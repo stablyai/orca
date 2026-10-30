@@ -1,3 +1,8 @@
+import {
+  isWindowsAbsolutePathLike,
+  relativePathInsideRoot
+} from '../../../shared/cross-platform-path'
+
 function stripTrailingSeparators(path: string): string {
   return path.replace(/[\\/]+$/, '')
 }
@@ -10,28 +15,11 @@ function getSeparator(path: string): '/' | '\\' {
   return path.includes('\\') ? '\\' : '/'
 }
 
-export function normalizeRelativePath(path: string): string {
+export function normalizeRelativePath(path: string, rootPath?: string | null): string {
+  if (rootPath && !isWindowsAbsolutePathLike(rootPath)) {
+    return path.replace(/^\/+/, '').replace(/\/+/g, '/')
+  }
   return stripLeadingSeparators(path).replace(/[\\/]+/g, '/')
-}
-
-function normalizeAbsolutePath(path: string): string {
-  const isUncPath = /^[\\/]{2}[^\\/]/.test(path)
-  const normalized = path.replace(/[\\/]+/g, '/')
-  return isUncPath && !normalized.startsWith('//') ? `/${normalized}` : normalized
-}
-
-function stripTrailingAbsoluteSeparators(path: string): string {
-  if (path === '/') {
-    return path
-  }
-  if (/^[A-Za-z]:\/$/.test(path)) {
-    return path
-  }
-  return path.replace(/\/+$/, '')
-}
-
-function isCaseInsensitiveAbsolutePath(path: string): boolean {
-  return /^[A-Za-z]:(?:\/|$)/.test(path) || path.startsWith('//')
 }
 
 export function getRelativePathInsideRoot(
@@ -41,29 +29,8 @@ export function getRelativePathInsideRoot(
   if (!rootPath) {
     return null
   }
-
-  const normalizedFilePath = normalizeAbsolutePath(filePath)
-  const normalizedRoot = stripTrailingAbsoluteSeparators(normalizeAbsolutePath(rootPath))
-  const comparisonFilePath = isCaseInsensitiveAbsolutePath(normalizedFilePath)
-    ? normalizedFilePath.toLowerCase()
-    : normalizedFilePath
-  const comparisonRoot = isCaseInsensitiveAbsolutePath(normalizedRoot)
-    ? normalizedRoot.toLowerCase()
-    : normalizedRoot
-
-  if (comparisonFilePath === comparisonRoot) {
-    return ''
-  }
-
-  // Why: POSIX and Windows drive roots already include their trailing separator.
-  const isRootPath = normalizedRoot === '/' || /^[A-Za-z]:\/$/.test(normalizedRoot)
-  const rootPrefix = isRootPath ? comparisonRoot : `${comparisonRoot}/`
-  if (!comparisonFilePath.startsWith(rootPrefix)) {
-    return null
-  }
-
-  const sliceStart = isRootPath ? normalizedRoot.length : normalizedRoot.length + 1
-  return normalizeRelativePath(normalizedFilePath.slice(sliceStart))
+  // Share Unicode containment folding; local case-only copies missed NFD/NFC matches (#10832).
+  return relativePathInsideRoot(rootPath, filePath)
 }
 
 export function basename(path: string): string {
@@ -112,9 +79,14 @@ export function joinPath(basePath: string, relativePath: string): string {
     return basePath
   }
 
-  const separator = getSeparator(basePath)
-  const normalizedBasePath = stripTrailingSeparators(basePath)
-  const normalizedRelativePath = stripLeadingSeparators(relativePath).replace(/[\\/]+/g, separator)
+  const windowsPath = isWindowsAbsolutePathLike(basePath)
+  const separator = windowsPath ? getSeparator(basePath) : '/'
+  const normalizedBasePath = windowsPath
+    ? stripTrailingSeparators(basePath)
+    : basePath.replace(/\/+$/, '')
+  const normalizedRelativePath = windowsPath
+    ? stripLeadingSeparators(relativePath).replace(/[\\/]+/g, separator)
+    : relativePath.replace(/^\/+/, '').replace(/\/+/g, '/')
 
   return `${normalizedBasePath}${separator}${normalizedRelativePath}`
 }

@@ -1,0 +1,142 @@
+// @vitest-environment happy-dom
+
+import React, { act } from 'react'
+import { createRoot } from 'react-dom/client'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { describe, expect, it, vi } from 'vitest'
+import { AgentWorkingSpinner } from './AgentWorkingSpinner'
+
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
+
+describe('AgentWorkingSpinner', () => {
+  it('renders the spinner animation and reduced-motion classes', () => {
+    const markup = renderToStaticMarkup(React.createElement(AgentWorkingSpinner))
+
+    expect(markup).toContain('agent-working-spinner')
+    expect(markup).toContain('data-agent-spinner')
+    expect(markup).toContain('border-agent-working')
+    expect(markup).toContain('border-t-transparent')
+    expect(markup).toContain('motion-reduce:border-t-agent-working')
+  })
+
+  it('renders when the Web Animations API is unavailable', async () => {
+    const originalGetAnimations = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      'getAnimations'
+    )
+    Object.defineProperty(HTMLElement.prototype, 'getAnimations', {
+      configurable: true,
+      value: undefined
+    })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    try {
+      await act(async () => {
+        root.render(<AgentWorkingSpinner />)
+      })
+      expect(container.querySelector('[data-agent-spinner]')).not.toBeNull()
+    } finally {
+      act(() => root.unmount())
+      container.remove()
+      if (originalGetAnimations === undefined) {
+        Reflect.deleteProperty(HTMLElement.prototype, 'getAnimations')
+      } else {
+        Object.defineProperty(HTMLElement.prototype, 'getAnimations', originalGetAnimations)
+      }
+    }
+  })
+
+  // Anchor every animationstart, including reveals/restarts. Static negative delays replay stale mount offsets and break phase sync.
+  it('anchors every animation start to the shared document epoch', async () => {
+    const animation = {
+      animationName: 'agent-spinner-rotate',
+      startTime: 321
+    } as unknown as Animation
+    const getAnimations = vi.fn(() => [animation])
+    const originalGetAnimations = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      'getAnimations'
+    )
+    Object.defineProperty(HTMLElement.prototype, 'getAnimations', {
+      configurable: true,
+      value: getAnimations
+    })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    const fireAnimationStart = async (): Promise<void> => {
+      const event = new Event('animationstart', { bubbles: true })
+      Object.defineProperty(event, 'animationName', { value: 'agent-spinner-rotate' })
+      await act(async () => {
+        container.querySelector('[data-agent-spinner]')!.dispatchEvent(event)
+      })
+    }
+
+    try {
+      await act(async () => {
+        root.render(<AgentWorkingSpinner />)
+      })
+      // Mount-time animation queries force style recalculation; the first animationstart establishes phase.
+      expect(getAnimations).not.toHaveBeenCalled()
+
+      await fireAnimationStart()
+      expect(animation.startTime).toBe(0)
+
+      animation.startTime = 654
+      await fireAnimationStart()
+      expect(animation.startTime).toBe(0)
+      expect(getAnimations).toHaveBeenCalledTimes(2)
+    } finally {
+      act(() => root.unmount())
+      container.remove()
+      if (originalGetAnimations === undefined) {
+        Reflect.deleteProperty(HTMLElement.prototype, 'getAnimations')
+      } else {
+        Object.defineProperty(HTMLElement.prototype, 'getAnimations', originalGetAnimations)
+      }
+    }
+  })
+
+  it('ignores animation starts from other animations on the same element', async () => {
+    const animation = {
+      animationName: 'agent-spinner-rotate',
+      startTime: 321
+    } as unknown as Animation
+    const getAnimations = vi.fn(() => [animation])
+    const originalGetAnimations = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      'getAnimations'
+    )
+    Object.defineProperty(HTMLElement.prototype, 'getAnimations', {
+      configurable: true,
+      value: getAnimations
+    })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    try {
+      await act(async () => {
+        root.render(<AgentWorkingSpinner />)
+      })
+      const unrelated = new Event('animationstart', { bubbles: true })
+      Object.defineProperty(unrelated, 'animationName', { value: 'compact-agent-expansion-reveal' })
+      await act(async () => {
+        container.querySelector('[data-agent-spinner]')!.dispatchEvent(unrelated)
+      })
+
+      expect(getAnimations).not.toHaveBeenCalled()
+      expect(animation.startTime).toBe(321)
+    } finally {
+      act(() => root.unmount())
+      container.remove()
+      if (originalGetAnimations === undefined) {
+        Reflect.deleteProperty(HTMLElement.prototype, 'getAnimations')
+      } else {
+        Object.defineProperty(HTMLElement.prototype, 'getAnimations', originalGetAnimations)
+      }
+    }
+  })
+})

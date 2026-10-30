@@ -1,13 +1,20 @@
-import type { GlobalSettings } from '../../../../shared/types'
+import { useState } from 'react'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { TERMINAL_DEFAULT_WORD_SEPARATOR } from '../../../../shared/terminal-word-separator'
+import {
+  DESKTOP_TERMINAL_SCROLLBACK_ROWS_MAX,
+  DESKTOP_TERMINAL_SCROLLBACK_ROWS_MIN,
+  normalizeDesktopTerminalScrollbackRows
+} from '../../../../shared/terminal-scrollback-policy'
+import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group'
-import { clampNumber } from '@/lib/terminal-theme'
 import {
   SettingsRow,
   SettingsSegmentedControl,
   SettingsSubsectionHeader
 } from './SettingsFormControls'
-import { SCROLLBACK_PRESETS_MB } from './SettingsConstants'
+import { SCROLLBACK_PRESETS_ROWS } from './SettingsConstants'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
 import { getTerminalWindowsPowershellImplementationSearchEntry } from './terminal-windows-search'
@@ -25,6 +32,14 @@ type TerminalAdvancedSectionProps = {
   isMac: boolean
 }
 
+function formatScrollbackRowsLabel(rows: number): string {
+  return rows % 1_000 === 0 ? `${rows / 1_000}k` : String(rows)
+}
+
+function toWordSeparatorSetting(draft: string): string | undefined {
+  return draft && draft !== TERMINAL_DEFAULT_WORD_SEPARATOR ? draft : undefined
+}
+
 export function TerminalAdvancedSection({
   settings,
   updateSettings,
@@ -35,13 +50,48 @@ export function TerminalAdvancedSection({
   pwshAvailable,
   isMac
 }: TerminalAdvancedSectionProps): React.JSX.Element {
-  const scrollbackMb = Math.max(1, Math.round(settings.terminalScrollbackBytes / 1_000_000))
-  const isPreset = SCROLLBACK_PRESETS_MB.includes(
-    scrollbackMb as (typeof SCROLLBACK_PRESETS_MB)[number]
+  const scrollbackRows = normalizeDesktopTerminalScrollbackRows(settings.terminalScrollbackRows)
+  const [scrollbackRowsDraft, setScrollbackRowsDraft] = useState(String(scrollbackRows))
+  const [prevScrollbackRows, setPrevScrollbackRows] = useState(scrollbackRows)
+  if (scrollbackRows !== prevScrollbackRows) {
+    // Adopt external settings changes without replacing drafts during active edits.
+    setPrevScrollbackRows(scrollbackRows)
+    setScrollbackRowsDraft(String(scrollbackRows))
+  }
+  const isPreset = SCROLLBACK_PRESETS_ROWS.includes(
+    scrollbackRows as (typeof SCROLLBACK_PRESETS_ROWS)[number]
   )
   const scrollbackToggleValue =
-    scrollbackMode === 'custom' ? 'custom' : isPreset ? `${scrollbackMb}` : 'custom'
+    scrollbackMode === 'custom' ? 'custom' : isPreset ? `${scrollbackRows}` : 'custom'
+  const wordSeparator = settings.terminalWordSeparator
+  const [wordSeparatorDraft, setWordSeparatorDraft] = useState(
+    wordSeparator ?? TERMINAL_DEFAULT_WORD_SEPARATOR
+  )
+  const [prevWordSeparator, setPrevWordSeparator] = useState(wordSeparator)
+  if (wordSeparator !== prevWordSeparator) {
+    setPrevWordSeparator(wordSeparator)
+    // Why: an emptied field stays empty while editing instead of snapping back to the default.
+    if (wordSeparator !== toWordSeparatorSetting(wordSeparatorDraft)) {
+      setWordSeparatorDraft(wordSeparator ?? TERMINAL_DEFAULT_WORD_SEPARATOR)
+    }
+  }
+  const commitWordSeparatorDraft = (draft: string): void => {
+    setWordSeparatorDraft(draft)
+    updateSettings({ terminalWordSeparator: toWordSeparatorSetting(draft) })
+  }
   const powerShellImplementation = settings.terminalWindowsPowerShellImplementation ?? 'auto'
+  const commitScrollbackRowsDraft = (): void => {
+    const trimmed = scrollbackRowsDraft.trim()
+    const value = Number(trimmed)
+    if (trimmed === '' || !Number.isFinite(value)) {
+      setScrollbackRowsDraft(String(scrollbackRows))
+      return
+    }
+
+    const next = normalizeDesktopTerminalScrollbackRows(value)
+    updateSettings({ terminalScrollbackRows: next })
+    setScrollbackRowsDraft(String(next))
+  }
 
   return (
     <section key="advanced" className="space-y-3">
@@ -55,19 +105,19 @@ export function TerminalAdvancedSection({
 
       <div className="divide-y divide-border/40">
         <SearchableSetting
-          title={translate('auto.components.settings.TerminalPane.9df53f7c14', 'Scrollback Size')}
+          title={translate('auto.components.settings.TerminalPane.9df53f7c14', 'Scrollback Rows')}
           description={translate(
             'auto.components.settings.TerminalPane.c3810b2b42',
-            'Maximum terminal scrollback buffer size.'
+            'Retained desktop terminal rows.'
           )}
-          keywords={['terminal', 'scrollback', 'buffer', 'memory']}
+          keywords={['terminal', 'scrollback', 'rows', 'buffer', 'memory']}
         >
           <SettingsRow
             alignTop={scrollbackMode === 'custom'}
-            label={translate('auto.components.settings.TerminalPane.9df53f7c14', 'Scrollback Size')}
+            label={translate('auto.components.settings.TerminalPane.9df53f7c14', 'Scrollback Rows')}
             description={translate(
               'auto.components.settings.TerminalPane.81d86b2dd2',
-              'Maximum terminal scrollback buffer size for new terminal panes.'
+              'Retained desktop terminal rows for new and open panes.'
             )}
             control={
               <div className="flex flex-col items-end gap-2">
@@ -85,25 +135,25 @@ export function TerminalAdvancedSection({
 
                     setScrollbackMode('preset')
                     updateSettings({
-                      terminalScrollbackBytes: Number(value) * 1_000_000
+                      terminalScrollbackRows: normalizeDesktopTerminalScrollbackRows(Number(value))
                     })
                   }}
                   variant="outline"
                   size="sm"
                   className="h-8 flex-wrap justify-end"
                 >
-                  {SCROLLBACK_PRESETS_MB.map((preset) => (
+                  {SCROLLBACK_PRESETS_ROWS.map((preset) => (
                     <ToggleGroupItem
                       key={preset}
                       value={`${preset}`}
                       className="h-8 px-3 text-xs"
                       aria-label={translate(
                         'auto.components.settings.TerminalPane.5336c096af',
-                        '{{value0}} megabytes',
+                        '{{value0}} rows',
                         { value0: preset }
                       )}
                     >
-                      {preset} {translate('auto.components.settings.TerminalPane.12e06178fa', 'MB')}
+                      {formatScrollbackRowsLabel(preset)}
                     </ToggleGroupItem>
                   ))}
                   <ToggleGroupItem
@@ -121,22 +171,21 @@ export function TerminalAdvancedSection({
                   <div className="flex items-center gap-2">
                     <Input
                       type="number"
-                      min={1}
-                      max={256}
-                      step={1}
-                      value={scrollbackMb}
-                      onChange={(e) => {
-                        const value = Number(e.target.value)
-                        if (Number.isFinite(value)) {
-                          updateSettings({
-                            terminalScrollbackBytes: clampNumber(value, 1, 256) * 1_000_000
-                          })
+                      min={DESKTOP_TERMINAL_SCROLLBACK_ROWS_MIN}
+                      max={DESKTOP_TERMINAL_SCROLLBACK_ROWS_MAX}
+                      step={100}
+                      value={scrollbackRowsDraft}
+                      onChange={(e) => setScrollbackRowsDraft(e.target.value)}
+                      onBlur={commitScrollbackRowsDraft}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          commitScrollbackRowsDraft()
                         }
                       }}
                       className="number-input-clean w-24 tabular-nums"
                     />
                     <span className="text-xs text-muted-foreground">
-                      {translate('auto.components.settings.TerminalPane.12e06178fa', 'MB')}
+                      {translate('auto.components.settings.TerminalPane.12e06178fa', 'rows')}
                     </span>
                   </div>
                 ) : null}
@@ -148,27 +197,47 @@ export function TerminalAdvancedSection({
         <SearchableSetting
           title={translate('auto.components.settings.TerminalPane.4bebcc2b2c', 'Word Separators')}
           description={translate(
-            'auto.components.settings.TerminalPane.8a956cc91e',
-            'Characters treated as word boundaries for double-click selection.'
+            'settings.terminal.wordSeparators.description',
+            'Characters treated as word boundaries for double-click selection, including space.'
           )}
           keywords={['word', 'separator', 'boundary', 'double-click', 'selection']}
         >
           <SettingsRow
             label={translate('auto.components.settings.TerminalPane.4bebcc2b2c', 'Word Separators')}
             description={translate(
-              'auto.components.settings.TerminalPane.8a956cc91e',
-              'Characters treated as word boundaries for double-click selection.'
+              'settings.terminal.wordSeparators.description',
+              'Characters treated as word boundaries for double-click selection, including space.'
             )}
             control={
-              <Input
-                value={settings.terminalWordSeparator ?? ''}
-                onChange={(e) => {
-                  const value = e.target.value
-                  updateSettings({ terminalWordSeparator: value || undefined })
-                }}
-                placeholder={` ()[]{},'"\``}
-                className="w-56 font-mono text-xs"
-              />
+              <div className="flex w-56 flex-col items-end gap-1">
+                <div className="flex w-full items-center gap-1">
+                  <Input
+                    value={wordSeparatorDraft}
+                    onChange={(e) => commitWordSeparatorDraft(e.target.value)}
+                    variant="code"
+                    spellCheck={false}
+                    className="min-w-0 flex-1"
+                  />
+                  {wordSeparatorDraft !== TERMINAL_DEFAULT_WORD_SEPARATOR ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => commitWordSeparatorDraft(TERMINAL_DEFAULT_WORD_SEPARATOR)}
+                    >
+                      {translate('auto.components.settings.AgentsPane.5200dac9da', 'Reset')}
+                    </Button>
+                  ) : null}
+                </div>
+                {wordSeparatorDraft && !wordSeparatorDraft.includes(' ') ? (
+                  <p className="text-xs text-status-warning">
+                    {translate(
+                      'settings.terminal.wordSeparators.noSpaceHint',
+                      'No space included — double-click will select across spaces.'
+                    )}
+                  </p>
+                ) : null}
+              </div>
             }
           />
         </SearchableSetting>

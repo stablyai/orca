@@ -1,4 +1,8 @@
-import type { SearchFileResult, SearchMatch, SearchResult } from '../../../../shared/types'
+import type {
+  SearchFileResult,
+  SearchMatch,
+  SearchResult
+} from '../../../../shared/code-search-types'
 
 export type SearchRow =
   | {
@@ -21,18 +25,14 @@ export function buildSearchRows(
     return []
   }
 
-  // Why: the summary row is rendered as a fixed header in Search.tsx so it
-  // stays visible while the user scrolls through results and doesn't
-  // participate in virtualisation.
+  // Keep the summary outside virtualization as a fixed header while results scroll.
   const rows: SearchRow[] = []
 
   for (const fileResult of results.files) {
     const collapsed = collapsedFiles.has(fileResult.filePath)
     rows.push({ type: 'file', fileResult, collapsed })
 
-    // Why: flattening the tree into rows lets the sidebar virtualize search
-    // output. Rendering every file header and every match at once is what made
-    // large ripgrep result sets freeze the renderer.
+    // Flatten for virtualization; mounting every ripgrep match at once froze the renderer.
     if (collapsed) {
       continue
     }

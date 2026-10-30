@@ -1,4 +1,4 @@
-import type { LinearIssue } from '../../../shared/types'
+import type { LinearIssue } from '../../../shared/linear/issue-types'
 
 export type LinearIssueTextField = 'title' | 'description'
 

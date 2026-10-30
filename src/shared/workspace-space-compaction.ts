@@ -19,23 +19,20 @@ export function compactWorkspaceSpaceItems(items: WorkspaceSpaceItem[]): {
   }
 
   const visible = sorted.slice(0, WORKSPACE_SPACE_MAX_TOP_LEVEL_ITEMS - 1)
-  const omitted = sorted.slice(WORKSPACE_SPACE_MAX_TOP_LEVEL_ITEMS - 1)
-  const other = omitted.reduce<WorkspaceSpaceItem>(
-    (acc, item) => ({
-      ...acc,
-      sizeBytes: acc.sizeBytes + item.sizeBytes
-    }),
-    {
-      name: 'Other',
-      path: '',
-      kind: 'other',
-      sizeBytes: 0
-    }
-  )
+  let omittedSizeBytes = 0
+  for (let index = visible.length; index < sorted.length; index += 1) {
+    omittedSizeBytes += sorted[index].sizeBytes
+  }
+  const other: WorkspaceSpaceItem = {
+    name: 'Other',
+    path: '',
+    kind: 'other',
+    sizeBytes: omittedSizeBytes
+  }
 
   return {
     topLevelItems: [...visible, other],
-    omittedTopLevelItemCount: omitted.length,
+    omittedTopLevelItemCount: sorted.length - visible.length,
     omittedTopLevelSizeBytes: other.sizeBytes
   }
 }

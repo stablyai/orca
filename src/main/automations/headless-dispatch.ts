@@ -4,6 +4,7 @@ import type {
   AutomationRunOutputSnapshot
 } from '../../shared/automations-types'
 import type { AutomationRunTargetResult } from './run-target-resolution'
+import type { AutomationRunFailureCodeFields } from '../../shared/automation-run-failure-copy'
 
 const MAX_HEADLESS_OUTPUT_SNAPSHOT_CHARS = 256 * 1024
 
@@ -11,11 +12,15 @@ export type HeadlessAutomationDispatchLaunch = {
   workspaceId: string
   workspaceDisplayName?: string | null
   terminalSessionId: string | null
-  completion?: Promise<{
-    status: 'completed' | 'dispatch_failed'
-    outputSnapshot?: AutomationRunOutputSnapshot | null
-    error?: string | null
-  }>
+  terminalPaneKey?: string | null
+  terminalPtyId?: string | null
+  completion?: Promise<
+    {
+      status: 'completed' | 'dispatch_failed'
+      outputSnapshot?: AutomationRunOutputSnapshot | null
+      error?: string | null
+    } & AutomationRunFailureCodeFields
+  >
 }
 
 export type HeadlessAutomationDispatcher = (request: {

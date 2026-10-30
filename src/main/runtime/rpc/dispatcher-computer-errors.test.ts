@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import './unused-default-rpc-methods.test-fixture'
+import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { RpcDispatcher } from './dispatcher'
 import { defineMethod, InvalidArgumentError, type RpcRequest } from './core'
@@ -17,26 +18,46 @@ function makeRuntime(): OrcaRuntimeService {
 const METHODS = [
   defineMethod({
     name: 'computer.click',
+    permission: 'desktop-control',
     params: z.object({ app: z.string().min(1, 'Missing app') }),
     handler: () => ({ ok: true })
   }),
   defineMethod({
     name: 'browser.click',
+    permission: 'workspace',
     params: z.object({ page: z.string().min(1, 'Missing page') }),
     handler: () => ({ ok: true })
   }),
   defineMethod({
     name: 'orchestration.throwZod',
+    permission: 'workspace',
     params: z.object({}),
     handler: () =>
       z.object({ title: z.string().min(1, 'Handler title missing') }).parse({ title: '' })
   }),
   defineMethod({
     name: 'orchestration.invalidArgument',
+    permission: 'workspace',
     params: z.object({}),
     handler: () => {
       throw new InvalidArgumentError('Async validation rejected payload')
     }
+  }),
+  defineMethod({
+    name: 'orchestration.inspectCaller',
+    permission: 'workspace',
+    params: z.object({}),
+    handler: (_params, { authenticatedCallerFingerprint }) => ({
+      authenticatedCallerFingerprint
+    })
+  }),
+  defineMethod({
+    name: 'orchestration.federationInspectCaller',
+    permission: 'workspace',
+    params: z.object({}),
+    handler: (_params, { authenticatedCallerFingerprint }) => ({
+      authenticatedCallerFingerprint
+    })
   })
 ]
 
@@ -109,17 +130,52 @@ describe('RpcDispatcher computer-use validation errors', () => {
     })
   })
 
-  it('maps async validation errors to invalid_argument without shadowing Zod formatting', async () => {
+  it('maps async validation errors over streaming transport without shadowing Zod formatting', async () => {
+    const messages: string[] = []
     const dispatcher = new RpcDispatcher({ runtime: makeRuntime(), methods: METHODS })
 
-    const response = await dispatcher.dispatch(makeRequest('orchestration.invalidArgument', {}))
+    await dispatcher.dispatchStreaming(
+      makeRequest('orchestration.invalidArgument', {}),
+      (message) => messages.push(message)
+    )
 
-    expect(response).toMatchObject({
+    expect(JSON.parse(messages[0]!)).toMatchObject({
       ok: false,
       error: {
         code: 'invalid_argument',
         message: 'Async validation rejected payload'
       }
     })
+  })
+
+  it('forwards a paired caller fingerprint without requiring local orchestration state', async () => {
+    const dispatcher = new RpcDispatcher({ runtime: makeRuntime(), methods: METHODS })
+
+    const response = await dispatcher.dispatch(makeRequest('orchestration.inspectCaller', {}), {
+      authenticatedCallerFingerprint: 'paired-caller'
+    })
+
+    expect(response).toMatchObject({
+      ok: true,
+      result: { authenticatedCallerFingerprint: 'paired-caller' }
+    })
+  })
+
+  it('provides local identity to read-only federation authorization', async () => {
+    const getOrCreateLocalMutationCallerFingerprint = vi.fn(() => 'local-caller')
+    const runtime = Object.assign(makeRuntime(), {
+      getOrchestrationDb: () => ({ getOrCreateLocalMutationCallerFingerprint })
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('orchestration.federationInspectCaller', {})
+    )
+
+    expect(response).toMatchObject({
+      ok: true,
+      result: { authenticatedCallerFingerprint: 'local-caller' }
+    })
+    expect(getOrCreateLocalMutationCallerFingerprint).toHaveBeenCalledOnce()
   })
 })

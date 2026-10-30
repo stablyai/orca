@@ -2,7 +2,7 @@ const ESC = '\x1b'
 const MAX_TERMINAL_GESTURE_INPUT_LENGTH = 2048
 const MAX_TERMINAL_GESTURE_INPUT_SEQUENCES = 32
 const SGR_MOUSE_GESTURE_SEQUENCE_RE = new RegExp(
-  `^${ESC}\\[<(0|64|65);([0-9]{1,4});([0-9]{1,4})([Mm])$`
+  `^${ESC}\\[<(0|32|64|65);([0-9]{1,4});([0-9]{1,4})([Mm])$`
 )
 
 function isDefaultMouseGestureSequence(bytes: string, offset: number): number | null {
@@ -13,7 +13,7 @@ function isDefaultMouseGestureSequence(bytes: string, offset: number): number | 
   const col = bytes.charCodeAt(offset + 4)
   const row = bytes.charCodeAt(offset + 5)
   if (
-    (button === 32 || button === 35 || button === 96 || button === 97) &&
+    (button === 32 || button === 35 || button === 64 || button === 96 || button === 97) &&
     col >= 33 &&
     col <= 126 &&
     row >= 33 &&

@@ -1,0 +1,275 @@
+import { createBrowserUuid } from '@/lib/browser-uuid'
+import { translate } from '@/i18n/i18n'
+import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from './browser-slice-contract'
+import {
+  assertManagedBrowserMaterializationAllowed,
+  getClientCreationActionPolicy
+} from '@/lib/client-creation-action-policy'
+import {
+  buildBrowserPage,
+  buildWorkspaceFromPage,
+  findPage,
+  findWorkspace
+} from '../browser-page-records'
+import { getBrowserSessionProfileHostId } from './browser-host-state'
+import { resolveNewBrowserTabProfile } from './browser-new-tab-profile'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { admitBrowserPageMount } from '@/components/browser-pane/host-guest/browser-page-mount-admission'
+import {
+  getRegisteredPairedBrowserTabCreator,
+  loadPairedBrowserTabCreator
+} from './paired-browser-tab-creator'
+import { findGroupAndWorktree } from '../tab-group-state'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { openBrowserTabThroughLayoutOwner } from './browser-tab-open-through-layout-owner'
+import { browserTabOpenView } from './browser-tab-open-view'
+
+export function createBrowserTabActions(
+  set: BrowserSliceSet,
+  get: BrowserSliceGet
+): Pick<
+  BrowserSlice,
+  | 'createBrowserTab'
+  | 'openNewBrowserTabInActiveWorkspace'
+  | 'openBrowserProfileTabInActiveWorkspace'
+> {
+  return {
+    createBrowserTab: (worktreeId, url, options) => {
+      options?.validateLinkPlacement?.(get())
+      assertManagedBrowserMaterializationAllowed(get(), options?.browserRuntimeEnvironmentId)
+      const workspaceId = createBrowserUuid()
+      const browserPageId = options?.browserPageId
+      if (
+        browserPageId &&
+        (findWorkspace(get().browserTabsByWorktree, browserPageId) ||
+          findPage(get().browserPagesByWorkspace, browserPageId))
+      ) {
+        throw new Error(`Browser page ${browserPageId} already exists`)
+      }
+      const page = buildBrowserPage(
+        workspaceId,
+        worktreeId,
+        url,
+        options?.title,
+        options?.browserRuntimeEnvironmentId,
+        browserPageId,
+        options?.docLocation
+      )
+      if (
+        !options?.browserRuntimeEnvironmentId &&
+        !options?.docLocation &&
+        !options?.validateLinkPlacement
+      ) {
+        admitBrowserPageMount(page.id)
+      }
+      // Why: with no explicit profile, Settings decides, so the profile scope applies to every way a tab opens.
+      const { sessionProfileId, sessionPartition } =
+        options?.sessionProfileId !== undefined
+          ? options
+          : resolveNewBrowserTabProfile(
+              get(),
+              worktreeId,
+              getBrowserSessionProfileHostId(
+                get(),
+                worktreeId,
+                options?.browserRuntimeEnvironmentId
+              )
+            )
+      const browserTab = buildWorkspaceFromPage(
+        workspaceId,
+        worktreeId,
+        page,
+        [page.id],
+        sessionProfileId,
+        sessionPartition
+      )
+
+      const admitLinkPageMount = (): void => {
+        if (
+          options?.validateLinkPlacement &&
+          !options.browserRuntimeEnvironmentId &&
+          !options.docLocation
+        ) {
+          admitBrowserPageMount(page.id)
+        }
+      }
+
+      const drawHere = (): void => {
+        set((s) => {
+          options?.validateLinkPlacement?.(s)
+          return {
+            browserTabsByWorktree: {
+              ...s.browserTabsByWorktree,
+              [worktreeId]: [...(s.browserTabsByWorktree[worktreeId] ?? []), browserTab]
+            },
+            browserPagesByWorkspace: {
+              ...s.browserPagesByWorkspace,
+              [workspaceId]: [page]
+            },
+            ...browserTabOpenView(s, worktreeId, browserTab, page, options)
+          }
+        })
+
+        const state = get()
+        const alreadyHasUnifiedTab = (state.unifiedTabsByWorktree[worktreeId] ?? []).some(
+          (t) => t.contentType === 'browser' && t.entityId === workspaceId
+        )
+        if (!alreadyHasUnifiedTab) {
+          const shouldActivate = options?.activate ?? true
+          let created
+          try {
+            created = state.createUnifiedTab(worktreeId, 'browser', {
+              ...(options?.validateLinkPlacement
+                ? { validatePlacement: options.validateLinkPlacement }
+                : {}),
+              entityId: workspaceId,
+              label: browserTab.title,
+              targetGroupId: options?.targetGroupId,
+              ...(options?.split ? { split: options.split } : {}),
+              ...(options?.afterTabId ? { afterTabId: options.afterTabId } : {}),
+              // Why no routing-host default: a substituted host would disown the wrapper from its worktree.
+              ...(options?.executionHostId ? { executionHostId: options.executionHostId } : {}),
+              activate: shouldActivate
+            })
+          } catch (error) {
+            if (options?.validateLinkPlacement) {
+              get().closeBrowserTab(workspaceId, { reason: 'cleanup' })
+            }
+            throw error
+          }
+          // Why: unified creation already selected the tab and recorded the visit; only the group moves.
+          if (shouldActivate && created) {
+            get().focusGroup(worktreeId, created.groupId)
+          }
+        }
+        admitLinkPageMount()
+      }
+      // Switch point: main opens the tab under these ids and its frame draws it.
+      if (
+        ORCA_LAYOUT_OWNER_IS_MAIN &&
+        openBrowserTabThroughLayoutOwner(get, {
+          worktreeId,
+          browserTab,
+          page,
+          options,
+          showView: () => {
+            set((s) => browserTabOpenView(s, worktreeId, browserTab, page, options))
+            admitLinkPageMount()
+          },
+          drawHere
+        })
+      ) {
+        return browserTab
+      }
+      drawHere()
+      // Why: activating by creation must reach main like a tab switch does, or main's active tab lags the UI.
+      // Main ignores a page id it never registered, so a paired-runtime page needs no owner lookup.
+      if (
+        (options?.activate ?? true) &&
+        !page.browserRuntimeEnvironmentId &&
+        typeof window !== 'undefined' &&
+        window.api?.browser
+      ) {
+        window.api.browser.notifyActiveTabChanged({ browserPageId: page.id }).catch(() => {})
+      }
+      return browserTab
+    },
+
+    openNewBrowserTabInActiveWorkspace: async (groupId) => {
+      const state = get()
+      // Why: the invoking group owns its workspace; global selection may already point elsewhere.
+      const worktreeId =
+        findGroupAndWorktree(state.groupsByWorktree, groupId)?.worktreeId ?? state.activeWorktreeId
+      if (!worktreeId) {
+        return
+      }
+      const browserAvailability = getClientCreationActionPolicy(state, worktreeId)[
+        'managed-browser'
+      ]
+      if (browserAvailability.state !== 'enabled') {
+        throw new Error(browserAvailability.reason)
+      }
+      const defaultUrl = state.browserDefaultUrl ?? 'about:blank'
+      const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
+      if (browserAvailability.provider === 'paired-runtime') {
+        if (!runtimeEnvironmentId) {
+          throw new Error('The paired runtime browser provider is unavailable.')
+        }
+        // The registered path stages on the click; a cold runtime loads before staging.
+        const createPairedBrowserTab =
+          getRegisteredPairedBrowserTabCreator() ?? (await loadPairedBrowserTabCreator())
+        try {
+          const created = await createPairedBrowserTab({
+            worktreeId,
+            environmentId: runtimeEnvironmentId,
+            url: defaultUrl,
+            // Desktop reconciliation honors clientTargetGroupId; targetGroupId steers snapshot-driven clients instead.
+            targetGroupId: groupId,
+            clientTargetGroupId: groupId
+          })
+          if (created) {
+            get().recordFeatureInteraction('browser-tab-created')
+            return
+          }
+        } catch (error) {
+          // Why: browser.headless.v1 remotes succeed above, so a failure here is real; surface it instead of a confusing local-tab fallback (split ownership).
+          console.warn(
+            '[browser] remote browser tab creation failed:',
+            error instanceof Error ? error.message : String(error)
+          )
+          throw error
+        }
+        throw new Error('The paired runtime could not create a managed browser tab.')
+      }
+      get().createBrowserTab(worktreeId, defaultUrl, {
+        title: translate('auto.store.slices.browser.d175274b6d', 'New Browser Tab'),
+        focusAddressBar: true,
+        browserRuntimeEnvironmentId: null,
+        targetGroupId: groupId
+      })
+      get().recordFeatureInteraction('browser-tab-created')
+    },
+
+    openBrowserProfileTabInActiveWorkspace: async (url, profileId) => {
+      const state = get()
+      const worktreeId = state.activeWorktreeId
+      if (!worktreeId) {
+        return false
+      }
+      const browserAvailability = getClientCreationActionPolicy(state, worktreeId)[
+        'managed-browser'
+      ]
+      if (browserAvailability.state !== 'enabled') {
+        return false
+      }
+      const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
+      if (browserAvailability.provider === 'paired-runtime') {
+        if (!runtimeEnvironmentId) {
+          return false
+        }
+        const createPairedBrowserTab =
+          getRegisteredPairedBrowserTabCreator() ?? (await loadPairedBrowserTabCreator())
+        try {
+          return await createPairedBrowserTab({
+            worktreeId,
+            environmentId: runtimeEnvironmentId,
+            url,
+            profileId
+          })
+        } catch (error) {
+          console.warn(
+            '[browser] remote profile tab creation failed:',
+            error instanceof Error ? error.message : String(error)
+          )
+          return false
+        }
+      }
+      get().createBrowserTab(worktreeId, url, {
+        activate: true,
+        sessionProfileId: profileId,
+        browserRuntimeEnvironmentId: null
+      })
+      return true
+    }
+  }
+}

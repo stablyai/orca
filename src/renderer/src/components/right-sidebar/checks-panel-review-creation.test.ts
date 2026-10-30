@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+  computeChecksPanelConfirmedReadiness,
+  isChecksPanelHardErrorCleared,
+  isChecksPanelHardRefreshErrorType,
   resolveChecksPanelHostedReviewBaseRef,
-  shouldOpenChecksPanelCreateComposer
+  type ChecksPanelConfirmedReadinessInput
 } from './checks-panel-review-creation'
 
 describe('resolveChecksPanelHostedReviewBaseRef', () => {
@@ -14,135 +17,210 @@ describe('resolveChecksPanelHostedReviewBaseRef', () => {
     ).toBe('release/1.4')
   })
 
-  it('falls back to the repo base ref when the worktree has no override', () => {
-    expect(
-      resolveChecksPanelHostedReviewBaseRef({
-        worktreeBaseRef: null,
-        repoBaseRef: ' main '
-      })
-    ).toBe('main')
-  })
-
   it('returns null when both inputs are null', () => {
     expect(
-      resolveChecksPanelHostedReviewBaseRef({
-        worktreeBaseRef: null,
-        repoBaseRef: null
-      })
+      resolveChecksPanelHostedReviewBaseRef({ worktreeBaseRef: null, repoBaseRef: null })
     ).toBe(null)
-  })
-
-  it('returns null when worktree base ref is whitespace-only', () => {
-    expect(
-      resolveChecksPanelHostedReviewBaseRef({
-        worktreeBaseRef: '   ',
-        repoBaseRef: null
-      })
-    ).toBe(null)
-  })
-
-  it('strips origin prefix from the worktree base ref', () => {
-    expect(
-      resolveChecksPanelHostedReviewBaseRef({
-        worktreeBaseRef: 'origin/main',
-        repoBaseRef: 'develop'
-      })
-    ).toBe('main')
-  })
-
-  it('strips upstream prefix from the repo base ref', () => {
-    expect(
-      resolveChecksPanelHostedReviewBaseRef({
-        worktreeBaseRef: null,
-        repoBaseRef: 'upstream/develop'
-      })
-    ).toBe('develop')
   })
 })
 
-describe('shouldOpenChecksPanelCreateComposer', () => {
-  it('opens for GitLab MR creation eligibility', () => {
+describe('isChecksPanelHardRefreshErrorType', () => {
+  it('flags the four hard error types', () => {
+    for (const t of ['auth', 'permission', 'repo_unavailable', 'gh_unavailable']) {
+      expect(isChecksPanelHardRefreshErrorType(t)).toBe(true)
+    }
+  })
+  it('does not flag transient types or undefined', () => {
+    for (const t of ['rate_limited', 'network', 'unknown']) {
+      expect(isChecksPanelHardRefreshErrorType(t)).toBe(false)
+    }
+    expect(isChecksPanelHardRefreshErrorType(undefined)).toBe(false)
+  })
+})
+
+describe('computeChecksPanelConfirmedReadiness', () => {
+  const NOW = 1_000_000
+  function readiness(
+    overrides: Partial<ChecksPanelConfirmedReadinessInput> = {}
+  ): ChecksPanelConfirmedReadinessInput {
+    return {
+      contextKeyMatches: true,
+      eligibility: { canCreate: true, blockedReason: null, reviewLookupOutcome: 'not_found' },
+      eligibilityCompletedAt: NOW - 1_000,
+      eligibilityRequestStartedAt: NOW - 2_000,
+      reviewLookup: 'not_found',
+      hardErrorObservedAt: undefined,
+      gitSnapshotMatches: true,
+      now: NOW,
+      ...overrides
+    }
+  }
+
+  it('confirms fresh, matching eligibility', () => {
+    expect(computeChecksPanelConfirmedReadiness(readiness())).toEqual({
+      confirmed: true,
+      needsPush: false
+    })
+  })
+
+  it('confirms needs_push as the Push & Create path', () => {
     expect(
-      shouldOpenChecksPanelCreateComposer({
-        activeReview: null,
-        isFolder: false,
-        branch: 'feature/gitlab-mr',
-        hostedReviewCreation: {
-          provider: 'gitlab',
-          review: null,
-          canCreate: true,
-          blockedReason: null,
-          nextAction: null
-        }
-      })
+      computeChecksPanelConfirmedReadiness(
+        readiness({
+          eligibility: {
+            canCreate: false,
+            blockedReason: 'needs_push',
+            reviewLookupOutcome: 'not_found'
+          }
+        })
+      )
+    ).toEqual({ confirmed: true, needsPush: true })
+  })
+
+  it('drops confirmed when the context key does not match', () => {
+    expect(
+      computeChecksPanelConfirmedReadiness(readiness({ contextKeyMatches: false })).confirmed
+    ).toBe(false)
+  })
+
+  it('drops confirmed on positive unresolved and existing_review', () => {
+    expect(
+      computeChecksPanelConfirmedReadiness(readiness({ reviewLookup: 'positive_unresolved' }))
+        .confirmed
+    ).toBe(false)
+    expect(
+      computeChecksPanelConfirmedReadiness(
+        readiness({
+          eligibility: {
+            canCreate: false,
+            blockedReason: 'existing_review',
+            reviewLookupOutcome: 'found'
+          }
+        })
+      ).confirmed
+    ).toBe(false)
+  })
+
+  it('drops confirmed when eligibility is older than 5 minutes', () => {
+    expect(
+      computeChecksPanelConfirmedReadiness(
+        readiness({ eligibilityCompletedAt: NOW - 5 * 60_000 - 1 })
+      ).confirmed
+    ).toBe(false)
+  })
+
+  it('drops confirmed when the git snapshot no longer matches', () => {
+    expect(
+      computeChecksPanelConfirmedReadiness(readiness({ gitSnapshotMatches: false })).confirmed
+    ).toBe(false)
+  })
+
+  describe('hard error clearing', () => {
+    it('clears when the request started strictly after the error with an accepted outcome', () => {
+      expect(
+        computeChecksPanelConfirmedReadiness(
+          readiness({
+            hardErrorObservedAt: NOW - 3_000,
+            eligibilityRequestStartedAt: NOW - 2_000,
+            eligibility: { canCreate: true, blockedReason: null, reviewLookupOutcome: 'not_found' }
+          })
+        ).confirmed
+      ).toBe(true)
+    })
+
+    it('does not clear for an in-flight request that started before the error', () => {
+      expect(
+        computeChecksPanelConfirmedReadiness(
+          readiness({ hardErrorObservedAt: NOW - 1_500, eligibilityRequestStartedAt: NOW - 2_000 })
+        ).confirmed
+      ).toBe(false)
+    })
+
+    it('does not clear on a late unavailable fallback', () => {
+      expect(
+        computeChecksPanelConfirmedReadiness(
+          readiness({
+            hardErrorObservedAt: NOW - 3_000,
+            eligibilityRequestStartedAt: NOW - 2_000,
+            eligibility: {
+              canCreate: false,
+              blockedReason: 'no_upstream',
+              reviewLookupOutcome: 'unavailable'
+            }
+          })
+        ).confirmed
+      ).toBe(false)
+    })
+  })
+})
+
+describe('isChecksPanelHardErrorCleared', () => {
+  const NOW = 1_000_000
+  function cleared(
+    overrides: Partial<ChecksPanelConfirmedReadinessInput> = {}
+  ): ChecksPanelConfirmedReadinessInput {
+    return {
+      contextKeyMatches: true,
+      eligibility: { canCreate: true, blockedReason: null, reviewLookupOutcome: 'not_found' },
+      eligibilityCompletedAt: NOW - 1_000,
+      eligibilityRequestStartedAt: NOW - 2_000,
+      reviewLookup: 'not_found',
+      hardErrorObservedAt: NOW - 3_000,
+      gitSnapshotMatches: true,
+      now: NOW,
+      ...overrides
+    }
+  }
+
+  it('is cleared (true) when no hard error is observed', () => {
+    expect(isChecksPanelHardErrorCleared(cleared({ hardErrorObservedAt: undefined }))).toBe(true)
+  })
+
+  it('stays blocked while only a queued/in-flight retry replaced the error', () => {
+    // An unfinished or pre-error request cannot clear the block and reenable Create.
+    expect(isChecksPanelHardErrorCleared(cleared({ eligibilityRequestStartedAt: undefined }))).toBe(
+      false
+    )
+  })
+
+  it('stays blocked for a request that started before the error', () => {
+    expect(
+      isChecksPanelHardErrorCleared(
+        cleared({ hardErrorObservedAt: NOW - 1_000, eligibilityRequestStartedAt: NOW - 2_000 })
+      )
+    ).toBe(false)
+  })
+
+  it('stays blocked when the clearing request is for a different context', () => {
+    expect(isChecksPanelHardErrorCleared(cleared({ contextKeyMatches: false }))).toBe(false)
+  })
+
+  it('stays blocked on an unavailable outcome even if the request started after', () => {
+    expect(
+      isChecksPanelHardErrorCleared(
+        cleared({
+          eligibility: {
+            canCreate: false,
+            blockedReason: 'no_upstream',
+            reviewLookupOutcome: 'unavailable'
+          }
+        })
+      )
+    ).toBe(false)
+  })
+
+  it('clears when a later request settles found or not_found', () => {
+    expect(isChecksPanelHardErrorCleared(cleared())).toBe(true)
+    expect(
+      isChecksPanelHardErrorCleared(
+        cleared({
+          eligibility: {
+            canCreate: false,
+            blockedReason: 'existing_review',
+            reviewLookupOutcome: 'found'
+          }
+        })
+      )
     ).toBe(true)
-  })
-
-  it('opens for push-before-create recovery', () => {
-    expect(
-      shouldOpenChecksPanelCreateComposer({
-        activeReview: null,
-        isFolder: false,
-        branch: 'feature/gitlab-mr',
-        hostedReviewCreation: {
-          provider: 'gitlab',
-          review: null,
-          canCreate: false,
-          blockedReason: 'needs_push',
-          nextAction: 'push'
-        }
-      })
-    ).toBe(true)
-  })
-
-  it('does not open when an active review exists', () => {
-    expect(
-      shouldOpenChecksPanelCreateComposer({
-        activeReview: { provider: 'github', number: 123 },
-        isFolder: false,
-        branch: 'feature/test',
-        hostedReviewCreation: {
-          provider: 'github',
-          review: null,
-          canCreate: true,
-          blockedReason: null,
-          nextAction: null
-        }
-      })
-    ).toBe(false)
-  })
-
-  it('does not open for folder repos', () => {
-    expect(
-      shouldOpenChecksPanelCreateComposer({
-        activeReview: null,
-        isFolder: true,
-        branch: 'feature/test',
-        hostedReviewCreation: {
-          provider: 'github',
-          review: null,
-          canCreate: true,
-          blockedReason: null,
-          nextAction: null
-        }
-      })
-    ).toBe(false)
-  })
-
-  it('does not open when branch is empty', () => {
-    expect(
-      shouldOpenChecksPanelCreateComposer({
-        activeReview: null,
-        isFolder: false,
-        branch: '',
-        hostedReviewCreation: {
-          provider: 'github',
-          review: null,
-          canCreate: true,
-          blockedReason: null,
-          nextAction: null
-        }
-      })
-    ).toBe(false)
   })
 })

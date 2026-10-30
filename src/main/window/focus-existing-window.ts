@@ -1,4 +1,9 @@
 import type { App, BrowserWindow } from 'electron'
+import {
+  isBackgroundLaunch,
+  isWindowlessLaunch,
+  showWindowWithoutStealingFocus
+} from './foreground-activation-policy'
 
 type FocusTimer = (callback: () => void, ms: number) => unknown
 
@@ -8,12 +13,18 @@ export type FocusExistingMainWindowOptions = {
   app: Pick<App, 'focus' | 'isReady'>
   getWindow: () => BrowserWindow | null
   openWindow: () => BrowserWindow
+  /** False while some other path must own the first window; the reopen is dropped, not queued. */
+  canOpenWindow?: () => boolean
   platform?: NodeJS.Platform
   setTimeout?: FocusTimer
   warn?: (message: string, error?: unknown) => void
 }
 
 function safelyFocusApp(app: Pick<App, 'focus'>): void {
+  // Real second-instance reopen may claim foreground; automated launches must never do so.
+  if (isBackgroundLaunch()) {
+    return
+  }
   try {
     app.focus({ steal: true })
   } catch {
@@ -25,15 +36,17 @@ function safelyFocusApp(app: Pick<App, 'focus'>): void {
   }
 }
 
-function safelyRevealWindow(window: BrowserWindow): void {
-  if (window.isDestroyed()) {
+export function safelyRevealWindow(window: BrowserWindow): void {
+  if (window.isDestroyed() || isWindowlessLaunch()) {
     return
   }
   if (window.isMinimized()) {
     window.restore()
   }
-  window.show()
-  window.focus()
+  showWindowWithoutStealingFocus(window)
+  if (!isBackgroundLaunch()) {
+    window.focus()
+  }
 }
 
 function pulseAlwaysOnTop(window: BrowserWindow, setTimer: FocusTimer): void {
@@ -64,6 +77,59 @@ function retryFocus(window: BrowserWindow, app: Pick<App, 'focus'>, setTimer: Fo
   }, 100)
 }
 
+// Share Windows foreground reinforcement and delayed focus retry across synchronous and retry/adoption paths.
+function activateWindow(
+  window: BrowserWindow,
+  app: Pick<App, 'focus'>,
+  platform: NodeJS.Platform,
+  setTimer: FocusTimer
+): void {
+  safelyFocusApp(app)
+  safelyRevealWindow(window)
+  // Windows reinforcement raises windows over other work; suppress it during background launches.
+  if (platform === 'win32' && !isBackgroundLaunch()) {
+    try {
+      window.moveTop()
+    } catch {
+      // Older Electron versions or destroyed windows may reject this; focus retry remains.
+    }
+    pulseAlwaysOnTop(window, setTimer)
+    retryFocus(window, app, setTimer)
+  }
+}
+
+// Transient startup/process pressure can reject window creation; bounded retries prevent a permanently windowless app.
+const REOPEN_MAX_ATTEMPTS = 3
+const REOPEN_RETRY_DELAY_MS = 300
+
+function openWindowWithRetry(
+  opts: Pick<FocusExistingMainWindowOptions, 'app' | 'getWindow' | 'openWindow' | 'warn'>,
+  platform: NodeJS.Platform,
+  setTimer: FocusTimer,
+  attempt: number
+): BrowserWindow | null {
+  try {
+    return opts.openWindow()
+  } catch (error) {
+    opts.warn?.('[window] Failed to reopen main window for second-instance launch', error)
+    if (attempt >= REOPEN_MAX_ATTEMPTS) {
+      return null
+    }
+    setTimer(() => {
+      // openWindow constructs each time; adopt windows created by concurrent/partially failed attempts to avoid orphaning duplicates.
+      const existing = opts.getWindow()
+      const window =
+        existing && !existing.isDestroyed()
+          ? existing
+          : openWindowWithRetry(opts, platform, setTimer, attempt + 1)
+      if (window) {
+        activateWindow(window, opts.app, platform, setTimer)
+      }
+    }, REOPEN_RETRY_DELAY_MS)
+    return null
+  }
+}
+
 export function focusExistingMainWindow(
   opts: FocusExistingMainWindowOptions
 ): FocusExistingMainWindowResult {
@@ -73,28 +139,16 @@ export function focusExistingMainWindow(
   let openedWindow = false
 
   if (!window || window.isDestroyed()) {
-    if (!opts.app.isReady()) {
+    if (!opts.app.isReady() || opts.canOpenWindow?.() === false) {
       return 'pending'
     }
-    try {
-      window = opts.openWindow()
-      openedWindow = true
-    } catch (error) {
-      opts.warn?.('[window] Failed to reopen main window for second-instance launch', error)
+    window = openWindowWithRetry(opts, platform, setTimer, 1)
+    if (!window) {
       return 'pending'
     }
+    openedWindow = true
   }
 
-  safelyFocusApp(opts.app)
-  safelyRevealWindow(window)
-  if (platform === 'win32') {
-    try {
-      window.moveTop()
-    } catch {
-      // Older Electron versions or destroyed windows may reject this; focus retry remains.
-    }
-    pulseAlwaysOnTop(window, setTimer)
-  }
-  retryFocus(window, opts.app, setTimer)
+  activateWindow(window, opts.app, platform, setTimer)
   return openedWindow ? 'opened' : 'focused'
 }

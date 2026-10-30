@@ -1,12 +1,4 @@
-/**
- * Two-launch Electron helper for restart-persistence tests.
- *
- * Why: the default `orcaPage` fixture creates a fresh `userDataDir` per test
- * and deletes it on close, which is incompatible with a test that needs to
- * quit the app and relaunch against the *same* on-disk state. This helper
- * owns the shared userDataDir and gives each caller an `app`+`page` pair
- * wired to it.
- */
+// Retain one isolated user-data directory across launches; the ordinary per-test fixture deletes it on close.
 
 import {
   _electron as electron,
@@ -15,13 +7,24 @@ import {
   type Page,
   type TestInfo
 } from '@stablyai/playwright-test'
-import { execSync } from 'child_process'
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
-import os from 'os'
-import path from 'path'
+import { execSync } from 'node:child_process'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { createServer } from 'node:net'
+import os from 'node:os'
+import path from 'node:path'
+import { runProcess } from '@orca/process-host'
+import type { ProcessResult } from '@orca/process-host/process-spec'
+export { launchOwnedBrowserForE2E } from './browser-sidecar-launch'
 import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
 import { getOrcaElectronLaunchArgs } from './electron-launch-args'
+import { retryTransientMainEvaluate } from './electron-main-evaluate-retry'
 import { cleanupE2EDaemons, closeElectronAppForE2E } from './electron-process-shutdown'
+import {
+  assertElectronResolvedIsolatedHome,
+  createElectronHomeIsolation,
+  type ElectronHomeIsolation
+} from './electron-home-isolation'
+import type { LaunchOptions } from './orca-restart-launch-options'
 
 type LaunchedOrca = {
   app: ElectronApplication
@@ -30,113 +33,228 @@ type LaunchedOrca = {
 
 type RestartSession = {
   userDataDir: string
-  launch: () => Promise<LaunchedOrca>
+  seedCodexResumeRollout: (sessionId: string, cwd: string) => string
+  launch: (options?: LaunchOptions) => Promise<LaunchedOrca>
+  launchUntilExit: (executablePath: string) => Promise<ProcessResult>
   /** Gracefully close a launch, letting beforeunload flush session state. */
   close: (app: ElectronApplication) => Promise<void>
-  /** Remove the shared userDataDir after the test is done. */
-  dispose: () => Promise<void>
+  /** Close the final launch and remove the shared userDataDir after the test is done. */
+  dispose: (app?: ElectronApplication) => Promise<void>
+}
+
+async function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    const timeout = setTimeout(resolve, ms)
+    timeout.unref?.()
+  })
+}
+
+async function reserveRestartRuntimeWsPort(): Promise<number> {
+  const server = createServer()
+  return new Promise<number>((resolve, reject) => {
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address()
+      if (!address || typeof address === 'string') {
+        server.close()
+        reject(new Error('Restart fixture could not reserve a runtime WebSocket port'))
+        return
+      }
+      server.close((error) => (error ? reject(error) : resolve(address.port)))
+    })
+  })
+}
+
+async function removeProfileDir(userDataDir: string): Promise<void> {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      rmSync(userDataDir, { recursive: true, force: true })
+      return
+    } catch (error) {
+      if (attempt === 4) {
+        throw error
+      }
+      // Windows taskkill may precede profile-handle release; retry deletion.
+      await delay(250)
+    }
+  }
 }
 
 function shouldLaunchHeadful(testInfo: TestInfo): boolean {
   return testInfo.project.metadata.orcaHeadful === true
 }
 
-function launchEnv(userDataDir: string, headful: boolean): NodeJS.ProcessEnv {
+function createRestartLaunchIsolation(
+  userDataDir: string,
+  headful: boolean,
+  extraEnv: Record<string, string>
+): ElectronHomeIsolation {
   const { ELECTRON_RUN_AS_NODE: _unused, ...cleanEnv } = process.env
   void _unused
-  return {
-    ...cleanEnv,
-    NODE_ENV: 'development',
-    ORCA_E2E_USER_DATA_DIR: userDataDir,
-    ...(headful ? { ORCA_E2E_HEADFUL: '1' } : { ORCA_E2E_HEADLESS: '1' })
-  }
+  return createElectronHomeIsolation({
+    inheritedEnv: cleanEnv,
+    launchEnv: {
+      NODE_ENV: 'development',
+      ...extraEnv,
+      ...(headful ? { ORCA_E2E_HEADFUL: '1' } : { ORCA_E2E_HEADLESS: '1' })
+    },
+    extraEnv: {},
+    userDataDir
+  })
 }
 
-/**
- * Create a restart session tied to a persistent userDataDir.
- *
- * Why: keep the launch wiring identical to the shared fixture (mainPath,
- * env stripping, headful toggle) so behavior differences between fixtures
- * don't leak in as false positives for persistence bugs.
- */
-export function createRestartSession(testInfo: TestInfo): RestartSession {
+// Keep launch policy aligned with the ordinary app fixture to avoid false persistence differences.
+export function createRestartSession(
+  testInfo: TestInfo,
+  extraEnv: Record<string, string> = {}
+): RestartSession {
   const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
   const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-restart-'))
   const headful = shouldLaunchHeadful(testInfo)
+  const homeIsolation = createRestartLaunchIsolation(userDataDir, headful, extraEnv)
+  let runtimeWsPort: number | null = null
 
-  // Why: this helper bypasses the shared `electronApp` fixture, so it must
-  // seed the same completed onboarding profile or first-run overlays cover
-  // both launches and obscure restart failures.
+  // Seed completed onboarding on both launches so first-run overlays cannot obscure persistence failures.
   writeFileSync(
     path.join(userDataDir, 'orca-data.json'),
     `${JSON.stringify(getE2ECompletedOnboardingProfile(), null, 2)}\n`
   )
 
-  const launch = async (): Promise<LaunchedOrca> => {
+  const seedCodexResumeRollout = (sessionId: string, cwd: string): string => {
+    const sessionsDir = path.join(
+      homeIsolation.isolatedHome,
+      '.codex',
+      'sessions',
+      '2026',
+      '07',
+      '28'
+    )
+    mkdirSync(sessionsDir, { recursive: true })
+    const transcriptPath = path.join(sessionsDir, `rollout-2026-07-28T00-00-00-${sessionId}.jsonl`)
+    writeFileSync(
+      transcriptPath,
+      `${JSON.stringify({
+        timestamp: '2026-07-28T00:00:00.000Z',
+        type: 'session_meta',
+        payload: { id: sessionId, cwd }
+      })}\n`
+    )
+    return transcriptPath
+  }
+
+  const launch = async (options?: LaunchOptions): Promise<LaunchedOrca> => {
+    runtimeWsPort ??= await reserveRestartRuntimeWsPort()
     const app = await electron.launch({
-      args: getOrcaElectronLaunchArgs(mainPath, headful),
-      env: launchEnv(userDataDir, headful)
+      args: [...getOrcaElectronLaunchArgs(mainPath, headful), ...(options?.extraArgs ?? [])],
+      env: {
+        ...homeIsolation.env,
+        ...options?.extraEnv,
+        ORCA_E2E_RUNTIME_WS_PORT: String(runtimeWsPort)
+      }
     })
-    const page = await app.firstWindow({ timeout: 120_000 })
-    await page.waitForLoadState('domcontentloaded')
-    await page.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
-    return { app, page }
+    // Attach before firstWindow or daemon-guard/plugin startup logs may already be gone.
+    if (options?.onStderr) {
+      const onStderr = options.onStderr
+      app.process().stderr?.on('data', (chunk: Buffer) => onStderr(chunk.toString()))
+    }
+    try {
+      const resolvedHome = await retryTransientMainEvaluate(() =>
+        app.evaluate(({ app }) => {
+          // This fixture owns every launch; native relaunch leaves an unattached Playwright child.
+          app.relaunch = () => {}
+          return app.getPath('home')
+        })
+      )
+      assertElectronResolvedIsolatedHome(resolvedHome, homeIsolation)
+      await options?.beforeFirstWindow?.(app)
+      const page = await app.firstWindow({ timeout: 120_000 })
+      await page.waitForLoadState('domcontentloaded')
+      await page.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
+      return { app, page }
+    } catch (error) {
+      await closeElectronAppForE2E(app)
+      throw error
+    }
   }
 
   const close = async (app: ElectronApplication): Promise<void> => {
     await closeElectronAppForE2E(app)
   }
 
-  const dispose = async (): Promise<void> => {
-    await cleanupE2EDaemons(userDataDir)
+  // Startup refusals exit before a renderer exists; capture their output from process creation.
+  const launchUntilExit = async (executablePath: string): Promise<ProcessResult> => {
+    runtimeWsPort ??= await reserveRestartRuntimeWsPort()
+    return runProcess({
+      program: executablePath,
+      args: getOrcaElectronLaunchArgs(mainPath, false),
+      env: {
+        ...homeIsolation.env,
+        ORCA_BACKGROUND_LAUNCH: '1',
+        ORCA_E2E_HEADLESS: '1',
+        ORCA_E2E_RUNTIME_WS_PORT: String(runtimeWsPort)
+      },
+      timeoutMs: 30_000,
+      detached: process.platform !== 'win32',
+      terminationBarrier: true
+    })
+  }
+
+  const dispose = async (app?: ElectronApplication): Promise<void> => {
+    await (app
+      ? closeElectronAppForE2E(app, { cleanupDaemonsForUserDataDir: userDataDir })
+      : cleanupE2EDaemons(userDataDir))
+    if (process.env.ORCA_E2E_PRESERVE_RESTART_PROFILE === '1') {
+      console.log(`[e2e] Preserved restart profile at ${userDataDir}`)
+      return
+    }
     if (existsSync(userDataDir)) {
-      rmSync(userDataDir, { recursive: true, force: true })
+      await removeProfileDir(userDataDir)
     }
   }
 
-  return { userDataDir, launch, close, dispose }
+  return { userDataDir, seedCodexResumeRollout, launch, launchUntilExit, close, dispose }
 }
 
-/**
- * Attach a repo to the running renderer and wait until a terminal tab is
- * active on its worktree. Matches the shared fixture's setup path so the
- * first-launch state lines up with what real users persist.
- */
+// Match ordinary repo setup so restart tests persist a realistic active terminal.
 export async function attachRepoAndOpenTerminal(page: Page, repoPath: string): Promise<string> {
   if (!isValidGitRepo(repoPath)) {
     throw new Error(`attachRepoAndOpenTerminal: ${repoPath} is not a git repo`)
   }
 
-  await page.evaluate(async (repoPath) => {
-    await window.api.repos.add({ path: repoPath })
-  }, repoPath)
-
-  await page.evaluate(async () => {
-    const store = window.__store
-    if (!store) {
-      return
-    }
-    await store.getState().fetchRepos()
-  })
-
   const repoId = await page.evaluate(async (repoPath) => {
-    const store = window.__store
-    if (!store) {
-      return null
+    const result = await window.api.repos.add({ path: repoPath })
+    if ('error' in result) {
+      throw new Error(result.error)
     }
-    const repo = store.getState().repos.find((candidate) => candidate.path === repoPath)
-    if (!repo) {
-      return null
-    }
-    // Why: this restart fixture uses the global e2e repo, whose seeded Git
-    // worktree is external to Orca's workspace root after the visibility rollout.
-    await store.getState().updateRepo(repo.id, { externalWorktreeVisibility: 'show' })
-    return repo.id
+    return result.repo.id
   }, repoPath)
 
-  if (!repoId) {
-    throw new Error(`attachRepoAndOpenTerminal: expected e2e repo to be loaded: ${repoPath}`)
-  }
+  await expect
+    .poll(
+      () =>
+        readRestartRendererState(() =>
+          page.evaluate(async (repoId) => {
+            const store = window.__store
+            if (!store) {
+              return false
+            }
+            // Poll through the concurrent repos.add refresh that can supersede this fetch generation.
+            await store.getState().fetchRepos({ runtimeEnvironmentId: null, throwOnError: true })
+            const repo = store.getState().repos.find((candidate) => candidate.id === repoId)
+            if (!repo) {
+              return false
+            }
+            // Show the seeded Git worktree external to Orca’s managed workspace root.
+            await store.getState().updateRepo(repo.id, { externalWorktreeVisibility: 'show' })
+            return true
+          }, repoId)
+        ),
+      {
+        timeout: 30_000,
+        message: `attachRepoAndOpenTerminal: expected e2e repo to be loaded: ${repoPath}`
+      }
+    )
+    .toBe(true)
 
   await page.waitForFunction(
     () => window.__store?.getState().workspaceSessionReady === true,
@@ -144,24 +262,20 @@ export async function attachRepoAndOpenTerminal(page: Page, repoPath: string): P
     { timeout: 30_000 }
   )
 
-  // Why: fetchWorktrees() is async. Awaiting the outer page.evaluate returns
-  // before the Zustand worktree slice has observed the hydrated state, so a
-  // single evaluate() that reads worktreesByRepo can see an empty map. Poll
-  // the store until *any* worktree shows up, then pick the one that matches
-  // our seeded repo. Matching by basename is sufficient because each test
-  // run uses a unique tmp-dir suffix, and it avoids symlink-canonicalization
-  // mismatches between the path we pass in and the one the store records.
+  // Poll until async worktree hydration reaches Zustand; page.evaluate settlement alone does not guarantee it.
   await expect
     .poll(
       async () =>
-        page.evaluate(async (repoId) => {
-          const store = window.__store
-          if (!store) {
-            return false
-          }
-          await store.getState().fetchWorktrees(repoId)
-          return (store.getState().worktreesByRepo[repoId]?.length ?? 0) > 0
-        }, repoId),
+        readRestartRendererState(() =>
+          page.evaluate(async (repoId) => {
+            const store = window.__store
+            if (!store) {
+              return false
+            }
+            await store.getState().fetchWorktrees(repoId)
+            return (store.getState().worktreesByRepo[repoId]?.length ?? 0) > 0
+          }, repoId)
+        ),
       {
         timeout: 15_000,
         message: 'attachRepoAndOpenTerminal: seeded worktree never surfaced in the store'
@@ -169,38 +283,39 @@ export async function attachRepoAndOpenTerminal(page: Page, repoPath: string): P
     )
     .toBe(true)
 
-  const repoBasename = path.basename(repoPath)
-  const worktreeId = await page.evaluate((repoBasename: string) => {
+  const worktreeId = await page.evaluate((repoId: string) => {
     const store = window.__store
     if (!store) {
       return null
     }
     const state = store.getState()
-    const allWorktrees = Object.values(state.worktreesByRepo).flat()
-    // Why: the primary worktree lives at the repo root, so its path ends with
-    // the repo directory name. The secondary worktree is a sibling directory
-    // and will not match this suffix. This gives us the primary deterministically
-    // without depending on boolean fields on the worktree record.
-    const primary =
-      allWorktrees.find(
-        (worktree) =>
-          worktree.path
-            .split(/[\\/]+/)
-            .filter(Boolean)
-            .pop() === repoBasename
-      ) ?? allWorktrees[0]
+    // Use repo identity across Windows path casing/separator normalization.
+    const repoWorktrees = state.worktreesByRepo[repoId] ?? []
+    const primary = repoWorktrees.find((worktree) => worktree.isMainWorktree) ?? repoWorktrees[0]
     if (!primary) {
       return null
     }
     state.setActiveWorktree(primary.id)
     return primary.id
-  }, repoBasename)
+  }, repoId)
 
   if (!worktreeId) {
     throw new Error('attachRepoAndOpenTerminal: test repo did not surface in the store')
   }
 
   return worktreeId
+}
+
+export async function readRestartRendererState<T>(read: () => Promise<T>): Promise<T | null> {
+  try {
+    return await read()
+  } catch (error) {
+    // Retry hydration’s document replacement without swallowing unrelated errors.
+    if (error instanceof Error && error.message.includes('Execution context was destroyed')) {
+      return null
+    }
+    throw error
+  }
 }
 
 function isValidGitRepo(repoPath: string): boolean {

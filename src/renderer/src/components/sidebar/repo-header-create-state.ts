@@ -1,5 +1,5 @@
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getSelectedRepoSshGate } from '../../lib/new-workspace-ssh-gate'
 import { translate } from '@/i18n/i18n'
@@ -14,7 +14,8 @@ export type RepoHeaderCreateState = {
 export function getRepoHeaderCreateState(input: {
   repo: Repo
   label: string
-  sshStatus: SshConnectionStatus | null
+  /** From selectRepoSshGateInput, so a paired server's own target reads that server's state. */
+  sshGate: { connectionId: string | null; status: SshConnectionStatus | null }
 }): RepoHeaderCreateState {
   if (!isGitRepoKind(input.repo)) {
     return {
@@ -33,10 +34,7 @@ export function getRepoHeaderCreateState(input: {
     }
   }
 
-  const sshGate = getSelectedRepoSshGate({
-    connectionId: input.repo.connectionId,
-    status: input.repo.connectionId ? input.sshStatus : null
-  })
+  const sshGate = getSelectedRepoSshGate(input.sshGate)
   if (sshGate.selectedRepoRequiresConnection) {
     return {
       disabled: true,

@@ -1,8 +1,9 @@
-import { readFile, writeFile, rename } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
-import { net } from 'electron'
+import { getMainHttpClient } from '../network/http-client'
 import { extractOAuthClientCredentials } from './gemini-cli-oauth-extractor'
+import { writeCredentialFileAtomic } from '../integration-credential-file'
 
 const API_TIMEOUT_MS = 10_000
 const OAUTH_CREDS_PATH = path.join(homedir(), '.gemini', 'oauth_creds.json')
@@ -77,10 +78,9 @@ export async function readGeminiCredentials(): Promise<GeminiCredentials | null>
   }
 }
 
+// Atomic replacement must preserve owner-only credentials despite orcad's login umask (#31125).
 export async function saveGeminiCredentials(creds: GeminiCredentials): Promise<void> {
-  const tmpPath = `${OAUTH_CREDS_PATH}.${process.pid}.tmp`
-  await writeFile(tmpPath, JSON.stringify(creds, null, 2), 'utf-8')
-  await rename(tmpPath, OAUTH_CREDS_PATH)
+  writeCredentialFileAtomic(OAUTH_CREDS_PATH, Buffer.from(JSON.stringify(creds, null, 2), 'utf-8'))
 }
 
 export type RefreshTokenResult = {
@@ -94,73 +94,57 @@ export async function refreshAccessToken(
   clientId: string,
   clientSecret: string
 ): Promise<RefreshTokenResult> {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS)
+  const res = await getMainHttpClient().fetch(GOOGLE_TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+      grant_type: 'refresh_token'
+    }).toString(),
+    signal: AbortSignal.timeout(API_TIMEOUT_MS)
+  })
 
-  try {
-    const res = await net.fetch(GOOGLE_TOKEN_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: clientId,
-        client_secret: clientSecret,
-        refresh_token: refreshToken,
-        grant_type: 'refresh_token'
-      }).toString(),
-      signal: controller.signal
-    })
+  if (!res.ok) {
+    return { accessToken: null, newRefreshToken: null }
+  }
 
-    if (!res.ok) {
-      return { accessToken: null, newRefreshToken: null }
-    }
-
-    const data = (await res.json()) as {
-      access_token?: string
-      refresh_token?: string
-      expires_in?: number
-    }
-    return {
-      accessToken: typeof data.access_token === 'string' ? data.access_token : null,
-      newRefreshToken: typeof data.refresh_token === 'string' ? data.refresh_token : null,
-      expiresIn: typeof data.expires_in === 'number' ? data.expires_in : undefined
-    }
-  } finally {
-    clearTimeout(timeout)
+  const data = (await res.json()) as {
+    access_token?: string
+    refresh_token?: string
+    expires_in?: number
+  }
+  return {
+    accessToken: typeof data.access_token === 'string' ? data.access_token : null,
+    newRefreshToken: typeof data.refresh_token === 'string' ? data.refresh_token : null,
+    expiresIn: typeof data.expires_in === 'number' ? data.expires_in : undefined
   }
 }
 
 export async function loadProjectId(accessToken: string): Promise<string> {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS)
+  const res = await getMainHttpClient().fetch(LOAD_CODE_ASSIST_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`
+    },
+    body: JSON.stringify({ metadata: { ideType: 'GEMINI_CLI', pluginType: 'GEMINI' } }),
+    signal: AbortSignal.timeout(API_TIMEOUT_MS)
+  })
 
-  try {
-    const res = await net.fetch(LOAD_CODE_ASSIST_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`
-      },
-      body: JSON.stringify({ metadata: { ideType: 'GEMINI_CLI', pluginType: 'GEMINI' } }),
-      signal: controller.signal
-    })
-
-    if (!res.ok) {
-      throw new Error(`Failed to load Gemini project ID (HTTP ${res.status})`)
-    }
-
-    const data = (await res.json()) as { cloudaicompanionProject?: string }
-    if (typeof data.cloudaicompanionProject !== 'string') {
-      throw new Error('Gemini project ID not found in API response')
-    }
-    return data.cloudaicompanionProject
-  } finally {
-    clearTimeout(timeout)
+  if (!res.ok) {
+    throw new Error(`Failed to load Gemini project ID (HTTP ${res.status})`)
   }
+
+  const data = (await res.json()) as { cloudaicompanionProject?: string }
+  if (typeof data.cloudaicompanionProject !== 'string') {
+    throw new Error('Gemini project ID not found in API response')
+  }
+  return data.cloudaicompanionProject
 }
 
-// Why: accepts a plain refresh token string so both the oauth_creds.json path
-// (GeminiCredentials) and the auth.json path (pipe-split string) can share
-// the same bundle credential extraction without coupling to either struct.
+// A plain refresh token lets both credential-file formats share bundle extraction.
 export async function tryRefreshTokenFromBundle(
   refreshToken: string,
   allowCliOAuth = true

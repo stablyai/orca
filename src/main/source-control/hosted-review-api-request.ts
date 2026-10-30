@@ -23,10 +23,8 @@ export async function requestHostedReviewJson<T>(
   init: Omit<RequestInit, 'signal'>,
   timeoutMs: number
 ): Promise<T> {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    const response = await fetch(url, { ...init, signal: controller.signal })
+    const response = await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) })
     if (!response.ok) {
       const body = await readResponseText(response)
       throw new HostedReviewApiRequestError(body || response.statusText, {
@@ -38,11 +36,10 @@ export async function requestHostedReviewJson<T>(
     if (error instanceof HostedReviewApiRequestError) {
       throw error
     }
-    if (error instanceof Error && error.name === 'AbortError') {
+    // AbortSignal.timeout() rejects with a TimeoutError, not an AbortError.
+    if (error instanceof Error && error.name === 'TimeoutError') {
       throw new HostedReviewApiRequestError('Request timed out', { timedOut: true })
     }
     throw error
-  } finally {
-    clearTimeout(timeout)
   }
 }

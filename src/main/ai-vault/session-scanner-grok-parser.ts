@@ -1,40 +1,44 @@
-import { createReadStream } from 'fs'
-import { readFile } from 'fs/promises'
-import { dirname, join } from 'path'
-import { createInterface } from 'readline'
+import { openTranscriptReadStream, wslGatedReadFile } from '../native-chat/wsl-transcript-fs-access'
+import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
+import { dirname, join } from 'node:path'
+import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { FileWithMtime, SessionAccumulator } from './session-scanner-types'
+import type { TranscriptMessageSink } from './session-transcript-consumers'
 import {
-  addPreviewMessage,
   createAccumulator,
   finalizeSession,
   sessionIdFromFileName,
   updateTimeline
 } from './session-scanner-accumulator'
+import { addSessionContent, addSessionText } from './session-scanner-messages'
+import {
+  extractGrokFirstUserPromptText,
+  stripGrokUserQueryEnvelope
+} from './session-scanner-grok-user-text'
 import {
   asRecord,
-  extractPreviewContentText,
   extractString,
-  normalizePreviewText,
   normalizeTitleText,
   numberValue,
   parseJsonObject
 } from './session-scanner-values'
 
-const GROK_USER_QUERY_PREVIEW_SCAN_LIMIT = 4096
+const GROK_PREVIEW_SCAN_LIMIT = 4096
 
 export async function parseGrokSessionFile(
   file: FileWithMtime,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  messages?: TranscriptMessageSink
 ): Promise<AiVaultSession | null> {
-  const record = asRecord(JSON.parse(await readFile(file.path, 'utf-8')) as unknown)
+  const record = asRecord(JSON.parse(await wslGatedReadFile(file.path, 'utf-8', 'scan')) as unknown)
   if (!record) {
     return null
   }
   const info = asRecord(record.info)
   const sessionId = extractString(info?.id) ?? sessionIdFromFileName(dirname(file.path))
-  const accumulator = createAccumulator({ agent: 'grok', file, sessionId })
-  accumulator.cwd = extractString(info?.cwd)
+  const accumulator = createAccumulator({ agent: 'grok', file, sessionId, messages })
+  accumulator.cwd = grokSessionCwd(record)
   accumulator.title =
     normalizeTitleText(extractString(record.generated_title) ?? '') ??
     normalizeTitleText(extractString(record.session_summary) ?? '')
@@ -49,16 +53,22 @@ export async function parseGrokSessionFile(
   return finalizeSession(accumulator, platform)
 }
 
+/** Scope discovery reads cwd from the summary without opening history. */
+export function grokSessionCwd(summary: Record<string, unknown>): string | null {
+  return extractString(asRecord(summary.info)?.cwd)
+}
+
 async function consumeGrokChatHistory(
   accumulator: SessionAccumulator,
   sessionDir: string
 ): Promise<void> {
+  const input = openTranscriptReadStream(
+    join(sessionDir, 'chat_history.jsonl'),
+    { encoding: 'utf-8' },
+    'scan'
+  )
+  const lines = createInterface({ input, crlfDelay: Infinity })
   try {
-    const lines = createInterface({
-      input: createReadStream(join(sessionDir, 'chat_history.jsonl'), { encoding: 'utf-8' }),
-      crlfDelay: Infinity
-    })
-
     for await (const line of lines) {
       const record = parseJsonObject(line)
       if (!record) {
@@ -68,67 +78,39 @@ async function consumeGrokChatHistory(
       if (role !== 'user' && role !== 'assistant') {
         continue
       }
-      const text = extractGrokContentText(record.content)
+
       if (role === 'user') {
-        accumulator.title ??= normalizeTitleText(text ?? '')
+        const text = extractGrokFirstUserPromptText(record.content)
+        if (text) {
+          accumulator.title ??= normalizeTitleText(text)
+          addSessionText(accumulator, {
+            role,
+            text,
+            timestamp: record.timestamp,
+            previewScanLimit: GROK_PREVIEW_SCAN_LIMIT
+          })
+        }
+        continue
       }
-      addPreviewMessage(accumulator, {
+
+      addSessionContent(
+        accumulator,
         role,
-        text,
-        timestamp: extractString(record.timestamp)
-      })
+        typeof record.content === 'string'
+          ? stripGrokUserQueryEnvelope(record.content)
+          : record.content,
+        record.timestamp,
+        { previewScanLimit: GROK_PREVIEW_SCAN_LIMIT }
+      )
     }
-  } catch {
-    // Summary-only sessions still provide enough metadata for the Vault list.
-  }
-}
-
-export function extractGrokContentText(value: unknown): string | null {
-  if (typeof value === 'string') {
-    return extractGrokStringContentText(value)
-  }
-  return extractPreviewContentText(value)
-}
-
-function extractGrokStringContentText(text: string): string | null {
-  const bounds = grokUserQueryEnvelopeBounds(text)
-  if (!bounds) {
-    return normalizePreviewText(text)
-  }
-
-  const boundedEnd = Math.min(bounds.end, bounds.start + GROK_USER_QUERY_PREVIEW_SCAN_LIMIT)
-  return normalizePreviewText(text.slice(bounds.start, boundedEnd)) ?? normalizePreviewText(text)
-}
-
-function grokUserQueryEnvelopeBounds(text: string): { start: number; end: number } | null {
-  const opener = '<user_query>'
-  const startIndex = indexOfAsciiIgnoreCase(text, opener, 0)
-  if (startIndex === -1) {
-    return null
-  }
-  const bodyStartIndex = startIndex + opener.length
-  const endIndex = indexOfAsciiIgnoreCase(text, '</user_query>', bodyStartIndex)
-  if (endIndex === -1) {
-    return null
-  }
-  return { start: bodyStartIndex, end: endIndex }
-}
-
-function indexOfAsciiIgnoreCase(value: string, search: string, fromIndex: number): number {
-  const lastStart = value.length - search.length
-  for (let index = Math.max(0, fromIndex); index <= lastStart; index++) {
-    let matches = true
-    for (let offset = 0; offset < search.length; offset++) {
-      const code = value.charCodeAt(index + offset)
-      const normalizedCode = code >= 65 && code <= 90 ? code + 32 : code
-      if (normalizedCode !== search.charCodeAt(offset)) {
-        matches = false
-        break
-      }
+  } catch (error) {
+    // Summary-only sessions can list; WSL refusal must propagate so incomplete history is not cached as current.
+    if (error instanceof WslTranscriptFsError) {
+      throw error
     }
-    if (matches) {
-      return index
-    }
+  } finally {
+    // readline.close() leaves its input open; destroy the gated stream after read failures too.
+    lines.close()
+    input.destroy()
   }
-  return -1
 }

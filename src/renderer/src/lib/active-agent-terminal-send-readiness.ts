@@ -1,6 +1,13 @@
 import type { RuntimeTerminalAgentStatus } from '../../../shared/runtime-types'
-import { callRuntimeRpc, RuntimeRpcCallError } from '@/runtime/runtime-rpc-client'
-import type { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
+import type { ActiveAgentNotesSendFailureCode } from './active-agent-note-send-result'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import {
+  runtimeFailureCode,
+  TERMINAL_RUNTIME_FAILURE_CODES
+} from './active-agent-note-send-diagnostics'
 
 export const ACTIVE_AGENT_SEND_RPC_TIMEOUT_MS = 15000
 
@@ -14,10 +21,11 @@ export type TerminalAgentSendReadiness =
 export type TerminalAgentSendReadinessResult = {
   status: TerminalAgentSendReadiness
   supportsGuardedSend: boolean
+  code?: ActiveAgentNotesSendFailureCode
 }
 
 export async function getTerminalAgentSendReadiness(
-  runtimeTarget: ReturnType<typeof getActiveRuntimeTarget>,
+  runtimeTarget: RuntimeClientTarget,
   terminalHandle: string,
   options: { allowLegacyFallback: boolean }
 ): Promise<TerminalAgentSendReadinessResult> {
@@ -38,28 +46,27 @@ export async function getTerminalAgentSendReadiness(
   } catch (error) {
     if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
       if (!options.allowLegacyFallback) {
-        // Why: selected-target sends are immediate; without terminal.agentStatus
-        // an older remote runtime cannot rule out permission/action prompts.
+        // Immediate selected-target sends require agentStatus to rule out permission/action prompts on older hosts.
         return { status: 'status-unavailable', supportsGuardedSend: false }
       }
-      // Why: active-focused sends still wait for tui-idle, preserving old
-      // runtime compatibility without immediate selected-target risk.
-      return {
-        status: await getLegacyTerminalAgentSendStatus(runtimeTarget, terminalHandle),
-        supportsGuardedSend: false
-      }
+      // Focused sends still wait for tui-idle, preserving older-runtime compatibility.
+      return await getLegacyTerminalAgentSendStatus(runtimeTarget, terminalHandle)
     }
     if (isRuntimeTerminalUnavailable(error)) {
-      return { status: 'no-active-terminal', supportsGuardedSend: false }
+      return {
+        status: 'no-active-terminal',
+        supportsGuardedSend: false,
+        code: runtimeTerminalUnavailableCode(error)
+      }
     }
     throw error
   }
 }
 
 async function getLegacyTerminalAgentSendStatus(
-  runtimeTarget: ReturnType<typeof getActiveRuntimeTarget>,
+  runtimeTarget: RuntimeClientTarget,
   terminalHandle: string
-): Promise<TerminalAgentSendReadiness> {
+): Promise<TerminalAgentSendReadinessResult> {
   try {
     const { isRunningAgent } = await callRuntimeRpc<{ isRunningAgent: boolean }>(
       runtimeTarget,
@@ -67,31 +74,38 @@ async function getLegacyTerminalAgentSendStatus(
       { terminal: terminalHandle },
       { timeoutMs: ACTIVE_AGENT_SEND_RPC_TIMEOUT_MS }
     )
-    return isRunningAgent ? 'sendable' : 'no-agent'
+    return {
+      status: isRunningAgent ? 'sendable' : 'no-agent',
+      supportsGuardedSend: false
+    }
   } catch (error) {
     if (isRuntimeTerminalUnavailable(error)) {
-      return 'no-active-terminal'
+      return {
+        status: 'no-active-terminal',
+        supportsGuardedSend: false,
+        code: runtimeTerminalUnavailableCode(error)
+      }
     }
     throw error
   }
 }
 
+function runtimeTerminalUnavailableCode(error: unknown): ActiveAgentNotesSendFailureCode {
+  return runtimeFailureCode(error) ?? 'runtime-unverifiable'
+}
+
 export function isRuntimeTimeout(error: unknown): boolean {
+  if (hasRuntimeRpcErrorCode(error, 'runtime_timeout')) {
+    return true
+  }
   const message = error instanceof Error ? error.message : String(error)
   return message.includes('timeout')
 }
 
 export function isRuntimeTerminalUnavailable(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error)
-  return (
-    message.includes('terminal_handle_stale') ||
-    message.includes('terminal_exited') ||
-    message.includes('terminal_gone') ||
-    message.includes('no_active_terminal')
-  )
+  return TERMINAL_RUNTIME_FAILURE_CODES.some((code) => hasRuntimeRpcErrorCode(error, code))
 }
 
 export function isRuntimeTerminalNotWritable(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error)
-  return message.includes('terminal_not_writable')
+  return hasRuntimeRpcErrorCode(error, 'terminal_not_writable')
 }

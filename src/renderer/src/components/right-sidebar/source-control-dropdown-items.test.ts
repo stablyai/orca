@@ -1,9 +1,16 @@
-/* eslint-disable max-lines -- Why: the dropdown priority table is easier to audit when the row-state cases live together. */
 import { describe, expect, it } from 'vitest'
-import { resolveDropdownItems, type DropdownActionInputs } from './source-control-dropdown-items'
+import { i18n } from '@/i18n/i18n'
+import { PSEUDO_LOCALIZATION_LOCALE } from '@/i18n/pseudo-localization'
+import { resolveDropdownItems } from './source-control-dropdown-items'
+import type {
+  DropdownActionInputs,
+  DropdownItem
+} from '../../../../shared/source-control-dropdown-item-types'
+import {
+  hasUsableHostedReviewPushTarget,
+  resolveHostedReviewActionUpstreamStatus
+} from '../../../../shared/hosted-review-push-target'
 
-// Why: a shared defaults object keeps each case row terse while making the
-// "this is the one knob that differs from the baseline" intent obvious.
 function inputs(overrides: Partial<DropdownActionInputs> = {}): DropdownActionInputs {
   return {
     stagedCount: 0,
@@ -78,7 +85,7 @@ describe('resolveDropdownItems', () => {
     expect(byKind.commit.title).toBe('Commit staged changes')
   })
 
-  it('disables push actions but keeps Fetch enabled when branch has no upstream', () => {
+  it('enables explicit push actions and keeps Fetch enabled when branch has no upstream', () => {
     const items = resolveDropdownItems(
       inputs({
         stagedCount: 1,
@@ -89,7 +96,8 @@ describe('resolveDropdownItems', () => {
     const byKind = Object.fromEntries(
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
-    expect(byKind.push.disabled).toBe(true)
+    expect(byKind.push.disabled).toBe(false)
+    expect(byKind.force_push.disabled).toBe(false)
     expect(byKind.commit_push.disabled).toBe(true)
     expect(byKind.publish.disabled).toBe(false)
     expect(byKind.fetch.disabled).toBe(false)
@@ -175,7 +183,8 @@ describe('resolveDropdownItems', () => {
           review: null,
           canCreate: false,
           blockedReason: 'needs_sync',
-          nextAction: 'sync'
+          nextAction: 'sync',
+          reviewLookupOutcome: 'not_found'
         }
       })
     )
@@ -184,8 +193,8 @@ describe('resolveDropdownItems', () => {
     )
 
     expect(byKind.push.label).toBe('Push (14)')
-    expect(byKind.push.disabled).toBe(true)
-    expect(byKind.push.title).toBe('Use Force Push — remote only has older copies of local commits')
+    expect(byKind.push.disabled).toBe(false)
+    expect(byKind.push.title).toBe('Try a regular push; git may require force push')
     expect(byKind.force_push.label).toBe('Force Push (4)')
     expect(byKind.force_push.disabled).toBe(false)
     expect(byKind.force_push.title).toBe(
@@ -352,7 +361,8 @@ describe('resolveDropdownItems', () => {
           review: null,
           canCreate: true,
           blockedReason: null,
-          nextAction: null
+          nextAction: null,
+          reviewLookupOutcome: 'not_found'
         }
       })
     )
@@ -365,10 +375,8 @@ describe('resolveDropdownItems', () => {
     }
   })
 
-  it('disables remote rows with a loading tooltip when upstreamStatus is undefined', () => {
-    // Why: mirrors the primary-action guard — while fetchUpstreamStatus is in
-    // flight we must not let the user click Publish on an already-tracked
-    // branch (which would re-run `git push -u` and clobber the upstream).
+  it('keeps explicit push rows available while upstreamStatus is undefined', () => {
+    // Block Publish while upstream loads; explicit Push/Force Push safely resolve their target at click time.
     const items = resolveDropdownItems(
       inputs({ stagedCount: 1, hasMessage: true, upstreamStatus: undefined })
     )
@@ -378,8 +386,6 @@ describe('resolveDropdownItems', () => {
     const loadingBlocked = [
       'commit_push',
       'commit_sync',
-      'push',
-      'force_push',
       'pull',
       'fast_forward',
       'sync',
@@ -389,24 +395,35 @@ describe('resolveDropdownItems', () => {
       expect(byKind[kind].disabled).toBe(true)
       expect(byKind[kind].title).toBe('Checking branch status…')
     }
-    // Commit itself does not depend on upstream — it remains enabled when
-    // staged + message are present and no commit is in flight.
     expect(byKind.commit.disabled).toBe(false)
+    expect(byKind.push.disabled).toBe(false)
+    expect(byKind.push.title).toBe('Push this branch and set an upstream if needed')
+    expect(byKind.force_push.disabled).toBe(false)
+    expect(byKind.force_push.title).toBe(
+      'Force push this branch with lease and set an upstream if needed.'
+    )
     expect(byKind.fetch.disabled).toBe(false)
     expect(byKind.fetch.title).toBe('Fetch from remote without merging')
   })
 
-  it('keeps Fetch enabled and surfaces publish-first tooltips when upstream is absent', () => {
-    // Why: sibling to the upstreamStatus=undefined test above. Once the fetch
-    // resolves to hasUpstream=false, the dropdown should explain that the
-    // user needs to publish first (rather than leaving the loading copy).
+  it('keeps explicit push rows enabled and surfaces publish-first tooltips elsewhere', () => {
+    // Explicit pushes can set upstream; Pull/Sync need publish-first guidance after absence is confirmed.
     const items = resolveDropdownItems(
-      inputs({ upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 } })
+      inputs({
+        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
+        branchCommitsAhead: 2
+      })
     )
     const byKind = Object.fromEntries(
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
-    expect(byKind.push.title).toBe('Publish the branch first to push commits')
+    expect(byKind.push.title).toBe('Push this branch and set an upstream if needed')
+    expect(byKind.push.disabled).toBe(false)
+    expect(byKind.force_push.label).toBe('Force Push (2)')
+    expect(byKind.force_push.title).toBe(
+      'Force push 2 branch commits with lease and set an upstream if needed.'
+    )
+    expect(byKind.force_push.disabled).toBe(false)
     expect(byKind.pull.title).toBe('Publish the branch first to pull commits')
     expect(byKind.fast_forward.title).toBe('Publish the branch first to fast-forward')
     expect(byKind.sync.title).toBe('Publish the branch first to sync commits')
@@ -483,7 +500,7 @@ describe('resolveDropdownItems', () => {
     expect(byKind.publish.disabled).toBe(false)
   })
 
-  it('does not mention Publish Branch when the linked PR is already merged', () => {
+  it('keeps explicit push rows available when the linked PR is already merged', () => {
     const items = resolveDropdownItems(
       inputs({
         upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
@@ -493,7 +510,12 @@ describe('resolveDropdownItems', () => {
     const byKind = Object.fromEntries(
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
-    expect(byKind.push.title).toBe('PR is already merged')
+    expect(byKind.push.title).toBe('Push this branch and set an upstream if needed')
+    expect(byKind.push.disabled).toBe(false)
+    expect(byKind.force_push.title).toBe(
+      'Force push this branch with lease and set an upstream if needed.'
+    )
+    expect(byKind.force_push.disabled).toBe(false)
     expect(byKind.pull.title).toBe('PR is already merged')
     expect(byKind.fast_forward.title).toBe('PR is already merged')
     expect(byKind.sync.title).toBe('PR is already merged')
@@ -519,12 +541,37 @@ describe('resolveDropdownItems', () => {
     expect(byKind.commit_push.disabled).toBe(false)
     expect(byKind.push.title).toBe('Push updates to the linked review branch')
     expect(byKind.push.disabled).toBe(false)
+    expect(byKind.force_push.label).toBe('Force Push (1)')
+    expect(byKind.force_push.disabled).toBe(false)
     expect(byKind.publish.label).toBe('Linked Review')
     expect(byKind.publish.title).toBe('Linked review branch already exists')
     expect(byKind.publish.disabled).toBe(true)
   })
 
-  it('blocks Push when an open linked review has no upstream and no branch target', () => {
+  it('keeps explicit Push available for a linked review with a usable target and no commits ahead', () => {
+    // Zero commits ahead still has a valid review head; match the primary Push gate.
+    const items = resolveDropdownItems(
+      inputs({
+        stagedCount: 1,
+        hasMessage: true,
+        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
+        branchCommitsAhead: 0,
+        prState: 'open',
+        canPushLinkedReviewWithoutUpstream: true
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    expect(byKind.push.disabled).toBe(false)
+    expect(byKind.push.title).toBe('Push this branch and set an upstream if needed')
+    expect(byKind.force_push.disabled).toBe(false)
+    expect(byKind.commit_push.disabled).toBe(false)
+    expect(byKind.publish.disabled).toBe(true)
+  })
+
+  it('blocks Push when an open linked review has no branch target', () => {
+    // Missing review heads must not fall through to an unrelated configured upstream; match the primary target gate.
     const items = resolveDropdownItems(
       inputs({
         stagedCount: 1,
@@ -541,6 +588,8 @@ describe('resolveDropdownItems', () => {
     expect(byKind.commit_push.title).toBe('Linked review branch target is unavailable')
     expect(byKind.push.title).toBe('Linked review branch target is unavailable')
     expect(byKind.push.disabled).toBe(true)
+    expect(byKind.force_push.title).toBe('Linked review branch target is unavailable')
+    expect(byKind.force_push.disabled).toBe(true)
     expect(byKind.publish.label).toBe('Linked Review')
     expect(byKind.publish.title).toBe('Linked review branch target is unavailable')
     expect(byKind.publish.disabled).toBe(true)
@@ -562,9 +611,7 @@ describe('resolveDropdownItems', () => {
   })
 
   it('omits counts from compound commit labels even when ahead/behind are nonzero', () => {
-    // Why: the commit itself changes ahead/behind, so pre-commit counts would
-    // be stale the moment the action fires. Plain Push/Pull/Sync continue to
-    // carry counts because no commit is interposed.
+    // Commit changes ahead/behind, invalidating compound-label counts; plain remote actions keep their counts.
     const items = resolveDropdownItems(
       inputs({
         stagedCount: 1,
@@ -577,7 +624,6 @@ describe('resolveDropdownItems', () => {
     )
     expect(byKind.commit_push.label).toBe('Commit & Push')
     expect(byKind.commit_sync.label).toBe('Commit & Sync')
-    // Sanity check: plain counterparts still carry counts.
     expect(byKind.push.label).toBe('Push (2)')
     expect(byKind.sync.label).toBe('Sync (↓3 ↑2)')
   })
@@ -605,117 +651,145 @@ describe('resolveDropdownItems', () => {
     )
   })
 
-  it('enables the push-before-PR recovery action when review creation is only blocked by unpushed commits', () => {
-    const items = resolveDropdownItems(
-      inputs({
-        upstreamStatus: { hasUpstream: true, ahead: 2, behind: 0 },
-        hostedReviewCreation: {
-          provider: 'github',
-          review: null,
-          canCreate: false,
-          blockedReason: 'needs_push',
-          nextAction: 'push'
-        }
-      })
-    )
-    const byKind = Object.fromEntries(
-      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
-    )
-    expect(byKind.create_pr.disabled).toBe(false)
-    expect(byKind.create_pr.hint).toBe('Push first')
-    expect(byKind.push_create_pr.label).toBe('Push before PR')
-    expect(byKind.push_create_pr.disabled).toBe(false)
-  })
-
-  it('uses GitLab MR copy for create and push-before-create rows', () => {
-    const items = resolveDropdownItems(
-      inputs({
-        upstreamStatus: { hasUpstream: true, ahead: 2, behind: 0 },
-        hostedReviewCreation: {
-          provider: 'gitlab',
-          review: null,
-          canCreate: false,
-          blockedReason: 'needs_push',
-          nextAction: 'push'
-        }
-      })
-    )
-    const byKind = Object.fromEntries(
-      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
-    )
-    expect(byKind.create_pr.label).toBe('Create MR')
-    expect(byKind.create_pr.hint).toBe('Push first')
-    expect(byKind.create_pr.disabled).toBe(false)
-    expect(byKind.push_create_pr.label).toBe('Push before MR')
-    expect(byKind.push_create_pr.title).toBe('Push local commits before creating a merge request')
-    expect(byKind.push_create_pr.disabled).toBe(false)
-  })
-
-  it.each(['azure-devops', 'gitea'] as const)(
-    'enables push-before-PR recovery for %s review creation',
-    (provider) => {
-      const items = resolveDropdownItems(
+  it('routes Commit & Sync, Rebase, and Create PR blocked copy through the active locale', async () => {
+    await i18n.changeLanguage(PSEUDO_LOCALIZATION_LOCALE)
+    try {
+      const loading = resolveDropdownItems(inputs({ rebaseBaseRef: 'origin/main' }))
+      const blocked = resolveDropdownItems(
         inputs({
-          upstreamStatus: { hasUpstream: true, ahead: 2, behind: 0 },
+          upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 },
           hostedReviewCreation: {
-            provider,
+            provider: 'github',
             review: null,
             canCreate: false,
-            blockedReason: 'needs_push',
-            nextAction: 'push'
+            blockedReason: 'dirty',
+            nextAction: 'commit',
+            reviewLookupOutcome: 'not_found'
           }
         })
       )
-      const byKind = Object.fromEntries(
-        items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+      const loadingByKind = Object.fromEntries(
+        loading.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
       )
-      expect(byKind.create_pr.label).toBe('Create PR')
-      expect(byKind.create_pr.hint).toBe('Push first')
-      expect(byKind.create_pr.disabled).toBe(false)
-      expect(byKind.push_create_pr.label).toBe('Push before PR')
-      expect(byKind.push_create_pr.title).toBe('Push local commits before creating a pull request')
-      expect(byKind.push_create_pr.disabled).toBe(false)
+      const blockedByKind = Object.fromEntries(
+        blocked.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+      )
+      expect(loadingByKind.commit_sync.title).toBe('[Checking branch status…]')
+      expect(loadingByKind.rebase_base.label).toBe('[Rebase from origin/main]')
+      expect(blockedByKind.create_pr.hint).toBe('[Commit changes first]')
+    } finally {
+      await i18n.changeLanguage('en')
     }
-  )
-
-  it.each([
-    ['azure-devops', 'Set ORCA_AZURE_DEVOPS_TOKEN in this environment'],
-    ['gitea', 'Set ORCA_GITEA_TOKEN in this environment']
-  ] as const)('uses token auth copy when %s PR creation needs authentication', (provider, hint) => {
-    const items = resolveDropdownItems(
-      inputs({
-        upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 },
-        hostedReviewCreation: {
-          provider,
-          review: null,
-          canCreate: false,
-          blockedReason: 'auth_required',
-          nextAction: 'authenticate'
-        }
-      })
-    )
-    const byKind = Object.fromEntries(
-      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
-    )
-    expect(byKind.create_pr.hint).toBe(hint)
   })
 
-  it('uses GitLab auth copy when MR creation needs authentication', () => {
+  it('routes every row label and tooltip through the active locale', async () => {
+    await i18n.changeLanguage(PSEUDO_LOCALIZATION_LOCALE)
+    try {
+      const idle = resolveDropdownItems(
+        inputs({
+          conflictOperation: 'merge',
+          upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0, upstreamName: 'origin/main' },
+          hostedReviewCreation: {
+            provider: 'github',
+            review: null,
+            canCreate: true,
+            blockedReason: null,
+            nextAction: null,
+            reviewLookupOutcome: 'not_found'
+          }
+        })
+      )
+      for (const entry of idle) {
+        if (entry.kind !== 'separator') {
+          expect(entry.label).toMatch(/^\[/)
+          expect(entry.title).toMatch(/^\[/)
+        }
+      }
+      const idleByKind = Object.fromEntries(
+        idle.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+      )
+      expect(idleByKind.commit.title).toBe('[Stage at least one file to commit]')
+      expect(idleByKind.push.title).toBe('[Nothing to push to origin/main]')
+      expect(idleByKind.abort_merge.title).toBe('[Abort the merge in progress]')
+
+      const loading = resolveDropdownItems(inputs())
+      const loadingByKind = Object.fromEntries(
+        loading.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+      )
+      for (const kind of ['commit_push', 'pull', 'fast_forward', 'sync', 'publish']) {
+        expect(loadingByKind[kind].title).toBe('[Checking branch status…]')
+      }
+    } finally {
+      await i18n.changeLanguage('en')
+    }
+  })
+})
+
+// Exercise the real push-target resolution chain used by the component (#8196).
+describe('resolveDropdownItems with an unhydrated linked-review push target', () => {
+  function pipeline(args: {
+    branchName: string
+    upstreamStatus: DropdownActionInputs['upstreamStatus']
+  }): Record<string, DropdownItem> {
+    const canUseHostedReviewPushTarget = hasUsableHostedReviewPushTarget({
+      // pushTarget intentionally omitted: the resolver has not hydrated it yet.
+      hasResolvableHostedReviewPushTargetLink: true,
+      branchName: args.branchName,
+      upstreamStatus: args.upstreamStatus
+    })
+    const upstreamStatus = resolveHostedReviewActionUpstreamStatus({
+      hasHostedReviewLink: true,
+      hasResolvableHostedReviewPushTargetLink: true,
+      hostedReviewState: 'open',
+      isHostedReviewStateLoading: false,
+      canUseHostedReviewPushTarget,
+      upstreamStatus: args.upstreamStatus
+    })
     const items = resolveDropdownItems(
       inputs({
-        upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 },
-        hostedReviewCreation: {
-          provider: 'gitlab',
-          review: null,
-          canCreate: false,
-          blockedReason: 'auth_required',
-          nextAction: 'authenticate'
-        }
+        stagedCount: 1,
+        hasMessage: true,
+        branchCommitsAhead: 7,
+        prState: 'open',
+        upstreamStatus,
+        canPushLinkedReviewWithoutUpstream: canUseHostedReviewPushTarget
       })
     )
-    const byKind = Object.fromEntries(
-      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    return Object.fromEntries(
+      items.filter((e): e is DropdownItem => e.kind !== 'separator').map((e) => [e.kind, e])
     )
-    expect(byKind.create_pr.hint).toBe('Run glab auth login in this environment')
+  }
+
+  it('enables Push and Force Push when the real upstream is the same-repo review head', () => {
+    const byKind = pipeline({
+      branchName: 'mobile-resume-suspected-fixes',
+      upstreamStatus: {
+        hasUpstream: true,
+        upstreamName: 'origin/mobile-resume-suspected-fixes',
+        ahead: 7,
+        behind: 2
+      }
+    })
+    expect(byKind.push.disabled).toBe(false)
+    expect(byKind.push.title).not.toBe('Linked review branch target is unavailable')
+    expect(byKind.force_push.disabled).toBe(false)
+    expect(byKind.pull.disabled).toBe(false)
+    expect(byKind.sync.disabled).toBe(false)
+    expect(byKind.publish.disabled).toBe(true)
+  })
+
+  it('still blocks Push when the real upstream is an unrelated fork/helper head', () => {
+    const byKind = pipeline({
+      branchName: 'mobile-resume-suspected-fixes',
+      upstreamStatus: {
+        hasUpstream: true,
+        upstreamName: 'origin/helper-branch',
+        ahead: 1,
+        behind: 0
+      }
+    })
+    expect(byKind.push.disabled).toBe(true)
+    expect(byKind.push.title).toBe('Linked review branch target is unavailable')
+    expect(byKind.force_push.disabled).toBe(true)
   })
 })

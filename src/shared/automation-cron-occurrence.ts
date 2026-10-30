@@ -1,0 +1,55 @@
+import type { ParsedCron } from './automation-schedule-parsing'
+
+const CRON_SCAN_DAYS = 9 * 366
+
+export function startOfLocalDay(timestamp: number): number {
+  const date = new Date(timestamp)
+  date.setHours(0, 0, 0, 0)
+  return date.getTime()
+}
+
+// Why: calendar steps, not 24h ones; DST days are not 24 hours long.
+export function addLocalDays(day: number, days: number): number {
+  const date = new Date(day)
+  date.setDate(date.getDate() + days)
+  date.setHours(0, 0, 0, 0)
+  return date.getTime()
+}
+
+// Why: local-field recomposition resolves a repeated fall-back minute to the earlier offset.
+export function floorToMinute(timestamp: number): number {
+  return Math.floor(timestamp / 60_000) * 60_000
+}
+
+export function cronMatches(rule: ParsedCron, timestamp: number): boolean {
+  if (!cronDateMatches(rule, timestamp)) {
+    return false
+  }
+  const date = new Date(timestamp)
+  return rule.hours.has(date.getHours()) && rule.minutes.has(date.getMinutes())
+}
+
+export function cronDateMatches(rule: ParsedCron, timestamp: number): boolean {
+  const date = new Date(timestamp)
+  if (!rule.months.has(date.getMonth() + 1)) {
+    return false
+  }
+  const dayOfMonthMatches = rule.daysOfMonth.has(date.getDate())
+  const dayOfWeekMatches = rule.daysOfWeek.has(date.getDay())
+  // Dialect rule; the flags are lexical (`isCronDayFieldRestricted`), not set sizes.
+  if (rule.dayOfMonthRestricted && rule.dayOfWeekRestricted) {
+    return dayOfMonthMatches || dayOfWeekMatches
+  }
+  return dayOfMonthMatches && dayOfWeekMatches
+}
+
+export function cronHasPossibleOccurrence(rule: ParsedCron, anchor: number): boolean {
+  let day = startOfLocalDay(anchor)
+  for (let i = 0; i < CRON_SCAN_DAYS; i += 1) {
+    if (cronDateMatches(rule, day)) {
+      return true
+    }
+    day = addLocalDays(day, 1)
+  }
+  return false
+}

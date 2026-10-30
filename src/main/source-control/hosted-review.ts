@@ -1,10 +1,13 @@
+import type { ExecutionHostId } from '../../shared/execution-host'
 import type { HostedReviewInfo } from '../../shared/hosted-review'
+import { assertRemoteUrlReadable } from '../git/remote-url-probe'
+import { getForgeProviderForRepository, type ForgeProviderId } from './forge-provider'
+import { hostedReviewSshConnectionId } from './hosted-review-execution-host'
+import { withHostedReviewBranchCache } from './hosted-review-branch-cache'
 import {
-  getForgeProviderById,
-  getForgeProviderForRepository,
-  type ForgeProviderId
-} from './forge-provider'
-import type { HostedReviewExecutionOptions } from './hosted-review-git-options'
+  getHostedReviewLocalGitOptions,
+  type HostedReviewExecutionOptions
+} from './hosted-review-git-options'
 
 function reviewLinkForProvider(
   input: Parameters<typeof getHostedReviewForBranch>[0],
@@ -30,7 +33,7 @@ function reviewLinkForProvider(
 export async function getHostedReviewForBranch(
   input: {
     repoPath: string
-    connectionId?: string | null
+    executionHostId: ExecutionHostId
     branch: string
     linkedGitHubPR?: number | null
     fallbackGitHubPR?: number | null
@@ -38,11 +41,14 @@ export async function getHostedReviewForBranch(
     linkedBitbucketPR?: number | null
     linkedAzureDevOpsPR?: number | null
     linkedGiteaPR?: number | null
+    currentHeadOid?: string | null
+    /** Selected-worktree surfaces earn per-minute pacing (#11532). */
+    active?: boolean
+    force?: boolean
   } & HostedReviewExecutionOptions
 ): Promise<HostedReviewInfo | null> {
   const branchName = input.branch.replace(/^refs\/heads\//, '')
-  // Why: detached HEAD cannot use branch lookup, but provider-specific exact
-  // ids can still resolve the review without probing an empty branch name.
+  // Detached HEAD skips branch lookup but still permits exact provider ids.
   if (
     !branchName &&
     input.linkedGitHubPR == null &&
@@ -55,27 +61,39 @@ export async function getHostedReviewForBranch(
     return null
   }
 
-  const provider = await getForgeProviderForRepository({
-    repoPath: input.repoPath,
-    connectionId: input.connectionId,
-    ...(input.localGitExecOptions ? { localGitExecOptions: input.localGitExecOptions } : {})
-  })
-  if (!provider) {
-    return null
-  }
-  return provider.getReviewForBranch({
-    repoPath: input.repoPath,
-    connectionId: input.connectionId,
-    branch: branchName,
-    ...(input.localGitExecOptions ? { localGitExecOptions: input.localGitExecOptions } : {}),
-    ...reviewLinkForProvider(input, provider.id)
-  })
-}
-
-export async function getHostedReviewByNumber(input: {
-  repoPath: string
-  provider: ForgeProviderId
-  number: number
-}): Promise<HostedReviewInfo | null> {
-  return getForgeProviderById(input.provider).getReviewByNumber(input)
+  const headOid = input.currentHeadOid?.trim() || null
+  // All clients spend one host-user API quota; cache above the provider funnel (#11532).
+  return withHostedReviewBranchCache(
+    { ...input, branch: branchName },
+    {
+      headOid,
+      ...(input.active === true ? { active: true } : {}),
+      ...(input.force === true ? { force: true } : {})
+    },
+    async () => {
+      const provider = await getForgeProviderForRepository({
+        repoPath: input.repoPath,
+        executionHostId: input.executionHostId,
+        ...(input.localGitExecOptions ? { localGitExecOptions: input.localGitExecOptions } : {})
+      })
+      if (!provider) {
+        // Detection swallows errors; probe reachability first so timeouts/relay loss cannot cache definitive no-review (P1-D).
+        await assertRemoteUrlReadable({
+          repoPath: input.repoPath,
+          // The probe is the leaf that still dials: it takes the SSH target, not the host id.
+          connectionId: hostedReviewSshConnectionId(input.executionHostId),
+          ...getHostedReviewLocalGitOptions(input)
+        })
+        return null
+      }
+      return provider.getReviewForBranch({
+        repoPath: input.repoPath,
+        executionHostId: input.executionHostId,
+        branch: branchName,
+        ...(input.localGitExecOptions ? { localGitExecOptions: input.localGitExecOptions } : {}),
+        githubCurrentHeadOid: headOid,
+        ...reviewLinkForProvider(input, provider.id)
+      })
+    }
+  )
 }

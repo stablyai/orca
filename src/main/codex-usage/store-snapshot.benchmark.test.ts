@@ -16,8 +16,8 @@ vi.mock('electron', () => ({
 function createStoreWithState(state: CodexUsagePersistedState): CodexUsageStore {
   const store = new CodexUsageStore({
     getRepos: () => [],
-    getWorktreeMeta: () => undefined
-  } as never)
+    getAllWorktreeMeta: () => ({})
+  })
 
   ;(store as unknown as { state: CodexUsagePersistedState }).state = state
   return store
@@ -37,7 +37,10 @@ function createLargeState(): CodexUsagePersistedState {
     outputTokens: 500,
     reasoningOutputTokens: 50,
     totalTokens: 1_500,
-    hasInferredPricing: false
+    hasInferredPricing: false,
+    longContextInputTokens: 0,
+    longContextCachedInputTokens: 0,
+    longContextOutputTokens: 0
   }))
   const sessions = Array.from({ length: 8_000 }, (_, index) => ({
     sessionId: `session-${index}`,
@@ -56,6 +59,9 @@ function createLargeState(): CodexUsagePersistedState {
     totalReasoningOutputTokens: 50,
     totalTokens: 1_500,
     hasInferredPricing: false,
+    longContextInputTokens: 0,
+    longContextCachedInputTokens: 0,
+    longContextOutputTokens: 0,
     locationBreakdown: [
       {
         locationKey: `worktree:wt-${index % 400}`,
@@ -68,7 +74,10 @@ function createLargeState(): CodexUsagePersistedState {
         outputTokens: 500,
         reasoningOutputTokens: 50,
         totalTokens: 1_500,
-        hasInferredPricing: false
+        hasInferredPricing: false,
+        longContextInputTokens: 0,
+        longContextCachedInputTokens: 0,
+        longContextOutputTokens: 0
       }
     ],
     modelBreakdown: [
@@ -76,6 +85,9 @@ function createLargeState(): CodexUsagePersistedState {
         modelKey: 'gpt-5',
         modelLabel: 'gpt-5',
         hasInferredPricing: false,
+        longContextInputTokens: 0,
+        longContextCachedInputTokens: 0,
+        longContextOutputTokens: 0,
         eventCount: 3,
         inputTokens: 1_000,
         cachedInputTokens: 250,
@@ -97,7 +109,10 @@ function createLargeState(): CodexUsagePersistedState {
         outputTokens: 500,
         reasoningOutputTokens: 50,
         totalTokens: 1_500,
-        hasInferredPricing: false
+        hasInferredPricing: false,
+        longContextInputTokens: 0,
+        longContextCachedInputTokens: 0,
+        longContextOutputTokens: 0
       }
     ]
   }))
@@ -132,9 +147,7 @@ describe('CodexUsageStore snapshot benchmark', () => {
     const snapshotMs = performance.now() - startedAt
     expect(snapshot.summary.totalTokens).toBe(18_000_000)
     expect(snapshot.recentSessions).toHaveLength(10)
-    // Why: full-suite CI runs this beside thousands of tests on shared runners.
-    // Keep a coarse guard so this catches accidental scan-like work without
-    // treating runner contention as a product regression.
+    // Use a coarse limit to tolerate contention on shared CI runners.
     expect(snapshotMs).toBeLessThan(1_000)
   })
 })

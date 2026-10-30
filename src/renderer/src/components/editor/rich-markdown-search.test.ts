@@ -6,7 +6,13 @@ import { findRichMarkdownSearchMatches } from './rich-markdown-search'
 
 function docFromText(text: string, pos = 0): ProseMirrorNode {
   return {
-    descendants(callback: (node: { isText: boolean; text?: string }, pos: number) => void) {
+    nodeSize: pos + text.length + 2,
+    content: { size: pos + text.length },
+    nodesBetween(
+      _from: number,
+      _to: number,
+      callback: (node: { isText: boolean; text?: string }, pos: number) => void
+    ) {
       callback({ isText: true, text }, pos)
     }
   } as unknown as ProseMirrorNode

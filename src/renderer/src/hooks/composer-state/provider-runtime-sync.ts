@@ -1,0 +1,286 @@
+import type { ComposerModel } from './composer-model'
+
+export type ComposerProviderRuntimeSyncInput = Pick<
+  ComposerModel,
+  | 'promptCaretFrameRef'
+  | 'repoId'
+  | 'selectedRepo'
+  | 'selectedRepoExecutionHostId'
+  | 'selectedRepoHookContextKey'
+  | 'selectedRepoIsGit'
+  | 'selectedRepoPath'
+  | 'selectedRepoTarget'
+  | 'setCheckedHooksContextKey'
+  | 'setSelectedRepoSlug'
+  | 'setSetupAgentStartupPolicy'
+  | 'setYamlHooks'
+  | 'setupAgentStartupPolicyDraftRef'
+  | 'setupAgentStartupPolicyRef'
+  | 'setupAgentStartupPolicySaveRef'
+  | 'updateRepo'
+>
+
+import { useEffect, useCallback, useRef } from 'react'
+import type { SetupAgentStartupPolicy, OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
+import { useAppStore } from '@/store'
+import { isGitRepoKind } from '../../../../shared/repo-kind'
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
+import { type HookCheckResult, checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import type { GitHubRepositoryIdentity } from '../../../../shared/github/pull-request-types'
+import {
+  getRepoSetupAgentStartupPolicy,
+  buildSetupAgentStartupHookSettings
+} from './setup-policy-decisions'
+
+export function useComposerProviderRuntimeSync(input: ComposerProviderRuntimeSyncInput) {
+  const {
+    promptCaretFrameRef,
+    repoId,
+    selectedRepo,
+    selectedRepoExecutionHostId,
+    selectedRepoHookContextKey,
+    selectedRepoIsGit,
+    selectedRepoPath,
+    selectedRepoTarget,
+    setCheckedHooksContextKey,
+    setSelectedRepoSlug,
+    setSetupAgentStartupPolicy,
+    setYamlHooks,
+    setupAgentStartupPolicyDraftRef,
+    setupAgentStartupPolicyRef,
+    setupAgentStartupPolicySaveRef,
+    updateRepo
+  } = input
+
+  // Depend on persisted hook-policy value; refetched repo identities must not replay stale toggles.
+  const persistedSetupAgentStartupPolicy = getRepoSetupAgentStartupPolicy(selectedRepo)
+
+  useEffect(() => {
+    const draft = setupAgentStartupPolicyDraftRef.current
+    if (draft?.repoId === repoId && draft.policy !== persistedSetupAgentStartupPolicy) {
+      return
+    }
+    setupAgentStartupPolicyRef.current = persistedSetupAgentStartupPolicy
+    setSetupAgentStartupPolicy(persistedSetupAgentStartupPolicy)
+  }, [
+    repoId,
+    persistedSetupAgentStartupPolicy,
+    setSetupAgentStartupPolicy,
+    setupAgentStartupPolicyDraftRef,
+    setupAgentStartupPolicyRef
+  ])
+
+  const persistSetupAgentStartupPolicy = useCallback(
+    async (
+      policy: SetupAgentStartupPolicy = setupAgentStartupPolicyRef.current
+    ): Promise<boolean> => {
+      while (true) {
+        const currentRepo = useAppStore.getState().repos.find((repo) => repo.id === repoId)
+        if (!currentRepo || !isGitRepoKind(currentRepo)) {
+          return true
+        }
+        const pendingSave = setupAgentStartupPolicySaveRef.current
+        if (pendingSave?.repoId === currentRepo.id) {
+          if (pendingSave.policy === policy) {
+            const saved = await pendingSave.promise
+            if (
+              saved &&
+              setupAgentStartupPolicyDraftRef.current?.repoId === currentRepo.id &&
+              setupAgentStartupPolicyDraftRef.current.policy === policy
+            ) {
+              setupAgentStartupPolicyDraftRef.current = null
+            }
+            return saved
+          }
+          await pendingSave.promise
+          continue
+        }
+        if (getRepoSetupAgentStartupPolicy(currentRepo) === policy) {
+          if (
+            setupAgentStartupPolicyDraftRef.current?.repoId === currentRepo.id &&
+            setupAgentStartupPolicyDraftRef.current.policy === policy
+          ) {
+            setupAgentStartupPolicyDraftRef.current = null
+          }
+          return true
+        }
+        const promise = updateRepo(currentRepo.id, {
+          hookSettings: buildSetupAgentStartupHookSettings(currentRepo.hookSettings, policy)
+        }).finally(() => {
+          if (setupAgentStartupPolicySaveRef.current?.promise === promise) {
+            setupAgentStartupPolicySaveRef.current = null
+          }
+        })
+        setupAgentStartupPolicySaveRef.current = { repoId: currentRepo.id, policy, promise }
+        const saved = await promise
+        if (
+          saved &&
+          setupAgentStartupPolicyDraftRef.current?.repoId === currentRepo.id &&
+          setupAgentStartupPolicyDraftRef.current.policy === policy
+        ) {
+          setupAgentStartupPolicyDraftRef.current = null
+        }
+        return saved
+      }
+    },
+    [
+      repoId,
+      updateRepo,
+      setupAgentStartupPolicyDraftRef,
+      setupAgentStartupPolicyRef,
+      setupAgentStartupPolicySaveRef
+    ]
+  )
+
+  const handleSetupAgentStartupPolicyChange = useCallback(
+    (policy: SetupAgentStartupPolicy) => {
+      setupAgentStartupPolicyRef.current = policy
+      if (repoId) {
+        setupAgentStartupPolicyDraftRef.current = { repoId, policy }
+      }
+      setSetupAgentStartupPolicy(policy)
+      void persistSetupAgentStartupPolicy(policy).then((saved) => {
+        if (!saved) {
+          toast.error(
+            translate(
+              'auto.hooks.useComposerState.setupAgentStartupPolicySaveFailed',
+              'Failed to save setup startup behavior.'
+            )
+          )
+        }
+      })
+    },
+    [
+      persistSetupAgentStartupPolicy,
+      repoId,
+      setSetupAgentStartupPolicy,
+      setupAgentStartupPolicyDraftRef,
+      setupAgentStartupPolicyRef
+    ]
+  )
+
+  const cancelPromptCaretFrame = useCallback((): void => {
+    if (promptCaretFrameRef.current === null) {
+      return
+    }
+    cancelAnimationFrame(promptCaretFrameRef.current)
+    promptCaretFrameRef.current = null
+  }, [promptCaretFrameRef])
+
+  const handleComposerNodeChange = useCallback(
+    (node: HTMLDivElement | null): void => {
+      // Why: cancel the queued caret restoration once the composer root (its target's ancestor) leaves the DOM.
+      if (!node) {
+        cancelPromptCaretFrame()
+      }
+    },
+    [cancelPromptCaretFrame]
+  )
+
+  const hookCheckRef = useRef<{
+    key: string
+    promise: Promise<HookCheckResult>
+  } | null>(null)
+
+  const loadHookCheckForRepo = useCallback(
+    (targetRepoId: string, options?: { background?: boolean }): Promise<HookCheckResult> => {
+      const background = options?.background === true
+      // A submit must not reuse the open-time check's stopped-distro refusal.
+      const key = JSON.stringify([
+        selectedRepoExecutionHostId ?? 'local',
+        targetRepoId,
+        ...(background ? ['background'] : [])
+      ])
+      const existing = hookCheckRef.current
+      if (existing?.key === key) {
+        return existing.promise
+      }
+      // Evict rejected checks so transient errors can retry; inspect only the repo’s known host.
+      const promise: Promise<HookCheckResult> = (
+        selectedRepoExecutionHostId
+          ? checkRuntimeHooks(selectedRepoExecutionHostId, targetRepoId, { background })
+          : Promise.reject(new Error('The project host is unknown.'))
+      ).catch((error: unknown) => {
+        if (hookCheckRef.current?.promise === promise) {
+          hookCheckRef.current = null
+        }
+        throw error
+      })
+      hookCheckRef.current = { key, promise }
+      return promise
+    },
+    [selectedRepoExecutionHostId]
+  )
+
+  const commitHookCheckIfCurrent = useCallback(
+    (targetContextKey: string, hooks: OrcaHooks | null): boolean => {
+      if (selectedRepoHookContextKey !== targetContextKey) {
+        return false
+      }
+      setYamlHooks(hooks)
+      setCheckedHooksContextKey(targetContextKey)
+      return true
+    },
+    [selectedRepoHookContextKey, setCheckedHooksContextKey, setYamlHooks]
+  )
+
+  useEffect(() => {
+    if (!selectedRepo || !selectedRepoPath || !selectedRepoIsGit) {
+      setSelectedRepoSlug(null)
+      return
+    }
+    let cancelled = false
+    const target = selectedRepoTarget
+    if (!target) {
+      setSelectedRepoSlug(null)
+      return
+    }
+    const slugRequest =
+      target.kind === 'environment'
+        ? callRuntimeRpc<GitHubRepositoryIdentity | null>(
+            target,
+            'github.repoSlug',
+            { repo: repoId },
+            { timeoutMs: 30_000 }
+          )
+        : (window.api.gh.repoSlug({ repoPath: selectedRepoPath, repoId }) as Promise<{
+            owner: string
+            repo: string
+          } | null>)
+    void slugRequest
+      .then((result) => {
+        if (cancelled) {
+          return
+        }
+        setSelectedRepoSlug(result)
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSelectedRepoSlug(null)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [
+    repoId,
+    selectedRepo,
+    selectedRepoIsGit,
+    selectedRepoPath,
+    selectedRepoTarget,
+    setSelectedRepoSlug
+  ])
+
+  return {
+    persistedSetupAgentStartupPolicy,
+    persistSetupAgentStartupPolicy,
+    handleSetupAgentStartupPolicyChange,
+    cancelPromptCaretFrame,
+    handleComposerNodeChange,
+    hookCheckRef,
+    loadHookCheckForRepo,
+    commitHookCheckIfCurrent
+  }
+}

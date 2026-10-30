@@ -3,6 +3,7 @@ import type { CommandHandler } from '../dispatch'
 import { formatRepoList, formatRepoRefs, formatRepoShow, printResult } from '../format'
 import { getOptionalPositiveIntegerFlag, getRequiredStringFlag } from '../flags'
 import { resolveRepoPathArgument } from '../repo-path-arguments'
+import { RuntimeClientError } from '../runtime/types'
 
 export const REPO_HANDLERS: Record<string, CommandHandler> = {
   'repo list': async ({ client, json }) => {
@@ -19,6 +20,21 @@ export const REPO_HANDLERS: Record<string, CommandHandler> = {
   'repo show': async ({ flags, client, json }) => {
     const result = await client.call<{ repo: Record<string, unknown> }>('repo.show', {
       repo: getRequiredStringFlag(flags, 'repo')
+    })
+    printResult(result, json, formatRepoShow)
+  },
+  'repo set': async ({ flags, client, json }) => {
+    const repo = getRequiredStringFlag(flags, 'repo')
+    const visibility = getRequiredStringFlag(flags, 'external-worktree-visibility')
+    if (visibility !== 'show' && visibility !== 'hide' && visibility !== 'inherit') {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        '--external-worktree-visibility must be show, hide, or inherit.'
+      )
+    }
+    const result = await client.call<{ repo: Record<string, unknown> }>('repo.update', {
+      repo,
+      updates: { externalWorktreeVisibility: visibility === 'inherit' ? null : visibility }
     })
     printResult(result, json, formatRepoShow)
   },

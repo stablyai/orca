@@ -8,9 +8,9 @@ function ok(id: string, result: unknown): RpcSuccess {
 }
 
 function clientWithResponses(responses: RpcResponse[]): Pick<RpcClient, 'sendRequest'> & {
-  calls: Array<{ method: string; params: unknown }>
+  calls: { method: string; params: unknown }[]
 } {
-  const calls: Array<{ method: string; params: unknown }> = []
+  const calls: { method: string; params: unknown }[] = []
   return {
     calls,
     sendRequest: vi.fn(async (method: string, params?: unknown) => {
@@ -25,8 +25,76 @@ function clientWithResponses(responses: RpcResponse[]): Pick<RpcClient, 'sendReq
 }
 
 describe('attachMobileImageToTerminal', () => {
+  it.each([null, 'unknown', 'codex'])(
+    'uploads an image as an attachment path when terminal agent is %s',
+    async (agent) => {
+      const client = clientWithResponses([
+        ok('start', { uploadId: 'upload-1' }),
+        ok('append', { receivedBase64Length: 4 }),
+        ok('commit', '/tmp/codex-shot.png'),
+        ok('send', { send: { accepted: true } })
+      ])
+
+      expect(
+        await attachMobileImageToTerminal('library', {
+          client,
+          agent,
+          terminal: 'codex-term',
+          deviceToken: null,
+          getConnectionId: async () => 'connection-ssh',
+          pickImage: async () => ({ base64: 'AAAA' })
+        })
+      ).toBe(true)
+      expect(
+        client.calls.find((call) => call.method === 'clipboard.startImageUpload')?.params
+      ).toMatchObject({ connectionId: 'connection-ssh' })
+      expect(client.calls.at(-1)).toEqual({
+        method: 'terminal.send',
+        params: {
+          terminal: 'codex-term',
+          text: '\x1b[200~/tmp/codex-shot.png\x1b[201~ ',
+          enter: false
+        }
+      })
+    }
+  )
+
+  it('keeps the captured OMP format while the picker is pending', async () => {
+    const client = clientWithResponses([
+      {
+        id: 'start',
+        ok: false,
+        error: { code: 'method_not_found', message: 'no' },
+        _meta: { runtimeId: 'r' }
+      },
+      ok('save', '/tmp/my image.png'),
+      ok('send', { send: { accepted: true } })
+    ])
+    let resolvePick!: (value: { base64: string }) => void
+    const deps = {
+      client,
+      terminal: 'omp-term',
+      agent: 'omp',
+      deviceToken: null,
+      getConnectionId: async () => null,
+      pickImage: () =>
+        new Promise<{ base64: string }>((resolve) => {
+          resolvePick = resolve
+        })
+    }
+    const pending = attachMobileImageToTerminal('library', deps)
+    deps.agent = 'claude'
+    deps.terminal = 'other-term'
+    resolvePick({ base64: 'AAAA' })
+    expect(await pending).toBe(true)
+    expect(client.calls.find((call) => call.method === 'terminal.send')?.params).toMatchObject({
+      terminal: 'omp-term',
+      text: '\x1b[200~@"/tmp/my image.png"\x1b[201~ ',
+      enter: false
+    })
+  })
+
   it('uploads the picked image and pastes its bracketed path into the terminal', async () => {
-    // startImageUpload (method_not_found) falls back to single-frame saveImageAsTempFile.
     const client = clientWithResponses([
       {
         id: 'start',
@@ -35,11 +103,12 @@ describe('attachMobileImageToTerminal', () => {
         _meta: { runtimeId: 'r' }
       },
       ok('save', '/tmp/orca-attach.png'),
-      ok('send', { ok: true })
+      ok('send', { send: { accepted: true } })
     ])
 
     const sent = await attachMobileImageToTerminal('library', {
       client,
+      agent: 'claude',
       terminal: 'term-1',
       deviceToken: 'device-9',
       getConnectionId: async () => 'conn-7',
@@ -50,13 +119,14 @@ describe('attachMobileImageToTerminal', () => {
     const sendCall = client.calls.find((c) => c.method === 'terminal.send')
     expect(sendCall?.params).toEqual({
       terminal: 'term-1',
-      text: '\x1b[200~/tmp/orca-attach.png\x1b[201~',
+      // A separator prevents the next keystroke gluing to the pasted image path.
+      text: '\x1b[200~/tmp/orca-attach.png\x1b[201~ ',
       enter: false,
       client: { id: 'device-9', type: 'mobile' }
     })
   })
 
-  it('passes the active worktree connectionId to the upload', async () => {
+  it('uploads the selected image bytes with the active worktree connectionId', async () => {
     const client = clientWithResponses([
       {
         id: 'start',
@@ -65,11 +135,12 @@ describe('attachMobileImageToTerminal', () => {
         _meta: { runtimeId: 'r' }
       },
       ok('save', '/tmp/x.png'),
-      ok('send', { ok: true })
+      ok('send', { send: { accepted: true } })
     ])
 
     await attachMobileImageToTerminal('files', {
       client,
+      agent: 'claude',
       terminal: 'term-1',
       deviceToken: null,
       getConnectionId: async () => 'conn-ssh',
@@ -77,7 +148,29 @@ describe('attachMobileImageToTerminal', () => {
     })
 
     const saveCall = client.calls.find((c) => c.method === 'clipboard.saveImageAsTempFile')
-    expect(saveCall?.params).toMatchObject({ connectionId: 'conn-ssh' })
+    expect(saveCall?.params).toEqual({ contentBase64: 'BBBB', connectionId: 'conn-ssh' })
+  })
+
+  it('forwards the picked fileName when attaching from files', async () => {
+    const client = clientWithResponses([
+      ok('start', { uploadId: 'upload-file-1' }),
+      ok('append', { received: 4 }),
+      ok('commit', '/tmp/orca-paste-1/柴静-看见.txt'),
+      ok('send', { send: { accepted: true } })
+    ])
+
+    const sent = await attachMobileImageToTerminal('files', {
+      client,
+      agent: 'claude',
+      terminal: 'term-1',
+      deviceToken: null,
+      getConnectionId: async () => null,
+      pickImage: vi.fn().mockResolvedValue({ base64: 'BBBB', fileName: '柴静-看见.txt' })
+    })
+
+    expect(sent).toBe(true)
+    const startCall = client.calls.find((c) => c.method === 'clipboard.startImageUpload')
+    expect(startCall?.params).toMatchObject({ fileName: '柴静-看见.txt' })
   })
 
   it('does nothing and returns false when the picker is cancelled', async () => {
@@ -85,6 +178,7 @@ describe('attachMobileImageToTerminal', () => {
 
     const sent = await attachMobileImageToTerminal('library', {
       client,
+      agent: 'claude',
       terminal: 'term-1',
       deviceToken: null,
       getConnectionId: async () => null,
@@ -104,11 +198,12 @@ describe('attachMobileImageToTerminal', () => {
         _meta: { runtimeId: 'r' }
       },
       ok('save', '/tmp/y.png'),
-      ok('send', { ok: true })
+      ok('send', { send: { accepted: true } })
     ])
 
     await attachMobileImageToTerminal('library', {
       client,
+      agent: 'claude',
       terminal: 'term-2',
       deviceToken: null,
       getConnectionId: async () => null,
@@ -117,5 +212,58 @@ describe('attachMobileImageToTerminal', () => {
 
     const sendCall = client.calls.find((c) => c.method === 'terminal.send')
     expect(sendCall?.params).not.toHaveProperty('client')
+  })
+
+  it('drops the image payload when the final pre-send check observes an input lease gap', async () => {
+    const client = clientWithResponses([
+      {
+        id: 'start',
+        ok: false,
+        error: { code: 'method_not_found', message: 'no' },
+        _meta: { runtimeId: 'r' }
+      },
+      ok('save', '/tmp/pending.png')
+    ])
+    // Why: upload can outlive the stream subscription whose acknowledgement
+    // originally enabled the composer.
+    const beforeTerminalSend = vi.fn(async () => false)
+
+    const sent = await attachMobileImageToTerminal('library', {
+      client,
+      agent: 'claude',
+      terminal: 'term-pending',
+      deviceToken: null,
+      getConnectionId: async () => null,
+      pickImage: vi.fn().mockResolvedValue({ base64: 'DDDD' }),
+      beforeTerminalSend
+    })
+
+    expect(sent).toBe(false)
+    expect(beforeTerminalSend).toHaveBeenCalledWith('term-pending')
+    expect(client.calls.some((call) => call.method === 'terminal.send')).toBe(false)
+  })
+
+  it('reports failure when the terminal rejects the uploaded image path', async () => {
+    const client = clientWithResponses([
+      {
+        id: 'start',
+        ok: false,
+        error: { code: 'method_not_found', message: 'no' },
+        _meta: { runtimeId: 'r' }
+      },
+      ok('save', '/tmp/rejected.png'),
+      ok('send', { send: { accepted: false } })
+    ])
+
+    const sent = await attachMobileImageToTerminal('library', {
+      client,
+      agent: 'claude',
+      terminal: 'term-rejected',
+      deviceToken: null,
+      getConnectionId: async () => null,
+      pickImage: vi.fn().mockResolvedValue({ base64: 'EEEE' })
+    })
+
+    expect(sent).toBe(false)
   })
 })

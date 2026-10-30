@@ -146,16 +146,22 @@ export const getDeveloperPermissionsPaneSearchEntries = createLocalizedCatalog((
   {
     title: translate(
       'auto.components.settings.developer.permissions.search.3363889768',
-      'Local Network, USB, and Bluetooth'
+      'LAN, USB, and Bluetooth'
     ),
     description: translate(
       'auto.components.settings.developer.permissions.search.acad3d4743',
-      'Allow device and local-network tools used from terminal sessions.'
+      'Allow device tools and LAN access used from terminal sessions.'
     ),
     keywords: [
-      translate(
+      // Index both UI LAN and macOS Local Network wording through localized catalogs.
+      ...translateSearchKeyword(
+        'auto.components.settings.developer.permissions.search.87620e6416',
+        'lan'
+      ),
+      ...translateSearchKeyword(
         'auto.components.settings.developer.permissions.search.fa3239cd42',
-        'local network'
+        'local network',
+        { aliases: ['local-network'] }
       ),
       ...translateSearchKeyword(
         'auto.components.settings.developer.permissions.search.c4a4a02ea4',

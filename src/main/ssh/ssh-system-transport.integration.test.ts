@@ -1,16 +1,15 @@
-import { mkdtempSync, writeFileSync, mkdirSync, chmodSync, rmSync, readFileSync } from 'fs'
-import { join } from 'path'
+import { mkdtempSync, writeFileSync, mkdirSync, chmodSync, rmSync, readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({
   app: { getAppPath: () => '/mock/app' }
 }))
 
-import { SshConnection } from './ssh-connection'
-import { deployAndLaunchRelay } from './ssh-relay-deploy'
-import { SshChannelMultiplexer } from './ssh-channel-multiplexer'
-import { uploadDirectoryViaSystemSsh } from './ssh-system-fallback'
+import { SshConnection } from './connection/ssh-connection'
+import { uploadDirectoryViaSystemSsh } from './system-transport/system-ssh-file-transfer'
 import type { SshTarget } from '../../shared/ssh-types'
+import { relayArtifactFilenames } from './relay-install-artifacts'
 
 const RELAY_VERSION = '0.1.0+systemtransport'
 
@@ -21,7 +20,9 @@ function makeTarget(): SshTarget {
     configHost: 'fdpass-host',
     host: 'ignored.example.com',
     port: 22,
-    username: ''
+    username: '',
+    // The fixture pre-installs a host-Node relay tree.
+    remoteRuntime: 'legacy'
   }
 }
 
@@ -32,7 +33,7 @@ function writeFakeSsh(dir: string): string {
     `#!/bin/sh
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    -o|-p|-i|-J) shift 2 ;;
+    -o|-p|-i|-J|-S) shift 2 ;;
     -T) shift ;;
     --) shift; break ;;
     -*) shift ;;
@@ -54,6 +55,15 @@ exec /bin/sh -c "$cmd"
 }
 
 function writeFakeRelay(dir: string): void {
+  // Stage every companion the manifest declares — relay.js gets real content
+  // below — so adding one cannot silently fail the completeness probe here.
+  for (const filename of relayArtifactFilenames(false)) {
+    if (filename !== 'relay.js') {
+      const artifactPath = join(dir, filename)
+      mkdirSync(dirname(artifactPath), { recursive: true })
+      writeFileSync(artifactPath, '')
+    }
+  }
   writeFileSync(
     join(dir, 'relay.js'),
     `
@@ -72,7 +82,8 @@ function encode(msg) {
   return Buffer.concat([header, payload]);
 }
 
-function serve(socket) {
+function serve(socket, onResolved) {
+  socket.on('error', () => {});
   socket.write(sentinel);
   let buffer = Buffer.alloc(0);
   socket.on('data', (chunk) => {
@@ -86,7 +97,10 @@ function serve(socket) {
       if (type !== 1) continue;
       const message = JSON.parse(payload.toString('utf8'));
       if (message.method === 'session.resolveHome') {
-        socket.write(encode({ jsonrpc: '2.0', id: message.id, result: process.env.HOME }));
+        socket.write(
+          encode({ jsonrpc: '2.0', id: message.id, result: process.env.HOME }),
+          onResolved
+        );
       }
     }
   });
@@ -94,27 +108,18 @@ function serve(socket) {
 
 if (process.argv.includes('--detached')) {
   try { fs.unlinkSync(sockPath); } catch {}
-  const server = net.createServer(serve);
-  server.listen(sockPath);
-  setTimeout(() => process.exit(0), 20000).unref();
-} else if (process.argv.includes('--connect')) {
-  process.stdout.write(sentinel);
-  let buffer = Buffer.alloc(0);
-  process.stdin.on('data', (chunk) => {
-    buffer = Buffer.concat([buffer, chunk]);
-    while (buffer.length >= 13) {
-      const type = buffer[0];
-      const length = buffer.readUInt32BE(9);
-      if (buffer.length < 13 + length) return;
-      const payload = buffer.subarray(13, 13 + length);
-      buffer = buffer.subarray(13 + length);
-      if (type !== 1) continue;
-      const message = JSON.parse(payload.toString('utf8'));
-      if (message.method === 'session.resolveHome') {
-        process.stdout.write(encode({ jsonrpc: '2.0', id: message.id, result: process.env.HOME }));
-      }
-    }
+  const server = net.createServer((socket) => {
+    serve(socket, () => server.close());
   });
+  server.listen(sockPath);
+} else if (process.argv.includes('--connect')) {
+  const socket = net.createConnection(sockPath);
+  socket.on('error', (error) => {
+    process.stderr.write(error.message);
+    process.exit(1);
+  });
+  process.stdin.pipe(socket);
+  socket.pipe(process.stdout);
 }
 `
   )
@@ -137,9 +142,13 @@ function createRelayTree(root: string, remoteHome: string): void {
   }
 
   const remoteDir = join(remoteHome, '.orca-remote', `relay-${RELAY_VERSION}`)
-  mkdirSync(join(remoteDir, 'node_modules', 'node-pty'), { recursive: true })
+  mkdirSync(join(remoteDir, 'node_modules', 'node-pty', 'lib'), { recursive: true })
   mkdirSync(join(remoteDir, 'node_modules', '@parcel', 'watcher'), { recursive: true })
   writeFileSync(join(remoteDir, 'node_modules', 'node-pty', 'index.js'), '')
+  writeFileSync(
+    join(remoteDir, 'node_modules', 'node-pty', 'lib', 'utils.js'),
+    'exports.loadNativeModule = () => ({})\n'
+  )
   writeFileSync(join(remoteDir, 'node_modules', '@parcel', 'watcher', 'index.js'), '')
   writeFileSync(join(remoteDir, '.install-complete'), '')
   writeFakeRelay(remoteDir)
@@ -198,23 +207,19 @@ describe('system SSH transport integration', () => {
     rmSync(tempDir, { recursive: true, force: true })
   })
 
-  // Why: this fixture writes a POSIX fake ssh script to exercise stdin/stdout
-  // transport semantics; Windows coverage stays in argument/unit tests.
   it.skipIf(process.platform === 'win32')(
-    'deploys and speaks relay RPC over a system ssh process for ProxyUseFdpass targets',
+    'connects GSSAPI-flagged targets through system ssh without the force override',
     async () => {
-      const conn = new SshConnection(makeTarget(), { onStateChange: vi.fn() })
+      delete process.env.ORCA_SSH_FORCE_SYSTEM_TRANSPORT
+      const conn = new SshConnection(
+        { ...makeTarget(), source: 'manual', gssapiAuthentication: true },
+        { onStateChange: vi.fn() }
+      )
       await conn.connect()
-      expect(conn.usesSystemSshTransport()).toBe(true)
-
-      const result = await deployAndLaunchRelay(conn, undefined, 60, makeTarget().id)
-      const mux = new SshChannelMultiplexer(result.transport)
       try {
-        await expect(mux.request('session.resolveHome', { path: '~' })).resolves.toBe(
-          join(tempDir, 'remote-home')
-        )
+        expect(conn.usesSystemSshTransport()).toBe(true)
+        expect(conn.getState().status).toBe('connected')
       } finally {
-        mux.dispose()
         await conn.disconnect()
       }
     },

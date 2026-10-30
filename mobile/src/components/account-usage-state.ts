@@ -1,57 +1,25 @@
-// Why: keep these shapes in lockstep with src/shared/types.ts and
-// src/shared/rate-limit-types.ts. We don't import from desktop here because
-// the mobile bundle must not pull in Electron-coupled type files.
-//
-// Pure state/selectors live here (no React Native imports) so they can be
-// unit-tested directly; AccountUsage.tsx re-exports them alongside the
-// UsageBar component.
-export type RateLimitWindow = {
-  usedPercent: number
-  windowMinutes: number
-  resetsAt: number | null
-  resetDescription: string | null
-}
+// Keep shapes aligned with shared types/rate-limit-types without pulling Electron-coupled desktop graph into mobile.
+// Pure RN-free selectors stay directly testable; AccountUsage re-exports them with UsageBar.
+import { formatResetCountdown } from '../../../src/shared/rate-limit-reset-format'
+import type {
+  AccountsSnapshot,
+  InactiveAccountUsage,
+  ProviderRateLimits
+} from './accounts-snapshot'
 
-export type ProviderRateLimits = {
-  provider: 'claude' | 'codex' | 'gemini' | 'opencode-go' | 'kimi'
-  session: RateLimitWindow | null
-  weekly: RateLimitWindow | null
-  monthly?: RateLimitWindow | null
-  buckets?: Array<RateLimitWindow & { name: string }>
-  updatedAt: number
-  error: string | null
-  status: 'idle' | 'fetching' | 'ok' | 'error' | 'unavailable'
-}
-
-export type InactiveAccountUsage = {
-  accountId: string
-  rateLimits: ProviderRateLimits | null
-  updatedAt: number
-  isFetching: boolean
-}
-
-export type ClaudeAccountSummary = {
-  id: string
-  email: string
-  organizationName?: string | null
-}
-
-export type CodexAccountSummary = {
-  id: string
-  email: string
-  workspaceLabel?: string | null
-}
-
-export type AccountsSnapshot = {
-  claude: { accounts: ClaudeAccountSummary[]; activeAccountId: string | null }
-  codex: { accounts: CodexAccountSummary[]; activeAccountId: string | null }
-  rateLimits: {
-    claude: ProviderRateLimits | null
-    codex: ProviderRateLimits | null
-    inactiveClaudeAccounts: InactiveAccountUsage[]
-    inactiveCodexAccounts: InactiveAccountUsage[]
-  }
-}
+export {
+  AccountsSnapshotSchema,
+  decodeAccountsSnapshot,
+  ProviderRateLimitsSchema,
+  RateLimitRuntimeTargetSchema,
+  type AccountsSnapshot,
+  type ClaudeAccountSummary,
+  type CodexAccountSummary,
+  type InactiveAccountUsage,
+  type ProviderRateLimits,
+  type RateLimitRuntimeTarget,
+  type RateLimitWindow
+} from './accounts-snapshot'
 
 export type ProviderKey = 'claude' | 'codex'
 
@@ -80,11 +48,7 @@ export function getInactiveProviderUsage(
   return list.find((u) => u.accountId === accountId) ?? null
 }
 
-// Why: rate limits are fetched for the active target even when no Orca-managed
-// account exists (the default target is the agent's own system-default login).
-// Treat a provider as having usage worth showing when a fetch succeeded or any
-// window has data; an unavailable/error provider with no windows means the
-// system-default login has no credentials for it, so there is nothing to show.
+// System-default logins still fetch quota without managed accounts. Show successful provider or any window data; empty unavailable/error means no credentials.
 export function hasActiveProviderUsage(limits: ProviderRateLimits | null): boolean {
   if (!limits) {
     return false
@@ -100,8 +64,7 @@ export function hasActiveProviderUsage(limits: ProviderRateLimits | null): boole
   return limits.status === 'ok'
 }
 
-// Why: transient errors keep the last successful window data, so availability
-// is per window rather than per provider status.
+// Determine availability per window because transient provider errors retain successful window data.
 export function getUsageBarState(
   limits: ProviderRateLimits | null,
   windowKey: 'session' | 'weekly',
@@ -117,9 +80,20 @@ export function getUsageBarState(
   }
 }
 
-// Why: the usage UI must render for the system-default login, not only for
-// Orca-managed accounts. Show a provider when it has at least one managed
-// account OR active rate-limit data for the system-default target.
+// Use desktop formatResetCountdown copy with injectable now; return null without reset timestamp to retain bars-only UI.
+export function getWindowResetLabel(
+  limits: ProviderRateLimits | null,
+  windowKey: 'session' | 'weekly',
+  now: number
+): string | null {
+  const resetsAt = limits?.[windowKey]?.resetsAt
+  if (resetsAt == null) {
+    return null
+  }
+  return formatResetCountdown(resetsAt - now)
+}
+
+// Show provider with managed accounts or active system-default quota; management is not required for usage UI.
 export function hasRenderableUsage(snapshot: AccountsSnapshot, provider: ProviderKey): boolean {
   const accounts = provider === 'claude' ? snapshot.claude.accounts : snapshot.codex.accounts
   if (accounts.length > 0) {

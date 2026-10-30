@@ -58,6 +58,7 @@ describe('check-terminal-perf-report-budgets', () => {
         'frames=180',
         'median=2.9ms',
         'worst=5.9ms',
+        'revisit=42.0ms',
         'maxTimerDrift=12.1ms',
         'scroll=149.9ms',
         'restore=642.0ms',
@@ -80,8 +81,9 @@ describe('check-terminal-perf-report-budgets', () => {
       [
         'panes=101',
         'frames=60',
-        'median=76.0ms',
+        'median=26.0ms',
         'worst=301.0ms',
+        'revisit=301.0ms',
         'maxTimerDrift=151.0ms',
         'scroll=151.0ms',
         'restore=1001.0ms',
@@ -94,8 +96,9 @@ describe('check-terminal-perf-report-budgets', () => {
     const result = runChecker(reportPath)
 
     expect(result.status).toBe(1)
-    expect(result.stderr).toContain('median typing latency 76ms exceeded budget 75ms')
+    expect(result.stderr).toContain('median typing latency 26ms exceeded budget 25ms')
     expect(result.stderr).toContain('worst typing latency 301ms exceeded budget 300ms')
+    expect(result.stderr).toContain('revisit latency 301ms exceeded budget 300ms')
     expect(result.stderr).toContain('timer drift 151ms exceeded budget 150ms')
     expect(result.stderr).toContain('scroll latency 151ms exceeded budget 150ms')
     expect(result.stderr).toContain('restore latency 1001ms exceeded budget 1000ms')
@@ -104,76 +107,72 @@ describe('check-terminal-perf-report-budgets', () => {
     expect(result.stderr).toContain('renderer dropped backlogs 1 exceeded budget 0')
   })
 
-  it('keeps hidden real PTY pressure headroom scoped to that scenario', () => {
-    const reportPath = writeReport(
-      [
-        'panes=101',
-        'median=74.0ms',
-        'worst=499.0ms',
-        'maxTimerDrift=249.0ms',
-        'restore=7999.0ms',
-        'rendererQueuedChars=5242880',
-        'rendererPeakQueuedChars=5242880',
-        'rendererDroppedBacklogs=0'
-      ].join(' '),
-      'opencode-hidden-real-pty-pressure-typing'
+  // Redraw scenarios must not inherit the unloaded drift ceiling.
+  it.each([
+    'opencode-same-workspace-typing',
+    'opencode-cross-workspace-typing',
+    'opencode-scale-same-workspace-50',
+    'opencode-scale-cross-workspace-50'
+  ])('applies the under-load timer-drift budget to %s', (scenario) => {
+    const passPath = writeReport(
+      ['panes=50', 'frames=60', 'median=12.0ms', 'worst=40.0ms', 'maxTimerDrift=1510.0ms'].join(
+        ' '
+      ),
+      scenario
     )
 
-    const output = execFileSync(process.execPath, [scriptPath, reportPath], {
+    const passOutput = execFileSync(process.execPath, [scriptPath, passPath], {
       cwd: process.cwd(),
       encoding: 'utf8'
     })
-
-    expect(output).toContain('Terminal perf budget check passed for 1 annotation row(s).')
+    expect(passOutput).toContain('Terminal perf budget check passed for 1 annotation row(s).')
   })
 
-  it('keeps ACK pressure headroom scoped to that scenario family', () => {
-    const reportPath = writeReport(
-      [
-        'panes=51',
-        'median=749.0ms',
-        'worst=4999.0ms',
-        'maxTimerDrift=249.0ms',
-        'scroll=299.0ms',
-        'rendererQueuedChars=5242880',
-        'rendererPeakQueuedChars=5242880',
-        'rendererDroppedBacklogs=0'
-      ].join(' '),
-      'opencode-main-pressure-active-scroll-25'
-    )
-
-    const output = execFileSync(process.execPath, [scriptPath, reportPath], {
-      cwd: process.cwd(),
-      encoding: 'utf8'
-    })
-
-    expect(output).toContain('Terminal perf budget check passed for 1 annotation row(s).')
+  // Historical outliers must not become the new latency baseline.
+  it.each([
+    ['opencode-baseline-typing', 'median=13.8ms worst=83.5ms', 0],
+    ['opencode-baseline-typing', 'maxTimerDrift=189.0ms', 1],
+    ['opencode-hidden-real-pty-restore-latin', 'restore=1640.7ms', 1],
+    ['opencode-hidden-real-pty-pressure-typing-25', 'worst=2090.6ms', 1],
+    ['opencode-hidden-real-pty-pressure-typing-25', 'maxTimerDrift=2032.6ms', 1],
+    ['opencode-main-pressure-worktree-revisit-marker', 'revisit=1030.2ms', 1],
+    ['opencode-main-pressure-worktree-revisit-typing', 'worst=1045.5ms', 1],
+    ['opencode-scale-same-workspace-25', 'worst=2053.2ms', 1],
+    ['opencode-scale-same-workspace-25', 'median=26.0ms', 1],
+    ['opencode-hidden-real-pty-pressure-typing-25', 'median=26.0ms', 1],
+    ['opencode-main-pressure-active-typing-25', 'rendererDroppedBacklogs=1', 1],
+    ['opencode-hidden-real-pty-pressure-typing-25', 'rendererPeakQueuedChars=2097153', 1],
+    ['opencode-main-pressure-active-scroll-25', 'scroll=151.0ms', 1],
+    ['opencode-baseline-typing', 'worst=301.0ms', 1]
+  ])('%s (%s) exits %s', (scenario, description, status) => {
+    const result = runChecker(writeReport(description, scenario))
+    expect(result.status, result.stderr).toBe(status)
   })
 
-  it('does not widen baseline typing rows', () => {
-    const reportPath = writeReport(
-      ['panes=26', 'median=74.0ms', 'worst=301.0ms'].join(' '),
-      'opencode-baseline-typing'
-    )
-
-    const result = runChecker(reportPath)
-
-    expect(result.status).toBe(1)
-    expect(result.stderr).toContain('worst typing latency 301ms exceeded budget 300ms')
+  it.each([
+    'opencode-main-pressure-active-typing',
+    'opencode-main-pressure-active-typing-25',
+    'opencode-main-pressure-active-typing-50',
+    'opencode-main-pressure-worktree-revisit-typing',
+    'opencode-main-pressure-worktree-revisit-drain'
+  ])('allows measured transient peaks but preserves backlog and loss limits for %s', (scenario) => {
+    expect(runChecker(writeReport('rendererPeakQueuedChars=3227648', scenario)).status).toBe(0)
+    expect(runChecker(writeReport('rendererPeakQueuedChars=3670016', scenario)).status).toBe(0)
+    expect(runChecker(writeReport('rendererPeakQueuedChars=3670017', scenario)).status).toBe(1)
+    expect(runChecker(writeReport('rendererQueuedChars=2097153', scenario)).status).toBe(1)
+    expect(runChecker(writeReport('rendererDroppedBacklogs=1', scenario)).status).toBe(1)
   })
 
-  it('keeps synthetic redraw worst-key headroom scoped to redraw scenarios', () => {
-    const reportPath = writeReport(
-      ['panes=5', 'median=149.0ms', 'worst=999.0ms', 'maxTimerDrift=149.0ms'].join(' '),
-      'opencode-same-workspace-typing'
+  it('fails multi-pane redraw scenarios that exceed the under-load timer-drift budget', () => {
+    const failPath = writeReport(
+      ['panes=50', 'frames=60', 'median=12.0ms', 'worst=40.0ms', 'maxTimerDrift=3501.0ms'].join(
+        ' '
+      ),
+      'opencode-cross-workspace-typing'
     )
-
-    const output = execFileSync(process.execPath, [scriptPath, reportPath], {
-      cwd: process.cwd(),
-      encoding: 'utf8'
-    })
-
-    expect(output).toContain('Terminal perf budget check passed for 1 annotation row(s).')
+    const failResult = runChecker(failPath)
+    expect(failResult.status).toBe(1)
+    expect(failResult.stderr).toContain('timer drift 3501ms exceeded budget 3500ms')
   })
 
   it('fails malformed metric values instead of treating them as absent', () => {
@@ -186,6 +185,31 @@ describe('check-terminal-perf-report-budgets', () => {
     expect(result.stderr).toContain('worst value "abcms" is malformed')
     expect(result.stderr).toContain('rendererQueuedChars value "wat" is malformed')
     expect(result.stderr).toContain('no recognized budget metrics found')
+  })
+
+  it('accepts revisit-only marker rows as budgeted perf evidence', () => {
+    const reportPath = writeReport('panes=19 revisit=25.7ms heldAckChars=2097184')
+
+    const output = execFileSync(process.execPath, [scriptPath, reportPath], {
+      cwd: process.cwd(),
+      encoding: 'utf8'
+    })
+
+    expect(output).toContain('Terminal perf budget check passed for 1 annotation row(s).')
+  })
+
+  it('accepts parked-memory rows that carry only heap and view-count metrics', () => {
+    const reportPath = writeReport(
+      'panes=8 parkedTabs=8 heapUsedMB=87.8 liveTerminals=1 livePaneManagers=1',
+      'opencode-parked-memory'
+    )
+
+    const output = execFileSync(process.execPath, [scriptPath, reportPath], {
+      cwd: process.cwd(),
+      encoding: 'utf8'
+    })
+
+    expect(output).toContain('Terminal perf budget check passed for 1 annotation row(s).')
   })
 
   it('fails OpenCode annotation rows that contain no budget metrics', () => {

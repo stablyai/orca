@@ -6,6 +6,7 @@ import type {
   RuntimeTerminalShow,
   RuntimeTerminalSplit
 } from '../../shared/runtime-types'
+import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 
 export type AgentTeamsTmuxCompatRequest = {
   teamId: string
@@ -43,7 +44,8 @@ export type AgentTeamsTerminalApi = {
   readTerminal(handle: string, opts?: { limit?: number }): Promise<RuntimeTerminalRead>
   sendTerminal(
     handle: string,
-    action: { text?: string; enter?: boolean; interrupt?: boolean }
+    action: { text?: string; enter?: boolean; interrupt?: boolean },
+    options: { inputKind: TerminalInputKind }
   ): Promise<RuntimeTerminalSend>
   focusTerminal(handle: string): Promise<RuntimeTerminalFocus>
   closeTerminal(handle: string): Promise<RuntimeTerminalClose>
@@ -54,6 +56,10 @@ export type TeamPane = {
   fakePaneId: string
   handle: string
   index: number
+  // Remember the split slot so placeholder respawn can preserve its fake pane id.
+  splitFromPane?: string
+  splitDirection?: 'horizontal' | 'vertical'
+  respawnBlockedReason?: string
 }
 
 export type AgentTeam = {

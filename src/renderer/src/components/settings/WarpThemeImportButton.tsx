@@ -3,8 +3,7 @@ import { WarpIcon } from '../icons/WarpIcon'
 import type { UseWarpThemeImportReturn } from './useWarpThemeImport'
 import { translate } from '@/i18n/i18n'
 
-// Why: Warp import only produces terminal themes, so it sits with the theme
-// pickers rather than in the Typography header.
+// Place Warp import with terminal themes, the only output it produces.
 export function WarpThemeImportButton({
   warpThemes
 }: {
@@ -18,7 +17,7 @@ export function WarpThemeImportButton({
       onClick={() => void warpThemes.handleClick()}
     >
       <WarpIcon className="size-4" />
-      {translate('auto.components.settings.WarpThemeImportModal.title', 'Import themes from Warp')}
+      {translate('auto.components.settings.WarpThemeImportModal.title', 'Import from Warp')}
     </Button>
   )
 }

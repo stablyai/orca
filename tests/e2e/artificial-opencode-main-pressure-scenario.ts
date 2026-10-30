@@ -4,8 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { rmSync } from 'node:fs'
 import path from 'node:path'
 import { sendToTerminal } from './helpers/terminal'
-import { writePtyInputAccepted } from './helpers/terminal-accepted-input'
-import { writePressureOutputScript } from './artificial-opencode-pressure-output-script'
+import { writePressureOutputScript } from './artificial-opencode-hidden-pressure-script'
 import {
   annotateScrollMeasurement,
   getResponsiveScrollPath,
@@ -13,43 +12,39 @@ import {
   scrollActiveTerminalToBottom,
   seedActiveTerminalScrollback
 } from './artificial-opencode-scroll-scenario'
-import { waitForMainPressureSourcePauseRelease } from './artificial-opencode-main-pressure-release'
-import {
-  expectMainPressureAndTyping,
-  waitForMainPressureTypingReadiness
-} from './artificial-opencode-main-pressure-budget'
 
 type MainPressurePane = {
   paneKey: string
   ptyId: string
 }
 
-export type MainPressureMeasurement = {
+type MainPressureMeasurement = {
   medianLatencyMs: number
   worstLatencyMs: number
   maxTimerDriftMs: number
 }
 
-export type MainPressureSnapshot = {
-  flushScheduled?: boolean
-  pendingChars?: number
+type MainPressureSnapshot = {
   peakPendingChars: number
   peakRendererInFlightChars: number
-  rendererInFlightChars?: number
   ackGatedFlushSkipCount: number
-  sourcePausedPtyCount?: number
 }
 
-export type MainPressureAckGate = {
+type MainPressureAckGate = {
   heldAckChars: number
+  heldAckCount: number
+  gatedPtyCount: number
 }
 
-export type MainPressureSchedulerSnapshot = {
+type MainPressureSchedulerSnapshot = {
   peakQueuedChars: number
   droppedBacklogCount: number
 }
 
-const MAIN_PRESSURE_OUTPUT_CHARS_PER_PANE = 48 * 1024
+// Why: peak queued chars is noisy at the byte level on CI, but a coarse cap
+// still catches renderer queue growth that dropped-backlog/latency checks miss.
+const MAX_RENDERER_SCHEDULER_QUEUED_CHARS = 5 * 1024 * 1024
+const MAIN_RENDERER_PRESSURE_TARGET_CHARS = 2 * 1024 * 1024
 
 type MainPressureDeps<
   TMeasurement,
@@ -75,22 +70,8 @@ type MainPressureDeps<
     page: Page,
     scriptPath: string,
     ptyId: string,
-    runId: string,
-    inputMethod?: 'keyboard' | 'ptyWrite' | 'terminalInput'
-  ) => Promise<TMeasurement>
-  measureReadyPromptTyping: (
-    page: Page,
-    ptyId: string,
-    runId: string,
-    inputMethod?: 'keyboard' | 'ptyWrite' | 'terminalInput',
-    maxWorstKeyLatencyMs?: number
-  ) => Promise<TMeasurement>
-  prepareTypingPrompt: (
-    page: Page,
-    scriptPath: string,
-    ptyId: string,
     runId: string
-  ) => Promise<void>
+  ) => Promise<TMeasurement>
   readMainPtyPressureDebug: (page: Page) => Promise<TMainPressure | null>
   readTerminalAckGateDebug: (page: Page) => Promise<TAckGate | null>
   readTerminalOutputSchedulerDebug: (page: Page) => Promise<TScheduler | null>
@@ -136,23 +117,17 @@ export async function runMainPressureScenario<
 }): Promise<void> {
   await deps.waitForSessionReady(orcaPage)
   await deps.waitForActiveWorktree(orcaPage)
-  const [initialTypingPane] = await deps.ensureActiveWorktreePaneLoad(orcaPage, 1)
-  if (!initialTypingPane) {
-    throw new Error('Active typing pane was not created')
-  }
-  await deps.focusPane(orcaPage, initialTypingPane.paneKey)
+  const panes = await deps.ensureActiveWorktreePaneLoad(orcaPage, backgroundPaneCount + 1)
+  const [typingPane, ...loadPanes] = panes
+  await deps.focusPane(orcaPage, typingPane.paneKey)
 
   const runId = randomUUID()
   const scrollRunId = randomUUID()
   const typingScriptPath = path.join(testRepoPath, `.orca-opencode-pressure-typing-${runId}.mjs`)
   const pressureScriptPath = path.join(testRepoPath, `.orca-opencode-pressure-load-${runId}.mjs`)
+  await seedActiveTerminalScrollback(orcaPage, typingPane.ptyId, scrollRunId)
   deps.writeInteractivePromptScript(typingScriptPath, runId)
-  writePressureOutputScript(pressureScriptPath, runId)
-  const panes = await deps.ensureActiveWorktreePaneLoad(orcaPage, backgroundPaneCount + 1)
-  const typingPane =
-    panes.find((pane) => pane.ptyId === initialTypingPane.ptyId) ?? initialTypingPane
-  const loadPanes = panes.filter((pane) => pane.ptyId !== typingPane.ptyId)
-  await deps.focusPane(orcaPage, typingPane.paneKey)
+  writePressureOutputScript(pressureScriptPath, runId, 'tui')
   await deps.resetTerminalPtyOutputDebug(orcaPage)
   await deps.holdTerminalAckGate(
     orcaPage,
@@ -166,8 +141,6 @@ export async function runMainPressureScenario<
       pressureScriptPath
     })
     const pressureBeforeTyping = await deps.waitForMainPtyPressureBacklog(orcaPage)
-    await deps.focusPane(orcaPage, typingPane.paneKey)
-    await seedActiveTerminalScrollback(orcaPage, typingPane.ptyId, scrollRunId)
     await measureAndAnnotateScroll({
       annotationSuffix,
       deps,
@@ -175,21 +148,13 @@ export async function runMainPressureScenario<
       maxTimerDriftMs,
       orcaPage,
       panes,
-      ptyId: typingPane.ptyId,
       testInfo
     })
-    await deps.prepareTypingPrompt(orcaPage, typingScriptPath, typingPane.ptyId, runId)
-    await waitForMainPressureTypingReadiness({
-      backgroundPaneCount: loadPanes.length,
-      readMainPtyPressureDebug: deps.readMainPtyPressureDebug,
-      orcaPage
-    })
-    const measurement = await deps.measureReadyPromptTyping(
+    const measurement = await deps.measureTypingDuringLoad(
       orcaPage,
+      typingScriptPath,
       typingPane.ptyId,
-      runId,
-      'terminalInput',
-      maxWorstKeyLatencyMs
+      runId
     )
     const mainPressure = await deps.readMainPtyPressureDebug(orcaPage)
     const ackGate = await deps.readTerminalAckGateDebug(orcaPage)
@@ -216,10 +181,6 @@ export async function runMainPressureScenario<
     })
   } finally {
     await deps.releaseTerminalAckGate(orcaPage)
-    await orcaPage.evaluate((ptyId) => {
-      window.api.pty.setActiveRendererPty?.(ptyId, false)
-    }, typingPane.ptyId)
-    await waitForMainPressureSourcePauseRelease(orcaPage, deps.readMainPtyPressureDebug)
     await sendToTerminal(orcaPage, typingPane.ptyId, '\x03').catch(() => undefined)
     await Promise.all(
       loadPanes.map((pane) => sendToTerminal(orcaPage, pane.ptyId, '\x03').catch(() => undefined))
@@ -242,16 +203,10 @@ async function startPressureCommands({
 }): Promise<void> {
   await Promise.all(
     loadPanes.map((pane, paneIndex) =>
-      writePtyInputAccepted(
+      sendToTerminal(
         orcaPage,
         pane.ptyId,
-        `\x03\x15${[
-          `node ${JSON.stringify(`./${path.basename(pressureScriptPath)}`)}`,
-          paneIndex,
-          Math.min(pressureOutputChars, MAIN_PRESSURE_OUTPUT_CHARS_PER_PANE),
-          0,
-          'idle'
-        ].join(' ')}\r`
+        `node ${JSON.stringify(pressureScriptPath)} ${paneIndex} ${pressureOutputChars}\r`
       )
     )
   )
@@ -261,8 +216,8 @@ async function measureAndAnnotateScroll<
   TMeasurement,
   TDebug,
   TScheduler extends MainPressureSchedulerSnapshot,
-  TMainPressure,
-  TAckGate
+  TMainPressure extends MainPressureSnapshot,
+  TAckGate extends MainPressureAckGate
 >({
   annotationSuffix,
   deps,
@@ -270,7 +225,6 @@ async function measureAndAnnotateScroll<
   maxTimerDriftMs,
   orcaPage,
   panes,
-  ptyId,
   testInfo
 }: {
   annotationSuffix: string
@@ -279,10 +233,9 @@ async function measureAndAnnotateScroll<
   maxTimerDriftMs: number
   orcaPage: Page
   panes: MainPressurePane[]
-  ptyId: string
   testInfo: TestInfo
 }): Promise<void> {
-  const scrollMeasurement = await measureActiveTerminalWheelScroll(orcaPage, ptyId)
+  const scrollMeasurement = await measureActiveTerminalWheelScroll(orcaPage)
   const mainPressureAfterScroll = await deps.readMainPtyPressureDebug(orcaPage)
   const ackGateAfterScroll = await deps.readTerminalAckGateDebug(orcaPage)
   annotateScrollMeasurement(
@@ -298,5 +251,39 @@ async function measureAndAnnotateScroll<
     expect(responsivePath.latencyMs).toBeLessThan(maxScrollLatencyMs)
   }
   expect(scrollMeasurement.maxTimerDriftMs).toBeLessThan(maxTimerDriftMs)
-  await scrollActiveTerminalToBottom(orcaPage, ptyId)
+  await scrollActiveTerminalToBottom(orcaPage)
+}
+
+function expectMainPressureAndTyping<TMeasurement extends MainPressureMeasurement>({
+  ackGate,
+  mainPressure,
+  maxMedianKeyLatencyMs,
+  maxTimerDriftMs,
+  maxWorstKeyLatencyMs,
+  measurement,
+  pressureBeforeTyping,
+  scheduler
+}: {
+  ackGate: MainPressureAckGate | null
+  mainPressure: MainPressureSnapshot | null
+  maxMedianKeyLatencyMs: number
+  maxTimerDriftMs: number
+  maxWorstKeyLatencyMs: number
+  measurement: TMeasurement
+  pressureBeforeTyping: MainPressureSnapshot
+  scheduler: MainPressureSchedulerSnapshot | null
+}): void {
+  expect(pressureBeforeTyping.peakPendingChars).toBeGreaterThan(0)
+  expect(pressureBeforeTyping.ackGatedFlushSkipCount).toBeGreaterThan(0)
+  expect(mainPressure?.peakRendererInFlightChars ?? 0).toBeGreaterThanOrEqual(
+    MAIN_RENDERER_PRESSURE_TARGET_CHARS
+  )
+  expect(ackGate?.heldAckChars ?? 0).toBeGreaterThan(0)
+  expect(scheduler?.droppedBacklogCount ?? Number.POSITIVE_INFINITY).toBe(0)
+  expect(scheduler?.peakQueuedChars ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(
+    MAX_RENDERER_SCHEDULER_QUEUED_CHARS
+  )
+  expect(measurement.medianLatencyMs).toBeLessThan(maxMedianKeyLatencyMs)
+  expect(measurement.worstLatencyMs).toBeLessThan(maxWorstKeyLatencyMs)
+  expect(measurement.maxTimerDriftMs).toBeLessThan(maxTimerDriftMs)
 }

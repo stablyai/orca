@@ -8,6 +8,7 @@ import {
 import type { FeatureWallOpenSourceTelemetry } from '../../../../shared/telemetry-events'
 import { track } from '@/lib/telemetry'
 import { translate } from '@/i18n/i18n'
+import { getLocalizedFeatureWallTileTitle } from './feature-wall-tour-localized-copy'
 
 export function PreviewMedia(props: {
   posterUrl: string | null
@@ -88,7 +89,7 @@ export function RelatedFeatures(props: {
               }}
               className="inline-flex items-center gap-1.5 text-left text-[13px] hover:underline hover:underline-offset-2"
             >
-              {tile.title}
+              {getLocalizedFeatureWallTileTitle(tile.id)}
               <ChevronRight className="size-3 text-muted-foreground" />
             </button>
           </li>

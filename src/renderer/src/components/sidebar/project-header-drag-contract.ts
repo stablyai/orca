@@ -1,7 +1,7 @@
 import type { PointerEvent } from 'react'
 
 import type { ProjectHeaderDragBucketKey, ProjectHeaderDragRect } from './project-header-drop'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 
 export type RepoDragState = {
   draggingRepoId: string | null
@@ -19,19 +19,21 @@ export type UseRepoHeaderDragArgs = {
   orderedRepoIds: string[]
   sidebarRepoHeaderIdsByBucket: ReadonlyMap<ProjectHeaderDragBucketKey, readonly string[]>
   repoById: ReadonlyMap<string, Repo>
+  getLiveRepos: () => readonly Repo[]
   usesProjectGroupOrdering: boolean
   onCommitRepoOrder: (orderedIds: string[]) => void
-  onCommitProjectGroupOrder: (repoId: string, projectGroupId: string | null, order: number) => void
+  onCommitProjectGroupOrder: (project: Repo, projectGroupId: string | null, order: number) => void
   getScrollContainer: () => HTMLElement | null
 }
 
 export type RepoHeaderDragController = {
   state: RepoDragState
-  onHandlePointerDown: (event: PointerEvent<HTMLElement>, repoId: string) => void
+  onHandlePointerDown: (event: PointerEvent<HTMLElement>, repo: Repo) => void
 }
 
 export type ProjectHeaderDragSession = {
-  repoId: string
+  // Why the row, not its id: a twin on another host shares the id.
+  repo: Repo
   bucketKey: ProjectHeaderDragBucketKey
   sidebarRepoHeaderIds: readonly string[]
   pointerId: number
@@ -47,14 +49,16 @@ export const PROJECT_HEADER_DRAG_THRESHOLD_PX = 4
 
 const REPO_HEADER_DRAG_HANDLE_SELECTOR = '[data-repo-header-drag-handle]'
 
-const REPO_HEADER_ACTION_SELECTOR =
-  '[data-repo-header-action], [data-repo-header-collapse-affordance], button, a, input, textarea, select, [contenteditable=""], [contenteditable="true"]'
+// Shared with project-group headers: both reuse ProjectHeaderActions markup.
+export const REPO_HEADER_ACTION_SELECTOR =
+  '[data-repo-header-actions], [data-repo-header-action], [data-repo-header-collapse-affordance], button, a, input, textarea, select, [contenteditable=""], [contenteditable="true"]'
 
 export function isProjectHeaderDragHandleTarget(
   target: EventTarget | null,
   currentTarget: HTMLElement
 ): boolean {
-  if (!(target instanceof HTMLElement)) {
+  // SVG icons are Elements too; allow dragging by the project icon.
+  if (!(target instanceof Element)) {
     return false
   }
   const dragHandle = target.closest(REPO_HEADER_DRAG_HANDLE_SELECTOR)
@@ -65,7 +69,8 @@ export function isRepoHeaderActionTarget(
   target: EventTarget | null,
   currentTarget: HTMLElement
 ): boolean {
-  if (!(target instanceof HTMLElement) || target === currentTarget) {
+  // SVG action icons must not arm a header drag.
+  if (!(target instanceof Element) || target === currentTarget) {
     return false
   }
   return currentTarget.contains(target) && target.closest(REPO_HEADER_ACTION_SELECTOR) !== null

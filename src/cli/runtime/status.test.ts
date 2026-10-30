@@ -1,10 +1,12 @@
-import { mkdtempSync, writeFileSync } from 'fs'
-import { createServer, type Socket } from 'net'
-import { tmpdir } from 'os'
-import { join } from 'path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { createServer, type Socket } from 'node:net'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getRuntimeMetadataPath } from '../../shared/runtime-bootstrap'
+import type { RuntimeStatus } from '../../shared/runtime-types'
 import { RuntimeClient } from './client'
+import { projectRemoteAppStatus } from './status'
 
 const servers = new Set<ReturnType<typeof createServer>>()
 const sockets = new Set<Socket>()
@@ -25,8 +27,7 @@ afterEach(async () => {
   servers.clear()
 })
 
-// Why: legacy runtime metadata compatibility only applies to local Unix socket
-// metadata; Windows uses named pipes and cannot run this fixture directly.
+// This legacy fixture uses Unix sockets; Windows runtimes use named pipes.
 describe.skipIf(process.platform === 'win32')('CLI runtime status', () => {
   it('uses the legacy singular runtime transport when reporting status', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-status-'))
@@ -45,7 +46,14 @@ describe.skipIf(process.platform === 'win32')('CLI runtime status', () => {
               rendererGraphEpoch: 1,
               graphStatus: 'ready',
               authoritativeWindowId: null,
-              liveTabCount: 0
+              liveTabCount: 0,
+              degradations: [
+                {
+                  code: 'browser_unavailable',
+                  capability: 'browser.headless.v1',
+                  message: 'Browser automation is unavailable.'
+                }
+              ]
             },
             _meta: { runtimeId: 'runtime-legacy' }
           })}\n`
@@ -69,8 +77,110 @@ describe.skipIf(process.platform === 'win32')('CLI runtime status', () => {
 
     expect(status.result.runtime).toMatchObject({
       reachable: true,
+      connectionState: 'connected',
       runtimeId: 'runtime-legacy',
-      state: 'ready'
+      state: 'ready',
+      degradations: [expect.objectContaining({ code: 'browser_unavailable' })]
     })
+  })
+})
+
+// EPERM proves a PID exists under another uid; it must not mark a live runtime dead.
+describe.skipIf(process.platform === 'win32')('CLI status pid fallback', () => {
+  async function statusWithUnreachableRuntime(
+    killError: NodeJS.ErrnoException
+  ): Promise<Awaited<ReturnType<RuntimeClient['getCliStatus']>>> {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-status-probe-'))
+    writeFileSync(
+      getRuntimeMetadataPath(userDataPath),
+      JSON.stringify({
+        runtimeId: 'runtime-unreachable',
+        pid: 424242,
+        // Nothing is listening here, so `status.get` fails and the pid probe decides.
+        transport: { kind: 'unix', endpoint: join(userDataPath, 'absent.sock') },
+        authToken: 'token',
+        startedAt: Date.now()
+      })
+    )
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
+      throw killError
+    })
+    try {
+      return await new RuntimeClient(userDataPath).getCliStatus()
+    } finally {
+      killSpy.mockRestore()
+    }
+  }
+
+  it('keeps an unsignalable app running rather than calling the bootstrap stale', async () => {
+    const status = await statusWithUnreachableRuntime(
+      Object.assign(new Error('kill EPERM'), { code: 'EPERM' })
+    )
+
+    expect(status.result.app).toMatchObject({ running: true, pid: 424242 })
+    expect(status.result.runtime.state).toBe('starting')
+    expect(status.result.graph.state).toBe('starting')
+  })
+
+  it('still reports a stale bootstrap when the host proves the pid is gone', async () => {
+    const status = await statusWithUnreachableRuntime(
+      Object.assign(new Error('kill ESRCH'), { code: 'ESRCH' })
+    )
+
+    expect(status.result.app).toMatchObject({ running: false, pid: null })
+    expect(status.result.runtime.state).toBe('stale_bootstrap')
+    expect(status.result.graph.state).toBe('not_running')
+  })
+})
+
+describe('projectRemoteAppStatus', () => {
+  function remoteStatus(overrides: Partial<RuntimeStatus> = {}): RuntimeStatus {
+    return {
+      runtimeId: 'remote-runtime',
+      graphStatus: 'ready',
+      authoritativeWindowId: null,
+      ...overrides
+    } as RuntimeStatus
+  }
+
+  it('reports the target app as running when a renderer owns the graph there', () => {
+    expect(projectRemoteAppStatus(remoteStatus({ desktopWindowStatus: 'available' }))).toEqual({
+      running: true,
+      pid: null,
+      desktopWindowStatus: 'available'
+    })
+  })
+
+  it.each(['openable', 'initializing', 'blocked'] as const)(
+    'does not claim a running desktop for window status %s',
+    (desktopWindowStatus) => {
+      expect(projectRemoteAppStatus(remoteStatus({ desktopWindowStatus })).running).toBe(false)
+    }
+  )
+
+  it('reports not running when the target has no desktop window status', () => {
+    expect(projectRemoteAppStatus(remoteStatus())).toEqual({ running: false, pid: null })
+  })
+
+  it('honors the authoritativeWindowId fallback for older runtimes', () => {
+    expect(projectRemoteAppStatus(remoteStatus({ authoritativeWindowId: 3 }))).toEqual({
+      running: true,
+      pid: null,
+      desktopWindowStatus: 'available'
+    })
+  })
+
+  it('does not claim a desktop app for a headless serve on any transport', () => {
+    expect(projectRemoteAppStatus(remoteStatus({ desktopWindowStatus: 'openable' }))).toEqual({
+      running: false,
+      pid: null,
+      desktopWindowStatus: 'openable'
+    })
+  })
+
+  it('never reports a remote pid', () => {
+    expect(
+      projectRemoteAppStatus(remoteStatus({ desktopWindowStatus: 'available' })).pid
+    ).toBeNull()
   })
 })

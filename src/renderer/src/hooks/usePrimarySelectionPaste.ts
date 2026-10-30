@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { isLinuxUserAgent, isMacUserAgent } from '@/components/terminal-pane/pane-helpers'
 import {
+  consumePrimarySelectionNativePasteSuppression,
   readPrimarySelectionText,
   setPrimarySelectionEnabled,
   setPrimarySelectionText
@@ -40,6 +41,14 @@ function suppressEvent(event: Event): void {
   event.stopImmediatePropagation()
 }
 
+// Scope armed suppression to xterm’s helper textarea so unrelated document pastes survive.
+function isTerminalNativePasteTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) {
+    return false
+  }
+  return target.classList.contains('xterm-helper-textarea') || target.closest('.xterm') !== null
+}
+
 function isPrimarySelectionPasteTargetCurrent(
   target: EditablePrimarySelectionPasteTarget
 ): boolean {
@@ -73,8 +82,7 @@ export function usePrimarySelectionPaste(enabled: boolean): void {
         return false
       }
       pendingMiddleTarget = target
-      // Why: native Linux middle-click paste emits follow-up input shortly
-      // after mousedown; keep ownership only for the same gesture.
+      // Keep native middle-click follow-up ownership within the same gesture.
       pendingMiddleUntil = Date.now() + PRIMARY_SELECTION_PENDING_TARGET_TTL_MS
       return true
     }
@@ -84,11 +92,21 @@ export function usePrimarySelectionPaste(enabled: boolean): void {
         typeof InputEvent !== 'function' ||
         !(event instanceof InputEvent) ||
         event.inputType === 'insertFromPaste'
+      if (!isPasteInputEvent) {
+        return
+      }
       if (
         pendingMiddleTarget &&
         Date.now() <= pendingMiddleUntil &&
-        targetMatchesPending(event.target) &&
-        isPasteInputEvent
+        targetMatchesPending(event.target)
+      ) {
+        suppressEvent(event)
+        return
+      }
+      // Terminal-owned paste lacks a pending DOM target; consume its arm once on xterm’s surface so later/unrelated pastes survive.
+      if (
+        isTerminalNativePasteTarget(event.target) &&
+        consumePrimarySelectionNativePasteSuppression()
       ) {
         suppressEvent(event)
       }
@@ -104,8 +122,7 @@ export function usePrimarySelectionPaste(enabled: boolean): void {
       }
       const onMouseUp = (event: MouseEvent): void => {
         if (event.button === 1) {
-          // Why: prevent Chromium's native Linux primary paste when disabled
-          // without blocking terminal apps from receiving middle-click events.
+          // Block disabled native primary paste without blocking TUI middle-click reports.
           event.preventDefault()
         }
         pendingMiddleTarget = null
@@ -117,8 +134,7 @@ export function usePrimarySelectionPaste(enabled: boolean): void {
         }
       }
 
-      // Why: when users opt out on Linux, Chromium can still perform native
-      // primary-selection paste unless the middle-click paste pipeline is stopped.
+      // Opt-out must stop Chromium’s native Linux primary-paste pipeline too.
       document.addEventListener('mousedown', onMouseDown, true)
       document.addEventListener('beforeinput', suppressPendingPasteInput, true)
       document.addEventListener('paste', suppressPendingPasteInput, true)
@@ -165,8 +181,7 @@ export function usePrimarySelectionPaste(enabled: boolean): void {
         clientY: event.clientY
       }
       void readPrimarySelectionText().then((text) => {
-        // Why: async primary-selection reads can resolve after focus moved;
-        // do not refocus and mutate a stale middle-click target.
+        // Async selection reads must revalidate focus before mutating/refocusing the original target.
         if (!text || !isPrimarySelectionPasteTargetCurrent(target)) {
           return
         }

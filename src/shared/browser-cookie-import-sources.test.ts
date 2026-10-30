@@ -9,6 +9,8 @@ describe('getBrowserCookieImportSourceLabels', () => {
       'Arc',
       'Brave',
       'Comet',
+      'Helium',
+      'Vivaldi',
       'Firefox',
       'Safari'
     ])
@@ -20,6 +22,7 @@ describe('getBrowserCookieImportSourceLabels', () => {
       'Microsoft Edge',
       'Brave',
       'Comet',
+      'Vivaldi',
       'Firefox'
     ])
   })
@@ -29,6 +32,7 @@ describe('getBrowserCookieImportSourceLabels', () => {
       'Google Chrome',
       'Microsoft Edge',
       'Brave',
+      'Vivaldi',
       'Firefox'
     ])
   })

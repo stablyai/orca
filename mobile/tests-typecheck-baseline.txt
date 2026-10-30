@@ -1,0 +1,5 @@
+# Test files that do NOT yet typecheck under mobile/tsconfig.test.json.
+# This is a RATCHET: the list may only SHRINK. Do NOT add entries to get CI green —
+# an unchecked test is one whose type-level pins prove nothing.
+# Regenerate/prune: node scripts/check-tests-typecheck-ratchet.mjs --prune
+

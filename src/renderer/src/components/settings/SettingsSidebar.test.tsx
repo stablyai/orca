@@ -1,20 +1,28 @@
+// @vitest-environment happy-dom
+
 import { renderToStaticMarkup } from 'react-dom/server'
-import { Bot, Mic, Network } from 'lucide-react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { Bot, GitBranch, Mic, Network, Puzzle } from 'lucide-react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
+import { buildSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
+import type * as ShortcutLabels from '@/hooks/useShortcutLabel'
 import { SettingsSidebar } from './SettingsSidebar'
 import { TooltipProvider } from '../ui/tooltip'
 import type { SettingsSetupGuideProgress } from './settings-setup-guide-progress'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 const mocks = vi.hoisted(() => ({
   useSettingsSetupGuideProgress: vi.fn()
 }))
 
-vi.mock('@/hooks/useShortcutLabel', () => ({
-  useShortcutLabel: () => '⌘F',
-  useShortcutKeyComboDetails: () => [{ keys: ['⌘', 'F'], doubleTap: false }]
-}))
+vi.mock('@/hooks/useShortcutLabel', async () => {
+  const actual = await vi.importActual<typeof ShortcutLabels>('@/hooks/useShortcutLabel')
+  return {
+    ...actual,
+    useShortcutLabel: () => '⌘F',
+    useShortcutKeyComboDetails: () => [{ keys: ['⌘', 'F'], doubleTap: false }]
+  }
+})
 
 vi.mock('./settings-setup-guide-progress', () => ({
   useSettingsSetupGuideProgress: mocks.useSettingsSetupGuideProgress
@@ -62,6 +70,35 @@ function renderSidebar(
                 title: 'Voice',
                 icon: Mic,
                 installStatus: 'installed'
+              },
+              {
+                id: 'computer-use',
+                title: 'Computer Use',
+                icon: Bot,
+                installStatus: 'up-to-date'
+              },
+              {
+                id: 'voice-loading',
+                title: 'Voice Loading',
+                icon: Mic,
+                installStatus: 'checking'
+              },
+              {
+                id: 'linear',
+                title: 'Linear',
+                icon: GitBranch,
+                installStatus: 'update-available'
+              },
+              {
+                id: 'ephemeral-vms',
+                title: 'Ephemeral VMs',
+                icon: Bot,
+                installStatus: 'needs-attention'
+              },
+              {
+                id: 'plugins',
+                title: 'Plugins',
+                icon: Puzzle
               }
             ]
           },
@@ -80,9 +117,7 @@ function renderSidebar(
         ]}
         repoSections={[]}
         hasRepos={false}
-        searchQuery=""
         onBack={vi.fn()}
-        onSearchChange={vi.fn()}
         onSelectSection={vi.fn()}
       />
     </TooltipProvider>
@@ -93,6 +128,37 @@ describe('SettingsSidebar', () => {
   beforeEach(() => {
     mocks.useSettingsSetupGuideProgress.mockReset()
     mocks.useSettingsSetupGuideProgress.mockReturnValue(makeSetupGuideProgress())
+  })
+
+  afterEach(() => {
+    document.body.innerHTML = ''
+  })
+
+  it.each([false, true])('renders Chat navigation only with the opt-in enabled (%s)', (enabled) => {
+    const settings = { ...getDefaultSettings('/tmp'), experimentalNativeChat: enabled }
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      nativeChatEnabled: enabled,
+      repos: []
+    }).filter((section) => section.group === 'interface')
+    const container = document.createElement('div')
+    container.innerHTML = renderToStaticMarkup(
+      <TooltipProvider>
+        <SettingsSidebar
+          activeSectionId="appearance"
+          settings={settings}
+          generalGroups={[{ id: 'interface', title: 'Interface', sections }]}
+          repoSections={[]}
+          hasRepos={false}
+          onBack={vi.fn()}
+          onSelectSection={vi.fn()}
+        />
+      </TooltipProvider>
+    )
+    const buttons = Array.from(container.querySelectorAll('button'))
+    expect(buttons.some((button) => button.textContent === 'Chat')).toBe(enabled)
   })
 
   it('applies left sidebar appearance styles to the settings navigation', () => {
@@ -109,11 +175,15 @@ describe('SettingsSidebar', () => {
     expect(markup).toContain('--worktree-sidebar-foreground:#f0f4f8')
   })
 
-  it('renders install state labels separately from static badges', () => {
+  it('reserves install state labels for actionable skill states', () => {
     const markup = renderSidebar()
 
-    expect(markup).toContain('Not installed')
-    expect(markup).toContain('Installed')
+    expect(markup).not.toContain('Not installed')
+    expect(markup).not.toContain('Installed')
+    expect(markup).not.toContain('Up to date')
+    expect(markup).not.toContain('Checking...')
+    expect(markup).toContain('Update available')
+    expect(markup).toContain('Review skill')
     expect(markup).toContain('Optional')
   })
 

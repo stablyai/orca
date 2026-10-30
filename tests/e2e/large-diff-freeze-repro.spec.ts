@@ -1,38 +1,14 @@
-import { execFileSync } from 'child_process'
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'fs'
-import os from 'os'
-import path from 'path'
-import { randomUUID } from 'crypto'
+import { rmSync, writeFileSync } from 'node:fs'
 import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 import { getLargeDiffRenderLimit } from '../../src/shared/large-diff-render-limit'
-
-type IsolatedLargeDiffRepo = {
-  repoPath: string
-  relativePath: string
-  absolutePath: string
-}
-
-function runGit(repoPath: string, args: string[]): void {
-  execFileSync('git', args, { cwd: repoPath, stdio: 'pipe' })
-}
-
-function createIsolatedLargeDiffRepo(): IsolatedLargeDiffRepo {
-  const repoPath = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'orca-large-diff-repro-')))
-  runGit(repoPath, ['init'])
-  runGit(repoPath, ['config', 'user.email', 'e2e@test.local'])
-  runGit(repoPath, ['config', 'user.name', 'E2E Test'])
-
-  mkdirSync(path.join(repoPath, 'src'), { recursive: true })
-  const relativePath = path.join('src', `large-diff-${randomUUID()}.ts`)
-  const absolutePath = path.join(repoPath, relativePath)
-  writeFileSync(absolutePath, 'export const seed = 1\n')
-  runGit(repoPath, ['add', '-A'])
-  runGit(repoPath, ['commit', '-m', 'Initial large diff repro fixture'])
-
-  return { repoPath, relativePath, absolutePath }
-}
+import { MAX_AUTOMATIC_DIFF_CHANGED_LINES } from '../../src/renderer/src/components/editor/combined-diff-on-demand-load'
+import {
+  buildLargeTypeScriptFile,
+  createIsolatedLargeDiffRepo,
+  createIsolatedStagedLocaleDiffRepo
+} from './large-diff-repro-fixtures'
 
 async function addAndActivateRepo(orcaPage: Page, repoPath: string): Promise<string> {
   const repoId = await orcaPage.evaluate(async (pathToRepo: string) => {
@@ -49,8 +25,7 @@ async function addAndActivateRepo(orcaPage: Page, repoPath: string): Promise<str
     return addedRepo.id
   }, repoPath)
 
-  // Why: fetchWorktrees() resolves before Zustand always reflects the async
-  // worktree scan, so poll the same public store path real repo setup uses.
+  // Poll the public store because fetchWorktrees may resolve before async scan state is visible.
   await expect
     .poll(
       () =>
@@ -92,17 +67,64 @@ async function addAndActivateRepo(orcaPage: Page, repoPath: string): Promise<str
   return worktreeId
 }
 
-function buildLargeTypeScriptFile(lineCount: number): string {
-  const lines: string[] = []
-  for (let i = 0; i < lineCount; i += 1) {
-    lines.push(`export const largeDiffValue${i} = ${i}`)
-  }
-  return `${lines.join('\n')}\n`
-}
-
 test.describe('Large diff freeze repro', () => {
   test.describe.configure({ mode: 'serial' })
   test.use({ seedTestRepo: false })
+  test('defers a large combined diff until the user loads it', async ({
+    orcaPage,
+    registerPostElectronShutdownCleanup
+  }) => {
+    await waitForSessionReady(orcaPage)
+    const fixture = createIsolatedLargeDiffRepo()
+    // Why: Windows keeps the watched fixture repo locked until Electron exits.
+    registerPostElectronShutdownCleanup(async () => {
+      rmSync(fixture.repoPath, { recursive: true, force: true })
+    })
+
+    const worktreeId = await addAndActivateRepo(orcaPage, fixture.repoPath)
+    writeFileSync(
+      fixture.absolutePath,
+      buildLargeTypeScriptFile(MAX_AUTOMATIC_DIFF_CHANGED_LINES + 1)
+    )
+    await orcaPage.evaluate(
+      async ({ wId, repoPath, relativePath }) => {
+        const store = window.__store
+        if (!store) {
+          throw new Error('window.__store is not available')
+        }
+        let status = await window.api.git.status({ worktreePath: repoPath })
+        let entry = status.entries.find(
+          (candidate) => candidate.path === relativePath && candidate.area === 'unstaged'
+        )
+        // Why: the app may still be settling the just-added worktree's first status read.
+        const statusDeadline = performance.now() + 5_000
+        while (!entry && performance.now() < statusDeadline) {
+          await new Promise((resolve) => window.setTimeout(resolve, 100))
+          status = await window.api.git.status({ worktreePath: repoPath })
+          entry = status.entries.find(
+            (candidate) => candidate.path === relativePath && candidate.area === 'unstaged'
+          )
+        }
+        if (!entry) {
+          throw new Error(`large diff status entry not found: ${relativePath}`)
+        }
+        store.getState().setGitStatus(wId, status)
+        store.getState().openAllDiffs(wId, repoPath, undefined, 'unstaged', [entry])
+      },
+      { wId: worktreeId, repoPath: fixture.repoPath, relativePath: fixture.relativePath }
+    )
+
+    const prompt = orcaPage.getByTestId('large-diff-load-prompt')
+    await expect(prompt).toBeVisible()
+    await expect(prompt).toContainText('Large diffs are not rendered by default.')
+    await expect(orcaPage.locator('.monaco-diff-editor')).toHaveCount(0)
+
+    await prompt.getByRole('button', { name: 'Load diff' }).click()
+
+    await expect(prompt).toHaveCount(0)
+    await expect(orcaPage.locator('.monaco-diff-editor')).toHaveCount(1, { timeout: 30_000 })
+  })
+
   test('opening a large single-file diff keeps the renderer responsive', async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
     const fixture = createIsolatedLargeDiffRepo()
@@ -187,6 +209,96 @@ test.describe('Large diff freeze repro', () => {
       } else {
         expect(measurement.editorCount).toBeGreaterThan(0)
       }
+      expect(measurement.maxLagMs).toBeLessThan(1_000)
+    } finally {
+      rmSync(fixture.repoPath, { recursive: true, force: true })
+    }
+  })
+
+  test('opening stale unstaged combined diffs after staging keeps the renderer responsive', async ({
+    orcaPage
+  }) => {
+    await waitForSessionReady(orcaPage)
+    const fixture = createIsolatedStagedLocaleDiffRepo()
+
+    try {
+      const worktreeId = await addAndActivateRepo(orcaPage, fixture.repoPath)
+      const measurement = await orcaPage.evaluate(
+        async ({ wId, repoPath, expectedPaths }) => {
+          const store = window.__store
+          if (!store) {
+            throw new Error('window.__store is not available')
+          }
+
+          const status = await window.api.git.status({ worktreePath: repoPath })
+          store.getState().setGitStatus(wId, status)
+          const entries = status.entries.filter((entry) => entry.area === 'staged')
+          const entryPaths = entries.map((entry) => entry.path)
+          const missing = expectedPaths.filter((path) => !entryPaths.includes(path))
+          if (missing.length > 0) {
+            throw new Error(`staged locale fixture missing entries: ${missing.join(', ')}`)
+          }
+
+          // Open staged-snapshot entries as unstaged to reproduce the stale combined diff.
+          const staleUnstagedEntries = entries.map((entry) => ({
+            ...entry,
+            area: 'unstaged' as const
+          }))
+          const intervalMs = 50
+          const samples: number[] = []
+          let last = performance.now()
+          let maxLagMs = 0
+          const timer = window.setInterval(() => {
+            const now = performance.now()
+            const lag = Math.max(0, now - last - intervalMs)
+            maxLagMs = Math.max(maxLagMs, lag)
+            samples.push(lag)
+            last = now
+          }, intervalMs)
+
+          const startedAt = performance.now()
+          store.getState().openAllDiffs(wId, repoPath, undefined, 'unstaged', staleUnstagedEntries)
+
+          let editorCount = 0
+          let fallbackCount = 0
+          try {
+            while (performance.now() - startedAt < 30_000) {
+              await new Promise((resolve) => window.setTimeout(resolve, 50))
+              editorCount = document.querySelectorAll('.monaco-diff-editor').length
+              fallbackCount = document.querySelectorAll(
+                '[data-testid="large-diff-fallback"]'
+              ).length
+              if (editorCount + fallbackCount >= Math.min(entries.length, 5)) {
+                await new Promise((resolve) => window.setTimeout(resolve, 1_000))
+                break
+              }
+            }
+          } finally {
+            window.clearInterval(timer)
+          }
+
+          const classHits = Array.from(
+            document.querySelectorAll(
+              '.monaco-diff-editor .line-insert, .monaco-diff-editor .line-delete, .monaco-diff-editor .char-insert, .monaco-diff-editor .char-delete'
+            )
+          ).length
+          return {
+            editorCount,
+            fallbackCount,
+            classHits,
+            maxLagMs,
+            sampleCount: samples.length,
+            p95LagMs: samples.length
+              ? [...samples].sort((a, b) => a - b)[Math.floor(samples.length * 0.95)]
+              : 0
+          }
+        },
+        { wId: worktreeId, repoPath: fixture.repoPath, expectedPaths: fixture.relativePaths }
+      )
+
+      console.log(`stale unstaged combined diff measurement ${JSON.stringify(measurement)}`)
+      expect(measurement.editorCount + measurement.fallbackCount).toBeGreaterThanOrEqual(5)
+      expect(measurement.classHits).toBeGreaterThan(0)
       expect(measurement.maxLagMs).toBeLessThan(1_000)
     } finally {
       rmSync(fixture.repoPath, { recursive: true, force: true })

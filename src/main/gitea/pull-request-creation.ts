@@ -1,3 +1,5 @@
+import type { ExecutionHostId } from '../../shared/execution-host'
+import { hostedReviewSshConnectionId } from '../source-control/hosted-review-execution-host'
 import type { CreateHostedReviewInput, CreateHostedReviewResult } from '../../shared/hosted-review'
 import {
   normalizeHostedReviewBaseRef,
@@ -8,7 +10,7 @@ import {
   requestHostedReviewJson
 } from '../source-control/hosted-review-api-request'
 import { readHostedPullRequestTemplate } from '../source-control/pull-request-template'
-import { getGiteaPullRequestForBranch } from './client'
+import { getGiteaPullRequestForBranch, invalidateGiteaPullRequestScanForRepo } from './client'
 import { mapGiteaPullRequest, type RawGiteaPullRequest } from './pull-request-mappers'
 import { getGiteaRepoRef, type GiteaRepoRef } from './repository-ref'
 
@@ -68,21 +70,24 @@ function classifyCreateError(error: unknown): CreateHostedReviewResult {
       ok: false,
       code: 'auth_required',
       error:
-        'Create PR failed: Gitea is not authenticated. Next step: set ORCA_GITEA_TOKEN in this environment.'
+        'Create PR failed: Gitea is not authenticated. Next step: set ORCA_GITEA_TOKEN in this environment.',
+      reason: 'auth_required'
     }
   }
   if (status === 409 || lower.includes('already exists') || lower.includes('already open')) {
     return {
       ok: false,
       code: 'already_exists',
-      error: 'A pull request already exists for this branch.'
+      error: 'A pull request already exists for this branch.',
+      reason: 'existing_review'
     }
   }
   if (error instanceof HostedReviewApiRequestError && error.timedOut) {
     return {
       ok: false,
       code: 'unknown_completion',
-      error: 'PR creation may have completed. Refreshing branch review state...'
+      error: 'PR creation may have completed. Refreshing branch review state...',
+      reason: 'creation_unconfirmed'
     }
   }
   if (status === 400 || status === 422 || lower.includes('validation')) {
@@ -90,13 +95,15 @@ function classifyCreateError(error: unknown): CreateHostedReviewResult {
       ok: false,
       code: 'validation',
       error:
-        'Create PR failed: Gitea rejected the pull request. Check the base branch and branch state, then try again.'
+        'Create PR failed: Gitea rejected the pull request. Check the base branch and branch state, then try again.',
+      reason: 'rejected'
     }
   }
   return {
     ok: false,
     code: 'unknown',
-    error: 'Create PR failed: Gitea could not create the pull request. Try again in a moment.'
+    error: 'Create PR failed: Gitea could not create the pull request. Try again in a moment.',
+    reason: 'create_failed'
   }
 }
 
@@ -105,6 +112,11 @@ async function findExistingPullRequest(
   head: string,
   connectionId?: string | null
 ): Promise<{ number: number; url: string } | null> {
+  // A create attempt may already have mutated the remote; discard pre-POST listings.
+  const repo = await getGiteaRepoRef(repoPath, connectionId)
+  if (repo) {
+    invalidateGiteaPullRequestScanForRepo(repo)
+  }
   const existing = await getGiteaPullRequestForBranch(repoPath, head, null, connectionId)
   return existing ? { number: existing.number, url: existing.url } : null
 }
@@ -112,22 +124,27 @@ async function findExistingPullRequest(
 export async function createGiteaPullRequest(
   repoPath: string,
   input: CreateHostedReviewInput,
-  connectionId?: string | null
+  executionHostId: ExecutionHostId
 ): Promise<CreateHostedReviewResult> {
   if (input.provider !== 'gitea') {
     return {
       ok: false,
       code: 'unsupported_provider',
-      error: 'Creating reviews for this provider is not supported yet.'
+      error: 'Creating reviews for this provider is not supported yet.',
+      reason: 'provider_not_supported'
     }
   }
+
+  // The Gitea REST calls run on this client; only the git reads under them are routed.
+  const connectionId = hostedReviewSshConnectionId(executionHostId)
 
   const repo = await getGiteaRepoRef(repoPath, connectionId)
   if (!repo) {
     return {
       ok: false,
       code: 'unsupported_provider',
-      error: 'Creating pull requests requires a Gitea remote.'
+      error: 'Creating pull requests requires a Gitea remote.',
+      reason: 'unsupported_provider'
     }
   }
 
@@ -138,14 +155,16 @@ export async function createGiteaPullRequest(
     return {
       ok: false,
       code: 'validation',
-      error: 'Create PR failed: base branch, head branch, and title are required.'
+      error: 'Create PR failed: base branch, head branch, and title are required.',
+      reason: 'base_head_title_required'
     }
   }
   if (head.toLowerCase() === base.toLowerCase()) {
     return {
       ok: false,
       code: 'validation',
-      error: 'Create PR failed: choose a different base branch before creating a pull request.'
+      error: 'Create PR failed: choose a different base branch before creating a pull request.',
+      reason: 'same_base_branch'
     }
   }
 
@@ -177,6 +196,7 @@ export async function createGiteaPullRequest(
     )
     const created = mapGiteaPullRequest(raw, 'neutral')
     if (created) {
+      invalidateGiteaPullRequestScanForRepo(repo)
       return { ok: true, number: created.number, url: created.url }
     }
     const found = await findExistingPullRequest(repoPath, head, connectionId).catch(() => null)
@@ -185,7 +205,8 @@ export async function createGiteaPullRequest(
       : {
           ok: false,
           code: 'unknown_completion',
-          error: 'PR creation may have completed. Refreshing branch review state...'
+          error: 'PR creation may have completed. Refreshing branch review state...',
+          reason: 'creation_unconfirmed'
         }
   } catch (error) {
     const classified = classifyCreateError(error)
@@ -199,6 +220,7 @@ export async function createGiteaPullRequest(
           ok: false,
           code: 'already_exists',
           error: 'A pull request already exists for this branch.',
+          reason: 'existing_review',
           existingReview: existing
         }
       }

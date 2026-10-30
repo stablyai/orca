@@ -1,0 +1,122 @@
+import type { AppState } from '../types'
+import type { SshConnectionStatus } from '../../../../shared/ssh-types'
+import {
+  isConnectedRuntimeHostState,
+  runtimeHostConnectionStateForEntry
+} from '@/runtime/runtime-host-connection-state'
+
+type RuntimeAwareSshReadState = Pick<
+  AppState,
+  | 'sshConnectionStates'
+  | 'sshTargetLabels'
+  | 'removedSshTargetLabels'
+  | 'sshTargetsHydrated'
+  | 'sshStateByEnvironment'
+> &
+  Partial<Pick<AppState, 'runtimeStatusByEnvironmentId'>>
+
+/** What a target's status reads; narrower so callers needn't carry the label maps. */
+export type RuntimeAwareSshStatusState = Pick<
+  AppState,
+  'sshConnectionStates' | 'sshStateByEnvironment'
+> &
+  Partial<Pick<AppState, 'runtimeStatusByEnvironmentId'>>
+
+// A null probe can leave transport connected; use shared reachability verdict or mirrored targets vanish (ssh-execution-boundary.md).
+function isEnvironmentReachable(state: RuntimeAwareSshStatusState, environmentId: string): boolean {
+  return isConnectedRuntimeHostState(
+    runtimeHostConnectionStateForEntry(state.runtimeStatusByEnvironmentId?.get(environmentId))
+  )
+}
+
+export function selectRuntimeAwareSshStatus(
+  state: RuntimeAwareSshStatusState,
+  environmentId: string | null,
+  targetId: string
+): SshConnectionStatus | null {
+  if (environmentId === null) {
+    return state.sshConnectionStates.get(targetId)?.status ?? 'disconnected'
+  }
+  if (!isEnvironmentReachable(state, environmentId)) {
+    return null
+  }
+  const bucket = state.sshStateByEnvironment.get(environmentId)
+  if (!bucket?.targetsHydrated) {
+    return null
+  }
+  return bucket.connectionStates.get(targetId)?.status ?? null
+}
+
+export function selectRuntimeAwareSshError(
+  state: RuntimeAwareSshStatusState,
+  environmentId: string | null,
+  targetId: string
+): string | null {
+  if (environmentId === null) {
+    return state.sshConnectionStates.get(targetId)?.error ?? null
+  }
+  if (!isEnvironmentReachable(state, environmentId)) {
+    return null
+  }
+  const bucket = state.sshStateByEnvironment.get(environmentId)
+  if (!bucket?.targetsHydrated) {
+    return null
+  }
+  return bucket.connectionStates.get(targetId)?.error ?? null
+}
+
+export function selectRuntimeAwareSshConnectionGeneration(
+  state: RuntimeAwareSshReadState,
+  environmentId: string | null,
+  targetId: string
+): number | null {
+  if (environmentId === null) {
+    return state.sshConnectionStates.get(targetId)?.connectionGeneration ?? null
+  }
+  if (!isEnvironmentReachable(state, environmentId)) {
+    return null
+  }
+  const bucket = state.sshStateByEnvironment.get(environmentId)
+  if (!bucket?.targetsHydrated) {
+    return null
+  }
+  return bucket.connectionStates.get(targetId)?.connectionGeneration ?? null
+}
+
+export function selectRuntimeAwareSshTargetLabel(
+  state: RuntimeAwareSshReadState,
+  environmentId: string | null,
+  targetId: string
+): string {
+  if (environmentId === null) {
+    return (
+      state.sshTargetLabels.get(targetId) ?? state.removedSshTargetLabels.get(targetId) ?? targetId
+    )
+  }
+  const bucket = state.sshStateByEnvironment.get(environmentId)
+  return bucket?.targetLabels.get(targetId) ?? bucket?.removedTargetLabels.get(targetId) ?? targetId
+}
+
+export function selectRuntimeAwareSshTargetRemoved(
+  state: RuntimeAwareSshReadState,
+  environmentId: string | null,
+  targetId: string
+): boolean {
+  if (environmentId === null) {
+    return (
+      state.removedSshTargetLabels.has(targetId) ||
+      (state.sshTargetsHydrated && !state.sshTargetLabels.has(targetId))
+    )
+  }
+  if (!isEnvironmentReachable(state, environmentId)) {
+    return false
+  }
+  const bucket = state.sshStateByEnvironment.get(environmentId)
+  if (!bucket) {
+    return false
+  }
+  return (
+    bucket.removedTargetLabels.has(targetId) ||
+    (bucket.targetsHydrated && !bucket.targetLabels.has(targetId))
+  )
+}

@@ -1,8 +1,13 @@
 import type React from 'react'
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
+import { useFileSearchScope } from './useFileSearchScope'
 import { useActiveWorktree } from '@/store/selectors'
-import type { SearchFileResult, SearchMatch, SearchResult } from '../../../../shared/types'
+import type {
+  SearchFileResult,
+  SearchMatch,
+  SearchResult
+} from '../../../../shared/code-search-types'
 import { buildSearchRows } from './search-rows'
 import { cancelRevealFrame, openMatchResult } from './search-match-open'
 import type { SearchQueryRowProps } from './SearchQueryRow'
@@ -17,6 +22,7 @@ export type FileSearchPanelModel = {
   filtersProps: SearchFiltersProps
   resultsProps: {
     results: SearchResult | null
+    error?: string | null
     hasCommittedResults: boolean
     query: string
     loading: boolean
@@ -44,6 +50,7 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
   const fileSearchIncludePattern = searchState?.includePattern ?? ''
   const fileSearchExcludePattern = searchState?.excludePattern ?? ''
   const fileSearchResults = searchState?.results ?? null
+  const fileSearchResultOwner = searchState?.resultOwner ?? null
   const fileSearchLoading = searchState?.loading ?? false
   const fileSearchCollapsedFiles = searchState?.collapsedFiles ?? EMPTY_COLLAPSED_FILES
   const fileSearchSeedRequestId = searchState?.seedRequestId
@@ -127,18 +134,43 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
   useEffect(() => {
     if (!worktreePath) {
       cancelPendingSearch()
-      updateActiveSearchState({ results: null })
+      updateActiveSearchState({ results: null, resultOwner: null, error: null })
     }
   }, [worktreePath, cancelPendingSearch, updateActiveSearchState])
 
-  const deferredSearchResults = useDeferredValue(fileSearchResults)
+  const isCurrentOwner = useFileSearchScope({
+    activeWorktreeId,
+    worktreePath,
+    explorerView,
+    executeSearch,
+    cancelPendingSearch,
+    updateActiveSearchState
+  })
+  const resultsAreCurrent = isCurrentOwner(fileSearchResultOwner)
+  const committedSearchResults = useMemo(
+    () => ({
+      results: resultsAreCurrent ? fileSearchResults : null,
+      owner: resultsAreCurrent ? fileSearchResultOwner : null
+    }),
+    [fileSearchResultOwner, fileSearchResults, resultsAreCurrent]
+  )
+  const deferredSearchResults = useDeferredValue(committedSearchResults)
+  const deferredResultsAreCurrent = isCurrentOwner(deferredSearchResults.owner)
   const searchRows = useMemo(
     () =>
       buildSearchRows(
-        fileSearchQuery.trim() && worktreePath ? deferredSearchResults : null,
+        deferredResultsAreCurrent && fileSearchQuery.trim() && worktreePath
+          ? deferredSearchResults.results
+          : null,
         fileSearchCollapsedFiles
       ),
-    [deferredSearchResults, fileSearchCollapsedFiles, fileSearchQuery, worktreePath]
+    [
+      deferredSearchResults.results,
+      fileSearchCollapsedFiles,
+      fileSearchQuery,
+      worktreePath,
+      deferredResultsAreCurrent
+    ]
   )
 
   useEffect(() => {
@@ -166,14 +198,6 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
     }
     inputRef.current?.focus()
   }, [activeWorktreeId, fileSearchFocusRequestId])
-
-  const previousExplorerViewRef = useRef(explorerView)
-  useEffect(() => {
-    if (previousExplorerViewRef.current !== 'search' && explorerView === 'search') {
-      focusQueryInput()
-    }
-    previousExplorerViewRef.current = explorerView
-  }, [explorerView, focusQueryInput])
 
   const handleClearSearch = useCallback(() => {
     cancelPendingSearch()
@@ -205,6 +229,9 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
         return
       }
       if (e.key === 'Escape') {
+        e.preventDefault()
+        e.stopPropagation()
+        inputRef.current?.blur()
         if (fileSearchQuery) {
           handleClearSearch()
         }
@@ -218,11 +245,11 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
 
   const handleMatchClick = useCallback(
     (fileResult: SearchFileResult, match: SearchMatch) => {
-      if (!activeWorktreeId) {
+      if (!deferredResultsAreCurrent) {
         return
       }
       openMatchResult({
-        activeWorktreeId,
+        resultOwner: deferredSearchResults.owner,
         fileResult,
         match,
         openFile,
@@ -231,7 +258,7 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
         revealInnerRafRef
       })
     },
-    [activeWorktreeId, openFile, setPendingEditorReveal]
+    [deferredSearchResults.owner, openFile, setPendingEditorReveal, deferredResultsAreCurrent]
   )
 
   return {
@@ -274,8 +301,9 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
       }
     },
     resultsProps: {
-      results: deferredSearchResults,
-      hasCommittedResults: fileSearchResults !== null,
+      results: deferredResultsAreCurrent ? deferredSearchResults.results : null,
+      error: resultsAreCurrent ? searchState?.error : null,
+      hasCommittedResults: resultsAreCurrent && fileSearchResults !== null,
       query: fileSearchQuery,
       loading: fileSearchLoading,
       rows: searchRows,

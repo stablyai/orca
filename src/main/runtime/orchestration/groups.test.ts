@@ -18,7 +18,9 @@ function makeSummary(
     connected: opts.connected ?? true,
     writable: opts.writable ?? true,
     lastOutputAt: opts.lastOutputAt ?? null,
-    preview: opts.preview ?? ''
+    preview: opts.preview ?? '',
+    // Omit unknown identity entirely to exercise hosts that predate the field.
+    ...(opts.agentIdentity ? { agentIdentity: opts.agentIdentity } : {})
   }
 }
 
@@ -30,6 +32,8 @@ describe('isGroupAddress', () => {
     expect(isGroupAddress('@idle')).toBe(true)
     expect(isGroupAddress('@claude')).toBe(true)
     expect(isGroupAddress('@droid')).toBe(true)
+    expect(isGroupAddress('@grok')).toBe(true)
+    expect(isGroupAddress('@cursor')).toBe(true)
     expect(isGroupAddress('@worktree:wt_1')).toBe(true)
   })
 
@@ -41,6 +45,16 @@ describe('isGroupAddress', () => {
 })
 
 describe('resolveGroupAddress', () => {
+  it('keeps observed DSB recipients out of existing agent-name groups', () => {
+    const terminals = [
+      makeSummary('term_dsb', { agentIdentity: 'dsb', title: 'Review Claude - DeepSeek Build' })
+    ]
+    expect(resolveGroupAddress('@claude', 'sender', terminals, noStatus)).toEqual([])
+    expect(resolveGroupAddress('@codex', 'sender', terminals, noStatus)).toEqual([])
+    expect(resolveGroupAddress('@dsb', 'sender', terminals, noStatus)).toEqual([])
+    expect(resolveGroupAddress('@all', 'sender', terminals, noStatus)).toEqual(['term_dsb'])
+  })
+
   it('returns the address as-is for non-group addresses', () => {
     const result = resolveGroupAddress('term_b', 'term_a', [], noStatus)
     expect(result).toEqual(['term_b'])
@@ -95,69 +109,97 @@ describe('resolveGroupAddress', () => {
   })
 
   describe('agent name groups', () => {
-    it('matches @claude by terminal title', () => {
+    // Route by host-proven identity; task titles can mention unrelated agents.
+
+    it('routes to every pane the host resolved as that agent', () => {
       const terminals = [
-        makeSummary('term_a', { title: 'Claude Code' }),
-        makeSummary('term_b', { title: 'Claude Code' }),
-        makeSummary('term_c', { title: 'Codex CLI' })
+        makeSummary('term_a', { agentIdentity: 'claude' }),
+        makeSummary('term_b', { agentIdentity: 'claude' }),
+        makeSummary('term_c', { agentIdentity: 'codex' })
       ]
-      const result = resolveGroupAddress('@claude', 'term_a', terminals, noStatus)
-      expect(result).toEqual(['term_b'])
+      expect(resolveGroupAddress('@claude', 'term_a', terminals, noStatus)).toEqual(['term_b'])
     })
 
-    it('matches @openclaude by terminal title', () => {
+    it.each([
+      ['@codex', 'codex'],
+      ['@openclaude', 'openclaude'],
+      ['@mimo', 'mimo-code'],
+      ['@gemini', 'gemini'],
+      ['@droid', 'droid'],
+      ['@grok', 'grok'],
+      ['@cursor', 'cursor'],
+      ['@opencode', 'opencode']
+    ])('routes %s to its agent id', (group, agentIdentity) => {
       const terminals = [
-        makeSummary('term_a', { title: 'OpenClaude' }),
-        makeSummary('term_b', { title: 'OpenClaude running' }),
-        makeSummary('term_c', { title: 'Claude Code' })
+        makeSummary('sender'),
+        makeSummary('target', { agentIdentity: agentIdentity as never }),
+        makeSummary('other', { agentIdentity: 'claude' })
       ]
-      const result = resolveGroupAddress('@openclaude', 'term_a', terminals, noStatus)
-      expect(result).toEqual(['term_b'])
+      const expected = agentIdentity === 'claude' ? ['target', 'other'] : ['target']
+      expect(resolveGroupAddress(group, 'sender', terminals, noStatus)).toEqual(expected)
     })
 
-    it('does not match OpenClaude titles through @claude', () => {
-      const terminals = [
-        makeSummary('term_a', { title: 'Claude Code' }),
-        makeSummary('term_b', { title: 'OpenClaude running' })
-      ]
-      const result = resolveGroupAddress('@claude', 'term_a', terminals, noStatus)
-      expect(result).toEqual([])
+    it('is case-insensitive for the group address', () => {
+      const terminals = [makeSummary('sender'), makeSummary('target', { agentIdentity: 'claude' })]
+      expect(resolveGroupAddress('@CLAUDE', 'sender', terminals, noStatus)).toEqual(['target'])
     })
 
-    it('matches @codex by terminal title', () => {
+    it('excludes the sender even when the sender is that agent', () => {
       const terminals = [
-        makeSummary('term_a', { title: 'Codex CLI' }),
-        makeSummary('term_b', { title: 'Codex CLI' })
+        makeSummary('sender', { agentIdentity: 'grok' }),
+        makeSummary('target', { agentIdentity: 'grok' })
       ]
-      const result = resolveGroupAddress('@codex', 'term_a', terminals, noStatus)
-      expect(result).toEqual(['term_b'])
+      expect(resolveGroupAddress('@grok', 'sender', terminals, noStatus)).toEqual(['target'])
     })
 
-    it('matches @droid by terminal title and excludes sender', () => {
-      const terminals = [
-        makeSummary('term_a', { title: 'Droid ready' }),
-        makeSummary('term_b', { title: 'Droid ready' }),
-        makeSummary('term_c', { title: 'Droid - action required' })
-      ]
-      const result = resolveGroupAddress('@droid', 'term_a', terminals, noStatus)
-      expect(result).toEqual(['term_b', 'term_c'])
+    describe('a task title can no longer redirect a message', () => {
+      // Recorded Grok titles mentioning Claude and Codex previously received both groups.
+      it('does not route @claude to a Codex pane whose task text names Claude', () => {
+        const terminals = [
+          makeSummary('sender'),
+          makeSummary('codex_pane', {
+            agentIdentity: 'codex',
+            title: 'Review the Claude session-history fix'
+          })
+        ]
+        expect(resolveGroupAddress('@claude', 'sender', terminals, noStatus)).toEqual([])
+      })
+
+      it('does not route @codex to a Grok pane whose task text names Codex', () => {
+        const terminals = [
+          makeSummary('sender'),
+          makeSummary('grok_pane', {
+            agentIdentity: 'grok',
+            title: 'Switch Claude and Codex off the load balancer… - grok'
+          })
+        ]
+        expect(resolveGroupAddress('@codex', 'sender', terminals, noStatus)).toEqual([])
+        expect(resolveGroupAddress('@grok', 'sender', terminals, noStatus)).toEqual(['grok_pane'])
+      })
+
+      it('does not route @cursor to a pane merely discussing a text cursor', () => {
+        const terminals = [
+          makeSummary('sender'),
+          makeSummary('claude_pane', {
+            agentIdentity: 'claude',
+            title: 'fix the text cursor blink'
+          })
+        ]
+        expect(resolveGroupAddress('@cursor', 'sender', terminals, noStatus)).toEqual([])
+      })
     })
 
-    it('does not match Android, path, or hyphenated tokens through @droid', () => {
-      const terminals = [
-        makeSummary('term_a', { title: 'Codex CLI' }),
-        makeSummary('term_b', { title: 'Android build' }),
-        makeSummary('term_c', { title: '/tmp/android' }),
-        makeSummary('term_d', { title: 'my-droid-worker' })
-      ]
-      const result = resolveGroupAddress('@droid', 'term_a', terminals, noStatus)
-      expect(result).toEqual([])
-    })
+    describe('unknown identity fails closed', () => {
+      // Unknown identity must fail closed; missing recipients are recoverable, misdelivered instructions are not.
+      it('does not route to a pane with no resolved identity, whatever its title says', () => {
+        const terminals = [makeSummary('sender'), makeSummary('unknown', { title: 'Claude Code' })]
+        expect(resolveGroupAddress('@claude', 'sender', terminals, noStatus)).toEqual([])
+      })
 
-    it('is case-insensitive for group address', () => {
-      const terminals = [makeSummary('term_a'), makeSummary('term_b', { title: 'Claude Code' })]
-      const result = resolveGroupAddress('@Claude', 'term_a', terminals, noStatus)
-      expect(result).toEqual(['term_b'])
+      it('still routes the identity-free groups, which do not depend on the field', () => {
+        const terminals = [makeSummary('sender'), makeSummary('other', { title: 'Claude Code' })]
+        expect(resolveGroupAddress('@all', 'sender', terminals, noStatus)).toEqual(['other'])
+      })
     })
   })
 

@@ -1,0 +1,408 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { setMainHttpClient } from '../network/http-client'
+
+const fetchMock = vi.fn()
+const authState = vi.hoisted<{
+  file: string | null
+  readError: Error | null
+}>(() => ({ file: null, readError: null }))
+
+vi.mock('node:fs', () => ({
+  existsSync: () => authState.file !== null,
+  readFileSync: () => {
+    if (authState.readError) {
+      throw authState.readError
+    }
+    if (authState.file === null) {
+      throw new Error('ENOENT')
+    }
+    return authState.file
+  }
+}))
+
+vi.mock('node:os', () => ({ homedir: () => '/home/test' }))
+
+import { fetchGrokRateLimits } from './grok-fetcher'
+
+setMainHttpClient({ fetch: fetchMock, proxySession: () => null })
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    json: async () => body
+  } as Response
+}
+
+const BILLING_RESPONSE = {
+  config: {
+    creditUsagePercent: 42,
+    currentPeriod: {
+      type: 'USAGE_PERIOD_TYPE_WEEKLY',
+      start: '2026-06-30T18:36:14.268512+00:00',
+      end: '2026-07-07T18:36:14.268512+00:00'
+    },
+    subscriptionTier: 'SuperGrok',
+    isUnifiedBillingUser: true
+  }
+}
+
+function freshAuthJson(): string {
+  return JSON.stringify({
+    'https://auth.x.ai::client': {
+      key: 'access-token',
+      user_id: 'user-1',
+      email: 'dev@example.com',
+      expires_at: '2099-01-01T00:00:00.000Z'
+    }
+  })
+}
+
+describe('fetchGrokRateLimits', () => {
+  beforeEach(() => {
+    fetchMock.mockReset()
+    authState.file = null
+    authState.readError = null
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('returns unavailable when not signed in', async () => {
+    const result = await fetchGrokRateLimits()
+    expect(result.provider).toBe('grok')
+    expect(result.status).toBe('unavailable')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('maps weekly credit usage from billing config', async () => {
+    authState.file = freshAuthJson()
+    fetchMock.mockResolvedValueOnce(jsonResponse(BILLING_RESPONSE))
+
+    const result = await fetchGrokRateLimits()
+    expect(result.status).toBe('ok')
+    expect(result.weekly?.usedPercent).toBe(42)
+    expect(result.weekly?.windowMinutes).toBe(10_080)
+    expect(result.usageMetadata?.source).toBe('oauth')
+    expect(result.usageMetadata?.authProvenance).toContain('SuperGrok')
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://cli-chat-proxy.grok.com/v1/billing?format=credits',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer access-token',
+          'X-XAI-Token-Auth': 'xai-grok-cli',
+          'x-userid': 'user-1'
+        })
+      })
+    )
+  })
+
+  // #9214/#9219 omit all scalars (protobuf default zero); #15740 emits explicit zero fields and needs different handling.
+  it('maps an omitted protobuf percentage as zero for a weekly credits period', async () => {
+    authState.file = freshAuthJson()
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        config: {
+          currentPeriod: {
+            type: 'USAGE_PERIOD_TYPE_WEEKLY',
+            start: '2026-07-17T19:38:56.948570+00:00',
+            end: '2026-07-24T19:38:56.948570+00:00'
+          },
+          billingPeriodStart: '2026-07-17T19:38:56.948570+00:00',
+          billingPeriodEnd: '2026-07-24T19:38:56.948570+00:00',
+          isUnifiedBillingUser: true
+        }
+      })
+    )
+
+    const result = await fetchGrokRateLimits()
+    expect(result.status).toBe('ok')
+    expect(result.weekly?.usedPercent).toBe(0)
+    expect(result.weekly?.resetsAt).toBe(Date.parse('2026-07-24T19:38:56.948570+00:00'))
+    expect(result.monthly).toBeUndefined()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  // #15740: absent percent with explicitly emitted zero fields means unreported, never zero usage.
+  it('reports usage as unavailable when the credits view omits the percent but emits explicit zero credit fields', async () => {
+    authState.file = freshAuthJson()
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse({
+          config: {
+            currentPeriod: {
+              type: 'USAGE_PERIOD_TYPE_WEEKLY',
+              start: '2026-08-16T12:54:39.515635+00:00',
+              end: '2026-08-23T12:54:39.515635+00:00'
+            },
+            onDemandCap: { val: 100 },
+            onDemandUsed: { val: 0 },
+            isUnifiedBillingUser: true,
+            prepaidBalance: { val: 0 },
+            topUpMethod: 'TOP_UP_METHOD_SAVED_PAYMENT_METHOD',
+            billingPeriodStart: '2026-08-16T12:54:39.515635+00:00',
+            billingPeriodEnd: '2026-08-23T12:54:39.515635+00:00'
+          }
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          config: {
+            monthlyLimit: { val: 0 },
+            used: { val: 37.5 },
+            billingPeriodStart: '2026-08-16T12:54:39.515635+00:00',
+            billingPeriodEnd: '2026-08-23T12:54:39.515635+00:00'
+          }
+        })
+      )
+
+    const result = await fetchGrokRateLimits()
+    expect(result.status).toBe('unavailable')
+    expect(result.weekly).toBeNull()
+    expect(result.monthly).toBeUndefined()
+    expect(result.error).toMatch(/did not report a usage percentage/i)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('publishes a credits-view monthly budget pair as a monthly window without a second request', async () => {
+    authState.file = freshAuthJson()
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        config: {
+          currentPeriod: {
+            type: 'USAGE_PERIOD_TYPE_WEEKLY',
+            start: '2026-08-16T12:54:39.515635+00:00',
+            end: '2026-08-23T12:54:39.515635+00:00'
+          },
+          billingPeriodStart: '2026-08-16T12:54:39.515635+00:00',
+          billingPeriodEnd: '2026-08-23T12:54:39.515635+00:00',
+          monthlyLimit: { val: 100 },
+          used: { val: 25 }
+        }
+      })
+    )
+
+    const result = await fetchGrokRateLimits()
+    expect(result.status).toBe('ok')
+    expect(result.weekly).toBeNull()
+    expect(result.monthly?.usedPercent).toBe(25)
+    expect(result.monthly?.windowMinutes).toBe(43_200)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  // Nonzero money fields do not prove default scalars are emitted; absent percent can still encode zero (#9214/#9219).
+  it('still reads an omitted percentage as zero when the payload carries only non-zero money fields', async () => {
+    authState.file = freshAuthJson()
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        config: {
+          currentPeriod: {
+            type: 'USAGE_PERIOD_TYPE_WEEKLY',
+            start: '2026-07-17T19:38:56.948570+00:00',
+            end: '2026-07-24T19:38:56.948570+00:00'
+          },
+          billingPeriodStart: '2026-07-17T19:38:56.948570+00:00',
+          billingPeriodEnd: '2026-07-24T19:38:56.948570+00:00',
+          onDemandCap: { val: 100 },
+          prepaidBalance: { val: 25 },
+          isUnifiedBillingUser: true
+        }
+      })
+    )
+
+    const result = await fetchGrokRateLimits()
+    expect(result.status).toBe('ok')
+    expect(result.weekly?.usedPercent).toBe(0)
+    expect(result.weekly?.windowMinutes).toBe(10_080)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([{ val: 0 }, { val: '0' }])(
+    'does not divide by a zero monthly limit (%o)',
+    async (monthlyLimit) => {
+      authState.file = freshAuthJson()
+      fetchMock
+        .mockResolvedValueOnce(jsonResponse({ config: { isUnifiedBillingUser: true } }))
+        .mockResolvedValueOnce(jsonResponse({ config: { monthlyLimit, used: { val: 12 } } }))
+
+      const result = await fetchGrokRateLimits()
+      expect(result.status).toBe('unavailable')
+      expect(result.weekly).toBeNull()
+      expect(result.monthly).toBeUndefined()
+      expect(result.error).toMatch(/did not report a usage percentage/i)
+    }
+  )
+
+  it('reads a flat billing payload that carries usage fields but no percent', async () => {
+    authState.file = freshAuthJson()
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        monthlyLimit: { val: 200 },
+        used: { val: 50 },
+        billingPeriodEnd: '2026-09-01T00:00:00+00:00'
+      })
+    )
+
+    const result = await fetchGrokRateLimits()
+    expect(result.status).toBe('ok')
+    expect(result.weekly).toBeNull()
+    expect(result.monthly?.usedPercent).toBe(25)
+    expect(result.monthly?.windowMinutes).toBe(43_200)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns unavailable when not signed in even if a token-less auth file exists', async () => {
+    authState.file = JSON.stringify({})
+    const result = await fetchGrokRateLimits()
+    expect(result.status).toBe('unavailable')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('returns unavailable when neither billing view has usage', async () => {
+    authState.file = freshAuthJson()
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ config: { subscriptionTier: 'Enterprise' } }))
+      .mockResolvedValueOnce(jsonResponse({ config: { subscriptionTier: 'Enterprise' } }))
+
+    const result = await fetchGrokRateLimits()
+    expect(result.status).toBe('unavailable')
+    expect(result.weekly).toBeNull()
+    expect(result.monthly).toBeUndefined()
+  })
+
+  it('maps monthly included usage when a unified-billing response has an ambiguous weekly period', async () => {
+    authState.file = freshAuthJson()
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse({
+          config: {
+            currentPeriod: {
+              type: 'USAGE_PERIOD_TYPE_WEEKLY',
+              start: '2026-07-10T19:38:56.948570+00:00',
+              end: '2026-07-17T19:38:56.948570+00:00'
+            },
+            isUnifiedBillingUser: true,
+            subscriptionTier: 'SuperGrok'
+          }
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          config: {
+            monthlyLimit: { val: 150000 },
+            used: { val: 837 },
+            billingPeriodStart: '2026-07-01T00:00:00+00:00',
+            billingPeriodEnd: '2026-08-01T00:00:00+00:00'
+          }
+        })
+      )
+
+    const result = await fetchGrokRateLimits()
+    expect(result.status).toBe('ok')
+    expect(result.error).toBeNull()
+    expect(result.weekly).toBeNull()
+    expect(result.monthly?.usedPercent).toBeCloseTo((837 / 150000) * 100, 5)
+    expect(result.monthly?.windowMinutes).toBe(43_200)
+    expect(result.monthly?.resetsAt).toBe(Date.parse('2026-08-01T00:00:00+00:00'))
+    expect(result.usageMetadata?.authProvenance).toContain('SuperGrok')
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'https://cli-chat-proxy.grok.com/v1/billing',
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer access-token' })
+      })
+    )
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  // Error retains stale monthly quota; unavailable would discard the last good snapshot.
+  it('surfaces an error when the monthly fallback request fails', async () => {
+    authState.file = freshAuthJson()
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ config: { isUnifiedBillingUser: true } }))
+      .mockResolvedValueOnce(jsonResponse({}, 500))
+
+    const result = await fetchGrokRateLimits()
+    expect(result.status).toBe('error')
+    expect(result.error).toBe('Grok usage request failed (HTTP 500)')
+  })
+
+  it('surfaces an error when the monthly fallback request throws', async () => {
+    authState.file = freshAuthJson()
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ config: { isUnifiedBillingUser: true } }))
+      .mockRejectedValueOnce(new Error('network down'))
+
+    const result = await fetchGrokRateLimits()
+    expect(result.status).toBe('error')
+    expect(result.error).toBe('network down')
+    expect(result.usageMetadata?.failureKind).toBe('network')
+  })
+
+  it('does not request the default billing view when weekly credits are present', async () => {
+    authState.file = freshAuthJson()
+    fetchMock.mockResolvedValueOnce(jsonResponse(BILLING_RESPONSE))
+
+    const result = await fetchGrokRateLimits()
+    expect(result.status).toBe('ok')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns unavailable when billing response has no config', async () => {
+    authState.file = freshAuthJson()
+    fetchMock.mockResolvedValueOnce(jsonResponse({}))
+
+    const result = await fetchGrokRateLimits()
+    expect(result.status).toBe('unavailable')
+  })
+
+  it('aborts the billing request when the caller aborts', async () => {
+    authState.file = freshAuthJson()
+    const controller = new AbortController()
+    let requestSignal: AbortSignal | undefined
+    fetchMock.mockImplementationOnce((_url, init: RequestInit) => {
+      requestSignal = init.signal as AbortSignal
+      return new Promise((_resolve, reject) => {
+        requestSignal?.addEventListener('abort', () => reject(new Error('aborted')), {
+          once: true
+        })
+      })
+    })
+
+    const resultPromise = fetchGrokRateLimits({ signal: controller.signal })
+    await Promise.resolve()
+
+    expect(requestSignal?.aborted).toBe(false)
+    controller.abort()
+    expect(requestSignal?.aborted).toBe(true)
+
+    const result = await resultPromise
+    expect(result.status).toBe('error')
+    expect(result.error).toBe('aborted')
+  })
+
+  it('returns error when the session token is expired', async () => {
+    authState.file = JSON.stringify({
+      'https://auth.x.ai::client': {
+        key: 'stale',
+        expires_at: '2000-01-01T00:00:00.000Z'
+      }
+    })
+    const result = await fetchGrokRateLimits()
+    expect(result.status).toBe('error')
+    expect(result.error).toMatch(/expired/i)
+    expect(result.error).toMatch(/run grok on the computer running Orca/i)
+    expect(result.error).toMatch(/sign in if prompted/i)
+    expect(result.error).toMatch(/no chat message is needed/i)
+    expect(result.usageMetadata).toEqual({
+      failureKind: 'delegated-refresh-required',
+      source: 'oauth'
+    })
+    // Stored expired tokens refresh on next Grok use; only missing auth needs login guidance (#8497).
+    expect(result.error).not.toMatch(/grok login/i)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+})

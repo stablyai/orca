@@ -6,30 +6,52 @@ import {
   buildAddRepoExistingWorkspacesTelemetry,
   shouldTrackAddRepoExistingWorkspacesDetected
 } from './add-repo-existing-workspaces-telemetry'
+import { compareWorktreeDisplayName } from '@/lib/worktree-display-name-order'
 import { finishProjectAddWithDefaultCheckout } from './project-added-default-checkout'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+
+export type GitRepoAddOutcome = { importedProjectGroupId?: string }
+
+export type CompleteGitRepoAdd = (
+  repoId: string,
+  source: AddRepoExistingWorkspaceSource,
+  executionHostId?: ExecutionHostId,
+  outcome?: GitRepoAddOutcome
+) => Promise<void>
 
 type CompleteGitRepoAddOptions = {
   closeModal: () => void
   setHideDefaultBranchWorkspace: (hide: boolean) => void
+  /** Hosted Add Project keeps the composer open and selects the project after normal telemetry. */
+  finishProjectAdd?: CompleteGitRepoAdd
 }
 
 export function useCompleteGitRepoAdd({
   closeModal,
-  setHideDefaultBranchWorkspace
-}: CompleteGitRepoAddOptions): (
-  repoId: string,
-  source: AddRepoExistingWorkspaceSource
-) => Promise<void> {
+  setHideDefaultBranchWorkspace,
+  finishProjectAdd
+}: CompleteGitRepoAddOptions): CompleteGitRepoAdd {
   const detectedTelemetryTrackedRef = useRef<Set<string>>(new Set())
 
   return useCallback(
-    async (repoId: string, source: AddRepoExistingWorkspaceSource): Promise<void> => {
-      const worktrees = useAppStore.getState().worktreesByRepo[repoId] ?? []
+    async (
+      repoId: string,
+      source: AddRepoExistingWorkspaceSource,
+      executionHostId?: ExecutionHostId,
+      outcome?: GitRepoAddOutcome
+    ): Promise<void> => {
+      const worktrees = (selectWorktreesByRepo(useAppStore.getState())[repoId] ?? []).filter(
+        (worktree) =>
+          executionHostId === undefined ||
+          worktree.hostId === executionHostId ||
+          (!worktree.hostId && executionHostId === 'local')
+      )
       const sortedWorktrees = [...worktrees].sort((a, b) => {
         if (a.lastActivityAt !== b.lastActivityAt) {
           return b.lastActivityAt - a.lastActivityAt
         }
-        return a.displayName.localeCompare(b.displayName)
+        return compareWorktreeDisplayName(a, b)
       })
       const existingWorkspaceTelemetry = buildAddRepoExistingWorkspacesTelemetry(
         source,
@@ -43,13 +65,18 @@ export function useCompleteGitRepoAdd({
         detectedTelemetryTrackedRef.current.add(repoId)
         track('add_repo_existing_workspaces_detected', existingWorkspaceTelemetry)
       }
+      if (finishProjectAdd) {
+        await finishProjectAdd(repoId, source, executionHostId, outcome)
+        return
+      }
       await finishProjectAddWithDefaultCheckout({
         repoId,
         source,
+        executionHostId,
         closeModal,
         setHideDefaultBranchWorkspace
       })
     },
-    [closeModal, setHideDefaultBranchWorkspace]
+    [closeModal, finishProjectAdd, setHideDefaultBranchWorkspace]
   )
 }

@@ -1,4 +1,4 @@
-import { spawn } from 'child_process'
+import { spawn } from 'node:child_process'
 import type { SystemResolverHealth } from '../daemon/types'
 
 const MAC_RESOLVER_CHECK_TIMEOUT_MS = 1_500
@@ -16,8 +16,10 @@ export function classifyMacSystemResolverHealth(scutilOutput: string): SystemRes
   return 'unknown'
 }
 
-export async function readCurrentProcessMacSystemResolverHealth(): Promise<SystemResolverHealth> {
-  if (process.platform !== 'darwin') {
+export async function readCurrentProcessMacSystemResolverHealth(
+  signal?: AbortSignal
+): Promise<SystemResolverHealth> {
+  if (process.platform !== 'darwin' || signal?.aborted) {
     return 'unknown'
   }
 
@@ -35,6 +37,10 @@ export async function readCurrentProcessMacSystemResolverHealth(): Promise<Syste
     const onStderrData = (chunk: string): void => {
       stderr += chunk
     }
+    const onAbort = (): void => {
+      child.kill('SIGKILL')
+      finish()
+    }
     const finish = (): void => {
       if (settled) {
         return
@@ -48,12 +54,12 @@ export async function readCurrentProcessMacSystemResolverHealth(): Promise<Syste
       child.stderr.off('data', onStderrData)
       child.off('error', finish)
       child.off('close', finish)
+      signal?.removeEventListener('abort', onAbort)
       resolve(classifyMacSystemResolverHealth(`${stdout}\n${stderr}`))
     }
     timer = setTimeout(() => {
       child.kill()
-      // Why: this runs inside the daemon request path, so the timeout must
-      // cap the RPC even if scutil is slow to exit after SIGTERM.
+      // Bound the daemon RPC even if scutil takes longer to exit after SIGTERM.
       finish()
     }, MAC_RESOLVER_CHECK_TIMEOUT_MS)
     child.stdout.setEncoding('utf8')
@@ -62,5 +68,6 @@ export async function readCurrentProcessMacSystemResolverHealth(): Promise<Syste
     child.stderr.on('data', onStderrData)
     child.on('error', finish)
     child.on('close', finish)
+    signal?.addEventListener('abort', onAbort, { once: true })
   })
 }

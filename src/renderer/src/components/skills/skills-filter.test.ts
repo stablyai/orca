@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import type { DiscoveredSkill } from '../../../../shared/skills'
 import {
   SKILLS_FILTER_QUERY_MAX_BYTES,
-  countSkillsBySource,
   filterSkills,
   isSkillsFilterQueryTooLarge
 } from './skills-filter'
@@ -19,7 +18,6 @@ function skill(overrides: Partial<DiscoveredSkill>): DiscoveredSkill {
     directoryPath: '/root/review',
     skillFilePath: '/root/review/SKILL.md',
     installed: true,
-    fileCount: 1,
     updatedAt: null,
     ...overrides
   }
@@ -38,14 +36,21 @@ describe('skills filtering', () => {
       })
     ]
 
+    // Root provenance preserves individual agent ownership that coarse provider tags collapse.
+    const agentByRootPath = new Map([
+      ['/home/dev/.codex/skills', 'codex'],
+      ['/repo/.claude/skills', 'claude']
+    ])
     expect(
-      filterSkills(skills, { query: 'docs', provider: 'claude', sourceKind: 'repo' }).map(
-        (item) => item.name
-      )
+      filterSkills(skills, { query: 'docs', agent: 'claude', sourceKind: 'repo' }, agentByRootPath)
+    ).toEqual([])
+    expect(
+      filterSkills(
+        skills,
+        { query: 'docs', agent: 'all', sourceKind: 'repo' },
+        agentByRootPath
+      ).map((item) => item.name)
     ).toEqual(['Docs Writer'])
-    expect(filterSkills(skills, { query: 'docs', provider: 'codex', sourceKind: 'all' })).toEqual(
-      []
-    )
   })
 
   it('rejects oversized pasted queries before reading skill metadata', () => {
@@ -68,19 +73,9 @@ describe('skills filtering', () => {
     expect(
       filterSkills(throwingSkills, {
         query: oversizedQuery,
-        provider: 'all',
+        agent: 'all',
         sourceKind: 'all'
       })
     ).toEqual([])
-  })
-
-  it('counts skills by source kind', () => {
-    expect(
-      countSkillsBySource([
-        skill({ sourceKind: 'home' }),
-        skill({ id: 'repo', sourceKind: 'repo' }),
-        skill({ id: 'plugin', sourceKind: 'plugin' })
-      ])
-    ).toEqual({ home: 1, repo: 1, bundled: 0, plugin: 1 })
   })
 })

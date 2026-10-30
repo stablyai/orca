@@ -1,0 +1,837 @@
+import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { POST_REPLAY_REATTACH_RESET } from '../../../../shared/terminal-mode-reset-profiles'
+import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { flushAsyncTicks, createDeferred } from './pty-connection-test-async'
+import {
+  createKeyboardEventTarget,
+  keyEvent,
+  sendTerminalInputThroughPane
+} from './pty-connection-test-dom'
+import {
+  LEAF_1,
+  createMockTransport,
+  createPane,
+  captureCallbackTerminalWrites,
+  createManager,
+  type ConnectCallbacks,
+  type MockTransport
+} from './pty-connection-test-pane-fixtures'
+import {
+  resolveMockPaneWindowsShiftEnterEncoding,
+  type StoreState
+} from './pty-connection-test-store-state'
+import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import { createInitialStoreState } from './pty-connection-test-store-fixtures'
+import {
+  installTerminalTestGlobals,
+  restoreTerminalTestGlobals
+} from './pty-connection-test-environment'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
+
+export function registerPtyConnectionCommandFinishedCleanupTests(): void {
+  let mockStoreState: StoreState
+  let transportFactoryQueue: MockTransport[] = []
+  let createdTransportOptions: Record<string, unknown>[] = []
+  let storeSubscribers: ((state: StoreState) => void)[] = []
+
+  function createDeps(overrides: Record<string, unknown> = {}) {
+    return buildPaneConnectionDeps(() => mockStoreState, overrides)
+  }
+
+  describe('connectPanePty', () => {
+    beforeEach(async () => {
+      vi.resetModules()
+      vi.clearAllMocks()
+      transportFactoryQueue = []
+      createdTransportOptions = []
+      storeSubscribers = []
+      mockStoreState = createInitialStoreState(() => mockStoreState)
+      bindPtyConnectionTestMocks({
+        getState: () => mockStoreState,
+        getTransportQueue: () => transportFactoryQueue,
+        getTransportOptions: () => createdTransportOptions,
+        getStoreSubscribers: () => storeSubscribers,
+        setStoreSubscribers: (subscribers) => {
+          storeSubscribers = subscribers
+        }
+      })
+      await installTerminalTestGlobals()
+    })
+
+    afterEach(async () => {
+      await restoreTerminalTestGlobals()
+    })
+
+    it.each(['process', 'launch'] as const)(
+      'does not let typed Droid input replace another live TUI %s identity',
+      async (identitySource) => {
+        vi.useFakeTimers()
+        const { connectPanePty } = await import('./pty-connection')
+        const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
+        const pane = createPane(1)
+        const ptyId = `pty-antigravity-${identitySource}-typed-droid`
+        const tabId = `tab-antigravity-${identitySource}-typed-droid`
+        const paneKey = makePaneKey(tabId, LEAF_1)
+        const transport = createMockTransport(ptyId)
+        transport.connect.mockImplementation(
+          async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+            dataCallbackRef.current = callbacks.onData ?? null
+            return { id: ptyId }
+          }
+        )
+        transportFactoryQueue.push(transport)
+
+        connectPanePty(
+          ...mockPanePtyArgs(
+            pane,
+            createManager(1),
+            createDeps({ tabId, isVisibleRef: { current: false } })
+          )
+        )
+        await vi.advanceTimersByTimeAsync(20)
+        await flushAsyncTicks()
+        if (identitySource === 'process') {
+          mockStoreState.paneForegroundAgentByPaneKey[paneKey] = {
+            agent: 'antigravity',
+            shellForeground: false
+          }
+        } else {
+          mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
+            launchConfig: { agentArgs: '', agentEnv: {} },
+            identity: { agentType: 'antigravity' }
+          }
+        }
+
+        sendTerminalInputThroughPane(pane, 'droid\r')
+        dataCallbackRef.current?.('\x1b]133;C\x07')
+
+        expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+          agent: null,
+          shellForeground: false
+        })
+        expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('alt-enter')
+      }
+    )
+
+    it.each([
+      ['SSH', 'ssh:conn@@pty-typed-droid', 'tab-ssh-typed-droid'],
+      ['remote runtime', 'remote:web-env-1@@pty-typed-droid', 'tab-remote-typed-droid']
+    ])(
+      'does not persist typed command process evidence for %s panes',
+      async (_label, ptyId, tabId) => {
+        vi.useFakeTimers()
+        const { connectPanePty } = await import('./pty-connection')
+        const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
+        const pane = createPane(1)
+        const paneKey = makePaneKey(tabId, LEAF_1)
+        const transport = createMockTransport(ptyId)
+        transport.connect.mockImplementation(
+          async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+            dataCallbackRef.current = callbacks.onData ?? null
+            return { id: ptyId }
+          }
+        )
+        transportFactoryQueue.push(transport)
+
+        connectPanePty(
+          ...mockPanePtyArgs(
+            pane,
+            createManager(1),
+            createDeps({ tabId, isVisibleRef: { current: false } })
+          )
+        )
+        await vi.advanceTimersByTimeAsync(20)
+        await flushAsyncTicks()
+
+        sendTerminalInputThroughPane(pane, 'droid\r')
+        dataCallbackRef.current?.('\x1b]133;C\x07\x1b]133;D;0\x07')
+
+        expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toBeUndefined()
+        expect(mockStoreState.setPaneForegroundAgent).not.toHaveBeenCalledWith(
+          paneKey,
+          expect.anything()
+        )
+      }
+    )
+
+    it('keeps Droid routing visible through command-finished foreground confirmation', async () => {
+      vi.useFakeTimers()
+      const { connectPanePty } = await import('./pty-connection')
+      const getForegroundProcess = vi.mocked(window.api.pty.confirmForegroundProcess)
+      getForegroundProcess.mockResolvedValue('droid')
+      const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
+      const ptyId = 'pty-droid-confirmation-window'
+      const transport = createMockTransport(ptyId)
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          dataCallbackRef.current = callbacks.onData ?? null
+          return { id: ptyId }
+        }
+      )
+      transportFactoryQueue.push(transport)
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+
+      connectPanePty(
+        ...mockPanePtyArgs(
+          createPane(1),
+          createManager(1),
+          createDeps({ isVisibleRef: { current: false } })
+        )
+      )
+      await vi.advanceTimersByTimeAsync(20)
+      await flushAsyncTicks()
+      mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
+        launchConfig: { agentArgs: '', agentEnv: {} },
+        identity: { agentType: 'droid' }
+      }
+      mockStoreState.clearAgentLaunchConfig.mockImplementation((key: string) => {
+        delete mockStoreState.agentLaunchConfigByPaneKey[key]
+      })
+
+      const readsBeforeFinish = getForegroundProcess.mock.calls.length
+      dataCallbackRef.current?.('\x1b]133;D;0\x07')
+      expect(mockStoreState.clearAgentLaunchConfig).not.toHaveBeenCalled()
+      expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('alt-enter')
+
+      await vi.advanceTimersByTimeAsync(350)
+      expect(mockStoreState.clearAgentLaunchConfig).not.toHaveBeenCalled()
+      expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('csi-u')
+
+      expect(getForegroundProcess).toHaveBeenCalledTimes(readsBeforeFinish + 1)
+      expect(mockStoreState.clearAgentLaunchConfig).not.toHaveBeenCalled()
+      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+        agent: 'droid',
+        agentEvidence: 'process-read',
+        routingTrusted: true,
+        shellForeground: false
+      })
+      expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('csi-u')
+    })
+
+    it('retires pane launch routing after one fresh scan confirms shell', async () => {
+      vi.useFakeTimers()
+      const { connectPanePty } = await import('./pty-connection')
+      vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('powershell.exe')
+      const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
+      const ptyId = 'pty-droid-confirmed-shell'
+      const transport = createMockTransport(ptyId)
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          dataCallbackRef.current = callbacks.onData ?? null
+          return { id: ptyId }
+        }
+      )
+      transportFactoryQueue.push(transport)
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+      const deps = createDeps({ isVisibleRef: { current: false } })
+
+      connectPanePty(...mockPanePtyArgs(createPane(1), createManager(1), deps))
+      await vi.advanceTimersByTimeAsync(20)
+      await flushAsyncTicks()
+      mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
+        launchConfig: { agentArgs: '', agentEnv: {} },
+        identity: { agentType: 'droid' }
+      }
+      mockStoreState.clearAgentLaunchConfig.mockImplementation((key: string) => {
+        delete mockStoreState.agentLaunchConfigByPaneKey[key]
+      })
+
+      dataCallbackRef.current?.('\x1b]133;D;0\x07')
+      await vi.advanceTimersByTimeAsync(350)
+      expect(mockStoreState.clearAgentLaunchConfig).toHaveBeenCalledExactlyOnceWith(paneKey)
+      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+        agent: null,
+        shellForeground: true
+      })
+      expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('alt-enter')
+      // Process-confirmed exit must reconcile caches; agentStatus:drop retains live-pane latches that would restore working status (STA-4612).
+      expect(window.api.agentStatus.reconcileEndedProcess).toHaveBeenCalledWith(paneKey)
+      // Shell-confirmed exit must leave ChatView even when the agent's OSC title survives.
+      expect(deps.onAgentExitedRef.current).toHaveBeenCalledWith(LEAF_1)
+    })
+
+    it.each([
+      ['clears stale sleeping identity after a confirmed return to shell', false],
+      // Hibernation records resume before kill; the exposed shell is Orca’s own stop rather than an independent agent exit.
+      ['keeps sleeping identity when the shell surfaces during an intentional stop', true]
+    ])('%s', async (_label, stoppingOnPurpose) => {
+      vi.useFakeTimers()
+      const { connectPanePty } = await import('./pty-connection')
+      vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('zsh')
+      const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
+      const ptyId = 'pty-sleeping-confirmed-shell'
+      const transport = createMockTransport(ptyId)
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          dataCallbackRef.current = callbacks.onData ?? null
+          return { id: ptyId }
+        }
+      )
+      transportFactoryQueue.push(transport)
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+      const deps = createDeps({ isVisibleRef: { current: false } })
+
+      connectPanePty(...mockPanePtyArgs(createPane(1), createManager(1), deps))
+      await vi.advanceTimersByTimeAsync(20)
+      await flushAsyncTicks()
+      mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
+        launchConfig: { agentArgs: '', agentEnv: {} },
+        identity: { agentType: 'codex' }
+      }
+      mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] = {
+        paneKey,
+        worktreeId: 'wt-1',
+        agent: 'codex',
+        providerSession: { key: 'session_id', id: 'sess-1' },
+        capturedAt: 1,
+        updatedAt: 1
+      }
+      if (stoppingOnPurpose) {
+        mockStoreState.suppressedPtyExitIds[ptyId] = true
+      }
+
+      dataCallbackRef.current?.('\x1b]133;D;0\x07')
+      await vi.advanceTimersByTimeAsync(350)
+
+      if (stoppingOnPurpose) {
+        expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
+        expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toMatchObject({
+          agent: 'codex'
+        })
+        expect(deps.onAgentExitedRef.current).not.toHaveBeenCalled()
+      } else {
+        expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledExactlyOnceWith(paneKey)
+        expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
+        expect(deps.onAgentExitedRef.current).toHaveBeenCalledWith(LEAF_1)
+      }
+      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+        agent: null,
+        shellForeground: true
+      })
+    })
+
+    it('keeps sleeping identity when the foreground check still sees the agent', async () => {
+      vi.useFakeTimers()
+      const { connectPanePty } = await import('./pty-connection')
+      // Why both: the pane's process monitor reads the same foreground the confirm read sees.
+      vi.mocked(window.api.pty.getForegroundProcess).mockResolvedValue('codex')
+      const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
+      const ptyId = 'pty-sleeping-leaked-shell-marker'
+      const transport = createMockTransport(ptyId)
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          dataCallbackRef.current = callbacks.onData ?? null
+          return { id: ptyId }
+        }
+      )
+      transportFactoryQueue.push(transport)
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+
+      connectPanePty(
+        ...mockPanePtyArgs(
+          createPane(1),
+          createManager(1),
+          createDeps({ isVisibleRef: { current: false } })
+        )
+      )
+      await vi.advanceTimersByTimeAsync(20)
+      await flushAsyncTicks()
+      mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
+        launchConfig: { agentArgs: '', agentEnv: {} },
+        identity: { agentType: 'codex' }
+      }
+      mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] = {
+        paneKey,
+        worktreeId: 'wt-1',
+        agent: 'codex',
+        providerSession: { key: 'session_id', id: 'sess-1' },
+        capturedAt: 1,
+        updatedAt: 1
+      }
+
+      dataCallbackRef.current?.('\x1b]133;D;0\x07')
+      await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
+      await flushAsyncTicks()
+
+      expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
+      expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toMatchObject({
+        agent: 'codex'
+      })
+    })
+
+    it('reconciles a pane that HAS a status row, whose own drop removes it first', async () => {
+      // Use an accepted row to exercise deferred-drop bookkeeping before reconcile; the no-row path returns early.
+      vi.useFakeTimers()
+      const { connectPanePty } = await import('./pty-connection')
+      // Import after resetModules to share pty-connection’s registry; static imports would assert against a different instance.
+      const { createCommandFinishedStatusStore } =
+        await import('./command-finished-status-store-test-fixture')
+      vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('powershell.exe')
+      vi.mocked(window.api.agentStatus.reconcileEndedProcess).mockClear()
+      const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
+      const ptyId = 'pty-claude-row-confirmed-shell'
+      const transport = createMockTransport(ptyId)
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          dataCallbackRef.current = callbacks.onData ?? null
+          return { id: ptyId }
+        }
+      )
+      transportFactoryQueue.push(transport)
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+
+      connectPanePty(
+        ...mockPanePtyArgs(
+          createPane(1),
+          createManager(1),
+          createDeps({ isVisibleRef: { current: false } })
+        )
+      )
+      await vi.advanceTimersByTimeAsync(20)
+      await flushAsyncTicks()
+
+      // A real working write carries accepted-status bookkeeping and the latch present during STA-4612 exits.
+      const realStore = createCommandFinishedStatusStore()
+      const row = realStore.acceptWorkingClaudeStatus(paneKey)
+      expect(row).toBeDefined()
+      mockStoreState.agentStatusByPaneKey[paneKey] = row
+      // Mirror both real dismissal and teardown to exercise drop-before-reconcile ordering.
+      mockStoreState.dropAgentStatus.mockImplementation((key: string) => {
+        delete mockStoreState.agentStatusByPaneKey[key]
+        realStore.dropAgentStatus(key)
+      })
+
+      dataCallbackRef.current?.('\x1b]133;D;0\x07')
+      await vi.advanceTimersByTimeAsync(350)
+
+      expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(paneKey)
+      expect(realStore.getStatus(paneKey)).toBeUndefined()
+      expect(window.api.agentStatus.reconcileEndedProcess).toHaveBeenCalledWith(paneKey)
+    })
+
+    it('does NOT reconcile when the process check could not confirm a shell', async () => {
+      vi.useFakeTimers()
+      const { connectPanePty } = await import('./pty-connection')
+      vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue(null)
+      vi.mocked(window.api.agentStatus.reconcileEndedProcess).mockClear()
+      const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
+      const ptyId = 'pty-unconfirmed-shell'
+      const transport = createMockTransport(ptyId)
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          dataCallbackRef.current = callbacks.onData ?? null
+          return { id: ptyId }
+        }
+      )
+      transportFactoryQueue.push(transport)
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+
+      connectPanePty(
+        ...mockPanePtyArgs(
+          createPane(1),
+          createManager(1),
+          createDeps({ isVisibleRef: { current: false } })
+        )
+      )
+      await vi.advanceTimersByTimeAsync(20)
+      await flushAsyncTicks()
+      mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
+        launchConfig: { agentArgs: '', agentEnv: {} },
+        identity: { agentType: 'droid' }
+      }
+
+      dataCallbackRef.current?.('\x1b]133;D;0\x07')
+      // Run the full ladder; at 350ms the unavailable branch has not settled, so early assertions can falsely pass.
+      await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
+      await flushAsyncTicks()
+
+      // The unavailable branch really ran: it publishes an unproven foreground before settling.
+      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+        agent: null,
+        shellForeground: false
+      })
+      expect(window.api.agentStatus.reconcileEndedProcess).not.toHaveBeenCalled()
+    })
+
+    it('disarms stale TUI modes in the emulator after a confirmed return to shell', async () => {
+      vi.useFakeTimers()
+      const { connectPanePty } = await import('./pty-connection')
+      vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('bash')
+      const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
+      const ptyId = 'pty-stale-mode-disarm'
+      const transport = createMockTransport(ptyId)
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          dataCallbackRef.current = callbacks.onData ?? null
+          return { id: ptyId }
+        }
+      )
+      transportFactoryQueue.push(transport)
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+      const pane = createPane(1)
+      const { writes } = captureCallbackTerminalWrites(pane)
+      const deps = createDeps({ isVisibleRef: { current: false } })
+
+      connectPanePty(...mockPanePtyArgs(pane, createManager(1), deps))
+      await vi.advanceTimersByTimeAsync(20)
+      await flushAsyncTicks()
+      mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
+        launchConfig: { agentArgs: '', agentEnv: {} },
+        identity: { agentType: 'droid' }
+      }
+
+      // The agent negotiates Kitty keys across a chunk split, then dies armed.
+      dataCallbackRef.current?.('\x1b[>')
+      dataCallbackRef.current?.('5u')
+      // SIGKILL omits mode teardown; bare 133;D cannot disarm until foreground inspection confirms exit.
+      dataCallbackRef.current?.('\x1b]133;D;0\x07')
+      expect(writes.some((w) => w.includes(POST_REPLAY_REATTACH_RESET))).toBe(false)
+      expect(deps.paneKittyKeyboardModesRef.current.get(pane.id)?.flags).toBe(5)
+
+      await vi.advanceTimersByTimeAsync(350)
+      await flushAsyncTicks()
+
+      const disarm = writes.find((w) => w.includes(POST_REPLAY_REATTACH_RESET))
+      expect(disarm).toBeDefined()
+      // Preserve bracketed paste re-armed by the live shell before the delayed reset.
+      expect(disarm).not.toContain('\x1b[?2004l')
+      // Shortcut policy reads the mirror, so it must drop the dead app's flags with xterm.
+      expect(deps.paneKittyKeyboardModesRef.current.get(pane.id)?.flags).toBe(0)
+    })
+
+    it('grounds xterm and the input mirror in stream order when output is still queued', async () => {
+      vi.useFakeTimers()
+      const { connectPanePty } = await import('./pty-connection')
+      const confirmRead = createDeferred<string>()
+      vi.mocked(window.api.pty.confirmForegroundProcess).mockReturnValue(confirmRead.promise)
+      const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
+      const ptyId = 'pty-stale-mode-queued-output'
+      const transport = createMockTransport(ptyId)
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          dataCallbackRef.current = callbacks.onData ?? null
+          return { id: ptyId }
+        }
+      )
+      transportFactoryQueue.push(transport)
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+      const pane = createPane(1)
+      const { writes } = captureCallbackTerminalWrites(pane)
+      const deps = createDeps({ isVisibleRef: { current: false } })
+
+      connectPanePty(...mockPanePtyArgs(pane, createManager(1), deps))
+      await vi.advanceTimersByTimeAsync(20)
+      await flushAsyncTicks()
+      mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
+        launchConfig: { agentArgs: '', agentEnv: {} },
+        identity: { agentType: 'droid' }
+      }
+      dataCallbackRef.current?.('\x1b]133;D;0\x07')
+      await vi.advanceTimersByTimeAsync(350)
+      await flushAsyncTicks()
+      expect(window.api.pty.confirmForegroundProcess).toHaveBeenCalled()
+
+      // Hidden-pane output sits in the background queue when the shell proof lands.
+      dataCallbackRef.current?.('\x1b[>5u')
+      expect(writes.some((w) => w.includes('\x1b[>5u'))).toBe(false)
+      confirmRead.resolve('bash')
+      await flushAsyncTicks()
+      await vi.advanceTimersByTimeAsync(100)
+
+      // Parsing what xterm received, in order, must match the mirror.
+      const xtermView = new TerminalKittyKeyboardModeTracker()
+      writes.forEach((write) => xtermView.scan(write))
+      expect(writes.some((w) => w.includes(POST_REPLAY_REATTACH_RESET))).toBe(true)
+      expect(deps.paneKittyKeyboardModesRef.current.get(pane.id)?.flags).toBe(0)
+      expect(xtermView.flags).toBe(0)
+    })
+
+    it('keeps armed modes while the agent still owns the foreground after a leaked 133;D', async () => {
+      vi.useFakeTimers()
+      const { connectPanePty } = await import('./pty-connection')
+      // Why both: the pane's process monitor reads the same foreground the confirm read sees.
+      vi.mocked(window.api.pty.getForegroundProcess).mockResolvedValue('droid')
+      const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
+      const ptyId = 'pty-stale-mode-live-agent'
+      const transport = createMockTransport(ptyId)
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          dataCallbackRef.current = callbacks.onData ?? null
+          return { id: ptyId }
+        }
+      )
+      transportFactoryQueue.push(transport)
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+      const pane = createPane(1)
+      const { writes } = captureCallbackTerminalWrites(pane)
+      const deps = createDeps({ isVisibleRef: { current: false } })
+
+      connectPanePty(...mockPanePtyArgs(pane, createManager(1), deps))
+      await vi.advanceTimersByTimeAsync(20)
+      await flushAsyncTicks()
+      mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
+        launchConfig: { agentArgs: '', agentEnv: {} },
+        identity: { agentType: 'droid' }
+      }
+
+      dataCallbackRef.current?.('\x1b[>5u')
+      // Nested-shell 133;D leaves the agent foreground, so its mouse/Kitty modes must survive confirmation.
+      dataCallbackRef.current?.('\x1b]133;D;0\x07')
+      await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
+      await flushAsyncTicks()
+
+      expect(writes.some((w) => w.includes(POST_REPLAY_REATTACH_RESET))).toBe(false)
+      expect(deps.paneKittyKeyboardModesRef.current.get(pane.id)?.flags).toBe(5)
+    })
+
+    it('retires stale routing after unavailable command-finish reads without asserting shell', async () => {
+      vi.useFakeTimers()
+      const { connectPanePty } = await import('./pty-connection')
+      vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue(null)
+      const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
+      const ptyId = 'pty-droid-unavailable-finish'
+      const tabId = 'tab-droid-unavailable-finish'
+      const transport = createMockTransport(ptyId)
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          dataCallbackRef.current = callbacks.onData ?? null
+          return { id: ptyId }
+        }
+      )
+      transportFactoryQueue.push(transport)
+      const paneKey = makePaneKey(tabId, LEAF_1)
+
+      connectPanePty(
+        ...mockPanePtyArgs(
+          createPane(1),
+          createManager(1),
+          createDeps({ tabId, isVisibleRef: { current: false } })
+        )
+      )
+      await vi.advanceTimersByTimeAsync(20)
+      await flushAsyncTicks()
+      mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
+        launchConfig: { agentArgs: '', agentEnv: {} },
+        identity: { agentType: 'droid' }
+      }
+      mockStoreState.clearAgentLaunchConfig.mockImplementation((key: string) => {
+        delete mockStoreState.agentLaunchConfigByPaneKey[key]
+      })
+
+      dataCallbackRef.current?.('\x1b]133;D;0\x07')
+      await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
+      await flushAsyncTicks()
+
+      expect(mockStoreState.clearAgentLaunchConfig).toHaveBeenCalledExactlyOnceWith(paneKey)
+      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+        agent: null,
+        shellForeground: false
+      })
+      expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('alt-enter')
+    })
+
+    it('cancels deferred cleanup on a new command and retires identity at its later shell', async () => {
+      vi.useFakeTimers()
+      const { connectPanePty } = await import('./pty-connection')
+      vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('powershell.exe')
+      const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
+      const ptyId = 'pty-droid-superseded-confirmation'
+      const transport = createMockTransport(ptyId)
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          dataCallbackRef.current = callbacks.onData ?? null
+          return { id: ptyId }
+        }
+      )
+      transportFactoryQueue.push(transport)
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+      connectPanePty(
+        ...mockPanePtyArgs(
+          createPane(1),
+          createManager(1),
+          createDeps({ isVisibleRef: { current: false } })
+        )
+      )
+      await vi.advanceTimersByTimeAsync(20)
+      await flushAsyncTicks()
+      mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
+        launchConfig: { agentArgs: '', agentEnv: {} },
+        identity: { agentType: 'droid' }
+      }
+      mockStoreState.clearAgentLaunchConfig.mockImplementation((key: string) => {
+        delete mockStoreState.agentLaunchConfigByPaneKey[key]
+      })
+
+      dataCallbackRef.current?.('\x1b]133;D;0\x07')
+      dataCallbackRef.current?.('\x1b]133;C\x07')
+      expect(mockStoreState.clearAgentLaunchConfig).not.toHaveBeenCalled()
+      expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('alt-enter')
+
+      dataCallbackRef.current?.('\x1b]133;D;0\x07')
+      await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
+
+      expect(mockStoreState.clearAgentLaunchConfig).toHaveBeenCalledExactlyOnceWith(paneKey)
+      expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('alt-enter')
+    })
+
+    it.each(['gemini', 'codex'] as const)(
+      'pins %s interrupt policy before acknowledged input and command exit cleanup',
+      async (agentType) => {
+        const { connectPanePty } = await import('./pty-connection')
+
+        const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+        const transport = createMockTransport()
+        const writeAccepted = createDeferred<boolean>()
+        transport.sendInputAccepted = vi.fn(() => writeAccepted.promise)
+        transport.connect.mockImplementation(
+          async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+            capturedDataCallback.current = callbacks.onData ?? null
+            return { id: 'tab-pty' }
+          }
+        )
+        transport.attach.mockImplementation(({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          capturedDataCallback.current = callbacks.onData ?? null
+        })
+        transportFactoryQueue.push(transport)
+        vi.useFakeTimers()
+        vi.setSystemTime(1_100)
+        const paneKey = makePaneKey('tab-1', LEAF_1)
+        mockStoreState = {
+          ...mockStoreState,
+          agentStatusByPaneKey: {
+            [paneKey]: {
+              paneKey,
+              state: 'working',
+              prompt: 'stop quickly',
+              updatedAt: 1_000,
+              stateStartedAt: 900,
+              agentType,
+              terminalTitle: agentType,
+              stateHistory: []
+            }
+          }
+        }
+        vi.mocked(window.api.agentStatus.inferInterrupt).mockImplementation(async () => {
+          mockStoreState.agentStatusByPaneKey[paneKey] = {
+            paneKey,
+            state: 'done',
+            prompt: 'stop quickly',
+            updatedAt: 1_100,
+            stateStartedAt: 1_100,
+            agentType,
+            terminalTitle: agentType,
+            interrupted: true,
+            stateHistory: [
+              {
+                state: 'working',
+                prompt: 'stop quickly',
+                startedAt: 900
+              }
+            ]
+          }
+          return true
+        })
+        const terminalTarget = createKeyboardEventTarget()
+        const pane = createPane(1)
+        ;(pane.terminal as { element?: unknown }).element = terminalTarget.target
+        let onDataHandler: ((data: string) => void) | null = null
+        pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
+          onDataHandler = handler
+          return { dispose: vi.fn() }
+        }) as typeof pane.terminal.onData)
+
+        connectPanePty(...mockPanePtyArgs(pane, createManager(1), createDeps()))
+        vi.advanceTimersByTime(1_000)
+        await flushAsyncTicks()
+        expect(capturedDataCallback.current).not.toBeNull()
+        if (!onDataHandler) {
+          throw new Error('expected onData handler to be registered')
+        }
+        terminalTarget.dispatch(keyEvent({ key: 'Escape' }))
+        ;(onDataHandler as unknown as (data: string) => void)('\x1b')
+
+        capturedDataCallback.current?.('\x1b]133;D;130\x07thebr ~/repo $ ')
+        expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
+        expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
+
+        delete mockStoreState.agentStatusByPaneKey[paneKey]
+        writeAccepted.resolve(true)
+        await flushAsyncTicks()
+
+        if (agentType === 'codex') {
+          expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
+          expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
+          expect(mockStoreState.clearAgentLaunchConfig).toHaveBeenCalledWith(paneKey)
+        } else {
+          expect(window.api.agentStatus.inferInterrupt).toHaveBeenCalledWith({
+            paneKey,
+            baselineUpdatedAt: 1_000,
+            baselineStateStartedAt: 900,
+            baselinePrompt: 'stop quickly',
+            baselineAgentType: agentType,
+            intent: 'plain-escape'
+          })
+          expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(paneKey)
+        }
+      }
+    )
+
+    it('drops the command-finished status when pending interrupt inference is rejected', async () => {
+      const { connectPanePty } = await import('./pty-connection')
+
+      vi.mocked(window.api.agentStatus.inferInterrupt).mockResolvedValue(false)
+      const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+      const transport = createMockTransport()
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          capturedDataCallback.current = callbacks.onData ?? null
+          return { id: 'tab-pty' }
+        }
+      )
+      transportFactoryQueue.push(transport)
+      vi.useFakeTimers()
+      vi.setSystemTime(1_100)
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+      mockStoreState = {
+        ...mockStoreState,
+        agentStatusByPaneKey: {
+          [paneKey]: {
+            paneKey,
+            state: 'working',
+            prompt: 'stop quickly',
+            updatedAt: 1_000,
+            stateStartedAt: 900,
+            agentType: 'custom-agent',
+            terminalTitle: 'Codex',
+            stateHistory: []
+          }
+        }
+      }
+      const terminalTarget = createKeyboardEventTarget()
+      const pane = createPane(1)
+      ;(pane.terminal as { element?: unknown }).element = terminalTarget.target
+      let onDataHandler: ((data: string) => void) | null = null
+      pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
+        onDataHandler = handler
+        return { dispose: vi.fn() }
+      }) as typeof pane.terminal.onData)
+
+      connectPanePty(...mockPanePtyArgs(pane, createManager(1), createDeps()))
+      vi.advanceTimersByTime(1_000)
+      await flushAsyncTicks()
+      if (!onDataHandler) {
+        throw new Error('expected onData handler to be registered')
+      }
+      terminalTarget.dispatch(keyEvent({ key: 'c', ctrlKey: true }))
+      ;(onDataHandler as unknown as (data: string) => void)('\x03')
+
+      capturedDataCallback.current?.('\x1b]133;D;130\x07thebr ~/repo $ ')
+      await flushAsyncTicks()
+
+      expect(window.api.agentStatus.inferInterrupt).toHaveBeenCalled()
+      expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(paneKey)
+    })
+  })
+}

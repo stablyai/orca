@@ -1,0 +1,217 @@
+import { useMemo } from 'react'
+import { Pressable, Text, View } from 'react-native'
+import { MobileNativeChatOwnedScrollView } from './MobileNativeChatOwnedScrollView'
+import { ChevronRight, FileMinus2, FilePen, FilePlus2 } from 'lucide-react-native'
+import { nativeChatEditFilePatchText } from '../../../src/shared/native-chat/tools/native-chat-edit-cards'
+import {
+  nativeChatEditFileBaseName,
+  nativeChatEditGutterChars,
+  unifiedLineNumber,
+  type NativeChatEditFile,
+  type NativeChatEditLine
+} from '../../../src/shared/native-chat/tools/native-chat-edit-model'
+import { nativeChatToolRowVerbCopy } from './native-chat/transcript/native-chat-tool-row-verb-copy'
+import { nativeChatDiffCardCopy } from './native-chat-diff-card-copy'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { MobileSourceCopyButton } from '../components/MobileSourceCopyButton'
+import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileNativeChatOpenedDetail } from './native-chat/visual/mobile-native-chat-opened-detail'
+import { useMobileNativeChatDisclosure } from './native-chat/transcript/mobile-native-chat-disclosure-store'
+import {
+  toolStyles as styles,
+  toolType
+} from './native-chat/transcript/mobile-native-chat-tool-styles'
+
+function VerbIcon({ kind, size }: { kind: NativeChatEditFile['changeKind']; size: number }) {
+  useMobileColorScheme()
+  const Icon = kind === 'added' ? FilePlus2 : kind === 'deleted' ? FileMinus2 : FilePen
+  return <Icon size={size} color={colors.textMuted} strokeWidth={2} />
+}
+
+function DiffRow({
+  line,
+  gutterChars,
+  type
+}: {
+  line: NativeChatEditLine
+  gutterChars: number
+  type: ReturnType<typeof toolType>['code']
+}): React.JSX.Element {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
+  if (line.kind === 'gap') {
+    return (
+      <Text style={[styles.diffGap, type]} accessibilityLabel={nativeChatDiffCardCopy(t).diffGap}>
+        ⋯
+      </Text>
+    )
+  }
+  return (
+    <View
+      style={[
+        styles.diffRow,
+        line.kind === 'add' && styles.diffAddGround,
+        line.kind === 'del' && styles.diffDelGround
+      ]}
+    >
+      {gutterChars > 0 ? (
+        <Text
+          style={[
+            styles.codeText,
+            styles.diffGutter,
+            type,
+            { width: gutterChars * type.fontSize * 0.62 },
+            line.kind === 'add' && styles.diffAddGutter,
+            line.kind === 'del' && styles.diffDelGutter
+          ]}
+        >
+          {unifiedLineNumber(line) ?? ''}
+        </Text>
+      ) : null}
+      <Text
+        style={[
+          styles.codeText,
+          styles.diffSign,
+          type,
+          line.kind === 'add' && styles.diffAddText,
+          line.kind === 'del' && styles.diffDelText
+        ]}
+      >
+        {line.kind === 'add' ? '+' : line.kind === 'del' ? '-' : ' '}
+      </Text>
+      <Text style={[styles.codeText, styles.diffText, type]}>{line.text}</Text>
+    </View>
+  )
+}
+
+// Mount rows only when expanded so collapsed cards avoid diff work.
+function DiffCardRows({
+  file,
+  fontScale,
+  disclosureKey,
+  rootIdentity
+}: {
+  file: NativeChatEditFile
+  fontScale: number
+  disclosureKey?: string
+  rootIdentity?: string
+}) {
+  useMobileColorScheme()
+  const onLayout = useMobileNativeChatOpenedDetail()
+  const type = toolType(fontScale).code
+  const gutterChars = nativeChatEditGutterChars(file)
+  const seen = new Map<string, number>()
+  return (
+    <MobileNativeChatOwnedScrollView
+      rootIdentity={rootIdentity ?? `diff:${file.path}`}
+      positionKey={disclosureKey ?? `diff:${file.path}`}
+      style={[styles.codeBox, styles.diffBody]}
+      nestedScrollEnabled
+      keyboardShouldPersistTaps="handled"
+      onLayout={onLayout}
+    >
+      {file.lines.map((line) => {
+        const signature = `${line.kind}:${line.oldLineNumber}:${line.newLineNumber}:${line.text}`
+        const occurrence = seen.get(signature) ?? 0
+        seen.set(signature, occurrence + 1)
+        return (
+          <DiffRow
+            key={`${signature}:${occurrence}`}
+            line={line}
+            gutterChars={gutterChars}
+            type={type}
+          />
+        )
+      })}
+    </MobileNativeChatOwnedScrollView>
+  )
+}
+
+export function MobileNativeChatDiffCard({
+  file,
+  fontScale,
+  disclosureKey,
+  rootIdentity,
+  onOpenFile
+}: {
+  file: NativeChatEditFile
+  fontScale: number
+  disclosureKey?: string
+  rootIdentity?: string
+  onOpenFile?: (path: string) => void
+}): React.JSX.Element {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
+  const copy = nativeChatDiffCardCopy(t)
+  const verbs = nativeChatToolRowVerbCopy(t)
+  const [expanded, setExpanded] = useMobileNativeChatDisclosure(disclosureKey, false)
+  const hasBody = file.lines.length > 0
+  const copyText = useMemo(() => nativeChatEditFilePatchText(file.lines), [file.lines])
+  const type = toolType(fontScale)
+  const iconSize = 15 * fontScale
+  const openFile = file.changeKind === 'deleted' ? undefined : onOpenFile
+  return (
+    <View>
+      <View style={styles.cardHeader}>
+        <Pressable
+          style={[styles.line, styles.cardToggle]}
+          onPress={() => hasBody && setExpanded(!expanded)}
+          disabled={!hasBody}
+          accessibilityRole="button"
+          accessibilityState={hasBody ? { expanded } : undefined}
+        >
+          <View style={[styles.iconSlot, { width: iconSize }]}>
+            <VerbIcon kind={file.changeKind} size={iconSize} />
+          </View>
+          <Text style={[styles.lineWord, type.row]}>{verbs[file.changeKind]}</Text>
+          {file.oldPath ? (
+            <>
+              <Text
+                style={[styles.lineWord, styles.shrinkable, styles.struck, type.row]}
+                numberOfLines={1}
+                accessibilityLabel={file.oldPath}
+              >
+                {nativeChatEditFileBaseName(file.oldPath)}
+              </Text>
+              <Text style={[styles.lineWord, type.row]}>→</Text>
+            </>
+          ) : null}
+          <Text
+            style={[styles.lineTarget, type.row, openFile && styles.lineLink]}
+            numberOfLines={1}
+            onPress={openFile ? () => openFile(file.path) : undefined}
+            suppressHighlighting={!openFile}
+            accessibilityRole={openFile ? 'link' : undefined}
+          >
+            {nativeChatEditFileBaseName(file.path)}
+          </Text>
+          <Text style={[styles.lineMeta, type.meta]}>
+            {file.added > 0 ? <Text style={styles.countAdded}>{`+${file.added}`}</Text> : null}
+            {file.added > 0 && file.removed > 0 ? ' ' : null}
+            {file.removed > 0 ? (
+              <Text style={styles.countRemoved}>{`-${file.removed}`}</Text>
+            ) : null}
+          </Text>
+          {file.truncated ? (
+            <Text style={[styles.lineMeta, type.meta]}>{copy.diffTruncated}</Text>
+          ) : null}
+          {hasBody ? (
+            <View style={expanded ? styles.caretOpen : undefined}>
+              <ChevronRight size={14 * fontScale} color={colors.textMuted} strokeWidth={2} />
+            </View>
+          ) : null}
+        </Pressable>
+        <MobileSourceCopyButton text={copyText} accessibilityLabel={copy.copyDiff} />
+      </View>
+      {hasBody && expanded ? (
+        <DiffCardRows
+          file={file}
+          fontScale={fontScale}
+          disclosureKey={disclosureKey}
+          rootIdentity={rootIdentity}
+        />
+      ) : null}
+    </View>
+  )
+}

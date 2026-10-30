@@ -4,6 +4,13 @@ import {
   tmuxSendKeysText,
   tmuxValue
 } from '../../shared/claude-agent-teams-tmux-compat'
+import { describeUnconfirmedAgentStop } from '../../shared/pty-liveness-verdict'
+import {
+  formatContext,
+  paneEnv,
+  resolveSplitTarget,
+  updateMainVerticalAfterSplit
+} from './claude-agent-teams-pane-layout'
 import type { AgentTeam, AgentTeamsTerminalApi, TeamPane } from './claude-agent-teams-types'
 
 type ResolvedTarget = { type: 'pane'; pane: TeamPane } | { type: 'window' }
@@ -31,6 +38,9 @@ export class ClaudeAgentTeamsTmuxDispatcher {
       case 'split-window':
       case 'splitw':
         return await this.splitWindow(team, args, envPane, api)
+      case 'respawn-pane':
+      case 'respawnp':
+        return await this.respawnPane(team, args, envPane, api)
       case 'select-layout':
         return this.selectLayout(team, args, envPane)
       case 'resize-pane':
@@ -86,7 +96,7 @@ export class ClaudeAgentTeamsTmuxDispatcher {
     const pane = target.type === 'window' ? this.resolvePane(team, envPane) : target.pane
     const format =
       parsed.positional.length > 0 ? parsed.positional.join(' ') : tmuxValue(parsed, '-F')
-    return `${renderTmuxFormat(format, this.formatContext(team, pane), '')}\n`
+    return `${renderTmuxFormat(format, formatContext(team, pane), '')}\n`
   }
 
   private async splitWindow(
@@ -103,31 +113,73 @@ export class ClaudeAgentTeamsTmuxDispatcher {
     const targetPane = this.resolvePane(team, tmuxValue(parsed, '-t') ?? envPane)
     const fakePaneId = `%${team.nextPaneNumber}`
     team.nextPaneNumber += 1
-    const splitTarget = this.resolveSplitTarget(team, targetPane, parsed.flags.has('-h'))
-    const env = {
-      ...team.baseEnv,
-      TMUX_PANE: fakePaneId,
-      ORCA_AGENT_TEAMS_LEADER_PANE: team.leaderPane
-    }
+    const splitTarget = resolveSplitTarget(team, targetPane, parsed.flags.has('-h'))
     const split = await api.splitTerminal(splitTarget.pane.handle, {
       direction: splitTarget.direction,
       command: parsed.positional.join(' ') || undefined,
-      env,
-      envToDelete: ['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR'],
+      env: paneEnv(team, fakePaneId),
+      envToDelete: ['TERM_PROGRAM'],
       activate: false
     })
     const pane: TeamPane = {
       fakePaneId,
       handle: split.handle,
-      index: team.paneOrder.length
+      index: team.paneOrder.length,
+      splitFromPane: splitTarget.pane.fakePaneId,
+      splitDirection: splitTarget.direction
     }
     team.panes.set(fakePaneId, pane)
     team.paneOrder.push(fakePaneId)
-    this.updateMainVerticalAfterSplit(team, fakePaneId, splitTarget)
+    updateMainVerticalAfterSplit(team, fakePaneId, splitTarget)
     if (!parsed.flags.has('-P')) {
       return ''
     }
-    return `${renderTmuxFormat(tmuxValue(parsed, '-F'), this.formatContext(team, pane), fakePaneId)}\n`
+    return `${renderTmuxFormat(tmuxValue(parsed, '-F'), formatContext(team, pane), fakePaneId)}\n`
+  }
+
+  /** PTYs cannot swap programs: emulate Claude's cat-placeholder respawn by close/re-split.
+   * Keep the fake pane id stable for later send-keys/kill-pane/list-panes commands. */
+  private async respawnPane(
+    team: AgentTeam,
+    args: string[],
+    envPane: string,
+    api: AgentTeamsTerminalApi
+  ): Promise<string> {
+    const parsed = parseTmuxArgs(args, ['-c', '-e', '-t'], ['-k'])
+    const pane = this.resolvePane(team, tmuxValue(parsed, '-t') ?? envPane)
+    if (pane.fakePaneId === team.leaderPane) {
+      throw new Error('refusing to respawn leader pane')
+    }
+    const command = parsed.positional.join(' ')
+    if (!command) {
+      return ''
+    }
+    if (pane.respawnBlockedReason) {
+      throw new Error(pane.respawnBlockedReason)
+    }
+    const origin =
+      (pane.splitFromPane ? team.panes.get(pane.splitFromPane) : undefined) ??
+      team.panes.get(team.leaderPane)!
+    const previousHandle = pane.handle
+    const close = await api.closeTerminal(previousHandle)
+    if (!close.ptyKilled) {
+      pane.respawnBlockedReason = describeUnconfirmedAgentStop(close)
+      throw new Error(pane.respawnBlockedReason)
+    }
+    try {
+      const split = await api.splitTerminal(origin.handle, {
+        direction: pane.splitDirection ?? 'horizontal',
+        command,
+        env: paneEnv(team, pane.fakePaneId),
+        envToDelete: ['TERM_PROGRAM'],
+        activate: false
+      })
+      pane.handle = split.handle
+    } catch (error) {
+      this.removePane(team, pane)
+      throw error
+    }
+    return ''
   }
 
   private selectLayout(team: AgentTeam, args: string[], envPane: string): string {
@@ -154,11 +206,7 @@ export class ClaudeAgentTeamsTmuxDispatcher {
     return team.paneOrder
       .map((paneId) => {
         const pane = team.panes.get(paneId)!
-        return renderTmuxFormat(
-          tmuxValue(parsed, '-F'),
-          this.formatContext(team, pane),
-          pane.fakePaneId
-        )
+        return renderTmuxFormat(tmuxValue(parsed, '-F'), formatContext(team, pane), pane.fakePaneId)
       })
       .join('\n')
       .concat('\n')
@@ -174,7 +222,7 @@ export class ClaudeAgentTeamsTmuxDispatcher {
     const pane = this.resolvePane(team, tmuxValue(parsed, '-t') ?? envPane)
     const text = tmuxSendKeysText(parsed.positional, parsed.flags.has('-l'))
     if (text) {
-      await api.sendTerminal(pane.handle, { text })
+      await api.sendTerminal(pane.handle, { text }, { inputKind: 'orchestration' })
     }
     return ''
   }
@@ -219,14 +267,21 @@ export class ClaudeAgentTeamsTmuxDispatcher {
     if (pane.fakePaneId === team.leaderPane) {
       throw new Error('refusing to kill leader pane')
     }
-    await api.closeTerminal(pane.handle)
+    const close = await api.closeTerminal(pane.handle)
+    if (!close.ptyKilled) {
+      throw new Error(describeUnconfirmedAgentStop(close))
+    }
+    this.removePane(team, pane)
+    return ''
+  }
+
+  private removePane(team: AgentTeam, pane: TeamPane): void {
     team.panes.delete(pane.fakePaneId)
     team.paneOrder = team.paneOrder.filter((id) => id !== pane.fakePaneId)
     if (team.mainVertical?.lastColumnPane === pane.fakePaneId) {
       team.mainVertical.lastColumnPane =
-        [...team.paneOrder].reverse().find((id) => id !== team.leaderPane) ?? null
+        [...team.paneOrder].toReversed().find((id) => id !== team.leaderPane) ?? null
     }
-    return ''
   }
 
   private async lastPane(
@@ -242,37 +297,6 @@ export class ClaudeAgentTeamsTmuxDispatcher {
     return ''
   }
 
-  private updateMainVerticalAfterSplit(
-    team: AgentTeam,
-    fakePaneId: string,
-    splitTarget: { pane: TeamPane; direction: 'horizontal' | 'vertical' }
-  ): void {
-    if (team.mainVertical) {
-      team.mainVertical.lastColumnPane = fakePaneId
-    } else if (
-      splitTarget.direction === 'vertical' &&
-      splitTarget.pane.fakePaneId === team.leaderPane
-    ) {
-      team.mainVertical = { mainPane: team.leaderPane, lastColumnPane: fakePaneId }
-    }
-  }
-
-  private resolveSplitTarget(
-    team: AgentTeam,
-    targetPane: TeamPane,
-    horizontal: boolean
-  ): { pane: TeamPane; direction: 'horizontal' | 'vertical' } {
-    if (horizontal && team.mainVertical?.lastColumnPane) {
-      return {
-        pane: team.panes.get(team.mainVertical.lastColumnPane) ?? targetPane,
-        direction: 'horizontal'
-      }
-    }
-    // Why: tmux `split-window -h` means left/right panes; Orca names that
-    // layout by the vertical divider it creates.
-    return { pane: targetPane, direction: horizontal ? 'vertical' : 'horizontal' }
-  }
-
   private resolvePaneOrWindow(team: AgentTeam, target: string): ResolvedTarget {
     if (target.includes(':') || target === team.sessionName || target.startsWith('@')) {
       return { type: 'window' }
@@ -286,27 +310,5 @@ export class ClaudeAgentTeamsTmuxDispatcher {
       throw new Error(`unknown pane: ${target}`)
     }
     return pane
-  }
-
-  private formatContext(team: AgentTeam, pane: TeamPane): Record<string, string> {
-    return {
-      session_name: team.sessionName,
-      session_id: '$0',
-      window_id: '@0',
-      window_index: team.windowIndex,
-      window_name: 'agent-teams',
-      window_active: '1',
-      window_flags: '*',
-      pane_id: pane.fakePaneId,
-      pane_index: String(pane.index),
-      pane_active: pane.fakePaneId === team.leaderPane ? '1' : '0',
-      pane_title: '',
-      pane_width: '',
-      pane_height: '',
-      pane_left: '',
-      pane_top: '',
-      window_width: '',
-      window_height: ''
-    }
   }
 }

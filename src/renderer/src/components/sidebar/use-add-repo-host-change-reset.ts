@@ -7,7 +7,7 @@ export function useAddRepoHostChangeReset({
   onResetHostScopedState
 }: {
   isOpen: boolean
-  selectedHostId: string
+  selectedHostId: string | null
   onResetClosed: () => void
   onResetHostScopedState: () => void
 }) {
@@ -24,8 +24,7 @@ export function useAddRepoHostChangeReset({
     if (!isOpen || previousSelectedHostIdRef.current === selectedHostId) {
       return
     }
-    // Why: Add Project form fields are host-path scoped, so switching hosts must
-    // clear typed paths and pending defaults before they can be submitted.
+    // Clear host-scoped paths and pending defaults before switching targets can submit them.
     previousSelectedHostIdRef.current = selectedHostId
     onResetHostScopedState()
   }, [isOpen, onResetHostScopedState, selectedHostId])

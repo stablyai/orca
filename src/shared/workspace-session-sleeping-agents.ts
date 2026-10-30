@@ -1,6 +1,13 @@
 import { z } from 'zod'
-import { normalizeAgentProviderSession, RESUMABLE_TUI_AGENTS } from './agent-session-resume'
+import {
+  getAgentResumeArgv,
+  normalizeAgentProviderSession,
+  RESUMABLE_TUI_AGENTS
+} from './agent-session-resume'
+import { AGENT_EFFORT_LEVEL } from './agent-effort-level'
 import { isValidTerminalTabId } from './terminal-tab-id'
+import { normalizeMainAgentStatusField } from './agent-status-types'
+import { salvagingRecord } from './zod-salvage'
 
 const terminalTabIdSchema = z
   .string()
@@ -11,7 +18,11 @@ const agentProviderSessionSchema = z.preprocess(
   (raw) => normalizeAgentProviderSession(raw) ?? undefined,
   z.object({
     key: z.enum(['session_id', 'conversation_id']),
-    id: z.string().min(1).max(512)
+    id: z.string().min(1).max(512),
+    // Pi resume requires its persisted authoritative transcript path.
+    transcriptPath: z.string().min(1).optional(),
+    cwd: z.string().min(1).optional(),
+    effort: z.string().regex(AGENT_EFFORT_LEVEL).optional()
   })
 )
 
@@ -54,10 +65,18 @@ const sleepingAgentLaunchEnvSchema = z.preprocess(
   z.record(z.string(), z.string())
 )
 
-const sleepingAgentLaunchConfigBaseSchema = z.object({
+export const sleepingAgentLaunchConfigBaseSchema = z.object({
   agentCommand: z.string().optional(),
   agentArgs: z.string(),
-  agentEnv: sleepingAgentLaunchEnvSchema
+  agentEnv: sleepingAgentLaunchEnvSchema,
+  // AI Vault scans arbitrary OMP roots; retain the exact resume locator for cold restore.
+  ompResumeFilePath: z
+    .string()
+    .trim()
+    .min(1)
+    .max(32 * 1024)
+    .refine((value) => !hasUnsafeLaunchEnvChars(value))
+    .optional()
 })
 
 export const sleepingAgentLaunchConfigSchema = z.preprocess((raw) => {
@@ -65,41 +84,35 @@ export const sleepingAgentLaunchConfigSchema = z.preprocess((raw) => {
   return parsed.success ? parsed.data : undefined
 }, sleepingAgentLaunchConfigBaseSchema.optional())
 
-const sleepingAgentSessionRecordSchema = z.object({
-  paneKey: z.string().refine((value) => value.length > 0),
-  tabId: terminalTabIdSchema.optional(),
-  worktreeId: z.string().min(1),
-  agent: z.enum(RESUMABLE_TUI_AGENTS),
-  providerSession: agentProviderSessionSchema,
-  prompt: z.string(),
-  state: z.enum(['working', 'blocked', 'waiting', 'done']),
-  capturedAt: z.number().finite().positive(),
-  updatedAt: z.number().finite().positive(),
-  terminalTitle: z.string().optional(),
-  lastAssistantMessage: z.string().optional(),
-  interrupted: z.boolean().optional(),
-  connectionId: z.string().nullable().optional(),
-  launchConfig: sleepingAgentLaunchConfigSchema.optional(),
-  origin: z.enum(['worktree-sleep', 'quit', 'live']).optional()
-})
-
-export const sleepingAgentSessionsByPaneKeySchema = z.preprocess((raw) => {
-  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) {
-    return undefined
-  }
-
-  const cleaned: Record<string, z.infer<typeof sleepingAgentSessionRecordSchema>> = Object.create(
-    null
+export const sleepingAgentSessionRecordSchema = z
+  .object({
+    paneKey: z.string().refine((value) => value.length > 0),
+    tabId: terminalTabIdSchema.optional(),
+    worktreeId: z.string().min(1),
+    agent: z.enum(RESUMABLE_TUI_AGENTS),
+    providerSession: agentProviderSessionSchema,
+    prompt: z.string(),
+    state: z.enum(['working', 'blocked', 'waiting', 'done']),
+    capturedAt: z.number().finite().positive(),
+    updatedAt: z.number().finite().positive(),
+    terminalTitle: z.string().optional(),
+    lastAssistantMessage: z.string().optional(),
+    interrupted: z.boolean().optional(),
+    // A malformed value drops the field, never the record.
+    mainAgent: z.unknown().transform(normalizeMainAgentStatusField).optional(),
+    connectionId: z.string().nullable().optional(),
+    launchConfig: sleepingAgentLaunchConfigSchema.optional(),
+    origin: z.enum(['worktree-sleep', 'quit', 'live']).optional(),
+    restoreOnTabOpenOnly: z.boolean().optional()
+  })
+  .refine(
+    (record) => getAgentResumeArgv(record.agent, record.providerSession) !== null,
+    // Resume must use a supported provider key; Pi also requires its transcript path.
+    { message: 'provider session is not resumable for this agent', path: ['providerSession'] }
   )
-  for (const [paneKey, value] of Object.entries(raw as Record<string, unknown>)) {
-    if (isUnsafeObjectKey(paneKey)) {
-      continue
-    }
-    const parsed = sleepingAgentSessionRecordSchema.safeParse(value)
-    if (parsed.success && parsed.data.paneKey === paneKey) {
-      cleaned[paneKey] = parsed.data
-    }
-  }
 
-  return Object.keys(cleaned).length > 0 ? { ...cleaned } : undefined
-}, z.record(z.string(), sleepingAgentSessionRecordSchema).optional())
+export const sleepingAgentSessionsByPaneKeySchema = salvagingRecord(
+  z.string().refine((paneKey) => !isUnsafeObjectKey(paneKey)),
+  sleepingAgentSessionRecordSchema,
+  (paneKey, record) => record.paneKey === paneKey
+).transform((records) => (Object.keys(records).length > 0 ? records : undefined))

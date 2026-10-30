@@ -1,14 +1,13 @@
-/* eslint-disable max-lines -- Why: this suite covers one row-building seam
-   shared by retention, stale decay, and orchestration lineage regressions. */
 import { describe, expect, it } from 'vitest'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/types'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import { applyAgentRowLineage } from '@/components/dashboard/agent-row-lineage'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { comparePaneKeysOrdinal } from './worktree-agent-row-order'
 import { buildWorktreeAgentRows } from './worktree-agent-rows'
 
 const ORPHAN_PANE_KEY = makePaneKey('tab-orphan', '11111111-1111-4111-8111-111111111111')
@@ -92,17 +91,17 @@ function makeSplitPaneLayout(firstLeafId: string, secondLeafId: string): Termina
 
 describe('buildWorktreeAgentRows', () => {
   it('includes retained rows even when their original tab is no longer current', () => {
+    const retained = makeRetained(ORPHAN_PANE_KEY, 'wt-1', 1000)
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1')],
       entries: [],
-      // Why: useWorktreeAgentRows filters retained snapshots by worktreeId, not
-      // current tab membership. This is the sidebar behavior that sleep cleanup
-      // must counter by dropping worktree-scoped retained rows.
-      retained: [makeRetained(ORPHAN_PANE_KEY, 'wt-1', 1000)],
+      // Retained rows are worktree-scoped, independent of current tab membership; Sleep must explicitly remove them.
+      retained: [retained],
       now: 2000
     })
 
     expect(rows.map((row) => row.paneKey)).toEqual([ORPHAN_PANE_KEY])
+    expect(rows[0].tab).toBe(retained.tab)
     expect(rows[0].state).toBe('done')
   })
 
@@ -139,6 +138,38 @@ describe('buildWorktreeAgentRows', () => {
     })
 
     expect(rows[0].agentType).toBe('codex')
+  })
+
+  it('prefers an unrelated live title over the launched tab agent for unknown rows', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: 'omp', title: '\u280b Codex' })],
+      entries: [
+        makeEntry(PANE_KEY_1, 1000, {
+          agentType: undefined,
+          terminalTitle: '\u280b Codex'
+        })
+      ],
+      retained: [],
+      now: 2000
+    })
+
+    expect(rows[0].agentType).toBe('codex')
+  })
+
+  it('normalizes live Pi-compatible rows from the launched OMP tab agent', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: 'omp', title: '\u280b Pi' })],
+      entries: [
+        makeEntry(PANE_KEY_1, 1000, {
+          agentType: 'pi',
+          terminalTitle: '\u280b Pi'
+        })
+      ],
+      retained: [],
+      now: 2000
+    })
+
+    expect(rows[0].agentType).toBe('omp')
   })
 
   it('resolves retained unknown rows from the launched tab agent', () => {
@@ -213,10 +244,7 @@ describe('buildWorktreeAgentRows', () => {
   })
 
   it('decays a stale working entry to idle but leaves a stale done entry alone', () => {
-    // Why: the freshness scheduler ticks agentStatusEpoch when an entry crosses
-    // the stale boundary; the row state machine must collapse working/blocked/
-    // waiting to idle but preserve done. Sleep is the most common path that
-    // freezes hook entries past their TTL.
+    // Freshness expires nonterminal evidence while preserving done; these fixtures have no live PTY.
     const staleAt = 1000
     const freshDoneAt = 2000
     const now = staleAt + AGENT_STATUS_STALE_AFTER_MS + 1
@@ -234,6 +262,26 @@ describe('buildWorktreeAgentRows', () => {
     const done = rows.find((r) => r.paneKey === PANE_KEY_2)
     expect(working?.state).toBe('idle')
     expect(done?.state).toBe('done')
+  })
+
+  it('decays a restored-unconfirmed working entry to idle even while recent', () => {
+    // Restored nonterminal evidence cannot prove current work, however recently its snapshot was written.
+    const updatedAt = 2_000
+    const now = updatedAt + 1
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1'), makeTab('tab-2')],
+      entries: [
+        makeEntry(PANE_KEY_1, updatedAt, { state: 'working', restoredUnconfirmed: true }),
+        makeEntry(PANE_KEY_2, updatedAt, { state: 'working' })
+      ],
+      retained: [],
+      now
+    })
+
+    const unconfirmed = rows.find((r) => r.paneKey === PANE_KEY_1)
+    const confirmed = rows.find((r) => r.paneKey === PANE_KEY_2)
+    expect(unconfirmed?.state).toBe('idle')
+    expect(confirmed?.state).toBe('working')
   })
 
   it('renders live worktree-attributed entries even when their tab is absent', () => {
@@ -259,6 +307,108 @@ describe('buildWorktreeAgentRows', () => {
         worktreeId: 'wt-1'
       }
     })
+  })
+
+  it('keeps simultaneous worktree-attributed agents in a deterministic order', () => {
+    const first = makeEntry(PANE_KEY_1, 1000, {
+      state: 'working',
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      prompt: 'omp worker'
+    })
+    const second = makeEntry(PANE_KEY_2, 1000, {
+      state: 'working',
+      worktreeId: 'wt-1',
+      tabId: 'tab-2',
+      prompt: 'omp worker'
+    })
+    const third = makeEntry(PANE_KEY_3, 1000, {
+      state: 'working',
+      worktreeId: 'wt-1',
+      tabId: 'tab-3',
+      prompt: 'omp worker'
+    })
+
+    const build = (entries: AgentStatusEntry[]) =>
+      buildWorktreeAgentRows({
+        tabs: [],
+        entries,
+        retained: [],
+        now: 2000
+      }).map((row) => row.paneKey)
+
+    // Worker arrival/status-map iteration order must not reorder agents whose tabs have not hydrated.
+    expect(build([third, first, second])).toEqual([PANE_KEY_1, PANE_KEY_2, PANE_KEY_3])
+    expect(build([{ ...second, updatedAt: 1500 }, third, first])).toEqual([
+      PANE_KEY_1,
+      PANE_KEY_2,
+      PANE_KEY_3
+    ])
+  })
+
+  it('keeps missing-tab row order stable after real state transitions', () => {
+    const first = makeEntry(PANE_KEY_1, 2000, {
+      state: 'done',
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      stateHistory: [{ state: 'working', prompt: 'omp worker', startedAt: 1000 }]
+    })
+    const second = makeEntry(PANE_KEY_2, 1500, {
+      state: 'blocked',
+      worktreeId: 'wt-1',
+      tabId: 'tab-2',
+      stateHistory: [{ state: 'working', prompt: 'omp worker', startedAt: 1000 }]
+    })
+
+    const rows = buildWorktreeAgentRows({
+      tabs: [],
+      entries: [second, first],
+      retained: [],
+      now: 2500
+    })
+
+    // Later terminal transitions must not make tab creation time outrank pane-key ties.
+    expect(rows.map((row) => [row.paneKey, row.startedAt, row.tab.createdAt])).toEqual([
+      [PANE_KEY_1, 1000, 1000],
+      [PANE_KEY_2, 1000, 1000]
+    ])
+  })
+
+  it('anchors missing-tab row order to the oldest state history entry', () => {
+    const first = makeEntry(PANE_KEY_1, 2400, {
+      state: 'done',
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      stateHistory: [
+        { state: 'working', prompt: 'omp worker', startedAt: 1000 },
+        { state: 'blocked', prompt: 'omp worker', startedAt: 1800 }
+      ]
+    })
+    const second = makeEntry(PANE_KEY_2, 1600, {
+      state: 'waiting',
+      worktreeId: 'wt-1',
+      tabId: 'tab-2',
+      stateHistory: [
+        { state: 'working', prompt: 'omp worker', startedAt: 1000 },
+        { state: 'blocked', prompt: 'omp worker', startedAt: 1200 }
+      ]
+    })
+
+    const rows = buildWorktreeAgentRows({
+      tabs: [],
+      entries: [second, first],
+      retained: [],
+      now: 2500
+    })
+
+    expect(rows.map((row) => [row.paneKey, row.startedAt, row.tab.createdAt])).toEqual([
+      [PANE_KEY_1, 1000, 1000],
+      [PANE_KEY_2, 1000, 1000]
+    ])
+  })
+
+  it('uses ordinal pane-key comparison for final row ordering ties', () => {
+    expect(comparePaneKeysOrdinal('tab-\u00e4', 'tab-z')).toBeGreaterThan(0)
   })
 
   it('uses runtime orchestration metadata for hook-reported live rows', () => {
@@ -564,5 +714,95 @@ describe('applyAgentRowLineage', () => {
     ])
     expect(ordered[1].lineage).toMatchObject({ depth: 1, childCount: 1 })
     expect(ordered[2].lineage).toMatchObject({ depth: 1, childCount: 0 })
+  })
+
+  it('derives indented child rows for a live entry with in-process subagents', () => {
+    const entry = makeEntry(PANE_KEY_1, 1000, {
+      state: 'working',
+      prompt: 'review the PR',
+      subagents: [
+        {
+          id: 'a1',
+          state: 'working',
+          startedAt: 1500,
+          agentType: 'general-purpose',
+          model: 'gpt-5.4-mini',
+          description: 'Review loop'
+        },
+        { id: 'r1', state: 'idle', startedAt: 1600, agentType: 'code-reviewer' }
+      ]
+    })
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1')],
+      entries: [entry],
+      retained: [],
+      now: 2000
+    })
+
+    const children = rows.filter((row) => row.rowSource === 'subagent')
+    expect(children).toHaveLength(2)
+    expect(children[0]).toMatchObject({
+      state: 'working',
+      agentType: 'general-purpose',
+      entry: { model: 'gpt-5.4-mini' },
+      activationPaneKey: PANE_KEY_1,
+      startedAt: 1500
+    })
+    expect(children[0].entry.prompt).toBe('Review loop')
+    expect(children[1]).toMatchObject({ state: 'idle', agentType: 'code-reviewer' })
+    expect(children[1].entry.prompt).toBe('code-reviewer')
+
+    const ordered = applyAgentRowLineage(rows)
+    expect(ordered[0].paneKey).toBe(PANE_KEY_1)
+    expect(ordered[0].lineage).toMatchObject({ depth: 0, childCount: 2 })
+    expect(ordered[1].lineage).toMatchObject({ depth: 1, isFirstSibling: true })
+    expect(ordered[2].lineage).toMatchObject({ depth: 1, isLastSibling: true })
+  })
+
+  it('marks working subagent child rows unverifiable when the parent status is stale', () => {
+    const entry = makeEntry(PANE_KEY_1, 1000, {
+      state: 'working',
+      subagents: [{ id: 'a1', state: 'working', startedAt: 1000 }]
+    })
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1')],
+      entries: [entry],
+      retained: [],
+      now: 1000 + AGENT_STATUS_STALE_AFTER_MS + 1
+    })
+
+    const child = rows.find((row) => row.rowSource === 'subagent')
+    expect(child?.state).toBe('unverifiable')
+  })
+
+  it('surfaces a live subagent waiting state', () => {
+    const entry = makeEntry(PANE_KEY_1, 1000, {
+      state: 'waiting',
+      subagents: [{ id: 'child-1', state: 'waiting', startedAt: 1000, agentType: 'reviewer' }]
+    })
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1')],
+      entries: [entry],
+      retained: [],
+      now: 2000
+    })
+
+    expect(rows.find((row) => row.rowSource === 'subagent')?.state).toBe('waiting')
+  })
+
+  it('does not derive subagent child rows for retained snapshots', () => {
+    const retained = makeRetained(PANE_KEY_1, 'wt-1', 1000, {
+      entry: makeEntry(PANE_KEY_1, 1000, {
+        subagents: [{ id: 'a1', state: 'idle', startedAt: 1000 }]
+      })
+    })
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1')],
+      entries: [],
+      retained: [retained],
+      now: 2000
+    })
+
+    expect(rows.some((row) => row.rowSource === 'subagent')).toBe(false)
   })
 })

@@ -1,0 +1,61 @@
+import { describe, expect, it } from 'vitest'
+import { AGENT_STATUS_STATES } from '../../../shared/agent-status-types'
+import type { AgentRowState } from '../../../shared/agent-row-decay-state'
+import { formatAgentToolPreview, showsAgentToolPreview } from './agent-row-tool-preview'
+
+const TOOL = { toolName: 'bash', toolInput: 'rm -rf build/' }
+const ROW_STATES: readonly AgentRowState[] = [...AGENT_STATUS_STATES, 'idle', 'unverifiable']
+
+describe('showsAgentToolPreview', () => {
+  it('covers exactly the two states whose tool fields describe live work', () => {
+    // Enumerate every state so a new state cannot silently inherit stale tool fields.
+    const showing = ROW_STATES.filter((state) => showsAgentToolPreview(state))
+
+    expect(showing).toEqual(['working', 'waiting'])
+  })
+
+  it('shows nothing when the state is unknown', () => {
+    expect(showsAgentToolPreview(null)).toBe(false)
+    expect(showsAgentToolPreview(undefined)).toBe(false)
+  })
+})
+
+describe('formatAgentToolPreview', () => {
+  it('names what a blocked approval is waiting on', () => {
+    expect(formatAgentToolPreview(TOOL, 'waiting')).toBe('bash: rm -rf build/')
+  })
+
+  it('names the running tool while working', () => {
+    expect(formatAgentToolPreview(TOOL, 'working')).toBe('bash: rm -rf build/')
+  })
+
+  it('shows nothing on a wait that carries no tool', () => {
+    // Why: a question-style wait sets no tool fields; it must not borrow an earlier one.
+    expect(formatAgentToolPreview({}, 'waiting')).toBe('')
+  })
+
+  it('falls back to the bare tool name when the input is not previewable', () => {
+    expect(formatAgentToolPreview({ toolName: 'edit' }, 'waiting')).toBe('edit')
+  })
+
+  it("shows a program's bare message when no tool is named", () => {
+    const program = {
+      agentType: 'brew',
+      toolInput: 'Pouring wget',
+      programStatus: { state: 'working' as const, observedAt: 1 }
+    }
+    expect(formatAgentToolPreview(program, 'working')).toBe('Pouring wget')
+    expect(formatAgentToolPreview(program, 'done')).toBe('')
+  })
+
+  it("hides a real agent's tool input that has no tool name", () => {
+    expect(
+      formatAgentToolPreview({ agentType: 'claude', toolInput: 'src/app.ts' }, 'working')
+    ).toBe('')
+    expect(formatAgentToolPreview({ toolInput: 'src/app.ts' }, 'working')).toBe('')
+  })
+
+  it('ignores whitespace-only fields', () => {
+    expect(formatAgentToolPreview({ toolName: '  ', toolInput: '  ' }, 'working')).toBe('')
+  })
+})

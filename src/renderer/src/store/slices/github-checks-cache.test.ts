@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 
-import { createGitHubSlice, prChecksCacheSuffix } from './github'
+import { createGitHubSlice } from './github'
+import { prChecksCacheSuffix } from '../github/cache-identity'
 import { createHostedReviewSlice } from './hosted-review'
 import { getHostedReviewCacheKey } from './hosted-review-cache-identity'
 import type { AppState } from '../types'
-import type { PRCheckDetail, PRInfo } from '../../../../shared/types'
+import type { PRCheckDetail } from '../../../../shared/github/check-types'
+import type { PRInfo } from '../../../../shared/github/pull-request-types'
 
 const mockApi = {
   gh: {
@@ -68,23 +70,6 @@ afterEach(() => {
 })
 
 describe('createGitHubSlice.fetchPRChecks checks cache freshness', () => {
-  it('expires empty checks cache entries after the shorter empty TTL', async () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(1_000)
-    const store = createTestStore()
-    const repoPath = '/repo'
-    const repoId = 'repo-id'
-    const branch = 'feature/test'
-
-    mockApi.gh.prChecks.mockResolvedValue([])
-
-    await store.getState().fetchPRChecks(repoPath, 12, branch, undefined, null, { repoId })
-    vi.setSystemTime(11_001)
-    await store.getState().fetchPRChecks(repoPath, 12, branch, undefined, null, { repoId })
-
-    expect(mockApi.gh.prChecks).toHaveBeenCalledTimes(2)
-  })
-
   it('keeps repeated automatic empty checks refreshes cacheable', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)

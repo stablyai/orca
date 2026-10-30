@@ -1,4 +1,4 @@
-import { type CSSProperties, type Dispatch, type SetStateAction } from 'react'
+import type { CSSProperties, Dispatch, SetStateAction } from 'react'
 import { flushSync } from 'react-dom'
 import {
   type ImageViewerImageDimensions,

@@ -12,6 +12,7 @@ function createSnapshot(
     tabsByWorktree: {},
     ptyIdsByTabId: {},
     terminalLayoutsByTabId: {},
+    localOnlyScrollbackByTabId: {},
     activeTabIdByWorktree: {},
     openFiles: [],
     editorDrafts: {},
@@ -20,8 +21,10 @@ function createSnapshot(
     activeTabTypeByWorktree: {},
     browserTabsByWorktree: {},
     browserPagesByWorkspace: {},
+    remoteBrowserPageHandlesByPageId: {},
     activeBrowserTabIdByWorktree: {},
     browserUrlHistory: [],
+    workspaceDocHistory: [],
     unifiedTabsByWorktree: {},
     groupsByWorktree: {},
     layoutByWorktree: {},
@@ -90,5 +93,126 @@ describe('workspace session live PTY persistence', () => {
 
     expect(payload.activeWorktreeIdsOnShutdown).toEqual([])
     expect(payload.remoteSessionIdsByTabId).toBeUndefined()
+  })
+
+  it('reconnects a persisted SSH PTY when shutdown observes a transient relay drop', () => {
+    const payload = buildWorkspaceSessionPayload(
+      createSnapshot({
+        tabsByWorktree: {
+          'wt-ssh': [
+            {
+              id: 'tab-ssh',
+              title: 'remote',
+              ptyId: null,
+              worktreeId: 'wt-ssh'
+            } as never
+          ]
+        },
+        ptyIdsByTabId: { 'tab-ssh': [] },
+        lastKnownRelayPtyIdByTabId: { 'tab-ssh': 'ssh:conn-1@@pty-42' },
+        // Involuntary drops use reconnecting/reconnection-failed/error; disconnected means explicit user action.
+        sshConnectionStates: new Map([['conn-1', { status: 'reconnecting' } as never]]),
+        repos: [
+          {
+            id: 'repo-ssh',
+            path: '/repo-ssh',
+            displayName: 'SSH',
+            badgeColor: '#fff',
+            addedAt: 1,
+            connectionId: 'conn-1'
+          }
+        ],
+        worktreesByRepo: {
+          'repo-ssh': [{ id: 'wt-ssh', repoId: 'repo-ssh' } as never]
+        }
+      })
+    )
+
+    expect(payload.remoteSessionIdsByTabId).toEqual({
+      'tab-ssh': 'ssh:conn-1@@pty-42'
+    })
+    expect(payload.activeConnectionIdsAtShutdown).toEqual(['conn-1'])
+  })
+
+  it('keeps explicitly disconnected hosts out of the startup reconnect list', () => {
+    const payload = buildWorkspaceSessionPayload(
+      createSnapshot({
+        tabsByWorktree: {
+          'wt-ssh': [
+            {
+              id: 'tab-ssh',
+              title: 'remote',
+              ptyId: null,
+              worktreeId: 'wt-ssh'
+            } as never
+          ]
+        },
+        ptyIdsByTabId: { 'tab-ssh': [] },
+        lastKnownRelayPtyIdByTabId: { 'tab-ssh': 'ssh:conn-1@@pty-42' },
+        // Keep disconnected session IDs for focus restore, but never auto-dial hosts the user deliberately left offline.
+        sshConnectionStates: new Map([['conn-1', { status: 'disconnected' } as never]]),
+        repos: [
+          {
+            id: 'repo-ssh',
+            path: '/repo-ssh',
+            displayName: 'SSH',
+            badgeColor: '#fff',
+            addedAt: 1,
+            connectionId: 'conn-1'
+          }
+        ],
+        worktreesByRepo: {
+          'repo-ssh': [{ id: 'wt-ssh', repoId: 'repo-ssh' } as never]
+        }
+      })
+    )
+
+    expect(payload.remoteSessionIdsByTabId).toEqual({
+      'tab-ssh': 'ssh:conn-1@@pty-42'
+    })
+    expect(payload.activeConnectionIdsAtShutdown).toBeUndefined()
+  })
+
+  it('never derives runtime-owned SSH targets into the startup reconnect list', () => {
+    const payload = buildWorkspaceSessionPayload(
+      createSnapshot({
+        tabsByWorktree: {
+          'wt-vm': [
+            {
+              id: 'tab-vm',
+              title: 'vm',
+              ptyId: null,
+              worktreeId: 'wt-vm'
+            } as never
+          ]
+        },
+        ptyIdsByTabId: { 'tab-vm': [] },
+        lastKnownRelayPtyIdByTabId: { 'tab-vm': 'ssh:runtime-ssh-vm1@@pty-7' },
+        // Seed optimistic runtime-owned status so exclusion is independently tested on both session-ID union and connected-state paths; missing status would already gate it out.
+        sshConnectionStates: new Map([
+          ['runtime-ssh-vm1', { status: 'reconnecting' } as never],
+          ['runtime-ssh-vm2', { status: 'connected' } as never]
+        ]),
+        repos: [
+          {
+            id: 'repo-vm',
+            path: '/repo-vm',
+            displayName: 'VM',
+            badgeColor: '#fff',
+            addedAt: 1,
+            connectionId: 'runtime-ssh-vm1'
+          }
+        ],
+        worktreesByRepo: {
+          'repo-vm': [{ id: 'wt-vm', repoId: 'repo-vm' } as never]
+        }
+      })
+    )
+
+    // Runtime owns ephemeral-VM target lifecycle; renderer startup connect would touch hidden/unmanageable hosts.
+    expect(payload.remoteSessionIdsByTabId).toEqual({
+      'tab-vm': 'ssh:runtime-ssh-vm1@@pty-7'
+    })
+    expect(payload.activeConnectionIdsAtShutdown).toBeUndefined()
   })
 })

@@ -1,6 +1,8 @@
 import { spawn as nodeSpawn } from 'node:child_process'
 
 export const MACOS_SYSTEM_SLEEP_ASSERTION_RETRY_MS = 30_000
+// Consecutive failures double the retry delay up to this many base delays.
+const MAX_RETRY_BACKOFF_FACTOR = 16
 
 type Logger = Pick<Console, 'debug' | 'warn'>
 
@@ -41,9 +43,11 @@ export class MacosSystemSleepAssertion {
   private retryTimer: ReturnType<typeof setTimeout> | null = null
   private lastFailureKey: string | null = null
   private warnedForLastFailure = false
+  private consecutiveFailures = 0
   private readonly intentionalStops = new WeakSet<CaffeinateProcess>()
   private readonly reportedFailures = new WeakSet<CaffeinateProcess>()
   private readonly childCleanups = new WeakMap<CaffeinateProcess, () => void>()
+  private readonly childStartedAt = new WeakMap<CaffeinateProcess, number>()
 
   constructor(options: MacosSystemSleepAssertionOptions = {}) {
     this.logger = options.logger ?? console
@@ -53,13 +57,16 @@ export class MacosSystemSleepAssertion {
     this.spawn = options.spawn ?? nodeSpawn
   }
 
-  start(reason: string): void {
-    if (this.platform !== 'darwin' || this.child) {
-      return
+  start(reason: string): boolean {
+    if (this.platform !== 'darwin') {
+      return false
+    }
+    if (this.child) {
+      return true
     }
     if (this.retryNotBefore !== null && this.now() < this.retryNotBefore) {
       this.scheduleRetry()
-      return
+      return false
     }
 
     let child: CaffeinateProcess
@@ -70,7 +77,7 @@ export class MacosSystemSleepAssertion {
       })
     } catch (error) {
       this.handleFailure('spawn-error', reason, error)
-      return
+      return false
     }
 
     this.child = child
@@ -89,8 +96,9 @@ export class MacosSystemSleepAssertion {
     })
     child.on('error', onError)
     child.on('exit', onExit)
+    this.childStartedAt.set(child, this.now())
     this.resetRetrySuppression()
-    this.resetFailureStreak()
+    return true
   }
 
   stop(_reason: string): void {
@@ -137,6 +145,13 @@ export class MacosSystemSleepAssertion {
     if (this.child === child) {
       this.child = null
     }
+    // A spawn proves nothing; only a child that outlived the retry window counts as recovered.
+    if (
+      this.now() - (this.childStartedAt.get(child) ?? this.now()) >=
+      MACOS_SYSTEM_SLEEP_ASSERTION_RETRY_MS
+    ) {
+      this.resetFailureStreak()
+    }
     this.handleFailure(failureKey, startReason, details, failureType)
   }
 
@@ -156,7 +171,11 @@ export class MacosSystemSleepAssertion {
     failureType: 'error' | 'exit' | 'spawn-error' = 'spawn-error'
   ): void {
     this.logFailure(failureKey, reason, details, failureType)
-    this.retryNotBefore = this.now() + MACOS_SYSTEM_SLEEP_ASSERTION_RETRY_MS
+    this.consecutiveFailures += 1
+    this.retryNotBefore =
+      this.now() +
+      MACOS_SYSTEM_SLEEP_ASSERTION_RETRY_MS *
+        Math.min(2 ** (this.consecutiveFailures - 1), MAX_RETRY_BACKOFF_FACTOR)
     this.scheduleRetry()
     this.onUnexpectedFailure('macos-assertion-failure')
   }
@@ -207,6 +226,7 @@ export class MacosSystemSleepAssertion {
   private resetFailureStreak(): void {
     this.lastFailureKey = null
     this.warnedForLastFailure = false
+    this.consecutiveFailures = 0
   }
 }
 

@@ -1,0 +1,206 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as RunProcess from '@orca/process-host'
+
+const { ptySpawnMock, resolveCodexCommandMock, stubScript } = vi.hoisted(() => ({
+  stubScript: { path: '' },
+  ptySpawnMock: vi.fn(),
+  resolveCodexCommandMock: vi.fn()
+}))
+
+// Run the Node fixture through the real process chokepoint; worker transport has separate coverage.
+vi.mock(
+  '../worker-thread-child-process/worker-thread-child-process',
+  () =>
+    import('../worker-thread-child-process/worker-thread-child-process-in-process.test-fixtures')
+)
+vi.mock('@orca/process-host', async (importOriginal) => {
+  const actual = await importOriginal<typeof RunProcess>()
+  return {
+    ...actual,
+    spawnProcess: (spec: Parameters<typeof actual.spawnProcess>[0]) =>
+      actual.spawnProcess({
+        ...spec,
+        program: process.execPath,
+        args: [stubScript.path, ...(spec.args ?? [])]
+      })
+  }
+})
+
+vi.mock('../codex-cli/command', () => ({
+  resolveCodexCommand: resolveCodexCommandMock
+}))
+
+vi.mock('node-pty', () => ({
+  spawn: ptySpawnMock
+}))
+
+vi.mock('./codex-auth-presence', () => ({
+  probeCodexAuthPresence: vi.fn(() => 'present')
+}))
+
+vi.mock('../codex/codex-state-db', () => ({
+  isCodexStateDbBackfillPending: vi.fn(() => false)
+}))
+
+vi.mock('../codex/codex-state-db-backfill-recovery', () => ({
+  startCodexStateDbBackfillRecoveryInBackground: vi.fn(() => Promise.resolve(null))
+}))
+
+import { fetchCodexRateLimits } from './codex-fetcher'
+
+const STUB_CODEX_SOURCE = `
+const expectedArgs = [
+  '-c',
+  'approval_policy=never',
+  '-c',
+  'features.plugins=false',
+  '-s',
+  'read-only',
+  '-a',
+  'never',
+  'app-server'
+]
+if (JSON.stringify(process.argv.slice(2)) !== JSON.stringify(expectedArgs)) {
+  process.stderr.write(
+    "error: invalid value 'untrusted' for '--ask-for-approval <APPROVAL_POLICY>'\\n" +
+      '  [possible values: on-request, never]\\n'
+  )
+  process.exit(2)
+}
+if (process.env.CODEX_HOME !== process.env.ORCA_EXPECTED_CODEX_HOME) {
+  process.stderr.write('managed CODEX_HOME was not preserved\\n')
+  process.exit(3)
+}
+if (process.env.ORCA_EXPECTED_PROXY_ENV) {
+  for (const [key, value] of Object.entries(JSON.parse(process.env.ORCA_EXPECTED_PROXY_ENV))) {
+    if (process.env[key] !== value) {
+      process.stderr.write('probe proxy environment mismatch: ' + key + '\\n')
+      process.exit(4)
+    }
+  }
+}
+let buffer = ''
+function send(message) {
+  process.stdout.write(JSON.stringify(message) + '\\n')
+}
+process.stdin.setEncoding('utf8')
+process.stdin.on('data', (chunk) => {
+  buffer += chunk
+  let newlineIndex
+  while ((newlineIndex = buffer.indexOf('\\n')) !== -1) {
+    const line = buffer.slice(0, newlineIndex).trim()
+    buffer = buffer.slice(newlineIndex + 1)
+    if (!line) continue
+    const message = JSON.parse(line)
+    if (message.method === 'initialize') {
+      send({ id: message.id, result: { userAgent: 'codex-contract/0.149.0' } })
+      continue
+    }
+    if (message.method === 'account/rateLimits/read') {
+      send({
+        id: message.id,
+        result: {
+          rateLimits: {
+            primary: { usedPercent: 17, windowDurationMins: 300 },
+            secondary: { usedPercent: 29, windowDurationMins: 10080 }
+          }
+        }
+      })
+    }
+  }
+})
+process.stdin.on('end', () => process.exit(0))
+`
+
+let tempRoot: string
+let stubPath: string
+let previousExpectedHome: string | undefined
+
+describe('Codex rate-limit process contract', () => {
+  beforeEach(() => {
+    tempRoot = mkdtempSync(join(tmpdir(), 'orca-codex-rate-limit-contract-'))
+    stubPath = join(tempRoot, 'codex-contract.cjs')
+    writeFileSync(stubPath, STUB_CODEX_SOURCE)
+    previousExpectedHome = process.env.ORCA_EXPECTED_CODEX_HOME
+    process.env.ORCA_EXPECTED_CODEX_HOME = join(tempRoot, 'managed-codex-home')
+    resolveCodexCommandMock.mockReturnValue('codex')
+    stubScript.path = stubPath
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    if (previousExpectedHome === undefined) {
+      delete process.env.ORCA_EXPECTED_CODEX_HOME
+    } else {
+      process.env.ORCA_EXPECTED_CODEX_HOME = previousExpectedHome
+    }
+    rmSync(tempRoot, { recursive: true, force: true })
+    vi.clearAllMocks()
+  })
+
+  it('starts a read-only non-interactive app-server with the managed home', async () => {
+    await expect(
+      fetchCodexRateLimits({
+        codexHomePath: process.env.ORCA_EXPECTED_CODEX_HOME
+      })
+    ).resolves.toMatchObject({
+      provider: 'codex',
+      session: { usedPercent: 17, windowMinutes: 300 },
+      weekly: { usedPercent: 29, windowMinutes: 10080 },
+      status: 'ok',
+      error: null
+    })
+    expect(ptySpawnMock).not.toHaveBeenCalled()
+  })
+
+  it.each(['localhost;*.fixture.invalid', ''])(
+    'passes configured proxy and bypass %j to the actual probe',
+    async (bypassRules) => {
+      const proxy = 'http://proxy.fixture.invalid:8080'
+      const expected = {
+        HTTP_PROXY: proxy,
+        HTTPS_PROXY: proxy,
+        ALL_PROXY: proxy,
+        http_proxy: proxy,
+        https_proxy: proxy,
+        all_proxy: proxy,
+        NO_PROXY: bypassRules.replaceAll(';', ','),
+        no_proxy: bypassRules.replaceAll(';', ',')
+      }
+      vi.stubEnv('NO_PROXY', 'inherited.invalid')
+      vi.stubEnv('no_proxy', 'inherited.invalid')
+      vi.stubEnv('ORCA_EXPECTED_PROXY_ENV', JSON.stringify(expected))
+
+      await expect(
+        fetchCodexRateLimits({
+          codexHomePath: process.env.ORCA_EXPECTED_CODEX_HOME,
+          networkProxySettings: { httpProxyUrl: proxy, httpProxyBypassRules: bypassRules }
+        })
+      ).resolves.toMatchObject({ status: 'ok', session: { usedPercent: 17 } })
+      expect(process.env.NO_PROXY).toBe('inherited.invalid')
+    }
+  )
+
+  it.each([undefined, { httpProxyUrl: '' }, { httpProxyUrl: 'file:///invalid-proxy' }])(
+    'preserves inherited proxy settings when app settings are unset or invalid: %j',
+    async (networkProxySettings) => {
+      const inherited = {
+        HTTPS_PROXY: 'http://inherited.fixture.invalid:8080',
+        NO_PROXY: 'fixture.invalid'
+      }
+      for (const [key, value] of Object.entries(inherited)) {
+        vi.stubEnv(key, value)
+      }
+      vi.stubEnv('ORCA_EXPECTED_PROXY_ENV', JSON.stringify(inherited))
+      await expect(
+        fetchCodexRateLimits({
+          codexHomePath: process.env.ORCA_EXPECTED_CODEX_HOME,
+          networkProxySettings
+        })
+      ).resolves.toMatchObject({ status: 'ok', session: { usedPercent: 17 } })
+    }
+  )
+})

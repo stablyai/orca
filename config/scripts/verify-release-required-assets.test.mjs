@@ -76,33 +76,44 @@ describe('extractManifestAssetNames', () => {
 })
 
 describe('verifyRequiredReleaseAssets', () => {
+  function releaseFetch(release, manifestAsset, manifestText) {
+    return vi.fn(async (url) => {
+      const releasesUrl = 'https://api.github.com/repos/stablyai/orca/releases'
+      if (url === `${releasesUrl}?per_page=100`) {
+        return jsonResponse([release])
+      }
+      if (url === `${releasesUrl}/assets/${manifestAsset.id}`) {
+        return jsonResponse(manifestText)
+      }
+      if (release.assets.some((asset) => url === `${releasesUrl}/assets/${asset.id}`)) {
+        return jsonResponse('version: 1.4.27\n')
+      }
+      throw new Error(`Unexpected release request: ${url}`)
+    })
+  }
+
   it('fails when a manifest-referenced asset has not been uploaded', async () => {
     const tag = 'v1.4.27'
-    const required = getRequiredReleaseAssetNames(tag)
-    const assets = required.filter((name) => name !== 'Orca-1.4.27-arm64-mac.zip')
-    const release = releaseWithAssets(tag, assets)
+    const release = releaseWithAssets(tag, getRequiredReleaseAssetNames(tag))
     const latestMacAsset = release.assets.find((asset) => asset.name === 'latest-mac.yml')
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse([release]))
-      .mockResolvedValueOnce(
-        jsonResponse(
-          [
-            'version: 1.4.27',
-            'files:',
-            '  - url: Orca-1.4.27-arm64-mac.zip',
-            '    sha512: test',
-            'path: Orca-1.4.27-arm64-mac.zip'
-          ].join('\n')
-        )
+    vi.stubGlobal(
+      'fetch',
+      releaseFetch(
+        release,
+        latestMacAsset,
+        [
+          'version: 1.4.27',
+          'files:',
+          '  - url: mac-updater-only.zip',
+          '    sha512: test',
+          'path: mac-updater-only.zip'
+        ].join('\n')
       )
-      .mockResolvedValue(jsonResponse('version: 1.4.27\n'))
-    vi.stubGlobal('fetch', fetchMock)
+    )
 
     await expect(
       verifyRequiredReleaseAssets({ repo: 'stablyai/orca', tag, token: 'token' })
-    ).rejects.toThrow('Missing: Orca-1.4.27-arm64-mac.zip')
-    expect(latestMacAsset).toBeTruthy()
+    ).rejects.toThrow('Missing: mac-updater-only.zip')
   })
 
   it('checks assets referenced by the Linux arm64 updater manifest', async () => {
@@ -110,26 +121,22 @@ describe('verifyRequiredReleaseAssets', () => {
     const required = getRequiredReleaseAssetNames(tag)
     const release = releaseWithAssets(tag, required)
     const arm64Manifest = release.assets.find((asset) => asset.name === 'latest-linux-arm64.yml')
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse([release]))
-      .mockResolvedValueOnce(jsonResponse('version: 1.4.27\n'))
-      .mockResolvedValueOnce(
-        jsonResponse(
-          [
-            'version: 1.4.27',
-            'files:',
-            '  - url: orca-linux-arm64.AppImage.blockmap',
-            'path: orca-linux-arm64.AppImage'
-          ].join('\n')
-        )
+    vi.stubGlobal(
+      'fetch',
+      releaseFetch(
+        release,
+        arm64Manifest,
+        [
+          'version: 1.4.27',
+          'files:',
+          '  - url: orca-linux-arm64.AppImage.blockmap',
+          'path: orca-linux-arm64.AppImage'
+        ].join('\n')
       )
-      .mockResolvedValue(jsonResponse('version: 1.4.27\n'))
-    vi.stubGlobal('fetch', fetchMock)
+    )
 
     await expect(
       verifyRequiredReleaseAssets({ repo: 'stablyai/orca', tag, token: 'token' })
     ).rejects.toThrow('Missing: orca-linux-arm64.AppImage.blockmap')
-    expect(arm64Manifest).toBeTruthy()
   })
 })

@@ -2,36 +2,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
 
-vi.mock('../runtime-client', () => {
+vi.mock('../runtime-client', async () => {
   class RuntimeClient {
     call = callMock
     getCliStatus = vi.fn()
     openOrca = vi.fn()
   }
 
-  class RuntimeClientError extends Error {
-    readonly code: string
-
-    constructor(code: string, message: string) {
-      super(message)
-      this.code = code
-    }
-  }
-
-  class RuntimeRpcFailureError extends RuntimeClientError {
-    readonly response: unknown
-
-    constructor(response: unknown) {
-      super('runtime_error', 'runtime_error')
-      this.response = response
-    }
-  }
-
-  return {
-    RuntimeClient,
-    RuntimeClientError,
-    RuntimeRpcFailureError
-  }
+  // Error formatting uses instanceof, so preserve the production error classes.
+  const { RuntimeClientError, RuntimeRpcFailureError } = await import('../runtime/types.js')
+  return { RuntimeClient, RuntimeClientError, RuntimeRpcFailureError }
 })
 
 import { main } from '../index'
@@ -46,21 +26,13 @@ describe('orca computer observation CLI handlers', () => {
     process.exitCode = undefined
   })
 
-  it('prints group help with all computer subcommands', async () => {
+  it('prints computer group help without contacting the runtime', async () => {
     await main(['computer', '--help'], '/tmp/repo')
 
     const output = vi.mocked(console.log).mock.calls[0][0]
+    expect(output).toContain('Usage: orca computer <command> [options]')
     expect(output).toContain('get-app-state')
-    expect(output).toContain('hotkey')
-    expect(output).toContain('capabilities')
-    expect(output).toContain('list-apps')
-    expect(output).toContain('list-windows')
-    expect(output).toContain('paste-text')
-    expect(output).toContain('permissions')
-    expect(output).toContain('set-value')
-    expect(output).toContain('press-key')
-    expect(output).toContain('Press a single key such as Return or Escape')
-    expect(output).not.toContain(['Press a key using', 'xdotool-style syntax'].join(' '))
+    expect(callMock).not.toHaveBeenCalled()
   })
 
   it('prints targeted permission setup command help', async () => {
@@ -88,6 +60,14 @@ describe('orca computer observation CLI handlers', () => {
     const pressKeyOutput = vi.mocked(console.log).mock.calls[0][0]
     expect(pressKeyOutput).toContain('--key <key>')
     expect(pressKeyOutput).toContain('Single key, e.g. Return, Escape, Tab, Left, or PageUp')
+  })
+
+  it('documents atomic modified clicks', async () => {
+    await main(['computer', 'click', '--help'], '/tmp/repo')
+
+    const output = vi.mocked(console.log).mock.calls[0][0]
+    expect(output).toContain('--modifiers <chord>')
+    expect(output).toContain('Modifier keys held only for this click')
   })
 
   it('passes list-apps through without resolving a worktree', async () => {

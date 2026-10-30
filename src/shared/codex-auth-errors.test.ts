@@ -8,6 +8,7 @@ afterEach(() => {
 describe('isCodexAuthError', () => {
   it('matches Codex authentication refresh failures', () => {
     expect(isCodexAuthError('Access token could not be refreshed')).toBe(true)
+    expect(isCodexAuthError('Sign in with ChatGPT')).toBe(true)
     expect(isCodexAuthError('plain provider error')).toBe(false)
     expect(isCodexAuthError(null)).toBe(false)
   })
@@ -16,7 +17,9 @@ describe('isCodexAuthError', () => {
 describe('extractCodexAuthError', () => {
   it('returns the first matching auth line', () => {
     expect(
-      extractCodexAuthError('startup log\nERROR: not logged in. Please sign in again.\nmore log')
+      extractCodexAuthError(
+        'startup log\nERROR: not logged in. Please sign in again.\nplease reauthenticate\nmore log'
+      )
     ).toBe('ERROR: not logged in. Please sign in again.')
   })
 

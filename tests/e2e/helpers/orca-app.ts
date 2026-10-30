@@ -1,17 +1,4 @@
-/**
- * Shared Electron fixture for Orca E2E tests.
- *
- * Why: Playwright's native _electron.launch() is used instead of CDP.
- * It launches the Electron app directly from the built output, gives
- * full access to the BrowserWindow, and handles lifecycle automatically.
- * No need to manually start the app or pass --remote-debugging-port.
- *
- * Why: the fixture adds a dedicated test repo to the app so tests are
- * idempotent — they don't depend on whatever the user has open.
- *
- * Prerequisites:
- *   electron-vite build must have run first (globalSetup handles this).
- */
+// Give each test an isolated Electron profile and fixture repo; globalSetup builds the E2E output first.
 
 import {
   test as base,
@@ -21,41 +8,50 @@ import {
   type ElectronApplication,
   type TestInfo
 } from '@stablyai/playwright-test'
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
-import { execSync } from 'child_process'
-import { randomUUID } from 'crypto'
-import os from 'os'
-import path from 'path'
-import { TEST_REPO_PATH_FILE } from '../global-setup'
-import { cleanupE2EDaemons, closeElectronAppForE2E } from './electron-process-shutdown'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { closeElectronAppForE2E } from './electron-process-shutdown'
+import { recordElectronShutdownTiming } from './electron-shutdown-timing'
 import { getOrcaElectronLaunchArgs } from './electron-launch-args'
+import { retryTransientMainEvaluate } from './electron-main-evaluate-retry'
 import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
+import {
+  assertElectronResolvedIsolatedHome,
+  createElectronHomeIsolation
+} from './electron-home-isolation'
+import {
+  createSeededTestRepo,
+  isValidGitRepo,
+  provideWorkerTestRepository
+} from './seeded-test-repo'
 
 type OrcaTestFixtures = {
   electronApp: ElectronApplication
+  registerPostElectronShutdownCleanup: (cleanup: () => Promise<void>) => void
   sharedPage: Page
   orcaPage: Page
-  // Why: every fresh userData dir paints the first-launch onboarding overlay
-  // (closedAt=null), which is `fixed inset-0 z-[100]` and intercepts pointer
-  // events for every other test. Dismiss it by default; onboarding.spec.ts
-  // opts out via `test.use({ dismissOnboarding: false })`.
+  // Dismiss pointer-blocking onboarding by default; onboarding specs explicitly opt out.
   dismissOnboarding: boolean
-  // Why: most E2E specs need a ready project before assertions start. Golden
-  // first-run specs opt out so they can prove the zero-project onboarding path.
+  // Seed a ready project unless a first-run golden needs the zero-project path.
   seedTestRepo: boolean
-  // Why: a few IPC repro specs need to launch the Electron app with a scoped
-  // PATH/token environment. Keep this fixture-owned so tests never mutate the
-  // developer's shell or already-running Orca instance.
+  seededRepoPath: string
+  // Synthetic-list specs need only the primary checkout; switching specs keep the two-row default.
+  minimumSeededWorktreeCount: number
+  // Scope launch env to each test; module-level process.env leaks between reused Playwright workers.
+  orcaAppExtraEnv: Record<string, string>
+  // Prepend test-local Chromium switches before the app entry so they reach Chromium without leaking to later specs.
+  orcaAppExtraArgs: string[]
+  // Keep PATH/token overrides fixture-owned so specs cannot alter the user’s shell or running Orca.
   launchEnv: NodeJS.ProcessEnv
 }
 
 type OrcaWorkerFixtures = {
-  /** Absolute path to the test git repo created by globalSetup. */
+  /** Absolute path to this worker's disposable test git repo. */
   testRepoPath: string
 }
 
-// Why: parse + warn at module scope so a bad ORCA_E2E_SLOWMO_MS value logs once
-// per worker instead of once per test (otherwise hundreds of lines per CI run).
+// Warn about invalid slowMo once per worker rather than once per test.
 const ORCA_E2E_SLOWMO_MS_RAW = process.env.ORCA_E2E_SLOWMO_MS
 const ORCA_E2E_SLOWMO_MS = ((): number => {
   if (ORCA_E2E_SLOWMO_MS_RAW === undefined) {
@@ -72,31 +68,32 @@ const ORCA_E2E_SLOWMO_MS = ((): number => {
 })()
 
 async function removeUserDataDirAfterShutdown(userDataDir: string): Promise<void> {
+  const started = performance.now()
   for (let attempt = 0; attempt < 5; attempt += 1) {
     try {
       rmSync(userDataDir, { recursive: true, force: true })
+      recordElectronShutdownTiming('profile-removal', started)
       return
     } catch (error) {
       if (attempt === 4) {
         throw error
       }
-      // Why: Windows can briefly keep Electron profile files locked after the
-      // process exits; retrying avoids turning a passed flow into teardown noise.
+      // Windows profile handles may outlive process exit; retry removal without masking the flow result.
       await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)))
     }
   }
 }
 
 function shouldLaunchHeadful(testInfo: TestInfo): boolean {
-  // Why: ORCA_E2E_FORCE_HEADFUL lets a developer watch any spec in a real
-  // window without retagging it `@headful` or switching projects.
+  // Allow isolated manual observation without retagging every spec.
   if (process.env.ORCA_E2E_FORCE_HEADFUL === '1') {
     return true
   }
   return testInfo.project.metadata.orcaHeadful === true
 }
 
-function forwardElectronProcessLogs(app: ElectronApplication, testInfo: TestInfo): void {
+// Expose gated log forwarding to specs that own their own app lifecycle.
+export function forwardElectronProcessLogs(app: ElectronApplication, testInfo: TestInfo): void {
   if (process.env.ORCA_E2E_FORWARD_APP_LOGS !== '1') {
     return
   }
@@ -114,173 +111,117 @@ function forwardElectronProcessLogs(app: ElectronApplication, testInfo: TestInfo
   })
 }
 
-function isValidGitRepo(repoPath: string): boolean {
-  if (!repoPath || !existsSync(repoPath)) {
-    return false
-  }
-
-  try {
-    return (
-      execSync('git rev-parse --is-inside-work-tree', {
-        cwd: repoPath,
-        stdio: 'pipe',
-        encoding: 'utf8'
-      }).trim() === 'true'
-    )
-  } catch {
-    return false
-  }
-}
-
-function createSeededTestRepo(): string {
-  const testRepoDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-repo-'))
-
-  execSync('git init', { cwd: testRepoDir, stdio: 'pipe' })
-  execSync('git config user.email "e2e@test.local"', { cwd: testRepoDir, stdio: 'pipe' })
-  execSync('git config user.name "E2E Test"', { cwd: testRepoDir, stdio: 'pipe' })
-
-  writeFileSync(
-    path.join(testRepoDir, 'README.md'),
-    '# Orca E2E Test Repo\n\nThis repo was created automatically for Playwright tests.\n'
-  )
-  writeFileSync(path.join(testRepoDir, 'CLAUDE.md'), '# CLAUDE.md\n\nTest instructions for E2E.\n')
-  writeFileSync(
-    path.join(testRepoDir, 'package.json'),
-    `${JSON.stringify({ name: 'orca-e2e-test', version: '0.0.0', private: true }, null, 2)}\n`
-  )
-  writeFileSync(path.join(testRepoDir, '.gitignore'), 'node_modules/\n')
-  mkdirSync(path.join(testRepoDir, 'src'), { recursive: true })
-  writeFileSync(path.join(testRepoDir, 'src', 'index.ts'), 'export const hello = "world"\n')
-
-  execSync('git add -A', { cwd: testRepoDir, stdio: 'pipe' })
-  execSync('git commit -m "Initial commit for E2E tests"', { cwd: testRepoDir, stdio: 'pipe' })
-
-  // Why: worker-scoped fixture fallbacks can run in parallel; UUIDs avoid
-  // colliding on the same temp repo/worktree when workers start together.
-  const worktreeDir = path.join(testRepoDir, '..', `orca-e2e-worktree-${randomUUID()}`)
-  execSync(`git worktree add "${worktreeDir}" -b e2e-secondary`, {
-    cwd: testRepoDir,
-    stdio: 'pipe'
-  })
-
-  writeFileSync(TEST_REPO_PATH_FILE, testRepoDir)
-  return testRepoDir
-}
-
-/**
- * Extended Playwright test with Orca-specific fixtures.
- *
- * `orcaPage` — the main Orca renderer window.
- *
- * Test-scoped: each test gets a fresh Electron instance and isolated
- * userData directory so state cannot leak across specs through persistence.
- */
+// Use fresh per-test apps/profiles so persistence cannot leak state between specs.
 export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
-  // Worker-scoped: read the test repo path once
+  // Auto: restart-only specs also read the published path without requesting an app fixture.
   testRepoPath: [
     // oxlint-disable-next-line no-empty-pattern -- Playwright fixture callbacks require object destructuring here.
     async ({}, provideFixture) => {
-      const persistedRepoPath = existsSync(TEST_REPO_PATH_FILE)
-        ? readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
-        : ''
-      const repoPath = isValidGitRepo(persistedRepoPath)
-        ? persistedRepoPath
-        : createSeededTestRepo()
-      await provideFixture(repoPath)
+      await provideWorkerTestRepository(provideFixture)
     },
-    { scope: 'worker' }
+    { scope: 'worker', auto: true }
   ],
 
-  // Test-scoped: one Electron app per test
-  electronApp: async ({ dismissOnboarding, launchEnv }, provideFixture, testInfo) => {
+  // Run path cleanup after Electron and detached daemons release Windows worktree handles.
+  registerPostElectronShutdownCleanup: [
+    // oxlint-disable-next-line no-empty-pattern -- Playwright fixture callbacks require object destructuring here.
+    async ({}, provideFixture) => {
+      const cleanups: (() => Promise<void>)[] = []
+      await provideFixture((cleanup) => cleanups.push(cleanup))
+      for (const cleanup of cleanups.toReversed()) {
+        await cleanup()
+      }
+    },
+    { scope: 'test' }
+  ],
+
+  electronApp: async (
+    {
+      dismissOnboarding,
+      launchEnv,
+      orcaAppExtraEnv,
+      orcaAppExtraArgs,
+      registerPostElectronShutdownCleanup
+    },
+    provideFixture,
+    testInfo
+  ) => {
+    // Depend on cleanup registration so its finalizer runs after Electron releases watchers, terminals and daemons.
+    void registerPostElectronShutdownCleanup
     const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
     const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-userdata-'))
 
     if (dismissOnboarding) {
-      // Why: onboarding renders a fullscreen `fixed inset-0 z-[100]` overlay
-      // when persisted `closedAt` is null, which intercepts pointer events for
-      // every other test. Seed a completed-onboarding fresh-install profile:
-      // an empty file would make persistence treat the profile as an
-      // existing-user upgrade cohort and mount the telemetry notice overlay.
+      // Seed completed onboarding; an empty profile implies an existing-user cohort and can show a telemetry overlay.
       writeFileSync(
         path.join(userDataDir, 'orca-data.json'),
         `${JSON.stringify(getE2ECompletedOnboardingProfile(), null, 2)}\n`
       )
     }
     const headful = shouldLaunchHeadful(testInfo)
-    // Why: strip ELECTRON_RUN_AS_NODE before spawning. Some host shells (e.g.
-    // Orca's own agent runtime) set it so Electron behaves as a plain Node
-    // binary. Playwright's _electron.launch passes --remote-debugging-port,
-    // which Node rejects with "bad option" and the process exits immediately.
+    // Strip ELECTRON_RUN_AS_NODE or Node rejects Playwright’s remote-debugging switch before launch.
     const { ELECTRON_RUN_AS_NODE: _unused, ...cleanEnv } = process.env
     void _unused
-    // Why: ORCA_E2E_SLOWMO_MS adds a pause between every Playwright action so a
-    // developer running with ORCA_E2E_FORCE_HEADFUL=1 can actually watch what
-    // the test does. Defaults to 0 (no slowdown) for normal runs.
+    const homeIsolation = createElectronHomeIsolation({
+      inheritedEnv: cleanEnv,
+      launchEnv,
+      extraEnv: orcaAppExtraEnv,
+      userDataDir
+    })
+    // Use slowMo only for deliberate observation on an isolated display.
     const slowMo = ORCA_E2E_SLOWMO_MS
-    // Why: ORCA_E2E_RECORD_VIDEO=1 captures a webm of the renderer so a
-    // developer can replay the run later — Electron's Playwright trace viewer
-    // does not produce DOM snapshots, so video is the only reliable replay.
-    // Why: testInfo.outputDir is created lazily by Playwright; on Windows the
-    // dir may not exist when the fixture initializes, and Electron silently
-    // drops the recording. mkdir up-front so the recorder always has a home.
+    // Record video for Electron replay; create outputDir up front or Windows may silently drop recordings.
     const recordVideoDir = process.env.ORCA_E2E_RECORD_VIDEO === '1' ? testInfo.outputDir : null
     if (recordVideoDir) {
       mkdirSync(recordVideoDir, { recursive: true })
     }
     const app = await electron.launch({
-      args: getOrcaElectronLaunchArgs(mainPath, headful),
+      args: [...orcaAppExtraArgs, ...getOrcaElectronLaunchArgs(mainPath, headful)],
       ...(slowMo > 0 ? { slowMo } : {}),
       ...(recordVideoDir ? { recordVideo: { dir: recordVideoDir } } : {}),
-      // Why: keep NODE_ENV=development so window.__store is exposed and
-      // dev-only helpers activate. ORCA_E2E_USER_DATA_DIR overrides the usual
-      // shared dev profile so every spec gets a clean persistence root.
-      // Why: ORCA_E2E_HEADLESS suppresses mainWindow.show() so the app
-      // window stays hidden during test runs, avoiding focus stealing and
-      // screen clutter. Playwright interacts via CDP regardless.
-      // Why: ORCA_E2E_HEADLESS suppresses mainWindow.show() for CI/headless
-      // runs. ORCA_E2E_HEADFUL overrides this for tests that need a visible
-      // window (e.g. pointer-capture drag tests).
-      // Why: local SSH E2E deploys the relay from the dev build output. The
-      // Electron app's getAppPath() points at the compiled main bundle in E2E,
-      // so pass the repo-root relay path explicitly for this opt-in suite.
+      // Use development/E2E helpers inside an isolated profile; background launch policy keeps automated desktop windows hidden.
       env: {
-        ...cleanEnv,
-        ...launchEnv,
+        ...homeIsolation.env,
         NODE_ENV: 'development',
-        ORCA_E2E_USER_DATA_DIR: userDataDir,
-        ...((process.env.ORCA_E2E_SSH_LOCALHOST === '1' ||
-          process.env.ORCA_E2E_SSH_DOCKER === '1') &&
-        !cleanEnv.ORCA_RELAY_PATH
-          ? { ORCA_RELAY_PATH: path.join(process.cwd(), 'out', 'relay') }
-          : {}),
         ...(headful ? { ORCA_E2E_HEADFUL: '1' } : { ORCA_E2E_HEADLESS: '1' })
       }
     })
     forwardElectronProcessLogs(app, testInfo)
+    try {
+      const resolvedHome = await retryTransientMainEvaluate(() =>
+        app.evaluate(({ app }) => app.getPath('home'))
+      )
+      assertElectronResolvedIsolatedHome(resolvedHome, homeIsolation)
+    } catch (error) {
+      await closeElectronAppForE2E(app, { cleanupDaemonsForUserDataDir: userDataDir })
+      await removeUserDataDirAfterShutdown(userDataDir)
+      throw error
+    }
     await provideFixture(app)
-    // Why: the Playwright close promise can settle before all Electron and PTY
-    // descendants are gone in CI; worker teardown then hangs on open handles.
-    await closeElectronAppForE2E(app)
-    await cleanupE2EDaemons(userDataDir)
+    // Await process-tree shutdown; Playwright close may settle before Electron/PTy descendants exit.
+    await closeElectronAppForE2E(app, { cleanupDaemonsForUserDataDir: userDataDir })
     await removeUserDataDirAfterShutdown(userDataDir)
   },
 
-  // Default: dismiss the onboarding overlay so it doesn't intercept clicks.
   dismissOnboarding: [true, { option: true }],
   seedTestRepo: [true, { option: true }],
+  // Test-scoped so generation scenarios can isolate Git indexes and remotes.
+  seededRepoPath: async ({ testRepoPath }, provideFixture) => {
+    await provideFixture(testRepoPath)
+  },
+  minimumSeededWorktreeCount: [2, { option: true }],
   launchEnv: [{}, { option: true }],
+  orcaAppExtraEnv: [{}, { option: true }],
+  orcaAppExtraArgs: [[], { option: true }],
 
-  // Test-scoped: grab the first BrowserWindow, add the test repo, and wait
-  // until the session is fully ready with a worktree active.
-  sharedPage: async ({ electronApp, seedTestRepo, testRepoPath }, provideFixture) => {
-    // Why: the Electron app may take a while to create the first window,
-    // especially on cold start with no prior dev userData. Isolated per-test
-    // profiles make late-suite launches slower, so use the full test budget.
+  sharedPage: async (
+    { electronApp, minimumSeededWorktreeCount, seedTestRepo, seededRepoPath },
+    provideFixture
+  ) => {
+    // Allow the full budget for first-window creation on cold isolated profiles.
     const page = await electronApp.firstWindow({ timeout: 120_000 })
     await page.waitForLoadState('domcontentloaded')
 
-    // Wait for the store to be available
     await page.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
 
     if (!seedTestRepo) {
@@ -293,73 +234,71 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       return
     }
 
-    const repoPath = isValidGitRepo(testRepoPath) ? testRepoPath : createSeededTestRepo()
+    const repoPath = isValidGitRepo(seededRepoPath) ? seededRepoPath : createSeededTestRepo()
 
-    // Add the test repo via the IPC bridge
-    // Why: calling window.api.repos.add() goes through the same code path as
-    // the "Add Project" UI flow, ensuring worktrees are fetched and the session
-    // initializes properly.
-    await page.evaluate(async (repoPath) => {
-      await window.api.repos.add({ path: repoPath })
+    // Use repos.add IPC to exercise the same discovery path as Add Project.
+    const seededRepoId = await page.evaluate(async (repoPath) => {
+      const result = await window.api.repos.add({ path: repoPath })
+      if ('error' in result) {
+        throw new Error(result.error)
+      }
+      return result.repo.id
     }, repoPath)
 
-    // Fetch repos in the renderer store so it picks up the new repo
-    await page.evaluate(async (repoPath) => {
-      const store = window.__store
-      if (!store) {
-        return
-      }
-
-      await store.getState().fetchRepos()
-      const repo = store.getState().repos.find((candidate) => candidate.path === repoPath)
-      if (!repo) {
-        throw new Error(`Expected e2e repo to be loaded: ${repoPath}`)
-      }
-      // Why: the fixture deliberately creates external Git worktrees. New
-      // repos hide those by default after the visibility rollout, so opt this
-      // disposable repo into showing them before specs assert on worktree state.
-      await store.getState().updateRepo(repo.id, { externalWorktreeVisibility: 'show' })
-    }, repoPath)
-
-    // Wait for the repo to appear and fetch its worktrees
-    await page.evaluate(async () => {
-      const store = window.__store
-      if (!store) {
-        return
-      }
-
-      const repos = store.getState().repos
-      for (const repo of repos) {
-        await store.getState().fetchWorktrees(repo.id)
-      }
-    })
-
-    // Why: parallel specs mutate real git worktrees in the shared fixture repo.
-    // A first scan can briefly return no rows while git holds a worktree lock,
-    // so poll the public fetch path until the seeded primary + secondary load.
+    // Poll through the concurrent repos:changed refresh, whose generation can supersede this fetch.
     await playwrightExpect
       .poll(
         () =>
-          page.evaluate(async (repoPath) => {
+          page.evaluate(async (repoId) => {
+            const store = window.__store
+            if (!store) {
+              return false
+            }
+            await store.getState().fetchRepos({ runtimeEnvironmentId: null, throwOnError: true })
+            const repo = store.getState().repos.find((candidate) => candidate.id === repoId)
+            if (!repo) {
+              return false
+            }
+            // Show the fixture’s external Git worktrees, which newly added repos hide by default.
+            await store.getState().updateRepo(repo.id, { externalWorktreeVisibility: 'show' })
+            return true
+          }, seededRepoId),
+        {
+          timeout: 30_000,
+          message: `Expected e2e repo to be loaded: ${repoPath}`
+        }
+      )
+      .toBe(true)
+
+    // Hydration can replace the execution context; tolerate this preliminary fetch because the later worktree poll is authoritative.
+    await page
+      .evaluate(async (repoId) => {
+        const store = window.__store
+        if (!store) {
+          return
+        }
+        await store.getState().fetchWorktrees(repoId)
+      }, seededRepoId)
+      .catch(() => false)
+
+    await playwrightExpect
+      .poll(
+        () =>
+          page.evaluate(async (repoId) => {
             const store = window.__store
             if (!store) {
               return 0
             }
-            const repo = store.getState().repos.find((candidate) => candidate.path === repoPath)
-            if (!repo) {
-              return 0
-            }
-            await store.getState().fetchWorktrees(repo.id)
-            return store.getState().worktreesByRepo[repo.id]?.length ?? 0
-          }, repoPath),
+            await store.getState().fetchWorktrees(repoId)
+            return store.getState().worktreesByRepo[repoId]?.length ?? 0
+          }, seededRepoId),
         {
           timeout: 30_000,
           message: 'seeded e2e worktrees did not load'
         }
       )
-      .toBeGreaterThanOrEqual(2)
+      .toBeGreaterThanOrEqual(minimumSeededWorktreeCount)
 
-    // Wait for workspaceSessionReady to become true
     await page.waitForFunction(
       () => {
         const store = window.__store
@@ -369,31 +308,24 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       { timeout: 30_000 }
     )
 
-    // Re-activate the test repo's primary worktree after session hydration.
-    // Why: workspaceSessionReady restoration can overwrite activeWorktreeId
-    // after earlier setup calls. Selecting it here ensures every test starts on
-    // the seeded repo instead of the "Select a worktree" empty state.
-    await page.evaluate((repoPath: string) => {
+    // Reactivate after hydration so restored state cannot overwrite the fixture’s chosen project.
+    await page.evaluate((repoId: string) => {
       const store = window.__store
       if (!store) {
         return
       }
 
       const state = store.getState()
-      const allWorktrees = Object.values(state.worktreesByRepo).flat()
-      const testWorktree = allWorktrees.find(
-        (worktree) => worktree.path === repoPath || worktree.path.startsWith(repoPath)
+      // Use provider identity rather than Windows-sensitive path string comparisons.
+      const testWorktree = state.worktreesByRepo[repoId]?.find(
+        (worktree) => worktree.isMainWorktree
       )
       if (testWorktree) {
         state.setActiveWorktree(testWorktree.id)
       }
-    }, repoPath)
+    }, seededRepoId)
 
-    // Best-effort seed of a baseline terminal tab when a fresh isolated
-    // profile has none yet.
-    // Why: terminal-focused suites call ensureTerminalVisible(), which does the
-    // authoritative wait. The shared fixture itself should not block non-
-    // terminal suites on tab creation timing.
+    // Seed a terminal without blocking nonterminal specs; terminal suites own their readiness wait.
     await page.evaluate(() => {
       const store = window.__store
       if (!store) {
@@ -412,7 +344,6 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
     await provideFixture(page)
   },
 
-  // Test-scoped: each test gets the shared page
   orcaPage: async ({ sharedPage }, provideFixture) => {
     await provideFixture(sharedPage)
   }

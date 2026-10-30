@@ -1,0 +1,315 @@
+import type { OrcaCloudAuthConfig } from '../../orca-profiles/profile-cloud-auth-config'
+import type { MobilePairingConnectionContext } from '../runtime-rpc/runtime-rpc-pairing-types'
+import type { OrcaRuntimeRpcServer } from '../runtime-rpc'
+import type {
+  DeviceCredentialInstalled,
+  PairingGetEndpointsParams,
+  PairingGetEndpointsResult,
+  PairingProvisionRelayParams
+} from '../../../shared/mobile-relay-credential-contract'
+import type { RelayHostCloseReason } from '../../../shared/relay-host-close-reason'
+import { readRelayAuthContext } from './relay-auth-context'
+import { relayIdentityKey } from './relay-auth-identity'
+import { RelayAuthCoordinator } from './relay-auth-coordinator'
+import { RelayUnavailableError } from './relay-readiness'
+import { RelaySessionBroker } from './relay-session-broker'
+import type { RelayBrokerStatus } from './relay-session-broker-contract'
+import type { PairingRelay } from '../../../shared/mobile-relay-pairing-offer'
+import type {
+  RelayRevokeOutbox,
+  RelayDeviceBinding,
+  RelayRevokeOutboxItem
+} from './relay-revoke-outbox'
+import { pairingAuthorizationForContext } from './relay-pairing-authorization'
+import { deriveRelayHostId } from './relay-http-client'
+import { RelayDemandLedger } from './relay-demand-ledger'
+import { createRelayRegionPreferenceReader } from './relay-region-preference-reader'
+
+type DesktopRelayServiceOptions = {
+  authConfig: OrcaCloudAuthConfig
+  userDataPath: string
+  appVersion: string
+  runtimeRpc: OrcaRuntimeRpcServer
+  onStatus: (status: RelayBrokerStatus, cellUrl?: string) => void
+}
+
+// Revive dead brokers lacking retry timers (sleep/token expiry) without requiring user Retry.
+const RELAY_LIVENESS_INTERVAL_MS = 5 * 60_000
+// Phone readiness budgets are shorter so replies arrive before their deadline.
+const PAIRING_MINT_READINESS_WAIT_MS = 20_000
+const PHONE_REQUEST_READINESS_WAIT_MS = 10_000
+
+export class DesktopRelayService {
+  private readonly coordinator: RelayAuthCoordinator
+  private readonly revokeOutbox: RelayRevokeOutbox
+  private readonly runtimeRpc: OrcaRuntimeRpcServer
+  private readonly demandLedger: RelayDemandLedger
+  private demandExpiryTimer: ReturnType<typeof setTimeout> | null = null
+  private livenessTimer: ReturnType<typeof setInterval> | null = null
+  private stopped = false
+
+  constructor(options: DesktopRelayServiceOptions) {
+    const keypair = options.runtimeRpc.getE2EEKeypair()
+    const mobileSocketWiring = options.runtimeRpc.getMobileSocketWiring()
+    if (!keypair || !mobileSocketWiring) {
+      throw new Error('mobile_runtime_not_ready')
+    }
+    this.runtimeRpc = options.runtimeRpc
+    this.revokeOutbox = options.runtimeRpc.getRelayRevokeOutbox()
+    this.demandLedger = new RelayDemandLedger({
+      deviceRegistry: options.runtimeRpc.getDeviceRegistry()!,
+      revokeOutbox: this.revokeOutbox,
+      relayHostId: deriveRelayHostId(keypair.publicKey)
+    })
+    const regionPreference = createRelayRegionPreferenceReader(options)
+    this.coordinator = new RelayAuthCoordinator({
+      readContext: () => readRelayAuthContext(options.authConfig, options.userDataPath),
+      hasDemand: ({ identity }) => this.demandLedger.hasDemand(relayIdentityKey(identity)),
+      openBroker: async ({ context, isCurrent, refreshAccessToken }) => {
+        const broker = await RelaySessionBroker.connect({
+          authConfig: options.authConfig,
+          accessToken: context.accessToken,
+          identity: context.identity,
+          keypair,
+          appVersion: options.appVersion,
+          mobileSocketWiring,
+          isCurrent,
+          refreshAccessToken,
+          resolvePreferredRegion: regionPreference.resolvePreferredRegion,
+          measureRegionDecision: regionPreference.measureRegionDecision,
+          onAssignedCellActive: regionPreference.noteAssignedCell,
+          onStatus: options.onStatus
+        })
+        void this.flushRevokeOutbox(broker)
+        return broker
+      },
+      onStatus: options.onStatus
+    })
+  }
+
+  start(): void {
+    this.refreshDemand()
+  }
+
+  ensureLive(): void {
+    if (!this.stopped) {
+      this.coordinator.ensureLive()
+    }
+  }
+
+  authMutated(): void {
+    this.refreshDemand()
+  }
+
+  fenceAndCloseNow(hostCloseReason?: RelayHostCloseReason): void {
+    // Hard sign-out fences must stop ticks until the next auth mutation re-arms demand.
+    if (this.livenessTimer) {
+      clearInterval(this.livenessTimer)
+      this.livenessTimer = null
+    }
+    this.coordinator.fenceAndCloseNow(hostCloseReason)
+  }
+
+  async createPairingRelay(
+    relayDeviceId: string
+  ): Promise<{ relay: PairingRelay; binding: RelayDeviceBinding }> {
+    return await this.withTransientDemand(`pairing:${relayDeviceId}`, async () => {
+      const broker = await this.requireActiveBroker(PAIRING_MINT_READINESS_WAIT_MS)
+      const relay = await broker.createPairingRelay(relayDeviceId)
+      return {
+        relay,
+        binding: {
+          relayHostId: broker.hostId,
+          relayDeviceId,
+          ownerIdentityKey: broker.ownerIdentityKey,
+          inviteExpiresAt: relay.inviteExpiresAt
+        }
+      }
+    })
+  }
+
+  onDeviceRevokeQueued(item: RelayRevokeOutboxItem): void {
+    this.refreshDemand()
+    const broker = this.coordinator.getActiveBroker()
+    if (
+      broker instanceof RelaySessionBroker &&
+      broker.hostId === item.relayHostId &&
+      broker.ownerIdentityKey === item.ownerIdentityKey
+    ) {
+      void this.flushRevoke(broker, item)
+    }
+  }
+
+  async getEndpoints(
+    context: MobilePairingConnectionContext,
+    params: PairingGetEndpointsParams
+  ): Promise<PairingGetEndpointsResult> {
+    this.requireMobileDevice(context.deviceId)
+    if (
+      this.runtimeRpc.getDeviceRegistry()?.getMobilePairingConnectionMode(context.deviceId) ===
+      'local-only'
+    ) {
+      return { v: 1, relay: null }
+    }
+    return await this.withTransientDemand(`endpoints:${context.deviceId}`, async () => {
+      const broker = await this.requireActiveBroker(PHONE_REQUEST_READINESS_WAIT_MS).catch(
+        () => null
+      )
+      if (!broker?.endpoint) {
+        return { v: 1, relay: null }
+      }
+      this.assertRelayHost(context, broker)
+      const result: PairingGetEndpointsResult = { v: 1, relay: broker.endpoint }
+      if (params.installReqId) {
+        result.installStatus = await broker.credentialInstallStatus(
+          context.deviceId,
+          params.installReqId
+        )
+      }
+      if (params.resumeConfirmReqId) {
+        if (
+          context.transport.transport !== 'relay' ||
+          context.transport.credentialKind !== 'resume'
+        ) {
+          throw new Error('resume_confirmation_unavailable')
+        }
+        result.resumeConfirmation = await broker.confirmResume(
+          context.transport.basisConnId,
+          params.resumeConfirmReqId
+        )
+      }
+      return result
+    })
+  }
+
+  async provisionRelay(
+    context: MobilePairingConnectionContext,
+    params: PairingProvisionRelayParams
+  ): Promise<DeviceCredentialInstalled> {
+    this.requireMobileDevice(context.deviceId)
+    if (
+      this.runtimeRpc.getDeviceRegistry()?.getMobilePairingConnectionMode(context.deviceId) ===
+      'local-only'
+    ) {
+      throw new Error('relay_disabled_for_device')
+    }
+    return await this.withTransientDemand(`provision:${context.deviceId}`, async () => {
+      const broker = await this.requireActiveBroker(PHONE_REQUEST_READINESS_WAIT_MS)
+      if (!broker.endpoint) {
+        throw new Error('relay_control_not_active')
+      }
+      this.assertRelayHost(context, broker)
+      const authorization = pairingAuthorizationForContext(context, broker.hostId)
+      if (!authorization) {
+        // Resume confirmation proves renewal, never either initial-install authorization mode.
+        throw new Error('relay_provision_authorization_unavailable')
+      }
+      if (
+        !this.runtimeRpc.setMobileRelayBinding(context.deviceId, {
+          relayHostId: broker.hostId,
+          relayDeviceId: context.deviceId,
+          ownerIdentityKey: broker.ownerIdentityKey
+        })
+      ) {
+        throw new Error('mobile_device_not_found')
+      }
+      this.refreshDemand()
+      return await broker.installCredential(context.deviceId, params, authorization)
+    })
+  }
+
+  demandStateChanged(): void {
+    this.refreshDemand()
+  }
+
+  stop(): void {
+    this.stopped = true
+    if (this.demandExpiryTimer) {
+      clearTimeout(this.demandExpiryTimer)
+      this.demandExpiryTimer = null
+    }
+    if (this.livenessTimer) {
+      clearInterval(this.livenessTimer)
+      this.livenessTimer = null
+    }
+    this.coordinator.stop()
+  }
+
+  private async flushRevokeOutbox(broker: RelaySessionBroker): Promise<void> {
+    for (const item of this.revokeOutbox.pendingFor(broker.ownerIdentityKey, broker.hostId)) {
+      await this.flushRevoke(broker, item)
+    }
+  }
+
+  private requireMobileDevice(deviceId: string): void {
+    if (this.runtimeRpc.getDeviceRegistry()?.getDevice(deviceId)?.scope !== 'mobile') {
+      throw new Error('mobile_device_not_found')
+    }
+  }
+
+  private assertRelayHost(
+    context: MobilePairingConnectionContext,
+    broker: RelaySessionBroker
+  ): void {
+    if (
+      context.transport.transport === 'relay' &&
+      context.transport.relayHostId !== broker.hostId
+    ) {
+      throw new Error('stale_relay_connection')
+    }
+  }
+
+  private async flushRevoke(
+    broker: RelaySessionBroker,
+    item: RelayRevokeOutboxItem
+  ): Promise<void> {
+    try {
+      await broker.revokeDevice(item.relayDeviceId, item.reqId)
+      this.revokeOutbox.remove(item.reqId)
+      this.refreshDemand()
+    } catch {
+      // Durable revoke reqId survives reconnect; remote retry must not delay local revocation.
+    }
+  }
+
+  private async withTransientDemand<T>(key: string, operation: () => Promise<T>): Promise<T> {
+    const release = this.demandLedger.acquireTransient(key)
+    this.refreshDemand()
+    try {
+      return await operation()
+    } finally {
+      release()
+      this.refreshDemand()
+    }
+  }
+
+  private async requireActiveBroker(waitMs: number): Promise<RelaySessionBroker> {
+    const readiness = await this.coordinator.waitForReadiness(waitMs)
+    if (readiness.ready && readiness.broker instanceof RelaySessionBroker) {
+      return readiness.broker
+    }
+    throw new RelayUnavailableError(
+      readiness.ready ? { reason: 'control_not_active', retryAt: null } : readiness
+    )
+  }
+
+  private refreshDemand(): void {
+    if (this.stopped) {
+      return
+    }
+    if (!this.livenessTimer) {
+      this.livenessTimer = setInterval(() => this.ensureLive(), RELAY_LIVENESS_INTERVAL_MS)
+    }
+    if (this.demandExpiryTimer) {
+      clearTimeout(this.demandExpiryTimer)
+      this.demandExpiryTimer = null
+    }
+    this.coordinator.reconcile()
+    const expiresAt = this.demandLedger.nextPendingExpiry()
+    if (expiresAt !== null) {
+      // Expired unscanned invites must release standing control even without a surviving renderer.
+      const delay = Math.max(1, expiresAt - Date.now() + 1)
+      this.demandExpiryTimer = setTimeout(() => this.refreshDemand(), delay)
+    }
+  }
+}

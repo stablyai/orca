@@ -1,0 +1,312 @@
+import {
+  toolExecutionMetadata,
+  toolWebSearchResults
+} from '../../shared/native-chat/tools/native-chat-tool-identity'
+import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
+import type { NativeChatBlock } from '../../shared/native-chat-types'
+import { CODEX_ASYNC_QUESTION_TOOL } from '../../shared/codex-async-question-input'
+import { journalPayload } from '../native-chat/agent-session-journal/journal-payload-bounds'
+import { unhandledProviderFrameJournalItem } from '../native-chat/agent-session-wire/unhandled-provider-frame'
+import { codexImageItemBody } from './codex-image-item-translation'
+import { commandActionFacts } from './codex-command-action-class'
+import {
+  codexCollabAgentToolCallBody,
+  type CodexHelperName
+} from './codex-collab-agent-item-translation'
+import { codexItemRunState } from './codex-item-run-state'
+import {
+  readFirstString,
+  readRecord,
+  readString,
+  readTextContent
+} from './codex-item-field-readers'
+import type { CodexThreadItem } from './codex-thread-item-identity'
+export {
+  codexItemIdentity,
+  isCodexMessageItemType,
+  readCodexThreadItem,
+  type CodexThreadItem
+} from './codex-thread-item-identity'
+export {
+  CodexTurnOrdinals,
+  MAX_CODEX_TURN_ORDINAL_BYTES,
+  MAX_CODEX_TURN_ORDINAL_ENTRIES
+} from './codex-turn-ordinals'
+import { journalReasoningBody } from '../native-chat/agent-session-journal/journal-reasoning-row'
+
+export function codexMessageBlocks(item: CodexThreadItem): NativeChatBlock[] {
+  const text =
+    item.type === 'agentMessage'
+      ? (readString(item, 'text') ?? readTextContent(item, 'content'))
+      : readString(item, 'text')
+  if (text !== null) {
+    return [{ type: 'text', text }]
+  }
+  const content = item.content
+  if (!Array.isArray(content)) {
+    return []
+  }
+  const blocks: NativeChatBlock[] = []
+  for (const part of content) {
+    if (typeof part !== 'object' || part === null) {
+      continue
+    }
+    const partText = readString(part as Record<string, unknown>, 'text')
+    if (partText !== null) {
+      blocks.push({ type: 'text', text: partText })
+      continue
+    }
+    const record = part as Record<string, unknown>
+    if (record.type === 'image' && typeof record.url === 'string') {
+      blocks.push({ type: 'image-ref', url: record.url })
+    } else if (record.type === 'localImage' && typeof record.path === 'string') {
+      blocks.push({ type: 'image-ref', path: record.path })
+    }
+  }
+  return blocks
+}
+
+/** The message text displays the question; this call block enables replies. */
+function codexAsyncQuestionBlock(item: CodexThreadItem): NativeChatBlock | null {
+  if (item.type !== 'agentMessage' || item.delivery !== 'async' || !Array.isArray(item.questions)) {
+    return null
+  }
+  return {
+    type: 'tool-call',
+    name: CODEX_ASYNC_QUESTION_TOOL,
+    callId: item.id,
+    input: { questions: item.questions }
+  }
+}
+
+export type CodexJournalItem = {
+  body: AgentJournalItemBody | null
+  handled: boolean
+}
+
+function commandItem(item: CodexThreadItem): CodexJournalItem {
+  const output = readFirstString(item, ['aggregatedOutput', 'aggregated_output'])
+  const parsed = commandActionFacts(item)
+  return {
+    body: {
+      kind: 'tool-call',
+      name: parsed?.name ?? 'shell',
+      callId: item.id,
+      // Preserve raw execution details alongside the classified label.
+      input: { command: item.command ?? null, cwd: item.cwd ?? null, ...parsed?.fields },
+      state: codexItemRunState(item),
+      ...toolExecutionMetadata(item),
+      ...(output === null ? {} : { output: journalPayload(output) })
+    },
+    handled: true
+  }
+}
+
+function fileChangeItem(item: CodexThreadItem): CodexJournalItem {
+  const changes = Array.isArray(item.changes)
+    ? item.changes.flatMap((change) => {
+        const record = typeof change === 'object' && change !== null ? readRecord(change) : {}
+        const path = readString(record, 'path')
+        const diff = readString(record, 'diff')
+        return path && diff ? [{ path, diff }] : []
+      })
+    : []
+  if (changes.length === 0) {
+    return {
+      body: {
+        kind: 'tool-call',
+        name: 'apply_patch',
+        callId: item.id,
+        input: { changes: item.changes ?? null },
+        state: codexItemRunState(item)
+      },
+      handled: true
+    }
+  }
+  const patch = changes.map((change) => change.diff).join('\n')
+  return {
+    body: {
+      kind: 'diff',
+      path: changes.length === 1 ? changes[0]!.path : `${changes.length} files`,
+      patch: journalPayload(patch)
+    },
+    handled: true
+  }
+}
+
+/** Preserve names for exact dispatch; qualify by server to avoid tool collisions. */
+function mcpToolCallName(item: CodexThreadItem): string {
+  const tool = readString(item, 'tool')
+  const server = readString(item, 'server')
+  return tool === null ? 'mcp' : server === null ? tool : `${server}/${tool}`
+}
+
+/** Labels read top-level keys; wrap non-object arguments and omit empty objects. */
+function mcpToolArguments(value: unknown): unknown {
+  if (typeof value !== 'object' || value === null) {
+    return value === null || value === undefined ? null : { arguments: value }
+  }
+  return Array.isArray(value) ? { arguments: value } : Object.keys(value).length > 0 ? value : null
+}
+
+function mcpToolCallItem(item: CodexThreadItem): CodexJournalItem {
+  const server = readString(item, 'server')
+  const tool = readString(item, 'tool')
+  const failure = readString(readRecord(item.error), 'message')
+  const text = failure ?? readTextContent(readRecord(item.result), 'content')
+  return {
+    body: {
+      kind: 'tool-call',
+      name: mcpToolCallName(item),
+      callId: item.id,
+      ...(server && tool ? { mcpIdentity: { server, tool } } : {}),
+      input: mcpToolArguments(item.arguments),
+      state: failure === null ? codexItemRunState(item) : 'failed',
+      ...(text === null ? {} : { output: journalPayload(text) })
+    },
+    handled: true
+  }
+}
+
+/** Hoist action fields for labels; description is the lowest-priority fallback. */
+function webSearchInput(item: CodexThreadItem): Record<string, unknown> | null {
+  const action = readRecord(item.action)
+  const fields: [string, unknown][] = [
+    ['url', readString(action, 'url')],
+    ['pattern', readString(action, 'pattern')],
+    ['description', readString(action, 'type')],
+    ['action', item.action ?? null]
+  ]
+  const query = readString(item, 'query') ?? readString(action, 'query')
+  const present = fields.filter(([, value]) => value !== null)
+  // A blank query prevents the run header from falling back to raw JSON.
+  return query === null && present.length === 0
+    ? null
+    : { query: query ?? '', ...Object.fromEntries(present) }
+}
+
+/** Web search has no status; action presence signals completion even when query is empty. */
+function webSearchItem(item: CodexThreadItem): CodexJournalItem {
+  const results = toolWebSearchResults(item.results)
+  const hits = Array.isArray(item.results) && item.results.length > 0 ? item.results : null
+  return {
+    body: {
+      kind: 'tool-call',
+      name: 'web_search',
+      callId: item.id,
+      ...(results.length > 0 ? { webSearchResults: results } : {}),
+      input: webSearchInput(item),
+      state: item.action === null || item.action === undefined ? 'running' : 'completed',
+      ...(hits === null ? {} : { output: journalPayload(JSON.stringify(hits)) })
+    },
+    handled: true
+  }
+}
+
+/** Unknown items get bounded status rows; started supplies the earlier revision of a finished item. */
+export function codexJournalItem(
+  item: CodexThreadItem,
+  helperName?: CodexHelperName,
+  started?: CodexThreadItem
+): CodexJournalItem {
+  if (item.type === 'userMessage' || item.type === 'agentMessage') {
+    const question = codexAsyncQuestionBlock(item)
+    const blocks = question ? [...codexMessageBlocks(item), question] : codexMessageBlocks(item)
+    return {
+      body:
+        blocks.length === 0
+          ? null
+          : { kind: 'message', role: item.type === 'userMessage' ? 'user' : 'assistant', blocks },
+      handled: true
+    }
+  }
+  if (item.type === 'commandExecution') {
+    return commandItem(item)
+  }
+  if (item.type === 'fileChange') {
+    return fileChangeItem(item)
+  }
+  if (item.type === 'mcpToolCall') {
+    return mcpToolCallItem(item)
+  }
+  if (item.type === 'webSearch') {
+    return webSearchItem(item)
+  }
+  if (item.type === 'imageView' || item.type === 'imageGeneration') {
+    return { body: codexImageItemBody(item), handled: true }
+  }
+  const collab = codexCollabAgentToolCallBody(item, helperName, started)
+  if (collab) {
+    return { body: collab, handled: true }
+  }
+  if (item.type === 'plan') {
+    const text = readTextContent(item, 'text')
+    return {
+      body:
+        text === null
+          ? null
+          : {
+              kind: 'status',
+              text,
+              presentation: 'plan-document'
+            },
+      handled: true
+    }
+  }
+  if (item.type === 'reasoning') {
+    const text =
+      readTextContent(item, 'text') ??
+      readTextContent(item, 'summary') ??
+      readTextContent(item, 'content')
+    return { body: journalReasoningBody(text), handled: true }
+  }
+  const unhandled = unhandledProviderFrameJournalItem('codex', `item:${item.type}`, item)
+  return unhandled ? { body: unhandled.body, handled: false } : { body: null, handled: true }
+}
+
+export function codexItemBody(item: CodexThreadItem): AgentJournalItemBody | null {
+  return codexJournalItem(item).body
+}
+
+export function codexStreamingMessageBody(text: string): AgentJournalItemBody {
+  return {
+    kind: 'message',
+    role: 'assistant',
+    blocks: [{ type: 'text', text }]
+  }
+}
+
+export function codexStreamingJournalItem(item: CodexThreadItem, text: string): CodexJournalItem {
+  if (item.type === 'agentMessage') {
+    return { body: codexStreamingMessageBody(text), handled: true }
+  }
+  if (item.type === 'reasoning') {
+    return { body: journalReasoningBody(text), handled: true }
+  }
+  if (item.type === 'commandExecution') {
+    return commandItem({ ...item, aggregatedOutput: text })
+  }
+  if (item.type === 'fileChange') {
+    const path = Array.isArray(item.changes)
+      ? readString(readRecord(item.changes[0]), 'path')
+      : null
+    return {
+      body: { kind: 'diff', path: path ?? 'pending patch', patch: journalPayload(text) },
+      handled: true
+    }
+  }
+  if (item.type === 'plan') {
+    return {
+      body: {
+        kind: 'status',
+        text,
+        presentation: 'plan-document'
+      },
+      handled: true
+    }
+  }
+  return {
+    body: { kind: 'status', text },
+    handled: true
+  }
+}

@@ -22,22 +22,14 @@ vi.mock('../git/runner', () => ({
 
 vi.mock('../git/repo', () => ({
   isGitRepo: vi.fn(),
-  getGitUsername: vi.fn(),
   getRepoName: vi.fn(),
   getBaseRefDefault: vi.fn(),
   searchBaseRefs: vi.fn()
 }))
 
-vi.mock('./filesystem-auth', () => ({
-  invalidateAuthorizedRootsCache: vi.fn()
-}))
-
-vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: vi.fn()
-}))
-
-vi.mock('./ssh', () => ({
-  getActiveMultiplexer: vi.fn()
+vi.mock('./registered-worktree-roots-cache', () => ({
+  invalidateAuthorizedRootsCache: vi.fn(),
+  invalidateAuthorizedRootsCacheForRepo: vi.fn()
 }))
 
 import { registerRepoHandlers } from './repos'
@@ -51,7 +43,6 @@ describe('repos folder pickers', () => {
   const mockStore = {
     getRepos: vi.fn().mockReturnValue([]),
     addRepo: vi.fn(),
-    removeProject: vi.fn(),
     getRepo: vi.fn(),
     updateRepo: vi.fn()
   }
@@ -81,7 +72,7 @@ describe('repos folder pickers', () => {
     removeHandlerMock.mockReset()
     showOpenDialogMock.mockReset()
 
-    registerRepoHandlers(mockWindow as never, mockStore as never)
+    registerRepoHandlers(mockWindow as never, mockStore as never, {} as never)
   })
 
   it('registers the multi-folder picker with handler cleanup', () => {

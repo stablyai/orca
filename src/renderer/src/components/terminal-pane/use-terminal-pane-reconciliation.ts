@@ -1,0 +1,197 @@
+import { useEffect, useLayoutEffect, useRef } from 'react'
+import {
+  applyExpandedLayoutTo,
+  cancelPendingPaneSizeRefreshFrames,
+  restoreExpandedLayoutFrom
+} from './expand-collapse'
+import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
+import { resolvePaneKeyForManager } from '@/lib/pane-manager/pane-key-resolution'
+import {
+  isHostAuthoritativeLayout,
+  planTerminalLiveLayoutInsertions,
+  planTerminalLiveLayoutRemovals,
+  selectRetiredPaneIds,
+  trackRetiredLeafIds
+} from './terminal-live-layout-reconciliation'
+import { collectLeafIds } from '../../../../shared/terminal-pane-layout-tree'
+import { useTerminalPaneProcessExitActions } from './use-terminal-pane-process-exit-actions'
+import type { TerminalPaneCloseController } from './use-terminal-pane-close-actions'
+
+export function useTerminalPaneReconciliation(controller: TerminalPaneCloseController) {
+  const {
+    activityIsolationSnapshotRef,
+    closeTerminalLinkActions,
+    containerRef,
+    executeClosePane,
+    hostRetiredLeafIdsRef,
+    isActive,
+    isRendererVisible,
+    isolatedPaneKey,
+    managerRef,
+    paneCount,
+    paneLayoutRevision,
+    paneTransportsRef,
+    pendingPaneSizeRefreshFrameIdsRef,
+    persistLayoutSnapshot,
+    ptyRecoveryStatesByPaneId,
+    restoredLayout,
+    tabId
+  } = controller
+  // Retain the last host layout to prove leaf retirement, which may wait for PTY exit.
+  const hostLayoutLeafIdsRef = useRef<ReadonlySet<string>>(new Set())
+
+  useEffect(() => {
+    closeTerminalLinkActions()
+  }, [closeTerminalLinkActions, isActive, isRendererVisible, paneLayoutRevision])
+
+  useEffect(() => {
+    const manager = managerRef.current
+    if (!manager || !restoredLayout.root) {
+      return
+    }
+    // Why the retired check: dropping a retired leaf can drop the layout's only remote PTY id.
+    if (
+      hostRetiredLeafIdsRef.current.size === 0 &&
+      !isHostAuthoritativeLayout({
+        isWebClient: !!(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__,
+        ptyIdsByLeafId: restoredLayout.ptyIdsByLeafId
+      })
+    ) {
+      return
+    }
+    const layoutLeafIds = new Set(collectLeafIds(restoredLayout.root))
+    const mountedLeafIds = manager.getPanes().map((pane) => pane.leafId)
+    const retiredLeafIds = trackRetiredLeafIds({
+      retiredLeafIds: hostRetiredLeafIdsRef.current,
+      previousLayoutLeafIds: hostLayoutLeafIdsRef.current,
+      layoutLeafIds,
+      mountedLeafIds
+    })
+    hostLayoutLeafIdsRef.current = layoutLeafIds
+    hostRetiredLeafIdsRef.current = retiredLeafIds
+    const insertions = planTerminalLiveLayoutInsertions(restoredLayout.root, mountedLeafIds)
+    const removals = planTerminalLiveLayoutRemovals(
+      restoredLayout.root,
+      mountedLeafIds,
+      retiredLeafIds
+    )
+    if (insertions.length === 0 && removals.length === 0) {
+      return
+    }
+    let appliedInsertion = false
+    for (const insertion of insertions) {
+      const ptyId = restoredLayout.ptyIdsByLeafId?.[insertion.newLeafId]
+      const sourcePaneId = manager.getNumericIdForLeaf(insertion.sourceLeafId)
+      if (!ptyId || sourcePaneId === null || manager.getNumericIdForLeaf(insertion.newLeafId)) {
+        continue
+      }
+      const splitRatio =
+        insertion.ratio === undefined
+          ? undefined
+          : insertion.placement === 'before'
+            ? 1 - insertion.ratio
+            : insertion.ratio
+      const createdPane = manager.splitPaneAroundLeafIds(
+        insertion.sourceLeafIds,
+        sourcePaneId,
+        insertion.direction,
+        {
+          ...(splitRatio !== undefined && { ratio: splitRatio }),
+          leafId: insertion.newLeafId,
+          ptyId,
+          placement: insertion.placement
+        }
+      )
+      if (createdPane) {
+        appliedInsertion = true
+      }
+    }
+    // Close host-retired panes only after their PTYs clear; recovery-state changes retry pending exits, preventing blank ghosts without killing live terminals.
+    const retiredPaneIds = selectRetiredPaneIds(removals, {
+      paneCount: manager.getPanes().length,
+      paneIdForLeaf: (leafId) => manager.getNumericIdForLeaf(leafId),
+      ptyIdForPane: (paneId) => paneTransportsRef.current.get(paneId)?.getPtyId()
+    })
+    for (const paneId of retiredPaneIds) {
+      executeClosePane(paneId)
+    }
+    if (appliedInsertion) {
+      persistLayoutSnapshot()
+    }
+    const activePaneId = restoredLayout.activeLeafId
+      ? manager.getNumericIdForLeaf(restoredLayout.activeLeafId)
+      : null
+    const fallbackActivePaneId = manager.getActivePane()?.id ?? manager.getPanes()[0]?.id ?? null
+    const nextActivePaneId = activePaneId ?? fallbackActivePaneId
+    if (nextActivePaneId !== null) {
+      manager.setActivePane(nextActivePaneId, { focus: isActive })
+    }
+    // Why ptyRecoveryStatesByPaneId: a host-retired pane whose PTY has not yet
+    // finished ending is kept until this re-run, when its transport reports a new
+    // recovery state and its PTY has cleared.
+  }, [
+    executeClosePane,
+    isActive,
+    paneCount,
+    persistLayoutSnapshot,
+    ptyRecoveryStatesByPaneId,
+    restoredLayout,
+    hostRetiredLeafIdsRef,
+    managerRef,
+    paneTransportsRef
+  ])
+
+  useLayoutEffect(() => {
+    const snapshots = activityIsolationSnapshotRef.current
+    const scheduleRefit = (): number =>
+      requestAnimationFrame(() => {
+        const manager = managerRef.current
+        if (!manager) {
+          return
+        }
+        for (const pane of manager.getPanes()) {
+          safeFit(pane)
+        }
+      })
+    if (isolatedPaneKey === null) {
+      restoreExpandedLayoutFrom(snapshots)
+      const frame = scheduleRefit()
+      return () => cancelAnimationFrame(frame)
+    }
+    const manager = managerRef.current
+    const resolution = resolvePaneKeyForManager(tabId, isolatedPaneKey, manager)
+    const resolvedPaneId = resolution.status === 'resolved' ? resolution.numericPaneId : null
+    const applied =
+      resolvedPaneId !== null &&
+      ((manager?.getPanes().length ?? 0) <= 1 ||
+        applyExpandedLayoutTo(resolvedPaneId, {
+          managerRef,
+          containerRef,
+          expandedStyleSnapshotRef: activityIsolationSnapshotRef
+        }))
+    if (!applied) {
+      restoreExpandedLayoutFrom(snapshots)
+      const root = containerRef.current?.firstElementChild
+      if (root instanceof HTMLElement) {
+        snapshots.set(root, { display: root.style.display, flex: root.style.flex })
+        root.style.display = 'none'
+      }
+      const frame = scheduleRefit()
+      return () => cancelAnimationFrame(frame)
+    }
+    const frame = scheduleRefit()
+    return () => cancelAnimationFrame(frame)
+  }, [isolatedPaneKey, paneCount, tabId, activityIsolationSnapshotRef, containerRef, managerRef])
+
+  useEffect(() => {
+    const snapshots = activityIsolationSnapshotRef.current
+    return () => {
+      restoreExpandedLayoutFrom(snapshots)
+      cancelPendingPaneSizeRefreshFrames({ pendingPaneSizeRefreshFrameIdsRef })
+    }
+  }, [activityIsolationSnapshotRef, pendingPaneSizeRefreshFrameIdsRef])
+
+  const processExitActions = useTerminalPaneProcessExitActions(controller)
+
+  return processExitActions
+}

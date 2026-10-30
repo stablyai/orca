@@ -1,7 +1,10 @@
-// Why: Orca's remote runtime transports share one NaCl box format across
-// desktop, CLI, and mobile pairing. Keeping the Node-compatible primitives in
-// shared code prevents the CLI from importing main-process modules.
+// Share NaCl box format across desktop/CLI/mobile pairing with Node-compatible primitives, avoiding main imports from CLI.
 import nacl from 'tweetnacl'
+
+const MAX_E2EE_TEXT_PLAINTEXT_BYTES = 4 * 1024 * 1024
+const LEGACY_E2EE_FRAME_OVERHEAD_BYTES = nacl.box.nonceLength + nacl.box.overheadLength
+export const MAX_E2EE_ENCRYPTED_BASE64_CHARACTERS =
+  Math.ceil((MAX_E2EE_TEXT_PLAINTEXT_BYTES + LEGACY_E2EE_FRAME_OVERHEAD_BYTES) / 3) * 4
 
 export function generateKeyPair(): nacl.BoxKeyPair {
   return nacl.box.keyPair()
@@ -12,6 +15,9 @@ export function deriveSharedKey(ourSecretKey: Uint8Array, peerPublicKey: Uint8Ar
 }
 
 export function publicKeyFromBase64(b64: string): Uint8Array {
+  if (b64.length > 44) {
+    throw new Error('Invalid public key: encoded value is too large')
+  }
   const key = Uint8Array.from(Buffer.from(b64, 'base64'))
   if (key.length !== 32) {
     throw new Error(`Invalid public key: expected 32 bytes, got ${key.length}`)
@@ -29,6 +35,9 @@ export function encrypt(plaintext: string, sharedKey: Uint8Array): string {
 }
 
 export function decrypt(encrypted: string, sharedKey: Uint8Array): string | null {
+  if (encrypted.length > MAX_E2EE_ENCRYPTED_BASE64_CHARACTERS) {
+    return null
+  }
   const bundle = Uint8Array.from(Buffer.from(encrypted, 'base64'))
   const plaintext = decryptBytes(bundle, sharedKey)
   return plaintext ? new TextDecoder().decode(plaintext) : null
@@ -37,7 +46,7 @@ export function decrypt(encrypted: string, sharedKey: Uint8Array): string | null
 export function encryptBytes(
   plaintext: Uint8Array<ArrayBufferLike>,
   sharedKey: Uint8Array
-): Uint8Array {
+): Uint8Array<ArrayBuffer> {
   const nonce = nacl.randomBytes(nacl.box.nonceLength)
   const ciphertext = nacl.box.after(plaintext, nonce, sharedKey)
 

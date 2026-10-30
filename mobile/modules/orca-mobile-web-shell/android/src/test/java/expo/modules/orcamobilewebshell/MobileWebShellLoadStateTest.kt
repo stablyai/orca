@@ -1,0 +1,145 @@
+package expo.modules.orcamobilewebshell
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+private fun failure(reason: String) = MobileWebShellLoadEmission("failed", reason)
+
+class MobileWebShellLoadStateTest {
+  @Test
+  fun `emits each failure as the payload the TypeScript parser reads`() {
+    val cases = listOf(
+      MobileWebShellFailureReason.GENERATION_UNREADABLE to "generation-unreadable",
+      MobileWebShellFailureReason.ISOLATION_UNAVAILABLE to "isolation-unavailable",
+      MobileWebShellFailureReason.DOCUMENT_LOAD_FAILED to "document-load-failed",
+      MobileWebShellFailureReason.RENDER_PROCESS_GONE to "render-process-gone"
+    )
+    for ((reason, expected) in cases) {
+      val machine = MobileWebShellLoadStateMachine()
+      assertEquals(mapOf("state" to "failed", "reason" to expected), machine.failed(reason)?.toPayload())
+    }
+  }
+
+  @Test
+  fun `hears a document only between its commit and the end of that load`() {
+    val machine = MobileWebShellLoadStateMachine()
+    assertFalse(machine.hasCommittedDocument)
+    machine.started()
+    // The previous document is alive and same-origin until the next one commits.
+    assertFalse(machine.hasCommittedDocument)
+    machine.committed()
+    assertTrue(machine.hasCommittedDocument)
+
+    // A new prop triple: the committed document is the one being replaced.
+    machine.reset()
+    assertFalse(machine.hasCommittedDocument)
+    machine.committed()
+    machine.documentEnded()
+    assertFalse(machine.hasCommittedDocument)
+
+    // A failure ends the document, and nothing after it re-arms: a retry is a remount.
+    machine.committed()
+    machine.failed(MobileWebShellFailureReason.RENDER_PROCESS_GONE)
+    assertFalse(machine.hasCommittedDocument)
+    machine.committed()
+    assertFalse(machine.hasCommittedDocument)
+  }
+
+  @Test
+  fun `reports a load in progress and then a load that finished`() {
+    val machine = MobileWebShellLoadStateMachine()
+    assertEquals(MobileWebShellLoadEmission("loading", null), machine.started())
+    machine.committed()
+    assertEquals(MobileWebShellLoadEmission("ready", null), machine.finished())
+  }
+
+  @Test
+  fun `says nothing twice in a row`() {
+    val machine = MobileWebShellLoadStateMachine()
+    assertNotNull(machine.started())
+    assertNull(machine.started())
+    machine.committed()
+    assertNotNull(machine.finished())
+    assertNull(machine.finished())
+  }
+
+  // replaceState rewrites the URL before finish; readiness must depend on commit state.
+  @Test
+  fun `a load that finished without committing reports nothing`() {
+    val machine = MobileWebShellLoadStateMachine()
+    machine.started()
+    assertNull(machine.finished())
+    machine.committed()
+    assertEquals(MobileWebShellLoadEmission("ready", null), machine.finished())
+  }
+
+  @Test
+  fun `a load whose document was replaced mid-flight reports nothing`() {
+    val machine = MobileWebShellLoadStateMachine()
+    machine.committed()
+    machine.documentEnded()
+    assertNull(machine.finished())
+  }
+
+  // Chromium finishes its error document after failure; ready would expose it again.
+  @Test
+  fun `a load that finished after a failure reports nothing`() {
+    val machine = MobileWebShellLoadStateMachine()
+    machine.started()
+    assertEquals(
+      failure("document-load-failed"),
+      machine.failed(MobileWebShellFailureReason.DOCUMENT_LOAD_FAILED)
+    )
+    assertNull(machine.finished())
+    assertNull(machine.started())
+  }
+
+  @Test
+  fun `a second failure reports nothing, whatever its reason`() {
+    val machine = MobileWebShellLoadStateMachine()
+    assertEquals(
+      failure("generation-unreadable"),
+      machine.failed(MobileWebShellFailureReason.GENERATION_UNREADABLE)
+    )
+    assertNull(machine.failed(MobileWebShellFailureReason.GENERATION_UNREADABLE))
+    assertNull(machine.failed(MobileWebShellFailureReason.ISOLATION_UNAVAILABLE))
+    assertNull(machine.failed(MobileWebShellFailureReason.RENDER_PROCESS_GONE))
+  }
+
+  // A prop update can replace a failed load before its deferred report.
+  @Test
+  fun `a failure decided before a new prop pair reports nothing`() {
+    val machine = MobileWebShellLoadStateMachine()
+    machine.started()
+    val epoch = machine.epoch
+    machine.reset()
+    assertNull(machine.failedDuring(epoch, MobileWebShellFailureReason.DOCUMENT_LOAD_FAILED))
+    machine.committed()
+    assertEquals(MobileWebShellLoadEmission("ready", null), machine.finished())
+  }
+
+  @Test
+  fun `a failure decided during the current load still reports`() {
+    val machine = MobileWebShellLoadStateMachine()
+    machine.started()
+    assertEquals(
+      failure("document-load-failed"),
+      machine.failedDuring(machine.epoch, MobileWebShellFailureReason.DOCUMENT_LOAD_FAILED)
+    )
+  }
+
+  @Test
+  fun `a new prop pair may report again, including the same failure`() {
+    val machine = MobileWebShellLoadStateMachine()
+    machine.failed(MobileWebShellFailureReason.RENDER_PROCESS_GONE)
+    machine.reset()
+    assertEquals(
+      failure("render-process-gone"),
+      machine.failed(MobileWebShellFailureReason.RENDER_PROCESS_GONE)
+    )
+  }
+}

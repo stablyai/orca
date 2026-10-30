@@ -1,5 +1,9 @@
 import { formatShortcutLabel } from '@/hooks/useShortcutLabel'
-import type { ContextualTour, ContextualTourId } from '../../../../shared/contextual-tours'
+import type {
+  ContextualTour,
+  ContextualTourId,
+  ContextualTourStepAction
+} from '../../../../shared/contextual-tours'
 import type { ContextualTourOutcome } from '../../../../shared/feature-education-telemetry'
 import { useAppStore } from '@/store'
 import {
@@ -11,6 +15,7 @@ import {
   getVisibleContextualTourStepIndexes
 } from './contextual-tour-gate'
 import type { ActiveTourRenderState } from './ContextualTourOverlaySurface'
+import { getLocalizedContextualTourStepCopy } from './contextual-tour-step-copy'
 import { translate } from '@/i18n/i18n'
 
 export type ContextualTourMeasurementAction =
@@ -54,8 +59,7 @@ export function getContextualTourMeasurementAction(args: {
   if (args.visibleStepIndexes.some((index) => index > args.activeStepIndex)) {
     return { kind: 'advance' }
   }
-  // Why: browser step 3's Import Cookies row appears only after that step is
-  // active and the toolbar menu opens; keep remeasuring instead of cancelling.
+  // Browser import appears only after activating its step and opening the menu; keep measuring instead of cancelling.
   if (args.activeStepIndex < args.tour.steps.length - 1 || args.tour.id === 'browser') {
     return { kind: 'wait' }
   }
@@ -115,6 +119,7 @@ export function measureContextualTourOverlayRenderState(args: {
     return { kind: 'cancel' }
   }
 
+  const localizedCopy = getLocalizedContextualTourStepCopy(activeStep.id)
   const sidebarAlreadyVisible =
     activeStep.primaryAction?.kind === 'show-worktrees' && args.sidebarOpen
   const primaryAction = sidebarAlreadyVisible
@@ -125,8 +130,10 @@ export function measureContextualTourOverlayRenderState(args: {
           'Next'
         )
       } as const)
-    : activeStep.primaryAction
-  const secondaryAction = sidebarAlreadyVisible ? undefined : activeStep.secondaryAction
+    : withLocalizedLabel(activeStep.primaryAction, localizedCopy?.primaryActionLabel)
+  const secondaryAction = sidebarAlreadyVisible
+    ? undefined
+    : withLocalizedLabel(activeStep.secondaryAction, localizedCopy?.secondaryActionLabel)
 
   return {
     kind: 'render',
@@ -135,8 +142,11 @@ export function measureContextualTourOverlayRenderState(args: {
       rect: target.rect,
       targetElement: target.element,
       progress,
-      title: activeStep.title,
-      body: formatContextualTourStepCopy(getContextualTourStepCopy(activeStep), args.keybindings),
+      title: localizedCopy?.title ?? activeStep.title,
+      body: formatContextualTourStepCopy(
+        localizedCopy?.body ?? getContextualTourStepCopy(activeStep),
+        args.keybindings
+      ),
       control: activeStep.control,
       primaryAction,
       secondaryAction,
@@ -154,12 +164,77 @@ export function measureContextualTourOverlayRenderState(args: {
   }
 }
 
+export type MeasuredContextualTourTarget = { element: Element; rect: DOMRect }
+
+// App-wide capture scroll needs only one rect probe before paying for a full step scan.
+export function hasContextualTourTargetMoved(
+  measured: MeasuredContextualTourTarget | null
+): boolean {
+  if (!measured) {
+    return true
+  }
+  const rect = measured.element.getBoundingClientRect()
+  return (
+    rect.left !== measured.rect.left ||
+    rect.top !== measured.rect.top ||
+    rect.width !== measured.rect.width ||
+    rect.height !== measured.rect.height
+  )
+}
+
+// Skip unchanged measurements to avoid React commits and floating-position resubscription.
+export function areContextualTourRenderStatesEqual(
+  a: ActiveTourRenderState | null,
+  b: ActiveTourRenderState | null
+): boolean {
+  if (a === null || b === null) {
+    return a === b
+  }
+  return (
+    a.targetElement === b.targetElement &&
+    a.panelHost === b.panelHost &&
+    a.rect.left === b.rect.left &&
+    a.rect.top === b.rect.top &&
+    a.rect.width === b.rect.width &&
+    a.rect.height === b.rect.height &&
+    a.progress.current === b.progress.current &&
+    a.progress.total === b.progress.total &&
+    a.title === b.title &&
+    a.body === b.body &&
+    a.control === b.control &&
+    a.preferredPlacement === b.preferredPlacement &&
+    a.targetPulse === b.targetPulse &&
+    a.hidePrimaryAction === b.hidePrimaryAction &&
+    a.isLastStep === b.isLastStep &&
+    a.isFirstStep === b.isFirstStep &&
+    areStepActionsEqual(a.primaryAction, b.primaryAction) &&
+    areStepActionsEqual(a.secondaryAction, b.secondaryAction)
+  )
+}
+
+function areStepActionsEqual(
+  a: ActiveTourRenderState['primaryAction'],
+  b: ActiveTourRenderState['primaryAction']
+): boolean {
+  if (a === undefined || b === undefined) {
+    return a === b
+  }
+  return a.kind === b.kind && a.label === b.label
+}
+
 export function getContextualTourCleanupOutcome(
   activeTourId: ContextualTourId
 ): ContextualTourOutcome {
   return useAppStore.getState().lastCompletedContextualTourId === activeTourId
     ? 'completed'
     : 'cancelled'
+}
+
+function withLocalizedLabel(
+  action: ContextualTourStepAction | undefined,
+  label: string | undefined
+): ContextualTourStepAction | undefined {
+  return action && label ? { ...action, label } : action
 }
 
 function formatContextualTourStepCopy(

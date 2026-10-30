@@ -1,6 +1,8 @@
+// Test window-owned paired-host moves; local main-owned frame placement is covered in tab-moves-drawn-from-frames.test.ts.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '../../store'
-import type { Tab } from '../../../../shared/types'
+import type { Tab } from '../../../../shared/tab-types'
+import { makeRuntimeOwnedWorktree } from '../../store/slices/store-test-helpers'
 import { canMoveTabToNewPaneColumn, moveTabToNewPaneColumn } from './tab-move-to-pane-column'
 
 const WT = 'wt-1'
@@ -18,6 +20,7 @@ describe('tab-move-to-pane-column', () => {
     mocks.mirrorWebRuntimeTabMove.mockReset()
     useAppStore.setState({
       activeWorktreeId: WT,
+      worktreesByRepo: { repo1: [makeRuntimeOwnedWorktree({ id: WT, repoId: 'repo1' })] },
       groupsByWorktree: {
         [WT]: [
           {

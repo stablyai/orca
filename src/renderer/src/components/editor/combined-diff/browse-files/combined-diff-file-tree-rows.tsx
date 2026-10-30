@@ -1,0 +1,62 @@
+import React from 'react'
+import { VirtualizedList } from '@/components/virtualized-list'
+import type {
+  CombinedDiffFileTreeEntry,
+  CombinedDiffFileTreeMode
+} from '../resolve-changes/combined-diff-section-identity'
+import {
+  CombinedDiffFileTreeRow,
+  COMBINED_DIFF_TREE_ROW_HEIGHT_PX
+} from './combined-diff-file-tree-row'
+import type { CombinedDiffTreeNode } from './combined-diff-file-tree-model'
+
+/** Window large reviews; keep small trees in natural flow to preserve their markup. */
+export function CombinedDiffFileTreeRows({
+  rows,
+  mode,
+  worktreePath,
+  sourceWorkspaceId,
+  activeSectionKey,
+  sectionIndexByKey,
+  collapsedDirectoryKeys,
+  visibleFileCounts,
+  scrollElement,
+  onToggleDirectory,
+  onNavigate
+}: {
+  rows: readonly CombinedDiffTreeNode[]
+  mode: CombinedDiffFileTreeMode
+  worktreePath: string
+  sourceWorkspaceId?: string
+  activeSectionKey: string | null
+  sectionIndexByKey: ReadonlyMap<string, number>
+  collapsedDirectoryKeys: ReadonlySet<string>
+  visibleFileCounts: ReadonlyMap<string, number> | undefined
+  scrollElement: HTMLDivElement | null
+  onToggleDirectory: (key: string) => void
+  onNavigate: (entry: CombinedDiffFileTreeEntry) => void
+}): React.JSX.Element {
+  return (
+    <VirtualizedList
+      rows={rows}
+      scrollElement={scrollElement}
+      estimateRowHeightPx={COMBINED_DIFF_TREE_ROW_HEIGHT_PX}
+      getRowKey={(node) => node.key}
+      renderRow={(node) => (
+        <CombinedDiffFileTreeRow
+          key={node.key}
+          node={node}
+          mode={mode}
+          worktreePath={worktreePath}
+          sourceWorkspaceId={sourceWorkspaceId}
+          activeSectionKey={activeSectionKey}
+          sectionIndexByKey={sectionIndexByKey}
+          isCollapsed={collapsedDirectoryKeys.has(node.key)}
+          visibleFileCount={visibleFileCounts?.get(node.key)}
+          onToggleDirectory={onToggleDirectory}
+          onNavigate={onNavigate}
+        />
+      )}
+    />
+  )
+}

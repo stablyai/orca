@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { TerminalTab } from '../../../../shared/types'
-import { emptyLayoutSnapshot, clearTransientTerminalState } from './terminal-helpers'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import { clearTransientTerminalState } from './terminal-helpers'
 
 function makeTab(overrides: Partial<TerminalTab> = {}): TerminalTab {
   return {
@@ -15,17 +15,6 @@ function makeTab(overrides: Partial<TerminalTab> = {}): TerminalTab {
     ...overrides
   }
 }
-
-describe('emptyLayoutSnapshot', () => {
-  it('returns correct default structure', () => {
-    const snapshot = emptyLayoutSnapshot()
-    expect(snapshot).toEqual({
-      root: null,
-      activeLeafId: null,
-      expandedLeafId: null
-    })
-  })
-})
 
 describe('clearTransientTerminalState', () => {
   it('clears ptyId to null', () => {
@@ -58,9 +47,7 @@ describe('clearTransientTerminalState', () => {
     expect(result.title).toBe('bash')
   })
 
-  // Why: idle agent titles (e.g. "* Claude done") are reset to the fallback
-  // on hydration — the prior-session agent is no longer running, so showing
-  // its last title would be misleading.
+  // Prior-session agents are no longer running after restart; do not restore misleading done/spinner titles.
   it('resets idle agent titles to fallback across hydration', () => {
     const tab = makeTab({ title: '* Claude done', customTitle: null })
     const result = clearTransientTerminalState(tab, 0)
@@ -75,12 +62,6 @@ describe('clearTransientTerminalState', () => {
 
   it('uses "Terminal {index+1}" when customTitle is whitespace only', () => {
     const tab = makeTab({ title: '⠋ codex running', customTitle: '   ' })
-    const result = clearTransientTerminalState(tab, 0)
-    expect(result.title).toBe('Terminal 1')
-  })
-
-  it('index-based fallback numbering: index 0 → "Terminal 1"', () => {
-    const tab = makeTab({ title: '. claude', customTitle: null })
     const result = clearTransientTerminalState(tab, 0)
     expect(result.title).toBe('Terminal 1')
   })

@@ -1,0 +1,397 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { AlertCircle, Loader2 } from 'lucide-react'
+import type {
+  DocPreviewFileFailure,
+  DocPreviewFileFailureReason
+} from '../../../../../shared/doc-preview-scheme'
+import type { HtmlDocPreviewProps } from './html-doc-preview-props'
+import {
+  advanceAcrossBrowserPageConversion,
+  returnAcrossBrowserPageConversion
+} from '@/lib/browser-page-conversion-history'
+import { BrowserGuestAnnotateOverlays } from '@/components/browser-pane/annotate/browser-guest-annotate-overlays'
+import { attachDocPreviewWebview } from './doc-preview-webview-attach'
+import {
+  buildDocPreviewGrantRequest,
+  ensureDocPreviewGrant,
+  releaseDocPreviewGrant,
+  type DocPreviewGrantHandle
+} from '@/lib/doc-preview-grants'
+import { selectWorktreeHostDisplayLabel } from '@/lib/execution-host-display-label'
+import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
+import { openDocPreviewExternally, openDocPreviewSource } from './doc-preview-document-actions'
+import {
+  DocPreviewDirectoryAccessBanner,
+  useDocPreviewDirectoryAccess
+} from './doc-preview-directory-access'
+import { buildDocPreviewDocumentIdentity } from './doc-preview-document-identity'
+import { docPreviewFailureDetail, docPreviewNotices } from './doc-preview-failure-messages'
+import { DocPreviewToolbar } from './doc-preview-toolbar'
+import { buildDocPreviewShareControl } from './doc-preview-artifact-share'
+import { useDocPreviewWebviewHistory } from './doc-preview-webview-history'
+import { useDocPreviewGuestFocus } from './use-doc-preview-guest-focus'
+import { useDocPreviewGuestTools } from './use-doc-preview-guest-tools'
+import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
+import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
+import { getOpenFileRevealOwner } from '@/lib/reveal-in-file-manager'
+import { subscribeDocPreviewExternalLinkConfirmation } from './doc-preview-external-link-confirmation'
+
+type PreviewState = 'loading' | 'ready' | 'unavailable'
+
+const MAX_ASSET_FAILURES = 50
+
+export function HtmlDocPreview({
+  previewId,
+  browserWorkspaceId,
+  filePath,
+  relativePath,
+  worktreeId,
+  holdsGuestFocus = false,
+  isActive = true,
+  runtimeEnvironmentId = null,
+  externalSshTargetId = null,
+  convertedFrom = null,
+  convertedTo = null
+}: HtmlDocPreviewProps): React.JSX.Element {
+  const confirm = useConfirmationDialog()
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const webviewRef = useRef<Electron.WebviewTag | null>(null)
+  const reloadRef = useRef<(() => void) | null>(null)
+  const [state, setState] = useState<PreviewState>('loading')
+  const [failureReason, setFailureReason] = useState<DocPreviewFileFailureReason | null>(null)
+  const [assetFailures, setAssetFailures] = useState<DocPreviewFileFailure[]>([])
+  const [downloadBlocked, setDownloadBlocked] = useState(false)
+  const [remintCount, setRemintCount] = useState(0)
+  const [grant, setGrant] = useState<DocPreviewGrantHandle | null>(null)
+  const grantId = grant?.grantId ?? null
+  const {
+    requests: accessRequests,
+    busy: accessRequestBusy,
+    offer: offerDirectoryAccess,
+    reset: resetDirectoryAccess,
+    dismiss: dismissDirectoryAccess,
+    allow: allowDirectoryAccess
+  } = useDocPreviewDirectoryAccess({ grantId, reloadRef })
+
+  const history = useDocPreviewWebviewHistory(webviewRef)
+  const { sync: syncHistory, reset: resetHistory } = history
+  // Guest replacement loses history; exhausted history crosses the document/browser conversion in both directions.
+  const historyWithConversionCrossings = useMemo(
+    () =>
+      convertedFrom || convertedTo
+        ? {
+            ...history,
+            canGoBack: history.canGoBack || Boolean(convertedFrom),
+            canGoForward: history.canGoForward || Boolean(convertedTo),
+            goBack: (): void => {
+              if (history.canGoBack) {
+                history.goBack()
+                return
+              }
+              if (convertedFrom) {
+                returnAcrossBrowserPageConversion(previewId, convertedFrom)
+              }
+            },
+            goForward: (): void => {
+              if (history.canGoForward) {
+                history.goForward()
+                return
+              }
+              if (convertedTo) {
+                advanceAcrossBrowserPageConversion(previewId, convertedTo)
+              }
+            }
+          }
+        : history,
+    [convertedFrom, convertedTo, history, previewId]
+  )
+
+  const worktreeRoot = useAppStore((store) => store.getKnownWorktreeById(worktreeId)?.path ?? null)
+  const hostLabel = useAppStore((store) => selectWorktreeHostDisplayLabel(store, worktreeId))
+  const identity = useMemo(
+    () => buildDocPreviewDocumentIdentity({ filePath, worktreeRoot, hostLabel }),
+    [filePath, hostLabel, worktreeRoot]
+  )
+  const isUnavailable = state === 'unavailable' || failureReason !== null
+  const {
+    grab,
+    markup,
+    annotationSend,
+    grabAnnotations,
+    browserOverlayViewport,
+    handleAnnotationViewportMessage,
+    resetBrowserOverlayViewport,
+    elementTools
+  } = useDocPreviewGuestTools({
+    previewId,
+    worktreeId,
+    grantId,
+    webviewRef,
+    containerRef,
+    toolsReady: state === 'ready' && !isUnavailable
+  })
+  const previewDocument = useMemo(
+    () => ({ filePath, relativePath, worktreeId, runtimeEnvironmentId, externalSshTargetId }),
+    [externalSshTargetId, filePath, relativePath, runtimeEnvironmentId, worktreeId]
+  )
+
+  useEffect(() => {
+    let disposed = false
+    let detach: (() => void) | undefined
+    let unsubscribeExternalLinks: (() => void) | undefined
+    let loadFailed = false
+    const onLoadStarted = (): void => {
+      resetBrowserOverlayViewport()
+      loadFailed = false
+      setFailureReason(null)
+      setAssetFailures([])
+      setDownloadBlocked(false)
+      setState('loading')
+    }
+    const onLoadStopped = (): void => {
+      // Why sync here too: a navigation's history entry is only committed once loading settles.
+      syncHistory()
+      if (!loadFailed) {
+        setState('ready')
+      }
+    }
+    const onLoadFailed = (event: Electron.DidFailLoadEvent): void => {
+      if (!event.isMainFrame || event.errorCode === -3) {
+        return
+      }
+      loadFailed = true
+      setState('unavailable')
+    }
+
+    setState('loading')
+    setFailureReason(null)
+    setAssetFailures([])
+    resetDirectoryAccess()
+    setDownloadBlocked(false)
+    setGrant(null)
+    resetHistory()
+    const request = buildDocPreviewGrantRequest(useAppStore.getState(), worktreeId, filePath)
+    if (!request) {
+      setState('unavailable')
+      return () => {
+        disposed = true
+      }
+    }
+    // Subscribe before minting: entry failures arrive out-of-band while the guest paints the error body as text.
+    let boundGrantId: string | null = null
+    const unsubscribeFailure = window.api.docPreview?.onLoadFailure?.((payload) => {
+      if (disposed || payload.grantId !== boundGrantId) {
+        return
+      }
+      // A blocked download is a policy response without a file path, not a document-load failure.
+      if (payload.reason === 'download-blocked') {
+        setDownloadBlocked(true)
+        return
+      }
+      if (payload.reason === 'authorization-required') {
+        offerDirectoryAccess(payload)
+        return
+      }
+      if (payload.relativePath === request.entryRelativePath) {
+        setFailureReason(payload.reason)
+        return
+      }
+      setAssetFailures((current) =>
+        current.length >= MAX_ASSET_FAILURES ||
+        current.some((failure) => failure.relativePath === payload.relativePath)
+          ? current
+          : [...current, payload]
+      )
+    })
+    void ensureDocPreviewGrant(previewId, request)
+      .then((handle) => {
+        boundGrantId = handle.grantId
+        if (disposed || !containerRef.current) {
+          return
+        }
+        unsubscribeExternalLinks = subscribeDocPreviewExternalLinkConfirmation(confirm, {
+          grantId: handle.grantId,
+          owner: handle.location.owner,
+          worktreeId,
+          browserWorkspaceId
+        })
+        const attached = attachDocPreviewWebview({
+          previewId,
+          container: containerRef.current,
+          url: handle.url,
+          ariaLabel: translate(
+            'auto.components.editor.HtmlDocPreview.previewAriaLabel',
+            'HTML preview'
+          ),
+          onLoadStarted,
+          onLoadStopped,
+          onLoadFailed,
+          onNavigated: syncHistory,
+          onViewportMessage: handleAnnotationViewportMessage,
+          onTitleUpdated: (event) => {
+            useAppStore.getState().updateBrowserPageState(previewId, { title: event.title })
+            // A rename only — the mount already recorded this document's visit.
+            useAppStore
+              .getState()
+              .recordWorkspaceDocVisit(
+                { kind: 'workspace-doc', worktreeId, filePath },
+                event.title,
+                { bump: false }
+              )
+          }
+        })
+        detach = attached.detach
+        reloadRef.current = attached.reload
+        webviewRef.current = attached.webview
+        // Main binds the grant on first commit; tools need the attached guest pointed at it.
+        setGrant(handle)
+      })
+      .catch(() => {
+        if (!disposed) {
+          setState('unavailable')
+        }
+      })
+
+    return () => {
+      disposed = true
+      reloadRef.current = null
+      webviewRef.current = null
+      unsubscribeFailure?.()
+      unsubscribeExternalLinks?.()
+      detach?.()
+    }
+  }, [
+    browserWorkspaceId,
+    confirm,
+    filePath,
+    offerDirectoryAccess,
+    previewId,
+    remintCount,
+    resetDirectoryAccess,
+    handleAnnotationViewportMessage,
+    resetBrowserOverlayViewport,
+    resetHistory,
+    syncHistory,
+    worktreeId
+  ])
+
+  useEffect(() => {
+    // Eviction removes the guest, not the retained pane; only the selected preview restores it.
+    if (isActive && webviewRef.current && !webviewRef.current.isConnected) {
+      setRemintCount((count) => count + 1)
+    }
+  }, [isActive, previewId])
+
+  // Record one visit per document mount; re-minting on hard reload is not a new visit.
+  useEffect(() => {
+    useAppStore
+      .getState()
+      .recordWorkspaceDocVisit({ kind: 'workspace-doc', worktreeId, filePath }, null)
+  }, [filePath, worktreeId])
+
+  useDocPreviewGuestFocus({
+    webviewRef,
+    holdsGuestFocus,
+    ready: state === 'ready',
+    previewId,
+    remintCount
+  })
+
+  // Reconnect changes the grant’s pinned owner IDs; mint a new grant rather than reloading the same failure.
+  const handleHardReload = useCallback(() => {
+    releaseDocPreviewGrant(previewId)
+    setRemintCount((count) => count + 1)
+  }, [previewId])
+
+  const handleReload = useCallback(() => {
+    if (failureReason !== null || state === 'unavailable') {
+      handleHardReload()
+      return
+    }
+    reloadRef.current?.()
+  }, [failureReason, handleHardReload, state])
+
+  const notices = docPreviewNotices(isUnavailable, downloadBlocked, assetFailures)
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-editor-surface">
+      <DocPreviewToolbar
+        identity={identity}
+        previewId={previewId}
+        worktreeId={worktreeId}
+        history={historyWithConversionCrossings}
+        onReload={handleReload}
+        onHardReload={handleHardReload}
+        onCopyPath={() =>
+          void window.api.ui.writeClipboardText(
+            formatClipboardFilePath(
+              identity.absolutePath,
+              getOpenFileRevealOwner(useAppStore.getState(), previewDocument)
+            )
+          )
+        }
+        onCopyRelativePath={() => void window.api.ui.writeClipboardText(relativePath)}
+        onOpenSource={() => openDocPreviewSource(previewDocument)}
+        onOpenExternally={() => openDocPreviewExternally(previewDocument)}
+        elementTools={elementTools}
+        markupActive={markup.isActive}
+        onToggleMarkup={() => (markup.isActive ? markup.cancel() : void markup.start())}
+        // Nothing has painted yet on a loading or failed preview, so there is nothing to draw on.
+        markupDisabled={isUnavailable || state !== 'ready' || grab.state !== 'idle'}
+        shareControl={buildDocPreviewShareControl(filePath, grant?.location ?? null)}
+      />
+      {notices.map((notice) => (
+        <div
+          key={notice}
+          className="flex shrink-0 items-center gap-1.5 border-b px-2 py-1 text-xs text-muted-foreground"
+          role="status"
+          title={notice}
+        >
+          <AlertCircle className="size-3.5 shrink-0" />
+          <span className="min-w-0 flex-1 truncate">{notice}</span>
+        </div>
+      ))}
+      {accessRequests.length > 0 && !isUnavailable ? (
+        <DocPreviewDirectoryAccessBanner
+          requests={accessRequests}
+          busy={accessRequestBusy}
+          worktreeRoot={worktreeRoot}
+          onDismiss={dismissDirectoryAccess}
+          onAllow={allowDirectoryAccess}
+        />
+      ) : null}
+      <div className="relative flex min-h-0 flex-1 overflow-hidden" ref={containerRef}>
+        <BrowserGuestAnnotateOverlays
+          markup={markup}
+          grab={grab}
+          annotationSend={annotationSend}
+          grabAnnotations={grabAnnotations}
+          containerRef={containerRef}
+          webviewRef={webviewRef}
+          browserOverlayViewport={browserOverlayViewport}
+          worktreeId={worktreeId}
+        />
+        {state === 'loading' && failureReason === null ? (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-editor-surface">
+            <Loader2 className="size-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : null}
+        {isUnavailable ? (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-editor-surface px-6 text-center">
+            <AlertCircle className="size-6 text-muted-foreground" />
+            <p className="text-sm font-medium">
+              {translate(
+                'auto.components.editor.HtmlDocPreview.previewUnavailableTitle',
+                'Preview unavailable'
+              )}
+            </p>
+            <p className="max-w-sm text-xs text-muted-foreground">
+              {docPreviewFailureDetail(failureReason)}
+            </p>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  )
+}

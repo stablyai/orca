@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { getPRCommentGroupId, groupPRComments, type PRCommentGroup } from '@/lib/pr-comment-groups'
+import {
+  getPRCommentGroupId,
+  groupPRComments,
+  type PRCommentGroup
+} from '../../../../shared/pr-comment-groups'
 import { isPRCommentGroupQueueableForAI } from '@/lib/pr-comment-action-state'
-import type { PRComment } from '../../../../shared/types'
+import type { PRComment } from '../../../../shared/github/comment-types'
 
 export type PRCommentsListSelection = {
   isSelectingForAI: boolean
@@ -26,26 +30,52 @@ type PRCommentsListSelectionState = {
 }
 
 const EMPTY_SELECTED_GROUP_IDS = new Set<string>()
+// Bound persisted selections because PR/MR contexts can vanish without clearing during long renderer sessions.
+export const MAX_PERSISTED_PR_COMMENTS_LIST_SELECTIONS = 1024
 const persistedSelectionByContextKey = new Map<
   string,
   { isSelectingForAI: boolean; selectedGroupIds: Set<string> }
 >()
 
+function trimPersistedSelectionContexts(): void {
+  while (persistedSelectionByContextKey.size > MAX_PERSISTED_PR_COMMENTS_LIST_SELECTIONS) {
+    const oldestContextKey = persistedSelectionByContextKey.keys().next().value
+    if (oldestContextKey === undefined) {
+      break
+    }
+    persistedSelectionByContextKey.delete(oldestContextKey)
+  }
+}
+
 function persistSelectionState(state: PRCommentsListSelectionState): void {
   if (!state.contextKey) {
     return
   }
-  if (!state.isSelectingForAI && state.selectedGroupIds.size === 0) {
+  if (state.selectedGroupIds.size === 0) {
     persistedSelectionByContextKey.delete(state.contextKey)
     return
   }
+  persistedSelectionByContextKey.delete(state.contextKey)
   persistedSelectionByContextKey.set(state.contextKey, {
     isSelectingForAI: state.isSelectingForAI,
     selectedGroupIds: new Set(state.selectedGroupIds)
   })
+  trimPersistedSelectionContexts()
 }
 
-function createSelectionState(contextKey: string | undefined): PRCommentsListSelectionState {
+function refreshPersistedSelectionContext(contextKey: string | undefined): void {
+  if (!contextKey) {
+    return
+  }
+  const persisted = persistedSelectionByContextKey.get(contextKey)
+  if (!persisted) {
+    return
+  }
+  persistedSelectionByContextKey.delete(contextKey)
+  persistedSelectionByContextKey.set(contextKey, persisted)
+}
+
+function readSelectionState(contextKey: string | undefined): PRCommentsListSelectionState {
   const persisted = contextKey ? persistedSelectionByContextKey.get(contextKey) : undefined
   return {
     contextKey,
@@ -60,41 +90,67 @@ export function clearPRCommentsListSelection(contextKey: string | undefined): vo
   }
 }
 
+export function clearPRCommentsListSelectionsForTests(): void {
+  persistedSelectionByContextKey.clear()
+}
+
+export function getPRCommentsListSelectionCountForTests(): number {
+  return persistedSelectionByContextKey.size
+}
+
+// Seed LRU tests without 1024 React mounts per case.
+export function seedPRCommentsListSelectionForTests(
+  contextKey: string,
+  selectedGroupIds: Iterable<string>,
+  isSelectingForAI = true
+): void {
+  persistSelectionState({
+    contextKey,
+    isSelectingForAI,
+    selectedGroupIds: new Set(selectedGroupIds)
+  })
+}
+
 export function usePRCommentsListSelection(
   comments: PRComment[],
   selectionContextKey: string | undefined,
   clearRequest?: PRCommentsListSelectionClearRequest | null
 ): PRCommentsListSelection {
-  const lastClearRequestTokenRef = useRef<number | null>(clearRequest?.token ?? null)
-  const [selectionState, setSelectionState] = useState<PRCommentsListSelectionState>(() =>
-    createSelectionState(selectionContextKey)
-  )
+  const lastClearRequestTokenRef = useRef<number | null>(null)
+  const [renderedSelectionState, setRenderedSelectionState] =
+    useState<PRCommentsListSelectionState>(() => readSelectionState(selectionContextKey))
+  const selectionState =
+    renderedSelectionState.contextKey === selectionContextKey
+      ? renderedSelectionState
+      : readSelectionState(selectionContextKey)
+  const commitSelectionState = useCallback((next: PRCommentsListSelectionState): void => {
+    persistSelectionState(next)
+    setRenderedSelectionState(next)
+  }, [])
 
   useEffect(() => {
-    setSelectionState((prev) =>
-      prev.contextKey === selectionContextKey ? prev : createSelectionState(selectionContextKey)
-    )
+    // Update LRU only after commit; StrictMode/Suspense may abandon or replay render.
+    refreshPersistedSelectionContext(selectionContextKey)
   }, [selectionContextKey])
 
   useEffect(() => {
-    if (!clearRequest || clearRequest.token === lastClearRequestTokenRef.current) {
+    if (
+      !clearRequest ||
+      clearRequest.contextKey !== selectionContextKey ||
+      clearRequest.token === lastClearRequestTokenRef.current
+    ) {
       return
     }
     lastClearRequestTokenRef.current = clearRequest.token
-    if (clearRequest.contextKey !== selectionContextKey) {
-      return
-    }
     const next = {
       contextKey: selectionContextKey,
       isSelectingForAI: false,
       selectedGroupIds: new Set<string>()
     }
-    persistSelectionState(next)
-    setSelectionState(next)
-  }, [clearRequest, selectionContextKey])
+    commitSelectionState(next)
+  }, [clearRequest, commitSelectionState, selectionContextKey])
 
-  // Why: selectable groups come from the unfiltered list so switching the
-  // audience filter doesn't silently drop already-selected comments.
+  // Use unfiltered groups so audience changes cannot silently discard queued selections.
   const canonicalGroups = useMemo(() => groupPRComments(comments), [comments])
   const selectableGroups = useMemo(
     () => canonicalGroups.filter(isPRCommentGroupQueueableForAI),
@@ -137,10 +193,10 @@ export function usePRCommentsListSelection(
       isSelectingForAI: selectionState.isSelectingForAI,
       selectedGroupIds: new Set(selectedGroupIds)
     }
-    persistSelectionState(next)
-    setSelectionState(next)
+    commitSelectionState(next)
   }, [
     candidateSelectedGroupIds,
+    commitSelectionState,
     comments.length,
     isCurrentSelectionContext,
     selectedGroupIds,
@@ -168,10 +224,9 @@ export function usePRCommentsListSelection(
         isSelectingForAI: true,
         selectedGroupIds: new Set([groupId])
       }
-      persistSelectionState(next)
-      setSelectionState(next)
+      commitSelectionState(next)
     },
-    [selectableGroupsById, selectionContextKey]
+    [commitSelectionState, selectableGroupsById, selectionContextKey]
   )
 
   const clearSelection = useCallback((): void => {
@@ -180,34 +235,32 @@ export function usePRCommentsListSelection(
       isSelectingForAI: false,
       selectedGroupIds: new Set<string>()
     }
-    persistSelectionState(next)
-    setSelectionState(next)
-  }, [selectionContextKey])
+    commitSelectionState(next)
+  }, [commitSelectionState, selectionContextKey])
 
   const toggleGroupSelection = useCallback(
     (groupId: string, checked: boolean): void => {
       if (!selectableGroupsById.has(groupId)) {
         return
       }
-      setSelectionState((prev) => {
-        const base =
-          prev.contextKey === selectionContextKey ? prev.selectedGroupIds : EMPTY_SELECTED_GROUP_IDS
-        const next = new Set([...base].filter((id) => selectableGroupsById.has(id)))
-        if (checked) {
-          next.add(groupId)
-        } else {
-          next.delete(groupId)
-        }
-        const nextState = {
-          contextKey: selectionContextKey,
-          isSelectingForAI: true,
-          selectedGroupIds: next
-        }
-        persistSelectionState(nextState)
-        return nextState
+      const current = readSelectionState(selectionContextKey)
+      const base =
+        current.contextKey === selectionContextKey
+          ? current.selectedGroupIds
+          : EMPTY_SELECTED_GROUP_IDS
+      const next = new Set([...base].filter((id) => selectableGroupsById.has(id)))
+      if (checked) {
+        next.add(groupId)
+      } else {
+        next.delete(groupId)
+      }
+      commitSelectionState({
+        contextKey: selectionContextKey,
+        isSelectingForAI: true,
+        selectedGroupIds: next
       })
     },
-    [selectableGroupsById, selectionContextKey]
+    [commitSelectionState, selectableGroupsById, selectionContextKey]
   )
 
   return {

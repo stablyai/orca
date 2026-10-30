@@ -1,18 +1,17 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'fs'
-import { homedir } from 'os'
-import { dirname, join } from 'path'
-import { randomUUID } from 'crypto'
+import { join } from 'node:path'
 import type { CommandHandler } from '../dispatch'
 import { printResult } from '../format'
-import { RuntimeClientError, type RuntimeClient, type RuntimeRpcSuccess } from '../runtime-client'
-import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
-import { getDefaultPersistedState } from '../../shared/constants'
-import type { PersistedState } from '../../shared/types'
+import { rejectRemoteSelectionFlags } from '../remote-selection-flag-rejection'
 import {
-  applyAgentStatusHooksEnabled,
-  getManagedAgentHookStatuses
-} from '../../main/agent-hooks/managed-agent-hook-controls'
-import { getDefaultUserDataPath } from '../runtime-client'
+  RuntimeClientError,
+  type RuntimeClient,
+  type RuntimeRpcSuccess,
+  getDefaultUserDataPath
+} from '../runtime-client'
+import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../shared/orca-profiles'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { ProfileStateOfflineLocation } from '../../main/persistence/profile-state/profile-state-offline-settings'
 
 type AgentHookCommandResult = {
   enabled: boolean
@@ -21,97 +20,112 @@ type AgentHookCommandResult = {
   statuses: AgentHookInstallStatus[]
 }
 
-function getDataPath(): string {
-  return join(getDefaultUserDataPath(), 'orca-data.json')
+// Covers managed-home verification, WSL identity, trust grant, and bounded app-server reap.
+const WSL_CODEX_PREPARE_TIMEOUT_MS = 50_000
+
+async function getDataPath(): Promise<string> {
+  return (
+    (await getProfileStateLocation())?.dataFile ?? join(getDefaultUserDataPath(), 'orca-data.json')
+  )
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
+async function getProfileStateLocation(): Promise<ProfileStateOfflineLocation | undefined> {
+  const { getActiveProfileStateLocation } = await import('../profile-state-location.js')
+  return getActiveProfileStateLocation()
 }
 
-function readPersistedState(dataPath: string): PersistedState {
-  if (!existsSync(dataPath)) {
-    const defaults = getDefaultPersistedState(homedir())
-    return {
-      ...defaults,
-      settings: {
-        ...defaults.settings,
-        // Why: offline CLI can create the first profile before desktop load;
-        // match the Store fresh-install default instead of pinning old cards.
-        experimentalNewWorktreeCardStyle: true
-      }
-    }
-  }
-  try {
-    const parsed = JSON.parse(readFileSync(dataPath, 'utf-8'))
-    if (!isRecord(parsed)) {
-      throw new Error('file does not contain a JSON object')
-    }
-    return parsed as PersistedState
-  } catch (error) {
-    throw new RuntimeClientError(
-      'runtime_error',
-      `Could not read ${dataPath}: ${error instanceof Error ? error.message : String(error)}`
-    )
+function legacyProfileStateLocation(): ProfileStateOfflineLocation {
+  const userDataPath = getDefaultUserDataPath()
+  return {
+    dataFile: join(userDataPath, 'orca-data.json'),
+    databaseFile: join(userDataPath, 'profile-state.db'),
+    profileId: DEFAULT_LOCAL_ORCA_PROFILE_ID
   }
 }
 
-function writePersistedState(dataPath: string, state: PersistedState): void {
-  mkdirSync(dirname(dataPath), { recursive: true })
-  const tmpPath = join(dirname(dataPath), `.${Date.now()}-${randomUUID()}.tmp`)
-  let renamed = false
+async function readHookSettingsFromDisk(): Promise<
+  Pick<GlobalSettings, 'agentStatusHooksEnabled' | 'disabledTuiAgents'>
+> {
+  const { acquireProfileStateRuntimeAdmission } =
+    await import('../../main/persistence/profile-state/profile-state-access.js')
+  const admission = acquireProfileStateRuntimeAdmission(getDefaultUserDataPath())
   try {
-    writeFileSync(tmpPath, `${JSON.stringify(state, null, 2)}\n`, 'utf-8')
-    renameSync(tmpPath, dataPath)
-    renamed = true
+    return await readAdmittedHookSettingsFromDisk()
   } finally {
-    if (!renamed && existsSync(tmpPath)) {
-      try {
-        unlinkSync(tmpPath)
-      } catch {
-        // best effort
-      }
+    admission.release()
+  }
+}
+
+async function readAdmittedHookSettingsFromDisk(): Promise<
+  Pick<GlobalSettings, 'agentStatusHooksEnabled' | 'disabledTuiAgents'>
+> {
+  const { readAgentHookSettingsFromProfileState } =
+    await import('../../main/persistence/profile-state/profile-state-offline-settings.js')
+  return readAgentHookSettingsFromProfileState(
+    (await getProfileStateLocation()) ?? legacyProfileStateLocation()
+  )
+}
+
+async function updateEnabledOnDisk(enabled: boolean): Promise<{
+  settingsPath: string
+  settings: Pick<GlobalSettings, 'agentCmdOverrides' | 'disabledTuiAgents'>
+}> {
+  const { assertOfflineProfileStateMutationRuntime } =
+    await import('../../main/persistence/profile-state/profile-state-offline-settings.js')
+  assertOfflineProfileStateMutationRuntime()
+  const { acquireProfileStateMaintenance } =
+    await import('../../main/persistence/profile-state/profile-state-access.js')
+  // A stopped-status response cannot exclude startup racing the first import.
+  const maintenance = acquireProfileStateMaintenance(getDefaultUserDataPath())
+  try {
+    return await updateAdmittedEnabledOnDisk(enabled)
+  } finally {
+    maintenance.release()
+  }
+}
+
+async function updateAdmittedEnabledOnDisk(enabled: boolean): Promise<{
+  settingsPath: string
+  settings: Pick<GlobalSettings, 'agentCmdOverrides' | 'disabledTuiAgents'>
+}> {
+  const { updateAgentHookSettingsFromProfileState, readAgentHookSettingsFromProfileState } =
+    await import('../../main/persistence/profile-state/profile-state-offline-settings.js')
+  let location = await getProfileStateLocation()
+  if (!location) {
+    const legacy = legacyProfileStateLocation()
+    const { classifyProfileStateStorage } =
+      await import('../../main/persistence/profile-state/profile-state-storage-classification.js')
+    const storage = classifyProfileStateStorage(legacy.dataFile, legacy.databaseFile)
+    if (storage !== 'json-only' && storage !== 'neither') {
+      throw new RuntimeClientError('runtime_error', 'Profile state has no active profile index.')
+    }
+    // Validate retained recovery evidence and source bytes before creating the index.
+    readAgentHookSettingsFromProfileState(legacy)
+    const { ensureActiveOrcaProfile } =
+      await import('../../main/orca-profiles/profile-index-store.js')
+    const profile = ensureActiveOrcaProfile(getDefaultUserDataPath())
+    location = {
+      dataFile: profile.dataFile,
+      databaseFile: profile.stateDatabaseFile,
+      profileId: profile.profile.id
     }
   }
-}
-
-function readEnabledFromDisk(): boolean {
-  const state = readPersistedState(getDataPath())
-  return state.settings?.agentStatusHooksEnabled !== false
-}
-
-function updateEnabledOnDisk(enabled: boolean): string {
-  const dataPath = getDataPath()
-  const state = readPersistedState(dataPath)
-  const experimentalNewWorktreeCardStyle =
-    state.settings?.experimentalNewWorktreeCardStyle ?? state.onboarding?.closedAt === null
-  state.settings = {
-    ...getDefaultPersistedState(homedir()).settings,
-    ...state.settings,
-    // Why: offline CLI can run before Store.load(); mirror its open-onboarding
-    // default without overriding a saved user opt-out.
-    experimentalNewWorktreeCardStyle,
-    agentStatusHooksEnabled: enabled
-  }
-  writePersistedState(dataPath, state)
-  return dataPath
+  return updateAgentHookSettingsFromProfileState(location, enabled)
 }
 
 async function updateRunningRuntime(client: RuntimeClient, enabled: boolean): Promise<boolean> {
-  try {
-    const status = await client.getCliStatus()
-    if (!status.result.runtime.reachable) {
-      return false
+  const status = await client.getCliStatus()
+  if (!status.result.runtime.reachable) {
+    if (status.result.app.running) {
+      throw new RuntimeClientError(
+        'runtime_error',
+        'Orca is running but unavailable. Retry when it responds, or stop Orca before changing agent hooks offline.'
+      )
     }
-    await client.call(
-      'settings.update',
-      { agentStatusHooksEnabled: enabled },
-      { timeoutMs: 10_000 }
-    )
-    return true
-  } catch {
     return false
   }
+  await client.call('settings.update', { agentStatusHooksEnabled: enabled }, { timeoutMs: 10_000 })
+  return true
 }
 
 function localSuccess<TResult>(result: TResult): RuntimeRpcSuccess<TResult> {
@@ -126,8 +140,12 @@ function localSuccess<TResult>(result: TResult): RuntimeRpcSuccess<TResult> {
 }
 
 function formatAgentHookCommandResult(result: AgentHookCommandResult): string {
+  // The CLI and app panes may use different homes; identify the one this status describes.
   const statusSummary = result.statuses
-    .map((status) => `${status.agent}: ${status.state}`)
+    .map(
+      (status) =>
+        `${status.agent}: ${status.state}${status.configPath ? ` (${status.configPath})` : ''}`
+    )
     .join('\n')
   return [
     `agentStatusHooksEnabled: ${result.enabled}`,
@@ -143,11 +161,14 @@ async function setAgentHooksEnabled(
   client: RuntimeClient,
   enabled: boolean
 ): Promise<AgentHookCommandResult> {
+  const { applyAgentStatusHooksEnabled, getManagedAgentHookStatuses } =
+    await import('../../main/agent-hooks/managed-agent-hook-controls.js')
   const updatedRuntime = await updateRunningRuntime(client, enabled)
-  const settingsPath = updatedRuntime ? getDataPath() : updateEnabledOnDisk(enabled)
+  const offlineUpdate = updatedRuntime ? null : await updateEnabledOnDisk(enabled)
+  const settingsPath = offlineUpdate?.settingsPath ?? (await getDataPath())
   const statuses = updatedRuntime
     ? getManagedAgentHookStatuses()
-    : applyAgentStatusHooksEnabled(enabled)
+    : await applyAgentStatusHooksEnabled(enabled, offlineUpdate?.settings)
   return {
     enabled,
     settingsPath,
@@ -157,21 +178,53 @@ async function setAgentHooksEnabled(
 }
 
 export const AGENT_HOOK_HANDLERS: Record<string, CommandHandler> = {
-  'agent hooks status': async ({ json }) => {
+  'agent hooks prepare-codex': async ({ client, flags }) => {
+    rejectRemoteHookSelection(flags)
+    if (!process.env.WSL_DISTRO_NAME?.trim()) {
+      // Native wrappers through v1.4.216 still call this; retain the no-op until they are unsupported.
+      return
+    }
+    try {
+      await client.call(
+        'agentHooks.prepareCodexForWslPane',
+        {
+          codexHome: process.env.CODEX_HOME ?? '',
+          orcaCodexHome: process.env.ORCA_CODEX_HOME ?? '',
+          wslDistro: process.env.WSL_DISTRO_NAME
+        },
+        { timeoutMs: WSL_CODEX_PREPARE_TIMEOUT_MS }
+      )
+    } catch {
+      // Best effort: old or unavailable runtimes must not block Codex launch.
+    }
+  },
+  'agent hooks status': async ({ json, flags }) => {
+    rejectRemoteHookSelection(flags)
+    const { getManagedAgentHookStatuses } =
+      await import('../../main/agent-hooks/managed-agent-hook-controls.js')
     const result: AgentHookCommandResult = {
-      enabled: readEnabledFromDisk(),
-      settingsPath: getDataPath(),
+      enabled: (await readHookSettingsFromDisk()).agentStatusHooksEnabled,
+      settingsPath: await getDataPath(),
       appliedBy: 'offline',
       statuses: getManagedAgentHookStatuses()
     }
     printResult(localSuccess(result), json, formatAgentHookCommandResult)
   },
-  'agent hooks off': async ({ client, json }) => {
+  'agent hooks off': async ({ client, json, flags }) => {
+    rejectRemoteHookSelection(flags)
     const result = await setAgentHooksEnabled(client, false)
     printResult(localSuccess(result), json, formatAgentHookCommandResult)
   },
-  'agent hooks on': async ({ client, json }) => {
+  'agent hooks on': async ({ client, json, flags }) => {
+    rejectRemoteHookSelection(flags)
     const result = await setAgentHooksEnabled(client, true)
     printResult(localSuccess(result), json, formatAgentHookCommandResult)
   }
+}
+
+function rejectRemoteHookSelection(flags: ReadonlyMap<string, string | boolean>): void {
+  rejectRemoteSelectionFlags(
+    flags,
+    'agent hooks; run this command on the machine whose hooks you want to manage.'
+  )
 }

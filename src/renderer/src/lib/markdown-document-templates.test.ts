@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { DirEntry } from '../../../shared/types'
+import type { DirEntry } from '../../../shared/filesystem-entry-types'
 import {
   applyMarkdownTemplatePlaceholders,
   getMarkdownTemplateTitleForFileName,
@@ -69,7 +69,9 @@ describe('markdown document templates', () => {
     const nonBreakingSpace = String.fromCharCode(160)
     const fileName = `  launch___plan\t${nonBreakingSpace}${' pasted '.repeat(300)}.md`
 
-    expect(getMarkdownTemplateTitleForFileName(fileName)).toContain('Launch plan pasted pasted')
+    expect(getMarkdownTemplateTitleForFileName(fileName)).toBe(
+      `Launch plan ${'pasted '.repeat(299)}pasted`
+    )
     expect(
       replace.mock.calls.filter(
         ([pattern]) => pattern instanceof RegExp && pattern.source === '\\s+'
@@ -92,7 +94,7 @@ describe('markdown document templates', () => {
     await expect(
       listMarkdownDocumentTemplates(
         {
-          settings: null,
+          target: { kind: 'local' as const },
           worktreeId: 'wt-1',
           worktreePath: '/repo',
           connectionId: 'conn-1'
@@ -137,7 +139,7 @@ describe('markdown document templates', () => {
 
     await expect(
       listMarkdownDocumentTemplates(
-        { settings: null, worktreeId: 'wt-1', worktreePath: '/repo' },
+        { target: { kind: 'local' as const }, worktreeId: 'wt-1', worktreePath: '/repo' },
         '/repo'
       )
     ).resolves.toEqual([])
@@ -150,7 +152,7 @@ describe('markdown document templates', () => {
 
     await expect(
       listMarkdownDocumentTemplates(
-        { settings: null, worktreeId: 'wt-1', worktreePath: 'C:\\repo' },
+        { target: { kind: 'local' as const }, worktreeId: 'wt-1', worktreePath: 'C:\\repo' },
         'C:\\repo'
       )
     ).resolves.toEqual([

@@ -1,6 +1,7 @@
-import { ChevronDown, ChevronRight, ExternalLink } from 'lucide-react'
+import { ChevronDown, ChevronRight, ExternalLink, Eye } from 'lucide-react'
 import type { MouseEvent, ReactElement, ReactNode } from 'react'
 import { translate } from '@/i18n/i18n'
+import { splitPathForDisplay } from './editor-path-display'
 
 export function DiffSectionHeader({
   path,
@@ -11,6 +12,7 @@ export function DiffSectionHeader({
   onToggle,
   onOpenSection,
   openSectionTitle,
+  onOpenPreview,
   trailingContent
 }: {
   path: string
@@ -21,18 +23,20 @@ export function DiffSectionHeader({
   onToggle: () => void
   onOpenSection: (event: MouseEvent) => void
   openSectionTitle: string
+  onOpenPreview?: (event: MouseEvent) => void
   trailingContent?: ReactNode
 }): ReactElement {
+  const displayPath = splitPathForDisplay(path)
   return (
     <div
       className="sticky top-0 z-10 bg-background flex items-center w-full px-3 py-1.5 text-left text-xs hover:bg-accent transition-colors group cursor-pointer"
       onClick={onToggle}
     >
-      <span className="min-w-0 flex-1 truncate text-muted-foreground">
+      <span className="flex min-w-0 flex-1 items-center text-muted-foreground">
         <span
           role="button"
           tabIndex={0}
-          className="cursor-copy hover:underline"
+          className="flex min-w-0 flex-1 cursor-copy overflow-hidden hover:underline"
           onMouseDown={(event) => {
             event.preventDefault()
             event.stopPropagation()
@@ -40,8 +44,7 @@ export function DiffSectionHeader({
           onClick={(event) => {
             event.preventDefault()
             event.stopPropagation()
-            // Why: stop both mouse-down and click on the path affordance so
-            // the parent section-toggle row cannot consume the interaction.
+            // Stop both mousedown and click so copying the path cannot toggle the parent section.
             void window.api.ui.writeClipboardText(path).catch((error) => {
               console.error('Failed to copy diff path:', error)
             })
@@ -58,23 +61,53 @@ export function DiffSectionHeader({
           }}
           title={translate('auto.components.editor.DiffSectionHeader.8915726e93', 'Copy path')}
         >
-          {path}
+          <span className="path-display-prefix">{displayPath.prefix}</span>
+          <span className="path-display-file">{displayPath.fileName}</span>
         </span>
-        {dirty && <span className="font-medium ml-1">M</span>}
-        {(added > 0 || removed > 0) && (
-          <span className="tabular-nums ml-2">
-            {added > 0 && <span className="text-green-600 dark:text-green-500">+{added}</span>}
-            {added > 0 && removed > 0 && <span> </span>}
-            {removed > 0 && <span className="text-red-500">-{removed}</span>}
-          </span>
-        )}
+        <span className="flex shrink-0 items-center">
+          {dirty && <span className="font-medium ml-1">M</span>}
+          {(added > 0 || removed > 0) && (
+            <span className="tabular-nums ml-2">
+              {added > 0 && <span className="text-green-600 dark:text-green-500">+{added}</span>}
+              {added > 0 && removed > 0 && <span> </span>}
+              {removed > 0 && <span className="text-red-500">-{removed}</span>}
+            </span>
+          )}
+        </span>
       </span>
       <div className="flex items-center gap-1 shrink-0 ml-2">
         {trailingContent}
+        {onOpenPreview != null && (
+          <button
+            type="button"
+            // Keep preview visible for touch and consistent with the single-file header.
+            className="p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors"
+            onClick={(event) => {
+              event.stopPropagation()
+              onOpenPreview(event)
+            }}
+            title={translate(
+              'auto.components.editor.EditorPanelHeader.fb8331694e',
+              'Open Preview to the Side'
+            )}
+            aria-label={translate(
+              'auto.components.editor.EditorPanelHeader.fb8331694e',
+              'Open Preview to the Side'
+            )}
+          >
+            <Eye className="size-3.5" />
+          </button>
+        )}
         <button
-          className="p-0.5 rounded text-muted-foreground hover:text-foreground can-hover:opacity-0 group-hover:opacity-100 transition-opacity"
-          onClick={onOpenSection}
+          // Keep open-file visible for touch, matching preview.
+          type="button"
+          className="p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors"
+          onClick={(event) => {
+            event.stopPropagation()
+            onOpenSection(event)
+          }}
           title={openSectionTitle}
+          aria-label={openSectionTitle}
         >
           <ExternalLink className="size-3.5" />
         </button>

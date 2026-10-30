@@ -1,0 +1,273 @@
+import type * as ReactModule from 'react'
+import { describe, expect, it, vi } from 'vitest'
+
+describe('runtime host catalog refresh on reposChanged', () => {
+  // reposChanged includes group/folder edits; repos-only refresh leaves those catalogs stale.
+  it('refetches the runtime host project group and folder workspace catalogs', async () => {
+    vi.resetModules()
+    vi.useFakeTimers()
+    try {
+      const calls: string[] = []
+      const fetchRuntimeEnvironmentRepos = vi.fn(() => {
+        calls.push('repos')
+        return Promise.resolve([])
+      })
+      const fetchProjectGroups = vi.fn(() => {
+        calls.push('project-groups')
+        return Promise.resolve()
+      })
+      const fetchFolderWorkspaces = vi.fn(() => {
+        calls.push('folder-workspaces')
+        return Promise.resolve()
+      })
+      const state = {
+        settings: { activeRuntimeEnvironmentId: 'env-1' as string | null },
+        repos: [],
+        worktreesByRepo: {},
+        folderWorkspaces: [],
+        projectGroups: [],
+        runtimeEnvironments: [],
+        runtimeStatusByEnvironmentId: new Map(),
+        tabsByWorktree: {},
+        ptyIdsByTabId: {},
+        remountTerminalTabForRecovery: vi.fn(),
+        markEnvironmentSshStateStale: vi.fn(),
+        fetchRepos: vi.fn(() => Promise.resolve()),
+        fetchRuntimeEnvironmentRepos,
+        fetchProjectGroups,
+        fetchHostWorkspaceStatuses: vi.fn(),
+        fetchFolderWorkspaces,
+        fetchWorktrees: vi.fn(() => Promise.resolve()),
+        fetchWorktreeLineage: vi.fn(() => Promise.resolve())
+      }
+
+      vi.doMock('react', async () => {
+        const actual = await vi.importActual<typeof ReactModule>('react')
+        return { ...actual, useEffect: (effect: () => void | (() => void)) => void effect() }
+      })
+      vi.doMock('../store', () => ({
+        useAppStore: { subscribe: vi.fn(() => () => {}), getState: () => state }
+      }))
+      const noopListener = (): (() => void) => () => {}
+      const autoStubNamespace = new Proxy(
+        {},
+        {
+          get:
+            () =>
+            (...args: unknown[]) => {
+              if (typeof args[0] === 'function') {
+                return noopListener()
+              }
+              return new Promise(() => {})
+            }
+        }
+      )
+      let runtimeOnResponse: ((response: unknown) => void) | undefined
+      const api = new Proxy(
+        {
+          runtimeEnvironments: {
+            subscribe: async (_args: unknown, callbacks: { onResponse: (r: unknown) => void }) => {
+              runtimeOnResponse = callbacks.onResponse
+              return { unsubscribe: vi.fn(), sendBinary: vi.fn() }
+            }
+          }
+        } as Record<string, unknown>,
+        { get: (target, prop: string) => target[prop] ?? autoStubNamespace }
+      )
+      vi.stubGlobal('window', { api })
+
+      const { useIpcEvents } = await import('./useIpcEvents')
+      useIpcEvents()
+      await vi.advanceTimersByTimeAsync(300)
+
+      const runtimeOwner = { runtimeEnvironmentId: 'env-1' }
+      expect(fetchProjectGroups).toHaveBeenCalledWith(runtimeOwner)
+      expect(fetchFolderWorkspaces).toHaveBeenCalledWith(runtimeOwner)
+      // Folder workspaces resolve their owning group from projectGroups, so groups must land first.
+      expect(calls).toEqual(['repos', 'project-groups', 'folder-workspaces'])
+
+      calls.length = 0
+      fetchProjectGroups.mockClear()
+      fetchFolderWorkspaces.mockClear()
+      if (!runtimeOnResponse) {
+        throw new Error('Expected runtime client event callbacks')
+      }
+      await vi.advanceTimersByTimeAsync(5_000)
+      runtimeOnResponse({ ok: true, result: { type: 'reposChanged' } })
+      await vi.advanceTimersByTimeAsync(300)
+
+      expect(fetchProjectGroups).toHaveBeenCalledWith(runtimeOwner)
+      expect(fetchFolderWorkspaces).toHaveBeenCalledWith(runtimeOwner)
+      expect(calls).toEqual(['repos', 'project-groups', 'folder-workspaces'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // Worktree/lineage refresh must not wait behind two 15s catalog timeouts.
+  it('refreshes worktrees and lineage without waiting on a stalled catalog fetch', async () => {
+    vi.resetModules()
+    vi.useFakeTimers()
+    try {
+      const fetchRuntimeEnvironmentRepos = vi.fn(() => Promise.resolve([{ id: 'repo-1' }]))
+      const fetchProjectGroups = vi.fn(() => new Promise<void>(() => {}))
+      const fetchFolderWorkspaces = vi.fn(() => Promise.resolve())
+      const fetchWorktrees = vi.fn(() => Promise.resolve())
+      const fetchWorktreeLineage = vi.fn(() => Promise.resolve())
+      const state = {
+        settings: { activeRuntimeEnvironmentId: 'env-1' as string | null },
+        repos: [],
+        worktreesByRepo: {},
+        folderWorkspaces: [],
+        projectGroups: [],
+        runtimeEnvironments: [],
+        runtimeStatusByEnvironmentId: new Map(),
+        tabsByWorktree: {},
+        ptyIdsByTabId: {},
+        remountTerminalTabForRecovery: vi.fn(),
+        markEnvironmentSshStateStale: vi.fn(),
+        fetchRepos: vi.fn(() => Promise.resolve()),
+        fetchRuntimeEnvironmentRepos,
+        fetchProjectGroups,
+        fetchHostWorkspaceStatuses: vi.fn(),
+        fetchFolderWorkspaces,
+        fetchWorktrees,
+        fetchWorktreeLineage
+      }
+
+      vi.doMock('react', async () => {
+        const actual = await vi.importActual<typeof ReactModule>('react')
+        return { ...actual, useEffect: (effect: () => void | (() => void)) => void effect() }
+      })
+      vi.doMock('../store', () => ({
+        useAppStore: { subscribe: vi.fn(() => () => {}), getState: () => state }
+      }))
+      const noopListener = (): (() => void) => () => {}
+      const autoStubNamespace = new Proxy(
+        {},
+        {
+          get:
+            () =>
+            (...args: unknown[]) => {
+              if (typeof args[0] === 'function') {
+                return noopListener()
+              }
+              return new Promise(() => {})
+            }
+        }
+      )
+      const api = new Proxy({} as Record<string, unknown>, {
+        get: (target, prop: string) => target[prop] ?? autoStubNamespace
+      })
+      vi.stubGlobal('window', { api })
+
+      const { useIpcEvents } = await import('./useIpcEvents')
+      useIpcEvents()
+      await vi.advanceTimersByTimeAsync(300)
+
+      expect(fetchProjectGroups).toHaveBeenCalled()
+      // Folder workspaces still wait on their groups; worktrees and lineage must not.
+      expect(fetchFolderWorkspaces).not.toHaveBeenCalled()
+      expect(fetchWorktrees).toHaveBeenCalledWith('repo-1', expect.anything())
+      expect(fetchWorktreeLineage).toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
+describe('repo catalog refresh on repos:changed', () => {
+  it('refreshes local catalogs and recovers parked panes with and without an active runtime', async () => {
+    vi.resetModules()
+    let reposChangedListener: (() => void) | undefined
+    const fetchRepos = vi.fn(() => Promise.resolve())
+    const fetchProjectGroups = vi.fn(() => Promise.resolve())
+    const fetchFolderWorkspaces = vi.fn(() => Promise.resolve())
+    const remountTerminalTabForRecovery = vi.fn(() => true)
+    const state = {
+      settings: { activeRuntimeEnvironmentId: null as string | null },
+      repos: [{ id: 'repo1', connectionId: 'conn-1' }],
+      worktreesByRepo: { repo1: [{ id: 'wt-1', repoId: 'repo1' }] },
+      folderWorkspaces: [],
+      projectGroups: [],
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      ptyIdsByTabId: {},
+      remountTerminalTabForRecovery,
+      fetchRepos,
+      fetchProjectGroups,
+      fetchHostWorkspaceStatuses: vi.fn(),
+      fetchFolderWorkspaces
+    }
+
+    vi.doMock('react', async () => {
+      const actual = await vi.importActual<typeof ReactModule>('react')
+      return { ...actual, useEffect: (effect: () => void | (() => void)) => void effect() }
+    })
+    vi.doMock('../store', () => ({
+      useAppStore: { subscribe: vi.fn(() => () => {}), getState: () => state }
+    }))
+    const noopListener = (): (() => void) => () => {}
+    const autoStubNamespace = new Proxy(
+      {},
+      {
+        get:
+          () =>
+          (...args: unknown[]) => {
+            if (typeof args[0] === 'function') {
+              return noopListener()
+            }
+            return new Promise(() => {})
+          }
+      }
+    )
+    const api = new Proxy(
+      {
+        repos: {
+          onChanged: (listener: () => void) => {
+            reposChangedListener = listener
+            return () => {}
+          }
+        }
+      } as Record<string, unknown>,
+      { get: (target, prop: string) => target[prop] ?? autoStubNamespace }
+    )
+    vi.stubGlobal('window', { api })
+
+    const { recordTerminalTabParkedOnUnresolvedHost, clearTerminalTabsParkedOnUnresolvedHost } =
+      await import('@/lib/parked-terminal-host-hydration')
+    clearTerminalTabsParkedOnUnresolvedHost()
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+    useIpcEvents()
+    expect(reposChangedListener).toBeDefined()
+
+    reposChangedListener?.()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(remountTerminalTabForRecovery).not.toHaveBeenCalled()
+
+    recordTerminalTabParkedOnUnresolvedHost('wt-1', 'tab-1')
+    reposChangedListener?.()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(remountTerminalTabForRecovery).toHaveBeenCalledWith('tab-1')
+
+    fetchRepos.mockClear()
+    fetchProjectGroups.mockClear()
+    fetchFolderWorkspaces.mockClear()
+    remountTerminalTabForRecovery.mockClear()
+    clearTerminalTabsParkedOnUnresolvedHost()
+    state.settings.activeRuntimeEnvironmentId = 'env-1'
+    // Why: the local-slice refresh still has to release panes that parked on an unhydrated host.
+    recordTerminalTabParkedOnUnresolvedHost('wt-1', 'tab-1')
+    reposChangedListener?.()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    const localOwner = { runtimeEnvironmentId: null }
+    expect(fetchRepos).toHaveBeenCalledWith(localOwner)
+    expect(fetchProjectGroups).toHaveBeenCalledWith(localOwner)
+    expect(fetchFolderWorkspaces).toHaveBeenCalledWith(localOwner)
+    expect(remountTerminalTabForRecovery).toHaveBeenCalledWith('tab-1')
+    clearTerminalTabsParkedOnUnresolvedHost()
+  })
+})

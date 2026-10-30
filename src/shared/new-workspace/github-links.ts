@@ -1,0 +1,45 @@
+import {
+  type GitHubIssueOrPRLink,
+  parseGitHubIssueOrPRLink,
+  parseGitHubIssueOrPRNumber
+} from '../github/links'
+import { isWorkItemLinkQueryTooLarge } from './work-item-link-query-bounds'
+
+export * from '../github/links'
+
+const HTTP_URL_PREFIX_RE = /^https?:\/\//i
+
+export type GitHubLinkQuery = {
+  query: string
+  directNumber: number | null
+  directLink?: GitHubIssueOrPRLink
+  tooLarge?: boolean
+}
+
+/** Resolve issue/PR numbers or GitHub URLs into search query and direct-number lookup. */
+export function normalizeGitHubLinkQuery(raw: string): GitHubLinkQuery {
+  if (isWorkItemLinkQueryTooLarge(raw)) {
+    return { query: '', directNumber: null, tooLarge: true }
+  }
+  const trimmed = raw.trim()
+  if (!trimmed) {
+    return { query: '', directNumber: null }
+  }
+
+  const direct = parseGitHubIssueOrPRNumber(trimmed)
+  if (direct !== null && !HTTP_URL_PREFIX_RE.test(trimmed)) {
+    return { query: trimmed, directNumber: direct }
+  }
+
+  const link = parseGitHubIssueOrPRLink(trimmed)
+  if (!link) {
+    return { query: trimmed, directNumber: null }
+  }
+
+  // Accept upstream numbers across differing fork/origin slugs.
+  return {
+    query: trimmed,
+    directNumber: link.number,
+    directLink: link
+  }
+}

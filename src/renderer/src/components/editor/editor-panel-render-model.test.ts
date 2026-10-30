@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
 import { RICH_MARKDOWN_MAX_SIZE_BYTES } from '../../../../shared/constants'
+import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import type { FileContent } from './editor-panel-content-types'
 import { getEditorPanelRenderModel } from './editor-panel-render-model'
 
@@ -30,18 +31,149 @@ function renderModel(args: {
   fileContents?: Record<string, FileContent>
   editorDrafts?: Record<string, string>
   markdownViewMode?: Record<string, 'source' | 'rich' | 'preview'>
+  markdownRichModeSizeOverridden?: boolean
   isChangesMode?: boolean
+  gitStatusByWorktree?: Record<string, GitStatusEntry[]>
 }) {
+  const activeFile = args.activeFile ?? markdownFile()
   return getEditorPanelRenderModel({
-    activeFile: args.activeFile ?? markdownFile(),
+    activeFile,
     fileContents: args.fileContents ?? { '/repo/README.md': textContent() },
     editorDrafts: args.editorDrafts ?? {},
-    gitStatusByWorktree: {},
-    gitBranchChangesByWorktree: {},
+    gitStatusEntries: args.gitStatusByWorktree?.[activeFile.worktreeId],
+    gitBranchEntries: undefined,
     markdownViewMode: args.markdownViewMode ?? {},
-    isChangesMode: args.isChangesMode ?? false
+    markdownRichModeSizeOverridden: args.markdownRichModeSizeOverridden ?? false,
+    isChangesMode: args.isChangesMode ?? false,
+    canOpenWorkspaceFileBrowser: true
   })
 }
+
+function htmlFile(overrides: Partial<OpenFile> = {}): OpenFile {
+  return {
+    id: '/repo/mock.html',
+    filePath: '/repo/mock.html',
+    relativePath: 'mock.html',
+    worktreeId: 'wt-1',
+    language: 'html',
+    mode: 'edit',
+    isDirty: false,
+    ...overrides
+  }
+}
+
+describe('getEditorPanelRenderModel HTML preview affordance', () => {
+  it('enables preview for HTML edit tabs', () => {
+    expect(renderModel({ activeFile: htmlFile(), fileContents: {} }).canOpenPreviewToSide).toBe(
+      true
+    )
+  })
+
+  it('disables preview when the workspace browser provider is unavailable', () => {
+    const activeFile = htmlFile()
+    const model = getEditorPanelRenderModel({
+      activeFile,
+      fileContents: {},
+      editorDrafts: {},
+      gitStatusEntries: undefined,
+      gitBranchEntries: undefined,
+      markdownViewMode: {},
+      markdownRichModeSizeOverridden: false,
+      isChangesMode: false,
+      canOpenWorkspaceFileBrowser: false
+    })
+
+    expect(model.canOpenPreviewToSide).toBe(false)
+  })
+
+  it('enables preview for single HTML diffs whose file exists on disk', () => {
+    const model = renderModel({
+      activeFile: htmlFile({ mode: 'diff', diffSource: 'unstaged' } as Partial<OpenFile>),
+      fileContents: {},
+      gitStatusByWorktree: {
+        'wt-1': [{ path: 'mock.html', status: 'modified', area: 'unstaged' }]
+      }
+    })
+
+    expect(model.canOpenPreviewToSide).toBe(true)
+  })
+
+  it('disables preview for diffs of deleted HTML files', () => {
+    const model = renderModel({
+      activeFile: htmlFile({ mode: 'diff', diffSource: 'unstaged' } as Partial<OpenFile>),
+      fileContents: {},
+      gitStatusByWorktree: {
+        'wt-1': [{ path: 'mock.html', status: 'deleted', area: 'unstaged' }]
+      }
+    })
+
+    expect(model.canOpenPreviewToSide).toBe(false)
+  })
+
+  it('disables preview for commit diffs whose content may not match disk', () => {
+    const model = renderModel({
+      activeFile: htmlFile({ mode: 'diff', diffSource: 'commit' } as Partial<OpenFile>),
+      fileContents: {}
+    })
+
+    expect(model.canOpenPreviewToSide).toBe(false)
+  })
+
+  it('disables preview for non-HTML diffs', () => {
+    const model = renderModel({
+      activeFile: markdownFile({ mode: 'diff', diffSource: 'unstaged' } as Partial<OpenFile>),
+      fileContents: {}
+    })
+
+    expect(model.canOpenPreviewToSide).toBe(false)
+  })
+})
+
+describe('getEditorPanelRenderModel shebang language fallback', () => {
+  it('uses the shebang when an extensionless file has no name-based language', () => {
+    const scriptFile: OpenFile = {
+      id: '/repo/bin/deploy',
+      filePath: '/repo/bin/deploy',
+      relativePath: 'bin/deploy',
+      worktreeId: 'wt-1',
+      language: 'plaintext',
+      mode: 'edit',
+      isDirty: false
+    }
+    const model = renderModel({
+      activeFile: scriptFile,
+      fileContents: {
+        [scriptFile.id]: textContent({ content: '#!/usr/bin/env python3\nprint(1)' })
+      }
+    })
+
+    expect(model.resolvedLanguage).toBe('python')
+    const diffModel = renderModel({
+      activeFile: { ...scriptFile, mode: 'diff', diffSource: 'unstaged' },
+      editorDrafts: { [scriptFile.id]: '#!/usr/bin/env python3\nprint(2)' }
+    })
+    expect(diffModel.resolvedLanguage).toBe('plaintext')
+  })
+})
+
+describe('getEditorPanelRenderModel read-only raw rendering (AI Vault View Log)', () => {
+  it('renders a read-only markdown log as raw source with no markdown viewer or chrome', () => {
+    const model = renderModel({ activeFile: markdownFile({ readOnly: true }) })
+
+    expect(model.isMarkdown).toBe(false)
+    expect(model.hasViewModeToggle).toBe(false)
+    expect(model.canShowMarkdownPreview).toBe(false)
+    expect(model.canExportMarkdownToPdf).toBe(false)
+    expect(model.canShowMarkdownTableOfContents).toBe(false)
+    expect(model.resolvedLanguage).toBe('markdown')
+  })
+
+  it('keeps markdown chrome for ordinary writable markdown tabs', () => {
+    const model = renderModel({ activeFile: markdownFile() })
+    expect(model.isMarkdown).toBe(true)
+    expect(model.hasViewModeToggle).toBe(true)
+  })
+})
 
 describe('getEditorPanelRenderModel markdown export affordance', () => {
   it('enables export for rendered markdown edit tabs', () => {
@@ -58,16 +190,39 @@ describe('getEditorPanelRenderModel markdown export affordance', () => {
       editorDrafts: { '/repo/README.md': '[example]: https://example.com' }
     })
 
-    expect(model.canExportMarkdownToPdf).toBe(false)
+    expect(model.inlineMarkdownRenderState?.renderMode).toBe('preview')
+    expect(model.canExportMarkdownToPdf).toBe(true)
   })
 
   it('disables rich export when a multibyte character crosses the byte limit', () => {
     const model = renderModel({
       markdownViewMode: { '/repo/README.md': 'rich' },
-      editorDrafts: { '/repo/README.md': `${'a'.repeat(RICH_MARKDOWN_MAX_SIZE_BYTES)}\u00e9` }
+      editorDrafts: {
+        '/repo/README.md': `${'a'.repeat(RICH_MARKDOWN_MAX_SIZE_BYTES)}\u00e9`
+      }
     })
 
     expect(model.shouldShowMarkdownExportAction).toBe(true)
+    expect(model.canExportMarkdownToPdf).toBe(false)
+  })
+
+  it('keeps rich mode for an oversized file the user chose to open anyway', () => {
+    const model = renderModel({
+      markdownViewMode: { '/repo/README.md': 'rich' },
+      editorDrafts: { '/repo/README.md': 'a'.repeat(RICH_MARKDOWN_MAX_SIZE_BYTES + 1) },
+      markdownRichModeSizeOverridden: true
+    })
+
+    expect(model.canExportMarkdownToPdf).toBe(true)
+  })
+
+  it('scopes the open-anyway override to its own file', () => {
+    const model = renderModel({
+      markdownViewMode: { '/repo/README.md': 'rich' },
+      editorDrafts: { '/repo/README.md': 'a'.repeat(RICH_MARKDOWN_MAX_SIZE_BYTES + 1) },
+      markdownRichModeSizeOverridden: false
+    })
+
     expect(model.canExportMarkdownToPdf).toBe(false)
   })
 
@@ -118,5 +273,27 @@ describe('getEditorPanelRenderModel markdown export affordance', () => {
         fileContents: { [preview.id]: textContent({ isBinary: true }) }
       }).canExportMarkdownToPdf
     ).toBe(false)
+  })
+})
+
+describe('virtual Markdown preview PDF export', () => {
+  it('disables export for large previews, including unsaved drafts', () => {
+    for (const useDraft of [false, true]) {
+      const content = 'x'.repeat(RICH_MARKDOWN_MAX_SIZE_BYTES + 1)
+      expect(
+        renderModel({
+          activeFile: markdownFile({
+            id: 'preview:/repo/README.md',
+            mode: 'markdown-preview',
+            markdownPreviewSourceFileId: '/repo/README.md'
+          }),
+          fileContents: {
+            'preview:/repo/README.md': textContent({ content: useDraft ? '# Small' : content })
+          },
+          editorDrafts: useDraft ? { '/repo/README.md': content } : {},
+          markdownRichModeSizeOverridden: true
+        }).canExportMarkdownToPdf
+      ).toBe(false)
+    }
   })
 })

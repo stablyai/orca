@@ -1,15 +1,51 @@
 import React from 'react'
-import Markdown, { defaultUrlTransform } from 'react-markdown'
+import {
+  CommentMarkdownMermaidContext,
+  CommentMarkdownMermaidSourceContext
+} from './comment-markdown-mermaid-policy'
+import {
+  defaultUrlTransform,
+  type Components,
+  type Options as MarkdownOptions
+} from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
+import { remarkChatMath } from './chat-markdown-math'
+import { copyChatMathSelection } from './chat-markdown-math-selection'
+import remarkCjkFriendly from 'remark-cjk-friendly/parseOnly'
 import rehypeRaw from 'rehype-raw'
-import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
-import type { Components } from 'react-markdown'
+import rehypeSanitize, { defaultSchema, type Options as SanitizeSchema } from 'rehype-sanitize'
+import remend from 'remend'
 import { cn } from '@/lib/utils'
-import { isMermaidFence, isMermaidPre, renderMermaidFence } from './comment-mermaid-fence'
+import {
+  selectCommentMarkdownComponents,
+  isTrustedCompactImageSrc,
+  type CommentMarkdownLinkClickHandler,
+  type DocumentCodeBlockRenderer
+} from './comment-markdown-element-renderers'
+import {
+  remarkNativeChatFileLinks,
+  type FileLinkExists
+} from './comment-markdown-native-chat-file-links'
+import { CommentMarkdownBlockLineContext } from './comment-markdown-code-renderers'
+import { remarkUnknownHtmlAsText } from './comment-markdown-unknown-html-as-text'
+import { CommentMarkdownWords } from './CommentMarkdownWords'
+import {
+  MemoizedMarkdown,
+  useMarkdownBlocks,
+  markdownBlockContent
+} from './comment-markdown-block-pipeline'
+import {
+  GITHUB_CALLOUT_SANITIZE_ATTRIBUTE,
+  remarkGitHubCallouts
+} from '@/lib/remark-github-callouts'
+import { remarkAutolinkLiteralProseBoundary } from '@/lib/remark-autolink-literal-prose-boundary'
 
-type MarkdownPlugins = NonNullable<React.ComponentProps<typeof Markdown>['rehypePlugins']>
-type UrlTransform = NonNullable<React.ComponentProps<typeof Markdown>['urlTransform']>
+export type { CommentMarkdownLinkClickHandler } from './comment-markdown-element-renderers'
+
+type MarkdownPlugins = NonNullable<MarkdownOptions['rehypePlugins']>
+type RemarkPlugins = NonNullable<MarkdownOptions['remarkPlugins']>
+type UrlTransform = NonNullable<MarkdownOptions['urlTransform']>
 
 type GitHubRepoReference = {
   owner: string
@@ -34,77 +70,6 @@ type MarkdownNode = {
   children?: MarkdownNode[]
 }
 
-function isTrustedCompactImageSrc(src: string | undefined): src is string {
-  if (!src) {
-    return false
-  }
-  const normalized = src.trim().toLowerCase()
-  return (
-    normalized.startsWith('blob:') || /^data:image\/(?:png|jpe?g|gif|webp);base64,/.test(normalized)
-  )
-}
-
-function isGitHubUserAttachmentUrl(href: string | undefined): href is string {
-  if (!href) {
-    return false
-  }
-  try {
-    const url = new URL(href)
-    return (
-      url.protocol === 'https:' &&
-      url.hostname === 'github.com' &&
-      url.pathname.startsWith('/user-attachments/assets/')
-    )
-  } catch {
-    return false
-  }
-}
-
-function isBareAutolink(children: React.ReactNode, href: string): boolean {
-  const text = React.Children.toArray(children).join('').trim()
-  return text === href
-}
-
-function GitHubUserAttachmentVideo({
-  href,
-  children
-}: {
-  href: string
-  children: React.ReactNode
-}): React.ReactElement {
-  const [failed, setFailed] = React.useState(false)
-
-  if (failed) {
-    return (
-      <a
-        href={href}
-        target="_blank"
-        rel="noreferrer"
-        className="break-all text-primary underline underline-offset-2 hover:text-primary/80"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {children}
-      </a>
-    )
-  }
-
-  return (
-    <video
-      src={href}
-      controls
-      preload="metadata"
-      playsInline
-      className="my-3 max-h-[28rem] max-w-full rounded-md bg-black/80 outline outline-1 outline-black/10 dark:outline-white/10"
-      onClick={(e) => e.stopPropagation()}
-      onError={() => setFailed(true)}
-    >
-      <a href={href} target="_blank" rel="noreferrer">
-        {children}
-      </a>
-    </video>
-  )
-}
-
 const commentMarkdownUrlTransform: UrlTransform = (value, key, node) => {
   if (key === 'src' && node?.tagName === 'img' && isTrustedCompactImageSrc(value)) {
     return value
@@ -112,205 +77,21 @@ const commentMarkdownUrlTransform: UrlTransform = (value, key, node) => {
   return defaultUrlTransform(value)
 }
 
-// Why: sidebar comments are rendered at 11px in a narrow card, so we strip
-// block-level wrappers that add unwanted margins and only keep inline
-// formatting (bold, italic, code, links) plus compact lists and line breaks.
-// Using react-markdown (already a project dependency) lets AI agents write
-// markdown via `orca worktree set --comment` and have it render nicely.
-
-const compactComponents: Components = {
-  // Strip <p> wrappers to avoid double margins in the tight card layout.
-  p: ({ children }) => <span className="comment-md-p">{children}</span>,
-  // Open links externally — sidebar is not a navigation context.
-  a: ({ href, children }) => (
-    <a
-      href={href}
-      target="_blank"
-      rel="noreferrer"
-      className="underline underline-offset-2 text-foreground/80 hover:text-foreground"
-      onClick={(e) => e.stopPropagation()}
-    >
-      {children}
-    </a>
-  ),
-  // Why: react-markdown calls the `code` component for both inline `code`
-  // and the <code> inside fenced blocks (<pre><code>…</code></pre>). We
-  // always apply inline-code styling here; the wrapper div uses a CSS
-  // descendant selector ([&_pre_code]) at higher specificity to strip
-  // the pill background/padding when code is inside a <pre>. This is
-  // more reliable than checking `className` — which is only set when
-  // the fenced block specifies a language (```js), not for bare ```.
-  // Why: compact comment previews live in dense cards; keep diagram fences as
-  // bounded source blocks so async SVG renders do not reshape sidebar lists.
-  code: ({ children }) => (
-    <code className="rounded bg-accent px-1 py-px text-[10px] font-mono [overflow-wrap:anywhere]">
-      {children}
-    </code>
-  ),
-  // Compact pre blocks — no syntax highlighting needed for short comments.
-  pre: ({ children }) => (
-    <pre className="my-1 max-h-32 max-w-full overflow-x-auto rounded bg-accent p-1.5 text-[10px] font-mono">
-      {children}
-    </pre>
-  ),
-  // Compact lists
-  ul: ({ children }) => <ul className="my-0.5 ml-3 list-disc space-y-0">{children}</ul>,
-  ol: ({ children }) => <ol className="my-0.5 ml-3 list-decimal space-y-0">{children}</ol>,
-  // Why: GFM task list checkboxes are non-functional in a read-only comment
-  // card (clicking them would just open the edit modal via the parent's
-  // onClick). Rendering them disabled avoids a misleading interactive
-  // affordance.
-  li: ({ children }) => (
-    <li className="leading-normal [&>input]:pointer-events-none">{children}</li>
-  ),
-  // Headings render as bold text at the same size — no visual hierarchy needed
-  // in a tiny sidebar card.
-  h1: ({ children }) => <span className="font-bold">{children}</span>,
-  h2: ({ children }) => <span className="font-bold">{children}</span>,
-  h3: ({ children }) => <span className="font-semibold">{children}</span>,
-  h4: ({ children }) => <span className="font-semibold">{children}</span>,
-  h5: ({ children }) => <span className="font-semibold">{children}</span>,
-  h6: ({ children }) => <span className="font-semibold">{children}</span>,
-  // Horizontal rules as a subtle divider
-  hr: () => <hr className="my-1 border-border/50" />,
-  // Compact blockquotes
-  blockquote: ({ children }) => (
-    <blockquote className="my-0.5 border-l-2 border-border/60 pl-2 text-muted-foreground/80">
-      {children}
-    </blockquote>
-  ),
-  // Why: agent replies and workspace notes often carry screenshot markdown
-  // like "Image #1"; compact cards inline app-managed thumbnails without
-  // auto-fetching arbitrary remote image URLs.
-  img: ({ alt, src }) => {
-    if (!isTrustedCompactImageSrc(src)) {
-      if (!src) {
-        return alt ? <span>{alt}</span> : null
-      }
-      return (
-        <a
-          href={src}
-          target="_blank"
-          rel="noreferrer"
-          className="underline underline-offset-2 text-foreground/80 hover:text-foreground"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {alt || src}
-        </a>
-      )
-    }
-
-    const image = (
-      <img
-        src={src}
-        alt={alt ?? ''}
-        className="my-1 max-h-32 max-w-full rounded-sm object-contain outline outline-1 outline-border/70"
-      />
-    )
-    return src ? (
-      <a href={src} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
-        {image}
-      </a>
-    ) : (
-      image
-    )
-  },
-  // Why: GFM tables in a ~200px sidebar would overflow badly. Wrapping in an
-  // overflow container keeps the card layout stable while still letting the
-  // user scroll to see the full table.
-  table: ({ children }) => (
-    <div className="my-1 max-w-full overflow-x-auto">
-      <table className="text-[10px] border-collapse [&_td]:border [&_td]:border-border/40 [&_td]:px-1 [&_td]:py-0.5 [&_th]:border [&_th]:border-border/40 [&_th]:px-1 [&_th]:py-0.5 [&_th]:font-semibold [&_th]:text-left">
-        {children}
-      </table>
-    </div>
-  )
+const commentMarkdownFileUriUrlTransform: UrlTransform = (value, key, node) => {
+  if (key === 'href' && node?.tagName === 'a' && value.trim().toLowerCase().startsWith('file:')) {
+    return value
+  }
+  return commentMarkdownUrlTransform(value, key, node)
 }
 
-const documentComponents: Components = {
-  p: ({ children }) => <p className="my-2 first:mt-0 last:mb-0">{children}</p>,
-  a: ({ href, children }) =>
-    isGitHubUserAttachmentUrl(href) && isBareAutolink(children, href) ? (
-      // Why: GitHub's API returns uploaded videos as bare attachment links;
-      // GitHub.com upgrades them to media embeds in its own renderer.
-      <GitHubUserAttachmentVideo href={href}>{children}</GitHubUserAttachmentVideo>
-    ) : (
-      <a
-        href={href}
-        target="_blank"
-        rel="noreferrer"
-        className="break-all text-primary underline underline-offset-2 hover:text-primary/80"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {children}
-      </a>
-    ),
-  code: ({ className, children }) =>
-    isMermaidFence(className) ? (
-      renderMermaidFence(
-        children,
-        'my-3 min-w-0 max-w-full overflow-x-auto rounded-md border border-border/60 p-3 [&_.mermaid-block]:min-w-0 [&_.mermaid-block_pre]:my-0 [&_.mermaid-block_pre]:max-h-80 [&_.mermaid-block_pre]:max-w-full [&_.mermaid-block_pre]:overflow-x-auto [&_.mermaid-block_pre]:rounded-md [&_.mermaid-block_pre]:bg-accent [&_.mermaid-block_pre]:p-3 [&_.mermaid-block_pre]:font-mono [&_.mermaid-block_pre]:text-[12px]'
-      )
-    ) : (
-      <code className="rounded bg-accent px-1.5 py-0.5 font-mono text-[0.92em] [overflow-wrap:anywhere]">
-        {children}
-      </code>
-    ),
-  // Mermaid fences render a <div>, which is invalid inside <pre>, so unwrap them.
-  pre: ({ children }) =>
-    isMermaidPre(children) ? (
-      <>{children}</>
-    ) : (
-      <pre className="my-3 max-h-80 max-w-full overflow-x-auto rounded-md bg-accent p-3 font-mono text-[12px]">
-        {children}
-      </pre>
-    ),
-  ul: ({ children }) => <ul className="my-2 ml-5 list-disc space-y-1">{children}</ul>,
-  ol: ({ children }) => <ol className="my-2 ml-5 list-decimal space-y-1">{children}</ol>,
-  li: ({ children }) => (
-    <li className="leading-relaxed [&>input]:pointer-events-none">{children}</li>
-  ),
-  h1: ({ children }) => (
-    <h1 className="mb-2 mt-4 text-[18px] font-semibold leading-tight first:mt-0">{children}</h1>
-  ),
-  h2: ({ children }) => (
-    <h2 className="mb-2 mt-4 text-[16px] font-semibold leading-tight first:mt-0">{children}</h2>
-  ),
-  h3: ({ children }) => (
-    <h3 className="mb-2 mt-3 text-[15px] font-semibold leading-tight first:mt-0">{children}</h3>
-  ),
-  h4: ({ children }) => <h4 className="mb-1 mt-3 font-semibold first:mt-0">{children}</h4>,
-  h5: ({ children }) => <h5 className="mb-1 mt-3 font-semibold first:mt-0">{children}</h5>,
-  h6: ({ children }) => <h6 className="mb-1 mt-3 font-semibold first:mt-0">{children}</h6>,
-  hr: () => <hr className="my-4 border-border/60" />,
-  blockquote: ({ children }) => (
-    <blockquote className="my-3 border-l-2 border-border/70 pl-3 text-muted-foreground">
-      {children}
-    </blockquote>
-  ),
-  img: ({ alt, src }) => (
-    <img
-      src={src}
-      alt={alt ?? ''}
-      className="my-3 max-h-96 max-w-full rounded-md object-contain outline outline-1 outline-black/10 dark:outline-white/10"
-    />
-  ),
-  // Why: GitHub issue/PR bodies commonly contain GFM tables. The dashboard
-  // dialog is wide enough to show them, but still needs overflow containment.
-  table: ({ children }) => (
-    <div className="my-3 max-w-full overflow-x-auto rounded-md border border-border/60">
-      <table className="min-w-full border-collapse text-[13px] [&_td]:border [&_td]:border-border/50 [&_td]:px-2 [&_td]:py-1.5 [&_th]:border [&_th]:border-border/50 [&_th]:bg-muted/60 [&_th]:px-2 [&_th]:py-1.5 [&_th]:text-left [&_th]:font-semibold">
-        {children}
-      </table>
-    </div>
-  )
-}
-
-// Why: standard CommonMark collapses single newlines into spaces. The old
-// plain-text renderer used whitespace-pre-wrap which preserved them. Adding
-// remark-breaks converts single newlines to <br>, keeping backward compat
-// with existing plain-text comments that rely on newline formatting.
-const remarkPlugins = [remarkGfm, remarkBreaks]
+// remark-breaks preserves newlines expected by existing plain-text comments; CommonMark otherwise collapses them.
+const remarkPlugins = [
+  remarkGfm,
+  remarkCjkFriendly,
+  remarkAutolinkLiteralProseBoundary,
+  remarkGitHubCallouts,
+  remarkBreaks
+]
 
 const GITHUB_REFERENCE_PATTERN = /(?:\b([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+))?#([1-9][0-9]*)\b/g
 
@@ -384,8 +165,7 @@ function transformGitHubReferenceChildren(
   const nextChildren: MarkdownNode[] = []
   for (const child of node.children) {
     if (child.type === 'text' && child.value !== undefined) {
-      // Why: generated agent comments can contain thousands of issue refs;
-      // appending iteratively avoids V8's argument-list limit.
+      // Agent replies can contain thousands of issue refs; append iteratively to avoid V8’s argument limit.
       for (const part of splitGitHubReferenceText(child.value, defaultRepo)) {
         nextChildren.push(part)
       }
@@ -404,32 +184,94 @@ export function remarkGitHubReferences(
   return () => (tree) => transformGitHubReferenceChildren(tree, defaultRepo)
 }
 
-const commentMarkdownSanitizeSchema = {
+const commentMarkdownSanitizeSchema: SanitizeSchema = {
   ...defaultSchema,
   tagNames: [...(defaultSchema.tagNames ?? []), 'details', 'summary', 'sub', 'sup', 'ins', 'kbd'],
   attributes: {
     ...defaultSchema.attributes,
     a: [...(defaultSchema.attributes?.a ?? []), 'href', 'title'],
+    blockquote: [
+      ...(defaultSchema.attributes?.blockquote ?? []),
+      GITHUB_CALLOUT_SANITIZE_ATTRIBUTE
+    ],
     details: [...(defaultSchema.attributes?.details ?? []), 'open'],
     img: [...(defaultSchema.attributes?.img ?? []), 'src', 'alt', 'title', 'width', 'height'],
     input: [...(defaultSchema.attributes?.input ?? []), 'type', 'checked', 'disabled'],
+    code: [
+      ...(defaultSchema.attributes?.code ?? []),
+      ['className', 'language-math', 'math-inline', 'math-display']
+    ],
+    span: [
+      ...(defaultSchema.attributes?.span ?? []),
+      ['className', 'language-math', 'math-inline', 'math-display', 'whitespace-pre-wrap']
+    ],
+    div: [
+      ...(defaultSchema.attributes?.div ?? []),
+      ['className', 'language-math', 'math-inline', 'math-display', 'whitespace-pre-wrap']
+    ],
     td: [...(defaultSchema.attributes?.td ?? []), 'align'],
     th: [...(defaultSchema.attributes?.th ?? []), 'align']
   },
   protocols: {
     ...defaultSchema.protocols,
-    src: [...(defaultSchema.protocols?.src ?? []), 'data', 'blob']
+    // Allow file links through sanitize for native chat; other surfaces still strip them in URL transformation.
+    href: [...(defaultSchema.protocols?.href ?? []), 'file'],
+    src: [...(defaultSchema.protocols?.src ?? []), 'data', 'blob', 'orca-jira-image']
   }
 }
 
-// Why: GitHub comments often include safe raw HTML (`<sub>`, `<details>`,
-// `<br />`). Parse it, then sanitize immediately before React renders it.
+// Escape HTML before remark-breaks so newlines inside it still break.
+const unknownHtmlAsTextRemarkPlugins = [
+  remarkUnknownHtmlAsText(
+    new Set((commentMarkdownSanitizeSchema.tagNames ?? []).map((name) => name.toLowerCase()))
+  ),
+  ...remarkPlugins
+]
+
+// GitHub comments use raw HTML; parse it then sanitize before rendering.
 const rehypePlugins: MarkdownPlugins = [rehypeRaw, [rehypeSanitize, commentMarkdownSanitizeSchema]]
+
+/** Keep extensions stable per surface; new objects rebuild components and remount their contents. */
+export type CommentMarkdownExtension = {
+  remarkPlugins: RemarkPlugins
+  /** Extra flow syntax requires one of these markers; omitted means unknown grammar. */
+  extraFlowSyntaxMarkers?: readonly string[]
+  sanitizeAttributes: Record<string, readonly string[]>
+  components: Components
+}
+
+function extensionRehypePlugins(extension: CommentMarkdownExtension): MarkdownPlugins {
+  const attributes: NonNullable<SanitizeSchema['attributes']> = {
+    ...commentMarkdownSanitizeSchema.attributes
+  }
+  for (const [tagName, names] of Object.entries(extension.sanitizeAttributes)) {
+    attributes[tagName] = [...(attributes[tagName] ?? []), ...names]
+  }
+  return [rehypeRaw, [rehypeSanitize, { ...commentMarkdownSanitizeSchema, attributes }]]
+}
 
 type CommentMarkdownProps = React.ComponentPropsWithoutRef<'div'> & {
   content: string
+  math?: boolean
   variant?: 'compact' | 'document'
   githubRepo?: GitHubRepoReference | null
+  onLinkClick?: CommentMarkdownLinkClickHandler
+  allowFileUriLinks?: boolean
+  /** Turns detected file paths into links, keeping only those this confirms exist. */
+  fileLinkExists?: FileLinkExists
+  expandImages?: boolean
+  renderCodeBlock?: DocumentCodeBlockRenderer
+  renderMermaid?: boolean
+  keepMermaidSourceWhilePending?: boolean
+  /** The content is still being appended to: render it block by block, so each
+   *  append re-renders only the last block, and close markup its end leaves open.
+   *  The block-by-block render stays on once seen. */
+  growing?: boolean
+  /** Give each word its own `data-word` element, for a stylesheet to animate as words arrive. */
+  fadeWords?: boolean
+  extension?: CommentMarkdownExtension
+  /** Show raw HTML that sanitize would strip as literal text instead of dropping its tags. */
+  unknownHtmlAsText?: boolean
 }
 
 // Why forwardRef + rest props: Radix's HoverCardTrigger asChild merges a ref
@@ -437,37 +279,112 @@ type CommentMarkdownProps = React.ComponentPropsWithoutRef<'div'> & {
 // the child. Without forwarding both, the hover card cannot open or position.
 const CommentMarkdown = React.memo(
   React.forwardRef<HTMLDivElement, CommentMarkdownProps>(function CommentMarkdown(
-    { content, className, variant = 'compact', githubRepo, ...rest },
+    {
+      content,
+      math = false,
+      className,
+      variant = 'compact',
+      githubRepo,
+      onLinkClick,
+      allowFileUriLinks = false,
+      fileLinkExists,
+      expandImages = false,
+      renderCodeBlock,
+      renderMermaid = true,
+      keepMermaidSourceWhilePending = false,
+      growing = false,
+      fadeWords = false,
+      extension,
+      onCopy,
+      unknownHtmlAsText = false,
+      ...rest
+    },
     ref
   ) {
-    const components = variant === 'document' ? documentComponents : compactComponents
-    const activeRemarkPlugins = React.useMemo(
-      () => (githubRepo ? [...remarkPlugins, remarkGitHubReferences(githubRepo)] : remarkPlugins),
-      [githubRepo]
+    const baseComponents = React.useMemo(
+      () =>
+        selectCommentMarkdownComponents({
+          variant,
+          onLinkClick,
+          renderCodeBlock,
+          expandImages
+        }),
+      [expandImages, renderCodeBlock, variant, onLinkClick]
     )
+    const components = React.useMemo(
+      () => (extension ? { ...baseComponents, ...extension.components } : baseComponents),
+      [baseComponents, extension]
+    )
+    const fadingComponents = React.useMemo(
+      () => ({ ...components, span: CommentMarkdownWords }),
+      [components]
+    )
+    const activeRehypePlugins = React.useMemo<MarkdownPlugins>(
+      () => (extension ? extensionRehypePlugins(extension) : rehypePlugins),
+      [extension]
+    )
+    const activeRemarkPlugins = React.useMemo(() => {
+      const basePlugins = unknownHtmlAsText ? unknownHtmlAsTextRemarkPlugins : remarkPlugins
+      const plugins = fileLinkExists
+        ? [...basePlugins, remarkNativeChatFileLinks(fileLinkExists)]
+        : basePlugins
+      const withMath: RemarkPlugins = math ? [...plugins, remarkChatMath] : plugins
+      const withExtension = extension ? [...withMath, ...extension.remarkPlugins] : withMath
+      return githubRepo ? [...withExtension, remarkGitHubReferences(githubRepo)] : withExtension
+    }, [extension, fileLinkExists, githubRepo, math, unknownHtmlAsText])
+    const blocks = useMarkdownBlocks(content, growing, math, activeRemarkPlugins, extension)
+    const [hadWordFade, setHadWordFade] = React.useState(fadeWords)
+    if (fadeWords && !hadWordFade) {
+      setHadWordFade(true)
+    }
+    const wrapsWords = fadeWords || hadWordFade
 
     return (
-      <div
-        ref={ref}
-        className={cn(
-          // Reset inline-code pill styles when <code> is inside a <pre> block.
-          // The descendant selector (pre code) has higher specificity than the
-          // direct utility classes on <code>, so these overrides win reliably.
-          '[&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:rounded-none',
-          'min-w-0 max-w-full [overflow-wrap:anywhere]',
-          className
-        )}
-        {...rest}
-      >
-        <Markdown
-          remarkPlugins={activeRemarkPlugins}
-          rehypePlugins={rehypePlugins}
-          components={components}
-          urlTransform={commentMarkdownUrlTransform}
-        >
-          {content}
-        </Markdown>
-      </div>
+      <CommentMarkdownMermaidContext.Provider value={renderMermaid}>
+        <CommentMarkdownMermaidSourceContext.Provider value={keepMermaidSourceWhilePending}>
+          <div
+            ref={ref}
+            className={cn(
+              // Descendant pre/code selectors outrank inline-code pill utilities to reset block-code styling.
+              '[&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:rounded-none',
+              'min-w-0 max-w-full [overflow-wrap:anywhere]',
+              className
+            )}
+            onCopy={(event) => {
+              onCopy?.(event)
+              if (math && !event.defaultPrevented) {
+                copyChatMathSelection(event)
+              }
+            }}
+            {...rest}
+          >
+            {blocks.map((block, index) => (
+              <CommentMarkdownBlockLineContext.Provider key={block.start} value={block.line}>
+                <MemoizedMarkdown
+                  block={block.tree ? block : undefined}
+                  remarkPlugins={activeRemarkPlugins}
+                  rehypePlugins={activeRehypePlugins}
+                  math={math}
+                  fadeWords={wrapsWords}
+                  components={wrapsWords ? fadingComponents : components}
+                  urlTransform={
+                    allowFileUriLinks
+                      ? commentMarkdownFileUriUrlTransform
+                      : commentMarkdownUrlTransform
+                  }
+                >
+                  {growing && index === blocks.length - 1 && !block.literalMath
+                    ? remend(markdownBlockContent(block), {
+                        linkMode: 'text-only',
+                        ...(math ? { katex: false, inlineKatex: false } : {})
+                      })
+                    : markdownBlockContent(block)}
+                </MemoizedMarkdown>
+              </CommentMarkdownBlockLineContext.Provider>
+            ))}
+          </div>
+        </CommentMarkdownMermaidSourceContext.Provider>
+      </CommentMarkdownMermaidContext.Provider>
     )
   })
 )

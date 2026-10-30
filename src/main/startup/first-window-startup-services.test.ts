@@ -41,7 +41,37 @@ describe('startFirstWindowStartupServices', () => {
     resolveHooks()
     await started.firstWindowReady
     await started.localPtyReady
+    await started.localPtyProviderReady
     expect(completed).toBe(true)
+  })
+
+  it('opens the provider gate when daemon startup finishes without waiting for hooks', async () => {
+    let resolveDaemon!: () => void
+    let resolveHooks!: () => void
+    const started = startFirstWindowStartupServices({
+      startDaemonPtyProvider: () =>
+        new Promise<void>((resolve) => {
+          resolveDaemon = resolve
+        }),
+      startAgentHookServer: () =>
+        new Promise<void>((resolve) => {
+          resolveHooks = resolve
+        }),
+      onDaemonError: vi.fn(),
+      onAgentHookServerError: vi.fn()
+    })
+    await Promise.resolve()
+
+    let allServicesReady = false
+    void started.localPtyReady.then(() => {
+      allServicesReady = true
+    })
+    resolveDaemon()
+    await expect(started.localPtyProviderReady).resolves.toBeUndefined()
+    expect(allServicesReady).toBe(false)
+
+    resolveHooks()
+    await started.localPtyReady
   })
 
   it('logs each service failure and still resolves the startup barrier', async () => {
@@ -57,6 +87,7 @@ describe('startFirstWindowStartupServices', () => {
 
     await expect(started.firstWindowReady).resolves.toBeUndefined()
     await expect(started.localPtyReady).resolves.toBeUndefined()
+    await expect(started.localPtyProviderReady).resolves.toBeUndefined()
 
     expect(onDaemonError).toHaveBeenCalledWith(expect.any(Error))
     expect(onAgentHookServerError).toHaveBeenCalledWith(expect.any(Error))
@@ -79,6 +110,7 @@ describe('startFirstWindowStartupServices', () => {
 
     await expect(started.firstWindowReady).resolves.toBeUndefined()
     await expect(started.localPtyReady).resolves.toBeUndefined()
+    await expect(started.localPtyProviderReady).resolves.toBeUndefined()
 
     expect(onDaemonError).toHaveBeenCalledWith(expect.any(Error))
     expect(onAgentHookServerError).toHaveBeenCalledWith(expect.any(Error))
@@ -111,14 +143,14 @@ describe('startFirstWindowStartupServices', () => {
       await vi.advanceTimersByTimeAsync(FIRST_WINDOW_STARTUP_SERVICE_TIMEOUT_MS)
       await expect(started.firstWindowReady).resolves.toBeUndefined()
 
-      // Why: opening the PTY gate before the daemon attempt finishes would
-      // spawn non-restorable LocalPtyProvider fallback terminals (#5232).
+      // Opening before daemon startup settles would create non-restorable fallback terminals (#5232).
       expect(ptyGateOpened).toBe(false)
       expect(daemonSignal?.aborted).toBe(false)
       expect(onDaemonError).not.toHaveBeenCalled()
 
       resolveDaemon()
       await expect(started.localPtyReady).resolves.toBeUndefined()
+      await expect(started.localPtyProviderReady).resolves.toBeUndefined()
       expect(daemonSignal?.aborted).toBe(false)
       expect(onDaemonError).not.toHaveBeenCalled()
     } finally {
@@ -147,6 +179,7 @@ describe('startFirstWindowStartupServices', () => {
       await vi.advanceTimersByTimeAsync(LOCAL_PTY_STARTUP_FAIL_OPEN_TIMEOUT_MS)
       await expect(started.firstWindowReady).resolves.toBeUndefined()
       await expect(started.localPtyReady).resolves.toBeUndefined()
+      await expect(started.localPtyProviderReady).resolves.toBeUndefined()
 
       expect(onDaemonError).toHaveBeenCalledWith(expect.any(Error))
       expect(onAgentHookServerError).not.toHaveBeenCalled()

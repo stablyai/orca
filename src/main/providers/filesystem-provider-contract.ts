@@ -1,0 +1,133 @@
+import type { PathExistenceResult } from '../../shared/path-existence-batch'
+import type { SearchOptions, SearchResult } from '../../shared/code-search-types'
+import type {
+  DocPreviewFileAccessRequest,
+  DocPreviewFileAccessResult,
+  DocPreviewFileChunk,
+  DocPreviewFileTarget
+} from '../../shared/doc-preview-file-access'
+import type { DirEntry, FsChangeEvent, MarkdownDocument } from '../../shared/filesystem-entry-types'
+import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-space-types'
+
+export type FileStat = {
+  size: number
+  type: 'file' | 'directory' | 'symlink'
+  mtime: number
+  mtimeMs?: number
+  /** Local only: SSH hosts do not report it. */
+  ctimeMs?: number
+  dev?: number
+  ino?: number
+  nlink?: number
+}
+
+export type FileReadResult = {
+  content: string
+  isBinary: boolean
+  isImage?: boolean
+  mimeType?: string
+}
+
+export type FileReadLimits = {
+  maxBinaryBytes?: number
+  maxTextBytes?: number
+}
+
+export type FileRangeReadResult = {
+  /** Hosts fill the requested range or reach EOF; over-cap requests throw, so short reads always mean EOF. */
+  bytes: Buffer
+  bytesRead: number
+}
+
+export type IFilesystemProvider = {
+  readDir(dirPath: string, options?: { followSymlinks?: boolean }): Promise<DirEntry[]>
+  readFile(filePath: string, limits?: FileReadLimits): Promise<FileReadResult>
+  readDocPreviewFile?(request: DocPreviewFileAccessRequest): Promise<DocPreviewFileAccessResult>
+  readDocPreviewFileChunk?(
+    request: DocPreviewFileTarget,
+    offset: number,
+    length: number
+  ): Promise<DocPreviewFileChunk>
+  /** Optional on older hosts; unsupported reads throw instead of transferring whole files per tail chunk.
+   * Position/end must be safe nonnegative offsets; length must be positive and within MAX_FILE_RANGE_READ_BYTES. */
+  readFileRange?(
+    filePath: string,
+    position: number,
+    length: number,
+    options?: { signal?: AbortSignal }
+  ): Promise<FileRangeReadResult>
+  supportsFileRangeRead?(options?: { signal?: AbortSignal }): Promise<boolean>
+  readTerminalArtifact?(
+    filePath: string,
+    options: TerminalArtifactAccessOptions
+  ): Promise<FileReadResult>
+  downloadFile?(sourcePath: string, destinationPath: string): Promise<void>
+  downloadFolder?: (src: string, dest: string, options?: { signal?: AbortSignal }) => Promise<void>
+  openFileUploadSession?(): Promise<FileUploadSession>
+  getTempDir?(): Promise<string>
+  writeFile(filePath: string, content: string): Promise<void>
+  writeTerminalArtifact?(
+    filePath: string,
+    content: string,
+    options: TerminalArtifactAccessOptions
+  ): Promise<FileStat>
+  writeFileBase64(filePath: string, contentBase64: string): Promise<void>
+  writeFileBase64Chunk(filePath: string, contentBase64: string, append: boolean): Promise<void>
+  pathsExist?(filePaths: string[]): Promise<PathExistenceResult[]>
+  stat(filePath: string): Promise<FileStat>
+  lstat?(filePath: string): Promise<FileStat>
+  deletePath(targetPath: string, recursive?: boolean): Promise<void>
+  createFile(filePath: string): Promise<void>
+  createDir(dirPath: string): Promise<void>
+  createDirNoClobber(dirPath: string): Promise<void>
+  rename(oldPath: string, newPath: string): Promise<void>
+  renameNoClobber(oldPath: string, newPath: string): Promise<void>
+  copy(source: string, destination: string): Promise<void>
+  realpath(filePath: string): Promise<string>
+  search(opts: SearchOptions, options?: { signal?: AbortSignal }): Promise<SearchResult>
+  listFiles(
+    rootPath: string,
+    options?: {
+      excludePaths?: string[]
+      signal?: AbortSignal
+      maxResults?: number
+      searchQuery?: string
+      candidatePaths?: string[]
+      includeIgnored?: boolean
+      followSymlinks?: boolean
+    }
+  ): Promise<string[]>
+  listMarkdownDocuments?(
+    rootPath: string,
+    options?: { signal?: AbortSignal }
+  ): Promise<MarkdownDocument[]>
+  supportsQuickOpenSearch?(options?: {
+    signal?: AbortSignal
+    minimumVersion?: number
+  }): Promise<boolean>
+  scanWorkspaceSpace?(
+    rootPath: string,
+    options?: { signal?: AbortSignal }
+  ): Promise<WorkspaceSpaceDirectoryScanResult>
+  watch(
+    rootPath: string,
+    callback: (events: FsChangeEvent[]) => void,
+    options?: { signal?: AbortSignal; onTerminalError?: (error: Error) => void }
+  ): Promise<() => void>
+  closeWatch?(rootPath: string): Promise<void>
+}
+
+export type FileUploadSession = {
+  uploadFile(
+    sourcePath: string,
+    destinationPath: string,
+    options?: { exclusive?: boolean }
+  ): Promise<void>
+  close(): void
+}
+
+export type TerminalArtifactAccessOptions = {
+  expectedRealPath: string
+  expectedStatIdentity: string | null
+  maxBytes: number
+}

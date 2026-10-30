@@ -1,15 +1,36 @@
 import { describe, expect, it } from 'vitest'
-import { getDevInstanceIdentity } from './dev-instance-identity'
+import { getDevInstanceIdentity, shouldApplyPreReadyAppName } from './dev-instance-identity'
 
 describe('dev-instance-identity', () => {
   it('keeps packaged identity stable', () => {
     expect(getDevInstanceIdentity(false, {})).toMatchObject({
       name: 'Orca',
+      appName: 'Orca',
       isDev: false,
       devLabel: null,
       dockBadgeLabel: null,
       appUserModelId: 'com.stablyai.orca'
     })
+  })
+
+  it('pins a stable dev appName across branches so the safeStorage key does not churn', () => {
+    const a = getDevInstanceIdentity(true, { ORCA_DEV_BRANCH: 'feature/a' })
+    const b = getDevInstanceIdentity(true, { ORCA_DEV_BRANCH: 'feature/b' })
+
+    expect(a.name).not.toBe(b.name)
+    expect(a.appName).toBe('Orca Dev')
+    expect(b.appName).toBe('Orca Dev')
+    expect(a.appName).not.toBe('Orca')
+  })
+
+  it('never renames a packaged build before ready', () => {
+    // Packaged forks must retain their CFBundleName-derived safeStorage key or encrypted secrets become orphaned.
+    expect(shouldApplyPreReadyAppName(getDevInstanceIdentity(false, {}))).toBe(false)
+    expect(shouldApplyPreReadyAppName({ isDev: false })).toBe(false)
+  })
+
+  it('applies the dev name before ready so safeStorage sees it', () => {
+    expect(shouldApplyPreReadyAppName(getDevInstanceIdentity(true, {}))).toBe(true)
   })
 
   it('derives a readable dev label from worktree and branch env', () => {

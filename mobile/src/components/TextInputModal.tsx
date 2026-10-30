@@ -1,14 +1,10 @@
 import { useState } from 'react'
-import {
-  View,
-  Text,
-  TextInput,
-  Pressable,
-  StyleSheet,
-  Platform,
-  type KeyboardTypeOptions
-} from 'react-native'
+import { View, Text, TextInput, Pressable, Platform, type KeyboardTypeOptions } from 'react-native'
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 import { BottomDrawer } from './BottomDrawer'
 
 type Props = {
@@ -23,6 +19,8 @@ type Props = {
   keyboardType?: KeyboardTypeOptions
   onSubmit: (value: string) => void
   onCancel: () => void
+  /** Called once the drawer has gone, which is when the field stops holding the focus. */
+  onAfterClose?: () => void
 }
 
 export function TextInputModal({
@@ -31,19 +29,21 @@ export function TextInputModal({
   message,
   defaultValue = '',
   placeholder,
-  submitLabel = 'Save',
+  submitLabel,
   selectTextOnFocus = false,
   allowEmpty = false,
   keyboardType,
   onSubmit,
-  onCancel
+  onCancel,
+  onAfterClose
 }: Props) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const [value, setValue] = useState(defaultValue)
   const [previousVisible, setPreviousVisible] = useState(visible)
   const [previousDefaultValue, setPreviousDefaultValue] = useState(defaultValue)
 
-  // Why: reset before the opening commit so the drawer never paints the
-  // previous modal value while preserving the existing close animation state.
+  // Reset before opening commit to prevent previous-value flash; preserve close-animation state.
   const shouldResetValue = visible && (!previousVisible || defaultValue !== previousDefaultValue)
   if (visible !== previousVisible || shouldResetValue) {
     setPreviousVisible(visible)
@@ -63,7 +63,7 @@ export function TextInputModal({
   const canSubmit = allowEmpty || value.trim().length > 0
 
   return (
-    <BottomDrawer visible={visible} onClose={onCancel}>
+    <BottomDrawer visible={visible} onClose={onCancel} onAfterClose={onAfterClose}>
       <View style={styles.header}>
         <Text style={styles.title}>{title}</Text>
         {message ? <Text style={styles.message}>{message}</Text> : null}
@@ -90,7 +90,7 @@ export function TextInputModal({
           style={({ pressed }) => [styles.cancelButton, pressed && styles.buttonPressed]}
           onPress={onCancel}
         >
-          <Text style={styles.cancelText}>Cancel</Text>
+          <Text style={styles.cancelText}>{t('common.cancel', 'Cancel')}</Text>
         </Pressable>
         <Pressable
           style={({ pressed }) => [
@@ -101,14 +101,14 @@ export function TextInputModal({
           disabled={!canSubmit}
           onPress={handleSubmit}
         >
-          <Text style={styles.submitText}>{submitLabel}</Text>
+          <Text style={styles.submitText}>{submitLabel ?? t('common.save', 'Save')}</Text>
         </Pressable>
       </View>
     </BottomDrawer>
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   header: {
     paddingHorizontal: spacing.xs,
     paddingBottom: spacing.sm
@@ -123,17 +123,14 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: 2
   },
-  // Why: matches NewWorktreeModal's input — bgRaised on the modal
-  // background reads as a tappable surface (brighter than the wrapper)
-  // rather than a recessed pit (darker than the wrapper, which is what
-  // bgBase looked like inside a bgPanel group).
+  // Match workspace input: bgRaised on bgPanel reads tappable; bgBase looked recessed.
   input: {
     backgroundColor: colors.bgRaised,
     color: colors.textPrimary,
     borderRadius: radii.input,
     paddingHorizontal: spacing.md,
     paddingVertical: Platform.OS === 'ios' ? spacing.sm + 2 : spacing.sm,
-    fontSize: typography.bodySize,
+    fontSize: TEXT_INPUT_FONT_SIZE,
     borderWidth: 1,
     borderColor: colors.borderSubtle
   },
@@ -170,4 +167,4 @@ const styles = StyleSheet.create({
     fontSize: typography.bodySize,
     fontWeight: '600'
   }
-})
+}))

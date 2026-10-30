@@ -2,11 +2,25 @@ import { useEffect, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { GitPullRequestArrow, Link2, RefreshCw } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { RpcClient } from '../../transport/rpc-client'
-import { resolveMobilePrPrefill, type MobilePrPrefill } from '../../source-control/mobile-pr-create'
-import { fetchWorktreeLinkedPR } from '../../source-control/mobile-pr-link'
-import { openMobilePrUrl } from '../MobilePrComposeSheet'
-import { MobilePrComposeForm } from './MobilePrComposeForm'
+import type { ConnectionState } from '../../transport/types'
+import type { MobileGitStatusResult } from '../../source-control/mobile-git-status'
+import {
+  getMobileCommitFailureStagedEntries,
+  type MobileCommitFailureRecovery
+} from '../../source-control/mobile-commit-failure-recovery'
+import { useMobileCommitFailureRecovery } from '../../source-control/use-mobile-commit-failure-recovery'
+import { MobileCommitFailurePanel } from '../../source-control/MobileCommitFailurePanel'
+import { mobileHostedReviewCreateIntentProgressMessage } from '../../source-control/mobile-hosted-review-create-intent'
+import type { MobileHostedReviewCreateIntentProgress } from '../../source-control/mobile-hosted-review-create-intent'
+import {
+  isMobileHostedReviewCommitFailure,
+  runMobileHostedReviewCreateIntent
+} from '../../source-control/mobile-hosted-review-create-intent-runner'
+import { fetchWorktreeGitHubPRLink } from '../../source-control/mobile-pr-link'
+import { openMobilePrUrl } from '../mobile-pr-url'
 import { MobileLinkPrForm } from './MobileLinkPrForm'
 import { prCreateEmptyStateStyles as styles } from './pr-create-empty-state-styles'
 
@@ -14,23 +28,48 @@ type Props = {
   client: RpcClient | null
   worktreeId: string
   gitBranch: string | null
+  gitStatus: MobileGitStatusResult | null
+  connState: ConnectionState
+  /** Named when the commit-recovery agent starts. */
+  workspaceLabel: string | null
   // Refetches the sidebar after create or an explicit empty-state refresh.
   onCreated: () => void
 }
 
-type Mode = 'choose' | 'create' | 'link'
+type Mode = 'choose' | 'link'
 
-// Empty state for a branch with no PR: create a new PR, or link an existing one
-// (the no-PR surface is the natural home for linking — desktop's link entry lives
-// on its PR card, but on mobile this is where a user lands with nothing linked).
-export function PrSidebarCreateEmptyState({ client, worktreeId, gitBranch, onCreated }: Props) {
-  const [prefill, setPrefill] = useState<MobilePrPrefill | null>(null)
+// Offer create or link when branch has no PR; empty state is mobile’s linking entry point.
+export function PrSidebarCreateEmptyState({
+  client,
+  worktreeId,
+  gitBranch,
+  gitStatus,
+  connState,
+  workspaceLabel,
+  onCreated
+}: Props) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const [mode, setMode] = useState<Mode>('choose')
   const [loading, setLoading] = useState(false)
   const [createWarning, setCreateWarning] = useState<string | null>(null)
-  // A persisted linkedPR while the branch shows no PR means the linked PR could
-  // not be resolved. Mention it while still allowing the user to relink.
+  const [commitFailureRecovery, setCommitFailureRecovery] =
+    useState<MobileCommitFailureRecovery | null>(null)
+  // Persisted linkedPR with no resolved PR warrants notice while preserving relink action.
   const [orphanLinkedPR, setOrphanLinkedPR] = useState<number | null>(null)
+  const commitFailureRecoveryAction = useMobileCommitFailureRecovery({
+    client,
+    connState,
+    worktreeId,
+    workspaceLabel,
+    failure: commitFailureRecovery
+  })
+
+  const refreshPrState = () => {
+    setCreateWarning(null)
+    setCommitFailureRecovery(null)
+    onCreated()
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -38,10 +77,10 @@ export function PrSidebarCreateEmptyState({ client, worktreeId, gitBranch, onCre
       setOrphanLinkedPR(null)
       return
     }
-    void fetchWorktreeLinkedPR(client, worktreeId)
-      .then((n) => {
+    void fetchWorktreeGitHubPRLink(client, worktreeId)
+      .then((link) => {
         if (!cancelled) {
-          setOrphanLinkedPR(n)
+          setOrphanLinkedPR(link.linkedPR)
         }
       })
       .catch(() => {
@@ -59,50 +98,62 @@ export function PrSidebarCreateEmptyState({ client, worktreeId, gitBranch, onCre
       return
     }
     setCreateWarning(null)
+    setCommitFailureRecovery(null)
     setLoading(true)
     try {
-      // Git-status fields are best-effort here (the sidebar has no working-tree
-      // state); base/title/body come from host eligibility regardless, and create
-      // does the authoritative branch-state validation.
-      const resolved = await resolveMobilePrPrefill(client, worktreeId, {
-        branch: gitBranch ?? undefined,
-        title: gitBranch ?? '',
-        hasUncommittedChanges: false,
-        hasUpstream: true,
-        ahead: 1,
-        behind: 0
+      if (!gitBranch) {
+        setCreateWarning(
+          t(
+            'pullRequest.prSidebarCreateEmptyState.branchRequired',
+            'Check out a branch before creating a pull request.'
+          )
+        )
+        return
+      }
+      // Skip local compose and use hosted create flow to match automated review path.
+      let progress: MobileHostedReviewCreateIntentProgress | null = null
+      const outcome = await runMobileHostedReviewCreateIntent(client, worktreeId, {
+        branch: gitBranch,
+        title: gitBranch,
+        status: gitStatus,
+        onProgress: (nextProgress) => {
+          progress = nextProgress
+          setCreateWarning(mobileHostedReviewCreateIntentProgressMessage(nextProgress))
+        }
       })
-      setPrefill(resolved)
-      setMode('create')
-    } catch {
-      // Best-effort: if prefill resolution rejects, leave the empty state so the
-      // user can retry rather than surfacing an unhandled rejection.
+      if (!outcome.ok) {
+        if (isMobileHostedReviewCommitFailure(outcome, progress)) {
+          const outcomeStagedEntries = getMobileCommitFailureStagedEntries(outcome.status?.entries)
+          setCommitFailureRecovery({
+            error: outcome.error,
+            commitMessage: outcome.commitMessage ?? gitBranch,
+            stagedEntries:
+              outcomeStagedEntries.length > 0
+                ? outcomeStagedEntries
+                : getMobileCommitFailureStagedEntries(gitStatus?.entries)
+          })
+        }
+        setCreateWarning(outcome.error)
+        return
+      }
+      setCreateWarning(outcome.warning ?? null)
+      openMobilePrUrl(outcome.url)
+      onCreated()
+    } catch (err) {
+      setCreateWarning(
+        err instanceof Error
+          ? err.message
+          : t(
+              'pullRequest.prSidebarCreateEmptyState.createFailed',
+              'Failed to create pull request.'
+            )
+      )
     } finally {
       setLoading(false)
     }
   }
 
   const canCreate = !!client && !!gitBranch
-
-  if (mode === 'create' && prefill) {
-    return (
-      <View style={styles.composerArea}>
-        <MobilePrComposeForm
-          client={client}
-          worktreeId={worktreeId}
-          prefill={prefill}
-          head={gitBranch}
-          onCancel={() => setMode('choose')}
-          onCreated={(url, warning) => {
-            setMode('choose')
-            setCreateWarning(warning ?? null)
-            openMobilePrUrl(url)
-            onCreated()
-          }}
-        />
-      </View>
-    )
-  }
 
   if (mode === 'link') {
     return (
@@ -113,7 +164,7 @@ export function PrSidebarCreateEmptyState({ client, worktreeId, gitBranch, onCre
           onCancel={() => setMode('choose')}
           onLinked={() => {
             setMode('choose')
-            onCreated()
+            refreshPrState()
           }}
         />
       </View>
@@ -125,14 +176,19 @@ export function PrSidebarCreateEmptyState({ client, worktreeId, gitBranch, onCre
       <View style={styles.header}>
         <View style={styles.headerTitle}>
           <GitPullRequestArrow size={14} color={colors.textSecondary} strokeWidth={2.2} />
-          <Text style={styles.headerLabel}>Pull request</Text>
+          <Text style={styles.headerLabel}>
+            {t('pullRequest.prSidebarCreateEmptyState.title', 'Pull request')}
+          </Text>
         </View>
         <View style={styles.headerActions}>
           <Pressable
             style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
-            onPress={onCreated}
+            onPress={refreshPrState}
             accessibilityRole="button"
-            accessibilityLabel="Refresh pull request"
+            accessibilityLabel={t(
+              'pullRequest.prSidebarCreateEmptyState.refreshPullRequest',
+              'Refresh pull request'
+            )}
             hitSlop={6}
           >
             <RefreshCw size={16} color={colors.textSecondary} strokeWidth={2.2} />
@@ -142,29 +198,57 @@ export function PrSidebarCreateEmptyState({ client, worktreeId, gitBranch, onCre
             onPress={() => void openComposer()}
             disabled={!canCreate || loading}
             accessibilityRole="button"
-            accessibilityLabel="Create pull request"
+            accessibilityLabel={t(
+              'pullRequest.prSidebarCreateEmptyState.createPullRequest',
+              'Create pull request'
+            )}
           >
             {loading ? (
               <ActivityIndicator color={colors.bgBase} />
             ) : (
               <GitPullRequestArrow size={14} color={colors.bgBase} strokeWidth={2.2} />
             )}
-            <Text style={styles.createButtonText}>Create PR</Text>
+            <Text style={styles.createButtonText}>
+              {t('pullRequest.prSidebarCreateEmptyState.createPr', 'Create PR')}
+            </Text>
           </Pressable>
         </View>
       </View>
       <View style={styles.body}>
         <Text style={styles.bodyTitle}>
-          {orphanLinkedPR ? `Linked PR #${orphanLinkedPR} unavailable` : 'No open pull request'}
+          {orphanLinkedPR
+            ? t(
+                'pullRequest.prSidebarCreateEmptyState.linkedPrUnavailable',
+                'Linked PR #{{number}} unavailable',
+                { number: orphanLinkedPR }
+              )
+            : t('pullRequest.prSidebarCreateEmptyState.noOpenPullRequest', 'No open pull request')}
         </Text>
         <Text style={styles.bodyText}>
           {orphanLinkedPR
-            ? 'Refresh to check again, or create a new PR for this branch.'
+            ? t(
+                'pullRequest.prSidebarCreateEmptyState.refreshOrCreate',
+                'Refresh to check again, or create a new PR for this branch.'
+              )
             : gitBranch
-              ? `${gitBranch} is not linked to an open PR.`
-              : 'The current branch is not linked to an open PR.'}
+              ? t(
+                  'pullRequest.prSidebarCreateEmptyState.branchNotLinked',
+                  '{{branch}} is not linked to an open PR.',
+                  { branch: gitBranch }
+                )
+              : t(
+                  'pullRequest.prSidebarCreateEmptyState.currentBranchNotLinked',
+                  'The current branch is not linked to an open PR.'
+                )}
         </Text>
-        {createWarning ? <Text style={styles.bodyText}>{createWarning}</Text> : null}
+        {commitFailureRecovery ? (
+          <MobileCommitFailurePanel
+            failure={commitFailureRecovery}
+            action={commitFailureRecoveryAction}
+          />
+        ) : createWarning ? (
+          <Text style={styles.bodyText}>{createWarning}</Text>
+        ) : null}
         <Pressable
           style={({ pressed }) => [
             styles.linkButton,
@@ -174,7 +258,10 @@ export function PrSidebarCreateEmptyState({ client, worktreeId, gitBranch, onCre
           onPress={() => setMode('link')}
           disabled={!client}
           accessibilityRole="button"
-          accessibilityLabel="Link an existing pull request"
+          accessibilityLabel={t(
+            'pullRequest.prSidebarCreateEmptyState.linkExistingPullRequest',
+            'Link an existing pull request'
+          )}
           accessibilityState={{ disabled: !client }}
           hitSlop={6}
         >
@@ -183,7 +270,9 @@ export function PrSidebarCreateEmptyState({ client, worktreeId, gitBranch, onCre
             color={client ? colors.textSecondary : colors.textMuted}
             strokeWidth={2.2}
           />
-          <Text style={styles.linkButtonText}>Link an existing PR</Text>
+          <Text style={styles.linkButtonText}>
+            {t('pullRequest.prSidebarCreateEmptyState.linkExistingPr', 'Link an existing PR')}
+          </Text>
         </Pressable>
       </View>
     </View>

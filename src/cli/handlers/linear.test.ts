@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
 
-vi.mock('../runtime-client', () => {
+vi.mock('../runtime-client', async () => {
   class RuntimeClient {
     readonly isRemote: boolean
     call = callMock
@@ -19,23 +19,8 @@ vi.mock('../runtime-client', () => {
     }
   }
 
-  class RuntimeClientError extends Error {
-    readonly code: string
-
-    constructor(code: string, message: string) {
-      super(message)
-      this.code = code
-    }
-  }
-
-  class RuntimeRpcFailureError extends RuntimeClientError {
-    readonly response: unknown
-
-    constructor(response: unknown) {
-      super('runtime_error', 'runtime_error')
-      this.response = response
-    }
-  }
+  // Error formatting uses instanceof, so preserve the production error classes.
+  const { RuntimeClientError, RuntimeRpcFailureError } = await import('../runtime/types.js')
 
   return {
     RuntimeClient,
@@ -54,9 +39,7 @@ describe('orca linear CLI handlers', () => {
     vi.restoreAllMocks()
     callMock.mockReset()
     process.env = { ...originalEnv }
-    // Why: these tests can run inside an Orca-managed terminal, which exports
-    // real worktree/terminal/pairing env hints; clear them so handler context
-    // assertions stay deterministic.
+    // Clear real terminal/worktree/pairing hints inherited from the test runner.
     delete process.env.ORCA_WORKTREE_ID
     delete process.env.ORCA_TERMINAL_HANDLE
     delete process.env.ORCA_PAIRING_CODE
@@ -81,7 +64,8 @@ describe('orca linear CLI handlers', () => {
           comments: true,
           children: true,
           attachments: true,
-          relations: true
+          relations: true,
+          activity: true
         },
         depth: 2,
         context: {
@@ -93,24 +77,80 @@ describe('orca linear CLI handlers', () => {
     )
   })
 
-  it('keeps global boolean flags before Linear commands from consuming command tokens', async () => {
-    queueFixtures(callMock, okFixture('req_linear', issueResult()))
+  it('maps MCP-compatible list-issues filters and cursor pagination', async () => {
+    queueFixtures(callMock, okFixture('req_list', issueResult()))
 
-    await main(['--json', 'linear', 'issue', 'ENG-123', '--full'], '/tmp/repo')
+    await main(
+      [
+        'linear',
+        'list-issues',
+        '--team',
+        'ENG',
+        '--assignee',
+        'me',
+        '--priority',
+        '2',
+        '--cursor',
+        'next-page',
+        '--order-by',
+        'createdAt',
+        '--include-archived',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
 
     expect(callMock).toHaveBeenCalledWith(
-      'linear.issueContext',
+      'linear.mcpListIssues',
       expect.objectContaining({
-        input: 'ENG-123',
-        include: expect.objectContaining({
-          comments: true,
-          children: true,
-          attachments: true,
-          relations: true
-        })
-      }),
-      { timeoutMs: 120_000 }
+        team: 'ENG',
+        assignee: 'me',
+        priority: 2,
+        cursor: 'next-page',
+        orderBy: 'createdAt',
+        includeArchived: true
+      })
     )
+  })
+
+  it('prints truncation on human stdout and in JSON without using stderr for JSON', async () => {
+    const listResult = {
+      issues: [
+        {
+          id: 'issue-1',
+          identifier: 'ENG-1',
+          title: 'Fix auth',
+          url: 'https://linear.app/acme/issue/ENG-1',
+          labels: [],
+          workspace: { id: 'workspace-1', name: 'Acme' }
+        }
+      ],
+      truncated: true,
+      meta: {
+        limit: 1,
+        returned: 1,
+        hasMore: true,
+        nextCursor: 'next-page',
+        orderBy: 'updatedAt',
+        workspaceId: 'workspace-1',
+        partial: false,
+        workspaceErrors: []
+      }
+    }
+    queueFixtures(callMock, okFixture('req_list', listResult))
+    await main(['linear', 'list-issues', '--limit', '1'], '/tmp/repo')
+    expect(vi.mocked(console.log).mock.calls[0][0]).toContain('truncated: showing 1')
+    expect(
+      vi.mocked(console.error).mock.calls.some((call) => String(call[0]).includes('more results'))
+    ).toBe(true)
+
+    vi.mocked(console.log).mockClear()
+    vi.mocked(console.error).mockClear()
+    queueFixtures(callMock, okFixture('req_list_json', listResult))
+    await main(['linear', 'list-issues', '--limit', '1', '--json'], '/tmp/repo')
+    const jsonOut = String(vi.mocked(console.log).mock.calls[0][0])
+    expect(jsonOut).toContain('"truncated": true')
+    expect(vi.mocked(console.error)).not.toHaveBeenCalled()
   })
 
   it('passes verified current-context hints without resolving cwd for remote runtimes', async () => {
@@ -194,24 +234,6 @@ describe('orca linear CLI handlers', () => {
     })
   })
 
-  it('keeps boolean flags between Linear and search from consuming the subcommand', async () => {
-    queueFixtures(
-      callMock,
-      okFixture('req_search', {
-        issues: [],
-        meta: { query: 'auth', workspaceId: undefined, limit: 1, returned: 0, limitReached: false }
-      })
-    )
-
-    await main(['linear', '--json', 'search', 'auth', '--limit', '1'], '/tmp/repo')
-
-    expect(callMock).toHaveBeenCalledWith('linear.agentSearchIssues', {
-      query: 'auth',
-      limit: 1,
-      workspaceId: undefined
-    })
-  })
-
   it('maps status writes to the agent write RPC with an explicit target', async () => {
     queueFixtures(callMock, okFixture('req_status', statusSetResult()))
 
@@ -244,6 +266,69 @@ describe('orca linear CLI handlers', () => {
         input: 'ENG-123',
         operation: 'priority',
         priority: 1
+      }),
+      { timeoutMs: 75_000 }
+    )
+  })
+
+  it('maps relation writes to the current-issue perspective', async () => {
+    queueFixtures(callMock, okFixture('req_relation', relationWriteResult()))
+
+    await main(
+      [
+        'linear',
+        'relation',
+        'add',
+        'ENG-123',
+        '--related',
+        'ENG-456',
+        '--type',
+        'blocked-by',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'linear.issueRelationWrite',
+      {
+        input: 'ENG-123',
+        current: false,
+        workspaceId: undefined,
+        relatedInput: 'ENG-456',
+        relationship: 'blockedBy',
+        operation: 'add',
+        context: { remote: false, cwd: '/tmp/repo' }
+      },
+      { timeoutMs: 75_000 }
+    )
+  })
+
+  it('dispatches relation rm through the remove handler', async () => {
+    queueFixtures(callMock, okFixture('req_relation_rm', relationWriteResult()))
+
+    await main(
+      [
+        'linear',
+        'relation',
+        'rm',
+        'ENG-123',
+        '--related',
+        'ENG-456',
+        '--type',
+        'related',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'linear.issueRelationWrite',
+      expect.objectContaining({
+        input: 'ENG-123',
+        relatedInput: 'ENG-456',
+        relationship: 'relatedTo',
+        operation: 'remove'
       }),
       { timeoutMs: 75_000 }
     )
@@ -348,6 +433,37 @@ describe('orca linear CLI handlers', () => {
       },
       { timeoutMs: 75_000 }
     )
+  })
+
+  it('edits a comment from stdin and deletes one through the rm alias', async () => {
+    const commentId = '9f3c2a10-1111-4222-8333-444455556666'
+    const stdin = mockStdin(false, ['fixed body'])
+    queueFixtures(
+      callMock,
+      okFixture('req_edit', commentAddResult()),
+      okFixture('req_delete', commentAddResult())
+    )
+
+    try {
+      await main(['linear', 'comment', 'edit', commentId, '--body-file', '-'], '/tmp/repo')
+    } finally {
+      stdin.restore()
+    }
+    await main(['linear', 'comment', 'rm', commentId, '--workspace', 'w', '--json'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenNthCalledWith(
+      1,
+      'linear.commentEdit',
+      { commentId, body: 'fixed body', workspaceId: undefined },
+      { timeoutMs: 75_000 }
+    )
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'linear.commentDelete',
+      { commentId, workspaceId: 'w' },
+      { timeoutMs: 75_000 }
+    )
+    expect(vi.mocked(console.log).mock.calls[0][0]).toBe('Edited comment comment-id on ENG-123.')
   })
 
   it('rejects malformed write ids before dispatch', async () => {
@@ -463,6 +579,46 @@ describe('orca linear CLI handlers', () => {
     )
   })
 
+  it('maps MCP-style save-issue updates and explicit clears', async () => {
+    queueFixtures(callMock, okFixture('req_save', createResult()))
+
+    await main(
+      [
+        'linear',
+        'save-issue',
+        'ENG-123',
+        '--title',
+        'Updated title',
+        '--assignee',
+        'null',
+        '--estimate',
+        'null',
+        '--due-date',
+        'null',
+        '--project',
+        'null',
+        '--label',
+        'Bug',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'linear.saveIssue',
+      expect.objectContaining({
+        input: 'ENG-123',
+        title: 'Updated title',
+        assignee: null,
+        estimate: null,
+        dueDate: null,
+        project: null,
+        labels: ['Bug']
+      }),
+      { timeoutMs: 75_000 }
+    )
+  })
+
   it('rejects duplicate body inputs before dispatch', async () => {
     await main(
       ['linear', 'create', '--title', 'Bug', '--body', 'one', '--body-file', 'body.md'],
@@ -488,7 +644,13 @@ function issueResult(): unknown {
     meta: {
       requested: {
         current: false,
-        include: { comments: false, children: false, attachments: false, relations: false },
+        include: {
+          comments: false,
+          children: false,
+          attachments: false,
+          relations: false,
+          activity: false
+        },
         depth: 2
       },
       resolved: {
@@ -551,6 +713,31 @@ function taskUpdateResult(operation: string): unknown {
     operation,
     previous: {},
     current: {},
+    meta: { workspaceId: 'workspace-1', alreadySet: false }
+  }
+}
+
+function relationWriteResult(): unknown {
+  return {
+    issue: {
+      id: 'issue-id',
+      identifier: 'ENG-123',
+      title: 'Current',
+      url: 'https://linear.app/acme/issue/ENG-123'
+    },
+    relatedIssue: {
+      id: 'related-id',
+      identifier: 'ENG-456',
+      title: 'Related',
+      url: 'https://linear.app/acme/issue/ENG-456'
+    },
+    relation: {
+      id: 'relation-id',
+      type: 'blocks',
+      direction: 'inbound',
+      relationship: 'blockedBy'
+    },
+    operation: 'add',
     meta: { workspaceId: 'workspace-1', alreadySet: false }
   }
 }

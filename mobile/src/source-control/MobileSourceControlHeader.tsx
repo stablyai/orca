@@ -1,6 +1,8 @@
 import { Pressable, Text, View } from 'react-native'
-import { ChevronLeft, RefreshCw, X } from 'lucide-react-native'
+import { ChevronLeft, ExternalLink, RefreshCw, X } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { styles } from './mobile-source-control-styles'
 
 type Props = {
@@ -8,7 +10,12 @@ type Props = {
   worktreeLabel: string
   ioBusy: boolean
   onBack: () => void
+  // Dock dismissal does not pop a route; keep it separate from Back.
+  onClose: () => void
   onRefresh: () => void
+  // Keep open-on-web in the header while the PR body scrolls.
+  onOpenPrWeb?: () => void
+  prNumber?: number | null
 }
 
 export function MobileSourceControlHeader({
@@ -16,30 +23,66 @@ export function MobileSourceControlHeader({
   worktreeLabel,
   ioBusy,
   onBack,
-  onRefresh
+  onClose,
+  onRefresh,
+  onOpenPrWeb,
+  prNumber = null
 }: Props) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   return (
     <View style={styles.topBar}>
-      <Pressable
-        style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
-        onPress={onBack}
-        hitSlop={8}
-        accessibilityLabel={embedded ? 'Close source control' : 'Back to session'}
-      >
-        {embedded ? (
+      {/* Dock dismissal and route Back have distinct semantics. */}
+      {embedded ? (
+        <Pressable
+          style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
+          onPress={onClose}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={t('sourceControl.header.close', 'Close source control')}
+        >
           <X size={22} color={colors.textSecondary} strokeWidth={2.2} />
-        ) : (
+        </Pressable>
+      ) : (
+        <Pressable
+          style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
+          onPress={onBack}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={t('sourceControl.header.backToSession', 'Back to session')}
+        >
           <ChevronLeft size={22} color={colors.textSecondary} strokeWidth={2.2} />
-        )}
-      </Pressable>
+        </Pressable>
+      )}
       <View style={styles.titleBlock}>
         <Text style={styles.title} numberOfLines={1}>
-          Source Control
+          {t('sourceControl.header.title', 'Source Control')}
         </Text>
         <Text style={styles.meta} numberOfLines={1}>
           {worktreeLabel}
         </Text>
       </View>
+      {onOpenPrWeb ? (
+        <Pressable
+          style={({ pressed }) => [styles.refreshButton, pressed && styles.refreshButtonPressed]}
+          onPress={onOpenPrWeb}
+          hitSlop={8}
+          accessibilityRole="link"
+          accessibilityLabel={
+            prNumber != null
+              ? t(
+                  'sourceControl.header.openNumberedPrWeb',
+                  'Open pull request #{{number}} on the web',
+                  {
+                    number: prNumber
+                  }
+                )
+              : t('sourceControl.header.openPrWeb', 'Open pull request on the web')
+          }
+        >
+          <ExternalLink size={18} color={colors.textSecondary} strokeWidth={2.1} />
+        </Pressable>
+      ) : null}
       <Pressable
         style={({ pressed }) => [
           styles.refreshButton,
@@ -49,7 +92,8 @@ export function MobileSourceControlHeader({
         onPress={onRefresh}
         disabled={ioBusy}
         hitSlop={8}
-        accessibilityLabel="Refresh source control"
+        accessibilityRole="button"
+        accessibilityLabel={t('sourceControl.header.refresh', 'Refresh source control')}
       >
         <RefreshCw size={18} color={colors.textSecondary} strokeWidth={2.1} />
       </Pressable>

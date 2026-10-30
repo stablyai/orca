@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
-import { tmpdir } from 'os'
-import { dirname, join } from 'path'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 
 const { getPathMock, homedirMock } = vi.hoisted(() => ({
   getPathMock: vi.fn<(name: string) => string>(),
@@ -23,6 +23,8 @@ vi.mock('os', async () => {
 })
 
 import { DroidHookService } from './hook-service'
+
+import { wrapWindowsBatchHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
 
 describe('DroidHookService', () => {
   let homeDir: string
@@ -72,7 +74,7 @@ describe('DroidHookService', () => {
     expect(config.hooks.UserPromptSubmit[0].matcher).toBeUndefined()
     expect(config.hooks.PreToolUse[0].hooks[0].command).toMatch(
       process.platform === 'win32'
-        ? /^powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
+        ? wrapWindowsBatchHookCommand(join(homeDir, '.orca', 'agent-hooks', 'droid-hook.cmd'))
         : /droid-hook/
     )
     if (process.platform !== 'win32') {
@@ -81,34 +83,22 @@ describe('DroidHookService', () => {
     expect(config.hooks.PreToolUse[0].hooks[0].command).not.toContain(userDataDir)
   })
 
-  // Why: #6078 — a Windows user profile path with a space used to be written
-  // verbatim as the hook command, so the agent split it at the space. The
-  // managed command must use an encoded launcher so the path never appears raw
-  // on the cmd.exe command line.
-  it.skipIf(process.platform !== 'win32')(
-    'wraps the managed hook command to survive spaces in the profile path (#6078)',
-    () => {
-      const spaceHome = join(tmpdir(), 'orca droid home with spaces')
-      mkdirSync(spaceHome, { recursive: true })
-      homedirMock.mockReturnValue(spaceHome)
-      try {
-        expect(new DroidHookService().install().state).toBe('installed')
-
-        const config = JSON.parse(
-          readFileSync(join(spaceHome, '.factory', 'settings.json'), 'utf8')
-        ) as { hooks: Record<string, { hooks: { command: string }[] }[]> }
-
-        for (const eventName of ['SessionStart', 'UserPromptSubmit', 'Stop']) {
-          const command = config.hooks[eventName]?.[0]?.hooks?.[0]?.command
-          expect(command).toMatch(
-            /^powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
-          )
-        }
-      } finally {
-        rmSync(spaceHome, { recursive: true, force: true })
+  // Shell execution is covered separately by windows-hook-payload-delivery.test.ts.
+  it('registers the Windows batch hook command for every event', () => {
+    const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    try {
+      expect(new DroidHookService().install().state).toBe('installed')
+      const command = wrapWindowsBatchHookCommand(
+        join(homeDir, '.orca', 'agent-hooks', 'droid-hook.cmd')
+      )
+      const config = JSON.parse(readFileSync(join(homeDir, '.factory', 'settings.json'), 'utf8'))
+      for (const eventName of ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'Stop']) {
+        expect(config.hooks[eventName][0].hooks[0].command).toBe(command)
       }
+    } finally {
+      platform.mockRestore()
     }
-  )
+  })
 
   it('reports partial when Factory has hooks disabled globally', () => {
     const configPath = join(homeDir, '.factory', 'settings.json')

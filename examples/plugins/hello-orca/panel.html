@@ -1,0 +1,80 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      /* The host injects Orca design tokens as CSS custom properties. */
+      body {
+        margin: 0;
+        padding: 12px;
+        font-family: system-ui, sans-serif;
+        font-size: 13px;
+        color: var(--orca-foreground, #ddd);
+        background: var(--orca-background, transparent);
+      }
+      h1 {
+        font-size: 14px;
+        margin: 0 0 8px;
+      }
+      button {
+        display: block;
+        margin: 6px 0;
+        padding: 6px 10px;
+        border: 1px solid var(--orca-border, #555);
+        border-radius: 6px;
+        background: var(--orca-secondary, #2a2a2a);
+        color: var(--orca-foreground, #ddd);
+        cursor: pointer;
+        font: inherit;
+      }
+      .status {
+        margin-top: 10px;
+        min-height: 1.4em;
+        color: var(--orca-muted-foreground, #999);
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Hello Orca 👋</h1>
+    <p>Panel + worker command + events, gated by consent.</p>
+    <button id="ctx">Read workspace context</button>
+    <button id="notify">Show a notification</button>
+    <p class="status" id="status"></p>
+    <script>
+      'use strict'
+      // Orca injects a frozen window.orca before this script runs.
+      var statusEl = document.getElementById('status')
+
+      document.getElementById('ctx').addEventListener('click', function () {
+        orca.host.call('workspace.readContext').then(
+          function (context) {
+            if (!context) {
+              statusEl.textContent = 'No workspace is focused.'
+              return
+            }
+            var count = context.terminals.length
+            var terminals = count === 1 ? 'terminal' : 'terminals'
+            statusEl.textContent = `${context.displayName} on branch ${context.branch} · ${count} ${terminals}`
+          },
+          function (error) {
+            statusEl.textContent = `context failed: ${error.code}: ${error.message}`
+          }
+        )
+      })
+
+      document.getElementById('notify').addEventListener('click', function () {
+        orca.host.call('notifications.show', { title: 'Hello from the panel' }).then(
+          function (result) {
+            statusEl.textContent = result.delivered
+              ? 'Notification shown.'
+              : 'Notifications are turned off.'
+          },
+          function (error) {
+            statusEl.textContent = `notify failed: ${error.code}: ${error.message}`
+          }
+        )
+      })
+    </script>
+  </body>
+</html>

@@ -1,18 +1,10 @@
 import { spawnSync } from 'node:child_process'
-import {
-  closeSync,
-  mkdirSync,
-  mkdtempSync,
-  openSync,
-  readFileSync,
-  rmSync,
-  writeFileSync
-} from 'node:fs'
+import { closeSync, copyFileSync, mkdirSync, mkdtempSync, openSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 
 const DEFAULT_REPORT_PATH = 'test-results/terminal-scale-perf-report.json'
+const DEFAULT_HTML_REPORT_PATH = 'test-results/terminal-perf-impact-report.html'
 
 export function parseReportGateArgs(argv, env = process.env) {
   const forwardedArgs = [...argv]
@@ -66,24 +58,6 @@ function exitCode(result) {
   return result.status ?? 1
 }
 
-export function extractPlaywrightJsonReport(rawReport) {
-  let offset = 0
-  let jsonStart = -1
-  for (const line of rawReport.split('\n')) {
-    if (line.startsWith('{')) {
-      jsonStart = offset
-      break
-    }
-    offset += line.length + 1
-  }
-  if (jsonStart === -1) {
-    return rawReport
-  }
-  const jsonReport = rawReport.slice(jsonStart)
-  JSON.parse(jsonReport)
-  return jsonReport
-}
-
 export function runTerminalScalePerfReportGate({
   argv = process.argv.slice(2),
   env = process.env,
@@ -111,7 +85,7 @@ export function runTerminalScalePerfReportGate({
 
     scaleExitCode = exitCode(scaleResult)
     mkdirSync(dirname(reportPath), { recursive: true })
-    writeFileSync(reportPath, extractPlaywrightJsonReport(readFileSync(tempReportPath, 'utf8')))
+    copyFileSync(tempReportPath, reportPath)
   } finally {
     rmSync(tempDir, { force: true, recursive: true })
   }
@@ -141,9 +115,22 @@ export function runTerminalScalePerfReportGate({
     spawnSyncImpl,
     env
   )
-  return exitCode(budgetResult)
+  const budgetExitCode = exitCode(budgetResult)
+  if (budgetExitCode !== 0) {
+    return budgetExitCode
+  }
+
+  const htmlReportPath = env.ORCA_E2E_TERMINAL_PERF_HTML_REPORT_PATH || DEFAULT_HTML_REPORT_PATH
+  const htmlResult = runNodeScript(
+    'config/scripts/generate-terminal-perf-html-report.mjs',
+    [reportPath, '--output', htmlReportPath],
+    'inherit',
+    spawnSyncImpl,
+    env
+  )
+  return exitCode(htmlResult)
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (process.argv[1] === import.meta.filename) {
   process.exit(runTerminalScalePerfReportGate())
 }

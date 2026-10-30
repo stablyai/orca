@@ -12,6 +12,7 @@ export type OpenCodeUsageLocationBreakdown = {
   eventCount: number
   inputTokens: number
   cachedInputTokens: number
+  cacheWriteInputTokens?: number
   outputTokens: number
   reasoningOutputTokens: number
   totalTokens: number
@@ -25,6 +26,7 @@ export type OpenCodeUsageModelBreakdown = {
   eventCount: number
   inputTokens: number
   cachedInputTokens: number
+  cacheWriteInputTokens?: number
   outputTokens: number
   reasoningOutputTokens: number
   totalTokens: number
@@ -39,6 +41,7 @@ export type OpenCodeUsageLocationModelBreakdown = {
   eventCount: number
   inputTokens: number
   cachedInputTokens: number
+  cacheWriteInputTokens?: number
   outputTokens: number
   reasoningOutputTokens: number
   totalTokens: number
@@ -58,6 +61,7 @@ export type OpenCodeUsageSession = {
   eventCount: number
   totalInputTokens: number
   totalCachedInputTokens: number
+  cacheWriteInputTokens?: number
   totalOutputTokens: number
   totalReasoningOutputTokens: number
   totalTokens: number
@@ -77,6 +81,7 @@ export type OpenCodeUsageDailyAggregate = {
   eventCount: number
   inputTokens: number
   cachedInputTokens: number
+  cacheWriteInputTokens?: number
   outputTokens: number
   reasoningOutputTokens: number
   totalTokens: number
@@ -86,6 +91,10 @@ export type OpenCodeUsageDailyAggregate = {
 export type OpenCodeUsagePersistedDatabase = OpenCodeUsageProcessedDatabase & {
   sessions: OpenCodeUsageSession[]
   dailyAggregates: OpenCodeUsageDailyAggregate[]
+  /** Persist ownership so sibling backups cannot double-count sessions across scans. */
+  ownedSessionIds: string[]
+  /** Only databases with deferred claims need reparse when an owner disappears. */
+  hasDeferredClaims: boolean
 }
 
 export type OpenCodeUsagePersistedState = {
@@ -110,6 +119,7 @@ export type OpenCodeUsageParsedEvent = {
   estimatedCostUsd: number | null
   inputTokens: number
   cachedInputTokens: number
+  cacheWriteInputTokens?: number
   outputTokens: number
   reasoningOutputTokens: number
   totalTokens: number

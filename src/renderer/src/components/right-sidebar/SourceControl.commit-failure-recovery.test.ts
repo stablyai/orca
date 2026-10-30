@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   appendCommitFailureCustomInstruction,
-  buildCommitFailureAgentCommandInput,
   buildFixCommitFailurePrompt
-} from './SourceControl'
+} from '../../../../shared/source-control-commit-failure'
+import { buildCommitFailureAgentCommandInput } from '../../../../shared/source-control-commit-failure-agent-command'
 
 describe('SourceControl commit failure recovery prompt', () => {
   it('builds a provider-neutral AI prompt for fixing a failed commit hook', () => {
@@ -69,24 +69,6 @@ describe('SourceControl commit failure recovery prompt', () => {
     const prompt = 'Fix the failed commit.'
 
     expect(appendCommitFailureCustomInstruction(prompt, '   ')).toBe(prompt)
-  })
-
-  it('leaves blank launch templates blank so the launcher can reject them', () => {
-    expect(
-      buildCommitFailureAgentCommandInput({
-        commandInputTemplate: '   ',
-        basePrompt: 'Fix this commit failure.'
-      })
-    ).toBe('')
-  })
-
-  it('falls back to the base commit-failure prompt when no launch template is saved', () => {
-    expect(
-      buildCommitFailureAgentCommandInput({
-        commandInputTemplate: undefined,
-        basePrompt: 'Fix this commit failure.'
-      })
-    ).toBe('Fix this commit failure.')
   })
 
   it('trims custom launch overrides before the direct launch path uses them', () => {

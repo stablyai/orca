@@ -1,5 +1,7 @@
 import type { AiVaultScope } from '../../../../shared/ai-vault-types'
 
+export const DEFAULT_AI_VAULT_SCOPE: AiVaultScope = 'workspace'
+
 export function normalizeAiVaultScopeForContext(args: {
   scope: AiVaultScope
   activeProjectKey: string | null
@@ -12,12 +14,4 @@ export function normalizeAiVaultScopeForContext(args: {
     return 'all'
   }
   return args.scope
-}
-
-export function shouldRestoreAiVaultProjectScope(args: {
-  scope: AiVaultScope
-  activeProjectKey: string | null
-  userChangedScope: boolean
-}): boolean {
-  return Boolean(args.activeProjectKey && args.scope === 'all' && !args.userChangedScope)
 }

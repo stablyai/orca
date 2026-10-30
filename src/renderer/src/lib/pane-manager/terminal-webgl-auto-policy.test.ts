@@ -62,6 +62,20 @@ function stubNoDocument(): void {
   vi.stubGlobal('document', undefined)
 }
 
+function stubDisplayServer(displayServer: 'wayland' | 'x11' | null): void {
+  vi.stubGlobal('window', {
+    api: {
+      platform: {
+        get: () => ({
+          platform: 'linux',
+          osRelease: '',
+          displayServer
+        })
+      }
+    }
+  })
+}
+
 describe('terminal WebGL auto policy', () => {
   beforeEach(() => {
     resetTerminalWebglAutoDecision()
@@ -102,6 +116,19 @@ describe('terminal WebGL auto policy', () => {
       reason: 'linux-hardware-renderer',
       renderer: 'Mesa Intel(R) UHD Graphics 770 (ADL-S GT1)',
       vendor: 'Intel'
+    })
+  })
+
+  it('keeps Linux auto panes on DOM for Wayland before probing WebGL', () => {
+    stubNavigator('Linux x86_64', 'Mozilla/5.0 (X11; Linux x86_64)')
+    stubDisplayServer('wayland')
+    stubNoDocument()
+
+    expect(getTerminalWebglAutoDecision()).toEqual({
+      allowWebgl: false,
+      reason: 'linux-wayland',
+      renderer: null,
+      vendor: null
     })
   })
 

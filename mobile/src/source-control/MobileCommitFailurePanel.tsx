@@ -1,0 +1,101 @@
+import { useState } from 'react'
+import { ActivityIndicator, Pressable, Text, View } from 'react-native'
+import { ChevronDown, ChevronRight, Sparkles } from 'lucide-react-native'
+import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { AgentLaunchNotice } from '../components/AgentLaunchNotice'
+import type { MobileCommitFailureRecovery } from './mobile-commit-failure-recovery'
+import type { MobileCommitFailureRecoveryAction } from './use-mobile-commit-failure-recovery'
+import { styles } from './mobile-source-control-styles'
+
+type Props = {
+  failure: MobileCommitFailureRecovery
+  action: MobileCommitFailureRecoveryAction
+}
+
+export function MobileCommitFailurePanel({ failure, action }: Props) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
+  const [expanded, setExpanded] = useState(false)
+  const Chevron = expanded ? ChevronDown : ChevronRight
+  const detailsText = failure.error.trim()
+
+  return (
+    <View style={styles.commitFailurePanel}>
+      <View style={styles.commitFailureHeader}>
+        <View style={styles.commitFailureTextBlock}>
+          <Text style={styles.commitFailureTitle}>
+            {t('sourceControl.commitFailurePanel.title', 'Commit failed')}
+          </Text>
+          <Text style={styles.commitFailureSummary} numberOfLines={2}>
+            {action.summary ?? t('sourceControl.commitFailurePanel.summary', 'Commit failed.')}
+          </Text>
+        </View>
+        <Pressable
+          style={({ pressed }) => [
+            styles.commitFailureFixButton,
+            (action.launching || action.availability !== 'available') &&
+              styles.commitFailureFixButtonDisabled,
+            pressed && styles.commitFailureFixButtonPressed
+          ]}
+          onPress={() => void action.launch()}
+          disabled={action.launching || action.availability !== 'available'}
+          accessibilityRole="button"
+          accessibilityLabel={t(
+            'sourceControl.commitFailurePanel.fixWithAi',
+            'Fix commit failure with AI'
+          )}
+        >
+          {action.launching ? (
+            <ActivityIndicator color={colors.bgBase} />
+          ) : (
+            <Sparkles size={14} color={colors.bgBase} strokeWidth={2.2} />
+          )}
+          <Text style={styles.commitFailureFixButtonText}>
+            {t('sourceControl.commitFailurePanel.fix', 'Fix')}
+          </Text>
+        </Pressable>
+      </View>
+      {action.hasDetails && detailsText ? (
+        <>
+          <Pressable
+            style={({ pressed }) => [
+              styles.commitFailureDetailsButton,
+              pressed && styles.commitFailureDetailsButtonPressed
+            ]}
+            onPress={() => setExpanded((current) => !current)}
+            accessibilityRole="button"
+            accessibilityLabel={
+              expanded
+                ? t(
+                    'sourceControl.commitFailurePanel.hideFailureDetails',
+                    'Hide commit failure details'
+                  )
+                : t(
+                    'sourceControl.commitFailurePanel.showFailureDetails',
+                    'Show commit failure details'
+                  )
+            }
+          >
+            <Chevron size={14} color={colors.textSecondary} strokeWidth={2.2} />
+            <Text style={styles.commitFailureDetailsButtonText}>
+              {expanded
+                ? t('sourceControl.commitFailurePanel.hideDetails', 'Hide details')
+                : t('sourceControl.commitFailurePanel.showDetails', 'Show details')}
+            </Text>
+          </Pressable>
+          {expanded ? <Text style={styles.commitFailureDetailsText}>{detailsText}</Text> : null}
+        </>
+      ) : null}
+      <AgentLaunchNotice
+        availability={action.availability}
+        success={action.launchSuccess}
+        error={action.launchError}
+        warning={action.launchWarning}
+        undeliveredPrompt={action.undeliveredPrompt}
+        errorStyle={styles.commitFailureLaunchError}
+      />
+    </View>
+  )
+}

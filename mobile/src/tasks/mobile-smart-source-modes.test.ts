@@ -1,0 +1,87 @@
+import { describe, expect, it } from 'vitest'
+import {
+  normalizeSmartMode,
+  resolveAvailableSmartModes,
+  resolveDefaultSmartMode
+} from './mobile-smart-source-modes'
+
+const fullyAvailable = {
+  textOnly: false,
+  tasksSupported: true,
+  hasRepo: true,
+  githubAvailable: true,
+  gitlabAvailable: true,
+  linearAvailable: true,
+  jiraAvailable: true
+}
+
+describe('resolveAvailableSmartModes', () => {
+  it('lists every mode in desktop order when all are available', () => {
+    expect(resolveAvailableSmartModes(fullyAvailable)).toEqual([
+      'smart',
+      'github',
+      'linear',
+      'jira',
+      'gitlab',
+      'branches',
+      'text'
+    ])
+  })
+
+  it('collapses to Name for a non-git (text-only) repo', () => {
+    expect(resolveAvailableSmartModes({ ...fullyAvailable, textOnly: true })).toEqual(['text'])
+  })
+
+  it('drops provider + smart modes when the tasks RPC surface is missing', () => {
+    expect(resolveAvailableSmartModes({ ...fullyAvailable, tasksSupported: false })).toEqual([
+      'branches',
+      'text'
+    ])
+  })
+
+  it('gates provider tabs on their availability and a selected repo', () => {
+    expect(
+      resolveAvailableSmartModes({
+        ...fullyAvailable,
+        githubAvailable: false,
+        gitlabAvailable: false
+      })
+    ).toEqual(['smart', 'linear', 'jira', 'branches', 'text'])
+    expect(resolveAvailableSmartModes({ ...fullyAvailable, hasRepo: false })).toEqual([
+      'smart',
+      'linear',
+      'jira',
+      'text'
+    ])
+  })
+
+  it('keeps the Jira tab repo-independent but hides it when Jira is disconnected', () => {
+    expect(resolveAvailableSmartModes({ ...fullyAvailable, hasRepo: false })).toContain('jira')
+    expect(resolveAvailableSmartModes({ ...fullyAvailable, jiraAvailable: false })).not.toContain(
+      'jira'
+    )
+  })
+})
+
+describe('resolveDefaultSmartMode', () => {
+  it('defaults to smart for a git repo with search', () => {
+    expect(resolveDefaultSmartMode(fullyAvailable)).toBe('smart')
+  })
+
+  it('defaults to text for a non-git repo', () => {
+    expect(resolveDefaultSmartMode({ ...fullyAvailable, textOnly: true })).toBe('text')
+  })
+
+  it('defaults to branches for a git repo without the tasks surface', () => {
+    expect(resolveDefaultSmartMode({ ...fullyAvailable, tasksSupported: false })).toBe('branches')
+  })
+})
+
+describe('normalizeSmartMode', () => {
+  it('keeps a valid mode and snaps an unavailable one back to default', () => {
+    expect(normalizeSmartMode('gitlab', fullyAvailable)).toBe('gitlab')
+    expect(normalizeSmartMode('gitlab', { ...fullyAvailable, gitlabAvailable: false })).toBe(
+      'smart'
+    )
+  })
+})

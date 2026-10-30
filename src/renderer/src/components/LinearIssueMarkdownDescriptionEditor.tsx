@@ -6,14 +6,26 @@ import Placeholder from '@tiptap/extension-placeholder'
 import { LoaderCircle } from 'lucide-react'
 
 import { createRichMarkdownExtensions } from '@/components/editor/rich-markdown-extensions'
+import { setRichMarkdownImageResolverContext } from '@/components/editor/rich-markdown-image-context'
 import { encodeRawMarkdownHtmlForRichEditor } from '@/components/editor/raw-markdown-html'
+import {
+  createRichMarkdownEditorCodec,
+  type RichMarkdownEditorCodec
+} from '@/components/editor/rich-markdown-source-transport'
 import { LinearIssueMarkdownToolbar } from '@/components/LinearIssueMarkdownToolbar'
+import { RichMarkdownTableControls } from '@/components/editor/RichMarkdownTableControls'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
+import {
+  getRichMarkdownSpellcheckAttribute,
+  useRichMarkdownSpellcheckAttribute
+} from '@/components/editor/rich-markdown-spellcheck'
 
 type LinearIssueMarkdownDescriptionEditorProps = {
   value: string
+  imageUrls?: Record<string, string>
   onChange: (value: string) => void
   onSave: (value: string) => void
   density: 'page' | 'drawer'
@@ -21,8 +33,8 @@ type LinearIssueMarkdownDescriptionEditorProps = {
   submitShortcutLabel: string
 }
 
-function createLinearIssueMarkdownExtensions() {
-  const extensions = createRichMarkdownExtensions()
+function createLinearIssueMarkdownExtensions(codec: RichMarkdownEditorCodec) {
+  const extensions = createRichMarkdownExtensions({ codec })
   return [
     ...extensions,
     Placeholder.configure({
@@ -36,6 +48,7 @@ function createLinearIssueMarkdownExtensions() {
 
 export function LinearIssueMarkdownDescriptionEditor({
   value,
+  imageUrls,
   onChange,
   onSave,
   density,
@@ -45,26 +58,37 @@ export function LinearIssueMarkdownDescriptionEditor({
   const { i18n } = useTranslation()
   const language = i18n.resolvedLanguage ?? i18n.language
   const lastEditorMarkdownRef = useRef(value)
+  const editorScrollRef = useRef<HTMLDivElement | null>(null)
   const editorRef = useRef<Editor | null>(null)
-  const linearIssueMarkdownExtensions = useMemo(() => {
-    // Why: Tiptap freezes extension options when the editor is created; the
-    // language value is the recreation key for translated extension options.
+  const richMarkdownSpellcheckEnabled = useAppStore(
+    (s) => s.settings?.richMarkdownSpellcheckEnabled ?? true
+  )
+  // Recreate the private Marked registry with Tiptap on language changes to avoid accumulating tokenizers.
+  const codec = useMemo(() => {
     void language
-    return createLinearIssueMarkdownExtensions()
+    return createRichMarkdownEditorCodec()
   }, [language])
+  const linearIssueMarkdownExtensions = useMemo(() => {
+    // Language keys editor recreation because Tiptap freezes translated extension options.
+    void language
+    return createLinearIssueMarkdownExtensions(codec)
+  }, [codec, language])
 
   const editor = useEditor(
     {
       immediatelyRender: false,
       extensions: linearIssueMarkdownExtensions,
-      content: encodeRawMarkdownHtmlForRichEditor(value),
+      content: encodeRawMarkdownHtmlForRichEditor(value, codec),
       contentType: 'markdown',
       editable: !disabled,
       editorProps: {
         attributes: {
           class: 'rich-markdown-editor',
-          spellcheck: 'true',
-          'aria-label': 'Issue description'
+          spellcheck: getRichMarkdownSpellcheckAttribute(richMarkdownSpellcheckEnabled),
+          'aria-label': translate(
+            'auto.components.LinearIssueWorkspace.issueDescriptionLabel',
+            'Issue description'
+          )
         },
         handleKeyDown: (_view, event) => {
           if (!isScreenSubmitShortcut(event)) {
@@ -91,8 +115,15 @@ export function LinearIssueMarkdownDescriptionEditor({
         onChange(nextValue)
       }
     },
-    [language]
+    [codec, language]
   )
+  useRichMarkdownSpellcheckAttribute(editor, richMarkdownSpellcheckEnabled)
+
+  useEffect(() => {
+    if (editor) {
+      setRichMarkdownImageResolverContext(editor, { filePath: '', imageUrls })
+    }
+  }, [editor, imageUrls])
 
   useEffect(() => {
     editorRef.current = editor
@@ -113,14 +144,13 @@ export function LinearIssueMarkdownDescriptionEditor({
       return
     }
 
-    // Why: Linear remains the source of truth when the selected issue changes
-    // or an optimistic save is reverted; keep the rich view aligned with it.
-    editor.commands.setContent(encodeRawMarkdownHtmlForRichEditor(value), {
+    // Follow Linear’s value on issue changes and optimistic rollback.
+    editor.commands.setContent(encodeRawMarkdownHtmlForRichEditor(value, codec), {
       contentType: 'markdown',
       emitUpdate: false
     })
     lastEditorMarkdownRef.current = value
-  }, [editor, value])
+  }, [codec, editor, value])
 
   return (
     <div
@@ -133,8 +163,13 @@ export function LinearIssueMarkdownDescriptionEditor({
       )}
     >
       <LinearIssueMarkdownToolbar editor={editor} disabled={disabled} />
-      <div className="linear-issue-markdown-scroll scrollbar-sleek">
+      <div ref={editorScrollRef} className="linear-issue-markdown-scroll relative scrollbar-sleek">
         <EditorContent editor={editor} />
+        <RichMarkdownTableControls
+          disabled={disabled}
+          editor={editor}
+          scrollContainerRef={editorScrollRef}
+        />
       </div>
       <div className="linear-issue-markdown-save-hint pointer-events-none absolute bottom-1.5 right-2 z-10 flex items-center gap-1.5 text-[10px] text-muted-foreground/75">
         <span className="flex items-center gap-1">

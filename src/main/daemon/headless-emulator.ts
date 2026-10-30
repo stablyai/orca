@@ -1,93 +1,201 @@
 import './xterm-env-polyfill'
-import { Terminal } from '@xterm/headless'
+import { Terminal, type ITerminalOptions } from '@xterm/headless'
 import { SerializeAddon } from '@xterm/addon-serialize'
-import { extractLastOscTitle } from '../../shared/agent-detection'
+import { Unicode11Addon } from '@xterm/addon-unicode11'
+import { activateOrcaTerminalUnicodeProvider } from '../../shared/terminal-unicode-provider'
+import {
+  readSavedCursorRegister,
+  serializeWithAbsoluteCursor
+} from '../../shared/terminal-serialize-absolute-cursor'
+import { advancePartialEscapeTail } from '../../shared/terminal-partial-escape-tail'
+import { CONPTY_DA1_RESPONSE } from '../../shared/conpty-device-attributes'
+import { resizeLikeOwnPty } from './conpty-reflow-viewport'
+import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../shared/terminal-scrollback-policy'
+import type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'
 import { collectHeadlessOscLinkRanges } from './headless-osc-link-ranges'
-import { extractOscScanTail, scanOsc7Uris } from './osc7-uri-extraction'
-import { parseFileUriPath } from './osc7-file-uri'
+import { readTerminalModes, trackModifyOtherKeys } from './headless-emulator-modes'
+import { buildRehydrateSequences } from './terminal-mode-rehydrate-sequences'
+import { TerminalOscCwdTitleScanner } from './terminal-osc-cwd-title-scanner'
+import { buildFrameRestoreSnapshotFields } from './terminal-frame-restore-sequences'
+import { splitTerminalSnapshotAnsi } from './terminal-snapshot-ansi-buffers'
+import {
+  installTerminalViewAttributeResponder,
+  type TerminalViewAttributeResponder
+} from './terminal-view-attribute-responder'
+import { installDeviceAttributesResponder } from './startup-device-attributes-responder'
 import type { TerminalSnapshot, TerminalModes } from './types'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
+import type { TerminalCursorContext } from '../../shared/terminal-composer-draft'
+import { readTerminalCursorLineContext } from '../../shared/terminal-cursor-line-context'
+import {
+  readHeadlessTerminalRows,
+  readHeadlessTerminalLines,
+  type HeadlessTerminalRow
+} from './headless-terminal-rows'
 
-export type HeadlessEmulatorOptions = {
+/** windowsPty: ConPTY repaints its own grid after a resize, so growing rows must not pull scrollback. */
+export type HeadlessEmulatorOptions = Pick<ITerminalOptions, 'windowsPty'> & {
   cols: number
   rows: number
   scrollback?: number
+  /** Only opted-in live writes may reply; daemon Session must never supply this sink. */
+  onQueryReply?: (reply: string) => void
+  pathFlavor?: 'posix' | 'win32'
+  remotePosixFileUriAuthority?: boolean
+  wslDistro?: string
+}
+
+export type HeadlessEmulatorWriteOptions = {
+  /** Opt in only for live chunks; seed, hydration and snapshot writes must never reply. */
+  forwardQueryReplies?: boolean
 }
 
 type TerminalWithSynchronousWrite = Terminal & {
   _core?: {
     writeSync?: (data: string) => void
+    coreService?: {
+      kittyKeyboard?: { flags?: number }
+    }
   }
 }
 
-const DEFAULT_SCROLLBACK = 5000
-const OSC_SCAN_TAIL_LIMIT = 4096
-// Why: PTY/SSH chunks can split a long combined DECSET before the final h/l.
-// Keep parser state far beyond normal mode lists while still bounding memory.
-const PRIVATE_MODE_SCAN_TAIL_LIMIT = 4096
-type MouseTrackingMode = NonNullable<TerminalModes['mouseTrackingMode']>
-
 export class HeadlessEmulator {
-  private terminal: Terminal
-  private serializer: SerializeAddon
-  private cwd: string | null = null
-  private lastTitle: string | null = null
-  private oscScanTail = ''
-  private privateModeScanTail = ''
-  private mouseTrackingMode: MouseTrackingMode = 'none'
-  private sgrMouseMode = false
-  private sgrMousePixelsMode = false
+  protected terminal: Terminal
+  protected serializer: SerializeAddon
+  private oscText: TerminalOscCwdTitleScanner
+  private readonly pathFlavor?: 'posix' | 'win32'
+  private readonly remotePosixFileUriAuthority: boolean
   private restoredOscLinks: TerminalOscLinkRange[] = []
   private disposed = false
+  private onQueryReply: ((reply: string) => void) | null
+  private conptyDa1OverrideInstalled = false
+  private viewAttributeResponder: TerminalViewAttributeResponder | null = null
+  // Scope replies to their live chunk so replayed queries cannot reach the PTY.
+  private queryReplyForwardingDepth = 0
+  // serialize() omits parser state, so preserve an incomplete escape for the next live chunk.
+  private partialEscapeTail = ''
 
   constructor(opts: HeadlessEmulatorOptions) {
+    this.pathFlavor = opts.pathFlavor
+    this.remotePosixFileUriAuthority = opts.remotePosixFileUriAuthority === true
+    this.oscText = new TerminalOscCwdTitleScanner({
+      pathFlavor: this.pathFlavor,
+      remotePosixAuthority: this.remotePosixFileUriAuthority,
+      wslDistro: opts.wslDistro
+    })
     this.terminal = new Terminal({
       cols: opts.cols,
       rows: opts.rows,
-      scrollback: opts.scrollback ?? DEFAULT_SCROLLBACK,
+      scrollback: opts.scrollback ?? DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT,
       allowProposedApi: true,
-      logLevel: 'off'
+      logLevel: 'off',
+      // Match renderer kitty flag parsing and query responses.
+      vtExtensions: { kittyKeyboard: true },
+      windowsPty: opts.windowsPty ?? {}
     })
 
     this.serializer = new SerializeAddon()
     this.terminal.loadAddon(this.serializer)
+    trackModifyOtherKeys(this.terminal)
 
-    // Why no onData wiring: this emulator exists purely for state tracking
-    // (snapshots, cwd, mode flags). It MUST NOT respond to terminal query
-    // sequences (DA1/DA2, DSR, OSC 10/11/12, DECRPM). The emulator parses
-    // data in-process synchronously before `handleSubprocessData` forwards
-    // it to the renderer over IPC, so any reply it emits would land on the
-    // shell's stdin ahead of the renderer's xterm reply and win the race.
-    // The renderer is the authoritative responder (it has the real theme,
-    // cursor position, and paste mode); a daemon-side reply would be a
-    // double-reply with wrong values. OSC 11 was the visible casualty:
-    // Claude Code's /theme auto always saw the emulator's default-black
-    // background regardless of Orca's configured terminal theme.
+    // Match renderer cell widths to prevent shifted snapshot rows.
+    this.terminal.loadAddon(new Unicode11Addon())
+    activateOrcaTerminalUnicodeProvider(this.terminal)
+
+    // Unsolicited emulator replies could race the renderer into shell input.
+    this.onQueryReply = opts.onQueryReply ?? null
+    if (this.onQueryReply) {
+      this.terminal.onData((reply) => this.emitQueryReply(reply))
+    }
   }
 
-  write(data: string): Promise<void> {
+  /** ConPTY 1.22+ blocks at spawn awaiting a DA1 reply. */
+  installConptyPrimaryDeviceAttributesOverride(): void {
+    if (this.conptyDa1OverrideInstalled) {
+      return
+    }
+    this.conptyDa1OverrideInstalled = true
+    installDeviceAttributesResponder({
+      parser: this.terminal.parser,
+      response: CONPTY_DA1_RESPONSE,
+      reply: (data) => this.emitQueryReply(data)
+    })
+  }
+
+  /** Responder installers own disposal of handlers registered here. */
+  get responderParser(): Terminal['parser'] {
+    return this.terminal.parser
+  }
+
+  /** Headless xterm has no theme; use renderer attributes for replies, never in daemon Session. */
+  installViewAttributeResponder(getBaseAttributes: () => TerminalViewAttributes | null): void {
+    if (this.viewAttributeResponder) {
+      return
+    }
+    this.viewAttributeResponder = installTerminalViewAttributeResponder({
+      parser: this.terminal.parser,
+      getBaseAttributes,
+      emitReply: (reply) => this.emitQueryReply(reply)
+    })
+  }
+
+  /** Match renderer cursor replies; pushed attributes supersede per-PTY color overrides. */
+  applyPushedViewAttributes(attributes: TerminalViewAttributes): void {
+    if (this.disposed) {
+      return
+    }
+    this.terminal.options.cursorStyle = attributes.cursorStyle
+    this.terminal.options.cursorBlink = attributes.cursorBlink
+    this.viewAttributeResponder?.clearColorOverrides()
+  }
+
+  /** Restore kitty flags without allowing query replies. */
+  applyKittyKeyboardFlags(flags: number): Promise<void> {
+    if (!Number.isInteger(flags) || flags <= 0) {
+      return Promise.resolve()
+    }
+    return this.write(`\x1b[=${flags};1u`)
+  }
+
+  private emitQueryReply(reply: string): void {
+    if (this.queryReplyForwardingDepth > 0 && this.onQueryReply) {
+      this.onQueryReply(reply)
+    }
+  }
+
+  /** Prevent late replies from reaching a respawned PTY that reuses the session ID. */
+  disableQueryReplyForwarding(): void {
+    this.onQueryReply = null
+  }
+
+  write(data: string, opts: HeadlessEmulatorWriteOptions = {}): Promise<void> {
     if (this.disposed) {
       return Promise.resolve()
     }
 
-    if (this.tryWriteSync(data)) {
+    const forwardQueryReplies = opts.forwardQueryReplies === true
+    if (this.tryWriteSync(data, { forwardQueryReplies })) {
       return Promise.resolve()
     }
-    this.scanInputForOscState(data)
+    this.oscText.scan(data)
+    // The empty-write callback opens forwarding at this chunk’s position in xterm’s async FIFO.
+    if (forwardQueryReplies) {
+      this.terminal.write('', () => {
+        this.queryReplyForwardingDepth += 1
+      })
+    }
     return new Promise<void>((resolve) => {
       this.terminal.write(data, () => {
-        // Why: snapshots combine serialized xterm state with mirrored mouse
-        // modes. Commit the mirror only after xterm has parsed the same bytes.
-        this.scanPrivateModes(data)
+        if (forwardQueryReplies) {
+          this.queryReplyForwardingDepth -= 1
+        }
+        this.partialEscapeTail = advancePartialEscapeTail(this.partialEscapeTail, data)
         resolve()
       })
     })
   }
 
-  /** Synchronous write used by cold-restore log replay, where a snapshot is
-   *  taken immediately after the last record and queued async writes would
-   *  serialize a half-applied stream. Returns false when xterm's synchronous
-   *  write path is unavailable — callers must then abandon the replay. */
+  /** Apply cold-restore bytes before snapshotting; return false if the private sync API is unavailable. */
   writeSync(data: string): boolean {
     if (this.disposed) {
       return false
@@ -95,84 +203,142 @@ export class HeadlessEmulator {
     return this.tryWriteSync(data)
   }
 
-  private tryWriteSync(data: string): boolean {
+  private tryWriteSync(data: string, opts: HeadlessEmulatorWriteOptions = {}): boolean {
     const writeSync = (this.terminal as TerminalWithSynchronousWrite)._core?.writeSync
     if (typeof writeSync !== 'function') {
       return false
     }
-    this.scanInputForOscState(data)
-    // Why: hidden renderer restore snapshots are requested immediately after
-    // PTY bursts; queued headless writes can snapshot half-cleared TUI rows.
-    writeSync.call((this.terminal as TerminalWithSynchronousWrite)._core, data)
-    this.scanPrivateModes(data)
+    this.oscText.scan(data)
+    const forwardQueryReplies = opts.forwardQueryReplies === true
+    if (forwardQueryReplies) {
+      this.queryReplyForwardingDepth += 1
+    }
+    // Queued PTY writes could leave a snapshot with half-cleared TUI rows.
+    try {
+      writeSync.call((this.terminal as TerminalWithSynchronousWrite)._core, data)
+    } finally {
+      if (forwardQueryReplies) {
+        this.queryReplyForwardingDepth -= 1
+      }
+    }
+    this.partialEscapeTail = advancePartialEscapeTail(this.partialEscapeTail, data)
     return true
   }
 
-  private scanInputForOscState(data: string): void {
-    const oscInput = this.oscScanTail + data
-    this.oscScanTail = this.extractOscScanTail(oscInput)
-    this.scanOsc7(oscInput)
-    const lastTitle = extractLastOscTitle(oscInput)
-    if (lastTitle !== null) {
-      this.lastTitle = lastTitle
-    }
-  }
-
   resize(cols: number, rows: number): void {
-    if (this.disposed) {
+    // Preserve row-indexed restored links on same-size resizes; only real resizes invalidate them.
+    if (this.disposed || (this.terminal.cols === cols && this.terminal.rows === rows)) {
       return
     }
     this.restoredOscLinks = []
-    this.terminal.resize(cols, rows)
+    const writeSync = this.partialEscapeTail ? null : (data: string) => void this.writeSync(data)
+    resizeLikeOwnPty(this.terminal, cols, rows, writeSync)
+  }
+
+  // Report applied dimensions so the renderer can detect a dropped resize.
+  getAppliedSize(): { cols: number; rows: number } {
+    return { cols: this.terminal.cols, rows: this.terminal.rows }
   }
 
   getSnapshot(opts: { scrollbackRows?: number } = {}): TerminalSnapshot {
     const modes = this.getModes()
-    const snapshotAnsi = this.normalizeSnapshotAnsiForModes(
-      this.serializer.serialize({ scrollback: opts.scrollbackRows }),
-      modes
+    // Absolute cursor restore avoids wrap-pending drift; carry the saved register for DECRC.
+    const serializedAnsi = serializeWithAbsoluteCursor(
+      this.serializer,
+      this.terminal,
+      { scrollback: opts.scrollbackRows },
+      readSavedCursorRegister(this.terminal)
     )
-    return {
+    const { snapshotAnsi, scrollbackAnsi } = splitTerminalSnapshotAnsi(serializedAnsi, modes)
+    const snapshot: TerminalSnapshot = {
       snapshotAnsi,
-      scrollbackAnsi: '',
+      scrollbackAnsi,
       oscLinks: collectHeadlessOscLinkRanges(
         this.terminal,
         opts.scrollbackRows,
         this.restoredOscLinks
       ),
-      rehydrateSequences: this.buildRehydrateSequences(modes),
-      cwd: this.cwd,
+      rehydrateSequences: buildRehydrateSequences(modes),
+      ...buildFrameRestoreSnapshotFields(this.serializer, this.terminal, modes),
+      cwd: this.oscText.cwd,
       modes,
       cols: this.terminal.cols,
       rows: this.terminal.rows,
       scrollbackLines: this.terminal.buffer.normal.length - this.terminal.rows,
-      lastTitle: this.lastTitle ?? undefined
+      lastTitle: this.oscText.lastTitle ?? undefined,
+      // Restore this last so the next live chunk completes the incomplete escape.
+      ...(this.partialEscapeTail.length > 0
+        ? { pendingEscapeTailAnsi: this.partialEscapeTail }
+        : {})
     }
+    return snapshot
   }
 
   get isAlternateScreen(): boolean {
     return this.terminal.buffer.active.type === 'alternate'
   }
 
-  getVisibleLines(): string[] {
+  /** Carry parser state across handoff so split escape sequences survive. */
+  get partialEscapeTailAnsi(): string {
+    return this.partialEscapeTail
+  }
+
+  /** Ctrl+L is safe at an empty PSReadLine prompt; PowerShell’s continuation prompt (>>) is excluded. */
+  isCursorOnEmptyPromptLine(): boolean {
     const buffer = this.terminal.buffer.active
-    const lines: string[] = []
-    for (let row = buffer.viewportY; row < buffer.viewportY + this.terminal.rows; row += 1) {
-      lines.push(buffer.getLine(row)?.translateToString(true) ?? '')
+    const line = buffer.getLine(buffer.baseY + buffer.cursorY)
+    if (!line) {
+      return false
     }
-    return lines
+    const upToCursor = line.translateToString(true, 0, buffer.cursorX).trimEnd()
+    const fullLine = line.translateToString(true).trimEnd()
+    return fullLine === upToCursor && upToCursor.endsWith('>') && !upToCursor.endsWith('>>')
+  }
+
+  getVisibleLines(): string[] {
+    return readHeadlessTerminalLines(this.terminal)
+  }
+
+  getVisibleRows(): HeadlessTerminalRow[] {
+    return readHeadlessTerminalRows(this.terminal)
+  }
+
+  getBufferTailRows(limit: number): HeadlessTerminalRow[] {
+    return readHeadlessTerminalRows(this.terminal, limit)
+  }
+
+  get isSynchronizedOutput(): boolean {
+    return this.terminal.modes.synchronizedOutputMode
+  }
+
+  getVisibleBufferRange(): { start: number; endExclusive: number; totalLength: number } {
+    const buffer = this.terminal.buffer.active
+    const start = buffer.viewportY
+    return {
+      start,
+      endExclusive: Math.min(buffer.length, start + this.terminal.rows),
+      totalLength: buffer.length
+    }
+  }
+
+  getCursorLineContext(rowsAbove = this.terminal.rows): TerminalCursorContext | null {
+    return readTerminalCursorLineContext(this.terminal, rowsAbove)
+  }
+
+  getBufferTailLines(limit: number): string[] {
+    return readHeadlessTerminalLines(this.terminal, limit)
   }
 
   getCwd(): string | null {
-    return this.cwd
+    return this.oscText.cwd
   }
 
   setCwd(cwd: string | null): void {
-    this.cwd = cwd
+    this.oscText.cwd = cwd
   }
 
   setLastTitle(title: string): void {
-    this.lastTitle = title
+    this.oscText.lastTitle = title
   }
 
   setRestoredOscLinks(links: TerminalOscLinkRange[] | undefined): void {
@@ -189,161 +355,7 @@ export class HeadlessEmulator {
     this.terminal.dispose()
   }
 
-  private scanOsc7(data: string): void {
-    scanOsc7Uris(data, (uri) => {
-      this.parseOsc7Uri(uri)
-    })
-  }
-
-  private extractOscScanTail(input: string): string {
-    return extractOscScanTail(input, OSC_SCAN_TAIL_LIMIT)
-  }
-
-  private scanPrivateModes(data: string): void {
-    const input = this.privateModeScanTail + data
-    this.privateModeScanTail = this.extractPrivateModeScanTail(input)
-    // oxlint-disable-next-line no-control-regex -- terminal escape sequences require control chars
-    const privateModeRe = /\x1bc|\x1b\[\?([0-9;]+)([hl])|\x9b\?([0-9;]+)([hl])/g
-    let match: RegExpExecArray | null
-    while ((match = privateModeRe.exec(input)) !== null) {
-      if (match[0] === '\x1bc') {
-        this.mouseTrackingMode = 'none'
-        this.sgrMouseMode = false
-        this.sgrMousePixelsMode = false
-        continue
-      }
-      const params = match[1] ?? match[3]
-      const enabled = (match[2] ?? match[4]) === 'h'
-      for (const rawParam of params.split(';')) {
-        if (rawParam === '') {
-          continue
-        }
-        const param = Number(rawParam)
-        if (!Number.isInteger(param)) {
-          continue
-        }
-        if (param === 9) {
-          this.mouseTrackingMode = enabled ? 'x10' : 'none'
-        }
-        if (param === 1000) {
-          this.mouseTrackingMode = enabled ? 'vt200' : 'none'
-        }
-        if (param === 1002) {
-          this.mouseTrackingMode = enabled ? 'drag' : 'none'
-        }
-        if (param === 1003) {
-          this.mouseTrackingMode = enabled ? 'any' : 'none'
-        }
-        if (param === 1006) {
-          this.sgrMouseMode = enabled
-          this.sgrMousePixelsMode = false
-        }
-        if (param === 1016) {
-          this.sgrMouseMode = false
-          this.sgrMousePixelsMode = enabled
-        }
-      }
-    }
-  }
-
-  private extractPrivateModeScanTail(input: string): string {
-    const start = Math.max(input.lastIndexOf('\x1b'), input.lastIndexOf('\x9b'))
-    if (start === -1) {
-      return ''
-    }
-    const tail = input.slice(start)
-    if (tail.length > PRIVATE_MODE_SCAN_TAIL_LIMIT) {
-      return ''
-    }
-    if (tail === '\x1b' || tail === '\x1b[' || tail === '\x9b') {
-      return tail
-    }
-    if (tail.startsWith('\x1b[?')) {
-      return this.isIncompletePrivateModeParams(tail.slice(3)) ? tail : ''
-    }
-    if (tail.startsWith('\x9b?')) {
-      return this.isIncompletePrivateModeParams(tail.slice(2)) ? tail : ''
-    }
-    return ''
-  }
-
-  private isIncompletePrivateModeParams(params: string): boolean {
-    return /^[0-9;]*$/.test(params)
-  }
-
-  private normalizeSnapshotAnsiForModes(snapshotAnsi: string, modes: TerminalModes): string {
-    if (!modes.alternateScreen) {
-      return snapshotAnsi
-    }
-    const alternateScreenMarker = '\x1b[?1049h'
-    const start = snapshotAnsi.lastIndexOf(alternateScreenMarker)
-    if (start === -1) {
-      return snapshotAnsi
-    }
-    // Why: rehydrateSequences already enters the alternate screen and restores
-    // mouse modes. Dropping SerializeAddon's duplicate ?1049h keeps mobile's
-    // "slice from last alt-screen marker" replay from discarding those modes.
-    return snapshotAnsi.slice(start + alternateScreenMarker.length)
-  }
-
-  private parseOsc7Uri(uri: string): void {
-    const parsed = parseFileUriPath(uri)
-    if (parsed) {
-      this.cwd = parsed
-    }
-  }
-
   private getModes(): TerminalModes {
-    const buffer = this.terminal.buffer.active
-    const mouseTrackingMode = this.mouseTrackingMode
-    return {
-      bracketedPaste: this.terminal.modes.bracketedPasteMode,
-      mouseTracking: mouseTrackingMode !== 'none',
-      mouseTrackingMode,
-      sgrMouseMode: this.sgrMouseMode,
-      sgrMousePixelsMode: this.sgrMousePixelsMode,
-      applicationCursor:
-        buffer.type === 'normal' ? this.terminal.modes.applicationCursorKeysMode : false,
-      alternateScreen: buffer.type === 'alternate'
-    }
-  }
-
-  private buildRehydrateSequences(modes: TerminalModes): string {
-    const seqs: string[] = []
-    if (modes.alternateScreen) {
-      seqs.push('\x1b[?1049h')
-    }
-    if (modes.bracketedPaste) {
-      seqs.push('\x1b[?2004h')
-    }
-    if (modes.applicationCursor) {
-      seqs.push('\x1b[?1h')
-    }
-    // Why: mobile alt-screen scroll gestures need xterm's mouse mode restored
-    // from cold snapshots; OpenCode/OpenTUI enables scrollable panes this way.
-    switch (modes.mouseTracking ? (modes.mouseTrackingMode ?? 'vt200') : 'none') {
-      case 'x10':
-        seqs.push('\x1b[?9h')
-        break
-      case 'vt200':
-        seqs.push('\x1b[?1000h')
-        break
-      case 'drag':
-        seqs.push('\x1b[?1002h')
-        break
-      case 'any':
-        seqs.push('\x1b[?1003h')
-        break
-      case 'none':
-        break
-    }
-    // Why: xterm tracks the mouse protocol and SGR encoding as independent
-    // modes, so snapshots must preserve the encoding even when reporting is off.
-    if (modes.sgrMousePixelsMode) {
-      seqs.push('\x1b[?1016h')
-    } else if (modes.sgrMouseMode) {
-      seqs.push('\x1b[?1006h')
-    }
-    return seqs.join('')
+    return readTerminalModes(this.terminal)
   }
 }

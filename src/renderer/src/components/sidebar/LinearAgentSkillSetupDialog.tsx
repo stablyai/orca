@@ -1,8 +1,9 @@
 import type { ComponentProps } from 'react'
-import { CheckCircle2, Info } from 'lucide-react'
+import { CheckCircle2, EyeOff, Info } from 'lucide-react'
 import { IntegrationStatusPill } from '@/components/integration-status-pill'
 import { AgentSkillSetupPanel } from '@/components/settings/AgentSkillSetupPanel'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   Dialog,
   DialogContent,
@@ -11,10 +12,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import {
-  AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
-  isOrcaCliAvailableOnPath
-} from '@/lib/agent-skill-cli-prerequisite'
+import { ORCA_LINEAR_SKILL_NAME } from '@/lib/agent-feature-skill-names'
 import { translate } from '@/i18n/i18n'
 
 type AgentSkillSetupPanelProps = ComponentProps<typeof AgentSkillSetupPanel>
@@ -24,18 +22,14 @@ type LinearAgentSkillSetupDialogProps = {
   showSuccess: boolean
   successDescription: string
   missingLabel: string
-  command: string
-  installedCommand: string
-  terminalShellOverride?: string
+  terminalRuntime?: AgentSkillSetupPanelProps['terminalRuntime']
+  updateSkillName: string
   installed: boolean
   loading: boolean
   error: string | null
-  getPrerequisiteStatus?: AgentSkillSetupPanelProps['getPrerequisiteStatus']
-  onBeforeOpenTerminal: AgentSkillSetupPanelProps['onBeforeOpenTerminal']
   onRecheck: AgentSkillSetupPanelProps['onRecheck']
   onOpenChange: (open: boolean) => void
   onDismissPermanently: () => void
-  onSnoozeForSession: () => void
   onDone: () => void
 }
 
@@ -44,18 +38,14 @@ export function LinearAgentSkillSetupDialog({
   showSuccess,
   successDescription,
   missingLabel,
-  command,
-  installedCommand,
-  terminalShellOverride,
+  updateSkillName,
+  terminalRuntime,
   installed,
   loading,
   error,
-  getPrerequisiteStatus,
-  onBeforeOpenTerminal,
   onRecheck,
   onOpenChange,
   onDismissPermanently,
-  onSnoozeForSession,
   onDone
 }: LinearAgentSkillSetupDialogProps): React.JSX.Element {
   return (
@@ -91,7 +81,7 @@ export function LinearAgentSkillSetupDialog({
           </>
         ) : (
           <>
-            <div className="px-6 pt-6 pr-14">
+            <div className="px-6 pt-6 pr-20">
               <DialogHeader>
                 <DialogTitle className="sr-only">
                   {translate(
@@ -101,8 +91,8 @@ export function LinearAgentSkillSetupDialog({
                 </DialogTitle>
                 <DialogDescription className="sr-only">
                   {translate(
-                    'auto.components.sidebar.LinearAgentSkillSetupPrompt.modalDescription',
-                    'Install the Linear skill from a terminal.'
+                    'auto.components.sidebar.LinearAgentSkillSetupPrompt.modalInstallDescription',
+                    'Install the Linear skill for your agents.'
                   )}
                 </DialogDescription>
               </DialogHeader>
@@ -117,7 +107,7 @@ export function LinearAgentSkillSetupDialog({
               </div>
             </div>
             <AgentSkillSetupPanel
-              className="px-6 pt-4 pb-3"
+              className="px-6 pt-4 pb-6"
               variant="inline"
               hideHeader
               title={translate(
@@ -125,46 +115,51 @@ export function LinearAgentSkillSetupDialog({
                 'Enable Linear ticket access'
               )}
               description={missingLabel}
-              command={command}
-              installedCommand={installedCommand}
-              terminalTitle={translate(
-                'auto.components.sidebar.LinearAgentSkillSetupPrompt.terminalTitle',
-                'Install Linear agent skill'
-              )}
-              terminalAriaLabel={translate(
-                'auto.components.sidebar.LinearAgentSkillSetupPrompt.terminalAria',
-                'Linear agent skill installer terminal'
-              )}
-              terminalWorktreeId="sidebar-linear-agent-skill-setup"
-              terminalHeightPx={240}
-              terminalShellOverride={terminalShellOverride}
+              skillNames={[ORCA_LINEAR_SKILL_NAME]}
+              installedSkillNames={[updateSkillName]}
+              terminalRuntime={terminalRuntime}
               installed={installed}
               loading={loading}
               error={error}
               installLabel={translate(
-                'auto.components.sidebar.LinearAgentSkillSetupPrompt.install',
-                'Install CLI & Skill'
+                'auto.components.skills.SkillInstallDialog.39acb9e8f4',
+                'Install skill'
               )}
-              preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
-              getPrerequisiteStatus={getPrerequisiteStatus}
-              isPrerequisiteAvailable={isOrcaCliAvailableOnPath}
-              onBeforeOpenTerminal={onBeforeOpenTerminal}
+              installVariant="default"
               onRecheck={onRecheck}
             />
-            <DialogFooter className="px-6 pb-6">
-              <Button type="button" variant="ghost" size="sm" onClick={onDismissPermanently}>
-                {translate(
-                  'auto.components.sidebar.LinearAgentSkillSetupPrompt.dontShowAgain',
-                  "Don't show again"
-                )}
-              </Button>
-              <Button type="button" variant="outline" size="sm" onClick={onSnoozeForSession}>
-                {translate('auto.components.sidebar.LinearAgentSkillSetupPrompt.notNow', 'Not now')}
-              </Button>
-            </DialogFooter>
+            {/* Place permanent opt-out last so initial focus/Enter reaches Install rather than dismissing forever. */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label={translate(
+                      'auto.components.sidebar.LinearAgentSkillSetupPrompt.dontShowAgain',
+                      "Don't show again"
+                    )}
+                    onClick={onDismissPermanently}
+                    // Align this button’s centered icon with the adjacent bare close icon.
+                    className="absolute top-3 right-10 text-muted-foreground"
+                  >
+                    <EyeOff className="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top" sideOffset={4}>
+                  {translate(
+                    'auto.components.sidebar.LinearAgentSkillSetupPrompt.dontShowAgain',
+                    "Don't show again"
+                  )}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </>
         )}
       </DialogContent>
     </Dialog>
   )
 }
+
+export default LinearAgentSkillSetupDialog

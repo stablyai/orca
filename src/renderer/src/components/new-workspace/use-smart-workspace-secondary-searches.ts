@@ -1,0 +1,314 @@
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { useEffect, useMemo, useRef } from 'react'
+import { searchRuntimeRepoBaseRefDetails } from '@/runtime/runtime-repo-client'
+import { lookupLinearIssueUrl } from '@/lib/linear-issue-url-lookup'
+import { searchJiraIssuesByKeyOrText } from '@/components/jira-key-or-text-search'
+import { linearWorkspaceScopeSignature } from '../../../../shared/linear/workspace-types'
+import {
+  credentialDecryptionMessage,
+  isIntegrationCredentialDecryptionError
+} from '../../../../shared/integration-credential-errors'
+import { getSmartWorkspaceLinearSearchQuery } from '../../../../shared/new-workspace/smart-workspace-linear-intent'
+import type { parseBoundedSmartWorkspaceLinearIssueUrlIntent } from '../../../../shared/new-workspace/smart-workspace-linear-intent'
+import { RESULT_LIMIT } from './smart-workspace-name-field-model'
+import { restrictJiraQueryToProject } from '../../../../shared/jira/jira-project-reference'
+import { getBranchSearchRequest } from '../../../../shared/new-workspace/smart-workspace-source-results'
+import type { useWorkItemSourceFoundation } from './use-work-item-source-foundation'
+
+type Foundation = ReturnType<typeof useWorkItemSourceFoundation>
+
+export function useSmartWorkspaceSecondarySearches({
+  foundation,
+  shouldQueryLinear,
+  linearQuery,
+  linearUrlIntent,
+  linearUrlIntentOwnsInput,
+  shouldQueryJira,
+  jiraSearchQuery
+}: {
+  foundation: Foundation
+  shouldQueryLinear: boolean
+  linearQuery: string
+  linearUrlIntent: ReturnType<typeof parseBoundedSmartWorkspaceLinearIssueUrlIntent>
+  linearUrlIntentOwnsInput: boolean
+  shouldQueryJira: boolean
+  jiraSearchQuery: string | null
+}): void {
+  const {
+    disabled,
+    jiraSource,
+    branchesEnabled,
+    repoBackedSourcesDisabled,
+    textOnly,
+    mode,
+    selectedRepo,
+    debouncedQuery,
+    setBranches,
+    setBranchResultsSource,
+    setBranchesLoading,
+    linearStatus,
+    fetchLinearIssue,
+    searchLinearIssues,
+    listLinearIssues,
+    linearSourceContext,
+    linearWorkspaceIdOverride,
+    setLinearIssues,
+    setLinearLoading,
+    setSettledLinearUrlQuery,
+    setLinearReadError,
+    jiraSourceContext,
+    jiraConnectionStatus,
+    jiraProject,
+    searchJiraIssues,
+    setJiraIssues,
+    setJiraLoading
+  } = foundation
+  // Read the latest metadata for URL resolution without making the search effect depend on object identity.
+  const linearStatusRef = useRef(linearStatus)
+  // react-doctor-disable-next-line react-doctor/no-ref-current-in-render
+  linearStatusRef.current = linearStatus
+  // Store action references can change with wiring; reads should only rerun for query/scope changes.
+  const linearReadMethodsRef = useRef({
+    fetchLinearIssue,
+    listLinearIssues,
+    searchLinearIssues
+  })
+  // react-doctor-disable-next-line react-doctor/no-ref-current-in-render
+  linearReadMethodsRef.current = {
+    fetchLinearIssue,
+    listLinearIssues,
+    searchLinearIssues
+  }
+  const failedLinearReadRef = useRef<readonly unknown[] | null>(null)
+  const linearConnected = linearStatus.connected === true
+  const linearScopeSignature = linearWorkspaceScopeSignature(linearStatus)
+  const branchSearchRequest = useMemo(
+    () =>
+      getBranchSearchRequest({
+        disabled: disabled || jiraSource.intent || linearUrlIntentOwnsInput,
+        branchesEnabled: branchesEnabled && !repoBackedSourcesDisabled,
+        textOnly,
+        mode,
+        selectedRepoId: selectedRepo?.id ?? null,
+        query: debouncedQuery,
+        limit: RESULT_LIMIT
+      }),
+    [
+      branchesEnabled,
+      debouncedQuery,
+      disabled,
+      jiraSource.intent,
+      linearUrlIntentOwnsInput,
+      mode,
+      repoBackedSourcesDisabled,
+      selectedRepo?.id,
+      textOnly
+    ]
+  )
+
+  // Why: branches are searched on the selected repo's own host.
+  const selectedRepoHostId = selectedRepo ? getRepoExecutionHostId(selectedRepo) : null
+  useEffect(() => {
+    if (!branchSearchRequest || !selectedRepoHostId) {
+      setBranches([])
+      setBranchResultsSource(null)
+      setBranchesLoading(false)
+      return
+    }
+    let stale = false
+    // Why: visibility retains prior rows while typing ahead of the debounced query.
+    setBranchesLoading(true)
+    void searchRuntimeRepoBaseRefDetails(
+      selectedRepoHostId,
+      branchSearchRequest.repoId,
+      branchSearchRequest.query,
+      branchSearchRequest.limit
+    )
+      .then((results) => {
+        if (!stale) {
+          setBranches(results)
+          setBranchResultsSource({
+            repoId: branchSearchRequest.repoId,
+            query: branchSearchRequest.query
+          })
+        }
+      })
+      .catch(() => {
+        if (!stale) {
+          setBranches([])
+          setBranchResultsSource(null)
+        }
+      })
+      .finally(() => {
+        if (!stale) {
+          setBranchesLoading(false)
+        }
+      })
+    return () => {
+      stale = true
+    }
+  }, [
+    branchSearchRequest,
+    selectedRepoHostId,
+    setBranches,
+    setBranchResultsSource,
+    setBranchesLoading
+  ])
+
+  useEffect(() => {
+    const readKey = [linearQuery, linearSourceContext, linearWorkspaceIdOverride] as const
+    // Why: the status refresh after a failure re-runs this same read; don't blink its error.
+    const rereadOfFailure =
+      failedLinearReadRef.current?.every((part, index) => part === readKey[index]) === true
+    const canQuery = !disabled && shouldQueryLinear && linearConnected
+    if (!rereadOfFailure || !canQuery) {
+      failedLinearReadRef.current = null
+      setLinearReadError(null)
+    }
+    if (!canQuery) {
+      setLinearIssues([])
+      setLinearLoading(false)
+      setSettledLinearUrlQuery(null)
+      return
+    }
+    let stale = false
+    const trimmed = linearQuery.trim()
+    if (!rereadOfFailure) {
+      setLinearLoading(true)
+      setSettledLinearUrlQuery(null)
+    }
+    // Why: empty-query list must not briefly paint the previous non-empty result set.
+    if (trimmed === '') {
+      setLinearIssues([])
+    }
+    const request = linearUrlIntent
+      ? lookupLinearIssueUrl({
+          intent: linearUrlIntent,
+          knownStatus: linearStatusRef.current,
+          sourceContext: linearSourceContext,
+          fetchLinearIssue: (identifier, workspaceId, options) =>
+            linearReadMethodsRef.current.fetchLinearIssue(identifier, workspaceId, {
+              ...options,
+              rejectCredentialError: true
+            })
+        }).then((issue) => (issue ? [issue] : []))
+      : trimmed
+        ? linearReadMethodsRef.current.searchLinearIssues(
+            getSmartWorkspaceLinearSearchQuery(trimmed),
+            RESULT_LIMIT,
+            {
+              sourceContext: linearSourceContext,
+              ...(linearWorkspaceIdOverride !== undefined
+                ? { workspaceId: linearWorkspaceIdOverride }
+                : {})
+            }
+          )
+        : linearReadMethodsRef.current
+            .listLinearIssues(
+              { kind: 'list', filter: 'assigned', limit: RESULT_LIMIT },
+              {
+                sourceContext: linearSourceContext,
+                ...(linearWorkspaceIdOverride !== undefined
+                  ? { workspaceId: linearWorkspaceIdOverride }
+                  : {})
+              }
+            )
+            .then((result) => result.items)
+    void request
+      .then((issues) => {
+        if (!stale) {
+          failedLinearReadRef.current = null
+          setLinearReadError(null)
+          setLinearIssues(issues)
+        }
+      })
+      .catch((error) => {
+        if (!stale) {
+          setLinearIssues([])
+          // Why: the read reports its own host's failure; host-wide status may describe another host.
+          const credentialError = isIntegrationCredentialDecryptionError(error)
+          failedLinearReadRef.current = credentialError ? readKey : null
+          setLinearReadError(credentialError ? credentialDecryptionMessage('Linear') : null)
+        }
+      })
+      .finally(() => {
+        if (!stale) {
+          setLinearLoading(false)
+          setSettledLinearUrlQuery(linearUrlIntent ? trimmed : null)
+        }
+      })
+    return () => {
+      stale = true
+    }
+  }, [
+    disabled,
+    linearConnected,
+    linearQuery,
+    linearScopeSignature,
+    linearSourceContext,
+    linearWorkspaceIdOverride,
+    linearUrlIntent,
+    setLinearIssues,
+    setLinearLoading,
+    setLinearReadError,
+    setSettledLinearUrlQuery,
+    shouldQueryLinear
+  ])
+
+  useEffect(() => {
+    if (!shouldQueryJira || !jiraSourceContext || !jiraSearchQuery) {
+      setJiraIssues([])
+      setJiraLoading(false)
+      return
+    }
+    let stale = false
+    // Why: a superseded query must immediately release its shared Jira request slot.
+    const controller = new AbortController()
+    setJiraLoading(true)
+    const siteId =
+      jiraProject?.siteId ??
+      jiraConnectionStatus?.selectedSiteId ??
+      jiraConnectionStatus?.activeSiteId ??
+      null
+    void searchJiraIssuesByKeyOrText(jiraSearchQuery, (jql) =>
+      searchJiraIssues(
+        jiraProject ? restrictJiraQueryToProject(jql, jiraProject) : jql,
+        RESULT_LIMIT,
+        {
+          sourceContext: jiraSourceContext,
+          siteId,
+          signal: controller.signal
+        }
+      )
+    )
+      .then((issues) => {
+        if (!stale) {
+          setJiraIssues(issues)
+        }
+      })
+      .catch(() => {
+        if (!stale) {
+          setJiraIssues([])
+        }
+      })
+      .finally(() => {
+        if (!stale) {
+          setJiraLoading(false)
+        }
+      })
+    return () => {
+      stale = true
+      controller.abort()
+    }
+  }, [
+    jiraConnectionStatus?.activeSiteId,
+    jiraConnectionStatus?.selectedSiteId,
+    jiraSearchQuery,
+    jiraProject,
+    jiraSourceContext,
+    searchJiraIssues,
+    setJiraIssues,
+    setJiraLoading,
+    shouldQueryJira
+  ])
+}

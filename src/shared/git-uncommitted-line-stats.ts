@@ -1,17 +1,20 @@
-import { lstat, readFile } from 'fs/promises'
-import * as path from 'path'
+import { lstat } from 'node:fs/promises'
+import * as path from 'node:path'
 import { isBinaryBuffer } from './binary-buffer'
 import { decodeGitCQuotedPath } from './git-cquoted-path'
+import { DEFAULT_GIT_STATUS_LIMIT } from './git-status-limit'
+import { iterateNulDelimitedFields } from './nul-delimited-fields'
+import { readNodeFileWithinLimit } from './node-bounded-file-reader'
 
 export type GitLineStats = { added?: number; removed?: number }
 
-// Limits how many untracked files we read at once when counting their lines,
-// so a worktree with thousands of new files cannot exhaust file descriptors.
+// Bound untracked line-count reads to avoid exhausting descriptors in large worktrees.
 const UNTRACKED_READ_CONCURRENCY = 8
-// Keep status polling cheap: large untracked files are commonly generated
-// assets, and reading them every poll can stall the source-control sidebar.
+// Skip large untracked assets so polling cannot stall the sidebar.
 export const MAX_UNTRACKED_LINE_COUNT_BYTES = 2 * 1024 * 1024
-const UNTRACKED_STATS_CACHE_MAX_ENTRIES = 2048
+// Hold at least a full capped scan or sequential reads evict everything before the next poll (#8013).
+// 2× leaves headroom for another window/worktree; ~200-byte entries keep memory within a few MB.
+const UNTRACKED_STATS_CACHE_MAX_ENTRIES = 2 * DEFAULT_GIT_STATUS_LIMIT
 const NEWLINE_BYTE = 0x0a
 
 type CachedUntrackedStats = {
@@ -32,9 +35,7 @@ function parseNumstatCount(value: string): number | undefined {
   return Number.isFinite(count) ? count : undefined
 }
 
-// `git diff -M` reports renames in the numstat path column as `old => new` or
-// `dir/{old => new}/file`; normalize to the post-rename path so it keys to the
-// porcelain status entry, which always reports the new path.
+// Normalize -M old => new and dir/{old => new}/file to post-rename paths used by porcelain status.
 function normalizeNumstatPath(rawPath: string): string {
   const decodedPath = decodeGitCQuotedPath(rawPath)
   const braced = /^(.*)\{(.+) => (.+)\}(.*)$/.exec(decodedPath)
@@ -46,9 +47,12 @@ function normalizeNumstatPath(rawPath: string): string {
   return markerIndex === -1 ? decodedPath : decodedPath.slice(markerIndex + marker.length)
 }
 
-export function parseNumstat(stdout: string): Map<string, GitLineStats> {
+export function parseNumstat(
+  stdout: string,
+  onRenameSource?: (path: string) => void
+): Map<string, GitLineStats> {
   if (stdout.includes('\0')) {
-    return parseNulDelimitedNumstat(stdout)
+    return parseNulDelimitedNumstat(stdout, onRenameSource)
   }
 
   const stats = new Map<string, GitLineStats>()
@@ -69,11 +73,14 @@ export function parseNumstat(stdout: string): Map<string, GitLineStats> {
   return stats
 }
 
-function parseNulDelimitedNumstat(stdout: string): Map<string, GitLineStats> {
+function parseNulDelimitedNumstat(
+  stdout: string,
+  onRenameSource?: (path: string) => void
+): Map<string, GitLineStats> {
   const stats = new Map<string, GitLineStats>()
-  const records = stdout.split('\0')
-  for (let i = 0; i < records.length; i += 1) {
-    const record = records[i]
+  const records = iterateNulDelimitedFields(stdout)[Symbol.iterator]()
+  for (let next = records.next(); !next.done; next = records.next()) {
+    const record = next.value
     if (!record) {
       continue
     }
@@ -82,9 +89,12 @@ function parseNulDelimitedNumstat(stdout: string): Map<string, GitLineStats> {
     let path = rawPath
     if (!path) {
       // Git -z emits rename paths as: "added<TAB>removed<TAB>\0old\0new\0".
-      // The split record has an empty path in the header; the postimage is next.
-      i += 2
-      path = records[i] ?? ''
+      // The empty header path is followed by the preimage and postimage.
+      const oldPath = records.next().value
+      if (oldPath) {
+        onRenameSource?.(oldPath)
+      }
+      path = records.next().value ?? ''
     }
     if (!path) {
       continue
@@ -107,6 +117,9 @@ async function countFileAdditions(absolutePath: string): Promise<GitLineStats> {
       cached.mtimeMs === fileStat.mtimeMs &&
       cached.ctimeMs === fileStat.ctimeMs
     ) {
+      // Reinsert hits to make Map order LRU, protecting hot worktrees from other scans.
+      untrackedStatsCache.delete(absolutePath)
+      untrackedStatsCache.set(absolutePath, cached)
       return cached.stats
     }
     if (fileStat.isSymbolicLink()) {
@@ -115,7 +128,7 @@ async function countFileAdditions(absolutePath: string): Promise<GitLineStats> {
     if (!fileStat.isFile() || fileStat.size > MAX_UNTRACKED_LINE_COUNT_BYTES) {
       return rememberUntrackedStats(absolutePath, fileStat, {})
     }
-    const buffer = await readFile(absolutePath)
+    const { buffer } = await readNodeFileWithinLimit(absolutePath, MAX_UNTRACKED_LINE_COUNT_BYTES)
     if (isBinaryBuffer(buffer)) {
       return rememberUntrackedStats(absolutePath, fileStat, {})
     }
@@ -128,8 +141,7 @@ async function countFileAdditions(absolutePath: string): Promise<GitLineStats> {
         newlineCount += 1
       }
     }
-    // A trailing newline marks the final line as complete; without one the last
-    // partial line still counts as an added line (matching git's numstat).
+    // A final partial line still counts as added, matching Git numstat.
     const endsWithNewline = buffer.at(-1) === NEWLINE_BYTE
     return rememberUntrackedStats(absolutePath, fileStat, {
       added: endsWithNewline ? newlineCount : newlineCount + 1
@@ -144,6 +156,8 @@ function rememberUntrackedStats(
   fileStat: { size: number; mtimeMs: number; ctimeMs: number },
   stats: GitLineStats
 ): GitLineStats {
+  // Refresh at the Map’s recent end to preserve LRU eviction.
+  untrackedStatsCache.delete(absolutePath)
   untrackedStatsCache.set(absolutePath, {
     size: fileStat.size,
     mtimeMs: fileStat.mtimeMs,
@@ -159,20 +173,33 @@ function rememberUntrackedStats(
   return stats
 }
 
-// Untracked files have no git-tracked baseline, so `git diff` ignores them.
-// We count their contents directly to show an additions magnitude.
+function createGitLineStatsAbortError(): Error {
+  const error = new Error('The operation was aborted.')
+  error.name = 'AbortError'
+  return error
+}
+
+/** Untracked files have no Git baseline; read their contents directly to count additions. */
 export async function collectUntrackedAdditions(
   worktreePath: string,
-  untrackedPaths: readonly string[]
+  untrackedPaths: readonly string[],
+  signal?: AbortSignal
 ): Promise<Map<string, GitLineStats>> {
   const result = new Map<string, GitLineStats>()
   for (let i = 0; i < untrackedPaths.length; i += UNTRACKED_READ_CONCURRENCY) {
+    // Reject aborts instead of returning partial status counts; stop further local/remote I/O.
+    if (signal?.aborted) {
+      throw createGitLineStatsAbortError()
+    }
     const chunk = untrackedPaths.slice(i, i + UNTRACKED_READ_CONCURRENCY)
     await Promise.all(
       chunk.map(async (relativePath) => {
         result.set(relativePath, await countFileAdditions(path.join(worktreePath, relativePath)))
       })
     )
+  }
+  if (signal?.aborted) {
+    throw createGitLineStatsAbortError()
   }
   return result
 }

@@ -3,7 +3,6 @@ import { mkdtempSync, readFileSync, rmSync, writeSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  extractPlaywrightJsonReport,
   parseReportGateArgs,
   runTerminalScalePerfReportGate
 } from './run-terminal-scale-perf-report-gate.mjs'
@@ -16,16 +15,16 @@ function tempReportPath() {
   return join(dir, 'report.json')
 }
 
-function makeSpawnSync({ onScaleRun, scaleStatus = 0 } = {}) {
+function makeSpawnSync({ onScaleRun, scaleStatus = 0, statuses = {} } = {}) {
   const calls = []
   const spawnSyncImpl = vi.fn((command, args, options) => {
     calls.push({ args, command, options })
     if (args[0] === 'config/scripts/run-terminal-scale-perf-e2e.mjs') {
       onScaleRun?.()
       writeSync(options.stdio[1], '{"suites":[]}')
-      return { signal: null, status: scaleStatus }
+      return { signal: null, status: statuses[args[0]] ?? scaleStatus }
     }
-    return { signal: null, status: 0 }
+    return { signal: null, status: statuses[args[0]] ?? 0 }
   })
   return { calls, spawnSyncImpl }
 }
@@ -37,10 +36,6 @@ afterEach(() => {
 })
 
 describe('run-terminal-scale-perf-report-gate', () => {
-  it('strips build output before the Playwright JSON report', () => {
-    expect(extractPlaywrightJsonReport('[e2e] Build complete\n{"suites":[]}')).toBe('{"suites":[]}')
-  })
-
   it('parses report path flags while forwarding remaining Playwright args', () => {
     expect(
       parseReportGateArgs(['--', '--report', 'tmp/report.json', '--grep', 'ACK-backpressured'])
@@ -82,7 +77,8 @@ describe('run-terminal-scale-perf-report-gate', () => {
     expect(calls.map((call) => call.args[0])).toEqual([
       'config/scripts/run-terminal-scale-perf-e2e.mjs',
       'config/scripts/summarize-terminal-perf-report.mjs',
-      'config/scripts/check-terminal-perf-report-budgets.mjs'
+      'config/scripts/check-terminal-perf-report-budgets.mjs',
+      'config/scripts/generate-terminal-perf-html-report.mjs'
     ])
     expect(calls[0].args).toEqual([
       'config/scripts/run-terminal-scale-perf-e2e.mjs',
@@ -97,6 +93,12 @@ describe('run-terminal-scale-perf-report-gate', () => {
       'config/scripts/check-terminal-perf-report-budgets.mjs',
       reportPath
     ])
+    expect(calls[3].args).toEqual([
+      'config/scripts/generate-terminal-perf-html-report.mjs',
+      reportPath,
+      '--output',
+      'test-results/terminal-perf-impact-report.html'
+    ])
   })
 
   it('uses the report path from env when no flag is provided', () => {
@@ -110,6 +112,28 @@ describe('run-terminal-scale-perf-report-gate', () => {
 
     expect(status).toBe(0)
     expect(calls[1].args).toEqual(['config/scripts/summarize-terminal-perf-report.mjs', reportPath])
+  })
+
+  it('uses the HTML report path from env when provided', () => {
+    const reportPath = tempReportPath()
+    const { calls, spawnSyncImpl } = makeSpawnSync()
+
+    const status = runTerminalScalePerfReportGate({
+      env: {
+        ...process.env,
+        ORCA_E2E_TERMINAL_PERF_HTML_REPORT_PATH: 'tmp/terminal-report.html',
+        ORCA_E2E_TERMINAL_PERF_REPORT_PATH: reportPath
+      },
+      spawnSyncImpl
+    })
+
+    expect(status).toBe(0)
+    expect(calls[3].args).toEqual([
+      'config/scripts/generate-terminal-perf-html-report.mjs',
+      reportPath,
+      '--output',
+      'tmp/terminal-report.html'
+    ])
   })
 
   it('preserves the report when Playwright clears the target report directory', () => {
@@ -129,33 +153,14 @@ describe('run-terminal-scale-perf-report-gate', () => {
     expect(readFileSync(reportPath, 'utf8')).toBe('{"suites":[]}')
   })
 
-  it('saves only the JSON payload when Playwright stdout includes build logs', () => {
+  it.each([
+    ['scale', 'config/scripts/run-terminal-scale-perf-e2e.mjs', 1],
+    ['summary', 'config/scripts/summarize-terminal-perf-report.mjs', 2],
+    ['budget', 'config/scripts/check-terminal-perf-report-budgets.mjs', 3],
+    ['HTML', 'config/scripts/generate-terminal-perf-html-report.mjs', 4]
+  ])('returns the %s failure and stops subsequent stages', (_stage, failedScript, count) => {
     const reportPath = tempReportPath()
-    const { spawnSyncImpl } = makeSpawnSync({
-      onScaleRun: () => {
-        // The normal mock writes a JSON payload after this prelude.
-      }
-    })
-    spawnSyncImpl.mockImplementation((command, args, options) => {
-      if (args[0] === 'config/scripts/run-terminal-scale-perf-e2e.mjs') {
-        writeSync(options.stdio[1], '[e2e] Build complete\n{"suites":[]}')
-        return { signal: null, status: 0 }
-      }
-      return { signal: null, status: 0 }
-    })
-
-    const status = runTerminalScalePerfReportGate({
-      argv: ['--report', reportPath],
-      spawnSyncImpl
-    })
-
-    expect(status).toBe(0)
-    expect(readFileSync(reportPath, 'utf8')).toBe('{"suites":[]}')
-  })
-
-  it('stops before summarize and budget checks when the scale run fails', () => {
-    const reportPath = tempReportPath()
-    const { calls, spawnSyncImpl } = makeSpawnSync({ scaleStatus: 7 })
+    const { calls, spawnSyncImpl } = makeSpawnSync({ statuses: { [failedScript]: 7 } })
 
     const status = runTerminalScalePerfReportGate({
       argv: ['--report', reportPath],
@@ -163,8 +168,13 @@ describe('run-terminal-scale-perf-report-gate', () => {
     })
 
     expect(status).toBe(7)
-    expect(calls.map((call) => call.args[0])).toEqual([
-      'config/scripts/run-terminal-scale-perf-e2e.mjs'
-    ])
+    expect(calls.map((call) => call.args[0])).toEqual(
+      [
+        'config/scripts/run-terminal-scale-perf-e2e.mjs',
+        'config/scripts/summarize-terminal-perf-report.mjs',
+        'config/scripts/check-terminal-perf-report-budgets.mjs',
+        'config/scripts/generate-terminal-perf-html-report.mjs'
+      ].slice(0, count)
+    )
   })
 })

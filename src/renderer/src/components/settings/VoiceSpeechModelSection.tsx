@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
-import type { VoiceSettings } from '../../../../shared/speech-types'
-import type { SpeechModelManifest, SpeechModelState } from '../../../../shared/speech-types'
+import type {
+  VoiceSettings,
+  SpeechModelManifest,
+  SpeechModelState
+} from '../../../../shared/speech-types'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import {
@@ -12,6 +15,13 @@ import {
 } from '../ui/dropdown-menu'
 import { Cloud, Download, Trash2, Loader2, ChevronDown, Check } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import { speechModelDescription } from './speech-model-description'
+
+function describeSpeechModelDownloadError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+  // Strip Electron’s invoke wrapper so download errors show the underlying cause.
+  return message.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '')
+}
 
 type VoiceSpeechModelSectionProps = {
   voiceSettings: VoiceSettings
@@ -46,7 +56,7 @@ export function VoiceSpeechModelSection({
         <Label>{translate('auto.components.settings.VoicePane.43fd4f454b', 'Speech Model')}</Label>
         <p className="text-xs text-muted-foreground">
           {selectedModel && selectedIsReady
-            ? `${selectedModel.label} — ${selectedModel.description}`
+            ? `${selectedModel.label} — ${speechModelDescription(selectedModel)}`
             : translate(
                 'auto.components.settings.VoicePane.e24f7d43d2',
                 'Select a speech model. Local models run offline; cloud models require an API key.'
@@ -82,22 +92,24 @@ export function VoiceSpeechModelSection({
               <DropdownMenuItem
                 key={manifest.id}
                 disabled={isDownloading}
-                onSelect={() => {
+                onSelect={(event) => {
                   if (isReady) {
                     onUpdateVoiceSettings({ sttModel: manifest.id })
                   } else if (isCloud) {
                     onOpenOpenAiDialog(manifest.id)
                   } else if (!isDownloading) {
-                    void window.api.speech
-                      .downloadModel(manifest.id)
-                      .catch(() =>
-                        toast.error(
-                          translate(
-                            'auto.components.settings.VoicePane.cfde55c7b0',
-                            'Failed to download model.'
-                          )
-                        )
+                    // Keep the menu open so download progress remains visible.
+                    event.preventDefault()
+                    void window.api.speech.downloadModel(manifest.id).catch((error: unknown) =>
+                      toast.error(
+                        translate(
+                          'auto.components.settings.VoicePane.cfde55c7b0',
+                          'Failed to download model.'
+                        ),
+                        // Include the raw cause because it is the diagnosable failure users can report.
+                        { description: describeSpeechModelDownloadError(error) }
                       )
+                    )
                   }
                 }}
                 className={`group flex items-center gap-2.5 py-2.5 ${
@@ -146,7 +158,7 @@ export function VoiceSpeechModelSection({
                     </span>
                   </div>
                   <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
-                    {manifest.description}
+                    {speechModelDescription(manifest)}
                   </p>
                 </div>
                 {!isCloud && isReady ? (

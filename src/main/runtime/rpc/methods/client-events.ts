@@ -1,24 +1,27 @@
-import { z } from 'zod'
-import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
+import {
+  getRegisteredSshState,
+  listRegisteredSshTargets
+} from '../../../ssh/targets/ssh-target-registry'
+import { getPublicSshState } from '../../public-ssh-state'
+import { defineMethod, defineStreamingMethod } from '../core'
+import { ClientEventsUnsubscribeParams } from '../../../../shared/rpc-contract/client-events-params'
 
 let clientEventSubscriptionSeq = 0
 
-const ClientEventsUnsubscribeParams = z.object({
-  subscriptionId: z
-    .unknown()
-    .transform((value) => (typeof value === 'string' && value.length > 0 ? value : ''))
-    .pipe(z.string().min(1, 'Missing subscriptionId'))
-})
-
-export const CLIENT_EVENT_METHODS: readonly RpcAnyMethod[] = [
+export const CLIENT_EVENT_METHODS = [
   defineStreamingMethod({
     name: 'runtime.clientEvents.subscribe',
+    permission: 'workspace',
     params: null,
-    handler: async (_params, { runtime, connectionId }, emit) => {
+    handler: async (_params, { runtime, connectionId, clientKind }, emit) => {
       await new Promise<void>((resolve) => {
-        const unsubscribe = runtime.onClientEvent((event) => {
-          emit(event)
-        })
+        // Mobile discards terminalSideEffects; filter per-OSC batch frames before they cross the relay.
+        const unsubscribe = runtime.onClientEvent(
+          (event) => {
+            emit(event)
+          },
+          { consumesTerminalSideEffects: clientKind !== 'mobile' }
+        )
 
         const seq = ++clientEventSubscriptionSeq
         const subscriptionId = `runtime-client-events-${connectionId ?? 'inproc'}-${seq}`
@@ -32,12 +35,26 @@ export const CLIENT_EVENT_METHODS: readonly RpcAnyMethod[] = [
           connectionId
         )
 
-        emit({ type: 'ready', subscriptionId })
+        // Listen before snapshotting to close the subscribe race and replay sleep state missed during disconnect.
+        for (const event of runtime.getTerminalSleepClientEventSnapshot?.() ?? []) {
+          emit(event)
+        }
+        for (const event of runtime.getNativeChatLaunchDraftResolutionClientEventSnapshot?.() ??
+          []) {
+          emit(event)
+        }
+        const sshStates = listRegisteredSshTargets().flatMap((target) => {
+          const state = getPublicSshState(getRegisteredSshState(target.id) ?? null)
+          return state ? [{ targetId: target.id, state }] : []
+        })
+        // Listen before snapshotting to close reload gaps without exposing HUB-private target configuration.
+        emit({ type: 'ready', subscriptionId, snapshot: { sshStates } })
       })
     }
   }),
   defineMethod({
     name: 'runtime.clientEvents.unsubscribe',
+    permission: 'workspace',
     params: ClientEventsUnsubscribeParams,
     handler: async (params, { runtime, connectionId }) => {
       const expectedPrefix = `runtime-client-events-${connectionId ?? 'inproc'}-`

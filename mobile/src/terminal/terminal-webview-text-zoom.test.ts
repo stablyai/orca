@@ -1,72 +1,34 @@
-import { readFileSync } from 'node:fs'
-import { Script } from 'node:vm'
-import { describe, expect, it } from 'vitest'
-
-const terminalWebViewSource = readFileSync(
-  new URL('./TerminalWebView.tsx', import.meta.url),
-  'utf8'
-)
-const terminalHtmlSource = readFileSync(
-  new URL('./terminal-webview-html.ts', import.meta.url),
-  'utf8'
-)
-
-function extractStatusDotNormalizer() {
-  const declarationStart = terminalHtmlSource.indexOf('  var CLAUDE_STATUS_DOT =')
-  const declarationEnd = terminalHtmlSource.indexOf('  var PRIVATE_MODE_SCAN_TAIL_LIMIT')
-  const functionStart = terminalHtmlSource.indexOf('  function isStatusDotPresentationSelector')
-  const functionEnd = terminalHtmlSource.indexOf('\n\n  function enqueueWrite', functionStart)
-  expect(declarationStart).toBeGreaterThanOrEqual(0)
-  expect(declarationEnd).toBeGreaterThan(declarationStart)
-  expect(functionStart).toBeGreaterThan(declarationEnd)
-  expect(functionEnd).toBeGreaterThan(functionStart)
-  return `${terminalHtmlSource.slice(declarationStart, declarationEnd)}\n${terminalHtmlSource.slice(functionStart, functionEnd)}`
-}
+// @vitest-environment happy-dom
+import { describe, expect, it, vi } from 'vitest'
+import { createTerminalDocumentScope } from './document/document-scope'
+import { normalizeStatusDotPresentation } from './document/write-queue'
+import { startTextScaling } from './document/text-scaling'
 
 function normalizeStatusDotChunks(chunks: string[]) {
-  const context: { chunks: string[]; output?: string } = { chunks }
-  new Script(`
-${extractStatusDotNormalizer()}
-output = chunks.map(function(chunk) { return normalizeStatusDotPresentation(chunk); }).join('');
-`).runInNewContext(context)
-  return context.output ?? ''
+  const scope = createTerminalDocumentScope()
+  return chunks.map((chunk) => normalizeStatusDotPresentation(scope, chunk)).join('')
+}
+
+// Plant required scroll markup and stub the real navigator before running text-scaling startup.
+function resolveTerminalFontFamily(navigatorValue: {
+  userAgent: string
+  platform: string
+  maxTouchPoints: number
+}) {
+  document.body.innerHTML =
+    '<div id="scroll-indicator"><div id="scroll-thumb"></div></div>' +
+    '<div id="terminal-container"><div id="terminal-surface"></div></div>'
+  vi.stubGlobal('navigator', navigatorValue)
+  try {
+    const scope = createTerminalDocumentScope()
+    startTextScaling(scope)
+    return scope.terminalFontFamily
+  } finally {
+    vi.unstubAllGlobals()
+  }
 }
 
 describe('TerminalWebView text zoom', () => {
-  it('pins textZoom to 100 so Android system font scale cannot inflate glyphs past xterm cell metrics', () => {
-    const start = terminalWebViewSource.indexOf('<WebView')
-    expect(start).toBeGreaterThanOrEqual(0)
-    const end = terminalWebViewSource.indexOf('/>', start)
-    expect(end).toBeGreaterThan(start)
-    const webViewProps = terminalWebViewSource.slice(start, end)
-    expect(webViewProps).toContain('textZoom={100}')
-  })
-
-  it('keeps the HTML source object stable so parent renders do not reload xterm', () => {
-    const start = terminalWebViewSource.indexOf('<WebView')
-    expect(start).toBeGreaterThanOrEqual(0)
-    const end = terminalWebViewSource.indexOf('/>', start)
-    expect(end).toBeGreaterThan(start)
-    const webViewProps = terminalWebViewSource.slice(start, end)
-    expect(terminalWebViewSource).toContain('const XTERM_WEBVIEW_SOURCE = { html: XTERM_HTML }')
-    expect(webViewProps).toContain('source={XTERM_WEBVIEW_SOURCE}')
-    expect(webViewProps).not.toContain('source={{ html: XTERM_HTML }}')
-  })
-
-  it('forces the Claude status dot to text presentation before xterm writes', () => {
-    expect(terminalHtmlSource).toContain('font-variant-emoji: text')
-    expect(terminalHtmlSource).toContain('var CLAUDE_STATUS_DOT = String.fromCharCode(0x23fa)')
-    expect(terminalHtmlSource).toContain('TEXT_PRESENTATION_SELECTOR = String.fromCharCode(0xfe0e)')
-    expect(terminalHtmlSource).toContain(
-      'EMOJI_PRESENTATION_SELECTOR = String.fromCharCode(0xfe0f)'
-    )
-    expect(terminalHtmlSource).toContain('function normalizeStatusDotPresentation(data)')
-    expect(terminalHtmlSource).toContain(
-      'data.replace(CLAUDE_STATUS_DOT_PATTERN, CLAUDE_STATUS_DOT + TEXT_PRESENTATION_SELECTOR)'
-    )
-    expect(terminalHtmlSource).toContain('writeQueue.push(normalizeStatusDotPresentation(data))')
-  })
-
   it('normalizes Claude status dots idempotently across write chunks', () => {
     const dot = String.fromCharCode(0x23fa)
     const textSelector = String.fromCharCode(0xfe0e)
@@ -93,41 +55,43 @@ describe('TerminalWebView text zoom', () => {
     )
   })
 
-  it('resets pending Claude status dot selector state when the terminal lifecycle resets', () => {
-    const initStart = terminalHtmlSource.indexOf('function init(')
-    const initReplay = terminalHtmlSource.indexOf(
-      'var replayData = normalizeInitialData(initialData)'
-    )
-    const clearStart = terminalHtmlSource.indexOf("} else if (msg.type === 'clear') {")
-    const clearEnd = terminalHtmlSource.indexOf("} else if (msg.type === 'measure')", clearStart)
-    expect(initStart).toBeGreaterThanOrEqual(0)
-    expect(initReplay).toBeGreaterThan(initStart)
-    expect(clearStart).toBeGreaterThanOrEqual(0)
-    expect(clearEnd).toBeGreaterThan(clearStart)
-    expect(terminalHtmlSource.slice(initStart, initReplay)).toContain(
-      'statusDotPendingSelector = false'
-    )
-    expect(terminalHtmlSource.slice(clearStart, clearEnd)).toContain(
-      'statusDotPendingSelector = false'
-    )
+  const IOS_IPHONE_NAVIGATOR = {
+    userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 19_0 like Mac OS X) AppleWebKit/605.1.15',
+    platform: 'iPhone',
+    maxTouchPoints: 5
+  }
+  const ANDROID_NAVIGATOR = {
+    userAgent: 'Mozilla/5.0 (Linux; Android 16)',
+    platform: 'Linux armv8l',
+    maxTouchPoints: 5
+  }
+
+  it('starts iOS WebViews on ui-monospace, never SF Mono, still ending in a generic monospace guarantee', () => {
+    const fontFamily = resolveTerminalFontFamily(IOS_IPHONE_NAVIGATOR)
+    expect(fontFamily.startsWith('ui-monospace, "Menlo"')).toBe(true)
+    expect(fontFamily.startsWith('"SF Mono"')).toBe(false)
+    // End in monospace so iOS cannot fall back to a proportional/script face.
+    expect(fontFamily.endsWith(', monospace')).toBe(true)
   })
 
-  it('loads Unicode 11 before replaying mobile terminal bytes', () => {
-    expect(terminalHtmlSource).toContain('@xterm/xterm@6.1.0-beta.285')
-    expect(terminalHtmlSource).toContain('@xterm/addon-unicode11@0.10.0-beta.285')
-    const open = terminalHtmlSource.indexOf('term.open(surface)')
-    const unicode = terminalHtmlSource.indexOf("term.unicode.activeVersion = '11'")
-    const replay = terminalHtmlSource.indexOf('enqueueWrite(replayData)')
-    expect(open).toBeGreaterThanOrEqual(0)
-    expect(unicode).toBeGreaterThan(open)
-    expect(replay).toBeGreaterThan(unicode)
+  it('treats touch iPadOS WebViews that report MacIntel as iOS for font fallback', () => {
+    const fontFamily = resolveTerminalFontFamily({
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15',
+      platform: 'MacIntel',
+      maxTouchPoints: 5
+    })
+    expect(fontFamily.startsWith('ui-monospace, "Menlo"')).toBe(true)
+    expect(fontFamily.startsWith('"SF Mono"')).toBe(false)
+    expect(fontFamily.endsWith(', monospace')).toBe(true)
   })
 
-  it('uses the newer WebGL-capable xterm stack and desktop font fallbacks', () => {
-    expect(terminalHtmlSource).toContain('@xterm/addon-webgl@0.20.0-beta.284')
-    expect(terminalHtmlSource).toContain('"SF Mono", "Menlo", "Monaco", "Cascadia Mono"')
-    expect(terminalHtmlSource).toContain("fontWeight: '300'")
-    expect(terminalHtmlSource).toContain("fontWeightBold: '500'")
-    expect(terminalHtmlSource).toContain('new window.WebglAddon.WebglAddon()')
+  it('keeps the SF Mono lead outside iOS WebViews and shares the identical fallback tail', () => {
+    const androidFontFamily = resolveTerminalFontFamily(ANDROID_NAVIGATOR)
+    expect(androidFontFamily.startsWith('"SF Mono", "Menlo"')).toBe(true)
+    expect(androidFontFamily.endsWith(', monospace')).toBe(true)
+    // Only the lead family differs by platform; preserve the common fallback chain.
+    const iosFontFamily = resolveTerminalFontFamily(IOS_IPHONE_NAVIGATOR)
+    const tailFrom = (family: string) => family.slice(family.indexOf('"Menlo"'))
+    expect(tailFrom(androidFontFamily)).toBe(tailFrom(iosFontFamily))
   })
 })

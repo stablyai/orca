@@ -1,34 +1,50 @@
-import type { RuntimeTerminalSummary } from '../../../shared/runtime-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
+import type { OrchestrationAddressableAgent } from './structured-worker-group-addressing'
 
-// Why: group addresses enable broadcast messaging to logical groups of agents.
-// Resolution is done at send-time: one message record per recipient, same thread_id,
-// so each recipient gets their own read-tracking (Section 4.5).
+// Resolve per-recipient mail at send-time; candidates are Run-scoped except explicit @worktree addresses, never host-wide.
 
-const AGENT_NAME_GROUPS = ['claude', 'openclaude', 'codex', 'opencode', 'gemini', 'droid'] as const
+const AGENT_NAME_GROUPS = [
+  'claude',
+  'openclaude',
+  'codex',
+  'opencode',
+  'mimo',
+  'gemini',
+  'droid',
+  'grok',
+  'cursor'
+] as const
 
-export type GroupAddress =
-  | '@all'
-  | '@idle'
-  | `@${(typeof AGENT_NAME_GROUPS)[number]}`
-  | `@worktree:${string}`
+type AgentNameGroup = (typeof AGENT_NAME_GROUPS)[number]
 
 export function isGroupAddress(to: string): boolean {
   return to.startsWith('@')
 }
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const GROUP_AGENT_IDS: Record<AgentNameGroup, TuiAgent> = {
+  claude: 'claude',
+  openclaude: 'openclaude',
+  codex: 'codex',
+  opencode: 'opencode',
+  mimo: 'mimo-code',
+  gemini: 'gemini',
+  droid: 'droid',
+  grok: 'grok',
+  cursor: 'cursor'
 }
 
-function titleMatchesAgentNameGroup(title: string, agentName: string): boolean {
-  const tokenRe = new RegExp(`(?<![\\w./\\\\-])${escapeRegExp(agentName)}(?![\\w./\\\\-])`, 'i')
-  return tokenRe.test(title)
+/** Route only by host-proven agent identity; titles may mention other agents, and unknown identity must fail closed. */
+function terminalIsAgent(
+  terminal: OrchestrationAddressableAgent,
+  agentName: AgentNameGroup
+): boolean {
+  return terminal.agentIdentity === GROUP_AGENT_IDS[agentName]
 }
 
 export function resolveGroupAddress(
   to: string,
   senderHandle: string,
-  terminals: RuntimeTerminalSummary[],
+  terminals: readonly OrchestrationAddressableAgent[],
   getAgentStatus: (handle: string) => string | null
 ): string[] {
   if (!isGroupAddress(to)) {
@@ -38,19 +54,15 @@ export function resolveGroupAddress(
   const group = to.toLowerCase()
 
   if (group === '@all') {
-    // Why: @all broadcasts to every terminal except the sender to avoid self-delivery loops.
     return terminals.map((t) => t.handle).filter((h) => h !== senderHandle)
   }
 
   if (group === '@idle') {
-    // Why: @idle targets only agents whose TUI reports idle status, useful for
-    // dispatching work to available agents without interrupting busy ones.
     return terminals
       .filter((t) => t.handle !== senderHandle && getAgentStatus(t.handle) === 'idle')
       .map((t) => t.handle)
   }
 
-  // @worktree:<id> — all handles in a specific worktree
   if (group.startsWith('@worktree:')) {
     const worktreeId = to.slice('@worktree:'.length)
     return terminals
@@ -58,22 +70,19 @@ export function resolveGroupAddress(
       .map((t) => t.handle)
   }
 
-  // Why: agent-name groups (@claude, @droid, etc.) match by terminal title so
-  // the sender can address all instances of a particular agent type without
-  // knowing their handles.
-  const agentName = group.slice(1) // remove @
+  // Agent groups use host-resolved identity so titles cannot redirect mail.
+  const agentName = group.slice(1)
   if ((AGENT_NAME_GROUPS as readonly string[]).includes(agentName)) {
     return terminals
       .filter((t) => {
         if (t.handle === senderHandle) {
           return false
         }
-        return titleMatchesAgentNameGroup(t.title ?? '', agentName)
+        return terminalIsAgent(t, agentName as AgentNameGroup)
       })
       .map((t) => t.handle)
   }
 
-  // Why: unknown groups resolve to empty rather than throwing so callers can
-  // distinguish "valid group, no current members" from programming errors.
+  // Unknown groups produce no recipients rather than throwing.
   return []
 }

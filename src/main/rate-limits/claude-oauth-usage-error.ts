@@ -1,10 +1,24 @@
+import { classifyThrownUsageRequestError } from './usage-request-failure-kind'
+import { parseUsageRetryAfterMs } from './usage-retry-after'
+
 export class OAuthUsageError extends Error {
   constructor(
     message: string,
     readonly status: number,
-    readonly skipPtyFallback: boolean
+    readonly skipPtyFallback: boolean,
+    readonly retryAfterMs: number | null = null
   ) {
     super(message)
+  }
+}
+
+/** The usage request threw before a usable body: a transport failure or malformed JSON. */
+export class ClaudeUsageRequestError extends Error {
+  readonly failureKind: 'network' | 'parse'
+
+  constructor(cause: unknown) {
+    super(cause instanceof Error ? cause.message : String(cause), { cause })
+    this.failureKind = classifyThrownUsageRequestError(cause)
   }
 }
 
@@ -12,9 +26,9 @@ export async function createOAuthUsageError(res: Response): Promise<OAuthUsageEr
   return new OAuthUsageError(
     await describeOAuthUsageError(res),
     res.status,
-    // Why: auth/rate-limit responses are already the user-visible usage API
-    // answer. Falling through to /usage can spawn Claude Code needlessly.
-    res.status === 401 || res.status === 403 || res.status === 429
+    // Auth/rate-limit responses are authoritative; falling back to /usage would needlessly spawn Claude.
+    res.status === 401 || res.status === 403 || res.status === 429,
+    res.status === 429 ? parseUsageRetryAfterMs(res.headers.get('retry-after')) : null
   )
 }
 

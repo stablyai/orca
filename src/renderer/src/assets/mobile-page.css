@@ -1,24 +1,42 @@
-/* Why: ported from mobile/orca-mobile-sidebar-mock-v3.html. The mock is the
-   1:1 design spec for the in-app Mobile page; styles are scoped under
-   .mobile-page-root so they don't leak into the rest of the app shell. */
+/* Scoped under .mobile-page-root; mobile/orca-mobile-sidebar-mock-v3.html is the 1:1 design spec. */
 
 .mobile-page-root .mp-page-toolbar {
   position: absolute;
   top: 12px;
   left: 12px;
+  right: 12px;
   z-index: 3;
   display: flex;
-  align-items: center;
-  gap: 4px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mobile-page-root .mp-page-toolbar-primary {
+  max-width: min(100%, 22rem);
+}
+
+.mobile-page-root .mp-sidebar-toggle-btn {
+  max-width: 100%;
+  justify-content: flex-start;
+  font-weight: 600;
+  text-align: left;
+  white-space: normal;
+}
+
+.mobile-page-root .mp-page-toolbar-close {
+  margin-top: 1px;
 }
 
 .mobile-page-root {
-  /* Real mobile-app tokens (from mobile/src/theme/mobile-theme.ts) — used
-     inside .mp-device-screen so simulated screens match the app exactly. */
+  /* Use mobile-theme.ts tokens inside simulated device screens. */
   --mp-flow-card-padding: 24px;
   --mp-flow-card-border-width: 1px;
   --mp-flow-card-inset: calc(var(--mp-flow-card-padding) + var(--mp-flow-card-border-width));
   --mp-flow-shell-height: 400px;
+  --mp-qr-large-size: 184px;
+  --mp-pairing-qr-image-size: 164px;
+  --mp-pairing-qr-frame-size: calc(var(--mp-pairing-qr-image-size) + 20px);
   --m-bg-base: #111111;
   --m-bg-panel: #1a1a1a;
   --m-bg-raised: #242424;
@@ -33,14 +51,14 @@
   --m-mono: 'Menlo', 'SF Mono', monospace;
 
   position: relative;
+  container-type: inline-size;
   display: block;
   width: 100%;
   height: 100%;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   color: var(--foreground);
 }
-
-/* ── Hero ────────────────────────────────────────────────────────── */
 
 .mobile-page-root .mp-hero {
   position: relative;
@@ -53,8 +71,7 @@
   gap: clamp(56px, 7vw, 112px);
   padding: 56px;
   width: 100%;
-  height: 100%;
-  overflow: hidden;
+  min-height: 100%;
   background-color: transparent;
   /* Why: the page should feel branded without putting copy over decorative
      blobs; a token-based dot texture stays quiet in both themes. */
@@ -73,9 +90,7 @@
   max-width: 560px;
   display: flex;
   flex-direction: column;
-  /* Why: min-height (rather than fixed height) keeps the intro/flow
-     screens at a uniform 400px box for centering, while letting the
-     paired view grow when the device list needs more room. */
+  /* Keep intro/flow centering at least 400px tall while allowing paired-device lists to grow. */
   min-height: var(--mp-flow-shell-height);
 }
 
@@ -168,8 +183,7 @@
   flex-direction: column;
   gap: 8px;
   max-width: 452px;
-  /* Why: cap so 4 rows fit fully and the 5th onward scrolls. Rows render
-     at ~64px each plus 8px gap, so 4 × 64 + 3 × 8 ≈ 280px. */
+  /* Fit four ~64px rows plus three 8px gaps; scroll later rows. */
   max-height: 288px;
   overflow-y: auto;
   scrollbar-width: none;
@@ -322,8 +336,6 @@
   background: var(--accent);
 }
 
-/* Step flow ─────────────────────────────────────────────────────── */
-
 .mobile-page-root .mp-flow-card {
   display: flex;
   flex-direction: column;
@@ -365,16 +377,18 @@
   color: var(--foreground);
 }
 
-/* Why: stack both step screens in the same grid cell so the viewport
-   sizes to the tallest child. This keeps the back button at the same
-   Y on Step 1 and Step 2 even though Step 2 has more rows of content. */
+/* Only the active step affects layout; measure it to grow Step 2 without oversizing Step 1. */
 .mobile-page-root .mp-flow-viewport {
-  display: grid;
-  grid-template-areas: 'stack';
+  position: relative;
+  overflow: hidden;
+  transition: height 280ms cubic-bezier(0.32, 0.72, 0.24, 1);
 }
 
 .mobile-page-root .mp-flow-screen {
-  grid-area: stack;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
   transform: translateX(40px);
   opacity: 0;
   pointer-events: none;
@@ -384,6 +398,7 @@
 }
 
 .mobile-page-root .mp-flow-screen.is-active {
+  position: relative;
   transform: translateX(0);
   opacity: 1;
   pointer-events: auto;
@@ -400,9 +415,7 @@
   justify-content: space-between;
   margin-top: auto;
   padding-top: 16px;
-  /* Why: keep row height stable across steps so the back button doesn't jump
-     vertically when the right side switches between a 40px Continue button
-     and a placeholder span. */
+  /* Keep action height stable so the back button stays put when Continue becomes a placeholder. */
   min-height: calc(40px + 16px);
 }
 
@@ -544,8 +557,10 @@
 }
 
 .mobile-page-root .mp-qr {
+  position: relative;
   display: grid;
   place-items: center;
+  overflow: hidden;
   padding: 8px;
   border-radius: 12px;
   background: #fafafa;
@@ -558,12 +573,58 @@
 }
 
 .mobile-page-root .mp-qr-large {
+  box-sizing: border-box;
+  width: var(--mp-qr-large-size);
+  height: var(--mp-qr-large-size);
+  /* Why: keep img size in lockstep with the box (padding 10px each side). */
   padding: 10px;
 }
 
 .mobile-page-root .mp-qr-large img {
-  width: 164px;
-  height: 164px;
+  width: calc(var(--mp-qr-large-size) - 20px);
+  height: calc(var(--mp-qr-large-size) - 20px);
+}
+
+.mobile-page-root .mp-pairing-qr .mp-qr-large {
+  width: var(--mp-pairing-qr-frame-size);
+  height: var(--mp-pairing-qr-frame-size);
+}
+
+.mobile-page-root .mp-pairing-qr .mp-qr-large img {
+  width: var(--mp-pairing-qr-image-size);
+  height: var(--mp-pairing-qr-image-size);
+  image-rendering: pixelated;
+}
+
+.mobile-page-root .mp-qr-refreshing {
+  filter: blur(5px);
+  opacity: 0.32;
+}
+
+.mobile-page-root .mp-qr-loading {
+  position: absolute;
+  inset: 10px;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--background) 76%, transparent);
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Why: empty QR frames need readable copy without looking like a stuck loader overlay. */
+.mobile-page-root .mp-qr-empty {
+  position: absolute;
+  inset: 10px;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+  text-wrap: balance;
 }
 
 .mobile-page-root .mp-qr-stack {
@@ -571,6 +632,17 @@
   flex-direction: column;
   align-items: center;
   gap: 10px;
+  /* Why: stack sits in a fixed QR grid track; fill the track so under-QR copy
+     has a definite width to wrap against. */
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+}
+
+/* Cap width and clear min-width:auto so flex/grid max-content cannot prevent under-QR text wrapping. */
+.mobile-page-root .mp-qr-stack > * {
+  max-width: 100%;
+  min-width: 0;
 }
 
 .mobile-page-root .mp-link-under {
@@ -595,18 +667,67 @@
   cursor: not-allowed;
 }
 
-/* Step 1 (Get the app) — borderless layout, page-1 typography */
+/* #9700: fix the QR track width so long notices cannot starve CJK copy into one-glyph lines.
+   Pair with min-width:0/max-width:100% on the QR stack and min-w-0 notice text. */
 .mobile-page-root .mp-step2-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) var(--mp-qr-large-size);
   gap: 28px;
   align-items: start;
 }
 
-/* Why: align the QR's top with the body copy ("Scan the QR…") instead
-   of the eyebrow row above it. The eyebrow row is ~22px tall + 22px
-   margin-bottom, and the h2 is ~38px line-height with no top margin —
-   so push the QR down by roughly that combined height. */
+.mobile-page-root .mp-pairing-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--mp-pairing-qr-frame-size);
+  grid-template-areas:
+    'copy qr'
+    'relay qr'
+    'controls controls';
+  column-gap: 32px;
+  row-gap: 18px;
+  align-items: start;
+}
+
+.mobile-page-root .mp-pairing-layout.has-failure {
+  grid-template-areas:
+    'copy qr'
+    'relay qr'
+    'failure failure'
+    'controls controls';
+}
+
+.mobile-page-root .mp-pairing-copy {
+  grid-area: copy;
+  min-width: 0;
+}
+
+.mobile-page-root .mp-pairing-qr {
+  grid-area: qr;
+  min-width: 0;
+  /* Why: the QR belongs to the pairing heading, not the paragraph below it. */
+  margin-top: 48px;
+}
+
+/* Keep the field inside copy so web’s absent field leaves no empty grid track/gap. */
+.mobile-page-root .mp-pairing-machine {
+  margin-top: 18px;
+}
+
+.mobile-page-root .mp-pairing-relay {
+  grid-area: relay;
+  min-width: 0;
+}
+
+.mobile-page-root .mp-pairing-controls {
+  grid-area: controls;
+  min-width: 0;
+}
+
+.mobile-page-root .mp-pairing-failure {
+  grid-area: failure;
+}
+
+/* Offset QR by eyebrow/margin/heading height to align it with body copy. */
 .mobile-page-root .mp-step2-layout > .mp-qr,
 .mobile-page-root .mp-step2-layout > .mp-qr-stack {
   margin-top: 72px;
@@ -662,6 +783,41 @@
   border-bottom-color: var(--foreground);
 }
 
+.mobile-page-root .mp-channel-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: -8px 0 18px;
+  flex-wrap: wrap;
+}
+
+.mobile-page-root .mp-channel-toggle button {
+  border: 1px solid var(--border);
+  background: transparent;
+  padding: 4px 12px;
+  border-radius: 999px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease,
+    border-color 140ms ease;
+}
+
+.mobile-page-root .mp-channel-toggle button.is-active {
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+  border-color: color-mix(in srgb, var(--foreground) 20%, transparent);
+  color: var(--foreground);
+}
+
+.mobile-page-root .mp-channel-tagline {
+  margin-left: 6px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
 .mobile-page-root .mp-inline-actions {
   display: flex;
   align-items: center;
@@ -696,6 +852,38 @@
 .mobile-page-root .mp-text-link[disabled] {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+/* Secondary collapsible; quieter than mp-text-link so it isn’t read as a primary action. */
+.mobile-page-root .mp-disclosure-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 140ms ease;
+}
+
+.mobile-page-root .mp-disclosure-trigger:hover {
+  color: var(--foreground);
+}
+
+.mobile-page-root .mp-disclosure-trigger svg {
+  width: 13px;
+  height: 13px;
+}
+
+.mobile-page-root .mp-disclosure-hint {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.45;
+  max-width: 36rem;
 }
 
 .mobile-page-root .mp-network-row {
@@ -765,7 +953,6 @@
   opacity: 0.6;
 }
 
-/* Pairing settings card */
 .mobile-page-root .mp-pair-settings {
   margin-top: 12px;
   background: var(--m-bg-panel);
@@ -866,8 +1053,6 @@
   opacity: 0.6;
 }
 
-/* ── Phone stage ────────────────────────────────────────────────── */
-
 .mobile-page-root .mp-stage {
   position: relative;
   z-index: 1;
@@ -896,9 +1081,7 @@
   overflow: hidden;
   border-radius: 41px;
   background: var(--m-bg-base);
-  /* Why: Chromium occasionally fails to clip transformed children to a
-     rounded-corner overflow:hidden ancestor. Forcing a paint containment
-     boundary guarantees the off-screen slide can't leak past the bezel. */
+  /* Paint containment prevents transformed slides leaking past Chromium’s rounded overflow clipping. */
   contain: paint;
   isolation: isolate;
 }
@@ -940,8 +1123,6 @@
   animation: mp-tap-pulse 280ms ease-out;
 }
 
-/* ── Simulated mobile-app screens (real tokens) ─────────────────── */
-
 .mobile-page-root .mp-device-screen {
   display: flex;
   width: 100%;
@@ -949,12 +1130,7 @@
   flex-direction: column;
   background: var(--m-bg-base);
   color: var(--m-text-primary);
-  font-family:
-    'Geist',
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    sans-serif;
+  font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 13px;
   box-sizing: border-box;
   /* Why: the phone frame is viewport-fit now; the preview content must stay
@@ -967,7 +1143,6 @@
   padding-top: 18px;
 }
 
-/* Top bar */
 .mobile-page-root .mp-app-topbar {
   display: flex;
   align-items: center;
@@ -1066,7 +1241,6 @@
   text-transform: uppercase;
 }
 
-/* Host card */
 .mobile-page-root .mp-host-card {
   display: flex;
   align-items: center;
@@ -1157,7 +1331,6 @@
   stroke-width: 1.75;
 }
 
-/* Resume card */
 .mobile-page-root .mp-resume-card {
   display: flex;
   align-items: center;
@@ -1188,6 +1361,9 @@
   color: var(--m-text-primary);
   font-size: 13px;
   font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .mobile-page-root .mp-resume-sub {
@@ -1197,6 +1373,15 @@
   margin-top: 2px;
   color: var(--m-text-secondary);
   font-size: 11px;
+  min-width: 0;
+}
+
+/* Why: keep long repo/branch labels inside the phone frame (matches RN numberOfLines={1}). */
+.mobile-page-root .mp-resume-sub > span:not(.mp-repo-dot) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .mobile-page-root .mp-repo-dot {
@@ -1206,7 +1391,6 @@
   flex: 0 0 auto;
 }
 
-/* Quick actions */
 .mobile-page-root .mp-quick-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1247,7 +1431,6 @@
   white-space: nowrap;
 }
 
-/* Tasks home card */
 .mobile-page-root .mp-task-home-card {
   display: flex;
   align-items: center;
@@ -1308,7 +1491,6 @@
   stroke-width: 1.75;
 }
 
-/* Account usage */
 .mobile-page-root .mp-accounts-card {
   background: var(--m-bg-panel);
   border: 1px solid var(--m-border);
@@ -1387,8 +1569,6 @@
   background: var(--m-text-secondary);
   border-radius: inherit;
 }
-
-/* ── Worktree-list screen ───────────────────────────────────────── */
 
 .mobile-page-root .mp-wl-chrome {
   background: var(--m-bg-panel);
@@ -1638,8 +1818,6 @@
   text-align: right;
 }
 
-/* ── Session / terminal screen ─────────────────────────────────── */
-
 .mobile-page-root .mp-session-chrome {
   background: var(--m-bg-panel);
   border-bottom: 1px solid var(--m-border);
@@ -1745,7 +1923,6 @@
   stroke-width: 2.2;
 }
 
-/* Tokyonight terminal */
 .mobile-page-root .mp-terminal {
   flex: 1;
   background: #1a1b26;
@@ -1804,7 +1981,6 @@
   }
 }
 
-/* Accessory + input bar */
 .mobile-page-root .mp-accessory-bar {
   background: var(--m-bg-panel);
   border-top: 1px solid var(--m-border);
@@ -1884,14 +2060,14 @@
   stroke-width: 2.4;
 }
 
-/* Reduced motion: pin to home, no slide transitions */
 @media (prefers-reduced-motion: reduce) {
-  .mobile-page-root .mp-screen-slide {
+  .mobile-page-root .mp-screen-slide,
+  .mobile-page-root .mp-flow-viewport,
+  .mobile-page-root .mp-flow-screen {
     transition: none;
   }
 }
 
-/* Narrow viewport: stack the hero so the phone falls below the copy */
 @media (max-width: 920px) {
   .mobile-page-root {
     --mp-flow-card-padding: 20px;
@@ -1950,5 +2126,34 @@
   .mobile-page-root .mp-lead {
     margin-bottom: 16px;
     font-size: 17px;
+  }
+}
+
+/* Container rules follow viewport rules: the app sidebar changes page width without changing the viewport. */
+@container (max-width: 1080px) {
+  .mobile-page-root .mp-hero {
+    --mp-flow-card-padding: 20px;
+
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+    align-items: start;
+    gap: 24px;
+    padding: 52px 28px 28px;
+  }
+
+  .mobile-page-root .mp-hero-copy {
+    min-height: 0;
+  }
+
+  .mobile-page-root .mp-h1 {
+    font-size: 44px;
+  }
+
+  .mobile-page-root .mp-stage {
+    height: min(420px, 42vh);
+  }
+
+  .mobile-page-root .mp-phone-frame {
+    width: min(290px, 100%);
   }
 }

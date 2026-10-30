@@ -4,7 +4,7 @@ import {
   fileUriToFilesystemPath
 } from '../../../../shared/file-uri-path'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
-import type { OpenHttpLinkOptions } from '@/lib/http-link-routing'
+import type { HttpLinkSourceOwner, OpenHttpLinkOptions } from '@/lib/http-link-routing'
 
 function toFileUrl(filePath: string): string {
   return filesystemPathToFileUri(filePath)
@@ -17,8 +17,7 @@ export function resolveMarkdownPreviewHref(rawUrl: string, filePath: string): UR
 
   try {
     if (isWindowsAbsolutePathLike(rawUrl)) {
-      // Why: URL treats `C:\...` as a custom `c:` scheme unless we first
-      // normalize the drive path into the file URL form markdown previews use.
+      // Convert Windows drive paths to file URLs before URL treats the drive letter as a scheme.
       return new URL(filesystemPathHrefToFileUri(rawUrl))
     }
     return new URL(rawUrl, toFileUrl(filePath))
@@ -113,26 +112,20 @@ export function isMarkdownPreviewSystemBrowserModifier(
   return event.shiftKey && (isMac ? event.metaKey : event.ctrlKey)
 }
 
-// Why: Cmd/Ctrl+Shift-click is the escape hatch that forces the OS default
-// browser; every other click routes through openHttpLink so the "open links in
-// Orca" setting (and remote-runtime state) decides the destination. Mac uses
-// metaKey, Linux/Windows use ctrlKey per AGENTS.md.
+// Pass platform-modifier + Shift intent to openHttpLink so it applies settings and runtime routing consistently.
 export function resolveMarkdownPreviewHttpOpenOptions(
   event: Pick<MouseEvent, 'metaKey' | 'ctrlKey' | 'shiftKey'>,
   isMac: boolean,
-  worktreeId: string | null
-): OpenHttpLinkOptions {
+  worktreeId: string | null,
+  sourceOwner: HttpLinkSourceOwner
+): OpenHttpLinkOptions & { sourceOwner: HttpLinkSourceOwner } {
   if (isMarkdownPreviewSystemBrowserModifier(event, isMac)) {
-    return { forceSystemBrowser: true }
+    return { worktreeId, modifierHeld: true, sourceOwner }
   }
-  return { worktreeId }
+  return { worktreeId, sourceOwner }
 }
 
-/**
- * Resolves a relative image src against the markdown file path to produce an
- * absolute filesystem path. Returns null for external URLs (http, https, data,
- * blob) that don't need local file loading.
- */
+/** Resolve filesystem image paths relative to the document; external URLs need no local loading. */
 export function resolveImageAbsolutePath(
   rawSrc: string | undefined,
   filePath: string

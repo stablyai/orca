@@ -1,30 +1,44 @@
 import type { HostedReviewCreationBlockedReason } from '../../../../shared/hosted-review'
 import { translate } from '@/i18n/i18n'
+import {
+  autoRetrySchedule,
+  capitalizeReviewLabel,
+  confirmedComposerMode,
+  ELIGIBILITY_SAFETY_BLOCKERS,
+  isBranchBlocker,
+  isHardRefreshError,
+  isTransientRefreshFailure,
+  workflowActionForComposer,
+  type ChecksPanelReviewState,
+  type ChecksPanelReviewStateInput
+} from './checks-panel-review-state-model'
+import {
+  concurrentLookupDetail,
+  hardRefreshErrorState,
+  skippedRefreshState,
+  transientRefreshState
+} from './checks-panel-review-copy'
+import { branchBlockerState, safetyBlockerState } from './checks-panel-blocker-copy'
 
-type PRRefreshStatus = 'queued' | 'in-flight' | 'paused' | 'error' | 'skipped' | undefined
+export type {
+  ChecksPanelComposerMode,
+  ChecksPanelWorkflowAction,
+  ChecksPanelRecoveryAction,
+  ChecksPanelReviewState,
+  ChecksPanelRefreshInput,
+  ChecksPanelReviewStateInput
+} from './checks-panel-review-state-model'
 
-type ChecksPanelEmptyStateInput = {
-  operationLabel: string | null
-  prRefreshStatus: PRRefreshStatus
-  hostedReviewBlockedReason: HostedReviewCreationBlockedReason | undefined
-  hasUpstream: boolean | undefined
-  hasCurrentBranch?: boolean
-  reviewLabel?: 'pull request' | 'merge request'
-  reviewShortLabel?: 'PR' | 'MR'
-}
+/** Decide copy/actions/composer together so uncertainty never reads as no review; see docs/design/pr-panel-refresh-guidance.md. */
+export function getChecksPanelReviewState(
+  input: ChecksPanelReviewStateInput
+): ChecksPanelReviewState {
+  const { reviewLabel, reviewShortLabel, providerName } = input
 
-type ChecksPanelEmptyStateCopy = {
-  title: string
-  description: string
-}
-
-export function getChecksPanelEmptyStateCopy(
-  input: ChecksPanelEmptyStateInput
-): ChecksPanelEmptyStateCopy {
-  const reviewLabel = input.reviewLabel ?? 'pull request'
-  const reviewShortLabel = input.reviewShortLabel ?? 'PR'
+  // Active operations outrank refresh copy.
   if (input.operationLabel) {
     return {
+      renderReview: false,
       title: translate(
         'auto.components.right.sidebar.checks.panel.empty.state.d77c513c1e',
         '{{value0}} in progress',
@@ -34,106 +48,203 @@ export function getChecksPanelEmptyStateCopy(
         'auto.components.right.sidebar.checks.panel.empty.state.05e4aec17b',
         '{{value0}} checks will be available after the operation completes',
         { value0: reviewShortLabel }
-      )
+      ),
+      composerMode: 'hidden',
+      workflowAction: null,
+      recovery: []
     }
   }
 
-  const blockedReason = input.hostedReviewBlockedReason
-  if (
-    shouldShowChecksPanelPublishBranchAction({
-      hostedReviewBlockedReason: blockedReason,
-      hasUpstream: input.hasUpstream,
-      hasCurrentBranch: input.hasCurrentBranch
-    })
-  ) {
-    // Why: a local-only branch cannot have GitHub PR status yet; surfacing a
-    // refresh error here makes a normal pre-publish state look broken.
+  if (input.reviewLookup === 'found') {
     return {
+      renderReview: true,
+      title: '',
+      description: '',
+      composerMode: 'hidden',
+      workflowAction: null,
+      recovery: []
+    }
+  }
+
+  const blockedReason = input.eligibilityBlockedReason
+
+  // Keep positive-review lookups updating without hiding stronger safety guidance.
+  const reviewFetchInFlight =
+    input.refresh?.status === 'queued' || input.refresh?.status === 'in-flight'
+  const hasPendingReviewEvidence =
+    input.reviewLookup === 'positive_unresolved' || blockedReason === 'existing_review'
+  const pendingReviewLookupOwnsState =
+    blockedReason === undefined || blockedReason === 'existing_review'
+  if (reviewFetchInFlight && hasPendingReviewEvidence && pendingReviewLookupOwnsState) {
+    return {
+      renderReview: false,
       title: translate(
-        'auto.components.right.sidebar.checks.panel.empty.state.41252bc53f',
-        'Branch not published'
+        'auto.components.right.sidebar.checks.panel.review.active.title',
+        'Checking {{reviewLabel}} status',
+        { reviewLabel }
       ),
       description: translate(
-        'auto.components.right.sidebar.checks.panel.empty.state.f8543140cc',
-        'Publish this branch before creating a {{value0}}.',
-        { value0: reviewLabel }
-      )
+        'auto.components.right.sidebar.checks.panel.review.active.body',
+        'Orca is checking {{provider}} for a {{reviewLabel}} on this branch.',
+        { reviewLabel, provider: providerName }
+      ),
+      composerMode: 'hidden',
+      workflowAction: null,
+      recovery: []
     }
   }
 
-  if (blockedReason === 'needs_push') {
+  // Safety blockers own their guidance; existing_review always blocks create.
+  if (blockedReason && ELIGIBILITY_SAFETY_BLOCKERS.has(blockedReason)) {
+    return safetyBlockerState(input, blockedReason)
+  }
+
+  // Known but unrenderable review evidence must block create actions.
+  if (input.reviewLookup === 'positive_unresolved' && !isBranchBlocker(blockedReason)) {
     return {
+      renderReview: false,
       title: translate(
-        'auto.components.right.sidebar.checks.panel.empty.state.76e15946a9',
-        'Branch has unpushed commits'
+        'auto.components.right.sidebar.checks.panel.review.positive.title',
+        '{{reviewLabelCap}} details unavailable',
+        { reviewLabelCap: capitalizeReviewLabel(reviewLabel) }
       ),
       description: translate(
-        'auto.components.right.sidebar.checks.panel.empty.state.6ce9d4e069',
-        'Push your branch before creating a {{value0}}.',
-        { value0: reviewLabel }
-      )
+        'auto.components.right.sidebar.checks.panel.review.positive.body',
+        'Orca has saved {{reviewLabel}} information for this branch but could not confirm its current status.',
+        { reviewLabel }
+      ),
+      composerMode: 'hidden',
+      workflowAction: null,
+      recovery: input.openReviewUrl ? ['open_review', 'retry'] : ['retry'],
+      openReviewUrl: input.openReviewUrl
     }
   }
 
-  switch (input.prRefreshStatus) {
-    case 'error':
-      return {
-        title: translate(
-          'auto.components.right.sidebar.checks.panel.empty.state.5f478ab3d3',
-          'Could not refresh pull request'
-        ),
-        description: translate(
-          'auto.components.right.sidebar.checks.panel.empty.state.2bdd7aaf2d',
-          'GitHub status could not be refreshed. Existing cached data was preserved.'
-        )
-      }
-    case 'queued':
-      return {
-        title: translate(
-          'auto.components.right.sidebar.checks.panel.empty.state.938b5606a6',
-          'Checking for pull request'
-        ),
-        description: translate(
-          'auto.components.right.sidebar.checks.panel.empty.state.6ba2440770',
-          'Waiting to refresh GitHub status for this branch'
-        )
-      }
-    case 'in-flight':
-      return {
-        title: translate(
-          'auto.components.right.sidebar.checks.panel.empty.state.938b5606a6',
-          'Checking for pull request'
-        ),
-        description: translate(
-          'auto.components.right.sidebar.checks.panel.empty.state.3d4af82ff4',
-          'Refreshing GitHub status for this branch'
-        )
-      }
-    case 'paused':
-      return {
-        title: translate(
-          'auto.components.right.sidebar.checks.panel.empty.state.7c299df37b',
-          'No pull request found'
-        ),
-        description: translate(
-          'auto.components.right.sidebar.checks.panel.empty.state.d372072df1',
-          'GitHub refresh is paused by the current rate-limit budget'
-        )
-      }
-    case 'skipped':
-    case undefined:
-      return {
-        title: translate(
-          'auto.components.right.sidebar.checks.panel.empty.state.13e1c7d5ed',
-          'No {{value0}} found',
-          { value0: reviewLabel }
-        ),
-        description: translate(
-          'auto.components.right.sidebar.checks.panel.empty.state.5b0cfae9a5',
-          'Create a {{value0}} to start checks and review.',
-          { value0: reviewLabel }
-        )
-      }
+  if (isBranchBlocker(blockedReason)) {
+    return branchBlockerState(
+      input,
+      blockedReason as NonNullable<HostedReviewCreationBlockedReason>
+    )
+  }
+  // Ready status without upstream means publish; undefined remains unknown.
+  if (input.gitStatusPhase === 'ready' && input.hasUpstream === false && input.hasCurrentBranch) {
+    return branchBlockerState(input, 'no_upstream')
+  }
+
+  // Keep the composer hidden until hard refresh errors clear.
+  if (isHardRefreshError(input.refresh)) {
+    return hardRefreshErrorState(input)
+  }
+
+  if (input.reviewLookup === 'not_found') {
+    const detail = isTransientRefreshFailure(input.refresh)
+      ? concurrentLookupDetail(input)
+      : undefined
+    const mode = confirmedComposerMode(input)
+    return {
+      renderReview: false,
+      title: translate(
+        'auto.components.right.sidebar.checks.panel.review.no_review.title',
+        'No {{reviewLabel}} found',
+        { reviewLabel }
+      ),
+      description: translate(
+        'auto.components.right.sidebar.checks.panel.review.no_review.body',
+        'Create a {{reviewLabel}} to start checks and review.',
+        { reviewLabel }
+      ),
+      detail,
+      composerMode: mode,
+      workflowAction: workflowActionForComposer(mode),
+      recovery: detail ? ['retry'] : ['refresh'],
+      ...(detail ? autoRetrySchedule(input) : {})
+    }
+  }
+
+  if (isTransientRefreshFailure(input.refresh)) {
+    const mode = confirmedComposerMode(input)
+    return transientRefreshState(input, mode, workflowActionForComposer(mode))
+  }
+
+  if (input.refresh?.status === 'queued' || input.refresh?.status === 'in-flight') {
+    const mode = confirmedComposerMode(input)
+    return {
+      renderReview: false,
+      title: translate(
+        'auto.components.right.sidebar.checks.panel.review.active.title',
+        'Checking {{reviewLabel}} status',
+        { reviewLabel }
+      ),
+      description: translate(
+        'auto.components.right.sidebar.checks.panel.review.active.body',
+        'Orca is checking {{provider}} for a {{reviewLabel}} on this branch.',
+        { reviewLabel, provider: providerName }
+      ),
+      composerMode: mode,
+      workflowAction: workflowActionForComposer(mode),
+      recovery: []
+    }
+  }
+
+  if (input.gitStatusPhase === 'loading' && input.hasUpstream === undefined) {
+    return {
+      renderReview: false,
+      title: translate(
+        'auto.components.right.sidebar.checks.panel.review.git_loading.title',
+        'Checking branch status'
+      ),
+      description: translate(
+        'auto.components.right.sidebar.checks.panel.review.git_loading.body',
+        'Orca is checking this branch before showing create or publish actions.'
+      ),
+      composerMode: 'hidden',
+      workflowAction: null,
+      recovery: []
+    }
+  }
+  if (input.gitStatusPhase === 'error' && input.hasUpstream === undefined) {
+    return {
+      renderReview: false,
+      title: translate(
+        'auto.components.right.sidebar.checks.panel.review.git_error.title',
+        'Could not check branch status'
+      ),
+      description: translate(
+        'auto.components.right.sidebar.checks.panel.review.git_error.body',
+        "Orca could not confirm this branch's upstream from this environment. Retry before publishing or creating a {{reviewLabel}}.",
+        { reviewLabel }
+      ),
+      composerMode: 'hidden',
+      workflowAction: null,
+      recovery: ['retry']
+    }
+  }
+
+  if (input.refresh?.status === 'skipped' && input.refresh.skippedReason) {
+    if (input.refresh.skippedReason === 'rate-limit') {
+      const mode = confirmedComposerMode(input)
+      return transientRefreshState(input, mode, workflowActionForComposer(mode))
+    }
+    const skipped = skippedRefreshState(input, input.refresh.skippedReason)
+    if (skipped) {
+      return skipped
+    }
+  }
+  return {
+    renderReview: false,
+    title: translate(
+      'auto.components.right.sidebar.checks.panel.review.unknown.title',
+      '{{reviewLabelCap}} status unavailable',
+      { reviewLabelCap: capitalizeReviewLabel(reviewLabel) }
+    ),
+    description: translate(
+      'auto.components.right.sidebar.checks.panel.review.unknown.body',
+      'Orca has not confirmed the {{reviewLabel}} status for this branch. Retry to check again.',
+      { reviewLabel }
+    ),
+    composerMode: 'hidden',
+    workflowAction: null,
+    recovery: ['retry']
   }
 }
 

@@ -1,4 +1,5 @@
 import type { TaskSourceContext } from '../../shared/task-source-context'
+import type { IssueSourcePreference } from '../../shared/repo-types'
 
 export type WorkItemArgs = {
   repoPath: string
@@ -11,16 +12,14 @@ export type WorkItemArgs = {
 type RegisteredRepoContext = {
   path: string
   connectionId?: string | null
+  issueSourcePreference?: IssueSourcePreference
 }
 
 type LocalGitExecOptions = {
   wslDistro?: string
 }
 
-// Why: renderer input crosses the IPC boundary and is untrusted. Reject
-// non-integer or < 1 numbers, and coerce unrecognised `type` values to
-// undefined so getWorkItem falls through to its issue-then-PR probe rather
-// than silently dispatching to the wrong branch.
+// Reject invalid item numbers; unknown types fall back to issue-then-PR probing.
 export function dispatchWorkItem<T>(
   args: WorkItemArgs,
   repo: RegisteredRepoContext,
@@ -29,7 +28,8 @@ export function dispatchWorkItem<T>(
     n: number,
     t?: 'issue' | 'pr',
     connectionId?: string | null,
-    localGitOptions?: LocalGitExecOptions
+    localGitOptions?: LocalGitExecOptions,
+    preference?: IssueSourcePreference
   ) => Promise<T | null>,
   localGitOptions?: LocalGitExecOptions
 ): Promise<T | null> | null {
@@ -38,5 +38,13 @@ export function dispatchWorkItem<T>(
     return null
   }
   const safeType = type === 'issue' || type === 'pr' ? type : undefined
-  return fn(repo.path, number, safeType, repo.connectionId ?? null, localGitOptions)
+  // Open-by-number must use the same origin/upstream source as listing and launch.
+  return fn(
+    repo.path,
+    number,
+    safeType,
+    repo.connectionId ?? null,
+    localGitOptions,
+    repo.issueSourcePreference
+  )
 }

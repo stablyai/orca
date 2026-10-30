@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { JSX } from 'react'
 import { AgentStateDot } from '@/components/AgentStateDot'
+import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { ClaudeIcon, OpenCodeGoIcon } from '../status-bar/icons'
 
 type AgentKind = 'claude' | 'codex' | 'opencode'
@@ -51,9 +52,6 @@ function AgentIcon({ kind }: { kind: AgentKind }): JSX.Element {
 }
 
 function StatusIcon({ running }: { running: boolean }): JSX.Element {
-  // Why: reuse the same AgentStateDot primitive that renders on actual
-  // workspace cards via DashboardAgentRow, so the tour visual is visually
-  // identical to the real UI rather than a one-off lookalike.
   return <AgentStateDot state={running ? 'working' : 'done'} size="md" />
 }
 
@@ -75,8 +73,7 @@ export function WorkspacesAnimatedVisual(props: { reducedMotion: boolean }): JSX
     return map
   }, [order])
 
-  // The selected workspace should read as the same completed item in every slot;
-  // the surrounding workspaces carry the running state while they cycle around it.
+  // Keep the selected workspace completed while surrounding workspaces cycle through running states.
   const running = useMemo(() => {
     const map = new Map<string, number>()
     WORKSPACES.forEach((ws) => map.set(ws.id, ws.id === SELECTED_ID ? -1 : 0))
@@ -87,21 +84,24 @@ export function WorkspacesAnimatedVisual(props: { reducedMotion: boolean }): JSX
     if (reducedMotion) {
       return
     }
-    const id = window.setInterval(() => {
-      setVisualState((current) => {
-        const next = current.order.slice()
-        const finishing = next.pop()
-        if (!finishing) {
-          return current
-        }
-        next.unshift(finishing)
-        return { order: next, promotedWorkspaceId: finishing.id }
-      })
-    }, STEP_MS)
-    return () => window.clearInterval(id)
+    // Pause hidden-window work; revealing resumes the cycle without skipping a card.
+    return installWindowVisibilityInterval({
+      run: () => {
+        setVisualState((current) => {
+          const next = current.order.slice()
+          const finishing = next.pop()
+          if (!finishing) {
+            return current
+          }
+          next.unshift(finishing)
+          return { order: next, promotedWorkspaceId: finishing.id }
+        })
+      },
+      runOnVisible: () => {},
+      intervalMs: STEP_MS
+    })
   }, [reducedMotion])
-  // Why: reduced-motion mode should display the static stack without a
-  // post-render repair; only the animated interval needs promoted z-order.
+  // Render reduced-motion stacking directly; only animation needs promoted z-order.
   const renderedPromotedWorkspaceId = reducedMotion ? null : promotedWorkspaceId
 
   return (
@@ -119,8 +119,7 @@ export function WorkspacesAnimatedVisual(props: { reducedMotion: boolean }): JSX
               className={`absolute inset-x-0 rounded-[10px] px-2 py-2.5 transition-[background,box-shadow,transform] duration-[1100ms] [transition-timing-function:cubic-bezier(.2,.8,.2,1)] ${
                 isSelected ? 'bg-accent shadow-[inset_0_0_0_1px_rgba(24,24,27,0.06)]' : 'bg-card'
               }`}
-              // Why: the card that was bottom before rotation must pass above the
-              // cards it crosses; stable slots avoid the old end-of-cycle FLIP snap.
+              // Promote the former bottom card above those it crosses to avoid an end-of-cycle snap.
               style={{
                 height: CARD_HEIGHT_PX_BY_ID[ws.id],
                 transform: `translateY(${slotTop}px)`,

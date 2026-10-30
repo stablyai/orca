@@ -1,44 +1,19 @@
-import type { GitHubPRMergeMethod, PRState } from '../../../src/shared/types'
+import type { GitHubPRMergeMethod, PRState } from '../../../src/shared/github/pull-request-types'
+import { githubRepoIdentityKey } from '../../../src/shared/github/repository-identity-key'
 import { classifyPrSidebarFailure } from './mobile-pr-sidebar-state'
 import { createOptimisticField, type OptimisticField } from './optimistic-write-sequence'
 import type { GitHubPrMutationOutcome } from './github-pr-mutations'
 import type { GitHubPrRepoSlug } from './github-pr-rpc'
+import type { PrActionMutations } from './pr-action-mutation-contract'
+import { translate } from '../i18n/mobile-i18n'
 
-// Pure (React-free) engine for the PR mutation actions: owns optimistic fields,
-// busy/error/blocked state, and the success/transient/permanent routing. The hook
-// is a thin adapter that subscribes to `onChange` and exposes these methods. Kept
-// React-free so the U6 action logic is unit-testable with injected fakes.
+export type { PrActionMutations } from './pr-action-mutation-contract'
 
-export type PrActionMutations = {
-  mergePR: (args: {
-    prNumber: number
-    method?: GitHubPRMergeMethod
-    prRepo?: GitHubPrRepoSlug | null
-  }) => Promise<GitHubPrMutationOutcome>
-  setPRAutoMerge: (args: {
-    prNumber: number
-    enabled: boolean
-    method?: GitHubPRMergeMethod
-    prRepo?: GitHubPrRepoSlug | null
-  }) => Promise<GitHubPrMutationOutcome>
-  updatePRState: (args: {
-    prNumber: number
-    state: 'open' | 'closed'
-  }) => Promise<GitHubPrMutationOutcome>
-  requestReviewers: (args: {
-    prNumber: number
-    reviewers: string[]
-  }) => Promise<GitHubPrMutationOutcome>
-  removeReviewers: (args: {
-    prNumber: number
-    reviewers: string[]
-  }) => Promise<GitHubPrMutationOutcome>
-  rerunChecks: (args: {
-    prNumber: number
-    headSha?: string | null
-    failedOnly?: boolean
-  }) => Promise<GitHubPrMutationOutcome>
-}
+const refreshFailureMessage = (): string =>
+  translate('session.prActionsEngine.refreshFailed', 'Failed to refresh pull request.')
+
+const mergeFailureMessage = (): string =>
+  translate('session.prActionsEngine.mergeFailed', 'Failed to merge pull request.')
 
 export type PrActionBusyKey =
   | { kind: 'merge' }
@@ -63,12 +38,11 @@ export type PrActionsEngineConfig = {
   headSha?: string | null
   prRepo?: GitHubPrRepoSlug | null
   refetch: () => void | Promise<void>
-  // Notifies subscribers (the hook) that observable state changed.
   onChange: () => void
 }
 
 function prActionsIdentity(cfg: PrActionsEngineConfig): string {
-  const repo = cfg.prRepo ? `${cfg.prRepo.owner}/${cfg.prRepo.repo}` : ''
+  const repo = cfg.prRepo ? githubRepoIdentityKey(cfg.prRepo) : ''
   return `${cfg.prNumber}:${repo}`
 }
 
@@ -77,7 +51,6 @@ export class PrActionsEngine {
   private identity: string
   busy: PrActionBusyKey | null = null
   error: string | null = null
-  // Permanent failure (R9) — surfaced persistently, no auto-retry.
   blocked: string | null = null
 
   private readonly autoMergeField: OptimisticField<boolean>
@@ -91,8 +64,7 @@ export class PrActionsEngine {
     this.stateField = createOptimisticField<PRState>(cfg.onChange)
   }
 
-  // Allows the hook to refresh config (prNumber/headSha/prRepo/refetch) without
-  // recreating optimistic fields and losing in-flight guard state.
+  // Refresh hook config without recreating optimistic fields or losing in-flight guards.
   updateConfig(cfg: PrActionsEngineConfig): void {
     const nextIdentity = prActionsIdentity(cfg)
     this.cfg = cfg
@@ -129,13 +101,16 @@ export class PrActionsEngine {
     return f
   }
 
+  // Avoid redundant busy/error notifications that rerender the full PR panel.
   private setBusy(key: PrActionBusyKey | null): void {
+    if (key === null ? this.busy === null : busyKeyEquals(this.busy, key)) {
+      return
+    }
     this.busy = key
     this.cfg.onChange()
   }
 
-  // Why: overlapping actions share `busy`; a late-resolving action must only clear
-  // it if it's still the one it set, so it can't wipe a newer action's busy state.
+  // Late completions can clear only the busy state they still own.
   private clearBusyIfOwned(identity: string, key: PrActionBusyKey): void {
     if (this.identity === identity && busyKeyEquals(this.busy, key)) {
       this.setBusy(null)
@@ -143,6 +118,9 @@ export class PrActionsEngine {
   }
 
   private setError(message: string | null): void {
+    if (this.error === message) {
+      return
+    }
     this.error = message
     this.cfg.onChange()
   }
@@ -152,8 +130,7 @@ export class PrActionsEngine {
     this.cfg.onChange()
   }
 
-  // Routes an outcome: success → refetch; transient → revert latest + non-blocking
-  // error; permanent (blocked) → no auto-retry, persistent blocked state (KTD7/R9).
+  // Reset state when review identity changes so prior actions cannot affect another PR.
   private resetForIdentityChange(): void {
     let changed = this.busy !== null || this.error !== null || this.blocked !== null
     this.busy = null
@@ -180,11 +157,17 @@ export class PrActionsEngine {
     }
     if (outcome.ok) {
       handlers.onSuccess()
-      await this.cfg.refetch()
+      // Contain refetch rejection for fire-and-forget action callers.
+      try {
+        await this.cfg.refetch()
+      } catch (err) {
+        if (this.identity === identity) {
+          this.setError(err instanceof Error ? err.message : refreshFailureMessage())
+        }
+      }
       return
     }
-    // Both failure classes clear optimism to authoritative; only the message
-    // routing differs (blocked is persistent and not retry-encouraged).
+    // Both failures revert optimism; permanent failures stay blocked without encouraging retry.
     handlers.onRevert()
     if (classifyPrSidebarFailure(outcome.error) === 'blocked') {
       this.setBlocked(outcome.error)
@@ -205,6 +188,10 @@ export class PrActionsEngine {
         prRepo: cfg.prRepo
       })
       await this.settle(identity, outcome, { onSuccess: () => {}, onRevert: () => {} })
+    } catch (err) {
+      if (this.identity === identity) {
+        this.setError(err instanceof Error ? err.message : mergeFailureMessage())
+      }
     } finally {
       this.clearBusyIfOwned(identity, { kind: 'merge' })
     }
@@ -241,7 +228,28 @@ export class PrActionsEngine {
     try {
       const outcome = await cfg.mutations.updatePRState({
         prNumber: cfg.prNumber,
-        state
+        state,
+        prRepo: cfg.prRepo
+      })
+      await this.settle(identity, outcome, {
+        onSuccess: () => this.stateField.settleSuccess(seq),
+        onRevert: () => this.stateField.settleFailure(seq)
+      })
+    } finally {
+      this.clearBusyIfOwned(identity, { kind: 'state' })
+    }
+  }
+
+  async markReadyForReview(): Promise<void> {
+    const cfg = this.cfg
+    const identity = this.identity
+    const seq = this.stateField.begin('open')
+    this.setBusy({ kind: 'state' })
+    this.setError(null)
+    try {
+      const outcome = await cfg.mutations.markReadyForReview({
+        prNumber: cfg.prNumber,
+        prRepo: cfg.prRepo
       })
       await this.settle(identity, outcome, {
         onSuccess: () => this.stateField.settleSuccess(seq),
@@ -262,7 +270,8 @@ export class PrActionsEngine {
     try {
       const outcome = await cfg.mutations.requestReviewers({
         prNumber: cfg.prNumber,
-        reviewers: [login]
+        reviewers: [login],
+        prRepo: cfg.prRepo
       })
       await this.settle(identity, outcome, {
         onSuccess: () => field.settleSuccess(seq),
@@ -283,7 +292,8 @@ export class PrActionsEngine {
     try {
       const outcome = await cfg.mutations.removeReviewers({
         prNumber: cfg.prNumber,
-        reviewers: [login]
+        reviewers: [login],
+        prRepo: cfg.prRepo
       })
       await this.settle(identity, outcome, {
         onSuccess: () => field.settleSuccess(seq),
@@ -303,7 +313,8 @@ export class PrActionsEngine {
       const outcome = await cfg.mutations.rerunChecks({
         prNumber: cfg.prNumber,
         headSha: cfg.headSha,
-        failedOnly: true
+        failedOnly: true,
+        prRepo: cfg.prRepo
       })
       await this.settle(identity, outcome, { onSuccess: () => {}, onRevert: () => {} })
     } finally {

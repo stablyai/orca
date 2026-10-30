@@ -1,35 +1,23 @@
 import type { DraftPasteReadySignal } from '../../../shared/tui-agent-config'
-import type { GlobalSettings } from '../../../shared/types'
 import { subscribeToPtyData } from '@/components/terminal-pane/pty-data-sidecar-subscriptions'
-import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
+import { replayPreHandlerPtyData } from '@/components/terminal-pane/pty-pre-handler-buffer'
+import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import { subscribeToRuntimeTerminalData } from '@/runtime/runtime-terminal-stream'
+import { createDraftPasteReadyScanner } from '../../../shared/draft-paste-ready-scanner'
 
-const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
-const CODEX_COMPOSER_PROMPT = '›'
 const BRACKETED_PASTE_QUIET_MS = 1500
 
-/**
- * Tap the PTY data stream as a side-channel observer (does NOT take over
- * the primary handler that feeds xterm) and resolve once input is ready.
- *
- * Why a sidecar subscription:
- *   - the main pane may attach mid-flight; we must not race against its
- *     handler registration on the dispatcher's primary slot.
- *   - DECSET 2004 and the Codex composer prompt may straddle two data chunks,
- *     so keep a small ring of recent bytes and search the union.
- */
+/** Observe without taking xterm’s primary handler; retain recent bytes because readiness markers can span chunks and the pane may attach mid-flight. */
 export function waitForAgentDraftInputReady(
   ptyId: string,
   timeoutMs: number,
-  readySignal: DraftPasteReadySignal,
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+  readySignal: DraftPasteReadySignal
 ): Promise<boolean> {
   return new Promise<boolean>((resolve) => {
     let settled = false
-    let recent = ''
-    let postHandshakeRecent = ''
-    let saw2004 = false
+    const scanner = createDraftPasteReadyScanner(readySignal)
     let quietTimer: number | null = null
+    let graceTimer: number | null = null
     let hardTimer: number | null = null
     let unsubscribe: (() => void) | null = null
 
@@ -44,6 +32,9 @@ export function waitForAgentDraftInputReady(
       if (quietTimer !== null) {
         window.clearTimeout(quietTimer)
       }
+      if (graceTimer !== null) {
+        window.clearTimeout(graceTimer)
+      }
       unsubscribe?.()
       resolve(value)
     }
@@ -56,52 +47,24 @@ export function waitForAgentDraftInputReady(
     }
 
     const observeData = (data: string): void => {
-      // Why: 512 bytes covers split escape sequences and Codex's styled prompt
-      // without retaining a large terminal scrollback copy.
-      const combined = recent + data
-      recent = combined.slice(-512)
-      if (!saw2004) {
-        const markerIndex = combined.indexOf(DECSET_BRACKETED_PASTE)
-        if (markerIndex === -1) {
-          return
-        }
-        saw2004 = true
-        const postHandshakeChunk = combined.slice(markerIndex + DECSET_BRACKETED_PASTE.length)
-        if (readySignal === 'codex-composer-prompt') {
-          if (postHandshakeChunk.includes(CODEX_COMPOSER_PROMPT)) {
-            finish(true)
-            return
-          }
-          postHandshakeRecent = postHandshakeChunk.slice(-512)
-          return
-        }
-        postHandshakeRecent = postHandshakeChunk.slice(-512)
-      } else {
-        if (
-          readySignal === 'codex-composer-prompt' &&
-          (data.includes(CODEX_COMPOSER_PROMPT) ||
-            (postHandshakeRecent + data).includes(CODEX_COMPOSER_PROMPT))
-        ) {
-          finish(true)
-          return
-        }
-        postHandshakeRecent = (postHandshakeRecent + data).slice(-512)
-      }
-      if (readySignal === 'codex-composer-prompt') {
+      const { ready, armQuietTimer: shouldArm, readyAfterMs } = scanner.observe(data)
+      if (ready) {
+        finish(true)
         return
       }
-      if (saw2004) {
+      if (readyAfterMs === null && graceTimer !== null) {
+        window.clearTimeout(graceTimer)
+        graceTimer = null
+      } else if (typeof readyAfterMs === 'number' && graceTimer === null) {
+        graceTimer = window.setTimeout(() => finish(true), readyAfterMs)
+      }
+      if (shouldArm) {
         armQuietTimer()
       }
     }
 
     if (isRemoteRuntimePtyId(ptyId)) {
-      void subscribeToRuntimeTerminalData(
-        settings,
-        ptyId,
-        `desktop:paste-ready:${ptyId}`,
-        observeData
-      )
+      void subscribeToRuntimeTerminalData(ptyId, `desktop:paste-ready:${ptyId}`, observeData)
         .then((remoteUnsubscribe) => {
           if (settled) {
             remoteUnsubscribe()
@@ -112,10 +75,13 @@ export function waitForAgentDraftInputReady(
         .catch(() => finish(false))
     } else {
       unsubscribe = subscribeToPtyData(ptyId, observeData)
+      // Replay early buffered Codex output to this observer without consuming xterm’s primary copy.
+      replayPreHandlerPtyData(ptyId, observeData)
     }
 
     if (!settled) {
-      hardTimer = window.setTimeout(() => finish(false), timeoutMs)
+      // A pending grace means the box was seen: take it, as the box rule would have.
+      hardTimer = window.setTimeout(() => finish(graceTimer !== null), timeoutMs)
     }
   })
 }

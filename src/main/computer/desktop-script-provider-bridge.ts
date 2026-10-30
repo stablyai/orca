@@ -1,28 +1,83 @@
-import { execFile } from 'child_process'
+import { execFile } from 'node:child_process'
+import { windowsPowerShellPath } from '@orca/process-host/windows-system-binary'
+import { reportComputerDiagnostic } from './computer-sidecar-diagnostics'
 import { RuntimeClientError } from './runtime-client-error'
 import type { DesktopScriptPlatform } from './desktop-script-provider-paths'
+import {
+  FALLBACK_WINDOWS_EXECUTION_POLICY,
+  PREFERRED_WINDOWS_EXECUTION_POLICY,
+  isExecutionPolicyBlocked,
+  windowsPowerShellRuntimeArgs
+} from './windows-powershell-execution-policy'
 
 const REQUEST_TIMEOUT_MS = 30_000
 const FORCE_KILL_GRACE_MS = 1_000
 
-export function execBridge(
+export async function execBridge(
   platform: DesktopScriptPlatform,
   scriptPath: string,
   operationPath: string
 ): Promise<{ stdout: string; stderr: string }> {
-  const command = platform === 'windows' ? 'powershell.exe' : 'python3'
-  const args =
-    platform === 'windows'
-      ? [
-          '-NoProfile',
-          '-NonInteractive',
-          '-ExecutionPolicy',
-          'Bypass',
-          '-File',
-          scriptPath,
-          operationPath
-        ]
-      : [scriptPath, operationPath]
+  if (platform !== 'windows') {
+    return await mapped(runBridgeProcess('python3', [scriptPath, operationPath]))
+  }
+  const command = windowsPowerShellPath()
+  try {
+    return await runBridgeProcess(
+      command,
+      windowsPowerShellRuntimeArgs(scriptPath, PREFERRED_WINDOWS_EXECUTION_POLICY, [operationPath])
+    )
+  } catch (error) {
+    if (!isPolicyBlockedStart(error)) {
+      throw error instanceof BridgeProcessFailure ? error.mapped : error
+    }
+    reportComputerDiagnostic(
+      `bridge start blocked at ${PREFERRED_WINDOWS_EXECUTION_POLICY}; retrying once with ${FALLBACK_WINDOWS_EXECUTION_POLICY}`
+    )
+    return await mapped(
+      runBridgeProcess(
+        command,
+        windowsPowerShellRuntimeArgs(scriptPath, FALLBACK_WINDOWS_EXECUTION_POLICY, [operationPath])
+      )
+    )
+  }
+}
+
+async function mapped(
+  run: Promise<{ stdout: string; stderr: string }>
+): Promise<{ stdout: string; stderr: string }> {
+  try {
+    return await run
+  } catch (error) {
+    throw error instanceof BridgeProcessFailure ? error.mapped : error
+  }
+}
+
+/** Retry policy failures with empty stdout; a post-action crash can also leave stdout empty. */
+function isPolicyBlockedStart(error: unknown): error is BridgeProcessFailure {
+  return (
+    error instanceof BridgeProcessFailure &&
+    !error.stdout.trim() &&
+    isExecutionPolicyBlocked(error.stderr)
+  )
+}
+
+/** Preserve raw streams so policy classification does not depend on a mapped error message. */
+class BridgeProcessFailure extends Error {
+  constructor(
+    readonly stdout: string,
+    readonly stderr: string,
+    readonly mapped: RuntimeClientError
+  ) {
+    super(mapped.message)
+    this.name = 'BridgeProcessFailure'
+  }
+}
+
+function runBridgeProcess(
+  command: string,
+  args: readonly string[]
+): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
     let child: ReturnType<typeof execFile> | null = null
     let settled = false
@@ -55,8 +110,7 @@ export function execBridge(
       resolve(result ?? { stdout: '', stderr: '' })
     }
 
-    // Why: native automation can hang inside platform APIs; reject promptly,
-    // then escalate cleanup if the bridge ignores the graceful termination.
+    // Native automation can hang; reject promptly and escalate if graceful termination fails.
     const timeout = setTimeout(() => {
       child?.kill('SIGTERM')
       forceKillTimer = setTimeout(() => {
@@ -76,7 +130,7 @@ export function execBridge(
     try {
       child = execFile(
         command,
-        args,
+        [...args],
         {
           env: process.env,
           maxBuffer: 20 * 1024 * 1024,
@@ -86,11 +140,10 @@ export function execBridge(
         (error, stdout, stderr) => {
           if (error) {
             const message = stderr.trim() || stdout.trim() || error.message
-            finish(
-              error.killed
-                ? new RuntimeClientError('action_timeout', message)
-                : mapBridgeError(message)
-            )
+            const mapped = error.killed
+              ? new RuntimeClientError('action_timeout', message)
+              : mapBridgeError(message)
+            finish(new BridgeProcessFailure(stdout, stderr, mapped))
             return
           }
           finish(null, { stdout, stderr })
@@ -112,7 +165,7 @@ export function mapBridgeError(message: string): RuntimeClientError {
     return new RuntimeClientError('app_blocked', text)
   }
   if (
-    /unsupported capability|hotkey.*require|paste_text requires|GDK is required for non-character key synthesis/i.test(
+    /unsupported capability|hotkey.*require|paste_text requires|modified clicks require xdotool|GDK is required for non-character key synthesis/i.test(
       text
     )
   ) {
@@ -126,9 +179,18 @@ export function mapBridgeError(message: string): RuntimeClientError {
     return new RuntimeClientError('invalid_argument', text)
   }
   if (/ModuleNotFoundError: No module named 'gi'|PyGObject|python3-gi/i.test(text)) {
+    const interpreter = /PyGObject unavailable in interpreter: (.+)/.exec(text)?.[1]?.trim()
     return new RuntimeClientError(
       'unsupported_capability',
-      'Linux Computer Use requires python3-gi and AT-SPI packages. Install python3-gi gir1.2-atspi-2.0 at-spi2-core, then retry.'
+      interpreter
+        ? `Linux Computer Use requires python3-gi and AT-SPI packages, which the python3 it ran (${interpreter}) cannot load. Install python3-gi gir1.2-atspi-2.0 at-spi2-core for that interpreter, or put a python3 that has them (usually /usr/bin/python3) first on PATH, then retry.`
+        : 'Linux Computer Use requires python3-gi and AT-SPI packages. Install python3-gi gir1.2-atspi-2.0 at-spi2-core, then retry.'
+    )
+  }
+  if (/spawn python3 ENOENT/.test(text)) {
+    return new RuntimeClientError(
+      'unsupported_capability',
+      "Computer use isn't available on this host: Linux Computer Use runs python3, and none is on PATH. Install python3 with python3-gi gir1.2-atspi-2.0 at-spi2-core, then retry."
     )
   }
   if (/not a valid secondary action|action.*not supported/i.test(text)) {

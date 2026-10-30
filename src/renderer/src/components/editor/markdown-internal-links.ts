@@ -3,14 +3,12 @@ import {
   filesystemPathToFileUri,
   fileUriToFilesystemPath
 } from '../../../../shared/file-uri-path'
-import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+import {
+  isWindowsAbsolutePathLike,
+  relativePathInsideRoot
+} from '../../../../shared/cross-platform-path'
 
-// Pure classifier for markdown link targets. Called by the link-activation
-// dispatcher (activateMarkdownLink slice action) from three call sites —
-// MarkdownPreview, RichMarkdownEditor Cmd-click, RichMarkdownLinkBubble open —
-// so behavior stays consistent across preview/rich/bubble entry points.
-//
-// See docs/markdown-internal-link-opening-design.md for the full rationale.
+// Share classification across preview, rich-editor and link-bubble activation; see docs/markdown-internal-link-opening-design.md.
 
 export type MarkdownLinkTarget =
   | { kind: 'anchor' }
@@ -30,13 +28,6 @@ export type MarkdownLinkTarget =
       line?: number
       column?: number
     }
-
-// Why: renderer runs with sandbox + contextIsolation, so process.platform is
-// unavailable. navigator.userAgent is the portable fallback (AGENTS.md).
-const ua = typeof navigator === 'undefined' ? '' : navigator.userAgent
-const isMacLike = ua.includes('Mac')
-const isWindowsLike = ua.includes('Windows')
-const caseInsensitiveFs = isMacLike || isWindowsLike
 
 const MARKDOWN_EXTENSIONS = new Set(['.md', '.mdx', '.markdown'])
 
@@ -60,18 +51,7 @@ function normalizePathForCompare(p: string): string {
   return np
 }
 
-function isDescendantOf(childAbs: string, parentAbs: string): boolean {
-  const child = normalizePathForCompare(childAbs)
-  const parent = normalizePathForCompare(parentAbs)
-  if (caseInsensitiveFs) {
-    const lc = child.toLowerCase()
-    const lp = parent.toLowerCase()
-    return lc === lp || lc.startsWith(`${lp}/`)
-  }
-  return child === parent || child.startsWith(`${parent}/`)
-}
-
-function hasMarkdownExtension(p: string): boolean {
+export function hasMarkdownExtension(p: string): boolean {
   const lastDot = p.lastIndexOf('.')
   if (lastDot === -1) {
     return false
@@ -79,9 +59,7 @@ function hasMarkdownExtension(p: string): boolean {
   return MARKDOWN_EXTENSIONS.has(p.slice(lastDot).toLowerCase())
 }
 
-// Extract `:line` or `:line:col` from the end of a path. Must anchor to
-// end-of-string and require digits so legal filenames containing `:` are not
-// silently truncated.
+// Require trailing numeric line/column syntax so filenames containing colons are not truncated.
 function extractTrailingLineCol(path: string): { path: string; line?: number; column?: number } {
   const match = /:(\d+)(?::(\d+))?$/.exec(path)
   if (!match) {
@@ -94,8 +72,7 @@ function extractTrailingLineCol(path: string): { path: string; line?: number; co
   }
 }
 
-// Parse `#L10` / `#L10C5` anchor (case-insensitive). Non-matching fragments
-// (e.g., `#heading`) return undefined so they flow through as normal links.
+// Leave non-line fragments such as heading anchors available to normal link handling.
 function extractHashLineCol(hash: string): { line?: number; column?: number } {
   if (!hash) {
     return {}
@@ -114,8 +91,7 @@ function extractHashLineCol(hash: string): { line?: number; column?: number } {
 function resolveRelativeToSource(rawHref: string, sourceFilePath: string): URL | null {
   try {
     if (isWindowsAbsolutePathLike(rawHref)) {
-      // Why: URL treats `C:\...` as a custom `c:` scheme unless the Windows
-      // absolute path is first converted to the file URL form used downstream.
+      // Convert Windows drive paths to file URLs before URL mistakes the drive letter for a scheme.
       return new URL(filesystemPathHrefToFileUri(rawHref))
     }
     return new URL(rawHref, toFileUrl(sourceFilePath))
@@ -125,25 +101,7 @@ function resolveRelativeToSource(rawHref: string, sourceFilePath: string): URL |
 }
 
 function computeRelativePath(absolutePath: string, worktreeRoot: string): string {
-  const parent = normalizePathForCompare(worktreeRoot)
-  const child = normalizePathForCompare(absolutePath)
-  const prefix = `${parent}/`
-  if (caseInsensitiveFs) {
-    if (child.toLowerCase() === parent.toLowerCase()) {
-      return ''
-    }
-    if (child.toLowerCase().startsWith(prefix.toLowerCase())) {
-      return child.slice(prefix.length)
-    }
-  } else {
-    if (child === parent) {
-      return ''
-    }
-    if (child.startsWith(prefix)) {
-      return child.slice(prefix.length)
-    }
-  }
-  return child
+  return relativePathInsideRoot(worktreeRoot, absolutePath) ?? normalizePathForCompare(absolutePath)
 }
 
 export function resolveMarkdownLinkTarget(
@@ -176,8 +134,6 @@ export function resolveMarkdownLinkTarget(
     return null
   }
 
-  // Why: hash-based line anchor takes precedence; fall back to trailing
-  // `:line:col` syntax only if no hash anchor was found.
   const hashParsed = extractHashLineCol(resolved.hash)
   let line = hashParsed.line
   let column = hashParsed.column
@@ -195,7 +151,7 @@ export function resolveMarkdownLinkTarget(
   if (
     worktreeRoot !== null &&
     hasMarkdownExtension(pathForClassification) &&
-    isDescendantOf(pathForClassification, worktreeRoot)
+    relativePathInsideRoot(worktreeRoot, pathForClassification) !== null
   ) {
     const relativePath = computeRelativePath(pathForClassification, worktreeRoot)
     return {
@@ -208,14 +164,11 @@ export function resolveMarkdownLinkTarget(
   }
 
   const relativePath =
-    worktreeRoot !== null && isDescendantOf(pathForClassification, worktreeRoot)
+    worktreeRoot !== null && relativePathInsideRoot(worktreeRoot, pathForClassification) !== null
       ? computeRelativePath(pathForClassification, worktreeRoot)
       : undefined
 
-  // Rebuild a file: URI without the line anchor so the OS handler gets a
-  // clean path. Use the original resolved URL minus the hash as an
-  // approximation; for trailing-colon paths there's no clean URL form,
-  // so we reconstruct from the stripped absolute path.
+  // Strip line anchors before OS handoff; trailing-colon syntax requires rebuilding the file URL from its stripped path.
   const cleanUri = line === undefined ? resolved.toString() : toFileUrl(pathForClassification)
   return {
     kind: 'file',
@@ -225,4 +178,53 @@ export function resolveMarkdownLinkTarget(
     line,
     column
   }
+}
+
+const HTML_ATTRIBUTE_WHITESPACE = /^[\t\n\f\r ]+|[\t\n\f\r ]+$/g
+
+export function projectMarkdownHrefForClipboard(href: string): string | null {
+  const projected = href.replace(HTML_ATTRIBUTE_WHITESPACE, '')
+  if (!projected || containsAsciiControl(projected)) {
+    return null
+  }
+  if (
+    isWindowsAbsolutePathLike(projected) ||
+    projected.startsWith('\\\\') ||
+    projected.startsWith('//')
+  ) {
+    return null
+  }
+  if (projected.startsWith('#')) {
+    return projected
+  }
+
+  const scheme = /^([A-Za-z][A-Za-z\d+.-]*):/.exec(projected)?.[1]?.toLowerCase()
+  if (!scheme) {
+    return projected
+  }
+  if (scheme !== 'http' && scheme !== 'https' && scheme !== 'file') {
+    return null
+  }
+  try {
+    const parsed = new URL(projected)
+    if (parsed.protocol !== `${scheme}:`) {
+      return null
+    }
+    if (scheme === 'file' && !parsed.pathname) {
+      return null
+    }
+    return projected
+  } catch {
+    return null
+  }
+}
+
+function containsAsciiControl(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index)
+    if (code <= 31 || code === 127) {
+      return true
+    }
+  }
+  return false
 }

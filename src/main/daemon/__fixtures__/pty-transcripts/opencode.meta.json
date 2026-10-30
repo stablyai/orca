@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-24T04:12:53.472Z",
+  "platform": "darwin",
+  "command": ["opencode", "--model", "opencode/muse-spark-1.3-contributor-free"],
+  "cols": 110,
+  "rows": 32,
+  "note": "opencode 1.18.32 TUI (alt screen); free Zen model, no account; cwd path redacted",
+  "exitCode": 0
+}

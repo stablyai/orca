@@ -1,84 +1,133 @@
-/* eslint-disable max-lines */
 import { ipcMain } from 'electron'
-import { basename } from 'node:path'
 import type { Store } from '../persistence'
-import { getStatus } from '../git/status'
-import { gitExecFileAsync } from '../git/runner'
-import { listRepoWorktrees, createFolderWorktree } from '../repo-worktrees'
-import { getSshGitProvider } from '../providers/ssh-git-dispatch'
-import type { IGitProvider, IPtyProvider } from '../providers/types'
-import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { listRegisteredPtys } from '../memory/pty-registry'
-import { getSshPtyProvider } from './pty'
-import { isFolderRepo } from '../../shared/repo-kind'
-import type {
-  GitStatusResult,
-  GitWorktreeInfo,
-  Repo,
-  Worktree,
-  WorktreeMeta
-} from '../../shared/types'
-import { mergeWorktree } from './worktree-logic'
-import { splitWorktreeId } from '../../shared/worktree-id'
 import {
   WORKSPACE_CLEANUP_CLASSIFIER_VERSION,
-  applyWorkspaceCleanupPolicy,
-  createWorkspaceCleanupFingerprint,
-  getWorkspaceCleanupInactivityReasons,
-  isWorkspaceOldForCleanup,
-  type WorkspaceCleanupBlocker,
-  type WorkspaceCleanupCandidate,
   type WorkspaceCleanupDismissArgs,
-  type WorkspaceCleanupLocalProcessArgs,
-  type WorkspaceCleanupLocalProcessResult,
-  type WorkspaceCleanupReason,
-  type WorkspaceCleanupScanError,
   type WorkspaceCleanupScanArgs,
-  type WorkspaceCleanupScanResult
+  type WorkspaceCleanupScanResult,
+  type WorkspaceCleanupSnapshotPruneBatchArgs,
+  type WorkspaceCleanupSnapshotPruneRecordArgs
 } from '../../shared/workspace-cleanup'
+import { parseExecutionHostId } from '../../shared/execution-host'
+import { getWorkspaceCleanupHostIdentity } from '../../shared/workspace-cleanup-host-identity'
+import { scanWorkspaceCleanup } from './workspace-cleanup-scan'
+import { abortWhenRendererGone } from './renderer-lifetime-abort'
+import { hasTargetedWorkspaceCleanupScan } from './workspace-cleanup-scan-targets'
+import {
+  persistWorkspaceCleanupScanResult,
+  readWorkspaceCleanupScanSnapshot
+} from '../workspace-cleanup-scan-snapshot'
+import {
+  beginWorkspaceCleanupRemovalSnapshotPruneBatch,
+  finishWorkspaceCleanupRemovalSnapshotPruneBatch,
+  recordWorkspaceCleanupRemovalSnapshotPrune
+} from '../workspace-cleanup-removal-snapshot-prune'
 
-const GIT_READ_TIMEOUT_MS = 8_000
-const WORKTREE_SCAN_CONCURRENCY = 3
+export { scanWorkspaceCleanup }
 
-type GitEvidence = {
-  clean: boolean | null
-  upstreamAhead: number | null
-  upstreamBehind: number | null
-  checkedAt: number | null
-  blockers: WorkspaceCleanupBlocker[]
+// Module scope preserves old-window scan cancellation across handler re-registration.
+const activeScans = new Map<string, AbortController>()
+// Separate legacy/full-list lanes by sender and mode, matching renderer scan ownership.
+const broadScanControllersBySenderMode = new Map<string, AbortController>()
+
+function getBroadScanModeKey(senderId: number, args: WorkspaceCleanupScanArgs): string {
+  return `${senderId}\0${args.includeAllWorkspaces === true}`
 }
 
-type WorkspaceCleanupHandlerDeps = {
-  runtime?: OrcaRuntimeService
-  getLocalPtyProvider?: () => IPtyProvider
-}
-
-export function registerWorkspaceCleanupHandlers(
-  store: Store,
-  deps: WorkspaceCleanupHandlerDeps = {}
-): void {
+export function registerWorkspaceCleanupHandlers(store: Store): void {
+  const snapshotDirectory = store.getProfileStorageDirectory()
   ipcMain.removeHandler('workspaceCleanup:scan')
+  ipcMain.removeHandler('workspaceCleanup:cancelScan')
+  ipcMain.removeHandler('workspaceCleanup:getCachedScan')
   ipcMain.removeHandler('workspaceCleanup:dismiss')
   ipcMain.removeHandler('workspaceCleanup:clearDismissals')
-  ipcMain.removeHandler('workspaceCleanup:hasKillableLocalProcesses')
+  ipcMain.removeHandler('workspaceCleanup:beginRemovalSnapshotPruneBatch')
+  ipcMain.removeHandler('workspaceCleanup:recordRemovalSnapshotPrune')
+  ipcMain.removeHandler('workspaceCleanup:finishRemovalSnapshotPruneBatch')
 
   ipcMain.handle(
     'workspaceCleanup:scan',
-    (_event, args?: WorkspaceCleanupScanArgs): Promise<WorkspaceCleanupScanResult> =>
-      scanWorkspaceCleanup(store, args ?? {})
+    async (event, args?: WorkspaceCleanupScanArgs): Promise<WorkspaceCleanupScanResult> => {
+      const scanArgs = args ?? {}
+      const sender = event.sender
+      const scanKey = getWorkspaceCleanupScanKey(sender.id, scanArgs.scanId)
+      const controller = new AbortController()
+      if (scanKey) {
+        activeScans.set(scanKey, controller)
+      }
+      const targeted = hasTargetedWorkspaceCleanupScan(scanArgs)
+      const broadScanKey = getBroadScanModeKey(sender.id, scanArgs)
+      if (!targeted) {
+        // Same-sender, same-mode refreshes supersede expensive work whose result would be discarded.
+        broadScanControllersBySenderMode.get(broadScanKey)?.abort()
+        broadScanControllersBySenderMode.set(broadScanKey, controller)
+      }
+      // Window retirement must cancel scan work, not merely mute its progress.
+      const lifetime = abortWhenRendererGone(sender)
+      lifetime.signal.addEventListener('abort', () => controller.abort(), { once: true })
+      try {
+        const result = await scanWorkspaceCleanup(store, scanArgs, {
+          signal: controller.signal,
+          onProgress: scanArgs.scanId
+            ? (progress) => {
+                if (!controller.signal.aborted && !sender.isDestroyed()) {
+                  sender.send('workspaceCleanup:scanProgress', progress)
+                }
+              }
+            : undefined
+        })
+        // Persist only fleet scans: even empty targeted results would wipe the broad snapshot.
+        if (!targeted) {
+          void persistWorkspaceCleanupScanResult(snapshotDirectory, scanArgs, result)
+        }
+        return result
+      } finally {
+        lifetime.dispose()
+        if (scanKey && activeScans.get(scanKey) === controller) {
+          activeScans.delete(scanKey)
+        }
+        if (!targeted && broadScanControllersBySenderMode.get(broadScanKey) === controller) {
+          broadScanControllersBySenderMode.delete(broadScanKey)
+        }
+      }
+    }
+  )
+
+  ipcMain.handle('workspaceCleanup:cancelScan', (event, scanId: string): boolean => {
+    const scanKey = getWorkspaceCleanupScanKey(event.sender.id, scanId)
+    const controller = scanKey ? activeScans.get(scanKey) : undefined
+    if (!controller || controller.signal.aborted) {
+      return false
+    }
+    controller.abort()
+    return true
+  })
+
+  ipcMain.handle('workspaceCleanup:getCachedScan', (): Promise<WorkspaceCleanupScanResult | null> =>
+    readWorkspaceCleanupScanSnapshot(snapshotDirectory)
   )
 
   ipcMain.handle('workspaceCleanup:dismiss', (_event, args: WorkspaceCleanupDismissArgs) => {
-    const current = store.getUI().workspaceCleanup?.dismissals ?? {}
-    const next = { ...current }
+    const next = { ...store.getUI().workspaceCleanup?.dismissals }
+    for (const worktreeId of args.removedWorktreeIds ?? []) {
+      for (const [identity, dismissal] of Object.entries(next)) {
+        if (dismissal.worktreeId === worktreeId) {
+          delete next[identity]
+        }
+      }
+    }
     for (const dismissal of args.dismissals ?? []) {
       if (
         dismissal &&
         dismissal.classifierVersion === WORKSPACE_CLEANUP_CLASSIFIER_VERSION &&
         typeof dismissal.worktreeId === 'string' &&
-        typeof dismissal.fingerprint === 'string'
+        typeof dismissal.fingerprint === 'string' &&
+        (dismissal.executionHostId === undefined || parseExecutionHostId(dismissal.executionHostId))
       ) {
-        next[dismissal.worktreeId] = dismissal
+        const identity = dismissal.executionHostId
+          ? getWorkspaceCleanupHostIdentity(dismissal.executionHostId, dismissal.worktreeId)
+          : dismissal.worktreeId
+        next[identity] = dismissal
       }
     }
     store.updateUI({ workspaceCleanup: { dismissals: next } })
@@ -89,655 +138,45 @@ export function registerWorkspaceCleanupHandlers(
   })
 
   ipcMain.handle(
-    'workspaceCleanup:hasKillableLocalProcesses',
-    async (
-      _event,
-      args: WorkspaceCleanupLocalProcessArgs
-    ): Promise<WorkspaceCleanupLocalProcessResult> => ({
-      hasKillableProcesses: await hasKillableProcesses(args, deps)
-    })
+    'workspaceCleanup:beginRemovalSnapshotPruneBatch',
+    (_event, args: WorkspaceCleanupSnapshotPruneBatchArgs) => {
+      if (isSnapshotPruneBatchId(args?.batchId)) {
+        beginWorkspaceCleanupRemovalSnapshotPruneBatch(snapshotDirectory, args)
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'workspaceCleanup:recordRemovalSnapshotPrune',
+    (_event, args: WorkspaceCleanupSnapshotPruneRecordArgs) => {
+      if (
+        isSnapshotPruneBatchId(args?.batchId) &&
+        typeof args?.worktreeId === 'string' &&
+        args.worktreeId.length > 0 &&
+        (args.executionHostId === undefined || parseExecutionHostId(args.executionHostId))
+      ) {
+        recordWorkspaceCleanupRemovalSnapshotPrune(snapshotDirectory, args)
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'workspaceCleanup:finishRemovalSnapshotPruneBatch',
+    (_event, args: WorkspaceCleanupSnapshotPruneBatchArgs) => {
+      if (isSnapshotPruneBatchId(args?.batchId)) {
+        return finishWorkspaceCleanupRemovalSnapshotPruneBatch(snapshotDirectory, args)
+      }
+      return undefined
+    }
   )
 }
 
-async function hasKillableProcesses(
-  args: WorkspaceCleanupLocalProcessArgs,
-  deps: WorkspaceCleanupHandlerDeps
-): Promise<boolean | null> {
-  const { worktreeId } = args
-  if (typeof worktreeId !== 'string' || worktreeId.length === 0) {
-    return false
-  }
-
-  let livenessUnknown = false
-  if (deps.runtime) {
-    try {
-      if (await deps.runtime.hasTerminalsForWorktree(worktreeId)) {
-        return true
-      }
-    } catch {
-      livenessUnknown = true
-    }
-  }
-
-  if (args.connectionId) {
-    return hasKillableSshProcesses(args.connectionId, args.worktreePath ?? '', livenessUnknown)
-  }
-
-  const registryPtyIds = new Set(
-    listRegisteredPtys()
-      .filter((entry) => entry.worktreeId === worktreeId)
-      .map((entry) => entry.ptyId)
-  )
-
-  const provider = deps.getLocalPtyProvider?.()
-  if (!provider) {
-    return registryPtyIds.size > 0 ? true : null
-  }
-
-  try {
-    const prefix = `${worktreeId}@@`
-    const sessions = await provider.listProcesses()
-    if (
-      sessions.some((session) => session.id.startsWith(prefix) || registryPtyIds.has(session.id))
-    ) {
-      return true
-    }
-    return livenessUnknown ? null : false
-  } catch {
-    return registryPtyIds.size > 0 ? true : null
-  }
+function isSnapshotPruneBatchId(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= 128
 }
 
-async function hasKillableSshProcesses(
-  connectionId: string,
-  worktreePath: string,
-  livenessUnknown: boolean
-): Promise<boolean | null> {
-  const provider = getSshPtyProvider(connectionId)
-  if (!provider) {
-    return null
-  }
-
-  try {
-    const normalizedWorktreePath = normalizeRemotePath(worktreePath)
-    const sessions = await provider.listProcesses()
-    if (
-      sessions.some((session) => {
-        if (session.id.startsWith(`${worktreePath}@@`)) {
-          return true
-        }
-        return (
-          normalizedWorktreePath.length > 0 &&
-          isPathWithin(normalizeRemotePath(session.cwd), normalizedWorktreePath)
-        )
-      })
-    ) {
-      return true
-    }
-    return livenessUnknown ? null : false
-  } catch {
-    return null
-  }
-}
-
-function normalizeRemotePath(path: string): string {
-  return path.replace(/\\/g, '/').replace(/\/+$/, '')
-}
-
-function isPathWithin(candidatePath: string, parentPath: string): boolean {
-  return candidatePath === parentPath || candidatePath.startsWith(`${parentPath}/`)
-}
-
-export async function scanWorkspaceCleanup(
-  store: Store,
-  args: WorkspaceCleanupScanArgs = {}
-): Promise<WorkspaceCleanupScanResult> {
-  const scannedAt = Date.now()
-  const repos = store.getRepos()
-  const errors: WorkspaceCleanupScanResult['errors'] = []
-  const candidates: WorkspaceCleanupCandidate[] = []
-
-  for (const repo of repos) {
-    const result = await scanRepoWorkspaces({
-      store,
-      repo,
-      scannedAt,
-      targetWorktreeId: args.worktreeId,
-      skipGitWorktreeIds: new Set(args.skipGitWorktreeIds ?? [])
-    })
-    appendListItems(candidates, result.candidates)
-    appendListItems(errors, result.errors)
-  }
-
-  return { scannedAt, candidates, errors }
-}
-
-async function scanRepoWorkspaces(args: {
-  store: Store
-  repo: Repo
-  scannedAt: number
-  targetWorktreeId?: string
-  skipGitWorktreeIds: Set<string>
-}): Promise<WorkspaceCleanupScanResult> {
-  const { store, repo, scannedAt, targetWorktreeId, skipGitWorktreeIds } = args
-  const errors: WorkspaceCleanupScanResult['errors'] = []
-  let provider: IGitProvider | null = null
-  let gitWorktrees: GitWorktreeInfo[] = []
-  const repoIsFolder = isFolderRepo(repo)
-
-  try {
-    if (repoIsFolder) {
-      gitWorktrees = [createFolderWorktree(repo)]
-    } else if (repo.connectionId) {
-      provider = getSshGitProvider(repo.connectionId) ?? null
-      if (!provider) {
-        // Why: cleanup should reflect only workspaces Orca can currently
-        // inspect. Disconnected SSH repos are skipped in broad scans.
-        return {
-          scannedAt,
-          candidates: targetWorktreeId
-            ? synthesizeDisconnectedSshCandidates(store, repo, scannedAt, targetWorktreeId)
-            : [],
-          errors: []
-        }
-      }
-      gitWorktrees = await withTimeout(
-        provider.listWorktrees(repo.path),
-        GIT_READ_TIMEOUT_MS,
-        'Timed out listing SSH worktrees.'
-      )
-    } else {
-      gitWorktrees = await withTimeout(
-        listRepoWorktrees(repo),
-        GIT_READ_TIMEOUT_MS,
-        'Timed out listing worktrees.'
-      )
-    }
-  } catch (error) {
-    console.error('Workspace cleanup repo scan failed', error)
-    if (repo.connectionId && !targetWorktreeId) {
-      // Why: broad cleanup only shows remote workspaces Orca can inspect now.
-      // A connected SSH repo that fails mid-scan is omitted, not bannered.
-      return { scannedAt, candidates: [], errors: [] }
-    }
-    errors.push(createScanError(repo, toSafeRepoScanError(error)))
-    return { scannedAt, candidates: [], errors }
-  }
-
-  const worktrees = gitWorktrees
-    .map((gitWorktree) => {
-      const worktreeId = `${repo.id}::${gitWorktree.path}`
-      const meta = store.getWorktreeMeta(worktreeId)
-      return mergeWorktree(repo.id, gitWorktree, meta, repo.displayName)
-    })
-    .filter((worktree) => {
-      if (targetWorktreeId) {
-        return worktree.id === targetWorktreeId
-      }
-      return (
-        !repoIsFolder &&
-        !worktree.isMainWorktree &&
-        isWorkspaceInactiveForCleanup(worktree, scannedAt)
-      )
-    })
-
-  const candidates = await mapWithConcurrency(worktrees, WORKTREE_SCAN_CONCURRENCY, (worktree) =>
-    buildCandidate({
-      repo,
-      worktree,
-      scannedAt,
-      provider,
-      skipGit: skipGitWorktreeIds.has(worktree.id),
-      forceGitCheck: Boolean(targetWorktreeId)
-    }).catch((error) => {
-      console.error('Workspace cleanup candidate scan failed', error)
-      return buildCandidateFromError(repo, worktree, scannedAt, toErrorMessage(error))
-    })
-  )
-
-  return { scannedAt, candidates, errors }
-}
-
-async function buildCandidate(args: {
-  repo: Repo
-  worktree: Worktree
-  scannedAt: number
-  provider: IGitProvider | null
-  skipGit: boolean
-  forceGitCheck: boolean
-}): Promise<WorkspaceCleanupCandidate> {
-  const { repo, worktree, scannedAt, provider, skipGit, forceGitCheck } = args
-  const blockers: WorkspaceCleanupBlocker[] = []
-  const reasons = getInactivityReasons(worktree, scannedAt)
-  const repoIsFolder = isFolderRepo(repo)
-
-  if (worktree.isMainWorktree) {
-    blockers.push('main-worktree')
-  }
-  if (repoIsFolder) {
-    blockers.push('folder-repo')
-  }
-  if (worktree.isPinned) {
-    blockers.push('pinned')
-  }
-
-  const localContext = buildLocalContext(worktree)
-  const shouldReadGit = shouldReadGitEvidence({
-    repoIsFolder,
-    blockers,
-    worktree,
-    skipGit,
-    forceGitCheck
-  })
-
-  const gitEvidence = !shouldReadGit
-    ? createEmptyGitEvidence()
-    : await readGitEvidence(worktree, repo, provider)
-  appendListItems(blockers, gitEvidence.blockers)
-
-  const candidateWithoutFingerprint: WorkspaceCleanupCandidate = {
-    worktreeId: worktree.id,
-    repoId: repo.id,
-    repoName: repo.displayName,
-    connectionId: repo.connectionId ?? null,
-    displayName: worktree.displayName,
-    branch: shortBranchName(worktree.branch),
-    path: worktree.path,
-    tier: 'review',
-    selectedByDefault: false,
-    reasons,
-    blockers: uniqueBlockers(blockers),
-    lastActivityAt: worktree.lastActivityAt,
-    ...(worktree.createdAt !== undefined ? { createdAt: worktree.createdAt } : {}),
-    localContext,
-    git: {
-      clean: gitEvidence.clean,
-      upstreamAhead: gitEvidence.upstreamAhead,
-      upstreamBehind: gitEvidence.upstreamBehind,
-      checkedAt: gitEvidence.checkedAt
-    },
-    fingerprint: ''
-  }
-
-  const fingerprint = createWorkspaceCleanupFingerprint({
-    branch: candidateWithoutFingerprint.branch,
-    head: worktree.head,
-    gitClean: gitEvidence.clean,
-    lastActivityAt: worktree.lastActivityAt
-  })
-
-  return applyWorkspaceCleanupPolicy({
-    ...candidateWithoutFingerprint,
-    reasons: uniqueReasons(reasons),
-    blockers: uniqueBlockers(blockers),
-    fingerprint
-  })
-}
-
-function shouldReadGitEvidence(args: {
-  repoIsFolder: boolean
-  blockers: WorkspaceCleanupBlocker[]
-  worktree: Worktree
-  skipGit: boolean
-  forceGitCheck: boolean
-}): boolean {
-  const { repoIsFolder, blockers, worktree, skipGit, forceGitCheck } = args
-  if ((skipGit && !forceGitCheck) || repoIsFolder || worktree.isMainWorktree) {
-    return false
-  }
-  if (
-    blockers.includes('pinned') ||
-    blockers.includes('main-worktree') ||
-    blockers.includes('folder-repo')
-  ) {
-    return false
-  }
-
-  // Why: inactivity is the only recommendation signal now. Git is read only
-  // to keep the destructive path from deleting dirty or local-only branch work.
-  return true
-}
-
-function appendListItems<T>(target: T[], entries: readonly T[]): void {
-  // Why: cleanup can aggregate generated-size worktree batches; spreading
-  // those batches into push can exceed JavaScript's argument limit.
-  for (const entry of entries) {
-    target.push(entry)
-  }
-}
-
-async function readGitEvidence(
-  worktree: Worktree,
-  repo: Repo,
-  provider: IGitProvider | null
-): Promise<GitEvidence> {
-  const blockers: WorkspaceCleanupBlocker[] = []
-  let status: GitStatusResult
-  const checkedAt = Date.now()
-
-  try {
-    status = await withTimeout(
-      repo.connectionId ? provider!.getStatus(worktree.path) : getStatus(worktree.path),
-      GIT_READ_TIMEOUT_MS,
-      'Timed out reading git status.'
-    )
-  } catch {
-    return {
-      ...createEmptyGitEvidence(),
-      blockers: ['git-status-error']
-    }
-  }
-
-  if (status.upstreamStatus === undefined) {
-    return {
-      ...createEmptyGitEvidence(),
-      blockers: ['git-status-error']
-    }
-  }
-
-  const clean = status.entries.length === 0
-  if (!clean) {
-    blockers.push('dirty-files')
-  }
-
-  const upstreamAhead = status.upstreamStatus.hasUpstream ? status.upstreamStatus.ahead : null
-  const upstreamBehind = status.upstreamStatus.hasUpstream ? status.upstreamStatus.behind : null
-  if (upstreamAhead !== null && upstreamAhead > 0) {
-    blockers.push('unpushed-commits')
-  }
-  if (clean && upstreamAhead === null) {
-    const unpushedCommitCount = await readUnpushedCommitCount(worktree, repo, provider)
-    if (unpushedCommitCount === null) {
-      blockers.push('unknown-base')
-    } else if (unpushedCommitCount > 0) {
-      blockers.push('unpushed-commits')
-    }
-  }
-
-  const evidence: GitEvidence = {
-    clean,
-    upstreamAhead,
-    upstreamBehind,
-    checkedAt,
-    blockers
-  }
-
-  return { ...evidence, blockers: uniqueBlockers(blockers) }
-}
-
-async function readUnpushedCommitCount(
-  worktree: Worktree,
-  repo: Repo,
-  provider: IGitProvider | null
-): Promise<number | null> {
-  try {
-    const result = await withTimeout(
-      repo.connectionId
-        ? provider!.exec(['rev-list', '--count', 'HEAD', '--not', '--remotes'], worktree.path)
-        : gitExecFileAsync(['rev-list', '--count', 'HEAD', '--not', '--remotes'], {
-            cwd: worktree.path
-          }),
-      GIT_READ_TIMEOUT_MS,
-      'Timed out checking unpushed commits.'
-    )
-    const count = Number.parseInt(result.stdout.trim(), 10)
-    return Number.isFinite(count) ? count : null
-  } catch {
-    return null
-  }
-}
-
-function buildCandidateFromError(
-  repo: Repo,
-  worktree: Worktree,
-  scannedAt: number,
-  _message: string
-): WorkspaceCleanupCandidate {
-  return applyWorkspaceCleanupPolicy({
-    worktreeId: worktree.id,
-    repoId: repo.id,
-    repoName: repo.displayName,
-    connectionId: repo.connectionId ?? null,
-    displayName: worktree.displayName,
-    branch: shortBranchName(worktree.branch),
-    path: worktree.path,
-    tier: 'protected',
-    selectedByDefault: false,
-    reasons: getInactivityReasons(worktree, scannedAt),
-    blockers: ['git-status-error'],
-    lastActivityAt: worktree.lastActivityAt,
-    ...(worktree.createdAt !== undefined ? { createdAt: worktree.createdAt } : {}),
-    localContext: buildLocalContext(worktree),
-    git: {
-      clean: null,
-      upstreamAhead: null,
-      upstreamBehind: null,
-      checkedAt: scannedAt
-    },
-    fingerprint: createWorkspaceCleanupFingerprint({
-      branch: shortBranchName(worktree.branch),
-      head: worktree.head,
-      gitClean: null,
-      lastActivityAt: worktree.lastActivityAt
-    })
-  })
-}
-
-function synthesizeDisconnectedSshCandidates(
-  store: Store,
-  repo: Repo,
-  scannedAt: number,
-  targetWorktreeId?: string
-): WorkspaceCleanupCandidate[] {
-  const repoWorktreePrefix = `${repo.id}::`
-  if (targetWorktreeId) {
-    if (!targetWorktreeId.startsWith(repoWorktreePrefix)) {
-      return []
-    }
-    // Why: focused delete preflight names one workspace already; walking all
-    // persisted metadata is unnecessary for disconnected SSH repos.
-    const meta = store.getWorktreeMeta(targetWorktreeId)
-    return meta ? [createDisconnectedSshCandidate(repo, scannedAt, targetWorktreeId, meta)] : []
-  }
-
-  const candidates: WorkspaceCleanupCandidate[] = []
-  const allMeta = store.getAllWorktreeMeta()
-  for (const worktreeId in allMeta) {
-    if (!Object.hasOwn(allMeta, worktreeId) || !worktreeId.startsWith(repoWorktreePrefix)) {
-      continue
-    }
-    const meta = allMeta[worktreeId]
-    if (!meta || !isWorkspaceInactiveForCleanup(meta, scannedAt)) {
-      continue
-    }
-    candidates.push(createDisconnectedSshCandidate(repo, scannedAt, worktreeId, meta))
-  }
-  return candidates
-}
-
-function createDisconnectedSshCandidate(
-  repo: Repo,
-  scannedAt: number,
-  worktreeId: string,
-  meta: WorktreeMeta
-): WorkspaceCleanupCandidate {
-  const parsed = splitWorktreeId(worktreeId)
-  const path = parsed?.worktreePath ?? worktreeId
-  const reasons = getInactivityReasons(meta, scannedAt)
-  return applyWorkspaceCleanupPolicy({
-    worktreeId,
-    repoId: repo.id,
-    repoName: repo.displayName,
-    connectionId: repo.connectionId ?? null,
-    displayName: meta.displayName || basename(path),
-    branch: basename(path),
-    path,
-    tier: 'protected',
-    selectedByDefault: false,
-    reasons,
-    blockers: ['ssh-disconnected'],
-    lastActivityAt: meta.lastActivityAt,
-    ...(meta.createdAt !== undefined ? { createdAt: meta.createdAt } : {}),
-    localContext: {
-      terminalTabCount: 0,
-      cleanEditorTabCount: 0,
-      browserTabCount: 0,
-      diffCommentCount: meta.diffComments?.length ?? 0,
-      newestDiffCommentAt: getNewestDiffCommentAt(meta.diffComments),
-      retainedDoneAgentCount: 0
-    },
-    git: {
-      clean: null,
-      upstreamAhead: null,
-      upstreamBehind: null,
-      checkedAt: null
-    },
-    fingerprint: createWorkspaceCleanupFingerprint({
-      branch: basename(path),
-      head: '',
-      gitClean: null,
-      lastActivityAt: meta.lastActivityAt
-    })
-  })
-}
-
-function buildLocalContext(worktree: Worktree): WorkspaceCleanupCandidate['localContext'] {
-  return {
-    terminalTabCount: 0,
-    cleanEditorTabCount: 0,
-    browserTabCount: 0,
-    diffCommentCount: worktree.diffComments?.length ?? 0,
-    newestDiffCommentAt: getNewestDiffCommentAt(worktree.diffComments),
-    retainedDoneAgentCount: 0
-  }
-}
-
-function getNewestDiffCommentAt(diffComments: Worktree['diffComments'] | undefined): number | null {
-  if (!diffComments || diffComments.length === 0) {
-    return null
-  }
-  // Why: persisted diff notes can grow large enough for spread-based Math.max
-  // to exceed the JavaScript argument limit during cleanup scans.
-  let newest = diffComments[0]?.createdAt ?? null
-  for (let index = 1; index < diffComments.length; index += 1) {
-    const createdAt = diffComments[index]?.createdAt
-    if (createdAt !== undefined && (newest === null || createdAt > newest)) {
-      newest = createdAt
-    }
-  }
-  return newest
-}
-
-function createEmptyGitEvidence(): GitEvidence {
-  return {
-    clean: null,
-    upstreamAhead: null,
-    upstreamBehind: null,
-    checkedAt: null,
-    blockers: []
-  }
-}
-
-function shortBranchName(branch: string): string {
-  return branch.replace(/^refs\/heads\//, '') || 'HEAD'
-}
-
-function uniqueBlockers(blockers: WorkspaceCleanupBlocker[]): WorkspaceCleanupBlocker[] {
-  return [...new Set(blockers)]
-}
-
-function uniqueReasons(reasons: WorkspaceCleanupReason[]): WorkspaceCleanupReason[] {
-  return [...new Set(reasons)]
-}
-
-function isWorkspaceInactiveForCleanup(
-  workspace: Pick<Worktree, 'isArchived' | 'lastActivityAt'>,
-  scannedAt: number
-): boolean {
-  return isWorkspaceOldForCleanup(workspace, scannedAt)
-}
-
-function getInactivityReasons(
-  workspace: Pick<Worktree, 'isArchived' | 'lastActivityAt'>,
-  scannedAt: number
-): WorkspaceCleanupReason[] {
-  return getWorkspaceCleanupInactivityReasons(workspace, scannedAt)
-}
-
-async function mapWithConcurrency<T, R>(
-  items: readonly T[],
-  limit: number,
-  fn: (item: T) => Promise<R>
-): Promise<R[]> {
-  const results: R[] = []
-  let nextIndex = 0
-  const workerCount = Math.min(limit, items.length)
-  await Promise.all(
-    Array.from({ length: workerCount }, async () => {
-      while (nextIndex < items.length) {
-        const index = nextIndex
-        nextIndex += 1
-        results[index] = await fn(items[index])
-      }
-    })
-  )
-  return results
-}
-
-async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
-  let timeoutId: NodeJS.Timeout | undefined
-  const timeoutPromise = new Promise<T>((_, reject) => {
-    timeoutId = setTimeout(() => reject(new Error(message)), timeoutMs)
-  })
-  try {
-    return await Promise.race([promise, timeoutPromise])
-  } finally {
-    if (timeoutId) {
-      clearTimeout(timeoutId)
-    }
-  }
-}
-
-function toErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
-}
-
-function createScanError(repo: Repo, message: string): WorkspaceCleanupScanError {
-  return {
-    repoId: repo.id,
-    repoName: repo.displayName || basename(repo.path),
-    message
-  }
-}
-
-// Why: git errors often include absolute paths or command output. Keep the
-// cause useful without leaking raw local/remote filesystem details to the UI.
-function toSafeRepoScanError(error: unknown): string {
-  const message = toErrorMessage(error)
-  if (message === 'Timed out listing SSH worktrees.') {
-    return 'Timed out listing remote worktrees.'
-  }
-  if (message === 'Timed out listing worktrees.') {
-    return 'Timed out listing worktrees.'
-  }
-  if (message.startsWith('Timed out ')) {
-    return message.replace(/\.$/, '')
-  }
-
-  const lower = message.toLowerCase()
-  if (lower.includes('not a git repository') || lower.includes('not a git worktree')) {
-    return 'Repository is not a git checkout.'
-  }
-  if (
-    lower.includes('enoent') ||
-    lower.includes('no such file') ||
-    lower.includes('cannot find') ||
-    lower.includes('does not exist')
-  ) {
-    return 'Repository folder was not found.'
-  }
-  if (lower.includes('eacces') || lower.includes('eperm') || lower.includes('permission denied')) {
-    return 'Repository folder is not accessible.'
-  }
-  return 'Git could not list worktrees.'
+function getWorkspaceCleanupScanKey(senderId: number, scanId: unknown): string | null {
+  return typeof scanId === 'string' && scanId.length > 0 && scanId.length <= 128
+    ? `${senderId}\0${scanId}`
+    : null
 }

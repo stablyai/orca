@@ -10,6 +10,7 @@ import {
 } from './github-pr-mutations'
 
 const WORKTREE_ID = 'repo-42::/path/to/wt'
+const ENTERPRISE_PR_REPO = { owner: 'fork', repo: 'proj', host: 'github.acme.test' }
 
 function okStatus(): RpcResponse {
   return { id: 'x', ok: true, result: { ok: true }, _meta: { runtimeId: 'r' } }
@@ -24,7 +25,6 @@ function mockClient(response: RpcResponse) {
   return { client: { sendRequest }, sendRequest }
 }
 
-// A controllable deferred so a test can resolve responses out of order.
 function deferred<T>() {
   let resolve!: (value: T) => void
   const promise = new Promise<T>((r) => {
@@ -39,6 +39,7 @@ function fakeMutations(overrides: Partial<PrActionMutations> = {}): PrActionMuta
     mergePR: vi.fn(ok),
     setPRAutoMerge: vi.fn(ok),
     updatePRState: vi.fn(ok),
+    markReadyForReview: vi.fn(ok),
     requestReviewers: vi.fn(ok),
     removeReviewers: vi.fn(ok),
     rerunChecks: vi.fn(ok),
@@ -46,20 +47,22 @@ function fakeMutations(overrides: Partial<PrActionMutations> = {}): PrActionMuta
   }
 }
 
-function makeEngine(mutations: PrActionMutations, refetch = vi.fn(async () => {})) {
+function makeEngine(
+  mutations: PrActionMutations,
+  refetch = vi.fn(async () => {}),
+  prRepo: typeof ENTERPRISE_PR_REPO | null = null
+) {
   const onChange = vi.fn()
   const engine = new PrActionsEngine({
     mutations,
     prNumber: 7,
     headSha: 'abc123',
-    prRepo: null,
+    prRepo,
     refetch,
     onChange
   })
   return { engine, onChange, refetch }
 }
-
-// ─── mutation wrappers: prRepo / param shapes ───────────────────────────────
 
 describe('mutation wrappers — prRepo + param shapes', () => {
   it('mergePR carries method + prRepo (fork) and uses the id: repo selector', async () => {
@@ -67,7 +70,7 @@ describe('mutation wrappers — prRepo + param shapes', () => {
     await fetchMergePR(client, WORKTREE_ID, {
       prNumber: 7,
       method: 'squash',
-      prRepo: { owner: 'fork', repo: 'proj' }
+      prRepo: ENTERPRISE_PR_REPO
     })
     expect(sendRequest).toHaveBeenCalledWith(
       'github.mergePR',
@@ -75,17 +78,25 @@ describe('mutation wrappers — prRepo + param shapes', () => {
         repo: 'id:repo-42',
         prNumber: 7,
         method: 'squash',
-        prRepo: { owner: 'fork', repo: 'proj' }
+        prRepo: ENTERPRISE_PR_REPO
       })
     )
   })
 
-  it('updatePRState close carries NO prRepo and the state update', async () => {
+  it('updatePRState carries the host-qualified PR repo and state update', async () => {
     const { client, sendRequest } = mockClient(okStatus())
-    await fetchUpdatePRState(client, WORKTREE_ID, { prNumber: 7, state: 'closed' })
+    await fetchUpdatePRState(client, WORKTREE_ID, {
+      prNumber: 7,
+      state: 'closed',
+      prRepo: ENTERPRISE_PR_REPO
+    })
     const [, params] = sendRequest.mock.calls[0]
-    expect(params).toEqual({ repo: 'id:repo-42', prNumber: 7, updates: { state: 'closed' } })
-    expect(params).not.toHaveProperty('prRepo')
+    expect(params).toEqual({
+      repo: 'id:repo-42',
+      prNumber: 7,
+      updates: { state: 'closed' },
+      prRepo: ENTERPRISE_PR_REPO
+    })
   })
 
   it('updatePRState reopen passes state:open', async () => {
@@ -95,27 +106,43 @@ describe('mutation wrappers — prRepo + param shapes', () => {
     expect((params.updates as { state: string }).state).toBe('open')
   })
 
-  it('request/remove reviewers carry NO prRepo even when a fork is in play', async () => {
+  it('request/remove reviewers carry the host-qualified PR repo', async () => {
     const { client, sendRequest } = mockClient(okStatus())
-    await fetchRequestPRReviewers(client, WORKTREE_ID, { prNumber: 7, reviewers: ['alice'] })
-    await fetchRemovePRReviewers(client, WORKTREE_ID, { prNumber: 7, reviewers: ['bob'] })
-    for (const [, params] of sendRequest.mock.calls) {
-      expect(params).not.toHaveProperty('prRepo')
-    }
-    expect(sendRequest.mock.calls[0][1]).toMatchObject({ reviewers: ['alice'] })
-    expect(sendRequest.mock.calls[1][1]).toMatchObject({ reviewers: ['bob'] })
+    await fetchRequestPRReviewers(client, WORKTREE_ID, {
+      prNumber: 7,
+      reviewers: ['alice'],
+      prRepo: ENTERPRISE_PR_REPO
+    })
+    await fetchRemovePRReviewers(client, WORKTREE_ID, {
+      prNumber: 7,
+      reviewers: ['bob'],
+      prRepo: ENTERPRISE_PR_REPO
+    })
+    expect(sendRequest.mock.calls[0][1]).toMatchObject({
+      reviewers: ['alice'],
+      prRepo: ENTERPRISE_PR_REPO
+    })
+    expect(sendRequest.mock.calls[1][1]).toMatchObject({
+      reviewers: ['bob'],
+      prRepo: ENTERPRISE_PR_REPO
+    })
   })
 
-  it('rerunPRChecks carries failedOnly + headSha and NO prRepo', async () => {
+  it('rerunPRChecks carries failedOnly, headSha, and the host-qualified PR repo', async () => {
     const { client, sendRequest } = mockClient(okStatus())
     await fetchRerunPRChecks(client, WORKTREE_ID, {
       prNumber: 7,
       headSha: 'abc',
-      failedOnly: true
+      failedOnly: true,
+      prRepo: ENTERPRISE_PR_REPO
     })
     const [, params] = sendRequest.mock.calls[0]
-    expect(params).toMatchObject({ prNumber: 7, failedOnly: true, headSha: 'abc' })
-    expect(params).not.toHaveProperty('prRepo')
+    expect(params).toMatchObject({
+      prNumber: 7,
+      failedOnly: true,
+      headSha: 'abc',
+      prRepo: ENTERPRISE_PR_REPO
+    })
   })
 
   it('a host { ok:false, error } result surfaces as a failure outcome', async () => {
@@ -124,8 +151,6 @@ describe('mutation wrappers — prRepo + param shapes', () => {
     expect(outcome).toEqual({ ok: false, error: 'merge blocked' })
   })
 })
-
-// ─── engine: merge / state / reviewers / rerun ──────────────────────────────
 
 describe('PrActionsEngine — merge', () => {
   it('merge fires with the chosen method and refetches on success', async () => {
@@ -155,26 +180,27 @@ describe('PrActionsEngine — auto-merge optimistic revert', () => {
     const mutations = fakeMutations({
       setPRAutoMerge: vi.fn(async () => ({ ok: false as const, error: 'connection lost' }))
     })
-    const { engine } = makeEngine(mutations)
-    // authoritative = false; user enables.
+    const { engine } = makeEngine(mutations, undefined, ENTERPRISE_PR_REPO)
     await engine.setAutoMerge(true, 'squash')
     expect(mutations.setPRAutoMerge).toHaveBeenCalledWith({
       prNumber: 7,
       enabled: true,
       method: 'squash',
-      prRepo: null
+      prRepo: ENTERPRISE_PR_REPO
     })
-    // Reverted to authoritative after transient failure.
     expect(engine.resolveAutoMerge(false)).toBe(false)
     expect(engine.error).toBe('connection lost')
   })
 
-  it('keeps the optimistic value through success until refetch', async () => {
-    const mutations = fakeMutations()
+  it('shows the optimistic toggle while pending and clears it on success', async () => {
+    const pending = deferred<{ ok: true }>()
+    const mutations = fakeMutations({ setPRAutoMerge: vi.fn(() => pending.promise) })
     const { engine, refetch } = makeEngine(mutations)
-    await engine.setAutoMerge(true)
-    // After success the optimism clears to authoritative (refetch supplies truth).
-    expect(engine.resolveAutoMerge(true)).toBe(true)
+    const operation = engine.setAutoMerge(true)
+    expect(engine.resolveAutoMerge(false)).toBe(true)
+    pending.resolve({ ok: true })
+    await operation
+    expect(engine.resolveAutoMerge(false)).toBe(false)
     expect(refetch).toHaveBeenCalledOnce()
   })
 })
@@ -182,20 +208,32 @@ describe('PrActionsEngine — auto-merge optimistic revert', () => {
 describe('PrActionsEngine — updateState close/reopen', () => {
   it('close fires state:closed and reopen fires state:open', async () => {
     const mutations = fakeMutations()
-    const { engine } = makeEngine(mutations)
+    const { engine } = makeEngine(mutations, undefined, ENTERPRISE_PR_REPO)
     await engine.updateState('closed')
     await engine.updateState('open')
-    expect(mutations.updatePRState).toHaveBeenNthCalledWith(1, { prNumber: 7, state: 'closed' })
-    expect(mutations.updatePRState).toHaveBeenNthCalledWith(2, { prNumber: 7, state: 'open' })
+    expect(mutations.updatePRState).toHaveBeenNthCalledWith(1, {
+      prNumber: 7,
+      state: 'closed',
+      prRepo: ENTERPRISE_PR_REPO
+    })
+    expect(mutations.updatePRState).toHaveBeenNthCalledWith(2, {
+      prNumber: 7,
+      state: 'open',
+      prRepo: ENTERPRISE_PR_REPO
+    })
   })
 })
 
 describe('PrActionsEngine — reviewers', () => {
-  it('requestReviewer adds via requestReviewers with a single login (no prRepo at engine level)', async () => {
+  it('requestReviewer adds via requestReviewers with a host-qualified PR repo', async () => {
     const mutations = fakeMutations()
-    const { engine } = makeEngine(mutations)
+    const { engine } = makeEngine(mutations, undefined, ENTERPRISE_PR_REPO)
     await engine.requestReviewer('alice')
-    expect(mutations.requestReviewers).toHaveBeenCalledWith({ prNumber: 7, reviewers: ['alice'] })
+    expect(mutations.requestReviewers).toHaveBeenCalledWith({
+      prNumber: 7,
+      reviewers: ['alice'],
+      prRepo: ENTERPRISE_PR_REPO
+    })
   })
 
   it('removeReviewer optimistic revert on transient failure', async () => {
@@ -203,9 +241,8 @@ describe('PrActionsEngine — reviewers', () => {
       removeReviewers: vi.fn(async () => ({ ok: false as const, error: 'temporary error' }))
     })
     const { engine } = makeEngine(mutations)
-    // authoritative requested = true; user removes.
     await engine.removeReviewer('bob')
-    expect(engine.resolveReviewerRequested('bob', true)).toBe(true) // reverted
+    expect(engine.resolveReviewerRequested('bob', true)).toBe(true)
     expect(engine.error).toBe('temporary error')
   })
 })
@@ -213,18 +250,17 @@ describe('PrActionsEngine — reviewers', () => {
 describe('PrActionsEngine — rerun checks', () => {
   it('fires failedOnly:true with headSha and refetches on success', async () => {
     const mutations = fakeMutations()
-    const { engine, refetch } = makeEngine(mutations)
+    const { engine, refetch } = makeEngine(mutations, undefined, ENTERPRISE_PR_REPO)
     await engine.rerunFailingChecks()
     expect(mutations.rerunChecks).toHaveBeenCalledWith({
       prNumber: 7,
       headSha: 'abc123',
-      failedOnly: true
+      failedOnly: true,
+      prRepo: ENTERPRISE_PR_REPO
     })
     expect(refetch).toHaveBeenCalledOnce()
   })
 })
-
-// ─── permanent vs transient + last-intent-wins ──────────────────────────────
 
 describe('PrActionsEngine — permanent failure (403)', () => {
   it('routes a permission denial to blocked, clears optimism, no auto-retry/refetch', async () => {
@@ -235,9 +271,8 @@ describe('PrActionsEngine — permanent failure (403)', () => {
     await engine.setAutoMerge(true)
     expect(engine.blocked).toBe('HTTP 403: forbidden')
     expect(engine.error).toBeNull()
-    expect(engine.resolveAutoMerge(false)).toBe(false) // optimism cleared to authoritative
+    expect(engine.resolveAutoMerge(false)).toBe(false)
     expect(refetch).not.toHaveBeenCalled()
-    // mutation fired exactly once — never auto-retried.
     expect(mutations.setPRAutoMerge).toHaveBeenCalledOnce()
   })
 })
@@ -254,17 +289,14 @@ describe('PrActionsEngine — last-intent-wins under out-of-order responses', ()
       })
     })
     const { engine } = makeEngine(mutations)
-    // authoritative = false
-    const pA = engine.setAutoMerge(true) // intent A: enable
-    const pB = engine.setAutoMerge(false) // intent B: disable (latest)
-    expect(engine.resolveAutoMerge(false)).toBe(false) // shows B's optimistic value
+    const pA = engine.setAutoMerge(true)
+    const pB = engine.setAutoMerge(false)
+    expect(engine.resolveAutoMerge(false)).toBe(false)
 
-    // A resolves LATE (success) — must not flip back to A's intent.
     dA.resolve({ ok: true })
     await pA
     expect(engine.resolveAutoMerge(false)).toBe(false)
 
-    // B resolves and is latest → clears optimism to authoritative.
     dB.resolve({ ok: true })
     await pB
     expect(engine.resolveAutoMerge(false)).toBe(false)

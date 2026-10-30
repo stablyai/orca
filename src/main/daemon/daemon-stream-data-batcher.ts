@@ -1,115 +1,52 @@
-import type { Socket } from 'net'
-import { encodeNdjson, NDJSON_MAX_LINE_BYTES } from './ndjson'
+import type { Socket } from 'node:net'
+import { NDJSON_MAX_LINE_BYTES } from './ndjson'
+import { recordDaemonStreamBacklogEvent } from './daemon-stream-backlog-probe'
+import { DaemonStreamBackpressure } from './daemon-stream-backpressure'
+import {
+  accountDaemonStreamEntry,
+  releaseDaemonStreamEntry
+} from './daemon-stream-entry-accounting'
+import { DaemonStreamHeldRefill } from './daemon-stream-held-refill'
+import { clampToSafeBulkWriteSplitIndex, streamFramesFor } from './daemon-stream-data-split'
+import type { PendingStreamDataBatch } from './daemon-stream-keep-tail-drop'
+import type { DaemonEvent } from './types'
+import {
+  appendDaemonStreamData,
+  flushDaemonStreamSession,
+  type DaemonStreamEnqueueOptions
+} from './daemon-stream-data-entry'
+import {
+  evaluateDroppableEnqueue,
+  refreshDroppableSessionMembership
+} from './daemon-stream-droppable-membership'
+import type { DaemonStreamDataBatcherOptions } from './daemon-stream-data-batcher-options'
+import type { ConnectedDaemonClient } from './daemon-client-connections'
 
-type StreamDataClient = {
-  streamSocket: Socket | null
-}
+// Resolve framing at flush time so replacement streams use their own negotiated format.
+type StreamDataClient = Pick<ConnectedDaemonClient, 'streamSocket' | 'streamFraming'>
 
-type PendingStreamDataBatch = {
-  timer: ReturnType<typeof setTimeout> | null
-  queue: { sessionId: string; data: string }[]
-  queuedChars: number
-}
+// Both daemon and main batch output; a short interval limits their combined echo delay.
+const STREAM_DATA_BATCH_INTERVAL_MS = 2
 
-// Why: match main-process PTY IPC batching to avoid adding latency while
-// removing daemon socket writes and JSON framing during bursty output.
-const STREAM_DATA_BATCH_INTERVAL_MS = 8
-// Why: once bytes are written to the daemon stream socket, active output is
-// stuck behind them in FIFO order. A per-turn write budget leaves room for
-// later interactive flushes to jump ahead of retained background batches.
-const STREAM_DATA_FLUSH_BUDGET_CHARS = 64 * 1024
-
-type EnqueueOptions = {
-  flushImmediately?: boolean
-  flushMaxChars?: number
-}
-
-type DaemonStreamDataBatcherOptions = {
-  maxLineBytes?: number
-}
-
-function encodeStreamDataEvent(sessionId: string, data: string): string {
-  return encodeNdjson({
-    type: 'event',
-    event: 'data',
-    sessionId,
-    payload: { data }
-  })
-}
-
-function streamDataEventLineBytes(sessionId: string, data: string): number {
-  return Buffer.byteLength(encodeStreamDataEvent(sessionId, data), 'utf8')
-}
-
-function isHighSurrogate(value: number): boolean {
-  return value >= 0xd800 && value <= 0xdbff
-}
-
-function isLowSurrogate(value: number): boolean {
-  return value >= 0xdc00 && value <= 0xdfff
-}
-
-function clampToSafeSplitIndex(value: string, start: number, end: number): number {
-  if (end <= start || end >= value.length) {
-    return end
-  }
-  const prev = value.charCodeAt(end - 1)
-  const next = value.charCodeAt(end)
-  return isHighSurrogate(prev) && isLowSurrogate(next) ? end - 1 : end
-}
-
-function nextSafeSplitIndex(value: string, start: number): number {
-  const next = Math.min(value.length, start + 1)
-  if (
-    next < value.length &&
-    isHighSurrogate(value.charCodeAt(start)) &&
-    isLowSurrogate(value.charCodeAt(next))
-  ) {
-    return next + 1
-  }
-  return next
-}
-
-function splitStreamDataForNdjson(sessionId: string, data: string, maxLineBytes: number): string[] {
-  if (streamDataEventLineBytes(sessionId, data) <= maxLineBytes) {
-    return [data]
-  }
-
-  const chunks: string[] = []
-  let start = 0
-  while (start < data.length) {
-    let low = start + 1
-    let high = data.length
-    let best = start
-
-    while (low <= high) {
-      const rawMid = Math.floor((low + high) / 2)
-      const mid = clampToSafeSplitIndex(data, start, rawMid)
-      if (mid <= start) {
-        low = rawMid + 1
-        continue
-      }
-
-      if (streamDataEventLineBytes(sessionId, data.slice(start, mid)) <= maxLineBytes) {
-        best = mid
-        low = rawMid + 1
-      } else {
-        high = rawMid - 1
-      }
-    }
-
-    const end = best > start ? best : nextSafeSplitIndex(data, start)
-    chunks.push(data.slice(start, end))
-    start = end
-  }
-
-  return chunks
-}
+// Keep the socket FIFO shallow so bulk output cannot bury interactive replies.
+// Stay above the socket high-water mark so held writes have a drain wake-up.
+const SHALLOW_SOCKET_WRITE_GATE_BYTES =
+  process.env.ORCA_DAEMON_SHALLOW_SOCKET_GATE === '0' ? Number.POSITIVE_INFINITY : 128 * 1024
+// Slice coalesced floods so one write cannot refill the socket far beyond the gate.
+const BULK_WRITE_SLICE_CHARS = 64 * 1024
+// Last resort for handles without pause support; actual memory bounds come from producer backpressure.
+const HELD_WRITE_THROUGH_TOTAL_CHARS = 32 * 1024 * 1024
+// Let small sessions bypass held floods when event-loop load defeats the interactive fast path.
+const SMALL_SESSION_HOLD_BYPASS_CHARS = 4 * 1024
 
 export class DaemonStreamDataBatcher {
   private pendingByClient = new Map<string, PendingStreamDataBatch>()
   private getClient: (clientId: string) => StreamDataClient | undefined
   private maxLineBytes: number
+  private readonly backpressure: DaemonStreamBackpressure | undefined
+  private readonly heldRefill = new DaemonStreamHeldRefill((clientId) => this.flush(clientId))
+  private isSessionDroppable: (sessionId: string) => boolean
+  private salvageDroppedData: (dropped: string) => string
 
   constructor(
     getClient: (clientId: string) => StreamDataClient | undefined,
@@ -117,37 +54,98 @@ export class DaemonStreamDataBatcher {
   ) {
     this.getClient = getClient
     this.maxLineBytes = Math.max(1, options.maxLineBytes ?? NDJSON_MAX_LINE_BYTES)
+    const isBackgroundDroppable = options.isSessionDroppable ?? (() => false)
+    // Keep-tail dropping also lets stalled foreground producers run past unreachable consumers.
+    this.isSessionDroppable = (sessionId) =>
+      this.backpressure?.isStallReleased(sessionId) === true || isBackgroundDroppable(sessionId)
+    this.salvageDroppedData = options.salvageDroppedData ?? (() => '')
+    this.backpressure = options.onProducerBackpressureChanged
+      ? new DaemonStreamBackpressure(
+          options.onProducerBackpressureChanged,
+          this.isSessionDroppable,
+          options.isSessionAttachedToClient,
+          (sessionId) => this.refreshSessionDroppability(sessionId)
+        )
+      : undefined
   }
 
-  enqueue(clientId: string, sessionId: string, data: string, options: EnqueueOptions = {}): void {
+  enqueue(
+    clientId: string,
+    sessionId: string,
+    data: string,
+    options: DaemonStreamEnqueueOptions = {}
+  ): void {
     const client = this.getClient(clientId)
     if (!client?.streamSocket || client.streamSocket.destroyed) {
       return
     }
 
-    let batch = this.pendingByClient.get(clientId)
-    if (!batch) {
-      batch = { timer: null, queue: [], queuedChars: 0 }
-      this.pendingByClient.set(clientId, batch)
-    }
-
-    const last = batch.queue.at(-1)
-    if (last?.sessionId === sessionId) {
-      last.data += data
-    } else {
-      batch.queue.push({ sessionId, data })
-    }
-    batch.queuedChars += data.length
+    const batch = this.getOrCreateBatch(clientId)
+    const queuedAfter = appendDaemonStreamData(batch, sessionId, data, options)
+    const queuedBefore = queuedAfter - data.length
+    evaluateDroppableEnqueue(
+      batch,
+      sessionId,
+      queuedBefore,
+      queuedAfter,
+      this.isSessionDroppable,
+      this.salvageDroppedData
+    )
+    this.updateBackpressure(clientId, batch)
 
     if (
       options.flushImmediately === true &&
-      this.queuedCharsForSession(batch, sessionId) <=
+      (!batch.droppableQueuedSessionIds.has(sessionId) ||
+        client.streamSocket.writableLength < SHALLOW_SOCKET_WRITE_GATE_BYTES) &&
+      (batch.queuedCharsBySession.get(sessionId) ?? 0) <=
         (options.flushMaxChars ?? Number.POSITIVE_INFINITY)
     ) {
       this.flushSession(clientId, sessionId)
       return
     }
-    this.scheduleFlush(clientId, batch)
+    if (!batch.timer) {
+      batch.timer = setTimeout(() => this.flush(clientId), STREAM_DATA_BATCH_INTERVAL_MS)
+    }
+  }
+
+  /** Preserve control events at their position in the session stream. */
+  enqueueControlEvent(clientId: string, sessionId: string, control: DaemonEvent): void {
+    const client = this.getClient(clientId)
+    if (!client?.streamSocket || client.streamSocket.destroyed) {
+      return
+    }
+    const batch = this.getOrCreateBatch(clientId)
+    batch.queue.push(accountDaemonStreamEntry(batch, { sessionId, data: '', control }))
+    this.updateBackpressure(clientId, batch)
+    if (!batch.timer) {
+      batch.timer = setTimeout(() => this.flush(clientId), STREAM_DATA_BATCH_INTERVAL_MS)
+    }
+  }
+
+  refreshSessionDroppability(sessionId: string): void {
+    const droppable = this.isSessionDroppable(sessionId)
+    refreshDroppableSessionMembership(this.pendingByClient.values(), sessionId, droppable)
+    this.backpressure?.refresh()
+  }
+
+  private getOrCreateBatch(clientId: string): PendingStreamDataBatch {
+    let batch = this.pendingByClient.get(clientId)
+    if (!batch) {
+      batch = {
+        timer: null,
+        queue: [],
+        queuedChars: 0,
+        queuedCharsBySession: new Map(),
+        queuedMetadataBytesBySession: new Map(),
+        droppableQueuedSessionIds: new Set()
+      }
+      this.pendingByClient.set(clientId, batch)
+    }
+    return batch
+  }
+
+  queuedCharsForClient(clientId: string): number {
+    return this.pendingByClient.get(clientId)?.queuedChars ?? 0
   }
 
   flush(clientId: string): void {
@@ -160,107 +158,166 @@ export class DaemonStreamDataBatcher {
       clearTimeout(batch.timer)
       batch.timer = null
     }
+
     const client = this.getClient(clientId)
     if (!client?.streamSocket || client.streamSocket.destroyed) {
-      this.pendingByClient.delete(clientId)
+      // Reconnection restores from the daemon model, so the disconnected stream copy can be discarded.
+      this.clear(clientId)
       return
     }
 
+    const socket = client.streamSocket
+    const frames = streamFramesFor(client.streamFraming)
+    // Holding one entry must hold that session's later entries to preserve byte order.
+    const heldSessions = new Set<string>()
     const retained: PendingStreamDataBatch['queue'] = []
-    let retainedChars = 0
-    let remainingBudget = STREAM_DATA_FLUSH_BUDGET_CHARS
-    for (const entry of batch.queue) {
-      if (remainingBudget <= 0) {
-        retained.push(entry)
-        retainedChars += entry.data.length
+    while (batch.queue.length > 0) {
+      const entry = batch.queue[0]
+      const socketDeep = (socket.writableLength ?? 0) >= SHALLOW_SOCKET_WRITE_GATE_BYTES
+      if (entry.control) {
+        // Holding gaps lets repeated background drops coalesce without filling the socket with markers.
+        if (
+          heldSessions.has(entry.sessionId) ||
+          (socketDeep && entry.control.event === 'dataGap')
+        ) {
+          heldSessions.add(entry.sessionId)
+          retained.push(entry)
+          batch.queue.shift()
+          continue
+        }
+        batch.queue.shift()
+        releaseDaemonStreamEntry(batch, entry)
+        this.write(clientId, entry.sessionId, socket, frames.control(entry.control))
         continue
       }
-      if (entry.data.length <= remainingBudget) {
-        this.writeStreamDataEvent(client.streamSocket, entry.sessionId, entry.data)
-        remainingBudget -= entry.data.length
-        continue
+      if (socketDeep && batch.queuedChars <= HELD_WRITE_THROUGH_TOTAL_CHARS) {
+        const sessionHeld = batch.queuedCharsBySession.get(entry.sessionId) ?? 0
+        if (
+          heldSessions.has(entry.sessionId) ||
+          batch.droppableQueuedSessionIds.has(entry.sessionId) ||
+          sessionHeld > SMALL_SESSION_HOLD_BYPASS_CHARS
+        ) {
+          // Hold bulk while small sessions bypass it; drain and refill callbacks resume flushing.
+          heldSessions.add(entry.sessionId)
+          retained.push(entry)
+          batch.queue.shift()
+          continue
+        }
+      } else if (socketDeep) {
+        // Write through above the fallback cap for producers without pause support.
+        recordDaemonStreamBacklogEvent('heldWriteThrough', {
+          heldChars: batch.queuedChars,
+          socketBufferedBytes: socket.writableLength ?? 0
+        })
       }
-      const splitIndex =
-        clampToSafeSplitIndex(entry.data, 0, remainingBudget) || nextSafeSplitIndex(entry.data, 0)
-      this.writeStreamDataEvent(
-        client.streamSocket,
+      const end =
+        entry.transformed || entry.data.length <= BULK_WRITE_SLICE_CHARS
+          ? entry.data.length
+          : clampToSafeBulkWriteSplitIndex(entry.data, BULK_WRITE_SLICE_CHARS)
+      const slice = entry.data.slice(0, end)
+      const entrySequenceChars = entry.sequenceChars ?? entry.data.length
+      const sliceSequenceChars = entry.transformed
+        ? entrySequenceChars
+        : entrySequenceChars === 0
+          ? 0
+          : slice.length
+      if (end >= entry.data.length) {
+        batch.queue.shift()
+        releaseDaemonStreamEntry(batch, entry)
+      } else {
+        entry.data = entry.data.slice(end)
+        const remainingSequenceChars = entrySequenceChars - sliceSequenceChars
+        entry.sequenceChars =
+          remainingSequenceChars === entry.data.length ? undefined : remainingSequenceChars
+      }
+      batch.queuedChars -= slice.length
+      const sessionHeldAfter =
+        (batch.queuedCharsBySession.get(entry.sessionId) ?? slice.length) - slice.length
+      if (sessionHeldAfter <= 0) {
+        batch.queuedCharsBySession.delete(entry.sessionId)
+        batch.droppableQueuedSessionIds.delete(entry.sessionId)
+      } else {
+        batch.queuedCharsBySession.set(entry.sessionId, sessionHeldAfter)
+      }
+      frames.data(
+        { write: (line) => this.write(clientId, entry.sessionId, socket, line) },
         entry.sessionId,
-        entry.data.slice(0, splitIndex)
+        slice,
+        this.maxLineBytes,
+        sliceSequenceChars,
+        entry.seq,
+        entry.transformed
       )
-      const rest = entry.data.slice(splitIndex)
-      retained.push({ sessionId: entry.sessionId, data: rest })
-      retainedChars += rest.length
-      remainingBudget = 0
     }
-
-    if (retained.length === 0) {
-      this.pendingByClient.delete(clientId)
+    this.updateBackpressure(clientId, batch)
+    if (retained.length > 0) {
+      batch.queue = retained
+      // Refill on a real frame's completion instead of waiting for the entire socket buffer to drain.
+      if (!socket.destroyed) {
+        const sessionId = retained[0].sessionId
+        this.heldRefill.arm(clientId, frames.noop(sessionId), (line, complete) =>
+          this.write(clientId, sessionId, socket, line, complete)
+        )
+      }
       return
     }
-    batch.queue = retained
-    batch.queuedChars = retainedChars
-    this.scheduleFlush(clientId, batch)
+    this.pendingByClient.delete(clientId)
   }
 
-  flushSession(clientId: string, sessionId: string): void {
-    this.flushSessionData(clientId, sessionId)
-  }
-
-  private queuedCharsForSession(batch: PendingStreamDataBatch, sessionId: string): number {
-    let chars = 0
-    for (const entry of batch.queue) {
-      if (entry.sessionId === sessionId) {
-        chars += entry.data.length
-      }
+  private write(
+    clientId: string,
+    sessionId: string,
+    socket: Socket,
+    line: string | Buffer,
+    onComplete?: () => void
+  ): void {
+    if (this.backpressure) {
+      this.backpressure.write(clientId, sessionId, socket, line, onComplete)
+    } else {
+      socket.write(line, onComplete)
     }
-    return chars
   }
 
-  private flushSessionData(clientId: string, sessionId: string): void {
+  private updateBackpressure(clientId: string, batch: PendingStreamDataBatch): void {
+    this.backpressure?.setQueued(
+      clientId,
+      batch.queuedCharsBySession,
+      batch.queuedMetadataBytesBySession
+    )
+  }
+
+  private flushSession(clientId: string, sessionId: string): void {
     const batch = this.pendingByClient.get(clientId)
     if (!batch) {
       return
     }
 
-    const flushed: PendingStreamDataBatch['queue'] = []
-    const retained: PendingStreamDataBatch['queue'] = []
-    let flushedChars = 0
-    for (const entry of batch.queue) {
-      if (entry.sessionId === sessionId) {
-        flushed.push(entry)
-        flushedChars += entry.data.length
-      } else {
-        retained.push(entry)
-      }
-    }
-    if (flushed.length === 0) {
-      return
-    }
-
-    batch.queue = retained
-    batch.queuedChars -= flushedChars
-    if (batch.queue.length === 0) {
-      if (batch.timer) {
-        clearTimeout(batch.timer)
-        batch.timer = null
-      }
-      this.pendingByClient.delete(clientId)
-    }
-
     const client = this.getClient(clientId)
     if (!client?.streamSocket || client.streamSocket.destroyed) {
+      this.clear(clientId)
       return
     }
 
-    for (const entry of flushed) {
-      this.writeStreamDataEvent(client.streamSocket, entry.sessionId, entry.data)
+    const socket = client.streamSocket
+    const frames = streamFramesFor(client.streamFraming)
+    flushDaemonStreamSession(batch, sessionId, this.maxLineBytes, frames, (line) =>
+      this.write(clientId, sessionId, socket, line)
+    )
+    if (batch.queue.length === 0) {
+      this.pendingByClient.delete(clientId)
     }
+    this.updateBackpressure(clientId, batch)
   }
 
-  private scheduleFlush(clientId: string, batch: PendingStreamDataBatch): void {
-    if (!batch.timer) {
-      batch.timer = setTimeout(() => this.flush(clientId), STREAM_DATA_BATCH_INTERVAL_MS)
+  /** Preserve queued payloads while resetting state tied to the replaced socket. */
+  replaceStream(clientId: string): void {
+    const batch = this.pendingByClient.get(clientId)
+    if (batch?.timer) {
+      clearTimeout(batch.timer)
+      batch.timer = null
     }
+    this.heldRefill.clear(clientId)
+    this.backpressure?.clear(clientId)
   }
 
   clear(clientId?: string): void {
@@ -275,14 +332,7 @@ export class DaemonStreamDataBatcher {
       }
       this.pendingByClient.delete(id)
     }
-  }
-
-  private writeStreamDataEvent(streamSocket: Socket, sessionId: string, data: string): void {
-    // Why: createNdjsonParser rejects oversized lines. Terminal output can
-    // burst faster than the batch interval, so writer-side chunking prevents
-    // the daemon from dropping its own stream events at the receiver.
-    for (const chunk of splitStreamDataForNdjson(sessionId, data, this.maxLineBytes)) {
-      streamSocket.write(encodeStreamDataEvent(sessionId, chunk))
-    }
+    this.heldRefill.clear(clientId)
+    this.backpressure?.clear(clientId)
   }
 }

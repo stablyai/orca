@@ -1,8 +1,8 @@
-import { describe, expect, it } from 'vitest'
-import { execFileSync } from 'child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { describe, expect, it, vi } from 'vitest'
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {
   buildGitGrepArgs,
   buildRgArgs,
@@ -12,10 +12,10 @@ import {
   ingestGitGrepLine,
   ingestRgJsonLine,
   MAX_LINE_CONTENT_LENGTH,
-  normalizeRelativePath,
-  splitSearchGlobPatterns,
-  toGitGlobPathspec
+  SEARCH_JSON_STRUCTURE_LIMITS
 } from './text-search'
+import { splitSearchGlobPatterns, toGitGlobPathspecs } from './text-search-glob-patterns'
+import { normalizeRelativePath } from './text-search-paths'
 
 describe('normalizeRelativePath', () => {
   it('collapses mixed separators and strips leading slashes', () => {
@@ -117,6 +117,22 @@ describe('ingestRgJsonLine', () => {
     expect(acc.totalMatches).toBe(0)
   })
 
+  it('rejects excessive nesting before JSON.parse', () => {
+    const parseSpy = vi.spyOn(JSON, 'parse')
+    const acc = createAccumulator()
+    try {
+      const amplified = `${'['.repeat(SEARCH_JSON_STRUCTURE_LIMITS.nestingDepth + 1)}0${']'.repeat(
+        SEARCH_JSON_STRUCTURE_LIMITS.nestingDepth + 1
+      )}`
+
+      expect(ingestRgJsonLine(amplified, '/root', acc, 100)).toBe('continue')
+      expect(parseSpy).not.toHaveBeenCalled()
+      expect(acc.totalMatches).toBe(0)
+    } finally {
+      parseSpy.mockRestore()
+    }
+  })
+
   it('creates a navigable fallback match when rg omits submatch ranges', () => {
     const acc = createAccumulator()
     const verdict = ingestRgJsonLine(makeMatch('/root/a.ts', 4, [], 'foobar'), '/root', acc, 100)
@@ -177,7 +193,6 @@ describe('ingestRgJsonLine', () => {
     expect(match.matchLength).toBe(6)
     expect(match.displayColumn).toBeDefined()
     expect(match.displayMatchLength).toBe(6)
-    // Extracted column should still align with NEEDLE inside the snippet.
     const displayColumn = match.displayColumn ?? match.column
     const displayMatchLength = match.displayMatchLength ?? match.matchLength
     const sliced = match.lineContent.slice(
@@ -230,11 +245,29 @@ describe('buildGitGrepArgs', () => {
   })
 })
 
-describe('toGitGlobPathspec', () => {
+describe('toGitGlobPathspecs', () => {
   it('wraps bare globs with **/ to match recursively', () => {
-    expect(toGitGlobPathspec('*.ts')).toBe(':(glob)**/*.ts')
-    expect(toGitGlobPathspec('src/*.ts')).toBe(':(glob)src/*.ts')
-    expect(toGitGlobPathspec('*.ts', true)).toBe(':(exclude,glob)**/*.ts')
+    expect(toGitGlobPathspecs('*.ts')).toContain(':(glob)**/*.ts')
+    expect(toGitGlobPathspecs('src/*.ts')).toContain(':(glob)src/*.ts')
+    expect(toGitGlobPathspecs('*.ts', true)).toContain(':(exclude,glob)**/*.ts')
+  })
+
+  it('also covers the subtree so a directory name behaves like rg --glob', () => {
+    expect(toGitGlobPathspecs('node_modules', true)).toEqual([
+      ':(exclude,glob)**/node_modules',
+      ':(exclude,glob)**/node_modules/**'
+    ])
+    expect(toGitGlobPathspecs('src')).toEqual([':(glob)**/src', ':(glob)**/src/**'])
+    expect(toGitGlobPathspecs('build/out')).toEqual([':(glob)build/out', ':(glob)build/out/**'])
+  })
+
+  it('keeps trailing-slash patterns directory-only', () => {
+    expect(toGitGlobPathspecs('node_modules/', true)).toEqual([':(exclude,glob)**/node_modules/**'])
+    expect(toGitGlobPathspecs('src/')).toEqual([':(glob)**/src/**'])
+  })
+
+  it('drops a pattern that is only separators', () => {
+    expect(toGitGlobPathspecs('/')).toEqual([])
   })
 })
 
@@ -259,7 +292,6 @@ describe('buildSubmatchRegex', () => {
   it('returns null for queries git grep accepts but JS RegExp rejects', () => {
     // Unbalanced group — git grep ERE accepts it as literal, JS RegExp throws.
     expect(buildSubmatchRegex('(foo', { useRegex: true })).toBeNull()
-    // Unterminated character class.
     expect(buildSubmatchRegex('[abc', { useRegex: true })).toBeNull()
   })
 })
@@ -300,6 +332,23 @@ describe('ingestGitGrepLine', () => {
         [2, 1],
         [2, 19]
       ])
+    } finally {
+      rmSync(rootPath, { recursive: true, force: true })
+    }
+  })
+
+  it('does not broaden a separator-only include pattern to the repository', () => {
+    const rootPath = mkdtempSync(join(tmpdir(), 'orca-search-git-'))
+    try {
+      execFileSync('git', ['init'], { cwd: rootPath, stdio: 'ignore' })
+      writeFileSync(join(rootPath, 'target.ts'), 'needle\n')
+
+      expect(() =>
+        execFileSync('git', buildGitGrepArgs('needle', { includePattern: '/' }), {
+          cwd: rootPath,
+          stdio: 'ignore'
+        })
+      ).toThrow()
     } finally {
       rmSync(rootPath, { recursive: true, force: true })
     }
@@ -361,7 +410,6 @@ describe('ingestGitGrepLine', () => {
 
   it('zero-length regex does not loop', () => {
     const acc = createAccumulator()
-    // A pattern that matches zero-length at every position.
     const re = new RegExp('', 'g')
     ingestGitGrepLine('a.ts\x001\x00abc', '/r', re, acc, 5)
     expect(acc.totalMatches).toBeGreaterThan(0)

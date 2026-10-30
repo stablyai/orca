@@ -1,13 +1,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { getDefaultUIState } from '../../shared/constants'
+import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 
-const { fromWebContentsMock, getAllWindowsMock, handleMock, onMock, removeAllListenersMock } =
-  vi.hoisted(() => ({
-    fromWebContentsMock: vi.fn(),
-    getAllWindowsMock: vi.fn(() => []),
-    handleMock: vi.fn(),
-    onMock: vi.fn(),
-    removeAllListenersMock: vi.fn()
-  }))
+const {
+  fromIdMock,
+  fromWebContentsMock,
+  getAllWebContentsMock,
+  getAllWindowsMock,
+  handleMock,
+  onMock,
+  removeAllListenersMock
+} = vi.hoisted(() => ({
+  fromIdMock: vi.fn(),
+  fromWebContentsMock: vi.fn(),
+  getAllWebContentsMock: vi.fn(),
+  getAllWindowsMock: vi.fn(),
+  handleMock: vi.fn(),
+  onMock: vi.fn(),
+  removeAllListenersMock: vi.fn()
+}))
 
 vi.mock('electron', () => ({
   BrowserWindow: {
@@ -18,18 +29,24 @@ vi.mock('electron', () => ({
     handle: handleMock,
     on: onMock,
     removeAllListeners: removeAllListenersMock
+  },
+  webContents: {
+    fromId: fromIdMock,
+    getAllWebContents: getAllWebContentsMock
   }
 }))
 
 import {
   clearTrustedUIRendererWebContentsId,
+  getTrustedUIRendererWindow,
   registerUIHandlers,
+  sendToTrustedUIRenderer,
   setTrustedUIRendererWebContentsId
 } from './ui'
 
 function makeStore() {
   return {
-    onUIChanged: vi.fn(),
+    onUIChanged: vi.fn<(listener: (ui: PersistedUIState) => void) => () => void>(() => () => {}),
     getUI: vi.fn(() => ({})),
     updateUI: vi.fn(),
     recordFeatureInteraction: vi.fn()
@@ -56,10 +73,19 @@ function getNativePasteHandler():
   return onMock.mock.calls.find(([channel]) => channel === 'ui:performNativePaste')?.[1]
 }
 
-describe('registerUIHandlers', () => {
+function getNativeSelectionActionHandler():
+  | ((event: ReturnType<typeof makeUIEvent>, action: unknown) => void)
+  | undefined {
+  return onMock.mock.calls.find(([channel]) => channel === 'ui:performNativeSelectionAction')?.[1]
+}
+
+describe('UI IPC', () => {
   beforeEach(() => {
     vi.stubEnv('ELECTRON_RENDERER_URL', '')
+    fromIdMock.mockReset()
     fromWebContentsMock.mockReset()
+    getAllWebContentsMock.mockReset()
+    getAllWebContentsMock.mockReturnValue([])
     getAllWindowsMock.mockReset()
     getAllWindowsMock.mockReturnValue([])
     handleMock.mockReset()
@@ -70,6 +96,115 @@ describe('registerUIHandlers', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs()
+  })
+
+  it('publishes UI state only to the trusted main renderer, never other windows', () => {
+    const mainSend = vi.fn()
+    const dashboardSend = vi.fn()
+    const spaceSend = vi.fn()
+    const main = { id: 17, isDestroyed: () => false, send: mainSend }
+    getAllWindowsMock.mockReturnValue(
+      [main, { id: 42, send: dashboardSend }, { id: 43, send: spaceSend }].map((contents) => ({
+        isDestroyed: () => false,
+        webContents: { ...contents, isDestroyed: () => false }
+      }))
+    )
+    fromIdMock.mockReturnValue(main)
+    const store = makeStore()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: UI handler registration uses only the supplied store methods.
+    registerUIHandlers(store as never)
+    const publish = store.onUIChanged.mock.calls[0]?.[0]
+    if (!publish) {
+      throw new Error('UI state publisher was not registered')
+    }
+    const ui = getDefaultUIState()
+
+    publish(ui)
+    expect(mainSend).not.toHaveBeenCalled()
+
+    setTrustedUIRendererWebContentsId(main.id)
+    publish(ui)
+    expect(mainSend).toHaveBeenCalledExactlyOnceWith('ui:stateChanged', ui)
+    expect(dashboardSend).not.toHaveBeenCalled()
+    expect(spaceSend).not.toHaveBeenCalled()
+    expect(getAllWindowsMock).not.toHaveBeenCalled()
+  })
+
+  it('sends app events once to the trusted renderer without waking 100 browser guests', () => {
+    const rendererSend = vi.fn()
+    const guestSends = Array.from({ length: 100 }, () => vi.fn())
+    getAllWebContentsMock.mockReturnValue(
+      guestSends.map((send, index) => ({
+        id: index + 100,
+        isDestroyed: () => false,
+        send
+      }))
+    )
+    fromIdMock.mockReturnValue({ id: 17, isDestroyed: () => false, send: rendererSend })
+    setTrustedUIRendererWebContentsId(17)
+
+    sendToTrustedUIRenderer('gh:prRefreshEvent', { sequence: 1 })
+
+    expect(fromIdMock).toHaveBeenCalledOnce()
+    expect(fromIdMock).toHaveBeenCalledWith(17)
+    expect(rendererSend).toHaveBeenCalledOnce()
+    expect(rendererSend).toHaveBeenCalledWith('gh:prRefreshEvent', { sequence: 1 })
+    expect(getAllWebContentsMock).not.toHaveBeenCalled()
+    expect(guestSends.reduce((total, send) => total + send.mock.calls.length, 0)).toBe(0)
+  })
+
+  it('resolves only the BrowserWindow that owns the trusted renderer', () => {
+    const renderer = { id: 17, isDestroyed: () => false }
+    const mainWindow = { id: 'main' }
+    fromIdMock.mockReturnValue(renderer)
+    fromWebContentsMock.mockReturnValue(mainWindow)
+    setTrustedUIRendererWebContentsId(17)
+
+    expect(getTrustedUIRendererWindow()).toBe(mainWindow)
+    expect(fromWebContentsMock).toHaveBeenCalledWith(renderer)
+
+    fromIdMock.mockReturnValue({ id: 17, isDestroyed: () => true })
+    expect(getTrustedUIRendererWindow()).toBeNull()
+  })
+
+  it('skips missing, destroyed, and originating renderers', () => {
+    const rendererSend = vi.fn()
+    setTrustedUIRendererWebContentsId(17)
+
+    fromIdMock.mockReturnValueOnce(undefined)
+    sendToTrustedUIRenderer('gh:workItemMutated', { number: 7 })
+
+    fromIdMock.mockReturnValueOnce({ id: 17, isDestroyed: () => true, send: rendererSend })
+    sendToTrustedUIRenderer('gh:workItemMutated', { number: 7 })
+
+    sendToTrustedUIRenderer('gh:workItemMutated', { number: 7 }, 17)
+
+    expect(fromIdMock).toHaveBeenCalledTimes(2)
+    expect(rendererSend).not.toHaveBeenCalled()
+  })
+
+  it('routes to a reopened window without retaining the closed renderer', () => {
+    const oldRendererSend = vi.fn()
+    const newRendererSend = vi.fn()
+    fromIdMock.mockImplementation((id) =>
+      id === 17
+        ? { id, isDestroyed: () => false, send: oldRendererSend }
+        : { id, isDestroyed: () => false, send: newRendererSend }
+    )
+
+    setTrustedUIRendererWebContentsId(17)
+    sendToTrustedUIRenderer('gh:prRefreshEvent', { sequence: 1 })
+
+    setTrustedUIRendererWebContentsId(42)
+    clearTrustedUIRendererWebContentsId(17)
+    sendToTrustedUIRenderer('gh:prRefreshEvent', { sequence: 2 })
+
+    clearTrustedUIRendererWebContentsId(42)
+    sendToTrustedUIRenderer('gh:prRefreshEvent', { sequence: 3 })
+
+    expect(oldRendererSend).toHaveBeenCalledTimes(1)
+    expect(newRendererSend).toHaveBeenCalledTimes(1)
+    expect(newRendererSend).toHaveBeenCalledWith('gh:prRefreshEvent', { sequence: 2 })
   })
 
   it('routes native paste fallback to the requesting webContents only', () => {
@@ -90,6 +225,44 @@ describe('registerUIHandlers', () => {
     expect(fromWebContentsMock).toHaveBeenCalledWith(sender)
     expect(paste).toHaveBeenCalledTimes(1)
     expect(pasteAndMatchStyle).toHaveBeenCalledTimes(1)
+  })
+
+  it('routes native selection fallbacks to the requesting webContents', () => {
+    const copy = vi.fn()
+    const selectAll = vi.fn()
+    const event = makeUIEvent()
+    setTrustedUIRendererWebContentsId(17)
+    fromWebContentsMock.mockReturnValue({ webContents: { copy, selectAll } })
+
+    registerUIHandlers(makeStore() as never)
+
+    expect(removeAllListenersMock).toHaveBeenCalledWith('ui:performNativeSelectionAction')
+    const handler = getNativeSelectionActionHandler()
+    handler?.(event, 'copy')
+    handler?.(event, 'select-all')
+    handler?.(event, 'invalid')
+
+    expect(copy).toHaveBeenCalledOnce()
+    expect(selectAll).toHaveBeenCalledOnce()
+  })
+
+  it('allows native selection fallback from the exact dashboard popout renderer', () => {
+    const copy = vi.fn()
+    const selectAll = vi.fn()
+    const event = makeUIEvent({ id: 42 })
+    const isDashboardPopoutRenderer = vi.fn((sender: unknown) => sender === event.sender)
+    fromWebContentsMock.mockReturnValue({ webContents: { copy, selectAll } })
+
+    registerUIHandlers(makeStore() as never, { isDashboardPopoutRenderer })
+
+    const handler = getNativeSelectionActionHandler()
+    handler?.(event, 'copy')
+    handler?.(event, 'select-all')
+    handler?.(makeUIEvent({ id: 43 }), 'copy')
+
+    expect(isDashboardPopoutRenderer).toHaveBeenCalledWith(event.sender)
+    expect(copy).toHaveBeenCalledOnce()
+    expect(selectAll).toHaveBeenCalledOnce()
   })
 
   it('ignores native paste fallback from stale or browser senders', () => {
@@ -139,29 +312,27 @@ describe('registerUIHandlers', () => {
     expect(pasteAndMatchStyle).not.toHaveBeenCalled()
   })
 
-  it('clears one trusted renderer id without clearing another window id', () => {
+  it('clears the trusted renderer id without clearing a newer window id', () => {
     const paste = vi.fn()
     const pasteAndMatchStyle = vi.fn()
     setTrustedUIRendererWebContentsId(17)
-    setTrustedUIRendererWebContentsId(42)
+    clearTrustedUIRendererWebContentsId(42)
     fromWebContentsMock.mockReturnValue({ webContents: { paste, pasteAndMatchStyle } })
 
     registerUIHandlers(makeStore() as never)
 
     getNativePasteHandler()?.(makeUIEvent())
-    getNativePasteHandler()?.(makeUIEvent({ id: 42 }))
 
-    expect(paste).toHaveBeenCalledTimes(2)
+    expect(paste).toHaveBeenCalledTimes(1)
 
-    clearTrustedUIRendererWebContentsId(42)
+    clearTrustedUIRendererWebContentsId(17)
     fromWebContentsMock.mockClear()
     paste.mockClear()
 
     getNativePasteHandler()?.(makeUIEvent())
-    getNativePasteHandler()?.(makeUIEvent({ id: 42 }))
 
-    expect(fromWebContentsMock).toHaveBeenCalledTimes(1)
-    expect(paste).toHaveBeenCalledTimes(1)
+    expect(fromWebContentsMock).not.toHaveBeenCalled()
+    expect(paste).not.toHaveBeenCalled()
   })
 
   it('allows native paste fallback only from the configured dev renderer origin', () => {

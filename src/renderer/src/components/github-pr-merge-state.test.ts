@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { presentGitHubPRMergeState, type GitHubPRMergeStateInput } from './github-pr-merge-state'
+import type { GitHubPRMergeStateInput } from '../../../shared/github/pull-request-merge-state'
+import { presentGitHubPRMergeState } from './github-pr-merge-state'
 
 function pr(overrides: Partial<GitHubPRMergeStateInput> = {}): GitHubPRMergeStateInput {
   return {
     state: 'open',
     mergeable: 'MERGEABLE',
     mergeStateStatus: 'CLEAN',
-    checksSummary: { state: 'success', total: 1, passed: 1, failed: 0, pending: 0 },
+    checksSummary: { state: 'success', total: 1, passed: 1, failed: 0, pending: 0, neutral: 0 },
     autoMergeAllowed: true,
     ...overrides
   }
@@ -32,24 +33,88 @@ describe('presentGitHubPRMergeState', () => {
     })
   })
 
-  it('offers enable auto-merge for open PRs that are waiting on requirements', () => {
-    expect(presentGitHubPRMergeState(pr()).autoMergeAction).toMatchObject({
-      kind: 'enable',
-      label: 'Enable auto-merge'
+  it('blocks conflicts on merge-queue branches', () => {
+    expect(
+      presentGitHubPRMergeState(
+        pr({ mergeQueueRequired: true, mergeable: 'UNKNOWN', mergeStateStatus: 'DIRTY' })
+      )
+    ).toMatchObject({
+      label: 'Conflicts',
+      directMergeAvailable: false,
+      autoMergeAction: null
     })
+  })
+
+  it('offers enable auto-merge for open PRs that are waiting on requirements', () => {
+    expect(presentGitHubPRMergeState(pr({ mergeQueueRequired: null })).autoMergeAction).toBeNull()
     expect(
-      presentGitHubPRMergeState(pr({ mergeQueueRequired: null })).autoMergeAction
-    ).toMatchObject({ kind: 'enable', label: 'Enable auto-merge' })
-    // Approval-required and checks-pending PRs are exactly when auto-merge helps.
-    expect(
-      presentGitHubPRMergeState(pr({ reviewDecision: 'REVIEW_REQUIRED' })).autoMergeAction
+      presentGitHubPRMergeState(
+        pr({ reviewDecision: 'REVIEW_REQUIRED', mergeStateStatus: 'BLOCKED' })
+      ).autoMergeAction
     ).toMatchObject({ kind: 'enable', label: 'Enable auto-merge' })
     expect(
       presentGitHubPRMergeState(
-        pr({ checksSummary: { state: 'pending', total: 1, passed: 0, failed: 0, pending: 1 } })
+        pr({
+          mergeStateStatus: 'BLOCKED',
+          checksSummary: {
+            state: 'pending',
+            total: 1,
+            passed: 0,
+            failed: 0,
+            pending: 1,
+            neutral: 0
+          }
+        })
       ).autoMergeAction
     ).toMatchObject({ kind: 'enable', label: 'Enable auto-merge' })
   })
+
+  it('does not offer enable auto-merge when only optional checks are pending', () => {
+    expect(
+      presentGitHubPRMergeState(
+        pr({
+          checksSummary: {
+            state: 'pending',
+            total: 1,
+            passed: 0,
+            failed: 0,
+            pending: 1,
+            neutral: 0
+          }
+        })
+      )
+    ).toMatchObject({
+      label: 'Checks pending',
+      directMergeAvailable: true,
+      autoMergeAction: null
+    })
+  })
+
+  it.each(['UNSTABLE', 'HAS_HOOKS'])(
+    'allows a direct merge for %s even before conflict detection finishes',
+    (mergeStateStatus) => {
+      expect(
+        presentGitHubPRMergeState(
+          pr({
+            mergeable: 'UNKNOWN',
+            mergeStateStatus,
+            checksSummary: {
+              state: 'failure',
+              total: 1,
+              passed: 0,
+              failed: 1,
+              pending: 0,
+              neutral: 0
+            }
+          })
+        )
+      ).toMatchObject({
+        label: 'Checks failed',
+        directMergeAvailable: true,
+        autoMergeAction: null
+      })
+    }
+  )
 
   it('does not offer enable auto-merge on conflicting PRs (GitHub would reject it)', () => {
     expect(
@@ -63,9 +128,15 @@ describe('presentGitHubPRMergeState', () => {
   })
 
   it('does not offer enable auto-merge when GitHub reports the repository disallows it', () => {
-    expect(presentGitHubPRMergeState(pr({ autoMergeAllowed: false })).autoMergeAction).toBeNull()
     expect(
-      presentGitHubPRMergeState(pr({ autoMergeAllowed: undefined })).autoMergeAction
+      presentGitHubPRMergeState(
+        pr({ autoMergeAllowed: false, mergeable: 'UNKNOWN', mergeStateStatus: 'BLOCKED' })
+      ).autoMergeAction
+    ).toBeNull()
+    expect(
+      presentGitHubPRMergeState(
+        pr({ autoMergeAllowed: undefined, mergeable: 'UNKNOWN', mergeStateStatus: 'BLOCKED' })
+      ).autoMergeAction
     ).toMatchObject({ kind: 'enable', label: 'Enable auto-merge' })
   })
 
@@ -73,6 +144,23 @@ describe('presentGitHubPRMergeState', () => {
     expect(presentGitHubPRMergeState(pr({ autoMergeEnabled: true }))).toMatchObject({
       autoMergeAction: { kind: 'disable', label: 'Disable auto-merge' }
     })
+  })
+
+  it('suppresses enable auto-merge but keeps disable when direct merge is available', () => {
+    // GitHub rejects enabling auto-merge on directly mergeable PRs with a clean-status error.
+    expect(
+      presentGitHubPRMergeState({
+        state: 'open',
+        checksSummary: { state: 'success', total: 1, passed: 1, failed: 0, pending: 0, neutral: 0 }
+      })
+    ).toMatchObject({ label: 'Checks passed', directMergeAvailable: true, autoMergeAction: null })
+    expect(presentGitHubPRMergeState(pr())).toMatchObject({
+      directMergeAvailable: true,
+      autoMergeAction: null
+    })
+    expect(presentGitHubPRMergeState(pr({ autoMergeEnabled: true })).autoMergeAction).toMatchObject(
+      { kind: 'disable' }
+    )
   })
 
   it('blocks conflicts and behind branches, but not optional aggregate check failures', () => {
@@ -88,12 +176,30 @@ describe('presentGitHubPRMergeState', () => {
     })
     expect(
       presentGitHubPRMergeState(
-        pr({ checksSummary: { state: 'pending', total: 1, passed: 0, failed: 0, pending: 1 } })
+        pr({
+          checksSummary: {
+            state: 'pending',
+            total: 1,
+            passed: 0,
+            failed: 0,
+            pending: 1,
+            neutral: 0
+          }
+        })
       )
     ).toMatchObject({ label: 'Checks pending', directMergeAvailable: true })
     expect(
       presentGitHubPRMergeState(
-        pr({ checksSummary: { state: 'failure', total: 1, passed: 0, failed: 1, pending: 0 } })
+        pr({
+          checksSummary: {
+            state: 'failure',
+            total: 1,
+            passed: 0,
+            failed: 1,
+            pending: 0,
+            neutral: 0
+          }
+        })
       )
     ).toMatchObject({ label: 'Checks failed', directMergeAvailable: true })
     expect(presentGitHubPRMergeState(pr())).toMatchObject({
@@ -108,7 +214,14 @@ describe('presentGitHubPRMergeState', () => {
         pr({
           mergeable: 'UNKNOWN',
           mergeStateStatus: null,
-          checksSummary: { state: 'pending', total: 1, passed: 0, failed: 0, pending: 1 }
+          checksSummary: {
+            state: 'pending',
+            total: 1,
+            passed: 0,
+            failed: 0,
+            pending: 1,
+            neutral: 0
+          }
         })
       )
     ).toMatchObject({
@@ -121,7 +234,7 @@ describe('presentGitHubPRMergeState', () => {
     expect(
       presentGitHubPRMergeState({
         state: 'open',
-        checksSummary: { state: 'success', total: 3, passed: 3, failed: 0, pending: 0 }
+        checksSummary: { state: 'success', total: 3, passed: 3, failed: 0, pending: 0, neutral: 0 }
       })
     ).toMatchObject({
       label: 'Checks passed',
@@ -132,7 +245,14 @@ describe('presentGitHubPRMergeState', () => {
         pr({
           mergeable: 'UNKNOWN',
           mergeStateStatus: null,
-          checksSummary: { state: 'success', total: 3, passed: 3, failed: 0, pending: 0 }
+          checksSummary: {
+            state: 'success',
+            total: 3,
+            passed: 3,
+            failed: 0,
+            pending: 0,
+            neutral: 0
+          }
         })
       )
     ).toMatchObject({

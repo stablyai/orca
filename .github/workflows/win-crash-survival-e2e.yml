@@ -1,0 +1,167 @@
+name: Windows Crash-Survival E2E
+
+# #7742: build/install unsigned branch artifact on disposable CI, crash only main and require same daemon/shell survival, adoption and input without FailFast. Companion update proof tests installer survival; see relocation post-mortem.
+
+on:
+  workflow_dispatch:
+    inputs:
+      expect:
+        description: Expected outcome profile
+        required: true
+        type: choice
+        default: survival
+        options:
+          - survival
+          - orphaned
+
+permissions:
+  contents: read
+
+concurrency:
+  group: win-crash-survival-e2e-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  crash-survival:
+    name: crash-survival (packaged build)
+    runs-on: windows-2022
+    timeout-minutes: 50
+    env:
+      EXPECT: ${{ inputs.expect || 'survival' }}
+      ORCA_BACKGROUND_LAUNCH: '1'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          # This job only builds and runs the harness locally; it never pushes.
+          persist-credentials: false
+
+      # Why: setup-node can restore pnpm's content-addressed store only after
+      # the pnpm binary exists, avoiding repeat dependency downloads per run.
+      - name: Setup pnpm
+        uses: pnpm/setup@v2
+        with:
+          install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          check-latest: true
+          cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            mobile/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Why: cache the built installer by production build inputs, excluding
+      # tests/reliability metadata so harness-only edits skip electron-builder.
+      # The daemon relocation lives under src/, so product changes still rebuild.
+      - name: Cache branch installer
+        id: cache-installer
+        uses: actions/cache@v4
+        with:
+          path: dist/orca-windows-setup.exe
+          # The mobile page trees are in the key because beforePack builds the mobile web bundle
+          # into the installer; config/** already covers the builder, the verifier and the manifest
+          # writer. A mobile-only change must miss this cache, not reuse a stale exe.
+          key: >-
+            crash-survival-installer-${{ hashFiles(
+              'src/**',
+              '!src/**/*.test.*',
+              '!src/**/*.bench.*',
+              'config/**',
+              '!config/**/*.test.*',
+              '!config/reliability-gates.jsonc',
+              '!config/max-lines-baseline.txt',
+              '!config/vitest.config.ts',
+              'native/**',
+              'resources/**',
+              'electron.vite.config.ts',
+              'tsconfig.json',
+              'vite.web.config.ts',
+              '.npmrc',
+              'package.json',
+              'pnpm-lock.yaml',
+              'pnpm-workspace.yaml',
+              'mobile/package.json',
+              'mobile/pnpm-lock.yaml',
+              'mobile/app/**',
+              'mobile/src/**',
+              'mobile/web-entry/**'
+            ) }}
+
+      # Why: production edits miss the installer cache by design, but Electron
+      # and NSIS downloads are lockfile-owned and need not be fetched again.
+      - name: Cache electron-builder downloads
+        if: steps.cache-installer.outputs.cache-hit != 'true'
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~\AppData\Local\electron\Cache
+            ~\AppData\Local\electron-builder\Cache
+          key: crash-survival-electron-builder-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            crash-survival-electron-builder-
+
+      # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
+      # build resolves React Native and Expo from mobile/node_modules. Gated with the
+      # build it feeds, so a cache hit does not pay for an install nothing consumes.
+      - uses: ./.github/actions/install-mobile-dependencies
+        if: steps.cache-installer.outputs.cache-hit != 'true'
+
+      - uses: ./.github/actions/prepare-windows-agent-hook
+        if: steps.cache-installer.outputs.cache-hit != 'true'
+
+      - name: Build Windows installer (unsigned)
+        if: steps.cache-installer.outputs.cache-hit != 'true'
+        run: |
+          node config/scripts/ensure-native-runtime.mjs --runtime=electron
+          pnpm run build:desktop
+          pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never
+
+      # Why: silent-install the branch build so the crash harness has a packaged
+      # Orca.exe to drive. A clean CI runner installs to the default per-user
+      # location (%LOCALAPPDATA%\Programs\Orca), which the harness auto-locates.
+      - name: Silent-install branch build
+        shell: pwsh
+        run: |
+          $exe = "dist/orca-windows-setup.exe"
+          if (-not (Test-Path $exe)) { throw "Installer not found at $exe" }
+          Start-Process -FilePath $exe -ArgumentList '/S' -Wait
+          $installed = Join-Path $env:LOCALAPPDATA 'Programs/Orca/Orca.exe'
+          if (-not (Test-Path $installed)) {
+            $installed = Join-Path $env:LOCALAPPDATA 'Programs/orca/Orca.exe'
+          }
+          if (-not (Test-Path $installed)) { throw "Installed Orca.exe not found after silent install" }
+          "ORCA_EXE=$installed" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      # Why: crash ONLY the app main and assert the relocated daemon + its shell
+      # survive, then that relaunch adopts them and input causes no pwsh FailFast.
+      - name: Run crash-survival harness
+        id: harness
+        shell: pwsh
+        env:
+          ORCA_E2E_DIAG_DIR: artifacts/diag
+        run: |
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          $log = "artifacts/crash-survival-output.log"
+          node tests/tools/win-crash-survival-e2e/run.mjs `
+            --expect "$env:EXPECT" `
+            --exe-path "$env:ORCA_EXE" `
+            --soak-seconds 8 2>&1 | Tee-Object -FilePath $log
+          exit $LASTEXITCODE
+
+      - name: Upload crash-survival output
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: win-crash-survival-output
+          path: |
+            artifacts/crash-survival-output.log
+            artifacts/diag/**
+          retention-days: 7
+          if-no-files-found: warn

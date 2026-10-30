@@ -1,4 +1,4 @@
-import { readFile, stat } from 'fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import type { WebContents } from 'electron'
 import type { Store } from '../persistence'
 import type {
@@ -162,8 +162,7 @@ export async function previewWarpThemeImport(
     themes.push(parsed.theme)
   }
 
-  // Why: an empty result carries no error — the renderer owns the localized
-  // empty-state copy; `error` is reserved for genuine failures.
+  // Renderer localizes empty results; reserve errors for actual discovery failures.
   return {
     found: themes.length > 0,
     sourceLabel: selection.sourceLabel,

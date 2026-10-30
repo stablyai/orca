@@ -2,13 +2,12 @@ import {
   isClipboardTextTooLargeError,
   type ReadClipboardTextOptions
 } from '../../../../shared/clipboard-text'
-import {
-  TERMINAL_PASTE_MAX_BYTES,
-  type TerminalPasteTextOptions
-} from './terminal-paste-coordinator'
+import { TERMINAL_PASTE_MAX_BYTES } from './terminal-paste-limits'
+import type { TerminalPasteTextOptions } from './terminal-paste-model'
 
 type SaveClipboardImageAsTempFile = (args?: {
   connectionId?: string | null
+  runtimeEnvironmentId?: string | null
 }) => Promise<string | null>
 
 type PasteTerminalClipboardDeps = {
@@ -19,7 +18,8 @@ type PasteTerminalClipboardDeps = {
     options?: TerminalPasteTextOptions
   ) => boolean | void | Promise<boolean | void>
   connectionId?: string | null
-  forceBracketedMultilineTextPaste?: boolean
+  runtimeEnvironmentId?: string | null
+  protectedMultilineTextPasteOptions?: TerminalPasteTextOptions
   onTextPasteError?: (error: unknown) => void
   onImagePasteError?: (error: unknown) => void
 }
@@ -42,7 +42,8 @@ export async function pasteTerminalClipboard({
   saveClipboardImageAsTempFile,
   pasteText,
   connectionId,
-  forceBracketedMultilineTextPaste = false,
+  runtimeEnvironmentId,
+  protectedMultilineTextPasteOptions,
   onTextPasteError,
   onImagePasteError
 }: PasteTerminalClipboardDeps): Promise<TerminalClipboardPasteResult> {
@@ -54,13 +55,12 @@ export async function pasteTerminalClipboard({
       onTextPasteError?.(error)
       return { status: 'skipped', reason: 'text-too-large' }
     }
-    // Why: browser clipboard text reads can fail for image-only clipboards.
-    // Still try the image path so Cmd/Ctrl+V works for screenshots.
+    // Image-only clipboards can reject text reads; still try the screenshot path.
   }
   if (text) {
     try {
-      const result = await (forceBracketedMultilineTextPaste
-        ? pasteText(text, { forceBracketedPasteForMultiline: true })
+      const result = await (protectedMultilineTextPasteOptions
+        ? pasteText(text, protectedMultilineTextPasteOptions)
         : pasteText(text))
       if (result === false) {
         return { status: 'skipped', reason: 'text-paste-rejected' }
@@ -73,13 +73,12 @@ export async function pasteTerminalClipboard({
   }
 
   try {
-    const filePath = await saveClipboardImageAsTempFile({ connectionId })
+    const filePath = await saveClipboardImageAsTempFile({ connectionId, runtimeEnvironmentId })
     if (!filePath) {
       return { status: 'skipped', reason: 'empty' }
     }
     const result = await pasteText(filePath, {
-      // Why: a generated clipboard-image path is terminal image injection, not
-      // ordinary one-line text. Keep it off the Ctrl+C stale-text paste path.
+      // Generated image paths must bypass the Ctrl+C stale-text path.
       forceBracketedPaste: true,
       recoverImagePasteWebglAtlas: true
     })

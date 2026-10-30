@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { composeActiveTerminalTheme } from './terminal-appearance'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 describe('composeActiveTerminalTheme', () => {
   function settingsWith(partial: Partial<GlobalSettings>): GlobalSettings {
@@ -58,9 +58,7 @@ describe('composeActiveTerminalTheme', () => {
   })
 
   it('honors a zero background opacity', () => {
-    // Why: pin against a regression where the guard becomes truthy-only
-    // (e.g. `if (settings.terminalBackgroundOpacity)`) and silently drops
-    // the user's intent to make the background fully transparent.
+    // Opacity zero means intentional full transparency; truthiness guards would discard it.
     const base = { background: '#112233' }
     const result = composeActiveTerminalTheme(base, settingsWith({ terminalBackgroundOpacity: 0 }))
     expect(result!.background).toBe('rgba(17, 34, 51, 0)')

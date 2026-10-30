@@ -1,8 +1,9 @@
-import { execFileSync } from 'child_process'
-import { mkdirSync, rmSync, writeFileSync } from 'fs'
-import { mkdtemp } from 'fs/promises'
-import os from 'os'
-import path from 'path'
+import { openSidebarProjectDialog } from './helpers/sidebar-project-dialog'
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtemp } from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 
@@ -12,7 +13,10 @@ async function createCloneFixture(): Promise<{
   sourcePath: string
   destinationParent: string
 }> {
-  const rootPath = await mkdtemp(path.join(os.tmpdir(), 'orca-e2e-add-project-clone-'))
+  // Canonicalize macOS /var → /private/var like git does when registering repo.path.
+  const rootPath = realpathSync(
+    await mkdtemp(path.join(os.tmpdir(), 'orca-e2e-add-project-clone-'))
+  )
   tempRoots.push(rootPath)
 
   const sourcePath = path.join(rootPath, 'default-checkout-source')
@@ -38,7 +42,10 @@ async function createLinkedWorktreeFixture(): Promise<{
   mainPath: string
   siblingPath: string
 }> {
-  const rootPath = await mkdtemp(path.join(os.tmpdir(), 'orca-e2e-add-project-linked-'))
+  // Canonicalize the main checkout path like git does on macOS /var symlinks.
+  const rootPath = realpathSync(
+    await mkdtemp(path.join(os.tmpdir(), 'orca-e2e-add-project-linked-'))
+  )
   tempRoots.push(rootPath)
 
   const mainPath = path.join(rootPath, 'linked-source')
@@ -76,10 +83,7 @@ test.describe('Add project default checkout', () => {
     await waitForSessionReady(orcaPage)
     const fixture = await createCloneFixture()
 
-    await orcaPage
-      .getByRole('button', { name: /Add Project/i })
-      .first()
-      .click()
+    await openSidebarProjectDialog(orcaPage)
     const addDialog = orcaPage.getByRole('dialog', { name: /Add a project/i })
     await expect(addDialog).toBeVisible()
     await addDialog.getByRole('button', { name: /Clone from URL/i }).click()

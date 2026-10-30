@@ -6,10 +6,19 @@ type ProcessGoneDedupeOptions = {
   maxKeys?: number
 }
 
+export type ProcessGoneDedupeClaim = {
+  readonly key: string
+}
+
+type ProcessGoneDedupeEntry = {
+  readonly recordedAt: number
+  readonly claim: ProcessGoneDedupeClaim
+}
+
 export class ProcessGoneDedupe {
   private readonly windowMs: number
   private readonly maxKeys: number
-  private readonly recentKeys = new Map<string, number>()
+  private readonly recentKeys = new Map<string, ProcessGoneDedupeEntry>()
 
   constructor(options: ProcessGoneDedupeOptions = {}) {
     this.windowMs = options.windowMs ?? DEFAULT_PROCESS_GONE_DEDUPE_WINDOW_MS
@@ -17,19 +26,31 @@ export class ProcessGoneDedupe {
   }
 
   shouldRecord(key: string, now = Date.now()): boolean {
+    return this.tryClaim(key, now) !== null
+  }
+
+  tryClaim(key: string, now = Date.now()): ProcessGoneDedupeClaim | null {
     this.prune(now)
 
     const previous = this.recentKeys.get(key)
-    if (previous !== undefined && now - previous < this.windowMs) {
-      return false
+    if (previous && now - previous.recordedAt < this.windowMs) {
+      return null
     }
 
-    // Why: process-gone tuples come from Electron and can vary by exit code;
-    // keep the short dedupe window without retaining stale tuples forever.
+    const claim = { key }
+    // Refresh insertion order so capacity eviction removes the oldest claim.
     this.recentKeys.delete(key)
-    this.recentKeys.set(key, now)
+    this.recentKeys.set(key, { recordedAt: now, claim })
     this.prune(now)
-    return true
+    return claim
+  }
+
+  release(claim: ProcessGoneDedupeClaim): void {
+    const current = this.recentKeys.get(claim.key)
+    // A failed old write must not release a newer claim for the same key.
+    if (current?.claim === claim) {
+      this.recentKeys.delete(claim.key)
+    }
   }
 
   get size(): number {
@@ -37,8 +58,8 @@ export class ProcessGoneDedupe {
   }
 
   private prune(now: number): void {
-    for (const [key, recordedAt] of this.recentKeys) {
-      if (now - recordedAt >= this.windowMs) {
+    for (const [key, entry] of this.recentKeys) {
+      if (now - entry.recordedAt >= this.windowMs) {
         this.recentKeys.delete(key)
       }
     }
@@ -54,11 +75,17 @@ export class ProcessGoneDedupe {
 }
 
 export function getProcessGoneDedupeKey(
+  source: 'renderer' | 'child',
   processType: string,
   reason: string,
-  exitCode: number | null
+  exitCode: number | null,
+  webContentsId?: number
 ): string {
-  return `${processType}:${reason}:${exitCode ?? 'null'}`
+  // One renderer death may produce several reasons; dedupe it by renderer identity.
+  if (source === 'renderer') {
+    return `${source}:${processType}:${webContentsId ?? 'global'}`
+  }
+  return `${source}:${processType}:${reason}:${exitCode ?? 'null'}`
 }
 
 export const processGoneDedupe = new ProcessGoneDedupe()

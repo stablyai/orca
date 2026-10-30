@@ -1,331 +1,238 @@
 import { useAppStore } from '@/store'
-import type { TabContentType } from '../../../../shared/types'
-import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
-import { reconcileTabOrder } from '../tab-bar/reconcile-order'
+import { closeWebRuntimeSessionTab } from '@/runtime/web-runtime-session-tab-lifecycle'
+import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
+import { toHostSessionTabId } from '../../../../shared/terminal-surface-id'
+import { getLatestWebSessionTabsPublicationEpoch } from '@/runtime/web-session-tabs-sync/tracking-lifecycle'
+import { resolveHostSessionTabIdForWebSessionTab } from '@/runtime/web-session-tabs-sync/tracking-mappings'
+import { resolveTerminalCloseRoute } from '@/lib/terminal-close-route'
 import {
-  activateWebRuntimeSessionTab,
-  closeWebRuntimeSessionTab,
-  createWebRuntimeSessionTerminal,
-  isWebRuntimeSessionActive,
-  isWebTerminalSurfaceTabId
-} from '@/runtime/web-runtime-session'
-import { resolveHostSessionTabIdForWebSessionTab } from '@/runtime/web-session-tabs-sync'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { guardPinnedTabClose, resolvePinnedTabLabel } from '@/store/pinned-tab-close-guard'
+  guardPinnedTabClose,
+  isUnifiedTabPinned,
+  resolvePinnedTabLabel,
+  shouldConfirmPinnedTabClose
+} from '@/store/pinned-tab-close-guard'
+import type {
+  TerminalTabCloseReason,
+  TerminalTabRetirementPlan
+} from '@/store/slices/terminal-tab-retirement'
+import {
+  guardRunningTerminalClose,
+  shouldConfirmRunningTerminalClose
+} from './running-terminal-close-guard'
+import { closeLocalTerminalTabState } from './close-local-terminal-tab-state'
+import { runAsAutomaticDeselection } from '@/store/active-worktree-deselection-intent'
+import { getTerminalIncarnationHandle } from './terminal-close-incarnation'
+import {
+  getWorktreeTerminalTabIds,
+  resolveTerminalCloseTarget,
+  validatePrecomputedTerminalCloseState,
+  type PrecomputedTerminalCloseState
+} from './terminal-close-target'
+export type { PrecomputedTerminalCloseState } from './terminal-close-target'
+export { closeOtherTerminalTabs, closeTerminalTabsToRight } from './terminal-tab-bulk-actions'
 
-const EDITOR_TAB_CONTENT_TYPES = new Set<TabContentType>([
-  'editor',
-  'diff',
-  'conflict-review',
-  'check-details'
-])
-
-type TerminalTabActionState = ReturnType<typeof useAppStore.getState>
-
-type CloseTerminalTabTarget = {
-  worktreeId: string
-  terminalTabId: string
-}
-
-function resolveCloseTerminalTabTarget(
-  state: TerminalTabActionState,
-  tabId: string
-): CloseTerminalTabTarget | null {
-  for (const [worktreeId, worktreeTabs] of Object.entries(state.tabsByWorktree)) {
-    if (worktreeTabs.some((tab) => tab.id === tabId)) {
-      return { worktreeId, terminalTabId: tabId }
-    }
+export function closeTerminalTab(
+  tabId: string,
+  options?: {
+    force?: boolean
+    rejectPinned?: boolean
+    reason?: TerminalTabCloseReason
+    /** Host-only lifecycle reason; local pin guards still use reason, so this must not bypass them. */
+    hostCloseReason?: TerminalTabCloseReason
+    /** PTY whose lifecycle event initiated the host close. */
+    lifecyclePtyId?: string
+    /** Skip modals for unattended/bulk/CLI/RPC paths and confirmed re-entry. */
+    skipRunningProcessConfirm?: boolean
+    captureRecentlyClosed?: boolean
+    localPtyTeardownOwnedExternally?: boolean
+    precomputedRetirementPlan?: TerminalTabRetirementPlan
+    precomputedCloseState?: PrecomputedTerminalCloseState
+    onClosed?: () => void
+    onCancel?: () => void
   }
-
-  for (const [worktreeId, unifiedTabs] of Object.entries(state.unifiedTabsByWorktree ?? {})) {
-    const unified = unifiedTabs.find(
-      (tab) => tab.contentType === 'terminal' && (tab.entityId === tabId || tab.id === tabId)
-    )
-    if (unified) {
-      return { worktreeId, terminalTabId: unified.entityId }
-    }
-  }
-
-  return null
-}
-
-// Why: host-backed terminals may only exist in unifiedTabsByWorktree as
-// terminal entities, so close/sibling selection must merge tabsByWorktree and
-// unified terminal entityIds into one deduped list per worktree.
-function getWorktreeTerminalTabIds(state: TerminalTabActionState, worktreeId: string): string[] {
-  const ids = new Set<string>()
-  for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
-    ids.add(tab.id)
-  }
-  for (const tab of state.unifiedTabsByWorktree?.[worktreeId] ?? []) {
-    if (tab.contentType === 'terminal') {
-      ids.add(tab.entityId)
-    }
-  }
-  return [...ids]
-}
-
-function closeLocalTerminalTabState(terminalTabId: string): void {
-  const state = useAppStore.getState()
-  if (
-    Object.values(state.tabsByWorktree).some((tabs) => tabs.some((tab) => tab.id === terminalTabId))
-  ) {
-    state.closeTab(terminalTabId)
-    return
-  }
-
-  for (const tabs of Object.values(state.unifiedTabsByWorktree ?? {})) {
-    const unified = tabs.find(
-      (tab) =>
-        tab.contentType === 'terminal' &&
-        (tab.entityId === terminalTabId || tab.id === terminalTabId)
-    )
-    if (unified) {
-      state.closeUnifiedTab(unified.id)
-      return
-    }
-  }
-}
-
-function isPinnedVisibleTab(
-  state: TerminalTabActionState,
-  worktreeId: string,
-  visibleId: string
-): boolean {
-  return (
-    (state.unifiedTabsByWorktree?.[worktreeId] ?? []).some(
-      (tab) => (tab.id === visibleId || tab.entityId === visibleId) && tab.isPinned
-    ) ?? false
-  )
-}
-
-export function createNewTerminalTab(
-  activeWorktreeId: string | null,
-  shellOverride?: string
 ): void {
-  if (!activeWorktreeId) {
-    return
-  }
   const state = useAppStore.getState()
-  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, activeWorktreeId)
-  if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
-    // Why: paired web clients receive host-owned terminal tabs through
-    // session.tabs. Creating a local tab first races the host snapshot and can
-    // leave stale remote handles in the web store.
-    void createWebRuntimeSessionTerminal({
-      worktreeId: activeWorktreeId,
-      environmentId: runtimeEnvironmentId,
-      command: shellOverride,
-      activate: true
-    })
-    return
-  }
-  const newTab = state.createTab(activeWorktreeId, undefined, shellOverride)
-  state.setActiveTabType('terminal')
-  // Why: persist the tab bar order with the new terminal at the end of the
-  // current visual order. Without this, reconcileTabOrder falls back to
-  // terminals-first when tabBarOrderByWorktree is unset, causing a new
-  // terminal to jump to index 0 instead of appending after editor tabs.
-  const freshState = useAppStore.getState()
-  const termIds = (freshState.tabsByWorktree[activeWorktreeId] ?? []).map((t) => t.id)
-  const editorIds = freshState.openFiles
-    .filter((f) => f.worktreeId === activeWorktreeId)
-    .map((f) => f.id)
-  const base = reconcileTabOrder(
-    freshState.tabBarOrderByWorktree[activeWorktreeId],
-    termIds,
-    editorIds
+  const precomputedCloseState = validatePrecomputedTerminalCloseState(
+    tabId,
+    options?.precomputedRetirementPlan,
+    options?.precomputedCloseState
   )
-  // The new tab is already in base via termIds; move it to the end
-  const order = base.filter((id) => id !== newTab.id)
-  order.push(newTab.id)
-  state.setTabBarOrder(activeWorktreeId, order)
-}
-
-export function closeTerminalTab(tabId: string, options?: { force?: boolean }): void {
-  const state = useAppStore.getState()
-  const target = resolveCloseTerminalTabTarget(state, tabId)
+  const target = resolveTerminalCloseTarget(state, tabId, precomputedCloseState)
   if (!target) {
+    const closeReason = options?.reason ?? options?.hostCloseReason ?? 'user'
+    if (closeReason !== 'pty-exit') {
+      // Why: late explicit cleanup must still revoke tab-scoped resume authority after PTY exit removed the row.
+      state.closeTab(tabId, {
+        reason: closeReason,
+        ...(options?.localPtyTeardownOwnedExternally
+          ? { localPtyTeardownOwnedExternally: true }
+          : {}),
+        ...(options?.precomputedRetirementPlan
+          ? { precomputedRetirementPlan: options.precomputedRetirementPlan }
+          : {})
+      })
+    }
+    options?.onClosed?.()
     return
   }
   const { worktreeId: owningWorktreeId, terminalTabId } = target
+  // Unrouted closes still prune and record locally; unproven-host PTY teardown fails closed independently.
+  const worktreeRoute = resolveTerminalCloseRoute(state, owningWorktreeId, terminalTabId)
 
-  // Why: a pinned tab routes through the confirmation guard instead of closing
-  // outright. `force` is the post-confirmation re-entry, which skips the guard.
-  if (!options?.force && isPinnedVisibleTab(state, owningWorktreeId, terminalTabId)) {
-    guardPinnedTabClose({
-      isPinned: true,
+  // Why: with the pin prompt turned off, the close itself is the user's consent.
+  let pinnedCloseConsented = false
+  // Pinned confirmation re-enters with force; ordinary closes must wait for consent.
+  if (
+    options?.reason !== 'pty-exit' &&
+    !options?.force &&
+    isUnifiedTabPinned(state, owningWorktreeId, terminalTabId)
+  ) {
+    // Unattended lifecycle callers cannot wait on a modal; reject pinned closes without bypassing consent.
+    if (options?.rejectPinned) {
+      options.onCancel?.()
+      return
+    }
+    // Disabling pin prompts must not bypass running-process confirmation for busy pinned tabs (#10142).
+    if (shouldConfirmPinnedTabClose(state)) {
+      guardPinnedTabClose({
+        isPinned: true,
+        tabLabel: resolvePinnedTabLabel(state, owningWorktreeId, terminalTabId),
+        onClose: () => closeTerminalTab(tabId, { ...options, force: true }),
+        ...(options?.onCancel ? { onCancel: options.onCancel } : {})
+      })
+      return
+    }
+    pinnedCloseConsented = true
+  }
+
+  // Guard before web routing so X, middle-click, menu, keyboard and host-backed closes share running-process policy (#10142).
+  if (shouldConfirmRunningTerminalClose(options)) {
+    guardRunningTerminalClose({
+      terminalTabId,
       tabLabel: resolvePinnedTabLabel(state, owningWorktreeId, terminalTabId),
-      onClose: () => closeTerminalTab(tabId, { force: true })
+      // Re-enter after consent to revalidate pinned, route, and precomputed state against the latest store.
+      onClose: () => closeTerminalTab(tabId, { ...options, skipRunningProcessConfirm: true }),
+      ...(options?.onCancel ? { onCancel: options.onCancel } : {})
     })
     return
   }
 
-  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, owningWorktreeId)
+  const runtimeEnvironmentId = worktreeRoute?.runtimeEnvironmentId ?? null
   if (runtimeEnvironmentId && isWebRuntimeSessionActive(runtimeEnvironmentId)) {
+    if (options?.reason === 'pty-exit') {
+      // Why: stream exit is not host-tab closure; the HUB snapshot decides whether reconnect restores or removes this tab.
+      return
+    }
+    // Send closes to the authoritative host even for unmapped/plain-UUID IDs, or its next snapshot resurrects the tab; unknown local IDs safely no-op there.
     const hostBackedTabId =
       resolveHostSessionTabIdForWebSessionTab(state, {
         environmentId: runtimeEnvironmentId,
         worktreeId: owningWorktreeId,
         tabId: terminalTabId
-      }) ?? (isWebTerminalSurfaceTabId(terminalTabId) ? terminalTabId : null)
-    if (hostBackedTabId) {
-      // Why: prune local mirrors immediately so close feels responsive while the
-      // host session snapshot catches up.
-      closeLocalTerminalTabState(terminalTabId)
-      void closeWebRuntimeSessionTab({
-        worktreeId: owningWorktreeId,
-        tabId: hostBackedTabId,
-        environmentId: runtimeEnvironmentId
-      })
-      return
-    }
-    // Why: legacy local-only tabs (e.g. agent quick launch before host routing)
-    // have no host session binding and must still close locally.
-  }
-
-  const currentTerminalTabIds = getWorktreeTerminalTabIds(state, owningWorktreeId)
-  if (currentTerminalTabIds.length <= 1) {
-    closeLocalTerminalTabState(terminalTabId)
-    if (state.activeWorktreeId === owningWorktreeId) {
-      // Why: only deactivate the worktree when no tabs of any kind remain.
-      // Editor files are a separate tab type; closing the last terminal tab
-      // should switch to the editor view instead of tearing down the workspace.
-      const worktreeFile = state.openFiles.find((f) => f.worktreeId === owningWorktreeId)
-      if (worktreeFile) {
-        state.setActiveFile(worktreeFile.id)
-        state.setActiveTabType('editor')
-      } else {
-        const browserTab = (state.browserTabsByWorktree?.[owningWorktreeId] ?? [])[0]
-        if (browserTab) {
-          state.setActiveBrowserTab(browserTab.id)
-          state.setActiveTabType('browser')
-        } else {
-          state.setActiveWorktree(null)
-        }
-      }
-    }
+      }) ?? toHostSessionTabId(terminalTabId)
+    const wireReason = options?.reason ?? options?.hostCloseReason ?? 'user'
+    const lifecycleTerminalHandle =
+      wireReason === 'user'
+        ? null
+        : getTerminalIncarnationHandle(options?.lifecyclePtyId ?? '', runtimeEnvironmentId)
+    const publicationEpoch =
+      wireReason === 'user'
+        ? null
+        : getLatestWebSessionTabsPublicationEpoch(runtimeEnvironmentId, owningWorktreeId)
+    // Prune local mirrors while awaiting the host snapshot so close feels immediate.
+    closeLocalTerminalTabState(terminalTabId, {
+      reason: options?.reason,
+      ...(options?.captureRecentlyClosed !== undefined
+        ? { captureRecentlyClosed: options.captureRecentlyClosed }
+        : {}),
+      remoteCloseOwnedByHost: true,
+      ...(options?.localPtyTeardownOwnedExternally
+        ? { localPtyTeardownOwnedExternally: true }
+        : {}),
+      ...(options?.precomputedRetirementPlan
+        ? { precomputedRetirementPlan: options.precomputedRetirementPlan }
+        : {})
+    })
+    void closeWebRuntimeSessionTab({
+      worktreeId: owningWorktreeId,
+      tabId: hostBackedTabId,
+      environmentId: runtimeEnvironmentId,
+      // Bind lifecycle evidence to the exact observed host publication and terminal incarnation.
+      reason: wireReason,
+      ...(wireReason !== 'user'
+        ? {
+            publicationEpoch,
+            terminalHandle: lifecycleTerminalHandle
+          }
+        : // Why: a confirmed pinned close (this window's prompt, a phone's, or the prompt turned off).
+          options?.force || pinnedCloseConsented
+          ? { force: true }
+          : {})
+    })
+    options?.onClosed?.()
     return
   }
 
-  if (state.activeWorktreeId === owningWorktreeId && terminalTabId === state.activeTabId) {
-    const currentIndex = currentTerminalTabIds.indexOf(terminalTabId)
-    const nextTabId =
-      currentTerminalTabIds[currentIndex + 1] ?? currentTerminalTabIds[currentIndex - 1]
+  const currentTerminalTabIds = precomputedCloseState
+    ? null
+    : getWorktreeTerminalTabIds(state, owningWorktreeId)
+  const terminalCountBeforeClose =
+    precomputedCloseState?.terminalCountBeforeClose ?? currentTerminalTabIds!.length
+  // closeUnifiedTab owns MRU/neighbor repair across all tab types; terminal-only preselection would overwrite it.
+  const hasUnifiedRow = (state.unifiedTabsByWorktree?.[owningWorktreeId] ?? []).some(
+    (tab) =>
+      tab.contentType === 'terminal' && (tab.entityId === terminalTabId || tab.id === terminalTabId)
+  )
+  if (
+    !hasUnifiedRow &&
+    terminalCountBeforeClose > 1 &&
+    state.activeWorktreeId === owningWorktreeId &&
+    terminalTabId === state.activeTabId
+  ) {
+    const currentIndex = currentTerminalTabIds?.indexOf(terminalTabId) ?? -1
+    const nextTabId = precomputedCloseState
+      ? precomputedCloseState.nextTerminalTabId
+      : (currentTerminalTabIds![currentIndex + 1] ?? currentTerminalTabIds![currentIndex - 1])
     if (nextTabId) {
       state.setActiveTab(nextTabId)
     }
   }
 
-  closeLocalTerminalTabState(terminalTabId)
-}
-
-export function closeOtherTerminalTabs(tabId: string, activeWorktreeId: string | null): void {
-  if (!activeWorktreeId) {
-    return
-  }
-  const state = useAppStore.getState()
-  const currentTabs = state.tabsByWorktree[activeWorktreeId] ?? []
-  state.setActiveTab(tabId)
-  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, activeWorktreeId)
-  const closeHostTerminalTabs = isWebRuntimeSessionActive(runtimeEnvironmentId)
-  for (const tab of currentTabs) {
-    if (tab.id !== tabId) {
-      if (isPinnedVisibleTab(state, activeWorktreeId, tab.id)) {
-        continue
-      }
-      if (closeHostTerminalTabs) {
-        // Why: paired web tabs are host-owned; local-only bulk close leaves
-        // the host to re-publish the supposedly closed terminal tabs.
-        void closeWebRuntimeSessionTab({
-          worktreeId: activeWorktreeId,
-          tabId: tab.id,
-          environmentId: runtimeEnvironmentId
-        })
-      } else {
-        state.closeTab(tab.id)
-      }
-    }
-  }
-}
-
-export function closeTerminalTabsToRight(tabId: string, activeWorktreeId: string | null): void {
-  if (!activeWorktreeId) {
-    return
-  }
-
-  const state = useAppStore.getState()
-  const currentTerminalTabs = state.tabsByWorktree[activeWorktreeId] ?? []
-  const currentEditorFiles = state.openFiles.filter((f) => f.worktreeId === activeWorktreeId)
-  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, activeWorktreeId)
-  const closeHostTerminalTabs = isWebRuntimeSessionActive(runtimeEnvironmentId)
-  const terminalIds = currentTerminalTabs.map((t) => t.id)
-  const terminalIdSet = new Set(terminalIds)
-  const orderedIds = reconcileTabOrder(
-    state.tabBarOrderByWorktree[activeWorktreeId],
-    terminalIds,
-    currentEditorFiles.map((f) => f.id)
-  )
-
-  const index = orderedIds.indexOf(tabId)
-  if (index === -1) {
-    return
-  }
-  const rightIds = orderedIds.slice(index + 1)
-  for (const id of rightIds) {
-    if (isPinnedVisibleTab(state, activeWorktreeId, id)) {
-      continue
-    }
-    if (terminalIdSet.has(id)) {
-      if (closeHostTerminalTabs) {
-        // Why: paired web tabs are host-owned; local-only bulk close leaves
-        // the host to re-publish the supposedly closed terminal tabs.
-        void closeWebRuntimeSessionTab({
-          worktreeId: activeWorktreeId,
-          tabId: id,
-          environmentId: runtimeEnvironmentId
-        })
-      } else {
-        state.closeTab(id)
-      }
-    } else {
-      const unifiedTab = (state.unifiedTabsByWorktree?.[activeWorktreeId] ?? []).find(
-        (tab) => tab.entityId === id && EDITOR_TAB_CONTENT_TYPES.has(tab.contentType)
-      )
-      if (!unifiedTab?.isPinned) {
-        useAppStore.getState().closeFile(id)
-      }
-    }
-  }
-}
-
-export function activateTerminalTab(tabId: string): void {
-  const s = useAppStore.getState()
-  const owningWorktreeId =
-    Object.entries(s.tabsByWorktree).find(([, worktreeTabs]) =>
-      worktreeTabs.some((tab) => tab.id === tabId)
-    )?.[0] ?? null
-  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(s, owningWorktreeId)
-  if (owningWorktreeId && isWebRuntimeSessionActive(runtimeEnvironmentId)) {
-    // Why: activation needs to update the host's active tab as well as the
-    // local optimistic state, otherwise the next host snapshot snaps back.
-    void activateWebRuntimeSessionTab({
-      worktreeId: owningWorktreeId,
-      tabId,
-      environmentId: runtimeEnvironmentId
-    })
-  }
-  s.setActiveTab(tabId)
-  s.setActiveTabType('terminal')
-}
-
-export function toggleTerminalPaneExpand(tabId: string): void {
-  useAppStore.getState().setActiveTab(tabId)
-  requestAnimationFrame(() => {
-    window.dispatchEvent(
-      new CustomEvent(TOGGLE_TERMINAL_PANE_EXPAND_EVENT, {
-        detail: { tabId }
-      })
-    )
+  closeLocalTerminalTabState(terminalTabId, {
+    // A parked tab's process exit carries only the host reason, to keep the pin guard above.
+    reason: options?.reason ?? (options?.hostCloseReason === 'pty-exit' ? 'pty-exit' : undefined),
+    ...(options?.captureRecentlyClosed !== undefined
+      ? { captureRecentlyClosed: options.captureRecentlyClosed }
+      : {}),
+    ...(options?.localPtyTeardownOwnedExternally ? { localPtyTeardownOwnedExternally: true } : {}),
+    ...(options?.precomputedRetirementPlan
+      ? { precomputedRetirementPlan: options.precomputedRetirementPlan }
+      : {})
   })
+  if (terminalCountBeforeClose <= 1 && state.activeWorktreeId === owningWorktreeId) {
+    // Re-read after closeUnifiedTab repairs/deactivates the surface; stale state must not clobber it.
+    const current = useAppStore.getState()
+    if (current.activeWorktreeId === owningWorktreeId) {
+      // Only unified renderable count includes agent-session/simulator tabs when proving the worktree empty.
+      const { renderableTabCount } = current.reconcileWorktreeTabModel(owningWorktreeId)
+      if (renderableTabCount === 0) {
+        const worktreeFile = current.openFiles.find((f) => f.worktreeId === owningWorktreeId)
+        if (worktreeFile) {
+          current.setActiveFile(worktreeFile.id)
+          current.setActiveTabType('editor', owningWorktreeId)
+        } else {
+          const browserTab = (current.browserTabsByWorktree?.[owningWorktreeId] ?? [])[0]
+          if (browserTab) {
+            current.setActiveBrowserTab(browserTab.id)
+            current.setActiveTabType('browser', owningWorktreeId)
+          } else if (options?.reason === 'pty-exit') {
+            runAsAutomaticDeselection(() => current.setActiveWorktree(null))
+          } else {
+            current.setActiveWorktree(null)
+          }
+        }
+      }
+    }
+  }
+  options?.onClosed?.()
 }

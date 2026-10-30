@@ -10,12 +10,17 @@ type BrowseDirArgs = {
   targetId: string
 }
 
+let browsePathFlavor: 'posix' | 'win32' = 'posix'
+let browseEntries = [
+  { name: 'src', isDirectory: true },
+  { name: 'README.md', isDirectory: false }
+]
+
 const browseDir = vi.fn(async ({ dirPath }: BrowseDirArgs) => ({
-  entries: [
-    { name: 'src', isDirectory: true },
-    { name: 'README.md', isDirectory: false }
-  ],
-  resolvedPath: dirPath === '~' ? '/home/alice' : dirPath
+  entries: browseEntries,
+  resolvedPath:
+    dirPath === '~' ? (browsePathFlavor === 'win32' ? 'C:/Users/alice' : '/home/alice') : dirPath,
+  pathFlavor: browsePathFlavor
 }))
 
 async function flushPromises(count = 4): Promise<void> {
@@ -65,6 +70,11 @@ describe('RemoteFileBrowser paste-sized input', () => {
   beforeEach(() => {
     ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     vi.useFakeTimers()
+    browsePathFlavor = 'posix'
+    browseEntries = [
+      { name: 'src', isDirectory: true },
+      { name: 'README.md', isDirectory: false }
+    ]
     browseDir.mockClear()
     Object.defineProperty(window, 'api', {
       configurable: true,
@@ -92,6 +102,44 @@ describe('RemoteFileBrowser paste-sized input', () => {
     await advancePathResolveDebounce()
 
     expect(browseDir).toHaveBeenCalledWith({ targetId: 'target-1', dirPath: '/home/alice/src' })
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('navigates a typed Windows drive root and renders its breadcrumb', async () => {
+    browsePathFlavor = 'win32'
+    const { container, input, root } = await renderRemoteFileBrowser()
+    browseDir.mockClear()
+
+    await changeInput(input, 'M:\\')
+    await advancePathResolveDebounce()
+
+    expect(browseDir).toHaveBeenCalledWith({ targetId: 'target-1', dirPath: 'M:\\' })
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+      await flushPromises()
+    })
+    expect(
+      [...container.querySelectorAll('button')].some((button) => button.textContent === 'M:')
+    ).toBe(true)
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('keeps a drive-shaped POSIX directory as an ordinary filtered row', async () => {
+    browseEntries = [{ name: 'M:\\', isDirectory: true }]
+    const { container, input, root } = await renderRemoteFileBrowser()
+    browseDir.mockClear()
+
+    await changeInput(input, 'M:\\')
+    await advancePathResolveDebounce()
+
+    expect(browseDir).not.toHaveBeenCalled()
+    expect(container.textContent).toContain('M:\\')
 
     await act(async () => {
       root.unmount()

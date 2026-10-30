@@ -2,6 +2,7 @@ export type TerminalJisYenInputEvent = {
   type: string
   key: string
   code?: string
+  keyCode?: number
   metaKey: boolean
   ctrlKey: boolean
   altKey: boolean
@@ -16,9 +17,9 @@ export type TerminalJisYenInputOptions = {
 export type TerminalJisYenInputAction = { type: 'input'; data: string } | { type: 'suppress' }
 
 function isPlainPhysicalJisYenKey(event: TerminalJisYenInputEvent): boolean {
-  // Why: event.key='¥' can come from input methods or other layouts; IntlYen
-  // scopes the rewrite to the physical JIS key the setting names.
+  // Scope ¥ rewrite to physical IntlYen; other layouts may emit ¥, and keyCode 229 means the IME owns the commit.
   return (
+    event.keyCode !== 229 &&
     event.code === 'IntlYen' &&
     event.key === '¥' &&
     !event.metaKey &&
@@ -41,8 +42,7 @@ export function resolveTerminalJisYenInput(
   }
 
   if (event.type === 'keypress' || event.type === 'keyup') {
-    // Why: suppress companion events so the translated keydown cannot be
-    // followed by a browser text event or xterm key-release sequence for ¥.
+    // Suppress companion events so the rewritten keydown cannot also emit ¥ text or release bytes.
     return { type: 'suppress' }
   }
 

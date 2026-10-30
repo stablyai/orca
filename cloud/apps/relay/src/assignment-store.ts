@@ -1,0 +1,9827 @@
+import { claimDeadManTripSlot } from './cell-dead-man-trip-slot.js'
+import { createDrainMigrationRowLookup } from './drain-migration-row-lookup.js'
+import { HeapWindowReaper } from './heap-window-reaper.js'
+import { PlacementLoadBand } from './placement-load-band.js'
+import type { SeatFeedCell } from './shadow-seat-directory.js'
+import {
+  selectIdleRegionalRehomes,
+  type IdleRegionalRehomeCandidate,
+  type IdleRehomeHostCursor
+} from './idle-regional-rehome-selection.js'
+import {
+  RegionalRehomePollTelemetry,
+  type RegionalRehomePollGate
+} from './regional-rehome-poll-telemetry.js'
+import { readRegionCorrectionOutcomes } from './region-correction-outcomes.js'
+import { ReservePaceError } from './reserve-assignment.js'
+import {
+  previewRegionalRehomeEligibility,
+  type RegionCorrectionPreview
+} from './region-correction-preview.js'
+import {
+  exchangeRegionCorrection,
+  previewRegionCorrection,
+  REGIONAL_REHOME_CONCURRENT_LIMIT
+} from './region-correction-state.js'
+import { randomUUID } from 'node:crypto'
+import { performance } from 'node:perf_hooks'
+import {
+  ASSIGNMENT_LIMITS,
+  mayNormallyReassign,
+  RELAY_ADMISSION_BUDGETS,
+  RELAY_DEFAULT_REGION,
+  RELAY_REGIONS,
+  RELAY_PROTOCOL_LIMITS,
+  type RelayRegion,
+  type RegionCorrectionRequest,
+  type RegionCorrectionResponse,
+  type IdleRegionalRehomeCommit,
+  type IdleRegionalRehomeRequest,
+} from '@orca-cloud/relay-contract'
+import {
+  cellAdmissionState,
+  cellAdmissionStates,
+  ensureCellAdmission,
+  isCellAdmissionState,
+  parseCellAdmissionState,
+  RelayCellAdmissionSelector,
+  setCellAdmissionBeforeBoundary,
+  stateFromEnabled,
+  synchronizeCellAdmissionBoundary,
+  type CellAdmissionMembership,
+  type CellAdmissionSelectorInspection,
+  type CellAdmissionState
+} from './cell-admission-selector.js'
+import {
+  RelayMigrationCellRegistrar,
+  type MigrationCellRegistration
+} from './cell-admission-migration-registration.js'
+import {
+  ASSIGNMENT_CONNECTION_HEADROOM_QUERY
+} from './assignment-connection-headroom-query.js'
+import {
+  CONNECTION_CAP_COLUMNS_SQL,
+  EFFECTIVE_HARD_CAP_SQL,
+  lockCellConnectionLimit,
+  readCellConnectionCap,
+  recordReportedHardCap,
+  reportedHardCapWithinLimit,
+  writeCellConnectionLimit,
+  type CellConnectionCap
+} from './cell-connection-cap.js'
+import { AssignmentIdentityQueue } from './assignment/assignment-identity-queue.js'
+import {
+  CONTROL_RENEWAL_BATCH_SQL,
+  CONTROL_RENEWAL_STATEMENT_OUTCOMES,
+  controlRenewalBatchParams,
+  orderedControlRenewalRows,
+  readControlRenewalOutcomes,
+  type ControlRenewalOutcome,
+  type ControlRenewalRequest
+} from './control-renewal-statement.js'
+import {
+  commitWithFinalWrite,
+  REGIONAL_REHOME_DEFAULT_HOST_COOLDOWN_MS
+} from './database.js'
+import type { RelayCellConfig } from './config.js'
+import type { CellLockHoldSite } from './cell-inventory-hold-samples.js'
+import type { DeadCellVerdict } from './cell-poll-reachability.js'
+import { isPostgresPoolConnectFailure } from './postgres-pool-pressure.js'
+import { isPostgresReadTimeout } from './relay-database-rejection-fence.js'
+import type {
+  RelayDatabase,
+  RelayLockOptions,
+  RelayTransactionOptions,
+  SqlRow
+} from './database.js'
+import type { RegionalRehomeSafetySnapshot } from './relay-observability.js'
+import {
+  combineRegionalRehomeSafety,
+  nextRegionalRehomeSqlFailuresBreach,
+  REGIONAL_REHOME_RECONNECTS_PER_CELL_LIMIT,
+  REGIONAL_REHOME_SQL_FAILURES_PER_CELL_LIMIT,
+  regionalRehomePoolPressure,
+  regionalRehomeSafetyFailure,
+  regionalRehomeSqlFailuresSustained,
+  type RegionalRehomeSqlFailuresBreach
+} from './regional-rehome-safety.js'
+import {
+  REGIONAL_REHOME_ARRIVAL_WINDOW_MS,
+  type RegionalRehomeAbortReason
+} from './regional-rehome-abort-reason.js'
+import {
+  ABANDONED_REGISTERED_MIGRATION,
+  DURABLY_FENCED_MIGRATION_SOURCE,
+  REGISTERED_MIGRATION_ABANDON_MS
+} from './registered-migration-abandonment.js'
+
+type AssignmentIdentity = { userId: string; relayHostId: string }
+type CellHeartbeat = {
+  cellId: string
+  cellUrl: string
+  cellIncarnation: string
+  startedAt: number
+  ready: boolean
+  observedRequests: number
+  region?: RelayRegion
+  totalConnections?: number
+  inFlightConnections?: number
+  reservedConnectionUnits?: number
+  enforcedConnectionUnits?: number
+  connectionInclusionWatermark?: number
+  connectionHardCap?: number
+  connectionUnobservedBound?: number
+}
+
+type CellRegionalRehomeStatus = {
+  cellId: string
+  cellIncarnation: string
+  regionalRehomeProtocol: number
+  safety: RegionalRehomeSafetySnapshot
+}
+
+type RelayAssignmentStoreOptions = {
+  regionalRehomeCohortPercent?: number
+  // Rehome selection only uses source cells in this region; see `rehomeSourceRegionAllowed`.
+  regionalRehomeDirectorRegion?: RelayRegion
+  requireLiveCells?: boolean
+  heartbeatTtlMs?: number
+  // Absent keeps the strict least-loaded pick (tests that assert exact cells).
+  placementLoadBand?: PlacementLoadBand
+  recordControlRenewal?: (durationMs: number, outcome: ControlRenewalOutcome) => void
+  // This director's seat-feed polls to the cell (see cell-poll-reachability); null while answered.
+  deadCellVerdict?: (cellId: string, now: number) => DeadCellVerdict | null
+}
+
+// Step 5 inputs, plus whether the host itself asked: only its own request may leave a dead cell.
+export type AssignOptions = {
+  epochFloor?: number
+  placeFresh?: () => Promise<RelayAssignment | null>
+  // A reserve cell in the placement region with room: the database lane leaves the region only after it.
+  regionReserve?: () => Promise<RelayAssignment | null>
+  // No database cell had room anywhere: a reserve seat in either region before the refusal.
+  reserveSpill?: (input: { skipOwnRegion: boolean; rowEpoch: number }) => Promise<RelayAssignment | null>
+  hostRequested?: boolean
+}
+
+export type { ControlRenewalOutcome, ControlRenewalRequest }
+
+// `cellId` null: the reserve-mode set could not be read, so no cell is known to be in db mode.
+export class RelayCellInReserveModeError extends Error {
+  constructor(readonly cellId: string | null) {
+    super(cellId === null ? 'reserve_mode_unknown' : 'cell_in_reserve_mode')
+  }
+}
+
+// Record reserve before the cell switch, db after control re-registration; per-host sweeps/readers skip reserve and stop while the set is unknown.
+const RESERVE_MODE_CACHE_MS = 5_000
+const RESERVE_MODE_STALE_MS = 60_000
+// Back off failed reserve-set reads using the last good answer or every stalled assign adds another timeout before BEGIN.
+const RESERVE_MODE_FAILURE_BACKOFF_MS = 5_000
+// A cell refreshes its admit-effective row every 15 s; three missed refreshes and it counts for nothing.
+export const CELL_ADMIT_EFFECTIVE_FRESH_MS = 45_000
+const RESERVE_MODE_FAILURE_LOG_MS = 60_000
+
+type ControlActivationInput = {
+  cellId: string
+  assignmentEpoch: number
+  generation: number
+  idleRegionalRehome?: boolean
+  cellIncarnation?: string
+  connectionInclusionWatermark?: number
+}
+
+export type RelayAssignment = AssignmentIdentity & {
+  cellId: string
+  cellUrl: string
+  assignmentEpoch: number
+  leaseExpiresAt: number
+  region?: RelayRegion
+}
+
+// `placed`: this assign minted the answer (a new epoch or a reserve booking); absent for the existing row.
+export type AssignedRelayAssignment = RelayAssignment & { placed?: true }
+
+// Set only by reconnect verification, for a host whose home cell is isolated for
+// a roll right now: its next assign re-places it rather than re-granting the pin.
+export type ResolvedRelayAssignment = RelayAssignment & { homeCellRollIsolated?: true }
+
+export type HostWhereaboutsRow = {
+  cellId: string
+  assignmentEpoch: number
+  leaseExpiresAt: number
+  openMigration: {
+    sourceCellId: string
+    targetCellId: string
+    previousEpoch: number
+    assignmentEpoch: number
+    expiresAt: number
+    targetRegisteredAt: number | null
+  } | null
+}
+
+export type RelayRegionCatalogEntry = {
+  region: RelayRegion
+  probeOrigins: string[]
+}
+
+export type RelayAssignmentMigration = AssignmentIdentity & {
+  sourceCellId: string
+  targetCellId: string
+  previousEpoch: number
+  assignmentEpoch: number
+  expiresAt: number
+  targetRegisteredAt?: number
+}
+
+export type RegionalRehomeAttempt = AssignmentIdentity & {
+  attemptId: string
+  preferredRegion: RelayRegion
+  sourceCellId: string
+  sourceCellUrl: string
+  sourceCellIncarnation: string
+  targetCellId: string
+  targetCellIncarnation: string
+  previousEpoch: number
+  assignmentEpoch: number
+  drainGraceMs: number
+  sendAttempts: number
+}
+
+export type RegionalHostDrainOutcome = 'accepted' | 'already-accepted' | 'host-not-connected'
+
+export type RegionalRehomeFleetSafety = RegionalRehomeSafetySnapshot & {
+  requiredCells: number
+  missingCells: number
+  maxReconnects: number
+}
+
+export type RegionalRehomeControl = {
+  generation: number
+  enabled: boolean
+  observationStartedAt: number
+  notBefore: number
+  ratePerMinute: number
+  preferenceMaxAgeMs: number
+  hostCooldownMs: number
+  drainGraceMs: number
+}
+
+type RegisteredEvacuationSupersessionInput = {
+  assignmentEpoch: number
+  sourceCellId: string
+  currentTargetCellId: string
+  replacementTargetCellId: string
+}
+
+export type DeadSourceCompletionResult = {
+  changed: boolean
+  assignmentEpoch: number
+  sourceCellId: string
+  targetCellId: string
+}
+
+export type CellEvacuationStatus = {
+  inProgress: number
+  oldestExpiresAt: number | null
+  oldestRemainingMs: number | null
+  targetRegistered: number
+  registeredSourceActive: number
+  registeredCompletable: number
+  registeredTargetInactive: number
+  completed: number
+  blocked: number
+  expiredUnregistered: number
+  repairableExpiredUnregistered: number
+  abortableExpiredUnregistered: number
+  blockedExpiredUnregistered: number
+  blockedExpiredOnNewerTargetAssignment: number
+}
+
+export type CellEvacuationCapacity = {
+  sourceAssignments: number
+  requiredTargetUnits: number
+  availableTargetUnits: number
+}
+
+// Rows the cell heartbeats itself: true in either admit mode.
+export type CellDeploymentBaseStatus = {
+  cellId: string
+  cellUrl: string
+  region: RelayRegion
+  enabled: boolean
+  admissionState: CellAdmissionState
+  capacityRequests: number
+  connectionCapacity: null | (CellConnectionCap & {
+    observedConnections: number
+    inFlightConnections: number
+    reservedConnectionUnits: number
+    enforcedConnectionUnits: number
+    pendingControlReservations: number
+    heartbeatFresh: boolean
+  })
+  runtime: null | {
+    cellUrl: string
+    cellIncarnation: string
+    startedAt: number
+    ready: boolean
+    observedRequests: number
+    lastHeartbeatAt: number
+    heartbeatFresh: boolean
+    regionalRehomeProtocol: number
+  }
+}
+
+// Per-host rows: a reserve-mode cell's are a lagging mirror, so they are never reported for one.
+export type CellPerHostCounts = {
+  reservedRequests: number
+  assignments: number
+  activityLeases: number
+  activityRequestUnits: number
+  restartBlockingActivityLeases: number
+  restartBlockingActivityRequestUnits: number
+  restartBlockingReservedRequests: number
+  outgoingMigrations: number
+  incomingMigrations: number
+}
+
+export type CellDeploymentStatus = CellDeploymentBaseStatus & CellPerHostCounts
+
+export type ReserveAwareCellDeploymentStatus =
+  | { admitMode: 'db'; status: CellDeploymentStatus }
+  | { admitMode: 'reserve'; status: CellDeploymentBaseStatus }
+
+export type CellFenceAttemptEvidence = {
+  attemptId: string
+  environment: 'staging' | 'production'
+  cellId: string
+  cellIncarnation: string
+  migName: string
+  instanceGroup: string
+  generationIdentity: string
+  fenceCommit: string
+  planSha256: string
+  planObjectName: string
+  planObjectGeneration?: string
+  varFileSha256: string
+  terraformStateLineage: string
+  terraformStateSerial: number
+  terraformStateObjectGeneration: string
+  terraformStateObjectSha256: string
+  requestReason: string
+}
+
+export type CellFenceApplyInvocation = {
+  invocationId: string
+  requestReason: string
+  startedAt: number
+  gceOperation?: string
+}
+
+export type CellFenceAttempt = CellFenceAttemptEvidence & {
+  applyInvocations?: CellFenceApplyInvocation[]
+  gceOperation?: string
+  createdAt: number
+  expiresAt: number
+  applyStartedAt?: number
+  completedAt?: number
+  abortedAt?: number
+}
+
+export type CellDrainAttemptState =
+  | 'prepared'
+  | 'send-may-have-started'
+  | 'application-receipt'
+  | 'proven-not-delivered'
+
+export type CellDrainAttempt = {
+  attemptId: string
+  cellId: string
+  cellIncarnation: string
+  traceValue: string
+  plannedGraceMs: number
+  state: CellDrainAttemptState
+  preparedAt: number
+  sendMayHaveStartedAt?: number
+  sendPermitExpiresAt?: number
+  applicationReceiptAt?: number
+  backendSuccessStatus?: number
+  backendInstance?: string
+  receiptCellIncarnation?: string
+  retryAfter?: number
+  recoverForwardAttemptedAt?: number
+  provenNotDeliveredAt?: number
+}
+
+export type AssignmentActivityKind =
+  | 'control'
+  | 'splice'
+  | 'invite'
+  | 'install'
+  | 'confirmation'
+  | 'migration'
+
+const ACTIVITY_COLUMN: Record<AssignmentActivityKind, string> = {
+  control: 'reserved_controls',
+  splice: 'reserved_splices',
+  invite: 'reserved_invites',
+  install: 'pending_installs',
+  confirmation: 'pending_confirmations',
+  migration: 'migration_leases'
+}
+
+const ACTIVITY_REQUEST_UNITS: Record<AssignmentActivityKind, number> = {
+  control: 1,
+  splice: 2,
+  invite: 1,
+  install: 1,
+  confirmation: 1,
+  migration: 1
+}
+
+const ASSIGNMENT_LOCK_RETRY_DEADLINE_MS = 15_000
+// Clamped at zero on release; an increase that would pass capacity changes no row.
+const CELL_RESERVATION_UPDATE = `UPDATE relay_cells SET reserved_requests =
+     CASE WHEN reserved_requests + ? < 0 THEN 0 ELSE reserved_requests + ? END,
+     updated_at = ?
+   WHERE cell_id = ?
+     AND (? <= 0 OR reserved_requests + ? <= capacity_requests)
+   RETURNING cell_id`
+// About one release round trip from Asia, with margin; see assignStickyOnce.
+const STICKY_ASSIGNMENT_ROW_WAIT_MS = 1_000
+
+// Lock order across all roles: relay_assignments → relay_assignment_migrations/activity_leases →
+// relay_control_connection_reservations → relay_cells (including conditional reservation UPDATE).
+// Per-host locks precede the cell shared by all hosts to prevent cross-host deadlocks and shorten
+// cell hold time across distant-Postgres round trips. Inventory-first paths acquire tiers 1–3
+// before inventory and recheck afterward. Global FOR UPDATE queues also exhaust pooled clients;
+// tune the 500ms request wait using cellInventoryHoldMsMax.
+export const CELL_INVENTORY_LOCK_TIMEOUT_MS = 500
+
+// The same inventory lock is taken by live requests and by background sweeps,
+// and the right failure mode differs per caller.
+export type CellInventoryLockMode =
+  // Bound the wait so a blocked request stops occupying a pooled client.
+  | 'request'
+  // Never queue: the caller handles database_lock_unavailable and moves on.
+  | 'nowait'
+  // Keep pool default for sweeps; an early 55P03 becomes terminal retry exhaustion and spends the incident gate’s 300/5min budget.
+  | 'pool-default'
+// Stranded grants must be old enough to attach (90s lease), yet recent enough to prove a retry loop; ordinary dormancy uses 24h (#225).
+const STRANDED_MIN_GRANT_AGE_MS = 60_000
+const STRANDED_RECENT_ACTIVITY_MS = 15 * 60_000
+// Same-cap isolate writes migration-only and restore writes general; existing-only still serves incumbents and cannot signal a roll.
+const ROLL_ISOLATED_ADMISSION: CellAdmissionState = 'migration-only'
+// A stamp older than a ~15-minute roll may be a failed wave or old-restore orphan; keep the possibly healthy pin for operator recovery.
+const ROLL_ISOLATION_STAMP_MAX_AGE_MS = 2 * 60 * 60_000
+const REGION_PREFERENCE_RETENTION_MS = 30 * 24 * 60 * 60_000
+const REGIONAL_REHOME_UNREGISTERED_REFRESH_MS = 5 * 60_000
+const REGIONAL_REHOME_MAX_REFRESH_MS = 24 * 60 * 60_000
+// Drain grace is enforced by session-scoped cell state that any control
+// reconnect sheds, so receipted attempts can stall dual-homed past grace;
+// redrains re-dispatch them with the elapsed (zero) grace until they detach.
+export const REGIONAL_REHOME_REDRAIN_INTERVAL_MS = 60_000
+export const REGIONAL_REHOME_REDRAIN_SEND_LIMIT = 20
+export const REGIONAL_REHOME_QUARANTINE_FAILURES = 3
+export const REGIONAL_REHOME_QUARANTINE_MS = 15 * 60_000
+const REGIONAL_REHOME_QUARANTINE_EXCLUSION_LIMIT = 50
+const REGIONAL_REHOME_QUARANTINE_MEMORY_LIMIT = 1_000
+// Consecutive drain-dispatch failures that latch the durable control off. Any
+// drain receipt and any enable reset it, so it reads "dispatch is broken now".
+const REGIONAL_REHOME_FAILURE_BUDGET = 3
+const REGIONAL_REHOME_OBSERVATION_MS = 24 * 60 * 60_000
+const ASSIGNMENT_LOCK_RETRY_MAX_DELAY_MS = 50
+// 'isolated' and 'isolated-other-regions': the general rows a roll-isolated
+// incumbent can move to, its own region first, never its own row. The source
+// row is the one a drain's releases keep busy.
+type AssignmentInventoryScope =
+  | 'none'
+  | 'general'
+  | 'isolated'
+  | 'isolated-other-regions'
+  | 'all'
+type IsolatedReplacementTier = 'same-region' | 'other-regions'
+type RetriedAssignmentInventoryScope = Exclude<AssignmentInventoryScope, 'none'>
+
+class AssignmentInventoryLockUnavailable extends Error {
+  constructor(readonly inventoryScope: RetriedAssignmentInventoryScope) {
+    super('database_lock_unavailable')
+  }
+}
+
+// Postgres holds row locks to COMMIT, so the next tier needs a new transaction.
+class AssignmentIsolatedTierExhausted extends Error {
+  constructor(readonly source: { cellId: string; region: RelayRegion }) {
+    super('assignment_isolated_tier_exhausted')
+  }
+}
+
+class AssignmentInventoryScopeChanged extends Error {
+  constructor() {
+    super('assignment_inventory_scope_changed')
+  }
+}
+
+// Sticky's "re-place me": the host's pin is on a cell isolated for a roll.
+type IsolatedPin = { isolatedFrom: { cellId: string; region: RelayRegion } }
+
+// The placement region has no database cell with room; nothing was written.
+class AssignmentRegionFull extends Error {
+  // Set when the host is leaving a roll-isolated cell in that region.
+  constructor(readonly isolatedSource?: { cellId: string; region: RelayRegion }) {
+    super('assignment_region_full')
+  }
+}
+
+// No database cell anywhere had room; nothing was written. Same message, so callers and
+// the public answer are unchanged.
+class AssignmentCapacityExhausted extends Error {
+  // The host row's epoch read in that attempt (0 for none): a reserve spill mints above it.
+  constructor(readonly rowEpoch: number) {
+    super('relay_capacity_exhausted')
+  }
+}
+
+// Fenced but unattested home cells refuse regardless of headroom; classify separately or operators chase capacity that was never short.
+export type RelayHomeCellUnavailableCause =
+  | 'draining'
+  | 'booting'
+  | 'unheard'
+  | 'not_ready'
+
+// Own release often holds this host row while queued on the cell; refuse rather than monopolize sticky admission until that queue drains.
+export class RelayAssignmentRowBusyError extends Error {
+  constructor() {
+    super('relay_assignment_row_busy')
+  }
+}
+
+export class RelayHomeCellUnavailableError extends Error {
+  constructor(
+    readonly cellId: string,
+    readonly unavailableCause: RelayHomeCellUnavailableCause
+  ) {
+    super('relay_home_cell_unavailable')
+  }
+}
+
+// Retain headroom for shortly late controls (10s attach/30s orphan grace), then retire debt or absent hosts exhaust fleet capacity.
+const LATE_ARRIVAL_DEBT_RETENTION_MS = 10 * 60 * 1_000
+// Readers ignore released reservations, but host locks still include them; one-day retention is forensic margin.
+export const RELEASED_CONTROL_RESERVATION_RETENTION_MS = 24 * 60 * 60 * 1_000
+// Bound each statement to a few hundred rows; ~9 ticks/min permits ~5M rows/day and empty scans read ~1MB/tick.
+const RELEASED_CONTROL_RESERVATION_REAP_BUDGET = {
+  pagesPerStatement: 16,
+  maxPagesPerTick: 128,
+  maxRowsPerTick: 400,
+  budgetMs: 250
+}
+const CELL_FENCE_TTL_MS = 5 * 60 * 1_000
+const CELL_FENCE_ATTEMPT_TTL_MS = 60 * 60 * 1_000
+const CELL_DRAIN_SEND_PERMIT_MS = 30_000
+const MAX_DRAIN_ACCOUNTING_REPAIR_ATTEMPTS = 3
+const CELL_FENCE_ATTEMPT_SELECT = `
+  SELECT attempts.*, bindings.plan_object_name, bindings.plan_object_generation,
+         bindings.var_file_sha256, bindings.terraform_state_lineage,
+         bindings.terraform_state_serial, bindings.terraform_state_object_generation,
+         bindings.terraform_state_object_sha256, bindings.request_reason
+  FROM relay_cell_fence_attempts attempts
+  JOIN relay_cell_fence_plan_bindings bindings
+    ON bindings.attempt_id = attempts.attempt_id`
+export const STRANDED_MIGRATION_ABANDON_MS = REGISTERED_MIGRATION_ABANDON_MS
+const ABORTABLE_EXPIRED_MIGRATION = `(
+  (
+    migration.target_registered_at IS NULL
+    AND NOT EXISTS (
+      SELECT 1 FROM relay_post_drain_migration_pins pin
+      WHERE pin.user_id = migration.user_id
+        AND pin.relay_host_id = migration.relay_host_id
+        AND pin.assignment_epoch = migration.assignment_epoch
+    )
+  )
+  OR ${ABANDONED_REGISTERED_MIGRATION}
+)`
+
+// `cell_id NOT IN (...)` for the reserve-mode cells, or nothing when there are none.
+function excludeCellsSql(column: string, cellIds: readonly string[]): string {
+  return cellIds.length === 0 ? '' : ` AND ${column} NOT IN (${cellIds.map(() => '?').join(', ')})`
+}
+
+export class RelayAssignmentStore {
+  private readonly regionalRehomeCohortPercent: number
+  private readonly regionalRehomeDirectorRegion?: RelayRegion
+  private readonly requireLiveCells: boolean
+  private readonly heartbeatTtlMs: number
+  // Quarantine permanent oldest failures out of LIMIT pages so healthy candidates progress; process-local state relearns within ticks after deploy.
+  private readonly regionalRehomeCandidateQuarantine = new Map<
+    string,
+    { failures: number; until: number }
+  >()
+  private readonly recordControlRenewal?: RelayAssignmentStoreOptions['recordControlRenewal']
+  private readonly deadCellVerdict?: RelayAssignmentStoreOptions['deadCellVerdict']
+  private reserveModeRead: {
+    cells: ReadonlySet<string>
+    admitsDatabase: ReadonlySet<string>
+    readAt: number
+  } | null = null
+  private reserveModeFailureLoggedAt = Number.NEGATIVE_INFINITY
+  private reserveModeFailedAt = Number.NEGATIVE_INFINITY
+  // One read at a time: concurrent callers share it.
+  private reserveModeInFlight: Promise<void> | null = null
+  // Bumped by an admit-mode write, so a read begun before it cannot land after it.
+  private reserveModeGeneration = 0
+  private readonly placementLoadBand?: PlacementLoadBand
+  private readonly admissionSelector: RelayCellAdmissionSelector
+  private readonly migrationCellRegistrar: RelayMigrationCellRegistrar
+  private readonly activityQueue = new AssignmentIdentityQueue()
+  private readonly releasedReservationReaper = new HeapWindowReaper(
+    'relay_control_connection_reservations',
+    `state = 'released' AND released_at <= ?`,
+    RELEASED_CONTROL_RESERVATION_REAP_BUDGET
+  )
+  private assignmentTail: Promise<void> = Promise.resolve()
+
+  constructor(
+    private readonly database: RelayDatabase,
+    private readonly now: () => number = Date.now,
+    options: RelayAssignmentStoreOptions = {}
+  ) {
+    this.regionalRehomeCohortPercent = options.regionalRehomeCohortPercent ?? 0
+    if (
+      !Number.isInteger(this.regionalRehomeCohortPercent) ||
+      this.regionalRehomeCohortPercent < 0 ||
+      this.regionalRehomeCohortPercent > 100
+    )
+      throw new Error('invalid_regional_rehome_cohort')
+    this.regionalRehomeDirectorRegion = options.regionalRehomeDirectorRegion
+    this.requireLiveCells = options.requireLiveCells ?? false
+    this.heartbeatTtlMs = options.heartbeatTtlMs ?? 45_000
+    this.deadCellVerdict = options.deadCellVerdict
+    this.recordControlRenewal = options.recordControlRenewal
+    this.placementLoadBand = options.placementLoadBand
+    this.admissionSelector = new RelayCellAdmissionSelector(database, now)
+    this.migrationCellRegistrar = new RelayMigrationCellRegistrar(database, now)
+  }
+
+  // Read before BEGIN: failed in-transaction queries (57014) abort it and lead to unretried 25P02. Transactions use cache only; after a minute unreadable returns null so callers treat all cells as possibly reserve.
+  async reserveModeCells(
+    database: Pick<RelayDatabase, 'query'> = this.database
+  ): Promise<ReadonlySet<string> | null> {
+    const at = performance.now()
+    const cached = this.reserveModeRead
+    const answer = (): ReadonlySet<string> | null => {
+      const read = this.reserveModeRead
+      return read && performance.now() - read.readAt <= RESERVE_MODE_STALE_MS ? read.cells : null
+    }
+    if (
+      database !== this.database ||
+      (cached && at - cached.readAt < RESERVE_MODE_CACHE_MS) ||
+      at - this.reserveModeFailedAt < RESERVE_MODE_FAILURE_BACKOFF_MS
+    ) {
+      return answer()
+    }
+    if (!this.reserveModeInFlight) {
+      const read: Promise<void> = this.readReserveModes(database).finally(() => {
+        if (this.reserveModeInFlight === read) this.reserveModeInFlight = null
+      })
+      this.reserveModeInFlight = read
+    }
+    await this.reserveModeInFlight
+    return answer()
+  }
+
+  private async readReserveModes(database: Pick<RelayDatabase, 'query'>): Promise<void> {
+    const at = performance.now()
+    const generation = this.reserveModeGeneration
+    try {
+      // With each reserve cell, whether its own current process says it admits through the
+      // database (a tripped dead-man): the one read the database path may place on it by.
+      const rows = await database.query(
+        `SELECT m.cell_id, e.cell_id AS admits_database
+         FROM relay_cell_admit_modes m
+         LEFT JOIN relay_cell_admit_effective e
+           ON e.cell_id = m.cell_id
+          AND e.mode = 'db'
+          AND e.updated_at > ?
+          AND e.cell_incarnation =
+            (SELECT r.cell_incarnation FROM relay_cell_runtime r WHERE r.cell_id = m.cell_id)
+         WHERE m.admit_mode <> 'db'`,
+        [this.now() - CELL_ADMIT_EFFECTIVE_FRESH_MS]
+      )
+      if (generation !== this.reserveModeGeneration) return
+      this.reserveModeRead = {
+        cells: new Set(rows.map((row) => text(row, 'cell_id'))),
+        admitsDatabase: new Set(rows.filter((row) => row.admits_database != null).map((row) => text(row, 'cell_id'))),
+        readAt: at
+      }
+    } catch (error) {
+      // A read begun before an admit-mode write says nothing about the table after it.
+      if (generation === this.reserveModeGeneration) this.reserveModeFailedAt = performance.now()
+      // Keep the last read until it is stale. Logged at most once a minute: while it fails,
+      // sweeps soon stop and admin operations are refused, so the cause must be on the record.
+      if (at - this.reserveModeFailureLoggedAt >= RESERVE_MODE_FAILURE_LOG_MS) {
+        this.reserveModeFailureLoggedAt = at
+        console.warn(
+          JSON.stringify({
+            event: 'orca_relay_reserve_mode_read_failed',
+            reason: error instanceof Error ? error.message : 'unknown',
+            lastReadAgeMs: this.reserveModeRead ? Math.round(at - this.reserveModeRead.readAt) : null
+          })
+        )
+      }
+    }
+  }
+
+  // Only from a recent read: a cell re-armed since may be booking from memory again.
+  private reserveCellAdmitsDatabase(cellId: string): boolean {
+    const read = this.reserveModeRead
+    return read !== null && performance.now() - read.readAt <= 2 * RESERVE_MODE_CACHE_MS && read.admitsDatabase.has(cellId)
+  }
+
+  // Written by the cell itself, best-effort, on every change of its raw mode and every 15 s.
+  async recordCellAdmitEffective(input: {
+    cellId: string
+    cellIncarnation: string
+    mode: 'db' | 'reserve'
+  }): Promise<void> {
+    await this.database.query(
+      `INSERT INTO relay_cell_admit_effective (cell_id, cell_incarnation, mode, updated_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT (cell_id) DO UPDATE SET
+         cell_incarnation = excluded.cell_incarnation,
+         mode = excluded.mode,
+         updated_at = excluded.updated_at`,
+      [input.cellId, input.cellIncarnation, input.mode, this.now()]
+    )
+  }
+
+  async claimDeadManTripSlot(input: {
+    cellId: string
+    cellIncarnation: string
+    slots: number
+  }): Promise<boolean> {
+    return await claimDeadManTripSlot(this.database, { ...input, now: this.now() })
+  }
+
+  // Break glass flips only a cell that has stopped heartbeating, ready or not.
+  async cellHeartbeatFresh(cellId: string): Promise<boolean> {
+    return await this.heartbeatFresh(this.database, cellId, this.now())
+  }
+
+  private async heartbeatFresh(database: Pick<RelayDatabase, 'query'>, cellId: string, now: number): Promise<boolean> {
+    const rows = await database.query(
+      `SELECT cell_id FROM relay_cell_runtime WHERE cell_id = ? AND last_heartbeat_at > ?`,
+      [cellId, now - this.heartbeatTtlMs]
+    )
+    return rows.length === 1
+  }
+
+  // Heartbeating reserve cells retain in-memory hosts even when DB brownouts clear ready; use break-glass liveness to avoid duplicate placement.
+  private async liveReserveCell(
+    cellId: string,
+    database: RelayDatabase,
+    now: number
+  ): Promise<boolean> {
+    if (!(await this.mayBeReserveCell(cellId, database))) return false
+    return !this.requireLiveCells || (await this.heartbeatFresh(database, cellId, now))
+  }
+
+  // A stale set beats none: an unreadable table for a minute must not pin every host. Only a
+  // store that has never read the set treats every cell as possibly reserve.
+  private async mayBeReserveCell(
+    cellId: string,
+    database: Pick<RelayDatabase, 'query'> = this.database
+  ): Promise<boolean> {
+    const cells = (await this.reserveModeCells(database)) ?? this.reserveModeRead?.cells ?? null
+    return cells === null || cells.has(cellId)
+  }
+
+  // Ops on a reserve cell would act on rows its hosts no longer keep; unknown refuses too.
+  private async refuseReserveCell(
+    cellId: string,
+    database: Pick<RelayDatabase, 'query'> = this.database
+  ): Promise<void> {
+    const cells = await this.reserveModeCells(database)
+    if (cells === null) throw new RelayCellInReserveModeError(null)
+    if (cells.has(cellId)) throw new RelayCellInReserveModeError(cellId)
+  }
+
+  async cellAdmitMode(cellId: string): Promise<{ admitMode: 'db' | 'reserve'; updatedAt: number | null }> {
+    const row = (
+      await this.database.query(
+        `SELECT admit_mode, updated_at FROM relay_cell_admit_modes WHERE cell_id = ?`,
+        [cellId]
+      )
+    )[0]
+    return row
+      ? { admitMode: text(row, 'admit_mode') === 'reserve' ? 'reserve' : 'db', updatedAt: integer(row, 'updated_at') }
+      : { admitMode: 'db', updatedAt: null }
+  }
+
+  // Reserve is refused while anything that moves this cell's rows is open: those flows read
+  // and write per-host rows a reserve cell no longer keeps.
+  async setCellAdmitMode(cellId: string, admitMode: 'db' | 'reserve'): Promise<void> {
+    const now = this.now()
+    await this.database.transaction(async (transaction) => {
+      if (admitMode === 'reserve') {
+        // One locked read per table: Postgres refuses FOR UPDATE on a UNION.
+        const openFlows: Array<[string, string, unknown[]]> = [
+          [
+            'migration',
+            `SELECT user_id FROM relay_assignment_migrations
+             WHERE (source_cell_id = ? OR target_cell_id = ?)
+               AND completed_at IS NULL AND aborted_at IS NULL LIMIT 1`,
+            [cellId, cellId]
+          ],
+          [
+            'rehome',
+            `SELECT attempt_id FROM relay_region_rehome_attempts
+             WHERE (source_cell_id = ? OR target_cell_id = ?)
+               AND completed_at IS NULL AND aborted_at IS NULL LIMIT 1`,
+            [cellId, cellId]
+          ],
+          [
+            'drain',
+            `SELECT attempt_id FROM relay_cell_drain_attempt_states
+             WHERE cell_id = ? AND state <> 'proven-not-delivered'
+               AND cell_incarnation = (SELECT cell_incarnation FROM relay_cell_runtime WHERE cell_id = ?)
+             LIMIT 1`,
+            [cellId, cellId]
+          ]
+        ]
+        for (const [kind, sql, params] of openFlows) {
+          if ((await transaction.queryLocked(sql, params))[0]) throw new Error(`cell_has_open_${kind}`)
+        }
+      }
+      await transaction.query(
+        `INSERT INTO relay_cell_admit_modes (cell_id, admit_mode, updated_at) VALUES (?, ?, ?)
+         ON CONFLICT (cell_id) DO UPDATE SET admit_mode = excluded.admit_mode, updated_at = excluded.updated_at`,
+        [cellId, admitMode, now]
+      )
+    })
+    this.reserveModeRead = null
+    this.reserveModeFailedAt = Number.NEGATIVE_INFINITY
+    this.reserveModeGeneration += 1
+    // The next caller reads afresh rather than joining a read from before this write.
+    this.reserveModeInFlight = null
+  }
+
+  async reconcileCells(cells: RelayCellConfig[], disableMissing = true): Promise<void> {
+    await this.reconcileCellsWithOptions(cells, disableMissing)
+  }
+
+  async reconcileCellsAtStartup(cells: RelayCellConfig[]): Promise<void> {
+    await this.reconcileCellsWithOptions(cells, false, { reportRetries: false })
+  }
+
+  private async reconcileCellsWithOptions(
+    cells: RelayCellConfig[],
+    disableMissing: boolean,
+    transactionOptions?: RelayTransactionOptions
+  ): Promise<void> {
+    const now = this.now()
+    await this.database.transaction(async (transaction) => {
+      await transaction.queryLocked(`SELECT cell_id FROM relay_cells ORDER BY cell_id ASC`)
+      // Capacity rows share one global lock order with assignment transactions.
+      for (const cell of [...cells].sort((left, right) => left.id.localeCompare(right.id))) {
+        // Operator-owned enabled state and tagged URLs must survive revision restarts.
+        await transaction.query(
+          `INSERT INTO relay_cells
+           (cell_id, cell_url, enabled, capacity_requests, reserved_requests,
+            observed_requests, last_heartbeat_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT (cell_id) DO UPDATE SET
+             capacity_requests = excluded.capacity_requests,
+             last_heartbeat_at = excluded.last_heartbeat_at,
+             updated_at = excluded.updated_at`,
+          [
+            cell.id,
+            cell.url,
+            cell.initiallyEnabled === false ? 0 : 1,
+            cell.capacityRequests,
+            0,
+            0,
+            now,
+            now
+          ]
+        )
+        await transaction.query(
+          `INSERT INTO relay_cell_regions (cell_id, region) VALUES (?, ?)
+           ON CONFLICT (cell_id) DO UPDATE SET region = excluded.region`,
+          [cell.id, cell.region ?? RELAY_DEFAULT_REGION]
+        )
+        await ensureCellAdmission(
+          transaction,
+          cell.id,
+          stateFromEnabled(cell.initiallyEnabled !== false),
+          now
+        )
+        await writeCellConnectionLimit(transaction, cell, now)
+      }
+      const current = await transaction.query(
+        `SELECT cell_id, enabled FROM relay_cells ORDER BY cell_id ASC`
+      )
+      for (const row of current) {
+        await ensureCellAdmission(
+          transaction,
+          text(row, 'cell_id'),
+          stateFromEnabled(integer(row, 'enabled') === 1),
+          now
+        )
+      }
+      if (disableMissing) {
+        const ids = new Set(cells.map(({ id }) => id))
+        for (const row of current) {
+          const id = text(row, 'cell_id')
+          if (
+            !ids.has(id) &&
+            (await cellAdmissionState(transaction, id)) !== 'existing-only'
+          ) {
+            await setCellAdmissionBeforeBoundary(transaction, id, 'existing-only', now)
+          }
+        }
+      }
+      await synchronizeCellAdmissionBoundary(transaction, now)
+    }, transactionOptions)
+  }
+
+  async assign(
+    identity: AssignmentIdentity,
+    preferredRegion?: RelayRegion,
+    placementRegion: RelayRegion = preferredRegion ?? RELAY_DEFAULT_REGION,
+    // Sweep placement keeps pool default; a shorter bounded wait would surface 55P03 as terminal sweep failure.
+    lockMode: CellInventoryLockMode = 'request',
+    // Step 5: a fresh placement may first be booked on a reserve-mode cell, outside any
+    // transaction; and a database mint stays above every epoch the director's map knew.
+    step5: AssignOptions = {}
+  ): Promise<AssignedRelayAssignment> {
+    const sticky = await this.assignStickyWithLockRetry(identity, lockMode, preferredRegion)
+    if (sticky && !('isolatedFrom' in sticky)) return sticky
+    let isolatedFrom = sticky?.isolatedFrom
+    // Off a roll-isolated cell: the canary counts the move whichever pool takes it.
+    const reservedOn = (reserved: RelayAssignment) => {
+      if (isolatedFrom) {
+        console.warn(
+          JSON.stringify({
+            event: 'orca_relay_sticky_replaced_off_isolated_cell',
+            fromCellId: isolatedFrom.cellId,
+            fromRegion: isolatedFrom.region,
+            admissionState: ROLL_ISOLATED_ADMISSION,
+            toCellId: reserved.cellId,
+            region: reserved.region,
+            via: 'reserve'
+          })
+        )
+      }
+      return { ...reserved, placed: true as const }
+    }
+    // A throttled reserve cell is no room, so the drain does not wait on reserve intake.
+    const bookReserve = async (book: () => Promise<RelayAssignment | null>) => {
+      let reserved: RelayAssignment | null
+      try {
+        reserved = await book()
+      } catch (error) {
+        if (!(isolatedFrom && error instanceof ReservePaceError)) {
+          throw error
+        }
+        reserved = null
+      }
+      return reserved && reservedOn(reserved)
+    }
+    const booked = step5.placeFresh ? await bookReserve(step5.placeFresh) : null
+    if (booked) return booked
+    // Serialize placement’s global inventory section locally so bursts do not become NOWAIT storms.
+    const placeOnDatabase = async (keepRegion: boolean) =>
+      await this.serializeAssignment(
+        async () =>
+          await this.assignWithLockRetry(
+            identity,
+            lockMode,
+            preferredRegion,
+            placementRegion,
+            step5.epochFloor ?? 0,
+            // Only through the step-5 plan: its floor holds every epoch the map knows for the host.
+            step5.hostRequested === true && step5.epochFloor !== undefined,
+            keepRegion
+          )
+      )
+    // Its own catch: bookReserve would turn an isolated host's pace into a refusal here.
+    const placeOrSpill = async (skipOwnRegion: boolean) => {
+      try {
+        return await placeOnDatabase(false)
+      } catch (error) {
+        if (!(error instanceof AssignmentCapacityExhausted) || !step5.reserveSpill) {
+          throw error
+        }
+        const spilled = await step5.reserveSpill({ skipOwnRegion, rowEpoch: error.rowEpoch })
+        if (!spilled) {
+          throw error
+        }
+        return reservedOn(spilled)
+      }
+    }
+    const regionReserve = step5.regionReserve
+    if (!regionReserve) {
+      return await placeOrSpill(false)
+    }
+    try {
+      return await placeOnDatabase(true)
+    } catch (error) {
+      if (!(error instanceof AssignmentRegionFull)) throw error
+      isolatedFrom ??= error.isolatedSource
+    }
+    return (await bookReserve(regionReserve)) ?? (await placeOrSpill(true))
+  }
+
+  private async assignStickyWithLockRetry(
+    identity: AssignmentIdentity,
+    lockMode: CellInventoryLockMode,
+    preferredRegion?: RelayRegion
+  ): Promise<RelayAssignment | IsolatedPin | null> {
+    return await this.withAssignmentLockRetry(
+      async (inventoryFirst) =>
+        await this.assignStickyOnce(identity, inventoryFirst, lockMode, preferredRegion)
+    )
+  }
+
+  private async assignWithLockRetry(
+    identity: AssignmentIdentity,
+    lockMode: CellInventoryLockMode,
+    preferredRegion?: RelayRegion,
+    placementRegion: RelayRegion = preferredRegion ?? RELAY_DEFAULT_REGION,
+    epochFloor = 0,
+    hostRequested = false,
+    keepRegion = false
+  ): Promise<AssignedRelayAssignment> {
+    const deadline = Date.now() + ASSIGNMENT_LOCK_RETRY_DEADLINE_MS
+    let inventoryScope: AssignmentInventoryScope = 'none'
+    while (true) {
+      try {
+        return await this.assignOnce(
+          identity,
+          inventoryScope,
+          lockMode,
+          preferredRegion,
+          placementRegion,
+          epochFloor,
+          hostRequested,
+          keepRegion
+        )
+      } catch (error) {
+        if (error instanceof AssignmentInventoryScopeChanged) {
+          inventoryScope = 'all'
+          continue
+        }
+        if (error instanceof AssignmentIsolatedTierExhausted) {
+          // An in-region reserve cell comes before the other regions.
+          if (keepRegion && error.source.region === placementRegion) {
+            throw new AssignmentRegionFull(error.source)
+          }
+          inventoryScope = 'isolated-other-regions'
+          continue
+        }
+        if (
+          !(error instanceof AssignmentInventoryLockUnavailable) ||
+          Date.now() >= deadline
+        ) {
+          throw error
+        }
+        inventoryScope = error.inventoryScope
+      }
+      await waitForAssignmentLockRetry(deadline)
+    }
+  }
+
+  private async withAssignmentLockRetry<T>(
+    operation: (inventoryFirst: boolean) => Promise<T>
+  ): Promise<T> {
+    const deadline = Date.now() + ASSIGNMENT_LOCK_RETRY_DEADLINE_MS
+    let inventoryFirst = false
+    while (true) {
+      try {
+        return await operation(inventoryFirst)
+      } catch (error) {
+        if (!isDatabaseLockUnavailable(error) || Date.now() >= deadline) throw error
+        inventoryFirst = true
+      }
+      // The retry joins the cell queue without holding later legacy-cycle locks.
+      await waitForAssignmentLockRetry(deadline)
+    }
+  }
+
+  private async assignStickyOnce(
+    identity: AssignmentIdentity,
+    inventoryFirst: boolean,
+    lockMode: CellInventoryLockMode,
+    preferredRegion?: RelayRegion
+  ): Promise<RelayAssignment | IsolatedPin | null> {
+    const now = this.now()
+    await this.reserveModeCells()
+    return await this.database.transaction(async (transaction) => {
+      // Legacy-order retry locks only the unlocked pin’s cell before assignment; locking all cells would serialize fleet-wide sticky refreshes.
+      const pinnedCellId = await this.pinnedCellId(transaction, identity)
+      const lockedCells =
+        !inventoryFirst || pinnedCellId === undefined
+          ? undefined
+          : await this.lockCellRows(transaction, [pinnedCellId], lockMode)
+      // One read serves the wait policy, the stranded rule and the roll-isolation
+      // check below; issuing it twice inside one sticky transaction is waste.
+      const unlockedAdmission =
+        pinnedCellId === undefined
+          ? undefined
+          : await this.pinnedCellAdmission(transaction, pinnedCellId)
+      // Wait briefly only for live general-cell releases to avoid the client’s 5s redial gate; never wait while holding cell first, which cycles against host-first release.
+      const pinIsLiveGeneral =
+        lockedCells === undefined &&
+        pinnedCellId !== undefined &&
+        unlockedAdmission?.state === 'general' &&
+        (await this.cellIsLive(transaction, pinnedCellId, now))
+      const existing = await this.assignmentRowOrBusy(
+        transaction,
+        identity,
+        pinIsLiveGeneral ? STICKY_ASSIGNMENT_ROW_WAIT_MS : undefined
+      )
+      if (!existing) return null
+      const activityLeases = await this.lockAssignmentActivities(transaction, identity, true)
+      await this.recordRegionPreference(transaction, identity, preferredRegion, now)
+      // A live reserve cell's hosts hold no activity here, so idle is not evidence they left.
+      if (
+        !(await this.liveReserveCell(text(existing, 'cell_id'), transaction, now)) &&
+        mayNormallyReassign(activity(existing), now)
+      ) {
+        return null
+      }
+      const pinnedAdmission =
+        text(existing, 'cell_id') === pinnedCellId
+          ? unlockedAdmission
+          : await this.pinnedCellAdmission(transaction, text(existing, 'cell_id'))
+      // Why: a stranded host must fall through to placement — re-granting the
+      // pinned cell here is what refreshes its own activity and sustains the
+      // loop (issue #225).
+      if (
+        await this.assignmentStrandedOnUnservedCell(
+          transaction,
+          identity,
+          existing,
+          now,
+          pinnedAdmission?.state
+        )
+      ) {
+        return null
+      }
+
+      // Fall through before touching the busy draining cell; re-granting its pin refreshes activity and sustains the retry loop.
+      if (
+        await this.incumbentCellIsolatedForRoll(
+          transaction,
+          identity,
+          existing,
+          now,
+          undefined,
+          pinnedAdmission
+        )
+      ) {
+        const cellId = text(existing, 'cell_id')
+        return { isolatedFrom: { cellId, region: await this.cellRegion(transaction, cellId) } }
+      }
+
+      const currentCellId = text(existing, 'cell_id')
+      // The pin moved between the unlocked read and the assignment lock, so the
+      // row held is the wrong one. Same recovery as losing the lock: retry.
+      if (lockedCells && pinnedCellId !== currentCellId) {
+        throw new Error('database_lock_unavailable')
+      }
+      const hadControl = holdsControlLease(
+        activityLeases,
+        currentCellId,
+        integer(existing, 'assignment_epoch')
+      )
+      const currentRow = lockedCells
+        ? lockedCells.find((row) => text(row, 'cell_id') === currentCellId)
+        : hadControl
+        ? (
+            await transaction.query(`SELECT * FROM relay_cells WHERE cell_id = ?`, [
+              currentCellId
+            ])
+          )[0]
+        : (
+            await transaction.queryLocked(
+              `SELECT * FROM relay_cells WHERE cell_id = ?`,
+              [currentCellId],
+              { failIfUnavailable: true }
+            )
+          )[0]
+      if (!currentRow) throw new Error('assigned_cell_missing')
+      if (
+        this.requireLiveCells &&
+        !(await this.cellIsLive(transaction, currentCellId, now))
+      ) {
+        return null
+      }
+      const leaseExpiresAt = now + ASSIGNMENT_LIMITS.activityLeaseMs
+      // A reserve cell counts its own controls: the pin is returned with no row written,
+      // since the sweeps that would release those units skip this cell.
+      if (!hadControl && (await this.mayBeReserveCell(currentCellId, transaction))) {
+        return this.result(
+          identity,
+          existing,
+          cell(currentRow, await this.cellRegion(transaction, currentCellId)),
+          leaseExpiresAt
+        )
+      }
+      if (
+        !hadControl &&
+        !(await this.cellHasConnectionHeadroom(transaction, currentCellId))
+      ) {
+        if (requestUnits(existing) === 0) return null
+        throw new Error('relay_connection_headroom_exhausted')
+      }
+
+      if (hadControl) {
+        await this.touchAssignment(transaction, identity, leaseExpiresAt, now)
+      } else {
+        // Delta, not the value read from the snapshot: an absolute write here
+        // would clobber any concurrent movement of the same counter.
+        await this.adjustCellReservationAtomically(transaction, currentCellId, 1)
+        await this.adjustActivityCount(transaction, identity, 'control', 1, leaseExpiresAt, now)
+        await this.insertPendingControlLease(
+          transaction,
+          identity,
+          currentCellId,
+          integer(existing, 'assignment_epoch'),
+          now
+        )
+      }
+      return this.result(
+        identity,
+        existing,
+        cell(currentRow, await this.cellRegion(transaction, currentCellId)),
+        leaseExpiresAt
+      )
+    })
+  }
+
+  // Existing-only pins (#194) assume attaches still work; C3 decommission broke this (#225). Prove stranding from a recent grant old enough to attach but with no live activity: reservation rows may not exist and expired leases are pruned.
+  private async assignmentStrandedOnUnservedCell(
+    transaction: RelayDatabase,
+    identity: AssignmentIdentity,
+    existing: SqlRow,
+    now: number,
+    // Read by the caller when it needs the same row for another question.
+    admissionState?: CellAdmissionState
+  ): Promise<boolean> {
+    const lastActivityAt = integer(existing, 'last_activity_at')
+    if (
+      now < lastActivityAt + STRANDED_MIN_GRANT_AGE_MS ||
+      now >= lastActivityAt + STRANDED_RECENT_ACTIVITY_MS
+    ) {
+      return false
+    }
+    const state =
+      admissionState ??
+      (await this.pinnedCellAdmission(transaction, text(existing, 'cell_id')))?.state
+    // Unknown or missing admission fails safe: the pin stays.
+    if (state !== 'existing-only') {
+      return false
+    }
+    // A reserve cell keeps no activity rows and its ledger stamps last_activity_at, so zero
+    // leases proves nothing; a dead one is left to the dead-reserve path and its fence.
+    if (await this.mayBeReserveCell(text(existing, 'cell_id'), transaction)) {
+      return false
+    }
+    const liveLeases = (
+      await transaction.query(
+        `SELECT COUNT(*) AS live FROM relay_assignment_activity_leases
+         WHERE user_id = ? AND relay_host_id = ? AND expires_at > ?
+           AND activity_id NOT LIKE 'control-pending:%'`,
+        [identity.userId, identity.relayHostId, now]
+      )
+    )[0]
+    return integer(liveLeases!, 'live') === 0
+  }
+
+  private async serializeAssignment<T>(operation: () => Promise<T>): Promise<T> {
+    const previous = this.assignmentTail
+    let release!: () => void
+    this.assignmentTail = new Promise((resolve) => (release = resolve))
+    await previous
+    try {
+      return await operation()
+    } finally {
+      release()
+    }
+  }
+
+  private async assignOnce(
+    identity: AssignmentIdentity,
+    inventoryScope: AssignmentInventoryScope,
+    lockMode: CellInventoryLockMode,
+    preferredRegion?: RelayRegion,
+    placementRegion: RelayRegion = preferredRegion ?? RELAY_DEFAULT_REGION,
+    epochFloor = 0,
+    hostRequested = false,
+    // Refuse to spill out of placementRegion: AssignmentRegionFull instead.
+    keepRegion = false
+  ): Promise<AssignedRelayAssignment> {
+    const now = this.now()
+    // An isolated retry takes its tier's rows before anything reassigns this,
+    // so a lock timeout there must retry the same tier, not fall to 'all'.
+    let retryScope: RetriedAssignmentInventoryScope =
+      inventoryScope === 'none' ? 'general' : inventoryScope
+    await this.reserveModeCells()
+    // Return events out of the transaction; stdout cannot roll back failed/retried placements and would inflate canary move counts.
+    const outcome = await this.database.transaction(async (transaction) => {
+      const events: string[] = []
+      // The retry paths below open with the inventory, so this path takes its
+      // host rows before any of them rather than where the others do.
+      await this.lockControlConnectionReservations(transaction, identity, lockMode)
+      const isolatedTier: IsolatedReplacementTier =
+        inventoryScope === 'isolated-other-regions' ? 'other-regions' : 'same-region'
+      const isolatedScope = inventoryScope === 'isolated' || inventoryScope === 'isolated-other-regions'
+      const isolatedRetrySource = isolatedScope
+        ? await this.pinnedCellId(transaction, identity)
+        : undefined
+      let lockedCells =
+        inventoryScope === 'all'
+          ? await this.lockCellInventory(transaction, lockMode)
+          : inventoryScope === 'general'
+            ? await this.lockGeneralCellInventory(transaction, lockMode)
+            : isolatedScope
+              ? await this.lockIsolatedReplacementCells(
+                  transaction,
+                  isolatedRetrySource,
+                  isolatedTier,
+                  lockMode
+                )
+              : undefined
+      const existing = await this.assignmentRowOrBusy(transaction, identity)
+      // Dormant hosts hold no units and need only target locks. Live reserve cells keep activity in memory, so empty rows prove dormancy only once dead.
+      const dormant =
+        !existing ||
+        (mayNormallyReassign(activity(existing), now) &&
+          !(await this.liveReserveCell(text(existing, 'cell_id'), transaction, now)))
+      retryScope = dormant ? 'general' : isolatedScope ? inventoryScope : 'all'
+      if (
+        (inventoryScope === 'general' && !dormant) ||
+        (isolatedScope &&
+          (!existing || dormant || text(existing, 'cell_id') !== isolatedRetrySource))
+      ) {
+        throw new AssignmentInventoryScopeChanged()
+      }
+      const activityLeases = await this.lockAssignmentActivities(transaction, identity, true)
+      await this.recordRegionPreference(transaction, identity, preferredRegion, now)
+      let forcedDeadReassignment = false
+      let connectionHeadroomReassignment = false
+      let strandedReassignment = false
+      let isolatedIncumbent: CellRow | undefined
+      let isolatedTarget: CellRow | undefined
+      let deadReserveSource: { cell: CellRow; verdict: DeadCellVerdict } | undefined
+      // Skipping source lock requires no units unbacked by leases; lower drifted counters are rebuilt from retained leases below.
+      let sourceRowSkipped = false
+      if (existing && !dormant && inventoryScope !== 'all') {
+        // Unlocked on purpose: this only chooses which rows to lock. A restore
+        // racing it lets one host move off a cell that no longer needed it.
+        if (
+          requestUnits(existing) <= leaseRequestUnits(activityLeases) &&
+          (await this.isolatedIncumbentMayMove(transaction, identity, existing, now))
+        ) {
+          const source = await this.unlockedCell(transaction, text(existing, 'cell_id'))
+          retryScope = isolatedTier === 'same-region' ? 'isolated' : 'isolated-other-regions'
+          lockedCells ??= await this.lockIsolatedReplacementCells(
+            transaction,
+            source.cellId,
+            isolatedTier,
+            'nowait'
+          )
+          isolatedTarget =
+            (await this.leastLoadedCell(
+              transaction,
+              lockedCells,
+              source.region,
+              isolatedTier === 'same-region' ? 'require' : 'prefer'
+            )) ?? undefined
+          // Same region full: try the other regions. All full: decide under the
+          // all-rows lock, which keeps the pin as before.
+          if (!isolatedTarget) {
+            if (isolatedTier === 'same-region') throw new AssignmentIsolatedTierExhausted(source)
+            throw new AssignmentInventoryScopeChanged()
+          }
+          isolatedIncumbent = source
+          sourceRowSkipped = true
+        } else if (isolatedScope) {
+          throw new AssignmentInventoryScopeChanged()
+        }
+      }
+      if (existing && !dormant && !sourceRowSkipped) {
+        lockedCells ??= await this.lockCellInventory(transaction, 'nowait')
+        const admission = await cellAdmissionStates(transaction)
+        const currentRow = lockedCells.find(
+          (row) => text(row, 'cell_id') === text(existing, 'cell_id')
+        )
+        if (!currentRow) throw new Error('assigned_cell_missing')
+        const current = cell(
+          currentRow,
+          await this.cellRegion(transaction, text(existing, 'cell_id'))
+        )
+        // Live existing-only cells rejecting attaches cannot re-pin hosts; dead-cell fencing does not apply to this C3 posture.
+        strandedReassignment = await this.assignmentStrandedOnUnservedCell(
+          transaction,
+          identity,
+          existing,
+          now
+        )
+        const currentIsLive =
+          strandedReassignment ||
+          !this.requireLiveCells ||
+          (await this.cellIsLive(transaction, current.cellId, now))
+        // Drain headroom must not retain an isolated pin; unreachable cells need fencing unless a post-roll restart proves old sockets gone.
+        if (
+          !strandedReassignment &&
+          (await this.incumbentCellIsolatedForRoll(
+            transaction,
+            identity,
+            existing,
+            now,
+            admission
+          )) &&
+          (currentIsLive ||
+            (await this.isolatedCellRestartedSinceRoll(transaction, current.cellId, now)))
+        ) {
+          isolatedTarget =
+            (await this.leastLoadedCell(transaction, lockedCells, current.region, 'require')) ??
+            undefined
+          if (isolatedTarget) {
+            isolatedIncumbent = current
+          } else {
+            // Keep the pin: the host retries its own cell. The narrowed path
+            // has already tried every region, or declined because the host
+            // holds units no lease backs; the reason string is a log contract.
+            events.push(
+              JSON.stringify({
+                event: 'orca_relay_sticky_replacement_deferred',
+                reason: 'no_same_region_headroom',
+                cellId: current.cellId,
+                region: current.region
+              })
+            )
+          }
+        }
+        if (!strandedReassignment && !isolatedIncumbent && currentIsLive) {
+          const hadControl = holdsControlLease(
+            activityLeases,
+            current.cellId,
+            integer(existing, 'assignment_epoch')
+          )
+          // A reserve cell counts its own controls: the pin is returned with no row written,
+          // since the sweeps that would release those units skip this cell.
+          if (!hadControl && (await this.mayBeReserveCell(current.cellId, transaction))) {
+            return {
+              assignment: this.result(
+                identity,
+                existing,
+                current,
+                now + ASSIGNMENT_LIMITS.activityLeaseMs
+              ),
+              events
+            }
+          }
+          const hasConnectionHeadroom =
+            hadControl ||
+            (await this.cellHasConnectionHeadroom(transaction, current.cellId))
+          if (hasConnectionHeadroom) {
+            const leaseExpiresAt = now + ASSIGNMENT_LIMITS.activityLeaseMs
+            if (hadControl) {
+              await this.touchAssignment(transaction, identity, leaseExpiresAt, now)
+            } else {
+              await this.adjustCellReservation(transaction, current.cellId, 1)
+              await this.adjustActivityCount(
+                transaction,
+                identity,
+                'control',
+                1,
+                leaseExpiresAt,
+                now
+              )
+              await this.insertPendingControlLease(
+                transaction,
+                identity,
+                current.cellId,
+                integer(existing, 'assignment_epoch'),
+                now
+              )
+            }
+            return {
+              assignment: this.result(identity, existing, current, leaseExpiresAt),
+              events
+            }
+          }
+          if (requestUnits(existing) > 0) {
+            throw new Error('relay_connection_headroom_exhausted')
+          }
+          if (admission.get(current.cellId) !== 'general') {
+            throw new Error('relay_connection_headroom_exhausted')
+          }
+          connectionHeadroomReassignment = true
+        }
+        // Live isolated cells verify epochs (4409); a post-roll process restart proves the old sockets gone.
+        // Without either proof, the dead-cell path still requires fencing.
+        if (!strandedReassignment && !connectionHeadroomReassignment && !isolatedIncumbent) {
+          const fence = await this.deadCellFenceRequirement(
+            transaction,
+            identity,
+            current.cellId,
+            integer(existing, 'assignment_epoch')
+          )
+          if (
+            (fence.capped || fence.pinned) &&
+            !(await this.cellHasCommittedFence(transaction, current.cellId, now))
+          ) {
+            const cause = await this.homeCellUnavailableCause(transaction, current.cellId, now)
+            // A host that lost its control may leave a reserve cell this director proves dead
+            // without a fence: nothing re-places a host that did not ask, and a migration's epochs
+            // stay fenced. Capped db cells keep the fence: autoheal returns them with their hosts.
+            const verdict =
+              hostRequested &&
+              !fence.pinned &&
+              cause === 'unheard' &&
+              (await this.reserveModeCells(transaction))?.has(current.cellId) === true
+                ? this.deadCellVerdict?.(current.cellId, now)
+                : undefined
+            if (!verdict?.dead) throw new RelayHomeCellUnavailableError(current.cellId, cause)
+            deadReserveSource = { cell: current, verdict }
+          }
+          forcedDeadReassignment = true
+        }
+      }
+
+      // Only a host with no assignment or a dormant one reaches here unlocked.
+      lockedCells ??= await this.lockGeneralCellInventory(transaction, 'nowait')
+      // The isolated target was chosen under the same inventory lock, with
+      // region required rather than preferred; re-picking here would reopen the
+      // cross-region spill it exists to refuse.
+      const target =
+        isolatedTarget ??
+        (await this.leastLoadedCell(
+          transaction,
+          lockedCells,
+          placementRegion,
+          keepRegion ? 'require' : 'prefer'
+        ))
+      if (!target) {
+        throw keepRegion
+          ? new AssignmentRegionFull()
+          : new AssignmentCapacityExhausted(existing ? integer(existing, 'assignment_epoch') : 0)
+      }
+      if (deadReserveSource) {
+        events.push(
+          JSON.stringify({
+            event: 'orca_relay_dead_reserve_cell_host_replaced',
+            fromCellId: deadReserveSource.cell.cellId,
+            toCellId: target.cellId,
+            region: target.region,
+            fleetFailing: deadReserveSource.verdict.fleetFailing,
+            fleetPolled: deadReserveSource.verdict.fleetPolled,
+            regionFailing: deadReserveSource.verdict.regionFailing,
+            regionPolled: deadReserveSource.verdict.regionPolled
+          })
+        )
+      }
+      if (isolatedIncumbent) {
+        // The canary's proof that the fix fired: count these against the
+        // drained cell's host count.
+        events.push(
+          JSON.stringify({
+            event: 'orca_relay_sticky_replaced_off_isolated_cell',
+            fromCellId: isolatedIncumbent.cellId,
+            fromRegion: isolatedIncumbent.region,
+            admissionState: ROLL_ISOLATED_ADMISSION,
+            toCellId: target.cellId,
+            region: target.region
+          })
+        )
+      }
+      // Freed leases charge their own cells; retained leases count until release/expiry. Only unbacked units charge the old cell, whose row must then be locked.
+      const deletesLeases = forcedDeadReassignment || strandedReassignment
+      const keptLeases = deletesLeases ? [] : activityLeases
+      if (existing) {
+        const unbackedUnits = requestUnits(existing) - leaseRequestUnits(activityLeases)
+        if (unbackedUnits > 0) {
+          await this.adjustCellReservation(transaction, text(existing, 'cell_id'), -unbackedUnits)
+        }
+        if (deletesLeases) {
+          // Dead/fenced incarnations have no drainable work; stranded leases are unclaimed loop artifacts. Delete them so late expiry cannot decrement replacements.
+          for (const [cellId, units] of leaseUnitsByCell(activityLeases)) {
+            await this.adjustCellReservation(transaction, cellId, -units)
+          }
+          await transaction.query(
+            `DELETE FROM relay_assignment_activity_leases
+             WHERE user_id = ? AND relay_host_id = ?`,
+            [identity.userId, identity.relayHostId]
+          )
+        }
+      }
+      await this.adjustCellReservation(transaction, target.cellId, 1)
+      // A host that left a reserve-mode cell inside the ledger's lag never reuses an epoch.
+      const assignmentEpoch =
+        Math.max(existing ? integer(existing, 'assignment_epoch') : 0, epochFloor) + 1
+      // Counters follow the leases the host still holds, plus the new control.
+      const counts = activityCounts(keptLeases)
+      counts.control += 1
+      const leaseExpiresAt = now + ASSIGNMENT_LIMITS.activityLeaseMs
+      await transaction.query(
+        `INSERT INTO relay_assignments
+         (user_id, relay_host_id, cell_id, assignment_epoch, lease_expires_at,
+          last_activity_at, reserved_controls, reserved_splices, reserved_invites,
+          pending_installs, pending_confirmations, migration_leases)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT (user_id, relay_host_id) DO UPDATE SET
+           cell_id = excluded.cell_id,
+           assignment_epoch = excluded.assignment_epoch,
+           lease_expires_at = excluded.lease_expires_at,
+           last_activity_at = excluded.last_activity_at,
+           reserved_controls = excluded.reserved_controls,
+           reserved_splices = excluded.reserved_splices,
+           reserved_invites = excluded.reserved_invites,
+           pending_installs = excluded.pending_installs,
+           pending_confirmations = excluded.pending_confirmations,
+           migration_leases = excluded.migration_leases`,
+        [
+          identity.userId,
+          identity.relayHostId,
+          target.cellId,
+          assignmentEpoch,
+          // Not before a kept lease expires: aggregate expiry keys off this.
+          Math.max(
+            leaseExpiresAt,
+            ...keptLeases.map((lease) => integer(lease, 'expires_at'))
+          ),
+          now,
+          counts.control,
+          counts.splice,
+          counts.invite,
+          counts.install,
+          counts.confirmation,
+          counts.migration
+        ]
+      )
+      if (existing) {
+        await this.releaseSupersededControlConnectionReservations(
+          transaction,
+          identity,
+          text(existing, 'cell_id'),
+          integer(existing, 'assignment_epoch'),
+          now
+        )
+      }
+      await this.insertPendingControlLease(
+        transaction,
+        identity,
+        target.cellId,
+        assignmentEpoch,
+        now
+      )
+      return {
+        assignment: { ...identity, ...target, assignmentEpoch, leaseExpiresAt, placed: true as const },
+        events
+      }
+    }).catch((error: unknown) => {
+      if (isDatabaseLockUnavailable(error)) {
+        throw new AssignmentInventoryLockUnavailable(retryScope)
+      }
+      throw error
+    })
+    for (const event of outcome.events) console.warn(event)
+    return outcome.assignment
+  }
+
+  async resolve(
+    identity: AssignmentIdentity,
+    // Director reconnect verification only: the same read classifies a host whose
+    // home is roll-isolated, so the drain-return lane costs no extra query.
+    options: { classifyHomeRollIsolation?: boolean } = {}
+  ): Promise<ResolvedRelayAssignment | null> {
+    const classify = options.classifyHomeRollIsolation === true
+    const rows = await this.database.query(
+      `SELECT assignment.*, cell.cell_url, region.region${
+        classify
+          ? `, home_admission.admission_state AS home_admission_state,
+         home_admission.roll_isolated_at AS home_roll_isolated_at,
+         CASE WHEN home_admission.roll_isolated_at IS NULL THEN 0
+           WHEN EXISTS (
+             SELECT 1 FROM relay_assignment_migrations migration
+             WHERE migration.user_id = assignment.user_id
+               AND migration.relay_host_id = assignment.relay_host_id
+               AND migration.completed_at IS NULL AND migration.aborted_at IS NULL
+           ) THEN 1 ELSE 0 END AS home_open_migrations`
+          : ''
+      }
+       FROM relay_assignments assignment
+       JOIN relay_cells cell ON cell.cell_id = assignment.cell_id
+       LEFT JOIN relay_cell_regions region ON region.cell_id = cell.cell_id${
+         classify
+           ? `
+       LEFT JOIN relay_cell_admission home_admission
+         ON home_admission.cell_id = assignment.cell_id`
+           : ''
+       }
+       WHERE assignment.user_id = ? AND assignment.relay_host_id = ?`,
+      [identity.userId, identity.relayHostId]
+    )
+    const row = rows[0]
+    const now = this.now()
+    if (!row) return null
+    if (this.requireLiveCells && !(await this.cellIsLive(this.database, text(row, 'cell_id'), now))) {
+      return null
+    }
+    const homeAdmissionState = row['home_admission_state']
+    return {
+      ...identity,
+      cellId: text(row, 'cell_id'),
+      cellUrl: text(row, 'cell_url'),
+      region: optionalRelayRegion(row, 'region') ?? RELAY_DEFAULT_REGION,
+      assignmentEpoch: integer(row, 'assignment_epoch'),
+      leaseExpiresAt: integer(row, 'lease_expires_at'),
+      ...(classify &&
+      isCellAdmissionState(homeAdmissionState) &&
+      // A migration owns this epoch; the sticky path keeps the pin, so it is not a drain return.
+      integer(row, 'migration_leases') === 0 &&
+      integer(row, 'home_open_migrations') === 0 &&
+      rollIsolationIsCurrent(
+        {
+          state: homeAdmissionState,
+          rollIsolatedAt: optionalInteger(row, 'home_roll_isolated_at')
+        },
+        now
+      )
+        ? { homeCellRollIsolated: true }
+        : {})
+    }
+  }
+
+  async setCellEnabled(cellId: string, enabled: boolean): Promise<void> {
+    await this.setCellAdmissionState(cellId, stateFromEnabled(enabled))
+  }
+
+  async setCellAdmissionState(cellId: string, state: CellAdmissionState): Promise<void> {
+    await this.database.transaction(
+      async (transaction) =>
+        await setCellAdmissionBeforeBoundary(transaction, cellId, state, this.now())
+    )
+  }
+
+  async applyCellAdmissionSelector(input: {
+    attemptId: string
+    expectedGeneration: number
+    expectedMembershipSha256?: string
+    membership: CellAdmissionMembership
+    rollIsolatedCells?: string[]
+  }): Promise<{
+    changed: boolean
+    selector: {
+      generation: number
+      attemptId: string | null
+      membership: CellAdmissionMembership
+    }
+  }> {
+    return await this.admissionSelector.apply(input)
+  }
+
+  async inspectCellAdmissionSelector(
+    attemptId?: string
+  ): Promise<CellAdmissionSelectorInspection> {
+    return await this.admissionSelector.inspect(attemptId)
+  }
+
+  async addMigrationCells(input: {
+    attemptId: string
+    expectedGeneration: number
+    cells: MigrationCellRegistration[]
+  }): Promise<{
+    changed: boolean
+    selector: {
+      generation: number
+      attemptId: string | null
+      membership: CellAdmissionMembership
+    }
+  }> {
+    return await this.migrationCellRegistrar.add(input)
+  }
+
+  async recordCellHeartbeat(input: CellHeartbeat): Promise<void> {
+    const now = this.now()
+    let inclusionWatermark: number | undefined
+    await this.database.transaction(async (transaction) => {
+      const configured = (
+        await transaction.queryLocked(`SELECT * FROM relay_cells WHERE cell_id = ?`, [input.cellId])
+      )[0]
+      if (!configured) throw new Error('cell_not_found')
+      if (text(configured, 'cell_url') !== input.cellUrl) throw new Error('cell_origin_mismatch')
+      if (
+        (await this.cellRegion(transaction, input.cellId)) !==
+        (input.region ?? RELAY_DEFAULT_REGION)
+      ) {
+        throw new Error('cell_region_mismatch')
+      }
+      const current = (
+        await transaction.queryLocked(`SELECT * FROM relay_cell_runtime WHERE cell_id = ?`, [
+          input.cellId
+        ])
+      )[0]
+      if (
+        current &&
+        ((text(current, 'cell_incarnation') === input.cellIncarnation &&
+          input.startedAt !== integer(current, 'started_at')) ||
+          (text(current, 'cell_incarnation') !== input.cellIncarnation &&
+            input.startedAt <= integer(current, 'started_at')))
+      ) {
+        throw new Error('stale_cell_incarnation')
+      }
+      const connectionLimit = await lockCellConnectionLimit(transaction, input.cellId)
+      if (connectionLimit) {
+        const reportedHardCap = reportedHardCapWithinLimit(connectionLimit, input)
+        if (
+          input.totalConnections === undefined ||
+          input.inFlightConnections === undefined ||
+          input.reservedConnectionUnits === undefined ||
+          input.enforcedConnectionUnits === undefined ||
+          input.enforcedConnectionUnits !==
+            input.totalConnections +
+              input.inFlightConnections +
+              input.reservedConnectionUnits ||
+          reportedHardCap === undefined
+        ) {
+          throw new Error('cell_connection_telemetry_mismatch')
+        }
+        await recordReportedHardCap(transaction, connectionLimit, input.cellId, reportedHardCap)
+      } else if (
+        input.totalConnections !== undefined ||
+        input.inFlightConnections !== undefined ||
+        input.reservedConnectionUnits !== undefined ||
+        input.enforcedConnectionUnits !== undefined ||
+        input.connectionInclusionWatermark !== undefined ||
+        input.connectionHardCap !== undefined ||
+        input.connectionUnobservedBound !== undefined
+      ) {
+        throw new Error('cell_connection_limit_not_configured')
+      }
+      await transaction.query(
+        `INSERT INTO relay_cell_runtime
+         (cell_id, cell_url, cell_incarnation, started_at, ready,
+          observed_requests, last_heartbeat_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT (cell_id) DO UPDATE SET
+           cell_url = excluded.cell_url,
+           cell_incarnation = excluded.cell_incarnation,
+           started_at = excluded.started_at,
+           ready = excluded.ready,
+           observed_requests = excluded.observed_requests,
+           last_heartbeat_at = excluded.last_heartbeat_at,
+           updated_at = excluded.updated_at`,
+        [
+          input.cellId,
+          input.cellUrl,
+          input.cellIncarnation,
+          input.startedAt,
+          input.ready ? 1 : 0,
+          input.observedRequests,
+          now,
+          now
+        ]
+      )
+      // Live directors read relay_cell_runtime; keep heartbeats off the placement capacity lock.
+      if (!this.requireLiveCells) {
+        await transaction.query(
+          `UPDATE relay_cells SET observed_requests = ?, last_heartbeat_at = ?, updated_at = ?
+           WHERE cell_id = ?`,
+          [input.observedRequests, now, now, input.cellId]
+        )
+      }
+      if (connectionLimit) {
+        const currentSnapshot = (
+          await transaction.queryLocked(
+            `SELECT * FROM relay_cell_connection_snapshots WHERE cell_id = ?`,
+            [input.cellId]
+          )
+        )[0]
+        const previousWatermark =
+          currentSnapshot &&
+          text(currentSnapshot, 'cell_incarnation') === input.cellIncarnation
+            ? integer(currentSnapshot, 'inclusion_watermark')
+            : -1
+        inclusionWatermark = input.connectionInclusionWatermark ?? previousWatermark + 1
+        if (
+          input.connectionInclusionWatermark !== undefined &&
+          inclusionWatermark <= previousWatermark
+        ) {
+          throw new Error('stale_connection_snapshot')
+        }
+        await transaction.query(
+          `INSERT INTO relay_cell_connection_runtime
+           (cell_id, cell_incarnation, total_connections, in_flight_connections,
+            reserved_connection_units, enforced_connection_units, last_heartbeat_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT (cell_id) DO UPDATE SET
+             cell_incarnation = excluded.cell_incarnation,
+             total_connections = excluded.total_connections,
+             in_flight_connections = excluded.in_flight_connections,
+             reserved_connection_units = excluded.reserved_connection_units,
+             enforced_connection_units = excluded.enforced_connection_units,
+             last_heartbeat_at = excluded.last_heartbeat_at,
+             updated_at = excluded.updated_at`,
+          [
+            input.cellId,
+            input.cellIncarnation,
+            input.totalConnections,
+            input.inFlightConnections,
+            input.reservedConnectionUnits,
+            input.enforcedConnectionUnits,
+            now,
+            now
+          ]
+        )
+        await transaction.query(
+          `INSERT INTO relay_cell_connection_snapshots
+           (cell_id, cell_incarnation, inclusion_watermark, total_connections,
+            in_flight_connections, reserved_connection_units,
+            enforced_connection_units, snapshot_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT (cell_id) DO UPDATE SET
+             cell_incarnation = excluded.cell_incarnation,
+             inclusion_watermark = excluded.inclusion_watermark,
+             total_connections = excluded.total_connections,
+             in_flight_connections = excluded.in_flight_connections,
+             reserved_connection_units = excluded.reserved_connection_units,
+             enforced_connection_units = excluded.enforced_connection_units,
+             snapshot_at = excluded.snapshot_at`,
+          [
+            input.cellId,
+            input.cellIncarnation,
+            inclusionWatermark,
+            input.totalConnections,
+            input.inFlightConnections,
+            input.reservedConnectionUnits,
+            input.enforcedConnectionUnits,
+            now
+          ]
+        )
+      }
+      await transaction.query(`DELETE FROM relay_cell_fences WHERE cell_id = ?`, [input.cellId])
+      await transaction.query(`DELETE FROM relay_cell_committed_fences WHERE cell_id = ?`, [
+        input.cellId
+      ])
+      await transaction.query(
+        `DELETE FROM relay_cell_legacy_fence_adoptions WHERE cell_id = ?`,
+        [input.cellId]
+      )
+    })
+    if (inclusionWatermark !== undefined) {
+      await this.releaseHeartbeatConnectionReservationDebt(
+        input.cellId,
+        input.cellIncarnation,
+        inclusionWatermark,
+        now
+      )
+    }
+  }
+
+  async recordCellRegionalRehomeStatus(input: CellRegionalRehomeStatus): Promise<void> {
+    const now = this.now()
+    await this.database.transaction(async (transaction) => {
+      const runtime = (
+        await transaction.queryLocked(
+          `SELECT cell_incarnation FROM relay_cell_runtime WHERE cell_id = ?`,
+          [input.cellId]
+        )
+      )[0]
+      if (!runtime || text(runtime, 'cell_incarnation') !== input.cellIncarnation) {
+        throw new Error('stale_cell_incarnation')
+      }
+      await transaction.query(
+        `INSERT INTO relay_cell_capabilities
+         (cell_id, cell_incarnation, regional_rehome_protocol, last_heartbeat_at)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT (cell_id) DO UPDATE SET
+           cell_incarnation = excluded.cell_incarnation,
+           regional_rehome_protocol = excluded.regional_rehome_protocol,
+           last_heartbeat_at = excluded.last_heartbeat_at`,
+        [input.cellId, input.cellIncarnation, input.regionalRehomeProtocol, now]
+      )
+      const safety = input.safety
+      await transaction.query(
+        `INSERT INTO relay_cell_rehome_safety
+         (cell_id, cell_incarnation, observed_at, sql_failures, reconnects,
+          control_activity_recovery_failures, database_pool_waiting,
+          database_pool_waiters_max, database_pool_wait_ms_max)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT (cell_id) DO UPDATE SET
+           cell_incarnation = excluded.cell_incarnation,
+           observed_at = excluded.observed_at,
+           sql_failures = excluded.sql_failures,
+           reconnects = excluded.reconnects,
+           control_activity_recovery_failures =
+             excluded.control_activity_recovery_failures,
+           database_pool_waiting = excluded.database_pool_waiting,
+           database_pool_waiters_max = excluded.database_pool_waiters_max,
+           database_pool_wait_ms_max = excluded.database_pool_wait_ms_max`,
+        [
+          input.cellId,
+          input.cellIncarnation,
+          safety.observedAt,
+          safety.sqlFailures,
+          safety.reconnects,
+          safety.controlActivityRecoveryFailures,
+          safety.databasePoolWaiting,
+          safety.databasePoolWaitersMax,
+          safety.databasePoolWaitMsMax
+        ]
+      )
+    })
+  }
+
+  private async releaseHeartbeatConnectionReservationDebt(
+    cellId: string,
+    cellIncarnation: string,
+    inclusionWatermark: number,
+    now: number
+  ): Promise<void> {
+    await this.database.transaction(async (transaction) => {
+      const runtime = (
+        await transaction.queryLocked(
+          `SELECT * FROM relay_cell_runtime WHERE cell_id = ?`,
+          [cellId]
+        )
+      )[0]
+      const snapshot = (
+        await transaction.queryLocked(
+          `SELECT * FROM relay_cell_connection_snapshots WHERE cell_id = ?`,
+          [cellId]
+        )
+      )[0]
+      if (
+        !runtime ||
+        !snapshot ||
+        text(runtime, 'cell_incarnation') !== cellIncarnation ||
+        text(snapshot, 'cell_incarnation') !== cellIncarnation ||
+        integer(snapshot, 'inclusion_watermark') !== inclusionWatermark
+      ) {
+        return
+      }
+      await transaction.query(
+        `UPDATE relay_control_connection_reservations
+         SET state = 'released', released_at = ?, updated_at = ?
+         WHERE cell_id = ? AND state = 'claimed'
+           AND inclusion_watermark IS NOT NULL
+           AND inclusion_watermark <= ?`,
+        [now, now, cellId, inclusionWatermark]
+      )
+      await transaction.query(
+        `UPDATE relay_control_connection_reservations
+         SET state = 'released', released_at = ?, updated_at = ?
+         WHERE reservation_id IN (
+           SELECT duplicate.reservation_id
+           FROM relay_control_connection_reservations duplicate
+           WHERE duplicate.cell_id = ?
+             AND duplicate.state = 'late-arrival-debt'
+             AND duplicate.claim_activity_id IS NULL
+             AND duplicate.timeout_at <= ?
+             AND EXISTS (
+               SELECT 1
+               FROM relay_control_connection_reservations retained
+               WHERE retained.user_id = duplicate.user_id
+                 AND retained.relay_host_id = duplicate.relay_host_id
+                 AND retained.assignment_epoch = duplicate.assignment_epoch
+                 AND retained.cell_id = duplicate.cell_id
+                 AND retained.state = 'late-arrival-debt'
+                 AND retained.claim_activity_id IS NULL
+                 AND retained.timeout_at <= ?
+                 AND (
+                   retained.created_at < duplicate.created_at OR
+                   (
+                     retained.created_at = duplicate.created_at AND
+                     retained.reservation_id < duplicate.reservation_id
+                   )
+                 )
+             )
+        )`,
+        [now, now, cellId, now, now]
+      )
+      await transaction.query(
+        `UPDATE relay_control_connection_reservations
+         SET state = 'released', released_at = ?, updated_at = ?
+         WHERE cell_id = ? AND state = 'late-arrival-debt'
+           AND claim_activity_id IS NULL AND timeout_at <= ?
+           AND EXISTS (
+             SELECT 1 FROM relay_assignments assignment
+             WHERE assignment.user_id =
+                 relay_control_connection_reservations.user_id
+               AND assignment.relay_host_id =
+                 relay_control_connection_reservations.relay_host_id
+               AND assignment.assignment_epoch >
+                 relay_control_connection_reservations.assignment_epoch
+           )
+           AND EXISTS (
+             SELECT 1 FROM relay_assignment_migrations migration
+             WHERE migration.user_id =
+                 relay_control_connection_reservations.user_id
+               AND migration.relay_host_id =
+                 relay_control_connection_reservations.relay_host_id
+               AND migration.assignment_epoch =
+                 relay_control_connection_reservations.assignment_epoch
+               AND migration.target_cell_id =
+                 relay_control_connection_reservations.cell_id
+               AND migration.aborted_at IS NOT NULL
+           )`,
+        [now, now, cellId, now]
+      )
+    })
+  }
+
+  async attestCellFence(cellId: string, cellIncarnation: string): Promise<number> {
+    const now = this.now()
+    return await this.database.transaction(async (transaction) => {
+      const cell = (
+        await transaction.queryLocked(`SELECT * FROM relay_cells WHERE cell_id = ?`, [cellId])
+      )[0]
+      if (!cell) throw new Error('cell_not_found')
+      if (integer(cell, 'enabled') !== 0) throw new Error('cell_fence_admission_enabled')
+      const runtime = (
+        await transaction.queryLocked(`SELECT * FROM relay_cell_runtime WHERE cell_id = ?`, [
+          cellId
+        ])
+      )[0]
+      if (
+        !runtime ||
+        text(runtime, 'cell_incarnation') !== cellIncarnation ||
+        integer(runtime, 'last_heartbeat_at') > now - this.heartbeatTtlMs
+      ) {
+        throw new Error('cell_fence_runtime_not_stale')
+      }
+      const expiresAt = now + CELL_FENCE_TTL_MS
+      await transaction.query(
+        `INSERT INTO relay_cell_fences
+         (cell_id, cell_incarnation, attested_at, expires_at)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT (cell_id) DO UPDATE SET
+           cell_incarnation = excluded.cell_incarnation,
+           attested_at = excluded.attested_at,
+           expires_at = excluded.expires_at`,
+        [cellId, cellIncarnation, now, expiresAt]
+      )
+      return expiresAt
+    })
+  }
+
+  async adoptLegacyCellFence(cellId: string, cellIncarnation: string): Promise<number> {
+    const now = this.now()
+    return await this.database.transaction(async (transaction) => {
+      const cell = (
+        await transaction.queryLocked(`SELECT * FROM relay_cells WHERE cell_id = ?`, [cellId])
+      )[0]
+      if (!cell) throw new Error('cell_not_found')
+      if (integer(cell, 'enabled') !== 0) throw new Error('cell_fence_admission_enabled')
+      const runtime = (
+        await transaction.queryLocked(`SELECT * FROM relay_cell_runtime WHERE cell_id = ?`, [
+          cellId
+        ])
+      )[0]
+      if (
+        !runtime ||
+        text(runtime, 'cell_incarnation') !== cellIncarnation ||
+        integer(runtime, 'last_heartbeat_at') > now - this.heartbeatTtlMs
+      ) {
+        throw new Error('cell_fence_runtime_not_stale')
+      }
+      const attempt = (
+        await transaction.queryLocked(
+          `SELECT attempt_id FROM relay_cell_fence_attempts
+           WHERE cell_id = ? ORDER BY created_at DESC LIMIT 1`,
+          [cellId]
+        )
+      )[0]
+      if (attempt) throw new Error('legacy_cell_fence_attempt_exists')
+      const expiresAt = now + CELL_FENCE_TTL_MS
+      await transaction.query(
+        `INSERT INTO relay_cell_fences
+         (cell_id, cell_incarnation, attested_at, expires_at)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT (cell_id) DO UPDATE SET
+           cell_incarnation = excluded.cell_incarnation,
+           attested_at = excluded.attested_at,
+           expires_at = excluded.expires_at`,
+        [cellId, cellIncarnation, now, expiresAt]
+      )
+      return expiresAt
+    })
+  }
+
+  async commitLegacyCellFenceAdoption(
+    cellId: string,
+    cellIncarnation: string
+  ): Promise<void> {
+    const now = this.now()
+    await this.database.transaction(async (transaction) => {
+      const cell = (
+        await transaction.queryLocked(`SELECT * FROM relay_cells WHERE cell_id = ?`, [cellId])
+      )[0]
+      if (!cell) throw new Error('cell_not_found')
+      if (integer(cell, 'enabled') !== 0) throw new Error('cell_fence_admission_enabled')
+      const runtime = (
+        await transaction.queryLocked(`SELECT * FROM relay_cell_runtime WHERE cell_id = ?`, [
+          cellId
+        ])
+      )[0]
+      const fence = (
+        await transaction.queryLocked(`SELECT * FROM relay_cell_fences WHERE cell_id = ?`, [
+          cellId
+        ])
+      )[0]
+      const attempt = (
+        await transaction.queryLocked(
+          `SELECT attempt_id FROM relay_cell_fence_attempts
+           WHERE cell_id = ? ORDER BY created_at DESC LIMIT 1`,
+          [cellId]
+        )
+      )[0]
+      if (attempt) throw new Error('legacy_cell_fence_attempt_exists')
+      if (
+        !runtime ||
+        !fence ||
+        text(runtime, 'cell_incarnation') !== cellIncarnation ||
+        text(fence, 'cell_incarnation') !== cellIncarnation ||
+        integer(runtime, 'last_heartbeat_at') > now - this.heartbeatTtlMs ||
+        integer(fence, 'attested_at') < integer(runtime, 'last_heartbeat_at') ||
+        integer(fence, 'expires_at') <= now
+      ) {
+        throw new Error('legacy_cell_fence_not_active')
+      }
+      await transaction.query(
+        `INSERT INTO relay_cell_legacy_fence_adoptions
+         (cell_id, cell_incarnation, attested_at, expires_at)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT (cell_id) DO UPDATE SET
+           cell_incarnation = excluded.cell_incarnation,
+           attested_at = excluded.attested_at,
+           expires_at = excluded.expires_at`,
+        [cellId, cellIncarnation, now, integer(fence, 'expires_at')]
+      )
+    })
+  }
+
+  async prepareCellFenceAttempt(input: CellFenceAttemptEvidence): Promise<CellFenceAttempt> {
+    const now = this.now()
+    return await this.database.transaction(async (transaction) => {
+      let createdAt = now
+      const cell = (
+        await transaction.queryLocked(`SELECT * FROM relay_cells WHERE cell_id = ?`, [
+          input.cellId
+        ])
+      )[0]
+      if (!cell) throw new Error('cell_not_found')
+      if (integer(cell, 'enabled') !== 0) throw new Error('cell_fence_admission_enabled')
+      const runtime = (
+        await transaction.queryLocked(`SELECT * FROM relay_cell_runtime WHERE cell_id = ?`, [
+          input.cellId
+        ])
+      )[0]
+      if (!runtime || text(runtime, 'cell_incarnation') !== input.cellIncarnation) {
+        throw new Error('cell_fence_runtime_mismatch')
+      }
+      const existing = (
+        await transaction.queryLocked(
+          `${CELL_FENCE_ATTEMPT_SELECT}
+           WHERE attempts.cell_id = ? ORDER BY attempts.created_at DESC LIMIT 1`,
+          [input.cellId]
+        )
+      )[0]
+      if (existing) {
+        const attempt = cellFenceAttempt(existing)
+        if (!attempt.completedAt && !attempt.abortedAt) {
+          assertCellFenceAttemptBase(existing, input)
+          return attempt
+        }
+        createdAt = Math.max(now, attempt.createdAt + 1)
+      } else {
+        const activeFence = (
+          await transaction.queryLocked(
+            `SELECT cell_id FROM relay_cell_fences
+             WHERE cell_id = ? AND cell_incarnation = ? AND expires_at > ?`,
+            [input.cellId, input.cellIncarnation, now]
+          )
+        )[0]
+        if (activeFence) throw new Error('cell_fence_already_attested')
+      }
+      const expiresAt = createdAt + CELL_FENCE_ATTEMPT_TTL_MS
+      await transaction.query(
+        `INSERT INTO relay_cell_fence_attempts
+         (attempt_id, environment, cell_id, cell_incarnation, mig_name, instance_group,
+          generation_identity, fence_commit, plan_sha256, gce_operation, created_at,
+          expires_at, apply_started_at, completed_at, aborted_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, NULL, NULL, NULL)`,
+        [
+          input.attemptId,
+          input.environment,
+          input.cellId,
+          input.cellIncarnation,
+          input.migName,
+          input.instanceGroup,
+          input.generationIdentity,
+          input.fenceCommit,
+          input.planSha256,
+          createdAt,
+          expiresAt
+        ]
+      )
+      await transaction.query(
+        `INSERT INTO relay_cell_fence_plan_bindings
+         (attempt_id, plan_object_name, plan_object_generation, var_file_sha256,
+          terraform_state_lineage, terraform_state_serial,
+          terraform_state_object_generation, terraform_state_object_sha256,
+          request_reason)
+         VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?)`,
+        [
+          input.attemptId,
+          input.planObjectName,
+          input.varFileSha256,
+          input.terraformStateLineage,
+          input.terraformStateSerial,
+          input.terraformStateObjectGeneration,
+          input.terraformStateObjectSha256,
+          input.requestReason
+        ]
+      )
+      const { planObjectGeneration: _ignored, ...prepared } = input
+      return { ...prepared, createdAt, expiresAt }
+    })
+  }
+
+  async bindCellFencePlanGeneration(
+    input: CellFenceAttemptEvidence,
+    planObjectGeneration: string
+  ): Promise<CellFenceAttempt> {
+    const now = this.now()
+    return await this.database.transaction(async (transaction) => {
+      const row = await lockedCellFenceAttempt(transaction, input.attemptId)
+      assertCellFenceAttemptBase(row, input)
+      if (integer(row, 'expires_at') <= now) throw new Error('cell_fence_attempt_expired')
+      if (row.apply_started_at !== null) throw new Error('cell_fence_apply_already_started')
+      if (row.completed_at !== null || row.aborted_at !== null) {
+        throw new Error('cell_fence_attempt_terminal')
+      }
+      const existing = optionalText(row, 'plan_object_generation')
+      if (existing && existing !== planObjectGeneration) {
+        throw new Error('cell_fence_plan_generation_mismatch')
+      }
+      if (!existing) {
+        await transaction.query(
+          `UPDATE relay_cell_fence_plan_bindings
+           SET plan_object_generation = ? WHERE attempt_id = ?`,
+          [planObjectGeneration, input.attemptId]
+        )
+        row.plan_object_generation = planObjectGeneration
+      }
+      return cellFenceAttempt(row)
+    })
+  }
+
+  async startCellFenceApply(
+    input: CellFenceAttemptEvidence,
+    invocationId: string,
+    requestReason: string
+  ): Promise<{ attempt: CellFenceAttempt; invocation: CellFenceApplyInvocation }> {
+    const now = this.now()
+    return await this.database.transaction(async (transaction) => {
+      if (requestReason !== `${input.requestReason}/${invocationId}`) {
+        throw new Error('cell_fence_invocation_mismatch')
+      }
+      const row = await lockedCellFenceAttempt(transaction, input.attemptId)
+      assertActiveCellFenceAttempt(row, input, now)
+      const existing = (
+        await transaction.queryLocked(
+          `SELECT * FROM relay_cell_fence_apply_invocations WHERE invocation_id = ?`,
+          [invocationId]
+        )
+      )[0]
+      if (existing) {
+        if (
+          text(existing, 'attempt_id') !== input.attemptId ||
+          text(existing, 'request_reason') !== requestReason
+        ) {
+          throw new Error('cell_fence_invocation_mismatch')
+        }
+        return {
+          attempt: cellFenceAttempt(row),
+          invocation: cellFenceApplyInvocation(existing)
+        }
+      }
+      if (row.apply_started_at === null) {
+        await transaction.query(
+          `UPDATE relay_cell_fence_attempts SET apply_started_at = ? WHERE attempt_id = ?`,
+          [now, input.attemptId]
+        )
+        row.apply_started_at = now
+      }
+      await transaction.query(
+        `INSERT INTO relay_cell_fence_apply_invocations
+         (invocation_id, attempt_id, request_reason, started_at, gce_operation)
+         VALUES (?, ?, ?, ?, NULL)`,
+        [invocationId, input.attemptId, requestReason, now]
+      )
+      return {
+        attempt: cellFenceAttempt(row),
+        invocation: { invocationId, requestReason, startedAt: now }
+      }
+    })
+  }
+
+  async recordCellFenceOperation(
+    input: CellFenceAttemptEvidence,
+    invocationId: string,
+    requestReason: string,
+    gceOperation: string
+  ): Promise<{ attempt: CellFenceAttempt; invocation: CellFenceApplyInvocation }> {
+    const now = this.now()
+    return await this.database.transaction(async (transaction) => {
+      if (requestReason !== `${input.requestReason}/${invocationId}`) {
+        throw new Error('cell_fence_invocation_mismatch')
+      }
+      const row = await lockedCellFenceAttempt(transaction, input.attemptId)
+      assertActiveCellFenceAttempt(row, input, now)
+      if (row.apply_started_at === null) throw new Error('cell_fence_apply_not_started')
+      const invocation = (
+        await transaction.queryLocked(
+          `SELECT * FROM relay_cell_fence_apply_invocations WHERE invocation_id = ?`,
+          [invocationId]
+        )
+      )[0]
+      if (
+        !invocation ||
+        text(invocation, 'attempt_id') !== input.attemptId ||
+        text(invocation, 'request_reason') !== requestReason
+      ) {
+        throw new Error('cell_fence_invocation_mismatch')
+      }
+      const existing = invocation.gce_operation
+      if (existing !== null && existing !== gceOperation) {
+        throw new Error('cell_fence_operation_mismatch')
+      }
+      await transaction.query(
+        `UPDATE relay_cell_fence_apply_invocations
+         SET gce_operation = ? WHERE invocation_id = ?`,
+        [gceOperation, invocationId]
+      )
+      invocation.gce_operation = gceOperation
+      await transaction.query(
+        `UPDATE relay_cell_fence_attempts SET gce_operation = ? WHERE attempt_id = ?`,
+        [gceOperation, input.attemptId]
+      )
+      row.gce_operation = gceOperation
+      return {
+        attempt: cellFenceAttempt(row),
+        invocation: cellFenceApplyInvocation(invocation)
+      }
+    })
+  }
+
+  async cellFenceAttempt(cellId: string): Promise<CellFenceAttempt | null> {
+    const rows = await this.database.query(
+      `${CELL_FENCE_ATTEMPT_SELECT}
+       WHERE attempts.cell_id = ? ORDER BY attempts.created_at DESC LIMIT 1`,
+      [cellId]
+    )
+    if (rows.length === 0) return null
+    const attempt = cellFenceAttempt(rows[0]!)
+    const invocations = await this.database.query(
+      `SELECT * FROM relay_cell_fence_apply_invocations
+       WHERE attempt_id = ? ORDER BY started_at, invocation_id`,
+      [attempt.attemptId]
+    )
+    return {
+      ...attempt,
+      applyInvocations: invocations.map(cellFenceApplyInvocation)
+    }
+  }
+
+  async abortCellFenceAttempt(input: CellFenceAttemptEvidence): Promise<CellFenceAttempt> {
+    return await this.database.transaction(async (transaction) => {
+      const row = await lockedCellFenceAttempt(transaction, input.attemptId)
+      assertCellFenceAttemptBase(row, input)
+      if (row.completed_at !== null) throw new Error('cell_fence_attempt_completed')
+      if (row.aborted_at !== null) throw new Error('cell_fence_attempt_aborted')
+      if (row.apply_started_at !== null || row.gce_operation !== null) {
+        throw new Error('cell_fence_apply_may_have_started')
+      }
+      const abortedAt = this.now()
+      await transaction.query(
+        `UPDATE relay_cell_fence_attempts SET aborted_at = ? WHERE attempt_id = ?`,
+        [abortedAt, input.attemptId]
+      )
+      row.aborted_at = abortedAt
+      return cellFenceAttempt(row)
+    })
+  }
+
+  async attestCellFenceAttempt(
+    input: CellFenceAttemptEvidence,
+    gceOperation: string
+  ): Promise<{ expiresAt: number; attempt: CellFenceAttempt }> {
+    const now = this.now()
+    return await this.database.transaction(async (transaction) => {
+      const attemptRow = await lockedCellFenceAttempt(transaction, input.attemptId)
+      assertCellFenceAttemptEvidence(attemptRow, input)
+      if (attemptRow.completed_at !== null) {
+        if (attemptRow.gce_operation !== gceOperation) {
+          throw new Error('cell_fence_operation_not_attested')
+        }
+        const cell = (
+          await transaction.queryLocked(`SELECT * FROM relay_cells WHERE cell_id = ?`, [
+            input.cellId
+          ])
+        )[0]
+        if (!cell) throw new Error('cell_not_found')
+        if (integer(cell, 'enabled') !== 0) throw new Error('cell_fence_admission_enabled')
+        const runtime = (
+          await transaction.queryLocked(`SELECT * FROM relay_cell_runtime WHERE cell_id = ?`, [
+            input.cellId
+          ])
+        )[0]
+        if (
+          !runtime ||
+          text(runtime, 'cell_incarnation') !== input.cellIncarnation ||
+          integer(runtime, 'last_heartbeat_at') > now - this.heartbeatTtlMs
+        ) {
+          throw new Error('cell_fence_runtime_not_stale')
+        }
+        const expiresAt = now + CELL_FENCE_TTL_MS
+        await transaction.query(
+          `INSERT INTO relay_cell_fences
+           (cell_id, cell_incarnation, attested_at, expires_at)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT (cell_id) DO UPDATE SET
+             cell_incarnation = excluded.cell_incarnation,
+             attested_at = excluded.attested_at,
+             expires_at = excluded.expires_at`,
+          [input.cellId, input.cellIncarnation, now, expiresAt]
+        )
+        await this.recordCommittedCellFence(
+          transaction,
+          input.cellId,
+          input.cellIncarnation,
+          input.attemptId,
+          now,
+          expiresAt
+        )
+        return {
+          expiresAt,
+          attempt: cellFenceAttempt(attemptRow)
+        }
+      }
+      assertActiveCellFenceAttempt(attemptRow, input, now)
+      if (
+        attemptRow.apply_started_at === null ||
+        attemptRow.gce_operation !== gceOperation
+      ) {
+        throw new Error('cell_fence_operation_not_attested')
+      }
+      const cell = (
+        await transaction.queryLocked(`SELECT * FROM relay_cells WHERE cell_id = ?`, [
+          input.cellId
+        ])
+      )[0]
+      if (!cell) throw new Error('cell_not_found')
+      if (integer(cell, 'enabled') !== 0) throw new Error('cell_fence_admission_enabled')
+      const runtime = (
+        await transaction.queryLocked(`SELECT * FROM relay_cell_runtime WHERE cell_id = ?`, [
+          input.cellId
+        ])
+      )[0]
+      if (
+        !runtime ||
+        text(runtime, 'cell_incarnation') !== input.cellIncarnation ||
+        integer(runtime, 'last_heartbeat_at') > now - this.heartbeatTtlMs
+      ) {
+        throw new Error('cell_fence_runtime_not_stale')
+      }
+      const expiresAt = now + CELL_FENCE_TTL_MS
+      await transaction.query(
+        `INSERT INTO relay_cell_fences
+         (cell_id, cell_incarnation, attested_at, expires_at)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT (cell_id) DO UPDATE SET
+           cell_incarnation = excluded.cell_incarnation,
+           attested_at = excluded.attested_at,
+           expires_at = excluded.expires_at`,
+        [input.cellId, input.cellIncarnation, now, expiresAt]
+      )
+      await this.recordCommittedCellFence(
+        transaction,
+        input.cellId,
+        input.cellIncarnation,
+        input.attemptId,
+        now,
+        expiresAt
+      )
+      await transaction.query(
+        `UPDATE relay_cell_fence_attempts SET completed_at = ? WHERE attempt_id = ?`,
+        [now, input.attemptId]
+      )
+      attemptRow.completed_at = now
+      return { expiresAt, attempt: cellFenceAttempt(attemptRow) }
+    })
+  }
+
+  async prepareCellDrainAttempt(input: {
+    attemptId: string
+    cellId: string
+    cellIncarnation: string
+    traceValue: string
+    plannedGraceMs: number
+  }): Promise<CellDrainAttempt & { shouldSend: false }> {
+    // Rolling a switched-on cell needs a flip back first (design default 4).
+    await this.refuseReserveCell(input.cellId)
+    const now = this.now()
+    return await this.database.transaction(async (transaction) => {
+      await this.assertDrainCellGeneration(
+        transaction,
+        input.cellId,
+        input.cellIncarnation
+      )
+      const existing = (
+        await transaction.queryLocked(
+          `SELECT * FROM relay_cell_drain_attempt_states
+           WHERE cell_id = ? ORDER BY prepared_at DESC LIMIT 1`,
+          [input.cellId]
+        )
+      )[0]
+      if (existing) {
+        if (text(existing, 'attempt_id') === input.attemptId) {
+          if (
+            text(existing, 'cell_incarnation') !== input.cellIncarnation ||
+            text(existing, 'trace_value') !== input.traceValue ||
+            integer(existing, 'planned_grace_ms') !== input.plannedGraceMs
+          ) {
+            throw new Error('drain_attempt_generation_mismatch')
+          }
+          return { ...cellDrainAttempt(existing), shouldSend: false }
+        }
+        if (
+          text(existing, 'state') !== 'proven-not-delivered' ||
+          text(existing, 'cell_incarnation') !== input.cellIncarnation
+        ) {
+          throw new Error('drain_attempt_generation_mismatch')
+        }
+      }
+      await transaction.query(
+        `INSERT INTO relay_cell_drain_attempt_states
+         (attempt_id, cell_id, cell_incarnation, trace_value, planned_grace_ms,
+          state, prepared_at, send_may_have_started_at, send_permit_expires_at,
+          application_receipt_at, backend_success_status, backend_instance,
+          receipt_cell_incarnation, retry_after, recover_forward_attempted_at,
+          proven_not_delivered_at)
+         VALUES (?, ?, ?, ?, ?, 'prepared', ?, NULL, NULL, NULL, NULL, NULL,
+          NULL, NULL, NULL, NULL)`,
+        [
+          input.attemptId,
+          input.cellId,
+          input.cellIncarnation,
+          input.traceValue,
+          input.plannedGraceMs,
+          now
+        ]
+      )
+      return {
+        attemptId: input.attemptId,
+        cellId: input.cellId,
+        cellIncarnation: input.cellIncarnation,
+        traceValue: input.traceValue,
+        plannedGraceMs: input.plannedGraceMs,
+        state: 'prepared',
+        preparedAt: now,
+        shouldSend: false
+      }
+    })
+  }
+
+  async beginCellDrainSend(input: {
+    attemptId: string
+    cellId: string
+    cellIncarnation: string
+  }): Promise<CellDrainAttempt & { shouldSend: boolean }> {
+    try {
+      return await this.beginCellDrainSendOnce(input)
+    } catch (error) {
+      if (
+        !(error instanceof Error) ||
+        error.message !== 'migration_activity_accounting_mismatch'
+      ) {
+        throw error
+      }
+      const activityCells = await this.database.query(
+        `SELECT DISTINCT lease.cell_id
+         FROM relay_assignment_activity_leases lease
+         WHERE EXISTS (
+           SELECT 1 FROM relay_assignment_migrations migration
+           WHERE migration.user_id = lease.user_id
+             AND migration.relay_host_id = lease.relay_host_id
+             AND migration.source_cell_id = ?
+             AND migration.completed_at IS NULL
+             AND migration.aborted_at IS NULL
+         )
+         ORDER BY lease.cell_id`,
+        [input.cellId]
+      )
+      const cellIds = activityCells
+        .map((row) => text(row, 'cell_id'))
+        .filter((cellId) => cellId !== input.cellId)
+      for (const cellId of cellIds) {
+        await this.reconcileReservationAccounting(input.cellId, cellId)
+      }
+      await this.refreshDrainMigrationLeases(input)
+      return await this.beginCellDrainSendOnce(input)
+    }
+  }
+
+  private async refreshDrainMigrationLeases(input: {
+    cellId: string
+    cellIncarnation: string
+  }): Promise<void> {
+    await this.retireObsoleteDrainMigrations(input.cellId)
+    for (let repairAttempt = 0; ; repairAttempt++) {
+      try {
+        await this.refreshDrainMigrationLeasesOnce(input)
+        return
+      } catch (error) {
+        if (
+          !(error instanceof Error) ||
+          error.message !== 'migration_activity_accounting_mismatch' ||
+          repairAttempt >= MAX_DRAIN_ACCOUNTING_REPAIR_ATTEMPTS
+        ) {
+          throw error
+        }
+        await this.reconcileDrainMigrationAccounting(input.cellId)
+      }
+    }
+  }
+
+  private async reconcileDrainMigrationAccounting(sourceCellId: string): Promise<void> {
+    const activityCells = await this.database.query(
+      `SELECT DISTINCT lease.cell_id
+       FROM relay_assignment_activity_leases lease
+       WHERE EXISTS (
+         SELECT 1 FROM relay_assignment_migrations migration
+         WHERE migration.user_id = lease.user_id
+           AND migration.relay_host_id = lease.relay_host_id
+           AND migration.source_cell_id = ?
+           AND migration.completed_at IS NULL
+           AND migration.aborted_at IS NULL
+       )
+       ORDER BY lease.cell_id`,
+      [sourceCellId]
+    )
+    for (const cellId of activityCells
+      .map((row) => text(row, 'cell_id'))
+      .filter((cellId) => cellId !== sourceCellId)) {
+      await this.reconcileReservationAccounting(sourceCellId, cellId)
+    }
+  }
+
+  private async retireObsoleteDrainMigrations(sourceCellId: string): Promise<void> {
+    const candidates = await this.database.query(
+      `SELECT migration.user_id, migration.relay_host_id,
+         migration.assignment_epoch
+       FROM relay_assignment_migrations migration
+       JOIN relay_assignments assignment
+         ON assignment.user_id = migration.user_id
+        AND assignment.relay_host_id = migration.relay_host_id
+       WHERE migration.source_cell_id = ?
+         AND migration.completed_at IS NULL AND migration.aborted_at IS NULL
+         AND assignment.assignment_epoch > migration.assignment_epoch
+       ORDER BY migration.user_id, migration.relay_host_id`,
+      [sourceCellId]
+    )
+    for (const candidate of candidates) {
+      await this.retireObsoleteDrainMigration(sourceCellId, candidate)
+    }
+  }
+
+  private async retireObsoleteDrainMigration(
+    sourceCellId: string,
+    candidate: SqlRow
+  ): Promise<void> {
+    const now = this.now()
+    await this.database.transaction(async (transaction) => {
+      const identity = {
+        userId: text(candidate, 'user_id'),
+        relayHostId: text(candidate, 'relay_host_id')
+      }
+      const assignment = await this.assignmentRow(transaction, identity)
+      const assignmentEpoch = integer(candidate, 'assignment_epoch')
+      const migrationRow = (
+        await transaction.queryLocked(
+          `SELECT * FROM relay_assignment_migrations
+           WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?
+             AND source_cell_id = ?
+             AND completed_at IS NULL AND aborted_at IS NULL`,
+          [identity.userId, identity.relayHostId, assignmentEpoch, sourceCellId]
+        )
+      )[0]
+      if (!migrationRow) return
+      if (!assignment || integer(assignment, 'assignment_epoch') <= assignmentEpoch) {
+        throw new Error('migration_assignment_mismatch')
+      }
+      const leases = await this.lockAssignmentActivities(transaction, identity)
+      const obsoleteActivityIds = new Set([
+        pendingControlActivityId(assignmentEpoch),
+        migrationActivityId(assignmentEpoch)
+      ])
+      if (leases.some((lease) => obsoleteActivityIds.has(text(lease, 'activity_id')))) {
+        throw new Error('migration_activity_topology_mismatch')
+      }
+      await this.releaseSupersededControlConnectionReservations(
+        transaction,
+        identity,
+        text(migrationRow, 'target_cell_id'),
+        assignmentEpoch,
+        now
+      )
+      await transaction.query(
+        `UPDATE relay_assignment_migrations SET aborted_at = ?, updated_at = ?
+         WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?`,
+        [now, now, identity.userId, identity.relayHostId, assignmentEpoch]
+      )
+    })
+  }
+
+  private async refreshDrainMigrationLeasesOnce(input: {
+    cellId: string
+    cellIncarnation: string
+  }): Promise<void> {
+    const now = this.now()
+    await this.database.transaction(async (transaction) => {
+      await this.assertDrainCellGeneration(
+        transaction,
+        input.cellId,
+        input.cellIncarnation
+      )
+      const assignments = await transaction.queryLocked(
+        `SELECT assignment.*
+         FROM relay_assignments assignment
+         WHERE EXISTS (
+           SELECT 1 FROM relay_assignment_migrations migration
+           WHERE migration.user_id = assignment.user_id
+             AND migration.relay_host_id = assignment.relay_host_id
+             AND migration.source_cell_id = ?
+             AND migration.completed_at IS NULL
+             AND migration.aborted_at IS NULL
+         )
+         ORDER BY assignment.user_id, assignment.relay_host_id`,
+        [input.cellId]
+      )
+      const activityLeases = await transaction.queryLocked(
+        `SELECT lease.*
+         FROM relay_assignment_activity_leases lease
+         WHERE EXISTS (
+           SELECT 1 FROM relay_assignment_migrations migration
+           WHERE migration.user_id = lease.user_id
+             AND migration.relay_host_id = lease.relay_host_id
+             AND migration.source_cell_id = ?
+             AND migration.completed_at IS NULL
+             AND migration.aborted_at IS NULL
+         )
+         ORDER BY lease.user_id, lease.relay_host_id, lease.activity_id`,
+        [input.cellId]
+      )
+      const migrations = await transaction.queryLocked(
+        `SELECT migration.*
+         FROM relay_assignment_migrations migration
+         WHERE migration.source_cell_id = ?
+           AND migration.completed_at IS NULL
+           AND migration.aborted_at IS NULL
+         ORDER BY migration.user_id, migration.relay_host_id`,
+        [input.cellId]
+      )
+      const cells = await this.lockCellInventory(transaction, 'request')
+      const assignmentRows = createDrainMigrationRowLookup(assignments, text)
+      const leaseRows = createDrainMigrationRowLookup(activityLeases, text)
+      for (const migrationRow of migrations) {
+        const identity = {
+          userId: text(migrationRow, 'user_id'),
+          relayHostId: text(migrationRow, 'relay_host_id')
+        }
+        const assignment = assignmentRows.first(identity)
+        assertCurrentMigrationAssignment(assignment, migrationRow)
+        const leases = leaseRows.all(identity)
+        const migrationLeases = leases.filter(
+          (lease) => text(lease, 'activity_kind') === 'migration'
+        )
+        const assignmentEpoch = integer(migrationRow, 'assignment_epoch')
+        const sourceRequestUnits = integer(migrationRow, 'source_request_units')
+        const targetCellId = text(migrationRow, 'target_cell_id')
+        const expiresAt = now + ASSIGNMENT_LIMITS.migrationLeaseMs
+        if (migrationLeases.length > 0) {
+          assertAssignmentActivityAccounting(assignment, leases, migrationRow)
+          await transaction.query(
+            `UPDATE relay_assignment_activity_leases SET expires_at = ?, updated_at = ?
+             WHERE user_id = ? AND relay_host_id = ?
+               AND activity_id IN (?, ?)`,
+            [
+              expiresAt,
+              now,
+              identity.userId,
+              identity.relayHostId,
+              pendingControlActivityId(assignmentEpoch),
+              migrationActivityId(assignmentEpoch)
+            ]
+          )
+          await transaction.query(
+            `UPDATE relay_assignments SET
+               lease_expires_at = CASE WHEN lease_expires_at > ? THEN lease_expires_at ELSE ? END,
+               last_activity_at = ?
+             WHERE user_id = ? AND relay_host_id = ?`,
+            [expiresAt, expiresAt, now, identity.userId, identity.relayHostId]
+          )
+          await transaction.query(
+            `UPDATE relay_assignment_migrations SET expires_at = ?, updated_at = ?
+             WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?`,
+            [expiresAt, now, identity.userId, identity.relayHostId, assignmentEpoch]
+          )
+          await this.refreshPendingControlReservation(
+            transaction,
+            identity,
+            targetCellId,
+            assignmentEpoch,
+            expiresAt,
+            now
+          )
+          continue
+        }
+        if (
+          optionalInteger(migrationRow, 'target_registered_at') === undefined ||
+          integer(migrationRow, 'expires_at') > now ||
+          sourceRequestUnits < 0 ||
+          integer(migrationRow, 'target_reserved_units') !== sourceRequestUnits + 1 ||
+          activityLeaseById(leases, migrationActivityId(assignmentEpoch)) ||
+          !cells.some((cell) => text(cell, 'cell_id') === targetCellId)
+        ) {
+          throw new Error('migration_activity_lease_shape_mismatch')
+        }
+        await this.adjustCellReservation(transaction, targetCellId, sourceRequestUnits)
+        await transaction.query(
+          `INSERT INTO relay_assignment_activity_leases
+           (user_id, relay_host_id, activity_id, activity_kind, cell_id,
+            request_units, expires_at, updated_at)
+           VALUES (?, ?, ?, 'migration', ?, ?, ?, ?)`,
+          [
+            identity.userId,
+            identity.relayHostId,
+            migrationActivityId(assignmentEpoch),
+            targetCellId,
+            sourceRequestUnits,
+            expiresAt,
+            now
+          ]
+        )
+        await transaction.query(
+          `UPDATE relay_assignments SET migration_leases = migration_leases + 1,
+             lease_expires_at = CASE WHEN lease_expires_at > ? THEN lease_expires_at ELSE ? END,
+             last_activity_at = ?
+           WHERE user_id = ? AND relay_host_id = ?`,
+          [expiresAt, expiresAt, now, identity.userId, identity.relayHostId]
+        )
+        await transaction.query(
+          `UPDATE relay_assignment_migrations SET expires_at = ?, updated_at = ?
+           WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?`,
+          [expiresAt, now, identity.userId, identity.relayHostId, assignmentEpoch]
+        )
+        await this.refreshPendingControlReservation(
+          transaction,
+          identity,
+          targetCellId,
+          assignmentEpoch,
+          expiresAt,
+          now
+        )
+      }
+    })
+  }
+
+  private async beginCellDrainSendOnce(input: {
+    attemptId: string
+    cellId: string
+    cellIncarnation: string
+  }): Promise<CellDrainAttempt & { shouldSend: boolean }> {
+    const now = this.now()
+    return await this.database.transaction(async (transaction) => {
+      await this.assertDrainCellGeneration(
+        transaction,
+        input.cellId,
+        input.cellIncarnation
+      )
+      const row = (
+        await transaction.queryLocked(
+          `SELECT * FROM relay_cell_drain_attempt_states
+           WHERE attempt_id = ? AND cell_id = ?`,
+          [input.attemptId, input.cellId]
+        )
+      )[0]
+      if (!row || text(row, 'cell_incarnation') !== input.cellIncarnation) {
+        throw new Error('drain_attempt_not_found')
+      }
+      if (text(row, 'state') !== 'prepared') {
+        return { ...cellDrainAttempt(row), shouldSend: false }
+      }
+      const assignments = await transaction.queryLocked(
+        `SELECT assignment.*
+         FROM relay_assignments assignment
+         JOIN relay_assignment_migrations migration
+           ON migration.user_id = assignment.user_id
+          AND migration.relay_host_id = assignment.relay_host_id
+         WHERE migration.source_cell_id = ?
+           AND migration.completed_at IS NULL AND migration.aborted_at IS NULL
+         ORDER BY assignment.user_id, assignment.relay_host_id`,
+        [input.cellId]
+      )
+      const activityLeases = await transaction.queryLocked(
+        `SELECT lease.*
+         FROM relay_assignment_activity_leases lease
+         WHERE EXISTS (
+           SELECT 1 FROM relay_assignment_migrations migration
+           WHERE migration.user_id = lease.user_id
+             AND migration.relay_host_id = lease.relay_host_id
+             AND migration.source_cell_id = ?
+             AND migration.completed_at IS NULL
+             AND migration.aborted_at IS NULL
+         )
+         ORDER BY lease.user_id, lease.relay_host_id, lease.activity_id`,
+        [input.cellId]
+      )
+      const migrationIncarnations = await transaction.queryLocked(
+        `SELECT migration.*,
+           (
+             SELECT incarnation.source_cell_incarnation
+             FROM relay_assignment_migration_incarnations incarnation
+             WHERE incarnation.user_id = migration.user_id
+               AND incarnation.relay_host_id = migration.relay_host_id
+               AND incarnation.assignment_epoch = migration.assignment_epoch
+           ) AS source_cell_incarnation,
+           (
+             SELECT incarnation.target_cell_incarnation
+             FROM relay_assignment_migration_incarnations incarnation
+             WHERE incarnation.user_id = migration.user_id
+               AND incarnation.relay_host_id = migration.relay_host_id
+               AND incarnation.assignment_epoch = migration.assignment_epoch
+           ) AS target_cell_incarnation
+         FROM relay_assignment_migrations migration
+         WHERE migration.source_cell_id = ?
+           AND migration.completed_at IS NULL AND migration.aborted_at IS NULL
+         ORDER BY migration.user_id, migration.relay_host_id`,
+        [input.cellId]
+      )
+      if (
+        migrationIncarnations.some(
+          (migration) =>
+            optionalText(migration, 'source_cell_incarnation') !== input.cellIncarnation
+        )
+      ) {
+        throw new Error('drain_migration_source_incarnation_mismatch')
+      }
+      const assignmentRows = createDrainMigrationRowLookup(assignments, text)
+      const leaseRows = createDrainMigrationRowLookup(activityLeases, text)
+      for (const migrationRow of migrationIncarnations) {
+        const identity = {
+          userId: text(migrationRow, 'user_id'),
+          relayHostId: text(migrationRow, 'relay_host_id')
+        }
+        const assignment = assignmentRows.first(identity)
+        assertCurrentMigrationAssignment(assignment, migrationRow)
+        assertAssignmentActivityAccounting(assignment, leaseRows.all(identity), migrationRow)
+      }
+      const sendPermitExpiresAt = now + CELL_DRAIN_SEND_PERMIT_MS
+      await transaction.query(
+        `UPDATE relay_cell_drain_attempt_states
+         SET state = 'send-may-have-started', send_may_have_started_at = ?,
+           send_permit_expires_at = ?
+         WHERE attempt_id = ?`,
+        [now, sendPermitExpiresAt, input.attemptId]
+      )
+      await transaction.query(
+        `INSERT INTO relay_post_drain_migration_pins
+         (user_id, relay_host_id, assignment_epoch, drain_attempt_id,
+          source_cell_id, source_cell_incarnation, target_cell_id,
+          target_cell_incarnation, source_request_units, target_reserved_units,
+          pinned_at)
+         SELECT migration.user_id, migration.relay_host_id,
+           migration.assignment_epoch, ?, migration.source_cell_id,
+           incarnation.source_cell_incarnation, migration.target_cell_id,
+           incarnation.target_cell_incarnation, migration.source_request_units,
+           migration.target_reserved_units, ?
+         FROM relay_assignment_migrations migration
+         JOIN relay_assignment_migration_incarnations incarnation
+           ON incarnation.user_id = migration.user_id
+          AND incarnation.relay_host_id = migration.relay_host_id
+          AND incarnation.assignment_epoch = migration.assignment_epoch
+         WHERE migration.source_cell_id = ?
+           AND migration.completed_at IS NULL AND migration.aborted_at IS NULL
+         ON CONFLICT (user_id, relay_host_id, assignment_epoch) DO NOTHING`,
+        [input.attemptId, now, input.cellId]
+      )
+      row.state = 'send-may-have-started'
+      row.send_may_have_started_at = now
+      row.send_permit_expires_at = sendPermitExpiresAt
+      return { ...cellDrainAttempt(row), shouldSend: true }
+    })
+  }
+
+  async recordCellDrainApplicationReceipt(input: {
+    attemptId: string
+    cellId: string
+    cellIncarnation: string
+    traceValue: string
+    backendStatus: number
+    backendInstance?: string
+  }): Promise<CellDrainAttempt> {
+    const now = this.now()
+    return await this.database.transaction(async (transaction) => {
+      await this.assertDrainCellGeneration(
+        transaction,
+        input.cellId,
+        input.cellIncarnation
+      )
+      const row = (
+        await transaction.queryLocked(
+          `SELECT * FROM relay_cell_drain_attempt_states
+           WHERE attempt_id = ? AND cell_id = ?`,
+          [input.attemptId, input.cellId]
+        )
+      )[0]
+      if (
+        !row ||
+        text(row, 'cell_incarnation') !== input.cellIncarnation ||
+        text(row, 'trace_value') !== input.traceValue
+      ) {
+        throw new Error('drain_attempt_not_found')
+      }
+      if (text(row, 'state') === 'application-receipt') return cellDrainAttempt(row)
+      if (
+        text(row, 'state') !== 'send-may-have-started' ||
+        input.backendStatus < 200 ||
+        input.backendStatus >= 300
+      ) {
+        throw new Error('drain_application_receipt_invalid')
+      }
+      const retryAfter = now + integer(row, 'planned_grace_ms') + 30_000
+      await transaction.query(
+        `UPDATE relay_cell_drain_attempt_states
+         SET state = 'application-receipt', application_receipt_at = ?,
+           backend_success_status = ?, backend_instance = ?,
+           receipt_cell_incarnation = ?, retry_after = ?
+         WHERE attempt_id = ?`,
+        [
+          now,
+          input.backendStatus,
+          input.backendInstance,
+          input.cellIncarnation,
+          retryAfter,
+          input.attemptId
+        ]
+      )
+      row.state = 'application-receipt'
+      row.application_receipt_at = now
+      row.backend_success_status = input.backendStatus
+      row.backend_instance = input.backendInstance ?? null
+      row.receipt_cell_incarnation = input.cellIncarnation
+      row.retry_after = retryAfter
+      return cellDrainAttempt(row)
+    })
+  }
+
+  async proveCellDrainNotDelivered(input: {
+    attemptId: string
+    cellId: string
+    cellIncarnation: string
+  }): Promise<CellDrainAttempt> {
+    const now = this.now()
+    return await this.database.transaction(async (transaction) => {
+      const row = (
+        await transaction.queryLocked(
+          `SELECT * FROM relay_cell_drain_attempt_states
+           WHERE attempt_id = ? AND cell_id = ?`,
+          [input.attemptId, input.cellId]
+        )
+      )[0]
+      if (!row || text(row, 'cell_incarnation') !== input.cellIncarnation) {
+        throw new Error('drain_attempt_not_found')
+      }
+      if (text(row, 'state') === 'proven-not-delivered') return cellDrainAttempt(row)
+      if (text(row, 'state') !== 'send-may-have-started') {
+        throw new Error('drain_delivery_proof_invalid')
+      }
+      await transaction.query(
+        `UPDATE relay_cell_drain_attempt_states
+         SET state = 'proven-not-delivered', proven_not_delivered_at = ?
+         WHERE attempt_id = ?`,
+        [now, input.attemptId]
+      )
+      row.state = 'proven-not-delivered'
+      row.proven_not_delivered_at = now
+      return cellDrainAttempt(row)
+    })
+  }
+
+  async prepareCellDrainRecovery(input: {
+    attemptId?: string
+    cellId: string
+    cellIncarnation: string
+  }): Promise<{
+    shouldSend: boolean
+    retryAfter: number
+    preparedAttempt?: CellDrainAttempt
+  }> {
+    await this.refreshDrainMigrationLeases(input)
+    const now = this.now()
+    return await this.database.transaction(async (transaction) => {
+      await this.assertDrainCellGeneration(
+        transaction,
+        input.cellId,
+        input.cellIncarnation
+      )
+      const attempt = (
+        await transaction.queryLocked(
+          `SELECT * FROM relay_cell_drain_attempt_states
+           WHERE cell_id = ?
+           ORDER BY prepared_at DESC LIMIT 1`,
+          [input.cellId]
+        )
+      )[0]
+      if (!attempt || (input.attemptId && text(attempt, 'attempt_id') !== input.attemptId)) {
+        throw new Error('drain_application_receipt_missing')
+      }
+      if (text(attempt, 'state') === 'prepared') {
+        if (text(attempt, 'cell_incarnation') !== input.cellIncarnation) {
+          throw new Error('drain_application_receipt_missing')
+        }
+        return {
+          shouldSend: false,
+          retryAfter: now,
+          preparedAttempt: cellDrainAttempt(attempt)
+        }
+      }
+      const applicationReceiptAt = optionalInteger(attempt, 'application_receipt_at')
+      const backendSuccessStatus = optionalInteger(attempt, 'backend_success_status')
+      const retryAfter = optionalInteger(attempt, 'retry_after')
+      if (
+        text(attempt, 'state') !== 'application-receipt' ||
+        optionalText(attempt, 'receipt_cell_incarnation') !==
+          text(attempt, 'cell_incarnation') ||
+        applicationReceiptAt === undefined ||
+        backendSuccessStatus === undefined ||
+        backendSuccessStatus < 200 ||
+        backendSuccessStatus >= 300 ||
+        retryAfter === undefined
+      ) {
+        throw new Error('drain_application_receipt_missing')
+      }
+      if (now < retryAfter) throw new Error('drain_recovery_too_early')
+      const attemptId = text(attempt, 'attempt_id')
+      if (text(attempt, 'cell_incarnation') !== input.cellIncarnation) {
+        const priorRecovery = (
+          await transaction.queryLocked(
+            `SELECT attempted_at FROM relay_cell_drain_recovery_attempts
+             WHERE drain_attempt_id = ? AND cell_incarnation = ?`,
+            [attemptId, input.cellIncarnation]
+          )
+        )[0]
+        if (priorRecovery) return { shouldSend: false, retryAfter }
+        await transaction.query(
+          `INSERT INTO relay_cell_drain_recovery_attempts
+           (drain_attempt_id, cell_incarnation, attempted_at) VALUES (?, ?, ?)`,
+          [attemptId, input.cellIncarnation, now]
+        )
+        return { shouldSend: true, retryAfter }
+      }
+      if (optionalInteger(attempt, 'recover_forward_attempted_at') !== undefined) {
+        return { shouldSend: false, retryAfter }
+      }
+      await transaction.query(
+        `UPDATE relay_cell_drain_attempt_states SET recover_forward_attempted_at = ?
+         WHERE attempt_id = ? AND recover_forward_attempted_at IS NULL`,
+        [now, attemptId]
+      )
+      return { shouldSend: true, retryAfter }
+    })
+  }
+
+  async evacuateDeadCells(limit = 100): Promise<number> {
+    if (!this.requireLiveCells) return 0
+    const cutoff = this.now() - this.heartbeatTtlMs
+    const reserveCells = await this.reserveModeCells()
+    if (reserveCells === null) return 0
+    // A reserve-mode cell that stops heartbeating is unverifiable, never gone: its hosts
+    // re-place themselves when their control drops.
+    const cellIds = (await this.deadCellEvacuationCandidates(cutoff)).filter(
+      (cellId) => !reserveCells.has(cellId)
+    )
+    // Without candidates, this scans all assignments for nothing (~574ms in production on stale existing-only cells).
+    if (cellIds.length === 0) return 0
+    const rows = await this.database.query(
+      `SELECT assignment.user_id, assignment.relay_host_id, assignment.cell_id
+       FROM relay_assignments assignment
+       JOIN relay_cells cell ON cell.cell_id = assignment.cell_id
+       LEFT JOIN relay_cell_committed_fences committed
+         ON committed.cell_id = assignment.cell_id
+       LEFT JOIN relay_cell_fence_attempts attempt
+         ON attempt.attempt_id = committed.attempt_id
+       LEFT JOIN relay_cell_fences fence ON fence.cell_id = assignment.cell_id
+       LEFT JOIN relay_cell_runtime runtime ON runtime.cell_id = cell.cell_id
+       WHERE (runtime.cell_id IS NULL OR runtime.ready != ? OR runtime.last_heartbeat_at <= ?)
+         AND (
+           (
+             cell.enabled = 1
+             AND NOT EXISTS (
+               SELECT 1 FROM relay_cell_connection_limits limits
+               WHERE limits.cell_id = assignment.cell_id
+             )
+             AND NOT EXISTS (
+               SELECT 1 FROM relay_post_drain_migration_pins pin
+               JOIN relay_assignment_migrations migration
+                 ON migration.user_id = pin.user_id
+                AND migration.relay_host_id = pin.relay_host_id
+                AND migration.assignment_epoch = pin.assignment_epoch
+               WHERE pin.user_id = assignment.user_id
+                 AND pin.relay_host_id = assignment.relay_host_id
+                 AND pin.assignment_epoch = assignment.assignment_epoch
+                 AND pin.target_cell_id = assignment.cell_id
+                 AND migration.completed_at IS NULL
+                 AND migration.aborted_at IS NULL
+             )
+           )
+           OR (
+             cell.enabled = 0
+             AND (
+               EXISTS (
+                 SELECT 1 FROM relay_cell_connection_limits limits
+                 WHERE limits.cell_id = assignment.cell_id
+               )
+               OR EXISTS (
+                 SELECT 1 FROM relay_post_drain_migration_pins pin
+                 JOIN relay_assignment_migrations migration
+                   ON migration.user_id = pin.user_id
+                  AND migration.relay_host_id = pin.relay_host_id
+                  AND migration.assignment_epoch = pin.assignment_epoch
+                 WHERE pin.user_id = assignment.user_id
+                   AND pin.relay_host_id = assignment.relay_host_id
+                   AND pin.assignment_epoch = assignment.assignment_epoch
+                   AND pin.target_cell_id = assignment.cell_id
+                   AND migration.completed_at IS NULL
+                   AND migration.aborted_at IS NULL
+               )
+             )
+             AND attempt.completed_at IS NOT NULL
+             AND attempt.aborted_at IS NULL
+             AND committed.cell_incarnation = runtime.cell_incarnation
+             AND fence.cell_incarnation = committed.cell_incarnation
+             AND committed.attested_at >= runtime.last_heartbeat_at
+             AND committed.expires_at > ?
+             AND fence.expires_at > ?
+           )
+         )
+         AND assignment.cell_id IN (${cellIds.map(() => '?').join(', ')})
+       ORDER BY assignment.user_id, assignment.relay_host_id LIMIT ?`,
+      [1, cutoff, this.now(), this.now(), ...cellIds, limit]
+    )
+    let moved = 0
+    for (const row of rows) {
+      try {
+        const assignment = await this.assign(
+          { userId: text(row, 'user_id'), relayHostId: text(row, 'relay_host_id') },
+          undefined,
+          undefined,
+          'pool-default'
+        )
+        if (assignment.cellId !== text(row, 'cell_id')) moved++
+      } catch (error) {
+        // One unplaceable or busy host must not end the sweep for the rest; a
+        // busy host is mid-release and the next tick takes it.
+        if (
+          !(error instanceof RelayHomeCellUnavailableError) &&
+          !(error instanceof RelayAssignmentRowBusyError) &&
+          !(error instanceof Error && error.message === 'relay_capacity_exhausted')
+        ) {
+          throw error
+        }
+      }
+    }
+    return moved
+  }
+
+  // The cell-level half of evacuateDeadCells' predicate, so it is a superset: every cell the host
+  // query could act on is here, and only the per-host pin checks are left out.
+  private async deadCellEvacuationCandidates(cutoff: number): Promise<string[]> {
+    const now = this.now()
+    const rows = await this.database.query(
+      `SELECT cell.cell_id
+       FROM relay_cells cell
+       LEFT JOIN relay_cell_committed_fences committed ON committed.cell_id = cell.cell_id
+       LEFT JOIN relay_cell_fence_attempts attempt ON attempt.attempt_id = committed.attempt_id
+       LEFT JOIN relay_cell_fences fence ON fence.cell_id = cell.cell_id
+       LEFT JOIN relay_cell_runtime runtime ON runtime.cell_id = cell.cell_id
+       WHERE (runtime.cell_id IS NULL OR runtime.ready != ? OR runtime.last_heartbeat_at <= ?)
+         AND (
+           (
+             cell.enabled = 1
+             AND NOT EXISTS (
+               SELECT 1 FROM relay_cell_connection_limits limits
+               WHERE limits.cell_id = cell.cell_id
+             )
+           )
+           OR (
+             cell.enabled = 0
+             AND attempt.completed_at IS NOT NULL
+             AND attempt.aborted_at IS NULL
+             AND committed.cell_incarnation = runtime.cell_incarnation
+             AND fence.cell_incarnation = committed.cell_incarnation
+             AND committed.attested_at >= runtime.last_heartbeat_at
+             AND committed.expires_at > ?
+             AND fence.expires_at > ?
+           )
+         )
+       ORDER BY cell.cell_id`,
+      [1, cutoff, now, now]
+    )
+    return rows.map((row) => text(row, 'cell_id'))
+  }
+
+  async configureCell(
+    cell: RelayCellConfig,
+    admission: boolean | CellAdmissionState
+  ): Promise<void> {
+    const now = this.now()
+    const state = typeof admission === 'boolean' ? stateFromEnabled(admission) : admission
+    await this.database.transaction(async (transaction) => {
+      const cells = await transaction.queryLocked(
+        `SELECT * FROM relay_cells ORDER BY cell_id ASC`
+      )
+      const current = cells.find((row) => text(row, 'cell_id') === cell.id)
+      if (current && integer(current, 'reserved_requests') > cell.capacityRequests) {
+        throw new Error('cell_capacity_below_reserved')
+      }
+      // Deploy automation owns tagged URLs; a restarted revision must not overwrite them.
+      await transaction.query(
+        `INSERT INTO relay_cells
+         (cell_id, cell_url, enabled, capacity_requests, reserved_requests,
+          observed_requests, last_heartbeat_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT (cell_id) DO UPDATE SET
+           cell_url = excluded.cell_url,
+           enabled = excluded.enabled,
+           capacity_requests = excluded.capacity_requests,
+           updated_at = excluded.updated_at`,
+        [
+          cell.id,
+          cell.url,
+          state === 'existing-only' ? 0 : 1,
+          cell.capacityRequests,
+          0,
+          0,
+          now,
+          now
+        ]
+      )
+      await transaction.query(
+        `INSERT INTO relay_cell_regions (cell_id, region) VALUES (?, ?)
+         ON CONFLICT (cell_id) DO UPDATE SET region = excluded.region`,
+        [cell.id, cell.region ?? RELAY_DEFAULT_REGION]
+      )
+      await ensureCellAdmission(transaction, cell.id, state, now)
+      await setCellAdmissionBeforeBoundary(transaction, cell.id, state, now)
+      await writeCellConnectionLimit(transaction, cell, now)
+    })
+  }
+
+  async startActiveCellEvacuations(
+    sourceCellId: string,
+    targetCellId: string,
+    limit: number
+  ): Promise<number> {
+    await this.refuseReserveCell(sourceCellId)
+    await this.refuseReserveCell(targetCellId)
+    const rows = await this.database.query(
+      `SELECT user_id, relay_host_id FROM relay_assignments
+       WHERE cell_id = ? AND
+         (reserved_controls > 0 OR reserved_splices > 0 OR reserved_invites > 0 OR
+          pending_installs > 0 OR pending_confirmations > 0 OR migration_leases > 0)
+       ORDER BY user_id, relay_host_id LIMIT ?`,
+      [sourceCellId, limit]
+    )
+    let started = 0
+    for (const row of rows) {
+      const migration = await this.startEvacuation(
+        { userId: text(row, 'user_id'), relayHostId: text(row, 'relay_host_id') },
+        targetCellId,
+        sourceCellId
+      )
+      if (migration) started++
+    }
+    return started
+  }
+
+  async cellEvacuationCapacity(
+    sourceCellId: string,
+    targetCellId: string
+  ): Promise<CellEvacuationCapacity> {
+    await this.refuseReserveCell(sourceCellId)
+    await this.refuseReserveCell(targetCellId)
+    const cells = await this.database.query(
+      `SELECT * FROM relay_cells WHERE cell_id IN (?, ?) ORDER BY cell_id`,
+      [sourceCellId, targetCellId]
+    )
+    if (!cells.some((row) => text(row, 'cell_id') === sourceCellId)) {
+      throw new Error('source_cell_not_found')
+    }
+    const target = cells.find((row) => text(row, 'cell_id') === targetCellId)
+    if (!target) throw new Error('target_cell_not_found')
+    if (!(await this.cellIsLive(this.database, targetCellId, this.now()))) {
+      throw new Error('target_cell_unavailable')
+    }
+    const summary = (
+      await this.database.query(
+        `SELECT COUNT(*) AS assignments,
+           COALESCE(SUM((SELECT COALESCE(SUM(lease.request_units), 0)
+             FROM relay_assignment_activity_leases lease
+             WHERE lease.user_id = assignment.user_id
+               AND lease.relay_host_id = assignment.relay_host_id)), 0) AS source_units
+         FROM relay_assignments assignment
+         WHERE assignment.cell_id = ? AND
+           (assignment.reserved_controls > 0 OR assignment.reserved_splices > 0 OR
+            assignment.reserved_invites > 0 OR assignment.pending_installs > 0 OR
+            assignment.pending_confirmations > 0 OR assignment.migration_leases > 0)`,
+        [sourceCellId]
+      )
+    )[0]!
+    const sourceAssignments = integer(summary, 'assignments')
+    return {
+      sourceAssignments,
+      // Each migration reserves its future target control plus all source-owned units.
+      requiredTargetUnits: integer(summary, 'source_units') + sourceAssignments,
+      availableTargetUnits:
+        integer(target, 'capacity_requests') - integer(target, 'reserved_requests')
+    }
+  }
+
+  async cellEvacuationStatus(
+    sourceCellId: string,
+    targetCellId: string,
+    completeReady: boolean
+  ): Promise<CellEvacuationStatus> {
+    await this.refuseReserveCell(sourceCellId)
+    await this.refuseReserveCell(targetCellId)
+    let completed = 0
+    let blocked = 0
+    const sourceFenced = await this.cellHasActiveFence(sourceCellId)
+    if (completeReady) {
+      const candidates = await this.activeCellMigrations(sourceCellId, targetCellId)
+      for (const [index, row] of candidates.entries()) {
+        try {
+          const identity = {
+            userId: text(row, 'user_id'),
+            relayHostId: text(row, 'relay_host_id')
+          }
+          const assignmentEpoch = integer(row, 'assignment_epoch')
+          if (sourceFenced) {
+            await this.completeEvacuationFromDeadSource(identity, {
+              assignmentEpoch,
+              sourceCellId,
+              targetCellId
+            })
+          } else {
+            await this.completeEvacuation(identity, assignmentEpoch)
+          }
+          completed++
+        } catch (error) {
+          if (error instanceof Error && error.message === 'migration_cell_inventory_busy') {
+            blocked += candidates.length - index
+            break
+          }
+          if (isIncompleteMigration(error)) blocked++
+          else if (!(error instanceof Error && error.message === 'migration_not_found')) throw error
+        }
+      }
+    }
+    const active = await this.activeCellMigrations(sourceCellId, targetCellId)
+    const oldestExpiresAt =
+      active.length === 0 ? null : Math.min(...active.map((row) => integer(row, 'expires_at')))
+    if (completeReady && active.length === 0) {
+      await this.reconcileReservationAccounting(sourceCellId, targetCellId)
+    }
+    const registered = active.filter(
+      (row) => optionalInteger(row, 'target_registered_at') !== undefined
+    )
+    const registeredSourceActive = registered.filter(
+      (row) => integer(row, 'source_activity_units') > 0
+    ).length
+    const registeredCompletable = registered.filter(
+      (row) =>
+        integer(row, 'source_activity_units') === 0 &&
+        integer(row, 'target_control_current') === 1
+    ).length
+    const registeredTargetInactive = registered.filter(
+      (row) =>
+        integer(row, 'source_activity_units') === 0 &&
+        integer(row, 'target_control_current') === 0
+    ).length
+    const expiredUnregistered = active.filter(
+      (row) =>
+        optionalInteger(row, 'target_registered_at') === undefined &&
+        integer(row, 'expires_at') <= this.now()
+    )
+    const repairableExpiredUnregistered = expiredUnregistered.filter(
+      (row) => migrationHasExactActiveTarget(row, targetCellId)
+    ).length
+    const abortableExpiredUnregistered = expiredUnregistered.filter(
+      (row) => integer(row, 'target_control_active') === 0
+    ).length
+    const blockedExpiredUnregistered =
+      expiredUnregistered.length -
+      repairableExpiredUnregistered -
+      abortableExpiredUnregistered
+    return {
+      inProgress: active.length,
+      oldestExpiresAt,
+      oldestRemainingMs: oldestExpiresAt === null ? null : oldestExpiresAt - this.now(),
+      targetRegistered: registered.length,
+      registeredSourceActive,
+      registeredCompletable,
+      registeredTargetInactive,
+      completed,
+      blocked,
+      expiredUnregistered: expiredUnregistered.length,
+      repairableExpiredUnregistered,
+      abortableExpiredUnregistered,
+      blockedExpiredUnregistered,
+      blockedExpiredOnNewerTargetAssignment: expiredUnregistered.filter(
+        (row) =>
+          integer(row, 'target_control_active') === 1 &&
+          optionalText(row, 'current_cell_id') === targetCellId &&
+          (optionalInteger(row, 'current_assignment_epoch') ?? 0) >
+            integer(row, 'assignment_epoch')
+      ).length
+    }
+  }
+
+  async completeReadyEvacuations(limit = 100): Promise<number> {
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+      throw new Error('invalid_evacuation_completion_limit')
+    }
+    const now = this.now()
+    const runtimeSafety = this.requireLiveCells
+      ? `AND EXISTS (
+           SELECT 1 FROM relay_cells source_cell
+           WHERE source_cell.cell_id = migration.source_cell_id
+             AND source_cell.enabled = 0
+         )
+         AND EXISTS (
+           SELECT 1 FROM relay_cells target_cell
+           WHERE target_cell.cell_id = migration.target_cell_id
+             AND target_cell.enabled = 1
+         )
+         AND EXISTS (
+           SELECT 1 FROM relay_cell_runtime source_runtime
+           WHERE source_runtime.cell_id = migration.source_cell_id
+             AND source_runtime.ready = 1
+             AND source_runtime.observed_requests = 0
+             AND source_runtime.last_heartbeat_at > ?
+         )
+         AND EXISTS (
+           SELECT 1 FROM relay_cell_runtime target_runtime
+           WHERE target_runtime.cell_id = migration.target_cell_id
+             AND target_runtime.ready = 1
+             AND target_runtime.last_heartbeat_at > ?
+         )`
+      : ''
+    const targetIncarnation = this.requireLiveCells
+      ? `AND target_control.updated_at >= (
+           SELECT target_runtime.started_at FROM relay_cell_runtime target_runtime
+           WHERE target_runtime.cell_id = migration.target_cell_id
+         )`
+      : ''
+    // Selection avoids polling offline desktops; completeEvacuation rechecks
+    // current target activity and zero source ownership under row locks.
+    const candidates = await this.database.query(
+      `SELECT migration.user_id, migration.relay_host_id, migration.source_cell_id,
+         migration.target_cell_id, migration.assignment_epoch
+       FROM relay_assignment_migrations migration
+       WHERE migration.target_registered_at IS NOT NULL
+         AND migration.completed_at IS NULL AND migration.aborted_at IS NULL
+         ${runtimeSafety}
+         AND NOT EXISTS (
+           SELECT 1 FROM relay_assignment_activity_leases source_lease
+           WHERE source_lease.user_id = migration.user_id
+             AND source_lease.relay_host_id = migration.relay_host_id
+             AND source_lease.cell_id = migration.source_cell_id
+         )
+         AND EXISTS (
+           SELECT 1 FROM relay_assignment_activity_leases target_control
+           WHERE target_control.user_id = migration.user_id
+             AND target_control.relay_host_id = migration.relay_host_id
+             AND target_control.cell_id = migration.target_cell_id
+             AND target_control.activity_kind = 'control'
+             AND target_control.activity_id NOT LIKE 'control-pending:%'
+             AND target_control.expires_at > ?
+             ${targetIncarnation}
+         )
+       ORDER BY migration.user_id, migration.relay_host_id
+       LIMIT ?`,
+      [
+        ...(this.requireLiveCells
+          ? [now - this.heartbeatTtlMs, now - this.heartbeatTtlMs]
+          : []),
+        now,
+        limit
+      ]
+    )
+    const pairs = new Map<string, { sourceCellId: string; targetCellId: string }>()
+    let completed = 0
+    for (const row of candidates) {
+      const sourceCellId = text(row, 'source_cell_id')
+      const targetCellId = text(row, 'target_cell_id')
+      pairs.set(JSON.stringify([sourceCellId, targetCellId]), { sourceCellId, targetCellId })
+      try {
+        await this.completeEvacuation(
+          { userId: text(row, 'user_id'), relayHostId: text(row, 'relay_host_id') },
+          integer(row, 'assignment_epoch')
+        )
+        completed++
+      } catch (error) {
+        if (!isIncompleteMigration(error) && !isMissingMigration(error)) throw error
+      }
+    }
+    for (const { sourceCellId, targetCellId } of pairs.values()) {
+      if ((await this.activeCellMigrations(sourceCellId, targetCellId)).length === 0) {
+        await this.reconcileReservationAccounting(sourceCellId, targetCellId)
+      }
+    }
+    return completed
+  }
+
+  // Its host counts here are stale for a reserve-mode cell, so tooling must not read it as empty.
+  async cellDeploymentStatus(cellId: string): Promise<CellDeploymentStatus> {
+    await this.refuseReserveCell(cellId)
+    const base = await this.cellDeploymentBaseStatus(cellId)
+    return { ...base, ...(await this.cellPerHostCounts(cellId)) }
+  }
+
+  // For tooling that knows a reserve-mode cell: it gets no per-host counts, rather than stale ones.
+  async reserveAwareCellDeploymentStatus(cellId: string): Promise<ReserveAwareCellDeploymentStatus> {
+    const reserveCells = await this.reserveModeCells()
+    if (reserveCells === null) throw new RelayCellInReserveModeError(null)
+    const base = await this.cellDeploymentBaseStatus(cellId)
+    if (reserveCells.has(cellId)) return { admitMode: 'reserve', status: base }
+    return { admitMode: 'db', status: { ...base, ...(await this.cellPerHostCounts(cellId)) } }
+  }
+
+  private async cellDeploymentBaseStatus(cellId: string): Promise<CellDeploymentBaseStatus> {
+    const cellRow = (
+      await this.database.query(
+        `SELECT cell.*, runtime.cell_url AS runtime_cell_url,
+           admission.admission_state,
+           runtime.cell_incarnation AS runtime_cell_incarnation,
+           runtime.started_at AS runtime_started_at, runtime.ready AS runtime_ready,
+           runtime.observed_requests AS runtime_observed_requests,
+           runtime.last_heartbeat_at AS runtime_last_heartbeat_at,
+           COALESCE(capabilities.regional_rehome_protocol, 0)
+             AS runtime_regional_rehome_protocol
+         FROM relay_cells cell
+         LEFT JOIN relay_cell_admission admission ON admission.cell_id = cell.cell_id
+         LEFT JOIN relay_cell_runtime runtime ON runtime.cell_id = cell.cell_id
+         LEFT JOIN relay_cell_capabilities capabilities
+           ON capabilities.cell_id = runtime.cell_id
+          AND capabilities.cell_incarnation = runtime.cell_incarnation
+         WHERE cell.cell_id = ?`,
+        [cellId]
+      )
+    )[0]
+    if (!cellRow) throw new Error('cell_not_found')
+    const connectionRow = (
+      await this.database.query(
+        `SELECT ${CONNECTION_CAP_COLUMNS_SQL},
+           connection_runtime.total_connections, connection_runtime.in_flight_connections,
+           connection_runtime.reserved_connection_units,
+           connection_runtime.enforced_connection_units,
+           connection_runtime.last_heartbeat_at,
+           current_runtime.cell_incarnation AS current_incarnation,
+           connection_runtime.cell_incarnation AS connection_incarnation,
+           (SELECT COUNT(*) FROM relay_control_connection_reservations reservation
+            WHERE reservation.cell_id = limits.cell_id
+              AND reservation.state IN
+                ('reserved', 'late-arrival-debt', 'claimed')) AS outstanding_reservations
+         FROM relay_cell_connection_limits limits
+         LEFT JOIN relay_cell_connection_runtime connection_runtime
+           ON connection_runtime.cell_id = limits.cell_id
+         LEFT JOIN relay_cell_runtime current_runtime
+           ON current_runtime.cell_id = limits.cell_id
+         WHERE limits.cell_id = ?`,
+        [cellId]
+      )
+    )[0]
+    const runtimeHeartbeat = optionalInteger(cellRow, 'runtime_last_heartbeat_at')
+    const connectionHeartbeat = connectionRow
+      ? optionalInteger(connectionRow, 'last_heartbeat_at')
+      : undefined
+    return {
+      cellId,
+      cellUrl: text(cellRow, 'cell_url'),
+      region: await this.cellRegion(this.database, cellId),
+      enabled: integer(cellRow, 'enabled') === 1,
+      admissionState: parseCellAdmissionState(text(cellRow, 'admission_state')),
+      capacityRequests: integer(cellRow, 'capacity_requests'),
+      connectionCapacity: connectionRow
+          ? {
+            ...readCellConnectionCap(connectionRow),
+            observedConnections:
+              optionalInteger(connectionRow, 'total_connections') ?? 0,
+            inFlightConnections:
+              optionalInteger(connectionRow, 'in_flight_connections') ?? 0,
+            reservedConnectionUnits:
+              optionalInteger(connectionRow, 'reserved_connection_units') ?? 0,
+            enforcedConnectionUnits:
+              optionalInteger(connectionRow, 'enforced_connection_units') ?? 0,
+            pendingControlReservations: integer(
+              connectionRow,
+              'outstanding_reservations'
+            ),
+            heartbeatFresh:
+              connectionHeartbeat !== undefined &&
+              connectionHeartbeat > this.now() - this.heartbeatTtlMs &&
+              optionalText(connectionRow, 'current_incarnation') ===
+                optionalText(connectionRow, 'connection_incarnation')
+          }
+        : null,
+      runtime:
+        runtimeHeartbeat === undefined
+          ? null
+          : {
+              cellUrl: text(cellRow, 'runtime_cell_url'),
+              cellIncarnation: text(cellRow, 'runtime_cell_incarnation'),
+              startedAt: integer(cellRow, 'runtime_started_at'),
+              ready: integer(cellRow, 'runtime_ready') === 1,
+              observedRequests: integer(cellRow, 'runtime_observed_requests'),
+              lastHeartbeatAt: runtimeHeartbeat,
+              heartbeatFresh: runtimeHeartbeat > this.now() - this.heartbeatTtlMs,
+              regionalRehomeProtocol: integer(
+                cellRow,
+                'runtime_regional_rehome_protocol'
+              )
+            }
+    }
+  }
+
+  private async cellPerHostCounts(cellId: string): Promise<CellPerHostCounts> {
+    const activityRow = (
+      await this.database.query(
+        `WITH activity AS (
+           SELECT COUNT(*) AS activity_lease_count,
+             COALESCE(SUM(request_units), 0) AS activity_request_units,
+             COALESCE(SUM(CASE WHEN activity_kind = 'control'
+                                    AND activity_id LIKE 'control-pending:%'
+                                    AND request_units = 1
+                               THEN 1 ELSE 0 END), 0) AS pending_control_units
+           FROM relay_assignment_activity_leases WHERE cell_id = ?
+         )
+         SELECT cell.reserved_requests,
+           activity.activity_lease_count, activity.activity_request_units,
+           activity.activity_lease_count - activity.pending_control_units
+             AS restart_blocking_activity_leases,
+           activity.activity_request_units - activity.pending_control_units
+             AS restart_blocking_activity_request_units,
+           cell.reserved_requests - activity.pending_control_units
+             AS restart_blocking_reserved_requests
+         FROM relay_cells cell
+         CROSS JOIN activity
+         WHERE cell.cell_id = ?`,
+        [cellId, cellId]
+      )
+    )[0]
+    if (!activityRow) throw new Error('cell_not_found')
+    const assignmentRow = (
+      await this.database.query(
+        `SELECT COUNT(*) AS assignment_count FROM relay_assignments WHERE cell_id = ?`,
+        [cellId]
+      )
+    )[0]!
+    const migrationRow = (
+      await this.database.query(
+        `SELECT
+           COALESCE(SUM(CASE WHEN source_cell_id = ? THEN 1 ELSE 0 END), 0)
+             AS outgoing_migrations,
+           COALESCE(SUM(CASE WHEN target_cell_id = ? THEN 1 ELSE 0 END), 0)
+             AS incoming_migrations
+         FROM relay_assignment_migrations
+         WHERE completed_at IS NULL AND aborted_at IS NULL
+           AND (source_cell_id = ? OR target_cell_id = ?)`,
+        [cellId, cellId, cellId, cellId]
+      )
+    )[0]!
+    return {
+      reservedRequests: integer(activityRow, 'reserved_requests'),
+      assignments: integer(assignmentRow, 'assignment_count'),
+      activityLeases: integer(activityRow, 'activity_lease_count'),
+      activityRequestUnits: integer(activityRow, 'activity_request_units'),
+      restartBlockingActivityLeases: integer(
+        activityRow,
+        'restart_blocking_activity_leases'
+      ),
+      restartBlockingActivityRequestUnits: integer(
+        activityRow,
+        'restart_blocking_activity_request_units'
+      ),
+      restartBlockingReservedRequests: integer(
+        activityRow,
+        'restart_blocking_reserved_requests'
+      ),
+      outgoingMigrations: integer(migrationRow, 'outgoing_migrations'),
+      incomingMigrations: integer(migrationRow, 'incoming_migrations')
+    }
+  }
+
+  async verifyCellAssignment(input: AssignmentIdentity & {
+    cellId: string
+    assignmentEpoch: number
+  }): Promise<boolean> {
+    const rows = await this.database.query(
+      `SELECT cell_id, assignment_epoch FROM relay_assignments
+       WHERE user_id = ? AND relay_host_id = ?`,
+      [input.userId, input.relayHostId]
+    )
+    return Boolean(
+      rows[0] &&
+        text(rows[0], 'cell_id') === input.cellId &&
+        integer(rows[0], 'assignment_epoch') === input.assignmentEpoch
+    )
+  }
+
+  async changeActivity(
+    identity: AssignmentIdentity,
+    kind: AssignmentActivityKind,
+    delta: 1 | -1
+  ): Promise<void> {
+    await this.activityQueue.run(identity, async () => {
+      const column = ACTIVITY_COLUMN[kind]
+      const now = this.now()
+      await this.database.transaction(async (transaction) => {
+        const row = (
+          await transaction.queryLocked(
+            `SELECT * FROM relay_assignments WHERE user_id = ? AND relay_host_id = ?`,
+            [identity.userId, identity.relayHostId]
+          )
+        )[0]
+        if (!row) return
+        const before = integer(row, column)
+        const after = Math.max(0, before + delta)
+        await transaction.query(
+          `UPDATE relay_assignments SET ${column} = ?, lease_expires_at = ?, last_activity_at = ?
+           WHERE user_id = ? AND relay_host_id = ?`,
+          [after, now + ASSIGNMENT_LIMITS.activityLeaseMs, now, identity.userId, identity.relayHostId]
+        )
+        const requestDelta = ACTIVITY_REQUEST_UNITS[kind] * (after - before)
+        if (requestDelta !== 0) {
+          await this.adjustCellReservationAtomically(transaction, text(row, 'cell_id'), requestDelta)
+        }
+      })
+    })
+  }
+
+  async acquireActivity(
+    identity: AssignmentIdentity,
+    input: {
+      activityId: string
+      kind: AssignmentActivityKind
+      cellId: string
+      expiresAt?: number
+    }
+  ): Promise<void> {
+    validateActivityId(input.activityId)
+    await this.activityQueue.run(identity, async () => {
+      const now = this.now()
+      await this.database.transaction(async (transaction) => {
+        const assignment = await this.assignmentRow(transaction, identity)
+        if (!assignment) throw new Error('assignment_not_found')
+        const assignmentCellId = text(assignment, 'cell_id')
+        if (input.cellId !== assignmentCellId) {
+          // Origin controls may renew work only while the exact forward
+          // migration is active; completion must fence late source activity.
+          const migration = (
+            await transaction.queryLocked(
+              `SELECT assignment_epoch FROM relay_assignment_migrations
+               WHERE user_id = ? AND relay_host_id = ?
+                 AND source_cell_id = ? AND target_cell_id = ?
+                 AND assignment_epoch = ?
+                 AND completed_at IS NULL AND aborted_at IS NULL`,
+              [
+                identity.userId,
+                identity.relayHostId,
+                input.cellId,
+                assignmentCellId,
+                integer(assignment, 'assignment_epoch')
+              ]
+            )
+          )[0]
+          if (!migration) throw new Error('activity_cell_not_authoritative')
+        }
+        const activityLeases = await this.lockAssignmentActivities(transaction, identity)
+        const existing = activityLeaseById(activityLeases, input.activityId)
+        const expiresAt = input.expiresAt ?? now + ASSIGNMENT_LIMITS.activityLeaseMs
+        if (!Number.isSafeInteger(expiresAt) || expiresAt <= now) {
+          throw new Error('invalid_activity_expiry')
+        }
+        if (existing && text(existing, 'activity_kind') === input.kind && text(existing, 'cell_id') === input.cellId) {
+          await transaction.query(
+            `UPDATE relay_assignment_activity_leases SET expires_at = ?, updated_at = ?
+             WHERE user_id = ? AND relay_host_id = ? AND activity_id = ?`,
+            [expiresAt, now, identity.userId, identity.relayHostId, input.activityId]
+          )
+          await this.touchAssignment(transaction, identity, expiresAt, now)
+          return
+        }
+        const units = ACTIVITY_REQUEST_UNITS[input.kind]
+        if (existing) {
+          // Client activity IDs can change cells; lock both touched rows in inventory’s cell_id order to prevent cycles.
+          await this.lockCellRows(transaction, [text(existing, 'cell_id'), input.cellId])
+          await this.removeActivityLease(transaction, identity, existing, now)
+          await this.adjustCellReservationAtomically(transaction, input.cellId, units)
+        }
+        await this.adjustActivityCount(transaction, identity, input.kind, 1, expiresAt, now)
+        await transaction.query(
+          `INSERT INTO relay_assignment_activity_leases
+           (user_id, relay_host_id, activity_id, activity_kind, cell_id,
+            request_units, expires_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            identity.userId,
+            identity.relayHostId,
+            input.activityId,
+            input.kind,
+            input.cellId,
+            units,
+            expiresAt,
+            now
+          ]
+        )
+        // Keep the contended cell row locked for only the final write and commit.
+        if (!existing) {
+          await this.commitCellReservationAtomically(transaction, input.cellId, units)
+        }
+      })
+    })
+  }
+
+  async exchangeRegionCorrection(
+    identity: AssignmentIdentity,
+    request: RegionCorrectionRequest,
+    assignmentEpoch: number
+  ): Promise<RegionCorrectionResponse> {
+    return exchangeRegionCorrection(this.database, identity, request, assignmentEpoch, this.now())
+  }
+
+  async regionCorrectionOutcomes() {
+    return readRegionCorrectionOutcomes(this.database, this.now())
+  }
+
+  async previewRegionCorrection(): Promise<Record<string, number>> {
+    return previewRegionCorrection(this.database, this.now())
+  }
+
+  private idleRegionalCandidateCursor: IdleRehomeHostCursor = null
+  private regionalRehomeSqlFailuresBreach: RegionalRehomeSqlFailuresBreach = null
+  private readonly regionalRehomePollTelemetry = new RegionalRehomePollTelemetry()
+
+  // The operator's regional rehome switch, for rehome on reconnect; null without the row.
+  async regionRehomeSwitch(): Promise<{ enabled: boolean; notBefore: number } | null> {
+    const control = (
+      await this.database.query(
+        `SELECT enabled, not_before FROM relay_region_rehome_control WHERE control_id = 'global'`
+      )
+    )[0]
+    return control ? { enabled: Number(control.enabled) === 1, notBefore: Number(control.not_before) } : null
+  }
+
+  async selectIdleRegionalRehomeCandidates(
+    processSafety?: RegionalRehomeSafetySnapshot
+  ): Promise<IdleRegionalRehomeCandidate[]> {
+    const now = this.now()
+    const gated = (gate: RegionalRehomePollGate): IdleRegionalRehomeCandidate[] => {
+      this.regionalRehomePollTelemetry.record({ now, gate, candidates: 0 })
+      return []
+    }
+    if (!processSafety) return gated('process-safety-unavailable')
+    if (this.regionalRehomeCohortPercent === 0) return gated('cohort-zero')
+    const control = (await this.database.query(
+      `SELECT enabled, not_before, preference_max_age_ms, host_cooldown_ms
+       FROM relay_region_rehome_control WHERE control_id = 'global'`
+    ))[0]
+    if (!control || Number(control.enabled) !== 1 || Number(control.not_before) > now) {
+      return gated('control-closed')
+    }
+    // Check durable global dispatch budget before joining/POSTing candidates; absent worker state means no budget spent yet.
+    const worker = (await this.database.query(
+      `SELECT paused_until, next_dispatch_at FROM relay_region_rehome_worker_state
+       WHERE worker_id = 'global'`
+    ))[0]
+    if (worker && (Number(worker.paused_until) > now || Number(worker.next_dispatch_at) > now)) {
+      return gated('budget-closed')
+    }
+    const fleetSafety = await this.readRegionalRehomeFleetSafety(this.database, now)
+    const sqlBreach = nextRegionalRehomeSqlFailuresBreach(
+      this.regionalRehomeSqlFailuresBreach,
+      combineRegionalRehomeSafety(processSafety, fleetSafety).sqlFailures,
+      now
+    )
+    this.regionalRehomeSqlFailuresBreach = sqlBreach
+    // Source cells only pause on sql failures; the poll is the regular observer that latches.
+    if (sqlBreach && regionalRehomeSqlFailuresSustained(sqlBreach)) {
+      const event = await this.disableRegionalRehomeForSafety(this.database, now, 'sql_failures', fleetSafety)
+      if (event) console.warn(JSON.stringify({ ...event, sustainedMs: now - sqlBreach.since }))
+      this.regionalRehomeSqlFailuresBreach = null
+      return gated('fleet-safety')
+    }
+    if (regionalRehomeFleetSafetyFailure(processSafety, fleetSafety, now)) return gated('fleet-safety')
+    const startedAt = performance.now()
+    const selection = await selectIdleRegionalRehomes({
+      database: this.database, now, heartbeatTtlMs: this.heartbeatTtlMs,
+      cohortPercent: this.regionalRehomeCohortPercent,
+      preferenceMaxAgeMs: Number(control.preference_max_age_ms),
+      hostCooldownMs: Number(control.host_cooldown_ms),
+      cursor: this.idleRegionalCandidateCursor,
+      directorRegion: this.regionalRehomeDirectorRegion,
+      connectionHeadroom: await this.connectionHeadroomByCell(this.database),
+      cellIsClean: regionalRehomeCellSafetyIsClean
+    })
+    this.idleRegionalCandidateCursor = selection.cursor
+    this.regionalRehomePollTelemetry.record({
+      now,
+      gate: 'open',
+      candidates: selection.candidates.length,
+      selectionMs: performance.now() - startedAt,
+      skippedOffRegionSourceCells: selection.skippedOffRegionSourceCells
+    })
+    // Neither side of an idle rehome may be a reserve-mode cell: the commit moves rows here.
+    const reserveCells = await this.reserveModeCells()
+    if (reserveCells === null) return []
+    return selection.candidates.filter(
+      (candidate) =>
+        !reserveCells.has(candidate.sourceCellId) && !reserveCells.has(candidate.targetCellId)
+    )
+  }
+
+  async commitIdleRegionalRehome(
+    request: IdleRegionalRehomeRequest,
+    processSafety?: RegionalRehomeSafetySnapshot,
+    cohortPercent = this.regionalRehomeCohortPercent
+  ): Promise<IdleRegionalRehomeCommit> {
+    const prior = await this.reconcileIdleRegionalRehome(request)
+    if (prior !== 'not-committed') return { outcome: prior }
+    if (!processSafety) return { outcome: 'deferred', reason: 'director-safety-stale' }
+    if (!Number.isInteger(cohortPercent) || cohortPercent <= 0 || cohortPercent > 100) {
+      return { outcome: 'deferred', reason: 'cohort-closed' }
+    }
+    let safetyDisable: Record<string, string | number> | null = null
+    // Set on every fleet-safety failure, disable or not: the pause is global
+    // either way, so no later candidate in this poll can get past it.
+    let safetyPaused = false
+    let targetDeferral: RegionalRehomeTargetDeferral | null = null
+    // Lock control→worker→host→one target cell, last; fleet-wide locking previously held all cells across ~20 cross-region round trips.
+    const result = await this.database.transaction(async (transaction): Promise<IdleRegionalRehomeCommit> => {
+      safetyDisable = null
+      safetyPaused = false
+      targetDeferral = null
+      const now = this.now()
+      // NOWAIT keeps global rate/migration/hard-cap budgets from queueing behind cross-region commits.
+      const control = (await transaction.queryLocked(
+        `SELECT * FROM relay_region_rehome_control WHERE control_id = 'global'`,
+        [],
+        { failIfUnavailable: true }
+      ))[0]
+      if (!control || Number(control.enabled) !== 1 || Number(control.not_before) > now) {
+        return { outcome: 'deferred', reason: 'control-closed' }
+      }
+      await transaction.query(
+        `INSERT INTO relay_region_rehome_worker_state
+         (worker_id, next_dispatch_at, paused_until, consecutive_failures, updated_at)
+         VALUES ('global', 0, 0, 0, ?) ON CONFLICT (worker_id) DO NOTHING`, [now]
+      )
+      const worker = (await transaction.queryLocked(
+        `SELECT * FROM relay_region_rehome_worker_state WHERE worker_id = 'global'`,
+        [],
+        { failIfUnavailable: true }
+      ))[0]!
+      if (Number(worker.paused_until) > now || Number(worker.next_dispatch_at) > now) {
+        return { outcome: 'deferred', reason: 'budget-closed' }
+      }
+      const open = (await transaction.query(
+        `SELECT COUNT(*) AS count FROM relay_assignment_migrations
+         WHERE completed_at IS NULL AND aborted_at IS NULL`
+      ))[0]
+      if (Number(open?.count ?? 0) >= REGIONAL_REHOME_CONCURRENT_LIMIT) {
+        return { outcome: 'deferred', reason: 'concurrency-limit' }
+      }
+      const attempt = await this.startRegionalRehomeCandidate(transaction, {
+        identity: request,
+        sourceCellId: request.sourceCellId,
+        assignmentEpoch: request.sourceAssignmentEpoch,
+        preferenceCutoff: now - Number(control.preference_max_age_ms),
+        cooldownCutoff: now - Number(control.host_cooldown_ms),
+        drainGraceMs: 0,
+        processSafety,
+        worker,
+        now,
+        skips: [],
+        idleRequest: request,
+        cohortPercent,
+        onSafetyDisabled: (event) => {
+          safetyDisable = event
+          safetyPaused = true
+        }
+      })
+      if (!attempt) {
+        return { outcome: 'deferred', reason: safetyPaused ? 'fleet-safety' : 'candidate-ineligible' }
+      }
+      await this.markRegionalRehomeDispatchClaimed(
+        transaction, request.attemptId, now, Math.ceil(60_000 / Number(control.rate_per_minute))
+      )
+      await transaction.query(
+        `UPDATE relay_region_rehome_attempts SET drain_receipt_at = ?, drain_outcome = 'accepted'
+         WHERE attempt_id = ?`, [now, request.attemptId]
+      )
+      // Must stay the last statement: the row is held from here to COMMIT.
+      const target = await this.reserveRegionalRehomeTargetRow(transaction, {
+        identity: request,
+        assignmentEpoch: attempt.assignmentEpoch,
+        cellId: attempt.targetCellId,
+        units: attempt.targetReservedUnits,
+        now
+      })
+      if (target !== 'reserved') {
+        targetDeferral = target
+        throw new RegionalRehomeTargetDeferred()
+      }
+      return { outcome: 'committed' }
+    }).catch((error: unknown): IdleRegionalRehomeCommit => {
+      if (!(error instanceof RegionalRehomeTargetDeferred)) throw error
+      // Rolled back whole: no attempt, migration or reservation survives, so the
+      // outcome report never sees it and the director moves to its next candidate.
+      console.warn(JSON.stringify({
+        event: 'orca_relay_idle_rehome_target_deferred',
+        attemptId: request.attemptId,
+        targetCellId: request.targetCellId,
+        cause: targetDeferral
+      }))
+      return { outcome: 'deferred', reason: 'candidate-ineligible' }
+    })
+    if (safetyDisable) console.warn(JSON.stringify(safetyDisable))
+    return result
+  }
+
+  async reconcileIdleRegionalRehome(request: IdleRegionalRehomeRequest): Promise<'committed' | 'not-committed' | 'stale'> {
+    return this.database.transaction(async (transaction) => {
+      // Absence is definitive only after the same assignment lock as commit/activation.
+      const assignment = await this.assignmentRow(transaction, request)
+      const attempt = (await transaction.queryLocked(
+        `SELECT * FROM relay_region_rehome_attempts WHERE attempt_id = ?`,
+        [request.attemptId]
+      ))[0]
+      if (attempt) {
+        return attempt.user_id === request.userId &&
+          attempt.relay_host_id === request.relayHostId &&
+          attempt.source_cell_id === request.sourceCellId &&
+          attempt.source_cell_incarnation === request.sourceCellIncarnation &&
+          Number(attempt.previous_epoch) === request.sourceAssignmentEpoch &&
+          Number(attempt.source_generation) === request.sourceGeneration &&
+          attempt.target_cell_id === request.targetCellId &&
+          attempt.aborted_at == null
+          ? 'committed' : 'stale'
+      }
+      if (!assignment || assignment.cell_id !== request.sourceCellId ||
+          Number(assignment.assignment_epoch) !== request.sourceAssignmentEpoch) return 'stale'
+      const control = (await transaction.query(
+        `SELECT capability.generation, capability.cell_incarnation
+         FROM relay_control_capabilities capability
+         JOIN relay_assignment_activity_leases lease
+           ON lease.user_id = capability.user_id AND lease.relay_host_id = capability.relay_host_id
+          AND lease.activity_id = capability.activity_id
+         WHERE capability.user_id = ? AND capability.relay_host_id = ?
+           AND capability.cell_id = ? AND capability.assignment_epoch = ?
+           AND lease.activity_kind = 'control' AND lease.expires_at > ?
+         ORDER BY capability.generation DESC LIMIT 1`,
+        [request.userId, request.relayHostId, request.sourceCellId, request.sourceAssignmentEpoch, this.now()]
+      ))[0]
+      return control && Number(control.generation) === request.sourceGeneration &&
+        control.cell_incarnation === request.sourceCellIncarnation ? 'not-committed' : 'stale'
+    })
+  }
+
+  async previewRegionalRehomeEligibility(
+    processSafety?: RegionalRehomeSafetySnapshot
+  ): Promise<RegionCorrectionPreview> {
+    const now = this.now()
+    const fleetSafety = await this.readRegionalRehomeFleetSafety(this.database, now)
+    return previewRegionalRehomeEligibility({
+      database: this.database,
+      now,
+      heartbeatTtlMs: this.heartbeatTtlMs,
+      cohortPercent: this.regionalRehomeCohortPercent,
+      globalSafetyFailure: processSafety
+        ? regionalRehomeFleetSafetyFailure(processSafety, fleetSafety, now)
+        : 'process-safety-unavailable',
+      directorRegion: this.regionalRehomeDirectorRegion,
+      connectionHeadroom: await this.connectionHeadroomByCell(this.database),
+      cellIsClean: regionalRehomeCellSafetyIsClean
+    })
+  }
+
+  // Kept as the single-row contract for callers and tests: resolves on a
+  // renewal and throws the outcome (or the driver's own error) otherwise.
+  async renewControlActivity(
+    identity: AssignmentIdentity,
+    input: { activityId: string; cellId: string; expiresAt: number }
+  ): Promise<void> {
+    validateActivityId(input.activityId)
+    const now = this.now()
+    if (!controlRenewalExpiryIsValid(input.expiresAt, now)) {
+      throw new Error('invalid_activity_expiry')
+    }
+    const startedAt = performance.now()
+    let outcome: ControlRenewalOutcome = 'database_error'
+    try {
+      outcome = await this.renewOneControlActivity({ identity, ...input }, now)
+      if (outcome !== 'renewed') throw new Error(outcome)
+    } catch (error) {
+      outcome = controlRenewalOutcomeOfError(error)
+      throw error
+    } finally {
+      this.recordControlRenewal?.(performance.now() - startedAt, outcome)
+    }
+  }
+
+  // Renews every due control lease on a cell in one write transaction, returning
+  // one outcome per input row in input order. Never throws for a multi-row batch:
+  // a caller routes its own session on its own outcome.
+  async renewControlActivities(
+    rows: readonly ControlRenewalRequest[]
+  ): Promise<ControlRenewalOutcome[]> {
+    const now = this.now()
+    const outcomes = new Array<ControlRenewalOutcome>(rows.length)
+    const accepted: Array<ControlRenewalRequest & { index: number }> = []
+    for (const [index, row] of rows.entries()) {
+      const rejection = controlRenewalRejection(row, now)
+      if (rejection) outcomes[index] = rejection
+      else accepted.push({ ...row, index })
+    }
+    const startedAt = performance.now()
+    try {
+      if (accepted.length === 0) return outcomes
+      let results: ControlRenewalOutcome[]
+      try {
+        results = await this.executeControlRenewals(accepted, now)
+      } catch (error) {
+        if (rows.length === 1) {
+          outcomes[accepted[0]!.index] = controlRenewalOutcomeOfError(error)
+          throw error
+        }
+        results = accepted.map(() => 'database_error')
+      }
+      for (const [position, row] of accepted.entries()) outcomes[row.index] = results[position]!
+      return outcomes
+    } finally {
+      // Every path, so a rethrown lone renewal and an all-invalid batch are
+      // counted the same as a batch that reached PostgreSQL.
+      const durationMs = performance.now() - startedAt
+      for (const outcome of outcomes) this.recordControlRenewal?.(durationMs, outcome)
+    }
+  }
+
+  private async executeControlRenewals(
+    rows: readonly ControlRenewalRequest[],
+    now: number
+  ): Promise<ControlRenewalOutcome[]> {
+    if (rows.length === 1) return [await this.renewOneControlActivity(rows[0]!, now, 'priority')]
+    if (this.database.dialect !== 'postgres') {
+      // Correctness over throughput: the SQLite writer is serialized anyway, and
+      // this is the dialect the unit suites run on.
+      return await this.renewControlActivitiesInSeries(rows, now)
+    }
+    const ordered = orderedControlRenewalRows(rows.map((row, index) => ({ ...row, index })))
+    const outcomes = new Array<ControlRenewalOutcome>(rows.length)
+    try {
+      const parsed = readControlRenewalOutcomes(
+        await this.priorityQuery(
+          CONTROL_RENEWAL_BATCH_SQL,
+          controlRenewalBatchParams(ordered, now)
+        ),
+        ordered.length
+      )
+      for (const [position, row] of ordered.entries()) outcomes[row.index] = parsed[position]!
+      return outcomes
+    } catch (error) {
+      // One contended host can fail the batch; fall back to per-host writes so other leases still renew.
+      console.warn(
+        JSON.stringify({
+          event: 'orca_relay_control_renewal_batch_failed',
+          rows: ordered.length,
+          message: String((error as { message?: unknown }).message)
+        })
+      )
+      // Skip fallback on connection loss/read timeout; per-host retries multiply load on the same stalled pool/server.
+      if (isPostgresPoolConnectFailure(error) || isPostgresReadTimeout(error)) {
+        return outcomes.fill('database_error')
+      }
+      await Promise.all(
+        ordered.map(async (row) => {
+          try {
+            outcomes[row.index] = await this.renewOneControlActivity(row, now)
+          } catch {
+            outcomes[row.index] = 'database_error'
+          }
+        })
+      )
+      return outcomes
+    }
+  }
+
+  private async priorityQuery(sql: string, params: unknown[]): Promise<SqlRow[]> {
+    return this.database.queryPriority
+      ? await this.database.queryPriority(sql, params)
+      : await this.database.query(sql, params)
+  }
+
+  private async renewControlActivitiesInSeries(
+    rows: readonly ControlRenewalRequest[],
+    now: number
+  ): Promise<ControlRenewalOutcome[]> {
+    const outcomes: ControlRenewalOutcome[] = []
+    for (const row of rows) {
+      try {
+        outcomes.push(await this.renewOneControlActivity(row, now))
+      } catch {
+        outcomes.push('database_error')
+      }
+    }
+    return outcomes
+  }
+
+  // Returns the outcome; a driver or pool failure reaches the caller unchanged.
+  private async renewOneControlActivity(
+    row: ControlRenewalRequest,
+    now: number,
+    lane: 'general' | 'priority' = 'general'
+  ): Promise<ControlRenewalOutcome> {
+    if (this.database.dialect === 'postgres') {
+      const params = controlRenewalBatchParams([row], now)
+      return readControlRenewalOutcomes(
+        lane === 'priority'
+          ? await this.priorityQuery(CONTROL_RENEWAL_BATCH_SQL, params)
+          : await this.database.query(CONTROL_RENEWAL_BATCH_SQL, params),
+        1
+      )[0]!
+    }
+    try {
+      return await this.renewTransactionalControlActivity(row.identity, row, now)
+    } catch (error) {
+      const message = String((error as { message?: unknown }).message)
+      if (!CONTROL_RENEWAL_STATEMENT_OUTCOMES.has(message as ControlRenewalOutcome)) throw error
+      return message as ControlRenewalOutcome
+    }
+  }
+
+  private async renewTransactionalControlActivity(
+    identity: AssignmentIdentity,
+    input: { activityId: string; cellId: string; expiresAt: number },
+    now: number
+  ): Promise<ControlRenewalOutcome> {
+    // Bypass the process queue so a network-stalled activity call cannot suppress renewal.
+    await this.database.transaction(async (transaction) => {
+      const assignment = await this.assignmentRow(transaction, identity)
+      if (!assignment) throw new Error('assignment_not_found')
+      const assignmentCellId = text(assignment, 'cell_id')
+      if (input.cellId !== assignmentCellId) {
+        const migration = (
+          await transaction.queryLocked(
+            `SELECT assignment_epoch FROM relay_assignment_migrations
+             WHERE user_id = ? AND relay_host_id = ?
+               AND source_cell_id = ? AND target_cell_id = ?
+               AND assignment_epoch = ?
+               AND completed_at IS NULL AND aborted_at IS NULL`,
+            [
+              identity.userId,
+              identity.relayHostId,
+              input.cellId,
+              assignmentCellId,
+              integer(assignment, 'assignment_epoch')
+            ]
+          )
+        )[0]
+        if (!migration) throw new Error('activity_cell_not_authoritative')
+      }
+      const lease = (
+        await transaction.queryLocked(
+          `SELECT * FROM relay_assignment_activity_leases
+           WHERE user_id = ? AND relay_host_id = ? AND activity_id = ?`,
+          [identity.userId, identity.relayHostId, input.activityId]
+        )
+      )[0]
+      if (!lease) throw new Error('control_activity_not_found')
+      if (
+        text(lease, 'activity_kind') !== 'control' ||
+        text(lease, 'cell_id') !== input.cellId
+      ) {
+        throw new Error('control_activity_moved')
+      }
+      await transaction.query(
+        `UPDATE relay_assignment_activity_leases SET
+           expires_at = CASE WHEN expires_at > ? THEN expires_at ELSE ? END,
+           updated_at = CASE WHEN updated_at > ? THEN updated_at ELSE ? END
+         WHERE user_id = ? AND relay_host_id = ? AND activity_id = ?`,
+        [
+          input.expiresAt,
+          input.expiresAt,
+          now,
+          now,
+          identity.userId,
+          identity.relayHostId,
+          input.activityId
+        ]
+      )
+      await transaction.query(
+        `UPDATE relay_assignments SET
+           lease_expires_at = CASE WHEN lease_expires_at > ? THEN lease_expires_at ELSE ? END,
+           last_activity_at = CASE WHEN last_activity_at > ? THEN last_activity_at ELSE ? END
+         WHERE user_id = ? AND relay_host_id = ?`,
+        [input.expiresAt, input.expiresAt, now, now, identity.userId, identity.relayHostId]
+      )
+    })
+    return 'renewed'
+  }
+
+  async releaseActivity(identity: AssignmentIdentity, activityId: string): Promise<boolean> {
+    validateActivityId(activityId)
+    return await this.activityQueue.run(identity, async () => {
+      const now = this.now()
+      return await this.database.transaction(async (transaction) => {
+        await this.assignmentRow(transaction, identity)
+        const activityLeases = await this.lockAssignmentActivities(transaction, identity)
+        const existing = activityLeaseById(activityLeases, activityId)
+        if (!existing) return false
+        await transaction.query(
+          `DELETE FROM relay_assignment_activity_leases
+           WHERE user_id = ? AND relay_host_id = ? AND activity_id = ?`,
+          [identity.userId, identity.relayHostId, activityId]
+        )
+        await this.adjustActivityCount(
+          transaction,
+          identity,
+          activityKind(existing),
+          -1,
+          now,
+          now
+        )
+        // Release paths can safely defer the cell-row lock until their final write.
+        await this.commitCellReservationAtomically(
+          transaction,
+          text(existing, 'cell_id'),
+          -integer(existing, 'request_units')
+        )
+        return true
+      })
+    })
+  }
+
+  async activateControl(
+    identity: AssignmentIdentity,
+    input: ControlActivationInput
+  ): Promise<string> {
+    return (await this.activateControlOnce(identity, input, false)).activityId
+  }
+
+  // Flip-back returns deltas for one commitCellReservationDelta write per batch; separate cross-region re-registrations would convoy on the cell row.
+  async activateControlDeferringCell(
+    identity: AssignmentIdentity,
+    input: ControlActivationInput
+  ): Promise<{ activityId: string; reservationDelta: number }> {
+    return await this.activateControlOnce(identity, input, true)
+  }
+
+  // Unguarded by capacity: these hosts are already connected to the cell.
+  async commitCellReservationDelta(cellId: string, delta: number): Promise<void> {
+    if (delta === 0) return
+    await this.database.query(
+      `UPDATE relay_cells SET reserved_requests =
+         CASE WHEN reserved_requests + ? < 0 THEN 0 ELSE reserved_requests + ? END,
+         updated_at = ?
+       WHERE cell_id = ?`,
+      [delta, delta, this.now(), cellId]
+    )
+  }
+
+  private async activateControlOnce(
+    identity: AssignmentIdentity,
+    input: ControlActivationInput,
+    deferCell: boolean
+  ): Promise<{ activityId: string; reservationDelta: number }> {
+    const activityId = `control:${input.cellId}:${input.generation}`
+    validateActivityId(activityId)
+    return await this.activityQueue.run(identity, async () => {
+      const now = this.now()
+      return await this.database.transaction(async (transaction) => {
+        const assignment = await this.assignmentRow(transaction, identity)
+        if (
+          !assignment ||
+          text(assignment, 'cell_id') !== input.cellId ||
+          integer(assignment, 'assignment_epoch') !== input.assignmentEpoch
+        ) {
+          throw new Error('wrong_assignment')
+        }
+        const expiresAt = now + ASSIGNMENT_LIMITS.activityLeaseMs
+        const activityLeases = await this.lockAssignmentActivities(transaction, identity)
+        const existing = activityLeaseById(activityLeases, activityId)
+        const pendingId = pendingControlActivityId(input.assignmentEpoch)
+        const pending = activityLeaseById(activityLeases, pendingId)
+        const retainedActivityId =
+          existing || (pending && text(pending, 'cell_id') === input.cellId)
+            ? existing
+              ? activityId
+              : pendingId
+            : activityId
+        // Accumulated, not applied: every cell-row write on this path is folded
+        // into one conditional statement issued last, below.
+        let reservationDelta = -(await this.removeSupersededSameCellControls(
+          transaction,
+          identity,
+          activityLeases,
+          input.cellId,
+          retainedActivityId,
+          now
+        ))
+        if (existing) {
+          await transaction.query(
+            `UPDATE relay_assignment_activity_leases SET expires_at = ?, updated_at = ?
+             WHERE user_id = ? AND relay_host_id = ? AND activity_id = ?`,
+            [expiresAt, now, identity.userId, identity.relayHostId, activityId]
+          )
+          await this.touchAssignment(transaction, identity, expiresAt, now)
+        } else {
+          if (pending && text(pending, 'cell_id') === input.cellId) {
+            await transaction.query(
+              `UPDATE relay_assignment_activity_leases
+               SET activity_id = ?, expires_at = ?, updated_at = ?
+               WHERE user_id = ? AND relay_host_id = ? AND activity_id = ?`,
+              [activityId, expiresAt, now, identity.userId, identity.relayHostId, pendingId]
+            )
+            await this.touchAssignment(transaction, identity, expiresAt, now)
+          } else {
+            reservationDelta += ACTIVITY_REQUEST_UNITS.control
+            await this.adjustActivityCount(transaction, identity, 'control', 1, expiresAt, now)
+            await transaction.query(
+              `INSERT INTO relay_assignment_activity_leases
+               (user_id, relay_host_id, activity_id, activity_kind, cell_id,
+                request_units, expires_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                identity.userId,
+                identity.relayHostId,
+                activityId,
+                'control',
+                input.cellId,
+                1,
+                expiresAt,
+                now
+              ]
+            )
+          }
+        }
+        await this.claimControlConnectionReservation(
+          transaction,
+          identity,
+          input.cellId,
+          input.assignmentEpoch,
+          activityId,
+          input.connectionInclusionWatermark,
+          now
+        )
+        await transaction.query(
+          `DELETE FROM relay_control_capabilities WHERE user_id = ? AND relay_host_id = ?
+           AND NOT EXISTS (SELECT 1 FROM relay_assignment_activity_leases lease
+             WHERE lease.user_id = relay_control_capabilities.user_id
+               AND lease.relay_host_id = relay_control_capabilities.relay_host_id
+               AND lease.activity_id = relay_control_capabilities.activity_id)`,
+          [identity.userId, identity.relayHostId]
+        )
+        await transaction.query(
+          `INSERT INTO relay_control_capabilities
+           (user_id, relay_host_id, activity_id, cell_id, cell_incarnation, assignment_epoch, generation, finish_existing, idle_regional_rehome)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT (user_id, relay_host_id, activity_id) DO UPDATE SET
+             cell_incarnation = excluded.cell_incarnation, assignment_epoch = excluded.assignment_epoch,
+             generation = excluded.generation, finish_existing = excluded.finish_existing, idle_regional_rehome = excluded.idle_regional_rehome`,
+          [
+            identity.userId,
+            identity.relayHostId,
+            activityId,
+            input.cellId,
+            input.cellIncarnation ?? '',
+            input.assignmentEpoch,
+            input.generation,
+            0,
+            input.idleRegionalRehome && input.cellIncarnation ? 1 : 0
+          ]
+        )
+        // Write shared cell row only last and only for nonzero delta; holding it across a dozen remote round trips capped accepts at a few per second.
+        if (reservationDelta !== 0 && !deferCell) {
+          await this.commitCellReservationAtomically(
+            transaction,
+            input.cellId,
+            reservationDelta
+          )
+        }
+        return { activityId, reservationDelta: deferCell ? reservationDelta : 0 }
+      })
+    })
+  }
+
+  async startEvacuation(
+    identity: AssignmentIdentity,
+    targetCellId: string
+  ): Promise<RelayAssignmentMigration>
+  async startEvacuation(
+    identity: AssignmentIdentity,
+    targetCellId: string,
+    expectedSourceCellId: string
+  ): Promise<RelayAssignmentMigration | null>
+  async startEvacuation(
+    identity: AssignmentIdentity,
+    targetCellId: string,
+    expectedSourceCellId?: string
+  ): Promise<RelayAssignmentMigration | null> {
+    const now = this.now()
+    await this.reserveModeCells()
+    return await this.database.transaction(async (transaction) => {
+      const assignment = await this.assignmentRow(transaction, identity)
+      if (!assignment) throw new Error('assignment_not_found')
+      const sourceCellId = text(assignment, 'cell_id')
+      // Bulk selection is intentionally staleable; fence it before considering
+      // an existing migration that already moved the assignment to its target.
+      if (expectedSourceCellId && sourceCellId !== expectedSourceCellId) return null
+      const existing = (
+        await transaction.queryLocked(
+          `SELECT * FROM relay_assignment_migrations
+           WHERE user_id = ? AND relay_host_id = ? AND completed_at IS NULL
+             AND aborted_at IS NULL AND expires_at > ?
+           ORDER BY assignment_epoch DESC LIMIT 1`,
+          [identity.userId, identity.relayHostId, now]
+        )
+      )[0]
+      if (existing) {
+        if (text(existing, 'target_cell_id') !== targetCellId) {
+          throw new Error('migration_in_progress')
+        }
+        return migration(identity, existing)
+      }
+      if (sourceCellId === targetCellId) throw new Error('target_matches_source')
+      await this.refuseReserveCell(sourceCellId, transaction)
+      await this.refuseReserveCell(targetCellId, transaction)
+      await this.lockAssignmentActivities(transaction, identity)
+      await this.lockControlConnectionReservations(transaction, identity)
+      const cells = await this.lockCellInventory(transaction, 'request')
+      const target = cells.find((row) => text(row, 'cell_id') === targetCellId)
+      if (!target || integer(target, 'enabled') !== 1) throw new Error('target_cell_unavailable')
+      if (!(await this.cellIsLive(transaction, targetCellId, now))) {
+        throw new Error('target_cell_unavailable')
+      }
+      let sourceCellIncarnation: string | undefined
+      let targetCellIncarnation: string | undefined
+      if (this.requireLiveCells) {
+        const runtimes = await transaction.queryLocked(
+          `SELECT * FROM relay_cell_runtime WHERE cell_id IN (?, ?) ORDER BY cell_id`,
+          [sourceCellId, targetCellId]
+        )
+        const sourceRuntime = runtimes.find(
+          (runtime) => text(runtime, 'cell_id') === sourceCellId
+        )
+        const targetRuntime = runtimes.find(
+          (runtime) => text(runtime, 'cell_id') === targetCellId
+        )
+        if (
+          !sourceRuntime ||
+          integer(sourceRuntime, 'ready') !== 1 ||
+          integer(sourceRuntime, 'last_heartbeat_at') <= now - this.heartbeatTtlMs
+        ) {
+          throw new Error('source_cell_unavailable')
+        }
+        if (
+          !targetRuntime ||
+          integer(targetRuntime, 'ready') !== 1 ||
+          integer(targetRuntime, 'last_heartbeat_at') <= now - this.heartbeatTtlMs
+        ) {
+          throw new Error('target_cell_unavailable')
+        }
+        sourceCellIncarnation = text(sourceRuntime, 'cell_incarnation')
+        targetCellIncarnation = text(targetRuntime, 'cell_incarnation')
+      }
+      await this.assertCellConnectionHeadroom(transaction, targetCellId)
+      const sourceUnitsRow = (
+        await transaction.query(
+          `SELECT COALESCE(SUM(request_units), 0) AS units
+           FROM relay_assignment_activity_leases
+           WHERE user_id = ? AND relay_host_id = ? AND cell_id = ?`,
+          [identity.userId, identity.relayHostId, sourceCellId]
+        )
+      )[0]
+      const sourceRequestUnits = integer(sourceUnitsRow!, 'units')
+      const targetReservedUnits = sourceRequestUnits + 1
+      await this.adjustCellReservation(transaction, targetCellId, targetReservedUnits)
+      const previousEpoch = integer(assignment, 'assignment_epoch')
+      const assignmentEpoch = previousEpoch + 1
+      const expiresAt = now + ASSIGNMENT_LIMITS.migrationLeaseMs
+      await transaction.query(
+        `UPDATE relay_assignments SET cell_id = ?, assignment_epoch = ?,
+           reserved_controls = reserved_controls + 1,
+           migration_leases = migration_leases + 1,
+           lease_expires_at = ?, last_activity_at = ?
+         WHERE user_id = ? AND relay_host_id = ?`,
+        [
+          targetCellId,
+          assignmentEpoch,
+          expiresAt,
+          now,
+          identity.userId,
+          identity.relayHostId
+        ]
+      )
+      await transaction.query(
+        `INSERT INTO relay_assignment_activity_leases
+         (user_id, relay_host_id, activity_id, activity_kind, cell_id,
+          request_units, expires_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          identity.userId,
+          identity.relayHostId,
+          pendingControlActivityId(assignmentEpoch),
+          'control',
+          targetCellId,
+          1,
+          expiresAt,
+          now,
+          identity.userId,
+          identity.relayHostId,
+          migrationActivityId(assignmentEpoch),
+          'migration',
+          targetCellId,
+          sourceRequestUnits,
+          expiresAt,
+          now
+        ]
+      )
+      await this.insertControlConnectionReservation(
+        transaction,
+        identity,
+        targetCellId,
+        assignmentEpoch,
+        expiresAt,
+        now
+      )
+      await transaction.query(
+        `INSERT INTO relay_assignment_migrations
+         (user_id, relay_host_id, source_cell_id, target_cell_id,
+          previous_epoch, assignment_epoch, source_request_units,
+          target_reserved_units, expires_at, target_registered_at,
+          completed_at, aborted_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?)`,
+        [
+          identity.userId,
+          identity.relayHostId,
+          sourceCellId,
+          targetCellId,
+          previousEpoch,
+          assignmentEpoch,
+          sourceRequestUnits,
+          targetReservedUnits,
+          expiresAt,
+          now,
+          now
+        ]
+      )
+      if (sourceCellIncarnation && targetCellIncarnation) {
+        await transaction.query(
+          `INSERT INTO relay_assignment_migration_incarnations
+           (user_id, relay_host_id, assignment_epoch, source_cell_incarnation,
+            target_cell_incarnation)
+           VALUES (?, ?, ?, ?, ?)`,
+          [
+            identity.userId,
+            identity.relayHostId,
+            assignmentEpoch,
+            sourceCellIncarnation,
+            targetCellIncarnation
+          ]
+        )
+      }
+      return {
+        ...identity,
+        sourceCellId,
+        targetCellId,
+        previousEpoch,
+        assignmentEpoch,
+        expiresAt
+      }
+    })
+  }
+
+  async markMigrationTargetRegistered(
+    identity: AssignmentIdentity,
+    input: { cellId: string; assignmentEpoch: number }
+  ): Promise<boolean> {
+    const now = this.now()
+    return await this.database.transaction(async (transaction) => {
+      const rows = await transaction.queryLocked(
+        `SELECT * FROM relay_assignment_migrations
+         WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?
+           AND target_cell_id = ? AND completed_at IS NULL AND aborted_at IS NULL`,
+        [
+          identity.userId,
+          identity.relayHostId,
+          input.assignmentEpoch,
+          input.cellId
+        ]
+      )
+      if (!rows[0]) return false
+      await transaction.query(
+        `UPDATE relay_assignment_migrations
+         SET target_registered_at = COALESCE(target_registered_at, ?), updated_at = ?
+         WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?`,
+        [now, now, identity.userId, identity.relayHostId, input.assignmentEpoch]
+      )
+      return true
+    })
+  }
+
+  async completeEvacuationFromDeadSource(
+    identity: AssignmentIdentity,
+    input: {
+      assignmentEpoch: number
+      sourceCellId: string
+      targetCellId: string
+    }
+  ): Promise<DeadSourceCompletionResult> {
+    try {
+      return await this.withAssignmentLockRetry(
+        async (inventoryFirst) =>
+          await this.completeEvacuationFromDeadSourceOnce(identity, input, inventoryFirst)
+      )
+    } catch (error) {
+      if (isDatabaseLockUnavailable(error)) {
+        throw new Error('migration_cell_inventory_busy')
+      }
+      throw error
+    }
+  }
+
+  private async completeEvacuationFromDeadSourceOnce(
+    identity: AssignmentIdentity,
+    input: {
+      assignmentEpoch: number
+      sourceCellId: string
+      targetCellId: string
+    },
+    inventoryFirst: boolean
+  ): Promise<DeadSourceCompletionResult> {
+    // A heartbeating reserve source keeps no activity rows, so its hosts are not provably off
+    // it. A dead one holds no duplicate.
+    const now = this.now()
+    if (await this.cellIsLive(this.database, input.sourceCellId, now)) {
+      await this.refuseReserveCell(input.sourceCellId)
+    }
+    return await this.database.transaction(async (transaction) => {
+      await this.lockControlConnectionReservations(transaction, identity)
+      let lockedCells: SqlRow[] | undefined
+      if (inventoryFirst) {
+        try {
+          lockedCells = await this.lockCellInventory(transaction, 'request')
+        } catch (error) {
+          if (isDatabaseLockTimeout(error)) {
+            throw new Error('database_lock_unavailable')
+          }
+          throw error
+        }
+      }
+      const assignment = await this.assignmentRow(transaction, identity, inventoryFirst)
+      const row = (
+        await transaction.queryLocked(
+          `SELECT * FROM relay_assignment_migrations
+           WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?`,
+          [identity.userId, identity.relayHostId, input.assignmentEpoch]
+        )
+      )[0]
+      if (!row) throw new Error('migration_not_found')
+      assertMigrationPair(row, input.sourceCellId, input.targetCellId)
+      if (optionalInteger(row, 'completed_at') !== undefined) {
+        return deadSourceCompletionResult(row, false)
+      }
+      if (optionalInteger(row, 'aborted_at') !== undefined) {
+        throw new Error('migration_already_aborted')
+      }
+      if (optionalInteger(row, 'target_registered_at') === undefined) {
+        throw new Error('migration_target_not_registered')
+      }
+      assertCurrentMigrationAssignment(assignment, row)
+      const activityLeases = await this.lockAssignmentActivities(transaction, identity)
+      assertAssignmentActivityAccounting(assignment, activityLeases, row)
+      if (
+        activityLeases.some(
+          (lease) =>
+            ![input.sourceCellId, input.targetCellId].includes(text(lease, 'cell_id'))
+        )
+      ) {
+        throw new Error('migration_activity_topology_mismatch')
+      }
+      if (activityUnitsForCell(activityLeases, input.sourceCellId) > 0) {
+        throw new Error('migration_source_still_active')
+      }
+      const cells = lockedCells ?? (await this.lockCellInventory(transaction, 'nowait'))
+      const source = cells.find((cell) => text(cell, 'cell_id') === input.sourceCellId)
+      const target = cells.find((cell) => text(cell, 'cell_id') === input.targetCellId)
+      if (!source || integer(source, 'enabled') !== 0) {
+        throw new Error('migration_source_admission_changed')
+      }
+      if (!target || integer(target, 'enabled') !== 1) {
+        throw new Error('migration_target_admission_changed')
+      }
+      await assertCellReservationAccounting(transaction, cells, [
+        input.sourceCellId,
+        input.targetCellId
+      ])
+      const runtimes = await transaction.queryLocked(
+        `SELECT * FROM relay_cell_runtime WHERE cell_id IN (?, ?) ORDER BY cell_id`,
+        [input.sourceCellId, input.targetCellId]
+      )
+      const sourceRuntime = runtimes.find(
+        (runtime) => text(runtime, 'cell_id') === input.sourceCellId
+      )
+      const targetRuntime = runtimes.find(
+        (runtime) => text(runtime, 'cell_id') === input.targetCellId
+      )
+      const freshAfter = now - this.heartbeatTtlMs
+      await this.requireCellFence(transaction, input.sourceCellId, sourceRuntime, now)
+      if (!sourceRuntime || integer(sourceRuntime, 'last_heartbeat_at') > freshAfter) {
+        throw new Error('migration_source_runtime_not_dead')
+      }
+      if (
+        !targetRuntime ||
+        integer(targetRuntime, 'ready') !== 1 ||
+        integer(targetRuntime, 'last_heartbeat_at') <= freshAfter
+      ) {
+        throw new Error('migration_target_runtime_not_ready')
+      }
+      const targetIsActive = activityLeases.some(
+        (lease) =>
+          text(lease, 'cell_id') === input.targetCellId &&
+          text(lease, 'activity_kind') === 'control' &&
+          !text(lease, 'activity_id').startsWith('control-pending:') &&
+          integer(lease, 'expires_at') > now &&
+          integer(lease, 'updated_at') >= integer(targetRuntime, 'started_at')
+      )
+      if (!targetIsActive) {
+        const inactiveTargetControls = activityLeases.filter(
+          (lease) =>
+            text(lease, 'cell_id') === input.targetCellId &&
+            text(lease, 'activity_kind') === 'control'
+        )
+        for (const lease of inactiveTargetControls) {
+          await this.removeActivityLease(transaction, identity, lease, now)
+        }
+        await this.releaseSupersededControlConnectionReservations(
+          transaction,
+          identity,
+          input.targetCellId,
+          input.assignmentEpoch,
+          now
+        )
+      }
+      const migrationLease = activityLeaseById(
+        activityLeases,
+        migrationActivityId(input.assignmentEpoch)
+      )
+      if (migrationLease) {
+        await this.removeActivityLease(transaction, identity, migrationLease, now)
+      }
+      await transaction.query(
+        `UPDATE relay_assignment_migrations SET completed_at = ?, updated_at = ?
+         WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?`,
+        [now, now, identity.userId, identity.relayHostId, input.assignmentEpoch]
+      )
+      return deadSourceCompletionResult(row, true)
+    })
+  }
+
+  async supersedeRegisteredEvacuation(
+    identity: AssignmentIdentity,
+    input: RegisteredEvacuationSupersessionInput,
+    preservedActivityCellIds: readonly string[] = []
+  ): Promise<RelayAssignmentMigration> {
+    if (input.assignmentEpoch >= Number.MAX_SAFE_INTEGER) {
+      throw new Error('assignment_epoch_exhausted')
+    }
+    return await this.withAssignmentLockRetry(
+      async (inventoryFirst) =>
+        await this.supersedeRegisteredEvacuationOnce(
+          identity,
+          input,
+          inventoryFirst,
+          preservedActivityCellIds
+        )
+    )
+  }
+
+  private async supersedeRegisteredEvacuationOnce(
+    identity: AssignmentIdentity,
+    input: RegisteredEvacuationSupersessionInput,
+    inventoryFirst: boolean,
+    preservedActivityCellIds: readonly string[]
+  ): Promise<RelayAssignmentMigration> {
+    const now = this.now()
+    return await this.database.transaction(async (transaction) => {
+      await this.lockControlConnectionReservations(transaction, identity)
+      const lockedCells = inventoryFirst
+        ? await this.lockCellInventory(transaction, 'request')
+        : undefined
+      const assignment = await this.assignmentRow(transaction, identity, inventoryFirst)
+      const existing = (
+        await transaction.queryLocked(
+          `SELECT * FROM relay_assignment_migrations
+           WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?`,
+          [identity.userId, identity.relayHostId, input.assignmentEpoch]
+        )
+      )[0]
+      if (!existing) throw new Error('migration_not_found')
+      assertMigrationPair(existing, input.sourceCellId, input.currentTargetCellId)
+      if (optionalInteger(existing, 'completed_at') !== undefined) {
+        throw new Error('migration_already_completed')
+      }
+      if (optionalInteger(existing, 'aborted_at') !== undefined) {
+        const successor = (
+          await transaction.queryLocked(
+            `SELECT * FROM relay_assignment_migrations
+             WHERE user_id = ? AND relay_host_id = ? AND previous_epoch = ?
+               AND source_cell_id = ? AND target_cell_id = ?
+             ORDER BY assignment_epoch DESC LIMIT 1`,
+            [
+              identity.userId,
+              identity.relayHostId,
+              input.assignmentEpoch,
+              input.sourceCellId,
+              input.replacementTargetCellId
+            ]
+          )
+        )[0]
+        if (!successor) throw new Error('migration_already_superseded')
+        return migration(identity, successor)
+      }
+      if (optionalInteger(existing, 'target_registered_at') === undefined) {
+        throw new Error('migration_target_not_registered')
+      }
+      const existingIncarnation = (
+        await transaction.queryLocked(
+          `SELECT * FROM relay_assignment_migration_incarnations
+           WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?`,
+          [identity.userId, identity.relayHostId, input.assignmentEpoch]
+        )
+      )[0]
+      const existingPin = (
+        await transaction.queryLocked(
+          `SELECT * FROM relay_post_drain_migration_pins
+           WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?`,
+          [identity.userId, identity.relayHostId, input.assignmentEpoch]
+        )
+      )[0]
+      if (existingPin && !existingIncarnation) {
+        throw new Error('drain_migration_source_incarnation_mismatch')
+      }
+      assertCurrentMigrationAssignment(assignment, existing)
+      if (input.currentTargetCellId === input.replacementTargetCellId) {
+        throw new Error('target_matches_source')
+      }
+      const activityLeases = await this.lockAssignmentActivities(transaction, identity)
+      assertAssignmentActivityAccounting(assignment, activityLeases, existing)
+      const additionalActivityCellIds = new Set(
+        activityLeases
+          .map((lease) => text(lease, 'cell_id'))
+          .filter(
+            (cellId) =>
+              ![input.sourceCellId, input.currentTargetCellId].includes(cellId)
+          )
+      )
+      if (
+        preservedActivityCellIds.includes(input.replacementTargetCellId) ||
+        !matchesExactCellSet(additionalActivityCellIds, preservedActivityCellIds)
+      ) {
+        throw new Error('migration_activity_topology_mismatch')
+      }
+      const cells = lockedCells ?? (await this.lockCellInventory(transaction, 'nowait'))
+      const source = cells.find((cell) => text(cell, 'cell_id') === input.sourceCellId)
+      const currentTarget = cells.find(
+        (cell) => text(cell, 'cell_id') === input.currentTargetCellId
+      )
+      const replacement = cells.find(
+        (cell) => text(cell, 'cell_id') === input.replacementTargetCellId
+      )
+      if (!source || integer(source, 'enabled') !== 0) {
+        throw new Error('migration_source_admission_changed')
+      }
+      if (!currentTarget || integer(currentTarget, 'enabled') !== 0) {
+        throw new Error('migration_target_still_enabled')
+      }
+      if (!replacement || integer(replacement, 'enabled') !== 1) {
+        throw new Error('replacement_target_unavailable')
+      }
+      await assertCellReservationAccounting(transaction, cells, [
+        input.sourceCellId,
+        input.currentTargetCellId,
+        input.replacementTargetCellId,
+        ...preservedActivityCellIds
+      ])
+      const runtimeCellIds = [
+        input.currentTargetCellId,
+        input.replacementTargetCellId,
+        ...preservedActivityCellIds
+      ]
+      const runtimes = await transaction.queryLocked(
+        `SELECT * FROM relay_cell_runtime
+         WHERE cell_id IN (${runtimeCellIds.map(() => '?').join(', ')})
+         ORDER BY cell_id`,
+        runtimeCellIds
+      )
+      const currentRuntime = runtimes.find(
+        (runtime) => text(runtime, 'cell_id') === input.currentTargetCellId
+      )
+      const replacementRuntime = runtimes.find(
+        (runtime) => text(runtime, 'cell_id') === input.replacementTargetCellId
+      )
+      const freshAfter = now - this.heartbeatTtlMs
+      await this.requireCellFence(
+        transaction,
+        input.currentTargetCellId,
+        currentRuntime,
+        now
+      )
+      if (
+        currentRuntime &&
+        integer(currentRuntime, 'ready') === 1 &&
+        integer(currentRuntime, 'last_heartbeat_at') > freshAfter
+      ) {
+        throw new Error('migration_target_still_available')
+      }
+      if (
+        !replacementRuntime ||
+        integer(replacementRuntime, 'ready') !== 1 ||
+        integer(replacementRuntime, 'last_heartbeat_at') <= freshAfter
+      ) {
+        throw new Error('replacement_target_unavailable')
+      }
+      if (
+        preservedActivityCellIds.some((cellId) => {
+          const runtime = runtimes.find((row) => text(row, 'cell_id') === cellId)
+          return (
+            !runtime ||
+            integer(runtime, 'ready') !== 1 ||
+            integer(runtime, 'last_heartbeat_at') <= freshAfter
+          )
+        })
+      ) {
+        throw new Error('migration_preserved_activity_cell_unavailable')
+      }
+      await this.assertCellConnectionHeadroom(
+        transaction,
+        input.replacementTargetCellId
+      )
+      for (const lease of activityLeases.filter(
+        (candidate) => text(candidate, 'cell_id') === input.currentTargetCellId
+      )) {
+        await this.removeActivityLease(transaction, identity, lease, now)
+      }
+      const sourceRequestUnits = activityUnitsForCell(activityLeases, input.sourceCellId)
+      const targetReservedUnits = sourceRequestUnits + 1
+      await this.adjustCellReservation(
+        transaction,
+        input.replacementTargetCellId,
+        targetReservedUnits
+      )
+      const assignmentEpoch = input.assignmentEpoch + 1
+      const expiresAt = now + ASSIGNMENT_LIMITS.migrationLeaseMs
+      await transaction.query(
+        `UPDATE relay_assignments SET cell_id = ?, assignment_epoch = ?,
+           reserved_controls = reserved_controls + 1,
+           migration_leases = migration_leases + 1,
+           lease_expires_at = ?, last_activity_at = ?
+         WHERE user_id = ? AND relay_host_id = ?`,
+        [
+          input.replacementTargetCellId,
+          assignmentEpoch,
+          expiresAt,
+          now,
+          identity.userId,
+          identity.relayHostId
+        ]
+      )
+      await transaction.query(
+        `INSERT INTO relay_assignment_activity_leases
+         (user_id, relay_host_id, activity_id, activity_kind, cell_id,
+          request_units, expires_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          identity.userId,
+          identity.relayHostId,
+          pendingControlActivityId(assignmentEpoch),
+          'control',
+          input.replacementTargetCellId,
+          1,
+          expiresAt,
+          now,
+          identity.userId,
+          identity.relayHostId,
+          migrationActivityId(assignmentEpoch),
+          'migration',
+          input.replacementTargetCellId,
+          sourceRequestUnits,
+          expiresAt,
+          now
+        ]
+      )
+      await this.insertControlConnectionReservation(
+        transaction,
+        identity,
+        input.replacementTargetCellId,
+        assignmentEpoch,
+        expiresAt,
+        now
+      )
+      await this.releaseSupersededControlConnectionReservations(
+        transaction,
+        identity,
+        input.currentTargetCellId,
+        input.assignmentEpoch,
+        now
+      )
+      await transaction.query(
+        `UPDATE relay_assignment_migrations SET aborted_at = ?, updated_at = ?
+         WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?`,
+        [now, now, identity.userId, identity.relayHostId, input.assignmentEpoch]
+      )
+      await transaction.query(
+        `INSERT INTO relay_assignment_migrations
+         (user_id, relay_host_id, source_cell_id, target_cell_id,
+          previous_epoch, assignment_epoch, source_request_units,
+          target_reserved_units, expires_at, target_registered_at,
+          completed_at, aborted_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?)`,
+        [
+          identity.userId,
+          identity.relayHostId,
+          input.sourceCellId,
+          input.replacementTargetCellId,
+          input.assignmentEpoch,
+          assignmentEpoch,
+          sourceRequestUnits,
+          targetReservedUnits,
+          expiresAt,
+          now,
+          now
+        ]
+      )
+      if (existingIncarnation) {
+        await transaction.query(
+          `INSERT INTO relay_assignment_migration_incarnations
+           (user_id, relay_host_id, assignment_epoch, source_cell_incarnation,
+            target_cell_incarnation)
+           VALUES (?, ?, ?, ?, ?)`,
+          [
+            identity.userId,
+            identity.relayHostId,
+            assignmentEpoch,
+            text(existingIncarnation, 'source_cell_incarnation'),
+            text(replacementRuntime, 'cell_incarnation')
+          ]
+        )
+      }
+      if (existingPin) {
+        await transaction.query(
+          `INSERT INTO relay_post_drain_migration_pins
+           (user_id, relay_host_id, assignment_epoch, drain_attempt_id,
+            source_cell_id, source_cell_incarnation, target_cell_id,
+            target_cell_incarnation, source_request_units, target_reserved_units,
+            pinned_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            identity.userId,
+            identity.relayHostId,
+            assignmentEpoch,
+            text(existingPin, 'drain_attempt_id'),
+            input.sourceCellId,
+            text(existingPin, 'source_cell_incarnation'),
+            input.replacementTargetCellId,
+            text(replacementRuntime, 'cell_incarnation'),
+            sourceRequestUnits,
+            targetReservedUnits,
+            now
+          ]
+        )
+      }
+      return {
+        ...identity,
+        sourceCellId: input.sourceCellId,
+        targetCellId: input.replacementTargetCellId,
+        previousEpoch: input.assignmentEpoch,
+        assignmentEpoch,
+        expiresAt
+      }
+    })
+  }
+
+  async supersedeRegisteredCellEvacuations(
+    sourceCellId: string,
+    currentTargetCellId: string,
+    replacementTargetCellId: string,
+    limit: number
+  ): Promise<number> {
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+      throw new Error('invalid_evacuation_limit')
+    }
+    const rows = await this.database.query(
+      `SELECT user_id, relay_host_id, assignment_epoch
+       FROM relay_assignment_migrations
+       WHERE source_cell_id = ? AND target_cell_id = ?
+         AND target_registered_at IS NOT NULL
+         AND completed_at IS NULL AND aborted_at IS NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM relay_assignment_migrations earlier
+           WHERE earlier.user_id = relay_assignment_migrations.user_id
+             AND earlier.relay_host_id = relay_assignment_migrations.relay_host_id
+             AND earlier.source_cell_id = relay_assignment_migrations.source_cell_id
+             AND earlier.target_cell_id = relay_assignment_migrations.target_cell_id
+             AND earlier.target_registered_at IS NOT NULL
+             AND earlier.completed_at IS NULL AND earlier.aborted_at IS NULL
+             AND earlier.assignment_epoch < relay_assignment_migrations.assignment_epoch
+         )
+       ORDER BY user_id, relay_host_id, assignment_epoch
+       LIMIT ?`,
+      [sourceCellId, currentTargetCellId, limit]
+    )
+    let superseded = 0
+    let reconciledAccounting = false
+    for (const row of rows) {
+      const identity = {
+        userId: text(row, 'user_id'),
+        relayHostId: text(row, 'relay_host_id')
+      }
+      const input = {
+        assignmentEpoch: integer(row, 'assignment_epoch'),
+        sourceCellId,
+        currentTargetCellId,
+        replacementTargetCellId
+      }
+      const prepared = await this.prepareRegisteredCellSupersession(identity, input)
+      if (prepared.retired) {
+        input.assignmentEpoch = integer(row, 'assignment_epoch')
+        await this.supersedeRegisteredEvacuation(identity, input)
+        superseded++
+        continue
+      }
+      input.assignmentEpoch = prepared.assignmentEpoch
+      try {
+        await this.supersedeRegisteredEvacuation(identity, input)
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message === 'migration_activity_topology_mismatch'
+        ) {
+          const preservedActivityCellIds = await this.additionalActivityCellIds(
+            identity,
+            sourceCellId,
+            currentTargetCellId
+          )
+          if (
+            preservedActivityCellIds.length === 0 ||
+            preservedActivityCellIds.includes(replacementTargetCellId)
+          ) {
+            throw error
+          }
+          await this.reconcileReservationAccounting(sourceCellId, currentTargetCellId)
+          await this.reconcileReservationAccounting(sourceCellId, replacementTargetCellId)
+          for (const cellId of preservedActivityCellIds) {
+            await this.reconcileReservationAccounting(sourceCellId, cellId)
+          }
+          await this.supersedeRegisteredEvacuation(
+            identity,
+            input,
+            preservedActivityCellIds
+          )
+          superseded++
+          continue
+        }
+        if (
+          reconciledAccounting ||
+          !(error instanceof Error) ||
+          error.message !== 'migration_cell_reservation_accounting_mismatch'
+        ) {
+          throw error
+        }
+        await this.reconcileReservationAccounting(sourceCellId, currentTargetCellId)
+        await this.reconcileReservationAccounting(sourceCellId, replacementTargetCellId)
+        reconciledAccounting = true
+        await this.supersedeRegisteredEvacuation(identity, input)
+      }
+      superseded++
+    }
+    return superseded
+  }
+
+  private async prepareRegisteredCellSupersession(
+    identity: AssignmentIdentity,
+    input: RegisteredEvacuationSupersessionInput
+  ): Promise<{ assignmentEpoch: number; retired: boolean }> {
+    const now = this.now()
+    return await this.database.transaction(async (transaction) => {
+      const assignment = await this.assignmentRow(transaction, identity)
+      const staleMigration = (
+        await transaction.queryLocked(
+          `SELECT * FROM relay_assignment_migrations
+           WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?`,
+          [identity.userId, identity.relayHostId, input.assignmentEpoch]
+        )
+      )[0]
+      if (!assignment || !staleMigration) throw new Error('migration_assignment_mismatch')
+      assertMigrationPair(
+        staleMigration,
+        input.sourceCellId,
+        input.currentTargetCellId
+      )
+      if (
+        optionalInteger(staleMigration, 'completed_at') !== undefined ||
+        optionalInteger(staleMigration, 'aborted_at') !== undefined
+      ) {
+        return { assignmentEpoch: integer(assignment, 'assignment_epoch'), retired: true }
+      }
+      if (optionalInteger(staleMigration, 'target_registered_at') === undefined) {
+        throw new Error('migration_not_registered_for_supersession')
+      }
+      const assignmentEpoch = integer(assignment, 'assignment_epoch')
+      if (assignmentEpoch < input.assignmentEpoch) {
+        throw new Error('migration_assignment_mismatch')
+      }
+      const assignmentCellId = text(assignment, 'cell_id')
+      if (
+        ![input.currentTargetCellId, input.replacementTargetCellId].includes(
+          assignmentCellId
+        )
+      ) {
+        throw new Error('migration_assignment_mismatch')
+      }
+      const leases = await this.lockAssignmentActivities(transaction, identity)
+      const staleIncarnation = (
+        await transaction.queryLocked(
+          `SELECT * FROM relay_assignment_migration_incarnations
+           WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?`,
+          [identity.userId, identity.relayHostId, input.assignmentEpoch]
+        )
+      )[0]
+      const stalePin = (
+        await transaction.queryLocked(
+          `SELECT * FROM relay_post_drain_migration_pins
+           WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?`,
+          [identity.userId, identity.relayHostId, input.assignmentEpoch]
+        )
+      )[0]
+      assertMigrationRecoveryMetadata(staleMigration, staleIncarnation, stalePin)
+      const failedRuntime = (
+        await transaction.queryLocked(
+          `SELECT * FROM relay_cell_runtime WHERE cell_id = ?`,
+          [input.currentTargetCellId]
+        )
+      )[0]
+      await this.requireCellFence(
+        transaction,
+        input.currentTargetCellId,
+        failedRuntime,
+        now
+      )
+      if (
+        assignmentEpoch > input.assignmentEpoch &&
+        assignmentCellId === input.replacementTargetCellId
+      ) {
+        const obsoleteActivityIds = new Set([
+          pendingControlActivityId(input.assignmentEpoch),
+          migrationActivityId(input.assignmentEpoch)
+        ])
+        const obsoleteLeases = leases.filter((lease) =>
+          obsoleteActivityIds.has(text(lease, 'activity_id'))
+        )
+        assertAssignmentActivityCounts(
+          assignment,
+          leases,
+          leases.filter((lease) => activityKind(lease) === 'migration').length
+        )
+        for (const lease of obsoleteLeases) {
+          const kind = activityKind(lease)
+          const expectedUnits =
+            kind === 'migration'
+              ? integer(staleMigration, 'source_request_units')
+              : ACTIVITY_REQUEST_UNITS.control
+          if (
+            text(lease, 'cell_id') !== input.currentTargetCellId ||
+            !['control', 'migration'].includes(kind) ||
+            integer(lease, 'request_units') !== expectedUnits
+          ) {
+            throw new Error('migration_activity_topology_mismatch')
+          }
+        }
+        if (obsoleteLeases.length > 0) {
+          await this.lockControlConnectionReservations(transaction, identity)
+          await this.lockCellInventory(transaction, 'request')
+        }
+        for (const lease of obsoleteLeases) {
+          await this.removeActivityLease(transaction, identity, lease, now)
+        }
+        await this.releaseSupersededControlConnectionReservations(
+          transaction,
+          identity,
+          input.currentTargetCellId,
+          input.assignmentEpoch,
+          now
+        )
+        await transaction.query(
+          `UPDATE relay_assignment_migrations SET aborted_at = ?, updated_at = ?
+           WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?`,
+          [now, now, identity.userId, identity.relayHostId, input.assignmentEpoch]
+        )
+        return { assignmentEpoch, retired: true }
+      }
+      let migrationRow = staleMigration
+      if (assignmentEpoch > input.assignmentEpoch) {
+        const existingCurrent = (
+          await transaction.queryLocked(
+            `SELECT * FROM relay_assignment_migrations
+             WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?`,
+            [identity.userId, identity.relayHostId, assignmentEpoch]
+          )
+        )[0]
+        if (existingCurrent) {
+          assertMigrationPair(
+            existingCurrent,
+            input.sourceCellId,
+            input.currentTargetCellId
+          )
+          if (
+            optionalInteger(existingCurrent, 'completed_at') !== undefined ||
+            optionalInteger(existingCurrent, 'aborted_at') !== undefined ||
+            optionalInteger(existingCurrent, 'target_registered_at') === undefined
+          ) {
+            throw new Error('migration_activity_topology_mismatch')
+          }
+          assertCurrentMigrationAssignment(assignment, existingCurrent)
+          const currentIncarnation = (
+            await transaction.queryLocked(
+              `SELECT * FROM relay_assignment_migration_incarnations
+               WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?`,
+              [identity.userId, identity.relayHostId, assignmentEpoch]
+            )
+          )[0]
+          const currentPin = (
+            await transaction.queryLocked(
+              `SELECT * FROM relay_post_drain_migration_pins
+               WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?`,
+              [identity.userId, identity.relayHostId, assignmentEpoch]
+            )
+          )[0]
+          assertMigrationRecoveryMetadata(
+            existingCurrent,
+            currentIncarnation,
+            currentPin
+          )
+          migrationRow = existingCurrent
+        } else {
+          if (leases.length !== 0) {
+            throw new Error('migration_activity_topology_mismatch')
+          }
+          assertAssignmentActivityCounts(assignment, leases, 0)
+          const currentIncarnations = await transaction.queryLocked(
+            `SELECT assignment_epoch FROM relay_assignment_migration_incarnations
+             WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?`,
+            [identity.userId, identity.relayHostId, assignmentEpoch]
+          )
+          const currentPins = await transaction.queryLocked(
+            `SELECT assignment_epoch FROM relay_post_drain_migration_pins
+             WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?`,
+            [identity.userId, identity.relayHostId, assignmentEpoch]
+          )
+          if (currentIncarnations.length > 0 || currentPins.length > 0) {
+            throw new Error('migration_activity_topology_mismatch')
+          }
+          await transaction.query(
+            `INSERT INTO relay_assignment_migrations
+             (user_id, relay_host_id, source_cell_id, target_cell_id,
+              previous_epoch, assignment_epoch, source_request_units,
+              target_reserved_units, expires_at, target_registered_at,
+              completed_at, aborted_at, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, 0, 1, ?, ?, NULL, NULL, ?, ?)`,
+            [
+              identity.userId,
+              identity.relayHostId,
+              input.sourceCellId,
+              input.currentTargetCellId,
+              input.assignmentEpoch,
+              assignmentEpoch,
+              now - 1,
+              now,
+              now,
+              now
+            ]
+          )
+          migrationRow = {
+            ...staleMigration,
+            assignment_epoch: assignmentEpoch,
+            previous_epoch: input.assignmentEpoch,
+            source_request_units: 0,
+            target_reserved_units: 1,
+            expires_at: now - 1,
+            target_registered_at: now,
+            completed_at: null,
+            aborted_at: null
+          }
+          if (staleIncarnation) {
+            await transaction.query(
+              `INSERT INTO relay_assignment_migration_incarnations
+               (user_id, relay_host_id, assignment_epoch,
+                source_cell_incarnation, target_cell_incarnation)
+               VALUES (?, ?, ?, ?, ?)`,
+              [
+                identity.userId,
+                identity.relayHostId,
+                assignmentEpoch,
+                text(staleIncarnation, 'source_cell_incarnation'),
+                text(staleIncarnation, 'target_cell_incarnation')
+              ]
+            )
+          }
+          if (stalePin) {
+            await transaction.query(
+              `INSERT INTO relay_post_drain_migration_pins
+               (user_id, relay_host_id, assignment_epoch, drain_attempt_id,
+                source_cell_id, source_cell_incarnation, target_cell_id,
+                target_cell_incarnation, source_request_units,
+                target_reserved_units, pinned_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 1, ?)`,
+              [
+                identity.userId,
+                identity.relayHostId,
+                assignmentEpoch,
+                text(stalePin, 'drain_attempt_id'),
+                input.sourceCellId,
+                text(stalePin, 'source_cell_incarnation'),
+                input.currentTargetCellId,
+                text(stalePin, 'target_cell_incarnation'),
+                now
+              ]
+            )
+          }
+        }
+        await this.releaseSupersededControlConnectionReservations(
+          transaction,
+          identity,
+          input.currentTargetCellId,
+          input.assignmentEpoch,
+          now
+        )
+        await transaction.query(
+          `UPDATE relay_assignment_migrations SET aborted_at = ?, updated_at = ?
+           WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?`,
+          [now, now, identity.userId, identity.relayHostId, input.assignmentEpoch]
+        )
+      }
+      const migrationLeases = leases.filter(
+        (lease) => activityKind(lease) === 'migration'
+      )
+      if (migrationLeases.length > 0) {
+        assertAssignmentActivityAccounting(assignment, leases, migrationRow)
+        return { assignmentEpoch, retired: false }
+      }
+      assertAssignmentActivityCounts(assignment, leases, 0)
+      const sourceRequestUnits = integer(migrationRow, 'source_request_units')
+      if (
+        integer(migrationRow, 'expires_at') > now ||
+        sourceRequestUnits < 0 ||
+        integer(migrationRow, 'target_reserved_units') !== sourceRequestUnits + 1
+      ) {
+        throw new Error('migration_activity_lease_shape_mismatch')
+      }
+      await this.lockCellInventory(transaction, 'request')
+      await this.adjustCellReservation(
+        transaction,
+        input.currentTargetCellId,
+        sourceRequestUnits
+      )
+      const expiresAt = now + ASSIGNMENT_LIMITS.migrationLeaseMs
+      await transaction.query(
+        `INSERT INTO relay_assignment_activity_leases
+         (user_id, relay_host_id, activity_id, activity_kind, cell_id,
+          request_units, expires_at, updated_at)
+         VALUES (?, ?, ?, 'migration', ?, ?, ?, ?)`,
+        [
+          identity.userId,
+          identity.relayHostId,
+          migrationActivityId(assignmentEpoch),
+          input.currentTargetCellId,
+          sourceRequestUnits,
+          expiresAt,
+          now
+        ]
+      )
+      await transaction.query(
+        `UPDATE relay_assignments SET migration_leases = migration_leases + 1,
+           lease_expires_at = CASE WHEN lease_expires_at > ? THEN lease_expires_at ELSE ? END,
+           last_activity_at = ?
+         WHERE user_id = ? AND relay_host_id = ?`,
+        [expiresAt, expiresAt, now, identity.userId, identity.relayHostId]
+      )
+      await transaction.query(
+        `UPDATE relay_assignment_migrations SET expires_at = ?, updated_at = ?
+         WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?`,
+        [expiresAt, now, identity.userId, identity.relayHostId, assignmentEpoch]
+      )
+      return { assignmentEpoch, retired: false }
+    })
+  }
+
+  private async additionalActivityCellIds(
+    identity: AssignmentIdentity,
+    sourceCellId: string,
+    currentTargetCellId: string
+  ): Promise<string[]> {
+    const rows = await this.database.query(
+      `SELECT DISTINCT cell_id FROM relay_assignment_activity_leases
+       WHERE user_id = ? AND relay_host_id = ?
+         AND cell_id NOT IN (?, ?)
+       ORDER BY cell_id`,
+      [identity.userId, identity.relayHostId, sourceCellId, currentTargetCellId]
+    )
+    return rows.map((row) => text(row, 'cell_id'))
+  }
+
+  async completeEvacuation(
+    identity: AssignmentIdentity,
+    assignmentEpoch: number
+  ): Promise<void> {
+    const now = this.now()
+    await this.reserveModeCells()
+    await this.database.transaction(async (transaction) => {
+      const assignment = await this.assignmentRow(transaction, identity)
+      const row = (
+        await transaction.queryLocked(
+          `SELECT * FROM relay_assignment_migrations
+           WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?
+             AND completed_at IS NULL AND aborted_at IS NULL`,
+          [identity.userId, identity.relayHostId, assignmentEpoch]
+        )
+      )[0]
+      if (!row) throw new Error('migration_not_found')
+      if (optionalInteger(row, 'target_registered_at') === undefined) {
+        throw new Error('migration_target_not_registered')
+      }
+      const sourceCellId = text(row, 'source_cell_id')
+      const targetCellId = text(row, 'target_cell_id')
+      if (
+        !assignment ||
+        text(assignment, 'cell_id') !== targetCellId ||
+        integer(assignment, 'assignment_epoch') !== assignmentEpoch
+      ) {
+        throw new Error('migration_assignment_mismatch')
+      }
+      const activityLeases = await this.lockAssignmentActivities(transaction, identity)
+      const sourceUnits = activityUnitsForCell(activityLeases, sourceCellId)
+      if (sourceUnits > 0) throw new Error('migration_source_still_active')
+      // A reserve source keeps no activity rows, so "no source units" proves nothing there.
+      await this.refuseReserveCell(sourceCellId, transaction)
+      let cellsLocked = false
+      let targetStartedAt = 0
+      if (this.requireLiveCells) {
+        let cells: SqlRow[]
+        try {
+          cells = await this.lockCellInventory(transaction, 'nowait')
+        } catch (error) {
+          if (isDatabaseLockUnavailable(error)) {
+            // Mixed-version workers may still hold a cell-first lock; defer
+            // instead of waiting long enough to form their legacy lock cycle.
+            throw new Error('migration_cell_inventory_busy')
+          }
+          throw error
+        }
+        cellsLocked = true
+        const source = cells.find((cell) => text(cell, 'cell_id') === sourceCellId)
+        const target = cells.find((cell) => text(cell, 'cell_id') === targetCellId)
+        if (!source || integer(source, 'enabled') !== 0) {
+          throw new Error('migration_source_admission_changed')
+        }
+        if (!target || integer(target, 'enabled') !== 1) {
+          throw new Error('migration_target_admission_changed')
+        }
+        const runtimes = await transaction.queryLocked(
+          `SELECT * FROM relay_cell_runtime WHERE cell_id IN (?, ?) ORDER BY cell_id`,
+          [sourceCellId, targetCellId]
+        )
+        const sourceRuntime = runtimes.find(
+          (runtime) => text(runtime, 'cell_id') === sourceCellId
+        )
+        const targetRuntime = runtimes.find(
+          (runtime) => text(runtime, 'cell_id') === targetCellId
+        )
+        const freshAfter = now - this.heartbeatTtlMs
+        if (
+          !sourceRuntime ||
+          integer(sourceRuntime, 'ready') !== 1 ||
+          integer(sourceRuntime, 'observed_requests') !== 0 ||
+          integer(sourceRuntime, 'last_heartbeat_at') <= freshAfter
+        ) {
+          throw new Error('migration_source_runtime_not_quiescent')
+        }
+        if (
+          !targetRuntime ||
+          integer(targetRuntime, 'ready') !== 1 ||
+          integer(targetRuntime, 'last_heartbeat_at') <= freshAfter
+        ) {
+          throw new Error('migration_target_runtime_not_ready')
+        }
+        targetStartedAt = integer(targetRuntime, 'started_at')
+      }
+      const targetIsActive = activityLeases.some(
+        (lease) =>
+          text(lease, 'cell_id') === targetCellId &&
+          text(lease, 'activity_kind') === 'control' &&
+          !text(lease, 'activity_id').startsWith('control-pending:') &&
+          integer(lease, 'expires_at') > now &&
+          integer(lease, 'updated_at') >= targetStartedAt
+      )
+      if (!targetIsActive) throw new Error('migration_target_not_active')
+      const lease = activityLeaseById(activityLeases, migrationActivityId(assignmentEpoch))
+      if (lease && !cellsLocked) await this.lockCellInventory(transaction, 'pool-default')
+      if (lease) await this.removeActivityLease(transaction, identity, lease, now)
+      await transaction.query(
+        `UPDATE relay_assignment_migrations SET completed_at = ?, updated_at = ?
+         WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?`,
+        [now, now, identity.userId, identity.relayHostId, assignmentEpoch]
+      )
+    })
+  }
+
+  async rebalanceDormant(
+    identity: AssignmentIdentity,
+    targetCellId: string
+  ): Promise<RelayAssignment> {
+    const now = this.now()
+    await this.reserveModeCells()
+    return await this.database.transaction(async (transaction) => {
+      const assignment = await this.assignmentRow(transaction, identity)
+      if (!assignment) throw new Error('assignment_not_found')
+      if (!mayNormallyReassign(activity(assignment), now)) throw new Error('assignment_active')
+      const sourceCellId = text(assignment, 'cell_id')
+      if (sourceCellId === targetCellId) throw new Error('target_matches_source')
+      await this.refuseReserveCell(sourceCellId, transaction)
+      await this.refuseReserveCell(targetCellId, transaction)
+      await this.lockAssignmentActivities(transaction, identity)
+      await this.lockControlConnectionReservations(transaction, identity)
+      const cells = await this.lockCellInventory(transaction, 'request')
+      const admission = await cellAdmissionStates(transaction)
+      const targetRow = cells.find(
+        (row) =>
+          text(row, 'cell_id') === targetCellId &&
+          admission.get(targetCellId) === 'general'
+      )
+      if (!targetRow) throw new Error('target_cell_unavailable')
+      if (!(await this.cellIsLive(transaction, targetCellId, now))) {
+        throw new Error('target_cell_unavailable')
+      }
+      await this.assertCellConnectionHeadroom(transaction, targetCellId)
+      const target = cell(targetRow, await this.cellRegion(transaction, targetCellId))
+      await this.adjustCellReservation(transaction, targetCellId, 1)
+      const assignmentEpoch = integer(assignment, 'assignment_epoch') + 1
+      const leaseExpiresAt = now + ASSIGNMENT_LIMITS.activityLeaseMs
+      await transaction.query(
+        `UPDATE relay_assignments SET cell_id = ?, assignment_epoch = ?,
+           reserved_controls = 1, lease_expires_at = ?, last_activity_at = ?
+         WHERE user_id = ? AND relay_host_id = ?`,
+        [
+          targetCellId,
+          assignmentEpoch,
+          leaseExpiresAt,
+          now,
+          identity.userId,
+          identity.relayHostId
+        ]
+      )
+      await this.releaseSupersededControlConnectionReservations(
+        transaction,
+        identity,
+        sourceCellId,
+        assignmentEpoch - 1,
+        now
+      )
+      await this.insertPendingControlLease(
+        transaction,
+        identity,
+        targetCellId,
+        assignmentEpoch,
+        now
+      )
+      return {
+        ...identity,
+        ...target,
+        assignmentEpoch,
+        leaseExpiresAt
+      }
+    })
+  }
+
+  async inspectRegionalRehomeControl(): Promise<RegionalRehomeControl> {
+    const now = this.now()
+    return await this.database.transaction(async (transaction) => {
+      await this.initializeRegionalRehomeControl(transaction, now)
+      const row = (
+        await transaction.query(
+          `SELECT * FROM relay_region_rehome_control WHERE control_id = 'global'`
+        )
+      )[0]!
+      return regionalRehomeControl(row)
+    })
+  }
+
+  async applyRegionalRehomeControl(input: {
+    expectedGeneration: number
+    enabled: boolean
+    notBefore: number
+    ratePerMinute: number
+    preferenceMaxAgeMs: number
+    hostCooldownMs: number
+    drainGraceMs: number
+  }): Promise<RegionalRehomeControl> {
+    if (!Number.isSafeInteger(input.expectedGeneration) || input.expectedGeneration < 0) {
+      throw new Error('invalid_regional_rehome_generation')
+    }
+    if (!Number.isSafeInteger(input.notBefore) || input.notBefore < 0) {
+      throw new Error('invalid_regional_rehome_not_before')
+    }
+    if (!Number.isSafeInteger(input.ratePerMinute) || input.ratePerMinute < 1 || input.ratePerMinute > 120) {
+      throw new Error('invalid_regional_rehome_rate')
+    }
+    if (
+      !Number.isSafeInteger(input.preferenceMaxAgeMs) ||
+      input.preferenceMaxAgeMs < 60_000 ||
+      input.preferenceMaxAgeMs > 30 * 24 * 60 * 60_000
+    ) {
+      throw new Error('invalid_regional_rehome_preference_age')
+    }
+    if (
+      !Number.isSafeInteger(input.hostCooldownMs) ||
+      input.hostCooldownMs < 60_000 ||
+      input.hostCooldownMs > 30 * 24 * 60 * 60_000
+    ) {
+      throw new Error('invalid_regional_rehome_host_cooldown')
+    }
+    if (
+      !Number.isSafeInteger(input.drainGraceMs) ||
+      input.drainGraceMs < 60_000 ||
+      input.drainGraceMs > 60 * 60_000
+    ) {
+      throw new Error('invalid_regional_rehome_drain_grace')
+    }
+    const now = this.now()
+    return await this.database.transaction(async (transaction) => {
+      await this.initializeRegionalRehomeControl(transaction, now)
+      const current = (
+        await transaction.queryLocked(
+          `SELECT * FROM relay_region_rehome_control WHERE control_id = 'global'`
+        )
+      )[0]!
+      if (integer(current, 'generation') !== input.expectedGeneration) {
+        throw new Error('regional_rehome_generation_mismatch')
+      }
+      if (
+        input.enabled &&
+        input.notBefore <
+          integer(current, 'observation_started_at') + REGIONAL_REHOME_OBSERVATION_MS
+      ) {
+        throw new Error('regional_rehome_observation_window_incomplete')
+      }
+      await transaction.query(
+        `UPDATE relay_region_rehome_control
+         SET generation = generation + 1, enabled = ?, not_before = ?,
+             rate_per_minute = ?, preference_max_age_ms = ?, host_cooldown_ms = ?,
+             drain_grace_ms = ?, updated_at = ?
+         WHERE control_id = 'global'`,
+        [
+          input.enabled ? 1 : 0,
+          input.notBefore,
+          input.ratePerMinute,
+          input.preferenceMaxAgeMs,
+          input.hostCooldownMs,
+          input.drainGraceMs,
+          now
+        ]
+      )
+      if (input.enabled) {
+        // A budget spent under a previous enable is not evidence about this one.
+        // Without this an old counter latches the fresh enable straight back off
+        // on its first transient failure.
+        await transaction.query(
+          `INSERT INTO relay_region_rehome_worker_state
+           (worker_id, next_dispatch_at, paused_until, consecutive_failures, updated_at)
+           VALUES ('global', 0, 0, 0, ?)
+           ON CONFLICT (worker_id) DO UPDATE
+             SET paused_until = 0, consecutive_failures = 0,
+                 updated_at = excluded.updated_at`,
+          [now]
+        )
+      }
+      const updated = (
+        await transaction.query(
+          `SELECT * FROM relay_region_rehome_control WHERE control_id = 'global'`
+        )
+      )[0]!
+      return regionalRehomeControl(updated)
+    })
+  }
+
+  async disableRegionalRehomeControl(): Promise<boolean> {
+    const now = this.now()
+    const result = await this.database.query(
+      `UPDATE relay_region_rehome_control
+       SET generation = generation + 1, enabled = 0, updated_at = ?
+       WHERE control_id = 'global' AND enabled = 1`,
+      [now]
+    )
+    return integer(result[0]!, 'changes') === 1
+  }
+
+  private async initializeRegionalRehomeControl(
+    database: RelayDatabase,
+    now: number
+  ): Promise<void> {
+    await database.query(
+      `INSERT INTO relay_region_rehome_control
+       (control_id, generation, enabled, observation_started_at, not_before,
+        rate_per_minute, preference_max_age_ms, host_cooldown_ms, drain_grace_ms,
+        updated_at)
+       VALUES ('global', 0, 0, ?, 0, 10, ?, ?, ?, ?)
+       ON CONFLICT (control_id) DO NOTHING`,
+      [
+        now,
+        24 * 60 * 60_000,
+        REGIONAL_REHOME_DEFAULT_HOST_COOLDOWN_MS,
+        60 * 60_000,
+        now
+      ]
+    )
+  }
+
+  async regionalRehomeFleetSafety(): Promise<RegionalRehomeFleetSafety> {
+    return await this.readRegionalRehomeFleetSafety(this.database, this.now())
+  }
+
+  // Both source and target must be general/drainable so hosts can move back out; retain region join to exclude unassigned cells.
+  private async readRegionalRehomeFleetSafety(
+    database: RelayDatabase,
+    now: number
+  ): Promise<RegionalRehomeFleetSafety> {
+    const rows = await database.query(
+      `SELECT runtime.ready, runtime.last_heartbeat_at,
+              safety.cell_id AS safety_cell_id, safety.observed_at,
+              safety.sql_failures, safety.reconnects,
+              safety.control_activity_recovery_failures,
+              safety.database_pool_waiting, safety.database_pool_waiters_max,
+              safety.database_pool_wait_ms_max
+       FROM relay_cells cell
+       JOIN relay_cell_admission admission ON admission.cell_id = cell.cell_id
+       JOIN relay_cell_regions region ON region.cell_id = cell.cell_id
+       LEFT JOIN relay_cell_runtime runtime ON runtime.cell_id = cell.cell_id
+       LEFT JOIN relay_cell_capabilities capability ON capability.cell_id = cell.cell_id
+       LEFT JOIN relay_cell_rehome_safety safety
+         ON safety.cell_id = runtime.cell_id
+        AND safety.cell_incarnation = runtime.cell_incarnation
+       WHERE cell.enabled = 1 AND admission.admission_state = 'general'
+         AND capability.regional_rehome_protocol >= 1`
+    )
+    const valid = rows.filter(
+      (row) =>
+        integer(row, 'ready') === 1 &&
+        integer(row, 'last_heartbeat_at') > now - this.heartbeatTtlMs &&
+        optionalText(row, 'safety_cell_id') !== undefined &&
+        integer(row, 'observed_at') > now - 60_000
+    )
+    const missingCells = rows.length === 0 ? 1 : rows.length - valid.length
+    return {
+      requiredCells: rows.length,
+      missingCells,
+      observedAt:
+        missingCells > 0
+          ? 0
+          : Math.min(...valid.map((row) => integer(row, 'observed_at'))),
+      sqlFailures: valid.reduce((total, row) => total + integer(row, 'sql_failures'), 0),
+      reconnects: valid.reduce((total, row) => total + integer(row, 'reconnects'), 0),
+      maxReconnects: Math.max(0, ...valid.map((row) => integer(row, 'reconnects'))),
+      controlActivityRecoveryFailures: valid.reduce(
+        (total, row) => total + integer(row, 'control_activity_recovery_failures'),
+        0
+      ),
+      databasePoolWaiting: Math.max(
+        0,
+        ...valid.map((row) => integer(row, 'database_pool_waiting'))
+      ),
+      databasePoolWaitersMax: Math.max(
+        0,
+        ...valid.map((row) => integer(row, 'database_pool_waiters_max'))
+      ),
+      databasePoolWaitMsMax: Math.max(
+        0,
+        ...valid.map((row) => integer(row, 'database_pool_wait_ms_max'))
+      )
+    }
+  }
+
+  private async startRegionalRehomeCandidate(
+    transaction: RelayDatabase,
+    input: {
+      identity: AssignmentIdentity
+      sourceCellId: string
+      assignmentEpoch: number
+      preferenceCutoff: number
+      cooldownCutoff: number
+      drainGraceMs: number
+      processSafety: RegionalRehomeSafetySnapshot
+      worker: SqlRow
+      now: number
+      skips: RegionalRehomeCandidateSkip[]
+      idleRequest: IdleRegionalRehomeRequest
+      cohortPercent: number
+      onSafetyDisabled: (event: Record<string, string | number> | null) => void
+    }
+  ): Promise<(Omit<RegionalRehomeAttempt, 'sendAttempts'> & { targetReservedUnits: number }) | null> {
+    const assignment = await this.assignmentRow(transaction, input.identity)
+    if (
+      !assignment ||
+      text(assignment, 'cell_id') !== input.sourceCellId ||
+      integer(assignment, 'assignment_epoch') !== input.assignmentEpoch
+    ) {
+      input.skips.push({ reason: 'candidate_stale' })
+      return null
+    }
+    const preference = (
+      await transaction.queryLocked(
+        `SELECT * FROM relay_region_decisions
+         WHERE user_id = ? AND relay_host_id = ?`,
+        [input.identity.userId, input.identity.relayHostId]
+      )
+    )[0]
+    if (
+      !preference ||
+      integer(preference, 'observed_at') < input.preferenceCutoff ||
+      Number(preference.expires_at) <= input.now ||
+      preference.outcome !== 'conclusive' ||
+      Number(preference.policy_version) !== 1 ||
+      Number(preference.assignment_epoch) !== input.assignmentEpoch ||
+      !preference.preferred_region ||
+      Number(preference.cohort_bucket) >= input.cohortPercent
+    ) {
+      input.skips.push({ reason: 'candidate_stale' })
+      return null
+    }
+    const preferredRegion = relayRegion(preference, 'preferred_region')
+    const activeMigration = await transaction.queryLocked(
+      `SELECT assignment_epoch FROM relay_assignment_migrations
+       WHERE user_id = ? AND relay_host_id = ?
+         AND completed_at IS NULL AND aborted_at IS NULL`,
+      [input.identity.userId, input.identity.relayHostId]
+    )
+    if (activeMigration.length > 0) {
+      input.skips.push({ reason: 'candidate_stale' })
+      return null
+    }
+    // Re-read under the claim: an attempt committed between the scan and here
+    // would otherwise start a second move for the same host.
+    const recentAttempt = await transaction.query(
+      `SELECT 1 FROM relay_region_rehome_attempts
+       WHERE user_id = ? AND relay_host_id = ? AND created_at > ?
+       LIMIT 1`,
+      [input.identity.userId, input.identity.relayHostId, input.cooldownCutoff]
+    )
+    if (recentAttempt.length > 0) {
+      input.skips.push({ reason: 'host_cooldown' })
+      return null
+    }
+    const activityLeases = await this.lockAssignmentActivities(transaction, input.identity)
+    assertAssignmentActivityCounts(assignment, activityLeases, 0)
+    await this.lockControlConnectionReservations(transaction, input.identity, 'nowait')
+    // Unlocked snapshot. It picks the target and feeds the fleet-safety
+    // heuristic; the target row is locked and re-checked last, in the caller.
+    const cells = await transaction.query(`SELECT * FROM relay_cells ORDER BY cell_id ASC`)
+    const admission = await cellAdmissionStates(transaction)
+    const regions = new Map(
+      (await transaction.query(`SELECT cell_id, region FROM relay_cell_regions`)).map((row) => [
+        text(row, 'cell_id'),
+        relayRegion(row, 'region')
+      ])
+    )
+    const runtimes = await transaction.query(`SELECT * FROM relay_cell_runtime ORDER BY cell_id`)
+    const capabilities = await transaction.query(
+      `SELECT * FROM relay_cell_capabilities ORDER BY cell_id`
+    )
+    const safetyRows = await transaction.query(
+      `SELECT * FROM relay_cell_rehome_safety ORDER BY cell_id`
+    )
+    const source = cells.find((row) => text(row, 'cell_id') === input.sourceCellId)
+    const sourceRuntime = runtimes.find(
+      (row) => text(row, 'cell_id') === input.sourceCellId
+    )
+    const sourceCapability = capabilities.find(
+      (row) => text(row, 'cell_id') === input.sourceCellId
+    )
+    const sourceSafety = safetyRows.find(
+      (row) => text(row, 'cell_id') === input.sourceCellId
+    )
+    const fleetSafety = regionalRehomeFleetSafetyFromInventory({
+      cells,
+      admission,
+      regions,
+      runtimes,
+      capabilities,
+      safetyRows,
+      now: input.now,
+      heartbeatTtlMs: this.heartbeatTtlMs
+    })
+    const safetyFailure = regionalRehomeFleetSafetyFailure(
+      input.processSafety,
+      fleetSafety,
+      input.now
+    )
+    if (safetyFailure) {
+      // A sql spike alone is usually one DB stall: pause this claim and leave
+      // the latch to the director's sustained-breach check.
+      input.onSafetyDisabled(safetyFailure === 'sql_failures' ? null : await this.pauseRegionalRehomeForSafety(
+        transaction,
+        input.worker,
+        input.now,
+        safetyFailure,
+        fleetSafety
+      ))
+      return null
+    }
+    // The preference read under lock can now agree with the cell the host is
+    // already on: nothing to move, in either direction.
+    if (regions.get(input.sourceCellId) === preferredRegion) {
+      input.skips.push({ reason: 'candidate_stale' })
+      return null
+    }
+    if (
+      !source ||
+      integer(source, 'enabled') !== 1 ||
+      admission.get(input.sourceCellId) !== 'general' ||
+      regions.get(input.sourceCellId) === undefined ||
+      !sourceRuntime ||
+      integer(sourceRuntime, 'ready') !== 1 ||
+      integer(sourceRuntime, 'last_heartbeat_at') <= input.now - this.heartbeatTtlMs ||
+      !sourceCapability ||
+      text(sourceCapability, 'cell_incarnation') !== text(sourceRuntime, 'cell_incarnation') ||
+      integer(sourceCapability, 'regional_rehome_protocol') < 3 ||
+      sourceRuntime.cell_incarnation !== input.idleRequest.sourceCellIncarnation
+    ) {
+      input.skips.push({ reason: 'source_ineligible', cellId: input.sourceCellId })
+      return null
+    }
+    if (!regionalRehomeCellSafetyIsClean(sourceSafety, sourceRuntime, input.now)) {
+      input.skips.push(cellUncleanSkip('source_unclean', input.sourceCellId, sourceSafety))
+      return null
+    }
+    const hostCapability = (
+      await transaction.query(
+        `SELECT capability.* FROM relay_control_capabilities capability
+       JOIN relay_assignment_activity_leases lease
+         ON lease.user_id = capability.user_id AND lease.relay_host_id = capability.relay_host_id
+        AND lease.activity_id = capability.activity_id
+       WHERE capability.user_id = ? AND capability.relay_host_id = ?
+         AND capability.cell_id = ? AND capability.assignment_epoch = ?
+         AND capability.cell_incarnation = ? AND capability.idle_regional_rehome = 1
+         AND lease.expires_at > ? AND lease.activity_kind = 'control'
+       ORDER BY capability.generation DESC LIMIT 1`,
+        [
+          input.identity.userId,
+          input.identity.relayHostId,
+          input.sourceCellId,
+          input.assignmentEpoch,
+          sourceRuntime.cell_incarnation,
+          input.now
+        ]
+      )
+    )[0]
+    if (!hostCapability || preference.incumbent_region !== regions.get(input.sourceCellId) ||
+        Number(hostCapability.generation) !== input.idleRequest.sourceGeneration) {
+      input.skips.push({ reason: 'candidate_stale' })
+      return null
+    }
+    const sourceControlActive = activityLeases.some(
+      (lease) =>
+        text(lease, 'cell_id') === input.sourceCellId &&
+        text(lease, 'activity_kind') === 'control' &&
+        !text(lease, 'activity_id').startsWith('control-pending:') &&
+        integer(lease, 'expires_at') > input.now &&
+        integer(lease, 'updated_at') >= integer(sourceRuntime, 'started_at')
+    )
+    if (!sourceControlActive) {
+      input.skips.push({ reason: 'source_control_inactive', cellId: input.sourceCellId })
+      return null
+    }
+    const connectionHeadroom = await this.connectionHeadroomByCell(transaction)
+    // A target must be drainable too, or the host lands somewhere it can never
+    // be rehomed out of again -- the trap this bidirectional move exists to undo.
+    const eligibleTargets = cells.filter((row) => {
+      const cellId = text(row, 'cell_id')
+      const runtime = runtimes.find((candidate) => text(candidate, 'cell_id') === cellId)
+      const capability = capabilities.find(
+        (candidate) => text(candidate, 'cell_id') === cellId
+      )
+      return (
+        cellId !== input.sourceCellId &&
+        integer(row, 'enabled') === 1 &&
+        admission.get(cellId) === 'general' &&
+        regions.get(cellId) === preferredRegion &&
+        runtime !== undefined &&
+        integer(runtime, 'ready') === 1 &&
+        integer(runtime, 'last_heartbeat_at') > input.now - this.heartbeatTtlMs &&
+        capability !== undefined &&
+        text(capability, 'cell_incarnation') === text(runtime, 'cell_incarnation') &&
+        integer(capability, 'regional_rehome_protocol') >= 3 &&
+        cellId === input.idleRequest.targetCellId
+      )
+    })
+    const targetIsClean = (row: SqlRow): boolean => {
+      const cellId = text(row, 'cell_id')
+      return regionalRehomeCellSafetyIsClean(
+        safetyRows.find((safety) => text(safety, 'cell_id') === cellId),
+        runtimes.find((candidate) => text(candidate, 'cell_id') === cellId)!,
+        input.now
+      )
+    }
+    const targetCandidates = eligibleTargets.filter(
+      (row) => targetIsClean(row) && connectionHeadroom.get(text(row, 'cell_id')) !== false
+    )
+    if (targetCandidates.length === 0) {
+      const unclean = eligibleTargets.filter((row) => !targetIsClean(row))
+      for (const row of unclean) {
+        const cellId = text(row, 'cell_id')
+        input.skips.push(
+          cellUncleanSkip(
+            'target_unclean',
+            cellId,
+            safetyRows.find((safety) => text(safety, 'cell_id') === cellId)
+          )
+        )
+      }
+      if (unclean.length === 0) {
+        input.skips.push({
+          reason: eligibleTargets.length === 0 ? 'no_eligible_target' : 'no_target_headroom'
+        })
+      }
+      return null
+    }
+    targetCandidates.sort((left, right) => {
+      const leftRuntime = runtimes.find(
+        (runtime) => text(runtime, 'cell_id') === text(left, 'cell_id')
+      )!
+      const rightRuntime = runtimes.find(
+        (runtime) => text(runtime, 'cell_id') === text(right, 'cell_id')
+      )!
+      const leftLoad =
+        (integer(left, 'reserved_requests') + integer(leftRuntime, 'observed_requests')) /
+        integer(left, 'capacity_requests')
+      const rightLoad =
+        (integer(right, 'reserved_requests') + integer(rightRuntime, 'observed_requests')) /
+        integer(right, 'capacity_requests')
+      return leftLoad - rightLoad ||
+        text(left, 'cell_id').localeCompare(text(right, 'cell_id'))
+    })
+    const sourceRequestUnits = activityUnitsForCell(activityLeases, input.sourceCellId)
+    const targetReservedUnits = sourceRequestUnits + 1
+    const target = targetCandidates.find(
+      (row) =>
+        integer(row, 'reserved_requests') + targetReservedUnits <=
+        integer(row, 'capacity_requests')
+    )
+    if (!target) {
+      input.skips.push({ reason: 'no_target_headroom' })
+      return null
+    }
+    const targetCellId = text(target, 'cell_id')
+    const targetRuntime = runtimes.find(
+      (runtime) => text(runtime, 'cell_id') === targetCellId
+    )!
+    const previousEpoch = integer(assignment, 'assignment_epoch')
+    const assignmentEpoch = previousEpoch + 1
+    const expiresAt = input.now + ASSIGNMENT_LIMITS.migrationLeaseMs
+    await transaction.query(
+      `UPDATE relay_assignments SET cell_id = ?, assignment_epoch = ?,
+         reserved_controls = reserved_controls + 1,
+         migration_leases = migration_leases + 1,
+         lease_expires_at = ?, last_activity_at = ?
+       WHERE user_id = ? AND relay_host_id = ?`,
+      [
+        targetCellId,
+        assignmentEpoch,
+        expiresAt,
+        input.now,
+        input.identity.userId,
+        input.identity.relayHostId
+      ]
+    )
+    await transaction.query(
+      `INSERT INTO relay_assignment_activity_leases
+       (user_id, relay_host_id, activity_id, activity_kind, cell_id,
+        request_units, expires_at, updated_at)
+       VALUES (?, ?, ?, 'control', ?, 1, ?, ?),
+              (?, ?, ?, 'migration', ?, ?, ?, ?)`,
+      [
+        input.identity.userId,
+        input.identity.relayHostId,
+        pendingControlActivityId(assignmentEpoch),
+        targetCellId,
+        expiresAt,
+        input.now,
+        input.identity.userId,
+        input.identity.relayHostId,
+        migrationActivityId(assignmentEpoch),
+        targetCellId,
+        sourceRequestUnits,
+        expiresAt,
+        input.now
+      ]
+    )
+    await this.insertControlConnectionReservation(
+      transaction,
+      input.identity,
+      targetCellId,
+      assignmentEpoch,
+      expiresAt,
+      input.now
+    )
+    await transaction.query(
+      `INSERT INTO relay_assignment_migrations
+       (user_id, relay_host_id, source_cell_id, target_cell_id,
+        previous_epoch, assignment_epoch, source_request_units,
+        target_reserved_units, expires_at, target_registered_at,
+        completed_at, aborted_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?)`,
+      [
+        input.identity.userId,
+        input.identity.relayHostId,
+        input.sourceCellId,
+        targetCellId,
+        previousEpoch,
+        assignmentEpoch,
+        sourceRequestUnits,
+        targetReservedUnits,
+        expiresAt,
+        input.now,
+        input.now
+      ]
+    )
+    await transaction.query(
+      `INSERT INTO relay_assignment_migration_incarnations
+       (user_id, relay_host_id, assignment_epoch, source_cell_incarnation,
+        target_cell_incarnation)
+       VALUES (?, ?, ?, ?, ?)`,
+      [
+        input.identity.userId,
+        input.identity.relayHostId,
+        assignmentEpoch,
+        text(sourceRuntime, 'cell_incarnation'),
+        text(targetRuntime, 'cell_incarnation')
+      ]
+    )
+    const attemptId = input.idleRequest.attemptId
+    await transaction.query(
+      `INSERT INTO relay_region_rehome_attempts
+       (attempt_id, user_id, relay_host_id, preferred_region,
+        source_cell_id, source_cell_incarnation, target_cell_id,
+        target_cell_incarnation, previous_epoch, assignment_epoch,
+        drain_grace_ms, send_attempts, last_send_attempt_at,
+        drain_receipt_at, drain_outcome, completed_at, aborted_at,
+        created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL,
+         NULL, NULL, NULL, NULL, ?, ?)`,
+      [
+        attemptId,
+        input.identity.userId,
+        input.identity.relayHostId,
+        preferredRegion,
+        input.sourceCellId,
+        text(sourceRuntime, 'cell_incarnation'),
+        targetCellId,
+        text(targetRuntime, 'cell_incarnation'),
+        previousEpoch,
+        assignmentEpoch,
+        input.drainGraceMs,
+        input.now,
+        input.now
+      ]
+    )
+    await transaction.query(
+      `UPDATE relay_region_rehome_attempts SET source_generation = ? WHERE attempt_id = ?`,
+      [input.idleRequest.sourceGeneration, attemptId]
+    )
+    return {
+      ...input.identity,
+      attemptId,
+      preferredRegion,
+      sourceCellId: input.sourceCellId,
+      sourceCellUrl: text(source, 'cell_url'),
+      sourceCellIncarnation: text(sourceRuntime, 'cell_incarnation'),
+      targetCellId,
+      targetCellIncarnation: text(targetRuntime, 'cell_incarnation'),
+      previousEpoch,
+      assignmentEpoch,
+      drainGraceMs: input.drainGraceMs,
+      targetReservedUnits
+    }
+  }
+
+  // Last statement locks one target row NOWAIT: host-first ordering must not wait against placement. Recheck enabled/admission/capacity and headroom under locks, including admission flips since snapshot; exclude own reservation by key because insert may add none.
+  private async reserveRegionalRehomeTargetRow(
+    database: RelayDatabase,
+    input: {
+      identity: AssignmentIdentity
+      assignmentEpoch: number
+      cellId: string
+      units: number
+      now: number
+    }
+  ): Promise<'reserved' | RegionalRehomeTargetDeferral> {
+    const { identity, cellId, units, now } = input
+    const lockClause = database.dialect === 'sqlite' ? '' : 'FOR UPDATE OF cell, admission NOWAIT'
+    try {
+      const rows = await database.queryLocked(
+        `WITH target AS (
+           SELECT cell.cell_id FROM relay_cells cell
+           JOIN relay_cell_admission admission ON admission.cell_id = cell.cell_id
+           WHERE cell.cell_id = ? AND cell.enabled = 1
+             AND admission.admission_state = 'general'
+           ${lockClause}
+         )
+         UPDATE relay_cells SET reserved_requests = reserved_requests + ?, updated_at = ?
+         WHERE cell_id IN (SELECT cell_id FROM target)
+           AND reserved_requests + ? <= capacity_requests
+           AND (
+             NOT EXISTS (SELECT 1 FROM relay_cell_connection_limits WHERE cell_id = ?)
+             OR EXISTS (
+               SELECT 1 FROM relay_cell_connection_limits limits
+               JOIN relay_cell_connection_snapshots snapshot ON snapshot.cell_id = limits.cell_id
+               JOIN relay_cell_runtime runtime ON runtime.cell_id = limits.cell_id
+               WHERE limits.cell_id = ?
+                 AND snapshot.snapshot_at > ?
+                 AND snapshot.cell_incarnation = runtime.cell_incarnation
+                 AND snapshot.enforced_connection_units
+                   + (SELECT COUNT(*) FROM relay_control_connection_reservations reservation
+                      WHERE reservation.cell_id = limits.cell_id
+                        AND reservation.state IN ('reserved', 'late-arrival-debt', 'claimed')
+                        AND NOT (reservation.user_id = ? AND reservation.relay_host_id = ?
+                          AND reservation.assignment_epoch = ?))
+                   + limits.unobserved_bound
+                   < ${EFFECTIVE_HARD_CAP_SQL} - ?
+             )
+           )
+         RETURNING cell_id`,
+        [
+          cellId,
+          units,
+          now,
+          units,
+          cellId,
+          cellId,
+          now - this.heartbeatTtlMs,
+          identity.userId,
+          identity.relayHostId,
+          input.assignmentEpoch,
+          RELAY_ADMISSION_BUDGETS.reservedHostControls
+        ],
+        {
+          failIfUnavailable: true,
+          lockClauseInStatement: true,
+          measureHoldMs: true,
+          holdSite: 'rehome-target-row'
+        }
+      )
+      return rows.length > 0 ? 'reserved' : 'target-not-admitting'
+    } catch (error) {
+      if (isDatabaseLockUnavailable(error)) return 'target-row-busy'
+      throw error
+    }
+  }
+
+  private async pauseRegionalRehomeForSafety(
+    transaction: RelayDatabase,
+    worker: SqlRow,
+    now: number,
+    reason: string,
+    fleetSafety: RegionalRehomeFleetSafety
+  ): Promise<Record<string, string | number> | null> {
+    const event = await this.disableRegionalRehomeForSafety(transaction, now, reason, fleetSafety)
+    await this.incrementRegionalRehomeWorkerFailure(transaction, worker, now)
+    return event
+  }
+
+  private async disableRegionalRehomeForSafety(
+    database: RelayDatabase,
+    now: number,
+    reason: string,
+    fleetSafety: RegionalRehomeFleetSafety
+  ): Promise<Record<string, string | number> | null> {
+    const disabled = await database.query(
+      `UPDATE relay_region_rehome_control
+       SET generation = generation + 1, enabled = 0, updated_at = ?
+       WHERE control_id = 'global' AND enabled = 1
+       RETURNING generation`,
+      [now]
+    )
+    // Return disable reason for logging after commit; inspection alone shows only enabled=false, and rolled-back decisions must not log.
+    if (disabled.length === 0) return null
+    return {
+      event: 'orca_relay_regional_rehome_safety_disabled',
+      reason,
+      controlGeneration: integer(disabled[0]!, 'generation'),
+      now,
+      requiredCells: fleetSafety.requiredCells,
+      missingCells: fleetSafety.missingCells,
+      observedAt: fleetSafety.observedAt,
+      sqlFailures: fleetSafety.sqlFailures,
+      reconnects: fleetSafety.reconnects,
+      maxReconnects: fleetSafety.maxReconnects,
+      controlActivityRecoveryFailures: fleetSafety.controlActivityRecoveryFailures,
+      databasePoolWaiting: fleetSafety.databasePoolWaiting,
+      databasePoolWaitersMax: fleetSafety.databasePoolWaitersMax,
+      databasePoolWaitMsMax: fleetSafety.databasePoolWaitMsMax
+    }
+  }
+
+
+  private async markRegionalRehomeDispatchClaimed(
+    transaction: RelayDatabase,
+    attemptId: string,
+    now: number,
+    intervalMs: number
+  ): Promise<void> {
+    await transaction.query(
+      `UPDATE relay_region_rehome_attempts
+       SET send_attempts = send_attempts + 1, last_send_attempt_at = ?, updated_at = ?
+       WHERE attempt_id = ?`,
+      [now, now, attemptId]
+    )
+    await transaction.query(
+      `UPDATE relay_region_rehome_worker_state
+       SET next_dispatch_at = ?, updated_at = ? WHERE worker_id = 'global'`,
+      [now + intervalMs, now]
+    )
+  }
+
+  // Returns the durable disable this failure caused, for the caller to log once
+  // its transaction commits; null when the budget survives or was already spent.
+  private async incrementRegionalRehomeWorkerFailure(
+    transaction: RelayDatabase,
+    worker: SqlRow,
+    now: number
+  ): Promise<Record<string, string | number> | null> {
+    const failures = integer(worker, 'consecutive_failures') + 1
+    const spent = failures >= REGIONAL_REHOME_FAILURE_BUDGET
+    await transaction.query(
+      `UPDATE relay_region_rehome_worker_state
+       SET consecutive_failures = ?, paused_until = ?, updated_at = ?
+       WHERE worker_id = 'global'`,
+      [failures, spent ? now + 5 * 60_000 : 0, now]
+    )
+    if (!spent) return null
+    const disabled = await transaction.query(
+      `UPDATE relay_region_rehome_control
+       SET generation = generation + 1, enabled = 0, updated_at = ?
+       WHERE control_id = 'global' AND enabled = 1
+       RETURNING generation`,
+      [now]
+    )
+    // The disable is otherwise invisible: inspection only shows enabled=false and
+    // nothing records that the failure budget, not an operator, turned it off.
+    if (disabled.length === 0) return null
+    return {
+      event: 'orca_relay_regional_rehome_failure_budget_disabled',
+      controlGeneration: integer(disabled[0]!, 'generation'),
+      consecutiveFailures: failures,
+      now
+    }
+  }
+
+  async completeReadyRegionalRehomes(limit = 10): Promise<number> {
+    const now = this.now()
+    const quarantined = this.quarantinedRegionalRehomeAttemptIds(now)
+    const exclusion = quarantined.length
+      ? ` AND attempt.attempt_id NOT IN (${quarantined.map(() => '?').join(', ')})`
+      : ''
+    const candidates = await this.database.query(
+      `SELECT attempt.attempt_id, attempt.user_id, attempt.relay_host_id,
+         attempt.assignment_epoch
+       FROM relay_region_rehome_attempts attempt
+       JOIN relay_assignment_migrations migration
+         ON migration.user_id = attempt.user_id
+        AND migration.relay_host_id = attempt.relay_host_id
+        AND migration.assignment_epoch = attempt.assignment_epoch
+       WHERE attempt.completed_at IS NULL AND attempt.aborted_at IS NULL
+         AND migration.target_registered_at IS NOT NULL
+         AND migration.completed_at IS NULL AND migration.aborted_at IS NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM relay_assignment_activity_leases source_lease
+           WHERE source_lease.user_id = attempt.user_id
+             AND source_lease.relay_host_id = attempt.relay_host_id
+             AND source_lease.cell_id = attempt.source_cell_id
+         )${exclusion}
+       ORDER BY attempt.created_at, attempt.attempt_id
+       LIMIT ?`,
+      [...quarantined, limit]
+    )
+    let completed = 0
+    let inventoryBusy = 0
+    for (const candidate of candidates) {
+      // One poisoned row must not stall every later candidate: an invariant
+      // throw here blocked fleet completions head-of-line in production.
+      const attemptId = text(candidate, 'attempt_id')
+      try {
+        const changed = await this.completeRegionalRehomeCandidate(
+          {
+            userId: text(candidate, 'user_id'),
+            relayHostId: text(candidate, 'relay_host_id')
+          },
+          integer(candidate, 'assignment_epoch'),
+          now
+        )
+        if (changed) completed++
+        this.regionalRehomeCandidateQuarantine.delete(attemptId)
+      } catch (error) {
+        if (isDatabaseLockUnavailable(error)) {
+          inventoryBusy++
+          continue
+        }
+        this.recordRegionalRehomeCandidateFailure('complete', attemptId, now, error)
+      }
+    }
+    warnSweepCellInventoryBusy('complete-ready-regional-rehomes', inventoryBusy)
+    return completed
+  }
+
+  // Quarantine repeated permanent failures or their oldest rows fill LIMIT pages and starve healthy candidates.
+  private recordRegionalRehomeCandidateFailure(
+    operation: 'complete' | 'abort' | 'refresh',
+    attemptId: string,
+    now: number,
+    error: unknown
+  ): void {
+    const entry = this.regionalRehomeCandidateQuarantine.get(attemptId) ?? {
+      failures: 0,
+      until: 0
+    }
+    entry.failures++
+    if (entry.failures >= REGIONAL_REHOME_QUARANTINE_FAILURES) {
+      entry.until = now + REGIONAL_REHOME_QUARANTINE_MS
+    }
+    this.regionalRehomeCandidateQuarantine.delete(attemptId)
+    this.regionalRehomeCandidateQuarantine.set(attemptId, entry)
+    if (this.regionalRehomeCandidateQuarantine.size > REGIONAL_REHOME_QUARANTINE_MEMORY_LIMIT) {
+      // Evict a non-quarantined entry first: mid-quarantine rows are excluded
+      // from the candidate pages and losing one returns it to the page with a
+      // reset counter.
+      let evict = this.regionalRehomeCandidateQuarantine.keys().next().value!
+      for (const [key, candidate] of this.regionalRehomeCandidateQuarantine) {
+        if (candidate.until <= now) {
+          evict = key
+          break
+        }
+      }
+      this.regionalRehomeCandidateQuarantine.delete(evict)
+    }
+    warnRegionalRehomeCandidateFailure(operation, attemptId, error)
+  }
+
+  private quarantinedRegionalRehomeAttemptIds(now: number): string[] {
+    const excluded: string[] = []
+    for (const [attemptId, entry] of this.regionalRehomeCandidateQuarantine) {
+      if (entry.until > now) excluded.push(attemptId)
+      if (excluded.length >= REGIONAL_REHOME_QUARANTINE_EXCLUSION_LIMIT) break
+    }
+    return excluded
+  }
+
+  async refreshRegionalRehomeLeases(limit = 100): Promise<number> {
+    const now = this.now()
+    const quarantined = this.quarantinedRegionalRehomeAttemptIds(now)
+    const exclusion = quarantined.length
+      ? ` AND attempt_id NOT IN (${quarantined.map(() => '?').join(', ')})`
+      : ''
+    const candidates = await this.database.query(
+      `SELECT attempt_id, user_id, relay_host_id, assignment_epoch
+       FROM relay_region_rehome_attempts
+       WHERE completed_at IS NULL AND aborted_at IS NULL${exclusion}
+       ORDER BY updated_at, attempt_id LIMIT ?`,
+      [...quarantined, limit]
+    )
+    let refreshed = 0
+    for (const candidate of candidates) {
+      const identity = {
+        userId: text(candidate, 'user_id'),
+        relayHostId: text(candidate, 'relay_host_id')
+      }
+      const assignmentEpoch = integer(candidate, 'assignment_epoch')
+      const attemptId = text(candidate, 'attempt_id')
+      try {
+        const changed = await this.database.transaction(async (transaction) => {
+          const assignment = await this.assignmentRow(transaction, identity)
+          const attempt = (
+            await transaction.queryLocked(
+              `SELECT * FROM relay_region_rehome_attempts
+             WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?`,
+              [identity.userId, identity.relayHostId, assignmentEpoch]
+            )
+          )[0]
+          const migration = (
+            await transaction.queryLocked(
+              `SELECT * FROM relay_assignment_migrations
+             WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?`,
+              [identity.userId, identity.relayHostId, assignmentEpoch]
+            )
+          )[0]
+          if (attempt && attempt.completed_at == null && attempt.aborted_at == null) {
+            await transaction.query(
+              `UPDATE relay_region_rehome_attempts SET updated_at = ? WHERE attempt_id = ?`,
+              [now, attempt.attempt_id]
+            )
+          }
+          if (
+            !assignment ||
+            !attempt ||
+            !migration ||
+            optionalInteger(attempt, 'completed_at') !== undefined ||
+            optionalInteger(attempt, 'aborted_at') !== undefined ||
+            optionalInteger(migration, 'completed_at') !== undefined ||
+            optionalInteger(migration, 'aborted_at') !== undefined
+          ) {
+            return false
+          }
+          const attemptAgeMs = now - integer(attempt, 'created_at')
+          if (attemptAgeMs >= REGIONAL_REHOME_MAX_REFRESH_MS) {
+            return false
+          }
+          if (
+            optionalInteger(migration, 'target_registered_at') === undefined &&
+            attemptAgeMs >= REGIONAL_REHOME_UNREGISTERED_REFRESH_MS
+          ) {
+            await transaction.query(
+              `UPDATE relay_assignment_activity_leases
+             SET expires_at = CASE WHEN expires_at < ? THEN expires_at ELSE ? END,
+                 updated_at = ?
+             WHERE user_id = ? AND relay_host_id = ?
+               AND activity_id IN (?, ?)`,
+              [
+                now,
+                now,
+                now,
+                identity.userId,
+                identity.relayHostId,
+                pendingControlActivityId(assignmentEpoch),
+                migrationActivityId(assignmentEpoch)
+              ]
+            )
+            await transaction.query(
+              `UPDATE relay_assignment_migrations
+             SET expires_at = CASE WHEN expires_at < ? THEN expires_at ELSE ? END,
+                 updated_at = ?
+             WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?`,
+              [now, now, now, identity.userId, identity.relayHostId, assignmentEpoch]
+            )
+            return false
+          }
+          const leases = await this.lockAssignmentActivities(transaction, identity)
+          const protectedIds = new Set([
+            pendingControlActivityId(assignmentEpoch),
+            migrationActivityId(assignmentEpoch)
+          ])
+          const protectedLeases = leases.filter((lease) =>
+            protectedIds.has(text(lease, 'activity_id'))
+          )
+          if (protectedLeases.length === 0) return false
+          const expiresAt = now + ASSIGNMENT_LIMITS.migrationLeaseMs
+          await transaction.query(
+            `UPDATE relay_assignment_activity_leases
+           SET expires_at = ?, updated_at = ?
+           WHERE user_id = ? AND relay_host_id = ?
+             AND activity_id IN (?, ?)`,
+            [
+              expiresAt,
+              now,
+              identity.userId,
+              identity.relayHostId,
+              pendingControlActivityId(assignmentEpoch),
+              migrationActivityId(assignmentEpoch)
+            ]
+          )
+          await transaction.query(
+            `UPDATE relay_assignment_migrations SET expires_at = ?, updated_at = ?
+           WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?`,
+            [expiresAt, now, identity.userId, identity.relayHostId, assignmentEpoch]
+          )
+          await transaction.query(
+            `UPDATE relay_assignments SET lease_expires_at =
+             CASE WHEN lease_expires_at > ? THEN lease_expires_at ELSE ? END,
+             last_activity_at = ?
+           WHERE user_id = ? AND relay_host_id = ?`,
+            [expiresAt, expiresAt, now, identity.userId, identity.relayHostId]
+          )
+          return true
+        })
+        if (changed) refreshed++
+        this.regionalRehomeCandidateQuarantine.delete(attemptId)
+      } catch (error) {
+        if (!isDatabaseLockUnavailable(error))
+          this.recordRegionalRehomeCandidateFailure('refresh', attemptId, now, error)
+      }
+    }
+    return refreshed
+  }
+
+  private async completeRegionalRehomeCandidate(
+    identity: AssignmentIdentity,
+    assignmentEpoch: number,
+    now: number
+  ): Promise<boolean> {
+    return await this.database.transaction(async (transaction) => {
+      const assignment = await this.assignmentRow(transaction, identity)
+      const attempt = (
+        await transaction.queryLocked(
+          `SELECT * FROM relay_region_rehome_attempts
+           WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?`,
+          [identity.userId, identity.relayHostId, assignmentEpoch]
+        )
+      )[0]
+      const migration = (
+        await transaction.queryLocked(
+          `SELECT * FROM relay_assignment_migrations
+           WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?`,
+          [identity.userId, identity.relayHostId, assignmentEpoch]
+        )
+      )[0]
+      if (
+        !attempt ||
+        !migration ||
+        optionalInteger(attempt, 'completed_at') !== undefined ||
+        optionalInteger(attempt, 'aborted_at') !== undefined ||
+        optionalInteger(migration, 'target_registered_at') === undefined ||
+        optionalInteger(migration, 'completed_at') !== undefined ||
+        optionalInteger(migration, 'aborted_at') !== undefined
+      ) {
+        return false
+      }
+      const sourceCellId = text(attempt, 'source_cell_id')
+      const targetCellId = text(attempt, 'target_cell_id')
+      if (
+        !assignment ||
+        text(assignment, 'cell_id') !== targetCellId ||
+        integer(assignment, 'assignment_epoch') !== assignmentEpoch ||
+        text(migration, 'source_cell_id') !== sourceCellId ||
+        text(migration, 'target_cell_id') !== targetCellId
+      ) {
+        throw new Error('regional_rehome_assignment_mismatch')
+      }
+      const leases = await this.lockAssignmentActivities(transaction, identity)
+      if (activityUnitsForCell(leases, sourceCellId) !== 0) return false
+      await this.repairAssignmentActivityCounts(
+        transaction,
+        identity,
+        text(attempt, 'attempt_id'),
+        assignment,
+        leases,
+        migration
+      )
+      const cells = await this.lockCellInventory(transaction, 'nowait')
+      const target = cells.find((cell) => text(cell, 'cell_id') === targetCellId)
+      const admission = await cellAdmissionStates(transaction)
+      if (
+        !target ||
+        integer(target, 'enabled') !== 1 ||
+        !['general', 'migration-only'].includes(admission.get(targetCellId) ?? '')
+      ) {
+        return false
+      }
+      const targetRuntime = (
+        await transaction.queryLocked(
+          `SELECT * FROM relay_cell_runtime WHERE cell_id = ?`,
+          [targetCellId]
+        )
+      )[0]
+      if (
+        !targetRuntime ||
+        integer(targetRuntime, 'ready') !== 1 ||
+        integer(targetRuntime, 'last_heartbeat_at') <= now - this.heartbeatTtlMs
+      ) {
+        return false
+      }
+      const targetActive = leases.some(
+        (lease) =>
+          text(lease, 'cell_id') === targetCellId &&
+          text(lease, 'activity_kind') === 'control' &&
+          !text(lease, 'activity_id').startsWith('control-pending:') &&
+          integer(lease, 'expires_at') > now &&
+          integer(lease, 'updated_at') >= integer(targetRuntime, 'started_at')
+      )
+      if (!targetActive) return false
+      const migrationLease = activityLeaseById(
+        leases,
+        migrationActivityId(assignmentEpoch)
+      )
+      if (migrationLease) {
+        await this.removeActivityLease(transaction, identity, migrationLease, now)
+      }
+      await transaction.query(
+        `UPDATE relay_assignment_migrations SET completed_at = ?, updated_at = ?
+         WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?`,
+        [now, now, identity.userId, identity.relayHostId, assignmentEpoch]
+      )
+      await transaction.query(
+        `UPDATE relay_region_rehome_attempts SET completed_at = ?, updated_at = ?
+         WHERE attempt_id = ?`,
+        [now, now, text(attempt, 'attempt_id')]
+      )
+      return true
+    })
+  }
+
+  // Repair only counter skew from locked leases; shape/topology failures must still throw. reconcileReservationAccounting opens its own transaction, so cannot replace this in-sweep repair.
+  private async repairAssignmentActivityCounts(
+    transaction: RelayDatabase,
+    identity: AssignmentIdentity,
+    attemptId: string,
+    assignment: SqlRow,
+    leases: SqlRow[],
+    migrationRow: SqlRow
+  ): Promise<void> {
+    try {
+      assertAssignmentActivityAccounting(assignment, leases, migrationRow)
+      return
+    } catch (error) {
+      if (
+        !(error instanceof Error) ||
+        error.message !== 'migration_activity_accounting_mismatch'
+      ) {
+        throw error
+      }
+    }
+    const counts = activityCounts(leases)
+    await transaction.query(
+      `UPDATE relay_assignments SET reserved_controls = ?, reserved_splices = ?,
+         reserved_invites = ?, pending_installs = ?, pending_confirmations = ?,
+         migration_leases = ?
+       WHERE user_id = ? AND relay_host_id = ?`,
+      [
+        counts.control,
+        counts.splice,
+        counts.invite,
+        counts.install,
+        counts.confirmation,
+        counts.migration,
+        identity.userId,
+        identity.relayHostId
+      ]
+    )
+    const repaired = await this.assignmentRow(transaction, identity)
+    if (!repaired) throw new Error('regional_rehome_assignment_mismatch')
+    assertAssignmentActivityAccounting(repaired, leases, migrationRow)
+    noteRegionalRehomeActivityCountsRepaired(attemptId)
+  }
+
+  async reapRegionalRehomeAttempts(): Promise<number> {
+    const now = this.now()
+    const completed = await this.database.query(
+      `UPDATE relay_region_rehome_attempts
+       SET completed_at = COALESCE(completed_at, ?), updated_at = ?
+       WHERE completed_at IS NULL AND aborted_at IS NULL
+         AND EXISTS (
+           SELECT 1 FROM relay_assignment_migrations migration
+           WHERE migration.user_id = relay_region_rehome_attempts.user_id
+             AND migration.relay_host_id = relay_region_rehome_attempts.relay_host_id
+             AND migration.assignment_epoch = relay_region_rehome_attempts.assignment_epoch
+             AND migration.completed_at IS NOT NULL
+         )`,
+      [now, now]
+    )
+    const aborted = await this.database.query(
+      `UPDATE relay_region_rehome_attempts
+       SET aborted_at = COALESCE(aborted_at, ?), updated_at = ?
+       WHERE completed_at IS NULL AND aborted_at IS NULL
+         AND EXISTS (
+           SELECT 1 FROM relay_assignment_migrations migration
+           WHERE migration.user_id = relay_region_rehome_attempts.user_id
+             AND migration.relay_host_id = relay_region_rehome_attempts.relay_host_id
+             AND migration.assignment_epoch = relay_region_rehome_attempts.assignment_epoch
+             AND migration.aborted_at IS NOT NULL
+         )`,
+      [now, now]
+    )
+    if (integer(aborted[0]!, 'changes') > 0) {
+      await this.disableRegionalRehomeControl()
+    }
+    return integer(completed[0]!, 'changes') + integer(aborted[0]!, 'changes')
+  }
+
+  // Unarrived hosts with no source activity waste one of eight migration slots; rollback leaves their original durable source for next reconnect.
+  async abortUnarrivedRegionalRehomes(limit = 100): Promise<number> {
+    return await this.rollBackStalledRegionalRehomes({
+      sweep: 'abort-unarrived-regional-rehomes',
+      minimumAttemptAgeMs: REGIONAL_REHOME_ARRIVAL_WINDOW_MS,
+      abortReason: 'host_not_arrived',
+      disableControl: false,
+      limit
+    })
+  }
+
+  // Only this last-resort sweep disables rehoming: surviving a day past dispatch means normal arrival rollback failed.
+  async abortExpiredRegionalRehomes(limit = 100): Promise<number> {
+    return await this.rollBackStalledRegionalRehomes({
+      sweep: 'abort-expired-regional-rehomes',
+      minimumAttemptAgeMs: REGIONAL_REHOME_MAX_REFRESH_MS,
+      abortReason: 'max_refresh_expired',
+      disableControl: true,
+      limit
+    })
+  }
+
+  private async rollBackStalledRegionalRehomes(input: {
+    sweep: string
+    minimumAttemptAgeMs: number
+    abortReason: RegionalRehomeAbortReason
+    disableControl: boolean
+    limit: number
+  }): Promise<number> {
+    const now = this.now()
+    const dispatchedBefore = now - input.minimumAttemptAgeMs
+    const quarantined = this.quarantinedRegionalRehomeAttemptIds(now)
+    const exclusion = quarantined.length
+      ? ` AND attempt_id NOT IN (${quarantined.map(() => '?').join(', ')})`
+      : ''
+    const candidates = await this.database.query(
+      `SELECT attempt_id, user_id, relay_host_id, assignment_epoch
+       FROM relay_region_rehome_attempts
+       WHERE completed_at IS NULL AND aborted_at IS NULL
+         AND created_at <= ?${exclusion}
+       ORDER BY created_at, attempt_id LIMIT ?`,
+      [dispatchedBefore, ...quarantined, input.limit]
+    )
+    let aborted = 0
+    let inventoryBusy = 0
+    for (const candidate of candidates) {
+      const identity = {
+        userId: text(candidate, 'user_id'),
+        relayHostId: text(candidate, 'relay_host_id')
+      }
+      const assignmentEpoch = integer(candidate, 'assignment_epoch')
+      const attemptId = text(candidate, 'attempt_id')
+      // Isolated like the completion sweep: one poisoned row must not stall
+      // every later candidate.
+      let changed = false
+      try {
+        changed = await this.database.transaction(async (transaction) => {
+        const assignment = await this.assignmentRow(transaction, identity)
+        const attempt = (
+          await transaction.queryLocked(
+            `SELECT * FROM relay_region_rehome_attempts
+             WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?`,
+            [identity.userId, identity.relayHostId, assignmentEpoch]
+          )
+        )[0]
+        const migration = (
+          await transaction.queryLocked(
+            `SELECT * FROM relay_assignment_migrations
+             WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?`,
+            [identity.userId, identity.relayHostId, assignmentEpoch]
+          )
+        )[0]
+        if (
+          !assignment ||
+          !attempt ||
+          !migration ||
+          optionalInteger(attempt, 'completed_at') !== undefined ||
+          optionalInteger(attempt, 'aborted_at') !== undefined ||
+          integer(attempt, 'created_at') > dispatchedBefore ||
+          optionalInteger(migration, 'completed_at') !== undefined ||
+          optionalInteger(migration, 'aborted_at') !== undefined
+        ) {
+          return false
+        }
+        const sourceCellId = text(attempt, 'source_cell_id')
+        const targetCellId = text(attempt, 'target_cell_id')
+        if (
+          text(assignment, 'cell_id') !== targetCellId ||
+          integer(assignment, 'assignment_epoch') !== assignmentEpoch
+        ) {
+          throw new Error('regional_rehome_assignment_mismatch')
+        }
+        const leases = await this.lockAssignmentActivities(transaction, identity)
+        if (activityUnitsForCell(leases, sourceCellId) > 0) return false
+        const targetActive = leases.some(
+          (lease) =>
+            text(lease, 'cell_id') === targetCellId &&
+            text(lease, 'activity_kind') === 'control' &&
+            !text(lease, 'activity_id').startsWith('control-pending:') &&
+            integer(lease, 'expires_at') > now
+        )
+        if (targetActive) return false
+        await this.lockControlConnectionReservations(transaction, identity, 'nowait')
+        const cells = await this.lockCellInventory(transaction, 'nowait')
+        const source = cells.find((cell) => text(cell, 'cell_id') === sourceCellId)
+        const admission = await cellAdmissionStates(transaction)
+        if (
+          !source ||
+          integer(source, 'enabled') !== 1 ||
+          admission.get(sourceCellId) !== 'general' ||
+          !(await this.cellIsLive(transaction, sourceCellId, now))
+        ) {
+          return false
+        }
+        for (const activityId of [
+          pendingControlActivityId(assignmentEpoch),
+          migrationActivityId(assignmentEpoch)
+        ]) {
+          const lease = activityLeaseById(leases, activityId)
+          if (lease) await this.removeActivityLease(transaction, identity, lease, now)
+        }
+        await this.releaseSupersededControlConnectionReservations(
+          transaction,
+          identity,
+          targetCellId,
+          assignmentEpoch,
+          now
+        )
+        await transaction.query(
+          `UPDATE relay_assignments SET cell_id = ?, assignment_epoch = ?,
+             lease_expires_at = ?, last_activity_at = ?
+           WHERE user_id = ? AND relay_host_id = ?`,
+          [
+            sourceCellId,
+            assignmentEpoch + 1,
+            now + ASSIGNMENT_LIMITS.activityLeaseMs,
+            now,
+            identity.userId,
+            identity.relayHostId
+          ]
+        )
+        await transaction.query(
+          `UPDATE relay_assignment_migrations SET aborted_at = ?, updated_at = ?
+           WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?`,
+          [now, now, identity.userId, identity.relayHostId, assignmentEpoch]
+        )
+        await transaction.query(
+          `UPDATE relay_region_rehome_attempts
+           SET aborted_at = ?, abort_reason = ?, updated_at = ?
+           WHERE attempt_id = ?`,
+          [now, input.abortReason, now, text(attempt, 'attempt_id')]
+        )
+        // Only last-resort expiry disables the feature; a laptop closing mid-move is not evidence rehoming is unsafe.
+        if (input.disableControl) {
+          await transaction.query(
+            `UPDATE relay_region_rehome_control
+             SET generation = generation + 1, enabled = 0, updated_at = ?
+             WHERE control_id = 'global' AND enabled = 1`,
+            [now]
+          )
+        }
+        return true
+        })
+        this.regionalRehomeCandidateQuarantine.delete(attemptId)
+      } catch (error) {
+        if (isDatabaseLockUnavailable(error)) inventoryBusy++
+        else this.recordRegionalRehomeCandidateFailure('abort', attemptId, now, error)
+      }
+      if (changed) aborted++
+    }
+    warnSweepCellInventoryBusy(input.sweep, inventoryBusy)
+    return aborted
+  }
+
+  async abortExpiredEvacuations(): Promise<number> {
+    const now = this.now()
+    const abandonedBefore = now - STRANDED_MIGRATION_ABANDON_MS
+    const candidates = await this.database.query(
+      `SELECT migration.user_id, migration.relay_host_id, migration.assignment_epoch
+       FROM relay_assignment_migrations migration
+       WHERE migration.expires_at <= ?
+         AND migration.completed_at IS NULL AND migration.aborted_at IS NULL
+         AND ${ABORTABLE_EXPIRED_MIGRATION}
+       ORDER BY user_id, relay_host_id, assignment_epoch`,
+      [now, now, abandonedBefore, abandonedBefore]
+    )
+    let aborted = 0
+    let inventoryBusy = 0
+    for (const candidate of candidates) {
+      const didAbort = await this.database
+        .transaction(async (transaction) => {
+          const identity = {
+            userId: text(candidate, 'user_id'),
+            relayHostId: text(candidate, 'relay_host_id')
+          }
+          // Migration cleanup follows the same assignment-first order as evacuation.
+          const assignment = await this.assignmentRow(transaction, identity)
+          const assignmentEpoch = integer(candidate, 'assignment_epoch')
+          const regionalAttempt = (
+            await transaction.queryLocked(
+              `SELECT attempt_id FROM relay_region_rehome_attempts
+             WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?
+               AND completed_at IS NULL AND aborted_at IS NULL`,
+              [identity.userId, identity.relayHostId, assignmentEpoch]
+            )
+          )[0]
+          const row = (
+            await transaction.queryLocked(
+              `SELECT migration.* FROM relay_assignment_migrations migration
+             WHERE migration.user_id = ? AND migration.relay_host_id = ?
+               AND migration.assignment_epoch = ?
+               AND migration.expires_at <= ?
+               AND migration.completed_at IS NULL AND migration.aborted_at IS NULL
+               AND ${ABORTABLE_EXPIRED_MIGRATION}`,
+              [
+                identity.userId,
+                identity.relayHostId,
+                assignmentEpoch,
+                now,
+                now,
+                abandonedBefore,
+                abandonedBefore
+              ]
+            )
+          )[0]
+          if (!row) return false
+          const targetCellId = text(row, 'target_cell_id')
+          const activityLeases = await this.lockAssignmentActivities(transaction, identity)
+          if (!assignment) throw new Error('migration_assignment_missing')
+          const currentAssignmentEpoch = integer(assignment, 'assignment_epoch')
+          const assignmentEpochMatches =
+            text(assignment, 'cell_id') === targetCellId &&
+            currentAssignmentEpoch === assignmentEpoch
+          const pendingTargetControl = activityLeaseById(
+            activityLeases,
+            pendingControlActivityId(assignmentEpoch)
+          )
+          const targetGrantIsFresh =
+            assignmentEpochMatches &&
+            pendingTargetControl !== undefined &&
+            text(pendingTargetControl, 'cell_id') === targetCellId &&
+            text(pendingTargetControl, 'activity_kind') === 'control' &&
+            integer(pendingTargetControl, 'expires_at') > now
+          const targetIsActive = activityLeases.some(
+            (lease) =>
+              text(lease, 'cell_id') === targetCellId &&
+              text(lease, 'activity_kind') === 'control' &&
+              text(lease, 'activity_id') !== pendingControlActivityId(assignmentEpoch)
+          )
+          if (targetGrantIsFresh) return false
+          if (targetIsActive && assignmentEpochMatches) {
+            // A committed target control is stronger evidence than a failed follow-up
+            // write; repair the marker instead of rolling a live desktop backward.
+            await transaction.query(
+              `UPDATE relay_assignment_migrations
+             SET target_registered_at = COALESCE(target_registered_at, ?), updated_at = ?
+             WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?`,
+              [now, now, identity.userId, identity.relayHostId, assignmentEpoch]
+            )
+            return false
+          }
+          if (!assignmentEpochMatches) {
+            if (currentAssignmentEpoch <= assignmentEpoch) {
+              throw new Error('migration_assignment_mismatch')
+            }
+            // A newer assignment is authoritative regardless of where it landed.
+            // Retire only this obsolete migration; never rewrite the newer epoch.
+            const obsoleteLeases = [
+              pendingControlActivityId(assignmentEpoch),
+              migrationActivityId(assignmentEpoch)
+            ]
+              .map((activityId) => activityLeaseById(activityLeases, activityId))
+              .filter((lease): lease is SqlRow => lease !== undefined)
+            if (obsoleteLeases.length > 0) {
+              await this.lockControlConnectionReservations(transaction, identity, 'nowait')
+              await this.lockCellInventory(transaction, 'nowait')
+            }
+            for (const lease of obsoleteLeases) {
+              await this.removeActivityLease(transaction, identity, lease, now)
+            }
+            await this.releaseSupersededControlConnectionReservations(
+              transaction,
+              identity,
+              targetCellId,
+              assignmentEpoch,
+              now
+            )
+            await transaction.query(
+              `UPDATE relay_assignment_migrations SET aborted_at = ?, updated_at = ?
+             WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?`,
+              [now, now, identity.userId, identity.relayHostId, assignmentEpoch]
+            )
+            return true
+          }
+          await this.lockControlConnectionReservations(transaction, identity, 'nowait')
+          const cells = await this.lockCellInventory(transaction, 'nowait')
+          const sourceCellId = text(row, 'source_cell_id')
+          const admissionRows = await transaction.query(
+            `SELECT cell_id, admission_state, updated_at FROM relay_cell_admission
+           WHERE cell_id IN (?, ?)`,
+            [sourceCellId, targetCellId]
+          )
+          const sourceCell = cells.find((cell) => text(cell, 'cell_id') === sourceCellId)
+          const targetCell = cells.find((cell) => text(cell, 'cell_id') === targetCellId)
+          const sourceAdmission = admissionRows.find(
+            (admission) => text(admission, 'cell_id') === sourceCellId
+          )
+          const targetAdmission = admissionRows.find(
+            (admission) => text(admission, 'cell_id') === targetCellId
+          )
+          const registered = optionalInteger(row, 'target_registered_at') !== undefined
+          const sourceIsDurablyFenced =
+            registered &&
+            (
+              await transaction.query(
+                `SELECT 1 FROM relay_assignment_migrations migration
+               WHERE migration.user_id = ? AND migration.relay_host_id = ?
+                 AND migration.assignment_epoch = ?
+                 AND ${DURABLY_FENCED_MIGRATION_SOURCE}`,
+                [identity.userId, identity.relayHostId, assignmentEpoch]
+              )
+            ).length === 1
+          const retireOnTarget =
+            registered &&
+            activityUnitsForCell(activityLeases, sourceCellId) === 0 &&
+            sourceCell !== undefined &&
+            integer(sourceCell, 'enabled') === 0 &&
+            sourceAdmission !== undefined &&
+            text(sourceAdmission, 'admission_state') === 'existing-only' &&
+            (integer(sourceAdmission, 'updated_at') <= abandonedBefore || sourceIsDurablyFenced) &&
+            targetCell !== undefined &&
+            integer(targetCell, 'enabled') === 1 &&
+            targetAdmission !== undefined &&
+            ['migration-only', 'general'].includes(text(targetAdmission, 'admission_state'))
+          const rollbackReason =
+            !registered ||
+            (targetCell !== undefined &&
+              integer(targetCell, 'enabled') === 0 &&
+              targetAdmission !== undefined &&
+              text(targetAdmission, 'admission_state') === 'existing-only' &&
+              integer(targetAdmission, 'updated_at') <= abandonedBefore)
+          const regionalRollbackSourceAvailable =
+            !regionalAttempt ||
+            (sourceCell !== undefined &&
+              integer(sourceCell, 'enabled') === 1 &&
+              sourceAdmission !== undefined &&
+              text(sourceAdmission, 'admission_state') === 'general' &&
+              (await this.cellIsLive(transaction, sourceCellId, now)))
+          const rollbackToSource = rollbackReason && regionalRollbackSourceAvailable
+          if (!retireOnTarget && !rollbackToSource) return false
+          for (const activityId of [
+            pendingControlActivityId(assignmentEpoch),
+            migrationActivityId(assignmentEpoch)
+          ]) {
+            const lease = activityLeaseById(activityLeases, activityId)
+            if (lease) await this.removeActivityLease(transaction, identity, lease, now)
+          }
+          await this.releaseSupersededControlConnectionReservations(
+            transaction,
+            identity,
+            targetCellId,
+            assignmentEpoch,
+            now
+          )
+          if (retireOnTarget) {
+            await transaction.query(
+              `UPDATE relay_assignment_migrations SET completed_at = ?, updated_at = ?
+             WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?`,
+              [now, now, identity.userId, identity.relayHostId, assignmentEpoch]
+            )
+            return true
+          }
+          await transaction.query(
+            `UPDATE relay_assignments SET cell_id = ?, assignment_epoch = ?,
+             lease_expires_at = ?, last_activity_at = ?
+           WHERE user_id = ? AND relay_host_id = ?`,
+            [
+              sourceCellId,
+              assignmentEpoch + 1,
+              now + ASSIGNMENT_LIMITS.activityLeaseMs,
+              now,
+              identity.userId,
+              identity.relayHostId
+            ]
+          )
+          await transaction.query(
+            `UPDATE relay_assignment_migrations SET aborted_at = ?, updated_at = ?
+           WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?`,
+            [now, now, identity.userId, identity.relayHostId, assignmentEpoch]
+          )
+          if (regionalAttempt) {
+            await transaction.query(
+              `UPDATE relay_region_rehome_attempts SET aborted_at = ?, updated_at = ? WHERE attempt_id = ?`,
+              [now, now, regionalAttempt.attempt_id]
+            )
+          }
+          return true
+        })
+        .catch((error: unknown): boolean => {
+          // Expiry is durable; another director settling this row is not a failure.
+          // Invariant failures remain fatal so operators see corrupt migration state.
+          if (!isDatabaseLockUnavailable(error)) throw error
+          inventoryBusy++
+          return false
+        })
+      if (didAbort) aborted++
+    }
+    warnSweepCellInventoryBusy('abort-expired-evacuations', inventoryBusy)
+    return aborted
+  }
+
+  async pruneReleasedControlReservations(): Promise<number> {
+    return await this.releasedReservationReaper.reap(this.database, [
+      this.now() - RELEASED_CONTROL_RESERVATION_RETENTION_MS
+    ])
+  }
+
+  async releaseExpiredActivityLeases(): Promise<number> {
+    const reserveCells = await this.reserveModeCells()
+    if (reserveCells === null) return 0
+    const now = this.now()
+    await this.database.query(
+      `UPDATE relay_control_connection_reservations
+       SET state = 'late-arrival-debt', updated_at = ?
+       WHERE state = 'reserved' AND timeout_at <= ?`,
+      [now, now]
+    )
+    await this.database.query(
+      `UPDATE relay_control_connection_reservations
+       SET state = 'released', released_at = ?, updated_at = ?
+       WHERE state = 'late-arrival-debt'
+         AND claim_activity_id IS NULL
+         AND timeout_at <= ?`,
+      [now, now, now - LATE_ARRIVAL_DEBT_RETENTION_MS]
+    )
+    const candidates = await this.database.query(
+      `SELECT user_id, relay_host_id, activity_id
+       FROM relay_assignment_activity_leases lease
+       WHERE expires_at <= ?${excludeCellsSql('lease.cell_id', [...reserveCells])}
+         AND NOT EXISTS (
+           SELECT 1 FROM relay_region_rehome_attempts rehome
+           WHERE rehome.user_id = lease.user_id
+             AND rehome.relay_host_id = lease.relay_host_id
+             AND rehome.completed_at IS NULL AND rehome.aborted_at IS NULL
+             AND lease.activity_id IN (
+               'control-pending:' || CAST(rehome.assignment_epoch AS TEXT),
+               'migration:' || CAST(rehome.assignment_epoch AS TEXT)
+             )
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM relay_post_drain_migration_pins pin
+           JOIN relay_assignment_migrations migration
+             ON migration.user_id = pin.user_id
+            AND migration.relay_host_id = pin.relay_host_id
+            AND migration.assignment_epoch = pin.assignment_epoch
+           WHERE pin.user_id = lease.user_id
+             AND pin.relay_host_id = lease.relay_host_id
+             AND migration.completed_at IS NULL
+             AND migration.aborted_at IS NULL
+             AND lease.activity_id IN (
+               'control-pending:' || CAST(pin.assignment_epoch AS TEXT),
+               'migration:' || CAST(pin.assignment_epoch AS TEXT)
+             )
+         )`,
+      [now, ...reserveCells]
+    )
+    let released = 0
+    for (const candidate of candidates) {
+      let didRelease: boolean
+      try {
+        didRelease = await this.database.transaction(async (transaction) => {
+          const identity = {
+            userId: text(candidate, 'user_id'),
+            relayHostId: text(candidate, 'relay_host_id')
+          }
+          // Recheck under assignment-first locks so concurrent renewals win; multiple directors skip busy rows instead of reaping refreshed leases or retrying contention.
+          await this.assignmentRow(transaction, identity, true)
+          const activityLeases = await this.lockAssignmentActivities(transaction, identity, true)
+          const lease = activityLeaseById(activityLeases, text(candidate, 'activity_id'))
+          if (!lease || integer(lease, 'expires_at') > now) return false
+          await this.lockCellInventory(transaction, 'nowait')
+          await this.removeActivityLease(transaction, identity, lease, now)
+          return true
+        })
+      } catch (error) {
+        // Released cell images can still hold their legacy cell-first lock;
+        // expiry is durable, so a later maintenance sweep can safely retry it.
+        if (isDatabaseLockUnavailable(error)) continue
+        throw error
+      }
+      if (didRelease) released++
+    }
+    return released
+  }
+
+  async releaseExpiredActivity(): Promise<number> {
+    const reserveCells = await this.reserveModeCells()
+    if (reserveCells === null) return 0
+    const now = this.now()
+    try {
+      return await this.database.transaction(async (transaction) => {
+        // Only counters no lease backs. A host's leases can sit on more than
+        // one cell, and the lease sweep takes each one's units off its own.
+        const expired = await transaction.queryLocked(
+          `SELECT * FROM relay_assignments WHERE lease_expires_at <= ?${excludeCellsSql(
+            'relay_assignments.cell_id',
+            [...reserveCells]
+          )} AND
+           (reserved_controls > 0 OR reserved_splices > 0 OR reserved_invites > 0 OR
+            pending_installs > 0 OR pending_confirmations > 0 OR migration_leases > 0)
+           AND NOT EXISTS (
+             SELECT 1 FROM relay_assignment_activity_leases lease
+             WHERE lease.user_id = relay_assignments.user_id
+               AND lease.relay_host_id = relay_assignments.relay_host_id
+           )
+           AND NOT EXISTS (
+             SELECT 1 FROM relay_region_rehome_attempts rehome
+             WHERE rehome.user_id = relay_assignments.user_id
+               AND rehome.relay_host_id = relay_assignments.relay_host_id
+               AND rehome.completed_at IS NULL AND rehome.aborted_at IS NULL
+           )
+           AND NOT EXISTS (
+             SELECT 1 FROM relay_post_drain_migration_pins pin
+             JOIN relay_assignment_migrations migration
+               ON migration.user_id = pin.user_id
+              AND migration.relay_host_id = pin.relay_host_id
+              AND migration.assignment_epoch = pin.assignment_epoch
+             WHERE pin.user_id = relay_assignments.user_id
+               AND pin.relay_host_id = relay_assignments.relay_host_id
+               AND migration.completed_at IS NULL
+               AND migration.aborted_at IS NULL
+           )
+           ORDER BY user_id, relay_host_id`,
+          [now, ...reserveCells],
+          { failIfUnavailable: true }
+        )
+        if (expired.length > 0) await this.lockCellInventory(transaction, 'nowait')
+        for (const row of expired) {
+          await this.adjustCellReservation(transaction, text(row, 'cell_id'), -requestUnits(row))
+          await transaction.query(
+            `UPDATE relay_assignments SET reserved_controls = 0, reserved_splices = 0,
+             reserved_invites = 0, pending_installs = 0, pending_confirmations = 0,
+             migration_leases = 0
+             WHERE user_id = ? AND relay_host_id = ?`,
+            [text(row, 'user_id'), text(row, 'relay_host_id')]
+          )
+        }
+        return expired.length
+      })
+    } catch (error) {
+      // Aggregate expiry is reconstructible from durable leases; never wait
+      // long enough to form a mixed-version cell/assignment lock cycle.
+      if (isDatabaseLockUnavailable(error)) return 0
+      throw error
+    }
+  }
+
+  async releaseExpiredRegionPreferences(): Promise<number> {
+    const result = await this.database.query(
+      `DELETE FROM relay_assignment_region_preferences WHERE observed_at < ?`,
+      [this.now() - REGION_PREFERENCE_RETENTION_MS]
+    )
+    return integer(result[0]!, 'changes')
+  }
+
+  private async reconcileReservationAccounting(
+    sourceCellId: string,
+    targetCellId: string
+  ): Promise<void> {
+    const now = this.now()
+    const drift = await this.database.transaction(async (transaction) => {
+      // Reconciliation takes the same assignment→activity→cell order as live
+      // mutations so correcting drift never races a credential or socket lease.
+      const assignments = await transaction.queryLocked(
+        `SELECT assignment.* FROM relay_assignments assignment
+         WHERE assignment.cell_id IN (?, ?) OR EXISTS (
+           SELECT 1 FROM relay_assignment_activity_leases scoped_lease
+           WHERE scoped_lease.user_id = assignment.user_id
+             AND scoped_lease.relay_host_id = assignment.relay_host_id
+             AND scoped_lease.cell_id IN (?, ?)
+         )
+         ORDER BY assignment.user_id, assignment.relay_host_id`,
+        [sourceCellId, targetCellId, sourceCellId, targetCellId]
+      )
+      const leases = await transaction.queryLocked(
+        `SELECT lease.* FROM relay_assignment_activity_leases lease
+         WHERE lease.cell_id IN (?, ?) OR EXISTS (
+           SELECT 1 FROM relay_assignments assignment
+           WHERE assignment.user_id = lease.user_id
+             AND assignment.relay_host_id = lease.relay_host_id
+             AND (
+               assignment.cell_id IN (?, ?) OR EXISTS (
+                 SELECT 1 FROM relay_assignment_activity_leases scoped_lease
+                 WHERE scoped_lease.user_id = lease.user_id
+                   AND scoped_lease.relay_host_id = lease.relay_host_id
+                   AND scoped_lease.cell_id IN (?, ?)
+               )
+             )
+         )
+         ORDER BY lease.user_id, lease.relay_host_id, lease.activity_id`,
+        [
+          sourceCellId,
+          targetCellId,
+          sourceCellId,
+          targetCellId,
+          sourceCellId,
+          targetCellId
+        ]
+      )
+      // Lock only the two repaired cells; this existence check reads the reconcileCells-owned table unlocked instead of holding the fleet.
+      const cellIds = new Set(
+        (await transaction.query(`SELECT cell_id FROM relay_cells`)).map((row) =>
+          text(row, 'cell_id')
+        )
+      )
+      const cells = await this.lockCellRows(
+        transaction,
+        [sourceCellId, targetCellId],
+        'pool-default'
+      )
+      // The counter is written as an absolute, so its units are read after the
+      // cell lock: a lease committed since the read above already bumped it.
+      const cellUnits = new Map(
+        (
+          await transaction.query(
+            `SELECT cell_id, SUM(request_units) AS units
+             FROM relay_assignment_activity_leases
+             WHERE cell_id IN (?, ?) GROUP BY cell_id`,
+            [sourceCellId, targetCellId]
+          )
+        ).map((row) => [text(row, 'cell_id'), integer(row, 'units')])
+      )
+      const assignmentKeys = new Set(
+        assignments.map((row) =>
+          assignmentKey(text(row, 'user_id'), text(row, 'relay_host_id'))
+        )
+      )
+      const assignmentCounts = new Map<
+        string,
+        { counts: Record<AssignmentActivityKind, number>; leaseExpiresAt: number }
+      >()
+
+      for (const lease of leases) {
+        const key = assignmentKey(text(lease, 'user_id'), text(lease, 'relay_host_id'))
+        if (!assignmentKeys.has(key)) throw new Error('activity_lease_assignment_missing')
+        const cellId = text(lease, 'cell_id')
+        if (!cellIds.has(cellId)) throw new Error('activity_lease_cell_missing')
+        const current =
+          assignmentCounts.get(key) ?? {
+            counts: emptyActivityCounts(),
+            leaseExpiresAt: 0
+          }
+        const kind = activityKind(lease)
+        current.counts[kind]++
+        current.leaseExpiresAt = Math.max(current.leaseExpiresAt, integer(lease, 'expires_at'))
+        assignmentCounts.set(key, current)
+      }
+
+      for (const row of assignments) {
+        const current = assignmentCounts.get(
+          assignmentKey(text(row, 'user_id'), text(row, 'relay_host_id'))
+        )
+        const counts = current?.counts ?? emptyActivityCounts()
+        const differs = (Object.keys(ACTIVITY_COLUMN) as AssignmentActivityKind[]).some(
+          (kind) => integer(row, ACTIVITY_COLUMN[kind]) !== counts[kind]
+        )
+        const expiryDiffers =
+          current !== undefined && integer(row, 'lease_expires_at') !== current.leaseExpiresAt
+        if (!differs && !expiryDiffers) continue
+        await transaction.query(
+          `UPDATE relay_assignments SET reserved_controls = ?, reserved_splices = ?,
+             reserved_invites = ?, pending_installs = ?, pending_confirmations = ?,
+             migration_leases = ?, lease_expires_at = ?
+           WHERE user_id = ? AND relay_host_id = ?`,
+          [
+            counts.control,
+            counts.splice,
+            counts.invite,
+            counts.install,
+            counts.confirmation,
+            counts.migration,
+            current?.leaseExpiresAt ?? integer(row, 'lease_expires_at'),
+            text(row, 'user_id'),
+            text(row, 'relay_host_id')
+          ]
+        )
+      }
+
+      const corrected: { cellId: string; reservedRequests: number; leaseUnits: number }[] = []
+      for (const row of cells) {
+        const cellId = text(row, 'cell_id')
+        const expected = cellUnits.get(cellId) ?? 0
+        if (expected > integer(row, 'capacity_requests')) {
+          throw new Error('relay_capacity_exhausted')
+        }
+        if (integer(row, 'reserved_requests') === expected) continue
+        await transaction.query(
+          `UPDATE relay_cells SET reserved_requests = ?, updated_at = ? WHERE cell_id = ?`,
+          [expected, now, cellId]
+        )
+        corrected.push({
+          cellId,
+          reservedRequests: integer(row, 'reserved_requests'),
+          leaseUnits: expected
+        })
+      }
+      return corrected
+    })
+    // Logged after COMMIT so a retried transaction reports each correction once.
+    for (const sample of drift) {
+      console.warn(JSON.stringify({ event: 'orca_relay_reservation_drift', ...sample }))
+    }
+  }
+
+  private async lockCellInventory(
+    database: RelayDatabase,
+    mode: CellInventoryLockMode
+  ): Promise<SqlRow[]> {
+    // Every capacity-changing assignment takes the tiny cell inventory in one
+    // order; dynamically locking only the selected target allowed cross-cell cycles.
+    const rows = await database.queryLocked(
+      `SELECT * FROM relay_cells ORDER BY cell_id ASC`,
+      [],
+      cellInventoryLockOptions(mode)
+    )
+    return rows
+  }
+
+  // Lock touched cells in inventory’s ascending order to avoid cycles. Honor caller wait policy so sweeps tolerate contention; sample only named sites so short holds cannot flatter inventory metrics.
+  private async lockCellRows(
+    database: RelayDatabase,
+    cellIds: string[],
+    mode: CellInventoryLockMode = 'request',
+    holdSite?: CellLockHoldSite
+  ): Promise<SqlRow[]> {
+    const distinct = [...new Set(cellIds)]
+    const { measureHoldMs: _sampled, ...wait } = cellInventoryLockOptions(mode)
+    return await database.queryLocked(
+      `SELECT * FROM relay_cells WHERE cell_id IN (${distinct.map(() => '?').join(', ')})
+       ORDER BY cell_id ASC`,
+      distinct,
+      holdSite ? { ...wait, measureHoldMs: true, holdSite } : wait
+    )
+  }
+
+  // Lock this host’s reservations before any cell row (tier 3); the set is known before placement selection.
+  private async lockControlConnectionReservations(
+    database: RelayDatabase,
+    identity: AssignmentIdentity,
+    mode: CellInventoryLockMode = 'request'
+  ): Promise<void> {
+    const { measureHoldMs: _sampled, ...wait } = cellInventoryLockOptions(mode)
+    await database.queryLocked(
+      `SELECT reservation_id FROM relay_control_connection_reservations
+       WHERE user_id = ? AND relay_host_id = ? ORDER BY reservation_id ASC`,
+      [identity.userId, identity.relayHostId],
+      wait
+    )
+  }
+
+  // Unlocked on purpose: this only names the row to lock next, and the caller
+  // re-checks the pin once the assignment row is held.
+  private async pinnedCellId(
+    database: RelayDatabase,
+    identity: AssignmentIdentity
+  ): Promise<string | undefined> {
+    const row = (
+      await database.query(
+        `SELECT cell_id FROM relay_assignments WHERE user_id = ? AND relay_host_id = ?`,
+        [identity.userId, identity.relayHostId]
+      )
+    )[0]
+    return row ? text(row, 'cell_id') : undefined
+  }
+
+  private async lockGeneralCellInventory(
+    database: RelayDatabase,
+    mode: CellInventoryLockMode
+  ): Promise<SqlRow[]> {
+    const rows = await database.queryLocked(
+      `SELECT * FROM relay_cells
+       WHERE cell_id IN (
+         SELECT cell_id FROM relay_cell_admission WHERE admission_state = 'general'
+       )
+       ORDER BY cell_id ASC`,
+      [],
+      cellInventoryLockOptions(mode)
+    )
+    return rows
+  }
+
+  // The rows a roll-isolated incumbent may move to in one tier: general cells
+  // in its own region, or in every other region, never its own. Placement
+  // re-reads admission and headroom under the lock.
+  private async lockIsolatedReplacementCells(
+    database: RelayDatabase,
+    sourceCellId: string | undefined,
+    tier: IsolatedReplacementTier,
+    mode: CellInventoryLockMode
+  ): Promise<SqlRow[]> {
+    if (sourceCellId === undefined) throw new AssignmentInventoryScopeChanged()
+    const sourceRegion = await this.cellRegion(database, sourceCellId)
+    const candidates = await database.query(
+      `SELECT admission.cell_id FROM relay_cell_admission admission
+       LEFT JOIN relay_cell_regions region ON region.cell_id = admission.cell_id
+       WHERE admission.admission_state = 'general' AND admission.cell_id <> ?
+         AND COALESCE(region.region, ?) ${tier === 'same-region' ? '=' : '<>'} ?`,
+      [sourceCellId, RELAY_DEFAULT_REGION, sourceRegion]
+    )
+    if (candidates.length === 0) {
+      if (tier === 'same-region') {
+        throw new AssignmentIsolatedTierExhausted({ cellId: sourceCellId, region: sourceRegion })
+      }
+      throw new AssignmentInventoryScopeChanged()
+    }
+    return await this.lockCellRows(
+      database,
+      candidates.map((row) => text(row, 'cell_id')),
+      mode,
+      'isolated-replacement'
+    )
+  }
+
+  // The same questions the all-rows path asks before moving an isolated
+  // incumbent, none of which needs a relay_cells lock.
+  private async isolatedIncumbentMayMove(
+    database: RelayDatabase,
+    identity: AssignmentIdentity,
+    existing: SqlRow,
+    now: number
+  ): Promise<boolean> {
+    const cellId = text(existing, 'cell_id')
+    const pinned = await this.pinnedCellAdmission(database, cellId)
+    if (await this.assignmentStrandedOnUnservedCell(database, identity, existing, now, pinned?.state)) {
+      return false
+    }
+    if (
+      !(await this.incumbentCellIsolatedForRoll(
+        database,
+        identity,
+        existing,
+        now,
+        undefined,
+        pinned
+      ))
+    ) {
+      return false
+    }
+    return (
+      (await this.cellIsLive(database, cellId, now)) ||
+      (await this.isolatedCellRestartedSinceRoll(database, cellId, now))
+    )
+  }
+
+  private async unlockedCell(database: RelayDatabase, cellId: string): Promise<CellRow> {
+    const row = (
+      await database.query(`SELECT * FROM relay_cells WHERE cell_id = ?`, [cellId])
+    )[0]
+    if (!row) throw new Error('assigned_cell_missing')
+    return cell(row, await this.cellRegion(database, cellId))
+  }
+
+  private async leastLoadedCell(
+    database: RelayDatabase,
+    // Required: the one caller has already locked the inventory it selects from,
+    // and an optional parameter left a second fleet-wide lock reachable here.
+    rows: SqlRow[],
+    preferredRegion: RelayRegion,
+    // Ordinary placement spills globally; isolated incumbents exhaust their own region before a separate cross-region tier.
+    regionMode: 'prefer' | 'require' = 'prefer'
+  ): Promise<CellRow | null> {
+    const regions = new Map(
+      (await database.query(`SELECT cell_id, region FROM relay_cell_regions`)).map((row) => [
+        text(row, 'cell_id'),
+        relayRegion(row, 'region')
+      ])
+    )
+    const admission = await cellAdmissionStates(database)
+    const runtimeLoad = this.requireLiveCells
+      ? new Map(
+          (
+            await database.query(
+              `SELECT cell_id, observed_requests FROM relay_cell_runtime
+               WHERE ready = ? AND last_heartbeat_at > ?`,
+              [1, this.now() - this.heartbeatTtlMs]
+            )
+          ).map((row) => [text(row, 'cell_id'), integer(row, 'observed_requests')])
+        )
+      : null
+    const connectionHeadroom = await this.connectionHeadroomByCell(database)
+    // The database pool: a reserve-mode cell takes only the bookings it admits itself. Unknown
+    // keeps the last set read (stale), not none: placement must not stop with a slow read.
+    const reserveCells = (await this.reserveModeCells(database)) ?? this.reserveModeRead?.cells ?? new Set<string>()
+    const candidates = rows.filter((row) => {
+      const cellId = text(row, 'cell_id')
+      return (
+        // A reserve cell whose own feed says it admits through the database again (its dead-man
+        // tripped, or a flip back finished) takes placements; the census sweeps still skip it.
+        (!reserveCells.has(cellId) || this.reserveCellAdmitsDatabase(cellId)) &&
+        admission.get(cellId) === 'general' &&
+        integer(row, 'reserved_requests') < integer(row, 'capacity_requests') &&
+        (!runtimeLoad || runtimeLoad.has(cellId)) &&
+        connectionHeadroom.get(cellId) !== false
+      )
+    })
+    const loadRatio = (row: SqlRow) =>
+      (integer(row, 'reserved_requests') +
+        (runtimeLoad?.get(text(row, 'cell_id')) ?? integer(row, 'observed_requests'))) /
+      integer(row, 'capacity_requests')
+    const ranked = candidates
+      .map((row) => ({ row, cellId: text(row, 'cell_id'), loadRatio: loadRatio(row) }))
+      .sort(
+        (left, right) =>
+          left.loadRatio - right.loadRatio || left.cellId.localeCompare(right.cellId)
+      )
+    const preferred = ranked.filter(
+      (candidate) => (regions.get(candidate.cellId) ?? RELAY_DEFAULT_REGION) === preferredRegion
+    )
+    const pool = regionMode === 'require' || preferred.length > 0 ? preferred : ranked
+    const selected = this.placementLoadBand
+      ? this.placementLoadBand.pick(pool, this.now())
+      : pool[0]
+    return selected
+      ? cell(selected.row, regions.get(selected.cellId) ?? RELAY_DEFAULT_REGION)
+      : null
+  }
+
+  // Every cell, enabled or not: an existing-only cell still seats hosts. Liveness is
+  // placement's own rule (ready, heartbeat within heartbeatTtlMs).
+  async seatFeedCells(): Promise<SeatFeedCell[]> {
+    const now = this.now()
+    const rows = await this.database.query(
+      `SELECT cell.cell_id, cell.cell_url, cell.capacity_requests, region.region,
+              admission.admission_state, admission.roll_isolated_at, runtime.ready,
+              runtime.last_heartbeat_at, runtime.cell_incarnation
+       FROM relay_cells cell
+       LEFT JOIN relay_cell_regions region ON region.cell_id = cell.cell_id
+       LEFT JOIN relay_cell_admission admission ON admission.cell_id = cell.cell_id
+       LEFT JOIN relay_cell_runtime runtime ON runtime.cell_id = cell.cell_id
+       ORDER BY cell.cell_id ASC`
+    )
+    return rows.map((row) => {
+      const lastHeartbeatAt = optionalInteger(row, 'last_heartbeat_at')
+      const heartbeatExpiresAt = !this.requireLiveCells
+        ? Number.MAX_SAFE_INTEGER
+        : optionalInteger(row, 'ready') === 1 && lastHeartbeatAt !== undefined
+          ? lastHeartbeatAt + this.heartbeatTtlMs
+          : null
+      return {
+        cellId: text(row, 'cell_id'),
+        cellUrl: text(row, 'cell_url'),
+        region: optionalRelayRegion(row, 'region') ?? RELAY_DEFAULT_REGION,
+        heartbeatExpiresAt,
+        requiredForComplete:
+          heartbeatExpiresAt !== null &&
+          heartbeatExpiresAt > now &&
+          integer(row, 'capacity_requests') > 0 &&
+          optionalInteger(row, 'roll_isolated_at') === undefined,
+        // Step 5 places only on general cells that are not isolated for a roll.
+        general:
+          optionalText(row, 'admission_state') === 'general' &&
+          optionalInteger(row, 'roll_isolated_at') === undefined &&
+          integer(row, 'capacity_requests') > 0,
+        capacityRequests: integer(row, 'capacity_requests'),
+        ...incarnationField(optionalText(row, 'cell_incarnation'))
+      }
+    })
+  }
+
+  // On-call "where is host X: primary-key reads only, no liveness filter.
+  async hostWhereabouts(identity: AssignmentIdentity): Promise<HostWhereaboutsRow | null> {
+    const row = (
+      await this.database.query(
+        `SELECT cell_id, assignment_epoch, lease_expires_at FROM relay_assignments
+         WHERE user_id = ? AND relay_host_id = ?`,
+        [identity.userId, identity.relayHostId]
+      )
+    )[0]
+    if (!row) return null
+    const migrations = await this.database.query(
+      `SELECT source_cell_id, target_cell_id, previous_epoch, assignment_epoch, expires_at,
+              target_registered_at
+       FROM relay_assignment_migrations
+       WHERE user_id = ? AND relay_host_id = ? AND completed_at IS NULL AND aborted_at IS NULL
+       ORDER BY assignment_epoch DESC LIMIT 1`,
+      [identity.userId, identity.relayHostId]
+    )
+    const migration = migrations[0]
+    return {
+      cellId: text(row, 'cell_id'),
+      assignmentEpoch: integer(row, 'assignment_epoch'),
+      leaseExpiresAt: integer(row, 'lease_expires_at'),
+      openMigration: migration
+        ? {
+            sourceCellId: text(migration, 'source_cell_id'),
+            targetCellId: text(migration, 'target_cell_id'),
+            previousEpoch: integer(migration, 'previous_epoch'),
+            assignmentEpoch: integer(migration, 'assignment_epoch'),
+            expiresAt: integer(migration, 'expires_at'),
+            targetRegisteredAt: optionalInteger(migration, 'target_registered_at') ?? null
+          }
+        : null
+    }
+  }
+
+  async regionCatalog(): Promise<RelayRegionCatalogEntry[]> {
+    const rows = await this.database.query(
+      `SELECT cell.cell_id, cell.cell_url, region.region
+       FROM relay_cells cell
+       LEFT JOIN relay_cell_regions region ON region.cell_id = cell.cell_id
+       JOIN relay_cell_admission admission ON admission.cell_id = cell.cell_id
+       JOIN relay_cell_runtime runtime ON runtime.cell_id = cell.cell_id
+       WHERE cell.enabled = 1
+         AND admission.admission_state = 'general'
+         AND runtime.ready = ? AND runtime.last_heartbeat_at > ?
+       ORDER BY cell.cell_id ASC`,
+      [1, this.now() - this.heartbeatTtlMs]
+    )
+    const origins = new Map<RelayRegion, string[]>()
+    for (const row of rows) {
+      const region = optionalRelayRegion(row, 'region') ?? RELAY_DEFAULT_REGION
+      const current = origins.get(region) ?? []
+      if (current.length < 2) current.push(text(row, 'cell_url'))
+      origins.set(region, current)
+    }
+    return RELAY_REGIONS.flatMap((region) => {
+      const probeOrigins = origins.get(region)
+      return probeOrigins?.length ? [{ region, probeOrigins }] : []
+    })
+  }
+
+  private async recordRegionPreference(
+    database: RelayDatabase,
+    identity: AssignmentIdentity,
+    preferredRegion: RelayRegion | undefined,
+    observedAt: number
+  ): Promise<void> {
+    if (!preferredRegion) return
+    await database.query(
+      `INSERT INTO relay_assignment_region_preferences
+       (user_id, relay_host_id, preferred_region, observed_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT (user_id, relay_host_id) DO UPDATE SET
+         preferred_region = CASE
+           WHEN excluded.observed_at >= relay_assignment_region_preferences.observed_at
+             THEN excluded.preferred_region
+           ELSE relay_assignment_region_preferences.preferred_region
+         END,
+         observed_at = CASE
+           WHEN excluded.observed_at >= relay_assignment_region_preferences.observed_at
+             THEN excluded.observed_at
+           ELSE relay_assignment_region_preferences.observed_at
+         END`,
+      [identity.userId, identity.relayHostId, preferredRegion, observedAt]
+    )
+  }
+
+  private async cellRegion(database: RelayDatabase, cellId: string): Promise<RelayRegion> {
+    const row = (
+      await database.query(`SELECT region FROM relay_cell_regions WHERE cell_id = ?`, [cellId])
+    )[0]
+    return row ? relayRegion(row, 'region') : RELAY_DEFAULT_REGION
+  }
+
+  private async connectionHeadroomByCell(
+    database: RelayDatabase,
+    cellId?: string
+  ): Promise<Map<string, boolean>> {
+    const now = this.now()
+    const rows = await database.query(
+      cellId === undefined
+        ? ASSIGNMENT_CONNECTION_HEADROOM_QUERY
+        : `${ASSIGNMENT_CONNECTION_HEADROOM_QUERY} WHERE limits.cell_id = ?`,
+      cellId === undefined ? [] : [cellId]
+    )
+    return new Map(
+      rows.map((row) => {
+        const heartbeat = optionalInteger(row, 'last_heartbeat_at')
+        const hasFreshTelemetry =
+          heartbeat !== undefined &&
+          heartbeat > now - this.heartbeatTtlMs &&
+          optionalText(row, 'connection_incarnation') ===
+            optionalText(row, 'current_incarnation')
+        const hasHeadroom =
+          hasFreshTelemetry &&
+          integer(row, 'enforced_connection_units') +
+            integer(row, 'outstanding_reservations') +
+            integer(row, 'unobserved_bound') <
+            integer(row, 'effective_hard_cap') -
+              RELAY_ADMISSION_BUDGETS.reservedHostControls
+        return [text(row, 'cell_id'), hasHeadroom] as const
+      })
+    )
+  }
+
+  private async assertCellConnectionHeadroom(
+    database: RelayDatabase,
+    cellId: string
+  ): Promise<void> {
+    if (!(await this.cellHasConnectionHeadroom(database, cellId))) {
+      throw new Error('relay_connection_headroom_exhausted')
+    }
+  }
+
+  private async cellHasConnectionHeadroom(
+    database: RelayDatabase,
+    cellId: string
+  ): Promise<boolean> {
+    return (await this.connectionHeadroomByCell(database, cellId)).get(cellId) !== false
+  }
+
+  private async cellIsLive(
+    database: RelayDatabase,
+    cellId: string,
+    now: number
+  ): Promise<boolean> {
+    if (!this.requireLiveCells) return true
+    const rows = await database.query(
+      `SELECT cell.cell_id FROM relay_cells cell
+       JOIN relay_cell_runtime runtime ON runtime.cell_id = cell.cell_id
+       WHERE cell.cell_id = ? AND runtime.ready = ? AND runtime.last_heartbeat_at > ?`,
+      [cellId, 1, now - this.heartbeatTtlMs]
+    )
+    return rows.length === 1
+  }
+
+  // Why: one relay container per VM, and a MIG that deletes before it creates, so a process
+  // started after the stamp is not the drained one. Fresh and (capped) empty: it holds nothing.
+  private async isolatedCellRestartedSinceRoll(
+    database: RelayDatabase,
+    cellId: string,
+    now: number
+  ): Promise<boolean> {
+    const row = (
+      await database.query(
+        `SELECT runtime.started_at, runtime.last_heartbeat_at, admission.roll_isolated_at,
+           CASE WHEN EXISTS (
+             SELECT 1 FROM relay_cell_connection_limits limits WHERE limits.cell_id = runtime.cell_id
+           ) THEN 1 ELSE 0 END AS capped,
+           CASE WHEN connections.cell_incarnation = runtime.cell_incarnation
+             AND connections.total_connections = 0 AND connections.in_flight_connections = 0
+           THEN 1 ELSE 0 END AS holds_nothing
+         FROM relay_cell_runtime runtime
+         JOIN relay_cell_admission admission ON admission.cell_id = runtime.cell_id
+         LEFT JOIN relay_cell_connection_runtime connections
+           ON connections.cell_id = runtime.cell_id
+         WHERE runtime.cell_id = ?`,
+        [cellId]
+      )
+    )[0]
+    if (!row) {
+      return false
+    }
+    const rollIsolatedAt = optionalInteger(row, 'roll_isolated_at')
+    return (
+      rollIsolatedAt !== undefined &&
+      integer(row, 'started_at') > rollIsolatedAt &&
+      integer(row, 'last_heartbeat_at') > now - this.heartbeatTtlMs &&
+      (integer(row, 'capped') === 0 || integer(row, 'holds_nothing') === 1)
+    )
+  }
+
+  // Roll-isolated cells heartbeat ready but reject attaches with 4503, so cellIsLive misses retry loops. Require a roll stamp: migration-only also durably holds evacuation/Asia rollback/failed-wave/new-cell hosts that must stay pinned.
+  private async incumbentCellIsolatedForRoll(
+    database: RelayDatabase,
+    identity: AssignmentIdentity,
+    existing: SqlRow,
+    // Use caller’s instant consistently; stamp age decides host movement.
+    now: number,
+    // Placement has already read the whole table; sticky has not, and a single
+    // pinned cell does not justify a second fleet-wide read.
+    admission?: ReadonlyMap<string, CellAdmissionState>,
+    // Sticky has already read the pinned row for the stranded rule.
+    pinnedAdmission?: PinnedCellAdmission
+  ): Promise<boolean> {
+    const cellId = text(existing, 'cell_id')
+    // Placement's map answers the common "not parked at all" case for free; the
+    // stamp itself is only on the row, so a migration-only incumbent still pays
+    // the single-row read.
+    if (admission && admission.get(cellId) !== ROLL_ISOLATED_ADMISSION) return false
+    const pinned = pinnedAdmission ?? (await this.pinnedCellAdmission(database, cellId))
+    if (!rollIsolationIsCurrent(pinned, now)) return false
+    if (integer(existing, 'migration_leases') > 0) return false
+    // Durable migration owns both epochs beyond the 15-minute counter lease; counter-only checks could move a stalled migration’s host.
+    const open = (
+      await database.query(
+        `SELECT COUNT(*) AS open FROM relay_assignment_migrations
+         WHERE user_id = ? AND relay_host_id = ?
+           AND completed_at IS NULL AND aborted_at IS NULL`,
+        [identity.userId, identity.relayHostId]
+      )
+    )[0]
+    return integer(open!, 'open') === 0
+  }
+
+  // One read for both the class and the roll stamp, so the sticky hot path pays
+  // a single indexed row lookup rather than one per question.
+  private async pinnedCellAdmission(
+    database: RelayDatabase,
+    cellId: string
+  ): Promise<PinnedCellAdmission | undefined> {
+    const row = (
+      await database.query(
+        `SELECT admission_state, roll_isolated_at FROM relay_cell_admission WHERE cell_id = ?`,
+        [cellId]
+      )
+    )[0]
+    // Unknown admission must retain the pin; never throw from the per-dial sticky reader that authorizes moves.
+    if (!row || !isCellAdmissionState(row['admission_state'])) return undefined
+    return {
+      state: row['admission_state'],
+      rollIsolatedAt: optionalInteger(row, 'roll_isolated_at')
+    }
+  }
+
+  // Reports which of `cellIsLive`'s conditions failed, so the rejection log
+  // separates an expected drain or boot from a cell whose readiness went out
+  // from under its hosts.
+  private async homeCellUnavailableCause(
+    database: RelayDatabase,
+    cellId: string,
+    now: number
+  ): Promise<RelayHomeCellUnavailableCause> {
+    const row = (
+      await database.query(
+        `SELECT cell.enabled, runtime.last_heartbeat_at
+         FROM relay_cells cell
+         LEFT JOIN relay_cell_runtime runtime ON runtime.cell_id = cell.cell_id
+         WHERE cell.cell_id = ?`,
+        [cellId]
+      )
+    )[0]
+    if (!row) return 'booting'
+    if (integer(row, 'enabled') === 0) return 'draining'
+    const heartbeatAt = optionalInteger(row, 'last_heartbeat_at')
+    if (heartbeatAt === undefined) return 'booting'
+    // Readiness is all that is left: `cellIsLive` already refused this cell.
+    return heartbeatAt <= now - this.heartbeatTtlMs ? 'unheard' : 'not_ready'
+  }
+
+  private async cellHasActiveFence(cellId: string): Promise<boolean> {
+    const rows = await this.database.query(
+      `SELECT fence.cell_id FROM relay_cell_fences fence
+       JOIN relay_cells cell ON cell.cell_id = fence.cell_id
+       JOIN relay_cell_runtime runtime ON runtime.cell_id = fence.cell_id
+       WHERE fence.cell_id = ? AND cell.enabled = 0
+         AND fence.cell_incarnation = runtime.cell_incarnation
+         AND fence.attested_at >= runtime.last_heartbeat_at
+         AND fence.expires_at > ?`,
+      [cellId, this.now()]
+    )
+    return rows.length === 1
+  }
+
+  private async recordCommittedCellFence(
+    transaction: RelayDatabase,
+    cellId: string,
+    cellIncarnation: string,
+    attemptId: string,
+    attestedAt: number,
+    expiresAt: number
+  ): Promise<void> {
+    await transaction.query(
+      `INSERT INTO relay_cell_committed_fences
+       (cell_id, attempt_id, cell_incarnation, attested_at, expires_at)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT (cell_id) DO UPDATE SET
+         attempt_id = excluded.attempt_id,
+         cell_incarnation = excluded.cell_incarnation,
+         attested_at = excluded.attested_at,
+         expires_at = excluded.expires_at`,
+      [cellId, attemptId, cellIncarnation, attestedAt, expiresAt]
+    )
+  }
+
+  private async cellHasCommittedFence(
+    database: RelayDatabase,
+    cellId: string,
+    now: number
+  ): Promise<boolean> {
+    const rows = await database.query(
+      `SELECT committed.cell_id
+       FROM relay_cell_committed_fences committed
+       JOIN relay_cell_fence_attempts attempt
+         ON attempt.attempt_id = committed.attempt_id
+       JOIN relay_cell_fences fence ON fence.cell_id = committed.cell_id
+       JOIN relay_cell_runtime runtime ON runtime.cell_id = committed.cell_id
+       JOIN relay_cells cell ON cell.cell_id = committed.cell_id
+       WHERE committed.cell_id = ?
+         AND attempt.completed_at IS NOT NULL
+         AND attempt.aborted_at IS NULL
+         AND cell.enabled = 0
+         AND committed.cell_incarnation = runtime.cell_incarnation
+         AND fence.cell_incarnation = committed.cell_incarnation
+         AND committed.attested_at >= runtime.last_heartbeat_at
+         AND committed.expires_at > ?
+         AND fence.expires_at > ?`,
+      [cellId, now, now]
+    )
+    return rows.length === 1
+  }
+
+  private async deadCellFenceRequirement(
+    database: RelayDatabase,
+    identity: AssignmentIdentity,
+    cellId: string,
+    assignmentEpoch: number
+  ): Promise<{ capped: boolean; pinned: boolean }> {
+    const row = (
+      await database.query(
+        `SELECT
+           CASE WHEN EXISTS (
+             SELECT 1 FROM relay_cell_connection_limits limits
+             WHERE limits.cell_id = ?
+           ) THEN 1 ELSE 0 END AS capped,
+           CASE WHEN EXISTS (
+             SELECT 1 FROM relay_post_drain_migration_pins pin
+             JOIN relay_assignment_migrations migration
+               ON migration.user_id = pin.user_id
+              AND migration.relay_host_id = pin.relay_host_id
+              AND migration.assignment_epoch = pin.assignment_epoch
+             WHERE pin.user_id = ? AND pin.relay_host_id = ?
+               AND pin.assignment_epoch = ?
+               AND pin.target_cell_id = ?
+               AND migration.completed_at IS NULL
+               AND migration.aborted_at IS NULL
+           ) THEN 1 ELSE 0 END AS pinned`,
+        [cellId, identity.userId, identity.relayHostId, assignmentEpoch, cellId]
+      )
+    )[0]
+    if (!row) return { capped: false, pinned: false }
+    return { capped: integer(row, 'capped') === 1, pinned: integer(row, 'pinned') === 1 }
+  }
+
+  private async assertDrainCellGeneration(
+    transaction: RelayDatabase,
+    cellId: string,
+    cellIncarnation: string
+  ): Promise<void> {
+    const cell = (
+      await transaction.queryLocked(`SELECT * FROM relay_cells WHERE cell_id = ?`, [cellId])
+    )[0]
+    const runtime = (
+      await transaction.queryLocked(`SELECT * FROM relay_cell_runtime WHERE cell_id = ?`, [
+        cellId
+      ])
+    )[0]
+    if (!cell || integer(cell, 'enabled') !== 0) {
+      throw new Error('drain_attempt_admission_enabled')
+    }
+    if (!runtime || text(runtime, 'cell_incarnation') !== cellIncarnation) {
+      throw new Error('drain_attempt_generation_mismatch')
+    }
+  }
+
+  private async requireCellFence(
+    transaction: RelayDatabase,
+    cellId: string,
+    runtime: SqlRow | undefined,
+    now: number
+  ): Promise<void> {
+    const fence = (
+      await transaction.queryLocked(`SELECT * FROM relay_cell_fences WHERE cell_id = ?`, [
+        cellId
+      ])
+    )[0]
+    if (
+      !fence ||
+      !runtime ||
+      text(fence, 'cell_incarnation') !== text(runtime, 'cell_incarnation') ||
+      integer(fence, 'attested_at') < integer(runtime, 'last_heartbeat_at') ||
+      integer(fence, 'expires_at') <= now
+    ) {
+      throw new Error('cell_fence_attestation_missing')
+    }
+  }
+
+  private async activeCellMigrations(sourceCellId: string, targetCellId: string): Promise<SqlRow[]> {
+    const targetRuntimeSafety = this.requireLiveCells
+      ? `AND EXISTS (
+           SELECT 1 FROM relay_cell_runtime target_runtime
+           WHERE target_runtime.cell_id = migration.target_cell_id
+             AND lease.updated_at >= target_runtime.started_at
+         )`
+      : ''
+    return await this.database.query(
+      `SELECT migration.*, assignment.cell_id AS current_cell_id,
+         assignment.assignment_epoch AS current_assignment_epoch,
+         COALESCE((
+           SELECT SUM(source_lease.request_units)
+           FROM relay_assignment_activity_leases source_lease
+           WHERE source_lease.user_id = migration.user_id
+             AND source_lease.relay_host_id = migration.relay_host_id
+             AND source_lease.cell_id = migration.source_cell_id
+         ), 0) AS source_activity_units,
+         CASE WHEN EXISTS (
+           SELECT 1 FROM relay_assignment_activity_leases lease
+           WHERE lease.user_id = migration.user_id
+             AND lease.relay_host_id = migration.relay_host_id
+             AND lease.cell_id = migration.target_cell_id
+             AND lease.activity_kind = 'control'
+             AND lease.activity_id NOT LIKE 'control-pending:%'
+         ) THEN 1 ELSE 0 END AS target_control_active,
+         CASE WHEN EXISTS (
+           SELECT 1 FROM relay_assignment_activity_leases lease
+           WHERE lease.user_id = migration.user_id
+             AND lease.relay_host_id = migration.relay_host_id
+             AND lease.cell_id = migration.target_cell_id
+             AND lease.activity_kind = 'control'
+             AND lease.activity_id NOT LIKE 'control-pending:%'
+             AND lease.expires_at > ?
+             ${targetRuntimeSafety}
+         ) THEN 1 ELSE 0 END AS target_control_current
+       FROM relay_assignment_migrations migration
+       LEFT JOIN relay_assignments assignment
+         ON assignment.user_id = migration.user_id
+        AND assignment.relay_host_id = migration.relay_host_id
+       WHERE migration.source_cell_id = ? AND migration.target_cell_id = ?
+         AND migration.completed_at IS NULL AND migration.aborted_at IS NULL
+       ORDER BY migration.user_id, migration.relay_host_id`,
+      [this.now(), sourceCellId, targetCellId]
+    )
+  }
+
+  private async insertPendingControlLease(
+    database: RelayDatabase,
+    identity: AssignmentIdentity,
+    cellId: string,
+    assignmentEpoch: number,
+    now: number
+  ): Promise<void> {
+    const timeoutAt = now + ASSIGNMENT_LIMITS.activityLeaseMs
+    await database.query(
+      `INSERT INTO relay_assignment_activity_leases
+       (user_id, relay_host_id, activity_id, activity_kind, cell_id,
+        request_units, expires_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (user_id, relay_host_id, activity_id) DO UPDATE SET
+         expires_at = excluded.expires_at, updated_at = excluded.updated_at`,
+      [
+        identity.userId,
+        identity.relayHostId,
+        pendingControlActivityId(assignmentEpoch),
+        'control',
+        cellId,
+        1,
+        timeoutAt,
+        now
+      ]
+    )
+    await this.insertControlConnectionReservation(
+      database,
+      identity,
+      cellId,
+      assignmentEpoch,
+      timeoutAt,
+      now
+    )
+  }
+
+  private async insertControlConnectionReservation(
+    database: RelayDatabase,
+    identity: AssignmentIdentity,
+    cellId: string,
+    assignmentEpoch: number,
+    timeoutAt: number,
+    now: number
+  ): Promise<void> {
+    const existing = await database.queryLocked(
+      `SELECT reservation_id
+       FROM relay_control_connection_reservations
+       WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?
+         AND cell_id = ? AND state IN ('reserved', 'late-arrival-debt')
+         AND claim_activity_id IS NULL
+       ORDER BY created_at ASC, reservation_id ASC
+       LIMIT 1`,
+      [identity.userId, identity.relayHostId, assignmentEpoch, cellId]
+    )
+    if (existing.length > 0) return
+    const reservationId = randomUUID()
+    await database.query(
+      `INSERT INTO relay_control_connection_reservations
+       (reservation_id, idempotency_key, user_id, relay_host_id,
+        assignment_epoch, cell_id, state, inclusion_watermark,
+        claim_activity_id, created_at, timeout_at, claimed_at, released_at,
+        updated_at)
+       SELECT ?, ?, ?, ?, ?, ?, 'reserved', NULL, NULL, ?, ?, NULL, NULL, ?
+       FROM relay_cell_connection_limits WHERE cell_id = ?`,
+      [
+        reservationId,
+        reservationId,
+        identity.userId,
+        identity.relayHostId,
+        assignmentEpoch,
+        cellId,
+        now,
+        timeoutAt,
+        now,
+        cellId
+      ]
+    )
+  }
+
+  private async refreshPendingControlReservation(
+    database: RelayDatabase,
+    identity: AssignmentIdentity,
+    cellId: string,
+    assignmentEpoch: number,
+    timeoutAt: number,
+    now: number
+  ): Promise<void> {
+    await database.query(
+      `UPDATE relay_control_connection_reservations
+       SET state = 'reserved', timeout_at = ?, updated_at = ?
+       WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?
+         AND cell_id = ? AND state IN ('reserved', 'late-arrival-debt')
+         AND claim_activity_id IS NULL`,
+      [
+        timeoutAt,
+        now,
+        identity.userId,
+        identity.relayHostId,
+        assignmentEpoch,
+        cellId
+      ]
+    )
+  }
+
+  private async claimControlConnectionReservation(
+    database: RelayDatabase,
+    identity: AssignmentIdentity,
+    cellId: string,
+    assignmentEpoch: number,
+    activityId: string,
+    inclusionWatermark: number | undefined,
+    now: number
+  ): Promise<void> {
+    await database.query(
+      `UPDATE relay_control_connection_reservations
+       SET claim_activity_id = ?, updated_at = ?
+       WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?
+         AND cell_id = ? AND state = 'claimed'
+         AND claim_activity_id IS NOT NULL AND claim_activity_id <> ?`,
+      [
+        activityId,
+        now,
+        identity.userId,
+        identity.relayHostId,
+        assignmentEpoch,
+        cellId,
+        activityId
+      ]
+    )
+    // Released claim IDs are history; treating them as live leaves same-generation reconnect reservations unclaimable, decaying into debt while already enforced.
+    const alreadyClaimed = await database.queryLocked(
+      `SELECT reservation_id FROM relay_control_connection_reservations
+       WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?
+         AND cell_id = ? AND claim_activity_id = ? AND state <> 'released'
+       ORDER BY created_at ASC, reservation_id ASC`,
+      [
+        identity.userId,
+        identity.relayHostId,
+        assignmentEpoch,
+        cellId,
+        activityId
+      ]
+    )
+    if (alreadyClaimed.length > 0) return
+    const reservation = (
+      await database.queryLocked(
+        `SELECT * FROM relay_control_connection_reservations
+         WHERE user_id = ? AND relay_host_id = ? AND assignment_epoch = ?
+           AND cell_id = ? AND state IN ('reserved', 'late-arrival-debt')
+           AND claim_activity_id IS NULL
+         ORDER BY created_at ASC, reservation_id ASC`,
+        [identity.userId, identity.relayHostId, assignmentEpoch, cellId]
+      )
+    )[0]
+    if (!reservation) return
+    await database.query(
+      `UPDATE relay_control_connection_reservations
+       SET state = 'claimed', inclusion_watermark = ?, claim_activity_id = ?,
+         claimed_at = ?, updated_at = ?
+       WHERE reservation_id = ?`,
+      [
+        inclusionWatermark,
+        activityId,
+        now,
+        now,
+        text(reservation, 'reservation_id')
+      ]
+    )
+  }
+
+  private async releaseSupersededControlConnectionReservations(
+    database: RelayDatabase,
+    identity: AssignmentIdentity,
+    cellId: string,
+    assignmentEpoch: number,
+    now: number
+  ): Promise<void> {
+    await database.query(
+      `UPDATE relay_control_connection_reservations
+       SET state = 'released', released_at = ?, updated_at = ?
+       WHERE user_id = ? AND relay_host_id = ? AND cell_id = ?
+         AND assignment_epoch = ? AND state <> 'released'`,
+      [
+        now,
+        now,
+        identity.userId,
+        identity.relayHostId,
+        cellId,
+        assignmentEpoch
+      ]
+    )
+  }
+
+  private async assignmentRow(
+    database: RelayDatabase,
+    identity: AssignmentIdentity,
+    failIfUnavailable = false
+  ): Promise<SqlRow | undefined> {
+    return (
+      await database.queryLocked(
+        `SELECT * FROM relay_assignments WHERE user_id = ? AND relay_host_id = ?`,
+        [identity.userId, identity.relayHostId],
+        { failIfUnavailable }
+      )
+    )[0]
+  }
+
+  // NOWAIT unless the caller grants a bounded wait; either way a held row
+  // surfaces as RelayAssignmentRowBusyError, never as a retried lock timeout.
+  private async assignmentRowOrBusy(
+    database: RelayDatabase,
+    identity: AssignmentIdentity,
+    waitMs?: number
+  ): Promise<SqlRow | undefined> {
+    try {
+      return (
+        await database.queryLocked(
+          `SELECT * FROM relay_assignments WHERE user_id = ? AND relay_host_id = ?`,
+          [identity.userId, identity.relayHostId],
+          waitMs === undefined ? { failIfUnavailable: true } : { lockTimeoutMs: waitMs }
+        )
+      )[0]
+    } catch (error) {
+      if (isDatabaseLockUnavailable(error) || (waitMs !== undefined && isDatabaseLockTimeout(error))) {
+        throw new RelayAssignmentRowBusyError()
+      }
+      throw error
+    }
+  }
+
+  private async lockAssignmentActivities(
+    database: RelayDatabase,
+    identity: AssignmentIdentity,
+    failIfUnavailable = false
+  ): Promise<SqlRow[]> {
+    // Lease rows always precede the globally ordered capacity rows.
+    return await database.queryLocked(
+      `SELECT * FROM relay_assignment_activity_leases
+       WHERE user_id = ? AND relay_host_id = ? ORDER BY activity_id ASC`,
+      [identity.userId, identity.relayHostId],
+      { failIfUnavailable }
+    )
+  }
+
+  private async removeActivityLease(
+    database: RelayDatabase,
+    identity: AssignmentIdentity,
+    lease: SqlRow,
+    now: number
+  ): Promise<void> {
+    const kind = activityKind(lease)
+    await this.adjustCellReservation(
+      database,
+      text(lease, 'cell_id'),
+      -integer(lease, 'request_units')
+    )
+    await database.query(
+      `DELETE FROM relay_assignment_activity_leases
+       WHERE user_id = ? AND relay_host_id = ? AND activity_id = ?`,
+      [identity.userId, identity.relayHostId, text(lease, 'activity_id')]
+    )
+    await this.adjustActivityCount(database, identity, kind, -1, now, now)
+  }
+
+  // Return freed units for the caller’s final conditional cell write; do not touch that contended row here.
+  private async removeSupersededSameCellControls(
+    database: RelayDatabase,
+    identity: AssignmentIdentity,
+    leases: SqlRow[],
+    cellId: string,
+    retainedActivityId: string,
+    now: number
+  ): Promise<number> {
+    const superseded = leases.filter(
+      (lease) =>
+        activityKind(lease) === 'control' &&
+        text(lease, 'cell_id') === cellId &&
+        text(lease, 'activity_id') !== retainedActivityId
+    )
+    if (superseded.length === 0) return 0
+    if (
+      superseded.some(
+        (lease) => integer(lease, 'request_units') !== ACTIVITY_REQUEST_UNITS.control
+      )
+    ) {
+      throw new Error('activity_lease_shape_mismatch')
+    }
+    await database.query(
+      `DELETE FROM relay_assignment_activity_leases
+       WHERE user_id = ? AND relay_host_id = ? AND activity_kind = 'control'
+         AND cell_id = ? AND activity_id <> ?`,
+      [identity.userId, identity.relayHostId, cellId, retainedActivityId]
+    )
+    const remainingControls =
+      leases.filter((lease) => activityKind(lease) === 'control').length - superseded.length
+    await database.query(
+      `UPDATE relay_assignments SET reserved_controls = ?, last_activity_at = ?
+       WHERE user_id = ? AND relay_host_id = ?`,
+      [remainingControls, now, identity.userId, identity.relayHostId]
+    )
+    // The shape check above proved every superseded lease holds exactly the
+    // control unit, so the freed units are exact without re-summing the cell.
+    return superseded.length * ACTIVITY_REQUEST_UNITS.control
+  }
+
+  private async adjustActivityCount(
+    database: RelayDatabase,
+    identity: AssignmentIdentity,
+    kind: AssignmentActivityKind,
+    delta: 1 | -1,
+    leaseExpiresAt: number,
+    now: number
+  ): Promise<void> {
+    const column = ACTIVITY_COLUMN[kind]
+    await database.query(
+      `UPDATE relay_assignments SET ${column} =
+         CASE WHEN ${column} + ? < 0 THEN 0 ELSE ${column} + ? END,
+         lease_expires_at =
+           CASE WHEN lease_expires_at > ? THEN lease_expires_at ELSE ? END,
+         last_activity_at = ?
+       WHERE user_id = ? AND relay_host_id = ?`,
+      [delta, delta, leaseExpiresAt, leaseExpiresAt, now, identity.userId, identity.relayHostId]
+    )
+  }
+
+  private async touchAssignment(
+    database: RelayDatabase,
+    identity: AssignmentIdentity,
+    leaseExpiresAt: number,
+    now: number
+  ): Promise<void> {
+    await database.query(
+      `UPDATE relay_assignments SET lease_expires_at =
+         CASE WHEN lease_expires_at > ? THEN lease_expires_at ELSE ? END,
+         last_activity_at = ?
+       WHERE user_id = ? AND relay_host_id = ?`,
+      [leaseExpiresAt, leaseExpiresAt, now, identity.userId, identity.relayHostId]
+    )
+  }
+
+  private async adjustCellReservation(
+    database: RelayDatabase,
+    cellId: string,
+    delta: number
+  ): Promise<void> {
+    const row = (await database.queryLocked(`SELECT * FROM relay_cells WHERE cell_id = ?`, [cellId]))[0]
+    if (!row) throw new Error('assigned_cell_missing')
+    const next = integer(row, 'reserved_requests') + delta
+    if (next > integer(row, 'capacity_requests')) throw new Error('relay_capacity_exhausted')
+    await database.query(
+      `UPDATE relay_cells SET reserved_requests =
+         CASE WHEN reserved_requests + ? < 0 THEN 0 ELSE reserved_requests + ? END,
+         updated_at = ? WHERE cell_id = ?`,
+      [delta, delta, this.now(), cellId]
+    )
+  }
+
+  private async adjustCellReservationAtomically(
+    database: RelayDatabase,
+    cellId: string,
+    delta: number
+  ): Promise<void> {
+    const rows = await database.query(CELL_RESERVATION_UPDATE, [
+      delta,
+      delta,
+      this.now(),
+      cellId,
+      delta,
+      delta
+    ])
+    if (rows.length === 0) await this.refuseCellReservation(database, cellId)
+  }
+
+  // Commit with the final cell write in one round trip or its lock lasts across the remote reply.
+  private async commitCellReservationAtomically(
+    transaction: RelayDatabase,
+    cellId: string,
+    delta: number
+  ): Promise<void> {
+    const params = [delta, delta, this.now(), cellId, delta, delta]
+    if (!(await commitWithFinalWrite(transaction, CELL_RESERVATION_UPDATE, params))) {
+      await this.refuseCellReservation(transaction, cellId)
+    }
+  }
+
+  private async refuseCellReservation(database: RelayDatabase, cellId: string): Promise<never> {
+    const cell = (
+      await database.query(`SELECT cell_id FROM relay_cells WHERE cell_id = ?`, [cellId])
+    )[0]
+    if (!cell) throw new Error('assigned_cell_missing')
+    throw new Error('relay_capacity_exhausted')
+  }
+
+  private result(
+    identity: AssignmentIdentity,
+    row: SqlRow,
+    cellRow: CellRow,
+    leaseExpiresAt: number
+  ): RelayAssignment {
+    return {
+      ...identity,
+      ...cellRow,
+      assignmentEpoch: integer(row, 'assignment_epoch'),
+      leaseExpiresAt
+    }
+  }
+}
+
+// One predicate for "isolated for a roll in progress", shared by re-placement and
+// the reconnect classification so the drain-return lane admits the hosts the
+// re-placement rule would move.
+function rollIsolationIsCurrent(admission: PinnedCellAdmission | undefined, now: number): boolean {
+  return (
+    admission?.state === ROLL_ISOLATED_ADMISSION &&
+    admission.rollIsolatedAt !== undefined &&
+    now - admission.rollIsolatedAt < ROLL_ISOLATION_STAMP_MAX_AGE_MS
+  )
+}
+
+type PinnedCellAdmission = {
+  state: CellAdmissionState
+  // Set only by the same-cap roll's isolate step; cleared by any write that
+  // moves the cell out of 'migration-only'.
+  rollIsolatedAt: number | undefined
+}
+
+type CellRow = { cellId: string; cellUrl: string; region: RelayRegion }
+
+function cell(row: SqlRow, region: RelayRegion): CellRow {
+  return { cellId: text(row, 'cell_id'), cellUrl: text(row, 'cell_url'), region }
+}
+
+function relayRegion(row: SqlRow, field: string): RelayRegion {
+  const value = text(row, field)
+  if (!RELAY_REGIONS.includes(value as RelayRegion)) throw new Error(`invalid region field ${field}`)
+  return value as RelayRegion
+}
+
+function optionalRelayRegion(row: SqlRow, field: string): RelayRegion | undefined {
+  const value = optionalText(row, field)
+  if (value === undefined) return undefined
+  if (!RELAY_REGIONS.includes(value as RelayRegion)) throw new Error(`invalid region field ${field}`)
+  return value as RelayRegion
+}
+
+function activityLeaseById(rows: SqlRow[], activityId: string): SqlRow | undefined {
+  return rows.find((row) => text(row, 'activity_id') === activityId)
+}
+
+// Mid-rehome source and pending target controls coexist; only leases prove existing reservations, since grants overwrite counters.
+function holdsControlLease(
+  rows: SqlRow[],
+  cellId: string,
+  assignmentEpoch: number
+): boolean {
+  const pendingId = pendingControlActivityId(assignmentEpoch)
+  return rows.some((row) => {
+    if (activityKind(row) !== 'control' || text(row, 'cell_id') !== cellId) return false
+    const activityId = text(row, 'activity_id')
+    return activityId === pendingId || !activityId.startsWith('control-pending:')
+  })
+}
+
+function activityCounts(rows: SqlRow[]): Record<AssignmentActivityKind, number> {
+  const counts = emptyActivityCounts()
+  for (const row of rows) counts[activityKind(row)]++
+  return counts
+}
+
+function leaseRequestUnits(rows: SqlRow[]): number {
+  return rows.reduce((total, row) => total + integer(row, 'request_units'), 0)
+}
+
+function leaseUnitsByCell(rows: SqlRow[]): Map<string, number> {
+  const units = new Map<string, number>()
+  for (const row of rows) {
+    const cellId = text(row, 'cell_id')
+    units.set(cellId, (units.get(cellId) ?? 0) + integer(row, 'request_units'))
+  }
+  return units
+}
+
+function activityUnitsForCell(rows: SqlRow[], cellId: string): number {
+  return rows.reduce(
+    (total, row) =>
+      text(row, 'cell_id') === cellId ? total + integer(row, 'request_units') : total,
+    0
+  )
+}
+
+function activity(row: SqlRow) {
+  return {
+    relayHostId: text(row, 'relay_host_id'),
+    cellId: text(row, 'cell_id'),
+    assignmentEpoch: integer(row, 'assignment_epoch'),
+    leaseExpiresAt: integer(row, 'lease_expires_at'),
+    lastActivityAt: integer(row, 'last_activity_at'),
+    reservedControls: integer(row, 'reserved_controls'),
+    reservedSplices: integer(row, 'reserved_splices'),
+    reservedInvites: integer(row, 'reserved_invites'),
+    pendingInstalls: integer(row, 'pending_installs'),
+    pendingConfirmations: integer(row, 'pending_confirmations'),
+    migrationLeases: integer(row, 'migration_leases')
+  }
+}
+
+function requestUnits(row: SqlRow): number {
+  return (
+    integer(row, 'reserved_controls') +
+    2 * integer(row, 'reserved_splices') +
+    integer(row, 'reserved_invites') +
+    integer(row, 'pending_installs') +
+    integer(row, 'pending_confirmations') +
+    integer(row, 'migration_leases')
+  )
+}
+
+function integer(row: SqlRow, field: string): number {
+  const value = Number(row[field])
+  if (!Number.isSafeInteger(value)) throw new Error(`invalid_${field}`)
+  return value
+}
+
+function text(row: SqlRow, field: string): string {
+  const value = row[field]
+  if (typeof value !== 'string') throw new Error(`invalid_${field}`)
+  return value
+}
+
+function cellFenceAttempt(row: SqlRow): CellFenceAttempt {
+  const environment = text(row, 'environment')
+  if (!['staging', 'production'].includes(environment)) {
+    throw new Error('invalid_environment')
+  }
+  return {
+    attemptId: text(row, 'attempt_id'),
+    environment: environment as CellFenceAttempt['environment'],
+    cellId: text(row, 'cell_id'),
+    cellIncarnation: text(row, 'cell_incarnation'),
+    migName: text(row, 'mig_name'),
+    instanceGroup: text(row, 'instance_group'),
+    generationIdentity: text(row, 'generation_identity'),
+    fenceCommit: text(row, 'fence_commit'),
+    planSha256: text(row, 'plan_sha256'),
+    planObjectName: text(row, 'plan_object_name'),
+    planObjectGeneration: optionalText(row, 'plan_object_generation'),
+    varFileSha256: text(row, 'var_file_sha256'),
+    terraformStateLineage: text(row, 'terraform_state_lineage'),
+    terraformStateSerial: integer(row, 'terraform_state_serial'),
+    terraformStateObjectGeneration: text(
+      row,
+      'terraform_state_object_generation'
+    ),
+    terraformStateObjectSha256: text(row, 'terraform_state_object_sha256'),
+    requestReason: text(row, 'request_reason'),
+    gceOperation: optionalText(row, 'gce_operation'),
+    createdAt: integer(row, 'created_at'),
+    expiresAt: integer(row, 'expires_at'),
+    applyStartedAt: optionalInteger(row, 'apply_started_at'),
+    completedAt: optionalInteger(row, 'completed_at'),
+    abortedAt: optionalInteger(row, 'aborted_at')
+  }
+}
+
+function cellFenceApplyInvocation(row: SqlRow): CellFenceApplyInvocation {
+  return {
+    invocationId: text(row, 'invocation_id'),
+    requestReason: text(row, 'request_reason'),
+    startedAt: integer(row, 'started_at'),
+    gceOperation: optionalText(row, 'gce_operation')
+  }
+}
+
+function assertCellFenceAttemptBase(
+  row: SqlRow,
+  input: CellFenceAttemptEvidence
+): void {
+  const fields: [keyof CellFenceAttemptEvidence, string][] = [
+    ['attemptId', 'attempt_id'],
+    ['environment', 'environment'],
+    ['cellId', 'cell_id'],
+    ['cellIncarnation', 'cell_incarnation'],
+    ['migName', 'mig_name'],
+    ['instanceGroup', 'instance_group'],
+    ['generationIdentity', 'generation_identity'],
+    ['fenceCommit', 'fence_commit'],
+    ['planSha256', 'plan_sha256'],
+    ['planObjectName', 'plan_object_name'],
+    ['varFileSha256', 'var_file_sha256'],
+    ['terraformStateLineage', 'terraform_state_lineage'],
+    ['terraformStateObjectGeneration', 'terraform_state_object_generation'],
+    ['terraformStateObjectSha256', 'terraform_state_object_sha256'],
+    ['requestReason', 'request_reason']
+  ]
+  if (
+    fields.some(([inputField, rowField]) => input[inputField] !== text(row, rowField)) ||
+    input.terraformStateSerial !== integer(row, 'terraform_state_serial')
+  ) {
+    throw new Error('cell_fence_attempt_evidence_mismatch')
+  }
+}
+
+function assertCellFenceAttemptEvidence(
+  row: SqlRow,
+  input: CellFenceAttemptEvidence
+): void {
+  assertCellFenceAttemptBase(row, input)
+  if (
+    !input.planObjectGeneration ||
+    input.planObjectGeneration !== optionalText(row, 'plan_object_generation')
+  ) {
+    throw new Error('cell_fence_attempt_evidence_mismatch')
+  }
+}
+
+function assertActiveCellFenceAttempt(
+  row: SqlRow,
+  input: CellFenceAttemptEvidence,
+  now: number
+): void {
+  assertCellFenceAttemptEvidence(row, input)
+  if (
+    integer(row, 'expires_at') <= now &&
+    optionalInteger(row, 'apply_started_at') === undefined
+  ) {
+    throw new Error('cell_fence_attempt_expired')
+  }
+  if (row.completed_at !== null) throw new Error('cell_fence_attempt_completed')
+  if (row.aborted_at !== null) throw new Error('cell_fence_attempt_aborted')
+}
+
+async function lockedCellFenceAttempt(
+  transaction: RelayDatabase,
+  attemptId: string
+): Promise<SqlRow> {
+  const row = (
+    await transaction.queryLocked(
+      `${CELL_FENCE_ATTEMPT_SELECT} WHERE attempts.attempt_id = ?`,
+      [attemptId]
+    )
+  )[0]
+  if (!row) throw new Error('cell_fence_attempt_not_found')
+  return row
+}
+
+function pendingControlActivityId(assignmentEpoch: number): string {
+  return `control-pending:${assignmentEpoch}`
+}
+
+function validateActivityId(activityId: string): void {
+  if (!activityId || activityId.length > 256) throw new Error('invalid_activity_id')
+}
+
+function controlRenewalExpiryIsValid(expiresAt: number, now: number): boolean {
+  const maximumExpiresAt =
+    now + ASSIGNMENT_LIMITS.activityLeaseMs + RELAY_PROTOCOL_LIMITS.controlPingIntervalMs * 2
+  return Number.isSafeInteger(expiresAt) && expiresAt > now && expiresAt <= maximumExpiresAt
+}
+
+// A renewal that threw still owes the metric an outcome: the message carries one
+// when the statement decided it, and anything else is the driver failing.
+function controlRenewalOutcomeOfError(error: unknown): ControlRenewalOutcome {
+  const message = String((error as { message?: unknown }).message)
+  return CONTROL_RENEWAL_STATEMENT_OUTCOMES.has(message as ControlRenewalOutcome)
+    ? (message as ControlRenewalOutcome)
+    : 'database_error'
+}
+
+function controlRenewalRejection(
+  row: ControlRenewalRequest,
+  now: number
+): ControlRenewalOutcome | null {
+  try {
+    validateActivityId(row.activityId)
+  } catch {
+    return 'invalid_activity_id'
+  }
+  return controlRenewalExpiryIsValid(row.expiresAt, now) ? null : 'invalid_activity_expiry'
+}
+
+function activityKind(row: SqlRow): AssignmentActivityKind {
+  const value = text(row, 'activity_kind')
+  if (!(value in ACTIVITY_REQUEST_UNITS)) throw new Error('invalid_activity_kind')
+  return value as AssignmentActivityKind
+}
+
+function migrationActivityId(assignmentEpoch: number): string {
+  return `migration:${assignmentEpoch}`
+}
+
+function isIncompleteMigration(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    [
+      'migration_target_not_registered',
+      'migration_source_still_active',
+      'migration_target_not_active',
+      'migration_assignment_mismatch',
+      'migration_source_admission_changed',
+      'migration_target_admission_changed',
+      'migration_source_runtime_not_quiescent',
+      'migration_source_runtime_not_dead',
+      'migration_target_runtime_not_ready',
+      'migration_cell_inventory_busy',
+      'migration_activity_accounting_mismatch',
+      'migration_activity_topology_mismatch',
+      'migration_activity_lease_shape_mismatch',
+      'migration_cell_reservation_accounting_mismatch',
+      'cell_fence_attestation_missing'
+    ].includes(error.message)
+  )
+}
+
+function isMissingMigration(error: unknown): boolean {
+  return error instanceof Error && error.message === 'migration_not_found'
+}
+
+// Disabled, not general, full, or gone (target-not-admitting), or locked by
+// another writer such as an admission change (target-row-busy).
+type RegionalRehomeTargetDeferral = 'target-not-admitting' | 'target-row-busy'
+
+class RegionalRehomeTargetDeferred extends Error {
+  constructor() {
+    super('regional_rehome_target_deferred')
+  }
+}
+
+function isDatabaseLockUnavailable(error: unknown): boolean {
+  return error instanceof Error && error.message === 'database_lock_unavailable'
+}
+
+function cellInventoryLockOptions(mode: CellInventoryLockMode): RelayLockOptions {
+  if (mode === 'nowait') return { failIfUnavailable: true, measureHoldMs: true }
+  if (mode === 'pool-default') return { measureHoldMs: true }
+  return { lockTimeoutMs: CELL_INVENTORY_LOCK_TIMEOUT_MS, measureHoldMs: true }
+}
+
+// NOWAIT skips re-derive from durable state next tick; log one contention summary, never sweep failure or quarantine.
+function warnSweepCellInventoryBusy(sweep: string, skipped: number): void {
+  if (skipped === 0) return
+  console.warn(
+    JSON.stringify({ event: 'orca_relay_sweep_cell_inventory_busy', sweep, skipped })
+  )
+}
+
+function isDatabaseLockTimeout(error: unknown): boolean {
+  return String((error as { code?: unknown }).code) === '55P03'
+}
+
+async function waitForAssignmentLockRetry(deadline: number): Promise<void> {
+  const remainingMs = Math.max(0, deadline - Date.now())
+  const maxDelayMs = Math.min(ASSIGNMENT_LOCK_RETRY_MAX_DELAY_MS, remainingMs)
+  const delayMs = Math.floor(Math.random() * (maxDelayMs + 1))
+  await new Promise((resolve) => setTimeout(resolve, delayMs))
+}
+
+function migration(identity: AssignmentIdentity, row: SqlRow): RelayAssignmentMigration {
+  const targetRegisteredAt = optionalInteger(row, 'target_registered_at')
+  return {
+    ...identity,
+    sourceCellId: text(row, 'source_cell_id'),
+    targetCellId: text(row, 'target_cell_id'),
+    previousEpoch: integer(row, 'previous_epoch'),
+    assignmentEpoch: integer(row, 'assignment_epoch'),
+    expiresAt: integer(row, 'expires_at'),
+    ...(targetRegisteredAt === undefined ? {} : { targetRegisteredAt })
+  }
+}
+
+// Attempt ids are server-minted UUIDs and this codebase's invariant messages
+// are snake_case slugs; anything else could carry secrets and logs redacted.
+function warnRegionalRehomeCandidateFailure(
+  operation: 'complete' | 'abort' | 'refresh',
+  attemptId: string,
+  error: unknown
+): void {
+  const message = error instanceof Error ? error.message : ''
+  console.warn(
+    JSON.stringify({
+      event: 'orca_relay_regional_rehome_candidate_failed',
+      operation,
+      attemptId,
+      reason: /^[a-z0-9_]{1,64}$/.test(message) ? message : 'redacted'
+    })
+  )
+}
+
+// The attempt id is the only field: counts would say which host holds what.
+function noteRegionalRehomeActivityCountsRepaired(attemptId: string): void {
+  console.warn(
+    JSON.stringify({
+      event: 'orca_relay_regional_rehome_activity_counts_repaired',
+      attemptId
+    })
+  )
+}
+
+function regionalRehomeControl(row: SqlRow): RegionalRehomeControl {
+  return {
+    generation: integer(row, 'generation'),
+    enabled: integer(row, 'enabled') === 1,
+    observationStartedAt: integer(row, 'observation_started_at'),
+    notBefore: integer(row, 'not_before'),
+    ratePerMinute: integer(row, 'rate_per_minute'),
+    preferenceMaxAgeMs: integer(row, 'preference_max_age_ms'),
+    hostCooldownMs: integer(row, 'host_cooldown_ms'),
+    drainGraceMs: integer(row, 'drain_grace_ms')
+  }
+}
+
+
+function regionalRehomeFleetSafetyFromInventory(input: {
+  cells: SqlRow[]
+  admission: ReadonlyMap<string, CellAdmissionState>
+  regions: ReadonlyMap<string, RelayRegion>
+  runtimes: SqlRow[]
+  capabilities: SqlRow[]
+  safetyRows: SqlRow[]
+  now: number
+  heartbeatTtlMs: number
+}): RegionalRehomeFleetSafety {
+  const capabilities = new Map(
+    input.capabilities.map((row) => [text(row, 'cell_id'), row])
+  )
+  const runtimes = new Map(input.runtimes.map((row) => [text(row, 'cell_id'), row]))
+  const safetyRows = new Map(
+    input.safetyRows.map((row) => [text(row, 'cell_id'), row])
+  )
+  const required = input.cells.filter((row) => {
+    const cellId = text(row, 'cell_id')
+    const capability = capabilities.get(cellId)
+    return (
+      integer(row, 'enabled') === 1 &&
+      input.admission.get(cellId) === 'general' &&
+      input.regions.get(cellId) !== undefined &&
+      capability !== undefined &&
+      integer(capability, 'regional_rehome_protocol') >= 1
+    )
+  })
+  const valid = required.flatMap((row) => {
+    const cellId = text(row, 'cell_id')
+    const runtime = runtimes.get(cellId)
+    const safety = safetyRows.get(cellId)
+    if (
+      !runtime ||
+      integer(runtime, 'ready') !== 1 ||
+      integer(runtime, 'last_heartbeat_at') <= input.now - input.heartbeatTtlMs ||
+      !safety ||
+      text(safety, 'cell_incarnation') !== text(runtime, 'cell_incarnation') ||
+      integer(safety, 'observed_at') <= input.now - 60_000
+    ) {
+      return []
+    }
+    return [safety]
+  })
+  const missingCells = required.length === 0 ? 1 : required.length - valid.length
+  return {
+    requiredCells: required.length,
+    missingCells,
+    observedAt:
+      missingCells > 0
+        ? 0
+        : Math.min(...valid.map((row) => integer(row, 'observed_at'))),
+    sqlFailures: valid.reduce((total, row) => total + integer(row, 'sql_failures'), 0),
+    reconnects: valid.reduce((total, row) => total + integer(row, 'reconnects'), 0),
+    maxReconnects: Math.max(0, ...valid.map((row) => integer(row, 'reconnects'))),
+    controlActivityRecoveryFailures: valid.reduce(
+      (total, row) => total + integer(row, 'control_activity_recovery_failures'),
+      0
+    ),
+    databasePoolWaiting: Math.max(
+      0,
+      ...valid.map((row) => integer(row, 'database_pool_waiting'))
+    ),
+    databasePoolWaitersMax: Math.max(
+      0,
+      ...valid.map((row) => integer(row, 'database_pool_waiters_max'))
+    ),
+    databasePoolWaitMsMax: Math.max(
+      0,
+      ...valid.map((row) => integer(row, 'database_pool_wait_ms_max'))
+    )
+  }
+}
+
+function regionalRehomeFleetSafetyFailure(
+  processSafety: RegionalRehomeSafetySnapshot,
+  fleetSafety: RegionalRehomeFleetSafety,
+  now: number
+): string | null {
+  if (fleetSafety.maxReconnects > REGIONAL_REHOME_RECONNECTS_PER_CELL_LIMIT) {
+    return 'elevated_reconnects'
+  }
+  return regionalRehomeSafetyFailure(
+    combineRegionalRehomeSafety(processSafety, fleetSafety),
+    now,
+    fleetSafety.requiredCells
+  )
+}
+
+type RegionalRehomeCandidateSkip = {
+  reason:
+    | 'candidate_stale'
+    | 'host_cooldown'
+    | 'source_ineligible'
+    | 'source_unclean'
+    | 'source_control_inactive'
+    | 'target_unclean'
+    | 'no_eligible_target'
+    | 'no_target_headroom'
+  cellId?: string
+  sqlFailures?: number
+  reconnects?: number
+}
+
+function cellUncleanSkip(
+  reason: 'source_unclean' | 'target_unclean',
+  cellId: string,
+  safety: SqlRow | undefined
+): RegionalRehomeCandidateSkip {
+  return {
+    reason,
+    cellId,
+    sqlFailures: safety === undefined ? undefined : integer(safety, 'sql_failures'),
+    reconnects: safety === undefined ? undefined : integer(safety, 'reconnects')
+  }
+}
+
+// Log skips to distinguish them from idle; only cell IDs/counters, never free-form errors.
+
+function regionalRehomeCellSafetyIsClean(
+  safety: SqlRow | undefined,
+  runtime: SqlRow,
+  now: number
+): boolean {
+  return (
+    safety !== undefined &&
+    text(safety, 'cell_incarnation') === text(runtime, 'cell_incarnation') &&
+    integer(safety, 'observed_at') > now - 60_000 &&
+    integer(safety, 'sql_failures') <= REGIONAL_REHOME_SQL_FAILURES_PER_CELL_LIMIT &&
+    integer(safety, 'reconnects') <= REGIONAL_REHOME_RECONNECTS_PER_CELL_LIMIT &&
+    integer(safety, 'control_activity_recovery_failures') === 0 &&
+    !regionalRehomePoolPressure({
+      databasePoolWaitersMax: integer(safety, 'database_pool_waiters_max'),
+      databasePoolWaitMsMax: integer(safety, 'database_pool_wait_ms_max')
+    })
+  )
+}
+
+function assertMigrationPair(row: SqlRow, sourceCellId: string, targetCellId: string): void {
+  if (
+    text(row, 'source_cell_id') !== sourceCellId ||
+    text(row, 'target_cell_id') !== targetCellId
+  ) {
+    throw new Error('migration_pair_mismatch')
+  }
+}
+
+function matchesExactCellSet(
+  actual: ReadonlySet<string>,
+  expected: readonly string[]
+): boolean {
+  const expectedSet = new Set(expected)
+  return (
+    expectedSet.size === expected.length &&
+    actual.size === expectedSet.size &&
+    [...actual].every((cellId) => expectedSet.has(cellId))
+  )
+}
+
+function assertCurrentMigrationAssignment(
+  assignment: SqlRow | undefined,
+  migrationRow: SqlRow
+): asserts assignment is SqlRow {
+  if (
+    !assignment ||
+    text(assignment, 'cell_id') !== text(migrationRow, 'target_cell_id') ||
+    integer(assignment, 'assignment_epoch') !== integer(migrationRow, 'assignment_epoch')
+  ) {
+    throw new Error('migration_assignment_mismatch')
+  }
+}
+
+function assertMigrationRecoveryMetadata(
+  migrationRow: SqlRow,
+  incarnation: SqlRow | undefined,
+  pin: SqlRow | undefined
+): void {
+  if (pin && !incarnation) {
+    throw new Error('drain_migration_source_incarnation_mismatch')
+  }
+  if (
+    pin &&
+    incarnation &&
+    (text(pin, 'source_cell_id') !== text(migrationRow, 'source_cell_id') ||
+      text(pin, 'target_cell_id') !== text(migrationRow, 'target_cell_id') ||
+      text(pin, 'source_cell_incarnation') !==
+        text(incarnation, 'source_cell_incarnation') ||
+      text(pin, 'target_cell_incarnation') !==
+        text(incarnation, 'target_cell_incarnation') ||
+      integer(pin, 'source_request_units') !==
+        integer(migrationRow, 'source_request_units') ||
+      integer(pin, 'target_reserved_units') !==
+        integer(migrationRow, 'target_reserved_units'))
+  ) {
+    throw new Error('migration_activity_topology_mismatch')
+  }
+}
+
+function assertAssignmentActivityAccounting(
+  assignment: SqlRow,
+  leases: SqlRow[],
+  migrationRow: SqlRow
+): void {
+  if (
+    integer(migrationRow, 'target_reserved_units') !==
+    integer(migrationRow, 'source_request_units') + 1
+  ) {
+    throw new Error('migration_activity_lease_shape_mismatch')
+  }
+  const counts = emptyActivityCounts()
+  for (const lease of leases) {
+    const kind = activityKind(lease)
+    const requestUnits = integer(lease, 'request_units')
+    if (kind === 'migration') {
+      if (
+        text(lease, 'activity_id') !==
+          migrationActivityId(integer(migrationRow, 'assignment_epoch')) ||
+        text(lease, 'cell_id') !== text(migrationRow, 'target_cell_id') ||
+        requestUnits !== integer(migrationRow, 'source_request_units')
+      ) {
+        throw new Error('migration_activity_lease_shape_mismatch')
+      }
+    } else if (requestUnits !== ACTIVITY_REQUEST_UNITS[kind]) {
+      throw new Error('migration_activity_lease_shape_mismatch')
+    }
+    counts[kind]++
+  }
+  assertAssignmentActivityCounts(assignment, leases, 1)
+}
+
+function assertAssignmentActivityCounts(
+  assignment: SqlRow,
+  leases: SqlRow[],
+  expectedMigrations: number
+): void {
+  const counts = activityCounts(leases)
+  if (
+    (Object.keys(ACTIVITY_COLUMN) as AssignmentActivityKind[]).some(
+      (kind) => integer(assignment, ACTIVITY_COLUMN[kind]) !== counts[kind]
+    ) ||
+    counts.migration !== expectedMigrations
+  ) {
+    throw new Error('migration_activity_accounting_mismatch')
+  }
+}
+
+async function assertCellReservationAccounting(
+  transaction: RelayDatabase,
+  cells: SqlRow[],
+  cellIds: string[]
+): Promise<void> {
+  const uniqueCellIds = [...new Set(cellIds)]
+  const rows = await transaction.query(
+    `SELECT cell_id, COALESCE(SUM(request_units), 0) AS request_units
+     FROM relay_assignment_activity_leases
+     WHERE cell_id IN (${uniqueCellIds.map(() => '?').join(', ')})
+     GROUP BY cell_id`,
+    uniqueCellIds
+  )
+  const unitsByCell = new Map(
+    rows.map((row) => [text(row, 'cell_id'), integer(row, 'request_units')])
+  )
+  for (const cellId of uniqueCellIds) {
+    const cell = cells.find((row) => text(row, 'cell_id') === cellId)
+    if (!cell || integer(cell, 'reserved_requests') !== (unitsByCell.get(cellId) ?? 0)) {
+      throw new Error('migration_cell_reservation_accounting_mismatch')
+    }
+  }
+}
+
+function deadSourceCompletionResult(
+  row: SqlRow,
+  changed: boolean
+): DeadSourceCompletionResult {
+  return {
+    changed,
+    assignmentEpoch: integer(row, 'assignment_epoch'),
+    sourceCellId: text(row, 'source_cell_id'),
+    targetCellId: text(row, 'target_cell_id')
+  }
+}
+
+function cellDrainAttempt(row: SqlRow): CellDrainAttempt {
+  const state = text(row, 'state')
+  if (
+    ![
+      'prepared',
+      'send-may-have-started',
+      'application-receipt',
+      'proven-not-delivered'
+    ].includes(state)
+  ) {
+    throw new Error('invalid_drain_attempt_state')
+  }
+  return {
+    attemptId: text(row, 'attempt_id'),
+    cellId: text(row, 'cell_id'),
+    cellIncarnation: text(row, 'cell_incarnation'),
+    traceValue: text(row, 'trace_value'),
+    plannedGraceMs: integer(row, 'planned_grace_ms'),
+    state: state as CellDrainAttemptState,
+    preparedAt: integer(row, 'prepared_at'),
+    sendMayHaveStartedAt: optionalInteger(row, 'send_may_have_started_at'),
+    sendPermitExpiresAt: optionalInteger(row, 'send_permit_expires_at'),
+    applicationReceiptAt: optionalInteger(row, 'application_receipt_at'),
+    backendSuccessStatus: optionalInteger(row, 'backend_success_status'),
+    backendInstance: optionalText(row, 'backend_instance'),
+    receiptCellIncarnation: optionalText(row, 'receipt_cell_incarnation'),
+    retryAfter: optionalInteger(row, 'retry_after'),
+    recoverForwardAttemptedAt: optionalInteger(row, 'recover_forward_attempted_at'),
+    provenNotDeliveredAt: optionalInteger(row, 'proven_not_delivered_at')
+  }
+}
+
+function optionalInteger(row: SqlRow, field: string): number | undefined {
+  if (row[field] === null || row[field] === undefined) return undefined
+  return integer(row, field)
+}
+
+function incarnationField(incarnation: string | undefined): { incarnation?: string } {
+  return incarnation === undefined ? {} : { incarnation }
+}
+
+function optionalText(row: SqlRow, field: string): string | undefined {
+  if (row[field] === null || row[field] === undefined) return undefined
+  return text(row, field)
+}
+
+function migrationHasExactActiveTarget(row: SqlRow, targetCellId: string): boolean {
+  return (
+    integer(row, 'target_control_active') === 1 &&
+    optionalText(row, 'current_cell_id') === targetCellId &&
+    optionalInteger(row, 'current_assignment_epoch') === integer(row, 'assignment_epoch')
+  )
+}
+
+function assignmentKey(userId: string, relayHostId: string): string {
+  return `${userId}\u0000${relayHostId}`
+}
+
+function emptyActivityCounts(): Record<AssignmentActivityKind, number> {
+  return {
+    control: 0,
+    splice: 0,
+    invite: 0,
+    install: 0,
+    confirmation: 0,
+    migration: 0
+  }
+}

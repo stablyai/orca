@@ -1,0 +1,96 @@
+{
+  "release": "10.0.0.0p2-Preview",
+  "archiveSha256": "698c6aec31c1dd0fb996206e8741f4531a97355686b5431ef347d531b07fcd42",
+  "files": [
+    {
+      "name": "libcrypto.dll",
+      "sha256": "7ad2b7721893c54ad6e4fec1a3477701fb48975323c2c4ac6cd0b8c972ab242a",
+      "machine": "0xAA64",
+      "certificateTableBytes": 10288
+    },
+    {
+      "name": "scp.exe",
+      "sha256": "53115de3294c52a3a2cc8b87a29ff71daa42cd72c6783ded3f12eac8e92662c1",
+      "machine": "0xAA64",
+      "certificateTableBytes": 10312
+    },
+    {
+      "name": "sftp-server.exe",
+      "sha256": "f3a2f3b27094ec12518eafdcc39d1cdfd6f1550eac5c24850314a1a776783b8b",
+      "machine": "0xAA64",
+      "certificateTableBytes": 10312
+    },
+    {
+      "name": "sftp.exe",
+      "sha256": "5e5560d2acb920e84f15762680be8542104ad58c508ce1d1ecca43408b26274d",
+      "machine": "0xAA64",
+      "certificateTableBytes": 10272
+    },
+    {
+      "name": "ssh-add.exe",
+      "sha256": "64ec90bd7bfff3f95720a2af2d954026d47eddcb91b1a9af8a62734d0319c63b",
+      "machine": "0xAA64",
+      "certificateTableBytes": 10296
+    },
+    {
+      "name": "ssh-agent.exe",
+      "sha256": "4dabe24c9439aefb024610112aac6866990be5165ffd1a2f8b8281af2e458064",
+      "machine": "0xAA64",
+      "certificateTableBytes": 10272
+    },
+    {
+      "name": "ssh-keygen.exe",
+      "sha256": "c94940e4ea52fb073e460532884e0c14202e631db1d488a3a681d8230d57e0d6",
+      "machine": "0xAA64",
+      "certificateTableBytes": 10312
+    },
+    {
+      "name": "ssh-keyscan.exe",
+      "sha256": "e68635da703812670aacf762a474191fe6cc25929bac5a498b3ea4c08667a79d",
+      "machine": "0xAA64",
+      "certificateTableBytes": 10272
+    },
+    {
+      "name": "ssh-pkcs11-helper.exe",
+      "sha256": "95db4da86676ffe4595a037d356d01755f4f6a4267049fdda0b0c9f97a97d2c9",
+      "machine": "0xAA64",
+      "certificateTableBytes": 10312
+    },
+    {
+      "name": "ssh-shellhost.exe",
+      "sha256": "d89f9a420268120789cf9dc1b94ef4313da1a258c3c57c172eda2fe999ded7e4",
+      "machine": "0xAA64",
+      "certificateTableBytes": 10312
+    },
+    {
+      "name": "ssh-sk-helper.exe",
+      "sha256": "b563dfb6ee18b3b761cae0bfde212295e7fec5c6b9fb67ea1b19fc424bb805e4",
+      "machine": "0xAA64",
+      "certificateTableBytes": 10296
+    },
+    {
+      "name": "ssh.exe",
+      "sha256": "fd87ccdfbd8be33d22b67fa3f1c94bb2327a3e7d24355bf7fd2485d356f1976d",
+      "machine": "0xAA64",
+      "certificateTableBytes": 10296
+    },
+    {
+      "name": "sshd-auth.exe",
+      "sha256": "0c7ca28ed3649ef6f0ce1b3698cc7a92f51b86286fc077d5513f1bf5e48b178f",
+      "machine": "0xAA64",
+      "certificateTableBytes": 10272
+    },
+    {
+      "name": "sshd-session.exe",
+      "sha256": "9f368188f703bd39594abefc29f28df5e97664acb937a1d26288b500ece4d463",
+      "machine": "0xAA64",
+      "certificateTableBytes": 10272
+    },
+    {
+      "name": "sshd.exe",
+      "sha256": "f3eb3230d454dc662d5c5f09eface5acdeb2b196ccdd41b562644433a1562906",
+      "machine": "0xAA64",
+      "certificateTableBytes": 10312
+    }
+  ]
+}

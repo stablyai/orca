@@ -1,0 +1,53 @@
+// Read-only runtime layout copy (design 3.3); the owner switch derives store slices from it.
+
+import { stableJson } from '../../../shared/workspace-layout/workspace-layout-load-report'
+import type { PublishedWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-published'
+import { applyWorkspaceLayoutRecordChange } from '../../../shared/workspace-layout/workspace-layout-records'
+import type { WorkspaceLayoutChangeFrame } from '../../../shared/workspace-layout/workspace-layout-stream-frames'
+
+export type WorkspaceLayoutCache = Readonly<Record<string, PublishedWorkspaceLayout>>
+
+export const EMPTY_WORKSPACE_LAYOUT_CACHE: WorkspaceLayoutCache = {}
+
+/** Only writer (design 3.3 applyFromRuntime); keep identity when unchanged. Invalid records throw so callers refetch the stream. */
+export function applyLayoutFrame(
+  cache: WorkspaceLayoutCache,
+  frame: WorkspaceLayoutChangeFrame
+): WorkspaceLayoutCache {
+  switch (frame.type) {
+    case 'workspace':
+      // The runtime publishes a workspace only when it changed.
+      return { ...cache, [frame.key]: frame.layout }
+    case 'removed': {
+      if (!(frame.key in cache)) {
+        return cache
+      }
+      const { [frame.key]: _removed, ...rest } = cache
+      return rest
+    }
+    case 'records': {
+      const next: Record<string, PublishedWorkspaceLayout> = { ...cache }
+      for (const change of frame.workspaces) {
+        const layout = applyWorkspaceLayoutRecordChange(next[change.key], change)
+        if (layout) {
+          next[change.key] = layout
+        } else {
+          delete next[change.key]
+        }
+      }
+      return frame.workspaces.length > 0 ? next : cache
+    }
+    case 'snapshot': {
+      // Keeps each equal entry, so a reconnect with unchanged data re-renders nothing.
+      const next: Record<string, PublishedWorkspaceLayout> = {}
+      let changed = false
+      for (const { key, layout } of frame.workspaces) {
+        const cached = cache[key]
+        const keep = cached !== undefined && stableJson(cached) === stableJson(layout)
+        next[key] = keep ? cached : layout
+        changed ||= !keep
+      }
+      return changed || Object.keys(next).length !== Object.keys(cache).length ? next : cache
+    }
+  }
+}

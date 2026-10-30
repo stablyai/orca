@@ -1,0 +1,37 @@
+import { delimiter, win32 as pathWin32 } from 'node:path'
+import { resolveWindowsShellStartupFamily } from '../../shared/windows-terminal-shell'
+
+export const SHELL_PATH_DELIMITER = '__ORCA_SHELL_PATH__'
+
+/** Build the login PATH probe in the selected shell's native syntax. */
+export function shellPathProbe(shell: string): { args: string[]; pathDelimiter: string } {
+  if (process.platform !== 'win32') {
+    if (pathWin32.basename(shell).toLowerCase() === 'nu') {
+      // Nushell stores PATH as a list; POSIX quoting would print a literal.
+      const command = [
+        `print -n '${SHELL_PATH_DELIMITER}';`,
+        'print -n ($env.PATH | str join (char esep));',
+        `print -n '${SHELL_PATH_DELIMITER}'`
+      ].join(' ')
+      // Retain interactive login flags for $nu.is-interactive rc behavior.
+      return { args: ['-ilc', command], pathDelimiter: delimiter }
+    }
+    const command =
+      `printf '%s' '${SHELL_PATH_DELIMITER}'; printf '%s' "$PATH"; ` +
+      `printf '%s' '${SHELL_PATH_DELIMITER}'`
+    return { args: ['-ilc', command], pathDelimiter: delimiter }
+  }
+  if (resolveWindowsShellStartupFamily(shell) === 'posix') {
+    // Native children cannot resolve Git Bash /c/... PATH entries.
+    const command =
+      `printf '%s' '${SHELL_PATH_DELIMITER}'; cygpath -wp "$PATH"; ` +
+      `printf '%s' '${SHELL_PATH_DELIMITER}'`
+    return { args: ['-ilc', command], pathDelimiter: ';' }
+  }
+  const command =
+    `[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); ` +
+    `[Console]::Write('${SHELL_PATH_DELIMITER}'); [Console]::Write($env:Path); ` +
+    `[Console]::Write('${SHELL_PATH_DELIMITER}')`
+  // Load profiles to capture user configuration; do not pass NoProfile.
+  return { args: ['-NoLogo', '-Command', command], pathDelimiter: ';' }
+}

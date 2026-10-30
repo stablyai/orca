@@ -1,17 +1,26 @@
+import {
+  projectedStructuredChatTabName,
+  type StructuredChatTabNames
+} from '@/runtime/structured-chat-tab-name'
+import { structuredChatTabById } from './structured-chat-tab-index'
 import type { AgentType } from '../../../shared/agent-status-types'
 import type { AppState } from '@/store/types'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
-import { detectAgentStatusFromTitle, getAgentLabel } from './agent-status'
-import { resolveRuntimePaneTitleForLeaf } from './runtime-pane-title-leaf-id'
+import { resolveTerminalTitleAgentType } from '../../../shared/terminal-title-agent-type'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import { detectAgentSendTitleStatus } from './agent-send-title-status'
+import {
+  resolveRuntimePaneTitleLeafResolution,
+  type RuntimePaneTitleLeafResolution
+} from '../../../shared/runtime-pane-title-leaf-id'
 import {
   deriveRunningAgentSendTargets,
+  deriveStatuslessStructuredAgentSendTargets,
+  runningAgentMessageTarget,
+  type RunningAgentSendTarget,
   type RunningAgentTargetState
 } from './running-agent-targets'
-
-const EXPLICIT_IDLE_TITLE_RE = /(^|\s)(ready|idle|done)(\s|$|[.!?])/i
-const CLAUDE_IDLE_PREFIX = '\u2733'
-const GEMINI_IDLE_PREFIX = '\u25c7'
-const PI_IDLE_PREFIX = '\u03c0 - '
+import type { AgentMessageTarget } from './agent-message-target'
 
 export type NotesSendAgentTargetState = RunningAgentTargetState &
   Pick<AppState, 'runtimePaneTitlesByTabId'>
@@ -19,128 +28,178 @@ export type NotesSendAgentTargetState = RunningAgentTargetState &
 export type NotesSendAgentTarget = {
   paneKey: string
   tabId: string
-  leafId: string
+  messageTarget: AgentMessageTarget
   agentType: AgentType | null | undefined
   tabTitle: string
   status: 'eligible' | 'disabled'
   disabledReason?: string
 }
 
-function isRecognizedAgentTitle(title: string | null): boolean {
-  return (
-    title !== null && detectAgentStatusFromTitle(title) !== null && getAgentLabel(title) !== null
-  )
+type AgentTitleEvidence = {
+  status: NonNullable<ReturnType<typeof detectAgentSendTitleStatus>>
+  title: string
 }
 
-function detectLaunchAgentPaneStatus(paneTitle: string | null, tabTitle: string) {
-  if (paneTitle !== null && isRecognizedAgentTitle(paneTitle)) {
-    return detectLaunchAgentStatusFromTitle(paneTitle)
+function detectTitleHintPaneEvidence(
+  paneTitleResolution: RuntimePaneTitleLeafResolution,
+  tabTitle: string
+): AgentTitleEvidence | null {
+  if (paneTitleResolution.title !== null) {
+    const status = detectAgentSendTitleStatus(paneTitleResolution.title)
+    return status ? { status, title: paneTitleResolution.title } : null
   }
-  // Why: mirror isTerminalRunningAgent — the OSC-enriched tab title only counts
-  // when the leaf has no runtime pane title of its own yet.
-  return paneTitle === null && isRecognizedAgentTitle(tabTitle)
-    ? detectLaunchAgentStatusFromTitle(tabTitle)
-    : null
-}
-
-function detectLaunchAgentStatusFromTitle(title: string) {
-  const status = detectAgentStatusFromTitle(title)
-  if (status !== 'idle') {
-    return status
+  // Use enriched tab title only before the leaf gets its own runtime title, as isTerminalRunningAgent does.
+  if (paneTitleResolution.hasAnyPaneTitle) {
+    return null
   }
-  // Why: selected-target sends are immediate. A bare launch title like
-  // "Codex" proves agent identity, but not that the CLI is ready for input.
-  return isExplicitIdleLaunchTitle(title) ? status : null
+  const status = detectAgentSendTitleStatus(tabTitle)
+  return status ? { status, title: tabTitle } : null
 }
 
-function isExplicitIdleLaunchTitle(title: string): boolean {
-  return (
-    EXPLICIT_IDLE_TITLE_RE.test(title) ||
-    title.startsWith(CLAUDE_IDLE_PREFIX) ||
-    title.startsWith('* ') ||
-    title.includes(GEMINI_IDLE_PREFIX) ||
-    title.startsWith(PI_IDLE_PREFIX)
-  )
-}
-
-/**
- * Agents of a worktree the notes dropdown can target.
- *
- * Why this exists on top of deriveRunningAgentSendTargets: that derivation only
- * sees panes with a live status entry, so a freshly launched (still idle) agent
- * stays invisible until its first hook event — i.e. until the user talks to it.
- * We augment it with launch-agent tabs whose pane still has a live PTY:
- * TerminalTab.launchAgent records the harness Orca started and is the same
- * pre-hook signal the tab bar already trusts for its provider icon.
- *
- * The launch hint is gated on a recognized agent title (pane or tab) — the same
- * signal isTerminalRunningAgent checks — so a freshly spawned tab is only listed
- * once the runtime would actually accept the send. Without that gate, clicking a
- * still-booting pane fails with "not a recognized agent session".
- */
+/** Add live title-backed terminals and first-turn chats that lack hook status. launchAgent gives stronger ownership than manual title hints; hints expose targets only, while runtime independently verifies guarded writes. */
 export function deriveNotesSendAgentTargets(
   state: NotesSendAgentTargetState,
   worktreeId: string,
+  chatNames: StructuredChatTabNames,
   now = Date.now()
 ): NotesSendAgentTarget[] {
-  const targets: NotesSendAgentTarget[] = deriveRunningAgentSendTargets(state, worktreeId, now).map(
-    (target) => ({
-      paneKey: target.paneKey,
-      tabId: target.tabId,
-      leafId: target.leafId,
-      agentType: target.entry.agentType,
-      tabTitle: target.tab.title,
-      status: target.status,
-      ...(target.disabledReason ? { disabledReason: target.disabledReason } : {})
-    })
-  )
-
-  // Why: dedupe by tab, not pane. A launch-agent tab already surfaced through a
-  // live status entry must not also emit a hint row — its active leaf may be a
-  // split shell pane, which would list a second bogus row for the same tab.
-  const statusBackedTabIds = new Set(targets.map((target) => target.tabId))
+  const targets: NotesSendAgentTarget[] = [
+    ...deriveRunningAgentSendTargets(state, worktreeId, now),
+    ...deriveStatuslessStructuredAgentSendTargets(state, worktreeId)
+  ].map((target) => {
+    const tab = structuredChatTabById(state.unifiedTabsByWorktree, worktreeId, target.tabId)
+    const title =
+      target.kind === 'structured-session' && tab?.entityId === target.sessionId
+        ? projectedStructuredChatTabName(tab, chatNames)
+        : undefined
+    return toNotesSendAgentTarget(target, title)
+  })
 
   for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
-    if (!tab.launchAgent || statusBackedTabIds.has(tab.id)) {
+    const titleHintTarget = deriveTitleHintAgentTarget(state, tab)
+    if (!titleHintTarget) {
       continue
     }
 
-    const layout = state.terminalLayoutsByTabId[tab.id]
-    const leafId = layout?.activeLeafId
-    if (!leafId || !isTerminalLeafId(leafId)) {
-      continue
+    // Launch ownership permits fresh titles to override stale same-pane status; manual hints may only add missing rows.
+    if (tab.launchAgent) {
+      mergeLaunchAgentTitleTarget(targets, titleHintTarget)
+    } else {
+      mergeManualAgentTitleTarget(targets, titleHintTarget)
     }
-
-    const ptyId = layout.ptyIdsByLeafId?.[leafId] ?? null
-    if (!ptyId || !state.ptyIdsByTabId[tab.id]?.includes(ptyId)) {
-      continue
-    }
-
-    const paneTitle = resolveRuntimePaneTitleForLeaf(
-      layout,
-      state.runtimePaneTitlesByTabId[tab.id],
-      leafId
-    )
-    const launchStatus = detectLaunchAgentPaneStatus(paneTitle, tab.title)
-    if (!launchStatus) {
-      // Why: launchAgent is set the instant Orca spawns the tab, but the runtime
-      // only accepts a send once the pane reads as an agent. Skipping until the
-      // title is recognized keeps "listed ⇒ sendable" and avoids the boot-window
-      // "not a recognized agent session" error.
-      continue
-    }
-    const disabledReason = launchStatus === 'permission' ? 'Agent needs permission' : undefined
-
-    targets.push({
-      paneKey: makePaneKey(tab.id, leafId),
-      tabId: tab.id,
-      leafId,
-      agentType: tab.launchAgent,
-      tabTitle: tab.title,
-      status: disabledReason ? 'disabled' : 'eligible',
-      ...(disabledReason ? { disabledReason } : {})
-    })
   }
 
   return targets
+}
+
+function toNotesSendAgentTarget(
+  target: RunningAgentSendTarget,
+  title?: string
+): NotesSendAgentTarget {
+  return {
+    paneKey: target.paneKey,
+    tabId: target.tabId,
+    messageTarget: runningAgentMessageTarget(target),
+    agentType:
+      target.kind === 'terminal'
+        ? resolveNotesTargetAgentType(target.entry.agentType, target.tab.launchAgent)
+        : target.agentType,
+    tabTitle: target.kind === 'terminal' ? target.tab.title : (title ?? target.title),
+    status: target.status,
+    ...(target.disabledReason ? { disabledReason: target.disabledReason } : {})
+  }
+}
+
+function resolveNotesTargetAgentType(
+  entryAgentType: AgentType | null | undefined,
+  launchAgent: AgentType | null | undefined
+): AgentType | null | undefined {
+  if (entryAgentType && entryAgentType !== 'unknown') {
+    return entryAgentType
+  }
+  return launchAgent ?? entryAgentType
+}
+
+function deriveTitleHintAgentTarget(
+  state: NotesSendAgentTargetState,
+  tab: TerminalTab
+): NotesSendAgentTarget | null {
+  const layout = state.terminalLayoutsByTabId[tab.id]
+  const leafId = layout?.activeLeafId
+  if (!leafId || !isTerminalLeafId(leafId)) {
+    return null
+  }
+
+  const ptyId = layout.ptyIdsByLeafId?.[leafId] ?? null
+  if (!ptyId || !state.ptyIdsByTabId[tab.id]?.includes(ptyId)) {
+    return null
+  }
+
+  const paneTitles = state.runtimePaneTitlesByTabId[tab.id]
+  const paneTitleResolution = resolveRuntimePaneTitleLeafResolution(layout, paneTitles, leafId)
+  const titleEvidence = detectTitleHintPaneEvidence(paneTitleResolution, tab.title)
+  if (!titleEvidence) {
+    // Launch metadata can precede actual TUI startup; require current matching title evidence for discovery.
+    return null
+  }
+  const disabledReason =
+    titleEvidence.status === 'permission' ? 'Agent needs permission' : undefined
+
+  return {
+    paneKey: makePaneKey(tab.id, leafId),
+    tabId: tab.id,
+    messageTarget: { kind: 'terminal', tabId: tab.id, leafId },
+    agentType: tab.launchAgent ?? resolveTerminalTitleAgentType(titleEvidence.title),
+    tabTitle: tab.title,
+    status: disabledReason ? 'disabled' : 'eligible',
+    ...(disabledReason ? { disabledReason } : {})
+  }
+}
+
+// Manual hints are weakest; never duplicate status/launch rows, including disabled ones.
+function mergeManualAgentTitleTarget(
+  targets: NotesSendAgentTarget[],
+  target: NotesSendAgentTarget
+): void {
+  if (targets.some((existing) => existing.tabId === target.tabId)) {
+    return
+  }
+  targets.push(target)
+}
+
+function mergeLaunchAgentTitleTarget(
+  targets: NotesSendAgentTarget[],
+  target: NotesSendAgentTarget
+): void {
+  const samePaneIndex = targets.findIndex((existing) => existing.paneKey === target.paneKey)
+  if (samePaneIndex !== -1) {
+    const existing = targets[samePaneIndex]
+    if (existing.status === 'eligible' || existing.disabledReason === 'Agent needs permission') {
+      return
+    }
+
+    // Sleep/resume can leave stale hook status; prefer fresh live-title evidence on the same launch-owned pane.
+    targets[samePaneIndex] = {
+      ...target,
+      agentType:
+        existing.agentType && existing.agentType !== 'unknown'
+          ? existing.agentType
+          : target.agentType,
+      tabTitle: existing.tabTitle || target.tabTitle
+    }
+    return
+  }
+
+  // Deduplicate fresh/permission rows by tab or an active split shell could create a bogus second target.
+  if (
+    targets.some(
+      (existing) =>
+        existing.tabId === target.tabId &&
+        (existing.status === 'eligible' || existing.disabledReason === 'Agent needs permission')
+    )
+  ) {
+    return
+  }
+
+  targets.push(target)
 }

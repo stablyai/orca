@@ -1,6 +1,14 @@
-import { chmodSync, lstatSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import {
+  chmodSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { formatBase64PayloadByteCount } from './base64-payload-byte-count'
 import { quoteCliCommandArgument } from './shell-command-quote'
 import type {
@@ -55,7 +63,11 @@ export function prepareComputerCliJsonResult<TResult>(
       screenshotStatus?: unknown
     }
   }
-  if (!record.result || !('screenshotStatus' in record.result)) {
+  if (
+    !record.result ||
+    typeof record.result !== 'object' ||
+    !('screenshotStatus' in record.result)
+  ) {
     return response
   }
   const screenshot = record.result?.screenshot
@@ -83,8 +95,7 @@ export function prepareComputerCliJsonResult<TResult>(
       }
     } as RuntimeRpcSuccess<TResult>
   } catch {
-    // Why: temp-file export is an ergonomics optimization; keep inline screenshot
-    // data when disk, permissions, or path validation would otherwise fail --json.
+    // Preserve inline screenshot data if the optional temp-file export fails.
     return response
   }
 }
@@ -112,8 +123,7 @@ function cleanupComputerScreenshots(outputDir: string): void {
   const now = Date.now()
   const markerPath = join(outputDir, COMPUTER_SCREENSHOT_CLEANUP_MARKER)
   try {
-    // Why: agents can call computer-use CLI commands in loops; a marker keeps
-    // temp cleanup from becoming a synchronous directory scan per screenshot.
+    // Throttle synchronous cleanup scans across repeated screenshots.
     if (statSync(markerPath).mtimeMs > now - COMPUTER_SCREENSHOT_CLEANUP_INTERVAL_MS) {
       return
     }
@@ -132,13 +142,13 @@ function cleanupComputerScreenshots(outputDir: string): void {
         rmSync(path, { force: true })
       }
     } catch {
-      // Best-effort cleanup only; formatting should not fail because a temp file raced.
+      // A raced temp file must not fail screenshot formatting.
     }
   }
   try {
     writeFileSync(markerPath, `${now}\n`, { mode: 0o600 })
   } catch {
-    // Best-effort marker only; stale cleanup state should not hide a screenshot.
+    // A failed cleanup marker must not hide the screenshot.
   }
 }
 
@@ -199,7 +209,7 @@ export function formatComputerAction(
   const path = result.action?.path ? ` via ${result.action.path}` : ''
   const verification = formatActionVerification(result.action)
   const followUpCommand = formatComputerFollowUpCommand(result, target)
-  const unverified = isUnverifiedComputerAction(result.action)
+  const unverified = result.action?.verification?.state !== 'verified'
   const outcome = unverified ? 'attempted' : 'completed'
   const screenshotFailure = formatComputerActionScreenshotFailure(result)
   const inspectTail = unverified
@@ -246,28 +256,24 @@ function formatComputerFollowUpCommand(
   return args.join(' ')
 }
 
+const UNVERIFIED_ACTION_REASONS: Record<ComputerActionMetadata['path'], string> = {
+  accessibility: 'accessibility action unasserted',
+  clipboard: 'clipboard paste',
+  synthetic: 'synthetic input'
+}
+
 function formatActionVerification(action: ComputerActionMetadata | undefined): string {
-  const verification = action?.verification
+  if (!action) {
+    return ', unverified (verification metadata unavailable)'
+  }
+  const verification = action.verification
   if (!verification) {
-    if (action?.path === 'synthetic') {
-      return ', unverified (synthetic input)'
-    }
-    if (action?.path === 'clipboard') {
-      return ', unverified (clipboard paste)'
-    }
-    return ''
+    return `, unverified (${UNVERIFIED_ACTION_REASONS[action.path]})`
   }
   if (verification.state === 'verified') {
     return `, verified ${verification.property}`
   }
   return `, unverified (${verification.reason.replaceAll('_', ' ')})`
-}
-
-function isUnverifiedComputerAction(action: ComputerActionMetadata | undefined): boolean {
-  if (action?.verification) {
-    return action.verification.state === 'unverified'
-  }
-  return action?.path === 'synthetic' || action?.path === 'clipboard'
 }
 
 function formatComputerActionScreenshotFailure(result: ComputerActionResult): string {

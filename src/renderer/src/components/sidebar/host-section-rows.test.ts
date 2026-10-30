@@ -1,7 +1,20 @@
 import { describe, expect, it } from 'vitest'
-import type { FolderWorkspace, ProjectGroup, Repo, Worktree } from '../../../../shared/types'
-import { PINNED_GROUP_KEY, type Row } from './worktree-list-groups'
-import { addHostSectionRows, type HostSectionRow } from './host-section-rows'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { PINNED_GROUP_KEY } from '../../../../shared/sidebar-list/group-keys'
+import type { Row } from '../../../../shared/sidebar-list/row-types'
+import {
+  addHostSectionRows,
+  type HostSectionRow
+} from '../../../../shared/sidebar-list/host-section-rows'
+
+function sectionRows(
+  args: Omit<Parameters<typeof addHostSectionRows>[0], 'localHostLabel'>
+): HostSectionRow[] {
+  return addHostSectionRows({ ...args, localHostLabel: 'Local Mac' })
+}
 
 function repo(id: string, connectionId?: string | null): Repo {
   return {
@@ -41,8 +54,21 @@ function header(key: string, label = key): Extract<Row, { type: 'header' }> {
     type: 'header',
     key,
     label,
-    count: 1,
-    tone: 'text-foreground'
+    icon: { kind: 'project' },
+    count: 1
+  }
+}
+
+function pinnedHeader(
+  counts: ReadonlyMap<'local' | 'ssh:ssh-1', number>,
+  idsByHost?: ReadonlyMap<'local' | 'ssh:ssh-1', readonly string[]>
+): Extract<Row, { type: 'header' }> {
+  return {
+    ...header(PINNED_GROUP_KEY, 'Pinned'),
+    count: Array.from(counts.values()).reduce((sum, count) => sum + count, 0),
+    hostWorktreeCounts: counts,
+    hostWorktreeIds: idsByHost,
+    worktreeIds: idsByHost ? Array.from(idsByHost.values()).flat() : undefined
   }
 }
 
@@ -63,7 +89,6 @@ function item(id: string, project: Repo): Extract<Row, { type: 'item' }> {
     repo: project,
     depth: 0,
     groupDepth: 0,
-    lineageTrail: [],
     isLastLineageChild: true,
     lineageChildCount: 0
   }
@@ -128,7 +153,7 @@ describe('addHostSectionRows', () => {
     const local = repo('local')
     const rows = [repoHeader(local), item('local-wt', local)]
 
-    const sectioned = addHostSectionRows({
+    const sectioned = sectionRows({
       rows,
       hostOptions: [
         {
@@ -153,7 +178,7 @@ describe('addHostSectionRows', () => {
     const rows = [repoHeader(local), item('local-wt', local)]
 
     expect(
-      addHostSectionRows({
+      sectionRows({
         rows,
         hostOptions: [
           {
@@ -175,7 +200,7 @@ describe('addHostSectionRows', () => {
     const ssh = repo('ssh', 'ssh-1')
     const rows = [repoHeader(local), item('local-wt', local), repoHeader(ssh), item('ssh-wt', ssh)]
 
-    const sectioned = addHostSectionRows({
+    const sectioned = sectionRows({
       rows,
       hostOptions: [
         {
@@ -210,7 +235,7 @@ describe('addHostSectionRows', () => {
     const ssh = repo('ssh', 'ssh-1')
     const rows = [repoHeader(local), item('local-wt', local), repoHeader(ssh), item('ssh-wt', ssh)]
 
-    const sectioned = addHostSectionRows({
+    const sectioned = sectionRows({
       rows,
       hostOptions: [
         {
@@ -235,7 +260,7 @@ describe('addHostSectionRows', () => {
     const ssh = repo('ssh', 'ssh-1')
     const rows = [repoHeader(local), item('local-wt', local), repoHeader(ssh), item('ssh-wt', ssh)]
 
-    const sectioned = addHostSectionRows({
+    const sectioned = sectionRows({
       rows,
       hostOptions: [
         {
@@ -268,7 +293,7 @@ describe('addHostSectionRows', () => {
     const ssh = repo('ssh', 'ssh-1')
     const rows = [header('all'), item('local-wt', local), header('done'), item('ssh-wt', ssh)]
 
-    const sectioned = addHostSectionRows({
+    const sectioned = sectionRows({
       rows,
       hostOptions: [
         {
@@ -294,21 +319,24 @@ describe('addHostSectionRows', () => {
     ])
   })
 
-  it('copies global pinned and all headers into each mixed-host section', () => {
+  it('copies global pinned and all headers into each mixed-host section without duplicating pins', () => {
     const local = repo('local')
     const ssh = repo('ssh', 'ssh-1')
     const rows = [
-      header(PINNED_GROUP_KEY, 'Pinned'),
+      pinnedHeader(
+        new Map([
+          ['local', 1],
+          ['ssh:ssh-1', 1]
+        ])
+      ),
       pinnedItem('local-pinned', local, PINNED_GROUP_KEY),
       pinnedItem('ssh-pinned', ssh, PINNED_GROUP_KEY),
       header('all', 'All'),
-      pinnedItem('local-pinned', local, 'all'),
       item('local-normal', local),
-      pinnedItem('ssh-pinned', ssh, 'all'),
       item('ssh-normal', ssh)
     ]
 
-    const sectioned = addHostSectionRows({
+    const sectioned = sectionRows({
       rows,
       hostOptions: [
         {
@@ -329,18 +357,181 @@ describe('addHostSectionRows', () => {
       'pinned',
       'pinned:local-pinned',
       'all',
-      'all:local-pinned',
       'repo:local:local-normal',
       'host:ssh:ssh-1',
       'pinned',
       'pinned:ssh-pinned',
       'all',
-      'all:ssh-pinned',
       'repo:ssh:ssh-normal'
     ])
     expect(sectioned.filter((row) => row.type === 'host-header')).toMatchObject([
       { label: 'Local Mac', count: 2 },
       { label: 'Builder', count: 2 }
+    ])
+    expect(
+      sectioned.filter((row) => row.type === 'header' && row.key === PINNED_GROUP_KEY)
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ count: 1, hostId: 'local' }),
+        expect.objectContaining({ count: 1, hostId: 'ssh:ssh-1' })
+      ])
+    )
+  })
+
+  it('keeps collapsed pinned rows attributable to their owning hosts', () => {
+    const rows = [
+      pinnedHeader(
+        new Map([
+          ['local', 1],
+          ['ssh:ssh-1', 2]
+        ])
+      )
+    ]
+
+    const sectioned = sectionRows({
+      rows,
+      hostOptions: [
+        {
+          id: 'local',
+          kind: 'local',
+          label: 'Local Mac',
+          detail: 'This computer',
+          health: 'local'
+        },
+        { id: 'ssh:ssh-1', kind: 'ssh', label: 'Builder', detail: 'SSH', health: 'available' }
+      ],
+      workspaceHostScope: 'all',
+      defaultHostId: 'local',
+      collapsedHostKeys: new Set(['host:ssh:ssh-1'])
+    })
+
+    expect(sectioned.map(rowKey)).toEqual(['host:local', 'pinned', 'host:ssh:ssh-1'])
+    expect(sectioned.filter((row) => row.type === 'host-header')).toMatchObject([
+      { hostId: 'local', collapsed: false, count: 1 },
+      { hostId: 'ssh:ssh-1', collapsed: true, count: 2 }
+    ])
+    expect(sectioned.filter((row) => row.type === 'header')).toMatchObject([
+      { key: PINNED_GROUP_KEY, count: 1, hostId: 'local' }
+    ])
+  })
+
+  it('keeps a pinned row with its explicit worktree host', () => {
+    const local = repo('local')
+    const pinned = pinnedItem('ssh-pinned', local, PINNED_GROUP_KEY)
+    pinned.worktree.hostId = 'ssh:ssh-1'
+    const rows = [
+      pinnedHeader(new Map([['ssh:ssh-1', 1]]), new Map([['ssh:ssh-1', ['ssh-pinned']]])),
+      pinned,
+      repoHeader(local),
+      item('local-wt', local)
+    ]
+
+    const sectioned = sectionRows({
+      rows,
+      hostOptions: [
+        {
+          id: 'local',
+          kind: 'local',
+          label: 'Local Mac',
+          detail: 'This computer',
+          health: 'local'
+        },
+        { id: 'ssh:ssh-1', kind: 'ssh', label: 'Builder', detail: 'SSH', health: 'available' }
+      ],
+      workspaceHostScope: 'all',
+      defaultHostId: 'local'
+    })
+
+    expect(sectioned.map(rowKey)).toEqual([
+      'host:local',
+      'repo:local',
+      'local-wt',
+      'host:ssh:ssh-1',
+      PINNED_GROUP_KEY,
+      'ssh-pinned'
+    ])
+    expect(sectioned.filter((row) => row.type === 'host-header')).toMatchObject([
+      { hostId: 'local', count: 1 },
+      { hostId: 'ssh:ssh-1', count: 1 }
+    ])
+  })
+
+  it('does not double-count a collapsed pinned header and its natural duplicate row', () => {
+    const local = repo('local')
+    const ssh = repo('ssh', 'ssh-1')
+    const rows = [
+      pinnedHeader(new Map([['local', 1]]), new Map([['local', ['wt-1']]])),
+      { ...header('all', 'All'), count: 1, worktreeIds: ['wt-1'] },
+      item('wt-1', local),
+      repoHeader(ssh),
+      item('ssh-wt', ssh)
+    ]
+
+    const sectioned = sectionRows({
+      rows,
+      hostOptions: [
+        {
+          id: 'local',
+          kind: 'local',
+          label: 'Local Mac',
+          detail: 'This computer',
+          health: 'local'
+        },
+        { id: 'ssh:ssh-1', kind: 'ssh', label: 'Builder', detail: 'SSH', health: 'available' }
+      ],
+      workspaceHostScope: 'all',
+      defaultHostId: 'local'
+    })
+
+    expect(
+      sectioned.find((row) => row.type === 'host-header' && row.hostId === 'local')
+    ).toMatchObject({ count: 1 })
+  })
+
+  it('localizes collapsed natural headers even when the hidden rows are owned by one host', () => {
+    const ssh = repo('ssh', 'ssh-1')
+    const localHostId = 'local' as const
+    const rows = [
+      {
+        ...header('all', 'All'),
+        count: 1,
+        hostWorktreeCounts: new Map([[localHostId, 1]]),
+        hostWorktreeIds: new Map([[localHostId, ['local-wt']]]),
+        worktreeIds: ['local-wt']
+      },
+      repoHeader(ssh),
+      item('ssh-wt', ssh)
+    ]
+
+    const sectioned = sectionRows({
+      rows,
+      hostOptions: [
+        {
+          id: 'local',
+          kind: 'local',
+          label: 'Local Mac',
+          detail: 'This computer',
+          health: 'local'
+        },
+        { id: 'ssh:ssh-1', kind: 'ssh', label: 'Builder', detail: 'SSH', health: 'available' }
+      ],
+      workspaceHostScope: 'all',
+      defaultHostId: 'local'
+    })
+
+    expect(sectioned.map(rowKey)).toEqual([
+      'host:local',
+      'all',
+      'host:ssh:ssh-1',
+      'repo:ssh',
+      'ssh-wt'
+    ])
+    expect(sectioned.filter((row) => row.type === 'host-header')).toMatchObject([
+      { hostId: 'local', count: 1 },
+      { hostId: 'ssh:ssh-1', count: 1 }
+    ])
+    expect(sectioned.filter((row) => row.type === 'header' && row.key === 'all')).toMatchObject([
+      { hostId: 'local', count: 1, worktreeIds: ['local-wt'] }
     ])
   })
 
@@ -354,7 +545,7 @@ describe('addHostSectionRows', () => {
       item('remote-wt', runtimeOwned)
     ]
 
-    const sectioned = addHostSectionRows({
+    const sectioned = sectionRows({
       rows,
       hostOptions: [
         {
@@ -397,7 +588,7 @@ describe('addHostSectionRows', () => {
     const local = repo('local')
     const rows: Row[] = [repoHeader(local), item('local-wt', local), folderWorkspaceRow('ssh-1')]
 
-    const sectioned = addHostSectionRows({
+    const sectioned = sectionRows({
       rows,
       hostOptions: [
         {
@@ -427,7 +618,7 @@ describe('addHostSectionRows', () => {
     const ssh = repo('ssh', 'ssh-1')
     const rows = [repoHeader(local), item('local-wt', local), repoHeader(ssh), item('ssh-wt', ssh)]
 
-    const sectioned = addHostSectionRows({
+    const sectioned = sectionRows({
       rows,
       hostOptions: [
         {
@@ -469,7 +660,7 @@ describe('addHostSectionRows', () => {
       item('runtime-wt', project)
     ]
 
-    const sectioned = addHostSectionRows({
+    const sectioned = sectionRows({
       rows,
       hostOptions: [
         {
@@ -499,7 +690,7 @@ describe('addHostSectionRows', () => {
     })
   })
 
-  it('passes host kind and blocked compatibility through to the header row', () => {
+  it('passes host kind, blocked compatibility and reason through to the header row', () => {
     const localOwned: Repo = { ...repo('local-project'), executionHostId: 'local' }
     const project = repo('runtime-project')
     const rows = [
@@ -509,7 +700,7 @@ describe('addHostSectionRows', () => {
       item('runtime-wt', project)
     ]
 
-    const sectioned = addHostSectionRows({
+    const sectioned = sectionRows({
       rows,
       hostOptions: [
         {
@@ -531,7 +722,8 @@ describe('addHostSectionRows', () => {
             clientProtocolVersion: 5,
             serverProtocolVersion: 1,
             requiredServerProtocolVersion: 4
-          }
+          },
+          blockedReason: 'incompatible'
         }
       ],
       workspaceHostScope: 'all',
@@ -543,7 +735,8 @@ describe('addHostSectionRows', () => {
     ).toMatchObject({
       kind: 'runtime',
       health: 'blocked',
-      compatibility: { kind: 'blocked', reason: 'server-too-old' }
+      compatibility: { kind: 'blocked', reason: 'server-too-old' },
+      blockedReason: 'incompatible'
     })
   })
 
@@ -551,7 +744,7 @@ describe('addHostSectionRows', () => {
     const local = repo('local')
     const rows = [repoHeader(local), item('local-wt', local)]
 
-    const sectioned = addHostSectionRows({
+    const sectioned = sectionRows({
       rows,
       hostOptions: [
         {
@@ -580,11 +773,10 @@ describe('addHostSectionRows', () => {
   it('counts a collapsed repo group via its header count instead of zero', () => {
     const local = repo('local')
     const ssh = repo('ssh', 'ssh-1')
-    // The ssh repo group is collapsed: its header is present, items are not.
     const collapsedSshHeader = { ...repoHeader(ssh), count: 9 }
     const rows = [repoHeader(local), item('local-wt', local), collapsedSshHeader]
 
-    const sectioned = addHostSectionRows({
+    const sectioned = sectionRows({
       rows,
       hostOptions: [
         {
@@ -613,7 +805,7 @@ describe('addHostSectionRows', () => {
     const ssh = repo('ssh', 'ssh-1')
     const rows = [repoHeader(local), item('local-wt', local), repoHeader(ssh), item('ssh-wt', ssh)]
 
-    const sectioned = addHostSectionRows({
+    const sectioned = sectionRows({
       rows,
       hostOptions: [
         {
@@ -647,7 +839,7 @@ describe('addHostSectionRows', () => {
     const ssh = repo('ssh', 'ssh-1')
     const rows = [repoHeader(local), item('local-wt', local), repoHeader(ssh), item('ssh-wt', ssh)]
 
-    const sectioned = addHostSectionRows({
+    const sectioned = sectionRows({
       rows,
       hostOptions: [
         {

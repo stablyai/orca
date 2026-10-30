@@ -1,5 +1,13 @@
+import type { XtermWithRenderDimensions } from './helpers/xterm-render-dimensions'
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
+import {
+  buildAltScreenFrame,
+  describeAltScreenRenderPath,
+  readRenderedAltScreenFrame,
+  writeToPaneTerminal
+} from './helpers/alt-screen-frame'
+import { runNodeScriptInTerminal } from './helpers/run-node-script-in-terminal'
 import {
   ensureTerminalVisible,
   getActiveTabId,
@@ -53,7 +61,6 @@ type SchedulerDebugWindow = Window & {
 type HiddenOutputDebugSnapshot = {
   hiddenRendererSkipCount: number
   hiddenRendererSkippedChars: number
-  hiddenRendererMode2031ReplyCount: number
 }
 
 type HiddenOutputRecoveryWindow = Window & {
@@ -154,7 +161,7 @@ async function createAgentMarkedTerminalTab(
         }
       })
       state.setActiveTab(tab.id)
-      state.setActiveTabType('terminal')
+      state.setActiveTabType('terminal', window.__store?.getState().activeWorktreeId ?? null)
       return tab.id
     },
     { worktreeId, agent, command }
@@ -176,7 +183,7 @@ async function activateTerminalTab(page: Page, tabId: string): Promise<void> {
       throw new Error('Store unavailable')
     }
     store.getState().setActiveTab(id)
-    store.getState().setActiveTabType('terminal')
+    store.getState().setActiveTabType('terminal', store.getState().activeWorktreeId)
   }, tabId)
   await expect
     .poll(
@@ -360,7 +367,8 @@ async function startHiddenPtyOutputBurst(page: Page, ptyId: string, runId: strin
     '},1);',
     '},30);'
   ].join('')
-  await sendToTerminal(page, ptyId, `node -e ${JSON.stringify(script)}\r`)
+  // Why: delivered via a temp file — `node -e` quoting is not PowerShell-safe (#8521).
+  await runNodeScriptInTerminal(page, ptyId, script, { prefix: 'orca-tab-switch-burst' })
 }
 
 async function writeStaticTabContent(
@@ -407,8 +415,7 @@ async function injectHiddenStreamingBurst(page: Page, tabId: string, runId: stri
       if (!pane) {
         throw new Error(`No terminal pane for tab ${tabId}`)
       }
-      // Why: Grok sessions can emit large formatted bursts while the tab is
-      // hidden; stress the visibility-resume flush path beyond a few lines.
+      // Stress Grok-sized hidden bursts beyond a few lines before visibility-resume flush.
       const burst = Array.from({ length: 400 }, (_, frame) => {
         const progress = `${'█'.repeat((frame % 16) + 1)}${'░'.repeat(16 - ((frame % 16) + 1))}`
         return [
@@ -448,7 +455,9 @@ async function readTabTerminalGeometry(
         throw new Error(`No xterm screen for tab ${tabId}`)
       }
       const screenRect = screen.getBoundingClientRect()
-      const cellWidth = pane.terminal._core?._renderService?.dimensions?.css?.cell?.width ?? 0
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: xterm has no public cell-size API; the private render service is read through all-optional fields.
+      const xterm = pane.terminal as XtermWithRenderDimensions
+      const cellWidth = xterm._core?._renderService?.dimensions?.css?.cell?.width ?? 0
       const renderedContentWidth = pane.terminal.cols * cellWidth
       const rowRight = screenRect.left + renderedContentWidth
       const contentWidthRatio = screenRect.width > 0 ? renderedContentWidth / screenRect.width : 0
@@ -493,8 +502,7 @@ function geometryLooksCorrupted(geometry: TabTerminalGeometry): string | null {
   if (geometry.cols < 40 || geometry.rows <= 0) {
     return `terminal grid invalid (${geometry.cols}x${geometry.rows})`
   }
-  // Why: half-width bug paints content in only ~50% of the screen; rowRight
-  // lags far behind screenRight when cols are stale.
+  // Reject the half-width bug: stale cols leave rowRight far behind screenRight.
   if (geometry.contentWidthRatio > 0 && geometry.contentWidthRatio < 0.82) {
     return `content width ratio ${geometry.contentWidthRatio.toFixed(3)} < 0.82`
   }
@@ -550,8 +558,7 @@ test.describe('Terminal tab switch visual restore', () => {
     for (let cycle = 0; cycle < 12; cycle += 1) {
       await activateTerminalTab(orcaPage, secondTabId)
       await injectHiddenStreamingBurst(orcaPage, firstTabId, runId)
-      // Why: rapid back-to-back switches mirror the user's leave/return pattern
-      // and race the overlay's rAF/50ms refit retries.
+      // Switch immediately to race the overlay’s rAF/50ms retries.
       await activateTerminalTab(orcaPage, firstTabId)
       if (cycle % 3 === 0) {
         await activateTerminalTab(orcaPage, secondTabId)
@@ -609,67 +616,46 @@ test.describe('Terminal tab switch visual restore', () => {
 
     const { firstTabId, secondTabId } = await ensureTwoTerminalTabs(orcaPage)
     await forceWebglOnActiveTab(orcaPage)
+    await waitForPanePtyIdOnTab(orcaPage, firstTabId)
 
     const runId = `${Date.now()}`
     const finalMarker = `${TAB_SWITCH_MARKER_PREFIX}_${runId}_ALT_24`
 
-    await orcaPage.evaluate(
-      ({ tabId, finalMarker }) => {
-        const manager = window.__paneManagers?.get(tabId)
-        const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0]
-        if (!pane) {
-          throw new Error(`No terminal pane for tab ${tabId}`)
-        }
-        const frames = Array.from({ length: 25 }, (_, frame) => {
-          const progress = `${'█'.repeat((frame % 8) + 1)}${'░'.repeat(8 - ((frame % 8) + 1))}`
-          return [
-            '\x1b[?2026h',
-            '\x1b[?1049h',
-            '\x1b[2J\x1b[H',
-            '\x1b[?25l',
-            `╭────────────────────────────────────────────────────────────────────╮`,
-            `│ ${finalMarker} frame ${String(frame).padStart(3, '0')} ${progress}                     │`,
-            `│ Dimension              │ Rating                                      │`,
-            `╰────────────────────────────────────────────────────────────────────╯`,
-            '\x1b[?2026l'
-          ].join('\r\n')
-        }).join('')
-        return new Promise<void>((resolve) => pane.terminal.write(frames, resolve))
-      },
-      { tabId: firstTabId, finalMarker }
+    await writeToPaneTerminal(
+      orcaPage,
+      firstTabId,
+      Array.from({ length: 25 }, (_, frame) => buildAltScreenFrame(finalMarker, frame)).join('')
     )
 
     const corruptionReports: string[] = []
+    const renderPaths: string[] = []
     for (let cycle = 0; cycle < 6; cycle += 1) {
+      const liveFrame = cycle * 4
+      const restoreFrame = liveFrame + 1
+      const redraw = buildAltScreenFrame(finalMarker, liveFrame)
+      // Direct-emulator frames bypass main’s model; publish an equivalent snapshot numbered one higher to identify which restore path paints.
+      // Re-read identity each cycle because reattach can re-key the override.
+      const { ptyId, cols, rows } = await readPaneIdentityOnTab(orcaPage, firstTabId)
+      await setHiddenSnapshotOverride(orcaPage, ptyId, {
+        data: buildAltScreenFrame(finalMarker, restoreFrame),
+        cols,
+        rows
+      })
       await activateTerminalTab(orcaPage, secondTabId)
-      await orcaPage.evaluate(
-        ({ tabId, finalMarker, cycle }) => {
-          const manager = window.__paneManagers?.get(tabId)
-          const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0]
-          if (!pane) {
-            throw new Error(`No terminal pane for tab ${tabId}`)
-          }
-          const frame = cycle * 4
-          const progress = `${'█'.repeat((frame % 8) + 1)}${'░'.repeat(8 - ((frame % 8) + 1))}`
-          const redraw = [
-            '\x1b[?2026h',
-            '\x1b[?1049h',
-            '\x1b[2J\x1b[H',
-            '\x1b[?25l',
-            `╭────────────────────────────────────────────────────────────────────╮`,
-            `│ ${finalMarker} frame ${String(frame).padStart(3, '0')} ${progress}                     │`,
-            `│ Dimension              │ Rating                                      │`,
-            `╰────────────────────────────────────────────────────────────────────╯`,
-            '\x1b[?2026l'
-          ].join('\r\n')
-          return new Promise<void>((resolve) => pane.terminal.write(redraw, resolve))
-        },
-        { tabId: firstTabId, finalMarker, cycle }
-      )
+      await writeToPaneTerminal(orcaPage, firstTabId, redraw)
       await activateTerminalTab(orcaPage, firstTabId)
 
       const geometry = await readTabTerminalGeometry(orcaPage, firstTabId, `${runId}_ALT`)
-      const issue = geometryLooksCorrupted(geometry)
+      const renderedFrame = await readRenderedAltScreenFrame(orcaPage, firstTabId, finalMarker)
+      renderPaths.push(
+        `cycle ${cycle}: ${describeAltScreenRenderPath(renderedFrame, liveFrame, restoreFrame)}`
+      )
+      // Require the winning path’s own frame; other content means stale restore.
+      const staleFrame =
+        renderedFrame !== null && renderedFrame !== liveFrame && renderedFrame !== restoreFrame
+          ? `alt-screen shows frame ${renderedFrame}, expected ${liveFrame} (live write) or ${restoreFrame} (reveal restore)`
+          : null
+      const issue = geometryLooksCorrupted(geometry) ?? staleFrame
       if (issue || !geometry.markerPresent) {
         corruptionReports.push(
           `cycle ${cycle}: ${issue ?? 'marker missing after alt-screen redraw'}`
@@ -682,6 +668,13 @@ test.describe('Terminal tab switch visual restore', () => {
         )
       }
     }
+
+    // Record load-dependent restore-path winners rather than assert them; stdout keeps the list reporter from hiding this evidence.
+    testInfo.annotations.push({
+      type: 'alt-screen-render-path',
+      description: renderPaths.join(', ')
+    })
+    console.log('[tab-switch-repro] alt-screen render path:', renderPaths.join(', '))
 
     expect(
       corruptionReports,
@@ -795,9 +788,10 @@ test.describe('Terminal tab switch visual restore', () => {
       .toContain(marker)
   })
 
-  test('keeps returned tab glyphs intact across tab switches', async ({ orcaPage }, testInfo) => {
-    // Why: screenshot equality catches WebGL atlas corruption on the tab being
-    // resumed, not just stale cols/rows geometry checks.
+  test('@headful keeps returned tab glyphs intact across tab switches', async ({
+    orcaPage
+  }, testInfo) => {
+    // Compare screenshots to catch atlas corruption beyond correct cols/rows.
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
@@ -838,9 +832,7 @@ test.describe('Terminal tab switch visual restore', () => {
     const screenshotMismatches: string[] = []
     for (let cycle = 0; cycle < 8; cycle += 1) {
       await activateTerminalTab(orcaPage, secondTabId)
-      // Why: do not write into the hidden tab here — new bytes would change the
-      // screenshot even when rendering is healthy. This cycle only exercises the
-      // suspend/resume + atlas reset path on unchanged content.
+      // Keep hidden content unchanged so screenshot equality isolates suspend/resume and atlas reset.
       await activateTerminalTab(orcaPage, firstTabId)
       await orcaPage.waitForTimeout(100)
       const afterReturn = await captureStableTabScreenshot(orcaPage, firstTabId)

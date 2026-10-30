@@ -1,49 +1,196 @@
-import type { SshConnection } from './ssh-connection'
-import { getProcessOutputFields } from '../../shared/process-output-field-scanner'
-import { parseUnameToRelayPlatform, type RelayPlatform } from './relay-protocol'
-import { execCommand } from './ssh-relay-deploy-helpers'
+import type { RemoteInstallTransport } from '../managed-server/install/remote-install-transport'
+import {
+  getProcessOutputFields,
+  iterateProcessOutputLines
+} from '../../shared/process-output-field-scanner'
+import { parseUnameToRelayPlatform, type RelayPlatform } from './remote-exec/remote-frame-protocol'
+import {
+  execCommand,
+  isSshExecTimeout,
+  isUnconfirmedSshCommandTermination
+} from './remote-exec/remote-exec-command'
+import { isSshSessionLimitError } from './ssh-session-limit-error'
 import { getRemoteHostPlatform, type RemoteHostPlatform } from './ssh-remote-platform'
 import { powerShellCommand } from './ssh-remote-powershell'
 
-export async function detectRemoteHostPlatform(
-  conn: SshConnection
-): Promise<RemoteHostPlatform | null> {
-  const unamePlatform = await detectUnamePlatform(conn)
-  if (unamePlatform) {
-    return getRemoteHostPlatform(unamePlatform)
-  }
-  const windowsPlatform = await detectWindowsPlatform(conn)
-  return windowsPlatform ? getRemoteHostPlatform(windowsPlatform) : null
+const PLATFORM_PROBE_MARKER = '__ORCA_REMOTE_PLATFORM__'
+/** The probe's marker-backed line starts with this. */
+export const UNAME_PLATFORM_PROBE_MARKER = `${PLATFORM_PROBE_MARKER} `
+const MAX_UNAME_FIELD_CHARS = 64
+const MAX_THROWN_OUTPUT_CHARS = 200
+const MAX_LOGGED_OUTPUT_CHARS = 1000
+
+type PlatformProbeOutcome =
+  | { kind: 'detected'; platform: RelayPlatform }
+  | { kind: 'unsupported'; uname: string }
+  | { kind: 'unparsed'; output: string }
+  | { kind: 'failed'; error: unknown }
+
+/** The POSIX platform probe, for callers that fold it into a command of their own. */
+export const UNAME_PLATFORM_PROBE_COMMAND = `printf '\\n%s ' '${PLATFORM_PROBE_MARKER}'; uname -sm`
+
+/** The platform a probe's output proves; null for unsupported, unparsed or startup-noise output. */
+export function remoteHostPlatformFromUnameProbe(output: string): RemoteHostPlatform | null {
+  const outcome = parseRemotePlatformOutput(output)
+  return outcome.kind === 'detected' ? getRemoteHostPlatform(outcome.platform) : null
 }
 
-async function detectUnamePlatform(conn: SshConnection): Promise<RelayPlatform | null> {
-  try {
-    const output = await execCommand(conn, 'uname -sm')
-    const parts = getProcessOutputFields(output, 2)
-    if (parts.length < 2) {
-      return null
-    }
-    return parseUnameToRelayPlatform(parts[0], parts[1])
-  } catch {
+export async function detectRemoteHostPlatform(
+  conn: RemoteInstallTransport,
+  options?: { signal?: AbortSignal }
+): Promise<RemoteHostPlatform | null> {
+  const uname = await detectUnamePlatform(conn, options?.signal)
+  if (uname.kind === 'detected') {
+    return getRemoteHostPlatform(uname.platform)
+  }
+  if (uname.kind === 'failed' && shouldAbandonAfterUnameProbe(uname.error)) {
+    throw uname.error
+  }
+  const windows = await detectWindowsPlatform(conn, options?.signal)
+  if (windows.kind === 'detected') {
+    return getRemoteHostPlatform(windows.platform)
+  }
+  // Only PowerShell can resolve unmapped uname such as Cygwin; unanswered probe keeps platform unknown.
+  const windowsProbeNeverRan = windows.kind === 'failed' && isTransportFailure(windows.error)
+  if ((uname.kind === 'unsupported' && !windowsProbeNeverRan) || windows.kind === 'unsupported') {
+    const reported = uname.kind === 'unsupported' ? uname.uname : probeUname(windows)
+    console.warn(`[ssh-relay] Remote reported an unsupported platform: ${reported}`)
     return null
   }
+  console.warn(
+    `[ssh-relay] Remote platform detection failed (uname probe: ${uname.kind}, PowerShell probe: ${windows.kind}). ` +
+      `Remote output: "${summarizeProbeOutput(probeEvidence(uname) || probeEvidence(windows), MAX_LOGGED_OUTPUT_CHARS)}"`
+  )
+  throw undetectedPlatformError(uname, windows)
 }
 
-async function detectWindowsPlatform(conn: SshConnection): Promise<RelayPlatform | null> {
+// Unconfirmed close can retain MaxSessions; a second probe would consume another timeout on the same held slot.
+function shouldAbandonAfterUnameProbe(error: unknown): boolean {
+  return (
+    (error instanceof Error && error.name === 'AbortError') ||
+    isUnconfirmedSshCommandTermination(error)
+  )
+}
+
+/** Precedence: transport failure from either probe, then uname, then PowerShell. */
+function undetectedPlatformError(
+  uname: PlatformProbeOutcome,
+  windows: PlatformProbeOutcome
+): Error {
+  for (const outcome of [uname, windows]) {
+    if (outcome.kind === 'failed' && isTransportFailure(outcome.error)) {
+      return wrapProbeError(outcome.error)
+    }
+  }
+  if (uname.kind === 'failed') {
+    return wrapProbeError(uname.error)
+  }
+  if (uname.kind === 'unparsed') {
+    return unrecognizedOutputError(uname.output)
+  }
+  if (windows.kind === 'failed') {
+    return wrapProbeError(windows.error)
+  }
+  return unrecognizedOutputError(probeOutput(windows))
+}
+
+// Transport failure explains more than the other probe's ordinary command-not-found exit.
+function isTransportFailure(error: unknown): boolean {
+  return (
+    isSshSessionLimitError(error) ||
+    isUnconfirmedSshCommandTermination(error) ||
+    isSshExecTimeout(error)
+  )
+}
+
+function wrapProbeError(error: unknown): Error {
+  const message = error instanceof Error ? error.message : String(error)
+  return new Error(`Could not detect the remote platform: ${message}`, { cause: error })
+}
+
+function unrecognizedOutputError(output: string): Error {
+  return new Error(
+    `Remote platform probe returned no recognizable output. Remote output: "${summarizeProbeOutput(output, MAX_THROWN_OUTPUT_CHARS)}"`
+  )
+}
+
+function probeOutput(outcome: PlatformProbeOutcome): string {
+  return outcome.kind === 'unparsed' ? outcome.output : ''
+}
+
+function probeUname(outcome: PlatformProbeOutcome): string {
+  return outcome.kind === 'unsupported' ? outcome.uname : ''
+}
+
+function probeEvidence(outcome: PlatformProbeOutcome): string {
+  return probeOutput(outcome) || probeUname(outcome)
+}
+
+// Marker is last, so retain bounded tail and collapse banner whitespace for status display.
+function summarizeProbeOutput(output: string, maxChars: number): string {
+  const collapsed = output.replace(/\s+/gu, ' ').trim()
+  return collapsed.length > maxChars ? `…${collapsed.slice(-maxChars)}` : collapsed
+}
+
+async function detectUnamePlatform(
+  conn: RemoteInstallTransport,
+  signal?: AbortSignal
+): Promise<PlatformProbeOutcome> {
+  try {
+    // Separate marker from startup output that may omit its trailing newline.
+    const output = signal
+      ? await execCommand(conn, UNAME_PLATFORM_PROBE_COMMAND, { signal })
+      : await execCommand(conn, UNAME_PLATFORM_PROBE_COMMAND)
+    return parseRemotePlatformOutput(output)
+  } catch (error) {
+    signal?.throwIfAborted()
+    return { kind: 'failed', error }
+  }
+}
+
+async function detectWindowsPlatform(
+  conn: RemoteInstallTransport,
+  signal?: AbortSignal
+): Promise<PlatformProbeOutcome> {
   try {
     const script = [
       '$arch = $env:PROCESSOR_ARCHITECTURE',
       'try { $runtimeArch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString(); if ($runtimeArch) { $arch = $runtimeArch } } catch {}',
       'if (-not $arch) { $arch = $env:PROCESSOR_ARCHITECTURE }',
-      'Write-Output ("Windows " + $arch)'
+      // Separate marker from startup output that may omit its trailing newline.
+      `Write-Output ("\`n${PLATFORM_PROBE_MARKER} Windows " + $arch)`
     ].join('; ')
-    const output = await execCommand(conn, powerShellCommand(script), { wrapCommand: false })
-    const parts = getProcessOutputFields(output, 2)
-    if (parts.length < 2 || parts[0].toLowerCase() !== 'windows') {
-      return null
-    }
-    return parseUnameToRelayPlatform('Windows', parts[1])
-  } catch {
-    return null
+    const output = await execCommand(conn, powerShellCommand(script), {
+      wrapCommand: false,
+      ...(signal ? { signal } : {})
+    })
+    return parseRemotePlatformOutput(output)
+  } catch (error) {
+    signal?.throwIfAborted()
+    return { kind: 'failed', error }
   }
+}
+
+function parseRemotePlatformOutput(output: string): PlatformProbeOutcome {
+  let unsupportedUname = ''
+  // Require marker-backed evidence; startup noise may resemble valid platform output.
+  for (const line of iterateProcessOutputLines(output)) {
+    const parts = getProcessOutputFields(line, 3)
+    if (parts.length < 3 || parts[0] !== PLATFORM_PROBE_MARKER) {
+      continue
+    }
+    const platform = parseUnameToRelayPlatform(parts[1], parts[2])
+    if (platform) {
+      return { kind: 'detected', platform }
+    }
+    unsupportedUname = `${clampUnameField(parts[1])} ${clampUnameField(parts[2])}`
+  }
+  return unsupportedUname
+    ? { kind: 'unsupported', uname: unsupportedUname }
+    : { kind: 'unparsed', output }
+}
+
+// Bound individual fields too; the scanner can return 4 KiB tokens.
+function clampUnameField(field: string): string {
+  return field.length > MAX_UNAME_FIELD_CHARS ? `${field.slice(0, MAX_UNAME_FIELD_CHARS)}…` : field
 }

@@ -1,17 +1,14 @@
 import { toast } from 'sonner'
-import { useAppStore } from '@/store'
 import { basename, dirname, joinPath } from '@/lib/path'
-import { getConnectionId } from '@/lib/connection-context'
-import { requestEditorSaveQuiesce } from '@/components/editor/editor-autosave'
 import { commitFileExplorerOp } from '@/components/right-sidebar/fileExplorerUndoRedo'
-import { renameRuntimePath } from '@/runtime/runtime-file-client'
-import { remapOpenEditorTabsForPathChange } from '@/lib/remap-open-editor-tabs-for-path-change'
+import { executeOpenEditorPathMove } from '@/lib/execute-open-editor-path-move'
+import {
+  captureFileExplorerOperationGuard,
+  getFileExplorerOperationOwner
+} from '@/components/right-sidebar/file-explorer-operation-owner'
+import type { FileExplorerOperationOwner } from '@/components/right-sidebar/file-explorer-types'
 
-/**
- * Electron's ipcRenderer.invoke wraps errors as:
- *   "Error invoking remote method 'channel': Error: actual message"
- * Strip the wrapper so users see only the meaningful part.
- */
+/** Strip ipcRenderer.invoke’s remote-method wrapper so toasts show the underlying error. */
 export function extractIpcErrorMessage(err: unknown, fallback: string): string {
   if (!(err instanceof Error)) {
     return fallback
@@ -22,27 +19,16 @@ export function extractIpcErrorMessage(err: unknown, fallback: string): string {
 
 type RenameFileArgs = {
   oldPath: string
-  /** just the new filename (no directory) */
   newName: string
   worktreeId: string
   worktreePath: string
-  /** refresh the parent directory in the explorer tree, if caller tracks one */
+  operationOwner?: FileExplorerOperationOwner
   refreshDir?: (dirPath: string) => Promise<void>
+  /** The file is an open user-named document, so the rename (and its Undo) may go anywhere. */
+  documentScoped?: boolean
 }
 
-/**
- * Rename a file or directory on disk. Handles:
- *   - no-op when the name is unchanged
- *   - quiescing any in-flight autosave on open tabs under `oldPath`
- *     (so a trailing write can't recreate the old path post-rename)
- *   - remapping every affected open editor tab to the new path
- *   - committing an undo/redo pair via the file-explorer undo stack
- *   - unwrapped toast on IPC failure
- *
- * Used by the file-explorer inline rename and by double-click-rename
- * from an editor tab. Both entry points should go through here so
- * the tab-remap + quiesce behavior stays consistent.
- */
+/** Share explorer/editor rename transactions, undo/redo and unwrapped IPC errors; the move coordinator owns quiesce/rename/rekey and unchanged names no-op. */
 export async function renameFileOnDisk(args: RenameFileArgs): Promise<void> {
   const { oldPath, newName, worktreeId, worktreePath, refreshDir } = args
   const trimmed = newName.trim()
@@ -55,42 +41,59 @@ export async function renameFileOnDisk(args: RenameFileArgs): Promise<void> {
   }
   const parentDir = dirname(oldPath)
   const newPath = joinPath(parentDir, trimmed)
-  const connectionId = getConnectionId(worktreeId) ?? undefined
-
-  // Let any in-flight autosave under `oldPath` finish first — a trailing
-  // write to the old path after rename would silently recreate it.
-  const state = useAppStore.getState()
-  const filesToQuiesce = state.openFiles.filter(
-    (file) =>
-      file.filePath === oldPath ||
-      file.filePath.startsWith(`${oldPath}/`) ||
-      file.filePath.startsWith(`${oldPath}\\`)
+  const operationGuard = captureFileExplorerOperationGuard(
+    worktreeId,
+    args.operationOwner ?? getFileExplorerOperationOwner(worktreeId)
   )
-  await Promise.all(filesToQuiesce.map((file) => requestEditorSaveQuiesce({ fileId: file.id })))
+  const operationRoute = operationGuard.route
   const fileContext = {
-    settings: state.settings,
+    target: operationRoute.target,
     worktreeId,
     worktreePath,
-    connectionId
+    connectionId: operationRoute.connectionId,
+    expectedExecutionHostId: operationRoute.expectedExecutionHostId,
+    expectedSshTargetId: operationRoute.expectedSshTargetId,
+    expectedSshConnectionGeneration: operationRoute.expectedSshConnectionGeneration
   }
 
   try {
-    await renameRuntimePath(fileContext, oldPath, newPath)
-    remapOpenEditorTabsForPathChange({ fromPath: oldPath, toPath: newPath, worktreePath })
+    operationGuard.assertCurrent()
+    await executeOpenEditorPathMove({
+      context: fileContext,
+      fromPath: oldPath,
+      toPath: newPath,
+      worktreeId,
+      worktreePath,
+      documentScoped: args.documentScoped
+    })
     commitFileExplorerOp({
       undo: async () => {
-        await renameRuntimePath(fileContext, newPath, oldPath)
+        operationGuard.assertCurrent()
+        await executeOpenEditorPathMove({
+          context: fileContext,
+          fromPath: newPath,
+          toPath: oldPath,
+          worktreeId,
+          worktreePath,
+          documentScoped: args.documentScoped
+        })
         if (refreshDir) {
           await refreshDir(parentDir)
         }
-        remapOpenEditorTabsForPathChange({ fromPath: newPath, toPath: oldPath, worktreePath })
       },
       redo: async () => {
-        await renameRuntimePath(fileContext, oldPath, newPath)
+        operationGuard.assertCurrent()
+        await executeOpenEditorPathMove({
+          context: fileContext,
+          fromPath: oldPath,
+          toPath: newPath,
+          worktreeId,
+          worktreePath,
+          documentScoped: args.documentScoped
+        })
         if (refreshDir) {
           await refreshDir(parentDir)
         }
-        remapOpenEditorTabsForPathChange({ fromPath: oldPath, toPath: newPath, worktreePath })
       }
     })
   } catch (err) {

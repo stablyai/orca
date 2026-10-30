@@ -1,68 +1,71 @@
-import type { Tab, TabGroup, Worktree } from '../../../shared/types'
+import type { Tab } from '../../../shared/tab-types'
+import {
+  getPaletteWorktreeIdentity,
+  isPaletteCurrentWorktree,
+  resolvePaletteRepoForWorktree
+} from './palette-repo-resolution'
+import { getActiveSimulatorTabId } from './simulator-palette-active-tab'
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
-import type { MatchRange } from './worktree-palette-search'
+import { compareBaseSensitivityLocaleText } from '../../../shared/locale-text-collators'
+import {
+  comparePaletteTabResults,
+  isOmniboxPaletteTabFieldAllowed,
+  matchPaletteTabDocument,
+  preparePaletteTabQuery
+} from '../../../shared/palette-match/tab-match'
+import { buildPaletteTabDocument } from '../../../shared/palette-match/tab-document'
+import {
+  resolveWorktreeBranchLabel,
+  resolveWorktreeDisplayName
+} from './worktree-default-display-name'
+import type { MatchRange } from '../../../shared/palette-match/normalized-text'
+import {
+  createPaletteSearchContext,
+  encodePaletteIdentity,
+  maxValidPaletteActivityTimestamp,
+  preparePaletteActivity,
+  type PaletteSearchContext
+} from '../../../shared/palette-match/palette-ranking'
+import {
+  findAmbiguousWorktreeIds,
+  findDuplicateIds,
+  getUnifiedTabPaletteExecutionHostId,
+  isUnifiedTabOwnedByWorktree
+} from './unified-tab-host-ownership'
+import type {
+  BuildSearchableSimulatorTabsOptions,
+  SearchableSimulatorTab,
+  SimulatorPaletteSearchResult
+} from './simulator-palette-search-types'
 
-export type SearchableSimulatorTab = {
-  tab: Tab
-  worktree: Worktree
-  repoName: string
-  worktreeSortIndex: number
-  isCurrentTab: boolean
-  isCurrentWorktree: boolean
-}
+export type {
+  BuildSearchableSimulatorTabsOptions,
+  SearchableSimulatorTab,
+  SimulatorPaletteSearchResult
+} from './simulator-palette-search-types'
+import { formatSimulatorTabLabel } from './simulator-tab-label'
 
-export type SimulatorPaletteSearchResult = {
-  tabId: string
-  worktreeId: string
-  groupId: string
-  title: string
-  secondaryText: string
-  repoName: string
-  worktreeName: string
-  titleRange: MatchRange | null
-  secondaryRange: MatchRange | null
-  repoRange: MatchRange | null
-  worktreeRange: MatchRange | null
-  isCurrentTab: boolean
-  isCurrentWorktree: boolean
-  score: number
-}
-
-type SimulatorPaletteActiveTabType = 'browser' | 'editor' | 'terminal' | 'simulator'
+const NO_RANGES: readonly MatchRange[] = []
 
 export const SIMULATOR_PALETTE_QUERY_MAX_BYTES = 2 * 1024
 
-export function isSimulatorPaletteQueryTooLarge(
+// Keep type aliases searchable but undisplayed; the icon already identifies emulator rows without redundant secondary text.
+export const SIMULATOR_TYPE_SEARCH_ALIASES = [
+  'mobile emulator tab',
+  'mobile emulator',
+  'ios simulator',
+  'emulator'
+] as const
+
+function isSimulatorPaletteQueryTooLarge(
   query: string,
   maxBytes = SIMULATOR_PALETTE_QUERY_MAX_BYTES
 ): boolean {
   return isClipboardTextByteLengthOverLimit(query, maxBytes)
 }
 
-export type BuildSearchableSimulatorTabsOptions = {
-  worktrees: readonly Worktree[]
-  repoMap: ReadonlyMap<string, { displayName?: string | null }>
-  worktreeOrder: ReadonlyMap<string, number>
-  unifiedTabsByWorktree: Record<string, readonly Tab[] | undefined>
-  activeGroupIdByWorktree: Record<string, string | undefined>
-  groupsByWorktree: Record<string, readonly TabGroup[] | undefined>
-  activeWorktreeId: string | null
-  activeTabType: SimulatorPaletteActiveTabType
-}
-
 function compareText(a: string, b: string): number {
-  return a.localeCompare(b, undefined, { sensitivity: 'base' })
-}
-
-function findRange(text: string, query: string): MatchRange | null {
-  if (!query) {
-    return null
-  }
-  const start = text.toLowerCase().indexOf(query)
-  if (start === -1) {
-    return null
-  }
-  return { start, end: start + query.length }
+  return compareBaseSensitivityLocaleText(a, b)
 }
 
 function compareEmptyQueryResults(
@@ -85,70 +88,102 @@ function compareEmptyQueryResults(
   return compareText(a.title, b.title)
 }
 
-function scoreSimulatorTabMatch({
-  fieldWeight,
-  matchIndex,
-  entry
-}: {
-  fieldWeight: number
-  matchIndex: number
-  entry: SearchableSimulatorTab
-}): number {
-  let score = fieldWeight + matchIndex + entry.worktreeSortIndex * 100
+// Empty queries use deterministic context order; lastActiveAt only breaks equal-ranked match ties.
+function positionScore(entry: SearchableSimulatorTab): number {
   if (entry.isCurrentTab) {
-    score -= 40
-  } else if (entry.isCurrentWorktree) {
-    score -= 10
+    return entry.worktreeSortIndex * 100 - 4000
   }
-  return score
+  return entry.worktreeSortIndex * 100 - (entry.isCurrentWorktree ? 1000 : 0)
 }
 
-function getActiveUnifiedTabId({
-  worktreeId,
-  activeWorktreeId,
-  activeTabType,
-  activeGroupIdByWorktree,
-  groupsByWorktree
-}: Pick<
-  BuildSearchableSimulatorTabsOptions,
-  'activeGroupIdByWorktree' | 'activeTabType' | 'activeWorktreeId' | 'groupsByWorktree'
-> & {
-  worktreeId: string
-}): string | null {
-  if (activeWorktreeId !== worktreeId || activeTabType !== 'simulator') {
-    return null
+export function simulatorPaletteTabTitle(tab: Tab): string {
+  return formatSimulatorTabLabel(tab.label)
+}
+
+function baseResult(
+  entry: SearchableSimulatorTab,
+  context: PaletteSearchContext
+): SimulatorPaletteSearchResult {
+  const executionHostId = getUnifiedTabPaletteExecutionHostId(entry.tab, entry.worktree)
+  const activity = preparePaletteActivity(
+    maxValidPaletteActivityTimestamp([entry.tab.lastFocusedAt, entry.tab.createdAt]),
+    context
+  )
+  return {
+    ...(executionHostId ? { executionHostId } : {}),
+    paletteIdentity: encodePaletteIdentity([
+      'simulator-tab',
+      executionHostId ?? '',
+      entry.worktree.id,
+      entry.tab.id
+    ]),
+    tabId: entry.tab.id,
+    worktreeId: entry.worktree.id,
+    groupId: entry.tab.groupId,
+    title: simulatorPaletteTabTitle(entry.tab),
+    // Why empty: the smartphone icon already says the type; a fixed label crowds the row.
+    secondaryText: '',
+    secondaryMatches: [],
+    repoName: entry.repoName,
+    // Why resolve: a cleared display name leaves the raw field undefined at runtime.
+    worktreeName: resolveWorktreeDisplayName(entry.worktree),
+    branchName: resolveWorktreeBranchLabel(entry.worktree),
+    titleRanges: NO_RANGES,
+    secondaryRanges: NO_RANGES,
+    repoRanges: NO_RANGES,
+    worktreeRanges: NO_RANGES,
+    branchRanges: NO_RANGES,
+    typeAliasMatches: [],
+    isCurrentTab: entry.isCurrentTab,
+    isCurrentWorktree: entry.isCurrentWorktree,
+    score: positionScore(entry),
+    qualityClass: null,
+    rank: null,
+    lastActiveAt: activity.timestamp || null,
+    activity
   }
-  const activeGroupId = activeGroupIdByWorktree[worktreeId]
-  const activeGroup = activeGroupId
-    ? (groupsByWorktree[worktreeId] ?? []).find((group) => group.id === activeGroupId)
-    : undefined
-  return activeGroup?.activeTabId ?? null
 }
 
 export function buildSearchableSimulatorTabs({
   worktrees,
+  ownershipWorktrees,
   repoMap,
+  repoMapByHostIdentity,
   worktreeOrder,
   unifiedTabsByWorktree,
   activeGroupIdByWorktree,
   groupsByWorktree,
   activeWorktreeId,
+  activeWorkspaceExecutionHostId,
   activeTabType
 }: BuildSearchableSimulatorTabsOptions): SearchableSimulatorTab[] {
   const entries: SearchableSimulatorTab[] = []
+  const ambiguousWorktreeIds = findAmbiguousWorktreeIds(ownershipWorktrees ?? worktrees)
   for (const worktree of worktrees) {
-    const repoName = repoMap.get(worktree.repoId)?.displayName ?? ''
-    const worktreeSortIndex = worktreeOrder.get(worktree.id) ?? Number.MAX_SAFE_INTEGER
-    const activeUnifiedTabId = getActiveUnifiedTabId({
+    const repoName =
+      resolvePaletteRepoForWorktree(worktree, repoMap, repoMapByHostIdentity)?.displayName ?? ''
+    const worktreeSortIndex =
+      worktreeOrder.get(getPaletteWorktreeIdentity(worktree)) ??
+      worktreeOrder.get(worktree.id) ??
+      Number.MAX_SAFE_INTEGER
+    const activeUnifiedTabId = getActiveSimulatorTabId({
       worktreeId: worktree.id,
+      worktreeHostId: worktree.hostId,
+      worktreeRuntimeOwnerEnvironmentId: worktree.runtimeOwnerEnvironmentId,
       activeWorktreeId,
+      activeWorkspaceExecutionHostId,
       activeTabType,
-      activeGroupIdByWorktree,
-      groupsByWorktree
+      activeGroupId: activeGroupIdByWorktree[worktree.id],
+      groups: groupsByWorktree[worktree.id]
     })
     const tabs = unifiedTabsByWorktree[worktree.id] ?? []
+    const duplicateTabIds = findDuplicateIds(tabs)
     for (const tab of tabs) {
-      if (tab.contentType !== 'simulator') {
+      if (
+        duplicateTabIds.has(tab.id) ||
+        tab.contentType !== 'simulator' ||
+        !isUnifiedTabOwnedByWorktree(tab, worktree, ambiguousWorktreeIds)
+      ) {
         continue
       }
       entries.push({
@@ -156,10 +191,22 @@ export function buildSearchableSimulatorTabs({
         worktree,
         repoName,
         worktreeSortIndex,
-        // Why: simulator tabs are unified tabs; terminal activeTabId does not
-        // identify the visible emulator tab after split-group activation.
+        // Use unified tab selection; terminal activeTabId cannot identify split-group emulator activation.
         isCurrentTab: activeUnifiedTabId === tab.id,
-        isCurrentWorktree: activeWorktreeId === worktree.id
+        isCurrentWorktree: isPaletteCurrentWorktree(
+          worktree,
+          activeWorktreeId,
+          activeWorkspaceExecutionHostId
+        ),
+        document: buildPaletteTabDocument({
+          id: tab.id,
+          title: simulatorPaletteTabTitle(tab),
+          secondaryTexts: [],
+          worktreeName: resolveWorktreeDisplayName(worktree),
+          branch: resolveWorktreeBranchLabel(worktree),
+          repoName,
+          typeAliases: SIMULATOR_TYPE_SEARCH_ALIASES
+        })
       })
     }
   }
@@ -167,129 +214,64 @@ export function buildSearchableSimulatorTabs({
 }
 
 export function searchSimulatorTabs(
-  entries: SearchableSimulatorTab[],
-  query: string
+  entries: readonly SearchableSimulatorTab[],
+  query: string,
+  options: { context?: PaletteSearchContext; fieldMode?: 'all' | 'omnibox' } = {}
 ): SimulatorPaletteSearchResult[] {
+  const context = options.context ?? createPaletteSearchContext(Date.now())
   if (isSimulatorPaletteQueryTooLarge(query)) {
     return []
   }
-  const trimmed = query.trim()
-  const trimmedQuery = trimmed.toLowerCase()
-  const results: SimulatorPaletteSearchResult[] = []
-
-  for (const entry of entries) {
-    const title = entry.tab.label || 'Mobile Emulator'
-    const secondaryText = 'Mobile Emulator tab'
-    const baseResult = {
-      tabId: entry.tab.id,
-      worktreeId: entry.worktree.id,
-      groupId: entry.tab.groupId,
-      title,
-      secondaryText,
-      repoName: entry.repoName,
-      worktreeName: entry.worktree.displayName,
-      isCurrentTab: entry.isCurrentTab,
-      isCurrentWorktree: entry.isCurrentWorktree
-    }
-
-    if (!trimmedQuery) {
-      results.push({
-        ...baseResult,
-        titleRange: null,
-        secondaryRange: null,
-        repoRange: null,
-        worktreeRange: null,
-        // Why: simulator tabs follow browser-tab Cmd+J ordering: deterministic
-        // and context-first until Orca tracks per-tab recency for this surface.
-        score: entry.isCurrentTab
-          ? -2
-          : entry.isCurrentWorktree
-            ? -1
-            : entry.worktreeSortIndex * 100
-      })
-      continue
-    }
-
-    const titleRange = findRange(title, trimmedQuery)
-    if (titleRange) {
-      results.push({
-        ...baseResult,
-        titleRange,
-        secondaryRange: null,
-        repoRange: null,
-        worktreeRange: null,
-        score: scoreSimulatorTabMatch({ fieldWeight: 0, matchIndex: titleRange.start, entry })
-      })
-      continue
-    }
-
-    const secondaryRange = findRange(secondaryText, trimmedQuery)
-    if (secondaryRange) {
-      results.push({
-        ...baseResult,
-        titleRange: null,
-        secondaryRange,
-        repoRange: null,
-        worktreeRange: null,
-        score: scoreSimulatorTabMatch({
-          fieldWeight: 20,
-          matchIndex: secondaryRange.start,
-          entry
-        })
-      })
-      continue
-    }
-
-    const aliasRange = findRange('ios simulator', trimmedQuery)
-    if (aliasRange) {
-      results.push({
-        ...baseResult,
-        titleRange: null,
-        secondaryRange: null,
-        repoRange: null,
-        worktreeRange: null,
-        score: scoreSimulatorTabMatch({ fieldWeight: 24, matchIndex: aliasRange.start, entry })
-      })
-      continue
-    }
-
-    const worktreeRange = findRange(entry.worktree.displayName, trimmedQuery)
-    if (worktreeRange) {
-      results.push({
-        ...baseResult,
-        titleRange: null,
-        secondaryRange: null,
-        repoRange: null,
-        worktreeRange,
-        score: scoreSimulatorTabMatch({
-          fieldWeight: 40,
-          matchIndex: worktreeRange.start,
-          entry
-        })
-      })
-      continue
-    }
-
-    const repoRange = findRange(entry.repoName, trimmedQuery)
-    if (repoRange) {
-      results.push({
-        ...baseResult,
-        titleRange: null,
-        secondaryRange: null,
-        repoRange,
-        worktreeRange: null,
-        score: scoreSimulatorTabMatch({ fieldWeight: 60, matchIndex: repoRange.start, entry })
-      })
-    }
+  const prepared = preparePaletteTabQuery(query)
+  if (!prepared) {
+    return query.trim()
+      ? []
+      : entries.map((entry) => baseResult(entry, context)).sort(compareEmptyQueryResults)
   }
 
-  return results.sort((a, b) => {
-    if (!trimmedQuery) {
-      return compareEmptyQueryResults(a, b)
+  const results: SimulatorPaletteSearchResult[] = []
+  for (const entry of entries) {
+    const match = matchPaletteTabDocument(entry.document, prepared, {
+      isFieldAllowed: options.fieldMode === 'omnibox' ? isOmniboxPaletteTabFieldAllowed : undefined
+    })
+    if (!match) {
+      continue
     }
-    if (a.score !== b.score) {
-      return a.score - b.score
-    }
-    return compareEmptyQueryResults(a, b)
-  })
+    const alias =
+      match.typeAlias !== null ? SIMULATOR_TYPE_SEARCH_ALIASES[match.typeAlias.index] : undefined
+    results.push({
+      ...baseResult(entry, context),
+      titleRanges: match.titleRanges,
+      repoRanges: match.repoRanges,
+      worktreeRanges: match.worktreeRanges,
+      branchRanges: match.branchRanges,
+      // Alias ranges index search-only text; the icon explains the match, so never highlight them on the row.
+      typeAliasMatch: alias ? { text: alias, ranges: match.typeAlias?.ranges ?? NO_RANGES } : null,
+      typeAliasMatches: match.typeAliasMatches.map((typeAlias) => ({
+        text: SIMULATOR_TYPE_SEARCH_ALIASES[typeAlias.index] ?? '',
+        ranges: typeAlias.ranges
+      })),
+      qualityClass: match.qualityClass,
+      rank: match.rank
+    })
+  }
+
+  return results.sort((a, b) =>
+    a.rank && b.rank
+      ? comparePaletteTabResults(
+          {
+            rank: a.rank,
+            positionScore: a.score,
+            identity: a.paletteIdentity,
+            activity: a.activity
+          },
+          {
+            rank: b.rank,
+            positionScore: b.score,
+            identity: b.paletteIdentity,
+            activity: b.activity
+          }
+        )
+      : compareEmptyQueryResults(a, b)
+  )
 }

@@ -1,3 +1,5 @@
+import type * as ReactModule from 'react'
+import type * as ReactI18nextModule from 'react-i18next'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_TRIGGER_POSITION_STORAGE_KEY } from './floating-terminal-trigger-position'
 
@@ -16,7 +18,7 @@ const hookRuntime = vi.hoisted(() => ({
 }))
 
 vi.mock('react', async () => {
-  const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+  const actual = await vi.importActual<typeof ReactModule>('react')
   return {
     ...actual,
     useCallback: <T,>(callback: T) => callback,
@@ -51,6 +53,11 @@ vi.mock('react', async () => {
     }
   }
 })
+
+vi.mock('react-i18next', async (importOriginal) => ({
+  ...(await importOriginal<typeof ReactI18nextModule>()),
+  useTranslation: () => ({})
+}))
 
 vi.mock('lucide-react', () => ({
   PanelsTopLeft: function PanelsTopLeft() {
@@ -88,6 +95,17 @@ vi.mock('./FloatingTerminalIconContextMenu', () => ({
   }
 }))
 
+const storeState = vi.hoisted(() => ({ hasFloatingUnread: false }))
+
+vi.mock('@/store', () => ({
+  useAppStore: <T,>(selector: (state: typeof storeState) => T): T => selector(storeState)
+}))
+
+// Isolate dot visibility here; store/selectors.test.ts covers the real unread selector.
+vi.mock('@/store/selectors', () => ({
+  selectFloatingWorkspaceHasUnread: (state: typeof storeState): boolean => state.hasFloatingUnread
+}))
+
 function visit(node: unknown, cb: (node: ReactElementLike) => void): void {
   if (node == null || typeof node === 'string' || typeof node === 'number') {
     return
@@ -114,6 +132,16 @@ function findByProp(node: unknown, propName: string): ReactElementLike {
   if (!found) {
     throw new Error(`${propName} not found`)
   }
+  return found
+}
+
+function hasProp(node: unknown, propName: string): boolean {
+  let found = false
+  visit(node, (entry) => {
+    if (entry.props[propName]) {
+      found = true
+    }
+  })
   return found
 }
 
@@ -231,5 +259,45 @@ describe('FloatingTerminalToggleButton positioning', () => {
       FLOATING_TERMINAL_TRIGGER_POSITION_STORAGE_KEY,
       '{"anchorX":"right","anchorY":"bottom","offsetX":124,"offsetY":172}'
     )
+  })
+})
+
+describe('FloatingTerminalToggleButton attention dot', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    hookRuntime.effects = []
+    hookRuntime.layoutEffects = []
+    hookRuntime.index = 0
+    hookRuntime.values = []
+    storeState.hasFloatingUnread = false
+    vi.stubGlobal('window', {
+      addEventListener: vi.fn(),
+      innerHeight: 800,
+      innerWidth: 1200,
+      localStorage: { getItem: vi.fn(() => null), setItem: vi.fn() },
+      removeEventListener: vi.fn()
+    })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('renders the attention dot when closed with pending floating activity', async () => {
+    storeState.hasFloatingUnread = true
+    const element = await renderToggle(false)
+    expect(hasProp(element, 'data-floating-terminal-attention')).toBe(true)
+  })
+
+  it('hides the dot when the panel is open even with pending activity', async () => {
+    storeState.hasFloatingUnread = true
+    const element = await renderToggle(true)
+    expect(hasProp(element, 'data-floating-terminal-attention')).toBe(false)
+  })
+
+  it('hides the dot when there is no pending activity', async () => {
+    storeState.hasFloatingUnread = false
+    const element = await renderToggle(false)
+    expect(hasProp(element, 'data-floating-terminal-attention')).toBe(false)
   })
 })

@@ -1,0 +1,233 @@
+import { forgetVisibleTabPicksForEnvironment } from '../web-session-visible-tab-pick-report'
+import {
+  latestSessionTabsSnapshotByWorktree,
+  replayableSessionTabsSnapshotByWorktree,
+  latestReceivedSessionTabsSnapshotByWorktree,
+  latestReceivedSessionTabsFrameByEnvironment,
+  latestReceivedSessionTabsInventoryFrameByEnvironment,
+  sessionTabsPublicationEpochHistoryByWorktree,
+  sessionTabsRemovalWatermarkByWorktree,
+  sessionTabsRuntimeHistoryByEnvironment,
+  trackedSessionTabsWorktreeIdsByEnvironment,
+  sessionTabsEnvironmentsByWorktree,
+  lastHostTerminalTabCountByWorktree,
+  sessionTabsInventoryOmissionsByWorktree,
+  hostSessionTabIdByLocalKey,
+  hostSessionTabMappingKeysByEnvironmentAndWorktree,
+  hostWorkingClientBoundaryByPaneKey,
+  resetReceivedSessionTabsFrameSequence
+} from './state'
+import {
+  clearWebRuntimeWakeTerminalRespawnForWorktree,
+  clearAllWebRuntimeWakeTerminalRespawn
+} from '../web-runtime-wake-terminal-respawn'
+import {
+  endWebRuntimeInitialTerminalBootstrap,
+  clearWebRuntimeInitialTerminalBootstrapsForEnvironment
+} from '../web-runtime-initial-terminal-bootstrap'
+import { clearWebSessionReorderIntentsForWorktree } from '../web-session-reorder-intent'
+import { clearWebSessionCloseIntentsForWorktree } from '../web-session-close-intent'
+import {
+  forgetMirroredTerminalHandles,
+  resetMirroredTerminalHandlesForTests
+} from './mirrored-terminal-handle-index'
+import {
+  forgetRetiredEpochCensuses,
+  resetRetiredEpochCensusesForTests
+} from './retired-epoch-census'
+import {
+  clearWebAgentSessionHandoffsForWorktree,
+  clearWebAgentSessionHandoffsForEnvironment
+} from '../web-agent-session-handoff'
+import {
+  clearWebSessionBrowserPlacementsForWorktree,
+  clearWebSessionBrowserPlacementsForEnvironment,
+  resetWebSessionBrowserPlacementsForTests
+} from '../web-session-browser-placement'
+import {
+  clearWebSessionTerminalPlacementsForWorktree,
+  clearWebSessionTerminalPlacementsForEnvironment
+} from '../web-session-terminal-placement'
+import { clearHostSessionMirrorHydration } from '../host-session-mirror-hydration'
+import { clearHostMirrorHandleGapVerdictsForEnvironment } from '@/lib/host-mirror-handle-gap-wait'
+import { createBoundedGenerationMap } from '@/lib/bounded-generation-map'
+import { clearHostSessionTabIdMappings } from './tracking-mappings'
+import {
+  sessionTabsFreshnessKey,
+  untrackWebSessionTabsWorktree,
+  removeWebSessionTabsEnvironment
+} from './tracking'
+
+const sessionTabsTrackingGenerations = createBoundedGenerationMap(512)
+
+/** Null until the host has sent a frame for the worktree: unknown is not zero. */
+export function getLastKnownHostTerminalTabCount(
+  environmentId: string,
+  worktreeId: string
+): number | null {
+  return (
+    lastHostTerminalTabCountByWorktree.get(sessionTabsFreshnessKey(environmentId, worktreeId)) ??
+    null
+  )
+}
+
+export function getLatestWebSessionTabsPublicationEpoch(
+  environmentId: string,
+  worktreeId: string
+): string | null {
+  return (
+    latestSessionTabsSnapshotByWorktree.get(sessionTabsFreshnessKey(environmentId, worktreeId))
+      ?.publicationEpoch ?? null
+  )
+}
+
+export { acceptReplayedWebSessionTabsSnapshot } from './state'
+export function resetWebSessionTabsSnapshotFreshnessForTests(): void {
+  latestSessionTabsSnapshotByWorktree.clear()
+  replayableSessionTabsSnapshotByWorktree.clear()
+  latestReceivedSessionTabsSnapshotByWorktree.clear()
+  sessionTabsRuntimeHistoryByEnvironment.clear()
+  sessionTabsPublicationEpochHistoryByWorktree.clear()
+  latestReceivedSessionTabsFrameByEnvironment.clear()
+  latestReceivedSessionTabsInventoryFrameByEnvironment.clear()
+  sessionTabsRemovalWatermarkByWorktree.clear()
+  trackedSessionTabsWorktreeIdsByEnvironment.clear()
+  sessionTabsEnvironmentsByWorktree.clear()
+  resetReceivedSessionTabsFrameSequence()
+  lastHostTerminalTabCountByWorktree.clear()
+  sessionTabsInventoryOmissionsByWorktree.clear()
+  hostSessionTabIdByLocalKey.clear()
+  hostSessionTabMappingKeysByEnvironmentAndWorktree.clear()
+  hostWorkingClientBoundaryByPaneKey.clear()
+  sessionTabsTrackingGenerations.reset()
+  resetWebSessionBrowserPlacementsForTests()
+  resetRetiredEpochCensusesForTests()
+  resetMirroredTerminalHandlesForTests()
+}
+
+export function _getWebSessionTabsTrackingCountsForTest(): {
+  freshness: number
+  hostMappings: number
+  hostMappingWorktrees: number
+} {
+  let hostMappingWorktrees = 0
+  for (const mappingKeysByWorktree of hostSessionTabMappingKeysByEnvironmentAndWorktree.values()) {
+    hostMappingWorktrees += mappingKeysByWorktree.size
+  }
+  return {
+    freshness: latestSessionTabsSnapshotByWorktree.size,
+    hostMappings: hostSessionTabIdByLocalKey.size,
+    // Why: the mapping index is a parallel structure, so leak tests must see it drain alongside the flat map.
+    hostMappingWorktrees
+  }
+}
+
+export function _getWebSessionTabsReceiptTrackingCountsForTest(): {
+  receipts: number
+  removalWatermarks: number
+} {
+  return {
+    receipts: latestReceivedSessionTabsSnapshotByWorktree.size,
+    removalWatermarks: sessionTabsRemovalWatermarkByWorktree.size
+  }
+}
+
+export function clearWebSessionTabsTrackingForWorktree(
+  environmentId: string,
+  worktreeId: string
+): void {
+  const key = sessionTabsFreshnessKey(environmentId, worktreeId)
+  latestSessionTabsSnapshotByWorktree.delete(key)
+  replayableSessionTabsSnapshotByWorktree.delete(key)
+  forgetRetiredEpochCensuses((candidate) => candidate === key)
+  // Retain receipt/removal boundaries after clearing live view; they distinguish delayed predecessors from live republication.
+  untrackWebSessionTabsWorktree(environmentId, worktreeId)
+  removeWebSessionTabsEnvironment(environmentId, worktreeId)
+  lastHostTerminalTabCountByWorktree.delete(key)
+  sessionTabsInventoryOmissionsByWorktree.delete(key)
+  clearWebRuntimeWakeTerminalRespawnForWorktree(worktreeId)
+  endWebRuntimeInitialTerminalBootstrap(environmentId, worktreeId)
+  clearWebSessionReorderIntentsForWorktree({ environmentId }, worktreeId)
+  clearWebSessionCloseIntentsForWorktree({ environmentId }, worktreeId)
+  clearWebAgentSessionHandoffsForWorktree(environmentId, worktreeId)
+  clearHostSessionTabIdMappings(environmentId, worktreeId)
+  clearWebSessionBrowserPlacementsForWorktree(environmentId, worktreeId)
+  clearWebSessionTerminalPlacementsForWorktree(environmentId, worktreeId)
+  forgetMirroredTerminalHandles(environmentId, worktreeId)
+}
+
+export function clearWebSessionTabsTrackingForEnvironment(environmentId: string): void {
+  const trimmedEnvironmentId = environmentId.trim()
+  if (!trimmedEnvironmentId) {
+    return
+  }
+  const keyPrefix = `${trimmedEnvironmentId}:`
+  sessionTabsTrackingGenerations.advance(trimmedEnvironmentId)
+  forgetRetiredEpochCensuses((key) => key.startsWith(keyPrefix))
+  for (const key of latestSessionTabsSnapshotByWorktree.keys()) {
+    if (key.startsWith(keyPrefix)) {
+      latestSessionTabsSnapshotByWorktree.delete(key)
+    }
+  }
+  for (const key of replayableSessionTabsSnapshotByWorktree.keys()) {
+    if (key.startsWith(keyPrefix)) {
+      replayableSessionTabsSnapshotByWorktree.delete(key)
+    }
+  }
+  for (const key of latestReceivedSessionTabsSnapshotByWorktree.keys()) {
+    if (key.startsWith(keyPrefix)) {
+      latestReceivedSessionTabsSnapshotByWorktree.delete(key)
+    }
+  }
+  sessionTabsRuntimeHistoryByEnvironment.delete(trimmedEnvironmentId)
+  for (const key of sessionTabsPublicationEpochHistoryByWorktree.keys()) {
+    if (key.startsWith(keyPrefix)) {
+      sessionTabsPublicationEpochHistoryByWorktree.delete(key)
+    }
+  }
+  latestReceivedSessionTabsFrameByEnvironment.delete(trimmedEnvironmentId)
+  latestReceivedSessionTabsInventoryFrameByEnvironment.delete(trimmedEnvironmentId)
+  forgetVisibleTabPicksForEnvironment(trimmedEnvironmentId)
+  for (const key of sessionTabsRemovalWatermarkByWorktree.keys()) {
+    if (key.startsWith(keyPrefix)) {
+      sessionTabsRemovalWatermarkByWorktree.delete(key)
+    }
+  }
+  trackedSessionTabsWorktreeIdsByEnvironment.delete(trimmedEnvironmentId)
+  for (const worktreeId of sessionTabsEnvironmentsByWorktree.keys()) {
+    removeWebSessionTabsEnvironment(trimmedEnvironmentId, worktreeId)
+  }
+  for (const key of lastHostTerminalTabCountByWorktree.keys()) {
+    if (key.startsWith(keyPrefix)) {
+      lastHostTerminalTabCountByWorktree.delete(key)
+    }
+  }
+  for (const key of sessionTabsInventoryOmissionsByWorktree.keys()) {
+    if (key.startsWith(keyPrefix)) {
+      sessionTabsInventoryOmissionsByWorktree.delete(key)
+    }
+  }
+  const mappingKeysByWorktree =
+    hostSessionTabMappingKeysByEnvironmentAndWorktree.get(trimmedEnvironmentId)
+  if (mappingKeysByWorktree) {
+    for (const mappingKeys of mappingKeysByWorktree.values()) {
+      for (const mappingKey of mappingKeys) {
+        hostSessionTabIdByLocalKey.delete(mappingKey)
+      }
+    }
+    hostSessionTabMappingKeysByEnvironmentAndWorktree.delete(trimmedEnvironmentId)
+  }
+  clearWebAgentSessionHandoffsForEnvironment(trimmedEnvironmentId)
+  clearWebSessionBrowserPlacementsForEnvironment(trimmedEnvironmentId)
+  clearWebSessionTerminalPlacementsForEnvironment(trimmedEnvironmentId)
+  clearHostSessionMirrorHydration(trimmedEnvironmentId)
+  clearHostMirrorHandleGapVerdictsForEnvironment(trimmedEnvironmentId)
+  clearAllWebRuntimeWakeTerminalRespawn()
+  clearWebRuntimeInitialTerminalBootstrapsForEnvironment(trimmedEnvironmentId)
+  forgetMirroredTerminalHandles(trimmedEnvironmentId)
+}
+
+export function getWebSessionTabsTrackingGeneration(environmentId: string): number {
+  const key = environmentId.trim()
+  return sessionTabsTrackingGenerations.get(key)
+}

@@ -1,6 +1,7 @@
 name: Bug report
 description: Report a problem with Orca
 title: '[Bug]: '
+type: Bug
 labels:
   - bug
 body:
@@ -8,6 +9,8 @@ body:
     attributes:
       value: |
         Use this form for Orca bugs. Include enough detail for someone else to reproduce the issue.
+
+        Please write your issue in English.
 
   - type: dropdown
     id: os

@@ -1,3 +1,11 @@
+import {
+  RuntimeHostDescriptorSchema,
+  type RuntimeHostDescriptor
+} from '../../../shared/runtime-host-descriptor'
+import { normalizePairingBase64 } from '../../../shared/mobile-pairing-base64'
+import { PAIRING_INPUT_MAX_CHARACTERS } from '../../../shared/mobile-pairing-protocol-limits'
+import type { DeviceScope } from '../../../shared/runtime-types'
+
 const PAIRING_OFFER_VERSION = 2
 
 export type WebPairingOffer = {
@@ -5,9 +13,20 @@ export type WebPairingOffer = {
   endpoint: string
   deviceToken: string
   publicKeyB64: string
+  pairedDeviceId?: string
+  scope?: DeviceScope
+  hostDescriptor?: RuntimeHostDescriptor
 }
 
+export type WebPairingStartupDecision =
+  | { kind: 'auto-save-runtime-offer'; offer: WebPairingOffer }
+  | { kind: 'show-connect'; initialPairingInput: string | null }
+  | { kind: 'use-stored-environment' }
+
 export function parseWebPairingInput(input: string): WebPairingOffer | null {
+  if (input.length > PAIRING_INPUT_MAX_CHARACTERS) {
+    return null
+  }
   const trimmed = input.trim()
   if (!trimmed) {
     return null
@@ -24,7 +43,12 @@ export function parseWebPairingInput(input: string): WebPairingOffer | null {
   }
 }
 
-export function readPairingInputFromLocation(location: Location): string | null {
+export function readPairingInputFromLocation(
+  location: Pick<Location, 'search' | 'hash'>
+): string | null {
+  if (location.search.length + location.hash.length > PAIRING_INPUT_MAX_CHARACTERS) {
+    return null
+  }
   const search = new URLSearchParams(location.search)
   for (const key of ['pairing', 'pair', 'code', 'token']) {
     const value = search.get(key)
@@ -50,11 +74,28 @@ export function readPairingInputFromLocation(location: Location): string | null 
   return hash
 }
 
+export function decideWebPairingStartup(args: {
+  initialPairingInput: string | null
+  hasStoredEnvironment: boolean
+}): WebPairingStartupDecision {
+  const offer = args.initialPairingInput ? parseWebPairingInput(args.initialPairingInput) : null
+  if (offer?.scope === 'runtime') {
+    return { kind: 'auto-save-runtime-offer', offer }
+  }
+  if (offer) {
+    return { kind: 'show-connect', initialPairingInput: args.initialPairingInput }
+  }
+  return args.hasStoredEnvironment
+    ? { kind: 'use-stored-environment' }
+    : { kind: 'show-connect', initialPairingInput: null }
+}
+
 export function clearPairingInputFromAddressBar(): void {
   if (!window.location.hash && !window.location.search) {
     return
   }
-  const cleanUrl = `${window.location.origin}${window.location.pathname}`
+  const workerWindow = new URLSearchParams(window.location.search).get('orcaWindow') === 'worker'
+  const cleanUrl = `${window.location.origin}${window.location.pathname}${workerWindow ? '?orcaWindow=worker' : ''}`
   // Why: pairing payloads include the runtime auth token. Clear them after
   // import so refresh/share/browser history no longer expose the secret.
   window.history.replaceState(null, document.title, cleanUrl)
@@ -74,15 +115,32 @@ function decodePairingPayload(base64url: string): WebPairingOffer | null {
   ) {
     return null
   }
+  const scope = parseWebPairingScope(parsed.scope)
+  const pairedDeviceId =
+    typeof parsed.pairedDeviceId === 'string' && parsed.pairedDeviceId.length > 0
+      ? parsed.pairedDeviceId
+      : null
+  // Why safeParse: a descriptor this build cannot read is dropped, never a reason to refuse pairing.
+  const hostDescriptor = RuntimeHostDescriptorSchema.safeParse(parsed.hostDescriptor).data
   return {
     v: PAIRING_OFFER_VERSION,
     endpoint: normalizeWebSocketEndpoint(parsed.endpoint),
     deviceToken: parsed.deviceToken,
-    publicKeyB64: parsed.publicKeyB64
+    publicKeyB64: parsed.publicKeyB64,
+    ...(pairedDeviceId ? { pairedDeviceId } : {}),
+    ...(scope ? { scope } : {}),
+    ...(hostDescriptor ? { hostDescriptor } : {})
   }
 }
 
+function parseWebPairingScope(value: unknown): DeviceScope | null {
+  return value === 'mobile' || value === 'runtime' ? value : null
+}
+
 function extractPairingCodeFromUrl(url: string): string | null {
+  if (url.length > PAIRING_INPUT_MAX_CHARACTERS) {
+    return null
+  }
   let parsed: URL
   try {
     parsed = new URL(url)
@@ -105,9 +163,7 @@ function extractPairingCodeFromUrl(url: string): string | null {
 }
 
 function base64UrlToBytes(value: string): Uint8Array {
-  const base64 = value.replace(/-/g, '+').replace(/_/g, '/')
-  const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=')
-  const binary = globalThis.atob(padded)
+  const binary = globalThis.atob(normalizePairingBase64(value))
   const bytes = new Uint8Array(binary.length)
   for (let index = 0; index < binary.length; index += 1) {
     bytes[index] = binary.charCodeAt(index)

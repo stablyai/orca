@@ -1,111 +1,175 @@
-import type React from 'react'
-import { useCallback, useRef, useState } from 'react'
-import { joinPath, normalizeRelativePath } from '@/lib/path'
-import { getConnectionId } from '@/lib/connection-context'
-import type { DirCache, TreeNode } from './file-explorer-types'
-import { splitPathSegments } from './path-tree'
-import { shouldIncludeFileExplorerEntry } from './file-explorer-entries'
-import { readRuntimeDirectory, statRuntimePath } from '@/runtime/runtime-file-client'
+import type { Dispatch, SetStateAction } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type { DirCache, FileExplorerTreeRefreshOutcome } from './file-explorer-types'
 import { createFileExplorerDirLoadTracker } from './file-explorer-dir-load-tracker'
-import { getRightSidebarWorktreeRuntimeSettings } from './file-explorer-runtime-owner'
+import {
+  getFileExplorerOperationOwner,
+  getFileExplorerOwnerUnresolvedMessage,
+  getFileExplorerOperationRoute
+} from './file-explorer-operation-owner'
+import {
+  keepOpenedDirectoryLinks,
+  clearFailedOpenedDirectoryLink,
+  readFileExplorerDirectory
+} from './file-explorer-directory-listing'
+import { fileExplorerDirDepth, fileExplorerListingToDirCache } from './file-explorer-dir-pages'
+import { useFileExplorerLoadMoreDir } from './use-file-explorer-load-more'
+import { refreshFileExplorerExpandedDirs } from './file-explorer-expanded-dirs-refresh'
+import { collectStaleDirCachePaths } from './file-explorer-stale-dir-cache'
+import { fileExplorerRefreshConcurrency } from './file-explorer-refresh-concurrency'
+import { describeFileExplorerReadError } from './file-explorer-read-error'
+import {
+  clearFileExplorerDirsLoading,
+  EMPTY_FILE_EXPLORER_LOADING_DIRS,
+  markFileExplorerDirsLoading,
+  withPendingFileExplorerDirCacheEntries
+} from './file-explorer-dir-load-state'
+import { statUserOpenedPath, type UserOpenedPathStat } from '@/lib/user-opened-local-path'
 
 type UseFileExplorerTreeResult = {
   dirCache: Record<string, DirCache>
-  setDirCache: React.Dispatch<React.SetStateAction<Record<string, DirCache>>>
+  setDirCache: Dispatch<SetStateAction<Record<string, DirCache>>>
+  /** Workspace whose committed root listing owns the rendered cache. */
+  sourceWorkspaceId: string | null
+  /** Dirs with a read in flight — kept out of dirCache so the row projection does not rebuild. */
+  loadingDirPaths: ReadonlySet<string>
   rootCache: DirCache | undefined
   rootError: string | null
   loadDir: (
     dirPath: string,
     depth: number,
-    options?: { force?: boolean; failOnError?: boolean }
+    options?: { force?: boolean; failOnError?: boolean; wakeWslDistro?: boolean }
   ) => Promise<boolean>
-  statPath: (path: string) => Promise<{ isDirectory: boolean }>
+  statPath: (path: string) => Promise<UserOpenedPathStat>
   markPathAsDirectory: (path: string) => void
-  refreshTree: () => Promise<void>
-  refreshDir: (dirPath: string) => Promise<void>
-  resetAndLoad: () => void
+  refreshTree: () => Promise<FileExplorerTreeRefreshOutcome>
+  /** `wakeWslDistro` only for a user act: it may start a stopped WSL distro. */
+  refreshDir: (dirPath: string, options?: { wakeWslDistro?: boolean }) => Promise<void>
+  /** Reads the next page of a folder a remote server listed only in part. */
+  loadMoreDir: (dirPath: string) => Promise<void>
+  /** True while a dir's cached listing predates the last full refresh that skipped it. */
+  isDirStale: (dirPath: string) => boolean
+  resetAndLoad: (options?: { wakeWslDistro?: boolean }) => void
 }
 
+/** Owns worktree-addressed directory caches and load tokens; display scoping changes traversal rather than cache identity. */
 export function useFileExplorerTree(
   worktreePath: string | null,
   expanded: Set<string>,
   activeWorktreeId?: string | null
 ): UseFileExplorerTreeResult {
   const [dirCache, setDirCache] = useState<Record<string, DirCache>>({})
+  const [loadingDirPaths, setLoadingDirPaths] = useState<ReadonlySet<string>>(
+    EMPTY_FILE_EXPLORER_LOADING_DIRS
+  )
   const [rootError, setRootError] = useState<string | null>(null)
+  const [sourceWorkspaceId, setSourceWorkspaceId] = useState<string | null>(null)
   const dirCacheRef = useRef(dirCache)
   dirCacheRef.current = dirCache
-  const dirLoadTrackerRef = useRef(createFileExplorerDirLoadTracker())
+  // Keep this ref authoritative: render writes may be discarded, and state mirrors lag long enough to admit duplicate reads.
+  const loadingDirPathsRef = useRef<ReadonlySet<string>>(EMPTY_FILE_EXPLORER_LOADING_DIRS)
+  const updateLoadingDirPaths = useCallback(
+    (update: (prev: ReadonlySet<string>) => ReadonlySet<string>) => {
+      const next = update(loadingDirPathsRef.current)
+      if (next === loadingDirPathsRef.current) {
+        return
+      }
+      loadingDirPathsRef.current = next
+      setLoadingDirPaths(next)
+    },
+    []
+  )
+  const dirLoadTrackerRef = useRef<ReturnType<typeof createFileExplorerDirLoadTracker>>(undefined!)
+  dirLoadTrackerRef.current ??= createFileExplorerDirLoadTracker()
+  // Expansion effects need marks from refreshes newer than their render; state would lag one render.
+  const staleDirsRef = useRef(new Set<string>())
+  const refreshGenerationRef = useRef(0)
+  // Distinguish root failure from supersession because loadDir returns false for both.
+  const rootReadFailedRef = useRef(false)
+
+  useEffect(() => {
+    const tracker = dirLoadTrackerRef.current
+    const refreshGeneration = refreshGenerationRef
+    return () => {
+      // A replaced host must not keep launching the old tree's queued directory reads.
+      refreshGeneration.current++
+      tracker?.reset()
+    }
+  }, [])
 
   const loadDir = useCallback(
     async (
       dirPath: string,
       depth: number,
-      options?: { force?: boolean; failOnError?: boolean }
+      options?: { force?: boolean; failOnError?: boolean; wakeWslDistro?: boolean }
     ) => {
       const cache = dirCacheRef.current
-      if (!options?.force && (cache[dirPath]?.children.length > 0 || cache[dirPath]?.loading)) {
+      if (
+        !options?.force &&
+        (cache[dirPath]?.children.length > 0 || loadingDirPathsRef.current.has(dirPath))
+      ) {
         return true
       }
       const loadToken = dirLoadTrackerRef.current.begin(dirPath)
-      // Why: when force-reloading a directory (e.g. after a file is created,
-      // duplicated, or deleted), keep the previous children visible while the
-      // fresh listing loads. Clearing to [] would momentarily shrink the
-      // visible projection and make the virtualizer jump to the top.
-      setDirCache((prev) => ({
-        ...prev,
-        [dirPath]: {
-          children: prev[dirPath]?.children ?? [],
-          loading: true
-        }
-      }))
+      const minEntries = cache[dirPath]?.children.length
+      const paged = cache[dirPath]?.paged
+      // Reads started after stale marking can verify that listing.
+      staleDirsRef.current.delete(dirPath)
+      // Retain cached children while loading so projection shrinkage cannot jump the virtualizer.
+      setDirCache((prev) => withPendingFileExplorerDirCacheEntries(prev, [dirPath]))
+      updateLoadingDirPaths((prev) => markFileExplorerDirsLoading(prev, [dirPath]))
       try {
-        const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
-        const entries = await readRuntimeDirectory(
-          {
-            settings: getRightSidebarWorktreeRuntimeSettings(activeWorktreeId),
-            worktreeId: activeWorktreeId,
-            worktreePath,
-            connectionId
-          },
-          dirPath
-        )
+        const listing = await readFileExplorerDirectory(activeWorktreeId, worktreePath, dirPath, {
+          wakeWslDistro: options?.wakeWslDistro,
+          paged,
+          minEntries
+        })
+        // Only the current read may clear loading; superseded reads must preserve their replacement’s spinner.
         if (!dirLoadTrackerRef.current.isCurrent(loadToken)) {
           return false
         }
         if (depth === -1) {
           setRootError(null)
+          setSourceWorkspaceId(activeWorktreeId?.trim() || null)
         }
-        const children: TreeNode[] = entries
-          .filter(shouldIncludeFileExplorerEntry)
-          .map((entry) => ({
-            name: entry.name,
-            path: joinPath(dirPath, entry.name),
-            relativePath: worktreePath
-              ? normalizeRelativePath(joinPath(dirPath, entry.name).slice(worktreePath.length + 1))
-              : entry.name,
-            isDirectory: entry.isDirectory,
-            isSymlink: entry.isSymlink,
-            depth: depth + 1
-          }))
-        setDirCache((prev) => ({ ...prev, [dirPath]: { children, loading: false } }))
+        const listed = fileExplorerListingToDirCache(listing, dirPath, depth, worktreePath)
+        setDirCache((prev) => ({
+          ...prev,
+          [dirPath]: {
+            ...listed,
+            children: keepOpenedDirectoryLinks(prev[dirPath]?.children, listed.children, prev)
+          }
+        }))
+        updateLoadingDirPaths((prev) => clearFileExplorerDirsLoading(prev, [dirPath]))
         return true
       } catch (error) {
         if (!dirLoadTrackerRef.current.isCurrent(loadToken)) {
           return false
         }
         if (depth === -1) {
-          // Why: the old implementation collapsed root read failures into an
-          // empty tree, which made authorization/path bugs look like a real
-          // empty worktree. Preserve the message so the UI can distinguish
-          // "no files" from "could not read this worktree".
-          setRootError(error instanceof Error ? error.message : String(error))
+          // Preserve root errors so authorization/path failures cannot look like empty worktrees.
+          setRootError(describeFileExplorerReadError(error))
+          setSourceWorkspaceId(null)
+          rootReadFailedRef.current = true
         }
-        setDirCache((prev) => ({ ...prev, [dirPath]: { children: [], loading: false } }))
+        setDirCache((prev) =>
+          clearFailedOpenedDirectoryLink(
+            {
+              ...prev,
+              [dirPath]: {
+                ...prev[dirPath],
+                children: prev[dirPath]?.children ?? [],
+                error: describeFileExplorerReadError(error)
+              }
+            },
+            dirPath
+          )
+        )
+        updateLoadingDirPaths((prev) => clearFileExplorerDirsLoading(prev, [dirPath]))
         return !options?.failOnError
       }
     },
-    [activeWorktreeId, worktreePath]
+    [activeWorktreeId, updateLoadingDirPaths, worktreePath]
   )
 
   const markPathAsDirectory = useCallback((path: string) => {
@@ -120,7 +184,11 @@ export function useFileExplorerTree(
           }
           changed = true
           cacheChanged = true
-          return { ...child, isDirectory: true }
+          return {
+            ...child,
+            isDirectory: true,
+            isDirectoryFromOpenedLink: child.isSymlink === true
+          }
         })
         next[dirPath] = cacheChanged ? { ...cache, children } : cache
       }
@@ -130,13 +198,17 @@ export function useFileExplorerTree(
 
   const statPath = useCallback(
     async (path: string) => {
-      const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
-      return statRuntimePath(
+      const operationOwner = getFileExplorerOperationOwner(activeWorktreeId)
+      const route = getFileExplorerOperationRoute(operationOwner)
+      if (!route) {
+        throw new Error(getFileExplorerOwnerUnresolvedMessage())
+      }
+      return statUserOpenedPath(
         {
-          settings: getRightSidebarWorktreeRuntimeSettings(activeWorktreeId),
+          target: route.target,
           worktreeId: activeWorktreeId,
           worktreePath,
-          connectionId
+          connectionId: route.connectionId
         },
         path
       )
@@ -144,56 +216,107 @@ export function useFileExplorerTree(
     [activeWorktreeId, worktreePath]
   )
 
-  const refreshTree = useCallback(async () => {
+  const refreshTree = useCallback(async (): Promise<FileExplorerTreeRefreshOutcome> => {
     if (!worktreePath) {
-      return
+      // No read means superseded; root-unreadable tells callers to drop pending refreshes.
+      return 'superseded'
     }
-    // Why: clearing the entire dirCache here would momentarily empty the
-    // visible projection and jump the virtualizer to the top. Instead we rely
-    // on force-reload keeping existing children visible until fresh data lands.
+    const refreshGeneration = ++refreshGenerationRef.current
+    // Retain children to prevent virtualizer jumps; union stale marks before reading because supersession may skip verification, and prune uncached paths to bound marks.
+    for (const dirPath of staleDirsRef.current) {
+      if (dirCacheRef.current[dirPath] === undefined) {
+        staleDirsRef.current.delete(dirPath)
+      }
+    }
+    // Callers use the latest callback, so expanded reflects the current traversal.
+    for (const dirPath of collectStaleDirCachePaths(dirCacheRef.current, worktreePath, expanded)) {
+      staleDirsRef.current.add(dirPath)
+    }
     const refreshSession = dirLoadTrackerRef.current.getSession()
-    const rootLoadCompleted = await loadDir(worktreePath, -1, { force: true })
+    rootReadFailedRef.current = false
+    // Propagate root failure before expanded waves; 200 dead dirs would otherwise impose about 50 sequential transport timeouts.
+    const rootLoadCompleted = await loadDir(worktreePath, -1, { force: true, failOnError: true })
     if (!rootLoadCompleted || !dirLoadTrackerRef.current.isSessionCurrent(refreshSession)) {
-      return
+      // Callers handle root failure and supersession differently; neither verified the expanded dirs.
+      return rootReadFailedRef.current ? 'root-unreadable' : 'superseded'
     }
-    await Promise.all(
-      Array.from(expanded).map(async (dirPath) => {
-        const depth = splitPathSegments(dirPath.slice(worktreePath.length + 1)).length - 1
-        await loadDir(dirPath, depth, { force: true })
-      })
-    )
-  }, [expanded, loadDir, worktreePath])
+    // Exclude the root already force-loaded above to avoid reading it twice.
+    const expandedDirs = Array.from(expanded)
+      .filter((dirPath) => dirPath !== worktreePath)
+      .map((dirPath) => ({ dirPath, depth: fileExplorerDirDepth(worktreePath, dirPath) }))
+    const allDirsCommitted = await refreshFileExplorerExpandedDirs({
+      dirs: expandedDirs,
+      worktreePath,
+      dirLoadTracker: dirLoadTrackerRef.current,
+      setDirCache,
+      updateLoadingDirPaths,
+      readDirectory: (dirPath) =>
+        readFileExplorerDirectory(activeWorktreeId, worktreePath, dirPath, {
+          paged: dirCacheRef.current[dirPath]?.paged,
+          minEntries: dirCacheRef.current[dirPath]?.children.length
+        }),
+      maxConcurrentReads: fileExplorerRefreshConcurrency(
+        getFileExplorerOperationOwner(activeWorktreeId)
+      ),
+      onDirCommitted: (dirPath) => {
+        // An older expanded read must not clear a newer collapsed-directory stale mark.
+        if (refreshGenerationRef.current === refreshGeneration) {
+          staleDirsRef.current.delete(dirPath)
+        }
+      }
+    })
+    return allDirsCommitted ? 'refreshed' : 'superseded'
+  }, [activeWorktreeId, expanded, loadDir, updateLoadingDirPaths, worktreePath])
 
   const refreshDir = useCallback(
-    async (dirPath: string) => {
+    async (dirPath: string, options?: { wakeWslDistro?: boolean }) => {
       if (!worktreePath) {
         return
       }
-      const depth =
-        dirPath === worktreePath
-          ? -1
-          : splitPathSegments(dirPath.slice(worktreePath.length + 1)).length - 1
-      await loadDir(dirPath, depth, { force: true })
+      await loadDir(dirPath, fileExplorerDirDepth(worktreePath, dirPath), {
+        force: true,
+        wakeWslDistro: options?.wakeWslDistro
+      })
     },
     [worktreePath, loadDir]
   )
 
+  const loadMoreDir = useFileExplorerLoadMoreDir({
+    activeWorktreeId,
+    worktreePath,
+    dirCacheRef,
+    loadingDirPathsRef,
+    dirLoadTrackerRef,
+    setDirCache,
+    updateLoadingDirPaths
+  })
+
+  const isDirStale = useCallback((dirPath: string) => staleDirsRef.current.has(dirPath), [])
+
   const rootCache = worktreePath ? dirCache[worktreePath] : undefined
 
-  const resetAndLoad = useCallback(() => {
-    // Why: stale readDir responses from the previous worktree/reset session
-    // must not repopulate the explorer after the tree has been cleared.
-    dirLoadTrackerRef.current.reset()
-    setDirCache({})
-    setRootError(null)
-    if (worktreePath) {
-      void loadDir(worktreePath, -1, { force: true })
-    }
-  }, [worktreePath, loadDir])
+  const resetAndLoad = useCallback(
+    (options?: { wakeWslDistro?: boolean }) => {
+      refreshGenerationRef.current++
+      // Reset tokens so previous-worktree responses cannot repopulate the cleared tree.
+      dirLoadTrackerRef.current.reset()
+      staleDirsRef.current.clear()
+      setDirCache({})
+      setSourceWorkspaceId(null)
+      updateLoadingDirPaths(() => EMPTY_FILE_EXPLORER_LOADING_DIRS)
+      setRootError(null)
+      if (worktreePath) {
+        void loadDir(worktreePath, -1, { force: true, wakeWslDistro: options?.wakeWslDistro })
+      }
+    },
+    [worktreePath, loadDir, updateLoadingDirPaths]
+  )
 
   return {
     dirCache,
     setDirCache,
+    sourceWorkspaceId,
+    loadingDirPaths,
     rootCache,
     rootError,
     loadDir,
@@ -201,6 +324,8 @@ export function useFileExplorerTree(
     markPathAsDirectory,
     refreshTree,
     refreshDir,
+    loadMoreDir,
+    isDirStale,
     resetAndLoad
   }
 }

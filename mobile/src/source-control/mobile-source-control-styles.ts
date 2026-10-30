@@ -1,9 +1,10 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet, themedStyles } from '../theme/themed-styles'
 import { diffStyles } from './mobile-source-control-diff-styles'
 import { listStyles } from './mobile-source-control-list-styles'
 
-const baseStyles = StyleSheet.create({
+const baseStyles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase
@@ -92,6 +93,7 @@ const baseStyles = StyleSheet.create({
   },
   countRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.md,
     marginTop: spacing.sm
   },
@@ -99,10 +101,15 @@ const baseStyles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: typography.metaSize
   },
+  // Keep Abort below counts so narrow cards cannot overflow.
   conflictRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    gap: spacing.sm
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+    alignSelf: 'flex-start',
+    maxWidth: '100%'
   },
   conflictText: {
     color: colors.statusAmber,
@@ -110,20 +117,46 @@ const baseStyles = StyleSheet.create({
     textTransform: 'capitalize'
   },
   abortButton: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
+    minHeight: 32,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
     borderRadius: radii.button,
     borderWidth: 1,
-    borderColor: colors.statusAmber
+    borderColor: colors.statusAmber,
+    backgroundColor: colors.bgRaised,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0
   },
   abortPressed: {
-    backgroundColor: colors.bgRaised
+    opacity: 0.75
+  },
+  abortButtonDisabled: {
+    opacity: 0.45
   },
   abortText: {
     color: colors.statusAmber,
-    fontSize: typography.metaSize,
+    fontSize: typography.bodySize,
     fontWeight: '600',
     textTransform: 'capitalize'
+  },
+  reconnectBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.lg,
+    marginBottom: -spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.button,
+    backgroundColor: colors.bgRaised,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.statusAmber
+  },
+  reconnectBannerText: {
+    color: colors.textPrimary,
+    fontSize: typography.metaSize
   },
   actionError: {
     marginTop: spacing.sm,
@@ -172,7 +205,43 @@ const baseStyles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: typography.bodySize,
     fontWeight: '600'
+  },
+  createPrBlock: {
+    marginTop: spacing.md
+  },
+  createPrButton: {
+    height: 42,
+    borderRadius: radii.button,
+    backgroundColor: colors.textPrimary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md
+  },
+  createPrButtonDisabled: {
+    backgroundColor: colors.bgRaised,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderSubtle
+  },
+  createPrButtonPressed: {
+    opacity: 0.78
+  },
+  createPrButtonText: {
+    color: colors.bgBase,
+    fontSize: typography.bodySize,
+    fontWeight: '700'
+  },
+  createPrButtonTextDisabled: {
+    color: colors.textSecondary
+  },
+  createPrButtonHint: {
+    fontSize: typography.metaSize,
+    fontWeight: '600',
+    lineHeight: 16,
+    textAlign: 'center',
+    flexShrink: 1
   }
-})
+}))
 
-export const styles = { ...baseStyles, ...listStyles, ...diffStyles }
+export const styles = themedStyles(() => ({ ...baseStyles, ...listStyles, ...diffStyles }))

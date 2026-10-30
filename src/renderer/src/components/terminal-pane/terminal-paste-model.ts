@@ -10,7 +10,7 @@ export type TerminalPasteSource =
 export type TerminalPasteRuntime = {
   platform: NodeJS.Platform
   runtimeKey: string
-  kind: 'local' | 'wsl' | 'ssh' | 'remote-runtime'
+  kind: 'local' | 'wsl' | 'remote-runtime'
   isWindowsConpty?: boolean
 }
 
@@ -29,13 +29,16 @@ export type TerminalPastePayload = {
   lineCount: number
   hasRichText: boolean
   hasControlSequences: boolean
+  lineEndingByteLength: number
 }
 
 export type TerminalPastePlan = {
   target: TerminalPasteTarget
   payload: TerminalPastePayload
-  mode: 'direct' | 'chunked' | 'bracketed-terminal' | 'reject'
-  newlinePolicy: 'preserve' | 'windows-crlf' | 'posix-lf' | 'target-default'
+  mode: 'direct' | 'chunked' | 'bracketed-terminal' | 'windows-input-record' | 'reject'
+  // Every Orca-built paste path must normalize LF to CR before ConPTY, matching xterm native paste.
+  newlinePolicy: 'preserve' | 'terminal-cr' | 'windows-input-record'
+  windowsInputRecordNewline?: WindowsInputRecordNewline
   runtimeKey: string
   maxChunkBytes?: number
   bracketed: boolean
@@ -46,8 +49,11 @@ export type TerminalPastePlan = {
 export type TerminalPasteTextOptions = {
   forceBracketedPaste?: boolean
   forceBracketedPasteForMultiline?: boolean
+  windowsInputRecordNewline?: WindowsInputRecordNewline
   recoverImagePasteWebglAtlas?: boolean
 }
+
+export type WindowsInputRecordNewline = 'alt-enter' | 'csi-u'
 
 export type TerminalPasteExecutionReason =
   | 'operation-timeout'

@@ -1,0 +1,292 @@
+import { reportWorkerTerminalUserInput } from '../terminal/worker-terminal-takeover-report'
+import { useCallback } from 'react'
+import { translate } from '../i18n/mobile-i18n'
+import { terminalBufferClear, terminalInputSend } from '../terminal/mobile-terminal-operations'
+import {
+  clearTerminalLiveInputFocusTimer,
+  scheduleTerminalLiveInputFocus
+} from '../terminal/terminal-live-input'
+import { sendMobileTerminalQueryReply } from '../terminal/mobile-terminal-query-reply'
+import {
+  buildTerminalSendParams,
+  TERMINAL_INPUT_SEND_OPTIONS
+} from '../terminal/terminal-send-request'
+import { countTerminalGestureInputSequences } from '../terminal/terminal-gesture-input'
+import {
+  isGestureMouseTrackingMode,
+  TERMINAL_GESTURE_INPUT_BUCKET_CAPACITY,
+  TERMINAL_GESTURE_INPUT_MAX_PENDING_SEQUENCES,
+  TERMINAL_GESTURE_INPUT_MAX_QUEUE_AGE_MS,
+  TERMINAL_GESTURE_INPUT_REFILL_PER_SECOND
+} from './mobile-session-route-helpers'
+import type { Terminal, TerminalGestureInputQueue } from './mobile-session-route-types'
+import type { TerminalPointerInput } from '../terminal/terminal-webview-contract'
+import type { MobileSessionFileActionsModel } from './use-mobile-session-file-actions'
+
+export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsModel) {
+  const {
+    client,
+    connState,
+    toggleTerminalLiveInput,
+    activeHandle,
+    ptyModesRef,
+    terminalGestureInputBucketsRef,
+    terminalGestureInputQueuesRef,
+    terminalGestureInputInFlightRef,
+    deviceTokenRef,
+    clientRef,
+    connStateRef,
+    liveInputRef,
+    liveInputFocusTimerRef,
+    terminalUnsubsRef,
+    activeHandleRef,
+    activeSessionTabTypeRef,
+    clearPendingLiveInputCommit,
+    liveInputTerminalHandlesRef,
+    sendLiveInputClick,
+    sendLiveTerminalInputRef,
+    showToast,
+    hostQueryReplyInputSupportedRef,
+    hostProgramStatusSupportedRef,
+    unsubscribeTerminal,
+    subscribeToTerminal
+  } = scope
+  const toggleLiveInput = useCallback(() => {
+    if (!activeHandle) {
+      return
+    }
+    const nextEnabled = toggleTerminalLiveInput(activeHandle)
+    clearPendingLiveInputCommit()
+    if (nextEnabled) {
+      scheduleTerminalLiveInputFocus(liveInputFocusTimerRef, () => liveInputRef.current?.focus())
+    } else {
+      clearTerminalLiveInputFocusTimer(liveInputFocusTimerRef)
+      liveInputRef.current?.blur()
+    }
+  }, [activeHandle, clearPendingLiveInputCommit, toggleTerminalLiveInput])
+
+  const allowTerminalGestureInput = useCallback(
+    (handle: string, sequenceCount: number): boolean => {
+      const now = Date.now()
+      const current = terminalGestureInputBucketsRef.current.get(handle) ?? {
+        tokens: TERMINAL_GESTURE_INPUT_BUCKET_CAPACITY,
+        lastRefillMs: now
+      }
+      const elapsedSeconds = Math.max(0, now - current.lastRefillMs) / 1000
+      const tokens = Math.min(
+        TERMINAL_GESTURE_INPUT_BUCKET_CAPACITY,
+        current.tokens + elapsedSeconds * TERMINAL_GESTURE_INPUT_REFILL_PER_SECOND
+      )
+
+      // Rate-limit control sequences, not WebView messages; one gesture can batch many reports.
+      if (tokens < sequenceCount) {
+        terminalGestureInputBucketsRef.current.set(handle, { tokens, lastRefillMs: now })
+        return false
+      }
+
+      terminalGestureInputBucketsRef.current.set(handle, {
+        tokens: tokens - sequenceCount,
+        lastRefillMs: now
+      })
+      return true
+    },
+    []
+  )
+
+  const flushTerminalGestureInput = useCallback(async (handle: string) => {
+    const queued = terminalGestureInputQueuesRef.current.get(handle)
+    if (!queued) {
+      return
+    }
+    if (queued.timer) {
+      clearTimeout(queued.timer)
+      queued.timer = null
+    }
+    if (terminalGestureInputInFlightRef.current.has(handle)) {
+      return
+    }
+
+    terminalGestureInputQueuesRef.current.delete(handle)
+    const isActive =
+      handle === activeHandleRef.current && activeSessionTabTypeRef.current === 'terminal'
+    const isFresh = Date.now() - queued.lastUpdatedMs <= TERMINAL_GESTURE_INPUT_MAX_QUEUE_AGE_MS
+    const rpc = clientRef.current
+    if (!rpc || connStateRef.current !== 'connected' || !isActive || !isFresh) {
+      return
+    }
+
+    terminalGestureInputInFlightRef.current.add(handle)
+    try {
+      // Drop queued gesture arrows on disconnect so reconnect cannot move the TUI long after the swipe.
+      const response = await terminalInputSend.request(
+        rpc,
+        buildTerminalSendParams({
+          terminal: handle,
+          text: queued.bytes,
+          enter: false,
+          deviceToken: deviceTokenRef.current
+        }),
+        TERMINAL_INPUT_SEND_OPTIONS
+      )
+      if (terminalInputSend.interpret(response) === true) {
+        reportWorkerTerminalUserInput(rpc, handle)
+      }
+    } catch {
+      // Transient failure
+    } finally {
+      terminalGestureInputInFlightRef.current.delete(handle)
+      const next = terminalGestureInputQueuesRef.current.get(handle)
+      if (next) {
+        if (Date.now() - next.lastUpdatedMs > TERMINAL_GESTURE_INPUT_MAX_QUEUE_AGE_MS) {
+          if (next.timer) {
+            clearTimeout(next.timer)
+          }
+          terminalGestureInputQueuesRef.current.delete(handle)
+        } else {
+          void flushTerminalGestureInput(handle)
+        }
+      }
+    }
+  }, [])
+
+  const enqueueTerminalGestureInput = useCallback(
+    (handle: string, bytes: string, sequenceCount: number) => {
+      const now = Date.now()
+      const current = terminalGestureInputQueuesRef.current.get(handle)
+      if (
+        current &&
+        current.sequenceCount + sequenceCount <= TERMINAL_GESTURE_INPUT_MAX_PENDING_SEQUENCES
+      ) {
+        current.bytes += bytes
+        current.sequenceCount += sequenceCount
+        current.lastUpdatedMs = now
+        if (!terminalGestureInputInFlightRef.current.has(handle)) {
+          void flushTerminalGestureInput(handle)
+        }
+        return
+      }
+
+      if (current) {
+        if (current.timer) {
+          clearTimeout(current.timer)
+        }
+        if (!terminalGestureInputInFlightRef.current.has(handle)) {
+          void flushTerminalGestureInput(handle)
+        } else {
+          // Merge beyond the soft cap rather than losing bytes; the in-flight flush drains the appended queue.
+          current.bytes += bytes
+          current.sequenceCount += sequenceCount
+          current.lastUpdatedMs = now
+          return
+        }
+      }
+
+      const queued: TerminalGestureInputQueue = {
+        bytes,
+        sequenceCount,
+        timer: null,
+        lastUpdatedMs: now
+      }
+      terminalGestureInputQueuesRef.current.set(handle, queued)
+      if (!terminalGestureInputInFlightRef.current.has(handle)) {
+        void flushTerminalGestureInput(handle)
+      }
+    },
+    [flushTerminalGestureInput]
+  )
+
+  const handleTerminalInput = useCallback(
+    async (handle: string, bytes: string, input?: TerminalPointerInput) => {
+      if (!client || connState !== 'connected' || bytes.length === 0) {
+        return
+      }
+      if (handle !== activeHandleRef.current || activeSessionTabTypeRef.current !== 'terminal') {
+        return
+      }
+      const modes = ptyModesRef.current.get(handle)
+      // Validate and rate-limit mouse reports because WebView gestures can become remote PTY input.
+      if (!modes?.altScreen && !isGestureMouseTrackingMode(modes?.mouseTrackingMode)) {
+        return
+      }
+      const sequenceCount = countTerminalGestureInputSequences(bytes)
+      if (sequenceCount == null) {
+        return
+      }
+      if (input?.click) {
+        // A deliberate click must survive wheel limits and follow text queued for the old cursor.
+        void (liveInputTerminalHandlesRef.current.has(handle)
+          ? sendLiveInputClick(handle, bytes)
+          : sendLiveTerminalInputRef.current(handle, bytes))
+        return
+      }
+      if (!allowTerminalGestureInput(handle, sequenceCount)) {
+        return
+      }
+      enqueueTerminalGestureInput(handle, bytes, sequenceCount)
+    },
+    [allowTerminalGestureInput, client, connState, enqueueTerminalGestureInput, sendLiveInputClick]
+  )
+
+  const handleTerminalQueryReply = useCallback((handle: string, bytes: string) => {
+    void sendMobileTerminalQueryReply({
+      bytes,
+      client: clientRef.current,
+      clientId: deviceTokenRef.current,
+      connected: connStateRef.current === 'connected',
+      handle,
+      hostSupportsQueryReplyInput: hostQueryReplyInputSupportedRef.current,
+      hostSupportsProgramStatus: hostProgramStatusSupportedRef.current,
+      subscribedTerminals: terminalUnsubsRef.current
+    })
+  }, [])
+
+  async function handleClearTerminal(target: Terminal) {
+    if (!client) {
+      return
+    }
+    // Why: only a different client is stale; the WebView handle is rebuilt on re-render and a path cutover keeps the same host.
+    const isCurrent = () => clientRef.current === client
+    try {
+      const response = await terminalBufferClear.request(
+        client,
+        { terminal: target.handle },
+        { failWhenDisconnected: true }
+      )
+      if (!isCurrent()) {
+        return
+      }
+      if (terminalBufferClear.interpret(response) !== true) {
+        showToast(
+          translate('session.useTerminalInput.clearFailed', "Couldn't clear terminal"),
+          1500
+        )
+        return
+      }
+      // Why: an unsubscribed tab draws a fresh snapshot when it next subscribes; subscribing it here would leak a background stream.
+      if (terminalUnsubsRef.current.has(target.handle)) {
+        unsubscribeTerminal(target.handle)
+        subscribeToTerminal(target.handle)
+      }
+      showToast(translate('session.useTerminalInput.cleared', 'Terminal cleared'))
+    } catch {
+      if (isCurrent()) {
+        showToast(
+          translate('session.useTerminalInput.clearFailed', "Couldn't clear terminal"),
+          1500
+        )
+      }
+    }
+  }
+  return {
+    toggleLiveInput,
+    allowTerminalGestureInput,
+    flushTerminalGestureInput,
+    enqueueTerminalGestureInput,
+    handleTerminalInput,
+    handleTerminalQueryReply,
+    handleClearTerminal
+  }
+}
+
+export type MobileSessionTerminalInputModel = MobileSessionFileActionsModel &
+  ReturnType<typeof useMobileSessionTerminalInput>

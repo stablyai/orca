@@ -1,0 +1,219 @@
+/** The resolver has no PTY: dropping followupPrompt would silently launch without the user's text. */
+
+import { describe, expect, it, vi } from 'vitest'
+import { OrcaRuntimeService } from './orca-runtime'
+import {
+  CODEX_REMOTE_VIEWER_SSH_CONNECTION,
+  PI_CLIPBOARD_OSC52_ENV
+} from '../ipc/pty/host-env/remote-viewer-clipboard-env'
+
+vi.mock('electron', () => ({
+  BrowserWindow: { fromId: vi.fn(() => null) },
+  webContents: { fromId: vi.fn(() => null) },
+  ipcMain: { on: vi.fn(), removeListener: vi.fn() },
+  app: { getPath: vi.fn(() => '/tmp') }
+}))
+
+// bash cannot fold multiline prompts into its launch line; zsh can.
+function runtimeWithAgentLaunch(
+  options: {
+    terminalDefaultShell?: string
+    connectionId?: string
+    agentDefaultEnv?: Record<string, Record<string, string>>
+  } = {}
+): {
+  runtime: OrcaRuntimeService
+  spawn: ReturnType<typeof vi.fn>
+} {
+  const runtime = new OrcaRuntimeService()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver under test is a protected member; the assertion names only the two internals this stub replaces, each of which is assigned before the create reaches it.
+  const internal = runtime as unknown as {
+    store: { getSettings: () => Record<string, unknown> }
+    resolveTerminalWorkspaceLaunchScope: (selector: string) => Promise<unknown>
+  }
+  internal.store = {
+    getSettings: () => ({
+      terminalDefaultShell: options.terminalDefaultShell ?? '/bin/bash',
+      agentDefaultEnv: options.agentDefaultEnv
+    })
+  }
+  vi.spyOn(internal, 'resolveTerminalWorkspaceLaunchScope').mockResolvedValue({
+    id: 'wt-1',
+    path: '/repo/app',
+    connectionId: options.connectionId ?? null,
+    repo: null,
+    folderWorkspace: null
+  })
+  const spawn = vi.fn().mockResolvedValue({ id: 'pty-1' })
+  runtime.setPtyController({
+    spawn,
+    write: () => true,
+    kill: () => true,
+    getForegroundProcess: async () => null
+  })
+  return { runtime, spawn }
+}
+
+function spawnedCommand(spawn: ReturnType<typeof vi.fn>): string {
+  const command = spawn.mock.calls[0]?.[0]?.command
+  return typeof command === 'string' ? command : ''
+}
+
+describe('a terminal create that is handed a launch prompt', () => {
+  it.each([
+    { supported: undefined, flag: undefined },
+    { supported: true, flag: undefined },
+    { supported: false, flag: '0' }
+  ])('applies viewer policy after startupAgent resolution (%s)', async ({ supported, flag }) => {
+    vi.stubEnv('CLAUDE_CODE_FORCE_TERMINAL_IMAGES', undefined)
+    try {
+      const { runtime, spawn } = runtimeWithAgentLaunch()
+      await runtime.createTerminal('id:wt-1', {
+        startupAgent: 'claude',
+        terminalImageViewerSupported: supported
+      })
+      expect(spawn.mock.calls[0]?.[0]?.env.CLAUDE_CODE_FORCE_TERMINAL_IMAGES).toBe(flag)
+      expect(spawn.mock.calls[0]?.[0]?.launchAgent).toBe('claude')
+      expect(spawnedCommand(spawn)).toContain('claude')
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  // #10861: a paired client's Codex on a desktop host copied to the host's clipboard, not the viewer's.
+  it.each([
+    { supported: undefined, marker: undefined },
+    { supported: true, marker: CODEX_REMOTE_VIEWER_SSH_CONNECTION },
+    { supported: false, marker: CODEX_REMOTE_VIEWER_SSH_CONNECTION }
+  ])('routes Codex and pi copy to a remote launcher (%s)', async ({ supported, marker }) => {
+    vi.stubEnv('SSH_CONNECTION', undefined)
+    vi.stubEnv('SSH_TTY', undefined)
+    vi.stubEnv(PI_CLIPBOARD_OSC52_ENV, undefined)
+    try {
+      const { runtime, spawn } = runtimeWithAgentLaunch()
+      await runtime.createTerminal('id:wt-1', {
+        startupAgent: 'codex',
+        terminalImageViewerSupported: supported
+      })
+      expect(spawn.mock.calls[0]?.[0]?.launchAgent).toBe('codex')
+      expect(spawn.mock.calls[0]?.[0]?.env.SSH_CONNECTION).toBe(marker)
+      // #33937: pi copies only reach a remote viewer through its own OSC 52 opt-in.
+      expect(spawn.mock.calls[0]?.[0]?.env[PI_CLIPBOARD_OSC52_ENV]).toBe(marker ? '1' : undefined)
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('keeps a configured image flag after resolving startupAgent for an older viewer', async () => {
+    vi.stubEnv('CLAUDE_CODE_FORCE_TERMINAL_IMAGES', undefined)
+    try {
+      const { runtime, spawn } = runtimeWithAgentLaunch({
+        agentDefaultEnv: { claude: { CLAUDE_CODE_FORCE_TERMINAL_IMAGES: '1' } }
+      })
+      await runtime.createTerminal('id:wt-1', {
+        startupAgent: 'claude',
+        terminalImageViewerSupported: false
+      })
+      expect(spawn.mock.calls[0]?.[0]?.env.CLAUDE_CODE_FORCE_TERMINAL_IMAGES).toBe('1')
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('folds an argv agent’s prompt into the command it spawns, and says it did', async () => {
+    const { runtime, spawn } = runtimeWithAgentLaunch()
+    const onStartupPromptCarry = vi.fn()
+
+    await runtime.createTerminal('id:wt-1', {
+      startupAgent: 'claude',
+      startupPrompt: 'summarize the diff',
+      onStartupPromptCarry
+    })
+
+    expect(spawnedCommand(spawn)).toContain('summarize the diff')
+    expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ launchAgent: 'claude' }))
+    expect(onStartupPromptCarry).toHaveBeenCalledWith(true)
+  })
+
+  it('starts clean, and says so, when the typed line cannot carry a multi-line prompt', async () => {
+    const { runtime, spawn } = runtimeWithAgentLaunch()
+    const onStartupPromptCarry = vi.fn()
+
+    await runtime.createTerminal('id:wt-1', {
+      startupAgent: 'claude',
+      startupPrompt: 'summarize the diff\nthen list the risks',
+      onStartupPromptCarry
+    })
+
+    expect(spawnedCommand(spawn)).toContain('claude')
+    expect(spawnedCommand(spawn)).not.toContain('summarize')
+    expect(onStartupPromptCarry).toHaveBeenCalledWith(false)
+  })
+
+  it('carries a short-lined multi-line prompt on a local zsh line, so the agent starts with it', async () => {
+    const { runtime, spawn } = runtimeWithAgentLaunch({ terminalDefaultShell: '/bin/zsh' })
+    const onStartupPromptCarry = vi.fn()
+
+    await runtime.createTerminal('id:wt-1', {
+      startupAgent: 'claude',
+      startupPrompt: 'summarize the diff\nthen list the risks',
+      onStartupPromptCarry
+    })
+
+    expect(spawnedCommand(spawn)).toContain('summarize the diff\nthen list the risks')
+    expect(onStartupPromptCarry).toHaveBeenCalledWith(true)
+  })
+
+  it('starts clean on a remote host, whose shell this host cannot name', async () => {
+    const { runtime, spawn } = runtimeWithAgentLaunch({
+      terminalDefaultShell: '/bin/zsh',
+      connectionId: 'ssh-1'
+    })
+    const onStartupPromptCarry = vi.fn()
+
+    await runtime.createTerminal('id:wt-1', {
+      startupAgent: 'claude',
+      startupPrompt: 'summarize the diff\nthen list the risks',
+      onStartupPromptCarry
+    })
+
+    expect(spawnedCommand(spawn)).not.toContain('summarize')
+    expect(onStartupPromptCarry).toHaveBeenCalledWith(false)
+  })
+
+  it('starts Hermes clean instead of refusing when its env budget cannot hold the prompt', async () => {
+    const { runtime, spawn } = runtimeWithAgentLaunch()
+    const onStartupPromptCarry = vi.fn()
+
+    await runtime.createTerminal('id:wt-1', {
+      startupAgent: 'hermes',
+      startupPrompt: 'x'.repeat(30_000),
+      onStartupPromptCarry
+    })
+
+    expect(spawn).toHaveBeenCalledTimes(1)
+    expect(onStartupPromptCarry).toHaveBeenCalledWith(false)
+  })
+
+  it('still builds a bare agent launch when no prompt is handed to it', async () => {
+    const { runtime, spawn } = runtimeWithAgentLaunch()
+
+    await runtime.createTerminal('id:wt-1', { startupAgent: 'claude' })
+
+    expect(spawnedCommand(spawn)).toContain('claude')
+    expect(spawnedCommand(spawn)).not.toContain('summarize')
+  })
+
+  it('refuses a prompt the launch command cannot carry instead of dropping it', async () => {
+    const { runtime, spawn } = runtimeWithAgentLaunch()
+
+    // aider requires post-start delivery; this resolver has no PTY, so spawning would silently lose the prompt.
+    await expect(
+      runtime.createTerminal('id:wt-1', {
+        startupAgent: 'aider',
+        startupPrompt: 'summarize the diff'
+      })
+    ).rejects.toThrow(/does not take a startup prompt/)
+    expect(spawn).not.toHaveBeenCalled()
+  })
+})

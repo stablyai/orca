@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef } from 'react'
-import { useShallow } from 'zustand/react/shallow'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import { agentTurnEndedUncleanly } from '../../../../shared/agent-main-agent-verdict'
 import { useAppStore } from '@/store'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
-// Why: leave a short quiet window after agents finish so the prompt does not
-// interrupt follow-up typing or status churn from the completed run.
+// Leave a quiet window after completion so prompts cannot interrupt follow-up typing or status churn.
 const QUIET_WINDOW_MS = 1200
 const CHECK_DELAY_MS = 1200
 const ACTIVE_AGENT_STATES = new Set(['working', 'waiting', 'blocked'])
@@ -34,7 +34,11 @@ function hasSuccessfulDoneTransition(
       previousEntry &&
       previousEntry.state !== 'done' &&
       entry.state === 'done' &&
-      !entry.interrupted &&
+      // Session-boundary done is idle connection, not completed work; resume must not trigger a launch-time nag.
+      entry.sessionBoundary !== true &&
+      !agentTurnEndedUncleanly(entry) &&
+      // A new done, not a return to one dated before the work it ended (a command at rest).
+      entry.stateStartedAt >= previousEntry.stateStartedAt &&
       hasMeaningfulPrompt(entry)
     ) {
       return true
@@ -48,14 +52,9 @@ function isTypingKeyEvent(event: KeyboardEvent): boolean {
 }
 
 export function StarNagAgentValueMomentObserver(): null {
-  const { agentStatusByPaneKey, agentStatusEpoch } = useAppStore(
-    useShallow((state) => ({
-      agentStatusByPaneKey: state.agentStatusByPaneKey,
-      agentStatusEpoch: state.agentStatusEpoch
-    }))
-  )
+  // Subscribe to state/freshness epochs and read snapshots imperatively so same-state pings cannot rescan every agent.
+  const agentStatusEpoch = useAppStore((state) => state.agentStatusEpoch)
   const previousEntriesRef = useRef<AgentStatusSnapshot | null>(null)
-  const latestEntriesRef = useRef(agentStatusByPaneKey)
   const pendingRef = useRef(false)
   const requestedRef = useRef(false)
   const preparationRef = useRef<AgentValueMomentPreparation | null>(null)
@@ -72,7 +71,10 @@ export function StarNagAgentValueMomentObserver(): null {
         return
       }
       const elapsedSinceTyping = Date.now() - lastTypingAtRef.current
-      if (hasActiveAgent(latestEntriesRef.current) || elapsedSinceTyping < QUIET_WINDOW_MS) {
+      if (
+        hasActiveAgent(useAppStore.getState().agentStatusByPaneKey) ||
+        elapsedSinceTyping < QUIET_WINDOW_MS
+      ) {
         scheduleCheck()
         return
       }
@@ -86,7 +88,10 @@ export function StarNagAgentValueMomentObserver(): null {
           }
         }
         const freshElapsedSinceTyping = Date.now() - lastTypingAtRef.current
-        if (hasActiveAgent(latestEntriesRef.current) || freshElapsedSinceTyping < QUIET_WINDOW_MS) {
+        if (
+          hasActiveAgent(useAppStore.getState().agentStatusByPaneKey) ||
+          freshElapsedSinceTyping < QUIET_WINDOW_MS
+        ) {
           scheduleCheck()
           return
         }
@@ -98,10 +103,6 @@ export function StarNagAgentValueMomentObserver(): null {
   }, [])
 
   useEffect(() => {
-    latestEntriesRef.current = agentStatusByPaneKey
-  }, [agentStatusByPaneKey, agentStatusEpoch])
-
-  useEffect(() => {
     const markTyping = (event: Event): void => {
       if (event instanceof KeyboardEvent) {
         if (!isTypingKeyEvent(event)) {
@@ -110,26 +111,27 @@ export function StarNagAgentValueMomentObserver(): null {
       }
       lastTypingAtRef.current = Date.now()
     }
-    window.addEventListener('keydown', markTyping, true)
+    addAppKeyListener('keydown', markTyping)
     window.addEventListener('input', markTyping, true)
     return () => {
-      window.removeEventListener('keydown', markTyping, true)
+      removeAppKeyListener('keydown', markTyping)
       window.removeEventListener('input', markTyping, true)
     }
   }, [])
 
   useEffect(() => {
+    const currentEntries = useAppStore.getState().agentStatusByPaneKey
     const previousEntries = previousEntriesRef.current
-    previousEntriesRef.current = agentStatusByPaneKey
+    previousEntriesRef.current = currentEntries
     if (!previousEntries || requestedRef.current) {
       return
     }
-    if (!hasSuccessfulDoneTransition(previousEntries, agentStatusByPaneKey)) {
+    if (!hasSuccessfulDoneTransition(previousEntries, currentEntries)) {
       return
     }
     pendingRef.current = true
     scheduleCheck()
-  }, [agentStatusByPaneKey, agentStatusEpoch, scheduleCheck])
+  }, [agentStatusEpoch, scheduleCheck])
 
   useEffect(() => {
     return () => {

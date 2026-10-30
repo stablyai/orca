@@ -1,6 +1,7 @@
+import { runCoalescedProbe, type CoalescedProbes } from '../git/coalesced-probe'
 import type { ProjectRef } from './gl-utils'
 
-const projectRefInFlight = new Map<string, Promise<ProjectRef | null>>()
+const projectRefInFlight: CoalescedProbes<ProjectRef | null> = new Map()
 
 export function clearProjectRefInFlight(): void {
   projectRefInFlight.clear()
@@ -8,19 +9,8 @@ export function clearProjectRefInFlight(): void {
 
 export async function runProjectRefProbeOnce(
   cacheKey: string,
-  createProbe: () => Promise<ProjectRef | null>
+  createProbe: (ownsKey: () => boolean) => Promise<ProjectRef | null>
 ): Promise<ProjectRef | null> {
-  const inFlight = projectRefInFlight.get(cacheKey)
-  if (inFlight) {
-    return inFlight
-  }
-  const probe = createProbe()
-  projectRefInFlight.set(cacheKey, probe)
-  try {
-    return await probe
-  } finally {
-    if (projectRefInFlight.get(cacheKey) === probe) {
-      projectRefInFlight.delete(cacheKey)
-    }
-  }
+  // Retire wedged probes so later retries can discover recovered hosts.
+  return runCoalescedProbe(projectRefInFlight, cacheKey, createProbe)
 }

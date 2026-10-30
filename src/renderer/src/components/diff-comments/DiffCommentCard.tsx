@@ -1,19 +1,13 @@
+import { ImeTextarea } from '@/lib/ime-text-field'
 import { CornerDownLeft, Pencil, Trash } from 'lucide-react'
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
-import { getDiffCommentLineLabel } from '@/lib/diff-comment-compat'
+import { getDiffCommentLineMetaLabel } from './diff-comment-line-meta-label'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
-// Why: the saved-note card lives inside a Monaco view zone's DOM node.
-// useDiffCommentDecorator creates a React root per zone and renders this
-// component into it so we can use normal lucide icons and JSX instead of
-// hand-built DOM + inline SVG strings.
-//
-// User-facing copy uses "Note" rather than "Comment" so it is not confused
-// with GitHub PR review comments (which some diff-view surfaces also render).
-// Internal types/ids (`DiffComment`, `diffComments`, `addDiffComment`) keep
-// the old names so we don't have to migrate the persisted WorktreeMeta shape.
+// Render note cards in per-zone React roots; keep persisted DiffComment names while UI says Note to distinguish PR review comments.
 
 type Props = {
   lineNumber: number
@@ -26,13 +20,18 @@ type Props = {
   createdAtLabel?: string
   url?: string
   onDelete?: () => void
-  // Why: Monaco view zones have a fixed `heightInPx` set at insertion time
-  // and aren't auto-measured. While the user is in edit mode the textarea
-  // grows, so the parent decorator passes a callback we fire on resize and
-  // it re-syncs the zone height. Without this the editor inputs would clip.
+  // Monaco zones do not auto-measure; notify the decorator when wrapping/growth needs a new heightInPx.
   onContentResize?: () => void
+  observeRenderedSize?: boolean
   onSubmitEdit?: (body: string) => Promise<boolean>
   headerActions?: ReactNode
+}
+
+function resizeDiffCommentTextarea(textarea: HTMLTextAreaElement): boolean {
+  const previousHeight = textarea.style.height
+  textarea.style.height = 'auto'
+  textarea.style.height = `${Math.min(textarea.scrollHeight, 240)}px`
+  return textarea.style.height !== previousHeight
 }
 
 export function DiffCommentCard({
@@ -47,27 +46,60 @@ export function DiffCommentCard({
   url,
   onDelete,
   onContentResize,
+  observeRenderedSize,
   onSubmitEdit,
   headerActions
 }: Props): React.JSX.Element {
+  // Zone cards live in separate React roots, so subscribe directly to language changes.
+  useUiLanguageRevision()
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(body)
   const [submitting, setSubmitting] = useState(false)
   const mountedRef = useMountedRef()
+  const cardRef = useRef<HTMLDivElement | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const resizeAfterCloseRef = useRef(false)
+  const observesRenderedSize = observeRenderedSize === true && onContentResize !== undefined
 
-  // Why: stash `onContentResize` in a ref so the layout/resize effects only
-  // re-run on `editing` transitions. The decorator passes a fresh arrow every
-  // render; depending on it directly would re-fire the layout effect on every
-  // unrelated parent render and yank the caret to the textarea's end while
-  // the user is mid-edit.
+  // Read the latest resize callback without rerunning edit layout; fresh parent arrows would move the caret to the end mid-edit.
   const onContentResizeRef = useRef(onContentResize)
   onContentResizeRef.current = onContentResize
 
-  // Why: focus + auto-grow the textarea on entering edit mode. Layout effect
-  // so the height is set before the browser paints — a measurement pass on
-  // the next animation frame would visibly jump from 0 to N px.
+  useLayoutEffect(() => {
+    const card = cardRef.current
+    if (!card || !observesRenderedSize) {
+      return
+    }
+    onContentResizeRef.current?.()
+    let frameId: number | null = null
+    const notifyResize = (): void => {
+      if (frameId !== null) {
+        return
+      }
+      frameId = requestAnimationFrame(() => {
+        frameId = null
+        onContentResizeRef.current?.()
+      })
+    }
+    if (typeof ResizeObserver === 'undefined') {
+      return () => {
+        if (frameId !== null) {
+          cancelAnimationFrame(frameId)
+        }
+      }
+    }
+    // Initial Monaco estimates miss narrow-pane wrapping; observe actual card height in both diff layouts.
+    const observer = new ResizeObserver(() => notifyResize())
+    observer.observe(card)
+    return () => {
+      observer.disconnect()
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId)
+      }
+    }
+  }, [observesRenderedSize])
+
+  // Measure the newly edited textarea before paint so its view zone cannot jump on the next frame.
   useLayoutEffect(() => {
     if (!editing) {
       if (resizeAfterCloseRef.current) {
@@ -80,17 +112,14 @@ export function DiffCommentCard({
     if (!el) {
       return
     }
-    el.style.height = 'auto'
-    el.style.height = `${Math.min(el.scrollHeight, 240)}px`
+    resizeDiffCommentTextarea(el)
     el.focus()
     el.setSelectionRange(el.value.length, el.value.length)
     onContentResizeRef.current?.()
   }, [editing])
 
   const scheduleContentResizeAfterClose = (): void => {
-    // Why: closing edit mode removes the textarea/footer before Monaco can
-    // re-measure the view zone. Let the layout effect run after React commits
-    // the body-only card so async saves cannot measure the old edit height.
+    // Measure after the body-only commit; async saves must not retain the textarea/footer height.
     resizeAfterCloseRef.current = true
   }
 
@@ -108,8 +137,13 @@ export function DiffCommentCard({
   const trimmedDraft = draft.trim()
   const canSubmit = !submitting && trimmedDraft.length > 0 && trimmedDraft !== body
   const lineLabel =
-    label === undefined ? getDiffCommentLineLabel({ lineNumber, startLine }).toLowerCase() : label
-  const metaText = [author || 'Note', lineLabel, createdAtLabel || (sentAt ? 'sent' : null)]
+    label === undefined ? getDiffCommentLineMetaLabel({ lineNumber, startLine }) : label
+  const metaText = [
+    author || translate('auto.components.diff.comments.DiffCommentCard.noteAuthorFallback', 'Note'),
+    lineLabel,
+    createdAtLabel ||
+      (sentAt ? translate('auto.components.diff.comments.DiffCommentCard.sentMeta', 'sent') : null)
+  ]
     .filter(Boolean)
     .join(' ')
 
@@ -125,10 +159,7 @@ export function DiffCommentCard({
         setEditing(false)
       }
     } catch (err) {
-      // Why: surface the error in the console but keep the editor open with
-      // the draft intact so the user can retry. Without this, a rejection from
-      // `onSubmitEdit` becomes an unhandled promise rejection at the call sites
-      // (`void handleSubmit()`).
+      // Catch rejected saves and retain the draft for retry; fire-and-forget callers cannot handle this rejection.
       console.error('Failed to submit diff comment edit:', err)
     } finally {
       if (mountedRef.current) {
@@ -138,7 +169,7 @@ export function DiffCommentCard({
   }
 
   return (
-    <div className="orca-diff-comment-card">
+    <div ref={cardRef} className="orca-diff-comment-card">
       <div className="orca-diff-comment-content-col">
         {/* Header Row */}
         <div className="orca-diff-comment-header">
@@ -239,16 +270,16 @@ export function DiffCommentCard({
         {/* Body or Edit Mode */}
         {editing ? (
           <div className="flex flex-col gap-2 mt-1">
-            <textarea
+            <ImeTextarea
               ref={textareaRef}
               className="orca-diff-comment-popover-textarea"
               value={draft}
               onChange={(e) => {
                 setDraft(e.target.value)
-                const el = e.currentTarget
-                el.style.height = 'auto'
-                el.style.height = `${Math.min(el.scrollHeight, 240)}px`
-                onContentResizeRef.current?.()
+                // Why: rich-review layout measures every note; skip it when this card stayed put.
+                if (resizeDiffCommentTextarea(e.currentTarget)) {
+                  onContentResizeRef.current?.()
+                }
               }}
               onKeyDown={(e) => {
                 if (e.key === 'Escape') {

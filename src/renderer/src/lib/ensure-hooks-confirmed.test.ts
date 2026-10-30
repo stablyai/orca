@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
-import type { PersistedTrustedOrcaHooks } from '../../../shared/types'
-import { __resetTrustPromptChainForTests, ensureHooksConfirmed } from './ensure-hooks-confirmed'
+import type { PersistedTrustedOrcaHooks } from '../../../shared/orca-yaml-hook-types'
+import {
+  __resetTrustPromptChainForTests,
+  ensureHooksConfirmed,
+  readAndConfirmRuntimeIssueCommand
+} from './ensure-hooks-confirmed'
 import { hashOrcaHookScript } from './orca-hook-trust'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
@@ -104,8 +108,7 @@ describe('ensureHooksConfirmed', () => {
 
     await vi.waitFor(() => expect(pending).toHaveLength(1))
     expect(pending[0].data.scriptContent).toBe('new script')
-    // The dialog uses this flag to tell the user we're re-prompting *because*
-    // orca.yaml changed, not because they've never approved this hook.
+    // Explain re-prompting as changed orca.yaml, distinct from first-time approval.
     expect(pending[0].data.previouslyApproved).toBe(true)
 
     pending[0].resolve('run')
@@ -137,6 +140,40 @@ describe('ensureHooksConfirmed', () => {
 
     pending[0].resolve('skip')
     await expect(promise).resolves.toBe('skip')
+  })
+
+  it('prompts for VM recipes using the recipe lifecycle declarations', async () => {
+    const { state, pending } = createTestState()
+    hooksCheckMock.mockResolvedValue({
+      hasHooks: true,
+      hooks: {
+        environmentRecipes: [
+          {
+            id: 'cloud-sandbox',
+            name: 'Cloud Sandbox',
+            description: 'Starts a per-workspace VM.',
+            create: './scripts/start-vm.sh',
+            suspend: './scripts/suspend-vm.sh',
+            resume: './scripts/resume-vm.sh',
+            destroy: './scripts/destroy-vm.sh'
+          }
+        ]
+      },
+      mayNeedUpdate: false
+    })
+
+    const promise = ensureHooksConfirmed(state, 'repo-1', 'vmRecipe')
+
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    expect(pending[0].data.scriptKind).toBe('vmRecipe')
+    expect(pending[0].data.scriptContent).toContain('# environmentRecipes.cloud-sandbox')
+    expect(pending[0].data.scriptContent).toContain('create: ./scripts/start-vm.sh')
+    expect(pending[0].data.scriptContent).toContain('suspend: ./scripts/suspend-vm.sh')
+    expect(pending[0].data.scriptContent).toContain('resume: ./scripts/resume-vm.sh')
+    expect(pending[0].data.scriptContent).toContain('destroy: ./scripts/destroy-vm.sh')
+
+    pending[0].resolve('run')
+    await expect(promise).resolves.toBe('run')
   })
 
   it('returns run without inspecting hooks when the repo is always trusted', async () => {
@@ -187,7 +224,46 @@ describe('ensureHooksConfirmed', () => {
     const decision = await ensureHooksConfirmed(state, 'repo-1', 'archive')
 
     expect(decision).toBe('run')
-    expect(hooksCheckMock).toHaveBeenCalledWith({ repoId: 'repo-1' })
+    expect(hooksCheckMock).toHaveBeenCalledWith({ repoId: 'repo-1', hostId: 'ssh:ssh-1' })
+    expect(pending).toHaveLength(0)
+  })
+
+  it('inspects the requested host when duplicate repo ids exist', async () => {
+    const { state } = createTestState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' },
+      trustedOrcaHooks: { 'repo-1': { all: { approvedAt: 1 } } },
+      repos: [
+        { id: 'repo-1', displayName: 'Runtime', executionHostId: 'runtime:env-1' },
+        { id: 'repo-1', displayName: 'SSH', connectionId: 'ssh-1' }
+      ]
+    } as unknown as Partial<AppState>)
+    hooksCheckMock.mockResolvedValue({
+      hasHooks: true,
+      hooks: { scripts: {} },
+      mayNeedUpdate: false
+    })
+
+    const decision = await ensureHooksConfirmed(state, 'repo-1', 'archive', 'ssh:ssh-1')
+
+    expect(decision).toBe('run')
+    expect(hooksCheckMock).toHaveBeenCalledWith({ repoId: 'repo-1', hostId: 'ssh:ssh-1' })
+    expect(runtimeEnvironmentCallMock).not.toHaveBeenCalled()
+  })
+
+  it('refuses to pick a host when the repo id is on two hosts and none is given', async () => {
+    const { state, pending } = createTestState()
+    Object.assign(state, {
+      repos: [
+        { id: 'repo-1', displayName: 'Runtime', executionHostId: 'runtime:env-1' },
+        { id: 'repo-1', displayName: 'Local', executionHostId: 'local' }
+      ]
+    })
+
+    const decision = await ensureHooksConfirmed(state, 'repo-1', 'setup')
+
+    expect(decision).toBe('skip')
+    expect(hooksCheckMock).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCallMock).not.toHaveBeenCalled()
     expect(pending).toHaveLength(0)
   })
 
@@ -231,7 +307,10 @@ describe('ensureHooksConfirmed', () => {
       repos: [
         {
           id: 'repo-1',
+          path: '/repo-1',
           displayName: 'Repo One',
+          badgeColor: 'blue',
+          addedAt: 1,
           hookSettings: {
             mode: 'auto',
             commandSourcePolicy: 'local-only',
@@ -258,7 +337,10 @@ describe('ensureHooksConfirmed', () => {
       repos: [
         {
           id: 'repo-1',
+          path: '/repo-1',
           displayName: 'Repo One',
+          badgeColor: 'blue',
+          addedAt: 1,
           hookSettings: {
             mode: 'auto',
             scripts: { setup: 'echo local', archive: '' }
@@ -309,6 +391,124 @@ describe('ensureHooksConfirmed', () => {
     const decision = await ensureHooksConfirmed(state, 'repo-1', 'issueCommand')
 
     expect(decision).toBe('run')
+    expect(pending).toHaveLength(0)
+  })
+
+  it('forwards the explicit host to issueCommand inspection when repo ids collide', async () => {
+    const { state } = createTestState({
+      repos: [
+        { id: 'repo-1', displayName: 'Local Row' },
+        { id: 'repo-1', displayName: 'SSH Row', connectionId: 'server' }
+      ]
+    } as unknown as Partial<AppState>)
+    readIssueCommandMock.mockResolvedValue({
+      source: 'local',
+      sharedContent: null,
+      localContent: 'user content',
+      effectiveContent: 'user content',
+      localFilePath: ''
+    })
+
+    await ensureHooksConfirmed(state, 'repo-1', 'issueCommand', 'ssh:server')
+
+    // A launch is a user act, so its read may start a stopped WSL distro (E9).
+    expect(readIssueCommandMock).toHaveBeenCalledWith({
+      repoId: 'repo-1',
+      hostId: 'ssh:server',
+      wakeWslDistro: true
+    })
+  })
+
+  it('approves and returns the exact issue-command bytes from one host-qualified read', async () => {
+    const { state, pending } = createTestState({
+      repos: [
+        { id: 'repo-1', displayName: 'Local Row' },
+        { id: 'repo-1', displayName: 'SSH Row', connectionId: 'server' }
+      ]
+    } as unknown as Partial<AppState>)
+    readIssueCommandMock
+      .mockResolvedValueOnce({
+        status: 'ok',
+        source: 'shared',
+        sharedContent: 'approved bytes',
+        localContent: null,
+        effectiveContent: 'approved bytes',
+        localFilePath: ''
+      })
+      .mockResolvedValueOnce({
+        status: 'ok',
+        source: 'shared',
+        sharedContent: 'changed bytes',
+        localContent: null,
+        effectiveContent: 'changed bytes',
+        localFilePath: ''
+      })
+
+    const promise = readAndConfirmRuntimeIssueCommand(state, 'repo-1', 'ssh:server')
+
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    expect(pending[0].data.scriptContent).toBe('approved bytes')
+    pending[0].resolve('run')
+
+    await expect(promise).resolves.toMatchObject({
+      template: 'approved bytes',
+      trustDecision: 'run'
+    })
+    expect(readIssueCommandMock).toHaveBeenCalledTimes(1)
+    expect(readIssueCommandMock).toHaveBeenCalledWith({
+      repoId: 'repo-1',
+      hostId: 'ssh:server',
+      wakeWslDistro: true
+    })
+  })
+
+  it('does not reuse repo-wide trust across duplicate execution hosts', async () => {
+    const { state, pending } = createTestState({
+      trustedOrcaHooks: { 'repo-1': { all: { approvedAt: 1 } } },
+      repos: [
+        { id: 'repo-1', displayName: 'Runtime', executionHostId: 'runtime:env-1' },
+        { id: 'repo-1', displayName: 'SSH', connectionId: 'server' }
+      ]
+    } as unknown as Partial<AppState>)
+    readIssueCommandMock.mockResolvedValue({
+      status: 'ok',
+      source: 'shared',
+      sharedContent: 'host-specific bytes',
+      localContent: null,
+      effectiveContent: 'host-specific bytes',
+      localFilePath: ''
+    })
+
+    const promise = readAndConfirmRuntimeIssueCommand(state, 'repo-1', 'ssh:server')
+
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    pending[0].resolve('skip')
+    await expect(promise).resolves.toMatchObject({ trustDecision: 'skip' })
+  })
+
+  it('does not open a trust prompt after its composer is cancelled mid-read', async () => {
+    const { state, pending } = createTestState()
+    let cancelled = false
+    let resolveRead: (result: Record<string, unknown>) => void = () => undefined
+    readIssueCommandMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveRead = resolve
+        })
+    )
+
+    const promise = readAndConfirmRuntimeIssueCommand(state, 'repo-1', 'local', () => cancelled)
+    cancelled = true
+    resolveRead({
+      status: 'ok',
+      source: 'shared',
+      sharedContent: 'late bytes',
+      localContent: null,
+      effectiveContent: 'late bytes',
+      localFilePath: ''
+    })
+
+    await expect(promise).resolves.toMatchObject({ trustDecision: 'skip' })
     expect(pending).toHaveLength(0)
   })
 
@@ -375,6 +575,36 @@ describe('ensureHooksConfirmed', () => {
 
     pending[1].resolve('run')
     await expect(second).resolves.toBe('run')
+  })
+
+  it('lets a queued prompt for the same script see the approval recorded by the one before it', async () => {
+    const created = createTestState()
+    const { pending } = created
+    let state = created.state
+    hooksCheckMock.mockResolvedValue({
+      hasHooks: true,
+      hooks: { scripts: { archive: 'echo bye' } },
+      mayNeedUpdate: false
+    })
+
+    const first = ensureHooksConfirmed(() => state, 'repo-1', 'archive')
+    const second = ensureHooksConfirmed(() => state, 'repo-1', 'archive')
+
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    // The store replaces its state when the dialog records trust, as zustand does.
+    state = {
+      ...state,
+      trustedOrcaHooks: {
+        'repo-1': {
+          archive: { contentHash: await hashOrcaHookScript('echo bye'), approvedAt: 1 }
+        }
+      }
+    }
+    pending[0].resolve('run')
+
+    await expect(first).resolves.toBe('run')
+    await expect(second).resolves.toBe('run')
+    expect(pending).toHaveLength(1)
   })
 
   it('fails closed when window.api.hooks.check throws', async () => {

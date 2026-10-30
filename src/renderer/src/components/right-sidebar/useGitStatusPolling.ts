@@ -1,22 +1,53 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { useAllWorktrees, useRepoById, useRepoMap, useWorktreeById } from '@/store/selectors'
-import type { GitConflictOperation } from '../../../../shared/types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
-import { getConnectionId } from '@/lib/connection-context'
-import { getRuntimeGitConflictOperation } from '@/runtime/runtime-git-client'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { refreshGitStatusForWorktree } from './git-status-refresh'
-import { createCoalescedPollRunner } from './coalesced-poll-runner'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
-import { shouldPollActiveGitStatus } from '@/lib/passive-macos-app-data-access'
-import { getRightSidebarWorktreeRuntimeSettings } from './file-explorer-runtime-owner'
+import { isWindowVisible } from '@/lib/window-visibility-interval'
+import { takeRecentWorkspaceSwitchWake } from '@/lib/workspace-switch-user-act'
+import {
+  hasInteractiveActiveGitStatusConsumer,
+  shouldPollActiveGitStatus
+} from '@/lib/passive-macos-app-data-access'
+import { resolveWorktreeGitCopyNow } from '@/lib/worktree-git-copy'
+import { useGitStatusFileWatchRefresh } from './git-status-file-watch-refresh'
+import { useGitStatusPushSignalRefresh } from './git-status-push-signal-refresh'
+import { useStaleConflictOperationPolling } from './stale-conflict-operation-poll'
+import { useGitStatusUpstreamRefWatch } from './use-git-status-upstream-ref-watch'
+import {
+  createGitStatusRefreshPacing,
+  createGitStatusRefreshScheduler,
+  type GitStatusRefreshPacing,
+  type GitStatusRefreshReason,
+  type GitStatusRefreshScheduler
+} from './git-status-refresh-scheduler'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
-const POLL_INTERVAL_MS = 3000
+const STATUS_SAFETY_INTERVAL_MS = 60_000
+const STATUS_ACTIVITY_DEBOUNCE_MS = 125
+// Retain the pre-scheduler floor so sustained change signals cannot run Git back-to-back (#7983).
+const STATUS_ACTIVITY_MIN_GAP_MS = 3000
+// Duration-aware spacing keeps slow scans/probes from running nonstop beyond their timer cadence.
+export const SLOW_GIT_POLL_BACKOFF = {
+  idleMultiplier: 1,
+  changeSignalMultiplier: 1,
+  maxIntervalMs: 5 * 60_000
+}
+
+export function admissionTierForGitStatusRefreshReason(
+  reason: GitStatusRefreshReason
+): 'status' | 'background' {
+  return reason === 'safety' ? 'background' : 'status'
+}
 
 export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
   const enabled = options.enabled ?? true
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeWorktree = useWorktreeById(activeWorktreeId)
+  const activeExecutionHostId = useAppStore((s) =>
+    getExecutionHostIdForWorktree(s, activeWorktreeId)
+  )
   const allWorktrees = useAllWorktrees()
   const updateWorktreeGitIdentity = useAppStore((s) => s.updateWorktreeGitIdentity)
   const setGitStatus = useAppStore((s) => s.setGitStatus)
@@ -31,9 +62,6 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
   const rightSidebarExplorerView = useAppStore((s) => s.rightSidebarExplorerView)
   const openFiles = useAppStore((s) => s.openFiles)
   const repoMap = useRepoMap()
-  const statusPollInFlightRef = useRef(false)
-  const statusPollRerunRef = useRef(false)
-  const fetchStatusRef = useRef<() => void>(() => {})
 
   const worktreePath = activeWorktree?.path ?? null
   const activePushTarget = activeWorktree?.pushTarget
@@ -46,171 +74,250 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
       !connectionId || sshConnectionStates.get(connectionId)?.status === 'connected',
     [sshConnectionStates]
   )
+  const activeGitStatusPollingArgs = {
+    activeWorktreeId,
+    worktreePath,
+    rightSidebarOpen,
+    rightSidebarTab,
+    rightSidebarExplorerView,
+    openFiles
+  }
+  const isActiveConnectionReady = isConnectionReady(activeConnectionId)
+  const canFetchActiveWorktreeGitStatus =
+    enabled &&
+    !!activeWorktreeId &&
+    !!worktreePath &&
+    activeRepoSupportsGit &&
+    shouldPollActiveGitStatus(activeGitStatusPollingArgs) &&
+    isActiveConnectionReady
+  // Pause only evidence-free polling: gating signal refreshes too would prevent a fresh result from clearing huge status.
+  const shouldPollActiveWorktreeGitStatus =
+    canFetchActiveWorktreeGitStatus &&
+    !!activeWorktreeId &&
+    !gitStatusHugeByWorktree?.[activeWorktreeId]
+  const activeStatusPollScope = shouldPollActiveWorktreeGitStatus
+    ? `${activeExecutionHostId}\0${activeWorktreeId}\0${worktreePath}`
+    : null
+  // Opening any status consumer must refresh promptly, preserving the previous interactive-poll behavior.
+  const interactiveConsumerVisible = hasInteractiveActiveGitStatusConsumer(
+    activeGitStatusPollingArgs
+  )
 
-  // Why: build a list of non-active worktrees that still have a known conflict
-  // operation (merge/rebase/cherry-pick). These need lightweight polling so
-  // their sidebar badges clear when the operation finishes — the full git status
-  // poll only covers the active worktree.
-  const staleConflictWorktrees = useMemo(() => {
-    const result: { id: string; path: string }[] = []
-    for (const [worktreeId, op] of Object.entries(conflictOperationByWorktree)) {
-      if (worktreeId === activeWorktreeId || op === 'unknown') {
-        continue
+  const publishUpstreamRefWatch = useGitStatusUpstreamRefWatch({
+    enabled: canFetchActiveWorktreeGitStatus,
+    executionHostId: activeExecutionHostId,
+    worktreeId: activeWorktreeId,
+    worktreePath
+  })
+
+  const runFetchStatus = useCallback(
+    async (request: {
+      reason: GitStatusRefreshReason
+      signal: AbortSignal
+      shouldApply: () => boolean
+    }) => {
+      // Recheck eligibility after timer dispatch so changed liveness cannot launch stale work.
+      if (
+        request.signal.aborted ||
+        !isWindowVisible() ||
+        !canFetchActiveWorktreeGitStatus ||
+        !activeWorktreeId ||
+        !worktreePath
+      ) {
+        return
       }
-      const worktree = allWorktrees.find((entry) => entry.id === worktreeId)
-      if (worktree) {
-        const repo = repoMap.get(worktree.repoId)
-        if (repo && !isGitRepoKind(repo)) {
-          continue
+      try {
+        // Why one resolution: a same-path twin must not get this copy's transport, SSH target or answer.
+        const copy = resolveWorktreeGitCopyNow(activeWorktreeId)
+        if (!copy) {
+          return
         }
-        result.push({ id: worktree.id, path: worktree.path })
+        // Only the first status after the user's own switch here may start WSL (E9); polls, remounts
+        // and restores stay gated.
+        const wakeWslDistro = takeRecentWorkspaceSwitchWake(activeWorktreeId, 'git-status')
+        await refreshGitStatusForWorktree({
+          target: copy.transport,
+          ownerHostId: copy.hostId,
+          worktreeId: activeWorktreeId,
+          worktreePath,
+          connectionId: copy.connectionId,
+          pushTarget: activePushTarget,
+          deps: { setGitStatus, updateWorktreeGitIdentity, setUpstreamStatus, fetchUpstreamStatus },
+          request: {
+            admissionTier: admissionTierForGitStatusRefreshReason(request.reason),
+            ...(request.reason === 'safety' ? { reuseLineStats: true } : {}),
+            signal: request.signal,
+            shouldApply: request.shouldApply,
+            onStatusAccepted: publishUpstreamRefWatch,
+            ...(wakeWslDistro ? { wakeWslDistro: true } : {})
+          }
+        })
+      } catch {}
+    },
+    [
+      activePushTarget,
+      activeWorktreeId,
+      fetchUpstreamStatus,
+      canFetchActiveWorktreeGitStatus,
+      publishUpstreamRefWatch,
+      worktreePath,
+      setGitStatus,
+      setUpstreamStatus,
+      updateWorktreeGitIdentity
+    ]
+  )
+
+  // Preserve scheduler lifetime across harmless rerenders so in-flight/trailing/pacing state remains authoritative.
+  const runFetchStatusRef = useRef(runFetchStatus)
+  runFetchStatusRef.current = runFetchStatus
+  const canApplyScheduledStatusRef = useRef(canFetchActiveWorktreeGitStatus)
+  canApplyScheduledStatusRef.current = canFetchActiveWorktreeGitStatus
+  const statusRefreshGenerationRef = useRef(0)
+
+  const statusSchedulerRef = useRef<GitStatusRefreshScheduler | null>(null)
+  // Persist pacing per worktree across host/target scheduler rebuilds so flapping cannot bypass the minimum gap.
+  const statusPacingRef = useRef<{
+    key: string
+    pacing: GitStatusRefreshPacing
+  } | null>(null)
+  useEffect(() => {
+    const generation = ++statusRefreshGenerationRef.current
+    const pacingKey = `${activeWorktreeId}\0${worktreePath}`
+    let pacing =
+      statusPacingRef.current?.key === pacingKey ? statusPacingRef.current.pacing : undefined
+    if (!pacing) {
+      pacing = createGitStatusRefreshPacing()
+      statusPacingRef.current = { key: pacingKey, pacing }
+    }
+    const scheduler = createGitStatusRefreshScheduler(
+      ({ reason, signal }) =>
+        runFetchStatusRef.current({
+          reason,
+          signal,
+          shouldApply: () =>
+            statusRefreshGenerationRef.current === generation &&
+            canApplyScheduledStatusRef.current &&
+            !signal.aborted &&
+            isWindowVisible()
+        }),
+      {
+        safetyIntervalMs: STATUS_SAFETY_INTERVAL_MS,
+        activityDebounceMs: STATUS_ACTIVITY_DEBOUNCE_MS,
+        activityMinGapMs: STATUS_ACTIVITY_MIN_GAP_MS,
+        slowTaskBackoff: SLOW_GIT_POLL_BACKOFF,
+        pacing
+      }
+    )
+    statusSchedulerRef.current = scheduler
+    return () => {
+      statusRefreshGenerationRef.current += 1
+      scheduler.dispose()
+      if (statusSchedulerRef.current === scheduler) {
+        statusSchedulerRef.current = null
       }
     }
-    return result
-  }, [allWorktrees, conflictOperationByWorktree, activeWorktreeId, repoMap])
+    // Target changes must invalidate in-flight results captured against an old remote/branch.
+  }, [activeExecutionHostId, activePushTarget, activeWorktreeId, worktreePath])
 
-  const runFetchStatus = useCallback(async () => {
-    if (!enabled) {
+  useEffect(() => {
+    const reconcile = (catchUp: boolean): void => {
+      const scheduler = statusSchedulerRef.current
+      if (!scheduler) {
+        return
+      }
+      if (!canFetchActiveWorktreeGitStatus || !isWindowVisible()) {
+        scheduler.pause()
+        return
+      }
+      if (activeStatusPollScope) {
+        scheduler.resumeSafety()
+        return
+      }
+      scheduler.suspendSafety()
+      if (catchUp) {
+        scheduler.refreshNow()
+      }
+    }
+    reconcile(false)
+    if (typeof document === 'undefined' || typeof document.addEventListener !== 'function') {
       return
     }
-    if (!activeWorktreeId || !worktreePath) {
-      return
+    const handleVisibilityChange = (): void => reconcile(isWindowVisible())
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
+  }, [activeStatusPollScope, canFetchActiveWorktreeGitStatus])
+
+  const previousConsumerVisibilityRef = useRef({
+    worktreeId: activeWorktreeId,
+    visible: interactiveConsumerVisible,
+    canFetch: canFetchActiveWorktreeGitStatus
+  })
+  useEffect(() => {
+    const previous = previousConsumerVisibilityRef.current
     if (
-      !shouldPollActiveGitStatus({
-        activeWorktreeId,
-        worktreePath,
-        rightSidebarOpen,
-        rightSidebarTab,
-        rightSidebarExplorerView,
-        openFiles
-      }) ||
-      !activeRepoSupportsGit
+      interactiveConsumerVisible &&
+      previous.worktreeId === activeWorktreeId &&
+      !previous.visible &&
+      previous.canFetch &&
+      canFetchActiveWorktreeGitStatus &&
+      isWindowVisible()
     ) {
-      return
+      statusSchedulerRef.current?.refreshNow()
     }
-    if (!isConnectionReady(activeConnectionId)) {
-      return
+    previousConsumerVisibilityRef.current = {
+      worktreeId: activeWorktreeId,
+      visible: interactiveConsumerVisible,
+      canFetch: canFetchActiveWorktreeGitStatus
     }
-    // Why: once a repo's status was truncated at the entry limit, re-running git
-    // status every 3s just re-does expensive work and re-truncates. Pause the
-    // automatic poll while huge (a manual refresh still goes through its own
-    // path); resolving the changes (e.g. .gitignoring the huge folder) clears
-    // the flag and polling resumes. Mirrors a "huge repo" disabling auto status.
-    if (gitStatusHugeByWorktree?.[activeWorktreeId]) {
-      return
-    }
-    try {
-      const connectionId = getConnectionId(activeWorktreeId) ?? undefined
-      await refreshGitStatusForWorktree({
-        settings: getRightSidebarWorktreeRuntimeSettings(activeWorktreeId),
-        worktreeId: activeWorktreeId,
-        worktreePath,
-        connectionId,
-        pushTarget: activePushTarget,
-        deps: {
-          setGitStatus,
-          updateWorktreeGitIdentity,
-          setUpstreamStatus,
-          fetchUpstreamStatus
-        }
-      })
-    } catch {
-      // ignore
-    }
-  }, [
-    activeRepoSupportsGit,
+  }, [activeWorktreeId, canFetchActiveWorktreeGitStatus, interactiveConsumerVisible])
+
+  // Coalesce file/terminal/metadata evidence so one Git operation cannot fan out status subprocesses.
+  const fetchStatusOnChangeSignal = useCallback(() => {
+    statusSchedulerRef.current?.signal()
+  }, [])
+
+  const getRepoWorktreePathsForSignal = useCallback(
+    (repoId: string) =>
+      (selectWorktreesByRepo(useAppStore.getState())[repoId] ?? []).map(
+        (worktree) => worktree.path
+      ),
+    []
+  )
+
+  useGitStatusFileWatchRefresh({
     activeConnectionId,
-    activePushTarget,
+    activeRepoSupportsGit,
     activeWorktreeId,
     enabled,
-    fetchUpstreamStatus,
+    fetchStatus: fetchStatusOnChangeSignal,
     gitStatusHugeByWorktree,
     isConnectionReady,
     openFiles,
     rightSidebarExplorerView,
     rightSidebarOpen,
     rightSidebarTab,
-    worktreePath,
-    setGitStatus,
-    setUpstreamStatus,
-    updateWorktreeGitIdentity
-  ])
+    worktreePath
+  })
 
-  const fetchStatus = useCallback(() => {
-    if (statusPollInFlightRef.current) {
-      statusPollRerunRef.current = true
-      return
-    }
-    statusPollInFlightRef.current = true
-    // Why: git status can exceed the 3s poll interval on large repos. Keep at
-    // most one subprocess chain in flight, then run one trailing refresh if a
-    // tick was skipped so the UI catches up without process pileups.
-    void runFetchStatus().finally(() => {
-      statusPollInFlightRef.current = false
-      if (statusPollRerunRef.current) {
-        statusPollRerunRef.current = false
-        fetchStatusRef.current()
-      }
-    })
-  }, [runFetchStatus])
-  fetchStatusRef.current = fetchStatus
+  useGitStatusPushSignalRefresh({
+    activeRepoId,
+    activeWorktreeId,
+    activeWorktreePath: worktreePath,
+    enabled: canFetchActiveWorktreeGitStatus,
+    fetchStatus: fetchStatusOnChangeSignal,
+    getRepoWorktreePaths: getRepoWorktreePathsForSignal
+  })
 
-  useEffect(() => {
-    if (!enabled) {
-      return
-    }
-    // Why: this root-level poll should pause while hidden, but visible
-    // unfocused windows still need fresh status for second-display workflows.
-    return installWindowVisibilityInterval({ run: fetchStatus, intervalMs: POLL_INTERVAL_MS })
-  }, [enabled, fetchStatus])
-
-  // Why: poll conflict operation for non-active worktrees that have a stale
-  // non-unknown operation. This is a lightweight fs-only check (no git status)
-  // so it won't cause performance issues even with many worktrees.
-  useEffect(() => {
-    if (!enabled) {
-      return
-    }
-    if (staleConflictWorktrees.length === 0) {
-      return
-    }
-
-    const pollStale = async (): Promise<void> => {
-      for (const { id, path } of staleConflictWorktrees) {
-        try {
-          const connectionId = getConnectionId(id) ?? undefined
-          // Why: after explicit SSH disconnect the provider is intentionally
-          // gone; keep remote polling quiet until the target reconnects.
-          if (!isConnectionReady(connectionId)) {
-            continue
-          }
-          const op = (await getRuntimeGitConflictOperation({
-            settings: getRightSidebarWorktreeRuntimeSettings(id),
-            worktreeId: id,
-            worktreePath: path,
-            connectionId
-          })) as GitConflictOperation
-          setConflictOperation(id, op)
-        } catch {
-          // ignore — worktree may have been removed
-        }
-      }
-    }
-
-    // Why: remote conflict probes can exceed the 3s interval. Keep one poll in
-    // flight and coalesce skipped ticks into one trailing pass so stale badges
-    // catch up without stacking SSH/RPC work.
-    const pollRunner = createCoalescedPollRunner(pollStale)
-    // Why: conflict badges are visible sidebar state; keep them fresh in
-    // visible unfocused windows, but do not poll disconnected hidden windows.
-    const stopVisiblePoll = installWindowVisibilityInterval({
-      run: () => pollRunner.run(),
-      intervalMs: POLL_INTERVAL_MS
-    })
-    return () => {
-      pollRunner.dispose()
-      stopVisiblePoll()
-    }
-  }, [enabled, staleConflictWorktrees, setConflictOperation, isConnectionReady])
+  useStaleConflictOperationPolling({
+    enabled,
+    activeWorktreeId,
+    allWorktrees,
+    repoMap,
+    conflictOperationByWorktree,
+    setConflictOperation,
+    isConnectionReady,
+    slowTaskBackoff: SLOW_GIT_POLL_BACKOFF
+  })
 }

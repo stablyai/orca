@@ -1,5 +1,6 @@
 import React from 'react'
 import { Kanban } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { ScrollToCurrentWorkspaceToolbarButton } from './ScrollToCurrentWorkspaceToolbarButton'
@@ -22,6 +23,8 @@ const SidebarToolbar = React.memo(function SidebarToolbar({
   workspaceBoardDragPreviewOpen = false,
   onWorkspaceBoardToggle
 }: SidebarToolbarProps) {
+  // Subscribe across this memo boundary so asynchronously applied locale changes relabel the toolbar and its children.
+  useTranslation()
   const [workspaceBoardMovedHintOpen, setWorkspaceBoardMovedHintOpen] = React.useState(false)
   const movedHintEligibleRef = React.useRef<boolean | null>(null)
   const persistedUIReady = useAppStore((state) => state.persistedUIReady)
@@ -33,8 +36,7 @@ const SidebarToolbar = React.memo(function SidebarToolbar({
     if (!persistedUIReady) {
       return
     }
-    // Why: only users who had already opened the old board location should
-    // see the relocation hint; first-time users should not become eligible.
+    // Limit relocation hints to users who opened the board at its old location.
     if (movedHintEligibleRef.current === null) {
       movedHintEligibleRef.current = hasUsedWorkspaceBoard
     }
@@ -65,14 +67,14 @@ const SidebarToolbar = React.memo(function SidebarToolbar({
   return (
     <div className="mt-auto shrink-0">
       <div className="flex items-center justify-between border-t border-worktree-sidebar-border px-2 py-1.5">
-        <SidebarSettingsHelpMenu />
+        <div className="flex min-w-0 items-center gap-1">
+          <SidebarSettingsHelpMenu />
+        </div>
         <div className="flex items-center gap-1">
           <ScrollToCurrentWorkspaceToolbarButton />
           <Tooltip open={workspaceBoardMovedHintOpen ? true : undefined}>
             <TooltipTrigger asChild>
               <Button
-                // Why: previewing the board from a card drag lights up the
-                // trigger so it's clear the drag is another way to open it.
                 variant={
                   workspaceBoardOpen || workspaceBoardDragPreviewOpen ? 'secondary' : 'ghost'
                 }

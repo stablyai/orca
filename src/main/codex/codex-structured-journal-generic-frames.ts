@@ -1,0 +1,308 @@
+import type { AgentJournalStatusItem } from '../../shared/agent-session-journal-types'
+import {
+  unhandledProviderFrameJournalItem,
+  type UnhandledProviderFrameJournalItem
+} from '../native-chat/agent-session-wire/unhandled-provider-frame'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type {
+  CodexJournalTranslationAdmission,
+  CodexJournalTranslatorDeps
+} from './codex-structured-journal-contracts'
+import { CODEX_JOURNAL_ADMITTED } from './codex-structured-journal-contracts'
+import {
+  MAX_CODEX_GENERIC_BOOKKEEPING_BYTES,
+  MAX_CODEX_GENERIC_BOOKKEEPING_ENTRIES,
+  MAX_CODEX_GENERIC_ROWS_PER_TURN,
+  MAX_CODEX_GENERIC_TURN_BUCKETS,
+  MAX_CODEX_WORDLESS_ROWS_PER_TURN
+} from './codex-structured-journal-limits'
+import { readCodexTurnId, readCodexErrorWillRetry } from './codex-structured-thread-facts'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
+import {
+  CODEX_PLAN_UPDATED_FRAME_KIND,
+  isWordlessProviderFrame
+} from '../../shared/native-chat/native-chat-provider-frame-summary'
+import type { CodexRowAttribution } from './codex-subagent-linkage'
+import { codexAuthenticationFailure } from './codex-authentication-failure'
+import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
+import { CodexUsageLimits } from './codex-usage-limits'
+
+const OVERFLOW_BUCKET = '__codex-generic-overflow__'
+type TurnRows = { drawn: number; wordless: number }
+/** Overflow summaries pool threads, so they have no single producer. */
+type SuppressedSummary = {
+  count: number
+  publishedCount: number
+  producer?: { threadId: string; turnId: string }
+}
+
+function boundedTurnBucket(threadId: string, turnId: string): string {
+  const encoded = `${encodeURIComponent(threadId)}:${encodeURIComponent(turnId)}`
+  if (Buffer.byteLength(encoded, 'utf8') <= 512) {
+    return encoded
+  }
+  let hash = 2166136261
+  for (const byte of Buffer.from(encoded, 'utf8')) {
+    hash ^= byte
+    hash = Math.imul(hash, 16777619)
+  }
+  return `${encoded.slice(0, 160)}:${(hash >>> 0).toString(16)}`
+}
+
+function defaultSchedule(run: () => void, ms: number): () => void {
+  const timer = setTimeout(run, ms)
+  timer.unref?.()
+  return () => clearTimeout(timer)
+}
+
+function publish(sink: StructuredAgentSessionEventSink): CodexJournalTranslationAdmission {
+  return sink.tryPublish ? sink.tryPublish() : (sink.publish(), CODEX_JOURNAL_ADMITTED)
+}
+
+export class CodexJournalGenericFrames {
+  private readonly genericRowsByTurn = new Map<string, TurnRows>()
+  private readonly suppressedRowsByTurn = new Map<string, SuppressedSummary>()
+  private readonly bucketOrder = new Map<string, number>()
+  private readonly schedule: NonNullable<CodexJournalTranslatorDeps['schedule']>
+  private readonly suppressionCoalesceMs: number
+  private nextBucketOrder = 0
+  private bookkeepingBytes = 0
+  private fallbackSequence = 0
+  private cancelSuppressionFlush: (() => void) | null = null
+  private readonly usageLimits = new CodexUsageLimits()
+
+  constructor(
+    private readonly deps: Pick<
+      CodexJournalTranslatorDeps,
+      'sink' | 'schedule' | 'coalesceMs' | 'acquisitionId' | 'account'
+    > & {
+      attributionFor: CodexRowAttribution
+    },
+    private readonly activeTurn: (threadId: string) => string | null
+  ) {
+    this.schedule = deps.schedule ?? defaultSchedule
+    this.suppressionCoalesceMs = deps.coalesceMs ?? 60
+  }
+
+  appendUnhandled(
+    kind: string,
+    payload: unknown,
+    threadId: string
+  ): CodexJournalTranslationAdmission {
+    if (this.usageLimits.observe(kind, payload)) {
+      return CODEX_JOURNAL_ADMITTED
+    }
+    const translated = unhandledProviderFrameJournalItem('codex', kind, payload)
+    // Declined frames count as success; rejection would force-close the provider.
+    const ended = kind === 'notification:error' && !readCodexErrorWillRetry(payload)
+    const usageLimit = ended ? this.usageLimits.failure(payload) : null
+    const failure =
+      usageLimit ?? (ended ? codexAuthenticationFailure(payload, this.deps.account?.()) : null)
+    return translated
+      ? this.appendFrameRow(threadId, payload, {
+          ...translated,
+          body: failure
+            ? {
+                ...translated.body,
+                ...(usageLimit ? { tone: 'warning' } : {}),
+                ...agentSessionFailureWords(failure, {
+                  provider: 'codex',
+                  agentName: 'Codex',
+                  surface: 'row'
+                })
+              }
+            : translated.body
+        })
+      : CODEX_JOURNAL_ADMITTED
+  }
+
+  appendFrameRow(
+    threadId: string,
+    payload: unknown,
+    translated: {
+      body: AgentJournalStatusItem
+      classification: UnhandledProviderFrameJournalItem['classification']
+      turnScope?: UnhandledProviderFrameJournalItem['turnScope']
+    }
+  ): CodexJournalTranslationAdmission {
+    const frameTurnId = readCodexTurnId(payload) ?? this.activeTurn(threadId)
+    const turnId = frameTurnId ?? 'outside-turn'
+    const bucket = this.bucketFor(threadId, turnId)
+    const rows = this.genericRowsByTurn.get(bucket) ?? { drawn: 0, wordless: 0 }
+    // Errors bypass the noise cap; suppressed visible frames are counted in a summary.
+    const isError = translated.classification === 'error-surface'
+    // The task list reads every plan update; capping one would freeze it mid-turn.
+    const isPlan = translated.body.providerFrame?.kind === CODEX_PLAN_UPDATED_FRAME_KIND
+    // Do not create visible summaries for rows no client draws.
+    const wordless = !isPlan && isWordlessProviderFrame(translated.body)
+    if (!isError && wordless && rows.wordless >= MAX_CODEX_WORDLESS_ROWS_PER_TURN) {
+      return CODEX_JOURNAL_ADMITTED
+    }
+    if (!isError && !isPlan && !wordless && rows.drawn >= MAX_CODEX_GENERIC_ROWS_PER_TURN) {
+      this.addSuppressed(bucket, 1, { threadId, turnId })
+      this.recordBucket(bucket)
+      this.scheduleSuppressedRows()
+      return CODEX_JOURNAL_ADMITTED
+    }
+    if (isError) {
+      const suppressionAdmission = this.flush()
+      if (!suppressionAdmission.accepted) {
+        return suppressionAdmission
+      }
+    }
+    this.fallbackSequence += 1
+    const identity = {
+      provider: 'orca' as const,
+      clientMessageId:
+        translated.body.failure?.kind === 'usageLimitReached' && frameTurnId
+          ? `terminal-failure:codex:${JSON.stringify([threadId, frameTurnId])}`
+          : `provider-frame:codex:${this.deps.acquisitionId ?? 'acquisition'}:${this.fallbackSequence}`
+    }
+    const attribution = this.deps.attributionFor(threadId, frameTurnId)
+    attribution.turnScope = translated.turnScope ?? attribution.turnScope
+    const admission = this.deps.sink.tryAppendItem
+      ? this.deps.sink.tryAppendItem(identity, translated.body, attribution)
+      : (this.deps.sink.appendItem(identity, translated.body, attribution), CODEX_JOURNAL_ADMITTED)
+    if (!admission.accepted) {
+      this.fallbackSequence -= 1
+      return admission
+    }
+    this.genericRowsByTurn.set(
+      bucket,
+      isPlan
+        ? rows
+        : wordless
+          ? { ...rows, wordless: rows.wordless + 1 }
+          : { ...rows, drawn: rows.drawn + 1 }
+    )
+    this.recordBucket(bucket)
+    return publish(this.deps.sink)
+  }
+
+  suppress(threadId: string, turnId: string, count = 1): void {
+    const bucket = this.bucketFor(threadId, turnId)
+    this.addSuppressed(bucket, count, { threadId, turnId })
+    this.recordBucket(bucket)
+  }
+
+  flush = (): CodexJournalTranslationAdmission => {
+    this.cancelSuppressionFlush?.()
+    this.cancelSuppressionFlush = null
+    let wrote = false
+    const ready: SuppressedSummary[] = []
+    let blocked: CodexJournalTranslationAdmission | null = null
+    for (const [bucket, summary] of this.suppressedRowsByTurn) {
+      if (summary.count === summary.publishedCount) {
+        continue
+      }
+      const text =
+        bucket === OVERFLOW_BUCKET
+          ? `${summary.count} more provider notification${summary.count === 1 ? '' : 's'} not shown across evicted turns`
+          : `${summary.count} more provider notification${summary.count === 1 ? '' : 's'} not shown for this turn`
+      const identity = {
+        provider: 'orca' as const,
+        clientMessageId: `provider-frame-suppressed:codex:${bucket}`
+      }
+      const options = {
+        ...(summary.producer
+          ? this.deps.attributionFor(summary.producer.threadId, summary.producer.turnId)
+          : { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
+      }
+      const admission = this.deps.sink.tryAppendItem
+        ? this.deps.sink.tryAppendItem(identity, { kind: 'status', text }, options)
+        : (this.deps.sink.appendItem(identity, { kind: 'status', text }, options),
+          CODEX_JOURNAL_ADMITTED)
+      if (!admission.accepted) {
+        blocked ??= admission
+        continue
+      }
+      ready.push(summary)
+      wrote = true
+    }
+    if (wrote) {
+      const admission = publish(this.deps.sink)
+      if (!admission.accepted) {
+        blocked ??= admission
+      } else {
+        for (const summary of ready) {
+          summary.publishedCount = summary.count
+        }
+      }
+    }
+    if (blocked) {
+      this.scheduleSuppressedRows()
+      return blocked
+    }
+    return CODEX_JOURNAL_ADMITTED
+  }
+
+  dispose(): void {
+    this.cancelSuppressionFlush?.()
+    this.genericRowsByTurn.clear()
+    this.suppressedRowsByTurn.clear()
+    this.bucketOrder.clear()
+    this.bookkeepingBytes = 0
+  }
+
+  private scheduleSuppressedRows(): void {
+    this.cancelSuppressionFlush ??= this.schedule(() => {
+      this.cancelSuppressionFlush = null
+      this.flush()
+    }, this.suppressionCoalesceMs)
+  }
+
+  private bucketFor(threadId: string, turnId: string): string {
+    const requested = boundedTurnBucket(threadId, turnId)
+    return Buffer.byteLength(requested, 'utf8') > MAX_CODEX_GENERIC_BOOKKEEPING_BYTES
+      ? OVERFLOW_BUCKET
+      : requested
+  }
+
+  private addSuppressed(
+    bucket: string,
+    count: number,
+    producer?: SuppressedSummary['producer']
+  ): void {
+    const summary = this.suppressedRowsByTurn.get(bucket) ?? {
+      count: 0,
+      publishedCount: 0,
+      ...(producer && bucket !== OVERFLOW_BUCKET ? { producer } : {})
+    }
+    summary.count += count
+    this.suppressedRowsByTurn.set(bucket, summary)
+  }
+
+  private recordBucket(bucket: string): void {
+    if (!this.bucketOrder.has(bucket)) {
+      this.bucketOrder.set(bucket, this.nextBucketOrder++)
+      this.bookkeepingBytes += Buffer.byteLength(bucket, 'utf8')
+    }
+    while (
+      (this.bucketOrder.size > MAX_CODEX_GENERIC_TURN_BUCKETS ||
+        this.genericRowsByTurn.size + this.suppressedRowsByTurn.size >
+          MAX_CODEX_GENERIC_BOOKKEEPING_ENTRIES ||
+        this.bookkeepingBytes > MAX_CODEX_GENERIC_BOOKKEEPING_BYTES) &&
+      this.bucketOrder.size > 1
+    ) {
+      const oldest = [...this.bucketOrder.entries()]
+        .filter(([id]) => id !== OVERFLOW_BUCKET && id !== bucket)
+        .sort((a, b) => a[1] - b[1])[0]?.[0]
+      if (!oldest) {
+        break
+      }
+      const suppressed = this.suppressedRowsByTurn.get(oldest)
+      this.removeBucket(oldest)
+      if (suppressed && suppressed.count > suppressed.publishedCount) {
+        this.recordBucket(OVERFLOW_BUCKET)
+        this.addSuppressed(OVERFLOW_BUCKET, suppressed.count - suppressed.publishedCount)
+      }
+    }
+  }
+
+  private removeBucket(bucket: string): void {
+    this.genericRowsByTurn.delete(bucket)
+    this.suppressedRowsByTurn.delete(bucket)
+    this.bookkeepingBytes = Math.max(0, this.bookkeepingBytes - Buffer.byteLength(bucket, 'utf8'))
+    this.bucketOrder.delete(bucket)
+  }
+}

@@ -1,10 +1,26 @@
-import { mkdtemp, mkdir, rm, writeFile } from 'fs/promises'
-import { mkdtempSync, rmSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { scanAiVaultSessions } from './session-scanner'
 import Database from '../sqlite/sync-database'
+
+// Source tests lack a worker bundle; inline fixtures here while production still fails closed without it.
+vi.mock('./session-scanner-opencode-sqlite-worker-spawn', async () => {
+  const [{ listOpenCodeSqliteSessions }, { parseOpenCodeSqliteSession }] = await Promise.all([
+    import('./session-scanner-opencode-sqlite-list'),
+    import('./session-scanner-opencode-sqlite')
+  ])
+  const { listOpenCode2SqliteSessions } = await import('./session-scanner-opencode2-sqlite-list')
+  return {
+    listOpenCode2SqliteSessionsViaWorker: listOpenCode2SqliteSessions,
+    listOpenCodeSqliteSessionsViaWorker: listOpenCodeSqliteSessions,
+    listZcodeSqliteSessionsViaWorker: (args: Parameters<typeof listOpenCodeSqliteSessions>[0]) =>
+      listOpenCodeSqliteSessions({ ...args, agent: 'zcode' }),
+    parseOpenCodeSqliteSessionViaWorker: parseOpenCodeSqliteSession
+  }
+})
 
 let tempRoots: string[] = []
 let tempDbDirs: string[] = []
@@ -23,6 +39,7 @@ function isolatedScanRoots(root: string) {
     claudeProjectsDir: join(root, 'claude-projects'),
     codexSessionsDir: join(root, 'codex-sessions'),
     geminiSessionsDir: join(root, 'gemini-sessions'),
+    antigravityBrainDir: join(root, 'antigravity-brain'),
     copilotSessionsDir: join(root, 'copilot-sessions'),
     cursorProjectsDir: join(root, 'cursor-projects'),
     opencodeStorageDir: join(root, 'opencode-storage'),
@@ -36,7 +53,13 @@ function isolatedScanRoots(root: string) {
     piSessionsDir: join(root, 'pi-sessions'),
     droidSessionsDir: join(root, 'droid-sessions'),
     droidProjectsDir: join(root, 'droid-projects'),
-    kimiSessionsDir: join(root, 'kimi-sessions')
+    kimiSessionsDir: join(root, 'kimi-sessions'),
+    museSessionsDir: join(root, 'muse-sessions'),
+    zcodeDbPath: join(root, 'zcode-db.sqlite'),
+    ompSessionsDir: join(root, 'omp-sessions'),
+    jcodeSessionsDir: join(root, 'jcode-sessions'),
+    kiroSessionsDir: join(root, 'kiro-sessions'),
+    primeAgentSessionsDir: join(root, 'prime-agent-sessions')
   }
 }
 
@@ -132,7 +155,6 @@ describe('scanAiVaultSessions — OpenCode SQLite + legacy file coexistence', ()
     tempRoots.push(root)
     const roots = isolatedScanRoots(root)
 
-    // Legacy file session under storage/session/<projectId>/<sessionId>.json
     await mkdir(join(roots.opencodeStorageDir, 'session', 'project'), { recursive: true })
     await mkdir(join(roots.opencodeStorageDir, 'message', 'legacy-session'), { recursive: true })
     await writeFile(
@@ -154,7 +176,7 @@ describe('scanAiVaultSessions — OpenCode SQLite + legacy file coexistence', ()
       })
     )
 
-    // SQLite session — same sessionId as the legacy file (dedup should keep SQLite)
+    // Match the legacy ID so SQLite must replace the stale file candidate.
     const { db, path: dbPath } = createTempOpenCodeDb()
     applyOpenCodeSchema(db)
     db.prepare(
@@ -175,7 +197,6 @@ describe('scanAiVaultSessions — OpenCode SQLite + legacy file coexistence', ()
     ).run(JSON.stringify({ type: 'text', text: 'sqlite hello' }))
     db.close()
 
-    // A second SQLite-only session
     const { db: db2, path: dbPath2 } = createTempOpenCodeDb()
     applyOpenCodeSchema(db2)
     db2
@@ -201,7 +222,6 @@ describe('scanAiVaultSessions — OpenCode SQLite + legacy file coexistence', ()
     const sessionIds = opencodeSessions.map((s) => s.sessionId).sort()
     expect(sessionIds).toEqual(['legacy-session', 'sqlite-only'])
 
-    // Why: dedup keeps the SQLite entry (newer time_updated, source of truth)
     const legacyEntry = opencodeSessions.find((s) => s.sessionId === 'legacy-session')
     expect(legacyEntry).toBeDefined()
     expect(legacyEntry!.title).toBe('SQLite session')

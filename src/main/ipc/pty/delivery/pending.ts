@@ -1,0 +1,163 @@
+import { extractHiddenStartupRendererQueryData } from '../../../../shared/terminal-reply-query-extraction'
+import {
+  INITIAL_MODE_2031_REPLY_SCAN_STATE,
+  scanMode2031ReplyDecision,
+  type Mode2031ReplyScanState
+} from '../../../../shared/terminal-color-scheme-protocol'
+import {
+  INITIAL_SYNCHRONIZED_OUTPUT_LATCH_STATE,
+  advanceDroppedSynchronizedOutputLatch
+} from '../../../../shared/terminal-synchronized-output-scan'
+import { redactPtyIdForDiagnostics } from '../../../../shared/pty-delivery-diagnostics'
+import { recordCrashBreadcrumb } from '../../../crash-reporting/crash-breadcrumb-store'
+import { terminalOutputBacklogCapChars } from '../../../../shared/terminal-scrollback-policy'
+import { isHiddenPtyDeliveryGateEnabled } from './pty-hidden-delivery-gate'
+import type { PendingPtyData } from './pty-pending-data-drain-contract'
+import { DROPPED_QUERY_SALVAGE_MAX_CHARS } from './constants'
+import type { PtyIpcSession } from '../session'
+
+export function pendingDataCapChars(session: PtyIpcSession): number {
+  return terminalOutputBacklogCapChars(session.getSettings?.().terminalScrollbackRows)
+}
+
+export function extractDroppedPtyQueryBytes(data: string): string {
+  if (!data.includes('\x1b')) {
+    return ''
+  }
+  const extracted = extractHiddenStartupRendererQueryData(data, '')
+  return extracted.statelessQueryData + extracted.statefulQueryData + extracted.oscColorQueryData
+}
+
+export function scanDroppedMode2031Data(
+  data: string,
+  previous: Mode2031ReplyScanState
+): { data: string; state: Mode2031ReplyScanState } {
+  const result = scanMode2031ReplyDecision(previous, data)
+  const decisionData =
+    result.decision === 'subscribed'
+      ? '\x1b[?2031h'
+      : result.decision === 'unsubscribed'
+        ? '\x1b[?2031l'
+        : ''
+  return { data: decisionData, state: result.state }
+}
+
+export function getDroppedMode2031RendererData(pending: PendingPtyData): string {
+  const state = pending.droppedMode2031ScanState
+  if (!state) {
+    return pending.droppedMode2031Data ?? ''
+  }
+  const pendingSubscribe = state.pendingSubscribe ? '\x1b[?2031h' : ''
+  return (pending.droppedMode2031Data ?? '') + pendingSubscribe + state.tail
+}
+
+/** Release DEC 2026 left open by dropped bytes so xterm need not wait for its forced-flush timeout. */
+export function getDroppedSynchronizedOutputRendererData(pending: PendingPtyData): string {
+  return pending.droppedSynchronizedOutputState?.active === true ? '\x1b[?2026l' : ''
+}
+
+export function dropOversizedPendingPtyData(
+  session: PtyIpcSession,
+  id: string,
+  pending: PendingPtyData
+): PendingPtyData {
+  const capChars = pendingDataCapChars(session)
+  if (pending.droppedOutput === true || pending.data.length <= capChars) {
+    return pending
+  }
+  if (!session.pendingDataDropWarnedPtys.has(id)) {
+    session.pendingDataDropWarnedPtys.add(id)
+    console.error(
+      `[pty] dropped ${pending.data.length} buffered chars for ${redactPtyIdForDiagnostics(id)}: renderer not receiving and per-PTY pending cap exceeded; pane will restore from the main-owned snapshot`
+    )
+    // Report cap pressure without session IDs, which can contain workspace paths (#2836, #7017).
+    recordCrashBreadcrumb('terminal_pending_output_dropped', {
+      droppedChars: pending.data.length,
+      capChars
+    })
+  }
+  if (
+    isHiddenPtyDeliveryGateEnabled(session.getSettings?.()) &&
+    !session.pendingOverflowMarkedPtys.has(id)
+  ) {
+    session.pendingOverflowMarkedPtys.add(id)
+  }
+  session.pendingDroppedChars += pending.data.length
+  const mode2031 = scanDroppedMode2031Data(pending.data, INITIAL_MODE_2031_REPLY_SCAN_STATE)
+  const synchronizedOutput = advanceDroppedSynchronizedOutputLatch(
+    pending.data,
+    INITIAL_SYNCHRONIZED_OUTPUT_LATCH_STATE
+  )
+  // A trimmed tail would retain a corrupting gap; restore from snapshot and salvage only bounded query bytes.
+  return {
+    data: extractDroppedPtyQueryBytes(pending.data).slice(0, DROPPED_QUERY_SALVAGE_MAX_CHARS),
+    droppedOutput: true,
+    droppedMode2031Data: mode2031.data,
+    droppedMode2031ScanState: mode2031.state,
+    droppedSynchronizedOutputState: synchronizedOutput.state
+  }
+}
+
+export function appendPendingPtyData(
+  session: PtyIpcSession,
+  id: string,
+  existing: PendingPtyData | undefined,
+  data: string,
+  startSeq: number | undefined,
+  preservesSeq: boolean,
+  containsBackgroundOutput: boolean,
+  rawLength = data.length,
+  transformed = false,
+  gapEscapeState?: string
+): PendingPtyData {
+  // Once dropped, keep bounded query/mode state while the restore sentinel supersedes ordinary output.
+  if (existing?.droppedOutput === true) {
+    const mode2031 = scanDroppedMode2031Data(
+      data,
+      existing.droppedMode2031ScanState ?? INITIAL_MODE_2031_REPLY_SCAN_STATE
+    )
+    const synchronizedOutput = advanceDroppedSynchronizedOutputLatch(
+      data,
+      existing.droppedSynchronizedOutputState ?? INITIAL_SYNCHRONIZED_OUTPUT_LATCH_STATE
+    )
+    const remainingQueryCapacity = Math.max(
+      0,
+      DROPPED_QUERY_SALVAGE_MAX_CHARS - existing.data.length
+    )
+    const salvaged = extractDroppedPtyQueryBytes(data).slice(0, remainingQueryCapacity)
+    return {
+      ...existing,
+      data: existing.data + salvaged,
+      droppedMode2031Data: mode2031.data || existing.droppedMode2031Data,
+      droppedMode2031ScanState: mode2031.state,
+      droppedSynchronizedOutputState: synchronizedOutput.state
+    }
+  }
+  const nextContainsBackgroundOutput =
+    existing?.containsBackgroundOutput === true || containsBackgroundOutput
+  if (!existing) {
+    const pending: PendingPtyData = {
+      data,
+      ...(typeof startSeq === 'number' ? { startSeq } : {}),
+      ...(rawLength !== data.length ? { rawLength } : {}),
+      ...(transformed ? { transformed: true } : {}),
+      ...(nextContainsBackgroundOutput ? { containsBackgroundOutput: true } : {}),
+      ...(gapEscapeState ? { gapEscapeState } : {})
+    }
+    return dropOversizedPendingPtyData(session, id, pending)
+  }
+  const existingRawLength = existing.rawLength ?? existing.data.length
+  const next: PendingPtyData = {
+    data: existing.data + data,
+    ...(!preservesSeq || existing.transformed || transformed
+      ? { rawLength: existingRawLength + rawLength, transformed: true as const }
+      : {}),
+    ...(nextContainsBackgroundOutput ? { containsBackgroundOutput: true } : {}),
+    // Describes the batch start; a gap inside an existing batch has no start to label.
+    ...(existing.gapEscapeState ? { gapEscapeState: existing.gapEscapeState } : {})
+  }
+  if (typeof existing.startSeq === 'number') {
+    next.startSeq = existing.startSeq
+  }
+  return dropOversizedPendingPtyData(session, id, next)
+}

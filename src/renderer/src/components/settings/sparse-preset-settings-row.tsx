@@ -1,5 +1,5 @@
 import { Bookmark, LoaderCircle, Pencil, Trash2 } from 'lucide-react'
-import type { SparsePreset } from '../../../../shared/types'
+import type { SparsePreset } from '../../../../shared/worktree/create-types'
 import { cn } from '@/lib/utils'
 import { Button } from '../ui/button'
 import { formatSparsePresetUpdatedAt } from './sparse-preset-date'
@@ -25,8 +25,7 @@ export function SparsePresetSettingsRow({
   onDelete,
   onClearDeleteConfirm
 }: SparsePresetSettingsRowProps): React.JSX.Element {
-  // Why: users can already have locally persisted presets from older
-  // builds or hand-edited state; a bad timestamp must not blank Settings.
+  // Older or hand-edited presets may have bad timestamps; keep Settings usable.
   const updatedLabel = formatSparsePresetUpdatedAt(preset.updatedAt)
   const isDeleting = deletingPresetId === preset.id
 
@@ -76,6 +75,7 @@ export function SparsePresetSettingsRow({
               'Edit {{value0}}',
               { value0: preset.name }
             )}
+            data-edit-preset={preset.id}
             onClick={() => onEdit(preset)}
             disabled={submitting || deletingPresetId !== null}
           >

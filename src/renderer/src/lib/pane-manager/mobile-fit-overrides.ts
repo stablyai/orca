@@ -1,37 +1,31 @@
-// Why: mobile-fit overrides are runtime-owned state that the renderer must
-// respect. When a mobile client resizes a PTY to phone dimensions, the desktop
-// renderer must not auto-fit that PTY back to desktop size. This module stores
-// the override state and provides lookup for safeFit() and transport.resize().
+// Non-owners hold xterm at the phone/desktop owner’s PTY grid to avoid passive-fit resize wars.
+
+export type FitHoldMode = 'mobile-fit' | 'remote-desktop-fit' | 'desktop-fit'
 
 type FitOverride = {
-  mode: 'mobile-fit'
+  mode: 'mobile-fit' | 'remote-desktop-fit'
   cols: number
   rows: number
+  localSharedGrid?: boolean
 }
 
 const overridesByPtyId = new Map<string, FitOverride>()
-// Why: this is an in-memory renderer fit binding, not an agent paneKey.
-// Numeric pane ids are valid here because fit overrides never cross replay.
+// These renderer-only pane IDs never cross replay, so numeric IDs remain valid.
 const ptyIdByFitBindingKey = new Map<string, string>()
 
 function fitBindingKey(tabId: string, paneId: number): string {
   return `${tabId}:${paneId}`
 }
 
-// Why: the override maps are plain JS — React components that read them
-// (e.g. the desktop mobile-fit banner) have no way to know when entries
-// change. This listener set lets TerminalPane subscribe for re-renders
-// and trigger safeFit on affected panes.
+// Publish plain-map changes so panes can update lock overlays and safely refit affected terminals.
 type OverrideChangeEvent = {
   ptyId: string
-  mode: 'mobile-fit' | 'desktop-fit'
+  mode: FitHoldMode
   cols: number
   rows: number
-  // Why: the dimensions the PTY was at *before* this event fired. For a
-  // desktop-fit transition this is the prior mobile-fit cols/rows so
-  // listeners can check whether xterm is still stuck at phone dims and
-  // needs the safety-net resize, vs. already moved on (e.g. user resized
-  // the desktop pane while mobile was active).
+  localSharedGrid?: boolean
+  priorLocalSharedGrid?: boolean
+  // Carry pre-event dimensions so listeners can distinguish stale phone-fit xterm size from newer user resizing.
   priorCols: number | null
   priorRows: number | null
 }
@@ -51,13 +45,20 @@ function notifyChange(event: OverrideChangeEvent): void {
 
 export function setFitOverride(
   ptyId: string,
-  mode: 'mobile-fit' | 'desktop-fit',
+  mode: FitHoldMode,
   cols: number,
-  rows: number
+  rows: number,
+  localSharedGrid?: boolean
 ): void {
   const prior = overridesByPtyId.get(ptyId) ?? null
-  if (mode === 'mobile-fit') {
-    overridesByPtyId.set(ptyId, { mode, cols, rows })
+  const sharedGrid = mode === 'remote-desktop-fit' && localSharedGrid === true
+  if (mode === 'mobile-fit' || mode === 'remote-desktop-fit') {
+    overridesByPtyId.set(ptyId, {
+      mode,
+      cols,
+      rows,
+      ...(sharedGrid ? { localSharedGrid: true } : {})
+    })
   } else {
     overridesByPtyId.delete(ptyId)
   }
@@ -66,9 +67,23 @@ export function setFitOverride(
     mode,
     cols,
     rows,
+    ...(sharedGrid ? { localSharedGrid: true } : {}),
+    ...(prior?.localSharedGrid ? { priorLocalSharedGrid: true } : {}),
     priorCols: prior?.cols ?? null,
     priorRows: prior?.rows ?? null
   })
+}
+
+export function replaceFitOverridePtyId(replacedPtyId: string, ptyId: string): void {
+  const replaced = overridesByPtyId.get(replacedPtyId)
+  if (!replaced) {
+    return
+  }
+  // Keep hold across handle rotation until replacement authority arrives; remove unreachable old-handle entries.
+  if (!overridesByPtyId.has(ptyId)) {
+    setFitOverride(ptyId, replaced.mode, replaced.cols, replaced.rows, replaced.localSharedGrid)
+  }
+  setFitOverride(replacedPtyId, 'desktop-fit', replaced.cols, replaced.rows)
 }
 
 export function getPaneIdsForPty(ptyId: string): number[] {
@@ -117,23 +132,37 @@ export function unbindPane(paneId: number, tabId?: string): void {
 }
 
 export function hydrateOverrides(
-  overrides: { ptyId: string; mode: 'mobile-fit'; cols: number; rows: number }[]
+  overrides: {
+    ptyId: string
+    mode: 'mobile-fit' | 'remote-desktop-fit'
+    cols: number
+    rows: number
+    localSharedGrid?: boolean
+  }[]
 ): void {
   const previous = new Map(overridesByPtyId)
   overridesByPtyId.clear()
   for (const o of overrides) {
-    overridesByPtyId.set(o.ptyId, { mode: o.mode, cols: o.cols, rows: o.rows })
+    overridesByPtyId.set(o.ptyId, {
+      mode: o.mode,
+      cols: o.cols,
+      rows: o.rows,
+      ...(o.mode === 'remote-desktop-fit' && o.localSharedGrid === true
+        ? { localSharedGrid: true }
+        : {})
+    })
   }
 
-  // Why: hydration can complete after terminal panes mount during reload. Notify
-  // readers so held phone-fit overlays appear even without a fresh IPC event.
+  // Hydration can follow pane mount; notify overlays even without another live IPC event.
   for (const [ptyId, override] of overridesByPtyId) {
     const prior = previous.get(ptyId) ?? null
     notifyChange({
       ptyId,
-      mode: 'mobile-fit',
+      mode: override.mode,
       cols: override.cols,
       rows: override.rows,
+      ...(override.localSharedGrid ? { localSharedGrid: true } : {}),
+      ...(prior?.localSharedGrid ? { priorLocalSharedGrid: true } : {}),
       priorCols: prior?.cols ?? null,
       priorRows: prior?.rows ?? null
     })
@@ -146,6 +175,7 @@ export function hydrateOverrides(
       mode: 'desktop-fit',
       cols: 0,
       rows: 0,
+      ...(prior.localSharedGrid ? { priorLocalSharedGrid: true } : {}),
       priorCols: prior.cols,
       priorRows: prior.rows
     })
@@ -154,4 +184,10 @@ export function hydrateOverrides(
 
 export function getAllOverrides(): Map<string, FitOverride> {
   return new Map(overridesByPtyId)
+}
+
+export function getMobileFitOverridePtyIds(): string[] {
+  return [...overridesByPtyId].flatMap(([ptyId, override]) =>
+    override.mode === 'mobile-fit' ? [ptyId] : []
+  )
 }

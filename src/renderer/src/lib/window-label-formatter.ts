@@ -1,9 +1,6 @@
-/**
- * Returns a short human-readable label for a usage window duration.
- *
- * Why: 10080 minutes (7 days) is hard-coded as "wk" for backward
- * compatibility with the original StatusBar implementation.
- */
+import { formatResetDuration } from '../../../shared/rate-limit-reset-format'
+
+/** Format usage-window duration; retain 10080 minutes → wk compatibility with the original status bar. */
 export function formatWindowLabel(windowMinutes: number): string {
   if (windowMinutes === 10080) {
     return 'wk'
@@ -27,4 +24,15 @@ export function formatWindowLabel(windowMinutes: number): string {
     return `${windowMinutes / 60}h`
   }
   return `${windowMinutes}m`
+}
+
+/** Match popup remaining-time labels when resetsAt exists (#8378); otherwise use fixed window duration. */
+export function formatRateLimitWindowChipLabel(
+  window: { windowMinutes: number; resetsAt: number | null },
+  now: number = Date.now()
+): string {
+  if (window.resetsAt != null) {
+    return formatResetDuration(window.resetsAt - now)
+  }
+  return formatWindowLabel(window.windowMinutes)
 }

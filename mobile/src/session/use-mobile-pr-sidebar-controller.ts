@@ -11,43 +11,59 @@ import {
 import {
   loadPrSidebarData,
   loadPrSidebarDetails,
+  prSidebarDetailsNeedFetch,
+  resolvePrSidebarDetailsAfterPhase2,
   shouldApplyResult,
+  shouldSoftRefreshPrSidebarOnHeadChange,
   type PrSidebarLoadDeps,
   type PrSidebarState
 } from './mobile-pr-sidebar-state'
-import { fetchWorktreeLinkedPR } from '../source-control/mobile-pr-link'
+import {
+  clearMobileWorktreeReviewLink,
+  fetchWorktreeGitHubPRLink
+} from '../source-control/mobile-pr-link'
 
 type PrSidebarControllerInput = {
   client: RpcClient | null
   connState: ConnectionState
   worktreeId: string
-  // Head branch + SHA come from git.status (`branch`/`head`) via the review screen,
-  // not the branchCompare base ref nor worktree metadata (which carries no branch).
   branch: string | null
   headSha: string | null
 }
 
-function buildPrSidebarIdentity(args: {
+// Load body/comments only when the PR segment opens; the hub chip needs just PR/checks.
+export type PrSidebarLoadOptions = {
+  includeDetails?: boolean
+}
+
+// Keep HEAD out of identity: commits soft-refresh checks without clearing ready UI.
+export function buildMobilePrSidebarIdentity(args: {
   worktreeId: string
   branch: string | null
-  headSha: string | null
 }): string | null {
-  return args.branch ? `${args.worktreeId}\u0000${args.branch}\u0000${args.headSha ?? ''}` : null
+  return args.branch ? `${args.worktreeId}\u0000${args.branch}` : null
 }
 
 export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
   const { client, connState, worktreeId, branch, headSha } = input
-  // The dedicated PR icon is available whenever the repo has a GitHub remote —
-  // independent of whether the branch has an open PR (a no-PR branch shows an
-  // empty state rather than hiding the icon).
   const [isGithubRepo, setIsGithubRepo] = useState(false)
+  // Wait for the probe before calling this repo unsupported.
+  const [repoProbeLoaded, setRepoProbeLoaded] = useState(false)
   const [state, setState] = useState<PrSidebarState>({ kind: 'hidden' })
   const [showPRSidebar, setShowPRSidebar] = useState(false)
   const loadSeqRef = useRef(0)
+  // Give details their own sequence so chip refreshes and details fetches cannot cancel each other.
+  const detailsSeqRef = useRef(0)
+  // Claim in-flight details by sequence and PR to dedupe cold segment opens.
+  const detailsInFlightRef = useRef<{ seq: number; prNumber: number } | null>(null)
   const stateIdentityRef = useRef<string | null>(null)
+  const stateRef = useRef(state)
+  stateRef.current = state
+  const headShaRef = useRef(headSha)
 
-  const ready = client !== null && connState === 'connected' && !!branch
-  const identity = buildPrSidebarIdentity({ worktreeId, branch, headSha })
+  // Detached HEAD still needs repo eligibility; branching the probe would strand its spinner.
+  const probeReady = client !== null && connState === 'connected'
+  const identity = buildMobilePrSidebarIdentity({ worktreeId, branch })
 
   const buildDeps = useCallback((): PrSidebarLoadDeps | null => {
     if (!client) {
@@ -55,93 +71,229 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
     }
     return {
       fetchForBranch: (wt, args) => fetchHostedReviewForBranch(client, wt, args),
-      fetchWorktreeLinkedPR: (wt) => fetchWorktreeLinkedPR(client, wt),
+      fetchWorktreeGitHubPRLink: (wt) => fetchWorktreeGitHubPRLink(client, wt),
+      clearWorktreeReviewLink: (wt, shouldApply) =>
+        clearMobileWorktreeReviewLink(client, wt, shouldApply),
       fetchPRForBranch: (wt, args) => fetchPRForBranch(client, wt, args),
       fetchWorkItemDetails: (wt, args) => fetchWorkItemDetails(client, wt, args),
       fetchPRChecks: (wt, args) => fetchPRChecks(client, wt, args)
     }
   }, [client])
 
-  // Probe whether this is a GitHub repo to decide icon availability (GitHub-only).
+  // Reset eligibility on workspace change, but retain it through disconnects so the chip stays visible.
+  useEffect(() => {
+    setIsGithubRepo(false)
+    setRepoProbeLoaded(false)
+  }, [worktreeId])
+
   useEffect(() => {
     let cancelled = false
-    if (!ready || !client) {
-      setIsGithubRepo(false)
+    if (!probeReady || !client) {
       return
     }
-    void fetchGithubRepoSlug(client, worktreeId).then((outcome) => {
-      if (!cancelled) {
-        setIsGithubRepo(outcome.ok && outcome.result !== null)
-      }
-    })
+    void fetchGithubRepoSlug(client, worktreeId)
+      .then((outcome) => {
+        if (!cancelled) {
+          setIsGithubRepo(outcome.ok && outcome.result !== null)
+          setRepoProbeLoaded(true)
+        }
+      })
+      .catch(() => {
+        // Contain stray repo-probe rejection even during unmount.
+        if (!cancelled) {
+          setIsGithubRepo(false)
+          setRepoProbeLoaded(true)
+        }
+      })
     return () => {
       cancelled = true
     }
-  }, [ready, client, worktreeId])
+  }, [probeReady, client, worktreeId])
 
   useEffect(() => {
     if (!identity) {
       loadSeqRef.current += 1
+      detailsSeqRef.current += 1
       stateIdentityRef.current = null
       setState({ kind: 'hidden' })
       return
     }
     if (stateIdentityRef.current !== null && stateIdentityRef.current !== identity) {
-      // Why: ready/loading data is scoped to branch+head. A branch switch must
-      // not let the open panel keep rendering the previous PR as "fresh."
+      // Invalidate branch-scoped data immediately so a switched branch cannot show the previous PR as fresh.
       loadSeqRef.current += 1
+      detailsSeqRef.current += 1
       stateIdentityRef.current = null
       setState({ kind: 'hidden' })
     }
   }, [identity])
 
-  const load = useCallback(async () => {
+  const load = useCallback(
+    async (options?: PrSidebarLoadOptions) => {
+      const includeDetails = options?.includeDetails ?? true
+      const deps = buildDeps()
+      const loadIdentity = identity
+      if (!deps || !branch || !loadIdentity) {
+        return
+      }
+      const seq = loadSeqRef.current + 1
+      loadSeqRef.current = seq
+      // Claim details only when this load starts fetching them; superseded phase-one loads must not orphan existing details.
+      const previousIdentity = stateIdentityRef.current
+      stateIdentityRef.current = loadIdentity
+      // Refresh same-branch data in place; reserve loading state for first load or identity replacement.
+      const keepVisible =
+        previousIdentity === loadIdentity &&
+        (stateRef.current.kind === 'ready' ||
+          stateRef.current.kind === 'none' ||
+          stateRef.current.kind === 'loading')
+      if (!keepVisible) {
+        setState({ kind: 'loading' })
+      }
+      const next = await loadPrSidebarData(deps, { worktreeId, branch, headSha })
+      if (
+        !shouldApplyResult(seq, loadSeqRef.current) ||
+        stateIdentityRef.current !== loadIdentity
+      ) {
+        return
+      }
+      stateIdentityRef.current = loadIdentity
+
+      // Keep prior details across phase one so refresh cannot blank the comment tree.
+      const priorDetails =
+        next.kind === 'ready' &&
+        stateRef.current.kind === 'ready' &&
+        stateRef.current.data.details != null &&
+        stateRef.current.data.pr.number === next.data.pr.number
+          ? stateRef.current.data.details
+          : null
+
+      if (next.kind === 'ready' && priorDetails != null) {
+        setState({ kind: 'ready', data: { ...next.data, details: priorDetails } })
+        if (!includeDetails) {
+          return
+        }
+      } else {
+        setState(next)
+        if (next.kind !== 'ready' || !includeDetails) {
+          return
+        }
+      }
+
+      const detailsSeq = detailsSeqRef.current + 1
+      detailsSeqRef.current = detailsSeq
+      detailsInFlightRef.current = { seq: detailsSeq, prNumber: next.data.pr.number }
+      const fetchedDetails = await loadPrSidebarDetails(deps, worktreeId, next.data.pr.number)
+      // Release only this details claim; a newer load may already own it.
+      if (detailsInFlightRef.current?.seq === detailsSeq) {
+        detailsInFlightRef.current = null
+      }
+      // Guard details by their own sequence; chip refresh advances loadSeq without replacing their owner.
+      if (
+        detailsSeq !== detailsSeqRef.current ||
+        stateIdentityRef.current !== loadIdentity ||
+        stateRef.current.kind !== 'ready' ||
+        stateRef.current.data.pr.number !== next.data.pr.number
+      ) {
+        return
+      }
+      // Replace nonfatal null with a placeholder so details cannot spin forever.
+      const details = resolvePrSidebarDetailsAfterPhase2({
+        fetched: fetchedDetails,
+        prior: stateRef.current.data.details,
+        pr: stateRef.current.data.pr
+      })
+      setState({ kind: 'ready', data: { ...stateRef.current.data, details } })
+    },
+    [buildDeps, branch, headSha, identity, worktreeId]
+  )
+
+  const ensurePrSidebarDetails = useCallback(async () => {
+    const current = stateRef.current
+    if (current.kind !== 'ready' || !prSidebarDetailsNeedFetch(current.data.details)) {
+      return
+    }
     const deps = buildDeps()
     const loadIdentity = identity
-    if (!deps || !branch || !loadIdentity) {
+    if (!deps || !loadIdentity || stateIdentityRef.current !== loadIdentity) {
       return
     }
-    const seq = loadSeqRef.current + 1
-    loadSeqRef.current = seq
-    stateIdentityRef.current = loadIdentity
-    setState({ kind: 'loading' })
-    // Phase 1: PR + checks (fast) — the worktree linkedPR read is parallelized with
-    // forBranch inside loadPrSidebarData so a closed/merged linked PR still resolves.
-    const next = await loadPrSidebarData(deps, { worktreeId, branch, headSha })
-    if (!shouldApplyResult(seq, loadSeqRef.current) || stateIdentityRef.current !== loadIdentity) {
+    const prNumber = current.data.pr.number
+    const inFlight = detailsInFlightRef.current
+    if (inFlight && inFlight.prNumber === prNumber && inFlight.seq === detailsSeqRef.current) {
       return
     }
-    stateIdentityRef.current = loadIdentity
-    setState(next)
-    if (next.kind !== 'ready') {
+    const detailsSeq = detailsSeqRef.current + 1
+    detailsSeqRef.current = detailsSeq
+    detailsInFlightRef.current = { seq: detailsSeq, prNumber }
+    const fetchedDetails = await loadPrSidebarDetails(deps, worktreeId, prNumber)
+    if (detailsInFlightRef.current?.seq === detailsSeq) {
+      detailsInFlightRef.current = null
+    }
+    if (
+      detailsSeq !== detailsSeqRef.current ||
+      stateIdentityRef.current !== loadIdentity ||
+      stateRef.current.kind !== 'ready' ||
+      stateRef.current.data.pr.number !== prNumber
+    ) {
       return
     }
-    // Phase 2: lazy-load the heavy comments/body payload and merge it in, so it never
-    // blocks the actionable PR UI. Re-check the seq so a newer load isn't clobbered.
-    const details = await loadPrSidebarDetails(deps, worktreeId, next.data.pr.number)
-    if (shouldApplyResult(seq, loadSeqRef.current) && stateIdentityRef.current === loadIdentity) {
-      setState({ kind: 'ready', data: { ...next.data, details } })
+    const details = resolvePrSidebarDetailsAfterPhase2({
+      fetched: fetchedDetails,
+      prior: stateRef.current.data.details,
+      pr: stateRef.current.data.pr
+    })
+    setState({
+      kind: 'ready',
+      data: { ...stateRef.current.data, details }
+    })
+  }, [buildDeps, identity, worktreeId])
+
+  // Restart same-branch reads on HEAD advance so their check lookup cannot keep a stale SHA.
+  useEffect(() => {
+    if (headShaRef.current === headSha) {
+      return
     }
-  }, [buildDeps, branch, headSha, identity, worktreeId])
+    headShaRef.current = headSha
+    // After identity reset the ref still holds old state; let the hidden-state effects start the new load.
+    if (stateIdentityRef.current === null) {
+      return
+    }
+    const current = stateRef.current
+    if (!shouldSoftRefreshPrSidebarOnHeadChange(current.kind)) {
+      return
+    }
+    void load({
+      includeDetails: current.kind === 'ready' && current.data.details != null
+    })
+  }, [headSha, load])
 
   const openPRSidebar = useCallback(() => {
     setShowPRSidebar(true)
-    // (Re)load on open unless we already have fresh PR data showing.
     if (
       stateIdentityRef.current !== identity ||
       (state.kind !== 'ready' && state.kind !== 'loading')
     ) {
-      void load()
+      void load({ includeDetails: true })
+    } else if (state.kind === 'ready' && prSidebarDetailsNeedFetch(state.data.details)) {
+      void ensurePrSidebarDetails()
     }
-  }, [identity, state.kind, load])
+  }, [identity, state, load, ensurePrSidebarDetails])
+
+  const retry = useCallback(() => {
+    void load({ includeDetails: true })
+  }, [load])
 
   return {
     prSidebarState: state,
     prSidebarIsGithubRepo: isGithubRepo,
+    prSidebarRepoProbeLoaded: repoProbeLoaded,
     showPRSidebar,
     setShowPRSidebar,
     openPRSidebar,
-    retryPRSidebar: load,
-    refetchPRSidebar: load
+    retryPRSidebar: retry,
+    refetchPRSidebar: load,
+    ensurePrSidebarDetails
   }
 }
+
+export type MobilePrSidebarController = ReturnType<typeof useMobilePrSidebarController>

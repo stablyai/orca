@@ -56,9 +56,7 @@ describe('terminal history log codec', () => {
   })
 
   it('rejects the whole log on a batch sequence gap', () => {
-    // Why: a gap means an appended take batch was lost (e.g. main crashed
-    // between take and append); the byte stream has a hole, so replaying any
-    // of it would corrupt the restored terminal.
+    // A missing take batch leaves a hole that makes terminal replay unsafe.
     const log = decodeTerminalHistoryLog(
       buildLog(1, [
         { seq: 5, records: [{ kind: 'output', data: 'a' }] },
@@ -88,11 +86,18 @@ describe('terminal history log codec', () => {
   it('treats a record frame before any batch frame as unreadable', () => {
     const orphanRecord = Buffer.concat([
       encodeLogHeader(0),
-      // encodeLogBatch always prefixes a batch frame; slice it off to craft
-      // a stream that starts with a bare output frame.
+      // Strip the batch frame to create an orphan output record.
       encodeLogBatch(1, [{ kind: 'output', data: 'x' }]).subarray(9)
     ])
     expect(decodeTerminalHistoryLog(orphanRecord)).toBeNull()
+  })
+
+  it('rejects a clear frame with a payload', () => {
+    const log = buildLog(1, [{ seq: 1, records: [{ kind: 'clear' }] }])
+    const clearFrameOffset = log.length - 5
+    log.writeUInt32LE(1, clearFrameOffset + 1)
+
+    expect(decodeTerminalHistoryLog(Buffer.concat([log, Buffer.from('x')]))).toBeNull()
   })
 
   it('decodes an empty log (header only)', () => {

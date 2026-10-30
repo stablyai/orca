@@ -1,39 +1,40 @@
-/**
- * Inline guidance for `auth_required` / `scope_missing` errors from gh.
- *
- * Why: the canned remediation `gh auth refresh -s project ...` silently
- * no-ops when GITHUB_TOKEN/GH_TOKEN is exported in the user's shell — gh
- * prefers env tokens and refuses to refresh them. Users follow the
- * instructions, see no error, retry, and stay stuck. This component runs
- * a one-shot diagnostic and rewrites the suggested fix to match what gh
- * is actually doing: env-shadow vs. plain missing-scope vs. not-installed.
- */
+/** Diagnose gh auth failures because environment tokens override keyring credentials and make auth refresh ineffective. */
 import { useEffect, useState } from 'react'
 import { Copy, ExternalLink, RotateCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import type { GitHubProjectViewError } from '@/../../shared/github-project-types'
-import type { GhAuthDiagnostic } from '@/../../shared/github-auth-types'
+import type { GitHubProjectViewError } from '../../../../shared/github/project-result-types'
+import type { GhAuthDiagnostic } from '../../../../shared/github/auth-types'
 import { translate } from '@/i18n/i18n'
+import { projectViewErrorMessage } from './project-view-error-copy'
 
 type AuthErrorKind = 'auth_required' | 'scope_missing'
 
 const REFRESH_CMD = 'gh auth refresh -s project -s read:org -s repo'
 const LOGIN_CMD = 'gh auth login'
 
-// AGENTS.md requires platform-specific shell guidance. The env-shadow
-// remediation needs different commands per host shell — bash/zsh on
-// macOS/Linux vs PowerShell on Windows.
+// Scope login to the Enterprise host; signing in to github.com cannot repair GHES credentials.
+function loginCommandForHost(host: string | null | undefined): string {
+  return host && host.toLowerCase() !== 'github.com'
+    ? `gh auth login --hostname ${host}`
+    : LOGIN_CMD
+}
+
+function refreshCommandForHost(host: string | null | undefined): string {
+  return host && host.toLowerCase() !== 'github.com'
+    ? `gh auth refresh --hostname ${host} -s project -s read:org -s repo`
+    : REFRESH_CMD
+}
+
+// Environment cleanup commands differ between PowerShell on Windows and bash/zsh on macOS/Linux.
 const IS_WINDOWS = typeof navigator !== 'undefined' && /Win(dows|32|64)/i.test(navigator.userAgent)
 
-function reloadOrcaRenderer(): void {
-  const reload = window.api.app.reload
-  if (typeof reload !== 'function') {
-    window.location.reload()
-    return
-  }
-  void reload().catch(() => {
-    window.location.reload()
+export function reloadOrcaRenderer(): void {
+  void window.api.app.reload().catch((error) => {
+    console.error(
+      '[github-projects] Renderer reload refused:',
+      error instanceof Error ? error.name : typeof error
+    )
   })
 }
 
@@ -58,8 +59,7 @@ function findEnvVarCommand(varName: string): { label: string; command: string } 
 
 function unsetEnvVarCommand(varName: string): { label: string; command: string } {
   if (IS_WINDOWS) {
-    // Persistent removal at the user scope; the user still needs a fresh
-    // shell/Orca relaunch for the change to take effect.
+    // User-scope changes require a fresh shell and Orca relaunch.
     return {
       label: translate(
         'auto.components.github.project.GhAuthErrorHelp.fd17b3019f',
@@ -78,9 +78,7 @@ function unsetEnvVarCommand(varName: string): { label: string; command: string }
 }
 
 function openExternal(url: string): void {
-  // In Electron renderers, raw `window.open` doesn't reliably route to the
-  // user's default browser. Use the same shell IPC the rest of the app
-  // uses (see SidebarToolbar.openExternalUrl).
+  // Route through Electron’s shell IPC because window.open may not reach the default browser.
   void window.api.shell.openUrl(url)
 }
 
@@ -98,23 +96,19 @@ async function copyToClipboard(text: string): Promise<void> {
 }
 
 type Remediation = {
-  /** Short human-readable summary of why the error is happening. */
   summary: string
-  /** Optional follow-up paragraph explaining the fix. */
   detail?: string
-  /** Commands to surface as copyable buttons, in order. */
   commands: { label: string; command: string }[]
-  /** Optional external doc link. */
   docsUrl?: string
 }
 
-function buildRemediation(
+export function buildRemediation(
   errorMessage: string,
   kind: AuthErrorKind,
-  diag: GhAuthDiagnostic | null
+  diag: GhAuthDiagnostic | null,
+  requestedHost?: string
 ): Remediation {
-  // Diagnostic still loading or unavailable — fall back to the canned advice
-  // so the UI never gets worse than the pre-diagnosis behavior.
+  // Keep the original guidance usable while diagnosis loads or is unavailable.
   if (!diag) {
     return {
       summary: errorMessage,
@@ -124,7 +118,35 @@ function buildRemediation(
             'auto.components.github.project.GhAuthErrorHelp.b436c586d1',
             'Copy command'
           ),
-          command: kind === 'auth_required' ? LOGIN_CMD : REFRESH_CMD
+          command:
+            kind === 'auth_required'
+              ? loginCommandForHost(requestedHost)
+              : refreshCommandForHost(requestedHost)
+        }
+      ]
+    }
+  }
+
+  // Missing Enterprise credentials outrank token/scope advice for another host.
+  if (diag.requiredHost && diag.requiredHostAuthenticated === false) {
+    return {
+      summary: translate(
+        'projectViews.authHelp.hostSignedOut',
+        '`gh` is not signed in to {{host}}.',
+        { host: diag.requiredHost }
+      ),
+      detail: translate(
+        'projectViews.authHelp.hostSignedOutDetail',
+        'GitHub Enterprise hosts need their own `gh` login, separate from github.com. Run the login command in a terminal, complete the browser flow on {{host}}, then reload.',
+        { host: diag.requiredHost }
+      ),
+      commands: [
+        {
+          label: translate(
+            'auto.components.github.project.GhAuthErrorHelp.9c2da6353b',
+            'Copy login command'
+          ),
+          command: loginCommandForHost(diag.requiredHost)
         }
       ]
     }
@@ -132,16 +154,21 @@ function buildRemediation(
 
   if (!diag.ghAvailable) {
     return {
-      summary: 'GitHub CLI (`gh`) is not installed or not on PATH.',
-      detail:
-        'Orca uses `gh` to talk to GitHub Projects. Install it from cli.github.com, then sign in.',
+      summary: translate(
+        'projectViews.authHelp.ghMissing',
+        'GitHub CLI (`gh`) is not installed or not on PATH.'
+      ),
+      detail: translate(
+        'projectViews.authHelp.ghMissingDetail',
+        'Orca uses `gh` to talk to GitHub Projects. Install it from cli.github.com, then sign in.'
+      ),
       commands: [
         {
           label: translate(
             'auto.components.github.project.GhAuthErrorHelp.9c2da6353b',
             'Copy login command'
           ),
-          command: LOGIN_CMD
+          command: loginCommandForHost(diag.requiredHost ?? requestedHost)
         }
       ],
       docsUrl: 'https://cli.github.com/'
@@ -149,34 +176,61 @@ function buildRemediation(
   }
 
   const active = diag.activeAccount
-  // Most insidious failure mode: gh is using a token from the environment,
-  // so `gh auth refresh` prints "GITHUB_TOKEN is being used... first clear
-  // the value from the environment" and exits 0 without doing anything.
+  // gh auth refresh can exit successfully without changing an environment-supplied token.
   if (active?.envToken) {
     const varName = active.envToken
     const fallback = diag.hasKeyringFallback
-      ? ' Your keyring already has a `gh` login that will take over once the env var is gone.'
-      : ' After unsetting it, run `gh auth login` to sign in normally, then retry.'
+      ? translate(
+          'projectViews.authHelp.envTokenKeyringFallback',
+          'Your keyring already has a `gh` login that will take over once the env var is gone.'
+        )
+      : translate(
+          'projectViews.authHelp.envTokenLoginAfterUnset',
+          'After unsetting it, run `gh auth login` to sign in normally, then retry.'
+        )
+    const removal = IS_WINDOWS
+      ? translate(
+          'projectViews.authHelp.envTokenRemoveWindows',
+          'Find where `{{varName}}` is set (System or User environment variables, or your PowerShell profile), remove it, then restart Orca so the new environment is picked up.',
+          { varName }
+        )
+      : translate(
+          'projectViews.authHelp.envTokenRemovePosix',
+          "Find where `{{varName}}` is exported (commonly `~/.zshrc`, `~/.zshenv`, `~/.bashrc`, `~/.profile`, or your shell's secrets manager), remove it, then restart Orca so the new environment is picked up.",
+          { varName }
+        )
     return {
-      summary: `\`${varName}\` is set in your environment, so \`gh\` is using that token instead of your keyring login. \`gh auth refresh\` cannot modify env-supplied tokens — that's why running it didn't help.`,
-      detail: IS_WINDOWS
-        ? `Find where \`${varName}\` is set (System or User environment variables, or your PowerShell profile), remove it, then restart Orca so the new environment is picked up.${fallback}`
-        : `Find where \`${varName}\` is exported (commonly \`~/.zshrc\`, \`~/.zshenv\`, \`~/.bashrc\`, \`~/.profile\`, or your shell's secrets manager), remove it, then restart Orca so the new environment is picked up.${fallback}`,
+      summary: translate(
+        'projectViews.authHelp.envTokenActive',
+        "`{{varName}}` is set in your environment, so `gh` is using that token instead of your keyring login. `gh auth refresh` cannot modify env-supplied tokens — that's why running it didn't help.",
+        { varName }
+      ),
+      detail: `${removal} ${fallback}`,
       commands: [findEnvVarCommand(varName), unsetEnvVarCommand(varName)],
       docsUrl: 'https://cli.github.com/manual/gh_help_environment'
     }
   }
 
-  // gh is not the problem, but the Electron process inherited GITHUB_TOKEN
-  // from the parent shell. Even after the user runs `gh auth refresh` in a
-  // separate terminal, Orca's gh subprocess sees the env var and uses it.
+  // Orca’s inherited token can still shadow credentials refreshed in a separate terminal.
   if (diag.envTokenInProcess && (!active || diag.missingScopes.length > 0)) {
     const varName = diag.envTokenInProcess
     return {
-      summary: `Orca inherited \`${varName}\` from your shell, and \`gh\` is using that token. \`gh auth refresh\` doesn't apply to env-supplied tokens.`,
-      detail: `Unset \`${varName}\` in the shell that launches Orca${
-        IS_WINDOWS ? ' (or in your user environment variables)' : ' (or in your shell rc file)'
-      }, then restart Orca.`,
+      summary: translate(
+        'projectViews.authHelp.envTokenInherited',
+        "Orca inherited `{{varName}}` from your shell, and `gh` is using that token. `gh auth refresh` doesn't apply to env-supplied tokens.",
+        { varName }
+      ),
+      detail: IS_WINDOWS
+        ? translate(
+            'projectViews.authHelp.envTokenInheritedDetailWindows',
+            'Unset `{{varName}}` in the shell that launches Orca (or in your user environment variables), then restart Orca.',
+            { varName }
+          )
+        : translate(
+            'projectViews.authHelp.envTokenInheritedDetailPosix',
+            'Unset `{{varName}}` in the shell that launches Orca (or in your shell rc file), then restart Orca.',
+            { varName }
+          ),
       commands: [findEnvVarCommand(varName), unsetEnvVarCommand(varName)],
       docsUrl: 'https://cli.github.com/manual/gh_help_environment'
     }
@@ -184,55 +238,59 @@ function buildRemediation(
 
   if (kind === 'auth_required' || !active) {
     return {
-      summary: 'You’re not signed in to GitHub via `gh`.',
+      summary: translate(
+        'projectViews.authHelp.signedOut',
+        'You’re not signed in to GitHub via `gh`.'
+      ),
       commands: [
         {
           label: translate(
             'auto.components.github.project.GhAuthErrorHelp.9c2da6353b',
             'Copy login command'
           ),
-          command: LOGIN_CMD
+          command: loginCommandForHost(diag.requiredHost)
         }
       ]
     }
   }
 
-  // Plain missing-scope case on a keyring login — refresh will work.
   if (diag.missingScopes.length > 0) {
     return {
-      summary: `Your \`gh\` token is missing the ${diag.missingScopes
-        .map((s) => `\`${s}\``)
-        .join(
-          ', '
-        )} scope${diag.missingScopes.length === 1 ? '' : 's'} needed for GitHub Projects.`,
-      detail:
-        'Run the refresh command in a terminal. It will open a browser to authorize the new scopes, then come back here and reload.',
+      summary: translate(
+        'projectViews.authHelp.missingScopes',
+        'Your `gh` token is missing scopes needed for GitHub Projects: {{scopes}}.',
+        { scopes: diag.missingScopes.map((scope) => `\`${scope}\``).join(', ') }
+      ),
+      detail: translate(
+        'projectViews.authHelp.missingScopesDetail',
+        'Run the refresh command in a terminal. It will open a browser to authorize the new scopes, then come back here and reload.'
+      ),
       commands: [
         {
           label: translate(
             'auto.components.github.project.GhAuthErrorHelp.3fefeebde4',
             'Copy refresh command'
           ),
-          command: REFRESH_CMD
+          command: refreshCommandForHost(diag.requiredHost)
         }
       ]
     }
   }
 
-  // Scopes look fine but GitHub still rejected us — likely SAML SSO not
-  // authorized for this org's token, or the project is in an org the token
-  // can't see. Surface the most likely fix.
+  // Valid scopes can still fail on org visibility or SAML SSO authorization.
   return {
     summary: errorMessage,
-    detail:
-      'Your token has the required scopes but GitHub still denied access. If the project is in an org with SAML SSO, you must authorize this token for the org under Settings → Developer settings → Personal access tokens → Configure SSO.',
+    detail: translate(
+      'projectViews.authHelp.accessDeniedDetail',
+      'Your token has the required scopes but GitHub still denied access. If the project is in an org with SAML SSO, you must authorize this token for the org under Settings → Developer settings → Personal access tokens → Configure SSO.'
+    ),
     commands: [
       {
         label: translate(
           'auto.components.github.project.GhAuthErrorHelp.3fefeebde4',
           'Copy refresh command'
         ),
-        command: REFRESH_CMD
+        command: refreshCommandForHost(diag.requiredHost ?? requestedHost)
       }
     ],
     docsUrl:
@@ -242,16 +300,19 @@ function buildRemediation(
 
 export function GhAuthErrorHelp({
   error,
-  variant = 'block'
+  variant = 'block',
+  host
 }: {
   error: GitHubProjectViewError & { type: AuthErrorKind }
   variant?: 'block' | 'banner'
+  /** GHES host the failing surface talks to; scopes the diagnosis per host. */
+  host?: string
 }): React.JSX.Element {
   const [diag, setDiag] = useState<GhAuthDiagnostic | null>(null)
   useEffect(() => {
     let cancelled = false
     window.api.gh
-      .diagnoseAuth()
+      .diagnoseAuth(host ? { host } : undefined)
       .then((d) => {
         if (!cancelled) {
           setDiag(d)
@@ -262,9 +323,9 @@ export function GhAuthErrorHelp({
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [host])
 
-  const remedy = buildRemediation(error.message, error.type, diag)
+  const remedy = buildRemediation(projectViewErrorMessage(error, { host }), error.type, diag, host)
   const docsUrl = remedy.docsUrl
 
   if (variant === 'banner') {
@@ -294,8 +355,7 @@ export function GhAuthErrorHelp({
               {translate('auto.components.github.project.GhAuthErrorHelp.baa006f9af', 'Docs')}
             </button>
           ) : null}
-          {/* Why: after running the refresh command in a terminal, users need to
-              reload the renderer to pick up the new gh token state. */}
+          {/* Reload diagnostics after refreshing credentials in a terminal. */}
           <button
             type="button"
             onClick={reloadOrcaRenderer}
@@ -331,8 +391,7 @@ export function GhAuthErrorHelp({
             {translate('auto.components.github.project.GhAuthErrorHelp.baa006f9af', 'Docs')}
           </Button>
         ) : null}
-        {/* Why: after running the refresh command in a terminal, users need to
-            reload the renderer to pick up the new gh token state. */}
+        {/* Reload diagnostics after refreshing credentials in a terminal. */}
         <Button size="sm" variant="outline" onClick={reloadOrcaRenderer}>
           <RotateCw className="mr-1 size-3.5" />{' '}
           {translate('auto.components.github.project.GhAuthErrorHelp.7e800068d8', 'Reload')}

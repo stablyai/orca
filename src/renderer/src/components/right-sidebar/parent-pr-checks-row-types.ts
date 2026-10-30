@@ -1,4 +1,11 @@
-import type { CheckStatus, PRCheckDetail, PRInfo, Repo, Worktree } from '../../../../shared/types'
+import type { PRCheckDetail } from '../../../../shared/github/check-types'
+import type {
+  CheckStatus,
+  GitHubRepositoryIdentity,
+  PRInfo
+} from '../../../../shared/github/pull-request-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import type { AppState } from '@/store'
 import { translate } from '@/i18n/i18n'
@@ -7,6 +14,7 @@ export type ParentPrChecksCacheEntry<T> = {
   data: T | null
   fetchedAt: number
   headSha?: string
+  linkedReviewHintKey?: string
 }
 
 export type ParentPrChecksRefreshOutcome =
@@ -52,10 +60,13 @@ export type ParentPrChecksRow = {
   group: ParentPrChecksGroupKey
   checkTone: CheckStatus
   title: string
+  reviewNumber: number | null
   reviewLabel: string | null
   reviewUrl: string | null
   reviewState: HostedReviewInfo['state'] | null
+  reviewStatus: HostedReviewInfo['status'] | null
   provider: HostedReviewInfo['provider'] | null
+  githubRepository?: GitHubRepositoryIdentity | null
   summary: string
   detailNames: string[]
   checks: PRCheckDetail[]

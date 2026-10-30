@@ -1,16 +1,32 @@
-import { getRuntimeGitStatus, getRuntimeGitUpstreamStatus } from '@/runtime/runtime-git-client'
-import type {
-  GitPushTarget,
-  GitStatusResult,
-  GitUpstreamStatus,
-  GlobalSettings
-} from '../../../../shared/types'
+import { getRuntimeGitStatus } from '@/runtime/runtime-git-status-client'
+import { getRuntimeGitUpstreamStatus } from '@/runtime/runtime-git-sync-client'
+import { getBranchLineTotalMergeBase } from './branch-line-total-request-gate'
+import {
+  clearAutomaticPushTargetUpstreamStatusCache,
+  getCachedAutomaticPushTargetUpstreamStatus,
+  invalidateAutomaticPushTargetUpstreamStatusCache,
+  storeCachedAutomaticPushTargetUpstreamStatus
+} from './push-target-upstream-refresh-cache'
+import type { GitStatusResult, GitUpstreamStatus } from '../../../../shared/git-status-types'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { GitPushTarget } from '../../../../shared/worktree/types'
+import {
+  beginAutomaticUpstreamRefresh,
+  beginStrictUpstreamRefresh,
+  claimAutomaticUpstreamRefreshApply,
+  clearGitStatusRefreshOrderingStateForTests,
+  finishAutomaticUpstreamRefresh,
+  shouldApplyAutomaticUpstreamRefresh,
+  type AutomaticRefreshOrder
+} from './git-status-refresh-ordering'
 
 export type GitStatusRefreshDeps = {
   setGitStatus: (worktreeId: string, status: GitStatusResult) => void
   updateWorktreeGitIdentity: (
     worktreeId: string,
-    identity: { head?: string; branch?: string | null }
+    identity: { head?: string; branch?: string | null },
+    ownerHostId: ExecutionHostId | null
   ) => void
   setUpstreamStatus: (worktreeId: string, status: GitUpstreamStatus) => void
   fetchUpstreamStatus: (
@@ -19,145 +35,167 @@ export type GitStatusRefreshDeps = {
     connectionId?: string,
     pushTarget?: GitPushTarget,
     options?: {
-      runtimeTargetSettings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+      runtimeTarget?: RuntimeClientTarget | null
       applyUpstreamStatus?: boolean
     }
   ) => Promise<GitUpstreamStatus | null>
 }
 
-const MAX_REFRESH_ORDERING_WORKTREES = 1024
-const strictUpstreamRefreshGenerationByWorktree = new Map<string, number>()
-const automaticUpstreamRefreshInFlightByWorktree = new Map<string, number>()
-
-function trimRefreshOrderingState(): void {
-  for (const worktreeId of strictUpstreamRefreshGenerationByWorktree.keys()) {
-    if (strictUpstreamRefreshGenerationByWorktree.size <= MAX_REFRESH_ORDERING_WORKTREES) {
-      break
-    }
-    if (automaticUpstreamRefreshInFlightByWorktree.has(worktreeId)) {
-      continue
-    }
-    strictUpstreamRefreshGenerationByWorktree.delete(worktreeId)
-  }
-}
-
-function beginAutomaticUpstreamRefresh(worktreeId: string): number {
-  automaticUpstreamRefreshInFlightByWorktree.set(
-    worktreeId,
-    (automaticUpstreamRefreshInFlightByWorktree.get(worktreeId) ?? 0) + 1
-  )
-  return strictUpstreamRefreshGenerationByWorktree.get(worktreeId) ?? 0
-}
-
-function finishAutomaticUpstreamRefresh(worktreeId: string): void {
-  const count = automaticUpstreamRefreshInFlightByWorktree.get(worktreeId) ?? 0
-  if (count <= 1) {
-    automaticUpstreamRefreshInFlightByWorktree.delete(worktreeId)
-  } else {
-    automaticUpstreamRefreshInFlightByWorktree.set(worktreeId, count - 1)
-  }
-  trimRefreshOrderingState()
-}
-
-function shouldApplyAutomaticUpstreamRefresh(worktreeId: string, startGeneration: number): boolean {
-  return (strictUpstreamRefreshGenerationByWorktree.get(worktreeId) ?? 0) === startGeneration
-}
-
 async function fetchAndApplyAutomaticUpstreamStatus({
-  settings,
+  target,
   worktreeId,
   worktreePath,
   connectionId,
   pushTarget,
   deps,
-  startGeneration
+  order,
+  shouldApply
 }: {
-  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+  /** The worktree owner's transport. */
+  target: RuntimeClientTarget
   worktreeId: string
   worktreePath: string
   connectionId?: string
   pushTarget?: GitPushTarget
   deps: GitStatusRefreshDeps
-  startGeneration: number
-}): Promise<void> {
+  order: AutomaticRefreshOrder
+  shouldApply?: () => boolean
+}): Promise<GitUpstreamStatus | null> {
+  if (!shouldApplyAutomaticUpstreamRefresh(worktreeId, order, shouldApply)) {
+    return null
+  }
   const upstreamStatus = await deps.fetchUpstreamStatus(
     worktreeId,
     worktreePath,
     connectionId,
     pushTarget,
     {
-      runtimeTargetSettings: settings,
+      runtimeTarget: target,
       applyUpstreamStatus: false
     }
   )
-  if (upstreamStatus && shouldApplyAutomaticUpstreamRefresh(worktreeId, startGeneration)) {
-    deps.setUpstreamStatus(worktreeId, upstreamStatus)
+  if (!upstreamStatus) {
+    if (pushTarget) {
+      // Invalidate failed publish-target refreshes so older automatic cache entries cannot suppress recovery.
+      invalidateAutomaticPushTargetUpstreamStatusCache({
+        target,
+        worktreeId,
+        worktreePath,
+        connectionId,
+        pushTarget
+      })
+    }
+    return null
   }
-}
-
-function beginStrictUpstreamRefresh(worktreeId: string): void {
-  strictUpstreamRefreshGenerationByWorktree.set(
-    worktreeId,
-    (strictUpstreamRefreshGenerationByWorktree.get(worktreeId) ?? 0) + 1
-  )
-  trimRefreshOrderingState()
+  if (!claimAutomaticUpstreamRefreshApply(worktreeId, order, shouldApply)) {
+    return null
+  }
+  deps.setUpstreamStatus(worktreeId, upstreamStatus)
+  return upstreamStatus
 }
 
 export function clearGitStatusRefreshOrderingForTests(): void {
-  strictUpstreamRefreshGenerationByWorktree.clear()
-  automaticUpstreamRefreshInFlightByWorktree.clear()
+  clearGitStatusRefreshOrderingStateForTests()
+  clearAutomaticPushTargetUpstreamStatusCache()
 }
 
 export async function refreshGitStatusForWorktree({
-  settings,
+  target,
+  ownerHostId,
   worktreeId,
   worktreePath,
   connectionId,
   pushTarget,
-  deps
+  deps,
+  request
 }: {
-  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+  /** The worktree owner's transport. */
+  target: RuntimeClientTarget
+  /** The copy `target` answers for, read when the request starts. */
+  ownerHostId: ExecutionHostId | null
   worktreeId: string
   worktreePath: string
   connectionId?: string
   pushTarget?: GitPushTarget
   deps: GitStatusRefreshDeps
+  request?: {
+    admissionTier?: 'interactive' | 'status' | 'background'
+    reuseLineStats?: boolean
+    signal?: AbortSignal
+    shouldApply?: () => boolean
+    onStatusAccepted?: (status: GitStatusResult) => void
+    wakeWslDistro?: boolean
+  }
 }): Promise<void> {
-  const upstreamStartGeneration = beginAutomaticUpstreamRefresh(worktreeId)
+  const refreshOrder = beginAutomaticUpstreamRefresh(worktreeId)
+  // Every status path needs the merge base or polls omitting it will blank the total chip.
+  const branchLineTotalMergeBase = getBranchLineTotalMergeBase(worktreeId)
   try {
-    const status = (await getRuntimeGitStatus({
-      settings,
-      worktreeId,
-      worktreePath,
-      connectionId
-    })) as GitStatusResult
+    const status = await getRuntimeGitStatus(
+      { target, worktreeId, worktreePath, connectionId },
+      {
+        admissionTier: request?.admissionTier ?? 'status',
+        ...(request?.reuseLineStats === true ? { reuseLineStats: true } : {}),
+        ...(request?.signal ? { signal: request.signal } : {}),
+        ...(branchLineTotalMergeBase ? { branchLineTotalMergeBase } : {}),
+        ...(request?.wakeWslDistro ? { wakeWslDistro: true } : {})
+      }
+    )
 
-    if (!shouldApplyAutomaticUpstreamRefresh(worktreeId, upstreamStartGeneration)) {
+    if (!claimAutomaticUpstreamRefreshApply(worktreeId, refreshOrder, request?.shouldApply)) {
       return
     }
 
     deps.setGitStatus(worktreeId, status)
-    // Why: branch switches can happen inside a terminal. `git status --branch`
-    // gives us the new identity without a separate worktree-list poll.
-    deps.updateWorktreeGitIdentity(worktreeId, {
-      head: status.head,
-      // Why: detached HEAD reports a head oid and no branch. Pass null as an
-      // explicit clear signal so stale branch names don't linger in the UI.
-      branch: status.branch ?? (status.head ? null : undefined)
-    })
+    // Read shell-driven branch changes from git status --branch without another worktree-list poll.
+    deps.updateWorktreeGitIdentity(
+      worktreeId,
+      {
+        head: status.head,
+        // Detached HEAD needs explicit null to clear any stale branch name.
+        branch: status.branch ?? (status.head ? null : undefined)
+      },
+      ownerHostId
+    )
+    request?.onStatusAccepted?.(status)
     if (pushTarget) {
-      // Why: porcelain status reports Git's configured upstream. Source Control
-      // actions for PR-created worktrees must instead reconcile with Orca's
-      // explicit publish target.
-      await fetchAndApplyAutomaticUpstreamStatus({
-        settings,
+      // Use Orca's explicit publish target for PR-created worktrees rather than Git's configured upstream.
+      const cachedUpstreamStatus = getCachedAutomaticPushTargetUpstreamStatus({
+        target,
+        worktreeId,
+        worktreePath,
+        connectionId,
+        pushTarget,
+        status
+      })
+      if (cachedUpstreamStatus) {
+        // Cache hits skip subprocesses; retain fresher status already written by push/fetch actions.
+        return
+      }
+      const upstreamStatus = await fetchAndApplyAutomaticUpstreamStatus({
+        target,
         worktreeId,
         worktreePath,
         connectionId,
         pushTarget,
         deps,
-        startGeneration: upstreamStartGeneration
+        order: refreshOrder,
+        shouldApply: request?.shouldApply
       })
+      if (upstreamStatus) {
+        // Briefly reuse unchanged automatic comparisons because explicit targets require several Git subprocesses.
+        storeCachedAutomaticPushTargetUpstreamStatus(
+          {
+            target,
+            worktreeId,
+            worktreePath,
+            connectionId,
+            pushTarget,
+            status
+          },
+          upstreamStatus
+        )
+      }
       return
     }
     if (status.upstreamStatus) {
@@ -166,30 +204,32 @@ export async function refreshGitStatusForWorktree({
         status.upstreamStatus.behind > 0 &&
         status.upstreamStatus.behindCommitsArePatchEquivalent === undefined
       ) {
-        // Why: porcelain status has counts but cannot tell stale post-rebase
-        // upstream commits from real remote work. Writing it first makes the
-        // primary action flicker between Sync and Force Push on every poll.
+        // Porcelain counts cannot identify stale post-rebase commits; compare first to avoid Sync/Force Push flicker.
         await fetchAndApplyAutomaticUpstreamStatus({
-          settings,
+          target,
           worktreeId,
           worktreePath,
           connectionId,
           deps,
-          startGeneration: upstreamStartGeneration
+          order: refreshOrder,
+          shouldApply: request?.shouldApply
         })
         return
       }
-      deps.setUpstreamStatus(worktreeId, status.upstreamStatus)
+      if (claimAutomaticUpstreamRefreshApply(worktreeId, refreshOrder, request?.shouldApply)) {
+        deps.setUpstreamStatus(worktreeId, status.upstreamStatus)
+      }
       return
     }
     await fetchAndApplyAutomaticUpstreamStatus({
-      settings,
+      target,
       worktreeId,
       worktreePath,
       connectionId,
       pushTarget,
       deps,
-      startGeneration: upstreamStartGeneration
+      order: refreshOrder,
+      shouldApply: request?.shouldApply
     })
   } finally {
     finishAutomaticUpstreamRefresh(worktreeId)
@@ -197,14 +237,18 @@ export async function refreshGitStatusForWorktree({
 }
 
 export async function refreshGitStatusForWorktreeStrict({
-  settings,
+  target,
+  ownerHostId,
   worktreeId,
   worktreePath,
   connectionId,
   pushTarget,
   deps
 }: {
-  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+  /** The worktree owner's transport. */
+  target: RuntimeClientTarget
+  /** The copy `target` answers for, read when the request starts. */
+  ownerHostId: ExecutionHostId | null
   worktreeId: string
   worktreePath: string
   connectionId?: string
@@ -214,35 +258,41 @@ export async function refreshGitStatusForWorktreeStrict({
   }
 }): Promise<{ status: GitStatusResult; upstreamStatus: GitUpstreamStatus }> {
   beginStrictUpstreamRefresh(worktreeId)
-  const status = (await getRuntimeGitStatus(
+  clearAutomaticPushTargetUpstreamStatusCache()
+  const strictBranchLineTotalMergeBase = getBranchLineTotalMergeBase(worktreeId)
+  const status = await getRuntimeGitStatus(
     {
-      settings,
+      target,
       worktreeId,
       worktreePath,
       connectionId
     },
     {
-      // Why: strict refreshes are user-triggered reconciliation and must not reuse
-      // automatic polling's no-upstream backoff window.
-      bypassEffectiveUpstreamNegativeCache: true
+      admissionTier: 'interactive',
+      // User-triggered reconciliation bypasses automatic polling's no-upstream backoff.
+      bypassEffectiveUpstreamNegativeCache: true,
+      // Keep the total gate after commit/push so missing totals cannot blank the updated chip.
+      ...(strictBranchLineTotalMergeBase
+        ? { branchLineTotalMergeBase: strictBranchLineTotalMergeBase }
+        : {})
     }
-  )) as GitStatusResult
+  )
 
   deps.setGitStatus(worktreeId, status)
-  // Why: branch switches can happen inside a terminal. `git status --branch`
-  // gives us the new identity without a separate worktree-list poll.
-  deps.updateWorktreeGitIdentity(worktreeId, {
-    head: status.head,
-    // Why: detached HEAD reports a head oid and no branch. Pass null as an
-    // explicit clear signal so stale branch names don't linger in the UI.
-    branch: status.branch ?? (status.head ? null : undefined)
-  })
+  // Read shell-driven branch changes from git status --branch without another worktree-list poll.
+  deps.updateWorktreeGitIdentity(
+    worktreeId,
+    {
+      head: status.head,
+      // Detached HEAD needs explicit null to clear any stale branch name.
+      branch: status.branch ?? (status.head ? null : undefined)
+    },
+    ownerHostId
+  )
   if (pushTarget) {
-    // Why: porcelain status reports Git's configured upstream. Source Control
-    // actions for PR-created worktrees must instead reconcile with Orca's
-    // explicit publish target.
+    // Use Orca's explicit publish target for PR-created worktrees rather than Git's configured upstream.
     const upstreamStatus = await getRuntimeGitUpstreamStatus(
-      { settings, worktreeId, worktreePath, connectionId },
+      { target, worktreeId, worktreePath, connectionId },
       pushTarget
     )
     deps.setUpstreamStatus(worktreeId, upstreamStatus)
@@ -254,11 +304,9 @@ export async function refreshGitStatusForWorktreeStrict({
       status.upstreamStatus.behind > 0 &&
       status.upstreamStatus.behindCommitsArePatchEquivalent === undefined
     ) {
-      // Why: porcelain status has counts but cannot tell stale post-rebase
-      // upstream commits from real remote work. Writing it first makes the
-      // primary action flicker between Sync and Force Push on every poll.
+      // Porcelain counts cannot identify stale post-rebase commits; compare first to avoid Sync/Force Push flicker.
       const upstreamStatus = await getRuntimeGitUpstreamStatus(
-        { settings, worktreeId, worktreePath, connectionId },
+        { target, worktreeId, worktreePath, connectionId },
         undefined
       )
       deps.setUpstreamStatus(worktreeId, upstreamStatus)
@@ -268,7 +316,7 @@ export async function refreshGitStatusForWorktreeStrict({
     return { status, upstreamStatus: status.upstreamStatus }
   }
   const upstreamStatus = await getRuntimeGitUpstreamStatus(
-    { settings, worktreeId, worktreePath, connectionId },
+    { target, worktreeId, worktreePath, connectionId },
     undefined
   )
   deps.setUpstreamStatus(worktreeId, upstreamStatus)

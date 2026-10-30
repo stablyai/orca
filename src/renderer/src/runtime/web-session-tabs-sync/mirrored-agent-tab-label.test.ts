@@ -1,0 +1,94 @@
+import { describe, expect, it } from 'vitest'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import type { Tab } from '../../../../shared/tab-types'
+import { buildMirroredAgentTabs } from './terminal-surfaces'
+
+const WORKTREE = 'repo-1::worktree-1'
+const GROUP = 'group-1'
+
+function snapshotWith(agent: 'claude' | 'codex', title: string): RuntimeMobileSessionTabsResult {
+  return {
+    worktree: WORKTREE,
+    publicationEpoch: 'epoch-1',
+    snapshotVersion: 1,
+    activeGroupId: GROUP,
+    activeTabId: null,
+    activeTabType: null,
+    tabs: [
+      {
+        type: 'agent-session',
+        id: 'host-tab-1',
+        title,
+        sessionId: `${agent}-1`,
+        agent,
+        isActive: false
+      }
+    ]
+  } as RuntimeMobileSessionTabsResult
+}
+
+function build(
+  snapshot: RuntimeMobileSessionTabsResult,
+  currentUnifiedTabs: readonly Tab[] = []
+): Tab {
+  const [mirrored] = buildMirroredAgentTabs(
+    snapshot,
+    'runtime:env-1',
+    new Map(),
+    GROUP,
+    0,
+    currentUnifiedTabs,
+    1_000
+  )
+  return mirrored.unifiedTab
+}
+
+describe('buildMirroredAgentTabs', () => {
+  it('keeps a manual rename across host snapshots', () => {
+    const snapshot = snapshotWith('codex', 'Codex Chat')
+    const renamed = build(snapshot)
+    const existing: Tab = { ...renamed, customLabel: 'My rename' }
+    expect(build(snapshot, [existing]).customLabel).toBe('My rename')
+  })
+
+  it('records the publishing host on a tab restored from before tabs carried one', () => {
+    const snapshot = snapshotWith('codex', 'Codex Chat')
+    const { executionHostId: _recorded, ...unrecorded } = build(snapshot)
+    const mirrored = build(snapshot, [unrecorded])
+    expect(mirrored.id).toBe(unrecorded.id)
+    expect(mirrored.executionHostId).toBe('runtime:env-1')
+  })
+
+  it('keeps the provisional tab group when the host publishes a different group', () => {
+    const snapshot = snapshotWith('codex', 'Codex Chat')
+    const provisional = build(snapshot)
+    const existing: Tab = { ...provisional, groupId: 'local-group' }
+    const [mirrored] = buildMirroredAgentTabs(
+      snapshot,
+      'runtime:env-1',
+      new Map([['host-tab-1', 'host-group']]),
+      GROUP,
+      0,
+      [existing],
+      1_000
+    )
+
+    expect(mirrored?.unifiedTab.id).toBe(existing.id)
+    expect(mirrored?.unifiedTab.groupId).toBe('local-group')
+  })
+
+  it('degrades to the placeholder when the host violates the string contract', () => {
+    const snapshot = snapshotWith('claude', 'Named')
+    // The wire type says `string`, but a host clearing a name can send null.
+    ;(snapshot.tabs[0] as { title: unknown }).title = null
+    expect(() => build(snapshot)).not.toThrow()
+    expect(build(snapshot).label).toBe('Claude Chat')
+  })
+
+  it('names an agent this build does not know after itself, not Codex', () => {
+    const snapshot = snapshotWith('codex', '')
+    // Wire agent union is closed; Tab.agentSessionAgent is open and can carry future agents.
+    ;(snapshot.tabs[0] as { agent: string }).agent = 'gemini'
+    expect(build(snapshot).label).toBe('Gemini Chat')
+  })
+})

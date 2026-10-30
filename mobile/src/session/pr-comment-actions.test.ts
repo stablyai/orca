@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { PRComment } from '../../../src/shared/types'
+import type { PRComment } from '../../../src/shared/github/comment-types'
 import {
   buildAddRootCommentParams,
   buildDeleteCommentParams,
@@ -9,7 +9,6 @@ import {
   canAddRootComment,
   canDeleteComment,
   canEditComment,
-  isMutablePRConversationComment,
   isResolvableComment,
   isSubmittableCommentBody
 } from './pr-comment-actions'
@@ -100,25 +99,6 @@ describe('isSubmittableCommentBody', () => {
   })
 })
 
-describe('isMutablePRConversationComment', () => {
-  it('allows only root conversation comments with a valid id', () => {
-    expect(isMutablePRConversationComment(comment())).toBe(true)
-  })
-
-  it('excludes review/threaded/inline comments', () => {
-    expect(isMutablePRConversationComment(comment({ threadId: 'T_1' }))).toBe(false)
-    expect(isMutablePRConversationComment(comment({ path: 'a.ts' }))).toBe(false)
-    expect(
-      isMutablePRConversationComment(comment({ url: 'https://x/pullrequestreview-1#r2' }))
-    ).toBe(false)
-  })
-
-  it('requires a positive integer id', () => {
-    expect(isMutablePRConversationComment(comment({ id: 0 }))).toBe(false)
-    expect(isMutablePRConversationComment(comment({ id: -1 }))).toBe(false)
-  })
-})
-
 describe('canEditComment / canDeleteComment', () => {
   const slug = { owner: 'o', repo: 'r' }
 
@@ -134,13 +114,19 @@ describe('canEditComment / canDeleteComment', () => {
 
 describe('buildEditCommentParams / buildDeleteCommentParams', () => {
   it('build slug-addressed params', () => {
-    const slug = { owner: 'o', repo: 'r' }
+    const slug = { owner: 'o', repo: 'r', host: 'github.acme.test' }
     expect(buildEditCommentParams(slug, 42, 'new body')).toEqual({
       owner: 'o',
       repo: 'r',
+      host: 'github.acme.test',
       commentId: 42,
       body: 'new body'
     })
-    expect(buildDeleteCommentParams(slug, 42)).toEqual({ owner: 'o', repo: 'r', commentId: 42 })
+    expect(buildDeleteCommentParams(slug, 42)).toEqual({
+      owner: 'o',
+      repo: 'r',
+      host: 'github.acme.test',
+      commentId: 42
+    })
   })
 })

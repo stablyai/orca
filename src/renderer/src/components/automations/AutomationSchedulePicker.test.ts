@@ -1,6 +1,6 @@
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import {
   AutomationCustomCronPanel,
@@ -9,14 +9,18 @@ import {
 } from './AutomationCustomCronPanel'
 import {
   AUTOMATION_SCHEDULE_PRESET_OPTIONS,
+  getAutomationSchedulePresetLabel,
   getSchedulePresetDraft
 } from './AutomationSchedulePicker'
-import { isValidAutomationCronSchedule } from '../../../../shared/automation-schedules'
+import { formatUiAutomationSchedule } from './automation-schedule-label'
+import { isValidAutomationCronSchedule } from '../../../../shared/automation-schedule-parsing'
+import { i18n } from '@/i18n/i18n'
 
 const BASE_DRAFT: AutomationDraft = {
   name: '',
   prompt: '',
   agentId: 'codex',
+  extraAgentArgs: '',
   projectId: '',
   workspaceMode: 'existing',
   workspaceId: '',
@@ -29,12 +33,64 @@ const BASE_DRAFT: AutomationDraft = {
   dayOfWeek: '1',
   customSchedule: '',
   missedRunGraceMinutes: '720',
+  savedSchedule: null,
   scheduleWarning: null
 }
 
 describe('AutomationSchedulePicker', () => {
-  it('offers custom cron as a selectable cadence', () => {
-    expect(AUTOMATION_SCHEDULE_PRESET_OPTIONS).toContainEqual(['custom', 'Custom cron'])
+  // Reset here, not after the assertion: a failed expect would otherwise leak the locale.
+  afterEach(async () => {
+    await i18n.changeLanguage('en')
+  })
+
+  it.each([
+    ['zh', ['每小时', '每天', '工作日', '每周', '自定义 cron']],
+    ['ja', ['毎時', '毎日', '平日', '毎週', 'カスタム cron']],
+    ['ko', ['매시간', '매일', '평일', '매주', '사용자 지정 cron']],
+    ['es', ['Cada hora', 'Diario', 'Días laborables', 'Semanal', 'Cron personalizado']]
+  ])('translates every cadence option in %s', async (locale, labels) => {
+    await i18n.changeLanguage(locale)
+    expect(AUTOMATION_SCHEDULE_PRESET_OPTIONS.map(getAutomationSchedulePresetLabel)).toEqual(labels)
+  })
+
+  it.each([
+    ['zh', '每星期五'],
+    ['ja', '毎週金曜日'],
+    ['ko', '매주 금요일'],
+    ['es', 'Cada viernes']
+  ])(
+    'localizes the weekly schedule label without an English plural in %s (#14404)',
+    async (locale, expected) => {
+      await i18n.changeLanguage(locale)
+      const label = formatUiAutomationSchedule('0 9 * * 5')
+
+      expect(label).toContain(expected)
+      expect(label).not.toMatch(/Friday/)
+      expect(label).not.toMatch(/s at /)
+    }
+  )
+
+  it.each(['en', 'zh', 'ja', 'ko', 'es'])(
+    'shows a valid multi-day weekly rule without an invalid label in %s (#24985)',
+    async (locale) => {
+      await i18n.changeLanguage(locale)
+      const rrule = 'FREQ=WEEKLY;BYDAY=TU,TH,SA;BYHOUR=8;BYMINUTE=0'
+
+      expect(formatUiAutomationSchedule(rrule)).toBe(rrule)
+      expect(formatUiAutomationSchedule('*/30 9-17 * * MON-FRI')).not.toBe('Invalid schedule')
+    }
+  )
+
+  it('localizes the valid-custom-cron status without matching English copy (#14404)', async () => {
+    await i18n.changeLanguage('zh')
+
+    expect(getCronScheduleStatusLabel('*/30 9-17 * * 1-5', isValidAutomationCronSchedule)).toEqual({
+      kind: 'valid',
+      label: '有效的自定义 cron'
+    })
+    expect(getCronScheduleStatusLabel('0 9 * * *', isValidAutomationCronSchedule).label).toContain(
+      '每天'
+    )
   })
 
   it('seeds custom cron from the current simple schedule', () => {

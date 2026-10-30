@@ -5,15 +5,19 @@ import type {
   TerminalQuickCommand,
   TerminalQuickCommandAction,
   TerminalQuickCommandScope
-} from './types'
+} from './terminal-quick-command-types'
 
-const MAX_QUICK_COMMANDS = 40
-const MAX_QUICK_COMMAND_LABEL_LENGTH = 80
-const MAX_QUICK_COMMAND_REPO_ID_LENGTH = 200
-const MAX_QUICK_COMMAND_TEXT_LENGTH = 4000
+export const MAX_QUICK_COMMAND_ID_LENGTH = 80
+export const MAX_QUICK_COMMAND_LABEL_LENGTH = 80
+export const MAX_QUICK_COMMAND_REPO_ID_LENGTH = 200
+export const MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH = 4000
 const REMOVED_PRESET_IDS = new Set(['default-pwd', 'default-git-status'])
 
 const DEFAULT_TERMINAL_QUICK_COMMANDS: TerminalQuickCommand[] = []
+
+export type TerminalQuickCommandMutation =
+  | { type: 'upsert'; command: TerminalQuickCommand }
+  | { type: 'delete'; id: string }
 
 export function getDefaultTerminalQuickCommands(): TerminalQuickCommand[] {
   return DEFAULT_TERMINAL_QUICK_COMMANDS.map((command) => ({ ...command }))
@@ -96,8 +100,7 @@ export function normalizeTerminalQuickCommands(input: unknown): TerminalQuickCom
       record.action === 'agent-prompt' ? 'agent-prompt' : 'terminal-command'
     const hasCommand = typeof record.command === 'string'
     const hasPrompt = typeof record.prompt === 'string'
-    // Why: settings saves on every edit; preserve incomplete rows so a newly
-    // added command is not deleted before the user fills in the command text.
+    // Settings save on every edit; retain incomplete rows while the user fills them in.
     if (!hasLabel && !hasCommand && !hasPrompt) {
       continue
     }
@@ -108,10 +111,10 @@ export function normalizeTerminalQuickCommands(input: unknown): TerminalQuickCom
     const label = hasLabel ? String(record.label).trim() : ''
 
     const idBase = rawId || `quick-command-${normalized.length + 1}`
-    let id = idBase.slice(0, MAX_QUICK_COMMAND_LABEL_LENGTH)
+    let id = idBase.slice(0, MAX_QUICK_COMMAND_ID_LENGTH)
     let suffix = 2
     while (seenIds.has(id)) {
-      id = `${idBase.slice(0, MAX_QUICK_COMMAND_LABEL_LENGTH - 4)}-${suffix}`
+      id = `${idBase.slice(0, MAX_QUICK_COMMAND_ID_LENGTH - 4)}-${suffix}`
       suffix += 1
     }
     seenIds.add(id)
@@ -131,27 +134,104 @@ export function normalizeTerminalQuickCommands(input: unknown): TerminalQuickCom
         ...base,
         action: 'agent-prompt',
         agent: agentId,
-        prompt: (hasPrompt ? String(record.prompt).trimEnd() : '').slice(
-          0,
-          MAX_QUICK_COMMAND_TEXT_LENGTH
-        )
+        prompt: hasPrompt ? String(record.prompt).trimEnd() : ''
       })
     } else {
       const command = hasCommand ? String(record.command).trimEnd() : ''
       normalized.push({
         ...base,
         action: 'terminal-command',
-        command: command.slice(0, MAX_QUICK_COMMAND_TEXT_LENGTH),
+        command: command.slice(0, MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH),
         appendEnter: record.appendEnter !== false
       })
-    }
-
-    if (normalized.length >= MAX_QUICK_COMMANDS) {
-      break
     }
   }
 
   return normalized
+}
+
+function hasExactKeys(record: Record<string, unknown>, keys: readonly string[]): boolean {
+  const actual = Object.keys(record)
+  return actual.length === keys.length && keys.every((key) => Object.hasOwn(record, key))
+}
+
+function isNormalizedTerminalQuickCommandScope(
+  value: unknown,
+  expected: TerminalQuickCommandScope
+): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false
+  }
+  const scope = value as Record<string, unknown>
+  if (expected.type === 'global') {
+    return hasExactKeys(scope, ['type']) && scope.type === 'global'
+  }
+  return (
+    hasExactKeys(scope, ['type', 'repoId']) &&
+    scope.type === 'repo' &&
+    scope.repoId === expected.repoId
+  )
+}
+
+function isNormalizedTerminalQuickCommand(value: unknown, expected: TerminalQuickCommand): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false
+  }
+  const command = value as Record<string, unknown>
+  if (
+    command.id !== expected.id ||
+    command.label !== expected.label ||
+    !isNormalizedTerminalQuickCommandScope(command.scope, expected.scope ?? { type: 'global' })
+  ) {
+    return false
+  }
+  if (isTerminalAgentQuickCommand(expected)) {
+    return (
+      hasExactKeys(command, ['id', 'label', 'action', 'agent', 'prompt', 'scope']) &&
+      command.action === 'agent-prompt' &&
+      command.agent === expected.agent &&
+      command.prompt === expected.prompt
+    )
+  }
+  return (
+    hasExactKeys(command, ['id', 'label', 'action', 'command', 'appendEnter', 'scope']) &&
+    command.action === 'terminal-command' &&
+    command.command === expected.command &&
+    command.appendEnter === expected.appendEnter
+  )
+}
+
+// Reject normalization changes in authoritative full lists or the next mutation could persist silent loss.
+export function parseNormalizedTerminalQuickCommands(
+  input: unknown
+): TerminalQuickCommand[] | null {
+  if (!Array.isArray(input)) {
+    return null
+  }
+  const normalized = normalizeTerminalQuickCommands(input)
+  if (
+    normalized.length !== input.length ||
+    normalized.some((command, index) => !isNormalizedTerminalQuickCommand(input[index], command))
+  ) {
+    return null
+  }
+  return normalized
+}
+
+// Why: paired clients can edit settings concurrently. Applying one command at
+// the host boundary preserves unrelated commands added by another client.
+export function applyTerminalQuickCommandMutation(
+  commands: readonly TerminalQuickCommand[],
+  mutation: TerminalQuickCommandMutation
+): TerminalQuickCommand[] {
+  if (mutation.type === 'delete') {
+    return commands.filter((command) => command.id !== mutation.id)
+  }
+  const existingIndex = commands.findIndex((command) => command.id === mutation.command.id)
+  if (existingIndex === -1) {
+    return [...commands, mutation.command]
+  }
+  return commands.map((command, index) => (index === existingIndex ? mutation.command : command))
 }
 
 export function buildTerminalQuickCommandInput(command: TerminalCommandQuickCommand): string {

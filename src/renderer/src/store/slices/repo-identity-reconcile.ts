@@ -1,45 +1,37 @@
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import { structuralValuesEqual } from '../../../../shared/structural-value-equality'
 import { getRepoHostIdentity } from './repo-host-identity'
+import { reconcileCatalogRows } from '../../../../shared/catalog-row-reconcile'
 
-// Why: after a drag-reorder we optimistically set `repos`, persist, and main
-// broadcasts `repos:changed`. The renderer's own echo handler refetches, which
-// would otherwise hand back field-identical repos as brand-new objects. New
-// identities invalidate the repoMap/repoOrder/rows memos and force the
-// virtualizer to rebuild + re-measure a tick after the drop — the visible jump.
-// Reusing equal objects (and the whole array when nothing moved) makes the echo
-// a no-op render.
-function areReposEqual(a: Repo, b: Repo): boolean {
-  if (a === b) {
-    return true
-  }
-  const keys = Object.keys(a) as (keyof Repo)[]
-  if (keys.length !== Object.keys(b).length) {
-    return false
-  }
-  for (const key of keys) {
-    if (!Object.prototype.hasOwnProperty.call(b, key)) {
-      return false
-    }
-    if (a[key] !== b[key]) {
-      return false
-    }
-  }
-  return true
+// Reuse structurally equal rows/arrays on IPC echoes after drag reorder or virtualizer memos rebuild and visibly jump. Reference equality cannot compare main-rebuilt/cloned nested Repo fields.
+
+export function reconcileFetchedRepos(
+  previous: readonly Repo[],
+  next: readonly Repo[]
+): readonly Repo[] {
+  return reconcileCatalogRows(previous, next, getRepoHostIdentity)
 }
 
-export function reconcileFetchedRepos(previous: readonly Repo[], next: Repo[]): Repo[] {
-  const previousById = new Map(previous.map((repo) => [getRepoHostIdentity(repo), repo]))
-  let identical = next.length === previous.length
-  const reconciled = next.map((repo, index) => {
-    const existing = previousById.get(getRepoHostIdentity(repo))
-    if (existing && areReposEqual(existing, repo)) {
-      if (existing !== previous[index]) {
-        identical = false
-      }
-      return existing
+/**
+ * Reuses equal record values from `previous` — and the whole map when nothing
+ * changed — so a cloned no-op refresh leaves Object.is subscribers untouched.
+ */
+export function reuseEqualRecordMap<T>(
+  previous: Readonly<Record<string, T>>,
+  next: Readonly<Record<string, T>>
+): Readonly<Record<string, T>> {
+  const nextKeys = Object.keys(next)
+  // Equal count plus every next key’s equal previous value proves key-set equality; removals cause count or lookup misses.
+  let identical = nextKeys.length === Object.keys(previous).length
+  const reconciled: Record<string, T> = {}
+  for (const key of nextKeys) {
+    const existing = Object.hasOwn(previous, key) ? previous[key] : undefined
+    if (existing !== undefined && structuralValuesEqual(existing, next[key])) {
+      reconciled[key] = existing
+      continue
     }
     identical = false
-    return repo
-  })
-  return identical ? (previous as Repo[]) : reconciled
+    reconciled[key] = next[key]
+  }
+  return identical ? previous : reconciled
 }

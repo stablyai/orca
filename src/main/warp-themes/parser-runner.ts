@@ -1,6 +1,6 @@
-import { Worker } from 'worker_threads'
+import { Worker } from 'node:worker_threads'
 import { app } from 'electron'
-import { join } from 'path'
+import { join } from 'node:path'
 import type { ParsedWarpThemeResult, ParseWarpThemeOptions } from './parser'
 
 export const WARP_THEME_PARSE_TIMEOUT_MS = 1_000
@@ -35,8 +35,7 @@ export function parseWarpThemeYamlWithTimeout(
       workerData: { content, fileLabel, options }
     })
     let settled = false
-    // Why: callers may shorten the parse timeout (preview budget) but never
-    // extend it past the default cap, keeping untrusted-input parse time bounded.
+    // Preview callers may shorten but never extend untrusted-input parse budgets.
     const timeoutMs = Math.max(
       0,
       Math.min(WARP_THEME_PARSE_TIMEOUT_MS, timeoutOptions.timeoutMs ?? WARP_THEME_PARSE_TIMEOUT_MS)

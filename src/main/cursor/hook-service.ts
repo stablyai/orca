@@ -1,51 +1,25 @@
-import { homedir } from 'os'
-import { join } from 'path'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
+  buildManagedCommandDefinition,
   createManagedCommandMatcher,
-  buildWindowsAgentHookPostCommand,
   getSharedManagedScriptPath,
   readHooksJson,
   removeManagedCommands,
-  wrapPosixHookCommand,
-  wrapWindowsHookCommand,
   writeHooksJson,
   writeManagedScript,
   type HookDefinition
 } from '../agent-hooks/installer-utils'
+import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
 import {
   readHooksJsonRemote,
   writeHooksJsonRemote,
   writeManagedScriptRemote
 } from '../agent-hooks/installer-utils-remote'
-
-// Why: cursor-agent exposes a declarative hooks.json surface at
-// ~/.cursor/hooks.json (https://cursor.com/docs/hooks) with camelCase event
-// names. We subscribe to the minimum set that drives the sidebar spinner and
-// turn-boundary detection:
-//   - beforeSubmitPrompt: new turn starts (carries the user's prompt)
-//   - stop:               turn ends (→ done)
-//   - preToolUse/postToolUse/postToolUseFailure: in-flight tool preview
-//     between submit and stop — without these the pane appears idle for the
-//     entire duration of a long tool-heavy turn
-//   - beforeShellExecution / beforeMCPExecution: shell/MCP tool preview (→ working)
-//   - afterAgentResponse: carries the final composed reply text so the
-//     dashboard can surface it on done
-// sessionStart / sessionEnd are intentionally NOT subscribed — cursor-agent
-// fires them at process lifetime boundaries rather than at turn boundaries,
-// and sessionStart's fire-time can race the first beforeSubmitPrompt in a
-// way that would reset the prompt cache for the just-submitted turn.
-const CURSOR_EVENTS = [
-  'beforeSubmitPrompt',
-  'stop',
-  'preToolUse',
-  'postToolUse',
-  'postToolUseFailure',
-  'beforeShellExecution',
-  'beforeMCPExecution',
-  'afterAgentResponse'
-] as const
+import { CURSOR_EVENTS } from './hook-events'
+import { getManagedCommand, getManagedScript, getPosixManagedCommand } from './hook-script'
 
 function getConfigPath(): string {
   return join(homedir(), '.cursor', 'hooks.json')
@@ -59,67 +33,11 @@ function getManagedScriptPath(): string {
   return getSharedManagedScriptPath(getManagedScriptFileName())
 }
 
-function getManagedCommand(scriptPath: string): string {
-  return process.platform === 'win32'
-    ? wrapWindowsHookCommand(scriptPath)
-    : wrapPosixHookCommand(scriptPath)
-}
-
-function getManagedScript(target: 'local' | 'posix' = 'local'): string {
-  if (target === 'local' && process.platform === 'win32') {
-    return [
-      '@echo off',
-      'setlocal',
-      // Why: see claude/hook-service.ts for rationale. The endpoint file holds
-      // the live port/token for this Orca install; sourcing it here lets a
-      // surviving PTY reach the current server even though its env points at
-      // the prior Orca's coordinates.
-      'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
-      'if "%ORCA_AGENT_HOOK_PORT%"=="" exit /b 0',
-      'if "%ORCA_AGENT_HOOK_TOKEN%"=="" exit /b 0',
-      'if "%ORCA_PANE_KEY%"=="" exit /b 0',
-      buildWindowsAgentHookPostCommand('cursor'),
-      'exit /b 0',
-      ''
-    ].join('\r\n')
+export class CursorHookService {
+  async refreshManagedScripts(): Promise<void> {
+    await refreshManagedScriptIfPresent(getManagedScriptPath(), getManagedScript())
   }
 
-  return [
-    '#!/bin/sh',
-    // Why: see claude/hook-service.ts for rationale. Sourcing refreshes
-    // PORT/TOKEN/ENV/VERSION from the current Orca so a surviving PTY keeps
-    // reporting after a restart.
-    'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
-    '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
-    'fi',
-    'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
-    '  exit 0',
-    'fi',
-    'payload=$(cat)',
-    'if [ -z "$payload" ]; then',
-    '  exit 0',
-    'fi',
-    // Why: worktreeId embeds a filesystem path, so hand-building JSON in POSIX
-    // shell is not safe once a path contains quotes or newlines. Post the raw
-    // hook payload plus metadata as form fields and let the receiver parse it.
-    // Timeout caps best-effort hook posts if the local listener stalls.
-    'curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/cursor" \\',
-    '  --connect-timeout 0.5 --max-time 1.5 \\',
-    '  -H "Content-Type: application/x-www-form-urlencoded" \\',
-    '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
-    '  --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',
-    '  --data-urlencode "tabId=${ORCA_TAB_ID}" \\',
-    '  --data-urlencode "launchToken=${ORCA_AGENT_LAUNCH_TOKEN}" \\',
-    '  --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
-    '  --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
-    '  --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
-    '  --data-urlencode "payload=${payload}" >/dev/null 2>&1 || true',
-    'exit 0',
-    ''
-  ].join('\n')
-}
-
-export class CursorHookService {
   getStatus(): AgentHookInstallStatus {
     const configPath = getConfigPath()
     const scriptPath = getManagedScriptPath()
@@ -134,14 +52,12 @@ export class CursorHookService {
       }
     }
 
-    const command = getManagedCommand(scriptPath)
     const missing: string[] = []
     let presentCount = 0
     for (const eventName of CURSOR_EVENTS) {
+      const command = getManagedCommand(scriptPath, eventName)
       const definitions = Array.isArray(config.hooks?.[eventName]) ? config.hooks![eventName]! : []
-      // Why: Cursor's schema places the command directly on the definition
-      // (not nested under a `hooks` array as Claude does), so match both
-      // shapes to stay robust against future schema changes.
+      // Accept both Cursor's direct command and legacy nested Claude-shaped definitions.
       const hasCommand = definitions.some(
         (definition) =>
           definition.command === command ||
@@ -183,23 +99,13 @@ export class CursorHookService {
       }
     }
 
-    const command = getManagedCommand(scriptPath)
-    // Why: Cursor's hooks.json wraps the map under a top-level "hooks" key
-    // (same as Claude/Codex). A fresh file with no prior hook install will
-    // have config.hooks === undefined.
     const nextHooks = { ...config.hooks }
     const managedEvents = new Set<string>(CURSOR_EVENTS)
 
-    // Why: match by script filename (not exact command string) so a fresh
-    // install sweeps stale entries left by older builds or a different
-    // Electron userData path (dev vs. prod). Without this, repeated installs
-    // accumulate duplicate hook entries pointing at defunct scripts.
+    // Match filenames to catch older builds and moved user-data paths.
     const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
 
-    // Why: sweep managed entries out of events we no longer subscribe to
-    // (e.g. a future rename where we drop an event name). Without this,
-    // users who already had that event registered would keep firing stale
-    // hooks after the app upgrade.
+    // Remove managed hooks from retired events so upgrades stop invoking them.
     for (const [eventName, definitions] of Object.entries(nextHooks)) {
       if (managedEvents.has(eventName)) {
         continue
@@ -208,37 +114,28 @@ export class CursorHookService {
         continue
       }
       const cleaned = removeManagedCommands(definitions, isManagedCommand)
-      // Also strip entries with the command at the top level (Cursor schema).
-      const strippedCursorShape = cleaned.filter(
-        (definition) => !isManagedCommand(definition.command as string | undefined)
+      const strippedTopLevelCommands = cleaned.filter(
+        (definition) => !isManagedCommand(definition.command)
       )
-      if (strippedCursorShape.length === 0) {
+      if (strippedTopLevelCommands.length === 0) {
         delete nextHooks[eventName]
       } else {
-        nextHooks[eventName] = strippedCursorShape
+        nextHooks[eventName] = strippedTopLevelCommands
       }
     }
 
     for (const eventName of CURSOR_EVENTS) {
+      const command = getManagedCommand(scriptPath, eventName)
       const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
-      // Sweep both the Claude-shaped (hooks[].command) and Cursor-shaped
-      // (definition.command) variants so repeated installs converge on a
-      // single managed entry.
       const cleaned = removeManagedCommands(current, isManagedCommand).filter(
-        (definition) => !isManagedCommand(definition.command as string | undefined)
+        (definition) => !isManagedCommand(definition.command)
       )
-      // Why: Cursor's documented schema puts `command` directly on the
-      // definition (not under `hooks`). Emit that shape so cursor-agent
-      // actually invokes the script.
-      const definition: HookDefinition = { command }
+      // Cursor requires command directly on the definition.
+      const definition: HookDefinition = buildManagedCommandDefinition(command)
       nextHooks[eventName] = [...cleaned, definition]
     }
 
-    // Why: cursor-agent's config schema requires a top-level `version: 1`
-    // (see https://cursor.com/docs/hooks). Preserve an existing value if the
-    // user has already pinned one, otherwise stamp the default so a fresh
-    // install produces a valid file. HooksConfig has an index signature on
-    // extra keys, so assign via a Record-typed object to satisfy the type.
+    // Cursor requires version 1; preserve user-pinned versions.
     const nextConfig: Record<string, unknown> = { ...config, hooks: nextHooks }
     if (nextConfig.version === undefined) {
       nextConfig.version = 1
@@ -248,12 +145,7 @@ export class CursorHookService {
     return this.getStatus()
   }
 
-  // Why: install Orca's managed Cursor hooks on the remote box. Mirrors
-  // ClaudeHookService.installRemote — POSIX-only, uses the same SFTP-backed
-  // primitives, and emits Cursor's documented schema (top-level `command`
-  // on each definition + top-level `version: 1`) so cursor-agent on the
-  // remote actually invokes the script. See docs/design/agent-status-over-ssh.md
-  // §8.
+  // Remote installs must match local hook behavior while using POSIX paths.
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
     const remoteConfigPath = `${remoteHome.replace(/\/$/, '')}/.cursor/hooks.json`
     const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/cursor-hook.sh`
@@ -269,18 +161,17 @@ export class CursorHookService {
         }
       }
 
-      const command = wrapPosixHookCommand(remoteScriptPath)
       const nextHooks = { ...config.hooks }
       const isManagedCommand = createManagedCommandMatcher('cursor-hook.sh')
 
       for (const eventName of CURSOR_EVENTS) {
+        const command = getPosixManagedCommand(remoteScriptPath, eventName)
         const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
-        // Why: same dual-shape sweep as the local install — repeated
-        // installs converge on a single managed entry.
+        // Remove both schema shapes so repeated installs converge on one entry.
         const cleaned = removeManagedCommands(current, isManagedCommand).filter(
-          (definition) => !isManagedCommand(definition.command as string | undefined)
+          (definition) => !isManagedCommand(definition.command)
         )
-        const definition: HookDefinition = { command }
+        const definition: HookDefinition = buildManagedCommandDefinition(command)
         nextHooks[eventName] = [...cleaned, definition]
       }
 
@@ -289,11 +180,7 @@ export class CursorHookService {
         nextConfig.version = 1
       }
 
-      // Why: script-then-config order so a partial-failure mid-install at
-      // worst leaves a working script no settings.json points at — see
-      // ClaudeHookService.installRemote.
-      // Why: SSH remotes use POSIX `.sh` hook paths even when Orca itself is
-      // running on Windows; never derive remote script syntax from local OS.
+      // Write the POSIX script before config so partial installs cannot reference a missing script.
       await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
       await writeHooksJsonRemote(sftp, remoteConfigPath, nextConfig)
 
@@ -335,7 +222,7 @@ export class CursorHookService {
         continue
       }
       const cleaned = removeManagedCommands(definitions, isManagedCommand).filter(
-        (definition) => !isManagedCommand(definition.command as string | undefined)
+        (definition) => !isManagedCommand(definition.command)
       )
       if (cleaned.length === 0) {
         delete nextHooks[eventName]

@@ -1,10 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { Button } from '../ui/button'
 import { Separator } from '../ui/separator'
-import { BellRing, Bot, Siren } from 'lucide-react'
+import { BellRing, Bot, EyeOff, Siren } from 'lucide-react'
 import { useAppStore } from '@/store'
+import {
+  MacNotificationPermissionCard,
+  useMacNotificationPermissionState
+} from '@/components/notifications/mac-notification-permission-card'
 import { NotificationSettingToggle } from './NotificationSettingToggle'
+import { NotificationHostToggles } from './NotificationHostToggles'
 import { NotificationSoundSection } from './NotificationSoundSection'
 import {
   createNotificationVolumeDraftState,
@@ -30,6 +35,9 @@ export function NotificationsPane({
 }: NotificationsPaneProps): React.JSX.Element {
   const notificationSettings = settings.notifications
   const notificationSettingsRef = useRef(notificationSettings)
+  const [macPermissionState, setMacPermissionState] = useMacNotificationPermissionState(
+    notificationSettings.enabled
+  )
 
   const updateNotificationSettings = async (
     updates: Partial<GlobalSettings['notifications']>
@@ -76,11 +84,30 @@ export function NotificationsPane({
 
   const handleSendTestNotification = async (): Promise<void> => {
     useAppStore.getState().recordFeatureInteraction('notifications')
-    await sendNotificationSettingsTestNotification(notificationSettings, volumeDraft)
+    const showsMacPermissionCard = macPermissionState !== null
+    const outcome = await sendNotificationSettingsTestNotification(
+      notificationSettings,
+      volumeDraft,
+      // Inline delivery state replaces ambiguous macOS banner-check toasts.
+      showsMacPermissionCard ? { suppressSystemPermissionToasts: true } : undefined
+    )
+    if (!showsMacPermissionCard) {
+      return
+    }
+    if (outcome === 'delivered') {
+      setMacPermissionState('enabled')
+    } else if (outcome === 'not-displayed') {
+      setMacPermissionState('blocked')
+    }
   }
 
   return (
     <div className="space-y-1">
+      {macPermissionState !== null ? (
+        <div className="pb-3">
+          <MacNotificationPermissionCard state={macPermissionState} />
+        </div>
+      ) : null}
       <NotificationSettingToggle
         label={translate(
           'auto.components.settings.NotificationsPane.841c8c549f',
@@ -132,6 +159,43 @@ export function NotificationsPane({
         onToggle={() =>
           void updateNotificationSettings({
             terminalBell: !notificationSettings.terminalBell
+          })
+        }
+      />
+
+      <NotificationHostToggles
+        mutedNotificationSourceIds={notificationSettings.mutedNotificationSourceIds}
+        disabled={!notificationSettings.enabled}
+        onChange={(hostIds, muted) =>
+          void updateNotificationSettings({
+            mutedNotificationSourceIds: muted
+              ? [
+                  ...new Set([
+                    ...notificationSettingsRef.current.mutedNotificationSourceIds,
+                    ...hostIds
+                  ])
+                ]
+              : notificationSettingsRef.current.mutedNotificationSourceIds.filter(
+                  (id) => !hostIds.includes(id)
+                )
+          })
+        }
+      />
+
+      <NotificationSettingToggle
+        icon={<EyeOff className="size-4" />}
+        label={translate(
+          'auto.components.settings.NotificationsPane.ba07e60f38',
+          'Notify About Hidden Workspaces'
+        )}
+        description={translate(
+          'auto.components.settings.NotificationsPane.e4b5e909ff',
+          "When off, workspaces hidden by a Hide switch in the sidebar's Filters menu show no unread dot and send no notifications to this computer or your phone."
+        )}
+        checked={notificationSettings.notifyHiddenWorkspaces}
+        onToggle={() =>
+          void updateNotificationSettings({
+            notifyHiddenWorkspaces: !notificationSettings.notifyHiddenWorkspaces
           })
         }
       />

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 const REFRESH_SPINNER_DELAY_MS = 200
 
-export function useFileExplorerManualRefresh(refreshTree: () => Promise<void>): {
+export function useFileExplorerManualRefresh(refreshTree: () => Promise<unknown>): {
   isRefreshing: boolean
   showRefreshSpinner: boolean
   handleRefresh: () => void
@@ -35,8 +35,7 @@ export function useFileExplorerManualRefresh(refreshTree: () => Promise<void>): 
 
     isRefreshingRef.current = true
     setIsRefreshing(true)
-    // Why: local refreshes are usually instant, but SSH can be visibly slower.
-    // Delay the spinner so fast refreshes do not flicker.
+    // Delay the spinner so fast local refreshes do not flicker while slow SSH refreshes remain visible.
     spinnerTimerRef.current = window.setTimeout(
       () => setShowRefreshSpinner(true),
       REFRESH_SPINNER_DELAY_MS

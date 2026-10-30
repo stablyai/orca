@@ -1,0 +1,291 @@
+// Keep guests in stable overlay-slot parents across chrome unmounts; Electron destroys them on DOM removal/reparenting.
+
+const slotViewportRoots = new Map<string, HTMLDivElement>()
+
+/** Lays docked DevTools out below the page when the dock says bottom, beside it otherwise. */
+export const BROWSER_DEVTOOLS_DOCK_SPLIT_CLASS_NAME =
+  'flex min-h-0 min-w-0 flex-1 has-[>[data-browser-devtools-dock=bottom]]:flex-col'
+
+type BrowserPageViewport = {
+  shell: HTMLDivElement
+  chromeInset: HTMLDivElement
+  /** Holds the page container and, while docked, DevTools below or beside it. */
+  devToolsSplit: HTMLDivElement
+  container: HTMLDivElement
+  scroller: HTMLDivElement
+  content: HTMLDivElement
+}
+
+export type BrowserPageViewportScrollState = {
+  scrollLeft: number
+  scrollTop: number
+  maxScrollLeft: number
+  maxScrollTop: number
+}
+
+const browserPageViewports = new Map<string, BrowserPageViewport>()
+
+// Remember chrome insets across shell recovery/profile/slot rebuilds that do not trigger React remeasurement.
+const browserPageChromeInsetHeights = new Map<string, number>()
+const browserPageViewportPresetSizes = new Map<string, { width: number; height: number }>()
+const MAX_REMEMBERED_BROWSER_PAGE_INSETS = 512
+
+const slotRootListeners = new Map<string, Set<() => void>>()
+
+function notifySlotRootListeners(workspaceTabId: string): void {
+  for (const listener of slotRootListeners.get(workspaceTabId) ?? []) {
+    listener()
+  }
+}
+
+export function registerBrowserOverlaySlotViewport(
+  workspaceTabId: string,
+  element: HTMLDivElement | null
+): void {
+  if (element) {
+    slotViewportRoots.set(workspaceTabId, element)
+    notifySlotRootListeners(workspaceTabId)
+    return
+  }
+  slotViewportRoots.delete(workspaceTabId)
+  // Subscribers outlive the root; notify them on removal so they can observe its replacement.
+  notifySlotRootListeners(workspaceTabId)
+}
+
+export function getBrowserOverlaySlotViewport(workspaceTabId: string): HTMLDivElement | null {
+  return slotViewportRoots.get(workspaceTabId) ?? null
+}
+
+export function subscribeBrowserOverlaySlotViewport(
+  workspaceTabId: string,
+  listener: () => void
+): () => void {
+  let listeners = slotRootListeners.get(workspaceTabId)
+  if (!listeners) {
+    listeners = new Set()
+    slotRootListeners.set(workspaceTabId, listeners)
+  }
+  const ownedListeners = listeners
+  ownedListeners.add(listener)
+  return () => {
+    ownedListeners.delete(listener)
+    // Unsubscribe only from the owned Set; a newer one may already occupy the same tab key.
+    if (ownedListeners.size === 0 && slotRootListeners.get(workspaceTabId) === ownedListeners) {
+      slotRootListeners.delete(workspaceTabId)
+    }
+  }
+}
+
+export function getBrowserPageViewportContainer(browserPageId: string): HTMLDivElement | null {
+  return browserPageViewports.get(browserPageId)?.container ?? null
+}
+
+export function ensureBrowserPageViewport(
+  browserPageId: string,
+  workspaceTabId: string
+): BrowserPageViewport | null {
+  const root = slotViewportRoots.get(workspaceTabId)
+  const existing = browserPageViewports.get(browserPageId)
+  if (existing) {
+    if (!root || existing.shell.parentElement === root) {
+      return existing
+    }
+    // Why: a remounted slot strands this shell after Electron destroys its detached guest (STA-3228).
+    existing.shell.remove()
+    browserPageViewports.delete(browserPageId)
+  }
+  if (!root) {
+    return null
+  }
+  const shell = document.createElement('div')
+  shell.dataset.browserPageViewportId = browserPageId
+  shell.className = 'absolute inset-0 flex min-h-0 flex-col'
+  shell.style.display = 'none'
+  shell.inert = true
+  shell.setAttribute('aria-hidden', 'true')
+
+  const chromeInset = document.createElement('div')
+  chromeInset.dataset.browserPageChromeInset = ''
+  chromeInset.className = 'shrink-0'
+  const rememberedInsetHeight = browserPageChromeInsetHeights.get(browserPageId)
+  if (rememberedInsetHeight !== undefined) {
+    chromeInset.style.height = `${rememberedInsetHeight}px`
+  }
+
+  const devToolsSplit = document.createElement('div')
+  devToolsSplit.className = BROWSER_DEVTOOLS_DOCK_SPLIT_CLASS_NAME
+
+  const container = document.createElement('div')
+  container.dataset.browserPageContainer = ''
+  container.className = 'relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background'
+
+  const scroller = document.createElement('div')
+  scroller.dataset.browserPageScroller = ''
+  scroller.className = 'scrollbar-sleek relative min-h-0 min-w-0 flex-1 overflow-hidden'
+
+  const content = document.createElement('div')
+  content.dataset.browserPageContent = ''
+  content.className = 'relative mx-auto'
+
+  scroller.appendChild(content)
+  container.appendChild(scroller)
+  devToolsSplit.appendChild(container)
+
+  shell.append(chromeInset, devToolsSplit)
+  root.appendChild(shell)
+
+  const viewport = { shell, chromeInset, devToolsSplit, container, scroller, content }
+  browserPageViewports.set(browserPageId, viewport)
+  applyViewportPresetSizeStyles(viewport, browserPageViewportPresetSizes.get(browserPageId) ?? null)
+  return viewport
+}
+
+/** Divides the preset's window-DIP size by the live UI zoom factor (see `main.css`). */
+export const BROWSER_PAGE_PRESET_VIEWPORT_CLASS_NAME = 'browser-page-preset-viewport'
+
+// CDP presets use window DIP while UI zoom changes CSS pixels; divide the host box to avoid unpainted strips.
+function applyViewportPresetSizeStyles(
+  viewport: BrowserPageViewport,
+  size: { width: number; height: number } | null
+): void {
+  if (size) {
+    viewport.content.style.setProperty('--browser-page-viewport-width', `${size.width}px`)
+    viewport.content.style.setProperty('--browser-page-viewport-height', `${size.height}px`)
+    // Why: an inline width/height would outrank the class rule's zoom division.
+    viewport.content.style.removeProperty('width')
+    viewport.content.style.removeProperty('height')
+    viewport.content.classList.add(BROWSER_PAGE_PRESET_VIEWPORT_CLASS_NAME)
+  } else {
+    viewport.content.classList.remove(BROWSER_PAGE_PRESET_VIEWPORT_CLASS_NAME)
+    viewport.content.style.removeProperty('--browser-page-viewport-width')
+    viewport.content.style.removeProperty('--browser-page-viewport-height')
+    viewport.content.style.width = '100%'
+    viewport.content.style.height = '100%'
+  }
+  viewport.scroller.style.overflow = size ? 'auto' : ''
+}
+
+export function setBrowserPageViewportPresetSize(
+  browserPageId: string,
+  size: { width: number; height: number } | null
+): void {
+  if (size) {
+    browserPageViewportPresetSizes.set(browserPageId, size)
+  } else {
+    browserPageViewportPresetSizes.delete(browserPageId)
+  }
+  const viewport = browserPageViewports.get(browserPageId)
+  if (viewport) {
+    applyViewportPresetSizeStyles(viewport, size)
+  }
+}
+
+export function clearBrowserPageViewportPresetSize(browserPageId: string): void {
+  setBrowserPageViewportPresetSize(browserPageId, null)
+}
+
+export function scrollBrowserPageViewport(
+  browserPageId: string,
+  deltaX: number,
+  deltaY: number
+): void {
+  const scroller = browserPageViewports.get(browserPageId)?.scroller
+  if (!scroller) {
+    return
+  }
+  scroller.scrollLeft += deltaX
+  scroller.scrollTop += deltaY
+}
+
+export function getBrowserPageViewportScrollState(
+  browserPageId: string
+): BrowserPageViewportScrollState | null {
+  const scroller = browserPageViewports.get(browserPageId)?.scroller
+  if (!scroller) {
+    return null
+  }
+  return {
+    scrollLeft: Math.max(0, scroller.scrollLeft),
+    scrollTop: Math.max(0, scroller.scrollTop),
+    maxScrollLeft: Math.max(0, scroller.scrollWidth - scroller.clientWidth),
+    maxScrollTop: Math.max(0, scroller.scrollHeight - scroller.clientHeight)
+  }
+}
+
+export function subscribeBrowserPageViewportScroll(
+  scroller: HTMLDivElement | null,
+  listener: () => void
+): () => void {
+  if (!scroller) {
+    return () => {}
+  }
+  scroller.addEventListener('scroll', listener, { passive: true })
+  return () => scroller.removeEventListener('scroll', listener)
+}
+
+export function removeBrowserPageViewport(browserPageId: string): void {
+  const viewport = browserPageViewports.get(browserPageId)
+  if (viewport) {
+    viewport.shell.remove()
+    browserPageViewports.delete(browserPageId)
+  }
+}
+
+export type BrowserPageViewportLayout = {
+  paintable: boolean
+  active: boolean
+}
+
+export function applyBrowserPageViewportLayout(
+  browserPageId: string,
+  layout: BrowserPageViewportLayout
+): void {
+  const viewport = browserPageViewports.get(browserPageId)
+  if (!viewport) {
+    return
+  }
+  if (!layout.paintable) {
+    viewport.shell.style.display = 'none'
+    viewport.shell.inert = true
+    viewport.shell.setAttribute('aria-hidden', 'true')
+    return
+  }
+  viewport.shell.inert = !layout.active
+  if (layout.active) {
+    viewport.shell.removeAttribute('aria-hidden')
+  } else {
+    viewport.shell.setAttribute('aria-hidden', 'true')
+  }
+  viewport.shell.style.display = 'flex'
+  viewport.shell.style.opacity = layout.active ? '1' : '0'
+  viewport.shell.style.pointerEvents = layout.active ? 'auto' : 'none'
+  viewport.shell.style.zIndex = layout.active ? '1' : '0'
+}
+
+export function syncBrowserPageChromeInset(browserPageId: string, heightPx: number): void {
+  const insetHeight = Math.max(0, heightPx)
+  browserPageChromeInsetHeights.set(browserPageId, insetHeight)
+  while (browserPageChromeInsetHeights.size > MAX_REMEMBERED_BROWSER_PAGE_INSETS) {
+    const oldest = browserPageChromeInsetHeights.keys().next()
+    if (oldest.done) {
+      break
+    }
+    browserPageChromeInsetHeights.delete(oldest.value)
+  }
+  const viewport = browserPageViewports.get(browserPageId)
+  if (!viewport) {
+    return
+  }
+  viewport.chromeInset.style.height = `${insetHeight}px`
+}
+
+export function parkBrowserPageViewport(browserPageId: string): void {
+  const viewport = browserPageViewports.get(browserPageId)
+  if (viewport) {
+    viewport.shell.style.display = 'none'
+    viewport.shell.inert = true
+    viewport.shell.setAttribute('aria-hidden', 'true')
+    viewport.shell.style.pointerEvents = 'none'
+    viewport.shell.style.opacity = '0'
+  }
+}

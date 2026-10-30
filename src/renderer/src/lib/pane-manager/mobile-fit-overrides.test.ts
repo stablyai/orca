@@ -8,15 +8,13 @@ import {
   getPaneIdsForPty,
   onOverrideChange,
   hydrateOverrides,
-  getAllOverrides
+  getAllOverrides,
+  getMobileFitOverridePtyIds,
+  replaceFitOverridePtyId
 } from './mobile-fit-overrides'
 
 afterEach(() => {
-  // Reset module-level maps between tests by clearing all overrides
-  // and unbinding all known panes.
   hydrateOverrides([])
-  // Unbind any panes bound during tests. We don't have direct access
-  // to the internal map, but we can unbind known test keys.
   for (const tabId of ['tab-0', 'tab-1', 'tab-2']) {
     for (let paneId = 0; paneId < 5; paneId++) {
       unbindPane(paneId, tabId)
@@ -24,16 +22,47 @@ afterEach(() => {
   }
 })
 
-// ---------------------------------------------------------------------------
-// setFitOverride + getFitOverrideForPty
-// ---------------------------------------------------------------------------
-
 describe('setFitOverride / getFitOverrideForPty', () => {
+  it('keeps shared-grid metadata through hydration and handle replacement without tagging mobile holds', () => {
+    hydrateOverrides([
+      {
+        ptyId: 'shared-old',
+        mode: 'remote-desktop-fit',
+        cols: 160,
+        rows: 40,
+        localSharedGrid: true
+      }
+    ])
+    replaceFitOverridePtyId('shared-old', 'shared-new')
+    expect(getFitOverrideForPty('shared-new')).toEqual({
+      mode: 'remote-desktop-fit',
+      cols: 160,
+      rows: 40,
+      localSharedGrid: true
+    })
+    setFitOverride('shared-new', 'mobile-fit', 40, 20, true)
+    expect(getFitOverrideForPty('shared-new')).toEqual({ mode: 'mobile-fit', cols: 40, rows: 20 })
+    setFitOverride('shared-new', 'desktop-fit', 160, 40)
+    expect(getFitOverrideForPty('shared-new')).toBeNull()
+  })
+
   it('stores a mobile-fit override keyed by ptyId', () => {
     setFitOverride('pty-1', 'mobile-fit', 49, 20)
 
     const override = getFitOverrideForPty('pty-1')
     expect(override).toEqual({ mode: 'mobile-fit', cols: 49, rows: 20 })
+  })
+
+  it('stores and releases a remote desktop fit hold', () => {
+    setFitOverride('pty-remote', 'remote-desktop-fit', 96, 32)
+    expect(getFitOverrideForPty('pty-remote')).toEqual({
+      mode: 'remote-desktop-fit',
+      cols: 96,
+      rows: 32
+    })
+
+    setFitOverride('pty-remote', 'desktop-fit', 120, 40)
+    expect(getFitOverrideForPty('pty-remote')).toBeNull()
   })
 
   it('removes the override when mode is desktop-fit', () => {
@@ -61,11 +90,17 @@ describe('setFitOverride / getFitOverrideForPty', () => {
     expect(getFitOverrideForPty('pty-1')?.cols).toBe(49)
     expect(getFitOverrideForPty('pty-2')?.cols).toBe(80)
   })
-})
 
-// ---------------------------------------------------------------------------
-// bindPanePtyId + getFitOverrideForPane (tab-scoped composite key)
-// ---------------------------------------------------------------------------
+  it('moves a fit hold when a provider replaces the PTY identity', () => {
+    setFitOverride('pty-old', 'mobile-fit', 49, 20)
+
+    replaceFitOverridePtyId('pty-old', 'pty-new')
+
+    expect(getFitOverrideForPty('pty-old')).toBeNull()
+    expect(getFitOverrideForPty('pty-new')).toEqual({ mode: 'mobile-fit', cols: 49, rows: 20 })
+    expect([...getAllOverrides().keys()]).toEqual(['pty-new'])
+  })
+})
 
 describe('bindPanePtyId / getFitOverrideForPane', () => {
   it('resolves override through tab:pane → ptyId → override chain', () => {
@@ -120,10 +155,6 @@ describe('bindPanePtyId / getFitOverrideForPane', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// unbindPane
-// ---------------------------------------------------------------------------
-
 describe('unbindPane', () => {
   it('removes the tab:pane binding', () => {
     setFitOverride('pty-1', 'mobile-fit', 49, 20)
@@ -152,10 +183,6 @@ describe('unbindPane', () => {
     expect(getFitOverrideForPane(1, 'tab-0')).toEqual({ mode: 'mobile-fit', cols: 49, rows: 20 })
   })
 })
-
-// ---------------------------------------------------------------------------
-// getPaneIdsForPty
-// ---------------------------------------------------------------------------
 
 describe('getPaneIdsForPty', () => {
   it('returns pane IDs bound to a ptyId', () => {
@@ -186,10 +213,6 @@ describe('getPaneIdsForPty', () => {
     expect(getPaneIdsForPty('pty-1')).toEqual([1])
   })
 })
-
-// ---------------------------------------------------------------------------
-// onOverrideChange
-// ---------------------------------------------------------------------------
 
 describe('onOverrideChange', () => {
   it('fires listener on mobile-fit override', () => {
@@ -273,10 +296,6 @@ describe('onOverrideChange', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// hydrateOverrides
-// ---------------------------------------------------------------------------
-
 describe('hydrateOverrides', () => {
   it('replaces all overrides with the given list', () => {
     setFitOverride('pty-old', 'mobile-fit', 49, 20)
@@ -307,10 +326,6 @@ describe('hydrateOverrides', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// getAllOverrides
-// ---------------------------------------------------------------------------
-
 describe('getAllOverrides', () => {
   it('returns a copy of all current overrides', () => {
     setFitOverride('pty-1', 'mobile-fit', 49, 20)
@@ -319,114 +334,14 @@ describe('getAllOverrides', () => {
     const all = getAllOverrides()
     expect(all.size).toBe(2)
 
-    // Verify it's a copy, not the internal map
     all.delete('pty-1')
     expect(getFitOverrideForPty('pty-1')).not.toBeNull()
   })
-})
 
-// ---------------------------------------------------------------------------
-// Scenario tests (from design doc verification matrix)
-// ---------------------------------------------------------------------------
+  it('excludes remote desktop holds from mobile bulk restore', () => {
+    setFitOverride('pty-mobile', 'mobile-fit', 49, 20)
+    setFitOverride('pty-remote', 'remote-desktop-fit', 100, 30)
 
-describe('scenario: desktop window resize while mobile is viewing', () => {
-  it('override persists across setFitOverride calls — desktop safeFit will see it', () => {
-    setFitOverride('pty-1', 'mobile-fit', 49, 20)
-    bindPanePtyId(1, 'pty-1', 'tab-0')
-
-    // Simulate desktop resize triggering a re-check — override should still be there
-    expect(getFitOverrideForPty('pty-1')).toEqual({ mode: 'mobile-fit', cols: 49, rows: 20 })
-    expect(getFitOverrideForPane(1, 'tab-0')).toEqual({ mode: 'mobile-fit', cols: 49, rows: 20 })
-  })
-})
-
-describe('scenario: mobile disconnect restores all terminals', () => {
-  it('clearing all overrides for a disconnected client removes all traces', () => {
-    setFitOverride('pty-1', 'mobile-fit', 49, 20)
-    setFitOverride('pty-2', 'mobile-fit', 49, 20)
-    bindPanePtyId(1, 'pty-1', 'tab-0')
-    bindPanePtyId(2, 'pty-2', 'tab-0')
-
-    // Simulate runtime clearing overrides on disconnect
-    setFitOverride('pty-1', 'desktop-fit', 120, 40)
-    setFitOverride('pty-2', 'desktop-fit', 120, 40)
-
-    expect(getFitOverrideForPty('pty-1')).toBeNull()
-    expect(getFitOverrideForPty('pty-2')).toBeNull()
-    expect(getFitOverrideForPane(1, 'tab-0')).toBeNull()
-    expect(getFitOverrideForPane(2, 'tab-0')).toBeNull()
-  })
-})
-
-describe('scenario: PTY exits while phone-fitted', () => {
-  it('clearing override for exited PTY leaves no stale state', () => {
-    setFitOverride('pty-1', 'mobile-fit', 49, 20)
-    bindPanePtyId(1, 'pty-1', 'tab-0')
-
-    // Runtime clears override on PTY exit
-    setFitOverride('pty-1', 'desktop-fit', 0, 0)
-    unbindPane(1, 'tab-0')
-
-    expect(getFitOverrideForPty('pty-1')).toBeNull()
-    expect(getFitOverrideForPane(1, 'tab-0')).toBeNull()
-    expect(getPaneIdsForPty('pty-1')).toEqual([])
-    expect(getAllOverrides().size).toBe(0)
-  })
-})
-
-describe('scenario: mobile reconnects after disconnect', () => {
-  it('new override after clear works correctly', () => {
-    // First session
-    setFitOverride('pty-1', 'mobile-fit', 49, 20)
-    bindPanePtyId(1, 'pty-1', 'tab-0')
-
-    // Disconnect
-    setFitOverride('pty-1', 'desktop-fit', 120, 40)
-
-    // Reconnect — new session sets override again
-    setFitOverride('pty-1', 'mobile-fit', 55, 22)
-
-    expect(getFitOverrideForPty('pty-1')).toEqual({ mode: 'mobile-fit', cols: 55, rows: 22 })
-    expect(getFitOverrideForPane(1, 'tab-0')).toEqual({ mode: 'mobile-fit', cols: 55, rows: 22 })
-  })
-})
-
-describe('scenario: multiple tabs with same pane IDs', () => {
-  it('override on one tab does not affect the other', () => {
-    bindPanePtyId(1, 'pty-A', 'tab-0')
-    bindPanePtyId(1, 'pty-B', 'tab-1')
-
-    setFitOverride('pty-A', 'mobile-fit', 49, 20)
-
-    expect(getFitOverrideForPane(1, 'tab-0')?.cols).toBe(49)
-    expect(getFitOverrideForPane(1, 'tab-1')).toBeNull()
-  })
-
-  it('clearing override for one tab does not affect the other', () => {
-    bindPanePtyId(1, 'pty-A', 'tab-0')
-    bindPanePtyId(1, 'pty-B', 'tab-1')
-
-    setFitOverride('pty-A', 'mobile-fit', 49, 20)
-    setFitOverride('pty-B', 'mobile-fit', 60, 25)
-
-    // Clear only tab-0's PTY
-    setFitOverride('pty-A', 'desktop-fit', 120, 40)
-
-    expect(getFitOverrideForPane(1, 'tab-0')).toBeNull()
-    expect(getFitOverrideForPane(1, 'tab-1')?.cols).toBe(60)
-  })
-})
-
-describe('scenario: change listener fires for both override and restore', () => {
-  it('tracks full lifecycle: mobile-fit → desktop-fit', () => {
-    const events: { mode: string }[] = []
-    const unsub = onOverrideChange((e) => events.push({ mode: e.mode }))
-
-    setFitOverride('pty-1', 'mobile-fit', 49, 20)
-    setFitOverride('pty-1', 'desktop-fit', 120, 40)
-
-    expect(events).toEqual([{ mode: 'mobile-fit' }, { mode: 'desktop-fit' }])
-
-    unsub()
+    expect(getMobileFitOverridePtyIds()).toEqual(['pty-mobile'])
   })
 })

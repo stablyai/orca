@@ -1,14 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { CommitArea } from './SourceControl'
+import { CommitArea } from './source-control/commit/commit-area'
 import { resolvePrimaryAction, type PrimaryActionInputs } from './source-control-primary-action'
-import { resolveDropdownItems, type DropdownActionKind } from './source-control-dropdown-items'
-
-// Why: split out from CommitArea.test.tsx so each file stays under the
-// project's max-lines budget. These tests cover the chevron spinner
-// behaviour for dropdown-only ops (Fetch) and the no-double-spin guard
-// when the primary button already hosts the in-flight indicator.
+import { resolveDropdownItems } from './source-control-dropdown-items'
+import type { DropdownActionKind } from '../../../../shared/source-control-dropdown-item-types'
 
 function buildInputs(overrides: Partial<PrimaryActionInputs> = {}): PrimaryActionInputs {
   return {
@@ -33,11 +29,12 @@ function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
     commitMessage: 'feat: add commit area',
     commitError: null as string | null,
     commitFailureRecoveryPrompt: null as string | null,
+    pushRecovery: null,
     remoteActionError: null as string | null,
     isCommitting: inputs.isCommitting,
     isFixingCommitFailureWithAI: false,
+    isFixingPushFailureWithAI: false,
     sourceControlAiActionsVisible: true,
-    aiEnabled: false,
     aiAgentConfigured: false,
     isGenerating: false,
     generateError: null as string | null,
@@ -52,13 +49,16 @@ function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
     onGenerate: vi.fn(),
     onCancelGenerate: vi.fn(),
     onFixCommitFailureWithAI: vi.fn(),
+    onFixPushFailureWithAI: vi.fn(),
     onPrimaryAction: vi.fn(),
     onDropdownAction: vi.fn() as (kind: DropdownActionKind) => void
   }
 }
 
 function buttons(markup: string): string[] {
-  return [...markup.matchAll(/<button\b[\s\S]*?<\/button>/g)].map((match) => match[0])
+  return [...markup.matchAll(/<button\b[\s\S]*?<\/button>/g)]
+    .map((match) => match[0])
+    .filter((entry) => !entry.includes('aria-label="Generate commit message with AI"'))
 }
 
 function renderButtons(props: ReturnType<typeof baseProps>): string[] {

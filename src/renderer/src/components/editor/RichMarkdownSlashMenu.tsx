@@ -4,7 +4,31 @@ import { Search } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { runSlashCommand } from './rich-markdown-slash-commands'
 import type { SlashCommand, SlashMenuState } from './rich-markdown-slash-commands'
+import type { SlashCommandGroup } from './rich-markdown-slash-command-primitives'
 import { translate } from '@/i18n/i18n'
+
+function slashCommandGroupLabel(group: SlashCommandGroup): string {
+  switch (group) {
+    case 'Headings':
+      return translate('auto.components.editor.RichMarkdownSlashMenu.groupHeadings', 'Headings')
+    case 'Toggle headings':
+      return translate(
+        'auto.components.editor.RichMarkdownSlashMenu.groupToggleHeadings',
+        'Toggle headings'
+      )
+    case 'Basic blocks':
+      return translate(
+        'auto.components.editor.RichMarkdownSlashMenu.groupBasicBlocks',
+        'Basic blocks'
+      )
+    case 'Advanced':
+      return translate('auto.components.editor.RichMarkdownSlashMenu.groupAdvanced', 'Advanced')
+    case 'Media':
+      return translate('auto.components.editor.RichMarkdownSlashMenu.groupMedia', 'Media')
+    case 'Others':
+      return translate('auto.components.editor.RichMarkdownSlashMenu.groupOthers', 'Others')
+  }
+}
 
 type RichMarkdownSlashMenuProps = {
   editor: Editor | null
@@ -66,7 +90,9 @@ export function RichMarkdownSlashMenu({
             return (
               <React.Fragment key={command.id}>
                 {showGroup ? (
-                  <div className="rich-markdown-slash-section">{command.group}</div>
+                  <div className="rich-markdown-slash-section">
+                    {slashCommandGroupLabel(command.group)}
+                  </div>
                 ) : null}
                 <button
                   type="button"

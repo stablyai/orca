@@ -77,8 +77,7 @@ function postRaw(
     function onResponseData(chunk: Buffer): void {
       responseBytes += chunk.length
       if (responseBytes > MAX_RESPONSE_BYTES) {
-        // Why: diagnostics endpoints should return tiny JSON envelopes.
-        // Cap response buffering so a bad endpoint cannot grow main memory.
+        // Bound buffering even if a misconfigured endpoint returns a huge response.
         rejectOnce(new Error('diagnostic response exceeded size limit'), {
           destroyRequest: true,
           destroyResponse: true
@@ -89,16 +88,15 @@ function postRaw(
     }
     function onResponseEnd(): void {
       const status = res?.statusCode ?? 0
-      const text = Buffer.concat(chunks).toString('utf8')
       if (status >= 200 && status < 300) {
+        const text = Buffer.concat(chunks).toString('utf8')
         try {
           resolveOnce(text.length > 0 ? JSON.parse(text) : {})
         } catch {
           rejectOnce(new Error(`malformed JSON response (HTTP ${status})`))
         }
       } else {
-        // Why: this error can cross IPC into renderer toasts. Never
-        // include backend response bodies; they may contain infra detail.
+        // Errors reach renderer IPC; response bodies may expose infrastructure details.
         rejectOnce(new Error(`HTTP ${status}`))
       }
     }
@@ -106,8 +104,7 @@ function postRaw(
       rejectOnce(new Error('diagnostic network request failed'))
     }
     function onRequestError(): void {
-      // Why: request errors can include endpoint hostnames. The diagnostics
-      // endpoint contract keeps infrastructure details out of renderer IPC.
+      // Network errors may expose endpoint hostnames across renderer IPC.
       rejectOnce(new Error('diagnostic network request failed'))
     }
     function onRequestTimeout(): void {

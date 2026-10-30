@@ -2,21 +2,29 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  statSync,
   writeFileSync,
   chmodSync,
-  copyFileSync,
   renameSync,
   unlinkSync
-} from 'fs'
-import { homedir } from 'os'
-import { dirname, join } from 'path'
-import { randomUUID } from 'crypto'
+} from 'node:fs'
+import { homedir } from 'node:os'
+import { dirname, join } from 'node:path'
+import { randomUUID } from 'node:crypto'
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
 import { grantDirAcl, isPermissionError } from '../win32-utils'
+import { resolveHooksJsonWritePath } from './hook-config-write-path'
+import { writeRollingFileBackup } from '../rolling-file-backup'
+import { renameOverLockedTarget } from './locked-executable-rename'
+import {
+  getWindowsNativeHookAgent,
+  WINDOWS_NATIVE_HOOK_EXECUTABLE_NAME
+} from './windows-native-hook-executable'
 
 export type HookCommandConfig = {
   type: 'command'
   command: string
+  args?: string[]
   timeout?: number
   async?: boolean
   statusMessage?: string
@@ -37,40 +45,43 @@ export type HooksConfig = {
   [key: string]: unknown
 }
 
-export function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
+// Host-level backstop independent of curl and provider-specific timeouts.
+export const MANAGED_HOOK_TIMEOUT_SECONDS = 10
+export const MANAGED_HOOK_TIMEOUT_MILLISECONDS = MANAGED_HOOK_TIMEOUT_SECONDS * 1000
+
+// Claude-shaped schemas nest command hooks; Cursor puts command on the definition itself.
+export function buildManagedCommandHook(
+  command: string,
+  timeout = MANAGED_HOOK_TIMEOUT_SECONDS
+): HookCommandConfig {
+  return { type: 'command', command, timeout }
 }
 
-export function readHooksJson(configPath: string): HooksConfig | null {
-  if (!existsSync(configPath)) {
-    return {}
-  }
-
-  try {
-    const parsed = JSON.parse(readFileSync(configPath, 'utf-8'))
-    return isPlainObject(parsed) ? parsed : null
-  } catch {
-    return null
-  }
+export function buildManagedCommandDefinition(command: string): HookDefinition {
+  return { command, timeout: MANAGED_HOOK_TIMEOUT_SECONDS }
 }
 
-// Why: callers in install/remove need to match not just the exact current
-// managed command, but also stale entries pointing at old script paths — e.g.
-// from a previous dev build with a different Electron userData dir, or a
-// parallel dev/prod install. Matching by the managed script's file name
-// (under any `agent-hooks/` directory) lets a fresh install sweep those
-// without touching unrelated user-authored hooks.
+export {
+  isPlainObject,
+  readHooksJson,
+  readHooksJsonWithRaw,
+  type HooksJsonSnapshot
+} from './hooks-json-read'
+
+// Match script names so reinstalls sweep entries from old and parallel installations.
 export function createManagedCommandMatcher(
   scriptFileName: string
 ): (command: string | undefined) => boolean {
-  const scriptStem = scriptFileName.replace(/\.(?:cmd|sh)$/, '')
-  // Why: local Windows installs use .cmd, while SSH/POSIX installs and older
-  // entries use .sh. A platform switch should still sweep stale Orca hooks.
+  const scriptStem = scriptFileName.replace(/\.(?:cmd|ps1|sh)$/, '')
+  // Sweep every platform suffix after a platform switch.
   const needles = [
     `agent-hooks/${scriptFileName}`,
     `agent-hooks/${scriptStem}.cmd`,
+    `agent-hooks/${scriptStem}.ps1`,
     `agent-hooks/${scriptStem}.sh`
   ]
+  // The native executable selects its provider through argv[1].
+  const nativeHook = `agent-hooks/${WINDOWS_NATIVE_HOOK_EXECUTABLE_NAME} ${getWindowsNativeHookAgent(scriptFileName)} `
   return (command) => {
     if (!command) {
       return false
@@ -78,7 +89,10 @@ export function createManagedCommandMatcher(
     const decodedCommand = decodePowerShellEncodedCommand(command)
     const searchText = decodedCommand ? `${command}\n${decodedCommand}` : command
     const normalizedCommand = searchText.replaceAll('\\', '/')
-    return needles.some((needle) => normalizedCommand.includes(needle))
+    return (
+      needles.some((needle) => normalizedCommand.includes(needle)) ||
+      normalizedCommand.split('\n').some((line) => `${line} `.includes(nativeHook))
+    )
   }
 }
 
@@ -94,53 +108,64 @@ function decodePowerShellEncodedCommand(command: string): string | null {
   }
 }
 
-// Why: prod, dev, and parallel Orca instances must write the same managed
-// settings entry instead of racing between per-userData script paths.
+// Parallel Orca instances must share one user-wide script path.
 export function getSharedManagedScriptPath(scriptFileName: string): string {
   return join(homedir(), '.orca', 'agent-hooks', scriptFileName)
 }
 
-// Why: a stale managed hook entry (left over after the user wiped userData,
-// switched dev↔prod installs, or had a partial install fail) used to fire
-// `/bin/sh "<missing path>"` on every tool call, which exits 127 and surfaces
-// as `PreToolUse hook (failed) error: hook exited with code 127` in the agent
-// transcript. Wrapping the launcher in `if [ -x ... ]; then ...; fi` makes a
-// missing/non-executable script a silent no-op so a broken install never
-// poisons the user's session. Failures inside the script itself are
-// unaffected — only the missing-script case short-circuits.
-export function wrapPosixHookCommand(scriptPath: string, env: Record<string, string> = {}): string {
-  // Why: POSIX single-quote escape so $, `, ", and \ in scriptPath are taken
-  // literally — avoids a shell-injection footgun if a future caller passes an
-  // arbitrary path.
-  const quoted = `'${scriptPath.replaceAll("'", "'\\''")}'`
-  const envPrefix = Object.entries(env)
-    .map(([key, value]) => `${key}='${value.replaceAll("'", "'\\''")}'`)
-    .join(' ')
-  const invocation = envPrefix ? `${envPrefix} /bin/sh ${quoted}` : `/bin/sh ${quoted}`
-  return `if [ -x ${quoted} ]; then ${invocation}; fi`
+export { wrapPosixHookCommand } from './posix-hook-command'
+
+export {
+  wrapWindowsPowerShellEncodedCommand,
+  WINDOWS_POWERSHELL_HOOK_SWITCHES
+} from './windows-powershell-hook-launcher'
+
+export {
+  buildWindowsHookPowerShellCommand,
+  isSafeUnicodeWindowsBatchHookPath,
+  WINDOWS_CMD_SAFE_PATH,
+  wrapWindowsHookCommand
+} from './windows-hook-command'
+
+/** Extra form lines precede payload@- and must end with ` ^`. */
+export function buildWindowsAgentHookPostCommand(
+  source: AgentHookSource,
+  extraFormLines: readonly string[] = []
+): string {
+  // Avoid PowerShell startup; qualify curl to prevent repo-local payload interception.
+  return [
+    `"%SystemRoot%\\System32\\curl.exe" -sS -X POST "http://127.0.0.1:%ORCA_AGENT_HOOK_PORT%/hook/${source}" ^`,
+    '  --connect-timeout 0.5 --max-time 1.5 ^',
+    '  -H "Content-Type: application/x-www-form-urlencoded" ^',
+    '  -H "X-Orca-Agent-Hook-Token: %ORCA_AGENT_HOOK_TOKEN%" ^',
+    '  --data-urlencode "paneKey=%ORCA_PANE_KEY%" ^',
+    '  --data-urlencode "tabId=%ORCA_TAB_ID%" ^',
+    '  --data-urlencode "launchToken=%ORCA_AGENT_LAUNCH_TOKEN%" ^',
+    '  --data-urlencode "worktreeId=%ORCA_WORKTREE_ID%" ^',
+    '  --data-urlencode "env=%ORCA_AGENT_HOOK_ENV%" ^',
+    '  --data-urlencode "version=%ORCA_AGENT_HOOK_VERSION%" ^',
+    ...extraFormLines,
+    '  --data-urlencode "payload@-" >nul 2>nul'
+  ].join('\r\n')
 }
 
-function quotePowerShellString(value: string): string {
-  return `'${value.replaceAll("'", "''")}'`
-}
-
-// Why: Windows splits a raw hook command on whitespace, so a user profile path
-// like `C:\Users\Jane Doe` makes the agent try to execute `C:\Users\Jane` and
-// fail with exit code 1. Keep the script path inside an encoded PowerShell
-// command so cmd.exe never gets a chance to expand legal path characters like
-// `%` or `^` before the .cmd is invoked. #6078.
-export function wrapWindowsHookCommand(scriptPath: string): string {
-  const command = `& ${quotePowerShellString(scriptPath)}; exit $LASTEXITCODE`
-  const encodedCommand = Buffer.from(command, 'utf16le').toString('base64')
-  return `powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${encodedCommand}`
-}
-
-export function buildWindowsAgentHookPostCommand(source: AgentHookSource): string {
-  // Why: Windows PowerShell 5.1 defaults redirected stdin/request bodies to the
-  // active code page. Hook payloads are UTF-8 JSON, so force UTF-8 on both read
-  // and POST or CJK prompts arrive in Orca as literal question marks. Timeout
-  // caps best-effort hook posts if the local listener stalls.
-  return `powershell -NoProfile -ExecutionPolicy Bypass -Command "$utf8=[System.Text.UTF8Encoding]::new($false); [Console]::InputEncoding=$utf8; [Console]::OutputEncoding=$utf8; $inputData=[Console]::In.ReadToEnd(); if ([string]::IsNullOrWhiteSpace($inputData)) { exit 0 }; try { $body=@{ paneKey=$env:ORCA_PANE_KEY; launchToken=$env:ORCA_AGENT_LAUNCH_TOKEN; tabId=$env:ORCA_TAB_ID; worktreeId=$env:ORCA_WORKTREE_ID; env=$env:ORCA_AGENT_HOOK_ENV; version=$env:ORCA_AGENT_HOOK_VERSION; payload=($inputData | ConvertFrom-Json) } | ConvertTo-Json -Depth 100 -Compress; $bodyBytes=$utf8.GetBytes($body); Invoke-WebRequest -UseBasicParsing -Method Post -Uri ('http://127.0.0.1:' + $env:ORCA_AGENT_HOOK_PORT + '/hook/${source}') -ContentType 'application/json; charset=utf-8' -Headers @{ 'X-Orca-Agent-Hook-Token'=$env:ORCA_AGENT_HOOK_TOKEN } -Body $bodyBytes -TimeoutSec 2 | Out-Null } catch {}"`
+// curl.exe avoids PowerShell startup and code-page corruption of UTF-8 payloads.
+export function buildWindowsAgentHookCurlPostCommand(source: AgentHookSource): string {
+  return [
+    '"%SystemRoot%\\System32\\curl.exe" -sS -X POST',
+    `"http://127.0.0.1:%ORCA_AGENT_HOOK_PORT%/hook/${source}"`,
+    '--connect-timeout 0.5 --max-time 1.5',
+    '-H "Content-Type: application/x-www-form-urlencoded"',
+    '-H "X-Orca-Agent-Hook-Token: %ORCA_AGENT_HOOK_TOKEN%"',
+    '--data-urlencode "paneKey=%ORCA_PANE_KEY%"',
+    '--data-urlencode "tabId=%ORCA_TAB_ID%"',
+    '--data-urlencode "launchToken=%ORCA_AGENT_LAUNCH_TOKEN%"',
+    '--data-urlencode "worktreeId=%ORCA_WORKTREE_ID%"',
+    '--data-urlencode "env=%ORCA_AGENT_HOOK_ENV%"',
+    '--data-urlencode "version=%ORCA_AGENT_HOOK_VERSION%"',
+    '--data-urlencode "payload@-"',
+    '>nul 2>&1'
+  ].join(' ')
 }
 
 export function removeManagedCommands(
@@ -152,7 +177,8 @@ export function removeManagedCommands(
     const directManagedKeys = directCommandKeys.filter((key) => isManagedCommand(definition[key]))
     const hasNestedHooks = Array.isArray(definition.hooks)
     const hasManagedNestedHook =
-      hasNestedHooks && definition.hooks!.some((hook) => isManagedCommand(hook.command))
+      hasNestedHooks &&
+      definition.hooks!.some((hook) => hookHasManagedCommand(hook, isManagedCommand))
 
     if (directManagedKeys.length === 0 && !hasManagedNestedHook) {
       return [definition]
@@ -164,7 +190,9 @@ export function removeManagedCommands(
     }
 
     if (hasManagedNestedHook) {
-      const filteredHooks = definition.hooks!.filter((hook) => !isManagedCommand(hook.command))
+      const filteredHooks = definition.hooks!.filter(
+        (hook) => !hookHasManagedCommand(hook, isManagedCommand)
+      )
       if (filteredHooks.length > 0) {
         nextDefinition.hooks = filteredHooks
       } else {
@@ -183,6 +211,23 @@ export function removeManagedCommands(
   })
 }
 
+function hookHasManagedCommand(hook: HookCommandConfig, matches: (value?: string) => boolean) {
+  const args = Array.isArray(hook.args) ? hook.args : []
+  return matches(hook.command) || args.some((arg) => typeof arg === 'string' && matches(arg))
+}
+
+// Users may opt a managed hook into async; keep that choice when the hook is rewritten.
+export function withPreviousManagedAsync(
+  hook: HookCommandConfig,
+  definitions: HookDefinition[],
+  matches: (command: string | undefined) => boolean
+): HookCommandConfig {
+  const async = definitions
+    .flatMap((definition) => (Array.isArray(definition.hooks) ? definition.hooks : []))
+    .find((prev) => typeof prev.async === 'boolean' && hookHasManagedCommand(prev, matches))?.async
+  return async === undefined ? hook : { ...hook, async }
+}
+
 export function hookDefinitionHasManagedCommand(
   definition: HookDefinition,
   isManagedCommand: (command: string | undefined) => boolean
@@ -192,19 +237,22 @@ export function hookDefinitionHasManagedCommand(
     isManagedCommand(definition.bash) ||
     isManagedCommand(definition.powershell) ||
     (Array.isArray(definition.hooks) &&
-      definition.hooks.some((hook) => isManagedCommand(hook.command)))
+      definition.hooks.some((hook) => hookHasManagedCommand(hook, isManagedCommand)))
   )
 }
 
-// Why: temp+rename so concurrent Orca instances writing this shared path can't
-// produce a torn script that an in-flight `/bin/sh <scriptPath>` would source.
-export function writeManagedScript(scriptPath: string, content: string): void {
+// Atomic replacement protects scripts being read by in-flight hooks.
+export function writeManagedScript(
+  scriptPath: string,
+  content: string | Buffer,
+  options: { moveLockedTargetAside?: boolean } = {}
+): void {
   const dir = dirname(scriptPath)
   mkdirSync(dir, { recursive: true })
 
   if (existsSync(scriptPath)) {
     try {
-      if (readFileSync(scriptPath, 'utf-8') === content) {
+      if (readFileSync(scriptPath).equals(Buffer.from(content))) {
         if (process.platform !== 'win32') {
           chmodSync(scriptPath, 0o755)
         }
@@ -218,13 +266,11 @@ export function writeManagedScript(scriptPath: string, content: string): void {
   const tmpPath = join(dir, `.${Date.now()}-${randomUUID()}.tmp`)
   try {
     writeScriptWithAclRetry(tmpPath, content)
-    // Why: chmod before rename so the canonical path is never visible in a
-    // non-executable state; wrapPosixHookCommand's `[ -x ]` guard would
-    // silently skip the hook in that window.
+    // Publish with execute permission so POSIX guards never skip a newly installed script.
     if (process.platform !== 'win32') {
       chmodSync(tmpPath, 0o755)
     }
-    renameSync(tmpPath, scriptPath)
+    renameOverLockedTarget(tmpPath, scriptPath, options.moveLockedTargetAside === true)
   } finally {
     if (existsSync(tmpPath)) {
       try {
@@ -236,9 +282,8 @@ export function writeManagedScript(scriptPath: string, content: string): void {
   }
 }
 
-// Why: on Windows, write may fail with EPERM if the target directory has a
-// restrictive DACL. Grant an explicit ACL on EPERM and retry once.
-function writeScriptWithAclRetry(scriptPath: string, content: string): void {
+// Retry Windows EPERM once after repairing a restrictive directory ACL.
+function writeScriptWithAclRetry(scriptPath: string, content: string | Buffer): void {
   try {
     writeFileSync(scriptPath, content, 'utf-8')
   } catch (error) {
@@ -248,56 +293,58 @@ function writeScriptWithAclRetry(scriptPath: string, content: string): void {
         writeFileSync(scriptPath, content, 'utf-8')
         return
       } catch {
-        // icacls failure is not actionable; re-throw the original EPERM
+        // a failed grant is not actionable; re-throw the original EPERM
       }
     }
     throw error
   }
 }
 
-export function writeHooksJson(configPath: string, config: HooksConfig): void {
-  const dir = dirname(configPath)
+export function writeHooksJson(
+  configPath: string,
+  // Fallback serialization accepts provider-specific JSON shapes, including nested hooks.events.
+  config: Record<string, unknown>,
+  // JSONC callers supply edited text while retaining atomic writes and backups.
+  options?: { preserveMode?: boolean; defaultMode?: number; serialized?: string }
+): void {
+  const writePath = resolveHooksJsonWritePath(configPath)
+  const dir = dirname(writePath)
   mkdirSync(dir, { recursive: true })
 
-  // Why: write to a temp file then rename so a crash or disk-full mid-write
-  // leaves the original untouched. This is the only safe way to update a
-  // config file the user may have hand-edited.
-  //
-  // Why randomUUID: Date.now() alone collides when two install() calls fire in
-  // the same millisecond targeting the same dir (e.g. a future caller that
-  // installs multiple agents sharing a config dir, or rapid reinstalls from
-  // the settings UI). A collision would corrupt one of the two writes. The
-  // UUID suffix makes the tmp path unique per call.
+  // Unique temp paths isolate concurrent writers and preserve the original on write failure.
   const tmpPath = join(dir, `.${Date.now()}-${randomUUID()}.tmp`)
-  const serialized = `${JSON.stringify(config, null, 2)}\n`
+  const serialized = options?.serialized ?? `${JSON.stringify(config, null, 2)}\n`
+  // Preserve owner-only permissions: agent configs can contain API keys.
+  const existingMode =
+    options?.preserveMode !== false && existsSync(writePath)
+      ? statSync(writePath).mode & 0o777
+      : options?.defaultMode
 
-  // Why: skip the write (and therefore the .bak rotation) when the on-disk
-  // content is already identical. Without this, every install() rewrites the
-  // file and rolls the backup forward, which can silently destroy the last
-  // recoverable copy if install() is called repeatedly (e.g. on app start).
-  if (existsSync(configPath)) {
+  // Identical reinstalls must not rotate away the last recoverable backup.
+  if (existsSync(writePath)) {
     try {
-      if (readFileSync(configPath, 'utf-8') === serialized) {
+      if (readFileSync(writePath, 'utf-8') === serialized) {
         return
       }
     } catch {
-      // Fall through to the normal write path — a read error here is not
-      // worth failing the install for; the atomic write below will either
-      // succeed or throw loudly.
+      // Retry through the write path after a failed read.
     }
   }
 
   try {
-    writeFileSync(tmpPath, serialized, 'utf-8')
-    // Why: single rolling backup — one file, no accumulation in ~/.claude.
-    // Protects against a merge-logic bug producing bad JSON; the original is
-    // always recoverable from <configPath>.bak until the next write.
-    if (existsSync(configPath)) {
-      copyFileSync(configPath, `${configPath}.bak`)
+    // Windows read-only mode could prevent deleting a failed temporary write.
+    const tmpMode = process.platform === 'win32' ? undefined : existingMode
+    writeFileSync(tmpPath, serialized, { encoding: 'utf-8', mode: tmpMode, flag: 'wx' })
+    if (existingMode !== undefined && process.platform !== 'win32') {
+      // Preserve requested permissions even with a stricter process umask.
+      chmodSync(tmpPath, existingMode)
     }
-    renameSync(tmpPath, configPath)
+    // Keep one prior version for recovery from a bad merge.
+    if (existsSync(writePath)) {
+      writeRollingFileBackup(writePath, `${writePath}.bak`)
+    }
+    renameSync(tmpPath, writePath)
   } finally {
-    // Clean up temp file if rename failed.
     if (existsSync(tmpPath)) {
       try {
         unlinkSync(tmpPath)
@@ -307,3 +354,5 @@ export function writeHooksJson(configPath: string, config: HooksConfig): void {
     }
   }
 }
+
+export { writeHooksJsonAsync } from './hooks-json-write-async'

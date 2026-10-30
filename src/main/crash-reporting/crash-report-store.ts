@@ -3,6 +3,7 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { app } from 'electron'
+import { grantDirAclAsync, isPermissionError } from '../win32-utils'
 import {
   formatCrashReportText,
   sanitizeCrashReportBreadcrumbs,
@@ -14,6 +15,7 @@ import {
 
 const MAX_REPORTS = 5
 const RELATED_CRASH_WINDOW_MS = 5_000
+const WINDOWS_FILE_OPERATION_RETRY_DELAYS_MS = [50, 100, 150, 200, 250]
 
 type CrashReportFile = {
   reports: CrashReportRecord[]
@@ -37,6 +39,45 @@ function isRelatedCrashEvent(anchor: CrashReportRecord, candidate: CrashReportRe
   )
 }
 
+function isRetryableWindowsFileOperationError(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException).code
+  return code === 'EPERM' || code === 'EACCES' || code === 'EBUSY'
+}
+
+async function wait(delayMs: number): Promise<void> {
+  await new Promise<void>((resolve) => setTimeout(resolve, delayMs))
+}
+
+async function runCrashReportFileOperationWithWindowsRecovery<T>(
+  directory: string,
+  operation: () => Promise<T>
+): Promise<T> {
+  let repairedAcl = false
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await operation()
+    } catch (error) {
+      if (
+        process.platform !== 'win32' ||
+        !isRetryableWindowsFileOperationError(error) ||
+        attempt >= WINDOWS_FILE_OPERATION_RETRY_DELAYS_MS.length
+      ) {
+        throw error
+      }
+      if (!repairedAcl && isPermissionError(error)) {
+        repairedAcl = true
+        try {
+          // Chromium can reset userData ACLs; repair them for both capture and prompt recovery.
+          await grantDirAclAsync(directory)
+        } catch {
+          // The bounded retry below still handles transient file locks.
+        }
+      }
+      await wait(WINDOWS_FILE_OPERATION_RETRY_DELAYS_MS[attempt])
+    }
+  }
+}
+
 export class CrashReportStore {
   private writeChain = Promise.resolve()
 
@@ -54,12 +95,35 @@ export class CrashReportStore {
         createdAt: new Date().toISOString(),
         status: 'pending',
         details: sanitizeCrashReportDetails(input.details),
-        breadcrumbs: sanitizeCrashReportBreadcrumbs(input.breadcrumbs)
+        breadcrumbs: sanitizeCrashReportBreadcrumbs(input.breadcrumbs)?.map(
+          ({ origin: _origin, ...breadcrumb }) => breadcrumb
+        )
       }
       return {
         reports: [report, ...reports].slice(0, MAX_REPORTS),
         result: report
       }
+    })
+  }
+
+  /** Crashpad may finish writing after process-gone; merge its signature into the existing report. */
+  async attachDetails(
+    id: string,
+    extraDetails: Record<string, unknown>
+  ): Promise<CrashReportRecord | null> {
+    return this.withWrite(async (reports) => {
+      let result: CrashReportRecord | null = null
+      const nextReports = reports.map((report) => {
+        if (report.id !== id) {
+          return report
+        }
+        result = {
+          ...report,
+          details: { ...report.details, ...sanitizeCrashReportDetails(extraDetails) }
+        }
+        return result
+      })
+      return { reports: nextReports, result }
     })
   }
 
@@ -112,9 +176,7 @@ export class CrashReportStore {
       const anchor = reports.find((report) => report.id === id)
       const nextReports = reports.map((report) => {
         if (report.id !== id) {
-          // Why: one Electron crash can emit GPU/Network/renderer exits in a
-          // burst. Once one report is handled, sibling pending records should
-          // not re-open the crash prompt as separate crashes.
+          // Dismiss related exit-burst records so handling one crash does not reopen sibling prompts.
           if (anchor && anchor.status === from && isRelatedCrashEvent(anchor, report)) {
             return { ...report, status: 'dismissed' as const }
           }
@@ -135,7 +197,8 @@ export class CrashReportStore {
     mutate: (reports: CrashReportRecord[]) => Promise<{ reports: CrashReportRecord[]; result: T }>
   ): Promise<T> {
     const run = this.writeChain.then(async () => {
-      const reports = await this.readReports()
+      // Reading directly avoids waiting on the write chain this callback already owns.
+      const reports = await this.readReportsFromDisk()
       const { reports: nextReports, result } = await mutate(reports)
       await this.writeReports(nextReports)
       return result
@@ -148,8 +211,17 @@ export class CrashReportStore {
   }
 
   private async readReports(): Promise<CrashReportRecord[]> {
+    // Recovery may query before capture finishes; wait until the crash write is visible.
+    await this.writeChain
+    return this.readReportsFromDisk()
+  }
+
+  private async readReportsFromDisk(): Promise<CrashReportRecord[]> {
     try {
-      const raw = await fs.readFile(this.filePath, 'utf8')
+      const raw = await runCrashReportFileOperationWithWindowsRecovery(
+        path.dirname(this.filePath),
+        () => fs.readFile(this.filePath, 'utf8')
+      )
       const parsed = JSON.parse(raw) as Partial<CrashReportFile>
       return Array.isArray(parsed.reports) ? parsed.reports.slice(0, MAX_REPORTS) : []
     } catch (error) {
@@ -161,9 +233,17 @@ export class CrashReportStore {
   }
 
   private async writeReports(reports: CrashReportRecord[]): Promise<void> {
-    await fs.mkdir(path.dirname(this.filePath), { recursive: true })
+    const directory = path.dirname(this.filePath)
     const tmpPath = `${this.filePath}.${process.pid}.${Date.now()}.${crypto.randomUUID()}.tmp`
-    await fs.writeFile(tmpPath, `${JSON.stringify({ reports }, null, 2)}${os.EOL}`, 'utf8')
-    await fs.rename(tmpPath, this.filePath)
+    try {
+      await runCrashReportFileOperationWithWindowsRecovery(directory, async () => {
+        await fs.mkdir(directory, { recursive: true })
+        await fs.writeFile(tmpPath, `${JSON.stringify({ reports }, null, 2)}${os.EOL}`, 'utf8')
+        await fs.rename(tmpPath, this.filePath)
+      })
+    } finally {
+      // Failed writes and renames must not accumulate orphaned report temp files.
+      await fs.rm(tmpPath, { force: true }).catch(() => {})
+    }
   }
 }

@@ -1,3 +1,4 @@
+import { textGenerationErrorText } from '@/lib/text-generation-error-copy'
 import { planCommitMessageGeneration } from '../../../shared/commit-message-plan'
 import {
   renderSourceControlActionCommandTemplate,
@@ -23,7 +24,8 @@ const SYNTHETIC_TEXT_GENERATION_CONTEXT: Record<
     basePrompt: SYNTHETIC_COMMIT_PROMPT,
     branch: 'feature/example',
     stagedFiles: 'M src/example.ts',
-    stagedPatch: 'diff --git a/src/example.ts b/src/example.ts'
+    stagedPatch: 'diff --git a/src/example.ts b/src/example.ts',
+    linkedIssue: '123'
   },
   pullRequest: {
     basePrompt: SYNTHETIC_PULL_REQUEST_PROMPT,
@@ -33,7 +35,8 @@ const SYNTHETIC_TEXT_GENERATION_CONTEXT: Record<
     currentBody: 'Draft description',
     commitSummary: 'a1b2c3d Add source-control AI recipes',
     changedFiles: 'src/example.ts | 12 ++++++++++--',
-    patch: 'diff --git a/src/example.ts b/src/example.ts'
+    patch: 'diff --git a/src/example.ts b/src/example.ts',
+    linkedIssue: '123'
   },
   branchName: {
     basePrompt: 'Generate a git branch name for a synthetic task.',
@@ -48,6 +51,7 @@ const SYNTHETIC_BASE_PROMPTS: Record<SourceControlTextActionId, string> = {
   branchName: 'Generate a git branch name for a synthetic task.'
 }
 
+/** Validate saved repo/global recipes against synthetic context; active linkedIssue must not disable Save/Generate for otherwise valid templates. */
 export function planSourceControlTextGeneration(
   actionId: SourceControlTextActionId,
   params: ResolvedSourceControlAiGenerationParams
@@ -70,10 +74,11 @@ export function planSourceControlTextGeneration(
   }
   const planned = planCommitMessageGeneration(params, prompt)
   if (!planned.ok) {
-    return { ok: false, error: planned.error }
+    return { ok: false, error: textGenerationErrorText(planned) }
   }
-  const delivery =
-    planned.plan.stdinPayload === null
+  const delivery = planned.plan.promptFile
+    ? 'Prompt is delivered as a temporary file attachment.'
+    : planned.plan.stdinPayload === null
       ? 'Prompt is delivered as command arguments.'
       : 'Prompt is piped to the agent over stdin.'
   return {

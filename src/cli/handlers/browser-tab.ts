@@ -15,6 +15,16 @@ import { RuntimeClientError } from '../runtime-client'
 import { getBrowserCommandTarget, getBrowserWorktreeSelector } from '../selectors'
 
 export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
+  'open-url': async ({ flags, client, cwd, json }) => {
+    const url = getRequiredStringFlag(flags, 'url')
+    const worktree = await getBrowserWorktreeSelector(flags, cwd, client)
+    const result = await client.call<{ browserPageId: string }>(
+      'browser.openUrl',
+      { url, worktree },
+      { timeoutMs: 60_000 }
+    )
+    printResult(result, json, (v) => `Opened URL in tab ${v.browserPageId}`)
+  },
   'tab list': async ({ flags, client, cwd, json }) => {
     const worktree = await getBrowserWorktreeSelector(flags, cwd, client)
     const result = await client.call<BrowserTabListResult>('browser.tabList', { worktree })
@@ -39,15 +49,9 @@ export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
     if (index === undefined && !page) {
       throw new RuntimeClientError('invalid_argument', 'Missing required --index or --page')
     }
-    // Why: a stable browser page id is globally unique across Orca, so page-
-    // targeted tab switches should match the rest of the --page command model:
-    // global by default, with --worktree only acting as explicit validation.
+    // Page ids are globally unique; worktree is optional validation rather than an implicit filter.
     const target = await getBrowserCommandTarget(flags, cwd, client)
-    // Why: --focus is an opt-in side effect. The renderer's handler is
-    // worktree-scoped: it surfaces the browser pane only when the user is
-    // already on the targeted worktree, otherwise it pre-stages silently.
-    // Spread conditionally so the RPC payload stays shape-identical to the
-    // pre-flag form when --focus is absent.
+    // Focus surfaces the pane only in the current worktree; otherwise the renderer pre-stages it.
     const result = await client.call<BrowserTabSwitchResult>('browser.tabSwitch', {
       index,
       page,

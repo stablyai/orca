@@ -6,12 +6,6 @@ export type PRCommentPresentationVariant = 'flat' | 'cards' | 'focus'
 
 export const DEFAULT_PR_COMMENT_PRESENTATION_VARIANT: PRCommentPresentationVariant = 'cards'
 
-export const PR_COMMENT_PRESENTATION_VARIANTS: PRCommentPresentationVariant[] = [
-  'flat',
-  'cards',
-  'focus'
-]
-
 const STORAGE_KEY = 'orca:pr-comment-presentation'
 
 export type PRCommentPresentationClasses = {
@@ -47,7 +41,6 @@ export type PRCommentPresentationClasses = {
   audienceTab: string
   audienceTabActive: string
   sectionTriageLabel: string
-  statusBadgeOpen: string
   statusBadgeResolved: string
   statusBadgeQueued: string
   commentHeaderPrimary: string
@@ -67,8 +60,7 @@ export function getPRCommentGroupSurfaceClasses(
   const classes = [presentation.group]
   if (options?.queued) {
     classes.push(presentation.groupQueued)
-    // Why: queued selection already owns the leading affordance; stacking the
-    // open rail next to its checkbox makes the card edge visually crowded.
+    // Queued checkboxes already lead the card; adding an open rail crowds the edge.
     return classes.join(' ')
   }
   if (actionState === 'open' && presentation.groupOpen) {
@@ -79,22 +71,51 @@ export function getPRCommentGroupSurfaceClasses(
   return classes.join(' ')
 }
 
-const MARKDOWN_BASE =
-  'break-words [&_p]:my-1.5 [&_pre]:max-h-none [&_pre]:max-w-full [&_pre]:whitespace-pre-wrap [&_table]:w-full [&_table]:max-w-full'
+// Restore block flow locally; other compact-markdown consumers retain dense inline layout.
+const MARKDOWN_BASE = cn(
+  'break-words',
+  // Space all top-level blocks; details/div elements between paragraphs would break adjacent-paragraph spacing.
+  '[&_.comment-md-p]:block [&_.comment-md-p+.comment-md-p]:mt-2 [&>*+*]:mt-2 [&_details]:my-2',
+  '[&_.comment-md-h]:mt-4 [&_.comment-md-h]:mb-1 [&_.comment-md-h]:block [&_.comment-md-h]:leading-tight [&_.comment-md-h:first-child]:mt-0',
+  // Match document headings at 18/16/15px over the 13px body so heading hierarchy stays visible.
+  '[&_.comment-md-h1]:text-[18px] [&_.comment-md-h2]:text-[16px] [&_.comment-md-h3]:text-[15px]',
+  // Promote bold-then-break bot section titles while preserving inline emphasis.
+  '[&_.comment-md-p>strong:first-child:has(+br)]:mt-3 [&_.comment-md-p>strong:first-child:has(+br)]:mb-0.5 [&_.comment-md-p>strong:first-child:has(+br)]:block [&_.comment-md-p>strong:first-child:has(+br)]:text-[15px] [&_.comment-md-p>strong:first-child:has(+br)]:leading-tight',
+  '[&_.comment-md-p:first-child>strong:first-child:has(+br)]:mt-0',
+  // The label's own <br> would double the break once it is block-level.
+  '[&_.comment-md-p>strong:first-child:has(+br)+br]:hidden',
+  // Override compact's 10px code/table sizes; 0.92em matches the document inline-code ratio.
+  '[&_code]:text-[0.92em] [&_pre]:text-xs [&_pre_code]:text-[1em] [&_table]:text-[12px]',
+  // Use absolute caption sizes because nested sub/sup percentages compound into illegible text.
+  '[&_sub]:text-[11px] [&_sup]:text-[11px]',
+  // Nested sub wrappers compound image offsets; neutralize only image wrappers, preserving real subscripts.
+  '[&_sub:has(img)]:bottom-0 [&_sub:has(img)]:align-middle',
+  '[&_sup:has(img)]:top-0 [&_sup:has(img)]:align-middle',
+  '[&_pre]:max-h-none [&_pre]:max-w-full [&_pre]:whitespace-pre-wrap',
+  '[&_table]:w-full [&_table]:max-w-full'
+)
 
-// Why: in light mode card and canvas are both #fff, so border-border alone disappears.
-// overflow-clip preserves rounded clipping without letting focused row actions scroll content.
+// Light canvas/card whites need surface contrast; overflow-clip prevents focused actions scrolling rounded cards.
 const COMMENT_CARD_SURFACE =
   'overflow-clip rounded-lg border border-border bg-secondary shadow-xs dark:bg-card dark:shadow-none'
 
 const COMMENT_CARD_DIVIDER = 'border-border dark:border-border/60'
 
-// Why: placeholders used bg-muted on bg-secondary cards — same grey in light mode.
+// Give placeholder avatars contrast against light-mode secondary cards.
 const COMMENT_AVATAR =
   'shrink-0 rounded-full border border-border bg-background object-cover shadow-xs dark:shadow-none'
 
 const RESOLVED_SECTION_LABEL =
   'text-[11px] font-semibold uppercase tracking-wider text-muted-foreground'
+
+// Match document body text across review surfaces and leave room for a visible heading scale.
+const CARD_COMMENT_BODY_SIZE = 'text-[13px] leading-relaxed'
+const CARD_COMMENT_AUTHOR_SIZE = 'text-[13px]'
+const CARD_COMMENT_LIST_GAP = 'gap-2'
+const CARD_COMMENT_BODY_PADDING = 'px-4 py-2.5'
+const CARD_COMMENT_HEADER_PADDING = 'px-3 py-2'
+const CARD_COMMENT_META_INDENT = 'pl-7'
+const CARD_COMMENT_META_SELECTION_INDENT = 'pl-[3.25rem]'
 
 const RESOLVED_SECTION_TRIGGER = cn(
   RESOLVED_SECTION_LABEL,
@@ -105,8 +126,7 @@ function isVariant(value: string | null): value is PRCommentPresentationVariant 
   return value === 'flat' || value === 'cards' || value === 'focus'
 }
 
-/** Resolve the active variant. In dev, override with
- *  localStorage.setItem('orca:pr-comment-presentation', 'cards' | 'flat' | 'focus'). */
+/** Dev override: localStorage.setItem('orca:pr-comment-presentation', 'cards' | 'flat' | 'focus'). */
 export function resolvePRCommentPresentationVariant(): PRCommentPresentationVariant {
   if (typeof window === 'undefined') {
     return DEFAULT_PR_COMMENT_PRESENTATION_VARIANT
@@ -157,8 +177,6 @@ export function getPRCommentPresentationClasses(
         'flex h-7 items-center justify-center gap-1 rounded-md px-1.5 text-[11px] font-medium text-muted-foreground transition-colors',
       audienceTabActive: 'bg-muted text-foreground',
       sectionTriageLabel: cn('px-3 pt-2', RESOLVED_SECTION_LABEL),
-      statusBadgeOpen:
-        'shrink-0 rounded border border-status-success-border bg-status-success-background px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-status-success',
       statusBadgeResolved:
         'shrink-0 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground',
       statusBadgeQueued:
@@ -172,29 +190,22 @@ export function getPRCommentPresentationClasses(
     }
   }
 
-  const isFocus = variant === 'focus'
-  const bodySize = isFocus ? 'text-[14px] leading-relaxed' : 'text-[13px] leading-relaxed'
-  const authorSize = isFocus ? 'text-[14px]' : 'text-[13px]'
-  const listGap = isFocus ? 'gap-3' : 'gap-2'
-  const bodyPadding = isFocus ? 'px-4 py-3' : 'px-4 py-2.5'
-  const headerPadding = isFocus ? 'px-3.5 py-2.5' : 'px-3 py-2'
-  const metaIndent = isFocus ? 'pl-8' : 'pl-7'
-
   return {
     variant,
     useCardLayout: true,
-    list: `flex flex-col ${listGap} px-3 py-2`,
+    list: `flex flex-col ${CARD_COMMENT_LIST_GAP} px-3 py-2`,
     group: COMMENT_CARD_SURFACE,
     groupStandalone: '',
     groupThread: '',
     commentRow: 'group/comment',
-    commentRowReply: `border-t ${COMMENT_CARD_DIVIDER} bg-muted/25 dark:bg-muted/10`,
-    commentHeader: `flex flex-col gap-1 border-b ${COMMENT_CARD_DIVIDER} ${headerPadding}`,
-    commentHeaderReply: `flex min-w-0 items-center gap-2 ${headerPadding}`,
-    commentBody: `${bodyPadding} ${bodySize} text-foreground`,
-    commentBodyReply: `${bodyPadding} ${bodySize} text-foreground`,
+    // Nest replies with indentation and a rail like GitHub threads.
+    commentRowReply: `border-t ${COMMENT_CARD_DIVIDER} bg-muted/25 pl-3 dark:bg-muted/10`,
+    commentHeader: `flex flex-col gap-1 border-b ${COMMENT_CARD_DIVIDER} ${CARD_COMMENT_HEADER_PADDING}`,
+    commentHeaderReply: `flex min-w-0 items-center gap-2 ${CARD_COMMENT_HEADER_PADDING}`,
+    commentBody: `${CARD_COMMENT_BODY_PADDING} ${CARD_COMMENT_BODY_SIZE} text-foreground`,
+    commentBodyReply: `${CARD_COMMENT_BODY_PADDING} ${CARD_COMMENT_BODY_SIZE} text-foreground`,
     commentBodyMarkdown: MARKDOWN_BASE,
-    author: `min-w-0 flex-1 truncate ${authorSize} font-semibold text-foreground`,
+    author: `min-w-0 flex-1 truncate ${CARD_COMMENT_AUTHOR_SIZE} font-semibold text-foreground`,
     authorResolved: 'text-muted-foreground',
     avatar: `size-5 ${COMMENT_AVATAR}`,
     avatarReply: `size-4 ${COMMENT_AVATAR}`,
@@ -203,7 +214,7 @@ export function getPRCommentPresentationClasses(
     pathBadge: 'min-w-0 max-w-full truncate font-mono text-muted-foreground',
     time: 'shrink-0 text-[11px] text-muted-foreground',
     resolvedContainer: 'opacity-60',
-    repliesContainer: 'flex flex-col',
+    repliesContainer: 'ml-3 flex flex-col border-l-2 border-border/50',
     resolvedSection: 'mt-1 border-t border-border pt-1',
     resolvedSectionTrigger: RESOLVED_SECTION_TRIGGER,
     resolvedSectionContent: 'flex flex-col gap-2 pb-1 pt-1',
@@ -216,23 +227,21 @@ export function getPRCommentPresentationClasses(
       'flex h-7 items-center justify-center gap-1 rounded-md px-1.5 text-[11px] font-medium text-muted-foreground transition-colors',
     audienceTabActive: 'bg-muted text-foreground shadow-xs',
     sectionTriageLabel: cn('px-3 pt-1', RESOLVED_SECTION_LABEL),
-    statusBadgeOpen:
-      'shrink-0 rounded border border-status-success-border bg-status-success-background px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-status-success',
     statusBadgeResolved:
       'shrink-0 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground',
     statusBadgeQueued:
       'shrink-0 rounded border border-ring/40 bg-accent px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground',
     commentHeaderPrimary: 'flex min-w-0 items-center gap-2',
     commentHeaderMeta: cn(
-      metaIndent,
+      CARD_COMMENT_META_INDENT,
       'flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground'
     ),
-    // Why: checkbox (16px) + gap-2 sits before the avatar row the meta row already indents past.
+    // Account for the 16px checkbox and gap before the avatar/meta indent.
     commentHeaderMetaWithSelection: cn(
-      isFocus ? 'pl-[3.5rem]' : 'pl-[3.25rem]',
+      CARD_COMMENT_META_SELECTION_INDENT,
       'flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground'
     ),
-    // Why: open state is conveyed by the status badge; a green card rail reads noisy in the sidebar.
+    // The status badge already marks open threads; omit a redundant green rail.
     groupOpen: '',
     groupQueued: 'ring-1 ring-ring/50',
     groupResolved: ''

@@ -106,7 +106,7 @@ export function GitHubRow(props: { compact?: boolean } = {}): React.JSX.Element 
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => void refreshPreflightStatus({ force: true })}
+              onClick={() => void refreshPreflightStatus({ force: true, wakeWslDistro: true })}
             >
               {translate('auto.components.onboarding.IntegrationsStep.80e3ce0bc9', 'Re-check')}
             </Button>
@@ -169,11 +169,17 @@ export function LinearRow(props: { compact?: boolean } = {}): React.JSX.Element 
               </div>
               <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
                 {linearStatus.connected
-                  ? translate(
-                      'auto.components.onboarding.IntegrationsStep.b08a6ac93c',
-                      '{{value0}} workspace{{value1}} linked. Add another workspace or replace a restricted key any time.',
-                      { value0: workspaceCount, value1: workspaceCount === 1 ? '' : 's' }
-                    )
+                  ? workspaceCount === 1
+                    ? translate(
+                        'auto.components.onboarding.IntegrationsStep.linearWorkspacesLinkedSingular',
+                        '{{count}} workspace linked. Add another workspace or replace a restricted key any time.',
+                        { count: workspaceCount }
+                      )
+                    : translate(
+                        'auto.components.onboarding.IntegrationsStep.linearWorkspacesLinkedPlural',
+                        '{{count}} workspaces linked. Add another workspace or replace a restricted key any time.',
+                        { count: workspaceCount }
+                      )
                   : translate(
                       'auto.components.onboarding.IntegrationsStep.4983ae7433',
                       'Add Linear access with a Personal API key. Full-access keys can show every team the key owner can access.'
@@ -211,17 +217,33 @@ export function LinearRow(props: { compact?: boolean } = {}): React.JSX.Element 
         onOpenChange={setDialogOpen}
         overlayClassName="z-[110]"
         contentClassName="z-[120]"
-        connectLabel="Add Linear access"
+        connectLabel={translate(
+          'auto.components.onboarding.IntegrationsStep.04ef416712',
+          'Add Linear access'
+        )}
       />
     </>
   )
 }
 
 const CAPABILITIES = [
-  'Start a workspace from any GitHub issue or pull request, prefilled with its title and context',
-  'Browse GitHub issues and pull requests in the Tasks view without leaving Orca',
-  'See issue state, review status, and CI checks on every worktree',
-  'Read, comment on, and merge pull requests without leaving Orca'
+  {
+    key: 'components.onboarding.integrations.capabilities.startWorkspaceFromIssue',
+    fallback:
+      'Start a workspace from any GitHub issue or pull request, prefilled with its title and context'
+  },
+  {
+    key: 'components.onboarding.integrations.capabilities.browseIssues',
+    fallback: 'Browse GitHub issues and pull requests in the Tasks view without leaving Orca'
+  },
+  {
+    key: 'components.onboarding.integrations.capabilities.reviewStatus',
+    fallback: 'See issue state, review status, and CI checks on every worktree'
+  },
+  {
+    key: 'components.onboarding.integrations.capabilities.managePullRequests',
+    fallback: 'Read, comment on, and merge pull requests without leaving Orca'
+  }
 ] as const
 
 export function IntegrationsStep(): React.JSX.Element {
@@ -234,10 +256,10 @@ export function IntegrationsStep(): React.JSX.Element {
   return (
     <div className="space-y-6">
       <ul className="-mt-6 space-y-1.5 text-[14px] leading-relaxed text-muted-foreground">
-        {CAPABILITIES.map((line) => (
-          <li key={line} className="flex gap-2.5">
+        {CAPABILITIES.map(({ key, fallback }) => (
+          <li key={key} className="flex gap-2.5">
             <span className="mt-2 size-1 shrink-0 rounded-full bg-muted-foreground" aria-hidden />
-            <span>{line}</span>
+            <span>{translate(key, fallback)}</span>
           </li>
         ))}
       </ul>

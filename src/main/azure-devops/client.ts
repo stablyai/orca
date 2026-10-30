@@ -1,10 +1,12 @@
 import {
   deriveAzureDevOpsStatus,
   mapAzureDevOpsPullRequest,
+  mapAzureDevOpsPullRequestState,
   type AzureDevOpsPullRequestInfo,
   type RawAzureDevOpsPullRequest,
   type RawAzureDevOpsStatus
 } from './pull-request-mappers'
+import { shouldHideNonOpenReviewOnDefaultBranch } from '../source-control/repo-default-branch'
 import { getAzureDevOpsRepoRef, type AzureDevOpsRepoRef } from './repository-ref'
 import {
   getHostedReviewLocalGitOptions,
@@ -116,7 +118,7 @@ function sortPullRequestsForBranch(
   const leftStatus = left.status?.trim().toLowerCase()
   const rightStatus = right.status?.trim().toLowerCase()
   const abandonedOrder = Number(leftStatus === 'abandoned') - Number(rightStatus === 'abandoned')
-  // Why: abandoned PRs can have newer close dates, but should not hide a usable branch PR.
+  // Newer abandoned PRs must not hide usable branch reviews.
   if (abandonedOrder !== 0) {
     return abandonedOrder
   }
@@ -197,7 +199,8 @@ export async function getAzureDevOpsPullRequestForBranch(
   branch: string,
   linkedPRNumber?: number | null,
   connectionId?: string | null,
-  options: HostedReviewExecutionOptions = {}
+  options: HostedReviewExecutionOptions = {},
+  throwOnFailure = false
 ): Promise<AzureDevOpsPullRequestInfo | null> {
   const branchName = branch.replace(/^refs\/heads\//, '')
   if (!branchName && linkedPRNumber == null) {
@@ -224,11 +227,23 @@ export async function getAzureDevOpsPullRequestForBranch(
           'searchCriteria.status': 'all',
           $top: 10
         }
-      }
+      },
+      throwOnFailure
     )
     const raw = (list?.value ?? []).sort(sortPullRequestsForBranch)[0]
     if (raw) {
-      return normalizePullRequest(repo, repository.idOrName, repository.webBaseUrl, raw)
+      const hideOnDefaultBranch = await shouldHideNonOpenReviewOnDefaultBranch({
+        state: mapAzureDevOpsPullRequestState(raw),
+        reviewNumber: raw.pullRequestId ?? null,
+        linkedReviewNumber: linkedPRNumber,
+        branchName,
+        repoPath,
+        connectionId,
+        localGitOptions: getHostedReviewLocalGitOptions(options)
+      })
+      if (!hideOnDefaultBranch) {
+        return normalizePullRequest(repo, repository.idOrName, repository.webBaseUrl, raw)
+      }
     }
   }
 
@@ -239,9 +254,29 @@ export async function getAzureDevOpsPullRequestForBranch(
     repo,
     `/_apis/git/repositories/${encodePathSegment(repository.idOrName)}/pullRequests/${encodePathSegment(
       String(linkedPRNumber)
-    )}`
+    )}`,
+    {},
+    throwOnFailure
   )
   return raw ? normalizePullRequest(repo, repository.idOrName, repository.webBaseUrl, raw) : null
+}
+
+/** Preserve lookup failures so creation preflight can report review state as unavailable. */
+export function getAzureDevOpsPullRequestForBranchOrThrow(
+  repoPath: string,
+  branch: string,
+  linkedPRNumber?: number | null,
+  connectionId?: string | null,
+  options: HostedReviewExecutionOptions = {}
+): Promise<AzureDevOpsPullRequestInfo | null> {
+  return getAzureDevOpsPullRequestForBranch(
+    repoPath,
+    branch,
+    linkedPRNumber,
+    connectionId,
+    options,
+    true
+  )
 }
 
 export async function getAzureDevOpsRepoSlug(

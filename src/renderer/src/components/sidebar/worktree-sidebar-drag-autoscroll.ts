@@ -1,5 +1,10 @@
+import type { DraggedWorktreeCopies } from './worktree-list/drag/dragged-worktree-copies'
 import type { WorktreeDragGroup } from './worktree-manual-order'
 import type { WorktreeDragUnitGroup } from './worktree-drag-units'
+import type {
+  WorktreeSidebarDragGrab,
+  WorktreeSidebarDropAnchor
+} from './worktree-sidebar-drag-geometry'
 
 const EDGE_ZONE_PX = 56
 const MAX_OUTSIDE_EDGE_PX = 48
@@ -23,9 +28,13 @@ export type WorktreeSidebarDragSession = {
   draggingWorktreeId: string
   sourceGroupKey: string
   draggedIds: readonly string[]
+  draggedCopies: DraggedWorktreeCopies
   reorderDraggedIds: readonly string[]
   reorderUnitDraggedIds: readonly string[]
+  // Keep live geometry for rendering/hit tests; hold the drop decision in anchor to resist mid-drag resizing.
   rects: readonly WorktreeSidebarDragRect[]
+  grab: WorktreeSidebarDragGrab | null
+  anchor: WorktreeSidebarDropAnchor | null
 }
 
 export type WorktreeSidebarAutoscrollResult = {
@@ -142,8 +151,7 @@ export function getWorktreeSidebarDragRectsForGroup(
     rects.push({
       worktreeId,
       groupIndex,
-      // Why: drop previews animate via row transforms. Anchor hit-testing to
-      // the virtual row's static slot so animated offsets cannot perturb it.
+      // Hit-test the static virtual slot so preview transforms cannot shift the target.
       top,
       bottom: top + rect.height
     })
@@ -180,8 +188,13 @@ export function refreshWorktreeSidebarDragSession(args: {
     return null
   }
 
+  const sourceGroupIds = new Set(sourceGroup.worktreeIds)
   const sourceUnitIds = new Set(sourceUnitGroup.worktreeIds)
-  if (args.session.reorderUnitDraggedIds.some((worktreeId) => !sourceUnitIds.has(worktreeId))) {
+  if (
+    args.session.reorderUnitDraggedIds.some(
+      (worktreeId) => !sourceUnitIds.has(worktreeId) && !sourceGroupIds.has(worktreeId)
+    )
+  ) {
     return null
   }
 

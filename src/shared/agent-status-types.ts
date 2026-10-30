@@ -1,398 +1,304 @@
-// ─── Explicit agent status (reported via native agent hooks → IPC) ──────────
-// These types define the normalized status that Orca receives from Claude,
-// Codex, and other explicit integrations. Agent state normally comes from
-// hooks; a narrow interrupt fallback may synthesize a final done state when an
-// agent misses its own cancellation hook. We still do not infer status from
-// terminal titles anywhere in the data flow.
+// Normalize explicit hook/OSC status; a guarded interrupt fallback supplies done when the cancellation hook is missing.
 
+import type { ProgramStatusFacet } from './program-status/facet'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
+import type { AgentMainAgentStatus } from './main-agent-status'
+import type { AgentStateHistoryEntry } from './agent-state-history'
+import { isAgentTurnOutcome } from './agent-turn-outcome'
+import type { OrchestrationFleetAttention } from './orchestration-fleet-attention'
+import type { AgentStatusRowFacets } from './agent-status-observation'
+import type { AgentChildWorkView } from './agent-status-child-work-view'
+import type { TerminalAgent } from './terminal-agent'
+import {
+  AGENT_MODEL_MAX_LENGTH,
+  AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
+  AGENT_TYPE_MAX_LENGTH,
+  normalizeInteractivePromptField,
+  normalizeOptionalField,
+  normalizeOptionalMultilineField,
+  normalizePromptField,
+  normalizeTurnCompletedAtField
+} from './agent-status-field-normalization'
+import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
+
+import {
+  normalizeAgentSubagentsField,
+  type AgentSubagentSnapshot
+} from './agent-status-subagent-snapshot'
+
+export {
+  AGENT_MODEL_MAX_LENGTH,
+  AGENT_STATUS_MAX_FIELD_LENGTH,
+  AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
+  AGENT_TYPE_MAX_LENGTH
+} from './agent-status-field-normalization'
+export {
+  agentSubagentsEqual,
+  type AgentSubagentSnapshot,
+  type AgentSubagentState
+} from './agent-status-subagent-snapshot'
+export type {
+  AgentStatusCacheIdentity,
+  AgentStatusClearIpcPayload,
+  AgentStatusIpcPayload,
+  MigrationUnsupportedPtyEntry,
+  RefusedPaneResume
+} from './agent-status-ipc-payload'
+export { mainAgentStatusEqual, type AgentMainAgentStatus } from './main-agent-status'
+export { AGENT_STATE_HISTORY_MAX, type AgentStateHistoryEntry } from './agent-state-history'
 
 export const AGENT_STATUS_STATES = ['working', 'blocked', 'waiting', 'done'] as const
 export type AgentStatusState = (typeof AGENT_STATUS_STATES)[number]
-// Why: agent types are not restricted to a fixed set — new agents appear
-// regularly and users may run custom agents. Any non-empty string is accepted;
-// well-known names are kept as a convenience union for internal code that
-// wants to pattern-match on common agents.
-export type WellKnownAgentType =
-  | 'claude'
-  | 'openclaude'
-  | 'codex'
-  | 'gemini'
-  | 'antigravity'
-  | 'amp'
-  | 'opencode'
-  | 'cursor'
-  | 'copilot'
-  | 'aider'
-  | 'pi'
-  | 'omp'
-  | 'droid'
-  | 'command-code'
-  | 'grok'
-  | 'hermes'
-  | 'devin'
-  | 'ante'
-  | 'unknown'
+export type AgentWorkingMode = 'monitoring'
+
+// Accept custom nonempty agent names; the well-known TerminalAgent/unknown union is only a pattern-matching convenience.
+export type WellKnownAgentType = TerminalAgent | 'unknown'
 export type AgentType = WellKnownAgentType | (string & {})
-
-/** A snapshot of a previous agent state, used to render activity blocks.
- *  Why: intentionally narrower than AgentStatusEntry — omits toolName,
- *  toolInput, and lastAssistantMessage. History rows record what STATE the
- *  agent was in and what PROMPT was being handled; tool context is
- *  per-event/per-turn and doesn't meaningfully apply to a historical state
- *  snapshot. Carrying tool/assistant payloads on every transition would also
- *  bloat memory on long sessions (capped at AGENT_STATE_HISTORY_MAX entries
- *  per agent). The current state's tool/assistant fields live on
- *  AgentStatusEntry only, and activity-block rendering intentionally shows
- *  state + prompt + duration summaries rather than tool traces. */
-export type AgentStateHistoryEntry = {
-  state: AgentStatusState
-  prompt: string
-  /** When this state was first reported. */
-  startedAt: number
-  /** True when this `done` was a cancellation. May come from an agent hook
-   *  (for example Claude Code `is_interrupt`) or Orca's guarded interrupt
-   *  fallback. Always falsy for non-`done` states, so retention logic can
-   *  preserve this signal. */
-  interrupted?: boolean
-}
-
-/** Maximum number of history entries kept per agent to bound memory. */
-export const AGENT_STATE_HISTORY_MAX = 20
 
 export type AgentStatusOrchestrationContext = {
   taskId: string
   dispatchId: string
+  /** Runtime-authoritative lifecycle state. Hook-only contexts may omit it. */
+  dispatchStatus?: 'pending' | 'dispatched' | 'completed' | 'failed' | 'circuit_broken'
   taskTitle?: string
   displayName?: string
   parentTerminalHandle?: string
   parentPaneKey?: string
   coordinatorHandle?: string
   orchestrationRunId?: string
+  /** Durable orchestration categories combined with the current push-fed status observation. */
+  attention?: OrchestrationFleetAttention
 }
 
 export type AgentStatusEntry = {
+  /** Renderer-local status-feed confirmation for children; absent on hook rows. */
+  subagentObservation?: 'live' | 'unverifiable'
   state: AgentStatusState
-  /** The user's most recent prompt, when the hook payload carried one.
-   *  Cached across the turn — subsequent tool-use events in the same turn do
-   *  not include the prompt, so the renderer receives the last known value
-   *  until a new prompt arrives or the pane resets. Empty when unknown. */
+  /** Ongoing work that does not require foreground agent execution. Only valid while working. */
+  workingMode?: AgentWorkingMode
+  /** Cache the latest prompt across tool events until a new prompt/reset; empty means unknown. */
   prompt: string
   /** Timestamp (ms) of the last status update. */
   updatedAt: number
-  /** Timestamp (ms) when the current `state` was first reported.
-   *  Why: separate from updatedAt so stateHistory[].startedAt reflects when
-   *  the state was first reported, not the most recent within-state update
-   *  (tool/prompt pings reset updatedAt but not stateStartedAt). */
+  /** Original evidence clock; delivery updatedAt restamps reconnect replays. Local/older-host rows omit this and use updatedAt for freshness. */
+  evidenceObservedAt?: number
+  /** True only while a host-held structured session is represented by its live status feed. */
+  structuredHostOwned?: true
+  /** State entry time stays fixed while tool/prompt pings advance updatedAt. */
   stateStartedAt: number
+  /** `updatedAt` of the write that switched into `state`; see AgentStateHistoryEntry.observedAt. */
+  stateObservedAt?: number
+  /** Host-stamped lead turn opening; older hosts/writers without turn clocks fall back to stateStartedAt. */
+  turnStartedAt?: number
+  /** The host's turn-end stamp; see `AgentStatusIpcPayload.turnEndedAt`. */
+  turnEndedAt?: number
+  /** How the host identified that end; see `TurnEndDisposition`. */
+  turnEndDisposition?: TurnEndDisposition
   agentType?: AgentType
+  /** Provider model currently used by this session. */
+  model?: string
+  /** Command installed by the running OMP extension; absent on older hosts. */
+  modelSwitchCommand?: 'orca-model'
   /** Composite key: `${tabId}:${leafId}` where leafId is a stable UUID layout leaf. */
   paneKey: string
   /** Runtime terminal handle for matching retained parent rows when the parent
    *  pane key cannot be re-derived after terminal teardown. */
   terminalHandle?: string
-  /** Worktree attribution stamped by main when a hook can be resolved there.
-   *  Why: orchestration workers can report status before their terminal tab is
-   *  present in a renderer; retaining this lets worktree-level UI still show
-   *  the live child agent instead of dropping it as unattributed. */
+  /** Retain host workspace attribution for orchestration workers reporting before their renderer tab exists. */
   worktreeId?: string
+  /** Accepted transport authority for this live row; null means local. */
+  connectionId?: string | null
   /** Tab attribution from the hook IPC payload, when available. */
   tabId?: string
   terminalTitle?: string
-  /** Rolling log of previous states. Each entry records a state the agent was in
-   *  before transitioning to the current one. Capped at AGENT_STATE_HISTORY_MAX. */
+  /** Rolling log of previous states, capped at AGENT_STATE_HISTORY_MAX. */
   stateHistory: AgentStateHistoryEntry[]
   /** Name of the tool the agent is currently using (e.g. "Edit", "Bash"). */
   toolName?: string
   /** Short preview of the tool input (e.g. file path, command). */
   toolInput?: string
+  /** Keep full AskUserQuestion JSON for cards, not toolInput previews; clear when the agent moves on. */
+  interactivePrompt?: string
   /** Most recent assistant message preview, when the hook carried one. */
   lastAssistantMessage?: string
-  /** True when the current `done` state was reached via an interrupt rather
-   *  than a normal turn completion. May be reported by the agent itself or
-   *  inferred by Orca's guarded interrupt fallback.
-   *  Orthogonal to `state`: the agent still finished the turn, but the user
-   *  cancelled it. Undefined while the agent is working or when no interrupt
-   *  signal was available. */
+  /** Dashboard may show tool output, but native-chat streaming must not present tool stdout as assistant prose. */
+  lastAssistantMessageIsToolOutput?: boolean
+  /** Retain the last completed non-boundary output across working: batched done→working publication may already clear lastAssistantMessage. */
+  lastCompletedAssistantMessage?: string
+  /** True when this `done` was reached via interrupt, not normal completion
+   *  (agent-reported or Orca's guarded fallback). Undefined otherwise. */
   interrupted?: boolean
-  /** Orchestration dispatch context for agent panes spawned by another agent.
-   *  Why: parent/child agent hierarchy is pane-level state, not worktree
-   *  lineage; workers often run in the same worktree as their coordinator. */
+  /** True when this `done` is a session boundary, not a completed turn. See AgentStatusPayload. */
+  sessionBoundary?: boolean
+  /** Dispatch hierarchy belongs to panes, not worktrees: workers can share the coordinator's worktree. */
   orchestration?: AgentStatusOrchestrationContext
+  /** Live in-process subagents/teammates of this pane's session. Absent when
+   *  none are tracked; the sidebar derives indented child rows from it. */
+  subagents?: AgentSubagentSnapshot[]
+  /** The main agent's own state; absent from old hosts and from writers that carry no main agent fact
+   *  (OSC, launch seeds), where readers fall back to `state`. */
+  mainAgent?: AgentMainAgentStatus
+  /** The host's child-work views for this session, when it publishes them; child rows then read
+   *  these instead of `subagents`. Absent from older hosts. */
+  children?: AgentChildWorkView[]
   /** Provider-owned conversation/session id captured from hook payloads.
    *  Used only for exact CLI resume; Orca terminal ids are not agent-session ids. */
   providerSession?: AgentProviderSessionMetadata
-}
-
-export type MigrationUnsupportedPtyEntry = {
-  ptyId: string
-  worktreeId?: string
-  tabId?: string
-  leafId?: string
-  /** Registry-backed UUID pane proof, when available. */
-  paneKey?: string
-  reason: 'legacy-numeric-pane-key'
-  source: 'local' | 'ssh'
-  updatedAt: number
-}
+  /** False when the status belongs to a non-terminal owner that restores itself. */
+  terminalResumeEligible?: false
+  /** Live-only Command Code turn boundary key; not persisted to last-status.json. */
+  promptInteractionKey?: string
+  /** Live OSC 7501 facet never decides state; read through resolveProgramStatusPresentation beside the state owner. */
+  programStatus?: ProgramStatusFacet
+  /** Hydrated nonterminal rows are immediately stale; accepted live events clear this flag.
+   * Hosts also use it for pre-process evidence: preserve identity without claiming current status. */
+  restoredUnconfirmed?: boolean
+} & AgentStatusRowFacets
 
 // ─── Agent status payload shape (what hook receivers send via IPC) ──────────
-// Hook integrations only need to provide normalized state fields. The
-// remaining AgentStatusEntry fields (updatedAt, paneKey, etc.) are populated
-// by the renderer when it receives the IPC event.
+// Hook integrations provide only normalized state fields; the renderer fills the rest (updatedAt, paneKey, …) on IPC receipt.
 
 export type AgentStatusPayload = {
   state: AgentStatusState
+  /** Ongoing work that does not require foreground agent execution. Only valid while working. */
+  workingMode?: AgentWorkingMode
   prompt?: string
   agentType?: AgentType
+  model?: string
+  modelSwitchCommand?: 'orca-model'
   toolName?: string
   toolInput?: string
+  /** JSON string of the AskUserQuestion tool input, captured live. See the
+   *  AgentStatusEntry field for semantics. Not truncated like toolInput. */
+  interactivePrompt?: string
   lastAssistantMessage?: string
+  /** See the AgentStatusEntry field for semantics. */
+  lastAssistantMessageIsToolOutput?: boolean
   interrupted?: boolean
+  /** done session boundaries (connect/resume/clear) are not turn completions; notifications/automations/badges/end clocks must ignore them (STA-3386). */
+  sessionBoundary?: boolean
+  /** Wall-clock ms when the lead turn ended while Claude background inventory kept the pane `working`.
+   *  `stateStartedAt` stays pinned for that whole working run, so this is the per-turn identity.
+   *  Present on the gated `working` row and that turn's later all-clear `done`. Event-only — not stored on AgentStatusEntry. */
+  turnCompletedAt?: number
+  /** Live in-process children of the reporting session. See AgentStatusEntry. */
+  subagents?: AgentSubagentSnapshot[]
+  /** The main agent's own state and last-turn verdict. See AgentMainAgentStatus. Producers publish it
+   *  beside the combined `state`; a reader that predates it keeps reading `state`. */
+  mainAgent?: AgentMainAgentStatus
+  /** The execution host awaits a launched Claude task’s wake-up or its finishing turn. */
+  claudeTaskWakeupPending?: 'notification' | 'finishing-turn'
 }
 
-/**
- * The result of `parseAgentStatusPayload`: prompt is always normalized to a
- * string (empty string when the raw payload omits it), so consumers do not
- * need nullish-coalescing on the field. Tool/assistant fields stay optional so
- * absence ("no new info") is distinguishable from an explicit empty string.
- */
+/** Parsing always supplies prompt (empty if omitted); optional tool/assistant fields distinguish no update from explicit clearing. */
 export type ParsedAgentStatusPayload = Omit<AgentStatusPayload, 'prompt'> & { prompt: string }
 
-/**
- * Wire shape for agent-status IPC. Both the push channel `agentStatus:set` and the
- * pull channel `agentStatus:getSnapshot` produce this shape so renderer call sites
- * can apply entries through a single `setAgentStatus` path. Flattens the parsed
- * payload onto pane identity + timing because the renderer's slice expects them
- * destructured.
- */
-export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
-  paneKey: string
-  launchToken?: string
-  terminalHandle?: string
-  tabId?: string
-  worktreeId?: string
-  /** Identifies the SSH connection the event arrived on, or null for local.
-   *  Stamped only on the remote-ingest path (Orca's `ingestRemote`); the
-   *  HTTP path always sets null because it cannot know which mux a request
-   *  came from. See docs/design/agent-status-over-ssh.md §5. */
-  connectionId: string | null
-  /** Timestamp (ms) when the hook server received this latest status event. */
-  receivedAt: number
-  /** Timestamp (ms) when the current state first appeared for this pane. */
-  stateStartedAt: number
-  orchestration?: AgentStatusOrchestrationContext
-  providerSession?: AgentProviderSessionMetadata
+/** Explicitly select status fields from flattened IPC; spreading would leak launchToken, connectionId, promptInteractionKey and providerSessionOnly to paired clients. */
+export function pickParsedAgentStatusPayload(
+  row: ParsedAgentStatusPayload
+): ParsedAgentStatusPayload {
+  return {
+    state: row.state,
+    ...(row.workingMode !== undefined ? { workingMode: row.workingMode } : {}),
+    prompt: row.prompt,
+    ...(row.agentType !== undefined ? { agentType: row.agentType } : {}),
+    ...(row.model !== undefined ? { model: row.model } : {}),
+    ...(row.modelSwitchCommand ? { modelSwitchCommand: row.modelSwitchCommand } : {}),
+    ...(row.toolName !== undefined ? { toolName: row.toolName } : {}),
+    ...(row.toolInput !== undefined ? { toolInput: row.toolInput } : {}),
+    ...(row.interactivePrompt !== undefined ? { interactivePrompt: row.interactivePrompt } : {}),
+    ...(row.lastAssistantMessage !== undefined
+      ? { lastAssistantMessage: row.lastAssistantMessage }
+      : {}),
+    ...(row.lastAssistantMessageIsToolOutput !== undefined
+      ? { lastAssistantMessageIsToolOutput: row.lastAssistantMessageIsToolOutput }
+      : {}),
+    ...(row.interrupted !== undefined ? { interrupted: row.interrupted } : {}),
+    ...(row.sessionBoundary !== undefined ? { sessionBoundary: row.sessionBoundary } : {}),
+    ...(row.turnCompletedAt !== undefined ? { turnCompletedAt: row.turnCompletedAt } : {}),
+    ...(row.subagents !== undefined ? { subagents: row.subagents } : {}),
+    ...(row.mainAgent !== undefined ? { mainAgent: row.mainAgent } : {}),
+    ...(row.claudeTaskWakeupPending !== undefined
+      ? { claudeTaskWakeupPending: row.claudeTaskWakeupPending }
+      : {})
+  }
 }
 
-/** Maximum character length for the prompt field. Truncated on parse. */
-export const AGENT_STATUS_MAX_FIELD_LENGTH = 200
+/** Hook set/snapshot IPC shares one shape so renderers use one setAgentStatus path. */
 /** Maximum character length for the toolName field. */
 export const AGENT_STATUS_TOOL_NAME_MAX_LENGTH = 60
-/** Maximum character length for the toolInput preview. */
-export const AGENT_STATUS_TOOL_INPUT_MAX_LENGTH = 160
-/** Maximum character length for the lastAssistantMessage preview.
- *  Why: assistant messages are the user-facing "what did the agent say" body,
- *  expanded inline in the dashboard row. 8 KB comfortably fits a multi-
- *  paragraph summary while still providing a hard upper bound — the hook
- *  HTTP endpoint already caps bodies at 1 MB, but per-field truncation is a
- *  second line of defense against a buggy/malicious agent spamming huge
- *  strings into the cache (which lives per pane with bounded history). */
+/** 8KB preserves paragraph summaries while bounding per-pane cache growth. */
 export const AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH = 8000
-/**
- * Freshness threshold for explicit agent status. Retained past this point so
- * WorktreeCard's sidebar dot can decay "working" back to "active" when the
- * hook stream goes silent. Smart-sort + WorktreeCard still read this; the
- * dashboard + hover only display hook-reported data as-is.
- */
-export const AGENT_STATUS_STALE_AFTER_MS = 30 * 60 * 1000
-const SINGLE_LINE_FIELD_SCAN_OVERHEAD = 64
-const SINGLE_LINE_FIELD_SCAN_MULTIPLIER = 8
+/** Keep full question JSON/options, with a cap to bound cache; preview cuts would corrupt it. */
+export const AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH = 16000
+// Re-exported here because every consumer reaches for the entry type and its freshness gate
+// together; the clock rules themselves live in agent-status-freshness.ts.
+export {
+  AGENT_STATUS_HYDRATE_MAX_AGE_MS,
+  AGENT_STATUS_STALE_AFTER_MS,
+  agentStatusAuthorityObservedAt,
+  agentStatusEvidenceObservedAt,
+  isFreshNonDoneAgentStatus
+} from './agent-status-freshness'
 
-// Why: typed as ReadonlySet<string> so .has() accepts any string without
-// requiring `state as AgentStatusState` at the check site. The narrowing
-// cast stays on the return line, where it's actually proven safe.
+// Why: ReadonlySet<string> so .has() accepts any string without a cast here; the narrowing cast stays on the return line where it's proven safe.
 const VALID_STATES: ReadonlySet<string> = new Set<string>(AGENT_STATUS_STATES)
-/** Maximum character length for the agentType label. Truncated on parse. */
-export const AGENT_TYPE_MAX_LENGTH = 40
 
-// Why: when truncation lands mid surrogate-pair (emoji / astral chars), the
-// high surrogate would be left dangling and render as the Unicode replacement
-// glyph. Drop the lone high surrogate so the result is always a valid UTF-16
-// sequence. Shared by the single-line and multiline normalizers so the
-// protection can't drift between them.
-function truncatePreservingSurrogates(value: string, maxLength: number): string {
-  if (value.length < maxLength) {
-    return value
-  }
-  let truncated = value.length === maxLength ? value : value.slice(0, maxLength)
-  const lastCode = truncated.charCodeAt(truncated.length - 1)
-  if (lastCode >= 0xd800 && lastCode <= 0xdbff) {
-    truncated = truncated.slice(0, -1)
-  }
-  return truncated
+/** identified proves a new/continued/repeated turn; ambiguous cannot distinguish repeats from missed openings. Absence is legacy (older hosts, replays, unclassified agents). */
+export type TurnEndDisposition = 'identified' | 'ambiguous'
+
+export type HostTurnEndFacts = { turnEndedAt?: number; turnEndDisposition?: TurnEndDisposition }
+
+export function isTurnEndDisposition(value: unknown): value is TurnEndDisposition {
+  return value === 'identified' || value === 'ambiguous'
 }
 
-/** Normalize a status field: trim, collapse to single line, truncate. */
-function normalizeField(value: unknown, maxLength: number = AGENT_STATUS_MAX_FIELD_LENGTH): string {
-  if (typeof value !== 'string') {
-    return ''
+/** The host's turn-end facts of a row, for the copies that carry them. */
+export function pickHostTurnEnd(row: HostTurnEndFacts): HostTurnEndFacts {
+  return {
+    ...(row.turnEndedAt !== undefined ? { turnEndedAt: row.turnEndedAt } : {}),
+    ...(row.turnEndDisposition !== undefined ? { turnEndDisposition: row.turnEndDisposition } : {})
   }
-  return normalizeSingleLinePreview(value, maxLength)
 }
 
-function normalizeSingleLinePreview(value: string, maxLength: number): string {
-  // Why: hook prompt/tool fields are previews. Bound the source scan before
-  // folding line breaks so paste-sized status text cannot run a full regex
-  // replacement just to keep a small dashboard label.
-  const scanEnd = Math.min(
-    value.length,
-    maxLength * SINGLE_LINE_FIELD_SCAN_MULTIPLIER + SINGLE_LINE_FIELD_SCAN_OVERHEAD
-  )
-  let index = 0
-  while (index < scanEnd && isEcmaTrimWhitespace(value.charCodeAt(index))) {
-    index++
-  }
-
-  let normalized = ''
-  let lineSeparatorRun = false
-  while (index < scanEnd && normalized.length < maxLength) {
-    const code = value.charCodeAt(index)
-    if (isSingleLineSeparator(code)) {
-      if (code === 13 && value.charCodeAt(index + 1) === 10) {
-        index++
-      }
-      if (!lineSeparatorRun) {
-        normalized += ' '
-      }
-      lineSeparatorRun = true
-      index++
-      continue
-    }
-
-    normalized += value[index]
-    lineSeparatorRun = false
-    index++
-  }
-
-  if (normalized.length < maxLength) {
-    normalized = trimTrailingWhitespace(normalized)
-  }
-  return truncatePreservingSurrogates(normalized, maxLength)
+export function isAgentStatusState(value: unknown): value is AgentStatusState {
+  return typeof value === 'string' && VALID_STATES.has(value)
 }
 
-// Why: assistant messages are a multi-paragraph "what did the agent say"
-// body that the dashboard renders with `whitespace-pre-wrap`. Collapsing
-// newlines here would erase structure the UI is designed to show. Still
-// normalize `\r\n` → `\n` and cap paragraph gaps at one blank line to keep
-// the bound meaningful, but otherwise preserve line breaks.
-function normalizeMultilineField(value: unknown, maxLength: number): string {
-  if (typeof value !== 'string') {
-    return ''
-  }
-  // Why: fold Unicode line/paragraph separators (U+2028, U+2029) into ordinary
-  // `\n` before the blank-line-run cap. These code points render as real line
-  // breaks under `whitespace-pre-wrap`, so leaving them untouched would let a
-  // buggy/malicious agent bypass the `\n{3,}` → `\n\n` safeguard by spamming
-  // arbitrarily many U+2029 paragraph breaks. Matches the single-line
-  // normalizer's treatment of the same code points, keeping the two paths in
-  // sync. Step order preserved: `\r\n` → `\n`, bare `\r` → `\n`,
-  // U+2028/U+2029 → `\n`, then collapse blank-line runs.
-  const { start, end } = getTrimmedStringBounds(value)
-  let normalized = ''
-  let newlineRun = 0
-  for (let index = start; index < end && normalized.length < maxLength; index++) {
-    const code = value.charCodeAt(index)
-    if (code === 13 || code === 10 || code === 0x2028 || code === 0x2029) {
-      if (code === 13 && value.charCodeAt(index + 1) === 10) {
-        index++
-      }
-      if (newlineRun < 2) {
-        normalized += '\n'
-      }
-      newlineRun++
-      continue
-    }
+export const AGENT_STATUS_JSON_STRUCTURE_LIMITS = {
+  structuralTokens: 4096,
+  nestingDepth: 16
+} as const
 
-    normalized += value[index]
-    newlineRun = 0
-  }
-  return truncatePreservingSurrogates(normalized, maxLength)
-}
-
-function getTrimmedStringBounds(value: string): { start: number; end: number } {
-  let start = 0
-  let end = value.length
-  while (start < end && isEcmaTrimWhitespace(value.charCodeAt(start))) {
-    start++
-  }
-  while (end > start && isEcmaTrimWhitespace(value.charCodeAt(end - 1))) {
-    end--
-  }
-  return { start, end }
-}
-
-function trimTrailingWhitespace(value: string): string {
-  let end = value.length
-  while (end > 0 && isEcmaTrimWhitespace(value.charCodeAt(end - 1))) {
-    end--
-  }
-  return end === value.length ? value : value.slice(0, end)
-}
-
-function isSingleLineSeparator(code: number): boolean {
-  return code === 13 || code === 10 || code === 0x2028 || code === 0x2029
-}
-
-function isEcmaTrimWhitespace(code: number): boolean {
-  return (
-    code === 0x20 ||
-    (code >= 0x09 && code <= 0x0d) ||
-    code === 0xa0 ||
-    code === 0x1680 ||
-    (code >= 0x2000 && code <= 0x200a) ||
-    code === 0x2028 ||
-    code === 0x2029 ||
-    code === 0x202f ||
-    code === 0x205f ||
-    code === 0x3000 ||
-    code === 0xfeff
-  )
-}
-
-// Why: tool/assistant fields are optional on the entry (absence = "no update
-// for this field"). We only surface them when the caller actually provided a
-// string value so a missing field doesn't overwrite the prior cached state.
-function normalizeOptionalField(value: unknown, maxLength: number): string | undefined {
-  if (typeof value !== 'string') {
+/** Drop malformed mainAgent alone; combined state remains valid, matching the older-host fallback. */
+export function normalizeMainAgentStatusField(value: unknown): AgentMainAgentStatus | undefined {
+  if (typeof value !== 'object' || value === null) {
     return undefined
   }
-  const normalized = normalizeField(value, maxLength)
-  return normalized.length > 0 ? normalized : undefined
-}
-
-function normalizeOptionalMultilineField(value: unknown, maxLength: number): string | undefined {
-  if (typeof value !== 'string') {
+  const obj = value as Record<string, unknown>
+  const state = obj.state
+  if (!isAgentStatusState(state)) {
     return undefined
   }
-  const normalized = normalizeMultilineField(value, maxLength)
-  return normalized.length > 0 ? normalized : undefined
+  if (typeof obj.stateStartedAt !== 'number' || !Number.isFinite(obj.stateStartedAt)) {
+    return undefined
+  }
+  return {
+    state,
+    // Why: a verdict belongs to a finished turn; anything riding on a live state is stale.
+    ...(state === 'done' && isAgentTurnOutcome(obj.outcome) ? { outcome: obj.outcome } : {}),
+    ...(state === 'working' && obj.stopping === true ? { stopping: true as const } : {}),
+    stateStartedAt: obj.stateStartedAt
+  }
 }
 
-/**
- * Normalize and validate an already-parsed agent status object. Shared by the
- * JSON string entry point (`parseAgentStatusPayload`) and the object entry
- * point (`normalizeAgentStatusPayload`) so both paths enforce identical field
- * rules. Returns null when the payload is malformed or the state is invalid.
- */
+/** Apply identical validation to JSON/object entrypoints; return null for malformed payloads or invalid states. */
 function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload | null {
   if (typeof parsed !== 'object' || parsed === null) {
     return null
   }
   const obj = parsed as Record<string, unknown>
-  // Why: explicit typeof guard ensures non-string values (e.g. numbers)
-  // are rejected rather than relying on Set.has returning false for
-  // mismatched types.
+  // Why: explicit typeof guard rejects non-string values instead of leaning on Set.has to return false for mismatched types.
   if (typeof obj.state !== 'string') {
     return null
   }
@@ -402,44 +308,51 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
   }
   return {
     state: state as AgentStatusState,
-    prompt: normalizeField(obj.prompt),
-    // Why: route through normalizeOptionalField so agentType gets the same
-    // trim / collapse-newlines / truncate / empty→undefined treatment as the
-    // other single-line string fields (toolName, toolInput, prompt). Inline
-    // trim+slice left embedded newlines intact, which broke single-line UI
-    // rendering and equality checks when a payload contained e.g.
-    // `agentType: "claude\nrogue"`.
+    workingMode: state === 'working' && obj.workingMode === 'monitoring' ? 'monitoring' : undefined,
+    prompt: normalizePromptField(obj.prompt),
+    // Why: normalize like the other single-line fields so embedded newlines (e.g. `agentType: "claude\nrogue"`) can't break single-line UI and equality checks.
     agentType: normalizeOptionalField(obj.agentType, AGENT_TYPE_MAX_LENGTH),
+    model: normalizeOptionalField(obj.model, AGENT_MODEL_MAX_LENGTH),
+    ...(obj.modelSwitchCommand === 'orca-model'
+      ? { modelSwitchCommand: 'orca-model' as const }
+      : {}),
     toolName: normalizeOptionalField(obj.toolName, AGENT_STATUS_TOOL_NAME_MAX_LENGTH),
     toolInput: normalizeOptionalField(obj.toolInput, AGENT_STATUS_TOOL_INPUT_MAX_LENGTH),
+    interactivePrompt: normalizeInteractivePromptField(
+      obj.interactivePrompt,
+      AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH
+    ),
     lastAssistantMessage: normalizeOptionalMultilineField(
       obj.lastAssistantMessage,
       AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH
     ),
-    // Why: only meaningful on `done`. Coerce to undefined on other states so
-    // the field doesn't leak stale truth through state transitions.
-    interrupted: obj.interrupted === true && state === 'done' ? true : undefined
+    // Only explicit true means known tool output; absent/false retain older-host behavior without suppressing prose.
+    lastAssistantMessageIsToolOutput:
+      obj.lastAssistantMessageIsToolOutput === true ? true : undefined,
+    // Why: only meaningful on `done`; coerce to undefined elsewhere so it can't leak stale truth across transitions.
+    interrupted: obj.interrupted === true && state === 'done' ? true : undefined,
+    sessionBoundary: obj.sessionBoundary === true && state === 'done' ? true : undefined,
+    turnCompletedAt: normalizeTurnCompletedAtField(obj.turnCompletedAt, state),
+    subagents: normalizeAgentSubagentsField(obj.subagents),
+    mainAgent: normalizeMainAgentStatusField(obj.mainAgent),
+    ...(obj.agentType === 'claude' &&
+    state !== 'done' &&
+    (obj.claudeTaskWakeupPending === 'notification' ||
+      obj.claudeTaskWakeupPending === 'finishing-turn')
+      ? { claudeTaskWakeupPending: obj.claudeTaskWakeupPending }
+      : {})
   }
 }
 
-/**
- * Normalize an already-structured agent status object (e.g. arriving via IPC
- * where the payload has already been deserialized by Electron). Skips the
- * JSON.stringify → JSON.parse round-trip that `parseAgentStatusPayload`
- * requires, which matters because hook events can fire many times per second
- * during a tool-use run.
- */
+/** Normalize deserialized IPC directly to avoid JSON round trips on frequent tool events. */
 export function normalizeAgentStatusPayload(payload: unknown): ParsedAgentStatusPayload | null {
   return normalizeAgentStatusObject(payload)
 }
 
-/**
- * Parse and validate an agent status JSON payload received from explicit
- * hook integrations or OSC 9999. Returns null if the payload is malformed or
- * has an invalid state.
- */
+/** Reject malformed hook/OSC 9999 JSON or invalid states as null. */
 export function parseAgentStatusPayload(json: string): ParsedAgentStatusPayload | null {
   try {
+    assertJsonTextStructureWithinLimits(json, AGENT_STATUS_JSON_STRUCTURE_LIMITS)
     return normalizeAgentStatusObject(JSON.parse(json))
   } catch {
     return null

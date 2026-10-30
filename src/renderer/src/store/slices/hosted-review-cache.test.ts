@@ -1,27 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
+import { createHostedReviewSlice } from './hosted-review'
 import {
   _clearHostedReviewRequestGenerationsForTest,
-  _getHostedReviewRequestGenerationCountForTest,
-  createHostedReviewSlice,
-  getHostedReviewCacheKey
-} from './hosted-review'
+  _getHostedReviewRequestGenerationCountForTest
+} from './hosted-review-request-state'
+import { getHostedReviewCacheKey } from './hosted-review-cache-identity'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 
 const runtimeRpc = vi.hoisted(() => ({
   callRuntimeRpc: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: runtimeRpc.callRuntimeRpc,
-  getActiveRuntimeTarget: (
-    settings: { activeRuntimeEnvironmentId?: string | null } | null | undefined
-  ) => {
-    const environmentId = settings?.activeRuntimeEnvironmentId?.trim()
-    return environmentId ? { kind: 'environment', environmentId } : { kind: 'local' }
-  }
-}))
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: runtimeRpc.callRuntimeRpc }))
 
 const mockApi = {
   hostedReview: {
@@ -139,7 +131,15 @@ describe('hosted review cache revalidation', () => {
     ).resolves.toEqual(review)
 
     expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(2)
-    const cacheKey = getHostedReviewCacheKey('/repo', 'feature/pr')
+    const cacheKey = getHostedReviewCacheKey(
+      '/repo',
+      'feature/pr',
+      null,
+      'repo-1',
+      null,
+      null,
+      true
+    )
     expect(store.getState().hostedReviewCache[cacheKey]?.data).toEqual(review)
 
     resolveRefresh(updatedReview)
@@ -147,6 +147,87 @@ describe('hosted review cache revalidation', () => {
     await Promise.resolve()
 
     expect(store.getState().hostedReviewCache[cacheKey]?.data).toEqual(updatedReview)
+  })
+
+  it('coalesces M card poll ticks into one trailing run after the slowTaskBackoff gap', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(0)
+    let resolveRefresh: (value: HostedReviewInfo) => void = () => {}
+    const slowRefresh = new Promise<HostedReviewInfo>((resolve) => {
+      resolveRefresh = resolve
+    })
+    mockApi.hostedReview.forBranch
+      .mockResolvedValueOnce(review)
+      .mockReturnValueOnce(slowRefresh)
+      .mockResolvedValue(review)
+    const store = makeStore()
+    const options = { linkedGitHubPR: 42, staleWhileRevalidate: true }
+
+    await store
+      .getState()
+      .fetchHostedReviewForBranch('/repo', 'feature/slow-poll', { linkedGitHubPR: 42 })
+    vi.setSystemTime(60_001)
+    await store.getState().fetchHostedReviewForBranch('/repo', 'feature/slow-poll', options)
+    for (let tick = 0; tick < 5; tick += 1) {
+      await store.getState().fetchHostedReviewForBranch('/repo', 'feature/slow-poll', options)
+    }
+    expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(2)
+
+    await vi.advanceTimersByTimeAsync(10_000)
+    resolveRefresh(review)
+    await slowRefresh
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(2)
+
+    await vi.advanceTimersByTimeAsync(49_999)
+    expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(3)
+  })
+
+  it('lets a force refresh supersede queued stale-while-revalidate work', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(0)
+    let resolveBackground: (value: HostedReviewInfo) => void = () => {}
+    let resolveForce: (value: HostedReviewInfo) => void = () => {}
+    const background = new Promise<HostedReviewInfo>((resolve) => {
+      resolveBackground = resolve
+    })
+    const force = new Promise<HostedReviewInfo>((resolve) => {
+      resolveForce = resolve
+    })
+    const forcedReview = { ...review, title: 'Manual refresh result' }
+    mockApi.hostedReview.forBranch
+      .mockResolvedValueOnce(review)
+      .mockReturnValueOnce(background)
+      .mockReturnValueOnce(force)
+      .mockResolvedValue(review)
+    const store = makeStore()
+    const branch = 'feature/force-supersedes-poll'
+    const staleOptions = { linkedGitHubPR: 42, staleWhileRevalidate: true }
+
+    await store.getState().fetchHostedReviewForBranch('/repo', branch, { linkedGitHubPR: 42 })
+    vi.setSystemTime(60_001)
+    await store.getState().fetchHostedReviewForBranch('/repo', branch, staleOptions)
+    await store.getState().fetchHostedReviewForBranch('/repo', branch, staleOptions)
+    const forceRefresh = store
+      .getState()
+      .fetchHostedReviewForBranch('/repo', branch, { linkedGitHubPR: 42, force: true })
+    await store.getState().fetchHostedReviewForBranch('/repo', branch, staleOptions)
+    expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(3)
+
+    await vi.advanceTimersByTimeAsync(10_000)
+    resolveBackground(review)
+    await background
+    await Promise.resolve()
+    await vi.advanceTimersByTimeAsync(300_000)
+    expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(3)
+
+    resolveForce(forcedReview)
+    await expect(forceRefresh).resolves.toEqual(forcedReview)
+    await vi.advanceTimersByTimeAsync(300_000)
+    expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(3)
   })
 
   it('does not serve stale metadata when a stronger linked PR hint changes the lookup', async () => {
@@ -192,11 +273,14 @@ describe('hosted review cache revalidation', () => {
     }
 
     expect(
-      store.getState().hostedReviewCache[getHostedReviewCacheKey('/repo', 'feature/cache-0')]
+      store.getState().hostedReviewCache[
+        getHostedReviewCacheKey('/repo', 'feature/cache-0', null, 'repo-1', null, null, true)
+      ]
     ).toBeUndefined()
     expect(
-      store.getState().hostedReviewCache[getHostedReviewCacheKey('/repo', 'feature/cache-500')]
-        ?.data
+      store.getState().hostedReviewCache[
+        getHostedReviewCacheKey('/repo', 'feature/cache-500', null, 'repo-1', null, null, true)
+      ]?.data
     ).toMatchObject({ title: 'feature/cache-500' })
     expect(Object.keys(store.getState().hostedReviewCache)).toHaveLength(500)
     expect(_getHostedReviewRequestGenerationCountForTest()).toBe(0)

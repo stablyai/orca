@@ -1,7 +1,8 @@
-import { execFileSync, spawn, spawnSync } from 'child_process'
-import { mkdtemp, readFile, rm, stat } from 'fs/promises'
-import { join } from 'path'
+import { execFileSync, spawn, spawnSync } from 'node:child_process'
+import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { fakeSpawnDispatch } from '../../shared/__fixtures__/fake-spawned-child'
 import {
   openComputerUsePermissions,
   resetComputerUsePermissions
@@ -13,23 +14,11 @@ const permissionStatusTempDir = '/tmp/orca-computer-use-permissions-test'
 const helperAppPath = '/Applications/Orca Computer Use.app'
 const helperInfoPlistPath = join(helperAppPath, 'Contents', 'Info.plist')
 
+const plistBuddyStdout = vi.hoisted(() => ({ value: 'com.example.orca.computer-use\n' }))
+
 vi.mock('child_process', () => ({
   execFileSync: vi.fn(),
-  spawn: vi.fn(() => {
-    const child = {
-      stdout: { off: vi.fn(), on: vi.fn(), setEncoding: vi.fn() },
-      stderr: { off: vi.fn(), on: vi.fn(), setEncoding: vi.fn() },
-      on: vi.fn((event: string, callback: (status: number) => void) => {
-        if (event === 'close') {
-          queueMicrotask(() => callback(0))
-        }
-        return child
-      }),
-      off: vi.fn(() => child),
-      unref: vi.fn()
-    }
-    return child
-  }),
+  spawn: vi.fn(),
   spawnSync: vi.fn()
 }))
 
@@ -49,7 +38,13 @@ describe('openComputerUsePermissions', () => {
   const originalPlatform = process.platform
 
   beforeEach(() => {
-    vi.mocked(spawn).mockClear()
+    vi.mocked(spawn)
+      .mockReset()
+      .mockImplementation(
+        fakeSpawnDispatch((program) => ({
+          stdout: program === '/usr/libexec/PlistBuddy' ? plistBuddyStdout.value : ''
+        }))
+      )
     vi.mocked(spawnSync).mockClear()
     vi.mocked(execFileSync).mockReset()
     vi.mocked(mkdtemp).mockReset()
@@ -213,7 +208,6 @@ describe('openComputerUsePermissions', () => {
     vi.mocked(readFile)
       .mockResolvedValueOnce('{"accessibility":"granted","screenshots":"granted"}')
       .mockResolvedValueOnce('{"accessibility":"not-granted","screenshots":"not-granted"}')
-    vi.mocked(execFileSync).mockReturnValueOnce('com.example.orca.computer-use\n')
     vi.mocked(spawnSync).mockReturnValue({ status: 0 } as ReturnType<typeof spawnSync>)
 
     await expect(resetComputerUsePermissions()).resolves.toEqual({
@@ -226,20 +220,27 @@ describe('openComputerUsePermissions', () => {
         { id: 'screenshots', status: 'not-granted' }
       ]
     })
-    expect(execFileSync).toHaveBeenCalledWith(
+    const throughChokepoint = expect.objectContaining({ shell: false, windowsHide: true })
+    expect(spawn).toHaveBeenCalledWith(
       '/usr/libexec/PlistBuddy',
       ['-c', 'Print :CFBundleIdentifier', helperInfoPlistPath],
-      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }
+      throughChokepoint
     )
-    expect(spawnSync).toHaveBeenCalledWith(
+    expect(spawn).toHaveBeenCalledWith(
       '/usr/bin/tccutil',
       ['reset', 'Accessibility', 'com.example.orca.computer-use'],
-      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }
+      throughChokepoint
     )
-    expect(spawnSync).toHaveBeenCalledWith(
+    expect(spawn).toHaveBeenCalledWith(
       '/usr/bin/tccutil',
       ['reset', 'ScreenCapture', 'com.example.orca.computer-use'],
-      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }
+      throughChokepoint
+    )
+    // Keep resets asynchronous so helper commands cannot block the main process.
+    expect(spawnSync).not.toHaveBeenCalledWith(
+      '/usr/bin/tccutil',
+      expect.anything(),
+      expect.anything()
     )
   })
 })

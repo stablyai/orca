@@ -1,7 +1,8 @@
 const BROWSER_SCREENCAST_KIND = 0x62
 const BROWSER_SCREENCAST_VERSION = 1
 const HEADER_BYTES = 16
-const METADATA_KEYS = [
+// Share metadata keys with the page’s frame-area budget so envelope sizing cannot drift.
+export const METADATA_KEYS = [
   'offsetTop',
   'pageScaleFactor',
   'deviceWidth',
@@ -37,6 +38,8 @@ export type BrowserScreencastFrame = {
   format: BrowserScreencastFormat
   metadata: BrowserScreencastFrameMetadata
   image: Uint8Array
+  // Preserve bridge-provided base64 for data URIs without re-encoding; socket frames still provide bytes in image.
+  b64?: string
 }
 
 function byteToFormat(value: number): BrowserScreencastFormat | null {

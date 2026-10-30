@@ -1,4 +1,6 @@
-import type { GitDiffResult } from '../../../../shared/types'
+import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
+import { shouldLoadCombinedDiffOnDemand } from './combined-diff-on-demand-load'
+import type { DiffSection } from './diff-section-types'
 import { countLinesLikeSplit, type DiffLineCounts } from './large-diff-render-limit'
 
 const DIFF_LINE_HEIGHT = 19
@@ -23,9 +25,22 @@ export function isIntrinsicHeightImageDiff(diffResult: GitDiffResult | null | un
 }
 
 export function getLargeDiffFallbackBodyHeight(): number {
-  // Why: section measurements may be stale Monaco heights from before a diff
-  // crossed the render limit; the fallback must always stay bounded.
+  // Ignore stale pre-limit Monaco heights so render-limit fallback rows stay bounded.
   return LARGE_DIFF_FALLBACK_BODY_HEIGHT
+}
+
+/** Keep deferred, limited and newly loading rows at bounded fallback height so empty in-flight content cannot shrink the list. */
+export function usesLargeDiffFallbackHeight(
+  section: Pick<
+    DiffSection,
+    'added' | 'largeDiffRenderLimit' | 'loading' | 'loadOnDemand' | 'path' | 'removed'
+  >
+): boolean {
+  return (
+    section.largeDiffRenderLimit?.limited === true ||
+    section.loadOnDemand === true ||
+    (section.loading && shouldLoadCombinedDiffOnDemand(section))
+  )
 }
 
 export function getDiffSectionBodyHeight({
@@ -55,9 +70,7 @@ export function getDiffSectionBodyHeight({
         )
       : Math.min(fullLineCount, MAX_UNMEASURED_TEXT_BODY_LINES)
 
-  // Why: combined diffs hide unchanged regions inside Monaco. Before Monaco
-  // reports its collapsed content height, sizing from full file length makes
-  // large files flash open and forces the virtualizer to jump on scroll.
+  // Estimate collapsed regions before Monaco reports height so full-file size cannot flash or jump the virtualizer.
   return Math.max(
     MIN_DIFF_SECTION_BODY_HEIGHT,
     estimatedLineCount * DIFF_LINE_HEIGHT + DIFF_SECTION_PADDING_HEIGHT
@@ -73,7 +86,10 @@ export function getDiffSectionEstimatedHeight({
   useIntrinsicImageHeight,
   lineCounts,
   isLargeDiffLimited = false
-}: DiffSectionBodyHeightInput & { collapsed: boolean; isLargeDiffLimited?: boolean }): number {
+}: DiffSectionBodyHeightInput & {
+  collapsed: boolean
+  isLargeDiffLimited?: boolean
+}): number {
   if (collapsed) {
     return DIFF_SECTION_HEADER_HEIGHT
   }
@@ -93,4 +109,36 @@ export function getDiffSectionEstimatedHeight({
       lineCounts
     }) ?? MIN_DIFF_SECTION_BODY_HEIGHT)
   )
+}
+
+/** Share estimates across worktree and review viewers, matching the row’s bounded fallback sizing. */
+export function getDiffSectionRowEstimatedHeight(
+  section: Pick<
+    DiffSection,
+    | 'added'
+    | 'collapsed'
+    | 'diffResult'
+    | 'largeDiffRenderLimit'
+    | 'loading'
+    | 'loadOnDemand'
+    | 'modifiedContent'
+    | 'originalContent'
+    | 'path'
+    | 'removed'
+  >,
+  measuredContentHeight: number | undefined
+): number {
+  return getDiffSectionEstimatedHeight({
+    collapsed: section.collapsed,
+    measuredContentHeight,
+    originalContent: section.originalContent,
+    modifiedContent: section.modifiedContent,
+    changedLineCount:
+      section.added === undefined && section.removed === undefined
+        ? undefined
+        : (section.added ?? 0) + (section.removed ?? 0),
+    useIntrinsicImageHeight: isIntrinsicHeightImageDiff(section.diffResult),
+    isLargeDiffLimited: usesLargeDiffFallbackHeight(section),
+    lineCounts: section.largeDiffRenderLimit?.lineCounts ?? undefined
+  })
 }

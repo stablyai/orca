@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { join } from 'path'
+import { join } from 'node:path'
 
 const mocks = vi.hoisted(() => ({
   createAgent: vi.fn(),
@@ -7,23 +7,30 @@ const mocks = vi.hoisted(() => ({
   readFileSync: vi.fn()
 }))
 
-vi.mock('fs', () => ({
-  readFileSync: (...args: unknown[]) => mocks.readFileSync(...args)
+vi.mock('./ssh-identity-file-read', () => ({
+  readSshIdentityFileSync: (path: string) => {
+    try {
+      return { contents: mocks.readFileSync(path) ?? null, problem: null }
+    } catch (error) {
+      return { contents: null, problem: String(error) }
+    }
+  }
 }))
 
 vi.mock('os', () => ({
   homedir: () => '/home/testuser'
 }))
 
-vi.mock('ssh2', () => {
+vi.mock('./ssh2-module-load', () => {
   class MockBaseAgent {}
-  return {
+  const ssh2 = {
     BaseAgent: MockBaseAgent,
     createAgent: (...args: unknown[]) => mocks.createAgent(...args),
     utils: {
       parseKey: (...args: unknown[]) => mocks.parseKey(...args)
     }
   }
+  return { loadSsh2: () => ssh2 }
 })
 
 import { createIdentityFilteredAgent } from './ssh-agent-identity-filter'

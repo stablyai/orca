@@ -1,21 +1,21 @@
-/* eslint-disable max-lines -- Why: split-tree DOM reparent, promote, and equalize rules need one consistent owner. */
 import type {
   DropZone,
   ManagedPane,
   ManagedPaneInternal,
-  PaneStyleOptions,
-  ScrollState
+  PaneStyleOptions
 } from './pane-manager-types'
 import { createDivider, disposeDivider } from './pane-divider'
-import { getFitOverrideForPty } from './mobile-fit-overrides'
 import { disposeWebgl, attachWebgl } from './pane-webgl-renderer'
-import { captureScrollState, restoreScrollStateAfterLayout } from './pane-scroll'
+import { safeFit } from './pane-fit'
 
+export {
+  cancelPendingSafeFitContinuations,
+  safeFit,
+  safeFitAndThen,
+  type SafeFitContinuationHandle
+} from './pane-fit'
 export { captureScrollState, restoreScrollState } from './pane-scroll'
-
-// ---------------------------------------------------------------------------
-// Split-tree manipulation: detach, insert, promote sibling
-// ---------------------------------------------------------------------------
+export { equalizePaneSplitSizes, findPaneChildren } from './pane-tree-equalization'
 
 type TreeOpsCallbacks = {
   getRoot: () => HTMLElement
@@ -23,93 +23,10 @@ type TreeOpsCallbacks = {
   safeFit: (pane: ManagedPane) => void
   refitPanesUnder: (el: HTMLElement) => void
   onLayoutChanged?: () => void
+  onDragActiveChange?: (active: boolean) => void
+  onDividerRatiosCommitted?: () => void
   isDestroyed?: () => boolean
   requestPaneReparentFrame?: (callback: FrameRequestCallback) => void
-}
-
-const MIN_PANE_FIT_WIDTH_PX = 48
-const MIN_PANE_FIT_HEIGHT_PX = 24
-const MIN_PANE_FIT_COLS = 8
-const MIN_PANE_FIT_ROWS = 4
-
-function getProposedDimensions(pane: ManagedPane): { cols: number; rows: number } | null {
-  try {
-    return pane.fitAddon.proposeDimensions() ?? null
-  } catch {
-    return null
-  }
-}
-
-function canMeasurePaneForFit(pane: ManagedPane): boolean {
-  const measure = pane.container.getBoundingClientRect
-  if (typeof measure === 'function') {
-    const rect = measure.call(pane.container)
-    if (rect.width < MIN_PANE_FIT_WIDTH_PX || rect.height < MIN_PANE_FIT_HEIGHT_PX) {
-      return false
-    }
-  }
-  const dims = getProposedDimensions(pane)
-  if (!dims) {
-    return false
-  }
-  // Why: worktree switches can briefly measure a near-zero overlay before
-  // fallback positioning lands. Fitting there pins the PTY at ~2 cols until
-  // the next user-driven resize.
-  return dims.cols >= MIN_PANE_FIT_COLS && dims.rows >= MIN_PANE_FIT_ROWS
-}
-
-function captureScrollStateForFit(pane: ManagedPane): ScrollState | null {
-  // Why: split reparent has its own delayed restore; restoring here can fight that timer.
-  return 'pendingSplitScrollState' in pane && (pane as ManagedPaneInternal).pendingSplitScrollState
-    ? null
-    : captureScrollState(pane.terminal)
-}
-
-export function safeFit(pane: ManagedPane): void {
-  if (!canMeasurePaneForFit(pane)) {
-    return
-  }
-  let scrollState: ScrollState | null = null
-  let shouldRestoreScroll = false
-  try {
-    // Why: when a mobile client has resized this PTY to phone dimensions,
-    // the desktop must keep xterm at those dimensions instead of fitting to
-    // the desktop pane geometry. This prevents desktop auto-fit from undoing
-    // the mobile resize. Uses data-pty-id (set by bindPanePtyId) to look up
-    // the override by ptyId directly, avoiding pane ID collisions across tabs.
-    const ptyId = pane.container.dataset.ptyId
-    const override = ptyId ? getFitOverrideForPty(ptyId) : null
-    if (override) {
-      if (pane.terminal.cols !== override.cols || pane.terminal.rows !== override.rows) {
-        scrollState = captureScrollStateForFit(pane)
-        shouldRestoreScroll = true
-        pane.terminal.resize(override.cols, override.rows)
-      }
-      return
-    }
-
-    const dims = getProposedDimensions(pane)
-    if (dims && dims.cols === pane.terminal.cols && dims.rows === pane.terminal.rows) {
-      // Why: divider drags fire refits every frame, but most frames do not
-      // cross a cell boundary. Skipping those avoids FitAddon.clear()+refresh()
-      // churn, which was causing visible terminal blinking while resizing.
-      return
-    }
-    scrollState = captureScrollStateForFit(pane)
-    shouldRestoreScroll = true
-    pane.fitAddon.fit()
-  } catch {
-    // Container may not have dimensions yet
-  } finally {
-    if (shouldRestoreScroll && scrollState) {
-      try {
-        restoreScrollStateAfterLayout(pane.terminal, scrollState)
-      } catch {
-        // Why: xterm can temporarily expose a terminal whose renderer has not
-        // initialized dimensions yet during SSH reattach/layout. Fit is best-effort.
-      }
-    }
-  }
 }
 
 export function fitAllPanesInternal(panes: Map<number, ManagedPaneInternal>): void {
@@ -119,7 +36,6 @@ export function fitAllPanesInternal(panes: Map<number, ManagedPaneInternal>): vo
 }
 
 export function refitPanesUnder(el: HTMLElement, panes: Map<number, ManagedPaneInternal>): void {
-  // If the element is a pane, refit it
   if (el.classList.contains('pane')) {
     const paneId = Number(el.dataset.paneId)
     const pane = panes.get(paneId)
@@ -129,7 +45,6 @@ export function refitPanesUnder(el: HTMLElement, panes: Map<number, ManagedPaneI
     return
   }
 
-  // If it's a split, refit all panes inside it
   if (el.classList.contains('pane-split')) {
     const paneEls = el.querySelectorAll('.pane[data-pane-id]')
     for (const paneEl of paneEls) {
@@ -154,12 +69,10 @@ export function detachPaneFromTree(pane: ManagedPaneInternal, callbacks: TreeOps
   }
 
   if (!parent.classList.contains('pane-split')) {
-    // Direct child of root — just remove it
     container.remove()
     return
   }
 
-  // Find sibling (skip dividers)
   const children = Array.from(parent.children).filter(
     (child): child is HTMLElement =>
       child instanceof HTMLElement &&
@@ -167,11 +80,9 @@ export function detachPaneFromTree(pane: ManagedPaneInternal, callbacks: TreeOps
   )
   const sibling = children.find((c) => c !== container) ?? null
 
-  // Remove pane and dividers from the split
   container.remove()
   removeDividers(parent)
 
-  // Promote sibling to replace the split container
   promoteSibling(sibling, parent, callbacks.getRoot())
 }
 
@@ -191,12 +102,10 @@ export function insertPaneNextTo(
   const isVertical = zone === 'left' || zone === 'right'
   const sourceFirst = zone === 'left' || zone === 'top'
 
-  // Capture target's flex slot
   const targetFlex = targetContainer.style.flex || ''
   const targetMinW = targetContainer.style.minWidth || ''
   const targetMinH = targetContainer.style.minHeight || ''
 
-  // Create split wrapper
   const split = document.createElement('div')
   split.className = `pane-split ${isVertical ? 'is-vertical' : 'is-horizontal'}`
   split.style.display = 'flex'
@@ -206,35 +115,30 @@ export function insertPaneNextTo(
     split.style.flex = targetFlex || '1 1 0%'
     split.style.minWidth = targetMinW || '0'
     split.style.minHeight = targetMinH || '0'
-    // No overflow:hidden here — divider ::after lines extend beyond
-    // their parent split with negative insets so intersecting dividers
-    // visually connect. Individual .pane containers still clip content.
+    // Keep split overflow visible so negative divider ::after insets connect intersections; individual panes still clip.
   } else {
     split.style.width = '100%'
     split.style.height = '100%'
   }
 
-  // Create divider
   const divider = createDivider(isVertical, callbacks.getStyleOptions(), {
     refitPanesUnder: callbacks.refitPanesUnder,
-    onLayoutChanged: callbacks.onLayoutChanged
+    onLayoutChanged: callbacks.onLayoutChanged,
+    onDragActiveChange: callbacks.onDragActiveChange,
+    onDividerRatiosCommitted: callbacks.onDividerRatiosCommitted
   })
 
-  // Apply flex styles to both panes
   applyPaneFlexStyle(source.container)
   applyPaneFlexStyle(targetContainer)
 
-  // Why: same pattern as splitPane — dispose WebGL before the DOM reparent
-  // to free GPU context slots, then reattach after layout settles.
+  // Dispose WebGL before reparenting to free GPU slots; reattach after layout settles, as splitPane does.
   const sourceHadWebgl = !!source.webglAddon
   const targetHadWebgl = !!target.webglAddon
   disposeWebgl(source)
   disposeWebgl(target)
 
-  // Replace target with the split in the DOM
   parent.replaceChild(split, targetContainer)
 
-  // Build split: [first] [divider] [second]
   if (sourceFirst) {
     split.appendChild(source.container)
     split.appendChild(divider)
@@ -296,20 +200,17 @@ export function promoteSibling(
   }
 }
 
-/** Apply standard flex styles to a pane container inside a split. */
 export function applyPaneFlexStyle(el: HTMLElement): void {
   el.style.flex = '1 1 0%'
   el.style.minWidth = '0'
   el.style.minHeight = '0'
   el.style.position = 'relative'
   el.style.overflow = 'hidden'
-  // Clear any fixed width/height from createInitialPane so flex sizing
-  // controls the layout instead of the leftover 100% values.
+  // Remove initial 100% dimensions so flex controls layout.
   el.style.width = ''
   el.style.height = ''
 }
 
-/** Remove all divider elements from a parent element. */
 export function removeDividers(parent: HTMLElement): void {
   const dividers = Array.from(parent.children).filter(
     (child): child is HTMLElement =>
@@ -321,88 +222,26 @@ export function removeDividers(parent: HTMLElement): void {
   }
 }
 
-/** Find non-divider children (panes and splits) of an element. */
-export function findPaneChildren(parent: HTMLElement): HTMLElement[] {
-  return Array.from(parent.children).filter(
-    (child): child is HTMLElement =>
-      child instanceof HTMLElement &&
-      (child.classList.contains('pane') || child.classList.contains('pane-split'))
-  )
-}
-
-function getSplitDirection(split: HTMLElement): 'vertical' | 'horizontal' {
-  return split.classList.contains('is-horizontal') ? 'horizontal' : 'vertical'
-}
-
-function getEqualizeWeight(el: HTMLElement, direction: 'vertical' | 'horizontal'): number {
-  if (!el.classList.contains('pane-split') || getSplitDirection(el) !== direction) {
-    return 1
-  }
-
-  const children = findPaneChildren(el)
-  return Math.max(
-    1,
-    children.reduce((sum, child) => sum + getEqualizeWeight(child, direction), 0)
-  )
-}
-
-export function equalizePaneSplitSizes(root: HTMLElement | null): boolean {
-  if (!root) {
-    return false
-  }
-
-  let changed = false
-  const visit = (el: HTMLElement): void => {
-    if (!el.classList.contains('pane-split')) {
-      return
-    }
-
-    const direction = getSplitDirection(el)
-    const children = findPaneChildren(el)
-    if (children.length >= 2) {
-      for (const child of children) {
-        // Why: same-axis nested splits need pane-count weighting so three
-        // side-by-side panes become thirds, not 50/25/25.
-        const weight = getEqualizeWeight(child, direction)
-        const nextFlex = `${weight} 1 0%`
-        if (child.style.flex !== nextFlex) {
-          child.style.flex = nextFlex
-          changed = true
-        }
-      }
-    }
-
-    for (const child of children) {
-      visit(child)
-    }
-  }
-
-  visit(root)
-  return changed
-}
-
 /**
  * Create a flex split wrapper that replaces `existingContainer` in the DOM,
- * then places [existing] [divider] [new] inside it.
+ * then places [existing] [divider] [new] inside it ([new] first when `newPaneFirst`).
  */
 export function wrapInSplit(
   existingContainer: HTMLElement,
   newContainer: HTMLElement,
   isVertical: boolean,
   divider: HTMLElement,
-  opts?: { ratio?: number }
+  opts?: { ratio?: number; newPaneFirst?: boolean }
 ): void {
   const parent = existingContainer.parentElement
   if (!parent) {
     return
   }
 
-  // Capture the flex style BEFORE modifying
   const existingFlex = existingContainer.style.flex || ''
   const existingMinW = existingContainer.style.minWidth || ''
   const existingMinH = existingContainer.style.minHeight || ''
 
-  // Create split container
   const split = document.createElement('div')
   split.className = `pane-split ${isVertical ? 'is-vertical' : 'is-horizontal'}`
   split.style.display = 'flex'
@@ -417,20 +256,19 @@ export function wrapInSplit(
     split.style.height = '100%'
   }
 
-  // Apply flex styles to both pane containers
   applyPaneFlexStyle(existingContainer)
   applyPaneFlexStyle(newContainer)
 
-  // Apply custom ratio if provided
   const ratio = opts?.ratio
   if (ratio !== undefined && ratio > 0 && ratio < 1) {
     existingContainer.style.flex = `${ratio} 1 0%`
     newContainer.style.flex = `${1 - ratio} 1 0%`
   }
 
-  // Replace existing with split in the DOM, then build children
   parent.replaceChild(split, existingContainer)
-  split.appendChild(existingContainer)
-  split.appendChild(divider)
-  split.appendChild(newContainer)
+  if (opts?.newPaneFirst) {
+    split.append(newContainer, divider, existingContainer)
+  } else {
+    split.append(existingContainer, divider, newContainer)
+  }
 }

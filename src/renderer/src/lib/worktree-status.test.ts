@@ -1,14 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import type { TerminalLayoutSnapshot } from '../../../shared/types'
+import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
 import { getWorktreeStatus, getWorktreeStatusLabel, resolveWorktreeStatus } from './worktree-status'
 
 const LEAF_ID_1 = '11111111-1111-4111-8111-111111111111'
 const LEAF_ID_2 = '22222222-2222-4222-8222-222222222222'
 
-// Why: build a live-pty map from tab ids so each test can declare which
-// tabs are alive without manually tracking parallel `tab.ptyId` values.
-// `tab.ptyId` is the wake-hint sessionId preserved across sleep, not a
-// liveness signal — slept-tab tests below pin the gap.
+// Tests declare live tab IDs; tab.ptyId survives sleep as a wake hint and must not imply liveness.
 function livePtyMap(...tabIds: string[]): Record<string, string[]> {
   return Object.fromEntries(tabIds.map((id, i) => [id, [`pty-${i}`]]))
 }
@@ -47,15 +44,24 @@ describe('getWorktreeStatus', () => {
     expect(status).toBe('active')
   })
 
+  it('preserves a working agent status without a renderer PTY', () => {
+    const status = getWorktreeStatus([], [], {}, {}, { liveAgentStatus: 'working' })
+
+    expect(status).toBe('working')
+  })
+
+  it('preserves a permission agent status without a renderer PTY', () => {
+    const status = getWorktreeStatus([], [], {}, {}, { liveAgentStatus: 'permission' })
+
+    expect(status).toBe('permission')
+  })
+
   it('returns inactive when neither tabs nor browser state are live', () => {
     expect(getWorktreeStatus([], [], {})).toBe('inactive')
   })
 
   it('reports working when any pane in a split-pane tab is working even if tab.title is idle', () => {
-    // Regression: clicking between split panes rewrites tab.title to the
-    // focused pane's title (see onActivePaneChange in
-    // use-terminal-pane-lifecycle.ts). If the focused pane is idle while
-    // another pane is still working, the sidebar spinner must stay spinning.
+    // Focused-pane changes rewrite tab.title; idle focus must not hide another working pane’s spinner.
     const status = getWorktreeStatus(
       [{ id: 'tab-1', title: 'claude [done]' }],
       [],
@@ -77,9 +83,7 @@ describe('getWorktreeStatus', () => {
     expect(status).toBe('permission')
   })
 
-  // Why: sleep clears ptyIdsByTabId[tab.id] to [] but preserves tab.ptyId
-  // as a wake-hint sessionId. Reading tab.ptyId for liveness was the bug —
-  // pin the new behavior so it can't regress.
+  // Sleep clears live ptyIdsByTabId but retains tab.ptyId as a wake hint; only the former proves liveness.
   it('returns inactive for a slept tab (ptyIdsByTabId empty even if heuristic title matches working)', () => {
     const status = getWorktreeStatus([{ id: 'tab-1', title: 'claude [working]' }], [], {
       'tab-1': []
@@ -92,6 +96,35 @@ describe('getWorktreeStatus', () => {
     const status = getWorktreeStatus([{ id: 'tab-1', title: 'bash' }], [], livePtyMap('tab-1'))
 
     expect(status).toBe('active')
+  })
+
+  // Exited agents can leave frozen spinner titles. Without attributable Claude identity the row builder shows no agent; the dot must agree.
+  it('does not spin on a bare braille-spinner tab title that yields no agent row', () => {
+    const status = getWorktreeStatus(
+      [{ id: 'tab-1', title: '⠐ Review branch for regressions' }],
+      [],
+      livePtyMap('tab-1')
+    )
+
+    expect(status).toBe('active')
+  })
+
+  it('does not spin on a bare braille-spinner pane title that yields no agent row', () => {
+    const status = getWorktreeStatus([{ id: 'tab-1', title: 'bash' }], [], livePtyMap('tab-1'), {
+      'tab-1': { 0: '⠐ Review branch for regressions', 1: 'bash' }
+    })
+
+    expect(status).toBe('active')
+  })
+
+  it('still spins on an agent-attributable braille-spinner title', () => {
+    const status = getWorktreeStatus(
+      [{ id: 'tab-1', title: '⠹ codex fix flaky test' }],
+      [],
+      livePtyMap('tab-1')
+    )
+
+    expect(status).toBe('working')
   })
 })
 
@@ -209,6 +242,41 @@ describe('resolveWorktreeStatus', () => {
     expect(status).toBe('working')
   })
 
+  it('reports passive monitoring below active work and permission', () => {
+    const base = {
+      tabs: [{ id: 'tab-1', title: 'bash' }],
+      browserTabs: [],
+      ptyIdsByTabId: livePtyMap('tab-1'),
+      hasLiveDone: false,
+      hasRetainedDone: false
+    }
+
+    expect(
+      resolveWorktreeStatus({
+        ...base,
+        hasPermission: false,
+        hasLiveWorking: false,
+        hasLiveMonitoring: true
+      })
+    ).toBe('monitoring')
+    expect(
+      resolveWorktreeStatus({
+        ...base,
+        hasPermission: false,
+        hasLiveWorking: true,
+        hasLiveMonitoring: true
+      })
+    ).toBe('working')
+    expect(
+      resolveWorktreeStatus({
+        ...base,
+        hasPermission: true,
+        hasLiveWorking: true,
+        hasLiveMonitoring: true
+      })
+    ).toBe('permission')
+  })
+
   it('lets heuristic working beat hasLiveDone (newer in-progress signal wins)', () => {
     const status = resolveWorktreeStatus({
       tabs: [{ id: 'tab-1', title: 'claude [working]' }],
@@ -297,11 +365,7 @@ describe('resolveWorktreeStatus', () => {
     expect(status).toBe('working')
   })
 
-  // Why: title-heuristic permission must beat hasLiveDone/hasRetainedDone —
-  // the priority "permission > working > done > heuristic" applies to BOTH
-  // sources of permission (the args.hasPermission overlay AND the heuristic
-  // 'permission' return). Otherwise a tab title scraping "permission" would
-  // be silently downgraded to 'done' whenever a separate done overlay exists.
+  // Permission outranks working/done for both explicit hooks and title heuristics; done overlays must not suppress a scraped permission question.
   it('honors heuristic permission over hasLiveDone (priority: permission > done)', () => {
     const status = resolveWorktreeStatus({
       tabs: [{ id: 'tab-1', title: 'claude [permission]' }],
@@ -328,6 +392,35 @@ describe('resolveWorktreeStatus', () => {
     })
 
     expect(status).toBe('done')
+  })
+
+  it('keeps a hook-backed working agent spinning despite an unattributable stale title', () => {
+    // Hook-managed working rows must survive the title-attribution gate.
+    const status = resolveWorktreeStatus({
+      tabs: [{ id: 'tab-1', title: '⠐ Review branch for regressions' }],
+      browserTabs: [],
+      ptyIdsByTabId: livePtyMap('tab-1'),
+      hasPermission: false,
+      hasLiveWorking: true,
+      hasLiveDone: false,
+      hasRetainedDone: false
+    })
+
+    expect(status).toBe('working')
+  })
+
+  it('resolves a stale unattributable spinner title with no hook entry to active, not working', () => {
+    const status = resolveWorktreeStatus({
+      tabs: [{ id: 'tab-1', title: '⠐ Review branch for regressions' }],
+      browserTabs: [],
+      ptyIdsByTabId: livePtyMap('tab-1'),
+      hasPermission: false,
+      hasLiveWorking: false,
+      hasLiveDone: false,
+      hasRetainedDone: false
+    })
+
+    expect(status).toBe('active')
   })
 
   it('falls through to active heuristic when nothing else applies', () => {

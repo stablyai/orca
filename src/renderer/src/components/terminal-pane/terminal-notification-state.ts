@@ -1,9 +1,25 @@
-import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import type { useAppStore } from '@/store'
-import { getWorktreeMapFromState } from '@/store/selectors'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-types'
+import { getRepoMapFromState } from '@/store/selectors'
+import { getIndexedWorktreesById } from '@/store/worktree-repo-index'
+import {
+  worktreeHostMatchOptions,
+  worktreeMatchesHost
+} from '@/store/slices/worktrees/listing/worktree-host-ownership'
+import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
+import {
+  findIndexedFolderWorkspaceOwner,
+  findIndexedProjectGroupOwner,
+  findIndexedRepoOwnerForHost,
+  getCatalogOwnerHostId,
+  resolveIndexedRepoOwner
+} from '@/lib/worktree-runtime-owner-index'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
-import type { TerminalPaneLayoutNode } from '../../../../shared/types'
+import type { TerminalPaneLayoutNode } from '../../../../shared/terminal-tab-types'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 type StoreSnapshot = ReturnType<typeof useAppStore.getState>
 
@@ -47,9 +63,7 @@ export function hasLivePtyForNotification(
   worktreeId: string,
   paneKey: string | undefined
 ): boolean {
-  // Why: inactive-worktree hook completions can arrive while the worktree tab
-  // list is between renderer hydration states; the pane-key PTY binding is the
-  // live terminal source in that path.
+  // Between tab-list hydration states, pane-key PTY bindings still prove inactive-worktree hook liveness.
   return hasLivePtyForWorktree(state, worktreeId) || hasLivePtyForPaneKey(state, paneKey)
 }
 
@@ -101,8 +115,7 @@ export function isCurrentLivePaneKey(
   }
 
   const leafPtyId = layout.ptyIdsByLeafId?.[parsed.leafId]
-  // Why: layout hydration can briefly know the leaf before restoring its PTY
-  // binding; the tab-level live PTY list remains the liveness source then.
+  // Layout can restore a leaf before its binding; tab-level PTYs still prove liveness.
   return leafPtyId === undefined || livePtyIds.includes(leafPtyId)
 }
 
@@ -137,81 +150,76 @@ export function isCurrentKnownPaneKey(
   }
 
   const leafPtyId = layout?.ptyIdsByLeafId?.[parsed.leafId]
-  // Why: when there is no live PTY map yet, a tab/leaf PTY hint proves this is
-  // an inactive-but-current pane. If hydration has no hint yet, keep accepting
-  // known-tab hook snapshots; only explicit suppressed hints mean teardown.
+  // Before PTY-map hydration, accept known-tab snapshots unless explicitly suppressed; tab/leaf hints prove current inactive panes.
   const ptyHints = [targetTabPtyId, leafPtyId].filter((ptyId): ptyId is string => Boolean(ptyId))
   return ptyHints.length === 0 || ptyHints.some((ptyId) => !isSuppressedPtyHint(state, ptyId))
 }
 
-function hasActiveWorktreeState(state: StoreSnapshot, worktreeId: string): boolean {
-  if (hasLivePtyForWorktree(state, worktreeId)) {
-    return true
+/** Resolve the workspace’s owning host: repoId::path omits host and can collide. Hydrated ownership must prove one before naming the workspace (STA-4343). */
+function findWorktreeRowOnItsOwnHost(
+  state: StoreSnapshot,
+  worktreeId: string
+): { worktree: Worktree | undefined; hostId: ExecutionHostId | null } {
+  const rows = getIndexedWorktreesById(selectWorktreesByRepo(state), worktreeId)
+  if (rows.length <= 1) {
+    return { worktree: rows[0], hostId: null }
   }
-
-  if ((state.browserTabsByWorktree?.[worktreeId] ?? []).length > 0) {
-    return true
+  const hostId = getResolvedExecutionHostIdForWorktree(state, worktreeId)
+  if (!hostId) {
+    return { worktree: undefined, hostId: null }
   }
-
-  const worktree = getWorktreeMapFromState(state).get(worktreeId)
-  if (worktree?.workspaceStatus === 'in-progress') {
-    return true
-  }
-
-  if (
-    Object.values(state.retainedAgentsByPaneKey ?? {}).some(
-      (agent) => agent.worktreeId === worktreeId
-    )
-  ) {
-    return true
-  }
-
-  const tabs = state.tabsByWorktree[worktreeId] ?? []
-  const tabIds = new Set(tabs.map((tab) => tab.id))
-  if (tabIds.size === 0) {
-    return false
-  }
-
-  const now = Date.now()
-  return Object.values(state.agentStatusByPaneKey ?? {}).some((entry) => {
-    const tabId = getPaneKeyTabId(entry.paneKey)
-    return (
-      tabId !== null &&
-      tabIds.has(tabId) &&
-      isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)
-    )
-  })
+  // Colliding rows share the id's repo prefix, so any row names the repo to scope against.
+  const matchOptions = worktreeHostMatchOptions(state, rows[0].repoId, hostId)
+  return { worktree: rows.find((row) => worktreeMatchesHost(row, hostId, matchOptions)), hostId }
 }
 
-function countReposWithWorktrees(state: StoreSnapshot): number {
-  let count = 0
-  for (const worktrees of Object.values(state.worktreesByRepo)) {
-    if (worktrees.length > 0) {
-      count += 1
-    }
+/** Name the project only with a unique repo owner; repo IDs can collide across hosts even when workspace paths differ. */
+function findNotificationRepo(
+  state: StoreSnapshot,
+  worktreeId: string,
+  repoId: string,
+  hostId: ExecutionHostId | null
+): Repo | undefined {
+  // One owner for the id means the id-keyed map already names it, at no extra cost.
+  if (resolveIndexedRepoOwner(state.repos, repoId).kind !== 'ambiguous') {
+    return getRepoMapFromState(state).get(repoId)
   }
-  return count
+  const owningHost = hostId ?? getResolvedExecutionHostIdForWorktree(state, worktreeId)
+  if (!owningHost) {
+    return undefined
+  }
+  return findIndexedRepoOwnerForHost(state.repos, repoId, owningHost) ?? undefined
 }
 
-export function countReposNeedingNotificationDisambiguation(state: StoreSnapshot): number {
-  const activeRepoIds = new Set<string>()
-  const worktreeMap = getWorktreeMapFromState(state)
-  for (const worktreeId of Object.keys(state.tabsByWorktree)) {
-    if (!hasActiveWorktreeState(state, worktreeId)) {
-      continue
-    }
-    const repoId = worktreeMap.get(worktreeId)?.repoId
-    if (repoId) {
-      activeRepoIds.add(repoId)
-    }
+export function getNotificationWorkspaceLabels(
+  state: StoreSnapshot,
+  workspaceId: string,
+  terminalTitle?: string
+): { repoLabel?: string; worktreeLabel: string } {
+  const scope = parseWorkspaceKey(workspaceId)
+  const fallback = terminalTitle?.trim() || 'workspace'
+  if (scope?.type === 'folder') {
+    const folder = findIndexedFolderWorkspaceOwner(
+      selectFolderWorkspaces(state),
+      scope.folderWorkspaceId
+    )
+    // The group ID is only unique per host, so qualify it with the folder's own host.
+    const group =
+      folder &&
+      findIndexedProjectGroupOwner(
+        state.projectGroups,
+        folder.projectGroupId,
+        getCatalogOwnerHostId(folder)
+      )
+    return { repoLabel: group?.name, worktreeLabel: folder?.name || fallback }
   }
-  for (const [repoId, worktrees] of Object.entries(state.worktreesByRepo)) {
-    if (activeRepoIds.has(repoId)) {
-      continue
-    }
-    if (worktrees.some((worktree) => hasActiveWorktreeState(state, worktree.id))) {
-      activeRepoIds.add(repoId)
-    }
+  const worktreeId = scope?.type === 'worktree' ? scope.worktreeId : workspaceId
+  const { worktree, hostId } = findWorktreeRowOnItsOwnHost(state, worktreeId)
+  const repo = worktree
+    ? findNotificationRepo(state, worktreeId, worktree.repoId, hostId)
+    : undefined
+  return {
+    repoLabel: repo?.displayName,
+    worktreeLabel: worktree?.displayName || worktree?.branch || fallback
   }
-  return Math.max(activeRepoIds.size, countReposWithWorktrees(state))
 }

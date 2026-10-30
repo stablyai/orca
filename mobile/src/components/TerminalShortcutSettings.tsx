@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   AppState,
   View,
@@ -12,9 +12,14 @@ import { useFocusEffect } from 'expo-router'
 import { ChevronRight, X } from 'lucide-react-native'
 import type Animated from 'react-native-reanimated'
 import type { AnimatedRef, SharedValue } from 'react-native-reanimated'
-import { CustomKeyModal, loadCustomKeys, saveCustomKeys, type CustomKey } from './CustomKeyModal'
+import { CustomKeyModal } from './CustomKeyModal'
+import { loadCustomKeys, saveCustomKeys, type CustomKey } from '../terminal/terminal-custom-keys'
 import { DragReorderList } from './DragReorderList'
+import { useSerializedStoredState } from '../storage/use-serialized-stored-state'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
   TERMINAL_ACCESSORY_KEYS,
   type TerminalAccessoryKey
@@ -28,8 +33,7 @@ import {
   type TerminalAccessoryLayout
 } from '../terminal/terminal-accessory-layout'
 
-// Why: DragReorderList absolutely positions rows, so every row in a
-// reorderable section must share one fixed height.
+// Absolutely positioned DragReorderList rows require one fixed height per section.
 const REORDER_ROW_HEIGHT = 56
 
 function ShortcutBarRow({
@@ -41,6 +45,7 @@ function ShortcutBarRow({
   visible: boolean
   onToggle: (visible: boolean) => void
 }): React.JSX.Element {
+  useMobileColorScheme()
   return (
     <View style={styles.reorderRowContent}>
       <View style={styles.keycap}>
@@ -59,6 +64,11 @@ function ShortcutBarRow({
   )
 }
 
+async function loadShortcutLayout(): Promise<TerminalAccessoryLayout> {
+  const { orderedBuiltInIds, visibleBuiltInIds } = await loadTerminalAccessoryLayout()
+  return { orderedBuiltInIds, visibleBuiltInIds }
+}
+
 type Props = {
   scrollRef: AnimatedRef<Animated.ScrollView>
   scrollOffsetY: SharedValue<number>
@@ -72,67 +82,26 @@ export function TerminalShortcutSettings({
   scrollContentHeight,
   onDragActiveChange
 }: Props): React.JSX.Element {
-  const [customKeys, setCustomKeys] = useState<CustomKey[]>([])
+  useMobileColorScheme()
+  const t = useMobileTranslation()
+  const {
+    value: customKeys,
+    setValue: setCustomKeys,
+    persist: persistCustomKeys,
+    refresh: refreshCustomKeys,
+    adoptStored: adoptStoredCustomKeys
+  } = useSerializedStoredState<CustomKey[]>([], loadCustomKeys, saveCustomKeys)
   const [showCustomKeyModal, setShowCustomKeyModal] = useState(false)
-  const [shortcutLayout, setShortcutLayout] = useState<TerminalAccessoryLayout>(
-    getDefaultTerminalAccessoryLayout
+  const {
+    value: shortcutLayout,
+    setValue: setShortcutLayout,
+    persist: persistLayout,
+    refresh: refreshShortcutLayout
+  } = useSerializedStoredState(
+    getDefaultTerminalAccessoryLayout,
+    loadShortcutLayout,
+    saveTerminalAccessoryLayout
   )
-  const layoutWriteChainRef = useRef<Promise<void>>(Promise.resolve())
-  const layoutWriteSeqRef = useRef(0)
-  const pendingLayoutWritesRef = useRef(0)
-
-  const persistLayout = useCallback((next: TerminalAccessoryLayout) => {
-    layoutWriteSeqRef.current += 1
-    pendingLayoutWritesRef.current += 1
-    layoutWriteChainRef.current = layoutWriteChainRef.current
-      .catch(() => {})
-      .then(() => saveTerminalAccessoryLayout(next))
-      .catch(() => {})
-      .finally(() => {
-        pendingLayoutWritesRef.current -= 1
-      })
-  }, [])
-
-  const refreshShortcutLayout = useCallback(() => {
-    const refreshSeq = layoutWriteSeqRef.current
-    void loadTerminalAccessoryLayout().then((layout) => {
-      if (pendingLayoutWritesRef.current > 0 || refreshSeq !== layoutWriteSeqRef.current) {
-        return
-      }
-      setShortcutLayout({
-        orderedBuiltInIds: layout.orderedBuiltInIds,
-        visibleBuiltInIds: layout.visibleBuiltInIds
-      })
-    })
-  }, [])
-
-  const customKeysWriteChainRef = useRef<Promise<void>>(Promise.resolve())
-  const customKeysWriteSeqRef = useRef(0)
-  const pendingCustomKeysWritesRef = useRef(0)
-
-  // Why: same stale-snapshot guard as persistLayout — a focus/AppState refresh
-  // racing an in-flight save must not overwrite the optimistic state.
-  const persistCustomKeys = useCallback((next: CustomKey[]) => {
-    customKeysWriteSeqRef.current += 1
-    pendingCustomKeysWritesRef.current += 1
-    customKeysWriteChainRef.current = customKeysWriteChainRef.current
-      .catch(() => {})
-      .then(() => saveCustomKeys(next))
-      .catch(() => {})
-      .finally(() => {
-        pendingCustomKeysWritesRef.current -= 1
-      })
-  }, [])
-
-  const refreshCustomKeys = useCallback(() => {
-    const refreshSeq = customKeysWriteSeqRef.current
-    void loadCustomKeys().then((keys) => {
-      if (pendingCustomKeysWritesRef.current > 0 || refreshSeq !== customKeysWriteSeqRef.current) {
-        return
-      }
-      setCustomKeys(keys)
-    })
-  }, [])
 
   const handleDeleteCustomKey = useCallback(
     (key: CustomKey) => {
@@ -222,10 +191,14 @@ export function TerminalShortcutSettings({
 
   return (
     <>
-      <Text style={[styles.groupHeading, styles.groupTopGap]}>SHORTCUT BAR</Text>
+      <Text style={[styles.groupHeading, styles.groupTopGap]}>
+        {t('components.terminalShortcutSettings.shortcutBar', 'SHORTCUT BAR')}
+      </Text>
       <Text style={styles.groupDescription}>
-        Toggle keys to show or hide them, and hold the grip to drag a key into the order you want on
-        the terminal shortcut bar.
+        {t(
+          'components.terminalShortcutSettings.shortcutBarDescription',
+          'Toggle keys to show or hide them, and hold the grip to drag a key into the order you want on the terminal shortcut bar.'
+        )}
       </Text>
       <View style={[styles.section, styles.sectionTopGap]}>
         <DragReorderList
@@ -250,20 +223,29 @@ export function TerminalShortcutSettings({
           onPress={resetBuiltInKeys}
         >
           <View style={styles.rowContent}>
-            <Text style={styles.rowLabel}>Reset Defaults</Text>
+            <Text style={styles.rowLabel}>
+              {t('components.terminalShortcutSettings.resetDefaults', 'Reset Defaults')}
+            </Text>
             <Text style={styles.rowSublabel}>
-              Show every built-in shortcut key in the original order
+              {t(
+                'components.terminalShortcutSettings.resetDescription',
+                'Show every built-in shortcut key in the original order'
+              )}
             </Text>
           </View>
         </Pressable>
       </View>
 
-      <Text style={[styles.groupHeading, styles.groupTopGap]}>CUSTOM SHORTCUTS</Text>
+      <Text style={[styles.groupHeading, styles.groupTopGap]}>
+        {t('components.terminalShortcutSettings.customShortcuts', 'CUSTOM SHORTCUTS')}
+      </Text>
       <View style={[styles.section, styles.sectionTopGap]}>
         {customKeys.length === 0 ? (
           <>
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No custom shortcuts defined yet.</Text>
+              <Text style={styles.emptyText}>
+                {t('components.terminalShortcutSettings.empty', 'No custom shortcuts defined yet.')}
+              </Text>
             </View>
             <View style={styles.separator} />
           </>
@@ -294,6 +276,13 @@ export function TerminalShortcutSettings({
                     pressed && styles.deleteButtonPressed
                   ]}
                   onPress={() => handleDeleteCustomKey(key)}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={t(
+                    'components.terminalShortcutSettings.removeShortcut',
+                    'Remove {{label}}',
+                    { label: key.label }
+                  )}
                 >
                   <X size={16} color={colors.statusRed} />
                 </Pressable>
@@ -306,8 +295,15 @@ export function TerminalShortcutSettings({
           onPress={() => setShowCustomKeyModal(true)}
         >
           <View style={styles.rowContent}>
-            <Text style={styles.rowLabel}>Add Custom Shortcut…</Text>
-            <Text style={styles.rowSublabel}>Create key combo or text macro</Text>
+            <Text style={styles.rowLabel}>
+              {t('components.terminalShortcutSettings.addShortcut', 'Add Custom Shortcut…')}
+            </Text>
+            <Text style={styles.rowSublabel}>
+              {t(
+                'components.terminalShortcutSettings.addDescription',
+                'Create key combo or text macro'
+              )}
+            </Text>
           </View>
           <ChevronRight size={16} color={colors.textMuted} />
         </Pressable>
@@ -316,18 +312,13 @@ export function TerminalShortcutSettings({
       <CustomKeyModal
         visible={showCustomKeyModal}
         onClose={() => setShowCustomKeyModal(false)}
-        onKeysChanged={(keys) => {
-          // Why: the modal already persisted this list; bumping the sequence
-          // discards refreshes that read storage before its save landed.
-          customKeysWriteSeqRef.current += 1
-          setCustomKeys(keys)
-        }}
+        onKeysChanged={adoptStoredCustomKeys}
       />
     </>
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   groupHeading: {
     fontSize: 11,
     fontWeight: '600',
@@ -363,8 +354,7 @@ const styles = StyleSheet.create({
   rowPressed: {
     backgroundColor: colors.bgRaised
   },
-  // Why: rows inside DragReorderList get a fixed height and a trailing grip
-  // handle from the list itself, so content only pads on the left.
+  // Reorder list supplies fixed height/trailing grip; pad content only on left.
   reorderRowContent: {
     flex: 1,
     height: '100%',
@@ -425,4 +415,4 @@ const styles = StyleSheet.create({
   deleteButtonPressed: {
     backgroundColor: 'rgba(239, 68, 68, 0.2)'
   }
-})
+}))

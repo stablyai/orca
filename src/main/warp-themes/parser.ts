@@ -1,6 +1,6 @@
-import path from 'path'
+import path from 'node:path'
 import { parseDocument } from 'yaml'
-import type { TerminalColorOverrides } from '../../shared/types'
+import type { TerminalColorOverrides } from '../../shared/terminal-color-overrides'
 import {
   hasUsableTerminalThemeColors,
   makeCustomTerminalThemeSelection,
@@ -100,9 +100,9 @@ function addWarpPalette(
 
 function luminance(hexColor: string): number {
   const hex = hexColor.slice(1)
-  const red = parseInt(hex.slice(0, 2), 16) / 255
-  const green = parseInt(hex.slice(2, 4), 16) / 255
-  const blue = parseInt(hex.slice(4, 6), 16) / 255
+  const red = Number.parseInt(hex.slice(0, 2), 16) / 255
+  const green = Number.parseInt(hex.slice(2, 4), 16) / 255
+  const blue = Number.parseInt(hex.slice(4, 6), 16) / 255
   return 0.2126 * red + 0.7152 * green + 0.0722 * blue
 }
 
@@ -157,7 +157,7 @@ export function parseWarpThemeYaml(
     if (document.errors.length > 0) {
       return { ok: false, reason: document.errors[0]?.message ?? 'Invalid YAML' }
     }
-    // Why: cap alias expansion so a malicious YAML alias bomb can't blow up memory.
+    // Bound YAML alias expansion to prevent memory-exhaustion bombs.
     value = document.toJS({ maxAliasCount: 20 })
     if (parseTimedOut()) {
       return { ok: false, reason: 'Theme file took too long to parse.' }

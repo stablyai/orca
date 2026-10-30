@@ -1,5 +1,5 @@
 import type { Page } from '@stablyai/playwright-test'
-import { writeFileSync } from 'fs'
+import { writeFileSync } from 'node:fs'
 
 async function setCustomGenerator(page: Page, scriptPath: string): Promise<void> {
   await page.evaluate(async (scriptPath) => {
@@ -14,17 +14,36 @@ async function setCustomGenerator(page: Page, scriptPath: string): Promise<void>
     }
     await store.getState().updateSettings({
       activeRuntimeEnvironmentId: null,
-      commitMessageAi: {
-        ...currentSettings.commitMessageAi,
+      sourceControlAi: {
         enabled: true,
         agentId: 'custom' as const,
         selectedModelByAgent: {},
         selectedThinkingByModel: {},
-        customPrompt: '',
+        instructionsByOperation: {},
+        actions: {},
         customAgentCommand: `node ${JSON.stringify(scriptPath)}`
       }
     })
   }, scriptPath)
+}
+
+// Echo the prompt’s linked issue to test renderer → IPC → metadata → template → agent stdin.
+// emitPayload runs with the captured issue and must write the caller’s expected reply.
+export function writeLinkedIssueEchoGenerator(scriptPath: string, emitPayload: string[]): void {
+  writeFileSync(
+    scriptPath,
+    [
+      'const chunks = []',
+      "process.stdin.on('data', (chunk) => chunks.push(chunk))",
+      "process.stdin.on('end', () => {",
+      "  const prompt = Buffer.concat(chunks).toString('utf8')",
+      // Capture the whole line: a zero-digit match would hide an unexpanded {linkedIssue} token as empty.
+      '  const match = prompt.match(/ORCA_E2E_ISSUE=([^\\r\\n]*)/)',
+      "  const issue = match ? match[1] || 'empty' : 'missing'",
+      ...emitPayload,
+      '})'
+    ].join('\n')
+  )
 }
 
 export async function installDelayedPrGenerator(

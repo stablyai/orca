@@ -1,9 +1,11 @@
+import { ImeTextarea } from '@/lib/ime-text-field'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Bold, Code2, Italic, List, Quote } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { cn } from '@/lib/utils'
+import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import {
   getCommentBodySubmitState,
   hasBoundedCommentBodyText
@@ -13,6 +15,7 @@ import {
   scheduleRightPanelCommentFocusTimer
 } from './right-panel-comment-focus-timers'
 import { translate } from '@/i18n/i18n'
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
 export type RightPanelCommentSubmitResult = { ok: true } | { ok: false; error: string }
 
@@ -108,8 +111,7 @@ export function RightPanelCommentComposer({
   const setTextareaRef = useCallback((node: HTMLTextAreaElement | null) => {
     textareaRef.current = node
     if (node === null) {
-      // Why: markdown toolbar selection restoration is scoped to this textarea;
-      // clearing here prevents stale focus after the composer unmounts.
+      // Cancel selection restoration on unmount so toolbar callbacks cannot focus a stale textarea.
       clearRightPanelCommentFocusTimer(selectionTimerRef)
     }
   }, [])
@@ -159,7 +161,7 @@ export function RightPanelCommentComposer({
         setBody('')
         onCancel?.()
       } else {
-        setError(result.error)
+        setError(codeHostErrorText(result))
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to post comment.')
@@ -171,6 +173,10 @@ export function RightPanelCommentComposer({
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      // IME confirm Enter may retain the modifier; submitting then would omit the final CJK syllable.
+      if (isImeCompositionKeyDown(event)) {
+        return
+      }
       const modifierPressed = isMac ? event.metaKey : event.ctrlKey
       if (event.key === 'Enter' && modifierPressed) {
         event.preventDefault()
@@ -232,7 +238,7 @@ export function RightPanelCommentComposer({
       onClick={stopPropagation}
       onMouseDown={stopPropagation}
     >
-      <textarea
+      <ImeTextarea
         ref={setTextareaRef}
         value={body}
         rows={3}

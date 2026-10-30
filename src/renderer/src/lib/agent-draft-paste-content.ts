@@ -1,13 +1,19 @@
-import type { GlobalSettings } from '../../../shared/types'
+import { yieldToEventLoop } from '../../../shared/event-loop-yield'
+import {
+  getUtf8ByteLengthForCodePoint,
+  readUtf8CodePointAt
+} from '../../../shared/utf8-byte-limits'
 import {
   BRACKETED_PASTE_END,
   BRACKETED_PASTE_START,
-  sanitizeTerminalPasteText
+  normalizeTerminalPasteLineEndings,
+  wrapTerminalBracketedPasteText
 } from '@/components/terminal-pane/terminal-bracketed-paste'
-import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-inspection'
+import { runTerminalPtyInputTransaction } from '@/components/terminal-pane/terminal-pty-input-transaction'
+import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-verified-input'
+import type { TerminalInputKind } from '../../../shared/terminal-input-kind'
 
-// Why: bracketed paste markers let supported TUIs treat generated prompt text
-// as one paste instead of echoing character-by-character or triggering edits.
+// Bracketed paste keeps generated prompts together without triggering per-character TUI edits.
 export const AGENT_DRAFT_PASTE_DIRECT_MAX_BYTES = 64 * 1024
 export const AGENT_DRAFT_PASTE_CHUNK_MAX_BYTES = 16 * 1024
 export const AGENT_DRAFT_PASTE_MAX_BYTES = 16 * 1024 * 1024
@@ -16,46 +22,62 @@ const AGENT_DRAFT_PASTE_ESCAPE_CODE_POINT = 0x1b
 const AGENT_DRAFT_PASTE_INERT_ESCAPE_CODE_POINT = 0x241b
 const AGENT_DRAFT_PASTE_INERT_ESCAPE = '\u241b'
 
+export type AgentDraftPtyInputWriter = (data: string) => boolean | Promise<boolean>
+
 export async function sendAgentDraftPasteContent(
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   ptyId: string,
-  content: string
+  content: string,
+  inputKind: TerminalInputKind,
+  writePty?: AgentDraftPtyInputWriter
+): Promise<boolean> {
+  return await runTerminalPtyInputTransaction(ptyId, () =>
+    sendAgentDraftPasteContentNow(ptyId, content, inputKind, writePty)
+  )
+}
+
+// Callers owning the larger paste/Enter transaction must hold the lock; reacquiring here would deadlock.
+export async function sendAgentDraftPasteContentNow(
+  ptyId: string,
+  content: string,
+  inputKind: TerminalInputKind,
+  writePty?: AgentDraftPtyInputWriter
 ): Promise<boolean> {
   if (content.length > AGENT_DRAFT_PASTE_MAX_BYTES) {
     return false
   }
 
-  const directMeasurement = measureSanitizedUtf8ByteLength(content, {
+  const terminalContent = normalizeTerminalPasteLineEndings(content)
+  const directMeasurement = measureSanitizedUtf8ByteLength(terminalContent, {
     stopAfterBytes: AGENT_DRAFT_PASTE_DIRECT_MAX_BYTES
   })
   if (!directMeasurement.exceededLimit) {
-    return await sendRuntimePtyInputVerified(
-      settings,
+    return await writeAgentDraftPtyInput(
       ptyId,
-      [BRACKETED_PASTE_START, sanitizeTerminalPasteText(content), BRACKETED_PASTE_END].join('')
+      wrapTerminalBracketedPasteText(terminalContent),
+      inputKind,
+      writePty
     )
   }
 
-  // Why: generated prompts can be paste-sized; yield during accepted-size
-  // preflight before starting any PTY writes so the renderer is not pinned.
-  if (await isSanitizedDraftPasteOverLimit(content, AGENT_DRAFT_PASTE_MAX_BYTES)) {
+  // Yield during size preflight so large generated prompts cannot pin the renderer before PTY writes.
+  if (await isSanitizedDraftPasteOverLimit(terminalContent, AGENT_DRAFT_PASTE_MAX_BYTES)) {
     return false
   }
 
   let bracketedPasteOpen = false
-  for (const chunk of iterateAgentDraftPasteContentChunks(content)) {
+  for (const chunk of iterateAgentDraftPasteContentChunks(terminalContent)) {
     let accepted = false
     try {
-      accepted = await sendRuntimePtyInputVerified(settings, ptyId, chunk)
+      accepted = await writeAgentDraftPtyInput(ptyId, chunk, inputKind, writePty)
     } catch {
       if (bracketedPasteOpen && chunk !== BRACKETED_PASTE_END) {
-        await closeAgentDraftBracketedPaste(settings, ptyId)
+        await closeAgentDraftBracketedPaste(ptyId, inputKind, writePty)
       }
       return false
     }
     if (!accepted) {
       if (bracketedPasteOpen && chunk !== BRACKETED_PASTE_END) {
-        await closeAgentDraftBracketedPaste(settings, ptyId)
+        await closeAgentDraftBracketedPaste(ptyId, inputKind, writePty)
       }
       return false
     }
@@ -81,16 +103,18 @@ export function* iterateAgentDraftPasteContentChunks(
 ): Generator<string> {
   const safeMaxChunkBytes = Math.max(4, maxChunkBytes)
   yield BRACKETED_PASTE_START
+  // Normalize before chunking so split CRLF cannot leak an LF to Windows ConPTY.
+  const terminalContent = normalizeTerminalPasteLineEndings(content)
   let chunk = ''
   let chunkBytes = 0
 
-  for (let index = 0; index < content.length; index += 1) {
-    const codePoint = content.codePointAt(index) ?? 0
+  for (let index = 0; index < terminalContent.length; index += 1) {
+    const codePoint = readUtf8CodePointAt(terminalContent, index)
     const codeUnitLength = codePoint > 0xffff ? 2 : 1
     const sanitizedEscape = codePoint === AGENT_DRAFT_PASTE_ESCAPE_CODE_POINT
     const sanitized = sanitizedEscape
       ? AGENT_DRAFT_PASTE_INERT_ESCAPE
-      : content.slice(index, index + codeUnitLength)
+      : terminalContent.slice(index, index + codeUnitLength)
     const characterBytes = getUtf8ByteLengthForCodePoint(
       sanitizedEscape ? AGENT_DRAFT_PASTE_INERT_ESCAPE_CODE_POINT : codePoint
     )
@@ -125,7 +149,7 @@ function measureSanitizedUtf8ByteLength(
   let byteLength = 0
   const stopAfterBytes = options.stopAfterBytes
   for (let index = 0; index < content.length; index += 1) {
-    const codePoint = content.codePointAt(index) ?? 0
+    const codePoint = readUtf8CodePointAt(content, index)
     byteLength += getSanitizedUtf8ByteLengthForCodePoint(codePoint)
     if (Number.isFinite(stopAfterBytes) && byteLength > (stopAfterBytes ?? 0)) {
       return { byteLength, exceededLimit: true }
@@ -141,7 +165,7 @@ async function isSanitizedDraftPasteOverLimit(content: string, maxBytes: number)
   let byteLength = 0
   let nextYieldAt = AGENT_DRAFT_PASTE_PREFLIGHT_YIELD_CODE_UNITS
   for (let index = 0; index < content.length; index += 1) {
-    const codePoint = content.codePointAt(index) ?? 0
+    const codePoint = readUtf8CodePointAt(content, index)
     byteLength += getSanitizedUtf8ByteLengthForCodePoint(codePoint)
     if (byteLength > maxBytes) {
       return true
@@ -150,7 +174,7 @@ async function isSanitizedDraftPasteOverLimit(content: string, maxBytes: number)
       index += 1
     }
     if (index >= nextYieldAt) {
-      await yieldToAgentDraftPastePreflight()
+      await yieldToEventLoop()
       nextYieldAt = index + AGENT_DRAFT_PASTE_PREFLIGHT_YIELD_CODE_UNITS
     }
   }
@@ -165,31 +189,23 @@ function getSanitizedUtf8ByteLengthForCodePoint(codePoint: number): number {
   )
 }
 
-function getUtf8ByteLengthForCodePoint(codePoint: number): number {
-  if (codePoint <= 0x7f) {
-    return 1
-  }
-  if (codePoint <= 0x7ff) {
-    return 2
-  }
-  if (codePoint <= 0xffff) {
-    return 3
-  }
-  return 4
-}
-
-function yieldToAgentDraftPastePreflight(): Promise<void> {
-  return new Promise((resolve) => globalThis.setTimeout(resolve, 0))
+async function writeAgentDraftPtyInput(
+  ptyId: string,
+  data: string,
+  inputKind: TerminalInputKind,
+  writePty?: AgentDraftPtyInputWriter
+): Promise<boolean> {
+  return writePty ? await writePty(data) : await sendRuntimePtyInputVerified(ptyId, data, inputKind)
 }
 
 async function closeAgentDraftBracketedPaste(
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
-  ptyId: string
+  ptyId: string,
+  inputKind: TerminalInputKind,
+  writePty?: AgentDraftPtyInputWriter
 ): Promise<void> {
   try {
-    // Why: once the opener reached the PTY, a failed content chunk should not
-    // leave the target TUI in bracketed-paste mode.
-    await sendRuntimePtyInputVerified(settings, ptyId, BRACKETED_PASTE_END)
+    // Close bracketed-paste mode even after a content write fails.
+    await writeAgentDraftPtyInput(ptyId, BRACKETED_PASTE_END, inputKind, writePty)
   } catch {
     // The original write already failed; callers only need the paste to fail closed.
   }

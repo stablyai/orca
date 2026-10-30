@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Activity E2E keeps the setup helpers beside the split-pane, split-group, and workspace-card routing assertions they support. */
 import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import {
@@ -8,6 +7,7 @@ import {
   waitForPaneIdentitySnapshot,
   type PaneIdentitySnapshot
 } from './helpers/terminal'
+import { clickFileInExplorer } from './helpers/file-explorer'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
 type SeededActivityThread = {
@@ -16,16 +16,11 @@ type SeededActivityThread = {
   prompt: string
 }
 
-type ActivityPaneVisibility = {
-  slotId: string | null
-  allLeafIds: string[]
-  visibleLeafIds: string[]
-}
-
 type ActivePaneSelection = {
   activeWorktreeId: string | null
   activeGroupId: string | null
   activeTabId: string | null
+  activeTabType: string | null
   activeLeafId: string | null
   activePaneId: number | null
 }
@@ -37,7 +32,7 @@ type SplitGroupTerminal = {
 }
 
 function agentsSidebarButton(page: Page) {
-  return page.getByRole('button', { name: /^Agents(?:\s+\d+)?$/ }).first()
+  return page.getByRole('button', { name: 'View activity', exact: true })
 }
 
 async function seedActivityThread(
@@ -112,40 +107,6 @@ async function seedActivityThreadsForSplitPanes(
   return [first, second]
 }
 
-async function readActivityPaneVisibility(page: Page): Promise<ActivityPaneVisibility> {
-  return page.evaluate(() => {
-    const slot = document.querySelector<HTMLElement>(
-      '[data-activity-terminal-slot-id]:not([aria-hidden="true"])'
-    )
-    if (!slot) {
-      return { slotId: null, allLeafIds: [], visibleLeafIds: [] }
-    }
-
-    const hasInlineDisplayNoneBetween = (element: HTMLElement, root: HTMLElement): boolean => {
-      let current: HTMLElement | null = element
-      while (current) {
-        if (current.style.display === 'none') {
-          return true
-        }
-        if (current === root) {
-          return false
-        }
-        current = current.parentElement
-      }
-      return false
-    }
-
-    const panes = Array.from(slot.querySelectorAll<HTMLElement>('[data-leaf-id]'))
-    return {
-      slotId: slot.dataset.activityTerminalSlotId ?? null,
-      allLeafIds: panes.map((pane) => pane.dataset.leafId ?? ''),
-      visibleLeafIds: panes
-        .filter((pane) => !hasInlineDisplayNoneBetween(pane, slot))
-        .map((pane) => pane.dataset.leafId ?? '')
-    }
-  })
-}
-
 async function enableInlineAgentCards(page: Page): Promise<void> {
   await page.evaluate(() => {
     const store = window.__store
@@ -155,7 +116,7 @@ async function enableInlineAgentCards(page: Page): Promise<void> {
 
     const state = store.getState()
     if (!state.worktreeCardProperties.includes('inline-agents')) {
-      state.toggleWorktreeCardProperty('inline-agents')
+      state.setWorktreeCardProperties([...state.worktreeCardProperties, 'inline-agents'])
     }
     state.closeActivityPage()
   })
@@ -163,9 +124,10 @@ async function enableInlineAgentCards(page: Page): Promise<void> {
 
 async function enableActivityAgentsView(page: Page): Promise<void> {
   await page.evaluate(async () => {
-    const settings = await window.api.settings.set({ experimentalActivity: true })
-    // Why: these specs exercise the experimental Agents page. E2E profiles use
-    // production defaults, where the sidebar entry is hidden unless enabled.
+    // Keep the migration intro from covering the activity toggle.
+    const settings = await window.api.settings.set({
+      agentsSidebarIntroShown: true
+    })
     window.__store?.setState({ settings })
   })
 }
@@ -189,6 +151,7 @@ async function readActivePaneSelection(page: Page): Promise<ActivePaneSelection>
         activeWorktreeId: null,
         activeGroupId: null,
         activeTabId: null,
+        activeTabType: null,
         activeLeafId: null,
         activePaneId: null
       }
@@ -208,10 +171,15 @@ async function readActivePaneSelection(page: Page): Promise<ActivePaneSelection>
       activeWorktreeId,
       activeGroupId,
       activeTabId,
+      activeTabType: state.activeTabType ?? null,
       activeLeafId: activePane?.leafId ?? null,
       activePaneId: activePane?.id ?? null
     }
   })
+}
+
+function terminalPaneForLeaf(page: Page, leafId: string) {
+  return page.locator(`.pane[data-leaf-id="${leafId}"]`).first()
 }
 
 async function createTerminalInNewSplitGroup(page: Page): Promise<SplitGroupTerminal> {
@@ -239,7 +207,7 @@ async function createTerminalInNewSplitGroup(page: Page): Promise<SplitGroupTerm
     const tab = state.createTab(worktreeId, groupId, undefined, { activate: true })
     state.focusGroup(worktreeId, groupId)
     state.setActiveTab(tab.id)
-    state.setActiveTabType('terminal')
+    state.setActiveTabType('terminal', window.__store?.getState().activeWorktreeId ?? null)
     return { sourceGroupId, groupId, tabId: tab.id }
   })
 }
@@ -260,7 +228,7 @@ test.describe('Activity Agent Pane Isolation', () => {
     await waitForPaneCount(orcaPage, 1, 30_000)
   })
 
-  test('selecting agent rows isolates the matching split pane by stable leaf id', async ({
+  test('selecting agent rows focuses the matching split pane by stable leaf id', async ({
     orcaPage
   }) => {
     await splitActiveTerminalPane(orcaPage, 'vertical')
@@ -274,74 +242,28 @@ test.describe('Activity Agent Pane Isolation', () => {
 
     await orcaPage.getByRole('button').filter({ hasText: first.prompt }).first().click()
     await expect
-      .poll(async () => readActivityPaneVisibility(orcaPage), {
+      .poll(async () => readActivePaneSelection(orcaPage), {
         timeout: 10_000,
-        message: 'Activity did not isolate the first selected split pane'
+        message: 'Agents sidebar row did not focus the first selected split pane'
       })
       .toMatchObject({
-        allLeafIds: expect.arrayContaining([first.leafId, second.leafId]),
-        visibleLeafIds: [first.leafId]
+        activeTabId: snapshot.tabId,
+        activeLeafId: first.leafId
       })
 
+    await expect(
+      orcaPage.getByRole('button', { name: 'Turn off activity view', exact: true })
+    ).toHaveAttribute('aria-pressed', 'true')
     await orcaPage.getByRole('button').filter({ hasText: second.prompt }).first().click()
     await expect
-      .poll(async () => readActivityPaneVisibility(orcaPage), {
+      .poll(async () => readActivePaneSelection(orcaPage), {
         timeout: 10_000,
-        message: 'Activity did not switch isolation to the second selected split pane'
+        message: 'Agents sidebar row did not focus the second selected split pane'
       })
       .toMatchObject({
-        allLeafIds: expect.arrayContaining([first.leafId, second.leafId]),
-        visibleLeafIds: [second.leafId]
+        activeTabId: snapshot.tabId,
+        activeLeafId: second.leafId
       })
-  })
-
-  test('acknowledged stable pane keys clear the Agents unread badge', async ({ orcaPage }) => {
-    await splitActiveTerminalPane(orcaPage, 'vertical')
-    await waitForPaneCount(orcaPage, 2)
-    const snapshot = await waitForPaneIdentitySnapshot(orcaPage, 2)
-    const firstPane = snapshot.panes[0]
-    if (!firstPane) {
-      throw new Error('Activity acknowledgement test needs a split pane')
-    }
-    const now = Date.now()
-    const thread: SeededActivityThread = {
-      paneKey: `${snapshot.tabId}:${firstPane.leafId}`,
-      leafId: firstPane.leafId,
-      prompt: `ACTIVITY_ACK_STABLE_PANE_${now}`
-    }
-
-    await orcaPage.evaluate(() => {
-      const store = window.__store
-      if (!store) {
-        throw new Error('window.__store is not available')
-      }
-      const state = store.getState()
-      for (const worktree of Object.values(state.worktreesByRepo).flat()) {
-        state.markWorktreeVisited(worktree.id)
-      }
-    })
-
-    await seedActivityThread(
-      orcaPage,
-      thread,
-      'Codex acknowledged pane',
-      'blocked',
-      'Waiting for acknowledgement migration coverage.',
-      now - 5_000
-    )
-
-    await expect(agentsSidebarButton(orcaPage)).toHaveAccessibleName(/^Agents\s+1$/)
-
-    await orcaPage.evaluate((paneKey) => {
-      const store = window.__store
-      if (!store) {
-        throw new Error('window.__store is not available')
-      }
-      store.getState().acknowledgeAgents([paneKey])
-    }, thread.paneKey)
-
-    await expect(agentsSidebarButton(orcaPage)).toHaveAccessibleName(/^Agents$/)
-    await expect(orcaPage.getByRole('button', { name: /^Agents\s+1$/ })).toHaveCount(0)
   })
 
   test('workspace card agent rows focus the matching terminal split pane', async ({ orcaPage }) => {
@@ -350,6 +272,7 @@ test.describe('Activity Agent Pane Isolation', () => {
     const snapshot = await waitForPaneIdentitySnapshot(orcaPage, 2)
     const [first, second] = await seedActivityThreadsForSplitPanes(orcaPage, snapshot)
 
+    await orcaPage.evaluate(() => window.__store?.getState().setWorktreeCardProperties([]))
     await enableInlineAgentCards(orcaPage)
 
     await clickWorkspaceCardAgentRow(orcaPage, first.prompt)
@@ -373,6 +296,42 @@ test.describe('Activity Agent Pane Isolation', () => {
         activeTabId: snapshot.tabId,
         activeLeafId: second.leafId
       })
+  })
+
+  test('workspace card agent rows reveal terminal logs from a non-terminal surface', async ({
+    orcaPage
+  }) => {
+    await splitActiveTerminalPane(orcaPage, 'vertical')
+    await waitForPaneCount(orcaPage, 2)
+    const snapshot = await waitForPaneIdentitySnapshot(orcaPage, 2)
+    const [first] = await seedActivityThreadsForSplitPanes(orcaPage, snapshot)
+
+    await enableInlineAgentCards(orcaPage)
+    await expect(terminalPaneForLeaf(orcaPage, first.leafId)).toBeVisible()
+    // Why: this reproduces the user-visible failure mode: the agent row is
+    // visible in the sidebar while the main workspace surface is not Terminal.
+    await expect(await clickFileInExplorer(orcaPage, ['README.md'])).toBe('README.md')
+    await expect
+      .poll(() => readActivePaneSelection(orcaPage))
+      .toMatchObject({
+        activeTabType: 'editor',
+        activeTabId: snapshot.tabId
+      })
+    await expect(terminalPaneForLeaf(orcaPage, first.leafId)).toBeHidden()
+
+    await clickWorkspaceCardAgentRow(orcaPage, first.prompt)
+
+    await expect
+      .poll(async () => readActivePaneSelection(orcaPage), {
+        timeout: 10_000,
+        message: 'Workspace-card row did not reveal the terminal log surface'
+      })
+      .toMatchObject({
+        activeTabType: 'terminal',
+        activeTabId: snapshot.tabId,
+        activeLeafId: first.leafId
+      })
+    await expect(terminalPaneForLeaf(orcaPage, first.leafId)).toBeVisible()
   })
 
   test('workspace card agent rows focus the matching split-group terminal pane', async ({

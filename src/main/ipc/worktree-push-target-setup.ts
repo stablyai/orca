@@ -1,48 +1,54 @@
-// Why: preparing a fork-PR push target means adding (or reusing) the contributor's
-// fork as a git remote, fetching the head, and wiring the new branch's upstream.
-// The git-driven core lives here behind an injectable `execGit` seam so the
-// remote-reuse / unique-naming / fetch behavior is unit-testable without a real
-// repo. The store-aware ownership decision stays with the caller via a predicate.
+import type { GitPushTarget } from '../../shared/worktree/types'
+import { findGitRemoteNameByFetchUrl } from '../../shared/git-remote-url-index'
+import { sameGitHubRemoteUrl, type GitRemoteExec } from './worktree-push-target-cleanup'
+import {
+  buildNarrowForkFetchRefspec,
+  ensureRemoteTracksBranchNarrowly
+} from '../git/fork-remote-refspec'
 
-import type { GitPushTarget } from '../../shared/types'
-import { parseGitHubOwnerRepo } from '../github/gh-utils'
-import type { GitRemoteExec } from './worktree-push-target-cleanup'
-
+// One remote -v avoids a subprocess per configured remote (#17914).
 export async function findRemoteForUrl(
   execGit: GitRemoteExec,
   repoPath: string,
   remoteUrl: string
 ): Promise<string | null> {
-  const target = parseGitHubOwnerRepo(remoteUrl)
   try {
-    const { stdout } = await execGit(['remote'], repoPath)
-    for (const remote of stdout
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean)) {
-      try {
-        const { stdout: urlStdout } = await execGit(['remote', 'get-url', remote], repoPath)
-        const candidateUrl = urlStdout.trim()
-        const candidate = parseGitHubOwnerRepo(candidateUrl)
-        if (
-          target &&
-          candidate &&
-          target.owner.toLowerCase() === candidate.owner.toLowerCase() &&
-          target.repo.toLowerCase() === candidate.repo.toLowerCase()
-        ) {
-          return remote
-        }
-        if (candidateUrl === remoteUrl) {
-          return remote
-        }
-      } catch {
-        // Ignore a remote that disappeared or has no fetch URL.
-      }
-    }
+    const { stdout } = await execGit(['remote', '-v'], repoPath)
+    return findGitRemoteNameByFetchUrl(stdout, (candidateUrl) =>
+      sameGitHubRemoteUrl(candidateUrl, remoteUrl)
+    )
   } catch {
     return null
   }
-  return null
+}
+
+// Named-remote probes keep repeated materialization independent of remote-table size.
+export async function remoteAlreadyMatchesUrl(
+  execGit: GitRemoteExec,
+  repoPath: string,
+  remoteName: string,
+  remoteUrl: string
+): Promise<boolean> {
+  try {
+    const { stdout } = await execGit(['remote', 'get-url', remoteName], repoPath)
+    return sameGitHubRemoteUrl(stdout.trim(), remoteUrl)
+  } catch {
+    return false
+  }
+}
+
+// Deferred materialization still needs upstream; resolve local HEAD because collision-renamed branches differ from the PR head.
+export async function resolveCheckedOutBranchName(
+  execGit: GitRemoteExec,
+  repoPath: string
+): Promise<string | null> {
+  try {
+    const { stdout } = await execGit(['symbolic-ref', '--short', 'HEAD'], repoPath)
+    const branch = stdout.trim()
+    return branch.length > 0 ? branch : null
+  } catch {
+    return null
+  }
 }
 
 export async function ensureUniqueRemoteName(
@@ -69,9 +75,6 @@ export async function ensureUniqueRemoteName(
   throw new Error(`Could not find an available remote name for ${preferred}.`)
 }
 
-// Exported for unit tests: the `execGit` seam drives the remote add/reuse/fetch
-// behavior without a real repo. `isRemoteCreatedByKnownWorktree` lets the caller
-// inject the store-aware ownership decision for the reuse case.
 export async function prepareWorktreePushTargetWithExec(
   execGit: GitRemoteExec,
   repoPath: string,
@@ -81,33 +84,71 @@ export async function prepareWorktreePushTargetWithExec(
   const { remoteCreated: _ignoredRemoteCreated, ...sanitizedTarget } = target
   let remoteName = target.remoteName
   let remoteCreated = false
+  // Inherited ownership is not proof this call created the remote; only new additions may roll back.
+  let remoteAddedHere = false
   if (target.remoteUrl) {
     const existingRemote = await findRemoteForUrl(execGit, repoPath, target.remoteUrl)
     if (existingRemote) {
       remoteName = existingRemote
-      // Why: if a later PR worktree reuses an Orca-created fork remote, it
-      // must inherit ownership so deleting the final user can remove it.
+      // Reused Orca remotes retain ownership so removing the final worktree can reclaim them.
       remoteCreated = isRemoteCreatedByKnownWorktree(existingRemote)
+      // Reused remotes may still track every fork branch; keep this branch within the bounded refspec.
+      await ensureRemoteTracksBranchNarrowly(execGit, repoPath, remoteName, target.branchName)
     } else {
       remoteName = await ensureUniqueRemoteName(execGit, repoPath, target.remoteName)
-      await execGit(['remote', 'add', remoteName, target.remoteUrl], repoPath)
+      // Restrict branches and tags at creation so even transient config cannot import the whole fork.
+      await execGit(
+        ['remote', 'add', '-t', target.branchName, '--no-tags', remoteName, target.remoteUrl],
+        repoPath
+      )
+      remoteAddedHere = true
+      try {
+        // Rewrite -t's literal refspec to the trailing-* form that tolerates deleted branches.
+        await ensureRemoteTracksBranchNarrowly(execGit, repoPath, remoteName, target.branchName)
+        // Git config provenance survives store purge and is removed with the remote.
+        await execGit(['config', `remote.${remoteName}.orca-created`, 'true'], repoPath)
+      } catch (error) {
+        // Failed provenance setup must roll back or cleanup cannot reclaim the half-configured remote.
+        await execGit(['remote', 'remove', remoteName], repoPath).catch(() => {})
+        throw error
+      }
       remoteCreated = true
     }
   }
 
-  await execGit(
-    [
-      'fetch',
-      remoteName,
-      `+refs/heads/${target.branchName}:refs/remotes/${remoteName}/${target.branchName}`
-    ],
-    repoPath
-  )
+  try {
+    await execGit(
+      ['fetch', remoteName, buildNarrowForkFetchRefspec(remoteName, target.branchName)],
+      repoPath
+    )
+  } catch (error) {
+    // Failed creation has no future removal event; roll back only this call's remote, preserving reused siblings.
+    if (remoteAddedHere) {
+      await execGit(['remote', 'remove', remoteName], repoPath).catch(() => {})
+    }
+    throw error
+  }
   return {
     ...sanitizedTarget,
     remoteName,
     ...(remoteCreated ? { remoteCreated: true } : {})
   }
+}
+
+// Every materialization path, including reuse, needs this local branch's upstream; PR head and local HEAD can differ.
+export async function restoreUpstreamAfterMaterialize(
+  execGit: GitRemoteExec,
+  worktreePath: string,
+  target: GitPushTarget
+): Promise<GitPushTarget> {
+  if (!target.remoteUrl) {
+    return target
+  }
+  const checkedOutBranch = await resolveCheckedOutBranchName(execGit, worktreePath)
+  if (!checkedOutBranch) {
+    return target
+  }
+  return configureCreatedWorktreePushTargetWithExec(execGit, worktreePath, checkedOutBranch, target)
 }
 
 export async function configureCreatedWorktreePushTargetWithExec(

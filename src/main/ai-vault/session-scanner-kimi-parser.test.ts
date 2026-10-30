@@ -1,10 +1,16 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { parseKimiSessionFile } from './session-scanner-kimi-parser'
-import { clearKimiSessionIndexCache } from './session-scanner-kimi-paths'
+import {
+  clearKimiSessionIndexCache,
+  hasKimiSessionIndexCacheEntryForTests,
+  KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS,
+  readKimiWorkDirBySessionId
+} from './session-scanner-kimi-paths'
 import type { FileWithMtime } from './session-scanner-types'
+import type { TranscriptMessage } from './session-transcript-consumers'
 
 let tempDirs: string[] = []
 
@@ -138,13 +144,11 @@ describe('parseKimiSessionFile', () => {
 
     expect(session).not.toBeNull()
     expect(session?.agent).toBe('kimi')
-    // The session id keeps the `session_` prefix that `kimi --session <id>` expects.
     expect(session?.sessionId).toBe(SESSION_ID)
     expect(session?.title).toBe('Please explain this project briefly')
     expect(session?.cwd).toBe('/private/tmp/kimi-test-proj')
     expect(session?.model).toBe('mock-model')
     expect(session?.totalTokens).toBe(30)
-    // 1 real user turn + 1 assistant turn; the injected system-reminder is excluded.
     expect(session?.messageCount).toBe(2)
     expect(session?.previewMessages).toEqual([
       { role: 'user', text: 'Please explain this project briefly', timestamp: null },
@@ -177,32 +181,50 @@ describe('parseKimiSessionFile', () => {
     expect(session?.resumeCommand).toBe(`kimi --session '${SESSION_ID}'`)
   })
 
-  it('keeps preview messages at the 220-char preview limit, not the 96-char title limit', async () => {
-    const longReply = 'x'.repeat(300)
-    const { file } = await writeKimiSession({
-      wireLines: [
-        {
-          type: 'context.append_message',
-          message: {
-            role: 'user',
-            content: [{ type: 'text', text: 'y'.repeat(300) }],
-            origin: { kind: 'user' }
-          }
-        },
-        {
-          type: 'context.append_loop_event',
-          event: { type: 'content.part', part: { type: 'text', text: longReply } }
-        },
-        { type: 'context.append_loop_event', event: { type: 'step.end' } }
-      ]
-    })
-    const session = await parseKimiSessionFile(file, 'darwin')
-    const [userPreview, assistantPreview] = session!.previewMessages
-    // 220-char cap = 217 chars + '...'; the 96-char title cap would be 93 + '...'.
-    expect(userPreview.text.length).toBe(220)
-    expect(assistantPreview.text.length).toBe(220)
-    expect(assistantPreview.text.endsWith('...')).toBe(true)
-  })
+  it.each([300, 256 * 1024 + 1])(
+    'publishes %i-character Kimi turns independently of the preview cap',
+    async (length) => {
+      const longReply = 'x'.repeat(length)
+      const messages: TranscriptMessage[] = []
+      const { file } = await writeKimiSession({
+        wireLines: [
+          {
+            type: 'context.append_message',
+            message: {
+              role: 'user',
+              content: [{ type: 'text', text: 'y'.repeat(length) }],
+              origin: { kind: 'user' }
+            }
+          },
+          {
+            type: 'context.append_loop_event',
+            event: { type: 'content.part', part: { type: 'text', text: longReply.slice(0, 150) } }
+          },
+          {
+            type: 'context.append_loop_event',
+            event: { type: 'content.part', part: { type: 'text', text: longReply.slice(150) } }
+          },
+          { type: 'context.append_loop_event', event: { type: 'step.end' } }
+        ]
+      })
+      const session = await parseKimiSessionFile(file, 'darwin', {
+        active: true,
+        push: (message) => messages.push(message)
+      })
+      const [userPreview, assistantPreview] = session!.previewMessages
+      // Preview length must use its own cap rather than the shorter title cap.
+      expect(userPreview.text.length).toBe(220)
+      expect(assistantPreview.text.length).toBe(220)
+      expect(assistantPreview.text.endsWith('...')).toBe(true)
+      expect(messages.map((message) => message.text)).toEqual([
+        'y'.repeat(Math.min(length, 256 * 1024)),
+        longReply.slice(0, 256 * 1024)
+      ])
+      expect(messages.map((message) => message.textTruncated)).toEqual(
+        length > 256 * 1024 ? [true, true] : [undefined, undefined]
+      )
+    }
+  )
 
   it('falls back to lastPrompt when the title is empty', async () => {
     const { file } = await writeKimiSession({
@@ -217,5 +239,35 @@ describe('parseKimiSessionFile', () => {
     })
     const session = await parseKimiSessionFile(file, 'darwin')
     expect(session?.title).toBe('do the thing')
+  })
+
+  it('caps cached session index maps by recent index path', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-kimi-cache-'))
+    tempDirs.push(root)
+    const indexPaths: string[] = []
+
+    for (let index = 0; index <= KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS; index += 1) {
+      const home = join(root, `home-${index}`)
+      await mkdir(home, { recursive: true })
+      const indexPath = join(home, 'session_index.jsonl')
+      await writeFile(
+        indexPath,
+        `${JSON.stringify({ sessionId: `session_${index}`, workDir: `/tmp/kimi-${index}` })}\n`
+      )
+      indexPaths.push(indexPath)
+    }
+
+    for (const indexPath of indexPaths.slice(0, KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS)) {
+      await readKimiWorkDirBySessionId(indexPath)
+    }
+    const refreshedFirst = await readKimiWorkDirBySessionId(indexPaths[0])
+    expect(refreshedFirst.get('session_0')).toBe('/tmp/kimi-0')
+    await readKimiWorkDirBySessionId(indexPaths[KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS])
+
+    expect(hasKimiSessionIndexCacheEntryForTests(indexPaths[0])).toBe(true)
+    expect(hasKimiSessionIndexCacheEntryForTests(indexPaths[1])).toBe(false)
+    expect(
+      hasKimiSessionIndexCacheEntryForTests(indexPaths[KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS])
+    ).toBe(true)
   })
 })

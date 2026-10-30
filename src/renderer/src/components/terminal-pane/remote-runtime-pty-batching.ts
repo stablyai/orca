@@ -8,6 +8,10 @@ import {
 
 export type RemoteRuntimePtyBatcher = {
   push: (data: string) => boolean
+  hasPendingValidation: () => boolean
+  /** Input accepted but not yet flushed or still validating. */
+  hasPendingInput: () => boolean
+  enqueueAfterValidation: (action: () => void) => void
   drain: () => Promise<void>
   takePending: () => string
   flush: () => void
@@ -50,6 +54,8 @@ export function createRemoteRuntimePtyTextBatcher(
 
   const clear = (): void => {
     clearTimer()
+    pending = ''
+    pendingBytes = 0
     validationVersion += 1
     validationTail = null
   }
@@ -84,8 +90,7 @@ export function createRemoteRuntimePtyTextBatcher(
         flush()
       }
       if (!pending && chunkBytes >= maxPendingBytes) {
-        // Why: remote paste chunks must not be coalesced back into one large
-        // binary frame or terminal.send payload by the short input debounce.
+        // Do not recombine remote paste chunks into one oversized frame/RPC during debounce.
         onFlush(chunk)
         continue
       }
@@ -124,6 +129,24 @@ export function createRemoteRuntimePtyTextBatcher(
     }
   }
 
+  const enqueueAfterValidation = (action: () => void): void => {
+    const queuedVersion = validationVersion
+    const previousTail = validationTail ?? Promise.resolve()
+    const guardedTail = previousTail.then(() => {
+      if (validationVersion === queuedVersion) {
+        action()
+      }
+    })
+    const nextTail = guardedTail
+      .catch(() => {})
+      .finally(() => {
+        if (validationTail === nextTail) {
+          validationTail = null
+        }
+      })
+    validationTail = nextTail
+  }
+
   return {
     push(data: string): boolean {
       if (!data) {
@@ -143,6 +166,10 @@ export function createRemoteRuntimePtyTextBatcher(
       enqueueValidatedInput(data, tooLarge)
       return true
     },
+    // Async size validation may precede pending entries; immediate replies must wait for it to preserve byte order.
+    hasPendingValidation: (): boolean => validationTail !== null,
+    hasPendingInput: (): boolean => pending.length > 0 || validationTail !== null,
+    enqueueAfterValidation,
     drain,
     takePending,
     flush,
@@ -166,6 +193,8 @@ export function createRemoteRuntimeViewportBatcher(
       clearTimeout(timer)
       timer = null
     }
+    // Clear pending viewport too so later reuse cannot flush stale geometry.
+    pending = null
   }
 
   const flush = (): void => {

@@ -7,6 +7,90 @@ import {
   moveWorktreeIdsWithinGroup,
   shouldWriteManualOrderForGroupDrop
 } from './worktree-manual-order'
+import { buildSparseManualOrderUpdates } from './worktree-manual-order-ranks'
+
+describe('buildSparseManualOrderUpdates durable migration', () => {
+  it('materializes filtered rows when the first drag creates Manual order', () => {
+    const result = buildSparseManualOrderUpdates({
+      orderedIds: ['a', 'c', 'b'],
+      movedIds: ['b'],
+      allWorktreeIds: ['a', 'b', 'hidden', 'c'],
+      rankByWorktreeId: new Map([
+        ['a', 4000],
+        ['b', 3000],
+        ['c', 1000]
+      ]),
+      now: 10_000
+    })
+
+    expect([...result.keys()]).toEqual(['a', 'c', 'hidden', 'b'])
+    expect([...result.values()].map((update) => update.manualOrder)).toEqual([
+      10_000, 9000, 8000, 7000
+    ])
+  })
+
+  it('keeps sparse updates after every known row has a durable rank', () => {
+    const result = buildSparseManualOrderUpdates({
+      orderedIds: ['a', 'c', 'b'],
+      movedIds: ['b'],
+      allWorktreeIds: ['a', 'b', 'hidden', 'c'],
+      rankByWorktreeId: new Map([
+        ['a', 4000],
+        ['b', 3000],
+        ['hidden', 2000],
+        ['c', 1000]
+      ]),
+      now: 10_000
+    })
+
+    expect([...result]).toEqual([['b', { manualOrder: 0 }]])
+  })
+
+  it('never drops known rows when a stale visible sequence contains unknowns or duplicates', () => {
+    const result = buildSparseManualOrderUpdates({
+      orderedIds: ['unknown', 'b', 'b', 'a'],
+      movedIds: ['b'],
+      allWorktreeIds: ['a', 'b', 'hidden', 'c', 'c'],
+      rankByWorktreeId: new Map(),
+      now: 10_000
+    })
+
+    expect([...result.keys()]).toEqual(['b', 'a', 'hidden', 'c', 'unknown'])
+  })
+
+  it('preserves hidden rows when dense ranks require a full reindex', () => {
+    const result = buildSparseManualOrderUpdates({
+      orderedIds: ['a', 'c', 'b'],
+      movedIds: ['c'],
+      allWorktreeIds: ['a', 'hidden', 'b', 'c'],
+      rankByWorktreeId: new Map([
+        ['a', 3],
+        ['hidden', 2.5],
+        ['b', 2],
+        ['c', 1]
+      ]),
+      now: 10_000
+    })
+
+    expect([...result.keys()]).toEqual(['a', 'hidden', 'c', 'b'])
+  })
+
+  it('preserves hidden rows when a stale neighbor requires a full reindex', () => {
+    const result = buildSparseManualOrderUpdates({
+      orderedIds: ['stale', 'b', 'a'],
+      movedIds: ['b'],
+      allWorktreeIds: ['a', 'hidden', 'b'],
+      rankByWorktreeId: new Map([
+        ['a', 3000],
+        ['hidden', 2000],
+        ['b', 1000]
+      ]),
+      now: 10_000
+    })
+
+    expect([...result.keys()]).toEqual(['b', 'hidden', 'a', 'stale'])
+  })
+})
 
 describe('expandDraggedWorktreeIdsForVisibleLineage', () => {
   it('expands an expanded lineage parent to its visible descendants for reordering', () => {
@@ -35,6 +119,43 @@ describe('expandDraggedWorktreeIdsForVisibleLineage', () => {
         ['z', 'parent']
       )
     ).toEqual(['parent', 'child', 'z'])
+  })
+
+  it('keeps ancestor coverage when a nested descendant is selected too', () => {
+    expect(
+      expandDraggedWorktreeIdsForVisibleLineage(
+        [
+          { worktreeId: 'parent', depth: 0 },
+          { worktreeId: 'child', depth: 2 },
+          { worktreeId: 'uncleish', depth: 1 },
+          { worktreeId: 'sibling', depth: 0 }
+        ],
+        ['parent', 'child']
+      )
+    ).toEqual(['parent', 'child', 'uncleish'])
+  })
+
+  it('restarts coverage for a later selected sibling after the previous run ends', () => {
+    expect(
+      expandDraggedWorktreeIdsForVisibleLineage(
+        [
+          { worktreeId: 'first', depth: 0 },
+          { worktreeId: 'first-child', depth: 1 },
+          { worktreeId: 'second', depth: 0 },
+          { worktreeId: 'second-child', depth: 1 }
+        ],
+        ['first', 'second']
+      )
+    ).toEqual(['first', 'first-child', 'second', 'second-child'])
+  })
+
+  it('emits each absent selected id once', () => {
+    expect(
+      expandDraggedWorktreeIdsForVisibleLineage(
+        [{ worktreeId: 'row', depth: 0 }],
+        ['gone', 'row', 'gone']
+      )
+    ).toEqual(['row', 'gone'])
   })
 })
 
@@ -69,7 +190,7 @@ describe('moveWorktreeIdsWithinGroup', () => {
 
 describe('buildWorktreeDragPreviewOffsets', () => {
   it('slides intervening rows up while dragging a row down', () => {
-    const offsets = buildWorktreeDragPreviewOffsets({
+    const { offsets } = buildWorktreeDragPreviewOffsets({
       groupIds: ['a', 'b', 'c', 'd'],
       draggedIds: ['b'],
       dropIndex: 4,
@@ -87,8 +208,30 @@ describe('buildWorktreeDragPreviewOffsets', () => {
     ])
   })
 
+  it('keeps downward offsets stable after virtualization unmounts the leading rows', () => {
+    const { offsets, placeholderTop } = buildWorktreeDragPreviewOffsets({
+      groupIds: ['a', 'b', 'c', 'd', 'e', 'f'],
+      draggedIds: ['a'],
+      draggingWorktreeId: 'a',
+      draggedPreviewHeight: 50,
+      dropIndex: 6,
+      rects: [
+        { worktreeId: 'd', groupIndex: 3, top: 168, bottom: 218 },
+        { worktreeId: 'e', groupIndex: 4, top: 224, bottom: 274 },
+        { worktreeId: 'f', groupIndex: 5, top: 280, bottom: 330 }
+      ]
+    })
+
+    expect(Array.from(offsets)).toEqual([
+      ['d', -56],
+      ['e', -56],
+      ['f', -56]
+    ])
+    expect(placeholderTop).toBe(280)
+  })
+
   it('slides intervening rows down while dragging a row up', () => {
-    const offsets = buildWorktreeDragPreviewOffsets({
+    const { offsets } = buildWorktreeDragPreviewOffsets({
       groupIds: ['a', 'b', 'c'],
       draggedIds: ['c'],
       dropIndex: 0,
@@ -106,7 +249,7 @@ describe('buildWorktreeDragPreviewOffsets', () => {
   })
 
   it('returns no preview offsets for a no-op hover', () => {
-    const offsets = buildWorktreeDragPreviewOffsets({
+    const { offsets } = buildWorktreeDragPreviewOffsets({
       groupIds: ['a', 'b'],
       draggedIds: ['a'],
       dropIndex: 1,
@@ -120,7 +263,7 @@ describe('buildWorktreeDragPreviewOffsets', () => {
   })
 
   it('uses the dragged unit height when previewing variable-height rows', () => {
-    const offsets = buildWorktreeDragPreviewOffsets({
+    const { offsets } = buildWorktreeDragPreviewOffsets({
       groupIds: ['parent', 'sibling'],
       draggedIds: ['parent'],
       dropIndex: 2,
@@ -134,7 +277,7 @@ describe('buildWorktreeDragPreviewOffsets', () => {
   })
 
   it('uses the dragged unit height when previewing a short row above a tall row', () => {
-    const offsets = buildWorktreeDragPreviewOffsets({
+    const { offsets } = buildWorktreeDragPreviewOffsets({
       groupIds: ['parent', 'sibling'],
       draggedIds: ['sibling'],
       dropIndex: 0,
@@ -145,6 +288,64 @@ describe('buildWorktreeDragPreviewOffsets', () => {
     })
 
     expect(Array.from(offsets)).toEqual([['parent', 108]])
+  })
+
+  it('reserves one card-height slot while previewing a multi-select batch', () => {
+    const { offsets } = buildWorktreeDragPreviewOffsets({
+      groupIds: ['a', 'b', 'c', 'd', 'e'],
+      draggedIds: ['b', 'c', 'd'],
+      draggingWorktreeId: 'b',
+      dropIndex: 5,
+      rects: [
+        { worktreeId: 'a', groupIndex: 0, top: 0, bottom: 50 },
+        { worktreeId: 'b', groupIndex: 1, top: 56, bottom: 106 },
+        { worktreeId: 'c', groupIndex: 2, top: 112, bottom: 162 },
+        { worktreeId: 'd', groupIndex: 3, top: 168, bottom: 218 },
+        { worktreeId: 'e', groupIndex: 4, top: 224, bottom: 274 }
+      ]
+    })
+
+    expect(Array.from(offsets)).toEqual([
+      ['c', -56],
+      ['d', -56],
+      ['e', -56]
+    ])
+  })
+
+  it('uses the grabbed selected card as the one preview placeholder', () => {
+    const { offsets } = buildWorktreeDragPreviewOffsets({
+      groupIds: ['a', 'b', 'c', 'd', 'e'],
+      draggedIds: ['b', 'c', 'd'],
+      draggingWorktreeId: 'd',
+      dropIndex: 5,
+      rects: [
+        { worktreeId: 'a', groupIndex: 0, top: 0, bottom: 50 },
+        { worktreeId: 'b', groupIndex: 1, top: 56, bottom: 106 },
+        { worktreeId: 'c', groupIndex: 2, top: 112, bottom: 162 },
+        { worktreeId: 'd', groupIndex: 3, top: 168, bottom: 218 },
+        { worktreeId: 'e', groupIndex: 4, top: 224, bottom: 274 }
+      ]
+    })
+
+    expect(Array.from(offsets)).toEqual([['e', -56]])
+  })
+
+  it('returns no preview offsets for a no-op multi-select hover', () => {
+    const { offsets } = buildWorktreeDragPreviewOffsets({
+      groupIds: ['a', 'b', 'c', 'd', 'e'],
+      draggedIds: ['b', 'c', 'd'],
+      draggingWorktreeId: 'b',
+      dropIndex: 4,
+      rects: [
+        { worktreeId: 'a', groupIndex: 0, top: 0, bottom: 50 },
+        { worktreeId: 'b', groupIndex: 1, top: 56, bottom: 106 },
+        { worktreeId: 'c', groupIndex: 2, top: 112, bottom: 162 },
+        { worktreeId: 'd', groupIndex: 3, top: 168, bottom: 218 },
+        { worktreeId: 'e', groupIndex: 4, top: 224, bottom: 274 }
+      ]
+    })
+
+    expect(offsets.size).toBe(0)
   })
 })
 
@@ -158,6 +359,7 @@ describe('buildManualOrderUpdatesForVisibleGroups', () => {
       sourceGroupKey: 'workspace-status:todo',
       draggedIds: ['todo-b'],
       dropIndex: 0,
+      allWorktreeIds: ['todo-a', 'todo-b', 'done-a', 'done-b'],
       now: 10_000
     })
 
@@ -177,6 +379,7 @@ describe('buildManualOrderUpdatesForVisibleGroups', () => {
       sourceGroupKey: 'repo:one',
       draggedIds: ['a'],
       dropIndex: 1,
+      allWorktreeIds: ['a', 'b'],
       now: 10_000
     })
 
@@ -190,6 +393,7 @@ describe('buildManualOrderUpdatesForVisibleGroups', () => {
       sourceGroupKey: 'repo:one',
       draggedIds: ['b'],
       dropIndex: 4,
+      allWorktreeIds: ['a', 'b', 'c', 'd'],
       now: 10_000,
       rankByWorktreeId: new Map([
         ['a', 4000],
@@ -209,6 +413,7 @@ describe('buildManualOrderUpdatesForVisibleGroups', () => {
       sourceGroupKey: 'all',
       draggedIds: ['parent', 'child'],
       dropIndex: 3,
+      allWorktreeIds: ['parent', 'child', 'other'],
       now: 10_000,
       rankByWorktreeId: new Map([
         ['parent', 3000],
@@ -235,6 +440,7 @@ describe('buildManualOrderUpdatesForVisibleGroups', () => {
       sourceGroupKey: 'all',
       draggedIds: ['wt-0'],
       dropIndex: ids.length,
+      allWorktreeIds: ids,
       now: 10_000,
       rankByWorktreeId
     })
@@ -257,6 +463,7 @@ describe('buildManualOrderUpdatesForGroupDrop', () => {
       targetGroupKey: 'doing',
       draggedIds: ['todo-b'],
       dropIndex: 1,
+      allWorktreeIds: ['todo-a', 'todo-b', 'doing-a', 'doing-b'],
       now: 10_000
     })
 
@@ -279,6 +486,7 @@ describe('buildManualOrderUpdatesForGroupDrop', () => {
       targetGroupKey: 'doing',
       draggedIds: ['d', 'b'],
       dropIndex: 0,
+      allWorktreeIds: ['a', 'b', 'c', 'd'],
       now: 10_000
     })
 
@@ -291,6 +499,7 @@ describe('buildManualOrderUpdatesForGroupDrop', () => {
       targetGroupKey: 'doing',
       draggedIds: ['a'],
       dropIndex: 1,
+      allWorktreeIds: ['a', 'b'],
       now: 10_000
     })
 
@@ -307,6 +516,7 @@ describe('buildManualOrderUpdatesForGroupDrop', () => {
       targetGroupKey: 'doing',
       draggedIds: ['todo-b'],
       dropIndex: 1,
+      allWorktreeIds: ['todo-a', 'todo-b', 'doing-a', 'doing-b'],
       now: 10_000,
       rankByWorktreeId: new Map([
         ['todo-a', 4000],

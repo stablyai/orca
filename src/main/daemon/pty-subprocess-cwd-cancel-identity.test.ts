@@ -1,0 +1,97 @@
+// Recovery keys off the daemon’s cancellation identity; a different error takes terminal-closing rollback.
+import { describe, expect, it, vi } from 'vitest'
+import type * as LocalPtyUtils from '../providers/local-pty-utils'
+
+const {
+  spawnMock,
+  isPwshAvailableMock,
+  validateWorkingDirectoryMock,
+  validateWorkingDirectoryAsyncMock,
+  resolveUnixShellPathMock,
+  resolveAgentForegroundProcessMock
+} = vi.hoisted(() => ({
+  spawnMock: vi.fn(),
+  isPwshAvailableMock: vi.fn(),
+  resolveUnixShellPathMock: vi.fn((shellPath: string) => shellPath),
+  resolveAgentForegroundProcessMock: vi.fn(),
+  validateWorkingDirectoryMock: vi.fn(),
+  validateWorkingDirectoryAsyncMock: vi.fn()
+}))
+
+vi.mock('node-pty', () => ({ spawn: spawnMock }))
+vi.mock('../pwsh', () => ({ isPwshAvailable: isPwshAvailableMock }))
+
+vi.mock('../providers/local-pty-utils', async (importOriginal) => {
+  const actual = await importOriginal<typeof LocalPtyUtils>()
+  return {
+    ...actual,
+    resolveUnixShellPath: resolveUnixShellPathMock,
+    validateWorkingDirectory: validateWorkingDirectoryMock,
+    validateWorkingDirectoryAsync: validateWorkingDirectoryAsyncMock
+  }
+})
+
+vi.mock('../providers/agent-foreground-process', () => ({
+  resolveAgentForegroundProcessWithAvailability: async (...args: unknown[]) => {
+    const value = await resolveAgentForegroundProcessMock(...args)
+    return value && typeof value === 'object' && 'available' in value
+      ? value
+      : { available: true, processName: value }
+  }
+}))
+
+vi.mock('../providers/windows-pty-job-membership', () => ({
+  readWindowsPtyJobProcessIds: () => new Set([12345]),
+  isWindowsPtyJobReadable: () => true
+}))
+
+import { createPtySubprocess } from './pty-subprocess'
+import { TerminalAttachCanceledError } from './daemon-errors'
+import { WorkingDirectoryValidationAbortedError } from '../providers/working-directory-validation'
+import { useDaemonPtySubprocessEnv } from './pty-subprocess-test-harness'
+
+describe('createPtySubprocess cwd cancellation identity', () => {
+  useDaemonPtySubprocessEnv({
+    spawnMock,
+    isPwshAvailableMock,
+    resolveUnixShellPathMock,
+    resolveAgentForegroundProcessMock,
+    validateWorkingDirectoryMock
+  })
+
+  it('reports a canceled cwd probe as an attach cancellation, not a spawn failure', async () => {
+    const cwd = process.platform === 'win32' ? 'C:\\Volumes\\dead\\repo' : '/Volumes/dead/repo'
+    validateWorkingDirectoryAsyncMock.mockRejectedValue(
+      new WorkingDirectoryValidationAbortedError(cwd)
+    )
+    const abort = new AbortController()
+    abort.abort()
+
+    await expect(
+      createPtySubprocess({
+        sessionId: 'canceled-cwd-session',
+        cols: 80,
+        rows: 24,
+        cwd,
+        cancelSignal: abort.signal
+      })
+    ).rejects.toThrow(TerminalAttachCanceledError)
+    expect(spawnMock).not.toHaveBeenCalled()
+  })
+
+  it('leaves a genuine missing-directory failure alone', async () => {
+    const cwd = process.platform === 'win32' ? 'C:\\gone' : '/gone'
+    validateWorkingDirectoryAsyncMock.mockRejectedValue(
+      new Error(`Working directory "${cwd}" does not exist. It may have been deleted.`)
+    )
+
+    await expect(
+      createPtySubprocess({
+        sessionId: 'missing-cwd-session',
+        cols: 80,
+        rows: 24,
+        cwd
+      })
+    ).rejects.toThrow(/does not exist/)
+  })
+})

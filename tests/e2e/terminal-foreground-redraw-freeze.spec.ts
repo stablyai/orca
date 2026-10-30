@@ -1,6 +1,8 @@
-import { existsSync, readFileSync } from 'fs'
-import path from 'path'
+import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import type { Page, TestInfo } from '@stablyai/playwright-test'
+import { z } from 'zod'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { waitForActivePaneHookDescriptor, waitForActiveTerminalManager } from './helpers/terminal'
@@ -8,11 +10,8 @@ import { waitForTerminalPtyDataInjector } from './helpers/terminal-pty-injection
 
 // Repro commands:
 //   SKIP_BUILD=1 pnpm exec playwright test tests/e2e/terminal-foreground-redraw-freeze.spec.ts --config tests/playwright.config.ts --project electron-headless -g "active OpenTUI-style"
-//   git clone https://github.com/anomalyco/opencode.git .tmp/opencode
-//   node tests/e2e/capture-opencode-tui-repro.mjs
 //   SKIP_BUILD=1 pnpm exec playwright test tests/e2e/terminal-foreground-redraw-freeze.spec.ts --config tests/playwright.config.ts --project electron-headless -g "captured OpenCode/OpenTUI" --reporter=json
-// The captured replay uses an artificial OpenCode source-tree harness that
-// imports OpenCode's spinner frames and emits real OpenTUI <=2KB redraw chunks.
+// Captured replay imports OpenCode spinner frames and emits real OpenTUI ≤2KB redraw chunks from an artificial source-tree harness.
 
 type SchedulerDebugSnapshot = {
   deferredForegroundEnqueueCount: number
@@ -39,13 +38,39 @@ type SchedulerDebugWindow = Window & {
   }
 }
 
+type RefreshProbeWindow = SchedulerDebugWindow & {
+  __terminalRefreshProbe?: {
+    snapshot: () => RefreshProbeSnapshot
+    dispose: () => void
+  }
+}
+
+type RefreshProbeSnapshot = {
+  synchronousWebgl: number
+  synchronousDom: number
+  debouncedWebgl: number
+  debouncedDom: number
+}
+
 const REDRAW_FRAME_COUNT = 270
 const REDRAW_PAYLOAD_CHARS = 520
+const REWRITE_REDRAW_FRAME_COUNT = REDRAW_FRAME_COUNT
+const REWRITE_REDRAW_PAYLOAD_CHARS = REDRAW_PAYLOAD_CHARS
 const TIMER_SAMPLE_MS = 16
 const MAX_RENDERER_TIMER_DRIFT_MS = 500
 const FOREGROUND_IMMEDIATE_BUDGET_CHARS = 128 * 1024
 const OPENCODE_CAPTURE_REPLAY_CHARS = FOREGROUND_IMMEDIATE_BUDGET_CHARS * 64
-const OPENCODE_CAPTURE_PATH = path.join(process.cwd(), '.tmp', 'opencode-tui-capture.txt')
+const OPENCODE_CAPTURE_PATH = path.join(
+  process.cwd(),
+  'tests',
+  'e2e',
+  'fixtures',
+  'opencode-small-redraw-capture.json'
+)
+const openCodeCaptureSchema = z.object({
+  capture: z.string().min(1),
+  provenance: z.object({ sha256: z.string().regex(/^[a-f0-9]{64}$/i) })
+})
 
 async function resetSchedulerDebug(page: Page): Promise<void> {
   await page.evaluate(() => {
@@ -78,6 +103,18 @@ async function measureRendererDuringBurst(page: Page, paneKey: string): Promise<
       `\x1b[4;6H\x1b[38;2;231;237;247m${payload}\x1b[0m` +
       '\x1b[?2026l'
     )
+  })
+  return measureRendererDuringFrames(page, paneKey, frames)
+}
+
+async function measureRendererDuringRewriteBurst(
+  page: Page,
+  paneKey: string
+): Promise<BurstMeasurement> {
+  const frames = Array.from({ length: REWRITE_REDRAW_FRAME_COUNT }, (_, frame) => {
+    const text = `• Working ${String(frame).padStart(4, '0')}`
+    const payload = 'x'.repeat(REWRITE_REDRAW_PAYLOAD_CHARS)
+    return `\r\x1b[2K${text} ${payload}`
   })
   return measureRendererDuringFrames(page, paneKey, frames)
 }
@@ -133,11 +170,145 @@ async function measureRendererDuringFrames(
   )
 }
 
-function loadCapturedOpenCodeSmallRedrawFrames(): string[] {
-  if (!existsSync(OPENCODE_CAPTURE_PATH)) {
-    return []
+async function installActivePaneRefreshProbe(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    ;(window as RefreshProbeWindow).__terminalRefreshProbe?.dispose()
+    const state = window.__store?.getState()
+    const worktreeId = state?.activeWorktreeId
+    const tabId =
+      state?.activeTabType === 'terminal'
+        ? state.activeTabId
+        : worktreeId
+          ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
+          : null
+    const manager = tabId ? window.__paneManagers?.get(tabId) : null
+    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+    if (!manager || !pane) {
+      throw new Error('Active terminal pane is unavailable')
+    }
+    const terminal = pane.terminal as unknown as {
+      _core?: { refresh?: (start: number, end: number, sync?: boolean) => void }
+      refresh: (start: number, end: number) => void
+    }
+    const originalCoreRefresh = terminal._core?.refresh?.bind(terminal._core)
+    const originalPublicRefresh = terminal.refresh.bind(terminal)
+    if (!terminal._core || !originalCoreRefresh) {
+      throw new Error('Active terminal core refresh hook is unavailable')
+    }
+    let synchronousWebgl = 0
+    let synchronousDom = 0
+    let debouncedWebgl = 0
+    let debouncedDom = 0
+    terminal._core.refresh = (start, end, sync) => {
+      if (sync === true) {
+        if (manager.hasWebglRenderer(pane.id)) {
+          synchronousWebgl += 1
+        } else {
+          synchronousDom += 1
+        }
+      }
+      originalCoreRefresh(start, end, sync)
+    }
+    terminal.refresh = (start, end) => {
+      if (manager.hasWebglRenderer(pane.id)) {
+        debouncedWebgl += 1
+      } else {
+        debouncedDom += 1
+      }
+      originalPublicRefresh(start, end)
+    }
+    ;(window as RefreshProbeWindow).__terminalRefreshProbe = {
+      snapshot: () => ({
+        synchronousWebgl,
+        synchronousDom,
+        debouncedWebgl,
+        debouncedDom
+      }),
+      dispose: () => {
+        if (terminal._core) {
+          terminal._core.refresh = originalCoreRefresh
+        }
+        terminal.refresh = originalPublicRefresh
+        delete (window as RefreshProbeWindow).__terminalRefreshProbe
+      }
+    }
+  })
+}
+
+async function forceActivePaneWebglRenderer(page: Page): Promise<boolean> {
+  await page.evaluate(() => {
+    const state = window.__store?.getState()
+    if (!state?.settings) {
+      throw new Error('Store unavailable')
+    }
+    window.__store?.setState({
+      settings: { ...state.settings, terminalGpuAcceleration: 'on' }
+    })
+    const worktreeId = state.activeWorktreeId
+    const tabId =
+      state.activeTabType === 'terminal'
+        ? state.activeTabId
+        : worktreeId
+          ? (state.activeTabIdByWorktree?.[worktreeId] ?? null)
+          : null
+    window.__paneManagers?.get(tabId ?? '')?.setTerminalGpuAcceleration?.('on')
+  })
+  return page
+    .waitForFunction(
+      () => {
+        const state = window.__store?.getState()
+        const worktreeId = state?.activeWorktreeId
+        const tabId =
+          state?.activeTabType === 'terminal'
+            ? state.activeTabId
+            : worktreeId
+              ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
+              : null
+        const manager = tabId ? window.__paneManagers?.get(tabId) : null
+        const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+        return pane ? manager?.hasWebglRenderer(pane.id) === true : false
+      },
+      null,
+      { timeout: 10_000 }
+    )
+    .then(() => true)
+    .catch(() => false)
+}
+
+async function readRefreshProbe(page: Page): Promise<RefreshProbeSnapshot> {
+  return page.evaluate(
+    () =>
+      (window as RefreshProbeWindow).__terminalRefreshProbe?.snapshot() ?? {
+        synchronousWebgl: 0,
+        synchronousDom: 0,
+        debouncedWebgl: 0,
+        debouncedDom: 0
+      }
+  )
+}
+
+function subtractRefreshProbe(
+  current: RefreshProbeSnapshot,
+  baseline: RefreshProbeSnapshot
+): RefreshProbeSnapshot {
+  return {
+    synchronousWebgl: current.synchronousWebgl - baseline.synchronousWebgl,
+    synchronousDom: current.synchronousDom - baseline.synchronousDom,
+    debouncedWebgl: current.debouncedWebgl - baseline.debouncedWebgl,
+    debouncedDom: current.debouncedDom - baseline.debouncedDom
   }
-  const capture = readFileSync(OPENCODE_CAPTURE_PATH, 'utf8')
+}
+
+async function disposeActivePaneRefreshProbe(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    ;(window as RefreshProbeWindow).__terminalRefreshProbe?.dispose()
+  })
+}
+
+function loadCapturedOpenCodeSmallRedrawFrames(): string[] {
+  const rawCapture: unknown = JSON.parse(readFileSync(OPENCODE_CAPTURE_PATH, 'utf8'))
+  const { capture, provenance } = openCodeCaptureSchema.parse(rawCapture)
+  expect(createHash('sha256').update(capture, 'utf8').digest('hex')).toBe(provenance.sha256)
   const smallFrames = capture
     .split('\x1b[?2026h')
     .slice(1)
@@ -176,6 +347,62 @@ function annotateMeasurement(
 }
 
 test.describe('Terminal foreground redraw freeze repro', () => {
+  test('@headful Codex-style line rewrites request a visible row refresh', async ({
+    orcaPage
+  }, testInfo) => {
+    await waitForSessionReady(orcaPage)
+    await waitForActiveWorktree(orcaPage)
+    await ensureTerminalVisible(orcaPage)
+    await waitForActiveTerminalManager(orcaPage, 30_000)
+
+    const { paneKey } = await waitForActivePaneHookDescriptor(orcaPage)
+    await waitForTerminalPtyDataInjector(orcaPage, paneKey)
+    const webglAttached = await forceActivePaneWebglRenderer(orcaPage)
+    // Linux headless CI disables GPU; skip that unsupported environment rather than weaken the WebGL oracle.
+    test.skip(!webglAttached, 'WebGL is unavailable for the refresh-policy probe')
+    if (!webglAttached) {
+      return
+    }
+    await installActivePaneRefreshProbe(orcaPage)
+    try {
+      const refreshBaseline = await readRefreshProbe(orcaPage)
+      await resetSchedulerDebug(orcaPage)
+      const measurement = await measureRendererDuringRewriteBurst(orcaPage, paneKey)
+      const scheduler = await readSchedulerDebug(orcaPage)
+
+      expect(measurement.injectedFrames).toBe(REWRITE_REDRAW_FRAME_COUNT)
+      expect(measurement.maxTimerDriftMs).toBeLessThan(MAX_RENDERER_TIMER_DRIFT_MS)
+      expect(scheduler.deferredForegroundEnqueueCount).toBeGreaterThan(0)
+      await expect
+        .poll(
+          async () => {
+            const refresh = await readRefreshProbe(orcaPage)
+            const delta = subtractRefreshProbe(refresh, refreshBaseline)
+            return Object.values(delta).reduce((total, count) => total + count, 0)
+          },
+          {
+            timeout: 5_000,
+            message: 'Codex-style terminal rewrites did not request an xterm refresh'
+          }
+        )
+        .toBeGreaterThan(0)
+      const refresh = await readRefreshProbe(orcaPage)
+      const refreshDelta = subtractRefreshProbe(refresh, refreshBaseline)
+      testInfo.annotations.push({
+        type: 'terminal-refresh-probe',
+        description: `syncWebgl=${refreshDelta.synchronousWebgl} syncDom=${
+          refreshDelta.synchronousDom
+        } debouncedWebgl=${refreshDelta.debouncedWebgl} debouncedDom=${refreshDelta.debouncedDom}`
+      })
+      // Synchronous full-grid refresh duplicates xterm’s queued frame and was the #6655 CPU hotspot.
+      expect(refreshDelta.synchronousWebgl).toBe(0)
+      // Require a public WebGL refresh so mid-run DOM fallback cannot make zero-sync vacuously pass.
+      expect(refreshDelta.debouncedWebgl).toBeGreaterThan(0)
+    } finally {
+      await disposeActivePaneRefreshProbe(orcaPage)
+    }
+  })
+
   test('active OpenTUI-style redraw bursts do not monopolize the renderer', async ({
     orcaPage
   }, testInfo) => {
@@ -193,8 +420,7 @@ test.describe('Terminal foreground redraw freeze repro', () => {
 
     expect(measurement.injectedFrames).toBe(REDRAW_FRAME_COUNT)
     expect(measurement.maxTimerDriftMs).toBeLessThan(MAX_RENDERER_TIMER_DRIFT_MS)
-    // Why: this is the PR #4558 contract. Once the foreground immediate budget
-    // is exhausted, throughput redraws must enter the async foreground drain.
+    // #4558: after the immediate foreground budget, throughput redraws must enter the async drain.
     expect(scheduler.deferredForegroundEnqueueCount).toBeGreaterThan(0)
   })
 
@@ -202,10 +428,10 @@ test.describe('Terminal foreground redraw freeze repro', () => {
     orcaPage
   }, testInfo) => {
     const frames = loadCapturedOpenCodeSmallRedrawFrames()
-    test.skip(
-      frames.length === 0,
-      `OpenCode PTY capture missing; run "git clone https://github.com/anomalyco/opencode.git .tmp/opencode" then "node tests/e2e/capture-opencode-tui-repro.mjs" to generate ${OPENCODE_CAPTURE_PATH}`
-    )
+    expect(
+      frames.length,
+      'committed OpenCode capture must contain small redraw frames'
+    ).toBeGreaterThan(0)
 
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)

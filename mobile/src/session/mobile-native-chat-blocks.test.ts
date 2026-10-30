@@ -1,0 +1,141 @@
+import { describe, expect, it } from 'vitest'
+import { foldToolMessages } from '../../../src/shared/native-chat/tools/native-chat-tool-fold'
+import { pairToolBlocks } from '../../../src/shared/native-chat/tools/native-chat-tool-pairs'
+import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+
+function msg(
+  role: NativeChatMessage['role'],
+  blocks: NativeChatMessage['blocks'],
+  id: string = role
+): NativeChatMessage {
+  return { id, role, blocks, timestamp: 0, source: 'transcript' }
+}
+
+describe('pairToolBlocks', () => {
+  it('pairs each call with the following result', () => {
+    const pairs = pairToolBlocks([
+      { type: 'tool-call', name: 'Bash', input: { command: 'ls' } },
+      { type: 'tool-result', output: 'a\nb' },
+      { type: 'tool-call', name: 'Edit', input: {} },
+      { type: 'tool-result', output: 'ok' }
+    ])
+    expect(pairs).toEqual([
+      {
+        call: { type: 'tool-call', name: 'Bash', input: { command: 'ls' } },
+        result: { type: 'tool-result', output: 'a\nb' }
+      },
+      {
+        call: { type: 'tool-call', name: 'Edit', input: {} },
+        result: { type: 'tool-result', output: 'ok' }
+      }
+    ])
+  })
+
+  it('keeps an orphan result on its own', () => {
+    const pairs = pairToolBlocks([{ type: 'tool-result', output: 'x' }])
+    expect(pairs).toEqual([{ result: { type: 'tool-result', output: 'x' } }])
+  })
+
+  it('does not attach a second result to an already-filled pair', () => {
+    const pairs = pairToolBlocks([
+      { type: 'tool-call', name: 'Bash', input: {} },
+      { type: 'tool-result', output: '1' },
+      { type: 'tool-result', output: '2' }
+    ])
+    expect(pairs).toHaveLength(2)
+    expect(pairs[1]!.call).toBeUndefined()
+    expect(pairs[1]!.result?.output).toBe('2')
+  })
+
+  it('pairs batched parallel calls by ordinal, not adjacency', () => {
+    const call1 = { type: 'tool-call' as const, name: 'Bash', input: { command: 'a' } }
+    const call2 = { type: 'tool-call' as const, name: 'Bash', input: { command: 'b' } }
+    const result1 = { type: 'tool-result' as const, output: 'out-a' }
+    const result2 = { type: 'tool-result' as const, output: 'out-b' }
+    const pairs = pairToolBlocks([call1, call2, result1, result2])
+
+    expect(pairs).toHaveLength(2)
+    expect(pairs[0]).toEqual({ call: call1, result: result1 })
+    expect(pairs[1]).toEqual({ call: call2, result: result2 })
+  })
+
+  it('does not graft a dropped over-limit call result onto a kept call', () => {
+    const call1 = { type: 'tool-call' as const, name: 'Bash', input: { command: 'a' } }
+    const call2 = { type: 'tool-call' as const, name: 'Bash', input: { command: 'b' } }
+    const call3 = { type: 'tool-call' as const, name: 'Bash', input: { command: 'c' } }
+    const result1 = { type: 'tool-result' as const, output: 'out-a' }
+    const result2 = { type: 'tool-result' as const, output: 'out-b' }
+    const result3 = { type: 'tool-result' as const, output: 'out-c' }
+    const pairs = pairToolBlocks([call1, call2, call3, result1, result2, result3], 2)
+
+    expect(pairs).toHaveLength(2)
+    expect(pairs[0]).toEqual({ call: call1, result: result1 })
+    expect(pairs[1]).toEqual({ call: call2, result: result2 })
+  })
+
+  it('keeps the first completed pairs at the rendering limit', () => {
+    const blocks = Array.from({ length: 20 }, (_unused, index) => [
+      { type: 'tool-call' as const, name: 'Bash', input: { index } },
+      { type: 'tool-result' as const, output: String(index) }
+    ]).flat()
+    const pairs = pairToolBlocks(blocks, 6)
+
+    expect(pairs).toHaveLength(6)
+    expect(pairs[5].result?.output).toBe('5')
+  })
+})
+
+describe('foldToolMessages', () => {
+  it('folds tool-call-only assistant messages and result messages into the prose turn', () => {
+    const folded = foldToolMessages([
+      msg('assistant', [{ type: 'text', text: 'doing' }], 'a0'),
+      msg('assistant', [{ type: 'tool-call', name: 'Bash', input: {} }], 'a1'),
+      msg('tool', [{ type: 'tool-result', output: 'done' }], 't1'),
+      msg('assistant', [{ type: 'tool-call', name: 'Edit', input: {} }], 'a2'),
+      msg('tool', [{ type: 'tool-result', output: 'ok' }], 't2')
+    ])
+    expect(folded).toHaveLength(1)
+    expect(folded[0]!.blocks).toEqual([
+      { type: 'text', text: 'doing' },
+      { type: 'tool-call', name: 'Bash', input: {} },
+      { type: 'tool-result', output: 'done' },
+      { type: 'tool-call', name: 'Edit', input: {} },
+      { type: 'tool-result', output: 'ok' }
+    ])
+  })
+
+  it('starts a new turn at the next prose assistant message', () => {
+    const folded = foldToolMessages([
+      msg('assistant', [{ type: 'text', text: 't1' }], 'a0'),
+      msg('assistant', [{ type: 'tool-call', name: 'Bash', input: {} }], 'a1'),
+      msg('assistant', [{ type: 'text', text: 't2' }], 'a2')
+    ])
+    expect(folded.map((m) => m.id)).toEqual(['a0', 'a2'])
+  })
+
+  it('drops a tool message whose call is outside the loaded window', () => {
+    const folded = foldToolMessages([msg('tool', [{ type: 'tool-result', output: 'x' }])])
+    expect(folded).toHaveLength(0)
+  })
+
+  it('does not merge across a user message', () => {
+    const folded = foldToolMessages([
+      msg('assistant', [{ type: 'tool-call', name: 'Bash', input: {} }], 'a'),
+      msg('user', [{ type: 'text', text: 'q' }], 'u'),
+      msg('tool', [{ type: 'tool-result', output: 'r' }], 't')
+    ])
+    expect(folded.map((m) => m.role)).toEqual(['assistant', 'user'])
+  })
+
+  it('folds a long tool run without mutating the source assistant', () => {
+    const assistant = msg('assistant', [{ type: 'text', text: 'working' }], 'a')
+    const tools = Array.from({ length: 1_000 }, (_unused, index) => [
+      msg('assistant', [{ type: 'tool-call', name: 'Bash', input: {} }], `c-${index}`),
+      msg('tool', [{ type: 'tool-result', output: String(index) }], `t-${index}`)
+    ]).flat()
+    const folded = foldToolMessages([assistant, ...tools])
+
+    expect(folded[0].blocks).toHaveLength(2_001)
+    expect(assistant.blocks).toHaveLength(1)
+  })
+})

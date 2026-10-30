@@ -1,58 +1,11 @@
-import { Node, mergeAttributes } from '@tiptap/core'
-import { isEditableDetailsHtmlBlock, matchDetailsHtmlBlock } from './details-markdown-html'
+import { createDetailsMatcher, isEditableDetailsHtmlBlock } from './details-markdown-html'
 import { formatMarkdownDocLinkBody, parseMarkdownDocLink } from './markdown-doc-links'
 import { normalizeMarkdownReferenceLinks } from './markdown-reference-link-normalization'
-
-const INLINE_PLACEHOLDER_PREFIX = '[[ORCA_RAW_HTML_INLINE:'
-const BLOCK_PLACEHOLDER_PREFIX = '[[ORCA_RAW_HTML_BLOCK:'
-const DOC_LINK_PLACEHOLDER_PREFIX = '[[ORCA_DOC_LINK:'
-const PLACEHOLDER_SUFFIX = ']]'
+import type { RichMarkdownEditorCodec } from './rich-markdown-source-transport'
+import { isReservedRichMarkdownTransportBody } from './rich-markdown-source-transport'
+import { matchHtmlSuperscriptLinkSource } from './rich-markdown-html-superscript-link-source'
 
 const INLINE_HTML_PATTERN = /^<!--[\s\S]*?-->|^<\/?[A-Za-z][\w.:-]*(?:\s[^<>]*?)?\/?>/
-
-function encodeHtmlPayload(raw: string): string {
-  return encodeURIComponent(raw)
-}
-
-function decodeHtmlPayload(payload: string): string {
-  try {
-    return decodeURIComponent(payload)
-  } catch {
-    return ''
-  }
-}
-
-function createPlaceholder(kind: 'inline' | 'block', raw: string): string {
-  const prefix = kind === 'inline' ? INLINE_PLACEHOLDER_PREFIX : BLOCK_PLACEHOLDER_PREFIX
-  return `${prefix}${encodeHtmlPayload(raw)}${PLACEHOLDER_SUFFIX}`
-}
-
-function matchPlaceholder(
-  src: string,
-  kind: 'inline' | 'block'
-): { placeholder: string; value: string } | null {
-  const prefix = kind === 'inline' ? INLINE_PLACEHOLDER_PREFIX : BLOCK_PLACEHOLDER_PREFIX
-  if (!src.startsWith(prefix)) {
-    return null
-  }
-
-  const endIndex = src.indexOf(PLACEHOLDER_SUFFIX, prefix.length)
-  if (endIndex === -1) {
-    return null
-  }
-
-  const placeholder = src.slice(0, endIndex + PLACEHOLDER_SUFFIX.length)
-  const payload = src.slice(prefix.length, endIndex)
-  return {
-    placeholder,
-    value: decodeHtmlPayload(payload)
-  }
-}
-
-function matchInlineHtml(src: string): string | null {
-  const match = src.match(INLINE_HTML_PATTERN)
-  return match?.[0] ?? null
-}
 
 function isEscaped(content: string, index: number): boolean {
   let backslashCount = 0
@@ -83,26 +36,38 @@ function isLineOnlyHtml(line: string): boolean {
 function matchBlockHtml(content: string, start: number): string | null {
   const lineEnd = findLineEnd(content, start)
   const line = content.slice(start, lineEnd)
-  if (!isLineOnlyHtml(line)) {
-    return null
-  }
-
-  return line
+  return isLineOnlyHtml(line) ? line : null
 }
 
-export function encodeRawMarkdownHtmlForRichEditor(content: string): string {
+export function encodeRawMarkdownHtmlForRichEditor(
+  content: string,
+  codec: RichMarkdownEditorCodec,
+  { htmlSuperscriptLinks = false }: { htmlSuperscriptLinks?: boolean } = {}
+): string {
   const normalizedContent = normalizeMarkdownReferenceLinks(content)
+  const matchDetails = createDetailsMatcher(normalizedContent)
+  const lastCommentClose = normalizedContent.lastIndexOf('-->')
+  const { transport } = codec
   let index = 0
-  let isLineStart = true
+  let nextDocLinkClose = 0
   let activeFence: '`' | '~' | null = null
   let activeFenceLength = 0
   let result = ''
+  const nonWhitespace = /\S/g
+  const fencePrefix = /(`{3,}|~{3,})/y
+  let fenceProbe = -1
+  let fenceMatch: RegExpExecArray | null = null
 
   while (index < normalizedContent.length) {
-    const lineRest = normalizedContent.slice(index)
-
+    const isLineStart = index === 0 || normalizedContent[index - 1] === '\n'
     if (isLineStart) {
-      const fenceMatch = lineRest.match(/^\s*(`{3,}|~{3,})/)
+      // Reuse the lookahead across blank lines, preserving cross-line fence semantics.
+      if (index > fenceProbe) {
+        nonWhitespace.lastIndex = index
+        fenceProbe = nonWhitespace.exec(normalizedContent)?.index ?? normalizedContent.length
+        fencePrefix.lastIndex = fenceProbe
+        fenceMatch = fencePrefix.exec(normalizedContent)
+      }
       if (fenceMatch) {
         const fenceChar = fenceMatch[1][0] as '`' | '~'
         const fenceLength = fenceMatch[1].length
@@ -119,7 +84,6 @@ export function encodeRawMarkdownHtmlForRichEditor(content: string): string {
     if (activeFence) {
       const nextChar = normalizedContent[index]
       result += nextChar
-      isLineStart = nextChar === '\n'
       index += 1
       continue
     }
@@ -130,8 +94,7 @@ export function encodeRawMarkdownHtmlForRichEditor(content: string): string {
         tickCount += 1
       }
 
-      // Why: the closing backtick sequence must be exactly tickCount backticks,
-      // not a longer run. We scan forward to find the first exact match.
+      // CommonMark closes inline code only on an exact-length backtick run.
       let searchFrom = index + tickCount
       let closingIndex = -1
       while (searchFrom < normalizedContent.length) {
@@ -139,7 +102,6 @@ export function encodeRawMarkdownHtmlForRichEditor(content: string): string {
         if (candidate === -1) {
           break
         }
-        // Verify the match is exactly tickCount backticks (no extra backtick before/after)
         if (
           (candidate === 0 || normalizedContent[candidate - 1] !== '`') &&
           normalizedContent[candidate + tickCount] !== '`'
@@ -153,64 +115,85 @@ export function encodeRawMarkdownHtmlForRichEditor(content: string): string {
       if (closingIndex !== -1) {
         const rawSpan = normalizedContent.slice(index, closingIndex + tickCount)
         result += rawSpan
-        isLineStart = rawSpan.endsWith('\n')
         index = closingIndex + tickCount
         continue
       }
     }
 
     if (isLineStart) {
-      const detailsHtml = matchDetailsHtmlBlock(normalizedContent, index)
+      const detailsHtml = matchDetails(index)
       if (detailsHtml && isEditableDetailsHtmlBlock(detailsHtml)) {
-        // Why: <details>/<summary> is an editable rich-mode node; raw passthrough
-        // would make toggle blocks reopen as inert HTML instead.
+        // Editable details/summary nodes must bypass raw passthrough or reopen as inert HTML.
         result += detailsHtml.raw
         index += detailsHtml.raw.length
         continue
       }
 
       if (detailsHtml) {
-        result += createPlaceholder('block', detailsHtml.raw)
+        result += transport.create('block-html', detailsHtml.raw)
         index += detailsHtml.raw.length
         continue
       }
 
       const blockHtml = matchBlockHtml(normalizedContent, index)
       if (blockHtml) {
-        result += createPlaceholder('block', blockHtml)
+        result += transport.create('block-html', blockHtml)
         index += blockHtml.length
         continue
       }
     }
 
+    // Keep authored random-envelope prefixes literal, including after edits and in HTML-free documents.
+    if (normalizedContent.startsWith(transport.authoredPrefix, index)) {
+      const authoredEnd = normalizedContent.indexOf(']]', index + transport.authoredPrefix.length)
+      const authoredOccurrence =
+        authoredEnd === -1
+          ? transport.authoredPrefix
+          : normalizedContent.slice(index, authoredEnd + 2)
+      result += transport.create('literal', authoredOccurrence)
+      index += authoredOccurrence.length
+      continue
+    }
+
     if (normalizedContent[index] === '<' && !isEscaped(normalizedContent, index)) {
-      const inlineHtml = matchInlineHtml(normalizedContent.slice(index))
+      if (htmlSuperscriptLinks) {
+        const superscriptLink = matchHtmlSuperscriptLinkSource(normalizedContent, index)
+        if (superscriptLink) {
+          result += transport.create('html-superscript-link', JSON.stringify(superscriptLink.value))
+          index = superscriptLink.end
+          continue
+        }
+      }
+      // An unterminated comment cannot match; later tags must still be encoded.
+      const inlineHtml =
+        normalizedContent.startsWith('<!--', index) && index + 4 > lastCommentClose
+          ? null
+          : (normalizedContent.slice(index).match(INLINE_HTML_PATTERN)?.[0] ?? null)
       if (inlineHtml) {
-        result += createPlaceholder('inline', inlineHtml)
+        result += transport.create('inline-html', inlineHtml)
         index += inlineHtml.length
         continue
       }
     }
 
-    // Why: doc link encoding runs inside the same while loop (not a separate
-    // pre-pass) so that fenced code blocks and backtick code spans are already
-    // skipped by the guards above. The [[ORCA_ prefix check prevents re-encoding
-    // sibling placeholders that were already emitted earlier in this pass.
+    // Encode document links only after excluding fenced and inline code from semantic preprocessing.
     if (
       normalizedContent[index] === '[' &&
       normalizedContent[index + 1] === '[' &&
-      !normalizedContent.startsWith('[[ORCA_', index) &&
       !isEscaped(normalizedContent, index)
     ) {
-      const closingIndex = normalizedContent.indexOf(']]', index + 2)
+      if (nextDocLinkClose !== -1 && nextDocLinkClose < index + 2) {
+        nextDocLinkClose = normalizedContent.indexOf(']]', index + 2)
+      }
+      const closingIndex = nextDocLinkClose
       if (closingIndex !== -1) {
         const rawTarget = normalizedContent.slice(index + 2, closingIndex)
         const link = parseMarkdownDocLink(rawTarget)
-        if (link) {
-          result += `${DOC_LINK_PLACEHOLDER_PREFIX}${formatMarkdownDocLinkBody(
-            link.target,
-            link.alias
-          )}${PLACEHOLDER_SUFFIX}`
+        if (link && !isReservedRichMarkdownTransportBody(rawTarget)) {
+          result += transport.create(
+            'document-link',
+            formatMarkdownDocLinkBody(link.target, link.alias)
+          )
           index = closingIndex + 2
           continue
         }
@@ -219,136 +202,8 @@ export function encodeRawMarkdownHtmlForRichEditor(content: string): string {
 
     const nextChar = normalizedContent[index]
     result += nextChar
-    isLineStart = nextChar === '\n'
     index += 1
   }
 
   return result
 }
-
-export const RawMarkdownHtmlInline = Node.create({
-  name: 'rawMarkdownHtmlInline',
-  inline: true,
-  group: 'inline',
-  atom: true,
-  selectable: true,
-
-  addAttributes() {
-    return {
-      value: {
-        default: ''
-      }
-    }
-  },
-
-  // Why: converting embedded HTML tags into placeholder tokens before the
-  // markdown parser runs keeps marked's built-in paragraph tokenization intact
-  // while still letting Orca round-trip the raw markup verbatim.
-  markdownTokenName: 'rawMarkdownHtmlInline',
-  markdownTokenizer: {
-    name: 'rawMarkdownHtmlInline',
-    level: 'inline',
-    start: INLINE_PLACEHOLDER_PREFIX,
-    tokenize(src) {
-      const matched = matchPlaceholder(src, 'inline')
-      if (!matched) {
-        return undefined
-      }
-
-      return {
-        type: 'rawMarkdownHtmlInline',
-        raw: matched.placeholder,
-        text: matched.value
-      }
-    }
-  },
-  parseMarkdown: (token, helpers) => {
-    if (token.type !== 'rawMarkdownHtmlInline') {
-      return []
-    }
-
-    return helpers.createNode('rawMarkdownHtmlInline', {
-      value: typeof token.text === 'string' ? token.text : ''
-    })
-  },
-  renderMarkdown: (node) => (typeof node.attrs?.value === 'string' ? node.attrs.value : ''),
-
-  parseHTML() {
-    return [{ tag: 'span[data-raw-markdown-html-inline]' }]
-  },
-
-  renderHTML({ HTMLAttributes, node }) {
-    const value = typeof node.attrs.value === 'string' ? node.attrs.value : ''
-    return [
-      'span',
-      mergeAttributes(HTMLAttributes, {
-        'data-raw-markdown-html-inline': '',
-        contenteditable: 'false',
-        class: 'raw-markdown-html-inline'
-      }),
-      value
-    ]
-  }
-})
-
-export const RawMarkdownHtmlBlock = Node.create({
-  name: 'rawMarkdownHtmlBlock',
-  group: 'block',
-  atom: true,
-  selectable: true,
-
-  addAttributes() {
-    return {
-      value: {
-        default: ''
-      }
-    }
-  },
-
-  markdownTokenName: 'rawMarkdownHtmlBlock',
-  markdownTokenizer: {
-    name: 'rawMarkdownHtmlBlock',
-    level: 'block',
-    start: BLOCK_PLACEHOLDER_PREFIX,
-    tokenize(src) {
-      const matched = matchPlaceholder(src, 'block')
-      if (!matched) {
-        return undefined
-      }
-
-      return {
-        type: 'rawMarkdownHtmlBlock',
-        raw: matched.placeholder,
-        text: matched.value,
-        block: true
-      }
-    }
-  },
-  parseMarkdown: (token, helpers) => {
-    if (token.type !== 'rawMarkdownHtmlBlock') {
-      return []
-    }
-
-    return helpers.createNode('rawMarkdownHtmlBlock', {
-      value: typeof token.text === 'string' ? token.text : ''
-    })
-  },
-  renderMarkdown: (node) => (typeof node.attrs?.value === 'string' ? node.attrs.value : ''),
-
-  parseHTML() {
-    return [{ tag: 'div[data-raw-markdown-html-block]' }]
-  },
-
-  renderHTML({ HTMLAttributes, node }) {
-    const value = typeof node.attrs.value === 'string' ? node.attrs.value : ''
-    return [
-      'div',
-      mergeAttributes(HTMLAttributes, {
-        'data-raw-markdown-html-block': '',
-        contenteditable: 'false',
-        class: 'raw-markdown-html-block'
-      }),
-      ['pre', value]
-    ]
-  }
-})

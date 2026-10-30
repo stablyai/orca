@@ -1,4 +1,13 @@
 import { useRef, useCallback } from 'react'
+import { openMicrophoneCaptureStream } from '@/components/dictation/microphone-devices'
+import {
+  DEFAULT_DICTATION_METER,
+  analyzeDictationAudioChunk,
+  createDictationMeterAnalyzerState,
+  dictationMeterStatesEqual,
+  toPublicDictationMeterState,
+  type DictationMeterState
+} from '../../../shared/dictation-audio-meter'
 
 type BufferedAudioChunk = {
   samples: Float32Array
@@ -9,6 +18,16 @@ type BufferedAudioChunk = {
 type StartAudioCaptureOptions = {
   bufferAudio?: boolean
   sessionId?: string
+  /** null/undefined = system default input device */
+  microphoneDeviceId?: string | null
+  /** Cached label, used to re-resolve a device whose id was re-salted */
+  microphoneDeviceLabel?: string | null
+  /** Fires when the live input device disappears mid-capture */
+  onCaptureLost?: () => void
+}
+
+export type StartAudioCaptureResult = {
+  fellBackToDefaultMicrophone: boolean
 }
 
 type StopAudioCaptureOptions = {
@@ -17,8 +36,11 @@ type StopAudioCaptureOptions = {
 
 const MAX_BUFFERED_AUDIO_SECONDS = 30
 const MAX_BUFFERED_AUDIO_BYTES = 8 * 1024 * 1024
+const METER_PUBLISH_INTERVAL_MS = 1000 / 15
 
-export function useAudioCapture() {
+type DictationMeterPublisher = (meter: DictationMeterState) => void
+
+export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
   const streamRef = useRef<MediaStream | null>(null)
   const contextRef = useRef<AudioContext | null>(null)
   const processorRef = useRef<ScriptProcessorNode | null>(null)
@@ -32,8 +54,16 @@ export function useAudioCapture() {
   const bufferedAudioSecondsRef = useRef(0)
   const capturedChunkCountRef = useRef(0)
   const sessionIdRef = useRef('desktop')
+  const trackLostCleanupRef = useRef<(() => void) | null>(null)
+  const meterAnalyzerRef = useRef<ReturnType<typeof createDictationMeterAnalyzerState>>(undefined!)
+  meterAnalyzerRef.current ??= createDictationMeterAnalyzerState()
+  const publishedMeterRef = useRef(DEFAULT_DICTATION_METER)
+  const lastMeterPublishedAtRef = useRef(Number.NEGATIVE_INFINITY)
 
   const cleanupCaptureResources = useCallback(() => {
+    trackLostCleanupRef.current?.()
+    trackLostCleanupRef.current = null
+
     processorRef.current?.disconnect()
     sourceRef.current?.disconnect()
     processorRef.current = null
@@ -55,6 +85,13 @@ export function useAudioCapture() {
     bufferedAudioSecondsRef.current = 0
   }, [])
 
+  const resetMeter = useCallback(() => {
+    meterAnalyzerRef.current = createDictationMeterAnalyzerState()
+    publishedMeterRef.current = DEFAULT_DICTATION_METER
+    lastMeterPublishedAtRef.current = Number.NEGATIVE_INFINITY
+    publishMeter?.(DEFAULT_DICTATION_METER)
+  }, [publishMeter])
+
   const removeOldestBufferedAudioChunk = useCallback(() => {
     const chunk = bufferedAudioRef.current.shift()
     if (!chunk) {
@@ -70,8 +107,7 @@ export function useAudioCapture() {
       bufferedAudioBytesRef.current += chunk.samples.byteLength
       bufferedAudioSecondsRef.current += chunk.samples.length / chunk.sampleRate
 
-      // Why: worker/model startup can hang; keep only a bounded recent window
-      // so renderer memory cannot grow forever while buffering is enabled.
+      // Bound recent buffering while worker/model startup hangs to prevent unlimited renderer memory growth.
       while (
         bufferedAudioRef.current.length > 0 &&
         (bufferedAudioBytesRef.current > MAX_BUFFERED_AUDIO_BYTES ||
@@ -84,7 +120,9 @@ export function useAudioCapture() {
   )
 
   const start = useCallback(
-    async (options: StartAudioCaptureOptions = {}) => {
+    async (
+      options: StartAudioCaptureOptions = {}
+    ): Promise<StartAudioCaptureResult | undefined> => {
       if (isCapturingRef.current) {
         return
       }
@@ -95,14 +133,15 @@ export function useAudioCapture() {
       bufferAudioRef.current = options.bufferAudio ?? false
       resetBufferedAudio()
       capturedChunkCountRef.current = 0
+      resetMeter()
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        }
+      const { stream, fellBackToDefaultMicrophone } = await openMicrophoneCaptureStream({
+        preferredDeviceId: options.microphoneDeviceId,
+        preferredDeviceLabel: options.microphoneDeviceLabel,
+        getUserMedia: (constraints) => navigator.mediaDevices.getUserMedia(constraints),
+        enumerateDevices: navigator.mediaDevices?.enumerateDevices
+          ? () => navigator.mediaDevices.enumerateDevices()
+          : undefined
       })
       if (startRequestRef.current !== startRequest) {
         stream.getTracks().forEach((track) => track.stop())
@@ -114,14 +153,11 @@ export function useAudioCapture() {
       let source: MediaStreamAudioSourceNode | null = null
       let processor: ScriptProcessorNode | null = null
       try {
-        // Why: requesting a specific sampleRate (e.g. 16kHz) in the AudioContext
-        // can produce silence on macOS because the hardware mic runs at 44.1/48kHz.
-        // Use the system default rate and let sherpa-onnx resample internally.
+        // Use hardware sample rate and let sherpa resample; forcing 16kHz can produce macOS microphone silence.
         context = new AudioContext()
         contextRef.current = context
 
-        // Why: some Chromium builds suspend the AudioContext until a user gesture.
-        // Resume it explicitly to ensure audio processing starts.
+        // Explicitly resume AudioContext because Chromium may suspend it pending a user gesture.
         if (context.state === 'suspended') {
           await context.resume()
         }
@@ -141,10 +177,7 @@ export function useAudioCapture() {
 
         source = context.createMediaStreamSource(stream)
 
-        // Why: ScriptProcessorNode is deprecated but AudioWorklet requires a
-        // separate module file which complicates the Vite build pipeline. For
-        // the initial implementation, ScriptProcessorNode is simpler and the
-        // performance difference is negligible for speech capture.
+        // ScriptProcessorNode avoids a separate AudioWorklet module in the Vite build.
         processor = context.createScriptProcessor(4096, 1, 1)
 
         const actualRate = context.sampleRate
@@ -158,6 +191,23 @@ export function useAudioCapture() {
             return
           }
           const samples = new Float32Array(e.inputBuffer.getChannelData(0))
+          const now = performance.now()
+          meterAnalyzerRef.current = analyzeDictationAudioChunk(
+            samples,
+            now,
+            meterAnalyzerRef.current
+          )
+          if (
+            !document.hidden &&
+            now - lastMeterPublishedAtRef.current >= METER_PUBLISH_INTERVAL_MS
+          ) {
+            lastMeterPublishedAtRef.current = now
+            const meter = toPublicDictationMeterState(meterAnalyzerRef.current)
+            if (!dictationMeterStatesEqual(publishedMeterRef.current, meter)) {
+              publishedMeterRef.current = meter
+              publishMeter?.(meter)
+            }
+          }
           capturedChunkCountRef.current += 1
           if (bufferAudioRef.current) {
             appendBufferedAudioChunk({
@@ -178,6 +228,23 @@ export function useAudioCapture() {
         processorRef.current = processor
         sourceRef.current = source
         isCapturingRef.current = true
+
+        // Device loss ends the track but leaves zero-filled processing alive; stop capture so dictation cannot appear healthy.
+        const onCaptureLost = options.onCaptureLost
+        const audioTrack = stream.getAudioTracks()[0]
+        if (onCaptureLost && audioTrack) {
+          const handleTrackEnded = (): void => {
+            if (startRequestRef.current !== startRequest || !isCapturingRef.current) {
+              return
+            }
+            onCaptureLost()
+          }
+          audioTrack.addEventListener('ended', handleTrackEnded)
+          trackLostCleanupRef.current = () => {
+            audioTrack.removeEventListener('ended', handleTrackEnded)
+          }
+        }
+        return { fellBackToDefaultMicrophone }
       } catch (err) {
         processor?.disconnect()
         source?.disconnect()
@@ -207,14 +274,19 @@ export function useAudioCapture() {
         throw err
       }
     },
-    [appendBufferedAudioChunk, cleanupCaptureResources, resetBufferedAudio]
+    [
+      appendBufferedAudioChunk,
+      cleanupCaptureResources,
+      publishMeter,
+      resetBufferedAudio,
+      resetMeter
+    ]
   )
 
   const flushBufferedAudio = useCallback(async () => {
     const flushGeneration = bufferedAudioGenerationRef.current
     try {
-      // Why: keep buffering enabled while draining so live audio appends behind
-      // startup audio instead of overtaking it through direct IPC sends.
+      // Keep buffering through drain so live samples queue behind startup audio instead of overtaking it.
       while (
         bufferedAudioGenerationRef.current === flushGeneration &&
         bufferedAudioRef.current.length > 0
@@ -250,8 +322,9 @@ export function useAudioCapture() {
         resetBufferedAudio()
       }
       cleanupCaptureResources()
+      resetMeter()
     },
-    [cleanupCaptureResources, resetBufferedAudio]
+    [cleanupCaptureResources, resetBufferedAudio, resetMeter]
   )
 
   return {

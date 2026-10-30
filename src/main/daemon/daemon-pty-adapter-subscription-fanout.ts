@@ -1,0 +1,101 @@
+import type { PtyBackgroundStreamEvent } from '../providers/pty-provider-contract'
+import { combineUnsubscribes } from './combine-unsubscribes'
+import type { DaemonPtyAdapter } from './daemon-pty-adapter'
+import type { DaemonPtyRouterDataEvent, DaemonPtyRouterExitEvent } from './daemon-pty-router-events'
+
+export class DaemonPtyAdapterSubscriptionFanout {
+  private unsubscribers: (() => void)[] = []
+  private readonly adapterUnsubscribers = new Map<DaemonPtyAdapter, (() => void)[]>()
+  private dataListeners: ((payload: DaemonPtyRouterDataEvent) => void)[] = []
+  private exitListeners: ((payload: DaemonPtyRouterExitEvent) => void)[] = []
+
+  private readonly adapters: DaemonPtyAdapter[]
+
+  constructor(
+    adapters: readonly DaemonPtyAdapter[],
+    onAdapterExit: (id: string, adapter: DaemonPtyAdapter) => void,
+    onAdapterIdentityChanged?: (adapter: DaemonPtyAdapter) => void
+  ) {
+    this.adapters = [...adapters]
+    for (const adapter of this.adapters) {
+      const unsubscribers = [
+        adapter.onData((payload) => {
+          for (const listener of this.dataListeners) {
+            listener(payload)
+          }
+        }),
+        adapter.onExit((payload) => {
+          onAdapterExit(payload.id, adapter)
+          for (const listener of this.exitListeners) {
+            listener(payload)
+          }
+        }),
+        ...(onAdapterIdentityChanged && typeof adapter.onDaemonIdentityChanged === 'function'
+          ? [adapter.onDaemonIdentityChanged(() => onAdapterIdentityChanged(adapter))]
+          : [])
+      ]
+      this.adapterUnsubscribers.set(adapter, unsubscribers)
+      this.unsubscribers.push(...unsubscribers)
+    }
+  }
+
+  dropAdapter(adapter: DaemonPtyAdapter): void {
+    const index = this.adapters.indexOf(adapter)
+    if (index !== -1) {
+      this.adapters.splice(index, 1)
+    }
+    const unsubscribers = this.adapterUnsubscribers.get(adapter)
+    if (!unsubscribers) {
+      return
+    }
+    this.adapterUnsubscribers.delete(adapter)
+    for (const unsubscribe of unsubscribers) {
+      unsubscribe()
+      const listed = this.unsubscribers.indexOf(unsubscribe)
+      if (listed !== -1) {
+        this.unsubscribers.splice(listed, 1)
+      }
+    }
+  }
+
+  onData(callback: (payload: DaemonPtyRouterDataEvent) => void): () => void {
+    this.dataListeners.push(callback)
+    return () => {
+      const index = this.dataListeners.indexOf(callback)
+      if (index !== -1) {
+        this.dataListeners.splice(index, 1)
+      }
+    }
+  }
+
+  onBackgroundStreamEvent(callback: (payload: PtyBackgroundStreamEvent) => void): () => void {
+    return combineUnsubscribes(
+      this.adapters.map((adapter) => adapter.onBackgroundStreamEvent(callback))
+    )
+  }
+
+  // Main subscribes through the router; forward recovery for passive sibling panes too.
+  onWriteUnavailable(callback: (payload: { id: string }) => void): () => void {
+    return combineUnsubscribes(this.adapters.map((adapter) => adapter.onWriteUnavailable(callback)))
+  }
+
+  onReplay(_callback: (payload: { id: string; data: string }) => void): () => void {
+    return () => {}
+  }
+
+  onExit(callback: (payload: DaemonPtyRouterExitEvent) => void): () => void {
+    this.exitListeners.push(callback)
+    return () => {
+      const index = this.exitListeners.indexOf(callback)
+      if (index !== -1) {
+        this.exitListeners.splice(index, 1)
+      }
+    }
+  }
+
+  dispose(): void {
+    for (const unsubscribe of this.unsubscribers.splice(0)) {
+      unsubscribe()
+    }
+  }
+}

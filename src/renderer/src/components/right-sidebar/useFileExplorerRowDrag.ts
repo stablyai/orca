@@ -60,8 +60,7 @@ export function useFileExplorerRowDrag({
 
   const setRowDragNode = useCallback(
     (node: HTMLButtonElement | null): void => {
-      // Why: delayed drag-expand timers target this row; unmounting the row
-      // makes those timers stale even if the browser skips dragleave.
+      // Detach invalidates row-owned expand timers even if dragleave never fires.
       if (node === null) {
         clearExpandTimer()
         clearNativeExpandTimer()
@@ -70,14 +69,13 @@ export function useFileExplorerRowDrag({
     [clearExpandTimer, clearNativeExpandTimer]
   )
 
+  // OS file dragover and drop are taken by the explorer root's owner before rows see them.
   const handleDragOver = useCallback((e: React.DragEvent) => {
-    const isInternal = e.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME)
-    const isNative = e.dataTransfer.types.includes('Files')
-    if (!isInternal && !isNative) {
+    if (!e.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME)) {
       return
     }
     e.preventDefault()
-    e.dataTransfer.dropEffect = isInternal ? 'move' : 'copy'
+    e.dataTransfer.dropEffect = 'move'
   }, [])
 
   const handleDragEnter = useCallback(
@@ -102,13 +100,8 @@ export function useFileExplorerRowDrag({
         }
       } else {
         nativeDragCounterRef.current += 1
-        // Why: only directories should claim themselves as native drop targets.
-        // A file row's parent dir (rowDropDir) would highlight every sibling,
-        // which is misleading when the user is aiming for a specific folder.
-        // Clearing the target for files lets the root container's subtle
-        // bg-border indicate the fallback drop zone instead.
+        // Only directories claim row highlights; file-parent targets would highlight every sibling, so use the root fallback instead.
         onNativeDragTargetChange(isDirectory ? rowDropDir : null)
-        // Reuse the same auto-expand delay for native drags over directories
         if (nativeDragCounterRef.current === 1 && isDirectory && !isExpanded) {
           clearNativeExpandTimer()
           nativeExpandTimerRef.current = setTimeout(() => {
@@ -140,16 +133,12 @@ export function useFileExplorerRowDrag({
         dragCounterRef.current = 0
         clearExpandTimer()
       }
-      // Decrement both counters since we cannot inspect types on dragleave
-      // (dataTransfer.types is empty in some browsers during dragleave).
-      // The clamp-to-zero prevents negative drift.
+      // Some browsers clear types on dragleave; decrement both counters and clamp against drift.
       nativeDragCounterRef.current -= 1
       if (nativeDragCounterRef.current <= 0) {
         nativeDragCounterRef.current = 0
         clearNativeExpandTimer()
-        // Why: clear stale row highlight so moving from a row to the root
-        // background (which has no row-level nativeDragTargetChange) does not
-        // leave the previous row visually highlighted.
+        // Moving to the root background emits no row target update; clear the old highlight here.
         onNativeDragTargetChange(null)
       }
     },
@@ -174,8 +163,6 @@ export function useFileExplorerRowDrag({
       for (const sourcePath of dragPaths.paths) {
         onMoveDrop(sourcePath, rowDropDir)
       }
-      // Why: native Files drops are handled by the preload-relayed IPC event,
-      // not the React drop handler. We only clear visual state here.
     },
     [
       rowDropDir,

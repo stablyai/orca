@@ -1,0 +1,88 @@
+import type { ITerminalInitOnlyOptions, ITerminalOptions, ITheme } from '@xterm/xterm'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
+import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
+import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-height-settings'
+import {
+  buildDefaultTerminalOptions,
+  normalizeTerminalFastScrollSensitivity,
+  normalizeTerminalScrollSensitivity,
+  resolveTerminalCursorInactiveStyle
+} from '@/lib/pane-manager/pane-terminal-options'
+import { buildLocalConptyTerminalOptions } from '@/lib/pane-manager/windows-pty-compatibility'
+import { buildFontFamily } from '@/lib/monospace-font-family'
+import { resolveTerminalMinimumContrastRatio } from '../../../../shared/terminal-contrast-correction'
+
+/** Options a live settings change can write onto an open preview terminal. */
+export function buildPreviewAppearanceOptions(
+  settings: GlobalSettings | null,
+  macOptionIsMeta: boolean
+): Partial<ITerminalOptions> {
+  const cursorStyle = settings?.terminalCursorStyle ?? 'block'
+  const fontWeights = resolveTerminalFontWeights(
+    settings?.terminalFontWeight,
+    settings?.terminalFontWeightBold
+  )
+  return {
+    fontSize: settings?.terminalFontSize ?? 14,
+    fontFamily: buildFontFamily(settings?.terminalFontFamily ?? ''),
+    fontWeight: fontWeights.fontWeight,
+    fontWeightBold: fontWeights.fontWeightBold,
+    cursorStyle,
+    cursorInactiveStyle: resolveTerminalCursorInactiveStyle(cursorStyle),
+    cursorBlink: settings?.terminalCursorBlink ?? true,
+    scrollSensitivity: normalizeTerminalScrollSensitivity(settings?.terminalScrollSensitivity),
+    fastScrollSensitivity: normalizeTerminalFastScrollSensitivity(
+      settings?.terminalFastScrollSensitivity
+    ),
+    lineHeight: normalizeTerminalLineHeight(settings?.terminalLineHeight),
+    wordSeparator: settings?.terminalWordSeparator,
+    // Why only 'true': 'left'/'right' are handled by the keydown policy, which needs Option composable at the xterm level.
+    macOptionIsMeta,
+    // Why: xterm renders an alpha background opaque unless transparency is on (matches applyTerminalAppearance).
+    allowTransparency:
+      settings?.terminalBackgroundOpacity !== undefined && settings.terminalBackgroundOpacity < 1
+  }
+}
+
+// Why: local ConPTY CLIs read the advertisement but can't decode CSI-u (#2434); mirror the pane's withhold.
+export function previewAdvertisesKittyKeyboard(
+  terminalInput: DashboardCardTerminalInput | null
+): boolean {
+  return !terminalInput || terminalInput.kittyKeyboardAdvertised
+}
+
+/** Match pane negotiation and appearance while limiting scrollback to the short history main serializes. */
+export function buildPreviewTerminalOptions(args: {
+  settings: GlobalSettings | null
+  terminalInput: DashboardCardTerminalInput | null
+  macOptionIsMeta: boolean
+  theme: ITheme | null
+  themeMode: 'dark' | 'light'
+  cols: number
+  rows: number
+  scrollback: number
+}): ITerminalOptions & ITerminalInitOnlyOptions {
+  const hostCompatibility: Partial<ITerminalOptions> = {
+    ...(args.terminalInput?.localWindowsConpty
+      ? buildLocalConptyTerminalOptions(args.terminalInput.osRelease)
+      : {}),
+    ...(previewAdvertisesKittyKeyboard(args.terminalInput)
+      ? {}
+      : { vtExtensions: { kittyKeyboard: false } })
+  }
+  return {
+    ...buildDefaultTerminalOptions(),
+    ...buildPreviewAppearanceOptions(args.settings, args.macOptionIsMeta),
+    ...hostCompatibility,
+    cols: args.cols,
+    rows: args.rows,
+    scrollback: args.scrollback,
+    theme: args.theme ?? undefined,
+    minimumContrastRatio: resolveTerminalMinimumContrastRatio(
+      args.theme?.background,
+      args.themeMode,
+      args.settings?.terminalMinimumContrastRatio
+    )
+  }
+}

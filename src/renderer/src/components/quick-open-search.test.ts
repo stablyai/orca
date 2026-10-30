@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  QuickOpenPathRanker,
   QUICK_OPEN_QUERY_MAX_BYTES,
   QUICK_OPEN_RESULT_LIMIT,
   isQuickOpenQueryTooLarge,
@@ -9,11 +10,79 @@ import {
 } from './quick-open-search'
 
 describe('quick-open-search', () => {
-  it('returns the first 50 paths with score 0 for an empty query', () => {
-    const files = Array.from({ length: 75 }, (_, index) => `src/file-${index}.ts`)
+  it('ranks each keystroke of a typed query exactly as a fresh full ranking would', () => {
+    const segments = ['src', 'native-chat', 'Quick_Open', 'renderer', 'ΑΣΑ', 'my dir', 'a-b_c']
+    const names = [
+      'index.ts',
+      'NativeChatComposer.tsx',
+      'quick-open-search.ts',
+      'read_me.md',
+      'ας.txt'
+    ]
+    const paths: string[] = []
+    for (let index = 0; index < 3000; index++) {
+      const depth = 1 + (index % 3)
+      const dirs = Array.from(
+        { length: depth },
+        (_, d) => segments[(index * (d + 3)) % segments.length]
+      )
+      paths.push(
+        [...dirs, `${index % 7}-${names[index % names.length]}`].join(index % 11 ? '/' : '\\')
+      )
+    }
+    const files = prepareQuickOpenFiles(paths)
+    const typed = ['native chat comp', 'Quick-open\\se', 'qo_s', 'ΑΣ', 'ΑΣΑ', 'a b c', 'src/re']
+    for (const query of typed) {
+      const steps = [
+        ...Array.from(query, (_, end) => query.slice(0, end + 1)),
+        query.slice(0, 2),
+        query
+      ]
+      for (const step of steps) {
+        expect(rankQuickOpenFiles(step, files)).toEqual(rankQuickOpenFiles(step, [...files]))
+      }
+    }
+  })
+
+  it('finds and retains a target after 100k non-matches without retaining the inventory', () => {
+    const ranker = new QuickOpenPathRanker('sta-4354-tail-target', 32)
+    for (let index = 0; index < 100_100; index++) {
+      ranker.consider(`data/chunk-${String(index).padStart(6, '0')}/payload.bin`)
+    }
+    ranker.consider('src/sta-4354-tail-target.ts')
+
+    expect(ranker.result()).toEqual({
+      paths: ['src/sta-4354-tail-target.ts'],
+      totalCount: 1
+    })
+  })
+  it('orders numbered paths naturally for empty queries and fuzzy-score ties', () => {
+    const files = prepareQuickOpenFiles([
+      'songs/100 - b.txt',
+      'songs/9 - c.txt',
+      'songs/99 - a.txt'
+    ])
+
+    expect(rankQuickOpenFiles('', files).map((item) => item.path)).toEqual([
+      'songs/9 - c.txt',
+      'songs/99 - a.txt',
+      'songs/100 - b.txt'
+    ])
+    expect(rankQuickOpenFiles('songs', files).map((item) => item.path)).toEqual([
+      'songs/9 - c.txt',
+      'songs/99 - a.txt',
+      'songs/100 - b.txt'
+    ])
+  })
+
+  it('returns the first 50 naturally sorted paths with score 0 for an empty query', () => {
+    const files = Array.from({ length: 75 }, (_, index) => `src/file-${74 - index}.ts`)
 
     expect(rankQuickOpenFiles('', prepareQuickOpenFiles(files))).toEqual(
-      files.slice(0, QUICK_OPEN_RESULT_LIMIT).map((path) => ({ path, score: 0 }))
+      Array.from({ length: QUICK_OPEN_RESULT_LIMIT }, (_, index) => ({
+        path: `src/file-${index}.ts`,
+        score: 0
+      }))
     )
   })
 
@@ -35,8 +104,8 @@ describe('quick-open-search', () => {
     ).toEqual(['src/components/Button.tsx', 'button-area/deep/path/file.tsx'])
   })
 
-  it('keeps first-seen order for tie-heavy results at the limit boundary', () => {
-    const files = Array.from({ length: 10 }, (_, index) => `src/path-${index}.bin`)
+  it('uses natural order for tie-heavy results at the limit boundary', () => {
+    const files = Array.from({ length: 10 }, (_, index) => `src/path-${9 - index}.bin`)
 
     expect(rankQuickOpenFiles('s', prepareQuickOpenFiles(files), 4)).toEqual([
       { path: 'src/path-0.bin', score: 0 },
@@ -85,9 +154,9 @@ describe('quick-open-search', () => {
   it('indexes normalized relative paths without changing path semantics', () => {
     const files = [
       'src/renderer/src/components/QuickOpen.tsx',
+      'legacy\\provider\\raw-path.ts',
       'packages/windows-origin/src/App.tsx',
-      'single-file.ts',
-      'legacy\\provider\\raw-path.ts'
+      'single-file.ts'
     ]
 
     expect(prepareQuickOpenFiles(files)).toEqual([
@@ -98,21 +167,21 @@ describe('quick-open-search', () => {
         inputIndex: 0
       },
       {
+        path: 'legacy\\provider\\raw-path.ts',
+        lowerPath: 'legacy/provider/raw-path.ts',
+        lowerFilename: 'raw-path.ts',
+        inputIndex: 1
+      },
+      {
         path: 'packages/windows-origin/src/App.tsx',
         lowerPath: 'packages/windows-origin/src/app.tsx',
         lowerFilename: 'app.tsx',
-        inputIndex: 1
+        inputIndex: 2
       },
       {
         path: 'single-file.ts',
         lowerPath: 'single-file.ts',
         lowerFilename: 'single-file.ts',
-        inputIndex: 2
-      },
-      {
-        path: 'legacy\\provider\\raw-path.ts',
-        lowerPath: 'legacy/provider/raw-path.ts',
-        lowerFilename: 'raw-path.ts',
         inputIndex: 3
       }
     ])
@@ -163,4 +232,124 @@ describe('quick-open-search', () => {
       'src/components/ButtonGroup.tsx'
     ])
   })
+})
+
+it('matches independent unique terms in either order in streaming and indexed searches', () => {
+  const paths = ['apps/api/.env', 'apps/web/.env', 'apps/api/server.ts']
+  const indexed = prepareQuickOpenFiles(paths)
+  const expected = rankQuickOpenFiles('.env api', indexed)
+  expect(expected.map((item) => item.path)).toEqual(['apps/api/.env'])
+  for (const query of ['api .env', '  API\t.env\napi  ']) {
+    expect(rankQuickOpenFiles(query, indexed)).toEqual(expected)
+    const ranker = new QuickOpenPathRanker(query, 50)
+    paths.forEach((path) => ranker.consider(path))
+    expect(ranker.result()).toEqual({ paths: ['apps/api/.env'], totalCount: 1 })
+  }
+})
+
+it('preserves every term in valid queries beyond 32 unique terms', () => {
+  const terms = Array.from({ length: 33 }, (_, i) => `a${i}`)
+  const path = `${terms.join('-')}.ts`
+  const query = terms.join(' ')
+  expect(query.length).toBe(121)
+  expect(path.length).toBe(124)
+  const indexed = prepareQuickOpenFiles([path, 'a0.ts'])
+  expect(rankQuickOpenFiles(query, indexed).map((item) => item.path)).toEqual([path])
+  const ranker = new QuickOpenPathRanker(query, 50)
+  ranker.consider(path)
+  expect(ranker.result().paths).toEqual([path])
+  expect(rankQuickOpenFiles(`${query} missing`, indexed)).toEqual([])
+  expect(rankQuickOpenFiles(Array(40).fill('a').join(' '), indexed)).toEqual(
+    rankQuickOpenFiles('a', indexed)
+  )
+})
+
+it.each([
+  ['user-profile', 'user/UserProfile/index.tsx'],
+  ['user-profile', 'user/UserProfile/components/views/index.tsx'],
+  ['product_detail', 'product/ProductDetail.ts'],
+  ['tab_bar_create_entry', 'tab-bar/TabBarCreateEntry.tsx'],
+  ['tab_bar_create_entry', 'tab-bar/TabBarCreateEntry/components/views/index.tsx']
+])('reconsiders separator alternatives for %s beneath an ancestor', (query, path) => {
+  expect(rankQuickOpenFiles(query, prepareQuickOpenFiles([path])).map((item) => item.path)).toEqual(
+    [path]
+  )
+  const ranker = new QuickOpenPathRanker(query, 50)
+  ranker.consider(path)
+  expect(ranker.result().paths).toEqual([path])
+})
+
+it('matches separator variants while preferring the separator typed', () => {
+  const paths = prepareQuickOpenFiles([
+    'src/product_detail.ts',
+    'src/product-detail.ts',
+    'src/ProductDetail.ts'
+  ])
+  expect(rankQuickOpenFiles('product-detail', paths).map((item) => item.path)).toEqual([
+    'src/product-detail.ts',
+    'src/product_detail.ts',
+    'src/ProductDetail.ts'
+  ])
+  expect(rankQuickOpenFiles('product_detail', paths).map((item) => item.path)).toEqual([
+    'src/product_detail.ts',
+    'src/product-detail.ts',
+    'src/ProductDetail.ts'
+  ])
+  expect(rankQuickOpenFiles('product detail', paths).map((item) => item.path)).toHaveLength(3)
+})
+
+it('retains legitimate negative-one scores', () => {
+  expect(rankQuickOpenFiles('ab', prepareQuickOpenFiles(['x/a1234b.txt']))).toEqual([
+    { path: 'x/a1234b.txt', score: -1 }
+  ])
+})
+
+it('bridges camel and acronym word boundaries for typed separators without matching flat words', () => {
+  const files = prepareQuickOpenFiles([
+    'src/ProductDetail.ts',
+    'src/productdetail.ts',
+    'src/HTTPServer.ts',
+    'src/Product Detail.ts'
+  ])
+  expect(
+    rankQuickOpenFiles('product_detail', files)
+      .map((item) => item.path)
+      .sort()
+  ).toEqual(['src/Product Detail.ts', 'src/ProductDetail.ts'])
+  expect(rankQuickOpenFiles('http-server', files).map((item) => item.path)).toEqual([
+    'src/HTTPServer.ts'
+  ])
+  expect(rankQuickOpenFiles('product-', files).map((item) => item.path)).toContain(
+    'src/ProductDetail.ts'
+  )
+})
+
+it('evaluates all terms up to the existing byte limit and rejects only oversized input', () => {
+  const terms = Array.from({ length: 350 }, (_, i) => `t${i}`)
+  const query = terms.join(' ')
+  const path = `${terms.join('/')}.ts`
+  expect(query.length).toBeLessThan(2048)
+  expect(rankQuickOpenFiles(query, prepareQuickOpenFiles([path])).map((item) => item.path)).toEqual(
+    [path]
+  )
+  expect(rankQuickOpenFiles(`${query} absent`, prepareQuickOpenFiles([path]))).toEqual([])
+  expect(rankQuickOpenFiles(`${query}${' '.repeat(2048)}`, prepareQuickOpenFiles([path]))).toEqual(
+    []
+  )
+})
+
+it.each([
+  ['abc-', 'abc.ts'],
+  ['bar-', 'foo-bar.ts'],
+  ['product_', 'productdetail.ts']
+])('requires a boundary after a trailing separator in %s', (query, path) => {
+  expect(rankQuickOpenFiles(query, prepareQuickOpenFiles([path]))).toEqual([])
+})
+
+it.each([
+  ['abc-', 'abc-file.ts'],
+  ['product_', 'ProductDetail.ts'],
+  ['http-', 'HTTPServer.ts']
+])('retains real trailing separator boundaries for %s', (query, path) => {
+  expect(rankQuickOpenFiles(query, prepareQuickOpenFiles([path]))).toHaveLength(1)
 })

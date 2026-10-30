@@ -1,56 +1,24 @@
-import { app, autoUpdater as nativeUpdater } from 'electron'
-import type { UpdateStatus } from '../shared/types'
+import { app } from 'electron'
 import {
-  consumeMacInstallGuardBypass,
-  deferMacQuitUntilInstallerReady,
-  handleMacInstallerReady,
   isMacInstallerReady,
-  isMacQuitAndInstallInFlight,
+  registerMacUpdaterEvents,
   resetMacInstallState
 } from './updater-mac-install'
 import { compareVersions } from './updater-fallback'
 import { fetchChangelog } from './updater-changelog'
-import type { ElectronAutoUpdater } from './electron-updater-loader'
+import type { UpdaterHandlerContext } from './updater-handler-context'
+import { recordUpdaterLifecycle } from './updater-lifecycle-diagnostics'
+import {
+  getRetainedLinuxPackageManualInstallStatus,
+  resolveLinuxPackageDownloadedStatus,
+  shouldIgnoreDownloadedUpdateEvent
+} from './linux-package-downloaded-status'
+import { isExternallyManagedLinuxInstall } from './linux-update-package-type'
+import * as linuxPackageRecovery from './linux-package-update-recovery'
+import { preExtractDownloadedAppImageUpdate } from './cli/appimage-copy-pre-extraction'
 
 const AUTO_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 const AUTO_UPDATE_RETRY_INTERVAL_MS = 60 * 60 * 1000
-
-type UpdaterHandlerContext = {
-  autoUpdater: ElectronAutoUpdater
-  clearBackgroundCheckLaunchPending: () => void
-  clearAvailableUpdateContext: () => void
-  consumeMissingManifestPrereleaseFallbackResult: () => { userInitiated: boolean } | null
-  getPublishingWindowLastGoodCheck: () => { lastGoodTag: string } | null
-  getMissingManifestPrereleaseFallbackUserInitiated: () => boolean | null
-  getCurrentStatus: () => UpdateStatus
-  getActiveUpdateCheckEventAttemptId: () => number | null
-  getKnownReleaseUrl: () => string | undefined
-  getPendingInstallVersion: () => string
-  getUserInitiatedCheck: () => boolean
-  hasNewerDownloadedVersion: () => boolean
-  shouldHandleUpdaterErrorEvent: () => boolean
-  clearUpdateAvailableEventPending: (attemptId: number | null) => void
-  isActiveUpdateCheckAttempt: (attemptId: number) => boolean
-  markUpdateCheckEventAttempt: () => boolean
-  markUpdateAvailableEventPending: (attemptId: number | null) => void
-  markMissingManifestPrereleaseFallbackChecking: () => void
-  performQuitAndInstall: () => void | Promise<void>
-  recordCompletedUpdateCheck: () => void
-  sendCheckFailureStatus: (
-    message: string,
-    userInitiated?: boolean,
-    source?: 'event' | 'promise' | 'fallback-promise',
-    sourceError?: unknown
-  ) => Promise<void>
-  sendErrorStatus: (message: string, userInitiated?: boolean) => void
-  sendStatus: (status: UpdateStatus) => void
-  scheduleAutomaticUpdateCheck: (delayMs: number) => void
-  shouldSuppressMissingManifestPrereleaseFallbackEvent: (message: string, error: unknown) => boolean
-  suppressMissingManifestPrereleaseFallbackPromiseFailure: (message: string) => void
-  setAvailableReleaseUrl: (releaseUrl: string | null) => void
-  setAvailableVersion: (version: string | null) => void
-  setUserInitiatedCheck: (value: boolean) => void
-}
 
 export function registerAutoUpdaterHandlers({
   autoUpdater,
@@ -64,7 +32,11 @@ export function registerAutoUpdaterHandlers({
   getKnownReleaseUrl,
   getPendingInstallVersion,
   getUserInitiatedCheck,
-  hasNewerDownloadedVersion,
+  handleQuitAndInstallFailure,
+  isQuitAndInstallHandoffActive,
+  hasInstallableDownloadedVersion,
+  isLocalBuildCheck,
+  isPinnedBuildCheck,
   shouldHandleUpdaterErrorEvent,
   clearUpdateAvailableEventPending,
   isActiveUpdateCheckAttempt,
@@ -72,7 +44,13 @@ export function registerAutoUpdaterHandlers({
   markUpdateAvailableEventPending,
   markMissingManifestPrereleaseFallbackChecking,
   performQuitAndInstall,
+  commitStagedMacInstall,
+  failMacStaging,
+  isAwaitingMacStaging,
+  isMacStagingDeferredToInstall,
+  shouldDeferMacQuitForInstall,
   recordCompletedUpdateCheck,
+  restoreReleaseUpdateSource,
   sendCheckFailureStatus,
   sendErrorStatus,
   sendStatus,
@@ -83,44 +61,16 @@ export function registerAutoUpdaterHandlers({
   setAvailableVersion,
   setUserInitiatedCheck
 }: UpdaterHandlerContext): void {
-  // On macOS, electron-updater's MacUpdater downloads the ZIP from GitHub,
-  // then serves it to Squirrel.Mac via a localhost proxy. The electron-updater
-  // 'update-downloaded' event fires BEFORE Squirrel finishes its download.
-  // Track Squirrel readiness so we don't show "ready to install" prematurely.
-  if (process.platform === 'darwin') {
-    nativeUpdater.on('update-downloaded', () => {
-      handleMacInstallerReady(hasNewerDownloadedVersion(), performQuitAndInstall, () => {
-        // If we were holding the 'downloaded' status, send it now — but only
-        // when the staged version is actually newer than what's running.
-        sendStatus({
-          state: 'downloaded',
-          version: getPendingInstallVersion(),
-          releaseUrl: getKnownReleaseUrl()
-        })
-      })
-    })
-  }
-
-  app.on('before-quit', (event) => {
-    if (consumeMacInstallGuardBypass() || isMacQuitAndInstallInFlight()) {
-      return
-    }
-
-    // On macOS the user can quit while Squirrel.Mac is still pulling the ZIP
-    // from electron-updater's localhost proxy. If we let that quit finish,
-    // autoInstallOnAppQuit has nothing staged to apply and the next launch
-    // comes back on the old version. Hold the quit, then resume install when
-    // nativeUpdater confirms ShipIt is actually ready.
-    if (
-      deferMacQuitUntilInstallerReady(
-        getCurrentStatus(),
-        hasNewerDownloadedVersion(),
-        getPendingInstallVersion,
-        sendStatus
-      )
-    ) {
-      event.preventDefault()
-    }
+  registerMacUpdaterEvents({
+    getCurrentStatus,
+    hasInstallableDownloadedVersion,
+    getPendingInstallVersion,
+    getKnownReleaseUrl,
+    performQuitAndInstall,
+    commitStagedMacInstall,
+    failMacStaging,
+    shouldDeferMacQuitForInstall,
+    sendStatus
   })
 
   autoUpdater.on('checking-for-update', () => {
@@ -142,18 +92,20 @@ export function registerAutoUpdaterHandlers({
       return
     }
     clearBackgroundCheckLaunchPending()
-    // --- synchronous preamble (runs before any await) ---
     const missingManifestFallback = consumeMissingManifestPrereleaseFallbackResult()
     const publishingWindowLastGoodCheck = getPublishingWindowLastGoodCheck()
     const wasUserInitiated = missingManifestFallback?.userInitiated ?? getUserInitiatedCheck()
     setUserInitiatedCheck(false)
 
-    // Guard: don't show an update that isn't actually newer than what's running.
-    if (compareVersions(info.version, app.getVersion()) <= 0) {
+    // Explicit local or pinned builds may downgrade; release checks remain newer-only.
+    if (
+      !isLocalBuildCheck() &&
+      !isPinnedBuildCheck() &&
+      compareVersions(info.version, app.getVersion()) <= 0
+    ) {
       clearAvailableUpdateContext()
       if (missingManifestFallback || publishingWindowLastGoodCheck) {
-        // Why: a fallback manifest at the current version is still the result of
-        // a transient missing primary manifest, so keep the short retry cadence.
+        // A missing primary manifest is transient; retain the short retry cadence.
         scheduleAutomaticUpdateCheck(AUTO_UPDATE_RETRY_INTERVAL_MS)
       } else {
         recordCompletedUpdateCheck()
@@ -161,22 +113,26 @@ export function registerAutoUpdaterHandlers({
           scheduleAutomaticUpdateCheck(AUTO_UPDATE_CHECK_INTERVAL_MS)
         }
       }
-      sendStatus({ state: 'not-available', userInitiated: wasUserInitiated || undefined })
+      sendStatus(
+        getRetainedLinuxPackageManualInstallStatus() ?? {
+          state: 'not-available',
+          userInitiated: wasUserInitiated || undefined
+        }
+      )
       return
     }
 
-    // Why: fetching changelog in the main process avoids CORS issues that
-    // would block a renderer-side fetch to onorca.dev, and ensures the
-    // card can render immediately without an async loading gap.
+    // A transiently older offer must not discard the retained recovery package.
+    linuxPackageRecovery.clearTrackedLinuxPackageArtifactForOtherVersion(info.version)
+
     markUpdateAvailableEventPending(attemptId)
     void (async () => {
       try {
-        const changelog = await fetchChangelog(info.version, app.getVersion()).catch(() => null)
+        const changelog =
+          isLocalBuildCheck() || isPinnedBuildCheck()
+            ? null
+            : await fetchChangelog(info.version, app.getVersion()).catch(() => null)
 
-        // Why: the handler is now async, so up to 5 seconds may pass during the
-        // fetch. If another autoUpdater event (e.g., 'error') fired and updated
-        // the attempt during that window, broadcasting 'available' here would
-        // overwrite a more recent check. Guard on the attempt before state.
         if (!isActiveUpdateCheckAttempt(attemptId)) {
           return
         }
@@ -184,27 +140,31 @@ export function registerAutoUpdaterHandlers({
           return
         }
 
-        // --- post-await side effects (only run if the guard passed) ---
-        // Why: these must live AFTER the guard, not before the await. If the
-        // fetch times out and a concurrent 'error' event advanced the status,
-        // bailing out above avoids orphaned side effects — e.g., availableVersion
-        // set without a matching 'available' broadcast, or a completed-check
-        // timestamp persisted for a check that never showed a result.
+        // A concurrent error during the fetch must not leave stale available state.
         setAvailableVersion(info.version)
         setAvailableReleaseUrl(null)
-        if (missingManifestFallback || publishingWindowLastGoodCheck) {
-          // Why: offering a previous/last-good release is only a temporary
-          // fallback; keep probing soon so users can move to the newest tag once
-          // its platform manifest finishes publishing.
-          scheduleAutomaticUpdateCheck(AUTO_UPDATE_RETRY_INTERVAL_MS)
-        } else {
-          recordCompletedUpdateCheck()
-          if (!wasUserInitiated) {
-            scheduleAutomaticUpdateCheck(AUTO_UPDATE_CHECK_INTERVAL_MS)
+        // Dev jumps must not suppress real background checks by persisting lastUpdateCheckAt.
+        if (!isLocalBuildCheck() && !isPinnedBuildCheck()) {
+          if (missingManifestFallback || publishingWindowLastGoodCheck) {
+            // Keep probing until the newest release finishes publishing.
+            scheduleAutomaticUpdateCheck(AUTO_UPDATE_RETRY_INTERVAL_MS)
+          } else {
+            recordCompletedUpdateCheck()
+            if (!wasUserInitiated) {
+              scheduleAutomaticUpdateCheck(AUTO_UPDATE_CHECK_INTERVAL_MS)
+            }
           }
         }
 
-        sendStatus({ state: 'available', version: info.version, changelog })
+        sendStatus(
+          getRetainedLinuxPackageManualInstallStatus() ?? {
+            state: 'available',
+            version: info.version,
+            changelog,
+            // Tell clients this host cannot self-update before offering a download.
+            ...(isExternallyManagedLinuxInstall() ? { externallyManaged: true } : {})
+          }
+        )
       } finally {
         clearUpdateAvailableEventPending(attemptId)
       }
@@ -217,50 +177,82 @@ export function registerAutoUpdaterHandlers({
     }
     clearBackgroundCheckLaunchPending()
     resetMacInstallState()
+    const retainedStatus = getRetainedLinuxPackageManualInstallStatus()
     const missingManifestFallback = consumeMissingManifestPrereleaseFallbackResult()
     const publishingWindowLastGoodCheck = getPublishingWindowLastGoodCheck()
     const wasUserInitiated = missingManifestFallback?.userInitiated ?? getUserInitiatedCheck()
+    const localBuildCheck = isLocalBuildCheck()
+    // Release the pin after unpinned outcomes so later background checks can change feeds.
+    const pinnedBuildCheck = isPinnedBuildCheck()
     setUserInitiatedCheck(false)
     clearAvailableUpdateContext()
-    if (missingManifestFallback || publishingWindowLastGoodCheck) {
-      // Why: the primary/newest release manifest/assets were missing, so a
-      // last-good not-available result is still a transient release-transition
-      // outcome and must not suppress the next retry for 24 hours.
-      scheduleAutomaticUpdateCheck(AUTO_UPDATE_RETRY_INTERVAL_MS)
-    } else {
-      recordCompletedUpdateCheck()
-      if (!wasUserInitiated) {
-        scheduleAutomaticUpdateCheck(AUTO_UPDATE_CHECK_INTERVAL_MS)
+    if (!localBuildCheck && !pinnedBuildCheck) {
+      if (missingManifestFallback || publishingWindowLastGoodCheck) {
+        // Transient publishing-window results must not defer checks for a full day.
+        scheduleAutomaticUpdateCheck(AUTO_UPDATE_RETRY_INTERVAL_MS)
+      } else {
+        recordCompletedUpdateCheck()
+        if (!wasUserInitiated) {
+          scheduleAutomaticUpdateCheck(AUTO_UPDATE_CHECK_INTERVAL_MS)
+        }
       }
     }
-    sendStatus({ state: 'not-available', userInitiated: wasUserInitiated || undefined })
+    // Preserve manual-install recovery when a recheck finds no newer release.
+    sendStatus(
+      retainedStatus ?? { state: 'not-available', userInitiated: wasUserInitiated || undefined }
+    )
+    if (localBuildCheck || pinnedBuildCheck) {
+      restoreReleaseUpdateSource()
+    }
   })
 
   autoUpdater.on('download-progress', (progress) => {
     clearBackgroundCheckLaunchPending()
+    const version = getPendingInstallVersion()
+    linuxPackageRecovery.clearTrackedLinuxPackageArtifactForOtherVersion(version)
     sendStatus({
       state: 'downloading',
       percent: Math.round(progress.percent),
-      version: getPendingInstallVersion()
+      version
     })
   })
 
   autoUpdater.on('update-downloaded', (info) => {
+    // An older download can finish after a new target replaces it.
+    if (
+      shouldIgnoreDownloadedUpdateEvent(
+        getCurrentStatus(),
+        info.version,
+        getPendingInstallVersion()
+      )
+    ) {
+      return
+    }
     clearBackgroundCheckLaunchPending()
-    // Don't show the banner if the downloaded version isn't actually newer
-    // than what's running. This catches the exact-same-version case as well
-    // as stale cached updates from an older release.
-    if (compareVersions(info.version, app.getVersion()) <= 0) {
+    if (
+      !isLocalBuildCheck() &&
+      !isPinnedBuildCheck() &&
+      compareVersions(info.version, app.getVersion()) <= 0
+    ) {
       clearAvailableUpdateContext()
+      linuxPackageRecovery.clearTrackedLinuxPackageArtifact()
       sendStatus({ state: 'not-available' })
       return
     }
-    // On macOS, defer the 'downloaded' status until Squirrel.Mac has finished
-    // processing the update via the localhost proxy. On other platforms,
-    // the update is ready immediately after electron-updater downloads it.
-    if (process.platform === 'darwin' && !isMacInstallerReady()) {
-      // Squirrel is still processing. Keep the UI at 100% downloaded so the
-      // user sees the handoff instead of a misleading "ready to install".
+    const macInstallerReady = process.platform === 'darwin' ? isMacInstallerReady() : true
+    recordUpdaterLifecycle('update_downloaded', { version: info.version, macInstallerReady })
+    // Launch the updated daemon from its unpacked runtime, not the mounted AppImage.
+    void preExtractDownloadedAppImageUpdate(info.downloadedFile, (filePath) =>
+      linuxPackageRecovery.isInUpdaterPendingCache(filePath)
+    )
+    const linuxPackageStatus = resolveLinuxPackageDownloadedStatus(info)
+    if (linuxPackageStatus) {
+      sendStatus(linuxPackageStatus)
+      return
+    }
+    // Squirrel must finish staging before macOS can install.
+    if (process.platform === 'darwin' && !macInstallerReady && !isMacStagingDeferredToInstall()) {
+      recordUpdaterLifecycle('macos_waiting_for_squirrel', { version: info.version })
       sendStatus({ state: 'downloading', percent: 100, version: info.version })
       return
     }
@@ -269,8 +261,18 @@ export function registerAutoUpdaterHandlers({
 
   autoUpdater.on('error', (err) => {
     const message = err?.message ?? 'Unknown error'
-    // Why: primary/fallback promise handlers may already own this failure; do
-    // not let their delayed paired error event consume fallback context.
+    // Native Squirrel listeners own staging errors; MacUpdater also re-emits them here.
+    if (isAwaitingMacStaging()) {
+      return
+    }
+    // Recover quit state before suppression guards; native failures may arrive asynchronously.
+    if (handleQuitAndInstallFailure(err)) {
+      return
+    }
+    if (isQuitAndInstallHandoffActive()) {
+      return
+    }
+    // Fallback promise handlers may own this error; preserve their context.
     if (shouldSuppressMissingManifestPrereleaseFallbackEvent(message, err)) {
       return
     }
@@ -288,5 +290,8 @@ export function registerAutoUpdaterHandlers({
       return
     }
     sendErrorStatus(message, wasUserInitiated || undefined)
+    if (isLocalBuildCheck() || isPinnedBuildCheck()) {
+      restoreReleaseUpdateSource()
+    }
   })
 }

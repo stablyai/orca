@@ -1,6 +1,9 @@
+import { useMemo } from 'react'
 import type React from 'react'
 import { toast } from 'sonner'
-import type { GlobalSettings, TuiAgent } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
+import { isFolderRepo } from '../../../../shared/repo-kind'
 import type {
   SourceControlAiSettings,
   SourceControlAiSettingsPatch
@@ -9,15 +12,27 @@ import { CUSTOM_AGENT_ID } from '../../../../shared/commit-message-agent-spec'
 import type { CustomAgentId } from '../../../../shared/commit-message-agent-spec'
 import {
   SOURCE_CONTROL_ACTION_IDS,
-  setSourceControlActionDefault,
-  type SourceControlActionId
+  setSourceControlActionAgentDefault,
+  type SourceControlActionRecipe,
+  type SourceControlActionId,
+  type SourceControlAiActionDefaults
 } from '../../../../shared/source-control-ai-actions'
 import { Label } from '../ui/label'
+import { useAppStore } from '@/store'
+import { useRepos } from '@/store/selectors'
+import {
+  summarizeReposOverridingActionRecipe,
+  type SourceControlActionRecipeOverrideSummary
+} from '../../../../shared/source-control-launch-agent-selection'
 import { SearchableSetting } from './SearchableSetting'
+import { getRepositorySourceControlAiActionRecipeSectionId } from './repository/repository-settings-targets'
 import { matchesSettingsSearch } from './settings-search'
 import { SourceControlActionRecipeRow } from './SourceControlActionRecipeRow'
+import { SourceControlActionRepoOverrideNote } from './SourceControlActionRepoOverrideNote'
+import { retireActionLaunchPreferences } from './source-control-ai-action-recipe-draft'
 import { useSourceControlActionRecipeDraftState } from './source-control-action-recipe-draft-state'
 import { translate } from '@/i18n/i18n'
+import { useSourceControlActionAgentInventory } from './use-source-control-action-agent'
 
 type SourceControlAiActionRecipeDefaultsProps = {
   config: SourceControlAiSettings
@@ -84,11 +99,31 @@ export function SourceControlAiActionRecipeDefaults({
   searchQuery,
   writeConfig
 }: SourceControlAiActionRecipeDefaultsProps): React.JSX.Element | null {
+  useSourceControlActionAgentInventory(
+    config.enabled && matchesSettingsSearch(searchQuery, ACTION_RECIPES_SEARCH_ENTRY)
+  )
+  const allRepos = useRepos()
+  // Memoize the O(actions × repos) override scan so sibling recipe typing cannot repeat it.
+  const repos = useMemo(() => allRepos.filter((repo) => !isFolderRepo(repo)), [allRepos])
+  const overrideSummaries = useMemo(
+    () =>
+      Object.fromEntries(
+        SOURCE_CONTROL_ACTION_IDS.map((actionId) => [
+          actionId,
+          summarizeReposOverridingActionRecipe({ repos, actionId })
+        ])
+      ) as Record<SourceControlActionId, SourceControlActionRecipeOverrideSummary>,
+    [repos]
+  )
+  const openSettingsPage = useAppStore((state) => state.openSettingsPage)
+  const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
   const {
     actionRecipeDraftState,
     savingActionTemplateIds,
     onActionTemplateChange,
     onActionAgentArgsChange,
+    onActionLaunchPreferencesChange,
+    retireActionAgentDocument,
     saveActionTemplateDraft,
     discardActionTemplateDraft,
     appendVariable
@@ -99,31 +134,16 @@ export function SourceControlAiActionRecipeDefaults({
     writeConfig
   })
 
-  const onActionAgentChange = async (
-    actionId: SourceControlActionId,
-    value: string
-  ): Promise<void> => {
-    const agentId =
-      value === '__default_agent__'
-        ? null
-        : value === CUSTOM_AGENT_ID
-          ? CUSTOM_AGENT_ID
-          : (value as TuiAgent)
-    let previousActions = config.actions
+  const writeActionDefault = async (
+    update: (actions: SourceControlAiActionDefaults | undefined) => SourceControlAiActionDefaults
+  ): Promise<boolean> => {
     try {
       await writeConfig((current) => {
-        previousActions = current.actions
-        return {
-          actions: setSourceControlActionDefault(current.actions, actionId, { agentId })
-        }
+        return { actions: update(current.actions) }
       })
+      return true
     } catch (error) {
       console.error('Failed to save Source Control AI action agent default', error)
-      try {
-        await writeConfig({ actions: previousActions })
-      } catch (rollbackError) {
-        console.error('Failed to roll back Source Control AI action agent default', rollbackError)
-      }
       toast.error(
         translate(
           'auto.components.settings.SourceControlAiActionRecipeDefaults.b5f46664d3',
@@ -131,7 +151,51 @@ export function SourceControlAiActionRecipeDefaults({
           { value0: error instanceof Error ? error.message : 'Unknown error' }
         )
       )
+      return false
     }
+  }
+
+  const onActionAgentChange = async (
+    actionId: SourceControlActionId,
+    value: string,
+    choice?: Pick<SourceControlActionRecipe, 'surface'>
+  ): Promise<void> => {
+    const agentId =
+      value === '__default_agent__'
+        ? null
+        : value === CUSTOM_AGENT_ID
+          ? CUSTOM_AGENT_ID
+          : (value as TuiAgent)
+    const changed = config.actions?.[actionId]?.agentId !== agentId
+    const captured = actionRecipeDraftState.values[actionId].launchPreferences
+    const saved = await writeActionDefault((actions) => {
+      const next = setSourceControlActionAgentDefault(actions, actionId, agentId)
+      if (choice) {
+        const { surface: _previous, ...recipe } = next[actionId] ?? {}
+        next[actionId] = { ...recipe, ...(choice.surface ? { surface: choice.surface } : {}) }
+      }
+      return next
+    })
+    if (saved && changed) {
+      retireActionAgentDocument(actionId, agentId)
+    }
+    if (saved && changed && captured) {
+      onActionLaunchPreferencesChange(actionId, (current) =>
+        retireActionLaunchPreferences(current, captured, agentId)
+      )
+    }
+  }
+
+  const openRepoSourceControlAiSettings = (
+    repoId: string,
+    actionId: SourceControlActionId
+  ): void => {
+    openSettingsTarget({
+      pane: 'repo',
+      repoId,
+      sectionId: getRepositorySourceControlAiActionRecipeSectionId(repoId, actionId)
+    })
+    openSettingsPage()
   }
 
   if (!config.enabled || !matchesSettingsSearch(searchQuery, ACTION_RECIPES_SEARCH_ENTRY)) {
@@ -158,6 +222,7 @@ export function SourceControlAiActionRecipeDefaults({
         {SOURCE_CONTROL_ACTION_IDS.map((actionId) => {
           const recipe = config.actions?.[actionId]
           const selectedAgent = recipe?.agentId ?? null
+          const overrideSummary = overrideSummaries[actionId]
           return (
             <SourceControlActionRecipeRow
               key={actionId}
@@ -167,12 +232,23 @@ export function SourceControlAiActionRecipeDefaults({
               baseValue={actionRecipeDraftState.baseValues[actionId]}
               defaultTuiAgent={defaultTuiAgent}
               isSavingTemplate={savingActionTemplateIds[actionId] === true}
-              onAgentChange={(id, value) => void onActionAgentChange(id, value)}
+              repoOverrideNote={
+                <SourceControlActionRepoOverrideNote
+                  summary={overrideSummary}
+                  onReviewRepo={(repoId) => openRepoSourceControlAiSettings(repoId, actionId)}
+                />
+              }
+              surface={recipe?.surface}
+              onAgentChange={(id, value, choice) => void onActionAgentChange(id, value, choice)}
+              launchPreferences={actionRecipeDraftState.values[actionId].launchPreferences}
+              onLaunchPreferencesChange={(id, value, userArgs, nodes) =>
+                void onActionLaunchPreferencesChange(id, value, userArgs, nodes)
+              }
               onTemplateChange={onActionTemplateChange}
               onAgentArgsChange={onActionAgentArgsChange}
               onAppendVariable={appendVariable}
               onDiscard={discardActionTemplateDraft}
-              onSave={(id) => void saveActionTemplateDraft(id)}
+              onSave={(id) => void saveActionTemplateDraft(id).catch(console.error)}
             />
           )
         })}

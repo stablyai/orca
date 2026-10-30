@@ -1,0 +1,116 @@
+import type { JiraMediaFormat } from '../../shared/jira/jira-attachment-image'
+import type { JiraFavouriteFilterList } from '../../shared/jira/jira-favourite-filters'
+import type {
+  JiraIssueSummaryGenerationRequest,
+  JiraIssueSummaryGenerationCancellation,
+  JiraIssueSummaryGenerationResult
+} from '../../shared/jira/jira-issue-summary-generation'
+import type {
+  JiraComment,
+  JiraConnectionStatus,
+  JiraCreateField,
+  JiraCreateIssueArgs,
+  JiraIssue,
+  JiraIssueFilter,
+  JiraIssueListFilters,
+  JiraIssueType,
+  JiraIssueUpdate,
+  JiraPriority,
+  JiraProject,
+  JiraProjectStatusOrder,
+  JiraSiteSelection,
+  JiraTransition,
+  JiraUser,
+  JiraViewer
+} from '../../shared/jira/jira-types'
+
+export type JiraApi = {
+  connect: (args: {
+    siteUrl: string
+    email: string
+    apiToken: string
+    authType?: 'cloud' | 'server'
+  }) => Promise<{ ok: true; viewer: JiraViewer } | { ok: false; error: string }>
+  disconnect: (args?: { siteId?: string }) => Promise<void>
+  selectSite: (args: { siteId: JiraSiteSelection }) => Promise<JiraConnectionStatus>
+  status: () => Promise<JiraConnectionStatus>
+  readStatus: () => Promise<JiraConnectionStatus>
+  testConnection: (args?: {
+    siteId?: string
+  }) => Promise<{ ok: true; viewer: JiraViewer } | { ok: false; error: string }>
+  searchIssues: (args: {
+    jql: string
+    limit?: number
+    siteId?: JiraSiteSelection
+    requestId?: string
+  }) => Promise<JiraIssue[]>
+  cancelSearchIssues: (args: { requestId: string }) => Promise<void>
+  listIssues: (args?: {
+    filter?: JiraIssueFilter
+    limit?: number
+    siteId?: JiraSiteSelection
+    filters?: JiraIssueListFilters
+  }) => Promise<JiraIssue[]>
+  getIssue: (args: {
+    key: string
+    siteId?: string
+    mediaFormat?: JiraMediaFormat
+  }) => Promise<JiraIssue | null>
+  lookupIssueSummary: (args: {
+    key: string
+    siteId: string
+    requestId?: string
+  }) => Promise<JiraIssue | null>
+  cancelIssueSummary: (args: { requestId: string }) => Promise<void>
+  createIssue: (
+    args: JiraCreateIssueArgs
+  ) => Promise<{ ok: true; id: string; key: string; url: string } | { ok: false; error: string }>
+  generateIssueSummary: (
+    args: JiraIssueSummaryGenerationRequest
+  ) => Promise<JiraIssueSummaryGenerationResult>
+  cancelGenerateIssueSummary: (args: JiraIssueSummaryGenerationCancellation) => Promise<void>
+  updateIssue: (args: {
+    key: string
+    updates: JiraIssueUpdate
+    siteId?: string
+  }) => Promise<{ ok: true } | { ok: false; error: string }>
+  addIssueComment: (args: {
+    key: string
+    body: string
+    siteId?: string
+  }) => Promise<{ ok: true; id: string } | { ok: false; error: string }>
+  issueComments: (args: {
+    key: string
+    siteId?: string
+    mediaFormat?: JiraMediaFormat
+  }) => Promise<JiraComment[]>
+  listProjects: (args?: { siteId?: JiraSiteSelection }) => Promise<JiraProject[]>
+  listFavouriteFilters: (args: { siteId: string }) => Promise<JiraFavouriteFilterList>
+  listIssueTypes: (args: { projectIdOrKey: string; siteId?: string }) => Promise<JiraIssueType[]>
+  listCreateFields: (args: {
+    projectIdOrKey: string
+    issueTypeId: string
+    siteId?: string
+  }) => Promise<JiraCreateField[]>
+  listPriorities: (args?: { siteId?: string }) => Promise<JiraPriority[]>
+  listAssignableUsers: (args: {
+    key: string
+    query?: string
+    siteId?: string
+  }) => Promise<JiraUser[]>
+  listAssignableUsersForProject: (args: {
+    projectIdOrKey: string
+    query?: string
+    siteId?: string
+  }) => Promise<JiraUser[]>
+  searchUsers: (args?: { query?: string; siteId?: string }) => Promise<JiraUser[]>
+  listTransitions: (args: {
+    key: string
+    siteId?: string
+    strict?: boolean
+  }) => Promise<JiraTransition[]>
+  getProjectStatusOrder: (args: {
+    projectKey: string
+    siteId?: string
+  }) => Promise<JiraProjectStatusOrder>
+}

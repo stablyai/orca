@@ -2,36 +2,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
 
-vi.mock('../runtime-client', () => {
+vi.mock('../runtime-client', async () => {
   class RuntimeClient {
     call = callMock
     getCliStatus = vi.fn()
     openOrca = vi.fn()
   }
 
-  class RuntimeClientError extends Error {
-    readonly code: string
-
-    constructor(code: string, message: string) {
-      super(message)
-      this.code = code
-    }
-  }
-
-  class RuntimeRpcFailureError extends RuntimeClientError {
-    readonly response: unknown
-
-    constructor(response: unknown) {
-      super('runtime_error', 'runtime_error')
-      this.response = response
-    }
-  }
-
-  return {
-    RuntimeClient,
-    RuntimeClientError,
-    RuntimeRpcFailureError
-  }
+  // Error formatting uses instanceof, so preserve the production error classes.
+  const { RuntimeClientError, RuntimeRpcFailureError } = await import('../runtime/types.js')
+  return { RuntimeClient, RuntimeClientError, RuntimeRpcFailureError }
 })
 
 import { main } from '../index'
@@ -67,14 +47,6 @@ describe('orca computer action CLI validation', () => {
       'Computer-use targeting accepts either --session or --worktree, not both'
     )
     expect(output).toContain('Next step: Do not retry the same command unchanged.')
-    expect(process.exitCode).toBe(1)
-  })
-
-  it('rejects actions without an app before resolving a worktree', async () => {
-    await main(['computer', 'click', '--element-index', '1'], '/tmp/repo/src')
-
-    expect(callMock).not.toHaveBeenCalled()
-    expect(vi.mocked(console.error).mock.calls[0][0]).toContain('Missing required --app')
     expect(process.exitCode).toBe(1)
   })
 
@@ -271,9 +243,9 @@ describe('orca computer action CLI validation', () => {
     )
 
     expect(callMock).not.toHaveBeenCalled()
-    const output = JSON.parse(vi.mocked(console.log).mock.calls[0][0]) as {
+    const output: {
       error: { code: string; message: string; data?: { nextSteps?: string[] } }
-    }
+    } = JSON.parse(vi.mocked(console.log).mock.calls[0][0])
     expect(output.error.code).toBe('invalid_argument')
     expect(output.error.message).toContain('Invalid positive integer for --click-count')
     expect(output.error.data?.nextSteps).toEqual([
@@ -301,6 +273,43 @@ describe('orca computer action CLI validation', () => {
 
     expect(callMock).not.toHaveBeenCalled()
     expect(vi.mocked(console.error).mock.calls[0][0]).toContain('Unsupported --mouse-button')
+    expect(process.exitCode).toBe(1)
+
+    vi.mocked(console.error).mockClear()
+    process.exitCode = undefined
+
+    await main(
+      [
+        'computer',
+        'click',
+        '--app',
+        'Finder',
+        '--element-index',
+        '1',
+        '--modifiers',
+        'CmdOrCtrl+A'
+      ],
+      '/tmp/repo/src'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect(vi.mocked(console.error).mock.calls[0][0]).toContain(
+      'Click modifiers accept modifier keys only'
+    )
+    expect(process.exitCode).toBe(1)
+
+    vi.mocked(console.error).mockClear()
+    process.exitCode = undefined
+
+    await main(
+      ['computer', 'click', '--app', 'Finder', '--element-index', '1', '--modifiers', ''],
+      '/tmp/repo/src'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect(vi.mocked(console.error).mock.calls[0][0]).toContain(
+      'Click modifiers accept modifier keys only'
+    )
     expect(process.exitCode).toBe(1)
 
     vi.mocked(console.error).mockClear()

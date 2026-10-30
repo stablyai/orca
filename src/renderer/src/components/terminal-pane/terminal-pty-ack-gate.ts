@@ -1,4 +1,8 @@
 import { e2eConfig } from '@/lib/e2e-config'
+import {
+  deliverTerminalDataWithDeferredCredit,
+  takeCurrentTerminalDeliveryCredit
+} from '@/lib/pane-manager/terminal-delivery-credit'
 
 type E2eTerminalPtyAckGateSnapshot = {
   gatedPtyCount: number
@@ -18,13 +22,22 @@ type E2eTerminalPtyAckGateWindow = Window & {
 
 const e2eTerminalAckGatePtyIds = new Set<string>()
 const e2eTerminalAckGateHeldChars = new Map<string, number>()
+// Cumulative processed-character ACKs recover lost messages; clear on PTY exit/reload to align reused IDs with main’s fresh totals.
+const processedPtyCharTotals = new Map<string, number>()
+
+function sendPtyAck(ptyId: string, chars: number): void {
+  const processedChars = (processedPtyCharTotals.get(ptyId) ?? 0) + chars
+  processedPtyCharTotals.set(ptyId, processedChars)
+  // Keep per-chunk deltas for older main during mixed-version hot reload.
+  window.api.pty.ackData?.(ptyId, chars, processedChars)
+}
 
 function releaseE2eTerminalAckGate(): void {
   const held = Array.from(e2eTerminalAckGateHeldChars.entries())
   e2eTerminalAckGatePtyIds.clear()
   e2eTerminalAckGateHeldChars.clear()
   for (const [ptyId, chars] of held) {
-    window.api.pty.ackData?.(ptyId, chars)
+    sendPtyAck(ptyId, chars)
   }
 }
 
@@ -32,8 +45,7 @@ export function exposeE2eTerminalPtyAckGate(): void {
   if (!e2eConfig.exposeStore || typeof window === 'undefined') {
     return
   }
-  // Why: perf tests need to force main-process renderer-delivery pressure
-  // without changing production ACK behavior or dropping terminal output.
+  // E2E pressure holds ACKs without changing production behavior or discarding output.
   const target = window as E2eTerminalPtyAckGateWindow
   target.__terminalPtyAckGate ??= {
     hold: (ptyIds) => {
@@ -58,9 +70,33 @@ export function exposeE2eTerminalPtyAckGate(): void {
 }
 
 export function ackPtyData(ptyId: string, chars: number): void {
+  // Withhold cumulative credit too so resync cannot bypass simulated backpressure.
   if (e2eTerminalAckGatePtyIds.has(ptyId)) {
     e2eTerminalAckGateHeldChars.set(ptyId, (e2eTerminalAckGateHeldChars.get(ptyId) ?? 0) + chars)
     return
   }
-  window.api.pty.ackData?.(ptyId, chars)
+  sendPtyAck(ptyId, chars)
+}
+
+// Credit at scheduler consumption, not receipt: early ACKs hide xterm backlog from main’s flow control and cause output drops.
+
+/** Claimed credit fires on scheduler write/discard; unclaimed credit fires at handler return so dropped chunks cannot strand main’s in-flight debt. */
+export function deliverPtyDataWithDeferredAck(
+  ptyId: string,
+  chars: number,
+  deliver: () => void
+): void {
+  deliverTerminalDataWithDeferredCredit(() => ackPtyData(ptyId, chars), deliver)
+}
+
+export function takeCurrentPtyDeliveryAckCredit(): (() => void) | null {
+  return takeCurrentTerminalDeliveryCredit()
+}
+
+export function getProcessedPtyCharTotals(): Record<string, number> {
+  return Object.fromEntries(processedPtyCharTotals)
+}
+
+export function clearProcessedPtyCharTotal(ptyId: string): void {
+  processedPtyCharTotals.delete(ptyId)
 }

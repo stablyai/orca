@@ -1,0 +1,3 @@
+# Static CRT runs without the Visual C++ Redistributable; Windows does not include VCRUNTIME140.dll.
+[target.'cfg(all(windows, target_env = "msvc"))']
+rustflags = ["-C", "target-feature=+crt-static"]

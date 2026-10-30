@@ -1,30 +1,50 @@
-import type { GitLabProjectRef } from '../../shared/types'
+import type { GitLabProjectRef } from '../../shared/gitlab-types'
+import { normalizeGitLabRemoteHost } from '../../shared/git-remote-host-alias'
 
 export type ProjectRef = GitLabProjectRef
 
-/**
- * Hosts always treated as GitLab. Self-hosted instances are added at
- * runtime via `getGlabKnownHosts()`, which inspects `glab auth status`.
- */
+/** Authenticated custom hosts extend the built-in GitLab host inventory at runtime. */
 export const DEFAULT_GITLAB_HOSTS = ['gitlab.com'] as const
 
 export function normalizeGitLabHost(value: string): string {
   return value.trim().toLowerCase()
 }
 
+function hostnameOf(host: string): string {
+  return host.replace(/:\d+$/, '')
+}
+
 function stripGitSuffix(path: string): string {
   return path.replace(/\/+$/, '').replace(/\.git$/i, '')
 }
 
+// HTTP ports identify API endpoints; SSH/git ports are transport-only.
+function hostIdentityFromUrl(url: URL): string {
+  const protocol = url.protocol.toLowerCase()
+  if (protocol === 'http:' || protocol === 'https:') {
+    return url.host
+  }
+  return url.hostname
+}
+
 function makeProjectRefForTrustedHost(host: string, path: string): ProjectRef | null {
-  const normalizedHost = normalizeGitLabHost(host)
+  const normalizedHost = normalizeGitLabRemoteHost(host)
   const normalizedPath = stripGitSuffix(path.replace(/^\/+/, '')).trim()
-  // Reject paths without at least one group segment — `gitlab.com:foo`
-  // alone is not a project reference.
   if (!normalizedPath.includes('/')) {
     return null
   }
   return { host: normalizedHost, path: normalizedPath }
+}
+
+/** Match ports exactly unless the known-host entry is legacy/portless, which matches any port on that hostname. */
+function knownHostMatches(urlHost: string, knownHost: string): boolean {
+  if (urlHost === knownHost) {
+    return true
+  }
+  if (hostnameOf(knownHost) === knownHost) {
+    return hostnameOf(urlHost) === knownHost
+  }
+  return false
 }
 
 function makeProjectRef(
@@ -32,9 +52,9 @@ function makeProjectRef(
   path: string,
   knownHosts: readonly string[]
 ): ProjectRef | null {
-  const normalizedHost = normalizeGitLabHost(host)
+  const normalizedHost = normalizeGitLabRemoteHost(host)
   const normalizedKnownHosts = knownHosts.map(normalizeGitLabHost)
-  if (!normalizedKnownHosts.includes(normalizedHost)) {
+  if (!normalizedKnownHosts.some((knownHost) => knownHostMatches(normalizedHost, knownHost))) {
     return null
   }
   return makeProjectRefForTrustedHost(normalizedHost, path)
@@ -54,7 +74,7 @@ export function parseRemoteProjectRefCandidate(remoteUrl: string): ProjectRef | 
     if (!['http:', 'https:', 'ssh:', 'git:', 'git+ssh:'].includes(url.protocol.toLowerCase())) {
       return null
     }
-    return makeProjectRefForTrustedHost(url.hostname, url.pathname)
+    return makeProjectRefForTrustedHost(hostIdentityFromUrl(url), url.pathname)
   } catch {
     return null
   }
@@ -77,7 +97,7 @@ export function parseGitLabProjectRef(
     if (!['http:', 'https:', 'ssh:', 'git:', 'git+ssh:'].includes(url.protocol.toLowerCase())) {
       return null
     }
-    return makeProjectRef(url.hostname, url.pathname, knownHosts)
+    return makeProjectRef(hostIdentityFromUrl(url), url.pathname, knownHosts)
   } catch {
     return null
   }

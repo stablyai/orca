@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react'
 import { FilePlus, FolderPlus } from 'lucide-react'
-import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/components/tab-bar/SortableTab'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,22 +13,24 @@ function stopRightButtonMenuSelection(event: React.PointerEvent): void {
   if (event.button !== 2) {
     return
   }
-  // Why: the synthetic trigger sits at the cursor; the right-button release
-  // can otherwise land on "New File" and select it immediately.
+  // Right-button release over the cursor-positioned trigger must not immediately select New File.
   event.preventDefault()
   event.stopPropagation()
 }
 
+/** Targets creation and paste at the displayed directory while keeping workspace operations rooted at the worktree. */
 export function FileExplorerBackgroundMenu({
   open,
   onOpenChange,
   point,
   worktreePath,
+  displayDepth = 0,
   onStartNew
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   point: { x: number; y: number }
+  displayDepth?: number
   worktreePath: string
   onStartNew: (type: 'file' | 'folder', dir: string, depth: number) => void
 }): React.JSX.Element {
@@ -55,14 +57,14 @@ export function FileExplorerBackgroundMenu({
         onPointerUpCapture={stopRightButtonMenuSelection}
         onCloseAutoFocus={(e) => e.preventDefault()}
       >
-        <DropdownMenuItem onSelect={() => onStartNew('file', worktreePath, 0)}>
+        <DropdownMenuItem onSelect={() => onStartNew('file', worktreePath, displayDepth)}>
           <FilePlus />
           {translate(
             'auto.components.right.sidebar.FileExplorerBackgroundMenu.21fe46ed36',
             'New File'
           )}
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => onStartNew('folder', worktreePath, 0)}>
+        <DropdownMenuItem onSelect={() => onStartNew('folder', worktreePath, displayDepth)}>
           <FolderPlus />
           {translate(
             'auto.components.right.sidebar.FileExplorerBackgroundMenu.3b5e2dcb8d',

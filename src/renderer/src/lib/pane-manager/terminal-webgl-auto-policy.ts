@@ -2,6 +2,7 @@ export type TerminalWebglAutoDecision = {
   allowWebgl: boolean
   reason:
     | 'non-linux'
+    | 'linux-wayland'
     | 'linux-hardware-renderer'
     | 'linux-webgl2-unavailable'
     | 'linux-renderer-unavailable'
@@ -27,6 +28,14 @@ export function isLinuxRendererHost(
     return false
   }
   return platform.includes('Linux') || userAgent.includes('Linux')
+}
+
+function readRendererDisplayServer(): 'wayland' | 'x11' | null {
+  try {
+    return window.api.platform.get().displayServer
+  } catch {
+    return null
+  }
 }
 
 function readWebglRendererInfo(): Pick<TerminalWebglAutoDecision, 'renderer' | 'vendor'> & {
@@ -77,6 +86,17 @@ export function getTerminalWebglAutoDecision(): TerminalWebglAutoDecision {
     return cachedDecision
   }
 
+  if (readRendererDisplayServer() === 'wayland') {
+    // Linux Wayland context creation can wedge input before xterm emits recoverable context loss (#5319).
+    cachedDecision = {
+      allowWebgl: false,
+      reason: 'linux-wayland',
+      renderer: null,
+      vendor: null
+    }
+    return cachedDecision
+  }
+
   const rendererInfo = readWebglRendererInfo()
   if (!rendererInfo.hasWebgl2) {
     cachedDecision = {
@@ -89,8 +109,7 @@ export function getTerminalWebglAutoDecision(): TerminalWebglAutoDecision {
   }
 
   if (!rendererInfo.hasRendererInfo) {
-    // Why: the Linux corruption path can leave WebGL alive while glyphs are bad;
-    // without renderer identity we cannot distinguish hardware from software GL.
+    // Corrupted Linux glyphs can coexist with live WebGL; record renderer identity to distinguish hardware/software GL.
     cachedDecision = {
       allowWebgl: false,
       reason: 'linux-renderer-unavailable',

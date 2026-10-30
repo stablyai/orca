@@ -1,4 +1,5 @@
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY } from '../../../../shared/constants'
 import { NumberField, SettingsSubsectionHeader } from './SettingsFormControls'
 import { SearchableSetting } from './SearchableSetting'
 import { clampNumber, resolvePaneStyleOptions } from '@/lib/terminal-theme'
@@ -22,13 +23,9 @@ export function TerminalPaneAppearanceSection({
           'auto.components.settings.TerminalAppearanceSection.e1a5c25555',
           'Terminal Panes'
         )}
-        description={translate(
-          'auto.components.settings.TerminalAppearanceSection.1b79379d4f',
-          'Control inactive pane dimming and split divider thickness.'
-        )}
       />
 
-      <div className="divide-y divide-border/40">
+      <div className="ml-4 divide-y divide-border/40">
         <SearchableSetting
           title={translate(
             'auto.components.settings.TerminalAppearanceSection.a6fdd6a3b1',
@@ -46,11 +43,11 @@ export function TerminalPaneAppearanceSection({
               'Inactive Pane Opacity'
             )}
             description={translate(
-              'auto.components.settings.TerminalAppearanceSection.db632cb50e',
-              'Opacity applied to panes that are not currently active.'
+              'auto.components.settings.TerminalAppearanceSection.dimUnfocusedPanes',
+              'Dim unfocused panes.'
             )}
             value={paneStyleOptions.inactivePaneOpacity}
-            defaultValue={0.8}
+            defaultValue={DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY}
             min={0}
             max={1}
             step={0.05}
@@ -78,10 +75,7 @@ export function TerminalPaneAppearanceSection({
               'auto.components.settings.TerminalAppearanceSection.f27a99978d',
               'Divider Thickness'
             )}
-            description={translate(
-              'auto.components.settings.TerminalAppearanceSection.a14a427ae4',
-              'Thickness of the pane divider line.'
-            )}
+            description=""
             value={paneStyleOptions.dividerThicknessPx}
             defaultValue={1}
             min={1}

@@ -1,7 +1,9 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GitStatusEntry } from '../../../../shared/types'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { i18n } from '@/i18n/i18n'
+import es from '@/i18n/locales/es.json'
+import type { GitStatusEntry } from '../../../../shared/git-status-types'
 
 type CapturedButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   children?: ReactNode
@@ -73,14 +75,34 @@ function textContent(node: ReactNode): string {
   return ''
 }
 
+afterEach(async () => {
+  await i18n.changeLanguage('en')
+})
+
 describe('SourceControlDiscardDialog', () => {
   beforeEach(() => {
     mocks.buttons = []
     mocks.dialogContentProps = []
   })
 
+  it('keeps the delete icon when its label is translated', async () => {
+    i18n.addResourceBundle('es', 'translation', es)
+    await i18n.changeLanguage('es')
+    const { SourceControlDiscardDialog } = await import('./source-control/commit/discard-dialog')
+    const markup = renderToStaticMarkup(
+      <SourceControlDiscardDialog
+        pendingDiscard={{ kind: 'area', area: 'untracked', paths: ['a.ts', 'b.ts'] }}
+        onCancel={vi.fn()}
+        onConfirm={vi.fn()}
+      />
+    )
+    expect(markup).toContain('lucide-trash')
+    expect(markup).not.toContain('lucide-undo-2')
+    expect(markup).toContain(es.sourceControl.discard.deleteCount.replace('{{count}}', '2'))
+  })
+
   it('makes the discard button the dialog default action', async () => {
-    const { SourceControlDiscardDialog } = await import('./source-control-discard-dialog')
+    const { SourceControlDiscardDialog } = await import('./source-control/commit/discard-dialog')
 
     renderToStaticMarkup(
       <SourceControlDiscardDialog
@@ -107,7 +129,8 @@ describe('SourceControlDiscardDialog', () => {
 
 describe('focusDiscardDialogConfirmButton', () => {
   it('prevents Radix from focusing the first tabbable button', async () => {
-    const { focusDiscardDialogConfirmButton } = await import('./source-control-discard-dialog')
+    const { focusDiscardDialogConfirmButton } =
+      await import('./source-control/commit/discard-dialog')
     const event = { preventDefault: vi.fn() } as unknown as Event
     const confirmButton = { focus: vi.fn() } as unknown as HTMLButtonElement
 

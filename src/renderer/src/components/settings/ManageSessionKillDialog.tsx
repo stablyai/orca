@@ -31,8 +31,7 @@ export function ManageSessionKillDialog({
         if (open) {
           return
         }
-        // Why: destructive terminal mutations should keep their progress
-        // dialog open until the daemon responds, matching other confirm flows.
+        // Keep destructive-operation progress open until the daemon responds.
         if (isBusy) {
           return
         }
@@ -66,7 +65,7 @@ export function ManageSessionKillDialog({
                 {translate(
                   'auto.components.settings.ManageSessionKillDialog.8401328fed',
                   'Force-quits'
-                )}
+                )}{' '}
                 <span className="font-medium text-foreground">{session.sessionId}</span>
                 {translate(
                   'auto.components.settings.ManageSessionKillDialog.ad9832aa26',

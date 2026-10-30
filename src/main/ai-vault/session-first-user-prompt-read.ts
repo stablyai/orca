@@ -1,0 +1,141 @@
+import type {
+  AiVaultAgent,
+  AiVaultFirstUserPromptResult,
+  AiVaultSession
+} from '../../shared/ai-vault-types'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
+import { wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
+import { parseAgentSessionFile } from './session-scanner-agent-parser'
+import { withFullFirstUserPromptCapture } from './session-scanner-first-user-prompt-capture'
+import {
+  parseOpenCodeSqliteSessionViaWorker,
+  parseOpenCode2SqliteSessionViaWorker,
+  parseZcodeSqliteSessionViaWorker
+} from './session-scanner-opencode-sqlite-worker-spawn'
+import { splitOpenCodeSqliteCandidate } from './session-scanner-opencode-sqlite-paths'
+import type { FileWithMtime } from './session-scanner-types'
+import type { OpenCodeWslRuntime } from './session-scanner-opencode-wsl-runtime'
+import { configureOpenCodeWslReaders } from './session-scanner-opencode-wsl-client'
+
+export type ReadAiVaultFirstUserPromptArgs = {
+  agent: AiVaultAgent
+  filePath: string
+  sessionId?: string
+  executionHostId?: ExecutionHostId
+  codexHome?: string | null
+  wslOpenCodeReaders?: readonly OpenCodeWslRuntime[]
+}
+
+export type ReadAiVaultFirstUserPromptResult = AiVaultFirstUserPromptResult
+
+/** Reparse one transcript with full first-prompt capture instead of listing preview limits. */
+export async function readAiVaultFirstUserPrompt(
+  args: ReadAiVaultFirstUserPromptArgs
+): Promise<ReadAiVaultFirstUserPromptResult> {
+  const filePath = args.filePath.trim()
+  if (!filePath || !args.agent) {
+    return { prompt: null }
+  }
+
+  // Transcript bodies belong to their execution host; remote rows fall back to preview text.
+  const executionHostId = args.executionHostId ?? LOCAL_EXECUTION_HOST_ID
+  if (executionHostId !== LOCAL_EXECUTION_HOST_ID) {
+    return { prompt: null }
+  }
+  if (args.wslOpenCodeReaders) {
+    configureOpenCodeWslReaders(args.wslOpenCodeReaders)
+  }
+
+  // Treat corrupt or partial transcripts as unavailable instead of rejecting the IPC call.
+  let session: AiVaultSession | null
+  try {
+    session = await withFullFirstUserPromptCapture(() =>
+      parseSessionForFullFirstUserPrompt({
+        agent: args.agent,
+        filePath,
+        sessionId: args.sessionId?.trim() || undefined,
+        codexHome: args.codexHome ?? null
+      })
+    )
+  } catch {
+    return { prompt: null }
+  }
+
+  const prompt = session?.firstUserPrompt?.trim() || null
+  return { prompt }
+}
+
+async function parseSessionForFullFirstUserPrompt(args: {
+  agent: AiVaultAgent
+  filePath: string
+  sessionId?: string
+  codexHome: string | null
+}): Promise<AiVaultSession | null> {
+  // Full capture must run in the actual reader, including WSL guests.
+  if (args.agent === 'opencode' || args.agent === 'opencode2' || args.agent === 'zcode') {
+    const parse =
+      args.agent === 'opencode2'
+        ? parseOpenCode2SqliteSessionViaWorker
+        : args.agent === 'zcode'
+          ? parseZcodeSqliteSessionViaWorker
+          : parseOpenCodeSqliteSessionViaWorker
+    const fromSynthetic = splitOpenCodeSqliteCandidate(args.filePath, args.agent)
+    if (fromSynthetic) {
+      return parse({
+        fullFirstUserPrompt: true,
+        dbPath: fromSynthetic.dbPath,
+        sessionId: fromSynthetic.sessionId,
+        platform: process.platform
+      })
+    }
+    if (args.sessionId) {
+      return parse({
+        fullFirstUserPrompt: true,
+        dbPath: args.filePath,
+        sessionId: args.sessionId,
+        platform: process.platform
+      })
+    }
+  }
+
+  const file = await fileWithMtimeForPath(args.filePath, args.agent)
+  if (!file) {
+    return null
+  }
+
+  return parseAgentSessionFile(
+    {
+      agent: args.agent,
+      file,
+      codexHome: args.codexHome
+    },
+    process.platform
+  )
+}
+
+async function fileWithMtimeForPath(
+  filePath: string,
+  agent: AiVaultAgent
+): Promise<FileWithMtime | null> {
+  // OpenCode dbPath#sessionId is synthetic; # in another agent's filename does not bypass stat.
+  if (agent === 'opencode' && splitOpenCodeSqliteCandidate(filePath)) {
+    return {
+      path: filePath,
+      mtimeMs: 0,
+      modifiedAt: new Date(0).toISOString()
+    }
+  }
+
+  try {
+    // Use the parser's scan lane so stat cannot jump the live-transcript queue.
+    const info = await wslGatedStat(filePath, 'scan')
+    return {
+      path: filePath,
+      mtimeMs: info.mtimeMs,
+      modifiedAt: info.mtime.toISOString(),
+      sizeBytes: info.size
+    }
+  } catch {
+    return null
+  }
+}

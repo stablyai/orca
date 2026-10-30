@@ -1,0 +1,151 @@
+---
+title: orca.yaml & .worktreeinclude
+description: Local worktree setup, terminal defaults, shared directories, and copied files.
+---
+
+Put `orca.yaml` and `.worktreeinclude` at the repository root. `orca.yaml` supplies project defaults; `.worktreeinclude` lists ignored files to carry into new worktrees. Commit these configuration files so other users can use the same rules. Keep secrets in the ignored files they refer to.
+
+This reference covers **local Git worktrees**. [Folder workspaces](/docs/model/worktrees#multi-repo-project-groups--folder-workspaces) do not create a Git checkout or run these copy/share steps. For other execution targets, see [Ways to run Orca](/docs/ways-to-run).
+
+## Example
+
+For a project that uses pnpm, this installs dependencies during setup and opens an agent tab and a Git status tab:
+
+```yaml
+scripts:
+  setup: |
+    pnpm install
+  archive: |
+    echo Workspace archived
+setupAgentStartupPolicy: wait-for-setup
+defaultTabs:
+  - title: Agent
+  - title: Git status
+    command: git status --short
+worktree:
+  sharedDirectories:
+    - .cache
+```
+
+The `.cache` directory must already exist and be gitignored in the primary checkout. The first tab deliberately has no command: when the desktop create composer launches an agent, its startup takes precedence over the first tab's configured command.
+
+## Accepted keys and defaults
+
+All keys are optional. Script, title, command, and path values must be strings; Orca trims them and drops empty or oversized values. Invalid fields are skipped while valid siblings still apply. Unknown keys do not configure additional behavior.
+
+| Key                          | Accepted value                                                                                                                                                                                        | When omitted                                                                  |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `scripts.setup`              | Nonempty script string, including a YAML block scalar (`\|`). Runs in the new worktree when setup is enabled.                                                                                         | No project setup script.                                                      |
+| `scripts.archive`            | Nonempty script string. Runs in the worktree before archive/removal when hooks are enabled.                                                                                                           | No project archive script.                                                    |
+| `setupAgentStartupPolicy`    | Exactly `start-immediately` or `wait-for-setup`.                                                                                                                                                      | `start-immediately`; a local **wait** setting still takes precedence.         |
+| `issueCommand`               | Nonempty command template for linked GitHub/GitLab items in the create composer.                                                                                                                      | No project template; the composer can still supply its built-in agent prompt. |
+| `defaultTabs`                | List of mappings with optional `title`, `command`, and `color`. At least one valid field is required per entry. `color` accepts `#RGB` or `#RRGGBB`.                                                  | Normal initial terminal behavior.                                             |
+| `worktree.sharedDirectories` | List of repository-relative directory paths. Only existing, gitignored directories are shared.                                                                                                        | Only the user's Settings shared paths apply.                                  |
+| `environmentRecipes`         | List of per-workspace environment recipes. See [Cloud VMs](/docs/ways-to-run#4-cloud-vms-per-workspace-environments) and the `orca-per-workspace-env` skill for recipe fields and lifecycle commands. | No project recipes.                                                           |
+
+`scripts` and `worktree` must be mappings; `defaultTabs`, `environmentRecipes`, and `sharedDirectories` must be lists. `setupRunPolicy` and `commandSourcePolicy` are **Settings values**, not accepted `orca.yaml` keys.
+
+### Parse failures and limits
+
+**Invalid YAML or a duplicate mapping key anywhere rejects the whole file.** Orca does not keep the last duplicate value. A non-mapping root, excessive alias expansion, or an oversized file also produces no configuration. A YAML checker that accepts duplicate keys does not establish that Orca will accept the file.
+
+| Limit                                                                                                     | Result when exceeded                                                                                          |
+| --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Whole file: 256 KiB (262,144 UTF-8 bytes) **and** 262,144 UTF-16 code units                               | Whole file rejected.                                                                                          |
+| Each string field: 64 KiB (65,536 UTF-8 bytes) **and** 65,536 UTF-16 code units, measured before trimming | Field dropped.                                                                                                |
+| `defaultTabs`: 256 input entries                                                                          | Entire tab list dropped.                                                                                      |
+| `environmentRecipes`: 256 input entries                                                                   | Entire recipe list dropped, with a recipe diagnostic.                                                         |
+| `worktree.sharedDirectories`: first 100 input entries                                                     | Later entries ignored, even if earlier entries were invalid or duplicates.                                    |
+| YAML alias expansion: parser `maxAliasCount` of 100                                                       | Whole file rejected if the parser's expansion budget is exceeded; this is not a simple count of alias tokens. |
+
+## Which checkout supplies the configuration?
+
+The **primary checkout** is the repository folder registered in Orca. It may be on a different branch from the new worktree.
+
+| Configuration                                         | Read from                                                                                    |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Setup script, setup startup policy, and `defaultTabs` | The **new worktree's** `orca.yaml`.                                                          |
+| Shared directory rules and their source directories   | The **primary checkout's** `orca.yaml` and filesystem.                                       |
+| Copy rules and their source files                     | The **primary checkout's** `.worktreeinclude` and filesystem.                                |
+| Archive script                                        | The **primary checkout's** `orca.yaml`, executed with the worktree as its working directory. |
+| Issue command                                         | The **primary checkout's** `.orca/issue-command`, then its `orca.yaml`.                      |
+
+Changing a feature branch's `.worktreeinclude` or shared-directory list does not update the primary checkout. Before creating another worktree, make sure the primary checkout has the intended rules and the ignored source paths. Setup and tab defaults instead follow the revision checked out in the new worktree. These defaults are applied during creation; they do not synchronize existing tabs or files.
+
+## Setup, archive, and command selection
+
+In **Settings → Repository**, setup can run automatically, ask each time, or be skipped by default. A new repository defaults to running setup. The [CLI](/docs/cli/reference#worktrees) accepts `--setup run|skip|inherit`; `inherit` follows that Settings policy. A valid file does not bypass Orca's command approval.
+
+**Command source & orca.yaml** controls setup and archive scripts:
+
+| Settings choice                    | Scripts used                                    |
+| ---------------------------------- | ----------------------------------------------- |
+| **orca.yaml only** (`shared-only`) | Only the YAML hook; a local hook is ignored.    |
+| **Local only** (`local-only`)      | Only the local hook; the YAML hook is ignored.  |
+| **Run both** (`run-both`)          | YAML first, then local, joined into one script. |
+
+When no source choice is saved, a nonempty local hook selects **Local only** for that hook; otherwise Orca uses **orca.yaml only**. Shared directories are independent of this command-source choice.
+
+Setup runs in a **Setup** terminal. On macOS/Linux, Orca writes a Bash runner with `set -e`; supported shell options on a leading `#!` line are replayed. On native Windows, the runner uses `.cmd` syntax and calls each nonempty line, stopping on failure. A leading POSIX-shell `#!` line opts into Bash only when Git Bash is configured and available; otherwise the `.cmd` runner refuses the script before running any commands. Choosing PowerShell as the terminal does not turn a setup script into PowerShell code.
+
+The setup runner receives:
+
+| Variable                                  | Value                                                             |
+| ----------------------------------------- | ----------------------------------------------------------------- |
+| `ORCA_ROOT_PATH`                          | Primary checkout path.                                            |
+| `ORCA_WORKTREE_PATH`                      | New worktree path.                                                |
+| `ORCA_WORKSPACE_NAME`                     | Worktree directory basename, rather than a renamed display title. |
+| `CONDUCTOR_ROOT_PATH`, `GHOSTX_ROOT_PATH` | Compatibility aliases for `ORCA_ROOT_PATH`.                       |
+
+Paths and shell syntax differ by platform. Use `$ORCA_WORKTREE_PATH` in Bash and `%ORCA_WORKTREE_PATH%` in `.cmd` scripts. `wait-for-setup` waits for successful setup before agent startup; either the YAML or local wait setting enables it. This controls startup order, not whether setup runs.
+
+Archive hooks run before local removal; the CLI requires `--run-hooks` to enable them. A failed archive hook blocks removal unless the caller explicitly accepts that failure.
+
+### Terminal defaults and issue commands
+
+`defaultTabs` creates terminal tabs once for the new worktree. Titles and colors still apply when commands are skipped. Tab commands follow the setup run decision and are suppressed by **Local only** (using the setup command-source policy).
+
+In the **desktop create composer**, an agent/startup command takes the first template tab, so the **first tab's template command is not run**. Reserve that tab for the agent and put other commands in later tabs. Local CLI creation with `--agent` instead creates a separate startup terminal alongside the configured tabs; every allowed template command can run. Tab commands do not wait for setup to finish, so a command that needs installed dependencies should be run after setup completes. The example's Git status command does not depend on the install.
+
+`issueCommand` has its own override: nonempty `.orca/issue-command` content wins over YAML. Clearing that local file restores the shared template. This is separate from the setup/archive command-source choice. Templates support `{{artifact_url}}` for the linked item's URL and legacy `{{issue}}` for its number; the composer decides whether to use the template. Shared YAML commands use Orca's approval flow, which can reuse saved trust; local overrides are treated as user-authored and do not trigger that shared-command prompt.
+
+```yaml
+issueCommand: |
+  echo "Linked item: {{artifact_url}}"
+```
+
+## Sharing versus copying ignored paths
+
+All three mechanisms take paths relative to the primary checkout and preserve an existing destination. Settings paths are applied first, then YAML shared directories, then include copies. A path already present through sharing is not copied again.
+
+| Mechanism                                         | Source entries                                                                                  | Result in a new local worktree                                                                                                                  |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Settings → Repository → Worktree Shared Paths** | Personal repository setting; existing files or directories.                                     | APFS clone-copy on macOS when available; otherwise a link. A clone has independent contents, while a link shares edits.                         |
+| `worktree.sharedDirectories`                      | Existing, **gitignored directories** listed in the primary `orca.yaml`. Adds to Settings paths. | Always a link to the primary directory, including on APFS. Windows tries a directory junction before a symlink. Edits affect the shared source. |
+| `.worktreeinclude`                                | Existing, **gitignored files or directories** listed in the primary checkout.                   | Private copy, using APFS clone-copy when available and ordinary copying otherwise. It never falls back to a shared link.                        |
+
+YAML shared paths normalize backslashes to `/`, remove a leading `./` and trailing `/`, and deduplicate. Absolute paths, drive-prefixed paths, empty path segments, `.`/`..` segments, and any `.git` segment are rejected. A file, missing directory, or non-ignored directory is skipped.
+
+### .worktreeinclude format and copy budget
+
+```text
+# .worktreeinclude
+.env
+.env.local
+.vscode/settings.json
+```
+
+Use **one literal path per line**, anchored to the repository root. Blank lines and lines starting with `#` are ignored; inline comments are not stripped. Backslashes, a leading `./`, and trailing `/` are normalized and duplicates are removed. Glob patterns containing `*` or `?` and negation starting with `!` are skipped. Use relative paths without traversal or `.git`; only existing, gitignored entries are copied. The include file must be a regular file no larger than 256 KiB; Orca considers at most 1,000 valid literal path candidates.
+
+Ordinary include copying is limited to **2 GiB total file bytes and 50,000 filesystem entries** per new worktree, measured before copying. APFS clones do not consume the byte budget, but still consume the entry budget; a fallback to ordinary copying must fit the byte budget. An entry that exceeds the remaining budget is skipped and creation reports a warning. Earlier refused entries can also exhaust the bounded sizing walk, leaving later entries unmeasured. These are admission limits, not quotas against files growing during copying.
+
+Copying a top-level source symlink uses its target's contents. Nested symlinks remain links, so editing through one can still affect its referent. Large dependency trees usually belong in setup or deliberate sharing rather than `.worktreeinclude`.
+
+## When configuration appears to do nothing
+
+1. Check the correct checkout from the table above, the exact key spelling, value type, duplicate keys, and limits. A parser failure can disable setup, tabs, and shared directories together.
+1. Check setup's run policy, command-source choice, approval, and first-tab startup behavior. `--setup run` changes the run decision; it does not override **Local only**.
+1. Check that source paths exist in the primary checkout and are directories for `sharedDirectories`. Verify ignored status there with `git check-ignore -- path/to/entry`; tracked or unignored paths do not qualify for YAML sharing or include copying.
+1. Check for an existing destination or a copy-budget warning. Missing shared directories are skipped without a warning; not every skipped field/path has a visible error. Absence of a warning does not prove acceptance.
+
+See [Worktrees](/docs/model/worktrees#shared-directories--gitignored-files) for the creation flow and [Settings](/docs/settings#repository) for repository preferences.

@@ -13,7 +13,8 @@ export function isHostHeaderActionTarget(
   target: EventTarget | null,
   currentTarget: HTMLElement
 ): boolean {
-  if (!(target instanceof HTMLElement) || target === currentTarget) {
+  // SVG icons are Elements too; action icons must not arm header dragging.
+  if (!(target instanceof Element) || target === currentTarget) {
     return false
   }
   return currentTarget.contains(target) && target.closest(HOST_HEADER_ACTION_SELECTOR) !== null

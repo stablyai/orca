@@ -1,12 +1,12 @@
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { getUtf8ByteLength } from '../../../../shared/utf8-byte-limits'
 
 import {
   TEXT_CONTROL_PASTE_CHUNK_MAX_BYTES,
   TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES,
-  TEXT_CONTROL_PASTE_MAX_BYTES,
-  getTextControlPasteByteLength
+  TEXT_CONTROL_PASTE_MAX_BYTES
 } from '@/lib/text-control-paste'
 import { insertText } from './dictation-insertion-target'
 
@@ -98,8 +98,7 @@ describe('dictation insertion target', () => {
     expect(execCommand.mock.calls.length).toBeGreaterThan(1)
     expect(
       execCommand.mock.calls.every(
-        (call) =>
-          getTextControlPasteByteLength(String(call[2] ?? '')) <= TEXT_CONTROL_PASTE_CHUNK_MAX_BYTES
+        (call) => getUtf8ByteLength(String(call[2] ?? '')) <= TEXT_CONTROL_PASTE_CHUNK_MAX_BYTES
       )
     ).toBe(true)
     expect(beforeInputEvents).toHaveLength(execCommand.mock.calls.length)
