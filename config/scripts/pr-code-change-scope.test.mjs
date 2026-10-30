@@ -101,6 +101,19 @@ describe('docs-only path classification', () => {
 })
 
 describe('per-job path classification', () => {
+  it('selects dependent Node checking only for the exact cloud owner support leaf', () => {
+    const leaf = 'cloud/apps/push/src/push-owner-integration.test-fixture.ts'
+    expectClassification([leaf], { static_analysis: true, typecheck: true })
+    expect(classifyPrJobs([leaf]).should_run).toBe(false)
+    for (const file of [
+      'cloud/apps/push/src/push-owner-live.test-fixture.ts',
+      `${leaf}x`,
+      'cloud/apps/push/src/index.ts'
+    ]) {
+      expect(classifyPrJobs([file]).typecheck, file).toBe(false)
+    }
+  })
+
   it('runs every expensive job on an empty diff rather than skipping by accident', () => {
     const result = classifyPrJobs([])
     expect(result.should_run).toBe(true)

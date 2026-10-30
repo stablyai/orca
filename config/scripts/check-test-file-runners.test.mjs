@@ -1,5 +1,10 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { findRunnerDrift, findUncollectedTestFiles } from './check-test-file-runners.mjs'
+import {
+  TEST_RUNNERS,
+  findRunnerDrift,
+  findUncollectedTestFiles
+} from './check-test-file-runners.mjs'
 import { classifyPrJobs } from './pr-code-change-scope.mjs'
 
 const RUNNERS = [
@@ -111,4 +116,50 @@ it('runs the static job when a cloud diff touches code that could hold or run a 
     ].filter((file) => !routed(file))
   ).toEqual([])
   expect(routed('cloud/apps/relay/Dockerfile')).toBe(false)
+})
+
+it('recognizes only the dedicated owner graph and ties its selectors to each actual source', () => {
+  const runners = TEST_RUNNERS.filter(({ name }) => name.startsWith('push owner '))
+  const entries = [
+    'src/main/runtime/push/push-owner-live.test-fixture.ts',
+    'mobile/src/notifications/push-owner-live.test-fixture.ts',
+    'cloud/apps/push/src/push-owner-live.test-fixture.ts'
+  ]
+  expect(runners.map(({ include }) => include)).toEqual(entries.map((entry) => [entry]))
+  expect(runners.every(({ manual }) => !manual)).toBe(true)
+  const suites = new Map([...entries, 'src/orphan.test-fixture.ts'].map((file) => [file, SUITE]))
+  expect(findUncollectedTestFiles(suites, TEST_RUNNERS)).toEqual(['src/orphan.test-fixture.ts'])
+  expect(
+    findUncollectedTestFiles(
+      suites,
+      TEST_RUNNERS.filter((row) => !runners.includes(row))
+    )
+  ).toEqual([...entries, 'src/orphan.test-fixture.ts'])
+  const sources = new Map(
+    runners.flatMap(({ sourceMirrors }) =>
+      Object.keys(sourceMirrors).map((file) => [
+        file,
+        readFileSync(new URL(`../../${file}`, import.meta.url), 'utf8')
+      ])
+    )
+  )
+  expect(findRunnerDrift(runners, (file) => sources.get(file) ?? null)).toEqual([])
+  for (const { name, sourceMirrors } of runners) {
+    for (const [source, literals] of Object.entries(sourceMirrors)) {
+      const missing = new Map(sources)
+      missing.delete(source)
+      expect(findRunnerDrift(runners, (file) => missing.get(file) ?? null)).toContain(
+        `${name}: ${source} is missing`
+      )
+      for (const literal of literals) {
+        const changed = new Map(sources)
+        changed.set(source, sources.get(source).replace(literal, 'changed-selector'))
+        const elsewhere = [...sources.keys()].find((file) => file !== source)
+        changed.set(elsewhere, `${changed.get(elsewhere)}\n${literal}`)
+        expect(findRunnerDrift(runners, (file) => changed.get(file) ?? null)).toContain(
+          `${name}: ${source} does not contain ${JSON.stringify(literal)}`
+        )
+      }
+    }
+  }
 })

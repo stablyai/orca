@@ -507,6 +507,10 @@ export function classifyPrJobs(
   jobs.static_analysis =
     jobs.static_analysis ||
     changedFiles.some((file) => isStaticAnalysisScannedPath(file) || isFormatCheckedPath(file))
+  // This exact cloud support leaf is also imported by the composite Node test program.
+  jobs.typecheck ||= changedFiles.includes(
+    'cloud/apps/push/src/push-owner-integration.test-fixture.ts'
+  )
   // Page-bundle gate must bypass desktop should_run or mobile-only diffs skip the very build they change.
   jobs.mobile_web_app = jobs.mobile_web_app || changesMobileWebApp(changedFiles)
   const mobileCiTools =

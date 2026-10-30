@@ -129,7 +129,12 @@ export const VERIFY_CHECKS = [
     inputs: [
       'config/scripts/ci-unit-files.mjs',
       'tests/playwright.config.ts',
-      'mobile/vitest.config.ts'
+      'mobile/vitest.config.ts',
+      'src/main/runtime/push/push-owner-live.test-fixture.ts',
+      'mobile/src/notifications/push-owner-live.test-fixture.ts',
+      'cloud/apps/push/src/push-owner-live.test-fixture.ts',
+      'src/main/runtime/push/push-owner-companions.test-fixture.ts',
+      '.github/workflows/push-owner-integration.yml'
     ],
     matches: (files) =>
       files.some((file) => TEST_FILE.test(file) || /vitest[^/]*\.config/.test(file))
@@ -169,6 +174,7 @@ export const VERIFY_CHECKS = [
 const TYPECHECK_INPUTS = [
   {
     config: 'config/tsconfig.node.json',
+    files: ['cloud/apps/push/src/push-owner-integration.test-fixture.ts'],
     inputs: [
       'src/main/',
       'src/preload/',
@@ -210,8 +216,8 @@ export function selectTypecheckProjects(files) {
     return TYPECHECK_INPUTS.map(({ config }) => config)
   }
   const typed = files.filter(isTypedSource)
-  return TYPECHECK_INPUTS.filter(({ inputs }) =>
-    typed.some((file) => matchesPrefix(file, inputs))
+  return TYPECHECK_INPUTS.filter(({ inputs, files: dependencies = [] }) =>
+    typed.some((file) => dependencies.includes(file) || matchesPrefix(file, inputs))
   ).map(({ config }) => config)
 }
 
