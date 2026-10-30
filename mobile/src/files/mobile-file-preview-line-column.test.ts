@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  estimateScrollOffsetForLine,
   normalizeMobileFilePreviewLineColumn,
   scrollOffsetForPreviewLine,
   textOffsetForLineColumn
@@ -35,5 +36,24 @@ describe('mobile-file-preview-line-column', () => {
   it('maps line numbers to the mono preview scroll offset', () => {
     expect(scrollOffsetForPreviewLine(1)).toBe(0)
     expect(scrollOffsetForPreviewLine(4)).toBe(57)
+  })
+
+  it('estimates scroll offset accounting for wrapped lines', () => {
+    expect(estimateScrollOffsetForLine(null, 4)).toBe(57)
+    expect(estimateScrollOffsetForLine([], 1)).toBe(0)
+
+    // Unwrapped lines match scrollOffsetForPreviewLine
+    const unwrapped = ['const a = 1', 'const b = 2', 'const c = 3', 'const d = 4']
+    expect(estimateScrollOffsetForLine(unwrapped, 4, 40)).toBe(57)
+
+    // Long lines wrap and add extra height
+    const wrapped = [
+      'a'.repeat(80), // 2 visual lines
+      'b'.repeat(20), // 1 visual line
+      'c'.repeat(120), // 3 visual lines
+      'target'
+    ]
+    // Lines 1..3 take 2 + 1 + 3 = 6 visual lines = 6 * 19 = 114px
+    expect(estimateScrollOffsetForLine(wrapped, 4, 40)).toBe(114)
   })
 })

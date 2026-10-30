@@ -16,6 +16,7 @@ type Props = {
   onRequestClose: () => void
   onFileOpenStart?: () => void
   onOpenedFileDiff?: (relativePath: string) => void
+  onOpenFile?: (relativePath: string) => void
 }
 
 type DockPanelContentProps = Omit<Props, 'availableWidth'>
@@ -29,7 +30,8 @@ export function SessionDockColumn({
   availableWidth,
   onRequestClose,
   onFileOpenStart,
-  onOpenedFileDiff
+  onOpenedFileDiff,
+  onOpenFile
 }: Props) {
   useMobileColorScheme()
   const { dockWidth, panHandlers } = useMobileDockResize(availableWidth)
@@ -46,6 +48,7 @@ export function SessionDockColumn({
         onRequestClose={onRequestClose}
         onFileOpenStart={onFileOpenStart}
         onOpenedFileDiff={onOpenedFileDiff}
+        onOpenFile={onOpenFile}
       />
     </View>
   )
@@ -59,7 +62,8 @@ const DockPanelContent = memo(function DockPanelContent({
   name,
   onRequestClose,
   onFileOpenStart,
-  onOpenedFileDiff
+  onOpenedFileDiff,
+  onOpenFile
 }: DockPanelContentProps) {
   // Reuse the source-control hub so dock icon switches retain commit draft, visited tabs and scroll.
   if (activePanel === 'sourceControl' || activePanel === 'pr') {
@@ -84,6 +88,7 @@ const DockPanelContent = memo(function DockPanelContent({
       name={name}
       embedded
       onRequestClose={onRequestClose}
+      onOpenFile={onOpenFile}
     />
   )
 })

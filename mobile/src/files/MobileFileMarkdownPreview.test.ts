@@ -15,10 +15,12 @@ vi.mock('react-native', () => ({
 }))
 
 vi.mock('lucide-react-native', () => ({
+  BookOpen: 'BookOpen',
   Code: 'Code',
   Pencil: 'Pencil',
   Copy: 'Copy',
-  Check: 'Check'
+  Check: 'Check',
+  ListOrdered: 'ListOrdered'
 }))
 
 const { writeText, alert } = vi.hoisted(() => ({ writeText: vi.fn(), alert: vi.fn() }))
@@ -184,5 +186,38 @@ describe('MobileFileMarkdownPreview', () => {
 
     await updatePreview(renderer, { ...baseProps, relativePath: 'notes/second.md', initialLine: 8 })
     expect(isSelected(renderer, 'View Markdown source')).toBe(true)
+  })
+
+  it('renders and toggles line numbers in source mode', async () => {
+    const onToggleLineNumbers = vi.fn()
+    const baseProps: PreviewProps = {
+      relativePath: 'notes/test.md',
+      content: '# Line 1\nLine 2',
+      truncated: false,
+      byteLength: 16,
+      showLineNumbers: true,
+      onToggleLineNumbers
+    }
+    renderer = await renderPreview(baseProps)
+
+    // In preview mode, line numbers toggle is omitted
+    expect(
+      findAllByHostType(renderer.root, 'Pressable').find(
+        (node) => node.props.accessibilityLabel === 'Hide line numbers'
+      )
+    ).toBeUndefined()
+
+    // Switch to source mode
+    await selectMode(renderer, 'View Markdown source')
+
+    const lineToggle = findAllByHostType(renderer.root, 'Pressable').find(
+      (node) => node.props.accessibilityLabel === 'Hide line numbers'
+    )
+    expect(lineToggle).toBeDefined()
+    expect(lineToggle?.props.accessibilityRole).toBe('button')
+    expect(lineToggle?.props.accessibilityState.selected).toBe(true)
+
+    await act(async () => lineToggle?.props.onPress())
+    expect(onToggleLineNumbers).toHaveBeenCalledOnce()
   })
 })

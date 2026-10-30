@@ -60,6 +60,25 @@ export const filePreviewStyles = themedStyleSheet(() => ({
     fontSize: typography.bodySize,
     textAlign: 'center'
   },
+  topBarActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm
+  },
+  toolbarButton: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radii.button,
+    backgroundColor: 'transparent'
+  },
+  toolbarButtonPressed: {
+    backgroundColor: colors.bgRaised
+  },
+  toolbarButtonActive: {
+    backgroundColor: colors.bgRaised
+  },
   saveButton: {
     width: 36,
     height: 36,
@@ -79,7 +98,46 @@ export const filePreviewStyles = themedStyleSheet(() => ({
     padding: spacing.md,
     paddingBottom: spacing.xl
   },
+  textContentWithLines: {
+    paddingLeft: 2,
+    paddingRight: spacing.sm,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xl
+  },
   textPreview: {
+    color: colors.textPrimary,
+    fontFamily: typography.monoFamily,
+    fontSize: 13,
+    lineHeight: 19
+  },
+  sourceLinesContainer: {
+    width: '100%'
+  },
+  sourceLineRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    minHeight: 19
+  },
+  sourceLineRowTarget: {
+    backgroundColor: colors.skillTokenSurface,
+    borderRadius: radii.button
+  },
+  sourceLineNumber: {
+    flexShrink: 0,
+    paddingRight: 6,
+    textAlign: 'right',
+    color: colors.textMuted,
+    fontFamily: typography.monoFamily,
+    fontSize: 12,
+    lineHeight: 19
+  },
+  sourceLineNumberTarget: {
+    color: colors.accentBlue,
+    fontWeight: '700'
+  },
+  sourceLineText: {
+    flex: 1,
+    minWidth: 0,
     color: colors.textPrimary,
     fontFamily: typography.monoFamily,
     fontSize: 13,
@@ -90,6 +148,10 @@ export const filePreviewStyles = themedStyleSheet(() => ({
     paddingBottom: spacing.xl
   },
   modeContainer: {
+    flex: 1,
+    backgroundColor: colors.editorSurface
+  },
+  codeContainer: {
     flex: 1,
     backgroundColor: colors.editorSurface
   },

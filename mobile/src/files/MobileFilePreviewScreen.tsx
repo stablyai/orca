@@ -32,6 +32,7 @@ import {
   isEditableMobileTerminalArtifactPreview,
   shouldKeepDirtyDraftOnPreviewLoadResult
 } from './mobile-file-preview-editability'
+import { useMobileLineNumbersPreference } from './mobile-line-numbers-preference'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
 import { mobileMarkdownFileLink } from './mobile-markdown-file-link'
 import { useMobileFilePreviewBack } from './use-mobile-file-preview-back'
@@ -69,6 +70,7 @@ function MobileFilePreviewDocument({ route }: Props) {
   const [savedContent, setSavedContent] = useState('')
   const [saveError, setSaveError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [showLineNumbers, setShowLineNumbers] = useMobileLineNumbersPreference()
   const savingRef = useRef(false)
   const saveRevisionRef = useRef(0)
   useLayoutEffect(
@@ -94,6 +96,11 @@ function MobileFilePreviewDocument({ route }: Props) {
     [routePreviewSource]
   )
   const previewSourceKeyRef = useRef(previewSourceKey)
+  const lineSeqRef = useRef(0)
+  const lineParam = previewParams?.line
+  useEffect(() => {
+    lineSeqRef.current += 1
+  }, [lineParam])
   // Grant-only refreshes keep the source key, so loads read the source here instead of re-running.
   const previewSourceRef = useRef(previewSource)
   const previewLoadRevisionRef = useRef(0)
@@ -331,19 +338,24 @@ function MobileFilePreviewDocument({ route }: Props) {
               {meta}
             </Text>
           </View>
-          {isEditableTerminalArtifact ? (
-            <Pressable
-              style={[styles.saveButton, (!canSaveArtifact || saving) && styles.saveButtonDisabled]}
-              onPress={() => void saveArtifact()}
-              disabled={!canSaveArtifact || saving}
-              accessibilityLabel={t(
-                'files.filePreviewScreen.saveArtifact',
-                'Save terminal artifact'
-              )}
-            >
-              <Save size={18} color={colors.textPrimary} strokeWidth={2.2} />
-            </Pressable>
-          ) : null}
+          <View style={styles.topBarActions}>
+            {isEditableTerminalArtifact ? (
+              <Pressable
+                style={[
+                  styles.saveButton,
+                  (!canSaveArtifact || saving) && styles.saveButtonDisabled
+                ]}
+                onPress={() => void saveArtifact()}
+                disabled={!canSaveArtifact || saving}
+                accessibilityLabel={t(
+                  'files.filePreviewScreen.saveArtifact',
+                  'Save terminal artifact'
+                )}
+              >
+                <Save size={18} color={colors.textPrimary} strokeWidth={2.2} />
+              </Pressable>
+            ) : null}
+          </View>
         </View>
       </SafeAreaView>
       <MobileFilePreviewBody
@@ -356,6 +368,9 @@ function MobileFilePreviewDocument({ route }: Props) {
         draftContent={draftContent}
         saveError={saveError}
         lineColumn={lineColumn}
+        initialLineSeq={lineSeqRef.current}
+        showLineNumbers={showLineNumbers}
+        onToggleLineNumbers={() => setShowLineNumbers((prev) => !prev)}
         imageWidth={Math.max(1, width - spacing.md * 2)}
         imageHeight={Math.max(240, height - 160)}
         onDraftChange={setDraftContent}
