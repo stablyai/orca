@@ -1,4 +1,11 @@
+import { useCallback, useMemo } from 'react'
 import type React from 'react'
+import { useAppStore } from '@/store'
+import { detectLanguage } from '@/lib/language-detect'
+import {
+  canCompareSelectedFiles,
+  orderFileComparePair
+} from '@/lib/file-explorer-file-compare'
 import { getExplorerDisplayDepth } from './file-explorer-display-root'
 import { Button } from '@/components/ui/button'
 import { dirname } from '@/lib/path'
@@ -64,6 +71,45 @@ export function FileExplorerFilesTreePane({
   const { loadingDirPaths, rootError } = tree
   const rootCache = displayRootPath ? tree.dirCache[displayRootPath] : undefined
   const { selectedPaths, preserveSelectionForContextMenu, copyPathsForNode } = selection
+  const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const selectedNodes = useMemo(
+    () => rowProjection.getRowsByPaths(selectedPaths),
+    [rowProjection, selectedPaths]
+  )
+  const canCompareSelected = useMemo(
+    () =>
+      canCompareSelectedFiles(
+        selectedNodes.map((node) => ({
+          path: node.path,
+          relativePath: node.relativePath,
+          isDirectory: node.isDirectory
+        }))
+      ),
+    [selectedNodes]
+  )
+  const handleCompareSelected = useCallback(() => {
+    if (!activeWorktreeId || !canCompareSelected || selectedNodes.length !== 2) {
+      return
+    }
+    const [left, right] = orderFileComparePair(
+      {
+        path: selectedNodes[0].path,
+        relativePath: selectedNodes[0].relativePath,
+        isDirectory: selectedNodes[0].isDirectory
+      },
+      {
+        path: selectedNodes[1].path,
+        relativePath: selectedNodes[1].relativePath,
+        isDirectory: selectedNodes[1].isDirectory
+      }
+    )
+    useAppStore.getState().openFileCompare(
+      activeWorktreeId,
+      { filePath: left.path, relativePath: left.relativePath },
+      { filePath: right.path, relativePath: right.relativePath },
+      detectLanguage(left.relativePath)
+    )
+  }, [activeWorktreeId, canCompareSelected, selectedNodes])
   const {
     scrollRef,
     runtimeDownloadContext,
@@ -218,6 +264,8 @@ export function FileExplorerFilesTreePane({
           onViewFile={handleClick}
           onContextMenuSelect={preserveSelectionForContextMenu}
           onCopyPaths={copyPathsForNode}
+          canCompareSelected={canCompareSelected}
+          onCompareSelected={handleCompareSelected}
           onStartNew={startNew}
           onStartRename={handleStartRename}
           onDuplicate={handleDuplicate}

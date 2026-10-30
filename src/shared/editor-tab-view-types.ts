@@ -20,10 +20,17 @@ export type DiffSource =
   | 'staged'
   | 'branch'
   | 'commit'
+  | 'file-compare'
   | 'combined-all'
   | 'combined-uncommitted'
   | 'combined-branch'
   | 'combined-commit'
+
+/** Second side of a same-worktree file↔file compare tab. Left side uses OpenFile.filePath. */
+export type FileCompareTarget = {
+  filePath: string
+  relativePath: string
+}
 
 export type BranchCompareSnapshot = Pick<
   GitBranchCompareSummary,
@@ -90,6 +97,8 @@ export type EditorTabView =
   | {
       mode: 'diff'
       diffSource?: DiffSource
+      /** Right-hand file when `diffSource === 'file-compare'`. */
+      compareTarget?: FileCompareTarget
       branchCompare?: BranchCompareSnapshot
       commitCompare?: CommitCompareSnapshot
       branchOldPath?: string

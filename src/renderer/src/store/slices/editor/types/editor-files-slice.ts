@@ -158,6 +158,13 @@ export type EditorFilesSlice = {
     staged: boolean,
     options?: EditorOpenTargetOptions & { selection?: EditorTabSelection }
   ) => void
+  openFileCompare: (
+    worktreeId: string,
+    left: { filePath: string; relativePath: string },
+    right: { filePath: string; relativePath: string },
+    language: string,
+    options?: EditorOpenTargetOptions
+  ) => void
   openBranchDiff: (
     worktreeId: string,
     worktreePath: string,

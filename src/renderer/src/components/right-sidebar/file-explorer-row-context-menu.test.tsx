@@ -89,6 +89,8 @@ function renderRevealItem(
       selectionSize={1}
       onViewFile={vi.fn()}
       onCopyPaths={vi.fn()}
+      canCompareSelected={false}
+      onCompareSelected={vi.fn()}
       onStartNew={vi.fn()}
       onStartRename={vi.fn()}
       onDuplicate={vi.fn()}

@@ -7,6 +7,7 @@ import type { OpenFile } from '../types/open-file'
 
 const DIFF_VIEW_FIELDS = [
   'diffSource',
+  'compareTarget',
   'branchCompare',
   'commitCompare',
   'branchOldPath',

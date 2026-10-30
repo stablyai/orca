@@ -48,11 +48,13 @@ export type FileExplorerRowProps = {
   targetDir: string
   targetDepth: number
   selectionSize: number
+  canCompareSelected: boolean
   onClick: (event: React.MouseEvent<HTMLButtonElement>) => void
   onDoubleClick: () => void
   onViewFile: () => void
   onContextMenuSelect: () => void
   onCopyPaths: (pathKind: 'absolute' | 'relative') => void
+  onCompareSelected: () => void
   onStartNew: (type: 'file' | 'folder', dir: string, depth: number) => void
   onStartRename: (node: TreeNode) => void
   onDuplicate: (node: TreeNode) => void
@@ -94,11 +96,13 @@ export function FileExplorerRow({
   targetDir,
   targetDepth,
   selectionSize,
+  canCompareSelected,
   onClick,
   onDoubleClick,
   onViewFile,
   onContextMenuSelect,
   onCopyPaths,
+  onCompareSelected,
   onStartNew,
   onStartRename,
   onDuplicate,
@@ -289,8 +293,10 @@ export function FileExplorerRow({
         targetDir={targetDir}
         targetDepth={targetDepth}
         selectionSize={selectionSize}
+        canCompareSelected={canCompareSelected}
         onViewFile={onViewFile}
         onCopyPaths={onCopyPaths}
+        onCompareSelected={onCompareSelected}
         onStartNew={onStartNew}
         onStartRename={onStartRename}
         onDuplicate={onDuplicate}

@@ -8,6 +8,7 @@ import {
   getRuntimeGitCommitDiff,
   getRuntimeGitDiff
 } from '@/runtime/runtime-git-diff-client'
+import { readRuntimeFileContent } from '@/runtime/runtime-file-read-client'
 import { getRuntimeGitScope } from '@/runtime/runtime-git-client-context'
 import type { DiffContent, InFlightContentRead } from './editor-panel-content-types'
 import { canUseChangesModeForFile } from './editor-panel-file-mode'
@@ -43,7 +44,11 @@ function inFlightDiffKey(
     file.diffSource === 'commit' && file.commitCompare
       ? `${file.commitCompare.parentOid ?? 'empty-tree'}..${file.commitCompare.commitOid}::${file.branchOldPath ?? ''}`
       : ''
-  return `${connectionId ?? ''}::${file.diffSource ?? ''}::${compareAgainstHead ? 'head' : 'default'}::${file.filePath}::${branch}::${commit}`
+  const fileCompare =
+    file.diffSource === 'file-compare' && file.compareTarget
+      ? `${file.filePath}::${file.compareTarget.filePath}`
+      : ''
+  return `${connectionId ?? ''}::${file.diffSource ?? ''}::${compareAgainstHead ? 'head' : 'default'}::${file.filePath}::${branch}::${commit}::${fileCompare}`
 }
 
 export function useEditorPanelDiffContentLoader({
@@ -100,7 +105,54 @@ export function useEditorPanelDiffContentLoader({
         let pending = inFlightDiffReads.get(key)
         if (!pending) {
           const promise: Promise<DiffContent> =
-            effectiveDiffSource === 'commit'
+            effectiveDiffSource === 'file-compare'
+              ? file.compareTarget
+                ? Promise.all([
+                    readRuntimeFileContent({
+                      target: fileTarget,
+                      filePath: file.filePath,
+                      relativePath: file.relativePath,
+                      worktreeId: file.worktreeId,
+                      connectionId,
+                      ...(wake ? { wakeWslDistro: true } : {})
+                    }),
+                    readRuntimeFileContent({
+                      target: fileTarget,
+                      filePath: file.compareTarget.filePath,
+                      relativePath: file.compareTarget.relativePath,
+                      worktreeId: file.worktreeId,
+                      connectionId,
+                      ...(wake ? { wakeWslDistro: true } : {})
+                    })
+                  ]).then(([left, right]): DiffContent => {
+                    if (left.isBinary) {
+                      return {
+                        kind: 'binary',
+                        originalContent: left.content,
+                        modifiedContent: right.content,
+                        originalIsBinary: true,
+                        modifiedIsBinary: right.isBinary
+                      }
+                    }
+                    if (right.isBinary) {
+                      return {
+                        kind: 'binary',
+                        originalContent: left.content,
+                        modifiedContent: right.content,
+                        originalIsBinary: false,
+                        modifiedIsBinary: true
+                      }
+                    }
+                    return {
+                      kind: 'text',
+                      originalContent: left.content,
+                      modifiedContent: right.content,
+                      originalIsBinary: false,
+                      modifiedIsBinary: false
+                    }
+                  })
+                : Promise.reject(new Error('Missing compare target for file-compare tab.'))
+              : effectiveDiffSource === 'commit'
               ? commitCompare
                 ? getRuntimeGitCommitDiff(
                     {

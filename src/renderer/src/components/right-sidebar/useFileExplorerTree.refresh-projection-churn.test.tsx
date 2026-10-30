@@ -214,6 +214,8 @@ describe('file explorer directory refresh churn', () => {
       onViewFile: vi.fn(),
       onContextMenuSelect: vi.fn(),
       onCopyPaths: vi.fn(),
+      canCompareSelected: false,
+      onCompareSelected: vi.fn(),
       onStartNew: vi.fn(),
       onStartRename: vi.fn(),
       onDuplicate: vi.fn(),

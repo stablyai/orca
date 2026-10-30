@@ -19,6 +19,7 @@ export type {
   ConflictReviewEntry,
   ConflictReviewState,
   DiffSource,
+  FileCompareTarget,
   OpenConflictMetadata
 } from '../../../../shared/editor-tab-view-types'
 

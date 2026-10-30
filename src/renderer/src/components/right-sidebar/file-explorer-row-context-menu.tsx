@@ -1,5 +1,6 @@
 import React, { useCallback } from 'react'
 import {
+  Columns2,
   Copy,
   Download,
   ExternalLink,
@@ -71,8 +72,10 @@ type FileExplorerRowContextMenuProps = Pick<
   | 'targetDir'
   | 'targetDepth'
   | 'selectionSize'
+  | 'canCompareSelected'
   | 'onViewFile'
   | 'onCopyPaths'
+  | 'onCompareSelected'
   | 'onStartNew'
   | 'onStartRename'
   | 'onDuplicate'
@@ -96,8 +99,10 @@ export function FileExplorerRowContextMenu({
   targetDir,
   targetDepth,
   selectionSize,
+  canCompareSelected,
   onViewFile,
   onCopyPaths,
+  onCompareSelected,
   onStartNew,
   onStartRename,
   onDuplicate,
@@ -200,6 +205,15 @@ export function FileExplorerRowContextMenu({
           <ContextMenuShortcut>{copyRelativePathShortcutLabel}</ContextMenuShortcut>
         ) : null}
       </ContextMenuItem>
+      {canCompareSelected ? (
+        <ContextMenuItem onSelect={onCompareSelected}>
+          <Columns2 />
+          {translate(
+            'auto.components.right.sidebar.FileExplorerRow.compareSelectedFiles',
+            'Compare Selected Files'
+          )}
+        </ContextMenuItem>
+      ) : null}
       {!node.isDirectory && (
         <ContextMenuItem disabled={writesBlocked} onSelect={() => onDuplicate(node)}>
           <Files />
