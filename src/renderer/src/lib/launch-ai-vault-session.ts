@@ -1,6 +1,5 @@
 import { useAppStore } from '@/store'
 import { persistAgentLaunchTabOrder } from '@/lib/launch-agent-tab-order'
-import { insertUnifiedTabAfterAnchor } from '@/lib/unified-tab-anchor-insertion'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-terminal-creation'
@@ -28,17 +27,8 @@ export function launchAiVaultSessionInNewTab(args: {
   providerSession?: AgentProviderSessionMetadata
   targetGroupId?: string
   splitDirection?: TabSplitDirection
-  /** Opens in this tab's slot: the next tab in its group. */
-  afterTabId?: string
-  /** A chat's switch, whose ordinary spawn admits the resume; set only for a capable host. */
-  resumeOrigin?: 'switch'
 }): LaunchAiVaultSessionInNewTabResult {
   const store = useAppStore.getState()
-  const slot = args.afterTabId
-    ? store.unifiedTabsByWorktree[args.worktreeId]?.find((tab) => tab.id === args.afterTabId)
-    : undefined
-  const sourceGroupId = args.targetGroupId ?? slot?.groupId
-  const switchStart = args.resumeOrigin ? { resumeOrigin: args.resumeOrigin } : {}
   // Why both paths split: the runtime path used to return first and drop the split (#22791).
   const split =
     args.splitDirection && args.targetGroupId
@@ -50,14 +40,12 @@ export function launchAiVaultSessionInNewTab(args: {
     const splitGroupId = split
       ? store.createEmptySplitGroup(args.worktreeId, split.sourceGroupId, split.splitDirection)
       : null
-    const targetGroupId = splitGroupId ?? sourceGroupId
+    const targetGroupId = splitGroupId ?? args.targetGroupId
     const runtimeLaunch = createWebRuntimeSessionTerminal(
       {
         worktreeId: args.worktreeId,
         environmentId: runtimeEnvironmentId,
         ...(targetGroupId ? { targetGroupId } : {}),
-        ...(args.afterTabId ? { afterTabId: args.afterTabId } : {}),
-        ...switchStart,
         agentSessionKind: 'resume',
         launchAgent: args.agent,
         command: args.command,
@@ -83,7 +71,7 @@ export function launchAiVaultSessionInNewTab(args: {
     return { tabId: null, runtimeLaunch: observedRuntimeLaunch }
   }
 
-  const tab = store.createTab(args.worktreeId, sourceGroupId, undefined, {
+  const tab = store.createTab(args.worktreeId, args.targetGroupId, undefined, {
     ...(split ? { split } : {}),
     ...(args.cwd ? { startupCwd: args.cwd } : {}),
     pendingStartup: {
@@ -92,7 +80,6 @@ export function launchAiVaultSessionInNewTab(args: {
       ...(args.envToDelete ? { envToDelete: args.envToDelete } : {}),
       ...(args.launchConfig ? { launchConfig: args.launchConfig, launchAgent: args.agent } : {}),
       ...(args.providerSession ? { resumeProviderSession: args.providerSession } : {}),
-      ...(args.resumeOrigin ? { launchAgent: args.agent, ...switchStart } : {}),
       telemetry: {
         agent_kind: tuiAgentToAgentKind(args.agent),
         launch_source: 'sidebar',
@@ -103,9 +90,6 @@ export function launchAiVaultSessionInNewTab(args: {
   store.setActiveTabType('terminal', args.worktreeId)
 
   persistAgentLaunchTabOrder(args.worktreeId, tab.id)
-  if (slot && !split && (!args.targetGroupId || args.targetGroupId === slot.groupId)) {
-    insertUnifiedTabAfterAnchor(args.worktreeId, tab.id, slot.id)
-  }
 
   return { tabId: tab.id }
 }

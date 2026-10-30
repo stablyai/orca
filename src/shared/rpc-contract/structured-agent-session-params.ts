@@ -221,7 +221,6 @@ export const SwitchToChatParams = OptionsParams.extend({
   execution: z
     .object({
       invocationId: Identifier('Invalid invocation'),
-      viewerSelection: z.string().max(16384).optional(),
       create: CreateIntentParams.omit({ firstMessage: true }).optional(),
       source: TerminalClose.required().optional()
     })
@@ -232,7 +231,6 @@ export const SwitchToTerminalParams = OptionsParams.extend({
   execution: z
     .object({
       invocationId: Identifier('Invalid invocation'),
-      viewerSelection: z.string().max(16384).optional(),
       sourceTabId: Identifier('Invalid tab').optional(),
       groupId: Identifier('Invalid group').optional(),
       commandOverride: z.string().max(8192).optional()

@@ -1,4 +1,3 @@
-import { copySleepingAgentLaunchConfig } from '../../runtime-agent-launch-resolution'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-session-contracts'
 import { OrcaRuntimeWithFailedStartPanes } from './failed-start-pane'
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
@@ -26,9 +25,6 @@ export type MobileTerminalCreateOptions = {
   sourceChatFork?: { sessionId: string }
   targetGroupId?: string
   command?: string
-  sessionOptions?: Record<string, string>
-  commandOverride?: string
-  launchRuntime?: AgentLaunchRuntime
   shellOverride?: string
   cwd?: string
   env?: Record<string, string>
@@ -38,62 +34,12 @@ export type MobileTerminalCreateOptions = {
   agentPrompt?: string
   launchConfig?: SleepingAgentLaunchConfig
   launchAgent?: TuiAgent
-  /** A switch's start: its ordinary spawn admission checks the conversation. */
-  resumeProviderSession?: AgentProviderSessionMetadata
-  resumeOrigin?: 'switch'
   viewMode?: 'terminal' | 'chat'
   activate?: boolean
   clientNavigationId?: string
   clientMutationId?: string
   supportsSplitGroupPlacement?: boolean
   signal?: AbortSignal
-}
-
-export type OwnedMobileTerminalDispatchRecipe = {
-  tabId: string
-  leafId: string
-  launchConfig?: SleepingAgentLaunchConfig
-  launchAgent?: TuiAgent
-  connectionId: string | null
-  recordedAt: number
-}
-
-const OWNED_MOBILE_DISPATCH_RECIPE_TTL_MS = 15 * 60_000
-
-export function pruneOwnedMobileTerminalDispatchRecipes(
-  recipes: Map<string, OwnedMobileTerminalDispatchRecipe>
-): void {
-  const now = Date.now()
-  for (const [handle, recipe] of recipes) {
-    if (now - recipe.recordedAt >= OWNED_MOBILE_DISPATCH_RECIPE_TTL_MS) {
-      recipes.delete(handle)
-    }
-  }
-}
-
-export function recordOwnedMobileTerminalDispatchRecipe(
-  recipes: Map<string, OwnedMobileTerminalDispatchRecipe>,
-  handle: string,
-  launch: Pick<
-    OwnedMobileTerminalDispatchRecipe,
-    'tabId' | 'leafId' | 'launchConfig' | 'launchAgent'
-  >,
-  workspace: { connectionId?: string | null }
-): void {
-  if (!recipes.has(handle) && recipes.size >= 4096) {
-    throw new Error('runtime_unavailable')
-  }
-  // Retain original dispatch evidence across an ambiguous response; retry payloads cannot replace it.
-  recipes.set(handle, {
-    tabId: launch.tabId,
-    leafId: launch.leafId,
-    connectionId: workspace.connectionId ?? null,
-    recordedAt: Date.now(),
-    ...(launch.launchConfig
-      ? { launchConfig: copySleepingAgentLaunchConfig(launch.launchConfig) }
-      : {}),
-    ...(launch.launchAgent ? { launchAgent: launch.launchAgent } : {})
-  })
 }
 
 export type OwnedMobileTerminalCreateOptions = {
@@ -115,7 +61,7 @@ export type OwnedMobileTerminalCreateOptions = {
   supportsSplitGroupPlacement?: boolean
   launchConfig?: SleepingAgentLaunchConfig
   resumeProviderSession?: AgentProviderSessionMetadata
-  resumeOrigin?: 'saved' | 'switch'
+  resumeOrigin?: 'saved'
   spawnIntent?: SpawnIntent
   launchRuntime?: AgentLaunchRuntime
   signal?: AbortSignal
@@ -151,9 +97,6 @@ export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRun
       sourceChatFork?: { sessionId: string }
       targetGroupId?: string
       command?: string
-      sessionOptions?: Record<string, string>
-      commandOverride?: string
-      launchRuntime?: AgentLaunchRuntime
       shellOverride?: string
       cwd?: string
       env?: Record<string, string>
@@ -163,7 +106,6 @@ export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRun
       agentPrompt?: string
       launchConfig?: SleepingAgentLaunchConfig
       resumeProviderSession?: AgentProviderSessionMetadata
-      resumeOrigin?: 'switch'
       launchAgent?: TuiAgent
       terminalImageViewerSupported?: boolean
       viewMode?: 'terminal' | 'chat'

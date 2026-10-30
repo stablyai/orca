@@ -52,38 +52,6 @@ function exitedBeforeAdmission(
   }
 }
 
-/** Best-effort late-create cleanup uses the ordinary host fence, never a retained switch permit. */
-export async function discardUnattachedPtySpawn(
-  provider: IPtyProvider,
-  result: PtySpawnResult
-): Promise<boolean> {
-  if (
-    !result.incarnationId ||
-    result.isReattach ||
-    result.agentSessionEnsure?.disposition === 'adopted'
-  ) {
-    return false
-  }
-  const cleanup = await provider
-    .killFenced?.({
-      id: result.id,
-      expectedIncarnationId: result.incarnationId,
-      requireNoAgentOwner: true,
-      requireUnattached: true
-    })
-    .catch(() => undefined)
-  if (cleanup?.outcome !== 'ended' && cleanup?.outcome !== 'already_exited') {
-    return false
-  }
-  finishPtyShutdown(
-    result.id,
-    null,
-    undefined,
-    PtyExitProof.from('shutdown-acknowledged', result.incarnationId)
-  )
-  return true
-}
-
 export async function discardUnpersistedPtySpawn(
   provider: IPtyProvider,
   result: PtySpawnResult,

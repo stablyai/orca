@@ -166,8 +166,6 @@ export const CreateTerminalTab = WorktreeTabSelector.extend({
   launchToken: z.string().min(1).max(128).optional(),
   // Record the resumed conversation before hook reports; drop malformed hints, never the create (#10923).
   resumeProviderSession: ResumeProviderSessionParam.optional().catch(undefined),
-  // Sent only to hosts advertising the agent's switch capability: an older host strips it unprotected.
-  resumeOrigin: z.literal('switch').optional(),
   agent: z
     .custom<TuiAgent>(isTuiAgent, {
       message: 'Unknown agent preset'
@@ -192,13 +190,6 @@ export const CreateTerminalTab = WorktreeTabSelector.extend({
   // Retry the same in-flight create on double-tap/reconnect instead of spawning another terminal.
   clientMutationId: z.string().min(1).max(128).optional()
 }).superRefine((value, context) => {
-  if (value.resumeOrigin === 'switch' && (!value.resumeProviderSession || !value.launchAgent)) {
-    context.addIssue({
-      code: 'custom',
-      path: ['resumeOrigin'],
-      message: 'A switch names its conversation and agent'
-    })
-  }
   if (value.sourceChatFork) {
     if (!value.clientMutationId) {
       context.addIssue({

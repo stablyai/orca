@@ -250,8 +250,6 @@ type RuntimeTerminalCreateBaseRequestPayload = {
   envToDelete?: string[]
   launchConfig?: AgentSessionResume.SleepingAgentLaunchConfig
   resumeProviderSession?: AgentSessionResume.AgentProviderSessionMetadata
-  /** A chat's switch: the pane's spawn admission claims the conversation. */
-  resumeOrigin?: 'switch'
   launchToken?: string
   launchAgent?: TuiAgent
   viewMode?: 'terminal' | 'chat'

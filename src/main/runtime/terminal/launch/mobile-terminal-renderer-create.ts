@@ -124,12 +124,9 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
         }
       )
     }
-    const switchStart =
-      opts.resumeOrigin === 'switch'
-        ? { resumeProviderSession: opts.resumeProviderSession, resumeOrigin: opts.resumeOrigin }
-        : {}
-    const createOwned = (identity?: { tabId: string; leafId: string }) =>
-      this.createRuntimeOwnedMobileSessionTerminal(
+    const win = this.getAvailableAuthoritativeWindow()
+    if (!win) {
+      return await this.createRuntimeOwnedMobileSessionTerminal(
         worktreeId,
         opts.activate !== false,
         afterTabId,
@@ -141,7 +138,6 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           env: startupCommand.env,
           envToDelete: startupCommand.envToDelete,
           startupCommandDelivery: startupCommand.startupCommandDelivery,
-          ...(identity ? { identity } : {}),
           launchAgent: startupCommand.launchAgent,
           viewMode: opts.viewMode,
           targetGroupId: opts.targetGroupId,
@@ -152,13 +148,9 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           supportsSplitGroupPlacement: opts.supportsSplitGroupPlacement,
           launchConfig: startupCommand.launchConfig,
           launchRuntime: startupCommand.launchRuntime,
-          ...switchStart,
           signal: opts.signal
         }
       )
-    const win = this.getAvailableAuthoritativeWindow()
-    if (!win) {
-      return await createOwned()
     }
     const rendererWebContents = win.webContents
     if (rendererWebContents.isDestroyed?.()) {
@@ -212,7 +204,6 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           ...(startupCommand.envToDelete ? { envToDelete: startupCommand.envToDelete } : {}),
           ...(startupCommand.launchConfig ? { launchConfig: startupCommand.launchConfig } : {}),
           ...(startupCommand.launchAgent ? { launchAgent: startupCommand.launchAgent } : {}),
-          ...switchStart,
           ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
           startupCommandDelivery: startupCommand.startupCommandDelivery,
           source: 'runtime-session',
@@ -261,11 +252,29 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
         if (!pendingSurface) {
           throw new Error('Timed out waiting for terminal surface after creation')
         }
-        // Why: a hidden renderer can publish the tab shell before the PTY spawns; reuse the same identity so later focus adopts instead of creating another tab.
-        return await createOwned({
-          tabId: pendingSurface.tab.parentTabId,
-          leafId: pendingSurface.tab.leafId
-        })
+        // Hidden renderers may publish tab shells before spawn; reuse identity so later focus adopts the tab.
+        return await this.createRuntimeOwnedMobileSessionTerminal(
+          worktreeId,
+          opts.activate !== false,
+          afterTabId,
+          {
+            wslUserAct: true,
+            command: startupCommand.command,
+            ...(opts.shellOverride ? { shellOverride: opts.shellOverride } : {}),
+            cwd,
+            env: startupCommand.env,
+            envToDelete: startupCommand.envToDelete,
+            startupCommandDelivery: startupCommand.startupCommandDelivery,
+            identity: { tabId: pendingSurface.tab.parentTabId, leafId: pendingSurface.tab.leafId },
+            launchAgent: startupCommand.launchAgent,
+            viewMode: opts.viewMode,
+            targetGroupId: opts.targetGroupId,
+            supportsSplitGroupPlacement: opts.supportsSplitGroupPlacement,
+            launchConfig: startupCommand.launchConfig,
+            launchRuntime: startupCommand.launchRuntime,
+            signal: opts.signal
+          }
+        )
       } catch (error) {
         // Hidden-renderer publication can time out; rescue only a live-backed tab or rollback would leave a ghost (#7587).
         if (this.findLiveRegisteredPtyForRendererTab(worktreeId, reply.tabId)) {
@@ -293,5 +302,3 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
     }
   }
 }
-
-export type { MobileTerminalCreateOptions } from './mobile-terminal-create'

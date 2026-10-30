@@ -31,7 +31,7 @@ export type PtyPaneStartup = {
   launchConfig?: SleepingAgentLaunchConfig
   resumeProviderSession?: AgentProviderSessionMetadata
   /** `saved`: a resume built from saved facts, which the host refuses for a chat's conversation. */
-  resumeOrigin?: 'saved' | 'switch'
+  resumeOrigin?: 'saved'
   resumeSource?: SavedResumeStartupSource
   launchToken?: string
   launchAgent?: TuiAgent

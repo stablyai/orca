@@ -1,19 +1,18 @@
-import { placeCreatedSessionTab } from '../../../../shared/session-tab-placement'
-import { insertTabIdIntoOrder } from '../../../../shared/workspace-layout/tab-order'
-import { OrcaRuntimeWithReconcileOwnedMobileTerminal } from './mobile-terminal-create-reconciliation'
+import { OrcaRuntimeWithResolveMobileSessionTerminalCommand } from './mobile-terminal-startup'
+import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
 import type {
   RuntimeMobileSessionCreateTerminalResult,
   RuntimeMobileSessionTabsSnapshot,
   RuntimeMobileSessionTerminalTab
 } from '../../../../shared/runtime-types'
-import {
-  pruneOwnedMobileTerminalDispatchRecipes,
-  recordOwnedMobileTerminalDispatchRecipe,
-  type OwnedMobileTerminalCreateOptions,
-  type OwnedMobileTerminalDispatchRecipe
-} from './mobile-terminal-create'
+import type { OwnedMobileTerminalCreateOptions } from './mobile-terminal-create'
 import { randomUUID } from 'node:crypto'
+import { copySleepingAgentLaunchConfig } from '../../runtime-agent-launch-resolution'
 import { deriveRemoteRuntimeTerminalCreateHandle } from '../../remote-runtime-terminal-create-identity'
+import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { placeCreatedSessionTab } from '../../../../shared/session-tab-placement'
+import { insertTabIdIntoOrder } from '../../../../shared/workspace-layout/tab-order'
 import type { OrcaRuntimeWithBuildPtyTerminalSummary as PtyTerminalSummaryMethods } from '../query/pty-terminal-summary'
 import {
   buildHeadlessMobileSessionTabGroups,
@@ -21,14 +20,31 @@ import {
   getHeadlessMobileSessionGroupId
 } from '../../mobile-session-layout-projection'
 
-export type { OwnedMobileTerminalCreateOptions } from './mobile-terminal-create'
+const OWNED_MOBILE_DISPATCH_RECIPE_TTL_MS = 15 * 60_000
 
-export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends OrcaRuntimeWithReconcileOwnedMobileTerminal {
+export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends OrcaRuntimeWithResolveMobileSessionTerminalCommand {
   protected abstract getPtyManualTitle(
     ...args: Parameters<PtyTerminalSummaryMethods['getPtyManualTitle']>
   ): ReturnType<PtyTerminalSummaryMethods['getPtyManualTitle']>
 
-  private readonly ownedMobileDispatchRecipes = new Map<string, OwnedMobileTerminalDispatchRecipe>()
+  private readonly ownedMobileDispatchRecipes = new Map<
+    string,
+    {
+      launchConfig?: SleepingAgentLaunchConfig
+      launchAgent?: TuiAgent
+      connectionId: string | null
+      recordedAt: number
+    }
+  >()
+
+  private pruneOwnedMobileDispatchRecipes(): void {
+    const now = Date.now()
+    for (const [handle, recipe] of this.ownedMobileDispatchRecipes) {
+      if (now - recipe.recordedAt >= OWNED_MOBILE_DISPATCH_RECIPE_TTL_MS) {
+        this.ownedMobileDispatchRecipes.delete(handle)
+      }
+    }
+  }
 
   protected async createRuntimeOwnedMobileSessionTerminal(
     worktreeId: string,
@@ -36,7 +52,7 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
     afterTabId?: string,
     opts: OwnedMobileTerminalCreateOptions = {}
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
-    pruneOwnedMobileTerminalDispatchRecipes(this.ownedMobileDispatchRecipes)
+    this.pruneOwnedMobileDispatchRecipes()
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(
       `id:${worktreeId}`,
       undefined,
@@ -63,12 +79,21 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
         ...(opts.afterDesktopTabId ? { afterTabId: opts.afterDesktopTabId } : {}),
         onPtySpawnDispatched: (launch) => {
           if (mutationHandle && launch) {
-            recordOwnedMobileTerminalDispatchRecipe(
-              this.ownedMobileDispatchRecipes,
-              mutationHandle,
-              launch,
-              workspace
-            )
+            if (
+              !this.ownedMobileDispatchRecipes.has(mutationHandle) &&
+              this.ownedMobileDispatchRecipes.size >= 4096
+            ) {
+              throw new Error('runtime_unavailable')
+            }
+            // Retain original dispatch evidence across an ambiguous response; retry payloads cannot replace it.
+            this.ownedMobileDispatchRecipes.set(mutationHandle, {
+              connectionId: workspace.connectionId ?? null,
+              recordedAt: Date.now(),
+              ...(launch.launchConfig
+                ? { launchConfig: copySleepingAgentLaunchConfig(launch.launchConfig) }
+                : {}),
+              ...(launch.launchAgent ? { launchAgent: launch.launchAgent } : {})
+            })
           }
           // Why after the recipe: its refusal above is still before dispatch.
           opts.onPtySpawnDispatched?.()
@@ -125,29 +150,53 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
     if (!livePty) {
       throw new Error('terminal_handle_stale')
     }
-    const dispatched =
-      mutationHandle === terminal.handle
-        ? this.ownedMobileDispatchRecipes.get(terminal.handle)
-        : undefined
-    const recipe = opts.createMutation
-      ? this.validateOwnedMobileDispatch(
-          livePty.pty,
-          terminal,
-          opts,
-          dispatched,
-          workspace.connectionId ?? null
-        )
-      : undefined
-    const { tabId: parentTabId, leafId } = await this.reconcileOwnedMobileTerminalSurface(
-      worktreeId,
-      workspace.connectionId ?? null,
-      terminal,
-      livePty.pty,
-      recipe
-    )
     if (opts.createMutation) {
+      if (
+        livePty.pty.launchAgent &&
+        opts.launchAgent &&
+        livePty.pty.launchAgent !== opts.launchAgent
+      ) {
+        throw new Error('terminal_create_identity_conflict')
+      }
+      const dispatchedRecipe =
+        mutationHandle === terminal.handle && this.ownedMobileDispatchRecipes.get(terminal.handle)
+      const recipe =
+        dispatchedRecipe &&
+        dispatchedRecipe.connectionId === (workspace.connectionId ?? null) &&
+        (!livePty.pty.launchAgent || livePty.pty.launchAgent === dispatchedRecipe.launchAgent)
+          ? dispatchedRecipe
+          : null
+      if (
+        !terminal.agentResumeRefused &&
+        !terminal.agentResumeUnavailable &&
+        opts.launchConfig &&
+        !livePty.pty.launchConfig &&
+        !recipe?.launchConfig
+      ) {
+        // Missing original dispatch evidence cannot authorize a retry's captured recipe.
+        throw new Error('runtime_unavailable')
+      }
+      if (recipe && !terminal.agentResumeRefused && !terminal.agentResumeUnavailable) {
+        livePty.pty.launchAgent ??= recipe.launchAgent ?? null
+        if (!livePty.pty.launchConfig && recipe.launchConfig) {
+          livePty.pty.launchConfig = copySleepingAgentLaunchConfig(recipe.launchConfig)
+        }
+      }
       livePty.pty.runtimeSessionOwned = true
+      if (mutationHandle) {
+        this.ownedMobileDispatchRecipes.delete(mutationHandle)
+      }
     }
+    if (opts.createMutation && opts.identity && terminal.ptyId) {
+      this.registerPty(terminal.ptyId, worktreeId, workspace.connectionId ?? null, {
+        tabId: opts.identity.tabId,
+        leafId: opts.identity.leafId,
+        terminalHandle: terminal.handle
+      })
+    }
+    const recorded = this.paneOfPty(livePty.pty)
+    const parentTabId = recorded.tabId ?? `pty:${livePty.pty.ptyId}`
+    const leafId = parsePaneKey(recorded.paneKey ?? '')?.leafId ?? randomUUID()
     const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
     const existingSurface =
       existing?.tabs.find(
@@ -251,9 +300,6 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
     const created = result.tabs.find((candidate) => candidate.id === tab.id)
     if (!created || created.type !== 'terminal') {
       throw new Error('terminal_handle_stale')
-    }
-    if (recipe && this.ownedMobileDispatchRecipes.get(terminal.handle) === recipe) {
-      this.ownedMobileDispatchRecipes.delete(terminal.handle)
     }
     return {
       tab: created,

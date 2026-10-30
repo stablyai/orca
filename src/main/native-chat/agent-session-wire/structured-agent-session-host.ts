@@ -173,11 +173,10 @@ export class StructuredAgentSessionHost extends StructuredAgentSessionHostContex
     this.lifetime.runSwitch(...args)
   adoptSwitch = (from: string, to: string) => this.lifetime.adoptSwitch(from, to)
   switchGeneration = (id: string) => this.lifetime.switchGeneration(id)
-  retainSwitch = (id: string) => this.lifetime.retainSwitch(id)
   guardSwitchWork = (id: string, current: () => boolean) =>
     this.lifetime.guardSwitchWork(id, current)
-  trackSwitchPhysical = <T>(id: string, work: Promise<T>, recover?: () => Promise<void>) =>
-    this.lifetime.trackSwitchPhysical(id, work, recover)
+  trackSwitchPhysical = <T>(id: string, work: Promise<T>) =>
+    this.lifetime.trackSwitchPhysical(id, work)
 
   /** Ordinary Stop owns interruption; only its captured child may be physically closed. */
 

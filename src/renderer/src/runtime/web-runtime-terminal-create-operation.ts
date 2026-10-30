@@ -1,10 +1,16 @@
-import { createWebRuntimeAgentTerminalHostAuthority } from './web-runtime-agent-terminal-host-authority'
+import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
+import { createAgentSessionKeyboardOptions } from './agent-session-keyboard-capability'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../shared/runtime-types'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
+import { agentProviderSessionForHostEnsure } from './agent-session-ensure-provider-session'
 import { translate } from '../i18n/i18n'
 import { useAppStore } from '../store'
 import { agentResumeHostAuthorityCapability } from './agent-resume-host-authority-capability'
+import {
+  createAgentSessionCreateOperation,
+  withAgentSessionCreateOperationId
+} from './agent-session-create-operation'
 import { runRemoteAgentSessionLaunch } from './remote-agent-session-launch'
 import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
@@ -34,7 +40,10 @@ import {
   selectWebRuntimeSessionWorktree,
   type WebRuntimeSessionWorkspaceSelectionRollback
 } from './web-runtime-session-workspace-selection'
-import { createdTerminalLeafId } from './web-runtime-terminal-identity'
+import {
+  createdTerminalLeafId,
+  readCreatedAgentTerminalIdentity
+} from './web-runtime-terminal-identity'
 import { settleWebRuntimeTerminalPlacement } from './web-runtime-terminal-placement-settlement'
 import { buildPlainCreateTerminalParams } from './web-runtime-plain-terminal-create-params'
 
@@ -79,14 +88,78 @@ export async function createWebRuntimeSessionTerminalResult(
     const agentArgsOverride =
       args.agentArgs !== undefined ? args.agentArgs : args.launchConfig?.agentArgs
     if (agent) {
+      // Paired panes retain the default keyboard advertisement, including on Windows clients.
+      const keyboardProtocol = buildDefaultTerminalOptions().vtExtensions?.kittyKeyboard
+      const keyboardOptions = createAgentSessionKeyboardOptions(keyboardProtocol)
       let legacyAlreadyPlacedInGroup = false
-      const hostAuthority = createWebRuntimeAgentTerminalHostAuthority(
-        environmentId,
-        args,
-        agent,
-        agentArgsOverride,
-        callEnvironment
-      )
+      // Keep legacy placement until structured creation supports afterTabId.
+      // Focus belongs to this client; headless hosts have no renderer.
+      // Rebuilding prepared commands under host authority can discard prompts/delivery flags.
+      const mustUseLegacyAgentCreate = args.preparedAgentCommand || args.afterTabId
+      const hostAuthority = mustUseLegacyAgentCreate
+        ? undefined
+        : args.agentSessionKind === 'resume'
+          ? args.providerSession
+            ? async () =>
+                readCreatedAgentTerminalIdentity(
+                  unwrapRuntimeRpcResult(
+                    await callEnvironment({
+                      method: 'terminal.ensureAgentSession',
+                      params: {
+                        ...(await keyboardOptions(environmentId)),
+                        kind: 'explicit',
+                        worktree: toRuntimeWorktreeSelector(args.worktreeId),
+                        agent,
+                        providerSession: await agentProviderSessionForHostEnsure(
+                          environmentId,
+                          args.providerSession!
+                        ),
+                        ...(args.launchConfig?.ompResumeFilePath
+                          ? { ompResumeFilePath: args.launchConfig.ompResumeFilePath }
+                          : {}),
+                        ...(agentArgsOverride !== undefined
+                          ? { agentArgs: agentArgsOverride }
+                          : {}),
+                        ...(args.launchPreferences
+                          ? { launchPreferences: args.launchPreferences }
+                          : {}),
+                        presentation: 'background'
+                      },
+                      timeoutMs: 15_000
+                    })
+                  )
+                )
+            : undefined
+          : async () =>
+              await createAgentSessionCreateOperation().run(async (clientOperationId) =>
+                readCreatedAgentTerminalIdentity(
+                  unwrapRuntimeRpcResult(
+                    await callEnvironment({
+                      method: 'terminal.createAgentSession',
+                      params: withAgentSessionCreateOperationId(
+                        {
+                          ...(await keyboardOptions(environmentId)),
+                          worktree: toRuntimeWorktreeSelector(args.worktreeId),
+                          agent,
+                          ...(args.prompt ? { prompt: args.prompt } : {}),
+                          ...(args.promptDelivery ? { promptDelivery: args.promptDelivery } : {}),
+                          ...(agentArgsOverride !== undefined
+                            ? { agentArgs: agentArgsOverride }
+                            : {}),
+                          ...(args.launchPreferences
+                            ? { launchPreferences: args.launchPreferences }
+                            : {}),
+                          ...(args.cwd ? { startupCwd: args.cwd } : {}),
+                          ...(args.viewMode ? { viewMode: args.viewMode } : {}),
+                          presentation: 'background'
+                        },
+                        clientOperationId
+                      ),
+                      timeoutMs: 15_000
+                    })
+                  )
+                )
+              )
       const resumeHostAuthorityCapability =
         args.agentSessionKind === 'resume' ? agentResumeHostAuthorityCapability(agent) : undefined
       const created = await runRemoteAgentSessionLaunch<{
@@ -113,9 +186,6 @@ export async function createWebRuntimeSessionTerminalResult(
               ...(args.launchToken ? { launchToken: args.launchToken } : {}),
               ...(args.agent ? { agent: args.agent } : {}),
               ...(args.launchAgent ? { launchAgent: args.launchAgent } : {}),
-              ...(args.resumeOrigin && args.providerSession
-                ? { resumeOrigin: args.resumeOrigin, resumeProviderSession: args.providerSession }
-                : {}),
               ...(args.viewMode ? { viewMode: args.viewMode } : {}),
               // Old hosts use activate:false; new hosts use select/navigation for caller-local focus.
               activate: false,

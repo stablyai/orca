@@ -210,7 +210,7 @@ export type TerminalActions = {
       envToDelete?: string[]
       launchConfig?: SleepingAgentLaunchConfig
       resumeProviderSession?: AgentProviderSessionMetadata
-      resumeOrigin?: 'saved' | 'switch'
+      resumeOrigin?: 'saved'
       launchToken?: string
       launchAgent?: TuiAgent
       agentArgsOverride?: string | null
@@ -237,7 +237,7 @@ export type TerminalActions = {
     envToDelete?: string[]
     launchConfig?: SleepingAgentLaunchConfig
     resumeProviderSession?: AgentProviderSessionMetadata
-    resumeOrigin?: 'saved' | 'switch'
+    resumeOrigin?: 'saved'
     launchToken?: string
     launchAgent?: TuiAgent
     agentArgsOverride?: string | null

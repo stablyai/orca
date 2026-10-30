@@ -106,12 +106,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
         }
         try {
           const { launchAgent } = launchOpts
-          launchOpts.onPtySpawnDispatched?.({
-            tabId,
-            leafId,
-            launchConfig: effectiveLaunchConfig,
-            launchAgent
-          })
+          launchOpts.onPtySpawnDispatched?.({ launchConfig: effectiveLaunchConfig, launchAgent })
           result = await dependencies.spawnInAdmittedPane(this.store, ptyController, {
             ...initialSize,
             cwd,
