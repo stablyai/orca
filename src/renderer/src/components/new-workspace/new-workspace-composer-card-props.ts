@@ -1,4 +1,5 @@
 import type { AgentComboboxSurfaceRows } from '@/components/agent/agent-combobox-surface-items'
+import type { ComposerAgentEntry } from '@/hooks/composer-state/composer-agent-entries'
 import type { ComposerAgentRows } from '@/hooks/composer-state/composer-agent-rows-target'
 import type RepoCombobox from '@/components/repo/RepoCombobox'
 import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
@@ -28,6 +29,8 @@ export type EphemeralVmRecipeOption = NonNullable<OrcaHooks['environmentRecipes'
 export const EMPTY_PROJECT_OPTIONS: NewWorkspaceProjectOption[] = []
 export const EMPTY_PROJECT_HOST_SETUP_OPTIONS: ProjectHostSetupOption[] = []
 export const EMPTY_EPHEMERAL_VM_RECIPES: EphemeralVmRecipeOption[] = []
+/** Guardrail, not a limit users hit: eight rows suffice for every supported harness combination. */
+export const MAX_COMPOSER_AGENT_ROWS = 8
 
 export type NewWorkspaceComposerCardProps = {
   contextualTourSource?: string
@@ -38,12 +41,21 @@ export type NewWorkspaceComposerCardProps = {
   composerRef?: React.RefObject<HTMLDivElement | null>
   onComposerNodeChange?: (node: HTMLDivElement | null) => void
   nameInputRef?: React.RefObject<HTMLInputElement | null>
+  /** Row 0's agent pick and the "Blank Terminal" representation; detection may resolve it late. */
   quickAgent: TuiAgent | null
   agentSurfaceRows?: AgentComboboxSurfaceRows
   onQuickAgentChange: (
     agent: TuiAgent | null,
     surface?: AgentComboboxSurfaceRows['surface']
   ) => void
+  /** Ordered agent rows of the multi-agent composer; omitted keeps the legacy single-agent picker. */
+  agentEntries?: ComposerAgentEntry[]
+  /** Replaces one row's draft or display name; the row id keeps repeated harnesses distinct. */
+  onAgentEntryChange?: (id: string, patch: Partial<ComposerAgentEntry>) => void
+  onAddAgentEntry?: () => void
+  onRemoveAgentEntry?: (id: string) => void
+  /** Folder, provisioned-root and ephemeral-VM targets collapse the list to row 0 with a notice. */
+  agentEntriesLocked?: boolean
   /** Where the quick agent would start; null keeps the picker's plain agent list. */
   agentRows?: ComposerAgentRows | null
   /** Cleared picker: skip the agent and the extra shell when setup runs. */

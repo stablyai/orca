@@ -15151,6 +15151,13 @@
       },
       "new": {
         "workspace": {
+          "NewWorkspaceComposerAgentSection": {
+            "2b3158e96c": "Add agent",
+            "44216cf70c": "Remove agent",
+            "59552ca156": "Agent name",
+            "ea6ee390a8": "Multiple agents apply only to local git workspaces; later rows will be ignored",
+            "0af78c86a9": "You can add up to {{max}} agents per workspace."
+          },
           "SetProjectLocationDialog": {
             "title": "Set project location",
             "description": "Choose where {{project}} lives on {{host}}.",
