@@ -5,6 +5,7 @@ import { deriveGlobalWindowsRuntimeDefaultFromLegacySettings } from '../../../sh
 import { normalizeTaskProviderSettings } from '../../../shared/task-providers'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../shared/auto-rename-branch-from-work-settings'
 import { normalizePluginSystemEnabledDefaultOn } from '../../../shared/plugins/plugin-system-settings'
+import { normalizeBrowserExtensionsDefaultOn } from '../../../shared/browser-extension-settings'
 import {
   addMobilePairingCustomAddress,
   normalizeMobilePairingCustomAddress,
@@ -37,6 +38,7 @@ export type PreparedLoadedProfileSettings = {
     'autoRenameBranchFromWork' | 'autoRenameBranchFromWorkDefaultedOn'
   >
   migratedPluginSystemEnabled: ReturnType<typeof normalizePluginSystemEnabledDefaultOn>
+  migratedBrowserExtensionsEnabled: ReturnType<typeof normalizeBrowserExtensionsDefaultOn>
   migratedTerminalCursorStyle: Pick<
     GlobalSettings,
     'terminalCursorStyle' | 'terminalCursorStyleDefaultedToBlock'
@@ -91,6 +93,10 @@ export function prepareLoadedProfileSettings(
   )
   const migratedPluginSystemEnabled = normalizePluginSystemEnabledDefaultOn(parsed.settings)
   if (parsed.settings?.pluginSystemDefaultedOn !== true) {
+    markNeedsSave()
+  }
+  const migratedBrowserExtensionsEnabled = normalizeBrowserExtensionsDefaultOn(parsed.settings)
+  if (parsed.settings?.browserExtensionsDefaultedOn !== true) {
     markNeedsSave()
   }
   const migratedTerminalCursorStyle = normalizeTerminalCursorStyleDefault(parsed.settings)
@@ -265,6 +271,7 @@ export function prepareLoadedProfileSettings(
     migratedExperimentalActivity,
     migratedAutoRenameBranchFromWork,
     migratedPluginSystemEnabled,
+    migratedBrowserExtensionsEnabled,
     migratedTerminalCursorStyle,
     migratedTerminalLineHeight,
     terminalRightClickToPasteDefaultedForPlatform,

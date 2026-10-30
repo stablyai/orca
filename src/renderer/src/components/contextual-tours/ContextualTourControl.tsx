@@ -1,4 +1,15 @@
 import type { JSX } from 'react'
+import {
+  BookmarkPlus,
+  Camera,
+  Code2,
+  Highlighter,
+  KeyRound,
+  Languages,
+  Pipette,
+  Puzzle,
+  ShieldCheck
+} from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 import { useAppStore } from '@/store'
 import type { ContextualTourStepControl } from '../../../../shared/contextual-tours'
@@ -13,6 +24,8 @@ export function ContextualTourControl({
   switch (control.kind) {
     case 'auto-rename-branch-from-work':
       return <AutoRenameBranchFromWorkControl />
+    case 'browser-extension-pin-preview':
+      return <BrowserExtensionPinPreview />
   }
 }
 
@@ -57,6 +70,44 @@ function AutoRenameBranchFromWorkControl(): JSX.Element {
             })
           }}
         />
+      </div>
+    </div>
+  )
+}
+
+const PIN_PREVIEW_ICONS = [
+  KeyRound,
+  ShieldCheck,
+  Code2,
+  Languages,
+  Pipette,
+  Highlighter,
+  Camera,
+  BookmarkPlus
+] as const
+
+/** Decorative toolbar strip: pinned extensions land left of the puzzle menu. */
+function BrowserExtensionPinPreview(): JSX.Element {
+  return (
+    <div
+      aria-hidden="true"
+      className="mt-3 flex justify-center rounded-md border border-border/70 bg-muted/35 px-3 py-3"
+    >
+      <div className="flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-2 shadow-xs">
+        {PIN_PREVIEW_ICONS.map((Icon, index) => (
+          <span
+            key={index}
+            className="flex size-5 items-center justify-center rounded-[5px] bg-muted text-foreground motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-50 motion-safe:duration-300"
+            style={{
+              animationDelay: `${200 + index * 70}ms`,
+              animationFillMode: 'both'
+            }}
+          >
+            <Icon className="size-3" />
+          </span>
+        ))}
+        <span className="mx-0.5 h-4 w-px bg-border" />
+        <Puzzle className="size-3.5 text-muted-foreground" />
       </div>
     </div>
   )

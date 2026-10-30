@@ -29,6 +29,7 @@ import { requestActiveTerminalPaneSplit } from '@/components/tab-bar/request-act
 import { performContextualTourStepAction } from './contextual-tour-step-actions'
 import { openWorkspaceCreationComposerWithTourHandoff } from './workspace-creation-tour-handoff'
 import { BROWSER_CLIENT_HOSTED_REMOTE_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
+import { CHROME_WEB_STORE_HOME_URL } from '../../../../shared/browser-extension-webstore'
 
 export function ContextualTourOverlay(): JSX.Element | null {
   const activeTourId = useAppStore((s) => s.activeContextualTourId)
@@ -56,6 +57,7 @@ export function ContextualTourOverlay(): JSX.Element | null {
   const openModal = useAppStore((s) => s.openModal)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
+  const openBrowserProfileTab = useAppStore((s) => s.openBrowserProfileTabInActiveWorkspace)
   const [renderState, setRenderState] = useState<ActiveTourRenderState | null>(null)
   const panelRef = useRef<HTMLElement | null>(null)
   const measuredTargetRef = useRef<MeasuredContextualTourTarget | null>(null)
@@ -367,6 +369,14 @@ export function ContextualTourOverlay(): JSX.Element | null {
           sectionId: BROWSER_CLIENT_HOSTED_REMOTE_SETTINGS_TARGET_ID
         })
         openSettingsPage()
+      },
+      openChromeWebStore: () => {
+        // Why the anchor's profile: a store install lands in the profile the store was opened from.
+        const profileId =
+          renderState.targetElement
+            .closest('[data-browser-profile-id]')
+            ?.getAttribute('data-browser-profile-id') ?? null
+        void openBrowserProfileTab(CHROME_WEB_STORE_HOME_URL, profileId)
       },
       openWorkspaceComposer: openWorkspaceCreationComposerWithTourHandoff,
       dispatchTerminalPaneSplit: requestActiveTerminalPaneSplit,

@@ -19,6 +19,7 @@ describe('performContextualTourStepAction', () => {
       openTaskPage,
       openModal: vi.fn(),
       openClientHostedBrowserSettings: vi.fn(),
+      openChromeWebStore: vi.fn(),
       openWorkspaceComposer: vi.fn(),
       dispatchTerminalPaneSplit: vi.fn(),
       schedule: vi.fn()
@@ -44,6 +45,7 @@ describe('performContextualTourStepAction', () => {
       openTaskPage: vi.fn(),
       openModal: vi.fn(),
       openClientHostedBrowserSettings: vi.fn(),
+      openChromeWebStore: vi.fn(),
       openWorkspaceComposer: vi.fn(),
       dispatchTerminalPaneSplit,
       schedule: vi.fn()
@@ -72,6 +74,7 @@ describe('performContextualTourStepAction', () => {
       openTaskPage: vi.fn(),
       openModal: vi.fn(),
       openClientHostedBrowserSettings: vi.fn(),
+      openChromeWebStore: vi.fn(),
       openWorkspaceComposer,
       dispatchTerminalPaneSplit: vi.fn(),
       schedule: vi.fn()
@@ -100,6 +103,7 @@ describe('performContextualTourStepAction', () => {
       openTaskPage: vi.fn(),
       openModal: vi.fn(),
       openClientHostedBrowserSettings: vi.fn(),
+      openChromeWebStore: vi.fn(),
       openWorkspaceComposer,
       dispatchTerminalPaneSplit: vi.fn(),
       schedule: vi.fn()
@@ -125,6 +129,7 @@ describe('performContextualTourStepAction', () => {
       openTaskPage: vi.fn(),
       openModal: vi.fn(),
       openClientHostedBrowserSettings,
+      openChromeWebStore: vi.fn(),
       openWorkspaceComposer: vi.fn(),
       dispatchTerminalPaneSplit: vi.fn(),
       schedule: (callback) => {
@@ -138,5 +143,37 @@ describe('performContextualTourStepAction', () => {
       callback()
     }
     expect(openClientHostedBrowserSettings).toHaveBeenCalledTimes(1)
+  })
+
+  it('finishes the extensions tour before opening the Chrome Web Store', () => {
+    const finishTour = vi.fn()
+    const openChromeWebStore = vi.fn()
+    const scheduled: (() => void)[] = []
+
+    performContextualTourStepAction({
+      action: { kind: 'open-chrome-web-store', label: 'Open Web Store' },
+      activeTabId: 'tab-1',
+      isLastStep: true,
+      finishTour,
+      advanceContextualTour: vi.fn(),
+      detachContextualTourSource: vi.fn(),
+      setSidebarOpen: vi.fn(),
+      openTaskPage: vi.fn(),
+      openModal: vi.fn(),
+      openClientHostedBrowserSettings: vi.fn(),
+      openChromeWebStore,
+      openWorkspaceComposer: vi.fn(),
+      dispatchTerminalPaneSplit: vi.fn(),
+      schedule: (callback) => {
+        scheduled.push(callback)
+      }
+    })
+
+    expect(finishTour).toHaveBeenCalledTimes(1)
+    expect(openChromeWebStore).not.toHaveBeenCalled()
+    for (const callback of scheduled) {
+      callback()
+    }
+    expect(openChromeWebStore).toHaveBeenCalledTimes(1)
   })
 })

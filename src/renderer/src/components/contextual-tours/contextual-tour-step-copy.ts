@@ -86,6 +86,24 @@ const LOCALIZED_STEP_COPY: Partial<Record<string, StepCopyThunk>> = {
       'Bring your existing logins into Orca to stay signed in immediately.'
     )
   }),
+  'browser-extensions-intro': () => ({
+    title: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.browser.extensions.intro.title',
+      'Bring your Chrome extensions'
+    ),
+    body: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.browser.extensions.intro.body',
+      'Install from the Chrome Web Store, then pin them next to the address bar.'
+    ),
+    primaryActionLabel: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.browser.extensions.intro.action',
+      'Open Web Store'
+    ),
+    secondaryActionLabel: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.browser.extensions.intro.secondaryAction',
+      'Got it'
+    )
+  }),
   'client-hosted-browser-intro': () => ({
     title: translate(
       'auto.components.contextual.tours.contextual.tour.overlay.measurement.client.hosted.browser.intro.title',

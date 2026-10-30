@@ -4,6 +4,7 @@ export type ContextualTourId =
   | 'workspace-board'
   | 'workspace-agent-sessions'
   | 'browser'
+  | 'browser-extensions'
   | 'client-hosted-browser'
   | 'tasks'
   | 'automations'
@@ -11,7 +12,7 @@ export type ContextualTourId =
   | 'workspace-creation'
 
 export type ContextualTourStepControl = {
-  kind: 'auto-rename-branch-from-work'
+  kind: 'auto-rename-branch-from-work' | 'browser-extension-pin-preview'
 }
 
 export type ContextualTourStepActionKind =
@@ -23,6 +24,7 @@ export type ContextualTourStepActionKind =
   | 'open-tasks'
   | 'open-getting-started'
   | 'open-client-hosted-browser-settings'
+  | 'open-chrome-web-store'
 
 export type ContextualTourStepAction = {
   kind: ContextualTourStepActionKind
@@ -126,6 +128,24 @@ export const CONTEXTUAL_TOURS = [
         targetSelector:
           '[data-contextual-tour-target="browser-import-hint"], [data-contextual-tour-target="browser-import-cookies-control"]',
         preferredPlacement: 'bottom'
+      }
+    ]
+  },
+  {
+    // Announcement for the toolbar puzzle menu; the browser tour (with its Import step) goes first.
+    id: 'browser-extensions',
+    steps: [
+      {
+        id: 'browser-extensions-intro',
+        title: 'Bring your Chrome extensions',
+        body: 'Install from the Chrome Web Store, then pin them next to the address bar.',
+        targetSelector: '[data-contextual-tour-target="browser-extensions-control"]',
+        requiredForStart: true,
+        preferredPlacement: 'bottom',
+        control: { kind: 'browser-extension-pin-preview' },
+        primaryAction: { kind: 'open-chrome-web-store', label: 'Open Web Store' },
+        secondaryAction: { kind: 'complete', label: 'Got it' },
+        advanceOnFeatureInteraction: 'browser-extensions'
       }
     ]
   },

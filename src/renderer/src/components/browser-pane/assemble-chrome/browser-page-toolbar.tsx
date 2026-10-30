@@ -11,6 +11,7 @@ import { BrowserReloadControl } from './browser-reload-control'
 import { BrowserToolbarMenu } from './BrowserToolbarMenu'
 import { BrowserExtensionToolbar } from './browser-extension-toolbar'
 import { useBrowserExtensionToolbar } from './use-browser-extension-toolbar'
+import { useBrowserExtensionsTour } from '../use-browser-extensions-tour'
 import { SshEgressIndicator } from './browser-egress-indicator'
 import { destroyPersistentWebview } from '../host-guest/webview-registry'
 import {
@@ -139,6 +140,7 @@ export function BrowserPageToolbar({
     isActive,
     `${currentBrowserUrl}\n${loading}`
   )
+  useBrowserExtensionsTour(isActive, extensionToolbar !== null)
 
   return (
     <BrowserChromeToolbar

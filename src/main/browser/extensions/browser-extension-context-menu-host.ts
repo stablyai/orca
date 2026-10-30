@@ -87,7 +87,7 @@ function forgetSnapshot(token: string): void {
 
 function topDocumentId(tabId: number | null): string | null {
   const contents = tabId === null ? null : resolveBrowserExtensionTab(tabId)?.contents
-  return contents ? getBrowserExtensionDocumentId(contents.mainFrame.frameTreeNodeId) : null
+  return contents ? getBrowserExtensionDocumentId(contents.mainFrame) : null
 }
 
 function extensionDisplayName(extension: Electron.Extension): string {

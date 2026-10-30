@@ -44,6 +44,7 @@ export function normalizeLoadedGlobalSettings(
     migratedExperimentalActivity,
     migratedAutoRenameBranchFromWork,
     migratedPluginSystemEnabled,
+    migratedBrowserExtensionsEnabled,
     migratedTerminalCursorStyle,
     migratedTerminalLineHeight,
     terminalRightClickToPasteDefaultedForPlatform,
@@ -91,6 +92,7 @@ export function normalizeLoadedGlobalSettings(
       primarySelectionDefaultedForTerminalDefaults || stampPrimarySelectionTerminalDefaults,
     ...migratedAutoRenameBranchFromWork,
     ...migratedPluginSystemEnabled,
+    ...migratedBrowserExtensionsEnabled,
     ...migratedTerminalCursorStyle,
     terminalLineHeight: migratedTerminalLineHeight,
     // False was always explicit; the old true default may be reset once.

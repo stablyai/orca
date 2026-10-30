@@ -17114,6 +17114,14 @@
                     "logins": {
                       "title": "Stay logged in",
                       "body": "Bring your existing logins into Orca to stay signed in immediately."
+                    },
+                    "extensions": {
+                      "intro": {
+                        "title": "Bring your Chrome extensions",
+                        "body": "Install from the Chrome Web Store, then pin them next to the address bar.",
+                        "action": "Open Web Store",
+                        "secondaryAction": "Got it"
+                      }
                     }
                   },
                   "tasks": {

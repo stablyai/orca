@@ -97,11 +97,9 @@ export default function BrowserPane({
     }
   }, [activeRuntimeEnvironmentId, browserPages, runtimeEnvironmentActive])
 
-  useContextualTour(
-    'browser',
-    isActive && activeBrowserPage !== null && !runtimeEnvironmentActive,
-    'browser_visible'
-  )
+  const localBrowserPageVisible =
+    isActive && activeBrowserPage !== null && !runtimeEnvironmentActive
+  useContextualTour('browser', localBrowserPageVisible, 'browser_visible')
 
   const reclaimActiveBrowserForDesktop = useCallback(async (): Promise<void> => {
     if (!activeBrowserPageId) {

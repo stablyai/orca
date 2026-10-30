@@ -12,6 +12,7 @@ export function performContextualTourStepAction(args: {
   openTaskPage: () => void
   openModal: (modal: 'setup-guide', data?: Record<string, unknown>) => void
   openClientHostedBrowserSettings: () => void
+  openChromeWebStore: () => void
   openWorkspaceComposer: () => void
   dispatchTerminalPaneSplit: (detail: RequestActiveTerminalPaneSplitDetail) => void
   schedule: (callback: () => void) => void
@@ -63,6 +64,12 @@ export function performContextualTourStepAction(args: {
       args.finishTour()
       args.schedule(() => {
         args.openClientHostedBrowserSettings()
+      })
+      return
+    case 'open-chrome-web-store':
+      args.finishTour()
+      args.schedule(() => {
+        args.openChromeWebStore()
       })
   }
 }

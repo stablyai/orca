@@ -192,6 +192,7 @@ export function BrowserExtensionToolbar({
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const openBrowserProfileTab = useAppStore((s) => s.openBrowserProfileTabInActiveWorkspace)
+  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const puzzleRef = useRef<HTMLButtonElement>(null)
   const pinnedRefs = useRef(new Map<string, HTMLButtonElement>())
   const pinned = compact ? [] : state.actions.filter((action) => action.pinned)
@@ -229,7 +230,15 @@ export function BrowserExtensionToolbar({
           }}
         />
       ))}
-      <DropdownMenu modal={false}>
+      <DropdownMenu
+        modal={false}
+        onOpenChange={(open) => {
+          // Why: opening the menu is discovery; it also ends the extensions tour pointing here.
+          if (open) {
+            void recordFeatureInteraction('browser-extensions')
+          }
+        }}
+      >
         <Tooltip>
           <TooltipTrigger asChild>
             <DropdownMenuTrigger asChild>
@@ -239,6 +248,8 @@ export function BrowserExtensionToolbar({
                 variant="ghost"
                 className="h-7 w-7"
                 aria-label={label}
+                data-contextual-tour-target="browser-extensions-control"
+                data-browser-profile-id={state.profileId}
               >
                 <Puzzle className="size-4" />
               </Button>
