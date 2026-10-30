@@ -168,9 +168,10 @@ async function readInCssPixels(
   format: 'png' | 'jpeg',
   wc: WebContents
 ): Promise<string> {
-  const lease = acquireElectronDebugger(wc)
+  let release = (): void => {}
   let metrics: unknown
   try {
+    release = acquireElectronDebugger(wc).release
     metrics = await sendGuestCdpCommand(wc, 'Page.getLayoutMetrics', {})
   } catch (error) {
     throw new BrowserError(
@@ -178,7 +179,7 @@ async function readInCssPixels(
       `Screenshot failed: ${error instanceof Error ? error.message : String(error)}`
     )
   } finally {
-    lease.release()
+    release()
   }
   const bytes = readFileSync(path)
   const viewport = CssViewportMetrics.safeParse(metrics)
@@ -191,7 +192,7 @@ async function readInCssPixels(
   const { clientWidth, clientHeight } = viewport.data.cssVisualViewport
   const scale = Math.max(clientWidth / width, clientHeight / height)
   const cssWidth = Math.round(width * scale)
-  if (!(scale > 0) || cssWidth >= width) {
+  if (!(scale > 0) || cssWidth === width) {
     return bytes.toString('base64')
   }
   const resized = image.resize({ width: cssWidth, quality: 'best' })
