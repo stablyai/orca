@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { getAzureDevOpsWorkItemTypes } from './work-item-type-metadata'
+import { getAzureDevOpsWorkItemTypes, removedStateNamesForTypes } from './work-item-type-metadata'
 import {
   CLOUD_REPO,
   WORK_ITEM_TYPES_RESPONSE,
@@ -39,6 +39,31 @@ describe('work item type metadata', () => {
     expect(Object.keys(types)).toEqual(['Feature', 'Product Backlog Item', 'Bug', 'Task'])
     // Why: on-prem responses may omit the url; the renderer then falls back to the lucide glyph.
     expect(types.Bug.iconUrl).toBeNull()
+  })
+
+  it('keeps a state name another type uses for active work out of the Removed list', () => {
+    const types = {
+      Bug: {
+        name: 'Bug',
+        color: null,
+        iconId: null,
+        iconUrl: null,
+        states: [
+          { name: 'Cut', color: null, category: 'Removed' as const },
+          { name: 'Removed', color: null, category: 'Removed' as const }
+        ]
+      },
+      Task: {
+        name: 'Task',
+        color: null,
+        iconId: null,
+        iconUrl: null,
+        states: [{ name: 'Cut', color: null, category: 'InProgress' as const }]
+      }
+    }
+    expect(removedStateNamesForTypes(['Bug', 'Task'], types)).toEqual(['Removed'])
+    // The contested name is still excluded for a query that covers only the type that removes it.
+    expect(removedStateNamesForTypes(['Bug'], types)).toEqual(['Cut', 'Removed'])
   })
 
   it('returns an empty map on failure', async () => {

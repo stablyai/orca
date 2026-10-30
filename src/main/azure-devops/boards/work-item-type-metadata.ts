@@ -39,20 +39,23 @@ function normalizeIconUrl(value: unknown): string | null {
   }
 }
 
-/** State names in the `Removed` category across the given types, so a query can exclude them. */
+/**
+ * State names that every one of the given types which defines them puts in the
+ * `Removed` category, so a query can exclude them.
+ */
 export function removedStateNamesForTypes(
   typeNames: Iterable<string>,
   workItemTypes: Record<string, AzureDevOpsWorkItemTypeMetadata>
 ): string[] {
-  const names = new Set<string>()
+  const removed = new Set<string>()
+  const live = new Set<string>()
   for (const typeName of typeNames) {
     for (const state of workItemTypes[typeName]?.states ?? []) {
-      if (state.category === 'Removed') {
-        names.add(state.name)
-      }
+      ;(state.category === 'Removed' ? removed : live).add(state.name)
     }
   }
-  return [...names]
+  // Why: the workflow is per type, so a name another type uses for active work must stay in the query.
+  return [...removed].filter((name) => !live.has(name))
 }
 
 export async function getAzureDevOpsWorkItemTypes(

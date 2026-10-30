@@ -30,7 +30,7 @@ export function resolveAzureDevOpsBoardForLevel(
   return boards.find((b) => b.name.trim().toLowerCase() === wanted) ?? null
 }
 
-/** State names the board discards anyway, so the query never carries them. */
+/** State names every level type that defines them calls Removed, so the query never carries them. */
 export function removedStateNames(
   level: AzureDevOpsBacklogLevel,
   workItemTypes: Record<string, AzureDevOpsWorkItemTypeMetadata>
