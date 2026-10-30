@@ -26,13 +26,36 @@ function source(paneKey: string): RuntimeWorktreeAgentSource {
 }
 
 function namesByPane(paneKeys: string[]): Record<string, string | undefined> {
-  // SAFETY: the row projection reads only these summary fields.
-  const summary = {
+  const summary: RuntimeWorktreePsSummary = {
     worktreeId: WORKTREE_ID,
-    status: 'inactive',
+    repoId: 'repo-1',
+    repo: 'repo-1',
+    path: '/workspace/app',
+    branch: 'main',
+    isArchived: false,
+    isMainWorktree: true,
     hasHostSidebarActivity: false,
+    parentWorktreeId: null,
+    childWorktreeIds: [],
+    displayName: 'app',
+    workspaceStatus: '',
+    sortOrder: 0,
+    linkedIssue: null,
+    linkedPR: null,
+    linkedLinearIssue: null,
+    linkedGitLabMR: null,
+    linkedGitLabIssue: null,
+    comment: '',
+    isPinned: false,
+    isActive: false,
+    unread: false,
+    liveTerminalCount: 0,
+    hasAttachedPty: false,
+    lastOutputAt: null,
+    preview: '',
+    status: 'inactive',
     agents: []
-  } as unknown as RuntimeWorktreePsSummary
+  }
   const summaries = new Map([[WORKTREE_ID, summary]])
   attachRuntimeWorktreeAgentRows({
     summaries,
