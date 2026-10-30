@@ -17,6 +17,7 @@ import type { PanZoomSize } from '../../../../../shared/document-preview/pan-zoo
 import { PanZoomImageSurface } from './PanZoomImageSurface'
 import { usePanZoomViewport } from '../viewer-viewport/use-pan-zoom-viewport'
 import { useViewerZoomCommands } from '../viewer-viewport/use-viewer-zoom-commands'
+import { ImageActions, ImageActionsButton, keepImageActionsOpen, type ImageActionSource } from './ImageActions'
 
 type PanZoomImageDialogProps = Omit<
   React.ComponentProps<typeof DialogContent>,
@@ -38,6 +39,8 @@ type PanZoomImageDialogProps = Omit<
    *  omitted for a lone image, which shows no arrows. */
   onPrevious?: (() => void) | null
   onNext?: (() => void) | null
+  imageSource?: ImageActionSource
+  actionSrc?: string | null
 }
 
 async function copyImageAsPng(
@@ -91,6 +94,9 @@ export function PanZoomImageDialog({
   onCloseAutoFocus,
   onKeyDown,
   busy,
+  imageSource,
+  actionSrc = src,
+  onInteractOutside,
   ...contentProps
 }: PanZoomImageDialogProps): React.JSX.Element {
   const openerRef = useRef<Element | null>(null)
@@ -142,6 +148,10 @@ export function PanZoomImageDialog({
             opener.focus({ preventScroll: true })
           }
         }}
+        onInteractOutside={(event) => {
+          keepImageActionsOpen(event)
+          onInteractOutside?.(event)
+        }}
       >
         <DialogTitle className="sr-only">{title}</DialogTitle>
         {/* Mount with dialog content, and again per image, so each starts fitted. */}
@@ -156,6 +166,8 @@ export function PanZoomImageDialog({
           toolbarActions={toolbarActions}
           onPrevious={onPrevious}
           onNext={onNext}
+          imageSource={imageSource}
+          actionSrc={actionSrc}
           onClose={() => onOpenChange(false)}
           closeOnBackdrop={!busy}
         />
@@ -175,7 +187,9 @@ function PanZoomImageCanvas({
   onPrevious,
   onNext,
   onClose,
-  closeOnBackdrop
+  closeOnBackdrop,
+  imageSource,
+  actionSrc
 }: Pick<
   PanZoomImageDialogProps,
   | 'src'
@@ -187,6 +201,8 @@ function PanZoomImageCanvas({
   | 'toolbarActions'
   | 'onPrevious'
   | 'onNext'
+  | 'imageSource'
+  | 'actionSrc'
 > & { onClose: () => void; closeOnBackdrop: boolean }): React.JSX.Element {
   const t = useTranslate()
   const [loaded, setLoaded] = useState<{ src: string; size: PanZoomSize } | null>(null)
@@ -204,7 +220,7 @@ function PanZoomImageCanvas({
   useViewerZoomCommands(panZoom, 'popup')
 
   return (
-    <>
+    <ImageActions src={imageSrc ? actionSrc : null} title={title} imageSource={imageSource}>
       <PanZoomImageSurface
         panZoom={panZoom}
         src={imageSrc}
@@ -255,6 +271,11 @@ function PanZoomImageCanvas({
                 <span aria-hidden className="mx-0.5 h-4 w-px bg-border" />
               </>
             ) : null}
+            <ImageActionsButton
+              src={imageSrc ? actionSrc : null}
+              title={title}
+              imageSource={imageSource}
+            />
             <ToolbarButton
               label={t('auto.components.editor.PanZoomImageDialog.zoomOut', 'Zoom out')}
               disabled={!panZoom.canZoomOut}
@@ -295,6 +316,6 @@ function PanZoomImageCanvas({
           </div>
         </div>
       </TooltipProvider>
-    </>
+    </ImageActions>
   )
 }
