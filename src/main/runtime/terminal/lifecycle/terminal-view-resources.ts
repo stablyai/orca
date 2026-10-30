@@ -14,6 +14,7 @@ import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-
 import type { createAgentStatusOscProcessor } from '../../../../shared/agent-status-osc'
 import { RuntimeTerminalViewSubscribers } from '../../runtime-terminal-view-subscribers'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import type { PaneExitScanState } from '../../../shell-pane-exit-scanner'
 
 export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWithStopRequestedPtyIds {
   protected abstract notifyRemoteTerminalViewPresenceChanged(ptyId: string): void
@@ -99,6 +100,11 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
 
   // OSC 7 carries live host cwd for relative mobile file taps.
   protected osc7ScanTailByPtyId = new Map<string, string>()
+
+  // macOS login(1) exits 0; the TCC trampoline publishes the inner status here.
+  protected lastReportedPaneExitCodeByPtyId = new Map<string, number>()
+
+  protected paneExitScanStateByPtyId = new Map<string, PaneExitScanState>()
 
   protected terminalCwdByPtyId = new Map<string, string>()
 

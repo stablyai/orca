@@ -15,6 +15,8 @@ export abstract class OrcaRuntimeWithInvalidateAllHandlesForPty extends OrcaRunt
   protected retirePredecessorPtyExitEvidence(pty: RuntimePtyWorktreeRecord): void {
     pty.lastExitCode = null
     pty.lastExitCause = null
+    this.lastReportedPaneExitCodeByPtyId.delete(pty.ptyId)
+    this.paneExitScanStateByPtyId.delete(pty.ptyId)
     for (const leaf of this.getLeavesForPty(pty.ptyId)) {
       leaf.lastExitCode = null
       leaf.lastExitCause = null
@@ -184,10 +186,14 @@ export abstract class OrcaRuntimeWithInvalidateAllHandlesForPty extends OrcaRunt
       }
       pty.connected = true
       pty.disconnectedAt = null
+      pty.lastExitCode = null
     }
+    this.lastReportedPaneExitCodeByPtyId.delete(ptyId)
+    this.paneExitScanStateByPtyId.delete(ptyId)
     for (const leaf of this.getLeavesForPty(ptyId)) {
       leaf.connected = true
       leaf.writable = this.graphStatus === 'ready'
+      leaf.lastExitCode = null
       this.adoptPreAllocatedHandle(leaf)
     }
   }

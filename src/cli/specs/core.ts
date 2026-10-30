@@ -210,7 +210,10 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     summary: 'Wait for a terminal condition',
     usage:
       'orca terminal wait [--terminal <handle>] --for exit|tui-idle [--timeout-ms <ms>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'for', 'timeout-ms']
+    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'for', 'timeout-ms'],
+    notes: [
+      "--for exit tracks the pane process, not a foreground command that returns to the shell. Prefix terminal create --command with exec so the command replaces the shell and its exitCode is reported (e.g. exec zsh -c 'exit 42')."
+    ]
   },
   {
     path: ['terminal', 'stop'],
@@ -232,7 +235,8 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'Creates a visible terminal tab without switching focus when possible; falls back to a background handle if the UI cannot adopt it. Pass --focus to switch to it.',
       'This creates a terminal and runs --command in it. To start an agent, use `orca agent launch` (or `orca worktree create --agent` for a new checkout), which follows your Chat UI setting.',
       '--shell picks the shell the terminal IS on a Windows host (cmd.exe, powershell.exe, pwsh.exe, wsl.exe, bash.exe, git-bash); --command is typed into whatever shell the host started, so `--command cmd.exe` leaves a cmd running INSIDE the default shell and exiting it drops back to that shell.',
-      'A host that cannot apply --shell refuses the create rather than quietly spawning its default shell: macOS and Linux execution hosts spawn the login shell, terminals routed over SSH resolve their shell on the SSH host, a --shell that contradicts the project execution runtime (WSL vs Windows host) is refused, and an Orca host older than --shell is refused by the CLI.'
+      'A host that cannot apply --shell refuses the create rather than quietly spawning its default shell: macOS and Linux execution hosts spawn the login shell, terminals routed over SSH resolve their shell on the SSH host, a --shell that contradicts the project execution runtime (WSL vs Windows host) is refused, and an Orca host older than --shell is refused by the CLI.',
+      "To use terminal wait --for exit, prefix --command with exec so the command replaces the pane shell (e.g. exec zsh -c 'exit 42')."
     ],
     examples: [
       'orca terminal create --json',

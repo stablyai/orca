@@ -13,6 +13,7 @@ import type { PtyLivenessVerdict } from '../../../../shared/pty-liveness-verdict
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { exitedSplitPaneFacts } from './exited-split-pane-rule'
 import { closedPaneOfExitedPty, type ClosedPaneOfExit } from './closed-pane-of-exited-pty'
+import { resolvePaneProcessExitCode } from '../../../shell-pane-exit-scanner'
 import type {
   RuntimePtyWorktreeRecord,
   RuntimeLeafRecord
@@ -75,11 +76,17 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
     if (exitIncarnationId && candidateIncarnation && exitIncarnationId !== candidateIncarnation) {
       return
     }
+    const resolvedExitCode = resolvePaneProcessExitCode(
+      exitCode,
+      this.lastReportedPaneExitCodeByPtyId.get(ptyId) ?? null
+    )
+    this.lastReportedPaneExitCodeByPtyId.delete(ptyId)
+    this.paneExitScanStateByPtyId.delete(ptyId)
     pending?.exitedIncarnations.add(exitIncarnationId ?? candidateIncarnation ?? null)
     this.invalidatePtyControllerInventoryForLifecycle(ptyId, pty?.connectionId)
     // A bare exit code is not enough to establish why a process ended: older
     // daemons and SSH relays can report 0 for crashes and wrapper exits.
-    const observedCause = options.cause ?? resolveUnreportedExitCause(exitCode)
+    const observedCause = options.cause ?? resolveUnreportedExitCause(resolvedExitCode)
     const stopNeverConfirmed =
       observedCause.kind === 'unknown' && observedCause.reason === 'stop_unverified'
     const stopRequested = this.stopRequestedPtyIds.has(ptyId)
@@ -237,7 +244,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
         pty.runtimeSessionOwned = false
         this.setPairedRendererSessionOwnership(pty.ptyId, false)
         pty.disconnectedAt = Date.now()
-        pty.lastExitCode = exitCode
+        pty.lastExitCode = resolvedExitCode
         pty.lastExitCause = exitCause
         // Same-id replacements must earn live idle evidence before delivery; retain status only for display.
         pty.lastAgentStatusObservedLive = false
@@ -261,7 +268,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
             exactSurfaces,
             // Switch point: main decides an exited split pane's close.
             ORCA_LAYOUT_OWNER_IS_MAIN
-              ? exitedSplitPaneFacts(this.terminalRunFacts, pty, ptyId, exitCode, options)
+              ? exitedSplitPaneFacts(this.terminalRunFacts, pty, ptyId, resolvedExitCode, options)
               : undefined,
             closedPane ?? undefined
           )
@@ -280,7 +287,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       this.detachedPreAllocatedLeaves.delete(ptyId)
       leaf.connected = false
       leaf.writable = false
-      leaf.lastExitCode = exitCode
+      leaf.lastExitCode = resolvedExitCode
       leaf.lastExitCause = exitCause
       leaf.lastAgentStatusObservedLive = false
       this.resolveExitWaiters(leaf)
@@ -299,7 +306,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
     }
     if (!preservesAbnormalSshSurface) {
       for (const surface of exitedSurfaces) {
-        this.failActiveDispatchOnExit(surface.handle, surface.paneKey, exitCode, exitCause)
+        this.failActiveDispatchOnExit(surface.handle, surface.paneKey, resolvedExitCode, exitCause)
       }
     }
     this.pruneDisconnectedPtyRecords()
