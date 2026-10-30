@@ -132,6 +132,7 @@ function Harness({ kind, singleton }: { kind: Kind; singleton: boolean }) {
           ) : kind === 'editor' ? (
             <EditorFileTab
               {...common}
+              gitStatus={null}
               file={{
                 id: ENTITY,
                 tabId: ENTITY,
@@ -148,7 +149,14 @@ function Harness({ kind, singleton }: { kind: Kind; singleton: boolean }) {
           ) : (
             <SortableTab
               {...common}
-              tab={{ id: ENTITY, worktreeId: worktree, title: 'Source' }}
+              agent={null}
+              tab={{
+                id: ENTITY,
+                worktreeId: worktree,
+                title: 'Source',
+                customTitle: null,
+                color: null
+              }}
               unifiedTabId={TAB}
               groupId={GROUP}
               isExpanded={false}
@@ -244,11 +252,8 @@ async function open(button = 2) {
   return item
 }
 async function right() {
-  fireEvent.pointerMove(
-    screen.getByRole('menuitem', { name: 'Move Tab to Split', exact: true }),
-    pointer(2)
-  )
-  const item = await screen.findByRole('menuitem', { name: 'Right', exact: true })
+  fireEvent.pointerMove(screen.getByRole('menuitem', { name: 'Move Tab to Split' }), pointer(2))
+  const item = await screen.findByRole('menuitem', { name: 'Right' })
   expectStationary(item.closest('[role="menu"]'))
   return item
 }
@@ -308,10 +313,7 @@ it.each([
     await mount(kind, workspace)
     await open(2)
     if (kind === 'terminal') {
-      fireEvent.pointerMove(
-        screen.getByRole('menuitem', { name: 'Split terminal', exact: true }),
-        pointer(2)
-      )
+      fireEvent.pointerMove(screen.getByRole('menuitem', { name: 'Split terminal' }), pointer(2))
       const terminalItem = await screen.findByRole('menuitem', {
         name: /^Split terminal right/i
       })
@@ -350,7 +352,7 @@ it('supports immediate same-row and cross-row selection after release-before-con
   fireEvent.pointerUp(source(), pointer(2, 0))
   fireEvent.contextMenu(source(), pointer(2, 0))
   expect(screen.queryByRole('menuitem', { name: 'Move Tab to Split' })).toBeNull()
-  const pin = await screen.findByRole('menuitem', { name: 'Pin Tab', exact: true })
+  const pin = await screen.findByRole('menuitem', { name: 'Pin Tab' })
   fireEvent.pointerDown(screen.getByRole('menuitem', { name: 'Duplicate Tab' }), pointer())
   fireEvent.pointerUp(pin, pointer(0, 0))
   await waitFor(() =>
@@ -374,7 +376,7 @@ it('supports immediate same-row and cross-row selection after release-before-con
 it('starts editor rename only after menu close autofocus and preserves ordinary dismissal', async () => {
   await mount('editor')
   await open()
-  fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Rename', exact: true }), { key: 'Enter' })
+  fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Rename' }), { key: 'Enter' })
   const renameInput = await screen.findByRole('textbox', { name: /Rename file/ })
   await waitFor(() => expect(document.activeElement).toBe(renameInput))
   expect(screen.queryByRole('menu')).toBeNull()
@@ -385,7 +387,7 @@ it('starts editor rename only after menu close autofocus and preserves ordinary 
 it('preserves keyboard selection, outside/blur dismissal and replacement on the actual owner', async () => {
   const view = await mount()
   await open()
-  fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Pin Tab', exact: true }), { key: ' ' })
+  fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Pin Tab' }), { key: ' ' })
   await waitFor(() =>
     expect(
       useAppStore.getState().unifiedTabsByWorktree[GIT_KEY]?.find((tab) => tab.id === TAB)?.isPinned
@@ -454,7 +456,7 @@ it.each([
     expect(drag).toEqual(['pending', 'abort'])
     expect(activations).toBe(0)
     expect(document.activeElement).not.toBe(screen.getByRole('textbox'))
-    const pin = screen.getByRole('menuitem', { name: 'Pin Tab', exact: true })
+    const pin = screen.getByRole('menuitem', { name: 'Pin Tab' })
     fireEvent.pointerDown(pin, pointer())
     fireEvent.pointerUp(pin, pointer(0, 0))
     fireEvent.click(pin)
