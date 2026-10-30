@@ -190,7 +190,7 @@ describe('WSL move desktop rewrite', () => {
   })
 
   it('does nothing at startup with the gate closed', async () => {
-    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '')
+    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '0')
     const trace: Trace = { events: [], failAt: new Set() }
     mainStore('a', trace)
     seedWslMoveCutover(userDataPath, cutover('move-1', 'destination-committed'))
@@ -298,7 +298,7 @@ describe('WSL move renderer rewrites', () => {
   })
 
   it('lists nothing and records nothing with the gate closed', () => {
-    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '')
+    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '0')
     expect(listPendingWslMoveRendererRewrites(userDataPath)).toEqual([])
     expect(
       recordWslMoveRendererStoreRewritten(userDataPath, {

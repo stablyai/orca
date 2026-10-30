@@ -223,7 +223,7 @@ describe('createOrFocusDashboardPopout', () => {
   })
 
   it('lets its preload expose saved WSL hosts in serve-only, and passes nothing otherwise', () => {
-    vi.stubEnv('ORCA_INTERNAL_WSL_HOSTS', undefined)
+    vi.stubEnv('ORCA_INTERNAL_WSL_HOSTS', '0')
     createOrFocusDashboardPopout(makeStore() as never)
     expect(instances[0].options.webPreferences?.additionalArguments).toBeUndefined()
     closeDashboardPopout()

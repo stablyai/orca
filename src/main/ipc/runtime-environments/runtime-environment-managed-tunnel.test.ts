@@ -223,7 +223,7 @@ describe('resolving a runtime for a call, by host kind', () => {
   })
 
   it('refuses a WSL host with the gate closed', async () => {
-    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '')
+    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '0')
     await expect(resolveManagedRuntimeEnvironment('/u', 'wsl:ubuntu')).rejects.toThrow(
       WSL_HOSTS_GATED_OFF_MESSAGE
     )

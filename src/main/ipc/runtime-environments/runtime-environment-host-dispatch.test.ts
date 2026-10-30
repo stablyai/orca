@@ -205,7 +205,7 @@ describe('runtimeEnvironments:connect by host kind', () => {
 
   it('refuses a WSL host with the gate closed before touching anything', async () => {
     useHost('wsl')
-    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '')
+    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '0')
     await expect(
       handler('runtimeEnvironments:connect')(null, { selector: 'wsl:ubuntu' })
     ).rejects.toThrow(WSL_HOSTS_GATED_OFF_MESSAGE)
@@ -258,7 +258,7 @@ describe('runtimeEnvironments:remove by host kind', () => {
 
   it('refuses a WSL host with the gate closed', () => {
     useHost('wsl')
-    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '')
+    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '0')
     expect(() => handler('runtimeEnvironments:remove')(null, { selector: 'wsl:ubuntu' })).toThrow(
       WSL_HOSTS_GATED_OFF_MESSAGE
     )
@@ -270,7 +270,7 @@ describe('runtimeEnvironments:remove by host kind', () => {
     mocks.handle.mockClear()
     register('wsl:ubuntu')
     useHost('wsl')
-    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '')
+    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '0')
     expect(() => handler('runtimeEnvironments:remove')(null, { selector: 'wsl:ubuntu' })).toThrow(
       'This server is the default host for new projects. Choose another one under New projects open on before removing it.'
     )
