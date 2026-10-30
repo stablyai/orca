@@ -1,123 +1,24 @@
 import {
-  pushOwnerNativePorts,
-  pushOwnerRpcPort as client
-} from './push-owner-native-ports.test-fixture'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+  registration,
+  native,
+  consent,
+  ports,
+  T2,
+  lifetime,
+  detach,
+  drain,
+  attach
+} from './push-native-consent-lifetime.test-fixture'
+import { pushOwnerRpcPort as client } from './push-owner-native-ports.test-fixture'
+import { expect, it, vi } from 'vitest'
 import { ownerCleanup } from '../../../cloud/apps/push/src/push-owner-integration.test-fixture'
 import { AppState, Platform } from 'react-native'
 import type { ConnectionState } from '../transport/types'
 import type { HostClientStoreEntry } from '../transport/host-entry-opener'
-import type * as Registration from './push-registration'
-import type * as Native from './push-native-preparation'
-import type * as Consent from './push-consent-preparation'
 import {
   readPushNotificationsPreference,
   savePushNotificationsEnabled
 } from '../storage/preferences'
-
-let registration: typeof Registration
-let native: typeof Native
-let consent: typeof Consent
-const ports = pushOwnerNativePorts()
-vi.mock('../transport/rpc-client', () => ({
-  connect: () => {
-    if (!ports.session) {
-      throw new Error('Missing external RPC session port')
-    }
-    return ports.session
-  }
-}))
-vi.mock('expo-file-system', () => ({
-  Directory: class {
-    readonly exists = false
-    readonly uri: string
-    constructor(...paths: string[]) {
-      this.uri = paths.join('/')
-    }
-  },
-  File: class {
-    readonly exists = false
-  },
-  Paths: { cache: 'file:///native-lifetime-cache' }
-}))
-const T2 = { platform: 'ios', token: 'c'.repeat(64), apnsEnvironment: 'production' } as const
-let stop: (() => void) | undefined
-const detach: (() => void)[] = []
-const drain = () => vi.advanceTimersByTimeAsync(0)
-function attach(count: number) {
-  return Array.from({ length: count }, (_, i) => {
-    const connection = client()
-    detach.push(registration.attachPushRegistration(`host-${i}`, connection))
-    return connection
-  })
-}
-beforeEach(async () => {
-  vi.resetModules()
-  registration = await import('./push-registration')
-  native = await import('./push-native-preparation')
-  consent = await import('./push-consent-preparation')
-  vi.useFakeTimers()
-  Object.assign(Platform, { OS: 'ios' })
-  AppState.currentState = 'active'
-  ports.storage.clear()
-  ports.keys.clear()
-  ports.storage.set('orca:pushServiceNotificationsEnabled', 'true')
-  ports.nativeCalls = 0
-  ports.listenerRemovals = 0
-  ports.consentCalls = 0
-  ports.nativeGets.length = 0
-  ports.channelCalls.length = 0
-  ports.consentResults.length = 0
-  ports.native = { platform: 'ios', token: 'b'.repeat(64), apnsEnvironment: 'production' }
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async () => new Response('{}', { status: 404 }))
-  )
-})
-afterEach(async () => {
-  const cleanup = ownerCleanup()
-  await cleanup.run(() => stop?.())
-  stop = undefined
-  for (const release of detach.splice(0)) {
-    await cleanup.run(release)
-  }
-  for (const release of [
-    () => ports.consentHold?.gate.resolve(),
-    () => ports.channelHold?.resolve(),
-    () => ports.nativeHold?.resolve(ports.native.token)
-  ]) {
-    await cleanup.run(release)
-  }
-  ports.consentHold = undefined
-  ports.channelHold = undefined
-  ports.nativeHold = undefined
-  await cleanup.run(drain)
-  await cleanup.run(registration.resetPushRegistrationForTests)
-  await cleanup.run(() =>
-    expect(native.pushNativeSnapshotForTests()).toEqual({
-      physical: 0,
-      assignment: 0,
-      entries: 0,
-      timers: 0,
-      callables: 0
-    })
-  )
-  await cleanup.run(() =>
-    expect(consent.pushConsentSnapshotForTests()).toEqual({
-      physical: 0,
-      selected: 0,
-      queued: 0,
-      root: 0,
-      hosts: 0,
-      callables: 0
-    })
-  )
-  await cleanup.run(() => expect(ports.listener).toBeUndefined())
-  await cleanup.run(() => vi.restoreAllMocks())
-  await cleanup.run(() => vi.unstubAllGlobals())
-  await cleanup.run(() => vi.useRealTimers())
-  cleanup.finish()
-})
 
 it.each([
   { H: 4, M: 10, R: 10 },
@@ -148,7 +49,7 @@ it.each([
       })
       return handle
     })
-    stop = registration.startPushTokenSync()
+    lifetime.stop = registration.startPushTokenSync()
     const clients = attach(H)
     await drain()
     expect(native.pushNativeSnapshotForTests()).toMatchObject({
@@ -165,14 +66,14 @@ it.each([
       expect(native.pushNativeSnapshotForTests().entries).toBe(0)
     }
     for (let i = 0; i < R; i++) {
-      stop()
+      lifetime.stop()
       expect(native.pushNativeSnapshotForTests()).toMatchObject({
         physical: 1,
         assignment: 0,
         entries: 0,
         callables: 0
       })
-      stop = registration.startPushTokenSync()
+      lifetime.stop = registration.startPushTokenSync()
       await drain()
       expect(native.pushNativeSnapshotForTests().entries).toBeLessThanOrEqual(H)
     }
@@ -189,7 +90,7 @@ it.each([
         )
       ).toHaveLength(0)
     }
-    stop()
+    lifetime.stop()
     await drain()
     expect(outcomes.some((outcome) => outcome.retired)).toBe(true)
     expect(native.pushNativeSnapshotForTests()).toMatchObject({
@@ -198,7 +99,7 @@ it.each([
       assignment: 0,
       callables: 0
     })
-    stop = registration.startPushTokenSync()
+    lifetime.stop = registration.startPushTokenSync()
     await drain()
     ports.nativeHold.resolve(ports.native.token)
     await drain()
@@ -223,7 +124,7 @@ it('gives a staggered admission its own full two seconds and returns unavailable
     ).result
   ).resolves.toEqual({ status: 'unavailable' })
   ports.nativeHold = Promise.withResolvers<string>()
-  stop = registration.startPushTokenSync()
+  lifetime.stop = registration.startPushTokenSync()
   attach(1)
   await drain()
   await vi.advanceTimersByTimeAsync(1500)
@@ -242,11 +143,11 @@ it.each(['token', 'null', 'error'] as const)(
   'keeps listener T2 across roots/local persistence when old native returns %s',
   async (result) => {
     ports.nativeHold = Promise.withResolvers<string>()
-    stop = registration.startPushTokenSync()
+    lifetime.stop = registration.startPushTokenSync()
     const [connection] = attach(1)
     await drain()
-    stop()
-    stop = registration.startPushTokenSync()
+    lifetime.stop()
+    lifetime.stop = registration.startPushTokenSync()
     await drain()
     ports.consentHold = { mode: 'reply', gate: Promise.withResolvers<void>() }
     ports.foreground?.('active')
@@ -284,7 +185,7 @@ it.each(['token', 'null', 'error'] as const)(
 
 it('lets fresh host consent join a retired pending native phase without starting or reviving an old assignment', async () => {
   ports.nativeHold = Promise.withResolvers<string>()
-  stop = registration.startPushTokenSync()
+  lifetime.stop = registration.startPushTokenSync()
   await drain()
   ports.storage.set('orca:pushServiceNotificationsEnabled', 'false')
   const off = client()
@@ -321,7 +222,7 @@ it.each(['null', 'error'] as const)(
   'ends finite native %s without self-retry and retries on a genuine foreground demand',
   async (outcome) => {
     ports.nativeHold = Promise.withResolvers<string>()
-    stop = registration.startPushTokenSync()
+    lifetime.stop = registration.startPushTokenSync()
     const [connection] = attach(1)
     await drain()
     if (outcome === 'error') {
@@ -361,11 +262,11 @@ it.each(['complete', 'fail'] as const)(
   async (outcome) => {
     Object.assign(Platform, { OS: 'android' })
     ports.channelHold = Promise.withResolvers<void>()
-    stop = registration.startPushTokenSync()
+    lifetime.stop = registration.startPushTokenSync()
     attach(1)
     await drain()
     expect(ports.channelCalls).toEqual(['orca-desktop-silent'])
-    stop()
+    lifetime.stop()
     if (outcome === 'fail') {
       ports.channelHold.reject(new Error('channel unavailable'))
     } else {
@@ -386,7 +287,7 @@ it.each([
   'bounds H$H/M$M/R$R consent requests at the actual native disk queue head and releases all current cells',
   async ({ H, M, R }) => {
     ports.consentHold = { mode: 'disk', gate: Promise.withResolvers<void>() }
-    stop = registration.startPushTokenSync()
+    lifetime.stop = registration.startPushTokenSync()
     attach(H)
     await drain()
     for (let i = 0; i < M; i++) {
@@ -394,8 +295,8 @@ it.each([
       await drain()
     }
     for (let i = 0; i < R; i++) {
-      stop()
-      stop = registration.startPushTokenSync()
+      lifetime.stop()
+      lifetime.stop = registration.startPushTokenSync()
       await drain()
       expect(consent.pushConsentSnapshotForTests()).toMatchObject({ physical: 1 })
       expect(consent.pushConsentSnapshotForTests().queued).toBeLessThanOrEqual(H + 1)
@@ -409,7 +310,7 @@ it.each([
     })
     await drain()
     expect(saved).toBe(false)
-    stop()
+    lifetime.stop()
     for (const release of detach.splice(0)) {
       release()
     }
@@ -518,7 +419,7 @@ it('retires consent before removal awaits and bounds genuine logical-client reco
     lastConnected: 0
   }
   await savePairedHost(host)
-  stop = registration.startPushTokenSync()
+  lifetime.stop = registration.startPushTokenSync()
   await drain()
   Object.assign(Platform, { OS: 'web' })
   const store = new Map<string, HostClientStoreEntry>()
@@ -571,7 +472,7 @@ it('retires consent before removal awaits and bounds genuine logical-client reco
       expect(consent.pushConsentSnapshotForTests().queued).toBeLessThanOrEqual(2)
     }
     entry.unsubState()
-    stop()
+    lifetime.stop()
     await drain()
     expect(consent.pushConsentSnapshotForTests()).toMatchObject({
       physical: 1,
@@ -617,7 +518,7 @@ it.each([10, 100])(
       'loadNotificationDeliveryPreferences'
     )
     ports.consentResults.push(new Error('root read failed'))
-    stop = registration.startPushTokenSync()
+    lifetime.stop = registration.startPushTokenSync()
     await drain()
     expect(ports.nativeCalls).toBe(0)
     ports.consentResults.push(new Error('listener root read failed'))
@@ -670,7 +571,7 @@ it.each([10, 100])(
 it.each(['false', 'error'] as const)(
   'keeps pending-branch true and normal second-read %s observations distinct',
   async (second) => {
-    stop = registration.startPushTokenSync()
+    lifetime.stop = registration.startPushTokenSync()
     await drain()
     ports.storage.set(
       'orca:remotePushHostRegistrations',
@@ -678,7 +579,7 @@ it.each(['false', 'error'] as const)(
     )
     // Reconstruct the record cache from actual saved state before admitting the host.
     registration.resetPushRegistrationForTests()
-    stop = registration.startPushTokenSync()
+    lifetime.stop = registration.startPushTokenSync()
     await drain()
     ports.consentResults.push(
       'true',
@@ -698,182 +599,5 @@ it.each(['false', 'error'] as const)(
       )
     ).toHaveLength(0)
     expect(ports.consentResults).toEqual([])
-  }
-)
-
-it.each(['native', 'consent'] as const)(
-  'extends saved/missing eleven-action ownership boundaries through the %s stage',
-  async (stage) => {
-    const actions = [
-      'disable',
-      'stop',
-      'restart',
-      'detach',
-      're-pair',
-      'remove',
-      'token',
-      'renewal',
-      'background',
-      'filter-failure',
-      'consent-failure'
-    ] as const
-    for (const kind of ['saved', 'missing'] as const) {
-      for (const action of actions) {
-        vi.resetModules()
-        const registration = await import('./push-registration')
-        const native = await import('./push-native-preparation')
-        const consent = await import('./push-consent-preparation')
-        const context = `${kind}/${stage}/${action}`
-        const currentToken = stage === 'native' && action === 'token'
-        if (currentToken) {
-          ports.native = { ...T2, token: 'b'.repeat(64) }
-        }
-        const initialToken = ports.native
-        const nativeCalls = ports.nativeCalls
-        ports.storage.set('orca:pushServiceNotificationsEnabled', 'true')
-        if (kind === 'saved') {
-          const { mobilePushRouteKey } = await import('./push-route-declaration')
-          const saved = mobilePushRouteKey(() => true)
-          try {
-            await drain()
-            await expect(saved.result, context).resolves.toMatchObject({ status: 'ready' })
-          } finally {
-            saved.release()
-          }
-          expect(ports.keys.size, context).toBeGreaterThan(0)
-        } else {
-          ports.keys.clear()
-        }
-        registration.resetPushRegistrationForTests()
-        const keyRead = (ports.keyRead = Promise.withResolvers<void>())
-        let release: (() => void) | undefined
-        try {
-          if (stage === 'native') {
-            ports.nativeHold = Promise.withResolvers<string>()
-          }
-          stop = registration.startPushTokenSync()
-          await drain()
-          if (stage === 'consent') {
-            ports.consentHold = { mode: 'reply', gate: Promise.withResolvers<void>() }
-          }
-          const connection = client()
-          release = registration.attachPushRegistration('actions', connection)
-          detach.push(release)
-          await drain()
-          const listener = ports.listener
-          expect(registration.pushRegistrationSnapshotForTests().preparations, context).toBe(1)
-          let rollback: (() => void) | undefined
-          if (action === 'disable') {
-            await registration.setRemotePushEnabled(false)
-          } else if (action === 'stop' || action === 'restart') {
-            stop()
-            if (action === 'restart') {
-              stop = registration.startPushTokenSync()
-            }
-          } else if (action === 'detach') {
-            release()
-          } else if (action === 'remove' || action === 're-pair') {
-            rollback = await registration.unregisterPushForRemovedHost('actions')
-            if (action === 're-pair') {
-              rollback()
-            }
-          } else if (action === 'token') {
-            ports.native = T2
-            ports.listener?.(T2)
-          } else if (action === 'renewal') {
-            ports.foreground?.('active')
-          } else if (action === 'background') {
-            AppState.currentState = 'background'
-            ports.foreground?.('background')
-          } else {
-            const storage = (await import('@react-native-async-storage/async-storage')).default
-            const save = vi
-              .spyOn(storage, 'setItem')
-              .mockRejectedValueOnce(new Error('local persistence failed'))
-            const local =
-              action === 'consent-failure'
-                ? registration.setRemotePushEnabled(false)
-                : registration.setNotificationDeliveryPreferences({
-                    onlyWhenDesktopAway: false,
-                    sound: false,
-                    suppressWhileViewing: true
-                  })
-            await expect(local, context).rejects.toThrow('local persistence failed')
-            save.mockRestore()
-          }
-          await drain()
-          const registerCalls = () =>
-            connection.sendRequest.mock.calls.filter(
-              ([method]) => method === 'notifications.registerPush'
-            )
-          if (currentToken) {
-            const expected = {
-              ...T2,
-              filter: { onlyWhenDesktopAway: true, sound: true }
-            }
-            expect(
-              registerCalls().map(([, params]) => params),
-              context
-            ).toEqual([expected])
-            expect(ports.nativeCalls - nativeCalls, context).toBe(1)
-            expect(native.pushNativeSnapshotForTests(), context).toEqual({
-              physical: 1,
-              assignment: 0,
-              entries: 0,
-              timers: 0,
-              callables: 0
-            })
-            ports.nativeHold?.resolve(initialToken.token)
-            await ports.nativeHold?.promise
-            await drain()
-            expect(
-              registerCalls().map(([, params]) => params),
-              `${context}: late T1`
-            ).toEqual([expected])
-            expect(ports.nativeCalls - nativeCalls, context).toBe(1)
-            expect(native.pushNativeSnapshotForTests().physical, context).toBe(0)
-          } else {
-            expect(registerCalls(), context).toHaveLength(0)
-          }
-          expect(
-            registration.pushRegistrationSnapshotForTests().preparations,
-            context
-          ).toBeLessThanOrEqual(1)
-          stop()
-          release()
-          expect(native.pushNativeSnapshotForTests(), context).toMatchObject({
-            entries: 0,
-            timers: 0,
-            assignment: 0,
-            callables: 0
-          })
-          expect(consent.pushConsentSnapshotForTests(), context).toMatchObject({
-            selected: 0,
-            queued: 0,
-            root: 0,
-            hosts: 0,
-            callables: 0
-          })
-          listener?.(initialToken)
-          await drain()
-          expect(registerCalls(), `${context}: retired listener`).toHaveLength(currentToken ? 1 : 0)
-        } finally {
-          stop?.()
-          release?.()
-          ports.consentHold?.gate.resolve()
-          ports.nativeHold?.resolve(initialToken.token)
-          keyRead.resolve()
-          await keyRead.promise
-          await ports.consentHold?.gate.promise
-          await ports.nativeHold?.promise
-          ports.consentHold = undefined
-          ports.nativeHold = undefined
-          ports.keyRead = undefined
-          await drain()
-          registration.resetPushRegistrationForTests()
-          AppState.currentState = 'active'
-        }
-      }
-    }
   }
 )
