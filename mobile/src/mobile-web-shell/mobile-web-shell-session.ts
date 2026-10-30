@@ -34,7 +34,11 @@ import {
   reconcileManifestCache,
   rendersRoute
 } from './mobile-web-shell-cached-generation'
-import { step } from './mobile-web-shell-session-step'
+import {
+  acceptsSessionEventFlow,
+  step,
+  stepNewFlow
+} from './mobile-web-shell-session-step'
 import { reducePageDocumentLifecycle } from './page-document-lifecycle'
 
 export function createMobileWebShellSession(
@@ -85,10 +89,10 @@ function startFlow(
   }
   const gated = gateState(gateVerdict(gates), patch.retriedOnce ?? session.retriedOnce)
   if (gated !== null) {
-    return step(session, { ...base, state: gated }, before)
+    return stepNewFlow(session, { ...base, state: gated }, before)
   }
   // Offline still sweeps/reads cache; onCacheRead skips only the host compatibility check.
-  return step(session, { ...base, state: CHECKING }, [...before, { kind: 'open-cache' }])
+  return stepNewFlow(session, { ...base, state: CHECKING }, [...before, { kind: 'open-cache' }])
 }
 
 // Unreachable opens the disk generation alone; connected opens a compatible one and still asks the host.
@@ -158,7 +162,7 @@ function onShellFailed(session: MobileWebShellSession, reason: ShellFailure): Mo
   const failed = { kind: 'failed', reason, retriedOnce: session.retriedOnce } as const
   if (reason === 'isolation-unavailable' || reason === 'host-profile-unreadable') {
     // Terminal failures advance flow so pending startup work is cancelled and its completions rejected.
-    return step(session, { state: failed, flow: session.flow + 1 })
+    return stepNewFlow(session, { state: failed, flow: session.flow + 1 })
   }
   if (reason === 'render-process-gone') {
     return session.remountedOnce
@@ -248,7 +252,7 @@ export function reduceMobileWebShellSession(
   session: MobileWebShellSession,
   event: MobileWebShellSessionEvent
 ): MobileWebShellStep {
-  if ('flow' in event && event.flow !== session.flow) {
+  if (!acceptsSessionEventFlow(session, event)) {
     return step(session, {})
   }
   switch (event.type) {
@@ -301,7 +305,7 @@ export function reduceMobileWebShellSession(
     case 'retry-pressed':
       // Only explicit retry resets recovery latches; reconnect must not grant another remount.
       return session.gates === null
-        ? step(session, {
+        ? stepNewFlow(session, {
             retriedOnce: false,
             remountedOnce: false,
             updateNotice: null,
