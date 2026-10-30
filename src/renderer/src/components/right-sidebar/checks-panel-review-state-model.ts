@@ -5,12 +5,7 @@ import type {
 } from '../../../../shared/github/pull-request-refresh-types'
 import type { ChecksPanelReviewLookup } from './checks-panel-review-lookup-authority'
 
-/**
- * Composer visibility the panel should render. Phase 1 never *opens* a new
- * composer from a refresh failure — `confirmed_open` / `needs_push_open` mean an
- * already-confirmed composer stays open. (Phase 2's disabled draft-preserve mode
- * is intentionally absent until that phase ships.)
- */
+/** Refresh failures may preserve a confirmed composer but must never open a new one. */
 export type ChecksPanelComposerMode = 'hidden' | 'confirmed_open' | 'needs_push_open'
 
 export type ChecksPanelWorkflowAction =
@@ -50,8 +45,9 @@ export type ChecksPanelRefreshInput = {
 
 export type ChecksPanelReviewStateInput = {
   operationLabel: string | null
-  reviewLabel: 'pull request' | 'merge request'
-  reviewShortLabel: 'PR' | 'MR'
+  /** Localized review noun, e.g. "pull request" (see localizedHostedReviewCopy). */
+  reviewLabel: string
+  reviewShortLabel: string
   /** Localized provider display name, e.g. "GitHub". */
   providerName: string
   /** GitHub gets typed error rows; other providers use neutral copy. */
@@ -111,8 +107,7 @@ export function isTransientRefreshFailure(refresh: ChecksPanelRefreshInput | und
     return true
   }
   if (refresh.status === 'error') {
-    // Untyped and typed-transient errors only pause background refresh; they do
-    // not prove a fresh user-initiated lookup would fail.
+    // Transient/untyped errors pause background refresh without proving a user-initiated lookup would fail.
     return (
       refresh.errorType == null ||
       refresh.errorType === 'network' ||

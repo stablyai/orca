@@ -99,9 +99,7 @@ describe('fetchGrokRateLimits', () => {
     )
   })
 
-  // Why: this payload emits NO usage scalars, so the omitted percent really is
-  // the dropped protobuf zero (#9214/#9219). #15740's payload does emit them —
-  // keep the two shapes apart.
+  // #9214/#9219 omit all scalars (protobuf default zero); #15740 emits explicit zero fields and needs different handling.
   it('maps an omitted protobuf percentage as zero for a weekly credits period', async () => {
     authState.file = freshAuthJson()
     fetchMock.mockResolvedValueOnce(
@@ -127,8 +125,7 @@ describe('fetchGrokRateLimits', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
-  // Why: #15740 — an absent creditUsagePercent alongside explicitly-emitted zero
-  // credit fields means "not reported", never 0%.
+  // #15740: absent percent with explicitly emitted zero fields means unreported, never zero usage.
   it('reports usage as unavailable when the credits view omits the percent but emits explicit zero credit fields', async () => {
     authState.file = freshAuthJson()
     fetchMock
@@ -169,8 +166,6 @@ describe('fetchGrokRateLimits', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
-  // Why: the monthly budget pair is a monthly window wherever it arrives — the
-  // credits view must not relabel it 'Weekly credits'.
   it('publishes a credits-view monthly budget pair as a monthly window without a second request', async () => {
     authState.file = freshAuthJson()
     fetchMock.mockResolvedValueOnce(
@@ -197,8 +192,7 @@ describe('fetchGrokRateLimits', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
-  // Why: #9214/#9219 — non-zero money fields never prove the encoder emits
-  // default zeros, so the omitted percent still reads as the dropped zero.
+  // Nonzero money fields do not prove default scalars are emitted; absent percent can still encode zero (#9214/#9219).
   it('still reads an omitted percentage as zero when the payload carries only non-zero money fields', async () => {
     authState.file = freshAuthJson()
     fetchMock.mockResolvedValueOnce(
@@ -324,9 +318,7 @@ describe('fetchGrokRateLimits', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
-  // Why: 'unavailable' would make applyStalePolicy discard the last good
-  // monthly snapshot; transient fallback failures must present like transient
-  // credits-view failures so stale data survives.
+  // Error retains stale monthly quota; unavailable would discard the last good snapshot.
   it('surfaces an error when the monthly fallback request fails', async () => {
     authState.file = freshAuthJson()
     fetchMock
@@ -409,9 +401,7 @@ describe('fetchGrokRateLimits', () => {
       failureKind: 'delegated-refresh-required',
       source: 'oauth'
     })
-    // Why: a stored-but-expired access token is refreshed by Grok CLI on next
-    // use (a genuine sign-out returns 'missing'), so the message must not tell
-    // users to re-run `grok login` (#8497).
+    // Stored expired tokens refresh on next Grok use; only missing auth needs login guidance (#8497).
     expect(result.error).not.toMatch(/grok login/i)
     expect(fetchMock).not.toHaveBeenCalled()
   })

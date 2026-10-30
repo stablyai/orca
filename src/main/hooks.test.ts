@@ -3,7 +3,6 @@ import type * as GitRunner from './git/runner'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { makeHookTestRepo } from './hooks-test-fixtures'
 
-// Mock fs used by loadHooks
 vi.mock('fs', () => ({
   readFileSync: vi.fn(),
   existsSync: vi.fn(),
@@ -20,8 +19,6 @@ const { spawnMock, runWslProcessMock, gitExecFileSyncMock } = vi.hoisted(() => (
 }))
 
 vi.mock('child_process', () => ({
-  // One `spawn` for both: hooks.ts runs the script through it, and runner.ts imports it
-  // transitively. A second key here silently shadowed the first.
   spawn: spawnMock,
   execFileSync: vi.fn()
 }))
@@ -35,7 +32,6 @@ vi.mock('./git/runner', async () => ({
   gitExecFileSync: gitExecFileSyncMock
 }))
 
-/** Minimal ChildProcess stand-in: hooks.ts reads the streams and waits for close/error. */
 function fakeChild(exit: { code?: number | null; signal?: NodeJS.Signals | null } = { code: 0 }) {
   const listeners: Record<string, ((...args: unknown[]) => void)[]> = {}
   const stream = { setEncoding: () => {}, on: () => {} }
@@ -59,7 +55,6 @@ function fakeChild(exit: { code?: number | null; signal?: NodeJS.Signals | null 
 }
 
 beforeEach(() => {
-  // Clear as well as re-arm: these assertions are order-sensitive and calls otherwise accumulate.
   spawnMock.mockClear()
   spawnMock.mockImplementation(() => fakeChild())
 })
@@ -113,8 +108,7 @@ describe('runHook', () => {
   })
 
   it('does not run setup scripts with a half-activated conda env', async () => {
-    // Why: setup scripts source conda exactly like a shell rc does, so the
-    // orphaned CONDA_SHLVL sentinel surfaces as an opaque hook failure (#14195).
+    // An orphaned CONDA_SHLVL sentinel breaks hook environment activation (#14195).
     let capturedEnv: Record<string, string> | undefined
     spawnMock.mockImplementation((_script, options) => {
       capturedEnv = (options as { env: Record<string, string> }).env
@@ -180,8 +174,7 @@ describe('runHook', () => {
         expect.objectContaining({
           cwd: '/repo/worktree',
           shell: '/bin/bash',
-          // Setup hooks run unattended: git in them must not pop the OS
-          // credential helper's OAuth window and loop it (issue #7652).
+          // Unattended Git must not open credential-helper OAuth windows (#7652).
           env: expect.objectContaining({
             GIT_TERMINAL_PROMPT: '0',
             GCM_INTERACTIVE: 'never'
@@ -237,8 +230,7 @@ describe('runHook', () => {
           loginPath: 'preferred',
           script: 'echo hello',
           cwd: '/home/jin/feature',
-          // #7652 regression: the unattended WSL hook branch must carry the
-          // credential guard into the guest env.
+          // WSL hooks must receive the credential guard inside the guest (#7652).
           env: expect.objectContaining({
             ORCA_ROOT_PATH: '/mnt/c/Users/jinwo/git/orca',
             ORCA_WORKTREE_PATH: '/home/jin/feature',
@@ -317,7 +309,7 @@ describe('runHook', () => {
     }
   })
 
-  it('writes Windows-path setup runners through WSL git when the project runtime targets WSL', async () => {
+  it('writes Windows-path setup runners for a project whose runtime targets WSL', async () => {
     gitExecFileSyncMock.mockReset()
     gitExecFileSyncMock.mockReturnValue('/mnt/c/Users/jinwo/git/orca/.git/orca/setup-runner.sh\n')
 
@@ -346,9 +338,10 @@ describe('runHook', () => {
 
       expect(gitExecFileSyncMock).toHaveBeenCalledWith(
         ['rev-parse', '--git-path', 'orca/setup-runner.sh'],
+        // The lookup is synchronous, so it runs host Git (as on main) rather than a blocking wsl.exe.
         {
           cwd: 'C:\\Users\\jinwo\\git\\orca-feature',
-          wslDistro: 'Ubuntu'
+          hostGit: true
         }
       )
       expect(result.runnerScriptPath).toContain('setup-runner.sh')
@@ -369,8 +362,7 @@ describe('runHook', () => {
   })
 
   it('settles WSL hooks when wsl.exe never reports completion', async () => {
-    // Why no fake timers: the timeout is now runProcess's own, internal to the
-    // mocked runWslProcess -- there is nothing left in hooks.ts to advance.
+    // The mocked runWslProcess owns the timeout; hooks.ts has no timer to advance.
     spawnMock.mockReset()
     spawnMock.mockImplementation(() => fakeChild())
     runWslProcessMock.mockReset()

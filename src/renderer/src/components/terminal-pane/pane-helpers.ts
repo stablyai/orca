@@ -6,8 +6,7 @@ export function fitPanes(manager: PaneManager): void {
 }
 
 export function focusActivePane(manager: PaneManager): void {
-  // Why: tab rename focuses the input on the next frame. A queued terminal
-  // layout focus can land in between mount and focus, blurring rename closed.
+  // Tab rename focuses next frame; queued layout focus must not blur it closed first.
   if (typeof document !== 'undefined' && document.querySelector('[data-tab-rename-input="true"]')) {
     return
   }
@@ -56,8 +55,7 @@ export function shouldPreserveEditableFocus(element: Element | null): boolean {
   if (element.closest('[hidden], [inert]')) {
     return false
   }
-  // Why: deferred fit/focus work can run after inline rename or settings
-  // fields take focus. Layout maintenance must not blur user edits closed.
+  // Deferred layout maintenance must not steal focus from rename or settings edits.
   return (
     element.isContentEditable ||
     element.tagName === 'INPUT' ||

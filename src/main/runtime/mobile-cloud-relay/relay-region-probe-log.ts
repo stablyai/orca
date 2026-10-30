@@ -4,7 +4,6 @@ import type { RegionMeasurement, RelayRegion, RelayRegionProbeReport } from './r
 export const RELAY_REGION_PROBE_EVENT = 'relay_region_probe'
 export const RELAY_REGION_SELF_HEAL_EVENT = 'relay_region_self_heal'
 
-/** Why the resolver ended up with the region it returned, or with no hint. */
 export type RelayRegionChoiceReason =
   | 'measured'
   | 'held-previous'
@@ -47,8 +46,7 @@ export type RelayRegionSelfHealLogEvent = {
 export type RelayRegionLogEvent = RelayRegionProbeLogEvent | RelayRegionSelfHealLogEvent
 export type RelayRegionLogSink = (event: RelayRegionLogEvent) => void
 
-// JSON rather than an object argument: Node pretty-prints nested objects across
-// many lines, and a support log census needs one grep-able line per event.
+// JSON keeps nested support-log events on one searchable line.
 export function logRelayRegionEvent(event: RelayRegionLogEvent): void {
   console.info('[relay-region]', JSON.stringify(event))
 }
@@ -120,8 +118,6 @@ function refreshReason(
   selected: RegionMeasurement | null
 ): RelayRegionChoiceReason {
   if (selected) {
-    // The resolver keeps the incumbent unless a rival wins by a real margin, so
-    // a selection that is not the fastest reading is a deliberate hold.
     return best && selected.region !== best.region ? 'held-previous' : 'measured'
   }
   if (reports.some((report) => report.verdict === 'measured')) {

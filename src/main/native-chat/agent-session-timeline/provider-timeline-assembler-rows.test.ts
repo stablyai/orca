@@ -1,5 +1,4 @@
-// Which row an event lands on is spelled from its keys, and an event the sink refused took
-// nothing: no key, no row, no room in the budget.
+// Refused events must consume no keys, rows or admission budget.
 
 import { afterEach, describe, expect, it } from 'vitest'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
@@ -34,7 +33,6 @@ describe('a refused event takes nothing', () => {
     expect(assembler.openTurnId).toBeNull()
     refusing = false
     expect(assembler.apply(turnOpen).admission).toEqual({ accepted: true })
-    // The minted turn takes the first serial, as if the refusal never happened.
     expect(assembler.openTurnId).toBe('m:gen-1%3At1')
     refusing = true
     expect(assembler.apply(frame).admission).toEqual(refused)
@@ -70,7 +68,7 @@ describe('a row keeps the turn it opened in', () => {
       body: backgroundTask('background-tool', 'working')
     })
     rig.assembler.apply({ type: 'turn.end', turn: 't1', at: 2_000, state: 'completed' })
-    // No turn is open: the update still joins the row's own turn, not the conversation.
+    // Completed turns still own later updates to their existing rows.
     rig.assembler.apply({
       type: 'item.update',
       item: 'background-tool',
@@ -148,7 +146,6 @@ describe('the budget counts the work actually open', () => {
       if (!identity) {
         throw new Error('the request has a journal key')
       }
-      // A client answers it, through the journal.
       await rig.journal.appendItem(
         identity,
         {

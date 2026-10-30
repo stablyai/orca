@@ -13,6 +13,7 @@ import {
 } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import type * as NodeTimersPromises from 'node:timers/promises'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as ownerIdentity from './managed-hook-owner-identity'
 import { withManagedHookInstallLock } from './managed-hook-install-lock'
@@ -20,10 +21,24 @@ import { withManagedHookInstallLock } from './managed-hook-install-lock'
 const tempHomes: string[] = []
 const STALE_TOKEN = '00000000-0000-4000-8000-000000000000'
 const STALE_CLAIM_TOKEN = '11111111-1111-4111-8111-111111111111'
-const fsFailure = vi.hoisted(() => ({
-  canonicalUnlinkPath: null as string | null,
-  contendWithoutLock: null as (() => void) | null
-}))
+const fsFailure = vi.hoisted(
+  (): {
+    canonicalUnlinkPath: string | null
+    contendWithoutLock: (() => void) | null
+    onRetryWait: (() => void) | null
+  } => ({ canonicalUnlinkPath: null, contendWithoutLock: null, onRetryWait: null })
+)
+
+vi.mock('node:timers/promises', async (importOriginal) => {
+  const original = await importOriginal<typeof NodeTimersPromises>()
+  return {
+    ...original,
+    setTimeout: async (...args: Parameters<typeof original.setTimeout>) => {
+      fsFailure.onRetryWait?.()
+      return await original.setTimeout(...args)
+    }
+  }
+})
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const original = await importOriginal<{ link: typeof link; unlink: typeof unlink }>()
@@ -84,6 +99,7 @@ async function createOwnedLock(
 afterEach(async () => {
   fsFailure.canonicalUnlinkPath = null
   fsFailure.contendWithoutLock = null
+  fsFailure.onRetryWait = null
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
   await Promise.all(tempHomes.splice(0).map((home) => rm(home, { recursive: true, force: true })))
@@ -115,12 +131,17 @@ describe.skipIf(process.platform === 'win32')('withManagedHookInstallLock', () =
       return new Promise<string>((resolve) => (releaseFirst = () => resolve('first')))
     })
     await firstStarted
+    const retryStarted = new Promise<void>((resolve) => {
+      fsFailure.onRetryWait = resolve
+    })
     const second = withManagedHookInstallLock(home, undefined, secondRun)
-
-    await new Promise((resolve) => setTimeout(resolve, 40))
-    expect(secondRun).not.toHaveBeenCalled()
-    releaseFirst()
-
+    try {
+      await retryStarted
+      expect(secondRun).not.toHaveBeenCalled()
+    } finally {
+      releaseFirst()
+      await Promise.allSettled([first, second])
+    }
     await expect(first).resolves.toBe('first')
     await expect(second).resolves.toBe('second')
   })
@@ -180,10 +201,12 @@ describe.skipIf(process.platform === 'win32')('withManagedHookInstallLock', () =
     const lockPath = join(home, '.orca', 'managed-hook-install.lock')
     await createOwnedLock(home, 'stale-process-incarnation', 'another-host-boot')
     const originalLock = await readFile(lockPath, 'utf8')
+    const processProbe = vi.spyOn(ownerIdentity, 'readManagedHookProcessIdentity')
 
     await expect(withManagedHookInstallLock(home, undefined, vi.fn())).rejects.toThrow(
       'belongs to another host'
     )
+    expect(processProbe).toHaveBeenCalledTimes(1)
     expect(await readFile(lockPath, 'utf8')).toBe(originalLock)
   })
 
@@ -222,9 +245,13 @@ describe.skipIf(process.platform === 'win32')('withManagedHookInstallLock', () =
     const first = withManagedHookInstallLock(home, undefined, run)
     const second = withManagedHookInstallLock(home, undefined, run)
 
-    await vi.waitFor(() => expect(run).toHaveBeenCalledTimes(1))
-    expect(maxActiveRuns).toBe(1)
-    releaseFirst()
+    try {
+      await vi.waitFor(() => expect(run).toHaveBeenCalledTimes(1))
+      expect(maxActiveRuns).toBe(1)
+    } finally {
+      releaseFirst?.()
+      await Promise.allSettled([first, second])
+    }
     await Promise.all([first, second])
     expect(run).toHaveBeenCalledTimes(2)
     expect(maxActiveRuns).toBe(1)
@@ -270,11 +297,12 @@ describe.skipIf(process.platform === 'win32')('withManagedHookInstallLock', () =
     await createOwnedLock(home, 'stale-process-incarnation')
     await unlink(ownerPath)
 
-    const startedAt = Date.now()
+    const retryWait = vi.fn()
+    fsFailure.onRetryWait = retryWait
     await expect(withManagedHookInstallLock(home, undefined, vi.fn())).rejects.toThrow(
       'unverifiable recovery claim'
     )
-    expect(Date.now() - startedAt).toBeLessThan(500)
+    expect(retryWait).not.toHaveBeenCalled()
     expect(await readFile(lockPath, 'utf8')).toContain(STALE_TOKEN)
   })
 
@@ -343,13 +371,20 @@ describe.skipIf(process.platform === 'win32')('withManagedHookInstallLock', () =
     await first
     const thirdRun = vi.fn()
     const controller = new AbortController()
+    const retryStarted = new Promise<void>((resolve) => {
+      fsFailure.onRetryWait = resolve
+    })
     const third = withManagedHookInstallLock(home, controller.signal, thirdRun)
-    await new Promise((resolve) => setTimeout(resolve, 40))
-    expect(thirdRun).not.toHaveBeenCalled()
-    controller.abort()
-    await expect(third).rejects.toMatchObject({ name: 'AbortError' })
-
-    releaseSecond()
+    try {
+      await retryStarted
+      expect(thirdRun).not.toHaveBeenCalled()
+      controller.abort()
+      await expect(third).rejects.toMatchObject({ name: 'AbortError' })
+    } finally {
+      controller.abort()
+      releaseSecond()
+      await Promise.allSettled([second, third])
+    }
     await second
   })
 
@@ -364,11 +399,12 @@ describe.skipIf(process.platform === 'win32')('withManagedHookInstallLock', () =
     )
     expect(await readdir(lockParent)).toContain('managed-hook-install.lock')
 
-    const startedAt = Date.now()
+    const retryWait = vi.fn()
+    fsFailure.onRetryWait = retryWait
     await expect(withManagedHookInstallLock(home, undefined, async () => 'second')).resolves.toBe(
       'second'
     )
-    expect(Date.now() - startedAt).toBeLessThan(500)
+    expect(retryWait).not.toHaveBeenCalled()
     expect(await readdir(lockParent)).toEqual([])
   })
 
@@ -384,14 +420,20 @@ describe.skipIf(process.platform === 'win32')('withManagedHookInstallLock', () =
     await firstStarted
     const controller = new AbortController()
     const secondRun = vi.fn()
+    const retryStarted = new Promise<void>((resolve) => {
+      fsFailure.onRetryWait = resolve
+    })
     const second = withManagedHookInstallLock(home, controller.signal, secondRun)
-    await new Promise((resolve) => setTimeout(resolve, 40))
-
-    controller.abort()
-
-    await expect(second).rejects.toMatchObject({ name: 'AbortError' })
-    expect(secondRun).not.toHaveBeenCalled()
-    releaseFirst()
+    try {
+      await retryStarted
+      controller.abort()
+      await expect(second).rejects.toMatchObject({ name: 'AbortError' })
+      expect(secondRun).not.toHaveBeenCalled()
+    } finally {
+      controller.abort()
+      releaseFirst()
+      await Promise.allSettled([first, second])
+    }
     await first
   })
 })

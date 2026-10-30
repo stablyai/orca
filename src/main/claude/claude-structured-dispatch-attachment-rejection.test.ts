@@ -1,5 +1,3 @@
-// What a person reads when Orca refuses a message's content before sending it.
-
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -167,7 +165,6 @@ describe('Claude structured dispatch attachment rejections', () => {
       rejection: { kind: 'attachmentUnreadable' }
     })
     expect(session.connection.send).not.toHaveBeenCalled()
-    // The row drops the error, so the log is the only place left to find why.
     expect(warn).toHaveBeenCalledWith(
       '[claude-dispatch] attachment could not be read:',
       expect.objectContaining({ code: 'ENOENT' })

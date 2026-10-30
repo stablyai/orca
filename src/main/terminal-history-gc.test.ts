@@ -16,9 +16,7 @@ const { removeHostTreeMock } = vi.hoisted(() => ({
   removeHostTreeMock: vi.fn<(dir: string) => Promise<void>>()
 }))
 
-// Why intercept rather than no-op: the tombstone path each prune produces is the decision this
-// suite reads, but the drain re-queues any tombstone still on disk after a "successful" removal,
-// so the stub has to really delete or the queue never terminates.
+// The stub must delete tombstones: reporting success while leaving them on disk loops the drain.
 vi.mock('./host-tree-removal', () => ({
   removeHostTree: removeHostTreeMock
 }))
@@ -40,13 +38,7 @@ let userDataDir: string
 let historyRoot: string
 let originalXdgDataHome: string | undefined
 
-/**
- * The enumeration this exercises used to be a synchronous walk. Its replacement is an async
- * fixed-worker pass, so the whole safety net is that both reach the same prune decision over a
- * realistic tree: over-pruning here destroys scrollback the user still expects to have.
- *
- * A verbatim port of the pre-change decision logic, reporting names instead of deleting.
- */
+// Pre-change pruning oracle; report decisions without deleting history.
 function referenceSyncPruneDecisions(root: string, liveWorktreeIds: Set<string>): string[] {
   const decisions: string[] = []
   if (!existsSync(root)) {
@@ -68,7 +60,7 @@ function referenceSyncPruneDecisions(root: string, liveWorktreeIds: Set<string>)
           statSync(join(entryPath, file))
         }
       } catch {
-        // Skip size estimation on error.
+        // Match the original walk's tolerance for failed size estimates.
       }
       if (!existsSync(join(entryPath, 'meta.json'))) {
         continue
@@ -84,7 +76,7 @@ function referenceSyncPruneDecisions(root: string, liveWorktreeIds: Set<string>)
         decisions.push(entry)
       }
     } catch {
-      // Skip individual entries that fail.
+      // Match the original walk's tolerance for unreadable entries.
     }
   }
   return decisions
@@ -108,7 +100,6 @@ function meta(worktreeId: string | undefined, ageMs: number | null): string {
 
 const OLD = GC_MIN_AGE_MS * 2
 
-/** Every decision shape the walk has to get right, including the ones that must never prune. */
 function seedDecisionMatrix(): void {
   seedDir('live-old', { 'meta.json': meta(LIVE_WORKTREE_ID, OLD), zsh_history: 'a' })
   seedDir('live-young', { 'meta.json': meta(LIVE_WORKTREE_ID, 0) })
@@ -132,15 +123,13 @@ function seedDecisionMatrix(): void {
       pad: 'x'.repeat(64 * 1024)
     })
   })
-  // meta.json as a directory: stat succeeds, the read does not.
+  // stat succeeds on a directory, but reading it as meta.json fails.
   mkdirSync(join(historyRoot, 'meta-is-a-dir', 'meta.json'), { recursive: true })
   seedDir('empty-dir', {})
-  // A plain file at the root is not a history directory.
   writeFileSync(join(historyRoot, 'stray-file'), 'x')
   mkdirSync(join(historyRoot, PENDING_DELETE_DIR_NAME), { recursive: true })
 }
 
-/** Enough entries to run several worker batches and cross the cooperative-yield boundary. */
 function seedBulk(count: number, orphanEvery: number): void {
   for (let i = 0; i < count; i++) {
     const orphan = i % orphanEvery === 0
@@ -166,8 +155,7 @@ beforeEach(() => {
   historyRoot = join(userDataDir, 'terminal-history')
   mkdirSync(historyRoot, { recursive: true })
   installFakeAppEnvironment({ getPath: () => userDataDir })
-  // Why: the fish sweep resolves a real user data dir otherwise, and would delete the
-  // developer's own orca fish history files while this suite runs.
+  // Isolate fish data so the sweep cannot delete the developer's own history.
   originalXdgDataHome = process.env.XDG_DATA_HOME
   process.env.XDG_DATA_HOME = userDataDir
   removeHostTreeMock.mockReset()
@@ -176,7 +164,7 @@ beforeEach(() => {
   })
 })
 
-/** Tombstone paths the pass condemned, with the `.<timestamp>.<rand>` rename suffix stripped. */
+// Strip the tombstone timestamp/random suffix to compare original entry names.
 function tombstonedNames(): Set<string> {
   return new Set(
     removeHostTreeMock.mock.calls.map(([dir]) => basename(dir).split('.').slice(0, -2).join('.'))
@@ -262,7 +250,6 @@ describe('history GC prune decisions', () => {
 
     await runHistoryGc(new Set([LIVE_WORKTREE_ID]))
 
-    // The recursive rm only ever sees a path already renamed into the tombstone queue.
     for (const [dir] of removeHostTreeMock.mock.calls) {
       expect(dir).toContain(PENDING_DELETE_DIR_NAME)
     }
@@ -282,12 +269,10 @@ describe('history GC prune decisions', () => {
   it('continues the pass after one orphan tombstone fails', async () => {
     seedDir('orphan-a', { 'meta.json': meta(`${DEAD_WORKTREE_ID}-a`, OLD) })
     seedDir('orphan-b', { 'meta.json': meta(`${DEAD_WORKTREE_ID}-b`, OLD) })
-    // A file where the tombstone root must be makes the first rename fail; mkdir cannot replace it.
     writeFileSync(join(historyRoot, PENDING_DELETE_DIR_NAME), 'not a directory')
 
     await expect(runHistoryGc(new Set([LIVE_WORKTREE_ID]))).resolves.toBeUndefined()
 
-    // Nothing could be tombstoned, and both entries survive for a later pass to reclaim.
     expect(survivingDirs()).toEqual(new Set(['orphan-a', 'orphan-b']))
   })
 })
@@ -313,7 +298,7 @@ describe('history GC concurrency behaviour', () => {
     let second: Promise<void> | undefined
     try {
       await reachedYield.promise
-      // A second walk with this snapshot would delete the first caller's live history.
+      // Starting a separate pass with this snapshot would delete the first caller's live history.
       second = runHistoryGc(new Set([DEAD_WORKTREE_ID]))
       releaseYield.resolve()
       await Promise.all([first, second])
@@ -341,7 +326,6 @@ describe('history GC concurrency behaviour', () => {
     const before = survivingDirs()
 
     const pass = runHistoryGc(new Set([LIVE_WORKTREE_ID]))
-    // Cancelling before the root listing resolves means no entry is ever visited.
     cancelHistoryGc()
     await pass
 
@@ -392,7 +376,6 @@ describe('history GC races an async walk introduces', () => {
     }
     await expect(pass).resolves.toBeUndefined()
 
-    // Every live directory the racer did not touch is still there.
     expect(survivingDirs().has('live-old')).toBe(true)
     expect(survivingDirs().has('bulk-1')).toBe(true)
     for (const name of vanishing) {
@@ -436,7 +419,7 @@ describe('history GC main-thread occupancy', () => {
     const ticks = { sync: 0, async: 0 }
     let maxAsyncGapMs = 0
 
-    // The pre-change walk is the control: a synchronous pass over the same tree cannot tick at all.
+    // The synchronous reference walk cannot service timers.
     const syncTimer = setInterval(() => {
       ticks.sync += 1
     }, 4)
@@ -477,12 +460,10 @@ describe('history GC main-thread occupancy', () => {
       maxAsyncGapMs = Math.max(maxAsyncGapMs, performance.now() - last - 4)
       clearInterval(asyncTimer)
 
-      // Count real timer service at the owner's yields, independent of total walk duration.
       expect(ticks.sync).toBe(0)
       expect(ticks.async).toBeGreaterThan(5)
       expect(servicedYields).not.toContain(false)
-      // Generous because shared CI runners stall an idle timer by tens of ms on their own; the
-      // failure this guards against is a whole-walk block, which is seconds.
+      // CI scheduling delays idle timers; detect a whole-walk block rather than small stalls.
       expect(maxAsyncGapMs).toBeLessThan(2_000)
     } finally {
       clearInterval(asyncTimer)

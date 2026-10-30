@@ -1,4 +1,5 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
+import { translate } from '../i18n/mobile-i18n'
 import { Pressable, Text } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
 
@@ -86,7 +87,11 @@ export function renderMobileTasksLinearViewControls(model: ConnectionPresentatio
             setShowLinearGroupPicker(true)
           }}
         >
-          <Text style={styles.segmentSecondaryText}>Group: {linearGroupLabel}</Text>
+          <Text style={styles.segmentSecondaryText}>
+            {translate('tasks.linearViewControls.groupLabel', 'Group: {{group}}', {
+              group: linearGroupLabel
+            })}
+          </Text>
         </Pressable>
         <Pressable
           style={styles.segmentButton}
@@ -98,7 +103,11 @@ export function renderMobileTasksLinearViewControls(model: ConnectionPresentatio
             setShowLinearOrderPicker(true)
           }}
         >
-          <Text style={styles.segmentSecondaryText}>Order: {linearOrderLabel}</Text>
+          <Text style={styles.segmentSecondaryText}>
+            {translate('tasks.linearViewControls.orderLabel', 'Order: {{order}}', {
+              order: linearOrderLabel
+            })}
+          </Text>
         </Pressable>
         <Pressable
           style={styles.segmentButton}
@@ -110,7 +119,9 @@ export function renderMobileTasksLinearViewControls(model: ConnectionPresentatio
             setShowLinearDisplayPicker(true)
           }}
         >
-          <Text style={styles.segmentSecondaryText}>Display</Text>
+          <Text style={styles.segmentSecondaryText}>
+            {translate('tasks.linearViewControls.displayButton', 'Display')}
+          </Text>
         </Pressable>
       </>
     )

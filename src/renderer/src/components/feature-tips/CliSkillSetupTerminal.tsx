@@ -1,3 +1,4 @@
+// COMPAT(wsl-bridge): removed when WSL runs as an orcad host.
 import { Copy } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -13,10 +14,7 @@ import { translate } from '@/i18n/i18n'
 
 export function CliSkillSetupTerminal(): React.JSX.Element {
   const activeSkillRuntime = useActiveProjectSkillRuntime()
-  // Why: a repair-required runtime resolves to a WSL distro that is missing, so
-  // drop back to the host runtime. This terminal auto-pastes with no install
-  // gate, and repair-required only happens on Windows, so it still needs the
-  // npx preflight.
+  // Missing WSL distros fall back to the Windows host; this ungated auto-paste still needs npx preflight.
   const skillCommand = buildSkillCommandForRuntime(
     ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND,
     activeSkillRuntime.installDisabledReason ? undefined : activeSkillRuntime.agentRuntime

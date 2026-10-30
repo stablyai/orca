@@ -19,7 +19,6 @@ type EditorPanelActionsMenuProps = {
   diffWordWrap: boolean
   /** Diff-only whitespace preference; ignored for normal file tabs. */
   diffShowWhitespace: boolean
-  /** File editor wrap preference (`settings.editorWordWrap`). */
   editorWordWrap: boolean
   shouldShowMarkdownExportAction: boolean
   canExportMarkdownToPdf: boolean
@@ -48,7 +47,6 @@ export function EditorPanelActionsMenu({
   onToggleMarkdownFrontmatter,
   onExportMarkdownToPdf
 }: EditorPanelActionsMenuProps): React.JSX.Element {
-  // Why: normal files always get Word Wrap so long/structured lines can unwrap without Settings (#9974).
   const wordWrapChecked = isDiffSurface ? diffWordWrap : editorWordWrap
   const onToggleWordWrap = isDiffSurface ? onToggleDiffWordWrap : onToggleEditorWordWrap
   const menuLabel = fileLocationActions
@@ -104,7 +102,7 @@ export function EditorPanelActionsMenu({
         {shouldShowMarkdownExportAction ? <DropdownMenuSeparator /> : null}
         {shouldShowMarkdownExportAction ? (
           <DropdownMenuItem
-            // Why: source/Monaco fallbacks have no rendered document DOM to export.
+            // Source/Monaco fallbacks have no rendered document DOM to export.
             disabled={!canExportMarkdownToPdf}
             onSelect={onExportMarkdownToPdf}
           >

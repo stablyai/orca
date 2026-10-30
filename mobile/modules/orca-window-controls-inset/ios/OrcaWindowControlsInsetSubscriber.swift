@@ -1,10 +1,7 @@
 import ExpoModulesCore
 import UIKit
 
-// Why: on iPadOS 26 a windowed app gets the close/minimize/resize buttons drawn over its
-// top-left corner, and the plain safe area does not grow for them, so header buttons sat
-// under them. Folding the corner-adapted inset into the root view controller's safe area
-// moves every screen below the buttons with no per-screen changes (0 in full screen).
+// iPadOS 26 window controls overlap the plain safe area; fold the corner-adapted inset into the root so all headers clear them.
 public class OrcaWindowControlsInsetSubscriber: ExpoAppDelegateSubscriber {
   public func application(
     _ application: UIApplication,
@@ -17,8 +14,7 @@ public class OrcaWindowControlsInsetSubscriber: ExpoAppDelegateSubscriber {
   }
 }
 
-/// Invisible full-window view: it is laid out on every window resize and safe-area change,
-/// and it measures the window, which the root controller's extra inset never feeds back into.
+/// Measure window resize/safe-area changes outside the root’s extra inset to avoid feedback.
 private final class WindowControlsInsetProbe: UIView {
   private var rootObservation: NSKeyValueObservation?
 

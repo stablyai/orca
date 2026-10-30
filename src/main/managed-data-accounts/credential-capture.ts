@@ -32,7 +32,7 @@ function auditOpenCodeCredentials(database: SyncDatabase): string[] {
   if (sessionTables.length === 0) {
     throw new Error('Unsupported OpenCode credential database.')
   }
-  // Deleted sessions can leave orphan content or durable events behind.
+  // Deleted sessions may leave orphan content outside the session tables.
   const conversationTables = [
     ...sessionTables,
     'message',
@@ -119,7 +119,7 @@ export async function captureDataAccountCredentials(
       throw new Error('Could not restrict OpenCode credential file permissions.')
     }
     await database.backup(destination)
-    // The source can change while SQLite copies; only the completed private snapshot is publishable.
+    // Source writes can race backup; publish only after validating the completed private snapshot.
     requireRegularFile(destination)
     const snapshot = new SyncDatabase(destination, { readonly: true, fileMustExist: true })
     try {

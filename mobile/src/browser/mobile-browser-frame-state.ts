@@ -96,8 +96,7 @@ export function browserErrorMessage(error: unknown, fallback: string): string {
 
 export function shouldSurfaceBrowserError(message: string): boolean {
   const normalized = message.toLowerCase()
-  // Why: selector_not_found can be emitted by in-flight page automation while
-  // the browser is still usable; replacing the frame with it feels like a crash.
+  // Transient selector_not_found from automation must not replace usable browser frame.
   return !normalized.includes('selector_not_found') && !normalized.includes('selector not found')
 }
 

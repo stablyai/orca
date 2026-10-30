@@ -53,7 +53,6 @@ function useTreeWithProjection(expanded: Set<string>) {
   return { tree, rowProjection: projection.rowProjection }
 }
 
-/** Counts how many times the memoized visible-row projection produced a new value. */
 function renderTreeWithProjectionRebuildCounter(expanded: Set<string>): {
   result: { current: ReturnType<typeof useTreeWithProjection> }
   rebuilds: () => number
@@ -117,8 +116,7 @@ describe('file explorer directory refresh churn', () => {
     })
     const rebuildsBeforeRefresh = rebuilds()
 
-    // One watcher-driven refresh of a directory that is already cached, with the read gated so the
-    // loading state is committed and painted before the listing lands.
+    // Gate the refresh so loading commits before the new listing.
     const gatedRead = gateNextRead()
     let pendingRefresh!: Promise<void>
     await act(async () => {
@@ -126,8 +124,7 @@ describe('file explorer directory refresh churn', () => {
       await Promise.resolve()
     })
     expect(result.current.tree.loadingDirPaths.has(SRC_DIR)).toBe(true)
-    // Why zero here: marking the dir loading used to commit a second dirCache identity carrying a
-    // byte-identical row set, so every refresh paid for two full tree walks and flattens.
+    // Loading must not replace identical dirCache rows and pay for a second full projection walk.
     expect(rebuilds()).toBe(rebuildsBeforeRefresh)
 
     await act(async () => {
@@ -156,13 +153,13 @@ describe('file explorer directory refresh churn', () => {
     })
     expect(result.current.tree.loadingDirPaths.has(SRC_DIR)).toBe(false)
     expect(result.current.tree.dirCache[SRC_DIR].children).toHaveLength(1)
-    // The spinner rendered without the projection being rebuilt for it.
     expect(rebuilds()).toBe(rebuildsWhileLoading + 1)
   })
 
   it('does not stack a second read on an expanded dir the loading set already owns', () => {
     const loadDir = vi.fn().mockResolvedValue(true)
     const params = {
+      workspaceKey: null,
       visibleFilesWorktreePath: WORKTREE_PATH,
       expanded: new Set([SRC_DIR]),
       dirCache: {},
@@ -178,18 +175,18 @@ describe('file explorer directory refresh churn', () => {
     const hook = renderHook((props: typeof params) => useFileExplorerTreeLoadEffects(props), {
       initialProps: params
     })
-    // Why this matters: a refresh wave marks every dir it owns before its first read lands, and the
-    // effect re-runs on any `expanded` change — without the guard it fans out an unbounded loadDir.
+    // Refresh waves premark owned dirs; expansion effects must not launch duplicate reads.
     expect(loadDir).not.toHaveBeenCalled()
 
-    // The effect re-runs on `expanded` identity; by then the wave's read has landed and cleared.
+    // Rerun after the wave’s read has landed and cleared its loading mark.
     hook.rerender({
       ...params,
       expanded: new Set([SRC_DIR]),
       loadingDirPaths: new Set<string>()
     })
     expect(loadDir).toHaveBeenCalledTimes(1)
-    expect(loadDir).toHaveBeenCalledWith(SRC_DIR, 0, undefined)
+    // Expanded since mount, not by the user now: the deferred read must not start WSL (E9).
+    expect(loadDir).toHaveBeenCalledWith(SRC_DIR, 0, {})
   })
 
   it('renders the folder spinner from the loading dir set', () => {

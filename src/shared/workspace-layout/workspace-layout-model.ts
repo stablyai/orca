@@ -1,12 +1,10 @@
-// The one workspace tab layout model the runtime holds, per execution-host partition. Pure data:
-// per-view selection, content facts (live titles, page state, scrollback) and drafts live beside it
-// (workspace-layout-beside.ts), never in it. Each on-disk field is written from exactly one field
-// here or beside it (workspace-layout-disk-fields.ts).
+// Per-execution-host layout data; view selection, content facts and drafts stay beside it. Disk-field tables assign each persisted field one source.
 
 import type { SleepingAgentSessionRecord } from '../agent-session-resume'
 import type { AgentType } from '../agent-status-types'
 import type { AiVaultSessionTitle } from '../ai-vault-session-title'
 import type { PersistedClientHostedBrowserPage } from '../client-hosted-browser-page-record'
+import type { ClosedTerminalPanesByPaneKey } from '../closed-terminal-panes'
 import type { ClosedTerminalTabTombstone } from '../closed-terminal-tab-tombstones'
 import type { ExecutionHostId } from '../execution-host'
 import type { TabContentType, TabGroupLayoutNode } from '../tab-types'
@@ -36,7 +34,6 @@ type LayoutTabFields = {
   agentSessionAgent?: AgentType
 }
 
-/** Creation fields only a terminal tab carries. */
 export type LayoutTerminalCreation = Pick<
   TerminalTab,
   'defaultTitle' | 'shellOverride' | 'forceHostRuntime' | 'startupCwd' | 'launchAgent'
@@ -72,55 +69,52 @@ export type LayoutSleepingRecord = Omit<
   'paneKey' | 'tabId' | 'worktreeId'
 >
 
-/** A closed terminal tab record minus its workspace. */
 export type LayoutClosedTab = Omit<ClosedTerminalTabTombstone, 'worktreeId'>
 
-/** One pane's own data. Kept by leaf id (unique in the partition), so a moved pane moves nothing. */
+/** Key pane data by partition-unique leaf ID so moving a pane does not move its records. */
 export type LayoutLeaf = {
-  /** The terminal it shows; absent while unbound. */
+  /** Absent while unbound. */
   ptyId?: string
   /** Rises on each pty bind, retire and rollback of this pane in this process. In memory only. */
   ptyGeneration?: number
   incarnationId?: string
-  /** User pane title. */
   title?: string
-  /** The pane's last grid: the size its terminal starts at. */
+  /** Last grid used to size the terminal at startup. */
   lastGrid?: TerminalGrid
-  /** A slept pane's record (isPaneSleepRecord). Never set with `resume`. */
+  /** Slept pane record; mutually exclusive with resume. */
   sleeping?: LayoutSleepingRecord
-  /** A running agent's resume record (origin live/quit), not a sleep. Never set with `sleeping`. */
+  /** Running-agent resume record (live/quit origin); mutually exclusive with sleeping. */
   resume?: LayoutSleepingRecord
 }
 
 export type WorkspaceLayout = {
-  /** The worktree or folder id every record of this workspace names on disk. */
+  /** Every persisted record names this worktree or folder ID. */
   worktreeId: string
-  /** Every tab of the workspace, all kinds. The order of this list is storage only. */
+  /** Storage order only; groups define display order. */
   tabs: LayoutTab[]
-  /** `tabOrder` here is the one tab order. A group never stays empty: an empty one is closed. */
+  /** Groups define the sole tab order and close when empty. */
   groups: LayoutGroup[]
   groupLayout?: TabGroupLayoutNode
   editorFiles?: LayoutEditorFile[]
   /** Tab id → what an editor tab shows beyond its file (diff, conflict, preview…). The view is not saved. */
   editorViews?: Record<string, LayoutEditorView>
   browserTabs?: LayoutBrowserTab[]
-  /** Leaf id → the data of a pane of one of this workspace's terminal tabs. */
+  /** Leaf ID → pane data. */
   leaves?: Record<string, LayoutLeaf>
-  /** Tab id → a terminal tab closed in this workspace. */
+  /** Tab ID → closed terminal record. */
   closedTerminalTabs?: Record<string, LayoutClosedTab>
 }
 
 export type WorkspaceLayoutRecords = {
   defaultTabsAppliedByWorkspace?: Record<string, true>
   clientHostedBrowserPagesByWorkspace?: Record<string, PersistedClientHostedBrowserPage[]>
+  /** Panes main dropped while their terminals may run on (layout-owner builds). */
+  closedTerminalPanesByPaneKey?: ClosedTerminalPanesByPaneKey
 }
 
 /** What only older builds read from today's documents; the layout never reads it back. */
 export type LegacyLayoutPersistence = {
-  /**
-   * Workspace key → this partition owns the workspace's terminal rows, saved as a row list even
-   * when empty (partitionOwnsWorktreeTabs). Absent is not empty: another partition may own them.
-   */
+  /** Owned workspaces retain a row list even when empty. Absence may mean another partition owns the rows. */
   terminalRowOwners: Record<string, true>
   /** Advanced when terminal panes change so an older build's save merge defers to this layout. */
   topologyRevisionByRepoId?: Record<string, number>
@@ -139,7 +133,6 @@ export function paneKeyOf(terminalTabId: string, leafId: string): string {
   return `${terminalTabId}:${leafId}`
 }
 
-/** The workspace's tabs in the one tab order. */
 export function tabsInOrder(workspace: WorkspaceLayout): LayoutTab[] {
   const byId = new Map(workspace.tabs.map((tab) => [tab.id, tab]))
   return workspace.groups.flatMap((group) => group.tabOrder.flatMap((id) => byId.get(id) ?? []))

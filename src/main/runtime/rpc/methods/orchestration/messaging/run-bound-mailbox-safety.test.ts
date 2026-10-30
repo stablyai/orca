@@ -58,11 +58,7 @@ const PANE_NEW = 'tab_new:dddddddd-dddd-4ddd-8ddd-dddddddddddd'
 
 type CheckResult = { messages: { subject: string }[]; count: number }
 
-/**
- * worker-abandon + worker-start --retry-of moves the Task to another terminal, but the old worker
- * keeps polling. Its check used to fall through to the direct mailbox and answer `count: 0`, which
- * the worker contract reads as "checkpoint, not a failure" — so it kept editing the new owner's files.
- */
+/** Superseded workers must stop polling, not fall through to count:0 (a checkpoint) and keep editing their replacement's files. */
 describe('orchestration.check from a terminal whose Attempt was superseded', () => {
   const h = createOrchestrationRpcHarness()
   let db: OrchestrationDb
@@ -118,8 +114,7 @@ describe('orchestration.check from a terminal whose Attempt was superseded', () 
     })
   })
 
-  // The direct mailbox is the old terminal's own, so inspection stays open; only the consuming
-  // read that a worker treats as a checkpoint is refused.
+  // Allow direct-mail inspection, but refuse the superseded worker's consuming checkpoint.
   it('still lets the old worker inspect its direct mailbox with --peek and --all', async () => {
     retriedOntoAnotherTerminal()
     db.insertMessage({ from: 'term_coord', to: 'term_old', subject: 'stand down' })
@@ -141,8 +136,7 @@ describe('orchestration.check from a terminal whose Attempt was superseded', () 
     await expect(check('term_old', PANE_OLD)).rejects.toMatchObject({ code: 'consumer_fenced' })
   })
 
-  // A superseded worker whose pane is gone cannot run-use either; the stop signal outranks the
-  // rebind advice, and a caller with no settled Attempt still gets the rebind advice.
+  // A superseded paneless worker must stop before run-use advice; callers without settled Attempts still get rebind advice.
   it('fences a paneless caller whose Attempt was superseded, and only that caller', async () => {
     retriedOntoAnotherTerminal()
 
@@ -183,8 +177,7 @@ describe('orchestration.check from a terminal whose Attempt was superseded', () 
   })
 })
 
-// A lead is dispatched by a root coordinator and then coordinates its own Run from the same pane.
-// That pane's `check` reads its own Run mailbox, so mail meant for it must land there.
+// Nested coordinators check their own child Run mailbox, so route mail there.
 describe('mail for a lead whose pane coordinates its own Run', () => {
   const h = createOrchestrationRpcHarness()
   const coordPane = 'tab_coord:11111111-1111-4111-8111-111111111111'
@@ -510,7 +503,9 @@ describe('Run-bound lead mailbox boundaries', () => {
       runId: leadRun.id,
       messages: [{ subject: 'Run report' }]
     })
-    await expect(check({ run: dispatch.run_id })).rejects.toMatchObject({ code: 'consumer_fenced' })
+    await expect(check({ run: dispatch.run_id })).rejects.toMatchObject({
+      code: 'worker_cannot_coordinate_own_run'
+    })
     expect(state.db.getMessageById(pending.id)?.read).toBe(0)
   })
 
@@ -585,20 +580,18 @@ describe('Run-bound lead mailbox boundaries', () => {
     expect(state.db.hasOutstandingMailboxDelivery(`dispatch:${dispatch.id}`)).toBe(false)
   })
 
-  it('refuses an explicit sender Run that would silently redirect into another Run', async () => {
-    await expect(
+  it('lets the owning Run address its Dispatch after the assignee binds a child Run', async () => {
+    const send = (run: string) =>
       h.call(
         'orchestration.send',
-        {
-          from: 'term_coord',
-          to: `dispatch:${dispatch.id}`,
-          run: dispatch.run_id,
-          subject: 'wrong scope'
-        },
+        { from: 'term_coord', to: `dispatch:${dispatch.id}`, run, subject: `via ${run}` },
         state.ctx
       )
-    ).rejects.toMatchObject({ code: 'recipient_run_mismatch' })
-    expect(state.db.getInbox()).toEqual([])
+    await expect(send(leadRun.id)).rejects.toMatchObject({ code: 'dispatch_run_mismatch' })
+    expect(await send(dispatch.run_id)).toMatchObject({
+      message: { to_handle: `run:${leadRun.id}`, run_id: leadRun.id },
+      warnings: [{ code: 'recipient_run_bound_redirect' }]
+    })
   })
 
   it('wakes a parked Run check for Dispatch mail sent after binding', async () => {

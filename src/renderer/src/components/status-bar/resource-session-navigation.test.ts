@@ -15,7 +15,6 @@ function makeDeps(events: string[] = []): ResourceSessionNavigationDeps {
       'wt-1': [{ id: TAB_ID }],
       'wt-2': [{ id: OTHER_TAB_ID }]
     },
-    setOpen: vi.fn((open: boolean) => events.push(`open:${open}`)),
     setActiveView: vi.fn((view: 'terminal') => events.push(`view:${view}`)),
     activateAndRevealWorktree: vi.fn((worktreeId: string) => {
       events.push(`worktree:${worktreeId}`)
@@ -27,18 +26,13 @@ function makeDeps(events: string[] = []): ResourceSessionNavigationDeps {
 }
 
 describe('resource session navigation', () => {
-  it('closes the popover first, reveals the owning worktree, and focuses a matching pane', () => {
+  it('reveals the owning worktree and focuses a matching pane without dismissing the manager', () => {
     const events: string[] = []
     const deps = makeDeps(events)
 
     navigateResourceSessionToTab(TAB_ID, `${TAB_ID}:${LEAF_ID}`, deps)
 
-    expect(events).toEqual([
-      `open:false`,
-      'worktree:wt-1',
-      'view:terminal',
-      `tab:${TAB_ID}:${LEAF_ID}`
-    ])
+    expect(events).toEqual(['worktree:wt-1', 'view:terminal', `tab:${TAB_ID}:${LEAF_ID}`])
     expect(deps.activateTabAndFocusPane).toHaveBeenCalledWith(TAB_ID, LEAF_ID, {
       flashFocusedPane: true,
       scrollToBottomIfOutputSinceLastView: true

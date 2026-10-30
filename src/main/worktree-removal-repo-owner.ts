@@ -12,13 +12,7 @@ export type WorktreeRemovalRepoOwner =
   | { kind: 'ambiguous' }
   | { kind: 'missing' }
 
-/**
- * Which repo a destructive worktree removal belongs to.
- *
- * A repo id can be registered once per execution host. Destructive RPC callers
- * reject a missing host before reaching this resolver; the unqualified branch
- * remains only for direct legacy callers and still refuses multiple owners.
- */
+/** Legacy callers may omit hostId only when the repo has one unambiguous owner. */
 export function resolveWorktreeRemovalRepoOwner(
   store: WorktreeRemovalRepoSource,
   repoId: string,
@@ -39,24 +33,7 @@ export function resolveWorktreeRemovalRepoOwner(
     : { kind: 'missing' }
 }
 
-/**
- * Whether this REPO is registered on a host other than the removal's.
- *
- * Deliberately a proxy, and it over-fires. The precise question is "does this
- * WORKTREE id exist on another host", but `worktreeMeta` holds one entry per bare
- * `repoId::path`, so main cannot enumerate per-host rows for an id — repo-level
- * registration is the closest signal available.
- *
- * The cost, accepted knowingly: deleting a workspace that exists on ONE host,
- * inside a repo that happens to be registered on two, preserves state it could
- * have torn down (terminal history, advertised-URL watcher, PR-refresh aliases,
- * the local session partition). Worktree ids are path-derived and reusable, so a
- * workspace recreated at that path can inherit it. Narrowing this needs
- * host-qualified worktree metadata, which is a storage change, not a fix here.
- *
- * Fail-safe direction: over-preserving leaves stale records, under-preserving
- * destroys another host's live state. Prefer this way round.
- */
+/** Conservatively preserve process state for any other host's repo copy, even if no same-ID worktree is known. */
 export function hasWorktreeRemovalRepoOwnerOnOtherHost(
   store: Pick<WorktreeRemovalRepoSource, 'getRepos'>,
   repoId: string,

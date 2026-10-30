@@ -105,7 +105,6 @@ describe('useMobileNewTabAgentOptions', () => {
       { agent: 'claude', label: 'Claude' },
       { agent: 'codex', label: 'Codex' }
     ])
-    // Settings stay live, as on desktop; only the settled detection is reused.
     expect(drawer.setOptions.mock.lastCall?.[0]).toEqual([{ agent: 'claude', label: 'Claude' }])
     expect(probes(client)).toEqual(['preflight.detectAgents'])
     drawer.unmount()

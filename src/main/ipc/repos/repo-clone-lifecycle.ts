@@ -39,7 +39,7 @@ type ActiveCloneMetadata = {
   resolvePendingAbortCleanup: (() => void) | null
 }
 
-// Why: module-scoped so the abort handle survives macOS window re-creation, when registerRepoHandlers re-runs.
+// Module scope preserves cancellation across macOS window recreation.
 let activeClone: ActiveCloneMetadata | null = null
 const pendingLocalCloneControllers = new Set<AbortController>()
 let nextCloneGeneration = 1
@@ -65,7 +65,7 @@ async function cleanupOwnedCloneTarget(metadata: ActiveCloneMetadata): Promise<v
   if (latestCloneGenerationByPath.get(metadata.pathKey) !== metadata.generation) {
     return
   }
-  // Why: a fast retry may attach a newer process before the aborted one closes; the old close handler must not delete it.
+  // An aborted clone must not delete a newer retry targeting the same path.
   if (
     activeClone &&
     activeClone.process !== metadata.process &&
@@ -117,7 +117,6 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
   ipcMain.handle(
     'repos:clone',
     async (_event, args: { url: string; destination: string }): Promise<Repo> => {
-      // Why: derive the repo folder name from the URL's last segment, matching default git clone behavior.
       const clonePath = deriveValidatedClonePath(args)
       const clonePathKey = getClonePathComparisonKey(clonePath)
       // Remote projects can share this path string without belonging to this clone host.
@@ -134,7 +133,7 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
         const cloneMetadataRef: { current: ActiveCloneMetadata | null } = { current: null }
         let claimedTarget: ClaimedCloneTarget
         let proc: Awaited<ReturnType<typeof gitSpawnAfterWindowsEnvironmentReady>>
-        // Why: registered before the saved-project check so Cancel also stops that git read.
+        // Register before saved-project reads so Cancel can abort those Git calls too.
         const pendingController = new AbortController()
         pendingLocalCloneControllers.add(pendingController)
         try {
@@ -145,24 +144,23 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
             pendingController.signal
           )
           if (reused) {
-            // Why: clone_url always produces a git repo.
             emitRepoAdded('clone_url', true, true)
             return reused
           }
-          // Why: gitSpawn cwd is args.destination, so it must exist before spawn (fresh installs may lack the defaulted parent).
+          // Fresh installs may lack the destination used as the clone process cwd.
           await mkdir(args.destination, { recursive: true })
           claimedTarget = await claimCloneTarget(clonePath)
-          // Why: spawn (not execFile) avoids the maxBuffer limit — clone progress on stderr can exceed Node's 1 MB default.
-          // Why: --progress forces git to emit progress even when stderr isn't a TTY.
+          // Stream progress to avoid execFile buffer limits; --progress also works without a TTY.
           try {
-            // Why: use the parent destination as cwd so the runner detects a WSL path and routes through wsl.exe.
-            // Why: '--' isolates the URL so a malicious URL can't be read as git flags (command injection).
+            // Destination cwd enables WSL routing; '--' prevents URL content from becoming Git flags.
             proc = await gitSpawnAfterWindowsEnvironmentReady(
               ['clone', '--progress', '--', args.url, clonePath],
               {
                 cwd: args.destination,
+                // Host Git on purpose: the clone makes a new repo no project owns, even inside one.
+                hostGit: true,
                 admissionTier: 'interactive',
-                // Why: without this, an auth-needing clone pops Git Credential Manager's OAuth window on Windows, unclosable in a restricted env (issue #7652).
+                // Suppress Windows Git Credential Manager OAuth windows during noninteractive cloning (#7652).
                 env: promptGuardGitEnv(),
                 signal: pendingController.signal,
                 stdio: ['ignore', 'ignore', 'pipe']
@@ -198,7 +196,7 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
             const text = chunk.toString()
             stderrTail = (stderrTail + text).slice(-4096)
 
-            // Why: git progress lines use \r to overwrite in-place; parse fragments the same as SSH clone.
+            // Git progress uses carriage-return fragments, matching the SSH clone parser.
             emitCloneProgressFromText(mainWindow, text)
           })
 
@@ -211,14 +209,14 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
               return
             }
             settled = true
-            // Why: only null activeClone if it still points to this proc; abort-and-retry may have reassigned it, stranding the new clone.
+            // Abort-and-retry may already have replaced the active process.
             if (activeClone?.process === proc) {
               activeClone = null
             }
 
             const cloneSucceeded = !err && code === 0 && !signal
             if (!cloneSucceeded) {
-              // Why: only the process that created this target may remove it, and only after git reports failure.
+              // Failed-clone cleanup belongs only to the process that created this target.
               await cleanupOwnedCloneTarget(metadata)
             }
             if (metadata.abortRequested && !cloneSucceeded) {
@@ -251,7 +249,7 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
         })
 
         try {
-          // Why: check after clone (path didn't exist before); reuse+upgrade a folder repo clone landed into instead of duplicating.
+          // Clone may land in an existing folder project; upgrade it instead of duplicating registration.
           const existing = findSaved()
           if (existing) {
             const conversion = await resolveClonedFolderConversion(store, existing)
@@ -273,13 +271,12 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
                 await prepareLocalWorktreeRootForRepo(store, updated)
                 invalidateAuthorizedRootsCache()
                 notifyReposChanged(mainWindow)
-                // Why: folder→git upgrade is a real new git repo provisioning event.
+                // Folder-to-Git conversion counts as new Git provisioning.
                 emitRepoAdded('clone_url', false, true)
                 return updated
               }
             }
-            // Why: git re-created this project's folder, so its worktree root is gone with it and
-            // the authorized-roots cache still holds the answers from before the folder came back.
+            // Recreating the folder loses its worktree root and invalidates cached authorization.
             if (current) {
               await prepareLocalWorktreeRootForRepo(store, current)
               invalidateAuthorizedRootsCache()

@@ -6,14 +6,14 @@ import type {
   JiraConnectionStatus,
   JiraIssue,
   JiraSiteSelection
-} from '../../../../shared/jira-types'
+} from '../../../../shared/jira/jira-types'
 import {
   getTaskSourceCacheScope,
   getTaskSourceRuntimeSettings,
   type TaskSourceContext
 } from '../../../../shared/task-source-context'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
-import { parseJiraStatusError } from '../../../../shared/jira-status-error'
+import { parseJiraStatusError } from '../../../../shared/jira/jira-status-error'
 import { defaultScopeSource } from '@/lib/default-creation-host'
 import type { RowLessSource } from '@/lib/default-creation-host'
 
@@ -77,8 +77,7 @@ export function evictStaleJiraCacheEntries<T>(
 
 export function looksLikeJiraAuthError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
-  // Why: Jira echoes the query in a 400 (`key 'PROJ-1401' does not exist`), so wording is only
-  // a fallback for errors that carry no status.
+  // Jira query echoes can resemble errors; use wording only when status is absent.
   const status = parseJiraStatusError(message)
   if (status) {
     // Jira 403 commonly means endpoint/project access is denied while the token remains valid.

@@ -5,8 +5,6 @@ import {
   type AgentSessionFailureCopyValues
 } from '../../../../shared/agent-session-failure-copy'
 
-// Desktop words for why no chat can start under an account, before and after a send.
-
 type AvailabilityCopyId = Extract<
   AgentSessionFailureCopyId,
   | 'claudeSystemNotSignedIn'
@@ -19,7 +17,9 @@ type AvailabilityCopyId = Extract<
   | 'agentNotSignedIn'
   | 'thenSendAgain'
   | 'cliMissing'
+  | 'cliMissingInWslDistro'
   | 'cliTooOld'
+  | 'modelUnavailable'
 >
 
 export const AVAILABILITY_PIECES: Record<
@@ -76,8 +76,20 @@ export const AVAILABILITY_PIECES: Record<
       COPY.antigravityNotSignedIn,
       values
     ),
+  modelUnavailable: (values) =>
+    translate(
+      'components.native-chat.failureWords.modelUnavailable',
+      COPY.modelUnavailable,
+      values
+    ),
   cliMissing: (values) =>
     translate('components.native-chat.failureWords.cliMissing', COPY.cliMissing, values),
+  cliMissingInWslDistro: (values) =>
+    translate(
+      'components.native-chat.failureWords.cliMissingInWslDistro',
+      COPY.cliMissingInWslDistro,
+      values
+    ),
   cliTooOld: (values) =>
     translate('components.native-chat.failureWords.cliTooOld', COPY.cliTooOld, values)
 }

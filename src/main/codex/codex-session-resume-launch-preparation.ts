@@ -19,13 +19,11 @@ import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-p
 import type { CodexRuntimeHomeService } from '../codex-accounts/runtime-home-service'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 
-/** Automatic Codex resume prep against a host's runtime-home service; the desktop and orcad share it. */
 export function createCodexSessionResumeLaunchPreparation(deps: {
   getRuntimeHome: () => CodexRuntimeHomeService | null
   getSettings: () => GlobalSettings | undefined
 }) {
-  /** Hook repair and the daemon-socket guard for a pane that pins `home` as its CODEX_HOME rather
-   *  than launching in the selected account's home, which the pane spawn prepares itself. */
+  // Pinned homes bypass the selected-account preparation done by pane spawn.
   async function prepareCodexPinnedLaunchHome(
     home: string,
     systemHomePath: string = getSystemCodexHomePath()
@@ -36,7 +34,6 @@ export function createCodexSessionResumeLaunchPreparation(deps: {
       isAgentStatusHooksEnabledForAgent(deps.getSettings(), 'codex')
     try {
       if (isSystemHome) {
-        // Why bounded: the resume waits only briefly for a reconcile; it runs on ~/.codex whatever the selection.
         await reconcileCodexHooksForLaunch()
       } else if (isHooksEnabled()) {
         await codexHookService.installForLaunchPrep(home, true, isHooksEnabled)
@@ -44,11 +41,11 @@ export function createCodexSessionResumeLaunchPreparation(deps: {
         await codexHookService.refreshRuntimeUserHooksForLaunchPrep(home)
       }
     } catch (error) {
-      // Why: hook repair is best-effort; it must not stop the pane from launching in this home.
+      // Hook repair must not prevent launch in the verified home.
       console.warn('[codex-hook-service] failed to prepare automatic resume home:', error)
     }
     if (!isSystemHome) {
-      // Why: this pins the pane's CODEX_HOME, and hook repair above can skip or fail before its config mirror applies the daemon guard.
+      // Hook repair may skip or fail before its config mirror applies the guard.
       ensureCodexDaemonSocketGuard(home)
     }
   }
@@ -65,26 +62,14 @@ export function createCodexSessionResumeLaunchPreparation(deps: {
     }
     const systemHomePath = getSystemCodexHomePath()
     const trustedHomes = trustedCodexResumeHomes(runtimeHome, systemHomePath)
-    // Why: resolved eagerly, once, before any ranking or provenance match. The
-    // marker read used to be deferred into the ranking thunk so a
-    // provenance-present resume never paid for it, but that optimisation let an
-    // unreadable selected home reach the PTY as "no selection": the provenance
-    // branch simply omits the account from `trustedHomes` and another account's
-    // readable alias wins. A throw here refuses the whole resume instead
-    // (#STA-4422).
+    // Refuse unreadable selections before provenance matching can choose another account.
     const selectedAccountCodexHome = runtimeHome.resolveSelectedHostAccountCodexHomePathForResume()
-    // Why: a `fresh` outcome must skip migration and hook repair entirely — there is
-    // no verified origin home to prepare, so the PTY layer drops the resume argv (#10793).
     const preparation = await prepareCodexSessionResume({
       sessionId: args.providerSession.id,
       transcriptPath: args.providerSession.transcriptPath,
       trustedCodexHomes: trustedHomes,
-      // Why: the legacy id rescan's winning home becomes this pane's CODEX_HOME, i.e. its account;
-      // rank it by the current selection so settings insertion order can never decide the account.
       getSelectedAccountCodexHome: () => selectedAccountCodexHome,
       systemCodexHomePath: systemHomePath,
-      // Why: the mirror winning is what triggers the migration into ~/.codex below, so it must
-      // outrank the path-sorted account homes or a system-default selection resumes as an account.
       sharedRuntimeCodexHomePath: getOrcaManagedCodexHomePath(),
       resolveVerifiedResumeHome: async (sessionSource) => {
         let migrated = { useRealCodexHome: false }
@@ -107,7 +92,7 @@ export function createCodexSessionResumeLaunchPreparation(deps: {
           if (error instanceof ManagedCodexHomeTemporarilyUnavailableError) {
             throw error
           }
-          // Why: migration is a compatibility repair; its failure must not prevent the PTY from resuming from its trusted origin home.
+          // Failed migration can still resume from the verified origin home.
           console.warn(
             '[codex-session-resume] Legacy rollout migration failed; using origin home:',
             error

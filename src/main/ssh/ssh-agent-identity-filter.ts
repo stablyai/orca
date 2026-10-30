@@ -1,15 +1,14 @@
-import { readFileSync } from 'node:fs'
-import {
+import type {
   BaseAgent,
-  createAgent,
-  utils,
-  type IdentityCallback,
-  type ParsedKey,
-  type PublicKeyEntry,
-  type SignCallback,
-  type SigningRequestOptions
+  IdentityCallback,
+  ParsedKey,
+  PublicKeyEntry,
+  SignCallback,
+  SigningRequestOptions
 } from 'ssh2'
 import { resolveSshConfigHomePath } from './config/ssh-config-path-expansion'
+import { readSshIdentityFileSync } from './ssh-identity-file-read'
+import { loadSsh2 } from './ssh2-module-load'
 
 type AgentPublicKey = ParsedKey | Buffer | string | PublicKeyEntry
 
@@ -24,53 +23,63 @@ function comparablePublicKey(key: AgentPublicKey): ParsedKey | Buffer | string {
   return key
 }
 
-class IdentityFilteredAgent extends BaseAgent<ParsedKey | Buffer | string> {
-  readonly kind = 'identity-filtered-agent'
-  declare getStream?: BaseAgent['getStream']
+// Define on first use: extending BaseAgent would otherwise load ssh2 at startup (#35731).
+function defineIdentityFilteredAgent() {
+  return class IdentityFilteredAgent extends loadSsh2().BaseAgent<ParsedKey | Buffer | string> {
+    readonly kind = 'identity-filtered-agent'
+    declare getStream?: BaseAgent['getStream']
 
-  constructor(
-    readonly socketPath: string,
-    private readonly agent: BaseAgent,
-    private readonly allowedKeys: ParsedKey[]
-  ) {
-    super()
-    if (agent.getStream) {
-      this.getStream = agent.getStream.bind(agent)
+    constructor(
+      readonly socketPath: string,
+      private readonly agent: BaseAgent,
+      private readonly allowedKeys: ParsedKey[]
+    ) {
+      super()
+      if (agent.getStream) {
+        this.getStream = agent.getStream.bind(agent)
+      }
     }
-  }
 
-  getIdentities(callback: IdentityCallback): void {
-    this.agent.getIdentities((error, keys) => {
-      if (error) {
-        callback(error)
+    getIdentities(callback: IdentityCallback): void {
+      this.agent.getIdentities((error, keys) => {
+        if (error) {
+          callback(error)
+          return
+        }
+        callback(
+          undefined,
+          keys?.filter((key) =>
+            this.allowedKeys.some((allowedKey) => allowedKey.equals(comparablePublicKey(key)))
+          ) ?? []
+        )
+      })
+    }
+
+    sign(
+      pubKey: ParsedKey | Buffer | string,
+      data: Buffer,
+      optionsOrCallback?: SigningRequestOptions | SignCallback,
+      callback?: SignCallback
+    ): void {
+      if (typeof optionsOrCallback === 'function') {
+        this.agent.sign(pubKey, data, optionsOrCallback)
         return
       }
-      callback(
-        undefined,
-        keys?.filter((key) =>
-          this.allowedKeys.some((allowedKey) => allowedKey.equals(comparablePublicKey(key)))
-        ) ?? []
-      )
-    })
-  }
-
-  sign(
-    pubKey: ParsedKey | Buffer | string,
-    data: Buffer,
-    optionsOrCallback?: SigningRequestOptions | SignCallback,
-    callback?: SignCallback
-  ): void {
-    if (typeof optionsOrCallback === 'function') {
-      this.agent.sign(pubKey, data, optionsOrCallback)
-      return
+      this.agent.sign(pubKey, data, optionsOrCallback ?? {}, callback)
     }
-    this.agent.sign(pubKey, data, optionsOrCallback ?? {}, callback)
   }
 }
 
+let IdentityFilteredAgent: ReturnType<typeof defineIdentityFilteredAgent> | null = null
+
 function parseIdentityKeyFile(filePath: string): ParsedKey | undefined {
+  const { contents } = readSshIdentityFileSync(filePath)
+  if (!contents) {
+    return undefined
+  }
+  const { utils } = loadSsh2()
   try {
-    const parsed = utils.parseKey(readFileSync(filePath)) as ParsedKey | ParsedKey[] | Error
+    const parsed = utils.parseKey(contents) as ParsedKey | ParsedKey[] | Error
     if (parsed instanceof Error) {
       return undefined
     }
@@ -100,7 +109,7 @@ export function createIdentityFilteredAgent(
   if (identityKeys.length === 0) {
     return undefined
   }
-  // Why: IdentitiesOnly must not offer every key loaded in the agent. ssh2 has
-  // no built-in equivalent, so wrap the agent and expose only IdentityFile keys.
-  return new IdentityFilteredAgent(agentSocket, createAgent(agentSocket), identityKeys)
+  // ssh2 lacks IdentitiesOnly; expose only configured IdentityFile keys instead of every agent key.
+  IdentityFilteredAgent ??= defineIdentityFilteredAgent()
+  return new IdentityFilteredAgent(agentSocket, loadSsh2().createAgent(agentSocket), identityKeys)
 }

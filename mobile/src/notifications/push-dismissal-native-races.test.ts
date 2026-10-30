@@ -1,7 +1,11 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { nativePushDismissal } from './native-push-dismissal'
-import { rememberPushDismissal, wasPushDismissed } from './push-dismissal-watermarks'
+import {
+  rememberPushDismissal,
+  rememberPushDismissals,
+  wasPushDismissed
+} from './push-dismissal-watermarks'
 import { foregroundNotificationBehavior } from './push-receive'
 import { loadNotificationDeliveryPreferences } from './notification-delivery-preferences'
 
@@ -9,13 +13,15 @@ const memory = vi.hoisted(() => new Map<string, string>())
 const nativeLedger = vi.hoisted(() => new Map<string, number>())
 vi.mock('./native-push-dismissal', () => ({
   nativePushDismissal: {
-    remember: vi.fn(async (payload) => {
-      const key = JSON.stringify([
-        payload.hostFingerprint,
-        payload.notificationEpoch,
-        payload.notificationId
-      ])
-      nativeLedger.set(key, Math.max(nativeLedger.get(key) ?? 0, payload.notificationSeq))
+    rememberAll: vi.fn(async (payloads) => {
+      for (const payload of payloads) {
+        const key = JSON.stringify([
+          payload.hostFingerprint,
+          payload.notificationEpoch,
+          payload.notificationId
+        ])
+        nativeLedger.set(key, Math.max(nativeLedger.get(key) ?? 0, payload.notificationSeq))
+      }
     }),
     wasDismissed: vi.fn(
       async (payload) =>
@@ -74,6 +80,18 @@ it('uses only native storage for iOS dismissal reads and writes', async () => {
   expect(AsyncStorage.setItem).not.toHaveBeenCalled()
 })
 
+it('keeps a batch in the native ledger and joins it before checking dismissal', async () => {
+  const other = { ...fence, notificationId: 'second' }
+  const pending = rememberPushDismissals([fence, other])
+  const secondDismissed = wasPushDismissed(other)
+  await pending
+  expect(nativePushDismissal!.rememberAll).toHaveBeenCalledTimes(1)
+  expect(await secondDismissed).toBe(true)
+  expect(await wasPushDismissed({ ...other, notificationSeq: 22 })).toBe(false)
+  expect(AsyncStorage.getItem).not.toHaveBeenCalled()
+  expect(AsyncStorage.setItem).not.toHaveBeenCalled()
+})
+
 it('rechecks a negative native snapshot overtaken by a dismissal', async () => {
   let finish!: () => void
   vi.mocked(nativePushDismissal!.wasDismissed).mockImplementationOnce(async () => {
@@ -91,7 +109,7 @@ it('rechecks a negative native snapshot overtaken by a dismissal', async () => {
 })
 
 it('surfaces native write failures without switching storage or poisoning later operations', async () => {
-  vi.mocked(nativePushDismissal!.remember).mockRejectedValueOnce(new Error('native failure'))
+  vi.mocked(nativePushDismissal!.rememberAll).mockRejectedValueOnce(new Error('native failure'))
   await expect(rememberPushDismissal(fence)).rejects.toThrow('native failure')
   expect(AsyncStorage.setItem).not.toHaveBeenCalled()
   await rememberPushDismissal(fence)
@@ -106,13 +124,12 @@ it('suppresses presentation when dismissal completes during the handler sound re
     })
     return { sound: true } as Awaited<ReturnType<typeof loadNotificationDeliveryPreferences>>
   })
-  const pending = foregroundNotificationBehavior({
-    request: {
-      identifier: 'foreground-alert',
-      trigger: null,
-      content: { title: null, subtitle: null, body: null, sound: null, data: { orca: payload } }
-    }
-  })
+  const foregroundAlert = {
+    identifier: 'foreground-alert',
+    trigger: null,
+    content: { title: null, subtitle: null, body: null, sound: null, data: { orca: payload } }
+  }
+  const pending = foregroundNotificationBehavior({ request: foregroundAlert })
   await vi.waitFor(() => expect(finish).toBeDefined())
   await foregroundNotificationBehavior({
     request: { content: { data: { orca: { ...fence, kind: 'dismiss' } } } }

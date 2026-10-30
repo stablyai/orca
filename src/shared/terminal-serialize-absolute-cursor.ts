@@ -1,13 +1,5 @@
-// Why this module exists: @xterm/addon-serialize restores the cursor with
-// RELATIVE moves (CUD/CUB) computed from where it assumes replay leaves the
-// cursor. When the final content row is filled exactly to the right margin,
-// replay leaves the fresh terminal wrap-pending (internal x == cols), so the
-// relative math lands one column short of the real cursor. Every Orca buffer
-// snapshot that will be replayed into another terminal must therefore end
-// with an absolute CUP derived from the SOURCE terminal's authoritative
-// cursor position. Snapshot producers that also need the VT100 DECSC
-// saved-cursor register carried across the restore compose it here too, and
-// the mouse encoding the addon's mode trailer omits rides beside it.
+// SerializeAddon’s relative cursor math can land one column short after a full-width wrap-pending row. Restore source cursor coordinates with absolute CUP.
+// Compose DECSC and mouse-encoding state omitted by the serializer for callers that require them.
 
 import {
   buildMouseEncodingRestoreSequence,
@@ -27,11 +19,7 @@ type BufferSerializer<TOpts> = {
 /** VT100 DECSC saved-cursor register (0-based, viewport-relative row). */
 export type SavedCursorRegister = { x: number; y: number; originMode: boolean }
 
-// xterm keeps the DECSC register on each Buffer (savedY is absolute:
-// ybase-included). It is not exposed through the public API, so snapshot
-// producers read the core buffer directly — `_core.buffer` is the ACTIVE
-// buffer, so an alt-screen TUI yields the alternate screen's own register,
-// matching the one a post-restore DECRC would consult.
+// DECSC is private and per buffer; _core.buffer exposes the active register (including alt), matching what a later DECRC reads.
 type TerminalWithSavedCursorCore = SerializeCursorTerminal & {
   modes?: { originMode?: boolean }
   _core?: {
@@ -59,16 +47,12 @@ export function readSavedCursorRegister(
   ) {
     return null
   }
-  // savedY is absolute; DECRC restores it relative to the ybase current at
-  // restore time, clamping at the top — mirror that clamp here. savedX can be
-  // cols (DECSC during wrap-pending); CUP cannot re-create pending, so clamp.
+  // Mirror DECRC’s ybase-relative top clamp. CUP cannot recreate wrap-pending savedX == cols, so clamp that too.
   const y = Math.min(Math.max(core.savedY - core.ybase, 0), terminal.rows - 1)
   const x = Math.min(Math.max(core.savedX, 0), terminal.cols - 1)
   const originMode = core.savedOriginMode === true
   if (x === 0 && y === 0 && !originMode) {
-    // Home is xterm's never-saved default: a fresh restore terminal already
-    // sends DECRC to home, and skipping the injection avoids overwriting the
-    // fresh terminal's default saved SGR/charset when nothing was ever saved.
+    // Home is indistinguishable from never-saved; keep the fresh default register rather than overwrite its SGR/charset.
     return null
   }
   return { x, y, originMode }
@@ -81,9 +65,7 @@ export function serializeWithAbsoluteCursor<TOpts>(
   savedCursor?: SavedCursorRegister | null
 ): string {
   const serialized = serializer.serialize(opts)
-  // Why skip empty snapshots: several callers treat '' as "nothing to
-  // restore" (e.g. shutdown layout capture drops empty buffers); a bare CUP
-  // would turn every idle pane into a persisted snapshot.
+  // Empty means nothing to restore to callers; a bare CUP would persist every idle pane.
   if (serialized.length === 0) {
     return serialized
   }
@@ -116,24 +98,14 @@ export function buildAbsoluteCursorRestoreSequence(
   const scrollBottom = buffer?.scrollBottom ?? terminal.rows - 1
   const originMode = terminalWithCore.modes?.originMode === true
   const cupCursorY = cursorY - (originMode ? scrollTop : 0)
-  // Why skip wrap-pending sources (cursorX == cols): plain replay already
-  // reproduces that state exactly, while CUP would clamp to the last column
-  // and clear the pending-wrap flag, changing how the next byte renders.
-  // The remaining bounds checks are defensive: never emit a clamping CUP.
+  // Replay preserves wrap-pending cursorX == cols; CUP would clamp and change the next byte. Never emit a CUP that clamps.
   const canRestoreCurrentCursor =
     cursorX >= 0 && cursorX < terminal.cols && cupCursorY >= 0 && cupCursorY < terminal.rows
   if (!canRestoreCurrentCursor && options.restoreModesWithoutCursor !== true) {
     return ''
   }
-  // Why the DECSC injection: the serialized screen cannot carry the VT100
-  // saved-cursor register, so a hidden DECSC followed by a post-reveal DECRC
-  // restored to home and clobbered live cells (Bug D in
-  // notes/garble-fuzz-divergences.md). Re-establish the register by saving at
-  // the source's saved position, then CUP back to the real cursor. Saved SGR/
-  // charset are not carried — the synthetic ESC 7 saves the serializer's
-  // final pen, a deliberate position-only fidelity trade.
-  // Install the saved register against a full region so its absolute row is
-  // representable even when it predates the current DECSTBM/DECOM state.
+  // Carry saved position or a later DECRC can restore home over live cells (Bug D). Save against a full region so older margins/origin cannot hide the row.
+  // Position-only tradeoff: synthetic DECSC saves the serializer’s final pen, not the source saved SGR/charset.
   const savedRestore = savedCursor
     ? `\x1b[r\x1b[?6${savedCursor.originMode ? 'h' : 'l'}\x1b[${savedCursor.y + 1};${savedCursor.x + 1}H\x1b7`
     : ''
@@ -143,8 +115,7 @@ export function buildAbsoluteCursorRestoreSequence(
       ? `\x1b[${scrollTop + 1};${scrollBottom + 1}r`
       : ''
   const originModeRestore = mustRestoreModes ? `\x1b[?6${originMode ? 'h' : 'l'}` : ''
-  // CUP rows become margin-relative under DECOM; ordinary snapshots keep the
-  // zero offset because scrollback length does not shift viewport coordinates.
+  // DECOM makes CUP margin-relative; scrollback length does not change viewport coordinates.
   const currentCursorRestore = canRestoreCurrentCursor
     ? `\x1b[${cupCursorY + 1};${cursorX + 1}H`
     : ''

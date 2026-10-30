@@ -1,8 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 
-/** Whether a one-line `truncate` element cuts its text off, kept current as its width changes.
- *  Attach the returned ref only while the element sits on its line; an opened disclosure keeps
- *  the last verdict, so its toggle stays put. */
+/** Measure only the collapsed line; preserve its last clipping verdict while expanded so the toggle stays stable. */
 export function useNativeChatClippedLine(
   initiallyClipped: boolean
 ): [clipped: boolean, measureLine: (line: HTMLElement | null) => void] {

@@ -41,7 +41,6 @@ const mocks = vi.hoisted(() => {
     lastActivityAt: 0
   }
   const calls = {
-    createBrowserTab: vi.fn(),
     openDiff: vi.fn(),
     openFile: vi.fn(),
     openConflictFile: vi.fn(),
@@ -150,10 +149,6 @@ function resetState(overrides: Partial<Record<string, unknown>> = {}): void {
     activeWorktreeId: mocks.activeWorktree.id,
     activeGroupIdByWorktree: { [mocks.activeWorktree.id]: 'group-1' },
     groupsByWorktree: { [mocks.activeWorktree.id]: [{ id: 'group-1', activeTabId: null }] },
-    browserTabsByWorktree: {},
-    browserPagesByWorkspace: {},
-    createBrowserTab: mocks.calls.createBrowserTab,
-    getKnownWorktreeById: () => mocks.activeWorktree,
     repos: [mocks.activeRepo],
     worktreesByRepo: { [mocks.activeRepo.id]: [mocks.activeWorktree] },
     sshConnectionStates: new Map(),
@@ -216,7 +211,6 @@ function resetState(overrides: Partial<Record<string, unknown>> = {}): void {
     clearDiffComments: noopAsync(true),
     clearDiffCommentsForFile: noopAsync(true),
     setScrollToDiffCommentId: vi.fn(),
-    closeAgentSendPopoverTargetMode: vi.fn(),
     setRightSidebarOpen: vi.fn(),
     setRightSidebarTab: vi.fn(),
     allocateCommitMessageGenerationRequestId: vi.fn(() => 'commit-generation-1'),
@@ -273,10 +267,11 @@ function doubleClickUncommitted(path: string): void {
   })
 }
 
-function clickBranchRow(path = 'src/branch.ts', init: MouseEventInit = {}): void {
-  const row = container.querySelector<HTMLDivElement>(
-    `[data-source-control-area="branch"][data-source-control-path="${path}"]`
+function clickBranchRow(init: MouseEventInit = {}): void {
+  const label = [...container.querySelectorAll('span')].find(
+    (candidate) => candidate.textContent === 'branch.ts'
   )
+  const row = label?.closest('div')
   expect(row).not.toBeNull()
   act(() => {
     row?.dispatchEvent(new MouseEvent('click', { bubbles: true, ...init }))
@@ -284,287 +279,37 @@ function clickBranchRow(path = 'src/branch.ts', init: MouseEventInit = {}): void
 }
 
 describe('SourceControl preview row opens', () => {
-  it.each(['untracked', 'unstaged', 'staged'] as const)(
-    'keeps the current-file indicator on an HTML browser preview in %s',
-    (area) => {
-      resetState({
-        gitStatusByWorktree: {
-          [mocks.activeWorktree.id]: [
-            gitEntry({
-              path: 'report one.html',
-              area,
-              status: area === 'untracked' ? area : 'modified'
-            })
-          ]
-        },
-        activeTabTypeByWorktree: { [mocks.activeWorktree.id]: 'browser' },
-        activeBrowserTabIdByWorktree: { [mocks.activeWorktree.id]: 'browser-1' },
-        browserTabsByWorktree: {
-          [mocks.activeWorktree.id]: [{ id: 'browser-1', activePageId: 'page-html' }]
-        },
-        browserPagesByWorkspace: {
-          'browser-1': [
-            { id: 'page-web', url: 'https://example.com' },
-            { id: 'page-html', url: 'file:///repo/wt/report%20one.html#section' }
-          ]
-        }
-      })
-      renderSourceControl()
-
-      expect(
-        container
-          .querySelector('[data-source-control-path="report one.html"]')
-          ?.getAttribute('data-current')
-      ).toBe('true')
-    }
-  )
-
-  it.each([mocks.activeWorktree.id, 'other-workspace'])(
-    'matches a workspace document only to its owning workspace: %s',
-    (documentWorktreeId) => {
-      resetState({
-        repos: [{ ...mocks.activeRepo, connectionId: 'ssh-1' }],
-        gitStatusByWorktree: { [mocks.activeWorktree.id]: [gitEntry({ path: 'test.html' })] },
-        activeTabTypeByWorktree: { [mocks.activeWorktree.id]: 'browser' },
-        activeBrowserTabIdByWorktree: { [mocks.activeWorktree.id]: 'browser-1' },
-        browserTabsByWorktree: {
-          [mocks.activeWorktree.id]: [{ id: 'browser-1', activePageId: 'page-html' }]
-        },
-        browserPagesByWorkspace: {
-          'browser-1': [
-            {
-              id: 'page-html',
-              url: 'data:text/html,',
-              docLocation: {
-                kind: 'workspace-doc',
-                worktreeId: documentWorktreeId,
-                filePath: '/repo/wt/test.html'
-              }
-            }
-          ]
-        }
-      })
-      renderSourceControl()
-
-      expect(
-        container
-          .querySelector('[data-source-control-path="test.html"]')
-          ?.getAttribute('data-current')
-      ).toBe(documentWorktreeId === mocks.activeWorktree.id ? 'true' : null)
-    }
-  )
-
-  it.each(['untracked', 'unstaged', 'staged'] as const)(
-    'renders HTML when opening a row in %s',
-    (area) => {
-      resetState({
-        gitStatusByWorktree: {
-          [mocks.activeWorktree.id]: [
-            gitEntry({ path: 'test.html', area, status: area === 'untracked' ? area : 'modified' })
-          ]
-        }
-      })
-      renderSourceControl()
-
-      clickUncommitted('test.html')
-
-      expect(mocks.calls.createBrowserTab).toHaveBeenCalledWith(
-        mocks.activeWorktree.id,
-        'file:///repo/wt/test.html',
-        { title: 'test.html', targetGroupId: undefined, activate: true }
-      )
-      expect(mocks.calls.openDiff).not.toHaveBeenCalled()
-      expect(mocks.calls.openFile).not.toHaveBeenCalled()
-    }
-  )
-
-  it('targets the requested split when previewing HTML', () => {
-    resetState({
-      gitStatusByWorktree: { [mocks.activeWorktree.id]: [gitEntry({ path: 'test.html' })] }
-    })
-    renderSourceControl()
-
-    clickUncommitted('test.html', { ctrlKey: true })
-
-    expect(mocks.calls.createBrowserTab).toHaveBeenCalledWith(
-      mocks.activeWorktree.id,
-      'file:///repo/wt/test.html',
-      { title: 'test.html', targetGroupId: 'group-2', activate: true }
-    )
-    expect(mocks.calls.openDiff).not.toHaveBeenCalled()
-  })
-
-  it('previews HTML through its SSH owner', () => {
-    resetState({
-      repos: [{ ...mocks.activeRepo, connectionId: 'ssh-1' }],
-      gitStatusByWorktree: { [mocks.activeWorktree.id]: [gitEntry({ path: 'test.html' })] }
-    })
-    renderSourceControl()
-
-    clickUncommitted('test.html')
-
-    expect(mocks.calls.createBrowserTab).toHaveBeenCalledWith(
-      mocks.activeWorktree.id,
-      'data:text/html,',
-      expect.objectContaining({
-        docLocation: {
-          kind: 'workspace-doc',
-          worktreeId: mocks.activeWorktree.id,
-          filePath: '/repo/wt/test.html'
-        },
-        browserRuntimeEnvironmentId: null,
-        activate: true
-      })
-    )
-    expect(mocks.calls.openDiff).not.toHaveBeenCalled()
-  })
-
-  it('keeps deleted HTML and HTML conflicts in their diff surfaces', () => {
+  it.each([
+    ['src/file.ts', 'src/staged.ts', 'typescript'],
+    ['report.html', 'staged.html', 'html'],
+    ['REPORT.HTM', 'STAGED.HTM', 'html']
+  ])('opens %s and %s as preview diff tabs on plain clicks', (path, stagedPath, language) => {
     resetState({
       gitStatusByWorktree: {
         [mocks.activeWorktree.id]: [
-          gitEntry({ path: 'deleted.html', status: 'deleted' }),
-          gitEntry({
-            path: 'conflict.html',
-            conflictKind: 'both_modified',
-            conflictStatus: 'unresolved'
-          })
+          gitEntry({ path }),
+          gitEntry({ path: stagedPath, area: 'staged' })
         ]
       }
     })
     renderSourceControl()
 
-    clickUncommitted('deleted.html')
-    clickUncommitted('conflict.html')
-
-    expect(mocks.calls.createBrowserTab).not.toHaveBeenCalled()
-    expect(mocks.calls.openDiff).toHaveBeenCalledWith(
-      mocks.activeWorktree.id,
-      '/repo/wt/deleted.html',
-      'deleted.html',
-      'html',
-      false,
-      { targetGroupId: undefined, preview: true }
-    )
-    expect(mocks.calls.openConflictFile).toHaveBeenCalledWith(
-      mocks.activeWorktree.id,
-      '/repo/wt',
-      expect.objectContaining({ path: 'conflict.html' }),
-      'html',
-      { targetGroupId: undefined, preview: true }
-    )
-  })
-
-  it('falls back to the diff when this client cannot preview HTML', () => {
-    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
-    onTestFinished(() => {
-      vi.unstubAllGlobals()
-    })
-    resetState({
-      gitStatusByWorktree: { [mocks.activeWorktree.id]: [gitEntry({ path: 'test.html' })] }
-    })
-    renderSourceControl()
-
-    clickUncommitted('test.html')
-
-    expect(mocks.calls.createBrowserTab).not.toHaveBeenCalled()
-    expect(mocks.calls.openDiff).toHaveBeenCalledWith(
-      mocks.activeWorktree.id,
-      '/repo/wt/test.html',
-      'test.html',
-      'html',
-      false,
-      { targetGroupId: undefined, preview: true }
-    )
-  })
-
-  it.each(['uncommitted', 'branch'] as const)('opens a %s HTML review note in the diff', (area) => {
-    resetState({
-      worktreesByRepo: {
-        [mocks.activeRepo.id]: [
-          {
-            ...mocks.activeWorktree,
-            diffComments: [
-              {
-                id: 'html-note',
-                worktreeId: mocks.activeWorktree.id,
-                filePath: 'test.html',
-                lineNumber: 1,
-                side: 'modified',
-                body: 'Review this heading',
-                createdAt: 1
-              }
-            ]
-          }
-        ]
-      },
-      gitStatusByWorktree: {
-        [mocks.activeWorktree.id]: area === 'uncommitted' ? [gitEntry({ path: 'test.html' })] : []
-      },
-      gitBranchChangesByWorktree: {
-        [mocks.activeWorktree.id]: area === 'branch' ? [branchEntry({ path: 'test.html' })] : []
-      },
-      gitBranchCompareSummaryByWorktree: { [mocks.activeWorktree.id]: branchSummary() }
-    })
-    renderSourceControl()
-
-    const expandNotes = container.querySelector<HTMLButtonElement>('button[title="Expand notes"]')
-    expect(expandNotes).not.toBeNull()
-    act(() => expandNotes?.click())
-    const note = container.querySelector<HTMLButtonElement>('button[aria-label^="Open note on"]')
-    expect(note?.textContent).toContain('Review this heading')
-    act(() => note?.click())
-
-    expect(mocks.calls.createBrowserTab).not.toHaveBeenCalled()
-    if (area === 'uncommitted') {
-      expect(mocks.calls.openDiff).toHaveBeenCalledWith(
-        mocks.activeWorktree.id,
-        '/repo/wt/test.html',
-        'test.html',
-        'html',
-        false,
-        { preview: true }
-      )
-    } else {
-      expect(mocks.calls.openBranchDiff).toHaveBeenCalledWith(
-        mocks.activeWorktree.id,
-        '/repo/wt',
-        expect.objectContaining({ path: 'test.html' }),
-        branchSummary(),
-        'html',
-        { preview: true }
-      )
-    }
-    expect(mocks.state.setScrollToDiffCommentId).toHaveBeenLastCalledWith('html-note')
-  })
-
-  it('passes preview=true when plain uncommitted row clicks open diff tabs', () => {
-    resetState({
-      gitStatusByWorktree: {
-        [mocks.activeWorktree.id]: [
-          gitEntry({ path: 'src/file.ts' }),
-          gitEntry({ path: 'src/staged.ts', area: 'staged' })
-        ]
-      }
-    })
-    renderSourceControl()
-
-    clickUncommitted('src/file.ts')
-    clickUncommitted('src/staged.ts')
+    clickUncommitted(path)
+    clickUncommitted(stagedPath)
 
     expect(mocks.calls.openDiff).toHaveBeenCalledWith(
       mocks.activeWorktree.id,
-      '/repo/wt/src/file.ts',
-      'src/file.ts',
-      'typescript',
+      `/repo/wt/${path}`,
+      path,
+      language,
       false,
       { targetGroupId: undefined, preview: true }
     )
     expect(mocks.calls.openDiff).toHaveBeenCalledWith(
       mocks.activeWorktree.id,
-      '/repo/wt/src/staged.ts',
-      'src/staged.ts',
-      'typescript',
+      `/repo/wt/${stagedPath}`,
+      stagedPath,
+      language,
       true,
       { targetGroupId: undefined, preview: true }
     )
@@ -662,7 +407,7 @@ describe('SourceControl preview row opens', () => {
     resetState({
       gitStatusByWorktree: { [mocks.activeWorktree.id]: [gitEntry({ path: 'src/file.ts' })] }
     })
-    // Why: the owner stamp routes the discard; a different focused server must not.
+    // Route discard by owner stamp even when another server is focused.
     Object.assign(mocks.activeRepo, { executionHostId: 'runtime:runtime-remote' })
     onTestFinished(() => {
       Reflect.deleteProperty(mocks.activeRepo, 'executionHostId')
@@ -789,68 +534,6 @@ describe('SourceControl preview row opens', () => {
       ['packages/nested']
     )
   })
-
-  it.each([false, true])('previews committed HTML from a branch row (split: %s)', (split) => {
-    resetState({
-      gitBranchChangesByWorktree: {
-        [mocks.activeWorktree.id]: [branchEntry({ path: 'test.html' })]
-      },
-      gitBranchCompareSummaryByWorktree: { [mocks.activeWorktree.id]: branchSummary() }
-    })
-    renderSourceControl()
-
-    clickBranchRow('test.html', { ctrlKey: split })
-
-    expect(mocks.calls.createBrowserTab).toHaveBeenCalledWith(
-      mocks.activeWorktree.id,
-      'file:///repo/wt/test.html',
-      { title: 'test.html', targetGroupId: split ? 'group-2' : undefined, activate: true }
-    )
-    expect(mocks.calls.openBranchDiff).not.toHaveBeenCalled()
-  })
-
-  it.each(['branch-deleted', 'worktree-deleted', 'worktree-conflict'] as const)(
-    'keeps a %s HTML branch row in the diff',
-    (kind) => {
-      resetState({
-        gitBranchChangesByWorktree: {
-          [mocks.activeWorktree.id]: [
-            branchEntry({
-              path: 'test.html',
-              status: kind === 'branch-deleted' ? 'deleted' : 'added'
-            })
-          ]
-        },
-        gitBranchCompareSummaryByWorktree: { [mocks.activeWorktree.id]: branchSummary() },
-        gitStatusByWorktree: {
-          [mocks.activeWorktree.id]:
-            kind === 'branch-deleted'
-              ? []
-              : [
-                  gitEntry({
-                    path: 'test.html',
-                    ...(kind === 'worktree-deleted'
-                      ? { status: 'deleted' }
-                      : { conflictKind: 'both_modified', conflictStatus: 'unresolved' })
-                  })
-                ]
-        }
-      })
-      renderSourceControl()
-
-      clickBranchRow('test.html')
-
-      expect(mocks.calls.createBrowserTab).not.toHaveBeenCalled()
-      expect(mocks.calls.openBranchDiff).toHaveBeenCalledWith(
-        mocks.activeWorktree.id,
-        '/repo/wt',
-        expect.objectContaining({ path: 'test.html' }),
-        branchSummary(),
-        'html',
-        { targetGroupId: undefined, preview: true }
-      )
-    }
-  )
 
   it('passes preview=true when a plain branch row click opens a branch diff tab', () => {
     resetState({

@@ -1,19 +1,30 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type * as NodeFs from 'node:fs'
+import type * as NodeFsPromises from 'node:fs/promises'
 
 import type { ProcessResult } from '@orca/process-host/process-spec'
 
-const { readFileSyncMock, recordSelfInitiatedTreeKillMock, runProcessMock, runProcessSyncMock } =
-  vi.hoisted(() => ({
-    readFileSyncMock: vi.fn(),
-    recordSelfInitiatedTreeKillMock: vi.fn(),
-    runProcessMock: vi.fn(),
-    runProcessSyncMock: vi.fn()
-  }))
+const {
+  readFileMock,
+  readFileSyncMock,
+  recordSelfInitiatedTreeKillMock,
+  runProcessMock,
+  runProcessSyncMock
+} = vi.hoisted(() => ({
+  readFileMock: vi.fn(),
+  readFileSyncMock: vi.fn(),
+  recordSelfInitiatedTreeKillMock: vi.fn(),
+  runProcessMock: vi.fn(),
+  runProcessSyncMock: vi.fn()
+}))
 vi.mock('node:fs', async (importOriginal) => ({
   ...(await importOriginal<typeof NodeFs>()),
   readFileSync: readFileSyncMock
+}))
+vi.mock('node:fs/promises', async (importOriginal) => ({
+  ...(await importOriginal<typeof NodeFsPromises>()),
+  readFile: readFileMock
 }))
 vi.mock('../crash-reporting/self-initiated-tree-kill-log', () => ({
   recordSelfInitiatedTreeKill: recordSelfInitiatedTreeKillMock
@@ -25,13 +36,16 @@ vi.mock('@orca/process-host', () => ({
 
 import {
   forceKillPosixPtyProcessGroups,
+  forceKillPosixPtyProcessGroupsSync,
   getPosixPtyProcessGroups,
   isPosixPtyRootStopped,
-  parseLinuxProcStatSessionId,
-  readPosixPtyProcessTable,
-  resetPosixPtyProcessTableDialectForTests,
   signalPosixPtyProcessGroups
 } from './posix-pty-process-groups'
+import {
+  parseLinuxProcStatSessionId,
+  readPosixPtyProcessTable,
+  resetPosixPtyProcessTableDialectForTests
+} from './posix-pty-process-table'
 
 // `/proc/<pid>/stat` fixture: fields after comm are state, ppid, pgrp, session, tty_nr, ...
 const procStat = (pid: number, session: number, comm = 'bash'): string =>
@@ -41,6 +55,7 @@ const procSessions = new Map<number, number>()
 beforeEach(() => {
   procSessions.clear()
   readFileSyncMock.mockReset()
+  readFileMock.mockReset()
   // Default fixture: each hundred-block of pids is one terminal session led by its round pid.
   readFileSyncMock.mockImplementation((path: string) => {
     const pid = Number(/^\/proc\/(\d+)\/stat$/.exec(path)?.[1])
@@ -49,6 +64,7 @@ beforeEach(() => {
     }
     return procStat(pid, procSessions.get(pid) ?? Math.floor(pid / 100) * 100)
   })
+  readFileMock.mockImplementation(async (path: string) => readFileSyncMock(path))
   recordSelfInitiatedTreeKillMock.mockReset()
   runProcessMock.mockReset()
   runProcessSyncMock.mockReset()
@@ -152,6 +168,27 @@ describe('ps selection compatibility', () => {
     ])
   })
 
+  it('releases every waiter after a failed probe instead of chaining another probe per caller', async () => {
+    // A wedged ps would otherwise stack one timeout per concurrent force-kill.
+    const probe = Promise.withResolvers<ProcessResult>()
+    const queries: ((result: ProcessResult) => void)[] = []
+    runProcessMock
+      .mockImplementationOnce(() => probe.promise)
+      .mockImplementation(() => new Promise((resolve) => queries.push(resolve)))
+    const first = readPosixPtyProcessTable(100)
+    const second = readPosixPtyProcessTable(200)
+    const third = readPosixPtyProcessTable(300)
+
+    probe.resolve({ code: null, signal: 'SIGTERM', stdout: '', stderr: '', timedOut: true })
+    await expect(first).rejects.toThrow('unavailable')
+    await vi.waitFor(() => expect(runProcessMock).toHaveBeenCalledTimes(3))
+
+    for (const resolve of queries) {
+      resolve({ code: 0, signal: null, stdout: '', stderr: '', timedOut: false })
+    }
+    await expect(Promise.all([second, third])).resolves.toEqual(['', ''])
+  })
+
   it('uses the cached async dialect for synchronous teardown with fresh membership', async () => {
     runProcessMock
       .mockResolvedValueOnce(unsupportedSelection())
@@ -163,7 +200,7 @@ describe('ps selection compatibility', () => {
     })
     const signalProcessGroup = vi.fn()
     const fallback = vi.fn()
-    forceKillPosixPtyProcessGroups(100, fallback, {
+    forceKillPosixPtyProcessGroupsSync(100, fallback, {
       platform: 'linux',
       currentPid: 999,
       signalProcessGroup
@@ -179,7 +216,7 @@ describe('ps selection compatibility', () => {
       .mockReturnValueOnce({ code: 0, stdout: BUSYBOX_TABLE })
     const signalProcessGroup = vi.fn()
     const fallback = vi.fn()
-    forceKillPosixPtyProcessGroups(100, fallback, {
+    forceKillPosixPtyProcessGroupsSync(100, fallback, {
       platform: 'linux',
       currentPid: 999,
       signalProcessGroup
@@ -224,7 +261,7 @@ describe('ps selection compatibility', () => {
       runProcessSyncMock.mockReturnValue({ stdout: BUSYBOX_TABLE, ...failure })
       const signalProcessGroup = vi.fn()
       const fallback = vi.fn()
-      forceKillPosixPtyProcessGroups(100, fallback, {
+      forceKillPosixPtyProcessGroupsSync(100, fallback, {
         platform: 'linux',
         currentPid: 999,
         signalProcessGroup
@@ -334,14 +371,14 @@ describe('POSIX PTY process-group termination', () => {
     expect(getPosixPtyProcessGroups(TABLE, 999, 998)).toBeNull()
   })
 
-  it('kills foreground and background groups before the PTY leader', () => {
+  it('kills foreground and background groups before the PTY leader', async () => {
     const fallback = vi.fn()
     const signalProcessGroup = vi.fn()
 
-    forceKillPosixPtyProcessGroups(100, fallback, {
+    await forceKillPosixPtyProcessGroups(100, fallback, {
       platform: 'darwin',
       currentPid: 999,
-      readProcessTable: () => TABLE,
+      readProcessTable: async () => TABLE,
       signalProcessGroup
     })
 
@@ -352,12 +389,12 @@ describe('POSIX PTY process-group termination', () => {
   it.each([
     ['SIGSTOP', [99, 101, 103]],
     ['SIGCONT', [101, 103, 99]]
-  ] as const)('orders shell and job groups safely for %s', (signal, expected) => {
+  ] as const)('orders shell and job groups safely for %s', async (signal, expected) => {
     const signalProcessGroup = vi.fn()
-    signalPosixPtyProcessGroups(100, signal, vi.fn(), {
+    await signalPosixPtyProcessGroups(100, signal, vi.fn(), {
       platform: 'linux',
       currentPid: 999,
-      readProcessTable: () => TABLE.replace('100  100', '100  99'),
+      readProcessTable: async () => TABLE.replace('100  100', '100  99'),
       signalProcessGroup
     })
     expect(signalProcessGroup.mock.calls.map(([pgid]) => pgid)).toEqual(expected)
@@ -365,41 +402,38 @@ describe('POSIX PTY process-group termination', () => {
 
   it.each(['EPERM', 'ESRCH'])(
     'does not stop jobs when stopping the shell fails with %s',
-    (code) => {
+    async (code) => {
       const error = Object.assign(new Error('stop failed'), { code })
       const signalProcessGroup = vi.fn(() => {
         throw error
       })
-      const stop = () =>
-        signalPosixPtyProcessGroups(100, 'SIGSTOP', vi.fn(), {
-          platform: 'linux',
-          currentPid: 999,
-          readProcessTable: () => TABLE,
-          signalProcessGroup
-        })
-      if (code === 'ESRCH') {
-        expect(stop).not.toThrow()
-      } else {
-        expect(stop).toThrow(error)
-      }
+      const stop = signalPosixPtyProcessGroups(100, 'SIGSTOP', vi.fn(), {
+        platform: 'linux',
+        currentPid: 999,
+        readProcessTable: async () => TABLE,
+        signalProcessGroup
+      })
+      await (code === 'ESRCH'
+        ? expect(stop).resolves.toBeUndefined()
+        : expect(stop).rejects.toThrow(error))
       expect(signalProcessGroup.mock.calls).toEqual([[100]])
     }
   )
 
-  it('falls back when the process table cannot prove PTY ownership', () => {
+  it('falls back when the process table cannot prove PTY ownership', async () => {
     const fallback = vi.fn()
 
-    forceKillPosixPtyProcessGroups(100, fallback, {
+    await forceKillPosixPtyProcessGroups(100, fallback, {
       platform: 'linux',
       currentPid: 102,
-      readProcessTable: () => TABLE,
+      readProcessTable: async () => TABLE,
       signalProcessGroup: vi.fn()
     })
 
     expect(fallback).toHaveBeenCalledOnce()
   })
 
-  it('ignores groups that exited after the snapshot but preserves real signal errors', () => {
+  it('ignores groups that exited after the snapshot but preserves real signal errors', async () => {
     const gone = Object.assign(new Error('gone'), { code: 'ESRCH' })
     const denied = Object.assign(new Error('denied'), { code: 'EPERM' })
     const signalProcessGroup = vi
@@ -411,22 +445,43 @@ describe('POSIX PTY process-group termination', () => {
         throw denied
       })
 
-    expect(() =>
+    await expect(
       forceKillPosixPtyProcessGroups(100, vi.fn(), {
         platform: 'darwin',
         currentPid: 999,
-        readProcessTable: () => TABLE,
+        readProcessTable: async () => TABLE,
         signalProcessGroup
       })
-    ).toThrow('denied')
+    ).rejects.toThrow('denied')
     expect(signalProcessGroup).toHaveBeenCalledTimes(3)
   })
 
-  it('uses the existing fallback on Windows without reading ps', () => {
+  it('signals nothing when the root exits while the table is read', async () => {
+    // A reaped root frees its pid and TTY, so the table may now describe another terminal.
+    let rootExited = false
     const fallback = vi.fn()
-    const readProcessTable = vi.fn(() => TABLE)
+    const signalProcessGroup = vi.fn()
 
-    forceKillPosixPtyProcessGroups(100, fallback, {
+    await forceKillPosixPtyProcessGroups(100, fallback, {
+      platform: 'darwin',
+      currentPid: 999,
+      readProcessTable: async () => {
+        rootExited = true
+        return TABLE
+      },
+      ownsRoot: () => !rootExited,
+      signalProcessGroup
+    })
+
+    expect(signalProcessGroup).not.toHaveBeenCalled()
+    expect(fallback).not.toHaveBeenCalled()
+  })
+
+  it('uses the existing fallback on Windows without reading ps', async () => {
+    const fallback = vi.fn()
+    const readProcessTable = vi.fn(async () => TABLE)
+
+    await forceKillPosixPtyProcessGroups(100, fallback, {
       platform: 'win32',
       readProcessTable
     })
@@ -453,28 +508,28 @@ describe('Linux terminal session identity (#27337)', () => {
     expect(parseLinuxProcStatSessionId('42 (bash) S 1 42 0 0')).toBeNull()
   })
 
-  it('force-kills only groups in the shell session, not container processes on the same pts', () => {
+  it('force-kills only groups in the shell session, not container processes on the same pts', async () => {
     procSessions.set(500, 500).set(501, 500).set(600, 600)
     const signalProcessGroup = vi.fn()
     const fallback = vi.fn()
-    forceKillPosixPtyProcessGroups(100, fallback, {
+    await forceKillPosixPtyProcessGroups(100, fallback, {
       platform: 'linux',
       currentPid: 999,
-      readProcessTable: () => COLLIDING_TABLE,
+      readProcessTable: async () => COLLIDING_TABLE,
       signalProcessGroup
     })
     expect(signalProcessGroup.mock.calls).toEqual([[101], [100]])
     expect(fallback).not.toHaveBeenCalled()
-    expect(readFileSyncMock).toHaveBeenCalledWith('/proc/500/stat', 'utf8')
+    expect(readFileMock).toHaveBeenCalledWith('/proc/500/stat', 'utf8')
   })
 
-  it('applies the same session filter to the stop/continue sweep', () => {
+  it('applies the same session filter to the stop/continue sweep', async () => {
     procSessions.set(500, 500).set(501, 500).set(600, 600)
     const signalProcessGroup = vi.fn()
-    signalPosixPtyProcessGroups(100, 'SIGSTOP', vi.fn(), {
+    await signalPosixPtyProcessGroups(100, 'SIGSTOP', vi.fn(), {
       platform: 'linux',
       currentPid: 999,
-      readProcessTable: () => COLLIDING_TABLE,
+      readProcessTable: async () => COLLIDING_TABLE,
       signalProcessGroup
     })
     expect(signalProcessGroup.mock.calls).toEqual([[100], [101]])
@@ -489,15 +544,15 @@ describe('Linux terminal session identity (#27337)', () => {
   })
 
   it.each([
-    ['unreadable', () => null],
-    ['not a session leader', () => 50]
-  ])('falls back to the root-only kill when the shell session is %s', (_label, sessionOf) => {
+    ['unreadable', async () => null],
+    ['not a session leader', async () => 50]
+  ])('falls back to the root-only kill when the shell session is %s', async (_label, sessionOf) => {
     const signalProcessGroup = vi.fn()
     const fallback = vi.fn()
-    forceKillPosixPtyProcessGroups(100, fallback, {
+    await forceKillPosixPtyProcessGroups(100, fallback, {
       platform: 'linux',
       currentPid: 999,
-      readProcessTable: () => COLLIDING_TABLE,
+      readProcessTable: async () => COLLIDING_TABLE,
       readProcessSessionId: sessionOf,
       signalProcessGroup
     })
@@ -505,25 +560,25 @@ describe('Linux terminal session identity (#27337)', () => {
     expect(signalProcessGroup).not.toHaveBeenCalled()
   })
 
-  it('keeps macOS selection by terminal alone without reading /proc', () => {
+  it('keeps macOS selection by terminal alone without reading /proc', async () => {
     const signalProcessGroup = vi.fn()
-    forceKillPosixPtyProcessGroups(100, vi.fn(), {
+    await forceKillPosixPtyProcessGroups(100, vi.fn(), {
       platform: 'darwin',
       currentPid: 999,
-      readProcessTable: () => COLLIDING_TABLE,
+      readProcessTable: async () => COLLIDING_TABLE,
       signalProcessGroup
     })
     expect(signalProcessGroup.mock.calls).toEqual([[101], [500], [600], [100]])
-    expect(readFileSyncMock).not.toHaveBeenCalled()
+    expect(readFileMock).not.toHaveBeenCalled()
   })
 })
 
 describe('POSIX PTY group-sweep breadcrumbs', () => {
-  it('records every group it actually signalled', () => {
-    forceKillPosixPtyProcessGroups(100, vi.fn(), {
+  it('records every group it actually signalled', async () => {
+    await forceKillPosixPtyProcessGroups(100, vi.fn(), {
       platform: 'darwin',
       currentPid: 999,
-      readProcessTable: () => TABLE,
+      readProcessTable: async () => TABLE,
       signalProcessGroup: vi.fn()
     })
 
@@ -534,11 +589,11 @@ describe('POSIX PTY group-sweep breadcrumbs', () => {
     ])
   })
 
-  it('does not claim a group that was already gone', () => {
-    forceKillPosixPtyProcessGroups(100, vi.fn(), {
+  it('does not claim a group that was already gone', async () => {
+    await forceKillPosixPtyProcessGroups(100, vi.fn(), {
       platform: 'darwin',
       currentPid: 999,
-      readProcessTable: () => TABLE,
+      readProcessTable: async () => TABLE,
       signalProcessGroup: (pgid: number) => {
         if (pgid === 103) {
           throw Object.assign(new Error('no such process'), { code: 'ESRCH' })

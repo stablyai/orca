@@ -10,6 +10,7 @@ import {
 } from '../github/stacked-pr-creation'
 import { createHostedReview } from './hosted-review-creation'
 import type { HostedReviewExecutionOptions } from './hosted-review-git-options'
+import { stackedReviewFailure } from '../../shared/stacked-hosted-review-failure-copy'
 
 export async function createStackedHostedReview(
   repoPath: string,
@@ -30,10 +31,7 @@ export async function createStackedHostedReview(
         return created
       }
       return {
-        ok: false,
-        code: 'validation',
-        error:
-          'An open pull request already exists for this branch but does not target the selected parent branch.',
+        ...stackedReviewFailure('stack_existing_review_other_base'),
         createdReview: {
           number: created.existingReview.number,
           url: created.existingReview.url
@@ -43,11 +41,7 @@ export async function createStackedHostedReview(
     currentReview = { number: created.number, url: created.url }
   }
   if (!currentReview) {
-    return {
-      ok: false,
-      code: 'unknown_completion',
-      error: 'Pull request creation may have completed. Retry to finish stack registration.'
-    }
+    return stackedReviewFailure('stack_creation_unconfirmed', {}, 'unknown_completion')
   }
 
   return registerGitHubStackedPullRequest({

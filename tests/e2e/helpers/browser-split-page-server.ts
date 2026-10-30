@@ -1,10 +1,7 @@
 import { createServer } from 'node:http'
 
 export type BrowserSplitPageServer = {
-  /**
-   * `/<pane>/<step>` serves an uncached page titled "<pane> <step>". Chromium shares page zoom
-   * per host, so give sibling panes different hosts (127.0.0.1 vs localhost) to keep zoom apart.
-   */
+  // Use distinct hosts for sibling panes because Chromium shares zoom per host.
   pageUrl: (pane: string, step: number, host?: '127.0.0.1' | 'localhost') => string
   close: () => Promise<void>
 }

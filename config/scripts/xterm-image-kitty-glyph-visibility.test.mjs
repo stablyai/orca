@@ -13,14 +13,9 @@ const PLACEHOLDER = String.fromCodePoint(0x10eeee)
 afterEach(() => vi.unstubAllGlobals())
 
 const cell = (h, row = 0, col = 0) => h.terminal.buffer.active.getLine(row)?.getCell(col)
-async function flush() {
-  // onWriteParsed fires after the write callback at the end of a parse batch.
-  await new Promise((resolve) => setTimeout(resolve, 20))
-}
 async function place(h) {
   await writeKitty(h.terminal, 'a=T,f=100,i=7,U=1,p=10,c=2,r=2', PNG)
   await write(h.terminal, placeholderCells(7, 10))
-  await flush()
 }
 
 function metadata(line, col) {
@@ -53,7 +48,6 @@ describe('reserved placeholder glyph visibility', () => {
     const h = createPlaceholderTerminal()
     try {
       await write(h.terminal, `${PLACEHOLDER}😀X`)
-      await flush()
       expect(cell(h).isInvisible()).toBeTruthy()
       expect(cell(h).getChars()).toBe(PLACEHOLDER)
       expect(cell(h).getCode()).toBe(0x10eeee)
@@ -71,7 +65,6 @@ describe('reserved placeholder glyph visibility', () => {
     try {
       await place(h)
       await writeKitty(h.terminal, 'a=d,d=I,i=7,p=10,q=2')
-      await flush()
       expect(h.kitty._virtualPlacements.has(7)).toBe(false)
       expect(cell(h, 0, 0).isInvisible()).toBeTruthy()
       expect(cell(h, 0, 1).isInvisible()).toBeTruthy()
@@ -87,7 +80,6 @@ describe('reserved placeholder glyph visibility', () => {
     let pending
     try {
       await write(h.terminal, placeholderCells(7, 10))
-      await flush()
       const handler = h.addon._handlers.get('kitty')
       const decode = handler._createBitmap.bind(handler)
       handler._createBitmap = async (image) => {
@@ -118,7 +110,6 @@ describe('reserved placeholder glyph visibility', () => {
           10
         )}\x1b]8;;\x1b\\`
       )
-      await flush()
       const line = h.terminal._core.buffer.lines.get(0)
       const before = [0, 1].map((col) => {
         line._data[col * 3 + 1] &= ~INVISIBLE
@@ -153,7 +144,6 @@ describe('reserved placeholder glyph visibility', () => {
         h.terminal,
         `\x1b[4;48;2;30;40;50m\x1b]8;;https://example.invalid/\x1b\\${placeholderCells(7, 10, 1, 1)}\x1b]8;;\x1b\\\x1b[H`
       )
-      await flush()
       const bitmap = new TrackedBitmap(10, 10)
       h.storage.addImage(bitmap, { scrolling: true, layer: 'top', zIndex: 0, cursorPos: 'iip' })
       const line = h.terminal._core.buffer.lines.get(0)
@@ -190,10 +180,8 @@ describe('reserved placeholder glyph visibility', () => {
     const h = createPlaceholderTerminal()
     try {
       await write(h.terminal, placeholderCells(7, 10))
-      await flush()
       expect(cell(h).isInvisible()).toBeTruthy()
       await write(h.terminal, '\x1b[1;1HAB')
-      await flush()
       expect(cell(h).getChars()).toBe('A')
       expect(cell(h, 0, 1).getChars()).toBe('B')
       expect(cell(h).isInvisible()).toBeFalsy()
@@ -207,7 +195,6 @@ describe('reserved placeholder glyph visibility', () => {
     const h = createPlaceholderTerminal()
     try {
       await write(h.terminal, `${PLACEHOLDER}\r\n${'ROW\r\n'.repeat(24)}`)
-      await flush()
       const buffer = h.terminal._core.buffer
       const first = reservedRow(h)
       expect(first).toBeLessThan(buffer.ybase)
@@ -217,7 +204,6 @@ describe('reserved placeholder glyph visibility', () => {
       expect(buffer.lines.get(first).getFg(0) & INVISIBLE).toBeTruthy()
       h.terminal.scrollToBottom()
       await write(h.terminal, `\x1b[H${PLACEHOLDER}\u030D\r\n${'ROW\r\n'.repeat(24)}`)
-      await flush()
       const last = reservedRow(h, true)
       expect(last).toBeLessThan(buffer.ybase)
       expect(buffer.lines.get(last).getFg(0) & INVISIBLE).toBe(0)
@@ -232,7 +218,6 @@ describe('reserved placeholder glyph visibility', () => {
     const h = createPlaceholderTerminal()
     try {
       await write(h.terminal, `${'ROW\r\n'.repeat(24)}TEXT`)
-      await flush()
       const buffer = h.terminal._core.buffer
       const reads = [],
         loads = [],
@@ -263,7 +248,6 @@ describe('reserved placeholder glyph visibility', () => {
       h.terminal.resize(80, 22)
       const scans = vi.spyOn(h.kitty, 'hidePlaceholderGlyphs')
       await write(h.terminal, 'ROW\r\n'.repeat(10000))
-      await flush()
       expect(scans).toHaveBeenCalledTimes(1)
       expect(h.terminal.buffer.active.cursorY).toBe(21)
     } finally {
@@ -275,7 +259,6 @@ describe('reserved placeholder glyph visibility', () => {
     const h = createPlaceholderTerminal()
     try {
       await write(h.terminal, `${PLACEHOLDER}\r\n${'ROW\r\n'.repeat(24)}`)
-      await flush()
       const scans = vi.spyOn(h.kitty, 'hidePlaceholderGlyphs')
       h.terminal.scrollToTop()
       h.addon.dispose()
@@ -292,11 +275,9 @@ describe('reserved placeholder glyph visibility', () => {
     const h = createPlaceholderTerminal()
     try {
       await write(h.terminal, PLACEHOLDER)
-      await flush()
       expect(cell(h).isInvisible()).toBeTruthy()
       h.addon.dispose()
       await write(h.terminal, `\x1b[2J\x1b[H${PLACEHOLDER}`)
-      await flush()
       expect(cell(h).getChars()).toBe(PLACEHOLDER)
       expect(cell(h).isInvisible()).toBeFalsy()
       h.terminal.resize(21, 7)

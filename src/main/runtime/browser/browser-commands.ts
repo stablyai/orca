@@ -97,6 +97,7 @@ export class RuntimeBrowserCommands {
 
   readonly browserProfileDetectBrowsers: RuntimeBrowserProfiles['browserProfileDetectBrowsers']
   readonly browserProfileImportFromBrowser: RuntimeBrowserProfiles['browserProfileImportFromBrowser']
+  readonly browserProfileClearGoogleCookies: RuntimeBrowserProfiles['browserProfileClearGoogleCookies']
   readonly browserProfileClearDefaultCookies: RuntimeBrowserProfiles['browserProfileClearDefaultCookies']
 
   constructor(host: RuntimeBrowserCommandHost) {
@@ -116,6 +117,7 @@ export class RuntimeBrowserCommands {
     const dialogs = new RuntimeBrowserDialogs(targets, screencasts)
     this.browserProfileDetectBrowsers = profiles.browserProfileDetectBrowsers.bind(profiles)
     this.browserProfileImportFromBrowser = profiles.browserProfileImportFromBrowser.bind(profiles)
+    this.browserProfileClearGoogleCookies = profiles.browserProfileClearGoogleCookies.bind(profiles)
     this.browserProfileClearDefaultCookies =
       profiles.browserProfileClearDefaultCookies.bind(profiles)
 

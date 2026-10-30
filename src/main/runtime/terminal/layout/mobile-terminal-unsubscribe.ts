@@ -1,14 +1,7 @@
 import { OrcaRuntimeWithHandleMobileSubscribeInternal } from './mobile-terminal-subscribe-internal'
 
 export abstract class OrcaRuntimeWithHandleMobileUnsubscribe extends OrcaRuntimeWithHandleMobileSubscribeInternal {
-  // Why: delayed restore prevents resize thrashing during rapid tab switches.
-  // The 300ms debounce means only the final tab triggers a PTY restore;
-  // intermediate terminals keep their current dims harmlessly.
-  //
-  // Multi-mobile: only the last subscriber leaving for this ptyId triggers
-  // restore + driver=idle. Peer mobile clients still on the inner map keep
-  // the lock banner mounted; if the disconnecting client was the active
-  // driver, we re-elect the most-recent surviving subscriber.
+  // Only the last subscriber schedules restore; surviving peers retain the floor and elect their most recent actor. Debounce avoids tab-switch resize thrashing.
   handleMobileUnsubscribe(ptyId: string, clientId: string): void {
     const inner = this.mobileSubscribers.get(ptyId)
     if (!inner) {
@@ -24,11 +17,7 @@ export abstract class OrcaRuntimeWithHandleMobileUnsubscribe extends OrcaRuntime
     this.notifyRemoteTerminalViewPresenceChanged(ptyId)
 
     if (inner.size > 0) {
-      // Why: if the leaving client was the only one with a non-null restore
-      // baseline (typical when peer joiners subscribed against an
-      // already-phone-fitted PTY and got null prevCols), donate the baseline
-      // to the earliest surviving subscriber so a future last-leaver can
-      // still restore correctly. See docs/mobile-presence-lock.md.
+      // Donate the departing baseline to the earliest surviving subscriber; peer joiners against phone-fit dimensions have none.
       if (
         subscriber.previousCols != null &&
         subscriber.previousRows != null &&
@@ -48,9 +37,7 @@ export abstract class OrcaRuntimeWithHandleMobileUnsubscribe extends OrcaRuntime
           }
         }
       }
-      // Peers still on the line. If the disconnecting client was the active
-      // mobile driver, re-elect the most-recent surviving subscriber so the
-      // banner remains correct and active phone-fit dims follow them.
+      // Elect the surviving actor when the active phone leaves, keeping banner ownership and viewport aligned.
       const driver = this.getDriver(ptyId)
       if (driver.kind === 'mobile' && driver.clientId === clientId) {
         const next = this.pickMostRecentActor(inner)
@@ -64,13 +51,10 @@ export abstract class OrcaRuntimeWithHandleMobileUnsubscribe extends OrcaRuntime
       return
     }
 
-    // Last subscriber leaving — clean up.
     this.mobileSubscribers.delete(ptyId)
     const mode = this.getMobileDisplayMode(ptyId)
 
-    // Resubscribe-grace: hold driver=mobile{clientId} for ~250ms so a quick
-    // re-subscribe (older clients without updateViewport) doesn't flash the
-    // desktop banner. See docs/mobile-presence-lock.md.
+    // Hold mobile ownership ~250ms to avoid banner flashes on older-client resubscribe (docs/mobile-presence-lock.md).
     const SOFT_LEAVE_GRACE_MS = 250
     const existingSoft = this.pendingSoftLeavers.get(ptyId)
     if (existingSoft) {
@@ -109,23 +93,12 @@ export abstract class OrcaRuntimeWithHandleMobileUnsubscribe extends OrcaRuntime
         clearTimeout(existingTimer.timer)
         this.pendingRestoreTimers.delete(ptyId)
       }
-      // Why: scheduling is conditional on the user's mobileAutoRestoreFitMs
-      // preference. `null` (default, "Indefinite") leaves the PTY at phone
-      // dims until the user clicks Restore on the desktop banner — the
-      // central UX promise of docs/mobile-fit-hold.md. A finite value runs
-      // the restore that long after the last unsubscribe.
+      // Null auto-restore means hold phone dimensions until explicit desktop Restore; finite values restore after the last unsubscribe (docs/mobile-fit-hold.md).
       const autoRestoreMs = this.getAutoRestoreFitMs()
       if (autoRestoreMs == null) {
-        // Indefinite hold: the fit override persists, the SOFT_LEAVE_GRACE
-        // driver-state grace above still releases the input lock, and the
-        // banner's Restore button is the explicit return path.
+        // Indefinite hold retains the fit override while soft-leave grace releases input ownership.
       } else {
-        // Snapshot the disconnecting subscriber's baseline NOW, before the
-        // timer fires. By the time the timer runs, the subscriber map has
-        // been deleted; resolveDesktopRestoreTarget would fall through to
-        // lastRendererSizes → current PTY size (which is at phone dims,
-        // wrong). The disconnecting subscriber's baseline is the correct
-        // restore target.
+        // Snapshot the baseline before subscriber deletion; timer-time fallback could read current phone dimensions.
         const fallback = this.lastRendererSizes.get(ptyId)
         const restoreCols =
           subscriber.previousCols ?? fallback?.cols ?? this.getTerminalSize(ptyId)?.cols ?? 80
@@ -146,8 +119,7 @@ export abstract class OrcaRuntimeWithHandleMobileUnsubscribe extends OrcaRuntime
             rows: restoreRows
           })
         }, autoRestoreMs)
-        // Why: a delayed mobile restore should not keep Electron main alive
-        // after the last window/runtime transport has otherwise shut down.
+        // Pending mobile restores must not keep Electron alive after its windows/transports stop.
         if (typeof timer.unref === 'function') {
           timer.unref()
         }
@@ -155,6 +127,5 @@ export abstract class OrcaRuntimeWithHandleMobileUnsubscribe extends OrcaRuntime
         this.pendingRestoreTimers.set(ptyId, { timer, clientId })
       }
     }
-    // 'desktop' mode: was never resized, nothing to restore.
   }
 }

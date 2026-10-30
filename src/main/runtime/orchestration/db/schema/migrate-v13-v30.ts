@@ -155,9 +155,7 @@ export function applySchemaMigrationsV13ToV30(this: OrchestrationDb, current: nu
         );
       `)
   }
-  // Why a column and not a parsed `last_failure`: an operator close and a crash
-  // used to write the same sentence, so post-mortem tooling had to reconcile
-  // against external logs to tell them apart (STA-4603).
+  // Operator close and crash shared diagnostic text; persist termination_reason for reliable attribution (STA-4603).
   if (current < 29 && !this.hasColumn('dispatch_contexts', 'termination_reason')) {
     this.db.exec('ALTER TABLE dispatch_contexts ADD COLUMN termination_reason TEXT')
   }
@@ -170,8 +168,7 @@ export function applySchemaMigrationsV13ToV30(this: OrchestrationDb, current: nu
         'ALTER TABLE remote_dispatch_attachments ADD COLUMN depth INTEGER NOT NULL DEFAULT 1'
       )
     }
-    // Why drop first: CREATE INDEX IF NOT EXISTS cannot widen an existing
-    // partial index predicate, and these two covered only starting/ready.
+    // Recreate partial indexes because IF NOT EXISTS cannot widen their old predicates.
     this.db.exec(`
         DROP INDEX IF EXISTS idx_remote_dispatch_attachments_active_pane;
         DROP INDEX IF EXISTS idx_remote_dispatch_attachments_active_pane_suffix;

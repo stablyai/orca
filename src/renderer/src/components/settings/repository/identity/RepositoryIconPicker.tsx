@@ -33,8 +33,7 @@ export function RepositoryIconPicker({
   const [loadingGitHub, setLoadingGitHub] = useState(false)
   const [resetting, setResetting] = useState(false)
   const mountedRef = useMountedRef()
-  // Why: resolve this repo's upstream/avatar on the host that owns it, not the
-  // focused runtime.
+  // Resolve avatars/upstream on the selected repo owner, independent of focused host.
   const selectedHost = parseExecutionHostId(getRepoExecutionHostId(repo))
   const ownerEnvironmentId = selectedHost?.kind === 'runtime' ? selectedHost.environmentId : null
   const selectedLucideName = repo.repoIcon?.type === 'lucide' ? repo.repoIcon.name : null
@@ -96,7 +95,6 @@ export function RepositoryIconPicker({
         )
         return
       }
-      // A null build means the stored icon/upstream already match — nothing to write.
       const updates = buildRepositoryGitHubAvatarUpdate(repo, resolution)
       if (updates) {
         updateRepo(repo.id, updates)
@@ -150,8 +148,7 @@ export function RepositoryIconPicker({
       let updates: Partial<Repo> | null
       try {
         if (hasGitHubAvatar) {
-          // Why: stored upstream/icon metadata can outlive a GitHub repo transfer.
-          // Refresh only when settings opens for the affected GitHub-avatar repo.
+          // Stored GitHub avatar metadata can outlive transfers; refresh live only when opening affected repo settings.
           const resolution = await resolveGitHubAvatar({ forceLive: true })
           updates = buildRepositoryGitHubAvatarUpdate(repo, resolution)
         } else {

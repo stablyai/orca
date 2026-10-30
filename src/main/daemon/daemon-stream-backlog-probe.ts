@@ -1,11 +1,4 @@
-/**
- * Env-gated diagnostics for the daemon→main stream backlog: samples the
- * batcher queue and each stream socket's user-space write buffer so
- * multi-second echo lag can be attributed to the hop that actually holds the
- * bytes. Enable by setting ORCA_DAEMON_STREAM_BACKLOG_FILE to a writable
- * path; zero cost otherwise. The timer only observes and appends JSONL — it
- * never mutates delivery state.
- */
+/** Set ORCA_DAEMON_STREAM_BACKLOG_FILE to append queue and socket diagnostics as JSONL. */
 import { appendFileSync } from 'node:fs'
 
 export type StreamBacklogClientSample = {
@@ -21,8 +14,7 @@ export type StreamBacklogSample = {
 
 const SAMPLE_INTERVAL_MS = 250
 
-/** Event-level entries interleaved with the periodic samples — used to
- *  attribute WHO mutated pacing state, not just when counts changed. */
+/** Interleave pacing changes with periodic backlog samples. */
 export function recordDaemonStreamBacklogEvent(
   event: string,
   detail: Record<string, unknown>

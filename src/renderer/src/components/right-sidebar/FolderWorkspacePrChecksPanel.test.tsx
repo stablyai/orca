@@ -47,13 +47,15 @@ vi.mock('@/i18n/i18n', () => ({
     values
       ? Object.entries(values).reduce(
           (text, [key, value]) => text.replaceAll(`{{${key}}}`, String(value)),
-          fallback
+          values.count === 1 && typeof values.defaultValue_one === 'string'
+            ? values.defaultValue_one
+            : fallback
         )
       : fallback
 }))
 
-vi.mock('@/lib/http-link-routing', () => ({
-  openHttpLink: (url: string) => {
+vi.mock('@/lib/app-http-link-open', () => ({
+  openAppHttpLink: (url: string) => {
     mockState.openedLinks.push(url)
   }
 }))

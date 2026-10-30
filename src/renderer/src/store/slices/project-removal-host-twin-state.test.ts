@@ -1,8 +1,4 @@
-/**
- * A local and a remote copy of one project can share the repo id and worktree path, so both
- * publish the same worktree id. Removing the remote copy must leave the local twin's shell,
- * tabs, unsaved document and drafts alone.
- */
+/** Same repo/path IDs can belong to two hosts; removing remote copy must preserve local shells, tabs and dirty drafts. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { registerPendingEditorFlush } from '@/components/editor/editor-pending-flush'
 import { confirmUnsavedDiscard } from './worktrees/teardown/removed-workspace-unsaved-files'
@@ -23,7 +19,6 @@ import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rp
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
-// Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -34,7 +29,7 @@ vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
-import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import type { Tab } from '../../../../shared/tab-types'
 import type { ClosedEditorTabSnapshot } from './editor/types/open-file'
@@ -97,8 +92,7 @@ function answerLikeRuntimeHost(args: RuntimeEnvironmentCallRequest): unknown {
 
 beforeEach(() => {
   clearRuntimeCompatibilityCacheForTests()
-  // A twin's editor close goes to main, which routes it to the host owning the copy; the window
-  // then closes its own copy as today.
+  // Main routes twin editor close to its owner, then window cleans its drawn copy.
   layoutApplyTestTransport.reset()
   layoutApplyTestTransport.answerWith({ refuse: 'host_not_owned' })
   ptyKill.mockReset()

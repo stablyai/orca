@@ -1,5 +1,4 @@
-// Only root CLI options can precede `app-server`. A prompt or another subcommand
-// would change the process Orca starts, and permission options belong to Orca.
+import { CODEX_PERMISSION_CONFIG_ROOTS } from '../../shared/agent-permission-args'
 import { parseTomlKeyPath } from './config-toml-key-path'
 import { StructuredAgentArgumentsError } from '../native-chat/structured-agent-arguments-error'
 
@@ -62,15 +61,10 @@ function inlineValue(token: string, option: string): string | undefined {
 
 function isPermissionConfig(value: string): boolean {
   const key = parseTomlKeyPath(value)?.segments[0]
-  return (
-    key === 'approval_policy' ||
-    key === 'sandbox_mode' ||
-    key === 'approvals_reviewer' ||
-    key === 'sandbox_workspace_write'
-  )
+  return CODEX_PERMISSION_CONFIG_ROOTS.some((root) => root === key)
 }
 
-/** Turns saved terminal Arguments into root options for a structured app-server launch. */
+/** Accept only root CLI options; Orca sets permissions on the thread RPC. */
 export function codexStructuredLaunchArgs(tokens: readonly string[]): string[] {
   const args: string[] = []
   for (let index = 0; index < tokens.length; index += 1) {

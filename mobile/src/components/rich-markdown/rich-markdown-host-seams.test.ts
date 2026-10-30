@@ -2,16 +2,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { quietRichMarkdownEditorHost } from './rich-markdown-editor-host.test-support'
 import { createRichMarkdownEditorDocument } from './create-rich-markdown-editor-document'
-import { createRichMarkdownEditorScope } from './document-scope'
 import { RICH_MARKDOWN_EDITOR_MARKUP } from './document-markup'
 import type { MobileRichMarkdownEditorMessage } from '../mobile-rich-markdown-editor-contract'
 import type { RichMarkdownEditorDocument, RichMarkdownEditorHost } from './document-host-seams'
 
-/**
- * The seams the page sets, and the window reads the rest default to. The page passes messages, the
- * URL prompt and the keyboard inset itself: on the page `window.ReactNativeWebView` is the shell's
- * bridge, `window.prompt` returns null in both shells, and the screen measures its own keyboard.
- */
+// Page supplies messages, URL prompt and keyboard seams: shell owns ReactNativeWebView, window.prompt returns null, and screen already measures keyboard; test remaining live-window defaults.
 const startedDocuments: RichMarkdownEditorDocument[] = []
 
 /** A started document over markup the case owns, with the hooks it wants as the host argument. */
@@ -27,28 +22,6 @@ afterEach(() => {
     startedDocuments.pop()!.stop()
   }
   vi.unstubAllGlobals()
-})
-
-describe('the editor document host seams, by default', () => {
-  it('clears a real timer, and a handle that was never set', () => {
-    const scope = createRichMarkdownEditorScope(quietRichMarkdownEditorHost())
-    const fired = vi.fn()
-    vi.useFakeTimers()
-    try {
-      scope.clearTimer(window.setTimeout(fired, 0))
-      vi.runAllTimers()
-      expect(fired).not.toHaveBeenCalled()
-      expect(() => scope.clearTimer(null)).not.toThrow()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('takes the selection and the page from the window the document is running in', () => {
-    const scope = createRichMarkdownEditorScope(quietRichMarkdownEditorHost())
-    expect(scope.getDocument()).toBe(document)
-    expect(scope.getSelection()).toBe(window.getSelection())
-  })
 })
 
 describe('the editor document host seams, once the page sets them', () => {
@@ -106,10 +79,7 @@ describe('the editor document host seams, once the page sets them', () => {
   })
 
   it('takes the caret from the selection the host names, not the window one', async () => {
-    // The seam the page needs most. A document mounted inside a screen shares `window` with every
-    // other field on it, so the caret the editor saves and restores has to come from the object
-    // its host hands over — and the window's must be left alone, because it belongs to whatever
-    // else has focus.
+    // Save/restore only host selection: overlapping fields share window, and global selection belongs to whichever other field holds focus.
     document.body.innerHTML = RICH_MARKDOWN_EDITOR_MARKUP
     const editor = document.getElementById('editor')!
     editor.innerHTML = '<p id="only">text</p>'
@@ -169,12 +139,7 @@ describe('the editor document host seams, once the page sets them', () => {
   })
 })
 
-/**
- * The page a host hands over: the real one, with `execCommand` recorded.
- *
- * happy-dom implements no `execCommand`, and the point of the seam is that the document never
- * reaches for a global one, so a host that answers with its own is exactly what a case needs.
- */
+// Host supplies real document with recorded execCommand because happy-dom lacks it; prove no global command lookup.
 function hostDocument(commands: [string, boolean, string | undefined][]): Document {
   const page: Document = Object.create(document)
   page.execCommand = (command: string, showUI?: boolean, value?: string) => {

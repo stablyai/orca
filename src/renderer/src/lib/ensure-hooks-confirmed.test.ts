@@ -108,8 +108,7 @@ describe('ensureHooksConfirmed', () => {
 
     await vi.waitFor(() => expect(pending).toHaveLength(1))
     expect(pending[0].data.scriptContent).toBe('new script')
-    // The dialog uses this flag to tell the user we're re-prompting *because*
-    // orca.yaml changed, not because they've never approved this hook.
+    // Explain re-prompting as changed orca.yaml, distinct from first-time approval.
     expect(pending[0].data.previouslyApproved).toBe(true)
 
     pending[0].resolve('run')
@@ -412,7 +411,12 @@ describe('ensureHooksConfirmed', () => {
 
     await ensureHooksConfirmed(state, 'repo-1', 'issueCommand', 'ssh:server')
 
-    expect(readIssueCommandMock).toHaveBeenCalledWith({ repoId: 'repo-1', hostId: 'ssh:server' })
+    // A launch is a user act, so its read may start a stopped WSL distro (E9).
+    expect(readIssueCommandMock).toHaveBeenCalledWith({
+      repoId: 'repo-1',
+      hostId: 'ssh:server',
+      wakeWslDistro: true
+    })
   })
 
   it('approves and returns the exact issue-command bytes from one host-qualified read', async () => {
@@ -453,7 +457,8 @@ describe('ensureHooksConfirmed', () => {
     expect(readIssueCommandMock).toHaveBeenCalledTimes(1)
     expect(readIssueCommandMock).toHaveBeenCalledWith({
       repoId: 'repo-1',
-      hostId: 'ssh:server'
+      hostId: 'ssh:server',
+      wakeWslDistro: true
     })
   })
 

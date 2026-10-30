@@ -1,3 +1,5 @@
+import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -63,6 +65,7 @@ describe('model catalog prewarm', () => {
     const grok = vi.fn(async (_home: AgentSessionAccountHome) => listing('grok-4'))
     const service = createAgentModelCatalogService({
       store,
+      getConversation: () => undefined,
       getRecord: () => undefined,
       drivesRecord: () => true,
       hasChatRecords: () => true,
@@ -73,7 +76,6 @@ describe('model catalog prewarm', () => {
 
     const prewarmed = service.prewarm()
     await vi.waitFor(() => expect(codex).toHaveBeenCalledTimes(1))
-    // A picker opening while the prewarm lists joins it instead of spawning a second listing.
     expect(await service.read({ agent: 'codex' })).toEqual({
       origin: 'unknown',
       listingInProgress: true
@@ -82,15 +84,22 @@ describe('model catalog prewarm', () => {
     await prewarmed
 
     expect(codex).toHaveBeenCalledTimes(1)
-    expect(codex).toHaveBeenCalledWith(HOME('CODEX_HOME', '/homes/a'), {
-      workspacePath: expect.any(String),
-      signal: expect.any(AbortSignal)
-    })
+    expect(codex).toHaveBeenCalledWith(
+      HOME('CODEX_HOME', '/homes/a'),
+      expect.objectContaining({
+        workspacePath: expect.any(String),
+        signal: expect.any(AbortSignal),
+        operation: expect.objectContaining({
+          current: expect.any(Function),
+          deadline: expect.any(Number),
+          signal: expect.any(AbortSignal)
+        })
+      })
+    )
     expect(grok).toHaveBeenCalledTimes(1)
     expect((await service.read({ agent: 'codex' })).origin).toBe('probe')
     expect((await service.read({ agent: 'grok' })).origin).toBe('probe')
 
-    // Fresh: a second prewarm lists nothing; once old, it lists again.
     await service.prewarm()
     expect(codex).toHaveBeenCalledTimes(1)
     now += AGENT_MODEL_CATALOG_FRESH_MS
@@ -99,12 +108,10 @@ describe('model catalog prewarm', () => {
     expect(grok).toHaveBeenCalledTimes(2)
   })
 
-  // A project's opencode.json can add or remove models, so its folder keeps its own list.
-  // The folder lookup can answer the earlier report last; the later report must still win.
   it("saves a running chat's reports in the order it sent them, per folder", async () => {
     const store = new AgentModelCatalogStore()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the service reads only provider, accountHome, location and launchDirectory.
-    const chat = {
+
+    const chat = agentSessionRecordFixture({
       sessionId: 'chat-b',
       provider: 'opencode2',
       accountHome: HOME('OPENCODE_HOME', '/homes/a'),
@@ -114,11 +121,12 @@ describe('model catalog prewarm', () => {
         workspaceId: 'ws-b',
         workspaceKind: 'folder'
       }
-    } as AgentSessionRecord
+    })
     const lookups = [deferred<string | null>(), deferred<string | null>()]
     let lookup = 0
     const service = createAgentModelCatalogService({
       store,
+      getConversation: () => agentSessionConversationView(chat),
       getRecord: () => chat,
       drivesRecord: () => true,
       resolveAccountHome: async () => HOME('OPENCODE_HOME', '/homes/a'),
@@ -129,8 +137,14 @@ describe('model catalog prewarm', () => {
     service.recordLiveListing('chat-b', { models: listing('newer').models })
     lookups[1]!.resolve('/work/b')
     lookups[0]!.resolve('/work/b')
-    const read = await service.read({ agent: 'opencode2', sessionId: 'chat-b' })
-    expect(read.origin !== 'unknown' && read.models.map((model) => model.id)).toEqual(['newer'])
+    await vi.waitFor(async () => {
+      const read = await service.read({
+        agent: 'opencode2',
+        sessionId: 'chat-b',
+        waitForListing: true
+      })
+      expect(read.origin !== 'unknown' && read.models.map((model) => model.id)).toEqual(['newer'])
+    })
   })
 
   it('keeps one catalog per folder for an agent whose project config changes its models', async () => {
@@ -139,8 +153,8 @@ describe('model catalog prewarm', () => {
       async (_home: AgentSessionAccountHome, options?: { workspacePath?: string }) =>
         listing(options?.workspacePath === '/work/b' ? 'only-in-b' : 'big-pickle')
     )
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the service reads only provider, accountHome, location and launchDirectory.
-    const chatInB = {
+
+    const chatInB = agentSessionRecordFixture({
       sessionId: 'chat-b',
       provider: 'opencode2',
       accountHome: HOME('OPENCODE_HOME', '/homes/a'),
@@ -151,9 +165,13 @@ describe('model catalog prewarm', () => {
         workspaceId: 'ws-b',
         workspaceKind: 'folder'
       }
-    } as AgentSessionRecord
+    })
     const service = createAgentModelCatalogService({
       store,
+      getConversation: (sessionId) => {
+        const saved = sessionId === 'chat-b' ? chatInB : undefined
+        return saved ? agentSessionConversationView(saved) : undefined
+      },
       getRecord: (sessionId) => (sessionId === 'chat-b' ? chatInB : undefined),
       drivesRecord: () => true,
       resolveAccountHome: async () => HOME('OPENCODE_HOME', '/homes/a'),
@@ -166,7 +184,6 @@ describe('model catalog prewarm', () => {
       return read.origin === 'unknown' ? [] : read.models.map((model) => model.id)
     }
 
-    // Asked at once, neither folder joins the other's listing.
     expect(await Promise.all([ids('/work/a'), ids('/work/b')])).toEqual([
       ['big-pickle'],
       ['only-in-b']
@@ -175,7 +192,6 @@ describe('model catalog prewarm', () => {
       '/work/a',
       '/work/b'
     ])
-    // A chat running in B saves what it lists for B only.
     service.recordLiveListing('chat-b', { models: listing('live-b').models })
     await vi.waitFor(async () => expect(await ids('/work/b')).toEqual(['live-b']))
     expect(await ids('/work/a')).toEqual(['big-pickle'])
@@ -184,7 +200,6 @@ describe('model catalog prewarm', () => {
     expect(answer).toMatchObject({ modelsDifferByWorkspace: true })
   })
 
-  // A picker that joined a prewarm listing with no chat folder was answered nothing at all.
   it('never prewarms a listing that runs in a chat folder, so a picker lists in its own', async () => {
     const store = new AgentModelCatalogStore()
     const versionChecked = deferred<void>()
@@ -199,6 +214,7 @@ describe('model catalog prewarm', () => {
     )
     const service = createAgentModelCatalogService({
       store,
+      getConversation: () => undefined,
       getRecord: () => undefined,
       drivesRecord: () => true,
       hasChatRecords: () => true,
@@ -209,20 +225,34 @@ describe('model catalog prewarm', () => {
 
     const prewarmed = service.prewarm()
     const opened = await service.read({ agent: 'opencode2', workspacePath: '/work/project' })
+    expect(opened).toEqual({ origin: 'unknown' })
+    expect(probe).not.toHaveBeenCalled()
     const waited = service.read({
       agent: 'opencode2',
       workspacePath: '/work/project',
       waitForListing: true
     })
+    await vi.waitFor(() => expect(probe).toHaveBeenCalledTimes(1))
+    expect(await service.read({ agent: 'opencode2', workspacePath: '/work/project' })).toEqual({
+      origin: 'unknown',
+      listingInProgress: true
+    })
     versionChecked.resolve()
     await prewarmed
-    expect(opened).toEqual({ origin: 'unknown', listingInProgress: true })
     expect((await waited).origin).toBe('probe')
     expect(probe).toHaveBeenCalledTimes(1)
-    expect(probe).toHaveBeenCalledWith(HOME('OPENCODE_HOME', '/homes/a'), {
-      signal: expect.any(AbortSignal),
-      workspacePath: '/work/project'
-    })
+    expect(probe).toHaveBeenCalledWith(
+      HOME('OPENCODE_HOME', '/homes/a'),
+      expect.objectContaining({
+        signal: expect.any(AbortSignal),
+        workspacePath: '/work/project',
+        operation: expect.objectContaining({
+          current: expect.any(Function),
+          deadline: expect.any(Number),
+          signal: expect.any(AbortSignal)
+        })
+      })
+    )
   })
 
   it('lists the new account after a switch and leaves the old account’s catalog alone', async () => {
@@ -233,6 +263,7 @@ describe('model catalog prewarm', () => {
     )
     const service = createAgentModelCatalogService({
       store,
+      getConversation: () => undefined,
       getRecord: () => undefined,
       drivesRecord: () => true,
       hasChatRecords: () => true,
@@ -261,6 +292,7 @@ describe('model catalog prewarm', () => {
     const claude = vi.fn(async (_home: AgentSessionAccountHome) => listing('opus'))
     const service = createAgentModelCatalogService({
       store,
+      getConversation: () => undefined,
       getRecord: () => undefined,
       drivesRecord: () => true,
       hasChatRecords: () => true,
@@ -277,7 +309,6 @@ describe('model catalog prewarm', () => {
     await service.prewarm()
     expect(codex).toHaveBeenCalledTimes(1)
     expect(claude).not.toHaveBeenCalled()
-    // Each listing leaves its agent and outcome in the trace log; the span carries its duration.
     expect(spans.started).toEqual([
       {
         name: 'agentModelCatalog.discovery',
@@ -289,13 +320,16 @@ describe('model catalog prewarm', () => {
 
   it('lists only agents used here: a saved catalog or a chat of it', async () => {
     const store = new AgentModelCatalogStore()
+    const piListed = deferred<AgentModelCatalogSuccess>()
     const probeFor = (agent: string) =>
-      vi.fn(async (_home: AgentSessionAccountHome) => listing(`${agent}-model`))
+      vi.fn(async (_home: AgentSessionAccountHome) =>
+        agent === 'pi' ? piListed.promise : listing(`${agent}-model`)
+      )
     const probes = { codex: probeFor('codex'), claude: probeFor('claude'), pi: probeFor('pi') }
-    // Claude has a catalog saved under another account; Codex has a chat; Pi was never used.
     store.recordSuccess('claude-other-account', 'claude', listing('opus'), 'discovery')
     const service = createAgentModelCatalogService({
       store,
+      getConversation: () => undefined,
       getRecord: () => undefined,
       drivesRecord: () => true,
       resolveAccountHome: async (agent) => HOME('HOME', `/homes/${agent}`),
@@ -307,12 +341,18 @@ describe('model catalog prewarm', () => {
     expect(probes.codex).toHaveBeenCalledTimes(1)
     expect(probes.claude).toHaveBeenCalledTimes(1)
     expect(probes.pi).not.toHaveBeenCalled()
+    expect(await service.read({ agent: 'pi' })).toEqual({ origin: 'unknown' })
+    expect(probes.pi).not.toHaveBeenCalled()
     // Its first chat still lists it on demand.
+    const demand = service.demand({ agent: 'pi' })
+    await vi.waitFor(() => expect(probes.pi).toHaveBeenCalledTimes(1))
     expect(await service.read({ agent: 'pi' })).toEqual({
       origin: 'unknown',
       listingInProgress: true
     })
-    expect(probes.pi).toHaveBeenCalledTimes(1)
+    piListed.resolve(listing('pi-model'))
+    await demand
+    expect(await service.read({ agent: 'pi' })).toMatchObject({ models: [{ id: 'pi-model' }] })
   })
 
   it('on stop, starts no queued agent, stops the running listings and lists nothing more', async () => {
@@ -334,6 +374,7 @@ describe('model catalog prewarm', () => {
     const hasChatRecords = vi.fn(() => true)
     const service = createAgentModelCatalogService({
       store,
+      getConversation: () => undefined,
       getRecord: () => undefined,
       drivesRecord: () => true,
       resolveAccountHome: async (agent) => HOME('HOME', `/homes/${agent}`),
@@ -348,12 +389,10 @@ describe('model catalog prewarm', () => {
     expect(started).toEqual(['codex', 'claude'])
     expect(signals.every((signal) => signal.aborted)).toBe(true)
 
-    // A read or another prewarm after stop spawns nothing.
     expect(await service.read({ agent: 'grok' })).toEqual({ origin: 'unknown' })
     hasChatRecords.mockClear()
     await service.prewarm()
     expect(started).toEqual(['codex', 'claude'])
-    // Not even the chat records are read.
     expect(hasChatRecords).not.toHaveBeenCalled()
   })
 
@@ -372,6 +411,7 @@ describe('model catalog prewarm', () => {
     const agents = ['codex', 'claude', 'grok', 'opencode', 'pi']
     const service = createAgentModelCatalogService({
       store,
+      getConversation: () => undefined,
       getRecord: () => undefined,
       drivesRecord: () => true,
       hasChatRecords: () => true,
@@ -390,8 +430,7 @@ describe('model catalog prewarm', () => {
 
 describe('one account, one catalog key', () => {
   function record(path: string): AgentSessionRecord {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the key reads only provider, accountHome and location.
-    return {
+    return agentSessionRecordFixture({
       sessionId: 'session-1',
       provider: 'grok',
       accountHome: HOME('GROK_HOME', path),
@@ -401,27 +440,21 @@ describe('one account, one catalog key', () => {
         workspaceId: 'ws-1',
         workspaceKind: 'git-worktree'
       }
-    } as AgentSessionRecord
+    })
   }
 
-  // The read and launch resolvers agreeing on the home is runtime-home-catalog-account-key.test.ts.
   it('a session’s saves through the host and through its adapter’s handle land under its record’s key', async () => {
     const store = new AgentModelCatalogStore()
     const managedHome = '/orca/grok-accounts/acct-1/home'
     const launched = record(managedHome)
     const service = createAgentModelCatalogService({
       store,
+      getConversation: () => agentSessionConversationView(launched),
       getRecord: () => launched,
       drivesRecord: () => true,
       resolveAccountHome: async () => HOME('GROK_HOME', managedHome)
     })
-    // What the chat saved, through the host and through the Grok adapter's own handle…
     service.recordLiveListing('session-1', { models: listing('gpt-live').models })
-    const incoming = { models: [...listing('gpt-live').models, ...listing('gpt-new').models] }
-    const retained = (launchOnlyModelId: string) =>
-      service.retainedLiveModelIds('session-1', { ...incoming, launchOnlyModelId })
-    expect(await retained('gpt-live')).toEqual(['gpt-live', 'gpt-new'])
-    expect(await retained('gpt-new')).toEqual(['gpt-live'])
     const adapterAccess = agentModelCatalogSessionAccess(
       store,
       { agent: 'grok', accountHomeVariable: 'GROK_HOME' },
@@ -430,7 +463,122 @@ describe('one account, one catalog key', () => {
     expect(adapterAccess?.fingerprint).toBe(agentModelCatalogFingerprintForRecord(launched))
 
     // …is what the next new chat reads for the same home: no cold start for this account.
-    const read = await service.read({ agent: 'grok' })
+    const read = await service.read({ agent: 'grok', waitForListing: true })
     expect(read.origin !== 'unknown' && read.models.map((model) => model.id)).toEqual(['gpt-live'])
   })
+})
+
+it('keeps old producers from publishing rows, defaults or failure expiry after retirement and stop', async () => {
+  const store = new AgentModelCatalogStore()
+  const record = agentSessionRecordFixture({
+    sessionId: 'source-chat',
+    provider: 'opencode2',
+    accountHome: HOME('OPENCODE_HOME', '/account'),
+    location: {
+      executionHostId: 'local',
+      wslDistro: null,
+      workspaceId: 'folder',
+      workspaceKind: 'folder'
+    }
+  })
+  const folder = deferred<string | null>()
+  const defaults = deferred<boolean>()
+  const lookup = vi.fn(async () => folder.promise)
+  const defaultLookup = vi.fn(async () => defaults.promise)
+  const service = createAgentModelCatalogService({
+    store,
+    getConversation: () => {
+      const held = record
+      return held ? agentSessionConversationView(held) : undefined
+    },
+    getRecord: () => record,
+    drivesRecord: () => true,
+    resolveAccountHome: async () => record.accountHome,
+    recordWorkspacePath: lookup,
+    workspaceMayOverrideDefaultModel: defaultLookup,
+    listsInChatFolder: new Set(['opencode2'])
+  })
+  const oldSource = service.captureSource(record)
+  service.recordLiveListing(
+    record.sessionId,
+    { ...listing('old'), configuredDefault: { modelId: 'old' } },
+    oldSource
+  )
+  service.providerStarted(record, oldSource)
+  await vi.waitFor(() => expect(lookup).toHaveBeenCalled())
+  store.expireAgent(record.provider)
+  const key = agentModelCatalogFingerprintForRecord(record, '/project')
+  const current = store.recordSuccess(key, record.provider, listing('current'), 'discovery')
+  await store.refresh(key, record.provider, () => Promise.reject(new Error('current failure')))
+  const save = vi.fn()
+  await store.attachPersistence({ load: async () => [], save, flush: async () => {} })
+  folder.resolve('/project')
+  await vi.waitFor(() => expect(lookup).toHaveBeenCalledTimes(2))
+  // Receipt after retirement cannot grant the old child a new launch identity.
+  service.recordLiveListing(record.sessionId, listing('late-receipt'), oldSource)
+  await Promise.resolve()
+  expect(store.get(key)).toBe(current)
+  expect(store.failureDetail(key)).toBe('current failure')
+  expect(save).not.toHaveBeenCalled()
+  const source = service.captureSource(record)
+  service.recordLiveListing(
+    record.sessionId,
+    { ...listing('valid'), configuredDefault: { modelId: 'valid' } },
+    source
+  )
+  await vi.waitFor(() => expect(defaultLookup).toHaveBeenCalledTimes(1))
+  const beforeStop = store.get(key)
+  save.mockClear()
+  service.stop()
+  defaults.resolve(false)
+  await Promise.resolve()
+  await Promise.resolve()
+  expect(store.get(key)).toBe(beforeStop)
+  expect(store.get(key)?.configured).toBeNull()
+  expect(save).not.toHaveBeenCalled()
+})
+
+it('withholds a known retired Pi invocation until a current live producer lists', async () => {
+  const store = new AgentModelCatalogStore()
+  const record = agentSessionRecordFixture({
+    sessionId: 'pi-chat',
+    provider: 'pi',
+    accountHome: HOME('PI_CODING_AGENT_DIR', '/pi')
+  })
+  const key = agentModelCatalogFingerprintForRecord(record)
+  store.recordSuccess(key, record.provider, listing('command-a'), 'discovery')
+  const listingPending = deferred<AgentModelCatalogSuccess>()
+  const probe = vi.fn(() => listingPending.promise)
+  const service = createAgentModelCatalogService({
+    store,
+    getConversation: () => {
+      const held = record
+      return held ? agentSessionConversationView(held) : undefined
+    },
+    getRecord: () => record,
+    drivesRecord: () => true,
+    resolveAccountHome: async () => record.accountHome,
+    probes: { pi: probe }
+  })
+  const old = service.captureSource(record)
+  store.expireAgent('pi')
+  void service.demand({ agent: 'pi', sessionId: record.sessionId })
+  await vi.waitFor(() => expect(probe).toHaveBeenCalledTimes(1))
+  expect(service.snapshot({ agent: 'pi', sessionId: record.sessionId, savedOnly: true })).toEqual({
+    origin: 'unknown'
+  })
+  service.recordLiveListing(record.sessionId, listing('old-child'), old)
+  expect(service.snapshot({ agent: 'pi', sessionId: record.sessionId, savedOnly: true })).toEqual({
+    origin: 'unknown'
+  })
+  service.recordLiveListing(
+    record.sessionId,
+    listing('current-child'),
+    service.captureSource(record)
+  )
+  expect(
+    service.snapshot({ agent: 'pi', sessionId: record.sessionId, savedOnly: true })
+  ).toMatchObject({ models: [{ id: 'current-child' }] })
+  service.stop()
+  listingPending.resolve(listing('stopped'))
 })

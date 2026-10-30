@@ -30,8 +30,7 @@ vi.mock('react-native', () => ({
 
 vi.mock('expo-router', () => ({
   router: { replace: vi.fn() },
-  // `ProtocolBlockScreen` reaches the router through the navigation handoff now, and the handoff's
-  // native form is this hook. Its web form is what posts the target to the shell.
+  // Mock native handoff’s router hook; web sibling posts target to shell.
   useRouter: () => ({ replace: vi.fn(), push: vi.fn(), back: vi.fn(), dismissTo: vi.fn() })
 }))
 

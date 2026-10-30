@@ -9,6 +9,7 @@ import { ORCHESTRATION_HANDLERS } from './orchestration'
 
 async function formatSend(result: unknown): Promise<string> {
   callMock.mockReset().mockResolvedValueOnce({ result })
+  vi.mocked(printResult).mockClear()
   await ORCHESTRATION_HANDLERS['orchestration send']({
     flags: new Map([
       ['from', 'term_sender'],
@@ -19,9 +20,14 @@ async function formatSend(result: unknown): Promise<string> {
     cwd: '/workspace',
     json: false
   } as never)
-  const printCall = vi.mocked(printResult).mock.calls.at(-1)
-  const formatter = printCall?.[2] as (value: unknown) => string
-  return formatter(result)
+  expect(printResult).toHaveBeenCalledOnce()
+  const printCall = vi.mocked(printResult).mock.calls[0]
+  if (!printCall) {
+    throw new Error('send did not print its receipt')
+  }
+  expect(printCall[0]).toEqual({ result })
+  expect(printCall[1]).toBe(false)
+  return printCall[2](printCall[0].result)
 }
 
 it('prints a live terminal-only delivery limitation', async () => {

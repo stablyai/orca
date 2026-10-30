@@ -3,13 +3,7 @@ const fs = require('node:fs')
 const ESC = '\x1b'
 const MOUSE_REPORT_PATTERN = new RegExp(`${ESC}\\[<(64|65);\\d+;\\d+M`, 'g')
 
-// Optional flags:
-//   --log <path>   append "<Date.now()> <reportsInChunk>" per consumed stdin
-//                  chunk so tests can measure when reports reached the PTY.
-//   --heavy        emit Claude-Code-scale redraw frames (~4KB of styled cells
-//                  per render, ~430KB/s at 120 reports/s — matches output
-//                  volume measured from a real Claude Code session scrolling
-//                  at 120 reports/s) instead of minimal rows.
+// --log records report arrival; --heavy matches measured Claude redraw volume (~4KB/frame, ~430KB/s at 120 reports/s).
 const args = process.argv.slice(2)
 const logIndex = args.indexOf('--log')
 const LOG_PATH = logIndex !== -1 ? args[logIndex + 1] : null

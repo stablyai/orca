@@ -20,12 +20,7 @@ export type ResolvedNavigation =
 
 export type SelectionMode = 'replace' | 'toggle' | 'range' | 'additive-range'
 
-/**
- * Resolve a tree-navigation key to a target row index, mirroring the VS Code
- * Explorer tree: arrow keys move within the flat visible order, Left/Right
- * collapse/expand folders or step across parent/child boundaries, and
- * Home/End/PageUp/PageDown jump along the visible list.
- */
+/** Use visible tree order; Left/Right collapse/expand or navigate parent/child, with Home/End/Page keys for larger jumps. */
 export function resolveFileExplorerNavigationTarget(args: {
   key: NavigationKey
   currentIndex: number | null
@@ -125,11 +120,7 @@ export type NavigationContext = {
   handlers: NavigationHandlers
 }
 
-/**
- * Apply a tree-navigation key to the explorer: resolve the target, then
- * move the selection (or toggle a directory) and bring the new row into
- * view. Returns true if the key was handled.
- */
+/** Move/reveal selection or toggle a directory; return whether the key was handled. */
 export function applyFileExplorerNavigation(ctx: NavigationContext, e: KeyboardEvent): boolean {
   if (e.altKey || e.metaKey || e.ctrlKey) {
     return false
@@ -158,8 +149,7 @@ export function applyFileExplorerNavigation(ctx: NavigationContext, e: KeyboardE
   if (resolved.type === 'toggle-expand' || resolved.type === 'toggle-collapse') {
     e.preventDefault()
     e.stopPropagation()
-    // Why: callers can disable directory toggles for projected or transient trees
-    // where mutating persisted expansion state would be misleading.
+    // Projected/transient trees may disable changes to persisted expansion state.
     if (ctx.activeWorktreeId && ctx.canToggleDirectories !== false) {
       ctx.handlers.toggleDir(ctx.activeWorktreeId, resolved.dirPath)
     }
@@ -174,15 +164,11 @@ export function applyFileExplorerNavigation(ctx: NavigationContext, e: KeyboardE
   e.preventDefault()
   e.stopPropagation()
 
-  // Why: VS Code replaces the selection on bare arrow keys and extends
-  // it (from the anchor) on Shift+arrow. We translate the modifier into
-  // the same selection modes the click handler uses.
+  // Match tree selection conventions: bare arrows replace, Shift+arrows extend from the anchor.
   const mode: SelectionMode = e.shiftKey && currentIndex !== null ? 'range' : 'replace'
   ctx.handlers.moveSelection(targetNode.path, mode)
 
-  // Why: focusing the row button keeps subsequent arrow keys anchored to
-  // the new row and lets the existing Enter/Delete shortcuts pick it up
-  // without a separate focus call from the caller.
+  // Focus the new row so subsequent arrows and existing Enter/Delete shortcuts follow the selection.
   requestAnimationFrame(() => {
     ctx.handlers.focusRowAtIndex(resolved.targetIndex)
     ctx.handlers.scrollToIndex(resolved.targetIndex)

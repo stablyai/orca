@@ -30,6 +30,7 @@ import type { LinearComment, LinearIssue } from '../../../shared/linear/issue-ty
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { LinearEditState, LinearLocalComment } from '@/components/linear-item-drawer-types'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 function LinearIcon({ className }: { className?: string }): React.JSX.Element {
   return (
@@ -107,7 +108,6 @@ export function renderLinearItemDrawerSheet({
 
         {displayed && (
           <div className="flex h-full min-h-0 flex-col">
-            {/* Header */}
             <div className="flex-none border-b border-border/60 px-4 py-3">
               <div className="flex items-start gap-2">
                 <LinearIcon className="mt-1 size-4 shrink-0 text-muted-foreground" />
@@ -137,7 +137,7 @@ export function renderLinearItemDrawerSheet({
                         variant="ghost"
                         size="icon"
                         className="size-7"
-                        onClick={() => window.api.shell.openUrl(displayed.url)}
+                        onClick={(event) => openAppHttpLink(displayed.url, { event })}
                         aria-label={translate(
                           'auto.components.LinearItemDrawer.0190b760c1',
                           'Open on Linear'
@@ -173,7 +173,6 @@ export function renderLinearItemDrawerSheet({
               </div>
             </div>
 
-            {/* Edit section */}
             {editState && (
               <LinearIssueEditSection
                 issue={displayed}
@@ -183,7 +182,6 @@ export function renderLinearItemDrawerSheet({
               />
             )}
 
-            {/* Body + comments */}
             <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
               <div className="px-4 py-4">
                 <LinearIssueTextEditor
@@ -248,7 +246,6 @@ export function renderLinearItemDrawerSheet({
               </div>
             </div>
 
-            {/* Comment footer + Start/Open workspace */}
             <LinearIssueCommentFooter
               issueId={displayed.id}
               workspaceId={displayed.workspaceId}

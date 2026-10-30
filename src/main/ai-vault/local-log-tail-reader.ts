@@ -10,8 +10,7 @@ export function localLogFileIdentity(stats: {
   ino: number
   birthtimeMs: number
 }): string {
-  // Why: inode catches atomic replacement on POSIX while birthtime covers
-  // platforms/filesystems that report an unusable inode value.
+  // Inodes detect POSIX replacement; birthtime covers filesystems with unusable inode values.
   return `${stats.dev}:${stats.ino}:${stats.birthtimeMs}`
 }
 
@@ -52,8 +51,7 @@ export async function readLocalLogTailRange(
     const nextByteOffset = fromByteOffset + bytesRead
     const finalStats = await handle.stat()
 
-    // Why: truncation can race the ranged read on the same open handle. Do not
-    // let an offset beyond the new EOF become the baseline for later appends.
+    // Concurrent truncation must not leave the next append offset beyond EOF.
     if (nextByteOffset > finalStats.size) {
       return {
         contentBase64: '',

@@ -3,11 +3,7 @@ import type {
   WorkspaceCleanupScanResult
 } from '../../../../shared/workspace-cleanup'
 
-/**
- * Stale-while-revalidate seed: fills an empty cleanup slice from the snapshot
- * main persisted, so the dialog renders a full list immediately and the
- * background rescan reconciles into it instead of rebuilding from nothing.
- */
+/** Seed an empty cleanup slice from main’s snapshot; render the full list immediately while background rescan reconciles it. */
 export async function hydrateWorkspaceCleanupScanFromCache({
   hasLiveScanState,
   enrich,

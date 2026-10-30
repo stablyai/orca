@@ -175,7 +175,6 @@ describe('readHookTrustEntries', () => {
   })
 
   it('normalizes backslash block key to forward-slash at ingestion', () => {
-    // Why: normalize the Map key (backslash -> forward-slash) so computeTrustKey lookups match either encoding.
     const original = [
       '[hooks.state."C:\\\\foo\\\\hooks.json:pre_tool_use:0:0"]',
       'enabled = true',
@@ -206,7 +205,6 @@ describe('readHookTrustEntries', () => {
   })
 
   it('supports case-insensitive lookups for Windows hook trust keys read from config', () => {
-    // Why: Codex and realpathSync.native can disagree on path casing, but lookups must still match.
     const rawKey = 'C:\\Users\\rod\\AppData\\Roaming\\orca\\hooks.json:session_start:0:0'
     const lookupKey = 'C:/Users/Rod/AppData/Roaming/orca/hooks.json:session_start:0:0'
     const original = [
@@ -248,7 +246,6 @@ describe('readHookTrustEntries', () => {
   })
 
   it('keeps case-distinct WSL UNC hook paths distinct', () => {
-    // Why: \\wsl$\<distro> is case-insensitive but the Linux tail is not — don't fold two distinct sources.
     const upperKey = '\\\\wsl$\\Ubuntu\\home\\u\\Repo\\hooks.json:session_start:0:0'
     const lowerKey = '\\\\wsl$\\Ubuntu\\home\\u\\repo\\hooks.json:session_start:0:0'
     writeFileSync(
@@ -268,7 +265,6 @@ describe('readHookTrustEntries', () => {
 
     const result = readHookTrustEntries(configPath)
 
-    // Same share, different-cased distro/separators still fold to one key.
     expect(result.get('//WSL$/ubuntu/home/u/Repo/hooks.json:session_start:0:0')?.trustedHash).toBe(
       'sha256:UPPER'
     )
@@ -316,7 +312,6 @@ describe('readHookTrustEntries', () => {
   })
 
   it('does not extract a fake [hooks.state."<key>"] header from inside a """ block', () => {
-    // Why: a header-shaped line inside a multi-line basic string must not parse as a real entry.
     const original = [
       'description = """',
       '[hooks.state."fake-key"]',
@@ -332,7 +327,6 @@ describe('readHookTrustEntries', () => {
   })
 
   it("does not extract a fake [hooks.state.\"<key>\"] header from inside a ''' block", () => {
-    // Why: same false-positive guard for multi-line literal strings.
     const original = [
       "description = '''",
       '[hooks.state."fake-key"]',
@@ -348,7 +342,6 @@ describe('readHookTrustEntries', () => {
   })
 
   it('reads a block whose header has an inline comment', () => {
-    // Why: regression — headerLineRegex rejected TOML-valid trailing comments, hiding trust entries.
     const key = '/x/hooks.json:pre_tool_use:0:0'
     const original = `[hooks.state."${key}"] # user note\nenabled = true\ntrusted_hash = "sha256:CMT"\n`
     writeFileSync(configPath, original, 'utf-8')

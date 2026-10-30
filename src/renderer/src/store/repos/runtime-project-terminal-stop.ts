@@ -11,8 +11,7 @@ export async function stopRuntimeProjectTerminalsBeforeRemoval(
   worktreeIds: readonly string[]
 ): Promise<void> {
   const target = { kind: 'environment', environmentId } as const
-  // Why: repo.show shares repo.rm's resolver, so a removal the host will reject (e.g.
-  // selector_ambiguous) leaves the shells running instead of killing them first.
+  // Preflight shared repo resolver before stopping shells; refused/ambiguous removals must leave them running.
   const hostResolvesProject = await callRuntimeRpc(
     target,
     'repo.show',

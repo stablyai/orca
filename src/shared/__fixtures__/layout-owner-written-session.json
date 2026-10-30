@@ -201,6 +201,9 @@
   "terminalTopologyRevisionByRepoId": {
     "repo-local": 5
   },
+  "terminalPtyIncarnationsByPaneKey": {
+    "tab-shell:11111111-1111-4111-8111-111111111111": "inc-shell"
+  },
   "closedTerminalTabTombstonesByTabId": {
     "tab-scratch": {
       "reason": "user",
@@ -208,8 +211,13 @@
       "worktreeId": "repo-local::/fixture/local"
     }
   },
-  "terminalPtyIncarnationsByPaneKey": {
-    "tab-shell:11111111-1111-4111-8111-111111111111": "inc-shell"
+  "closedTerminalPanesByPaneKey": {
+    "tab-scratch:44444444-1111-4111-8111-111111111111": {
+      "ptyId": "pty-scratch",
+      "incarnationId": "inc-scratch",
+      "worktreeId": "repo-local::/fixture/local",
+      "closedAt": 1700000000000
+    }
   },
   "terminalSurfaceTombstonesByPaneKey": {},
   "activeTabIdByWorktree": {

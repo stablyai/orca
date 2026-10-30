@@ -1,4 +1,4 @@
-import type { JiraIssue, JiraSiteSelection } from '../../../shared/jira-types'
+import type { JiraIssue, JiraSiteSelection } from '../../../shared/jira/jira-types'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 
 type LocalJiraSearchArgs = { jql: string; limit?: number; siteId?: JiraSiteSelection }
@@ -9,12 +9,7 @@ function createJiraSearchAbortError(): Error {
   return error
 }
 
-/**
- * Run a local Jira search that the main process can cancel.
- *
- * Without the cancel round-trip a superseded keystroke keeps its slot in the shared Jira request
- * pool until the abandoned query drains, which is what stalls the next search.
- */
+/** Cancel superseded local searches in main or abandoned keystrokes hold shared Jira pool slots and stall the next query. */
 export async function searchLocalJiraIssues(
   args: LocalJiraSearchArgs,
   signal: AbortSignal

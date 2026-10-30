@@ -1,35 +1,21 @@
-// The object a boot-time DDL statement locks on Postgres, so the catalog can be asked whether it
-// already exists before the statement joins the lock queue. `table` is kept exactly as the
-// statement wrote it, schema qualification and quoting included, because it is fed to
-// `to_regclass`; `name` is the bare identifier the catalog stores in `relname`/`attname`.
+// Precheck catalog before boot DDL joins lock queue; table retains schema/quoting for to_regclass, name is the bare catalog identifier.
 export type SchemaLockTarget =
   | {
       kind: 'index' | 'column' | 'constraint' | 'reloption'
       table: string
       name: string
-      // The catalog answer that means this statement has nothing left to do. Creating statements
-      // skip on present; `DROP CONSTRAINT IF EXISTS` is the inverse, because nothing to drop is
-      // done.
+      // Creates skip when present; IF EXISTS drops skip when absent.
       skipWhen: 'present' | 'absent'
     }
-  // A `DROP INDEX` names no table, and needs none: an index name that resolves to nothing is
-  // nothing to drop, whatever table it used to belong to. Resolution is by name through the
-  // search_path, which is how the DROP itself would resolve it.
+  // DROP INDEX has no table: resolve the name through search_path as PostgreSQL does.
   | { kind: 'index-by-name'; name: string; skipWhen: 'absent' }
 
-// Keywords that sit in an identifier position when the optional clause before them is absent.
-// Without this, `CREATE UNIQUE INDEX CONCURRENTLY ON t(c)` reads CONCURRENTLY as the index name and
-// `ADD COLUMN IF NOT EXISTS` with no column reads IF as the column: a silently wrong target, which
-// is worse than no target. Excluding them makes both throw instead. A column genuinely named `if`
-// has to be quoted to be derivable, which is the safe direction to fail in.
+// Reject keywords masquerading as absent identifiers (CONCURRENTLY, IF); genuine keyword names must be quoted to fail safely.
 const NOT_KEYWORD = '(?!(?:CONCURRENTLY|IF|NOT|EXISTS|ON|ONLY)\\b)'
 const IDENTIFIER = `"(?:[^"]|"")*"|${NOT_KEYWORD}[A-Za-z_][A-Za-z0-9_$]*`
 const QUALIFIED = `((?:${IDENTIFIER})(?:\\.(?:${IDENTIFIER}))?)`
 
-// `$$...$$` and `$tag$...$tag$` are opaque: a comment marker, comma, parenthesis or bracket inside
-// one is text. The closing delimiter must match the opening tag exactly, so an inner `$$` inside a
-// `$tag$` body is more text rather than the end. The tag cannot start with a digit, which is what
-// keeps a `$1` placeholder from reading as an opener.
+// Dollar-quoted bodies are opaque; exact matching tags keep inner $$ as text, and nonnumeric starts exclude $1 placeholders.
 const DOLLAR_QUOTE = /\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/y
 
 function dollarQuoteEnd(sql: string, index: number): number | undefined {
@@ -40,12 +26,8 @@ function dollarQuoteEnd(sql: string, index: number): number | undefined {
   return close === -1 ? sql.length : close + opener.length
 }
 
-// Every comment, not only the block a ';'-split schema glues above a statement. A comment between
-// two keywords (`ADD /* note */ COLUMN`) is invisible to the classification regexes AND to the
-// must-parse shapes, so it used to yield no target and no throw: the statement ran with no
-// pre-check at all, which is the one direction this must never fail in. Postgres treats a comment
-// as whitespace, so each becomes a single space. Only classification reads this; the server is
-// always sent the original text.
+// Replace all comments with whitespace for classification/must-parse checks, including between keywords.
+// Otherwise DDL can silently bypass prechecks; send original text to the server.
 export function sqlWithoutComments(statement: string): string {
   let stripped = ''
   let quote: string | undefined
@@ -116,43 +98,32 @@ const ADD_CONSTRAINT = new RegExp(
     `ADD\\s+CONSTRAINT\\s+${QUALIFIED}`,
   'i'
 )
-// `IF EXISTS` is required, not optional. A bare `DROP CONSTRAINT` on a missing constraint is an
-// error the server is supposed to raise, and skipping it would swallow that. Without a target the
-// statement throws at boot instead, which tells the author to write `IF EXISTS`.
+// Require IF EXISTS or a precheck skip would swallow the missing-constraint error; bare DROP fails boot.
 const DROP_CONSTRAINT = new RegExp(
   `^ALTER\\s+TABLE\\s+(?:IF\\s+EXISTS\\s+)?(?:ONLY\\s+)?${QUALIFIED}\\s+` +
     `DROP\\s+CONSTRAINT\\s+IF\\s+EXISTS\\s+${QUALIFIED}`,
   'i'
 )
 
-// `IF EXISTS` is required for the same reason it is on DROP CONSTRAINT: a bare `DROP INDEX` on a
-// missing index is an error the server is supposed to raise. Without a target the statement throws
-// at boot instead, which tells the author to write `IF EXISTS`.
+// Require IF EXISTS to preserve missing-index errors; bare DROP fails boot instead of being prechecked away.
 const DROP_INDEX = new RegExp(`^DROP\\s+INDEX\\s+(?:CONCURRENTLY\\s+)?IF\\s+EXISTS\\s+${QUALIFIED}\\s*$`, 'i')
 
-// One option per statement, and a literal value: the catalog stores reloptions as `name=value`
-// text, so the pre-check compares the written pair against that array verbatim. A list of options
-// is refused by `hasTopLevelComma` before it reaches here, the same as a multi-action ALTER TABLE.
+// Compare one literal reloption as catalog name=value; multi-option statements cannot be safely skipped together.
 const SET_RELOPTION = new RegExp(
   `^ALTER\\s+TABLE\\s+(?:IF\\s+EXISTS\\s+)?(?:ONLY\\s+)?${QUALIFIED}\\s+` +
     `SET\\s+\\(\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*=\\s*([A-Za-z0-9_.]+)\\s*\\)\\s*$`,
   'i'
 )
 
-// Every statement shape that takes a relation lock before Postgres evaluates its existence test.
-// `CREATE TABLE IF NOT EXISTS` is absent on purpose: it resolves a name against the schema and
-// takes no lock on an existing table.
-// `DROP INDEX` is here because it takes ACCESS EXCLUSIVE on the index's table whenever the index is
-// actually there, which is every boot until the first one wins. That it takes no lock once the
-// index is gone is what the pre-check turns into the steady state, not a reason to omit it.
+// CREATE TABLE takes no lock on existing tables; ALTER/CREATE INDEX/DROP INDEX can.
+// Include DROP while its index exists; catalog precheck supplies the no-lock steady state once absent.
 const TAKES_RELATION_LOCK = /^(?:CREATE\s+(?:UNIQUE\s+)?INDEX|DROP\s+INDEX|ALTER\s+TABLE)\b/i
 
 export function takesRelationLock(statement: string): boolean {
   return TAKES_RELATION_LOCK.test(sqlWithoutComments(statement))
 }
 
-// Splitting on '.' is not enough: `"a.b"` is one identifier containing a dot, not two parts. Each
-// part is read quote-aware, with a doubled quote unescaped to one.
+// Parse quoted dotted names whole; doubled quotes escape literal quotes.
 function qualifiedParts(written: string): { text: string; quoted: boolean }[] {
   const parts: { text: string; quoted: boolean }[] = []
   let text = ''
@@ -184,18 +155,14 @@ function qualifiedParts(written: string): { text: string; quoted: boolean }[] {
   return parts
 }
 
-// Postgres folds an unquoted identifier to lower case before storing it, so `Foo` is `foo` in
-// relname, attname and conname. Comparing the written case would miss the row and rebuild the
-// object on every boot.
+// Fold unquoted names like PostgreSQL or written case misses catalog rows and rebuilds every boot.
 function catalogName(written: string): string {
   const last = qualifiedParts(written).pop()
   if (!last) return written
   return last.quoted ? last.text : last.text.toLowerCase()
 }
 
-// Shapes whose lock target the pre-check must be able to derive. Deliberately looser than the
-// regexes that parse them, so a statement that reads as one of these but does not parse is caught
-// rather than falling through to the lock path.
+// Broader than target parsers so malformed lock-taking shapes fail rather than bypass precheck.
 const MUST_PARSE = [
   /^CREATE\s+(?:UNIQUE\s+)?INDEX\b/i,
   /^ALTER\s+TABLE\b[\s\S]*\bADD\s+COLUMN\b/i,
@@ -240,9 +207,7 @@ export function schemaLockTarget(statement: string): SchemaLockTarget | undefine
   }
   const option = SET_RELOPTION.exec(sql)
   if (option?.[1] && option[2] && option[3]) {
-    // Option names are always folded, but the value is stored as written, so only the name goes
-    // through catalogName. `fillfactor=70` and `fillfactor=80` are different targets, which is
-    // what makes a changed value re-run rather than skip.
+    // Fold option name but preserve value; changed name=value pairs must reapply.
     return {
       kind: 'reloption',
       table: option[1],
@@ -255,9 +220,7 @@ export function schemaLockTarget(statement: string): SchemaLockTarget | undefine
 
 const ALTER_TABLE = /^ALTER\s+TABLE\b/i
 
-// A comma that separates ALTER TABLE subcommands rather than sitting inside a type, a default, a
-// CHECK body or a dollar-quoted body. Takes comment-free SQL. Square brackets count as depth too,
-// or an array type or `DEFAULT ARRAY[1, 2]` reads as a second subcommand and fails the boot.
+// Detect only top-level commas in comment-free SQL; types/defaults/CHECK/dollar bodies and ARRAY brackets can contain nested commas.
 function hasTopLevelComma(sql: string): boolean {
   let depth = 0
   let quote: string | undefined
@@ -284,15 +247,10 @@ function hasTopLevelComma(sql: string): boolean {
   return false
 }
 
-// An index or column statement whose target cannot be read is the dangerous case: it would be sent
-// unchecked and take the lock the pre-check exists to avoid, silently and on every boot. An
-// auto-named `CREATE INDEX ON t(c)` lands here too, because nothing in the text says what the
-// catalog will call it. Fail the boot with the statement instead.
+// Unparsed lock targets, including auto-named indexes, must fail boot rather than lock unchecked every time.
 export function requireSchemaLockTarget(statement: string): SchemaLockTarget | undefined {
   const sql = sqlWithoutComments(statement)
-  // A multi-action ALTER TABLE parses to its FIRST subcommand's target only, so skipping on that
-  // one object would silently drop every later action for the life of the database. One action per
-  // statement, or no pre-check is possible.
+  // One ALTER action per statement: skipping on first target would permanently lose later actions.
   if (ALTER_TABLE.test(sql) && hasTopLevelComma(sql)) {
     throw new Error(`unparsed_schema_lock_target: ${sql}`)
   }

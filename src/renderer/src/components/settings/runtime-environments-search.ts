@@ -67,7 +67,7 @@ export const getRuntimeEnvironmentsSearchEntry = createLocalizedCatalog(
         'auto.components.settings.runtime.environments.search.newProjectsKeyword',
         'new projects'
       ),
-      // Why: the setting's former name, so existing users can still find it.
+      // Retain the former setting name for existing users’ searches.
       ...translateSearchKeyword(
         'auto.components.settings.runtime.environments.search.activeServerKeyword',
         'active server'
@@ -89,12 +89,12 @@ export const getRuntimeEnvironmentsSearchEntry = createLocalizedCatalog(
         'auto.components.settings.runtime.environments.search.installKeyword',
         'install server'
       ),
-      // Why: the section's former name, so users who knew it can still find it.
+      // Retain the former section name for existing users’ searches.
       ...translateSearchKeyword(
         'auto.components.settings.managedServers.search.keywordFormerName',
         'managed servers'
       ),
-      // Why: Share this computer mounts the machine name field, so its keywords open this pane.
+      // Index machine-name fields mounted by Share this computer.
       ...getMachineNameSearchKeywords()
     ]
   })

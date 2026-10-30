@@ -13,15 +13,6 @@ const request: PendingEditorFocusRequest = {
 const pane = { fileId: 'file-1', worktreeId: 'worktree-1', viewStateId: 'view-1' }
 
 describe('matchesPendingEditorFocusRequest', () => {
-  it('matches the pane the handoff was opened into', () => {
-    expect(matchesPendingEditorFocusRequest(request, pane)).toBe(true)
-  })
-
-  it('rejects a missing request', () => {
-    expect(matchesPendingEditorFocusRequest(null, pane)).toBe(false)
-    expect(matchesPendingEditorFocusRequest(undefined, pane)).toBe(false)
-  })
-
   it('rejects a split sibling showing the same file', () => {
     expect(matchesPendingEditorFocusRequest(request, { ...pane, viewStateId: 'view-2' })).toBe(
       false

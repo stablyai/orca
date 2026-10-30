@@ -40,8 +40,7 @@ function SkillUsageExamplePromptText(props: {
 
 export function SkillUsageExampleDialog(props: {
   example: SkillUsageExample
-  // Why: the copyable prompt highlights the skill's slash command so the reader
-  // sees which skill to invoke; each skill passes its own (e.g. /orchestration).
+  // Highlight the supplied slash command so readers know which skill to invoke.
   slashCommand: string
   icon?: LucideIcon
   open: boolean

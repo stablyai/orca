@@ -18,7 +18,6 @@ const counters = vi.hoisted(() => ({
   injectExpandedSubmoduleEntries: 0
 }))
 
-/** Lets a test swap in a comparator that is deliberately not a total order. */
 const comparatorOverride = vi.hoisted(() => ({
   current: null as ((a: string, b: string) => number) | null
 }))
@@ -119,7 +118,6 @@ function makeBranchEntries(count: number): GitBranchChangeEntry[] {
   }))
 }
 
-/** Numeric collation, case variants, unicode, collator ties, and an exact duplicate path. */
 const ORDERING_FIXTURE: GitBranchChangeEntry[] = [
   { path: 'migrations/100.sql', status: 'modified' },
   { path: 'migrations/9.sql', status: 'modified' },
@@ -136,7 +134,6 @@ const ORDERING_FIXTURE: GitBranchChangeEntry[] = [
   { path: 'src/dup.ts', status: 'added' }
 ]
 
-/** The pre-change implementation: filter, then copy-and-sort. */
 function legacyFilterThenSort(
   entries: GitBranchChangeEntry[],
   filterQuery: string
@@ -155,10 +152,7 @@ function makeStatusEntries(count: number): GitStatusEntry[] {
   }))
 }
 
-/**
- * Deliberately not a total order: every path under the same top-level directory compares equal, so
- * distinct paths tie. Sort-before-filter must still match filter-before-sort under it.
- */
+/** Tie distinct paths by top-level directory to prove sort/filter equivalence does not require a total order. */
 function compareTopLevelDirOnly(a: string, b: string): number {
   const dirA = a.slice(0, a.indexOf('/'))
   const dirB = b.slice(0, b.indexOf('/'))
@@ -250,9 +244,7 @@ describe('useSourceControlFileProjection entry ordering', () => {
     }
   })
 
-  // Guards the invariant the sort-before-filter swap actually rests on: a stable sort, not a total
-  // order. If sortedBranchEntries ever stops preserving the original order of tied paths, this
-  // diverges from filter-then-sort even though every total-order fixture above still passes.
+  // Only stable sorting preserves tie order after filtering; total-order fixtures alone cannot detect this regression.
   it('matches filter-then-sort under a comparator that is not a total order', () => {
     comparatorOverride.current = compareTopLevelDirOnly
     const branchEntries = makeTieHeavyEntries(300)

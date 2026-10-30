@@ -24,6 +24,15 @@ vi.mock('./transcript-watch-engine', () => ({
   getActiveNativeChatWatcherCount: vi.fn(() => 0),
   installTranscriptWatcher: mocks.install
 }))
+// These cases cover root and path policy; the E9 gate has its own suite.
+vi.mock('./wsl-transcript-running-admission', () => ({ admitWslTranscriptPath: async () => {} }))
+vi.mock('../wsl/wsl-home-unless-stopped', async () => {
+  const wsl = await import('../wsl')
+  return {
+    wslHomeUnlessStopped: (distro: string) => wsl.getWslHomeAsync(distro),
+    listRunningWslHomeDirsUnlessStopped: () => wsl.listRunningWslHomeDirsAsync()
+  }
+})
 vi.mock('../wsl', () => ({
   getWslHomeAsync: mocks.getWslHomeAsync,
   listRunningWslDistrosAsync: mocks.listRunningWslDistrosAsync,

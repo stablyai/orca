@@ -11,11 +11,7 @@ import {
   type SplitRatioIntent
 } from '../../../../shared/workspace-layout/split-ratio-intents'
 
-/**
- * A layout-owner build's pane gestures: an in-tab drop goes to main, whose frame moves the pane,
- * and not when main refuses; a divider's new ratios, already drawn while dragging, go to main as
- * the dividers that moved when the drag ends.
- */
+/** Send in-tab moves to main and draw its frame; send changed divider ratios after drag, preserving their optimistic rendering until accepted/refused. */
 export function layoutOwnerPaneGestures(pane: {
   worktreeId: string
   tabId: string
@@ -66,10 +62,7 @@ export function layoutOwnerPaneGestures(pane: {
   }
 }
 
-/**
- * The dividers the user moved: against main's frame with the ratios still in flight applied, so a
- * drag back to the frame's ratio is sent too. Every one before main's frame holds the tab.
- */
+/** Compare against framed ratios plus in-flight changes so dragging back to the frame’s value still sends; earlier requests hold the tab. */
 function dividersMoved(
   worktreeId: string,
   tabId: string,

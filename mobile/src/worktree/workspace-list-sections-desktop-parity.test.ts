@@ -14,9 +14,7 @@ import {
 } from './project-sections-operations'
 import { buildSections, type Worktree } from './workspace-list-sections'
 
-// The desktop half lives in src/renderer/src/components/sidebar/
-// worktree-list-groups-mobile-parity.test.ts: buildRows renders these headers, and main serves
-// PROJECT_SECTION_PARITY_SERVED for the same host answers.
+// Counterpart: renderer sidebar/worktree-list-groups-mobile-parity.test.ts uses the same served project fixtures.
 
 function served(): ServedProjectSections | null {
   const verdict = projectSectionsRead.interpret({

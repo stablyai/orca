@@ -13,10 +13,7 @@ import {
   type PairedElectronClient
 } from './helpers/paired-electron-client'
 
-// What this proves: a paired client whose remote browser stream drops retries on a bounded budget,
-// then surfaces a Reconnect control instead of either giving up silently or retrying forever. The
-// failure is real, not injected — the runtime connection is dropped, so every restart genuinely
-// fails while it is down.
+// Drop the real runtime connection; require bounded failed stream retries followed by a persistent Reconnect control.
 
 async function callEnvironment<TResult>(
   page: Page,
@@ -71,34 +68,22 @@ test('bounds remote browser stream retries, then offers reconnect', async ({
       'browser.tabCreate',
       { worktree: `id:${worktreeId}`, url: 'about:blank', activate: true }
     )
-    // The client mirrors the host's browser tabs on its own, so this opens the pane a user would
-    // click into. It used to build a second local pane for the same runtime page, which is not a
-    // state a user can reach: two panes on one connection means two screencast subscribers, and the
-    // runtime keeps only the newest — the loser sits on a dead stream with a frozen frame.
+    // Use the mirrored tab; a second pane creates competing subscribers on a connection that keeps only the newest.
     await focusMaterializedRemoteBrowserPane(page, {
       environmentId: client.environmentId,
       remotePageId: created.browserPageId,
       worktreeId
     })
 
-    // The stream is live once the pane paints a remote frame.
     const remoteFrame = page.getByTestId('remote-browser-frame').first()
     await expect(remoteFrame).toBeVisible({ timeout: 60_000 })
 
     const errorToast = page.getByTestId('remote-browser-stream-error')
-    // exact: true, because accessible-name matching is a case-insensitive SUBSTRING match by
-    // default. The pane toolbar's egress indicator is labelled 'Browsing on <host>', and this
-    // test's host is named 'Remote browser reconnect' — so the loose locator matched the
-    // indicator and reported a reconnect control on a perfectly healthy stream.
+    // Match Reconnect exactly so Browsing on Remote browser reconnect cannot satisfy the locator.
     const reconnectButton = page.getByRole('button', { name: 'Reconnect', exact: true })
     await expect(reconnectButton).toHaveCount(0)
 
-    // Leave a pane-owned notice on screen before the drop. It outranks the stream's own message by
-    // design (it is the only response to what the user typed), so if nothing clears it on a status
-    // change, the stranded pane below reports a stale URL complaint next to its Reconnect button and
-    // never says what actually happened. The 'Lost connection' assertion after the drop is what
-    // catches that.
-    // Scoped to the pane holding the remote frame: a workspace can hold more than one browser pane.
+    // Seed a pane-owned URL notice before drop; status change must replace it with the real connection failure.
     const remotePane = page
       .getByTestId('remote-browser-pane')
       .filter({ has: page.getByTestId('remote-browser-frame') })
@@ -108,7 +93,6 @@ test('bounds remote browser stream retries, then offers reconnect', async ({
     await addressBar.press('Enter')
     await expect(errorToast).toContainText('Enter a valid http(s) or localhost URL.')
 
-    // Drop the runtime connection: the stream closes and every restart attempt now genuinely fails.
     await page.evaluate(async (selector) => {
       await window.api.runtimeEnvironments.disconnect({ selector })
     }, client.environmentId)
@@ -135,9 +119,7 @@ test('bounds remote browser stream retries, then offers reconnect', async ({
     await page.waitForTimeout(15_000)
     await expect(reconnectButton).toBeVisible()
 
-    // Clicking the frozen frame is the natural reaction to a stuck pane, and the input handlers
-    // clear the error optimistically — so without a guard this exact gesture deletes the user's only
-    // way back, then repaints the raw transport string once the queued RPC fails.
+    // Clicking the frozen frame must not clear the only recovery control or expose raw transport errors.
     await remoteFrame.click({ position: { x: 40, y: 40 }, force: true })
     await page.waitForTimeout(1_000)
     await expect(reconnectButton).toBeVisible()
@@ -154,9 +136,7 @@ test('bounds remote browser stream retries, then offers reconnect', async ({
       )
       .toBe(true)
 
-    // Why the frame src and not just visibility: the pane deliberately keeps the last frame painted
-    // during a restart, so "an image is showing" is also true of a frozen, dead stream. A changed
-    // object URL means a NEW frame actually arrived, which only a live subscription can produce.
+    // Require a new frame object URL; visibility alone also passes on the deliberately retained frozen image.
     const frozenFrameSrc = await remoteFrame.getAttribute('src')
     await reconnectButton.click()
     await expect(errorToast).toHaveCount(0, { timeout: 60_000 })
@@ -173,8 +153,7 @@ test('bounds remote browser stream retries, then offers reconnect', async ({
   }
 })
 
-// The other door into the same failure: the pane never had a stream to lose. A drop-only fix leaves
-// this one stranded on a bare error, which is the original bug wearing a different hat.
+// Cover initial-open failure too, where no prior subscription exists to restart.
 test('offers reconnect when the remote browser never opens at all', async ({
   testRepoPath
 }, testInfo) => {
@@ -207,8 +186,7 @@ test('offers reconnect when the remote browser never opens at all', async ({
       { worktree: `id:${worktreeId}`, url: 'about:blank', activate: true }
     )
 
-    // Let the mirrored tab arrive while the link is still up, but leave it unfocused: focusing is
-    // what mounts the pane, and this test needs the very first open to happen after the drop.
+    // Let the mirrored row arrive without surfacing it so first pane mount happens after disconnect.
     const target = {
       environmentId: client.environmentId,
       remotePageId: created.browserPageId,
@@ -216,8 +194,7 @@ test('offers reconnect when the remote browser never opens at all', async ({
     }
     await waitForMaterializedRemoteBrowserPane(page, target)
 
-    // Drop the connection BEFORE the pane mounts, so the very first open fails and no stream ever
-    // exists. Nothing here can be recovered by restarting a subscription.
+    // Drop before mount so the initial open has no existing stream to recover.
     await page.evaluate(async (selector) => {
       await window.api.runtimeEnvironments.disconnect({ selector })
     }, client.environmentId)
@@ -250,7 +227,6 @@ test('offers reconnect when the remote browser never opens at all', async ({
       )
       .toBe(true)
 
-    // Reconnect must build the stream from nothing, not resume something that never existed.
     await reconnectButton.click()
     await expect(errorToast).toHaveCount(0, { timeout: 60_000 })
     await expect(page.getByTestId('remote-browser-frame').first()).toBeVisible({

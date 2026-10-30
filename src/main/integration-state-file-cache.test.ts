@@ -90,7 +90,6 @@ describe('createIntegrationStateFileCache', () => {
   })
 
   it('reloads when a file appears after an absent first read', () => {
-    // The desktop app commonly starts before any integration is connected.
     const path = tempFile()
     const cache = createIntegrationStateFileCache({
       filePath: () => path,
@@ -133,7 +132,6 @@ describe('createIntegrationStateFileCache', () => {
   })
 
   it('recovers when another process writes between the stamp and the read', () => {
-    // A concurrent write must force another read instead of pinning stale content.
     const path = tempFile()
     writeFileSync(path, 'v1')
     let reads = 0
@@ -155,12 +153,11 @@ describe('createIntegrationStateFileCache', () => {
     cache.invalidate()
     writeDuringRead = true
 
-    // Reads 'theirs' but stamped against 'ours', so the next look must reload.
+    // Content read after a concurrent write still carries the earlier stamp, forcing one more read.
     expect(cache.get()).toEqual({ body: 'theirs' })
     expect(cache.get()).toEqual({ body: 'theirs' })
     expect(reads).toBe(3)
 
-    // Stamp and content now agree, so a further look is served from memory.
     expect(cache.get()).toEqual({ body: 'theirs' })
     expect(reads).toBe(3)
   })

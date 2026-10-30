@@ -1,7 +1,9 @@
+import { useAppStore } from '@/store'
+import { forgetStructuredSessionSelection } from '@/lib/structured-agent-session-selection-controller'
 // @vitest-environment happy-dom
 
-import { act, renderHook } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, cleanup, renderHook } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ call: vi.fn() }))
 
@@ -20,7 +22,7 @@ vi.mock('@/lib/structured-agent-session-launch-options', () => ({
   getStructuredAgentSessionLaunchSelection: () => null
 }))
 
-import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
+import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
 import { useStructuredAgentSessionOptions } from './use-structured-agent-session-options'
 import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-catalog-snapshots'
@@ -38,8 +40,7 @@ const HOST_CATALOG = {
   fetchedAt: 1_000
 }
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: no test here sends a pick over a fence, so mutate is never called.
-const mutate = vi.fn(async () => null) as unknown as StructuredAgentSessionMutate
+const mutate: StructuredAgentSessionMutate = vi.fn(async () => null)
 
 type Props = { hidden?: boolean; attached?: boolean; sessionId?: string }
 
@@ -61,7 +62,7 @@ function renderOptions(initial: Props = {}) {
         turnId: null,
         unloadedTurnRevisions: undefined,
         mutate,
-        launch: { kind: 'new', seedOptions: { model: 'gpt-5.5' }, heldOptions: {} }
+        launch: { kind: 'new', seedOptions: { model: 'gpt-5.5' } }
       }),
     { initialProps: initial }
   )
@@ -102,7 +103,6 @@ function catalogReads(): unknown[] {
     .map(([, , params]) => params)
 }
 
-/** The picker opens and takes a pick: what a usable first frame means. */
 function usable(snapshot: readonly SessionOptionDescriptor[]): boolean {
   return model(snapshot).settable && modelChoices(snapshot).length > 0
 }
@@ -118,8 +118,28 @@ function modelChoices(snapshot: readonly SessionOptionDescriptor[]): string[] {
 
 const flush = (): Promise<void> => act(async () => {})
 
+const initialStore = useAppStore.getState()
+afterEach(() => {
+  cleanup()
+  forgetStructuredSessionSelection(sessionId, PAIRED_TARGET)
+  forgetStructuredSessionSelection(`${sessionId}-other`, PAIRED_TARGET)
+  useAppStore.setState(initialStore, true)
+})
 describe('host model catalog read', () => {
   beforeEach(() => {
+    useAppStore.getState().setRuntimeEnvironments([
+      {
+        id: PAIRED_TARGET.environmentId,
+        name: 'catalog host',
+        createdAt: 1,
+        updatedAt: 1,
+        pairingRevision: 1,
+        lastUsedAt: null,
+        runtimeId: null,
+        endpoints: [],
+        preferredEndpointId: 'loopback'
+      }
+    ])
     mocks.call.mockReset()
     resetHostModelCatalogSnapshotsForTests()
     sessionCount += 1
@@ -131,7 +151,6 @@ describe('host model catalog read', () => {
     answerCatalog([() => first.promise])
     const { result, unmount } = renderOptions()
     await flush()
-    // No built-in label the host's list could replace.
     expect(modelChoices(result.current.optionSnapshot)).toEqual([])
     expect(model(result.current.optionSnapshot).settable).toBe(false)
     first.resolve(HOST_CATALOG)
@@ -153,8 +172,7 @@ describe('host model catalog read', () => {
       { agent: 'codex', sessionId },
       { agent: 'codex', sessionId, waitForListing: true }
     ])
-    // Once the host says it has none: the built-in list, open to a pick, naming nothing it
-    // could replace.
+    // A settled empty host catalog enables built-ins without claiming a replaceable model default.
     const first = model(result.current.optionSnapshot)
     expect(usable(result.current.optionSnapshot)).toBe(true)
     expect(first.kind.type === 'select' ? first.kind.currentValue : null).toBeUndefined()
@@ -207,6 +225,7 @@ describe('host model catalog read', () => {
     )
     const { result, unmount } = renderOptions({ attached: true })
     await flush()
+    expect(mocks.call.mock.calls.some(([, method]) => method === 'agentSession.options')).toBe(true)
     live.resolve({
       models: [{ id: 'gpt-live', label: 'GPT Live', isDefault: true, efforts: [] }],
       current: { model: 'gpt-live', confirmed: ['model'] }

@@ -38,12 +38,7 @@ export type PRRefreshEnqueue = {
 
 type PRRefreshRequestState = { until: number; requestSequence?: number }
 
-/** A worktree has one live branch at a time, so a second cacheKey for it is a
- *  branch it moved off. Drop those: a linked-PR key survives every branch
- *  switch, so while its entry is parked (rate-limit pause, error backoff, or
- *  just waiting to drain) every switch used to add a cacheKey that the drain
- *  snapshot then carries forward, and each dead one costs IPC payload and a
- *  renderer cache write on every later broadcast. */
+/** Retire old-branch aliases when a linked-PR key survives worktree branch changes. */
 function setLiveAlias(
   aliases: Map<string, GitHubPRRefreshAlias>,
   alias: GitHubPRRefreshAlias
@@ -58,9 +53,7 @@ function setLiveAlias(
   aliases.set(alias.cacheKey, alias)
 }
 
-/** Follow-up aliases were captured before the request ran, so anything enqueued
- *  while it was in flight is newer. Return that preserved alias so callers do
- *  not pair it with the stale request candidate. */
+/** Queued aliases are newer than request-time follow-ups; preserve them with their matching candidate. */
 function mergeFollowUpAlias(
   aliases: Map<string, GitHubPRRefreshAlias>,
   alias: GitHubPRRefreshAlias
@@ -76,9 +69,7 @@ function mergeFollowUpAlias(
   return undefined
 }
 
-/** A manual refresh merges its alias into its own copy of the map and writes it
- *  back, so re-entry through `set` has to re-apply the same bound; later
- *  insertions are the newer branch and win. */
+/** Manual refresh writes copied maps back; keep the latest branch per worktree on re-entry too. */
 function dropSupersededWorktreeAliases(aliases: Map<string, GitHubPRRefreshAlias>): void {
   const liveCacheKeyByWorktree = new Map<string, string>()
   for (const [cacheKey, alias] of aliases) {

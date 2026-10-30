@@ -1,15 +1,12 @@
-// Terminal-style prompt recall: Up/Down in the composer walk what the chat shows the
-// user sent. Derived from the shown conversation at the keypress, so there is no
-// history to store, and recall survives a remount, a reload, and another client's sends.
+// Derive recall from the visible conversation at keypress so reloads, remounts and other clients’ sends need no separate history.
 
 import { deriveNativeChatRowContent } from '../../../../shared/native-chat-row-content'
-import { stripSentImagePromptMarkers } from '../../../../shared/native-chat-image-transcript-markers'
+import { stripSentImagePromptMarkers } from '../../../../shared/native-chat/transcript/native-chat-image-transcript-markers'
 import { projectNativeChatTranscriptMessages } from '../../../../shared/native-chat-transcript-projection'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import type { NativeChatCommandMarker } from './native-chat-command-marker'
-import { compareMessages } from './native-chat-session-assembler'
+import { compareMessages, orderMessages } from './native-chat-session-assembler'
 
-/** The conversation a composer recalls from. */
 export type NativeChatRecallSource = {
   messages: readonly NativeChatMessage[]
   /** Commands sent from this pane that the transcript holds no user turn for. */
@@ -27,16 +24,13 @@ export type NativeChatComposerRecall = {
   setPosition: (position: NativeChatRecallPosition | null) => void
   /** False keeps an arrow key moving the caret inside a recalled multi-line prompt. */
   isCaretOnVisualEdge: (edge: 'start' | 'end') => boolean
-  /** Puts a recalled prompt in the editor with the caret at its end, as a shell does. Done at
-   *  the keypress: left to the draft sync, the caret stays wherever the last prompt had it. */
+  /** Set the caret at keypress; relying on draft sync would preserve the previous prompt’s caret. */
   show: (prompt: string) => void
 }
 
-/** `id` survives new messages landing mid-recall; `recalled` is the text put in the
- *  composer, and recall is over once the composer no longer holds it. */
+/** Stable ids survive incoming messages; editing the recalled text ends recall. */
 export type NativeChatRecallPosition = { id: string; recalled: string }
 
-/** Recall is live only while the composer still holds the recalled text untouched. */
 export function isNativeChatRecallActive(
   position: NativeChatRecallPosition | null,
   draft: string
@@ -60,9 +54,12 @@ export function nativeChatSentPrompts(source: NativeChatRecallSource): NativeCha
   }
   const commands = source.commands ?? []
   let nextCommand = 0
-  // Why projected: the raw list also holds harness-injected user turns and subagent prompts,
-  // which the chat never draws as the user's own.
-  for (const message of projectNativeChatTranscriptMessages(source.messages, compareMessages)) {
+  // Use projected rows so harness turns and subagent prompts never enter user recall.
+  for (const message of projectNativeChatTranscriptMessages(
+    source.messages,
+    compareMessages,
+    orderMessages
+  )) {
     // `from` marks a prompt another agent sent; it was never typed here.
     if (message.role !== 'user' || message.from) {
       continue
@@ -92,11 +89,7 @@ export function nativeChatSentPrompts(source: NativeChatRecallSource): NativeCha
   return prompts
 }
 
-/**
- * One Up (`back`) or Down (`forward`) press. Null leaves the key to the caret. Back starts
- * only from an empty composer and stops at the oldest prompt; forward past the newest
- * empties the composer and ends recall.
- */
+/** Start Back only from empty input; stop at the oldest prompt, clear past newest, and return null to leave the key to the caret. */
 export function stepNativeChatPromptRecall(input: {
   direction: 'back' | 'forward'
   prompts: readonly NativeChatSentPrompt[]

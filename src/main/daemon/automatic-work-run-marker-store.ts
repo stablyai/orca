@@ -11,8 +11,7 @@ import {
 
 const PRIVATE_FILE_MODE = 0o600
 
-// Why per protocol version: an old-protocol daemon can stay alive beside a new one in the
-// same runtime dir, and must neither read the other's run as a crash nor overwrite it.
+// Protocol generations share a runtime directory but must never overwrite each other's run markers.
 export function automaticWorkMarkerPathFor(pidRecordPath: string): string {
   return `${pidRecordPath.replace(/\.pid$/, '')}.automatic-work-run.json`
 }
@@ -26,8 +25,7 @@ export function readBootIdentity(now: number = Date.now()): BootIdentity {
       bootId = null
     }
   }
-  // Why null on Windows: Fast Startup keeps the uptime counter across a shutdown, so boot
-  // time cannot tell a new boot from the same one; an unknown boot never pauses.
+  // Windows Fast Startup preserves uptime across shutdowns, so boot time cannot safely pause restores.
   return { bootTimeMs: process.platform === 'win32' ? null : now - uptime() * 1000, bootId }
 }
 
@@ -39,11 +37,7 @@ function readPreviousMarker(path: string): AutomaticWorkRunMarkerFile | null {
   }
 }
 
-/**
- * The daemon's record of whether automatic restores were running when it last died.
- * Inert until `open()`, which the endpoint owner calls once it has won the endpoint.
- * Fail-open: a marker that cannot be read or written never blocks a restore.
- */
+/** Open only after winning the endpoint; marker I/O failures must not block restores. */
 export class AutomaticWorkRunMarker {
   private currentMode: AutomaticWorkMode = { kind: 'normal' }
   private opened = false
@@ -55,7 +49,7 @@ export class AutomaticWorkRunMarker {
   constructor(
     private readonly path: string | undefined,
     private readonly logger: { log: (event: string, details: Record<string, unknown>) => void },
-    /** Why: a daemon that lost its endpoint must not rewrite its successor's record. */
+    /** A replaced daemon must not rewrite its successor's marker. */
     private readonly ownsEndpoint: () => boolean = () => true
   ) {}
 
@@ -85,8 +79,7 @@ export class AutomaticWorkRunMarker {
     return { automaticWorkMode: () => this.currentMode, armAutomaticWork: () => this.arm() }
   }
 
-  /** Durably records `running` before the first automatic fork of this run.
-   *  Why sync: an async write could land after the clean-exit write and fake a crash. */
+  /** Write synchronously before automatic forks so a late running write cannot overwrite clean-exit. */
   arm(): void {
     this.armRequested = true
     if (!this.opened || this.armed) {
@@ -96,7 +89,7 @@ export class AutomaticWorkRunMarker {
     this.writeSync('running')
   }
 
-  /** Lifts a recorded pause; only an explicit operator resume calls this, never a timer. */
+  /** Resume only on explicit operator action. */
   resume(): void {
     if (this.currentMode.kind === 'normal') {
       return
@@ -114,9 +107,7 @@ export class AutomaticWorkRunMarker {
     }
   }
 
-  /** Durably ends this run's crash candidacy as soon as a stop is requested from outside.
-   *  Why: a systemd scope stop signals the daemon and its AppImage mount together, so the
-   *  teardown can die before `markCleanExit`; that death is the stop, not a crash. */
+  /** Mark clean before external-stop teardown, which may kill the daemon before markCleanExit(). */
   recordStopRequested(): void {
     this.stopRequested = true
     if (this.opened) {

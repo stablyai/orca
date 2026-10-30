@@ -1,5 +1,4 @@
-// A discriminated union that reads a tag this build does not know instead of failing on it: the
-// journal's blocks, goal states, approval subjects and item bodies, so a newer build can add one.
+// Preserve unknown journal union tags so newer bodies/blocks/goals/approval subjects remain readable.
 
 import { z } from 'zod'
 
@@ -19,9 +18,7 @@ export function knownTags(union: z.ZodDiscriminatedUnion): ReadonlySet<string> {
   )
 }
 
-/** A discriminated union a tag this build does not know still reads through: kept as-is, for a
- *  reader to skip. A tag of only whitespace is damage, as an empty one is. The catch-all aborts, so
- *  a known arm's own failure still reaches the reader. */
+/** Keep unknown nonblank tags as-is for readers to skip. Abort the catch-all for known malformed arms; blank tags are damage. */
 export function openDiscriminatedUnion<T extends z.ZodDiscriminatedUnion>(known: T) {
   const key = known.def.discriminator
   const tags = knownTags(known)

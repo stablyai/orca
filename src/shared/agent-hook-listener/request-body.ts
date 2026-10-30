@@ -3,7 +3,6 @@ import type { IncomingMessage } from 'node:http'
 import { classifyTruncatedHookRequest } from '../agent-hook-transport-interference'
 import { assertJsonTextStructureWithinLimits } from '../json-text-structure-limit'
 
-/** Maximum request body size accepted by the listener (1 MB). */
 export const HOOK_REQUEST_MAX_BYTES = 1_000_000
 const HOOK_REQUEST_INITIAL_BUFFER_BYTES = 4 * 1024
 const AGENT_HOOK_JSON_STRUCTURE_LIMITS = {
@@ -21,7 +20,6 @@ export function parseAgentHookJson(content: string): unknown {
   assertJsonTextStructureWithinLimits(normalizedContent, AGENT_HOOK_JSON_STRUCTURE_LIMITS)
   return JSON.parse(normalizedContent) as unknown
 }
-// ─── Body parsing ───────────────────────────────────────────────────
 
 export function parseFormEncodedBody(body: string): Record<string, string> {
   const params = new URLSearchParams(body)
@@ -42,7 +40,7 @@ export function readRequestBody(req: IncomingMessage): Promise<unknown> {
       req.off('end', onEnd)
       req.off('error', onError)
       req.off('close', onClose)
-      // Why: keep a neutral error sink so a late IncomingMessage error after cleanup can't become unhandled.
+      // Absorb late IncomingMessage errors after cleanup so they cannot become unhandled.
       req.on('error', ignoreSettledRequestError)
     }
     const settleResolve = (value: unknown): void => {
@@ -62,7 +60,7 @@ export function readRequestBody(req: IncomingMessage): Promise<unknown> {
       reject(error)
     }
     const onData = (chunk: Buffer): void => {
-      // Why: bound by bytes (not UTF-16 units) and stop accumulating after rejection so a client can't push memory past the cap.
+      // Bound bytes, including after rejection; UTF-16 length would undercount non-ASCII bodies.
       const nextByteLength = byteLength + chunk.length
       if (nextByteLength > HOOK_REQUEST_MAX_BYTES) {
         settleReject(new Error('payload too large'))
@@ -96,15 +94,13 @@ export function readRequestBody(req: IncomingMessage): Promise<unknown> {
           settleResolve(parseFormEncodedBody(body))
           return
         }
-        // Why: managed scripts POST JSON, updated POSIX scripts form-encoded; default to JSON for unknown content types.
+        // Managed scripts send JSON or form data; unknown content types retain JSON compatibility.
         settleResolve(body ? parseAgentHookJson(body) : {})
       } catch (error) {
         settleReject(error)
       }
     }
-    // Why (#11217): a body cut short of its own Content-Length is the fingerprint of an IDS
-    // resetting the connection mid-inspection. Classify on every path that ends the request without
-    // 'end' — a peer RST surfaces as 'error' (ECONNRESET) and only a local destroy reaches 'close' first.
+    // Classify incomplete Content-Length on error and close: peer RST and local destroy take different paths (#11217).
     const settleUnfinished = (fallback: Error): void => {
       settleReject(
         classifyTruncatedHookRequest(req.headers['content-length'], byteLength) ?? fallback
@@ -113,7 +109,7 @@ export function readRequestBody(req: IncomingMessage): Promise<unknown> {
     const onError = (err: Error): void => {
       settleUnfinished(err)
     }
-    // Why: req.destroy() (slowloris timer) emits 'close' but not 'end'/'error'; without this the promise never settles and buffers leak.
+    // Slowloris destroy may emit only close; settle it to release buffers.
     const onClose = (): void => {
       settleUnfinished(new Error('aborted'))
     }

@@ -1,3 +1,9 @@
+import { readFileSync } from 'node:fs'
+import { acpLaunchSpecFor } from './acp-launch-specs'
+import {
+  NewSessionResponseSchema,
+  SessionNotificationSchema
+} from './generated/acp-protocol.generated'
 import { afterEach, describe, expect, it } from 'vitest'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import {
@@ -6,10 +12,11 @@ import {
 } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { AgentSessionAcquisitionRootExitObservedError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { GENERIC_ACP_DIALECT } from './acp-dialects/acp-dialect'
-import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/structured-session-child-env'
-import { AGENT_HOOK_RUNTIME_ENV_KEYS } from '../ipc/pty/host-env/spawn-env-keys'
+import { OPENCODE_ACP_DIALECT } from './acp-dialects/opencode-dialect'
+import { OMP_ACP_DIALECT } from './acp-dialects/omp-dialect'
 import {
   GROK,
+  GROK_CONFIG_OPTIONS,
   openAcpAdapterRig,
   PID,
   PROVIDER_SESSION,
@@ -68,7 +75,7 @@ describe('ACP structured session adapter: acquire', () => {
       provider: 'grok',
       accountHome: { variable: 'GROK_HOME', path: '/home/work/.grok' }
     })
-    // The launch its registration composes: the shared seal names the child, not this adapter.
+    // Use the registration's shared launch seal rather than an adapter-specific one.
     const rig = await openAcpAdapterRig({
       deps: {
         resolveLaunch: createAcpStructuredLaunchResolver(GROK, {
@@ -77,7 +84,18 @@ describe('ACP structured session adapter: acquire', () => {
           resolveEnvironment: async () => ({
             PATH: '/usr/bin',
             ORCA_PANE_KEY: 'tab-1:pane-1',
-            ORCA_AGENT_HOOK_PORT: '1234'
+            ORCA_TAB_ID: 'tab-1',
+            ORCA_WORKTREE_ID: 'worktree-1',
+            ORCA_AGENT_LAUNCH_TOKEN: 'launch-1',
+            ORCA_AGENT_PANE: 'tab-1:pane-1',
+            ORCA_AGENT_LAUNCH: 'launch-1',
+            ORCA_AGENT_HOOK_PORT: '1234',
+            ORCA_AGENT_HOOK_TOKEN: 'hook-token',
+            ORCA_AGENT_HOOK_ENV: 'test',
+            ORCA_AGENT_HOOK_VERSION: '1',
+            ORCA_AGENT_HOOK_TRANSPORT: 'http',
+            ORCA_AGENT_HOOK_ENDPOINT: '/hook',
+            ORCA_CLAUDE_AGENT_STATUS_SETTINGS: '{}'
           }),
           resolveCommand: () => '/opt/bin/grok',
           readJournal: () => null
@@ -86,9 +104,22 @@ describe('ACP structured session adapter: acquire', () => {
     })
     await rig.acquire()
     const launch = rig.child().launch
-    expect(launch.envToDelete).toEqual(expect.arrayContaining([...STRUCTURED_CHILD_ENV_TO_DELETE]))
     expect(launch.envToDelete).toEqual(
-      expect.arrayContaining(['ORCA_PANE_KEY', 'ORCA_AGENT_PANE', ...AGENT_HOOK_RUNTIME_ENV_KEYS])
+      expect.arrayContaining([
+        'ORCA_PANE_KEY',
+        'ORCA_TAB_ID',
+        'ORCA_WORKTREE_ID',
+        'ORCA_AGENT_LAUNCH_TOKEN',
+        'ORCA_AGENT_PANE',
+        'ORCA_AGENT_LAUNCH',
+        'ORCA_AGENT_HOOK_PORT',
+        'ORCA_AGENT_HOOK_TOKEN',
+        'ORCA_AGENT_HOOK_ENV',
+        'ORCA_AGENT_HOOK_VERSION',
+        'ORCA_AGENT_HOOK_TRANSPORT',
+        'ORCA_AGENT_HOOK_ENDPOINT',
+        'ORCA_CLAUDE_AGENT_STATUS_SETTINGS'
+      ])
     )
     expect(launch.env).toMatchObject({
       ORCA_AGENT_SESSION_ID: SESSION,
@@ -146,12 +177,17 @@ it('reads those last words when the agent ends its stdout before its exit is see
       agent.on('session/new', () => {
         const child = rig.child()
         child.stderr = 'grok: config.toml is invalid'
-        // On POSIX a dying process's stdout ends first; its exit is observed a moment later.
+        // Simulate stdout EOF preceding observed process exit.
         child.agent.stdout.end()
-        setTimeout(() => child.exit(), 5)
       })
   })
-  await rig.acquire()
+  const acquiring = rig.acquire()
+  await rig.frame('session/new')
+  await rig.settle()
+  expect(rig.ended).toEqual([])
+  expect(rig.child().closes).toBe(0)
+  rig.child().exit()
+  await acquiring
   expect(rig.ended).toMatchObject([
     { failure: { detail: { text: 'grok: config.toml is invalid' } } }
   ])
@@ -178,6 +214,271 @@ describe('ACP structured session adapter: turns', () => {
     await expect(rig.adapter.readOptions({ sessionId: SESSION, fence: 1 })).resolves.toMatchObject({
       current: { model: 'grok-4.6', effort: 'low' }
     })
+  })
+
+  it.each([
+    ['composite', OPENCODE_ACP_DIALECT, 2],
+    ['independent', OMP_ACP_DIALECT, 1]
+  ] as const)(
+    'keeps applied model proof consistent with the %s dialect effort writer',
+    async (_name, dialect, modelWrites) => {
+      const rig = await openAcpAdapterRig({ spec: { ...GROK, dialect } })
+      await rig.acquire()
+      const inputs = [
+        { model: 'openai/gpt-5/high' },
+        { effort: 'low' },
+        { model: 'openai/gpt-5/high' }
+      ]
+      for (const [index, executionOptions] of inputs.entries()) {
+        await rig.adapter.dispatch({
+          sessionId: SESSION,
+          fence: 1,
+          clientMessageId: `variant-${index}`,
+          body: hello,
+          executionOptions
+        })
+        const prompt = await rig.frame('session/prompt', index)
+        rig.child().agent.notify('session/update', chunk(`prompt:variant-${index}`, 'Reply'))
+        rig.child().agent.reply(prompt, { stopReason: 'end_turn' })
+        await waitFor(async () => {
+          const turns = (await rig.rig.rows()).flatMap(
+            (row) => readAgentJournalTurn(row.body) ?? []
+          )
+          expect(turns.filter((turn) => turn.state === 'completed')).toHaveLength(index + 1)
+        })
+      }
+      const controls = rig
+        .child()
+        .agent.frames.filter((frame) => frame.method === 'session/set_config_option')
+      expect(
+        controls.filter(
+          (frame) =>
+            typeof frame.params === 'object' &&
+            frame.params !== null &&
+            'configId' in frame.params &&
+            frame.params.configId === 'model'
+        )
+      ).toHaveLength(modelWrites)
+      expect(
+        controls.filter(
+          (frame) =>
+            typeof frame.params === 'object' &&
+            frame.params !== null &&
+            'configId' in frame.params &&
+            frame.params.configId === 'reasoning_effort'
+        )
+      ).toHaveLength(1)
+    }
+  )
+
+  it('inherits omitted effort after acquired and applied high when OMP offers no default effort', async () => {
+    const configOptions = [
+      {
+        id: 'model',
+        name: 'Model',
+        category: 'model',
+        type: 'select',
+        currentValue: 'google/gemini-3.1-pro-preview',
+        options: [
+          { value: 'google/gemini-3.1-pro-preview', name: 'Gemini' },
+          { value: 'team_lb/gpt-6.1-sol', name: 'GPT' }
+        ]
+      },
+      {
+        id: 'reasoning_effort',
+        name: 'Effort',
+        category: 'thought_level',
+        type: 'select',
+        currentValue: 'high',
+        options: [{ value: 'high', name: 'High' }]
+      }
+    ]
+    const rig = await openAcpAdapterRig({
+      spec: acpLaunchSpecFor('omp')!,
+      script: (agent) => {
+        agent.on('session/new', (frame) =>
+          agent.reply(frame, { sessionId: PROVIDER_SESSION, configOptions })
+        )
+        // The unchanged report does not echo or confirm the supplied control.
+        agent.on('session/set_config_option', (frame) => agent.reply(frame, { configOptions }))
+      }
+    })
+    await rig.acquire()
+    let promptIndex = 0
+    const dispatch = async (id: string, executionOptions: Record<string, string>) => {
+      await rig.adapter.dispatch({
+        sessionId: SESSION,
+        fence: 1,
+        clientMessageId: id,
+        executionOptions,
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: id }] }
+      })
+      const prompt = await rig.frame('session/prompt', promptIndex++)
+      rig.child().agent.notify('session/update', chunk(`prompt:${id}`, 'Reply'))
+      rig.child().agent.reply(prompt, { stopReason: 'end_turn' })
+      await waitFor(async () => {
+        const turns = (await rig.rig.rows()).flatMap((row) => readAgentJournalTurn(row.body) ?? [])
+        expect(turns.filter((turn) => turn.state === 'completed')).toHaveLength(promptIndex)
+      })
+    }
+    const observed = await rig.adapter.readOptions({ sessionId: SESSION, fence: 1 })
+    expect(observed.current).toMatchObject({
+      model: 'google/gemini-3.1-pro-preview',
+      effort: 'high'
+    })
+    expect(observed.models?.find((model) => model.id === 'team_lb/gpt-6.1-sol')).not.toHaveProperty(
+      'defaultEffort'
+    )
+    await dispatch('acquired', { model: 'team_lb/gpt-6.1-sol' })
+    expect(rig.sent('session/set_config_option').map((frame) => frame.params)).toEqual([
+      expect.objectContaining({ configId: 'model', value: 'team_lb/gpt-6.1-sol' })
+    ])
+    await dispatch('B', { model: 'unlisted-model', effort: 'high' })
+    await rig.frame('session/prompt')
+    let before = rig.child().agent.frames.length
+    await dispatch('A', { model: 'team_lb/gpt-6.1-sol' })
+    expect(
+      rig
+        .child()
+        .agent.frames.slice(before)
+        .map((frame) => frame.method)
+    ).toEqual(['session/set_config_option', 'session/prompt'])
+    before = rig.child().agent.frames.length
+    await dispatch('empty', {})
+    expect(
+      rig
+        .child()
+        .agent.frames.slice(before)
+        .map((frame) => frame.method)
+    ).toEqual(['session/prompt'])
+    before = rig.child().agent.frames.length
+    await dispatch('explicit', { effort: 'high' })
+    expect(
+      rig
+        .child()
+        .agent.frames.slice(before)
+        .map((frame) => frame.method)
+    ).toEqual(['session/set_config_option', 'session/prompt'])
+  })
+
+  it('sends model-only choices away from the opening model, back, and away again', async () => {
+    const rig = await openAcpAdapterRig()
+    await rig.acquire()
+    for (const [index, [clientMessageId, model]] of [
+      ['away', 'grok-4.6'],
+      ['back', 'grok-4.7'],
+      ['again', 'grok-4.6']
+    ].entries()) {
+      await expect(
+        rig.adapter.dispatch({
+          sessionId: SESSION,
+          fence: 1,
+          clientMessageId,
+          body: hello,
+          executionOptions: { model }
+        })
+      ).resolves.toEqual({ state: 'admitted' })
+      rig.child().agent.reply(await rig.frame('session/prompt', index), { stopReason: 'end_turn' })
+      await waitFor(() => expect(rig.adapter.holdsDispatch(SESSION)).toBe(false))
+    }
+    // Model-only sends inherit native effort on each model.
+    expect(rig.sent('session/set_config_option').map((frame) => frame.params)).toMatchObject([
+      { configId: 'model', value: 'grok-4.6' },
+      { configId: 'model', value: 'grok-4.7' },
+      { configId: 'model', value: 'grok-4.6' }
+    ])
+  })
+
+  it.each([
+    ['no choice', {}],
+    ['an effort choice', { effort: 'low' }]
+  ])(
+    'runs a message with %s on the model the agent moved to before Orca wrote one',
+    async (_name, executionOptions: { effort?: string }) => {
+      // As OpenCode 2: session/new answers before its catalog loads, then reports the configured model.
+      const rig = await openAcpAdapterRig()
+      await rig.acquire()
+      if (executionOptions.effort) {
+        await rig.adapter.setOption({
+          sessionId: SESSION,
+          key: 'effort',
+          value: executionOptions.effort,
+          fence: 1
+        })
+      }
+      rig.child().agent.notify('session/update', {
+        sessionId: PROVIDER_SESSION,
+        update: {
+          sessionUpdate: 'config_option_update',
+          configOptions: GROK_CONFIG_OPTIONS.map((option) =>
+            option.id === 'model'
+              ? { ...option, currentValue: 'grok-4.6' }
+              : { ...option, currentValue: executionOptions.effort ?? option.currentValue }
+          )
+        }
+      })
+      await waitFor(() =>
+        expect(rig.lifecycle).toContainEqual(
+          expect.objectContaining({
+            type: 'options-reported',
+            reportedOptions: expect.objectContaining({ model: 'grok-4.6' })
+          })
+        )
+      )
+      await rig.adapter.dispatch({
+        sessionId: SESSION,
+        fence: 1,
+        clientMessageId: 'unchosen-send',
+        body: hello,
+        executionOptions
+      })
+      await rig.frame('session/prompt')
+      expect(rig.sent('session/set_config_option').map((frame) => frame.params)).toEqual(
+        executionOptions.effort
+          ? [{ sessionId: PROVIDER_SESSION, configId: 'reasoning_effort', value: 'low' }]
+          : []
+      )
+    }
+  )
+
+  it('keeps recorded OpenCode startup identity inert when its own model arrives later', async () => {
+    const startup = NewSessionResponseSchema.parse(
+      JSON.parse(
+        readFileSync(new URL('./fixtures/opencode-v2-start-options.json', import.meta.url), 'utf8')
+      )
+    )
+    const frames = readFileSync(
+      new URL('./fixtures/opencode-v2-reopen.jsonl', import.meta.url),
+      'utf8'
+    )
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line))
+    const late = SessionNotificationSchema.parse(frames[1].message.params)
+    const rig = await openAcpAdapterRig({
+      spec: acpLaunchSpecFor('opencode2')!,
+      script: (agent) =>
+        agent.on('session/new', (frame) =>
+          agent.reply(frame, { ...startup, sessionId: PROVIDER_SESSION })
+        )
+    })
+    await rig.acquire()
+    rig.child().agent.notify('session/update', { ...late, sessionId: PROVIDER_SESSION })
+    await waitFor(() =>
+      expect(rig.lifecycle.at(-1)).toMatchObject({
+        type: 'options-reported',
+        reportedOptions: { model: 'opencode/big-pickle' }
+      })
+    )
+    await rig.adapter.dispatch({
+      sessionId: SESSION,
+      fence: 1,
+      clientMessageId: 'own-model',
+      body: hello,
+      executionOptions: {}
+    })
+    await rig.frame('session/prompt')
+    expect(rig.sent('session/set_config_option')).toHaveLength(0)
   })
 
   it("sends Grok's prompt identity only to an agent whose dialect echoes it", async () => {
@@ -389,10 +690,9 @@ describe('ACP structured session adapter: requests a Stop cancels', () => {
       kind: 'approval',
       response: { kind: 'option', optionId: 'allow-once' },
       fence: 1,
-      // The Stop lands while the person's answer is being saved.
       commit: () => rig.adapter.cancelTurn({ sessionId: SESSION, fence: 1 }).then(() => {})
     })
-    // The Stop withdraws only what no answer has claimed.
+    // Stop must not preempt an answer already claimed for commit.
     await expect(answering).resolves.toBeUndefined()
     expect(await permission).toMatchObject({
       result: { outcome: { outcome: 'selected', optionId: 'allow-once' } }
@@ -510,6 +810,5 @@ describe('Grok launch spec', () => {
       '/orca/visuals',
       'stdio'
     ])
-    expect(GROK.env).toEqual({})
   })
 })

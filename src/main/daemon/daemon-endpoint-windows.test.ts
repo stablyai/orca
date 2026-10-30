@@ -1,8 +1,4 @@
-/* The win32 branches of endpoint ownership, exercised on any host.
-   Every other endpoint test is skipIf(win32), so these paths had no coverage anywhere: on POSIX
-   they are skipped by the guard, and PR CI never runs the suite on Windows at all. What they must
-   guarantee is that the whole mechanism is inert on named pipes — the pipe name is already
-   exclusive and a dead daemon's pipe ceases to exist, so a successful listen is the protocol. */
+// Exercise named-pipe ownership branches on any host.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -38,7 +34,6 @@ describe('daemon endpoint ownership on win32', () => {
     const outcome = await publishDaemonEndpoint(boundPath, canonicalPath, probe)
 
     expect(outcome).toEqual({ status: 'published', identity: null })
-    // A pipe name cannot be link/renamed, and probing one we are about to bind proves nothing.
     expect(probe).not.toHaveBeenCalled()
     expect(existsSync(canonicalPath)).toBe(false)
   })
@@ -50,9 +45,7 @@ describe('daemon endpoint ownership on win32', () => {
     writeFileSync(canonicalPath, 'someone else')
     const probe = vi.fn()
 
-    // Why this is safe rather than the split brain it would be on POSIX: on Windows the daemon
-    // binds the canonical pipe name directly, so listen() has already failed if one is taken.
-    // Reaching here means we hold it.
+    // Windows binds the canonical pipe directly; successful listen already establishes ownership.
     await expect(publishDaemonEndpoint(boundPath, canonicalPath, probe)).resolves.toEqual({
       status: 'published',
       identity: null
@@ -70,8 +63,7 @@ describe('daemon endpoint ownership on win32', () => {
   it('never reports lost ownership, so a daemon is never retired on Windows', () => {
     const missing = join(dir, 'gone.sock')
 
-    // 'indeterminate' and not 'lost' is what keeps the watchdog and the session guard inert: a
-    // named pipe has no directory entry to compare, so absence here is not evidence of takeover.
+    // Named pipes have no directory entry; absence cannot establish a takeover.
     expect(readDaemonEndpointOwnershipState(missing, null)).toBe('indeterminate')
     expect(readDaemonEndpointOwnershipState(missing, { dev: 1n, ino: 2n })).toBe('indeterminate')
   })

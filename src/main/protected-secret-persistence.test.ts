@@ -15,10 +15,7 @@ describe('ProtectedSecretPersistence', () => {
   })
 
   it('surfaces an uninstalled secret store instead of degrading silently', async () => {
-    // Why: a missing setSecretStore() is a startup bug. If the availability check
-    // swallows it, encrypt() hands back an empty blob and decryptWithStatus() reports
-    // 'unavailable' — a real secret silently not stored, which is the outcome the
-    // port throws to prevent.
+    // Missing store installation must surface instead of silently discarding secrets as unavailable.
     const { ProtectedSecretPersistence } = await import('./protected-secret-persistence')
     const secrets = new ProtectedSecretPersistence()
     _resetSecretStoreForTests()

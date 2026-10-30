@@ -24,7 +24,7 @@ export type StructuredAgentSessionLiveSubscribe = (
   onClose: () => void
 ) => Promise<{ unsubscribe: () => void }>
 
-// A stream hands its failure over as the raw `{ code, message }` payload; `String()` of that is `[object Object]`.
+// Raw stream failures carry code/message; String(object) would hide the failure as [object Object].
 function readFailureText(error: unknown): string {
   if (error instanceof Error) {
     return error.message || 'Something went wrong.'
@@ -43,17 +43,14 @@ function readFailureText(error: unknown): string {
   return 'Something went wrong.'
 }
 
-/**
- * The live transcript read every client shares: it reopens from the last applied cursor after the
- * stream ends or fails, waiting twice as long each time up to the cap.
- */
+/** Resume from the last applied cursor after stream end/failure with capped exponential backoff. */
 export function startStructuredAgentSessionLiveRead(args: {
   applyRequests?: (action: StructuredAgentSessionAction) => void
   applyEvent: (event: AgentSessionSubscribeEvent, options?: { opensSubscription: true }) => void
   /** `message` is the failure's own text, for logs; `refusal` is what a surface words. */
   applyError: (message: string, refusal?: AgentSessionRefusalReference) => void
   getCursor: () => AgentJournalCursor | null
-  /** The live read is gone until a reconnect delivers: what the pane holds is stale from here. */
+  /** Mark retained content stale until reconnect delivers. */
   onContactLost: () => void
   onHistoryReadInvalidated: () => void
   hydrate?: (shouldStop: () => boolean) => Promise<void>
@@ -70,7 +67,7 @@ export function startStructuredAgentSessionLiveRead(args: {
 } {
   let stopped = false
   let connected = false
-  // A refusal no retry reads past ends reconnecting for this run; reopening the chat starts another.
+  // Terminal refusals stop this run’s reconnects; reopening the chat starts a new run.
   let failedFinally = false
   let unattachedSince: number | null = null
   let opening = false
@@ -78,8 +75,6 @@ export function startStructuredAgentSessionLiveRead(args: {
   /** The open generation whose first frame has not arrived yet. */
   let openingFrameGeneration = 0
   let stateGeneration = 0
-  /** The current-request version whose failed read already reopened the subscription once. */
-  let failedRequestsVersion: string | undefined
   let unsubscribe = (): void => {}
   let shouldStopCoalescedEvent = (): boolean => true
   const coalescer = createStructuredAgentSessionEventCoalescer((event) => {
@@ -91,11 +86,11 @@ export function startStructuredAgentSessionLiveRead(args: {
     shouldStop: () => stopped || connected || failedFinally,
     reconnect: () => void open()
   })
-  // Why: an outage grows the retry wait to its cap; a host that is back should not wait it out.
+  // A reachable-again host should bypass outage-expanded retry delay.
   const stopHostContactWatch = args.subscribeRetryNow(() => reconnectScheduler.retryNow())
   const loseContact = (): void => {
     connected = false
-    // What already arrived is applied first: landing later, it would read as contact regained.
+    // Flush before marking contact lost or buffered frames would appear to restore contact.
     coalescer.flush()
     requestReader.invalidate()
     args.onContactLost()
@@ -106,17 +101,8 @@ export function startStructuredAgentSessionLiveRead(args: {
   const clearUnattachedReadGrace = (): void => {
     unattachedSince = null
   }
-  /**
-   * A read failure, reported to the pane only once it is one.
-   *
-   * A refusal saying this host holds no attached session is the retry loop's own subject, not a
-   * verdict: the reconnect below re-asks, and either the host opening the session or the tab
-   * retirement that ends the pane resolves it. Only an older host still refuses this way. Painting the pane red inside that window turned an
-   * ordinary chat close into a `Could not load conversation` the user could do nothing about.
-   *
-   * A window, not a mute. An unattached read still refusing past the grace is no longer
-   * transitional, so the pane is owed the failure rather than a spinner that never resolves.
-   */
+  /** Older hosts can transiently refuse reads during attach/close. Reconnect through the grace window;
+   * report persistent refusal afterwards instead of leaving an endless spinner. */
   const applyReadFailure = (error: unknown): void => {
     const refusal = readAgentSessionErrorRefusal(error)
     failedFinally = isFinalAgentSessionReadRefusal(refusal)
@@ -148,22 +134,14 @@ export function startStructuredAgentSessionLiveRead(args: {
     read: args.readCurrentRequests,
     complete: (marker, items) => args.applyRequests?.({ type: 'requests-complete', marker, items }),
     replaceMarker: (marker) => args.applyRequests?.({ type: 'requests-marker', marker }),
-    error: (error, marker) => {
-      reportReadFailure(error)
-      // Why: a reopen re-reads the same version, so a deterministic failure would resubscribe forever.
-      if (failedRequestsVersion === marker.version) {
-        return
-      }
-      failedRequestsVersion = marker.version
-      loseContact()
-    }
+    error: reportReadFailure
   })
   const handleEvent = (event: AgentSessionSubscribeEvent, eventOpenGeneration: number): void => {
     if (!isCurrentOpenGeneration(eventOpenGeneration)) {
       return
     }
     clearUnattachedReadGrace()
-    // Not on connect: a local subscribe resolves before the host's open refuses.
+    // Reset on delivered frames; local subscribe can resolve before the host refuses opening.
     if (event.type !== 'end') {
       reconnectScheduler.reset()
     }
@@ -185,9 +163,8 @@ export function startStructuredAgentSessionLiveRead(args: {
     if (opensSubscription) {
       openingFrameGeneration = 0
     }
-    // A resumed subscription's first batch replaces state the client held while detached, so it is
-    // applied alone, never merged into a later batch that would read as "unchanged".
-    if (opensSubscription && event.type === 'batch') {
+    // First resumed batch replaces detached state; apply alone so coalescing cannot turn it into unchanged state.
+    if (opensSubscription) {
       coalescer.flush()
       if (isCurrentOpenGeneration(eventOpenGeneration)) {
         args.applyEvent(event, { opensSubscription: true })

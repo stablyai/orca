@@ -47,24 +47,20 @@ function Step({
   )
 }
 
-/**
- * Whether the denial is one `tccutil reset` can act on: only Documents, Desktop and Downloads have
- * a per-app TCC row, so offering the button for any other folder promises a remedy that cannot run.
- */
+/** Only Documents/Desktop/Downloads have per-app TCC rows that tccutil can reset. */
 function canResetPermission(mismatch: PtyManagementFolderAccessMismatch): boolean {
   return mismatch.freshDaemonAccess === 'denied' && isMacTccFolderClass(mismatch.cwdClass)
 }
 
 function allowStepHelper(mismatch: PtyManagementFolderAccessMismatch): string | undefined {
-  // A probe that could not answer must not accuse the user of a missing grant.
+  // An unanswered probe cannot establish a missing grant.
   if (mismatch.freshDaemonAccess === 'unknown') {
     return translate(
       'auto.components.shared.MacFolderAccessFixDialog.stepAllowUnknown',
       'Couldn’t verify. Skip if already allowed.'
     )
   }
-  // The toggle is already on for everyone who sees this, so the step has to say what the reset
-  // does instead of pointing at a switch (STA-7948). Without a reset there is nothing to promise.
+  // The toggle is already on; explain the reset only when one is available.
   if (canResetPermission(mismatch)) {
     return translate(
       'auto.components.shared.MacFolderAccessFixDialog.stepAllowDenied',
@@ -148,7 +144,6 @@ function FixSteps({
   )
 }
 
-/** The footer carries the active step's one action, so the steps stay a checklist. */
 function FixFooter({
   mismatch,
   restartState,
@@ -178,8 +173,7 @@ function FixFooter({
       </Button>
     )
   }
-  // Restarting cannot help while a fresh daemon is denied, so the reset takes the primary slot.
-  // Two routes for one step would read as a choice the user cannot make.
+  // Restart cannot help a denied fresh daemon; offer reset as the sole primary remedy.
   if (canResetPermission(mismatch)) {
     // System Settings is the fallback: it appears only once the reset has settled without helping.
     const resetSettled = resetState === 'probed' || resetState === 'failed'
@@ -206,8 +200,7 @@ function FixFooter({
       </>
     )
   }
-  // A denial with no TCC row to reset leaves System Settings as the only route, so it takes the
-  // primary slot: a restart cannot help while a fresh daemon is denied.
+  // Without a resettable TCC row, only System Settings can resolve the denial before restart.
   if (mismatch.freshDaemonAccess === 'denied') {
     return (
       <>
@@ -241,11 +234,7 @@ function FixFooter({
   )
 }
 
-/**
- * The remedy for a daemon macOS refuses a folder to (STA-7948), raised from the folder-access
- * toast. Two steps, because a restart alone only works once Orca itself is allowed again — which
- * step 1 does, and the focus-time poll behind `freshDaemonAccess` is what notices it landed.
- */
+/** Grant access before restarting; focus-time probes detect when the first step succeeds. */
 function FolderAccessFix({
   mismatch
 }: {
@@ -277,8 +266,7 @@ function FolderAccessFix({
         return
       }
       setResetState('probed')
-      // A null verdict means the evidence is gone (daemon replaced mid-reset), which unmounts this
-      // dialog: there is nothing left for it to fix.
+      // Null evidence means the daemon was replaced; applyVerdict unmounts this obsolete remedy.
       applyVerdict(result.mismatch)
     } catch {
       if (mountedRef.current) {
@@ -297,8 +285,7 @@ function FolderAccessFix({
       }
       setRestartState(success ? 'done' : 'failed')
       if (success) {
-        // Why here: the replaced daemon's identity is gone, so the poll that raised the toast will
-        // never mention it again, and a takedown the user did not ask for is not a dismissal.
+        // The replaced daemon will never be polled again; retire its toast without counting dismissal.
         retireNotice(daemonScope)
       }
     } catch {
@@ -370,10 +357,7 @@ function FolderAccessFix({
   )
 }
 
-/**
- * Shown only while the scope the user opened is still the one the evidence is about, so no remedy
- * phase can outlive its evidence and nothing here has to be closed by hand.
- */
+/** Limit the remedy to its original evidence scope so stale phases cannot outlive it. */
 export function MacFolderAccessFixDialog(): React.JSX.Element | null {
   const mismatch = useMacFolderAccessFixStore((s) => s.mismatch)
   const openScope = useMacFolderAccessFixStore((s) => s.openScope)

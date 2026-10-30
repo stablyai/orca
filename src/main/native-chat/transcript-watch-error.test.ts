@@ -135,7 +135,6 @@ describe('native chat transcript watcher errors', () => {
     await vi.waitFor(() =>
       expect(onInitialSnapshot).toHaveBeenCalledWith([], false, 0, 'Transcript unavailable')
     )
-    // Surfaced once, not spammed by the capped rotation retry loop.
     await new Promise((resolve) => setTimeout(resolve, 120))
     expect(onInitialSnapshot).toHaveBeenCalledOnce()
 
@@ -162,11 +161,7 @@ describe('native chat transcript watcher errors', () => {
       expect(onInitialSnapshot).toHaveBeenCalledWith([], false, 0, 'Transcript unavailable')
     )
 
-    // initialDrain stays true after the error, so a recovered read delivers the
-    // real snapshot instead of stranding the client on the error frame.
-    // The content must land before reads recover: the capped rotation retry is
-    // still firing, and any drain that succeeds against a still-empty file
-    // legitimately consumes the pending initial drain with an empty snapshot.
+    // Write content before read recovery: an intervening empty success legitimately consumes initialDrain.
     await writeFile(filePath, claudeLine('u-recovered', 'user', 'back'))
     tailReaderState.failure = null
     watchCallbacks[0]!('change', 'transcript.jsonl')

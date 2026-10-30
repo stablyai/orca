@@ -108,8 +108,7 @@ export function createHarness() {
       subscribeGate = null
       await gate.wait
     }
-    // Models the host closing the subscription and only then rejecting the request, which is what
-    // src/main/ipc/runtime-environments/runtime-environments.ts does on a stale pairing.
+    // Model stale pairing: the host closes the subscription before rejecting the request.
     if (closeBeforeNextSubscribeRejects) {
       closeBeforeNextSubscribeRejects = false
       callbacks.onClose?.()
@@ -211,8 +210,6 @@ export function createHarness() {
     get subscribeAttempts(): number {
       return subscribeAttempts
     },
-    // Kept as accessors so the assertions written against the old three-variable shape still read
-    // naturally — they now derive from the one status, which is the point of the change.
     get errorLog(): (string | null)[] {
       return statusLog.map(remoteBrowserStreamNotice)
     },

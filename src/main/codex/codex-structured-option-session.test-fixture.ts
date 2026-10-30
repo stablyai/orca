@@ -1,4 +1,4 @@
-import type { CodexAppServerConnection } from './codex-app-server-connection'
+import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import { CodexAcquisitionWindow } from './codex-structured-acquisition-window'
 import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import { createCodexDispatchEchoes } from './codex-structured-dispatch-echo'
@@ -24,6 +24,7 @@ export function optionSession(request: CodexAppServerConnection['request']): Cod
     prompts: new CodexAcquisitionWindow().prompts,
     options: new Map(),
     reportedOptions: { model: 'gpt-live', effort: 'high' },
+    appliedTurnOptions: { model: 'gpt-live', effort: 'high' },
     dispatchEchoes: createCodexDispatchEchoes(),
     turnOpenWaits: createCodexTurnOpenWaits(),
     translator: null

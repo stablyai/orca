@@ -18,7 +18,7 @@ vi.mock('../zcode/zcode-plan-api-key-store', () => ({
   API_KEY_ENVELOPE_PREFIX: 'zcode:',
   getZcodePlanApiKeyPath: () => 'zcode-key-path'
 }))
-// The files are mocked away; readability has its own coverage in the RPC test.
+// Mocked files have no real readability; RPC tests cover that check.
 vi.mock('../credentials/saved-credential-readability', () => ({
   savedCredentialUnreadable: () => undefined,
   refuseCredentialSealedElsewhere: () => {

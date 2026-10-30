@@ -9,6 +9,9 @@ const { setupMock } = vi.hoisted(() => ({
 
 vi.mock('electron', () => ({ app: {}, ipcMain: {} }))
 vi.mock('../updater', () => ({ setupAutoUpdater: setupMock }))
+vi.mock('../updater/electron-updater-proxy-session', () => ({
+  applyProxyToElectronUpdaterSession: vi.fn()
+}))
 vi.mock('../ipc/ui', () => ({ isTrustedUIRenderer: () => true }))
 vi.mock('../startup/startup-diagnostics', () => ({ logStartupMilestone: vi.fn() }))
 
@@ -16,11 +19,12 @@ import { setupHeadlessServeAutoUpdater } from './main-window-updater'
 
 function createStore() {
   const store = {
+    getSettings: vi.fn(() => ({})),
     getUI: vi.fn(() => ({ lastUpdateCheckAt: 5 })),
     updateUI: vi.fn(),
     flushPendingAsync: vi.fn<Store['flushPendingAsync']>().mockResolvedValue(undefined)
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: setup only reads getUI/updateUI/flushPendingAsync, all provided above.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: setup only reads getSettings/getUI/updateUI/flushPendingAsync, all provided above.
   return { store, persistence: store as unknown as Store }
 }
 

@@ -47,9 +47,7 @@ describe('native chat transcript resolve polling', () => {
       return mocks.stopObservation
     })
     mocks.toHostReadable.mockReset().mockResolvedValue(null)
-    // Why: a POSIX exact path is a WSL guest path on win32 and is deliberately
-    // never installed raw there, so pin the platform instead of inheriting the
-    // host's — otherwise these cases only hold on non-Windows machines.
+    // Pin Linux: Windows must translate guest paths before install, so these raw POSIX fixtures cannot inherit host OS.
     setPlatform('linux')
   })
 
@@ -120,7 +118,6 @@ describe('native chat transcript resolve polling', () => {
 
     await mocks.observation?.(['Ubuntu'])
     expect(mocks.install.mock.calls.some(([filePath]) => filePath === unc)).toBe(true)
-    // The resolve observer hands ownership to the installed watcher.
     expect(mocks.toHostReadable).toHaveBeenCalledTimes(1)
     expect(mocks.stopObservation).toHaveBeenCalledOnce()
 

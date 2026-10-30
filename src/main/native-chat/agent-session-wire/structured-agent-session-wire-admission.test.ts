@@ -10,7 +10,7 @@ import type {
   AgentSessionBackgroundTaskState,
   AgentSessionSubscribeEvent
 } from '../../../shared/agent-session-wire'
-import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../shared/remote-runtime-memory-limits'
+import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 import { mobileE2EETextPayloadAdmissionBytes } from '../../runtime/rpc/mobile-e2ee-outbound-admission'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
@@ -104,10 +104,7 @@ describe('structured agent-session outbound admission', () => {
     expect(epochHistory).toMatchObject({ ok: false, reset: 'epoch_changed' })
     expectAdmitted(epochHistory)
 
-    // The store can no longer produce a `cursor_compacted` reset — with no row
-    // shedding inside an epoch, `oldestSequence` is always 1. The reset reason
-    // stays in the wire vocabulary through the over-budget page path, which is
-    // where this file's subject — is such a frame admitted outbound? — now lives.
+    // Epochs no longer shed rows; exercise cursor_compacted via an over-budget legacy page.
     const cursorBefore = journal.cursor()
     const overBudget = await reopenWithOversizedRemoval(cursorBefore.sequence)
     const history = readAgentSessionHistory(overBudget, {
@@ -160,8 +157,7 @@ function body(text: string): AgentJournalItemBody {
   return { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text }] }
 }
 
-/** Stages a pre-bounding oversized removal id — the one remaining producer of a
- *  `cursor_compacted` reset — straight into the session database. */
+/** Inject a legacy oversized removal ID to force a cursor_compacted reset. */
 async function reopenWithOversizedRemoval(afterSequence: number): Promise<AgentSessionJournal> {
   const hugeItemId = `codex:thread-1:${'h'.repeat(5 * 1024 * 1024)}:1`
   const base = { v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION, epoch: journal.epoch, fence: 1, ts: 1 }

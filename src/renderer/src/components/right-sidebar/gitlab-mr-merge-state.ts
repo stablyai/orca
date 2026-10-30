@@ -121,8 +121,7 @@ function presentUnknownMergeState(
         )
       )
     default:
-      // Why: with no usable reason from GitLab, a red pipeline is the most actionable thing we
-      // know — reporting a bare "Checking" hid the failure the user actually has to fix.
+      // Without a usable merge reason, surface the actionable failed pipeline instead of Checking.
       if (checksStatus === 'failure') {
         return blockedPresentation(
           translate(
@@ -189,8 +188,7 @@ export function presentGitLabMRMergeState(review: GitLabMRMergeStateReview): Mer
       directMergeAvailable: false
     }
   }
-  // Why: only GitLab's explicit `mergeable` projects to MERGEABLE. UNKNOWN used to fall through
-  // to "Able to merge", so not_approved / discussions_not_resolved / ci_must_pass looked ready.
+  // Only explicit mergeable means ready; UNKNOWN may hide approval, discussion, or CI blockers.
   if (review.mergeable !== 'MERGEABLE') {
     return presentUnknownMergeState(review.mergeStateStatus, review.status)
   }

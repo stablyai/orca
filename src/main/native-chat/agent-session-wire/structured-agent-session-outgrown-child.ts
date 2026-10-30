@@ -1,5 +1,4 @@
-// A child the chat outgrew (signed out, or launched with another permission mode) is replaced before
-// the next send: agents read their login and permission mode only when they start.
+// Replace an outgrown child only when its provider needs acquisition to apply the current choice.
 
 import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { isRootAgentJournalItem } from '../../../shared/agent-session-journal-producer'
@@ -12,11 +11,14 @@ import {
   type StructuredAgentSessionChildWorkReads
 } from './structured-agent-session-idle-sweep'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
-import type { AgentChatPermissionMode } from '../../../shared/agent-chat-permission-mode'
+import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 
-/** What the check reads of a conversation; every read skips building a snapshot. */
 type OutgrownChildReading = Pick<StructuredAgentSessionHostSession, 'child'> & {
-  journal: Pick<AgentSessionJournal, 'visitItemsWithLinkage' | 'itemFence' | 'newestTurn'> & {
+  journal: Pick<
+    AgentSessionJournal,
+    'visitItemsWithLinkage' | 'itemFence' | 'newestTurn' | 'itemBody'
+  > & {
     submissions(): readonly Pick<AgentJournalSubmission, 'dispatchState' | 'fence' | 'rejection'>[]
   }
 }
@@ -24,8 +26,7 @@ type OutgrownChildReading = Pick<StructuredAgentSessionHostSession, 'child'> & {
 const signedOut = (failure: unknown): boolean =>
   readWholeAgentSessionFailureFact(failure)?.kind === 'notSignedIn'
 
-/** The running child itself said it is not signed in through a rejected send or a row it wrote.
- *  Its fence scopes both to this child, so a new one has nothing. */
+/** Scope sign-out evidence to this child’s fence so replacement children do not inherit it. */
 export function structuredAgentSessionChildReportedSignedOut(
   session: OutgrownChildReading
 ): boolean {
@@ -45,7 +46,7 @@ export function structuredAgentSessionChildReportedSignedOut(
   ) {
     return true
   }
-  // The session's own agent only: a subagent's sign-in failure says nothing about its parent.
+  // A subagent’s sign-in failure says nothing about the parent.
   let found = false
   journal.visitItemsWithLinkage((itemId, _sequence, body, attribution) => {
     found ||=
@@ -57,9 +58,7 @@ export function structuredAgentSessionChildReportedSignedOut(
   return found
 }
 
-/** Child work that settled after the lead's newest turn ended: the lead may still owe the turn
- *  that reads its result, which journals nothing until it opens. The idle sweep's window covers
- *  this; a restart before the next send has none, so it waits for that turn. */
+/** Wait for the lead’s wake-up after child completion; unlike idle sweep, immediate restart has no window. */
 function owesWakeUp(
   journal: Pick<AgentSessionJournal, 'newestTurn'>,
   childWork: readonly AgentChildWorkView[] | undefined
@@ -70,31 +69,53 @@ function owesWakeUp(
   )
 }
 
-/** Loop-free: a start launches with the same `current` this compares against. */
+/** Compare the actual launch mode so replacement cannot loop. */
 async function launchedWithOtherPermissionMode(
   child: OutgrownChildReading['child'],
-  current: (() => Promise<AgentChatPermissionMode | null>) | undefined
+  current: (() => Promise<AgentChatPermissionChoice | null>) | undefined,
+  requiresAcquisition: ((mode: AgentChatPermissionChoice) => boolean) | undefined
 ): Promise<boolean> {
   if (!child || child.phase === 'starting' || child.close || !child.permissionMode || !current) {
     return false
   }
   const mode = await current()
-  return mode !== null && mode !== child.permissionMode
+  return (
+    mode !== null &&
+    (requiresAcquisition ? requiresAcquisition(mode) : mode !== child.permissionMode)
+  )
 }
 
-/** For a caller inside the session's serialize, before it hands the next send to the child. Work
- *  the child still owes keeps it, as it keeps an idle one from the sweep. A stop that fails leaves
- *  the close begun, which the start joins. */
+/** Orca mail notices are not the user's turn: they keep the running process and its choices. */
+function picksNewLaunchModel(
+  session: OutgrownChildReading,
+  next: AgentJournalSubmission | undefined,
+  requiresModelTransitionRestart: ((next: AgentJournalSubmission) => boolean) | undefined
+): boolean {
+  if (!next || !requiresModelTransitionRestart) {
+    return false
+  }
+  const body = session.journal.itemBody(agentJournalSubmissionKey(next.clientMessageId))
+  return (
+    body?.kind === 'message' &&
+    body.from?.orchestration?.message !== 'mail-notice' &&
+    requiresModelTransitionRestart(next)
+  )
+}
+
+/** Retire under serialization only when no work is owed; failed Stop leaves a close for startup to join. */
 export async function retireOutgrownStructuredAgentSessionChild(
   sessionId: string,
   session: OutgrownChildReading | undefined,
   deps: {
-    /** `childWork`: the records, read only for endings the lead has yet to answer. */
+    /** Read records only for child endings the lead has not answered. */
     work: StructuredAgentSessionChildWorkReads & {
       childWork: () => readonly AgentChildWorkView[] | undefined
     }
-    /** The mode a start of the chat would launch with now. */
-    launchPermission?: () => Promise<AgentChatPermissionMode | null>
+    launchPermission?: () => Promise<AgentChatPermissionChoice | null>
+    /** The send about to be handed over; a new model pick may need the requested approval mode. */
+    next?: AgentJournalSubmission
+    requiresModelTransitionRestart?: (next: AgentJournalSubmission) => boolean
+    permissionRequiresAcquisition?: (mode: AgentChatPermissionChoice) => boolean
     stopAgent: (sessionId: string) => Promise<void>
     logger: StructuredAgentSessionLogger
   }
@@ -103,10 +124,14 @@ export async function retireOutgrownStructuredAgentSessionChild(
     !session ||
     !(
       structuredAgentSessionChildReportedSignedOut(session) ||
-      (await launchedWithOtherPermissionMode(session.child, deps.launchPermission))
+      picksNewLaunchModel(session, deps.next, deps.requiresModelTransitionRestart) ||
+      (await launchedWithOtherPermissionMode(
+        session.child,
+        deps.launchPermission,
+        deps.permissionRequiresAcquisition
+      ))
     ) ||
-    structuredAgentSessionChildHasOpenWork(deps.work) ||
-    owesWakeUp(session.journal, deps.work.childWork())
+    structuredAgentSessionChildOwesWork(session.journal, deps.work)
   ) {
     return
   }
@@ -117,4 +142,13 @@ export async function retireOutgrownStructuredAgentSessionChild(
       error
     })
   )
+}
+
+export function structuredAgentSessionChildOwesWork(
+  journal: Pick<AgentSessionJournal, 'newestTurn'>,
+  work: StructuredAgentSessionChildWorkReads & {
+    childWork: () => readonly AgentChildWorkView[] | undefined
+  }
+): boolean {
+  return structuredAgentSessionChildHasOpenWork(work) || owesWakeUp(journal, work.childWork())
 }

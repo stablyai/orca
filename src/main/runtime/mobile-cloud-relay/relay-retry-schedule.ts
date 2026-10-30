@@ -1,8 +1,7 @@
 const RETRY_BASE_MS = 1_000
 const RETRY_MAX_MS = 5 * 60_000
 
-// Jittered exponential backoff that recovers brief failures quickly without
-// turning a sustained outage into auth/director load. One pending retry at a time.
+// Jitter prevents sustained outages from overloading auth/director; allow only one pending retry.
 export class RelayRetrySchedule {
   private timer: ReturnType<typeof setTimeout> | null = null
   private attempt = 0
@@ -15,7 +14,6 @@ export class RelayRetrySchedule {
     return this.timer !== null
   }
 
-  // Consecutive scheduled retries since the last reset (a success or a fresh demand).
   get attempts(): number {
     return this.attempt
   }
@@ -24,7 +22,6 @@ export class RelayRetrySchedule {
     return this.dueAt
   }
 
-  // Resolves once the pending retry has run or was cancelled.
   settled(): Promise<void> {
     return this.timer
       ? new Promise((resolve) => this.settledWaiters.add(resolve))

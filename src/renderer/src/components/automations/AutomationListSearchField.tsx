@@ -57,8 +57,7 @@ export function AutomationListSearchField({
         )}
         aria-invalid={isTooLarge || undefined}
         aria-describedby={isTooLarge ? 'automations-list-search-too-large' : undefined}
-        // Why: the page-level capture Escape handler blurs inputs; this opts out
-        // so the first Escape clears the query without also losing focus.
+        // Let the first Escape clear search without the page’s capture handler also blurring it.
         data-escape-clears-value={hasText ? 'true' : undefined}
         className={cn(
           // Flat list search: no elevation/halo; soft focus border only.

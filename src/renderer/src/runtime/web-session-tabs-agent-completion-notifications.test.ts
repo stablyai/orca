@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { AgentStatusChange } from '@/store/slices/agent-status/agent-status-contract'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
@@ -22,7 +23,11 @@ import {
   registerRendererOwnedAgentStatusPane,
   resetRendererOwnedAgentStatusPanesForTests
 } from '@/components/terminal-pane/renderer-owned-agent-status-registry'
-import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
+import {
+  applyWebSessionTabsSnapshot,
+  applyWebSessionTabsSnapshots,
+  applyWebSessionTabsSnapshotOperations
+} from './web-session-tabs-sync/snapshot-api'
 import { applyWebSessionTabsStorePatch } from './web-session-tabs-sync/store-patch'
 import { decideWebSessionTabsSnapshot } from './web-session-tabs-sync/tracking-decisions'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
@@ -78,7 +83,15 @@ function makeAgentSnapshot(
 function applySnapshot(snapshot: RuntimeMobileSessionTabsResult, live: boolean): void {
   const decision = decideWebSessionTabsSnapshot(snapshot, ENVIRONMENT_ID)
   applyWebSessionTabsStorePatch(
-    (state) => applyWebSessionTabsSnapshot(state, snapshot, ENVIRONMENT_ID, NOW),
+    (state, changedAgentPaneKeys) =>
+      applyWebSessionTabsSnapshot(
+        state,
+        snapshot,
+        ENVIRONMENT_ID,
+        NOW,
+        undefined,
+        changedAgentPaneKeys
+      ),
     { frames: [{ environmentId: ENVIRONMENT_ID, worktreeId: snapshot.worktree, decision }] },
     snapshot,
     live
@@ -104,6 +117,67 @@ describe('paired session-tab agent completion notifications', () => {
     vi.useRealTimers()
   })
 
+  it.each(['single', 'batch', 'operations'] as const)(
+    'reports committed mirror keys through %s reconciliation and retraction',
+    (kind) => {
+      const observed = vi.fn((changes: readonly AgentStatusChange[]) => {
+        for (const change of changes) {
+          expect(useAppStore.getState().agentStatusByPaneKey[change.paneKey]).toBe(change.current)
+        }
+      })
+      const dispose = useAppStore.getState().subscribeAgentStatusChanges(observed)
+      const paneKey = makePaneKey(toWebTerminalSurfaceTabId(HOST_TAB_ID), LEAF_ID)
+      const apply = (snapshot: RuntimeMobileSessionTabsResult) => {
+        const decision = decideWebSessionTabsSnapshot(snapshot, ENVIRONMENT_ID)
+        const settle = applyWebSessionTabsStorePatch(
+          (state, keys) => {
+            if (kind === 'batch') {
+              return applyWebSessionTabsSnapshots(state, [snapshot], ENVIRONMENT_ID, NOW, keys)
+            }
+            if (kind === 'operations') {
+              return applyWebSessionTabsSnapshotOperations(
+                state,
+                [{ snapshot, environmentId: ENVIRONMENT_ID, decision }],
+                keys
+              )
+            }
+            return applyWebSessionTabsSnapshot(
+              state,
+              snapshot,
+              ENVIRONMENT_ID,
+              NOW,
+              undefined,
+              keys
+            )
+          },
+          { frames: [{ environmentId: ENVIRONMENT_ID, worktreeId: WORKTREE_ID, decision }] }
+        )
+        settle()
+      }
+      try {
+        apply(makeAgentSnapshot(1, NOW))
+        expect(observed).toHaveBeenCalledExactlyOnceWith([
+          {
+            paneKey,
+            previous: undefined,
+            current: useAppStore.getState().agentStatusByPaneKey[paneKey]
+          }
+        ])
+        const previous = useAppStore.getState().agentStatusByPaneKey[paneKey]
+        observed.mockClear()
+        apply({ ...makeAgentSnapshot(2, NOW + 1), tabs: [] })
+        expect(observed).toHaveBeenCalledExactlyOnceWith([
+          { paneKey, previous, current: undefined }
+        ])
+        observed.mockClear()
+        apply({ ...makeAgentSnapshot(3, NOW + 2), tabs: [] })
+        expect(observed).not.toHaveBeenCalled()
+      } finally {
+        dispose()
+      }
+    }
+  )
+
   it('forwards accepted working snapshots and live statuses', () => {
     applySnapshot(makeAgentSnapshot(1, NOW), false)
     expect(mocks.observeAgentHookCompletionForNotification).toHaveBeenCalledTimes(1)
@@ -125,6 +199,21 @@ describe('paired session-tab agent completion notifications', () => {
 
     applySnapshot(makeAgentSnapshot(4, NOW + 3_000, turnCompletedAt + 1_000), false)
     expect(mocks.observeAgentHookCompletionForNotification).toHaveBeenCalledTimes(4)
+  })
+
+  // STA-12043: a cold-restored host republishes the old turn as unverifiable under a new date.
+  it('announces no completion for an unverifiable done', () => {
+    applySnapshot(makeAgentSnapshot(1, NOW, undefined, 'done', NOW), true)
+    const announced = mocks.observeAgentHookCompletionForNotification.mock.calls.length
+    const restored = makeAgentSnapshot(2, NOW + 60_000, undefined, 'done', NOW + 60_000)
+    const [tab] = restored.tabs
+    if (tab?.type === 'terminal' && tab.agentStatus) {
+      tab.agentStatus.restoredUnconfirmed = true
+    }
+
+    applySnapshot(restored, true)
+
+    expect(mocks.observeAgentHookCompletionForNotification).toHaveBeenCalledTimes(announced)
   })
 
   it('announces one live stamped completion after a late-pair working seed', () => {

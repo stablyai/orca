@@ -151,7 +151,6 @@ describe('PushDispatcher', () => {
     scheduled[0]?.()
     await flush()
     expect(sends).toHaveLength(2)
-    // The second attempt is the last one; a further retry is never scheduled.
     expect(scheduled).toHaveLength(1)
   })
 

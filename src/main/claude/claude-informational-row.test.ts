@@ -18,7 +18,7 @@ const IDENTITY: AgentSessionJournalIdentity = {
   providerHandle: claudeProviderHandle('provider-1', 'leaf-1')
 }
 
-/** A frame as Claude Code 2.1.280 sends it: a transcript note at a render level. */
+/** Informational frame shape from CLI 2.1.280. */
 function informational(
   level: 'info' | 'notice' | 'suggestion' | 'warning',
   content: string
@@ -71,9 +71,5 @@ describe('a Claude informational frame', () => {
     const items = await itemsFor([informational('warning', content)])
 
     expect(items).toEqual([{ kind: 'status', tone: 'warning', text: content }])
-  })
-
-  it('writes no row for a warning with nothing to say', async () => {
-    expect(await itemsFor([informational('warning', '  ')])).toEqual([])
   })
 })

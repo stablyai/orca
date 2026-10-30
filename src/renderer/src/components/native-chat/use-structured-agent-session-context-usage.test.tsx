@@ -8,6 +8,7 @@ let items: AgentJournalRenderItem[] = []
 let unloadedTurnRevisions: number | undefined
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
+  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
   callStructuredAgentSession: mocks.call,
   readStructuredAgentSessionConversationOutline: vi.fn(async () => null)
 }))
@@ -196,8 +197,8 @@ describe('useStructuredAgentSession context usage', () => {
     }
     expect(optionReads()).toBe(2)
     await act(async () => replies[1](160_000))
-    // The one in flight lands, and one more read covers every revision behind it.
-    expect(result.current.contextUsage).toMatchObject({ usedTokens: 160_000 })
+    // The obsolete read cannot replace the answer; one current successor covers the revisions.
+    expect(result.current.contextUsage).toMatchObject({ usedTokens: 150_000 })
     await waitFor(() => expect(optionReads()).toBe(3))
     await act(async () => replies[2](175_000))
     expect(result.current.contextUsage).toMatchObject({ usedTokens: 175_000 })

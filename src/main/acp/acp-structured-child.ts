@@ -1,5 +1,6 @@
 import type { SubmissionRejectionFact } from '../../shared/agent-session-failure'
 import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
+import type { StructuredAgentSessionSetOptionInput } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { AcpAgentError } from './acp-errors'
 import { acpAuthenticationRequired, acpSignInRequiredFailure } from './acp-turn-failures'
 import type { AcpStructuredSession } from './acp-structured-session'
@@ -34,12 +35,28 @@ export function isAcpReadySession(
   return session != null && session.lane !== null && session.turns !== null
 }
 
+export function canSetAcpOptionWhileIdle(
+  session: AcpStructuredChild | undefined,
+  input: StructuredAgentSessionSetOptionInput
+): boolean {
+  return !!(
+    session &&
+    isAcpReadySession(session) &&
+    session.fence === input.fence &&
+    session.journalClosed === null &&
+    !session.closeRequested &&
+    !session.turns.running &&
+    input.key === 'model' &&
+    session.options.write('model', input.value)?.method === 'config'
+  )
+}
+
 export function acpStartupFailure(
   session: AcpStructuredChild,
   error: unknown
 ): SubmissionRejectionFact | undefined {
   if (error instanceof AcpAgentError && acpAuthenticationRequired(session.spec.dialect, error)) {
-    // The agent's sign-in words, never log lines it wrote before refusing.
+    // Use the agent's sign-in answer, excluding preceding diagnostic output.
     return acpSignInRequiredFailure(session.spec.dialect, error)
   }
   return undefined

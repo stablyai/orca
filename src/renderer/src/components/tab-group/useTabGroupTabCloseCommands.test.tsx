@@ -87,7 +87,7 @@ function commands(): ReturnType<typeof useTabGroupTabCloseCommands> {
   return renderHook(() => useTabGroupTabCloseCommands({ worktreeId: 'worktree-a' })).result.current
 }
 
-/** One page, held under a client-minted handle the host has not published yet. */
+/** Stage a client handle before the host publishes its page. */
 function stageWorkspace(workspaceId: string): void {
   useAppStore.setState({
     browserPagesByWorkspace: { [workspaceId]: [{ id: 'page-1', workspaceId }] },
@@ -103,8 +103,7 @@ function closedEnvironmentIds(): string[] {
     .sort()
 }
 
-// Why: a workspace whose pages span two environments resolved as "ambiguous", and both close
-// paths fell through without doing anything — the X was inert with no error and no teardown.
+// Mixed-environment workspaces must route each tab separately rather than reject the owner as ambiguous.
 describe('closing a browser workspace owned by more than one runtime environment', () => {
   it('closes it on every owning host from the single-tab close', () => {
     commands().closeItem('unified-browser')
@@ -130,8 +129,7 @@ describe('closing a browser workspace owned by more than one runtime environment
     expect(closeUnifiedTab).toHaveBeenCalledWith('unified-browser', undefined)
   })
 
-  // Why: a mirror of a host tab has no page of its own, so nothing names an owner — without the
-  // worktree's owner standing in, the X removed nothing and the host re-mirrored the tab.
+  // Pageless host mirrors need the workspace owner or the host re-mirrors the locally removed tab.
   it("removes a pageless host mirror through the worktree's runtime owner", () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: setState takes a partial slice; these fixtures seed only the fields the close plan reads.
     useAppStore.setState({
@@ -161,8 +159,7 @@ describe('closing a browser workspace owned by more than one runtime environment
     expect(closeUnifiedTab).toHaveBeenCalledWith('unified-browser', undefined)
   })
 
-  // Why: a staged page names an environment before the host has minted it, so the owner branch
-  // would fire an inert close and the in-flight create's snapshot would put the tab back.
+  // Cancel staged creates locally; a host close would do nothing before the create snapshot arrives.
   it('unwinds a staged tab locally instead of closing it on the host', () => {
     stageWorkspace('workspace-a')
 
@@ -177,8 +174,7 @@ describe('closing a browser workspace owned by more than one runtime environment
     })
   })
 
-  // Why: the empty check answers "the user emptied this worktree". Cancelling a create that never
-  // finished is not that — deselecting here drops the user on the landing screen mid-click.
+  // Cancelling an unfinished create must preserve selection rather than act like emptying a workspace.
   it('keeps the worktree selected when the unwound staged tab was the last one', () => {
     stageWorkspace('workspace-a')
     const setActiveWorktree = vi.fn()
@@ -193,8 +189,6 @@ describe('closing a browser workspace owned by more than one runtime environment
     expect(setActiveWorktree).not.toHaveBeenCalled()
   })
 
-  // Why: the bail above is only correct if it is narrow. Making it unconditional reads the same in
-  // the staged test, so pin the case it must not swallow — a real X on the last real browser tab.
   it('leaves the worktree when a real close empties it', () => {
     mocks.isWebRuntimeSessionActive.mockReturnValue(false)
     const setActiveWorktree = vi.fn()
@@ -210,9 +204,7 @@ describe('closing a browser workspace owned by more than one runtime environment
     expect(setActiveWorktree).toHaveBeenCalledWith(null)
   })
 
-  // Why: closeMany runs the plan per item, so a staged tab and a real host-mirrored one in the
-  // same bulk close must take different routes — the bulk path is where a shared close policy
-  // historically went unasserted.
+  // Bulk close must resolve staged and host-mirrored ownership per item.
   it('routes a staged tab and a host-mirrored tab differently in one bulk close', () => {
     const hostTab = {
       id: 'unified-browser-2',

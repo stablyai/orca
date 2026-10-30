@@ -25,8 +25,7 @@ const mocks = vi.hoisted(() => ({
   listeners: new Set<() => void>()
 }))
 
-// Why subscribable: a mid-mount auth re-read has to reach the rendered tree, which a
-// plain selector-over-a-mutable-object mock silently swallows.
+// Use a subscribable mock so auth rereads reach the mounted tree rather than disappear into mutable selector state.
 vi.mock('../../store', () => ({
   useAppStore: (selector: (state: MobileRelayStoreState) => unknown) =>
     useSyncExternalStore(
@@ -42,10 +41,6 @@ function publishStoreState(next: MobileRelayStoreState): void {
   mocks.state = next
   mocks.listeners.forEach((listener) => listener())
 }
-
-vi.mock('../../i18n/i18n', () => ({
-  translate: (_key: string, fallback: string) => fallback
-}))
 
 describe('MobilePairingConnectionOptions', () => {
   let statusListener: ((detail: MobileRelayStatusDetail) => void) | null
@@ -96,19 +91,15 @@ describe('MobilePairingConnectionOptions', () => {
     expect(
       screen.getByText(/Signs this desktop in to Orca and routes the phone through Orca’s servers/)
     ).toBeVisible()
-    // Why: CTA must sit between Relay and LAN so it is not buried under LAN.
     expect(
       relay.compareDocumentPosition(signInPanel) & Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy()
     expect(signInPanel.compareDocumentPosition(lan) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    // Why: `radiogroup` only permits `radio` children. The panel is layout-only,
-    // so it must stay role-less rather than declaring a `group` the group cannot
-    // own — and its label must not double-announce the button it wraps.
+    // Keep layout role-less: radiogroups own radios only, and extra labels would double-announce Sign in.
     const group = screen.getByRole('radiogroup')
     expect(within(group).queryAllByRole('group')).toHaveLength(0)
     expect(within(group).getAllByRole('radio')).toHaveLength(2)
     expect(signInPanel).not.toHaveAttribute('aria-label')
-    // Why: do not surface build-setup diagnostics in the pairing flow.
     expect(screen.queryByText(/not configured for this build/i)).toBeNull()
 
     await user.click(signIn)
@@ -153,7 +144,6 @@ describe('MobilePairingConnectionOptions', () => {
     }
     render(<MobilePairingConnectionOptions value="automatic" onChange={vi.fn()} />)
 
-    // No Relay endpoint to sign into — the Sign in CTA must not appear.
     expect(screen.queryByTestId('anywhere-sign-in-panel')).toBeNull()
     expect(screen.queryByRole('button', { name: /Sign in/i })).toBeNull()
     const relay = screen.getByRole('radio', { name: /Orca Relay/i })
@@ -288,6 +278,28 @@ describe('MobilePairingConnectionOptions', () => {
     await waitFor(() => expect(screen.queryByTestId('relay-cell-line')).toBeNull())
   })
 
+  it('shows clock guidance from status and clears it when Relay recovers', async () => {
+    mocks.state = {
+      ...mocks.state,
+      orcaProfileAuthStatus: {
+        activeProfileId: 'profile-1',
+        configured: true,
+        state: 'connected',
+        persistence: 'encrypted'
+      }
+    }
+    render(<MobilePairingConnectionOptions value="automatic" onChange={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('Ready')).toBeVisible())
+
+    statusListener?.({ status: 'offline', clockOffsetMs: -38_000 })
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      "Your computer's clock is off by about 38 seconds. Turn on automatic time, then retry."
+    )
+
+    statusListener?.({ status: 'registered' })
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
+  })
+
   it('keeps LAN available while Relay is retrying', async () => {
     mocks.state = {
       ...mocks.state,
@@ -319,8 +331,7 @@ describe('MobilePairingConnectionOptions', () => {
   })
 
   it('re-reads a session revoked since startup and offers Sign in again', async () => {
-    // Regression: the store cached "connected" at startup and the pane only
-    // fetched when it was empty, so a revoked session stayed invisible.
+    // A cached connected state must not hide sessions revoked since startup.
     const connectedState: MobileRelayStoreState = {
       ...mocks.state,
       orcaProfileAuthStatus: {

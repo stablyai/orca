@@ -59,8 +59,7 @@ describe('showSourceControlEntryFailureToast', () => {
   })
 
   it('says "delete" for an entry whose discard removes the file rather than restoring it', () => {
-    // Why: untracked and added paths have no HEAD version, so the row button and the confirmation
-    // dialog both say "delete" — the failure must not contradict the verb the user pressed.
+    // Match the delete verb shown by row/confirmation controls when discard removes a file.
     show({ operation: 'discard', deletesFile: true })
     expect(lastToast().title).toBe('Failed to delete “src/app.ts”')
   })
@@ -81,8 +80,7 @@ describe('showSourceControlEntryFailureToast', () => {
   })
 
   it('still reports a failure belonging to a worktree the user has left, naming it', () => {
-    // Why: suppressing the ACTION on a worktree mismatch is right; suppressing the REPORT would
-    // reintroduce exactly the silent failure this module exists to remove.
+    // Suppress stale recovery actions after switches, but still report the original workspace's failure.
     storeState.activeWorktreeId = 'wt-2'
     show({ worktreeId: 'wt-1', worktreeName: 'feature-a', onRetry: vi.fn() })
 
@@ -102,8 +100,7 @@ describe('showSourceControlEntryFailureToast', () => {
   })
 
   it('keeps sonner from auto-dismissing the slot the retry is about to re-raise into', () => {
-    // Why: sonner's post-click removal is scheduled by id, so it would swallow a re-failure raised
-    // within ~200ms; preventDefault hands the slot's lifetime to the retry itself.
+    // Sonner removes action-clicked IDs after ~200ms; preventDefault preserves fast retry failures.
     const onRetry = vi.fn()
     show({ onRetry })
 
@@ -129,8 +126,7 @@ describe('showSourceControlEntryFailureToast', () => {
   })
 
   it('leaves a failure another worktree raised into the slot alone', () => {
-    // Why: a retry still in flight in the worktree the user left must not erase the failure the
-    // worktree they switched to has since raised into the shared slot.
+    // A slow old-workspace retry must not dismiss a newer workspace's failure in the shared slot.
     show({ worktreeId: 'wt-1' })
     storeState.activeWorktreeId = 'wt-2'
     show({ worktreeId: 'wt-2', worktreeName: 'feature-b' })

@@ -374,8 +374,7 @@ describe('RelayAgentHookServer', () => {
       expect(replayed).toBe(1)
       expect(forward).toHaveBeenCalledTimes(1)
       expect(forward.mock.calls[0][0].payload.prompt).toBe('cache me')
-      // Why: replay must preserve the wire envelope's env/version (and source)
-      // so protocol diagnostics and the remote-location marker survive replay.
+      // Replay must retain env/version/source for protocol diagnostics and remote location.
       expect(forward.mock.calls[0][0].source).toBe('claude')
       expect(forward.mock.calls[0][0].env).toBe('remote')
       expect(forward.mock.calls[0][0].version).toBe('1')
@@ -468,8 +467,7 @@ describe('RelayAgentHookServer', () => {
     }
   })
 
-  // Why: the relay should still drop malformed HTTP events before they reach
-  // the wire, even though Orca main re-validates at the SSH trust boundary.
+  // Reject malformed HTTP events before the wire even though main revalidates at SSH ingress.
   it('does not forward when normalizeHookPayload rejects the event', async () => {
     const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
     const server = new RelayAgentHookServer({ endpointDir: dir, forward })
@@ -486,14 +484,10 @@ describe('RelayAgentHookServer', () => {
           paneKey: 'tab-1:0',
           tabId: 'tab-1',
           worktreeId: 'wt-1',
-          // Why: bogus hook_event_name — normalizeClaudeEvent returns null for
-          // any value outside its known set, which propagates up so
-          // normalizeHookPayload returns null.
           payload: { hook_event_name: 'BogusEvent', prompt: 'ignored' }
         })
       })
-      // Why: hook server fails open with 204 even on rejected input — the
-      // contract is "never block the agent", not "tell the agent it lost".
+      // Rejected hooks still return 204 so agents never block.
       expect(res.status).toBe(204)
       expect(forward).not.toHaveBeenCalled()
     } finally {
@@ -691,8 +685,7 @@ describe('RelayAgentHookServer', () => {
   })
 
   it('caps the replay cache at 256 panes, evicting the least-recently-updated', async () => {
-    // Mirrors the server's private MAX_CACHED_PANES. The WSL relay never gets a
-    // per-pane teardown signal, so the cache is recency-capped instead.
+    // Match private MAX_CACHED_PANES; WSL receives no pane teardown signal and relies on recency eviction.
     const CAP = 256
     const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
     const server = new RelayAgentHookServer({ endpointDir: dir, forward })
@@ -713,13 +706,11 @@ describe('RelayAgentHookServer', () => {
           })
         })
 
-      // Fill the cache to exactly the cap in insertion order 0..CAP-1. Sequential
-      // awaits pin Map order = update recency, which the eviction relies on.
+      // Await posts sequentially so insertion order tracks update recency.
       for (let i = 0; i < CAP; i++) {
         await postPane(paneKeyFor(i))
       }
-      // Refresh the OLDEST pane just before overflow, then push one more pane.
-      // Recency (not insertion) order must now evict pane 1, sparing pane 0.
+      // Refresh the oldest before overflow to distinguish recency eviction from insertion order.
       await postPane(paneKeyFor(0))
       await postPane(paneKeyFor(CAP))
 

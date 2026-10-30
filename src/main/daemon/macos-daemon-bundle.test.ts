@@ -39,7 +39,7 @@ const helperExecutable = (): string => join(helper, 'Contents', 'MacOS', 'orca-t
 
 beforeEach(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), 'orca-mac-runtime-')))
-  // The running app was parked by an update; a new build already sits at the install path.
+  // Model an update that moved the running bundle and replaced its original path.
   source = join(root, 'com.stablyai.orca.ShipIt.old', 'Orca.app')
   helper = join(source, 'Contents', 'Helpers', 'Orca Terminal Host.app')
   copies = join(root, 'profile', 'daemon-host', 'macos')
@@ -103,7 +103,6 @@ it('publishes one verified copy per helper build, from the running app rather th
   const copy = await materializeMacDaemonBundle(copies, signal())
   await rm(source, { recursive: true })
   expect(copy.directory).toBe(join(copies, `terminal-host-${cdhash}`))
-  // Spotlight never indexes the copy, so it is not offered as a second Orca app.
   expect(copy.execPath).toBe(
     join(
       copy.directory,

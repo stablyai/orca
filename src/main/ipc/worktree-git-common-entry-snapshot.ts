@@ -10,12 +10,25 @@ function statSignature(value: { mtimeMs: number; ctimeMs: number; ino: number })
   return `${value.mtimeMs}:${value.ctimeMs}:${value.ino}`
 }
 
-export async function gitCommonDirectorySignature(path: string): Promise<string> {
+export async function gitCommonDirectorySignature(
+  path: string,
+  previousSignature = 'missing',
+  onMissing?: () => void
+): Promise<string> {
   try {
     const value = await stat(path)
     return `${statSignature(value)}:${value.size}`
-  } catch {
-    return 'missing'
+  } catch (error) {
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      (error.code === 'ENOENT' || error.code === 'ENOTDIR')
+    ) {
+      onMissing?.()
+      return 'missing'
+    }
+    return previousSignature
   }
 }
 
@@ -35,9 +48,7 @@ export type GitCommonEntrySnapshot = {
   headLogSignature: string | null
 }
 
-// Why: git rewrites `gitdir` in place and appends `logs/HEAD` in place, so neither
-// moves the entry dir's signature; stat them directly when the caller can't rely
-// on a short backstop to catch them.
+// In-place gitdir/reflog writes do not alter entry signatures; slow-cadence callers must stat these leaves.
 async function inPlaceLeavesChanged(
   entryPath: string,
   previous: GitCommonEntrySnapshot
@@ -52,8 +63,7 @@ async function inPlaceLeavesChanged(
   )
 }
 
-// Only leaf rewrites count: a null side may be a transient stat miss, and
-// create/unlink of a leaf (e.g. `locked`) is a real dir change anyway.
+// Null can be a transient miss; creation/removal already changes the directory signature.
 function gatedLeafRewritten(
   previous: GitCommonEntrySnapshot,
   next: GitCommonEntrySnapshot
@@ -85,15 +95,7 @@ export async function snapshotGitCommonEntry(
   statInPlaceLeaves = false,
   onDirGateMiss?: () => void
 ): Promise<GitCommonEntrySnapshot> {
-  // Git writes HEAD/index/config.worktree/locked via a lock file + rename inside the
-  // entry dir, so the entry dir's own signature moves on every one of those writes
-  // (verified against git 2.55: checkout, commit, amend, reset, ref updates, stash,
-  // worktree lock/unlock, config --worktree, index writes all move it). The one
-  // in-place exception is `gitdir` (worktree move/repair), which the periodic
-  // forceFullScan backstop (INDEX_BACKSTOP_TICKS) below re-stats regardless of this
-  // gate. Gating all of these leaves on the entry-dir signature turns an unchanged
-  // entry into a single stat per tick instead of stat-ing every leaf every tick.
-  // statInPlaceLeaves adds the two in-place leaves for slow-cadence callers.
+  // Lock-and-rename writes change entry signatures; in-place gitdir/reflog writes need direct probes or ungated backstops.
   const [nextDirSignature, inPlaceChanged] = await Promise.all([
     gitCommonDirectorySignature(entryPath),
     statInPlaceLeaves && previous && !forceFullScan
@@ -134,8 +136,7 @@ export async function snapshotGitCommonEntry(
     indexSignature,
     headLogSignature
   }
-  // Why: re-stat the dir so a rename landing between the dir and leaf stats isn't
-  // mistaken for a filesystem whose dir signature ignores child renames.
+  // Recheck the directory so a racing rename does not falsely prove its signature unreliable.
   if (
     onDirGateMiss &&
     previous &&

@@ -1,72 +1,48 @@
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
+import { tokenizeCustomCommandTemplate } from '../../../../shared/commit-message-prompt'
+import { quotePosixShellDoubleQuotedApostrophe } from '../../../../shared/shell-argument-quoting'
 
-// Why: environment overrides are pasteable settings text; reject huge drafts before tokenizing.
+// Reject oversized pasted overrides before tokenization.
 export const AGENT_DEFAULT_ENV_DRAFT_MAX_BYTES = 8 * 1024
+
+export type AgentDefaultEnvDraftInvalidReason = 'too-large' | 'unclosed-quote'
 
 export type AgentDefaultEnvDraftParseResult = {
   env: Record<string, string>
-  tooLarge: boolean
+  invalidReason: AgentDefaultEnvDraftInvalidReason | null
 }
 
 export function stringifyAgentDefaultEnvDraft(env: Record<string, string>): string {
   return Object.entries(env)
-    .map(([name, value]) => `${name}=${value}`)
+    .map(
+      ([name, value]) =>
+        `${quoteAgentDefaultEnvDraftWord(name)}=${quoteAgentDefaultEnvDraftWord(value)}`
+    )
     .join(' ')
+}
+
+// Use quote grouping that preserves literal backslashes without introducing escapes.
+function quoteAgentDefaultEnvDraftWord(word: string): string {
+  return word && !/[\s'"]/.test(word) ? word : quotePosixShellDoubleQuotedApostrophe(word)
 }
 
 export function parseAgentDefaultEnvDraft(value: string): AgentDefaultEnvDraftParseResult {
   if (isClipboardTextByteLengthOverLimit(value, AGENT_DEFAULT_ENV_DRAFT_MAX_BYTES)) {
-    return { env: {}, tooLarge: true }
+    return { env: {}, invalidReason: 'too-large' }
+  }
+  // Preserve unquoted Windows path separators as literal backslashes.
+  const tokenized = tokenizeCustomCommandTemplate(value, 'literal')
+  if (!tokenized.ok) {
+    return { env: {}, invalidReason: 'unclosed-quote' }
   }
 
   const env: Record<string, string> = {}
-  for (const pair of getAgentDefaultEnvDraftPairs(value)) {
+  for (const pair of tokenized.tokens) {
     const separatorIndex = pair.indexOf('=')
     if (separatorIndex <= 0) {
       continue
     }
-    const name = pair.slice(0, separatorIndex).trim()
-    if (!name) {
-      continue
-    }
-    env[name] = pair.slice(separatorIndex + 1)
+    env[pair.slice(0, separatorIndex)] = pair.slice(separatorIndex + 1)
   }
-  return { env, tooLarge: false }
-}
-
-function getAgentDefaultEnvDraftPairs(value: string): string[] {
-  const pairs: string[] = []
-  let tokenStart = -1
-
-  for (let index = 0; index <= value.length; index += 1) {
-    const isEnd = index === value.length
-    if (!isEnd && !isAgentDefaultEnvDraftWhitespace(value.charCodeAt(index))) {
-      if (tokenStart === -1) {
-        tokenStart = index
-      }
-      continue
-    }
-    if (tokenStart !== -1) {
-      pairs.push(value.slice(tokenStart, index))
-      tokenStart = -1
-    }
-  }
-
-  return pairs
-}
-
-function isAgentDefaultEnvDraftWhitespace(code: number): boolean {
-  return (
-    code === 32 ||
-    (code >= 9 && code <= 13) ||
-    code === 160 ||
-    code === 5760 ||
-    (code >= 8192 && code <= 8202) ||
-    code === 8232 ||
-    code === 8233 ||
-    code === 8239 ||
-    code === 8287 ||
-    code === 12288 ||
-    code === 65279
-  )
+  return { env, invalidReason: null }
 }

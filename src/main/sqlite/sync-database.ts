@@ -18,19 +18,18 @@ type PragmaOptions = {
 
 export type { SqliteStatement } from './sqlite-statement'
 
-// Why: dynamic `IN (?,?,…)` clauses mint a new SQL string per arity, so the cache must stay bounded.
+// Dynamic IN arity creates unique SQL strings; bound the statement cache.
 const STATEMENT_CACHE_LIMIT = 256
 const AGGREGATE_STAR = /\(\s*\*\s*\)/g
 const PRAGMA_STATEMENT = /^\s*PRAGMA\b/i
 const SCHEMA_CHANGING_SQL = /\b(?:ALTER|CREATE|DROP|REINDEX|VACUUM|ATTACH|DETACH)\b/i
 
-// Why: node:sqlite builds the first post-schema-change row from stale column names, so a reused
-// wildcard SELECT can drop a freshly added column; PRAGMAs are one-shot config, never hot-path.
+// Reused wildcard rows can retain stale column names after DDL; PRAGMAs are one-shot settings.
 function isStatementCacheable(sql: string): boolean {
   return !PRAGMA_STATEMENT.test(sql) && !sql.replace(AGGREGATE_STAR, '').includes('*')
 }
 
-// Why: SSH companions target Node 18 and import this adapter without opening SQLite.
+// Node 18 SSH companions import this module without opening SQLite; load the builtin lazily.
 function loadDatabaseSync(): typeof DatabaseSync {
   if (typeof process.getBuiltinModule !== 'function') {
     throw new Error('node:sqlite is unavailable in this Node.js runtime')
@@ -85,7 +84,7 @@ class SyncDatabase {
   }
 
   exec(sql: string): void {
-    // Why: drop cached statements before DDL lands so a partially applied batch cannot leave stale ones.
+    // Invalidate before DDL so partially applied batches cannot retain stale statements.
     if (SCHEMA_CHANGING_SQL.test(sql)) {
       this.statementCache.clear()
     }

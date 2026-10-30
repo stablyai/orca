@@ -7,8 +7,7 @@ function getSidebarWorktreeOptions(worktreeId: string): HTMLElement[] {
 }
 
 function isPinnedSidebarWorktreeOption(element: HTMLElement): boolean {
-  // Why: duplicated pinned rows share a worktree id; the row-key prefix is the
-  // stable row-scoped signal that distinguishes the pinned copy from natural rows.
+  // Pinned duplicates share workspace IDs; use the row-key prefix to distinguish their occurrences.
   return element.dataset.worktreeRowKey?.startsWith('pinned:') === true
 }
 
@@ -63,9 +62,7 @@ export function preserveSidebarWorktreePosition(worktreeId: string): () => void 
       }
       const nextRow = findSidebarWorktreeRow(worktreeId, activeRowKey)
       if (!nextRow) {
-        // Why: a remount can first render the wrong virtual window. Put the
-        // scroller near the same content after height changes so the row
-        // mounts, then retry and correct by actual DOM position.
+        // After remount or height changes, approximate the old viewport so the row mounts before correcting its DOM position.
         currentScroller.scrollTop = Math.max(
           0,
           previousScrollTop + currentScroller.scrollHeight - previousScrollHeight

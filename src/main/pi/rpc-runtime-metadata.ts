@@ -13,10 +13,9 @@ export const PI_RPC_RUNTIME_METADATA: StructuredAgentRuntimeMetadata = {
   definition: PI_RPC_AGENT,
   modelCatalog: (context) => ({
     kind: 'probe',
-    // `--list-models` marks no model as the one Pi runs by default.
+    // `get_available_models` marks no model as the one Pi runs by default.
     listingNamesConfiguredModel: false,
     probe: createPiModelCatalogProbe({
-      // The environment a chat's launch starts from too.
       resolveEnvironment: () => context.environment.resolveAgentEnvironment('pi'),
       refreshEnvironmentAfterMiss: context.environment.refreshAfterMissingProgram,
       ...(context.deps.resolveAgentCommandSettings
@@ -29,10 +28,13 @@ export const PI_RPC_RUNTIME_METADATA: StructuredAgentRuntimeMetadata = {
   supportsLocation: supportsSupervisedProviderChildLocation,
   launchCheck: {
     resolveLaunch: (env, commandSettings) => ({
-      command: resolvePiRpcCommand(env, commandSettings),
+      ...resolvePiRpcCommand(env, commandSettings),
       env
     }),
     minimumVersions: PI_RPC_MINIMUM_VERSIONS
+  },
+  chatProgram: {
+    resolve: (env, commandSettings) => ({ ...resolvePiRpcCommand(env, commandSettings), env })
   },
   resolveAccountHome: async ({ launchEnv }) =>
     agentSessionAccountHome(

@@ -52,7 +52,7 @@ export function acpSessionUpdate(
         : [{ type: 'provider.frame', frameKind: update.sessionUpdate, payload: update, ...join }]
     }
     case 'user_message_chunk':
-      // A live echo of the send is the send's own row.
+      // The original send already owns a journal row.
       return []
     case 'tool_call':
     case 'tool_call_update': {
@@ -61,7 +61,7 @@ export function acpSessionUpdate(
       const tool = events[0]
       const body = tool && 'body' in tool && tool.body?.kind === 'tool-call' ? tool.body : null
       const subagentUpdates = body ? (dialect.toolSubagents?.(update, body) ?? []) : []
-      // Runs first, so a subagent this call reveals is never also taken for a background task.
+      // Register subagents before excluding them from background tasks.
       const subagentEvents = subagents.translate(subagentUpdates, join.join, at)
       const tasks = (body ? (dialect.toolBackgroundTasks?.(update, body) ?? []) : []).filter(
         (task) => !subagents.has(task.taskId)
@@ -92,7 +92,7 @@ export function acpSessionUpdate(
     case 'current_mode_update':
     case 'config_option_update':
     case 'session_info_update':
-      // These feed commands, options and the session title, outside the timeline.
+      // Options, commands and titles update outside the timeline.
       return []
     case 'plan_update':
     case 'plan_removed':

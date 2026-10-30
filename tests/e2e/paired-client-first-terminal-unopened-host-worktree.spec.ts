@@ -1,12 +1,4 @@
-/**
- * A paired client opening a host worktree the host's own window has never opened must get its first
- * terminal. Such a worktree has no published tab graph on the host, yet the host is fully started.
- *
- * Run:
- *   ORCA_BACKGROUND_LAUNCH=1 pnpm exec playwright test \
- *     tests/e2e/paired-client-first-terminal-unopened-host-worktree.spec.ts \
- *     --config tests/playwright.config.ts --project electron-headless --workers=1
- */
+// A paired client must get a first terminal in a worktree the fully started desktop host has never opened or published.
 import { existsSync, readFileSync } from 'node:fs'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'

@@ -111,8 +111,7 @@ export function clearClientHostedBrowserCloseIntents(
 }
 
 export function listClientHostedBrowserCloseIntents(
-  // Why undefined-tolerant: replay fires and forgets from a status refresh, so a store that
-  // has not materialized the map yet must read as "no intents", not an unhandled rejection.
+  // Status refresh replays fire-and-forget; unmaterialized maps must mean no intents, not an unhandled rejection.
   current: ClientHostedBrowserCloseIntentsByEnvironment | undefined,
   environmentId: string
 ): readonly ClientHostedBrowserCloseIntent[] {
