@@ -56,7 +56,7 @@ afterEach(async () => {
     await rig.queue.drain()
   }
   vi.restoreAllMocks()
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 

@@ -248,13 +248,18 @@ it('round trips the complete replayed reducer, including insertion order and und
   const restored = requireState(readJournalSavedState(database.db, identity.sessionId, epoch))
   expectSameState(restored, state)
   // A paced reader decodes the same state one stored row per page.
-  const pages = readJournalSavedStatePages(() => database.db, identity.sessionId, epoch, 1)
+  const pages = readJournalSavedStatePages(() => database.db, identity.sessionId, epoch, {
+    rows: 1,
+    chars: Number.POSITIVE_INFINITY
+  })
   let page = pages.next()
   let rests = 0
   for (; !page.done; page = pages.next()) {
     rests += 1
   }
-  expectSameState(requireState(page.value), state)
+  const paged = page.value
+  expect(paged).not.toBeTypeOf('string')
+  expectSameState(requireState(typeof paged === 'string' ? null : paged), state)
   expect(rests).toBeGreaterThan(state.items.size)
   expect(restored.derivedTurnScope.scopeFor(text('next'))).toEqual({
     kind: 'turn',

@@ -161,7 +161,7 @@ describe('ACP launch resolution', () => {
       expect(await readDecisions(restored)).toStrictEqual(await readDecisions(full))
       expect(await readDecisions(restored)).toEqual({ unsaved: false, losses: [] })
     } finally {
-      closeTestJournalHostDatabase(root)
+      await closeTestJournalHostDatabase(root)
       rmSync(root, { recursive: true, force: true })
     }
   })

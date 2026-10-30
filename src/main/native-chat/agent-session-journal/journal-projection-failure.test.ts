@@ -57,7 +57,7 @@ afterEach(async () => {
   }
   vi.restoreAllMocks()
   vi.useRealTimers()
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 
