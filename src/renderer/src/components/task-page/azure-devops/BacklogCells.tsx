@@ -21,6 +21,10 @@ export function formatBacklogCell(referenceName: string, value: unknown): string
   if (value === null || value === undefined) {
     return ''
   }
+  // Why: a work item number is an identifier, so it never takes the locale's grouping separator.
+  if (referenceName === 'System.Id') {
+    return String(value)
+  }
   if (typeof value === 'object') {
     return 'displayName' in value && typeof value.displayName === 'string' ? value.displayName : ''
   }

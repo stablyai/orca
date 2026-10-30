@@ -6,6 +6,7 @@ import type {
 import type { BacklogRow } from './task-page-azure-devops-backlog-tree'
 import { STATE_FIELD, TITLE_FIELD } from './task-page-azure-devops-backlog-columns'
 
+const ID_FIELD = 'System.Id'
 const CHANGED_DATE_FIELD = 'System.ChangedDate'
 const AREA_PATH_FIELD = 'System.AreaPath'
 
@@ -16,6 +17,11 @@ const AREA_PATH_FIELD = 'System.AreaPath'
  */
 export function azureDevOpsWorkItemColumns(): AzureDevOpsBacklogColumnField[] {
   return [
+    {
+      referenceName: ID_FIELD,
+      name: translate('auto.components.TaskPage.azureDevOps.columnId', 'ID'),
+      width: 70
+    },
     {
       referenceName: TITLE_FIELD,
       name: translate('auto.components.TaskPage.azureDevOps.columnTitle', 'Title'),

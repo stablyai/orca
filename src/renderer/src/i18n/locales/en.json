@@ -3234,7 +3234,8 @@
           },
           "workItemsView": "Work items",
           "columnAreaPath": "Area Path",
-          "columnChangedDate": "Changed Date"
+          "columnChangedDate": "Changed Date",
+          "columnId": "ID"
         }
       },
       "Terminal": {

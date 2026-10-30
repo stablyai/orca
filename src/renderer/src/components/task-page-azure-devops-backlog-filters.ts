@@ -47,7 +47,10 @@ function isUnderIteration(itemPath: string, filterPath: string): boolean {
 
 export function matchesBacklogFilters(item: AzureDevOpsWorkItem, filters: BacklogFilters): boolean {
   const keyword = filters.keyword.trim().toLowerCase()
-  if (keyword && !item.title.toLowerCase().includes(keyword) && String(item.id) !== keyword) {
+  // Why: a digits-only keyword is someone reaching for a work item number, so match the id by
+  // prefix as well as the title; a keyword with letters in it never looks like an id.
+  const matchesId = /^\d+$/.test(keyword) && String(item.id).includes(keyword)
+  if (keyword && !item.title.toLowerCase().includes(keyword) && !matchesId) {
     return false
   }
   if (filters.workItemTypes.size > 0 && !filters.workItemTypes.has(item.workItemType)) {

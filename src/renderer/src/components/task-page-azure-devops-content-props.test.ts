@@ -208,6 +208,7 @@ describe('buildAzureDevOpsContentProps', () => {
       true
     )
     expect(built.workItems.table.columnFields.map((c) => c.referenceName)).toEqual([
+      'System.Id',
       'System.Title',
       'System.State',
       'System.AreaPath',

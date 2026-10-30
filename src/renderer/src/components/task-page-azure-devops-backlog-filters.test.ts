@@ -41,6 +41,10 @@ describe('matchesBacklogFilters', () => {
       })
     ).toBe(true)
     expect(matchesBacklogFilters(item(42), { ...EMPTY_BACKLOG_FILTERS, keyword: '42' })).toBe(true)
+    // Someone reaching for a work item number types the first digits of it.
+    expect(matchesBacklogFilters(item(465), { ...EMPTY_BACKLOG_FILTERS, keyword: '46' })).toBe(true)
+    // A keyword with letters is a title search, never an id.
+    expect(matchesBacklogFilters(item(42), { ...EMPTY_BACKLOG_FILTERS, keyword: '4a' })).toBe(false)
     expect(matchesBacklogFilters(item(42), { ...EMPTY_BACKLOG_FILTERS, keyword: 'zzz' })).toBe(
       false
     )
