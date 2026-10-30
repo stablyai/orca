@@ -18,17 +18,23 @@ import { useNow } from '../hooks/use-now'
 import { getMobileTerminalTabHostAgentIdentity } from './mobile-terminal-tab-agent'
 import { mobileSessionTabCardContent } from './mobile-session-tab-card-content'
 import { MobileSessionTabCardFooter } from './MobileSessionTabCardFooter'
-import { useSessionSideRail } from './session-side-rail'
+import { useShellSideRail } from '../layout/use-shell-side-rail'
 
 export function MobileSessionSurface({ controller }: { controller: MobileSessionController }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const { setMobileSessionRootRef } = controller
   const server = useContext(WorkspaceServerContext)
-  const besideTabs = useResponsiveLayout().isLandscapePhone && controller.visibleTabs.length > 0
+  const layout = useResponsiveLayout()
+  const sideRail = useShellSideRail()
+  const hasTabs = controller.visibleTabs.length > 0
+  const besideTabs = (layout.isLandscapePhone || sideRail) && hasTabs
+  const titleVisible =
+    !sideRail || !hasTabs || controller.showConnectionRetry || controller.connectionEscalated
   const obscured = Boolean(
     controller.showHeaderMoreActions ||
     controller.showCreateTabDrawer ||
+    controller.showTerminalLayout ||
     (controller.showQuickCommands && controller.quickCommandsSupported === true) ||
     controller.pendingDiffNotesDelivery != null ||
     controller.actionTarget != null ||
@@ -45,8 +51,8 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
     controller.showDictationSetup ||
     controller.deleteKeyTarget != null
   )
-  const details = useSessionTitleCard(besideTabs, obscured, controller.visibleTabs)
-  const { missingTab } = details
+  const details = useSessionTitleCard(besideTabs, obscured, controller.visibleTabs, titleVisible)
+  const missingSource = details.missingTab || details.missingTitle
   const tab = useMemo(
     () =>
       details.tabId
@@ -67,16 +73,15 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
     () => (tabContent ? <MobileSessionTabCardFooter content={tabContent} /> : null),
     [tabContent]
   )
-  const rail = useSessionSideRail(controller, details)
   const contentRow = useMemo(
-    () => <MobileSessionContentRow controller={controller} keysInRail={rail.keysInRail} />,
-    [controller, rail.keysInRail]
+    () => <MobileSessionContentRow controller={controller} />,
+    [controller]
   )
   useDetailCardScope({
     ...details,
     openerRef: details.scopeOpenerRef,
-    active: details.active && !missingTab,
-    obscured: obscured || missingTab
+    active: details.active && !missingSource,
+    obscured: obscured || missingSource
   })
   // Only a proven local record belongs to this route's desktop or server.
   const hostName =
@@ -84,11 +89,7 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
   return (
     <View ref={setMobileSessionRootRef} style={styles.container}>
       <View style={styles.kavInner}>
-        <MobileSessionHeader
-          controller={controller}
-          details={details}
-          backInRail={rail.backInRail}
-        />
+        <MobileSessionHeader controller={controller} details={details} />
         {contentRow}
       </View>
       <DetailCardLayer>
@@ -105,8 +106,8 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
               bounds={details.bounds}
               contentRef={details.contentRef}
               boundaryRefs={details.boundaryRefs}
-              active={details.active && !missingTab}
-              obscured={obscured || missingTab}
+              active={details.active && !missingSource}
+              obscured={obscured || missingSource}
               onSettled={details.onSettled}
               title={
                 tabContent?.title ??

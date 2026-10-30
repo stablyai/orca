@@ -20,7 +20,7 @@
 3 src/renderer/src/components/sidebar/worktree-list/listing/use-main-list-model.ts # reads a passed-in copy
 2 src/renderer/src/components/sidebar/worktree-list/listing/use-window-list-model.ts # reads a passed-in copy
 1 src/renderer/src/components/sidebar/worktree-list/navigation/pending-reveal-inputs.ts # reads a passed-in copy
-2 src/renderer/src/components/sidebar/worktree-list/navigation/use-pending-reveal.ts # reads a passed-in copy
+1 src/renderer/src/components/sidebar/worktree-list/navigation/use-pending-reveal.ts # reads a passed-in copy
 2 src/renderer/src/components/sidebar/worktree-list/viewport/VirtualizedWorktreeViewport.tsx # reads a passed-in copy
 1 src/renderer/src/components/sidebar/worktree-manual-order-catalog.ts # reads a passed-in copy
 2 src/renderer/src/components/skills/skill-install-workspace-choices.ts # reads a passed-in copy
@@ -68,7 +68,6 @@
 3 src/renderer/src/store/slices/worktrees/listing/fetch-detected-worktrees.ts # store writer
 13 src/renderer/src/store/slices/worktrees/listing/fetched-worktree-merge.ts # store writer
 6 src/renderer/src/store/slices/worktrees/listing/known-ssh-worktree-fetch.ts # store writer
-3 src/renderer/src/store/slices/worktrees/listing/worktree-sort-order-patch.ts # store writer
 4 src/renderer/src/store/slices/worktrees/metadata/hosted-review-link-mutation.ts # store writer
 8 src/renderer/src/store/slices/worktrees/metadata/update-worktrees-meta.ts # store writer
 2 src/renderer/src/store/slices/worktrees/metadata/worktree-git-identity-update.ts # store writer

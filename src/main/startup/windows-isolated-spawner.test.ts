@@ -32,14 +32,29 @@ describe('installWindowsIsolatedSpawner', () => {
   })
 
   it('installs the native spawner when the binary exports it', () => {
-    const { security, spawnDetachedIsolated } = addonWith(
-      (name) => name === 'spawnDetachedIsolated'
-    )
+    const { security, spawnDetachedIsolated } = addonWith(() => true)
     loadWindowsSecurity.mockReturnValue(security)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     installWindowsIsolatedSpawner('win32')
 
     expect(setIsolatedSpawner).toHaveBeenCalledWith(spawnDetachedIsolated)
+    expect(warn).not.toHaveBeenCalled()
+  })
+
+  it('still installs a pre-breakaway spawner for its handle isolation, and logs it', () => {
+    const { security, spawnDetachedIsolated } = addonWith(
+      (name) => name === 'spawnDetachedIsolated'
+    )
+    loadWindowsSecurity.mockReturnValue(security)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    installWindowsIsolatedSpawner('win32')
+
+    expect(setIsolatedSpawner).toHaveBeenCalledWith(spawnDetachedIsolated)
+    expect(warn).toHaveBeenCalledWith(
+      '[startup] detached spawns stay in our jobs; the addon build predates breakaway'
+    )
   })
 
   it('keeps libuv and logs when the binary is stale', () => {

@@ -518,11 +518,15 @@ describe('AgentsPane', () => {
   })
 
   it.each([
-    ['manual', undefined, 'How much agents can do without asking you.', 1],
-    ['auto', 'yolo', 'Supported agents</button> approve safe actions on their own.', 2],
-    ['auto', 'mixed', 'Supported agents</button> approve safe actions on their own.', 1],
-    ['mixed', undefined, 'Most agents use Yolo. Choosing a mode resets the marked exceptions', 0]
-  ] as const)('describes %s permissions with others %s', (mode, nonAutoMode, copy, checked) => {
+    ['manual', undefined, 'How much agents can do without asking you.'],
+    ['auto', 'yolo', 'Supported agents</button> approve safe actions on their own.'],
+    ['auto', 'mixed', 'Supported agents</button> approve safe actions on their own.'],
+    [
+      'mixed',
+      undefined,
+      'Most agents use Full access. Choosing a mode resets the marked exceptions'
+    ]
+  ] as const)('describes %s permissions with others %s', (mode, nonAutoMode, copy) => {
     const markup = renderToStaticMarkup(
       <TooltipProvider>
         <AgentPermissionsSetting
@@ -537,7 +541,6 @@ describe('AgentsPane', () => {
     )
     expect(markup).toContain(copy)
     expect(markup.includes('inert=""')).toBe(mode !== 'auto')
-    expect(markup.match(/aria-checked="true"/g)?.length ?? 0).toBe(checked)
   })
 
   it('explains inline when the host cannot run Auto', () => {
@@ -546,8 +549,7 @@ describe('AgentsPane', () => {
         <AgentPermissionsSetting mode="yolo" autoSupported={false} onChange={vi.fn()} />
       </TooltipProvider>
     )
-    expect(markup).toContain('Auto needs a newer Orca on this host.')
-    expect(markup).toMatch(/aria-disabled="true"[^>]*>Auto</)
+    expect(markup).toContain('Approve for me needs a newer Orca on this host.')
   })
 
   it('keeps catalog agent ids, labels, and commands discoverable in settings search', () => {

@@ -2,13 +2,13 @@ import { mkdtempSync } from 'node:fs'
 import * as fsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
 import { createAgentModelCatalogFilePersistence } from './agent-model-catalog-persistence'
 import {
   AgentModelCatalogStore,
   AGENT_MODEL_CATALOG_MAX_ENTRIES
 } from './agent-model-catalog-store'
-import type { AgentModelCatalogEntry } from './agent-model-catalog-entry'
+import { agentModelCatalogEntry, type AgentModelCatalogEntry } from './agent-model-catalog-entry'
 
 vi.mock('node:fs/promises', async (original) => {
   const actual = await original<typeof fsPromises>()
@@ -166,3 +166,95 @@ it('keeps optional cache write failure from poisoning subsequent serialized writ
   await store.flushPersistence()
   expect((await persistence.load())[0]?.models[0]?.id).toBe('B')
 })
+
+it.each([
+  [false, 10, ['low']],
+  [true, 10, ['low']],
+  [false, 1, []],
+  [true, 1, []]
+] as const)(
+  'replaces historical Pi live capabilities only after discovery succeeds (mixed=%s, at=%s)',
+  async (mixed, at, levels) => {
+    const directory = mkdtempSync(join(tmpdir(), 'pr-36194-pi-cache-'))
+    onTestFinished(() => actual.rm(directory, { recursive: true, force: true }))
+    const oldModels = [
+      {
+        id: 'openai/gpt-6',
+        label: 'GPT-6',
+        isDefault: false,
+        efforts: [{ value: 'high', label: 'high' }],
+        defaultEffort: 'high'
+      }
+    ]
+    const legacy = agentModelCatalogEntry(
+      'pi',
+      'pi-fp',
+      mixed
+        ? {
+            origin: 'probe',
+            at: 5,
+            models: oldModels
+          }
+        : null,
+      {
+        origin: 'live-session',
+        at: 10,
+        models: [
+          ...oldModels,
+          {
+            id: 'project/only',
+            label: 'Project',
+            isDefault: false,
+            efforts: []
+          }
+        ],
+        fastModeSupport: { supported: true }
+      },
+      { modelId: 'openai/gpt-6', effort: 'high', at: 3 }
+    )!
+    const other = { ...legacy, agent: 'grok', fingerprint: 'other-host-account' }
+    await actual.writeFile(
+      join(directory, 'agent-model-catalog.json'),
+      JSON.stringify({
+        version: 3,
+        entries: [legacy, other]
+      })
+    )
+    const store = new AgentModelCatalogStore({ now: () => at })
+    await store.attachPersistence(createAgentModelCatalogFilePersistence(directory))
+    const hydrated = store.get('pi-fp')!
+    expect(hydrated.models).toEqual(legacy.models)
+    const configured = hydrated.configured
+    const otherBefore = store.get('other-host-account')
+    const fail = async () => {
+      throw new Error('RPC failed')
+    }
+    await store.refresh('pi-fp', 'pi', fail)
+    expect(store.get('pi-fp')).toBe(hydrated)
+    await store.refresh('pi-fp', 'pi', async () => ({ origin: 'probe', models: [] }))
+    expect(store.get('pi-fp')).toBe(hydrated)
+    const discovered = [
+      {
+        id: 'openai/gpt-6',
+        label: 'GPT-6',
+        isDefault: false,
+        efforts: levels.map((value) => ({ value, label: value }))
+      }
+    ]
+    await store.refresh('pi-fp', 'pi', async () => ({ origin: 'probe', models: discovered }))
+    const fresh = store.get('pi-fp')!
+    expect(fresh.live).toBeNull()
+    expect(fresh.configured).toBe(configured)
+    expect(fresh.models).toEqual([{ ...discovered[0], isDefault: true }])
+    expect(fresh).not.toHaveProperty('fastModeSupport')
+    expect(store.get('other-host-account')).toBe(otherBefore)
+    await store.flushPersistence()
+    const reloaded = new AgentModelCatalogStore({ now: () => at + 1 })
+    await reloaded.attachPersistence(createAgentModelCatalogFilePersistence(directory))
+    expect(reloaded.get('pi-fp')).toEqual(fresh)
+    await reloaded.refresh('pi-fp', 'pi', fail)
+    expect(reloaded.get('pi-fp')?.models).toEqual(fresh.models)
+    expect(reloaded.get('pi-fp')?.live).toBeNull()
+    expect(reloaded.get('other-host-account')).toEqual(otherBefore)
+  }
+)

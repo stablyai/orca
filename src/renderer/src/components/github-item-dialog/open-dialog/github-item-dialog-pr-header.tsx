@@ -16,6 +16,7 @@ import { translate } from '@/i18n/i18n'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import { WorkItemIssueSourceIndicator } from './work-item-issue-source-indicator'
 import { WorkItemStateBadge } from '../load-item-details/work-item-state-badge'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 export function GitHubItemDialogPRHeader({
   workItem,
@@ -155,7 +156,7 @@ export function GitHubItemDialogPRHeader({
               <Button
                 variant="ghost"
                 size="icon-sm"
-                onClick={() => window.api.shell.openUrl(workItem.url)}
+                onClick={(event) => openAppHttpLink(workItem.url, { event })}
                 aria-label={translate(
                   'auto.components.GitHubItemDialog.3fdf777817',
                   'Open on GitHub'

@@ -1,3 +1,4 @@
+import { asyncQuestionSourceScope as questionSourceScope } from '../../../src/shared/native-chat/input/native-chat-ask'
 import { useCallback, useMemo, useRef } from 'react'
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat/transcript/native-chat-transcript-retention'
 import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'
@@ -60,7 +61,8 @@ export function useMobileStructuredAgentSession(
     enabled,
     onActionResolved,
     onSendError,
-    hostSupport
+    hostSupport,
+    onCommandsChanged
   } = args
   // Gate queueing by capability while accepting published cards from every host.
   const queueCapable = hostSupport?.queuedMessages === true
@@ -73,7 +75,7 @@ export function useMobileStructuredAgentSession(
   const commandPendingRef = useRef(false)
   // Legacy hosts must join repeated Stop while the first turn cancel remains pending.
   const inFlightStopsRef = useRef(new Map<string, Promise<boolean>>())
-  const stateArgs = { client, sessionId, sessionKey, enabled, connected }
+  const stateArgs = { client, sessionId, sessionKey, enabled, connected, onCommandsChanged }
   const { state, stateRef, queuedMessages, queuePause, olderPages, loadEarlier } =
     useMobileStructuredAgentState(stateArgs)
 
@@ -202,10 +204,10 @@ export function useMobileStructuredAgentSession(
     sessionCommands: args.sessionCommands,
     onSendError,
     queueSendsNext,
-    sendOptions: hostSupport?.sendOptions === true ? options.sendSelection : undefined,
+    sendSelection: options.sendSelection,
     takesSkills: hostSupport?.sendSkills === true
   })
-  const { items, currentRequests, actionablePromptIds, status } = state
+  const { items, currentRequests, actionablePromptIds, status, epoch } = state
   // Prefer host actionability: ended-agent prompts must receive no answer.
   const [approvalPrompt, questionPrompt] = useMemo(() => {
     const prompts = { items, currentRequests, actionablePromptIds }
@@ -272,6 +274,7 @@ export function useMobileStructuredAgentSession(
   return {
     ...options,
     visualSource,
+    asyncQuestionSourceScope: questionSourceScope({ kind: 'journal', agent, sessionId, epoch }),
     imagePreviewsByMessageId: sends.imagePreviewsByMessageId,
     session: {
       messages,

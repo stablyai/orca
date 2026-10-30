@@ -12,6 +12,16 @@ import {
 } from './browser-host-state'
 import { browserCookieImportFailureText } from '@/lib/browser-cookie-import-error-copy'
 
+function remoteCookieImportUnavailable(): BrowserCookieImportResult {
+  return {
+    ok: false,
+    reason: translate(
+      'auto.store.slices.browser.remoteCookieImportUnavailable',
+      'Manual cookie file import is unavailable while a remote runtime is active.'
+    )
+  }
+}
+
 export function createBrowserProfileImportActions(
   set: BrowserSliceSet,
   get: BrowserSliceGet
@@ -24,26 +34,7 @@ export function createBrowserProfileImportActions(
       const initialState = get()
       const hostId = getBrowserSettingsHostId(initialState)
       const executionHostLabel = selectExecutionHostDisplayLabel(initialState, hostId)
-      if (getBrowserSettingsRuntimeEnvironmentId(initialState)) {
-        const reason = translate(
-          'auto.store.slices.browser.remoteCookieImportUnavailable',
-          'Manual cookie file import is unavailable while a remote runtime is active.'
-        )
-        set((state) =>
-          browserImportStateForHostUpdate(state, hostId, {
-            profileId,
-            status: 'error',
-            summary: null,
-            error: reason
-          })
-        )
-        return retainCookieImportExecutionHost(
-          { ok: false as const, reason },
-          hostId,
-          executionHostLabel,
-          'client'
-        )
-      }
+      const runtimeEnvironmentId = getBrowserSettingsRuntimeEnvironmentId(initialState)
       set((state) =>
         browserImportStateForHostUpdate(state, hostId, {
           profileId,
@@ -53,9 +44,13 @@ export function createBrowserProfileImportActions(
         })
       )
       try {
-        const result = (await window.api.browser.sessionImportCookies({
-          profileId
-        })) as BrowserCookieImportResult
+        // Under a remote runtime, only pages this desktop hosts can take a local cookie file.
+        const result: BrowserCookieImportResult = runtimeEnvironmentId
+          ? ((await window.api.browser.sessionImportCookiesForClientHost({
+              environmentId: runtimeEnvironmentId,
+              profileId
+            })) ?? remoteCookieImportUnavailable())
+          : await window.api.browser.sessionImportCookies({ profileId })
         if (result.ok) {
           get().recordFeatureInteraction?.('cookie-import')
           set((state) =>

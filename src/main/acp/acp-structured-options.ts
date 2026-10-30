@@ -51,7 +51,7 @@ export class AcpStructuredOptions {
   constructor(
     private readonly dialect: Pick<
       AcpDialect,
-      'modelEfforts' | 'clampsUnlistedEffort' | 'withheldCommands' | 'effortChangesModel'
+      'modelEfforts' | 'withheldCommands' | 'effortChangesModel' | 'clampsUnlistedEffort'
     > = {}
   ) {}
 
@@ -136,7 +136,7 @@ export class AcpStructuredOptions {
     return null
   }
 
-  /** Effort menus describe models; current session values never establish catalog defaults. */
+  /** Native choices never establish an unobserved model's capability or configured default. */
   read(): Pick<AgentSessionOptionsResult, 'models' | 'current'> {
     const modelOption = this.select('model')
     const effortOption = this.select('thought_level')
@@ -162,18 +162,23 @@ export class AcpStructuredOptions {
     const models: AgentSessionModelOption[] = listed.map((model) => {
       const info = this.models?.availableModels.find((entry) => entry.modelId === model.id)
       const advertised = info ? this.dialect.modelEfforts?.(info) : undefined
-      // A clamping agent's session menu says nothing about another model's menu: unknown, not none.
+      // A current-session menu supplies no negative evidence about an unobserved model.
       const sessionMenu =
         model.id === currentModel
           ? { efforts: sessionEfforts }
-          : this.dialect.clampsUnlistedEffort && effortOption && !advertised
-            ? { efforts: [], effortsKnown: false as const }
+          : (modelOption || effortOption) && !advertised
+            ? {
+                efforts: this.dialect.clampsUnlistedEffort ? sessionEfforts : [],
+                effortsKnown: false as const
+              }
             : { efforts: [] }
       return {
         ...model,
         isDefault: false,
         // Fall back to the running session's menu when the advertised menu is empty.
-        ...(advertised && advertised.efforts.length > 0 ? advertised : sessionMenu)
+        ...(advertised && (advertised.efforts.length > 0 || model.id !== currentModel)
+          ? advertised
+          : sessionMenu)
       }
     })
     const confirmed = [...(currentModel ? ['model'] : []), ...(effortOption ? ['effort'] : [])]

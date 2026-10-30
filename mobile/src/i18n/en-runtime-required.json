@@ -18,6 +18,22 @@
     }
   },
   "chat": {
+    "subagentGroup": {
+      "ran_one": "Ran {{count}} subagent",
+      "ran_other": "Ran {{count}} subagents",
+      "started_one": "Kicked off {{count}} subagent",
+      "started_other": "Kicked off {{count}} subagents",
+      "stateFailedCount_one": "{{count}} failed",
+      "stateFailedCount_other": "{{count}} failed",
+      "stateIdleCount_one": "{{count}} idle",
+      "stateIdleCount_other": "{{count}} idle",
+      "stateStoppedCount_one": "{{count}} stopped",
+      "stateStoppedCount_other": "{{count}} stopped",
+      "stateUnverifiableCount_one": "{{count}} with status unavailable",
+      "stateUnverifiableCount_other": "{{count}} with status unavailable",
+      "stateWorkingCount_one": "{{count}} working",
+      "stateWorkingCount_other": "{{count}} working"
+    },
     "toolActivity": {
       "count_one": "{{count}} tool call",
       "count_other": "{{count}} tool calls"
@@ -169,7 +185,21 @@
       "countWorkflows_one": "{{count}} workflow",
       "countWorkflows_other": "{{count}} workflows",
       "headerTotalCount_one": "{{count}} background task",
-      "headerTotalCount_other": "{{count}} background tasks"
+      "headerTotalCount_other": "{{count}} background tasks",
+      "stateBlockedCount_one": "{{value0}} blocked",
+      "stateBlockedCount_other": "{{value0}} blocked",
+      "stateDoneCount_one": "{{value0}} done",
+      "stateDoneCount_other": "{{value0}} done",
+      "stateIdleCount_one": "{{value0}} stopped",
+      "stateIdleCount_other": "{{value0}} stopped",
+      "stateMonitoringCount_one": "{{value0}} monitoring",
+      "stateMonitoringCount_other": "{{value0}} monitoring",
+      "stateUnverifiableCount_one": "{{value0}} with status unavailable",
+      "stateUnverifiableCount_other": "{{value0}} with status unavailable",
+      "stateWaitingCount_one": "{{value0}} waiting",
+      "stateWaitingCount_other": "{{value0}} waiting",
+      "stateWorkingCount_one": "{{value0}} working",
+      "stateWorkingCount_other": "{{value0}} working"
     },
     "fileReader": {
       "reviewNotes_one": "{{count}} review note",

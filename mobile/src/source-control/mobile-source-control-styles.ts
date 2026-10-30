@@ -128,6 +128,21 @@ const baseStyles = themedStyleSheet(() => ({
     justifyContent: 'center',
     flexShrink: 0
   },
+  completeMergeButton: {
+    minHeight: 32,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radii.button,
+    backgroundColor: colors.textPrimary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0
+  },
+  completeMergeText: {
+    color: colors.bgBase,
+    fontSize: typography.bodySize,
+    fontWeight: '600'
+  },
   abortPressed: {
     opacity: 0.75
   },

@@ -184,7 +184,8 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
             if (!section.title) {
               return pendingCreations ? <>{pendingCreations}</> : null
             }
-            const isCollapsed = controller.collapsedGroups.has(section.key)
+            const collapseKey = section.collapseKey ?? section.key
+            const isCollapsed = controller.collapsedGroups.has(collapseKey)
             const count =
               section.count ?? rawSections.find((s) => s.key === section.key)?.data.length ?? 0
             const repoSectionLook =
@@ -205,7 +206,7 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
                         }
                       : null
                   ]}
-                  onPress={() => settings.toggleCollapsed(section.key)}
+                  onPress={() => settings.toggleCollapsed(collapseKey)}
                 >
                   {isCollapsed ? (
                     <ChevronRight size={12} color={colors.textMuted} style={styles.sectionIcon} />
@@ -228,7 +229,7 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
                   ) : null}
                   <Text style={styles.sectionTitle}>{section.title}</Text>
                   <Text style={styles.sectionCount}>{count}</Text>
-                  {pendingCollapseKeys.has(section.key) && (
+                  {pendingCollapseKeys.has(collapseKey) && (
                     <ActivityIndicator
                       size="small"
                       color={colors.textMuted}

@@ -51,11 +51,12 @@ export function AgentChoiceControls({
       ...normalizeAgentModelOptionChoices(next),
       ...(next.permissionMode ? { permissionMode: next.permissionMode } : {})
     })
-  const unlistedModel =
-    catalog && selected?.model && !findCatalogModel(catalog, selected.model)
-      ? selected.model
-      : undefined
-  const options = sourceControlActionOptions(agent, selected?.model ?? '')
+  const model = catalog && selected?.model ? findCatalogModel(catalog, selected.model) : undefined
+  const unlistedModel = catalog && selected?.model && !model ? selected.model : undefined
+  const options = sourceControlActionOptions(agent, selected?.model ?? '').filter(
+    // CLI carrier mappings remain available to Args badges without advertising a mode control.
+    ({ option }) => Boolean(model) || option.category !== 'mode'
+  )
   const defaultLabel = translate('settings.sourceControl.actionModel.effortDefault', 'Default')
   return (
     <div className={layout === 'contents' ? 'contents' : 'grid min-w-0 grid-cols-1 gap-2'}>
@@ -83,7 +84,7 @@ export function AgentChoiceControls({
               disabled={disabled}
               label={
                 selected?.model
-                  ? (findCatalogModel(catalog, selected.model)?.label ?? selected.model)
+                  ? (model?.label ?? selected.model)
                   : translate('settings.sourceControl.actionModel.agentDefault', 'Agent default')
               }
             />

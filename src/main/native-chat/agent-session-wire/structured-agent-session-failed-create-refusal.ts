@@ -81,7 +81,9 @@ export function failedAcquisitionSettlement(
   const exitProof = isAgentSessionPreSpawnError(error)
     ? 'processless'
     : error instanceof AgentSessionAcquisitionRootExitObservedError
-      ? 'root-exit-observed'
+      ? error.deathEvidenceKind === 'kill-delivered'
+        ? 'kill-delivered'
+        : 'root-exit-observed'
       : 'exit-proven'
   const raw = error instanceof Error ? error.message : String(error)
   const details = failedAcquisitionDetails(error)

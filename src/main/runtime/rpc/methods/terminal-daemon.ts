@@ -1,3 +1,4 @@
+import { TerminalLimitUpdateParams } from '../../../../shared/rpc-contract/terminal-limit-params'
 import { TerminalDaemonRestartSeveredParams } from '../../../../shared/rpc-contract/terminal-daemon-params'
 import {
   readSeveredDaemonStatus,
@@ -6,6 +7,18 @@ import {
 import { defineMethod } from '../core'
 
 export const TERMINAL_DAEMON_METHODS = [
+  defineMethod({
+    name: 'terminalDaemon.limit',
+    permission: 'workspace',
+    params: null,
+    handler: async (_params, { runtime }) => runtime.terminalLimit()
+  }),
+  defineMethod({
+    name: 'terminalDaemon.setLimit',
+    permission: 'host-admin',
+    params: TerminalLimitUpdateParams,
+    handler: async (params, { runtime }) => runtime.terminalLimit(params)
+  }),
   defineMethod({
     name: 'terminalDaemon.severedStatus',
     permission: 'workspace',

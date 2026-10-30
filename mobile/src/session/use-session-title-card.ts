@@ -9,7 +9,8 @@ import {
 export function useSessionTitleCard(
   besideTabs: boolean,
   obscured: boolean,
-  tabs: readonly { id: string }[] = []
+  tabs: readonly { id: string }[] = [],
+  titleVisible = true
 ) {
   const barRef = useRef<View>(null)
   const titleRef = useRef<ComponentRef<typeof Text>>(null)
@@ -27,8 +28,12 @@ export function useSessionTitleCard(
   const requestedTabId = card.requestedKey?.startsWith('tab:') ? card.requestedKey.slice(4) : null
   const tabIds = useMemo(() => new Set(tabs.map((tab) => tab.id)), [tabs])
   const missingTab = Boolean(tabId && !tabIds.has(tabId))
-  const missingRequest = Boolean(requestedTabId && !tabIds.has(requestedTabId))
-  const missingKey = missingRequest ? card.requestedKey : missingTab ? tabKey : null
+  const missingTitle = !titleVisible && tabKey === 'title'
+  const missingRequest = Boolean(
+    (requestedTabId && !tabIds.has(requestedTabId)) ||
+    (!titleVisible && card.requestedKey === 'title')
+  )
+  const missingKey = missingRequest ? card.requestedKey : missingTab || missingTitle ? tabKey : null
   const { removeSource, dismiss, refreshSource, registerSource, boundaryRefs } = card
   useLayoutEffect(() => {
     if (missingKey) {
@@ -54,6 +59,7 @@ export function useSessionTitleCard(
     tabId,
     tabDetails,
     missingTab,
+    missingTitle,
     ...card,
     barRef,
     titleRef,

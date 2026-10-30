@@ -109,6 +109,7 @@ async function startChild(
       providerSessionId: PROVIDER_SESSION_ID,
       resumeLeafUuid: null,
       resumesTranscript: false,
+      cliFlag: async () => 'supported' as const,
       continuesChain: false
     }),
     onEvent: (event) => events.push(event),
@@ -472,7 +473,13 @@ describe('Claude effort default at rest', () => {
 
     const result = await readAtRest(store, record)
 
-    expect(result.current).toEqual({ model: 'gpt-5.5', defaulted: [], permissionMode: 'ask' })
+    expect(result.current).toEqual({
+      model: 'gpt-5.5',
+      defaulted: [],
+      permissionMode: 'ask',
+      acceptedInputSources: { model: 'saved' }
+    })
+    expect(result.current?.effort).toBeUndefined()
   })
 
   it("never saves the applied effort as the chat's pick, yet shows it at rest", async () => {

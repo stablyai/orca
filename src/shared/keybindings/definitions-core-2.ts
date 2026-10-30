@@ -95,6 +95,19 @@ export const KEYBINDING_DEFINITION_CORE_2: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings(['Mod+Shift+B'])
   },
   {
+    id: 'tab.newBrowserSplitRight',
+    title: 'New browser tab in right split',
+    group: 'Tabs',
+    scope: 'tabs',
+    searchKeywords: ['shortcut', 'tab', 'browser', 'new', 'split', 'right', 'side', 'pane'],
+    // Why: macOS only — Ctrl+Alt+letter is AltGr text input on Windows/Linux.
+    defaultBindings: {
+      darwin: ['Mod+Alt+B'],
+      linux: [],
+      win32: []
+    }
+  },
+  {
     id: 'tab.newSimulator',
     title: 'New mobile emulator tab',
     group: 'Tabs',

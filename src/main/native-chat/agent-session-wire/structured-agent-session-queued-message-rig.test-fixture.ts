@@ -19,7 +19,7 @@ import {
 } from './structured-agent-session-host'
 import {
   HOST_TEST_NOW as NOW,
-  HOST_TEST_SESSION as SESSION,
+  HOST_TEST_SESSION as DEFAULT_SESSION,
   HOST_TEST_THREAD as THREAD,
   hostTestAttachParams,
   hostTestMessage,
@@ -52,6 +52,7 @@ export type QueuedMessageTestRig = Awaited<ReturnType<typeof createQueuedMessage
 
 export async function createQueuedMessageTestRig(
   options: QueuedRigProviderOptions & {
+    sessionId?: string
     idleSweep?: { idleMs: number; intervalMs: number }
     now?: () => number
     /** Teardown records its restart offers, which `restartOffers` lists. */
@@ -61,6 +62,7 @@ export async function createQueuedMessageTestRig(
     probeOwner?: StructuredAgentSessionHostDeps['probeOwner']
   } = {}
 ) {
+  const SESSION = options.sessionId ?? DEFAULT_SESSION
   const root = await mkdtemp(join(tmpdir(), 'orca-queued-messages-'))
   resetHostTestOperationIds()
   const store = await openTestAgentSessionRecordStore(root)
@@ -83,6 +85,12 @@ export async function createQueuedMessageTestRig(
   let host = makeHost()
   const firstAttach = hostTestAttachParams(null, {
     ...(options.location ? { location: options.location } : {}),
+    envelope: {
+      sessionId: SESSION,
+      clientOperationId: hostTestOperationId(),
+      expectedRuntimeFence: null,
+      payloadFingerprint: ''
+    },
     ...(options.agent === 'claude'
       ? ({
           provider: 'claude',

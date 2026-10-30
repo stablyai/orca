@@ -14,7 +14,10 @@ import {
   type ProjectRuntimeResolutionStore
 } from '../../local-project-runtime-resolution'
 import type { PtySpawnOptions, PtySpawnResult } from '../../providers/pty-provider-contract'
-import { holdPassiveRestoreOfStoppedWslDistro } from '../../daemon/daemon-wsl-passive-restore-hold'
+import {
+  holdPassiveRestoreOfStoppedWslDistro,
+  wslHoldReadAnchor as wslHoldReadAnchorNow
+} from '../../daemon/daemon-wsl-passive-restore-hold'
 import { normalizeWindowsTerminalCwd } from '../../providers/windows-shell-args'
 import { wslUncDirectoryExistsAsync } from '../../wsl'
 import { getCodexSelectionTargetForPty } from './host-env/codex-home'
@@ -36,6 +39,8 @@ export type PtySpawnStartupTarget = {
   terminalRuntimeOptions: LocalWindowsTerminalRuntimeOptions
   expectedWslDistro: string | null
   codexSelectionTarget: CodexAccountSelectionTarget
+  /** Set when this hold read the running list: the provider hold reuses that read, not another spawn's. */
+  wslHoldReadAnchor?: number
 }
 
 type PtySpawnStartupArgs = {
@@ -55,8 +60,11 @@ type PtySpawnStartupArgs = {
     cwd: string | undefined,
     missingDirFallback?: TerminalStartupCwdMissingDirFallback
   ) => string | undefined
-  /** A restore the user did not ask for; held here, before any provider or cwd probe can boot WSL. */
-  passiveWslRestore?: Pick<PtySpawnOptions, 'sessionId' | 'isNewSession' | 'attachOnly'>
+  /** A restore or background start the user did not ask for; held here, before any provider or cwd probe can boot WSL. */
+  wslStartHold?: Pick<
+    PtySpawnOptions,
+    'wslPassiveRestore' | 'wslBackgroundStart' | 'sessionId' | 'isNewSession' | 'attachOnly'
+  >
 }
 
 export async function resolvePtySpawnStartupTarget(
@@ -73,16 +81,22 @@ export async function resolvePtySpawnStartupTarget(
       args.shellOverride,
       process.env.COMSPEC || 'powershell.exe'
     )
-  if (args.passiveWslRestore && !args.preAdopted) {
+  const heldWslDistro =
+    args.wslStartHold && !args.preAdopted
+      ? resolveWslSessionContext({
+          cwd: args.cwd,
+          sessionId: args.sessionId,
+          shellOverride: terminalRuntimeOptions.shellOverride,
+          terminalWindowsWslDistro: terminalRuntimeOptions.terminalWindowsWslDistro
+        })?.distro
+      : undefined
+  // The provider hold reuses this read (and only this spawn's) through the anchor.
+  const wslHoldReadAnchor = heldWslDistro ? wslHoldReadAnchorNow() : undefined
+  if (args.wslStartHold && wslHoldReadAnchor !== undefined) {
     // E9: whichever provider runs (daemon, degraded or off), and before the cwd probe's `wsl.exe`.
     await holdPassiveRestoreOfStoppedWslDistro(
-      { ...args.passiveWslRestore, wslPassiveRestore: true },
-      resolveWslSessionContext({
-        cwd: args.cwd,
-        sessionId: args.sessionId,
-        shellOverride: terminalRuntimeOptions.shellOverride,
-        terminalWindowsWslDistro: terminalRuntimeOptions.terminalWindowsWslDistro
-      })?.distro
+      { ...args.wslStartHold, wslHoldReadAnchor },
+      heldWslDistro
     )
   }
   const startup = args.preAdopted
@@ -106,6 +120,7 @@ export async function resolvePtySpawnStartupTarget(
       : startup.cwd,
     terminalRuntimeOptions,
     expectedWslDistro,
+    ...(wslHoldReadAnchor === undefined ? {} : { wslHoldReadAnchor }),
     codexSelectionTarget: getCodexSelectionTargetForPty(
       terminalRuntimeOptions.shellOverride,
       startup.cwd,

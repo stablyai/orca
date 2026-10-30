@@ -1,23 +1,24 @@
-import { useMemo, useRef } from 'react'
+import { createContext, useMemo, useRef } from 'react'
 import { Animated, Pressable, View } from 'react-native'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { assert, expect, it, vi } from 'vitest'
 import { MobileSessionHeader } from './MobileSessionHeader'
+import { MobileSessionSurface } from './MobileSessionSurface'
+import { mountFixture } from '../test-support/rpc-recording/recorder-fixture-shape'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { useDetailCardSource, type DetailCardSource } from '../components/use-anchored-detail-card'
 import { useSessionTitleCard } from './use-session-title-card'
 import { AnchoredDetailCard } from '../components/AnchoredDetailCard'
-import { SideRailProvider } from '../layout/side-rail'
-import { useSessionSideRail } from './session-side-rail'
 
 const overlay = vi.hoisted(
   (): {
     width: number
     height: number
+    rail: boolean
     back: (() => boolean) | null
     motions: (() => () => void)[]
     measure: (() => void) | null
-  } => ({ width: 667, height: 375, back: null, motions: [], measure: null })
+  } => ({ width: 667, height: 375, rail: false, back: null, motions: [], measure: null })
 )
 vi.mock('../layout/side-safe-area', () => ({
   useWindowSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 })
@@ -79,14 +80,32 @@ vi.mock('react-native', () => {
 })
 vi.mock('../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => false }))
 vi.mock('react-native-safe-area-context', () => ({ SafeAreaView: 'SafeAreaView' }))
-vi.mock('lucide-react-native', () => ({ ChevronLeft: 'Icon' }))
+vi.mock('lucide-react-native', () => ({
+  ChevronLeft: 'Icon',
+  Folder: 'Icon',
+  GitBranch: 'Icon',
+  MoreHorizontal: 'Icon',
+  PanelLeftOpen: 'Icon',
+  Columns2: 'Icon',
+  Plus: 'Icon',
+  SquareChevronRight: 'Icon'
+}))
 vi.mock('../layout/host-sidebar-reveal', () => ({ useHostSidebarReveal: () => null }))
 vi.mock('../layout/responsive-layout', () => ({
-  useResponsiveLayout: () => ({ isWideLayout: false })
+  useResponsiveLayout: () => ({ isWideLayout: false, width: overlay.width })
 }))
 vi.mock('./MobileSessionTabStrip', () => ({ MobileSessionTabStrip: () => null }))
-vi.mock('./MobileSessionAccessoryKeys', () => ({ MobileSessionAccessoryKeys: () => null }))
-vi.mock('./MobileSessionCommandDock', () => ({ sessionCommandDockShown: () => false }))
+vi.mock('../layout/use-top-chrome-space', () => ({ useTopChromeSpace: () => ({}) }))
+vi.mock('../layout/use-shell-side-rail', () => ({ useShellSideRail: () => overlay.rail }))
+vi.mock('./MobileSessionHeaderMoreActionsSheet', () => ({
+  MobileSessionHeaderMoreActionsSheet: () => null
+}))
+vi.mock('./MobileSessionContentRow', () => ({ MobileSessionContentRow: () => null }))
+vi.mock('./MobileSessionSheets', () => ({ MobileSessionSheets: () => null }))
+vi.mock('./MobileSessionTabCardFooter', () => ({ MobileSessionTabCardFooter: () => null }))
+vi.mock('../transport/use-workspace-client', () => ({
+  WorkspaceServerContext: createContext(null)
+}))
 const leave = vi.fn()
 const headerFields: Partial<MobileSessionController> = {
   worktreeName: 'workspace',
@@ -114,7 +133,6 @@ function Fixture() {
     [details.barRef]
   )
   useDetailCardSource(details, source)
-  const rail = useSessionSideRail(header, details)
   return (
     <View>
       <Pressable
@@ -122,7 +140,7 @@ function Fixture() {
         accessibilityLabel="Tab details"
         onPress={() => details.toggleSource(source)}
       />
-      <MobileSessionHeader controller={header} details={details} backInRail={rail.backInRail} />
+      <MobileSessionHeader controller={header} details={details} />
       <View ref={details.layerRef} testID="layer" onLayout={details.onLayout}>
         {details.visual ? (
           <AnchoredDetailCard {...details} {...details.visual} obscured={false} title="workspace" />
@@ -133,11 +151,8 @@ function Fixture() {
 }
 
 function Screen({ rail = false }: { rail?: boolean }) {
-  return (
-    <SideRailProvider edge={rail ? 'right' : null} width={84} bottom={0}>
-      <Fixture />
-    </SideRailProvider>
-  )
+  overlay.rail = rail
+  return <Fixture />
 }
 
 it('preserves title identity and current request across queued results and Back', () => {
@@ -240,25 +255,25 @@ it('preserves title identity and current request across queued results and Back'
   expect(root.findByProps({ 'aria-expanded': false })).toBe(opener)
   expect(opener.findByProps({ children: 'workspace' })).toBe(title)
   act(() => renderer.update(<Screen rail />))
-  expect(root.findAllByProps({ hitSlop: 4 })).toHaveLength(0)
-  const railBack = root.findByProps({
+  expect(root.findAllByProps({ hitSlop: 4 })).toHaveLength(1)
+  const duoBack = root.findByProps({
     accessibilityRole: 'button',
     accessibilityLabel: 'Back to worktrees'
   })
   tap()
   check(true, false)
-  const railMeasurement = overlay.measure
-  act(() => railBack.props.onPress())
-  act(() => railMeasurement?.())
+  const duoMeasurement = overlay.measure
+  act(() => duoBack.props.onPress())
+  act(() => duoMeasurement?.())
   check(false, false)
   expect(leave).toHaveBeenCalledTimes(1)
   tap()
   measure()
   finish()
-  act(() => railBack.props.onPress())
+  act(() => duoBack.props.onPress())
   check(false, true)
   expect(leave).toHaveBeenCalledTimes(1)
-  act(() => railBack.props.onPress())
+  act(() => duoBack.props.onPress())
   expect(leave).toHaveBeenCalledTimes(2)
   expect(root.findByProps({ 'aria-expanded': false })).toBe(opener)
   act(() => renderer.unmount())
@@ -325,3 +340,71 @@ it.each([false, true])(
     act(() => mounted.unmount())
   }
 )
+it('releases an open card and pending measurements when the connected Duo header removes its title', () => {
+  overlay.rail = true
+  const pending: (() => void)[] = []
+  const screen = (retry: boolean) => (
+    <MobileSessionSurface
+      controller={mountFixture<MobileSessionController>({
+        ...headerFields,
+        activePanel: null,
+        visibleTabs: [{ id: 'tab', type: 'terminal', terminal: 'terminal' }],
+        showConnectionRetry: retry,
+        connectionEscalated: retry,
+        bulkCloseConfirm: { visible: false }
+      })}
+    />
+  )
+  const mounted: { renderer?: ReactTestRenderer } = {}
+  act(() => {
+    mounted.renderer = create(screen(true), {
+      createNodeMock: (node) => ({
+        measureInWindow: (done: (x: number, y: number, width: number, height: number) => void) => {
+          if (
+            node.props !== null &&
+            typeof node.props === 'object' &&
+            'collapsable' in node.props &&
+            node.props.collapsable === false
+          ) {
+            pending.push(() => done(20, 10, 627, 290))
+          } else {
+            done(80, 20, 40, 45)
+          }
+        }
+      })
+    })
+  })
+  const renderer = mounted.renderer
+  assert(renderer)
+  const root = renderer.root
+  act(() => {
+    root.findByProps({ collapsable: false }).props.onLayout({
+      nativeEvent: { layout: { width: 627, height: 290 } }
+    })
+  })
+  act(() => root.findByProps({ 'aria-expanded': false }).props.onPress())
+  act(() => pending.shift()?.())
+  act(() => overlay.motions.at(-1)?.()())
+  expect(root.findByType(AnchoredDetailCard).props.active).toBe(true)
+  expect(overlay.back).not.toBeNull()
+  act(() => renderer.update(screen(false)))
+  expect(root.findAll((node) => node.props['aria-expanded'] !== undefined)).toHaveLength(0)
+  expect(root.findByType(AnchoredDetailCard).props).toMatchObject({
+    target: 0,
+    active: false,
+    obscured: true
+  })
+  expect(root.findByType(Animated.View).props.pointerEvents).toBe('none')
+  expect(root.findByType(Animated.View).props['aria-hidden']).toBe(true)
+  expect(overlay.back).toBeNull()
+  act(() => renderer.update(screen(true)))
+  act(() => root.findByProps({ 'aria-expanded': false }).props.onPress())
+  expect(pending).toHaveLength(1)
+  act(() => renderer.update(screen(false)))
+  act(() => pending.shift()?.())
+  expect(root.findByType(AnchoredDetailCard).props).toMatchObject({ target: 0, active: false })
+  expect(overlay.back).toBeNull()
+  act(() => overlay.motions.at(-1)?.()())
+  expect(root.findAllByType(AnchoredDetailCard)).toHaveLength(0)
+  act(() => renderer.unmount())
+})

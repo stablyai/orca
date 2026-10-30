@@ -222,6 +222,8 @@ export type HostedReviewCreationEligibilityArgs = {
   linkedBitbucketPR?: number | null
   linkedAzureDevOpsPR?: number | null
   linkedGiteaPR?: number | null
+  /** The user's Create PR: it may start the repo's stopped WSL distro (E9). */
+  wakeWslDistro?: boolean
 }
 
 export type HostedReviewDecision = 'approved' | 'changes_requested' | 'review_required' | null

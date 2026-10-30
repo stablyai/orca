@@ -75,7 +75,11 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { ReviewNotesSendMenuContent } from '@/components/editor/ReviewNotesSendMenuContent'
-import { QuickLaunchAgentMenuItems, ProjectedAgentMenuItems } from './QuickLaunchButton'
+import {
+  QuickLaunchAgentMenuItems,
+  ProjectedAgentMenuItems,
+  useTabAgentMenuLaunch
+} from './QuickLaunchButton'
 import { useTabBarCreateMenuController } from './use-tab-bar-create-menu-controller'
 import * as menuRows from './use-new-tab-agent-menu-rows'
 import {
@@ -460,7 +464,7 @@ function registerLaunch(
     promise: new Promise(() => undefined),
     visibilityUnknown: false,
     cancelled: false,
-    selection: { held: {} }
+    selection: {}
   } satisfies StructuredLaunchState)
 }
 
@@ -654,4 +658,46 @@ describe('QuickLaunchAgentMenuItems launches', () => {
     fireEvent.click(document.querySelector('[title="Launch Codex in a new terminal"]')!)
     expect(launchMock).not.toHaveBeenCalled()
   })
+})
+
+it('forwards configured choices through the existing dispatcher and launch-only Arguments only to terminals', () => {
+  launchMock.mockClear()
+  launchMock.mockReturnValue({ surface: { kind: 'local-terminal', tabId: 'new-tab' } })
+  const hook = renderHook(() =>
+    useTabAgentMenuLaunch({
+      worktreeId: WORKTREE_ID,
+      groupId: 'group-1',
+      onFocusTerminal: vi.fn()
+    })
+  )
+  const choices = { model: 'astra', options: { effort: 'low' }, permissionMode: 'ask' as const }
+  hook.result.current(
+    { agent: 'codex', kind: 'cli', executionHostId: 'runtime:server' },
+    {
+      agent: 'codex',
+      surface: 'terminal',
+      choices,
+      arguments: '--add-dir docs'
+    }
+  )
+  expect(launchMock.mock.calls[0][0]).toMatchObject({
+    requestedSurface: 'terminal',
+    selectedExecutionHostId: 'runtime:server',
+    agentArgs: expect.stringContaining('--add-dir docs'),
+    sessionOptions: { model: 'astra', effort: 'low', permissionMode: 'ask' }
+  })
+  hook.result.current(
+    { agent: 'codex', kind: 'chat', executionHostId: 'runtime:server' },
+    {
+      agent: 'codex',
+      surface: 'chat',
+      choices,
+      arguments: '--add-dir docs'
+    }
+  )
+  expect(launchMock.mock.calls[1][0]).toMatchObject({
+    requestedSurface: 'chat',
+    sessionOptions: { model: 'astra', effort: 'low', permissionMode: 'ask' }
+  })
+  expect(launchMock.mock.calls[1][0]).not.toHaveProperty('agentArgs')
 })

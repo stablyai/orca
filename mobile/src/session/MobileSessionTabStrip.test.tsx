@@ -10,6 +10,7 @@ import {
 } from '../theme/mobile-theme'
 import { mobileSessionFrameStyles } from './mobile-session-frame-styles'
 import { MobileSessionTabCardFooter } from './MobileSessionTabCardFooter'
+import { MobileSessionTitleBlock } from './MobileSessionTitleBlock'
 import type { MobileSessionHeaderIconButton } from './MobileSessionHeaderIconButton'
 import type * as TabModule from './MobileSessionTab'
 import type * as FooterModule from './MobileSessionTabCardFooter'
@@ -27,6 +28,7 @@ type StripWork = {
   records: number
   measures: number
   landscape: boolean
+  sideRail: boolean
   back: (() => boolean) | null
   removeAppState: ReturnType<typeof vi.fn>
 }
@@ -40,6 +42,7 @@ const work = vi.hoisted((): StripWork => ({
   records: 0,
   measures: 0,
   landscape: false,
+  sideRail: false,
   back: null,
   removeAppState: vi.fn()
 }))
@@ -81,7 +84,9 @@ vi.mock('lucide-react-native', () => ({
   MoreHorizontal: 'Icon',
   PanelLeftOpen: 'Icon',
   Plus: 'Icon',
-  SquareTerminal: 'TerminalIcon'
+  SquareTerminal: 'TerminalIcon',
+  Columns2: 'Icon',
+  SquareChevronRight: 'Icon'
 }))
 vi.mock('../navigation/use-back-claim', () => ({
   useBackClaim: (claim: (() => boolean) | null) => {
@@ -118,8 +123,13 @@ vi.mock('./mobile-session-styles', async () => {
 vi.mock('react-native-safe-area-context', () => ({ SafeAreaView: 'SafeAreaView' }))
 vi.mock('../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => true }))
 vi.mock('../layout/host-sidebar-reveal', () => ({ useHostSidebarReveal: () => null }))
+vi.mock('../layout/use-top-chrome-space', () => ({ useTopChromeSpace: () => ({}) }))
+vi.mock('../layout/use-shell-side-rail', () => ({ useShellSideRail: () => work.sideRail }))
+vi.mock('./MobileSessionHeaderMoreActionsSheet', () => ({
+  MobileSessionHeaderMoreActionsSheet: () => null
+}))
 vi.mock('../layout/responsive-layout', () => ({
-  useResponsiveLayout: () => ({ isLandscapePhone: work.landscape })
+  useResponsiveLayout: () => ({ isLandscapePhone: work.landscape, width: 800 })
 }))
 vi.mock('../transport/use-workspace-client', () => ({
   WorkspaceServerContext: createContext(undefined)
@@ -230,6 +240,8 @@ function mountStrip(
       ...keyboard,
       connState: 'connected',
       presentedConnState: 'connected',
+      showConnectionRetry: false,
+      connectionEscalated: false,
       worktreeName: 'workspace',
       bulkCloseConfirm: { visible: false },
       isFloatingWorkspaceRoute: true,
@@ -345,6 +357,7 @@ describe('MobileSessionTabStrip edge taps', () => {
       records: 0,
       measures: 0,
       landscape: false,
+      sideRail: false,
       back: null
     })
     work.removeAppState.mockClear()
@@ -356,6 +369,22 @@ describe('MobileSessionTabStrip edge taps', () => {
   afterEach(() => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
+  })
+
+  it('opens tab details in the compact Duo header while its title is absent', () => {
+    work.sideRail = true
+    const strip = mountStrip()
+    expect(strip.root.findAllByType(MobileSessionTitleBlock)).toHaveLength(0)
+    strip.tapAt(50)
+    expect(strip.card().props.active).toBe(true)
+    expect(strip.card().props.title).toBe('a')
+    expect(strip.card().props.obscured).toBe(false)
+    act(() => expect(work.back?.()).toBe(true))
+    expect(strip.card().props.active).toBe(false)
+    expect(work.back).toBeNull()
+    act(() => strip.card().props.onSettled(strip.card().props.motion))
+    expect(strip.root.findAllByType(AnchoredDetailCard)).toHaveLength(0)
+    strip.unmount()
   })
 
   it('uses the host identity while retaining tab gestures', () => {

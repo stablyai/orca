@@ -4,6 +4,7 @@ import {
   openVersionedCacheDatabase,
   removeVersionedCacheDatabase
 } from '../sqlite/versioned-cache-database'
+import { asRecord } from '../ai-vault/session-scanner-record-value'
 
 // Cache transcript content verbatim; outbound snippet policy belongs at the transport boundary.
 
@@ -50,7 +51,9 @@ CREATE TABLE IF NOT EXISTS files(
   state TEXT NOT NULL DEFAULT 'current',
   fail_count INTEGER NOT NULL DEFAULT 0,
   -- Retry held-out failures only after the source mtime changes.
-  failed_mtime_ms REAL
+  failed_mtime_ms REAL,
+  -- SHA-256 of bytes [0, byte_offset); lets a reread after restart append instead of replace.
+  prefix_hash TEXT
 );
 CREATE INDEX IF NOT EXISTS files_mtime ON files(mtime_ms);
 CREATE TABLE IF NOT EXISTS messages(
@@ -86,8 +89,24 @@ export function openSessionSearchDatabase(path: string): SyncDatabase {
           AND EXISTS (SELECT 1 FROM files WHERE files.path = sessions.file_path
             AND files.session_row_id = sessions.id)
       `)
+      addSessionSearchPrefixHashColumn(db)
     }
   })
+}
+
+/** Version 8 indexes predate the column; check under the write lock so concurrent openers add it once. */
+export function addSessionSearchPrefixHashColumn(db: SyncDatabase): void {
+  db.exec('BEGIN IMMEDIATE')
+  try {
+    const columns = db.prepare('PRAGMA table_info(files)').all()
+    if (!columns.some((column) => asRecord(column)?.name === 'prefix_hash')) {
+      db.exec('ALTER TABLE files ADD COLUMN prefix_hash TEXT')
+    }
+    db.exec('COMMIT')
+  } catch (error) {
+    db.exec('ROLLBACK')
+    throw error
+  }
 }
 
 export function removeSessionSearchDatabase(path: string): void {

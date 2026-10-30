@@ -1,4 +1,4 @@
-import { registerMarkdownTokenizerStart } from './markdown-tokenizer-start'
+import { registerMarkdownLookbehindTokenizerStart } from './markdown-tokenizer-start'
 import { guardMarkdownDirectiveTokenizer } from './markdown-directive-tokenizer'
 import { decodeHtmlEntities, type AnyExtension, type Editor } from '@tiptap/core'
 import { Details, DetailsContent, DetailsSummary } from '@tiptap/extension-details'
@@ -233,8 +233,10 @@ const OrcaDetails = Details.extend({
     name: 'details',
     level: 'block',
     // HTML blocks open only at a line start; marked passes source.slice(1), so offset 0 never qualifies.
-    start: registerMarkdownTokenizerStart('<', (source) =>
-      source.search(/(?<=[\n\r] {0,3})<details\b/i)
+    start: registerMarkdownLookbehindTokenizerStart(
+      '<',
+      (source) => source.search(/(?<=[\n\r] {0,3})<details\b/i),
+      4
     ),
     tokenize(src, _tokens, lexer) {
       const detailsBlock = matchDetailsHtmlBlock(src, 0)

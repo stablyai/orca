@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { normalizeExecutionHostId } from '../execution-host'
+import { CLIENT_PROVENANCE_SNAPSHOT_MAX } from '../automation-workspace-provenance'
 import { isTuiAgent } from '../tui-agent-config'
 import type { TuiAgent } from '../tui-agent'
 import {
@@ -43,6 +44,21 @@ export const AutomationWorkspaceProvenanceRequest = z.object({
   automationRunId: z.string(),
   dispatchToken: z.string(),
   createRequestId: z.string()
+})
+
+// A label for another owner's run: the host records it only for automations it does not hold, and stamps createdAt.
+const ProvenanceId = z.string().min(1).max(256)
+const ProvenanceSnapshot = z.string().max(CLIENT_PROVENANCE_SNAPSHOT_MAX)
+export const ClientAutomationWorkspaceProvenance = z.object({
+  automationId: ProvenanceId,
+  automationNameSnapshot: ProvenanceSnapshot,
+  automationRunId: ProvenanceId,
+  automationRunTitleSnapshot: ProvenanceSnapshot,
+  executionTargetType: z.enum(['local', 'ssh']),
+  executionTargetId: z.string().max(256),
+  projectId: z.string().max(256),
+  repoId: z.string().max(256).optional(),
+  hostId: OptionalExecutionHostId
 })
 
 // Descriptive provenance grants no authority; the host stamps createdAt to avoid client-clock sort skew.
@@ -178,6 +194,8 @@ export const WorktreeSet = WorktreeSelector.extend({
 })
 
 export const WorktreeRemove = WorktreeSelector.extend({
+  // Omission retains legacy/UI metadata policy; explicit CLI intent overrides it.
+  deleteBranch: OptionalBoolean,
   hostId: OptionalExecutionHostId,
   force: OptionalBoolean,
   // Desktop force also means ordinary confirmed delete; PTY-stop waivers need their own field (#11960).
@@ -212,7 +230,9 @@ export const WorktreeResolvePrBase = z.object({
     .pipe(z.number().int().positive('Missing PR number')),
   headRefName: OptionalString,
   baseRefName: OptionalString,
-  isCrossRepository: OptionalBoolean
+  isCrossRepository: OptionalBoolean,
+  /** The user creating or launching from the PR; older hosts drop it. */
+  wakeWslDistro: OptionalBoolean
 })
 
 export const WorktreeResolveMrBase = z.object({
@@ -226,5 +246,7 @@ export const WorktreeResolveMrBase = z.object({
     .pipe(z.number().int().positive('Missing MR number')),
   sourceBranch: OptionalString,
   targetBranch: OptionalString,
-  isCrossRepository: OptionalBoolean
+  isCrossRepository: OptionalBoolean,
+  /** The user creating from the MR; older hosts drop it. */
+  wakeWslDistro: OptionalBoolean
 })

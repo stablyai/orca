@@ -7,7 +7,7 @@ import type { AgentDashboardSurface } from '../../shared/telemetry-agent-dashboa
 import type { Store } from '../persistence'
 import { consumeBurstToken, resetBurstCapsForSession } from './burst-cap'
 import { getCohortAtEmit } from './cohort-classifier'
-import { resolveConsent } from './consent'
+import { isConsentEnvOverridden, resolveConsent } from './consent'
 import * as postHogStart from './posthog-client-start'
 import { buildCommonProps, createPostHogClient, waitForCaptureEnqueue } from './posthog-transport'
 import { commonPropsSchema, validate } from './validator'
@@ -83,7 +83,7 @@ export function initTelemetry(store: Store, scheduleStart: postHogStart.StartSch
   }
 
   posthog = null
-  postHogStart.deferStart(WRITE_KEY, scheduleStart, ensurePostHogClient)
+  postHogStart.deferStart(WRITE_KEY, store, scheduleStart, ensurePostHogClient)
 }
 
 function ensurePostHogClient(): PostHog | null {
@@ -94,9 +94,7 @@ function ensurePostHogClient(): PostHog | null {
   try {
     // Apply consent as it stands now; the live per-event check already gated each held capture.
     posthog = createPostHogClient(start.writeKey, resolveConsent(storeRef.getSettings()))
-    for (const message of start.held) {
-      posthog.capture(message)
-    }
+    postHogStart.replayHeld(posthog, start.held)
   } catch (err) {
     // Callers include opt-out and quit, which must still complete without a client.
     console.warn('[telemetry] PostHog client failed to start or replay held events:', err)
@@ -210,7 +208,7 @@ export function track<N extends EventName>(name: N, props: EventProps<N>): boole
   if (posthog) {
     posthog.capture(message)
   } else {
-    postHogStart.holdCapture(message)
+    postHogStart.holdCapture(message, ensurePostHogClient)
   }
   if (dashboardActiveSurface && settings.telemetry) {
     trackedDashboardActiveDays.set(dashboardActiveSurface, dashboardActiveDay)
@@ -251,14 +249,14 @@ export async function setOptIn(via: OptInVia, optedIn: boolean): Promise<void> {
 
   const client = posthog
   if (optedIn) {
-    if (client) {
+    if (client && !isConsentEnvOverridden()) {
       await client.optIn()
     }
     // Settings opt-in also starts an observable session that needs an adoption denominator.
     trackAppOpenedOnce()
     track('telemetry_opted_in', { via })
   } else {
-    if (!client) {
+    if (!client || isConsentEnvOverridden()) {
       return
     }
     // Enqueue opt-out directly before disabling SDK; track would reject it under the newly stored preference.
@@ -307,7 +305,7 @@ export async function persistBannerAcknowledgeWithoutEmitting(): Promise<void> {
     },
     { notifyListeners: true }
   )
-  if (posthog) {
+  if (posthog && !isConsentEnvOverridden()) {
     await posthog.optIn()
   }
   // Banner resolution is first app_opened eligibility; re-enable SDK before capture.
@@ -325,7 +323,7 @@ export function trackAppOpenedOnce(): void {
 export async function shutdownTelemetry(): Promise<void> {
   // Fence before flushing so late IPC cannot enqueue.
   shuttingDown = true
-  const instance = postHogStart.hasHeldCaptures() ? ensurePostHogClient() : posthog
+  const instance = postHogStart.hasSendableHeldCaptures() ? ensurePostHogClient() : posthog
   postHogStart.resetStart()
   if (!instance) {
     return

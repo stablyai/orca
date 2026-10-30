@@ -2,19 +2,30 @@ import { ArrowUpRight } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { Button } from '../../ui/button'
 import type { PluginListEntry } from '../list/plugin-list-entries'
-import { pluginCategoryLabel } from '../list/plugin-category-label'
+import { PluginCategoryBadges } from '../list/PluginCategoryBadge'
+import { pluginFilterKinds } from '../list/plugin-list-filter'
 import { DetailSection } from './PluginDetailSections'
 import { formatPluginReleaseDate } from '../presentation/plugin-release-date'
 import { usePluginRollbackVersion } from '../state/use-plugin-rollback-version'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { pluginRepositoryPageUrl } from '../../../../../shared/plugins/catalog/plugin-repository-link'
 
-function InfoRow({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+function InfoRow({
+  label,
+  value,
+  mono = false
+}: {
+  label: string
+  value: React.ReactNode
+  mono?: boolean
+}) {
   return (
     <div className="flex justify-between gap-3 py-1 text-xs">
       <dt className="shrink-0 text-muted-foreground">{label}</dt>
       <dd
         data-mono={mono}
         className="min-w-0 truncate text-right data-[mono=true]:font-mono"
-        title={value}
+        title={typeof value === 'string' ? value : undefined}
       >
         {value}
       </dd>
@@ -22,9 +33,8 @@ function InfoRow({ label, value, mono = false }: { label: string; value: string;
   )
 }
 
-function LinkButton({ url, label }: { url: string | null; label: string }) {
-  // Why: catalog and manifest links are untrusted; only open web links.
-  if (!url?.startsWith('https://')) {
+function RepositoryLink({ url }: { url: string | null }) {
+  if (!url) {
     return null
   }
   return (
@@ -32,9 +42,9 @@ function LinkButton({ url, label }: { url: string | null; label: string }) {
       variant="link"
       size="xs"
       className="-ml-2"
-      onClick={() => void window.api.shell.openUrl(url)}
+      onClick={(event) => openAppHttpLink(url, { event })}
     >
-      {label}
+      {translate('auto.components.settings.PluginDetailPage.repository', 'Repository')}
       <ArrowUpRight />
     </Button>
   )
@@ -53,16 +63,12 @@ export function PluginDetailInfo({
   const rollbackVersion = usePluginRollbackVersion(
     plugin?.source?.kind === 'marketplace' ? plugin.pluginKey : null
   )
-  // Why: "official" is trust, already shown by the verified mark.
-  const categories = entry.categories.filter((category) => category !== 'official')
   const updated = formatPluginReleaseDate(listing?.updatedAt)
   const license = plugin?.license ?? listing?.license
-  const repository =
-    plugin?.repository ??
-    listing?.repository ??
-    listing?.source.url ??
-    (plugin?.source?.kind === 'git' ? plugin.source.reference : null)
-  const homepage = plugin?.homepage ?? listing?.homepage ?? null
+  // Why only the install source: manifest and catalog `repository`/`homepage` are author text.
+  const sourceUrl =
+    listing?.source.url ?? (plugin?.source?.kind === 'git' ? plugin.source.reference : null)
+  const repository = sourceUrl ? pluginRepositoryPageUrl(sourceUrl) : null
 
   return (
     <aside className="mt-6">
@@ -110,10 +116,10 @@ export function PluginDetailInfo({
             value={license}
           />
         ) : null}
-        {categories.length > 0 ? (
+        {pluginFilterKinds(entry).size > 0 ? (
           <InfoRow
             label={translate('auto.components.settings.PluginDetailPage.categories', 'Categories')}
-            value={[...new Set(categories.map(pluginCategoryLabel))].join(', ')}
+            value={<PluginCategoryBadges entry={entry} />}
           />
         ) : null}
         <InfoRow
@@ -123,14 +129,7 @@ export function PluginDetailInfo({
         />
       </dl>
       <div className="mt-2 flex flex-col items-start">
-        <LinkButton
-          url={repository}
-          label={translate('auto.components.settings.PluginDetailPage.repository', 'Repository')}
-        />
-        <LinkButton
-          url={homepage}
-          label={translate('auto.components.settings.PluginDetailInfo.homepage', 'Homepage')}
-        />
+        <RepositoryLink url={repository} />
       </div>
     </aside>
   )
