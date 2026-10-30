@@ -333,8 +333,16 @@ export async function runRfp1Observation() {
       const initialA = currentStatus(await aView.status(), B)
       capture({ boundary: 'A-authenticated-source-status', frame: initialA })
       const sourceProjection = record(await aView.projection())
+      capture({
+        boundary: 'A-authenticated-source-session-projection',
+        callerPin: A.checkout.commit,
+        sourcePin: B.checkout.commit,
+        selector: RA.id,
+        method: 'session.tabs.list',
+        params: { worktree: `id:${RFP1_WORKSPACE}` },
+        frame: sourceProjection
+      })
       expect(sourceProjection.ok).toBe(true)
-      capture({ boundary: 'A-authenticated-source-session-projection', frame: sourceProjection })
       capture({
         boundary: 'initial-phone-view',
         sample: await mobile('sample', { workspace: RFP1_WORKSPACE })

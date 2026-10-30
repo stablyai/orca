@@ -6,9 +6,10 @@ import {
   PushRouteCurrentSchema,
   pushRouteDeclarationContent
 } from '@orca-cloud/push-contract'
-import type { PushRouteContent } from '../../../packages/push-contract/src/route-declaration-content.js'
 import { createPushServerHarness, APNS_TOKEN } from './push-server-harness.test-fixture.js'
 import { createPushHostKeypair } from './host-challenge-answering.test-fixture.js'
+
+type PushRouteContent = Parameters<typeof pushRouteDeclarationContent>[0]
 
 let harness: Awaited<ReturnType<typeof createPushServerHarness>> | undefined
 afterEach(async () => {

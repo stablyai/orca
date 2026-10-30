@@ -187,6 +187,8 @@ it('runs the actual current-owner, prepared sender and signed publisher against 
         }
         ports.foreground('active')
       } else if (op === 'fault') {
+        const failed = Promise.withResolvers<string>()
+        ports.faultStarted = failed.resolve
         ports.fault = text(data.kind)
         if (ports.fault === 'catalog-race') {
           ports.finalFailure = Promise.withResolvers<void>()
@@ -194,6 +196,13 @@ it('runs the actual current-owner, prepared sender and signed publisher against 
         ports.reads = 0
         ports.writes = 0
         ports.foreground?.('active')
+        const key = await failed.promise
+        ports.faultStarted = undefined
+        await drain()
+        const phase = pushRoutePreparationSnapshotForTests()
+        expect(phase).toMatchObject({ builder: 1, routeTimers: 1, routeHttp: 0 })
+        expect(ports.reads).toBe(1)
+        console.info('Owner source fault', { kind: ports.fault, key, reads: ports.reads, phase })
       } else if (op === 'disconnect') {
         for (const release of detach.splice(0)) {
           release()
@@ -284,5 +293,6 @@ it('runs the actual current-owner, prepared sender and signed publisher against 
     await cleanup.run(release)
   }
   ports.nativeHold = undefined
+  ports.faultStarted = undefined
   cleanup.finish()
 }, 120_000)

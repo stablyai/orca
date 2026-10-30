@@ -623,11 +623,14 @@ it.skipIf(!durablePushTestDatabaseUrl)(
         hosts: [A, B]
       })
       hold = true
-      pending = request({ action: 'replace', version: 2, expectedVersion: 1, hosts: [B] })
-      await within(entered.promise)
+      const replacing = Promise.resolve(
+        request({ action: 'replace', version: 2, expectedVersion: 1, hosts: [B] })
+      )
+      pending = replacing
+      await within(entered.promise, 5000)
       await f.store.prune() // SKIP LOCKED cannot delete the held current row
       held.resolve()
-      expect((await pending).status).toBe(200)
+      expect((await replacing).status).toBe(200)
       const rows = await f.db.query(
         'SELECT updated_at FROM push_route_declarations WHERE route_key = ?',
         [routeKey]

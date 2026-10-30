@@ -234,7 +234,8 @@ it('keeps T2 through late/lost actual replies and recovers bounded source failur
     ].entries()) {
       await mobile('fault', { kind })
       await mobile('background')
-      await advance(10_000)
+      await advance(5000)
+      await advance(5000)
       const parked = record(await mobile('stats'))
       expect(parked.reads).toBe(3)
       const posts = accepted

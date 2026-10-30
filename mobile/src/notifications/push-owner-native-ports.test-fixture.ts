@@ -11,6 +11,7 @@ type Ports = {
   foreground?: (state: string) => void
   finalFailure?: ReturnType<typeof Promise.withResolvers<void>>
   fault: string
+  faultStarted?: (key: string) => void
   reads: number
   writes: number
   bytes: number
@@ -87,6 +88,7 @@ const storagePort = {
     }
     const fault = ports.fault
     if (fault === 'catalog-race' && key === 'orca:hosts') {
+      ports.faultStarted?.(key)
       if (ports.reads === 3) {
         await ports.finalFailure?.promise
       }
@@ -96,9 +98,11 @@ const storagePort = {
       (ports.fault === 'catalog-read' && key === 'orca:hosts') ||
       (ports.fault === 'version-read' && key === 'orca:push-route-version')
     ) {
+      ports.faultStarted?.(key)
       throw new Error('Controlled storage read failure')
     }
     if (ports.fault === 'non-array' && key === 'orca:hosts') {
+      ports.faultStarted?.(key)
       return '{}'
     }
     return ports.storage.get(key) ?? null
@@ -110,6 +114,7 @@ const storagePort = {
     if (key === 'orca:push-route-version') {
       ports.writes++
       if (ports.fault === 'version-write') {
+        ports.faultStarted?.(key)
         throw new Error('Controlled storage write failure')
       }
     }
