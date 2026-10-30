@@ -5,6 +5,7 @@ import type { DiffSection } from '@/components/editor/diff-section-types'
 import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
 import type { PRComment } from '../../../../../shared/github/comment-types'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
 export async function addPullRequestLineComment(args: {
   headSha: string | undefined
@@ -52,7 +53,7 @@ export async function addPullRequestLineComment(args: {
   }
   if (!result.ok) {
     toast.error(
-      result.error ||
+      codeHostErrorText(result) ||
         translate('auto.components.PullRequestPage.19628e058d', 'Failed to add review comment.')
     )
     return false

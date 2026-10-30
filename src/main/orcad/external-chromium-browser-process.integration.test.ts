@@ -31,6 +31,7 @@ describe('ExternalChromiumBrowserProcess integration', () => {
           throw new Error('External Chromium provider did not resolve.')
         }
         const commands = provider.factory({
+          getRuntimeId: () => 'fixture-runtime',
           getAgentBrowserBridge: () => null,
           resolveWorkspaceSelector: async (selector) => ({ id: selector }),
           resolveBrowserWorkspace: async (selector) => ({ id: selector }),

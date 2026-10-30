@@ -19,6 +19,23 @@ function negotiate(args: { reject: unknown }): {
 }
 
 describe('mobile runtime capability negotiation', () => {
+  it('connects a new phone when an older desktop does not implement the advisory', async () => {
+    const onReady = vi.fn()
+    const onFailure = vi.fn()
+    negotiateMobileRuntimeCapabilities({
+      sendRequest: async () => ({
+        id: 'caps',
+        ok: false,
+        error: { code: 'unknown_method', message: 'Unknown method' }
+      }),
+      current: () => true,
+      onReady,
+      onFailure
+    })
+    await vi.waitFor(() => expect(onReady).toHaveBeenCalledOnce())
+    expect(onFailure).not.toHaveBeenCalled()
+  })
+
   it('proceeds when the host never answers, so a slow link still reaches connected', async () => {
     const timedOut = markRpcDeliveryUnknown(
       new Error('Request timed out: runtime.clientCapabilities.update')

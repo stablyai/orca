@@ -713,6 +713,39 @@ describe('getConnectionIdFromState', () => {
     expect(repoIdReads).toBe(100)
   })
 
+  it('invalidates folder connection inference for each catalog slice and preserves tri-state answers', () => {
+    const key = folderWorkspaceKey('folder-workspace-1')
+    const state: ConnectionContextState = {
+      folderWorkspaces: [makeFolderWorkspace()],
+      projectGroups: [makeProjectGroup()],
+      repos: [makeRepo({ id: 'repo-1', projectGroupId: 'group-1', connectionId: 'ssh-1' })],
+      worktreesByRepo: {}
+    }
+    expect(getConnectionIdFromState(state, key)).toBe('ssh-1')
+    const local = {
+      ...state,
+      repos: [makeRepo({ id: 'repo-1', projectGroupId: 'group-1' })]
+    }
+    expect(getConnectionIdFromState(local, key)).toBeNull()
+    const contested = {
+      ...local,
+      projectGroups: [makeProjectGroup({ connectionId: 'ssh-2' })]
+    }
+    expect(getConnectionIdFromState(contested, key)).toBeUndefined()
+    expect(getConnectionIdFromState(contested, key)).toBeUndefined()
+    const pinned = {
+      ...contested,
+      folderWorkspaces: [
+        makeFolderWorkspace({ executionHostId: 'runtime:host-a', connectionId: 'nested-ssh' })
+      ]
+    }
+    expect(getConnectionIdFromState(pinned, key)).toBe('nested-ssh')
+    expect(getConnectionIdFromState({ ...pinned, folderWorkspaces: [] }, key)).toBeUndefined()
+    // Retained snapshots remain independent when React reads them between current publications.
+    expect(getConnectionIdFromState(state, key)).toBe('ssh-1')
+    expect(getConnectionIdFromState(local, key)).toBeNull()
+  })
+
   it('returns null for a null worktreeId', () => {
     const state: ConnectionContextState = {
       folderWorkspaces: [],

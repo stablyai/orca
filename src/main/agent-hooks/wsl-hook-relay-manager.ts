@@ -126,6 +126,11 @@ export class WslHookRelayManager {
     if (!distro || this.disposed) {
       return
     }
+    // Before the state check, so concurrent ensures still join one start. A passive restore's env
+    // prep ensures the relay before its hold (#35813): its wsl.exe must not start the distro (E9).
+    if ((await this.deps.blockedForExec(distro)) || this.disposed) {
+      return
+    }
     const key = wslHookRelayStateKey(distro)
     this.idle.restoreParked(distro)
     const existing = this.states.get(key)

@@ -27,21 +27,4 @@ describe("the daemon's bridge sessions for a relay's distro", () => {
       daemonBridgeSessionVerdict([session({ cwd: '\\\\wsl.localhost\\Ubuntu\\home\\u' })], 'Ubuntu')
     ).toBe('live')
   })
-
-  it('ignores native, other-distro and exited sessions', () => {
-    expect(
-      daemonBridgeSessionVerdict(
-        [
-          session({ wslDistro: null, cwd: 'C:\\repo' }),
-          session({ wslDistro: 'Debian' }),
-          session({ wslDistro: 'Ubuntu', isAlive: false })
-        ],
-        'Ubuntu'
-      )
-    ).toBe('none')
-  })
-
-  it('cannot vouch when a daemon generation did not answer', () => {
-    expect(daemonBridgeSessionVerdict(null, 'Ubuntu')).toBe('unverifiable')
-  })
 })

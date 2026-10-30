@@ -7,6 +7,7 @@ import {
   selectAllKnownWorkspaceStatuses
 } from '@/store/host-workspace-status-columns'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../shared/worktree/types'
+import { translate } from '@/i18n/i18n'
 
 type WorkspaceStatuses = ReturnType<typeof useAppStore.getState>['workspaceStatuses']
 
@@ -74,12 +75,18 @@ export function useWorkspaceKanbanStatusActions(args: {
     [args]
   )
   const handleAddStatus = useCallback(() => {
-    const label = `Status ${args.workspaceStatuses.length + 1}`
+    const number = args.workspaceStatuses.length + 1
+    // Ids stay ASCII slugs; only the visible default label follows the UI language.
+    const idSeed = `Status ${number}`
     args.setWorkspaceStatuses([
       ...args.workspaceStatuses,
       {
-        id: makeWorkspaceStatusId(label, selectAllKnownWorkspaceStatuses(useAppStore.getState())),
-        label
+        id: makeWorkspaceStatusId(idSeed, selectAllKnownWorkspaceStatuses(useAppStore.getState())),
+        label: translate(
+          'auto.components.sidebar.workspaceKanbanStatus.defaultLabel',
+          'Status {{number}}',
+          { number }
+        )
       }
     ])
     recordInteraction()

@@ -3,7 +3,7 @@
 import {
   hasImagePromptMarker,
   isImageSourceUserTurn
-} from '../../../../shared/native-chat-image-transcript-markers'
+} from '../../../../shared/native-chat/transcript/native-chat-image-transcript-markers'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import {
   compareMessages,

@@ -87,7 +87,10 @@ export function registerHostAccountLaunchEnvTests(): void {
   })
 
   describe('launches a WSL host starts on its own', () => {
-    function runtimeWithHostAccounts(): OrcaRuntimeService {
+    /** `null`: a fresh WSL host that has not had its first push yet. */
+    function runtimeWithHostAccounts(
+      launchEnv: typeof LAUNCH_ENV | null = LAUNCH_ENV
+    ): OrcaRuntimeService {
       const store = {
         getSettings: () => ({
           disabledTuiAgents: [],
@@ -99,7 +102,11 @@ export function registerHostAccountLaunchEnvTests(): void {
         })
       }
       const runtime = new OrcaRuntimeService(partialRuntimeStore(store))
-      runtime.setHostAccountLaunchEnv(LAUNCH_ENV)
+      if (launchEnv) {
+        runtime.setHostAccountLaunchEnv(launchEnv)
+      } else {
+        runtime.restoreHostAccountLaunchEnv(null, () => {}, { expectDesktopPush: true })
+      }
       return runtime
     }
 
@@ -127,6 +134,24 @@ export function registerHostAccountLaunchEnvTests(): void {
       }
       const launch = await runtime['resolveAgentTerminalCreateOptions'](workspace, {})
       expect(launch.env).toBeUndefined()
+    })
+
+    it("holds a fresh WSL host's first agent terminal for the desktop's first push", async () => {
+      const fresh = runtimeWithHostAccounts(null)
+      const workspace = {
+        id: 'wt-1',
+        path: '/home/u/repo',
+        connectionId: null,
+        repo: null,
+        folderWorkspace: null
+      }
+      // A plain shell never waits for accounts: this resolves before any push.
+      const shell = await fresh['resolveAgentTerminalCreateOptions'](workspace, {})
+      expect(shell.env).toBeUndefined()
+
+      const agent = fresh['resolveAgentTerminalCreateOptions'](workspace, { launchAgent: 'claude' })
+      fresh.setHostAccountLaunchEnv(LAUNCH_ENV)
+      await expect(agent).resolves.toMatchObject({ env: LAUNCH_ENV.claude })
     })
 
     it("pins a structured chat to the selected account's home", () => {

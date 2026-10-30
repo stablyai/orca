@@ -1,11 +1,13 @@
 import { useMemo, useRef, useState } from 'react'
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
-import { ArrowUp, Check, CircleHelp } from 'lucide-react-native'
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Check, CircleHelp } from 'lucide-react-native'
 import { MobileNativeChatCardHeaderAction } from '../../MobileNativeChatCardHeaderAction'
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
-import { mobileNativeChatInputStyles } from '../composer/mobile-native-chat-input-styles'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
+import { MessageBox } from '../../../components/composer-input/MessageBox'
+import { useMobileNativeChatReplyScroll } from './use-mobile-native-chat-reply-scroll'
 import {
   formatQuestionAnswerByIndexes,
   formatQuestionAnswerWithOtherByIndexes,
@@ -29,6 +31,8 @@ export function MobileNativeChatQuestion({
   onCollapse
 }: Props): React.JSX.Element {
   useMobileColorScheme()
+  const t = useMobileTranslation()
+  const { scrollRef, inputRef, revealReply, onViewportLayout } = useMobileNativeChatReplyScroll()
   const [selectedOptionIndexes, setSelectedOptionIndexes] = useState<number[]>([])
   const [freeText, setFreeText] = useState(() => question.freeTextInput?.initialValue ?? '')
   const [sending, setSending] = useState(false)
@@ -109,7 +113,13 @@ export function MobileNativeChatQuestion({
   )
 
   return (
-    <View style={styles.card}>
+    <ScrollView
+      ref={scrollRef}
+      onLayout={onViewportLayout}
+      style={styles.card}
+      contentContainerStyle={styles.cardContent}
+      keyboardShouldPersistTaps="handled"
+    >
       <View style={styles.header}>
         <CircleHelp size={15} color={colors.accentBlue} strokeWidth={2.2} />
         <Text style={styles.question}>{question.question}</Text>
@@ -158,7 +168,7 @@ export function MobileNativeChatQuestion({
 
       {question.multiSelect && hasOptions ? (
         <Pressable
-          accessibilityLabel="Submit selected options"
+          accessibilityLabel={t('chat.question.submitSelectedOptions', 'Submit selected options')}
           style={({ pressed }) => [
             styles.submit,
             !canSubmitMulti && styles.submitDisabled,
@@ -168,60 +178,55 @@ export function MobileNativeChatQuestion({
           disabled={!canSubmitMulti}
         >
           <Text style={[styles.submitText, !canSubmitMulti && styles.submitTextDisabled]}>
-            Submit{selectedOptionIndexes.length > 0 ? ` (${selectedOptionIndexes.length})` : ''}
+            {selectedOptionIndexes.length > 0
+              ? t('chat.question.submitCount', 'Submit ({{count}})', {
+                  count: selectedOptionIndexes.length
+                })
+              : t('chat.question.submit', 'Submit')}
           </Text>
         </Pressable>
       ) : null}
 
       {allowOther ? (
-        <View style={styles.freeTextRow}>
-          <TextInput
-            style={mobileNativeChatInputStyles.freeInput}
-            value={freeText}
-            onChangeText={setFreeText}
-            placeholder={
-              question.freeTextInput?.placeholder ??
-              (hasOptions ? 'Or type a reply…' : 'Type your reply…')
-            }
-            placeholderTextColor={colors.textMuted}
-            selectionColor={colors.accentBlue}
-            onSubmitEditing={submitFreeText}
-            returnKeyType="send"
-            // A declared input (Pi's `input`) is one line unless it asks for more, as on desktop.
-            multiline={question.freeTextInput ? question.freeTextInput.multiline === true : true}
-          />
-          <Pressable
-            accessibilityLabel="Send reply"
-            style={({ pressed }) => [
-              styles.freeSend,
-              !canSendFreeText && styles.freeSendDisabled,
-              pressed && canSendFreeText && styles.pressed
-            ]}
-            onPress={submitFreeText}
-            disabled={!canSendFreeText}
-          >
-            <ArrowUp
-              size={18}
-              color={canSendFreeText ? colors.bgBase : colors.textMuted}
-              strokeWidth={2.6}
-            />
-          </Pressable>
-        </View>
+        <MessageBox
+          inputRef={inputRef}
+          onFocus={revealReply}
+          value={freeText}
+          onChangeText={setFreeText}
+          placeholder={
+            question.freeTextInput?.placeholder ??
+            (hasOptions
+              ? t('chat.question.otherReplyPlaceholder', 'Or type a reply…')
+              : t('chat.question.replyPlaceholder', 'Type your reply…'))
+          }
+          onSubmitEditing={submitFreeText}
+          returnKeyType="send"
+          // A declared input (Pi's `input`) is one line unless it asks for more, as on desktop.
+          multiline={question.freeTextInput ? question.freeTextInput.multiline === true : true}
+          onSend={submitFreeText}
+          canSend={canSendFreeText}
+          sendAccessibilityLabel={t('chat.question.sendReply', 'Send reply')}
+        />
       ) : null}
-    </View>
+    </ScrollView>
   )
 }
 
 const styles = themedStyleSheet(() => ({
   card: {
+    flexGrow: 0,
+    flexShrink: 1,
+    minHeight: 0,
     marginHorizontal: spacing.lg,
     marginVertical: spacing.sm,
-    padding: spacing.md,
-    gap: spacing.sm,
     backgroundColor: colors.bgPanel,
     borderRadius: radii.card,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle
+  },
+  cardContent: {
+    padding: spacing.md,
+    gap: spacing.sm
   },
   header: {
     flexDirection: 'row',
@@ -296,22 +301,6 @@ const styles = themedStyleSheet(() => ({
   },
   submitTextDisabled: {
     color: colors.textMuted
-  },
-  freeTextRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: spacing.sm
-  },
-  freeSend: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.textPrimary
-  },
-  freeSendDisabled: {
-    backgroundColor: colors.bgRaised
   },
   pressed: {
     opacity: 0.7

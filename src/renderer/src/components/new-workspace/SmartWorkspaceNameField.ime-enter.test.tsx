@@ -1,3 +1,7 @@
+import type { LinearIssue } from '../../../../shared/linear/issue-types'
+import type { LinearCollectionResult } from '../../../../shared/linear/workspace-types'
+import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { linearIssueReadFixture } from '@/store/slices/linear-slice-test-harness'
 // @vitest-environment happy-dom
 
 import React, { act } from 'react'
@@ -5,6 +9,8 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import SmartWorkspaceNameField from './SmartWorkspaceNameField'
+import type * as ReactI18nextModule from 'react-i18next'
+import type * as I18nModule from '@/i18n/i18n'
 
 vi.mock('@/store', () => {
   const state = {
@@ -17,6 +23,7 @@ vi.mock('@/store', () => {
     getCachedWorkItems: vi.fn(() => null),
     linearStatus: { connected: false },
     linearStatusChecked: false,
+    linearStatusContextKey: '',
     listLinearIssues: vi.fn(),
     preflightStatus: null,
     preflightStatusChecked: false,
@@ -36,11 +43,13 @@ vi.mock('@/lib/local-preflight-context', () => ({
   localPreflightContextKey: () => 'test-preflight-context'
 }))
 
-vi.mock('react-i18next', () => ({
+vi.mock('react-i18next', async (importOriginal) => ({
+  ...(await importOriginal<typeof ReactI18nextModule>()),
   useTranslation: () => ({ t: (key: string, fallback?: string) => fallback ?? key })
 }))
 
-vi.mock('@/i18n/i18n', () => ({
+vi.mock('@/i18n/i18n', async (importOriginal) => ({
+  ...(await importOriginal<typeof I18nModule>()),
   translate: (_key: string, fallback: string) => fallback
 }))
 
@@ -85,9 +94,12 @@ beforeEach(() => {
   useAppStore.setState({
     linearStatus: { connected: false, viewer: null },
     linearStatusChecked: false,
-    fetchLinearIssue: vi.fn(async () => null),
-    listLinearIssues: vi.fn(async () => ({ items: [] })),
-    searchLinearIssues: vi.fn(async () => [])
+    linearStatusContextKey: getProviderRuntimeContextKey(null),
+    fetchLinearIssue: vi.fn(() => linearIssueReadFixture<LinearIssue | null>(async () => null)),
+    listLinearIssues: vi.fn(() =>
+      linearIssueReadFixture<LinearCollectionResult<LinearIssue>>(async () => ({ items: [] }))
+    ),
+    searchLinearIssues: vi.fn(() => linearIssueReadFixture<LinearIssue[]>(async () => []))
   })
   container = document.createElement('div')
   document.body.appendChild(container)
@@ -290,7 +302,9 @@ describe('SmartWorkspaceNameField Linear URL loading', () => {
         ]
       },
       linearStatusChecked: true,
-      fetchLinearIssue: vi.fn(() => new Promise<null>(() => {}))
+      fetchLinearIssue: vi.fn(() =>
+        linearIssueReadFixture<LinearIssue | null>(() => new Promise<null>(() => {}))
+      )
     })
 
     await act(async () => {

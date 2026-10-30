@@ -6,7 +6,7 @@ import {
   pluginGitConfigArgs,
   pluginGitFetchCommitArgs,
   pluginGitTreeArgs
-} from './plugins/plugin-git-arguments'
+} from './plugins/installation/plugin-git-arguments'
 
 export function registerPluginGitDownloadBinaryCompatibilityCase(
   runGit: (
@@ -61,6 +61,9 @@ export function registerPluginGitDownloadBinaryCompatibilityCase(
       const object = file?.slice(12, 52) ?? ''
       const blob = await runGit(['-C', repository, 'cat-file', '--batch'], {}, `${object}\n`)
       expect(blob.stdout).toBe(`${object} blob 7\nplugin\n\n`)
+      // Why: a catalog `path` lists one directory, named relative to it, through `<commit>:<path>`.
+      const subtree = await runGit(['-C', repository, ...pluginGitTreeArgs(commit, 'bin')])
+      expect(subtree.stdout).toBe(`100755 blob ${object}       7\trun\0`)
     }
   })
 }

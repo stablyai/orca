@@ -3,10 +3,8 @@ import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../shared/remote-runtime/control/remote-runtime-shared-control-types'
 import type { RuntimeHostBlockedReason } from '../../../../shared/runtime-host-status'
 import type { RuntimePairingRepairRoute } from '../../../../shared/runtime-environments'
-import {
-  describeRuntimeCompatBlock,
-  type RuntimeCompatVerdict
-} from '../../../../shared/protocol-compat'
+import type { RuntimeCompatVerdict } from '../../../../shared/protocol-compat'
+import { describeRuntimeCompatBlock } from '@/lib/runtime-host-copy'
 import {
   runtimeStatusForOverall,
   type HostStatus,

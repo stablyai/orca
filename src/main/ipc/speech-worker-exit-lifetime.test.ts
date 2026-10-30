@@ -98,7 +98,7 @@ vi.mock('node:worker_threads', async () => {
         if (message.type === 'init' && environment.readyOnInit) {
           queueMicrotask(() => this.emit('message', { type: 'ready' }))
         }
-        if (message.type === 'stop' && this.emitStoppedOnStop) {
+        if ((message.type === 'stop' && this.emitStoppedOnStop) || message.type === 'discard') {
           queueMicrotask(() => this.emit('message', { type: 'stopped' }))
         }
       }

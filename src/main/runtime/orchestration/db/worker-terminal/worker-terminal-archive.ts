@@ -1,9 +1,10 @@
-import type {
-  WorkerTerminalArchiveKind,
-  WorkerTerminalResourceRow,
-  WorkerTerminalArchiveRow,
-  WorkerTerminalArchiveStatus,
-  WorkerTerminalRetainedReason
+import {
+  USER_KEPT_WORKER_TERMINAL_SQL,
+  type WorkerTerminalArchiveKind,
+  type WorkerTerminalResourceRow,
+  type WorkerTerminalArchiveRow,
+  type WorkerTerminalArchiveStatus,
+  type WorkerTerminalRetainedReason
 } from '../../worker-terminal-ownership'
 import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationDb } from '../orchestration-db'
@@ -25,6 +26,38 @@ export function storeWorkerTerminalArchive(
          resource_id = excluded.resource_id, kind = excluded.kind, content = excluded.content`
     )
     .run(params.dispatchId, params.resourceId, params.kind, params.content)
+}
+
+/** Stop closes the terminal; keep its output so a later release has an archive to settle with. */
+export function storeWorkerTerminalArchiveBeforeStop(
+  this: OrchestrationDb,
+  params: {
+    dispatchId: string
+    resourceId: string
+    kind: WorkerTerminalArchiveKind
+    content: string
+    archiveSource: 'transcript' | 'terminal'
+    archiveStatus: Extract<WorkerTerminalArchiveStatus, 'captured' | 'empty'>
+  }
+): void {
+  this.db.exec('BEGIN IMMEDIATE')
+  try {
+    const { changes } = this.db
+      .prepare(
+        `UPDATE worker_terminal_resources
+         SET archive_source = ?, archive_status = ?, updated_at = datetime('now')
+         WHERE id = ? AND owner_dispatch_id = ? AND ownership_state = 'owned'
+           AND release_state IN ('not_requested', 'retained')`
+      )
+      .run(params.archiveSource, params.archiveStatus, params.resourceId, params.dispatchId)
+    if (changes > 0) {
+      this.storeWorkerTerminalArchive(params)
+    }
+    this.db.exec('COMMIT')
+  } catch (error) {
+    this.db.exec('ROLLBACK')
+    throw error
+  }
 }
 
 export function commitWorkerTerminalArchiveForRelease(
@@ -145,34 +178,48 @@ export function revertWorkerTerminalReleaseToRetained(
 export function retainTerminalResourceInTransaction(
   database: OrchestrationDb,
   resourceId: string,
-  dispatchId: string
+  dispatchId: string,
+  retainableSql = "release_state IN ('not_requested', 'retained', 'requested')",
+  reason: Extract<WorkerTerminalRetainedReason, 'user_requested' | 'user_kept'> = 'user_requested'
 ): boolean {
   const { changes } = database.db
     .prepare(
       `UPDATE worker_terminal_resources
-       SET release_state = 'retained', retained_reason = 'user_requested',
-           updated_at = datetime('now')
-       WHERE id = ? AND release_state IN ('not_requested', 'retained', 'requested')`
+       SET retained_reason = CASE WHEN ${USER_KEPT_WORKER_TERMINAL_SQL} THEN retained_reason ELSE ? END,
+           release_state = 'retained', auto_release_at = NULL, updated_at = datetime('now')
+       WHERE id = ? AND ${retainableSql}`
     )
-    .run(resourceId)
+    .run(reason, resourceId)
   if (changes > 0) {
-    database.db
-      .prepare('DELETE FROM worker_terminal_archives WHERE dispatch_id = ?')
-      .run(dispatchId)
+    // A stopped worker's terminal is closed; the archive taken before stop is its only output.
+    const dropped = database.db
+      .prepare(
+        `DELETE FROM worker_terminal_archives WHERE dispatch_id = ? AND NOT EXISTS (
+           SELECT 1 FROM worker_dispatches WHERE dispatch_id = ? AND state = 'stopped')`
+      )
+      .run(dispatchId, dispatchId)
+    if (dropped.changes > 0) {
+      database.db
+        .prepare(
+          'UPDATE worker_terminal_resources SET archive_source = NULL, archive_status = NULL WHERE id = ?'
+        )
+        .run(resourceId)
+    }
   }
   return changes > 0
 }
 
-export function retainWorkerTerminalResource(
-  this: OrchestrationDb,
-  dispatchId: string
-):
+type WorkerTerminalRetainResult =
   | { disposition: 'retained'; resource: WorkerTerminalResourceRow }
   | { disposition: 'already_released'; resource: WorkerTerminalResourceRow }
   | { disposition: 'release_committed'; resource: WorkerTerminalResourceRow }
-  | { disposition: 'no_owned_resource'; resource: null } {
-  this.db.exec('BEGIN IMMEDIATE')
-  try {
+  | { disposition: 'no_owned_resource'; resource: null }
+
+export function retainWorkerTerminalResource(
+  this: OrchestrationDb,
+  dispatchId: string
+): WorkerTerminalRetainResult {
+  return retainOwnedTerminalResource(this, dispatchId, () => {
     const dispatch = this.getDispatchContextById(dispatchId)
     if (!dispatch) {
       throw new OrchestrationError('dispatch_not_found', `Dispatch ${dispatchId} was not found.`)
@@ -184,47 +231,76 @@ export function retainWorkerTerminalResource(
         `Dispatch ${dispatchId} is ${dispatch.status}; only a settled dispatch can retain.`
       )
     }
-    const resource = this.getWorkerTerminalResourceByOwner(dispatchId)
+  })
+}
+
+/** The execution host's half of a forwarded worker-retain. */
+export function retainRemoteAttachmentTerminalResource(
+  this: OrchestrationDb,
+  dispatchId: string
+): WorkerTerminalRetainResult {
+  return retainOwnedTerminalResource(this, dispatchId, () => {
+    if (!this.getRemoteDispatchAttachment(dispatchId)) {
+      throw new OrchestrationError(
+        'dispatch_not_found',
+        `Remote Dispatch ${dispatchId} was not found.`
+      )
+    }
+  })
+}
+
+function retainOwnedTerminalResource(
+  database: OrchestrationDb,
+  dispatchId: string,
+  assertRetainable: () => void
+): WorkerTerminalRetainResult {
+  database.db.exec('BEGIN IMMEDIATE')
+  try {
+    assertRetainable()
+    const resource = database.getWorkerTerminalResourceByOwner(dispatchId)
     if (!resource) {
-      this.db.exec('COMMIT')
+      database.db.exec('COMMIT')
       return { disposition: 'no_owned_resource', resource: null }
     }
     if (resource.release_state === 'released') {
-      this.db.exec('COMMIT')
+      database.db.exec('COMMIT')
       return { disposition: 'already_released', resource }
     }
-    const retained = retainTerminalResourceInTransaction(this, resource.id, dispatchId)
-    const updated = this.getWorkerTerminalResource(resource.id) as WorkerTerminalResourceRow
-    if (!retained) {
-      this.db.exec('COMMIT')
-      return { disposition: 'release_committed', resource: updated }
-    }
-    this.db.exec('COMMIT')
-    return { disposition: 'retained', resource: updated }
+    const retained = retainTerminalResourceInTransaction(database, resource.id, dispatchId)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the row was read under this transaction's write lock, so it still exists.
+    const updated = database.getWorkerTerminalResource(resource.id) as WorkerTerminalResourceRow
+    database.db.exec('COMMIT')
+    return retained
+      ? { disposition: 'retained', resource: updated }
+      : { disposition: 'release_committed', resource: updated }
   } catch (error) {
-    this.db.exec('ROLLBACK')
+    database.db.exec('ROLLBACK')
     throw error
   }
 }
 
 export type WorkerTerminalArchiveMethods = {
   storeWorkerTerminalArchive: typeof storeWorkerTerminalArchive
+  storeWorkerTerminalArchiveBeforeStop: typeof storeWorkerTerminalArchiveBeforeStop
   commitWorkerTerminalArchiveForRelease: typeof commitWorkerTerminalArchiveForRelease
   getWorkerTerminalArchive: typeof getWorkerTerminalArchive
   settleWorkerTerminalRelease: typeof settleWorkerTerminalRelease
   markWorkerTerminalReleaseUnknown: typeof markWorkerTerminalReleaseUnknown
   revertWorkerTerminalReleaseToRetained: typeof revertWorkerTerminalReleaseToRetained
   retainWorkerTerminalResource: typeof retainWorkerTerminalResource
+  retainRemoteAttachmentTerminalResource: typeof retainRemoteAttachmentTerminalResource
 }
 
 export function attachWorkerTerminalArchive(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
     storeWorkerTerminalArchive,
+    storeWorkerTerminalArchiveBeforeStop,
     commitWorkerTerminalArchiveForRelease,
     getWorkerTerminalArchive,
     settleWorkerTerminalRelease,
     markWorkerTerminalReleaseUnknown,
     revertWorkerTerminalReleaseToRetained,
-    retainWorkerTerminalResource
+    retainWorkerTerminalResource,
+    retainRemoteAttachmentTerminalResource
   })
 }

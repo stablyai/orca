@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { stubRpcClient } from '../../../transport/rpc-client-test-stub'
 import type { RpcClient } from '../../../transport/rpc-client'
 import type { RpcResponse } from '../../../transport/types'
-import { isRenderableImageUri, readStoredChatImage } from './mobile-native-chat-image-preview'
+import { isRenderableImageUri, readHostChatImage } from './mobile-native-chat-image-preview'
 
 describe('isRenderableImageUri', () => {
   it('accepts local previews and real URLs the device can load', () => {
@@ -33,28 +33,28 @@ describe('isRenderableImageUri', () => {
   })
 })
 
-describe('readStoredChatImage', () => {
+describe('readHostChatImage', () => {
   it('reads two images at a time and drops reads whose row went away while queued', async () => {
     const replies: ((reply: RpcResponse) => void)[] = []
     const sendRequest = vi.fn<RpcClient['sendRequest']>(
       () => new Promise<RpcResponse>((resolve) => replies.push(resolve))
     )
-    const client = stubRpcClient({ sendRequest })
+    const source = { client: stubRpcClient({ sendRequest }), worktreeId: 'wt-1' }
     const gone = new AbortController()
     const reads = [
-      readStoredChatImage(client, '/a.png', new AbortController().signal),
-      readStoredChatImage(client, '/b.png', new AbortController().signal),
-      readStoredChatImage(client, '/c.png', gone.signal),
-      readStoredChatImage(client, '/d.png', new AbortController().signal)
+      readHostChatImage(source, '/a.png', new AbortController().signal),
+      readHostChatImage(source, '/b.png', new AbortController().signal),
+      readHostChatImage(source, '/c.png', gone.signal),
+      readHostChatImage(source, '/d.png', new AbortController().signal)
     ]
     await vi.waitFor(() => expect(sendRequest).toHaveBeenCalledTimes(2))
     gone.abort()
     replies[0]!({ id: '1', ok: false, error: { code: 'forbidden', message: 'refused' } })
     await vi.waitFor(() => expect(sendRequest).toHaveBeenCalledTimes(3))
     expect(sendRequest.mock.calls.map((call) => call[1])).toEqual([
-      { path: '/a.png' },
-      { path: '/b.png' },
-      { path: '/d.png' }
+      { worktree: 'id:wt-1', path: '/a.png' },
+      { worktree: 'id:wt-1', path: '/b.png' },
+      { worktree: 'id:wt-1', path: '/d.png' }
     ])
     replies[1]!({ id: '2', ok: false, error: { code: 'forbidden', message: 'refused' } })
     replies[2]!({ id: '3', ok: false, error: { code: 'forbidden', message: 'refused' } })

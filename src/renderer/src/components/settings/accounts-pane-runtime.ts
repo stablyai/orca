@@ -6,7 +6,7 @@ import type {
 } from '../../../../shared/managed-account-types'
 import { resolveLocalAccountRuntimeTarget } from '../../../../shared/local-account-runtime'
 import { getRendererAppPlatform } from '../../lib/renderer-app-platform'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 import type { LocalAccountRuntime } from './accounts-pane-types'
 
 export const EMPTY_WSL_DISTROS: string[] = []
@@ -103,7 +103,7 @@ export function getRuntimeSentenceLabel(runtime: LocalAccountRuntime): string {
 }
 
 export function formatAccountTimestamp(timestamp: number): string {
-  return new Date(timestamp).toLocaleString(undefined, {
+  return new Date(timestamp).toLocaleString(getIntlLocale(), {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',

@@ -18,7 +18,8 @@ import {
 } from 'lucide-react-native'
 import type { AgentChildRowModel } from '../../../../../src/shared/agent-child-row-model'
 import type { AgentSessionBackgroundTask } from '../../../../../src/shared/agent-session-background-task-wire'
-import { sayBackgroundTaskEnglish as say } from '../../../../../src/shared/background-task-copy'
+import { sayMobileBackgroundTask as say } from '../../mobile-background-task-copy'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import {
   backgroundTasksHeaderContent,
   backgroundTasksHeaderText,
@@ -151,6 +152,7 @@ function MobileNativeChatBackgroundTasksImpl({
   tasks: MobileStructuredBackgroundTasks
 }): React.JSX.Element | null {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const { view, rowContext } = tasks
   const [expanded, setExpanded] = useState(false)
   // Seed from usable window width to avoid changing form after first layout.
@@ -163,7 +165,7 @@ function MobileNativeChatBackgroundTasksImpl({
       view.children !== undefined
         ? buildBackgroundTaskGroupsFromViews(view.children, rowContext)
         : buildBackgroundTaskGroups(view.tasks, view.settledTasks, say),
-    [view.children, view.tasks, view.settledTasks, rowContext]
+    [view.children, view.tasks, view.settledTasks, rowContext, t]
   )
   const now = useNow(1_000, view.show && backgroundTasksStripTicks(groups, expanded))
   if (!view.show) {

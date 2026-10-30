@@ -29,13 +29,12 @@ import {
   readNativeChatSessionOptionCache,
   writeNativeChatSessionOptionCache
 } from '../../../../../src/shared/native-chat-session-option-cache'
-import { retireMissingModelMutation } from '../../../../../src/shared/native-chat-discovered-catalog-models'
 import {
   createNativeChatSessionOptionRecord,
   matchNativeChatCatalogModelId
 } from '../../../../../src/shared/native-chat/input/native-chat-session-option-state'
 import { setBoundedScopeCacheEntry } from '../../../../../src/shared/native-chat/native-chat-scope-cache'
-import { sayNativeChatSessionOptionEnglish } from '../../../../../src/shared/native-chat-session-option-labels'
+import { sayMobileNativeChatSessionOption } from './native-chat-session-option-copy'
 
 export type MobileNativeChatSessionOptionsController = {
   optionSurface?: SessionOptionsSurface
@@ -111,7 +110,7 @@ function createMobileSurfaceEntry(args: {
     agent,
     scopeKey: args.scopeKey,
     mode: 'live',
-    modelLabel: sayNativeChatSessionOptionEnglish('model'),
+    modelLabel: sayMobileNativeChatSessionOption('model'),
     canSwitchOmpModel: args.canSwitchOmpModel,
     dispatchCommand: async (command, options) => {
       // One controller serves every tab: a queued pick must not reach the tab opened since.
@@ -174,7 +173,6 @@ export function useMobileNativeChatSessionOptions(
   const [pending, setPending] = useState<PendingOperation | null>(null)
   // One surface per tab for this controller's life: a pick still on its way lands where the chat shows it on return.
   const [surfaces] = useState(() => new Map<string, SurfaceEntry>())
-  const retiredModelsRef = useRef<readonly CatalogModel[] | null>(null)
 
   useLayoutEffect(() => {
     latest.current = args
@@ -221,17 +219,6 @@ export function useMobileNativeChatSessionOptions(
       entry.surface.replaceModels(discoveredModels)
     }
   }, [discoveredModels, entry])
-
-  useEffect(() => {
-    if (!agent || !discoveredModels || retiredModelsRef.current === discoveredModels) {
-      return
-    }
-    retiredModelsRef.current = discoveredModels
-    const mutation = retireMissingModelMutation(agent, discoveredModels)
-    if (mutation) {
-      latest.current.writeSettings?.(mutation)
-    }
-  }, [agent, discoveredModels])
 
   useEffect(() => {
     if (!surface || !scopeKey || !catalog || !reportedModel) {

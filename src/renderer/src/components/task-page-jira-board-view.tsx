@@ -121,7 +121,13 @@ export function TaskPageJiraBoardView({
           ? {
               ...current,
               selected: transition,
-              error: error instanceof Error ? error.message : 'Failed to change status.'
+              error:
+                error instanceof Error
+                  ? error.message
+                  : translate(
+                      'auto.components.taskPageJiraBoard.changeStatusFailed',
+                      'Failed to change status.'
+                    )
             }
           : null
       )
@@ -199,7 +205,13 @@ export function TaskPageJiraBoardView({
         selected: null,
         transitions: [],
         loading: false,
-        error: error instanceof Error ? error.message : 'Failed to load status changes.'
+        error:
+          error instanceof Error
+            ? error.message
+            : translate(
+                'auto.components.jiraIssue.loadStatusChangesFailed',
+                'Failed to load status changes.'
+              )
       })
     }
   }

@@ -53,6 +53,7 @@ export type NativeChatStructuredComposerTransport = {
   sessionCommands?: readonly AgentSessionSlashCommand[]
   /** Request command refresh; updated choices arrive through sessionCommands. */
   refreshCommands?: () => void
+  setCommandsMenuOpen?: (open: boolean) => void
   /** False when the agent takes no image input, as its host registered it. */
   acceptsImages?: boolean
   /** The session's context usage; null until the journal can state it. */

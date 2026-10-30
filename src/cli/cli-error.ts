@@ -56,7 +56,7 @@ function errorData(error: unknown): unknown {
   return error instanceof RuntimeClientError ? error.data : undefined
 }
 
-function errorCode(error: unknown): string | undefined {
+export function cliErrorCode(error: unknown): string | undefined {
   if (error instanceof RuntimeRpcFailureError) {
     return error.response.error.code
   }
@@ -65,7 +65,7 @@ function errorCode(error: unknown): string | undefined {
 
 export function formatCliError(error: unknown, context: CliErrorContext = {}): string {
   const message = error instanceof Error ? error.message : String(error)
-  const selector = contextRecovery(errorCode(error), context)
+  const selector = contextRecovery(cliErrorCode(error), context)
   if (selector) {
     return formatMessageWithNextSteps(
       message,
@@ -128,7 +128,7 @@ function formatRuntimeUnavailableError(message: string, data: unknown): string {
 }
 
 export function reportCliError(error: unknown, json: boolean, context: CliErrorContext = {}): void {
-  const selector = contextRecovery(errorCode(error), context)
+  const selector = contextRecovery(cliErrorCode(error), context)
   if (json) {
     if (error instanceof RuntimeRpcFailureError) {
       const sidecarExit = computerSidecarExitRecovery(error, context)
@@ -246,7 +246,7 @@ function nextStepsFromData(data: unknown): string[] {
 function computerSidecarExitRecovery(error: unknown, context: CliErrorContext) {
   if (
     context.commandPath?.[0] !== 'computer' ||
-    errorCode(error) !== 'accessibility_error' ||
+    cliErrorCode(error) !== 'accessibility_error' ||
     !(error instanceof Error) ||
     !error.message.startsWith('computer sidecar exited with code')
   ) {
@@ -260,7 +260,7 @@ function localCliErrorData(error: unknown, context: CliErrorContext): unknown {
   if (sidecarExit) {
     return sidecarExit
   }
-  const selector = contextRecovery(errorCode(error), context)
+  const selector = contextRecovery(cliErrorCode(error), context)
   // Error-specific recovery takes precedence over the generic fallback.
   if (error instanceof RuntimeClientError && error.data !== undefined) {
     return mergeContextRecovery(error.data, selector)

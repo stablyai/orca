@@ -1,3 +1,4 @@
+import { terminalArtifactPreviewMatchesBase } from './mobile-file-preview-editability'
 import { mobileFileMedia } from './mobile-file-media'
 import { classifyMobileArtifact } from '../session/mobile-artifact-kind'
 import type { RpcAcceptedResult } from '../transport/rpc-accepted-result'
@@ -14,6 +15,7 @@ import {
   normalizeMobileFilePreviewResult,
   previewError,
   previewErrorFromRefusal,
+  terminalArtifactPreviewChangedError,
   type MobileFilePreviewResult
 } from './mobile-file-preview-response'
 import {
@@ -60,6 +62,7 @@ type MobileFilePreviewOutcome =
 type TerminalArtifactSource = MobileTerminalArtifactPreviewSource
 type TerminalArtifactSaveOptions = TerminalArtifactRetryOptions & {
   baseContent?: string
+  isCurrent?: () => boolean
 }
 
 export function createMobileFilePreviewRequest(
@@ -164,7 +167,7 @@ export async function loadMobileFilePreview(
       read.refusal,
       options
     )
-    if (refreshed) {
+    if (refreshed && options.isCurrent?.() !== false) {
       source = refreshed
       options.onTerminalArtifactSourceRefreshed?.(refreshed)
       read = await sendMobileFilePreviewRead(
@@ -196,6 +199,9 @@ export async function saveMobileTerminalArtifactPreview(
       options.baseContent,
       options
     )
+    if (options.isCurrent?.() === false) {
+      return previewError('Save canceled')
+    }
     if (verified.status === 'error') {
       return verified.error
     }
@@ -205,6 +211,9 @@ export async function saveMobileTerminalArtifactPreview(
     }
   }
   let write = await writeTerminalArtifactPreview(client, writeSource, content)
+  if (options.isCurrent?.() === false) {
+    return previewError('Save canceled')
+  }
   if (write.accepted) {
     return { status: 'saved' }
   }
@@ -218,12 +227,16 @@ export async function saveMobileTerminalArtifactPreview(
     write.refusal,
     options
   )
-  if (!refreshed) {
+  if (!refreshed || options.isCurrent?.() === false) {
     return previewErrorFromRefusal(write.refusal)
   }
   const verified = await verifyTerminalArtifactBaseContent(client, refreshed, options.baseContent, {
+    ...options,
     refreshGrant: false
   })
+  if (options.isCurrent?.() === false) {
+    return previewError('Save canceled')
+  }
   if (verified.status === 'error') {
     return verified.error
   }
@@ -240,7 +253,7 @@ async function verifyTerminalArtifactBaseContent(
   client: MobileFilePreviewRpcSender,
   source: TerminalArtifactSource,
   baseContent: string,
-  options: TerminalArtifactRetryOptions
+  options: TerminalArtifactSaveOptions
 ): Promise<
   | { status: 'ok'; source: TerminalArtifactSource; refreshed: boolean }
   | { status: 'error'; error: MobileFilePreviewResult }
@@ -248,6 +261,9 @@ async function verifyTerminalArtifactBaseContent(
   let readSource = source
   let read = await sendMobileFilePreviewRead(client, createMobileFilePreviewRequest(readSource))
   let refreshed = false
+  if (options.isCurrent?.() === false) {
+    return { status: 'error', error: previewError('Save canceled') }
+  }
   if (!read.accepted) {
     const nextSource = await refreshTerminalArtifactSourceAfterGrantFailure(
       client,
@@ -255,7 +271,7 @@ async function verifyTerminalArtifactBaseContent(
       read.refusal,
       options
     )
-    if (!nextSource) {
+    if (!nextSource || options.isCurrent?.() === false) {
       return { status: 'error', error: previewErrorFromRefusal(read.refusal) }
     }
     readSource = nextSource
@@ -270,14 +286,7 @@ async function verifyTerminalArtifactBaseContent(
     return { status: 'error', error: latest }
   }
   if (!terminalArtifactPreviewMatchesBase(latest, baseContent)) {
-    return {
-      status: 'error',
-      error: {
-        status: 'error',
-        message: 'File changed on desktop. Reload preview before saving',
-        reconnect: false
-      }
-    }
+    return { status: 'error', error: terminalArtifactPreviewChangedError() }
   }
   return { status: 'ok', source: readSource, refreshed }
 }
@@ -295,21 +304,6 @@ async function writeTerminalArtifactPreview(
       content
     }),
     terminalArtifactWrite.interpret
-  )
-}
-
-function terminalArtifactPreviewMatchesBase(
-  preview: MobileFilePreviewResult,
-  baseContent: string
-): boolean {
-  if (preview.status === 'empty') {
-    return baseContent.length === 0
-  }
-  return (
-    preview.status === 'ready' &&
-    preview.kind !== 'image' &&
-    preview.kind !== 'media' &&
-    preview.content === baseContent
   )
 }
 

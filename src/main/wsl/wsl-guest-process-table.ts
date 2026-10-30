@@ -8,6 +8,7 @@ import {
   type WslGuestProcessRow
 } from '../persistence/moving-wsl-projects/wsl-move-guest-foreground'
 import { runWslProcess } from './wsl-runner'
+import { blockedWslDistroForPath } from './wsl-unc-access-gate'
 
 const readsInFlight = new Map<string, Promise<WslGuestProcessRow[] | null>>()
 
@@ -19,7 +20,18 @@ export function readWslGuestProcessTable(distro: string): Promise<WslGuestProces
   if (inFlight) {
     return inFlight
   }
-  const read = runWslProcess({
+  const read = readRunningGuestProcessTable(distro).finally(() => readsInFlight.delete(key))
+  readsInFlight.set(key, read)
+  return read
+}
+
+async function readRunningGuestProcessTable(distro: string): Promise<WslGuestProcessRow[] | null> {
+  // An automatic move must not boot the distro to list it (E9); a stopped one runs nothing.
+  const blocked = await blockedWslDistroForPath('', distro)
+  if (blocked) {
+    return blocked.state === 'stopped' ? [] : null
+  }
+  return runWslProcess({
     distro,
     script: WSL_GUEST_PANE_PROCESS_SCRIPT,
     loginPath: 'none',
@@ -32,7 +44,4 @@ export function readWslGuestProcessTable(distro: string): Promise<WslGuestProces
         : parseWslGuestPaneProcesses(result.stdout)
     )
     .catch(() => null)
-    .finally(() => readsInFlight.delete(key))
-  readsInFlight.set(key, read)
-  return read
 }

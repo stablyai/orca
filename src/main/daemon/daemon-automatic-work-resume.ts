@@ -1,3 +1,4 @@
+import type { TerminalLimitStatus, TerminalLimitUpdate } from '../../shared/terminal-limit-policy'
 import type {
   AutomaticWorkResumeOutcome,
   AutomaticWorkStatus
@@ -9,7 +10,8 @@ import { DegradedDaemonPtyProvider } from './degraded-daemon-pty-provider'
 
 type LocalDaemons = { current: DaemonPtyAdapter; legacy: readonly DaemonPtyAdapter[] }
 
-function localDaemons(provider: IPtyProvider): LocalDaemons | null {
+/** The daemons behind the local provider; null for the in-process fallback, which has no gate. */
+export function localDaemons(provider: IPtyProvider): LocalDaemons | null {
   if (provider instanceof DaemonPtyAdapter) {
     return { current: provider, legacy: [] }
   }
@@ -41,4 +43,11 @@ export async function resumeLocalAutomaticWork(
     throw current.reason
   }
   return current.value
+}
+
+export async function localTerminalLimit(
+  provider: IPtyProvider,
+  update?: TerminalLimitUpdate
+): Promise<TerminalLimitStatus | null> {
+  return (await localDaemons(provider)?.current.terminalLimit(update)) ?? null
 }

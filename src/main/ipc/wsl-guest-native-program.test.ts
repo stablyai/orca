@@ -1,8 +1,10 @@
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { resolveCliCommand } from '../../shared/node-cli-command-resolution'
 import {
+  _resetWindowsCopyVerdictsForTests,
   guestNativeSpawnEnv,
   isWslHostOrcadProcess,
   ORCAD_WSL_HOST_ENV,
@@ -29,6 +31,8 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.useRealTimers()
+  _resetWindowsCopyVerdictsForTests()
   rmSync(root, { recursive: true, force: true })
 })
 
@@ -53,6 +57,44 @@ describe.skipIf(process.platform === 'win32')('resolveGuestNativeProgram', () =>
   it('resolves exactly as before off a WSL host (native Linux, macOS, SSH hosts, the desktop)', () => {
     const windowsCopy = install(join(drive, 'npm'))
     expect(resolveGuestNativeProgram('claude', options(), undefined, [])).toBe(windowsCopy)
+  })
+})
+
+describe.skipIf(process.platform === 'win32')('the Windows-copy check', () => {
+  const options = () => ({ pathEnv: `${native}:${drive}/npm`, homePath: join(root, 'home') })
+  const counting = () => vi.fn(resolveCliCommand)
+
+  it('scans the drive-mounted PATH once for repeated lookups of the same PATH', () => {
+    install(join(drive, 'npm'))
+    const resolve = counting()
+    expect(resolveGuestNativeProgram('claude', options(), resolve, [drive])).toBeNull()
+    expect(resolveGuestNativeProgram('claude', options(), resolve, [drive])).toBeNull()
+    // One native lookup per call, one Windows-copy scan in total.
+    expect(resolve).toHaveBeenCalledTimes(3)
+  })
+
+  it('still finds a WSL install made after the verdict was cached', () => {
+    install(join(drive, 'npm'))
+    expect(resolveGuestNativeProgram('claude', options(), undefined, [drive])).toBeNull()
+    const own = install(native)
+    expect(resolveGuestNativeProgram('claude', options(), undefined, [drive])).toBe(own)
+  })
+
+  it('re-checks once the verdict is old', () => {
+    vi.useFakeTimers({ now: 1_000_000, toFake: ['Date'] })
+    expect(resolveGuestNativeProgram('claude', options(), undefined, [drive])).toBe('claude')
+    install(join(drive, 'npm'))
+    expect(resolveGuestNativeProgram('claude', options(), undefined, [drive])).toBe('claude')
+    vi.advanceTimersByTime(30_000)
+    expect(resolveGuestNativeProgram('claude', options(), undefined, [drive])).toBeNull()
+  })
+
+  it('caches nothing off a WSL host (native Linux, macOS, SSH hosts, the desktop)', () => {
+    const resolve = counting()
+    expect(resolveGuestNativeProgram('claude', options(), resolve, [])).toBe('claude')
+    const windowsCopy = install(join(drive, 'npm'))
+    expect(resolveGuestNativeProgram('claude', options(), resolve, [])).toBe(windowsCopy)
+    expect(resolve).toHaveBeenCalledTimes(2)
   })
 })
 

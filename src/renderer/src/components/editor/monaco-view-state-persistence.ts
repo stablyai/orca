@@ -1,6 +1,11 @@
 import type { MutableRefObject } from 'react'
 import type { editor } from 'monaco-editor'
-import { editorSelectionCache, scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
+import {
+  editorSelectionCache,
+  editorViewStateCache,
+  scrollTopCache,
+  setWithLRU
+} from '@/lib/scroll-cache'
 
 type MonacoViewStateTrackingParams = {
   editorInstance: editor.IStandaloneCodeEditor
@@ -8,6 +13,14 @@ type MonacoViewStateTrackingParams = {
   viewStateKey: string
   scrollThrottleTimerRef: MutableRefObject<ReturnType<typeof setTimeout> | null>
   setEditorCursorLine: (fileId: string, line: number) => void
+}
+
+function editorViewStateKey(
+  editorInstance: editor.IStandaloneCodeEditor,
+  viewStateKey: string
+): string | null {
+  const model = editorInstance.getModel()
+  return model ? JSON.stringify([viewStateKey, model.uri.toString()]) : null
 }
 
 export function installMonacoViewStateTracking(params: MonacoViewStateTrackingParams): {
@@ -44,16 +57,22 @@ export function restoreMonacoViewState(
   viewStateKey: string,
   canFocus?: () => boolean
 ): void {
+  const cacheKey = editorViewStateKey(editorInstance, viewStateKey)
+  const savedViewState = cacheKey === null ? undefined : editorViewStateCache.get(cacheKey)
   const savedSelections = editorSelectionCache.get(viewStateKey)
   const savedScrollTop = scrollTopCache.get(viewStateKey)
-  if (savedScrollTop !== undefined || savedSelections) {
+  if (savedViewState || savedScrollTop !== undefined || savedSelections) {
     // Why: Monaco renders synchronously so one RAF suffices; focus inside it to avoid a scroll-0 flash before restore.
     requestAnimationFrame(() => {
-      if (savedSelections) {
-        editorInstance.setSelections(savedSelections)
-      }
-      if (savedScrollTop !== undefined) {
-        editorInstance.setScrollTop(savedScrollTop)
+      if (savedViewState) {
+        editorInstance.restoreViewState(savedViewState)
+      } else {
+        if (savedSelections) {
+          editorInstance.setSelections(savedSelections)
+        }
+        if (savedScrollTop !== undefined) {
+          editorInstance.setScrollTop(savedScrollTop)
+        }
       }
       if (canFocus?.() !== false) {
         editorInstance.focus()
@@ -71,6 +90,11 @@ export function snapshotMonacoViewState(
 ): void {
   const ed = editorRef.current
   if (ed) {
+    const cacheKey = editorViewStateKey(ed, viewStateKey)
+    const viewState = ed.saveViewState()
+    if (cacheKey !== null && viewState) {
+      setWithLRU(editorViewStateCache, cacheKey, viewState)
+    }
     setWithLRU(scrollTopCache, viewStateKey, ed.getScrollTop())
     const selections = ed.getSelections()
     if (selections) {

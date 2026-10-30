@@ -118,27 +118,30 @@ function JobCard({
   const collapsible = [...breakdown.succeeded, ...breakdown.skipped, ...breakdown.pending]
   const summaryParts: string[] = []
   if (breakdown.succeeded.length > 0) {
+    const count = breakdown.succeeded.length
     summaryParts.push(
-      `${breakdown.succeeded.length} ${translate(
-        'auto.components.editor.CheckRunJobs.1c0a4d7e02',
-        'succeeded'
-      )}`
+      translate('auto.components.editor.CheckRunJobs.stepsSucceeded', '{{count}} succeeded', {
+        count,
+        defaultValue_one: '{{count}} succeeded'
+      })
     )
   }
   if (breakdown.skipped.length > 0) {
+    const count = breakdown.skipped.length
     summaryParts.push(
-      `${breakdown.skipped.length} ${translate(
-        'auto.components.editor.CheckRunJobs.2d3b8f1a55',
-        'skipped'
-      )}`
+      translate('auto.components.editor.CheckRunJobs.stepsSkipped', '{{count}} skipped', {
+        count,
+        defaultValue_one: '{{count}} skipped'
+      })
     )
   }
   if (breakdown.pending.length > 0) {
+    const count = breakdown.pending.length
     summaryParts.push(
-      `${breakdown.pending.length} ${translate(
-        'auto.components.editor.CheckRunJobs.3e6c9a2b71',
-        'pending'
-      )}`
+      translate('auto.components.editor.CheckRunJobs.stepsPending', '{{count}} pending', {
+        count,
+        defaultValue_one: '{{count}} pending'
+      })
     )
   }
 
@@ -155,10 +158,15 @@ function JobCard({
         </span>
         {breakdown.failed.length > 0 && (
           <Badge variant="destructive">
-            {breakdown.failed.length}
-            {' / '}
-            {breakdown.total}{' '}
-            {translate('auto.components.editor.CheckRunJobs.4f7d0c3e88', 'steps failed')}
+            {translate(
+              'auto.components.editor.CheckRunJobs.stepsFailedOfTotal',
+              '{{failed}} / {{count}} steps failed',
+              {
+                failed: breakdown.failed.length,
+                count: breakdown.total,
+                defaultValue_one: '{{failed}} / {{count}} steps failed'
+              }
+            )}
           </Badge>
         )}
       </div>

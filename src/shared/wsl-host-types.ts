@@ -1,4 +1,5 @@
 /** Desktop-only WSL host IPC; never part of the wire protocol (C7). */
+import type { WslHostCopyParams } from './wsl-host-failure-copy'
 
 export const WSL_HOST_STATUS_CHANNEL = 'wslHosts:statusChanged'
 
@@ -26,6 +27,9 @@ export type WslHostStatus = {
   state: WslHostConnectionState
   /** Why it failed or is unverifiable, in the main process's words. */
   detail: string | null
+  /** `detail`'s WSL_HOST_STATUS_DETAIL_COPY code; absent when `detail` is verbatim diagnostic text. */
+  detailCode?: string
+  detailParams?: WslHostCopyParams
   /** An app update the running server waits to take (e.g. live terminals); Update/Force retry it. */
   deferredUpdate?: WslHostDeferredUpdate | null
   /** A Remove that could not prove the server stopped; `detail` says why. Remove retries it. */
@@ -65,7 +69,15 @@ export type WslHostCapability = {
 export type WslHostServerStop =
   /** `keptForOtherDesktops`: another Orca shares the server, so only this desktop let go of it. */
   | { stopped: true; keptForOtherDesktops?: string[] }
-  | { stopped: false; reason: string; verdict?: 'live' | 'unverifiable'; kept?: boolean }
+  | {
+      stopped: false
+      reason: string
+      /** `reason`'s WSL_HOST_STATUS_DETAIL_COPY code, when it is one coded sentence. */
+      reasonCode?: string
+      reasonParams?: WslHostCopyParams
+      verdict?: 'live' | 'unverifiable'
+      kept?: boolean
+    }
 
 export type WslHostAddFailureKind =
   | 'unsupported-wsl1'
@@ -81,7 +93,14 @@ export type WslHostAddFailureKind =
 
 export type WslHostAddResult =
   | { ok: true; environmentId: string }
-  | { ok: false; kind: WslHostAddFailureKind; message: string }
+  | {
+      ok: false
+      kind: WslHostAddFailureKind
+      message: string
+      /** `message`'s WSL_HOST_ADD_REFUSAL_COPY code; absent when `message` is verbatim error text. */
+      errorCode?: string
+      errorParams?: WslHostCopyParams
+    }
 
 export function wslHostEnvironmentLabel(distro: string): string {
   return `${distro} (WSL)`

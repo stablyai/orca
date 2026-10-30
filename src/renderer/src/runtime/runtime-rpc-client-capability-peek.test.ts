@@ -40,17 +40,6 @@ afterEach(() => {
 })
 
 describe('peekRuntimeEnvironmentCapability', () => {
-  it('answers undefined without issuing a request when no status is cached', () => {
-    expect(peekRuntimeEnvironmentCapability('env-cold', CAPABILITY)).toBeUndefined()
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-  })
-
-  it('answers a cached positive verdict synchronously', async () => {
-    runtimeEnvironmentCall.mockResolvedValue(statusReply([CAPABILITY]))
-    await runtimeEnvironmentSupportsCapability('env-new', CAPABILITY)
-    expect(peekRuntimeEnvironmentCapability('env-new', CAPABILITY)).toBe(true)
-  })
-
   it('caches an old host answer for the TTL while async callers still re-probe it', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date(0))

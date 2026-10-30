@@ -28,6 +28,7 @@ import { prepareFederatedAttachmentAuthority } from './federation-attachment-aut
 export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
   defineMethod({
     name: 'orchestration.federationAttachStart',
+    requires: ['accounts'],
     permission: 'workspace',
     params: FederationAttachStartParams,
     handler: async (params, { runtime, orchestrationMutation }) => {
@@ -210,7 +211,6 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
               devMode: params.devMode,
               // Enforce the execution host's nesting cap using its own setting.
               canDispatchSubWorkers: (params.depth ?? 1) < runtime.getNestedWorkerMaxDepth(),
-              heartbeatIntervalMinutes: runtime.getOrchestrationHeartbeatMinutes(),
               subWorkersInOwnRun: true,
               cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
             })

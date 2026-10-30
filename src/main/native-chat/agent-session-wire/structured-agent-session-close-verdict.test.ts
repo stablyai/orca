@@ -1,4 +1,5 @@
-// Only user-close supplies personal cancellation; host eviction/quit leaves interrupted work reportable.
+import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
+// Personal close and intentional shutdown are cancellation; unrelated eviction remains failure news.
 // Provider and fallback turn-end writers both derive verdict from the journal Stop event.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -9,7 +10,7 @@ import {
 import type { AgentSessionStatusEvent } from '../../../shared/agent-session-wire'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import { describeNativeChatTurnStatus } from '../../../shared/native-chat-turn-status'
-import { withNativeChatCutTurnNotices } from '../../../shared/native-chat-cut-turn-notice'
+import { withNativeChatCutTurnNotices } from '../../../shared/native-chat/transcript/native-chat-cut-turn-notice'
 import { selectStructuredAgentSettledTurns } from '../../../shared/structured-agent-session-turn-timing'
 import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
@@ -113,7 +114,12 @@ async function runningTurn(): Promise<AgentSessionStatusEvent[]> {
 }
 
 async function settledTurn() {
-  await host.restoreReadableSessions([SESSION])
+  if (!host.hasSession(SESSION)) {
+    await host.flushAllStreamedEvents()
+    host = new StructuredAgentSessionHost(host.deps)
+    replaceHostTestState({ store: host.deps.store, host })
+  }
+  await openTestChats(host, [SESSION])
   const { items } = await host.journalSnapshot(SESSION)
   const turn = items.map((item) => readAgentJournalTurn(item.body)).find(Boolean)
   const [settled] = [...selectStructuredAgentSettledTurns(items).values()]
@@ -237,13 +243,13 @@ describe('a turn cut short by closing its provider', () => {
     expect(turn).toMatchObject({ state: 'interrupted', outcome: 'failure' })
   })
 
-  it('leaves a quit as news', async () => {
+  it('projects an intentional quit as cancellation while retaining its cut notice', async () => {
     const statuses = await runningTurn()
 
     await host.flushAllStreamedEvents({ trigger: 'quit' })
 
     expect(statuses.findLast((event) => event.type === 'status')).toMatchObject({
-      session: { status: 'idle', turnOutcome: 'interruption' }
+      session: { status: 'idle', turnOutcome: 'cancellation' }
     })
     const { label, notices } = await settledTurn()
     expect(label).toBe('workedFor')
@@ -296,7 +302,7 @@ describe('a turn cut short by closing its provider', () => {
     }
   )
 
-  it("leaves a quit's cut on a turn no adapter settled as news", async () => {
+  it("retains a quit's raw cut when no adapter settled the turn", async () => {
     providerEnd = null
     await runningTurn()
 

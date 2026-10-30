@@ -10,6 +10,7 @@ import { getInitialCodexRateLimitTarget } from './rate-limits/codex-rate-limit-t
 import { getInitialClaudeRateLimitTarget } from './rate-limits/claude-rate-limit-target'
 import { getKimiRuntimeTarget, resolveKimiHome } from './kimi/kimi-runtime-home'
 import { isWslDistroRunningForBackgroundWork } from './wsl-background-distro-gate'
+import { inactiveCodexHomeUnlessStopped } from './rate-limits/inactive-codex-home'
 import { readMiniMaxSessionCookie } from './minimax/minimax-cookie-store'
 import { readMiniMaxApiKey } from './minimax/minimax-api-key-store'
 import { readZcodePlanApiKey } from './zcode/zcode-plan-api-key-store'
@@ -168,12 +169,10 @@ export function createProviderAccountServices(
       .filter((account) => !activeIds.has(account.id))
       .map((account) => ({
         id: account.id,
-        resolveHome: () => {
-          const resolved = codexRuntimeHome.resolveCodexManagedAccountHomeForInactiveFetch(account)
-          return resolved.kind === 'ready'
-            ? { kind: 'ready' as const, managedHomePath: resolved.homePath }
-            : { kind: 'skip' as const }
-        }
+        resolveHome: () =>
+          inactiveCodexHomeUnlessStopped(
+            codexRuntimeHome.resolveCodexManagedAccountHomeForInactiveFetch(account)
+          )
       }))
   })
   return { rateLimits, codexRuntimeHome, codexAccounts, claudeRuntimeAuth, claudeAccounts }

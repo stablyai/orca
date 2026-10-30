@@ -19,7 +19,7 @@ const SAVE_COALESCE_MS = 500
 export type AgentModelCatalogPersistence = {
   load: () => Promise<AgentModelCatalogEntry[]>
   /** Coalesce saves; failures leave the in-memory store authoritative. */
-  save: (entries: readonly AgentModelCatalogEntry[]) => void
+  save: (snapshot: () => readonly AgentModelCatalogEntry[]) => void
   /** Flush at quit because the delayed-save timer is unref'd. */
   flush: () => Promise<void>
 }
@@ -162,7 +162,7 @@ export function createAgentModelCatalogFilePersistence(
   directory: string
 ): AgentModelCatalogPersistence {
   const filePath = join(directory, 'agent-model-catalog.json')
-  let pending: readonly AgentModelCatalogEntry[] | null = null
+  let pending: (() => readonly AgentModelCatalogEntry[]) | null = null
   let timer: ReturnType<typeof setTimeout> | null = null
   let writing = Promise.resolve()
 
@@ -171,11 +171,12 @@ export function createAgentModelCatalogFilePersistence(
       clearTimeout(timer)
       timer = null
     }
-    const entries = pending
+    const snapshot = pending
     pending = null
-    if (!entries) {
+    if (!snapshot) {
       return writing
     }
+    const entries = snapshot()
     writing = writing.then(async () => {
       try {
         await mkdir(dirname(filePath), { recursive: true })
@@ -211,8 +212,8 @@ export function createAgentModelCatalogFilePersistence(
         return []
       }
     },
-    save(entries) {
-      pending = [...entries]
+    save(snapshot) {
+      pending = snapshot
       if (timer === null) {
         timer = setTimeout(flush, SAVE_COALESCE_MS)
         timer.unref?.()

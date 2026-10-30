@@ -3,19 +3,23 @@ import { X } from 'lucide-react-native'
 import { colors, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 // Monochrome notice reports vanished target; failure uses one red rule for action refusal without taking screen.
 // Announce inserted banners: failure uses alert/assertive, notice uses polite live region (RN has no status role).
 export function HostRouteNoticeBanner({
   message,
   tone = 'notice',
+  action,
   onDismiss
 }: {
   message: string
   tone?: 'notice' | 'failure'
-  onDismiss: () => void
+  action?: { label: string; onPress: () => void }
+  onDismiss?: () => void
 }) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   return (
     <View
       style={[styles.banner, tone === 'failure' && styles.failure]}
@@ -23,15 +27,22 @@ export function HostRouteNoticeBanner({
       accessibilityLiveRegion={tone === 'failure' ? 'assertive' : 'polite'}
     >
       <Text style={styles.text}>{message}</Text>
-      <Pressable
-        onPress={onDismiss}
-        accessibilityRole="button"
-        accessibilityLabel="Dismiss notice"
-        hitSlop={spacing.sm}
-        style={styles.dismiss}
-      >
-        <X size={16} color={colors.textMuted} />
-      </Pressable>
+      {action ? (
+        <Pressable onPress={action.onPress} accessibilityRole="button" hitSlop={spacing.sm}>
+          <Text style={styles.action}>{action.label}</Text>
+        </Pressable>
+      ) : null}
+      {onDismiss ? (
+        <Pressable
+          onPress={onDismiss}
+          accessibilityRole="button"
+          accessibilityLabel={t('components.hostRouteNoticeBanner.dismissNotice', 'Dismiss notice')}
+          hitSlop={spacing.sm}
+          style={styles.dismiss}
+        >
+          <X size={16} color={colors.textMuted} />
+        </Pressable>
+      ) : null}
     </View>
   )
 }
@@ -49,5 +60,11 @@ const styles = themedStyleSheet(() => ({
   },
   failure: { borderBottomColor: colors.statusRed },
   text: { flex: 1, color: colors.textSecondary, fontSize: 13 },
+  action: {
+    color: colors.textPrimary,
+    fontSize: 13,
+    fontWeight: '600',
+    paddingVertical: spacing.xs
+  },
   dismiss: { padding: spacing.xs }
 }))

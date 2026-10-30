@@ -25,6 +25,7 @@ describe('reconcileManagedWslCliRegistrations', () => {
       userDataPath: '/user-data',
       listDistros: async () => ['Ubuntu', 'Debian', 'Fedora'],
       listRunningDistros: async () => ['Ubuntu', 'Debian', 'Fedora'],
+      isDistroRunning: async (distro: string) => ['Ubuntu', 'Debian', 'Fedora'].includes(distro),
       registry,
       createInstaller: (distro) => {
         if (distro === 'Ubuntu') {
@@ -63,6 +64,7 @@ describe('reconcileManagedWslCliRegistrations', () => {
       userDataPath: '/user-data',
       listDistros: async () => ['Broken Distro', 'No Interop'],
       listRunningDistros: async () => ['Broken Distro', 'No Interop'],
+      isDistroRunning: async (distro: string) => ['Broken Distro', 'No Interop'].includes(distro),
       registry,
       createInstaller: (distro) => ({
         repairManagedRegistration: async () => {
@@ -98,6 +100,7 @@ describe('reconcileManagedWslCliRegistrations', () => {
         userDataPath: '/user-data',
         listDistros: async () => ['Ubuntu'],
         listRunningDistros: async () => ['Ubuntu'],
+        isDistroRunning: async (distro: string) => ['Ubuntu'].includes(distro),
         registry: {
           getCandidates: async () => ['Ubuntu'],
           recordObservations: async () => {
@@ -141,6 +144,7 @@ describe('reconcileManagedWslCliRegistrations', () => {
       userDataPath: '/user-data',
       listDistros: async () => ['Ubuntu'],
       listRunningDistros: async () => ['Ubuntu'],
+      isDistroRunning: async (distro: string) => ['Ubuntu'].includes(distro),
       registry,
       createInstaller: () => ({
         repairManagedRegistration: async () => {
@@ -192,6 +196,7 @@ describe('reconcileManagedWslCliRegistrations', () => {
       userDataPath: '/user-data',
       listDistros: async () => ['Ubuntu', 'Debian'],
       listRunningDistros: async () => running,
+      isDistroRunning: async (distro: string) => running.includes(distro),
       deferUntilRunning: (distro: string, _key: string, task: () => unknown) => {
         deferred.set(distro, task)
       },
@@ -218,5 +223,36 @@ describe('reconcileManagedWslCliRegistrations', () => {
       currentTarget: null,
       appVersion: ''
     })
+  })
+
+  it('defers a listed distro that a settled read finds stopped, never spawning its repair (E9)', async () => {
+    const repaired: string[] = []
+    const deferred: string[] = []
+    const results = await reconcileManagedWslCliRegistrations({
+      platform: 'win32',
+      isPackaged: true,
+      userDataPath: '/user-data',
+      listDistros: async () => ['Ubuntu', 'Debian'],
+      // The unsettled list still names Debian while it stops.
+      listRunningDistros: async () => ['Ubuntu', 'Debian'],
+      isDistroRunning: async (distro: string) => distro === 'Ubuntu',
+      deferUntilRunning: (distro: string) => {
+        deferred.push(distro)
+      },
+      registry: {
+        getCandidates: async () => ['Ubuntu', 'Debian'],
+        recordObservations: async () => undefined
+      },
+      createInstaller: (distro: string) => ({
+        repairManagedRegistration: async () => {
+          repaired.push(distro)
+          return { changed: false, managed: true, status: { state: 'installed' as const } }
+        }
+      })
+    })
+
+    expect(repaired).toEqual(['Ubuntu'])
+    expect(deferred).toEqual(['Debian'])
+    expect(results).toContainEqual({ distro: 'Debian', outcome: 'deferred' })
   })
 })
