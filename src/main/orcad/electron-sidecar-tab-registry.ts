@@ -11,7 +11,8 @@ export const ElectronSidecarTabSchema = z
     browserPageId: z.string(),
     index: z.number().optional(),
     active: z.boolean().optional(),
-    certificateFailure: CertificateFailure
+    certificateFailure: CertificateFailure,
+    openerBrowserPageId: z.string().optional()
   })
   .passthrough()
 const ElectronSidecarResult = z
@@ -42,11 +43,15 @@ export class ElectronSidecarTabRegistry {
   }
 
   register(sidecarPageId: string, requestedPageId: string | undefined, worktreeId?: string) {
-    const publicPageId = requestedPageId || sidecarPageId
+    const page = this.track(sidecarPageId, requestedPageId || sidecarPageId, worktreeId)
+    this.setActive(page)
+    return page
+  }
+
+  private track(sidecarPageId: string, publicPageId: string, worktreeId?: string) {
     const page = { publicPageId, sidecarPageId, worktreeId }
     this.pagesByPublicId.set(publicPageId, page)
     this.pagesBySidecarId.set(sidecarPageId, page)
-    this.setActive(page)
     return page
   }
   find(publicPageId: string): ElectronSidecarPage | undefined {
@@ -120,9 +125,17 @@ export class ElectronSidecarTabRegistry {
     }
     return tabs
       .flatMap((tab) => {
+        const opener = tab.openerBrowserPageId
+          ? this.pagesBySidecarId.get(tab.openerBrowserPageId)
+          : undefined
+        // A popup joins its opener's workspace without taking focus; other unknown pages need an unscoped listing.
         const page =
           this.pagesBySidecarId.get(tab.browserPageId) ??
-          (worktreeId ? undefined : this.register(tab.browserPageId, undefined, undefined))
+          (opener
+            ? this.track(tab.browserPageId, tab.browserPageId, opener.worktreeId)
+            : worktreeId
+              ? undefined
+              : this.register(tab.browserPageId, undefined, undefined))
         if (!page || (worktreeId && page.worktreeId !== worktreeId)) {
           return []
         }
@@ -156,6 +169,9 @@ export class ElectronSidecarTabRegistry {
     return {
       ...tab,
       browserPageId: this.publicPageId(tab.browserPageId),
+      ...(tab.openerBrowserPageId
+        ? { openerBrowserPageId: this.publicPageId(tab.openerBrowserPageId) }
+        : {}),
       ...(tab.certificateFailure
         ? {
             certificateFailure: {

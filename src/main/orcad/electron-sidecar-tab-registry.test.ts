@@ -40,6 +40,26 @@ describe('ElectronSidecarTabRegistry', () => {
     )
   })
 
+  it('scopes a listed popup to its opener without making it active', () => {
+    const registry = new ElectronSidecarTabRegistry()
+    registry.register('sidecar-a', 'public-a', 'worktree-a')
+
+    const tabs = registry.reconcileTabs(
+      [
+        { browserPageId: 'sidecar-a', active: true },
+        { browserPageId: 'popup-7', openerBrowserPageId: 'sidecar-a' }
+      ],
+      'worktree-a'
+    )
+
+    expect(tabs).toEqual([
+      expect.objectContaining({ browserPageId: 'public-a', index: 0 }),
+      expect.objectContaining({ browserPageId: 'popup-7', openerBrowserPageId: 'public-a' })
+    ])
+    expect(registry.require('popup-7', 'worktree-a').sidecarPageId).toBe('popup-7')
+    expect(registry.active('worktree-a').publicPageId).toBe('public-a')
+  })
+
   it('rewrites page ids in tab and command results', () => {
     const registry = new ElectronSidecarTabRegistry()
     registry.register('sidecar-a', 'public-a', 'worktree-a')

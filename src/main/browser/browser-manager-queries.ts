@@ -38,12 +38,22 @@ export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
     return this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
   }
 
+  /** A popup page belongs to its opener tab, sharing its workspace and profile. */
+  getOwningTabIdForPage(browserPageId: string): string {
+    const popupWebContentsId = popupPageWebContentsId(browserPageId)
+    const ownerTabId =
+      popupWebContentsId === null
+        ? null
+        : this.resolvePopupOwnerContext(popupWebContentsId)?.browserTabId
+    return ownerTabId ?? browserPageId
+  }
+
   getWorktreeIdForTab(browserTabId: string): string | undefined {
-    return this.worktreeIdByTabId.get(this.resolvePageOwnerTabId(browserTabId))
+    return this.worktreeIdByTabId.get(this.getOwningTabIdForPage(browserTabId))
   }
 
   getSessionProfileIdForTab(browserTabId: string): string | null {
-    return this.sessionProfileIdByPageId.get(this.resolvePageOwnerTabId(browserTabId)) ?? null
+    return this.sessionProfileIdByPageId.get(this.getOwningTabIdForPage(browserTabId)) ?? null
   }
 
   /** Native popups (OAuth, payment) keep their opener, so agents reach them as pages beside their tab. */
@@ -76,16 +86,6 @@ export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
     }
     popup.close()
     return true
-  }
-
-  // A popup page shares its opener tab's workspace and profile.
-  private resolvePageOwnerTabId(browserPageId: string): string {
-    const popupWebContentsId = popupPageWebContentsId(browserPageId)
-    const ownerTabId =
-      popupWebContentsId === null
-        ? null
-        : this.resolvePopupOwnerContext(popupWebContentsId)?.browserTabId
-    return ownerTabId ?? browserPageId
   }
 
   getBrowserPageLoadError(browserPageId: string): BrowserLoadError | null {
