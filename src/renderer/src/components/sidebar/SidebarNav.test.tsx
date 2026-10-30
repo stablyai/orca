@@ -19,6 +19,9 @@ const mocks = vi.hoisted(() => ({
   openMobilePage: vi.fn(),
   openArtifactsPage: vi.fn(),
   openModal: vi.fn(),
+  setActiveView: vi.fn(),
+  recordViewVisit: vi.fn(),
+  pluginPanels: [] as { tabKey: `plugin:${string}`; title: string; icon?: string }[],
   updateSettings: vi.fn(),
   refreshPreflightStatus: vi.fn(),
   checkLinearConnection: vi.fn(),
@@ -31,6 +34,10 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: Record<string, unknown>) => unknown) => selector(mocks.state)
+}))
+
+vi.mock('@/store/plugin-panels', () => ({
+  useLeftNavigationPluginPanels: () => mocks.pluginPanels
 }))
 
 vi.mock('@/store/selectors', () => ({
@@ -132,6 +139,8 @@ function setSidebarState({
     openMobilePage: mocks.openMobilePage,
     openArtifactsPage: mocks.openArtifactsPage,
     openModal: mocks.openModal,
+    setActiveView: mocks.setActiveView,
+    recordViewVisit: mocks.recordViewVisit,
     updateSettings: mocks.updateSettings,
     preflightStatus: { glab: { installed: false } },
     preflightStatusChecked: true,
@@ -213,6 +222,7 @@ describe('SidebarNav', () => {
     await i18n.changeLanguage('en')
     mocks.hasPairedMobileDevice = false
     mocks.agentBucketCounts = { attention: 0, working: 0, done: 0, idle: 0 }
+    mocks.pluginPanels = []
     setSidebarState()
   })
 
@@ -221,6 +231,25 @@ describe('SidebarNav', () => {
 
     expect(queryButtonByText(container, 'Agent Dashboard')).toBeNull()
     expect(mocks.getAgentBucketCounts).not.toHaveBeenCalled()
+  })
+
+  it('routes duplicate panel titles by their distinct tab keys', async () => {
+    mocks.pluginPanels = [
+      { tabKey: 'plugin:samples.one/dashboard', title: 'Dashboard' },
+      { tabKey: 'plugin:samples.two/dashboard', title: 'Dashboard' }
+    ]
+    mocks.state.activeView = 'plugin:samples.two/dashboard'
+    const container = await renderSidebarNav()
+    const entries = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).filter(
+      (button) => button.textContent?.trim() === 'Dashboard'
+    )
+
+    expect(entries).toHaveLength(2)
+    expect(entries[0]?.getAttribute('aria-current')).toBeNull()
+    expect(entries[1]?.getAttribute('aria-current')).toBe('page')
+    await clickButton(entries[0]!)
+    expect(mocks.recordViewVisit).toHaveBeenCalledWith('plugin:samples.one/dashboard')
+    expect(mocks.setActiveView).toHaveBeenCalledWith('plugin:samples.one/dashboard')
   })
 
   it('mounts the Agent Dashboard row only when its experiment is enabled', async () => {

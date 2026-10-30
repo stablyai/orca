@@ -14,6 +14,7 @@ import { ClientUiWorkspaceFilterFields } from './client-ui-workspace-filter-fiel
 import { TaskResumeState } from './task-resume-state-params'
 import { WorkspaceCleanup } from './workspace-cleanup-ui-params'
 import { omitUndefinedValues, tolerateUnknownValues } from './ui-update-value-tolerance-params'
+import { isTopLevelView } from '../top-level-view'
 
 export const NullableString = z.string().nullable()
 
@@ -107,17 +108,7 @@ export const FeatureInteractionIdParam = z.custom<FeatureInteractionId>(isFeatur
   message: 'Unknown feature interaction id'
 })
 
-export const TopLevelViewSchema = z.enum([
-  'terminal',
-  'settings',
-  'tasks',
-  'activity',
-  'automations',
-  'space',
-  'skills',
-  'artifacts',
-  'mobile'
-])
+export const TopLevelViewSchema = z.custom(isTopLevelView, { message: 'Unknown top-level view' })
 
 export const UiUpdateFields = z
   .object({

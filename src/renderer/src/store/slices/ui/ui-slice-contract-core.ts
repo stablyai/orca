@@ -112,16 +112,7 @@ export type NewWorkspaceDraft = {
   compareBaseRef?: string
 }
 
-export type UiViewHistory =
-  | 'terminal'
-  | 'settings'
-  | 'tasks'
-  | 'activity'
-  | 'automations'
-  | 'space'
-  | 'skills'
-  | 'artifacts'
-  | 'mobile'
+export type UiViewHistory = TopLevelView
 
 export type UISliceCore = {
   sidebarOpen: boolean

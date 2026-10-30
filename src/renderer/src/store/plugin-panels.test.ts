@@ -75,6 +75,7 @@ describe('plugin panel list loading', () => {
       'plugin:samples.a/side',
       'plugin:samples.a/legacy'
     ])
+    expect(collectLeftNavigationPluginPanels([{ ...enabled, needsReconsent: true }])).toEqual([])
   })
 
   it('collects commands only from enabled plugin states', () => {

@@ -11,6 +11,8 @@ import {
 } from '../../../../shared/task-source-context'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { selectFolderWorkspaces, selectWorktreesByRepo } from '../workspace-record-selectors'
+import { isPluginPanelTabKey } from '../../../../shared/plugins/frames/plugin-tab-key'
+import { collectLeftNavigationPluginPanels, usePluginPanelsStore } from '../plugin-panels'
 
 // Why: bound per-session history growth; 50 keeps goBack/goForward's linear scans cheap yet is never hit in normal use.
 const MAX_HISTORY = 50
@@ -51,6 +53,7 @@ export type WorktreeNavHistoryTaskDetailEntry =
     }
 export type WorktreeNavHistoryViewEntry =
   | WorktreeNavHistorySimpleViewEntry
+  | `plugin:${string}`
   | WorktreeNavHistoryTaskDetailEntry
 export type WorktreeNavHistoryEntry = (string & {}) | WorktreeNavHistoryViewEntry
 
@@ -95,7 +98,11 @@ function isSimpleViewEntry(
 
 // Why: view entries count as live unconditionally — findWorktreeById can't resolve page sentinels.
 export function isViewEntry(entry: WorktreeNavHistoryEntry): entry is WorktreeNavHistoryViewEntry {
-  return isSimpleViewEntry(entry) || typeof entry === 'object'
+  return (
+    isSimpleViewEntry(entry) ||
+    (typeof entry === 'string' && isPluginPanelTabKey(entry)) ||
+    typeof entry === 'object'
+  )
 }
 
 function isTaskStackEntry(entry: WorktreeNavHistoryEntry): boolean {
@@ -104,7 +111,7 @@ function isTaskStackEntry(entry: WorktreeNavHistoryEntry): boolean {
 
 function getHistoryEntryKey(entry: WorktreeNavHistoryEntry): string {
   if (typeof entry === 'string') {
-    return isSimpleViewEntry(entry) ? `view:${entry}` : `worktree:${entry}`
+    return isViewEntry(entry) ? `view:${entry}` : `worktree:${entry}`
   }
   if (entry.source === 'github') {
     const sourceScope =
@@ -135,6 +142,11 @@ function getHistoryEntryKey(entry: WorktreeNavHistoryEntry): string {
 }
 
 function isLiveEntry(entry: WorktreeNavHistoryEntry, state: AppState): boolean {
+  if (typeof entry === 'string' && isPluginPanelTabKey(entry)) {
+    return collectLeftNavigationPluginPanels(usePluginPanelsStore.getState().plugins).some(
+      (panel) => panel.tabKey === entry
+    )
+  }
   if (isViewEntry(entry)) {
     return true
   }

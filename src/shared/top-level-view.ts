@@ -1,7 +1,8 @@
 import type { TopLevelView } from './ui-chrome-types'
+import { isPluginPanelTabKey } from './plugins/frames/plugin-tab-key'
 
 // Exhaustive keys make new views update every persistence/IPC validator.
-const TOP_LEVEL_VIEW_LOOKUP: Record<TopLevelView, true> = {
+const TOP_LEVEL_VIEW_LOOKUP: Record<Exclude<TopLevelView, `plugin:${string}`>, true> = {
   terminal: true,
   settings: true,
   tasks: true,
@@ -15,5 +16,8 @@ const TOP_LEVEL_VIEW_LOOKUP: Record<TopLevelView, true> = {
 
 export function isTopLevelView(value: unknown): value is TopLevelView {
   // Reject inherited prototype keys from corrupt sidecars or they can blank the main surface.
-  return typeof value === 'string' && Object.hasOwn(TOP_LEVEL_VIEW_LOOKUP, value)
+  return (
+    typeof value === 'string' &&
+    (Object.hasOwn(TOP_LEVEL_VIEW_LOOKUP, value) || isPluginPanelTabKey(value))
+  )
 }

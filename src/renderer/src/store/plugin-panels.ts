@@ -149,7 +149,10 @@ export function ensurePluginPanelsLoaded(): void {
 
 /** Enabled and consented, whether or not a worker runs: its contributions are offered. */
 export function isLivePlugin(plugin: PluginHostListEntry): boolean {
-  return plugin.status === 'running' || plugin.status === 'restarting' || plugin.status === 'idle'
+  return (
+    !plugin.needsReconsent &&
+    (plugin.status === 'running' || plugin.status === 'restarting' || plugin.status === 'idle')
+  )
 }
 
 /** A contribution tagged with the plugin it came from. */
