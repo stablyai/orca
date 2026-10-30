@@ -40,6 +40,7 @@
     <p>Panel + worker command + events, gated by consent.</p>
     <button id="ctx">Read workspace context</button>
     <button id="notify">Show a notification</button>
+    <button id="count">Count in the worker</button>
     <p class="status" id="status"></p>
     <script>
       'use strict'
@@ -72,6 +73,22 @@
           },
           function (error) {
             statusEl.textContent = `notify failed: ${error.code}: ${error.message}`
+          }
+        )
+      })
+
+      // Panel to worker: the worker keeps the count in memory and answers each message.
+      var countButton = document.getElementById('count')
+      if (!orca.panel || typeof orca.panel.postMessage !== 'function') {
+        countButton.hidden = true
+      }
+      countButton.addEventListener('click', function () {
+        orca.panel.postMessage({ type: 'increment' }).then(
+          function (reply) {
+            statusEl.textContent = `The worker has counted ${reply.clicks}.`
+          },
+          function (error) {
+            statusEl.textContent = `count failed: ${error.code}: ${error.message}`
           }
         )
       })

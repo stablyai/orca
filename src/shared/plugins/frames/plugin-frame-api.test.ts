@@ -271,15 +271,21 @@ describe('window.orca.document', () => {
 })
 
 describe('hello-orca example panel', () => {
-  it('talks to Orca only through window.orca', async () => {
-    const html = readFileSync(
-      join(process.cwd(), 'examples', 'plugins', 'hello-orca', 'panel.html'),
-      'utf8'
-    )
-    expect(html).not.toContain('postMessage')
+  const html = readFileSync(
+    join(process.cwd(), 'examples', 'plugins', 'hello-orca', 'panel.html'),
+    'utf8'
+  )
+
+  function mountExample(surface: PluginFrameSurface = 'panel') {
     document.body.innerHTML = html.match(/<body>([\s\S]*?)<script>/)?.[1] ?? ''
-    const { fromHost, posted } = mountShell()
+    const shell = mountShell(surface)
     window.eval(html.match(/<script>([\s\S]*?)<\/script>/)?.[1] ?? '')
+    return shell
+  }
+
+  it('talks to Orca only through window.orca', async () => {
+    expect(html).not.toContain('parent.postMessage')
+    const { fromHost, posted } = mountExample()
     document.getElementById('ctx')!.click()
     expect(posted().at(-1)).toMatchObject({ kind: 'req', method: 'workspace.readContext' })
     fromHost({
@@ -290,5 +296,21 @@ describe('hello-orca example panel', () => {
     })
     await flush()
     expect(document.getElementById('status')!.textContent).toBe('Repo on branch main · 1 terminal')
+  })
+
+  it('counts in the worker through orca.panel.postMessage, and hides the button without it', async () => {
+    const { fromHost, posted } = mountExample()
+    document.getElementById('count')!.click()
+    expect(posted().at(-1)).toMatchObject({
+      kind: 'req',
+      method: 'panel.postMessage',
+      params: { type: 'increment' }
+    })
+    fromHost({ orca: 1, kind: 'res', id: 0, result: { clicks: 3 } })
+    await flush()
+    expect(document.getElementById('status')!.textContent).toBe('The worker has counted 3.')
+
+    mountExample('editor')
+    expect(document.getElementById('count')!.hidden).toBe(true)
   })
 })
