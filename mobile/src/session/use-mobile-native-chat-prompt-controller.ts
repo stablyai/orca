@@ -1,3 +1,4 @@
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useMobileAsyncQuestionHides } from './native-chat/input/use-mobile-native-chat-prompt-dismiss'
 import type { AskPrompt } from '../../../src/shared/native-chat/input/native-chat-ask-types'
 import type { AskAnswerSelection } from '../../../src/shared/native-chat-ask-answer'
@@ -10,6 +11,16 @@ import { useMobileNativeChatPrompts } from './native-chat/input/use-mobile-nativ
 import type { useMobileNativeChatSession } from './use-mobile-native-chat-session'
 import type { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 import { useNativeChatAcceptedAction } from './use-native-chat-action-outcomes'
+import { createUseMessageQuestionCancel } from '../../../src/shared/native-chat/use-message-question-cancel'
+import type { MobileNativeChatSendErrorReporter } from './native-chat/use-mobile-native-chat-send-error'
+
+const useMessageQuestionCancel = createUseMessageQuestionCancel({
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState
+})
 
 // Read the chat's ask and permission/question prompts and route their answers to the active lane.
 export function useMobileNativeChatPromptController({
@@ -23,14 +34,20 @@ export function useMobileNativeChatPromptController({
   asyncSourceScope,
   visible,
   terminal,
-  onSendResolved
+  onSendResolved,
+  onSendError
 }: {
   enabled: boolean
   structured: ReturnType<typeof useMobileStructuredAgentSession> | null
   status: AgentStatusEntry | null | undefined
   session: Pick<
     ReturnType<typeof useMobileNativeChatSession>,
-    'messages' | 'transcriptLoading' | 'status' | 'asyncQuestion'
+    | 'messages'
+    | 'transcriptLoading'
+    | 'status'
+    | 'asyncQuestion'
+    | 'messageQuestions'
+    | 'cancelMessageQuestions'
   >
   scopeKey: string | null
   sessionId: string | null
@@ -43,6 +60,7 @@ export function useMobileNativeChatPromptController({
     'answerAsk' | 'cancelAsk' | 'respondPermission'
   >
   onSendResolved: () => void
+  onSendError?: MobileNativeChatSendErrorReporter
 }): Pick<
   MobileNativeChatController,
   | 'nativeChatPermission'
@@ -59,8 +77,16 @@ export function useMobileNativeChatPromptController({
   | 'collapseNativeChatAsk'
   | 'handleNativeChatAnswerAsk'
   | 'handleNativeChatCancelAsk'
-> & { hasPromptCard: boolean } {
+> & { hasPromptCard: boolean; nativeChatAskDisabled: boolean } {
   const asyncHides = useMobileAsyncQuestionHides(scopeKey, asyncSourceScope, streamIdentity)
+  const actions = useMessageQuestionCancel({
+    sourceKey: JSON.stringify([scopeKey, streamIdentity, asyncSourceScope]),
+    view: session.messageQuestions,
+    cancel: session.cancelMessageQuestions,
+    error: () => onSendError?.('Could not cancel the questions. Try again.')
+  })
+  const capable = session.messageQuestions !== undefined
+  const asyncQuestion = capable ? actions.prompt : session.asyncQuestion
   const {
     permission: legacyNativeChatPermission,
     waitStartedAt: nativeChatPromptStartedAt,
@@ -68,10 +94,10 @@ export function useMobileNativeChatPromptController({
     structuredAnswer
   } = useMobileNativeChatPrompts({
     enabled,
-    structured,
+    structured: structured ? { ...structured, asyncQuestion } : null,
     status,
     messages: session.messages,
-    asyncQuestion: session.asyncQuestion,
+    asyncQuestion,
     transcriptLoading: session.transcriptLoading,
     asyncSourceScope,
     hiddenAsyncIds: asyncHides.hidden
@@ -81,7 +107,7 @@ export function useMobileNativeChatPromptController({
     session.status === 'ready' || (session.status === 'error' && session.messages.length > 0)
   const askDismissal = useMobileNativeChatAskDismiss({
     ask: nativeChatAskPrompt,
-    dismissAsync: asyncHides.capture(nativeChatAskPrompt?.occurrenceIds ?? []),
+    dismissAsync: capable ? () => {} : asyncHides.capture(nativeChatAskPrompt?.occurrenceIds ?? []),
     startedAt: nativeChatPromptStartedAt,
     scopeKey,
     sessionKey: nativeChatAskPrompt?.replyAsMessage ? streamIdentity : sessionId,
@@ -92,14 +118,24 @@ export function useMobileNativeChatPromptController({
       const hide = asyncHides.capture(prompt.occurrenceIds ?? [])
       const accepted = await (structuredAnswer ?? terminal.answerAsk)(prompt, selections)
       // Only terminal writes acknowledge delivery; structured admission leaves retirement to rows.
-      if (accepted && prompt.replyAsMessage && !structuredAnswer) {
+      if (accepted && prompt.replyAsMessage && !structuredAnswer && !capable) {
         hide()
       }
       return accepted
     },
     onSendResolved
   )
-  const cancelAsk = useNativeChatAcceptedAction(terminal.cancelAsk, onSendResolved)
+  const cancelAsk = useNativeChatAcceptedAction(async () => {
+    if (nativeChatAskPrompt?.replyAsMessage) {
+      const ids = nativeChatAskPrompt.occurrenceIds ?? []
+      if (capable) {
+        return actions.cancel(ids)
+      }
+      asyncHides.capture(ids)()
+      return true
+    }
+    return terminal.cancelAsk()
+  }, onSendResolved)
   const promptCards = useMobileNativeChatPromptCards({
     terminal: {
       permission: legacyNativeChatPermission,
@@ -114,6 +150,8 @@ export function useMobileNativeChatPromptController({
   })
 
   return {
+    nativeChatAskDisabled:
+      capable && nativeChatAskPrompt?.replyAsMessage === true && !actions.ready,
     hasPromptCard: (legacyNativeChatPermission ?? nativeChatAskPrompt) != null,
     ...promptCards,
     nativeChatAsk: askDismissal.showAsk || askDismissal.collapsedAsk ? nativeChatAskPrompt : null,

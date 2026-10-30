@@ -1,5 +1,14 @@
-import type { SubscribeNativeChatTranscriptArgs } from '../../../native-chat/transcript-watch-contract'
-import { describe, expect, it, vi } from 'vitest'
+import '../unused-default-rpc-methods.test-fixture'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { appendFile } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
+import { RpcDispatcher } from '../dispatcher'
+import type { AgentSessionCurrentRequestsPiece } from '../../../../shared/agent-session-current-requests-wire'
+import { AGENT_SESSION_CURRENT_REQUESTS_V2 } from '../../../../shared/agent-session-current-requests-capability'
+import {
+  questionResourceFixture,
+  questionResourceLine
+} from '../../../native-chat/message-question-resource.test-fixture'
 import { RuntimeSubscriptionRegistry } from '../../runtime-subscription-registry'
 import type { RpcContext } from '../core'
 
@@ -39,6 +48,8 @@ function phoneConnection(): {
   const context: RpcContext = {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handlers under test only touch these registry-backed members and the hook rows.
     runtime: {
+      getRuntimeId: () => 'runtime-1',
+      ensureStructuredAgentSessionHost: async () => {},
       getAgentProviderSessionRows: () => [],
       registerSubscriptionCleanup: registry.register.bind(registry),
       cleanupSubscription: registry.cleanup.bind(registry),
@@ -86,48 +97,147 @@ describe('nativeChat subscription tokens on one connection', () => {
   })
 })
 
-it('allows only the owning negotiated terminal subscription to read its complete current feed', async () => {
+const resources: Awaited<ReturnType<typeof questionResourceFixture>>[] = []
+afterEach(async () => {
+  for (const resource of resources.splice(0)) {
+    await resource.dispose()
+  }
+})
+
+async function resourceRpc() {
+  const resource = await questionResourceFixture('escaped \\" 😀'.repeat(10_000))
+  resources.push(resource)
   const phone = phoneConnection()
-  const contract = 'agent-session.current-requests.v2' as const
-  const marker = {
-    contract,
+  const rpc = new RpcDispatcher({ runtime: phone.context.runtime, methods: NATIVE_CHAT_METHODS })
+  const params = {
+    agent: 'codex',
     sessionId: 'session',
-    epoch: 'e',
-    publisher: 'host',
-    owner: 'source',
-    revision: 1,
-    version: 'v'
+    transcriptPath: resource.path,
+    version: randomUUID()
   }
-  const items = {
-    blocking: [],
-    asyncQuestions: [],
-    context: { sessionId: 'session', boundary: 'file' }
-  }
-  sourceHooks.subscribe.mockImplementation((args: SubscribeNativeChatTranscriptArgs) => {
-    args.onCurrentRequests?.({ identity: 'host', marker, items })
+  const options = (connectionId: string) => ({
+    connectionId,
+    clientKind: 'mobile' as const,
+    pairedDeviceId: connectionId,
+    callerScope: { kind: 'mobile' as const },
+    clientCapabilities: [AGENT_SESSION_CURRENT_REQUESTS_V2]
   })
-  try {
-    await handler('nativeChat.subscribe')(
+  const read = async (connectionId: string, version: string, cursor = 0) => {
+    const reply = await rpc.dispatch(
       {
-        agent: 'codex',
-        sessionId: 'session',
-        subscriptionId: 'current',
-        capabilities: { currentRequests: 2 }
+        id: 'read',
+        authToken: 'transport-authenticated',
+        method: 'nativeChat.currentRequests',
+        params: { ...params, version, cursor }
       },
-      { ...phone.context, clientCapabilities: [contract] },
-      () => {}
+      options(connectionId)
     )
-    const read = handler('nativeChat.currentRequests')
-    const request = { sessionId: 'session', subscriptionId: 'current', version: 'v' }
-    await expect(read(request, phone.context, () => {})).resolves.toMatchObject({
-      json: JSON.stringify(items)
-    })
-    await expect(
-      read(request, { ...phone.context, connectionId: 'another-phone' }, () => {})
-    ).rejects.toThrow('unavailable')
-    await phone.unsubscribe('current')
-    await expect(read(request, phone.context, () => {})).rejects.toThrow('unavailable')
-  } finally {
-    sourceHooks.subscribe.mockReset()
+    expect(reply.ok).toBe(true)
+    if (!reply.ok) {
+      throw new Error(reply.error.message)
+    }
+    // SAFETY: the registered production reader returns this wire type; successful dispatch is asserted above.
+    return reply.result as AgentSessionCurrentRequestsPiece
   }
+  return { resource, phone, rpc, params, options, read }
+}
+
+it('reads one complete resource from two authorized connections without subscribing', async () => {
+  const f = await resourceRpc()
+  const opening = await f.read('phone-a', f.params.version)
+  expect(opening.restart).toBe(true)
+  const first = await f.read('phone-a', opening.marker.version)
+  expect(first.nextCursor).not.toBeNull()
+  let json = first.json
+  let cursor = first.nextCursor
+  while (cursor !== null) {
+    const next = await f.read('phone-b', first.marker.version, cursor)
+    expect(next.marker).toEqual(first.marker)
+    expect(next.restart).toBeUndefined()
+    json += next.json
+    cursor = next.nextCursor
+  }
+  expect(JSON.parse(json).asyncQuestions).toMatchObject([{ sourceRowId: 'q1' }])
+  expect((await f.read('phone-b', first.marker.version)).json).toBe(first.json)
+})
+
+it('refuses missing capability and stale execution-host admission before acquiring the resource', async () => {
+  const f = await resourceRpc()
+  const ensure = vi.spyOn(f.phone.context.runtime, 'ensureStructuredAgentSessionHost')
+  const request = {
+    id: 'read',
+    authToken: 'transport-authenticated',
+    method: 'nativeChat.currentRequests',
+    params: f.params
+  }
+  const noCapability = await f.rpc.dispatch(request, {
+    ...f.options('phone-a'),
+    clientCapabilities: []
+  })
+  expect(noCapability).toMatchObject({
+    ok: false,
+    error: { message: expect.stringContaining('capability') }
+  })
+  const wrongHost = await f.rpc.dispatch(
+    {
+      ...request,
+      expectedRuntimeSource: { sourceId: 'different-source', runtimeId: 'different-host' }
+    },
+    f.options('phone-b')
+  )
+  expect(wrongHost).toMatchObject({
+    ok: false,
+    error: { code: expect.stringMatching(/^runtime_source_/) }
+  })
+  expect(ensure).not.toHaveBeenCalled()
+  const aborted = new AbortController()
+  aborted.abort(new Error('view replaced'))
+  const replaced = await f.rpc.dispatch(request, {
+    ...f.options('phone-a'),
+    signal: aborted.signal
+  })
+  expect(replaced.ok).toBe(false)
+})
+
+it('commits exact displayed Cancel IDs through the real resource and refuses foreign or unauthenticated mutations', async () => {
+  const f = await resourceRpc()
+  const opening = await f.read('phone-a', f.params.version)
+  let cursor: number | null = 0
+  let json = ''
+  while (cursor !== null) {
+    const next = await f.read('phone-a', opening.marker.version, cursor)
+    json += next.json
+    cursor = next.nextCursor
+  }
+  const displayed = JSON.parse(json).asyncQuestions.map((row: { id: string }) => row.id)
+  await appendFile(f.resource.path, questionResourceLine('q2'))
+  const cancel = {
+    id: 'cancel',
+    authToken: 'not-caller-authority',
+    method: 'nativeChat.cancelCurrentQuestions',
+    params: {
+      agent: 'codex',
+      sessionId: 'session',
+      transcriptPath: f.resource.path,
+      ids: displayed
+    }
+  }
+  expect(
+    await f.rpc.dispatch(cancel, { ...f.options('phone-a'), pairedDeviceId: undefined })
+  ).toMatchObject({ ok: false })
+  expect(
+    await f.rpc.dispatch(
+      { ...cancel, params: { ...cancel.params, sessionId: 'foreign-session' } },
+      f.options('phone-b')
+    )
+  ).toMatchObject({ ok: false })
+  expect(await f.rpc.dispatch(cancel, f.options('phone-b'))).toMatchObject({
+    ok: true,
+    result: { cancelled: true }
+  })
+  const updated = await f.read('phone-a', opening.marker.version)
+  expect(updated.restart).toBe(true)
+  const complete = await f.read('phone-a', updated.marker.version)
+  expect(JSON.parse(complete.json).asyncQuestions).toMatchObject([{ sourceRowId: 'q2' }])
+  expect(JSON.parse(complete.json).asyncQuestions).toHaveLength(1)
 })

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { callAgentSession } from '../session/mobile-structured-agent-session-rpc'
 import { MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY } from '../../../src/shared/mobile-desktop-relay-contract'
 import {
   reachableServerClients,
@@ -198,3 +199,59 @@ describe('scopeRpcClientToExecutionHost', () => {
     expect(reachableServerClients(fakeClient(false), relays, hosts).size).toBe(0)
   })
 })
+
+it.each(['local', SERVER] as const)(
+  'reads and cancels exact message-question IDs on captured %s without a stream attachment',
+  async (host) => {
+    const socket = directWire()
+    const requests = directWireTracker(socket)
+    const direct: RpcClient = {
+      ...fakeClient(),
+      sendRequest: (method, params, options) => requests.sendRequest(method, params, options)
+    }
+    const captured = host === 'local' ? direct : scopeRpcClientToExecutionHost(direct, host)
+    const read = callAgentSession(captured, 'nativeChat.currentRequests', {
+      agent: 'codex',
+      sessionId: 'same-session',
+      version: 'snapshot',
+      cursor: 0
+    })
+    const cancel = callAgentSession(captured, 'nativeChat.cancelCurrentQuestions', {
+      agent: 'codex',
+      sessionId: 'same-session',
+      ids: ['displayed-Q1']
+    })
+    try {
+      await vi.waitFor(() => expect(socket.sent).toHaveLength(2))
+      expect(socket.frames()).toEqual([
+        expect.objectContaining({
+          id: 'rpc-1',
+          method: 'nativeChat.currentRequests',
+          params: { agent: 'codex', sessionId: 'same-session', version: 'snapshot', cursor: 0 },
+          ...(host === 'local' ? {} : { executionHost: host })
+        }),
+        expect.objectContaining({
+          id: 'rpc-2',
+          method: 'nativeChat.cancelCurrentQuestions',
+          params: { agent: 'codex', sessionId: 'same-session', ids: ['displayed-Q1'] },
+          ...(host === 'local' ? {} : { executionHost: host })
+        })
+      ])
+      if (host === 'local') {
+        expect(socket.frames().every((frame) => !('executionHost' in frame))).toBe(true)
+      }
+      requests.resolve({
+        id: 'rpc-1',
+        ok: true,
+        result: { marker: { version: 'snapshot' }, json: '{}', nextCursor: null }
+      })
+      requests.resolve({ id: 'rpc-2', ok: true, result: { cancelled: true } })
+      await expect(read).resolves.toMatchObject({ nextCursor: null })
+      await expect(cancel).resolves.toEqual({ cancelled: true })
+      expect(direct.subscribe).not.toHaveBeenCalled()
+    } finally {
+      requests.rejectAll('test cleanup')
+      await Promise.allSettled([read, cancel])
+    }
+  }
+)

@@ -68,7 +68,6 @@ vi.mock('../../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: (
 vi.mock('../native-chat/transcript/MobileNativeChatLiveLine', () => ({
   MobileNativeChatLiveLine: 'LiveStatus'
 }))
-vi.mock('../native-chat/input/MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
 vi.mock('../native-chat/input/MobileNativeChatSessionOptionPickers', () => ({
   MobileNativeChatSessionOptionPickers: 'SessionOptions'
 }))

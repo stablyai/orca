@@ -7,6 +7,7 @@ import {
 } from '../../../src/shared/structured-agent-session-stop-join'
 import type { RpcClient } from '../transport/rpc-client'
 import {
+  callAgentSession,
   requestStructuredAgentSessionMutation,
   type StructuredAgentSessionMutationCallResult
 } from './mobile-structured-agent-session-rpc'
@@ -92,4 +93,18 @@ async function sendStop(input: {
     input.onSendError(result.message)
   }
   return false
+}
+
+export async function requestMobileMessageQuestionCancel(
+  client: RpcClient | null,
+  sessionId: string | null,
+  ids: readonly string[]
+): Promise<void> {
+  if (!client || !sessionId) {
+    throw new Error('Chat source unavailable')
+  }
+  await callAgentSession(client, 'agentSession.cancelCurrentQuestions', {
+    sessionId,
+    ids: [...ids]
+  })
 }

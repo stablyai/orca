@@ -12,6 +12,8 @@ export function NativeChatInteractiveCard({
   card,
   send,
   onDismiss,
+  onCancelAsync,
+  asyncReady = true,
   onCollapse,
   requiresTerminal = false,
   onAnswerInTerminal,
@@ -22,6 +24,8 @@ export function NativeChatInteractiveCard({
   send: NativeChatInteractiveSend
   /** Hide this occurrence after its answer write was acknowledged. */
   onDismiss: () => void
+  onCancelAsync?: () => void
+  asyncReady?: boolean
   /** Fold this occurrence to a strip above the composer, writing nothing. */
   onCollapse?: () => void
   requiresTerminal?: boolean
@@ -84,6 +88,7 @@ export function NativeChatInteractiveCard({
       <NativeChatQuestionCard
         key={nativeChatAskDismissKey(card.prompt)}
         prompt={card.prompt}
+        disabled={card.prompt.replyAsMessage && !asyncReady}
         isSubmitting={submitting}
         isCancelling={cancelling}
         answerInputRef={answerInputRef}
@@ -114,7 +119,8 @@ export function NativeChatInteractiveCard({
         onCancel={() => {
           if (card.prompt.replyAsMessage) {
             // The agent is not waiting on this card, and Escape would interrupt its turn.
-            onDismiss()
+            const cancel = onCancelAsync ?? onDismiss
+            cancel()
             return
           }
           if (cancellingRef.current) {

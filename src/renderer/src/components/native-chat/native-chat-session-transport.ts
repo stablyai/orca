@@ -294,3 +294,22 @@ export function getNativeChatSessionTransport(
   }
   return localNativeChatTransport
 }
+
+export function messageCancelAction(
+  transport: NativeChatSessionTransport,
+  agent: Parameters<NativeChatApi['readSession']>[0],
+  sessionId: string | null,
+  transcriptPath?: string | null
+): (ids: readonly string[]) => Promise<void> {
+  return async (ids) => {
+    if (!sessionId) {
+      throw new Error('Chat source unavailable')
+    }
+    await transport.cancelCurrentQuestions({
+      agent,
+      sessionId,
+      ...(transcriptPath ? { transcriptPath } : {}),
+      ids: [...ids]
+    })
+  }
+}

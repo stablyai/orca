@@ -21,7 +21,7 @@ import type {
   ReadState,
   UseNativeChatLiveSessionArgs
 } from './native-chat-live-session-contract'
-import { getNativeChatSessionTransport } from './native-chat-session-transport'
+import { messageCancelAction, getNativeChatSessionTransport } from './native-chat-session-transport'
 import { useNativeChatTranscriptLifecycle } from './use-native-chat-transcript-lifecycle'
 import { useNativeChatHookStatus } from './use-native-chat-hook-status'
 import { useNativeChatAssembledMessages } from './use-native-chat-assembled-messages'
@@ -30,7 +30,6 @@ import { nextTranscriptId, openNativeChatTranscriptStream } from './native-chat-
 
 export type {
   NativeChatLiveSession,
-  ReadState,
   UseNativeChatLiveSessionArgs
 } from './native-chat-live-session-contract'
 
@@ -312,6 +311,7 @@ export function useNativeChatLiveSession(
     return {
       ...session,
       ...currentQuestionView,
+      cancelMessageQuestions: messageCancelAction(transport, agent, sessionId, transcriptPath),
       hasMore,
       loadingEarlier,
       olderHistoryGeneration,
@@ -322,6 +322,8 @@ export function useNativeChatLiveSession(
     normalizedMessages,
     assembledMessages,
     currentQuestionView,
+    transport,
+    transcriptPath,
     read,
     sessionId,
     agent,

@@ -4,6 +4,7 @@ import '@testing-library/jest-dom/vitest'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { messageQuestionFixture } from '../../../../shared/message-question-occurrence.test-fixture'
 import type { AgentStatusPayload } from '../../../../shared/agent-status-types'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
@@ -247,3 +248,28 @@ describe('a prompt card hides the composer without unmounting it', () => {
     }
   )
 })
+
+it.each([true, false])(
+  'keeps composer reveal focus beside a complete async card (ready=%s)',
+  async (ready) => {
+    if (!retained.session) {
+      throw new Error('Missing retained session')
+    }
+    retained.session = {
+      ...retained.session,
+      messageQuestions: { records: [messageQuestionFixture('outside-history')], ready },
+      cancelMessageQuestions: async () => {}
+    }
+    setStatus({ state: 'working' })
+    renderPane()
+    expect(screen.getByText('Which color?')).toBeInTheDocument()
+    expect(screen.getByTestId('composer-field').closest('[hidden]')).toBeNull()
+    await vi.waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByTestId('composer-field'))
+    )
+    fireEvent.keyDown(rootElement(), { key: 'x' })
+    expect(composer.typed).toHaveBeenCalledExactlyOnceWith('x')
+    expect(composer.mounts).toBe(1)
+    expect(pty.verified).not.toHaveBeenCalled()
+  }
+)

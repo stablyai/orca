@@ -1,3 +1,4 @@
+import type { MessageQuestionView } from '../../../../src/shared/message-question-occurrence'
 import './mobile-prompt-render-mocks'
 import { createElement } from 'react'
 import { Pressable } from 'react-native'
@@ -17,7 +18,14 @@ import { mobileNativeChatPromptDismissals } from '../native-chat/input/mobile-na
 import { setMobileNativeChatDraftText } from '../native-chat/composer/mobile-native-chat-draft-store'
 export const visible = { value: true }
 const messages: NativeChatMessage[] = []
-export const session = {
+export const session: {
+  messages: NativeChatMessage[]
+  folded: NativeChatMessage[]
+  status: string
+  transcriptLoading: boolean
+  messageQuestions?: MessageQuestionView
+  cancelMessageQuestions?: (ids: readonly string[]) => Promise<void>
+} = {
   messages,
   folded: [],
   status: 'ready',
@@ -208,6 +216,9 @@ export function reset(rpcClient: RpcClient) {
   handleRef.current = 'term-1'
   lastProps = null
   session.messages = []
+  session.transcriptLoading = false
+  delete session.messageQuestions
+  delete session.cancelMessageQuestions
   structuredSession.asyncQuestionSourceScope = 'journal/host/session/epoch'
   structuredSession.sendWithOutcome.mockReset().mockResolvedValue('accepted')
   sendError.mockReset()

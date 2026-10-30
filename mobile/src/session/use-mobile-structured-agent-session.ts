@@ -1,3 +1,4 @@
+import { projectMobileStructuredChatSession } from './mobile-structured-session-projection'
 import { authoritativeAsyncQuestion } from '../../../src/shared/agent-session-current-requests'
 import { asyncQuestionSourceScope as questionSourceScope } from '../../../src/shared/native-chat/input/native-chat-ask'
 import { useCallback, useMemo, useRef } from 'react'
@@ -11,7 +12,6 @@ import { withNativeChatCutTurnNotices } from '../../../src/shared/native-chat/tr
 import { agentSessionTranscriptRows } from '../../../src/shared/agent-session-context-clear'
 import { tuiAgentDisplayName } from '../../../src/shared/tui-agent-display-names'
 import { isStructuredAgentSessionMainAgentWorking } from '../../../src/shared/structured-agent-session-main-agent-working'
-import { isFinalAgentSessionReadRefusal } from '../../../src/shared/structured-agent-session-read-refusal'
 import {
   runningStructuredAgentSessionTurnId,
   structuredAgentSessionHostSaysWorking,
@@ -38,6 +38,7 @@ import { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-o
 import { useMobileStructuredSessionOptionStamp } from './use-mobile-structured-session-option-stamp'
 import { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agent-turn-timing'
 import {
+  requestMobileMessageQuestionCancel,
   pendingStructuredPromptIdentity,
   requestMobileStructuredAgentSessionCancel
 } from './mobile-structured-agent-session-cancel'
@@ -207,7 +208,7 @@ export function useMobileStructuredAgentSession(
     sendOptions: hostSupport?.sendOptions === true ? options.sendSelection : undefined,
     takesSkills: hostSupport?.sendSkills === true
   })
-  const { items, currentRequests, actionablePromptIds, status, epoch } = state
+  const { items, currentRequests, actionablePromptIds, epoch } = state
   // Prefer host actionability: ended-agent prompts must receive no answer.
   const [approvalPrompt, questionPrompt] = useMemo(() => {
     const prompts = { items, currentRequests, actionablePromptIds }
@@ -278,16 +279,8 @@ export function useMobileStructuredAgentSession(
     asyncQuestionSourceScope: questionSourceScope({ kind: 'journal', agent, sessionId, epoch }),
     imagePreviewsByMessageId: sends.imagePreviewsByMessageId,
     session: {
-      messages,
-      asyncQuestion: authoritativeAsyncQuestion(state),
-      status,
-      transcriptLoading: status === 'loading',
-      error: state.error,
-      readFailedFinally: status === 'error' && isFinalAgentSessionReadRefusal(state.readRefusal),
-      hasMore: state.hasOlder && olderPages !== 'unavailable',
-      loadingEarlier: olderPages === 'loading',
-      olderPages,
-      loadEarlier
+      ...projectMobileStructuredChatSession({ state, messages, olderPages, loadEarlier }),
+      cancelMessageQuestions: (ids) => requestMobileMessageQuestionCancel(client, sessionId, ids)
     },
     isWorking: isWorking || queueSendsNext,
     canStop,

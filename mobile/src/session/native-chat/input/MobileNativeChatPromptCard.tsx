@@ -18,6 +18,7 @@ export function MobileNativeChatPromptCard({
   ask,
   answering = false,
   askKey,
+  askDisabled = false,
   onDismissAsk,
   onAnswerAsk,
   requiresTerminal = false,
@@ -36,6 +37,7 @@ export function MobileNativeChatPromptCard({
   // The keyboard is up for this card's reply, so it may take the whole conversation area.
   answering?: boolean
   askKey?: string | null
+  askDisabled?: boolean
   onDismissAsk?: () => void
   onAnswerAsk?: (prompt: AskPrompt, selections: AskAnswerSelection[]) => Promise<boolean>
   requiresTerminal?: boolean
@@ -75,6 +77,7 @@ export function MobileNativeChatPromptCard({
       <MobileNativeChatAsk
         key={askKey ?? 'ask'}
         prompt={ask}
+        disabled={askDisabled}
         onAnswer={async (selections) => {
           const accepted = (await onAnswerAsk?.(ask, selections)) ?? false
           if (accepted && !ask.replyAsMessage) {
@@ -84,7 +87,7 @@ export function MobileNativeChatPromptCard({
         }}
         onCancel={async () => {
           // The agent is not waiting on this card, and Escape would interrupt its turn.
-          const accepted = ask.replyAsMessage ? true : ((await onCancelAsk?.()) ?? false)
+          const accepted = onCancelAsk ? await onCancelAsk() : ask.replyAsMessage === true
           if (accepted) {
             onDismissAsk?.()
           }

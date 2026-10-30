@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { Check } from 'lucide-react-native'
 import type { AskAnswerSelection } from '../../../../../src/shared/native-chat-ask-answer'
@@ -24,6 +24,7 @@ import { useMobileNativeChatReplyScroll } from './use-mobile-native-chat-reply-s
 
 type Props = {
   prompt: AskPrompt
+  disabled?: boolean
   // Use option indices so Claude’s selector can navigate without pasting labels.
   onAnswer: (selections: AskAnswerSelection[]) => Promise<boolean>
   onCancel?: () => Promise<boolean>
@@ -47,6 +48,7 @@ const OTHER = -1
 
 export function MobileNativeChatAsk({
   prompt,
+  disabled = false,
   onAnswer,
   onCancel,
   onCollapse,
@@ -64,6 +66,12 @@ export function MobileNativeChatAsk({
   const [submitting, setSubmitting] = useState(false)
   const submittingRef = useRef(false)
   const autoAdvance = useMobileNativeChatAskAutoAdvance()
+  useLayoutEffect(() => {
+    if (disabled) {
+      autoAdvance.cancel()
+    }
+  }, [disabled, autoAdvance.cancel])
+  const blocked = submitting || disabled
   // Open each step at its question and end the last step's edit, so no typing lands out of view.
   const showStep = (next: (current: number) => number): void => {
     inputRef.current?.blur()
@@ -80,7 +88,7 @@ export function MobileNativeChatAsk({
   // Delay single-select advance to show the choice; Other still needs text.
   const toggle = (qi: number, optIndex: number, multi: boolean): void => {
     // Block same-frame taps before disabled state renders.
-    if (submittingRef.current) {
+    if (disabled || submittingRef.current) {
       return
     }
     const cur = selections[qi] ?? []
@@ -120,7 +128,7 @@ export function MobileNativeChatAsk({
     prompt.questions.some((_, i) => isAnswered(i, sel))
 
   const submit = async (sel: number[][]): Promise<void> => {
-    if (!anyAnswered(sel) || submittingRef.current) {
+    if (!anyAnswered(sel) || disabled || submittingRef.current) {
       return
     }
     submittingRef.current = true
@@ -144,7 +152,7 @@ export function MobileNativeChatAsk({
 
   const cancel = async (): Promise<void> => {
     autoAdvance.cancel()
-    if (!submittingRef.current && onCancel) {
+    if (!disabled && !submittingRef.current && onCancel) {
       submittingRef.current = true
       setSubmitting(true)
       try {
@@ -186,7 +194,7 @@ export function MobileNativeChatAsk({
               // oxlint-disable-next-line react-doctor/no-array-index-as-key -- Questions are positional: selections are index-addressed and a prompt never reorders them.
               key={i}
               style={[styles.tab, i === index && styles.tabActive]}
-              disabled={submitting}
+              disabled={blocked}
               onPress={() => {
                 autoAdvance.cancel()
                 showStep(() => i)
@@ -219,7 +227,7 @@ export function MobileNativeChatAsk({
                 onCollapse()
               })
             }
-            disabled={submitting}
+            disabled={blocked}
           />
         </View>
         {q.options.map((opt, optIndex) => (
@@ -229,7 +237,7 @@ export function MobileNativeChatAsk({
             description={opt.description}
             selected={(selections[index] ?? []).includes(optIndex)}
             multi={q.multiSelect}
-            disabled={submitting}
+            disabled={blocked}
             onPress={() => toggle(index, optIndex, q.multiSelect)}
           />
         ))}
@@ -238,7 +246,7 @@ export function MobileNativeChatAsk({
             label={t('chat.ask.other', 'Other…')}
             selected={otherSelected}
             multi={q.multiSelect}
-            disabled={submitting}
+            disabled={blocked}
             onPress={() => toggle(index, OTHER, q.multiSelect)}
           />
         ) : null}
@@ -255,7 +263,8 @@ export function MobileNativeChatAsk({
             placeholderTextColor={colors.textMuted}
             // A declared input (Pi's `input`) is one line unless it asks for more, as on desktop.
             multiline={freeTextInput ? freeTextInput.multiline === true : true}
-            autoFocus
+            editable={!blocked}
+            autoFocus={!disabled}
           />
         ) : null}
       </ScrollView>
@@ -264,7 +273,7 @@ export function MobileNativeChatAsk({
         <Pressable
           style={styles.cancel}
           onPress={() => void cancel()}
-          disabled={submitting}
+          disabled={blocked}
           hitSlop={8}
         >
           <Text style={styles.cancelText}>{t('common.cancel', 'Cancel')}</Text>
@@ -277,7 +286,7 @@ export function MobileNativeChatAsk({
         <Pressable
           style={[styles.next, !currentAnswered && styles.nextSkip]}
           onPress={confirm}
-          disabled={submitting}
+          disabled={blocked}
         >
           <Text style={[styles.nextText, !currentAnswered && styles.nextSkipText]}>
             {confirmLabels(t)[askConfirmLabel(currentAnswered, isLast)]}

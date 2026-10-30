@@ -178,22 +178,21 @@ export function NativeChatResolvedView({
         : new Map([...(launchPromptDeliveryNotices ?? []), ...delivery.notices]),
     [launchPromptDeliveryNotices, delivery.notices]
   )
-  const {
-    promptCard,
-    presentation: promptCardPresentation,
-    actionKey
-  } = useNativeChatTerminalPromptCard({
-    paneKey,
-    targetPtyId,
-    runtimeEnvironmentId,
-    agent,
-    sessionId,
-    transcriptPath: transcriptPath ?? null,
-    messages: sessionAfterCommandBoundaries.messages,
-    transcriptSettled: session.readPhase === 'ready',
-    canSend
-  })
-  const { card: shownPromptCard, collapsedCard } = promptCardPresentation
+  const { promptCard, presentation, actionKey, cancelAsync, asyncReady } =
+    useNativeChatTerminalPromptCard({
+      paneKey,
+      targetPtyId,
+      runtimeEnvironmentId,
+      agent,
+      sessionId,
+      transcriptPath: transcriptPath ?? null,
+      messages: sessionAfterCommandBoundaries.messages,
+      messageQuestions: sessionAfterCommandBoundaries.messageQuestions,
+      cancelMessageQuestions: sessionAfterCommandBoundaries.cancelMessageQuestions,
+      transcriptSettled: session.readPhase === 'ready',
+      canSend
+    })
+  const { card: shownPromptCard, collapsedCard } = presentation
   const cardOwnsInput =
     shownPromptCard !== null &&
     (shownPromptCard.kind !== 'question' || !shownPromptCard.prompt.replyAsMessage)
@@ -379,15 +378,17 @@ export function NativeChatResolvedView({
             send={interactiveSend}
             requiresTerminal={nativeChatAskRequiresTerminal(agent)}
             onAnswerInTerminal={onSwitchToTerminal}
-            onDismiss={promptCardPresentation.dismiss}
-            onCollapse={promptCardPresentation.collapse}
+            onDismiss={presentation.dismiss}
+            onCancelAsync={cancelAsync}
+            asyncReady={asyncReady}
+            onCollapse={presentation.collapse}
             shouldFocus={cardOwnsInput && isVisible && isFocusedGroup}
             answerInputRef={questionAnswerInputRef}
           />
         </div>
       ) : null}
       {collapsedCard ? (
-        <NativeChatPromptStrip card={collapsedCard} onExpand={promptCardPresentation.expand} />
+        <NativeChatPromptStrip card={collapsedCard} onExpand={presentation.expand} />
       ) : null}
       {/* Honor mobile PTY ownership; retain the hidden composer’s state but detach its ref from typing, paste and focus routes. */}
       <div hidden={cardOwnsInput} className="contents">

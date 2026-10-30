@@ -3,6 +3,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { createNativeChatCurrentRequestsBinding } from '../../../../shared/native-chat-current-requests-binding'
 import {
   authoritativeAsyncQuestion,
+  currentMessageQuestionView,
   type AgentSessionCurrentRequestsState
 } from '../../../../shared/agent-session-current-requests'
 
@@ -28,7 +29,8 @@ export function useNativeChatCurrentQuestions(args: UseNativeChatLiveSessionArgs
   const view = useMemo(
     () => ({
       asyncQuestion: requests.source === source ? authoritativeAsyncQuestion(requests) : undefined,
-      asyncQuestionContributors: requests.source === source ? requests.asyncQuestions : undefined
+      messageQuestions:
+        requests.source === source ? currentMessageQuestionView(requests) : undefined
     }),
     [requests, source]
   )

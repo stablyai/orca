@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { AskPrompt } from './native-chat/input/native-chat-ask-types'
 
 const question = z.strictObject({
   question: z.string(),
@@ -43,6 +44,25 @@ export const messageQuestionOccurrenceSchema = z.strictObject({
 
 export type MessageQuestionOccurrence = z.infer<typeof messageQuestionOccurrenceSchema>
 export type MessageQuestionResolution = z.infer<typeof messageQuestionResolutionSchema>
+export type MessageQuestionView = {
+  records: readonly MessageQuestionOccurrence[]
+  ready: boolean
+}
+
+export function messageQuestionPrompt(
+  records: readonly MessageQuestionOccurrence[],
+  hidden?: ReadonlySet<string>
+): AskPrompt | null {
+  const questions: AskPrompt['questions'] = []
+  const occurrenceIds: string[] = []
+  for (const record of records) {
+    if (record.resolution.state === 'pending' && !hidden?.has(record.id)) {
+      occurrenceIds.push(record.id)
+      questions.push(...record.questions)
+    }
+  }
+  return questions.length ? { questions, occurrenceIds, replyAsMessage: true } : null
+}
 export const PENDING_MESSAGE_QUESTION = {
   state: 'pending',
   reason: null,

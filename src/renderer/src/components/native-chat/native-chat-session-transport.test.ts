@@ -8,6 +8,7 @@ import {
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import { RUNTIME_COMPAT_BLOCK_CODE } from '@/runtime/runtime-protocol-compat'
 import {
+  messageCancelAction,
   getNativeChatSessionTransport,
   RUNTIME_NATIVE_CHAT_RECONNECT_MS,
   toRuntimeNativeChatErrorMessage
@@ -656,4 +657,40 @@ describe('runtime readSession error mapping', () => {
 
     expect(toRuntimeNativeChatErrorMessage(new Error('request timed out'))).toBe(generic)
   })
+})
+
+it('routes exact-ID Cancel through the captured native or remote resource adapter', async () => {
+  const request = {
+    agent: 'codex' as const,
+    sessionId: 'same-session',
+    transcriptPath: '/canonical/source',
+    ids: ['displayed-Q1']
+  }
+  const localCancel = vi.fn(async () => {})
+  Object.assign(window.api.nativeChat, { cancelCurrentQuestions: localCancel })
+  await messageCancelAction(
+    getNativeChatSessionTransport(null),
+    request.agent,
+    request.sessionId,
+    request.transcriptPath
+  )(request.ids)
+  expect(localCancel).toHaveBeenCalledExactlyOnceWith(request)
+  markRuntimeEnvironmentCompatible(ENV)
+  runtimeEnvironmentsCall.mockResolvedValue(okEnvelope({ cancelled: true }))
+  const remote = getNativeChatSessionTransport(ENV)
+  await messageCancelAction(
+    remote,
+    request.agent,
+    request.sessionId,
+    request.transcriptPath
+  )(request.ids)
+  expect(runtimeEnvironmentsCall).toHaveBeenCalledWith(
+    expect.objectContaining({
+      selector: ENV,
+      method: 'nativeChat.cancelCurrentQuestions',
+      params: request
+    })
+  )
+  expect(nativeChatSubscribe).not.toHaveBeenCalled()
+  expect(runtimeEnvironmentsSubscribe).not.toHaveBeenCalled()
 })

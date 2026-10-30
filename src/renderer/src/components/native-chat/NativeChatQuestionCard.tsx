@@ -1,17 +1,16 @@
 import { ImeInput } from '@/lib/ime-text-field'
 import { Textarea } from '@/components/ui/textarea'
-import { useRef, useState, type RefObject } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { Check, Pencil, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type { AskAnswerSelection } from '../../../../shared/native-chat-ask-answer'
-import type { AskPrompt } from '../../../../shared/native-chat/input/native-chat-ask-types'
 import { NativeChatPromptCollapseToggle } from './NativeChatPromptCollapse'
 import { useNativeChatPromptCardFocus } from './use-native-chat-prompt-card-focus'
 import { useNativeChatQuestionAutoAdvance } from './use-native-chat-question-auto-advance'
 import { useNativeChatQuestionKeys } from './use-native-chat-question-keys'
 import { isEditableTarget } from '@/lib/editable-target'
-import type { AgentJournalFreeTextInput } from '../../../../shared/agent-session-journal-types'
+import type { NativeChatQuestionCardProps } from './native-chat-question-card-contract'
 import {
   askAcceptsEmptyAnswer,
   askConfirmAction,
@@ -20,24 +19,7 @@ import {
   toggleAskOption
 } from '../../../../shared/native-chat-ask-card-rules'
 
-export type NativeChatQuestionCardProps = {
-  prompt: AskPrompt
-  /** Whether the snapshotted answer is still being delivered to the agent. */
-  isSubmitting?: boolean
-  isCancelling?: boolean
-  /** Deliver the chosen answer (per-question option indices + free text). */
-  onAnswer: (selections: AskAnswerSelection[]) => void
-  allowOther?: boolean | readonly boolean[]
-  freeTextInputs?: readonly (AgentJournalFreeTextInput | undefined)[]
-  /** Dismiss the prompt (sends Escape to the agent). */
-  onCancel: () => void
-  /** Fold the card to a strip and give the input back, writing nothing; Escape does too. */
-  onCollapse?: () => void
-  /** Take focus when the card takes the input region; number keys pick while it holds. */
-  shouldFocus?: boolean
-  /** Paste target while the card replaces the composer. */
-  answerInputRef?: RefObject<HTMLInputElement | null>
-}
+export type { NativeChatQuestionCardProps } from './native-chat-question-card-contract'
 
 // Reserve a non-option index so single-select holds either an option or typed text.
 const TYPED_ANSWER = -1
@@ -53,6 +35,7 @@ export function NativeChatQuestionCard({
   prompt,
   isSubmitting = false,
   isCancelling = false,
+  disabled = false,
   onAnswer,
   allowOther = true,
   freeTextInputs,
@@ -63,6 +46,13 @@ export function NativeChatQuestionCard({
 }: NativeChatQuestionCardProps): React.JSX.Element {
   const cardRef = useRef<HTMLDivElement>(null)
   const autoAdvance = useNativeChatQuestionAutoAdvance()
+  const cancelAutoAdvance = autoAdvance.cancel
+  useLayoutEffect(() => {
+    if (disabled) {
+      cancelAutoAdvance()
+    }
+  }, [disabled, cancelAutoAdvance])
+  const blocked = isSubmitting || disabled
   const [index, setIndex] = useState(0)
   useNativeChatPromptCardFocus(cardRef, shouldFocus, index)
   // Use indices because labels can repeat and the agent commits numbered rows.
@@ -163,7 +153,7 @@ export function NativeChatQuestionCard({
       autoAdvance.schedule(() => advanceOrSubmit(next, otherText))
     }
   }
-  useNativeChatQuestionKeys(cardRef, shouldFocus && !isSubmitting, q.options.length, pickOption)
+  useNativeChatQuestionKeys(cardRef, shouldFocus && !blocked, q.options.length, pickOption)
 
   const confirm = (fromKeyboard = false): void => {
     autoAdvance.cancel()
@@ -207,7 +197,7 @@ export function NativeChatQuestionCard({
           event.key === 'Escape' &&
           !event.nativeEvent.isComposing &&
           collapse &&
-          !isSubmitting &&
+          !blocked &&
           !isEditableTarget(event.target)
         ) {
           event.preventDefault()
@@ -223,7 +213,7 @@ export function NativeChatQuestionCard({
               <button
                 key={i}
                 type="button"
-                disabled={isSubmitting}
+                disabled={blocked}
                 onClick={() => goTo(i)}
                 className={cn(
                   'flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium disabled:pointer-events-none',
@@ -255,16 +245,12 @@ export function NativeChatQuestionCard({
               {q.question}
             </p>
             {collapse ? (
-              <NativeChatPromptCollapseToggle
-                expanded
-                disabled={isSubmitting}
-                onToggle={collapse}
-              />
+              <NativeChatPromptCollapseToggle expanded disabled={blocked} onToggle={collapse} />
             ) : null}
             <button
               type="button"
               onClick={cancel}
-              disabled={isCancelling}
+              disabled={disabled || isCancelling}
               aria-label={translate('components.native-chat.question.cancel', 'Cancel')}
               className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
@@ -281,7 +267,7 @@ export function NativeChatQuestionCard({
                 label={opt.label}
                 description={opt.description}
                 selected={(selections[index] ?? []).includes(i)}
-                disabled={isSubmitting}
+                disabled={blocked}
                 onSelect={() => pickOption(i)}
               />
             ))}
@@ -306,7 +292,7 @@ export function NativeChatQuestionCard({
                   {freeTextInput?.multiline ? (
                     <Textarea
                       data-native-chat-prompt-card-focus-target={fieldTakesFocus}
-                      disabled={isSubmitting}
+                      disabled={blocked}
                       value={otherText[index]}
                       onChange={(e) => setOther(index, e.target.value)}
                       onClick={autoAdvance.cancel}
@@ -317,7 +303,7 @@ export function NativeChatQuestionCard({
                       ref={answerInputRef}
                       data-native-chat-answer-field
                       data-native-chat-prompt-card-focus-target={fieldTakesFocus}
-                      disabled={isSubmitting}
+                      disabled={blocked}
                       value={otherText[index]}
                       onChange={(e) => setOther(index, e.target.value)}
                       // Select typed text on click; tabbing toward Submit must not replace a picked option.
@@ -348,7 +334,7 @@ export function NativeChatQuestionCard({
               )}
               <button
                 type="button"
-                disabled={isSubmitting}
+                disabled={blocked}
                 onClick={() => confirm()}
                 className={cn(
                   'shrink-0 whitespace-nowrap rounded-md px-3 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-50',

@@ -145,6 +145,7 @@ export function useMobileNativeChatController(args: {
         }),
     visible: showNativeChat,
     terminal: bridgePromptWrites,
+    onSendError,
     onSendResolved
   })
 

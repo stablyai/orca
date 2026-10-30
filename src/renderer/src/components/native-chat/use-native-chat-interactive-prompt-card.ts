@@ -8,6 +8,7 @@ import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { resolveNativeChatInteractivePromptCard } from '../../../../shared/native-chat-interactive-prompt'
 import { sayNativeChatApprovalTranslated } from './native-chat-interactive-prompt'
 import type { InteractivePromptCard } from '../../../../shared/native-chat-interactive-prompt'
+import type { NativeChatLiveSession } from './native-chat-live-session-contract'
 
 export function useNativeChatInteractivePromptCard({
   paneKey,
@@ -66,6 +67,8 @@ export function useNativeChatTerminalPromptCard(args: {
   messages: readonly NativeChatMessage[]
   transcriptSettled: boolean
   canSend: boolean
+  messageQuestions?: NativeChatLiveSession['messageQuestions']
+  cancelMessageQuestions?: NativeChatLiveSession['cancelMessageQuestions']
 }) {
   const {
     paneKey,
@@ -90,12 +93,14 @@ export function useNativeChatTerminalPromptCard(args: {
     ]),
     sourceScope: asyncQuestionSourceScope({ kind: 'transcript', agent, sessionId, transcriptPath }),
     messages,
-    settled: transcriptSettled
+    settled: transcriptSettled,
+    messageQuestions: args.messageQuestions,
+    cancelMessageQuestions: args.cancelMessageQuestions
   })
   const promptCard = useNativeChatInteractivePromptCard({
     paneKey,
     messages,
-    transcriptSettled,
+    transcriptSettled: transcriptSettled || args.messageQuestions !== undefined,
     transcriptAsk: asyncQuestions.blocking ?? asyncQuestions.prompt
   })
   const presentation = useNativeChatPromptCardPresentation({
@@ -111,5 +116,11 @@ export function useNativeChatTerminalPromptCard(args: {
     mounted?.kind === 'question' && mounted.prompt.replyAsMessage
       ? asyncQuestions.ownerKey
       : (presentation.occurrenceKey ?? 'prompt')
-  return { promptCard, presentation, actionKey }
+  return {
+    promptCard,
+    presentation,
+    actionKey,
+    cancelAsync: asyncQuestions.cancel,
+    asyncReady: asyncQuestions.ready
+  }
 }

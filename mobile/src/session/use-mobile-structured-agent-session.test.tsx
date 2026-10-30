@@ -285,6 +285,28 @@ describe('useMobileStructuredAgentSession', () => {
     )
   })
 
+  it('keeps exact-ID Cancel on its captured session without sending provider input', async () => {
+    act(() => {
+      renderer = create(createElement(Harness))
+    })
+    const cancel = hook!.session.cancelMessageQuestions!
+    act(() => {
+      renderer!.update(createElement(Harness, { sessionId: 'session-2' }))
+    })
+    sendRequest.mockClear()
+    await cancel(['displayed-Q1'])
+    const mutations = sendRequest.mock.calls.filter(
+      ([method]) => method !== 'agentSession.options' && method !== 'agentSession.release'
+    )
+    expect(mutations).toEqual([
+      [
+        'agentSession.cancelCurrentQuestions',
+        { sessionId: 'session-1', ids: ['displayed-Q1'] },
+        { timeoutMs: 15_000, budgetSpansConnect: true }
+      ]
+    ])
+  })
+
   it('re-holds before resubscribing after a reconnect', async () => {
     act(() => {
       renderer = create(createElement(Harness, { connected: true }))

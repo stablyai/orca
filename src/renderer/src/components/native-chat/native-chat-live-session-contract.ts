@@ -1,4 +1,4 @@
-import type { AsyncQuestionContributor } from '../../../../shared/native-chat/input/native-chat-ask'
+import type { MessageQuestionView } from '../../../../shared/message-question-occurrence'
 import type { AskPrompt } from '../../../../shared/native-chat/input/native-chat-ask-types'
 import type {
   AgentType,
@@ -21,7 +21,8 @@ export function isNativeChatTranscriptUnsettled(phase: ReadState['phase']): bool
 }
 
 export type NativeChatLiveSession = NativeChatSession & {
-  asyncQuestionContributors?: AsyncQuestionContributor[]
+  messageQuestions?: MessageQuestionView
+  cancelMessageQuestions?: (ids: readonly string[]) => Promise<void>
   asyncQuestion?: AskPrompt | null
   /** Latest provider turn boundary, used to settle orphaned running tool rows. */
   transcriptLifecycle?: NativeChatTurnLifecycle

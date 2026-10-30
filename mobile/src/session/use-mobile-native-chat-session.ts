@@ -1,10 +1,14 @@
+import type {
+  MobileNativeChatStatus,
+  MobileNativeChatSession
+} from './mobile-native-chat-session-contract'
 import { callAgentSession } from './mobile-structured-agent-session-rpc'
 import { createNativeChatCurrentRequestsBinding } from '../../../src/shared/native-chat-current-requests-binding'
 import {
   authoritativeAsyncQuestion,
+  currentMessageQuestionView,
   type AgentSessionCurrentRequestsState
 } from '../../../src/shared/agent-session-current-requests'
-import type { AskPrompt } from '../../../src/shared/native-chat/input/native-chat-ask-types'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   createNativeChatTranscriptRetention,
@@ -26,35 +30,12 @@ import {
   type MobileNativeChatStreamFrame
 } from './native-chat/mobile-native-chat-stream-frame'
 import { randomV4Uuid } from '../platform/random-v4-uuid'
-import { useMobileOlderPageLoader, type OlderPagePhase } from './use-mobile-older-page-loader'
+import { useMobileOlderPageLoader } from './use-mobile-older-page-loader'
 
-export type MobileNativeChatStatus =
-  | 'idle'
-  | 'loading'
-  | 'waiting-session'
-  // No transcript file yet: render the empty chat while keeping its read unsettled.
-  | 'awaiting-transcript'
-  | 'ready'
-  | 'error'
-
-export type MobileNativeChatSession = {
-  asyncQuestion?: AskPrompt | null
-  messages: NativeChatMessage[]
-  status: MobileNativeChatStatus
-  // Unsettled reads or passive resets may still hold another tab’s history; wait before interpreting empty messages as a seed/retirement boundary.
-  transcriptLoading: boolean
-  error?: string
-  /** The read failed for good (damage, or a newer Orca's chat): the error says why, once, and
-   *  there is nothing to send into. */
-  readFailedFinally?: boolean
-  hasMore: boolean
-  /** `olderPages === 'loading'`, kept because recorded RPC fixtures read it. */
-  loadingEarlier: boolean
-  olderPages?: OlderPagePhase
-  loadEarlier: () => void
-  /** Latest provider turn boundary from the transcript feed; absent from older hosts. */
-  transcriptLifecycle?: NativeChatTurnLifecycle
-}
+export type {
+  MobileNativeChatStatus,
+  MobileNativeChatSession
+} from './mobile-native-chat-session-contract'
 
 const INITIAL_LIMIT = 40
 const PAGE = 60
@@ -326,6 +307,19 @@ export function useMobileNativeChatSession(args: {
     messages: visibleMessages,
     asyncQuestion:
       requests.identity === identity ? authoritativeAsyncQuestion(requests) : undefined,
+    messageQuestions:
+      requests.identity === identity ? currentMessageQuestionView(requests) : undefined,
+    cancelMessageQuestions: async (ids) => {
+      if (!client || !agent || !sessionId) {
+        throw new Error('Chat source unavailable')
+      }
+      await callAgentSession(client, 'nativeChat.cancelCurrentQuestions', {
+        agent,
+        sessionId,
+        ...(transcriptPath ? { transcriptPath } : {}),
+        ids: [...ids]
+      })
+    },
     status,
     transcriptLoading: status === 'loading' || status === 'awaiting-transcript',
     error,

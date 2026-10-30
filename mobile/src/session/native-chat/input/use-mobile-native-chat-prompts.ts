@@ -61,7 +61,7 @@ export function useMobileNativeChatPrompts(args: {
         agent,
         messages,
         transcriptAsk,
-        transcriptSettled: !transcriptLoading
+        transcriptSettled: args.asyncQuestion !== undefined || !transcriptLoading
       }),
     [
       args.asyncQuestion,

@@ -10,7 +10,7 @@ import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { useNativeChatAsyncQuestions } from './use-native-chat-async-questions'
 
-/** Async questions leave the composer usable; the next ordinary send answers them and Cancel only hides them. */
+/** Async questions leave the composer usable; a delivered ordinary send answers them and Cancel uses their source. */
 export function NativeChatStructuredAsyncQuestion({
   paneKey,
   session,
@@ -23,29 +23,35 @@ export function NativeChatStructuredAsyncQuestion({
   sourceKey: string
   sourceScope: string
   blocked?: boolean
-  session: Pick<NativeChatLiveSession, 'messages' | 'readPhase' | 'asyncQuestion'>
+  session: Pick<
+    NativeChatLiveSession,
+    'messages' | 'readPhase' | 'asyncQuestion' | 'messageQuestions' | 'cancelMessageQuestions'
+  >
   send: NativeChatStructuredComposerTransport['send']
 }): React.JSX.Element | null {
-  const { prompt, dismiss, ownerKey } = useNativeChatAsyncQuestions({
+  const { prompt, cancel, ready, ownerKey } = useNativeChatAsyncQuestions({
     paneKey,
     sourceKey,
     sourceScope,
     viewKey: paneKey,
     messages: session.messages,
-    settled: session.readPhase === 'ready' && !blocked
+    settled: session.readPhase === 'ready' && !blocked,
+    messageQuestions: session.messageQuestions,
+    cancelMessageQuestions: session.cancelMessageQuestions
   })
-  if (!prompt) {
+  if (!prompt || blocked) {
     return null
   }
   return (
     <NativeChatQuestionCard
       key={JSON.stringify([ownerKey, nativeChatAskDismissKey(prompt)])}
       prompt={prompt}
+      disabled={!ready}
       onAnswer={(selections) => {
         // Send admission can precede delivery; canonical transcript rows retire questions.
         send(formatAskAnswer(prompt, selections), [])
       }}
-      onCancel={dismiss}
+      onCancel={cancel}
     />
   )
 }
@@ -53,7 +59,10 @@ export function NativeChatStructuredAsyncQuestion({
 export function nativeChatStructuredAsyncQuestion(
   props: Pick<NativeChatStructuredViewProps, 'target' | 'agent' | 'sessionId' | 'tabId'>,
   controller: Pick<ReturnType<typeof useStructuredAgentSession>, 'epoch' | 'prompts'>,
-  session: Pick<NativeChatLiveSession, 'messages' | 'readPhase' | 'asyncQuestion'>,
+  session: Pick<
+    NativeChatLiveSession,
+    'messages' | 'readPhase' | 'asyncQuestion' | 'messageQuestions' | 'cancelMessageQuestions'
+  >,
   send: NativeChatStructuredComposerTransport['send']
 ): React.JSX.Element {
   const { agent, sessionId } = props

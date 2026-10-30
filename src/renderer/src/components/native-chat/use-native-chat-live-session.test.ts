@@ -1,3 +1,4 @@
+import type * as NativeChatSessionTransport from './native-chat-session-transport'
 // @vitest-environment happy-dom
 
 import { act, createElement } from 'react'
@@ -13,6 +14,7 @@ const { transportFactory, getMockTransport, resetMockTransports } = vi.hoisted((
     readSession: ReturnType<typeof vi.fn>
     subscribe: ReturnType<typeof vi.fn>
     unsubscribe: ReturnType<typeof vi.fn>
+    cancelCurrentQuestions: ReturnType<typeof vi.fn>
     emit: (frame: unknown) => void
   }
   const transports = new Map<string | null, MockTransport>()
@@ -27,6 +29,7 @@ const { transportFactory, getMockTransport, resetMockTransports } = vi.hoisted((
       let listener: (frame: unknown) => void = () => {}
       transport = {
         unsubscribe,
+        cancelCurrentQuestions: vi.fn(async () => {}),
         readSession: vi.fn().mockResolvedValue({ messages: [] }),
         subscribe: vi.fn((_args, onFrame) => {
           listener = onFrame
@@ -48,7 +51,8 @@ const { transportFactory, getMockTransport, resetMockTransports } = vi.hoisted((
   }
 })
 
-vi.mock('./native-chat-session-transport', () => ({
+vi.mock('./native-chat-session-transport', async (importOriginal) => ({
+  ...(await importOriginal<typeof NativeChatSessionTransport>()),
   getNativeChatSessionTransport: transportFactory
 }))
 
@@ -108,6 +112,32 @@ describe('useNativeChatLiveSession — transport routing', () => {
     })
     await flush()
   }
+
+  it('keeps an addressed Cancel on the transport and source captured before an owner switch', async () => {
+    const root = await render({
+      paneKey: PANE,
+      agent: AGENT,
+      sessionId: SESSION,
+      transcriptPath: '/original',
+      runtimeEnvironmentId: 'host-a'
+    })
+    const cancel = latest!.cancelMessageQuestions!
+    await rerender(root, {
+      paneKey: PANE,
+      agent: AGENT,
+      sessionId: 'other-session',
+      transcriptPath: '/replacement',
+      runtimeEnvironmentId: 'host-b'
+    })
+    await cancel(['displayed-Q1'])
+    expect(getMockTransport('host-a').cancelCurrentQuestions).toHaveBeenCalledExactlyOnceWith({
+      agent: AGENT,
+      sessionId: SESSION,
+      transcriptPath: '/original',
+      ids: ['displayed-Q1']
+    })
+    expect(getMockTransport('host-b').cancelCurrentQuestions).not.toHaveBeenCalled()
+  })
 
   beforeEach(() => {
     useAppStore.setState({ agentStatusByPaneKey: {} })

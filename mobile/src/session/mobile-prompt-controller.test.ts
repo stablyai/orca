@@ -1,4 +1,7 @@
+import './__mocks__/mobile-prompt-render-mocks'
+import { messageQuestionFixture } from '../../../src/shared/message-question-occurrence.test-fixture'
 import { act } from 'react-test-renderer'
+import { Pressable, Text } from 'react-native'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mobileNativeChatPromptDismissals } from './native-chat/input/mobile-native-chat-prompt-dismissals'
 import { mobileStructuredSendDelivery } from './mobile-structured-send-delivery'
@@ -553,5 +556,102 @@ describe('async occurrences through the phone controller and rendered card actio
     })
     await render({ tab: structuredTab, hostId: 'host-B' })
     expect(titles()).toBeUndefined()
+  })
+})
+
+describe('complete message-question records through phone card actions', () => {
+  const structuredTab = {
+    type: 'agent-session',
+    id: 'tab-1',
+    title: 'Chat',
+    sessionId: 'session-1',
+    agent: 'codex',
+    isActive: true
+  }
+  const terminalTab = {
+    ...baseTab,
+    launchAgent: 'codex',
+    agentStatus: { ...baseTab.agentStatus, agentType: 'codex' }
+  }
+  const q1 = messageQuestionFixture('host-Q1')
+  const q2 = messageQuestionFixture('unseen-Q2', {
+    questions: [{ question: 'Next question?', options: [{ label: 'Yes' }], multiSelect: false }]
+  })
+  const titles = () => getController().nativeChatAsk?.questions.map((q) => q.question)
+
+  it.each(['structured', 'terminal'])(
+    'uses full records while history loads and restores failed exact-ID Cancel (%s)',
+    async (kind) => {
+      const tab = kind === 'structured' ? structuredTab : terminalTab
+      const mutation = Promise.withResolvers<void>()
+      const cancel = vi.fn(() => mutation.promise)
+      session.transcriptLoading = true
+      session.messageQuestions = { records: [q1], ready: false }
+      session.cancelMessageQuestions = cancel
+      await render({ tab })
+      expect(titles()).toEqual(['Which color?'])
+      expect(getController().nativeChatAskDisabled).toBe(true)
+      expect(sendButton().props.disabled).toBe(false)
+      expect(
+        getTree()
+          .root.findAllByType(Pressable)
+          .find((button) =>
+            button.findAllByType(Text).some((text) => text.props.children === 'Cancel')
+          )?.props.disabled
+      ).toBe(true)
+      session.messageQuestions = { records: [q1], ready: true }
+      await render({ tab })
+      let pending: Promise<boolean> | undefined
+      act(() => {
+        pending = askCancel()
+      })
+      expect(titles()).toBeUndefined()
+      session.messageQuestions = { records: [q1, q2], ready: true }
+      await render({ tab })
+      expect(titles()).toEqual(['Next question?'])
+      expect(cancel).toHaveBeenCalledExactlyOnceWith(['host-Q1'])
+      await act(async () => {
+        mutation.reject(new Error('save failed'))
+        await pending
+      })
+      expect(titles()).toEqual(['Which color?', 'Next question?'])
+      expect(sendError).toHaveBeenCalledOnce()
+      expect(client.sendRequest).not.toHaveBeenCalled()
+      expect(structuredSession.sendWithOutcome).not.toHaveBeenCalled()
+      expect(sendButton().props.disabled).toBe(false)
+    }
+  )
+
+  it('keeps a later Cancel mask when an older Answer finishes, and rejects old source actions', async () => {
+    const answer = Promise.withResolvers<'accepted'>()
+    structuredSession.sendWithOutcome.mockReturnValue(answer.promise)
+    const cancel = vi.fn(async () => {})
+    session.messageQuestions = { records: [q1], ready: true }
+    session.cancelMessageQuestions = cancel
+    await render({ tab: structuredTab })
+    let sent: Promise<boolean> | undefined
+    act(() => {
+      sent = askAnswer([{ indices: [1] }])
+    })
+    await unmount()
+    await render({ tab: structuredTab })
+    const oldCancel = getController().handleNativeChatCancelAsk
+    await act(async () => {
+      await askCancel()
+    })
+    await act(async () => {
+      answer.resolve('accepted')
+      await sent
+    })
+    expect(titles()).toBeUndefined()
+    expect(cancel).toHaveBeenCalledExactlyOnceWith(['host-Q1'])
+    expect(structuredSession.sendWithOutcome).toHaveBeenCalledWith('> Which color?\n\nBlue')
+    await render({ tab: structuredTab, hostId: 'different-host' })
+    expect(titles()).toEqual(['Which color?'])
+    await act(async () => {
+      await expect(oldCancel()).resolves.toBe(false)
+    })
+    expect(cancel).toHaveBeenCalledTimes(1)
+    expect(titles()).toEqual(['Which color?'])
   })
 })

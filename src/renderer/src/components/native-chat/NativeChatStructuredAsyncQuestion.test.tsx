@@ -1,3 +1,5 @@
+import { messageQuestionFixture } from '../../../../shared/message-question-occurrence.test-fixture'
+import type { MessageQuestionOccurrence } from '../../../../shared/message-question-occurrence'
 // @vitest-environment happy-dom
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
@@ -411,45 +413,83 @@ describe('NativeChatStructuredAsyncQuestion', () => {
   })
 })
 
-it('renders authoritative choices and free text without a question in loaded history, and Cancel sends nothing', () => {
-  const prompt = {
-    replyAsMessage: true as const,
-    occurrenceKey: '["source-row"]',
-    questions: [
-      {
-        question: 'Which color?',
-        multiSelect: false,
-        options: [{ label: 'Red' }, { label: 'Blue' }]
-      }
-    ]
-  }
+it('renders complete outside-history records and sends exact displayed IDs to shared Cancel', async () => {
   const send = vi.fn(() => true)
-  const render = (asyncQuestion: typeof prompt | null) =>
+  const cancel = vi.fn(async () => {})
+  const render = (records: readonly MessageQuestionOccurrence[], ready = true) =>
     act(() =>
       root.render(
         <NativeChatStructuredAsyncQuestion
           paneKey="host-current"
-          session={{ messages: [], readPhase: 'ready', asyncQuestion }}
+          sourceKey="canonical-host/session"
+          sourceScope="unused-client-path-alias"
+          session={{
+            messages: [],
+            readPhase: 'ready',
+            messageQuestions: { records, ready },
+            cancelMessageQuestions: cancel
+          }}
           send={send}
         />
       )
     )
-  render(prompt)
+  render([messageQuestionFixture('published-Q1')])
   expect(container.textContent).toContain('Which color?')
   expect(container.querySelector('textarea, input')).not.toBeNull()
-  act(() =>
-    container
-      .querySelector('button[aria-label="Cancel"]')
-      ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  await act(async () =>
+    container.querySelector<HTMLButtonElement>('button[aria-label="Cancel"]')?.click()
   )
+  expect(cancel).toHaveBeenCalledExactlyOnceWith(['published-Q1'])
   expect(send).not.toHaveBeenCalled()
-  render({ ...prompt, occurrenceKey: '["later-row"]' })
+  expect(container.textContent).not.toContain('Which color?')
+  render([messageQuestionFixture('published-Q1'), messageQuestionFixture('unseen-Q2')])
+  expect(container.textContent).toContain('Which color?')
   const blue = [...container.querySelectorAll('button[aria-pressed]')].find((node) =>
     node.textContent?.includes('Blue')
   )
   act(() => blue?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
   act(() => vi.runAllTimers())
   expect(send).toHaveBeenCalledWith('> Which color?\n\nBlue', [])
-  render(null)
+  expect(cancel).toHaveBeenCalledTimes(1)
+  render([])
   expect(container.textContent).not.toContain('Which color?')
+})
+
+it('retains same-source known controls disabled while loading and restores them after failed Cancel', async () => {
+  const send = vi.fn(() => true)
+  const cancel = vi.fn(async () => {
+    throw new Error('commit unavailable')
+  })
+  const records = [messageQuestionFixture('published-Q1')]
+  const render = (ready: boolean) =>
+    act(() =>
+      root.render(
+        <NativeChatStructuredAsyncQuestion
+          paneKey="loading-current"
+          sourceKey="host/session"
+          sourceScope="local-alias"
+          session={{
+            messages: [],
+            readPhase: 'loading',
+            messageQuestions: { records, ready },
+            cancelMessageQuestions: cancel
+          }}
+          send={send}
+        />
+      )
+    )
+  render(false)
+  expect(container.textContent).toContain('Which color?')
+  expect(
+    [...container.querySelectorAll<HTMLButtonElement | HTMLInputElement>('button, input')].every(
+      (node) => node.disabled
+    )
+  ).toBe(true)
+  render(true)
+  await act(async () =>
+    container.querySelector<HTMLButtonElement>('button[aria-label="Cancel"]')?.click()
+  )
+  expect(cancel).toHaveBeenCalledExactlyOnceWith(['published-Q1'])
+  expect(container.textContent).toContain('Which color?')
+  expect(send).not.toHaveBeenCalled()
 })

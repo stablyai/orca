@@ -1,4 +1,4 @@
-import { aggregateAsyncQuestions } from '../../../../shared/native-chat/input/native-chat-ask'
+import { messageQuestionPrompt } from '../../../../shared/message-question-occurrence'
 import type { NativeChatLiveSession } from './native-chat-live-session-contract'
 // Slash-command feedback and transcript boundaries stay separate from optimistic user-send pruning.
 
@@ -129,11 +129,19 @@ export function applySessionCommandMarkerBoundaries(
     launchPrompt ? [...session.messages, launchPrompt] : session.messages,
     markers
   )
-  if (session.asyncQuestionContributors) {
-    const contributors = session.asyncQuestionContributors.filter((row) =>
+  if (latestClearSentAt(markers) === null) {
+    return messages === session.messages ? session : { ...session, messages }
+  }
+  if (session.messageQuestions) {
+    const records = session.messageQuestions.records.filter((row) =>
       afterCommandMarkerBoundary(row.timestamp, markers)
     )
-    return { ...session, messages, asyncQuestion: aggregateAsyncQuestions(contributors) }
+    return {
+      ...session,
+      messages,
+      messageQuestions: { ...session.messageQuestions, records },
+      asyncQuestion: messageQuestionPrompt(records)
+    }
   }
   return messages === session.messages ? session : { ...session, messages }
 }

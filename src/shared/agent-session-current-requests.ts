@@ -1,8 +1,6 @@
-import {
-  aggregateAsyncQuestions,
-  extractPendingMessageReplyAsk
-} from './native-chat/input/native-chat-ask'
+import { extractPendingMessageReplyAsk } from './native-chat/input/native-chat-ask'
 import type { MessageQuestionOccurrence } from './message-question-occurrence'
+import { messageQuestionPrompt, type MessageQuestionView } from './message-question-occurrence'
 import type { NativeChatMessage } from './native-chat-types'
 import type { SourceContext } from './agent-session-current-requests-wire'
 import { agentSessionCurrentContextRows } from './agent-session-context-clear'
@@ -49,20 +47,21 @@ export function applyCurrentRequestsMarker(
   if (prior?.publisher === marker.publisher && marker.revision <= prior.revision) {
     return currentRequestsState(state)
   }
+  const sameSource =
+    prior !== undefined && prior.epoch === marker.epoch && prior.sessionId === marker.sessionId
   const sameOwner =
-    prior?.publisher === marker.publisher &&
-    prior.owner === marker.owner &&
-    prior.epoch === marker.epoch &&
-    prior.sessionId === marker.sessionId
+    sameSource &&
+    prior.owner.slice(prior.publisher.length + 1) ===
+      marker.owner.slice(marker.publisher.length + 1)
   return {
     currentRequests: sameOwner ? state.currentRequests : [],
     asyncQuestions:
       marker.contract === AGENT_SESSION_CURRENT_REQUESTS_V2
-        ? sameOwner
+        ? sameSource
           ? state.asyncQuestions
-          : []
+          : undefined
         : undefined,
-    requestContext: sameOwner ? state.requestContext : undefined,
+    requestContext: sameSource ? state.requestContext : undefined,
     requestAuthority: sameOwner ? state.requestAuthority : undefined,
     requestMarker: marker
   }
@@ -113,9 +112,20 @@ export function selectAgentSessionCurrentRequests(state: {
 }
 
 /** A negotiated feed owns async controls even before its first complete read. */
+export function currentMessageQuestionView(
+  state: AgentSessionCurrentRequestsState
+): MessageQuestionView | undefined {
+  return state.requestMarker?.contract === AGENT_SESSION_CURRENT_REQUESTS_V2
+    ? {
+        records: state.asyncQuestions ?? [],
+        ready: state.requestMarker.version === state.requestAuthority?.version
+      }
+    : undefined
+}
+
 export function authoritativeAsyncQuestion(state: AgentSessionCurrentRequestsState) {
   return state.requestMarker?.contract === AGENT_SESSION_CURRENT_REQUESTS_V2
-    ? aggregateAsyncQuestions(state.asyncQuestions ?? [])
+    ? messageQuestionPrompt(state.asyncQuestions ?? [])
     : undefined
 }
 
@@ -124,6 +134,6 @@ export function currentAsyncQuestion(
   messages: readonly NativeChatMessage[]
 ) {
   return state.requestMarker?.contract === AGENT_SESSION_CURRENT_REQUESTS_V2
-    ? aggregateAsyncQuestions(state.asyncQuestions ?? [])
+    ? messageQuestionPrompt(state.asyncQuestions ?? [])
     : extractPendingMessageReplyAsk(messages)
 }
