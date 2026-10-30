@@ -23,7 +23,9 @@ export abstract class AgentBrowserBridgeElementCalls extends AgentBrowserBridgeE
       element,
       action,
       functionDeclaration,
-      args
+      {
+        args
+      }
     )
   }
 
@@ -59,8 +61,7 @@ export abstract class AgentBrowserBridgeElementCalls extends AgentBrowserBridgeE
     element: string,
     action: string,
     functionDeclaration: string,
-    args: unknown[] = [],
-    userGesture = false
+    { args = [], userGesture = false }: { args?: unknown[]; userGesture?: boolean } = {}
   ): Promise<unknown> {
     const response = await this.sendElementCdpCommand(
       sessionName,

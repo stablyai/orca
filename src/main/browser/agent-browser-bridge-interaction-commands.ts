@@ -17,7 +17,9 @@ import {
   SELECT_ALL_ELEMENT_FUNCTION
 } from './browser-element-functions'
 import { assertUploadFilesExist } from './browser-upload-files'
-import { interceptFileChooser } from './guest-file-chooser'
+import type { WebContents } from 'electron'
+import type { CapturedElement } from './cdp-element-capture'
+import { interceptFileChooser, type OpenedFileChooser } from './guest-file-chooser'
 import { readRecord, readString } from './guest-frame-input-sessions'
 import {
   agentBrowserWaitArguments,
@@ -80,34 +82,12 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
             element,
             'upload to',
             FILE_UPLOAD_TARGET_FUNCTION,
-            [],
-            true
+            { userGesture: true }
           )
-          let input = { objectId: captured.objectId, sessionId: captured.sessionId }
-          if (isFileInput !== true) {
-            const opened = await chooser.next()
-            if (!opened?.backendNodeId) {
-              throw new BrowserError(
-                'browser_element_not_interactable',
-                `Cannot upload to ${element}: ${opened ? 'its file picker has no file input' : 'clicking it opened no file picker'}`
-              )
-            }
-            const resolved = await this.sendElementCdpCommand(
-              sessionName,
-              wc,
-              'DOM.resolveNode',
-              { backendNodeId: opened.backendNodeId },
-              opened.sessionId
-            )
-            const objectId = readString(readRecord(resolved, 'object'), 'objectId')
-            if (!objectId) {
-              throw new BrowserError(
-                'browser_error',
-                `Could not resolve the file input ${element} opened`
-              )
-            }
-            input = { objectId, sessionId: opened.sessionId }
-          }
+          const input =
+            isFileInput === true
+              ? captured
+              : await this.openedFileInput(sessionName, wc, element, await chooser.next())
           const frame = await this.sendElementCdpCommand(
             sessionName,
             wc,
@@ -137,6 +117,32 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
       },
       { elements: [element] }
     )
+  }
+
+  private async openedFileInput(
+    sessionName: string,
+    wc: WebContents,
+    element: string,
+    opened: OpenedFileChooser | null
+  ): Promise<CapturedElement> {
+    if (!opened?.backendNodeId) {
+      throw new BrowserError(
+        'browser_element_not_interactable',
+        `Cannot upload to ${element}: ${opened ? 'its file picker has no file input' : 'clicking it opened no file picker'}`
+      )
+    }
+    const resolved = await this.sendElementCdpCommand(
+      sessionName,
+      wc,
+      'DOM.resolveNode',
+      { backendNodeId: opened.backendNodeId },
+      opened.sessionId
+    )
+    const objectId = readString(readRecord(resolved, 'object'), 'objectId')
+    if (!objectId) {
+      throw new BrowserError('browser_error', `Could not resolve the file input ${element} opened`)
+    }
+    return { objectId, sessionId: opened.sessionId }
   }
 
   async wait(

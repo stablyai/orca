@@ -22,10 +22,7 @@ export async function interceptFileChooser(
   frameSessionId: string | undefined
 ): Promise<FileChooserInterception> {
   const sessionIds = [...new Set([undefined, frameSessionId])]
-  let resolveOpened: (opened: OpenedFileChooser) => void = () => {}
-  const opened = new Promise<OpenedFileChooser>((resolve) => {
-    resolveOpened = resolve
-  })
+  const { promise: opened, resolve: resolveOpened } = Promise.withResolvers<OpenedFileChooser>()
   const onMessage = (
     _event: unknown,
     method: string,
@@ -40,28 +37,32 @@ export async function interceptFileChooser(
   wc.debugger.on('message', onMessage)
   const release = async (): Promise<void> => {
     wc.debugger.removeListener('message', onMessage)
-    for (const sessionId of sessionIds) {
-      await sendGuestCdpCommand(
-        wc,
-        'Page.setInterceptFileChooserDialog',
-        { enabled: false },
-        sessionId
-      ).catch(() => {})
-    }
+    await Promise.all(
+      sessionIds.map((sessionId) =>
+        sendGuestCdpCommand(
+          wc,
+          'Page.setInterceptFileChooserDialog',
+          { enabled: false },
+          sessionId
+        ).catch(() => {})
+      )
+    )
   }
   try {
-    for (const sessionId of sessionIds) {
-      // Cross-site frame sessions report choosers only with Page on; the page session already has it.
-      if (sessionId !== undefined) {
-        await sendGuestCdpCommand(wc, 'Page.enable', {}, sessionId)
-      }
-      await sendGuestCdpCommand(
-        wc,
-        'Page.setInterceptFileChooserDialog',
-        { enabled: true },
-        sessionId
-      )
-    }
+    await Promise.all(
+      sessionIds.map(async (sessionId) => {
+        // Cross-site frame sessions report choosers only with Page on; the page session has it.
+        if (sessionId !== undefined) {
+          await sendGuestCdpCommand(wc, 'Page.enable', {}, sessionId)
+        }
+        await sendGuestCdpCommand(
+          wc,
+          'Page.setInterceptFileChooserDialog',
+          { enabled: true },
+          sessionId
+        )
+      })
+    )
   } catch (error) {
     await release()
     throw error
