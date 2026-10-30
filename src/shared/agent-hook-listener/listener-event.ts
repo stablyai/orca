@@ -51,6 +51,8 @@ export type AgentHookEventPayload = {
   toolAgentType?: string
   /** Provider-owned conversation/session id needed to resume a sleeping agent. */
   providerSession?: AgentProviderSessionMetadata
+  /** In-process status correlation only; never a new locator, persisted field or relay field. */
+  statusAdmissionSession?: string
   /** Session identity update with no turn-state transition; refreshes durable resume metadata without a fake status row. */
   providerSessionOnly?: boolean
   /** True when this event is a relay cache replay rather than a live hook. */

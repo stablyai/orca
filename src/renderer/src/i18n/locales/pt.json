@@ -2012,9 +2012,7 @@
         "jira": {
           "856083302c": "A conexão com o Jira foi substituída por uma solicitação mais recente."
         },
-        "linear": {
-          "37d36984d0": "A conexão com o Linear foi substituída por uma solicitação mais recente."
-        },
+        "linear": {},
         "orca": {
           "profiles": {
             "612f7f6861": "Falha ao criar o perfil",
@@ -7989,19 +7987,6 @@
           "191ac34567": "Orquestração de Agentes",
           "nestedWorkerDepthTitle": "Profundidade de worker aninhado",
           "nestedWorkerDepthDescription": "Quantas gerações de workers despachados podem gerar seus próprios workers. 1 mantém a árvore de agentes plana: um coordenador despacha workers, e esses workers não despacham.",
-          "chatErrorEscalationTitle": "Avisar o coordenador sobre erros do chat",
-          "chatErrorEscalationDescription": "Quando um agente atribuído encontra um erro que encerra seu turno, envia o erro exato ao coordenador que o atribuiu. A tarefa continua atribuída ao agente. Funciona apenas para agentes executados na interface de chat.",
-          "chatErrorEscalationNeedsChat": "Ative a interface de chat nas configurações experimentais para usar.",
-          "chatErrorEscalationKeywordError": "erro",
-          "chatErrorEscalationKeywordChat": "chat",
-          "heartbeatTitle": "Sinais de vida dos workers",
-          "heartbeatDescription": "Os workers atribuídos dão sinal a cada poucos minutos para que o coordenador distinga um agente trabalhando de um travado. Desativar reduz as mensagens para o coordenador, mas ele perde esse sinal de acompanhamento. Vale para workers atribuídos após a mudança.",
-          "heartbeatKeywordHeartbeat": "sinal de vida",
-          "heartbeatKeywordStalled": "travado",
-          "heartbeatKeywordInterval": "intervalo",
-          "heartbeatIntervalTitle": "Intervalo dos sinais de vida",
-          "heartbeatIntervalDescription": "Intervalos menores dão ao coordenador sinais mais frequentes, mas enviam mais mensagens. Intervalos maiores enviam menos mensagens, mas deixam mais tempo entre os sinais. Vale para workers atribuídos após a mudança.",
-          "heartbeatIntervalSuffix": "minutos",
           "7bc082f4de": "Copiar comando de instalação"
         },
         "RuntimeAccessGrantList": {
@@ -22576,12 +22561,7 @@
       "fetchMore": "Buscar mais",
       "connectionFailed": "Falha na conexão",
       "listLabel": "Lista do Linear",
-      "projectsLoadFailed": "Não foi possível carregar os projetos.",
       "projectNotFound": "O projeto não foi encontrado.",
-      "projectLoadFailed": "Não foi possível carregar o projeto.",
-      "projectIssuesLoadFailed": "Não foi possível carregar as issues do projeto.",
-      "viewsLoadFailed": "Não foi possível carregar as visualizações.",
-      "viewContentsLoadFailed": "Não foi possível carregar o conteúdo da visualização.",
       "issuesLoadFailed": "Não foi possível carregar as issues do Linear.",
       "apiKeyHint": "Cole uma chave de API pessoal do espaço de trabalho do Linear que deseja usar no Orca. Se ele já estiver conectado, o Orca substituirá a chave armazenada.",
       "remoteKeyStorage": "Esta chave é armazenada pelo ambiente de execução remoto ativo.",

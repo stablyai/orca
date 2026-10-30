@@ -1,5 +1,14 @@
 // @vitest-environment happy-dom
-import { act, cleanup, renderHook } from '@testing-library/react'
+import { act, cleanup, renderHook, render, screen } from '@testing-library/react'
+import { HoverCard } from '../ui/hover-card'
+import { WorkspaceDecisionHoverCard } from './workspace-space-decision-hover-card'
+import {
+  pickSpaceWindowState,
+  isSpaceWindowState,
+  spaceWindowStateChanged
+} from '../workspace-space/space-window-state'
+import { issue, readLinearIssueForTest } from '@/store/slices/linear-slice-test-harness'
+import { clearLinearRequestMaps } from '@/store/slices/linear/linear-slice-request-state'
 import { useStore } from 'zustand'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../../store/types'
@@ -17,6 +26,11 @@ import { useWorkspaceSpaceDecisionProjection } from './use-workspace-space-decis
 import { useWorkspaceSpaceManagerProjection } from './use-workspace-space-manager-projection'
 import { getWorkspaceSpaceWorktreeIdentity } from './workspace-space-delete-selection'
 
+const linearTransport = vi.hoisted(() => ({ detail: vi.fn() }))
+vi.mock('@/runtime/runtime-linear-issue-mutations', async (original) => ({
+  ...(await original<Record<string, unknown>>()),
+  linearGetIssue: linearTransport.detail
+}))
 let store: ReturnType<typeof createTestStore>
 vi.mock('../../store', () => ({
   useAppStore: Object.assign(
@@ -342,3 +356,62 @@ describe('Space git refresh scheduling', () => {
     expect(refreshWorkspaceGitStatus).toHaveBeenCalledTimes(2)
   })
 })
+
+it.each(['main', 'snapshot'] as const)(
+  'default Linear cache reaches the visible Space decision through %s state',
+  async (target) => {
+    seed([row('w0')])
+    store.setState({
+      worktreesByRepo: {
+        repo: [
+          makeWorktree({ id: 'w0', repoId: 'repo', hostId: 'local', linkedLinearIssue: 'DAT-124' })
+        ]
+      }
+    })
+    linearTransport.detail.mockResolvedValue({
+      ...issue('U'),
+      identifier: 'DAT-124',
+      title: 'Provider title',
+      state: { name: 'Done', type: 'completed', color: '#888888' }
+    })
+    clearLinearRequestMaps()
+    await readLinearIssueForTest(
+      store.getState().fetchLinearIssue('DAT-124', undefined, { force: true })
+    )
+    const sourceStore = store
+    function publishSnapshot() {
+      const snapshot = pickSpaceWindowState(sourceStore.getState())
+      expect(isSpaceWindowState(snapshot)).toBe(true)
+      store.setState(snapshot)
+    }
+    if (target === 'snapshot') {
+      store = createTestStore()
+      publishSnapshot()
+    }
+    function Decision() {
+      const projection = useWorkspaceSpaceDecisionProjection(useWorkspaceSpaceManagerBindings())
+      const details = projection.decisionDetailsByWorktreeId.get('local|w0')!
+      return (
+        <HoverCard open>
+          <WorkspaceDecisionHoverCard
+            worktree={row('w0')}
+            details={details}
+            onOpenWorkspace={() => {}}
+          />
+        </HoverCard>
+      )
+    }
+    render(<Decision />)
+    expect(screen.getByText('DAT-124 Done: Provider title')).toBeTruthy()
+    const before = sourceStore.getState()
+    act(() => {
+      sourceStore.getState().patchLinearIssue('U', { title: 'Updated provider title' })
+      if (target === 'snapshot') {
+        publishSnapshot()
+      }
+    })
+    expect(spaceWindowStateChanged(before, sourceStore.getState())).toBe(true)
+    expect(screen.getByText('DAT-124 Done: Updated provider title')).toBeTruthy()
+    clearLinearRequestMaps()
+  }
+)

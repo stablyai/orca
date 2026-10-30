@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { z } from 'zod'
-import {
-  terminalSendAcceptedSchema,
-  terminalViewportUpdatedSchema,
-  terminalWriteUnreadReplySchema
-} from './terminal-reply-schema'
+import { terminalSendAcceptedSchema, terminalViewportUpdatedSchema } from './terminal-reply-schema'
 
 function reads<T>(schema: z.ZodType<T, unknown>, value: unknown): T {
   const parsed = schema.safeParse(value)
@@ -12,10 +8,6 @@ function reads<T>(schema: z.ZodType<T, unknown>, value: unknown): T {
     throw new Error(`expected a readable reply: ${parsed.error.message}`)
   }
   return parsed.data
-}
-
-function refuses(schema: z.ZodType<unknown, unknown>, value: unknown): boolean {
-  return !schema.safeParse(value).success
 }
 
 describe('a terminal send is delivered only on an exact true', () => {
@@ -58,13 +50,5 @@ describe('a viewport update projects both flags through an exact true', () => {
       updated: true,
       applied: true
     })
-  })
-})
-
-describe('the two terminal writes whose body nothing reads', () => {
-  it('takes every reply shape', () => {
-    expect(refuses(terminalWriteUnreadReplySchema, undefined)).toBe(false)
-    expect(refuses(terminalWriteUnreadReplySchema, null)).toBe(false)
-    expect(refuses(terminalWriteUnreadReplySchema, { changed: 1 })).toBe(false)
   })
 })

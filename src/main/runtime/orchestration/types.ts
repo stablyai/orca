@@ -190,9 +190,14 @@ export type FederatedDispatchRow = {
   remote_terminal_handle: string | null
   to_home_imported_sequence: number
   to_home_acknowledged_sequence: number
+  home_auto_release_at: string | null
+  home_auto_release_state: FederatedHomeAutoReleaseState | null
   created_at: string
   updated_at: string
 }
+
+/** The home's own deadline for a host that cannot release settled workers by itself. */
+export type FederatedHomeAutoReleaseState = 'armed' | 'ended'
 
 export type RemoteDispatchAttachmentRow = {
   home_run_id: string

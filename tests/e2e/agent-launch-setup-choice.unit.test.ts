@@ -35,7 +35,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   setAgentLaunchRecordStore(null)
-  closeTestJournalHostDatabase(directory)
+  await closeTestJournalHostDatabase(directory)
   vi.restoreAllMocks()
   await rm(directory, { recursive: true, force: true })
 })
@@ -113,7 +113,7 @@ describe('CLI setup choice across durable launch admission', () => {
     }
 
     setAgentLaunchRecordStore(null)
-    closeTestJournalHostDatabase(directory)
+    await closeTestJournalHostDatabase(directory)
     store = await openTestAgentSessionRecordStore(directory)
     setAgentLaunchRecordStore(store)
     const replay = runtimeStub({ settings: {} })
