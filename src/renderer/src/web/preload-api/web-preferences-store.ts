@@ -12,6 +12,11 @@ import {
   applyPRBotAuthorOverride,
   normalizePRBotAuthorOverrides
 } from '../../../../shared/pr-bot-author-overrides'
+import {
+  normalizeTuiAgentArgsRecord,
+  normalizeTuiAgentEnvRecord
+} from '../../../../shared/tui-agent-launch-defaults'
+import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
 import { readStoredWebRuntimeEnvironment } from '../web-runtime-environment'
 import {
   mergeSettings,
@@ -215,6 +220,21 @@ export async function syncRuntimeBackedSettings(
     )
   }
   Object.assign(runtimeUpdates, runtimeChatPermissionSetting(updates, false))
+  if ('agentDefaultArgs' in updates) {
+    runtimeUpdates.agentDefaultArgs = normalizeTuiAgentArgsRecord(updates.agentDefaultArgs)
+  }
+  if ('agentDefaultEnv' in updates) {
+    runtimeUpdates.agentDefaultEnv = normalizeTuiAgentEnvRecord(updates.agentDefaultEnv)
+  }
+  if ('defaultTuiAgent' in updates) {
+    runtimeUpdates.defaultTuiAgent = updates.defaultTuiAgent
+  }
+  if ('disabledTuiAgents' in updates) {
+    runtimeUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
+  }
+  if (typeof updates.agentStatusHooksEnabled === 'boolean') {
+    runtimeUpdates.agentStatusHooksEnabled = updates.agentStatusHooksEnabled
+  }
   if (Object.keys(runtimeUpdates).length === 0) {
     return localNext
   }
