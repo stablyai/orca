@@ -282,10 +282,11 @@ it('keeps drafts during acceptance, ignores unrelated store/host updates, and di
   expect(container.querySelector('h1')?.textContent).toContain('Bob account')
 })
 
+const { default: Project } = await vi.importActual<typeof ProjectViewModule>(
+  '@/components/github-project/ProjectViewWrapper'
+)
+
 it('updates the real retained Project selection, survives detail eviction, and reconciles its old store writer without changing Project metadata', async () => {
-  const { default: Project } = await vi.importActual<typeof ProjectViewModule>(
-    '@/components/github-project/ProjectViewWrapper'
-  )
   await act(async () =>
     context.root.render(
       <TooltipProvider>
@@ -486,6 +487,9 @@ it('keeps page-N navigation and a shared workspace raw callback through acceptan
       githubPerRepoPageLimit: 30,
       githubPageSize: 30,
       ...store.getState(),
+      appliedTaskQuery: parseTaskQuery(''),
+      githubWorkItemMutationQueryKey: 'q',
+      githubViewerLogin: 'alice',
       pagesRef,
       currentPageRef: { current: 0 },
       paginationGenerationRef: { current: 1 },

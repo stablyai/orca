@@ -30,6 +30,8 @@ import {
   draft
 } from './github-task-refresh.test-fixture'
 
+import * as translations from '@/i18n/i18n'
+
 import React, { act } from 'react'
 import { useStore } from 'zustand'
 import GitHubItemDialog from '@/components/github-item-dialog/open-dialog/github-item-dialog'
@@ -59,6 +61,8 @@ import type { TaskPageGitHubQuietRefreshPreludeModel } from '@/components/task-p
 
 import { runTaskPageGitHubLandingRefresh } from '@/components/task-page/github/task-page-github-landing-refresh-run'
 import type { TaskPageGitHubSearchPaginationModel } from '@/components/task-page/github/use-task-page-github-search-pagination'
+
+const actual = await vi.importActual<typeof translations>('@/i18n/i18n')
 
 it('clicks the real header/direct reader/settler and publishes accepted data to URL aliases, page-N, resume, drawer and two Project views', async () => {
   const { twin } = fixture()
@@ -92,8 +96,9 @@ it('clicks the real header/direct reader/settler and publishes accepted data to 
   await store.getState().fetchWorkItems(repo.id, repo.path, 30, 'legacy')
   const legacyKey = workItemsCacheKey(repo.id, 30, 'legacy')
   list.mockClear()
-  taskPageGitHubResumeCache.write(resume, 2, context.pages[2]!, Date.now())
-  const before = taskPageGitHubResumeCache.read(resume, 2)!.cachedAt
+  const cachedAt = 1_700_000_000_000
+  taskPageGitHubResumeCache.write(resume, 2, context.pages[2]!, cachedAt)
+  const before = taskPageGitHubResumeCache.read(resume, 2, cachedAt)!.cachedAt
   await mount()
   expect(direct).toHaveBeenCalledTimes(1)
   await click('Add Bob')
@@ -130,8 +135,8 @@ it('clicks the real header/direct reader/settler and publishes accepted data to 
     id: seed.id,
     title: 'Accepted title'
   })
-  expect(taskPageGitHubResumeCache.read(resume, 2)?.cachedAt).toBe(before)
-  expect(taskPageGitHubResumeCache.read(resume, 2)?.items[0].title).toBe('Accepted title')
+  expect(taskPageGitHubResumeCache.read(resume, 2, cachedAt)?.cachedAt).toBe(before)
+  expect(taskPageGitHubResumeCache.read(resume, 2, cachedAt)?.items[0].title).toBe('Accepted title')
   for (const entry of Object.values(store.getState().projectViewCache).filter(
     (entry) => entry !== remoteProject
   )) {
@@ -620,8 +625,6 @@ it('keeps a production-prefetched foreign legacy PR unchanged through real local
 })
 
 it('translates the real Refresh header tooltip and one failed DIRECT alert while preserving pending controls and retry', async () => {
-  const translations = await import('@/i18n/i18n')
-  const actual = await vi.importActual<typeof translations>('@/i18n/i18n')
   const translate = vi.spyOn(translations, 'translate').mockImplementation(actual.translate)
   const language = actual.i18n.language
   const prior = actual.i18n.hasResourceBundle('fr', 'translation')
@@ -653,9 +656,10 @@ it('translates the real Refresh header tooltip and one failed DIRECT alert while
     expect(button.classList.contains('size-7')).toBe(true)
     await act(async () => {
       button.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerType: 'mouse' }))
-      await new Promise((resolve) => setTimeout(resolve, 800))
     })
-    expect(document.querySelector('[role="tooltip"]')?.textContent).toBe('Actualiser la tâche')
+    await vi.waitFor(() => {
+      expect(document.querySelector('[role="tooltip"]')?.textContent).toBe('Actualiser la tâche')
+    })
     const pending = Promise.withResolvers<GitHubWorkItemDetails | null>()
     direct.mockReturnValueOnce(pending.promise)
     const beforeCalls = direct.mock.calls.length

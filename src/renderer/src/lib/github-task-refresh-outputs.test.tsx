@@ -47,8 +47,12 @@ import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 
 import type { useTaskPageGitHubWorkItemMutation } from '@/hooks/useTaskPageGitHubWorkItemMutation'
 
+const actualI18n = await vi.importActual<typeof i18n>('@/i18n/i18n')
+const { TaskPageGitHubList } = await vi.importActual<typeof ListModule>(
+  '@/components/task-page/github/List'
+)
+
 it('shows accepted ordinary pages and Project assignees through real row/chip/card readers, rollback and assignee-filter exits without changing twins', async () => {
-  const actualI18n = await vi.importActual<typeof i18n>('@/i18n/i18n')
   vi.spyOn(i18n, 'translate').mockImplementation(actualI18n.translate)
   const local = { ...seed, id: 'issue:5', assignees: [user('alice')] }
   const upstream = {
@@ -455,10 +459,6 @@ import { getRepoBackedTaskEmptyState } from '@/components/task-page/task-page-em
 import type { TaskPageComposerActionsModel } from '@/components/task-page/use-task-page-composer-actions'
 
 it('renders actual single-page empty and multipage exits, and navigates cached and unloaded numbered pages without changing a foreign row', async () => {
-  const { TaskPageGitHubList } = await vi.importActual<typeof ListModule>(
-    '@/components/task-page/github/List'
-  )
-  const actualI18n = await vi.importActual<typeof i18n>('@/i18n/i18n')
   vi.spyOn(i18n, 'translate').mockImplementation(actualI18n.translate)
   const local = { ...seed, id: 'issue:5', assignees: [user('bob')] }
   const foreign = { ...local, repoHostId: 'ssh:builder' as const, title: 'Foreign cached page' }
