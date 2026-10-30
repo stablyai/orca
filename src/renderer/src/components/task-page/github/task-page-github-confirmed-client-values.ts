@@ -111,7 +111,7 @@ export function isTaskPageGitHubScalarApplicable(
 }
 
 /** Index the actual one-slot entries; aliases affect applicability, never storage or lifetime. */
-export function createTaskPageGitHubScalarAuthorityIndex() {
+function captureTaskPageGitHubScalarEntries() {
   const entries = new Map<string, ConfirmedClientEntry>()
   const keyFor = (
     owner: string | undefined,
@@ -133,8 +133,31 @@ export function createTaskPageGitHubScalarAuthorityIndex() {
     sourceScope: string | null,
     observation: GitHubTaskObservation | undefined,
     family: string
-  ) => {
-    const entry = entries.get(keyFor(observation?.key, sourceScope, item.repoId, item.id, family))
-    return entry && isTaskPageGitHubScalarApplicable(entry, item, observation) ? entry : undefined
+  ) => entries.get(keyFor(observation?.key, sourceScope, item.repoId, item.id, family))
+}
+
+export function captureTaskPageGitHubScalarAuthorityIndex() {
+  const captured = captureTaskPageGitHubScalarEntries()
+  return (...args: Parameters<typeof captured>) => {
+    const entry = captured(...args)
+    return entry && isTaskPageGitHubScalarApplicable(entry, args[0], args[2]) ? entry : undefined
+  }
+}
+
+export function createTaskPageGitHubScalarAuthorityIndex() {
+  const captured = captureTaskPageGitHubScalarEntries()
+  return (...args: Parameters<typeof captured>) => {
+    const entry = captured(...args)
+    return entry &&
+      sameGitHubTaskObservation(entry.observation, args[2]) &&
+      getLastConfirmedClientValue(
+        entry.sourceScope,
+        entry.repoId,
+        entry.itemId,
+        entry.family,
+        parseGitHubIssueOrPRLink(args[0].url)?.slug ?? null
+      ) !== undefined
+      ? entry
+      : undefined
   }
 }

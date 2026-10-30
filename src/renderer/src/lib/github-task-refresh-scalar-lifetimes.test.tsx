@@ -410,6 +410,9 @@ it('seals the actual outer page updater across raw deletion and canonical siblin
       state: 'closed'
     })
   close('o')
+  const { createTaskPageGitHubScalarAuthorityIndex } =
+    await import('@/components/task-page/github/task-page-github-confirmed-client-values')
+  const liveScalar = createTaskPageGitHubScalarAuthorityIndex()
   const read = beginGitHubTaskRead(
     [{ repoId: repo.id, sourceContext: source }],
     undefined,
@@ -453,6 +456,7 @@ it('seals the actual outer page updater across raw deletion and canonical siblin
     expect(getGitHubTaskObservation(before[2]![0])).toEqual(getGitHubTaskObservation(row))
     deleteLastConfirmedClientValue(scope, repo.id, row.id, 'state')
     const afterDelete = queued!(current)
+    expect(liveScalar(row, scope, getGitHubTaskObservation(row), 'state')).toBeUndefined()
     close('upstream')
     const afterSibling = queued!(current)
     console.log('R6 outer scalar replay', JSON.stringify({ before, afterDelete, afterSibling }))

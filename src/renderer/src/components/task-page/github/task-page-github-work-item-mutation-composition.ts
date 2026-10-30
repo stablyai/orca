@@ -19,7 +19,7 @@ import {
   type ListComposition
 } from './task-page-github-work-item-mutation-registry'
 
-import { createTaskPageGitHubScalarAuthorityIndex } from './task-page-github-confirmed-client-values'
+import { captureTaskPageGitHubScalarAuthorityIndex } from './task-page-github-confirmed-client-values'
 
 import {
   taskPageGitHubMutationItemId,
@@ -134,7 +134,7 @@ export function createTaskPageGitHubAuthorityProjection() {
       group.familyOps[family] = pendingListOpsForFamily(group.ops, family)
     }
   }
-  const scalarFor = createTaskPageGitHubScalarAuthorityIndex()
+  const scalarFor = captureTaskPageGitHubScalarAuthorityIndex()
   const compose = (
     item: ObservedGitHubWorkItem,
     sourceScope: string | null,
