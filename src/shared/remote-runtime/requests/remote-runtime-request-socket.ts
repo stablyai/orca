@@ -227,7 +227,7 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
       finishError(
         new RemoteRuntimeClientError(
           'remote_runtime_unavailable',
-          remoteRuntimeConnectFailureMessage(error, connection.endpoint),
+          remoteRuntimeConnectFailureMessage(error, protocol.endpoint),
           { pairingStage: router.pairingStage }
         )
       )

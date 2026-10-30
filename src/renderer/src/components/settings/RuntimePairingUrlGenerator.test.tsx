@@ -2,7 +2,7 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
@@ -35,6 +35,8 @@ vi.mock('./RuntimePairingGeneratorForm', () => ({
 }))
 
 import { RuntimePairingUrlGenerator } from './RuntimePairingUrlGenerator'
+import { createMobileRelayPairingFixtures } from '../../../../shared/mobile-relay-pairing-fixtures'
+import { encodePairingOffer } from '../../../../shared/pairing'
 import { runtimePairingLinkCache } from './runtime-pairing-link-state'
 
 describe('RuntimePairingUrlGenerator', () => {
@@ -46,6 +48,7 @@ describe('RuntimePairingUrlGenerator', () => {
     runtimePairingLinkCache.runtimePairingUrl = null
     runtimePairingLinkCache.webClientUrl = null
     runtimePairingLinkCache.runtimePairingDeviceId = null
+    runtimePairingLinkCache.inviteExpiresAt = null
     mocks.listNetworkInterfaces.mockReset()
     mocks.listRuntimeAccessGrants.mockReset().mockResolvedValue({ grants: [] })
     mocks.getRuntimePairingUrl.mockReset().mockResolvedValue({
@@ -69,7 +72,44 @@ describe('RuntimePairingUrlGenerator', () => {
 
   afterEach(() => {
     cleanup()
+    vi.useRealTimers()
   })
+
+  it.each([false, true])(
+    'hides expired Relay codes, including after reopening (reopen: %s)',
+    async (reopen) => {
+      vi.useFakeTimers()
+      const offer = createMobileRelayPairingFixtures(Date.now()).find(
+        (fixture) => fixture.name === 'relay offer with runtime scope'
+      )?.expected
+      if (!offer?.relay) {
+        throw new Error('Expected a Relay fixture')
+      }
+      const pairingUrl = encodePairingOffer(offer)
+      runtimePairingLinkCache.intent = 'relay'
+      runtimePairingLinkCache.selectedAddress = '127.0.0.1'
+      mocks.listNetworkInterfaces.mockResolvedValue({ interfaces: [] })
+      mocks.getRuntimePairingUrl.mockResolvedValue({
+        available: true,
+        pairingUrl,
+        webClientUrl: null,
+        deviceId: 'runtime-1'
+      })
+      const view = render(<RuntimePairingUrlGenerator />)
+      await act(async () => screen.getByRole('button', { name: 'Generate' }).click())
+      expect(screen.getByText(pairingUrl)).toBeInTheDocument()
+      if (reopen) {
+        view.unmount()
+      }
+      act(() => vi.advanceTimersByTime(offer.relay.inviteExpiresAt - Date.now()))
+      if (reopen) {
+        render(<RuntimePairingUrlGenerator />)
+      }
+      expect(screen.queryByText(pairingUrl)).toBeNull()
+      expect(runtimePairingLinkCache.runtimePairingUrl).toBeNull()
+      expect(screen.getByRole('button', { name: 'Generate' })).toBeInTheDocument()
+    }
+  )
 
   it('keeps the cached address while interfaces are loading', async () => {
     let resolveInterfaces!: (value: { interfaces: { name: string; address: string }[] }) => void

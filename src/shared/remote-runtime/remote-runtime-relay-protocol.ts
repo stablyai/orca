@@ -103,17 +103,19 @@ export function openAfterRemoteRuntimeRelayResolution(
   ready: () => void,
   failed: (error: RemoteRuntimeClientError) => void
 ): void {
+  const open = (): void => {
+    try {
+      ready()
+    } catch (error) {
+      failed(relayRuntimeClientError(error))
+    }
+  }
   if (!connection.relayConnection) {
-    ready()
+    open()
     return
   }
-  void resolveRemoteRuntimeRelay(connection).then(ready, () =>
-    failed(
-      new RemoteRuntimeClientError(
-        'remote_runtime_unavailable',
-        'Could not resolve the Relay host.'
-      )
-    )
+  void resolveRemoteRuntimeRelay(connection).then(open, (error) =>
+    failed(relayRuntimeClientError(error))
   )
 }
 

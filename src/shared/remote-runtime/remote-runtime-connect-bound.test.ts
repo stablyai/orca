@@ -1,3 +1,4 @@
+import { deriveRelayHostId } from '../relay-host-id'
 import { pairedRuntimeConnectionFromOffer } from '../paired-runtime-connection'
 import { createServer, type Server, type Socket } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -58,49 +59,75 @@ describe('remote runtime connect bound', () => {
     expect(options.maxPayload).toBe(1024)
   })
 
-  it('reports an unanswered host as unreachable rather than as an empty result', async () => {
-    const endpoint = await listenSilentUpgradeServer()
-    const keyPair = generateKeyPair()
-    const onError = vi.fn()
-    const onTextFrame = vi.fn()
+  it.each([false, true])(
+    'reports the dialed endpoint for an unanswered host (Relay: %s)',
+    async (relay) => {
+      const endpoint = await listenSilentUpgradeServer()
+      const keyPair = generateKeyPair()
+      const onError = vi.fn()
+      const onTextFrame = vi.fn()
 
-    const opened = openRemoteRuntimeWebSocket(
-      pairedRuntimeConnectionFromOffer({
-        v: 2,
-        endpoint,
-        deviceToken: 'device-token',
-        publicKeyB64: publicKeyToBase64(keyPair.publicKey)
-      }),
-      { onClose: vi.fn(), onError, onTextFrame },
-      150
-    )
-    if (!opened.ok) {
-      throw opened.error
+      const directEndpoint = relay ? 'ws://127.0.0.1:6768' : endpoint
+      const cellUrl = endpoint.replace(/^ws:/, 'https:')
+      const relayHostId = deriveRelayHostId(keyPair.publicKey)
+      const dialedEndpoint = relay ? cellUrl.replace(/^https:/, 'wss:') : endpoint
+      const opened = openRemoteRuntimeWebSocket(
+        pairedRuntimeConnectionFromOffer({
+          v: 2,
+          endpoint: directEndpoint,
+          ...(relay
+            ? {
+                relay: {
+                  v: 1 as const,
+                  directorUrl: cellUrl,
+                  cellUrl,
+                  assignmentEpoch: 1,
+                  relayHostId,
+                  inviteToken: 'I'.repeat(43),
+                  inviteExpiresAt: Date.now() + 60_000,
+                  e2eeFraming: 2 as const
+                }
+              }
+            : {}),
+          deviceToken: 'device-token',
+          publicKeyB64: publicKeyToBase64(keyPair.publicKey)
+        }),
+        { onClose: vi.fn(), onError, onTextFrame },
+        150
+      )
+      if (!opened.ok) {
+        throw opened.error
+      }
+
+      await vi.waitFor(() => expect(onError).toHaveBeenCalledTimes(1), {
+        timeout: 5_000
+      })
+
+      // The bounded path was taken: a connect failure, not a silent empty answer.
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: vi mock call args are untyped; this subscription's onError is only ever invoked with a RemoteRuntimeClientError.
+      const error = onError.mock.calls[0][1] as RemoteRuntimeClientError
+      expect(error.code).toBe('remote_runtime_unavailable')
+      expect(error.message).toContain(dialedEndpoint)
+      if (relay) {
+        expect(error.message).not.toContain(directEndpoint)
+      }
+      expect(error.message).toContain('unverifiable')
+      expect(onTextFrame).not.toHaveBeenCalled()
+
+      // Loss of contact is never evidence the host's work stopped.
+      expect(error.message).not.toMatch(/\b(exited|gone|stopped|empty|no terminals)\b/i)
+
+      // Subscribe IPC drops code; the real message must remain recoverable or pane recovery stops.
+      expect(isRecoverableRemoteRuntimeConnectionError({ message: error.message })).toBe(true)
+      // ...and must still earn the Tailscale remedy, which is gated on the same phrase.
+      if (!relay) {
+        expect(withRemoteRuntimeTailscaleHint(error.message, endpoint)).not.toBe(error.message)
+      }
+
+      opened.socket.cleanup()
+      opened.socket.ws.terminate()
     }
-
-    await vi.waitFor(() => expect(onError).toHaveBeenCalledTimes(1), {
-      timeout: 5_000
-    })
-
-    // The bounded path was taken: a connect failure, not a silent empty answer.
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: vi mock call args are untyped; this subscription's onError is only ever invoked with a RemoteRuntimeClientError.
-    const error = onError.mock.calls[0][1] as RemoteRuntimeClientError
-    expect(error.code).toBe('remote_runtime_unavailable')
-    expect(error.message).toContain(endpoint)
-    expect(error.message).toContain('unverifiable')
-    expect(onTextFrame).not.toHaveBeenCalled()
-
-    // Loss of contact is never evidence the host's work stopped.
-    expect(error.message).not.toMatch(/\b(exited|gone|stopped|empty|no terminals)\b/i)
-
-    // Subscribe IPC drops code; the real message must remain recoverable or pane recovery stops.
-    expect(isRecoverableRemoteRuntimeConnectionError({ message: error.message })).toBe(true)
-    // ...and must still earn the Tailscale remedy, which is gated on the same phrase.
-    expect(withRemoteRuntimeTailscaleHint(error.message, endpoint)).not.toBe(error.message)
-
-    opened.socket.cleanup()
-    opened.socket.ws.terminate()
-  })
+  )
 
   it('only calls an elapsed handshake a connect timeout', () => {
     expect(isRemoteRuntimeConnectTimeout(handshakeTimeoutError())).toBe(true)

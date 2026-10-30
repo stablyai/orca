@@ -1,3 +1,4 @@
+import { resolveRemoteConnection } from '../../cli/runtime/runtime-remote-pairing'
 import { createHash } from 'node:crypto'
 import { createServer } from 'node:https'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -244,6 +245,38 @@ describe('desktop runtime over Relay', () => {
     expect(host.methods.filter((method) => method === 'pairing.provisionRelay')).toHaveLength(1)
   })
 
+  it.each([401, 403])(
+    'requests re-pairing when the director rejects a saved credential with %s',
+    async (status) => {
+      const host = await relayHost()
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-relay-auth-'))
+      cleanups.push(() => rmSync(userDataPath, { recursive: true, force: true }))
+      const paired = await verifyAndAddRuntimeEnvironmentFromPairingCode(userDataPath, {
+        name: 'Desktop',
+        pairingCode: host.pairingCode
+      })
+      if (!paired.ok) {
+        throw new Error(paired.message)
+      }
+      const connection = getPreferredPairedRuntimeConnection(
+        resolveEnvironment(userDataPath, paired.environment.id)
+      )
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => new Response(null, { status }))
+      )
+      const onAuthenticationRejected = vi.fn()
+      const control = new RemoteRuntimeSharedControlConnection(connection, {
+        onAuthenticationRejected
+      })
+      cleanups.push(() => control.close())
+      await expect(control.request('status.get', undefined, 5000)).rejects.toMatchObject({
+        code: 'unauthorized'
+      })
+      expect(onAuthenticationRejected).toHaveBeenCalledOnce()
+    }
+  )
+
   it('pairs over loopback-only advertised reach, saves resume credentials, and serves requests, shared control and encrypted terminal data', async () => {
     const host = await relayHost()
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-relay-'))
@@ -259,8 +292,12 @@ describe('desktop runtime over Relay', () => {
     const saved = resolveEnvironment(userDataPath, paired.environment.id)
     const connection = getPreferredPairedRuntimeConnection(saved)
     expect(connection.relayConnection?.credentialKind).toBe('resume')
+    const cliConnection = resolveRemoteConnection(userDataPath, null, saved.id)
+    if (!cliConnection) {
+      throw new Error('Expected a saved CLI connection')
+    }
     await expect(
-      sendRemoteRuntimeRequest(connection, 'status.get', undefined, 5000)
+      sendRemoteRuntimeRequest(cliConnection, 'status.get', undefined, 5000)
     ).resolves.toMatchObject({ ok: true, result: { deviceScope: 'runtime' } })
     const control = new RemoteRuntimeSharedControlConnection(connection)
     cleanups.push(() => control.close())

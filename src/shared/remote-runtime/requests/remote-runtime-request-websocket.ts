@@ -56,7 +56,7 @@ export function openRemoteRuntimeWebSocket(
       error instanceof RemoteRuntimeClientError
         ? error
         : remoteRuntimeUnavailableError(
-            remoteRuntimeConnectFailureMessage(error, connection.endpoint)
+            remoteRuntimeConnectFailureMessage(error, protocol.endpoint)
           )
     )
   }

@@ -3,7 +3,8 @@ import {
   type PairedRuntimeConnection
 } from '../../shared/paired-runtime-connection'
 import { parsePairingCode } from '../../shared/pairing'
-import { resolveEnvironmentPairingOffer } from './environments'
+import { resolveEnvironment } from './environments'
+import { getPreferredPairedRuntimeConnection } from '../../shared/runtime-environments'
 import { RuntimeClientError } from './types'
 
 export function resolveRemoteConnection(
@@ -18,8 +19,8 @@ export function resolveRemoteConnection(
     )
   }
   if (environmentSelector) {
-    return pairedRuntimeConnectionFromOffer(
-      resolveEnvironmentPairingOffer(userDataPath, environmentSelector)
+    return getPreferredPairedRuntimeConnection(
+      resolveEnvironment(userDataPath, environmentSelector)
     )
   }
   if (!pairingCode) {
