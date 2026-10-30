@@ -3,6 +3,7 @@ import { useRouter, useFocusEffect } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AccountsSnapshot } from '../components/AccountUsage'
 import { hasRenderableUsage } from '../components/AccountUsage'
+import { hasDeepSeekAccountUsage } from '../components/deepseek-account-usage'
 import { loadHomeSnapshot, saveHomeSnapshot } from '../cache/home-snapshot-cache'
 import { getCachedWorktrees, setCachedWorktrees } from '../cache/worktree-cache'
 import {
@@ -153,7 +154,9 @@ export function useMobileHomeData() {
       if (
         connections.hostStates[host.id] === 'connected' &&
         snapshot &&
-        (hasRenderableUsage(snapshot, 'claude') || hasRenderableUsage(snapshot, 'codex'))
+        (hasRenderableUsage(snapshot, 'claude') ||
+          hasRenderableUsage(snapshot, 'codex') ||
+          hasDeepSeekAccountUsage(snapshot))
       ) {
         items.push({ host, snapshot })
       }
