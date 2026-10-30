@@ -20,6 +20,10 @@ import { PANE_PTY_RESIZE_HOLD_FLUSH_EVENT } from '@/lib/pane-manager/pane-pty-re
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import { createUnservedSshRowTransport } from './pty-connection/unserved-ssh-pane-connect'
 import type { LegacyRelayBridgedPane } from '../../../../shared/legacy-relay-bridge-contract'
+import {
+  createRemoteRuntimeTransportMocks,
+  type MultiplexSubscriptionCallbacks
+} from './remote-runtime-pty-transport-test-harness'
 
 const state = vi.hoisted(() => ({
   codexRestartNoticeByPtyId: {},
@@ -36,9 +40,25 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-it.each(['managed', 'unserved'])(
+it.each(['managed', 'unserved', 'recovered-inner'])(
   'opens a direct link through a live %s legacy bridge and the real input-owner binding',
   async (wrapper) => {
+    const actualWindow = window
+    const subscription: { callbacks: MultiplexSubscriptionCallbacks } = { callbacks: null }
+    let handle = 'terminal-1'
+    const runtime = createRemoteRuntimeTransportMocks({
+      getCallbacks: () => subscription.callbacks,
+      setCallbacks: (next) => {
+        subscription.callbacks = next
+      },
+      getResolvedPaneHandle: () => handle,
+      setResolvedPaneHandle: (next) => {
+        handle = next
+      }
+    })
+    if (wrapper === 'recovered-inner') {
+      runtime.resetRemoteRuntimeTransport()
+    }
     const ptyId = 'ssh:box@@pty2:0360053e-409a-415b-8dee-dd911e8330ba:3'
     const url = 'https://example.com'
     const bridgeWrite = vi.fn()
@@ -49,9 +69,9 @@ it.each(['managed', 'unserved'])(
     doubles.storeState.settings = { openLinksInApp: false, openLinksInAppPreferencePrompted: true }
     registerHttpLinkStoreAccessor(() => doubles.storeState)
     vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' })
-    const actualWindow = window
     vi.stubGlobal('window', {
       api: {
+        runtimeEnvironments: { call: runtime.runtimeCall, subscribe: runtime.runtimeSubscribe },
         platform: { get: () => ({ platform: 'darwin' }) },
         shell: { openUrl: doubles.openUrlMock },
         legacyRelayBridge: {
@@ -71,7 +91,17 @@ it.each(['managed', 'unserved'])(
       addEventListener: actualWindow.addEventListener.bind(actualWindow),
       removeEventListener: actualWindow.removeEventListener.bind(actualWindow)
     })
-    const inner = createIpcPtyTransport()
+    const inner =
+      wrapper === 'recovered-inner'
+        ? (await import('./remote-runtime-pty-transport')).createRemoteRuntimePtyTransport(
+            'env-1',
+            {
+              worktreeId: 'wt-1',
+              tabId: 'tab-1',
+              leafId: LEAF_1
+            }
+          )
+        : createIpcPtyTransport()
     const emulator = new Terminal({ allowProposedApi: true })
     const element = document.createElement('div')
     const screen = document.createElement('div')
@@ -126,9 +156,31 @@ it.each(['managed', 'unserved'])(
       () => transport.detach?.(),
       () => inner.detach?.()
     )
-    await transport.connect({ url: '', sessionId: ptyId, callbacks: {} })
+    await transport.connect({
+      url: '',
+      sessionId: wrapper === 'recovered-inner' ? undefined : ptyId,
+      callbacks: {}
+    })
+    const ack = (): void =>
+      subscription.callbacks?.onResponse({
+        ok: true,
+        result: {
+          type: 'subscribed',
+          streamId: runtime.latestSubscribePayload().streamId,
+          terminal: handle,
+          launchResult: { ptyId: 'pty', incarnationId: 'i1' }
+        }
+      })
+    if (wrapper === 'recovered-inner') {
+      await vi.waitFor(() => expect(runtime.subscribeFrameCount()).toBe(1))
+      ack()
+      runtime.emitSnapshot(runtime.latestSubscribePayload().streamId, url)
+      expect(transport.getInputSource?.()?.isCurrent()).toBe(true)
+      expect(inner.getInputSource?.()?.endpoint?.incarnationId).toBe('i1')
+    } else {
+      expect(inner.getInputSource?.()).toBeNull()
+    }
     expect(transport.isConnected()).toBe(true)
-    expect(inner.getInputSource?.()).toBeNull()
     installPtyInputForward(session)
     cleanup.push(() => {
       session.onDataDisposable.dispose()
@@ -143,8 +195,28 @@ it.each(['managed', 'unserved'])(
       emulator.dispose()
       element.remove()
     })
-    emulator.input('ordinary-positive', true)
-    expect(bridgeWrite).toHaveBeenCalledWith({ ptyId, data: 'ordinary-positive' })
+    if (wrapper === 'recovered-inner') {
+      const sourceA = inner.getInputSource?.()
+      emulator.input('before-recovery', true)
+      await vi.waitFor(() => expect(runtime.inputFrameTexts().join('')).toBe('before-recovery'))
+      subscription.callbacks?.onError?.({
+        code: 'remote_runtime_unavailable',
+        message: 'Remote runtime connection closed.'
+      })
+      await vi.waitFor(() => expect(runtime.subscribeFrameCount()).toBe(2))
+      ack()
+      runtime.emitSnapshot(runtime.latestSubscribePayload().streamId, url)
+      expect(inner.getInputSource?.()).toBe(sourceA)
+      expect(sourceA?.isCurrent()).toBe(true)
+      expect(sourceA?.endpoint?.incarnationId).toBe('i1')
+      runtime.subscriptionSendBinary.mockClear()
+      emulator.input('ordinary-positive', true)
+      await vi.waitFor(() => expect(runtime.inputFrameTexts().join('')).toBe('ordinary-positive'))
+      runtime.subscriptionSendBinary.mockClear()
+    } else {
+      emulator.input('ordinary-positive', true)
+      expect(bridgeWrite).toHaveBeenCalledWith({ ptyId, data: 'ordinary-positive' })
+    }
     bridgeWrite.mockClear()
     element.addEventListener('mousedown', () => emulator.input('\x1b[<0;2;1M', true))
     let committed = false
@@ -182,5 +254,6 @@ it.each(['managed', 'unserved'])(
     expect(clearSelection).toHaveBeenCalledOnce()
     expect(doubles.openUrlMock).toHaveBeenCalledExactlyOnceWith(url)
     expect(bridgeWrite).not.toHaveBeenCalled()
+    expect(runtime.inputFrameTexts()).toEqual([])
   }
 )
