@@ -19108,6 +19108,20 @@
       "useKnownId": "Use known user ID \"{{value0}}\""
     },
     "native-chat": {
+      "textAttachmentPreview": {
+        "copiedContents": "Copied contents",
+        "textAttachment": "Text attachment",
+        "byteSize": "{{size}} bytes",
+        "copyContents": "Copy contents",
+        "saveFile": "Save file",
+        "copyTooLarge": "This file is too large to copy. Save it instead.",
+        "first": "First",
+        "page": "Page",
+        "attachmentPage": "Attachment page",
+        "section": "Section {{section}}/{{sections}}",
+        "last": "Last",
+        "exportError": "Unable to export attachment. Try again."
+      },
       "install": {
         "checking": "Checking whether {{agent}} is ready on this host…"
       },

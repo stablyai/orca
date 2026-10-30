@@ -9,7 +9,8 @@ import {
   SheetDescription
 } from '@/components/ui/sheet'
 import { isWebClientLocation } from '@/lib/web-client-location'
-import { getIntlLocale } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { createAttachmentTextPreviewHook } from '../../../../shared/use-attachment-text-preview'
 import { ATTACHMENT_TEXT_COPY_MAX_BYTES } from '../../../../shared/attachment-text-source'
@@ -33,12 +34,16 @@ export function NativeChatTextAttachmentPreview({
   target: RuntimeClientTarget | null
   onClose: () => void
 }) {
+  useUiLanguageRevision()
   const read = useMemo(() => createChatAttachmentReader(target, text), [target, text])
   const { source, display, busy, error, setError, setBusy, load, retry } = useAttachmentTextPreview(
     path,
     read
   )
-  const name = text === undefined ? chatTextAttachmentName(path) : 'Pasted text'
+  const name =
+    text === undefined
+      ? chatTextAttachmentName(path)
+      : translate('components.native-chat.composer.pastedTextLabel', 'Pasted text')
   const run = async (action: 'copy' | 'save') => {
     setBusy(true)
     setError('')
@@ -48,7 +53,12 @@ export function NativeChatTextAttachmentPreview({
         source.assertCurrent()
         await window.api.ui.writeClipboardText(content)
         source.assertCurrent()
-        toast.success('Copied contents')
+        toast.success(
+          translate(
+            'components.native-chat.textAttachmentPreview.copiedContents',
+            'Copied contents'
+          )
+        )
       } else if (isWebClientLocation()) {
         const chunks: Uint8Array<ArrayBuffer>[] = []
         for await (const bytes of source.bytes()) {
@@ -97,7 +107,14 @@ export function NativeChatTextAttachmentPreview({
       }
     } catch (cause) {
       if (!source.disposed) {
-        setError(cause instanceof Error ? cause.message : 'Unable to export attachment. Try again.')
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : translate(
+                'components.native-chat.textAttachmentPreview.exportError',
+                'Unable to export attachment. Try again.'
+              )
+        )
       }
     } finally {
       if (!source.disposed) {
@@ -122,8 +139,15 @@ export function NativeChatTextAttachmentPreview({
           <SheetTitle>{name}</SheetTitle>
           <SheetDescription className="break-all">
             {source.size === null
-              ? 'Text attachment'
-              : `${source.size.toLocaleString(getIntlLocale())} bytes`}
+              ? translate(
+                  'components.native-chat.textAttachmentPreview.textAttachment',
+                  'Text attachment'
+                )
+              : translate(
+                  'components.native-chat.textAttachmentPreview.byteSize',
+                  '{{size}} bytes',
+                  { size: source.size.toLocaleString(getIntlLocale()) }
+                )}
           </SheetDescription>
         </SheetHeader>
         <div className="flex flex-wrap gap-2 px-4">
@@ -133,7 +157,10 @@ export function NativeChatTextAttachmentPreview({
             disabled={busy || source.size === null || copyTooLarge}
             onClick={() => void run('copy')}
           >
-            Copy contents
+            {translate(
+              'components.native-chat.textAttachmentPreview.copyContents',
+              'Copy contents'
+            )}
           </Button>
           <Button
             variant="outline"
@@ -141,7 +168,7 @@ export function NativeChatTextAttachmentPreview({
             disabled={busy || source.size === null}
             onClick={() => void run('save')}
           >
-            Save file
+            {translate('components.native-chat.textAttachmentPreview.saveFile', 'Save file')}
           </Button>
           {busy ? (
             <Button
@@ -152,20 +179,23 @@ export function NativeChatTextAttachmentPreview({
                 onClose()
               }}
             >
-              Cancel
+              {translate('common.cancel', 'Cancel')}
             </Button>
           ) : null}
         </div>
         {copyTooLarge ? (
           <p className="px-4 text-sm text-muted-foreground">
-            This file is too large to copy. Save it instead.
+            {translate(
+              'components.native-chat.textAttachmentPreview.copyTooLarge',
+              'This file is too large to copy. Save it instead.'
+            )}
           </p>
         ) : null}
         {error ? (
           <div role="alert" className="px-4 text-sm">
             <p>{error}</p>
             <Button variant="outline" size="sm" disabled={busy} onClick={retry}>
-              Retry
+              {translate('common.retry', 'Retry')}
             </Button>
           </div>
         ) : null}
@@ -183,7 +213,7 @@ export function NativeChatTextAttachmentPreview({
             disabled={busy || !display || (display.page === 0 && display.subpage === 0)}
             onClick={() => void load(0)}
           >
-            First
+            {translate('components.native-chat.textAttachmentPreview.first', 'First')}
           </Button>
           <Button
             variant="ghost"
@@ -197,12 +227,15 @@ export function NativeChatTextAttachmentPreview({
               )
             }
           >
-            Previous
+            {translate('auto.components.TaskPage.297a805b64', 'Previous')}
           </Button>
           <label>
-            Page{' '}
+            {translate('components.native-chat.textAttachmentPreview.page', 'Page')}{' '}
             <input
-              aria-label="Attachment page"
+              aria-label={translate(
+                'components.native-chat.textAttachmentPreview.attachmentPage',
+                'Attachment page'
+              )}
               className="w-16 rounded border bg-background px-1"
               type="number"
               min={1}
@@ -218,7 +251,15 @@ export function NativeChatTextAttachmentPreview({
             />{' '}
             / {source.pageCount}
           </label>
-          <span>{display ? `Section ${display.subpage + 1}/${display.subpages}` : ''}</span>
+          <span>
+            {display
+              ? translate(
+                  'components.native-chat.textAttachmentPreview.section',
+                  'Section {{section}}/{{sections}}',
+                  { section: display.subpage + 1, sections: display.subpages }
+                )
+              : ''}
+          </span>
           <Button
             variant="ghost"
             size="sm"
@@ -235,7 +276,7 @@ export function NativeChatTextAttachmentPreview({
               )
             }
           >
-            Next
+            {translate('auto.components.TaskPage.b73717af92', 'Next')}
           </Button>
           <Button
             variant="ghost"
@@ -243,7 +284,7 @@ export function NativeChatTextAttachmentPreview({
             disabled={busy || !display}
             onClick={() => void load(source.pageCount - 1, Number.MAX_SAFE_INTEGER)}
           >
-            Last
+            {translate('components.native-chat.textAttachmentPreview.last', 'Last')}
           </Button>
         </div>
       </SheetContent>

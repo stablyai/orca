@@ -1,5 +1,8 @@
 // @vitest-environment happy-dom
-import { StrictMode, useContext, useState, useMemo } from 'react'
+import { Profiler, StrictMode, useContext, useState, useMemo } from 'react'
+import { toast } from 'sonner'
+import { i18n } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -37,7 +40,9 @@ const target = { kind: 'environment', environmentId: 'env-text' } as const
 const bytes = Buffer.from(['\ufeffstart\r\n', '🙂'.repeat(20_000), 'end'].join(''))
 let capable = true
 
-beforeEach(() => {
+beforeEach(async () => {
+  await i18n.changeLanguage('en')
+  vi.mocked(toast.success).mockClear()
   capable = true
   mocks.context = null
   mocks.web = false
@@ -76,7 +81,10 @@ beforeEach(() => {
     }
   })
 })
-afterEach(cleanup)
+afterEach(async () => {
+  cleanup()
+  await i18n.changeLanguage('en')
+})
 
 const waitUntilEnabled = (name: string) =>
   waitFor(() => expect(screen.getByRole('button', { name }).hasAttribute('disabled')).toBe(false))
@@ -105,6 +113,9 @@ it('keeps terminal text unchanged and does no body reads until a structured refe
   ).toHaveLength(1)
   fireEvent.click(screen.getByRole('button', { name: 'Copy contents' }))
   await waitFor(() => expect(mocks.write).toHaveBeenCalledWith(bytes.toString('utf8')))
+  await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Copied contents'))
+  expect(screen.getByText('Section 1/1')).toBeTruthy()
+  expect(screen.getByRole('spinbutton', { name: 'Attachment page' })).toBeTruthy()
   await waitUntilEnabled('Save file')
   fireEvent.click(screen.getByRole('button', { name: 'Save file' }))
   await waitFor(() => expect(mocks.finish).toHaveBeenCalled())
@@ -265,4 +276,69 @@ it('exports all raw web bytes and cancels desktop picker/output failures', async
   await screen.findByText('Output failed')
   expect(mocks.cancel).toHaveBeenCalledWith({ transferId: 'output' })
   expect(mocks.finish).not.toHaveBeenCalled()
+})
+
+it('updates only open preview chrome from language resources without replacing its source', async () => {
+  const language = 'fr-x-pr35636'
+  const commits = vi.fn()
+  const closedChat = vi.fn(() => <span>Other chat</span>)
+  const ClosedChat = closedChat
+  const activeWorktreeId = useAppStore.getState().activeWorktreeId
+  i18n.addResourceBundle(language, 'translation', {
+    components: {
+      'native-chat': {
+        textAttachmentPreview: {
+          copyContents: 'Copier le contenu',
+          copiedContents: 'Contenu copié',
+          attachmentPage: 'Page de la pièce jointe',
+          section: 'Partie {{section}}/{{sections}}'
+        }
+      }
+    }
+  })
+  try {
+    render(
+      <>
+        <ClosedChat />
+        <Profiler id="preview35636" onRender={commits}>
+          <NativeChatTextAttachmentPreview path={path} target={target} onClose={() => {}} />
+        </Profiler>
+      </>
+    )
+    await waitUntilEnabled('Copy contents')
+    const input = screen.getByRole('spinbutton', { name: 'Attachment page' })
+    const initialCommits = commits.mock.calls.length
+    const initialClosedRenders = closedChat.mock.calls.length
+    const initialReads = mocks.rpc.mock.calls.length
+    await act(async () => useAppStore.setState({ activeWorktreeId: 'unrelated35636' }))
+    expect(commits).toHaveBeenCalledTimes(initialCommits)
+    expect(closedChat).toHaveBeenCalledTimes(initialClosedRenders)
+    await act(async () => {
+      await i18n.changeLanguage(language)
+    })
+    expect(screen.getByRole('spinbutton', { name: 'Page de la pièce jointe' })).toBe(input)
+    expect(screen.getByText('Partie 1/1')).toBeTruthy()
+    expect(commits.mock.calls.length).toBeGreaterThan(initialCommits)
+    const languageCommits = commits.mock.calls.length
+    await act(async () => {
+      i18n.addResource(
+        language,
+        'translation',
+        'components.native-chat.textAttachmentPreview.copyContents',
+        'Copier tout'
+      )
+    })
+    expect(screen.getByRole('button', { name: 'Copier tout' })).toBeTruthy()
+    expect(commits.mock.calls.length).toBeGreaterThan(languageCommits)
+    expect(closedChat).toHaveBeenCalledTimes(initialClosedRenders)
+    expect(mocks.rpc).toHaveBeenCalledTimes(initialReads)
+    fireEvent.click(screen.getByRole('button', { name: 'Copier tout' }))
+    await waitFor(() => expect(mocks.write).toHaveBeenCalledWith(bytes.toString('utf8')))
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Contenu copié'))
+  } finally {
+    cleanup()
+    useAppStore.setState({ activeWorktreeId })
+    await i18n.changeLanguage('en')
+    i18n.removeResourceBundle(language, 'translation')
+  }
 })
