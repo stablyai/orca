@@ -328,7 +328,9 @@ it.each([1, 10])(
     const descriptorWitnessRenders = descriptors.length - witnessed
     expect(descriptorWitnessRenders).toBe(1)
     expect(descriptors.at(-1)).toBe('changed35636')
-    expect(tree!.root.findByType('HostWitness').props.machineName).toBe('changed35636')
+    expect(tree!.root.find((node) => String(node.type) === 'HostWitness').props.machineName).toBe(
+      'changed35636'
+    )
     expect(commits).toHaveBeenCalledTimes(rendered)
     expect(subscriptions.registered).toBe(descriptorRegistrations)
     expect(subscriptions.live).toBe(descriptorLive)
