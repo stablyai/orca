@@ -110,6 +110,8 @@
       ],
       "expo-notifications",
       "./plugins/android-respect-rotation-lock.js",
+      "./plugins/android-optout-edge-to-edge-enforcement.js",
+      "./plugins/android-fit-system-windows-for-ime.js",
       [
         "expo-splash-screen",
         {
@@ -138,7 +140,8 @@
             "buildReactNativeFromSource": true
           },
           "android": {
-            "usesCleartextTraffic": true
+            "usesCleartextTraffic": true,
+            "targetSdkVersion": 35
           }
         }
       ]
