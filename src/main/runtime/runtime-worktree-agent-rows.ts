@@ -40,9 +40,11 @@ export function attachRuntimeWorktreeAgentRows(args: {
     }
     const orchestration = args.orchestrationByPaneKey?.[source.paneKey]
     const parentPaneKey = orchestration?.parentPaneKey ?? null
-    // A child running in its parent's tab does not own that tab's name.
+    // Like desktop lineage, a listed child running in its parent's tab does not own that tab's name.
     const conversationName =
-      parentPaneKey && parsePaneKey(parentPaneKey)?.tabId === source.tabId
+      parentPaneKey &&
+      rowSources.has(parentPaneKey) &&
+      parsePaneKey(parentPaneKey)?.tabId === source.tabId
         ? null
         : args.conversationName?.(source)
     const row: RuntimeWorktreeAgentRow = {
