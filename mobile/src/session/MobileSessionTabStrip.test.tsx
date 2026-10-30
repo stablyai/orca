@@ -10,11 +10,28 @@ import {
 } from '../theme/mobile-theme'
 import { mobileSessionFrameStyles } from './mobile-session-frame-styles'
 import { MobileSessionTabCardFooter } from './MobileSessionTabCardFooter'
+import type { MobileSessionHeaderIconButton } from './MobileSessionHeaderIconButton'
+import type * as TabModule from './MobileSessionTab'
+import type * as FooterModule from './MobileSessionTabCardFooter'
+import type * as TabContentModule from './mobile-session-tab-card-content'
 import { act, create, type ReactTestInstance } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mountFixture } from '../test-support/rpc-recording/recorder-fixture-shape'
 
-const work = vi.hoisted(() => ({
+type StripWork = {
+  tabs: number
+  content: number
+  footer: number
+  rows: number
+  ids: number
+  records: number
+  measures: number
+  landscape: boolean
+  back: (() => boolean) | null
+  removeAppState: ReturnType<typeof vi.fn>
+}
+
+const work = vi.hoisted((): StripWork => ({
   tabs: 0,
   content: 0,
   footer: 0,
@@ -23,7 +40,7 @@ const work = vi.hoisted(() => ({
   records: 0,
   measures: 0,
   landscape: false,
-  back: null as (() => boolean) | null,
+  back: null,
   removeAppState: vi.fn()
 }))
 vi.mock('react-native', () => ({
@@ -76,21 +93,15 @@ vi.mock('../layout/side-safe-area', () => ({
 }))
 vi.mock('../platform/haptics', () => ({ triggerMediumImpact: () => {} }))
 vi.mock('../components/MobileAgentIcon', () => ({
-  MobileAgentIcon: (
-    props: Parameters<typeof import('../components/MobileAgentIcon').MobileAgentIcon>[0]
-  ) => createElement('AgentIcon', props)
+  MobileAgentIcon: (props: Parameters<typeof MobileAgentIcon>[0]) =>
+    createElement('AgentIcon', props)
 }))
 vi.mock('../components/AgentStateDot', () => ({
-  AgentStateDot: (
-    props: Parameters<typeof import('../components/AgentStateDot').AgentStateDot>[0]
-  ) => createElement('StateDot', props)
+  AgentStateDot: (props: Parameters<typeof AgentStateDot>[0]) => createElement('StateDot', props)
 }))
 vi.mock('./MobileSessionHeaderIconButton', () => ({
-  MobileSessionHeaderIconButton: (
-    props: Parameters<
-      typeof import('./MobileSessionHeaderIconButton').MobileSessionHeaderIconButton
-    >[0]
-  ) => createElement('HeaderButton', props)
+  MobileSessionHeaderIconButton: (props: Parameters<typeof MobileSessionHeaderIconButton>[0]) =>
+    createElement('HeaderButton', props)
 }))
 vi.mock('./QuickCommandsTabButton', () => ({ QuickCommandsTabButton: () => null }))
 vi.mock('./mobile-session-styles', async () => {
@@ -123,7 +134,7 @@ vi.mock('./MobileSessionContentRow', () => ({
 }))
 vi.mock('./MobileSessionSheets', () => ({ MobileSessionSheets: () => null }))
 vi.mock('./MobileSessionTab', async (original) => {
-  const actual = await original<typeof import('./MobileSessionTab')>()
+  const actual = await original<typeof TabModule>()
   return {
     MobileSessionTab: (props: Parameters<typeof actual.MobileSessionTab>[0]) => {
       work.tabs++
@@ -132,7 +143,7 @@ vi.mock('./MobileSessionTab', async (original) => {
   }
 })
 vi.mock('./MobileSessionTabCardFooter', async (original) => {
-  const actual = await original<typeof import('./MobileSessionTabCardFooter')>()
+  const actual = await original<typeof FooterModule>()
   return {
     MobileSessionTabCardFooter: (
       props: Parameters<typeof actual.MobileSessionTabCardFooter>[0]
@@ -143,7 +154,7 @@ vi.mock('./MobileSessionTabCardFooter', async (original) => {
   }
 })
 vi.mock('./mobile-session-tab-card-content', async (original) => {
-  const actual = await original<typeof import('./mobile-session-tab-card-content')>()
+  const actual = await original<typeof TabContentModule>()
   return {
     mobileSessionTabCardContent: (
       ...args: Parameters<typeof actual.mobileSessionTabCardContent>
