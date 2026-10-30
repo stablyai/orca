@@ -99,7 +99,10 @@ export async function createClaudeNamingRuntime(
   })
   let operation = 0
   const operationId = () => `${Date.now()}-${(++operation).toString(16).padStart(32, '0')}`
-  const nativeOptions = { initSessionId: nativeId, holdInit: options.initialize !== undefined }
+  const nativeOptions: { initSessionId: string; holdInit: boolean } = {
+    initSessionId: nativeId,
+    holdInit: options.initialize !== undefined
+  }
   const native = fakeClaude(nativeOptions)
   const install = async () => {
     host = await ensureStructuredAgentSessionHost({
