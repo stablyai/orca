@@ -7,7 +7,7 @@ import type {
   AzureDevOpsBacklogPage
 } from '../../../shared/azure-devops/boards-types'
 import type { AzureDevOpsTeamRoute } from '../../../shared/azure-devops/boards-repo-resolution'
-import type { Repo } from '../../../shared/repo-types'
+import type { AzureDevOpsRepoIdentity } from '@/store/slices/azure-devops-boards'
 import type { AzureDevOpsTaskView } from './task-page-azure-devops-team-selection-persistence'
 import type { AzureDevOpsViewsStatus } from './task-page-azure-devops-backlog-level-selection'
 
@@ -25,7 +25,7 @@ type KeyedPage = {
  */
 export function useAzureDevOpsBacklogPageLoader(args: {
   active: boolean
-  repo: Repo | null
+  repo: AzureDevOpsRepoIdentity | null
   teamRoute: AzureDevOpsTeamRoute | null
   level: AzureDevOpsBacklogLevel | null
   columns: AzureDevOpsBacklogColumnField[]

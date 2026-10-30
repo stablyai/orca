@@ -1,5 +1,6 @@
 import type {
   AzureDevOpsBacklogLevel,
+  AzureDevOpsWorkItemTypeMetadata,
   AzureDevOpsBoardPage,
   AzureDevOpsBoardSummary,
   AzureDevOpsTeamAreaPaths
@@ -13,6 +14,7 @@ import {
   listAzureDevOpsBoards
 } from './board-configuration-client'
 import { listAzureDevOpsTeamAreaPaths } from './team-resolution'
+import { getAzureDevOpsWorkItemTypes } from './work-item-type-metadata'
 
 const BOARD_TIMEOUT_MS = 15_000
 const STACK_RANK_FIELD = 'Microsoft.VSTS.Common.StackRank'
@@ -31,10 +33,27 @@ export function resolveAzureDevOpsBoardForLevel(
   return boards.find((b) => b.name.trim().toLowerCase() === wanted) ?? null
 }
 
+/** State names the board discards anyway, so the query never carries them. */
+export function removedStateNames(
+  level: AzureDevOpsBacklogLevel,
+  workItemTypes: Record<string, AzureDevOpsWorkItemTypeMetadata>
+): string[] {
+  const names = new Set<string>()
+  for (const typeName of level.workItemTypes) {
+    for (const state of workItemTypes[typeName]?.states ?? []) {
+      if (state.category === 'Removed') {
+        names.add(state.name)
+      }
+    }
+  }
+  return [...names]
+}
+
 export function buildAzureDevOpsBoardWiql(
   project: string,
   level: AzureDevOpsBacklogLevel,
-  areas: AzureDevOpsTeamAreaPaths
+  areas: AzureDevOpsTeamAreaPaths,
+  removedStates: readonly string[] = []
 ): string {
   const types = level.workItemTypes.map(quote).join(', ')
   // A team migrated from TFS scopes its board by a custom field, not the area path.
@@ -42,9 +61,15 @@ export function buildAzureDevOpsBoardWiql(
   const areaClauses = areas.values.map(
     (a) => `[${teamField}] ${a.includeChildren ? 'UNDER' : '='} ${quote(a.value)}`
   )
+  // Why: the layout drops Removed cards after hydration, so leaving them in the query spends
+  // WIQL's result budget and a batch fetch on rows the board will never show.
+  const removedClause =
+    removedStates.length === 0
+      ? ''
+      : `AND [System.State] NOT IN (${removedStates.map(quote).join(', ')}) `
   return (
     `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = ${quote(project)} AND ` +
-    `[System.WorkItemType] IN (${types}) AND (${areaClauses.join(' OR ')}) ` +
+    `[System.WorkItemType] IN (${types}) AND (${areaClauses.join(' OR ')}) ${removedClause}` +
     `ORDER BY [${STACK_RANK_FIELD}]`
   )
 }
@@ -58,9 +83,10 @@ export async function loadAzureDevOpsBoardPage(
   if (!board) {
     return null
   }
-  const [configuration, areas] = await Promise.all([
+  const [configuration, areas, workItemTypes] = await Promise.all([
     getAzureDevOpsBoardConfiguration(repo, teamName, board.id),
-    listAzureDevOpsTeamAreaPaths(repo, teamName)
+    listAzureDevOpsTeamAreaPaths(repo, teamName),
+    getAzureDevOpsWorkItemTypes(repo)
   ])
   if (!configuration) {
     // Why: the board exists by name, so a missing configuration is a failed request, not "no board".
@@ -70,7 +96,12 @@ export async function loadAzureDevOpsBoardPage(
     // A team with no team field value has no board content; a failed lookup threw above.
     return null
   }
-  const query = buildAzureDevOpsBoardWiql(repo.project, level, areas)
+  const query = buildAzureDevOpsBoardWiql(
+    repo.project,
+    level,
+    areas,
+    removedStateNames(level, workItemTypes)
+  )
   const raw = await requestAzureDevOpsJsonAtBase<{ workItems?: { id?: number }[] }>(
     resolveAzureDevOpsApiBases(repo).project,
     '/_apis/wit/wiql',

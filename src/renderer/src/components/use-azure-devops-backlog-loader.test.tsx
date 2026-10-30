@@ -29,6 +29,9 @@ const initialState = useAppStore.getInitialState()
 const repoA = { id: 'repo-a', path: '/a', connectionId: null } as unknown as Repo
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the loader reads only id, path and connectionId off the repo.
 const repoB = { id: 'repo-b', path: '/b', connectionId: null } as unknown as Repo
+// Why: the same repo re-created, as updateRepo does on changes the loader does not care about.
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the loader reads only id, path and connectionId off the repo.
+const repoAReplaced = { id: 'repo-a', path: '/a', connectionId: null } as unknown as Repo
 const teams = [
   { id: 'team-1', name: 'Platform', isDefault: true },
   { id: 'team-2', name: 'Mobile', isDefault: false }
@@ -253,6 +256,19 @@ describe('useAzureDevOpsBacklogLoader', () => {
     expect(api.getConfiguration).toHaveBeenLastCalledWith(
       expect.objectContaining({ repoId: 'repo-b', teamName: 'Web' })
     )
+  })
+
+  it('keeps the team when the repo object is replaced but its identity has not changed', async () => {
+    const { result, rerender } = render()
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+    const teamName = result.current.teamName
+    const listed = api.listTeams.mock.calls.length
+
+    rerender({ repo: repoAReplaced })
+
+    expect(result.current.teamName).toBe(teamName)
+    expect(result.current.status).toBe('ready')
+    expect(api.listTeams).toHaveBeenCalledTimes(listed)
   })
 
   it('serves a cached page and revalidates only on refresh', async () => {

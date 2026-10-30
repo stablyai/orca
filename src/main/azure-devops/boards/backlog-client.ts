@@ -127,7 +127,11 @@ export async function loadAzureDevOpsBacklogPage(
     .map((w) => w.target?.id)
     .filter((id): id is number => typeof id === 'number')
   const extraFields = [...level.columnFields.map((c) => c.referenceName), ...columnFields]
-  const items = await hydrateAzureDevOpsWorkItems(repo, orderedIds, extraFields)
+  // Why: these rows are the backlog, so the rule above applies to them too; one unknown field in
+  // extraFields returns 400, which would otherwise read as a level with no work items.
+  const items = await hydrateAzureDevOpsWorkItems(repo, orderedIds, extraFields, {
+    requireResponse: true
+  })
 
   const childIdsByParent = await listAzureDevOpsChildIds(
     repo,

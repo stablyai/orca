@@ -19,49 +19,53 @@ export type AzureDevOpsBacklogCacheEntry = { page: AzureDevOpsBacklogPage; loade
 
 export type AzureDevOpsBoardCacheEntry = { page: AzureDevOpsBoardPage; loadedAt: number }
 
+/** What every boards request needs from a repo. Narrow so callers can key effects by identity:
+ *  `updateRepo` replaces the Repo object without changing any of these. */
+export type AzureDevOpsRepoIdentity = Pick<Repo, 'id' | 'path' | 'connectionId'>
+
 export type AzureDevOpsBoardsSlice = {
   azureDevOpsTeamsByRepo: Record<string, AzureDevOpsTeam[]>
   azureDevOpsConfigurationByTeam: Record<string, AzureDevOpsTeamConfiguration>
   azureDevOpsBacklogByKey: Record<string, AzureDevOpsBacklogCacheEntry>
   azureDevOpsBoardByKey: Record<string, AzureDevOpsBoardCacheEntry>
-  loadAzureDevOpsTeams: (repo: Repo) => Promise<AzureDevOpsTeam[]>
+  loadAzureDevOpsTeams: (repo: AzureDevOpsRepoIdentity) => Promise<AzureDevOpsTeam[]>
   loadAzureDevOpsConfiguration: (
-    repo: Repo,
+    repo: AzureDevOpsRepoIdentity,
     team: AzureDevOpsTeamRoute,
     options?: { force?: boolean }
   ) => Promise<AzureDevOpsTeamConfiguration>
   /** Cached page for the key, fresh or stale, without a request. */
   readAzureDevOpsBacklog: (
-    repo: Repo,
+    repo: AzureDevOpsRepoIdentity,
     team: AzureDevOpsTeamRoute,
     level: AzureDevOpsBacklogLevel
   ) => { page: AzureDevOpsBacklogPage; fresh: boolean } | null
   loadAzureDevOpsBacklog: (
-    repo: Repo,
+    repo: AzureDevOpsRepoIdentity,
     team: AzureDevOpsTeamRoute,
     level: AzureDevOpsBacklogLevel,
     options?: { force?: boolean; columnFields?: string[] }
   ) => Promise<AzureDevOpsBacklogPage>
   /** Cached board for the key, fresh or stale, without a request. */
   readAzureDevOpsBoard: (
-    repo: Repo,
+    repo: AzureDevOpsRepoIdentity,
     team: AzureDevOpsTeamRoute,
     level: AzureDevOpsBacklogLevel
   ) => AzureDevOpsBoardPage | null
   /** Resolves null when the level has no board; null is not cached. */
   loadAzureDevOpsBoard: (
-    repo: Repo,
+    repo: AzureDevOpsRepoIdentity,
     team: AzureDevOpsTeamRoute,
     level: AzureDevOpsBacklogLevel,
     options?: { force?: boolean }
   ) => Promise<AzureDevOpsBoardPage | null>
   /** @param cachedIds Ids the caller holds, so the host only hydrates the children it must. */
   loadAzureDevOpsWorkItem: (
-    repo: Repo,
+    repo: AzureDevOpsRepoIdentity,
     id: number,
     cachedIds?: number[]
   ) => Promise<AzureDevOpsWorkItemDetail | null>
-  isAzureDevOpsAuthenticated: (repo: Repo) => Promise<boolean>
+  isAzureDevOpsAuthenticated: (repo: AzureDevOpsRepoIdentity) => Promise<boolean>
 }
 
 // Why: same revalidation window as GitHub / Linear / Jira work-item lists.
@@ -94,7 +98,7 @@ export function isAzureDevOpsBacklogEntryFresh(
   return now - entry.loadedAt < AZURE_DEVOPS_BACKLOG_CACHE_TTL
 }
 
-function repoArgs(repo: Repo): AzureDevOpsBoardsRepoArgs {
+function repoArgs(repo: AzureDevOpsRepoIdentity): AzureDevOpsBoardsRepoArgs {
   return { repoPath: repo.path, repoId: repo.id, connectionId: repo.connectionId ?? null }
 }
 

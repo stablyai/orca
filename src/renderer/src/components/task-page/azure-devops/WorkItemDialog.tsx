@@ -48,7 +48,20 @@ export function sanitizeAzureDevOpsHtml(html: string): string {
   return getSanitizer().sanitize(html, {
     USE_PROFILES: { html: true },
     // Belt-and-braces: script is listed even though the html profile already drops it.
-    FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed']
+    // Why: the html profile keeps form controls, so a work item body could render a submit target.
+    FORBID_TAGS: [
+      'script',
+      'style',
+      'iframe',
+      'object',
+      'embed',
+      'form',
+      'input',
+      'button',
+      'select',
+      'textarea'
+    ],
+    FORBID_ATTR: ['action', 'formaction']
   })
 }
 

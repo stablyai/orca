@@ -11,13 +11,14 @@ import {
 // Why: DOMPurify is inert under happy-dom (returns input untouched), so the mock keeps the
 // tag-stripping contract; the instance/global split is what the isolation test asserts.
 const { privateInstance, globalAddHook } = vi.hoisted(() => {
-  const sanitize = (html: string) =>
+  const sanitize = vi.fn((html: string, _options?: Record<string, unknown>) =>
     html
       .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
       .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
       .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
       .replace(/<embed\b[^<]*>/gi, '')
       .replace(/<object\b[^<]*(?:(?!<\/object>)<[^<]*)*<\/object>/gi, '')
+  )
   return {
     privateInstance: { sanitize, addHook: vi.fn() },
     globalAddHook: vi.fn()
@@ -61,6 +62,15 @@ describe('sanitizeAzureDevOpsHtml', () => {
     const html = sanitizeAzureDevOpsHtml(detail.descriptionHtml!)
     expect(html).not.toContain('<script')
     expect(html).toContain('<b>world</b>')
+  })
+
+  it('forbids the form controls the html profile would otherwise keep', () => {
+    sanitizeAzureDevOpsHtml('<p>x</p>')
+    const options = privateInstance.sanitize.mock.calls.at(-1)?.[1]
+    expect(options?.FORBID_TAGS).toEqual(
+      expect.arrayContaining(['form', 'input', 'button', 'select', 'textarea'])
+    )
+    expect(options?.FORBID_ATTR).toEqual(expect.arrayContaining(['action', 'formaction']))
   })
 
   it('registers the external-link hook on a private instance, never on the global one', () => {

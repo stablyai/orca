@@ -1,7 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
-import { azureDevOpsBoardKey } from '@/store/slices/azure-devops-boards'
+import {
+  azureDevOpsBoardKey,
+  type AzureDevOpsRepoIdentity
+} from '@/store/slices/azure-devops-boards'
 import type {
   AzureDevOpsBacklogLevel,
   AzureDevOpsBoardPage
@@ -45,7 +48,19 @@ export function useAzureDevOpsBoardLoader(args: {
   collapsedLaneIds: ReadonlySet<string>
   toggleLane: (laneId: string) => void
 } {
-  const { active, repo, teamRoute, level, view } = args
+  const { active, teamRoute, level, view } = args
+  // Why: updateRepo replaces the Repo object on changes these loaders do not care about. Keying the
+  // effects by the identity the requests use keeps a re-created object from resetting the team pick.
+  const repoId = args.repo?.id ?? null
+  const repoPath = args.repo?.path ?? null
+  const repoConnectionId = args.repo?.connectionId ?? null
+  const repo = useMemo<AzureDevOpsRepoIdentity | null>(
+    () =>
+      repoId === null || repoPath === null
+        ? null
+        : { id: repoId, path: repoPath, connectionId: repoConnectionId },
+    [repoId, repoPath, repoConnectionId]
+  )
   const { readAzureDevOpsBoard, loadAzureDevOpsBoard } = useAppStore(
     useShallow((s) => ({
       readAzureDevOpsBoard: s.readAzureDevOpsBoard,

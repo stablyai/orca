@@ -20,6 +20,7 @@ import type {
 } from '../../../shared/azure-devops/boards-types'
 import type { AzureDevOpsTeamRoute } from '../../../shared/azure-devops/boards-repo-resolution'
 import type { Repo } from '../../../shared/repo-types'
+import type { AzureDevOpsRepoIdentity } from '../store/slices/azure-devops-boards'
 import { resolveAzureDevOpsBacklogColumns } from './task-page-azure-devops-backlog-columns'
 import {
   azureDevOpsTeamSelectionKey,
@@ -69,7 +70,19 @@ export function useAzureDevOpsBacklogLoader(args: {
   refresh: () => void
   refreshing: boolean
 } {
-  const { active, repo, settings, updateSettings } = args
+  const { active, settings, updateSettings } = args
+  // Why: updateRepo replaces the Repo object on changes these loaders do not care about. Keying the
+  // effects by the identity the requests use keeps a re-created object from resetting the team pick.
+  const repoId = args.repo?.id ?? null
+  const repoPath = args.repo?.path ?? null
+  const repoConnectionId = args.repo?.connectionId ?? null
+  const repo = useMemo<AzureDevOpsRepoIdentity | null>(
+    () =>
+      repoId === null || repoPath === null
+        ? null
+        : { id: repoId, path: repoPath, connectionId: repoConnectionId },
+    [repoId, repoPath, repoConnectionId]
+  )
   const {
     azureDevOpsTeamsByRepo,
     loadAzureDevOpsTeams,

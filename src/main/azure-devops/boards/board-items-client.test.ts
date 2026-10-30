@@ -6,6 +6,7 @@ import type {
 import {
   buildAzureDevOpsBoardWiql,
   loadAzureDevOpsBoardPage,
+  removedStateNames,
   resolveAzureDevOpsBoardForLevel
 } from './board-items-client'
 import { CLOUD_REPO, installAzureDevOpsFetchFixture, rawWorkItem } from './test-fixtures'
@@ -91,6 +92,57 @@ describe('board WIQL and board matching', () => {
         "([System.AreaPath] UNDER 'Project\\Web' OR [System.AreaPath] = 'Project\\Api') " +
         'ORDER BY [Microsoft.VSTS.Common.StackRank]'
     )
+  })
+
+  it('excludes the Removed states, so the query never spends its budget on them', () => {
+    const wiql = buildAzureDevOpsBoardWiql(
+      'Project',
+      LEVEL,
+      {
+        field: null,
+        defaultValue: 'Project\\Web',
+        values: [{ value: 'Project\\Web', includeChildren: true }]
+      },
+      ['Removed', 'Cut']
+    )
+    expect(wiql).toContain("AND [System.State] NOT IN ('Removed', 'Cut') ORDER BY")
+  })
+
+  it('names the Removed states of the level’s own types only', () => {
+    const states = (names: [string, string][]) =>
+      names.map(([name, category]) => ({
+        name,
+        color: null,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pairs above are state categories; the tuple type is widened to string by the literal.
+        category: category as 'Removed' | 'Proposed'
+      }))
+    const metadata = {
+      'Product Backlog Item': {
+        name: 'Product Backlog Item',
+        color: null,
+        iconId: null,
+        iconUrl: null,
+        states: states([
+          ['New', 'Proposed'],
+          ['Removed', 'Removed']
+        ])
+      },
+      Bug: {
+        name: 'Bug',
+        color: null,
+        iconId: null,
+        iconUrl: null,
+        states: states([['Cut', 'Removed']])
+      },
+      Task: {
+        name: 'Task',
+        color: null,
+        iconId: null,
+        iconUrl: null,
+        states: states([['Dropped', 'Removed']])
+      }
+    }
+    expect(removedStateNames(LEVEL, metadata)).toEqual(['Removed', 'Cut'])
   })
 
   it('escapes a single quote in an area path', () => {

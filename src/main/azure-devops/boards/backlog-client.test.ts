@@ -165,6 +165,17 @@ describe('backlog client', () => {
     ])
   })
 
+  it('throws when the level items cannot be hydrated, rather than reading as an empty level', async () => {
+    installAzureDevOpsFetchFixture({
+      '/acme/Project/Mobile/_apis/work/backlogs/Microsoft.RequirementCategory/workItems': {
+        workItems: [{ target: { id: 10 } }]
+      }
+    })
+    await expect(loadAzureDevOpsBacklogPage(CLOUD_REPO, 'Mobile', LEVEL)).rejects.toThrow(
+      'HTTP 404'
+    )
+  })
+
   it('throws with the HTTP status when the ordered-id request fails', async () => {
     installAzureDevOpsFetchFixture({})
     await expect(loadAzureDevOpsBacklogPage(CLOUD_REPO, 'Mobile', LEVEL)).rejects.toThrow(
