@@ -128,6 +128,84 @@ export function registerTerminalPtyExitWaiterTests(): void {
   })
 
   describe('fresh composer lifetime', () => {
+    it('bounds exit work by affected composer operations at N and 10N', async () => {
+      for (const n of [2, 20]) {
+        const { runtime, handle } = await createTranscriptPane({
+          paneTitle: 'shell',
+          foregroundProcess: 'bash',
+          data: ''
+        })
+        const otherPtyId = 'pty-unrelated'
+        const other = runtime['recordPtyWorktree'](otherPtyId, 'wt-1', {
+          connected: true,
+          incarnationId: 'inc-other'
+        })
+        const otherHandle = runtime['issuePtyHandle'](other)
+        const registry = runtime['terminalWaiters']
+        const listeners = runtime['terminalStreamConsumers']['dataListeners']
+        const pending: Promise<unknown>[] = []
+        vi.useFakeTimers()
+        try {
+          const otherSettled = vi.fn()
+          pending.push(
+            ...Array.from({ length: n }, () =>
+              runtime.waitForFreshWorkerComposer(otherHandle, 'claude', 60_000).catch(otherSettled)
+            )
+          )
+          const add = vi.spyOn(registry, 'add')
+          const resolve = vi.spyOn(registry, 'resolve')
+          const remove = vi.spyOn(registry, 'remove')
+          const lookup = vi.spyOn(registry['byPtyId'], 'get')
+          const settled = vi.fn((error: unknown) => error)
+          pending.push(
+            ...Array.from({ length: n }, () =>
+              runtime.waitForFreshWorkerComposer(handle, 'claude', 60_000).catch(settled)
+            )
+          )
+          const targetData = listeners.get(TRANSCRIPT_PANE_PTY_ID)!
+          const otherData = listeners.get(otherPtyId)!
+          expect(targetData.size).toBe(n)
+          expect(otherData.size).toBe(n)
+          const targetDelete = vi.spyOn(targetData, 'delete')
+          const otherDelete = vi.spyOn(otherData, 'delete')
+          runtime.onPtyExit(TRANSCRIPT_PANE_PTY_ID, 137, 'inc-1', { providerExitObserved: true })
+          await vi.advanceTimersByTimeAsync(0)
+          expect(add).toHaveBeenCalledTimes(n)
+          expect(resolve).toHaveBeenCalledTimes(n)
+          expect(remove).toHaveBeenCalledTimes(2 * n)
+          expect(settled).toHaveBeenCalledTimes(n)
+          expect(
+            settled.mock.calls.every(
+              ([error]) => error instanceof Error && error.message === 'terminal_exited'
+            )
+          ).toBe(true)
+          expect(lookup.mock.calls.length).toBeLessThanOrEqual(4 * n + 4)
+          expect(lookup.mock.calls.every(([id]) => id === TRANSCRIPT_PANE_PTY_ID)).toBe(true)
+          expect(
+            [...resolve.mock.calls, ...remove.mock.calls].every(
+              ([waiter]) => waiter.ptyId === TRANSCRIPT_PANE_PTY_ID
+            )
+          ).toBe(true)
+          expect(targetDelete).toHaveBeenCalledTimes(n)
+          expect(otherDelete).not.toHaveBeenCalled()
+          expect(otherSettled).not.toHaveBeenCalled()
+          expect(registry.forPty(TRANSCRIPT_PANE_PTY_ID)).toHaveLength(0)
+          expect(registry.forPty(otherPtyId)).toHaveLength(n)
+          expect(listeners.has(TRANSCRIPT_PANE_PTY_ID)).toBe(false)
+          expect(otherData.size).toBe(n)
+          runtime.onPtyExit(otherPtyId, 137, 'inc-other', { providerExitObserved: true })
+          await Promise.all(pending)
+          expect(registry['byPtyId'].size).toBe(0)
+          expect(listeners.size).toBe(0)
+        } finally {
+          registry.rejectAll('request_aborted')
+          await Promise.all(pending)
+          vi.useRealTimers()
+          vi.restoreAllMocks()
+        }
+      }
+    })
+
     it.each(['exit', 'replacement', 'prune', 'graph-retirement', 'abort', 'timeout'] as const)(
       'retires its scanner, listeners and deadline on %s',
       async (end) => {
