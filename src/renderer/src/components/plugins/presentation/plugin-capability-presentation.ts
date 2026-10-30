@@ -49,6 +49,11 @@ export function pluginCapabilityDescription(kind: string, fallback: string): str
         'auto.components.settings.PluginConsentDialog.capability.settingsOwn',
         'Read and change its own settings'
       )
+    case 'panel:own':
+      return translate(
+        'auto.components.settings.PluginConsentDialog.capability.panelOwn',
+        'Send messages to its own panels and receive their actions'
+      )
     default:
       return fallback
   }
