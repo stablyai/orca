@@ -31,6 +31,7 @@ const recordSubmit = (event: Event): void => {
 
 beforeEach(() => {
   vi.useFakeTimers()
+  store.state.dictationState = 'stopping'
   submitted = []
   document.addEventListener(DICTATION_SUBMIT_EVENT, recordSubmit)
 })
@@ -53,14 +54,14 @@ function appendComposerEditor(): HTMLElement {
 }
 
 function watchStoppingInto(editor: HTMLElement) {
-  const { result } = renderHook(() => useDictationAutoSend())
+  const { result, rerender } = renderHook(() => useDictationAutoSend())
   const target = { kind: 'contentEditable' as const, element: editor }
   let report: ReturnType<typeof result.current.watchStopping> = () => {}
   act(() => {
     report = result.current.watchStopping(target)
     result.current.trackInsertion(Promise.resolve(true))
   })
-  return { report, watchAgain: () => result.current.watchStopping(target) }
+  return { report, rerender, watchAgain: () => result.current.watchStopping(target) }
 }
 
 const SPOKEN = { finalTranscriptReceived: true, sessionErrored: false }
@@ -101,6 +102,20 @@ describe('useDictationAutoSend while a dictation is stopping', () => {
     act(() => report(outcome))
     await act(async () => vi.advanceTimersByTimeAsync(1000))
 
+    expect(submitted).toEqual([])
+  })
+
+  it('stops watching when dictation ends without reporting, as after a failed start', async () => {
+    const setPending = vi.spyOn(store.state, 'setPendingDictationAutoSend')
+    const { report, rerender } = watchStoppingInto(appendComposerEditor())
+
+    store.state.dictationState = 'idle'
+    rerender()
+    await act(async () => vi.advanceTimersByTimeAsync(0))
+    act(() => report(SPOKEN))
+    await act(async () => vi.advanceTimersByTimeAsync(1000))
+
+    expect(setPending).toHaveBeenLastCalledWith(null)
     expect(submitted).toEqual([])
   })
 })

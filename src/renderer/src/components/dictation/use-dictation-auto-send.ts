@@ -105,6 +105,13 @@ export function useDictationAutoSend(): {
   }, [dictationState, cancel])
 
   useEffect(() => {
+    // A failed start or speech error ends dictation without reporting; stop watching for takeover.
+    if (dictationState === 'idle') {
+      reportOutcomeRef.current?.({ finalTranscriptReceived: false, sessionErrored: true })
+    }
+  }, [dictationState])
+
+  useEffect(() => {
     if (!voiceEnabled || !autoSendEnabled) {
       cancel()
     }
