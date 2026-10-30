@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 import { qualifyGitHubTaskLists } from '@/lib/github-task-observation'
 import { getTaskPageRepoSourceContext } from '@/components/task-page/task-page-source-context'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
@@ -247,7 +248,13 @@ export function useGitHubTaskRefresh({
           continue
         }
         if (outcome?.status !== 'accepted') {
-          setRefreshFailure({ key: target.key, message: 'Unable to refresh this task. Try again.' })
+          setRefreshFailure({
+            key: target.key,
+            message: translate(
+              'auto.components.GitHubItemDialog.refreshTaskFailed',
+              'Unable to refresh this task. Try again.'
+            )
+          })
         }
         break
       }

@@ -3,11 +3,11 @@ import type { GitHubWorkItem } from '../../../../../shared/github/work-item-type
 import { parseTaskQuery, type ParsedTaskQuery } from '../../../../../shared/task-query'
 import { getTaskPageRepoSourceContext } from '../task-page-source-context'
 import {
-  createGitHubTaskObservationIndex,
   captureGitHubTaskObservation,
   getGitHubTaskObservation,
   type GitHubTaskObservation
 } from '@/lib/github-task-observation'
+import { getGitHubRepoLookupIndex } from '@/store/slices/github-repo-lookup-index'
 import { githubTaskIdentity, githubTaskSourceKey } from '@/lib/github-task-target'
 import { observeExistingListBases } from './task-page-github-work-item-mutation-registry'
 import {
@@ -21,7 +21,9 @@ export type TaskPageGitHubProjectionContext = {
   queryKey: string
   viewerLogin: string | null
   ownerOf?: (
-    item: Pick<GitHubWorkItem, 'repoId' | 'repoHostId'>
+    item: Pick<GitHubWorkItem, 'repoId' | 'repoHostId'> & {
+      githubObservation?: GitHubTaskObservation
+    }
   ) => GitHubTaskObservation | undefined
   owns?: (owner: GitHubTaskObservation | undefined) => boolean
 }
@@ -31,20 +33,29 @@ export function createTaskPageGitHubProjectionContext(
   queryKey: string,
   viewerLogin: string | null
 ): TaskPageGitHubProjectionContext {
-  const keys = new Set(
-    repos.map(
-      (repo) =>
-        captureGitHubTaskObservation(repo, getTaskPageRepoSourceContext(repo, 'github'))?.key
-    )
+  const lookup = getGitHubRepoLookupIndex(repos)
+  // Finish the shared lookup before any queued row can consult it.
+  lookup.findForWorkItem({ repoId: '' })
+  const owners = new Map(
+    repos.map((repo) => [
+      repo,
+      captureGitHubTaskObservation(repo, getTaskPageRepoSourceContext(repo, 'github'))
+    ])
   )
+  const keys = new Set([...owners.values()].map((owner) => owner?.key))
   return {
-    query,
+    query: { ...query, labels: [...query.labels] },
     queryKey,
     viewerLogin,
     owns: (owner) => !owner || owner.aliases.some((key) => keys.has(key)),
-    ownerOf: createGitHubTaskObservationIndex(repos, (repo) =>
-      getTaskPageRepoSourceContext(repo, 'github')
-    )
+    ownerOf: (item) => {
+      const hostId = item.repoHostId ?? item.githubObservation?.hostId
+      const candidate = hostId
+        ? lookup.findByHostAndId(hostId, item.repoId)
+        : lookup.findById(item.repoId)
+      const repo = hostId || candidate === lookup.findForWorkItem(item) ? candidate : undefined
+      return repo ? owners.get(repo) : undefined
+    }
   }
 }
 export function admitTaskPageGitHubListInputs(
@@ -91,12 +102,13 @@ export function materializeTaskPageItemList(args: {
   return createTaskPageGitHubMaterializer(context)(args.networkItems, args.previousItems)
 }
 export function createTaskPageGitHubMaterializer(context: TaskPageGitHubProjectionContext) {
+  const ownerOf = context.ownerOf
   const compose = createTaskPageGitHubAuthorityProjection()
   const project = createTaskPageGitHubMembershipProjection(context)
   return (networkItems: readonly GitHubWorkItem[], previousItems: readonly GitHubWorkItem[]) => {
     const byKey = new Map<string, GitHubWorkItem>()
     for (const item of networkItems) {
-      const owner = context.ownerOf?.(item) ?? getGitHubTaskObservation(item)
+      const owner = ownerOf?.(item) ?? getGitHubTaskObservation(item)
       const scope = owner ? githubTaskSourceKey(owner.source) : null
       byKey.set(taskPageGitHubObservedRowKey(item), compose(item, scope, owner))
     }
@@ -105,7 +117,7 @@ export function createTaskPageGitHubMaterializer(context: TaskPageGitHubProjecti
       if (byKey.has(key)) {
         continue
       }
-      const owner = context.ownerOf?.(item) ?? getGitHubTaskObservation(item)
+      const owner = ownerOf?.(item) ?? getGitHubTaskObservation(item)
       const scope = owner ? githubTaskSourceKey(owner.source) : null
       const projected = project(item, scope, owner)
       if (

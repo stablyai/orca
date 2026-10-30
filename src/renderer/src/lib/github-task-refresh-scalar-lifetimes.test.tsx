@@ -391,3 +391,207 @@ it.each([true, false])(
     expect(visible()).toEqual(['Account B']) // New server-admitted query has no prior local basis.
   }
 )
+
+it('seals the actual outer page updater across raw deletion and canonical sibling replacement', async () => {
+  const { beginGitHubTaskRead } = await import('@/store/github/request-coordination')
+  const { deliverTaskPageGitHubRead } =
+    await import('@/components/task-page/github/task-page-github-work-item-mutation-pages')
+  const row = observeGitHubWorkItem(
+    { ...seed, id: 'issue:5' },
+    captureGitHubTaskObservation(repo, source)
+  )
+  const scope = getTaskSourceCacheScope(source)
+  const close = (owner: string) =>
+    assertTaskPageGitHubDialogStateAuthority({
+      repoId: repo.id,
+      itemId: row.id,
+      sourceContext: source,
+      ownerRepo: { owner, repo: 'r', host: 'github.com' },
+      state: 'closed'
+    })
+  close('o')
+  const read = beginGitHubTaskRead(
+    [{ repoId: repo.id, sourceContext: source }],
+    undefined,
+    store.getState()
+  )
+  type Pages = (GitHubWorkItem[] | null)[]
+  let queued: ((current: Pages) => Pages) | undefined
+  const current: Pages = [null, null, [row]]
+  const foreignRepo = { ...repo, id: 'foreign', executionHostId: 'ssh:foreign' as const }
+  const projection = createTaskPageGitHubProjectionContext(
+    [repo, foreignRepo],
+    parseTaskQuery('is:open'),
+    'q',
+    'alice'
+  )
+  const fences = await import('@/store/host-catalog-fencing')
+  const captureFence = vi.spyOn(fences, 'captureHostIdentityFence')
+  try {
+    deliverTaskPageGitHubRead(
+      read,
+      [row],
+      (update) => {
+        if (typeof update === 'function') {
+          queued = update
+        }
+      },
+      { current },
+      projection,
+      (pages, rows, materialize) => {
+        const next = [...pages]
+        while (next.length <= 2) {
+          next.push(null)
+        }
+        next[2] = materialize(rows, pages[2] ?? [])
+        return next
+      }
+    )
+    expect(queued).toBeTypeOf('function')
+    const before = queued!(current)
+    expect(before[2]?.[0].state).toBe('closed')
+    expect(getGitHubTaskObservation(before[2]![0])).toEqual(getGitHubTaskObservation(row))
+    deleteLastConfirmedClientValue(scope, repo.id, row.id, 'state')
+    const afterDelete = queued!(current)
+    close('upstream')
+    const afterSibling = queued!(current)
+    console.log('R6 outer scalar replay', JSON.stringify({ before, afterDelete, afterSibling }))
+    expect(afterDelete).toEqual(before)
+    expect(afterSibling).toEqual(before)
+    captureFence.mockClear()
+    const foreignRow = { ...seed, repoId: foreignRepo.id, repoHostId: foreignRepo.executionHostId }
+    expect(queued!([null, null, [row, foreignRow]])).toEqual(before)
+    expect(captureFence).not.toHaveBeenCalled()
+    const live = materializeTaskPageItemList({
+      networkItems: [row],
+      previousItems: [],
+      queryKey: 'q',
+      context: createTaskPageGitHubProjectionContext(
+        [repo],
+        parseTaskQuery('is:open'),
+        'q',
+        'alice'
+      )
+    })
+    expect(live[0].state).toBe('open')
+  } finally {
+    captureFence.mockRestore()
+    read.dispose()
+  }
+})
+
+it('seals omitted-row membership and pending eligibility while retaining explicit current page values', async () => {
+  const { beginGitHubTaskRead } = await import('@/store/github/request-coordination')
+  const { deliverTaskPageGitHubRead } =
+    await import('@/components/task-page/github/task-page-github-work-item-mutation-pages')
+  const { establishTaskPageGitHubMembership, getRegistryMergedTaskPageGitHubWorkItem } =
+    await import('@/components/task-page/github/task-page-github-work-item-mutation-composition')
+  const registry =
+    await import('@/components/task-page/github/task-page-github-work-item-mutation-registry')
+  const owner = captureGitHubTaskObservation(repo, source)!
+  let row = observeGitHubWorkItem({ ...seed, id: 'issue:5', state: 'closed' }, owner)
+  const scope = getTaskSourceCacheScope(source)
+  assertTaskPageGitHubDialogStateAuthority({
+    repoId: repo.id,
+    itemId: row.id,
+    sourceContext: source,
+    ownerRepo: { owner: 'o', repo: 'r', host: 'github.com' },
+    state: 'closed'
+  })
+  row = getRegistryMergedTaskPageGitHubWorkItem(row, scope, owner)
+  establishTaskPageGitHubMembership({
+    item: row,
+    sourceScope: scope,
+    queryKey: 'q',
+    skipMeQualifiers: false,
+    observation: owner,
+    accepted: true
+  })
+  const pendingRow = observeGitHubWorkItem(
+    { ...row, id: 'issue:6', number: 6, url: 'https://github.com/o/r/issues/6', state: 'open' },
+    owner
+  )
+  const { taskPageGitHubMutationItemId } =
+    await import('@/components/task-page/github/task-page-github-work-item-mutation-keys')
+  const pendingKey = {
+    sourceScope: scope,
+    observation: owner,
+    repoId: repo.id,
+    itemId: taskPageGitHubMutationItemId(pendingRow),
+    opKey: 'state'
+  }
+  registry.setPendingTaskPageGitHubOp({
+    key: pendingKey,
+    generation: 1,
+    previous: {},
+    next: { state: 'closed' },
+    skipMeQualifiers: false,
+    startedAt: 1
+  })
+  type Pages = (GitHubWorkItem[] | null)[]
+  const current: Pages = [[row, pendingRow]]
+  const read = beginGitHubTaskRead(
+    [{ repoId: repo.id, sourceContext: source }],
+    undefined,
+    store.getState()
+  )
+  let queued: ((pages: Pages) => Pages) | undefined
+  try {
+    deliverTaskPageGitHubRead(
+      read,
+      [],
+      (update) => {
+        if (typeof update === 'function') {
+          queued = update
+        }
+      },
+      { current },
+      createTaskPageGitHubProjectionContext([repo], parseTaskQuery('is:open'), 'q', 'alice'),
+      (pages, rows, materialize) => [materialize(rows, pages[0] ?? [])]
+    )
+    const before = queued!(current)
+    expect(before[0]?.map((item) => item.id)).toEqual([row.id, pendingRow.id])
+    for (const key of registry.getTaskPageGitHubMembershipBases().keys()) {
+      registry.deleteTaskPageGitHubMembershipBasis(key)
+    }
+    registry.deletePendingTaskPageGitHubOp(pendingKey)
+    deleteLastConfirmedClientValue(scope, repo.id, row.id, 'state')
+    const after = queued!(current)
+    console.log('R6 outer omitted replay', JSON.stringify({ before, after }))
+    expect(after).toEqual(before)
+    const changed = observeGitHubWorkItem(
+      {
+        ...row,
+        title: 'Current Y',
+        assignees: [],
+        author: 'profile',
+        authorAvatarUrl: 'current.png'
+      },
+      owner,
+      true
+    )
+    const explicit = queued!([[changed]])
+    expect(explicit[0]?.[0]).toEqual(changed)
+    const profiled = {
+      ...changed,
+      assignees: [{ login: 'y', name: 'Current profile', avatarUrl: 'y.png' }]
+    }
+    expect(queued!([[profiled]])[0]?.[0]).toEqual(profiled)
+    expect(queued!([[]])).toEqual([[]])
+    expect(
+      materializeTaskPageItemList({
+        networkItems: [],
+        previousItems: current[0] ?? [],
+        queryKey: 'q',
+        context: createTaskPageGitHubProjectionContext(
+          [repo],
+          parseTaskQuery('is:open'),
+          'q',
+          'alice'
+        )
+      })
+    ).toEqual([])
+  } finally {
+    read.dispose()
+  }
+})

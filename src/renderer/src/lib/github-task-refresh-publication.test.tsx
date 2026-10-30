@@ -42,7 +42,7 @@ import {
   invalidateWorkItemDetailsCacheForKey
 } from '@/components/github-item-dialog/load-item-details/work-item-details-cache'
 
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 
 import type { GitHubWorkItem, GitHubWorkItemDetails } from '../../../shared/github/work-item-types'
 
@@ -617,4 +617,75 @@ it('keeps a production-prefetched foreign legacy PR unchanged through real local
   await act(async () => merge.click())
   expect(store.getState().workItemsCache[key].data?.[0].state).toBe('merged')
   assertForeign()
+})
+
+it('translates the real Refresh header tooltip and one failed DIRECT alert while preserving pending controls and retry', async () => {
+  const translations = await import('@/i18n/i18n')
+  const actual = await vi.importActual<typeof translations>('@/i18n/i18n')
+  const translate = vi.spyOn(translations, 'translate').mockImplementation(actual.translate)
+  const language = actual.i18n.language
+  const prior = actual.i18n.hasResourceBundle('fr', 'translation')
+    ? structuredClone(actual.i18n.getResourceBundle('fr', 'translation'))
+    : undefined
+  actual.i18n.addResourceBundle(
+    'fr',
+    'translation',
+    {
+      auto: {
+        components: {
+          GitHubItemDialog: {
+            refreshTask: 'Actualiser la tâche',
+            refreshTaskFailed: 'Impossible d’actualiser cette tâche. Réessayez.'
+          }
+        }
+      }
+    },
+    true,
+    true
+  )
+  try {
+    await actual.i18n.changeLanguage('fr')
+    await mount(true)
+    await draft('Body draft', 'Keep body')
+    await draft('Comment draft', 'Keep comment')
+    const button = container.querySelector<HTMLButtonElement>('[aria-label="Actualiser la tâche"]')!
+    expect(button).toBeTruthy()
+    expect(button.classList.contains('size-7')).toBe(true)
+    await act(async () => {
+      button.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerType: 'mouse' }))
+      await new Promise((resolve) => setTimeout(resolve, 800))
+    })
+    expect(document.querySelector('[role="tooltip"]')?.textContent).toBe('Actualiser la tâche')
+    const pending = Promise.withResolvers<GitHubWorkItemDetails | null>()
+    direct.mockReturnValueOnce(pending.promise)
+    const beforeCalls = direct.mock.calls.length
+    await click('Actualiser la tâche')
+    expect(direct).toHaveBeenCalledTimes(beforeCalls + 1)
+    expect(button.disabled).toBe(true)
+    expect(button.classList.contains('size-7')).toBe(true)
+    expect(container.querySelectorAll('[role="alert"]')).toHaveLength(0)
+    await act(async () => pending.reject(new Error('Provider rejected')))
+    expect(container.querySelectorAll('[role="alert"]')).toHaveLength(1)
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe(
+      'Impossible d’actualiser cette tâche. Réessayez.'
+    )
+    expect(button.disabled).toBe(false)
+    expect(container.querySelector<HTMLInputElement>('[aria-label="Body draft"]')?.value).toBe(
+      'Keep body'
+    )
+    expect(container.querySelector<HTMLInputElement>('[aria-label="Comment draft"]')?.value).toBe(
+      'Keep comment'
+    )
+    direct.mockResolvedValueOnce(returned)
+    await click('Actualiser la tâche')
+    expect(container.querySelectorAll('[role="alert"]')).toHaveLength(0)
+    expect(button.disabled).toBe(false)
+  } finally {
+    await actual.i18n.changeLanguage(language)
+    actual.i18n.removeResourceBundle('fr', 'translation')
+    if (prior) {
+      actual.i18n.addResourceBundle('fr', 'translation', prior, true, true)
+    }
+    translate.mockRestore()
+  }
 })

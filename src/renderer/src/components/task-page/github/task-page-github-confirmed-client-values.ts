@@ -96,6 +96,20 @@ export function clearLastConfirmedClientValues(): void {
   }
 }
 
+export function isTaskPageGitHubScalarApplicable(
+  entry: ConfirmedClientEntry,
+  item: GitHubWorkItem,
+  observation: GitHubTaskObservation | undefined
+): boolean {
+  const owner = parseGitHubIssueOrPRLink(item.url)?.slug
+  return (
+    sameGitHubTaskObservation(entry.observation, observation) &&
+    entry.value !== undefined &&
+    (!entry.ownerRepo ||
+      (!!owner && githubRepoIdentityKey(entry.ownerRepo) === githubRepoIdentityKey(owner)))
+  )
+}
+
 /** Index the actual one-slot entries; aliases affect applicability, never storage or lifetime. */
 export function createTaskPageGitHubScalarAuthorityIndex() {
   const entries = new Map<string, ConfirmedClientEntry>()
@@ -121,16 +135,6 @@ export function createTaskPageGitHubScalarAuthorityIndex() {
     family: string
   ) => {
     const entry = entries.get(keyFor(observation?.key, sourceScope, item.repoId, item.id, family))
-    return entry &&
-      sameGitHubTaskObservation(entry.observation, observation) &&
-      getLastConfirmedClientValue(
-        entry.sourceScope,
-        entry.repoId,
-        entry.itemId,
-        family,
-        parseGitHubIssueOrPRLink(item.url)?.slug ?? null
-      ) !== undefined
-      ? entry
-      : undefined
+    return entry && isTaskPageGitHubScalarApplicable(entry, item, observation) ? entry : undefined
   }
 }

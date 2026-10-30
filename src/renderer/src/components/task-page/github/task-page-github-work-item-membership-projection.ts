@@ -16,7 +16,7 @@ import {
 
 import {
   getLastConfirmedClientEntries,
-  getLastConfirmedClientValue
+  isTaskPageGitHubScalarApplicable
 } from './task-page-github-confirmed-client-values'
 
 import {
@@ -119,6 +119,12 @@ export function createTaskPageGitHubMembershipProjection(args: {
   queryKey: string
   viewerLogin: string | null
 }) {
+  const queryInput = { ...args.query, labels: [...args.query.labels] }
+  const queryKey = args.queryKey
+  const fallbackViewer = args.viewerLogin
+  const bases = new Map(getTaskPageGitHubMembershipBases())
+  const scalars = new Map(getLastConfirmedClientEntries())
+  const pending = new Map(getTaskPageGitHubPendingEntries())
   const compose = createTaskPageGitHubAuthorityProjection()
   const liveLists = new Map<string, { full: boolean; logins: Set<string> }>()
   const listCoordinate = (
@@ -171,15 +177,14 @@ export function createTaskPageGitHubMembershipProjection(args: {
       rawItemId: item.id,
       observation
     }
-    const bases = getTaskPageGitHubMembershipBases()
     const basis =
       bases.get(membershipBasisKey(address)) ??
       bases.get(membershipBasisKey({ ...address, rawItemId: '*' }))
-    const activeBasis = basis?.queryKey === args.queryKey ? basis : undefined
+    const activeBasis = basis?.queryKey === queryKey ? basis : undefined
     const hasAuthority = merged !== item
     const viewerLogin =
       observation?.account === null
-        ? args.viewerLogin
+        ? fallbackViewer
         : observation?.account?.host === 'github.com' &&
             parseGitHubIssueOrPRLink(item.url)?.slug.host?.toLowerCase() === 'github.com'
           ? observation.account.user
@@ -200,38 +205,28 @@ export function createTaskPageGitHubMembershipProjection(args: {
         )
       }
       if (origin.kind === 'scalar') {
-        const entry = origin.coordinate && getLastConfirmedClientEntries().get(origin.coordinate)
-        return (
-          !!entry &&
-          sameGitHubTaskObservation(entry.observation, observation) &&
-          getLastConfirmedClientValue(
-            entry.sourceScope,
-            entry.repoId,
-            entry.itemId,
-            entry.family,
-            parseGitHubIssueOrPRLink(item.url)?.slug ?? null
-          ) !== undefined
-        )
+        const entry = origin.coordinate && scalars.get(origin.coordinate)
+        return !!entry && isTaskPageGitHubScalarApplicable(entry, item, observation)
       }
       if (origin.kind === 'list') {
         const knowledge = origin.coordinate ? liveLists.get(origin.coordinate) : undefined
-        const qualifier = family === 'assignees' ? args.query.assignee : args.query.reviewRequested
+        const qualifier = family === 'assignees' ? queryInput.assignee : queryInput.reviewRequested
         const login = qualifier === '@me' ? viewerLogin : qualifier?.replace(/^@/, '').toLowerCase()
         return (
           !!knowledge && (knowledge.full || (!!login && knowledge.logins.has(login.toLowerCase())))
         )
       }
-      const op = origin.coordinate && getTaskPageGitHubPendingEntries().get(origin.coordinate)
+      const op = origin.coordinate && pending.get(origin.coordinate)
       return (
         !!op && op.generation === origin.generation && op.key.observation?.key === observation?.key
       )
     }
     const query = {
-      ...args.query,
-      state: eligible('state') ? args.query.state : null,
-      draft: eligible('state') && args.query.draft,
-      assignee: eligible('assignees') ? args.query.assignee : null,
-      reviewRequested: eligible('reviewRequests') ? args.query.reviewRequested : null
+      ...queryInput,
+      state: eligible('state') ? queryInput.state : null,
+      draft: eligible('state') && queryInput.draft,
+      assignee: eligible('assignees') ? queryInput.assignee : null,
+      reviewRequested: eligible('reviewRequests') ? queryInput.reviewRequested : null
     }
     return {
       item: merged,
