@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
 import type { OrcaHooks } from '../../shared/orca-yaml-hook-types'
-import { hashOrcaHookScript } from '../../renderer/src/lib/orca-hook-trust'
 
 const mocks = vi.hoisted(() => ({
   blocked: vi.fn(async (): Promise<{ distro: string; state: string } | null> => null),
@@ -74,7 +73,8 @@ describe('repo.hooks archive trust', () => {
   it('reports the shared archive script in the hash desktop records', async () => {
     await expect(hooksFor()).resolves.toMatchObject({
       archiveTrust: {
-        contentHash: await hashOrcaHookScript('make clean'),
+        // sha256('make clean'): desktop's hashOrcaHookScript of the trimmed script.
+        contentHash: '3eb737ac04c0fa7e0563845bbe946297f97d03f1244d1b4c0fa5496fa4fe9d92',
         scriptContent: 'make clean'
       }
     })
