@@ -318,12 +318,14 @@ describe('idle admission across SSH inventory uncertainty', () => {
       const settled = vi.fn()
       const waiting = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 5_000 })
       waiting.then(settled, settled)
-      await new Promise((resolve) => setImmediate(resolve))
+      await vi.waitFor(() => {
+        expect(runtime['terminalWaiters'].forPty(SSH_PTY)).toHaveLength(1)
+      })
       expect(settled).not.toHaveBeenCalled()
       host.live.add(SSH_PTY)
       await sweepProvider(runtime, 'ssh-target')
       expect(record(runtime, SSH_PTY)?.incarnationId).toBe('ssh-inc-1')
-      runtime.onPtyData(SSH_PTY, '\x1b]0;Codex ready\x07', Date.now())
+      runtime.onPtyData(SSH_PTY, '\x1b]0;Codex ready\x07', 1)
       await expect(waiting).resolves.toMatchObject({ satisfied: true, status: 'running' })
       expect(runtime['terminalWaiters'].forPty(SSH_PTY)).toHaveLength(0)
     }
