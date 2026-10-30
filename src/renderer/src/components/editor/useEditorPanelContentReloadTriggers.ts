@@ -101,7 +101,8 @@ export function useEditorPanelContentReloadTriggers({
       return
     }
     const current = openFilesRef.current.find((f) => f.id === activeFile.id)
-    if (!current || !isReloadableSingleFileDiffTab(current)) {
+    // Why: edit-mode Changes tabs also bump this nonce on manual SC refresh.
+    if (!current || !(isReloadableSingleFileDiffTab(current) || isChangesMode)) {
       return
     }
     invalidateDiffContent([current.id])
@@ -112,6 +113,7 @@ export function useEditorPanelContentReloadTriggers({
   }, [
     activeFile?.diffContentReloadNonce,
     activeFile?.id,
+    isChangesMode,
     invalidateDiffContent,
     loadDiffContent,
     isVisibleRef,

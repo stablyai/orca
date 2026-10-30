@@ -80,7 +80,9 @@ export function useEditorPanelDiffContentLoader({
         const gitScope = getRuntimeGitScope(fileTarget, connectionId)
         const effectiveDiffSource: typeof file.diffSource =
           file.mode === 'edit' ? 'unstaged' : file.diffSource
-        const compareAgainstHead = file.mode === 'edit'
+        // Why: SC Changes / edit Changes view must be WT vs index (`git diff`).
+        // HEAD-vs-WT mixed already-staged hunks into remaining unstaged work (#11133).
+        const compareAgainstHead = false
         const wake = options?.wakeWslDistro ? { wakeWslDistro: true } : undefined
         // A background reload must not join (and inherit the refusal of) a wake, or vice versa.
         const key = `${inFlightDiffKey(

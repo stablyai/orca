@@ -1,6 +1,6 @@
 import { ImeInput } from '@/lib/ime-text-field'
 import React, { useCallback, useEffect, useRef } from 'react'
-import { GitPullRequestArrow, Loader2, Search, X } from 'lucide-react'
+import { GitPullRequestArrow, Loader2, RefreshCw, Search, X } from 'lucide-react'
 import type { GitBranchCompareSummary } from '../../../../../../shared/git-diff-compare-types'
 import type { GitBranchLineTotal } from '../../../../../../shared/git-status-types'
 import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-types'
@@ -35,6 +35,8 @@ type SourceControlHeaderToolbarProps = {
   onChangeBaseRef: () => void
   onRefreshBranchCompare: () => void
   branchCompareRefreshDisabled: boolean
+  onManualRefresh: () => void
+  isManualRefreshing: boolean
   diffCommentCount: number
   onExpandNotes: () => void
   branchSummary: GitBranchCompareSummary | null
@@ -157,6 +159,8 @@ export function SourceControlHeaderToolbar({
   onChangeBaseRef,
   onRefreshBranchCompare,
   branchCompareRefreshDisabled,
+  onManualRefresh,
+  isManualRefreshing,
   diffCommentCount,
   onExpandNotes,
   branchSummary,
@@ -178,6 +182,10 @@ export function SourceControlHeaderToolbar({
     diffCommentCount,
     onExpandNotes
   }
+  const refreshLabel = translate(
+    'auto.components.right.sidebar.SourceControl.manualRefresh',
+    'Refresh'
+  )
 
   const expandFilter = useCallback(() => {
     onFilterExpandedChange(true)
@@ -254,6 +262,18 @@ export function SourceControlHeaderToolbar({
               {normalizedFilter ? (
                 <span className="absolute right-1 top-1 size-1.5 rounded-full bg-foreground" />
               ) : null}
+            </button>
+            <button
+              type="button"
+              data-testid="source-control-manual-refresh"
+              className="inline-flex size-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-default disabled:opacity-50"
+              onClick={onManualRefresh}
+              disabled={isManualRefreshing}
+              aria-label={refreshLabel}
+              title={refreshLabel}
+              aria-busy={isManualRefreshing}
+            >
+              <RefreshCw className={cn('size-3.5', isManualRefreshing && 'animate-spin')} />
             </button>
             {renderOverflowMenu(overflowProps)}
           </>

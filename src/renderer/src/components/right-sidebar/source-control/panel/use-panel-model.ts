@@ -10,6 +10,7 @@ import { useSourceControlActionModel } from '../review/use-action-model'
 import { useSourceControlCreatePrIntentFlows } from '../review/use-create-pr-intent-flows'
 import { useSourceControlReviewFlows } from '../review/use-review-flows'
 import { useSourceControlUpstreamStatusFetch } from '../sync/use-upstream-status-fetch'
+import { useSourceControlManualRefresh } from '../sync/use-manual-refresh'
 import { useSourceControlPanelFoundation } from './use-panel-foundation'
 
 export function useSourceControlPanelModel() {
@@ -161,6 +162,14 @@ export function useSourceControlPanelModel() {
     worktreePath,
     refreshActiveGitStatusAfterMutation
   })
+  const manualRefresh = useSourceControlManualRefresh({
+    activeWorktreeId,
+    worktreePath,
+    isFolder,
+    refreshActiveGitStatus: foundation.refreshActiveGitStatus,
+    refreshBranchCompare: foundation.refreshBranchCompare,
+    refreshGitHistory: foundation.refreshGitHistory
+  })
   const discardConfirmation = useSourceControlDiscardConfirmation({
     activeRepoTarget,
     activeWorktreeId,
@@ -185,6 +194,7 @@ export function useSourceControlPanelModel() {
     ...noteOpening,
     ...entryMutations,
     ...discardConfirmation,
+    ...manualRefresh,
     handleRelinkSuppressedGitHubPR
   }
 }
