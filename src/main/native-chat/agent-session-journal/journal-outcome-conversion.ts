@@ -75,10 +75,8 @@ export class JournalOutcomeConversion {
     let publicationStarted: number | undefined
     const result = database.transaction(
       (db) => {
-        if (this.disposed || readJournalSessionEpoch(db, sessionId) !== epoch) {
-          return 'retired'
-        }
-        if (journalOutcomeSource(db, sessionId, epoch)) {
+        // The catch-up checks the chat's epoch in this same synchronous step.
+        if (this.disposed || journalOutcomeSource(db, sessionId, epoch)) {
           return 'retired'
         }
         if (this.generation === 0) {
