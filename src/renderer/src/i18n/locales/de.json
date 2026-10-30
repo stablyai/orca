@@ -496,15 +496,9 @@
       },
       "providers": {
         "title": "Anbieter",
-        "description": "Auswählen, welche Agenten als Chat geöffnet werden. Bei deaktivierter Option wird ein installierter Agent in einem Terminal geöffnet.",
         "searchAgents": "Agenten",
         "searchCli": "CLI",
         "searchTerminal": "Terminal",
-        "agentDisabled": "In den Agenteneinstellungen deaktiviert",
-        "installed": "Installiert",
-        "notInstalled": "Nicht installiert",
-        "install": "Installieren",
-        "toggleLabel": "{{value0}} als Chat öffnen",
         "antigravityDescription": "Antigravity-Chats nutzen einen Server, den Orca auf diesen Host herunterlädt, unabhängig von der agy-CLI.",
         "antigravityNotSignedIn": "Nicht angemeldet. Chats erfordern eine separate Antigravity-Anmeldung, unabhängig vom agy-Terminal-Konto.",
         "antigravityAccount": "Konto",
@@ -757,7 +751,6 @@
       "defaultOpensAs": "{{value0}} öffnen als",
       "defaultOpensAsChat": "Chat",
       "defaultOpensAsCli": "CLI",
-      "defaultOpensAsScope": "Gilt für neue {{value0}}-Sitzungen, die von diesem Computer aus gestartet werden, auch auf gekoppelten Hosts. Entspricht dem zugehörigen Schalter unter „Anbieter“.",
       "save": "Speichern",
       "clearDefault": "Standardagent-Auswahl aufheben",
       "autoUnsupported": "„Automatisch“ erfordert eine neuere Orca-Version auf diesem Host.",
@@ -807,7 +800,11 @@
         "description": "Erlaubt jedem Codex-Konto und deinem eigenen ~/.codex, Unterhaltungen fortzusetzen, die in den anderen begonnen wurden. Schalte es aus, um den Verlauf jedes Kontos getrennt zu halten. Beim Ausschalten wird nichts entfernt, was bereits geteilt wurde.",
         "unsupported": "Aktualisiere Orca auf {{host}}, um diese Einstellung dort zu ändern.",
         "updateFailed": "Die Einstellung auf {{host}} konnte nicht aktualisiert werden."
-      }
+      },
+      "installCliForTerminal": "Installiere die {{value0}}-CLI, um es in einem Terminal zu öffnen.",
+      "chatRuntime": "Chat-Laufzeit",
+      "chatChoiceTitle": "Als Chat oder CLI öffnen",
+      "chatChoiceDescription": "Lege fest, ob jeder Agent als Chat oder in seiner CLI geöffnet wird."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "Symbolischer Link",
@@ -14111,8 +14108,7 @@
             "trashFailed": "„{{name}}“ konnte nicht in den Papierkorb verschoben werden."
           },
           "useFileExplorerHandlers": {
-            "32cd9fd991": "Ziel des symbolischen Links kann nicht geöffnet werden",
-            "folderLinksOutsideProject": "Dieser Ordner verweist auf ein Ziel außerhalb des Projekts und kann daher hier nicht geöffnet werden."
+            "32cd9fd991": "Ziel des symbolischen Links kann nicht geöffnet werden"
           },
           "useFileExplorerImport": {
             "importFailedCount_one": "Import von {{count}} Datei fehlgeschlagen.",
@@ -20034,7 +20030,7 @@
       "heroBody": "Einmaliger Download von {{size}} MB. Alle Chats mit {{agent}} auf dem Computer, auf dem dieser Chat läuft, verwenden ihn gemeinsam.",
       "heroBodyNoSize": "Einmaliger Download. Alle Chats mit {{agent}} auf dem Computer, auf dem dieser Chat läuft, verwenden ihn gemeinsam.",
       "stripSize": "Download von {{size}} MB auf dem Computer, auf dem dieser Chat läuft",
-      "settingsHint": "Auch unter Einstellungen › Chat › Anbieter",
+      "settingsHint": "Auch unter Einstellungen › Agenten",
       "installShort": "Installieren",
       "tryAgain": "Erneut versuchen",
       "cancelShort": "Abbrechen",

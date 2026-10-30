@@ -710,3 +710,54 @@ it('refuses a typed literal at an unresolved fence and accepts it when that fenc
   expect(calls).toHaveLength(1)
   await view.unmount()
 })
+
+import type { PiRefreshFixtureModule } from '../../../src/shared/structured-agent-session-option-refresh.test-fixture-contract'
+const { piOptionRefreshContract } = await vi.importActual<PiRefreshFixtureModule>(
+  '../../../src/main/native-chat/agent-session-wire/structured-agent-session-option-refresh.test-fixture'
+)
+
+describe('Pi catalog refresh completion', () => {
+  piOptionRefreshContract(
+    async (host) => {
+      const first = optionsClient(
+        () => host.options(),
+        () => host.catalog()
+      )
+      const second = optionsClient(
+        () => host.options(),
+        () => host.catalog()
+      )
+      const { mutate } = recordingMutate(async (_call, fields) => {
+        if (typeof fields.value !== 'string') {
+          throw new Error('missing effort')
+        }
+        return accepted(await host.acceptEffort(fields.value), true)
+      })
+      const harness = await mountOptions({
+        ...BASE,
+        agent: 'pi',
+        sendSelection: true,
+        sessionId: host.record.sessionId,
+        client: first.client,
+        mutate
+      })
+      return {
+        snapshot: () => harness.current().optionSnapshot,
+        capture: () => harness.current().sendSelection().selection,
+        demand: () => harness.current().optionSurface.demandModelCatalog?.(),
+        pick: (value) => harness.current().setStructuredOption('effort', value),
+        replace: async (fence, otherHost) =>
+          harness.rerender({ fence, client: otherHost ? second.client : first.client }),
+        close: () => harness.unmount()
+      }
+    },
+    async (work) => {
+      await act(async () => {
+        work()
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+      await settle()
+    }
+  )
+})

@@ -29,10 +29,12 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     gitHistoryState,
     handleAbortOperationForConflict,
     handleCommitAction,
+    handleCompleteMerge,
     handleContextMenu,
     handleOpenDiff,
     handleResolveConflictsWithAI,
     handleSelect,
+    handleResolveConflict,
     handleStage,
     handleStageAllPaths,
     handleStageSectionPaths,
@@ -43,6 +45,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     isResolvingConflictsWithAI,
     isAbortingOperation,
     isCheckingRecoveryAdmission,
+    isCommitting,
     isExecutingBulk,
     isGitHistoryVisible,
     loadCommitFiles,
@@ -94,6 +97,8 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
         isRecoveryBusy={isCheckingRecoveryAdmission || isResolvingConflictsWithAI}
         isAbortingOperation={isAbortingOperation}
         onAbortOperation={handleAbortOperationForConflict}
+        isCompletingMerge={isCommitting}
+        onCompleteMerge={() => void handleCompleteMerge()}
         onResolveWithAi={() => void handleResolveConflictsWithAI()}
         onReviewConflicts={() => {
           openConflictReview(
@@ -174,6 +179,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
           activeConnectionId={activeConnectionId}
           handleOpenDiff={handleOpenDiff}
           handleStage={handleStage}
+          handleResolveConflict={handleResolveConflict}
           handleUnstage={handleUnstage}
           requestDiscardEntry={requestDiscardEntry}
           diffCommentCountByPath={diffCommentCountByPath}

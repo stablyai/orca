@@ -9,6 +9,7 @@ import { readLiveCodexSessionOptions } from '../../codex/codex-structured-sessio
 import { optionSession } from '../../codex/codex-structured-option-session.test-fixture'
 import { CodexAppServerRequestError } from '../../codex/app-server/codex-app-server-request-error'
 import { structuredAgentSessionDrawnValues } from '../../../shared/structured-agent-session-option-snapshot'
+
 import { structuredAgentSessionCapabilityView } from './structured-agent-session-option-models'
 import { claudeFallbackModelOptions } from '../../claude/claude-structured-session-options'
 import {
@@ -23,7 +24,6 @@ import {
   createStructuredAgentSessionOptionState
 } from '../../../shared/structured-agent-session-options'
 import type { StructuredAgentSessionLiveOptions } from './structured-agent-session-adapter'
-
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
@@ -35,7 +35,10 @@ import {
 import type { AgentJournalItemBody } from '../../../shared/agent-session-journal-types'
 import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import type { AgentSessionModelOption } from '../../../shared/agent-session-wire'
-import { createAgentModelCatalogService } from '../agent-model-catalog/agent-model-catalog-service'
+import {
+  createAgentModelCatalogService,
+  type AgentModelCatalogService
+} from '../agent-model-catalog/agent-model-catalog-service'
 import {
   AgentModelCatalogStore,
   type AgentModelCatalogSuccess
@@ -260,7 +263,8 @@ describe('a chat at rest, read by the host', () => {
     wroteBeforeOpen = false,
     models: AgentSessionModelOption[] | null = listed,
     verified = true,
-    liveOptions?: StructuredAgentSessionLiveOptions
+    liveOptions?: StructuredAgentSessionLiveOptions,
+    modelCatalog: Pick<AgentModelCatalogService, 'read'> = catalog(models, verified)
   ) {
     const record = { ...restingRecord(), ...facts }
     const resting = {
@@ -274,7 +278,7 @@ describe('a chat at rest, read by the host', () => {
         adapter: liveOptions ? { readOptions: async () => liveOptions } : {},
         agents: claudeAndCodexAgents(),
         store: hostTestOptionsReadStore(() => record),
-        modelCatalog: catalog(models, verified)
+        modelCatalog
       },
       serialize: (_sessionId: string, task: () => Promise<unknown>) => task(),
       openConversation: async () => resting,

@@ -5,6 +5,7 @@ import {
 } from './feature-interactions'
 
 export type FeatureTipId =
+  | 'macos-12-support'
   | 'native-chat-upgrade'
   | 'voice-dictation'
   | 'orca-cli'
@@ -14,6 +15,7 @@ export type FeatureTipId =
 export type FeatureTipPriority = 'new' | 'unseen'
 
 export type FeatureTipAction =
+  | 'review-macos-support'
   | 'learn-native-chat-upgrade'
   | 'enable-voice'
   | 'setup-cli'
@@ -32,6 +34,7 @@ export type FeatureTip = {
 }
 
 export type CompletedFeatureTipState = {
+  macos12SupportNoticeEligible?: boolean
   cliInstalled: boolean
   voiceDictationEnabled: boolean
   /** Search is on, or this client cannot turn it on. */
@@ -42,6 +45,17 @@ export type CompletedFeatureTipState = {
 }
 
 export const FEATURE_TIPS = [
+  {
+    id: 'macos-12-support',
+    priority: 'new',
+    eyebrow: 'Compatibility',
+    title: 'A heads-up for your Mac',
+    description:
+      'Orca will soon require macOS 13 or later. You can keep using this version for now.',
+    action: 'review-macos-support',
+    ctaLabel: 'Review your options',
+    completedByFeatureInteractions: []
+  },
   {
     // Show the upgrade tip first for its audience’s first launch.
     id: 'native-chat-upgrade',
@@ -121,6 +135,9 @@ export function normalizeFeatureTipIds(value: unknown): FeatureTipId[] {
 
 export function getCompletedFeatureTipIds(state: CompletedFeatureTipState): Set<FeatureTipId> {
   const completedIds = new Set<FeatureTipId>()
+  if (!state.macos12SupportNoticeEligible) {
+    completedIds.add('macos-12-support')
+  }
   if (state.cliInstalled) {
     completedIds.add('orca-cli')
   }

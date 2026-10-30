@@ -13,7 +13,7 @@ const TAB_ACTIONS_WITHOUT_KEYBOARD_OWNER = new Set<KeybindingActionId>([
   'tab.openMarkdown'
 ])
 
-/** A focused page hands tab chords and the Plugins launcher back to Orca. */
+/** A focused page hands tab chords back to Orca. */
 export function matchesGuestTabShortcut(
   input: WindowShortcutInput,
   platform: NodeJS.Platform,
@@ -22,7 +22,7 @@ export function matchesGuestTabShortcut(
 ): boolean {
   return KEYBINDING_DEFINITIONS.some(
     (definition) =>
-      (definition.scope === 'tabs' || definition.id === 'view.plugins') &&
+      definition.scope === 'tabs' &&
       !TAB_ACTIONS_WITHOUT_KEYBOARD_OWNER.has(definition.id) &&
       (definition.id !== 'tab.newSimulator' || isMobileEmulatorEnabled) &&
       keybindingMatchesAction(definition.id, input, platform, keybindings)

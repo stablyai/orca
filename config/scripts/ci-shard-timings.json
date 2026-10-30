@@ -9137,7 +9137,6 @@
       "src/renderer/src/components/sidebar/worktree-list/rows/ProjectHeaderHostLabel.test.tsx": 714,
       "src/renderer/src/components/sidebar/worktree-list/rows/RepoScanUnavailableIndicator.test.tsx": 1417,
       "src/renderer/src/components/sidebar/worktree-list/rows/host-header-detail.test.ts": 128,
-      "src/renderer/src/components/sidebar/worktree-list/rows/indentation.test.ts": 34,
       "src/renderer/src/components/sidebar/worktree-list/rows/option-dom-host-collision.test.ts": 125,
       "src/renderer/src/components/sidebar/worktree-list/rows/project-header-host-context.test.ts": 103,
       "src/renderer/src/components/sidebar/worktree-list/rows/use-project-group-dialogs-owner-host.test.tsx": 732,

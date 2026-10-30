@@ -12,6 +12,7 @@ export function createWebAppApi(): Partial<PreloadApi> {
       isProfileStateSaveDelayed: () => Promise.resolve(false),
       onProfileStateSaveDelayChanged: () => () => undefined,
       getWindowsAdministratorStatus: () => Promise.resolve(null),
+      getMacosUpgradeSupport: () => Promise.resolve(null),
       restartAsAdministrator: () =>
         Promise.reject(new Error('Administrator restart requires the Windows desktop app.')),
       getIdentity: () =>

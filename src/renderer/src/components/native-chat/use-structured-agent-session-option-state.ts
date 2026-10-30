@@ -152,7 +152,8 @@ export function useStructuredAgentSessionOptionState(args: {
             ...previous,
             record: cloneStructuredAgentSessionOptionRecord(previous.record),
             pendingId: null,
-            reportedPermissionMode: undefined
+            reportedPermissionMode: undefined,
+            reportedEffort: undefined
           }
         : seeded
     const next = sameSession ? { ...kept, permissionMode: previous.permissionMode } : kept

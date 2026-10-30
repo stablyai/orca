@@ -13,8 +13,11 @@ import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import type { KeyboardLayoutSnapshot } from '../../shared/keyboard-layout-snapshot'
 import type { KeyboardLayoutChangeEvent } from '../../shared/keyboard-layout-events'
+import type { MacosUpgradeSupport } from '../../shared/macos-12-support-notice/upgrade-support'
 
 export type AppApi = {
+  /** Local desktop only; optional for older clients and unavailable outside macOS 12. */
+  getMacosUpgradeSupport?: () => Promise<MacosUpgradeSupport | null>
   getSystemLanguageDetection?: (
     browserPreferences?: readonly string[]
   ) => Promise<UiLanguageDetection | null>

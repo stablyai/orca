@@ -14,6 +14,7 @@ import {
   lucideBarrelPlugin
 } from '../build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
+import { themeSwitchTest } from './mobile-web-app-theme-switch.mjs'
 import { textInputFontSizeFloor } from './platform-seams/mobile-web-app-text-input-font-size-seam.mjs'
 import {
   createBundleServer,
@@ -77,6 +78,7 @@ import { createElement, useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { MobileRichMarkdownEditor } from './MobileRichMarkdownEditor'
+import { applyMobileColorScheme } from '../theme/mobile-theme'
 
 /**
  * What the route's own navigator supplies and a bare mount does not: react-navigation wraps every
@@ -101,6 +103,7 @@ function Harness() {
   useEffect(() => {
     globalThis.__orcaEditor = {
       set: (next) => setState((previous) => ({ ...previous, ...next })),
+      setScheme: applyMobileColorScheme,
       changes: [],
       secondChanges: [],
       links: [],
@@ -293,9 +296,8 @@ async function setContentWithin(page, markdown, selector) {
 // Nested ul-in-p serialization once returned unchanged text, leaving next command against previous document.
 const bodyFor = (index) => `body text ${String(index)}`
 
-function readSurface(page, surface = '#first-surface') {
-  return page.evaluate((id) => document.querySelector(`${id} #editor`)?.innerHTML ?? null, surface)
-}
+const readSurface = (page, surface = '#first-surface') =>
+  page.evaluate((id) => document.querySelector(`${id} #editor`)?.innerHTML ?? null, surface)
 
 async function select(page, how) {
   await page.evaluate((mode) => {
@@ -328,9 +330,9 @@ describeEditor(
           browser = await engine.launch()
         }, 180_000)
 
-        afterAll(async () => {
-          await browser?.close()
-        })
+        afterAll(() => browser?.close())
+
+        themeSwitchTest(() => browser, openPage)
 
         it('mounts the document, reports ready through the seam and never touches the bridge', async () => {
           const { page, consoleErrors } = await openPage(browser)

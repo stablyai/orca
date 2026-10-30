@@ -26,14 +26,14 @@ export function parseListLine(line: string): ParsedListItem | null {
   }
   const marker = match[2] ?? ''
   const rawText = match[3] ?? ''
-  const task = rawText.match(/^\[([ xX])\]\s+(.+)$/)
+  const task = rawText.match(/^\[([ xX])\](?:\s+(.*))?$/)
   const ordered = /^\d/.test(marker)
   return {
     indent: indentationWidth(match[1] ?? ''),
     ordered,
     orderedNumber: ordered ? Number.parseInt(marker, 10) : null,
     task: task ? task[1]!.toLowerCase() === 'x' : null,
-    text: task ? task[2]! : rawText,
+    text: task ? (task[2] ?? '') : rawText,
     children: []
   }
 }

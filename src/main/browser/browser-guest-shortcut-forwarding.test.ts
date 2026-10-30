@@ -161,28 +161,22 @@ describe('setupGuestShortcutForwarding', () => {
     guestOffMock = vi.fn()
   })
 
-  it('replays the Plugins shortcut once and preserves unbound overrides', () => {
-    let keybindings = { 'view.plugins': ['Mod+Shift+X'] }
-    setupGuestShortcutForwarding({
-      browserTabId,
-      guest: makeGuest(),
-      resolveRenderer: () => makeRenderer(),
-      getKeybindings: () => keybindings
-    })
+  it.each([undefined, { 'view.plugins': ['Mod+Shift+X'] }])(
+    'leaves the Plugins shortcut and repeats to the guest with keybindings %j',
+    (keybindings) => {
+      setupGuestShortcutForwarding({
+        browserTabId,
+        guest: makeGuest(),
+        resolveRenderer: () => makeRenderer(),
+        getKeybindings: () => keybindings
+      })
 
-    const input = { key: 'X', code: 'KeyX', shift: true }
-    expect(triggerBeforeInput(input)).toHaveBeenCalledOnce()
-    expect(rendererSendMock).toHaveBeenCalledWith(
-      'ui:browserPageTabShortcut',
-      expect.objectContaining(input)
-    )
-    expect(triggerBeforeInput({ ...input, isAutoRepeat: true })).toHaveBeenCalledOnce()
-    expect(rendererSendMock).toHaveBeenCalledTimes(1)
-
-    keybindings = { 'view.plugins': [] }
-    expect(triggerBeforeInput(input)).not.toHaveBeenCalled()
-    expect(rendererSendMock).toHaveBeenCalledTimes(1)
-  })
+      const input = { key: 'X', code: 'KeyX', shift: true }
+      expect(triggerBeforeInput(input)).not.toHaveBeenCalled()
+      expect(triggerBeforeInput({ ...input, isAutoRepeat: true })).not.toHaveBeenCalled()
+      expect(rendererSendMock).not.toHaveBeenCalled()
+    }
+  )
 
   it('commits Ctrl+Tab switching from focused guest pages on generic release events', () => {
     setupGuestShortcutForwarding({

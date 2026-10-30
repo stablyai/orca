@@ -109,11 +109,13 @@ describe('host launch settings form', () => {
   it('shows resolved launch defaults in a collapsed legacy host row', async () => {
     transport.read.mockResolvedValue(projectAgentLaunchSettings({ agentDefaultArgs: {} }))
     render(pane(17))
-    const installed = (await screen.findByText('Installed')).closest('section')
-    if (!installed) {
-      throw new Error('missing installed agents section')
+    const row = (await screen.findByRole('radiogroup', { name: 'Claude availability' })).closest(
+      '.py-3'
+    )
+    if (!(row instanceof HTMLElement)) {
+      throw new Error('missing Claude settings row')
     }
-    expect(within(installed).getByText('--dangerously-skip-permissions')).toBeTruthy()
+    expect(within(row).getByText('--dangerously-skip-permissions')).toBeTruthy()
     expect(transport.mutate).not.toHaveBeenCalled()
   })
 

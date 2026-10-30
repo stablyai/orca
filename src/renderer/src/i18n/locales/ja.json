@@ -58,12 +58,6 @@
         "antigravitySignInNeeded": "チャットには、ターミナルの agy アカウントとは別の Antigravity サインインが必要です。",
         "searchAgents": "Agent",
         "searchTerminal": "ターミナル",
-        "installed": "インストール済み",
-        "notInstalled": "未インストール",
-        "install": "インストール",
-        "description": "どの Agent をチャットとして開くかを選択します。オフにすると、インストールされた Agent がターミナルで開きます。",
-        "agentDisabled": "Agent 設定でオフになっています",
-        "toggleLabel": "{{value0}} をチャットとして開きます",
         "searchCli": "CLI"
       },
       "permissionsDescriptionOwnAgents": "新しいチャットは、設定 → Agent にある各 Agent の権限に従います。"
@@ -326,7 +320,6 @@
       "defaultOpensAs": "{{value0}}の開き方",
       "defaultOpensAsChat": "チャット",
       "defaultOpensAsCli": "CLI",
-      "defaultOpensAsScope": "このコンピューターから起動する新しい{{value0}}セッション（ペアリングしたホスト上も含む）に適用されます。プロバイダーのスイッチと連動します。",
       "save": "保存",
       "clearDefault": "デフォルトの Agent をクリア",
       "customArgsBadge": "カスタム",
@@ -379,7 +372,11 @@
         "description": "各 Codex アカウントとご自身の ~/.codex で、ほかのアカウントで始めた会話を再開できるようにします。オフにすると、アカウントごとに履歴を分けたままにします。オフにしても、すでに共有されたものは削除されません。",
         "unsupported": "この設定を変更するには、{{host}} の Orca を更新してください。",
         "updateFailed": "{{host}} の設定を更新できませんでした。"
-      }
+      },
+      "installCliForTerminal": "ターミナルで開くには {{value0}} CLI をインストールしてください。",
+      "chatRuntime": "チャットランタイム",
+      "chatChoiceTitle": "チャットまたは CLI で開く",
+      "chatChoiceDescription": "各 Agent をチャットで開くか CLI で開くかを選びます。"
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "シンボリックリンク",
@@ -13747,8 +13744,7 @@
             "trashFailed": "「{{name}}」をごみ箱に移動できませんでした。"
           },
           "useFileExplorerHandlers": {
-            "32cd9fd991": "シンボリックリンクターゲットを開けません",
-            "folderLinksOutsideProject": "このフォルダーはプロジェクト外へのリンクのため、ここでは開けません。"
+            "32cd9fd991": "シンボリックリンクターゲットを開けません"
           },
           "useFileExplorerImport": {
             "importFailedCount_other": "{{count}} 個のファイルのインポートに失敗しました。",
@@ -19613,7 +19609,7 @@
       "heroBody": "{{size}} MB の一度きりのダウンロードです。このチャットを実行するコンピューター上の {{agent}} チャットで共有されます。",
       "heroBodyNoSize": "一度きりのダウンロードです。このチャットを実行するコンピューター上の {{agent}} チャットで共有されます。",
       "stripSize": "このチャットを実行するコンピューターに {{size}} MB をダウンロード",
-      "settingsHint": "設定 › チャット › プロバイダー からも行えます",
+      "settingsHint": "設定 › Agent からも行えます",
       "installShort": "インストール",
       "tryAgain": "再試行",
       "cancelShort": "キャンセル",

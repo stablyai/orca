@@ -314,6 +314,28 @@ function slots(message: NativeChatMessage, surrounding = false, working = false)
   })
 }
 
+it('keeps a short message footer-free with copy beside the header timestamp', () => {
+  const message: NativeChatMessage = {
+    id: 'short-agent-message',
+    role: 'user',
+    source: 'transcript',
+    timestamp: 1,
+    from,
+    blocks: [{ type: 'text', text: 'Short agent message.' }]
+  }
+  const { container } = render(card(message))
+  expect(screen.queryByRole('button', { name: /Show more|Show less/ })).toBeNull()
+  const body = screen.getByText('Short agent message.').closest('div[id]')
+  expect(body).toBeInTheDocument()
+  expect(body?.nextElementSibling).toBeNull()
+
+  const copy = screen.getByRole('button', { name: 'Copy message' })
+  const timestamp = container.querySelector('time')
+  expect(timestamp).toBeInTheDocument()
+  expect(screen.getByText('Message from').parentElement).toContainElement(copy)
+  expect(copy.parentElement).toBe(timestamp?.parentElement)
+})
+
 it.each(['task', 'mail'] as const)(
   'keeps native %s progress independent from Markdown and reparses own edits',
   async (kind) => {

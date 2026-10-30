@@ -492,15 +492,9 @@
       },
       "providers": {
         "title": "Sağlayıcılar",
-        "description": "Hangi ajanların sohbet olarak açılacağını seçin. Bu seçenek kapalıysa yüklü ajan terminalde açılır.",
         "searchAgents": "ajanlar",
         "searchCli": "CLI",
         "searchTerminal": "terminal",
-        "agentDisabled": "Ajan ayarlarında kapalı",
-        "installed": "Yüklü",
-        "notInstalled": "Yüklü değil",
-        "install": "Yükle",
-        "toggleLabel": "{{value0}} öğesini sohbet olarak aç",
         "antigravityDescription": "Antigravity sohbetleri, Orca'nın bu ana makineye indirdiği ve agy CLI'dan ayrı olan bir sunucuyu çalıştırır.",
         "antigravityNotSignedIn": "Oturum açılmadı. Sohbetler için agy terminal hesabınızdan ayrı bir Antigravity oturumu gerekir.",
         "antigravityAccount": "Hesap",
@@ -749,7 +743,6 @@
       "defaultOpensAs": "{{value0}} açılış biçimi",
       "defaultOpensAsChat": "Sohbet",
       "defaultOpensAsCli": "CLI",
-      "defaultOpensAsScope": "Eşleştirilmiş sunuculardakiler dahil, bu bilgisayardan başlatılan yeni {{value0}} oturumları için geçerlidir. Sağlayıcılar bölümündeki seçimiyle eşleşir.",
       "save": "Kaydet",
       "clearDefault": "Varsayılan ajanı temizle",
       "autoUnsupported": "Otomatik modu için bu ana makinede daha yeni bir Orca sürümü gerekir.",
@@ -799,7 +792,11 @@
         "description": "Her Codex hesabının ve kendi ~/.codex dizininin, diğerlerinde başlatılan konuşmaları sürdürmesine izin verir. Her hesabın geçmişini ayrı tutmak için kapatın. Kapatmak, zaten paylaşılmış hiçbir şeyi kaldırmaz.",
         "unsupported": "Bu ayarı orada değiştirmek için {{host}} üzerindeki Orca'yı güncelleyin.",
         "updateFailed": "{{host}} üzerindeki ayar güncellenemedi."
-      }
+      },
+      "installCliForTerminal": "Terminalde açmak için {{value0}} CLI'ını yükleyin.",
+      "chatRuntime": "Sohbet çalışma ortamı",
+      "chatChoiceTitle": "Sohbet veya CLI olarak aç",
+      "chatChoiceDescription": "Her ajanın sohbet olarak mı yoksa kendi CLI'ında mı açılacağını seçin."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "sembolik bağlantı",
@@ -14097,8 +14094,7 @@
             "trashFailed": "'{{name}}' çöp kutusuna taşınamadı."
           },
           "useFileExplorerHandlers": {
-            "32cd9fd991": "Sembolik bağlantı hedefi açılamıyor",
-            "folderLinksOutsideProject": "Bu klasör proje dışına bağlantı verdiği için burada açılamıyor."
+            "32cd9fd991": "Sembolik bağlantı hedefi açılamıyor"
           },
           "useFileExplorerImport": {
             "importFailedCount_other": "{{count}} dosya içe aktarılamadı.",
@@ -20018,7 +20014,7 @@
       "heroBody": "Bir defaya mahsus {{size}} MB indirilir. Bu sohbeti çalıştıran bilgisayardaki {{agent}} sohbetleri tarafından ortak kullanılır.",
       "heroBodyNoSize": "Bir defaya mahsus indirilir. Bu sohbeti çalıştıran bilgisayardaki {{agent}} sohbetleri tarafından ortak kullanılır.",
       "stripSize": "Bu sohbeti çalıştıran bilgisayara {{size}} MB indirilir",
-      "settingsHint": "Ayarlar › Sohbet › Sağlayıcılar bölümünden de erişilebilir",
+      "settingsHint": "Ayarlar › Ajanlar bölümünden de erişilebilir",
       "installShort": "Yükle",
       "tryAgain": "Yeniden dene",
       "cancelShort": "İptal",

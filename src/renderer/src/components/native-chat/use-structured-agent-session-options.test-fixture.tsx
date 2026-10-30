@@ -12,7 +12,7 @@ type OptionsFixtureMocks = {
   enqueue: Mock
   pick: Mock
   target: RuntimeClientTarget
-  agent: 'codex' | 'claude' | 'antigravity'
+  agent: 'codex' | 'claude' | 'pi' | 'antigravity'
   hold: Mock<
     (
       sessionId: string,
@@ -23,10 +23,14 @@ type OptionsFixtureMocks = {
   >
   toastError: Mock<(message: string) => void>
   coherentCatalog: boolean
+  sendSelection: boolean
 }
 
 const mocks: OptionsFixtureMocks = vi.hoisted(() => {
-  const selection: { target: RuntimeClientTarget; agent: 'codex' | 'claude' } = {
+  const selection: {
+    target: RuntimeClientTarget
+    agent: 'codex' | 'claude' | 'pi' | 'antigravity'
+  } = {
     target: { kind: 'local' },
     agent: 'codex'
   }
@@ -44,7 +48,8 @@ const mocks: OptionsFixtureMocks = vi.hoisted(() => {
       ) => Promise<SelectionOutcome> | null
     >(),
     toastError: vi.fn<(message: string) => void>(),
-    coherentCatalog: false
+    coherentCatalog: false,
+    sendSelection: false
   }
 })
 
@@ -63,6 +68,7 @@ vi.mock('@/runtime/structured-agent-session-host-capability', async () => {
       const supported = actual.useStructuredAgentSessionHostCapability(target, capability)
       return (
         (mocks.coherentCatalog && capability === 'agent-session.coherent-model-catalog.v1') ||
+        (mocks.sendSelection && capability === 'agent-session.send-selection.v1') ||
         supported
       )
     }
@@ -107,6 +113,7 @@ vi.mock('@/lib/structured-agent-session-launch-options', async () => {
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
 import { useStructuredAgentSessionOptions } from './use-structured-agent-session-options'
+import { useStructuredAgentSessionSendOptions } from './use-structured-agent-session-send-options'
 
 const LOCAL_TARGET = { kind: 'local' } as const
 const PAIRED_TARGET = { kind: 'environment', environmentId: 'server-1' } as const
@@ -152,6 +159,7 @@ function mutateWith(reply: MutateCall): {
 }
 
 type RenderProps = {
+  sessionId?: string
   transportEnabled: boolean
   fence: number | null
   turnId?: string | null
@@ -159,7 +167,7 @@ type RenderProps = {
   hidden?: boolean
   launchSeedOptions?: Record<string, string>
   worktree?: string
-  agent?: 'claude' | 'codex' | 'antigravity'
+  agent?: 'claude' | 'codex' | 'pi' | 'antigravity'
   providerStarting?: boolean
   paired?: boolean
 }
@@ -175,10 +183,10 @@ function renderOptions(initial: RenderProps, mutate: StructuredAgentSessionMutat
   mocks.target = initial.paired ? PAIRED_TARGET : LOCAL_TARGET
   mocks.agent = initial.agent ?? 'codex'
   return renderHook(
-    (props: RenderProps) =>
-      useStructuredAgentSessionOptions({
+    (props: RenderProps) => {
+      const options = useStructuredAgentSessionOptions({
         agent: props.agent ?? 'codex',
-        sessionId: 'session-1',
+        sessionId: props.sessionId ?? 'session-1',
         target: props.paired ? PAIRED_TARGET : LOCAL_TARGET,
         transportEnabled: props.transportEnabled,
         isVisible: !props.hidden,
@@ -197,7 +205,14 @@ function renderOptions(initial: RenderProps, mutate: StructuredAgentSessionMutat
               }
             }
           : {})
-      }),
+      })
+      const capture = useStructuredAgentSessionSendOptions(
+        props.sessionId ?? 'session-1',
+        undefined,
+        options.sendSource
+      )
+      return { ...options, capture }
+    },
     { initialProps: initial }
   )
 }

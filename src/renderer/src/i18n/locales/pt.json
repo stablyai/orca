@@ -1411,15 +1411,9 @@
       },
       "providers": {
         "title": "Provedores",
-        "description": "Escolha quais agentes abrem como chat. Quando desativado, um agente instalado abre em um terminal.",
         "searchAgents": "agentes",
         "searchCli": "CLI",
         "searchTerminal": "terminal",
-        "agentDisabled": "Desativado nas configurações de Agentes",
-        "installed": "Instalado",
-        "notInstalled": "Não instalado",
-        "install": "Instalar",
-        "toggleLabel": "Abrir {{value0}} como chat",
         "antigravityDescription": "Os chats do Antigravity executam um servidor que o Orca baixa neste host, separado da CLI agy.",
         "antigravityNotSignedIn": "Sessão não iniciada. Os chats exigem login no Antigravity, separado da sua conta agy do terminal.",
         "antigravityAccount": "Conta",
@@ -1511,7 +1505,6 @@
       "defaultOpensAs": "Abrir {{value0}} como",
       "defaultOpensAsChat": "Chat",
       "defaultOpensAsCli": "CLI",
-      "defaultOpensAsScope": "Aplica-se a novas sessões de {{value0}} iniciadas neste computador, inclusive em hosts pareados. Corresponde à opção em Provedores.",
       "permissionsTitle": "Permissões",
       "permissionsChoiceExplanation": "O que todos os agentes podem fazer sem perguntar. Você pode configurar um agente de forma diferente abaixo.",
       "permissionEachOwn": "Configurações próprias de cada agente",
@@ -1548,7 +1541,11 @@
         "description": "Permite que cada conta do Codex, e o seu próprio ~/.codex, retome conversas iniciadas nas outras. Desative para manter o histórico de cada conta separado. Desativar não remove nada que já tenha sido compartilhado.",
         "unsupported": "Atualize o Orca em {{host}} para alterar essa configuração lá.",
         "updateFailed": "Não foi possível atualizar a configuração em {{host}}."
-      }
+      },
+      "installCliForTerminal": "Instale a CLI do {{value0}} para abri-lo em um terminal.",
+      "chatRuntime": "Runtime de chat",
+      "chatChoiceTitle": "Abrir como chat ou CLI",
+      "chatChoiceDescription": "Escolha se cada agente abre como chat ou na sua CLI."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "link simbólico",
@@ -10828,8 +10825,7 @@
             "unresolved": "Não foi possível determinar qual host possui este espaço de trabalho. Verifique a conexão e tente novamente."
           },
           "useFileExplorerHandlers": {
-            "32cd9fd991": "Não é possível abrir o destino do link simbólico",
-            "folderLinksOutsideProject": "Esta pasta aponta para fora do projeto, então não pode ser aberta aqui."
+            "32cd9fd991": "Não é possível abrir o destino do link simbólico"
           },
           "useFileExplorerKeys": {
             "8adb953095": "Falha na operação"
@@ -21081,7 +21077,7 @@
       "heroBody": "Download único de {{size}} MB. Ele é compartilhado pelos chats do {{agent}} no computador que executa este chat.",
       "heroBodyNoSize": "Download único. Ele é compartilhado pelos chats do {{agent}} no computador que executa este chat.",
       "stripSize": "Download de {{size}} MB no computador que executa este chat",
-      "settingsHint": "Também em Configurações › Chat › Provedores",
+      "settingsHint": "Também em Configurações › Agentes",
       "installShort": "Instalar",
       "tryAgain": "Tentar novamente",
       "cancelShort": "Cancelar",

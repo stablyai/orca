@@ -66,6 +66,7 @@ export type StructuredAgentSessionOptionState = {
   permissionMode: string | null
   reportedPermissionMode?: string | null
   permissionOwnSupported?: boolean | null
+  reportedEffort?: string
   pendingId: string | null
   listingInProgress?: boolean
   fastModeRestricted?: boolean
@@ -203,6 +204,7 @@ export function applyStructuredAgentSessionOptions(
   return {
     ...state,
     optionsAnswerPresent: true,
+    reportedEffort: state.record.agent === 'pi' ? current.reportedEffort : undefined,
     catalog: installed ? state.catalog : structuredAgentSessionOptionCatalog(seed, result),
     fastModeRestricted:
       installed &&
@@ -238,6 +240,9 @@ export function commitStructuredAgentSessionOption(
   value: string,
   origin: 'picked' | 'seeded' = 'picked'
 ): StructuredAgentSessionOptionState {
+  if (id === 'model' || id === 'effort') {
+    state = { ...state, reportedEffort: undefined }
+  }
   if (id === AGENT_CHAT_PERMISSION_MODE_OPTION_ID) {
     return { ...state, permissionMode: value, reportedPermissionMode: undefined, pendingId: null }
   }

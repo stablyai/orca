@@ -7,7 +7,7 @@ import { translate } from '@/i18n/i18n'
 
 export function PluginsStatusSegment(): React.JSX.Element {
   const shortcut = useShortcutKeyComboDetails('view.plugins')
-  const label = translate('auto.components.status.bar.PluginsStatusSegment.label', 'Plugins')
+  const label = translate('auto.components.settings.PluginsSettingsSection.title', 'Plugins')
 
   return (
     <Tooltip>

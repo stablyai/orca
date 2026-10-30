@@ -36,6 +36,8 @@ export type AgentSessionOptionsResult = {
     acceptedInputSources?: AgentSessionAcceptedInputSources
     model?: string
     effort?: string
+    /** Child-scoped actual for display only; effort remains accepted raw input. */
+    reportedEffort?: string
     /** Canonical preference for the next turn. Explicit false is meaningful. */
     fastMode?: boolean
     /** Next-turn service tier id where the model lists `serviceTiers`; `default` is standard. */

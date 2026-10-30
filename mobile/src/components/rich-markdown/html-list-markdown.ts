@@ -132,6 +132,11 @@ export function holdsUnownedList(element: Element): boolean {
   return Array.from(element.querySelectorAll('ul, ol')).some((list) => list.closest('li') === null)
 }
 
+// An empty task saves as a bare `- [ ]` rather than leaving trailing whitespace on its line.
+function itemLine(prefix: string, text: string, isTask: boolean): string {
+  return isTask && !text ? prefix.trimEnd() : prefix + text
+}
+
 // Indent two spaces per list level; prefer markup item number over position to preserve pasted/split browser renumbering.
 export function listMarkdown(element: Element, depth: number): string {
   const tag = element.tagName.toLowerCase()
@@ -163,7 +168,7 @@ export function listMarkdown(element: Element, depth: number): string {
             .split('\n')
             .map((text, lineIndex) => (lineIndex === 0 || !text ? text : continuation + text))
             .join('\n')
-        : indent + marker + listItemText(item)
+        : itemLine(indent + marker, listItemText(item), isTask)
       // Children of a wide ordered marker start at its content column, or readers end the item.
       const nestedIndent = blocks
         ? ' '.repeat(Math.max(0, continuation.length - indent.length - 2))
