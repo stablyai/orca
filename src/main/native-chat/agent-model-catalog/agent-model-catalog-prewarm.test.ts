@@ -538,7 +538,7 @@ it('keeps old producers from publishing rows, defaults or failure expiry after r
   expect(save).not.toHaveBeenCalled()
 })
 
-it('withholds a known retired Pi invocation until a current live producer lists', async () => {
+it('withholds a known retired Pi invocation until current discovery succeeds', async () => {
   const store = new AgentModelCatalogStore()
   const record = agentSessionRecordFixture({
     sessionId: 'pi-chat',
@@ -562,7 +562,7 @@ it('withholds a known retired Pi invocation until a current live producer lists'
   })
   const old = service.captureSource(record)
   store.expireAgent('pi')
-  void service.demand({ agent: 'pi', sessionId: record.sessionId })
+  const demand = service.demand({ agent: 'pi', sessionId: record.sessionId })
   await vi.waitFor(() => expect(probe).toHaveBeenCalledTimes(1))
   expect(service.snapshot({ agent: 'pi', sessionId: record.sessionId, savedOnly: true })).toEqual({
     origin: 'unknown'
@@ -576,9 +576,15 @@ it('withholds a known retired Pi invocation until a current live producer lists'
     listing('current-child'),
     service.captureSource(record)
   )
-  expect(
-    service.snapshot({ agent: 'pi', sessionId: record.sessionId, savedOnly: true })
-  ).toMatchObject({ models: [{ id: 'current-child' }] })
+  expect(service.snapshot({ agent: 'pi', sessionId: record.sessionId, savedOnly: true })).toEqual({
+    origin: 'unknown'
+  })
+  listingPending.resolve(listing('current-discovery'))
+  await demand
+  const recovered = service.snapshot({ agent: 'pi', sessionId: record.sessionId, savedOnly: true })
+  expect(recovered.origin).toBe('probe')
+  expect(recovered.origin !== 'unknown' && recovered.models.map((model) => model.id)).toEqual([
+    'current-discovery'
+  ])
   service.stop()
-  listingPending.resolve(listing('stopped'))
 })

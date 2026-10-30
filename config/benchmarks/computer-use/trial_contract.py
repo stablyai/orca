@@ -40,6 +40,7 @@ def select_unique(elements, selector):
 def initial_state(task):
     text = "hello" if task == "replace_submit" else ""
     return {"text": text, "decoyText": DECOY, "count": 0, "returns": 0, "combo": "Red", "top": 0,
+            "submittedText": None, "clickedColor": None,
             "check": False, "menuHits": 0, "dropOpen": False, "selStart": len(text), "selLen": 0,
             "logicalFocus": "decoy" if task == "targeted_type" else "field"}
 
@@ -51,21 +52,23 @@ def acknowledged(state, instance, pid, nonce):
 
 def prepared(state, task, instance, pid, nonce):
     return acknowledged(state, instance, pid, nonce) and all(
-        state.get(key) == value for key, value in initial_state(task).items())
+        key in state and state[key] == value for key, value in initial_state(task).items())
 
 
 def completed(state, task):
     expected = initial_state(task)
-    for key in ("selStart", "selLen", "logicalFocus"):
+    for key in ("selStart", "selLen", "logicalFocus", "submittedText", "clickedColor"):
         del expected[key]
     if task in ("targeted_type", "type_submit", "replace_submit"):
         expected["text"] = MARKER
     if task in ("type_submit", "replace_submit"):
         expected["returns"] = 1
+        expected["submittedText"] = MARKER
     if task in ("choose_and_click", "click_interference"):
         expected["count"] = 1
     if task == "choose_and_click":
         expected["combo"] = "Blue"
+        expected["clickedColor"] = "Blue"
     if task == "scroll_interference":
         del expected["top"]
         if not isinstance(state.get("top"), (int, float)) or state["top"] <= 0:

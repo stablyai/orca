@@ -8453,19 +8453,10 @@
           "191ac34567": "Agent Orchestration",
           "nestedWorkerDepthTitle": "Nested worker depth",
           "nestedWorkerDepthDescription": "How many generations of dispatched workers may spawn their own workers. 1 keeps the agent tree flat: a coordinator dispatches workers, and those workers do not dispatch.",
-          "chatErrorEscalationTitle": "Tell the coordinator about chat errors",
-          "chatErrorEscalationDescription": "When a dispatched agent hits an error that ends its turn, send the exact error to the coordinator that dispatched it. The task stays assigned to the agent. Only works for agents running in Chat UI.",
-          "chatErrorEscalationNeedsChat": "Turn on Chat UI in Experimental settings to use it.",
-          "chatErrorEscalationKeywordError": "error",
-          "chatErrorEscalationKeywordChat": "chat",
-          "heartbeatTitle": "Worker heartbeats",
-          "heartbeatDescription": "Dispatched workers check in every few minutes so the coordinator can tell a working agent from a hung one. Turning this off means fewer messages to the coordinator, but it loses that check-in signal. Applies to workers dispatched after the change.",
-          "heartbeatKeywordHeartbeat": "heartbeat",
-          "heartbeatKeywordStalled": "stalled",
-          "heartbeatKeywordInterval": "interval",
-          "heartbeatIntervalTitle": "Heartbeat interval",
-          "heartbeatIntervalDescription": "Shorter intervals give the coordinator more frequent check-ins but send it more messages. Longer intervals send fewer messages but leave longer gaps between check-ins. Applies to workers dispatched after the change.",
-          "heartbeatIntervalSuffix": "minutes",
+          "workerAutoReleaseTitle": "Auto-close finished workers",
+          "workerAutoReleaseDescription": "Closes a worker's terminal or chat 2 minutes after it finishes, unless you choose Keep open. If it starts working again, the 2 minutes start over when it finishes.",
+          "workerAutoReleaseKeywordClose": "close",
+          "workerAutoReleaseKeywordRelease": "release",
           "7bc082f4de": "Copy install command"
         },
         "OrchestrationSetupCard": {
@@ -13226,7 +13217,6 @@
           "previous": "Previous",
           "updated": "Updated",
           "license": "License",
-          "homepage": "Homepage",
           "whatsNew": "What’s new",
           "hashCopied": "Content hash copied",
           "hashCopyFailed": "Couldn't copy the hash."
@@ -13271,9 +13261,11 @@
         },
         "PluginThemeUseNow": {
           "label": "Use now:",
-          "useName": "Use now: {{value0}}",
           "useForLight": "Use for light:",
-          "useForDark": "Use for dark:"
+          "useForDark": "Use for dark:",
+          "assignedLight": "{{value0}} set as your light theme",
+          "assignedDark": "{{value0}} set as your dark theme",
+          "saveFailed": "Could not save the theme. Try again."
         },
         "PluginPageHero": {
           "screenshots": "Screenshots",
@@ -18692,6 +18684,13 @@
           "confirm": "Sign in",
           "cancel": "Cancel"
         },
+        "javaScriptDialog": {
+          "title": "{{origin}} says",
+          "anonymousTitle": "This page says",
+          "confirm": "OK",
+          "cancel": "Cancel",
+          "answer": "Answer"
+        },
         "sitePermission": {
           "label": {
             "camera": "Camera",
@@ -20072,7 +20071,8 @@
       "bar": {
         "SortableTabContextMenu": {
           "switchToTerminalView": "Continue with Terminal Agent",
-          "switchToChatView": "Continue in Chat UI"
+          "switchToChatView": "Continue in Chat UI",
+          "allowAutoClose": "Allow Auto-Close"
         },
         "BrowserTab": {
           "closeOthers": "Close Others",
@@ -20487,6 +20487,10 @@
       "caution": "Caution"
     },
     "automations": {
+      "openIn": "Open in",
+      "chat": "Chat",
+      "terminal": "Terminal",
+      "runChatUnavailable": "Run chat is unavailable. Showing its workspace; any saved output remains in Run Details.",
       "runTerminalUnavailable": "Run terminal is unavailable."
     },
     "agentCombobox": {
@@ -20499,6 +20503,13 @@
     },
     "JiraIssueWorkspace": {
       "pendingChange": "Another issue change is in progress."
+    },
+    "linearWorkspacePicker": {
+      "search": "Search Linear workspaces",
+      "empty": "No workspaces found.",
+      "label": "Linear workspace",
+      "all": "All Linear workspaces",
+      "unavailable": "Unavailable Linear workspace"
     },
     "jiraProjectPicker": {
       "search": "Search Jira projects",
@@ -20569,6 +20580,13 @@
       "stepDownload": "Download",
       "stepUnpack": "Unpack",
       "stepCheck": "Check"
+    },
+    "orchestration": {
+      "workerAutoClose": {
+        "running": "Temporary orchestration worker · Closes 2 minutes after it finishes",
+        "finished": "Temporary orchestration worker finished · Closes in {{countdown}}",
+        "keepOpen": "Keep open"
+      }
     }
   },
   "dashboardPopout": {
@@ -23162,5 +23180,9 @@
       "needsPermission": "Agent needs permission",
       "statusStale": "Agent status is stale"
     }
+  },
+  "wslDistroHold": {
+    "terminalStopped": "The WSL distro {{distro}} is stopped, so Orca didn't start this terminal. Start the distro, then try again.",
+    "terminalUnverifiable": "Orca couldn't check whether the WSL distro {{distro}} is running, so it didn't start this terminal. Start the distro, then try again."
   }
 }

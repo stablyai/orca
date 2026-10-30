@@ -86,7 +86,7 @@ export function registerJournalUnknownRowKindTests(): void {
       deleteTestJournalRow(db, IDENTITY.sessionId, seq)
       insertTestJournalRowJson(db, IDENTITY.sessionId, seq, json, 5_000 + seq)
     })
-    closeTestJournalHostDatabase(root)
+    await closeTestJournalHostDatabase(root)
   }
 
   async function restartAfter(edit: (put: (seq: number, json: string) => void) => void = () => {}) {

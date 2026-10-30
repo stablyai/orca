@@ -50,8 +50,8 @@ describe('foreground group signalling over the in-process reader', () => {
   it('gives an 80ms ps its whole timeout while a terminal naming pass is held', async () => {
     setLibprocAddonForTests({
       readProcessTable: async () => [row(ROOT_PID)],
-      processCwd: () => null,
-      processPath: () => null
+      readProcessCwd: async () => null,
+      readProcessPath: async () => null
     })
     claimDarwinTerminalNaming(() => new Promise<never>(() => {}))
     // An 80ms ps, killed at its timeout like process-host's runProcess.

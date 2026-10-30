@@ -101,6 +101,15 @@ export async function installOnJournal(
       onState: delivery.reconcile
     })
   }
+  if (deps.onTurnAttention) {
+    const installed = host
+    const onTurnAttention = deps.onTurnAttention
+    installed.subscribeTurnCompletions({
+      id: 'host-turn-attention',
+      includePrompts: true,
+      emit: (event) => onTurnAttention(event, installed.readStatusSummary)
+    })
+  }
   // Prewarm catalogs at runtime start for local and remote hosts.
   const modelCatalog = host.deps.modelCatalog
   void modelCatalog?.prewarm()

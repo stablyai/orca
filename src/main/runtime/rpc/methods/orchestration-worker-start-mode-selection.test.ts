@@ -162,7 +162,7 @@ describe('worker-start honours the settings default', () => {
     const preamble = sendStructuredWorkerPreamble.mock.calls[0]![0].preamble
     expect(preamble).toContain(`Your Orca session ID is: orca_session_id:${STRUCTURED_SESSION_ID}`)
     expect(preamble).toContain('The coordinator cannot see this chat')
-    expect(preamble).toContain('it will send this chat a fresh')
+    expect(preamble).toContain('More supervised work arrives in this chat')
     expect(preamble).not.toContain('this terminal')
     expect(preamble).not.toMatch(/exit the shell/i)
     expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
@@ -179,7 +179,7 @@ describe('worker-start honours the settings default', () => {
     expect(createStructuredWorkerSessionForWorktree).not.toHaveBeenCalled()
     const preamble = vi.mocked(runtime.sendTerminalAgentPrompt).mock.calls[0]![1]
     expect(preamble).toContain('The coordinator cannot see this terminal')
-    expect(preamble).toContain('Do not exit the shell. Your terminal stays available')
+    expect(preamble).toContain('Do not exit the shell. More supervised work arrives here')
     expect(preamble).not.toContain('this chat')
     expect(sendStructuredWorkerPreamble).not.toHaveBeenCalled()
   })

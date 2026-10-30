@@ -7989,19 +7989,6 @@
           "191ac34567": "Orquestração de Agentes",
           "nestedWorkerDepthTitle": "Profundidade de worker aninhado",
           "nestedWorkerDepthDescription": "Quantas gerações de workers despachados podem gerar seus próprios workers. 1 mantém a árvore de agentes plana: um coordenador despacha workers, e esses workers não despacham.",
-          "chatErrorEscalationTitle": "Avisar o coordenador sobre erros do chat",
-          "chatErrorEscalationDescription": "Quando um agente atribuído encontra um erro que encerra seu turno, envia o erro exato ao coordenador que o atribuiu. A tarefa continua atribuída ao agente. Funciona apenas para agentes executados na interface de chat.",
-          "chatErrorEscalationNeedsChat": "Ative a interface de chat nas configurações experimentais para usar.",
-          "chatErrorEscalationKeywordError": "erro",
-          "chatErrorEscalationKeywordChat": "chat",
-          "heartbeatTitle": "Sinais de vida dos workers",
-          "heartbeatDescription": "Os workers atribuídos dão sinal a cada poucos minutos para que o coordenador distinga um agente trabalhando de um travado. Desativar reduz as mensagens para o coordenador, mas ele perde esse sinal de acompanhamento. Vale para workers atribuídos após a mudança.",
-          "heartbeatKeywordHeartbeat": "sinal de vida",
-          "heartbeatKeywordStalled": "travado",
-          "heartbeatKeywordInterval": "intervalo",
-          "heartbeatIntervalTitle": "Intervalo dos sinais de vida",
-          "heartbeatIntervalDescription": "Intervalos menores dão ao coordenador sinais mais frequentes, mas enviam mais mensagens. Intervalos maiores enviam menos mensagens, mas deixam mais tempo entre os sinais. Vale para workers atribuídos após a mudança.",
-          "heartbeatIntervalSuffix": "minutos",
           "7bc082f4de": "Copiar comando de instalação"
         },
         "RuntimeAccessGrantList": {
@@ -9395,7 +9382,6 @@
           "previous": "Anterior",
           "updated": "Atualizado",
           "license": "Licença",
-          "homepage": "Site",
           "whatsNew": "Novidades"
         },
         "PluginFilterPopover": {
@@ -19442,6 +19428,13 @@
           "confirm": "Entrar",
           "cancel": "Cancelar"
         },
+        "javaScriptDialog": {
+          "title": "{{origin}} diz",
+          "anonymousTitle": "Esta página diz",
+          "confirm": "OK",
+          "cancel": "Cancelar",
+          "answer": "Resposta"
+        },
         "sitePermission": {
           "label": {
             "camera": "Câmera",
@@ -21162,6 +21155,10 @@
       "caution": "Cuidado"
     },
     "automations": {
+      "openIn": "Abrir em",
+      "chat": "Chat",
+      "terminal": "Terminal",
+      "runChatUnavailable": "O chat da execução está indisponível. O espaço de trabalho está aberto; a saída salva continua nos detalhes da execução.",
       "runTerminalUnavailable": "O terminal da execução está indisponível."
     },
     "agentCombobox": {
@@ -23203,5 +23200,9 @@
       "needsPermission": "O agente precisa de permissão",
       "statusStale": "O status do agente está desatualizado"
     }
+  },
+  "wslDistroHold": {
+    "terminalStopped": "A distribuição WSL {{distro}} está parada, então o Orca não iniciou este terminal. Inicie a distribuição e tente novamente.",
+    "terminalUnverifiable": "O Orca não conseguiu verificar se a distribuição WSL {{distro}} está em execução, então não iniciou este terminal. Inicie a distribuição e tente novamente."
   }
 }

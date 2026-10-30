@@ -92,7 +92,11 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   const structuredAgentCliSourceEvidence =
     args.structuredAgentCliSourceEvidence ??
     (args.resumeFrom?.cliSource
-      ? captureStructuredAgentCliSource(() => args.runtime.getAgentProviderSessionRows())
+      ? captureStructuredAgentCliSource(
+          () => args.runtime.getAgentProviderSessionRows(),
+          args.resumeFrom.cliSource,
+          (source) => args.runtime.getStructuredAgentCliSourceRoute(source)
+        )
       : undefined)
   // Adoption replay may need the record loaded from disk before source discovery can be skipped.
   let host = args.resumeFrom ? await args.ensureHost() : null

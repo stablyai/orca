@@ -1,3 +1,4 @@
+import { AutomationSurfaceField } from './AutomationSurfaceField'
 import AgentCombobox from '@/components/agent/AgentCombobox'
 import { translate } from '@/i18n/i18n'
 import { isValidAutomationSchedule } from '../../../../shared/automation-schedule-parsing'
@@ -22,6 +23,8 @@ import type { AutomationDraft } from './AutomationEditorDialog'
 
 type AutomationEditorSettingsSidebarProps = {
   /** The host picker: where a create lands, or the host an edit can move the record to. */
+  surface: 'chat' | 'terminal'
+  chatSupported: boolean | null
   destination?: AutomationCreateDestinationControl
   repos: readonly Repo[]
   projectHostSetups: readonly ProjectHostSetup[]
@@ -44,6 +47,8 @@ type AutomationEditorSettingsSidebarProps = {
 
 export function AutomationEditorSettingsSidebar({
   destination,
+  surface,
+  chatSupported,
   repos,
   projectHostSetups,
   automationYamlHooksByRepoKey,
@@ -82,7 +87,15 @@ export function AutomationEditorSettingsSidebar({
               allowNarrowTrigger
             />
           </Field>
-          <AutomationExtraAgentArgsField draft={draft} onDraftChange={onDraftChange} />
+          <AutomationSurfaceField
+            draft={draft}
+            settings={settings}
+            supported={chatSupported}
+            onDraftChange={onDraftChange}
+          />
+          {surface === 'terminal' ? (
+            <AutomationExtraAgentArgsField draft={draft} onDraftChange={onDraftChange} />
+          ) : null}
         </div>
         {destination ? (
           <div className="mb-4">
