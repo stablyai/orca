@@ -3,6 +3,7 @@ import { Text } from 'react-native'
 import { File, FileText, Globe, SquareTerminal } from 'lucide-react-native'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import { AgentStateDot } from '../components/AgentStateDot'
+import { activateMobileUiLocale, getMobileUiLocale } from '../i18n/mobile-i18n'
 import {
   applyMobileColorScheme,
   getMobileColorScheme,
@@ -515,6 +516,41 @@ describe('MobileSessionTabStrip edge taps', () => {
     strip.unmount()
   })
 
+  it('keeps an empty terminal heading readable as its open row and locale change', async () => {
+    const originalLocale = getMobileUiLocale()
+    const empty = { ...visibleTabs[0], title: '' }
+    const strip = mountStrip([], [empty])
+    try {
+      strip.tapAt(50)
+      const source = strip.card().props.source
+      const motion = strip.card().props.motion
+      const now = Date.now()
+      const heading = () => strip.card().findAllByType(Text)[0].props.children
+      expect(heading()).toBe('Terminal')
+      for (const title of ['First full shell title', '', 'Next full shell title']) {
+        const row = { ...empty, title }
+        strip.updateTabs([row])
+        expect(heading()).toBe(title || 'Terminal')
+        expect(row.title).toBe(title)
+        expect(strip.card().props.active).toBe(true)
+        expect(strip.card().props.source).toBe(source)
+        expect(strip.card().props.motion).toBe(motion)
+        expect(Date.now()).toBe(now)
+        if (title === '') {
+          await act(async () => activateMobileUiLocale('ja'))
+          expect(heading()).toBe('ターミナル')
+          expect(row.title).toBe('')
+          expect(Date.now()).toBe(now)
+          await act(async () => activateMobileUiLocale(originalLocale))
+        }
+      }
+      expect(empty.title).toBe('')
+    } finally {
+      strip.unmount()
+      await act(async () => activateMobileUiLocale(originalLocale))
+    }
+  })
+
   it('renders representative per-kind content through Surface and the real footer', () => {
     const samples: {
       tab: Controller['visibleTabs'][number]
@@ -546,8 +582,8 @@ describe('MobileSessionTabStrip edge taps', () => {
         state: 'working'
       },
       {
-        tab: { ...visibleTabs[0], title: 'Shell' },
-        title: 'Shell',
+        tab: { ...visibleTabs[0], title: '  Full shell name · work  ' },
+        title: '  Full shell name · work  ',
         program: 'Terminal',
         icon: SquareTerminal
       },

@@ -5,7 +5,10 @@ import { isTuiAgent } from '../../../src/shared/tui-agent-config'
 import { isBlankBrowserUrl } from '../browser/browser-url'
 import { translate } from '../i18n/mobile-i18n'
 import { agentDotState, type AgentDotState } from '../worktree/agent-row-display'
-import { resolveMobileTerminalTabAgentId } from './mobile-terminal-tab-agent'
+import {
+  getMobileSessionTabTitle,
+  resolveMobileTerminalTabAgentId
+} from './mobile-terminal-tab-agent'
 import type { MobileSessionTab } from './mobile-session-route-types'
 
 export function mobileSessionTabCardContent(
@@ -61,8 +64,9 @@ export function mobileSessionTabCardContent(
       kind: tab.type
     }
   }
+  const title = agentId ? stripLeadingAgentTitleDecoration(tab.title) : tab.title
   return {
-    title: agentId ? stripLeadingAgentTitleDecoration(tab.title) : tab.title,
+    title: title === '' ? getMobileSessionTabTitle(tab, hostAgentIdentity) : title,
     detail: null,
     programName: agentId
       ? isTuiAgent(agentId)
