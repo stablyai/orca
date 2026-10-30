@@ -129,7 +129,10 @@ export const WORKER_START_VIEW: OrchestrationAgentView<WorkerStartAgentReceipt, 
         ? undefined
         : isUnobservedTurnStart(value)
           ? {
+              // The worker is likely starting; a non-zero exit reads as a failure to retry.
               level: 'warning',
+              exitCode: 0,
+              fullExitCode: 1,
               code: 'turn_start_unobserved',
               message: "task typed in; the worker may still be starting. Don't resend."
             }

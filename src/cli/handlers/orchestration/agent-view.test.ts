@@ -313,6 +313,22 @@ describe('orchestration agent views', () => {
     expect(stderr).toBe(
       "warning: turn_start_unobserved: task typed in; the worker may still be starting. Don't resend."
     )
+    expect(process.exitCode).toBe(0)
+
+    process.exitCode = undefined
+    await run(
+      'worker-start',
+      [
+        ['task', 'task_1'],
+        ['full', true]
+      ],
+      {
+        ...OLDER_RUNTIME_START,
+        state: 'outcome_unknown',
+        stage: 'turn_start_unobserved',
+        turnStart: 'unobserved'
+      }
+    )
     expect(process.exitCode).toBe(1)
   })
 })

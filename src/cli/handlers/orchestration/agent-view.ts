@@ -12,6 +12,8 @@ export type OrchestrationFailure = {
   code: string
   message: string
   exitCode?: number
+  /** --full keeps the exit code scripts saw before the concise view. */
+  fullExitCode?: number
   level?: 'error' | 'warning'
 }
 
@@ -39,7 +41,11 @@ export function printOrchestrationResult<TResult, TFields extends AgentViewField
   }
   const failure = view.failure?.(response.result)
   if (failure) {
-    reportOrchestrationFailure(failure)
+    reportOrchestrationFailure(
+      ctx.flags.has('full') && failure.fullExitCode !== undefined
+        ? { ...failure, exitCode: failure.fullExitCode }
+        : failure
+    )
   }
 }
 
