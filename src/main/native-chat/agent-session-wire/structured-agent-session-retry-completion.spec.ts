@@ -28,6 +28,7 @@ import { codexTurnLifecycleIdentity } from '../../codex/codex-structured-journal
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { latestNativeChatTurnSinceRequest } from '../../../shared/native-chat/native-chat-orca-stop-cut'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { registerRetryStopCompletion } from './structured-agent-session-retry-stop-completion.spec'
 
 export function registerRetryCompletion(get: () => Rig): void {
   it('consumes T without Stop when H starts before its reply, retaining physical failed history and real escalation authority', async () => {
@@ -247,48 +248,7 @@ export function registerRetryCompletion(get: () => Rig): void {
     }
   )
 
-  it.each(['prepare', 'written'] as const)(
-    'releases a precommit-refused Stop after early abort of %s with no later provider row',
-    async (phase) => {
-      const rig = get()
-      Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
-      const t = await root(rig)
-      if (phase === 'prepare') {
-        await rig.pick('auto')
-      }
-      const preparation = Promise.withResolvers<unknown>()
-      const entered = vi.fn(() => preparation.promise)
-      rig.codex.routes[phase === 'prepare' ? 'config/read' : 'turn/start'] = entered
-      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-      await fail(rig)
-      await vi.advanceTimersByTimeAsync(2_000)
-      expect(entered).toHaveBeenCalledOnce()
-      const journal = journalOf(rig)
-      const database = journal['database'].db
-      database.exec(
-        "CREATE TRIGGER fail_retry_stop BEFORE INSERT ON agent_session_command_receipts BEGIN SELECT RAISE(ABORT, 'receipt unavailable'); END"
-      )
-      try {
-        expect(await rig.stop()).toMatchObject({
-          ok: false,
-          refusal: { code: 'agent_session_operation_invalid', details: { reason: 'stopFailed' } }
-        })
-        await vi.advanceTimersByTimeAsync(0)
-        expect(rig.failures).toMatchObject([{ id: key(t), outcome: 'failure' }])
-        assertRetired(rig)
-        expect(hidden(rig)).toHaveLength(phase === 'written' ? 1 : 0)
-        expect(journal.itemBody(key(t))).toMatchObject({ outcome: 'failure' })
-        preparation.resolve(phase === 'prepare' ? rig.config : { turn: { id: 'unopened-H' } })
-        await vi.advanceTimersByTimeAsync(90_000)
-        expect(rig.failures).toHaveLength(1)
-        expect(hidden(rig)).toHaveLength(phase === 'written' ? 1 : 0)
-        assertRetired(rig)
-      } finally {
-        database.exec('DROP TRIGGER fail_retry_stop')
-        preparation.resolve(rig.config)
-      }
-    }
-  )
+  registerRetryStopCompletion(get)
 
   it.each(['unproven', 'throw'] as const)(
     'releases the exact failure before an ordinary live close is %s, without treating it as disposal',

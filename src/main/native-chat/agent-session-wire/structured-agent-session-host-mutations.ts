@@ -1,4 +1,3 @@
-import { finishAbortedStructuredAgentSessionProviderRetry } from './structured-agent-session-provider-retry'
 import { latestNativeChatUsageLimitCut } from '../../../shared/native-chat/native-chat-usage-limit-cut'
 import { refuse } from '../../../shared/agent-session-wire'
 import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
@@ -184,13 +183,6 @@ export function cancelStructuredAgentSessionTurn(
           { stop, interrupt: () => plan.run(ctx) }
         )
       : stop().then(({ outcome }) => outcome)
-  ).finally(() =>
-    context.serialize(params.envelope.sessionId, async () => {
-      const journal = context.sessions.get(params.envelope.sessionId)?.journal
-      if (journal && finishAbortedStructuredAgentSessionProviderRetry(journal)) {
-        context.publishWorkChanged(params.envelope.sessionId)
-      }
-    })
   )
 }
 

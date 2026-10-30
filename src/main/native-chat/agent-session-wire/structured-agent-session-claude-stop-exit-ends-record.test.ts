@@ -30,6 +30,10 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 
+import { owners, type View } from './structured-agent-session-provider-retry-view'
+import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import type { JournalStep } from '../agent-session-journal/journal-step-writer'
+
 const CALLER = { callerKey: 'client-1' }
 const CAPABILITIES = ['interrupt_receipt_v1', 'interrupt_cancel_queued_v1', 'msg_lifecycle_v1']
 
@@ -333,6 +337,92 @@ it('has a send made while the close still runs wait for that close, not start an
   expect(connection.closeCount).toBe(1)
 })
 
+it('keeps the Stop receipt and captured close when completion and publication both fail', async () => {
+  const connection = claude.connections[0]!
+  await openTurn(connection)
+  const journal = host['sessions'].get(SESSION)!.journal
+  const completionError = new Error('completion view unavailable')
+  const publicationError = new Error('row-free publication unavailable')
+  const completion = vi.fn(() => {
+    throw completionError
+  })
+  const originalSet = owners.set.bind(owners)
+  let underlying = owners.get(journal)!
+  let wrapped = underlying
+  const wrap = (view: View): View => {
+    underlying = view
+    wrapped = { ...view, finishAborted: completion }
+    return wrapped
+  }
+  const replace = vi
+    .spyOn(owners, 'set')
+    .mockImplementation((key, view) => originalSet(key, key === journal ? wrap(view) : view))
+  originalSet(journal, wrap(underlying))
+  const publish = host['clientDelivery'].publishGenerationEnded
+  let publicationAttempts = 0
+  const publication = vi
+    .spyOn(host['clientDelivery'], 'publishGenerationEnded')
+    .mockImplementation((id, options) => {
+      if (id === SESSION && completion.mock.calls.length > 0 && publicationAttempts === 0) {
+        publicationAttempts += 1
+        throw publicationError
+      }
+      return publish(id, options)
+    })
+  const proof = deferred<void>()
+  const close = connection.close
+  let attempts = 0
+  connection.close = async () => {
+    attempts += 1
+    connection.closed = true
+    await proof.promise
+    return close()
+  }
+  refuseWritesOnceClosed(connection)
+  const request = { envelope: envelope('agentSession.cancel', {}) }
+  try {
+    await expect(host.cancel(CALLER, request)).resolves.toMatchObject({
+      ok: true,
+      value: { cancelled: true }
+    })
+    expect(completion).toHaveBeenCalledOnce()
+    expect(publicationAttempts).toBe(1)
+    for (const [scope, error] of [
+      ['stop-retry-completion', completionError],
+      ['stop-retry-publication', publicationError]
+    ] as const) {
+      expect(log.entries).toContainEqual(
+        expect.objectContaining({
+          fields: expect.objectContaining({
+            scope,
+            sessionId: SESSION,
+            operationId: request.envelope.clientOperationId,
+            error
+          })
+        })
+      )
+    }
+    frame(connection, INTERRUPTED_RESULT)
+    const sent = send('Carry on.')
+    await eventually(() => expect(attempts).toBe(1))
+    expect(claude.connections).toHaveLength(1)
+    proof.resolve()
+    await sent
+    await resumedWith(connection, 'Carry on.')
+    expect(attempts).toBe(1)
+    expect(connection.closeCount).toBe(1)
+  } finally {
+    frame(connection, INTERRUPTED_RESULT)
+    proof.resolve()
+    replace.mockRestore()
+    if (owners.get(journal) === wrapped) {
+      originalSet(journal, underlying)
+    }
+    publication.mockRestore()
+    connection.close = close
+  }
+})
+
 it('ends the record at the proven exit though the resume-point write after it never settles', async () => {
   const connection = claude.connections[0]!
   await openTurn(connection)
@@ -524,11 +614,50 @@ it('retains exit ownership through kept reattach and final-tail failure recovery
     event.type === 'ended' ? lateEvent.promise.then(() => handle(event)) : handle(event)
   )
   const journal = host['sessions'].get(SESSION)!.journal
-  const append = journal.appendResolvedItem.bind(journal)
-  vi.spyOn(journal, 'appendResolvedItem').mockImplementationOnce(async (resolve, options) => {
-    await append(resolve, options)
-    now += 30_000
-    throw new Error('final journal write acknowledgement lost')
+  const turnId = activeStructuredAgentSessionTurnId(journal.snapshot().items)
+  const target = journal
+    .snapshot()
+    .items.find((item) => item.body.kind === 'turn' && item.body.turnId === turnId)
+  if (!target) {
+    throw new Error('original exiting turn missing')
+  }
+  const acknowledgementLost = vi.fn()
+  const append = journal.appendSteps.bind(journal)
+  vi.spyOn(journal, 'appendSteps').mockImplementation(async (steps) => {
+    let matched: number | undefined
+    const observed = steps.map((step, index): JournalStep =>
+      step.kind !== 'item'
+        ? step
+        : {
+            ...step,
+            resolve: () => {
+              const resolved = step.resolve()
+              if (
+                resolved &&
+                agentJournalItemKey(resolved.identity) === target.itemId &&
+                resolved.body.kind === 'turn' &&
+                resolved.body.state === 'interrupted' &&
+                resolved.body.completedAt === NOW
+              ) {
+                matched = index
+              }
+              return resolved
+            }
+          }
+    )
+    const wrote = await append(observed)
+    if (matched !== undefined && acknowledgementLost.mock.calls.length === 0) {
+      expect(wrote[matched]).toBe(true)
+      expect(journal.itemBody(target.itemId)).toMatchObject({
+        kind: 'turn',
+        state: 'interrupted',
+        completedAt: NOW
+      })
+      acknowledgementLost(target.itemId, matched)
+      now += 30_000
+      throw new Error('final journal write acknowledgement lost')
+    }
+    return wrote
   })
   const reserved = vi.fn()
   const continueAttach = deferred<void>()
@@ -546,6 +675,8 @@ it('retains exit ownership through kept reattach and final-tail failure recovery
     await eventually(() => expect(reserved).toHaveBeenCalledOnce())
     connection.exitVerdict = { root: 'exited', tree: 'unverifiable' }
     connection.handlers.onExit?.(new Error('claude exited'))
+    await eventually(() => expect(acknowledgementLost).toHaveBeenCalledOnce())
+    expect(acknowledgementLost).toHaveBeenCalledWith(target.itemId, expect.any(Number))
     await eventually(() => expect(recovery).toHaveBeenCalledOnce())
     expect(originalSink.state().failed).toBe(true)
     expect(adapter.heldSends(SESSION)?.size).toBe(0)
