@@ -33,7 +33,11 @@ type RuntimeFolderWorktreeCreateDeps = {
     options: TerminalCreateOptions
   ) => Promise<RuntimeTerminalCreate>
   pasteDraft: (handle: string, draft: WorktreeStartupDraftPaste) => void
-  sendFollowup: (handle: string, followup: WorktreeStartupFollowup) => void
+  sendFollowup: (
+    handle: string,
+    followup: WorktreeStartupFollowup,
+    terminal: RuntimeTerminalCreate
+  ) => void
   invalidateResolvedWorktrees: () => void
   notifyWorktreesChanged: (repoId: string) => void
   emitCreated: (event: {
@@ -167,11 +171,12 @@ export async function createRuntimeFolderWorktree(args: {
         ...(ORCA_LAYOUT_OWNER_IS_MAIN ? { keepPaneOnStartFailure: true as const } : {}),
         ...(shouldActivate ? {} : { surfaceOwner: false })
       })
+      request.onStartupTerminalCreated?.(terminal)
       if (args.draftPaste) {
         deps.pasteDraft(terminal.handle, args.draftPaste)
       }
       if (args.startupFollowup) {
-        deps.sendFollowup(terminal.handle, args.startupFollowup)
+        deps.sendFollowup(terminal.handle, args.startupFollowup, terminal)
       }
       didSpawnStartup = true
       startupTerminal = {

@@ -1,11 +1,11 @@
 import type { PtySpawnResult } from '../../providers/pty-provider-contract'
-import { markTerminalStartFailure } from '../../../shared/terminal-start-failure'
 import { ptyIncarnationById } from './provider/ownership-state'
 import { ensureWslHookRelayForReattach } from '../../agent-hooks/wsl-hook-relay-reattach'
 import { noteWslDistroWoken, noteWslDistrosRunning } from '../../wsl-background-distro-gate'
 import {
   agentSessionOwners,
   assertSpawnReplyWasLive,
+  assertSpawnRegistrationAllowed,
   reconcileAgentSessionOwnerListings
 } from './pane/agent-session-owners'
 import { resolveStablePaneOwner } from './pane/stable-owner'
@@ -129,10 +129,7 @@ export async function executePtySpawn(
             // Lower-owner success proves physical commit even when registration observes an early exit.
             facts.reportPtySpawnCommitted?.()
             assertSpawnReplyWasLive(providerResult)
-            ctx.deps.runtime?.assertPtyRegistrationAllowed?.(
-              providerResult.id,
-              providerResult.incarnationId
-            )
+            assertSpawnRegistrationAllowed(ctx.deps.runtime, providerResult)
             if (providerResult.incarnationId) {
               // In-process providers cannot list controller claims; record exact incarnation before ownership promotion.
               ptyIncarnationById.set(providerResult.id, providerResult.incarnationId)
@@ -227,7 +224,7 @@ export async function executePtySpawn(
     ) {
       throw new PaneOwnerContentionError()
     }
-    ctx.deps.runtime?.assertPtyRegistrationAllowed?.(ctx.result.id, ctx.result.incarnationId)
+    assertSpawnRegistrationAllowed(ctx.deps.runtime, ctx.result)
     if (ctx.result.providerSequence) {
       const runtimeSequenceBeforeReconcile =
         ctx.deps.runtime?.getPtyOutputSequence?.(ctx.result.id) ?? 0
@@ -262,16 +259,12 @@ export async function executePtySpawn(
     ctx.deps.runtime?.preparePtyExecutionContext?.(ctx.result.id, spawnedWslDistro)
     ctx.spawnTiming?.mark('provider_spawn')
   } catch (err) {
-    throw failPtySpawnExecute(
-      ctx,
-      markTerminalStartFailure(err, ctx.rejectedRegistrationCandidate ?? ctx.result),
-      {
-        sessionId: facts.sessionId,
-        ownsNewSession: ctx.ownsNewIncarnation,
-        telemetry: args.telemetry,
-        joinedAnotherStart: awaitingAnotherStart
-      }
-    )
+    throw failPtySpawnExecute(ctx, err, {
+      sessionId: facts.sessionId,
+      ownsNewSession: ctx.ownsNewIncarnation,
+      telemetry: args.telemetry,
+      joinedAnotherStart: awaitingAnotherStart
+    })
   } finally {
     if (facts.preAllocatedHandle) {
       ctx.deps.trustedTerminalHandleEnv.delete(facts.preAllocatedHandle)

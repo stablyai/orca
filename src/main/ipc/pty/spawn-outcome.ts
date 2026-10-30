@@ -1,6 +1,6 @@
 import {
-  markTerminalStartFailure,
   terminalExitError,
+  terminalStartError,
   type TerminalStartFailure
 } from '../../../shared/terminal-start-failure'
 import { terminalAttachResult } from '../../../shared/terminal-attach-result'
@@ -28,21 +28,21 @@ export { provenSpawnResponse } from '../../../shared/terminal-spawn-response'
 
 export function requireAcceptedSpawn(outcome: PtySpawnOutcome): PtySpawnOutcome['result'] {
   if (outcome.kind === 'registration-exited') {
-    throw markTerminalStartFailure(
-      terminalExitError(
-        'agent_session_exited_during_start',
-        outcome.terminalStartFailure?.cause,
-        outcome.terminalStartFailure?.incarnationId
-      ),
-      outcome.result
-    )
+    const failure = outcome.terminalStartFailure
+    throw failure
+      ? terminalStartError(
+          'agent_session_exited_during_start',
+          failure.cause,
+          failure.incarnationId
+        )
+      : terminalExitError('agent_session_exited_during_start')
   }
   return outcome.result
 }
 
 export function adoptedOutcome(adopted: AdoptStablePaneResult): PtySpawnOutcome {
   return {
-    kind: adopted.outcome?.kind ?? 'adopted',
+    ...(adopted.outcome ?? { kind: 'adopted' }),
     result: terminalAttachResult(adopted.result),
     owner: adopted.owner
   }

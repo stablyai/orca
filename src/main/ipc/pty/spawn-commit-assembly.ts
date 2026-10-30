@@ -1,7 +1,4 @@
-import {
-  markTerminalStartFailure,
-  readTerminalStartFailure
-} from '../../../shared/terminal-start-failure'
+import { readTerminalStartFailure } from '../../../shared/terminal-start-failure'
 import type { PtySpawnSizeSeed } from './spawn-options-assembly'
 import { isValidTerminalTabId } from '../../../shared/terminal-tab-id'
 import type { AgentSessionClaimedSpawnResult } from '../../../shared/agent-session-host-authority'
@@ -111,17 +108,6 @@ export type PtySpawnCommitInput = {
 
 /** The one commit for a freshly started process, run inside the prompt-intent wrapper. */
 export async function commitPtySpawn(input: PtySpawnCommitInput): Promise<PtySpawnOutcome> {
-  try {
-    return await commitPtySpawnImpl(input)
-  } catch (error) {
-    throw markTerminalStartFailure(
-      error,
-      input.adoptedAgentSession ? { isReattach: true } : input.state.result
-    )
-  }
-}
-
-async function commitPtySpawnImpl(input: PtySpawnCommitInput): Promise<PtySpawnOutcome> {
   const { state } = input
   const { result } = state
   const runtime = state.deps.runtime
@@ -156,6 +142,7 @@ async function commitPtySpawnImpl(input: PtySpawnCommitInput): Promise<PtySpawnO
       runtime,
       registration.store,
       state.pendingRegistrationClaim,
+      result,
       result.id,
       registration.worktreeId,
       null,
@@ -183,7 +170,7 @@ async function commitPtySpawnImpl(input: PtySpawnCommitInput): Promise<PtySpawnO
         if (!(error instanceof Error) || error.message !== 'agent_session_exited_during_start') {
           throw error
         }
-        terminalStartFailure = readTerminalStartFailure(markTerminalStartFailure(error, result))
+        terminalStartFailure = readTerminalStartFailure(error)
       })
       runtime?.cancelPendingPtyRegistration?.(
         result.id,
@@ -224,6 +211,7 @@ async function commitAdoptedAgentSession(
     runtime,
     input.registration.store,
     state.pendingRegistrationClaim,
+    adoptedResult,
     result.id,
     surface.worktreeId,
     null,

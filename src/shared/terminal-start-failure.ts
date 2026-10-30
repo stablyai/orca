@@ -62,25 +62,41 @@ export function terminalExitError(
   })
 }
 
-/** Promote only inside an operation already waiting for a fresh process to start. */
-export function markTerminalStartFailure(
+/** Classify a newly produced creation failure before sharing it with other requests. */
+export function classifyTerminalCreationFailure(
   error: unknown,
-  result?: { isReattach?: boolean; agentSessionEnsure?: { disposition: string } }
+  result:
+    | {
+        id: string
+        incarnationId?: string
+        isReattach?: boolean
+        agentSessionEnsure?: { disposition: string }
+      }
+    | undefined
 ): unknown {
-  if (result?.isReattach || result?.agentSessionEnsure?.disposition === 'adopted') {
+  if (
+    !result?.id ||
+    result.isReattach ||
+    result.agentSessionEnsure?.disposition === 'adopted' ||
+    readTerminalStartFailure(error) ||
+    !(error instanceof Error) ||
+    !('terminalExitCause' in error)
+  ) {
     return error
   }
-  if (error instanceof Error && 'terminalExitCause' in error) {
-    Object.assign(error, {
-      terminalStartFailure: {
-        cause: error.terminalExitCause,
-        ...('terminalExitIncarnationId' in error
-          ? { incarnationId: error.terminalExitIncarnationId }
-          : {})
-      }
-    })
+  const failure = parseTerminalStartFailure({
+    cause: error.terminalExitCause,
+    incarnationId:
+      'terminalExitIncarnationId' in error ? error.terminalExitIncarnationId : result.incarnationId
+  })
+  if (!failure || (failure.incarnationId && failure.incarnationId !== result.incarnationId)) {
+    return error
   }
-  return error
+  return Object.defineProperties(new Error(error.message), {
+    ...Object.getOwnPropertyDescriptors(error),
+    stack: { value: error.stack, configurable: true, writable: true },
+    terminalStartFailure: { value: failure, enumerable: true, configurable: true, writable: true }
+  })
 }
 
 export function readTerminalStartFailure(error: unknown): TerminalStartFailure | undefined {

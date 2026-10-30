@@ -1,3 +1,4 @@
+import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
 import type { PtyLivenessVerdict } from '../../shared/pty-liveness-verdict'
 import { terminalExitError } from '../../shared/terminal-start-failure'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
@@ -6,7 +7,7 @@ import {
   type WorktreeStartupReadinessHost
 } from './runtime-worktree-startup-readiness'
 import {
-  markTerminalStartFailure,
+  classifyTerminalCreationFailure,
   readTerminalStartFailure
 } from '../../shared/terminal-start-failure'
 /** Fresh-launch signals require shell handoff plus dialog/provisional-header vetoes; shells also enable bracketed paste.
@@ -32,7 +33,41 @@ export function getLaunchedAgentReadinessLane(agent: TuiAgent): LaunchedAgentRea
 export type LaunchedAgentReadinessRuntime = Pick<
   OrcaRuntimeService,
   'waitForTerminal' | 'waitForFreshWorkerComposer'
+> &
+  Partial<Pick<OrcaRuntimeService, 'getPtyLivenessVerdict'>>
+
+export type TerminalReadinessCreation = Pick<
+  RuntimeTerminalCreate,
+  'handle' | 'ptyId' | 'incarnationId' | 'isReattach' | 'agentSessionDisposition'
 >
+
+function readinessFailure(
+  runtime: LaunchedAgentReadinessRuntime,
+  handle: string,
+  creation: TerminalReadinessCreation | undefined,
+  error: unknown
+): unknown {
+  if (readTerminalStartFailure(error)) {
+    return error
+  }
+  const verdict = creation?.ptyId ? runtime.getPtyLivenessVerdict?.(creation.ptyId) : null
+  if (
+    !creation ||
+    creation.handle !== handle ||
+    creation.isReattach ||
+    creation.agentSessionDisposition === 'adopted' ||
+    !creation.incarnationId ||
+    !creation.ptyId ||
+    verdict?.status !== 'exited' ||
+    verdict.incarnationId !== creation.incarnationId
+  ) {
+    return error
+  }
+  return classifyTerminalCreationFailure(error, {
+    id: creation.ptyId,
+    incarnationId: creation.incarnationId
+  })
+}
 
 /** Startup dialogs and hold anchors veto signals; Codex's provisional loading header discards input. */
 export function readFreshComposerHold(
@@ -124,22 +159,39 @@ function firstAnswer(
 export async function waitForWorkerAgentReady(
   runtime: LaunchedAgentReadinessRuntime,
   handle: string,
-  args: { agent: TuiAgent | undefined; reusesTerminal: boolean; timeoutMs: number }
+  args: {
+    agent: TuiAgent | undefined
+    reusesTerminal: boolean
+    timeoutMs: number
+    creation?: TerminalReadinessCreation
+  }
 ): Promise<RuntimeTerminalWait> {
   try {
     const result = await (args.agent && !args.reusesTerminal
       ? waitForWorkerStartComposer(runtime, handle, args.agent, args.timeoutMs)
       : runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: args.timeoutMs }))
-    return args.reusesTerminal ? result : requireFreshReadiness(result)
+    return args.reusesTerminal
+      ? result
+      : requireFreshReadiness(runtime, handle, args.creation, result)
   } catch (error) {
-    throw args.reusesTerminal ? error : markTerminalStartFailure(error)
+    throw args.reusesTerminal ? error : readinessFailure(runtime, handle, args.creation, error)
   }
 }
 
-function requireFreshReadiness(result: RuntimeTerminalWait): RuntimeTerminalWait {
+function requireFreshReadiness(
+  runtime: LaunchedAgentReadinessRuntime,
+  handle: string,
+  creation: TerminalReadinessCreation | undefined,
+  result: RuntimeTerminalWait
+): RuntimeTerminalWait {
   if (result.status === 'exited') {
-    const error = terminalExitError('terminal_exited', result.exitCause)
-    if (readTerminalStartFailure(markTerminalStartFailure(error))) {
+    const error = readinessFailure(
+      runtime,
+      handle,
+      creation,
+      terminalExitError('terminal_exited', result.exitCause)
+    )
+    if (readTerminalStartFailure(error)) {
       throw error
     }
   }
@@ -152,7 +204,8 @@ async function waitForLaunchedAgentComposerImpl(
   handle: string,
   agent: TuiAgent,
   timeoutMs: number,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  creation?: TerminalReadinessCreation
 ): Promise<RuntimeTerminalWait> {
   const abort = signal ? { signal } : {}
   if (getLaunchedAgentReadinessLane(agent) === 'composer-marker') {
@@ -169,8 +222,9 @@ async function waitForLaunchedAgentComposerImpl(
       { requireComposerMarker: false, stopOnDialog: true, ...abort }
     )
   } catch (error) {
-    if (readTerminalStartFailure(markTerminalStartFailure(error))) {
-      throw error
+    const failure = readinessFailure(runtime, handle, creation, error)
+    if (readTerminalStartFailure(failure)) {
+      throw failure
     }
     // tui-idle classifies timeout/dialog/unreadable panes and rejects lost handles.
   }
@@ -185,10 +239,16 @@ async function waitForLaunchedAgentComposerImpl(
 export async function waitForLaunchedAgentComposer(
   ...args: Parameters<typeof waitForLaunchedAgentComposerImpl>
 ): Promise<RuntimeTerminalWait> {
+  const [runtime, handle, , , , creation] = args
   try {
-    return requireFreshReadiness(await waitForLaunchedAgentComposerImpl(...args))
+    return requireFreshReadiness(
+      runtime,
+      handle,
+      creation,
+      await waitForLaunchedAgentComposerImpl(...args)
+    )
   } catch (error) {
-    throw markTerminalStartFailure(error)
+    throw readinessFailure(runtime, handle, creation, error)
   }
 }
 

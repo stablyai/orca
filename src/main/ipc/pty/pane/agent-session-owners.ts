@@ -1,5 +1,5 @@
 import {
-  markTerminalStartFailure,
+  classifyTerminalCreationFailure,
   terminalExitError
 } from '../../../../shared/terminal-start-failure'
 import type { AgentSessionOwnerBinding } from '../../../../shared/agent-session-host-authority'
@@ -54,7 +54,18 @@ export function assertSpawnReplyWasLive(result: PtySpawnResult): void {
       agentSessionOperationOutcome: 'unknown' as const
     }
   )
-  throw markTerminalStartFailure(error, result)
+  throw classifyTerminalCreationFailure(error, result)
+}
+
+export function assertSpawnRegistrationAllowed(
+  runtime: Pick<OrcaRuntimeService, 'assertPtyRegistrationAllowed'> | undefined,
+  result: PtySpawnResult
+): void {
+  try {
+    runtime?.assertPtyRegistrationAllowed?.(result.id, result.incarnationId)
+  } catch (error) {
+    throw classifyTerminalCreationFailure(error, result)
+  }
 }
 
 export async function reconcileAgentSessionOwnerListings(): Promise<void> {

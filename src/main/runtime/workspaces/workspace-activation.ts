@@ -33,6 +33,7 @@ import { recordCreatedWorktreeLineage as recordCreatedWorktreeLineageState } fro
 import {
   deliverStartupFollowupPrompt,
   pasteWorktreeStartupDraftWhenReady,
+  type StartupFollowupPromptOptions,
   type WorktreeStartupReadinessHost
 } from '../runtime-worktree-startup-readiness'
 import type { CreateWorktreeResult } from '../../../shared/worktree/create-types'
@@ -289,14 +290,10 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     return describeLaunchedAgentHost(pty, () => this.pathFlavorForPty(pty))
   }
 
-  protected sendStartupFollowupWhenReady(handle: string, followup: WorktreeStartupFollowup): void {
-    void this.deliverStartupFollowup(handle, followup)
-  }
-
   deliverStartupFollowup(
     handle: string,
     followup: WorktreeStartupFollowup,
-    options?: { signal?: AbortSignal; agentLaunch?: boolean }
+    options?: StartupFollowupPromptOptions
   ): Promise<boolean> {
     const host = this.getWorktreeStartupReadinessHost()
     return deliverStartupFollowupPrompt(this, host, handle, followup, options)

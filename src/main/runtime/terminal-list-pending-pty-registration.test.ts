@@ -1,5 +1,5 @@
 import {
-  markTerminalStartFailure,
+  classifyTerminalCreationFailure,
   readTerminalStartFailure
 } from '../../shared/terminal-start-failure'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -172,7 +172,11 @@ describe('startup exit evidence incarnation', () => {
       runtime.assertPtyRegistrationAllowed(PTY, PREDECESSOR)
     } catch (error) {
       expect(readTerminalStartFailure(error)).toBeUndefined()
-      expect(readTerminalStartFailure(markTerminalStartFailure(error))).toMatchObject({
+      expect(
+        readTerminalStartFailure(
+          classifyTerminalCreationFailure(error, { id: PTY, incarnationId: PREDECESSOR })
+        )
+      ).toMatchObject({
         incarnationId: PREDECESSOR
       })
     }

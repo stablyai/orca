@@ -206,30 +206,27 @@ describe('runtime spawn commit: run facts', () => {
     { context: 'fresh', result: {} },
     { context: 'reattach', result: { isReattach: true } },
     { context: 'adopted without reattach flag', result: { agentSessionEnsure: ADOPTED } }
-  ])(
-    'keeps registration-exited output drain and operation context ($context)',
-    ({ context, result }) => {
-      const outcome = {
-        kind: 'registration-exited' as const,
-        result: { id: PTY_ID, incarnationId: INCARNATION_ID, ...result },
-        terminalStartFailure: {
-          incarnationId: INCARNATION_ID,
-          cause: {
-            kind: 'exited' as const,
-            exitCode: 256,
-            initialOutputDiagnostic: 'git-bash-console-capacity' as const
-          }
+  ])('preserves an already-classified registration-exited outcome ($context)', ({ result }) => {
+    const outcome = {
+      kind: 'registration-exited' as const,
+      result: { id: PTY_ID, incarnationId: INCARNATION_ID, ...result },
+      terminalStartFailure: {
+        incarnationId: INCARNATION_ID,
+        cause: {
+          kind: 'exited' as const,
+          exitCode: 256,
+          initialOutputDiagnostic: 'git-bash-console-capacity' as const
         }
       }
-      let error: unknown
-      try {
-        requireAcceptedSpawn(outcome)
-      } catch (caught) {
-        error = caught
-      }
-      expect(error).toMatchObject({ message: 'agent_session_exited_during_start' })
-      expect(formatTerminalStartFailure(error) !== undefined).toBe(context === 'fresh')
-      expect(outcome.kind).toBe('registration-exited')
     }
-  )
+    let error: unknown
+    try {
+      requireAcceptedSpawn(outcome)
+    } catch (caught) {
+      error = caught
+    }
+    expect(error).toMatchObject({ message: 'agent_session_exited_during_start' })
+    expect(formatTerminalStartFailure(error)).toContain('Close some Git Bash terminals')
+    expect(outcome.kind).toBe('registration-exited')
+  })
 })

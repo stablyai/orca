@@ -1,5 +1,5 @@
 import {
-  markTerminalStartFailure,
+  classifyTerminalCreationFailure,
   terminalExitError
 } from '../../../../shared/terminal-start-failure'
 import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
@@ -208,7 +208,7 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalida
       if (error instanceof Error && error.message === 'agent_session_exited_during_start') {
         this.releaseRejectedPtyRegistrationFence(ptyId, incarnationId)
       }
-      throw markTerminalStartFailure(error, result)
+      throw classifyTerminalCreationFailure(error, result)
     }
   }
 
