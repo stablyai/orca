@@ -164,6 +164,15 @@ stop, abandon, retry, or release; keep waiting or inspect.
 prompt injection, and supervised resource ownership. `dispatch --inject` leaves
 an operator-created process unsupervised and is only for an expressiveness gap.
 
+
+## Runtime Outages
+
+`orca orchestration send` and `orca orchestration ask` call the running Orca runtime directly. The CLI does not durably queue these calls or automatically retry them after runtime transport loss. If the runtime is unreachable, the command exits nonzero and the shared CLI error formatter reports `runtime_unavailable`; that result is distinct from a reachable runtime returning a normal `ask` result with `timedOut: true`.
+
+Workers must not treat a failed lifecycle send as delivered. If `worker_done` or `heartbeat` returns `runtime_unavailable`, keep the same turn alive, wait for `orca status --json` to show a reachable runtime, inspect the Dispatch or Run state as needed, then retry the same lifecycle command from the same terminal. `ask` is different: it may persist the question before the client receives the response, so do not retry the same `ask` command blindly. First run the exact non-consuming recovery check printed by the runtime; only issue a new question after that check proves the original was not persisted, otherwise resume or consume the existing question using its original message ID. Only end the worker turn after `worker_done` returns successfully or after sending an explicit `escalation`/failed outcome that the runtime accepts.
+
+Coordinators must distinguish quiet wait windows from runtime outages. A successful `check --wait` timeout means the runtime was reachable and no matching Delivery arrived during that window; an `ok:false` `runtime_unavailable` response means the wait did not observe orchestration state. After an outage, inspect `task-list`, `dispatch-show`, and, when needed, `worker-read` before deciding whether a worker is still running, completed but unreported, or needs an explicit recovery action.
+
 ## Task-spec contract
 
 Every Task spec must be self-contained and name:
