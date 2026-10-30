@@ -1,7 +1,14 @@
 import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
+import {
+  selectWorkspaceByHostTarget,
+  type WorkspaceRecordState
+} from '@/store/workspace-record-selectors'
+import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import { getRuntimeTargetForWorktreeOwner } from '@/lib/file-owner-runtime-target'
+import { runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { warnAmbiguousOwnerOnce } from '@/lib/ambiguous-owner-warning'
 import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
 import type { RuntimeLinearSettings } from '@/runtime/runtime-linear-client'
@@ -122,13 +129,22 @@ function reportTaskStatusSyncResult(result: WorkspaceBoardTaskStatusSyncResult):
   )
 }
 
-/** Linear settings of the worktree's owner, or `null` to skip a worktree whose owner is ambiguous. */
+/** Linear settings of the worktree's owner, or `null` when its captured copy is gone or ambiguous. */
 export function linearSettingsForBoardWorktree(
-  state: WorktreeOperationRouteState,
-  worktreeId: string
+  state: WorktreeOperationRouteState & WorkspaceRecordState,
+  worktreeId: string,
+  /** The card's own host, retained even if its same-id copies change while queued. */
+  hostId?: ExecutionHostId
 ): RuntimeLinearSettings | null {
-  // Why: a workspace no row places is this computer's, but a twin must not borrow its Linear account.
-  const target = getRuntimeTargetForWorktreeOwner(state, worktreeId)
+  if (
+    hostId &&
+    !selectWorkspaceByHostTarget(state, hostWorktreeTarget({ id: worktreeId, hostId }))
+  ) {
+    return null
+  }
+  const target = hostId
+    ? runtimeTargetForWorkspaceOwner(state, { workspaceId: worktreeId, hostId })
+    : getRuntimeTargetForWorktreeOwner(state, worktreeId)
   if (!target) {
     warnAmbiguousOwnerOnce(worktreeId, 'sync a board task status')
   }
@@ -137,29 +153,45 @@ export function linearSettingsForBoardWorktree(
 
 export function useWorkspaceBoardTaskStatusSync(args: {
   enabled: boolean
-  worktreesById: ReadonlyMap<string, Worktree>
+  /** Board cards by host identity, so each same-id copy syncs through its own host. */
+  worktreesByKey: ReadonlyMap<string, Worktree>
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
-}): (worktreeIds: readonly string[], status: WorkspaceStatus) => void {
+}): (worktreeKeys: readonly string[], status: WorkspaceStatus) => void {
   return useCallback(
-    (worktreeIds, status) => {
+    (worktreeKeys, status) => {
       const request = getWorkspaceBoardTaskStatusSyncRequest({
         enabled: args.enabled,
-        worktreeIds,
+        worktreeKeys,
         status,
-        worktreesById: args.worktreesById,
+        worktreesByKey: args.worktreesByKey,
         workspaceStatuses: args.workspaceStatuses
       })
       if (!request) {
         return
       }
       void syncWorkspaceBoardTaskStatuses({
-        worktreeIds: request.worktreeIds,
+        worktreeKeys: request.worktreeKeys,
         targetStatus: request.targetStatus,
-        worktreesById: args.worktreesById,
-        getSettingsForWorktree: (worktreeId) =>
-          linearSettingsForBoardWorktree(useAppStore.getState(), worktreeId),
-        getLatestWorkspaceStatus: (worktreeId) =>
-          useAppStore.getState().getKnownWorktreeById(worktreeId)?.workspaceStatus
+        worktreesByKey: args.worktreesByKey,
+        getSettingsForWorktree: (key) => {
+          const worktree = args.worktreesByKey.get(key)
+          return worktree
+            ? linearSettingsForBoardWorktree(useAppStore.getState(), worktree.id, worktree.hostId)
+            : null
+        },
+        getLatestWorkspaceStatus: (key) => {
+          const worktree = args.worktreesByKey.get(key)
+          if (!worktree) {
+            return undefined
+          }
+          const state = useAppStore.getState()
+          return worktree.hostId
+            ? selectWorkspaceByHostTarget(
+                state,
+                hostWorktreeTarget({ id: worktree.id, hostId: worktree.hostId })
+              )?.workspaceStatus
+            : state.getKnownWorktreeById(worktree.id)?.workspaceStatus
+        }
       })
         .then((result) => {
           if (result.updated > 0 || result.failed > 0 || result.messages.length > 0) {
@@ -172,7 +204,7 @@ export function useWorkspaceBoardTaskStatusSync(args: {
           reportTaskStatusSyncResult({
             updated: 0,
             skipped: 0,
-            failed: request.worktreeIds.length,
+            failed: request.worktreeKeys.length,
             messages: [
               {
                 kind: 'unexpected-error',
@@ -182,6 +214,6 @@ export function useWorkspaceBoardTaskStatusSync(args: {
           })
         })
     },
-    [args.enabled, args.workspaceStatuses, args.worktreesById]
+    [args.enabled, args.workspaceStatuses, args.worktreesByKey]
   )
 }

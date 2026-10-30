@@ -434,6 +434,76 @@ it('keeps the old Codex workspace-write Ask literal and explains that terminal t
   ).toBeDefined()
 })
 
+it.each([
+  { model: undefined, controls: 2, fast: false },
+  { model: 'unlisted-host-model', controls: 2, fast: false },
+  { model: 'opus', controls: 3, fast: true }
+])('offers only model-advertised action mode controls for $model', ({ model, controls, fast }) => {
+  render(
+    <TooltipProvider>
+      <SourceControlActionArguments
+        agent="claude"
+        value="--verbose"
+        preferences={{ agentId: 'claude', model }}
+        onArgsChange={vi.fn()}
+        onPreferencesChange={vi.fn()}
+      />
+    </TooltipProvider>
+  )
+  expect(screen.getAllByRole('combobox')).toHaveLength(controls)
+  expect(screen.queryByText('Fast mode') !== null).toBe(fast)
+  expect(screen.getByRole('button', { name: 'Claude permissions' })).toBeDefined()
+  expect(screen.getByRole('textbox', { name: 'Arguments' })).toHaveProperty('value', '--verbose')
+})
+
+it.each(['host-private', 'sonnet'])(
+  'keeps a saved %s Fast badge removable without offering a Fast select',
+  async (model) => {
+    write.mockClear()
+    const saved = {
+      value: normalizeSourceControlAiSettings({
+        ...initial,
+        actions: {
+          fixChecks: {
+            agentId: 'claude',
+            agentArgs: `--settings '{"theme":"light"}' --add-dir docs`,
+            launchPreferences: {
+              agentId: 'claude',
+              model,
+              options: { fastMode: 'true' }
+            }
+          }
+        }
+      })
+    }
+    render(<GlobalHarness saved={saved} />)
+    expect(
+      screen.getByRole('combobox', { name: model === 'sonnet' ? 'Sonnet' : model })
+    ).toBeDefined()
+    expect(screen.queryByText('Fast mode')).toBeNull()
+    expect(screen.getAllByRole('combobox')).toHaveLength(2)
+    fireEvent.click(screen.getByRole('button', { name: /Remove --settings/ }))
+    expect(screen.queryByRole('button', { name: /Remove --settings/ })).toBeNull()
+    fireEvent.click(screen.getByText('Save'))
+    await waitFor(() => expect(write).toHaveBeenCalledTimes(1))
+    const recipe = saved.value.actions?.fixChecks
+    expect(sourceControlActionSelectedPreferences(recipe ?? {}, 'claude')).toMatchObject({
+      model
+    })
+    expect(
+      sourceControlActionSelectedPreferences(recipe ?? {}, 'claude')?.options?.fastMode
+    ).toBeUndefined()
+    const args = sourceControlActionAgentArgs(recipe ?? {}, 'claude', null)
+    expect(shell.tokenizeStartupCommand(args ?? '', 'posix')).toMatchObject({
+      ok: true,
+      tokens: ['--settings', '{"theme":"light"}', '--add-dir', 'docs']
+    })
+    expect(args).toContain('"theme":"light"')
+    expect(args).toContain('--add-dir docs')
+    expect(args).not.toContain('"fastMode":true')
+  }
+)
+
 it('edits and saves a sparse repository model without authoring the inherited permission', async () => {
   write.mockClear()
   const source = {

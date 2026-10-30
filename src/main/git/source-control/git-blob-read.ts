@@ -1,6 +1,7 @@
 import { readFile, stat } from 'node:fs/promises'
 import { isBinaryBuffer } from '../../../shared/binary-buffer'
 import { isMissingGitBlobPath } from '../../../shared/git-blob-absence'
+import { readGitCommandFailureStderr } from '../../../shared/git-command-failure-text'
 import type { GitRuntimeOptions } from '../git-runtime-options'
 import { gitReadOptionsForWorktree } from '../git-runtime-options'
 import { gitExecFileAsyncBuffer } from '../runner'
@@ -10,6 +11,7 @@ import {
   IMAGE_AND_PDF_PREVIEW_MIME_TYPES,
   filePreviewExtension
 } from '../../../shared/file-preview-kind'
+import { literalPathspec } from './git-pathspec'
 
 export type GitBlobReadResult = {
   content: string
@@ -49,7 +51,7 @@ export async function readGitBlobAtIndexPath(
   // Git blob syntax requires forward slashes, including on Windows.
   const gitPath = filePath.replace(/\\/g, '/')
   try {
-    const { stdout } = await gitExecFileAsyncBuffer(['show', `:${gitPath}`], {
+    const { stdout } = await gitExecFileAsyncBuffer(['cat-file', 'blob', '--', `:${gitPath}`], {
       ...gitReadOptionsForWorktree(worktreePath, options),
       maxBuffer: MAX_GIT_SHOW_BYTES
     })
@@ -63,7 +65,7 @@ export async function readGitBlobAtIndexPath(
       content: '',
       isBinary: false,
       exists: false,
-      failed: !isMissingGitBlobPath(error, gitPath)
+      failed: !(await verifyMissingBlobPath(error, worktreePath, gitPath, options))
     }
   }
 }
@@ -78,7 +80,7 @@ export async function readGitBlobAtOidPath(
   const gitPath = filePath.replace(/\\/g, '/')
   try {
     const { stdout } = await gitExecFileAsyncBuffer(
-      ['show', '--end-of-options', `${oid}:${gitPath}`],
+      ['cat-file', 'blob', '--', `${oid}:${gitPath}`],
       {
         ...gitReadOptionsForWorktree(worktreePath, options),
         maxBuffer: MAX_GIT_SHOW_BYTES
@@ -94,8 +96,44 @@ export async function readGitBlobAtOidPath(
       content: '',
       isBinary: false,
       exists: false,
-      failed: !isMissingGitBlobPath(error, gitPath, oid)
+      failed: !(await verifyMissingBlobPath(error, worktreePath, gitPath, options, oid))
     }
+  }
+}
+
+async function verifyMissingBlobPath(
+  error: unknown,
+  worktreePath: string,
+  gitPath: string,
+  options: GitRuntimeOptions,
+  oid?: string
+): Promise<boolean> {
+  if (isMissingGitBlobPath(error, gitPath, oid)) {
+    return true
+  }
+  if (
+    typeof error !== 'object' ||
+    error === null ||
+    !('code' in error) ||
+    error.code !== 128 ||
+    readGitCommandFailureStderr(error)?.replace(/\r?\n$/, '') !==
+      `fatal: Not a valid object name ${oid ?? ''}:${gitPath}` ||
+    oid?.startsWith('-') ||
+    options.signal?.aborted
+  ) {
+    return false
+  }
+  // Older cat-file omits path diagnostics; only an empty successful listing proves absence.
+  try {
+    const { stdout } = await gitExecFileAsyncBuffer(
+      oid === undefined
+        ? ['ls-files', '--stage', '-z', '--', literalPathspec(gitPath, worktreePath, options)]
+        : ['ls-tree', '-z', oid, '--', literalPathspec(gitPath, worktreePath, options)],
+      { ...gitReadOptionsForWorktree(worktreePath, options), maxBuffer: MAX_GIT_SHOW_BYTES }
+    )
+    return stdout.length === 0
+  } catch {
+    return false
   }
 }
 
