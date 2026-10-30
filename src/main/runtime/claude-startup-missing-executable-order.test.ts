@@ -61,6 +61,7 @@ const trace = vi.hoisted(() => {
       rows = []
       waiters.clear()
       signal = AbortSignal.timeout(20_000)
+      // ast-grep-ignore: test-no-wall-clock -- Real-time budget only fails inconclusive/hung actual SDK/OS joins; never proves success, ordering or physical exit.
       deadline = Date.now() + 20_000
       this.identity = () => null
       this.sourceDone = () => {}
@@ -115,6 +116,7 @@ const trace = vi.hoisted(() => {
       )
       return promise
     },
+    // ast-grep-ignore: test-no-wall-clock -- Real-time budget only fails inconclusive/hung actual SDK/OS joins; never proves success, ordering or physical exit.
     remainingBudget: () => Math.max(0, deadline - Date.now()),
     snapshot: () => rows,
     async when(event: string) {
