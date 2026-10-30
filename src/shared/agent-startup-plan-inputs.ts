@@ -56,15 +56,6 @@ export function resolveAgentStartupPlanInputs(args: {
 }): AgentStartupPlanInputs {
   const { agent, platform, isRemote, sessionOptions } = args
   const settings = agentLaunchPermissionSettings(agent, args.settings, sessionOptions)
-  // Test absence: launch overrides win and null explicitly means no arguments.
-  let agentArgs =
-    args.agentArgs !== undefined
-      ? args.agentArgs
-      : resolveTuiAgentLaunchArgs(
-          agent,
-          settings,
-          readLaunchPermissionChoice(sessionOptions) ? 'own' : undefined
-        )
   const shell =
     args.shell ??
     resolveLocalWindowsAgentStartupShell({
@@ -72,6 +63,16 @@ export function resolveAgentStartupPlanInputs(args: {
       isRemote,
       terminalWindowsShell: settings.terminalWindowsShell
     })
+  // Test absence: launch overrides win and null explicitly means no arguments.
+  let agentArgs =
+    args.agentArgs !== undefined
+      ? args.agentArgs
+      : resolveTuiAgentLaunchArgs(
+          agent,
+          settings,
+          readLaunchPermissionChoice(sessionOptions) ? 'own' : undefined,
+          resolveStartupShell(platform, shell)
+        )
   if (hasExtraAgentArgs(args.extraAgentArgs)) {
     const merged = mergeExtraAgentArgs({
       agent,

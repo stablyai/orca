@@ -4,6 +4,17 @@ import type { AgentType } from './agent-status-types'
 // Required values consume dash-leading text; boolean and optional-valued options are excluded.
 // Codex (clap) and OpenCode (yargs) never take a dash-leading value, so they have no entry.
 const AGENT_REQUIRED_VALUE_OPTIONS: Partial<Record<AgentType, readonly string[]>> = {
+  kimi: [
+    '-m',
+    '--model',
+    '-p',
+    '--prompt',
+    '--output-format',
+    '--skills-dir',
+    '--agent',
+    '--agent-file',
+    '--add-dir'
+  ],
   claude: [
     '--add-dir',
     '--agent',

@@ -5,6 +5,7 @@ import { agentRequiredValueOptions } from './agent-session-option-agent-args'
 import { agentPermissionArgs, agentPermissionChoices } from './tui-agent-permission-choice'
 import { tokenizeStartupCommand, type AgentStartupShell } from './tui-agent-startup-shell'
 import type { TuiAgent } from './tui-agent'
+import { agentCommandArgumentTokens } from './tui-agent-launch-command-override'
 
 export const CODEX_PERMISSION_CONFIG_ROOTS = [
   'approval_policy',
@@ -63,7 +64,8 @@ const EXTRA_CARRIERS: Partial<Record<TuiAgent, readonly string[]>> = {
   'claude-agent-teams': CLAUDE_PERMISSION_OPTIONS,
   codex: ['-a', '--ask-for-approval', '-s', '--sandbox', '--yolo', '--not-so-yolo', '--full-auto'],
   grok: ['--permission-mode', '--always-approve', '--yolo', '--dangerously-skip-permissions'],
-  gemini: ['--approval-mode', '-y']
+  gemini: ['--approval-mode', '-y'],
+  kimi: ['--yolo', '-y', '--yes', '--auto-approve']
 }
 const CODEX_VALUES = [
   '-a',
@@ -224,11 +226,27 @@ export function analyzeAgentChoiceWords(
   return { roles, optionIndices, carrier: carrierIndices.length > 0, carrierIndices }
 }
 
-export function agentArgsSetPermission(agent: TuiAgent, text: string | null | undefined): boolean {
-  return PERMISSION_LAUNCH_GRAMMARS.some((grammar) => {
+export function agentArgsSetPermission(
+  agent: TuiAgent,
+  text: string | null | undefined,
+  shell?: AgentStartupShell
+): boolean {
+  return (shell ? [shell] : PERMISSION_LAUNCH_GRAMMARS).some((grammar) => {
     const parsed = tokenizeStartupCommand(text ?? '', grammar)
     return parsed.ok && analyzeAgentChoiceWords(agent, parsed.tokens).carrier
   })
+}
+
+export function agentCommandSetsPermission(
+  agent: TuiAgent,
+  command: string | undefined,
+  shell: AgentStartupShell
+): boolean | null {
+  if (!command) {
+    return false
+  }
+  const tokens = agentCommandArgumentTokens(command, shell)
+  return tokens === null ? null : analyzeAgentChoiceWords(agent, tokens).carrier
 }
 
 export function agentChoiceCliForms(agent: TuiAgent) {
@@ -263,11 +281,14 @@ export function agentChoiceCliForms(agent: TuiAgent) {
 export function agentPermissionArgsForLaunch(
   agent: TuiAgent,
   choice: AgentPermissionChoice,
-  text: string
+  text: string,
+  command?: string,
+  shell: AgentStartupShell = 'posix'
 ): string | null {
   return choice === 'own'
     ? ''
-    : agentArgsSetPermission(agent, text)
+    : agentArgsSetPermission(agent, text, shell) ||
+        agentCommandSetsPermission(agent, command, shell) !== false
       ? null
       : agentPermissionArgs(agent, choice)
 }

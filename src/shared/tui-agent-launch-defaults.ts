@@ -30,7 +30,11 @@ const UNSUPPORTED_TUI_AGENT_ARGS: Partial<Record<TuiAgent, readonly string[]>> =
 export type AgentLaunchProfileSettings = Partial<
   Pick<
     GlobalSettings,
-    'agentDefaultArgs' | 'agentDefaultEnv' | 'agentPermissionDefault' | 'agentPermissionOverrides'
+    | 'agentDefaultArgs'
+    | 'agentDefaultEnv'
+    | 'agentPermissionDefault'
+    | 'agentPermissionOverrides'
+    | 'agentCmdOverrides'
   >
 >
 
@@ -173,13 +177,15 @@ export { agentPermissionArgsForLaunch } from './agent-permission-args'
 export function resolveTuiAgentLaunchArgs(
   agent: string,
   settings: AgentLaunchProfileSettings | null | undefined,
-  permissionChoice?: AgentPermissionChoice
+  permissionChoice?: AgentPermissionChoice,
+  shell: AgentStartupShell = 'posix'
 ): string {
   if (!isTuiAgent(agent)) {
     return ownArgs(agent, settings) ?? getTuiAgentDefaultArgs(agent)
   }
   return projectAgentLaunchProfile(agent, settings, {
     target: 'terminal',
+    shell,
     ...(permissionChoice ? { choices: { permissionMode: permissionChoice } } : {})
   }).args
 }
@@ -201,7 +207,11 @@ export function resolvedTuiAgentArgsBypassPermissions(
       terminalWindowsShell: settings?.terminalWindowsShell
     })
   )
-  return tuiAgentArgsBypassPermissions(agent, resolveTuiAgentLaunchArgs(agent, settings), shell)
+  return tuiAgentArgsBypassPermissions(
+    agent,
+    resolveTuiAgentLaunchArgs(agent, settings, undefined, shell),
+    shell
+  )
 }
 
 /** The env a terminal launch of this agent gets; the user's own entries win over Orca's. */
@@ -256,7 +266,15 @@ export function composeAgentLaunchProfile(
   ])
   return {
     agentDefaultArgs: Object.fromEntries(
-      [...argAgents].map((agent) => [agent, resolveTuiAgentLaunchArgs(agent, settings)])
+      [...argAgents].map((agent) => [
+        agent,
+        resolveTuiAgentLaunchArgs(
+          agent,
+          settings,
+          undefined,
+          resolveStartupShell(platform ?? agentPermissionHostPlatform() ?? 'linux')
+        )
+      ])
     ),
     agentDefaultEnv: Object.fromEntries(
       [...envAgents].map((agent) => [agent, resolveTuiAgentLaunchEnv(agent, settings, platform)])

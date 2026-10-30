@@ -102,7 +102,8 @@ export function resolveAgentSessionOptionLaunch(
   values: Record<string, SessionOptionValue> | null | undefined,
   trailingAgentArgs: readonly string[] = [],
   includeCatalogDefaults = true,
-  permissionTrailingArgs = trailingAgentArgs
+  // Opaque command overrides cannot safely receive another permission flag.
+  permissionTrailingArgs: readonly string[] | null = trailingAgentArgs
 ): ResolvedSessionOptionLaunch {
   const resolved = resolveModelOptionLaunch(
     agent,
@@ -115,8 +116,13 @@ export function resolveAgentSessionOptionLaunch(
   if (!permission || !isTuiAgent(agent) || !agentPermissionHasTerminalChoice(agent, permission)) {
     return resolved
   }
-  const userArgs = permissionTrailingArgs.map((token) => quoteStartupArg(token, 'posix')).join(' ')
-  const text = agentPermissionArgsForLaunch(agent, permission, userArgs)
+  if (permissionTrailingArgs === null && permission !== 'own') {
+    return resolved
+  }
+  const userArgs = (permissionTrailingArgs ?? [])
+    .map((token) => quoteStartupArg(token, 'posix'))
+    .join(' ')
+  const text = agentPermissionArgsForLaunch(agent, permission, userArgs, undefined, 'posix')
   if (text === null) {
     return resolved
   }

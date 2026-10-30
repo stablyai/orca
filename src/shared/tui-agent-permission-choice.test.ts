@@ -146,6 +146,9 @@ describe('terminal launch composes the stored choice', () => {
     expect(resolveTuiAgentLaunchArgs('codex', typed)).toBe('--search')
     expect(resolveTuiAgentLaunchArgs('grok', typed)).toBe('--permission-mode plan')
     expect(resolveTuiAgentLaunchArgs('gemini', typed)).toBe('--yolo')
+    expect(resolveTuiAgentLaunchArgs('kimi', { agentPermissionDefault: 'full-access' })).toBe(
+      '--auto'
+    )
     // Stored intent survives; the terminal composes no unsupported recipe.
     expect(resolveTuiAgentLaunchArgs('gemini', { agentPermissionDefault: 'ask' })).toBe('')
   })
@@ -378,6 +381,35 @@ describe('permission carrier ownership across save, reload and consumers', () =>
     ['claude', disagreement, disagreement, disagreement, 'auto', true],
     ['grok', '--yolo', '--yolo', '--yolo', 'ask', true]
   ] as const
+  it.each(['--yolo', '-y', '--yes', '--auto-approve'])(
+    'preserves Kimi literal %s under Full through save and reload',
+    (value) => {
+      const before: AgentLaunchSettingsSource = { agentPermissionDefault: 'full-access' }
+      const updates = agentLaunchSettingsMutationUpdates(
+        before,
+        { type: 'user-arguments', agent: 'kimi', value },
+        'linux'
+      )
+      const loaded = migrateAgentPermissionChoice(
+        JSON.parse(JSON.stringify({ ...before, ...updates })),
+        'linux'
+      )
+      expect(loaded.agentDefaultArgs.kimi).toBe(value)
+      expect(loaded.agentPermissionOverrides).toEqual({})
+      expect(resolveAgentPermission('kimi', loaded).choice).toBe('full-access')
+      expect(resolveTuiAgentLaunchArgs('kimi', loaded)).toBe(value)
+      expect(projectAgentLaunchSettings(loaded).agentDefaultArgs.kimi).toBe(value)
+      expect(agentArgsSetPermission('kimi', value)).toBe(true)
+    }
+  )
+
+  it('keeps an unmigrated Kimi --yolo profile on its own permission', () => {
+    const loaded = migrateAgentPermissionChoice({ agentDefaultArgs: { kimi: '--yolo' } }, 'linux')
+    expect(resolveAgentPermission('kimi', loaded).choice).toBe('own')
+    expect(loaded.agentDefaultArgs.kimi).toBe('--yolo')
+    expect(resolveTuiAgentLaunchArgs('kimi', loaded)).toBe('--yolo')
+  })
+
   it.each(
     ownershipCases.flatMap(([agent, value, raw, launch, chat, carrier]) =>
       (value.includes('--model opus') || value === repeated ? [20, 200] : [1]).map((n) => {

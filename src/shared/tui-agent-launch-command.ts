@@ -11,6 +11,7 @@ import {
   type AgentStartupShell
 } from './tui-agent-startup-shell'
 import type { TuiAgent } from './tui-agent'
+import { agentCommandArgumentTokens } from './tui-agent-launch-command-override'
 
 // Why: Enter on Codex's "Update available" screen picks "Update now", which installs and exits.
 const STARTUP_UPDATE_PROMPT_SUPPRESSION_ARGS: Partial<Record<TuiAgent, readonly string[]>> = {
@@ -118,12 +119,15 @@ export function resolveAgentLaunchCommand(args: {
   if (!trailingTokens.ok) {
     return { ok: false, error: `CLI arguments are invalid: ${trailingTokens.error}` }
   }
+  const commandTokens = override ? agentCommandArgumentTokens(override, args.shell) : []
+  const permissionTokens =
+    commandTokens === null ? null : [...commandTokens, ...trailingTokens.tokens]
   const resolvedOptions = resolveAgentSessionOptionLaunch(
     args.agent,
     args.sessionOptions,
     args.sessionOptionsOverrideAgentArgs ? [] : trailingTokens.tokens,
     !args.sessionOptionsOverrideAgentArgs,
-    trailingTokens.tokens
+    permissionTokens
   )
   if (override && args.sessionOptionsOverrideAgentArgs) {
     const overrideTokens = tokenizeStartupCommand(override, args.shell)
@@ -134,7 +138,8 @@ export function resolveAgentLaunchCommand(args: {
       args.agent,
       args.sessionOptions,
       overrideTokens.tokens,
-      false
+      false,
+      permissionTokens
     )
     if (
       Object.entries(resolvedOptions.appliedValues).some(

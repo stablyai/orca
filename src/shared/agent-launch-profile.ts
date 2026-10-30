@@ -1,4 +1,4 @@
-import { agentPermissionArgsForLaunch } from './agent-permission-args'
+import { agentCommandSetsPermission, agentPermissionArgsForLaunch } from './agent-permission-args'
 import type { AgentDedicatedChoices } from './agent-launch-choices'
 import { resolveAgentChoiceLayers } from './agent-choice-layers'
 import {
@@ -27,11 +27,17 @@ export function projectAgentLaunchProfile(
   settings: AgentLaunchProfileSettings | null | undefined,
   input: AgentLaunchProfileProjection
 ): { args: string; choices: AgentDedicatedChoices } {
+  const shell = input.shell ?? 'posix'
   const typed = hasTypedAgentPermission(settings)
+  const command = settings?.agentCmdOverrides?.[agent]
   const userArgs =
     input.userArgs ??
     settings?.agentDefaultArgs?.[agent] ??
-    (typed || input.choices?.permissionMode !== undefined ? '' : (YOLO_TUI_AGENT_ARGS[agent] ?? ''))
+    (typed ||
+    input.choices?.permissionMode !== undefined ||
+    agentCommandSetsPermission(agent, command, shell) !== false
+      ? ''
+      : (YOLO_TUI_AGENT_ARGS[agent] ?? ''))
   const choices = resolveAgentChoiceLayers({
     agent,
     defaults: typed
@@ -46,7 +52,6 @@ export function projectAgentLaunchProfile(
     ...choices.options,
     ...(choices.model ? { model: choices.model } : {})
   }
-  const shell = input.shell ?? 'posix'
   if (!Object.keys(values).length) {
     if (
       input.target !== 'terminal' ||
@@ -58,7 +63,13 @@ export function projectAgentLaunchProfile(
     if (!tokenizeStartupCommand(userArgs, shell).ok) {
       return { args: userArgs, choices }
     }
-    const permission = agentPermissionArgsForLaunch(agent, choices.permissionMode, userArgs)
+    const permission = agentPermissionArgsForLaunch(
+      agent,
+      choices.permissionMode,
+      userArgs,
+      command,
+      shell
+    )
     return { args: [permission, userArgs].filter(Boolean).join(' '), choices }
   }
   const parsed = tokenizeStartupCommand(userArgs, shell)
@@ -79,7 +90,7 @@ export function projectAgentLaunchProfile(
     /^[A-Za-z0-9_./:=@-]+$/.test(token) ? token : quoteStartupArg(token, shell)
   const permission =
     input.target === 'terminal' && choices.permissionMode
-      ? agentPermissionArgsForLaunch(agent, choices.permissionMode, userArgs)
+      ? agentPermissionArgsForLaunch(agent, choices.permissionMode, userArgs, command, shell)
       : ''
   const prefix = launch.args.map(render).join(' ')
   return { args: [prefix, permission, raw].filter(Boolean).join(' '), choices }
