@@ -163,6 +163,8 @@ export function useMobileSessionNativeChatDictation(
       })().catch(() => keepUndeliveredDictation(text))
     },
     onError: (err) => {
+      // A failure hands over the words so far first; they stay a draft, not a send.
+      dictationAutoSend.withdraw()
       dictationRouteContextRef.current = null
       reportDictationFailure(err)
     }

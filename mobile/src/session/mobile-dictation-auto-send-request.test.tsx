@@ -27,6 +27,7 @@ const lifecycle = vi.hoisted((): ScreenLifecycle => ({
   focusCleanups: new Set(),
   chatViewTabs: new Set()
 }))
+const microphone = vi.hoisted(() => new Set<(event: { data: Uint8Array }) => void>())
 const setAppState = (state: string): void => lifecycle.appStateListeners.forEach((l) => l(state))
 const blurScreen = (): void => lifecycle.focusCleanups.forEach((cleanup) => cleanup())
 
@@ -40,7 +41,16 @@ vi.mock('react-native', () => ({
   Platform: { OS: 'ios' }
 }))
 vi.mock('@orca/expo-two-way-audio', () => ({
-  addExpoTwoWayAudioEventListener: () => ({ remove: () => {} }),
+  addExpoTwoWayAudioEventListener: (
+    event: string,
+    listener: (event: { data: Uint8Array }) => void
+  ) => {
+    if (event !== 'onMicrophoneData') {
+      return { remove: () => {} }
+    }
+    microphone.add(listener)
+    return { remove: () => microphone.delete(listener) }
+  },
   initialize: async () => true,
   requestMicrophonePermissionsAsync: async () => ({ granted: true }),
   tearDown: () => {},
@@ -264,9 +274,13 @@ async function mountChat(
 }
 
 /** Records, stops, and leaves the finish unanswered so the transcript can arrive later. */
-async function recordAndStop(rpc: FakeRpcClient): Promise<SentRequest> {
+async function recordAndStop(rpc: FakeRpcClient, wordsSoFar?: string): Promise<SentRequest> {
   await act(async () => model().startDictation())
   await reply(rpc, 'speech.dictation.start', { started: true })
+  if (wordsSoFar !== undefined) {
+    act(() => microphone.forEach((listener) => listener({ data: Uint8Array.from([1, 2]) })))
+    await reply(rpc, 'speech.dictation.chunk', { text: wordsSoFar })
+  }
   await act(async () => {
     void model().dictation.stop()
   })
@@ -310,6 +324,16 @@ describe('a chat transcript and the desktop auto-send setting', () => {
     await deliver(await recordAndStop(rpc), 'spoken words')
 
     expect(draft.text).toBe('Draft spoken words')
+    expect(model().dictationAutoSend.getSnapshot()).toBeNull()
+  })
+
+  it('keeps the words a failed dictation saved as a draft', async () => {
+    const { rpc } = await mountChat(SETTING_ON)
+    const finish = await recordAndStop(rpc, 'partial words')
+
+    await act(async () => finish.reject(new Error('Connection lost')))
+
+    expect(draft.text).toBe('Draft partial words')
     expect(model().dictationAutoSend.getSnapshot()).toBeNull()
   })
 
