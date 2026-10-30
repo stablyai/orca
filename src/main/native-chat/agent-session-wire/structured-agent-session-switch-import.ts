@@ -109,12 +109,14 @@ export async function catchUpSwitchedCliTranscript(input: {
   const items = prepared.items
   const user = lastUser(items)
   const userKey = user && agentJournalItemKey(user.identity)
+  const latest = prepared.latestTurn
   const interrupted =
     input.stopped?.sessionId === input.source.sessionId &&
     input.stopped.userItemKey === userKey &&
-    (!prepared.latestTurn ||
-      (prepared.latestTurn.turnId === input.stopped.turnId &&
-        prepared.latestTurn.state === 'working'))
+    (!latest ||
+      (latest.turnId === input.stopped.turnId &&
+        (latest.state === 'working' ||
+          (latest.state === 'interrupted' && latest.outcome === undefined))))
   const covered = switchTranscriptNativeCoverage({
     agent: input.source.agent,
     providerSessionId: input.source.sessionId,
@@ -126,7 +128,6 @@ export async function catchUpSwitchedCliTranscript(input: {
     input.source.agent === 'codex'
       ? []
       : items.filter((item) => !covered.has(agentJournalItemKey(item.identity)))
-  const latest = prepared.latestTurn
   const ended =
     latest && latest.state !== 'working' ? { ...latest, state: latest.state } : undefined
   const turnId = interrupted ? input.stopped?.turnId : ended?.turnId
@@ -145,7 +146,11 @@ export async function catchUpSwitchedCliTranscript(input: {
         turnId,
         userItemId: userKey,
         state: interrupted ? 'interrupted' : ended!.state,
-        ...(ended?.outcome ? { outcome: ended.outcome } : {}),
+        ...(interrupted
+          ? { outcome: 'cancellation' as const }
+          : ended?.outcome
+            ? { outcome: ended.outcome }
+            : {}),
         ...(ended?.timestamp == null ? {} : { completedAt: ended.timestamp })
       }
     })

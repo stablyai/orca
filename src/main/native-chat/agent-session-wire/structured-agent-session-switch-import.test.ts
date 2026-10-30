@@ -4,6 +4,11 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { writeCodexHistoryFixture } from '../agent-session-journal/codex-history-test-fixture'
 import { agentSessionSwitchDeadline } from '../../../shared/agent-session-switch-execution'
+import { agentTurnVerdict } from '../../../shared/agent-turn-outcome'
+import { agentVerdictDisplayMark } from '../../../shared/agent-main-agent-verdict'
+import { withNativeChatCutTurnNotices } from '../../../shared/native-chat/transcript/native-chat-cut-turn-notice'
+import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import {
   claudeProviderHandle,
   codexProviderHandle
@@ -11,6 +16,7 @@ import {
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import { importLegacyTranscriptIntoJournal } from '../agent-session-journal/journal-legacy-import'
+import { catchUpStructuredSessionAtRest } from './structured-agent-session-at-rest-catch-up'
 import {
   captureSwitchStoppedCliTurn,
   catchUpSwitchedCliTranscript
@@ -125,10 +131,7 @@ it.each([
       return journal
     }
     const turns = (journal: AgentSessionJournal) =>
-      journal
-        .snapshot()
-        .items.filter((item) => item.body.kind === 'turn')
-        .map((item) => item.body)
+      journal.snapshot().items.flatMap(({ body }) => (body.kind === 'turn' ? [body] : []))
     const blocks = (journal: AgentSessionJournal) =>
       journal
         .snapshot()
@@ -152,9 +155,21 @@ it.each([
     ).toHaveLength(1)
     expect(blocks(journal)).toContain('tool-call')
     await catchUpSwitchedCliTranscript({ journal, source, fence: 1, deadline, stopped })
-    expect(turns(journal)).toEqual([expect.objectContaining({ state: 'interrupted' })])
+    expect(turns(journal)).toEqual([
+      expect.objectContaining({ state: 'interrupted', outcome: 'cancellation' })
+    ])
     expect(journal.snapshot().items.filter(({ body }) => body.kind !== 'turn')).toEqual(content)
     const interrupted = journal.snapshot()
+    const [turn] = turns(journal)
+    const verdict = agentTurnVerdict({ state: turn!.state, outcome: turn!.outcome ?? null })
+    expect(verdict).toBe('cancellation')
+    expect(
+      agentVerdictDisplayMark({
+        state: 'done',
+        mainAgent: { state: 'done', outcome: verdict ?? undefined }
+      })
+    ).toBe('interrupted')
+    expect(withNativeChatCutTurnNotices(interrupted.items)).toBe(interrupted.items)
     await journal.close()
     journal = await journals.open({
       ...recordedOptions,
@@ -162,6 +177,163 @@ it.each([
     })
     await catchUpSwitchedCliTranscript({ journal, source, fence: 1, deadline, stopped })
     expect(journal.snapshot()).toEqual(interrupted)
+    if (agent === 'claude') {
+      const prefix = await readFile(filePath, 'utf8')
+      const assistant = JSON.parse(prefix.trimEnd().split('\n').at(-1)!)
+      expect(typeof assistant.uuid).toBe('string')
+      await writeFile(
+        filePath,
+        `${prefix}${JSON.stringify({
+          type: 'user',
+          uuid: 'interrupted-cli-turn',
+          sessionId: recordedId,
+          interruptedMessageId: assistant.uuid,
+          timestamp: new Date(Date.parse(assistant.timestamp) + 1).toISOString(),
+          message: {
+            role: 'user',
+            content: [{ type: 'text', text: '[Request interrupted by user]' }]
+          }
+        })}\n`
+      )
+      const historyWithMarker = await imported('historical-interruption-marker')
+      await catchUpSwitchedCliTranscript({ journal: historyWithMarker, source, fence: 1, deadline })
+      const [historicalTurn] = turns(historyWithMarker)
+      expect(historicalTurn).toMatchObject({ state: 'interrupted', turnId: stopped!.turnId })
+      expect(historicalTurn!.outcome).toBeUndefined()
+      expect(agentTurnVerdict({ state: historicalTurn!.state, outcome: null })).toBe('interruption')
+      const historyItems = historyWithMarker.snapshot().items
+      expect(withNativeChatCutTurnNotices(historyItems)).toHaveLength(historyItems.length + 1)
+      const stoppedWithMarker = await imported('stopped-interruption-marker')
+      await catchUpSwitchedCliTranscript({
+        journal: stoppedWithMarker,
+        source,
+        fence: 1,
+        deadline,
+        stopped
+      })
+      expect(turns(stoppedWithMarker)).toEqual([
+        expect.objectContaining({
+          state: 'interrupted',
+          turnId: stopped!.turnId,
+          outcome: 'cancellation'
+        })
+      ])
+      const stoppedItems = stoppedWithMarker.snapshot().items
+      expect(withNativeChatCutTurnNotices(stoppedItems)).toBe(stoppedItems)
+      const stoppedSnapshot = stoppedWithMarker.snapshot()
+      await catchUpSwitchedCliTranscript({
+        journal: stoppedWithMarker,
+        source,
+        fence: 1,
+        deadline,
+        stopped
+      })
+      expect(stoppedWithMarker.snapshot()).toEqual(stoppedSnapshot)
+    }
+    if (agent === 'codex') {
+      const prefix = await readFile(filePath, 'utf8')
+      const started = prefix
+        .trimEnd()
+        .split('\n')
+        .map((line) => JSON.parse(line))
+        .find((row) => row.type === 'event_msg' && row.payload.type === 'task_started')
+      expect(started.payload.turn_id).toBe(stopped!.turnId)
+      await writeFile(
+        filePath,
+        `${prefix}${JSON.stringify({
+          type: 'event_msg',
+          timestamp: new Date(Date.parse(started.timestamp) + 1).toISOString(),
+          payload: { type: 'turn_aborted', turn_id: stopped!.turnId }
+        })}\n`
+      )
+      const canonicalTurn = agentJournalItemKey({
+        provider: 'legacy',
+        agent,
+        sessionId: recordedId,
+        recordId: `turn-lifecycle:${stopped!.turnId}`
+      })
+      for (const personalStop of [false, true]) {
+        const nativeOptions = {
+          ...recordedOptions,
+          identity: {
+            ...recordedOptions.identity,
+            sessionId: personalStop ? 'at-rest-stopped' : 'at-rest-historical'
+          }
+        }
+        let retained = await journals.open(nativeOptions)
+        await retained.appendItem(
+          { provider: 'codex', threadId: recordedId, turnId: 'prior-native-turn', ordinal: 0 },
+          { kind: 'turn', turnId: 'prior-native-turn', state: 'completed', outcome: 'success' },
+          { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+        )
+        const nativeItems = retained.snapshot().items
+        expect(turns(retained)).toHaveLength(1)
+        expect(retained.item(canonicalTurn)).toBeNull()
+        await catchUpStructuredSessionAtRest({
+          journal: retained,
+          threadId: recordedId,
+          filePath,
+          fence: 1,
+          deadline,
+          stoppedTurnId: personalStop ? stopped!.turnId : undefined,
+          check: deadline.check
+        })
+        const firstEnd = retained.item(canonicalTurn)
+        expect(firstEnd?.body).toEqual({
+          kind: 'turn',
+          turnId: stopped!.turnId,
+          state: 'interrupted',
+          ...(personalStop ? { outcome: 'cancellation' } : {}),
+          completedAt: Date.parse(started.timestamp) + 1
+        })
+        expect(retained.snapshot().items.slice(0, nativeItems.length)).toEqual(nativeItems)
+        await catchUpSwitchedCliTranscript({
+          journal: retained,
+          source,
+          fence: 1,
+          deadline,
+          stopped: personalStop ? stopped : undefined
+        })
+        expect(retained.item(canonicalTurn)).toEqual(firstEnd)
+        const ended = turns(retained).at(-1)!
+        const verdict = agentTurnVerdict({ state: ended.state, outcome: ended.outcome ?? null })
+        expect(verdict).toBe(personalStop ? 'cancellation' : 'interruption')
+        expect(
+          agentVerdictDisplayMark({
+            state: 'done',
+            mainAgent: { state: 'done', outcome: verdict! }
+          })
+        ).toBe(personalStop ? 'interrupted' : 'failed')
+        const snapshot = retained.snapshot()
+        if (personalStop) {
+          expect(withNativeChatCutTurnNotices(snapshot.items)).toBe(snapshot.items)
+        } else {
+          expect(withNativeChatCutTurnNotices(snapshot.items)).toHaveLength(
+            snapshot.items.length + 1
+          )
+        }
+        await retained.close()
+        retained = await journals.open(nativeOptions)
+        await catchUpStructuredSessionAtRest({
+          journal: retained,
+          threadId: recordedId,
+          filePath,
+          fence: 1,
+          deadline,
+          stoppedTurnId: stopped!.turnId,
+          check: deadline.check
+        })
+        await catchUpSwitchedCliTranscript({
+          journal: retained,
+          source,
+          fence: 1,
+          deadline,
+          stopped
+        })
+        expect(retained.canonicalItemId(canonicalTurn)).toBe(canonicalTurn)
+        expect(retained.snapshot()).toEqual(snapshot)
+      }
+    }
     await install(true)
     const completed = await imported('completed-recording')
     await catchUpSwitchedCliTranscript({ journal: completed, source, fence: 1, deadline, stopped })
