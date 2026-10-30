@@ -346,6 +346,51 @@ describe('usage overview model', () => {
     ])
   })
 
+  it('folds omp daily totals into the overview series without adding a provider row', () => {
+    const overview = buildUsageOverview({
+      claude: { scanState: null, summary: null, daily: [] },
+      codex: { scanState: null, summary: null, daily: [] },
+      opencode: { scanState: null, summary: null, daily: [] },
+      muse: { scanState: null, summary: null, daily: [] },
+      omp: {
+        scanState: null,
+        summary: null,
+        daily: [
+          {
+            day: '2026-05-14',
+            inputTokens: 10,
+            cacheReadTokens: 2,
+            cacheWriteTokens: 1,
+            outputTokens: 5,
+            reasoningTokens: 0,
+            totalTokens: 18,
+            costUsd: 0.2
+          },
+          {
+            day: '2026-05-15',
+            inputTokens: 4,
+            cacheReadTokens: 0,
+            cacheWriteTokens: 0,
+            outputTokens: 2,
+            reasoningTokens: 0,
+            totalTokens: 6,
+            costUsd: 0.1
+          }
+        ]
+      }
+    })
+
+    expect(overview.bestDay).toMatchObject({ day: '2026-05-14', totalTokens: 18, ompTokens: 18 })
+    expect(overview.activeDays).toBe(2)
+    // The omp provider row stays deferred; only the daily series consumes its data.
+    expect(overview.providers.map((provider) => provider.id)).toEqual([
+      'claude',
+      'codex',
+      'opencode',
+      'muse'
+    ])
+  })
+
   it('pads recent usage days with zero-token cells', () => {
     const recent = getRecentUsageDays(
       [
