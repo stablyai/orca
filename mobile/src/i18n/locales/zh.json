@@ -957,9 +957,7 @@
       "empty": "尚未设置自定义快捷键。",
       "removeShortcut": "移除 {{label}}",
       "resetDefaults": "恢复默认设置",
-      "resetDescription": "按原始顺序显示所有内置快捷键",
-      "shortcutBar": "快捷键栏",
-      "shortcutBarDescription": "切换按键开关可显示或隐藏按键，按住拖动手柄可调整终端快捷键栏中的按键顺序。"
+      "resetDescription": "按原始顺序显示所有内置快捷键"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "使用一次速率限制重置额度？",
@@ -1389,14 +1387,6 @@
     },
     "hostPendingCreationRow": {
       "creatingWorkspace": "正在创建工作区…"
-    },
-    "hostRailActions": {
-      "accounts": "账户",
-      "closeSearch": "关闭搜索",
-      "floatingWorkspace": "浮动工作区",
-      "newWorkspace": "新工作区",
-      "searchWorkspaces": "搜索工作区",
-      "tasks": "任务"
     },
     "hostScreenHeader": {
       "accounts": "账户",
@@ -1836,16 +1826,8 @@
   },
   "session": {
     "accessoryKeys": {
-      "addCustomShortcut": "添加自定义快捷键",
       "dismissKeyboard": "关闭键盘",
-      "dismissKeyboardHint": "隐藏软键盘，并保持当前终端会话打开。",
-      "paste": "粘贴",
-      "pasteFromClipboard": "从剪贴板粘贴",
-      "sendKey": "发送 {{label}}",
-      "switchToBufferedInput": "切换到缓冲命令输入",
-      "switchToDesktopMode": "切换到桌面模式",
-      "switchToLiveInput": "切换到实时终端输入",
-      "switchToPhoneMode": "切换到手机模式"
+      "sendKey": "发送 {{label}}"
     },
     "activeContent": {
       "createTab": "创建标签页",
@@ -1955,21 +1937,12 @@
       "titleRight": "关闭右侧标签页？"
     },
     "commandDock": {
-      "commandPlaceholder": "输入命令…",
       "liveInputHint": "输入的文本会直接发送到当前终端",
       "liveInputLabel": "终端实时输入",
       "sendCommand": "发送命令"
     },
     "contentRow": {
       "dismissCreationWarning": "关闭工作区创建警告"
-    },
-    "diffCommentLineRow": {
-      "addNote": "在第 {{line}} 行添加注释",
-      "deleteNote": "删除第 {{line}} 行的注释",
-      "diffLine": "{{title}} 的差异，第 {{line}} 行",
-      "line": "第 {{line}} 行",
-      "placeholder": "添加评论注释",
-      "saveNote": "保存注释"
     },
     "diffLineRow": {
       "addNoteLabel": "在第 {{line}} 行添加注释",
@@ -2347,9 +2320,6 @@
       "terminalName": "终端名称",
       "unsavedMarkdown": "未保存的 Markdown 更改",
       "urlPrompt": "输入 URL，或留空以新建标签页。"
-    },
-    "sideRail": {
-      "backToWorktrees": "返回工作树列表"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "此工作区主机上未检测到已启用的 AI 智能体。",

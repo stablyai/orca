@@ -78,6 +78,7 @@ export function registerPluginMarketplaceHandlers(
   const ensureOfficialSeed = (): void => {
     if (getSettings().pluginSystemEnabled === true) {
       void services.marketplace.seedOfficialSource().catch(() => undefined)
+      void services.marketplace.seedCommunitySource().catch(() => undefined)
     }
   }
   ipcMain.handle('plugins:listMarketplaces', () => {

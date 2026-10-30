@@ -36,7 +36,8 @@ export function rpcContextFromTransport(
   runtime: OrcaRuntimeService,
   request: RpcRequest,
   options: RpcDispatchStreamingOptions | undefined,
-  orchestrationCaller: OrchestrationSessionCaller | undefined
+  orchestrationCaller: OrchestrationSessionCaller | undefined,
+  params?: unknown
 ): RpcContext {
   return {
     runtime,
@@ -50,7 +51,11 @@ export function rpcContextFromTransport(
       : undefined,
     structuredAgentCliSourceEvidence:
       request.method === 'agentSession.create'
-        ? captureStructuredAgentCliSource(() => runtime.getAgentProviderSessionRows())
+        ? captureStructuredAgentCliSource(
+            () => runtime.getAgentProviderSessionRows(),
+            cliSourceCoordinates(params),
+            (source) => runtime.getStructuredAgentCliSourceRoute(source)
+          )
         : undefined,
     clientId: options?.clientId,
     pairedDeviceId: options?.pairedDeviceId,
@@ -70,4 +75,23 @@ export function rpcContextFromTransport(
     registerBinaryMessageHandler: options?.registerBinaryMessageHandler,
     orchestrationCaller
   }
+}
+
+function cliSourceCoordinates(params: unknown) {
+  if (!params || typeof params !== 'object' || !('resumeFrom' in params)) {
+    return undefined
+  }
+  const resume = params.resumeFrom
+  if (!resume || typeof resume !== 'object' || !('cliSource' in resume)) {
+    return undefined
+  }
+  const source = resume.cliSource
+  return source &&
+    typeof source === 'object' &&
+    'workspaceId' in source &&
+    typeof source.workspaceId === 'string' &&
+    'paneKey' in source &&
+    typeof source.paneKey === 'string'
+    ? { workspaceId: source.workspaceId, paneKey: source.paneKey }
+    : undefined
 }

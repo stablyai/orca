@@ -880,6 +880,10 @@
             }
           }
         }
+      },
+      "pluginNewFile": {
+        "unavailable": "{{value0}} ya no está disponible. Vuelve a activar su plugin.",
+        "failed": "No se pudo crear el archivo."
       }
     },
     "lib": {
@@ -11545,7 +11549,8 @@
             "terminalRun": "Ejecutar comandos en tus terminales, incluso SSH"
           },
           "decisionFailed": "No se pudo guardar la decisión sobre los permisos. Inténtalo de nuevo.",
-          "fullAccessWarning": "Acceso total: se ejecuta como un programa normal y puede leer tus archivos, usar la red y ejecutar otros programas."
+          "fullAccessWarning": "Acceso total: se ejecuta como un programa normal y puede leer tus archivos, usar la red y ejecutar otros programas.",
+          "uiWarning": "Ejecuta el código del autor dentro de Orca para dibujar su vista. Orca muestra a qué puede acceder y pregunta antes de activarlo."
         },
         "PluginConsentProvenance": {
           "official": "Official",
@@ -11606,13 +11611,13 @@
           "addSource": "Añadir catálogo",
           "noResultsTitle": "No matching plugins",
           "noResults": "Ningún plugin del catálogo coincide con esta búsqueda.",
-          "clearSearch": "Clear search",
+          "clearSearch": "Borrar búsqueda",
           "emptyTitle": "Nothing listed yet",
           "empty": "Los catálogos configurados no incluyen ningún plugin."
         },
         "PluginMarketplaceListingRow": {
           "blocked": "Bloqueado por la lista de seguridad de Orca: {{value0}}",
-          "install": "Install"
+          "install": "Instalar"
         },
         "PluginMarketplaceSourceDialog": {
           "addFailed": "No se pudo añadir este catálogo. Revisa la URL y la ref.",
@@ -12703,7 +12708,10 @@
           "browseAll": "Ver todos los plugins",
           "resultCount": "{{value0}} plugins coinciden",
           "resultCountOne": "1 plugin coincide",
-          "updateAll": "Actualizar todo…"
+          "updateAll": "Actualizar todo…",
+          "notFromCatalog": "fuera de catálogo",
+          "allInstalledTitle": "Todos los plugins del catálogo están instalados",
+          "showInstalled": "Mostrar plugins instalados"
         },
         "PluginDetailPage": {
           "bundled": "Incluido con Orca",
@@ -12748,7 +12756,8 @@
           "copyLogs": "Copiar",
           "accessFailed": "No se pudo leer su acceso",
           "retry": "Reintentar",
-          "noAccessReach": "Nada fuera de sus propios archivos"
+          "noAccessReach": "Nada fuera de sus propios archivos",
+          "customEditor": "Editor"
         },
         "PluginManagerRows": {
           "reinstall": "Reinstalar",
@@ -12772,6 +12781,8 @@
           "update": "Actualizar a {{value0}}",
           "needsOrca": "Requiere Orca {{value0}}",
           "rollbackTo": "Volver a {{value0}}…",
+          "copyContentHash": "Copiar hash del contenido",
+          "reviewUpdate": "Revisar actualización",
           "dataLoadFailed": "No se pudieron cargar sus archivos"
         },
         "PluginSettingsOverview": {
@@ -12784,7 +12795,13 @@
           "themes": "Temas",
           "languages": "Lenguajes",
           "icons": "Iconos",
-          "commands": "Comandos y paneles"
+          "commands": "Comandos y paneles",
+          "catalogLabel": "Filtrar por catálogo",
+          "editors": "Editores",
+          "remoteVms": "Remoto/VM",
+          "games": "Juegos",
+          "agents": "Agentes",
+          "integrations": "Integraciones"
         },
         "PluginUpdateAllDialog": {
           "previewError": "No se pudo leer esta actualización",
@@ -12807,13 +12824,13 @@
           "newRecipes": "Recetas de máquina",
           "newShortcuts": "Atajos de teclado",
           "sourceMoved": "Nueva fuente: {{value0}} (antes {{value1}})",
-          "update": "Actualizar"
+          "update": "Actualizar",
+          "review": "Revisar"
         },
         "PluginDetailInfo": {
           "previous": "Anterior",
           "updated": "Actualizado",
           "license": "Licencia",
-          "homepage": "Página web",
           "whatsNew": "Novedades",
           "hashCopied": "Hash de contenido copiado",
           "hashCopyFailed": "No se pudo copiar el hash."
@@ -12830,9 +12847,11 @@
           "languageCoverage": "Idioma de la interfaz · {{value0}} % traducido"
         },
         "PluginInstallConsent": {
-          "fullAccessUpdates": "Las actualizaciones pueden cambiar su código sin preguntar",
           "noOtherAccess": "Ningún otro acceso",
-          "updatesKeepApproval": "Las actualizaciones solo vuelven a preguntar por accesos nuevos"
+          "replacesShortcut": "{{value0}} ({{value1}}) reemplaza tu atajo para {{value2}}.",
+          "updatesKeepApproval": "Las actualizaciones solo vuelven a preguntar por accesos nuevos",
+          "fullAccessUpdates": "Las actualizaciones pueden cambiar su código sin preguntar",
+          "editsFileTypes": "Abre y edita archivos {{value0}} en Orca. Puede leer los archivos que abre."
         },
         "PluginPageAction": {
           "contentOnly": "Solo contenido"
@@ -12904,6 +12923,34 @@
             "mod": "mod",
             "shortcut": "atajo"
           }
+        },
+        "PluginUpdateReview": {
+          "title": "Revisar la actualización de {{value0}}",
+          "back": "Atrás",
+          "approve": "Aprobar y actualizar",
+          "explain": "Esta actualización pide más que la versión que aprobaste. Solo se instala si la apruebas aquí.",
+          "before": "Antes",
+          "after": "Después"
+        },
+        "PluginNotOfficialWarning": {
+          "unknownPublisher": "su editor",
+          "install": "Asegúrate de que confías en {{value0}} antes de instalarlo. Este plugin ejecuta el código del editor dentro de Orca.",
+          "update": "Asegúrate de que confías en {{value0}} antes de actualizarlo. Este plugin ejecuta el código del editor dentro de Orca.",
+          "installed": "Asegúrate de que confías en {{value0}}. Este plugin ejecuta el código del editor dentro de Orca.",
+          "label": "No es un plugin oficial:",
+          "translations": "Las traducciones pueden cambiar cualquier texto de Orca. Asegúrate de que confías en {{value0}}."
+        },
+        "pluginConsentCopy": {
+          "addsCommands": "Añade comandos",
+          "addsPanel": "Añade un panel",
+          "contentOnly": "Solo contenido",
+          "fullAccess": "Acceso total",
+          "addsVmRecipes": "Añade recetas de VM",
+          "opensAndEditsFiles": "Abre y edita archivos",
+          "runsPluginCode": "Ejecuta código del plugin"
+        },
+        "pluginTryAction": {
+          "incompleteLanguage": "Este paquete de idioma está demasiado incompleto para cambiar a él."
         }
       },
       "right": {
@@ -18049,13 +18096,14 @@
       "pluginCatalog": {
         "PluginCatalogLayout": {
           "title": "Plugins",
-          "filter": "Plugin filter",
-          "all": "All",
-          "installed": "Installed",
-          "searchLabel": "Search plugins",
+          "filter": "Filtro de plugins",
+          "all": "Todos",
+          "installed": "Instalados",
+          "searchLabel": "Buscar plugins",
           "searchPlaceholder": "Buscar plugins",
           "updates": "Actualizaciones",
-          "clearSearch": "Borrar búsqueda"
+          "clearSearch": "Borrar búsqueda",
+          "notInstalled": "No instalados"
         },
         "PluginListGroup": {
           "showAll": "Mostrar {{value0}} más"
@@ -18325,6 +18373,13 @@
           "retry": "Ese nombre de usuario o contraseña no funcionó.",
           "insecure": "Su conexión a este sitio no es privada.",
           "description": "{{origin}} solicita un nombre de usuario y contraseña."
+        },
+        "javaScriptDialog": {
+          "title": "{{origin}} dice",
+          "anonymousTitle": "Esta página dice",
+          "confirm": "Aceptar",
+          "cancel": "Cancelar",
+          "answer": "Respuesta"
         },
         "sitePermission": {
           "label": {
@@ -23251,5 +23306,9 @@
       "needsPermission": "El agente necesita permiso",
       "statusStale": "El estado del agente está desactualizado"
     }
+  },
+  "wslDistroHold": {
+    "terminalStopped": "La distribución WSL {{distro}} está detenida, así que Orca no inició esta terminal. Inicia la distribución y vuelve a intentarlo.",
+    "terminalUnverifiable": "Orca no pudo comprobar si la distribución WSL {{distro}} está en ejecución, así que no inició esta terminal. Inicia la distribución y vuelve a intentarlo."
   }
 }

@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { View, Text, ScrollView, Pressable } from 'react-native'
-import { File, FileText, Globe, Plus, SquareTerminal } from 'lucide-react-native'
+import { File, FileText, Globe, Plus, SquareTerminal, Columns2 } from 'lucide-react-native'
 import { triggerMediumImpact } from '../platform/haptics'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
@@ -30,15 +30,16 @@ const DOUBLE_TAP_RENAME_MS = 300
 
 export function MobileSessionTabStrip({
   controller,
-  inTopBar
+  inTopBar,
+  actionsCollapsed = false
 }: {
   controller: MobileSessionController
   inTopBar: boolean
+  actionsCollapsed?: boolean
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const {
-    connState,
     activeSessionTabId,
     activeSessionTabIdRef,
     tabStripRef,
@@ -46,14 +47,10 @@ export function MobileSessionTabStrip({
     tabStripViewportWidthRef,
     tabStripContentWidthRef,
     tabLayoutsRef,
-    creating,
-    creatingBrowser,
-    creatingMarkdown,
-    setCreateError,
-    setShowCreateTabDrawer,
-    setShowQuickCommands,
-    quickCommandsSupported,
-    showToast,
+    connState,
+    createTabBusy,
+    handleOpenNewTab,
+    handleOpenQuickCommands,
     scrollActiveTabIntoView,
     holdTabStripReveal,
     cancelHeldTabStripReveal,
@@ -62,6 +59,9 @@ export function MobileSessionTabStrip({
     setRenameTarget,
     activeHandleRef,
     visibleTabs,
+    canSplitTerminals,
+    terminalSplitActive,
+    setShowTerminalLayout,
     terminals
   } = controller
   const tabBarKeepsKeyboard = useKeyboardPersistingTaps('handled')
@@ -279,38 +279,28 @@ export function MobileSessionTabStrip({
           </View>
         ) : null}
       </View>
-      {/* Why: pinned outside the scroll strip so the new-agent button stays reachable however far the tabs scroll. */}
-      <MobileSessionHeaderIconButton
-        disabled={creating || creatingBrowser || creatingMarkdown || connState !== 'connected'}
-        onPress={() => {
-          setCreateError('')
-          setShowCreateTabDrawer(true)
-        }}
-        accessibilityLabel={t('session.tabStrip.newTab', 'New tab')}
-        icon={Plus}
-      />
-      {/* Why: stable placement matters, while old hosts must stay gated because they strip agentPrompt. */}
-      <QuickCommandsTabButton
-        disabled={creating || creatingBrowser || creatingMarkdown || connState !== 'connected'}
-        onPress={() => {
-          if (quickCommandsSupported === true) {
-            setShowQuickCommands(true)
-            return
-          }
-          showToast(
-            quickCommandsSupported === false
-              ? t(
-                  'session.tabStrip.quickCommandsUpdateRequired',
-                  'Desktop update required for quick commands'
-                )
-              : t(
-                  'session.tabStrip.checkingCapabilities',
-                  'Checking desktop capabilities — try again in a moment'
-                ),
-            1600
-          )
-        }}
-      />
+      {!actionsCollapsed && (canSplitTerminals || terminalSplitActive) && (
+        <MobileSessionHeaderIconButton
+          active={terminalSplitActive}
+          accessibilityLabel={t('session.tabStrip.terminalLayout', 'Terminal layout')}
+          icon={Columns2}
+          onPress={() => setShowTerminalLayout(true)}
+        />
+      )}
+      {!actionsCollapsed ? (
+        <>
+          <MobileSessionHeaderIconButton
+            disabled={createTabBusy || connState !== 'connected'}
+            onPress={handleOpenNewTab}
+            accessibilityLabel={t('session.tabStrip.newTab', 'New tab')}
+            icon={Plus}
+          />
+          <QuickCommandsTabButton
+            disabled={createTabBusy || connState !== 'connected'}
+            onPress={handleOpenQuickCommands}
+          />
+        </>
+      ) : null}
     </View>
   )
 }

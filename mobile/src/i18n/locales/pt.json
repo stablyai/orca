@@ -1003,9 +1003,7 @@
       "empty": "Nenhum atalho personalizado definido ainda.",
       "removeShortcut": "Remover {{label}}",
       "resetDefaults": "Restaurar Padrões",
-      "resetDescription": "Mostrar todas as teclas de atalho integradas na ordem original",
-      "shortcutBar": "BARRA DE ATALHOS",
-      "shortcutBarDescription": "Ative ou desative as teclas para exibi-las ou ocultá-las e mantenha a alça pressionada para arrastar uma tecla até a posição desejada na barra de atalhos do terminal."
+      "resetDescription": "Mostrar todas as teclas de atalho integradas na ordem original"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "Usar uma redefinição de limite de taxa?",
@@ -1436,14 +1434,6 @@
     },
     "hostPendingCreationRow": {
       "creatingWorkspace": "Criando espaço de trabalho…"
-    },
-    "hostRailActions": {
-      "accounts": "Contas",
-      "closeSearch": "Fechar busca",
-      "floatingWorkspace": "Espaço de Trabalho Flutuante",
-      "newWorkspace": "Novo espaço de trabalho",
-      "searchWorkspaces": "Buscar espaços de trabalho",
-      "tasks": "Tarefas"
     },
     "hostScreenHeader": {
       "accounts": "Contas",
@@ -1897,16 +1887,8 @@
   },
   "session": {
     "accessoryKeys": {
-      "addCustomShortcut": "Adicionar atalho personalizado",
       "dismissKeyboard": "Ocultar teclado",
-      "dismissKeyboardHint": "Oculta o teclado virtual e mantém a sessão atual do terminal aberta.",
-      "paste": "Colar",
-      "pasteFromClipboard": "Colar da área de transferência",
-      "sendKey": "Enviar {{label}}",
-      "switchToBufferedInput": "Mudar para entrada de comandos em buffer",
-      "switchToDesktopMode": "Alternar para o modo desktop",
-      "switchToLiveInput": "Mudar para entrada em tempo real no terminal",
-      "switchToPhoneMode": "Mudar para o modo celular"
+      "sendKey": "Enviar {{label}}"
     },
     "activeContent": {
       "createTab": "Criar Aba",
@@ -2032,21 +2014,12 @@
       "titleRight": "Fechar abas à direita?"
     },
     "commandDock": {
-      "commandPlaceholder": "Digite um comando…",
       "liveInputHint": "O texto digitado é enviado diretamente ao terminal ativo.",
       "liveInputLabel": "Entrada em tempo real no terminal",
       "sendCommand": "Enviar comando"
     },
     "contentRow": {
       "dismissCreationWarning": "Dispensar aviso de criação do espaço de trabalho"
-    },
-    "diffCommentLineRow": {
-      "addNote": "Adicionar nota na linha {{line}}",
-      "deleteNote": "Excluir nota na linha {{line}}",
-      "diffLine": "{{title}}, linha {{line}} do diff",
-      "line": "Linha {{line}}",
-      "placeholder": "Adicionar nota de revisão",
-      "saveNote": "Salvar nota"
     },
     "diffLineRow": {
       "addNoteLabel": "Adicionar nota na linha {{line}}",
@@ -2426,9 +2399,6 @@
       "terminalName": "Nome do terminal",
       "unsavedMarkdown": "Alterações em Markdown não salvas",
       "urlPrompt": "Digite uma URL ou deixe em branco para abrir uma nova aba."
-    },
-    "sideRail": {
-      "backToWorktrees": "Voltar para as worktrees"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "Nenhum agente de IA ativado foi detectado neste host do espaço de trabalho.",

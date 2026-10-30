@@ -46,15 +46,14 @@ vi.mock('./browser-extension-window-model', () => ({
 
 const { openBrowserExtensionTab, recentWorktreeIdForBrowserProfile, recordActiveBrowserPage } =
   await import('./browser-extension-tab-model')
-const { watchBrowserExtensionMainWindowReadiness } =
-  await import('./browser-extension-main-window-readiness')
+const { watchBrowserMainWindowReadiness } = await import('../browser-main-window-readiness')
 
 /** Orca's main window; its renderer reports readiness on the per-window IPC channel. */
 function mainWindow() {
   const contents = Object.assign(new EventEmitter(), { ipc: new EventEmitter() })
   const window = { id: 1, webContents: contents, isDestroyed: () => false }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: readiness reads only id, isDestroyed and these two emitters.
-  watchBrowserExtensionMainWindowReadiness(window as unknown as Electron.BrowserWindow)
+  watchBrowserMainWindowReadiness(window as unknown as Electron.BrowserWindow)
   return {
     rendererReady: () => contents.ipc.emit('browser:tabRequestsReady'),
     reload: () => contents.emit('did-navigate')

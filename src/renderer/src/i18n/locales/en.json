@@ -13193,7 +13193,10 @@
           "commands": "Commands & panels",
           "catalogLabel": "Filter by catalog",
           "editors": "Editors",
-          "remoteVms": "Remote/VMs"
+          "remoteVms": "Remote/VMs",
+          "games": "Games",
+          "agents": "Agents",
+          "integrations": "Integrations"
         },
         "PluginUpdateAllDialog": {
           "previewError": "Couldn’t read this update",
@@ -13216,13 +13219,13 @@
           "newRecipes": "Machine recipes",
           "newContributions": "Features that act for you",
           "allAccess": "See all access",
-          "update": "Update"
+          "update": "Update",
+          "review": "Review"
         },
         "PluginDetailInfo": {
           "previous": "Previous",
           "updated": "Updated",
           "license": "License",
-          "homepage": "Homepage",
           "whatsNew": "What’s new",
           "hashCopied": "Content hash copied",
           "hashCopyFailed": "Couldn't copy the hash."
@@ -13371,6 +13374,22 @@
         },
         "pluginTryAction": {
           "incompleteLanguage": "This language pack is too incomplete to switch to."
+        },
+        "PluginUpdateReview": {
+          "title": "Review update to {{value0}}",
+          "back": "Back",
+          "approve": "Approve & update",
+          "explain": "This update asks for more than the version you approved. It installs only if you approve it here.",
+          "before": "Before",
+          "after": "After"
+        },
+        "PluginNotOfficialWarning": {
+          "unknownPublisher": "its publisher",
+          "install": "Make sure you trust {{value0}} before installing. This plugin runs the publisher’s code inside Orca.",
+          "update": "Make sure you trust {{value0}} before updating. This plugin runs the publisher’s code inside Orca.",
+          "installed": "Make sure you trust {{value0}}. This plugin runs the publisher’s code inside Orca.",
+          "label": "Not an official plugin:",
+          "translations": "Translations can change any text in Orca. Make sure you trust {{value0}}."
         }
       },
       "right": {
@@ -18672,6 +18691,13 @@
           "confirm": "Sign in",
           "cancel": "Cancel"
         },
+        "javaScriptDialog": {
+          "title": "{{origin}} says",
+          "anonymousTitle": "This page says",
+          "confirm": "OK",
+          "cancel": "Cancel",
+          "answer": "Answer"
+        },
         "sitePermission": {
           "label": {
             "camera": "Camera",
@@ -23142,5 +23168,9 @@
       "needsPermission": "Agent needs permission",
       "statusStale": "Agent status is stale"
     }
+  },
+  "wslDistroHold": {
+    "terminalStopped": "The WSL distro {{distro}} is stopped, so Orca didn't start this terminal. Start the distro, then try again.",
+    "terminalUnverifiable": "Orca couldn't check whether the WSL distro {{distro}} is running, so it didn't start this terminal. Start the distro, then try again."
   }
 }

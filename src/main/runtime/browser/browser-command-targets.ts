@@ -1,10 +1,13 @@
+import type { BrowserSnapshotOptions } from '../../../shared/rpc-contract/browser-observation-params'
 import type { AgentBrowserBridge } from '../../browser/agent-browser-bridge'
 import { BrowserError } from '../../browser/browser-error'
+import { browserPopupPageWebContentsId } from '../../browser/browser-popup-page-id'
 import { webContents } from 'electron'
 import {
   waitForTabRegistration,
   waitForWorktreeTabRegistration
 } from '../../ipc/browser-tab-registration-wait'
+import { whenBrowserMainWindowReady } from '../../browser/browser-main-window-readiness'
 import type { BrowserSnapshotResult } from '../../../shared/runtime-types'
 import type {
   BrowserCommandTargetParams,
@@ -12,6 +15,8 @@ import type {
   ResolvedBrowserCommandTarget,
   ResolvedBrowserPageWebContents
 } from './browser-command-contracts'
+
+const MAIN_WINDOW_READY_WAIT_MS = 8_000
 
 export class RuntimeBrowserCommandTargets {
   constructor(
@@ -107,7 +112,12 @@ export class RuntimeBrowserCommandTargets {
       ? (await this.host.resolveWorkspaceSelector(params.worktree)).id
       : undefined
     const bridge = this.host.getAgentBrowserBridge()
-    if (bridge && !this.hasLiveRegisteredBrowserPage(bridge, worktreeId, browserPageId)) {
+    // The renderer never registers popups, so waking it for a closed one only stalls.
+    if (
+      bridge &&
+      browserPopupPageWebContentsId(browserPageId) === null &&
+      !this.hasLiveRegisteredBrowserPage(bridge, worktreeId, browserPageId)
+    ) {
       try {
         await this.ensureBrowserPageActive(worktreeId, browserPageId)
       } catch {}
@@ -155,8 +165,7 @@ export class RuntimeBrowserCommandTargets {
     if (this.host.serveBrowserTabs?.hasStartable(worktreeId) === false) {
       return
     }
-    const win = this.host.getAuthoritativeWindow()
-    win.webContents.send('browser:activateView', worktreeId ? { worktreeId } : {})
+    await this.sendActivateView(worktreeId ? { worktreeId } : {})
     // Await registerGuest rather than guessing a fixed mount delay.
     await waitForWorktreeTabRegistration(worktreeId)
   }
@@ -168,12 +177,18 @@ export class RuntimeBrowserCommandTargets {
     if (await this.host.serveBrowserTabs?.start(worktreeId, browserPageId)) {
       return
     }
-    const win = this.host.getAuthoritativeWindow()
-    win.webContents.send(
-      'browser:activateView',
-      worktreeId ? { worktreeId, browserPageId } : { browserPageId }
-    )
+    await this.sendActivateView(worktreeId ? { worktreeId, browserPageId } : { browserPageId })
     await waitForTabRegistration(browserPageId)
+  }
+
+  // A reloaded renderer drops activateView until it has restored the tab to mount.
+  private async sendActivateView(payload: {
+    worktreeId?: string
+    browserPageId?: string
+  }): Promise<void> {
+    const win = this.host.getAuthoritativeWindow()
+    await whenBrowserMainWindowReady(MAIN_WINDOW_READY_WAIT_MS)
+    win.webContents.send('browser:activateView', payload)
   }
 
   // Automation may bypass Electron navigation events; publish authoritative URL/title updates.
@@ -195,8 +210,14 @@ export class RuntimeBrowserCommandTargets {
     } catch {}
   }
 
-  async browserSnapshot(params: BrowserCommandTargetParams): Promise<BrowserSnapshotResult> {
+  async browserSnapshot(
+    params: BrowserSnapshotOptions & BrowserCommandTargetParams
+  ): Promise<BrowserSnapshotResult> {
     const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().snapshot(target.worktreeId, target.browserPageId)
+    return this.requireAgentBrowserBridge().snapshot(
+      target.worktreeId,
+      target.browserPageId,
+      params
+    )
   }
 }

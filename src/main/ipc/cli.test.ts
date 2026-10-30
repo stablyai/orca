@@ -7,6 +7,7 @@ const {
   wslInstallerMock,
   recordInstalledMock,
   recordRemovedMock,
+  forgetMock,
   getDefaultWslDistroMock,
   readWslDistroRunningStateMock
 } = vi.hoisted(() => ({
@@ -16,6 +17,7 @@ const {
   wslInstallerMock: vi.fn(),
   recordInstalledMock: vi.fn(),
   recordRemovedMock: vi.fn(),
+  forgetMock: vi.fn(),
   getDefaultWslDistroMock: vi.fn()
 }))
 
@@ -24,7 +26,8 @@ vi.mock('../cli/cli-installer', () => ({ CliInstaller: vi.fn() }))
 vi.mock('../cli/wsl-cli-installer', () => ({ WslCliInstaller: wslInstallerMock }))
 vi.mock('../cli/wsl-cli-registration-registry', () => ({
   recordWslCliRegistrationInstalled: recordInstalledMock,
-  recordWslCliRegistrationRemoved: recordRemovedMock
+  recordWslCliRegistrationRemoved: recordRemovedMock,
+  forgetWslCliRegistration: forgetMock
 }))
 vi.mock('../persistence', () => ({ getCanonicalUserDataPath: () => '/canonical-user-data' }))
 vi.mock('../startup/hydrate-shell-path', () => ({
@@ -65,6 +68,7 @@ describe('WSL CLI registration IPC', () => {
     wslInstallerMock.mockReset()
     recordInstalledMock.mockReset().mockResolvedValue(undefined)
     recordRemovedMock.mockReset().mockResolvedValue(undefined)
+    forgetMock.mockReset().mockResolvedValue(undefined)
     getDefaultWslDistroMock.mockReset().mockReturnValue('Ubuntu')
     registerCliHandlers()
   })
@@ -118,6 +122,35 @@ describe('WSL CLI registration IPC', () => {
     await expect(getWslHandler('cli:removeWsl')({})).resolves.toEqual({ state: 'not_installed' })
     expect(wslInstallerMock).toHaveBeenCalledWith({ distro: 'Ubuntu' })
     expect(recordRemovedMock).toHaveBeenCalledWith('/canonical-user-data', 'Ubuntu')
+  })
+
+  it('forgets the registration of a deleted distro instead of failing the removal', async () => {
+    const remove = vi.fn(async () => {
+      throw new Error('wsl.exe: There is no distribution with the supplied name.')
+    })
+    wslInstallerMock.mockImplementation(function MockWslCliInstaller() {
+      return { remove }
+    })
+
+    await expect(
+      getWslHandler('cli:removeWsl')({}, { distro: 'orca-uqa-1029' })
+    ).resolves.toMatchObject({ state: 'not_installed', supported: false })
+    expect(forgetMock).toHaveBeenCalledWith('/canonical-user-data', 'orca-uqa-1029')
+    expect(recordRemovedMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps the registration when removal fails for another reason', async () => {
+    const remove = vi.fn(async () => {
+      throw new Error('permission denied')
+    })
+    wslInstallerMock.mockImplementation(function MockWslCliInstaller() {
+      return { remove }
+    })
+
+    await expect(getWslHandler('cli:removeWsl')({}, { distro: 'Ubuntu' })).rejects.toThrow(
+      'permission denied'
+    )
+    expect(forgetMock).not.toHaveBeenCalled()
   })
 
   it('does not claim ownership when installation is not confirmed', async () => {

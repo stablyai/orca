@@ -961,9 +961,7 @@
       "empty": "Henüz özel kısayol tanımlanmadı.",
       "removeShortcut": "{{label}} kısayolunu kaldır",
       "resetDefaults": "Varsayılanlara Sıfırla",
-      "resetDescription": "Tüm yerleşik kısayol tuşlarını özgün sırayla göster",
-      "shortcutBar": "KISAYOL ÇUBUĞU",
-      "shortcutBarDescription": "Tuşları gösterip gizlemek için düğmeleri açıp kapatın. Terminal kısayol çubuğunda bir tuşun sırasını değiştirmek için tutamacını basılı tutup sürükleyin."
+      "resetDescription": "Tüm yerleşik kısayol tuşlarını özgün sırayla göster"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "Hız sınırı sıfırlama hakkı kullanılsın mı?",
@@ -1393,14 +1391,6 @@
     },
     "hostPendingCreationRow": {
       "creatingWorkspace": "Çalışma alanı oluşturuluyor…"
-    },
-    "hostRailActions": {
-      "accounts": "Hesaplar",
-      "closeSearch": "Aramayı kapat",
-      "floatingWorkspace": "Yüzen Çalışma Alanı",
-      "newWorkspace": "Yeni çalışma alanı",
-      "searchWorkspaces": "Çalışma alanlarını ara",
-      "tasks": "Görevler"
     },
     "hostScreenHeader": {
       "accounts": "Hesaplar",
@@ -1840,16 +1830,8 @@
   },
   "session": {
     "accessoryKeys": {
-      "addCustomShortcut": "Özel kısayol ekle",
       "dismissKeyboard": "Klavyeyi gizle",
-      "dismissKeyboardHint": "Ekran klavyesini gizler ve geçerli terminal oturumunu açık tutar.",
-      "paste": "Yapıştır",
-      "pasteFromClipboard": "Panodan yapıştır",
-      "sendKey": "{{label}} gönder",
-      "switchToBufferedInput": "Arabellekli komut girişine geç",
-      "switchToDesktopMode": "Masaüstü moduna geç",
-      "switchToLiveInput": "Canlı terminal girişine geç",
-      "switchToPhoneMode": "Telefon moduna geç"
+      "sendKey": "{{label}} gönder"
     },
     "activeContent": {
       "createTab": "Sekme Oluştur",
@@ -1959,21 +1941,12 @@
       "titleRight": "Sağdaki sekmeler kapatılsın mı?"
     },
     "commandDock": {
-      "commandPlaceholder": "Bir komut yazın…",
       "liveInputHint": "Yazılan metin doğrudan etkin terminale gönderilir",
       "liveInputLabel": "Canlı terminal girişi",
       "sendCommand": "Komut gönder"
     },
     "contentRow": {
       "dismissCreationWarning": "Çalışma alanı oluşturma uyarısını kapat"
-    },
-    "diffCommentLineRow": {
-      "addNote": "{{line}}. satıra not ekle",
-      "deleteNote": "{{line}}. satırdaki notu sil",
-      "diffLine": "{{title}} diff'i, {{line}}. satır",
-      "line": "Satır {{line}}",
-      "placeholder": "İnceleme notu ekle",
-      "saveNote": "Notu kaydet"
     },
     "diffLineRow": {
       "addNoteLabel": "{{line}} numaralı satıra not ekle",
@@ -2351,9 +2324,6 @@
       "terminalName": "Terminal adı",
       "unsavedMarkdown": "Kaydedilmemiş Markdown değişiklikleri",
       "urlPrompt": "Bir URL girin veya yeni sekme için boş bırakın."
-    },
-    "sideRail": {
-      "backToWorktrees": "Worktree'lere dön"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "Bu çalışma alanı sunucusunda etkin bir AI ajanı algılanmadı.",

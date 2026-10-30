@@ -13,6 +13,8 @@ const activeSessionMountByHostId = new Map<string, symbol>()
 export type MobileSessionKeyboardScope = Pick<
   MobileSessionLifecycleModel,
   | 'activeHandleRef'
+  | 'visibleTerminalHandlesRef'
+  | 'terminalPaneViewportsRef'
   | 'activeSessionTabId'
   | 'clientRef'
   | 'connState'
@@ -63,6 +65,8 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
     viewportMeasuredRef,
     terminalRefs,
     activeHandleRef,
+    visibleTerminalHandlesRef,
+    terminalPaneViewportsRef,
     terminalFrameRef,
     showNativeChatRef,
     unsubscribeTerminal,
@@ -75,6 +79,8 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
     notifyTerminalCellBoxChange
   } = useTerminalViewportRefit({
     activeHandleRef,
+    visibleTerminalHandlesRef,
+    terminalPaneViewportsRef,
     terminalRefs,
     terminalFrameRef,
     viewportRef,

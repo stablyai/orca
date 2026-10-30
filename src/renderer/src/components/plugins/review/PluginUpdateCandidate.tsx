@@ -6,6 +6,7 @@ import {
   reachablePluginCapabilities
 } from '../../../../../shared/plugins/capabilities/plugin-capability-reach'
 import type { PluginContributionPoint } from '../../../../../shared/plugins/contributions/plugin-contribution-points'
+import { pluginUpdateGrowsAccess } from '../../../../../shared/plugins/approval/plugin-update-access-growth'
 import { translate } from '@/i18n/i18n'
 import type { PluginListEntry } from '../list/plugin-list-entries'
 import { PluginRowArt } from '../list/PluginRowArt'
@@ -37,8 +38,21 @@ export function movedFromSource(
   return installed?.kind === 'marketplace' ? installed.reference : ''
 }
 
+/**
+ * Whether the update changes what the plugin may do or where it comes from. Such an update never
+ * joins a bulk Update; it lands only from its own review. Why unknown counts: main omits growth
+ * only when it could not compare against the installed version.
+ */
+export function updateNeedsApproval(preview: PluginMarketplaceHostInstallPreview): boolean {
+  return (
+    preview.repositoryMoved === true ||
+    !preview.accessGrowth ||
+    pluginUpdateGrowsAccess(preview.accessGrowth)
+  )
+}
+
 // Why the same form as main's list projection: `movedFrom` is compared against it by eye.
-const sourceLabel = (source: { url: string; path?: string }): string =>
+export const sourceLabel = (source: { url: string; path?: string }): string =>
   source.path ? `${source.url} (${source.path})` : source.url
 
 const contributionGrowthLabel = (point: PluginContributionPoint): string => {
@@ -67,7 +81,7 @@ const contributionGrowthLabel = (point: PluginContributionPoint): string => {
 }
 
 /** What main found the update adds over the installed version, as review lines. */
-function updateChanges(preview: PluginMarketplaceHostInstallPreview): {
+export function updateChanges(preview: PluginMarketplaceHostInstallPreview): {
   capabilities: string[]
   warnings: string[]
 } {
@@ -108,7 +122,7 @@ function NewLine({ children }: { children: string }): React.JSX.Element {
 }
 
 /** Everything the update can reach, for the rare reader who wants more than what's new. */
-function AllAccess({
+export function AllAccess({
   preview,
   execution
 }: {
@@ -140,7 +154,7 @@ function AllAccess({
           </ul>
           <PluginConsentProvenance
             official={preview.official}
-            publisher={preview.manifest.publisher}
+            publisher={preview.manifest.publisher ?? ''}
             source={{
               kind: preview.bundled ? 'bundled' : 'marketplace',
               reference: sourceLabel({
@@ -166,13 +180,16 @@ export function CandidateRow({
   done,
   checked,
   disabled,
-  onCheckedChange
+  onCheckedChange,
+  onReview
 }: {
   candidate: UpdateCandidate
   done: boolean
   checked: boolean
   disabled: boolean
   onCheckedChange: (checked: boolean) => void
+  /** Set when the update needs its own approval; it replaces the checkbox. */
+  onReview?: () => void
 }): React.JSX.Element {
   const { entry, preview, error, needsOrca } = candidate
   const { capabilities: requestedAdded, warnings } = preview
@@ -259,12 +276,18 @@ export function CandidateRow({
             {entry.installed?.version} → {preview?.manifest.version ?? entry.updateVersion}
           </span>
         </label>
-        <Checkbox
-          id={checkboxId}
-          checked={checked}
-          disabled={disabled}
-          onCheckedChange={(next) => onCheckedChange(next === true)}
-        />
+        {onReview ? (
+          <Button variant="outline" size="xs" disabled={disabled} onClick={onReview}>
+            {translate('auto.components.settings.PluginUpdateAllDialog.review', 'Review')}
+          </Button>
+        ) : (
+          <Checkbox
+            id={checkboxId}
+            checked={checked}
+            disabled={disabled}
+            onCheckedChange={(next) => onCheckedChange(next === true)}
+          />
+        )}
       </div>
       {note ? <div className="mt-1 ml-10">{note}</div> : null}
     </li>

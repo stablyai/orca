@@ -2,15 +2,15 @@ import { execFile } from 'node:child_process'
 import type { WebContents } from 'electron'
 import { BrowserError } from './cdp-bridge'
 import {
-  focusedRichTextEditExpression,
-  isExplicitContentEditableResult
-} from './agent-browser-bridge-input'
-import {
   isTabClosedTransportError,
   pageUnavailableMessageForSession
 } from './agent-browser-bridge-process'
 import { translateResult } from './agent-browser-bridge-result'
-import { AGENT_BROWSER_BATCH_ARGS, agentBrowserBatchInput } from './agent-browser-batch-command'
+import {
+  AGENT_BROWSER_BATCH_ARGS,
+  agentBrowserBatchInput,
+  agentBrowserResultMintsRefs
+} from './agent-browser-batch-command'
 import { AgentBrowserBridgeTabs } from './agent-browser-bridge-tabs'
 import { assertRemoteCliBrowserAccess } from '../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 import { ORCA_TAB_SESSION_PREFIX } from './agent-browser-orphan-sweep'
@@ -45,15 +45,13 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
     return wc
   }
 
-  /** Idle retirement loses daemon routes; restore them when its replacement connects. */
+  /** Idle retirement loses daemon routes and the delta baseline; restore routes when its replacement connects. */
   protected reinitializeIfDaemonIdledOut(sessionName: string, session: SessionState): void {
-    if (
-      this.agentBrowserIdleTimeoutMs === null ||
-      Date.now() - session.lastCommandAt < this.agentBrowserIdleTimeoutMs
-    ) {
+    if (!this.isDaemonIdledOut(session)) {
       return
     }
     session.initialized = false
+    session.hasDeltaBaseline = false
     if (session.activeInterceptPatterns.length > 0) {
       this.pendingInterceptRestore.set(sessionName, [...session.activeInterceptPatterns])
     }
@@ -103,7 +101,7 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
         session.proxy.pointAtNextNode(false)
       }
     }
-    const translated = translateResult(stdout)
+    const translated = translateResult(stdout, execOptions)
 
     if (!translated.ok) {
       throw this.createCommandError(
@@ -112,6 +110,13 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
         translated.error.code,
         session.webContentsId
       )
+    }
+
+    if (agentBrowserResultMintsRefs(translated.result)) {
+      const browserPageId = this.resolveTabIdSafe(session.webContentsId)
+      if (browserPageId) {
+        this.recordRefPage(browserPageId)
+      }
     }
 
     if (needsInit) {
@@ -157,31 +162,6 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
     }
     args.push('--json')
     return this.runAgentBrowserRaw(sessionName, args, execOptions)
-  }
-
-  protected async isExplicitContentEditableTarget(
-    sessionName: string,
-    element: string
-  ): Promise<boolean> {
-    const result = await this.execAgentBrowser(sessionName, [
-      'get',
-      'attr',
-      element,
-      'contenteditable'
-    ])
-    return isExplicitContentEditableResult(result)
-  }
-
-  protected async fillExplicitContentEditable(
-    sessionName: string,
-    element: string,
-    value: string
-  ): Promise<void> {
-    await this.execAgentBrowser(sessionName, ['focus', element])
-    // Send one stdin edit to avoid argv limits and focus changes between chunks.
-    await this.execAgentBrowser(sessionName, ['eval', '--stdin'], {
-      stdinText: focusedRichTextEditExpression(JSON.stringify(value), { selectAll: true })
-    })
   }
 
   protected createPageUnavailableError(sessionName: string): BrowserError {

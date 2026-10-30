@@ -65,6 +65,9 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
       .catch((error) =>
         console.warn('[plugins] failed to configure the official marketplace:', error)
       )
+    void state.pluginMarketplaceService
+      ?.seedCommunitySource()
+      .catch((error) => console.warn('[plugins] failed to add the community marketplace:', error))
   }
   state.pluginMarketplaceInstaller = new PluginMarketplaceInstaller({
     marketplace: state.pluginMarketplaceService,
@@ -191,7 +194,9 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
     applyConsent: (request) =>
       applyPluginConsent({ store, pluginService: state.pluginService!, ...request }),
     applyEnablement: (pluginKey, enabled) =>
-      applyPluginEnablement({ store, pluginService: state.pluginService!, pluginKey, enabled })
+      applyPluginEnablement({ store, pluginService: state.pluginService!, pluginKey, enabled }),
+    setDevPluginPaths: (devPluginPaths) =>
+      store.updateSettings({ devPluginPaths }, { notifyListeners: true })
   })
   // Initialization discovers manifests only; workers/panel reads wait for explicit triggers.
   void state.pluginService

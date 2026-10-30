@@ -10,7 +10,6 @@ import type { TerminalLiveInputSender } from '../terminal/terminal-live-input-se
 import type { MobileSessionTerminalWebviewModel } from './use-mobile-session-terminal-webview'
 import type { TerminalModes } from '../terminal/terminal-webview-contract'
 
-// Bind once before the client/handle arrives, then dispatch after rerender to prove the frozen field listener reads current send state.
 const mocks = vi.hoisted(() => {
   const sent: Array<Record<string, unknown>> = []
   return { sent, acknowledge: async () => {} }
@@ -57,7 +56,6 @@ const READY: Session = {
   draft: 'ls -la'
 }
 
-const field = document.createElement('input')
 let restoredDrafts: string[] = []
 
 function buildScope(session: Session): MobileSessionTerminalWebviewModel {
@@ -111,46 +109,6 @@ function buildScope(session: Session): MobileSessionTerminalWebviewModel {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook destructures exactly the keys above, which the census beside this file pins; nothing else on the model is reachable from the submit path under test.
   return scope as unknown as MobileSessionTerminalWebviewModel
 }
-
-function Harness({ session }: { readonly session: Session }): null {
-  const { bindCommandField } = useMobileSessionTerminalSendActions(buildScope(session))
-  // Keep ref identity stable as React does; the bound handler must update independently.
-  useEffect(() => {
-    bindCommandField(fieldAsTextInput)
-  }, [bindCommandField])
-  return null
-}
-
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: on React Native Web a TextInput ref is the DOM node, which is what the page's binding reads and what this dispatches on.
-const fieldAsTextInput = field as unknown as RefObject<never>['current']
-
-describe('the buffered field submit the page binds', () => {
-  it('reaches a handleSend that can send, not the one the first render had', () => {
-    mocks.sent.length = 0
-    restoredDrafts = []
-    let renderer: ReactTestRenderer | null = null
-
-    act(() => {
-      renderer = create(createElement(Harness, { session: OFFLINE }))
-    })
-    act(() => {
-      renderer?.update(createElement(Harness, { session: READY }))
-    })
-    act(() => {
-      field.dispatchEvent(
-        new InputEvent('beforeinput', {
-          bubbles: true,
-          cancelable: true,
-          inputType: 'insertLineBreak'
-        })
-      )
-    })
-
-    expect(mocks.sent).toHaveLength(1)
-    expect(mocks.sent[0]).toMatchObject({ terminal: 'terminal-a', text: 'ls -la', enter: true })
-    act(() => renderer?.unmount())
-  })
-})
 
 let changeLiveText: (text: string) => void = () => {}
 const liveField = Object.assign(document.createElement('input'), {

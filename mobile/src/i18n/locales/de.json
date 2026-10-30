@@ -961,9 +961,7 @@
       "empty": "Noch keine eigenen Tastenkürzel definiert.",
       "removeShortcut": "{{label}} entfernen",
       "resetDefaults": "Auf Standard zurücksetzen",
-      "resetDescription": "Alle integrierten Tastenkürzel in der ursprünglichen Reihenfolge anzeigen",
-      "shortcutBar": "TASTENKÜRZELLEISTE",
-      "shortcutBarDescription": "Tasten ein- oder ausblenden. Zum Anordnen in der Terminal-Tastenkürzelleiste den Ziehgriff einer Taste gedrückt halten und die Taste an die gewünschte Position ziehen."
+      "resetDescription": "Alle integrierten Tastenkürzel in der ursprünglichen Reihenfolge anzeigen"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "Ratenlimit-Zurücksetzung verwenden?",
@@ -1393,14 +1391,6 @@
     },
     "hostPendingCreationRow": {
       "creatingWorkspace": "Arbeitsbereich wird erstellt…"
-    },
-    "hostRailActions": {
-      "accounts": "Konten",
-      "closeSearch": "Suche schließen",
-      "floatingWorkspace": "Schwebender Arbeitsbereich",
-      "newWorkspace": "Neuer Arbeitsbereich",
-      "searchWorkspaces": "Arbeitsbereiche durchsuchen",
-      "tasks": "Aufgaben"
     },
     "hostScreenHeader": {
       "accounts": "Konten",
@@ -1840,16 +1830,8 @@
   },
   "session": {
     "accessoryKeys": {
-      "addCustomShortcut": "Benutzerdefiniertes Tastenkürzel hinzufügen",
       "dismissKeyboard": "Tastatur ausblenden",
-      "dismissKeyboardHint": "Blendet die Bildschirmtastatur aus und lässt die aktuelle Terminal-Sitzung geöffnet.",
-      "paste": "Einfügen",
-      "pasteFromClipboard": "Aus der Zwischenablage einfügen",
-      "sendKey": "{{label}} senden",
-      "switchToBufferedInput": "Zur gepufferten Befehlseingabe wechseln",
-      "switchToDesktopMode": "In den Desktop-Modus wechseln",
-      "switchToLiveInput": "Zur direkten Terminaleingabe wechseln",
-      "switchToPhoneMode": "In den Smartphone-Modus wechseln"
+      "sendKey": "{{label}} senden"
     },
     "activeContent": {
       "createTab": "Tab erstellen",
@@ -1959,21 +1941,12 @@
       "titleRight": "Tabs rechts schließen?"
     },
     "commandDock": {
-      "commandPlaceholder": "Befehl eingeben…",
       "liveInputHint": "Eingegebener Text wird direkt an das aktive Terminal gesendet",
       "liveInputLabel": "Live-Eingabe im Terminal",
       "sendCommand": "Befehl senden"
     },
     "contentRow": {
       "dismissCreationWarning": "Warnung zur Erstellung des Arbeitsbereichs ausblenden"
-    },
-    "diffCommentLineRow": {
-      "addNote": "Notiz zu Zeile {{line}} hinzufügen",
-      "deleteNote": "Notiz zu Zeile {{line}} löschen",
-      "diffLine": "{{title}}: Diff-Zeile {{line}}",
-      "line": "Zeile {{line}}",
-      "placeholder": "Review-Notiz hinzufügen",
-      "saveNote": "Notiz speichern"
     },
     "diffLineRow": {
       "addNoteLabel": "Notiz zu Zeile {{line}} hinzufügen",
@@ -2351,9 +2324,6 @@
       "terminalName": "Terminal-Name",
       "unsavedMarkdown": "Ungespeicherte Markdown-Änderungen",
       "urlPrompt": "URL eingeben oder für einen neuen Tab leer lassen."
-    },
-    "sideRail": {
-      "backToWorktrees": "Zurück zu den Worktrees"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "Auf dem Host dieses Arbeitsbereichs wurde kein aktivierter KI-Agent erkannt.",
