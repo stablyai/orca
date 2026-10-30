@@ -8,6 +8,13 @@ import { DaemonTerminalAdmission } from './daemon-terminal-admission'
 import { DaemonPtySpawnPreparations } from './daemon-pty-spawn-preparations'
 import { answerDaemonControlRequest } from './daemon-control-request'
 import { DaemonPendingRequests } from './daemon-client-pending-requests'
+import { DaemonClientConnections } from './daemon-client-connections'
+import { DaemonEndpointLifecycle } from './daemon-endpoint-lifecycle'
+import { DaemonSessionAttachments } from './daemon-session-attachments'
+import { DaemonStreamDataBatcher } from './daemon-stream-data-batcher'
+import { BackgroundTransientFactRelay } from './daemon-background-transient-facts'
+import { TerminalHistorySeedTransferRegistry } from './terminal-history-seed-transfer-registry'
+import { createNoopDaemonFileLog } from './daemon-file-log'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 import {
@@ -88,17 +95,65 @@ describe('process-owned terminal startup failure', () => {
     try {
       const preparations = new DaemonPtySpawnPreparations(async () => {})
       const finish = vi.spyOn(preparations, 'finish')
-      const attach = vi.fn()
-      // SAFETY: constructor-time rejection reaches only these admission dependencies; success-only dependencies must remain unused.
+      const attachments = new DaemonSessionAttachments(host)
+      const attach = vi.spyOn(attachments, 'attach')
+      const log = createNoopDaemonFileLog()
+      const unexpected = (): never => {
+        throw new Error('unexpected admission lifecycle callback')
+      }
+      const streamDataBatcher = new DaemonStreamDataBatcher(unexpected)
+      const connections = new DaemonClientConnections({
+        token: 'test-token',
+        protocolVersion: 1,
+        identity: {
+          launchNonce: null,
+          startedAtMs: null,
+          entryPath: null,
+          appVersion: null,
+          spawnerExecPath: null
+        },
+        log,
+        streamDataBatcher,
+        isAcceptingWork: () => true,
+        onTransportChanged: unexpected,
+        onConnectionAccepted: unexpected,
+        onAuthenticatedPair: unexpected,
+        onLastAuthenticatedClientDisconnected: unexpected,
+        onControlRequest: unexpected,
+        onControlReplaced: unexpected,
+        onClientDisconnected: unexpected,
+        onStreamDisconnected: unexpected
+      })
+      vi.spyOn(connections, 'get').mockReturnValue({
+        clientId: 'client',
+        authenticatedPairEstablished: true,
+        controlSocket: socket,
+        streamSocket: socket
+      })
       const options = {
         host,
         preparations,
-        connections: { get: () => ({ authenticatedPairEstablished: true, streamSocket: socket }) },
-        endpoint: { hasLostOwnership: () => false },
-        attachments: { attach },
+        connections,
+        endpoint: new DaemonEndpointLifecycle({
+          socketPath: 'unused-test-endpoint',
+          tokenPath: 'unused-test-token',
+          pidPath: null,
+          launchNonce: null,
+          token: 'test-token',
+          publishEndpointOwnership: unexpected,
+          log,
+          isServing: () => false,
+          onOwnershipLost: unexpected
+        }),
+        attachments,
+        historySeedTransfers: new TerminalHistorySeedTransferRegistry(),
+        transientFactRelay: new BackgroundTransientFactRelay(unexpected),
+        streamDataBatcher,
+        log,
         isAcceptingWork: () => true,
+        requestEndpointRetirement: unexpected,
         reevaluateIdleShutdown: vi.fn()
-      } as unknown as ConstructorParameters<typeof DaemonTerminalAdmission>[0]
+      } satisfies ConstructorParameters<typeof DaemonTerminalAdmission>[0]
       const admission = new DaemonTerminalAdmission(options)
       const request = {
         id: 'start',
