@@ -5061,7 +5061,8 @@
           "totalTokens": "Total tokens",
           "estimatedCost": "Est. cost",
           "window": "Last {{days}} days",
-          "openFullStats": "Open full stats"
+          "openFullStats": "Open full stats",
+          "estimatedCostWindow": "Est. cost · {{days}}d"
         },
         "UsageDashboardQuotaStrip": {
           "title": "Quotas",

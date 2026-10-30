@@ -190,6 +190,8 @@ describe('UsageDashboardDrawerContent', () => {
     expect(within(footer).getByText('3.5k')).toBeInTheDocument()
     expect(within(footer).getByText('$0.20')).toBeInTheDocument()
     expect(within(footer).getByText('Last 14 days')).toBeInTheDocument()
+    // The 14-day view reads 30-day provider buckets, so the cost must name its real window.
+    expect(within(footer).getByText('Est. cost · 30d')).toBeInTheDocument()
   })
 
   it('skips disabled providers instead of fetching their data', async () => {
@@ -212,6 +214,10 @@ describe('UsageDashboardDrawerContent', () => {
       expect(claude.getDaily).toHaveBeenLastCalledWith({ scope: 'all', range: '7d' })
     )
     expect(screen.getByText('Last 7 days')).toBeInTheDocument()
+    // A 7-day period reads a 7-day provider bucket, so the cost needs no window qualifier.
+    expect(
+      within(screen.getByTestId('usage-dashboard-footer')).getByText('Est. cost')
+    ).toBeInTheDocument()
   })
 
   it('switches the fetch scope when the orca toggle is selected', async () => {

@@ -159,6 +159,18 @@ export default function UsageDashboardDrawerContent(): React.JSX.Element {
   // Only omp prices individual days, so the period price comes from the model breakdown instead.
   const totalCost = (data?.modelRows ?? []).reduce((sum, row) => sum + (row.costUsd ?? 0), 0)
   const hasUsage = (data?.modelRows.length ?? 0) > 0 || totalTokens > 0
+  // 14 days reads the 30-day buckets, so the cost label names the window it actually covers.
+  const costLabel =
+    rangeDays === period
+      ? translate(
+          'auto.components.usageDashboard.UsageDashboardDrawerContent.estimatedCost',
+          'Est. cost'
+        )
+      : translate(
+          'auto.components.usageDashboard.UsageDashboardDrawerContent.estimatedCostWindow',
+          'Est. cost · {{days}}d',
+          { days: rangeDays }
+        )
 
   return (
     <div className="flex flex-col gap-3 p-4" data-testid="usage-dashboard-content">
@@ -300,12 +312,7 @@ export default function UsageDashboardDrawerContent(): React.JSX.Element {
             </span>
           </span>
           <span>
-            <span className="text-muted-foreground">
-              {translate(
-                'auto.components.usageDashboard.UsageDashboardDrawerContent.estimatedCost',
-                'Est. cost'
-              )}
-            </span>{' '}
+            <span className="text-muted-foreground">{costLabel}</span>{' '}
             <span className="font-medium tabular-nums text-foreground">
               {hasKnownCost ? formatCost(totalCost) : '—'}
             </span>
