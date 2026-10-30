@@ -35,7 +35,8 @@ def main():
         ("long", "éΩ" * 300, None),
         ("oversized", "éΩ" * 300 + "é", "limited to 600"),
         ("slots", "".join(chr(0x4E00 + i) for i in range(256)), "insufficient unused X11 keycodes"),
-        ("identical", mixed, None),
+        ("identical", "café Ω", None),
+        ("supplementary-selection", mixed, None),
         ("append", mixed, None),
         ("latin-layout", "Orca ASCII", None),
         ("busy", mixed, "another keyboard operation is active"),
@@ -67,7 +68,7 @@ def main():
             trial_contract.MARKER = "hello" + marker if name in ("append", "latin-layout") else marker
             task = "replace_submit"
             trial_contract.TASKS["replace_submit"] = replacement
-            if name == "identical":
+            if name in ("identical", "supplementary-selection"):
                 trial_contract.TASKS["replace_submit"] = replacement[:-1] + replacement[1:]
             if name in ("append", "latin-layout"):
                 trial_contract.TASKS["replace_submit"] = [step for step in replacement if step[0] != "ctrl_a"]
@@ -95,7 +96,14 @@ def main():
                     or row.get("observer_error")):
                 raise AssertionError("typing observation failed")
             state = row["final_state"]
-            if refusal:
+            if name == "supplementary-selection" and row["api_errors"]:
+                if (len(row["api_errors"]) != 1 or "requires readable focused text" not in str(row["api_errors"])
+                        or state["text"] != marker or state["returns"] != 0 or state["submittedText"] is not None
+                        or state["decoyText"] != "untouched" or state["selStart"] != 0
+                        or state["selLen"] != len(marker.encode("utf-16-le")) // 2
+                        or row["steps"][-1]["action"] != "type" or row["steps"][-1]["result"].get("error") is not True):
+                    raise AssertionError("ambiguous selection was not refused before typing")
+            elif refusal:
                 if (not row["api_errors"] or refusal not in str(row["api_errors"])
                         or state["text"] != "hello" or state["returns"] != 0
                         or state["submittedText"] is not None or state["decoyText"] != "untouched"):

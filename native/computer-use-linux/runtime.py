@@ -1127,7 +1127,6 @@ def synthetic_text_receipt(window, value):
         return None
     if start != end:
         get_selections = getattr(getattr(Atspi, "Document", None), "get_text_selections", None)
-        sys.stderr.write("DOC_METHOD " + str(get_selections) + "\n")
         selections = None
         ancestor = node
         if get_selections is not None:
@@ -1135,10 +1134,6 @@ def synthetic_text_receipt(window, value):
                 document = attempt(lambda: ancestor.get_document_iface())
                 if document is not None:
                     selections = attempt(lambda: get_selections(document))
-                    sys.stderr.write("DOC_SELECTION " + repr(selections) + "\n")
-                    if selections:
-                        for selected in selections:
-                            sys.stderr.write("DOC_RANGE " + repr((name_of(selected.start_object), role_of(selected.start_object), selected.start_object == node, selected.start_offset, name_of(selected.end_object), selected.end_object == node, selected.end_offset, selected.start_is_active, Atspi.Text.get_caret_offset(text))) + "\n")
                     break
                 ancestor = attempt(lambda: ancestor.get_parent())
                 if ancestor is None:
