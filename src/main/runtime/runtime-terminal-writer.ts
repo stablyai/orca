@@ -1,4 +1,7 @@
-import { resolveAgentPromptSubmitDelayForAgent } from '../../shared/agent-prompt-injection'
+import {
+  getWindowsInputRecordPasteBurstMs,
+  resolveAgentPromptSubmitDelayForAgent
+} from '../../shared/agent-prompt-injection'
 import type { TerminalAgent } from '../../shared/terminal-agent'
 import { iterateTerminalInputChunks } from '../../shared/terminal-input'
 import type { TerminalInputSource } from './terminal-input-admission'
@@ -81,13 +84,12 @@ export class RuntimeTerminalWriter {
     if (hasSuffix) {
       const suffix = (action.enter ? '\r' : '') + (action.interrupt ? '\x03' : '')
       if (text) {
-        // Enter must wait for host ingestion; a flat 500ms cannot cover 16MB.
+        // Enter must wait for host ingestion and any key-event burst, or the agent keeps it as a newline.
+        const platform = this.getWriteHostPlatform(ptyId)
+        const agent = this.getAgent(ptyId)
         await waitForTerminalWriteDelay(
-          resolveAgentPromptSubmitDelayForAgent(
-            this.getWriteHostPlatform(ptyId),
-            text,
-            this.getAgent(ptyId)
-          ),
+          resolveAgentPromptSubmitDelayForAgent(platform, text, agent) +
+            getWindowsInputRecordPasteBurstMs(platform, agent, text),
           options.signal
         )
       }

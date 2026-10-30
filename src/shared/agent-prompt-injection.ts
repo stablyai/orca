@@ -57,6 +57,19 @@ export function getMaxTerminalPasteBytesForIngestMs(
 // Codex 0.162.1 on a low-spec Win11 host took 5.1 s for 1,849 chars and 21.1 s for 9,249 (~2.3 ms/char).
 const WINDOWS_INPUT_RECORD_PASTE_MS_PER_CHAR = 3
 
+/** How long an input-record TUI on a Windows host takes to read `text` as key events. */
+export function getWindowsInputRecordPasteBurstMs(
+  platform: NodeJS.Platform,
+  agent: TerminalAgent | null | undefined,
+  text: string
+): number {
+  return platform === 'win32' &&
+    isTuiAgent(agent) &&
+    TUI_AGENT_CONFIG[agent].windowsInputRecordPasteNewline
+    ? text.length * WINDOWS_INPUT_RECORD_PASTE_MS_PER_CHAR
+    : 0
+}
+
 /** How long a held prompt may still need Enter: an input-record TUI's paste burst, or a composer not yet submit-ready. */
 export function getAgentPromptHeldSubmitBudgetMs(
   platform: NodeJS.Platform,
@@ -68,10 +81,7 @@ export function getAgentPromptHeldSubmitBudgetMs(
   }
   const config = TUI_AGENT_CONFIG[agent]
   const startupMs = config.submitRetryBudgetMs ?? 0
-  const pasteBurstMs =
-    platform === 'win32' && config.windowsInputRecordPasteNewline
-      ? pastePayload.length * WINDOWS_INPUT_RECORD_PASTE_MS_PER_CHAR
-      : 0
+  const pasteBurstMs = getWindowsInputRecordPasteBurstMs(platform, agent, pastePayload)
   // Why the cap: with the render gate (<= 8 s + ingest), ingest itself and this wait, delivery
   // stays <= 38 s, inside worker-start's 50 s grace once observation is shortened by delivery time.
   const capMs =

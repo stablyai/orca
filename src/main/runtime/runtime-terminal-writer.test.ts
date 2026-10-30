@@ -184,3 +184,42 @@ it.each([
     )
   }
 })
+
+describe('Enter after text for a Windows input-record agent', () => {
+  // Windows Codex reads typed text as key events and takes an Enter that lands mid-burst as a newline.
+  it('waits out the key-event burst before a mobile-sized message’s Enter', async () => {
+    vi.useFakeTimers()
+    const raw = vi.fn((_id: string, _data: string) => true)
+    const writer = new RuntimeTerminalWriter(
+      raw,
+      () => 'win32',
+      () => 'codex'
+    )
+    const text = 'm'.repeat(2_015)
+    const pending = writer.writeAction('pty', { text, enter: true }, `${text}\r`, {
+      inputKind: 'driving'
+    })
+    await vi.advanceTimersByTimeAsync(2_015 * 3)
+    expect(raw.mock.calls.map((call) => call[1])).toEqual([text])
+    await vi.runAllTimersAsync()
+    await pending
+    expect(raw.mock.calls.map((call) => call[1])).toEqual([text, '\r'])
+  })
+
+  it('keeps the ingest-only delay for agents that read a VT stream', async () => {
+    vi.useFakeTimers()
+    const raw = vi.fn((_id: string, _data: string) => true)
+    const writer = new RuntimeTerminalWriter(
+      raw,
+      () => 'win32',
+      () => 'claude'
+    )
+    const text = 'm'.repeat(2_015)
+    const pending = writer.writeAction('pty', { text, enter: true }, `${text}\r`, {
+      inputKind: 'driving'
+    })
+    await vi.advanceTimersByTimeAsync(1_000)
+    await pending
+    expect(raw.mock.calls.map((call) => call[1])).toEqual([text, '\r'])
+  })
+})
