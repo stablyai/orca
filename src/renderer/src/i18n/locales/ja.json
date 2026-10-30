@@ -1384,6 +1384,18 @@
         "title": "Windows ドライブ上のフォルダーはこのコンピューターで追加してください",
         "descriptionWithPath": "{{value0}} は Windows ドライブ上にあります。WSL の Git はそこで誤った改行コードの変更を報告し、Windows から行った編集を見逃し、検索も遅くなります。",
         "description": "このフォルダーは Windows ドライブ上にあります。WSL の Git はそこで誤った改行コードの変更を報告し、Windows から行った編集を見逃し、検索も遅くなります。"
+      },
+      "issue": {
+        "draft": {
+          "agent": {
+            "launch": {
+              "noPrimaryWorktree": "このプロジェクトには、Agent を実行するプライマリチェックアウトがありません。",
+              "noAgent": "このプロジェクトで、チャットとして実行できる有効な Agent が見つかりませんでした。",
+              "failed": "Agent を起動できませんでした。",
+              "noChat": "この Agent はここではチャットとして実行できないため、プライマリチェックアウトのターミナルで開きました。"
+            }
+          }
+        }
       }
     },
     "hooks": {
@@ -2572,6 +2584,17 @@
           "linearProjectRestoreFailed": "保存された Linear プロジェクトを復元できませんでした。",
           "linearViewNotFound": "保存された Linear ビューが見つかりませんでした。",
           "linearViewRestoreFailed": "保存された Linear ビューを復元できませんでした。"
+        },
+        "issueDraftPanel": {
+          "title": "Issue の起票",
+          "resize": "Issue 起票パネルのサイズを変更",
+          "runsIn": "{{project}} · プライマリチェックアウト",
+          "openInWorkspace": "ワークスペースで開く",
+          "newConversation": "新しい会話",
+          "intro": "既定の Agent と相談しながら新しい Issue を作ります。重複を確認して下書きを一緒に練り、あなたが指示したときだけ起票します。",
+          "includeList": "表示中の {{total}} 件を共有して重複を確認する",
+          "start": "会話を始める",
+          "toggle": "Agent で Issue を起票"
         }
       },
       "Terminal": {
@@ -7268,6 +7291,9 @@
           "browserExtensions": {
             "copy": "ローカルブラウザプロファイル向けに 設定 › ブラウザ › 拡張機能 を追加します。",
             "toggleLabel": "ブラウザ拡張機能を切り替え"
+          },
+          "issueDraftAgent": {
+            "toggleLabel": "「Agent で Issue を起票」を切り替える"
           }
         },
         "FloatingWorkspacePane": {
@@ -9470,6 +9496,13 @@
               "extension": "拡張機能",
               "chrome": "クローム",
               "password": "パスワードマネージャー"
+            },
+            "issueDraftAgent": {
+              "title": "Agent で Issue を起票",
+              "description": "GitHub のタスク一覧の横にパネルを追加し、既定の Agent とプロジェクトのプライマリチェックアウトで相談しながら新しい Issue を作れるようにします。起票はあなたが指示したときだけ行います。",
+              "tasks": "タスク",
+              "issues": "Issue",
+              "agent": "Agent"
             }
           }
         },

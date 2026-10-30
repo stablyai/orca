@@ -17,6 +17,7 @@ import IssueSourceSelector, { issueSourceChipClass } from '@/components/github/I
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { repoMatchesHostIdentity } from '@/store/slices/repo-host-identity'
 import { deriveGitHubTaskPreset } from './task-page-preset-highlight'
+import { TaskPageIssueDraftPanelToggle } from './IssueDraftPanelToggle'
 export function TaskPageGitHubFilters({
   model
 }: {
@@ -53,6 +54,9 @@ export function TaskPageGitHubFilters({
     handleTaskSearchKeyDown,
     githubTasksBusy
   } = model
+  const issueDraftAgentEnabled = useAppStore(
+    (s) => s.settings?.experimentalIssueDraftAgent === true
+  )
   const highlightedPreset = deriveGitHubTaskPreset(activeGithubTaskKind, appliedTaskQuery)
   // Why: filter metadata for the primary slug is read from the host that owns the repo it came from.
   const primaryGithubFilterSource = perRepoSourceState.find((state) =>
@@ -145,6 +149,9 @@ export function TaskPageGitHubFilters({
           className="flex shrink-0 items-center gap-2"
           data-contextual-tour-target="tasks-actions"
         >
+          {issueDraftAgentEnabled ? (
+            <TaskPageIssueDraftPanelToggle disabled={!newIssueTargetRepo} />
+          ) : null}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button

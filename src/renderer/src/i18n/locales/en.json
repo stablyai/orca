@@ -1886,6 +1886,18 @@
         "title": "Add Windows drive folders on this computer",
         "descriptionWithPath": "{{value0}} is on a Windows drive. Git in WSL reports false line-ending changes there, misses edits made from Windows, and searches it slowly.",
         "description": "This folder is on a Windows drive. Git in WSL reports false line-ending changes there, misses edits made from Windows, and searches it slowly."
+      },
+      "issue": {
+        "draft": {
+          "agent": {
+            "launch": {
+              "noPrimaryWorktree": "This project has no primary checkout to run the agent in.",
+              "noAgent": "No enabled agent that can run as a chat was detected for this project.",
+              "failed": "Could not start the agent.",
+              "noChat": "This agent cannot run as a chat here, so it opened in a terminal in the primary checkout."
+            }
+          }
+        }
       }
     },
     "hooks": {
@@ -3141,7 +3153,18 @@
           "linearViewNotFound": "Saved Linear view was not found.",
           "linearViewRestoreFailed": "Failed to restore saved Linear view."
         },
-        "shownCount_one": "{{count}} shown"
+        "shownCount_one": "{{count}} shown",
+        "issueDraftPanel": {
+          "title": "Draft issues",
+          "resize": "Resize issue drafting panel",
+          "runsIn": "{{project}} · primary checkout",
+          "openInWorkspace": "Open in workspace",
+          "newConversation": "New conversation",
+          "intro": "Talk through new issues with your default agent. It checks for duplicates, drafts the issue with you, and files it only when you tell it to.",
+          "includeList": "Share the {{total}} items shown to check for duplicates",
+          "start": "Start conversation",
+          "toggle": "Draft issues with an agent"
+        }
       },
       "Terminal": {
         "73768427cf": "Close",
@@ -7981,6 +8004,9 @@
           "browserExtensions": {
             "copy": "Adds Settings › Browser › Extensions for local browser profiles.",
             "toggleLabel": "Toggle browser extensions"
+          },
+          "issueDraftAgent": {
+            "toggleLabel": "Toggle Draft issues with an agent"
           }
         },
         "FloatingWorkspacePane": {
@@ -10197,6 +10223,13 @@
               "extension": "extension",
               "chrome": "chrome",
               "password": "password manager"
+            },
+            "issueDraftAgent": {
+              "title": "Draft issues with an agent",
+              "description": "Adds a panel beside the GitHub task list where you talk through new issues with your default agent in the project’s primary checkout. It files an issue only when you tell it to.",
+              "tasks": "tasks",
+              "issues": "issues",
+              "agent": "agent"
             }
           }
         },

@@ -55,6 +55,10 @@ export function ExperimentalPane({
   ])
   const agentHibernationEnabled = settings.experimentalAgentHibernation === true
   const newWorktreeCardStyleEnabled = settings.experimentalNewWorktreeCardStyle === true
+  const showIssueDraftAgent = matchesSettingsSearch(searchQuery, [
+    getExperimentalSearchEntry().issueDraftAgent
+  ])
+  const issueDraftAgentEnabled = settings.experimentalIssueDraftAgent === true
   // Use the planner’s clamped millisecond value/default while editing minutes.
   const agentHibernationIdleMinutes = Math.round(
     getEffectiveAgentHibernationIdleMs(settings.agentHibernationIdleMs) / MS_PER_MINUTE
@@ -260,6 +264,35 @@ export function ExperimentalPane({
                 updateSettings({
                   experimentalNewWorktreeCardStyle: !newWorktreeCardStyleEnabled
                 })
+              }
+            />
+          </div>
+        </SearchableSetting>
+      ) : null}
+
+      {showIssueDraftAgent ? (
+        <SearchableSetting
+          title={getExperimentalSearchEntry().issueDraftAgent.title}
+          description={getExperimentalSearchEntry().issueDraftAgent.description}
+          keywords={getExperimentalSearchEntry().issueDraftAgent.keywords}
+          className="space-y-3 py-2"
+          id="experimental-issue-draft-agent"
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 shrink space-y-0.5">
+              <Label>{getExperimentalSearchEntry().issueDraftAgent.title}</Label>
+              <p className="text-xs text-muted-foreground">
+                {getExperimentalSearchEntry().issueDraftAgent.description}
+              </p>
+            </div>
+            <SettingsSwitch
+              checked={issueDraftAgentEnabled}
+              ariaLabel={translate(
+                'auto.components.settings.ExperimentalPane.issueDraftAgent.toggleLabel',
+                'Toggle Draft issues with an agent'
+              )}
+              onChange={() =>
+                updateSettings({ experimentalIssueDraftAgent: !issueDraftAgentEnabled })
               }
             />
           </div>

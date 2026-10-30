@@ -468,6 +468,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   experimentalNewWorktreeCardStyle?: boolean
   /** Experimental: per-workspace on-demand environment recipes and setup surface. */
   experimentalEphemeralVms?: boolean
+  /** Experimental: Task page panel where an agent drafts and files new issues in the primary checkout. */
+  experimentalIssueDraftAgent?: boolean
   /** Experimental (Windows): add WSL distros as hosts, each running its own Orca server. */
   experimentalWslHosts?: boolean
   /** Compact worktree cards: hide the metadata row when title and branch say the same thing. */

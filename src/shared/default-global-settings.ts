@@ -264,6 +264,7 @@ export function buildDefaultSettings(args: {
     agentHibernationIdleMs: 30 * 60 * 1000,
     experimentalNewWorktreeCardStyle: false,
     experimentalEphemeralVms: false,
+    experimentalIssueDraftAgent: false,
     experimentalConnectors: false,
     experimentalWslHosts: false,
     compactWorktreeCards: false,
