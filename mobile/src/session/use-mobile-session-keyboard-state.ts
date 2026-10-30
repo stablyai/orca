@@ -1,12 +1,27 @@
-import { useEffect, useCallback, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
+import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { useSoftKeyboard } from '../platform/keyboard-occlusion'
 import { useTerminalViewportRefit } from '../terminal/terminal-viewport-refit'
 import { removeCustomKey, type CustomKey } from '../terminal/terminal-custom-keys'
-import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { writeLastVisitedWorktree } from '../worktree/last-visited-worktree-by-host'
+import { sessionTabPaneKey } from './notification-pane-tab'
+import { getMobileTerminalTabHostAgentIdentity } from './mobile-terminal-tab-agent'
+import {
+  buildRecentSessionCardFromTab,
+  hydrateRecentSessionCards,
+  reconcileRecentSessionCardsForWorktree,
+  recordRecentSessionCardVisit
+} from './recent-session-cards'
 import { resolveTabStripScrollOffset } from './tab-strip-scroll'
 import type { MobileSessionLifecycleModel } from './use-mobile-session-lifecycle'
 
+const EMPTY_SESSION_TABS: MobileSessionLifecycleModel['sessionTabs'] = []
+const activeSessionMountByHostId = new Map<string, symbol>()
+
+/**
+ * Exactly the fields this hook reads, so the whole lifecycle model still fits and a test can build
+ * one. Most of them are forwarded to the viewport refit; the rest are named where they are used.
+ */
 export type MobileSessionKeyboardScope = Pick<
   MobileSessionLifecycleModel,
   | 'activeHandleRef'
@@ -36,12 +51,15 @@ export type MobileSessionKeyboardScope = Pick<
   | 'viewportMeasuredRef'
   | 'viewportRef'
   | 'worktreeId'
->
+> &
+  Partial<Pick<MobileSessionLifecycleModel, 'sessionTabs' | 'worktreeName'>>
 
 export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope) {
   const {
     hostId,
     worktreeId,
+    worktreeName,
+    sessionTabs = EMPTY_SESSION_TABS,
     router,
     connState,
     terminals,
@@ -150,11 +168,98 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
   }, [activeSessionTabId, scrollActiveTabIntoView])
 
   const executionHost = useWorkspaceExecutionHost()
+  const activeTab = scope.sessionTabs?.find((tab) => tab.id === activeSessionTabId)
+  const activePaneKey = sessionTabPaneKey(activeTab)
+  const sessionMountTokenRef = useRef<symbol | null>(null)
+  if (sessionMountTokenRef.current === null) {
+    sessionMountTokenRef.current = Symbol('session-mount')
+  }
+  const latestVisitRef = useRef({ hostId, worktreeId, executionHost })
+  latestVisitRef.current = { hostId, worktreeId, executionHost }
   useEffect(() => {
     if (hostId && worktreeId) {
-      void writeLastVisitedWorktree({ hostId, worktreeId, executionHost })
+      activeSessionMountByHostId.set(hostId, sessionMountTokenRef.current!)
+      void writeLastVisitedWorktree({
+        hostId,
+        worktreeId,
+        executionHost,
+        inSession: true,
+        ...(activePaneKey ? { paneKey: activePaneKey } : {})
+      })
     }
-  }, [hostId, worktreeId, executionHost])
+  }, [hostId, worktreeId, executionHost, activePaneKey])
+  useEffect(() => {
+    const token = sessionMountTokenRef.current
+    return () => {
+      const {
+        hostId: lastHostId,
+        worktreeId: lastWorktreeId,
+        executionHost: lastExecHost
+      } = latestVisitRef.current
+      if (
+        lastHostId &&
+        lastWorktreeId &&
+        activeSessionMountByHostId.get(lastHostId) === token
+      ) {
+        activeSessionMountByHostId.delete(lastHostId)
+        void writeLastVisitedWorktree({
+          hostId: lastHostId,
+          worktreeId: lastWorktreeId,
+          executionHost: lastExecHost,
+          inSession: false
+        })
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    void hydrateRecentSessionCards().catch(() => {})
+  }, [])
+
+  const lastRecordedCardKeyRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!hostId || !worktreeId) {
+      return
+    }
+    if (sessionTabs.length > 0) {
+      reconcileRecentSessionCardsForWorktree({
+        hostId,
+        worktreeId,
+        liveTabs: sessionTabs,
+        activeTabId: activeSessionTabId
+      })
+    }
+    if (!activeSessionTabId) {
+      return
+    }
+    const activeTab = sessionTabs.find((tab) => tab.id === activeSessionTabId)
+    if (!activeTab) {
+      return
+    }
+    const hostAgentIdentity = getMobileTerminalTabHostAgentIdentity(activeTab, terminals)
+    // Why: status receipts rewrite sessionTabs without a new visit.
+    const recordedKey = [
+      hostId,
+      worktreeId,
+      activeTab.id,
+      activeTab.title,
+      worktreeName,
+      hostAgentIdentity ?? ''
+    ].join('\0')
+    if (lastRecordedCardKeyRef.current === recordedKey) {
+      return
+    }
+    lastRecordedCardKeyRef.current = recordedKey
+    recordRecentSessionCardVisit(
+      buildRecentSessionCardFromTab({
+        hostId,
+        worktreeId,
+        worktreeName: worktreeName || '',
+        tab: activeTab,
+        hostAgentIdentity
+      })
+    )
+  }, [activeSessionTabId, hostId, sessionTabs, terminals, worktreeId, worktreeName])
 
   const handleDeleteCustomKey = useCallback(async (key: CustomKey) => {
     try {

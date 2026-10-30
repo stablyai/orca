@@ -23,6 +23,9 @@ export const TERMINAL_SHORTCUT_STORAGE_KEYS = [
 
 export const PAGE_STORAGE_EXACT_KEYS = [
   'orca:last-visited-worktree',
+  /** Recent session cards. Also copied onto last-visited so an OTA shell keeps them. */
+  'orca:recent-session-cards',
+  /** The worktree-list sidebar's width, which `app/h/_layout.tsx` renders above every page route. */
   'orca:hostSidebarWidth',
   'orca:hostDockWidth',
   'orca:terminal-accessory-layout',

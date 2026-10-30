@@ -7,7 +7,25 @@ import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { TuiAgent } from '../../../src/shared/tui-agent'
 import { isBlankBrowserUrl } from '../browser/browser-url'
 import { translate } from '../i18n/mobile-i18n'
+import { agentDotState, type AgentDotState } from '../worktree/agent-row-display'
 import type { MobileSessionTab } from './mobile-session-route-types'
+import {
+  clearCatalogWorktreesForTabStatusForTests,
+  reconcileTerminalAgentStatusWithCatalog,
+  setCatalogWorktreesForTabStatus,
+  subscribeCatalogWorktreesForTabStatus
+} from './session-tab-catalog-agent-status'
+
+export { setCatalogWorktreesForTabStatus, subscribeCatalogWorktreesForTabStatus }
+
+export {
+  buildRecentSessionCardFromTab,
+  recentCardSnapshotTabs,
+  resolveLiveTabDotState,
+  syncRecentCardWithLiveTab,
+  type LiveRecentCardTab,
+  type RecentSessionCardSnapshot
+} from './recent-session-card-snapshot'
 
 export type MobileTerminalTabAgentIdentity = {
   title: string
@@ -121,4 +139,221 @@ export function getMobileSessionTabTitle(
     )
   }
   return tab.title || translate('session.terminalTabAgent.terminal', 'Terminal')
+}
+
+const VALID_AGENT_DOT_STATES: readonly AgentDotState[] = [
+  'working',
+  'monitoring',
+  'blocked',
+  'waiting',
+  'unread',
+  'done',
+  'interrupted',
+  'failed',
+  'unconfirmed'
+]
+
+export function parseAgentDotState(raw: unknown): AgentDotState | undefined {
+  return typeof raw === 'string' ? VALID_AGENT_DOT_STATES.find((state) => state === raw) : undefined
+}
+
+type TabCompletionTrackerEntry = {
+  sawInTurn: boolean
+  unread: boolean
+  acknowledgedDoneAt?: number
+}
+
+const tabCompletionTracker = new Map<string, TabCompletionTrackerEntry>()
+
+export function clearTabCompletionTrackerForTests(): void {
+  tabCompletionTracker.clear()
+  clearCatalogWorktreesForTabStatusForTests()
+}
+
+function isInTurnDotState(state: AgentDotState | null | undefined): boolean {
+  return state === 'working' || state === 'monitoring' || state === 'waiting' || state === 'blocked'
+}
+
+function getOrCreateTrackerEntry(keys: readonly string[]): TabCompletionTrackerEntry | null {
+  if (keys.length === 0) {
+    return null
+  }
+  let existing: TabCompletionTrackerEntry | undefined
+  for (const key of keys) {
+    existing = tabCompletionTracker.get(key)
+    if (existing) {
+      break
+    }
+  }
+  const entry = existing ?? { sawInTurn: false, unread: false }
+  for (const key of keys) {
+    tabCompletionTracker.set(key, entry)
+  }
+  return entry
+}
+
+export function buildTabCompletionKeys(args: {
+  id?: string | null
+  terminal?: string | null
+  paneKey?: string | null
+}): string[] {
+  const keys: string[] = []
+  if (args.id) {
+    keys.push(`tab:${args.id}`)
+  }
+  if (args.terminal) {
+    keys.push(`pty:${args.terminal}`)
+  }
+  if (args.paneKey) {
+    keys.push(`pane:${args.paneKey}`)
+  }
+  return keys
+}
+
+export function resolveTrackedTabCompletionState(args: {
+  keys: readonly string[]
+  rawState: AgentDotState | undefined
+  doneStamp?: number
+  isActiveOnScreen?: boolean
+  previousCardState?: AgentDotState
+}): AgentDotState | undefined {
+  const { keys, rawState, doneStamp, isActiveOnScreen, previousCardState } = args
+  const entry = getOrCreateTrackerEntry(keys)
+  if (!entry) {
+    return rawState
+  }
+  if (
+    previousCardState === 'unread' &&
+    !entry.sawInTurn &&
+    !entry.unread &&
+    entry.acknowledgedDoneAt === undefined
+  ) {
+    entry.unread = true
+  }
+  if (isInTurnDotState(previousCardState) && rawState === 'done' && isActiveOnScreen === false) {
+    entry.sawInTurn = true
+  }
+  if (isInTurnDotState(rawState)) {
+    entry.sawInTurn = true
+    entry.unread = false
+    return rawState
+  }
+  if (rawState === 'done') {
+    const hasUnacknowledgedCompletion = entry.unread || entry.sawInTurn
+    if (isActiveOnScreen === true) {
+      entry.sawInTurn = false
+      entry.unread = false
+      if (doneStamp !== undefined) {
+        entry.acknowledgedDoneAt = Math.max(entry.acknowledgedDoneAt ?? 0, doneStamp)
+      }
+      return 'done'
+    }
+    if (isActiveOnScreen === false) {
+      if (hasUnacknowledgedCompletion) {
+        entry.sawInTurn = false
+        entry.unread = true
+        return 'unread'
+      }
+      if (doneStamp !== undefined && entry.acknowledgedDoneAt === undefined) {
+        entry.acknowledgedDoneAt = doneStamp
+      }
+      return 'done'
+    }
+    if (entry.unread) {
+      return 'unread'
+    }
+    if (entry.sawInTurn) {
+      entry.sawInTurn = false
+      entry.unread = true
+      return 'unread'
+    }
+    if (doneStamp !== undefined && entry.acknowledgedDoneAt === undefined) {
+      entry.acknowledgedDoneAt = doneStamp
+    }
+    return 'done'
+  }
+  if (rawState === 'interrupted' || rawState === 'failed') {
+    entry.sawInTurn = false
+    entry.unread = false
+  }
+  return rawState
+}
+
+export function resolveRawSessionTabDotState(
+  tab: {
+    id?: string
+    parentTabId?: string | null
+    leafId?: string | null
+    type?: MobileSessionTab['type']
+    agentStatus?: (AgentStatusEntry & { restoredUnconfirmed?: boolean }) | null
+    chatStatus?: Extract<MobileSessionTab, { type: 'agent-session' }>['chatStatus'] | null
+  },
+  now = Date.now()
+): AgentDotState | undefined {
+  if (tab.type === 'terminal') {
+    const status = reconcileTerminalAgentStatusWithCatalog(tab.agentStatus, {
+      tabId: tab.id,
+      parentTabId: tab.parentTabId,
+      leafId: tab.leafId,
+      now
+    })
+    // Why: a status restored across a host restart is unconfirmed, so like desktop it shows no live state.
+    if (status && !status.restoredUnconfirmed) {
+      return agentDotState(status, now)
+    }
+    return undefined
+  }
+  if (tab.type === 'agent-session' && tab.chatStatus) {
+    return agentDotState(tab.chatStatus, now)
+  }
+  return undefined
+}
+
+export function resolveTabDoneStamp(tab: {
+  id?: string
+  parentTabId?: string | null
+  leafId?: string | null
+  type?: MobileSessionTab['type']
+  agentStatus?: (AgentStatusEntry & { restoredUnconfirmed?: boolean }) | null
+  chatStatus?: Extract<MobileSessionTab, { type: 'agent-session' }>['chatStatus'] | null
+}): number | undefined {
+  if (tab.type === 'terminal') {
+    const status = reconcileTerminalAgentStatusWithCatalog(tab.agentStatus, {
+      tabId: tab.id,
+      parentTabId: tab.parentTabId,
+      leafId: tab.leafId
+    })
+    return status ? (status.stateStartedAt ?? status.updatedAt) : undefined
+  }
+  if (tab.type === 'agent-session' && tab.chatStatus) {
+    return tab.chatStatus.updatedAt
+  }
+  return undefined
+}
+
+export function resolveMobileSessionTabDotState(
+  tab: {
+    id?: string
+    parentTabId?: string | null
+    leafId?: string | null
+    terminal?: string | null
+    isActive?: boolean
+    type?: MobileSessionTab['type']
+    agentStatus?: (AgentStatusEntry & { restoredUnconfirmed?: boolean }) | null
+    chatStatus?: Extract<MobileSessionTab, { type: 'agent-session' }>['chatStatus'] | null
+  },
+  now = Date.now(),
+  options?: { isActiveOnScreen?: boolean }
+): AgentDotState | undefined {
+  const rawState = resolveRawSessionTabDotState(tab, now)
+  return resolveTrackedTabCompletionState({
+    keys: buildTabCompletionKeys({
+      id: tab.id,
+      terminal: tab.terminal,
+      paneKey: tab.agentStatus?.paneKey
+    }),
+    rawState,
+    doneStamp: resolveTabDoneStamp(tab),
+    isActiveOnScreen: options?.isActiveOnScreen ?? tab.isActive
+  })
 }

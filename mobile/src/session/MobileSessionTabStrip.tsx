@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { View, Text, ScrollView, Pressable } from 'react-native'
 import { File, FileText, Globe, Plus, SquareTerminal, Columns2 } from 'lucide-react-native'
 import { triggerMediumImpact } from '../platform/haptics'
@@ -6,11 +6,13 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import { AgentStateDot } from '../components/AgentStateDot'
 import { useNow } from '../hooks/use-now'
-import { agentDotState, agentStateLabel, type AgentDotState } from '../worktree/agent-row-display'
+import { agentStateLabel, type AgentDotState } from '../worktree/agent-row-display'
 import {
   getMobileTerminalTabHostAgentIdentity,
   getMobileSessionTabTitle,
-  resolveMobileTerminalTabAgentId
+  resolveMobileSessionTabDotState,
+  resolveMobileTerminalTabAgentId,
+  subscribeCatalogWorktreesForTabStatus
 } from './mobile-terminal-tab-agent'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -67,18 +69,24 @@ export function MobileSessionTabStrip({
   const tabBarKeepsKeyboard = useKeyboardPersistingTaps('handled')
   const lastTabTapRef = useRef<{ id: string; at: number } | null>(null)
   const now = useNow(60_000)
+  const [catalogRevision, setCatalogRevision] = useState(0)
+  useEffect(
+    () => subscribeCatalogWorktreesForTabStatus(() => setCatalogRevision((rev) => rev + 1)),
+    []
+  )
   const tabStates = useMemo(() => {
+    void catalogRevision
     const states = new Map<string, AgentDotState>()
     for (const tab of visibleTabs) {
-      // Why: a status restored across a host restart is unconfirmed, so like desktop it shows no live state.
-      if (tab.type === 'terminal' && tab.agentStatus && !tab.agentStatus.restoredUnconfirmed) {
-        states.set(tab.id, agentDotState(tab.agentStatus, now))
-      } else if (tab.type === 'agent-session' && tab.chatStatus) {
-        states.set(tab.id, agentDotState(tab.chatStatus, now))
+      const state = resolveMobileSessionTabDotState(tab, now, {
+        isActiveOnScreen: tab.id === activeSessionTabId
+      })
+      if (state) {
+        states.set(tab.id, state)
       }
     }
     return states
-  }, [visibleTabs, now])
+  }, [visibleTabs, now, activeSessionTabId, catalogRevision])
   const [hiddenTabs, setHiddenTabs] = useState<TabStripHiddenTabs>({ left: [], right: [] })
   const refreshHiddenTabs = () => {
     const next = resolveTabStripHiddenTabs({

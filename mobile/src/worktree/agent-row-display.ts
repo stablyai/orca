@@ -10,6 +10,7 @@ export type AgentDotState =
   | 'monitoring'
   | 'blocked'
   | 'waiting'
+  | 'unread'
   | 'done'
   | 'idle'
   | 'unverifiable'
@@ -62,6 +63,8 @@ export function agentStateLabel(state: AgentDotState): string {
       return translate('worktree.agentRowDisplay.failed', 'Failed')
     case 'unconfirmed':
       return translate('worktree.agentRowDisplay.unconfirmed', 'Couldn’t confirm')
+    case 'unread':
+      return 'Unread'
     case 'done':
       return translate('worktree.agentRowDisplay.done', 'Done')
     case 'idle':

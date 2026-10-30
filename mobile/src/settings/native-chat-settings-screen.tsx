@@ -1,8 +1,17 @@
+import { useEffect, useState } from 'react'
 import { View, Text, Pressable, ScrollView, Switch } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
-import { ChevronLeft } from 'lucide-react-native'
+import { ChevronLeft, Minus, Plus } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import {
+  getRecentSessionCardsMaxDisplaySync,
+  hydrateRecentSessionCards,
+  MAX_RECENT_SESSION_CARDS_LIMIT,
+  MIN_RECENT_SESSION_CARDS_DISPLAY,
+  setRecentSessionCardsMaxDisplay,
+  subscribeRecentSessionCards
+} from '../session/recent-session-cards'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileDefaultSessionViewPreference } from '../session/use-mobile-default-session-view-preference'
@@ -16,6 +25,17 @@ export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => vo
 
   const { defaultView, setDefaultView } = useMobileDefaultSessionViewPreference()
   const chatDefault = defaultView === 'chat'
+  const [recentMaxDisplay, setRecentMaxDisplay] = useState(() =>
+    getRecentSessionCardsMaxDisplaySync()
+  )
+  useEffect(() => {
+    void hydrateRecentSessionCards().catch(() => {})
+    return subscribeRecentSessionCards(() =>
+      setRecentMaxDisplay(getRecentSessionCardsMaxDisplaySync())
+    )
+  }, [])
+  const canDecreaseRecent = recentMaxDisplay > MIN_RECENT_SESSION_CARDS_DISPLAY
+  const canIncreaseRecent = recentMaxDisplay < MAX_RECENT_SESSION_CARDS_LIMIT
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
@@ -68,6 +88,48 @@ export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => vo
               trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
               thumbColor={colors.textPrimary}
             />
+          </View>
+        </View>
+
+        <Text style={[styles.groupHeading, styles.groupTopGap]}>RECENTLY USED</Text>
+        <Text style={styles.groupDescription}>
+          Customize how many recently visited cards appear in the session menu (default 7).
+        </Text>
+        <View style={[styles.section, styles.sectionTopGap]}>
+          <View style={styles.row}>
+            <View style={styles.rowContent}>
+              <Text style={styles.rowLabel}>Max recent items</Text>
+              <Text style={styles.rowSublabel}>{recentMaxDisplay} cards</Text>
+            </View>
+            <View style={styles.stepper}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Decrease max recent items"
+                disabled={!canDecreaseRecent}
+                onPress={() => setRecentSessionCardsMaxDisplay(recentMaxDisplay - 1)}
+                style={({ pressed }) => [
+                  styles.stepperButton,
+                  !canDecreaseRecent && styles.stepperButtonDisabled,
+                  pressed && canDecreaseRecent && styles.stepperButtonPressed
+                ]}
+              >
+                <Minus size={16} color={colors.textPrimary} />
+              </Pressable>
+              <Text style={styles.stepperValue}>{recentMaxDisplay}</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Increase max recent items"
+                disabled={!canIncreaseRecent}
+                onPress={() => setRecentSessionCardsMaxDisplay(recentMaxDisplay + 1)}
+                style={({ pressed }) => [
+                  styles.stepperButton,
+                  !canIncreaseRecent && styles.stepperButtonDisabled,
+                  pressed && canIncreaseRecent && styles.stepperButtonPressed
+                ]}
+              >
+                <Plus size={16} color={colors.textPrimary} />
+              </Pressable>
+            </View>
           </View>
         </View>
       </ScrollView>
@@ -141,5 +203,36 @@ const styles = themedStyleSheet(() => ({
     fontSize: typography.bodySize - 2,
     color: colors.textSecondary,
     marginTop: 2
+  },
+  groupTopGap: {
+    marginTop: spacing.xl
+  },
+  stepper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.bgRaised,
+    borderRadius: 8,
+    padding: 4
+  },
+  stepperButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  stepperButtonPressed: {
+    backgroundColor: colors.bgPanel
+  },
+  stepperButtonDisabled: {
+    opacity: 0.35
+  },
+  stepperValue: {
+    minWidth: 24,
+    fontSize: typography.bodySize,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    textAlign: 'center'
   }
 }))

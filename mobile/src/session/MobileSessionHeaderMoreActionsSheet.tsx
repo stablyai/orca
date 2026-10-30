@@ -2,12 +2,20 @@ import { ListChecks } from 'lucide-react-native'
 import { MobileAgentSessionHistoryIcon } from '../agent-history/MobileAgentSessionHistoryIcon'
 import { ActionSheetModal, type ActionSheetAction } from '../components/ActionSheetModal'
 import { colors } from '../theme/mobile-theme'
+import type { RecentSessionCardRecord } from './recent-session-cards'
+import { RecentSessionCardsSection } from './RecentSessionCardsSheet'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
-type Props = {
+type MobileSessionHeaderMoreActionsSheetProps = {
   visible: boolean
   additionalActions?: ActionSheetAction[]
+  showRecentSessionCards?: boolean
+  recentSessionCards?: readonly RecentSessionCardRecord[]
+  jumpingRecentCardKey?: string | null
+  currentWorktreeId?: string
+  currentTabId?: string | null
+  onSelectRecentSessionCard?: (card: RecentSessionCardRecord) => void
   showAgentSessionHistory: boolean
   showChecks: boolean
   onOpenAgentSessionHistory: () => void
@@ -18,12 +26,18 @@ type Props = {
 export function MobileSessionHeaderMoreActionsSheet({
   visible,
   additionalActions,
+  showRecentSessionCards,
+  recentSessionCards,
+  jumpingRecentCardKey,
+  currentWorktreeId,
+  currentTabId,
+  onSelectRecentSessionCard,
   showAgentSessionHistory,
   showChecks,
   onOpenAgentSessionHistory,
   onOpenChecks,
   onClose
-}: Props) {
+}: MobileSessionHeaderMoreActionsSheetProps) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   return (
@@ -64,6 +78,16 @@ export function MobileSessionHeaderMoreActionsSheet({
           : [])
       ]}
       onClose={onClose}
-    />
+    >
+      {showRecentSessionCards && onSelectRecentSessionCard ? (
+        <RecentSessionCardsSection
+          cards={recentSessionCards ?? []}
+          jumpingCardKey={jumpingRecentCardKey ?? null}
+          currentWorktreeId={currentWorktreeId}
+          currentTabId={currentTabId}
+          onSelectCard={onSelectRecentSessionCard}
+        />
+      ) : null}
+    </ActionSheetModal>
   )
 }

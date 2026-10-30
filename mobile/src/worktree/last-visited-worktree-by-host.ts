@@ -62,6 +62,78 @@ export function readLastVisitedWorktreeOnHost(
   return record?.hostId === hostId ? { worktreeId: record.worktreeId } : null
 }
 
+function extractRecentCardFields(raw: string | null): {
+  recentCards?: unknown[]
+  recentCardsMaxDisplay?: number
+} {
+  if (!raw) {
+    return {}
+  }
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (!isRecord(parsed)) {
+      return {}
+    }
+    const recentCards =
+      Array.isArray(parsed.recentCards) && parsed.recentCards.length > 0
+        ? parsed.recentCards
+        : undefined
+    const recentCardsMaxDisplay =
+      typeof parsed.recentCardsMaxDisplay === 'number' &&
+      Number.isFinite(parsed.recentCardsMaxDisplay)
+        ? parsed.recentCardsMaxDisplay
+        : undefined
+    return {
+      ...(recentCards ? { recentCards } : {}),
+      ...(recentCardsMaxDisplay !== undefined ? { recentCardsMaxDisplay } : {})
+    }
+  } catch {
+    return {}
+  }
+}
+
+/** Merge recent cards into an existing visit record. Null when there is no visit to keep. */
+export function withRecentCards(
+  raw: string | null,
+  cards: readonly unknown[],
+  extras?: { recentCardsMaxDisplay?: number }
+): string | null {
+  if (!raw || readLastVisitedWorktreeRecord(raw) === null) {
+    return null
+  }
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (!isRecord(parsed)) {
+      return null
+    }
+    const trimmedCards = [...cards]
+    const build = () => {
+      const next: Record<string, unknown> = {
+        ...parsed,
+        ...(trimmedCards.length > 0 ? { recentCards: trimmedCards } : {})
+      }
+      if (trimmedCards.length === 0) {
+        delete next.recentCards
+      }
+      if (extras?.recentCardsMaxDisplay !== undefined) {
+        next.recentCardsMaxDisplay = extras.recentCardsMaxDisplay
+      } else {
+        delete next.recentCardsMaxDisplay
+      }
+      return JSON.stringify(next)
+    }
+    let value = build()
+    while (trimmedCards.length > 0 && value.length > PAGE_STORAGE_MAX_VALUE_CHARS) {
+      trimmedCards.pop()
+      value = build()
+    }
+    return value
+  } catch {
+    return null
+  }
+}
+
+/** The stored value with `record` as the latest visit and its host's entry. */
 export function withLastVisitedWorktree(
   raw: string | null,
   record: LastVisitedWorktreeRecord & { executionHost?: ExecutionHostId }
@@ -74,11 +146,17 @@ export function withLastVisitedWorktree(
   // Re-inserted so the map's order is oldest visit first, which is what the cap drops.
   byHost.delete(record.hostId)
   byHost.set(record.hostId, visitOf(record.worktreeId, record.executionHost))
+  const recentFields = extractRecentCardFields(raw)
+  const trimmedCards = recentFields.recentCards ? [...recentFields.recentCards] : undefined
   const serialize = () =>
     JSON.stringify({
       hostId: record.hostId,
       worktreeId: record.worktreeId,
-      byHost: Object.fromEntries(byHost)
+      byHost: Object.fromEntries(byHost),
+      ...(trimmedCards && trimmedCards.length > 0 ? { recentCards: trimmedCards } : {}),
+      ...(recentFields.recentCardsMaxDisplay !== undefined
+        ? { recentCardsMaxDisplay: recentFields.recentCardsMaxDisplay }
+        : {})
     })
   let value = serialize()
   while (
@@ -90,6 +168,10 @@ export function withLastVisitedWorktree(
       break
     }
     byHost.delete(oldest)
+    value = serialize()
+  }
+  while (trimmedCards && trimmedCards.length > 0 && value.length > PAGE_STORAGE_MAX_VALUE_CHARS) {
+    trimmedCards.pop()
     value = serialize()
   }
   return value
@@ -130,6 +212,20 @@ export function writeLastVisitedWorktree(
     .then((raw) =>
       persistMirrored(LAST_VISITED_WORKTREE_STORAGE_KEY, withLastVisitedWorktree(raw, record))
     )
+    .catch(() => {})
+  return writeChain
+}
+
+export function writeRecentCardsToLastVisitedWorktree(
+  cards: readonly unknown[],
+  extras?: { recentCardsMaxDisplay?: number }
+): Promise<void> {
+  writeChain = writeChain
+    .then(() => readMirroredKeyOrStore(LAST_VISITED_WORKTREE_STORAGE_KEY).catch(() => null))
+    .then((raw) => {
+      const merged = withRecentCards(raw, cards, extras)
+      return merged ? persistMirrored(LAST_VISITED_WORKTREE_STORAGE_KEY, merged) : undefined
+    })
     .catch(() => {})
   return writeChain
 }

@@ -7,13 +7,39 @@ import { isCachedActiveDocumentRetap } from './mobile-session-active-document-re
 import { activateMobileSessionTab } from './mobile-session-tab-activation'
 import { activatedAtWorkspaceRoot } from './session-write-reply-schema'
 import type { MobileSessionTab } from './mobile-session-route-types'
+import { getMobileTerminalTabHostAgentIdentity } from './mobile-terminal-tab-agent'
+import { buildRecentSessionCardFromTab, recordRecentSessionCardVisit } from './recent-session-cards'
 import type { MobileSessionKeyboardStateModel } from './use-mobile-session-keyboard-state'
+
+function rememberRecentSessionCard(args: {
+  hostId: string | undefined
+  worktreeId: string | undefined
+  worktreeName: string | undefined
+  tab: MobileSessionTab
+  terminals: MobileSessionKeyboardStateModel['terminals']
+}): void {
+  if (!args.hostId || !args.worktreeId) {
+    return
+  }
+  recordRecentSessionCardVisit(
+    buildRecentSessionCardFromTab({
+      hostId: args.hostId,
+      worktreeId: args.worktreeId,
+      worktreeName: args.worktreeName || '',
+      tab: args.tab,
+      hostAgentIdentity: getMobileTerminalTabHostAgentIdentity(args.tab, args.terminals)
+    })
+  )
+}
 
 export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateModel) {
   const {
+    hostId,
     worktreeId,
+    worktreeName,
     client,
     sessionTabs,
+    terminals,
     defaultTerminalHandlesToLiveInput,
     setActiveHandle,
     setSplitTerminalHandles,
@@ -24,6 +50,8 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
     terminalUnsubsRef,
     terminalDiagnosticsRef,
     activeHandleRef,
+    activeSessionTabIdRef,
+    selectedSessionTabIdRef,
     visibleTerminalHandlesRef,
     activeSessionTabTypeRef,
     pendingSelectionRef,
@@ -53,6 +81,12 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
       terminalDiagnosticsRef.current.tabSwitch('terminal', matchingTab?.id ?? '', false, handle)
       pendingSelectionRef.current = { kind: 'terminal', handle, tabId: matchingTab?.id ?? null }
       activeSessionTabTypeRef.current = 'terminal'
+      if (activeSessionTabIdRef) {
+        activeSessionTabIdRef.current = matchingTab?.id ?? null
+      }
+      if (selectedSessionTabIdRef) {
+        selectedSessionTabIdRef.current = matchingTab?.id ?? null
+      }
       defaultTerminalHandlesToLiveInput([handle])
       setActiveSessionTabId(matchingTab?.id ?? null)
       const visible = visibleTerminalHandlesRef?.current
@@ -77,6 +111,9 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
         unsubscribeTerminal(handle)
       }
       subscribeToTerminal(handle)
+      if (matchingTab) {
+        rememberRecentSessionCard({ hostId, worktreeId, worktreeName, tab: matchingTab, terminals })
+      }
       if (client) {
         if (matchingTab) {
           void activateMobileSessionTab(client, {
@@ -94,12 +131,15 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
     [
       client,
       defaultTerminalHandlesToLiveInput,
+      hostId,
       reportActivation,
       sessionTabs,
       setSplitTerminalHandles,
       subscribeToTerminal,
+      terminals,
       unsubscribeTerminal,
-      worktreeId
+      worktreeId,
+      worktreeName
     ]
   )
 
@@ -108,6 +148,7 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
       if (isCachedActiveDocumentRetap(tab, activeSessionTabId, { markdownDocs, fileDocs })) {
         return
       }
+      rememberRecentSessionCard({ hostId, worktreeId, worktreeName, tab, terminals })
       if (tab.type === 'terminal') {
         if (typeof tab.terminal === 'string') {
           switchTab(tab.terminal)
@@ -117,6 +158,12 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
         triggerSelection()
         pendingSelectionRef.current = { kind: 'tab', tabId: tab.id }
         activeSessionTabTypeRef.current = 'terminal'
+        if (activeSessionTabIdRef) {
+          activeSessionTabIdRef.current = tab.id
+        }
+        if (selectedSessionTabIdRef) {
+          selectedSessionTabIdRef.current = tab.id
+        }
         setActiveSessionTabId(tab.id)
         const prev = activeHandleRef.current
         if (prev) {
@@ -144,6 +191,12 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
       terminalDiagnosticsRef.current.tabSwitch(tab.type, tab.id, false)
       pendingSelectionRef.current = { kind: 'tab', tabId: tab.id }
       activeSessionTabTypeRef.current = tab.type
+      if (activeSessionTabIdRef) {
+        activeSessionTabIdRef.current = tab.id
+      }
+      if (selectedSessionTabIdRef) {
+        selectedSessionTabIdRef.current = tab.id
+      }
       setActiveSessionTabId(tab.id)
       const prev = activeHandleRef.current
       if (prev) {
@@ -185,13 +238,16 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
       activeSessionTabId,
       client,
       fileDocs,
+      hostId,
       markdownDocs,
       readFileTab,
       readMarkdownTab,
       reportActivation,
       switchTab,
+      terminals,
       unsubscribeTerminal,
-      worktreeId
+      worktreeId,
+      worktreeName
     ]
   )
   switchSessionTabRef.current = switchSessionTab

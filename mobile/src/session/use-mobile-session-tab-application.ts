@@ -23,7 +23,10 @@ import {
 import type { SessionTabsApplyOutcome } from './mobile-session-tabs-stream-health'
 import { getActiveTabIdForHandle } from './mobile-session-route-helpers'
 import { resolveActiveSessionTab } from './active-session-tab'
-import { activateMobileSessionTab } from './mobile-session-tab-activation'
+import {
+  activateMobileSessionTab,
+  consumePendingCrossWorktreeTabTarget
+} from './mobile-session-tab-activation'
 import { releaseTerminalCreateLock } from './terminal-create-lock'
 import { withSessionTabStatusReceipts } from './mobile-session-tab-status-clock'
 import { withRememberedNativeChatIdentity } from './native-chat/mobile-native-chat-eligibility'
@@ -193,6 +196,23 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
             navigation: 'caller',
             intent: 'user'
           }).catch(() => {})
+        }
+      }
+      const crossWorktreeTarget =
+        nextTabs.length > 0 ? consumePendingCrossWorktreeTabTarget(result.worktree) : null
+      if (crossWorktreeTarget) {
+        const targetTab = nextTabs.find(
+          (tab) =>
+            tab.id === crossWorktreeTarget.tabId ||
+            (tab.type === 'terminal' &&
+              Boolean(crossWorktreeTarget.terminalHandle) &&
+              tab.terminal === crossWorktreeTarget.terminalHandle)
+        )
+        if (targetTab) {
+          pendingSelectionRef.current =
+            targetTab.type === 'terminal' && typeof targetTab.terminal === 'string'
+              ? { kind: 'terminal', handle: targetTab.terminal, tabId: targetTab.id }
+              : { kind: 'tab', tabId: targetTab.id }
         }
       }
       const pendingActiveSessionTabId = pendingSelectionTabId(pendingSelectionRef.current)

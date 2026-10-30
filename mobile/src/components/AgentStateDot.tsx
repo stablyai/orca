@@ -1,4 +1,4 @@
-import { Activity } from 'lucide-react-native'
+import { Activity, Bell } from 'lucide-react-native'
 import { Animated, View } from 'react-native'
 import type { AgentDotState } from '../worktree/agent-row-display'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -7,10 +7,14 @@ import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useWorkingRingRotation } from './use-working-ring-rotation'
 
-// Match desktop per-agent vocabulary: working yellow spinner, done emerald, attention red, interrupted muted, unconfirmed amber, idle neutral.
-// Separate from AgentSpinner’s five-state worktree rollup.
+// Per-agent state indicator, 1:1 with desktop AgentStateDot
+// (src/renderer/src/components/AgentStateDot.tsx): yellow spinner for 'working',
+// emerald for 'done', red for blocked/waiting/failed (attention), muted for a user's Stop
+// ('interrupted'), amber for 'unconfirmed' (desktop's missing-evidence tone), neutral for idle. Distinct from the
+// worktree-level AgentSpinner, which collapses the agent vocabulary into the 5-state
+// rollup the sidebar dot uses.
 const dotColors = (): Record<
-  Exclude<AgentDotState, 'working' | 'monitoring' | 'unverifiable'>,
+  Exclude<AgentDotState, 'working' | 'monitoring' | 'unread' | 'unverifiable'>,
   string
 > => ({
   done: '#10b981',
@@ -45,6 +49,14 @@ export function AgentStateDot({ state }: { state: AgentDotState | 'unverifiable'
         accessibilityLabel={t('components.agentStateDot.monitoring', 'Monitoring background tasks')}
       >
         <Activity size={10} color={AGENT_WORKING_COLOR} />
+      </View>
+    )
+  }
+
+  if (state === 'unread') {
+    return (
+      <View style={styles.wrapper} accessibilityLabel="Unread">
+        <Bell size={10} color={colors.statusAmber} fill={colors.statusAmber} />
       </View>
     )
   }

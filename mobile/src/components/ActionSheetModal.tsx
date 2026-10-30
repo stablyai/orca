@@ -24,6 +24,7 @@ type Props = {
   visible: boolean
   title?: string
   message?: string
+  children?: ReactNode
   actions: ActionSheetAction[]
   onClose: () => void
 }
@@ -115,7 +116,7 @@ export function ActionSheetContent({ title, message, children, actions, onClose 
   )
 }
 
-export function ActionSheetModal({ visible, title, message, actions, onClose }: Props) {
+export function ActionSheetModal({ visible, title, message, children, actions, onClose }: Props) {
   const pendingActionRef = useRef<(() => void) | null>(null)
   const sequencedActions = actions.map((action) =>
     action.closeBeforePress
@@ -145,7 +146,9 @@ export function ActionSheetModal({ visible, title, message, actions, onClose }: 
         message={message}
         actions={sequencedActions}
         onClose={onClose}
-      />
+      >
+        {children}
+      </ActionSheetContent>
     </BottomDrawer>
   )
 }
