@@ -6,6 +6,7 @@ import {
 } from '../i18n/mobile-i18n'
 import { pseudoLocalizeString } from '../../../src/shared/pseudo-localization'
 import React from 'react'
+import { Text } from 'react-native'
 import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
 import { CreateTerminalTab } from '../../../src/shared/rpc-contract/session-tabs-schemas-params'
 import type { RpcClient } from '../transport/rpc-client'
@@ -614,7 +615,7 @@ it.each([
         const expected =
           mode === 'generation fallback' ? message : pseudoLocalizeString(message, { expand: true })
         const banners = rendered.tree?.root.findAll(
-          (node) => node.type === 'Text' && node.props.children === expected
+          (node) => node.type === Text && node.props.children === expected
         )
         expect(banners).toHaveLength(1)
         expect(notifications.error).toHaveBeenCalledTimes(1)
