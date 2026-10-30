@@ -1,3 +1,4 @@
+import { useEditorImageSource } from './use-editor-image-source'
 import { translate } from '@/i18n/i18n'
 import { getConnectionIdForFile } from '@/lib/connection-context'
 import type { MarkdownViewMode, OpenFile, PendingEditorReveal } from '@/store/slices/editor'
@@ -109,6 +110,7 @@ export function EditorEditFileSurface({
   handleSave: (content: string) => Promise<boolean>
   reloadContent: (file: OpenFile, options?: { wakeWslDistro?: boolean }) => void
 }): React.JSX.Element {
+  const imageSource = useEditorImageSource(activeFile, fileContent)
   if (activeFile.conflict?.kind === 'conflict-placeholder') {
     return <ConflictPlaceholderView file={activeFile} />
   }
@@ -177,6 +179,7 @@ export function EditorEditFileSurface({
           src={fileContent.mediaUrl}
           byteSize={fileContent.size}
           filePath={activeFile.filePath}
+          imageSource={imageSource}
           mimeType={fileContent.mimeType}
           preferenceKey={pdfPreferenceKey}
           scrollCacheKey={pdfViewStateKey}

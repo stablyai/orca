@@ -12,6 +12,7 @@ import { useSvgObjectUrl } from './use-svg-object-url'
 import { translate } from '@/i18n/i18n'
 import { buildImageDataUri } from '../../../../shared/image-data-uri'
 import { decodeSvgBase64, readSvgIntrinsicSize } from '../../../../shared/svg-document'
+import { ImageActions, ImageActionsButton, type ImageActionSource } from './ImageActions'
 
 const FALLBACK_IMAGE_MIME_TYPE = 'image/png'
 const SVG_MIME_TYPE = 'image/svg+xml'
@@ -32,6 +33,7 @@ type ImageViewerProps = {
   preferenceKey?: string | null
   // Omission disables PDF scroll memory because diff/conflict surfaces can share a path.
   scrollCacheKey?: string | null
+  imageSource?: ImageActionSource
 }
 
 function formatByteSize(bytes: number): string {
@@ -53,7 +55,8 @@ export default function ImageViewer({
   mimeType = FALLBACK_IMAGE_MIME_TYPE,
   layout = 'fill',
   preferenceKey,
-  scrollCacheKey = null
+  scrollCacheKey = null,
+  imageSource
 }: ImageViewerProps): JSX.Element {
   const [loaded, setLoaded] = useState<{ key: string | null; size: PanZoomSize } | null>(null)
   const [failedPreviewSrc, setFailedPreviewSrc] = useState<string | null>(null)
@@ -152,25 +155,31 @@ export default function ImageViewer({
 
   if (isIntrinsicLayout) {
     return (
-      <IntrinsicImage
-        previewSrc={previewSrc}
-        filename={filename}
-        imageSize={imageSize}
-        onLoad={onLoad}
-        onError={onError}
-      />
+      <ImageActions src={previewSrc} title={filename} imageSource={imageSource}>
+        <IntrinsicImage
+          previewSrc={previewSrc}
+          filename={filename}
+          imageSize={imageSize}
+          onLoad={onLoad}
+          onError={onError}
+          imageSource={imageSource}
+        />
+      </ImageActions>
     )
   }
   return (
-    <FilledImage
-      previewSrc={previewSrc}
-      filename={filename}
-      imageSize={imageSize}
-      isVector={svgMarkup !== null}
-      estimatedSize={estimatedSize}
-      onLoad={onLoad}
-      onError={onError}
-    />
+    <ImageActions src={previewSrc} title={filename} imageSource={imageSource}>
+      <FilledImage
+        previewSrc={previewSrc}
+        filename={filename}
+        imageSize={imageSize}
+        isVector={svgMarkup !== null}
+        estimatedSize={estimatedSize}
+        onLoad={onLoad}
+        onError={onError}
+        imageSource={imageSource}
+      />
+    </ImageActions>
   )
 }
 
@@ -187,11 +196,13 @@ function FilledImage({
   isVector,
   estimatedSize,
   onLoad,
-  onError
+  onError,
+  imageSource
 }: {
   previewSrc: string
   filename: string
   imageSize: PanZoomSize | null
+  imageSource?: ImageActionSource
   isVector: boolean
   estimatedSize: string
 } & ImageLoadHandlers): JSX.Element {
@@ -260,6 +271,7 @@ function FilledImage({
           </span>
         )}
         <span>{estimatedSize}</span>
+        <ImageActionsButton src={previewSrc} title={filename} imageSource={imageSource} />
       </div>
     </div>
   )
@@ -271,11 +283,13 @@ function IntrinsicImage({
   filename,
   imageSize,
   onLoad,
-  onError
+  onError,
+  imageSource
 }: {
   previewSrc: string
   filename: string
   imageSize: PanZoomSize | null
+  imageSource?: ImageActionSource
 } & ImageLoadHandlers): JSX.Element {
   const [expanded, setExpanded] = useState(false)
   const label = translate('auto.components.editor.ImageViewer.expand', 'Expand image')
@@ -304,6 +318,7 @@ function IntrinsicImage({
         src={previewSrc}
         size={imageSize}
         title={filename}
+        imageSource={imageSource}
         showTitle
       />
     </div>

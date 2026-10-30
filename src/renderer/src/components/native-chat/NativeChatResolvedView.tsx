@@ -1,6 +1,7 @@
 import { NativeChatCrewFrame } from '../orchestration-crew/NativeChatCrewPanel'
 import { TerminalChatCrewPanel } from '../orchestration-crew/TerminalChatCrewPanel'
 import { cn } from '@/lib/utils'
+import { ImageActionsScope } from '@/components/editor/ImageActions'
 import { NATIVE_CHAT_APPEARANCE_ROOT_CLASS } from './native-chat-appearance-style'
 import { useNativeChatStoreAppearanceStyle } from './use-native-chat-store-appearance-style'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -309,11 +310,11 @@ export function NativeChatResolvedView({
   const appearanceStyle = useNativeChatStoreAppearanceStyle()
 
   return (
-    <div
+    <ImageActionsScope
+      enabled={isVisible}
       ref={rootRef}
       data-native-chat-root="true"
       data-native-chat-working={isWorking ? 'true' : 'false'}
-      tabIndex={-1}
       onPointerDownCapture={(event) => {
         contextMenu.onPointerDownCapture(event)
         if (event.button === 2) {
@@ -413,6 +414,6 @@ export function NativeChatResolvedView({
       </div>
       {contextMenu.menu}
       <LinkActionPopover request={linkActionRequest} onClose={closeLinkActions} />
-    </div>
+    </ImageActionsScope>
   )
 }
