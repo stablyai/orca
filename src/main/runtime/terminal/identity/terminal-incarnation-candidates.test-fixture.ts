@@ -1,4 +1,5 @@
 import { vi } from 'vitest'
+import type { TerminalIdentitySource } from './terminal-identity-source'
 import { TerminalIncarnationCandidates } from './terminal-incarnation-candidates'
 
 /** Counts only operations executing inside the actual candidate representation. */
@@ -17,7 +18,12 @@ export function meterIncarnationCandidates() {
     preparationLookup = counts()
   let reading = false
   const validation = { bindings: 0, ptys: 0, keyChars: 0 }
-  let validationMaps: { bindings: object; ptys: object } | undefined
+  let validationMaps:
+    | {
+        bindings: TerminalIdentitySource['incarnations']
+        ptys: TerminalIdentitySource['ptys']
+      }
+    | undefined
   let validating = false
   let active: ReturnType<typeof counts> | undefined
   const during = <T>(phase: ReturnType<typeof counts>, action: () => T): T => {
@@ -123,7 +129,10 @@ export function meterIncarnationCandidates() {
     lookup,
     preparationLookup,
     validation,
-    validationMaps: (bindings: object, ptys: object) => {
+    validationMaps: (
+      bindings: TerminalIdentitySource['incarnations'],
+      ptys: TerminalIdentitySource['ptys']
+    ) => {
       validationMaps = { bindings, ptys }
     },
     validate: <T>(action: () => T): T => {
