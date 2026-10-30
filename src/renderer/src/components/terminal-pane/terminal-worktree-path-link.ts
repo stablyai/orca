@@ -107,6 +107,11 @@ export function terminalFileSourceHost(
   context: RuntimeFileOperationArgs | undefined
 ): ExecutionHostId | null {
   const target = context?.target
+  if (context?.expectedExecutionHostId) {
+    return target?.kind === 'environment' && context.expectedExecutionHostId === 'local'
+      ? toRuntimeExecutionHostId(target.environmentId)
+      : context.expectedExecutionHostId
+  }
   if (target?.kind === 'environment') {
     const sourceRoute = context?.worktreeId
       ? resolveWorktreeOperationRouteResult(state, context.worktreeId)

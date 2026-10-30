@@ -24,6 +24,7 @@ type AgentTerminalDialogProps = {
   onOpenChange: (open: boolean) => void
   /** Pop-outs reveal through IPC; in-window hosts activate the pane locally. */
   onReveal: (args: AgentRevealArgs) => void
+  onNavigate?: () => void
 }
 
 type AgentTerminalFrameProps = Omit<AgentTerminalDialogProps, 'card'> & {
@@ -37,7 +38,8 @@ function AgentTerminalFrame({
   title,
   previewClassName,
   onOpenChange,
-  onReveal
+  onReveal,
+  onNavigate
 }: AgentTerminalFrameProps): React.JSX.Element {
   const reveal = (): void => {
     onReveal({
@@ -75,9 +77,17 @@ function AgentTerminalFrame({
       {card.ptyId ? (
         <AgentTerminalPreview
           ptyId={card.ptyId}
+          linkSource={card}
           terminalInput={card.terminalInput ?? null}
           className={previewClassName}
           onRequestClose={() => onOpenChange(false)}
+          onNavigate={
+            onNavigate &&
+            (() => {
+              onOpenChange(false)
+              onNavigate()
+            })
+          }
         />
       ) : (
         <div className="min-h-0 flex-1 px-2.5 pb-2 text-[11px] text-muted-foreground">
@@ -98,7 +108,8 @@ function AgentTerminalFrame({
 export function AgentTerminalDialog({
   card,
   onOpenChange,
-  onReveal
+  onReveal,
+  onNavigate
 }: AgentTerminalDialogProps): React.JSX.Element {
   return (
     <Dialog open={card !== null} onOpenChange={onOpenChange}>
@@ -131,6 +142,7 @@ export function AgentTerminalDialog({
             }
             onOpenChange={onOpenChange}
             onReveal={onReveal}
+            onNavigate={onNavigate}
           />
         </DialogContent>
       ) : null}
@@ -142,6 +154,7 @@ export function AgentTerminalPanel({
   card,
   onOpenChange,
   onReveal,
+  onNavigate,
   className
 }: Omit<AgentTerminalDialogProps, 'card'> & {
   card: DashboardCard
@@ -183,6 +196,7 @@ export function AgentTerminalPanel({
         previewClassName="h-auto min-h-0 flex-1"
         onOpenChange={onOpenChange}
         onReveal={onReveal}
+        onNavigate={onNavigate}
       />
     </section>
   )

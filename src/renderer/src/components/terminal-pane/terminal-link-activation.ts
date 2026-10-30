@@ -7,11 +7,16 @@ export function isTerminalLinkActivation(
 }
 
 type TerminalLinkMouseEvent = Pick<MouseEvent, 'ctrlKey' | 'metaKey'> &
-  Partial<Pick<MouseEvent, 'altKey' | 'button' | 'shiftKey'>>
+  Partial<Pick<MouseEvent, 'altKey' | 'button' | 'shiftKey' | 'type'>>
+
+export function isTerminalLinkContextMenuActivation(event: TerminalLinkMouseEvent): boolean {
+  return event.type === 'contextmenu'
+}
 
 export function isTerminalLinkDirectActivation(event: TerminalLinkMouseEvent | undefined): boolean {
   return Boolean(
     event &&
+    !isTerminalLinkContextMenuActivation(event) &&
     (event.button === undefined || event.button === 0) &&
     !event.altKey &&
     isTerminalLinkActivation(event)

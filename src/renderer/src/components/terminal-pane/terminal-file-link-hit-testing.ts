@@ -49,13 +49,12 @@ type ClickedFileLink = FileLinkTarget & {
 // Why: a slow probe from an earlier click must not open its file after a later click.
 let latestClickGesture = 0
 
-export function openFilePathLinkAtBufferPosition(
+export function prepareFilePathLinkAtBufferPosition(
   buffer: { getLine(y: number): IBufferLine | undefined },
   position: { x: number; y: number },
   terminalColumns: number,
   deps: FileLinkHitTestDeps
-): boolean {
-  const gesture = ++latestClickGesture
+): (() => void) | null {
   const host: FileLinkHost = { ...deps, cwd: deps.startupCwd, homePath: deps.terminalHomePath }
   const readings = findTerminalFileLinksAtBufferPosition(buffer, position, terminalColumns)
   const links: ClickedFileLink[] = []
@@ -91,7 +90,7 @@ export function openFilePathLinkAtBufferPosition(
 
   // Why: only a written path or a confirmed guess takes the click; prose beside a path stays ordinary text.
   if (!links.some((link) => !link.guess || link.cachedExists === true)) {
-    return false
+    return null
   }
   // Why: a failure names the path the user sees, never a guess.
   const shown = shortestPath(links.filter((link) => !link.guess))
@@ -128,31 +127,43 @@ export function openFilePathLinkAtBufferPosition(
   const visible = shown && !shown.hasOscLink && /[\\/]/.test(shown.pathText) ? shown : undefined
   if (toProbe.length === 0 || (!best && toProbe.length === 1 && !toProbe[0].guess)) {
     const link = best ?? toProbe[0] ?? visible
-    if (link) {
-      open(link)
-    }
-    return link !== undefined
+    return link
+      ? () => {
+          latestClickGesture++
+          open(link)
+        }
+      : null
   }
 
   // Probe before choosing a longer hard-wrap or spaced reading; otherwise a bad join can hide the real path.
-  const isLatestOpen = reserveDetectedFilePathOpenTurn()
-  const clickedHost = fileHostFingerprint(toProbe[0].fileContext)
-  void probeClickedFileLinks(toProbe, deps).then((existing) => {
-    // A changed host/pairing cannot authorize opening a same-named file on the new host.
-    const currentHost = fileHostFingerprint(
-      getTerminalFileContext(deps.worktreeId, deps.worktreePath, deps.runtimeEnvironmentId)
-    )
-    if (gesture !== latestClickGesture || !isLatestOpen() || currentHost !== clickedHost) {
-      return
-    }
-    const found = longestPath(existing)
-    // Without a verified reading, opening the shortest unchecked path reports the real failure.
-    const link = found ?? best ?? shortestPath(toProbe.filter((link) => !link.guess)) ?? visible
-    if (link) {
-      open(link, link === found || link.cachedExists === true)
-    }
-  })
-  return true
+  return () => {
+    const gesture = ++latestClickGesture
+    const isLatestOpen = reserveDetectedFilePathOpenTurn()
+    const clickedHost = fileHostFingerprint(toProbe[0].fileContext)
+    void probeClickedFileLinks(toProbe, deps).then((existing) => {
+      // A changed host/pairing cannot authorize opening a same-named file on the new host.
+      const currentHost = fileHostFingerprint(
+        getTerminalFileContext(deps.worktreeId, deps.worktreePath, deps.runtimeEnvironmentId)
+      )
+      if (gesture !== latestClickGesture || !isLatestOpen() || currentHost !== clickedHost) {
+        return
+      }
+      const found = longestPath(existing)
+      // Without a verified reading, opening the shortest unchecked path reports the real failure.
+      const link = found ?? best ?? shortestPath(toProbe.filter((link) => !link.guess)) ?? visible
+      if (link) {
+        open(link, link === found || link.cachedExists === true)
+      }
+    })
+  }
+}
+
+export function openFilePathLinkAtBufferPosition(
+  ...args: Parameters<typeof prepareFilePathLinkAtBufferPosition>
+): boolean {
+  const operation = prepareFilePathLinkAtBufferPosition(...args)
+  operation?.()
+  return operation !== null
 }
 
 function fileHostFingerprint(context: TerminalFileContext): string {

@@ -1,3 +1,4 @@
+import { installTerminalLinkPtyMouseSuppression } from './terminal-link-pty-mouse-suppression'
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushAsyncTicks } from './pty-connection-test-async'
@@ -109,6 +110,42 @@ describe('connectPanePty', () => {
     })
 
     const pane = createPane(1)
+    const events: string[] = []
+    const listeners = new Set<(data: string) => void>()
+    const emitInput = (text: string): void => {
+      for (const listener of listeners) {
+        listener(text)
+      }
+    }
+    const successor = createMockTransport('successor')
+    const owner = installTerminalLinkPtyMouseSuppression(
+      { element: undefined, clearSelection: vi.fn() },
+      {
+        candidate: () => null,
+        eligible: () => false,
+        canContinue: () => false
+      }
+    )
+    const invalidate = owner.invalidateSource
+    vi.spyOn(owner, 'invalidateSource').mockImplementation(() => {
+      events.push('owner')
+      invalidate()
+    })
+    const dataDispose = vi.fn(() => {
+      listeners.clear()
+      events.push('input-detach')
+      deps.paneTransportsRef.current.set(1, successor)
+      throw new Error('input cleanup failed')
+    })
+    const resizeDispose = vi.fn(() => {
+      events.push('resize')
+      throw new Error('later resize cleanup')
+    })
+    pane.terminal.onData.mockImplementation((listener: (data: string) => void) => {
+      listeners.add(listener)
+      return { dispose: dataDispose }
+    })
+    pane.terminal.onResize.mockReturnValue({ dispose: resizeDispose })
     const { writes } = captureCallbackTerminalWrites(pane)
 
     // Count visibility getter reads to measure finally re-arms deterministically without timing or memory heuristics.
@@ -123,10 +160,24 @@ describe('connectPanePty', () => {
         visible = next
       }
     }
-    const deps = buildPaneConnectionDeps(() => mockStoreState, { isVisibleRef })
+    const errorCleared = vi.fn()
+    const deps = buildPaneConnectionDeps(() => mockStoreState, {
+      isVisibleRef,
+      getPtyInputOwner: () => owner,
+      onPtyErrorClearedRef: { current: errorCleared }
+    })
+    Object.assign(transport, {
+      observeInputSource: () => ({
+        dispose: () => {
+          events.push('source-observer')
+        }
+      })
+    })
 
     const disposable = connectPanePty(pane as never, createManager(1) as never, deps as never)
     await flushAsyncTicks(6)
+    emitInput('positive-before-dispose')
+    expect(transport.sendInput).toHaveBeenCalledWith('positive-before-dispose', expect.anything())
 
     // Arm the restore: hidden bytes land while the pane is hidden, then it is revealed.
     capturedDataCallback.current?.(hidden, { seq: hidden.length, rawLength: hidden.length })
@@ -139,7 +190,22 @@ describe('connectPanePty', () => {
 
     expect(getMainBufferSnapshot).toHaveBeenCalledTimes(1)
     expect(writes).toContain('snapshot-state\r\n')
-    disposable.dispose()
+    events.length = 0
+    errorCleared.mockClear()
+    const oldWrites = transport.sendInput.mock.calls.length
+    expect(() => disposable.dispose()).toThrow('input cleanup failed')
+    expect(events).toEqual(['input-detach', 'owner', 'source-observer', 'resize'])
+    expect(dataDispose).toHaveBeenCalledOnce()
+    expect(resizeDispose).toHaveBeenCalledOnce()
+    expect(errorCleared).not.toHaveBeenCalled()
+    expect(deps.paneTransportsRef.current.get(1)).toBe(successor)
+    emitInput('late-old-input')
+    expect(listeners.size).toBe(0)
+    expect(transport.sendInput).toHaveBeenCalledTimes(oldWrites)
+    expect(successor.sendInput).not.toHaveBeenCalled()
+    expect(() => disposable.dispose()).not.toThrow()
+    expect(events).toHaveLength(4)
+    owner.dispose()
     const readsAtDispose = visibilityReads
     try {
       await flushAsyncTicks(200)

@@ -6,6 +6,7 @@ const OSC_LINK_TEXT = 'STA_3888_OSC_LINK'
 const SGR_MOUSE_REPORT_PATTERN = new RegExp(String.raw`\x1b\[<\d+;\d+;\d+[Mm]`, 'g')
 const logPath = process.argv[2]
 const linkMode = process.argv[3] ?? 'http'
+const inputLogPath = process.argv[4]
 let pending = ''
 
 if (!logPath) {
@@ -27,10 +28,13 @@ const renderedLink =
   linkMode === 'osc' ? `${ESC}]8;;${LINK}\x07${OSC_LINK_TEXT}${ESC}]8;;\x07` : LINK
 process.stdout.write(
   `${ESC}[?1049h${ESC}[?1000h${ESC}[?1006h${ESC}[?25l${ESC}[2J${ESC}[H` +
-    `LINK_MOUSE_READY ${renderedLink}\r\nPress q to exit`
+    `LINK_MOUSE_READY ${renderedLink}\r\nCHILD_CONTROL Press q to exit`
 )
 
 process.stdin.on('data', (chunk) => {
+  if (inputLogPath) {
+    fs.appendFileSync(inputLogPath, `${Buffer.from(chunk).toString('hex')}\n`)
+  }
   if (chunk.includes('\x03') || chunk.includes('q')) {
     cleanup()
   }

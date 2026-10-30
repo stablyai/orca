@@ -29,7 +29,9 @@ export function guardLinkProvider(provider: ILinkProvider, label: string): ILink
 }
 
 /** Wrap registration before any provider/addon loads, including internal web-links providers, so all pass through guardLinkProvider. */
-export function installGuardedLinkProviderRegistration(terminal: Terminal): void {
+export function installGuardedLinkProviderRegistration(
+  terminal: Pick<Terminal, 'registerLinkProvider'>
+): void {
   // Missing future/stub registerLinkProvider must not prevent pane creation.
   if (typeof terminal.registerLinkProvider !== 'function') {
     return

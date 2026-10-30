@@ -1,3 +1,4 @@
+import { commitPreparedLinkForRoutingTest } from './terminal-link-handlers-test-fixtures'
 import { expect, vi } from 'vitest'
 import type { IDisposable, ILink } from '@xterm/xterm'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
@@ -93,6 +94,7 @@ export function createProviderSetup(
       worktreeId: 'wt-1',
       worktreePath: depsOverrides.worktreePath ?? '/repo',
       startupCwd: '/repo',
+      getLinkCommit: () => commitPreparedLinkForRoutingTest,
       managerRef,
       linkProviderDisposablesRef: { current: new Map<number, IDisposable>() },
       pathExistsCache,
@@ -195,12 +197,34 @@ export function getRegisteredMouseUpHandler(element: {
   return registration![1] as (event: MouseEvent) => void
 }
 
-export function getRegisteredBubbleMouseUpHandler(element: {
-  addEventListener: ReturnType<typeof vi.fn>
-}): (event: MouseEvent) => void {
+export function getRegisteredBubbleMouseUpHandler(
+  element: {
+    addEventListener: ReturnType<typeof vi.fn>
+  },
+  binding?: ReturnType<typeof installHttpLinkClickFallback>
+): (event: MouseEvent) => void {
   const registration = element.addEventListener.mock.calls.find(
     ([eventName, _handler, options]) => eventName === 'mouseup' && options === undefined
   )
   expect(registration, 'bubble mouseup handler should be registered').toBeDefined()
-  return registration![1] as (event: MouseEvent) => void
+  const handler: unknown = registration?.[1]
+  if (typeof handler !== 'function') {
+    throw new Error('Missing fallback callback')
+  }
+  binding?.ptyMouseSuppression.bindSource({
+    isCurrent: () => true,
+    user: () => {},
+    unclassified: () => {}
+  })
+  return (event) => {
+    for (const type of ['mousedown', 'mouseup']) {
+      const capture: unknown = element.addEventListener.mock.calls.find(
+        ([name, _fn, options]) => name === type && options?.capture
+      )?.[1]
+      if (typeof capture === 'function') {
+        capture(event)
+      }
+    }
+    handler(event)
+  }
 }

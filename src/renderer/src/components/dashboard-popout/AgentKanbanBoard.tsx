@@ -122,6 +122,7 @@ type AgentKanbanBoardProps = {
   onRevealAgent?: (args: AgentRevealArgs) => void
   /** In-window hosts provide a close control; pop-outs use native window controls. */
   onClose?: () => void
+  onNavigate?: () => void
   /** In-window settings controls; the pop-out renderer has no store to drive them. */
   headerActions?: React.ReactNode
 }
@@ -133,6 +134,7 @@ export function AgentKanbanBoard({
   onAckAgent = ackAgentViaPopoutRelay,
   onRevealAgent = revealAgentViaPopoutRelay,
   onClose,
+  onNavigate,
   headerActions
 }: AgentKanbanBoardProps): React.JSX.Element {
   const visibleBuckets = useMemo(
@@ -293,6 +295,7 @@ export function AgentKanbanBoard({
           card={dialogCard}
           onOpenChange={handleDialogOpenChange}
           onReveal={onRevealAgent}
+          onNavigate={onNavigate}
         />
       </div>
     </TooltipProvider>

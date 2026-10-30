@@ -9,8 +9,10 @@
  */
 import type { LegacyRelayBridgeAttachResult } from '../../../../shared/legacy-relay-bridge-contract'
 import type { PtyConnectResult, PtyTransport } from './pty-transport-types'
-import type { RemoteRuntimeSnapshotRequestOptions } from '../../runtime/remote-runtime-terminal-multiplexer-types'
+import { legacyRelayTransportLifecycle } from './legacy-relay-transport-lifecycle'
+import { legacyRelayTransportRouting } from './legacy-relay-transport-routing'
 import { SSH_SESSION_EXPIRED_ERROR } from './pty-connection/pty-connect-limits'
+import { createLegacyRelayInputSource, disposeLegacyRelayViewer } from './legacy-relay-input-source'
 import {
   legacyRelayBridgedPane,
   onLegacyRelayBridgedPanesChanged
@@ -34,35 +36,80 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
   let lastState: 'live' | 'unverifiable' | null = null
   /** Bumped by release, so an attach answered after the pane left hands its viewer back. */
   let epoch = 0
+  const inputSource = createLegacyRelayInputSource({
+    ptyId,
+    api,
+    inner,
+    isBridgeWritable: () => mode === 'bridge' && viewer !== null
+  })
 
-  const dropViewer = (): void => {
-    if (viewer !== null) {
-      api?.detach({ ptyId, acquisitionId: viewer })
-    }
-    viewer = null
+  const dropViewer = (): boolean => {
+    let previous: number | null = null
+    const owns = inputSource.change(
+      null,
+      () => {
+        previous = viewer
+        viewer = null
+      },
+      true
+    )
+    const version = inputSource.version()
+    disposeLegacyRelayViewer(api, ptyId, previous, [])
+    return owns && version === inputSource.version()
   }
 
   /** Issue order of this pane's attaches, and which one the held viewer came from. */
   const seqs = { issued: 0, viewer: 0 }
 
   // The newest issued attach retains its viewer regardless of reply order; release every other viewer.
-  const adoptViewer = (seq: number, acquisitionId: number): void => {
+  const adoptViewer = (seq: number, acquisitionId: number): boolean => {
     if (seq < seqs.viewer) {
       api?.detach({ ptyId, acquisitionId })
-      return
+      return true
     }
-    if (viewer !== null && viewer !== acquisitionId) {
-      api?.detach({ ptyId, acquisitionId: viewer })
-    }
-    viewer = acquisitionId
-    seqs.viewer = seq
+    let previous: number | null = null
+    const owns = inputSource.change('bridge', () => {
+      previous = viewer !== acquisitionId ? viewer : null
+      viewer = acquisitionId
+      seqs.viewer = seq
+    })
+    const version = inputSource.version()
+    disposeLegacyRelayViewer(api, ptyId, previous, [])
+    return owns && version === inputSource.version()
   }
 
-  const release = (): void => {
-    epoch += 1
-    unsubscribe.forEach((dispose) => dispose())
-    unsubscribe = []
-    dropViewer()
+  const release = (
+    nextMode = mode,
+    unavailable = false,
+    endObservation = false,
+    finish?: () => void
+  ): boolean => {
+    let previous: number | null = null
+    let disposers: (() => void)[] = []
+    const owns = inputSource.change(
+      !endObservation && nextMode === 'inner' ? 'inner' : null,
+      () => {
+        epoch += 1
+        mode = nextMode
+        previous = viewer
+        viewer = null
+        disposers = unsubscribe
+        unsubscribe = []
+        if (endObservation) {
+          disposers.push(inputSource.takeObservation())
+        }
+      },
+      unavailable
+    )
+    const version = inputSource.version()
+    try {
+      disposeLegacyRelayViewer(api, ptyId, previous, disposers)
+    } finally {
+      if (owns && version === inputSource.version()) {
+        finish?.()
+      }
+    }
+    return owns && version === inputSource.version()
   }
 
   /** False when the pane left while the attach was in flight; a late success is released. */
@@ -109,11 +156,19 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
         return
       }
       if (result.status === 'attached') {
-        adoptViewer(seq, result.acquisitionId)
-        clearUnreachable()
+        if (adoptViewer(seq, result.acquisitionId)) {
+          clearUnreachable()
+        }
       } else if (result.status === 'exited' || result.status === 'not-bridged') {
+        if (!release('bridge', true)) {
+          return
+        }
+        const version = inputSource.version()
+        const previousCallbacks = callbacks
         clearUnreachable()
-        callbacks?.onExit?.(-1)
+        if (version === inputSource.version()) {
+          previousCallbacks?.onExit?.(-1)
+        }
       }
     } finally {
       reattaching = false
@@ -144,9 +199,15 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
       }),
       api.onExit((event) => {
         if (mode === 'bridge' && event.ptyId === ptyId) {
+          if (!release('bridge', true)) {
+            return
+          }
+          const version = inputSource.version()
+          const previousCallbacks = callbacks
           clearUnreachable()
-          release()
-          callbacks?.onExit?.(event.code)
+          if (version === inputSource.version()) {
+            previousCallbacks?.onExit?.(event.code)
+          }
         }
       }),
       onLegacyRelayBridgedPanesChanged(() => {
@@ -157,15 +218,17 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
         if (!pane) {
           lastState = null
           // Reconnect must reattach; a disconnected bridge proves no exit, and its replacement forwards only attached panes.
-          dropViewer()
-          void reattach()
+          if (dropViewer()) {
+            void reattach()
+          }
           return
         }
         const previous = lastState
         lastState = pane.state
         if (pane.state === 'unverifiable') {
-          dropViewer()
-          showUnreachable()
+          if (dropViewer()) {
+            showUnreachable()
+          }
         } else if (viewer === null && previous !== 'live') {
           // Only on the change to live: a terminal that refuses to attach waits for the next one.
           void reattach()
@@ -175,12 +238,19 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
   }
 
   const connectBridged = async (next: Callbacks): Promise<PtyConnectResult | undefined> => {
-    callbacks = next
     if (!api) {
+      callbacks = next
       next.onError?.(`${SSH_SESSION_EXPIRED_ERROR}: legacy relay bridge unavailable`)
       return undefined
     }
-    mode = 'bridge'
+    if (
+      !inputSource.change(mode === 'bridge' && viewer !== null ? 'bridge' : null, () => {
+        mode = 'bridge'
+        callbacks = next
+      })
+    ) {
+      return undefined
+    }
     subscribe()
     const at = epoch
     const seq = ++seqs.issued
@@ -189,146 +259,49 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
       return undefined
     }
     if (result.status === 'exited' || result.status === 'not-bridged') {
-      release()
-      mode = 'pending'
+      if (!release('pending', true)) {
+        return undefined
+      }
       next.onError?.(`${SSH_SESSION_EXPIRED_ERROR}: the older relay no longer runs this terminal`)
       return undefined
     }
-    next.onConnect?.()
     lastState = result.status === 'attached' ? 'live' : 'unverifiable'
     if (result.status === 'unverifiable') {
-      showUnreachable()
+      const version = inputSource.version()
+      next.onConnect?.()
+      if (version === inputSource.version()) {
+        showUnreachable()
+      }
       return { id: ptyId, isReattach: true, replay: '' }
     }
-    adoptViewer(seq, result.acquisitionId)
+    if (!adoptViewer(seq, result.acquisitionId)) {
+      return undefined
+    }
+    if (at !== epoch || mode !== 'bridge') {
+      return undefined
+    }
+    const version = inputSource.version()
+    next.onConnect?.()
+    if (version !== inputSource.version()) {
+      return undefined
+    }
     return { id: ptyId, isReattach: true, replay: result.replay }
   }
 
   const bridged = (): boolean => mode === 'bridge'
-  const innerRecoveryState = inner.getRecoveryState?.bind(inner)
-  const innerSnapshotOutcome = inner.serializeBufferOutcome?.bind(inner)
-
   return {
-    ...(innerRecoveryState
-      ? {
-          getRecoveryState: () =>
-            bridged()
-              ? { phase: viewer !== null ? 'connected' : 'recovering', epoch: 0, attempt: 0 }
-              : innerRecoveryState()
-        }
-      : {}),
-    ...(innerSnapshotOutcome
-      ? {
-          serializeBufferOutcome: (opts?: RemoteRuntimeSnapshotRequestOptions) =>
-            bridged()
-              ? Promise.resolve({
-                  availability: { kind: 'unknown-legacy-host' as const },
-                  snapshot: null
-                })
-              : innerSnapshotOutcome(opts)
-        }
-      : {}),
-    getConnectionId: () => (bridged() ? null : inner.getConnectionId?.()),
-    ownsRecovery: () => (bridged() ? false : (inner.ownsRecovery?.() ?? false)),
-    retryRecovery: () => (bridged() ? false : (inner.retryRecovery?.() ?? false)),
-    setOutputPaused: (paused) => {
-      if (!bridged()) {
-        return inner.setOutputPaused?.(paused) ?? false
-      }
-      if (!api) {
-        return false
-      }
-      api.setOutputPaused({ ptyId, paused })
-      return true
-    },
-    connect: (options) => {
-      if (options.sessionId === ptyId) {
-        return connectBridged(options.callbacks)
-      }
-      mode = 'inner'
-      release()
-      return inner.connect(options)
-    },
-    attach: (options) => {
-      if (options.existingPtyId === ptyId) {
-        void connectBridged(options.callbacks)
-        return
-      }
-      mode = 'inner'
-      inner.attach(options)
-    },
-    disconnect: () => {
-      if (bridged()) {
-        release()
-        callbacks?.onDisconnect?.()
-        return
-      }
-      inner.disconnect()
-    },
-    sendInput: (data, inputKind) => {
-      if (bridged()) {
-        api?.write({ ptyId, data })
-        return viewer !== null
-      }
-      return inner.sendInput(data, inputKind)
-    },
-    sendInputImmediate: (data) => {
-      if (bridged()) {
-        api?.write({ ptyId, data })
-        return viewer !== null
-      }
-      return inner.sendInputImmediate(data)
-    },
-    sendInputAccepted: async (data, inputKind, options) => {
-      if (bridged()) {
-        api?.write({ ptyId, data })
-        return viewer !== null
-      }
-      return inner.sendInputAccepted
-        ? inner.sendInputAccepted(data, inputKind, options)
-        : inner.sendInput(data, inputKind)
-    },
-    resize: (cols, rows, meta) => {
-      if (bridged()) {
-        api?.resize({ ptyId, cols, rows })
-        return viewer !== null
-      }
-      return inner.resize(cols, rows, meta)
-    },
-    isConnected: () => (bridged() ? viewer !== null : inner.isConnected()),
-    getPtyId: () => (bridged() ? ptyId : inner.getPtyId()),
-    isConnectPending: () => (bridged() ? false : (inner.isConnectPending?.() ?? false)),
-    getRuntimeEnvironmentId: () => (bridged() ? null : (inner.getRuntimeEnvironmentId?.() ?? null)),
-    getExecutionHostId: () => (bridged() ? null : (inner.getExecutionHostId?.() ?? null)),
-    getRemotePlatform: () => (bridged() ? null : (inner.getRemotePlatform?.() ?? null)),
-    claimViewport: (cols, rows) =>
-      bridged() ? false : (inner.claimViewport?.(cols, rows) ?? false),
-    serializeBuffer: async (opts) => (bridged() ? null : (inner.serializeBuffer?.(opts) ?? null)),
-    preserve: () => {
-      if (!bridged()) {
-        inner.preserve?.()
-      }
-    },
-    detach: (options) => {
-      if (bridged()) {
-        release()
-        return
-      }
-      inner.detach?.(options)
-    },
-    destroy: (options) => {
-      if (bridged()) {
-        // An explicit pane close: stop the shell, as the other transports' destroy does.
-        void api?.close({ ptyId }).catch(() => {})
-      }
-      if (bridged() || mode === 'pending') {
-        release()
-        mode = 'pending'
-        return
-      }
-      return inner.destroy?.(options)
-    },
-    abandonPreconnectInput: () => inner.abandonPreconnectInput?.(),
-    notifyErrorSurfaceDismissed: () => inner.notifyErrorSurfaceDismissed?.()
+    ...legacyRelayTransportRouting(ptyId, api, inner, bridged, () => viewer),
+    getInputSource: inputSource.current,
+    observeInputSource: inputSource.observe,
+    ...legacyRelayTransportLifecycle({
+      ptyId,
+      api,
+      inner,
+      bridged,
+      getMode: () => mode,
+      connectBridged,
+      release,
+      onDisconnect: () => callbacks?.onDisconnect?.()
+    })
   }
 }

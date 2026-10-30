@@ -58,7 +58,13 @@ describe('createFilePathLinkProvider range bounds', () => {
     links[0]!.hover?.({} as MouseEvent, links[0]!.text)
     expect(linkTooltip.textContent).toContain(mappedPath)
     links[0]!.activate?.(
-      { ctrlKey: true, metaKey: false, shiftKey: false } as MouseEvent,
+      new MouseEvent('click', {
+        cancelable: true,
+        button: 0,
+        ctrlKey: true,
+        metaKey: false,
+        shiftKey: false
+      }),
       links[0]!.text
     )
     await flushAsyncWork()

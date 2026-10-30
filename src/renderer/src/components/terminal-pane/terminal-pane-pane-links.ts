@@ -91,6 +91,7 @@ export function installTerminalPaneLinkHandling(context: PaneLinkContext): void 
           null,
         getRuntimeEnvironmentId: () => linkDeps.getRuntimeEnvironmentIdForPane?.(pane.id) ?? null,
         linkTooltip: pane.linkTooltip,
+        getLinkCommit: () => linkDeps.getLinkCommit?.(pane.id),
         getLinkActionContext: () => getLinkActionContext(pane.id)
       })
     )
@@ -98,10 +99,6 @@ export function installTerminalPaneLinkHandling(context: PaneLinkContext): void 
   refs.linkifierClickPrimingDisposablesRef.current.set(
     pane.id,
     installTerminalLinkifierClickPriming(pane.terminal)
-  )
-  refs.fileLinkClickFallbackDisposablesRef.current.set(
-    pane.id,
-    installFilePathLinkClickFallback(pane.id, pane.terminal, linkDeps)
   )
   refs.httpLinkClickFallbackDisposablesRef.current.set(
     pane.id,
@@ -112,6 +109,10 @@ export function installTerminalPaneLinkHandling(context: PaneLinkContext): void 
       getLinkActionContext: () => getLinkActionContext(pane.id),
       getActionDestinations: () => getHttpLinkActionDestinations(pane.id)
     })
+  )
+  refs.fileLinkClickFallbackDisposablesRef.current.set(
+    pane.id,
+    installFilePathLinkClickFallback(pane.id, pane.terminal, linkDeps)
   )
   seedStartupSessionRestoredBanner(ptyStartup, pane.id, onShowSessionRestoredBanner)
 
@@ -183,11 +184,12 @@ export function installTerminalPaneLinkHandling(context: PaneLinkContext): void 
         runtimeEnvironmentId: linkDeps.getRuntimeEnvironmentIdForPane?.(pane.id) ?? null,
         sourceOwner: getHttpLinkSourceOwnerForPane(pane.id),
         requestOpenLinksInAppPreference,
+        commit: linkDeps.getLinkCommit?.(pane.id),
         linkActionContext: getLinkActionContext(pane.id),
         actionDestinations: getHttpLinkActionDestinations(pane.id)
       })
       if (handled) {
-        pane.terminal.clearSelection()
+        event?.preventDefault()
       }
     },
     hover: (_event, text) => {

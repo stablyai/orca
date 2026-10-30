@@ -34,14 +34,34 @@ export function watchHostRebindAfterExit(
     ) {
       return
     }
-    dispose()
-    onRebound(next)
+    let failed = false
+    let failure: unknown
+    try {
+      dispose()
+    } catch (error) {
+      failed = true
+      failure = error
+    }
+    try {
+      onRebound(next)
+    } catch (error) {
+      if (!failed) {
+        failed = true
+        failure = error
+      }
+    }
+    if (failed) {
+      throw failure
+    }
   }
   const stop = subscribeAcceptedWebSessionTerminalHandle(args, (update) => {
     latest = update
     judge(update)
   })
   function dispose(): void {
+    if (stopped) {
+      return
+    }
     stopped = true
     stop()
   }

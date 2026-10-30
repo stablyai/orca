@@ -1,7 +1,7 @@
 import type { Terminal } from '@xterm/xterm'
 
 export function getTerminalBufferPositionForMouseEvent(
-  terminal: Terminal,
+  terminal: Pick<Terminal, 'element' | 'cols' | 'rows' | 'buffer'>,
   event: MouseEvent
 ): { x: number; y: number } | null {
   const screenElement = terminal.element?.querySelector('.xterm-screen')

@@ -1,3 +1,4 @@
+import type { PtyInputSource } from './pty-input-source'
 import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
 import {
   createPtyPreconnectInputBuffer,
@@ -39,12 +40,18 @@ export type RemoteRuntimeRecoveryInputHold = {
   isHolding: () => boolean
   hasPendingInput: () => boolean
   isHoldingBeforeBind: () => boolean
-  enqueue: (endpoint: HeldEndpoint, data: string, inputKind: TerminalInputKind) => boolean
+  enqueue: (
+    endpoint: HeldEndpoint,
+    data: string,
+    inputKind: TerminalInputKind,
+    source?: PtyInputSource
+  ) => boolean
   enqueueAccepted: (
     endpoint: HeldEndpoint,
     data: string,
     inputKind: TerminalInputKind,
-    options?: AcceptedInputOptions
+    options?: AcceptedInputOptions,
+    source?: PtyInputSource
   ) => Promise<boolean>
   /** Binds pre-bind typing to the terminal a connect restores; null (a fresh create) drops it. */
   expect: (endpoint: HeldEndpoint) => RestoredInputExpectation
@@ -65,6 +72,7 @@ export type RemoteRuntimeRecoveryInputHold = {
     writer: HeldInputWriter
   ) => { done: Promise<void> } | undefined
   discard: () => void
+  discardUnscoped: () => void
 }
 
 export function isSameRemoteRuntimeInputEndpoint(
@@ -101,12 +109,72 @@ export function createRemoteRuntimeRecoveryInputHold(
   const discard = (): void => {
     const current = held
     held = null
+    latestExpectation = null
     const droppedTyping =
       current?.beforeBind === true && current.typed && current.buffer.hasPendingInput()
-    current?.buffer.clear()
-    if (droppedTyping) {
-      options.onTypingDiscardedBeforeBind?.()
+    let failed = false
+    let failure: unknown
+    try {
+      current?.buffer.clear()
+    } catch (error) {
+      failed = true
+      failure = error
     }
+    try {
+      if (droppedTyping) {
+        options.onTypingDiscardedBeforeBind?.()
+      }
+    } catch (error) {
+      if (!failed) {
+        failed = true
+        failure = error
+      }
+    }
+    if (failed) {
+      throw failure
+    }
+  }
+
+  const withdrawOrdinary = (
+    current: HeldInput,
+    endpoint: HeldEndpoint,
+    beforeBind = false,
+    ensureHold = false
+  ): HeldInput | null => {
+    const droppedTyping = current.beforeBind && current.typed && current.buffer.hasPendingInput()
+    let replacement: HeldInput | null = null
+    let failed = false
+    let failure: unknown
+    try {
+      current.buffer.discardUnscoped(() => {
+        if (held !== current) {
+          return
+        }
+        replacement = current.buffer.isBuffering()
+          ? { endpoint, buffer: current.buffer, beforeBind, typed: false }
+          : ensureHold
+            ? newHold(endpoint, beforeBind)
+            : null
+        held = replacement
+      })
+    } catch (error) {
+      failed = true
+      failure = error
+    }
+    try {
+      if (droppedTyping) {
+        options.onTypingDiscardedBeforeBind?.()
+      }
+    } catch (error) {
+      if (!failed) {
+        failed = true
+        failure = error
+      }
+    }
+    if (failed) {
+      throw failure
+    }
+    return held === replacement ? replacement : null
   }
 
   const matches = (endpoint: HeldEndpoint): boolean =>
@@ -116,17 +184,20 @@ export function createRemoteRuntimeRecoveryInputHold(
 
   const bufferFor = (
     endpoint: HeldEndpoint,
-    inputKind: TerminalInputKind
-  ): PtyPreconnectInputBuffer => {
+    inputKind: TerminalInputKind,
+    source?: PtyInputSource
+  ): PtyPreconnectInputBuffer | undefined => {
     if (held && !matches(endpoint)) {
-      // Why: input typed at one shell must never run in its replacement (#10065).
-      discard()
+      // Input typed at one shell must never run in its replacement (#10065).
+      latestExpectation = null
+      if (!withdrawOrdinary(held, endpoint, endpoint === null, true)) {
+        return undefined
+      }
     }
     if (!held?.buffer.isBuffering()) {
-      // Why: a drained buffer refuses input; its release bookkeeping may still be settling.
       held = newHold(endpoint, endpoint === null)
     }
-    if (inputKind === 'driving') {
+    if (!source && inputKind === 'driving') {
       held.typed = true
     }
     return held.buffer
@@ -136,36 +207,57 @@ export function createRemoteRuntimeRecoveryInputHold(
     isHolding: () => held?.buffer.isBuffering() === true,
     hasPendingInput: () => held?.buffer.hasPendingInput() === true,
     isHoldingBeforeBind: () => held?.beforeBind === true && held.buffer.isBuffering(),
-    enqueue: (endpoint, data, inputKind) =>
-      bufferFor(endpoint, inputKind).enqueue(data, 'ordinary', inputKind),
-    enqueueAccepted: (endpoint, data, inputKind, acceptedOptions) =>
-      bufferFor(endpoint, inputKind).enqueueAccepted(data, inputKind, undefined, acceptedOptions),
+    enqueue: (endpoint, data, inputKind, source) =>
+      bufferFor(endpoint, inputKind, source)?.enqueue(
+        data,
+        'ordinary',
+        inputKind,
+        undefined,
+        source
+      ) ?? false,
+    enqueueAccepted: (endpoint, data, inputKind, acceptedOptions, source) =>
+      bufferFor(endpoint, inputKind, source)?.enqueueAccepted(
+        data,
+        inputKind,
+        undefined,
+        acceptedOptions,
+        source
+      ) ?? Promise.resolve(false),
     expect(endpoint) {
       const expectation: RestoredInputExpectation = { endpoint }
       latestExpectation = endpoint ? expectation : null
       if (!endpoint) {
         if (held?.beforeBind) {
-          discard()
+          withdrawOrdinary(held, null)
         }
         return expectation
       }
-      let expected = held
-      if (!expected?.buffer.isBuffering() || (expected.endpoint && !matches(endpoint))) {
-        discard()
-        expected = newHold(endpoint, true)
-        held = expected
+      if (held?.endpoint && !matches(endpoint)) {
+        withdrawOrdinary(held, endpoint, true, true)
       }
-      expected.endpoint ??= endpoint
-      expected.beforeBind = true
+      if (latestExpectation !== expectation) {
+        return expectation
+      }
+      if (!held?.buffer.isBuffering()) {
+        held = newHold(endpoint, true)
+      }
+      held.endpoint ??= endpoint
+      held.beforeBind = true
       return expectation
     },
     expectNewTerminal() {
       const expectation: RestoredInputExpectation = { endpoint: null, newTerminal: true }
       latestExpectation = expectation
-      if (!held?.buffer.isBuffering() || held.endpoint) {
-        discard()
+      if (held?.endpoint) {
+        withdrawOrdinary(held, null, true, true)
+      }
+      if (latestExpectation !== expectation) {
+        return expectation
+      }
+      if (!held?.buffer.isBuffering()) {
         held = newHold(null, true)
       }
+      held.beforeBind = true
       return expectation
     },
     settleExpectation(expectation, bound, createdEndpoint) {
@@ -177,7 +269,7 @@ export function createRemoteRuntimeRecoveryInputHold(
         return
       }
       if (!bound || (expectation.newTerminal && !createdEndpoint)) {
-        discard()
+        withdrawOrdinary(held, held.endpoint)
         return
       }
       if (expectation.newTerminal) {
@@ -186,30 +278,36 @@ export function createRemoteRuntimeRecoveryInputHold(
       held.beforeBind = false
     },
     release(bound, writer) {
-      const current = held
+      let current = held
       if (!current) {
         return
       }
       if (!current.endpoint || !isSameRemoteRuntimeInputEndpoint(current.endpoint, bound)) {
-        discard()
-        if (current.beforeBind) {
-          // Why: the restored screen still shows the original terminal until its connect settles.
-          held = newHold(current.endpoint, true)
+        latestExpectation = null
+        current = withdrawOrdinary(current, bound)
+        if (!current) {
+          return
         }
-        return
       }
-      const done = current.buffer
+      const releasing = current
+      const done = releasing.buffer
         .flush({
           ...writer,
-          isCurrent: () => held === current && writer.isCurrent()
+          isCurrent: () => held?.buffer === releasing.buffer && writer.isCurrent()
         })
         .catch(() => undefined)
         .finally(() => {
-          if (held === current && !current.buffer.isBuffering()) {
+          if (held?.buffer === releasing.buffer && !releasing.buffer.isBuffering()) {
             held = null
           }
         })
       return { done }
+    },
+    discardUnscoped: () => {
+      latestExpectation = null
+      if (held) {
+        withdrawOrdinary(held, null)
+      }
     },
     discard
   }

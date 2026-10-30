@@ -1,3 +1,13 @@
+import { terminalLinkPressCandidate } from './terminal-link-press-candidate'
+import {
+  isTerminalLinkDirectActivation,
+  isTerminalMiddleClickActivation
+} from './terminal-link-activation'
+import {
+  prepareTerminalLinkActivation,
+  commitTerminalLinkActivation,
+  type TerminalLinkCommit
+} from './terminal-link-activation-operation'
 import type { IBufferLine, IDisposable, Terminal } from '@xterm/xterm'
 import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
 import { isTerminalHttpLinkActivation } from './terminal-http-link-activation'
@@ -7,7 +17,6 @@ import {
 } from './terminal-link-pty-mouse-suppression'
 import { getTerminalBufferPositionForMouseEvent } from './terminal-mouse-buffer-position'
 import { findTerminalHttpLinkAtBufferPosition } from '../../../../shared/terminal-link-buffer-hit-testing'
-import { isTerminalLinkifierHoverActive } from '@/lib/pane-manager/terminal-linkifier-hover-reset'
 import {
   buildHttpLinkActions,
   httpLinkDirectClickDestination,
@@ -33,6 +42,7 @@ type UrlLinkHitTestDeps = {
   requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
   linkActionContext?: TerminalLinkActionContext | null
   actionDestinations?: TerminalHttpLinkActionDestinations
+  commit?: TerminalLinkCommit
   actionDestination?: string
   forceDestination?: TerminalHttpLinkDestination
 }
@@ -74,12 +84,20 @@ export function handleTerminalHttpLink(
     const forceDestination =
       deps.actionDestinations &&
       httpLinkDirectClickDestination(deps.actionDestinations, Boolean(event?.shiftKey))
-    openRoutedHttpLink(url, {
-      ...deps,
-      modifierHeld: forceDestination ? false : Boolean(event?.shiftKey),
-      forceDestination
-    })
-    return true
+    return commitTerminalLinkActivation(
+      event,
+      prepareTerminalLinkActivation(event, {
+        kind: 'url',
+        direct: () =>
+          openRoutedHttpLink(url, {
+            ...deps,
+            modifierHeld: forceDestination ? false : Boolean(event?.shiftKey),
+            forceDestination
+          }),
+        details: () => {}
+      }),
+      deps.commit ?? deps.linkActionContext?.commit
+    )
   }
 
   return requestTerminalLinkAction(event, deps.linkActionContext, {
@@ -131,25 +149,21 @@ export function installHttpLinkClickFallback(
   terminal: Terminal,
   deps: UrlLinkClickFallbackDeps
 ): HttpLinkClickFallbackBinding {
-  const isLinkMouseEvent = (event: MouseEvent): boolean => {
-    if (isTerminalLinkifierHoverActive(terminal)) {
-      return true
-    }
-    const position = getTerminalBufferPositionForMouseEvent(terminal, event)
-    return Boolean(
-      position &&
-      findTerminalHttpLinkAtBufferPosition(terminal.buffer.active, position, terminal.cols)
-    )
-  }
-  const ptyMouseSuppression = installTerminalLinkPtyMouseSuppression(
-    terminal,
-    isLinkMouseEvent,
-    (event) => {
+  const ptyMouseSuppression = installTerminalLinkPtyMouseSuppression(terminal, {
+    candidate: (event) => terminalLinkPressCandidate(terminal, event, true),
+    eligible: (event) => {
+      if (isTerminalLinkDirectActivation(event)) {
+        return true
+      }
       const context = deps.getLinkActionContext?.()
-      return Boolean(context?.pointerGesture.canRequestAction(event) && isLinkMouseEvent(event))
+      const mode = isTerminalMiddleClickActivation(event)
+        ? context?.middleClickBehavior
+        : context?.plainClickBehavior
+      return Boolean(context && mode !== 'none' && context.pointerGesture.canRequestAction(event))
     },
-    (event) => Boolean(deps.getLinkActionContext?.()?.pointerGesture.canRequestAction(event))
-  )
+    canContinue: (event) =>
+      Boolean(deps.getLinkActionContext?.()?.pointerGesture.canRequestAction(event))
+  })
   const handleMouseUp = (event: MouseEvent): void => {
     if (!isDesktopHttpLinkFallbackActivation(event)) {
       return
@@ -164,13 +178,13 @@ export function installHttpLinkClickFallback(
         sourceTabId: deps.sourceTabId,
         sourceOwner: deps.getSourceOwner?.() ?? { kind: 'local' },
         requestOpenLinksInAppPreference: deps.requestOpenLinksInAppPreference,
+        commit: ptyMouseSuppression.commit,
         linkActionContext: deps.getLinkActionContext?.(),
         actionDestinations: deps.getActionDestinations?.()
       })
     )
     if (handled) {
       event.preventDefault()
-      terminal.clearSelection()
     }
   }
 
@@ -179,8 +193,11 @@ export function installHttpLinkClickFallback(
   return {
     ptyMouseSuppression,
     dispose: () => {
-      ptyMouseSuppression.dispose()
-      terminalElement?.removeEventListener('mouseup', handleMouseUp)
+      try {
+        ptyMouseSuppression.dispose()
+      } finally {
+        terminalElement?.removeEventListener('mouseup', handleMouseUp)
+      }
     }
   }
 }

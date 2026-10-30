@@ -147,6 +147,10 @@ export function createTerminalPaneCreatedHandler(
     refs.osc7DisposablesRef.current.set(pane.id, osc7Disposable)
 
     installTerminalPaneInputHandling({
+      recordLinkKeyEvent: (event) =>
+        refs.httpLinkClickFallbackDisposablesRef.current
+          .get(pane.id)
+          ?.ptyMouseSuppression.recordKeyEvent(event),
       pane,
       managerRef,
       paneKittyKeyboardModesRef,

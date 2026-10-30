@@ -56,9 +56,11 @@ vi.mock('./preview-terminal-box-fit', () => ({
   createPreviewBoxFit: () => ({ schedule: vi.fn(), dispose: vi.fn() })
 }))
 vi.mock('./preview-terminal-ligatures', () => ({ syncPreviewTerminalLigatures: vi.fn() }))
-vi.mock('./preview-terminal-compatibility', () => ({
-  installPreviewTerminalCompatibility: () => vi.fn()
-}))
+vi.mock('./preview-terminal-compatibility', async () => {
+  const { createPreviewCompatibilityTestDisposer } =
+    await import('./preview-terminal-emulator-test-fixture')
+  return { installPreviewTerminalCompatibility: createPreviewCompatibilityTestDisposer }
+})
 vi.mock('./preview-terminal-ime-bridge', () => ({
   installPreviewImeBridge: () => ({ claimKeyEvent: () => false, dispose: vi.fn() })
 }))

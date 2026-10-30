@@ -1,3 +1,4 @@
+import { commitPreparedLinkForRoutingTest } from './terminal-link-handlers-test-fixtures'
 import type { IDisposable } from '@xterm/xterm'
 import { describe, expect, it, vi } from 'vitest'
 import {
@@ -330,7 +331,11 @@ describe('createFilePathLinkProvider range bounds', () => {
       runtimeEnvironmentId: null,
       managerRef: { current: null },
       linkProviderDisposablesRef: { current: new Map<number, IDisposable>() },
-      pathExistsCache: makeExistsCache()
+      pathExistsCache: makeExistsCache(),
+      getLinkCommit: () => (event, operation) => {
+        terminal.clearSelection()
+        return commitPreparedLinkForRoutingTest(event, operation)
+      }
     })
     const mouseUp = getRegisteredMouseUpHandler(element)
     const preventDefault = vi.fn()
@@ -373,7 +378,11 @@ describe('createFilePathLinkProvider range bounds', () => {
       runtimeEnvironmentId: null,
       managerRef: { current: null },
       linkProviderDisposablesRef: { current: new Map<number, IDisposable>() },
-      pathExistsCache: makeExistsCache()
+      pathExistsCache: makeExistsCache(),
+      getLinkCommit: () => (event, operation) => {
+        terminal.clearSelection()
+        return commitPreparedLinkForRoutingTest(event, operation)
+      }
     })
     const mouseUp = getRegisteredMouseUpHandler(element)
     const preventDefault = vi.fn()
@@ -406,7 +415,7 @@ describe('createFilePathLinkProvider range bounds', () => {
     ]
     const { terminal, element } = makeFallbackTerminal(rows)
     const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
-    const mouseUp = getRegisteredBubbleMouseUpHandler(element)
+    const mouseUp = getRegisteredBubbleMouseUpHandler(element, disposable)
     const preventDefault = vi.fn()
     const stopPropagation = vi.fn()
 
@@ -428,7 +437,7 @@ describe('createFilePathLinkProvider range bounds', () => {
     expect(terminal.clearSelection).not.toHaveBeenCalled()
 
     disposable.dispose()
-    expect(element.removeEventListener).toHaveBeenCalledWith('mouseup', mouseUp)
+    expect(element.removeEventListener).toHaveBeenCalledWith('mouseup', expect.any(Function))
   })
 
   it('opens regular URLs from a direct modifier-click fallback when xterm did not handle them', async () => {
@@ -439,7 +448,7 @@ describe('createFilePathLinkProvider range bounds', () => {
     ]
     const { terminal, element } = makeFallbackTerminal(rows)
     const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
-    const mouseUp = getRegisteredBubbleMouseUpHandler(element)
+    const mouseUp = getRegisteredBubbleMouseUpHandler(element, disposable)
     const preventDefault = vi.fn()
     const stopPropagation = vi.fn()
 
@@ -463,7 +472,7 @@ describe('createFilePathLinkProvider range bounds', () => {
     expect(terminal.clearSelection).toHaveBeenCalled()
 
     disposable.dispose()
-    expect(element.removeEventListener).toHaveBeenCalledWith('mouseup', mouseUp)
+    expect(element.removeEventListener).toHaveBeenCalledWith('mouseup', expect.any(Function))
   })
 
   it('does not steal macOS ctrl-click context-menu gestures in the URL fallback', async () => {
@@ -472,7 +481,7 @@ describe('createFilePathLinkProvider range bounds', () => {
     const rows = [makeBufferLine('Open https://github.com/stablyai/orca/pull/2914')]
     const { terminal, element } = makeFallbackTerminal(rows)
     const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
-    const mouseUp = getRegisteredBubbleMouseUpHandler(element)
+    const mouseUp = getRegisteredBubbleMouseUpHandler(element, disposable)
     const preventDefault = vi.fn()
 
     mouseUp({
@@ -509,7 +518,7 @@ describe('createFilePathLinkProvider range bounds', () => {
       worktreeId: 'wt-1',
       requestOpenLinksInAppPreference
     })
-    const mouseUp = getRegisteredBubbleMouseUpHandler(element)
+    const mouseUp = getRegisteredBubbleMouseUpHandler(element, disposable)
     const preventDefault = vi.fn()
 
     mouseUp({
@@ -549,7 +558,7 @@ describe('createFilePathLinkProvider range bounds', () => {
     const rows = [makeBufferLine('Open https://github.com/stablyai/orca/pull/2914')]
     const { terminal, element } = makeFallbackTerminal(rows)
     const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
-    const mouseUp = getRegisteredBubbleMouseUpHandler(element)
+    const mouseUp = getRegisteredBubbleMouseUpHandler(element, disposable)
 
     mouseUp({
       button: 0,

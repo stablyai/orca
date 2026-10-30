@@ -55,7 +55,8 @@ export function makeRequest(method: string, params?: unknown): RpcRequest {
 export function startDesktopMultiplexSubscribe(
   overrides: Partial<OrcaRuntimeService> = {},
   trace?: string[],
-  sendBinaryOverride?: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void
+  sendBinaryOverride?: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void,
+  onMessage?: (message: string) => void
 ) {
   const messages: string[] = []
   const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
@@ -90,6 +91,7 @@ export function startDesktopMultiplexSubscribe(
     makeRequest('terminal.multiplex', {}),
     (msg) => {
       messages.push(msg)
+      onMessage?.(msg)
       const type = JSON.parse(msg).result?.type
       if (type) {
         trace?.push(type)

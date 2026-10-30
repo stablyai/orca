@@ -100,6 +100,27 @@ describe('handleOscLink', () => {
     )
   })
 
+  it('opens an absolute Windows path when source cwd is unavailable', async () => {
+    setPlatform('Windows')
+    handleOscLink(
+      'C:\\repo\\src\\index.ts',
+      { metaKey: false, ctrlKey: true },
+      {
+        ...deps,
+        startupCwd: '',
+        worktreePath: 'C:\\repo'
+      }
+    )
+    await flushAsyncWork()
+    expect(statMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: 'C:/repo/src/index.ts' })
+    )
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: 'C:/repo/src/index.ts' }),
+      { forceContentReload: true }
+    )
+  })
+
   it('opens Windows UNC file URL links from Windows worktrees', async () => {
     setPlatform('Windows')
 

@@ -1,3 +1,4 @@
+import type { PtyTransport } from '../terminal-pane/pty-transport-types'
 /** Reuse pane Unicode/link/IME/shortcut and kitty policy outside panes; callers own transport and parse-completion backpressure. */
 import { Terminal, type ITerminalInitOnlyOptions, type ITerminalOptions } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
@@ -16,6 +17,7 @@ import { installPreviewImeBridge } from '../dashboard-popout/preview-terminal-im
 import { installPreviewTerminalKeyHandler } from '../dashboard-popout/preview-terminal-key-handler'
 import { installPreviewTerminalAppMenuClipboard } from '../dashboard-popout/preview-terminal-app-menu-clipboard'
 import { installPreviewTerminalRightClickPaste } from '../dashboard-popout/preview-terminal-right-click-paste'
+import type { PreviewTerminalLinkRouting } from '../dashboard-popout/preview-terminal-links'
 
 export type StandaloneTerminalArgs = {
   container: HTMLElement
@@ -27,15 +29,19 @@ export type StandaloneTerminalArgs = {
   /** The user's keystrokes and pastes, plus xterm's replies to output when `answersQueries`. */
   sendInput: (data: string) => boolean | Promise<boolean>
   /** Only the session’s sole emulator answers terminal queries; mirrors leave replies to the real pane. */
+  inputSource?: Pick<PtyTransport, 'getInputSource' | 'observeInputSource'>
   answersQueries: boolean
   getSettings: () => GlobalSettings | null
   getMacOptionAsAlt: () => MacOptionAsAlt
   getTerminalInput: () => DashboardCardTerminalInput | null
   requestClose?: () => void
+  linkRouting?: PreviewTerminalLinkRouting
 }
 
 export type StandaloneTerminal = {
   terminal: Terminal
+  invalidateSource: () => void
+  reset: () => void
   /** Scan live kitty pushes or apply replay idempotently; onDone signals parse completion for backpressure acknowledgment. */
   write: (chunk: string, options: { live: boolean; onDone?: () => void }) => void
   dispose: () => void
@@ -55,7 +61,8 @@ export function openStandaloneTerminal(args: StandaloneTerminalArgs): Standalone
   let replayDepth = 0
 
   const disposeCompatibility = installPreviewTerminalCompatibility(terminal, {
-    getSettings: args.getSettings
+    getSettings: args.getSettings,
+    linkRouting: args.linkRouting
   })
   const disposeNativeCopyGutterTrim = installTerminalNativeCopyGutterTrim(terminal).dispose
 
@@ -63,7 +70,24 @@ export function openStandaloneTerminal(args: StandaloneTerminalArgs): Standalone
   const userInputDisposable = subscribeToTerminalUserInput(terminal, () => {
     pendingUserInputSignals = Math.min(32, pendingUserInputSignals + 1)
   })
-  terminal.onData((data) => {
+  const owner = disposeCompatibility.inputOwner
+  const sourceObservation = args.inputSource?.observeInputSource?.({
+    beforeChange: () => owner.invalidateSource(),
+    afterChange: (source) => {
+      const forward = (data: string): void => {
+        if (source?.isCurrent()) {
+          void source.sendInput(data, 'driving')
+        }
+      }
+      owner.bindSource(
+        source && { isCurrent: source.isCurrent, user: forward, unclassified: forward }
+      )
+    }
+  })
+  const forwardOrdinary = (data: string): void => {
+    void args.sendInput(data)
+  }
+  const onData = terminal.onData((data) => {
     const signaledUserInput = pendingUserInputSignals > 0
     if (signaledUserInput) {
       pendingUserInputSignals--
@@ -72,7 +96,7 @@ export function openStandaloneTerminal(args: StandaloneTerminalArgs): Standalone
     if (!args.answersQueries && (userInputDisposable ? !signaledUserInput : replayDepth > 0)) {
       return
     }
-    void args.sendInput(data)
+    owner.handlePtyInput(data, forwardOrdinary, signaledUserInput)
   })
 
   // Why a live getter: kitty state can change between keydown and commit.
@@ -89,6 +113,7 @@ export function openStandaloneTerminal(args: StandaloneTerminalArgs): Standalone
   })
   const disposeKeyHandler = installPreviewTerminalKeyHandler({
     terminal,
+    onKeyEvent: owner.recordKeyEvent,
     claimImeKeyEvent: (event) => imeBridge?.claimKeyEvent(event) ?? false,
     pasteClipboardText: (activeElement, source) => void pasteClipboardText(activeElement, source),
     // Why: route through terminal.input so the chord's bytes carry core's user-input signal, like typed keys.
@@ -119,6 +144,16 @@ export function openStandaloneTerminal(args: StandaloneTerminalArgs): Standalone
 
   return {
     terminal,
+    invalidateSource: owner.invalidateSource,
+    reset: () => {
+      try {
+        owner.reset()
+      } finally {
+        if (!disposed) {
+          terminal.reset()
+        }
+      }
+    },
     write: (chunk, { live, onDone }) => {
       // Snapshots redeliver one-time kitty pushes; replay must use idempotent sets rather than push twice.
       if (live) {
@@ -137,14 +172,29 @@ export function openStandaloneTerminal(args: StandaloneTerminalArgs): Standalone
         return
       }
       disposed = true
-      userInputDisposable?.dispose()
-      imeBridge?.dispose()
-      disposeCompatibility()
-      disposeKeyHandler()
-      disposeNativeCopyGutterTrim()
-      disposeAppMenuClipboard()
-      disposeRightClickPaste()
-      terminal.dispose()
+      let failure: unknown
+      for (const dispose of [
+        () => onData.dispose(),
+        () => owner.dispose(),
+        () => sourceObservation?.dispose(),
+        () => userInputDisposable?.dispose(),
+        () => imeBridge?.dispose(),
+        disposeCompatibility,
+        disposeKeyHandler,
+        disposeNativeCopyGutterTrim,
+        disposeAppMenuClipboard,
+        disposeRightClickPaste,
+        () => terminal.dispose()
+      ]) {
+        try {
+          dispose()
+        } catch (error) {
+          failure ??= error
+        }
+      }
+      if (failure !== undefined) {
+        throw failure
+      }
     }
   }
 }

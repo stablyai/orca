@@ -25,6 +25,8 @@ const {
   subscriptionSendBinary,
   latestSubscribePayload,
   emitSnapshot,
+  inputFrameTexts,
+  subscribeFrameCount,
   resetRemoteRuntimeTransport
 } = createRemoteRuntimeTransportMocks({
   getCallbacks: () => subscriptionCallbacks,
@@ -146,7 +148,7 @@ describe('remote runtime pane whose host session already ended (#31539)', () => 
 
     refuseStream('no_connected_pty')
 
-    await vi.waitFor(() => expect(onPtyExit).toHaveBeenCalledWith(HOST_TAB_PTY_ID))
+    await vi.waitFor(() => expect(onPtyExit).toHaveBeenCalledWith(HOST_TAB_PTY_ID, undefined))
     expect(transport.getRecoveryState?.().phase).toBe('ended')
     transport.destroy?.()
   })
@@ -377,10 +379,330 @@ describe('remote runtime pane whose host session already ended (#31539)', () => 
 
     transport.attach({ existingPtyId: 'remote:env-1@@terminal-ended', callbacks: {} })
 
-    await vi.waitFor(() => expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-ended'))
+    await vi.waitFor(() =>
+      expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-ended', undefined)
+    )
     expect(shown).toEqual(['terminal-ended'])
     expect(transport.getRecoveryState?.().phase).toBe('ended')
     expect(subscriptionSendBinary).not.toHaveBeenCalled()
     transport.destroy?.()
+  })
+  it.each(['source-notification', 'exit-effect', 'captured-disposer'] as const)(
+    'keeps the early handoff after an adopted retirement throws in %s',
+    async (site) => {
+      const { getRemoteRuntimeTerminalMultiplexer } =
+        await import('../../runtime/remote-runtime-terminal-multiplexer')
+      const multiplexer = getRemoteRuntimeTerminalMultiplexer('hub-env')
+      const subscribe = multiplexer.subscribeTerminal.bind(multiplexer)
+      const closed = vi.fn()
+      const interception = vi
+        .spyOn(multiplexer, 'subscribeTerminal')
+        .mockImplementation(async (args) => {
+          const stream = await subscribe(args)
+          const close = stream.close
+          stream.close = () => {
+            close()
+            closed()
+          }
+          return stream
+        })
+      const rebound = vi.fn()
+      const exit = vi.fn(() => {
+        if (site === 'exit-effect') {
+          throw new Error('exit effect failed')
+        }
+      })
+      const transport = await attachRestoredHostTab(exit, rebound)
+      const events = await import('../../runtime/web-session-terminal-handle-events')
+      const subscribeHandle = events.subscribeAcceptedWebSessionTerminalHandle
+      let firstDisposal = true
+      const disposals = vi
+        .spyOn(events, 'subscribeAcceptedWebSessionTerminalHandle')
+        .mockImplementation((args, listener) => {
+          const stop = subscribeHandle(args, listener)
+          return () => {
+            stop()
+            if (site === 'captured-disposer' && firstDisposal) {
+              firstDisposal = false
+              throw new Error('captured observation disposal failed')
+            }
+          }
+        })
+      const warning = vi.spyOn(console, 'warn').mockImplementation(() => {
+        if (site === 'source-notification') {
+          throw new Error('warning failed')
+        }
+      })
+      const observation = transport.observeInputSource?.({
+        beforeChange: () => {},
+        afterChange: (source) => {
+          if (site === 'source-notification' && !source) {
+            throw new Error('observer failed')
+          }
+        }
+      })
+      try {
+        answerShow({ connected: false, verdict: 'exited', incarnationId: 'inc-1' })
+        refuseStream('terminal_handle_stale')
+        await vi.waitFor(() => expect(exit).toHaveBeenCalledOnce())
+        expect(closed).toHaveBeenCalledOnce()
+        await publishHostSurface({ terminal: 'terminal-restarted', incarnationId: 'inc-2' }, 4)
+        expect(rebound.mock.calls).toEqual([['remote:hub-env@@terminal-restarted']])
+        expect(exit).toHaveBeenCalledOnce()
+        expect(transport.getPtyId()).toBeNull()
+        expect(events.getWebSessionTerminalHandleSubscriberCountForTests()).toBe(0)
+      } finally {
+        observation?.dispose()
+        warning.mockRestore()
+        interception.mockRestore()
+        transport.destroy?.()
+        disposals.mockRestore()
+      }
+    }
+  )
+
+  it.each([10, 100])(
+    'bounds actual exit observation/rebind work and current bytes at N=%i',
+    async (n) => {
+      const events = await import('../../runtime/web-session-terminal-handle-events')
+      const subscribe = events.subscribeAcceptedWebSessionTerminalHandle
+      let registrations = 0
+      let removals = 0
+      let callbacks = 0
+      const observation = vi
+        .spyOn(events, 'subscribeAcceptedWebSessionTerminalHandle')
+        .mockImplementation((args, listener) => {
+          registrations++
+          const stop = subscribe(args, (update) => {
+            callbacks++
+            listener(update)
+          })
+          return () => {
+            removals++
+            stop()
+          }
+        })
+      const rebound = vi.fn()
+      const exit = vi.fn()
+      const transport = await attachRestoredHostTab(exit, rebound)
+      try {
+        answerShow({ connected: false, verdict: 'exited', incarnationId: 'inc-1' })
+        for (let i = 0; i < n; i++) {
+          if (i > 0) {
+            const frames = subscribeFrameCount()
+            transport.attach({ existingPtyId: HOST_TAB_PTY_ID, callbacks: {} })
+            await vi.waitFor(() => expect(subscribeFrameCount()).toBeGreaterThan(frames), {
+              interval: 1
+            })
+            emitSnapshot(latestSubscribePayload().streamId, 'live prompt')
+          }
+          const source = transport.getInputSource?.()
+          expect(source?.isCurrent()).toBe(true)
+          expect(transport.sendInput(`live-${i};`, 'driving')).toBe(true)
+          await vi.waitFor(() => expect(inputFrameTexts().join('')).toContain(`live-${i};`), {
+            interval: 1
+          })
+          refuseStream('terminal_handle_stale')
+          await vi.waitFor(() => expect(exit).toHaveBeenCalledTimes(i + 1), { interval: 1 })
+          expect(source?.isCurrent()).toBe(false)
+          expect(events.getWebSessionTerminalHandleSubscriberCountForTests()).toBe(1)
+          await publishHostSurface(
+            { terminal: 'terminal-ended', incarnationId: 'inc-1' },
+            4 + 2 * i
+          )
+          expect(rebound).toHaveBeenCalledTimes(i)
+          await publishHostSurface(
+            { terminal: 'terminal-restarted', incarnationId: 'inc-2' },
+            5 + 2 * i
+          )
+          expect(rebound).toHaveBeenCalledTimes(i + 1)
+          expect(events.getWebSessionTerminalHandleSubscriberCountForTests()).toBe(0)
+        }
+        expect(registrations).toBe(2 * n)
+        expect(removals).toBe(2 * n)
+        expect(callbacks).toBe(2 * n)
+      } finally {
+        transport.destroy?.()
+        observation.mockRestore()
+      }
+      expect(events.getWebSessionTerminalHandleSubscriberCountForTests()).toBe(0)
+    },
+    30_000
+  )
+
+  it.each(['connect', 'attach', 'rebind', 'destroy'] as const)(
+    'detaches the actual early observer and rejects late exit proof after %s',
+    async (entry) => {
+      const exit = vi.fn()
+      const rebound = vi.fn()
+      const transport = await attachRestoredHostTab(exit, rebound)
+      const events = await import('../../runtime/web-session-terminal-handle-events')
+      const answer = runtimeCall.getMockImplementation()
+      let finishProof!: (value: unknown) => void
+      runtimeCall.mockImplementation(async (request: { method: string }) => {
+        if (request.method === 'terminal.show') {
+          return new Promise((resolve) => {
+            finishProof = resolve
+          })
+        }
+        return answer?.(request)
+      })
+      try {
+        refuseStream('terminal_handle_stale')
+        await vi.waitFor(() => expect(finishProof).toBeTypeOf('function'))
+        expect(events.getWebSessionTerminalHandleSubscriberCountForTests()).toBe(2)
+        const frames = subscribeFrameCount()
+        if (entry === 'destroy') {
+          transport.destroy?.()
+        } else if (entry === 'rebind') {
+          resolvedPaneHandle = 'terminal-restarted'
+          await publishHostSurface({ terminal: 'terminal-restarted', incarnationId: 'inc-2' }, 8)
+          await vi.waitFor(() => expect(subscribeFrameCount()).toBeGreaterThan(frames))
+          emitSnapshot(latestSubscribePayload().streamId, 'current process')
+        } else {
+          resolvedPaneHandle = 'terminal-restarted'
+          if (entry === 'connect') {
+            await transport.connect({ url: '', callbacks: {} })
+          } else {
+            transport.attach({ existingPtyId: 'remote:hub-env@@terminal-restarted', callbacks: {} })
+          }
+          await vi.waitFor(() => expect(subscribeFrameCount()).toBeGreaterThan(frames))
+          emitSnapshot(latestSubscribePayload().streamId, 'current process')
+        }
+        expect(events.getWebSessionTerminalHandleSubscriberCountForTests()).toBe(0)
+        finishProof({
+          ok: true,
+          result: {
+            terminal: {
+              handle: 'terminal-ended',
+              connected: false,
+              verdict: 'exited',
+              incarnationId: 'inc-1'
+            }
+          }
+        })
+        await publishHostSurface({ terminal: 'terminal-too-late', incarnationId: 'inc-2' }, 9)
+        expect(rebound).not.toHaveBeenCalled()
+        if (entry !== 'destroy') {
+          expect(exit).not.toHaveBeenCalled()
+          expect(transport.getPtyId()).toBe('remote:hub-env@@terminal-restarted')
+          expect(transport.sendInput('new-entry-positive', 'driving')).toBe(true)
+          await vi.waitFor(() => expect(inputFrameTexts().join('')).toContain('new-entry-positive'))
+        } else {
+          expect(transport.sendInput('after-destroy', 'driving')).toBe(false)
+        }
+        expect(events.getWebSessionTerminalHandleSubscriberCountForTests()).toBe(0)
+      } finally {
+        finishProof?.({ ok: true, result: {} })
+        transport.destroy?.()
+      }
+    }
+  )
+
+  it('cannot hand an outer retirement the successor installed during source publication', async () => {
+    const exit = vi.fn()
+    const rebound = vi.fn()
+    const transport = await attachRestoredHostTab(exit, rebound)
+    const events = await import('../../runtime/web-session-terminal-handle-events')
+    const a = transport.getInputSource?.()
+    const frames = subscribeFrameCount()
+    let replaced = false
+    const observation = transport.observeInputSource?.({
+      beforeChange: () => {},
+      afterChange: (source) => {
+        if (!source && !replaced) {
+          replaced = true
+          resolvedPaneHandle = 'terminal-successor'
+          transport.attach({ existingPtyId: 'remote:hub-env@@terminal-successor', callbacks: {} })
+        }
+      }
+    })
+    try {
+      answerShow({ connected: false, verdict: 'exited', incarnationId: 'inc-1' })
+      refuseStream('terminal_handle_stale')
+      await vi.waitFor(() => expect(subscribeFrameCount()).toBeGreaterThan(frames))
+      emitSnapshot(latestSubscribePayload().streamId, 'successor prompt')
+      await publishHostSurface({ terminal: 'terminal-unrelated', incarnationId: 'inc-2' }, 9)
+      expect(rebound).not.toHaveBeenCalled()
+      expect(exit).not.toHaveBeenCalled()
+      expect(a?.isCurrent()).toBe(false)
+      expect(transport.getPtyId()).toBe('remote:hub-env@@terminal-successor')
+      expect(transport.sendInput('successor-positive', 'driving')).toBe(true)
+      await vi.waitFor(() => expect(inputFrameTexts().join('')).toContain('successor-positive'))
+      expect(events.getWebSessionTerminalHandleSubscriberCountForTests()).toBe(0)
+    } finally {
+      observation?.dispose()
+      transport.destroy?.()
+    }
+  })
+
+  it('keeps watching-finally priority over waiting faults through actual published rebind delivery', async () => {
+    const transport = await attachRestoredHostTab(vi.fn(), vi.fn())
+    const original = transport.getInputSource?.()
+    const events = await import('../../runtime/web-session-terminal-handle-events')
+    const subscribe = events.subscribeAcceptedWebSessionTerminalHandle
+    const removals: number[] = []
+    let registrations = 0
+    let failed = false
+    let failure: unknown
+    const observation = vi
+      .spyOn(events, 'subscribeAcceptedWebSessionTerminalHandle')
+      .mockImplementation((args, listener) => {
+        const registration = ++registrations
+        const stop = subscribe(args, (update) => {
+          try {
+            listener(update)
+          } catch (error) {
+            failed = true
+            failure = error
+          }
+        })
+        return () => {
+          stop()
+          removals.push(registration)
+          if (registration === 1) {
+            throw new Error('waiting fault after real removal')
+          }
+          if (registration === 2) {
+            throw undefined
+          }
+        }
+      })
+    const { promise: show, resolve: finishShow } = Promise.withResolvers<void>()
+    const defaultCall = runtimeCall.getMockImplementation()
+    runtimeCall.mockImplementation(async (args: { method: string }) => {
+      if (args.method === 'terminal.show') {
+        await show
+        return { ok: true, result: { terminal: { connected: true } } }
+      }
+      return defaultCall?.(args)
+    })
+    try {
+      refuseStream('terminal_handle_stale')
+      await vi.waitFor(() => expect(registrations).toBe(2))
+      expect(events.getWebSessionTerminalHandleSubscriberCountForTests()).toBe(2)
+      await publishHostSurface({ terminal: 'terminal-new' }, 9)
+      expect(failed).toBe(true)
+      expect(failure).toBeUndefined()
+      expect(removals).toEqual([1, 2])
+      expect(events.getWebSessionTerminalHandleSubscriberCountForTests()).toBe(0)
+      expect(transport.getInputSource?.()).toBe(original)
+      expect(transport.getPtyId()).toBe(HOST_TAB_PTY_ID)
+      observation.mockRestore()
+      finishShow()
+      resolvedPaneHandle = 'terminal-new'
+      const frames = subscribeFrameCount()
+      transport.attach({ existingPtyId: 'remote:hub-env@@terminal-new', callbacks: {} })
+      await vi.waitFor(() => expect(subscribeFrameCount()).toBeGreaterThan(frames))
+      emitSnapshot(latestSubscribePayload().streamId, 'new prompt')
+      expect(transport.sendInput('after-captured-cleanup', 'driving')).toBe(true)
+      await vi.waitFor(() => expect(inputFrameTexts().join('')).toContain('after-captured-cleanup'))
+      expect(original?.isCurrent()).toBe(false)
+    } finally {
+      observation.mockRestore()
+      finishShow()
+      transport.destroy?.()
+    }
+    expect(events.getWebSessionTerminalHandleSubscriberCountForTests()).toBe(0)
   })
 })

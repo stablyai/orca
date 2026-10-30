@@ -35,68 +35,103 @@ export function cleanupTerminalPaneMount(args: {
     cancelResize
   } = args
   const { tabId, worktreeId, managerRef, paneTransportsRef, panePtyBindingsRef } = deps
+  let failure: unknown
+  const finish = (cleanup: () => void): void => {
+    try {
+      cleanup()
+    } catch (error) {
+      failure ??= error
+    }
+  }
   const currentStore = useAppStore.getState()
   const currentWorktreeTabs = currentStore.tabsByWorktree[worktreeId]
   // Cancel queued splits by original worktree even if the tab moved buckets.
   const tabRemainsInWorktree = Boolean(
     currentWorktreeTabs?.some((candidate) => candidate.id === tabId)
   )
-  if (!tabRemainsInWorktree) {
-    cancelQueuedTerminalPaneSplitRequests(tabId, worktreeId)
-  }
   // Global ownership permits handoff across the bucket gap before a rehomed surface mounts, including deferred splits without PTY IDs.
   const tabStillExists = isTerminalTabPresent(currentStore, tabId)
-  unregisterRuntimeTab()
-  cancelResize()
-  restoreExpandedLayoutFrom(expandedStyleSnapshots)
-  disposeAll(refs.linkProviderDisposablesRef.current)
-  disposeAll(refs.terminalHandleLinkDisposablesRef.current)
-  disposeAll(refs.linkifierClickPrimingDisposablesRef.current)
-  for (const gesture of refs.linkPointerGesturesRef.current.values()) {
-    gesture.dispose()
-  }
-  refs.linkPointerGesturesRef.current.clear()
-  disposeAll(refs.fileLinkClickFallbackDisposablesRef.current)
-  disposeAll(refs.httpLinkClickFallbackDisposablesRef.current)
-  disposeAll(refs.selectionDisposablesRef.current)
-  disposeAll(refs.nativeCopyDisposablesRef.current)
-  for (const timer of refs.selectionCaptureTimersRef.current.values()) {
-    window.clearTimeout(timer)
-  }
-  refs.selectionCaptureTimersRef.current.clear()
-  disposeAll(refs.mouseHideDisposablesRef.current)
-  disposeAll(refs.imeCompositionDisposablesRef.current)
-  disposeAll(refs.imeNativeTextForwarderDisposablesRef.current)
-
   captureParkedTerminalPaneCandidates(
     tabId,
     worktreeId,
     manager.getPanes().map((pane) => {
       const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId() ?? null
-      const binding = panePtyBindingsRef.current.get(pane.id) as
-        | { isUntouchedFreshSpawnPty?: (candidate: string) => boolean }
-        | undefined
+      const binding = panePtyBindingsRef.current.get(pane.id)
       return {
         ptyId,
         workspaceOwner: captureNotificationTransportOwner(paneTransportsRef.current.get(pane.id)),
         paneId: pane.id,
         leafId: pane.leafId,
         drivesTabTitle: manager.getActivePane()?.id === pane.id,
-        untouchedFreshSpawn: ptyId !== null && (binding?.isUntouchedFreshSpawnPty?.(ptyId) ?? false)
+        untouchedFreshSpawn:
+          ptyId !== null &&
+          binding !== undefined &&
+          'isUntouchedFreshSpawnPty' in binding &&
+          typeof binding.isUntouchedFreshSpawnPty === 'function' &&
+          binding.isUntouchedFreshSpawnPty(ptyId) === true
       }
     })
   )
-  for (const [paneId, transport] of paneTransportsRef.current) {
+  const bindings = [...panePtyBindingsRef.current]
+  const transports = [...paneTransportsRef.current]
+  for (const [id, binding] of bindings) {
+    if (panePtyBindingsRef.current.get(id) === binding) {
+      panePtyBindingsRef.current.delete(id)
+    }
+  }
+  for (const [id, transport] of transports) {
+    if (paneTransportsRef.current.get(id) === transport) {
+      paneTransportsRef.current.delete(id)
+    }
+  }
+  const disposables = [
+    refs.linkProviderDisposablesRef.current,
+    refs.terminalHandleLinkDisposablesRef.current,
+    refs.linkifierClickPrimingDisposablesRef.current,
+    refs.linkPointerGesturesRef.current,
+    refs.fileLinkClickFallbackDisposablesRef.current,
+    refs.selectionDisposablesRef.current,
+    refs.nativeCopyDisposablesRef.current,
+    refs.mouseHideDisposablesRef.current,
+    refs.imeCompositionDisposablesRef.current,
+    refs.imeNativeTextForwarderDisposablesRef.current,
+    refs.httpLinkClickFallbackDisposablesRef.current,
+    refs.osc52DisposablesRef.current,
+    refs.osc7DisposablesRef.current
+  ].flatMap((map) => {
+    const captured = [...map.values()]
+    map.clear()
+    return captured
+  })
+  const timers = [...refs.selectionCaptureTimersRef.current.values()]
+  refs.selectionCaptureTimersRef.current.clear()
+  const handoffs = new Map(deferredSplitHandoffs)
+  deferredSplitHandoffs.clear()
+  if (!tabRemainsInWorktree) {
+    finish(() => cancelQueuedTerminalPaneSplitRequests(tabId, worktreeId))
+  }
+  for (const [, binding] of bindings) {
+    finish(() => binding.dispose())
+  }
+  for (const disposable of disposables) {
+    finish(() => disposable.dispose())
+  }
+  for (const timer of timers) {
+    window.clearTimeout(timer)
+  }
+  finish(unregisterRuntimeTab)
+  finish(cancelResize)
+  finish(() => restoreExpandedLayoutFrom(expandedStyleSnapshots))
+  for (const [paneId, transport] of transports) {
     const ptyId = transport.getPtyId()
-    const deferredSplitHandoff = deferredSplitHandoffs.get(paneId)
+    const deferredSplitHandoff = handoffs.get(paneId)
     if (deferredSplitHandoff) {
       if (tabStillExists && !ptyId) {
         // Retain only transient launch identity across whole-tab remounts; dispose old transport/xterm.
-        releaseDeferredSplitPaneHandoff(deferredSplitHandoff)
+        finish(() => releaseDeferredSplitPaneHandoff(deferredSplitHandoff))
       } else {
-        clearDeferredSplitPaneHandoff(deferredSplitHandoff)
+        finish(() => clearDeferredSplitPaneHandoff(deferredSplitHandoff))
       }
-      deferredSplitHandoffs.delete(paneId)
     }
     if (
       shouldDetachPaneTransportOnUnmount({
@@ -106,32 +141,27 @@ export function cleanupTerminalPaneMount(args: {
         worktreeTabs: currentWorktreeTabs
       })
     ) {
-      transport.detach?.({ preserveExitObserver: false })
+      finish(() => transport.detach?.({ preserveExitObserver: false }))
     } else {
-      transport.destroy?.()
+      finish(() => transport.destroy?.())
     }
   }
   if (!tabStillExists) {
     // Cleanup also covers transports removed by a racing close.
-    discardDeferredSplitPaneHandoffsForTab(tabId)
+    finish(() => discardDeferredSplitPaneHandoffsForTab(tabId))
   }
-  for (const binding of panePtyBindingsRef.current.values()) {
-    binding.dispose()
+  finish(() => manager.destroy())
+  if (managerRef.current === manager) {
+    managerRef.current = null
   }
-  panePtyBindingsRef.current.clear()
-  paneTransportsRef.current.clear()
-  manager.destroy()
-  managerRef.current = null
   if (e2eConfig.exposeStore && window.__paneManagers?.get(tabId) === manager) {
     window.__paneManagers.delete(tabId)
   }
-  deps.setTabPaneExpanded(tabId, false)
-  deps.setTabCanExpandPane(tabId, false)
-}
-
-function disposeAll(map: Map<number, { dispose: () => void }>): void {
-  for (const disposable of map.values()) {
-    disposable.dispose()
+  if (managerRef.current === null) {
+    finish(() => deps.setTabPaneExpanded(tabId, false))
+    finish(() => deps.setTabCanExpandPane(tabId, false))
   }
-  map.clear()
+  if (failure !== undefined) {
+    throw failure
+  }
 }

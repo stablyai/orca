@@ -402,4 +402,59 @@ describe('remote reattach type-ahead', () => {
       transport.destroy?.()
     })
   })
+  it.each(['ordinary-error', 'scoped-success'] as const)(
+    'keeps late original accepted completion from owning a new connect: %s',
+    async (mode) => {
+      const exit = vi.fn()
+      const { transport, created, waitForCreate } = await createGatedTransport({ onPtyExit: exit })
+      const initial = transport.connect({ url: '', callbacks: {} })
+      await waitForCreate()
+      created.resolve('terminal-1')
+      await initial
+      await completeAttach()
+      const original = transport.getInputSource?.()
+      if (!original) {
+        throw new Error('missing original source')
+      }
+      const accepted = createDeferred<unknown>()
+      const next = createDeferred<unknown>()
+      const call = runtimeCall.getMockImplementation()
+      runtimeCall.mockImplementation(async (request: { method: string }) => {
+        if (request.method === 'terminal.send') {
+          return accepted.promise
+        }
+        if (request.method === 'terminal.create') {
+          return next.promise
+        }
+        return call?.(request)
+      })
+      const pending =
+        mode === 'scoped-success'
+          ? original.sendInputAccepted?.('original-accepted', 'driving')
+          : transport.sendInputAccepted?.('original-accepted', 'driving')
+      await vi.waitFor(() =>
+        expect(runtimeCall).toHaveBeenCalledWith(
+          expect.objectContaining({ method: 'terminal.send' })
+        )
+      )
+      const connecting = transport.connect({ url: '', callbacks: {} })
+      if (mode === 'ordinary-error') {
+        accepted.reject(new Error('terminal_gone'))
+      } else {
+        accepted.resolve({ ok: true, result: { send: { accepted: true } } })
+      }
+      await expect(pending).resolves.toBe(mode === 'scoped-success')
+      expect(exit).not.toHaveBeenCalled()
+      next.resolve({ ok: true, result: { terminal: { handle: 'terminal-2', isReattach: true } } })
+      await connecting
+      await completeAttach()
+      expect(transport.getPtyId()).toBe('remote:env-1@@terminal-2')
+      expect(transport.getRecoveryState?.().phase).not.toBe('ended')
+      expect(original.isCurrent()).toBe(false)
+      expect(transport.sendInput('fresh-positive', 'driving')).toBe(true)
+      await vi.waitFor(() => expect(inputFrameTexts().join('')).toContain('fresh-positive'))
+      expect(exit).not.toHaveBeenCalled()
+      transport.destroy?.()
+    }
+  )
 })

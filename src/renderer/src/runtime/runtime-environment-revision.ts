@@ -105,9 +105,12 @@ export function resolveContinuedRuntimeEnvironmentRevision(
     return getRuntimeEnvironmentRevision(environmentId)
   }
   const continued = continuedRevisionsByEnvironmentId.get(environmentId)
+  if (!continued?.has(revision)) {
+    return revision
+  }
   let current = revision
   const seen = new Set<number>()
-  while (continued?.has(current) && !seen.has(current)) {
+  while (continued.has(current) && !seen.has(current)) {
     seen.add(current)
     current = continued.get(current) ?? current
   }

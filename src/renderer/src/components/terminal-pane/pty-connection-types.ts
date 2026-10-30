@@ -1,3 +1,4 @@
+import type { TerminalLinkPtyMouseSuppression } from './terminal-link-pty-mouse-suppression'
 import type { TerminalLaunchInputAttemptOwner } from './terminal-launch-input-attempt'
 import type { WorkspaceAttentionSlice } from '@/store/slices/workspace-attention/workspace-attention-contract'
 import type { NotificationWorkspaceOwner } from '../../../../shared/notification-source'
@@ -131,7 +132,13 @@ export type PtyConnectionDeps = {
   onStartupBound?: () => void
   /** Re-renders mobile lock overlays for fit/driver state that arrived before this pane bound its PTY. */
   refreshMobileOverlays?: () => void
-  deferPtyInput?: (paneId: number, data: string, forward: (data: string) => void) => void
+  getPtyInputOwner?: (paneId: number) => TerminalLinkPtyMouseSuppression | undefined
+  deferPtyInput?: (
+    paneId: number,
+    data: string,
+    forward: (data: string) => void,
+    wasUserInput?: boolean
+  ) => void
   /** Record main’s 2031 subscription and current theme for later flip pushes; subscription itself is silent (#9993). */
   recordPaneMode2031Subscription?: (paneId: number, subscribedMode: 'dark' | 'light') => void
 }

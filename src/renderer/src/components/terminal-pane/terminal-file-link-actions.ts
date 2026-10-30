@@ -1,3 +1,9 @@
+import {
+  prepareTerminalLinkActivation,
+  commitTerminalLinkActivation,
+  type TerminalLinkCommit
+} from './terminal-link-activation-operation'
+import type { TerminalFileContext } from './terminal-file-path-mapping'
 import type { LinkActionRequest } from '@/components/link-actions/link-action-request'
 import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
 import { buildHttpLinkActions } from '@/lib/http-link-destinations'
@@ -23,9 +29,12 @@ import { getLocalPathOpenOwnerForRoute, isLocalPathOpenBlocked } from '@/lib/loc
 import { canOpenLinkInSourceGroup } from '@/store/slices/editor/tabs/editor-open-target-group'
 
 export type TerminalFileLinkActionDeps = {
+  commit?: TerminalLinkCommit
   worktreeId: string
   worktreePath: string
   runtimeEnvironmentId?: string | null
+  fileContext?: TerminalFileContext
+  onInternalOpen?: () => void
   wslDistro?: string | null
   /** The paired-server terminal that printed the link; lets its host grant a file outside workspaces. */
   terminalHandle?: string | null
@@ -51,13 +60,21 @@ export function handleTerminalFileLink(
   actionDestination?: string
 ): boolean {
   if (isTerminalLinkDirectActivation(event)) {
-    event?.preventDefault?.()
-    openDetectedFilePath(filePath, line, column, {
-      ...deps,
-      openWithSystemDefault: Boolean(event?.shiftKey)
-    })
-    return true
+    return commitTerminalLinkActivation(
+      event,
+      prepareTerminalLinkActivation(event, {
+        kind: 'file',
+        direct: () =>
+          openDetectedFilePath(filePath, line, column, {
+            ...deps,
+            openWithSystemDefault: Boolean(event?.shiftKey)
+          }),
+        details: () => {}
+      }),
+      deps.commit ?? actionContext?.commit
+    )
   }
+
   const actions = buildFileLinkActions(filePath, line, column, deps, actionContext?.sourceOwner)
   return requestTerminalLinkAction(event, actionContext, {
     ...actions,
@@ -79,11 +96,9 @@ export function buildFileLinkActions(
     deps.worktreePath,
     terminalLinkWslDistro(deps.wslDistro, deps.runtimeEnvironmentId)
   )
-  const fileContext = getTerminalFileContext(
-    deps.worktreeId,
-    deps.worktreePath,
-    deps.runtimeEnvironmentId
-  )
+  const fileContext =
+    deps.fileContext ??
+    getTerminalFileContext(deps.worktreeId, deps.worktreePath, deps.runtimeEnvironmentId)
   const worktreeRoot = resolveKnownWorktreeRootPathLink(
     mappedPath,
     useAppStore.getState(),

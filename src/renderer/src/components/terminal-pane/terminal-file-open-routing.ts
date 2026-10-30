@@ -1,3 +1,4 @@
+import type { TerminalFileLinkActionDeps } from './terminal-file-link-actions'
 import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
 import { findWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
 import { isPathInsideWorktree, toWorktreeRelativePath } from '../../../../shared/terminal-links'
@@ -55,22 +56,11 @@ export type FileOpenFailure = {
   error: unknown
 }
 
-type TerminalFileOpenDeps = {
-  worktreeId: string
-  worktreePath: string
-  runtimeEnvironmentId?: string | null
-  wslDistro?: string | null
+type TerminalFileOpenDeps = TerminalFileLinkActionDeps & {
   /** Shift+modifier: the OS default app, or the other link-routing browser for a local HTML file. */
   openWithSystemDefault?: boolean
   /** Where a local HTML file opens, chosen from its popover; otherwise link routing decides. */
   browserDestination?: HttpLinkDestination
-  /** The paired-server terminal that printed the link; lets its host grant a file outside workspaces. */
-  terminalHandle?: string | null
-  hostFileOnly?: boolean
-  /** Reports a path that could not be verified before opening; skipped once a later open supersedes it. */
-  onOpenFailure?: (failure: FileOpenFailure) => void
-  /** The tab that owns the link; editor opens place themselves relative to its group. */
-  sourceTabId?: string | null
   /** "Open in this group": pins the source tab's group at activation, or refuses. */
   openInSourceGroup?: boolean
   /** Opt-in menu request; the legacy flag remains editor-only. */
@@ -110,7 +100,8 @@ export function openDetectedFilePath(
 
   void (async () => {
     let statResult
-    let fileContext = getTerminalFileContext(worktreeId, worktreePath, runtimeEnvironmentId)
+    let fileContext =
+      deps.fileContext ?? getTerminalFileContext(worktreeId, worktreePath, runtimeEnvironmentId)
     const sourceFileHostId =
       terminalFileSourceHost(useAppStore.getState(), fileContext) ??
       getConnectionExecutionHostId(fileContext.connectionId)
@@ -144,6 +135,7 @@ export function openDetectedFilePath(
         if (!isCurrentRequest()) {
           return
         }
+        deps.onInternalOpen?.()
         activateAndRevealWorktree(worktreeRootLink.id, {
           executionHostId: worktreeRootLink.executionHostId
         })
@@ -250,6 +242,7 @@ export function openDetectedFilePath(
           canOpenWithSystemDefault,
           ...(linkContext && !clientLocal ? { fileExecutionHostId } : {}),
           linkContext,
+          onInternalOpen: deps.onInternalOpen,
           ...(explicitGroupRequest ? { refuseOpenInSourceGroup: refuseExplicitNonEditorRoute } : {})
         })
       ) {
@@ -267,6 +260,7 @@ export function openDetectedFilePath(
     const runtimeOwnerId = runtimeTargetEnvironmentId(fileContext.target) ?? sourceRuntimeOwnerId
     let targetExecutionHostId =
       hostWorkspaceFile?.executionHostId ??
+      (deps.fileContext ? sourceFileHostId : null) ??
       (runtimeOwnerId
         ? toRuntimeExecutionHostId(runtimeOwnerId)
         : getConnectionExecutionHostId(fileContext.connectionId))
@@ -302,6 +296,7 @@ export function openDetectedFilePath(
       return
     }
 
+    deps.onInternalOpen?.()
     if (targetWorktreeId) {
       // Route by workspace shape and resolved host: folder keys are valid and worktree ids can repeat across hosts.
       activateAndRevealWorkspace(targetWorktreeId, {

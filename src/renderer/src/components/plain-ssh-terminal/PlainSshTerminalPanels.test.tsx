@@ -17,25 +17,31 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import { getDefaultSettings } from '../../../../shared/constants'
 
+import type { StandaloneTerminalArgs } from '../standalone-terminal/open-standalone-terminal'
+
 const written: string[] = []
+const standaloneArgs: StandaloneTerminalArgs[] = []
 
 // The standalone terminal is the preview's, covered by its tests; this stands in for xterm.
 vi.mock('@/components/standalone-terminal/open-standalone-terminal', () => ({
-  openStandaloneTerminal: () => ({
-    terminal: {
-      options: {},
-      cols: 80,
-      rows: 24,
-      loadAddon: () => {},
-      focus: () => {},
-      onResize: () => ({ dispose: () => {} })
-    },
-    write: (chunk: string, options: { onDone?: () => void }) => {
-      written.push(chunk)
-      options.onDone?.()
-    },
-    dispose: () => {}
-  })
+  openStandaloneTerminal: (args: StandaloneTerminalArgs) => {
+    standaloneArgs.push(args)
+    return {
+      terminal: {
+        options: {},
+        cols: 80,
+        rows: 24,
+        loadAddon: () => {},
+        focus: () => {},
+        onResize: () => ({ dispose: () => {} })
+      },
+      write: (chunk: string, options: { onDone?: () => void }) => {
+        written.push(chunk)
+        options.onDone?.()
+      },
+      dispose: () => {}
+    }
+  }
 }))
 const fit = vi.fn()
 vi.mock('@xterm/addon-fit', () => ({
@@ -59,6 +65,7 @@ const ack = vi.fn()
 
 beforeEach(() => {
   written.length = 0
+  standaloneArgs.length = 0
   open.mockReset()
   close.mockReset()
   ack.mockReset()
@@ -157,6 +164,38 @@ describe('plain SSH terminal', () => {
 
     act(() => emit({ kind: 'exit', sessionId: 's1', exitCode: 0 }))
     await waitFor(() => expect(screen.queryByText('Plain SSH · lambda')).toBeNull())
+  })
+
+  it('binds retained input to the actual open UUID and refuses it after exit or unmount', async () => {
+    const resolveOpen = deferOpen()
+    const user = userEvent.setup()
+    const mounted = render(<Harness status={blocked} />)
+    await user.click(screen.getByRole('button', { name: 'Open plain SSH terminal' }))
+    const args = standaloneArgs.at(-1)
+    if (!args) {
+      throw new Error('Missing standalone caller')
+    }
+    expect(args.answersQueries).toBe(true)
+    expect(args.inputSource?.getInputSource?.()).toBeNull()
+    await act(async () => resolveOpen({ ok: true, sessionId: 'source-uuid', label: 'lambda' }))
+    const a = args.inputSource?.getInputSource?.()
+    if (!a) {
+      throw new Error('Missing opened source')
+    }
+    expect(a.ptyId).toBe('source-uuid')
+    expect(a.sendInput('original', 'driving')).toBe(true)
+    expect(window.api.plainSsh.write).toHaveBeenCalledWith({
+      sessionId: 'source-uuid',
+      data: 'original'
+    })
+    act(() => emit({ kind: 'exit', sessionId: 'unrelated', exitCode: 0 }))
+    expect(a.isCurrent()).toBe(true)
+    act(() => emit({ kind: 'exit', sessionId: 'source-uuid', exitCode: 255 }))
+    expect(a.sendInput('ended', 'driving')).toBe(false)
+    expect(args.inputSource?.getInputSource?.()).toBeNull()
+    mounted.unmount()
+    expect(a.sendInput('disposed', 'driving')).toBe(false)
+    expect(window.api.plainSsh.write).toHaveBeenCalledTimes(1)
   })
 
   it('keeps output when ssh is killed by a signal, even with exit code 0', async () => {

@@ -1,3 +1,4 @@
+import type { PtyInputSource } from '../pty-input-source'
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { useAppStore } from '@/store'
 import { ambiguousWorkspaceOwnerMessage } from '@/lib/duplicate-paired-servers'
@@ -129,8 +130,11 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
     session.sendDesktopQueryReplyImmediate
   )
 
-  session.claimViewportForUserActivity = (input?: string): void => {
-    const currentPtyId = session.transport.getPtyId()
+  session.claimViewportForUserActivity = (input?: string, source?: PtyInputSource): void => {
+    if (source && !source.isCurrent()) {
+      return
+    }
+    const currentPtyId = source?.ptyId ?? session.transport.getPtyId()
     if (!currentPtyId || getFitOverrideForPty(currentPtyId)?.mode !== 'remote-desktop-fit') {
       return
     }
@@ -148,7 +152,8 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
     const rows = proposed?.rows ?? session.pane.terminal.rows
     if (cols > 0 && rows > 0) {
       // Keep parked until runtime confirms desktop-fit; queued claims must remain retryable after transient failure.
-      session.transport.claimViewport?.(cols, rows)
+      const writer = source ?? session.transport
+      writer.claimViewport?.(cols, rows)
     }
   }
   session.claimPendingVisibleRemoteViewport = (): void => {

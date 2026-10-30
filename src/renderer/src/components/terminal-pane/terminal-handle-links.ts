@@ -1,3 +1,8 @@
+import {
+  prepareTerminalLinkActivation,
+  commitTerminalLinkActivation,
+  type TerminalLinkCommit
+} from './terminal-link-activation-operation'
 import type { ILink, ILinkProvider, Terminal } from '@xterm/xterm'
 import type { AppState } from '@/store'
 import { useAppStore } from '@/store'
@@ -49,6 +54,7 @@ type TerminalHandleLinkProviderDeps = {
   getTerminal: () => Terminal | null
   getRuntimeEnvironmentId: () => string | null
   linkTooltip: HTMLElement
+  getLinkCommit?: () => TerminalLinkCommit | undefined
   getLinkActionContext?: () => TerminalLinkActionContext | null
 }
 
@@ -204,13 +210,21 @@ export function createTerminalHandleLinkProvider(
               if (!directActivation && !actionActivation) {
                 return
               }
-              let handled = false
+              const runtimeEnvironmentId = deps.getRuntimeEnvironmentId()
               if (directActivation) {
-                event?.preventDefault()
-                void activateParsedLink(parsed, deps.getRuntimeEnvironmentId())
-                handled = true
+                commitTerminalLinkActivation(
+                  event,
+                  prepareTerminalLinkActivation(event, {
+                    kind: parsed.kind,
+                    direct: () => {
+                      void activateParsedLink(parsed, runtimeEnvironmentId)
+                    },
+                    details: () => {}
+                  }),
+                  deps.getLinkCommit?.() ?? deps.getLinkActionContext?.()?.commit
+                )
               } else {
-                handled = requestTerminalLinkAction(event, deps.getLinkActionContext?.(), {
+                requestTerminalLinkAction(event, deps.getLinkActionContext?.(), {
                   destination: parsed.text,
                   kind: parsed.kind,
                   primary: {
@@ -224,12 +238,9 @@ export function createTerminalHandleLinkProvider(
                             'auto.components.terminal.pane.TerminalLinkActionPopover.openTaskTerminal',
                             'Open task terminal'
                           ),
-                    run: () => activateParsedLink(parsed, deps.getRuntimeEnvironmentId())
+                    run: () => activateParsedLink(parsed, runtimeEnvironmentId)
                   }
                 })
-              }
-              if (handled) {
-                terminal.clearSelection()
               }
             },
             hover: () => {

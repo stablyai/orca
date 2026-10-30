@@ -6,14 +6,14 @@ import {
   iterateTerminalInputChunks
 } from '../../../../shared/terminal-input'
 
-export type RemoteRuntimePtyBatcher = {
-  push: (data: string) => boolean
+export type RemoteRuntimePtyBatcher<Scope = never> = {
+  push: (data: string, scope?: Scope) => boolean
   hasPendingValidation: () => boolean
   /** Input accepted but not yet flushed or still validating. */
   hasPendingInput: () => boolean
   enqueueAfterValidation: (action: () => void) => void
   drain: () => Promise<void>
-  takePending: () => string
+  takePending: (consume?: (text: string, scope?: Scope) => void) => string
   flush: () => void
   clear: () => void
 }
@@ -29,17 +29,18 @@ export type RemoteRuntimePtyTextBatcherOptions = {
   maxBytes?: number
 }
 
-export function createRemoteRuntimePtyTextBatcher(
+export function createRemoteRuntimePtyTextBatcher<Scope = never>(
   delayMs: number,
-  onFlush: (text: string) => void,
+  onFlush: (text: string, scope?: Scope) => void,
   options: RemoteRuntimePtyTextBatcherOptions = {}
-): RemoteRuntimePtyBatcher {
+): RemoteRuntimePtyBatcher<Scope> {
   const maxPendingBytes = getPositiveByteLimit(
     options.maxPendingBytes,
     TERMINAL_INPUT_CHUNK_MAX_BYTES
   )
   const maxBytes = getPositiveByteLimit(options.maxBytes, TERMINAL_INPUT_MAX_BYTES)
   let pending = ''
+  let pendingScope: Scope | undefined
   let pendingBytes = 0
   let timer: ReturnType<typeof setTimeout> | null = null
   let validationTail: Promise<void> | null = null
@@ -55,24 +56,26 @@ export function createRemoteRuntimePtyTextBatcher(
   const clear = (): void => {
     clearTimer()
     pending = ''
+    pendingScope = undefined
     pendingBytes = 0
     validationVersion += 1
     validationTail = null
   }
 
-  const flush = (): void => {
-    const text = takePending()
-    if (text) {
-      onFlush(text)
-    }
-  }
-
-  const takePending = (): string => {
+  const takePending = (consume?: (text: string, scope?: Scope) => void): string => {
     const text = pending
+    const scope = pendingScope
     pending = ''
+    pendingScope = undefined
     pendingBytes = 0
     clearTimer()
+    if (text) {
+      consume?.(text, scope)
+    }
     return text
+  }
+  const flush = (): void => {
+    takePending(onFlush)
   }
 
   const queuePending = (chunk: string, chunkBytes: number): void => {
@@ -83,7 +86,10 @@ export function createRemoteRuntimePtyTextBatcher(
     }
   }
 
-  const pushValidatedInput = (data: string): void => {
+  const pushValidatedInput = (data: string, scope?: Scope): void => {
+    if (pending && pendingScope !== scope) {
+      flush()
+    }
     for (const chunk of iterateTerminalInputChunks(data, maxPendingBytes)) {
       const chunkBytes = getTerminalInputByteLength(chunk)
       if (pending && pendingBytes + chunkBytes > maxPendingBytes) {
@@ -91,14 +97,19 @@ export function createRemoteRuntimePtyTextBatcher(
       }
       if (!pending && chunkBytes >= maxPendingBytes) {
         // Do not recombine remote paste chunks into one oversized frame/RPC during debounce.
-        onFlush(chunk)
+        onFlush(chunk, scope)
         continue
       }
+      pendingScope = scope
       queuePending(chunk, chunkBytes)
     }
   }
 
-  const enqueueValidatedInput = (data: string, tooLarge: false | Promise<boolean>): void => {
+  const enqueueValidatedInput = (
+    data: string,
+    tooLarge: false | Promise<boolean>,
+    scope?: Scope
+  ): void => {
     const queuedVersion = validationVersion
     const previousTail = validationTail ?? Promise.resolve()
     const guardedTail = previousTail.then(async () => {
@@ -109,7 +120,7 @@ export function createRemoteRuntimePtyTextBatcher(
         return
       }
       if (validationVersion === queuedVersion) {
-        pushValidatedInput(data)
+        pushValidatedInput(data, scope)
       }
     })
     const nextTail = guardedTail
@@ -148,7 +159,7 @@ export function createRemoteRuntimePtyTextBatcher(
   }
 
   return {
-    push(data: string): boolean {
+    push(data: string, scope?: Scope): boolean {
       if (!data) {
         return true
       }
@@ -159,11 +170,11 @@ export function createRemoteRuntimePtyTextBatcher(
       }
 
       if (tooLarge === false && validationTail === null) {
-        pushValidatedInput(data)
+        pushValidatedInput(data, scope)
         return true
       }
 
-      enqueueValidatedInput(data, tooLarge)
+      enqueueValidatedInput(data, tooLarge, scope)
       return true
     },
     // Async size validation may precede pending entries; immediate replies must wait for it to preserve byte order.

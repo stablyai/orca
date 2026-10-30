@@ -1,9 +1,18 @@
+import {
+  prepareTerminalLinkActivation,
+  commitTerminalLinkActivation,
+  type TerminalLinkCommit
+} from './terminal-link-activation-operation'
+import { showFileLinkOpenFailureToast } from '@/lib/file-link-open-failure-toast'
+import { requestTerminalLinkAction } from './terminal-link-action-request'
+import { showFileLinkUnresolvedToast } from '@/components/native-chat/native-chat-file-link-toasts'
 import { resolveTerminalFileLink } from '../../../../shared/terminal-links'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 import type { LinkHandlerDeps } from './terminal-link-handlers'
 import { classifyTerminalOscLinkTarget } from '../../../../shared/terminal-osc-link-target'
 import {
   isTerminalLinkActionActivation,
+  isTerminalLinkContextMenuActivation,
   isTerminalLinkDirectActivation
 } from './terminal-link-activation'
 import {
@@ -13,7 +22,10 @@ import {
 } from './terminal-url-link-hit-testing'
 import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
 import type { TerminalLinkActionContext } from './terminal-link-action-request'
-import { handleTerminalFileLink } from './terminal-file-link-actions'
+import {
+  handleTerminalFileLink,
+  type TerminalFileLinkActionDeps
+} from './terminal-file-link-actions'
 
 type TerminalLinkEvent = Pick<MouseEvent, 'metaKey' | 'ctrlKey'> &
   Partial<
@@ -26,12 +38,16 @@ type TerminalLinkEvent = Pick<MouseEvent, 'metaKey' | 'ctrlKey'> &
       | 'shiftKey'
       | 'preventDefault'
       | 'stopPropagation'
+      | 'type'
     >
   >
 
 function isDesktopOscLinkActivation(event: TerminalLinkEvent | undefined): boolean {
   if (!event) {
     return false
+  }
+  if (isTerminalLinkContextMenuActivation(event)) {
+    return true
   }
   if ('button' in event && event.button !== undefined && event.button !== 0) {
     return false
@@ -50,6 +66,10 @@ export function handleOscLink(
         'runtimeEnvironmentId' | 'startupCwd' | 'terminalHomePath' | 'wslDistro' | 'sourceTabId'
       >
     > & {
+      commit?: TerminalLinkCommit
+      fileContext?: TerminalFileLinkActionDeps['fileContext']
+      onInternalOpen?: () => void
+      onOpenFailure?: TerminalFileLinkActionDeps['onOpenFailure']
       sourceOwner?: HttpLinkSourceOwner
       requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
       linkActionContext?: TerminalLinkActionContext | null
@@ -69,9 +89,9 @@ export function handleOscLink(
 
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the link handlers read only the MouseEvent fields TerminalLinkEvent picks.
   const mouseEvent = event as MouseEvent
-  const cwd = deps.startupCwd || deps.worktreePath
+  const cwd = deps.startupCwd ?? deps.worktreePath
   const target = classifyTerminalOscLinkTarget(rawText, {
-    windowsPathsFirst: isWindowsAbsolutePathLike(cwd),
+    windowsPathsFirst: isWindowsAbsolutePathLike(cwd || deps.worktreePath),
     // Reject foreign file hosts except standard Windows UNC file://server/share paths.
     allowUncHost:
       navigator.userAgent.includes('Windows') &&
@@ -91,9 +111,13 @@ export function handleOscLink(
         requestOpenLinksInAppPreference: deps.requestOpenLinksInAppPreference,
         linkActionContext: deps.linkActionContext,
         actionDestinations: deps.actionDestinations,
+        commit: deps.commit,
         actionDestination: rawText
       })
     )
+  }
+  if (!cwd && !deps.worktreePath) {
+    return false
   }
   const file =
     target?.kind === 'file-url'
@@ -106,6 +130,21 @@ export function handleOscLink(
         ? resolveTerminalFileLink(target.link, cwd, deps.terminalHomePath)
         : null
   if (!file) {
+    if (target?.kind === 'path') {
+      const report = (): void => showFileLinkUnresolvedToast(target.link.pathText)
+      if (isTerminalLinkDirectActivation(mouseEvent)) {
+        return commitTerminalLinkActivation(
+          mouseEvent,
+          prepareTerminalLinkActivation(mouseEvent, {
+            kind: 'unresolved',
+            direct: report,
+            details: report
+          }),
+          deps.commit ?? deps.linkActionContext?.commit
+        )
+      }
+      return finish(requestTerminalLinkAction(mouseEvent, deps.linkActionContext, report))
+    }
     return false
   }
   return finish(
@@ -114,7 +153,12 @@ export function handleOscLink(
       file.line,
       file.column,
       mouseEvent,
-      deps,
+      {
+        ...deps,
+        onOpenFailure:
+          deps.onOpenFailure ??
+          ((failure) => showFileLinkOpenFailureToast(file.absolutePath, failure))
+      },
       deps.linkActionContext,
       rawText
     )

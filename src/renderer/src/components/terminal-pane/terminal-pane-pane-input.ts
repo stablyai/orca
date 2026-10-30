@@ -35,6 +35,7 @@ type PaneInputContext = {
   pane: Pick<ManagedPane, 'id' | 'terminal'>
   managerRef: React.RefObject<PaneManager | null>
   paneKittyKeyboardModesRef: UseTerminalPaneLifecycleDeps['paneKittyKeyboardModesRef']
+  recordLinkKeyEvent?: (event: KeyboardEvent) => void
   settingsRef: React.RefObject<Record<string, unknown> | null | undefined>
   imeCompositionDisposablesRef: React.RefObject<Map<number, IDisposable>>
   imeNativeTextForwarderDisposablesRef: React.RefObject<Map<number, IDisposable>>
@@ -182,9 +183,10 @@ export function installTerminalPaneInputHandling(context: PaneInputContext): voi
     return !shouldBypass
   }
 
-  pane.terminal.attachCustomKeyEventHandler((event) =>
-    kittyOrphanKeyupGuard.filter(event, resolveXtermKeyEvent(event), getKittyKeyboardFlags())
-  )
+  pane.terminal.attachCustomKeyEventHandler((event) => {
+    context.recordLinkKeyEvent?.(event)
+    return kittyOrphanKeyupGuard.filter(event, resolveXtermKeyEvent(event), getKittyKeyboardFlags())
+  })
 }
 
 export type { PaneInputContext }

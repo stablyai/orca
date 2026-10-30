@@ -1,3 +1,4 @@
+import { commitPreparedLinkForRoutingTest } from './terminal-link-handlers-test-fixtures'
 import type { ILink } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -108,6 +109,7 @@ async function collectLinks(
     getTerminal: () => terminal as never,
     getRuntimeEnvironmentId: () => runtimeEnvironmentId,
     linkTooltip: { textContent: '', style: { display: '' } } as unknown as HTMLElement,
+    getLinkCommit: () => linkActionContext?.commit ?? commitPreparedLinkForRoutingTest,
     getLinkActionContext: () => linkActionContext ?? null
   })
   return await new Promise<ILink[]>((resolve) => {
@@ -350,7 +352,7 @@ describe('createTerminalHandleLinkProvider', () => {
     const links = await collectLinks([makeBufferLine('Worker: term_worker')], 1, null, {
       paneId: 4,
       pointerGesture: { canRequestAction: () => true, dispose: vi.fn() },
-      claimPtyMouse: vi.fn(() => true),
+      commit: vi.fn(commitPreparedLinkForRoutingTest),
       request,
       focusTerminal: vi.fn()
     })

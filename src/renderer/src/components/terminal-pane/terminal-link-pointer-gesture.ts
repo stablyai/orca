@@ -15,7 +15,9 @@ type PendingGesture = {
   moved: boolean
 }
 
-export function installTerminalLinkPointerGesture(terminal: Terminal): TerminalLinkPointerGesture {
+export function installTerminalLinkPointerGesture(
+  terminal: Pick<Terminal, 'element' | 'hasSelection'>
+): TerminalLinkPointerGesture {
   const terminalElement = terminal.element
   const ownerDocument = terminalElement?.ownerDocument
   const ownerWindow = ownerDocument?.defaultView

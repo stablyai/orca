@@ -52,12 +52,16 @@ type TerminalHtmlFileBrowserTarget = FileBrowserLinkTarget & {
   canOpenWithSystemDefault: boolean
   linkContext?: BrowserLinkOpenContext
   refuseOpenInSourceGroup?: () => boolean
+  onInternalOpen?: () => void
 }
 
 /** Returns true when the HTML link was opened or deliberately refused. */
 export function openTerminalHtmlFileInBrowser(params: TerminalHtmlFileBrowserTarget): boolean {
   if (params.canOpenWithSystemDefault) {
     void openResolvedHtmlFileInBrowser(params).then((outcome) => {
+      if (outcome === null || outcome.status === 'opened') {
+        params.onInternalOpen?.()
+      }
       if (outcome?.status === 'refused' || outcome?.status === 'unsupported') {
         params.refuseOpenInSourceGroup?.()
       }
@@ -74,6 +78,7 @@ export function openTerminalHtmlFileInBrowser(params: TerminalHtmlFileBrowserTar
     return false
   }
   if (!params.linkContext) {
+    params.onInternalOpen?.()
     activateAndRevealWorkspace(params.worktreeId, { providesInitialSurface: true })
   }
   openFileInBrowserTab({
@@ -84,6 +89,9 @@ export function openTerminalHtmlFileInBrowser(params: TerminalHtmlFileBrowserTar
       ? {
           linkContext: params.linkContext,
           onLinkOutcome: (outcome) => {
+            if (outcome.status === 'opened') {
+              params.onInternalOpen?.()
+            }
             if (outcome.status === 'refused' || outcome.status === 'unsupported') {
               params.refuseOpenInSourceGroup?.()
             }

@@ -54,6 +54,7 @@ const imeHarness = vi.hoisted(() => ({
 
 vi.mock('@xterm/xterm', () => ({
   Terminal: class {
+    options = {}
     cols = 80
     rows = 24
     buffer = { active: { cursorY: 0 } }
@@ -147,10 +148,48 @@ vi.mock('@/store', () => {
   return { useAppStore }
 })
 
-// Paste encoding is under test here; owner routing is covered by AgentTerminalPreview.test.tsx.
-vi.mock('./terminal-preview-api', () => ({
-  terminalPreviewApiFor: () => window.api.terminalPreview
-}))
+// Clipboard encoding uses the captured preview API; paired discovery is covered separately.
+vi.mock('./terminal-preview-api', async () => {
+  const { createPtyInputSourceBinding } = await import('../terminal-pane/pty-input-source')
+  return {
+    terminalPreviewApiFor: () => window.api.terminalPreview,
+    bindTerminalPreviewApiFor: (ptyId: string) => {
+      const api = window.api.terminalPreview
+      const source = createPtyInputSourceBinding<string>({
+        same: (a, b) => a === b,
+        refine: (_, next) => next,
+        create: (endpoint, isCurrent) => ({
+          ptyId: endpoint(),
+          isCurrent,
+          sendInput: (data) => {
+            if (!isCurrent()) {
+              return false
+            }
+            void api.input(endpoint(), data)
+            return true
+          },
+          sendInputImmediate: (data) => {
+            if (!isCurrent()) {
+              return false
+            }
+            void api.input(endpoint(), data)
+            return true
+          }
+        })
+      })
+      source.change(ptyId, () => {})
+      return {
+        ...api,
+        getInputSource: source.current,
+        observeInputSource: source.observe,
+        unsubscribe: async (id: string) => {
+          source.change(null, () => {}, true)
+          await api.unsubscribe(id)
+        }
+      }
+    }
+  }
+})
 
 import { AgentTerminalPreview } from './AgentTerminalPreview'
 

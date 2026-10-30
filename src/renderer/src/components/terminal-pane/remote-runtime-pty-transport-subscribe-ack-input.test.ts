@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const appStore = vi.hoisted(() => ({
   getState: vi.fn(() => {
@@ -27,6 +28,7 @@ let resolvedPaneHandle = 'terminal-1'
 
 const {
   runtimeSubscribe,
+  runtimeCall,
   subscriptionSendBinary,
   latestSubscribePayload,
   emitSnapshot,
@@ -75,8 +77,22 @@ function viewportAndInputFrames(): string[] {
   })
 }
 
-function acknowledgeSubscribe(streamId: number): void {
-  subscriptionCallbacks?.onResponse({ ok: true, result: { type: 'subscribed', streamId } })
+function acknowledgeSubscribe(streamId: number, incarnationId?: string): void {
+  subscriptionCallbacks?.onResponse({
+    ok: true,
+    result: {
+      type: 'subscribed',
+      streamId,
+      ...(incarnationId
+        ? {
+            terminal: latestSubscribePayload().terminal,
+            launchResult: { ptyId: 'pty', incarnationId },
+            capabilities: { inputAck: 1 },
+            inputLedgerId: 'ledger'
+          }
+        : {})
+    }
+  })
 }
 
 /** Connects, drops the link, and waits for the recovery resubscribe to go out. */
@@ -261,4 +277,138 @@ describe('remote recovery input at the subscribed ack', () => {
     await vi.waitFor(() => expect(transport.isConnected()).toBe(true))
     transport.destroy?.()
   })
+})
+
+it('reconciles contradictory current ACK proof without adopting launch metadata or relabelling mixed held input', async () => {
+  const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+  const { installTerminalLinkPtyMouseSuppression } =
+    await import('./terminal-link-pty-mouse-suppression')
+  const launches = vi.fn()
+  const unavailable = vi.fn()
+  const defaultCall = runtimeCall.getMockImplementation()
+  let resolvedIncarnation = 'i1'
+  let resolutionGate: Promise<void> | null = null
+  runtimeCall.mockImplementation(async (request: { method: string; params?: unknown }) => {
+    if (request.method !== 'terminal.resolvePane') {
+      return defaultCall?.(request)
+    }
+    if (resolutionGate) {
+      await resolutionGate
+    }
+    return {
+      ok: true,
+      result: {
+        terminal: {
+          handle: 'terminal-1',
+          tabId: 'tab-1',
+          leafId: 'pane:1',
+          worktreeId: 'wt-1',
+          incarnationId: resolvedIncarnation
+        }
+      }
+    }
+  })
+  const transport = createRemoteRuntimePtyTransport('env-1', {
+    worktreeId: 'wt-1',
+    tabId: 'tab-1',
+    leafId: 'pane:1'
+  })
+  const element = document.createElement('div')
+  document.body.append(element)
+  const owner = installTerminalLinkPtyMouseSuppression(
+    { element, clearSelection: vi.fn() },
+    { candidate: () => 'link', eligible: () => true, canContinue: () => true }
+  )
+  const observe = transport.observeInputSource?.({
+    beforeChange: owner.invalidateSource,
+    afterChange: (source) => {
+      const forward = (text: string): void => {
+        source?.sendInput(text, 'driving')
+      }
+      owner.bindSource(
+        source && { isCurrent: source.isCurrent, user: forward, unclassified: forward }
+      )
+    }
+  })
+  element.addEventListener('mousedown', () =>
+    owner.handlePtyInput(
+      '\x1b[<0;1;1M',
+      () => {
+        throw new Error('Ordinary route must not acquire a retained frame')
+      },
+      true
+    )
+  )
+  try {
+    await transport.connect({
+      url: '',
+      callbacks: { onLaunchResult: launches, onWriteUnavailable: unavailable }
+    })
+    await vi.waitFor(() => expect(latestSubscribePayload()).toBeDefined())
+    acknowledgeSubscribe(latestSubscribePayload().streamId, 'i1')
+    emitSnapshot(latestSubscribePayload().streamId, 'prompt$ ')
+    const a = transport.getInputSource?.()
+    if (!a) {
+      throw new Error('Missing i1')
+    }
+    launches.mockClear()
+    // Below-entry debounce and a genuinely retained owner frame coexist with ordinary outage keys.
+    a.sendInput('old-debounce', 'driving')
+    subscriptionCallbacks?.onError?.({
+      code: 'remote_runtime_unavailable',
+      message: 'Remote runtime connection closed.'
+    })
+    transport.sendInput('ordinary-held', 'driving')
+    expect(a.claimViewport?.(120, 40)).toBe(true)
+    await vi.waitFor(() => expect(subscribeFrameCount()).toBe(2))
+    element.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, buttons: 1 }))
+    acknowledgeSubscribe(latestSubscribePayload().streamId, 'i2')
+    const b = transport.getInputSource?.()
+    if (!b) {
+      throw new Error('Missing fresh i2')
+    }
+    expect(a.isCurrent()).toBe(false)
+    expect(b).not.toBe(a)
+    expect(b.endpoint).toMatchObject({ incarnationId: 'i2' })
+    expect(launches).not.toHaveBeenCalled()
+    expect(viewportAndInputFrames()).not.toContain('claim 120x40')
+    expect(b.claimViewport?.(132, 50)).toBe(true)
+    expect(viewportAndInputFrames()).toContain('claim 132x50')
+    await vi.waitFor(() => expect(inputFrameTexts().join('')).toContain('ordinary-held'))
+    expect(inputFrameTexts().join('')).not.toContain('old-debounce')
+    expect(inputFrameTexts().join('')).not.toContain('\x1b[<')
+    b.sendInput('i2-live', 'driving')
+    await vi.waitFor(() => expect(inputFrameTexts().join('')).toContain('i2-live'))
+    // Cached same-h attach and snapshot preserve proof before a fresh resolver adopts metadata.
+    let releaseResolution!: () => void
+    resolutionGate = new Promise<void>((resolve) => {
+      releaseResolution = resolve
+    })
+    emitSnapshot(latestSubscribePayload().streamId, 'still i2')
+    transport.attach({
+      existingPtyId: 'remote:env-1@@terminal-1',
+      callbacks: { onWriteUnavailable: unavailable }
+    })
+    expect(transport.getInputSource?.()).toBe(b)
+    expect(b.isCurrent()).toBe(true)
+    transport.sendInput('ordinary-again', 'driving')
+    b.sendInput('i2-held', 'driving')
+    resolvedIncarnation = 'i2'
+    releaseResolution()
+    await vi.waitFor(() => expect(subscribeFrameCount()).toBe(3))
+    acknowledgeSubscribe(latestSubscribePayload().streamId, 'i2')
+    emitSnapshot(latestSubscribePayload().streamId, 'i2 prompt$ ')
+    await vi.waitFor(() => expect(inputFrameTexts().join('')).toContain('i2-held'))
+    expect(inputFrameTexts().join('')).not.toContain('ordinary-again')
+    expect(transport.getInputSource?.()).toBe(b)
+    expect(transport.sendInput('ordinary-fresh-i2', 'driving')).toBe(true)
+    await vi.waitFor(() => expect(inputFrameTexts().join('')).toContain('ordinary-fresh-i2'))
+    expect(transport.getInputSource?.()?.endpoint).toMatchObject({ incarnationId: 'i2' })
+    expect(unavailable).not.toHaveBeenCalled()
+  } finally {
+    owner.dispose()
+    observe?.dispose()
+    transport.destroy?.()
+    element.remove()
+  }
 })

@@ -1,28 +1,18 @@
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
-import { act, cleanup, render, waitFor } from '@testing-library/react'
+import { useState } from 'react'
+import { AgentTerminalDialog } from './AgentTerminalDialog'
+import type { DashboardCard } from '../../../../shared/dashboard-snapshot'
+import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { previewContext, type PreviewTestTerminal } from './preview-terminal-emulator-test-fixture'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import type { TerminalPreviewApi } from '../../../../preload/api/dashboard-api'
 import type { TerminalPreviewConnectResult } from '../../../../shared/terminal-preview'
 
 const terminalHarness = vi.hoisted(() => ({
-  instances: [] as {
-    write: ReturnType<typeof vi.fn>
-    writeCallbacks: (() => void)[]
-    onDataListener: ((data: string) => void) | null
-    dispose: ReturnType<typeof vi.fn>
-    resize: ReturnType<typeof vi.fn>
-    reset: ReturnType<typeof vi.fn>
-    paste: ReturnType<typeof vi.fn>
-    input: ReturnType<typeof vi.fn>
-    scrollToTop: ReturnType<typeof vi.fn>
-    scrollToBottom: ReturnType<typeof vi.fn>
-    selectAll: ReturnType<typeof vi.fn>
-    modes: { bracketedPasteMode: boolean }
-    selectionText: string
-    customKeyHandler: ((event: KeyboardEvent) => boolean) | null
-  }[],
+  instances: new Array<PreviewTestTerminal>(),
   userInputListener: null as (() => void) | null,
   userInputDispose: vi.fn()
 }))
@@ -30,6 +20,8 @@ const terminalHarness = vi.hoisted(() => ({
 const platformState = vi.hoisted(() => ({ value: 'linux' }))
 const storeState = vi.hoisted(() => ({
   settings: null,
+  openSettingsPage: vi.fn(),
+  openSettingsTarget: vi.fn(),
   keybindings: {} as Record<string, string[]>
 }))
 
@@ -44,56 +36,16 @@ const imeHarness = vi.hoisted(() => ({
   claimResult: false
 }))
 
-vi.mock('@xterm/xterm', () => ({
-  Terminal: class {
-    cols = 80
-    rows = 24
-    buffer = { active: { cursorY: 0 } }
-    writeCallbacks: (() => void)[] = []
-    onDataListener: ((data: string) => void) | null = null
-    customKeyHandler: ((event: KeyboardEvent) => boolean) | null = null
-    selectionText = ''
-    write = vi.fn((_data: string, callback?: () => void) => {
-      if (callback) {
-        this.writeCallbacks.push(callback)
+vi.mock('@xterm/xterm', async () => {
+  const { PreviewTestTerminal } = await import('./preview-terminal-emulator-test-fixture')
+  return {
+    Terminal: class extends PreviewTestTerminal {
+      constructor() {
+        super(terminalHarness)
       }
-    })
-    open = vi.fn()
-    focus = vi.fn()
-    dispose = vi.fn()
-    resize = vi.fn()
-    reset = vi.fn()
-    modes = { bracketedPasteMode: false }
-    paste = vi.fn((data: string) => {
-      terminalHarness.userInputListener?.()
-      this.onDataListener?.(data)
-    })
-    input = vi.fn((data: string) => {
-      terminalHarness.userInputListener?.()
-      this.onDataListener?.(data)
-    })
-    element = document.createElement('div')
-    unicode = { activeVersion: '6', versions: ['6', '11'], register: vi.fn() }
-    loadAddon = vi.fn()
-    attachCustomWheelEventHandler = vi.fn()
-    scrollToTop = vi.fn()
-    scrollToBottom = vi.fn()
-    selectAll = vi.fn()
-    getSelection = vi.fn(() => this.selectionText)
-    hasSelection = vi.fn(() => this.selectionText !== '')
-    attachCustomKeyEventHandler = vi.fn((handler: (event: KeyboardEvent) => boolean) => {
-      this.customKeyHandler = handler
-    })
-    onData = vi.fn((listener: (data: string) => void) => {
-      this.onDataListener = listener
-      return { dispose: vi.fn() }
-    })
-
-    constructor() {
-      terminalHarness.instances.push(this)
     }
   }
-}))
+})
 vi.mock(import('@/lib/pane-manager/pane-terminal-options'), async (importOriginal) => ({
   ...(await importOriginal()),
   buildDefaultTerminalOptions: () => ({})
@@ -226,6 +178,90 @@ describe('AgentTerminalPreview', () => {
     multiplexerHarness.subscriptions.length = 0
     vi.clearAllMocks()
   })
+
+  it('opens the shared link actions from a preview right-click and launches the chosen browser', async () => {
+    const openUrl = vi.fn(async () => {})
+    Object.assign(window.api, { shell: { openUrl } })
+    const view = render(
+      <TooltipProvider>
+        <AgentTerminalPreview ptyId="pty-1" />
+      </TooltipProvider>
+    )
+    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+    const terminal = terminalHarness.instances[0]!
+    const url = 'https://github.com/stablyai/orca/pull/34229'
+    act(() => previewContext(terminal, url))
+    expect(terminal.clearSelection).toHaveBeenCalledOnce()
+    const browser = await view.findByRole('button', { name: /System Browser/ })
+    expect(view.queryByRole('button', { name: 'Terminal link settings' })).toBeNull()
+    fireEvent.click(browser)
+    expect(openUrl).toHaveBeenCalledExactlyOnceWith(url)
+    await waitFor(() => expect(view.queryByRole('button', { name: /System Browser/ })).toBeNull())
+  })
+
+  it('hands in-window Settings navigation to the host before opening Settings', async () => {
+    const onNavigate = vi.fn()
+    const card: DashboardCard = {
+      paneKey: 'tab:leaf',
+      ptyId: 'pty-1',
+      agentType: 'codex',
+      bucket: 'working',
+      dotState: 'working',
+      task: 'task',
+      repoId: 'repo',
+      worktreeId: 'wt',
+      tabId: 'tab',
+      leafId: 'leaf',
+      repoName: 'Repo',
+      worktreeName: 'Workspace',
+      startedAt: 0,
+      finishedAt: null,
+      stateChangedAt: 0,
+      unseen: false
+    }
+    function Host() {
+      const [open, setOpen] = useState(true)
+      return (
+        <TooltipProvider>
+          <AgentTerminalDialog
+            card={open ? card : null}
+            onOpenChange={setOpen}
+            onReveal={() => {}}
+            onNavigate={onNavigate}
+          />
+        </TooltipProvider>
+      )
+    }
+    const view = render(<Host />)
+    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+    const terminal = terminalHarness.instances[0]!
+    act(() => previewContext(terminal, 'https://example.com'))
+    expect(terminal.clearSelection).toHaveBeenCalledOnce()
+    fireEvent.click(await view.findByRole('button', { name: 'Terminal link settings' }))
+    expect(onNavigate).toHaveBeenCalledOnce()
+    await waitFor(() => expect(view.queryByRole('dialog')).toBeNull())
+    expect(storeState.openSettingsTarget).toHaveBeenCalledOnce()
+    expect(storeState.openSettingsPage).toHaveBeenCalledOnce()
+    expect(onNavigate.mock.invocationCallOrder[0]).toBeLessThan(
+      storeState.openSettingsPage.mock.invocationCallOrder[0]!
+    )
+  })
+
+  it.each(['absent', 'no-link'] as const)(
+    'refuses preview context without %s press authority',
+    async (origin) => {
+      const view = render(
+        <TooltipProvider>
+          <AgentTerminalPreview ptyId="pty-1" />
+        </TooltipProvider>
+      )
+      await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+      const terminal = terminalHarness.instances[0]!
+      act(() => previewContext(terminal, 'https://example.com', origin))
+      expect(view.queryByRole('button', { name: /System Browser/ })).toBeNull()
+      expect(terminal.clearSelection).not.toHaveBeenCalled()
+    }
+  )
 
   it('routes signaled user input while a live write parses and drops parser replies', async () => {
     render(<AgentTerminalPreview ptyId="pty-1" />)
@@ -736,11 +772,12 @@ describe('AgentTerminalPreview', () => {
     Object.defineProperty(box, 'clientWidth', { configurable: true, value: 900 })
     Object.defineProperty(box, 'clientHeight', { configurable: true, value: 480 })
     // 80×24 grid rendered at 800×384 → 10×16 cells → the box holds 90×30.
-    const screen = document.createElement('div')
-    screen.className = 'xterm-screen'
+    const screen = host.querySelector<HTMLElement>('.xterm-screen')
+    if (!screen) {
+      throw new Error('Missing first preview screen')
+    }
     Object.defineProperty(screen, 'offsetWidth', { configurable: true, value: 800 })
     Object.defineProperty(screen, 'offsetHeight', { configurable: true, value: 384 })
-    host.appendChild(screen)
 
     await vi.advanceTimersByTimeAsync(200)
     expect(fit).toHaveBeenCalledTimes(1)

@@ -1,3 +1,4 @@
+import { commitPreparedLinkForRoutingTest } from './terminal-link-handlers-test-fixtures'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   registerHttpLinkStoreAccessor,
@@ -9,6 +10,7 @@ import {
   type TerminalLinkActionContext,
   type TerminalLinkActionRequest
 } from './terminal-link-action-request'
+import { isTerminalLinkDirectActivation } from './terminal-link-activation'
 import { handleOscLink } from './terminal-osc-link-routing'
 import { handleTerminalHttpLink } from './terminal-url-link-hit-testing'
 
@@ -40,7 +42,7 @@ function actionContext(request = vi.fn()): TerminalLinkActionContext {
   return {
     paneId: 7,
     pointerGesture: { canRequestAction: () => true, dispose: vi.fn() },
-    claimPtyMouse: vi.fn(() => true),
+    commit: vi.fn(commitPreparedLinkForRoutingTest),
     request,
     focusTerminal: vi.fn()
   }
@@ -72,11 +74,39 @@ describe('terminal link action routing', () => {
     expect(closeTerminalLinkActionRequest(first, first)).toBeNull()
   })
 
+  it.each([
+    ['Macintosh', 'metaKey'],
+    ['Windows', 'ctrlKey']
+  ] as const)(
+    'requests %s contextmenu actions with its modifier and still honors PTY claim refusal',
+    (platform, modifier) => {
+      vi.stubGlobal('navigator', { userAgent: platform })
+      const event = plainEvent()
+      Object.defineProperty(event, 'type', { value: 'contextmenu' })
+      Object.defineProperty(event, modifier, { value: true })
+      expect(isTerminalLinkDirectActivation(event)).toBe(false)
+      const request = vi.fn()
+      const context = actionContext(request)
+      context.plainClickBehavior = 'none'
+      context.pointerGesture.canRequestAction = () => false
+      const details = {
+        destination: 'https://example.com',
+        kind: 'url' as const,
+        primary: { label: 'Open', run: vi.fn() }
+      }
+      expect(requestTerminalLinkAction(event, context, details)).toBe(true)
+      expect(request).toHaveBeenCalledOnce()
+      context.commit = () => false
+      expect(requestTerminalLinkAction(event, context, details)).toBe(false)
+      expect(request).toHaveBeenCalledOnce()
+    }
+  )
+
   it('claims PTY mouse ownership only after the pointer gesture is eligible', () => {
-    const claimPtyMouse = vi.fn(() => true)
+    const commit = vi.fn(commitPreparedLinkForRoutingTest)
     const request = vi.fn()
     const context = actionContext(request)
-    context.claimPtyMouse = claimPtyMouse
+    context.commit = commit
 
     expect(
       requestTerminalLinkAction(plainEvent(), context, {
@@ -85,10 +115,8 @@ describe('terminal link action routing', () => {
         primary: { label: 'Open', run: vi.fn() }
       })
     ).toBe(true)
-    expect(claimPtyMouse).toHaveBeenCalledOnce()
-    expect(claimPtyMouse.mock.invocationCallOrder[0]).toBeLessThan(
-      request.mock.invocationCallOrder[0]
-    )
+    expect(commit).toHaveBeenCalledOnce()
+    expect(commit.mock.invocationCallOrder[0]).toBeLessThan(request.mock.invocationCallOrder[0])
   })
 
   it('opens the primary destination directly when plain-click mode is enabled', () => {
@@ -136,7 +164,7 @@ describe('terminal link action routing', () => {
         primary: { label: 'Open', run }
       })
     ).toBe(false)
-    expect(context.claimPtyMouse).not.toHaveBeenCalled()
+    expect(context.commit).not.toHaveBeenCalled()
     expect(event.preventDefault).not.toHaveBeenCalled()
     expect(context.request).not.toHaveBeenCalled()
     expect(run).not.toHaveBeenCalled()
@@ -168,13 +196,13 @@ describe('terminal link action routing', () => {
         primary: { label: 'Open', run: vi.fn() }
       })
     ).toBe(false)
-    expect(context.claimPtyMouse).not.toHaveBeenCalled()
+    expect(context.commit).not.toHaveBeenCalled()
     expect(context.request).not.toHaveBeenCalled()
   })
 
   it('leaves the action closed when the child already owns the gesture', () => {
     const context = actionContext()
-    context.claimPtyMouse = vi.fn(() => false)
+    context.commit = vi.fn(() => false)
 
     expect(
       requestTerminalLinkAction(plainEvent(), context, {
@@ -193,6 +221,7 @@ describe('terminal link action routing', () => {
     expect(
       handleTerminalHttpLink('https://example.com/path', event, {
         worktreeId: 'wt-1',
+        commit: commitPreparedLinkForRoutingTest,
         linkActionContext: actionContext(request),
         actionDestinations: { primary: 'system', alternate: 'orca' }
       })
@@ -229,6 +258,7 @@ describe('terminal link action routing', () => {
 
     handleTerminalHttpLink('https://example.com/path', plainEvent(), {
       worktreeId: 'wt-1',
+      commit: commitPreparedLinkForRoutingTest,
       linkActionContext: actionContext(request),
       actionDestinations: { primary: 'orca', alternate: 'system' }
     })
@@ -255,6 +285,7 @@ describe('terminal link action routing', () => {
 
     handleTerminalHttpLink('https://example.com/path', plainEvent(), {
       worktreeId: 'wt-1',
+      commit: commitPreparedLinkForRoutingTest,
       sourceOwner: { kind: 'ssh', connectionId: 'ssh-1' },
       linkActionContext: actionContext(request),
       actionDestinations: { primary: 'system' }
@@ -270,6 +301,7 @@ describe('terminal link action routing', () => {
 
     handleTerminalHttpLink('https://example.com/path', plainEvent(), {
       worktreeId: 'wt-1',
+      commit: commitPreparedLinkForRoutingTest,
       sourceOwner: { kind: 'runtime', runtimeEnvironmentId: 'env-1' },
       linkActionContext: actionContext(request),
       actionDestinations: { primary: 'system', alternate: 'orca' }
@@ -294,6 +326,7 @@ describe('terminal link action routing', () => {
 
     handleTerminalHttpLink(url, plainEvent(), {
       worktreeId: 'wt-1',
+      commit: commitPreparedLinkForRoutingTest,
       sourceOwner: { kind: 'ssh', connectionId: 'ssh-1' },
       linkActionContext: actionContext(request),
       actionDestinations: { primary: 'system', alternate: 'orca' }
@@ -316,6 +349,7 @@ describe('terminal link action routing', () => {
 
     handleTerminalHttpLink('https://example.com/path', event, {
       worktreeId: 'wt-1',
+      commit: commitPreparedLinkForRoutingTest,
       actionDestinations: { primary: 'system', alternate: 'orca' }
     })
 
@@ -333,6 +367,7 @@ describe('terminal link action routing', () => {
 
     handleTerminalHttpLink('https://example.com/path', event, {
       worktreeId: 'wt-1',
+      commit: commitPreparedLinkForRoutingTest,
       sourceOwner: { kind: 'runtime', runtimeEnvironmentId: 'env-1' },
       actionDestinations: { primary: 'system' }
     })
@@ -348,6 +383,7 @@ describe('terminal link action routing', () => {
     expect(
       handleOscLink(destination, plainEvent(), {
         worktreeId: 'wt-1',
+        commit: commitPreparedLinkForRoutingTest,
         worktreePath: '/repo',
         startupCwd: '/repo',
         linkActionContext: actionContext(request)
@@ -361,6 +397,7 @@ describe('terminal link action routing', () => {
 
     handleOscLink('file:///repo/my%20file.ts#L4', plainEvent(), {
       worktreeId: 'wt-1',
+      commit: commitPreparedLinkForRoutingTest,
       worktreePath: '/repo',
       startupCwd: '/repo',
       linkActionContext: actionContext(request)

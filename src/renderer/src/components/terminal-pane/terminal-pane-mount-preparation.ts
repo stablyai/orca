@@ -150,7 +150,7 @@ export function prepareTerminalPaneMount(
     return {
       paneId,
       pointerGesture,
-      claimPtyMouse: suppression.claimAction,
+      commit: suppression.commit,
       request: deps.requestTerminalLinkAction,
       focusTerminal: () => pane.terminal.focus(),
       plainClickBehavior,
@@ -177,6 +177,8 @@ export function prepareTerminalPaneMount(
       ),
     getRuntimeTerminalHandleForPane: (id) => resolveTerminalRuntimeHandle(paneTransports.get(id)),
     getLinkActionContext,
+    getLinkCommit: (paneId) =>
+      refs.httpLinkClickFallbackDisposablesRef.current.get(paneId)?.ptyMouseSuppression.commit,
     sourceTabId: deps.tabId
   }
   let resizeRaf: number | null = null
@@ -238,6 +240,7 @@ export function prepareTerminalPaneMount(
     getManager: () => deps.managerRef.current,
     getContainer: () => deps.containerRef.current,
     getPtyIdForPane: (paneId) => paneTransports.get(paneId)?.getPtyId() ?? null,
+    getLinkContextForPane: (paneId) => ({ startupCwd: getPaneLinkCwd(paneId), terminalHomePath }),
     getTabWideAgentHintLeafId: deps.getTabWideAgentHintLeafId
   })
   const fileOpenLinkHint = getTerminalFileOpenHint()

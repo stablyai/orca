@@ -15,9 +15,11 @@ vi.mock('./AgentTerminalPreview', () => ({
   AgentTerminalPreview: ({
     ptyId,
     terminalInput,
+    onNavigate,
     className
   }: {
     ptyId: string
+    onNavigate?: () => void
     terminalInput?: DashboardCardTerminalInput | null
     className?: string
   }) => (
@@ -26,7 +28,9 @@ vi.mock('./AgentTerminalPreview', () => ({
       data-pty-id={ptyId}
       data-terminal-input={terminalInput === null ? 'null' : JSON.stringify(terminalInput)}
       className={className}
-    />
+    >
+      <button onClick={onNavigate}>Open internal link</button>
+    </div>
   )
 }))
 
@@ -67,6 +71,22 @@ afterEach(() => {
 
 // This prop is the only path carrying relayed host-input facts into the preview; omission silently falls back to client-OS routing.
 describe('AgentTerminalDialog', () => {
+  it('closes its preview and hands foreground link navigation to its enclosing host', () => {
+    const onOpenChange = vi.fn()
+    const onNavigate = vi.fn()
+    render(
+      <AgentTerminalDialog
+        card={card()}
+        onOpenChange={onOpenChange}
+        onReveal={() => {}}
+        onNavigate={onNavigate}
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Open internal link' }))
+    expect(onOpenChange).toHaveBeenCalledExactlyOnceWith(false)
+    expect(onNavigate).toHaveBeenCalledOnce()
+  })
+
   it("hands the card's relayed host-input profile to the preview terminal", () => {
     render(
       <AgentTerminalDialog

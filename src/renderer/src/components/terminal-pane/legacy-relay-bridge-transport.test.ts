@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LegacyRelayBridgedPane } from '../../../../shared/legacy-relay-bridge-contract'
+import { createLegacyRelayTestInner } from './legacy-relay-input-source-test-fixture'
 import type { PtyTransport } from './pty-transport-types'
 
 const PTY = 'ssh:ssh-box@@pty-1'
@@ -175,6 +176,10 @@ describe('a runtime pane bridged to an older relay’s terminal', () => {
       replay: 'SCREEN'
     })
     expect(transport.getPtyId()).toBe(PTY)
+    const source = transport.getInputSource?.()
+    expect(source?.isCurrent()).toBe(true)
+    expect(source?.sendInput('scoped-positive', 'driving')).toBe(true)
+    expect(bridge.write).toHaveBeenCalledWith({ ptyId: PTY, data: 'scoped-positive' })
     expect(transport.sendInput('ls\r', 'driving')).toBe(true)
     expect(bridge.write).toHaveBeenCalledWith({ ptyId: PTY, data: 'ls\r' })
     transport.resize(100, 30)
@@ -184,6 +189,10 @@ describe('a runtime pane bridged to an older relay’s terminal', () => {
     expect(cb.onData.mock.calls).toEqual([['out']])
     bridge.exit.forEach((listener) => listener({ ptyId: PTY, code: 0 }))
     expect(cb.onExit).toHaveBeenCalledWith(0)
+    expect(source?.isCurrent()).toBe(false)
+    bridge.write.mockClear()
+    expect(source?.sendInput('obsolete', 'driving')).toBe(false)
+    expect(bridge.write).not.toHaveBeenCalled()
     expect(bridge.detach).toHaveBeenCalledWith({ ptyId: PTY, acquisitionId: 1 })
     expect(inner.connect).not.toHaveBeenCalled()
   })
@@ -250,9 +259,13 @@ describe('a runtime pane bridged to an older relay’s terminal', () => {
       state: 'live'
     }
     publishPanes([live])
+    const source = transport.getInputSource?.()
+    expect(source?.isCurrent()).toBe(true)
     // A disconnect stops the bridge, which publishes no panes and reports no exit.
     bridge.attach.mockResolvedValueOnce({ status: 'unverifiable' })
     publishPanes([])
+    expect(transport.getInputSource?.()).toBeNull()
+    expect(source?.isCurrent()).toBe(false)
     await vi.waitFor(() => expect(bridge.attach).toHaveBeenCalledTimes(2))
     expect(transport.sendInput('lost\r', 'driving')).toBe(false)
     expect(cb.onExit).not.toHaveBeenCalled()
@@ -263,6 +276,10 @@ describe('a runtime pane bridged to an older relay’s terminal', () => {
       expect(cb.onReplayData).toHaveBeenCalledWith('BACK', { clearBeforeReplay: true })
     )
     expect(transport.sendInput('ls\r', 'driving')).toBe(true)
+    const recovered = transport.getInputSource?.()
+    expect(recovered).not.toBe(source)
+    expect(recovered?.sendInputImmediate('current-query')).toBe(true)
+    expect(source?.sendInputImmediate('stale-query')).toBe(false)
   })
 
   it('asks again for a pane that turned live while an earlier ask was still out', async () => {
@@ -365,6 +382,34 @@ describe('a runtime pane bridged to an older relay’s terminal', () => {
     expect(bridge.close).toHaveBeenCalledWith({ ptyId: PTY })
   })
 
+  it('settles the live captured bridge before an inner successor, without losing its owed close', async () => {
+    bridge.attach.mockResolvedValue({ status: 'attached', replay: '', acquisitionId: 1 })
+    const inner = innerTransport()
+    const transport = createLegacyRelayBridgeTransport(PTY, inner)
+    await transport.connect({ url: '', sessionId: PTY, callbacks: callbacks() })
+    const source = transport.getInputSource?.()
+    let replacing = false
+    const observation = transport.observeInputSource?.({
+      beforeChange: () => {
+        if (!replacing) {
+          replacing = true
+          expect(source?.sendInput('settled-A', 'driving')).toBe(true)
+          void transport.connect({ url: '', sessionId: 'remote:env@@new', callbacks: {} })
+        }
+      },
+      afterChange: () => {}
+    })
+    transport.destroy?.()
+    expect(source?.isCurrent()).toBe(false)
+    expect(bridge.write).toHaveBeenCalledExactlyOnceWith({ ptyId: PTY, data: 'settled-A' })
+    expect(bridge.detach).toHaveBeenCalledExactlyOnceWith({ ptyId: PTY, acquisitionId: 1 })
+    expect(bridge.close).toHaveBeenCalledExactlyOnceWith({ ptyId: PTY })
+    expect(inner.destroy).toBeUndefined()
+    expect(transport.sendInput('ordinary-B', 'driving')).toBe(true)
+    expect(inner.sendInput).toHaveBeenCalledExactlyOnceWith('ordinary-B', 'driving')
+    observation?.dispose()
+  })
+
   it('names the bridged shells a closing tab runs, or only its leaf for a split mirror', () => {
     const second = 'ssh:ssh-box@@pty-2'
     publishPanes([
@@ -436,4 +481,209 @@ describe('a runtime pane bridged to an older relay’s terminal', () => {
     expect(bridge.attach).not.toHaveBeenCalled()
     expect(inner.connect).toHaveBeenCalledTimes(1)
   })
+})
+
+it.each([10, 100])(
+  'derives continuing inner identity and bounds lifecycle work at N=%i',
+  async (n) => {
+    const projection = await import('./legacy-relay-inner-input-source')
+    const views = vi.spyOn(projection, 'projectLegacyRelayInnerInputSource')
+    const lower = createLegacyRelayTestInner()
+    const transport = createLegacyRelayBridgeTransport(PTY, lower.transport)
+    const before = vi.fn()
+    const after = vi.fn()
+    const observation = transport.observeInputSource?.({ beforeChange: before, afterChange: after })
+    try {
+      expect(transport.getInputSource?.()).toBeNull()
+      await transport.connect({ url: '', callbacks: {} })
+      const a = transport.getInputSource?.()
+      expect(a?.isCurrent()).toBe(true)
+      expect(views).toHaveBeenCalledTimes(1)
+      const callbacksBefore = after.mock.calls.length
+      for (let i = 0; i < n; i++) {
+        lower.source.invalidate()
+        lower.source.change({ incarnation: 'i1' }, () => {})
+        transport.attach({ existingPtyId: 'remote:env-1@@t-1', callbacks: {} })
+        expect(transport.getInputSource?.()).toBe(a)
+      }
+      expect(before).toHaveBeenCalledTimes(n)
+      expect(after).toHaveBeenCalledTimes(callbacksBefore)
+      expect(a?.endpoint?.incarnationId).toBe('i1')
+      expect(views).toHaveBeenCalledTimes(1)
+      expect(lower.observeSource).toHaveBeenCalledTimes(1)
+      expect(lower.registrations()).toBe(1)
+      lower.readSource.mockClear()
+      for (let i = 0; i < n; i++) {
+        expect(transport.sendInput('ordinary', 'driving')).toBe(true)
+      }
+      expect(lower.writes).toEqual(Array(n).fill('ordinary'))
+      expect(lower.readSource).not.toHaveBeenCalled()
+      expect(views).toHaveBeenCalledTimes(1)
+      // A silent compatible failed adoption has no after event; the getter still derives null.
+      expect(() =>
+        lower.source.change({ incarnation: 'i1' }, () => {
+          throw new Error('adopt')
+        })
+      ).toThrow('adopt')
+      expect(transport.getInputSource?.()).toBeNull()
+      expect(a?.isCurrent()).toBe(false)
+      lower.source.change({ incarnation: 'i1' }, () => {})
+      const liveA = transport.getInputSource?.()
+      expect(liveA).not.toBe(a)
+      let knownStale: boolean | undefined
+      before.mockImplementation(() => {
+        knownStale = liveA?.sendInput('known-stale', 'driving')
+      })
+      lower.source.change({ incarnation: 'i2' }, () => {})
+      expect(knownStale).toBe(false)
+      const b = transport.getInputSource?.()
+      expect(b?.endpoint?.incarnationId).toBe('i2')
+      expect(b?.sendInput('current-i2', 'driving')).toBe(true)
+      before.mockReset()
+      let settledInner: boolean | undefined
+      before.mockImplementationOnce(() => {
+        settledInner = b?.sendInput('settled-inner', 'driving')
+      })
+      bridge.attach.mockResolvedValue({ status: 'attached', replay: '', acquisitionId: 1 })
+      const acceptedOptions = { signal: new AbortController().signal }
+      const pending = b?.sendInputAccepted?.('accepted-original', 'driving', acceptedOptions)
+      expect(lower.acceptedCalls).toEqual([['accepted-original', 'driving', acceptedOptions]])
+      expect(b?.claimViewport?.(91, 31)).toBe(true)
+      await transport.connect({ url: '', sessionId: PTY, callbacks: {} })
+      expect(settledInner).toBe(true)
+      expect(b?.isCurrent()).toBe(false)
+      const bridgeSource = transport.getInputSource?.()
+      expect(bridgeSource?.sendInput('bridge-positive', 'driving')).toBe(true)
+      expect(bridge.write).toHaveBeenCalledExactlyOnceWith({ ptyId: PTY, data: 'bridge-positive' })
+      let settledBridge: boolean | undefined
+      before.mockImplementationOnce(() => {
+        settledBridge = bridgeSource?.sendInput('settled-bridge', 'driving')
+      })
+      await transport.connect({ url: '', callbacks: {} })
+      expect(settledBridge).toBe(true)
+      expect(bridgeSource?.sendInput('retired-bridge', 'driving')).toBe(false)
+      expect(bridge.write.mock.calls.map(([args]) => args.data)).toEqual([
+        'bridge-positive',
+        'settled-bridge'
+      ])
+      const returned = transport.getInputSource?.()
+      expect(lower.source.current()?.endpoint?.incarnationId).toBe('i2')
+      expect(returned).not.toBe(b)
+      expect(returned?.sendInputImmediate('returned-positive')).toBe(true)
+      expect(b?.sendInputImmediate('old-route')).toBe(false)
+      lower.acceptance.resolve(true)
+      await expect(pending).resolves.toBe(false)
+      expect(lower.writes.slice(-4)).toEqual([
+        'accepted-original',
+        'claim:91x31',
+        'settled-inner',
+        'returned-positive'
+      ])
+      before.mockImplementationOnce(() => {
+        void transport.connect({ url: '', callbacks: {} })
+      })
+      await transport.connect({ url: '', sessionId: PTY, callbacks: {} })
+      expect(bridge.attach).toHaveBeenCalledOnce()
+      expect(transport.getInputSource?.()).toBe(returned)
+      expect(returned?.sendInput('reentrant-positive', 'driving')).toBe(true)
+      lower.source.change(null, () => {}, true)
+      expect(returned?.isCurrent()).toBe(false)
+      expect(transport.getInputSource?.()).toBeNull()
+      const ending = Promise.withResolvers<void>()
+      const options = { onAbandonedConnect: () => false }
+      lower.transport.destroy = vi.fn().mockImplementationOnce(function (
+        this: PtyTransport,
+        received: Parameters<NonNullable<PtyTransport['destroy']>>[0]
+      ) {
+        expect(this).toBe(lower.transport)
+        expect(received).toBe(options)
+        return ending.promise
+      })
+      const completion = transport.destroy?.(options)
+      expect(completion).toBe(ending.promise)
+      ending.resolve()
+      await completion
+    } finally {
+      observation?.dispose()
+      transport.detach?.()
+      views.mockRestore()
+    }
+    expect(lower.registrations()).toBe(0)
+    expect(lower.disposed).toHaveBeenCalledOnce()
+  }
+)
+
+it('keeps outer replacement and an inner successor across captured throwing cleanup', async () => {
+  const lower = createLegacyRelayTestInner(false)
+  const transport = createLegacyRelayBridgeTransport(PTY, lower.transport)
+  const successorBefore = vi.fn()
+  const successorAfter = vi.fn()
+  const successor = { beforeChange: successorBefore, afterChange: successorAfter }
+  let replacement: { dispose: () => void } | undefined
+  const obsolete = transport.observeInputSource?.({
+    beforeChange: () => {},
+    afterChange: () => {
+      const older = transport.observeInputSource?.(successor)
+      replacement = transport.observeInputSource?.(successor)
+      older?.dispose()
+    }
+  })
+  obsolete?.dispose()
+  await transport.connect({ url: '', callbacks: {} })
+  const a = transport.getInputSource?.()
+  expect(a?.sendInputAccepted).toBeUndefined()
+  expect(a?.claimViewport).toBeUndefined()
+  lower.source.invalidate()
+  expect(successorBefore).toHaveBeenCalledOnce()
+  expect(successorAfter).toHaveBeenCalledTimes(3)
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  replacement?.dispose()
+  const throwing = transport.observeInputSource?.({
+    beforeChange: () => {
+      throw new Error('before observer')
+    },
+    afterChange: () => {
+      throw new Error('after observer')
+    }
+  })
+  lower.source.change({ incarnation: 'i1' }, () => {})
+  lower.source.invalidate()
+  expect(transport.getInputSource?.()).toBe(a)
+  expect(warn).toHaveBeenCalledTimes(2)
+  throwing?.dispose()
+  const api = window.api.legacyRelayBridge
+  if (!api) {
+    throw new Error('Missing bridge API')
+  }
+  const onData = api.onData
+  const intercept = vi.spyOn(api, 'onData').mockImplementation((listener) => {
+    const remove = onData(listener)
+    return () => {
+      remove()
+      throw new Error('old data cleanup')
+    }
+  })
+  try {
+    bridge.attach.mockResolvedValue({ status: 'attached', replay: '', acquisitionId: 1 })
+    await transport.connect({ url: '', sessionId: PTY, callbacks: {} })
+    lower.onDispose(() => {
+      lower.onDispose(() => {})
+      void transport.connect({ url: '', callbacks: {} })
+      throw new Error('old observation cleanup')
+    })
+    expect(() => transport.detach?.()).toThrow('old data cleanup')
+    expect(lower.disposed).toHaveBeenCalledOnce()
+    expect(lower.registrations()).toBe(1)
+    expect(bridge.data.size + bridge.replay.size + bridge.exit.size).toBe(0)
+    expect(bridge.detach).toHaveBeenCalledExactlyOnceWith({ ptyId: PTY, acquisitionId: 1 })
+    expect(transport.getInputSource?.()?.isCurrent()).toBe(true)
+    expect(transport.sendInput('successor-positive', 'driving')).toBe(true)
+    expect(lower.writes).toEqual(['successor-positive'])
+    transport.detach?.()
+    expect(lower.registrations()).toBe(0)
+    expect(lower.disposed).toHaveBeenCalledTimes(2)
+  } finally {
+    intercept.mockRestore()
+    warn.mockRestore()
+  }
 })

@@ -27,11 +27,13 @@ vi.mock('../dashboard-popout/AgentKanbanBoard', () => ({
   AgentKanbanBoard: ({
     onClose,
     onRevealAgent,
+    onNavigate,
     headerActions
   }: ComponentProps<typeof AgentKanbanBoard>) => (
     <>
       <input aria-label="Search agents" />
       <button onClick={onClose}>Close dashboard</button>
+      <button onClick={onNavigate}>Open internal link</button>
       <button
         onClick={() =>
           onRevealAgent?.({ repoId: 'repo', worktreeId: 'worktree', tabId: 'tab', leafId: 'leaf' })
@@ -102,6 +104,15 @@ async function closed(): Promise<void> {
 }
 
 describe('AgentDashboardDrawer focus return', () => {
+  it('hands link navigation off without returning focus to the drawer opener', async () => {
+    fixture()
+    const opener = await openFrom()
+    await userEvent.click(screen.getByRole('button', { name: 'Open internal link' }))
+    await closed()
+    expect(useAppStore.getState().agentDashboardDrawerOpen).toBe(false)
+    expect(document.activeElement).not.toBe(opener)
+  })
+
   it.each(['Escape', 'Close dashboard'])('returns to the opener after %s', async (dismiss) => {
     fixture()
     const opener = await openFrom()

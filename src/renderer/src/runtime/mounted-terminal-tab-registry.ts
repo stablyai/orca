@@ -11,6 +11,10 @@ export type RegisteredTerminalTab = {
   getManager: () => PaneManager | null
   getContainer: () => HTMLDivElement | null
   getPtyIdForPane: (paneId: number) => string | null
+  getLinkContextForPane?: (paneId: number) => {
+    startupCwd: string
+    terminalHomePath: string | null
+  }
   getTabWideAgentHintLeafId: () => string | null
 }
 
