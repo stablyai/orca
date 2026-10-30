@@ -44,7 +44,7 @@ export function isStageableStatusEntry(entry: GitStatusEntry): boolean {
 
 /** Non-recursive restore leaves a present submodule's checkout untouched, so only a deleted one can be restored. */
 export function isWorktreeUndiscardableGitlink(entry: GitStatusEntry): boolean {
-  return !!entry.submodule && entry.status !== 'deleted'
+  return !!entry.submodule && entry.status !== 'deleted' && entry.submodule.restoreRecurses !== true
 }
 
 export function isSubmoduleWorktreeOnlyChange(entry: GitStatusEntry): boolean {
