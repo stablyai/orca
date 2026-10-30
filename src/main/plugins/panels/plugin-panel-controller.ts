@@ -72,6 +72,10 @@ export class PluginPanelController {
     return this.openFrame(ownerKey, pluginKey, 'editor', editorId, isCurrent)
   }
 
+  hasOpenFrame(pluginKey: string, panelId: string): boolean {
+    return this.sessions.has(pluginKey, 'panel', panelId)
+  }
+
   async execute(ownerKey: string, call: unknown): Promise<PluginHostCallOutcome> {
     const sessionToken = this.extractSessionToken(call)
     if (!sessionToken) {

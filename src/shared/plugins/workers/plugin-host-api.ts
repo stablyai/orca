@@ -269,7 +269,7 @@ export const PLUGIN_HOST_API = {
   }),
   'panel.post': spec({
     summary:
-      "Sends a JSON message to one of the plugin's own panels; `delivered` is false when no frame of that panel is open.",
+      "Sends a JSON message to one of the plugin's own panels; `delivered` is false when no window currently hosts that panel.",
     since: 1,
     scope: 'plugin-private',
     capability: 'panel:own',
