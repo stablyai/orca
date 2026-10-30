@@ -9,7 +9,8 @@ describe('Grok declared effort defaults', () => {
     for (const [reasoningEffort, expected] of [
       ['xhigh', 'xhigh'],
       [undefined, 'high'],
-      ['unlisted', 'high']
+      ['unlisted', undefined],
+      [42, undefined]
     ]) {
       expect(grokModelEfforts({ _meta: { ...model._meta, reasoningEffort } }).defaultEffort).toBe(
         expected

@@ -34,7 +34,7 @@ const effortEntrySchema = z.union([
 ])
 const modelMetaSchema = z.looseObject({
   supportsReasoningEffort: z.boolean().optional(),
-  reasoningEffort: z.string().optional(),
+  reasoningEffort: z.unknown().optional(),
   reasoningEfforts: z.array(z.unknown()).optional()
 })
 const modelsListReplySchema = z.looseObject({
@@ -92,7 +92,8 @@ export function grokModelEfforts(model: Pick<ModelInfo, '_meta'>): {
     )
     reportedDefaultEffort = efforts.find(({ value }) => value === meta.data.reasoningEffort)?.value
   }
-  defaultEffort = reportedDefaultEffort ?? defaultEffort
+  // An unmappable reported override leaves the default unknown, not the menu's recommendation.
+  defaultEffort = meta.data.reasoningEffort === undefined ? defaultEffort : reportedDefaultEffort
   return { efforts, ...(defaultEffort ? { defaultEffort } : {}) }
 }
 
