@@ -3,6 +3,7 @@ import { appendFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/pro
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { appendTranscriptEntries } from '../claude/claude-provider-session-rename'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import { fakeClaude, type FakeConnection } from '../claude/claude-structured-session-test-support'
 import type { ClaudeStreamJsonLaunch } from '../claude/claude-stream-json-connection'
@@ -41,7 +42,8 @@ export async function writeNativeNamingConversation(
       timestamp: '2026-10-27T00:00:00.000Z',
       message: { role: 'user', content: 'Imported prompt' }
     },
-    { type: 'custom-title', sessionId: nativeId, customTitle: title }
+    { type: 'custom-title', sessionId: nativeId, customTitle: title },
+    { type: 'agent-name', agentName: title, sessionId: nativeId }
   ]
   await writeFile(path, `${rows.map((row) => JSON.stringify(row)).join('\n')}\n`)
 }
@@ -152,10 +154,10 @@ export async function createClaudeNamingRuntime(
           controls.push({ name, nativeId: target })
           await options.beforeControl?.(actual, name)
           remembered = name
-          await appendFile(
-            targetFile,
-            `${JSON.stringify({ type: 'custom-title', sessionId: target, customTitle: name })}\n`
-          )
+          await appendTranscriptEntries(targetFile, [
+            { type: 'custom-title', sessionId: target, customTitle: name },
+            { type: 'agent-name', agentName: name, sessionId: target }
+          ])
         }
         let closing: Promise<boolean> | undefined
         connection.close = () =>
@@ -166,10 +168,10 @@ export async function createClaudeNamingRuntime(
             const proven = (await options.beforeClose?.(actual)) ?? true
             if (proven) {
               if (remembered !== undefined) {
-                await appendFile(
-                  targetFile,
-                  `${JSON.stringify({ type: 'custom-title', sessionId: target, customTitle: remembered })}\n`
-                )
+                await appendTranscriptEntries(targetFile, [
+                  { type: 'custom-title', sessionId: target, customTitle: remembered },
+                  { type: 'agent-name', agentName: remembered, sessionId: target }
+                ])
               }
               actual.exitVerdict = { root: 'exited', tree: 'exited' }
             } else {

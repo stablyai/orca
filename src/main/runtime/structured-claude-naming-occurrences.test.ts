@@ -2,7 +2,7 @@ import { agentJournalSubmissionKey } from '../../shared/agent-session-journal-it
 import { claudePromptUuidForSubmission } from '../claude/structured/claude-structured-session-id'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import { CREATE_TEST_CALLER } from '../native-chat/agent-session-wire/structured-agent-session-create-test-fixture'
-import { appendFile, readFile } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import * as transcriptNaming from '../claude/claude-provider-session-rename'
@@ -62,6 +62,20 @@ it.each([10, 100])(
     await stopStructuredAgentSessionRuntime()
     expect(inventory).toHaveBeenCalledTimes(3)
     expect(fixture.controls).toEqual([])
+    const entries = (await readFile(fixture.file, 'utf8'))
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line))
+    expect(
+      entries.filter((entry) => entry.type === 'custom-title').map((entry) => entry.customTitle)
+    ).toEqual(['Old', 'First', `Name ${count}`, `Name ${count}`])
+    expect(entries.filter((entry) => entry.type === 'agent-name')).toEqual(
+      ['Old', 'First', `Name ${count}`, `Name ${count}`].map((name) => ({
+        type: 'agent-name',
+        agentName: name,
+        sessionId: fixture.nativeId
+      }))
+    )
   }
 )
 
@@ -278,10 +292,11 @@ it('names the materialized committed rewind fork at rest and never replays it on
   expect(await fixture.send()).toMatchObject({ ok: true })
   await vi.waitFor(() => expect(fixture.native.connections[0]?.sent).toHaveLength(1))
   await host.close(HOST_TEST_SESSION, 'evict')
-  await appendFile(
-    fixture.file,
-    `${JSON.stringify({ type: 'custom-title', sessionId: fixture.nativeId, customTitle: 'Independent source title' })}\n`
-  )
+  await transcriptNaming.appendTranscriptEntries(fixture.file, [
+    { type: 'custom-title', sessionId: fixture.nativeId, customTitle: 'Independent source title' },
+    { type: 'agent-name', agentName: 'Independent source title', sessionId: fixture.nativeId }
+  ])
+  const source = await readFile(fixture.file, 'utf8')
   const journal = await host.journalSnapshot(HOST_TEST_SESSION)
   const prompt = journal.items.findLast(
     (item) => item.body.kind === 'message' && item.body.role === 'user'
@@ -316,10 +331,26 @@ it('names the materialized committed rewind fork at rest and never replays it on
   expect(fixture.launches).toHaveLength(1)
   expect(fixture.controls).toEqual([])
   expect(await nativeNamingTitle(fixture.file)).toBe('Independent source title')
-  await appendFile(
-    destination,
-    `${JSON.stringify({ type: 'custom-title', sessionId: fork.sessionId, customTitle: 'Later fork CLI' })}\n`
-  )
+  expect(await readFile(fixture.file, 'utf8')).toBe(source)
+  expect(
+    (await readFile(destination, 'utf8'))
+      .trim()
+      .split('\n')
+      .slice(-2)
+      .map((line) => JSON.parse(line))
+  ).toEqual([
+    expect.objectContaining({
+      type: 'custom-title',
+      customTitle: 'Fork inherits',
+      sessionId: fork.sessionId
+    }),
+    { type: 'agent-name', agentName: 'Fork inherits', sessionId: fork.sessionId }
+  ])
+  const laterPair = [
+    { type: 'custom-title', sessionId: fork.sessionId, customTitle: 'Later fork CLI' },
+    { type: 'agent-name', agentName: 'Later fork CLI', sessionId: fork.sessionId }
+  ]
+  await transcriptNaming.appendTranscriptEntries(destination, laterPair)
   const previous = fixture.native.connections.at(-1)
   const connectionCount = fixture.native.connections.length
   const launchCount = fixture.launches.length
@@ -354,5 +385,13 @@ it('names the materialized committed rewind fork at rest and never replays it on
   await stopping
   expect(fixture.launches[launchCount]?.options.resume).toBe(fork.sessionId)
   expect(await nativeNamingTitle(destination)).toBe('Later fork CLI')
+  expect(
+    (await readFile(destination, 'utf8'))
+      .trim()
+      .split('\n')
+      .slice(-2)
+      .map((line) => JSON.parse(line))
+  ).toEqual(laterPair)
+  expect(await readFile(fixture.file, 'utf8')).toBe(source)
   expect(fixture.controls).toEqual([])
 })

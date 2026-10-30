@@ -42,7 +42,11 @@ export async function renameClaudeTranscript(
         if (!transcript) {
           throw new Error('Claude naming found no transcript in the launch home')
         }
-        await appendTranscriptEntries(transcript, entries)
+        await appendTranscriptEntries(transcript, [
+          ...entries,
+          // Native resume's prompt name is a separate projection from the SDK title.
+          { type: 'agent-name', agentName: name.trim(), sessionId: providerSessionId }
+        ])
       }
     }
   })

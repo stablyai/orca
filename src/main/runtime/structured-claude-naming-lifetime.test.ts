@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { appendFile, readFile } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import * as transcriptNaming from '../claude/claude-provider-session-rename'
@@ -23,6 +23,7 @@ it('settles fresh input while the actual outside append is held, then corrects o
   const entered = Promise.withResolvers<void>()
   const release = Promise.withResolvers<void>()
   const fixture = await createClaudeNamingRuntime()
+  let appended: string | undefined
   const append = transcriptNaming.renameClaudeTranscript
   const naming = vi
     .spyOn(transcriptNaming, 'renameClaudeTranscript')
@@ -30,6 +31,7 @@ it('settles fresh input while the actual outside append is held, then corrects o
       entered.resolve()
       await release.promise
       await append(...args)
+      appended = await readFile(fixture.file, 'utf8')
     })
   onTestFinished(async () => {
     release.resolve()
@@ -90,19 +92,49 @@ it('settles fresh input while the actual outside append is held, then corrects o
   )
   await stopStructuredAgentSessionRuntime()
   expect(await nativeNamingTitle(fixture.file)).toBe('New name')
+  const pair = [
+    expect.objectContaining({
+      type: 'custom-title',
+      customTitle: 'New name',
+      sessionId: fixture.nativeId
+    }),
+    { type: 'agent-name', agentName: 'New name', sessionId: fixture.nativeId }
+  ]
+  expect(
+    appended
+      ?.trim()
+      .split('\n')
+      .slice(-2)
+      .map((line) => JSON.parse(line))
+  ).toEqual(pair)
+  expect(
+    (await readFile(fixture.file, 'utf8'))
+      .trim()
+      .split('\n')
+      .slice(-2)
+      .map((line) => JSON.parse(line))
+  ).toEqual(pair)
   expect(naming).toHaveBeenCalledOnce()
 
   // A later independent native rename survives an unrelated true resume, even to an older spelling.
   for (const later of ['Independent CLI', 'Old']) {
-    await appendFile(
-      fixture.file,
-      `${JSON.stringify({ type: 'custom-title', sessionId: fixture.nativeId, customTitle: later })}\n`
-    )
+    const laterPair = [
+      { type: 'custom-title', sessionId: fixture.nativeId, customTitle: later },
+      { type: 'agent-name', agentName: later, sessionId: fixture.nativeId }
+    ]
+    await transcriptNaming.appendTranscriptEntries(fixture.file, laterPair)
     await fixture.install()
     expect(await fixture.send('Unrelated continuation')).toMatchObject({ ok: true })
     await vi.waitFor(() => expect(fixture.native.connections.at(-1)?.sent).toHaveLength(1))
     await stopStructuredAgentSessionRuntime()
     expect(await nativeNamingTitle(fixture.file)).toBe(later)
+    expect(
+      (await readFile(fixture.file, 'utf8'))
+        .trim()
+        .split('\n')
+        .slice(-2)
+        .map((line) => JSON.parse(line))
+    ).toEqual(laterPair)
     expect(fixture.controls).toHaveLength(1)
     expect(naming).toHaveBeenCalledOnce()
   }
