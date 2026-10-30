@@ -85,18 +85,26 @@ describe('accepted spawn followed by failed startup readiness', () => {
             : {})
         }
       })
-      const ordinary = await runtime.waitForTerminal(handle, {
-        condition: 'tui-idle',
+      const ordinary = await runtime
+        .waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 50 })
+        .catch((error: unknown) => error)
+      const worker = await waitForWorkerAgentReady(runtime, handle, {
+        agent: 'codex',
+        reusesTerminal,
         timeoutMs: 50
-      })
-      expect(
-        await waitForWorkerAgentReady(runtime, handle, {
-          agent: 'codex',
-          reusesTerminal,
-          timeoutMs: 50
+      }).catch((error: unknown) => error)
+      for (const error of [ordinary, worker]) {
+        expect(error).toBeInstanceOf(Error)
+        expect(error).toHaveProperty('message', 'terminal_exited')
+        expect(error).toHaveProperty('terminalExitCause', {
+          kind: 'exited',
+          exitCode: 256,
+          ...(reusesTerminal ? { initialOutputDiagnostic: 'git-bash-console-capacity' } : {})
         })
-      ).toEqual(ordinary)
-      expect(ordinary).toMatchObject({ satisfied: true, status: 'exited' })
+        expect(error).not.toHaveProperty('terminalStartFailure')
+        expect(readTerminalStartFailure(error)).toBeUndefined()
+        expect(formatTerminalStartFailure(error)).toBeUndefined()
+      }
     }
   )
 
