@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import { getRequiredStringFlag, getRequiredStringFlagAllowingEmpty } from './flags'
 import { RuntimeClientError } from './runtime-client'
@@ -38,26 +38,42 @@ export async function readCommandBody(
   }
   const body = hasBody
     ? getRequiredStringFlagAllowingEmpty(flags, 'body')
-    : await readBodyFile(getRequiredStringFlag(flags, 'body-file'), cwd)
+    : await readBodyFile(getRequiredStringFlag(flags, 'body-file'), cwd, options)
   if (body.length > options.maximumCharacters) {
-    throw new RuntimeClientError(
-      options.tooLargeCode,
-      `${options.label} must be at most ${options.maximumCharacters} characters`
-    )
+    throw bodyTooLarge(options)
   }
   return body
 }
 
-async function readBodyFile(path: string, cwd: string): Promise<string> {
+function bodyTooLarge(options: BodyOptions): RuntimeClientError {
+  return new RuntimeClientError(
+    options.tooLargeCode,
+    `${options.label} must be at most ${options.maximumCharacters} characters`
+  )
+}
+
+async function readBodyFile(path: string, cwd: string, options: BodyOptions): Promise<string> {
+  // Why: UTF-8 spends at most 4 bytes per character, so more bytes than this must be over the cap.
+  const maxBytes = options.maximumCharacters * 4
   if (path !== '-') {
-    return readFile(isAbsolute(path) ? path : join(cwd, path), 'utf8')
+    const filePath = isAbsolute(path) ? path : join(cwd, path)
+    if ((await stat(filePath)).size > maxBytes) {
+      throw bodyTooLarge(options)
+    }
+    return readFile(filePath, 'utf8')
   }
   if (process.stdin.isTTY) {
     throw new RuntimeClientError('invalid_argument', 'stdin body requested but stdin is a TTY')
   }
   const chunks: Buffer[] = []
+  let bytes = 0
   for await (const chunk of process.stdin) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)))
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk))
+    bytes += buffer.length
+    if (bytes > maxBytes) {
+      throw bodyTooLarge(options)
+    }
+    chunks.push(buffer)
   }
   return Buffer.concat(chunks).toString('utf8')
 }

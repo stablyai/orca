@@ -1,6 +1,7 @@
 import type { GitHubWorkItem } from '../github/work-item-types'
 import type { GitLabWorkItem } from '../gitlab-types'
 import type { JiraIssue } from '../jira/jira-types'
+import type { YouTrackIssue } from '../youtrack-types'
 import type { LinearIssue } from '../linear/issue-types'
 import type { LinearCollectionResult } from '../linear/workspace-types'
 import type { BaseRefSearchResult } from '../repo-types'
@@ -9,16 +10,18 @@ import { buildJiraTextMatchJql } from '../jira/jira-search-input-jql'
 import type { GitHubIssueOrPRLink } from '../github/links'
 import {
   buildSmartWorkspaceUrlSourceRows,
-  type SmartWorkspaceGitLabUrlIntent
+  type SmartWorkspaceGitLabUrlIntent,
+  type SmartWorkspaceUrlSourceMode
 } from './smart-workspace-url-source-results'
 import { isSmartWorkspaceSourceQueryWithinLimit } from './smart-workspace-source-query'
+import { partitionYouTrackRows } from './smart-workspace-youtrack-rows'
 
 export {
   SMART_WORKSPACE_SOURCE_QUERY_MAX_BYTES,
   isSmartWorkspaceSourceQueryWithinLimit
 } from './smart-workspace-source-query'
 
-export type SmartNameMode = 'smart' | 'github' | 'gitlab' | 'branches' | 'linear' | 'jira' | 'text'
+export type SmartNameMode = SmartWorkspaceUrlSourceMode
 
 export type SmartWorkspaceSourceRow =
   | { kind: 'use-name'; value: string; name: string }
@@ -28,6 +31,7 @@ export type SmartWorkspaceSourceRow =
   | { kind: 'branch'; value: string; refName: string; localBranchName: string }
   | { kind: 'linear'; value: string; issue: LinearIssue }
   | { kind: 'jira'; value: string; issue: JiraIssue }
+  | { kind: 'youtrack'; value: string; issue: YouTrackIssue }
 
 type LinearIssueSourceInput = LinearIssue[] | LinearCollectionResult<LinearIssue> | null | undefined
 
@@ -38,6 +42,7 @@ const EMPTY_HINT_BY_MODE: Record<SmartNameMode, string> = {
   branches: 'No matching branches.',
   linear: 'Start typing to search Linear issues.',
   jira: 'Start typing to search Jira issues, or paste an issue URL.',
+  youtrack: 'No matching YouTrack issues.',
   text: ''
 }
 
@@ -207,7 +212,8 @@ export function buildSmartWorkspaceSourceRows({
   linearUrlIntentOwnsResults = false,
   mode,
   resultLimit,
-  value
+  value,
+  youtrackIssues = []
 }: {
   branches: BaseRefSearchResult[]
   githubItems: GitHubWorkItem[]
@@ -224,6 +230,8 @@ export function buildSmartWorkspaceSourceRows({
   mode: SmartNameMode
   resultLimit: number
   value: string
+  /** YouTrack issues confirmed for the typed ID, URL, or ID prefix. */
+  youtrackIssues?: YouTrackIssue[]
 }): SmartWorkspaceSourceRow[] {
   // Why: a pasted issue URL resolves to exactly one issue — every other source is noise.
   if (jiraIntent) {
@@ -256,9 +264,14 @@ export function buildSmartWorkspaceSourceRows({
   }
   const trimmed = value.trim()
   const nextRows: SmartWorkspaceSourceRow[] = []
+  // Why: only a full ID or issue URL outranks "use as name"; prefix suggestions follow it.
+  const [exactYouTrack, prefixYouTrack] = partitionYouTrackRows(youtrackIssues, trimmed)
+  if (mode === 'smart') {
+    nextRows.push(...exactYouTrack)
+  }
   if (trimmed && mode === 'smart') {
     // Why: stable cmdk value — embedding the query remounted the row every keystroke.
-    nextRows.push({ kind: 'use-name', value: 'use-name', name: trimmed })
+    nextRows.push({ kind: 'use-name', value: 'use-name', name: trimmed }, ...prefixYouTrack)
   }
   if (mode === 'text') {
     return nextRows
@@ -304,6 +317,9 @@ export function buildSmartWorkspaceSourceRows({
   }
   if (mode === 'jira') {
     nextRows.push(...jiraIssues.map(toJiraSourceRow))
+  }
+  if (mode === 'youtrack') {
+    nextRows.push(...exactYouTrack, ...prefixYouTrack)
   }
   return nextRows.slice(0, resultLimit + 1)
 }

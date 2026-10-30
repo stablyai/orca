@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { getLinearIssueTextSavePlan } from './linear-issue-text-save-plan'
+import { getIssueTextSavePlan } from './issue-text-save-plan'
 
-describe('getLinearIssueTextSavePlan', () => {
+describe('getIssueTextSavePlan', () => {
   it('skips description saves when only stored trailing whitespace differs', () => {
-    const plan = getLinearIssueTextSavePlan({
+    const plan = getIssueTextSavePlan({
       descriptionDraft: 'Details\n',
       field: 'description',
       issue: { title: 'Issue title', description: 'Details\n' },
@@ -14,7 +14,7 @@ describe('getLinearIssueTextSavePlan', () => {
   })
 
   it('still saves meaningful description edits with trailing whitespace trimmed', () => {
-    const plan = getLinearIssueTextSavePlan({
+    const plan = getIssueTextSavePlan({
       descriptionDraft: 'Updated details\n',
       field: 'description',
       issue: { title: 'Issue title', description: 'Details\n' },

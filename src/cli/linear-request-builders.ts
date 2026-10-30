@@ -19,6 +19,7 @@ import {
   getRequiredStringFlag
 } from './flags'
 import { RuntimeClientError } from './runtime-client'
+import { buildCurrentWorktreeContext } from './current-worktree-context'
 
 const LINEAR_PRIORITY_VALUES = new Map([
   ['none', 0],
@@ -147,7 +148,7 @@ export function buildIssueRequest(
     workspaceId,
     include: includes,
     depth: clampLinearIssueDepth(requestedDepth),
-    context: buildLinearCurrentContext(cwd, remote)
+    context: buildCurrentWorktreeContext(cwd, remote)
   }
 }
 
@@ -169,21 +170,7 @@ export function buildWriteTargetRequest(
     input,
     current,
     workspaceId: getOptionalStringFlag(flags, 'workspace'),
-    context: buildLinearCurrentContext(cwd, remote)
-  }
-}
-
-export function buildLinearCurrentContext(
-  cwd: string,
-  remote: boolean
-): LinearIssueRequest['context'] {
-  return {
-    remote,
-    ...(remote ? {} : { cwd }),
-    ...(process.env.ORCA_WORKTREE_ID ? { worktreeId: process.env.ORCA_WORKTREE_ID } : {}),
-    ...(process.env.ORCA_TERMINAL_HANDLE
-      ? { terminalHandle: process.env.ORCA_TERMINAL_HANDLE }
-      : {})
+    context: buildCurrentWorktreeContext(cwd, remote)
   }
 }
 

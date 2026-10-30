@@ -1,19 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import {
-  createLinearIssueTextDraftState,
-  resolveLinearIssueTextDraftState
-} from './linear-issue-text-draft-state'
+import { createIssueTextDraftState, resolveIssueTextDraftState } from './issue-text-draft-state'
 
-describe('linear issue text draft state', () => {
+describe('issue text draft state', () => {
   it('resets both drafts when the issue changes', () => {
-    const state = createLinearIssueTextDraftState({
+    const state = createIssueTextDraftState({
       description: 'Old body',
       id: 'issue-1',
       title: 'Old title'
     })
 
     expect(
-      resolveLinearIssueTextDraftState(
+      resolveIssueTextDraftState(
         { ...state, description: 'Unsaved body', title: 'Unsaved title' },
         {
           description: 'New body',
@@ -31,14 +28,14 @@ describe('linear issue text draft state', () => {
   })
 
   it('reconciles untouched fields while preserving unsaved edits', () => {
-    const state = createLinearIssueTextDraftState({
+    const state = createIssueTextDraftState({
       description: 'Old body',
       id: 'issue-1',
       title: 'Old title'
     })
 
     expect(
-      resolveLinearIssueTextDraftState(
+      resolveIssueTextDraftState(
         { ...state, title: 'Unsaved title' },
         {
           description: 'Remote body',

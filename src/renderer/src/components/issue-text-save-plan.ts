@@ -1,25 +1,25 @@
-import type { LinearIssue } from '../../../shared/linear/issue-types'
+import type { IssueTextDraftSource } from './issue-text-draft-state'
 
-export type LinearIssueTextField = 'title' | 'description'
+export type IssueTextField = 'title' | 'description'
 
-type LinearIssueTextPatch = Pick<LinearIssue, 'title'> | Pick<LinearIssue, 'description'>
+type IssueTextPatch = { title: string } | { description: string }
 
-export type LinearIssueTextSavePlan =
-  | { kind: 'changed'; patch: LinearIssueTextPatch }
+export type IssueTextSavePlan =
+  | { kind: 'changed'; patch: IssueTextPatch }
   | { kind: 'empty-title' }
   | { kind: 'unchanged' }
 
-export function getLinearIssueTextSavePlan({
+export function getIssueTextSavePlan({
   descriptionDraft,
   field,
   issue,
   titleDraft
 }: {
   descriptionDraft: string
-  field: LinearIssueTextField
-  issue: Pick<LinearIssue, 'description' | 'title'>
+  field: IssueTextField
+  issue: Pick<IssueTextDraftSource, 'description' | 'title'>
   titleDraft: string
-}): LinearIssueTextSavePlan {
+}): IssueTextSavePlan {
   const nextTitle = titleDraft.trim()
   const nextDescription = descriptionDraft.trimEnd()
   if (field === 'title' && !nextTitle) {
@@ -28,7 +28,7 @@ export function getLinearIssueTextSavePlan({
 
   const nextValue = field === 'title' ? nextTitle : nextDescription
   // Why: description saves strip trailing whitespace, so stored trailing
-  // whitespace from Linear should not trigger a no-op PATCH on blur.
+  // whitespace from the provider should not trigger a no-op save on blur.
   const currentValue = field === 'title' ? issue.title : (issue.description ?? '').trimEnd()
   if (nextValue === currentValue) {
     return { kind: 'unchanged' }

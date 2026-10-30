@@ -31,7 +31,6 @@ import {
 import {
   buildAssigneeSetRequest,
   buildIssueRequest,
-  buildLinearCurrentContext,
   buildWriteTargetRequest,
   getDueDateFlag,
   getHttpUrlFlag,
@@ -43,6 +42,7 @@ import {
   readLinearBody,
   rejectAllWorkspaceForWrite
 } from '../linear-request-builders'
+import { buildCurrentWorktreeContext } from '../current-worktree-context'
 import {
   formatLinearAttach,
   formatLinearCreate,
@@ -252,7 +252,7 @@ export const LINEAR_HANDLERS: Record<string, CommandHandler> = {
       parentCurrent,
       workspaceId: getOptionalStringFlag(flags, 'workspace'),
       writeId: getOptionalWriteId(flags),
-      context: buildLinearCurrentContext(cwd, client.isRemote)
+      context: buildCurrentWorktreeContext(cwd, client.isRemote)
     }
     const response = await client.call<LinearCreateResult>('linear.issueCreate', request, {
       timeoutMs: LINEAR_WRITE_TIMEOUT_MS

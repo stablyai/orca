@@ -150,6 +150,21 @@ describe('buildLinearLaunchContextBlock', () => {
   })
 })
 
+describe('YouTrack launch context', () => {
+  it('names the YouTrack issue ID alongside its link', () => {
+    const item = {
+      provider: 'youtrack' as const,
+      number: 0,
+      url: 'https://yt.example.com/issue/PROJ-81',
+      title: 'PROJ-81 Retry payments',
+      youtrackIdentifier: 'PROJ-81'
+    }
+    const block = 'Linked YouTrack issue: PROJ-81\nhttps://yt.example.com/issue/PROJ-81'
+    expect(getLaunchableWorkItemDraftContent(item)).toBe(`${block}\n`)
+    expect(resolveQuickCreateLinkedWorkItemPrompt(item, '').draftPrompt).toBe(`${block}\n`)
+  })
+})
+
 describe('resolveQuickCreateLinkedWorkItemPrompt', () => {
   it('drafts the note above the link-only Linear reference', () => {
     const result = resolveQuickCreateLinkedWorkItemPrompt(

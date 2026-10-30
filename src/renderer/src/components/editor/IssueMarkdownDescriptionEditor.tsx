@@ -12,7 +12,7 @@ import {
   createRichMarkdownEditorCodec,
   type RichMarkdownEditorCodec
 } from '@/components/editor/rich-markdown-source-transport'
-import { LinearIssueMarkdownToolbar } from '@/components/LinearIssueMarkdownToolbar'
+import { IssueMarkdownToolbar } from '@/components/editor/IssueMarkdownToolbar'
 import { RichMarkdownTableControls } from '@/components/editor/RichMarkdownTableControls'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { cn } from '@/lib/utils'
@@ -23,7 +23,7 @@ import {
   useRichMarkdownSpellcheckAttribute
 } from '@/components/editor/rich-markdown-spellcheck'
 
-type LinearIssueMarkdownDescriptionEditorProps = {
+type IssueMarkdownDescriptionEditorProps = {
   value: string
   imageUrls?: Record<string, string>
   onChange: (value: string) => void
@@ -33,7 +33,7 @@ type LinearIssueMarkdownDescriptionEditorProps = {
   submitShortcutLabel: string
 }
 
-function createLinearIssueMarkdownExtensions(codec: RichMarkdownEditorCodec) {
+function createIssueMarkdownExtensions(codec: RichMarkdownEditorCodec) {
   const extensions = createRichMarkdownExtensions({ codec })
   return [
     ...extensions,
@@ -46,7 +46,7 @@ function createLinearIssueMarkdownExtensions(codec: RichMarkdownEditorCodec) {
   ]
 }
 
-export function LinearIssueMarkdownDescriptionEditor({
+export function IssueMarkdownDescriptionEditor({
   value,
   imageUrls,
   onChange,
@@ -54,10 +54,12 @@ export function LinearIssueMarkdownDescriptionEditor({
   density,
   disabled,
   submitShortcutLabel
-}: LinearIssueMarkdownDescriptionEditorProps): React.JSX.Element {
+}: IssueMarkdownDescriptionEditorProps): React.JSX.Element {
   const { i18n } = useTranslation()
   const language = i18n.resolvedLanguage ?? i18n.language
   const lastEditorMarkdownRef = useRef(value)
+  // Serializing reformats untouched markdown (`* a` → `- a`), so only a real edit may be saved.
+  const editedRef = useRef(false)
   const editorScrollRef = useRef<HTMLDivElement | null>(null)
   const editorRef = useRef<Editor | null>(null)
   const richMarkdownSpellcheckEnabled = useAppStore(
@@ -68,16 +70,16 @@ export function LinearIssueMarkdownDescriptionEditor({
     void language
     return createRichMarkdownEditorCodec()
   }, [language])
-  const linearIssueMarkdownExtensions = useMemo(() => {
+  const issueMarkdownExtensions = useMemo(() => {
     // Language keys editor recreation because Tiptap freezes translated extension options.
     void language
-    return createLinearIssueMarkdownExtensions(codec)
+    return createIssueMarkdownExtensions(codec)
   }, [codec, language])
 
   const editor = useEditor(
     {
       immediatelyRender: false,
-      extensions: linearIssueMarkdownExtensions,
+      extensions: issueMarkdownExtensions,
       content: encodeRawMarkdownHtmlForRichEditor(value, codec),
       contentType: 'markdown',
       editable: !disabled,
@@ -104,12 +106,17 @@ export function LinearIssueMarkdownDescriptionEditor({
       },
       onBlur: ({ editor: nextEditor }) => {
         window.api.ui.setMarkdownEditorFocused(false)
+        if (!editedRef.current) {
+          return
+        }
+        editedRef.current = false
         const nextValue = nextEditor.getMarkdown()
         lastEditorMarkdownRef.current = nextValue
         onChange(nextValue)
         onSave(nextValue)
       },
       onUpdate: ({ editor: nextEditor }) => {
+        editedRef.current = true
         const nextValue = nextEditor.getMarkdown()
         lastEditorMarkdownRef.current = nextValue
         onChange(nextValue)
@@ -144,11 +151,12 @@ export function LinearIssueMarkdownDescriptionEditor({
       return
     }
 
-    // Follow Linear’s value on issue changes and optimistic rollback.
+    // Follow the provider’s value on issue changes and optimistic rollback.
     editor.commands.setContent(encodeRawMarkdownHtmlForRichEditor(value, codec), {
       contentType: 'markdown',
       emitUpdate: false
     })
+    editedRef.current = false
     lastEditorMarkdownRef.current = value
   }, [codec, editor, value])
 
@@ -162,7 +170,7 @@ export function LinearIssueMarkdownDescriptionEditor({
         disabled && 'is-disabled'
       )}
     >
-      <LinearIssueMarkdownToolbar editor={editor} disabled={disabled} />
+      <IssueMarkdownToolbar editor={editor} disabled={disabled} />
       <div ref={editorScrollRef} className="linear-issue-markdown-scroll relative scrollbar-sleek">
         <EditorContent editor={editor} />
         <RichMarkdownTableControls

@@ -72,7 +72,8 @@ export const HOST_OPERATION_OWNERSHIP = {
   ui: 'host',
   updater: 'host',
   workspacePorts: 'host',
-  worktree: 'host'
+  worktree: 'host',
+  youtrack: 'scope-picked'
 } as const satisfies Record<string, HostOperationOwnership>
 
 /** Method overrides for scope-picked forge reads and streams without a subscription name. */

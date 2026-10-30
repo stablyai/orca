@@ -690,6 +690,14 @@ import {
   WorktreeTeardownMissingTerminalsParams
 } from './worktree-params'
 import { WorktreeAdoptProvisionedRoot } from './worktree-provisioned-root-params'
+import {
+  YouTrackCommentAdd,
+  YouTrackFieldSet,
+  YouTrackIssueCreate,
+  YouTrackIssueList,
+  YouTrackIssueRead,
+  YouTrackStateSet
+} from './youtrack-agent-params'
 import { RepoIconDataUrlsParams } from '../sidebar-list/repo-icon-data-urls-contract'
 import { SidebarInputsReadParams } from '../sidebar-list/sidebar-inputs-feed-contract'
 import { SkillBundleInstallRequestSchema } from '../skill-bundle-install-contract'
@@ -1508,7 +1516,13 @@ export const RPC_PARAMS_BY_METHOD = {
   'worktree.set': WorktreeSet,
   'worktree.show': WorktreeSelectorOfWorktreeParams,
   'worktree.sleep': WorktreeSleepParams,
-  'worktree.teardownMissingTerminals': WorktreeTeardownMissingTerminalsParams
+  'worktree.teardownMissingTerminals': WorktreeTeardownMissingTerminalsParams,
+  'youtrack.commentAdd': YouTrackCommentAdd,
+  'youtrack.create': YouTrackIssueCreate,
+  'youtrack.fieldSet': YouTrackFieldSet,
+  'youtrack.issue': YouTrackIssueRead,
+  'youtrack.list': YouTrackIssueList,
+  'youtrack.stateSet': YouTrackStateSet
 } as const
 
 // Why: these methods bind a schema the shared contract cannot hold because its value

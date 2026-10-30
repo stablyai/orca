@@ -34,6 +34,7 @@ type IssueSourceActionsInput = Pick<
 import { useCallback, useMemo } from 'react'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { JiraIssue } from '../../../../shared/jira/jira-types'
+import { useYouTrackIssueSelect } from '@/components/youtrack/use-youtrack-issue-select'
 import {
   toLinearLinkedWorkItem,
   getLinkedItemDisplayName,
@@ -162,10 +163,14 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
     ]
   )
 
-  const handleSmartJiraIssueSelect = useCallback(
-    (issue: JiraIssue, sourceContext: TaskSourceContext): void => {
+  // Why shared: string-keyed issue providers (Jira, YouTrack) link and auto-name identically.
+  const applyIssueSource = useCallback(
+    (
+      linkedItem: LinkedWorkItemSummary,
+      sourceContext: TaskSourceContext | null,
+      nameIsLookupText = false
+    ): void => {
       smartSourceSelectionRef.current = null
-      const linkedItem: LinkedWorkItemSummary = buildJiraWorkspaceSource(issue)
       setLinkedIssue('')
       setLinkedPR(null)
       setLinkedGitLabIssue(null)
@@ -184,14 +189,15 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
       const suggestedName =
         getLinkedWorkItemWorkspaceName(linkedItem, getJiraIssueKeyCasingSeedOptions())?.seedName ??
         getLinkedWorkItemSuggestedName(linkedItem)
-      // Why: the Jira lookup is async, so a name the user typed while it resolved must survive.
+      // Why: issue lookups are async, so a name the user typed while one resolved must survive.
       if (
         suggestedName &&
-        shouldApplyWorkspaceSourceAutoName({
-          currentName: name,
-          lastAutoName: lastAutoNameRef.current,
-          lookupTextIsQuery: !linkedWorkItem
-        })
+        (nameIsLookupText ||
+          shouldApplyWorkspaceSourceAutoName({
+            currentName: name,
+            lastAutoName: lastAutoNameRef.current,
+            lookupTextIsQuery: !linkedWorkItem
+          }))
       ) {
         setName(suggestedName)
         lastAutoNameRef.current = suggestedName
@@ -219,6 +225,13 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
       smartSourceSelectionRef
     ]
   )
+
+  const handleSmartJiraIssueSelect = useCallback(
+    (issue: JiraIssue, sourceContext: TaskSourceContext): void =>
+      applyIssueSource(buildJiraWorkspaceSource(issue), sourceContext),
+    [applyIssueSource]
+  )
+  const handleSmartYouTrackIssueSelect = useYouTrackIssueSelect(applyIssueSource, name)
 
   const handleClearSmartNameSelection = useCallback((): void => {
     smartSourceSelectionRef.current = null
@@ -290,6 +303,7 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
   return {
     handleSmartLinearIssueSelect,
     handleSmartJiraIssueSelect,
+    handleSmartYouTrackIssueSelect,
     handleClearSmartNameSelection,
     smartNameSelection
   }

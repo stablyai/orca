@@ -35,6 +35,7 @@ import { ensureLocalRuntimeCapabilities } from '../../../../runtime/local-runtim
 import { showLocalBaseRefUpdateSuggestionToast } from '@/components/sidebar/local-base-ref-suggestion-toast'
 import { requestWorktreeBaseFallbackNotice } from '@/components/worktree-base-fallback-notice'
 import { showLocalBaseRefRefreshToast } from './local-base-ref-refresh-toast'
+import { warnYouTrackLinkOnRemoteServer } from '@/components/youtrack/youtrack-remote-link-notice'
 import { applyCreatedWorktree } from './created-worktree-state-merge'
 import { adoptRuntimeProvisionedRoot } from './runtime-provisioned-root-adoption'
 import { isRuntimeLineageParentMissingError } from '../listing/runtime-worktree-rpc-errors'
@@ -243,6 +244,9 @@ export function createCreateWorktree(
           WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
           'Update the remote runtime to link Jira'
         )
+      }
+      if (target.kind === 'environment' && options?.linkedWorkItem?.provider === 'youtrack') {
+        warnYouTrackLinkOnRemoteServer()
       }
       if (
         options?.provisionedRoot &&

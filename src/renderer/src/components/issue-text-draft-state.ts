@@ -1,8 +1,7 @@
-import type { LinearIssue } from '../../../shared/linear/issue-types'
+/** Title and description of a provider issue; YouTrack maps its summary to `title`. */
+export type IssueTextDraftSource = { id: string; title: string; description?: string }
 
-type LinearIssueTextDraftSource = Pick<LinearIssue, 'description' | 'id' | 'title'>
-
-export type LinearIssueTextDraftState = {
+export type IssueTextDraftState = {
   issueId: string
   sourceTitle: string
   sourceDescription: string
@@ -10,14 +9,12 @@ export type LinearIssueTextDraftState = {
   description: string
 }
 
-function getLinearIssueDescription(issue: LinearIssueTextDraftSource): string {
+function getIssueDescription(issue: IssueTextDraftSource): string {
   return issue.description ?? ''
 }
 
-export function createLinearIssueTextDraftState(
-  issue: LinearIssueTextDraftSource
-): LinearIssueTextDraftState {
-  const description = getLinearIssueDescription(issue)
+export function createIssueTextDraftState(issue: IssueTextDraftSource): IssueTextDraftState {
+  const description = getIssueDescription(issue)
   return {
     issueId: issue.id,
     sourceTitle: issue.title,
@@ -27,13 +24,13 @@ export function createLinearIssueTextDraftState(
   }
 }
 
-export function resolveLinearIssueTextDraftState(
-  state: LinearIssueTextDraftState,
-  issue: LinearIssueTextDraftSource
-): LinearIssueTextDraftState {
-  const sourceDescription = getLinearIssueDescription(issue)
+export function resolveIssueTextDraftState(
+  state: IssueTextDraftState,
+  issue: IssueTextDraftSource
+): IssueTextDraftState {
+  const sourceDescription = getIssueDescription(issue)
   if (state.issueId !== issue.id) {
-    return createLinearIssueTextDraftState(issue)
+    return createIssueTextDraftState(issue)
   }
   if (state.sourceTitle === issue.title && state.sourceDescription === sourceDescription) {
     return state

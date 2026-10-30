@@ -1,6 +1,7 @@
 import React from 'react'
 import { EyeOff, Github, Gitlab, List } from 'lucide-react'
 import { JiraIcon } from '@/components/icons/JiraIcon'
+import { YouTrackIcon } from '@/components/icons/YouTrackIcon'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import {
   ContextMenu,
@@ -226,6 +227,14 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
                 onOpen={() => openTaskPage({ taskSource: 'jira' })}
               >
                 <JiraIcon className="size-3.5" />
+              </TaskProviderShortcut>
+            ) : null}
+            {visibleTaskProviders.includes('youtrack') ? (
+              <TaskProviderShortcut
+                label={translate('youtrack.sidebar.openTasks', 'Open YouTrack tasks')}
+                onOpen={() => openTaskPage({ taskSource: 'youtrack' })}
+              >
+                <YouTrackIcon className="size-3.5" />
               </TaskProviderShortcut>
             ) : null}
           </span>

@@ -1,25 +1,17 @@
 import { taskProviderErrorMessage } from '@/lib/task-provider-error-copy'
-import { ImeTextarea } from '@/lib/ime-text-field'
 import React, { useCallback, useRef, useState } from 'react'
-import { LoaderCircle } from 'lucide-react'
 import { toast } from 'sonner'
 
-import { LinearIssueMarkdownDescriptionEditor } from '@/components/LinearIssueMarkdownDescriptionEditor'
+import { IssueMarkdownDescriptionEditor } from '@/components/editor/IssueMarkdownDescriptionEditor'
+import { IssueTitleField } from '@/components/editor/IssueTitleField'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
-import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import { getScreenSubmitShortcutLabel } from '@/lib/screen-submit-shortcut'
 import { linearUpdateIssue } from '@/runtime/runtime-linear-issue-mutations'
 import type { LinearIssue } from '../../../shared/linear/issue-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
-import {
-  getLinearIssueTextSavePlan,
-  type LinearIssueTextField
-} from './linear-issue-text-save-plan'
-import {
-  createLinearIssueTextDraftState,
-  resolveLinearIssueTextDraftState
-} from './linear-issue-text-draft-state'
+import { getIssueTextSavePlan, type IssueTextField } from './issue-text-save-plan'
+import { createIssueTextDraftState, resolveIssueTextDraftState } from './issue-text-draft-state'
 import { translate } from '@/i18n/i18n'
 import { defaultScopeSource } from '@/lib/default-creation-host'
 
@@ -41,11 +33,11 @@ export function LinearIssueTextEditor({
   const settings = useAppStore((s) => s.settings)
   const providerSettings = sourceContext ?? defaultScopeSource(settings)
   const patchLinearIssue = useAppStore((s) => s.patchLinearIssue)
-  const [draftState, setDraftState] = useState(() => createLinearIssueTextDraftState(issue))
-  const [savingField, setSavingField] = useState<LinearIssueTextField | null>(null)
+  const [draftState, setDraftState] = useState(() => createIssueTextDraftState(issue))
+  const [savingField, setSavingField] = useState<IssueTextField | null>(null)
   const lastIssueIdRef = useRef(issue.id)
   const mountedRef = useMountedRef()
-  const resolvedDraftState = resolveLinearIssueTextDraftState(draftState, issue)
+  const resolvedDraftState = resolveIssueTextDraftState(draftState, issue)
   const issueChanged = draftState.issueId !== issue.id
   if (resolvedDraftState !== draftState) {
     // Reconcile untouched drafts before paint without clobbering unsaved fields when Linear pushes changes.
@@ -61,7 +53,7 @@ export function LinearIssueTextEditor({
   const updateTitleDraft = useCallback(
     (title: string): void => {
       setDraftState((current) => ({
-        ...resolveLinearIssueTextDraftState(current, issue),
+        ...resolveIssueTextDraftState(current, issue),
         title
       }))
     },
@@ -70,7 +62,7 @@ export function LinearIssueTextEditor({
   const updateDescriptionDraft = useCallback(
     (description: string): void => {
       setDraftState((current) => ({
-        ...resolveLinearIssueTextDraftState(current, issue),
+        ...resolveIssueTextDraftState(current, issue),
         description
       }))
     },
@@ -78,8 +70,8 @@ export function LinearIssueTextEditor({
   )
 
   const saveField = useCallback(
-    async (field: LinearIssueTextField, descriptionOverride?: string) => {
-      const savePlan = getLinearIssueTextSavePlan({
+    async (field: IssueTextField, descriptionOverride?: string) => {
+      const savePlan = getIssueTextSavePlan({
         descriptionDraft: descriptionOverride ?? descriptionDraft,
         field,
         issue: { description: issue.description, title: issue.title },
@@ -154,35 +146,12 @@ export function LinearIssueTextEditor({
     ]
   )
 
-  const handleDescriptionKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (!isScreenSubmitShortcut(event)) {
-        return
-      }
-      event.preventDefault()
-      event.currentTarget.blur()
-    },
-    []
-  )
-
   const saveDescriptionValue = useCallback(
     (value: string) => {
       updateDescriptionDraft(value)
       void saveField('description', value)
     },
     [saveField, updateDescriptionDraft]
-  )
-
-  const handleTitleKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (event.key === 'Enter') {
-        event.preventDefault()
-        event.currentTarget.blur()
-        return
-      }
-      handleDescriptionKeyDown(event)
-    },
-    [handleDescriptionKeyDown]
   )
 
   const titleClass =
@@ -192,40 +161,18 @@ export function LinearIssueTextEditor({
   return (
     <div className="min-w-0">
       {fields !== 'description' ? (
-        <div className="relative">
-          <ImeTextarea
-            value={titleDraft}
-            onChange={(event) => updateTitleDraft(event.target.value)}
-            onBlur={() => void saveField('title')}
-            onKeyDown={handleTitleKeyDown}
-            disabled={savingField === 'title'}
-            rows={1}
-            aria-label={translate(
-              'auto.components.LinearIssueTextEditor.04d73b72dc',
-              'Issue title'
-            )}
-            // CSS field sizing grows and rewraps titles without JS measurement.
-            className={cn(
-              'peer scrollbar-sleek block w-full resize-none overflow-hidden rounded-md border border-transparent bg-transparent px-1 py-0 text-foreground outline-none transition hover:border-border/50 hover:bg-accent/40 focus-visible:border-border focus-visible:bg-background focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-80',
-              '[field-sizing:content]',
-              titleClass
-            )}
-          />
-          <div className="pointer-events-none absolute bottom-1.5 right-2 z-10 flex items-center gap-1 text-[10px] text-muted-foreground/75 opacity-0 transition-opacity peer-focus:opacity-100">
-            <kbd className="inline-flex h-4 min-w-4 select-none items-center justify-center rounded border border-border bg-muted/70 px-1 font-mono text-[9px] font-medium shadow-xs">
-              ↵
-            </kbd>
-            <span>{translate('auto.components.LinearIssueTextEditor.947ba2d6f4', 'to save')}</span>
-          </div>
-          {savingField === 'title' ? (
-            <LoaderCircle className="absolute right-2 top-2 size-4 animate-spin text-muted-foreground" />
-          ) : null}
-        </div>
+        <IssueTitleField
+          value={titleDraft}
+          onChange={updateTitleDraft}
+          onSave={() => void saveField('title')}
+          saving={savingField === 'title'}
+          className={titleClass}
+        />
       ) : null}
 
       {fields !== 'title' ? (
         <div className="relative">
-          <LinearIssueMarkdownDescriptionEditor
+          <IssueMarkdownDescriptionEditor
             value={descriptionDraft}
             imageUrls={issue.descriptionImageUrls}
             onChange={updateDescriptionDraft}

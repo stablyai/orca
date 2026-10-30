@@ -10,6 +10,9 @@ import type {
 import { useJiraSourceConnection } from './use-jira-source-connection'
 import { useJiraUrlSource } from './use-jira-url-source'
 import { useLinearSourceConnection } from './use-linear-source-connection'
+import { useYouTrackSourceIssues } from '@/components/youtrack/use-youtrack-source-issues'
+import { useYouTrackVisible } from '@/components/youtrack/use-youtrack-visible'
+import { useYouTrackStore } from '@/components/youtrack/youtrack-store'
 import { useSmartWorkspaceFieldAvailability } from './use-smart-workspace-field-availability'
 import { useWorkItemSourceState } from './use-work-item-source-state'
 import { useJiraComposerProject } from './use-jira-composer-project'
@@ -162,6 +165,15 @@ export function useWorkItemSourceFoundation(props: NormalizedWorkItemSourceSearc
     sourceContext: jiraSourceContext,
     connection: jiraConnection
   })
+  const youtrackSourceEnabled = !disabled && !textOnly && !sourceSelected
+  const { issues: youtrackIssues, loading: youtrackLoading } = useYouTrackSourceIssues({
+    value,
+    debouncedQuery: state.debouncedQuery,
+    suggest: youtrackSourceEnabled && (state.mode === 'smart' || state.mode === 'youtrack'),
+    search: youtrackSourceEnabled && state.mode === 'youtrack'
+  })
+  const youtrackConnected = useYouTrackStore((s) => s.status.connected)
+  const youtrackVisible = useYouTrackVisible()
   const jiraSourceConnected = jiraConnectionStatus?.connected === true
   const jiraProject = useJiraComposerProject(
     selectedRepo,
@@ -186,7 +198,8 @@ export function useWorkItemSourceFoundation(props: NormalizedWorkItemSourceSearc
     linearStatusChecked: hasLinearSearchSource || linearStatusChecked,
     linearStatusPending: hasLinearSearchSource && !linearConnection.loaded,
     checkLinearConnection,
-    jiraSourceConnected
+    jiraSourceConnected,
+    youtrackSourceConnected: youtrackConnected && youtrackVisible
   })
 
   return {
@@ -214,6 +227,8 @@ export function useWorkItemSourceFoundation(props: NormalizedWorkItemSourceSearc
     jiraSource,
     jiraSourceConnected,
     ...jiraProject,
+    youtrackIssues,
+    youtrackLoading,
     showJiraSiteContext,
     jiraStatusId,
     linearStatusId

@@ -1,3 +1,5 @@
+import { YOUTRACK_FLAG_HELP } from './youtrack-flag-help'
+
 // File focus differs from terminal create's shared --focus help.
 const FILE_OPEN_FOCUS_HELP =
   "--focus                Bring the user to the file (switches Orca's window to its worktree)"
@@ -114,7 +116,8 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
   download: {
     selector: '--selector <ref>       Element ref or CSS selector of the download link',
     path: '--path <path>          File path to save the download to'
-  }
+  },
+  ...YOUTRACK_FLAG_HELP
 }
 
 export function formatCommandScopedFlagHelp(command: string, flag: string): string | undefined {
