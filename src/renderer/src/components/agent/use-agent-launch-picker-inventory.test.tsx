@@ -686,7 +686,7 @@ it('updates a mounted setup from current host rows without making ordinary actio
         createElement(
           DropdownMenuContent,
           null,
-          createElement(AgentLaunchPickerMenu, { model: menu, entries: current, runLaunch: launch })
+          createElement(AgentLaunchPickerMenu, { entries: current, runLaunch: launch })
         )
       )
     )

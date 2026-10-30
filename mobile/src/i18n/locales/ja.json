@@ -957,9 +957,7 @@
       "empty": "カスタムショートカットはまだ設定されていません。",
       "removeShortcut": "{{label}} を削除",
       "resetDefaults": "初期設定に戻す",
-      "resetDescription": "すべての組み込みショートカットキーを元の順序で表示",
-      "shortcutBar": "ショートカットバー",
-      "shortcutBarDescription": "キーの表示・非表示を切り替えられます。ドラッグハンドルを長押ししてキーをドラッグすると、ターミナルのショートカットバーのキーを好みの順序に並べ替えられます。"
+      "resetDescription": "すべての組み込みショートカットキーを元の順序で表示"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "レート制限のリセット枠を使用しますか？",
@@ -1389,14 +1387,6 @@
     },
     "hostPendingCreationRow": {
       "creatingWorkspace": "ワークスペースを作成中…"
-    },
-    "hostRailActions": {
-      "accounts": "アカウント",
-      "closeSearch": "検索を閉じる",
-      "floatingWorkspace": "フローティングワークスペース",
-      "newWorkspace": "新規ワークスペース",
-      "searchWorkspaces": "ワークスペースの検索",
-      "tasks": "タスク"
     },
     "hostScreenHeader": {
       "accounts": "アカウント",
@@ -1836,16 +1826,8 @@
   },
   "session": {
     "accessoryKeys": {
-      "addCustomShortcut": "カスタムショートカットを追加",
       "dismissKeyboard": "キーボードを閉じる",
-      "dismissKeyboardHint": "現在のターミナルセッションを開いたまま、ソフトウェアキーボードを非表示にします。",
-      "paste": "貼り付け",
-      "pasteFromClipboard": "クリップボードから貼り付け",
-      "sendKey": "{{label}} を送信",
-      "switchToBufferedInput": "バッファー式のコマンド入力に切り替え",
-      "switchToDesktopMode": "デスクトップモードに切り替え",
-      "switchToLiveInput": "ターミナルへのリアルタイム入力に切り替え",
-      "switchToPhoneMode": "スマートフォンモードに切り替え"
+      "sendKey": "{{label}} を送信"
     },
     "activeContent": {
       "createTab": "タブを作成",
@@ -1955,21 +1937,12 @@
       "titleRight": "右側のタブを閉じますか？"
     },
     "commandDock": {
-      "commandPlaceholder": "コマンドを入力してください…",
       "liveInputHint": "入力したテキストは、選択中のターミナルに直接送信されます。",
       "liveInputLabel": "ターミナルへのリアルタイム入力",
       "sendCommand": "コマンドを送信"
     },
     "contentRow": {
       "dismissCreationWarning": "ワークスペース作成の警告を閉じる"
-    },
-    "diffCommentLineRow": {
-      "addNote": "{{line}} 行目にメモを追加",
-      "deleteNote": "{{line}} 行目のメモを削除",
-      "diffLine": "{{title}} の差分 {{line}} 行目",
-      "line": "{{line}} 行目",
-      "placeholder": "レビューメモを追加",
-      "saveNote": "メモを保存"
     },
     "diffLineRow": {
       "addNoteLabel": "{{line}} 行目にメモを追加",
@@ -2140,6 +2113,7 @@
       "requestFailed": "リクエストに失敗しました: {{method}}"
     },
     "header": {
+      "workspaceDetailsHint": "ワークスペースの完全な名前と場所を表示します",
       "backToWorktrees": "ワークツリー一覧に戻る",
       "moreActions": "セッションのその他の操作",
       "openFileExplorer": "ファイルエクスプローラーを開く",
@@ -2347,9 +2321,6 @@
       "terminalName": "ターミナル名",
       "unsavedMarkdown": "Markdown の未保存の変更",
       "urlPrompt": "URL を入力してください。空欄のままにすると新規タブが開きます。"
-    },
-    "sideRail": {
-      "backToWorktrees": "ワークツリーに戻る"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "このワークスペースホストでは有効な AI Agent が検出されませんでした。",

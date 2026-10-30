@@ -1,33 +1,199 @@
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
-import { act, cleanup, fireEvent, renderHook, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { render } from './native-chat-tooltip-test-harness'
 import { useAppStore } from '@/store'
-import { makeTab, makeWorktree, TEST_REPO } from '@/store/slices/store-test-helpers'
-import { readStoreListenerCount } from '@/store/store-listener-census'
-import { getKnownExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { resolveStructuredAgentSessionOwner } from '@/runtime/structured-agent-session-owner'
-import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import type { AgentMessageSenderView } from '../../../../shared/agent-session/agent-message-presentation'
-import { runtimeEnvironmentStatusFromSnapshot } from '../../../../shared/runtime-host-status'
-import * as presentation from '@/lib/program-status/agent-row-presentation'
-import * as cache from '@/components/dashboard/worktree-agent-rows-cache'
-import * as selectors from '@/components/sidebar/worktree-agent-row-selectors'
-import { useAgentMessageSenderView } from './native-chat-agent-message-sender-view'
-import { useAgentMessageSenderSource } from './native-chat-agent-message-sender-source'
-import { AgentStateDot } from '@/components/AgentStateDot'
+import {
+  initialStore,
+  from,
+  status,
+  resetSenderStore
+} from './native-chat-agent-sender.test-fixture'
 import { AGENT_SESSION_WRITE_NOTICE_COPY } from '../../../../shared/agent-session-write-notice-copy'
+import * as terminalLinks from '@/components/terminal-pane/terminal-handle-links'
 import * as markdown from './NativeChatMarkdown'
 import * as display from '../../../../shared/agent-session/agent-message-display-text'
 import type * as SonnerModule from 'sonner'
 import type * as RuntimeRpc from '@/runtime/runtime-rpc-client'
-import type { AgentMessageSource } from '../../../../shared/agent-session/agent-session-message-source'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import { createNativeChatMessageListProjection } from './native-chat-message-list-projection'
 import { buildNativeChatTranscriptSlots } from './native-chat-transcript-slots'
 import { nativeChatSlotCopyText } from './native-chat-message-copy-text'
 import { NativeChatAgentMessageCard } from './NativeChatAgentMessageCard'
+import { MessageRow } from './NativeChatMessageRow'
+import { projectStructuredAgentStartItem } from '../../../../shared/structured-agent-start-projection'
+import {
+  createStructuredQuestionProjection,
+  projectStructuredQuestionMessages
+} from '../../../../shared/structured-agent-question-projection'
+import { desktopStructuredTranscript } from './structured-agent-session-message-projection'
+import {
+  EMPTY_STRUCTURED_AGENT_SESSION,
+  reduceStructuredAgentSession
+} from '../../../../shared/structured-agent-session-reducer'
+import type { AgentSessionHistoryPage } from '../../../../shared/agent-session-wire'
+import { projectStructuredItemToNativeChat } from '../../../../shared/structured-agent-session-projection'
+import { isAdmissibleAgentJournalRenderItem } from '../../../../shared/agent-session-journal-schemas'
+import { agentMessageHeading } from '../../../../shared/agent-session/agent-message-presentation'
+import { nativeChatTurnFoldRow } from '../../../../shared/native-chat/transcript/native-chat-turn-fold'
+import { isNoiseMessage } from '../../../../shared/native-chat-noise'
+import { nativeChatRowSpeaksOrActs } from '../../../../shared/native-chat/native-chat-trailing-run'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+
+it('reloads a positioned worker start into the shared card with full task, Copy and navigation', async () => {
+  const task = `  Task with [a link][target].\n\n${'More task text.\n'.repeat(20)}END  \n\n[target]: https://example.com\n`
+  const item: AgentJournalRenderItem = {
+    itemId: 'start:dispatch',
+    revision: 1,
+    sequence: 7,
+    observedAt: 1,
+    body: { kind: 'agent-start', dispatchId: 'dispatch', worker: from.senders[0], task }
+  }
+  const reloaded: unknown = JSON.parse(JSON.stringify(item))
+  if (!isAdmissibleAgentJournalRenderItem(reloaded)) {
+    throw new Error('start item did not survive admission')
+  }
+  const message = projectStructuredAgentStartItem(reloaded)
+  if (!message?.from) {
+    throw new Error('start item did not project')
+  }
+  expect(message).toMatchObject({
+    role: 'system',
+    agentStart: true,
+    journalPosition: { sequence: 7, index: 0 },
+    timestamp: 1
+  })
+  expect(agentMessageHeading(message.from, message.agentStart)).toBe('started')
+  expect(nativeChatTurnFoldRow(message, 'turn', false).outlivesTurn).toBe(true)
+  expect(isNoiseMessage(message)).toBe(false)
+  expect(nativeChatRowSpeaksOrActs(message, true, new Map())).toBe(false)
+  const future: unknown = { ...item, body: { kind: 'future-start' } }
+  if (!isAdmissibleAgentJournalRenderItem(future)) {
+    throw new Error('unknown journal kind was refused')
+  }
+  expect(projectStructuredItemToNativeChat(future)).toBeNull()
+  expect(projectStructuredAgentStartItem({ ...item, shortened: true })).toBeNull()
+  expect(projectStructuredItemToNativeChat(reloaded)).toBeNull()
+  height = 120
+  const writeClipboardText = vi.fn(async () => {})
+  vi.stubGlobal('api', { ui: { writeClipboardText } })
+  render(
+    <MessageRow
+      message={message}
+      expandSignal={false}
+      onScrollMessageToTop={() => {}}
+      runtimeContext={{ worktreeId: 'wt-chat', worktreePath: null, target: { kind: 'local' } }}
+    />
+  )
+  expect(screen.getByText('Started worker')).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'a link' })).toHaveAttribute(
+    'href',
+    'https://example.com'
+  )
+  expect(screen.getByRole('button', { name: 'Show more' })).toHaveAttribute(
+    'aria-expanded',
+    'false'
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Show more' }))
+  expect(screen.getByRole('button', { name: 'Show less' })).toHaveAttribute('aria-expanded', 'true')
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Copy message' })))
+  expect(writeClipboardText).toHaveBeenCalledWith(task)
+  expect(nativeChatSlotCopyText(slots(message), message.id)).toBe(task)
+  fireEvent.click(screen.getByRole('button', { name: 'Show less' }))
+  expect(screen.getByRole('button', { name: 'Show more' })).toHaveAttribute(
+    'aria-expanded',
+    'false'
+  )
+  navigation.rpc.mockResolvedValue({ location: { kind: 'terminal', handle: 'term_0' } })
+  const focus = vi.spyOn(terminalLinks, 'focusRendererTerminalHandle').mockReturnValue(true)
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Build cards' })))
+  expect(navigation.rpc).toHaveBeenCalledWith({ kind: 'local' }, 'orchestration.partyLocation', {
+    address: 'term_0'
+  })
+  expect(focus).toHaveBeenCalledWith('term_0', null)
+})
+
+it.each(['', '   ', '<system-reminder>Internal noise</system-reminder>'])(
+  'retains a creation fact through real tool/start/answer slots for %j',
+  (task) => {
+    const message = projectStructuredAgentStartItem({
+      itemId: 'fact',
+      revision: 1,
+      sequence: 2,
+      observedAt: 1,
+      body: { kind: 'agent-start', dispatchId: 'd', worker: from.senders[0], task }
+    })!
+    for (const working of [true, false]) {
+      const positioned = slots(message, true, working)
+      const fact = positioned.find(
+        (slot) => slot.kind === 'message' && slot.message.id === message.id
+      )
+      expect(fact).toMatchObject({ kind: 'message', folded: false, drawsMessage: true })
+      expect(nativeChatSlotCopyText(positioned, message.id)).toBe(task)
+      expect(
+        positioned.some((slot) => slot.kind === 'message' && slot.message.id === 'answer')
+      ).toBe(true)
+    }
+    render(<MessageRow message={message} expandSignal={false} onScrollMessageToTop={() => {}} />)
+    expect(screen.getByText('Started worker')).toBeInTheDocument()
+  }
+)
+
+it('renders unreadable worker metadata with the existing unnamed fallback and no navigation', () => {
+  const raw: unknown = {
+    itemId: 'future-worker',
+    revision: 1,
+    sequence: 1,
+    observedAt: 1,
+    body: {
+      kind: 'agent-start',
+      dispatchId: 'd',
+      task: 'Keep the complete task',
+      worker: { futureIdentity: 'new' }
+    }
+  }
+  if (!isAdmissibleAgentJournalRenderItem(raw)) {
+    throw new Error('open metadata was refused')
+  }
+  const message = projectStructuredAgentStartItem(raw)!
+  render(
+    <MessageRow
+      message={message}
+      expandSignal={false}
+      onScrollMessageToTop={() => {}}
+      runtimeContext={context}
+    />
+  )
+  expect(screen.getByText('Started worker')).toBeInTheDocument()
+  expect(screen.getByText('an agent')).toBeInTheDocument()
+  expect(screen.getByText('Keep the complete task')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'an agent' })).toBeNull()
+})
+
+it.each([false, true])(
+  'isolates canonical and desktop policy caches, desktop first=%s',
+  (desktopFirst) => {
+    const item: AgentJournalRenderItem = {
+      itemId: 'policy-start',
+      revision: 1,
+      sequence: 1,
+      observedAt: 1,
+      body: { kind: 'agent-start', dispatchId: 'd', worker: from.senders[0], task: 'Full task' }
+    }
+    const items = [item]
+    if (desktopFirst) {
+      desktopStructuredTranscript.messages(items)
+    } else {
+      projectStructuredQuestionMessages(items)
+    }
+    expect(projectStructuredQuestionMessages(items)).toEqual([])
+    const messages = desktopStructuredTranscript.messages(items)
+    expect(messages).toHaveLength(1)
+    expect(desktopStructuredTranscript.messages(items)).toBe(messages)
+    expect(desktopStructuredTranscript.messages([...items])[0]).toBe(messages[0])
+  }
+)
 
 const navigation = vi.hoisted(() => ({ rpc: vi.fn(), toast: vi.fn() }))
 vi.mock('@/runtime/runtime-rpc-client', async (original) => ({
@@ -47,85 +213,13 @@ vi.mock('sonner', async (importOriginal) => {
     )
   }
 })
-const initialStore = useAppStore.getState()
-const LEAF = '11111111-1111-4111-8111-111111111111'
-const renders = new Map<number, number>()
-const views = new Map<number, AgentMessageSenderView>()
-function status(i: number, worktreeId = 'workspace'): AgentStatusEntry {
-  return {
-    paneKey: `tab-${i}:${LEAF}`,
-    worktreeId,
-    terminalHandle: `term_${i}`,
-    agentType: 'claude',
-    state: 'working',
-    prompt: 'work',
-    updatedAt: 2_000_000,
-    stateStartedAt: 2_000_000,
-    stateHistory: []
-  }
-}
-function Probe({
-  id,
-  workspace = 'workspace',
-  remote = false
-}: {
-  id: number
-  workspace?: string
-  remote?: boolean
-}) {
-  const value = useAgentMessageSenderView(
-    {
-      party: { address: `term_${id}`, terminalHandle: `term_${id}`, orcaSessionId: null },
-      name: 'Sender'
-    },
-    workspace,
-    remote ? { kind: 'environment', environmentId: 'remote' } : { kind: 'local' }
-  )
-  views.set(id, value)
-  renders.set(id, (renders.get(id) ?? 0) + 1)
-  return null
-}
-function write(i: number, update: Partial<AgentStatusEntry>) {
-  const state = useAppStore.getState()
-  const key = status(i).paneKey
-  act(() =>
-    useAppStore.setState({
-      agentStatusByPaneKey: {
-        ...state.agentStatusByPaneKey,
-        [key]: { ...state.agentStatusByPaneKey[key], ...update }
-      },
-      agentStatusEpoch: state.agentStatusEpoch + 1
-    })
-  )
-}
-
 let height = 48
 let resize: () => void
 let disconnects = 0
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(2_000_000)
-  renders.clear()
-  views.clear()
-  useAppStore.setState(
-    {
-      ...initialStore,
-      activeWorktreeId: 'workspace',
-      activeWorkspaceExecutionHostId: 'local',
-      tabsByWorktree: { workspace: [makeTab({ id: 'tab-0', worktreeId: 'workspace' })] },
-      unifiedTabsByWorktree: {},
-      agentStatusByPaneKey: { [status(0).paneKey]: status(0) },
-      retainedAgentsByPaneKey: {},
-      migrationUnsupportedByPtyId: {},
-      runtimeAgentOrchestrationByPaneKey: {},
-      runtimePaneTitlesByTabId: {},
-      terminalLayoutsByTabId: {},
-      ptyIdsByTabId: {},
-      paneForegroundAgentByPaneKey: {},
-      agentStatusEpoch: 1
-    },
-    true
-  )
+  resetSenderStore()
   navigation.rpc.mockReset()
   navigation.toast.mockReset()
   height = 48
@@ -168,14 +262,6 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-const from: AgentMessageSource = {
-  kind: 'agent',
-  orchestration: null,
-  senders: ['Build cards', 'Other sender'].map((name, i) => ({
-    name,
-    party: { address: `term_${i}`, terminalHandle: `term_${i}`, orcaSessionId: null }
-  }))
-}
 const context = { worktreeId: 'workspace', worktreePath: null, target: { kind: 'local' as const } }
 function card(message: NativeChatMessage) {
   return (
@@ -188,17 +274,43 @@ function card(message: NativeChatMessage) {
     />
   )
 }
-function slots(message: NativeChatMessage) {
+function slots(message: NativeChatMessage, surrounding = false, working = false) {
+  const input: NativeChatMessage[] = surrounding
+    ? [
+        {
+          id: 'tool',
+          role: 'assistant',
+          source: 'transcript',
+          timestamp: 0,
+          journalPosition: { sequence: 1, index: 0 },
+          blocks: [{ type: 'tool-call', name: 'shell', input: { command: 'inspect' } }]
+        },
+        message,
+        {
+          id: 'answer',
+          role: 'assistant',
+          source: 'transcript',
+          timestamp: 2,
+          journalPosition: { sequence: 3, index: 0 },
+          blocks: [{ type: 'text', text: 'Final answer' }]
+        }
+      ]
+    : [message]
+  const messages = createNativeChatMessageListProjection()(input).conversation
   return buildNativeChatTranscriptSlots({
-    messages: [message],
-    turnKeys: [undefined],
-    liveTurnKey: undefined,
+    messages,
+    turnKeys: messages.map(() => (surrounding ? 'turn' : undefined)),
+    liveTurnKey: working ? 'turn' : undefined,
     receipts: new Map(),
-    turnStatuses: { active: null, completedByTurn: {} },
+    turnStatuses: {
+      active: working ? { startedAt: 1, thinking: false, workedSeconds: null } : null,
+      completedByTurn:
+        surrounding && !working ? { turn: { startedAt: 1, thinking: false, workedSeconds: 1 } } : {}
+    },
     turnDiffs: new Map(),
     expandedTurnKeys: new Set(),
-    isWorking: false,
-    lifecycleWorking: false
+    isWorking: working,
+    lifecycleWorking: working
   })
 }
 
@@ -405,232 +517,183 @@ it.each(['task', 'mail'] as const)(
   }
 )
 
-it.each([100, 1000])(
-  'shares actual row acquisition and isolates selected progress across %i cards',
-  (n) => {
-    let visits = 0
-    const live = new Proxy(
-      Object.fromEntries(
-        Array.from({ length: n }, (_, i) => {
-          const entry = status(i)
-          return [entry.paneKey, entry]
-        })
-      ),
-      {
-        ownKeys(target) {
-          const keys = Object.getOwnPropertyNames(target)
-          visits += keys.length
-          return keys
+it.each([10, 100])(
+  'bounds real publication work and settled body renders with %i starts',
+  async (count) => {
+    let itemVisits = 0
+    let taskReads = 0
+    let listVisits = 0
+    let conversions = 0
+    const projection = createStructuredQuestionProjection((item) => {
+      conversions++
+      return projectStructuredAgentStartItem(item)
+    })
+    const ordinary: AgentJournalRenderItem[] = Array.from({ length: 9 * count }, (_, index) => ({
+      itemId: `ordinary-${index}`,
+      revision: 1,
+      sequence: index + 1,
+      observedAt: 1,
+      body: {
+        kind: 'message',
+        role: 'assistant',
+        blocks: [{ type: 'text', text: `History ${index}` }]
+      }
+    }))
+    const starts: AgentJournalRenderItem[] = Array.from({ length: count }, (_, index) => {
+      const body = {
+        kind: 'agent-start' as const,
+        dispatchId: `d-${index}`,
+        worker: from.senders[0],
+        get task() {
+          taskReads++
+          return `Task ${index}`
         }
       }
-    )
-    useAppStore.setState({
-      agentStatusByPaneKey: live,
-      tabsByWorktree: {
-        workspace: Array.from({ length: n }, (_, i) =>
-          makeTab({ id: `tab-${i}`, worktreeId: 'workspace' })
-        )
-      },
-      terminalLayoutsByTabId: Object.fromEntries(
-        Array.from({ length: n }, (_, i): [string, TerminalLayoutSnapshot] => [
-          `tab-${i}`,
-          { root: { type: 'leaf', leafId: LEAF }, activeLeafId: LEAF, expandedLeafId: null }
-        ])
-      )
+      return {
+        itemId: `start-${index}`,
+        revision: 1,
+        sequence: ordinary.length + index + 1,
+        observedAt: 1,
+        get body() {
+          itemVisits++
+          return body
+        }
+      }
     })
-    const normalize = vi.spyOn(presentation, 'resolveRowProgramStatus')
-    const mounted = render(
+    const items = [...ordinary, ...starts]
+    const page: AgentSessionHistoryPage = {
+      sessionId: 'scale',
+      epoch: 'scale-epoch',
+      direction: 'tail',
+      items,
+      removedItemIds: [],
+      submissions: [],
+      window: {
+        oldest: { epoch: 'scale-epoch', sequence: 1 },
+        newest: { epoch: 'scale-epoch', sequence: items.length },
+        nextCursor: { epoch: 'scale-epoch', sequence: 1 }
+      },
+      liveCursor: { epoch: 'scale-epoch', sequence: items.length },
+      hasOlder: false,
+      hasNewer: false
+    }
+    let state = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
+      type: 'history-page',
+      page
+    })
+    const readRows = () => {
+      const counted = state.items.slice()
+      counted.forEach((item, index) => {
+        Object.defineProperty(counted, index, {
+          get() {
+            listVisits++
+            return item
+          }
+        })
+      })
+      return projection.messages(counted).filter(({ agentStart }) => agentStart)
+    }
+    let messages = readRows()
+    expect(conversions).toBe(items.length)
+    expect(taskReads).toBe(count)
+    // One existing question pass visits the source array once; the second pass visits its composed rows.
+    expect(listVisits).toBe(items.length)
+    expect(itemVisits).toBeLessThan(100 * items.length)
+    const markdownRender = vi.spyOn(markdown, 'NativeChatMarkdown')
+    const scroll = () => {}
+    const rows = () => (
       <>
-        {Array.from({ length: n }, (_, id) => (
-          <Probe key={id} id={id} />
+        {messages.map((message) => (
+          <MessageRow
+            key={message.id}
+            message={message}
+            runtimeContext={context}
+            expandSignal={false}
+            onScrollMessageToTop={scroll}
+          />
         ))}
       </>
     )
-    // Handle lookup, visible-authority acquisition and sidebar indexing each enumerate the N live entries.
-    expect(visits).toBe(n * 3)
-    expect(normalize).toHaveBeenCalledTimes(n)
-    for (let i = 0; i < n; i++) {
-      expect(views.get(i)?.dot).toBe('working')
-    }
-    const before = new Map(renders)
-    visits = 0
-    normalize.mockClear()
-    act(() => useAppStore.setState({ sidebarBody: 'agents' }))
-    expect(visits).toBe(0)
-    expect(normalize).not.toHaveBeenCalled()
-    expect(renders).toEqual(before)
-    for (const progress of [40, 60]) {
-      normalize.mockClear()
-      const epoch = useAppStore.getState().agentStatusEpoch
-      act(() =>
-        useAppStore.getState().setAgentProgramStatus(status(0).paneKey, {
-          state: 'working',
-          progress,
-          observedAt: 2_000_000
-        })
-      )
-      expect(useAppStore.getState().agentStatusEpoch).toBe(epoch)
-      expect(normalize).toHaveBeenCalledTimes(n)
-      expect(views.get(0)?.progress).toBe(progress)
-      expect(renders.get(0)).toBe(before.get(0)! + (progress === 40 ? 1 : 2))
-      for (let i = 1; i < n; i++) {
-        expect(renders.get(i)).toBe(before.get(i))
+    const mounted = render(rows())
+    await act(async () => {})
+    markdownRender.mockClear()
+    navigation.rpc.mockClear()
+    itemVisits = taskReads = listVisits = conversions = 0
+    // Real history publication with identical immutable rows must reuse their body construction.
+    state = reduceStructuredAgentSession(state, {
+      type: 'history-page',
+      page: { ...page, items: [...items] }
+    })
+    messages = readRows()
+    await act(async () => mounted.rerender(rows()))
+    expect(conversions).toBe(0)
+    expect(taskReads).toBe(0)
+    expect(listVisits).toBe(items.length)
+    expect(itemVisits).toBeLessThan(100 * items.length)
+    expect(markdownRender).not.toHaveBeenCalled()
+    const unrelated: AgentJournalRenderItem = {
+      itemId: 'new-answer',
+      revision: 1,
+      sequence: items.length + 1,
+      observedAt: 2,
+      body: {
+        kind: 'message',
+        role: 'assistant',
+        blocks: [{ type: 'text', text: 'Another row streams' }]
       }
     }
-    mounted.unmount()
+    state = reduceStructuredAgentSession(state, {
+      type: 'event',
+      event: {
+        type: 'batch',
+        sessionId: 'scale',
+        batch: {
+          cursor: { epoch: 'scale-epoch', sequence: items.length + 1 },
+          items: [unrelated],
+          removedItemIds: [],
+          submissions: []
+        }
+      }
+    })
+    messages = readRows()
+    await act(async () => mounted.rerender(rows()))
+    expect(conversions).toBe(1)
+    expect(taskReads).toBe(0)
+    expect(markdownRender).not.toHaveBeenCalled()
+    conversions = 0
+    // A relevant live revision updates its own body in a distinct act turn.
+    const revised: AgentJournalRenderItem = {
+      ...starts[0],
+      revision: 2,
+      body: {
+        kind: 'agent-start',
+        dispatchId: 'd-0',
+        worker: from.senders[0],
+        task: 'Changed task'
+      }
+    }
+    state = reduceStructuredAgentSession(state, {
+      type: 'event',
+      event: {
+        type: 'batch',
+        sessionId: 'scale',
+        batch: {
+          cursor: { epoch: 'scale-epoch', sequence: items.length + 2 },
+          items: [revised],
+          removedItemIds: [],
+          submissions: []
+        }
+      }
+    })
+    messages = readRows()
+    await act(async () => mounted.rerender(rows()))
+    expect(conversions).toBe(1)
+    expect(markdownRender).toHaveBeenCalledTimes(1)
+    expect(screen.getByText('Changed task')).toBeInTheDocument()
+    expect(
+      navigation.rpc.mock.calls.filter(([, method]) =>
+        /agentSession\.item|capabilit/i.test(String(method))
+      )
+    ).toEqual([])
   }
 )
-
-it('keeps other hosts isolated, retains completed senders, and releases disconnected subscriptions', () => {
-  const create = vi.spyOn(cache, 'createWorktreeAgentRowsCache')
-  const baseline = readStoreListenerCount()
-  expect(baseline).not.toBeNull()
-  const other = status(9, 'remote')
-  useAppStore.setState({
-    repos: [TEST_REPO],
-    worktreesByRepo: {
-      [TEST_REPO.id]: [
-        makeWorktree({ id: 'remote', repoId: TEST_REPO.id, hostId: 'runtime:remote' })
-      ]
-    },
-    tabsByWorktree: {
-      ...useAppStore.getState().tabsByWorktree,
-      remote: [makeTab({ id: 'tab-9', worktreeId: 'remote' })]
-    },
-    agentStatusByPaneKey: { ...useAppStore.getState().agentStatusByPaneKey, [other.paneKey]: other }
-  })
-  const mounted = render(
-    <>
-      <Probe id={0} />
-      <Probe id={9} workspace="remote" remote />
-    </>
-  )
-  expect(readStoreListenerCount()).toBeGreaterThan(baseline!)
-  const leased = create.mock.results.flatMap((result) =>
-    result.type === 'return' && result.value.byWorktree.size ? [result.value] : []
-  )
-  expect(leased.flatMap((value) => [...value.byWorktree.keys()]).sort()).toEqual([
-    'remote',
-    'workspace'
-  ])
-  const before = new Map(renders)
-  write(9, { state: 'waiting' })
-  expect(views.get(9)?.dot).toBe('waiting')
-  expect(renders.get(9)).toBe(before.get(9)! + 1)
-  expect(renders.get(0)).toBe(before.get(0))
-  write(0, {
-    agentType: 'codex',
-    programStatus: { state: 'blocked', progress: 60, observedAt: 2_000_000 }
-  })
-  expect(views.get(0)).toEqual({ agentType: 'codex', dot: 'permission', progress: 60 })
-  expect(renders.get(9)).toBe(before.get(9)! + 1)
-  for (const value of leased) {
-    expect(value.lastComputedWorktreeIds.length).toBeLessThanOrEqual(1)
-  }
-  const entry = { ...status(0), state: 'done' as const }
-  act(() =>
-    useAppStore.setState({
-      agentStatusByPaneKey: { [other.paneKey]: other },
-      retainedAgentsByPaneKey: {
-        [entry.paneKey]: {
-          entry,
-          tab: makeTab({ id: 'tab-0', worktreeId: 'workspace' }),
-          worktreeId: 'workspace',
-          agentType: 'claude',
-          startedAt: 1
-        }
-      },
-      runtimeStatusByEnvironmentId: new Map([
-        [
-          'remote',
-          runtimeEnvironmentStatusFromSnapshot({
-            environmentId: 'remote',
-            pairingRevision: 1,
-            sequence: 1,
-            checkedAt: 1,
-            verification: 'blocked',
-            transport: 'disconnected',
-            retired: true,
-            status: null
-          })
-        ]
-      ])
-    })
-  )
-  expect(views.get(0)?.dot).toBe('done')
-  act(() => useAppStore.setState({ activeWorkspaceExecutionHostId: 'runtime:remote' }))
-  expect(views.get(0)).toEqual({})
-  act(() => useAppStore.setState({ activeWorkspaceExecutionHostId: 'local' }))
-  expect(views.get(0)?.dot).toBe('done')
-  const disconnected = new Map(renders)
-  const constructions = create.mock.calls.length
-  act(() => useAppStore.setState({ sidebarBody: 'agents' }))
-  expect(renders).toEqual(disconnected)
-  expect(create).toHaveBeenCalledTimes(constructions)
-  mounted.unmount()
-  for (const value of leased) {
-    expect(value.byWorktree.size).toBe(0)
-  }
-  expect(readStoreListenerCount()).toBe(baseline)
-  render(<Probe id={0} />)
-  expect(views.get(0)?.dot).toBe('done')
-})
-
-it('uses the child row own glyph even when its parent program needs permission', () => {
-  write(0, {
-    programStatus: { state: 'blocked', progress: 60, observedAt: 2_000_000 },
-    subagents: [{ id: 'child', state: 'working', startedAt: 2_000_000, description: 'Child' }]
-  })
-  const state = useAppStore.getState()
-  const projected = cache.selectWorktreeAgentRowsCached({
-    state,
-    worktreeId: 'workspace',
-    now: 2_000_000,
-    generation: '',
-    orchestration: selectors.selectRuntimeAgentOrchestrationForWorktree(state, 'workspace')
-  })
-  const child = projected.find((row) => row.childRow)!
-  expect(child).toBeDefined()
-  const locate = () => ({ host: 'local', worktreeId: 'workspace', paneKey: child.paneKey })
-  let value: AgentMessageSenderView | undefined
-  function Child() {
-    value = useAgentMessageSenderSource(locate)
-    return value.dot ? (
-      <AgentStateDot state={value.dot} progress={value.progress} size="md" title={null} />
-    ) : null
-  }
-  render(<Child />)
-  expect(value?.dot).toBe('working')
-  expect(value?.progress).toBeUndefined()
-  expect(screen.queryByRole('progressbar')).toBeNull()
-  expect(screen.getByLabelText('Working')).toBeDefined()
-})
-
-it('refuses a target-less ambiguous workspace twin while an explicit local target resolves', () => {
-  const workspace = `${TEST_REPO.id}::/w`
-  const entry = status(0, workspace)
-  useAppStore.setState({
-    repos: [TEST_REPO],
-    activeWorktreeId: 'different',
-    activeWorkspaceExecutionHostId: 'local',
-    detectedWorktreesByRepo: {},
-    worktreesByRepo: {
-      [TEST_REPO.id]: [
-        makeWorktree({ id: workspace, repoId: TEST_REPO.id, hostId: 'local' }),
-        makeWorktree({ id: workspace, repoId: TEST_REPO.id, hostId: 'runtime:e' })
-      ]
-    },
-    tabsByWorktree: { [workspace]: [makeTab({ id: 'tab-0', worktreeId: workspace })] },
-    agentStatusByPaneKey: { [entry.paneKey]: entry }
-  })
-  const state = useAppStore.getState()
-  expect(getKnownExecutionHostIdForWorktree(state, workspace)).toBe('local')
-  expect(resolveStructuredAgentSessionOwner(state, workspace)).toBeNull()
-  const view = renderHook(() => useAgentMessageSenderView(from.senders[0], workspace))
-  expect(view.result.current).toEqual({})
-  view.unmount()
-  const explicit = renderHook(() =>
-    useAgentMessageSenderView(from.senders[0], workspace, { kind: 'local' })
-  )
-  expect(explicit.result.current.dot).toBe('working')
-})

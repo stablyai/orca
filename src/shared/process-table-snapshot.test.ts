@@ -141,6 +141,21 @@ describe('process-table-snapshot reader', () => {
     expect((await reader.getSnapshotWithAge()).capturedAgeMs).toBe(4_000)
   })
 
+  it('reports an older input’s age in whole milliseconds, rounded older, for the integer-only wire', async () => {
+    const clock = 10_000
+    const reader = createProcessTableSnapshotReader({
+      // Recovered argv read 750.5ms before the capture, converted from the monotonic clock.
+      runPs: async (_fresh, inputAt) => {
+        inputAt(clock - 750.5)
+        return 'scan'
+      },
+      now: () => clock,
+      ttlMs: 500
+    })
+
+    expect((await reader.getSnapshotWithAge()).capturedAgeMs).toBe(751)
+  })
+
   it('does not cache failures and retries on the next call', async () => {
     let scans = 0
     const reader = createProcessTableSnapshotReader({

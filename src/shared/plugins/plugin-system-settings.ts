@@ -33,3 +33,20 @@ export function normalizePluginSystemEnabledDefaultOn(
     pluginSystemDefaultedOn: true
   }
 }
+
+/** Whether `plugin:<key>/<name>` content comes from a plugin that is switched off. */
+export function isPluginContentSwitchedOff(
+  settings:
+    | Partial<Pick<PluginSystemSettings, 'pluginSystemEnabled' | 'disabledPlugins'>>
+    | undefined,
+  contentId: string
+): boolean {
+  if (!contentId.startsWith('plugin:')) {
+    return false
+  }
+  const pluginKey = contentId.slice('plugin:'.length, contentId.lastIndexOf('/'))
+  return (
+    settings?.pluginSystemEnabled === false ||
+    (Array.isArray(settings?.disabledPlugins) && settings.disabledPlugins.includes(pluginKey))
+  )
+}

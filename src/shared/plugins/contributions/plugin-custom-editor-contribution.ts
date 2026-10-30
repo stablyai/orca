@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { safePluginDisplayText } from '../manifest/plugin-display-text'
 import { pluginIdSchema, pluginRelativePathSchema } from '../manifest/plugin-manifest-fields'
 import {
   pluginFieldDoc,
@@ -25,17 +26,13 @@ export const pluginCustomEditorContributionSchema = z
         ['excalidraw']
       )
     ),
-    title: z
-      .string()
-      .min(1)
-      .max(64)
-      .meta(
-        pluginFieldDoc(
-          "Name shown in the editor's view toggle beside Source, and on the tab of a file it opens.",
-          PLUGIN_MANIFEST_V2_SINCE,
-          ['Excalidraw']
-        )
-      ),
+    title: safePluginDisplayText(z.string().min(1).max(64)).meta(
+      pluginFieldDoc(
+        "Name shown in the editor's view toggle beside Source, and on the tab of a file it opens.",
+        PLUGIN_MANIFEST_V2_SINCE,
+        ['Excalidraw']
+      )
+    ),
     icon: pluginRelativePathSchema
       .optional()
       .meta(

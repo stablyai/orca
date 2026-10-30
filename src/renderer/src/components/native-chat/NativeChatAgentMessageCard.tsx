@@ -28,8 +28,10 @@ import { NativeChatCopyButton } from './NativeChatCopyButton'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
 import { NativeChatImageAttachments } from './NativeChatTranscriptChrome'
 
-function heading(from: AgentMessageSource): string {
-  switch (agentMessageHeading(from)) {
+function heading(from: AgentMessageSource, agentStart: boolean): string {
+  switch (agentMessageHeading(from, agentStart)) {
+    case 'started':
+      return translate('components.native-chat.agentMessage.startedWorker', 'Started worker')
     case 'task':
       return translate(
         'components.native-chat.agentMessage.taskFromCoordinator',
@@ -93,7 +95,7 @@ export function NativeChatAgentMessageCard({
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-          <span>{heading(from)}</span>
+          <span>{heading(from, message.agentStart === true)}</span>
           <div className="flex items-center gap-1">
             {agentMessageCanCopy(text) ? (
               // Why: -my-1 keeps the 24px button inside the text-xs header line, so copy costs no row of its own.

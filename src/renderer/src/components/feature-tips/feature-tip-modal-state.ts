@@ -8,7 +8,6 @@ import {
 import { getPendingFeatureTips, type FeatureTipSettings } from './feature-tip-startup-gate'
 
 export function getFeatureTipForModal(args: {
-  macos12SupportNoticeEligible?: boolean
   cliInstalled: boolean
   modalData: Record<string, unknown>
   seenTipIds: readonly FeatureTipId[]
@@ -20,12 +19,6 @@ export function getFeatureTipForModal(args: {
   const modalTipId = isFeatureTipId(args.modalData.tipId) ? args.modalData.tipId : null
   const inNativeChatUpgradeTipAudience = args.inNativeChatUpgradeTipAudience === true
   if (modalTipId) {
-    if (
-      modalTipId === 'macos-12-support' &&
-      (!args.macos12SupportNoticeEligible || args.webClient)
-    ) {
-      return null
-    }
     // Why: no opener, even one naming the tip, may show it outside main's recorded audience.
     if (modalTipId === 'native-chat-upgrade' && !inNativeChatUpgradeTipAudience) {
       return null

@@ -1,5 +1,7 @@
 {
   "agentLaunch": {
+    "terminalPreparationFailed": "Couldn't open a terminal for {{value0}}. Check the workspace connection and agent settings, then try again.",
+    "terminalPromptFailed": "Orca opened a terminal for {{value0}}, but could not pass it your prompt. Send the prompt in that terminal.",
     "opencode": {
       "updateRequired": "OpenCode cannot safely start with a chosen model on this version. Update OpenCode to a supported release, or omit the model choice.",
       "invalidConfig": "OpenCode could not apply this model choice to the launch configuration. Check the OpenCode launch configuration and try again, or omit the model choice.",
@@ -850,7 +852,8 @@
       "installCliForTerminal": "Install the {{value0}} CLI to open it in a terminal.",
       "chatRuntime": "Chat runtime",
       "chatChoiceTitle": "Open as chat or CLI",
-      "chatChoiceDescription": "Choose whether each agent opens as a chat or in its CLI."
+      "chatChoiceDescription": "Choose whether each agent opens as a chat or in its CLI.",
+      "sameAsChoice": "Same as {{agent}} · {{choice}}"
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "symlink",
@@ -1326,9 +1329,7 @@
         "jira": {
           "856083302c": "Jira connection was superseded by a newer request."
         },
-        "linear": {
-          "37d36984d0": "Linear connection was superseded by a newer request."
-        },
+        "linear": {},
         "orca": {
           "profiles": {
             "612f7f6861": "Failed to create profile",
@@ -8453,19 +8454,10 @@
           "191ac34567": "Agent Orchestration",
           "nestedWorkerDepthTitle": "Nested worker depth",
           "nestedWorkerDepthDescription": "How many generations of dispatched workers may spawn their own workers. 1 keeps the agent tree flat: a coordinator dispatches workers, and those workers do not dispatch.",
-          "chatErrorEscalationTitle": "Tell the coordinator about chat errors",
-          "chatErrorEscalationDescription": "When a dispatched agent hits an error that ends its turn, send the exact error to the coordinator that dispatched it. The task stays assigned to the agent. Only works for agents running in Chat UI.",
-          "chatErrorEscalationNeedsChat": "Turn on Chat UI in Experimental settings to use it.",
-          "chatErrorEscalationKeywordError": "error",
-          "chatErrorEscalationKeywordChat": "chat",
-          "heartbeatTitle": "Worker heartbeats",
-          "heartbeatDescription": "Dispatched workers check in every few minutes so the coordinator can tell a working agent from a hung one. Turning this off means fewer messages to the coordinator, but it loses that check-in signal. Applies to workers dispatched after the change.",
-          "heartbeatKeywordHeartbeat": "heartbeat",
-          "heartbeatKeywordStalled": "stalled",
-          "heartbeatKeywordInterval": "interval",
-          "heartbeatIntervalTitle": "Heartbeat interval",
-          "heartbeatIntervalDescription": "Shorter intervals give the coordinator more frequent check-ins but send it more messages. Longer intervals send fewer messages but leave longer gaps between check-ins. Applies to workers dispatched after the change.",
-          "heartbeatIntervalSuffix": "minutes",
+          "workerAutoReleaseTitle": "Auto-close finished workers",
+          "workerAutoReleaseDescription": "Closes a worker's terminal or chat 2 minutes after it finishes, unless you choose Keep open. If it starts working again, the 2 minutes start over when it finishes.",
+          "workerAutoReleaseKeywordClose": "close",
+          "workerAutoReleaseKeywordRelease": "release",
           "7bc082f4de": "Copy install command"
         },
         "OrchestrationSetupCard": {
@@ -13193,7 +13185,10 @@
           "commands": "Commands & panels",
           "catalogLabel": "Filter by catalog",
           "editors": "Editors",
-          "remoteVms": "Remote/VMs"
+          "remoteVms": "Remote/VMs",
+          "games": "Games",
+          "agents": "Agents",
+          "integrations": "Integrations"
         },
         "PluginUpdateAllDialog": {
           "previewError": "Couldn’t read this update",
@@ -13216,13 +13211,13 @@
           "newRecipes": "Machine recipes",
           "newContributions": "Features that act for you",
           "allAccess": "See all access",
-          "update": "Update"
+          "update": "Update",
+          "review": "Review"
         },
         "PluginDetailInfo": {
           "previous": "Previous",
           "updated": "Updated",
           "license": "License",
-          "homepage": "Homepage",
           "whatsNew": "What’s new",
           "hashCopied": "Content hash copied",
           "hashCopyFailed": "Couldn't copy the hash."
@@ -13267,9 +13262,11 @@
         },
         "PluginThemeUseNow": {
           "label": "Use now:",
-          "useName": "Use now: {{value0}}",
           "useForLight": "Use for light:",
-          "useForDark": "Use for dark:"
+          "useForDark": "Use for dark:",
+          "assignedLight": "{{value0}} set as your light theme",
+          "assignedDark": "{{value0}} set as your dark theme",
+          "saveFailed": "Could not save the theme. Try again."
         },
         "PluginPageHero": {
           "screenshots": "Screenshots",
@@ -13371,6 +13368,31 @@
         },
         "pluginTryAction": {
           "incompleteLanguage": "This language pack is too incomplete to switch to."
+        },
+        "PluginUpdateReview": {
+          "title": "Review update to {{value0}}",
+          "back": "Back",
+          "approve": "Approve & update",
+          "explain": "This update asks for more than the version you approved. It installs only if you approve it here.",
+          "before": "Before",
+          "after": "After"
+        },
+        "PluginNotOfficialWarning": {
+          "unknownPublisher": "its publisher",
+          "install": "Make sure you trust {{value0}} before installing. This plugin runs the publisher’s code inside Orca.",
+          "update": "Make sure you trust {{value0}} before updating. This plugin runs the publisher’s code inside Orca.",
+          "installed": "Make sure you trust {{value0}}. This plugin runs the publisher’s code inside Orca.",
+          "label": "Not an official plugin:",
+          "translations": "Translations can change any text in Orca. Make sure you trust {{value0}}."
+        },
+        "PluginUpdateReviewToast": {
+          "movedTitle": "{{value0}} {{value1}} comes from a different repository",
+          "accessTitle": "{{value0}} {{value1}} wants more access",
+          "manyTitle": "{{value0}} plugin updates need your review",
+          "oneDescription": "Published by {{value0}}. It won’t update until you review it.",
+          "manyDescription": "They won’t update until you review them.",
+          "review": "Review",
+          "dismiss": "Dismiss"
         }
       },
       "right": {
@@ -18672,6 +18694,13 @@
           "confirm": "Sign in",
           "cancel": "Cancel"
         },
+        "javaScriptDialog": {
+          "title": "{{origin}} says",
+          "anonymousTitle": "This page says",
+          "confirm": "OK",
+          "cancel": "Cancel",
+          "answer": "Answer"
+        },
         "sitePermission": {
           "label": {
             "camera": "Camera",
@@ -19768,6 +19797,7 @@
         "goToAgent": "Go to agent",
         "messageFromCoordinator": "Message from coordinator",
         "showMore": "Show more",
+        "startedWorker": "Started worker",
         "taskFromCoordinator": "Task from coordinator",
         "updateFromWorker": "Update from worker"
       },
@@ -20051,7 +20081,8 @@
       "bar": {
         "SortableTabContextMenu": {
           "switchToTerminalView": "Continue with Terminal Agent",
-          "switchToChatView": "Continue in Chat UI"
+          "switchToChatView": "Continue in Chat UI",
+          "allowAutoClose": "Allow Auto-Close"
         },
         "BrowserTab": {
           "closeOthers": "Close Others",
@@ -20466,6 +20497,10 @@
       "caution": "Caution"
     },
     "automations": {
+      "openIn": "Open in",
+      "chat": "Chat",
+      "terminal": "Terminal",
+      "runChatUnavailable": "Run chat is unavailable. Showing its workspace; any saved output remains in Run Details.",
       "runTerminalUnavailable": "Run terminal is unavailable."
     },
     "agentCombobox": {
@@ -20479,6 +20514,13 @@
     },
     "JiraIssueWorkspace": {
       "pendingChange": "Another issue change is in progress."
+    },
+    "linearWorkspacePicker": {
+      "search": "Search Linear workspaces",
+      "empty": "No workspaces found.",
+      "label": "Linear workspace",
+      "all": "All Linear workspaces",
+      "unavailable": "Unavailable Linear workspace"
     },
     "jiraProjectPicker": {
       "search": "Search Jira projects",
@@ -20549,6 +20591,13 @@
       "stepDownload": "Download",
       "stepUnpack": "Unpack",
       "stepCheck": "Check"
+    },
+    "orchestration": {
+      "workerAutoClose": {
+        "running": "Temporary orchestration worker · Closes 2 minutes after it finishes",
+        "finished": "Temporary orchestration worker finished · Closes in {{countdown}}",
+        "keepOpen": "Keep open"
+      }
     }
   },
   "dashboardPopout": {
@@ -22660,12 +22709,7 @@
       "addAccess": "Add Linear access",
       "listLabel": "Linear list",
       "fetchMore": "Fetch more",
-      "projectsLoadFailed": "Failed to load projects.",
       "projectNotFound": "Project was not found.",
-      "projectLoadFailed": "Failed to load project.",
-      "projectIssuesLoadFailed": "Failed to load project issues.",
-      "viewsLoadFailed": "Failed to load views.",
-      "viewContentsLoadFailed": "Failed to load view contents.",
       "issuesLoadFailed": "Failed to load Linear issues.",
       "connectionFailed": "Connection failed",
       "apiKeyHint": "Paste a Personal API key for the Linear workspace you want Orca to use. If that workspace is already connected, Orca replaces its stored key.",
@@ -23150,25 +23194,8 @@
       "statusStale": "Agent status is stale"
     }
   },
-  "macosSupport": {
-    "title": "A heads-up for your Mac",
-    "description": "A future version of Orca will require macOS 13 or later.",
-    "checking": "Checking whether this Mac can upgrade…",
-    "upgradeDescription": "Your Mac can upgrade. Update macOS to keep receiving Orca updates.",
-    "omarchyDescription": "Apple doesn’t support macOS 13 on this Mac. Orca also runs on Omarchy, a Linux desktop.",
-    "unknownDescription": "We couldn’t confirm an upgrade for this Mac. Apple’s compatibility guide can help.",
-    "omarchyBackup": "Installing Omarchy replaces macOS. Back up your files first.",
-    "whyTitle": "Why is this changing?",
-    "whyIntro": "We’re updating Electron, the foundation Orca runs on, to bring:",
-    "whySecurity": "Ongoing security fixes from Electron and Chromium.",
-    "whyPerformance": "Faster startup and more efficient native API calls.",
-    "whySystemApis": "Support for current macOS notification APIs and secure Keychain storage.",
-    "whyRequirement": "That newer foundation requires macOS 13 or later.",
-    "stillWorks": "This Orca version will keep working for now.",
-    "dismiss": "Got it",
-    "checkingAction": "Checking your Mac…",
-    "updateAction": "How to update macOS",
-    "omarchyAction": "Explore Omarchy",
-    "checkAction": "Check compatibility"
+  "wslDistroHold": {
+    "terminalStopped": "The WSL distro {{distro}} is stopped, so Orca didn't start this terminal. Start the distro, then try again.",
+    "terminalUnverifiable": "Orca couldn't check whether the WSL distro {{distro}} is running, so it didn't start this terminal. Start the distro, then try again."
   }
 }

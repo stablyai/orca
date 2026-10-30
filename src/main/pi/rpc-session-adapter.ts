@@ -5,7 +5,6 @@ import {
   AgentSessionPreSpawnError,
   AgentSessionAcquisitionRootExitObservedError,
   AgentSessionAcquisitionExitUnprovenError,
-  AgentSessionAcquisitionExitProvenError,
   launchPreparationFailure,
   type AgentSessionAcquisition,
   type StructuredAgentSessionAcquireInput,
@@ -13,6 +12,7 @@ import {
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { providerSpawnedProcessIdentity } from '../provider-process/provider-spawned-process-identity'
 import { ProviderAcquisitionStarts } from '../provider-process/provider-acquisition-starts'
+import { piStartExitError } from './rpc-exit-classification'
 import { compactPiRpcSession } from './rpc-compaction'
 import { buildPiRpcLaunch } from './rpc-launch'
 import type { PiRpcResolvedLaunch } from './rpc-launch-resolution'
@@ -106,14 +106,9 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
           : new AgentSessionPreSpawnError(error)
       }
       const result = await session.close(false).catch(() => null)
-      if (result?.killDelivered && result.root !== 'exited') {
-        throw new AgentSessionAcquisitionRootExitObservedError(error, 'kill-delivered')
-      }
-      if (result?.root === 'exited') {
-        if (session.connection.processless) {
-          throw new AgentSessionAcquisitionExitProvenError(error)
-        }
-        throw new AgentSessionAcquisitionRootExitObservedError(error)
+      const exited = piStartExitError(error, session.connection, result)
+      if (exited) {
+        throw exited
       }
       this.starts.retainFailed(id, session.connection)
       throw new AgentSessionAcquisitionExitUnprovenError(error)

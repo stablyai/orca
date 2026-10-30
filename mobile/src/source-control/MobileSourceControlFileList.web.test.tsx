@@ -104,7 +104,9 @@ describe('source-control file virtualization in the mobile web page', () => {
       for (const count of [1_000, 20_000]) {
         const state = fileListState(count, dirty)
         await act(async () => {
-          root.render(createElement(MobileSourceControlFileList, { key: count, state }))
+          root.render(
+            createElement(MobileSourceControlFileList, { key: count, state, bottomInset: 0 })
+          )
         })
         const rows = container.querySelectorAll('[aria-label^="Open committed change "]')
         mountedCounts.push(rows.length)

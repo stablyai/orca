@@ -6,6 +6,10 @@ import {
   spacing,
   typography
 } from './mobile-tasks-dependencies'
+import {
+  composerInputStyles,
+  COMPOSER_TEXT_SIZE
+} from '../components/composer-input/composer-input-styles'
 
 export const mobileTasksDetailStyles = themedStyleSheet(() => ({
   groupSeparator: {
@@ -57,12 +61,12 @@ export const mobileTasksDetailStyles = themedStyleSheet(() => ({
   },
   actionGroup: {
     backgroundColor: colors.bgPanel,
-    borderRadius: 12,
+    borderRadius: radii.surface,
     overflow: 'hidden'
   },
   detailGroup: {
     backgroundColor: colors.bgPanel,
-    borderRadius: 12,
+    borderRadius: radii.surface,
     padding: spacing.md,
     marginBottom: spacing.md,
     gap: spacing.md
@@ -108,7 +112,7 @@ export const mobileTasksDetailStyles = themedStyleSheet(() => ({
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgRaised,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: spacing.sm,
     paddingVertical: 2
   },
@@ -128,7 +132,7 @@ export const mobileTasksDetailStyles = themedStyleSheet(() => ({
   issueTypeDot: {
     width: 7,
     height: 7,
-    borderRadius: 999
+    borderRadius: radii.pill
   },
   detailSection: {
     gap: spacing.xs
@@ -151,16 +155,10 @@ export const mobileTasksDetailStyles = themedStyleSheet(() => ({
     fontSize: 11,
     color: colors.textMuted
   },
+  // Pickers sit beside text fields in these forms, so they wear the same field shell.
   fieldButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
+    ...composerInputStyles.field,
+    paddingVertical: spacing.sm
   },
   fieldButtonDisabled: {
     opacity: 0.55
@@ -170,7 +168,7 @@ export const mobileTasksDetailStyles = themedStyleSheet(() => ({
   },
   fieldButtonText: {
     flex: 1,
-    fontSize: typography.bodySize,
+    fontSize: COMPOSER_TEXT_SIZE,
     color: colors.textPrimary
   }
 }))

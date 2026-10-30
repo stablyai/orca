@@ -104,6 +104,15 @@ vi.mock('@/runtime/host-structured-agents', () => ({
   readHostStructuredAgents: mocks.catalog,
   readHostStructuredAgentsForRuntime: mocks.catalog,
   hostStructuredAgentsReadFailed: mocks.failed,
+  hostStructuredAgentsCatalogUnlearned: (
+    host: string,
+    runtimeId: string | null | undefined,
+    capabilities: readonly string[] | undefined
+  ) =>
+    runtimeId !== undefined &&
+    capabilities?.includes(CATALOG) === true &&
+    !mocks.catalog(host, runtimeId) &&
+    !mocks.failed(host, runtimeId),
   loadHostStructuredAgents: mocks.load,
   relearnHostStructuredAgents: mocks.load,
   hostStructuredAgentsVersion: () => 0,

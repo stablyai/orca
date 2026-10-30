@@ -154,8 +154,8 @@ export type UISliceSurfaces = {
   pendingRevealSidebarRow: UISliceCore['pendingRevealSidebarRow']
   revealWorktreeInSidebar: UISliceCore['revealWorktreeInSidebar']
   revealSidebarRow: UISliceCore['revealSidebarRow']
-  clearPendingRevealWorktreeId: () => void
-  clearPendingRevealSidebarRow: () => void
+  clearPendingRevealWorktreeId: (expected?: UISliceCore['pendingRevealWorktree']) => void
+  clearPendingRevealSidebarRow: (expected?: UISliceCore['pendingRevealSidebarRow']) => void
   // Why: cleared by the diff decorator after it reveals the line, so the same id can be requested again without a stale value.
   scrollToDiffCommentId: string | null
   setScrollToDiffCommentId: (id: string | null) => void

@@ -124,14 +124,16 @@ export function useRichMarkdownSearch({
   }, [isSearchOpen])
 
   const closeSearch = useCallback(() => {
+    // Focus the editor before Find unmounts its input; a deferred focus leaves Mod+F landing outside the editor.
+    if (editor && !editor.isDestroyed) {
+      editor.view.focus()
+    }
     setIsSearchOpen(false)
     setIsReplaceMode(false)
     setSearchQuery('')
     setReplaceQuery('')
     setDebouncedQuery('')
     setRawActiveMatchIndex(-1)
-    // Return focus after search unmounts its input so editor-scoped shortcuts can reopen it without a click.
-    editor?.commands.focus()
   }, [editor])
 
   const toggleMatchCase = useCallback(() => setMatchCase((value) => !value), [])

@@ -15,6 +15,7 @@ vi.mock('../storage/preferences', () => ({
 
 type TerminalLiveInputModePreferenceHarness = {
   readonly current: ReturnType<typeof useTerminalLiveInputModePreference>
+  readonly setAgentHandles: (handles: readonly string[]) => void
   readonly unmount: () => void
 }
 
@@ -37,11 +38,13 @@ function createDeferred<T>(): Deferred<T> {
 function createTerminalLiveInputModePreferenceHarness(): TerminalLiveInputModePreferenceHarness {
   let current: ReturnType<typeof useTerminalLiveInputModePreference> | null = null
   let renderer: ReactTestRenderer | null = null
+  let agentHandles: ReadonlySet<string> = new Set()
 
   function Harness(): null {
     current = useTerminalLiveInputModePreference({
       hostId: 'host-1',
-      worktreeId: 'worktree-1'
+      worktreeId: 'worktree-1',
+      agentHandles
     })
     return null
   }
@@ -59,6 +62,10 @@ function createTerminalLiveInputModePreferenceHarness(): TerminalLiveInputModePr
         throw new Error('terminal live input mode preference hook is not mounted')
       }
       return current
+    },
+    setAgentHandles: (handles) => {
+      agentHandles = new Set(handles)
+      act(() => renderer?.update(createElement(Harness)))
     },
     unmount: () => {
       act(() => renderer?.unmount())
@@ -115,6 +122,32 @@ describe('terminal live input mode preference hook', () => {
     })
 
     expect([...harness.current.liveInputTerminalHandles]).toEqual(['pty-1'])
+    expect(saveDisabledTerminalLiveInputHandles).not.toHaveBeenCalled()
+    harness.unmount()
+  })
+
+  it('opens agent tabs in the composer and drops a live-keys pick once the agent quits', async () => {
+    vi.mocked(readDisabledTerminalLiveInputHandlesPreference).mockResolvedValue({
+      handles: new Set(),
+      loaded: true
+    })
+    const harness = createTerminalLiveInputModePreferenceHarness()
+    await act(async () => {})
+    harness.setAgentHandles(['agent-pty'])
+    act(() => {
+      harness.current.defaultTerminalHandlesToLiveInput(['agent-pty', 'shell-pty'])
+    })
+    expect([...harness.current.liveInputTerminalHandles]).toEqual(['shell-pty'])
+
+    act(() => {
+      expect(harness.current.toggleTerminalLiveInput('agent-pty')).toBe(true)
+    })
+    expect(harness.current.liveInputTerminalHandles.has('agent-pty')).toBe(true)
+
+    harness.setAgentHandles([])
+    expect(harness.current.liveInputTerminalHandles.has('agent-pty')).toBe(true)
+    harness.setAgentHandles(['agent-pty'])
+    expect(harness.current.liveInputTerminalHandles.has('agent-pty')).toBe(false)
     expect(saveDisabledTerminalLiveInputHandles).not.toHaveBeenCalled()
     harness.unmount()
   })

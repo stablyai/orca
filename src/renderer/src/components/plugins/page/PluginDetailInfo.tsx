@@ -8,6 +8,7 @@ import { DetailSection } from './PluginDetailSections'
 import { formatPluginReleaseDate } from '../presentation/plugin-release-date'
 import { usePluginRollbackVersion } from '../state/use-plugin-rollback-version'
 import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { pluginRepositoryPageUrl } from '../../../../../shared/plugins/catalog/plugin-repository-link'
 
 function InfoRow({
   label,
@@ -32,9 +33,8 @@ function InfoRow({
   )
 }
 
-function LinkButton({ url, label }: { url: string | null; label: string }) {
-  // Why: catalog and manifest links are untrusted; only open web links.
-  if (!url?.startsWith('https://')) {
+function RepositoryLink({ url }: { url: string | null }) {
+  if (!url) {
     return null
   }
   return (
@@ -44,7 +44,7 @@ function LinkButton({ url, label }: { url: string | null; label: string }) {
       className="-ml-2"
       onClick={(event) => openAppHttpLink(url, { event })}
     >
-      {label}
+      {translate('auto.components.settings.PluginDetailPage.repository', 'Repository')}
       <ArrowUpRight />
     </Button>
   )
@@ -65,12 +65,10 @@ export function PluginDetailInfo({
   )
   const updated = formatPluginReleaseDate(listing?.updatedAt)
   const license = plugin?.license ?? listing?.license
-  const repository =
-    plugin?.repository ??
-    listing?.repository ??
-    listing?.source.url ??
-    (plugin?.source?.kind === 'git' ? plugin.source.reference : null)
-  const homepage = plugin?.homepage ?? listing?.homepage ?? null
+  // Why only the install source: manifest and catalog `repository`/`homepage` are author text.
+  const sourceUrl =
+    listing?.source.url ?? (plugin?.source?.kind === 'git' ? plugin.source.reference : null)
+  const repository = sourceUrl ? pluginRepositoryPageUrl(sourceUrl) : null
 
   return (
     <aside className="mt-6">
@@ -131,14 +129,7 @@ export function PluginDetailInfo({
         />
       </dl>
       <div className="mt-2 flex flex-col items-start">
-        <LinkButton
-          url={repository}
-          label={translate('auto.components.settings.PluginDetailPage.repository', 'Repository')}
-        />
-        <LinkButton
-          url={homepage}
-          label={translate('auto.components.settings.PluginDetailInfo.homepage', 'Homepage')}
-        />
+        <RepositoryLink url={repository} />
       </div>
     </aside>
   )

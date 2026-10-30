@@ -1,3 +1,4 @@
+import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import '../unused-default-rpc-methods.test-fixture'
 /** Pre-dispatch failures prove no effects and record the real cause; a lost reply after dispatch remains unknown. Explicitly unsupported chat is refused before creation. */
 
@@ -76,6 +77,7 @@ describe('a launch whose terminal fails', () => {
 
   afterEach(async () => {
     setAgentLaunchRecordStore(null)
+    await closeTestJournalHostDatabases()
     await rm(directory, { recursive: true, force: true })
   })
 

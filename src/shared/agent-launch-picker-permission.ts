@@ -38,6 +38,7 @@ export function agentPickerArgumentPermission(entry: AgentPickerEntry, draft: Ag
     return {
       key: 'permissionMode',
       value: '',
+      words: parsed.tokens.slice(index, end + 1),
       start: parsed.spans[index].start,
       end: parsed.spans[end].end,
       lift: false,

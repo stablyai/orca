@@ -154,6 +154,15 @@ function LocalAgentLaunchSettings({
   const mutate = (mutation: AgentLaunchSettingsMutation): Promise<void> =>
     enqueue(async () => {
       const before = permissions()
+      if (mutation.type === 'launch-choices') {
+        try {
+          await callRuntimeRpc(LOCAL_DETECTION_TARGET, 'settings.mutateAgentLaunch', mutation)
+          await useAppStore.getState().fetchSettings({ deferOwnerWorktreeVisibilityDefaults: true })
+        } catch (error) {
+          failed(mutation.agent)(error)
+        }
+        return
+      }
       const after = await write(
         mutation.type !== 'default' && 'agent' in mutation ? mutation.agent : undefined,
         (latest, platform) => agentLaunchSettingsMutationUpdates(latest, mutation, platform)

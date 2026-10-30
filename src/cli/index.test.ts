@@ -134,7 +134,13 @@ describe('command aliases dispatch to the canonical handler', () => {
       2,
       'worktree.rm',
       expect.objectContaining({ waitForBackgroundRemoval: true }),
-      { timeoutMs: worktreeRemovalReplyTimeoutMs(true) }
+      {
+        timeoutMs: worktreeRemovalReplyTimeoutMs(true),
+        requestSelection: {
+          paramsForStatus: expect.any(Function),
+          onDispatch: expect.any(Function)
+        }
+      }
     )
     expect(logSpy).toHaveBeenCalledWith('removed: true')
   })
@@ -151,6 +157,23 @@ describe('command aliases dispatch to the canonical handler', () => {
     expect(logSpy).toHaveBeenCalledWith(
       'removed: false\nOrca is still deleting the checkout in the background.'
     )
+  })
+
+  it('leaves missing removal and branch outcomes unconfirmed', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('show', { worktree: { hostId: 'local' } }),
+      okFixture('rm', {})
+    )
+    await main(['worktree', 'rm', '--worktree', 'id:wt-1', '--delete-branch'], '/tmp/repo')
+    expect(logSpy).toHaveBeenCalledWith('Removal is not confirmed.')
+    queueFixtures(
+      callMock,
+      okFixture('show', { worktree: { hostId: 'local' } }),
+      okFixture('rm', {})
+    )
+    await main(['worktree', 'rm', '--worktree', 'id:wt-1', '--json'], '/tmp/repo')
+    expect(JSON.parse(String(logSpy.mock.calls.at(-1)?.[0])).result).toEqual({})
   })
 
   it('fails closed when worktree removal cannot resolve a host', async () => {

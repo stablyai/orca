@@ -1,9 +1,10 @@
-import { View, Text, Pressable, Platform } from 'react-native'
+import { View, Text, Pressable } from 'react-native'
 import { ChevronDown } from 'lucide-react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { HostKindIcon } from './HostKindIcon'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
+import { composerInputStyles, COMPOSER_TEXT_SIZE } from './composer-input/composer-input-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 type Selection = { label: string; detail?: string }
@@ -100,27 +101,20 @@ const styles = themedStyleSheet(() => ({
     marginBottom: spacing.xs
   },
   fieldButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    paddingHorizontal: spacing.md,
-    paddingVertical: Platform.OS === 'ios' ? spacing.sm + 2 : spacing.sm
+    ...composerInputStyles.field,
+    paddingVertical: spacing.sm
   },
   projectDot: {
     width: 8,
     height: 8,
-    borderRadius: 999
+    borderRadius: radii.pill
   },
   fieldButtonCopy: {
     flex: 1,
     minWidth: 0
   },
   fieldButtonText: {
-    fontSize: typography.bodySize,
+    fontSize: COMPOSER_TEXT_SIZE,
     color: colors.textPrimary
   },
   fieldButtonDetail: {

@@ -1003,9 +1003,7 @@
       "empty": "Aún no hay atajos personalizados definidos.",
       "removeShortcut": "Eliminar {{label}}",
       "resetDefaults": "Restablecer valores predeterminados",
-      "resetDescription": "Mostrar todas las teclas de atajo integradas en su orden original",
-      "shortcutBar": "BARRA DE ATAJOS",
-      "shortcutBarDescription": "Activa o desactiva las teclas para mostrarlas u ocultarlas y mantén pulsado el control de arrastre para colocarlas en el orden que quieras en la barra de atajos de la terminal."
+      "resetDescription": "Mostrar todas las teclas de atajo integradas en su orden original"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "¿Usar un restablecimiento de límites de uso?",
@@ -1436,14 +1434,6 @@
     },
     "hostPendingCreationRow": {
       "creatingWorkspace": "Creando espacio de trabajo…"
-    },
-    "hostRailActions": {
-      "accounts": "Cuentas",
-      "closeSearch": "Cerrar búsqueda",
-      "floatingWorkspace": "Espacio de trabajo flotante",
-      "newWorkspace": "Nuevo espacio de trabajo",
-      "searchWorkspaces": "Buscar espacios de trabajo",
-      "tasks": "Tareas"
     },
     "hostScreenHeader": {
       "accounts": "Cuentas",
@@ -1897,16 +1887,8 @@
   },
   "session": {
     "accessoryKeys": {
-      "addCustomShortcut": "Agregar atajo personalizado",
       "dismissKeyboard": "Ocultar teclado",
-      "dismissKeyboardHint": "Oculta el teclado en pantalla y mantiene abierta la sesión de terminal actual.",
-      "paste": "Pegar",
-      "pasteFromClipboard": "Pegar desde el portapapeles",
-      "sendKey": "Enviar {{label}}",
-      "switchToBufferedInput": "Cambiar a la entrada de comandos en búfer",
-      "switchToDesktopMode": "Cambiar al modo de escritorio",
-      "switchToLiveInput": "Cambiar a la entrada directa en la terminal",
-      "switchToPhoneMode": "Cambiar al modo teléfono"
+      "sendKey": "Enviar {{label}}"
     },
     "activeContent": {
       "createTab": "Crear pestaña",
@@ -2032,21 +2014,12 @@
       "titleRight": "¿Cerrar las pestañas de la derecha?"
     },
     "commandDock": {
-      "commandPlaceholder": "Escribe un comando…",
       "liveInputHint": "El texto que escribes se envía directamente a la terminal activa.",
       "liveInputLabel": "Entrada al terminal en tiempo real",
       "sendCommand": "Enviar comando"
     },
     "contentRow": {
       "dismissCreationWarning": "Descartar la advertencia de creación del espacio de trabajo"
-    },
-    "diffCommentLineRow": {
-      "addNote": "Agregar nota en la línea {{line}}",
-      "deleteNote": "Eliminar nota de la línea {{line}}",
-      "diffLine": "{{title}}, línea {{line}} del diff",
-      "line": "Línea {{line}}",
-      "placeholder": "Agregar nota de revisión",
-      "saveNote": "Guardar nota"
     },
     "diffLineRow": {
       "addNoteLabel": "Agregar nota en la línea {{line}}",
@@ -2218,6 +2191,7 @@
       "requestFailed": "La solicitud falló: {{method}}"
     },
     "header": {
+      "workspaceDetailsHint": "Muestra el nombre completo del espacio de trabajo y dónde se encuentra",
       "backToWorktrees": "Volver a los worktrees",
       "moreActions": "Más acciones de la sesión",
       "openFileExplorer": "Abrir explorador de archivos",
@@ -2426,9 +2400,6 @@
       "terminalName": "Nombre de la terminal",
       "unsavedMarkdown": "Cambios en Markdown sin guardar",
       "urlPrompt": "Introduce una URL o deja el campo en blanco para abrir una pestaña nueva."
-    },
-    "sideRail": {
-      "backToWorktrees": "Volver a los worktrees"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "No se detectó ningún agente de IA habilitado en este host de espacio de trabajo.",

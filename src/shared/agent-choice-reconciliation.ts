@@ -1,5 +1,9 @@
 import { composeAgentLaunchModel } from './agent-session-option-launch'
-import { analyzeAgentChoiceArgs, type ChoiceOccurrence } from './agent-choice-args'
+import {
+  analyzeAgentChoiceArgs,
+  type ChoiceOccurrence,
+  type AgentChoicePublicationContext
+} from './agent-choice-args'
 import {
   findCatalogModel,
   getAgentSessionOptionLaunchCatalog
@@ -24,6 +28,7 @@ export type AgentChoiceArgsInput = {
   retainedKeys?: ReadonlySet<string>
   permissionRanges?: readonly ChoiceOccurrence[]
   sourceEdit?: boolean
+  publication?: AgentChoicePublicationContext
 }
 
 export function reconcileAgentChoiceArgs(input: AgentChoiceArgsInput): {
@@ -36,9 +41,29 @@ export function reconcileAgentChoiceArgs(input: AgentChoiceArgsInput): {
 
 export function reconcileAgentChoiceArgsDetailed(input: AgentChoiceArgsInput) {
   const { agent, userArgs, keys, mode, patch } = input
-  const analysis = analyzeAgentChoiceArgs(agent, userArgs)
+  const analysis = analyzeAgentChoiceArgs(agent, userArgs, input.publication)
   const catalog = getAgentSessionOptionLaunchCatalog(agent)
-  const choices = { ...input.choices, options: { ...input.choices.options } }
+  const choices: AgentDedicatedChoices & { options: Record<string, string> } = {
+    ...input.choices,
+    options: { ...input.choices.options }
+  }
+  if ('publishedKeys' in analysis && analysis.publishedKeys) {
+    for (const key of analysis.publishedKeys) {
+      if (key === 'model') {
+        delete choices.model
+        for (const option of findCatalogModel(
+          catalog ?? { models: [], modelApply: {} },
+          input.choices.model ?? ''
+        )?.options ?? []) {
+          if (option.apply.composedIntoModel) {
+            delete choices.options[option.id]
+          }
+        }
+      } else if (key !== 'permissionMode') {
+        delete choices.options[key]
+      }
+    }
+  }
   const effects: AgentChoicePatch = {}
   const patched = (key: string) =>
     key === 'model'
@@ -55,12 +80,13 @@ export function reconcileAgentChoiceArgsDetailed(input: AgentChoiceArgsInput) {
   const write = (key: string, value: string | null, explicit = true, target = choices) => {
     const publish = mode !== 'load' && explicit
     if (key === 'model') {
-      if (value !== target.model) {
+      const previousModel = input.publication ? input.choices.model : target.model
+      if (value !== previousModel) {
         const independent = getAgentSessionOptionLaunchCatalog(agent)?.unknownModelOptions ?? []
         target.options = Object.fromEntries(
           Object.entries(target.options).filter(([id]) => {
             const retain =
-              (value === null || target.model === undefined) &&
+              (value === null || previousModel === undefined) &&
               independent.some((option) => option.id === id && option.apply.launchArgs)
             if (!retain && publish) {
               effects.options = { ...effects.options, [id]: null }
@@ -126,6 +152,9 @@ export function reconcileAgentChoiceArgsDetailed(input: AgentChoiceArgsInput) {
     if (entry.composed && composedPatch) {
       return entry.owned
     }
+    if ('publicationOwned' in entry && entry.publicationOwned) {
+      return true
+    }
     if (!entry.lift || counts.get(entry.key) !== 1) {
       return false
     }
@@ -143,7 +172,10 @@ export function reconcileAgentChoiceArgsDetailed(input: AgentChoiceArgsInput) {
         catalog?.unknownModelOptions?.find((option) => option.id === entry.key)
       if (
         !option?.apply.launchArgs ||
-        (option.kind.type === 'boolean' ? entry.value !== 'true' && entry.value !== 'false' : false)
+        (option.kind.type === 'boolean'
+          ? entry.valueType !== 'boolean' || (entry.value !== 'true' && entry.value !== 'false')
+          : option.kind.choices.length > 0 &&
+            !option.kind.choices.some((choice) => choice.value === entry.value))
       ) {
         return false
       }
@@ -183,6 +215,18 @@ export function reconcileAgentChoiceArgsDetailed(input: AgentChoiceArgsInput) {
   const model = lifted.find((entry) => entry.key === 'model')
   if (model) {
     write('model', model.value, mode === 'arguments-edit')
+    if (input.publication && model.composed) {
+      for (const option of findCatalogModel(
+        catalog ?? { models: [], modelApply: {} },
+        input.choices.model ?? ''
+      )?.options ?? []) {
+        const value = input.choices.options?.[option.id]
+        // The same model carrier also conserves saved composed values that emit nothing.
+        if (option.apply.composedIntoModel && value !== undefined) {
+          choices.options[option.id] = value
+        }
+      }
+    }
   }
   if (mode === 'choice-edit' && patch?.model !== undefined) {
     write('model', patch.model)

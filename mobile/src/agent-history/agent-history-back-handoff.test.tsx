@@ -34,7 +34,13 @@ vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 })
 }))
 vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path' }))
-vi.mock('lucide-react-native', () => ({ ChevronLeft: 'Icon', Play: 'Icon', RefreshCw: 'Icon' }))
+vi.mock('lucide-react-native', () => ({
+  ChevronLeft: 'Icon',
+  Play: 'Icon',
+  RefreshCw: 'Icon',
+  Search: 'Icon',
+  X: 'Icon'
+}))
 vi.mock('../platform/haptics', () => ({ triggerError: () => {}, triggerSuccess: () => {} }))
 // Mock Metro PNG requires; no client means session list never renders here.
 vi.mock('../components/MobileAgentIcon', () => ({ MobileAgentIcon: () => null }))

@@ -197,6 +197,7 @@ describe('Electron Vite output contract', () => {
       'persistence/profile-state/legacy-json/profile-state-recovery',
       'persistence/profile-state/profile-state-recovery-command',
       'persistence/profile-state/profile-state-storage-classification',
+      'plugins/plugin-authoring-checks',
       'skills/bundled-skill-install/cli-entry',
       'startup/http1-compatibility-marker'
     ]) {

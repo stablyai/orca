@@ -1,3 +1,9 @@
+import type {
+  BridgeTerminalKeyId,
+  BridgeTerminalToolbar,
+  BridgeTerminalKeyRail
+} from './bridge/bridge-terminal-key'
+import type { BridgePageGeometry } from './bridge/bridge-page-geometry'
 import type { TerminalBacklogEnd, TerminalBacklogTimers } from './bridge-terminal-output-backlog'
 import type { RpcClient } from '../transport/rpc-client'
 import type { BridgeSessionBack } from './bridge-host-back'
@@ -10,6 +16,7 @@ import type {
 } from './bridge/bridge-envelope'
 import type { BridgeClearableRouteParam } from './bridge/bridge-route-update'
 import type { BridgeSafeAreaInsets } from './bridge/bridge-safe-area-insets'
+import type { BridgeFoldDivision } from './bridge/bridge-fold-division'
 import type { BridgeHapticsKind } from './bridge/bridge-haptics-notify'
 import type { BridgeErrorCapture } from './bridge/bridge-error-capture'
 import type { BridgeNativeVerb } from './bridge/bridge-native-verbs'
@@ -76,6 +83,13 @@ export type BridgeHostOptions = {
   keyboardInset?: number
   // Default to dark; publishColorScheme moves the app's resolved scheme later.
   colorScheme?: BridgeColorScheme
+  /** The fold splitting the page on a partially folded device. None when absent; moved later with
+   *  `publishFoldDivision`. */
+  pageGeometry?: BridgePageGeometry
+  foldDivision?: BridgeFoldDivision | null
+  /** The keys the shell's rail shows beside the page. None when absent; moved later with
+   *  `publishTerminalKeyRail`. */
+  terminalKeyRail?: BridgeTerminalKeyRail
   // Absent until the shell knows its language; publishUiLocale moves it later.
   uiLocale?: BridgeUiLocale
   // Read identity at forward time because this host outlives renders; replace the page placeholder as init promised or the desktop refuses spoofed sends.
@@ -100,9 +114,20 @@ export type BridgeHostOptions = {
   onPagePainted: () => void
   // Required for native interception: only a live claim owns Back. Document-ending paths publish false so callers need not infer staleness.
   onPageBackClaim: (claimed: boolean) => void
-  // Where a host-area page navigated inside its own document; the native route never moves for those hops.
+  // Where a host-area page from an older desktop navigated inside its own document; the native route never moves for those hops.
   onPageLocation: (href: string) => void
-  // Clear a consumed one-shot param only if its value still matches; a newer tap may already have replaced it (ruling 34).
+  /** The page shows a terminal with its key row, or stopped; false also arrives each time a
+   *  document starts or ends, and the page claims again on the `init` that follows. */
+  onTerminalKeyRailClaim?: (
+    claimed: boolean,
+    inputOwner?: string,
+    toolbar?: BridgeTerminalToolbar
+  ) => void
+  /**
+   * The page applied a one-shot route param and is asking for it to be erased (ruling 34), naming
+   * the value it applied. The holder of that param compares before it clears: a tap that has moved
+   * on since leaves a newer value here, and a clear naming the older one is not for it.
+   */
   onRouteParamClear: (param: BridgeClearableRouteParam, value: string) => void
   // Escalate invalid shell routes visibly; a page-only console warning would leave a blank document retrying forever.
   onRouteRefused: (issue: string) => void
@@ -111,4 +136,33 @@ export type BridgeHostOptions = {
   onBinaryFramesDropped?: (total: number) => void
   // Inject timers for tests so they exercise the shipped silence bound without waiting twenty seconds per case.
   terminalTimers?: TerminalBacklogTimers
+}
+
+export type BridgeHost = {
+  publishStorage: () => void
+  receive: (json: string) => void
+  // Hold same-screen param updates even when posting fails; repair from the next ready without delivery tracking. Different pathnames require remount; the page clears consumed params (rulings 33.1/34).
+  publishRoute: (next: BridgeInitRoute) => void
+  publishSafeAreaInsets: (next: BridgeSafeAreaInsets) => void
+  publishKeyboardInset: (next: number) => void
+  /** Hands this session a moved fold over the same re-sent `init`. */
+  publishPageGeometry: (next: BridgePageGeometry) => void
+  publishFoldDivision: (next: BridgeFoldDivision | null) => void
+  /** Tells this session the shell's key rail shows or hides, over the same re-sent `init`. */
+  publishTerminalKeyRail: (next: BridgeTerminalKeyRail) => void
+  publishColorScheme: (next: BridgeColorScheme) => void
+  publishUiLocale: (next: BridgeUiLocale) => void
+  /**
+   * Hands the page one press on the key rail. False when this session was not granted the rail,
+   * which is every page older than it, or when no document holds the view.
+   */
+  sendTerminalKey: (key: BridgeTerminalKeyId, inputOwner?: string) => boolean
+  /**
+   * Hands the page one Back press. False when this document never said it takes one, which is
+   * every page older than the frame; the caller then leaves the key to the navigator.
+   */
+  sendBack: () => boolean
+  // Transfer the session’s Back state on client-driven host rebuild; the mounted page never reclaims it. Ending sessions simply discard it.
+  readSessionBack: () => BridgeSessionBack
+  dispose: () => void
 }
