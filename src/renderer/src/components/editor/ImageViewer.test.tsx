@@ -81,6 +81,12 @@ vi.mock('./PdfViewer', () => ({
   }
 }))
 
+vi.mock('./ImageActions', () => ({
+  ImageActions: ({ children }: { children: unknown }) => children,
+  ImageActionsButton: () => null,
+  keepImageActionsOpen: () => {}
+}))
+
 type ReactElementLike = {
   type: unknown
   props: Record<string, unknown>

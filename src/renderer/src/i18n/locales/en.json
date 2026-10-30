@@ -20416,6 +20416,18 @@
       "stepDownload": "Download",
       "stepUnpack": "Unpack",
       "stepCheck": "Check"
+    },
+    "editor": {
+      "imageActions": {
+        "saveAs": "Save image as…",
+        "saved": "Image saved",
+        "copyPath": "Copy image path",
+        "copyLink": "Copy image link",
+        "pathCopied": "Image path copied",
+        "linkCopied": "Image link copied",
+        "failed": "Image action failed",
+        "label": "Image actions"
+      }
     }
   },
   "dashboardPopout": {

@@ -26,6 +26,7 @@ import {
 import type * as TerminalFileOpenRouting from '@/components/terminal-pane/terminal-file-open-routing'
 import type * as HttpLinkRouting from '@/lib/http-link-routing'
 import { getDefaultSettings } from '../../../../shared/constants'
+import { getRevealInFileManagerLabel } from '@/lib/reveal-in-file-manager'
 
 const mocks = vi.hoisted(() => ({
   readRuntimeFilePreview: vi.fn(),
@@ -164,6 +165,47 @@ afterEach(() => {
 })
 
 describe('native chat Markdown image preview', () => {
+  it.each([
+    {
+      name: 'client-local',
+      runtimeContext: localOwner.runtimeContext,
+      canOpenLocally: true
+    },
+    {
+      name: 'paired server',
+      runtimeContext: {
+        ...localOwner.runtimeContext,
+        target: { kind: 'environment' as const, environmentId: 'env-1' }
+      },
+      canOpenLocally: false
+    },
+    {
+      name: 'SSH execution host on a local transport',
+      runtimeContext: {
+        ...localOwner.runtimeContext,
+        expectedExecutionHostId: 'ssh:ssh-1' as const
+      },
+      canOpenLocally: false
+    }
+  ])(
+    'limits OS image actions to the client for a $name image',
+    async ({ runtimeContext, canOpenLocally }) => {
+      const user = userEvent.setup()
+      render(<Transcript owner={{ ...localOwner, runtimeContext }} />)
+      await screen.findByRole('img', { name: 'Chart' })
+      fireEvent.click(screen.getByRole('button', { name: 'View image: Chart' }))
+      await user.click(screen.getByRole('button', { name: 'Image actions' }))
+
+      expect(screen.queryByRole('menuitem', { name: getRevealInFileManagerLabel() }) !== null).toBe(
+        canOpenLocally
+      )
+      expect(screen.queryByRole('menuitem', { name: 'Open with default app' }) !== null).toBe(
+        canOpenLocally
+      )
+      expect(screen.getByRole('menuitem', { name: 'Copy image path' })).toBeInTheDocument()
+    }
+  )
+
   it('routes image reads and actions through the selected owner provider across owner changes and removal', async () => {
     const original = useAppStore.getState()
     const fixture = nativeChatFanoutFixture(1, 1, 0)
