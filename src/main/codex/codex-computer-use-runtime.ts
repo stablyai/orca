@@ -33,7 +33,7 @@ export function findCodexComputerUseHosts(rows: readonly Row[], rootPid: number)
       recognizeAgentProcessFromCommandLine(row.command, { includeHeadlessOneShot: true })?.agent ===
       'codex'
   ).flatMap((row) => {
-    const executable = row.command.match(/^(\S+\/cua_node\/bin\/node_repl)(?:\s|$)/)?.[1]
+    const executable = row.command.match(/^(\/.+?\/cua_node\/bin\/node_repl)(?:\s|$)/)?.[1]
     if (!executable) {
       return []
     }
@@ -42,7 +42,7 @@ export function findCodexComputerUseHosts(rows: readonly Row[], rootPid: number)
 }
 
 async function executableIdentity(path: string): Promise<string | null> {
-  return stat(path).then(
+  return stat(path, { bigint: true }).then(
     (entry) => (entry.isFile() ? `${entry.dev}:${entry.ino}` : null),
     (error: unknown) => {
       if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
@@ -53,20 +53,39 @@ async function executableIdentity(path: string): Promise<string | null> {
   )
 }
 
+function readMappedIdentities(output: string): Map<number, string> {
+  const mappings = new Map<number, string>()
+  let pid: number | null = null
+  let file: { device?: string; inode?: string; path?: string } = {}
+  const flush = (): void => {
+    if (pid !== null && file.device && file.inode && file.path?.endsWith('/node_repl')) {
+      mappings.set(pid, `${BigInt(`0x${file.device}`)}:${BigInt(file.inode)}`)
+    }
+  }
+  for (const line of output.split('\n')) {
+    if (/^p\d+$/.test(line) || line.startsWith('f')) {
+      flush()
+      file = {}
+    }
+    if (/^p\d+$/.test(line)) {
+      pid = Number(line.slice(1))
+    } else if (/^D(?:0x)?[\da-f]+$/i.test(line)) {
+      file.device = line.slice(1).replace(/^0x/i, '')
+    } else if (/^i\d+$/.test(line)) {
+      file.inode = line.slice(1)
+    } else if (line.startsWith('n')) {
+      file.path = line.slice(1)
+    }
+  }
+  flush()
+  return mappings
+}
+
 export async function inspectCodexComputerUseMappings(
   hosts: readonly Host[],
   output: string
 ): Promise<CodexComputerUseRuntimeStatus> {
-  const mappings = new Map<number, string>()
-  let pid: number | null = null
-  for (const line of output.split('\n')) {
-    if (/^p\d+$/.test(line)) {
-      pid = Number(line.slice(1))
-    }
-    if (pid !== null && line.startsWith('n') && line.endsWith('/node_repl')) {
-      mappings.set(pid, line.slice(1))
-    }
-  }
+  const mappings = readMappedIdentities(output)
   let inspected = 0
   for (const host of hosts) {
     const mapped = mappings.get(host.pid)
@@ -77,8 +96,7 @@ export async function inspectCodexComputerUseMappings(
     if (!currentIdentity) {
       continue
     }
-    const mappedIdentity = await executableIdentity(mapped)
-    if (mappedIdentity !== currentIdentity) {
+    if (mapped !== currentIdentity) {
       return { status: 'stale' }
     }
     inspected += 1
@@ -99,7 +117,7 @@ export async function inspectPaneCodexComputerUseRuntime(
   }
   const result = await runProcess({
     program: '/usr/sbin/lsof',
-    args: ['-n', '-a', '-p', hosts.map((host) => host.pid).join(','), '-d', 'txt', '-Fpn'],
+    args: ['-n', '-a', '-p', hosts.map((host) => host.pid).join(','), '-d', 'txt', '-FpfDin'],
     cwd: '/',
     timeoutMs: 3000,
     maxOutputBytes: 512 * 1024

@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, rm, stat, rename } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -24,6 +24,11 @@ async function runtime() {
   return { root, current }
 }
 
+async function lsofRecord(pid: number, path: string): Promise<string> {
+  const identity = await stat(path, { bigint: true })
+  return `p${pid}\nftxt\nD0x${identity.dev.toString(16)}\ni${identity.ino}\nn${path}\n`
+}
+
 describe('Codex Computer Use executable mappings', () => {
   it('detects a deleted updater image despite an unchanged launch command', async () => {
     const { root, current } = await runtime()
@@ -32,7 +37,11 @@ describe('Codex Computer Use executable mappings', () => {
       root,
       'Sparkle/Installation/old/ChatGPT.app/Contents/Resources/cua_node/bin/node_repl'
     ).replaceAll('\\', '/')
-    expect(await inspectCodexComputerUseMappings(hosts, `p12\nftxt\nn${mapped}\n`)).toEqual({
+    await mkdir(join(mapped, '..'), { recursive: true })
+    await writeFile(mapped, 'old-runtime')
+    const record = await lsofRecord(12, mapped)
+    await rm(mapped)
+    expect(await inspectCodexComputerUseMappings(hosts, record)).toEqual({
       status: 'stale'
     })
   })
@@ -42,19 +51,19 @@ describe('Codex Computer Use executable mappings', () => {
     expect(
       await inspectCodexComputerUseMappings(
         [{ pid: 12, executable: current }],
-        `p12\nn${current}\n`
+        await lsofRecord(12, current)
       )
     ).toEqual({ status: 'current' })
     expect(
       await inspectCodexComputerUseMappings(
         [{ pid: 12, executable: join(root, 'missing') }],
-        `p12\nn${current}\n`
+        await lsofRecord(12, current)
       )
     ).toEqual({ status: 'unavailable' })
     expect(
       await inspectCodexComputerUseMappings(
         [{ pid: 12, executable: current }],
-        `p99\nn${current}\n`
+        await lsofRecord(99, current)
       )
     ).toEqual({ status: 'unavailable' })
   })
@@ -64,8 +73,41 @@ describe('Codex Computer Use executable mappings', () => {
     const old = join(root, 'node_repl').replaceAll('\\', '/')
     await writeFile(old, 'older-runtime')
     expect(
-      await inspectCodexComputerUseMappings([{ pid: 12, executable: current }], `p12\nn${old}\n`)
+      await inspectCodexComputerUseMappings(
+        [{ pid: 12, executable: current }],
+        await lsofRecord(12, old)
+      )
     ).toEqual({ status: 'stale' })
+  })
+
+  it('detects an atomic replacement at the same path without reading the replacement as the mapped image', async () => {
+    const { current } = await runtime()
+    const record = await lsofRecord(12, current)
+    await rename(current, `${current}.old`)
+    await writeFile(current, 'replacement-at-identical-path')
+    expect(
+      await inspectCodexComputerUseMappings([{ pid: 12, executable: current }], record)
+    ).toEqual({ status: 'stale' })
+    expect(
+      await inspectCodexComputerUseMappings(
+        [{ pid: 12, executable: current }],
+        `p12\nftxt\nn${current}\n`
+      )
+    ).toEqual({ status: 'unavailable' })
+  })
+
+  it('keeps spaces in the executable path and accepts a Codex PTY root', () => {
+    const command =
+      '/Users/Agent User/Applications/ChatGPT Beta.app/Contents/Resources/cua_node/bin/node_repl'
+    expect(
+      findCodexComputerUseHosts(
+        [
+          { pid: 10, ppid: 1, command: 'codex --no-daemon' },
+          { pid: 11, ppid: 10, command }
+        ],
+        10
+      )
+    ).toEqual([{ pid: 11, executable: command }])
   })
 
   it('keeps helper ownership within the outer Codex invocation', () => {
