@@ -78,12 +78,14 @@ export function useSetupGuideProgress(
     useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, {
       enabled: shouldRefreshCoreState,
       discoveryTarget: activeSkillRuntime.discoveryTarget,
+      runtimeTarget: activeSkillRuntime.discoveryRuntimeTarget,
       sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
     })
   const { installed: computerUseSkillInstalled, loading: computerUseSkillLoading } =
     useInstalledAgentSkill(COMPUTER_USE_SKILL_NAME, {
       enabled: shouldRefreshCoreState,
       discoveryTarget: activeSkillRuntime.discoveryTarget,
+      runtimeTarget: activeSkillRuntime.discoveryRuntimeTarget,
       sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
     })
   const {
@@ -92,6 +94,7 @@ export function useSetupGuideProgress(
   } = useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME, {
     enabled: shouldRefreshCoreState,
     discoveryTarget: activeSkillRuntime.discoveryTarget,
+    runtimeTarget: activeSkillRuntime.discoveryRuntimeTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
   const providerRuntimeContextKey = getProviderRuntimeContextKey(settings)

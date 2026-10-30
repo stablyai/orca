@@ -50,14 +50,17 @@ export function useAgentCapabilitySetupStatus(): AgentCapabilitySetupStatus {
   const activeSkillRuntime = useActiveProjectSkillRuntime()
   const browserUseSkill = useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, {
     discoveryTarget: activeSkillRuntime.discoveryTarget,
+    runtimeTarget: activeSkillRuntime.discoveryRuntimeTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
   const computerUseSkill = useInstalledAgentSkill(COMPUTER_USE_SKILL_NAME, {
     discoveryTarget: activeSkillRuntime.discoveryTarget,
+    runtimeTarget: activeSkillRuntime.discoveryRuntimeTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
   const orchestrationSkill = useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME, {
     discoveryTarget: activeSkillRuntime.discoveryTarget,
+    runtimeTarget: activeSkillRuntime.discoveryRuntimeTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
   const computerUsePermissionStatus = useComputerUsePermissionStatus(computerUseSkill.installed)
