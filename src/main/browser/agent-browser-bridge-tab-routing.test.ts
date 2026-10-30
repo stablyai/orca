@@ -297,7 +297,9 @@ describe('AgentBrowserBridge', () => {
     })
     await expect(b.snapshot(undefined, 'popup-7')).resolves.toEqual({
       browserPageId: 'popup-7',
-      snapshot: 'popup tree'
+      snapshot: 'popup tree',
+      url: 'https://auth.example.com/',
+      title: 'Sign in'
     })
     expect(b.getActivePageId('wt-1')).toBe('tab-a')
 
