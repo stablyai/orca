@@ -27,7 +27,7 @@ export const mobileDiffReviewControlStyles = themedStyleSheet(() => ({
   navButton: {
     width: 44,
     minHeight: 44,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised,
     alignItems: 'center',
     justifyContent: 'center'
@@ -39,7 +39,7 @@ export const mobileDiffReviewControlStyles = themedStyleSheet(() => ({
     justifyContent: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.md,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised
   },
   footerButtonText: {
@@ -55,7 +55,7 @@ export const mobileDiffReviewControlStyles = themedStyleSheet(() => ({
     justifyContent: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.md,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.textPrimary
   },
   primaryButtonDone: {
@@ -74,7 +74,7 @@ export const mobileDiffReviewControlStyles = themedStyleSheet(() => ({
     justifyContent: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.md,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised
   },
   secondaryButtonText: {

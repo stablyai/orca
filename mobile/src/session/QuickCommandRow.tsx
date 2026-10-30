@@ -3,7 +3,7 @@ import { View, Text, Pressable, StyleSheet } from 'react-native'
 import { useClipboardWriter } from '../platform/clipboard'
 import { triggerError } from '../platform/haptics'
 import { Check, Copy, Pencil, Play, Trash2 } from 'lucide-react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
@@ -201,7 +201,7 @@ const styles = themedStyleSheet(() => ({
   rowIcon: {
     width: 26,
     height: 26,
-    borderRadius: 6,
+    borderRadius: radii.tile,
     backgroundColor: colors.bgRaised,
     alignItems: 'center',
     justifyContent: 'center'

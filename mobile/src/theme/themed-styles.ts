@@ -20,7 +20,31 @@ export function themedStyles<T extends Record<string, unknown>>(create: () => T)
   return live
 }
 
+const CORNER_RADIUS_KEYS = [
+  'borderRadius',
+  'borderTopLeftRadius',
+  'borderTopRightRadius',
+  'borderBottomLeftRadius',
+  'borderBottomRightRadius'
+] as const
+
+// Every rounded style asks for Apple's continuous corner curve; iOS draws it, Android and the web ignore the key.
+// Mutates the fresh objects `create()` just built.
+function withContinuousCorners<T extends StyleSheet.NamedStyles<T>>(styles: T): T {
+  for (const style of Object.values(styles)) {
+    if (
+      style &&
+      typeof style === 'object' &&
+      !('borderCurve' in style) &&
+      CORNER_RADIUS_KEYS.some((key) => key in style)
+    ) {
+      Object.assign(style, { borderCurve: 'continuous' })
+    }
+  }
+  return styles
+}
+
 // Drop-in for a module-scope `StyleSheet.create` that reads `colors`.
 export function themedStyleSheet<T extends StyleSheet.NamedStyles<T>>(create: () => T): T {
-  return themedStyles(() => StyleSheet.create(create()))
+  return themedStyles(() => StyleSheet.create(withContinuousCorners(create())))
 }

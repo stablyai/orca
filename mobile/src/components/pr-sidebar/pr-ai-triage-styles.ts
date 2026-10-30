@@ -12,7 +12,7 @@ export const prAiTriageStyles = themedStyleSheet(() => ({
     alignItems: 'center',
     gap: spacing.sm,
     padding: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.statusRed,
     backgroundColor: colors.diffDeletedBg
@@ -36,7 +36,7 @@ export const prAiTriageStyles = themedStyleSheet(() => ({
     alignItems: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgRaised
@@ -53,7 +53,7 @@ export const prAiTriageStyles = themedStyleSheet(() => ({
     justifyContent: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.md,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgRaised
