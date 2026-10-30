@@ -88,13 +88,17 @@ export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
   }
 
   /** Closes a popup page as the page's own window.close() would; false when it is not a live popup. */
-  closePopupPage(browserPageId: string): boolean {
+  async closePopupPage(browserPageId: string): Promise<boolean> {
     const page = this.getPopupPages().find((popup) => popup.browserPageId === browserPageId)
     const popup = page ? webContents.fromId(page.webContentsId) : undefined
     if (!popup || popup.isDestroyed()) {
       return false
     }
-    popup.close()
+    // Settle after the agent is handed back to the opener, so its next command lands there.
+    await new Promise<void>((resolve) => {
+      popup.once('destroyed', () => resolve())
+      popup.close()
+    })
     return true
   }
 

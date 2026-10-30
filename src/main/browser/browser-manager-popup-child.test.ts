@@ -254,7 +254,7 @@ describe('browserManager popup child policies', () => {
     expect(childOffMock).toHaveBeenCalledWith('will-redirect', expect.any(Function))
   })
 
-  it('exposes a live popup child as a page owned by its opener tab', () => {
+  it('exposes a live popup child as a page owned by its opener tab', async () => {
     let didCreateWindow: (window: { webContents: unknown }) => void = () => {}
     const fakeGuest = (id: number) => ({
       id,
@@ -268,6 +268,7 @@ describe('browserManager popup child policies', () => {
         }
       }),
       off: vi.fn(),
+      once: vi.fn((_event: string, listener: () => void) => listener()),
       close: vi.fn()
     })
     const opener = fakeGuest(404)
@@ -291,8 +292,8 @@ describe('browserManager popup child policies', () => {
     ])
     expect(browserManager.getWorktreeIdForTab('popup-4040')).toBe('wt-1')
     expect(browserManager.getSessionProfileIdForTab('popup-4040')).toBe('work')
-    expect(browserManager.closePopupPage('browser-1')).toBe(false)
-    expect(browserManager.closePopupPage('popup-4040')).toBe(true)
+    await expect(browserManager.closePopupPage('browser-1')).resolves.toBe(false)
+    await expect(browserManager.closePopupPage('popup-4040')).resolves.toBe(true)
     expect(popup.close).toHaveBeenCalledTimes(1)
 
     browserManager.unregisterGuest('browser-1')

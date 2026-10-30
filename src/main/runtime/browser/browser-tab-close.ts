@@ -92,7 +92,7 @@ export class RuntimeBrowserTabClose {
     if (
       popupPageId &&
       bridge.getRegisteredTabs(worktreeId).has(popupPageId) &&
-      browserManager.closePopupPage(popupPageId)
+      (await browserManager.closePopupPage(popupPageId))
     ) {
       return { closed: true }
     }

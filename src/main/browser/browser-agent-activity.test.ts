@@ -110,16 +110,19 @@ describe('BrowserAgentActivity', () => {
     expect(sent.at(-1)?.data).toEqual({ browserPageId: PAGE, worktreeId: 'wt-1', active: false })
   })
 
-  it('hands an agent claim to the page it continues on, which then idles out like any other', () => {
+  it('hands an agent claim to the page it continues on with a fresh idle window', () => {
     const { activity, agentCommand } = setup()
-    activity.handOver(PAGE, 'opener')
-    expect(activity.isActive('opener')).toBe(false)
+    activity.handOver('opener', PAGE)
+    expect(activity.isActive(PAGE)).toBe(false)
 
     agentCommand().end()
-    activity.handOver(PAGE, 'opener')
-    expect(activity.isActive('opener')).toBe(true)
-    vi.advanceTimersByTime(20_000)
-    expect(activity.isActive('opener')).toBe(false)
+    vi.advanceTimersByTime(15_000)
+    runWithActiveRpcCaller({ kind: 'local-cli' }, () => activity.beginCommand('popup')).end()
+    activity.handOver('popup', PAGE)
+    vi.advanceTimersByTime(19_000)
+    expect(activity.isActive(PAGE)).toBe(true)
+    vi.advanceTimersByTime(1_000)
+    expect(activity.isActive(PAGE)).toBe(false)
   })
 
   it('holds a fresh move until the renderer reports the cursor landed', async () => {
