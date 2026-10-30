@@ -217,7 +217,8 @@ it('fences a host-produced valid direct-alias replacement before snapshot, with 
   }
   callbacks?.onError?.({ code: 'remote_runtime_unavailable', message: 'closed' })
   register('i2', true)
-  await expect(runtime.readTerminal(handle)).resolves.toMatchObject({ incarnationId: 'i2' })
+  await expect(runtime.readTerminal(handle)).resolves.toMatchObject({ status: 'running' })
+  expect(runtime.getTerminalLaunchResult(id)).toMatchObject({ incarnationId: 'i2' })
   const recovering = binding.connect(previewId)
   await vi.waitFor(() => expect(snapshots).toBe(2))
   expect(binding.getInputSource()).toBe(original)

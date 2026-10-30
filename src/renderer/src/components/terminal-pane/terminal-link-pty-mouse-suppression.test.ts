@@ -36,7 +36,9 @@ function mount(actions = true) {
   })
   const ownerElementHandlers = registration.mock.calls.length - trackerElementHandlers
   const forward = (data: string): void => {
-    if (live) writes.push(data)
+    if (live) {
+      writes.push(data)
+    }
   }
   owner.bindSource({ isCurrent: () => live, user: forward, unclassified: forward })
   element.addEventListener('mousedown', () => owner.handlePtyInput(DOWN, forward, true))

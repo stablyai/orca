@@ -69,7 +69,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       }
     })
 
-    expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-exited')
+    expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-exited', undefined)
     expect(transport.getPtyId()).toBeNull()
     expect(transport.isConnected()).toBe(false)
     expect(transport.getRecoveryState?.().phase).toBe('ended')

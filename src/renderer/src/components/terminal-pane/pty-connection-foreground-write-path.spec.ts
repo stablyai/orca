@@ -150,7 +150,7 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
       await flushAsyncTicks()
       sendTerminalInputThroughPane(pane, 'a')
 
-      expect(deferPtyInput).toHaveBeenCalledWith(1, 'a', expect.any(Function))
+      expect(deferPtyInput).toHaveBeenCalledWith(1, 'a', expect.any(Function), false)
       expect(transport.sendInput).not.toHaveBeenCalled()
 
       const forward = deferPtyInput.mock.calls[0]?.[2] as (data: string) => void

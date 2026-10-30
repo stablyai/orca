@@ -772,11 +772,12 @@ describe('AgentTerminalPreview', () => {
     Object.defineProperty(box, 'clientWidth', { configurable: true, value: 900 })
     Object.defineProperty(box, 'clientHeight', { configurable: true, value: 480 })
     // 80×24 grid rendered at 800×384 → 10×16 cells → the box holds 90×30.
-    const screen = document.createElement('div')
-    screen.className = 'xterm-screen'
+    const screen = host.querySelector<HTMLElement>('.xterm-screen')
+    if (!screen) {
+      throw new Error('Missing first preview screen')
+    }
     Object.defineProperty(screen, 'offsetWidth', { configurable: true, value: 800 })
     Object.defineProperty(screen, 'offsetHeight', { configurable: true, value: 384 })
-    host.appendChild(screen)
 
     await vi.advanceTimersByTimeAsync(200)
     expect(fit).toHaveBeenCalledTimes(1)

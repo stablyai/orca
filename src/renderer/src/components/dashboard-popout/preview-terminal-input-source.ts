@@ -165,7 +165,7 @@ export function transitionSession(
   operation.bindings = [...session.bindings].map((binding) =>
     binding.reserve(endpoint ? session : null, endpoint, unavailable)
   )
-  for (const part of [...operation.bindings]) {
+  for (const part of operation.bindings.slice()) {
     if (!owns()) {
       break
     }

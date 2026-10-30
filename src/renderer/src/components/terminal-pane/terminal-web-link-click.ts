@@ -38,25 +38,20 @@ export function handleTerminalWebLinkClick(
     return false
   }
 
-  let handled: boolean
   const completeUrl = deps.terminal ? findHttpLinkAtTerminalMouseEvent(deps.terminal, event) : null
-  if (completeUrl) {
-    handled = handleTerminalHttpLink(completeUrl, event, {
-      worktreeId: deps.worktreeId,
-      sourceTabId: deps.sourceTabId,
-      sourceOwner:
-        deps.sourceOwner ??
-        (deps.runtimeEnvironmentId
-          ? { kind: 'runtime', runtimeEnvironmentId: deps.runtimeEnvironmentId }
-          : { kind: 'local' }),
-      requestOpenLinksInAppPreference: deps.requestOpenLinksInAppPreference,
-      linkActionContext: deps.linkActionContext,
-      commit: deps.commit,
-      actionDestinations: deps.actionDestinations
-    })
-  } else {
-    handled = handleOscLink(url, event, deps)
-  }
-
-  return handled
+  return completeUrl
+    ? handleTerminalHttpLink(completeUrl, event, {
+        worktreeId: deps.worktreeId,
+        sourceTabId: deps.sourceTabId,
+        sourceOwner:
+          deps.sourceOwner ??
+          (deps.runtimeEnvironmentId
+            ? { kind: 'runtime', runtimeEnvironmentId: deps.runtimeEnvironmentId }
+            : { kind: 'local' }),
+        requestOpenLinksInAppPreference: deps.requestOpenLinksInAppPreference,
+        linkActionContext: deps.linkActionContext,
+        commit: deps.commit,
+        actionDestinations: deps.actionDestinations
+      })
+    : handleOscLink(url, event, deps)
 }

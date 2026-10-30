@@ -206,6 +206,8 @@ export function createPreviewTerminalSessionLifetime(
               }
               const releases: (() => void)[] = []
               let adopted = false
+              let transitionFailed = false
+              let transitionFailure: unknown
               try {
                 transitionSession(
                   session,
@@ -226,22 +228,24 @@ export function createPreviewTerminalSessionLifetime(
                   !event.recoverable,
                   event.recoverable
                 )
-              } finally {
+              } catch (error) {
+                transitionFailed = true
+                transitionFailure = error
+              }
+              let failure: unknown
+              for (const release of releases) {
                 try {
-                  let failure: unknown
-                  for (const release of releases) {
-                    try {
-                      release()
-                    } catch (error) {
-                      failure ??= error
-                    }
-                  }
-                  if (failure !== undefined) {
-                    throw failure
-                  }
-                } finally {
-                  finish(UNAVAILABLE)
+                  release()
+                } catch (error) {
+                  failure ??= error
                 }
+              }
+              finish(UNAVAILABLE)
+              if (failure !== undefined) {
+                throw failure
+              }
+              if (transitionFailed) {
+                throw transitionFailure
               }
               if (adopted && initialized && !session.closed && !sessions.has(ptyId)) {
                 emit({ type: 'resync', ptyId })

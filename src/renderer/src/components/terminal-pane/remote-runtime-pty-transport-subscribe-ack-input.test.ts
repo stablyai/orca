@@ -28,6 +28,7 @@ let resolvedPaneHandle = 'terminal-1'
 
 const {
   runtimeSubscribe,
+  runtimeCall,
   subscriptionSendBinary,
   latestSubscribePayload,
   emitSnapshot,
@@ -284,6 +285,23 @@ it('reconciles contradictory current ACK proof without adopting launch metadata 
     await import('./terminal-link-pty-mouse-suppression')
   const launches = vi.fn()
   const unavailable = vi.fn()
+  const defaultCall = runtimeCall.getMockImplementation()
+  runtimeCall.mockImplementation(async (request: { method: string; params?: unknown }) =>
+    request.method === 'terminal.resolvePane'
+      ? {
+          ok: true,
+          result: {
+            terminal: {
+              handle: 'terminal-1',
+              tabId: 'tab-1',
+              leafId: 'pane:1',
+              worktreeId: 'wt-1',
+              incarnationId: 'i1'
+            }
+          }
+        }
+      : defaultCall?.(request)
+  )
   const transport = createRemoteRuntimePtyTransport('env-1', {
     worktreeId: 'wt-1',
     tabId: 'tab-1',

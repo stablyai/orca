@@ -263,7 +263,9 @@ describe('paired source publication', () => {
         events.push('before2')
       },
       afterChange: (source) => {
-        if (source !== b) events.push('after2')
+        if (source !== b) {
+          events.push('after2')
+        }
       }
     })
     recovered.callbacks.onSubscribeAcknowledged?.({ ptyId: 'pty', incarnationId: 'i2' })

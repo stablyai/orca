@@ -38,7 +38,7 @@ async function refreshSession(
   if (!stream) {
     return UNAVAILABLE
   }
-  for (const binding of [...session.bindings]) {
+  for (const binding of Array.from(session.bindings)) {
     binding.invalidate()
   }
   if (

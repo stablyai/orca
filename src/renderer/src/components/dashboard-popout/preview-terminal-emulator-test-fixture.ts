@@ -1,5 +1,6 @@
 import { vi } from 'vitest'
 import type { Terminal } from '@xterm/xterm'
+import { installTerminalLinkPtyMouseSuppression } from '../terminal-pane/terminal-link-pty-mouse-suppression'
 
 type PreviewCurrentLink = {
   linkifier: {
@@ -100,4 +101,16 @@ export function previewContext(
   Object.defineProperty(menu, 'timeStamp', { value: down.timeStamp })
   terminal.element.dispatchEvent(menu)
   terminal.element.dispatchEvent(new MouseEvent('mouseup', { ...facts, buttons: 0 }))
+}
+
+/** Geometry/lifetime specs omit compatibility addons, while retaining the required owner contract. */
+export function createPreviewCompatibilityTestDisposer(
+  terminal: Parameters<typeof installTerminalLinkPtyMouseSuppression>[0]
+) {
+  const inputOwner = installTerminalLinkPtyMouseSuppression(terminal, {
+    candidate: () => null,
+    eligible: () => false,
+    canContinue: () => false
+  })
+  return Object.assign(() => inputOwner.dispose(), { inputOwner })
 }

@@ -36,6 +36,7 @@ describe('createIpcPtyTransport', () => {
 
   afterEach(() => {
     restorePtySpecWindow(originalWindow)
+    vi.useRealTimers()
   })
 
   it('does not create a second kill authority when a mounted pane detaches', async () => {
@@ -246,12 +247,20 @@ describe('createIpcPtyTransport', () => {
     expect(kill).not.toHaveBeenCalled()
   })
 
-  it.each([undefined, 'ssh-1'])(
-    'keeps actual IPC source queue lifetime and caller reentry for connection %s',
-    async (connectionId) => {
+  it.each([
+    { connectionId: undefined, wrapped: false },
+    { connectionId: 'ssh-1', wrapped: false },
+    { connectionId: undefined, wrapped: true },
+    { connectionId: 'ssh-1', wrapped: true }
+  ])(
+    'keeps actual IPC source queue lifetime and caller reentry for $connectionId, wrapped=$wrapped',
+    async ({ connectionId, wrapped }) => {
       const { createIpcPtyTransport } = await import('./pty-transport')
-      const transport = createIpcPtyTransport({ connectionId })
+      const { createLegacyRelayBridgeTransport } = await import('./legacy-relay-bridge-transport')
+      const inner = createIpcPtyTransport({ connectionId })
+      const transport = wrapped ? createLegacyRelayBridgeTransport('ssh:box@@old', inner) : inner
       await transport.connect({ url: '', callbacks: {} })
+      vi.useFakeTimers()
       const a = transport.getInputSource?.()
       if (!a) {
         throw new Error('Missing actual IPC source')
@@ -284,7 +293,7 @@ describe('createIpcPtyTransport', () => {
         throw new Error('Missing successor source')
       }
       expect(b.sendInput('current-B', 'driving')).toBe(true)
-      await flushAsyncTicks()
+      await vi.advanceTimersByTimeAsync(30)
       expect(vi.mocked(window.api.pty.write).mock.calls.every(([id]) => id === 'pty-3')).toBe(true)
       expect(
         vi

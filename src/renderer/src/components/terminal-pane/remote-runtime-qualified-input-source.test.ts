@@ -1,5 +1,7 @@
 // @vitest-environment happy-dom
 import { Terminal } from '@xterm/xterm'
+import type * as InputSourceModule from './pty-input-source'
+import type * as QualifiedInputModule from './pty-connection/pty-qualified-input-forwarder'
 import { afterEach, expect, it, vi } from 'vitest'
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../../shared/clipboard-text'
 import {
@@ -12,7 +14,7 @@ import { subscribeToTerminalInputData } from './terminal-user-input-signal'
 import type { QualifiedPtyInputSession } from './pty-connection/pty-qualified-input-forwarder'
 const allocation = vi.hoisted(() => ({ sources: 0, forwarders: 0 }))
 vi.mock('./pty-input-source', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./pty-input-source')>()
+  const actual = await importOriginal<typeof InputSourceModule>()
   return {
     ...actual,
     createPtyInputSourceBinding: <T>(
@@ -28,8 +30,7 @@ vi.mock('./pty-input-source', async (importOriginal) => {
   }
 })
 vi.mock('./pty-connection/pty-qualified-input-forwarder', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('./pty-connection/pty-qualified-input-forwarder')>()
+  const actual = await importOriginal<typeof QualifiedInputModule>()
   return {
     ...actual,
     createQualifiedPtyInputForwarder: (
@@ -63,6 +64,7 @@ afterEach(() => {
     .toReversed()
     .forEach((dispose) => dispose())
   vi.unstubAllGlobals()
+  vi.useRealTimers()
 })
 async function open(revision?: number) {
   h.resetRemoteRuntimeTransport()
@@ -104,6 +106,12 @@ it.each(['same', 'replace'] as const)(
   'keeps original qualification and delayed scope through %s ACK validation/viewport/accepted/immediate handoffs',
   async (mode) => {
     const { transport, ack } = await open()
+    callbacks?.onError?.({
+      code: 'remote_runtime_unavailable',
+      message: 'Remote runtime connection closed.'
+    })
+    await vi.waitFor(() => expect(h.subscribeFrameCount()).toBe(2))
+    vi.useFakeTimers()
     h.runtimeCall.mockImplementation(async () => ({
       ok: true,
       result: { send: { accepted: true } }
@@ -196,8 +204,9 @@ it.each(['same', 'replace'] as const)(
     element.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, buttons: 1 }))
     // Actual current response reconciles byte identity while launch attribution remains i1.
     ack(mode === 'replace' ? 'i2' : 'i1')
+    h.emitSnapshot(h.latestSubscribePayload().streamId, 'current screen')
     element.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
-    await new Promise((resolve) => setTimeout(resolve, 30))
+    await vi.advanceTimersByTimeAsync(30)
     const bytes = h.inputFrameTexts().join('')
     if (mode === 'replace') {
       expect(a.isCurrent()).toBe(false)
@@ -227,8 +236,9 @@ it.each(['same', 'replace'] as const)(
     h.subscriptionSendBinary.mockClear()
     element.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, buttons: 1 }))
     element.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
+    await vi.advanceTimersByTimeAsync(8)
     emulator.input('ordinary-B', true)
-    await vi.waitFor(() => expect(h.inputFrameTexts().join('')).toContain(down + up + 'ordinary-B'))
+    await vi.waitFor(() => expect(h.inputFrameTexts().join('')).toContain(`${down}${up}ordinary-B`))
     expect(session.markAcceptedTerminalInputSent).toHaveBeenCalled()
     expect(session.requestRecoveryForUndeliverableInput).not.toHaveBeenCalled()
     const records = { ...allocation }
@@ -336,6 +346,7 @@ it.each([10, 100])(
     h.emitSnapshot(h.latestSubscribePayload().streamId, 'recovered')
     const ordinaryResolve = vi.spyOn(revisions, 'resolveContinuedRuntimeEnvironmentRevision')
     const ordinaryRaw = vi.spyOn(revisions, 'getRuntimeEnvironmentRevision')
+    const recordsBeforeOrdinary = { ...allocation }
     h.subscriptionSendBinary.mockClear()
     for (let i = 0; i < n; i += 1) {
       transport.sendInput('ordinary', 'driving')
@@ -343,7 +354,8 @@ it.each([10, 100])(
     await vi.waitFor(() => expect(h.inputFrameTexts().join('')).toBe('ordinary'.repeat(n)))
     expect(h.inputFrameTexts()).toHaveLength(1)
     expect(ordinaryResolve).not.toHaveBeenCalled()
-    expect(ordinaryRaw).not.toHaveBeenCalled()
+    expect(ordinaryRaw).toHaveBeenCalledTimes(h.inputFrameTexts().length)
+    expect(allocation).toEqual(recordsBeforeOrdinary)
     ordinaryResolve.mockRestore()
     ordinaryRaw.mockRestore()
     producer.resetDeferredPeerChecksForTests()

@@ -1,12 +1,13 @@
-import { commitPreparedLinkForRoutingTest } from './terminal-link-handlers-test-fixtures'
+// @vitest-environment happy-dom
+import {
+  commitPreparedLinkForRoutingTest,
+  installTerminalLinkFallbackForTest
+} from './terminal-link-handlers-test-fixtures'
 import type { IBufferLine, Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
 import { handleTerminalWebLinkClick } from './terminal-web-link-click'
-import {
-  installHttpLinkClickFallback,
-  TERMINAL_HTTP_URL_MAX_LENGTH
-} from './terminal-url-link-hit-testing'
+import { TERMINAL_HTTP_URL_MAX_LENGTH } from './terminal-url-link-hit-testing'
 import { TERMINAL_HTTP_URL_MAX_LENGTH as maximumHttpUrlLength } from '../../../../shared/terminal-http-link-limits'
 
 const COLS = 157
@@ -90,28 +91,19 @@ function makeTerminal(options?: {
   const rows = options?.rows ?? ROWS
   const urlRows = options?.urlRows ?? URL_ROWS
   const registrations: ListenerRegistration[] = []
-  const ownerWindow = {
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn()
-  }
-  const ownerDocument = {
-    defaultView: ownerWindow,
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn()
-  }
-  const screen = {
-    getBoundingClientRect: () => ({ left: 0, top: 0, width: cols * 10, height: rows * 10 })
-  }
-  const element = {
-    ownerDocument,
-    querySelector: vi.fn(() => screen),
-    addEventListener: vi.fn(
-      (name: string, listener: EventListener, options?: AddEventListenerOptions | boolean) => {
-        registrations.push([name, listener, options])
-      }
-    ),
-    removeEventListener: vi.fn()
-  }
+  const element = document.createElement('div')
+  const screen = document.createElement('div')
+  screen.className = 'xterm-screen'
+  element.append(screen)
+  document.body.append(element)
+  vi.spyOn(screen, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, cols * 10, rows * 10))
+  const add = element.addEventListener.bind(element)
+  vi.spyOn(element, 'addEventListener').mockImplementation((name, listener, options) => {
+    if (typeof listener === 'function') {
+      registrations.push([name, listener, options])
+    }
+    add(name, listener, options)
+  })
   const clearSelection = vi.fn()
   return {
     terminal: {
@@ -143,22 +135,16 @@ function mouseEventForRow(
   row: number,
   options: { altKey?: boolean; plain?: boolean } = {}
 ): MouseEvent {
-  let defaultPrevented = false
-  return {
+  return new MouseEvent('mouseup', {
+    bubbles: true,
+    cancelable: true,
     button: 0,
     metaKey: !options.plain,
-    ctrlKey: false,
     altKey: options.altKey ?? false,
     shiftKey: !options.plain,
-    get defaultPrevented() {
-      return defaultPrevented
-    },
     clientX: 150,
-    clientY: row * 10 + 5,
-    preventDefault: vi.fn(() => {
-      defaultPrevented = true
-    })
-  } as unknown as MouseEvent
+    clientY: row * 10 + 5
+  })
 }
 
 describe('hard-wrapped terminal HTTP clicks', () => {
@@ -178,12 +164,14 @@ describe('hard-wrapped terminal HTTP clicks', () => {
   })
 
   afterEach(() => {
+    document.body.replaceChildren()
+    vi.restoreAllMocks()
     vi.unstubAllGlobals()
   })
 
   it('opens the full logical URL once when WebLinksAddon reports only the first row', () => {
     const { terminal, registrations, clearSelection } = makeTerminal()
-    const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
+    const disposable = installTerminalLinkFallbackForTest(terminal, { worktreeId: 'wt-1' })
     const event = mouseEventForRow(0)
 
     expect(
@@ -209,23 +197,18 @@ describe('hard-wrapped terminal HTTP clicks', () => {
     expect(openUrlMock).toHaveBeenCalledWith(FULL_URL)
     expect(new URL(URL_ROWS[0]).pathname).toHaveLength(136)
     expect(`${new URL(FULL_URL).pathname}${new URL(FULL_URL).search}`).toHaveLength(811)
-    expect(event.preventDefault).toHaveBeenCalled()
+    expect(event.defaultPrevented).toBe(true)
     expect(clearSelection).toHaveBeenCalled()
     disposable.dispose()
   })
 
   it('opens the same full URL from a continuation-row fallback click', () => {
-    const { terminal, registrations } = makeTerminal()
-    const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
-    const event = mouseEventForRow(3)
-    const fallback = registrations.find(
-      ([name, _listener, options]) => name === 'mouseup' && options === undefined
-    )?.[1]
-
-    fallback!(event)
-
+    const { terminal } = makeTerminal()
+    const disposable = installTerminalLinkFallbackForTest(terminal, { worktreeId: 'wt-1' })
+    disposable.press({ metaKey: true, shiftKey: true, clientX: 150, clientY: 35 })
     expect(openUrlMock).toHaveBeenCalledTimes(1)
     expect(openUrlMock).toHaveBeenCalledWith(FULL_URL)
+    expect(disposable.writes).toEqual([])
     disposable.dispose()
   })
 
@@ -359,14 +342,14 @@ describe('hard-wrapped terminal HTTP clicks', () => {
   })
 
   it('does not append an unrelated aligned TUI row to a complete URL', () => {
-    const { terminal, registrations } = makeTerminal({
+    const { terminal } = makeTerminal({
       cols: 135,
       urlRows: ['http://example.com/', 'next-token'],
       linePrefix: ' │   ',
       lineSuffix: '│ ',
       softWrapped: false
     })
-    const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
+    const disposable = installTerminalLinkFallbackForTest(terminal, { worktreeId: 'wt-1' })
 
     expect(
       handleTerminalWebLinkClick('http://example.com/', mouseEventForRow(0), {
@@ -384,10 +367,8 @@ describe('hard-wrapped terminal HTTP clicks', () => {
     expect(openUrlMock).toHaveBeenCalledWith('http://example.com/')
 
     openUrlMock.mockReset()
-    const fallback = registrations.find(
-      ([name, _listener, options]) => name === 'mouseup' && options === undefined
-    )?.[1]
-    fallback!(mouseEventForRow(1))
+    disposable.press({ metaKey: true, clientX: 150, clientY: 15 })
+    expect(disposable.writes).toEqual(['\x1b[<0;2;1M', '\x1b[<0;2;1m'])
     expect(openUrlMock).not.toHaveBeenCalled()
     disposable.dispose()
   })
@@ -420,17 +401,14 @@ describe('hard-wrapped terminal HTTP clicks', () => {
   })
 
   it('does not glue the next logical line onto a URL that ends mid-row (#8832)', () => {
-    const { terminal, registrations } = makeTerminal({
+    const { terminal } = makeTerminal({
       cols: 80,
       urlRows: ['Repo: https://github.com/stablyai/orca/', 'Description: 123'],
       softWrapped: false
     })
-    const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
+    const disposable = installTerminalLinkFallbackForTest(terminal, { worktreeId: 'wt-1' })
 
-    const fallback = registrations.find(
-      ([name, _listener, options]) => name === 'mouseup' && options === undefined
-    )?.[1]
-    fallback!(mouseEventForRow(0))
+    disposable.press({ metaKey: true, clientX: 150, clientY: 5 })
 
     expect(openUrlMock).toHaveBeenCalledOnce()
     expect(openUrlMock).toHaveBeenCalledWith('https://github.com/stablyai/orca/')
@@ -440,136 +418,114 @@ describe('hard-wrapped terminal HTTP clicks', () => {
   it('still joins a URL hard-wrapped at the row edge without native wrap metadata', () => {
     const cols = 40
     const url = 'https://example.com/very/long/path/segments/that/continue/more'
-    const { terminal, registrations } = makeTerminal({
+    const { terminal } = makeTerminal({
       cols,
       urlRows: [url.slice(0, cols), url.slice(cols)],
       softWrapped: false
     })
-    const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
+    const disposable = installTerminalLinkFallbackForTest(terminal, { worktreeId: 'wt-1' })
 
-    const fallback = registrations.find(
-      ([name, _listener, options]) => name === 'mouseup' && options === undefined
-    )?.[1]
-    fallback!(mouseEventForRow(0))
+    disposable.press({ metaKey: true, clientX: 150, clientY: 5 })
 
     expect(openUrlMock).toHaveBeenCalledOnce()
     expect(openUrlMock).toHaveBeenCalledWith(url)
     disposable.dispose()
   })
 
-  it('does not suppress a modifier-click when the buffer position is not an HTTP link', () => {
-    const { terminal, registrations } = makeTerminal({ urlRows: ['not-a-link'] })
-    const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
-    const mouseDown = registrations.find(([name]) => name === 'mousedown')?.[1]
-
-    mouseDown!(mouseEventForRow(0))
-
+  it('forwards both child reports when no link is hit', () => {
+    const { terminal } = makeTerminal({ urlRows: ['not-a-link'] })
+    const disposable = installTerminalLinkFallbackForTest(terminal, { worktreeId: 'wt-1' })
+    disposable.press({ metaKey: true })
+    expect(disposable.writes).toEqual(['\x1b[<0;2;1M', '\x1b[<0;2;1m'])
+    expect(openUrlMock).not.toHaveBeenCalled()
     expect(terminal.options.mouseEventsRequireAlt).toBe(false)
     disposable.dispose()
   })
 
-  it('temporarily suppresses PTY mouse reporting for a primed OSC link', () => {
-    const { terminal, registrations } = makeTerminal({ urlRows: ['OSC label'] })
-    const terminalWithLinkifier = terminal as unknown as {
-      _core: { linkifier: { _currentLink: unknown } }
-    }
-    terminalWithLinkifier._core = {
-      linkifier: { _currentLink: { link: 'https://example.com/osc' } }
-    }
-    const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
-    const mouseDown = registrations.find(([name]) => name === 'mousedown')?.[1]
-
-    mouseDown!(mouseEventForRow(0))
-
-    expect(terminal.options.mouseEventsRequireAlt).toBe(true)
-    disposable.dispose()
+  it('consumes a typed primed OSC link through the real press owner', () => {
+    const { terminal, clearSelection } = makeTerminal({ urlRows: ['OSC label'] })
+    Object.defineProperty(terminal, '_core', {
+      value: {
+        linkifier: {
+          _currentLink: {
+            link: {
+              text: 'https://example.com/osc',
+              range: { start: { x: 1, y: 1 }, end: { x: 20, y: 1 } }
+            }
+          }
+        }
+      }
+    })
+    const disposable = installTerminalLinkFallbackForTest(terminal, { worktreeId: 'wt-1' })
+    terminal.element?.addEventListener('mouseup', (event) => {
+      handleTerminalWebLinkClick('https://example.com/osc', event, {
+        terminal,
+        worktreeId: 'wt-1',
+        commit: disposable.ptyMouseSuppression.commit
+      })
+    })
+    disposable.press({ metaKey: true })
+    expect(openUrlMock).toHaveBeenCalledExactlyOnceWith('https://example.com/osc')
+    expect(clearSelection).toHaveBeenCalledOnce()
+    expect(disposable.writes).toEqual([])
     expect(terminal.options.mouseEventsRequireAlt).toBe(false)
+    disposable.dispose()
   })
 
   it('leaves Alt-modified link gestures to the child TUI', () => {
-    const { terminal, registrations } = makeTerminal()
-    const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
-    const mouseDown = registrations.find(([name]) => name === 'mousedown')?.[1]
-    const event = mouseEventForRow(0, { altKey: true })
-
-    mouseDown!(event)
+    const { terminal } = makeTerminal()
+    const disposable = installTerminalLinkFallbackForTest(terminal, { worktreeId: 'wt-1' })
+    disposable.press({ metaKey: true, altKey: true })
+    expect(disposable.writes).toEqual(['\x1b[<0;2;1M', '\x1b[<0;2;1m'])
     expect(terminal.options.mouseEventsRequireAlt).toBe(false)
-    expect(
-      handleTerminalWebLinkClick(URL_ROWS[0], event, {
-        terminal,
-        commit: (event, operation) => {
-          terminal.clearSelection()
-          return commitPreparedLinkForRoutingTest(event, operation)
-        },
-        worktreeId: 'wt-1',
-        worktreePath: '/tmp',
-        startupCwd: '/tmp'
-      })
-    ).toBe(false)
     expect(openUrlMock).not.toHaveBeenCalled()
     disposable.dispose()
   })
 
-  it('temporarily suppresses PTY mouse reporting at an HTTP link position', async () => {
-    const { terminal, registrations } = makeTerminal()
-    const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
-    const mouseDown = registrations.find(([name]) => name === 'mousedown')?.[1]
-    const mouseUp = registrations.find(
-      ([name, _listener, options]) => name === 'mouseup' && options !== undefined
-    )?.[1]
-
-    mouseDown!(mouseEventForRow(0))
-    expect(terminal.options.mouseEventsRequireAlt).toBe(true)
-
-    mouseUp!(mouseEventForRow(0))
-    await Promise.resolve()
+  it('consumes HTTP reports without toggling the mouse option and refuses a retired source', () => {
+    const { terminal, clearSelection } = makeTerminal()
+    const disposable = installTerminalLinkFallbackForTest(terminal, { worktreeId: 'wt-1' })
+    disposable.press({ metaKey: true })
+    expect(openUrlMock).toHaveBeenCalledExactlyOnceWith(FULL_URL)
+    expect(clearSelection).toHaveBeenCalledOnce()
+    expect(disposable.writes).toEqual([])
     expect(terminal.options.mouseEventsRequireAlt).toBe(false)
+    disposable.retire()
+    disposable.press({ metaKey: true })
+    expect(openUrlMock).toHaveBeenCalledOnce()
+    expect(disposable.writes).toEqual([])
     disposable.dispose()
   })
 
-  it('owns a plain HTTP link click without opening until an action is chosen', () => {
+  it('owns a plain HTTP click without opening until an action is chosen', () => {
     const request = vi.fn()
-    const { terminal, registrations } = makeTerminal()
-    const disposable = installHttpLinkClickFallback(terminal, {
-      worktreeId: 'wt-1',
-      getLinkActionContext: () => ({
-        paneId: 1,
-        pointerGesture: { canRequestAction: () => true, dispose: vi.fn() },
-        commit: vi.fn(commitPreparedLinkForRoutingTest),
-        request,
-        focusTerminal: vi.fn()
+    const { terminal } = makeTerminal()
+    const disposable: ReturnType<typeof installTerminalLinkFallbackForTest> =
+      installTerminalLinkFallbackForTest(terminal, {
+        worktreeId: 'wt-1',
+        getLinkActionContext: () => ({
+          paneId: 1,
+          pointerGesture: { canRequestAction: () => true, dispose: vi.fn() },
+          commit: disposable.ptyMouseSuppression.commit,
+          request,
+          focusTerminal: vi.fn()
+        })
       })
-    })
-    const mouseDown = registrations.find(([name]) => name === 'mousedown')?.[1]
-    const mouseUp = registrations.find(
-      ([name, _listener, options]) => name === 'mouseup' && options === undefined
-    )?.[1]
-    const event = mouseEventForRow(0, { plain: true })
-
-    mouseDown!(event)
-    expect(terminal.options.mouseEventsRequireAlt).toBe(false)
-    mouseUp!(event)
-
+    disposable.press()
     expect(request).toHaveBeenCalledWith(expect.objectContaining({ kind: 'url' }))
+    expect(disposable.writes).toEqual([])
     expect(openUrlMock).not.toHaveBeenCalled()
     disposable.dispose()
   })
 
-  it('does not suppress a plain HTTP link when action popovers are disabled', () => {
-    const { terminal, registrations } = makeTerminal()
-    const disposable = installHttpLinkClickFallback(terminal, {
+  it('forwards a plain HTTP click when action popovers are disabled', () => {
+    const { terminal } = makeTerminal()
+    const disposable = installTerminalLinkFallbackForTest(terminal, {
       worktreeId: 'wt-1',
       getLinkActionContext: () => null
     })
-    const mouseDown = registrations.find(([name]) => name === 'mousedown')?.[1]
-    const mouseUp = registrations.find(
-      ([name, _listener, options]) => name === 'mouseup' && options === undefined
-    )?.[1]
-    const event = mouseEventForRow(0, { plain: true })
-
-    mouseDown!(event)
-    mouseUp!(event)
-
+    disposable.press()
+    expect(disposable.writes).toEqual(['\x1b[<0;2;1M', '\x1b[<0;2;1m'])
     expect(terminal.options.mouseEventsRequireAlt).toBe(false)
     expect(openUrlMock).not.toHaveBeenCalled()
     disposable.dispose()

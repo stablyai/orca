@@ -211,7 +211,7 @@ describe('handleOscLink', () => {
     handleOscLink(
       'https://example.com',
       { metaKey: true, ctrlKey: false, shiftKey: false },
-      { worktreeId: '', worktreePath: '/tmp' }
+      { worktreeId: '', worktreePath: '/tmp', commit: deps.commit }
     )
 
     expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')

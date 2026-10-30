@@ -101,7 +101,7 @@ export function createRemoteRuntimeInputJournal(deps: {
     timer = setTimeout(() => {
       timer = null
       resendRequested = false
-      for (const entry of [...entries]) {
+      for (const entry of entries.slice()) {
         if (entry.source && !entry.source.isCurrent()) {
           retireEntry(entry)
         }
@@ -249,7 +249,7 @@ export function createRemoteRuntimeInputJournal(deps: {
         entries = entries.slice(settled)
         clearTimer()
       }
-      for (const entry of [...entries]) {
+      for (const entry of entries.slice()) {
         if (entry.source && !entry.source.isCurrent()) {
           retireEntry(entry)
         }
@@ -283,7 +283,7 @@ export function createRemoteRuntimeInputJournal(deps: {
       })
     },
     hasUnacknowledgedInput() {
-      for (const entry of [...entries]) {
+      for (const entry of entries.slice()) {
         if (entry.source && !entry.source.isCurrent()) {
           retireEntry(entry)
         }

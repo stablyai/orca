@@ -1,3 +1,6 @@
+import type { Terminal } from '@xterm/xterm'
+import { createPtyInputSourceBinding } from './pty-input-source'
+import { installHttpLinkClickFallback } from './terminal-url-link-hit-testing'
 import type { TerminalLinkCommit } from './terminal-link-activation-operation'
 import { vi, type Mock } from 'vitest'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
@@ -140,4 +143,77 @@ export const commitPreparedLinkForRoutingTest: TerminalLinkCommit = (event, oper
   event.preventDefault?.()
   operation.run()
   return true
+}
+
+/** Real source/owner composition; the final child writer is the fixture boundary. */
+export function installTerminalLinkFallbackForTest(
+  terminal: Terminal,
+  deps: Parameters<typeof installHttpLinkClickFallback>[1]
+) {
+  const fallback = installHttpLinkClickFallback(terminal, deps)
+  const writes: string[] = []
+  const source = createPtyInputSourceBinding<string>({
+    same: (a, b) => a === b,
+    refine: (_, next) => next,
+    create: (endpoint, isCurrent) => {
+      const send = (data: string): boolean => {
+        if (!isCurrent()) {
+          return false
+        }
+        writes.push(data)
+        return true
+      }
+      return { ptyId: endpoint(), isCurrent, sendInput: send, sendInputImmediate: send }
+    }
+  })
+  source.change('fixture-pty', () => {})
+  const observation = source.observe({
+    beforeChange: fallback.ptyMouseSuppression.invalidateSource,
+    afterChange: (next) =>
+      fallback.ptyMouseSuppression.bindSource(
+        next && {
+          isCurrent: next.isCurrent,
+          user: (data) => {
+            next.sendInput(data, 'driving')
+          },
+          unclassified: (data) => {
+            next.sendInput(data, 'query-reply')
+          }
+        }
+      )
+  })
+  const forward = (data: string): void => {
+    source.current()?.sendInput(data, 'driving')
+  }
+  const down = (): void =>
+    fallback.ptyMouseSuppression.handlePtyInput('\x1b[<0;2;1M', forward, true)
+  const up = (): void => fallback.ptyMouseSuppression.handlePtyInput('\x1b[<0;2;1m', forward, true)
+  terminal.element?.addEventListener('mousedown', down)
+  terminal.element?.addEventListener('mouseup', up)
+  return {
+    ...fallback,
+    writes,
+    retire: () => source.change(null, () => {}, true),
+    press: (init: MouseEventInit = {}) => {
+      const options = {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+        clientX: 15,
+        clientY: 5,
+        ...init
+      }
+      terminal.element?.dispatchEvent(new MouseEvent('mousedown', { ...options, buttons: 1 }))
+      const event = new MouseEvent('mouseup', { ...options, buttons: 0 })
+      terminal.element?.dispatchEvent(event)
+      return event
+    },
+    dispose: () => {
+      terminal.element?.removeEventListener('mousedown', down)
+      terminal.element?.removeEventListener('mouseup', up)
+      source.change(null, () => {}, true)
+      observation.dispose()
+      fallback.dispose()
+    }
+  }
 }

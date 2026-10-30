@@ -1,3 +1,4 @@
+import type * as InputSourceModule from '../terminal-pane/pty-input-source'
 import { afterEach, expect, it, vi } from 'vitest'
 import * as revisions from '@/runtime/runtime-environment-revision'
 import {
@@ -13,7 +14,7 @@ import {
 
 const allocation = vi.hoisted(() => ({ sources: 0 }))
 vi.mock('../terminal-pane/pty-input-source', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../terminal-pane/pty-input-source')>()
+  const actual = await importOriginal<typeof InputSourceModule>()
   return {
     ...actual,
     createPtyInputSourceBinding: <T>(

@@ -109,6 +109,7 @@ async function collectLinks(
     getTerminal: () => terminal as never,
     getRuntimeEnvironmentId: () => runtimeEnvironmentId,
     linkTooltip: { textContent: '', style: { display: '' } } as unknown as HTMLElement,
+    getLinkCommit: () => linkActionContext?.commit ?? commitPreparedLinkForRoutingTest,
     getLinkActionContext: () => linkActionContext ?? null
   })
   return await new Promise<ILink[]>((resolve) => {

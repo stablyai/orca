@@ -175,6 +175,10 @@ describe('a runtime pane bridged to an older relay’s terminal', () => {
       replay: 'SCREEN'
     })
     expect(transport.getPtyId()).toBe(PTY)
+    const source = transport.getInputSource?.()
+    expect(source?.isCurrent()).toBe(true)
+    expect(source?.sendInput('scoped-positive', 'driving')).toBe(true)
+    expect(bridge.write).toHaveBeenCalledWith({ ptyId: PTY, data: 'scoped-positive' })
     expect(transport.sendInput('ls\r', 'driving')).toBe(true)
     expect(bridge.write).toHaveBeenCalledWith({ ptyId: PTY, data: 'ls\r' })
     transport.resize(100, 30)
@@ -184,6 +188,10 @@ describe('a runtime pane bridged to an older relay’s terminal', () => {
     expect(cb.onData.mock.calls).toEqual([['out']])
     bridge.exit.forEach((listener) => listener({ ptyId: PTY, code: 0 }))
     expect(cb.onExit).toHaveBeenCalledWith(0)
+    expect(source?.isCurrent()).toBe(false)
+    bridge.write.mockClear()
+    expect(source?.sendInput('obsolete', 'driving')).toBe(false)
+    expect(bridge.write).not.toHaveBeenCalled()
     expect(bridge.detach).toHaveBeenCalledWith({ ptyId: PTY, acquisitionId: 1 })
     expect(inner.connect).not.toHaveBeenCalled()
   })
@@ -250,9 +258,13 @@ describe('a runtime pane bridged to an older relay’s terminal', () => {
       state: 'live'
     }
     publishPanes([live])
+    const source = transport.getInputSource?.()
+    expect(source?.isCurrent()).toBe(true)
     // A disconnect stops the bridge, which publishes no panes and reports no exit.
     bridge.attach.mockResolvedValueOnce({ status: 'unverifiable' })
     publishPanes([])
+    expect(transport.getInputSource?.()).toBeNull()
+    expect(source?.isCurrent()).toBe(false)
     await vi.waitFor(() => expect(bridge.attach).toHaveBeenCalledTimes(2))
     expect(transport.sendInput('lost\r', 'driving')).toBe(false)
     expect(cb.onExit).not.toHaveBeenCalled()
@@ -263,6 +275,10 @@ describe('a runtime pane bridged to an older relay’s terminal', () => {
       expect(cb.onReplayData).toHaveBeenCalledWith('BACK', { clearBeforeReplay: true })
     )
     expect(transport.sendInput('ls\r', 'driving')).toBe(true)
+    const recovered = transport.getInputSource?.()
+    expect(recovered).not.toBe(source)
+    expect(recovered?.sendInputImmediate('current-query')).toBe(true)
+    expect(source?.sendInputImmediate('stale-query')).toBe(false)
   })
 
   it('asks again for a pane that turned live while an earlier ask was still out', async () => {
@@ -363,6 +379,34 @@ describe('a runtime pane bridged to an older relay’s terminal', () => {
     await closed.connect({ url: '', sessionId: PTY, callbacks: callbacks() })
     closed.destroy?.()
     expect(bridge.close).toHaveBeenCalledWith({ ptyId: PTY })
+  })
+
+  it('settles the live captured bridge before an inner successor, without losing its owed close', async () => {
+    bridge.attach.mockResolvedValue({ status: 'attached', replay: '', acquisitionId: 1 })
+    const inner = innerTransport()
+    const transport = createLegacyRelayBridgeTransport(PTY, inner)
+    await transport.connect({ url: '', sessionId: PTY, callbacks: callbacks() })
+    const source = transport.getInputSource?.()
+    let replacing = false
+    const observation = transport.observeInputSource?.({
+      beforeChange: () => {
+        if (!replacing) {
+          replacing = true
+          expect(source?.sendInput('settled-A', 'driving')).toBe(true)
+          void transport.connect({ url: '', sessionId: 'remote:env@@new', callbacks: {} })
+        }
+      },
+      afterChange: () => {}
+    })
+    transport.destroy?.()
+    expect(source?.isCurrent()).toBe(false)
+    expect(bridge.write).toHaveBeenCalledExactlyOnceWith({ ptyId: PTY, data: 'settled-A' })
+    expect(bridge.detach).toHaveBeenCalledExactlyOnceWith({ ptyId: PTY, acquisitionId: 1 })
+    expect(bridge.close).toHaveBeenCalledExactlyOnceWith({ ptyId: PTY })
+    expect(inner.destroy).toBeUndefined()
+    expect(transport.sendInput('ordinary-B', 'driving')).toBe(true)
+    expect(inner.sendInput).toHaveBeenCalledExactlyOnceWith('ordinary-B', 'driving')
+    observation?.dispose()
   })
 
   it('names the bridged shells a closing tab runs, or only its leaf for a split mirror', () => {

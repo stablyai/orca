@@ -1,4 +1,8 @@
-import { commitPreparedLinkForRoutingTest } from './terminal-link-handlers-test-fixtures'
+// @vitest-environment happy-dom
+import {
+  commitPreparedLinkForRoutingTest,
+  installTerminalLinkFallbackForTest
+} from './terminal-link-handlers-test-fixtures'
 import type { IBufferLine, Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -7,7 +11,6 @@ import {
 } from '@/lib/http-link-routing'
 import { handleOscLink } from './terminal-osc-link-routing'
 import { handleTerminalWebLinkClick } from './terminal-web-link-click'
-import { installHttpLinkClickFallback } from './terminal-url-link-hit-testing'
 
 const URL = 'http://example.com/'
 const COLS = 80
@@ -19,8 +22,6 @@ const createBrowserTabMock = vi.fn()
 const openRuntimeBrowserTabMock = vi.fn((): Promise<string | null> => Promise.resolve(null))
 const runtimeSourceOwner = { kind: 'runtime', runtimeEnvironmentId: 'env-1' } as const
 const sshSourceOwner = { kind: 'ssh', connectionId: 'ssh-1' } as const
-
-type ListenerRegistration = [string, EventListener, AddEventListenerOptions | boolean | undefined]
 
 function makeBufferLine(text: string): IBufferLine {
   const padded = text.padEnd(COLS)
@@ -48,30 +49,19 @@ function makeBufferLine(text: string): IBufferLine {
   } as IBufferLine
 }
 
-function makeTerminal(): { terminal: Terminal; registrations: ListenerRegistration[] } {
-  const registrations: ListenerRegistration[] = []
-  const screen = {
-    getBoundingClientRect: () => ({ left: 0, top: 0, width: COLS * 10, height: ROWS * 10 })
-  }
+function makeTerminal(): { terminal: Terminal } {
+  const element = document.createElement('div')
+  const screen = document.createElement('div')
+  screen.className = 'xterm-screen'
+  element.append(screen)
+  document.body.append(element)
+  vi.spyOn(screen, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, COLS * 10, ROWS * 10))
   return {
     terminal: {
       cols: COLS,
       rows: ROWS,
       options: { mouseEventsRequireAlt: false },
-      element: {
-        ownerDocument: {
-          defaultView: { addEventListener: vi.fn(), removeEventListener: vi.fn() },
-          addEventListener: vi.fn(),
-          removeEventListener: vi.fn()
-        },
-        querySelector: vi.fn(() => screen),
-        addEventListener: vi.fn(
-          (name: string, listener: EventListener, options?: AddEventListenerOptions | boolean) => {
-            registrations.push([name, listener, options])
-          }
-        ),
-        removeEventListener: vi.fn()
-      },
+      element,
       buffer: {
         active: {
           viewportY: 0,
@@ -79,23 +69,19 @@ function makeTerminal(): { terminal: Terminal; registrations: ListenerRegistrati
         }
       },
       clearSelection: vi.fn()
-    } as unknown as Terminal,
-    registrations
+    } as unknown as Terminal
   }
 }
 
 function clickEvent(): MouseEvent {
-  return {
+  return new MouseEvent('mouseup', {
+    bubbles: true,
+    cancelable: true,
     button: 0,
     metaKey: true,
-    ctrlKey: false,
-    altKey: false,
-    shiftKey: false,
-    defaultPrevented: false,
     clientX: 15,
-    clientY: 5,
-    preventDefault: vi.fn()
-  } as unknown as MouseEvent
+    clientY: 5
+  })
 }
 
 // Workspace runtimes can own the clicked pane while the global active runtime is null.
@@ -113,6 +99,8 @@ beforeEach(() => {
 
 afterEach(() => {
   registerWorkspaceHttpLinkBrowserOpener(null)
+  document.body.replaceChildren()
+  vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
 
@@ -160,15 +148,14 @@ describe('terminal HTTP links on a runtime-hosted pane', () => {
   })
 
   it('opens a click-fallback activation on the owning runtime', () => {
-    const { terminal, registrations } = makeTerminal()
-    const disposable = installHttpLinkClickFallback(terminal, {
+    const { terminal } = makeTerminal()
+    const disposable = installTerminalLinkFallbackForTest(terminal, {
       worktreeId: 'wt-1',
       getSourceOwner: () => runtimeSourceOwner
     })
 
-    registrations.find(
-      ([name, _listener, options]) => name === 'mouseup' && options === undefined
-    )?.[1](clickEvent())
+    disposable.press({ metaKey: true })
+    expect(disposable.writes).toEqual([])
 
     expect(openRuntimeBrowserTabMock).toHaveBeenCalledWith(
       expect.objectContaining({ expectedRuntimeEnvironmentId: 'env-1', url: URL })
@@ -237,15 +224,14 @@ describe('terminal HTTP links on a direct SSH pane', () => {
   })
 
   it('opens a click-fallback activation through the owning SSH workspace', () => {
-    const { terminal, registrations } = makeTerminal()
-    const disposable = installHttpLinkClickFallback(terminal, {
+    const { terminal } = makeTerminal()
+    const disposable = installTerminalLinkFallbackForTest(terminal, {
       worktreeId: 'wt-1',
       getSourceOwner: () => sshSourceOwner
     })
 
-    registrations.find(
-      ([name, _listener, options]) => name === 'mouseup' && options === undefined
-    )?.[1](clickEvent())
+    disposable.press({ metaKey: true })
+    expect(disposable.writes).toEqual([])
 
     expect(openRuntimeBrowserTabMock).toHaveBeenCalledWith(
       expect.objectContaining({ expectedSshConnectionId: 'ssh-1', url: URL })
@@ -277,12 +263,11 @@ describe('terminal HTTP links on a local pane', () => {
   })
 
   it('still opens a click-fallback activation in an Orca browser tab', () => {
-    const { terminal, registrations } = makeTerminal()
-    const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
+    const { terminal } = makeTerminal()
+    const disposable = installTerminalLinkFallbackForTest(terminal, { worktreeId: 'wt-1' })
 
-    registrations.find(
-      ([name, _listener, options]) => name === 'mouseup' && options === undefined
-    )?.[1](clickEvent())
+    disposable.press({ metaKey: true })
+    expect(disposable.writes).toEqual([])
 
     expect(openRuntimeBrowserTabMock).toHaveBeenCalledWith({
       workspaceId: 'wt-1',

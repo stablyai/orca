@@ -2611,9 +2611,11 @@ export function createRemoteRuntimePtyTransport(
     let previousCallbacks = storedCallbacks
     let attached = false
     let epoch = lifecycleEpoch
+    let failed = false
+    let failure: unknown
     try {
       if (
-        !changeInputEndpoint(null, null, () => {
+        changeInputEndpoint(null, null, () => {
           attached = connected || handle !== null
           epoch = ++lifecycleEpoch
           attachGeneration += 1
@@ -2649,46 +2651,49 @@ export function createRemoteRuntimePtyTransport(
           settleSignInConnectWait()
         })
       ) {
-        return
-      }
-      const owns = (): boolean => epoch === lifecycleEpoch && inputSource.current() === null
-      try {
-        discardPendingInput()
-      } finally {
-        if (owns()) {
-          recovery.cancel()
-        }
-      }
-      if (!owns()) {
-        return
-      }
-      emitRecoveryState()
-      if (!detaching && attached && owns()) {
+        const owns = (): boolean => epoch === lifecycleEpoch && inputSource.current() === null
         try {
-          previousCallbacks.onDisconnect?.()
+          discardPendingInput()
         } finally {
-          if (owns() && retired.id) {
-            // This viewer ended; the host process may still live.
-            onPtyExit?.(retired.id, -1)
+          if (owns()) {
+            recovery.cancel()
           }
         }
-      }
-    } finally {
-      try {
-        retired.stopWaiting?.()
-      } finally {
-        try {
-          retired.stopWatching?.()
-        } finally {
-          try {
-            retired.stream?.close()
-          } finally {
-            if (viewportFailure !== undefined) {
-              throw viewportFailure
+        if (owns()) {
+          emitRecoveryState()
+          if (!detaching && attached && owns()) {
+            try {
+              previousCallbacks.onDisconnect?.()
+            } finally {
+              if (owns() && retired.id) {
+                // This viewer ended; the host process may still live.
+                onPtyExit?.(retired.id, -1)
+              }
             }
           }
         }
       }
+    } catch (error) {
+      failed = true
+      failure = error
+    }
+    for (const cleanup of [
+      () => retired.stopWaiting?.(),
+      () => retired.stopWatching?.(),
+      () => retired.stream?.close()
+    ]) {
+      try {
+        cleanup()
+      } catch (error) {
+        failed = true
+        failure = error
+      }
+    }
+    if (viewportFailure !== undefined) {
+      throw viewportFailure
+    }
+    if (failed) {
+      throw failure
     }
   }
 
@@ -3909,10 +3914,14 @@ export function createRemoteRuntimePtyTransport(
         if (ownsAttach()) {
           surfaceErrorMessage('Remote runtime terminal id is invalid.')
         }
-      } finally {
+      } catch (error) {
         if (callbackFailure !== undefined) {
           throw callbackFailure
         }
+        throw error
+      }
+      if (callbackFailure !== undefined) {
+        throw callbackFailure
       }
       return
     }
