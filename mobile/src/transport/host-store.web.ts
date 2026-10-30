@@ -23,6 +23,10 @@ export const setRelayRouting = (_hostId: string, _relay: MobileRelayEndpoint): P
   Promise.resolve()
 export const removeHost = (_hostId: string): Promise<void> => Promise.resolve()
 
+// The page has one host; ordering the native host catalog is outside its write surface.
+export const reorderHosts = (_orderedIds: readonly string[]): Promise<void> =>
+  Promise.reject(new Error('Desktop ordering is available in the native home screen'))
+
 // Recency belongs to the native host list, which this page does not show.
 export const updateLastConnected = (_hostId: string): Promise<void> => Promise.resolve()
 

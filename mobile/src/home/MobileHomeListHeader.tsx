@@ -1,4 +1,4 @@
-import { Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import type { Translate } from '../i18n/mobile-i18n'
 import { getUiIntlLocale } from '../i18n/ui-intl-locale'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -22,7 +22,13 @@ function formatDuration(ms: number, t: Translate): string {
     : t('home.listHeader.minutes', '{{minutes}}m', { minutes: totalMinutes })
 }
 
-export function MobileHomeListHeader({ stats }: { stats: HomeStatsSummary | null }) {
+export function MobileHomeListHeader({
+  stats,
+  onReorder
+}: {
+  stats: HomeStatsSummary | null
+  onReorder?: () => void
+}) {
   const t = useMobileTranslation()
   useMobileColorScheme()
   return (
@@ -53,7 +59,19 @@ export function MobileHomeListHeader({ stats }: { stats: HomeStatsSummary | null
         </View>
       ) : null}
       <MobileHomeAppUpdateCard />
-      <Text style={styles.sectionHeading}>{t('home.listHeader.desktopsHeading', 'Desktops')}</Text>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionHeading}>{t('home.listHeader.desktopsHeading', 'Desktops')}</Text>
+        {onReorder ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('home.listHeader.reorderDesktops', 'Reorder desktops')}
+            hitSlop={8}
+            onPress={onReorder}
+          >
+            <Text style={styles.reorder}>{t('home.listHeader.reorder', 'Reorder')}</Text>
+          </Pressable>
+        ) : null}
+      </View>
     </View>
   )
 }
@@ -83,13 +101,19 @@ const styles = themedStyleSheet(() => ({
     letterSpacing: -0.3
   },
   statLabel: { color: colors.textMuted, fontSize: 11, fontWeight: '500', marginTop: 2 },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm
+  },
+  reorder: { color: colors.textSecondary, fontSize: 12, paddingHorizontal: spacing.xs },
   sectionHeading: {
     fontSize: 11,
     fontWeight: '600',
     color: colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
-    marginBottom: spacing.sm,
     paddingHorizontal: spacing.xs
   }
 }))

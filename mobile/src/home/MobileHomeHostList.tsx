@@ -27,6 +27,7 @@ type MobileHomeHostListProps = {
   onOpen: (host: HostCatalogEntry) => void
   onLongPress: (host: HostCatalogEntry) => void
   onOpenActions: (host: HostCatalogEntry) => void
+  onReorder: () => void
 }
 
 export function MobileHomeHostList(props: MobileHomeHostListProps) {
@@ -71,7 +72,12 @@ export function MobileHomeHostList(props: MobileHomeHostListProps) {
           alignSelf: 'center'
         }
       ]}
-      ListHeaderComponent={<MobileHomeListHeader stats={props.stats} />}
+      ListHeaderComponent={
+        <MobileHomeListHeader
+          stats={props.stats}
+          onReorder={props.hosts.length > 1 ? props.onReorder : undefined}
+        />
+      }
       ItemSeparatorComponent={CardGap}
       renderItem={renderHost}
       ListFooterComponent={props.footer}
