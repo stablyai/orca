@@ -18384,6 +18384,13 @@
           "confirm": "Oturum aç",
           "cancel": "İptal"
         },
+        "javaScriptDialog": {
+          "title": "{{origin}} diyor ki",
+          "anonymousTitle": "Bu sayfa diyor ki",
+          "confirm": "Tamam",
+          "cancel": "İptal",
+          "answer": "Yanıt"
+        },
         "sitePermission": {
           "label": {
             "camera": "Kamera",

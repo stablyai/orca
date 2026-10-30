@@ -30,6 +30,8 @@ export type SessionState = {
   // Revalidate after queue delay, when the tab may have disappeared.
   webContentsId: number
   activeProcess: ChildProcess | null
+  // agent-browser keeps the `snapshot --delta` baseline in this session's daemon.
+  hasDeltaBaseline?: boolean
 }
 
 export type QueuedCommand = {
@@ -63,6 +65,8 @@ export type AgentBrowserExecOptions = {
 
 export type EnqueueTargetedCommandOptions = {
   ensureSession?: boolean
+  /** Page actions report what they caused when an agent runs them. */
+  reportEffects?: boolean
   // Text mutations must not fall back to a global tab from another worktree.
   requireScopedTarget?: boolean
   // Element arguments that may be snapshot refs.

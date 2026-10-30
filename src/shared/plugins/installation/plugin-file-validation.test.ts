@@ -4,7 +4,7 @@ import {
   catalogFixture,
   v2ManifestFixture
 } from '../manifest/plugin-json-schema.test-fixture'
-import { validatePluginFile } from './plugin-file-validation'
+import { pluginManifestWarnings, validatePluginFile } from './plugin-file-validation'
 
 const VALID_RELEASE = {
   version: '1.0.0',
@@ -24,6 +24,26 @@ describe('validatePluginFile', () => {
     expect(
       validatePluginFile('orca-plugin.json', v2ManifestFixture({ engines: { orca: '>=1.0.0' } }))
     ).toEqual([expect.stringContaining('engines.orca: must be at least')])
+  })
+
+  it('warns, never fails, about a deprecated manifest publisher', () => {
+    expect(validatePluginFile('orca-plugin.json', v2ManifestFixture())).toEqual([])
+    expect(pluginManifestWarnings(v2ManifestFixture())).toEqual([
+      expect.stringContaining('publisher is deprecated and ignored')
+    ])
+    const { publisher: _publisher, ...withoutPublisher } = v2ManifestFixture({
+      engines: { orca: '>=9.0.0' }
+    })
+    expect(pluginManifestWarnings(withoutPublisher)).toEqual([])
+  })
+
+  it('accepts a catalog entry carrying the owner id', () => {
+    expect(
+      validatePluginFile(
+        'orca-catalog.json',
+        catalogFixture([catalogEntryFixture({ ownerId: 42 })])
+      )
+    ).toEqual([])
   })
 
   it('turns every runtime repair of a catalog into an error', () => {

@@ -17903,6 +17903,13 @@
           "password": "비밀번호",
           "retry": "사용자 이름 또는 비밀번호가 올바르지 않습니다."
         },
+        "javaScriptDialog": {
+          "title": "{{origin}} 내용:",
+          "anonymousTitle": "이 페이지 내용:",
+          "confirm": "확인",
+          "cancel": "취소",
+          "answer": "답변"
+        },
         "sitePermission": {
           "label": {
             "camera": "카메라",

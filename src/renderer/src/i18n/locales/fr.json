@@ -18598,6 +18598,13 @@
           "retry": "Ce nom d'utilisateur ou ce mot de passe n'a pas fonctionné.",
           "description": "{{origin}} demande un nom d'utilisateur et un mot de passe."
         },
+        "javaScriptDialog": {
+          "title": "{{origin}} indique",
+          "anonymousTitle": "Cette page indique",
+          "confirm": "OK",
+          "cancel": "Annuler",
+          "answer": "Réponse"
+        },
         "sitePermission": {
           "label": {
             "camera": "Caméra",

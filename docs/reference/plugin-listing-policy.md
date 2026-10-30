@@ -11,11 +11,6 @@ Orca doesn't support paid plugins yet. A listed plugin must be free to install a
 - No paywalls, license keys, trials, or features locked behind a purchase or subscription.
 - A plugin may connect to a paid service the user already has, such as their own API account.
 
-## No donation or sponsor links
-
-Don't add donation, sponsor or funding links to the manifest, the description or the plugin's
-UI. Don't put URLs in the description at all: Orca shows descriptions as plain text.
-
 ## Publisher is the repository owner
 
 `publisher` must be the GitHub or GitLab user or organization that owns the plugin's repository, the same

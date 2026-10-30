@@ -17903,6 +17903,13 @@
           "description": "{{origin}} はユーザー名とパスワードを要求しています。",
           "retry": "ユーザー名またはパスワードが正しくありません。"
         },
+        "javaScriptDialog": {
+          "title": "{{origin}} の内容",
+          "anonymousTitle": "このページの内容",
+          "confirm": "OK",
+          "cancel": "キャンセル",
+          "answer": "回答"
+        },
         "sitePermission": {
           "label": {
             "camera": "カメラ",

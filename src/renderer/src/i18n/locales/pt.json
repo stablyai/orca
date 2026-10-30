@@ -19441,6 +19441,13 @@
           "confirm": "Entrar",
           "cancel": "Cancelar"
         },
+        "javaScriptDialog": {
+          "title": "{{origin}} diz",
+          "anonymousTitle": "Esta página diz",
+          "confirm": "OK",
+          "cancel": "Cancelar",
+          "answer": "Resposta"
+        },
         "sitePermission": {
           "label": {
             "camera": "Câmera",

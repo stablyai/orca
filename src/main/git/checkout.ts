@@ -28,7 +28,7 @@ export async function listLocalBranches(
   options: GitRuntimeOptions = {}
 ): Promise<{ current: string | null; branches: string[] }> {
   const { stdout } = await gitExecFileAsync(
-    ['for-each-ref', '--format=%(HEAD)%09%(refname:short)', 'refs/heads/'],
+    ['for-each-ref', '--format=%(HEAD)%09%(refname:lstrip=2)', 'refs/heads/'],
     gitOptionsForWorktree(worktreePath, options)
   )
   let current: string | null = null

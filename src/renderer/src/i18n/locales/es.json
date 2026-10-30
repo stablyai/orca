@@ -18374,6 +18374,13 @@
           "insecure": "Su conexión a este sitio no es privada.",
           "description": "{{origin}} solicita un nombre de usuario y contraseña."
         },
+        "javaScriptDialog": {
+          "title": "{{origin}} dice",
+          "anonymousTitle": "Esta página dice",
+          "confirm": "Aceptar",
+          "cancel": "Cancelar",
+          "answer": "Respuesta"
+        },
         "sitePermission": {
           "label": {
             "camera": "Cámara",

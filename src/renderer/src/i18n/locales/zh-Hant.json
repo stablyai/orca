@@ -18145,6 +18145,13 @@
           "confirm": "登入",
           "cancel": "取消"
         },
+        "javaScriptDialog": {
+          "title": "{{origin}} 顯示",
+          "anonymousTitle": "此網頁顯示",
+          "confirm": "確定",
+          "cancel": "取消",
+          "answer": "回答"
+        },
         "sitePermission": {
           "label": {
             "camera": "攝影機",

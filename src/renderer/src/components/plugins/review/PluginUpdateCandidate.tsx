@@ -154,7 +154,7 @@ export function AllAccess({
           </ul>
           <PluginConsentProvenance
             official={preview.official}
-            publisher={preview.manifest.publisher}
+            publisher={preview.manifest.publisher ?? ''}
             source={{
               kind: preview.bundled ? 'bundled' : 'marketplace',
               reference: sourceLabel({

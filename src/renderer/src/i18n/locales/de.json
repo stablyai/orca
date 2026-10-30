@@ -18398,6 +18398,13 @@
           "confirm": "Anmelden",
           "cancel": "Abbrechen"
         },
+        "javaScriptDialog": {
+          "title": "{{origin}} meldet",
+          "anonymousTitle": "Diese Seite meldet",
+          "confirm": "OK",
+          "cancel": "Abbrechen",
+          "answer": "Antwort"
+        },
         "sitePermission": {
           "label": {
             "camera": "Kamera",

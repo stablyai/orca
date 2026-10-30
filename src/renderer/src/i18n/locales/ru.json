@@ -18956,6 +18956,13 @@
           "confirm": "Войти",
           "cancel": "Отмена"
         },
+        "javaScriptDialog": {
+          "title": "{{origin}} сообщает",
+          "anonymousTitle": "Эта страница сообщает",
+          "confirm": "ОК",
+          "cancel": "Отмена",
+          "answer": "Ответ"
+        },
         "sitePermission": {
           "label": {
             "camera": "Камера",

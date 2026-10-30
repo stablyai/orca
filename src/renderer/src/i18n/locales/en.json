@@ -18691,6 +18691,13 @@
           "confirm": "Sign in",
           "cancel": "Cancel"
         },
+        "javaScriptDialog": {
+          "title": "{{origin}} says",
+          "anonymousTitle": "This page says",
+          "confirm": "OK",
+          "cancel": "Cancel",
+          "answer": "Answer"
+        },
         "sitePermission": {
           "label": {
             "camera": "Camera",

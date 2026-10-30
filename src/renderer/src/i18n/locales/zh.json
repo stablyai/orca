@@ -17903,6 +17903,13 @@
           "retry": "该用户名或密码无效。",
           "description": "{{origin}} 要求输入用户名和密码。"
         },
+        "javaScriptDialog": {
+          "title": "{{origin}} 显示",
+          "anonymousTitle": "此网页显示",
+          "confirm": "确定",
+          "cancel": "取消",
+          "answer": "回答"
+        },
         "sitePermission": {
           "label": {
             "camera": "摄像头",
