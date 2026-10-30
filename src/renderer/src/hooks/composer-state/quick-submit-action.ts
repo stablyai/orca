@@ -36,6 +36,7 @@ type QuickSubmitActionInput = Pick<
   | 'resolvePendingSmartGitHubSubmit'
   | 'selectedRepo'
   | 'selectedRepoIsGit'
+  | 'selectedRepoIsRemote'
   | 'selectedRepoRequiresConnection'
   | 'selectedWorkspaceTarget'
   | 'setCreateError'
@@ -66,6 +67,7 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
     resolvePendingSmartGitHubSubmit,
     selectedRepo,
     selectedRepoIsGit,
+    selectedRepoIsRemote,
     selectedRepoRequiresConnection,
     selectedWorkspaceTarget,
     setCreateError,
@@ -92,7 +94,8 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
 
       const agentLaunches = resolveComposerAgentLaunchList({
         selection: agents,
-        gitWorktree: selectedRepoIsGit
+        gitWorktree: selectedRepoIsGit,
+        remote: selectedRepoIsRemote
       })
       // List entries have no single quick pick; the first row still qualifies the prompt preflight.
       const previewAgent = agentLaunches
@@ -234,6 +237,7 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
       resolvePendingSmartGitHubSubmit,
       selectedRepo,
       selectedRepoIsGit,
+      selectedRepoIsRemote,
       selectedRepoRequiresConnection,
       selectedWorkspaceTarget,
       setCreateError,

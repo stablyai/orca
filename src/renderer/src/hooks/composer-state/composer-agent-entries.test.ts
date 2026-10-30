@@ -126,10 +126,13 @@ describe('resolveComposerAgentLaunchList', () => {
     expect(
       resolveComposerAgentLaunchList({
         selection: { entries: [entryOf('codex')], locked: false },
-        gitWorktree: true
+        gitWorktree: true,
+        remote: false
       })
     ).toBeNull()
-    expect(resolveComposerAgentLaunchList({ selection: undefined, gitWorktree: true })).toBeNull()
+    expect(
+      resolveComposerAgentLaunchList({ selection: undefined, gitWorktree: true, remote: false })
+    ).toBeNull()
   })
 
   it('maps rows verbatim when a second row exists', () => {
@@ -138,18 +141,24 @@ describe('resolveComposerAgentLaunchList', () => {
       entryOf('claude', { surface: 'chat' })
     ]
     expect(
-      resolveComposerAgentLaunchList({ selection: { entries, locked: false }, gitWorktree: true })
+      resolveComposerAgentLaunchList({
+        selection: { entries, locked: false },
+        gitWorktree: true,
+        remote: false
+      })
     ).toEqual(entriesToLaunchList(entries))
   })
 
   it.each([
-    ['folder/remote/VM locked', { locked: true, gitWorktree: true }],
-    ['non-git workspace', { locked: false, gitWorktree: false }]
+    ['folder/VM locked', { locked: true, gitWorktree: true, remote: false }],
+    ['non-git workspace', { locked: false, gitWorktree: false, remote: false }],
+    ['remote host', { locked: false, gitWorktree: true, remote: true }]
   ])('collapses to the legacy path for %s', (_label, flags) => {
     expect(
       resolveComposerAgentLaunchList({
         selection: { entries: [entryOf('codex'), entryOf('claude')], locked: flags.locked },
-        gitWorktree: flags.gitWorktree
+        gitWorktree: flags.gitWorktree,
+        remote: flags.remote
       })
     ).toBeNull()
   })

@@ -71,9 +71,17 @@ export type ComposerAgentSubmitSelection = {
 export function resolveComposerAgentLaunchList(args: {
   selection: ComposerAgentSubmitSelection | undefined
   gitWorktree: boolean
+  /** Resolution 2: remote hosts collapse the rows to the legacy first-row pick. */
+  remote: boolean
 }): AgentLaunchListEntry[] | null {
   const selection = args.selection
-  if (!selection || selection.locked || !args.gitWorktree || selection.entries.length === 0) {
+  if (
+    !selection ||
+    selection.locked ||
+    !args.gitWorktree ||
+    args.remote ||
+    selection.entries.length === 0
+  ) {
     return null
   }
   return isLegacySingleAgentSubmit(selection.entries)
