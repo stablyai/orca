@@ -53,6 +53,19 @@ export function main(
     console.error(`${file}: ${now} type error(s), baseline allows ${allowed}.`)
   }
   if (grown.length > 0) {
+    const grownFiles = new Set(grown.map(({ file }) => file))
+    let printDiagnostic = false
+    for (const line of tscOutput.split(/\r?\n/)) {
+      const match = TEST_ERROR_ROW.exec(line)
+      if (match) {
+        printDiagnostic = grownFiles.has(match[1])
+      } else if (!/^\s/.test(line)) {
+        printDiagnostic = false
+      }
+      if (printDiagnostic) {
+        console.error(line)
+      }
+    }
     console.error(`See the errors with: pnpm typecheck:e2e`)
   }
   for (const { file, now, allowed } of shrunk) {
