@@ -37,6 +37,7 @@ export function ResourcePtyPanel({
   const panelRef = useRef<HTMLDivElement>(null)
   const getScope = useCallback(() => panelRef.current, [])
   const { sessions } = inventory.sessionInventory
+  const { end: endPty } = actions
   const rows = useMemo(
     () =>
       active
@@ -65,6 +66,34 @@ export function ResourcePtyPanel({
   const unbound = useMemo(
     () => rows.reduce((count, row) => count + Number(row.binding === 'unbound'), 0),
     [rows]
+  )
+  const focusBodyBeforeEnd = useCallback(
+    (source: Element | null) => {
+      if (
+        !active ||
+        !scrollElement?.isConnected ||
+        !source?.contains(scrollElement.ownerDocument.activeElement) ||
+        !panelRef.current?.contains(source) ||
+        scrollElement.getClientRects().length === 0 ||
+        getComputedStyle(scrollElement).visibility !== 'visible' ||
+        scrollElement.closest('[aria-hidden="true"], [inert]')
+      ) {
+        return
+      }
+      scrollElement.focus({ preventScroll: true })
+    },
+    [active, scrollElement]
+  )
+  const end = useCallback(
+    (row: ResourcePtyRow) => {
+      const focusedRow =
+        panelRef.current?.ownerDocument.activeElement?.closest('[data-resource-pty-row]')
+      focusBodyBeforeEnd(
+        focusedRow?.getAttribute('data-resource-pty-row') === row.identity ? focusedRow : null
+      )
+      endPty(row)
+    },
+    [endPty, focusBodyBeforeEnd]
   )
   return (
     <div ref={panelRef} className="flex h-full min-h-0 flex-col">
@@ -113,7 +142,20 @@ export function ResourcePtyPanel({
               variant="destructive"
               size="xs"
               disabled={selection.selectedItems.length === 0}
-              onClick={() => void actions.endMany(selection.selectedItems)}
+              onClick={(event) => {
+                const focusedRow =
+                  event.currentTarget.ownerDocument.activeElement?.closest(
+                    '[data-resource-pty-row]'
+                  )
+                focusBodyBeforeEnd(
+                  selection.selectedKeys.has(
+                    focusedRow?.getAttribute('data-resource-pty-row') ?? ''
+                  )
+                    ? (focusedRow ?? null)
+                    : event.currentTarget
+                )
+                void actions.endMany(selection.selectedItems)
+              }}
             >
               {translate('resourceManager.pty.endSelected', 'End selected ({{count}})', {
                 count: selection.selectedItems.length
@@ -158,7 +200,7 @@ export function ResourcePtyPanel({
           errors={actions.errors}
           selected={selection.selectedKeys}
           onSelect={selection.toggleSelection}
-          onEnd={actions.end}
+          onEnd={end}
           onNavigate={onNavigate}
         />
       </div>
