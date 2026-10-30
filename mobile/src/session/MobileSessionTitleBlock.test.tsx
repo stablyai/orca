@@ -1,5 +1,5 @@
 import { useMemo, useRef } from 'react'
-import { Animated, View } from 'react-native'
+import { Animated, Pressable, View } from 'react-native'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { assert, expect, it, vi } from 'vitest'
 import { MobileSessionHeader } from './MobileSessionHeader'
@@ -117,7 +117,7 @@ function Fixture() {
   const rail = useSessionSideRail(header, details)
   return (
     <View>
-      <View
+      <Pressable
         ref={tabRef}
         accessibilityLabel="Tab details"
         onPress={() => details.toggleSource(source)}
@@ -307,7 +307,8 @@ it.each([false, true])(
         ).props.onPress()
       )
     tap()
-    const stale = overlay.measure
+    const readMeasurement = (): (() => void) | null => overlay.measure
+    const stale = readMeasurement()
     back()
     act(() => stale?.())
     expect(root.findAllByType(AnchoredDetailCard)).toHaveLength(0)
@@ -315,6 +316,7 @@ it.each([false, true])(
     tap()
     act(() => overlay.measure?.())
     expect(root.findByType(AnchoredDetailCard).props.active).toBe(true)
+    act(() => overlay.motions.at(-1)?.()())
     back()
     expect(root.findByType(AnchoredDetailCard).props.active).toBe(false)
     expect(leave).not.toHaveBeenCalled()

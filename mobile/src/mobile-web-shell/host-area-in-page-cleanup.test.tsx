@@ -33,7 +33,7 @@ vi.mock('../layout/responsive-layout', () => ({
   useResponsiveLayout: () => ({ isLandscapePhone: false })
 }))
 vi.mock('../session/use-session-title-card', () => ({
-  useSessionTitleCard: () => ({ visual: null })
+  useSessionTitleCard: () => ({ active: false, visual: null, tabId: null, missingTab: false })
 }))
 vi.mock('../session/MobileSessionHeader', () => ({ MobileSessionHeader: () => null }))
 vi.mock('../session/MobileSessionContentRow', () => ({ MobileSessionContentRow: () => null }))

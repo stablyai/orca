@@ -1,4 +1,15 @@
 import { createContext, createElement, useMemo, useRef, useState } from 'react'
+import { Text } from 'react-native'
+import { File, FileText, Globe, SquareTerminal } from 'lucide-react-native'
+import { MobileAgentIcon } from '../components/MobileAgentIcon'
+import { AgentStateDot } from '../components/AgentStateDot'
+import {
+  applyMobileColorScheme,
+  getMobileColorScheme,
+  paletteForScheme
+} from '../theme/mobile-theme'
+import { mobileSessionFrameStyles } from './mobile-session-frame-styles'
+import { MobileSessionTabCardFooter } from './MobileSessionTabCardFooter'
 import { act, create, type ReactTestInstance } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mountFixture } from '../test-support/rpc-recording/recorder-fixture-shape'
@@ -65,16 +76,34 @@ vi.mock('../layout/side-safe-area', () => ({
 }))
 vi.mock('../platform/haptics', () => ({ triggerMediumImpact: () => {} }))
 vi.mock('../components/MobileAgentIcon', () => ({
-  MobileAgentIcon: (props: object) => createElement('AgentIcon', props)
+  MobileAgentIcon: (
+    props: Parameters<typeof import('../components/MobileAgentIcon').MobileAgentIcon>[0]
+  ) => createElement('AgentIcon', props)
 }))
 vi.mock('../components/AgentStateDot', () => ({
-  AgentStateDot: (props: object) => createElement('StateDot', props)
+  AgentStateDot: (
+    props: Parameters<typeof import('../components/AgentStateDot').AgentStateDot>[0]
+  ) => createElement('StateDot', props)
 }))
 vi.mock('./MobileSessionHeaderIconButton', () => ({
-  MobileSessionHeaderIconButton: (props: object) => createElement('HeaderButton', props)
+  MobileSessionHeaderIconButton: (
+    props: Parameters<
+      typeof import('./MobileSessionHeaderIconButton').MobileSessionHeaderIconButton
+    >[0]
+  ) => createElement('HeaderButton', props)
 }))
 vi.mock('./QuickCommandsTabButton', () => ({ QuickCommandsTabButton: () => null }))
-vi.mock('./mobile-session-styles', () => ({ styles: { sessionTopBar: 'top-bar' } }))
+vi.mock('./mobile-session-styles', async () => {
+  const { mobileSessionFrameStyles } = await import('./mobile-session-frame-styles')
+  return {
+    styles: {
+      sessionTopBar: 'top-bar',
+      get sessionMetaText() {
+        return mobileSessionFrameStyles.sessionMetaText
+      }
+    }
+  }
+})
 vi.mock('react-native-safe-area-context', () => ({ SafeAreaView: 'SafeAreaView' }))
 vi.mock('../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => true }))
 vi.mock('../layout/host-sidebar-reveal', () => ({ useHostSidebarReveal: () => null }))
@@ -320,10 +349,7 @@ describe('MobileSessionTabStrip edge taps', () => {
 
   it('uses the host identity while retaining tab gestures', () => {
     const strip = mountStrip([{ handle: 'term-c', agentIdentity: 'cursor' }])
-    expect(
-      strip.tabs[2].findAll((node) => typeof node.type === 'string' && node.type === 'AgentIcon')[0]
-        .props.agentId
-    ).toBe('cursor')
+    expect(strip.tabs[2].findByType(MobileAgentIcon).props.agentId).toBe('cursor')
     strip.tapAt(295)
     strip.wait(100)
     strip.tapAt(295)
@@ -453,7 +479,7 @@ describe('MobileSessionTabStrip edge taps', () => {
       tab: Controller['visibleTabs'][number]
       title: string
       program: string
-      icon: string
+      icon: typeof File | typeof MobileAgentIcon
       agentId?: string
       state?: string
       detail?: string
@@ -474,7 +500,7 @@ describe('MobileSessionTabStrip edge taps', () => {
         },
         title: 'Fix tabs',
         program: 'Claude',
-        icon: 'AgentIcon',
+        icon: MobileAgentIcon,
         agentId: 'claude',
         state: 'working'
       },
@@ -482,7 +508,7 @@ describe('MobileSessionTabStrip edge taps', () => {
         tab: { ...visibleTabs[0], title: 'Shell' },
         title: 'Shell',
         program: 'Terminal',
-        icon: 'TerminalIcon'
+        icon: SquareTerminal
       },
       {
         tab: {
@@ -495,7 +521,7 @@ describe('MobileSessionTabStrip edge taps', () => {
         },
         title: 'Chat',
         program: 'Codex',
-        icon: 'AgentIcon',
+        icon: MobileAgentIcon,
         agentId: 'codex'
       },
       ...(['file', 'markdown'] as const).map((type) => ({
@@ -512,7 +538,7 @@ describe('MobileSessionTabStrip edge taps', () => {
         title: 'note.md',
         detail: 'docs/note.md',
         program: 'Editor',
-        icon: type === 'file' ? 'FileIcon' : 'MarkdownIcon'
+        icon: type === 'file' ? File : FileText
       })),
       {
         tab: {
@@ -529,34 +555,60 @@ describe('MobileSessionTabStrip edge taps', () => {
         },
         title: 'Search',
         program: 'example.com/search',
-        icon: 'BrowserIcon'
+        icon: Globe
       }
     ]
     for (const sample of samples) {
       const strip = mountStrip([], [sample.tab])
       strip.tapAt(50)
       const card = strip.card()
-      const text = card
-        .findAll((node) => typeof node.type === 'string' && node.type === 'Text')
-        .map((node) => node.props.children)
+      const text = card.findAllByType(Text).map((node) => node.props.children)
       expect(text).toEqual(
         sample.detail
           ? [sample.title, sample.detail, sample.program]
           : [sample.title, sample.program]
       )
-      const icons = card.findAll(
-        (node) => typeof node.type === 'string' && node.type === sample.icon
-      )
+      const icons = card.findAllByType(sample.icon)
       expect(icons).toHaveLength(1)
       if (sample.agentId) {
         expect(icons[0].props.agentId).toBe(sample.agentId)
       }
-      expect(
-        card
-          .findAll((node) => typeof node.type === 'string' && node.type === 'StateDot')
-          .map((node) => node.props.state)
-      ).toEqual(sample.state ? [sample.state] : [])
+      expect(card.findAllByType(AgentStateDot).map((node) => node.props.state)).toEqual(
+        sample.state ? [sample.state] : []
+      )
       strip.unmount()
+    }
+  })
+
+  it('repaints the cached footer immediately on dark-light-dark appearance changes', () => {
+    const originalScheme = getMobileColorScheme()
+    let strip: ReturnType<typeof mountStrip> | undefined
+    try {
+      act(() => applyMobileColorScheme('dark'))
+      strip = mountStrip([], [{ ...visibleTabs[0], title: 'Shell' }])
+      strip.tapAt(50)
+      const card = strip.card()
+      const footerElement = card.props.footer
+      const content = card.findByType(MobileSessionTabCardFooter).props.content
+      const anchor = card.props.anchor
+      const now = Date.now()
+      for (const scheme of ['dark', 'light', 'dark'] as const) {
+        act(() => applyMobileColorScheme(scheme))
+        expect(card.props.footer).toBe(footerElement)
+        expect(card.findByType(MobileSessionTabCardFooter).props.content).toBe(content)
+        expect(card.props.anchor).toBe(anchor)
+        expect(Date.now()).toBe(now)
+        expect(card.findByType(SquareTerminal).props.color).toBe(
+          paletteForScheme(scheme).textSecondary
+        )
+        const texts = card.findAllByType(Text)
+        expect(texts.map((text) => text.props.children)).toEqual(['Shell', 'Terminal'])
+        expect(texts[1].props.style).toBe(mobileSessionFrameStyles.sessionMetaText)
+        expect(texts[1].props.style.color).toBe(paletteForScheme(scheme).textSecondary)
+      }
+    } finally {
+      strip?.unmount()
+      act(() => applyMobileColorScheme(originalScheme))
     }
   })
 
@@ -594,6 +646,7 @@ describe('MobileSessionTabStrip edge taps', () => {
           .find((node) => node.props.horizontal === true)
           .props.onScroll({ nativeEvent: { contentOffset: { x } } })
       )
+    strip.wait(16) // Settle the keyboard mount RAF before the clock baseline.
     // Settle the existing hidden-edge transition before measuring unchanged-edge work.
     scroll(10)
     scroll(10)

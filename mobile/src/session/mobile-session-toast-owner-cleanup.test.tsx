@@ -62,7 +62,9 @@ vi.mock('./MobileSessionTabCardFooter', () => ({ MobileSessionTabCardFooter: () 
 vi.mock('../layout/responsive-layout', () => ({
   useResponsiveLayout: () => ({ isLandscapePhone: false })
 }))
-vi.mock('./use-session-title-card', () => ({ useSessionTitleCard: () => ({ anchor: null }) }))
+vi.mock('./use-session-title-card', () => ({
+  useSessionTitleCard: () => ({ active: false, visual: null, tabId: null, missingTab: false })
+}))
 vi.mock('./MobileSessionHeader', () => ({ MobileSessionHeader: () => null }))
 vi.mock('./MobileSessionContentRow', () => ({ MobileSessionContentRow: () => null }))
 vi.mock('./MobileSessionSheets', () => ({ MobileSessionSheets: () => null }))
