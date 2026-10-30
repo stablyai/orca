@@ -29,6 +29,7 @@ import { useTaskPageLinearBoard } from './use-task-page-linear-board'
 import { useTaskPageLinearIssueCreation } from './use-task-page-linear-issue-creation'
 import { useLinearIssueCreationForm } from './use-task-page-linear-creation-state'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
+import { getWorktreeHostIdentity } from '../../../../../shared/worktree/host-qualified-identity'
 import { useTaskPageDetailRouting } from '../use-task-page-detail-routing'
 import { useLinearIssueWorkspaceDetail } from '../../linear-issue-workspace-detail-state'
 import { expect, it, vi } from 'vitest'
@@ -235,6 +236,7 @@ it('confirmed project selection retires old hydration and publishes through the 
 
 it('confirmed workspace-board sync retires a real crossing loader and accepts its replacement', async () => {
   const s = store()
+  const worktreeKey = getWorktreeHostIdentity({ id: 'tree', hostId: 'local' })
   reads.list.mockResolvedValueOnce({ items: [task()] })
   await read(s, 'list')
   const old = deferred<{ items: LinearIssue[] }>(),
@@ -244,10 +246,10 @@ it('confirmed workspace-board sync retires a real crossing loader and accepts it
   await waitFor(() => expect(reads.list).toHaveBeenCalledTimes(2))
   await act(async () => {
     const result = await syncWorkspaceBoardTaskStatuses({
-      worktreeIds: ['tree'],
+      worktreeKeys: [worktreeKey],
       targetStatus: { id: 'done', label: 'Done' },
-      worktreesById: new Map([
-        ['tree', { linkedLinearIssue: task().identifier, linkedLinearIssueWorkspaceId: 'w' }]
+      worktreesByKey: new Map([
+        [worktreeKey, { linkedLinearIssue: task().identifier, linkedLinearIssueWorkspaceId: 'w' }]
       ]),
       settings: { kind: 'local' },
       getLatestWorkspaceStatus: () => 'done',
