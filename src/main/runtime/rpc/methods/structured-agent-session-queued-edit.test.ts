@@ -1,7 +1,5 @@
 import '../unused-default-rpc-methods.test-fixture'
-// The two in-place edit methods on the wire: registered and advertised apart from the dark
-// mid-turn queue, the caller taken from the authenticated transport, strict params, and a lease
-// release that cleanup admission always lets through.
+// Check independent edit capabilities, authenticated caller, strict params and unconditional cleanup lease release.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {

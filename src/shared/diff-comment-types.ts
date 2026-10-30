@@ -1,8 +1,4 @@
-// ─── Diff line comments ──────────────────────────────────────────────
-// Why: users leave review notes on specific lines of the modified side of
-// a diff so they can be handed back to an AI agent (pasted into a terminal
-// or used to bootstrap a new agent session). Stored on WorktreeMeta so the
-// existing persistence layer writes them to orca-data.json automatically.
+// Persist line review notes on WorktreeMeta for existing orca-data.json storage and later agent handoff.
 export type DiffCommentSource = 'diff' | 'markdown'
 export type DiffReviewScope = 'unstaged' | 'staged' | 'branch'
 

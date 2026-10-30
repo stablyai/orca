@@ -49,6 +49,7 @@ export const ptyStreamAndSerializationApi = {
       transformed?: boolean
       background?: boolean
       droppedOutput?: boolean
+      gapEscapeState?: string
     }) => void
   ): (() => void) => {
     const listener = (
@@ -61,6 +62,7 @@ export const ptyStreamAndSerializationApi = {
         transformed?: boolean
         background?: boolean
         droppedOutput?: boolean
+        gapEscapeState?: string
       }
     ) => callback(data)
     ipcRenderer.on('pty:data', listener)
@@ -91,12 +93,9 @@ export const ptyStreamAndSerializationApi = {
       id: string
       code: number
       preserveRendererBinding?: boolean
-      /** Which lifetime of `id` died; absent when the execution host predates the field. */
       incarnationId?: string
       hostId?: string
-      /** Set only when the owning relay disowned this id; never a claim that the process died. */
       ptySourceDisowned?: true
-      /** Main stopped this PTY so a new process could take its pane; the pane is not dying. */
       replacedByRestart?: true
     }) => void
   ): (() => void) => {

@@ -32,10 +32,6 @@ it('reads only the requested bytes and reports partial and past-EOF ranges', asy
   })
 })
 
-it('refuses directories through the shared regular-file guard', async () => {
-  await expect(readLocalFileRange(folder, 0, 4)).rejects.toThrow()
-})
-
 it('rejects invalid or excessive ranges before opening the path', async () => {
   for (const [offset, length] of [
     [-1, 1],

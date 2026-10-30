@@ -1,12 +1,4 @@
-/**
- * The minimum relay protocol needed to drive terminals an already-running older relay holds.
- * COMPAT(legacy-relay-bridge): revisit 2027-01-15.
- *
- * The old relay compares bundle hashes exactly, so this build's handshake is refused. Its own
- * `relay.js --connect`, run from its own version directory, presents its own hash, so any later
- * client reaches it. Nothing is ever deployed or started here: a relay that is not already
- * listening simply cannot be reached.
- */
+/** Drive only already-listening legacy relays using their own relay.js --connect and matching bundle hash; deploy/start nothing. COMPAT(legacy-relay-bridge): revisit 2027-01-15. */
 import { z } from 'zod'
 import type { MultiplexerTransport } from '../ssh-channel-multiplexer'
 import { SshChannelMultiplexer } from '../ssh-channel-multiplexer'
@@ -185,10 +177,7 @@ export class LegacyRelayClient {
     )
   }
 
-  /**
-   * Resumes output for one PTY and returns its screen so far. Throws "not found" when it is gone.
-   * `atSnapshot` runs in stream order: output routed before it is in the screen, output after is not.
-   */
+  /** atSnapshot runs in stream order: earlier output is in the returned screen, later output is not. */
   async attach(
     relayPtyId: string,
     atSnapshot?: (replay: string) => void
@@ -212,10 +201,7 @@ export class LegacyRelayClient {
     this.mux.notify('pty.resize', { id: relayPtyId, cols, rows })
   }
 
-  /**
-   * The old relay's own stop: it kills the shell and reports `pty.exit` (v1.4.2xx wire shape).
-   * The incarnation fence is omitted, never sent undefined, for relays that predate it.
-   */
+  /** Use the legacy shutdown wire shape; omit unsupported incarnation fields entirely for older relays. */
   async shutdown(relayPtyId: string, expectedIncarnationId?: string): Promise<void> {
     await this.mux.request(
       'pty.shutdown',
@@ -264,10 +250,7 @@ export class LegacyRelayClient {
   }
 }
 
-/**
- * Asks for the owner role without output flow control, so the old relay publishes plain
- * `pty.data` frames no shipped client had to acknowledge. An attached holder is never displaced.
- */
+/** Request ownership without flow control so old relays emit plain unacknowledged pty.data. Never displace attached holders. */
 async function claimOwner(
   mux: SshChannelMultiplexer,
   options: LegacyRelayClientOptions

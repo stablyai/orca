@@ -6,9 +6,11 @@ import {
   type BridgeSafeAreaInsets
 } from './bridge-safe-area-insets'
 import type {
+  BridgeColorScheme,
   BridgeConnectionSnapshot,
   BridgeHostMessage,
-  BridgeInitRoute
+  BridgeInitRoute,
+  BridgeUiLocale
 } from './bridge-envelope'
 
 type InitMessage = Extract<BridgeHostMessage, { type: 'init' }>
@@ -44,26 +46,21 @@ export type BridgeStorageUpdateListener = (
 
 export type BridgeClientShellSession = {
   current: () => BridgeShellSession | null
-  /** Reads one `init`: updates or replaces the session, then fires what that change is owed. */
   accept: (message: InitMessage) => void
-  /** Fires once the session exists, immediately if it already does. */
   onReady: (listener: () => void) => () => void
-  /** Fires when a second `init` for the session the page holds moved its route, and never else. */
   onRouteUpdate: (listener: (route: BridgeInitRoute | null) => void) => () => void
-  /** Fires when an `init` moved the safe-area insets the page holds, including a replacement's. */
   onSafeAreaInsetsUpdate: (listener: (insets: BridgeSafeAreaInsets) => void) => () => void
-  /** Fires when an `init` moved the keyboard height the page holds, including a replacement's. */
   onKeyboardInsetUpdate: (listener: (height: number) => void) => () => void
   /** Fires when an `init` moved the storage snapshot the page holds, including a replacement's. */
   onStorageUpdate: (listener: BridgeStorageUpdateListener) => () => void
+  onColorSchemeUpdate: (listener: (scheme: BridgeColorScheme) => void) => () => void
+  onUiLocaleUpdate: (listener: (locale: BridgeUiLocale | null) => void) => () => void
   /** Drops the session and every listener waiting on one, which `close` is the only caller of. */
   close: () => void
 }
 
 export function createBridgeClientShellSession(args: {
-  /** The shell was rebuilt: everything the old session had in flight belongs to nobody now. */
   onReplaced: () => void
-  /** Seats the connection cache from the frame, between the session moving and the listeners. */
   prime: (connection: BridgeConnectionSnapshot) => void
 }): BridgeClientShellSession {
   let session: BridgeShellSession | null = null
@@ -74,6 +71,8 @@ export function createBridgeClientShellSession(args: {
   const storageListeners = new Set<
     (storage: Readonly<Record<string, string>>, storageOversize: readonly string[]) => void
   >()
+  const schemeListeners = new Set<(scheme: BridgeColorScheme) => void>()
+  const uiLocaleListeners = new Set<(locale: BridgeUiLocale | null) => void>()
 
   return {
     current: () => session,
@@ -83,13 +82,10 @@ export function createBridgeClientShellSession(args: {
       if (held !== null && update === null) {
         args.onReplaced()
       }
-      // Updated in place for the session the page already holds, rebuilt for a different one. The
-      // identity of what survives is the assertion: same object, so the storage snapshot the page
-      // booted from is the one it keeps.
+      // Preserve the original storage snapshot across same-session init while rebuilding the session value with new route/insets.
       const sent = message.safeAreaInsets ?? ZERO_SAFE_AREA_INSETS
       const movedInsets = held !== null && !sameSafeAreaInsets(held.safeAreaInsets, sent)
-      // The held object when the values match, so a reader keyed on identity does not re-render
-      // for a re-asked `ready`.
+      // Reuse equal values’ identity so repeated ready cannot rerender keyed readers.
       const safeAreaInsets = held === null || movedInsets ? sent : held.safeAreaInsets
       const keyboardInset = message.keyboardInset ?? 0
       const movedKeyboard = held !== null && held.keyboardInset !== keyboardInset
@@ -101,16 +97,22 @@ export function createBridgeClientShellSession(args: {
       const storage = held === null || movedStorage ? nextSession.storage : held.storage
       const storageOversize =
         held === null || movedStorage ? nextSession.storageOversize : held.storageOversize
+      const colorScheme = message.colorScheme ?? 'dark'
+      const movedScheme = held !== null && held.colorScheme !== colorScheme
+      const uiLocale = message.uiLocale ?? null
+      const movedUiLocale = held !== null && held.uiLocale !== uiLocale
       session =
         update === null
-          ? { ...nextSession, safeAreaInsets, storage, storageOversize }
+          ? { ...nextSession, safeAreaInsets, storage, storageOversize, colorScheme }
           : {
               ...update,
               route: message.route ?? null,
               safeAreaInsets,
               keyboardInset,
               storage,
-              storageOversize
+              storageOversize,
+              colorScheme,
+              uiLocale
             }
       // Re-primed either way, because a second `init` is also how the page recovers a cache it has
       // refused a `state` frame into: the shell rebuilt under it publishes a generation the page's
@@ -136,6 +138,16 @@ export function createBridgeClientShellSession(args: {
           listener(storage, storageOversize)
         }
       }
+      if (movedScheme) {
+        for (const listener of schemeListeners) {
+          listener(colorScheme)
+        }
+      }
+      if (movedUiLocale) {
+        for (const listener of uiLocaleListeners) {
+          listener(uiLocale)
+        }
+      }
       // Only a route that moved is an update. The shell answers every `ready` with the route it
       // holds, and the page re-asks after a refused `state` frame, so publishing each of those
       // would hand the pane hook the route it is already on.
@@ -156,8 +168,7 @@ export function createBridgeClientShellSession(args: {
         readyListeners.delete(listener)
       }
     },
-    // Not fired on subscribe, and no replay: a listener that arrives late reads the route it wants
-    // off `current`, and what this publishes is the fact that one moved.
+    // Late listeners read current; updates report changes without replaying the held route.
     onRouteUpdate: (listener) => {
       routeUpdateListeners.add(listener)
       return () => {
@@ -180,6 +191,18 @@ export function createBridgeClientShellSession(args: {
       storageListeners.add(listener)
       return () => {
         storageListeners.delete(listener)
+      }
+    },
+    onColorSchemeUpdate: (listener) => {
+      schemeListeners.add(listener)
+      return () => {
+        schemeListeners.delete(listener)
+      }
+    },
+    onUiLocaleUpdate: (listener) => {
+      uiLocaleListeners.add(listener)
+      return () => {
+        uiLocaleListeners.delete(listener)
       }
     },
     close: () => {

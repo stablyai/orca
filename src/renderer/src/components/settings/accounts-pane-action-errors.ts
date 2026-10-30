@@ -9,11 +9,7 @@ export function getCodexAccountErrorDescription(error: unknown): string {
     .trim()
   const normalizedMessage = message.toLowerCase()
 
-  // Why: Codex account actions cross the Electron IPC boundary, and invoke()
-  // failures often include transport-level wrapper text that is useful in
-  // devtools but noisy in product UI. Normalize the handful of expected auth
-  // failures here so users see actionable sign-in guidance instead of IPC
-  // internals or raw upstream wording.
+  // Normalize expected auth failures into actionable guidance without Electron wrappers or raw upstream wording.
   if (normalizedMessage.includes('timed out waiting for codex login to finish')) {
     return 'Codex sign-in took too long to finish. Please try again.'
   }

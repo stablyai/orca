@@ -21,13 +21,11 @@ function probeIn(repoPath: string, hostId: ExecutionHostId, signal?: AbortSignal
   }
 }
 
-/** Only an empty first line means the folder is the checkout's own top level: a subfolder prints
- *  `../`, and a bare repo prints nothing so whatever follows lands on the first line instead. */
+/** Empty first line proves top level; subfolders print ../ and bare repos supply no cdup record. */
 function isCheckoutTopLevel(cdupStdout: string | null): boolean {
   return cdupStdout !== null && cdupStdout.split(/\r?\n/)[0] === ''
 }
 
-/** True when git shows `repoPath` is a checkout's own top level whose HEAD git finished writing. */
 async function isFinishedCheckout(
   probe: GitProbe
 ): Promise<{ unbornBranch: string | null } | null> {
@@ -83,8 +81,7 @@ async function readCloneOrigin(
   return values.get('remote.origin.url') ?? null
 }
 
-/** True only when git on `hostId` shows `repoPath` is a finished checkout whose single origin URL
- *  names the same repo as `url` — what a finished `git clone url` leaves. */
+/** Require a finished top-level checkout with exactly one origin URL matching the requested repository. */
 async function isFinishedCloneOf(
   repoPath: string,
   url: string,
@@ -108,12 +105,7 @@ async function isFinishedCloneOf(
   }
 }
 
-/**
- * Decides what a clone does about a saved project already at its path. Returns the project when its
- * folder is already a clone of `url`, null when git should clone (nothing saved, or the saved
- * project was this repo and lost its folder), and throws when the saved project is something else.
- * `findSaved` must match path and host, so re-reading it after the probe also checks the host.
- */
+/** Reuse finished saved clones, allow same-repo reclones, and reject mismatches; findSaved must match host and path. */
 export async function reuseSavedCloneTarget(
   findSaved: () => Repo | undefined,
   url: string,
@@ -130,15 +122,14 @@ export async function reuseSavedCloneTarget(
   }
   if (isClone) {
     const current = findSaved()
-    // Why: removed or replaced while git answered; git clone then refuses the non-empty folder.
+    // Recheck identity after Git I/O; clone itself refuses any remaining nonempty folder.
     return current?.id === saved.id ? current : null
   }
   const requestedKey = normalizeGitRemoteUrl(url)
-  // Why: `origin` is the only stored remote that names the project's own repo. `upstream` names the
-  // repo a fork came from, and so do `Repo.upstream` and the GitHub avatar `repoIcon` derived from it.
+  // Only origin names this project's own repo; upstream metadata and avatars may identify its source fork.
   const storedOrigin =
     saved.gitRemoteIdentity?.remoteName === 'origin' ? saved.gitRemoteIdentity : null
-  // Why: the project was this repo, so its settings still belong once git re-creates the folder.
+  // Keep settings when the same repository needs its missing folder recreated.
   if (requestedKey && storedOrigin?.canonicalKey === requestedKey) {
     return null
   }

@@ -5,6 +5,10 @@ import { hardenOrchestrationDatabaseFiles } from './database-file-permissions'
 import { backfillFederatedStubHomeRuns } from './federation/federated-stub-home-run-backfill'
 import type { OrchestrationDbMethods } from './orchestration-db-methods'
 import {
+  installRemovedWorkCapture,
+  isRemovedWorkCaptureIntact
+} from './reset/removed-orchestration-work-store'
+import {
   createCoordinatorMailRoutingTrigger,
   createRunCoordinatorAddressTriggers,
   rememberCurrentRunCoordinatorHandles
@@ -17,15 +21,10 @@ import { reconcileSettledWorkerDispatches } from './worker-dispatch/worker-dispa
 class OrchestrationDbCore {
   db: Database.Database
 
-  // Why: the orchestration DB is created lazily for ALL users, but only the
-  // small minority who dispatch work ever have dispatch_contexts rows. The
-  // renderer graph publish rebuilds orchestration context on every 16ms tick
-  // (buildAgentOrchestrationByPaneKey), issuing 2 queries per terminal. Cache
-  // emptiness so the non-orchestration majority short-circuits the whole
-  // per-terminal fan-out. Only createDispatchContext flips this false→true.
+  // Cache Dispatch emptiness to skip per-terminal queries on 16ms graph ticks for users without orchestration.
   hasAnyDispatchContextsCache: boolean | undefined
   localMutationCallerFingerprint: string | undefined
-  // Why: in memory only; the re-armed rows themselves are what restart recovery reads.
+  // Restart recovery reads durable re-armed rows; only the post-transaction notification queue is in memory.
   pendingMailHandBacks: MailHandBack[] = []
   /** The runtime's wake for mail a settlement handed to a Run, called once the transaction ends. */
   mailHandBackListener: ((handBack: MailHandBack) => void) | undefined
@@ -36,9 +35,13 @@ class OrchestrationDbCore {
     this.db.pragma('synchronous = NORMAL')
     this.db.pragma('busy_timeout = 5000')
     createTables.call(this as unknown as OrchestrationDb)
+    // Read before migrate, which drops the capture triggers it may need to rebuild around.
+    const removedWorkCaptureWasIntact = isRemovedWorkCaptureIntact(this.db)
     migrate.call(this as unknown as OrchestrationDb)
     createRunCoordinatorAddressTriggers(this.db)
     backfillFederatedStubHomeRuns(this.db)
+    // After every open step that creates Runs, before any step that deletes work.
+    installRemovedWorkCapture(this.db, removedWorkCaptureWasIntact)
     backfillStructuredWorkerOrcaSessionIds(this.db)
     reconcileSettledWorkerDispatches(this.db)
     createCoordinatorMailRoutingTrigger.call(this as unknown as OrchestrationDb)
@@ -55,7 +58,7 @@ export type OrchestrationDb = OrchestrationDbCore & OrchestrationDbMethods
 
 attachOrchestrationDbMethods(OrchestrationDbCore)
 
-// Why: attach adds methods on the prototype; oxlint forbids class/interface merging, so the construct type is asserted.
+// Prototype installation supplies the methods modeled by this construct type.
 export const OrchestrationDb = OrchestrationDbCore as new (
   dbPath: (string & {}) | ':memory:'
 ) => OrchestrationDb

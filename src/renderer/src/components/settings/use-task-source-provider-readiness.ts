@@ -45,8 +45,7 @@ export function useTaskSourceProviderReadiness(
 
   const preflightCurrent = preflightStatusContextKey === expectedPreflightContextKey
   const reviewChecking = preflightStatusLoading || !preflightStatusChecked || !preflightCurrent
-  // A failed preflight leaves the previous status object in place, so mirror
-  // Integrations and refuse to read connection facts out of a stale snapshot.
+  // Failed preflight retains stale status; reject it so Task Sources agrees with Integrations.
   const reviewReadyForConnection = !reviewChecking && preflightStatusError === null
   const reviewUnavailable = !reviewChecking && preflightStatusError !== null
   const githubConnected =

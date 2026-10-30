@@ -16,9 +16,7 @@ import type { RuntimeWorktreeAgentSource } from './runtime-worktree-agent-source
 export type ConnectedPtyEvidence = {
   tabIds: ReadonlySet<string>
   paneKeys: ReadonlySet<string>
-  /** The connected PTY behind each issued terminal handle. A status row names a pane and the
-   *  handle it was observed under, never a process, so this is where it rejoins its terminal —
-   *  and it is the only rescue left for a row whose pane binding was cleared under it. */
+  /** Join status rows to connected PTYs by issued handle; this also rescues rows whose pane binding was cleared. */
   ptyIdByTerminalHandle: ReadonlyMap<string, string>
 }
 
@@ -62,6 +60,7 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
       ptyId: entry.terminalHandle
         ? args.connectedPtyEvidence.ptyIdByTerminalHandle.get(entry.terminalHandle)
         : undefined,
+      terminalHandle: entry.terminalHandle,
       tabId: entry.tabId,
       worktreeId: entry.worktreeId,
       connectionId: entry.connectionId,
@@ -91,22 +90,23 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
       parsePaneKey(source.paneKey)?.tabId ??
       parseLegacyNumericPaneKey(source.paneKey)?.tabId
     const mirroredWorktreeId = tabId ? args.mirroredWorktreeIdByTabId.get(tabId) : undefined
-    // Why a structured row skips the connected-process gate: it has no PTY, and the host that
-    // holds the session drops the row itself on close, so its presence is the liveness evidence.
+    const hasLivePty =
+      // Resolved only from a connected PTY's handle, so its presence is the liveness evidence.
+      source.ptyId !== undefined ||
+      args.connectedPtyEvidence.paneKeys.has(source.paneKey) ||
+      (tabId !== undefined && args.connectedPtyEvidence.tabIds.has(tabId))
+    // Structured rows have no PTY; their host removes them on close, so roster membership proves liveness.
     if (
       source.structuredHost === undefined &&
       tabId !== undefined &&
       mirroredWorktreeId === undefined &&
       isLocalHookConnectionId(source.connectionId) &&
-      !args.connectedPtyEvidence.tabIds.has(tabId) &&
-      !args.connectedPtyEvidence.paneKeys.has(source.paneKey) &&
-      // Resolved only from a connected PTY's handle, so its presence is the liveness evidence.
-      source.ptyId === undefined
+      !hasLivePty
     ) {
       continue
     }
     const worktreeId = mirroredWorktreeId ?? source.worktreeId
-    sources.push({ ...source, tabId, worktreeId })
+    sources.push({ ...source, tabId, worktreeId, ...(hasLivePty ? { hasLivePty: true } : {}) })
   }
   return sources
 }

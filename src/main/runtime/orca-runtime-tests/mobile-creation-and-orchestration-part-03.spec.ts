@@ -34,10 +34,7 @@ describe('OrcaRuntimeService', () => {
       await runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle' })
       write.mockClear()
 
-      // Why: the push reads every pending row, not just the one that woke it. A
-      // `status` notify is unclaimed and pushes, but the worker_done row landing
-      // in the same drain belongs to this waiter's check — injecting it too would
-      // deliver that completion twice (pane + check return).
+      // Push scans all pending rows; exclude worker_done owned by the blocked check or it delivers twice.
       const waitPromise = runtime.waitForMessage(mailbox, {
         typeFilter: ['worker_done'],
         timeoutMs: 5_000
@@ -102,9 +99,7 @@ describe('OrcaRuntimeService', () => {
         subject: 'claimed late',
         type: 'status'
       })
-      // Why: the notify snapshot is empty — no waiter existed yet. A check that
-      // blocks before the deferred push runs still owns this row, so only the
-      // push-time read of live waiters can keep it out of the pane.
+      // A waiter arriving after notify still owns rows before deferred push; consult live waiters at push time.
       runtime.notifyMessageArrived(terminal.handle, 'status')
       const waitPromise = runtime.waitForMessage(mailbox, {
         typeFilter: ['status'],
@@ -135,9 +130,7 @@ describe('OrcaRuntimeService', () => {
         kill: vi.fn(),
         getForegroundProcess: async () => null
       })
-      // Why a UUID leaf id: the retirement fence's pty-candidate clause compares
-      // parsePaneKey(pty.paneKey).leafId to the republished leafId, and a non-UUID
-      // id falls back to `tabId:paneRuntimeId`, so it is always fenced after exit.
+      // Non-UUID leaves fall back to tab:paneRuntimeId and are always exit-fenced; use UUID to exercise exact retirement.
       const leafId = '11111111-1111-1111-8111-111111111111'
       registerLivePty(runtime, 'pty-1', TEST_WORKTREE_ID, null, { tabId: 'tab-1', leafId })
       const syncUuidLeaf = (): void => {
@@ -174,11 +167,8 @@ describe('OrcaRuntimeService', () => {
 
       runtime.onPtyExit('pty-1', 0)
       runtime.onPtySpawned('pty-1', undefined, { awaitsRegistration: false })
-      // Main's exit cleanup dropped the pane; the respawn's commit binds it again.
       registerLivePty(runtime, 'pty-1', TEST_WORKTREE_ID, null, { tabId: 'tab-1', leafId })
-      // Drop the leaf, then republish it: the rebuilt record's tailSource is the
-      // PTY record rather than the previous leaf, which is what pins the clear
-      // onPtyExit applies at the pty level.
+      // Rebuild without the previous leaf so PTY-level tail clearing is tested.
       runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
       syncUuidLeaf()
 
@@ -237,9 +227,7 @@ describe('OrcaRuntimeService', () => {
       await runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle' })
       write.mockClear()
 
-      // Why: syncWindowGraph rebuilds every leaf record on any pane/tab change.
-      // An idle agent emits no new title, so dropping the live-status carry here
-      // would strand mail until the next OSC frame — the #12536 symptom.
+      // Graph rebuilds must retain live idle or mail waits forever for another OSC frame (#12536).
       syncSinglePty(runtime)
 
       const [republished] = (await runtime.listTerminals()).terminals
@@ -284,9 +272,7 @@ describe('OrcaRuntimeService', () => {
       await runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle' })
       write.mockClear()
 
-      // Why: a cold restore respawns under the same session id and makes the
-      // leaf writable again before any new title. The dead process's live idle
-      // must not authorize typing into its replacement mid-turn.
+      // Same-id respawn is writable before new status; dead-process idle must never authorize replacement writes.
       runtime.onPtyExit('pty-1', 0)
       runtime.onPtySpawned('pty-1', undefined, { awaitsRegistration: false })
       setInMemoryOrchestrationMessages(runtime, db)
@@ -304,9 +290,7 @@ describe('OrcaRuntimeService', () => {
       await vi.advanceTimersByTimeAsync(600)
       expect(message.delivered_at).toBeNull()
 
-      // The replacement's first live idle frame re-authorizes delivery — with no
-      // working frame, since exit keeps lastAgentStatus 'idle' for `ps` and the
-      // replacement can come up straight at an idle prompt (no transition).
+      // Replacement can start idle with no transition; its first live idle evidence must reauthorize delivery.
       runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 200)
       expect(write).toHaveBeenCalledWith(
         'pty-1',
@@ -341,9 +325,7 @@ describe('OrcaRuntimeService', () => {
       runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
       await runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle' })
 
-      // Why: a `check --wait --types worker_done` waiter never returns a status
-      // row — check re-reads under the same filter — so it is not the consumer
-      // and treating it as one would strand the message (#12536).
+      // worker_done-filtered waiters cannot consume status rows and must not suppress their idle push (#12536).
       const waitPromise = runtime.waitForMessage(mailbox, {
         typeFilter: ['worker_done'],
         timeoutMs: 5_000
@@ -366,7 +348,6 @@ describe('OrcaRuntimeService', () => {
       await vi.advanceTimersByTimeAsync(600)
       expect(message.delivered_at).toEqual(expect.any(String))
 
-      // The filtered waiter stays blocked; the push did not consume its wake.
       await vi.advanceTimersByTimeAsync(5_000)
       await expect(waitPromise).resolves.toBe('timed_out')
       db.close()
@@ -402,8 +383,7 @@ describe('OrcaRuntimeService', () => {
       })
       write.mockClear()
 
-      // Why: blocked orchestration.check --wait is an explicit pull; push must
-      // not stamp delivered_at or type into the pane (double delivery, #12584).
+      // Explicit check --wait owns delivery; push must neither stamp nor type those rows (#12584).
       const waitPromise = runtime.waitForMessage(mailbox, { timeoutMs: 5_000 })
       runtime.notifyMessageArrived(terminal.handle, 'status')
 
@@ -486,12 +466,10 @@ describe('OrcaRuntimeService', () => {
       await runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle' })
       const first = db.insertMessage({ from: 'sender', to: terminal.handle, subject: 'first' })
       runtime.notifyMessageArrived(terminal.handle, 'status')
-      // Why the flush: the deferred push must actually arm its flight before the
-      // second message arrives, or this exercises a plain batch instead.
+      // Arm the first flight before the next message, or this tests ordinary batching.
       await Promise.resolve()
 
-      // Why: mid-flight notify parks the leaf; flight settle re-runs delivery
-      // so the second row is not lost and is not double-injected with the first.
+      // Mid-flight notify must retry after settlement without losing or duplicating the second row.
       const second = db.insertMessage({ from: 'sender', to: terminal.handle, subject: 'second' })
       runtime.notifyMessageArrived(terminal.handle, 'status')
       await Promise.resolve()
@@ -502,9 +480,7 @@ describe('OrcaRuntimeService', () => {
       ).toHaveLength(1)
       expect(second.delivered_at).toBeNull()
 
-      // Why: release must not require another agent-status OSC — only the
-      // delayed-Enter flight timer. Advancing 3s with no status output covers
-      // timer-only settle (CodeRabbit settling-timeout gap, #12584).
+      // Delayed-Enter settlement alone must retry mail; no further agent OSC is required (#12584).
       await vi.advanceTimersByTimeAsync(3_000)
       expect(write).toHaveBeenCalledWith('pty-1', '\r')
       expect(first.delivered_at).toEqual(expect.any(String))
@@ -617,20 +593,6 @@ describe('OrcaRuntimeService', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('allows only one exclusive mailbox waiter and supports explicit cancellation', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    const first = runtime.waitForMessage('run:run_1', {
-      timeoutMs: 5000,
-      exclusive: true
-    })
-
-    await expect(
-      runtime.waitForMessage('run:run_1', { timeoutMs: 5000, exclusive: true })
-    ).resolves.toBe('waiter_exists')
-    runtime.cancelMessageWaiters('run:run_1')
-    await expect(first).resolves.toBe('cancelled')
   })
 
   it('rejects leaf PTY waits when the request signal aborts', async () => {

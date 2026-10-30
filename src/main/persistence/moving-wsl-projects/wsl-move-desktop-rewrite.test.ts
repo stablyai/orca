@@ -3,6 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../../shared/wsl-host-internal-gate'
+import type { WslMoveCutoverPhase } from '../../../shared/wsl-move/wsl-move-cutover'
+import { WSL_MOVE_RENDERER_REWRITE_STORE_IDS } from '../../../shared/wsl-move/wsl-move-renderer-rewrite-types'
 import { wslMoveCutoverFixture as cutover } from '../__fixtures__/wsl-mover/wsl-move-cutover-fixture'
 import { seedWslMoveCutover } from '../__fixtures__/wsl-mover/wsl-move-journal-seeding'
 import { listWslMoveCutovers, wslMoveJournalDirectory } from './wsl-move-cutover-journal'
@@ -14,6 +16,7 @@ import {
 } from './wsl-move-desktop-rewrite'
 import {
   registerWslMoveDesktopRewriteStore,
+  registerWslMoveRendererRewriteStores,
   resetWslMoveDesktopRewriteStoresForTests,
   setWslMoveDesktopRewriteRegistryCompleteForTests,
   type WslMoveDesktopRewriteContext
@@ -26,6 +29,7 @@ beforeEach(() => {
   setWslMoveDesktopRewriteRegistryCompleteForTests(true)
 })
 afterEach(() => {
+  vi.useRealTimers()
   vi.unstubAllEnvs()
   resetWslMoveDesktopRewriteStoresForTests()
   rmSync(userDataPath, { recursive: true, force: true })
@@ -139,7 +143,10 @@ describe('WSL move desktop rewrite', () => {
     })
     seedWslMoveCutover(userDataPath, cutover('move-1', 'destination-committed'))
     const warn = vi.fn()
-    await runWslMoveDesktopRewritePass({ userDataPath, warn, storeTimeoutMs: 10 })
+    vi.useFakeTimers()
+    const running = runWslMoveDesktopRewritePass({ userDataPath, warn, storeTimeoutMs: 10 })
+    await vi.advanceTimersByTimeAsync(10)
+    await running
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('slow run timed out'))
     expect(record()?.rewrittenStores).toEqual([])
 
@@ -218,9 +225,36 @@ describe('WSL move renderer rewrites', () => {
         destinationHostId: 'runtime:wsl%3AUbuntu',
         distro: 'Ubuntu',
         scopeRepoIds: ['repo-1'],
-        scopeFolderWorkspaceIds: []
+        scopeFolderWorkspaceIds: [],
+        scopeRootPaths: ['/home/dev/repo-1']
       }
     ])
+  })
+
+  it('lists a move from commit on for re-application, with nothing to record after its rewrite', () => {
+    // One move per distro at a time, so each phase gets its own journal.
+    const listedFor = (phase: WslMoveCutoverPhase) => {
+      rmSync(wslMoveJournalDirectory(userDataPath), { recursive: true, force: true })
+      const rewrittenStores =
+        phase === 'blobs-transferred' ? [] : ['main-a', 'renderer-a', 'renderer-b']
+      seedWslMoveCutover(userDataPath, cutover('move-1', phase, { rewrittenStores }))
+      return listPendingWslMoveRendererRewrites(userDataPath).map((move) => move.storeIds)
+    }
+    expect(listedFor('blobs-transferred')).toEqual([])
+    expect(listedFor('client-rewritten')).toEqual([[]])
+    expect(listedFor('retained')).toEqual([[]])
+  })
+
+  it('writes the renderer storage to disk before the ledger entry, and not when refused', () => {
+    const flushed: string[][] = []
+    const flush = () => {
+      flushed.push([...(record()?.rewrittenStores ?? [])])
+    }
+    const request = { migrationId: 'move-1', storeId: 'renderer-a' }
+    recordWslMoveRendererStoreRewritten(userDataPath, request, flush)
+    recordWslMoveRendererStoreRewritten(userDataPath, request, flush)
+    expect(flushed).toEqual([[]])
+    expect(record()?.rewrittenStores).toEqual(['renderer-a'])
   })
 
   it('records a pending renderer store, and finishes the move with the last one', async () => {
@@ -238,7 +272,7 @@ describe('WSL move renderer rewrites', () => {
     })
     expect(record()?.rewrittenStores).toEqual(['main-a', 'renderer-a', 'renderer-b'])
     expect(record()?.phase).toBe('client-rewritten')
-    expect(listPendingWslMoveRendererRewrites(userDataPath)).toEqual([])
+    expect(listPendingWslMoveRendererRewrites(userDataPath)).toMatchObject([{ storeIds: [] }])
   })
 
   it.each([
@@ -273,5 +307,15 @@ describe('WSL move renderer rewrites', () => {
       })
     ).toEqual({ recorded: false, reason: 'gated-off' })
     expect(record()?.rewrittenStores).toEqual([])
+  })
+})
+
+describe('WSL move renderer store registration', () => {
+  it('waits on every renderer store the renderer knows how to rewrite', () => {
+    registerWslMoveRendererRewriteStores()
+    seedWslMoveCutover(userDataPath, cutover('move-1', 'destination-committed'))
+    expect(listPendingWslMoveRendererRewrites(userDataPath)[0]?.storeIds).toEqual([
+      ...WSL_MOVE_RENDERER_REWRITE_STORE_IDS
+    ])
   })
 })

@@ -29,6 +29,8 @@ export type GitInspectionApi = {
     /** Merge-base OID to measure the branch line total against; omit to skip the work. */
     branchLineTotalMergeBase?: string
     requestToken?: string
+    /** The active workspace's first status: a user act that may start its WSL distro. */
+    wakeWslDistro?: boolean
   }) => Promise<GitStatusResult>
   cancelStatus: (args: { requestToken: string }) => Promise<void>
   setStatusUpstreamRefWatch: (args: {
@@ -52,7 +54,11 @@ export type GitInspectionApi = {
   }) => Promise<string[]>
   findHugeFoldersToIgnore: (args: { worktreePath: string }) => Promise<string[]>
   history: (
-    args: { worktreePath: string; connectionId?: string } & GitHistoryOptions
+    args: {
+      worktreePath: string
+      connectionId?: string
+      wakeWslDistro?: boolean
+    } & GitHistoryOptions
   ) => Promise<GitHistoryResult>
   conflictOperation: (args: {
     worktreePath: string
@@ -68,6 +74,7 @@ export type GitInspectionApi = {
     staged: boolean
     compareAgainstHead?: boolean
     connectionId?: string
+    wakeWslDistro?: boolean
   }) => Promise<GitDiffResult>
   branchCompare: (args: {
     worktreePath: string
@@ -96,6 +103,7 @@ export type GitInspectionApi = {
     filePath: string
     oldPath?: string
     connectionId?: string
+    wakeWslDistro?: boolean
   }) => Promise<GitDiffResult>
   commitDiff: (args: {
     worktreePath: string
@@ -104,6 +112,7 @@ export type GitInspectionApi = {
     filePath: string
     oldPath?: string
     connectionId?: string
+    wakeWslDistro?: boolean
   }) => Promise<GitDiffResult>
   discoverCommitMessageModels: (args: {
     agentId: string
@@ -123,6 +132,7 @@ export type GitInspectionApi = {
     worktreePath: string
     relativePath: string
     line: number
+    endLine?: number
     connectionId?: string
   }) => Promise<string | null>
   remoteCommitUrl: (args: {

@@ -59,10 +59,8 @@ const buildServer: PublicKnownRuntimeEnvironment = {
   preferredEndpointId: 'ws'
 }
 
-// Stamps on every host's rows, so Recent and Smart order across local, SSH and the paired server.
 const STAMPS: Record<string, SmartStampFields & { lastActivityAt?: number; isUnread?: boolean }> = {
   Zeta: { smartTier: 'needs-you', smartAt: GOLDEN_NOW - 600_000 },
-  // Done holds only while unread: feat-a and api-y were not read yet.
   'feat-a': { smartTier: 'done', smartAt: GOLDEN_NOW - 60_000, isUnread: true },
   'api-y': {
     smartTier: 'done',
@@ -71,16 +69,11 @@ const STAMPS: Record<string, SmartStampFields & { lastActivityAt?: number; isUnr
     isUnread: true
   },
   'remote-x': { smartTier: 'working', smartAt: GOLDEN_NOW - 30_000 },
-  // Read since it finished, so it ranks as Rest.
   'feat-b': { smartTier: 'done', smartAt: GOLDEN_NOW - 1_000 },
   'gitlab-mr': { smartTier: 'working', smartAt: GOLDEN_NOW - 900_000 }
 }
 
-/**
- * What the parity suite adds to the golden store: stamps, a paired server the desktop knows with
- * a nested workspace and a folder workspace, an SSH connection, a saved host order and a creation
- * this host runs.
- */
+/** Extend the golden world with host stamps, paired-server workspaces, SSH and manual host order. */
 export function parityWorldOverrides(base: Partial<AppState>): Partial<AppState> {
   const repos = [...(base.repos ?? []), ...GROUPED_REPOS]
   const repoById = new Map(repos.map((entry) => [entry.id, entry]))
@@ -98,19 +91,16 @@ export function parityWorldOverrides(base: Partial<AppState>): Partial<AppState>
           ? { cliProvenance: { kind: 'created-by-cli' as const, createdAt: 1 } }
           : {})
       }
-      // Hosts stamped as the window's catalog fetch stamps them.
       const listed = repo ? withRepoHostOwnership(worktree, getRepoExecutionHostId(repo)) : worktree
       return { ...listed, ...stamps }
     })
   }
   const pending = Object.values(base.pendingWorktreeCreations ?? {})[0]
   const [serverMain, serverChild] = worktreesByRepo.api ?? []
-  // The repos, projects and server groups as the window's all-host fetch folds them.
   const projectGroups = [...(base.projectGroups ?? []), ...GROUPS_OF_GROUPED_REPOS]
   const catalog = windowCatalogFromServerAnswers({ ...base, repos, worktreesByRepo, projectGroups })
   return {
     ...catalog,
-    // A server workspace nested under the server's main, and a server folder workspace.
     worktreeLineageById: {
       ...base.worktreeLineageById,
       ...(serverMain && serverChild ? { [serverChild.id]: lineage(serverChild, serverMain) } : {})
@@ -186,10 +176,7 @@ export function parityServerBrowserTabState(): Partial<AppState> {
   }
 }
 
-/**
- * The feed domains main would publish for this store, read through the window-side projections
- * the shadow comparison held equal to main's producers before the window read main's feed.
- */
+/** Project this store into main’s feed domains using the window projections checked against its producers. */
 export function feedDomainsFromWindowState(
   state: AppState,
   serverHostIds: ReadonlySet<string> = new Set([SERVER_HOST_ID])
@@ -198,12 +185,10 @@ export function feedDomainsFromWindowState(
   const servers = readWindowPairedServerHosts(state, serverHostIds)
   const windowActivity = readWindowWorkspaceActivityFacts(state, GOLDEN_NOW)
   const serverRows = readWindowPairedServerRows(state, new Set(servers.keys()))
-  // The server reports the terminals and agents the desktop runs in its workspaces.
   const reportedRows = [...serverRows.values()].map((row) => {
     const facts = windowActivity.get(row.worktreeId)
     return { ...row, activity: { terminal: facts?.terminal ?? null, agent: facts?.agent ?? null } }
   })
-  // Each server reports only its own rows, keyed `hostId|worktreeId`.
   const rowsOf = <Row extends { key: string }>(rows: readonly Row[], hostId: string): Row[] =>
     rows.filter((row) => row.key.startsWith(`${hostId}|`))
   const domain = (
@@ -225,7 +210,6 @@ export function feedDomainsFromWindowState(
   return [
     domain('workspaces', () => workspaceRows),
     domain('activity', () => ({
-      // The window's browser and chat tabs, as its saved session for the server holds them.
       ...buildPairedServerActivityFacts(
         [...servers.keys()].map((hostId) => ({
           hostId,
@@ -268,7 +252,6 @@ export function feedDomainsFromWindowState(
     ),
     domain('pairedServerRows', () => Object.fromEntries(serverRows)),
     domain('desktop', () => readWindowDesktopSidebarFacts(state)),
-    // Main's own builder, over the store and server reads the window's catalog came from.
     projectCatalogDomain(state)
   ]
 }
@@ -300,11 +283,7 @@ export function phoneInputsFromWindowState(
   }
 }
 
-/**
- * What both adapters must agree on, one line per row in occurrence order: headers with their
- * counts and collapse keys, lineage keys, and which occurrences are active. Labels a client draws
- * from its own icons, host health and card contents are presentation and left out.
- */
+/** Compare occurrence order, header counts/collapse, lineage and activation; omit client-specific presentation. */
 export function projectParityRows(
   rows: readonly HostSectionRow[],
   activeRowKeys: ReadonlySet<string>

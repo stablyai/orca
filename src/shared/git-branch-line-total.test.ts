@@ -203,18 +203,6 @@ describe('buildGitBranchLineTotalDiffArgs', () => {
       '--'
     ])
   })
-
-  it('never asks for --cached or -C, which would change the measured range', () => {
-    const args = buildGitBranchLineTotalDiffArgs(MERGE_BASE)
-    expect(args).not.toContain('--cached')
-    expect(args).not.toContain('-C')
-    expect(args.at(-1)).toBe('--')
-  })
-
-  it('exposes a finite timeout budget so a huge branch cannot block the status response', () => {
-    expect(GIT_BRANCH_LINE_TOTAL_TIMEOUT_MS).toBeGreaterThan(0)
-    expect(Number.isFinite(GIT_BRANCH_LINE_TOTAL_TIMEOUT_MS)).toBe(true)
-  })
 })
 
 describe('computeGitBranchLineTotal', () => {

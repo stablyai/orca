@@ -1,8 +1,6 @@
 import type { IncrementalAgentFixture } from './session-scanner-incremental-fixtures'
 
-// Prime Agent is a Pi fork sharing the message-graph format and Pi's
-// `modelId` key; its own fixture exercises the registry's 'prime-agent'
-// branch with the v3 tree-session header its releases write.
+// Prime Agent uses Pi-style modelId with a v3 tree-session header.
 export function primeAgentFixture(): IncrementalAgentFixture {
   return {
     agent: 'prime-agent',

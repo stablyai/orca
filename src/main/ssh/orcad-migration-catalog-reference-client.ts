@@ -1,7 +1,7 @@
 import { parseOrcadMigrationCatalogReferenceAbortResult } from '../../shared/orcad-migration/orcad-migration-catalog-state'
 import type {
-  OrcadMigrationCatalogReferenceAbortResult,
-  OrcadMigrationManifest
+  OrcadMigrationCatalogReference,
+  OrcadMigrationCatalogReferenceAbortResult
 } from '../../shared/orcad-migration/orcad-migration-manifest'
 import { ORCAD_MIGRATION_CATALOG_ABORT_BY_REFERENCE_RUNTIME_CAPABILITY } from '../../shared/orcad-runtime-capabilities'
 import { parsePairingCode } from '../../shared/pairing'
@@ -12,14 +12,14 @@ import {
   type CatalogRequestOptions
 } from './orcad-migration-catalog-client'
 
-/** Not the release evidence `ORCAD_MIGRATION_DESTINATION_UNSUPPORTED` is: the host may hold a stage. */
+/** Unlike migration-unsupported, this refusal cannot prove no earlier stage exists. */
 export const ORCAD_MIGRATION_DESTINATION_ABORT_BY_REFERENCE_UNSUPPORTED =
   'orcad_migration_destination_abort_by_reference_unsupported:Update Orca on this host to cancel this move.'
 
-/** Sends only the manifest's identity, for a manifest whose whole request would overflow the frame. */
+/** Abort by manifest identity when the full request cannot fit the sealed frame. */
 export async function abortRemoteOrcadMigrationCatalogByReference(
   pairingCode: string,
-  manifest: OrcadMigrationManifest,
+  manifest: OrcadMigrationCatalogReference,
   options: CatalogRequestOptions = {}
 ): Promise<OrcadMigrationCatalogReferenceAbortResult> {
   const pairing = parsePairingCode(pairingCode)

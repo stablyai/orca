@@ -1,7 +1,6 @@
-// What a hook-reported terminal agent's turns tell a listener away from the screen: a turn that
-// finished (or failed) and an agent that needs input, each with its hook row. The rules and timing
-// are the window's; the listener (the phone push, a connector) decides only how to word and send it.
+// Share desktop completion/input timing and hook rows; phone/connector listeners choose wording and transport.
 import type { AgentPaneChange } from '../agent-hooks/agent-transition-detector'
+import { agentTurnEndedOnPurpose } from '../../shared/agent-main-agent-verdict'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
 import { AGENT_DONE_QUIET_MS } from '../../shared/agent-transitions'
 import { isPiCompatibleAgentType } from '../../shared/pi-agent-kind'
@@ -18,6 +17,10 @@ export type TerminalAgentTurnNewsDeps<Prepared> = {
   prepare: (news: TerminalAgentTurnNewsItem) => Prepared
   deliver: (prepared: Prepared) => void
   setTimer: (run: () => void, delayMs: number) => { cancel: () => void }
+  /** Opt-in: a turn began (a prompt went in), told at once. */
+  started?: (news: TerminalAgentTurnNewsItem) => void
+  /** Opt-in: a turn its user stopped or a newer request replaced, which is otherwise no news. */
+  stopped?: (news: TerminalAgentTurnNewsItem) => void
 }
 
 type PendingFinish = {
@@ -51,6 +54,7 @@ export class TerminalAgentTurnNews<Prepared> {
       return
     }
     const { transition } = change
+    this.tellOptIn(change)
     const finished = transition === 'turn-finished' || transition === 'errored'
     const row = finished || transition === 'needs-input' ? this.deps.readHookRow(paneKey) : null
     // The all-clear of a turn announced when its lead agent finished: that finish still stands.
@@ -81,6 +85,30 @@ export class TerminalAgentTurnNews<Prepared> {
     this.announce(paneKey, change.workspace.worktreeId, row, waitOutQuiet)
   }
 
+  dispose(): void {
+    for (const paneKey of this.pendingByPane.keys()) {
+      this.cancelPending(paneKey)
+    }
+    this.finishedTurnByPane.clear()
+    this.workingSeen.clear()
+  }
+
+  private tellOptIn(change: Extract<AgentPaneChange, { kind: 'moved' }>): void {
+    const { paneKey, workspace } = change
+    if (change.transition === 'prompt-submitted' && this.deps.started) {
+      const row = this.deps.readHookRow(paneKey)
+      if (row && !row.structuredHost) {
+        this.deps.started({ paneKey, worktreeId: workspace.worktreeId, row })
+      }
+    }
+    if (change.to === 'rest' && change.from !== 'rest' && this.deps.stopped) {
+      const row = this.deps.readHookRow(paneKey)
+      if (row?.state === 'done' && !row.structuredHost && agentTurnEndedOnPurpose(row)) {
+        this.deps.stopped({ paneKey, worktreeId: workspace.worktreeId, row })
+      }
+    }
+  }
+
   private observeWorking(paneKey: string, worktreeId: string | undefined): void {
     const row = this.deps.readHookRow(paneKey)
     if (!row || row.state !== 'working' || !worktreeId) {
@@ -91,13 +119,12 @@ export class TerminalAgentTurnNews<Prepared> {
       this.workingSeen.add(paneKey)
       return
     }
-    // The lead agent finished while background work keeps the pane working: as the window does,
-    // that is the turn's finish, named by its `turnCompletedAt` and announced at once, once.
+    // Announce the lead agent's turnCompletedAt once even while background work keeps the pane working.
     if (this.finishedTurnByPane.get(paneKey) === turnCompletedAt) {
       return
     }
     this.finishedTurnByPane.set(paneKey, turnCompletedAt)
-    // A finish of work this host never saw is the window's to drop too; it still marks the turn told.
+    // Unseen work suppresses the alert but still marks the turn announced.
     if (!this.workingSeen.has(paneKey)) {
       return
     }
@@ -107,7 +134,7 @@ export class TerminalAgentTurnNews<Prepared> {
     this.announce(paneKey, worktreeId, finish, false)
   }
 
-  // As the window seeds a restored pane: a working one counts as work seen, a stamped turn as told.
+  // Seed restored rows like the window: working counts as seen, stamped completion as announced.
   private seed(paneKey: string): void {
     const row = this.deps.readHookRow(paneKey)
     if (row?.turnCompletedAt !== undefined) {

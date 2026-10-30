@@ -6,7 +6,11 @@ import { warnAmbiguousOwnerOnce } from '@/lib/ambiguous-owner-warning'
 import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
 import type { RuntimeLinearSettings } from '@/runtime/runtime-linear-client'
 import { translate } from '@/i18n/i18n'
-import type { WorkspaceStatus, Worktree } from '../../../../shared/worktree/types'
+import type {
+  WorkspaceStatus,
+  WorkspaceStatusDefinition,
+  Worktree
+} from '../../../../shared/worktree/types'
 import {
   getWorkspaceBoardTaskStatusSyncRequest,
   syncWorkspaceBoardTaskStatuses,
@@ -134,7 +138,7 @@ export function linearSettingsForBoardWorktree(
 export function useWorkspaceBoardTaskStatusSync(args: {
   enabled: boolean
   worktreesById: ReadonlyMap<string, Worktree>
-  workspaceStatuses: ReturnType<typeof useAppStore.getState>['workspaceStatuses']
+  workspaceStatuses: readonly WorkspaceStatusDefinition[]
 }): (worktreeIds: readonly string[], status: WorkspaceStatus) => void {
   return useCallback(
     (worktreeIds, status) => {

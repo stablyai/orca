@@ -23,7 +23,6 @@ it('names a saved override at once and asks the runtime only for the detected na
   expect(view.result.current).toBe('Brennan’s MacBook Pro')
   expect(getStatus).toHaveBeenCalledTimes(1)
 
-  // The runtime still answering with the old name must not reach the caption.
   view.rerender({ saved: ' QA Override Desk ' })
   await act(async () => {})
   expect(view.result.current).toBe('QA Override Desk')

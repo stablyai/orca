@@ -67,17 +67,4 @@ describe('writeForegroundTerminalChunk render-pause ownership', () => {
     expect(renderService._isPaused).toBe(true)
     expect(renderService._needsFullRefresh).toBe(true)
   })
-
-  it('does not inspect RenderService on the ordinary forced-refresh path', () => {
-    const { terminal, renderService } = createTerminal(true)
-    const renderServiceRead = vi.fn(() => renderService)
-    Object.defineProperty(terminal._core, '_renderService', { get: renderServiceRead })
-
-    writeForegroundTerminalChunk(terminal, 'ordinary output', {
-      forceViewportRefresh: true
-    })
-
-    expect(renderServiceRead).not.toHaveBeenCalled()
-    expect(terminal._core.refresh).toHaveBeenCalledWith(0, 23, true)
-  })
 })

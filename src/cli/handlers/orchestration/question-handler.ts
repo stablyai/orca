@@ -69,13 +69,12 @@ export const ORCHESTRATION_QUESTION_HANDLER: Record<string, CommandHandler> = {
         compatibilityCliCommand: resolveCompatibilityCliCommand(),
         compatibilityWindowsCommand: resolvePackagedWindowsCompatibilityCommand()
       },
-      // Why: extend past timeoutMs so transport does not abort before the runtime resolves its timeout.
+      // Outlive the server timeout so its result arrives before the transport aborts.
       {
         timeoutMs: resolveOrchestrationAskClientTimeoutMs(parsedTimeoutMs),
         orchestrationCapability: getOptionalStringFlag(flags, 'dispatch-capability')
       }
     )
-    // Why: same {ok, result} envelope as every sibling verb; ask used to print a bare object.
     if (json) {
       printResult(result, true, () => '')
     } else if (result.result.legacyCompatibility?.resumeRequired) {
@@ -99,7 +98,7 @@ export const ORCHESTRATION_QUESTION_HANDLER: Record<string, CommandHandler> = {
     }
     if (result.result.timedOut) {
       if (!json) {
-        // Why: report the server's clamped effective budget rather than overstating the wait.
+        // Report the server's effective budget, which may be clamped below the requested timeout.
         const waitedMs = result.result.timeoutMs ?? timeoutMs
         const messageId = result.result.messageId
         const dispatchCapability = getOptionalStringFlag(flags, 'dispatch-capability')

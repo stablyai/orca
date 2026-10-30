@@ -1,13 +1,6 @@
-// Which part of the host's conversation outline the rail may use.
-//
-// The loaded window is a contiguous suffix of the journal and is authoritative for
-// everything it covers, so the outline only ever speaks for messages older than it.
-// The outline is current through `cursor.sequence`; if that falls short of the
-// loaded window's first row there is a gap no source covers, and a rail built over
-// the gap would silently skip messages. That outline is stale: the rail shows
-// loaded messages only until a fresh one arrives.
+// Use outline entries only before the authoritative loaded suffix; gaps in sequence coverage make the outline stale and require loaded-only rail entries.
 
-import type { AgentSessionConversationOutline } from '../../../../shared/agent-session-conversation-outline'
+import type { AgentSessionConversationOutline } from '../../../../shared/agent-session/agent-session-conversation-outline'
 import type { NativeChatRailOutlineEntry } from './native-chat-message-rail-items'
 
 export type StructuredRailOutlineWindow = {
@@ -48,8 +41,7 @@ export function selectStructuredRailOutline(
   ) {
     return STALE
   }
-  // The rail's merge sees one array until the covered entries change. A trimmed live
-  // window moves its edge on every new row, and usually past no user message.
+  // Reuse view identity until covered entries change; streaming often moves the edge without crossing a prompt.
   const prior = views.get(outline)
   const cached = prior?.floor === contextFloor ? prior : undefined
   if (cached?.edge === oldestLoadedSequence) {

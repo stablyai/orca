@@ -17,7 +17,6 @@ import type { HostScreenState } from './use-host-screen-state'
 
 const REPO_METADATA_REFRESH_MS = 60_000
 
-/** A desktop repo.list row as Project sections read it, for a desktop that serves no catalog. */
 function desktopSectionRepo(repo: HostRepoCatalogRow): SectionRepo {
   return {
     id: repo.id,
@@ -84,9 +83,7 @@ export function useHostRepoMetadata(args: {
           setCachedRepos(requestHostId, catalog)
           setDesktopRepos(catalog.map(desktopSectionRepo))
           setRepoHostIdByRepoId(buildRepoHostIdByRepoId(catalog))
-          // Why: rows name their host when the list spans hosts or an SSH host may be unhealthy,
-          // so a local-only catalog never pays for the label lookups. Counted over repos, not the
-          // id-keyed map: one repo id registered on two hosts is two hosts.
+          // Fetch labels only for mixed-host or potentially unhealthy SSH rows. Count repos, not the id-keyed map: the same repo id may exist on two hosts.
           const hostIds = new Set(catalog.map((repo) => getRepoExecutionHostId(repo)))
           const hasSshHost = [...hostIds].some((id) => parseExecutionHostId(id)?.kind === 'ssh')
           if (hostIds.size > 1 || hasSshHost) {
@@ -101,7 +98,7 @@ export function useHostRepoMetadata(args: {
             setHostLabelById(hostLabelById)
             setHostPlatform(acceptedMetadata(hostPlatform, hostPlatformRead.interpret) ?? null)
           } else {
-            // Why: a host that left the catalog must not keep badging rows that still name it.
+            // Clear labels for departed hosts so stale metadata cannot badge remaining rows.
             setHostHealthById(new Map())
             setHostLabelById(new Map())
           }

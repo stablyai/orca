@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import EditHostScreen from '../app/h/[hostId]/edit'
+import { findAllByHostType } from './test-support/react-test-renderer-host-nodes'
 
 const dependencies = vi.hoisted(() => ({
   back: vi.fn(),
@@ -25,6 +26,9 @@ vi.mock('react-native', () => ({
 
 vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ bottom: 0, left: 0, right: 0, top: 0 })
+}))
+vi.mock('./layout/side-safe-area', () => ({
+  SideSafeArea: ({ children }: { children: unknown }) => children
 }))
 
 vi.mock('expo-router', () => ({
@@ -79,7 +83,7 @@ describe('edit host route accessibility', () => {
   it('exposes stable accessible names for both editable fields', async () => {
     const renderer = await renderEditHostRoute()
 
-    const inputs = renderer.root.findAllByType('TextInput')
+    const inputs = findAllByHostType(renderer.root, 'TextInput')
     expect(inputs).toHaveLength(2)
     expect(inputs.map((input) => input.props.accessibilityLabel)).toEqual(['Name', 'Address'])
 

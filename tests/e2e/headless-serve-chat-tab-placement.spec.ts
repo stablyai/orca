@@ -1,11 +1,4 @@
-/**
- * L270: a switch-on `orca serve` saves a chat a paired client creates where the client asked
- * (`tabPlacement`, in the server's own group and tab ids), not at the end of the group.
- *
- * Run (switch-on build: ORCA_LAYOUT_OWNER=main ... --mode e2e):
- *   pnpm exec playwright test tests/e2e/headless-serve-chat-tab-placement.spec.ts \
- *     --config tests/playwright.config.ts --project electron-headless --workers=1
- */
+// L270: a layout-owner serve host must persist the paired client’s requested tabPlacement using server group/tab ids.
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import path from 'node:path'

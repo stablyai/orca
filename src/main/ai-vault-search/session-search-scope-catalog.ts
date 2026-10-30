@@ -3,8 +3,7 @@ import type { Project, ProjectHostSetup } from '../../shared/project-types'
 import type { Repo } from '../../shared/repo-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 
-// Persisted state, never a git scan: a handful of prefixes answers a search that
-// enumerating hundreds of working trees would not.
+// Use the answering host’s persisted registrations to avoid Git scans.
 export type SessionSearchScopeCatalog = {
   repos: readonly Pick<
     Repo,
@@ -15,16 +14,13 @@ export type SessionSearchScopeCatalog = {
     ProjectHostSetup,
     'projectId' | 'repoId' | 'path' | 'worktreeBasePath'
   >[]
-  /** Registered workspaces of this host, keyed by worktree id. */
   worktreeMeta: Readonly<Record<string, Pick<WorktreeMeta, 'projectId' | 'priorWorktreeIds'>>>
   settings: Pick<GlobalSettings, 'workspaceDir' | 'nestWorkspaces' | 'workspaceDirHistory'>
 }
 
-/** Bound to one execution host by whoever installs it: the host that answers. */
 export type SessionSearchScopeCatalogSource = () => SessionSearchScopeCatalog | null
 
-// A source, not a value: the relay imports this and owns no store, so its reads
-// stay null and a scope is refused rather than silently widened.
+// Hosts without a catalog must reject scopes rather than widen searches.
 let readCatalog: SessionSearchScopeCatalogSource | null = null
 
 export function installSessionSearchScopeCatalogSource(

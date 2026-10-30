@@ -1,10 +1,5 @@
-/**
- * In-app clock for command → drawn layout latency. The window stamps the moment React commits the
- * expected DOM (the MutationObserver callback that first sees it) and the next animation frame,
- * so no DevTools round trip lands inside a sample. The start is stamped in the window too for
- * in-window commands (a keydown, or the call itself); RPC commands are stamped by the test just
- * before sending. All stamps are Date.now() on one machine, so they compare across processes.
- */
+// Stamp commit and paint in the renderer to exclude DevTools IPC from samples; Date.now shares a clock across local processes.
+// Stamp starts at the in-window command or immediately before sending an RPC.
 
 import type { Page } from '@stablyai/playwright-test'
 import { SORTABLE_TAB } from './terminal-tab-menu'
@@ -139,10 +134,7 @@ export function armLayoutLatencyProbe(
   )
 }
 
-/**
- * Waits for the armed watch; `sentAt` is the test's stamp for a command it sent itself. Null when
- * the command waited on a confirmation, which measures the click and not the layout.
- */
+// Exclude commands requiring confirmation because those samples measure the click rather than layout.
 export async function readLayoutLatencyProbe(
   page: Page,
   sentAt: number

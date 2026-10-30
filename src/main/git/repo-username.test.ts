@@ -48,8 +48,7 @@ describe('isBranchSafeHostedLogin', () => {
     }
   )
 
-  // Length is Orca's defensive bound, not a check-ref-format rule: a login is one
-  // branch component, so a loose ref stores it as a single 255-byte-max filename.
+  // One branch component occupies a single loose-ref filename, capped at 255 bytes.
   it('accepts long provider-agnostic logins up to the loose-ref filename cap', () => {
     expect(isBranchSafeHostedLogin('a'.repeat(255))).toBe(true)
   })
@@ -99,7 +98,6 @@ describe('resolveLocalGitUsername', () => {
         return { stdout: `${currentBranch}\n`, stderr: '' }
       }
       if (args[0] === 'symbolic-ref') {
-        // origin/HEAD unset — resolveDefaultBaseRefViaExec falls through to probes.
         throw makeExecError('no origin/HEAD')
       }
       if (args[0] === 'rev-parse') {
@@ -204,13 +202,11 @@ describe('resolveLocalGitUsername', () => {
     gitConfig['user.name'] = 'Demo User'
     ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'gh-demo\n', stderr: '' })
 
-    // Spaces make "Demo User" branch-unsafe; free-form author identity stays out of prefixes.
     await expect(resolveLocalGitUsername('/repo')).resolves.toBe('')
     expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
   it('falls back to branch-safe user.name when github.user and gh login are absent', async () => {
-    // Issue #11590: only `user.name = lorengroves` is configured; branch prefix was empty.
     originRemoteUrl = 'https://github.com/stablyai/orca.git'
     gitConfig['user.name'] = 'lorengroves'
     ghExecFileAsyncMock.mockRejectedValue(makeExecError('gh unavailable'))
@@ -241,9 +237,6 @@ describe('resolveLocalGitUsername', () => {
   })
 
   it('ignores a secondary GitHub mirror when the effective remote is GitLab', async () => {
-    // Why: a GitLab-primary repo with a GitHub mirror must not pick up the
-    // GitHub account name as its branch prefix — only the effective remote
-    // (branch remote / default base remote / origin / lone remote) counts.
     originRemoteUrl = 'https://gitlab.com/stablyai/orca.git'
     remoteUrls['github-mirror'] = 'https://github.com/stablyai/orca.git'
     ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'gh-demo\n', stderr: '' })
@@ -259,7 +252,6 @@ describe('resolveLocalGitUsername', () => {
     await expect(resolveLocalGitUsername('/repo')).resolves.toBe('')
     await expect(resolveLocalGitUsername('/repo')).resolves.toBe('')
 
-    // api + auth-status fallback on the first resolution; cached afterwards.
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
     for (const [, options] of ghExecFileAsyncMock.mock.calls) {
       expect(options).toMatchObject({ timeout: 2500 })
@@ -292,9 +284,6 @@ describe('resolveLocalGitUsername', () => {
   })
 
   it('treats a Windows timeout kill (SIGTERM, no ETIMEDOUT code) as a timeout', async () => {
-    // Why: on Windows the exec timeout kill surfaces killed/SIGTERM without an
-    // ETIMEDOUT code; the old sync probe missed this and ran a second equally
-    // stuck probe (issue #7225).
     originRemoteUrl = 'https://github.com/stablyai/orca.git'
     ghExecFileAsyncMock.mockRejectedValueOnce(
       makeExecError('gh was killed', { killed: true, signal: 'SIGTERM' })
@@ -315,7 +304,6 @@ describe('resolveLocalGitUsername', () => {
       username: '',
       authoritative: false
     })
-    // Within the cooldown the timeout result is reused without a new spawn.
     await expect(resolveLocalGitUsernameDetailed('/repo')).resolves.toEqual({
       username: '',
       authoritative: false
@@ -359,8 +347,7 @@ describe('resolveLocalGitUsername', () => {
   it('settles within the wall even when the gh child never exits', async () => {
     vi.useFakeTimers()
     originRemoteUrl = 'https://github.com/stablyai/orca.git'
-    // A promise that never settles — models a killed gh whose grandchild
-    // keeps the stdio pipes open past the exec timeout.
+    // Simulate a killed gh whose descendants keep its stdio pipes open.
     ghExecFileAsyncMock.mockImplementation(() => new Promise(() => {}))
 
     const resolution = resolveLocalGitUsernameDetailed('/repo')

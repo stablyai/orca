@@ -1,6 +1,3 @@
-// What a resend of a send id gets: the answer its record holds, never a refusal made before the
-// host looked the id up, and never a made-up record.
-
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -91,7 +88,6 @@ describe('a resent send id', () => {
       ok: false,
       refusal: { code: 'agent_session_operation_unknown', details: { reason: 'outcomeUnknown' } }
     })
-    // A new id meets the same chat as a first run, and is refused for what it is.
     await expect(host.send(CALLER, sendParams('a new message'))).resolves.toMatchObject({
       ok: false,
       refusal: { code: 'agent_session_journal_unreadable' }
@@ -168,7 +164,7 @@ describe('a resent send id', () => {
     await host.send(CALLER, params)
     await deliveredOnce()
     await host.close(SESSION, 'evict')
-    // Only the provider can settle this rewind, so a send's first run would start it.
+    // Fresh execution would need provider startup to resolve this rewind.
     await persistRewindRecord(store, SESSION, store.getRecord(SESSION)!.lease.runtimeFence, {
       operationId: 'rewind-op',
       callerKey: CALLER.callerKey,
@@ -201,7 +197,7 @@ describe('a resent send id', () => {
     expect(store.readOnly).toBe(true)
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 
-    // This build never reads a newer Orca's chat, so the answer its journal holds stays unknown.
+    // Unreadable newer journals cannot supply replay answers.
     await expect(host.send(CALLER, params)).resolves.toMatchObject({
       ok: false,
       refusal: { code: 'agent_session_operation_unknown', details: { reason: 'outcomeUnknown' } }

@@ -99,8 +99,7 @@ export function MarkupOverlay({
         draggable={false}
         onLoad={() => setBaseLoaded(true)}
         onError={() => {
-          // Why: the backdrop is a self-generated data URL, so a decode failure is
-          // unexpected — but never trap the user with a permanently-disabled Done.
+          // Cancel on unexpected backdrop decode failure so Done cannot stay disabled forever.
           console.error('markup: base screenshot failed to load')
           onCancel()
         }}
@@ -131,11 +130,9 @@ export function MarkupOverlay({
           onPointerDown={(event) => event.stopPropagation()}
           onBlur={(event) => editor.commitPendingText(event.target.value)}
           onKeyDown={(event) => {
-            // Why: keep keystrokes local — without this the browser pane's global
-            // key handlers can swallow typing before it reaches the input.
+            // Keep typing local; browser-pane global handlers otherwise swallow it.
             event.stopPropagation()
-            // Why: during IME composition (e.g. Japanese conversion), Enter
-            // confirms the candidate — it must NOT also commit the annotation.
+            // IME Enter confirms its candidate and must not also commit the annotation.
             if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
               event.preventDefault()
               editor.commitPendingText(event.currentTarget.value)
@@ -144,11 +141,7 @@ export function MarkupOverlay({
               editor.cancelPendingText()
             }
           }}
-          // Why: the input renders ONLY the editable glyphs (no box of its own) —
-          // the selection frame is drawn on the canvas so it's identical whether
-          // selecting or editing. No padding/border + the same font as the canvas
-          // so the text sits exactly where it commits. field-sizing hugs the text
-          // so clicks outside it still reach the canvas.
+          // Match canvas typography with no input chrome; the canvas owns the selection frame and outside clicks remain reachable.
           className="absolute z-30 min-w-0 border-0 bg-transparent p-0 leading-none outline-none [field-sizing:content]"
           style={{
             left: pendingText.x,
@@ -157,9 +150,7 @@ export function MarkupOverlay({
             fontSize: editor.fontSize,
             fontWeight: 600,
             fontFamily: TEXT_FONT_FAMILY,
-            // Why: force line-height to 1 (the UA default ~1.2 pushes the glyph
-            // down) and zero the height so the text top aligns with the canvas's
-            // textBaseline:'top' render — otherwise editing text sits slightly low.
+            // Match canvas textBaseline:top; the UA line height would shift editable glyphs down.
             lineHeight: 1,
             height: '1em',
             boxSizing: 'content-box',

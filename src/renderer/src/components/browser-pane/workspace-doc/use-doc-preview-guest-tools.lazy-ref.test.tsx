@@ -1,10 +1,6 @@
 // @vitest-environment happy-dom
 
-/**
- * The annotation viewport bridge token used to sit in a `useRef(...)` argument, so every render of
- * a doc preview minted a fresh `crypto.randomUUID()` and threw it away — only the mount-time token
- * was ever read. Pin the mint count to the mount count.
- */
+/** Mint the viewport bridge token once per mount; useRef arguments otherwise discard a new UUID on every render. */
 import { useState } from 'react'
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'

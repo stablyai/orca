@@ -1,7 +1,4 @@
-/**
- * What a chain link records when the provider could not restore a chat's saved conversation and a
- * fresh one took over.
- */
+/** Record a fresh conversation taking over when the provider cannot restore the saved one. */
 
 import type { AgentSessionProviderHandle } from './agent-session-provider-handle'
 import {
@@ -11,10 +8,7 @@ import {
 
 const MAX_REPLACEMENT_REASON_LENGTH = 64
 
-/**
- * Why a chat's agent no longer remembers what came before this link: the provider could not
- * restore the conversation the chat had, so a fresh one continues it without that history.
- */
+/** A fresh conversation continues without the history the provider could not restore. */
 export type AgentSessionProviderHandleReplacement = {
   /** Key of the conversation that was lost: the head this creation followed. */
   key: string
@@ -39,9 +33,7 @@ export function isAgentSessionProviderHandleReplacement(
   }
   const { key, reason, replacedAt } = value
   return (
-    // Why: older builds read Claude and Codex rows and refuse a creation anywhere but first in a
-    // chain, so a replacement there would set the whole chat aside after a downgrade. Every other
-    // agent's row is one they never read. A Claude or Codex fallback must first pick a stored shape.
+    // Older builds reject later Claude/Codex creations, setting the whole chat aside on downgrade. Other agents were unreadable there; typed-lane fallback needs a stored-shape decision first.
     !isAgentSessionProviderHandleReadByOlderBuilds(handle) &&
     isAgentSessionProviderHandleKeyFor(handle, key) &&
     typeof reason === 'string' &&

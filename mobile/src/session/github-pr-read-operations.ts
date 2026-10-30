@@ -9,15 +9,7 @@ import {
   hostedReviewForBranchSchema
 } from './github-pr-read-reply-schema'
 
-// The PR sidebar's reads. Every one of these replies was re-typed and hand-parsed at the wrapper;
-// the schemas in github-pr-read-reply-schema.ts are now the only place that says what each payload
-// is. They keep every identity requirement the parsers had, so a payload that used to degrade to
-// null still degrades to null — what changes is a payload that is not the declared container at
-// all, which is an incompatible reply rather than a silent "nothing found".
-//
-// All seven share one acceptance: a refused read is an error the sidebar shows, never a skip. The
-// wrapper turns the throw back into its `{ ok: false, error }` outcome, which is the contract the
-// sidebar's loaders route on.
+// Separate container decode failures from valid null absence; preserve host in-band errors for the sidebar.
 
 /** Whether the worktree's repo has a GitHub remote, which gates the dedicated PR-view icon. */
 export const githubPrRepoSlugRead = bindDeferredRpcOperation(

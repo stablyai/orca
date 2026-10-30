@@ -73,10 +73,7 @@ async function subscribeTarget(
   let activeWatch: ActiveWatch | null = null
   const gitStatusRefPaths = new Set<string>()
   applyActiveGitStatusRefBinding({ ...target, gitStatusRefPaths })
-  // Why: a recursive native watcher here forced fseventsd to deliver every
-  // event under the whole workspace root (all worktrees) / whole common .git
-  // (objects included) just to observe a few shallow paths. The poller reads
-  // exactly those paths and registers zero fseventsd clients.
+  // Use shallow polling/narrow streams instead of recursive workspace and Git-object FSEvents subscriptions.
   const subscription = await startWorktreeBaseDirectoryPoller(
     target,
     () => (activeWatches.get(target.key) ?? activeWatch)?.repos ?? target.repos,
@@ -107,9 +104,7 @@ async function subscribeTarget(
   )
   activeWatch = createActiveWatch(target, mainWindow, subscription, gitStatusRefPaths)
   if (supportsWorktreeHeadIdentityRefresh(activeWatch)) {
-    // Baseline eagerly so the first status-only signal — possibly hours after
-    // subscribe — diffs against subscribe-time heads instead of silently
-    // re-baselining past an external commit.
+    // Baseline at subscribe time so the first later head signal cannot silently skip an external commit.
     void refreshWorktreeHeadIdentities(activeWatch, activeWatch.headIdentityRefresh, false)
   }
   return activeWatch
@@ -194,8 +189,7 @@ export function setWorktreeBaseDirectoryWatcherSyncContext(
   mainWindow: BrowserWindow
 ): void {
   latestSyncContext = { store, mainWindow }
-  // Why: older integration tests use lean BrowserWindow stubs; real windows still
-  // clear this context on close so stale watcher syncs cannot target dead chrome.
+  // Real windows release retained sync context on close; lean test windows may lack event methods.
   if (typeof mainWindow.once === 'function') {
     mainWindow.once('closed', () => {
       if (latestSyncContext?.mainWindow === mainWindow) {

@@ -2,6 +2,7 @@ import type { Editor, UseEditorOptions } from '@tiptap/react'
 import type { EditorView } from '@tiptap/pm/view'
 import { handleRichMarkdownCut } from './rich-markdown-cut-handler'
 import { handleRichMarkdownPaste } from './rich-markdown-paste-handler'
+import { handleRichMarkdownPasteAdmission } from './rich-markdown-paste-admission'
 import { encodeRawMarkdownHtmlForRichEditor } from './raw-markdown-html'
 import { normalizeEmptyListItems } from './rich-markdown-normalize'
 import { autoFocusRichEditor } from './rich-markdown-auto-focus'
@@ -165,6 +166,15 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
       },
       handleDOMEvents: {
         cut: handleRichMarkdownCut,
+        paste: (view, event) =>
+          handleRichMarkdownPasteAdmission({
+            editor: editorRef.current,
+            event,
+            filePath,
+            worktreeId,
+            runtimeEnvironmentId,
+            view
+          }),
         // ProseMirror skips handleClick for Shift gestures to extend the selection.
         click: (view, event) => {
           if (
@@ -203,9 +213,6 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
         typedEmptyOrderedListMarkerRef.current = /^\d+\.$/.test(beforeCursor)
         return false
       },
-      // Why: KeyHandlerContext is a typed subset of EditorConfigParams, so the
-      // spread stays type-checked while new context fields avoid re-listing
-      // every ref here.
       handleKeyDown: createRichMarkdownKeyHandler({
         ...params,
         linkBubbleOwnerId: codec.transport.key,
@@ -230,14 +237,10 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
       params.flushPendingSerialization()
     },
     onCreate: ({ editor: nextEditor }) => {
-      // Why: normalizeEmptyListItems (not normalizeSoftBreaks) so hard-wrapped
-      // source paragraphs stay one paragraph and reflow via CSS instead of being
-      // split on load.
+      // Repair empty lists while keeping hard-wrapped prose in one paragraph for CSS reflow.
       normalizeEmptyListItems(nextEditor)
       lastCommittedMarkdownRef.current = content
-      // Why: seed the source-preserving reconciliation baseline — the raw loaded
-      // bytes and their canonical serialization — so the first edit patches onto
-      // the original style instead of re-canonicalizing the whole file.
+      // Seed raw/canonical reconciliation so the first edit preserves source style instead of canonicalizing the whole file.
       originalSourceRef.current = content
       baseCanonicalRef.current = nextEditor.getMarkdown()
       isInitializingRef.current = false

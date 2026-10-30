@@ -99,6 +99,11 @@ function runOracle(label, targetRoot, operation, userDataPath, options = {}) {
     }
   })
   const output = `${result.stdout ?? ''}${result.stderr ?? ''}`
+  if (result.error || result.signal || result.status === null) {
+    throw new Error(
+      `${label} could not complete (${result.error?.message ?? result.signal ?? 'no exit status'})\n${output}`
+    )
+  }
   if (options.expectFailure) {
     if (result.status === 0 || !output.includes(options.expectFailure)) {
       throw new Error(

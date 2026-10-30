@@ -3,8 +3,8 @@ import type {
   PtyFencedTerminationOutcome
 } from '../../../../shared/pty-fenced-termination'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
-import { getPtyIpc } from '../../pty-host-bindings'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { getPtyIpc } from '../pty-host-bindings'
 import type { Store } from '../../../persistence'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { TerminalIntentionalStopKind } from '../../../runtime/terminal-intentional-stops'
@@ -35,8 +35,6 @@ export type PtyKillIpcDeps = {
   sendPtyExitToRenderer: (payload: { id: string; code: number; incarnationId?: string }) => void
 }
 
-/** `pty:kill` — the route the renderer takes when the user closes a terminal tab, and a separate
- *  implementation from `killPtyFromRuntimeController`. */
 export function installPtyKillIpcHandler(deps: PtyKillIpcDeps): void {
   getPtyIpc().handle('pty:kill', (_event, args: { id: string; keepHistory?: boolean }) =>
     stopRendererOwnedPty(deps, args)
@@ -46,18 +44,17 @@ export function installPtyKillIpcHandler(deps: PtyKillIpcDeps): void {
   )
 }
 
-/** Stops a pane's PTY for the spawn replacing it. The stop register labels the exit so the
- *  renderer reads it as a handoff, not the pane dying; a failed stop leaves no label. */
+/** Label successful replacement stops as handoff; failed stops leave no label. */
 export async function stopReplacedPanePty(deps: PtyKillIpcDeps, id: string): Promise<void> {
   await stopRendererOwnedPtyAs(deps, { id }, 'replaced')
 }
 
-/** Stops a renderer-owned PTY and settles only once its shutdown has been observed or synthesized. */
+/** Settle only after shutdown is observed or synthesized. */
 export async function stopRendererOwnedPty(
   deps: PtyKillIpcDeps,
   args: { id: string; keepHistory?: boolean }
 ): Promise<void> {
-  // Why: only hibernation passes keepHistory, and its exit must keep the pane's wake binding.
+  // Hibernation must retain the pane's wake binding.
   await stopRendererOwnedPtyAs(deps, args, args?.keepHistory === true ? 'reversible' : null)
 }
 
@@ -67,7 +64,7 @@ async function stopRendererOwnedPtyAs(
   intentionalStop: TerminalIntentionalStopKind | null
 ): Promise<void> {
   if (typeof args?.id !== 'string' || !args.id || isRemoteRuntimePtyId(args.id)) {
-    // Why: runtime terminal handles belong to terminal.close; unowned PTY routing could target the local provider.
+    // Runtime handles belong to terminal.close; unowned routing could target a local provider.
     throw new Error('Invalid PTY provider id')
   }
   const settleStop = intentionalStop
@@ -102,16 +99,14 @@ async function stopRendererOwnedPtyProcess(
     await bridgedStop
     return
   }
-  // Why: wait for daemon startup before selecting the local provider, else a fallback shutdown falsely succeeds and orphans a restored daemon PTY (#7742).
+  // Await daemon ownership handoff before shutdown or fallback can orphan restored PTYs (#7742).
   const startupPromise = getLocalPtyProviderStartupPromise(resolvePtyExecutionHost(args.id))
   if (startupPromise) {
     await startupPromise
   }
   const provider = tryGetProviderForPty(args.id)
   if (!provider && connectionId) {
-    // Why: detached SSH PTYs intentionally keep ownership after their
-    // provider is unregistered; hydrated app-scoped ids can also arrive
-    // before ownership is rebuilt. Tombstone instead of falling back local.
+    // Detached/unhydrated SSH ownership must be tombstoned, never routed to local fallback.
     const unproven = PtyRetirementWithoutProof.because(SSH_PROVIDER_UNREGISTERED_REASON)
     const incarnationId = finishPtyShutdown(args.id, connectionId, store, unproven)
     publishSyntheticExit(deps, args.id, -1, incarnationId, unproven)
@@ -131,13 +126,12 @@ async function stopRendererOwnedPtyProcess(
     )
   } catch (err) {
     if (!isPtyAlreadyGoneError(err)) {
-      // Why: a failed shutdown can leave the local daemon's process alive; keep ownership so a retry can reach it.
+      // Failed shutdown may leave a live process; keep ownership so retry can reach it.
       throw err
     }
     proof = PtyExitProof.from('absent', stoppingIncarnationId)
   }
-  // Why: some shutdown paths do not emit onExit through the provider listener.
-  // Explicit cleanup is idempotent and covers already-dead PTYs.
+  // Some shutdown paths omit onExit; idempotent cleanup must cover them too.
   const incarnationId = finishPtyShutdown(args.id, connectionId, store, proof)
   if (proof.source !== 'exit-observed') {
     publishSyntheticExit(deps, args.id, -1, incarnationId, proof)
@@ -167,7 +161,15 @@ async function stopFencedRendererPty(
     if (!provider?.killFenced) {
       return { outcome: 'refused', reason: 'unsupported' }
     }
-    const result = await provider.killFenced(args)
+    // Main attaches what it spawns, so only main sees viewers; best-effort, a later viewer sees the confirmed End.
+    if (args.requireUnattached && deps.runtime?.hasTerminalViewer(args.id)) {
+      return { outcome: 'refused', reason: 'attached' }
+    }
+    // Without a runtime to ask about viewers, keep the daemon's attached check.
+    const result = await provider.killFenced({
+      ...args,
+      requireUnattached: args.requireUnattached && !deps.runtime
+    })
     if (
       (result.outcome === 'ended' || result.outcome === 'already_exited') &&
       ptyIncarnationById.get(args.id) === args.expectedIncarnationId

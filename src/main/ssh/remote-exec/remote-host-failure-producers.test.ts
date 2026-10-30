@@ -1,7 +1,4 @@
-/**
- * How real host-side failures surface: system-ssh directory upload, system sftp, and the warm
- * runtime check. Each runs real processes where it can.
- */
+/** Exercise real failure producers for directory upload, system SFTP and runtime self-test. */
 import { randomBytes } from 'node:crypto'
 import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -75,8 +72,7 @@ describe.runIf(posix)('system-ssh directory upload', () => {
   })
 
   it('keeps the remote ENOSPC when the far end closes mid-stream and local tar then fails to write', async () => {
-    // Why 8 MiB of noise: tar is still writing when ssh exits, so it fails downstream (BSD tar:
-    // exit 1 "Write error", no signal) instead of finishing first.
+    // Keep tar writing past SSH exit so downstream failure occurs on BSD tar too.
     const dir = join(scratch, 'large')
     await mkdir(dir)
     await writeFile(join(dir, 'runtime.bin'), randomBytes(8 * 1024 * 1024))

@@ -102,9 +102,7 @@ describe('createSshSlice', () => {
         'tab-stale-encoded': toAppSshPtyId(targetId, 'pty-1'),
         'tab-other': toAppSshPtyId(otherTargetId, 'pty-2')
       },
-      // Why: a hydrated-but-not-yet-reconnected session for the removed target;
-      // the orphan sweep reads this map as liveness, so removal must clear it or
-      // a dead tab is pinned alive forever (#9911).
+      // Pending reconnect counts as orphan-sweep liveness; removal must clear it or pin the dead tab (#9911).
       pendingReconnectPtyIdByTabId: {
         'tab-ssh': toAppSshPtyId(targetId, 'pty-1'),
         'tab-stale-encoded': toAppSshPtyId(targetId, 'pty-9'),
@@ -127,8 +125,6 @@ describe('createSshSlice', () => {
     expect(state.deferredSshSessionIdsByTabId).toEqual({
       'tab-other': toAppSshPtyId(otherTargetId, 'pty-2')
     })
-    // Removed target's pending-reconnect sessions cleared (by tab membership and
-    // by target-scoped session id); the surviving target's entry is retained.
     expect(state.pendingReconnectPtyIdByTabId).toEqual({
       'tab-other': toAppSshPtyId(otherTargetId, 'pty-2')
     })
@@ -258,8 +254,7 @@ describe('createSshSlice', () => {
     const store = createTestStore()
     store.getState().setSshTargetsMetadata([{ id: 'ssh-1', label: 'Remote', generation: 4 }])
 
-    // Remove-and-re-add issues a fresh id and a fresh generation; the mirror has
-    // to follow, or the re-added host stays view-only for the rest of the session.
+    // Re-add issues fresh ID/generation; mirror must update or the host stays view-only.
     store.getState().setSshTargetsMetadata([{ id: 'ssh-2', label: 'Remote', generation: 9 }])
 
     expect(store.getState().sshTargetGenerations.has('ssh-1')).toBe(false)
@@ -273,9 +268,7 @@ describe('createSshSlice', () => {
       .getState()
       .setSshTargetsMetadata([{ id: 'ssh-runtime-owned-r1', label: 'Env', generation: 4 }])
 
-    // Runtime-owned targets keep a deterministic id, so a re-upsert after removal
-    // reissues a *new* generation under the *old* key — the one re-registration
-    // shape a key-set comparison would miss, freezing the host view-only.
+    // Runtime-owned targets reuse IDs with new registration generations; comparing only keys freezes them view-only.
     store
       .getState()
       .setSshTargetsMetadata([{ id: 'ssh-runtime-owned-r1', label: 'Env', generation: 11 }])
@@ -287,8 +280,7 @@ describe('createSshSlice', () => {
     const store = createTestStore()
     store.getState().setSshTargetsMetadata([{ id: 'ssh-1', label: 'Remote' }])
 
-    // Why: labels alone would satisfy the unchanged-list early return and freeze
-    // the mirror empty, leaving the host view-only against a known generation.
+    // Matching labels must not block first generation hydration and leave the host view-only.
     store.getState().setSshTargetsMetadata([{ id: 'ssh-1', label: 'Remote', generation: 3 }])
 
     expect(store.getState().sshTargetGenerations.get('ssh-1')).toBe(3)

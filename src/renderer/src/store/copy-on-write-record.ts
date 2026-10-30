@@ -6,10 +6,7 @@ export type CopyOnWriteRecord<T> = {
   set: (key: string, value: T) => void
 }
 
-/**
- * Lets a store patch touch a record only when it has something to change: an untouched
- * source keeps its identity, so identity-keyed selectors and persist gates stay quiet.
- */
+/** Clone only on first real write so no-op patches preserve identity-keyed selectors/persist gates. */
 export function copyOnWriteRecord<T>(source: Record<string, T>): CopyOnWriteRecord<T> {
   let next = source
   const mutable = (): Record<string, T> => {

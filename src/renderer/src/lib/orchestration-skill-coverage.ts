@@ -35,8 +35,7 @@ function isOrchestrationSkill(skill: DiscoveredSkill): boolean {
   )
 }
 
-// Why: an agent with a chat profile reads the roots its chats do; without one it reads its own,
-// and Claude Agent Teams launches Claude Code, so it reads Claude's.
+// Chat-profile agents read chat roots; others read their own, while Claude Agent Teams uses Claude Code’s roots.
 function skillReaderForAgent(
   agent: TuiAgent
 ): Pick<NativeChatAgentProfile, 'skillSourceOwner' | 'readsSkillFoldersOf'> {
@@ -58,9 +57,7 @@ export function agentHasOrchestrationSkill(
     // Why: dedup keeps one row, so the roots it absorbed still have to be classified.
     const rootPaths = skill.rootPaths?.length ? skill.rootPaths : [skill.rootPath]
     return rootPaths.some((rootPath) =>
-      // Why: one path can carry several sources — a workspace whose cwd is the
-      // home dir scans `~/.claude/skills` as both a home and a repo root. Keying
-      // by path would let the repo duplicate shadow the owning home root.
+      // One path can be home and repo simultaneously; keying only by path lets a repo duplicate shadow its owning home root.
       sources.some(
         (source) =>
           source.path === rootPath &&

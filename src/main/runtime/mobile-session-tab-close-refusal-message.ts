@@ -4,10 +4,8 @@ type MobileSessionTabCloseRefusalReason = NonNullable<
   RuntimeMobileSessionTabCloseResult['refusalReason']
 >
 
-// Why: these reach a CLI user and a Sleep-workspace toast verbatim, so they must
-// read as sentences. Avoid the substrings `describeSleepFailure` keys off
-// ('legacy', 'terminal_', 'runtime', 'connection', 'Daemon') — a match there
-// would relabel a refusal as an unreachable host.
+// CLI/toasts show these verbatim; avoid describeSleepFailure keys (legacy, terminal_, runtime, connection, Daemon)
+// or refusals will be mislabeled as unreachable hosts.
 const REFUSAL_MESSAGES: Record<MobileSessionTabCloseRefusalReason, string> = {
   'missing-intent':
     'The host had no record of a close for this terminal tab, so the tab was kept open.',

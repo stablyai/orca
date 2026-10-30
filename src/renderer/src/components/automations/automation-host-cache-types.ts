@@ -1,11 +1,4 @@
-/**
- * Shapes the per-host automation cache stores and fences.
- *
- * A cached row is only ever as trustworthy as the incarnation it was fetched
- * under, so every row keeps the owner it came from (null when the authority
- * could not qualify it) and every request keeps the three generations its
- * commit must still match.
- */
+/** Rows retain captured owners, null when unqualified; requests retain all three generations required by their commit fence. */
 
 import type { Automation } from '../../../../shared/automations-types'
 import type { AutomationListItemSelector } from '../../../../shared/automation-list-scope'
@@ -56,10 +49,7 @@ export type AutomationHostCacheEntry = {
   orphanCount: number | null
 }
 
-/**
- * Everything a response must still match to commit. `catalogGeneration` covers
- * removal tombstones too: a target leaving the catalog advances it.
- */
+/** Require all captured generations to match; catalog generation also covers removed-target tombstones. */
 export type AutomationHostRequestFence = {
   stableKey: string
   authorityKey: string

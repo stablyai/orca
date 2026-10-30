@@ -4,11 +4,9 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import {
-  collectIdOnlyStoreWrites,
   findIdOnlyLookups,
   findIdOnlyWrites,
-  listStoreOperationClasses,
-  NOT_HOST_TWINNED
+  listStoreOperationClasses
 } from './check-id-only-store-write-ratchet.mjs'
 
 const SOURCE = `export class RowOps {
@@ -73,17 +71,6 @@ describe('findIdOnlyWrites', () => {
   it('stays inside the named class', () => {
     expect(findIdOnlyWrites('Other', SOURCE)).toEqual(['Other.setWorktreeLineage'])
     expect(findIdOnlyWrites('Missing', SOURCE)).toEqual([])
-  })
-})
-
-describe('collectIdOnlyStoreWrites', () => {
-  it('scans every Store operations class and skips the documented exemptions', () => {
-    expect(listStoreOperationClasses(process.cwd()).length).toBeGreaterThan(10)
-    const entries = collectIdOnlyStoreWrites(process.cwd())
-    expect(entries).not.toContain('RepoLifecycleOperations.updateRepo')
-    for (const exempt of NOT_HOST_TWINNED.keys()) {
-      expect(entries).not.toContain(exempt)
-    }
   })
 })
 

@@ -4,13 +4,10 @@ import {
   getRemoteHeadBranchName,
   getRepoDefaultBranchName
 } from '../../../source-control/repo-default-branch'
-import {
-  ownerRepoFromPullRequestUrl,
-  type GhExecOptions,
-  type HostedReviewLocalGitOptions
-} from './../github-exec-scope'
+import type { GhExecOptions, HostedReviewLocalGitOptions } from './../github-exec-scope'
 import type { TrackedUpstreamBranch } from './tracked-upstream-cache'
 import {
+  isSameRepositoryPullRequest,
   pullRequestHeadRepository,
   pullRequestMatchesHeadRepository,
   type PullRequestLookupData,
@@ -66,10 +63,7 @@ function isForeignSameNamedHead(
   if (data.headRefName !== context.branchName || expectedHeads.length === 0) {
     return false
   }
-  const headRepo = pullRequestHeadRepository(data, prRepo)
-  const baseRepo = data.url ? ownerRepoFromPullRequestUrl(data.url) : null
-  // Why: a same-repo PR lives in a checkout remote; its canonical URL survives stale renamed-remote URLs.
-  if (headRepo && baseRepo && githubRepoIdentityKey(headRepo) === githubRepoIdentityKey(baseRepo)) {
+  if (isSameRepositoryPullRequest(data, prRepo)) {
     return false
   }
   return expectedHeads.every((head) => !pullRequestMatchesHeadRepository(data, prRepo, head))

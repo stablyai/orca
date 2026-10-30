@@ -71,7 +71,7 @@ export function GitHubItemDialogIssueBody({
 
   return (
     <div className="h-full min-h-0 overflow-y-auto scrollbar-sleek bg-background">
-      {/* Why: full content width so the description isn't squeezed by a right rail; px-2 + ConversationTab px-4 = header px-6. */}
+      {/* Match header padding: this px-2 plus ConversationTab’s px-4 equals px-6. */}
       <div className="w-full px-2 py-6">
         {(canUseDetailsRepoContext || projectOrigin) && (
           <div className="mb-5 border-b border-border/60 px-4 pb-5">

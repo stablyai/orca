@@ -7,9 +7,7 @@ import { releaseBrowserPageMount } from '../../components/browser-pane/host-gues
 
 export { moveFocusToRendererBeforeFocusedWebviewHidden }
 
-// Why the admission is released here: a page that leaves the store (close, worktree purge,
-// conversion) or has its guest evicted is destroyed through this function, so the start
-// admission dies with its guest.
+// Release admission with guest destruction on close, purge, conversion or eviction.
 export function destroyRemovedBrowserWebview(browserPageId: string): void {
   releaseBrowserPageMount(browserPageId)
   destroyPersistentWebview(browserPageId)
@@ -51,8 +49,7 @@ export function collectBrowserWebviewIds(
   return ids
 }
 
-// Why: guest-budget eviction destroys every guest a hidden worktree retains
-// while its tabs/pages stay in the store, so a revisit rebuilds from state.
+// Evict hidden guests without removing tabs/pages so revisit rebuilds from saved state.
 export function destroyWorktreeBrowserGuests(
   browserTabsByWorktree: Record<string, BrowserWorkspace[]>,
   browserPagesByWorkspace: Record<string, BrowserPage[]>,
@@ -60,8 +57,7 @@ export function destroyWorktreeBrowserGuests(
 ): void {
   for (const tab of browserTabsByWorktree[worktreeId] ?? []) {
     const pages = browserPagesByWorkspace[tab.id] ?? []
-    // Legacy sessions persisted before pages existed key their webview by the
-    // workspace tab id (same fallback as collectBrowserWebviewIds).
+    // Legacy pre-page sessions key guests by workspace tab ID, like collectBrowserWebviewIds.
     const guestIds = pages.length === 0 ? [tab.id] : pages.map((page) => page.id)
     for (const guestId of guestIds) {
       destroyRemovedBrowserWebview(guestId)
@@ -75,8 +71,7 @@ export function destroyWorkspaceWebviews(
 ): void {
   const pages = browserPagesByWorkspace[workspaceId] ?? []
   if (pages.length === 0) {
-    // Why: legacy sessions persisted before pages existed still key their
-    // webview by workspace id. Preserve the legacy destroy as a fallback.
+    // Preserve workspace-ID destruction for legacy pre-page sessions.
     destroyRemovedBrowserWebview(workspaceId)
     return
   }

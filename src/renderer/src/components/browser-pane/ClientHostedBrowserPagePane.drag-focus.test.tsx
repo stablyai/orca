@@ -48,6 +48,8 @@ function createGuest(): { webview: Electron.WebviewTag; focus: ReturnType<typeof
   const webview = document.createElement('webview') as Electron.WebviewTag
   const focus = vi.fn()
   Object.assign(webview, {
+    // An attached guest has a WebContents id; focus waits for one.
+    getWebContentsId: vi.fn(() => 7),
     getURL: vi.fn(() => 'about:blank'),
     getTitle: vi.fn(() => 'New Tab'),
     isLoading: vi.fn(() => false),
@@ -69,8 +71,7 @@ function createGuest(): { webview: Electron.WebviewTag; focus: ReturnType<typeof
   return { webview, focus }
 }
 
-/** Set per describe half: the renderer itself runs under StrictMode, so the focus latch has to
- *  survive an effect being destroyed and recreated on a pane that never went anywhere. */
+/** Run under StrictMode too: effect replay must preserve the focus latch without a real pane departure. */
 let wrap: (tree: ReactNode) => React.JSX.Element = (tree) => <>{tree}</>
 
 function paneElement(isActive: boolean): React.JSX.Element {
@@ -129,9 +130,7 @@ describe.each([
     expect(focus).toHaveBeenCalledTimes(1)
   })
 
-  // Why this matters: a drag preview-activates whatever tab it hovers, and focusing the guest
-  // hands focus to another WebContents. The embedder blur that follows is exactly what the drag's
-  // missed-end fallback treats as an aborted gesture, so the drag would die on its own preview.
+  // Guest focus blurs the embedder, triggering the drag’s missed-end fallback and aborting its own preview activation.
   it('leaves the guest unfocused while a drag holds guests click-through', () => {
     const { focus } = createGuest()
     const view = render(paneElement(false))
@@ -165,10 +164,7 @@ describe.each([
     expect(focus).not.toHaveBeenCalled()
   })
 
-  // Why this matters: the gate makes the focus effect reactive, so a drag anywhere in the window —
-  // a terminal pane reorder, a drag of some other tab — re-runs it on a tab that was already active.
-  // Focusing the guest there takes focus off an address bar the user is typing in, and the URL-follow
-  // guard only holds the draft while the bar still owns focus.
+  // An unrelated drag must not refocus the guest and steal an address-bar draft, whose guard lasts only while focused.
   it('leaves an already-active guest alone when an unrelated drag ends', () => {
     const { focus } = createGuest()
     render(paneElement(true))

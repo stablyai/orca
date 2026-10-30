@@ -164,7 +164,7 @@ describe('fetchWorktrees', () => {
       displayName: 'feature-two'
     })
 
-    mockApi.worktrees.list.mockResolvedValue([refreshed])
+    worktreeListMock.mockResolvedValue([refreshed])
     store.setState({ worktreesByRepo: { repo1: [existing] }, sortEpoch: 7 } as Partial<AppState>)
 
     await store.getState().fetchWorktrees('repo1')
@@ -194,7 +194,7 @@ describe('fetchWorktrees', () => {
       pushTarget: { remoteName: 'origin', branchName: 'feature-one' }
     })
 
-    mockApi.worktrees.list.mockResolvedValue([refreshed])
+    worktreeListMock.mockResolvedValue([refreshed])
     store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
 
     await store.getState().fetchWorktrees('repo1')
@@ -412,11 +412,11 @@ describe('fetchWorktrees', () => {
     })
     const staleResponse = { ...existing, displayNameMode: undefined }
 
-    mockApi.worktrees.list.mockResolvedValueOnce([staleResponse])
+    worktreeListMock.mockResolvedValueOnce([staleResponse])
     store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
 
     await store.getState().fetchWorktrees('repo1')
-    store.getState().updateWorktreeGitIdentity(existing.id, { branch: 'refs/heads/next' })
+    store.getState().updateWorktreeGitIdentity(existing.id, { branch: 'refs/heads/next' }, null)
 
     expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
       displayName: 'feature',
@@ -437,7 +437,7 @@ describe('fetchWorktrees', () => {
     // A changed non-branch label from a mode-less host is explicit meta a peer wrote there.
     const peerRenamed = { ...existing, displayName: 'peer label', displayNameMode: undefined }
 
-    mockApi.worktrees.list.mockResolvedValueOnce([peerRenamed])
+    worktreeListMock.mockResolvedValueOnce([peerRenamed])
     store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
 
     await store.getState().fetchWorktrees('repo1')
@@ -462,7 +462,7 @@ describe('fetchWorktrees', () => {
       displayNameMode: undefined
     }
 
-    mockApi.worktrees.list.mockResolvedValueOnce([rederived])
+    worktreeListMock.mockResolvedValueOnce([rederived])
     store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
 
     await store.getState().fetchWorktrees('repo1')
@@ -486,7 +486,7 @@ describe('fetchWorktrees', () => {
     })
     const rederived = { ...existing, branch: '', displayName: 'wt1', displayNameMode: undefined }
 
-    mockApi.worktrees.list.mockResolvedValueOnce([rederived])
+    worktreeListMock.mockResolvedValueOnce([rederived])
     store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
 
     await store.getState().fetchWorktrees('repo1')
@@ -514,7 +514,7 @@ describe('fetchWorktrees', () => {
         resolvePersist = resolve
       })
     )
-    mockApi.worktrees.list.mockResolvedValueOnce([staleResponse])
+    worktreeListMock.mockResolvedValueOnce([staleResponse])
     store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
 
     const rename = store.getState().updateWorktreeMeta(existing.id, { displayName: 'new label' })
@@ -546,7 +546,7 @@ describe('fetchWorktrees', () => {
       baseRef: 'upstream/release'
     })
 
-    mockApi.worktrees.list.mockResolvedValue([refreshed])
+    worktreeListMock.mockResolvedValue([refreshed])
     store.setState({ worktreesByRepo: { repo1: [existing] }, sortEpoch: 7 } as Partial<AppState>)
 
     await store.getState().fetchWorktrees('repo1')
@@ -569,7 +569,7 @@ describe('fetchWorktrees', () => {
       priorWorktreeIds: ['repo1::/path/old-name']
     })
 
-    mockApi.worktrees.list.mockResolvedValue([refreshed])
+    worktreeListMock.mockResolvedValue([refreshed])
     store.setState({ worktreesByRepo: { repo1: [existing] }, sortEpoch: 7 } as Partial<AppState>)
 
     await store.getState().fetchWorktrees('repo1')
@@ -593,6 +593,46 @@ describe('fetchWorktrees', () => {
     const result = await store.getState().fetchWorktrees('repo1')
 
     expect(store.getState().worktreesByRepo.repo1).toEqual([existing])
+    expect(store.getState().sortEpoch).toBe(7)
+    expect(result).toBe(false)
+  })
+
+  it('keeps the scanned rows and their tabs when a stopped WSL distro returns stored rows', async () => {
+    const store = createTestStore()
+    const scanned = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      branch: 'refs/heads/feature'
+    })
+    const notStored = makeWorktree({ id: 'repo1::/path/wt2', repoId: 'repo1', path: '/path/wt2' })
+    const stored = { ...scanned, branch: '', head: '' }
+
+    mockApi.worktrees.listDetected.mockResolvedValueOnce(
+      makeDetectedResult('repo1', [stored], {
+        authoritative: false,
+        source: 'metadata-fallback',
+        unavailableReason: "WSL distro 'Ubuntu' is not running.",
+        wslDistroStopped: { distro: 'Ubuntu', state: 'stopped' }
+      })
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the merge reads only these tab fields.
+    store.setState({
+      worktreesByRepo: { repo1: [scanned, notStored] },
+      sortEpoch: 7,
+      tabsByWorktree: { [notStored.id]: [{ id: 'tab-2', worktreeId: notStored.id }] }
+    } as unknown as Partial<AppState>)
+
+    const result = await store.getState().fetchWorktrees('repo1')
+
+    expect(store.getState().worktreesByRepo.repo1).toEqual([scanned, notStored])
+    expect(store.getState().tabsByWorktree[notStored.id]).toEqual([
+      { id: 'tab-2', worktreeId: notStored.id }
+    ])
+    expect(store.getState().detectedWorktreesByRepo.repo1?.wslDistroStopped).toEqual({
+      distro: 'Ubuntu',
+      state: 'stopped'
+    })
     expect(store.getState().sortEpoch).toBe(7)
     expect(result).toBe(false)
   })

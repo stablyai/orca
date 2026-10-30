@@ -23,7 +23,7 @@ describe('HeadlessEmulator modifyOtherKeys snapshot (STA-7701)', () => {
     expect(snapshot.modes.modifyOtherKeys).toBe(2)
     expect(snapshot.rehydrateSequences).toContain('\x1b[>4;2m')
 
-    // The startup push is long gone from any replay window; only the rehydrate restates it.
+    // Only rehydration can recover a startup mode push that has left the replay window.
     const mirror = new TerminalKittyKeyboardModeTracker()
     mirror.resetForSnapshot()
     mirror.scanReplay(snapshot.rehydrateSequences + snapshot.snapshotAnsi)

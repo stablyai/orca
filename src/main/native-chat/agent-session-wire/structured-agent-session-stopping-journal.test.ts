@@ -1,7 +1,3 @@
-// "Stopping…" read straight off a journal: it holds while a person's Stop settles, and then while
-// the turn it named or its settle bound still runs, whatever the Stop's answer. It reads only the
-// journal's tail to tell.
-
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -72,7 +68,6 @@ function stopping(): boolean {
 }
 
 describe("a person's Stop's Stopping", () => {
-  // The Stop is the person's whatever the agent answered; only the turn's end clears it.
   it('holds through an answer that says the Stop stopped nothing, until the turn ends', async () => {
     await turn('turn-1', 'running')
     await journal.appendStopEvent({ reason: 'user-stop', turnId: 'turn-1' }, FENCE)

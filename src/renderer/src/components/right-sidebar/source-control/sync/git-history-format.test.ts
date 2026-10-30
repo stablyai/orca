@@ -13,8 +13,7 @@ describe('formatGitHistoryTimestamp', () => {
   })
 })
 
-// Node reads the OS timezone on Windows and ignores a runtime process.env.TZ change, so the
-// stub — and the precondition asserting it took — cannot work there.
+// Windows ignores runtime TZ changes, so the stub and its precondition cannot work there.
 describe.skipIf(process.platform === 'win32')('formatGitHistoryTimestamp local-time zone', () => {
   afterEach(() => {
     vi.unstubAllEnvs()
@@ -22,11 +21,10 @@ describe.skipIf(process.platform === 'win32')('formatGitHistoryTimestamp local-t
 
   it('tells apart commits in the hour a DST fall-back repeats', async () => {
     vi.stubEnv('TZ', 'America/New_York')
-    // Precondition: the stub took and 2026-11-01 really does replay an hour here.
     expect(new Date(2026, 10, 1, 12).getTimezoneOffset()).toBe(
       new Date(2026, 10, 1, 0).getTimezoneOffset() + 60
     )
-    // The formatter binds the time zone when the module loads, so load it under the stub.
+    // Reload under the stub because the formatter captures its zone on import.
     vi.resetModules()
     const { formatGitHistoryTimestamp: formatInNewYork } = await import('./git-history-format')
 

@@ -5,20 +5,24 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   call: vi.fn(),
+  toast: vi.fn(),
   promptCancelSupported: vi.fn(),
   questionAnswersSupported: vi.fn(),
   operationId: vi.fn(() => 'operation-1')
 }))
 
+vi.mock('sonner', () => ({ toast: { error: mocks.toast } }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
+  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
   callStructuredAgentSession: mocks.call,
+  supportsStructuredAgentSessionQuietRepeatedStop: async () => true,
   supportsStructuredAgentSessionPromptCancel: mocks.promptCancelSupported,
   supportsStructuredAgentSessionQuestionAnswers: mocks.questionAnswersSupported
 }))
 vi.mock('./use-structured-agent-session-read', () => ({
   useStructuredAgentSessionRead: () => ({
     state: {
-      fence: 3,
+      fence,
       items,
       submissions: [],
       status: 'ready',
@@ -49,6 +53,7 @@ import {
   type StructuredPromptItem
 } from './use-structured-agent-session'
 
+let fence = 3
 let items: AgentJournalRenderItem[] = []
 const target = { kind: 'local' } as const
 
@@ -99,28 +104,60 @@ function respondCall(): Record<string, unknown> | undefined {
 describe('desktop structured prompt answers', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    fence = 3
     items = [question, approval]
     mocks.call.mockResolvedValue({ ok: true, value: { itemId: 'question-1', revision: 3 } })
   })
 
-  it('sends structured answers to a host that takes them', async () => {
-    mocks.questionAnswersSupported.mockResolvedValue(true)
-    const { result } = renderHook(() =>
-      useStructuredAgentSession({
-        sessionId: 'session-1',
-        target,
-        agent: 'claude',
-        isVisible: true
-      })
+  it.each(['answers', 'cancel'] as const)('owns %s through preparation', async (kind) => {
+    const support = Promise.withResolvers<boolean>()
+    mocks.questionAnswersSupported.mockReturnValue(support.promise)
+    mocks.promptCancelSupported.mockReturnValue(support.promise)
+    const original = { kind: 'environment' as const, environmentId: 'host-A' }
+    const view = renderHook(
+      ({ target }) =>
+        useStructuredAgentSession({
+          sessionId: 'session-1',
+          target,
+          agent: 'claude',
+          isVisible: true
+        }),
+      { initialProps: { target: original } }
     )
-
-    await act(async () => {
-      await result.current.respond(question, { kind: 'answers', answers })
+    const prompt = { itemId: question.itemId, expectedRevision: question.revision }
+    const pending =
+      kind === 'answers'
+        ? view.result.current.respond(question, { kind: 'answers', answers })
+        : view.result.current.cancel('turn-1', prompt)
+    expect(
+      mocks.call.mock.calls.filter(
+        ([, method]) =>
+          method === (kind === 'answers' ? 'agentSession.respondToQuestion' : 'agentSession.cancel')
+      )
+    ).toEqual([])
+    fence = 4
+    view.rerender({ target: { ...original, environmentId: 'host-B' } })
+    view.unmount()
+    if (kind === 'cancel') {
+      mocks.call.mockResolvedValue({ ok: false, refusal: { code: 'agent_session_conflict' } })
+    }
+    support.resolve(true)
+    expect(await pending).toEqual(kind === 'answers' ? { itemId: 'question-1', revision: 3 } : null)
+    const calls = mocks.call.mock.calls.filter(
+      ([, method]) =>
+        method === (kind === 'answers' ? 'agentSession.respondToQuestion' : 'agentSession.cancel')
+    )
+    expect(calls).toHaveLength(1)
+    const [rpcTarget, method, params] = calls[0]
+    expect(rpcTarget).toEqual(original)
+    expect(method).toBe(
+      kind === 'answers' ? 'agentSession.respondToQuestion' : 'agentSession.cancel'
+    )
+    expect(params).toEqual({
+      envelope: expect.objectContaining({ sessionId: 'session-1', expectedRuntimeFence: 3 }),
+      ...(kind === 'answers' ? { ...prompt, answers } : { turnId: 'turn-1', prompt })
     })
-
-    expect(mocks.questionAnswersSupported).toHaveBeenCalledWith(target)
-    expect(respondCall()).toMatchObject({ itemId: 'question-1', expectedRevision: 2, answers })
-    expect(respondCall()).not.toHaveProperty('optionId')
+    expect(mocks.toast).not.toHaveBeenCalled()
   })
 
   it('packs the answer into an option id for a host that predates structured answers', async () => {

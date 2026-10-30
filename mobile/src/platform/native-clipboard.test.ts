@@ -1,4 +1,3 @@
-/** The device half: what the shell actually does with a verb the host let through. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ZodError } from 'zod'
 
@@ -44,16 +43,11 @@ describe('serving a clipboard verb', () => {
   })
 
   it('does not take an image at all, because the media verbs stage one instead', async () => {
-    // The out-of-scope refusal this verb used to answer is retired: an image on the pasteboard is
-    // `native.media.pick { source: 'clipboard' }`, so the mime never parses here and the handler
-    // is never reached. The seam refuses it as params before dispatch; this is the same answer one
-    // step further in, for a caller that reaches the handler directly.
+    // Images use staged media handles; clipboard.read rejects their MIME before reaching the device.
     for (const verb of ['native.clipboard.write', 'native.clipboard.read'] as const) {
       const params =
         verb === 'native.clipboard.write' ? { mime: 'image', value: 'x' } : { mime: 'image' }
-      // Named, not merely thrown: the mime is out of this verb's enum, so the parse is what
-      // refuses it. A bare throw here would pass for a handler that reached the pasteboard and
-      // failed there, which is the one outcome this case exists to rule out.
+      // Require the params refusal code so a pasteboard error cannot satisfy this assertion.
       await expect(serveNativeClipboardVerb(verb, params)).rejects.toSatisfy(
         (error: unknown) =>
           error instanceof ZodError && error.issues.some((issue) => issue.path[0] === 'mime')

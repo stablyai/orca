@@ -10,8 +10,6 @@ import type { WorktreeDropCommitContext } from './drop-commit-context'
 import type { WorktreeDragSession } from './use-session'
 import type { WorktreeDragRuntime } from './use-runtime'
 
-// Drag-and-drop onto a status section header or a status-grouped row, including the
-// document-level fallback used when the pointer leaves the sidebar mid-drag.
 export function useWorkspaceStatusRowDrag(args: {
   ctx: WorktreeDropCommitContext
   session: WorktreeDragSession
@@ -119,7 +117,7 @@ export function useWorkspaceStatusRowDrag(args: {
     [clearWorktreeDrag, ctx, session, setDragOverStatus]
   )
 
-  // Why: expand here (not the shared hook, used by the flat board) so a dropped parent carries its lineage children (#9083).
+  // Expand lineage here; the flat board’s shared drop hook must not implicitly carry children.
   const moveWorktreesToStatusForDocumentDrop = useCallback(
     (ids: readonly string[], status: WorkspaceStatus) =>
       ctx.onMoveWorktreesToStatus(session.getReorderDraggedIds(ids), status),

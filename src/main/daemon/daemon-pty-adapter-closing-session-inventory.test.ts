@@ -18,7 +18,7 @@ describe('daemon inventory of a pane closed just before quit', () => {
     subprocesses.length = 0
     const harness = await startDaemonAdapterHarness(() => {
       const subprocess = createMockSubprocess()
-      // Why: a shell inside its kill grace -- it exits only when the test says so.
+      // Hold the shell in its kill grace until the test emits exit.
       vi.mocked(subprocess.kill).mockImplementation(() => {})
       vi.mocked(subprocess.forceKill).mockImplementation(() => {})
       subprocesses.push(subprocess)
@@ -45,7 +45,6 @@ describe('daemon inventory of a pane closed just before quit', () => {
 
     const shutdown = quittingApp.shutdown(closed.id, { immediate: true })
     await vi.waitFor(() => expect(subprocesses[1]!.forceKill).toHaveBeenCalled())
-    // Quit before the daemon has finished the kill.
     quittingApp.dispose()
     await shutdown.catch(() => {})
 

@@ -1,5 +1,5 @@
 import { app, clipboard, dialog, type BrowserWindow } from 'electron'
-import { parseSkillShareId } from '../shared/skill-share-link'
+import { isRoutedOrcaDeepLink } from './startup/orca-deep-link-url'
 import { createMacAppActivationHandler } from './window/macos-app-activation'
 import { isBackgroundLaunch, isOrcadSidecarLaunch } from './window/foreground-activation-policy'
 import { createDesktopHandoff, desktopHandoffArguments } from './window/macos-desktop-handoff'
@@ -10,6 +10,9 @@ import {
 import { openMainWindow as openMainWindowController } from './startup/main-window-controller'
 import { mainProcessState as state } from './startup/main-process-state'
 import { runMainProcessPreflight } from './startup/main-process-preflight'
+import { runWslHolderUninstallPreflight } from './startup/wsl-holder-uninstall-preflight'
+import { runAgentHooksUninstallPreflight } from './startup/agent-hooks-uninstall-preflight'
+import { enableLinearRegexpFallback } from './startup/linear-regexp-fallback'
 import { registerMainProcessIpcHandlers } from './startup/main-process-ipc-bootstrap'
 import { initializeMainProcessReady } from './startup/main-process-ready'
 import { installMainProcessQuitHandlers } from './startup/main-process-quit'
@@ -28,9 +31,21 @@ import {
   readProfileStateCopySavedTimes
 } from './persistence/profile-state/profile-state-startup-recovery-dialog'
 import { profileStateDesktopRecoveryArgs } from './startup/profile-state-recovery-preflight'
+import { prepareEarlyMainUiLanguage, translateMain } from './i18n/main-i18n'
 import { ProfileStateRecoveryRequiredError } from './persistence/profile-state/profile-state-recovery-required'
 import { getProfileUserDataPath } from './orca-profiles/profile-storage-paths'
 import { leaseAppImageGenerationForCurrentProcess } from './cli/appimage-generation-lease'
+import { wakeRememberedWslHosts } from './wsl/wsl-host-early-wake'
+import { wslHostsServing } from './wsl/wsl-host-gate'
+import { configureWslHostsGateFromDisk } from './wsl/wsl-host-gate-startup'
+import { ignoreInheritedWslHostsGateState } from '../shared/wsl-host-internal-gate'
+import { registerOrcaProtocolClient } from './startup/orca-protocol-registration'
+import { clearWindowsStdHandleInheritance } from './startup/windows-std-handle-inheritance'
+import { installWindowsIsolatedSpawner } from './startup/windows-isolated-spawner'
+import { dropE2eSpawnLogOutsideE2e } from './startup/e2e-spawn-log-env'
+
+// Before anything spawns, so no daemon, PTY or agent inherits it outside e2e.
+dropE2eSpawnLogOutsideE2e()
 
 function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): BrowserWindow {
   return openMainWindowController(options)
@@ -50,12 +65,15 @@ function requestDesktopActivation(argv: readonly string[] = []): void {
   state.skillShareDeepLinks.capture(argv, (shareId) => {
     state.mainWindow?.webContents.send('ui:openSkillShare', shareId)
   })
+  state.pluginInstallLinks.capture(argv, (link) => {
+    state.mainWindow?.webContents.send('ui:openPluginInstallLink', link)
+  })
   state.osOpenedDocuments.capture(argv, publishOsOpenedDocuments)
-  // Why: a duplicate `orca serve` must not drag a headless server into opening a desktop window (#11935).
+  // Duplicate serve launches must not activate a desktop on a headless server (#11935).
   if (!shouldActivateDesktopForSecondInstance(argv)) {
     return
   }
-  // Why: the sidecar's throwaway profile must never become the user's window.
+  // The sidecar’s throwaway profile must never become the user’s window.
   if (isOrcadSidecarLaunch()) {
     requestDesktopHandoff()
     return
@@ -63,19 +81,13 @@ function requestDesktopActivation(argv: readonly string[] = []): void {
   state.desktopActivationGate?.requestActivation()
 }
 
-/**
- * Hands buffered OS-opened document paths to a renderer that has proven it is listening.
- *
- * Until that proof arrives the paths stay buffered, because `webContents.send` to a renderer
- * with no listener attached is dropped silently and the queue would be gone.
- */
+/** Buffer documents until listener readiness; webContents.send silently drops unhandled messages. */
 function publishOsOpenedDocuments(): void {
   const targetWindow = state.mainWindow
   if (!state.osDocumentOpenListenerReady || !targetWindow || targetWindow.isDestroyed()) {
     return
   }
-  // Why consumed before the await: a renderer pull racing this resolve must not take the same
-  // batch again. The restore() calls hand it back if delivery turns out to be impossible.
+  // Consume before awaiting to prevent duplicate renderer pulls; restore if delivery fails.
   const filePaths = state.osOpenedDocuments.consume()
   if (filePaths.length === 0) {
     return
@@ -101,36 +113,55 @@ const handleMacAppActivation = createMacAppActivationHandler({
   requestActivation: requestDesktopActivation
 })
 
-const preflightReady = runMainProcessPreflight({
-  focusExistingWindow,
-  requestDesktopActivation
-})
+// Before anything spawns: no child may inherit Orca's std handles.
+clearWindowsStdHandleInheritance()
+installWindowsIsolatedSpawner()
+// A relaunch or installer inherits the parent's published WSL gate state; this process recomputes.
+ignoreInheritedWslHostsGateState()
+// The uninstaller's holder release and hook removal run instead of the app, never alongside it.
+const preflightReady =
+  !runWslHolderUninstallPreflight() &&
+  !runAgentHooksUninstallPreflight() &&
+  runMainProcessPreflight({
+    focusExistingWindow,
+    requestDesktopActivation
+  })
 
-// Why: when another process holds the lock we've already exited; skip file-writing side effects so this transient process never touches userData.
+// Skip userData writes after losing the single-instance lock.
 if (preflightReady) {
+  enableLinearRegexpFallback()
   void leaseAppImageGenerationForCurrentProcess()
+  // Before any gate check: saved WSL work keeps a closed gate serving it.
+  configureWslHostsGateFromDisk(app.getPath('userData'), app.getVersion())
+  // Why this early: a cold distro takes seconds to boot; starting now overlaps it with app startup.
+  if (process.platform === 'win32' && wslHostsServing()) {
+    wakeRememberedWslHosts(app.getPath('userData'))
+  }
   app.on('open-url', (event, url) => {
-    if (!parseSkillShareId(url)) {
+    if (!isRoutedOrcaDeepLink(url)) {
       return
     }
     event.preventDefault()
     requestDesktopActivation([url])
   })
-  // Why: macOS delivers "Open With" as open-file, often before `ready`, and only to a handler
-  // that claims the event. Unsupported paths stay unclaimed.
+  // macOS can deliver Open With before ready; claim only supported paths.
   app.on('open-file', (event, filePath) => {
     if (!state.osOpenedDocuments.captureFilePaths([filePath], publishOsOpenedDocuments)) {
       return
     }
     event.preventDefault()
-    // Why gated on isReady: pre-ready the cold-start window is already on its way, and
-    // activating the gate here would try to open one before Electron can. The sidecar has none.
+    // Cold-start activation must wait for Electron readiness; sidecars have no pending window.
     if (app.isReady() || isOrcadSidecarLaunch()) {
       requestDesktopActivation()
     }
   })
+  registerOrcaProtocolClient(app, {
+    platform: process.platform,
+    desktopLaunch: !state.isServeMode && !isBackgroundLaunch() && !isOrcadSidecarLaunch()
+  })
   state.skillShareDeepLinks.capture(process.argv)
-  // Why no publish: nothing is listening this early, so the first renderer pulls these on mount.
+  state.pluginInstallLinks.capture(process.argv)
+  // The first renderer pulls on mount; nothing listens this early.
   state.osOpenedDocuments.capture(process.argv)
   registerMainProcessIpcHandlers()
   installMainProcessQuitHandlers()
@@ -141,9 +172,9 @@ if (preflightReady) {
         handleMacAppActivation
       })
     } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
       const message =
-        formatProfileStateStartupFailure(error) ??
-        `Orca could not finish starting: ${error instanceof Error ? error.message : String(error)}`
+        formatProfileStateStartupFailure(error) ?? `Orca could not finish starting: ${detail}`
       const failureClass = profileStateStartupFailureClass(error)
       if (failureClass !== undefined) {
         recordDurableCrashBreadcrumb('profile_state_startup_failed', {
@@ -153,11 +184,13 @@ if (preflightReady) {
       console.error(`[profile-state] ${message}`)
       if (!state.isServeMode && !isBackgroundLaunch()) {
         try {
+          await prepareEarlyMainUiLanguage()
           const userDataPath = getProfileUserDataPath()
           if (isDivergedProfileStateFailure(error)) {
             const choice = await chooseProfileStateCopy({
               ...readProfileStateCopySavedTimes(userDataPath),
-              showMessageBox: (options) => dialog.showMessageBox(options)
+              showMessageBox: (options) => dialog.showMessageBox(options),
+              translate: translateMain
             })
             if (choice !== undefined) {
               // Recovery needs both profile locks, which only a fresh process can own safely.
@@ -179,7 +212,8 @@ if (preflightReady) {
             if (
               await chooseProfileStateRepair({
                 sections,
-                showMessageBox: (options) => dialog.showMessageBox(options)
+                showMessageBox: (options) => dialog.showMessageBox(options),
+                translate: translateMain
               })
             ) {
               app.relaunch({
@@ -197,12 +231,19 @@ if (preflightReady) {
             return
           }
           await presentProfileStateStartupRecoveryDialog({
-            message,
+            message:
+              formatProfileStateStartupFailure(error, translateMain) ??
+              translateMain(
+                'startupFailure.finishFailed',
+                'Orca could not finish starting: {{detail}}',
+                { detail }
+              ),
             ...(failureClass === 'recovery-required' || failureClass === 'ambiguous-authority'
               ? { recoveryCommand: 'orca profile state exports' }
               : {}),
             showMessageBox: (options) => dialog.showMessageBox(options),
-            copyToClipboard: (text) => clipboard.writeText(text)
+            copyToClipboard: (text) => clipboard.writeText(text),
+            translate: translateMain
           })
         } catch (dialogError) {
           console.warn('[profile-state] Recovery dialog failed; exiting safely:', dialogError)

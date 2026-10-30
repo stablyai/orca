@@ -14,18 +14,14 @@ export type WorkspaceSleepResult = {
   completed: boolean
 }
 
-/**
- * Shared "sleep worktree" flow (close all panels to free memory / CPU) used by the context menu,
- * the twin dialog and the dashboard. Main runs the sleep on each workspace's hosts; this window
- * follows main's notices (workspace-sleep-follower.ts) and shows the outcome here.
- */
+/** Main sleeps workspace hosts; this window follows notices and reports the outcome for every entrypoint. */
 export async function runSleepWorktree(worktreeId: string): Promise<WorkspaceSleepResult[]> {
   return runSleepWorktrees([worktreeId])
 }
 
 function describeSleepFailure(error: unknown): string {
   const detail = error instanceof Error ? error.message : String(error)
-  // Why first: the twin refusal names no connection problem, though it contains "terminal_".
+  // Check twin ambiguity before terminal errors because its message also contains terminal_.
   if (detail.includes('ambiguous_terminal_owner')) {
     return translate(
       'auto.components.sidebar.sleep.worktree.flow.twin.unattributed',
@@ -135,7 +131,7 @@ export async function sleepWorktreesReportingFailures(
   // Why: only the user's Sleep hides its chats; a project move pauses through this core too.
   options: { markChatsAsleep?: boolean } = {}
 ): Promise<WorktreeSleepOutcome> {
-  // Why unique: both copies of a twin share one id, and sleeping it sleeps the whole workspace.
+  // Host twins share one ID and must sleep only once.
   const worktreeIds = [...new Set(requestedWorktreeIds)]
   if (worktreeIds.length === 0) {
     return { failedWorktreeIds: [], errors: [], vmStillRunningIds: [], results: [] }

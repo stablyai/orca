@@ -128,11 +128,7 @@ function createDescendantMatcher(rootPath: string): (normalizedCandidate: string
     normalizedCandidate !== normalizedRoot && matchesInsideOrEqual(normalizedCandidate)
 }
 
-/**
- * Precondition: `configuredWorktreeBasePaths` are already resolved and free of
- * `.`/`..` segments — pass them through `resolveConfiguredWorktreeBasePaths`,
- * since a raw `.claude/worktrees/.` compares unequal and would not supersede.
- */
+/** Resolve configured bases through resolveConfiguredWorktreeBasePaths first; raw dot segments would prevent an explicit base superseding a scratch root. */
 export function createWorktreeVisibilitySourceMatcher(
   checkoutPaths: readonly string[],
   customSources: readonly CustomWorktreeVisibilitySource[],
@@ -147,8 +143,7 @@ export function createWorktreeVisibilitySourceMatcher(
     key: normalizeRuntimePathForComparison(basePath),
     contains: createNormalizedPathInsideOrEqualMatcher(basePath)
   }))
-  // Why: only a base pointing at or inside the matched root counts. A base of
-  // `.` or `..` merely contains the root and must not exempt it (#9388).
+  // Only a base at/inside the matched root exempts it; an ancestor such as . or .. does not (#9388).
   const isSupersededByConfiguredBase = (sourceRootKey: string, candidateKey: string): boolean =>
     configuredBases.some(
       (base) =>

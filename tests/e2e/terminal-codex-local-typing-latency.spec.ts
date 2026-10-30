@@ -1,3 +1,4 @@
+import type { XtermWithRenderDimensions } from './helpers/xterm-render-dimensions'
 import type { Page } from '@stablyai/playwright-test'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
@@ -20,27 +21,19 @@ import {
   summarizeLatencies
 } from './codex-composer-echo-latency-probe'
 
-// Why: only the live composer draws this status bar. Banner text like "OpenAI's
-// command-line coding agent" also renders on the sign-in screen, and the
-// serialized buffer interleaves ANSI codes through the banner glyphs.
+// Require the live composer status bar; banner text also appears on sign-in and serialized ANSI fragments it.
 const CODEX_COMPOSER_READY_RE = /Context \d+% used/i
 const CODEX_SIGN_IN_RE = /Sign in with ChatGPT|Sign in to|press Enter to log in/i
 const CODEX_TRUST_PROMPT_RE = /Do you trust|trust this folder|Trust this/i
 const CODEX_UPDATE_PROMPT_RE = /update available|install update|Skip for now/i
-// Why lowercase ASCII only: digits/punctuation trigger the composer's slash and
-// file-mention popups, which redraw the whole pane and skew later keystrokes.
+// Use lowercase ASCII so slash/mention popups cannot skew later redraws.
 const TYPING_ALPHABET = 'abcdefghijklmnopqrstuvwxyz'
 const TOTAL_KEYSTROKES = 60
-// Why: the first keystrokes pay one-time costs (composer first-paint, WebGL
-// atlas fill), so they measure startup rather than steady-state typing.
+// Warm composer/WebGL atlas costs before measuring steady-state input.
 const WARMUP_KEYSTROKES = 10
 const KEYSTROKE_INTERVAL_MS = 60
 const TERMINAL_DUMP_CHARS = 4_000
-// Why these budgets: ~20 local runs put p50 in a tight 21.5-22.6ms band with a
-// unimodal per-key distribution and rare isolated spikes to ~90ms. p50 gates the
-// steady state at ~1.6x observed; the tail budgets absorb those spikes so only a
-// sustained shift fails. A plain-shell control on this same probe reads p50 2ms,
-// so the ~22ms is Codex composer redraw cost, not harness overhead.
+// Local runs measured p50 21.5–22.6ms, plain shell 2ms; gate median near 1.6× and tolerate isolated ~90ms tail spikes.
 const MAX_P50_ECHO_LATENCY_MS = 35
 const MAX_P95_ECHO_LATENCY_MS = 80
 const MAX_WORST_ECHO_LATENCY_MS = 150
@@ -50,8 +43,7 @@ type CodexCursorBlinkSample = {
   paintedCursorCellCount: number
 }
 
-// Why the focus assert: a run that types into an unfocused pane records zero
-// echoes and would otherwise fail as an opaque "sample count" mismatch.
+// Require focused input so zero echoes cannot become an opaque sample-count failure.
 async function focusActiveTerminalInput(page: Page): Promise<void> {
   await page.evaluate(() => {
     const state = window.__store?.getState()
@@ -118,7 +110,9 @@ async function readActiveTerminalRasterTarget(page: Page): Promise<TerminalRaste
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
     const screen = pane?.container.querySelector<HTMLElement>('.xterm-screen')
-    const dimensions = pane?.terminal._core?._renderService?.dimensions?.css?.cell
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: xterm has no public cell-size API; the private render service is read through all-optional fields.
+    const dimensions = (pane?.terminal as XtermWithRenderDimensions | undefined)?._core
+      ?._renderService?.dimensions?.css?.cell
     if (!pane || !screen || !dimensions) {
       throw new Error('Active terminal screen is unavailable')
     }
@@ -174,8 +168,7 @@ async function dismissCodexPromptsIfPresent(page: Page): Promise<void> {
   }
 }
 
-// Why the dump: a run that "went ready" on the sign-in screen produced garbage
-// numbers silently before; failures must show what the pane actually rendered.
+// Dump rendered content so false sign-in readiness cannot produce unexplained timings.
 async function waitForCodexComposer(page: Page): Promise<string> {
   const deadline = Date.now() + 60_000
   let lastContent = ''
@@ -203,8 +196,7 @@ test.describe('local Codex terminal typing latency', () => {
 
     const homeDir = process.env.HOME ?? ''
     const codexSource = path.join(homeDir, 'projects', 'codex')
-    // Why: the E2E profile runs an isolated HOME with a managed CODEX_HOME that
-    // has no auth.json, so an unpinned launch lands on the sign-in screen.
+    // Pin auth for isolated managed CODEX_HOME, which otherwise opens sign-in.
     const realCodexHome = path.join(homeDir, '.codex')
     test.skip(
       !existsSync(path.join(realCodexHome, 'auth.json')),
@@ -242,8 +234,7 @@ test.describe('local Codex terminal typing latency', () => {
       await installCodexEchoLatencyProbe(orcaPage, typed)
       for (const char of typed) {
         await orcaPage.keyboard.type(char)
-        // Why: spacing keys past one frame keeps each sample an isolated echo
-        // instead of measuring a burst the scheduler coalesced into one write.
+        // Space keys beyond one frame so each sample measures an isolated echo.
         await orcaPage.waitForTimeout(KEYSTROKE_INTERVAL_MS)
       }
       // Why: the last keystroke's echo can still be in flight when typing ends.
@@ -263,8 +254,7 @@ test.describe('local Codex terminal typing latency', () => {
         `${formatDistribution('paint(key->render)', painted)} | ` +
         `keys=${report.keysObserved} parseEvents=${report.parseEvents}`
       testInfo.annotations.push({ type: 'codex-local-typing-latency', description: summary })
-      // Why stdout too: annotations are invisible in the default list reporter,
-      // and these numbers are the whole point of the run.
+      // Print results because the list reporter hides annotations.
       console.log(`[codex-typing-latency] ready="${composerMarker}" ${summary}`)
       testInfo.annotations.push({
         type: 'codex-local-cursor-blink',

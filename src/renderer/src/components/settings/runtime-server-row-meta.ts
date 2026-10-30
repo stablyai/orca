@@ -8,7 +8,6 @@ import type { RuntimeServerRowState } from './runtime-server-row-state'
 
 export type RuntimeServerProblemLine = { text: string; destructive: boolean }
 
-/** How the row reaches the server when it isn't its plain network address. */
 export function getRuntimeServerRoute(
   environment: PublicKnownRuntimeEnvironment,
   targets: SshTarget[]
@@ -38,10 +37,7 @@ export function getRuntimeServerRoute(
     : null
 }
 
-/**
- * The one line that replaces the row's info line, if anything needs saying.
- * Why "Last seen": the status column already says it's unreachable; the line says since when.
- */
+/** Explain problems without repeating status; Last seen adds time to the Unreachable indicator. */
 export function getRuntimeServerProblemLine({
   environment,
   row,
@@ -68,7 +64,7 @@ export function getRuntimeServerProblemLine({
   if (row.accessRevoked) {
     return { text: row.problem ?? '', destructive: true }
   }
-  // Why before other problems: the twin makes this server's projects uneditable until one goes.
+  // Prioritize duplicate pairing because it prevents editing this host’s projects.
   if (duplicateOfNames.length > 0) {
     return {
       text: translate(
@@ -97,7 +93,7 @@ export function getRuntimeServerProblemLine({
           when: formatUiRelativeTime(environment.lastUsedAt - now)
         })
       : translate('auto.components.settings.serverList.neverConnected', 'Never connected')
-    // Why the address: it tells otherwise identical unreachable rows apart.
+    // Addresses distinguish otherwise identical unreachable rows.
     return { text: address ? `${when} · ${address}` : when, destructive: false }
   }
   if (row.problem) {

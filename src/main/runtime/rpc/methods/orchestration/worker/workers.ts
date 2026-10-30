@@ -20,6 +20,7 @@ import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as SESSION_CODES } from '../..
 export const ORCHESTRATION_WORKER_START_METHODS = [
   defineMethod({
     name: 'orchestration.workerStart',
+    requires: ['accounts'],
     permission: 'workspace',
     params: WorkerStartParams,
     handler: async (
@@ -69,8 +70,7 @@ export const ORCHESTRATION_WORKER_START_METHODS = [
         )
       }
       if (params.on) {
-        // A remote worker is always a terminal agent; the mode receipt rides along so the
-        // coordinator still learns why its structured default did not apply.
+        // Remote workers are terminal-only; carry the mode receipt to explain structured-preference fallback.
         const receipt = await startFederatedWorker({
           params,
           runtime,

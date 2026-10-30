@@ -35,6 +35,7 @@ describe('diagnostic upload HTTP', () => {
     response.emit('data', Buffer.from('private backend details: not JSON'))
     response.emit('end')
     await expect(result).rejects.toThrow(/^HTTP 503$/)
+    request.emit('close')
     expect(response.listenerCount('data')).toBe(0)
     expect(request.listenerCount('error')).toBe(0)
   })
@@ -52,6 +53,7 @@ describe('diagnostic upload HTTP', () => {
     response.emit('end')
 
     await expect(result).resolves.toEqual({ accepted: true })
+    request.emit('close')
     expect(request.listenerCount('error')).toBe(0)
     expect(request.listenerCount('timeout')).toBe(0)
     expect(response.listenerCount('data')).toBe(0)
@@ -71,6 +73,7 @@ describe('diagnostic upload HTTP', () => {
     response.emit('data', Buffer.alloc(MAX_RESPONSE_BYTES + 1))
 
     await expect(result).rejects.toThrow('diagnostic response exceeded size limit')
+    request.emit('close')
     expect(request.destroy).toHaveBeenCalledTimes(1)
     expect(response.destroy).toHaveBeenCalledTimes(1)
     expect(request.listenerCount('error')).toBe(0)
@@ -78,5 +81,18 @@ describe('diagnostic upload HTTP', () => {
     expect(response.listenerCount('data')).toBe(0)
     expect(response.listenerCount('end')).toBe(0)
     expect(response.listenerCount('error')).toBe(0)
+  })
+
+  it('handles the asynchronous socket error after a request timeout until close', async () => {
+    const request = new FakeRequest()
+    httpRequestMock.mockReturnValueOnce(request)
+    const result = postJsonForJson('http://diagnostics.example/upload', {}, 1000)
+    request.emit('timeout')
+
+    await expect(result).rejects.toThrow('diagnostic network request timed out')
+    expect(request.destroy).toHaveBeenCalledOnce()
+    expect(() => request.emit('error', new Error('socket hang up'))).not.toThrow()
+    request.emit('close')
+    expect(request.eventNames()).toEqual([])
   })
 })

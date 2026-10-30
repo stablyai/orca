@@ -40,7 +40,6 @@ function createEnvironment(): KnownRuntimeEnvironment {
   }
 }
 
-/** One host whose server another desktop can restart onto a new port behind this one's back. */
 function setup(options: { publishesPort?: boolean } = {}) {
   const host = { boundPort: 6_768 }
   const target: SshTarget = {
@@ -79,7 +78,7 @@ function setup(options: { publishesPort?: boolean } = {}) {
       }
     }
   }
-  // A live server that does not answer on the forwarded port: the wake's "live but not answering".
+  // The server is live but answers only on its current bound port.
   const ensureServing = vi.fn(
     async ({ remotePort }: { remotePort: number }): Promise<OrcadManagedServing> =>
       remotePort === host.boundPort
@@ -115,7 +114,6 @@ describe("a managed tunnel follows another desktop's restart of the server", () 
     await state.manager.ensure(environment)
     expect([...state.forwardedTo.values()]).toEqual([6_768])
 
-    // Another desktop updated the host; its server came back on a different port.
     state.host.boundPort = 7_001
 
     await expect(state.manager.verifyServing(environment)).resolves.toEqual({ state: 'serving' })

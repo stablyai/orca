@@ -1,5 +1,4 @@
-// Why a hand-rolled reader: the release guard only needs the import table's DLL
-// names, and a parser dependency would be a new supply-chain input for one check.
+// Read DLL names directly to avoid parser dependency/supply-chain input for one release check.
 const IMPORT_DIRECTORY_INDEX = 1
 
 export function readPeImportedDllNames(buffer) {

@@ -22,10 +22,7 @@ function choose(
   return next === current[kind] ? current : { ...current, [kind]: next }
 }
 
-/** The transcript's subagent sections, and the sections and roster lists the reader
- *  opened or closed by hand. Every other section is open only at its running scope's
- *  live frontier; every other roster list, while that frontier or a reader's choice is
- *  on one of its sections. */
+/** Preserve manual section/roster choices; otherwise expand only at the running scope’s live frontier. */
 export function useNativeChatSubagentSections(
   conversation: readonly NativeChatMessage[],
   subagentRows: ReadonlyMap<string, readonly NativeChatSubagentRow[]>,
@@ -36,8 +33,7 @@ export function useNativeChatSubagentSections(
   subagentRowsInOrder: readonly NativeChatSubagentRow[]
   subagentChoices: NativeChatSubagentChoices
   subagentDisclosure: NativeChatSubagentDisclosure
-  /** Opens the sections a row sits in, and the roster lists they sit under, so a reveal
-   *  of that row can land. */
+  /** Expand containing sections/rosters so reveals can land on these rows. */
   openSubagentSections: (agentIds: readonly string[]) => void
 } {
   const sections = useMemo(

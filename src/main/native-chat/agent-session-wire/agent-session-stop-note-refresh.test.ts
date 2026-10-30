@@ -1,5 +1,4 @@
-// The stop-note refresh frame carries rows, so it restates the host's current work as every rows
-// frame does: a client reads a rows frame without it as an older host's.
+// Rows frames must restate current work or clients interpret them as legacy-host frames.
 
 import { describe, expect, it } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
@@ -60,7 +59,6 @@ describe('the stop-note refresh frame', () => {
       }),
       itemBody: (itemId: string) => (itemId === noteId ? unconfirmed : null)
     }
-    // The generation live now is fence 2; both stale items came from fence 1.
     const work = new StructuredAgentSessionCurrentWork(
       {
         cursor: () => ({ epoch: 'e', sequence: 3 }),

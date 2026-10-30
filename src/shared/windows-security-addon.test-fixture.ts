@@ -1,4 +1,4 @@
-import { writeFileSync } from 'node:fs'
+import { existsSync, lstatSync, readFileSync, writeFileSync } from 'node:fs'
 import type {
   GrantAccessOptions,
   WindowsAce,
@@ -23,10 +23,7 @@ const ACE_TYPES: Record<string, number> = { A: 0, D: 1, OA: 5, XA: 9 }
 const ACE_FLAGS: Record<string, number> = { OI: 0x1, CI: 0x2, NP: 0x4, IO: 0x8, ID: 0x10 }
 const RIGHTS: Record<string, number> = { FA: 0x1f01ff, FR: 0x120089, GA: 0x10000000 }
 
-/**
- * Test-only: the structure the addon's getDaclAces returns for an SDDL fixture, so tests can keep
- * writing DACLs the way Windows prints them. Production never parses SDDL.
- */
+/** Test-only SDDL parser for native getDaclAces-shaped fixtures; production never parses SDDL. */
 export function daclFromSddl(sddl: string): WindowsDacl | null {
   if (sddl.includes('NO_ACCESS_CONTROL')) {
     return null
@@ -90,6 +87,7 @@ function plainPath(addonPath: string): string {
 /** An in-memory stand-in for native/windows-security; files it creates are real. */
 export function createFakeWindowsSecurity(): FakeWindowsSecurity {
   const parked: (() => void)[] = []
+  const credentials = new Map<string, Buffer>()
   const record = <T extends FakeWindowsSecurityCall['op']>(
     op: T,
     addonPath: string,
@@ -109,6 +107,29 @@ export function createFakeWindowsSecurity(): FakeWindowsSecurity {
     callsFor: (op, path) =>
       fake.calls.filter((call) => call.op === op && (path === undefined || call.path === path)),
     currentUserSid: () => FAKE_USER_SID,
+    readGenericCredential: (target) => credentials.get(target) ?? null,
+    writeGenericCredential: (target, _user, bytes) => {
+      credentials.set(target, Buffer.from(bytes))
+    },
+    readFileWithDacl: (addonPath, maxBytes) => {
+      if (!existsSync(addonPath)) {
+        return null
+      }
+      const stat = lstatSync(addonPath)
+      if (!stat.isFile() || stat.size > maxBytes) {
+        throw win32Error('ReadFile')
+      }
+      return {
+        data: readFileSync(addonPath),
+        dacl: daclFromSddl(fake.dacls.get(plainPath(addonPath)) ?? INHERITED_SDDL)
+      }
+    },
+    clearStdHandleInheritance: () => [],
+    spawnDetachedIsolated: () => {
+      throw new Error('spawnDetachedIsolated is not faked')
+    },
+    isolatedSpawnBreaksAwayFromJob: () => true,
+    hasNativeExport: () => true,
     getDaclAces: (addonPath) => {
       const path = record('get', addonPath)
       return daclFromSddl(fake.dacls.get(path) ?? INHERITED_SDDL)

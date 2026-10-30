@@ -15,6 +15,7 @@ import type { PRComment } from '../../../../../shared/github/comment-types'
 import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
 export function GHCommentComposer({
   className,
@@ -73,7 +74,7 @@ export function GHCommentComposer({
         onCommentAdded(result.comment)
       } else {
         toast.error(
-          result.error ??
+          codeHostErrorText(result) ??
             translate('auto.components.GitHubItemDialog.082515176a', 'Failed to add comment')
         )
       }

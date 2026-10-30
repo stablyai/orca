@@ -4,8 +4,6 @@ import {
   identityFor,
   THREAD_ID
 } from './codex-structured-session-adapter-fixture'
-// Default-mode collab frames as a live session sent them, and the journal rows the real adapter
-// publishes for them: what a client reads.
 
 import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
@@ -96,7 +94,7 @@ export async function publishedRows(frames: Frame[]): Promise<AgentJournalRender
     readProcessStartTime: async () => 1_700_000_000_000,
     now: () => 1_700_000_000_500
   })
-  // The latest revision of each row, in first-written order, as a client's journal holds it.
+  // Match the client journal: latest revisions in first-written order.
   const rows = new Map<string, AgentJournalRenderItem>()
   const journal: StructuredAgentSessionEventSink = {
     appendItem: (identity, body, options) => {

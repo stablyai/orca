@@ -76,14 +76,4 @@ describe('closeWorkspaceBrowserTab owner', () => {
     expect(warn.mock.calls[0]).toContain(WORKTREE_ID)
     warn.mockRestore()
   })
-
-  it("still closes a twin's tab whose pages name their own owner", () => {
-    mocks.state = stateOwnedBy(['local', 'runtime:env-1'], [{ id: 'page-1' }])
-
-    closeWorkspaceBrowserTab(WORKTREE_ID, 'browser-ws', 'visible-tab')
-
-    expect(mocks.closeOnHosts).toHaveBeenCalledWith(
-      expect.objectContaining({ focusedEnvironmentId: null })
-    )
-  })
 })

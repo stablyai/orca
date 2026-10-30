@@ -176,7 +176,6 @@ function stringifyWithinLimit(checkpoint: TerminalCheckpointFile, maxBytes: numb
   return writer.result()
 }
 
-/** Rebuilds a snapshot, optionally trimmed to `scrollbackRows` of scrollback. */
 export async function replayTerminalSnapshot(
   snapshot: TerminalSnapshot,
   opts: { scrollbackRows?: number } = {}
@@ -197,14 +196,14 @@ export async function replayTerminalSnapshot(
     await write(snapshot.scrollbackAnsi)
     await write(snapshot.rehydrateSequences)
     await write(snapshot.snapshotAnsi)
-    // Why: rehydrateSequences omits kitty flags, and the torn escape tail must stay last.
+    // Apply kitty flags before restoring the escape tail, which must remain last.
     await emulator.applyKittyKeyboardFlags(snapshot.modes.kittyKeyboardFlags ?? 0)
     await write(snapshot.pendingEscapeTailAnsi ?? '')
     emulator.setCwd(snapshot.cwd)
     if (snapshot.lastTitle) {
       emulator.setLastTitle(snapshot.lastTitle)
     }
-    // Why untrimmed only: seeded ranges keep pre-trim row indexes; trimmed replays collect the re-emitted OSC 8 instead.
+    // Trimmed replays collect OSC 8 links again because seeded row indexes no longer apply.
     if (opts.scrollbackRows === undefined) {
       emulator.setRestoredOscLinks(snapshot.oscLinks)
     }
@@ -227,8 +226,7 @@ export async function serializeTerminalCheckpointWithinLimit(
 
   const emulator = await replayTerminalSnapshot(snapshot)
   try {
-    // Why carried, not re-derived: trimming rows cannot change who owned the
-    // terminal at this checkpoint's boundary.
+    // Trimming history must preserve ownership at the original checkpoint boundary.
     const ownership = snapshot.terminalOwner ? { terminalOwner: snapshot.terminalOwner } : {}
     const visibleOnly = { ...emulator.getSnapshot({ scrollbackRows: 0 }), ...ownership }
     let bestJson = stringifyWithinLimit(checkpointFile(visibleOnly, metadata), maxBytes)

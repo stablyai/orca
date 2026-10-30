@@ -140,11 +140,7 @@ export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees e
     >
   ): ReturnType<SessionTabsInventoryPublicationMethods['waitForSessionTabsInventoryPublication']>
 
-  // Why: toMobileSessionTabsResult resolves handles/titles from this.tabs and
-  // this.leaves, so any tab/leaf delta a graph sync installs can flip the
-  // client payload (pending-handle → ready, tab title) with zero change to the
-  // stored snapshot. Compare exactly the projection-relevant fields and report
-  // the affected worktrees; false positives only cost a coalesced no-op emit.
+  // Graph changes can alter projected handles/titles without changing snapshot bytes; compare projection fields and fan out affected workspaces.
   protected collectMobileVisibleGraphChangedWorktrees(
     previousTabs: Map<string, RuntimeSyncedTab>,
     previousLeaves: Map<string, RuntimeLeafRecord>
@@ -193,13 +189,13 @@ export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees e
       })
       this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(explicitWorktreeId)
       await this.refreshMobileSessionPtyRecords(explicitWorktreeId)
-      // Why: the refresh may discover a surviving PTY under the host's original path spelling.
+      // Refresh may find surviving PTYs under the host's original path spelling.
       const resolvedId =
         this.getExplicitSessionWorktreeIdSelector(worktreeSelector) ?? explicitWorktreeId
       this.restoreLivePairedRendererSessionOwnedMobileTerminals(resolvedId)
       return this.getMobileSessionTabsForWorktree(resolvedId, clientNavigationId, options)
     }
-    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+    const worktree = await this.resolveWorkspaceSelector(worktreeSelector)
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktree.id, {
       allowAttachedWindow: true,
       onlyRuntimeOwnedTerminals: true

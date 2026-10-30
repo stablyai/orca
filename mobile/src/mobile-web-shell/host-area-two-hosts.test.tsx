@@ -1,10 +1,4 @@
-/**
- * Two hosts' host-area pages on one stack: `/h/A` serving, push `/h/B`, pop back to `/h/A`.
- *
- * The real host layout and the real shell screen, with the session's answer and the page's own
- * sidebar standing outside: A's page owns its area again after the pop, so the native layout must
- * not draw beside it.
- */
+// Push host B over A, then pop: A must regain area ownership without a duplicate native sidebar.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const harness = await vi.hoisted(async () => await import('./mobile-web-shell-screen-test-harness'))
@@ -35,7 +29,7 @@ vi.mock('expo-router', async () => {
   return {
     ...mocks['expo-router'](),
     useGlobalSearchParams: () => ({ hostId: stack.hosts.at(-1) }),
-    // Focus as the native stack gives it: only the top screen, re-run when it comes back on top.
+    // Model native stack focus: rerun only for the top screen when it returns.
     useFocusEffect: (effect: () => undefined | (() => void)) => {
       const focused = React.useContext(stack.Focused)
       React.useEffect(() => (focused ? effect() : undefined), [focused, effect])
@@ -55,7 +49,6 @@ vi.mock('../../modules/orca-mobile-web-shell/src', mocks['../../modules/orca-mob
 vi.mock('../app-update/use-wall-app-update', mocks['../app-update/use-wall-app-update'])
 vi.mock('../transport/host-client-hooks', mocks['../transport/host-client-hooks'])
 vi.mock('./use-page-host-snapshot', mocks['./use-page-host-snapshot'])
-// Each host route's session as the reducer leaves it under a declaring page on a wide layout.
 vi.mock('./use-mobile-web-shell-session', () => ({
   useMobileWebShellSession: (args: { routePathname: string }) => ({
     ...mocks['./use-mobile-web-shell-session']().useMobileWebShellSession(),
@@ -67,7 +60,6 @@ vi.mock('../theme/mobile-theme', async (original) => ({
   colors: {}
 }))
 vi.mock('../storage/preferences', () => ({
-  HOST_SIDEBAR_DEFAULT_WIDTH: 320,
   HOST_SIDEBAR_MAX_WIDTH: 480,
   HOST_SIDEBAR_MIN_WIDTH: 240,
   loadHostSidebarWidth: async () => 320,
@@ -80,7 +72,6 @@ vi.mock('../host-screen/HostScreen', () => ({ HostScreen: stack.HostSidebar }))
 vi.mock('../navigation/host-stack', async () => {
   const { MobileWebShellScreen } = await import('./MobileWebShellScreen')
   return {
-    // Every screen stays mounted under the one pushed over it, and only the top is focused.
     HostStack: () =>
       stack.hosts.map((hostId, index) => (
         <stack.Focused.Provider key={hostId} value={index === stack.hosts.length - 1}>

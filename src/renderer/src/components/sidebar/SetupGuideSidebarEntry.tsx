@@ -44,8 +44,7 @@ export function SetupGuideSidebarEntry(): React.JSX.Element | null {
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const setupGuideSidebarDismissed = useAppStore((s) => s.setupGuideSidebarDismissed)
   const setSetupGuideSidebarDismissed = useAppStore((s) => s.setSetupGuideSidebarDismissed)
-  // Why: the sidebar count must be warmed before click so it matches the modal
-  // count instead of changing while the lazy modal is mounting.
+  // Warm progress before click so lazy modal mounting cannot change the displayed count.
   const setupProgress = useSetupGuideProgress(true, false, false)
   const setupComplete = isSetupGuideSidebarComplete(setupProgress)
   const setupActive = activeModal === 'setup-guide'
@@ -58,8 +57,7 @@ export function SetupGuideSidebarEntry(): React.JSX.Element | null {
   if (showSetupGuideEntry) {
     lastVisibleProgressRef.current = setupProgress
   }
-  // Why: host/workspace switches can briefly refresh setup probes. Once the
-  // checklist is visibly available, keep that stable row through the refresh.
+  // Keep an already-visible checklist row stable through host/workspace probe refreshes.
   const renderedProgress = showSetupGuideEntry
     ? setupProgress
     : !setupProgress.ready && !setupGuideSidebarDismissed

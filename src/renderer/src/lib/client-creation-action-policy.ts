@@ -73,10 +73,13 @@ export function getClientCreationActionPolicy(
   state: AppState,
   worktreeId: string | null
 ): ClientCreationActionPolicy {
-  if (worktreeId) {
-    return getWorkspaceClientCreationActionPolicy(state, worktreeId)
-  }
-  return creationPolicyForRuntime(state, state.settings?.activeRuntimeEnvironmentId?.trim() ?? null)
+  return worktreeId
+    ? getWorkspaceClientCreationActionPolicy(state, worktreeId)
+    : creationPolicyForRuntime(
+        state,
+        state.settings?.activeRuntimeEnvironmentId?.trim() ?? null,
+        false
+      )
 }
 
 export function getWorkspaceClientCreationActionPolicy(
@@ -84,16 +87,17 @@ export function getWorkspaceClientCreationActionPolicy(
   worktreeId: string
 ): ClientCreationActionPolicy {
   const floatingWorkspace = worktreeId === FLOATING_TERMINAL_WORKTREE_ID
-  const runtimeEnvironmentId = floatingWorkspace
-    ? null
-    : runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
-  return creationPolicyForRuntime(state, runtimeEnvironmentId, floatingWorkspace)
+  return creationPolicyForRuntime(
+    state,
+    floatingWorkspace ? null : runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId),
+    floatingWorkspace
+  )
 }
 
 function creationPolicyForRuntime(
   state: AppState,
   runtimeEnvironmentId: string | null,
-  floatingWorkspace = false
+  floatingWorkspace: boolean
 ): ClientCreationActionPolicy {
   const runtimeStatus = runtimeEnvironmentId
     ? (state.runtimeStatusByEnvironmentId?.get(runtimeEnvironmentId)?.status ?? null)
@@ -108,7 +112,6 @@ function creationPolicyForRuntime(
   })
 }
 
-/** The store fields that decide where a runtime's browser pages render. */
 export type RuntimeBrowserHostingState = {
   runtimeStatusByEnvironmentId?: ReadonlyMap<
     string,
@@ -118,10 +121,7 @@ export type RuntimeBrowserHostingState = {
   settings?: Pick<GlobalSettings, 'browserClientHostedRemoteEnabled'> | null
 }
 
-/**
- * A runtime with no browser of its own (orcad) whose pages this desktop hosts, network tunnelled
- * through the runtime. A managed SSH deployment keeps desktop tabs on its SSH browser route.
- */
+/** Host orcad browser pages on this desktop through runtime tunnels; managed SSH deployments retain the SSH browser route. */
 export function runtimeHostsPagesOnThisDesktop(
   state: RuntimeBrowserHostingState,
   runtimeEnvironmentId: string

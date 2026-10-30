@@ -21,8 +21,6 @@ import {
 } from './claude-settled-background-tasks'
 import { combineClaudeBackgroundTaskRoster } from './claude-background-task-roster-merge'
 
-// `claude-subagent-*` reads this channel through these names; the readers themselves
-// live in the frames module so both consumers share one definition.
 export {
   classifyClaudeBackgroundTaskKind,
   isBoundedClaudeTaskId,
@@ -31,7 +29,7 @@ export {
 } from './claude-background-task-frames'
 export type { ClaudeBackgroundTaskKind } from './claude-background-task-frames'
 
-/** Ended ids remembered to refuse a late start; live tasks take no bound. */
+// Bound terminal IDs without evicting live tasks.
 const MAX_TERMINAL_TASK_IDS = 256
 export type ClaudeGoalBackgroundWork = 'live' | 'unverifiable' | 'exited'
 
@@ -76,16 +74,7 @@ export class ClaudeBackgroundTaskTracker {
   }
 
   observe(message: Record<string, unknown>, startsTurn = false): boolean {
-    // Background work publishes through a foreground turn: the strip stays
-    // honest mid-fan-out and the client alone decides when the idle-only
-    // monitoring label may speak.
-    //
-    // A new turn is the same evidence `result` is: nothing the previous turn
-    // left foreground is still that turn's work. CLEANUP ONLY — a row's
-    // visibility never consults `startsTurn`, which is Orca's own
-    // dispatch-correlation bookkeeping and false by design for undispatched
-    // turns, so a missed one degrades to the old behaviour and can never hide
-    // live work.
+    // Turn changes retire foreground work; background visibility depends on provider evidence.
     if (startsTurn || message.type === 'result') {
       this.settleForegroundTasks()
     }
@@ -108,9 +97,6 @@ export class ClaudeBackgroundTaskTracker {
     return this.refreshMonitoring()
   }
 
-  /** `result` is the outcome of every task the provider marked foreground, so
-   *  they stop being live work. Backgrounded tasks outlive the turn and are
-   *  never swept here — only their own terminal frame retires them. */
   private settleForegroundTasks(): void {
     for (const task of this.tasks.values()) {
       if (!task.backgrounded) {
@@ -138,16 +124,14 @@ export class ClaudeBackgroundTaskTracker {
       return false
     }
     if (message.subtype === 'task_notification') {
-      // The notification is affirmative terminal evidence even when its status
-      // field is unreadable — matching the liveness semantics this edge always had.
+      // A terminal notification settles liveness even if its status is unreadable.
       this.settle(id, terminalClaudeTaskRunState(message.status) ?? 'done', {
         totalTokens: taskUsageTotalTokens(message)
       })
       return true
     }
     if (message.subtype === 'task_progress') {
-      // Progress `description` is the current activity ("Running <tool>"), not
-      // the task's name — only usage (and a missing identity) may update.
+      // Progress descriptions are transient activity; preserve the task name.
       const existing = this.tasks.get(id)
       const totalTokens = taskUsageTotalTokens(message)
       if (!existing?.backgrounded || totalTokens === undefined) {
@@ -169,9 +153,7 @@ export class ClaudeBackgroundTaskTracker {
     const kind = classifyClaudeBackgroundTaskKind(message.task_type)
     const backgrounded =
       message.is_backgrounded === true || kind === 'workflow' || kind === 'monitor'
-    // The aggregate roster enumerates BACKGROUND work only, so it is authoritative
-    // over that class alone. A foreground start it could never have listed is not
-    // stale evidence, and dropping it here silently killed foreground rows.
+    // The aggregate roster is authoritative only for background work.
     if (this.aggregateRosterObserved && backgrounded && !this.tasks.has(id)) {
       return false
     }
@@ -197,8 +179,6 @@ export class ClaudeBackgroundTaskTracker {
       return true
     }
     const existing = this.tasks.get(id)
-    // Classification is re-derived per transition: a later frame that reveals a
-    // real type moves the task between buckets instead of pinning first-seen.
     const patchKind =
       'task_type' in patch ? classifyClaudeBackgroundTaskKind(patch.task_type) : undefined
     const liveState = liveClaudeTaskRunState(patch.status)
@@ -246,10 +226,7 @@ export class ClaudeBackgroundTaskTracker {
         coverageIncomplete = true
         continue
       }
-      // An authoritative live roster supersedes an earlier terminal edge — for
-      // the ids it actually lists. Wiping the whole set left a finished
-      // FOREGROUND id undefended, since the start guard now convicts only
-      // backgrounded starts.
+      // Only explicitly rostered IDs supersede terminal evidence; preserve finished foreground IDs.
       this.terminalTaskIds.delete(id)
       const existing = prior.get(id) ?? this.retention.resume(id)
       const kind = classifyClaudeBackgroundTaskKind(task.task_type)

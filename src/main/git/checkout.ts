@@ -3,25 +3,14 @@ import { gitOptionsForWorktree } from './git-runtime-options'
 import { gitExecFileAsync } from './runner'
 import { runWithGitReadCacheInvalidation } from './status'
 
-/**
- * Reject branch names git would parse as an option (`-`/`--…`) or that aren't a
- * valid ref. Defense-in-depth: callers also validate at the RPC schema, but the
- * relay entrypoint is reachable independently, so the helper guards too.
- */
+/** Reject empty and option-like names here too: relay callers can bypass RPC schema validation. */
 export function assertValidBranchName(branch: string): void {
   if (branch.length === 0 || branch.startsWith('-')) {
     throw new Error('invalid_branch_name')
   }
 }
 
-/**
- * Switch the worktree to an existing local branch. Git itself refuses (and
- * surfaces a "would be overwritten by checkout" error) when uncommitted changes
- * would conflict, so we let that message propagate to the caller rather than
- * forcing — mobile shows it as a toast. Flag-injection is prevented by
- * `assertValidBranchName` (rejects `-…`); the trailing `--` marks that no
- * pathspecs follow, so the token is unambiguously treated as a branch ref.
- */
+/** Leave conflicting changes to Git; trailing -- disambiguates the branch from pathspecs. */
 export async function checkoutBranch(
   worktreePath: string,
   branch: string,
@@ -33,11 +22,7 @@ export async function checkoutBranch(
   )
 }
 
-/**
- * List local branch short-names for the branch picker, current branch first.
- * Uses `for-each-ref` (stable, scriptable output) instead of `branch` to avoid
- * locale-dependent decoration.
- */
+/** for-each-ref avoids localized branch decoration; return the current branch first. */
 export async function listLocalBranches(
   worktreePath: string,
   options: GitRuntimeOptions = {}
@@ -61,8 +46,6 @@ export async function listLocalBranches(
     }
     branches.push(name)
   }
-  // Why: surface the checked-out branch first so the picker reads "you are here"
-  // at the top, then the rest in git's ref order.
   branches.sort((a, b) => {
     if (a === current) {
       return -1

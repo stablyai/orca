@@ -1,18 +1,5 @@
-/**
- * Going back to the previously active orcad.
- *
- * Rollback is a state operation, not a binary swap. The version dirs are immutable and both
- * are still on disk, so pointing at the old one is trivial; what is not trivial is that both
- * versions share ONE data root, outside either dir. A newer orcad migrates that root on load
- * — and Orca's persisted state carries no schema version to migrate against, so the older
- * build cannot be shown to read the result. Rollback therefore restores the pre-activation
- * snapshot, and refuses when restoring it would orphan work (`assessOrcadRollback`).
- *
- * The order is the whole safety argument: stop, rescue, restore, then start. Restoring under
- * a running orcad would replace the store beneath a process holding it open, and starting
- * before restoring would let the old build migrate the new build's state. The rescue copy of
- * the newer state, and the journal under the activation fence, make each step undoable.
- */
+// Rollback restores a pre-activation snapshot: older builds may not understand newer state.
+// Stop, rescue, restore, then launch; the rescue and fenced journal allow recovery of interrupted steps.
 import { logOrcadActivationOutcome } from '../activation/orcad-activation-outcome-log'
 import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
 import type { OrcadActivationRecord } from '../activation/orcad-activation-record'
@@ -40,16 +27,13 @@ export type OrcadRollbackOptions = {
   bindHost: string
   port: number
   census: OrcadTerminalCensus
-  /**
-   * Counts again under the host lock just before the stop, closing the server's terminal admission
-   * first so nothing starts before it; any failure must read as unverifiable.
-   */
+  /** Close terminal admission, then recount under the host lock; any failure is unverifiable. */
   recountCensus: () => Promise<OrcadTerminalCensus>
-  /** Reopens the admission `recountCensus` closed, when the rollback leaves the server serving. */
+  /** Reopen admission if rollback leaves the incumbent serving. */
   releaseIncumbentAdmission: () => Promise<void>
-  /** Expected build hash of the rollback target, from the client's copy of those bytes. */
+  /** Expected hash from the client's copy of the rollback target. */
   targetBuildHash: string
-  /** The rollback target's daemon protocol facts, from the same copy. */
+  /** Protocol facts from the same target bytes. */
   targetDaemonProtocol: OrcadDaemonProtocolFacts
   readinessTimeoutMs?: number
   now?: () => Date

@@ -4,6 +4,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TERMINAL_ACCESSORY_KEYS } from '../terminal/terminal-accessory-keys'
 import { persistMirrored } from '../storage/mirrored-storage-keys'
+import { saveCustomKeys, type CustomKey } from '../terminal/terminal-custom-keys'
 import { useMobileSessionLifecycle } from './use-mobile-session-lifecycle'
 import { useMobileSessionPreferenceFocus } from './use-mobile-session-preference-focus'
 import { useMobileSessionViewMode } from './use-mobile-session-view-mode'
@@ -54,15 +55,27 @@ function deferred<T>() {
   return { promise, resolve }
 }
 
+function refocus() {
+  act(() => {
+    for (const [effect, cleanup] of focusEffects.callbacks) {
+      cleanup?.()
+      focusEffects.callbacks.set(effect, effect())
+    }
+  })
+}
+
 function sessionScope() {
+  const customKeys: CustomKey[] = []
   return {
     hostId: 'host',
     connState: 'connecting',
+    customKeys,
     setTerminalTextScale: vi.fn(),
     terminalTextScaleRevisionRef: { current: 0 },
     setAutocompleteEnabled: vi.fn(),
     setTerminalLinkOpenMode: vi.fn(),
     setCustomKeys: vi.fn(),
+    setShortcutLayout: vi.fn(),
     setVisibleBuiltInIds: vi.fn(),
     setHostEndpoint: vi.fn(),
     connStateRef: { current: 'connecting' },
@@ -80,6 +93,7 @@ beforeEach(() => {
   focusEffects.callbacks.clear()
   focusEffects.appStateListeners.clear()
   vi.mocked(AsyncStorage.getItem).mockReset().mockResolvedValue(null)
+  vi.mocked(AsyncStorage.setItem).mockReset().mockResolvedValue(undefined)
 })
 afterEach(() => {
   act(() => renderer?.unmount())
@@ -353,5 +367,91 @@ describe('saved session settings before the first render', () => {
       await persistMirrored('orca:custom-accessory-keys', JSON.stringify(added))
     })
     expect(scope.setCustomKeys).toHaveBeenLastCalledWith(added)
+  })
+})
+
+describe('session custom shortcuts after saved settings change', () => {
+  const oldKey = { id: 'old', label: 'Old', bytes: 'old', enter: false }
+  const newKey = { id: 'new', label: 'New', bytes: 'new\r', enter: false }
+  const otherKey = { id: 'other', label: 'Other', bytes: 'other', enter: false }
+
+  function storeCustomKeys(read: () => Promise<string | null>) {
+    vi.mocked(AsyncStorage.getItem).mockImplementation((key) =>
+      key === 'orca:custom-accessory-keys' ? read() : Promise.resolve(null)
+    )
+  }
+
+  async function mountWithKeys(keys: CustomKey[]) {
+    storeCustomKeys(async () => JSON.stringify(keys))
+    const scope = sessionScope()
+    function Harness() {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the lifecycle reads only the supplied session members.
+      useMobileSessionLifecycle(scope as never)
+      return null
+    }
+    await act(async () => {
+      renderer = create(createElement(Harness))
+    })
+    scope.customKeys = keys
+    await act(async () => renderer?.update(createElement(Harness)))
+    scope.setCustomKeys.mockClear()
+    return { scope, rerender: () => renderer?.update(createElement(Harness)) }
+  }
+
+  it('rereads saved shortcuts on focus and on foreground', async () => {
+    const { scope } = await mountWithKeys([oldKey])
+    storeCustomKeys(async () => JSON.stringify([otherKey]))
+    await act(async () => refocus())
+    expect(scope.setCustomKeys).toHaveBeenLastCalledWith([otherKey])
+    storeCustomKeys(async () => JSON.stringify([newKey]))
+    await act(async () => {
+      for (const listener of focusEffects.appStateListeners) {
+        listener('active')
+      }
+    })
+    expect(scope.setCustomKeys).toHaveBeenLastCalledWith([newKey])
+  })
+
+  it('keeps the live shortcuts when the refresh read fails', async () => {
+    const { scope } = await mountWithKeys([oldKey])
+    storeCustomKeys(() => Promise.reject(new Error('storage unavailable')))
+    await act(async () => refocus())
+    expect(scope.setCustomKeys).toHaveBeenCalledTimes(1)
+    expect(scope.setCustomKeys).toHaveBeenLastCalledWith(scope.customKeys)
+  })
+
+  it('keeps a newer in-session edit when an older focus read settles', async () => {
+    const { scope, rerender } = await mountWithKeys([oldKey])
+    const read = deferred<string | null>()
+    storeCustomKeys(() => read.promise)
+    refocus()
+    scope.customKeys = [newKey]
+    await act(async () => rerender())
+    await act(async () => read.resolve(JSON.stringify([oldKey])))
+    expect(scope.setCustomKeys).not.toHaveBeenCalled()
+  })
+
+  it('ends on the last queued Settings write when focus reads between writes', async () => {
+    const { scope } = await mountWithKeys([oldKey])
+    let stored = JSON.stringify([oldKey])
+    vi.mocked(AsyncStorage.setItem).mockImplementation(async (_key, value) => {
+      stored = value
+    })
+    const intermediateRead = deferred<string | null>()
+    let focusRead = true
+    storeCustomKeys(async () => {
+      if (focusRead) {
+        focusRead = false
+        return intermediateRead.promise
+      }
+      return stored
+    })
+    refocus()
+    await act(async () => {
+      await saveCustomKeys([otherKey])
+      intermediateRead.resolve(stored)
+      await saveCustomKeys([otherKey, newKey])
+    })
+    expect(scope.setCustomKeys).toHaveBeenLastCalledWith([otherKey, newKey])
   })
 })

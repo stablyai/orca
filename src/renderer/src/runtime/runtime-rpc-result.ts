@@ -21,9 +21,7 @@ export function unwrapRuntimeRpcResult<TResult>(response: RuntimeRpcResponse<TRe
   return response.result
 }
 
-// Why: mobile-scope device tokens are denied non-allowlisted runtime methods
-// with code 'forbidden'. Callers use this to surface one scope-mismatch banner
-// instead of silently swallowing the failure into empty/retry-looping UI.
+// Mobile tokens refuse nonallowlisted methods as forbidden; surface one scope banner instead of empty/retrying UI.
 export function isRuntimeScopeForbiddenError(error: unknown): boolean {
   return error instanceof RuntimeRpcCallError && error.code === 'forbidden'
 }

@@ -1,10 +1,8 @@
 import { useCallback, useState } from 'react'
 
-/** The conversation on screen: its tab, and the agent session the tab holds. */
 export type MobileNativeChatConversation = { surfaceId: string; sessionId: string | null }
 
-/** State that belongs to the conversation it was set in. A notification switching tabs, or the
- *  tab's agent session being replaced, clears it; the tab's first session id arriving does not. */
+// Reset conversation state on tab/session replacement, but not when its first session id arrives.
 export function useMobileNativeChatConversationState<T>({
   surfaceId,
   sessionId

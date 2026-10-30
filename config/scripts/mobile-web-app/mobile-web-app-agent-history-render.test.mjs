@@ -7,6 +7,7 @@ import { buildMobileWebAppBundle } from '../build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 import {
   createBundleServer,
+  waitForPageFrames,
   installShellDouble,
   readBridgeFaultGrant,
   readBridgePagePainted,
@@ -14,17 +15,8 @@ import {
   readShellCsp
 } from './preview/mobile-web-app-render-harness.mjs'
 
-/**
- * The agent-history page route in a real browser.
- *
- * Its own file rather than more cases in the render check next door: three domain series now append
- * browser cases to that one file, each under the `.mjs` line cap alone, and the merge of any two of
- * them is not. C1.10 extracted the harness so a domain gets a file; this is C5's.
- *
- * What lives here is what only a browser can answer for this route: that every module in its
- * closure evaluates under React Native Web, that the screen paints from replies the desktop would
- * really send, that its Back button reaches the shell, and that its chunk arrives over the wire.
- */
+// Browser-only history checks prove real RN-Web closure evaluation, corpus-backed rows, shell Back handoff and deferred chunk delivery.
+// Domain file uses shared C1.10 harness to avoid line-cap conflicts between concurrent series.
 
 const HOST_ROUTE = '/h/render-check-host'
 /** The pattern `init.pageRoutes` names, which is what the page matches a navigation against. */
@@ -40,28 +32,12 @@ const SHELL_HOST = {
 const UNMATCHED = 'Unmatched Route'
 const ROUTE_KEY = './h/[hostId]/agent-history/[worktreeId].tsx'
 
-/**
- * What the desktop answers, lifted from the recorded corpus rather than written here.
- *
- * Every body below is a reply scripted in `mobile/rpc-foundation/pilot-scenarios.json` — the
- * session list and worktree list from `aivault-history-screen-listed`, the status fields from
- * `transport-host-status-gates-ready` — which is the same shape the readers were built against. Authoring them here is how a fixture ends up wrong in a way the screen tolerates: a
- * locked-terminal reply written by hand in the seam test resolved instead of throwing, because the
- * flag it set was one level off the shape the reader reads.
- *
- * `wt-history` and `/repo/feature` travel together for the same reason. The panel opens on the
- * `workspace` scope and derives its filter paths from the worktree list, so the session is in scope
- * only when the route's worktree is the one whose path is the session's `cwd`. Opened on any other
- * worktree these same replies paint "No agent sessions" — a green mount that proves nothing.
- */
+// Use recorded pilot-scenario RPC replies: hand-authored seam fixtures once set a locked flag at the wrong level and falsely passed.
+// Match session cwd to route worktree path; otherwise workspace-scope filtering paints an empty list and proves no row rendering.
 const HISTORY_WORKTREE = 'wt-history'
 const SESSION_TITLE = 'Fix the explorer'
 const CORPUS_REPLIES = {
-  // Two scenarios merged, because two readers read this one method and neither reply carries what
-  // the other needs. `transport-host-status-gates-ready` is what `HostProtocolGate` above every
-  // host route reads: with only the capability list it decides this desktop is too old and paints
-  // "Update Orca on your computer" over the route, which is what the screen showed first. The
-  // capability is `aivault-history-screen-listed`'s, and it is what opens the panel's own gate.
+  // Merge status fields with history capabilities: HostProtocolGate otherwise paints update-required before panel’s own gate opens.
   'status.get': {
     protocolVersion: 5,
     minCompatibleMobileVersion: 1,
@@ -142,8 +118,7 @@ afterAll(async () => {
 /** A page carrying every signal these cases read: uncaught errors, console errors, script paths. */
 async function openPage({ shellRoute, shellGrants, shellPageRoutes = null, replies } = {}) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
-  // At document start, where the native shell installs the real channel: the entry reads it while
-  // its own script runs, so a channel added after `load` would already be too late.
+  // Install channel at document start; entry reads it during evaluation, before load.
   await page.addInitScript(installShellDouble, {
     version: bridgeVersion,
     sessionId: SHELL_SESSION_ID,
@@ -181,10 +156,7 @@ async function openPage({ shellRoute, shellGrants, shellPageRoutes = null, repli
   return { page, errors, scripts, uncaught }
 }
 
-/**
- * Wait for the entry to mount and then for the route's own content, polled rather than read once:
- * every screen is deferred behind `import()`, so `mounted` lands while the chunk is still arriving.
- */
+// Wait beyond entry mount for route content; deferred import chunk may still be arriving.
 async function waitForRoute({ page, errors, uncaught }, route, awaitText) {
   const named = (cause, what) =>
     new Error(`${route} ${what}: ${errors.join(' | ') || 'no page or console error'}`, { cause })
@@ -238,17 +210,8 @@ async function readNotifies(page) {
 }
 
 describeRender('the agent-history route in a real browser', () => {
-  /**
-   * What this proves, exactly: every module in the route's closure imports and evaluates under
-   * React Native Web, and the panel's own chrome paints. The unit tests mock react-native,
-   * safe-area, svg, lucide and the icon assets away — they have to, react-native is Flow source
-   * vitest cannot parse — so import-time breakage had no test anywhere until this one.
-   *
-   * This case answers no RPC, so the panel paints its "Unable to Load" state; the case below it
-   * scripts the corpus replies and renders a row. What stays uncovered after both is the resume
-   * path and the scope tabs, which need taps and a second scripted turn, and which C5.3 covers on
-   * device against the native list.
-   */
+  // Prove real RN-Web import/evaluation absent from mocked native units; no-RPC case paints failure, next corpus case paints a row.
+  // Resume/scope-tab interactions remain native C5.3 device coverage.
   it('mounts the route, whose panel no unit test renders for real', async () => {
     const route = `${HOST_ROUTE}/agent-history/wt-1`
     const opened = await openRoute(route, 'Agent Session History', {
@@ -278,8 +241,7 @@ describeRender('the agent-history route in a real browser', () => {
     expect(text).toContain(SESSION_TITLE)
     // The row's own fields, so a screen that painted the title from somewhere else fails here.
     expect(text).toContain('4 messages')
-    // Positively asserted, because both of the states this case is not in are silent: the scan
-    // failing paints "Unable to Load" and an out-of-scope session paints "No agent sessions".
+    // Assert populated state explicitly; failed scan and out-of-scope session both paint silent empty/error states.
     expect(text).not.toContain('Unable to Load')
     expect(text).not.toContain('No agent sessions')
     await opened.page.close()
@@ -292,26 +254,24 @@ describeRender('the agent-history route in a real browser', () => {
       shellPageRoutes: [HOST_ROUTE_PATTERN]
     })
     await opened.page.getByLabel('Back').click()
-    // Nothing to wait for but the absence of a navigation, so settle the microtask the notify
-    // would have posted on and then read the page that is still there.
-    await opened.page.waitForTimeout(1_000)
+    await expect
+      .poll(() => readNotifies(opened.page))
+      .toEqual([{ v: bridgeVersion, type: 'notify', name: 'navigate-back' }])
     expect(await readNotifies(opened.page)).toEqual([
       { v: bridgeVersion, type: 'notify', name: 'navigate-back' }
     ])
-    // Handed over, not taken: the document holds the single entry the entry wrote with
-    // `replaceState`, so a Back this page served itself would have gone nowhere and looked alike.
+    // Document has only replaceState entry; page-local Back would do nothing and look like a successful shell handoff.
     expect(await opened.page.evaluate(() => location.pathname)).toBe(route)
     expect(opened.errors).toEqual([])
     await opened.page.close()
   }, 60_000)
 
   it('posts nothing for Back when the shell granted no navigate, and stays put', async () => {
-    // The absence that makes the case above evidence: with the grant withheld the same tap reaches
-    // the same handler and the same seam, and the only thing that changes is the frame.
+    // Withhold grant while preserving tap/handler/seam to prove handoff depends on permission.
     const route = `${HOST_ROUTE}/agent-history/wt-1`
     const opened = await openRoute(route, 'Agent Session History')
     await opened.page.getByLabel('Back').click()
-    await opened.page.waitForTimeout(1_000)
+    await waitForPageFrames(opened.page)
     expect(await readNotifies(opened.page)).toEqual([])
     expect(await opened.page.evaluate(() => location.pathname)).toBe(route)
     expect(opened.errors).toEqual([])
@@ -319,8 +279,7 @@ describeRender('the agent-history route in a real browser', () => {
   }, 60_000)
 
   it("fetches the route's own chunk when the page navigates to it", async () => {
-    // C5 is the first series whose success path pulls a second chunk after the first paint, which
-    // on iOS goes through WKURLSchemeHandler under `script-src 'self'`.
+    // History success loads another post-paint chunk; iOS delivers it through WKURLSchemeHandler under script-src self.
     const opened = await openRoute(HOST_ROUTE, SHELL_HOST.name)
     const loadedForFirstRoute = [...opened.scripts]
     const route = `${HOST_ROUTE}/agent-history/wt-1`
@@ -332,8 +291,7 @@ describeRender('the agent-history route in a real browser', () => {
     const chunk = routeChunks[ROUTE_KEY]
     expect(chunk, Object.keys(routeChunks).join(' ')).toBeTruthy()
     const fetchedOnNavigation = opened.scripts.filter((path) => !loadedForFirstRoute.includes(path))
-    // Named by the builder rather than guessed from the bytes, and absent from what the first
-    // route loaded, which is what says the route came over the wire now.
+    // Use builder-owned chunk identity and require it absent initially to prove a new wire fetch.
     expect(fetchedOnNavigation, opened.scripts.join(' ')).toContain(`/assets/${chunk}`)
     expect(loadedForFirstRoute).not.toContain(`/assets/${chunk}`)
     expect(opened.errors).toEqual([])

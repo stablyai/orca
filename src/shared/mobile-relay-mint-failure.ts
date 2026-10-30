@@ -1,7 +1,4 @@
-/**
- * Structured failure when an Anywhere (Orca Relay) pairing mint cannot attach Relay.
- * Returned instead of silently degrading to a LAN-only QR under the Relay label.
- */
+/** Anywhere mint failure; never silently replace the Relay offer with a LAN-only QR. */
 export type MobileRelayMintFailureStage =
   | 'provider_missing'
   | 'e2ee_missing'
@@ -12,6 +9,7 @@ export type MobileRelayMintFailure = {
   code: string
   stage: MobileRelayMintFailureStage
   message: string
+  clockOffsetMs?: number
 }
 
 export function mobileRelayMintFailureFromUnknown(args: {
@@ -33,9 +31,19 @@ export function mobileRelayMintFailureFromUnknown(args: {
     candidateCode != null && /^relay_[a-z0-9_]{1,74}$/.test(candidateCode)
       ? candidateCode
       : args.fallbackCode
+  const clockOffsetMs =
+    code === 'relay_clock_skew' &&
+    typeof args.error === 'object' &&
+    args.error !== null &&
+    'clockOffsetMs' in args.error &&
+    typeof args.error.clockOffsetMs === 'number' &&
+    Number.isFinite(args.error.clockOffsetMs)
+      ? args.error.clockOffsetMs
+      : undefined
   return {
     code,
     stage: args.stage,
-    message: args.fallbackMessage
+    message: args.fallbackMessage,
+    ...(clockOffsetMs === undefined ? {} : { clockOffsetMs })
   }
 }

@@ -3,6 +3,7 @@ import { applyClosedTerminalLeafNotice } from '@/components/terminal-pane/closed
 import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
 import { detectLanguage } from '@/lib/language-detect'
 import { followWorkspaceSleep } from '@/components/sidebar/workspace-sleep-follower'
+import { createProjectMovePauseFollower } from '@/components/sidebar/project-move-pause-follower'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { persistWorkspaceSessionByHost } from '@/lib/workspace-session-host-persistence'
 import { revealWorkspaceSurface } from '@/lib/workspace-surface-reveal'
@@ -19,9 +20,7 @@ import {
   type RuntimeNavigationTarget
 } from '../../../../shared/runtime-navigation'
 
-// Why: a caller that names a non-host target (CLI without --focus) must not change anything on screen;
-// the tab is selected only inside a worktree the user is not viewing, without counting as a visit.
-// No target (phones, older CLIs) keeps the original switch, which the phone's "Open in session" relies on.
+// Explicit non-host targets stay off-screen without visit accounting; absent targets preserve older CLI/phone Open in session behavior.
 function openRuntimeEditorTab(
   worktreeId: string,
   navigation: RuntimeNavigationTarget | undefined,
@@ -40,7 +39,7 @@ function openRuntimeEditorTab(
   store.setActiveTabType('editor', worktreeId)
 }
 
-/** Shows main's editor tab if the window draws it; false when it does not (closed, or undrawn). */
+/** Show only if the window currently draws main’s editor tab. */
 function showMainEditorTab(
   { worktreeId, tabId, navigation, position }: RuntimeEditorTabReveal,
   positionFile: ReturnType<typeof createRuntimeFilePositionQueue>
@@ -60,10 +59,7 @@ function showMainEditorTab(
   return true
 }
 
-/**
- * Runs `show` once a visited workspace starts drawing: its root group is seeded after render, and
- * main's tabs draw in the frame flush that queues. Dropped if the user leaves first or frames stop.
- */
+/** After first-visit group/frame hydration, show the tab unless the user left or frames stopped. */
 function showOnceWorkspaceDraws({ worktreeId }: RuntimeEditorTabReveal, show: () => void): void {
   const unsubscribe = useAppStore.subscribe((state) => {
     const viewed = isFloatingWorkspaceId(worktreeId)
@@ -73,8 +69,7 @@ function showOnceWorkspaceDraws({ worktreeId }: RuntimeEditorTabReveal, show: ()
       unsubscribe()
     } else if (framesDrawWorkspace(state)(worktreeId)) {
       unsubscribe()
-      // Why after: the frame sync subscribed at startup, so this update queued its flush first.
-      // (Before the frame sync starts, no flush comes and the tab shows on a later visit.)
+      // Frame sync subscribes first, so its queued flush precedes this task; before sync starts, defer display until another visit.
       queueMicrotask(show)
     }
   })
@@ -90,7 +85,7 @@ export function registerMobileAndTerminalCloseIpcBridge(
       ({ worktreeId, filePath, relativePath, runtimeEnvironmentId, navigation, position }) => {
         const basename = relativePath.split(/[\\/]/).pop() || relativePath
         openRuntimeEditorTab(worktreeId, navigation, (store, selection) => {
-          // Why: renderer owns tab creation so grouped order and markdown bridges share the desktop File Explorer's store path.
+          // Use File Explorer’s creation path so grouped ordering and markdown bridges stay consistent.
           const fileId = store.openFile(
             {
               filePath,
@@ -108,8 +103,7 @@ export function registerMobileAndTerminalCloseIpcBridge(
     )
   )
 
-  // Layout-owner builds: main wrote the tab of a file it opened; show it once its frame draws it.
-  // Why optional: an older preload lingering through an in-place reload lacks the channel.
+  // Show main-owned tabs after their frame draws; channel stays optional for older preloads surviving reload.
   if (window.api.ui.onRevealEditorTabFromRuntime) {
     unsubs.push(
       window.api.ui.onRevealEditorTabFromRuntime((reveal) =>
@@ -198,11 +192,23 @@ export function registerMobileAndTerminalCloseIpcBridge(
   }
 
   // A sleep main runs, from this window or a phone: the window hides the workspace and its panes.
-  unsubs.push(window.api.ui.onWorkspaceSleep(followWorkspaceSleep))
+  if (window.api.ui.onProjectMovePause && window.api.ui.respondProjectMovePause) {
+    const movePause = createProjectMovePauseFollower(window.api.ui.respondProjectMovePause)
+    unsubs.push(
+      window.api.ui.onProjectMovePause((request) => {
+        void movePause.request(request).catch((error: unknown) => {
+          console.warn('[project-move-pause] renderer reply failed', error)
+        })
+      })
+    )
+    unsubs.push(window.api.ui.onWorkspaceSleep(movePause.follow))
+  } else {
+    unsubs.push(window.api.ui.onWorkspaceSleep(followWorkspaceSleep))
+  }
 
   unsubs.push(
     window.api.ui.onResumeSleepingAgents(({ worktreeId }) => {
-      // Why: a phone opened this worktree; wake its slept agents without changing the desktop's worktree/tab/view.
+      // Phone opens wake sleeping agents without changing the desktop’s workspace, tab or view.
       requestSleepingAgentWake(worktreeId)
     })
   )

@@ -67,7 +67,7 @@ async function failedStart(agent: 'pi' | 'codex' | 'grok', script: ScriptedAgent
         }
   )
   params.envelope.clientOperationId = operationId()
-  const attached = await host.attach(caller, params)
+  const attached = await host.create(caller, params)
   if (!attached.ok) {
     throw new Error(JSON.stringify(attached.refusal))
   }
@@ -88,8 +88,11 @@ async function failedStart(agent: 'pi' | 'codex' | 'grok', script: ScriptedAgent
   if (!sent.ok) {
     throw new Error(JSON.stringify(sent.refusal))
   }
-  await vi.waitFor(() => expect(script.spawns()).toBe(1))
-  script.failHandshake?.('provider config is invalid: bad key')
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    // Retries back off 100·2^n ms (800 ms before the fifth spawn); the 1 s default leaves no room under load.
+    await vi.waitFor(() => expect(script.spawns()).toBe(attempt), { timeout: 5_000 })
+    script.failHandshake('provider config is invalid: bad key')
+  }
   const submission = async () => {
     await host.flushStreamedEvents(SESSION)
     return (await host.journalSnapshot(SESSION)).submissions.find(
@@ -114,7 +117,7 @@ async function failedStart(agent: 'pi' | 'codex' | 'grok', script: ScriptedAgent
     )
   ).toHaveLength(1)
   expect(script.prompts()).toEqual([])
-  expect(script.spawns()).toBe(1)
+  expect(script.spawns()).toBe(5)
 }
 
 it('Pi records one failure without dispatch after a failed start', async () => {

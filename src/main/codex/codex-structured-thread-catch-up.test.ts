@@ -1,7 +1,5 @@
 import { projectStructuredItemsToNativeChat } from '../../shared/structured-agent-session-projection'
 import { registerCodexCatchUpEchoTests } from './codex-structured-thread-catch-up-echo.spec'
-// Turns made outside a Codex chat, through the real path they take:
-// Codex turns pages → translator → deferred sink → on-disk journal.
 
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -42,7 +40,6 @@ export function turn(index: number, view: 'full' | 'summary' = 'full'): Record<s
   }
 }
 
-/** Serves Codex's saved turns newest first, two to a page. */
 function codexWith(turns: Record<string, unknown>[]) {
   return {
     request: async (method: string, params?: Record<string, unknown>) => {
@@ -117,7 +114,6 @@ export async function chat(clock: { now: number }) {
       deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
       bind()
     },
-    /** One agent open: a fresh translator, as each new app-server gets. */
     open: async (
       turns: Record<string, unknown>[],
       options: Partial<Parameters<typeof catchUpCodexThread>[0]> = {}
@@ -191,7 +187,7 @@ describe('Codex chat catch-up', () => {
     await c.open([turn(1), turn(2), turn(3)])
     expect(c.texts()).toEqual(caughtUp)
 
-    // Rewound elsewhere: the chat keeps what it showed and says the agent no longer has it.
+    // An external rewind preserves displayed rows and adds a notice.
     await c.open([turn(1), turn(2), turn(4)])
     expect(c.texts().slice(caughtUp.length)).toEqual([
       '(continued-outside-rewound)',
@@ -199,8 +195,7 @@ describe('Codex chat catch-up', () => {
       'assistant:answer 4'
     ])
 
-    // An older Codex answers with summary turns: nothing is guessed from them.
-
+    // Summary-only history cannot be imported.
     await c.open([turn(1), turn(2), turn(4), turn(6, 'summary')])
     expect(c.texts().slice(caughtUp.length + 3)).toEqual([])
   })

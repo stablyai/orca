@@ -20,7 +20,6 @@ const CLAUDE_LIMIT_WINDOWS: Record<string, AgentSessionUsageLimitWindow> = {
   overage: 'credits'
 }
 
-/** The ends a result reports when a limit refused its request; any other is a different failure. */
 const LIMIT_TERMINAL_REASONS = ['api_error']
 
 export type ClaudeUsageLimitRow = AgentSessionFailureRowWords & {
@@ -117,7 +116,7 @@ export class ClaudeUsageLimits {
     }
   }
 
-  /** Every refusing limit must reset before a request can run, so the latest reset is the one. */
+  /** All rejecting limits must reset before requests can resume. */
   private limit(): AgentSessionUsageLimit | null {
     const now = this.now()
     for (const [type, resetsAt] of this.rejected) {

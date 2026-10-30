@@ -1,9 +1,6 @@
-/**
- * The relaunch half of WSL orcad liveness: C4's deploy-and-launch on a bounded ladder, then the
- * terminal census before anything is marked. A background recovery (nothing user-visible needs
- * the distro) relaunches only into a distro confirmed running, so it can never boot one.
- */
+/** C4 recovery uses bounded relaunch backoff, then census before publishing terminal verdicts. Recovery is never a user action, so it needs a confirmed-running distro and never boots one (E9). */
 import type { OrcadTerminalCensus } from '../../shared/orcad-terminal-census'
+import { wslHostStatusDetailText } from '../../shared/wsl-host-failure-copy'
 import type { WslRunningDistrosRead } from '../wsl-background-distro-gate'
 import { wslDistroHolderKey } from './wsl-distro-holder-record'
 import type { WslOrcadConnection, WslOrcadConnectOptions } from './wsl-orcad-connection'
@@ -25,7 +22,6 @@ export type WslOrcadRecoveryContext = {
   collectCensus: (connection: WslOrcadConnection) => Promise<OrcadTerminalCensus>
   /** Records the new orcad's identity and holds a fresh watch. */
   arm: (connection: WslOrcadConnection) => Promise<void>
-  hasUserVisibleWork: () => boolean
   readRunning: () => Promise<WslRunningDistrosRead>
 }
 
@@ -38,9 +34,15 @@ export async function recoverWslOrcad(
   for (;;) {
     const decision = context.backoff.next(context.now())
     if (decision.kind === 'give-up') {
+      const gaveUp = wslHostStatusDetailText('restartGaveUp', {
+        distro: context.distro,
+        count: decision.attempts
+      })
       context.publish({
         state: 'failed',
-        reason: `Could not restart the Orca server in ${context.distro} after ${decision.attempts} attempts`,
+        reason: gaveUp.text,
+        reasonCode: gaveUp.code,
+        reasonParams: gaveUp.params,
         terminals
       })
       return null
@@ -56,11 +58,9 @@ export async function recoverWslOrcad(
     if (!context.current()) {
       return null
     }
-    if (!context.hasUserVisibleWork()) {
-      const gate = backgroundRecoveryGate(await context.readRunning(), context.distro)
-      if (gate || !context.current()) {
-        return gate
-      }
+    const gate = backgroundRecoveryGate(await context.readRunning(), context.distro)
+    if (gate || !context.current()) {
+      return gate
     }
     try {
       const connection = await context.ensure({
@@ -72,7 +72,7 @@ export async function recoverWslOrcad(
       if (!context.current()) {
         return null
       }
-      // Before marking anything: orcad's daemon may have kept every terminal through the crash.
+      // Recount before marking terminals; the daemon may have preserved all sessions across orcad loss.
       const census = await context.collectCensus(connection)
       await context.arm(connection)
       if (context.current()) {

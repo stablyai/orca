@@ -55,7 +55,6 @@ const makeGuest = createViewportGuestFactory(browserMocks)
 const MOBILE_VIEWPORT_OVERRIDE = { width: 375, height: 667, deviceScaleFactor: 2, mobile: true }
 const MOBILE_UA_PATTERN = /CriOS\//
 
-/** Registers a guest the way the renderer does, and hands back the session its requests arrive on. */
 function registerGuest(browserPageId: string, webContentsId: number): Electron.Session {
   const { guest } = makeGuest(webContentsId)
   webContentsFromIdMock.mockReturnValue(guest)
@@ -74,10 +73,7 @@ function resolve(session: Electron.Session, webContentsId?: number): string {
   }).userAgent
 }
 
-/**
- * Viewport emulation is a per-target CDP override. It cannot reach a worker, so the only question
- * is what the worker's *request* carries — and it must match what that worker's own JS reports.
- */
+// Shared/service worker requests lack a guest ID and must retain their process identity.
 describe('worker request identity under viewport emulation', () => {
   beforeEach(() => {
     resetBrowserManagerMocks(browserMocks)
@@ -92,8 +88,6 @@ describe('worker request identity under viewport emulation', () => {
       true
     )
 
-    // A worker request carries no webContentsId. Its navigator.userAgent is the session default —
-    // desktop-clean — so sending the mobile UA on the wire makes one context disagree with itself.
     expect(resolve(session)).toBe(GUEST_CLEAN_UA)
   })
 
@@ -122,8 +116,7 @@ describe('worker request identity under viewport emulation', () => {
     expect(resolve(session)).toBe(GUEST_CLEAN_UA)
   })
 
-  // A popup carries a webContentsId that maps to no registered tab. It resolves through the same
-  // branch as a worker, so the one rule covers both: no mapped tab means the process identity.
+  // Unmapped guests must not inherit another tab's mobile override.
   it('keeps an unmapped webContents desktop-clean beside an emulated tab', async () => {
     const session = registerGuest('tab-mobile', 4242)
     expect(await browserManager.setViewportOverride('tab-mobile', MOBILE_VIEWPORT_OVERRIDE)).toBe(

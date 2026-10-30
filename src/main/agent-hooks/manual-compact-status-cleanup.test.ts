@@ -25,24 +25,27 @@ function compactEvent(hookEventName: string, state: 'working' | 'done') {
 }
 
 describe('manual compact status cleanup', () => {
-  it('retires authority with pane, tab, and server cleanup', () => {
+  it.each(['pane', 'tab', 'server'] as const)('retires authority with %s cleanup', (cleanup) => {
     const server = new AgentHookServer()
-    const begin = (): void => {
+    try {
       server.ingestRemote(compactEvent('UserPromptSubmit', 'working'), 'conn-a')
       server.ingestRemote(compactEvent('PreCompact', 'working'), 'conn-a')
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({ paneKey: PANE_KEY, state: 'working' })
+      ])
+
+      if (cleanup === 'pane') {
+        server.clearPaneState(PANE_KEY)
+      } else if (cleanup === 'tab') {
+        server.dropStatusEntriesByTabPrefix('manual-compact')
+      } else {
+        server.stop()
+      }
+      expect(server.getStatusSnapshot()).toEqual([])
+      server.ingestRemote(compactEvent('PostCompact', 'done'), 'conn-a')
+      expect(server.getStatusSnapshot()).toEqual([])
+    } finally {
+      server.stop()
     }
-
-    begin()
-    server.clearPaneState(PANE_KEY)
-    server.ingestRemote(compactEvent('PostCompact', 'done'), 'conn-a')
-    expect(server.getStatusSnapshot()).toEqual([])
-
-    begin()
-    server.dropStatusEntriesByTabPrefix('manual-compact')
-    server.ingestRemote(compactEvent('PostCompact', 'done'), 'conn-a')
-    expect(server.getStatusSnapshot()).toEqual([])
-
-    server.stop()
-    expect(server._getStateForTests().lastStatusByPaneKey.size).toBe(0)
   })
 })

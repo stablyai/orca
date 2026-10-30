@@ -3,8 +3,7 @@ import { repoIsRemote } from './agent-launch-remote'
 
 describe('repoIsRemote', () => {
   it('reads both spellings of SSH ownership on two different hosts', () => {
-    // Why two hosts: a single-host fixture passes even when the predicate answers from the wrong
-    // row, which is how the `ssh:m4air` -> openclaw leak survived review.
+    // Distinct SSH hosts catch lookups accidentally reading another row's owner (ssh:m4air to openclaw).
     expect(repoIsRemote({ connectionId: 'm4air', executionHostId: null })).toBe(true)
     expect(repoIsRemote({ connectionId: null, executionHostId: 'ssh:openclaw' })).toBe(true)
     expect(repoIsRemote({ connectionId: 'm4air', executionHostId: 'ssh:m4air' })).toBe(true)
@@ -20,13 +19,21 @@ describe('repoIsRemote', () => {
     )
   })
 
-  it('keeps a runtime host with no nested SSH target local-shaped', () => {
-    // A runtime with no nested target is a full Orca install, not a relay shim, so it keeps the
-    // platform CLI name.
-    expect(repoIsRemote({ connectionId: null, executionHostId: 'runtime:vm-1' })).toBe(false)
+  it('treats a headless runtime with no nested SSH target as remote', () => {
+    expect(repoIsRemote({ connectionId: null, executionHostId: 'runtime:vm-1' })).toBe(true)
   })
 
-  it('keeps plain local and WSL rows local', () => {
+  it('keeps a WSL workspace on a Windows server on the WSL CLI name', () => {
+    expect(
+      repoIsRemote({
+        connectionId: null,
+        executionHostId: 'runtime:win-1',
+        path: '\\\\wsl.localhost\\Ubuntu\\home\\u\\repo'
+      })
+    ).toBe(false)
+  })
+
+  it('keeps plain local rows local', () => {
     expect(repoIsRemote({ connectionId: null, executionHostId: null })).toBe(false)
     expect(repoIsRemote({ connectionId: null, executionHostId: 'local' })).toBe(false)
   })

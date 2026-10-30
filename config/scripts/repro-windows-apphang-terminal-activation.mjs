@@ -162,9 +162,7 @@ async function main() {
     console.log(JSON.stringify(payload, null, 2))
   }
 
-  // Why: a broken harness run (CDP/setup/selector failure) proves nothing —
-  // it must fail both --expect=repro and --expect=pass rather than being
-  // miscounted as hang evidence or as a clean pass.
+  // Harness CDP/setup/selector failure must fail both expectations; it proves neither hang nor clean pass.
   const harnessErrors = results.filter((result) => result.harnessError)
   if (harnessErrors.length > 0) {
     const harnessErrorLines = harnessErrors

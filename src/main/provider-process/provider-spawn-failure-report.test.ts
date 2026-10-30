@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   PROVIDER_SPAWN_FAILURE_MARKER,
-  providerStderrForDisplay,
   supervisedProviderSpawnFailure
 } from './provider-spawn-failure-report'
 
@@ -32,14 +31,5 @@ describe('provider spawn failure report', () => {
     ['a malformed report', 127, `${PROVIDER_SPAWN_FAILURE_MARKER}{"thrown":true}\n`]
   ])('reads no spawn failure from %s', (_, code, stderr) => {
     expect(supervisedProviderSpawnFailure(code, stderr)).toBeNull()
-  })
-
-  it('shows a report as the spawn error a direct spawn gives, and other stderr unchanged', () => {
-    expect(
-      providerStderrForDisplay(
-        `Warning: a runtime notice\n${report(false, 'ENOENT', 'spawn /opt/claude ENOENT')}`
-      )
-    ).toBe('Warning: a runtime notice\nspawn /opt/claude ENOENT\n')
-    expect(providerStderrForDisplay('Error: auth failed\n')).toBe('Error: auth failed\n')
   })
 })

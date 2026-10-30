@@ -11,6 +11,7 @@ import {
 } from '../../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import { normalizeWorkspaceAttachmentUpdate } from '../../../../shared/workspace-attachments'
 import type {
   GitHubPRRefreshCandidate,
   GitHubPRRefreshReason
@@ -189,7 +190,9 @@ export function installLinkedPRClearStub(
         const nextWorktrees = {
           ...state.worktreesByRepo,
           [args.repoId]: (state.worktreesByRepo[args.repoId] ?? []).map((worktree) =>
-            worktree.id === worktreeId ? { ...worktree, ...updates } : worktree
+            worktree.id === worktreeId
+              ? { ...worktree, ...normalizeWorkspaceAttachmentUpdate(worktree, updates) }
+              : worktree
           )
         }
         const nextPRCache = { ...state.prCache }

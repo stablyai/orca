@@ -24,11 +24,10 @@ export class RemoteLayoutSnapshotPersistence {
     ]
   }
 
-  /** Every server's snapshot, for `layout.getRemoteSnapshots`. */
   getRemoteLayoutSnapshots(): Record<string, RemoteLayoutSnapshot> {
     const stored =
       this[remoteLayoutSnapshotPersistenceContext].runtime.state.remoteLayoutSnapshots ?? {}
-    // Rebuilt so fields older builds stored (receivedAt, serverRuntimeId) are not handed on.
+    // Drop legacy receivedAt/serverRuntimeId fields when returning snapshots.
     return Object.fromEntries(
       Object.entries(stored).map(([environmentId, { workspaces }]) => [
         environmentId,
@@ -37,10 +36,7 @@ export class RemoteLayoutSnapshotPersistence {
     )
   }
 
-  /**
-   * Only the recorder calls this (ratchet in remote-layout-snapshot-recorder.test.ts). `later`
-   * marks the domain dirty without arming the save timer, so it rides the next save or quit flush.
-   */
+  /** Recorder-only writes; later marks dirty without a timer and persists with the next save/quit flush. */
   setRemoteLayoutSnapshot(
     environmentId: string,
     snapshot: RemoteLayoutSnapshot | null,
@@ -58,7 +54,7 @@ export class RemoteLayoutSnapshotPersistence {
       runtime.dirtyProfileStateDomains?.add('remoteLayoutSnapshots')
       return
     }
-    // Named so the save writes only this domain and wakes no workspace-session listener.
+    // Save only this domain without waking workspace-session listeners.
     scheduleSave(scheduling, ['remoteLayoutSnapshots'])
   }
 }

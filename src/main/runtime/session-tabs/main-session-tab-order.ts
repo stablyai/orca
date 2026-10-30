@@ -1,7 +1,4 @@
-// Layout-owner builds: what the one writer of session.tabs rows takes from main's layout for a
-// workspace main owns. Only the tab order and the groups: which rows exist, and every fact a row
-// carries (its terminal id above all), stay as written, since a writer may know a terminal or an
-// exit main's layout has not caught up with.
+// Take only order/groups from main; preserve written rows and terminal/exit facts that may be newer than layout bindings.
 
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-session-contracts'
 import type { MainSessionTabRows } from './main-session-tab-rows'

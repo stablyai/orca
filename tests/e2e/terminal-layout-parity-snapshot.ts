@@ -80,10 +80,7 @@ class IdLabeler {
     return text.replace(new RegExp(ID_SOURCE, 'gi'), (id) => this.label(id.toLowerCase()))
   }
 
-  /**
-   * Arrays in order, plain keys sorted. A map keyed by ids is visited only once its ids are labeled
-   * elsewhere (e.g. tab ids from the ordered tab list), so random id order never picks a label.
-   */
+  // Visit arrays in order and keys sorted; label ids in ordered structures before visiting id-keyed maps so random key order cannot choose labels.
   visit(root: unknown): void {
     const pending: [string, unknown][] = []
     const walk = (value: unknown): void => {

@@ -1,6 +1,4 @@
-// P4 (L80): with the switch on, a handle resolved for a pane whose terminal a replacement unbound
-// learns that replacement, and only when its own terminal ended, the replacement is connected and
-// bound at that pane now, and the workspace is the same.
+// Recover ended pane handles only to connected replacements bound in the same pane and workspace (L80 P4).
 import { readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'

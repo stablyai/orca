@@ -127,8 +127,7 @@ vi.mock('@/components/terminal-pane/terminal-ime-native-text-forwarder', () => (
       claimKeyEvent: vi.fn(() => imeHarness.claimResult),
       dispose: vi.fn(),
       sendInput: args.sendInput,
-      // Why captured: the bridge's whole job is handing the live mirror to the
-      // forwarder, so the test reads what a real commit would read.
+      // Read the same live keyboard-mode mirror the real commit forwarder receives.
       getKittyKeyboardFlags: args.getKittyKeyboardFlags ?? ((): number => 0)
     }
     imeHarness.forwarders.push(forwarder)
@@ -395,8 +394,7 @@ describe('AgentTerminalPreview clipboard routes', () => {
     await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
     focusInsidePreview(view.container)
 
-    // Why deferred: macOS keeps a real Cmd+V accelerator, so handling it here
-    // AND letting the menu fire would paste twice.
+    // macOS Cmd+V uses its native accelerator; handling it here too would paste twice.
     const plain = terminal.customKeyHandler!(
       new KeyboardEvent('keydown', { key: 'v', code: 'KeyV', metaKey: true })
     )

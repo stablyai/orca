@@ -1,14 +1,8 @@
-// `agentSession.agents` — the structured agents this host registered, with each agent's declared
-// capability record, so a client can show what an agent supports before a session of it exists.
-//
-// Additive and negotiated: a client calls it only once the host advertises
-// `agent-session.structured.registered-agents.v1`; without it, a client knows Claude and Codex only.
-//
-// `agentSession.subscribeAvailability` — this host's health snapshot of its installed agents, as
-// complete replacements from the runtime's one shared resource. Negotiated separately.
+// Negotiate registered-agents.v1 for this build's declared agent capabilities; older clients know only Claude/Codex.
+// subscribeAvailability separately negotiates complete health snapshots from one shared host resource.
 
-import type { AgentSessionAgentsResult } from '../../../../shared/agent-session-registered-agents'
-import { AGENT_SESSION_AGENTS_METHOD } from '../../../../shared/agent-session-registered-agents'
+import type { AgentSessionAgentsResult } from '../../../../shared/agent-session/agent-session-registered-agents'
+import { AGENT_SESSION_AGENTS_METHOD } from '../../../../shared/agent-session/agent-session-registered-agents'
 import {
   AGENT_SESSION_AVAILABILITY_METHOD,
   type AgentSessionAvailabilityFrame
@@ -26,8 +20,7 @@ export const STRUCTURED_AGENT_SESSION_AGENTS_METHODS = [
     name: AGENT_SESSION_AGENTS_METHOD,
     permission: 'workspace',
     params: AgentsParams,
-    // Read from the registrations the host is built from, as createSupport is: the answer is
-    // fixed for this build, so it never waits on, or fails with, installing the host.
+    // Read build-time registrations without installing the host, matching createSupport.
     handler: async (_params, ctx): Promise<AgentSessionAgentsResult> => {
       requireStructuredCapability(ctx)
       return {
@@ -56,7 +49,7 @@ export const STRUCTURED_AGENT_SESSION_AGENTS_METHODS = [
       release = ctx.runtime.subscribeStructuredAgentAvailability((agents) => {
         const frame: AgentSessionAvailabilityFrame = {
           type: 'availability',
-          // The audience of `agentSession.agents`: no client hears of an agent it cannot open.
+          // Expose only agents the client can open.
           agents: agents.filter(({ agent }) => clientReadsStructuredSessionAgent(ctx, agent))
         }
         emit(frame)

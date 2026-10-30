@@ -1,17 +1,4 @@
-/**
- * Canonical ownership identity for automation records.
- *
- * An automation ID is unique only inside the authority that stores it, so every
- * row, request, and action carries the authority (desktop or a paired runtime)
- * plus the host selector (self or one SSH target) that produced it.
- *
- * Two forms exist on purpose:
- * - Stable refs survive renames and connection changes; they key the persisted
- *   host filter and the display slot.
- * - Owner refs additionally pin the *incarnation* (`pairingRevision` for a
- *   runtime, `targetGeneration` for an SSH registration) so data captured from
- *   an old incarnation can never commit against a new one.
- */
+/** Automation IDs are authority-local: qualify records/actions with authority plus Self/SSH selector. Stable refs key persisted filters/display; owner refs also pin pairingRevision/targetGeneration so stale captures cannot commit to new incarnations. */
 
 export type AutomationAuthorityRef =
   | { kind: 'desktop' }

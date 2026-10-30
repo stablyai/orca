@@ -1,6 +1,3 @@
-// One disk move's editor renames over two partitions (a local and an SSH workspace): main writes
-// both or, when either refuses, neither.
-
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultUIState } from '../../../shared/constants'
 import type { ExecutionHostId } from '../../../shared/execution-host'
@@ -85,7 +82,6 @@ describe('editor renames across partitions', () => {
     const result = commitLayoutCommandsAcrossPartitions(
       [
         { hostId: 'local', command: rename(GIT_KEY, 'diff::/b.ts') },
-        // b.ts is open there and not itself renamed.
         { hostId: SSH, command: rename(SSH_KEY, 'diff::/b.ts') }
       ],
       commit

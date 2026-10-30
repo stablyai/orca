@@ -4,8 +4,6 @@ import { NativeChatEmptyState } from './NativeChatEmptyState'
 import { NativeChatInstallHero } from './NativeChatInstallHero'
 import type { NativeChatInstallSlotState } from './NativeChatInstallSlot'
 
-/** The pane of a chat with no messages: the install message while its host has no program to run,
- *  else the Start-a-chat copy. */
 export function NativeChatEmptyPane(props: {
   slot: NativeChatInstallSlotState
   agent: AgentType

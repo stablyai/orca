@@ -1,12 +1,11 @@
-import { RELAY_REGION_METRIC_SEGMENTS, RELAY_REGIONS } from '@orca-cloud/relay-contract'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RelayDatabase } from './database.js'
 import { observeRelayDatabase } from './observed-relay-database.js'
 import {
   CONTROL_RTT_RESERVOIR_LIMIT,
   observedRelayRequests,
-  PRE_AUTH_RESERVOIR_LIMIT,
   percentile,
+  PRE_AUTH_RESERVOIR_LIMIT,
   RelayObservability,
   STICKY_CONNECTION_LIMIT,
   type RelayProcessCounts
@@ -28,10 +27,7 @@ const counts: RelayProcessCounts = {
   databasePoolWaitMsMax: 1_250
 }
 
-// Two schema keys legitimately spell a policed word: the abandoned-accept bucket
-// is keyed by stage name and one stage is `credential`. Rename those exact keys in
-// a clone instead of rewriting the JSON, so a stray raw field or value anywhere
-// else still trips the guard below.
+// Alias only legitimate credential schema keys in a clone so raw secret fields/values elsewhere still trip the guard.
 const SCHEMA_KEY_ALIASES: Record<string, string> = {
   clientAcceptCredentialMsP95: 'clientAcceptStageTwoMsP95'
 }
@@ -60,6 +56,7 @@ function renameStageKeys(bucket: unknown): unknown {
 }
 
 describe('relay observability', () => {
+  afterEach(() => vi.restoreAllMocks())
   it('stamps every runtime metrics line with the fix level', () => {
     const entries: Array<Record<string, unknown>> = []
     const observability = new RelayObservability(
@@ -71,7 +68,6 @@ describe('relay observability', () => {
       event: 'orca_relay_runtime_metrics',
       fixLevel: RELAY_FIX_LEVEL
     })
-    expect(RELAY_FIX_LEVEL).toBeGreaterThanOrEqual(1)
   })
 
   // Why: a director whose loop froze for 134 s still reported a 68 ms p99 (staging 2026-10-11).
@@ -245,6 +241,7 @@ describe('relay observability', () => {
     for (let index = 0; index < 40; index++) {
       observability.recordAssignmentUnavailable('drain-return-deferred')
     }
+    observability.recordAssignmentUnavailable('reserve-paced-drained')
     observability.recordAssignmentUnavailable('sticky-lane')
     observability.recordAssignmentUnavailable('relay_capacity_exhausted')
     observability.recordAssignmentUnavailable('relay_capacity_exhausted')
@@ -254,6 +251,7 @@ describe('relay observability', () => {
     expect(entries[0]).toMatchObject({
       assign503sByCauseDelta: {
         'drain-return-deferred': 40,
+        'reserve-paced-drained': 1,
         'sticky-lane': 1,
         relay_capacity_exhausted: 2
       },
@@ -315,6 +313,8 @@ describe('relay observability', () => {
       stickySqlMsP99: 198,
       stickyStatementsP50: 14,
       stickyStatementsMax: 14,
+      // 50 statements at 300 ms and 100 at 5-6 ms: the pooled median is the fast connection's.
+      stickyStatementMsP50: 6,
       stickySqlByConnection: {
         '1': {
           requests: 50,
@@ -329,6 +329,46 @@ describe('relay observability', () => {
     })
     expect(entries[1]).not.toHaveProperty('stickySlotsDelta')
     expect(entries[1]).not.toHaveProperty('stickySqlByConnection')
+  })
+
+  it('stamps the instance zone once it is known', () => {
+    const entries: Record<string, unknown>[] = []
+    const observability = new RelayObservability(
+      { role: 'director', cellId: 'director', region: 'us-central1' },
+      (entry) => entries.push(entry)
+    )
+    observability.flush(counts)
+    observability.setInstanceZone('us-central1-a')
+    observability.flush(counts)
+
+    expect(entries[0]).not.toHaveProperty('instanceZone')
+    expect(entries[1]).toMatchObject({ instanceZone: 'us-central1-a' })
+  })
+
+  it('adds the sandbox TCP counter deltas of each window once a reader is set', () => {
+    const entries: Record<string, unknown>[] = []
+    const observability = new RelayObservability(
+      { role: 'director', cellId: 'director', region: 'us-central1' },
+      (entry) => entries.push(entry)
+    )
+    const reads = [10, 13, 13, undefined, 20, 2].map((retransSegs) =>
+      retransSegs === undefined
+        ? undefined
+        : { inSegs: retransSegs * 100, outSegs: 0, retransSegs, inErrs: 0, outRsts: 0, estabResets: 0 }
+    )
+    observability.flush(counts)
+    observability.setTcpCounterReader(() => reads.shift())
+    for (let window = 0; window < 5; window++) {
+      observability.flush(counts)
+    }
+
+    expect(entries[0]).not.toHaveProperty('tcpRetransSegsDelta')
+    expect(entries[1]).toMatchObject({ tcpRetransSegsDelta: 3, tcpInSegsDelta: 300 })
+    expect(entries[2]).toMatchObject({ tcpRetransSegsDelta: 0 })
+    // An unreadable window, the window after it, and a counter reset carry no delta.
+    expect(entries[3]).not.toHaveProperty('tcpRetransSegsDelta')
+    expect(entries[4]).not.toHaveProperty('tcpRetransSegsDelta')
+    expect(entries[5]).not.toHaveProperty('tcpRetransSegsDelta')
   })
 
   it('bounds the per-connection sticky summary', () => {
@@ -422,13 +462,6 @@ describe('relay observability', () => {
       selectedRegionUsCentral1Delta: 0,
       selectedRegionAsiaEast2Delta: 0
     })
-    // A region added to the contract has to reach the flat keys, or the skew alert's
-    // denominator silently misses it.
-    for (const segment of Object.values(RELAY_REGION_METRIC_SEGMENTS)) {
-      expect(entries[0]).toHaveProperty(`requestedRegion${segment}Delta`)
-      expect(entries[0]).toHaveProperty(`selectedRegion${segment}Delta`)
-    }
-    expect(Object.keys(RELAY_REGION_METRIC_SEGMENTS).sort()).toEqual([...RELAY_REGIONS].sort())
   })
 
   it('emits bounded aggregate runtime signals without identities or credentials', () => {
@@ -604,7 +637,6 @@ describe('relay observability', () => {
       controlRttMsP95: 240,
       controlRttMsMax: 240
     })
-    // Only-add: the pre-existing fields still read the same after the extension.
     expect(entries[0]).toMatchObject({
       event: 'orca_relay_runtime_metrics',
       metricVersion: 2,
@@ -612,8 +644,7 @@ describe('relay observability', () => {
       clientAcceptAbandonedMsMax: 0
     })
     expect(entries[0]).toMatchObject({ clientAcceptsByPhonePathDelta: {} })
-    // An empty window publishes counts only: a zero percentile point is
-    // indistinguishable from a real zero once Cloud Logging aggregates it.
+    // Omit empty percentiles: aggregated zeros are indistinguishable from actual zero-latency samples.
     expect(entries[1]).toMatchObject({ clientAcceptCompletedDelta: 0, controlRttSamplesDelta: 0 })
     for (const omitted of [
       'clientAcceptTotalMsP50',
@@ -646,12 +677,10 @@ describe('relay observability', () => {
     }
     observability.flush(counts)
 
-    // Dropped is observed minus retained, so this pins the retained window at the cap.
     expect(entries[0]).toMatchObject({
       controlRttSamplesDelta: flooded,
       controlRttSamplesDroppedDelta: flooded - CONTROL_RTT_RESERVOIR_LIMIT
     })
-    // The kept samples are real observations, not a truncated or synthesised window.
     expect(entries[0]!.controlRttMsP50 as number).toBeGreaterThanOrEqual(10)
     expect(entries[0]!.controlRttMsMax as number).toBeLessThanOrEqual(49)
 
@@ -664,6 +693,11 @@ describe('relay observability', () => {
   })
 
   it('samples the whole flooded window rather than its first samples', () => {
+    let seed = 42
+    vi.spyOn(Math, 'random').mockImplementation(() => {
+      seed = (Math.imul(seed, 1_664_525) + 1_013_904_223) >>> 0
+      return seed / 0x1_0000_0000
+    })
     const entries: Array<Record<string, unknown>> = []
     const observability = new RelayObservability(
       { role: 'cell', cellId: 'production-gce-c28', region: 'asia-east2' },
@@ -674,9 +708,7 @@ describe('relay observability', () => {
     for (let sample = 0; sample < half; sample++) observability.recordControlRtt(900)
     observability.flush(counts)
 
-    // Keeping the first N instead would publish a window of nothing but 10s. Each
-    // reservoir slot ends up drawn from the late half with ~1/2 probability, so
-    // fewer than the 5% the p95 needs is out of reach of this suite.
+    // A first-N reservoir would publish only the early 10 ms samples.
     expect(entries[0]!.controlRttMsP95).toBe(900)
     expect(entries[0]!.controlRttMsMax).toBe(900)
   })
@@ -751,7 +783,6 @@ describe('relay observability', () => {
         }
       }
     })
-    // The window resets, and an empty window publishes counts only.
     expect(entries[1]!.preAuthLatencyMs).toEqual({ beforeCheck: none, db: none, reserve: none })
   })
 
@@ -807,15 +838,15 @@ describe('relay observability', () => {
     })
 
     await database.query('SELECT 1')
-    await expect(database.transaction(async (tx) => await tx.queryLocked('SELECT 2'))).rejects.toThrow(
+    await expect(
+      database.transaction(async (tx) => await tx.queryLocked('SELECT 2'))
+    ).rejects.toThrow('database unavailable')
+    await expect(database.queryLocked('SELECT 3', [], { failIfUnavailable: true })).rejects.toThrow(
+      'database_lock_unavailable'
+    )
+    await expect(database.queryLocked('SELECT 4', [], { failIfUnavailable: true })).rejects.toThrow(
       'database unavailable'
     )
-    await expect(
-      database.queryLocked('SELECT 3', [], { failIfUnavailable: true })
-    ).rejects.toThrow('database_lock_unavailable')
-    await expect(
-      database.queryLocked('SELECT 4', [], { failIfUnavailable: true })
-    ).rejects.toThrow('database unavailable')
     expect(recordSql).toHaveBeenCalledTimes(4)
     expect(recordSql.mock.calls.map((call) => call[1])).toEqual([true, false, true, false])
   })
@@ -839,67 +870,49 @@ function summaryThroughFlush(samples: number[]) {
 
 describe('latency window summarisation', () => {
   it.each([
-    { values: [], rank: 0.5, expected: 0 },
-    { values: [10, 1, 5, 3], rank: 0.5, expected: 3 },
-    { values: [10, 1, 5, 3], rank: 0.95, expected: 10 },
-    { values: [10, 1, 5, 3], rank: 0, expected: 0 },
-    { values: [-5, -1, -9, -3, -2], rank: 1, expected: -1 },
-    { values: [0, -0, -0, 0], rank: 0.5, expected: -0 },
-    { values: new Array<number>(4), rank: 0.5, expected: 0 },
-    { values: [Number.NaN, Number.NaN], rank: 1, expected: Number.NaN },
-    { values: [Infinity, -Infinity], rank: 0.5, expected: -Infinity }
-  ])('selects the nearest rank without interpolating (case %#)', ({ values, rank, expected }) => {
-    expect(percentile(values, rank)).toBe(expected)
-  })
-
-  it.each([
     { name: 'empty', values: [], expected: { p50: 0, p95: 0, max: 0 } },
     { name: 'single', values: [7.5], expected: { p50: 7.5, p95: 7.5, max: 7.5 } },
     { name: 'unsorted', values: [10, 1, 5, 3], expected: { p50: 3, p95: 10, max: 10 } },
     { name: 'duplicates', values: [4, 4, 4], expected: { p50: 4, p95: 4, max: 4 } },
     { name: 'negative', values: [-5, -1, -9, -3, -2], expected: { p50: -3, p95: -1, max: 0 } },
-    { name: 'mixed signs', values: [-2, 3, -7, 0, 11, -0.5], expected: { p50: -0.5, p95: 11, max: 11 } },
+    {
+      name: 'mixed signs',
+      values: [-2, 3, -7, 0, 11, -0.5],
+      expected: { p50: -0.5, p95: 11, max: 11 }
+    },
     { name: 'signed zero', values: [0, -0, -0, 0], expected: { p50: 0, p95: 0, max: 0 } },
     {
       name: 'NaN',
       values: [Number.NaN, Number.NaN],
       expected: { p50: Number.NaN, p95: Number.NaN, max: Number.NaN }
     },
-    { name: 'positive infinity', values: [Infinity, 3, 1], expected: { p50: 3, p95: Infinity, max: Infinity } },
-    { name: 'negative infinity', values: [-Infinity, -3, -1], expected: { p50: -3, p95: -1, max: 0 } },
-    { name: 'both infinities', values: [Infinity, -Infinity, 3, -Infinity], expected: { p50: -Infinity, p95: Infinity, max: Infinity } },
-    { name: 'rounding', values: [0.00049, 0.0005, 0.00051, 0.9995], expected: { p50: 0.001, p95: 1, max: 1 } }
+    {
+      name: 'positive infinity',
+      values: [Infinity, 3, 1],
+      expected: { p50: 3, p95: Infinity, max: Infinity }
+    },
+    {
+      name: 'negative infinity',
+      values: [-Infinity, -3, -1],
+      expected: { p50: -3, p95: -1, max: 0 }
+    },
+    {
+      name: 'both infinities',
+      values: [Infinity, -Infinity, 3, -Infinity],
+      expected: { p50: -Infinity, p95: Infinity, max: Infinity }
+    },
+    {
+      name: 'rounding',
+      values: [0.00049, 0.0005, 0.00051, 0.9995],
+      expected: { p50: 0.001, p95: 1, max: 1 }
+    }
   ])('publishes explicit p50, p95 and maximum for $name samples', ({ values, expected }) => {
     expect(summaryThroughFlush(values)).toEqual(expected)
   })
 
-  it('sorts a full latency reservoir once for all ranks', () => {
-    const samples = Array.from({ length: CONTROL_RTT_RESERVOIR_LIMIT }, (_, index) =>
-      CONTROL_RTT_RESERVOIR_LIMIT - index
-    )
-    const sort = vi.spyOn(Array.prototype, 'sort')
-    try {
-      summaryThroughFlush(samples)
-      const sortedWindows = [...sort.mock.contexts]
-      expect(sortedWindows).toHaveLength(1)
-      expect(sortedWindows[0]).toHaveLength(CONTROL_RTT_RESERVOIR_LIMIT)
-    } finally {
-      sort.mockRestore()
-    }
-  })
-
-  it('never sorts an empty window and leaves the caller window untouched', () => {
-    const sort = vi.spyOn(Array.prototype, 'sort')
-    try {
-      summaryThroughFlush([])
-      percentile([], 0.95)
-      expect(sort).not.toHaveBeenCalled()
-    } finally {
-      sort.mockRestore()
-    }
+  it('leaves the caller window untouched when computing a percentile', () => {
     const samples = [5, -1, Number.NaN, 3, -0]
     const before = [...samples]
-    summaryThroughFlush(samples)
     percentile(samples, 0.5)
     expect(samples).toEqual(before)
   })

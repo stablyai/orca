@@ -3,7 +3,6 @@ import { createEditorStore, createEditorTabsStore } from './editor-slice-test-ha
 import { makeLayout, makeTab } from './store-test-helpers'
 import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
 
-// Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')

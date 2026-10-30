@@ -29,8 +29,7 @@ export function installMonacoDelayerCancellationGuard(): void {
   delayerPrototype.cancel = function cancelWithHandledCancellation(this: MonacoDelayerInstance) {
     const completionPromise = this.completionPromise
     if (completionPromise) {
-      // Why: Monaco Delayer cancellation is normal during DisposableStore
-      // teardown, but ignored trigger promises surface as unhandled rejections.
+      // Monaco teardown normally cancels Delayers; consume ignored trigger rejections before they surface as unhandled errors.
       void completionPromise.catch((error) => {
         if (!isMonacoCancellationError(error)) {
           throw error

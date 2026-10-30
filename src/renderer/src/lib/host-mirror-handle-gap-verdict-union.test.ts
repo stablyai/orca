@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useAppStore, type AppState } from '@/store'
+import { useAppStore } from '@/store'
 import {
   clearRuntimeEnvironmentConnectionGenerationsForTests,
   setRuntimeEnvironmentConnectionGenerationForTests
@@ -12,28 +12,10 @@ import {
   parkUntilHostMirrorHandleLands,
   resetHostMirrorHandleGapWaitsForTests
 } from './host-mirror-handle-gap-wait'
+import { makeTerminalTab } from '../store/slices/worktrees-slice-test-fixtures'
+import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
 
-/**
- * The UNION suite for `expiredGenerationByPane`.
- *
- * Three agents changed this one map on three branches and each verified only their own. These
- * cases exist because nothing else proves the rules compose: individually-correct rules whose
- * interaction nobody tested is the exact failure this was looking for.
- *
- * Four orphan classes, and what covers each:
- *   A  tab churn on a LIVE environment        tab-death rule, recording environment only
- *   B  REMOVED environment                    clearHostMirrorHandleGapVerdictsForEnvironment
- *   C  cross-environment QUIESCENCE           generation rule, per key, every environment
- *   D  REUSED tab id                          read-time pane identity, NOT a prune
- *
- * D is the one that needed no new trigger: every trigger the other three own fires downstream of
- * the moment it needs. The verdict instead carries the PTY binding its pane held AT PARK TIME and
- * only answers for a pane that still holds it.
- *
- * Plus the properties no rule may break: the verdict stays sticky enough to break the
- * park/expire/replay loop, a genuine reattach still inherits, and no rule evicts a verdict a live
- * pane still needs.
- */
+/** Verify composition: same-environment tab death, environment teardown, global stale-generation pruning and read-time pane identity. Retain verdicts for live/genuine reattached panes so expiry cannot re-park forever. */
 
 const ENV_A = 'env-union-a'
 const ENV_B = 'env-union-b'
@@ -52,7 +34,7 @@ const ENV_OF_TAB: Record<string, string> = {
 
 /** Publishes rows AND the layout PTY binding each pane holds — the binding is the pane's identity. */
 function setLiveTabs(tabIds: string[], ptyByTabId: Record<string, string> = {}): void {
-  const layouts: Record<string, unknown> = {}
+  const layouts: Record<string, TerminalLayoutSnapshot> = {}
   for (const id of tabIds) {
     const ptyId = ptyByTabId[id] ?? `remote:${ENV_OF_TAB[id] ?? ENV_A}@@term_${id}`
     layouts[id] = {
@@ -62,12 +44,13 @@ function setLiveTabs(tabIds: string[], ptyByTabId: Record<string, string> = {}):
       ptyIdsByLeafId: { [`leaf-${id}`]: ptyId }
     }
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seeded slice names only the store fields this suite drives; the rest of AppState keeps its defaults.
   useAppStore.setState({
-    tabsByWorktree: { [WORKTREE]: tabIds.map((id) => ({ id, title: id, ptyId: null })) },
+    tabsByWorktree: {
+      [WORKTREE]: tabIds.map((id) => makeTerminalTab({ id, worktreeId: WORKTREE, title: id }))
+    },
     terminalLayoutsByTabId: layouts,
     ptyIdsByTabId: {}
-  } as unknown as AppState)
+  })
 }
 
 function parkAndExpire(environmentId: string, tabId: string): void {
@@ -109,35 +92,23 @@ describe('handle-gap verdict map, all rules on one tree', () => {
     setRuntimeEnvironmentConnectionGenerationForTests(ENV_C, 2)
     clearHostMirrorHandleGapVerdictsForEnvironment(ENV_B)
 
-    // A's tab closes; the reused id is retracted and republished as a DIFFERENT pane, which binds
-    // a PTY the host newly minted. That new binding is what makes it a different pane, not the id.
+    // Reused tab ID is a new pane only because its environment-minted PTY binding changed.
     setLiveTabs(['a2', 'reused'], { reused: `remote:${ENV_A}@@term_freshly_minted` })
     parkAndExpire(ENV_A, 'a2')
 
-    // A drained: a1's row is gone and env-a recorded again, so the tab-death rule swept it.
     expect(hasHostMirrorHandleWaitExpired(ENV_A, 'a1')).toBe(false)
-    // B drained: by teardown, which is the only trigger that fires for a removed environment.
     expect(hasHostMirrorHandleWaitExpired(ENV_B, 'b1')).toBe(false)
-    // C: env-c reconnected at :109, so this read is false on the read-time generation gate alone
-    // and says nothing about whether the drain ran. The drain is what the COUNT below proves — it
-    // is the only assertion here that distinguishes "retired" from "stranded but unreachable".
+    // The read-time generation gate alone returns false; only retained-entry COUNT proves global pruning ran.
     expect(hasHostMirrorHandleWaitExpired(ENV_C, 'c1')).toBe(false)
 
-    // D is closed, and NOT by a prune. No trigger any rule above owns fires at the right moment:
-    // the tab-death predicate stops matching once the id is live again, teardown is the wrong
-    // event, and no waiter observes the retraction because a pane holding a verdict never parks.
-    // It is closed at READ time instead — the verdict names the pane it was about, so a pane that
-    // binds a newly minted PTY does not answer to it and serves its own wait.
+    // A reused live tab defeats death/teardown triggers; compare its park-time binding at read time to deny another pane’s verdict.
     expect(hasHostMirrorHandleWaitExpired(ENV_A, 'reused')).toBe(false)
 
-    // Only the two live verdicts survive: a2's and the stranded reused-id row.
     expect(countHostMirrorHandleGapVerdictsForTests()).toBe(2)
   })
 
   it('answers for a genuine reattach that still holds the same PTY', () => {
-    // The verdict follows the PTY, not the tab id. A pane that reattaches to the SAME environment
-    // PTY is the same pane, so it must inherit — otherwise the identity check would have quietly
-    // removed the loop-breaker for every reattach.
+    // Same-PTY reattach must inherit its verdict or identity checks would remove the expiry loop-breaker.
     setRuntimeEnvironmentConnectionGenerationForTests(ENV_A, 1)
     setLiveTabs(['a1'])
     parkAndExpire(ENV_A, 'a1')
@@ -147,31 +118,18 @@ describe('handle-gap verdict map, all rules on one tree', () => {
   })
 
   it('records the binding the pane held at PARK time, not at expiry', () => {
-    // The mutation this kills: reading the binding inside `recordExpiredWait` from the store
-    // instead of from the waiter. A pane replaced mid-wait leaves the original waiter running to
-    // term, and an expiry-time read would attribute the verdict to whoever holds the id by then —
-    // handing the new pane a wait it never served. Three earlier cases all survived that bug;
-    // only rebinding BETWEEN park and expire distinguishes the two implementations.
+    // Rebind between park and expiry to catch reading current identity instead of the waiter’s original binding.
     setRuntimeEnvironmentConnectionGenerationForTests(ENV_A, 1)
     setLiveTabs(['a1'])
     parkUntilHostMirrorHandleLands(ENV_A, WORKTREE, 'a1', () => {})
     setLiveTabs(['a1'], { a1: `remote:${ENV_A}@@term_replacement` })
     vi.advanceTimersByTime(HOST_MIRROR_HANDLE_GAP_DEADLINE_MS + 1)
 
-    // The replacement pane never served this wait, so it must not inherit its verdict.
     expect(hasHostMirrorHandleWaitExpired(ENV_A, 'a1')).toBe(false)
   })
 
   it('refuses to answer on an empty binding, which is a match value and not a null', () => {
-    // '' is what `paneBindingFor` returns when no leaf holds an environment-minted PTY. Two
-    // different panes both reading '' would compare EQUAL and inherit, which is the reused-tab-id
-    // shape again. Measured unreachable through the production park path rather than assumed: the
-    // only route into `parkUntilHostMirrorHandleLands` is `kind: 'handle'`, which
-    // `findUnhydratedHostMirrorForPane` reports only when `tabHoldsEnvironmentPtyBinding`
-    // (host-mirrored-pane-liveness.ts:28-31) finds a match — the SAME `terminalLayoutsByTabId`
-    // map through the SAME `parseRemoteRuntimePtyId` predicate `paneBindingFor` uses, so a pane
-    // that would bind '' never parks. It must still refuse rather than match, because that
-    // coupling is two functions in two files and nothing enforces it.
+    // Two empty bindings must never match; verify the production park predicate uses the same environment-PTY test, but retain the defensive empty-value refusal.
     setRuntimeEnvironmentConnectionGenerationForTests(ENV_A, 1)
     setLiveTabs(['a1'], { a1: 'remote:some-other-env@@term_1' })
     parkAndExpire(ENV_A, 'a1')
@@ -179,8 +137,7 @@ describe('handle-gap verdict map, all rules on one tree', () => {
   })
 
   it('keeps a verdict sticky enough to break the park/expire/replay loop', () => {
-    // The verdict exists to stop a pane re-parking forever. If any rule evicted it while the pane
-    // is live and its connection current, the wait would rearm on a fresh budget every replay.
+    // Live/current verdicts must stay sticky or each replay re-parks with a fresh budget forever.
     setRuntimeEnvironmentConnectionGenerationForTests(ENV_A, 1)
     setLiveTabs(['a1'])
     parkAndExpire(ENV_A, 'a1')
@@ -193,10 +150,7 @@ describe('handle-gap verdict map, all rules on one tree', () => {
   })
 
   it('never evicts a live pane verdict, whichever environment sweeps', () => {
-    // env-b is the discriminator, and it is the only assertion here that is not a control: its row
-    // goes absent at the moment env-a records, so widening the tab-death rule past the recording
-    // environment deletes a verdict whose pane is merely mid-republish. env-a's and env-c's rows
-    // are published throughout and hold under every candidate rule.
+    // Only env-b is temporarily rowless while env-a records; its surviving verdict proves tab-death pruning stays environment-scoped.
     for (const environmentId of [ENV_A, ENV_B, ENV_C]) {
       setRuntimeEnvironmentConnectionGenerationForTests(environmentId, 1)
     }
@@ -205,8 +159,6 @@ describe('handle-gap verdict map, all rules on one tree', () => {
     parkAndExpire(ENV_B, 'b1')
     parkAndExpire(ENV_C, 'c1')
 
-    // env-b is briefly rowless mid-rehydration while env-a sweeps. Row absence is transient, so
-    // this must not be read as retraction for an environment other than the one recording.
     setLiveTabs(['a1', 'a2', 'c1'])
     parkAndExpire(ENV_A, 'a2')
     setLiveTabs(['a1', 'a2', 'b1', 'c1'])
@@ -220,22 +172,12 @@ describe('handle-gap verdict map, all rules on one tree', () => {
     for (let round = 0; round < 300; round += 1) {
       const environmentId = [ENV_A, ENV_B, ENV_C][round % 3]!
       setRuntimeEnvironmentConnectionGenerationForTests(environmentId, round + 1)
-      // Bind each round's pane to the environment that is recording it. No assertion here reads
-      // `paneBinding` and neither prune rule inspects it, so this changes no outcome — but falling
-      // back to env-a stored the empty match value on two rounds in three, and a fixture that
-      // models a state the production park path cannot reach is not churn worth running.
+      // Bind each round to its recording environment so retention fixtures represent reachable non-empty pane identities.
       setLiveTabs([`tab-${round}`], { [`tab-${round}`]: `remote:${environmentId}@@term_${round}` })
       parkAndExpire(environmentId, `tab-${round}`)
     }
 
-    // The assertion the loop exists for, and it has to come BEFORE teardown: the clear below
-    // deletes every key in the map by construction, so `toBe(0)` after it holds whether the drains
-    // work or are deleted outright. 300 expiries must leave one live verdict per environment.
-    // What this pins is that the prune loop runs AT ALL — without it the map holds 300. It does
-    // not isolate which rule prunes: with one tab live per round the generation rule and the
-    // tab-death rule each sweep the recording environment's predecessor on their own, so removing
-    // either alone still reads 3. The generation rule is separately isolated by the count in
-    // `handles all four orphan classes simultaneously`, where only it can retire env-c's row.
+    // Count BEFORE teardown: 300 expiries must retain only one verdict per environment. This proves pruning runs; the simultaneous orphan test separately isolates the generation rule.
     expect(countHostMirrorHandleGapVerdictsForTests()).toBe(3)
 
     for (const environmentId of [ENV_A, ENV_B, ENV_C]) {

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import type { JiraSite, JiraViewer } from '../../shared/jira-types'
+import type { JiraSite, JiraViewer } from '../../shared/jira/jira-types'
 
 export function normalizeJiraSiteUrl(siteUrl: string): string {
   const trimmed = siteUrl.trim()

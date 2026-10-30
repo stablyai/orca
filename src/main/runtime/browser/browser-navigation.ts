@@ -28,7 +28,7 @@ export class RuntimeBrowserNavigation {
     const target = await this.targets.resolveBrowserCommandTarget(params)
     const bridge = this.targets.requireAgentBrowserBridge()
     const result = await bridge.click(params.element, target.worktreeId, target.browserPageId)
-    // Why: clicks can trigger navigation, so push the tab's live URL/title to the renderer even when automation targeted a non-active page.
+    // Publish click-driven navigation even for non-active pages.
     const page = bridge.getPageInfo(target.worktreeId, target.browserPageId)
     if (page) {
       this.targets.notifyRendererNavigation(page.browserPageId, page.url, page.title)

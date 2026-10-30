@@ -40,8 +40,7 @@ async function dispatch(runtime: OrcaRuntimeService, method: string, params: unk
   return response
 }
 
-// Why this suite exists: a paired client orders listings against the create and remove replies
-// it has applied, so both replies must name the catalog their mutation produced.
+// Paired clients order listings against applied create/remove replies; both must name the catalog their mutation produced.
 describe('worktree mutation replies carry the catalog version', () => {
   it('worktree.create stamps the version current after the create', async () => {
     const runtime = stubRuntime({

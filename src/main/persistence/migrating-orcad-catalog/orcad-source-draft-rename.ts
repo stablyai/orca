@@ -1,8 +1,4 @@
-/**
- * Unsaved editor drafts never leave this desktop. Its own session holds each one per host
- * partition, file path and disk baseline; a committed move renames the record from the SSH host
- * to its server, and restore lays it over the file and warns when the baseline no longer matches.
- */
+// Drafts stay on this desktop; commit retargets their host records and restore checks disk baselines.
 import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type {
@@ -17,10 +13,8 @@ import {
 } from './orcad-source-scope'
 import { orcadMigrationSessionPartitions } from './orcad-source-session-partitions'
 
-/** Destination worktree key → the drafted files it gains, as the server names that worktree. */
 export type OrcadMigrationSourceDrafts = Record<string, PersistedOpenFile[]>
 
-/** Another host's file stays that host's record; the move cannot rename it. */
 export function isHostBoundOpenFile(file: PersistedOpenFile): boolean {
   return file.externalSshTargetId !== undefined || Boolean(file.runtimeEnvironmentId)
 }
@@ -34,7 +28,7 @@ export function collectOrcadMigrationSourceDrafts(
     catalog: manifest.payload,
     repos: state.repos
   })
-  // The host's own copy first: where both hold one file, it is the one the app reads.
+  // Prefer the host copy on duplicate files, matching app reads.
   const partitions = orcadMigrationSessionPartitions(state, sourceScope).sort(
     ([a], [b]) => Number(b === sourceScope.hostId) - Number(a === sourceScope.hostId)
   )
@@ -61,10 +55,7 @@ export function collectOrcadMigrationSourceDrafts(
   return Object.fromEntries([...drafts].map(([key, byPath]) => [key, [...byPath.values()]]))
 }
 
-/**
- * The destination partition with each draft added, or null when nothing changes. A file the
- * destination already lists keeps its own record, so a draft discarded there never comes back.
- */
+/** Existing destination records win so discarded drafts cannot revive. */
 export function withRenamedOrcadMigrationDrafts(
   destination: WorkspaceSessionState,
   drafts: OrcadMigrationSourceDrafts,
@@ -75,7 +66,7 @@ export function withRenamedOrcadMigrationDrafts(
   for (const [key, files] of Object.entries(drafts)) {
     const held = openFilesByWorktree[key] ?? []
     const heldPaths = new Set(held.map((file) => file.filePath))
-    // Owned by the server now, so reads, saves and its mirrored tab all resolve to it.
+    // Retarget reads and saves to the server without transferring draft contents.
     const added = files
       .filter((file) => !heldPaths.has(file.filePath))
       .map((file) => ({ ...file, runtimeEnvironmentId: destinationEnvironmentId }))
@@ -87,7 +78,7 @@ export function withRenamedOrcadMigrationDrafts(
   return changed ? { ...destination, openFilesByWorktree } : null
 }
 
-/** The session the server is sent: tabs without their unsaved contents. */
+/** Strip unsaved contents from the session sent to the server. */
 export function withoutOrcadMigrationDrafts(session: WorkspaceSessionState): WorkspaceSessionState {
   if (!session.openFilesByWorktree) {
     return session

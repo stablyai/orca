@@ -2,8 +2,7 @@ import { resolve, sep } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { MAX_PENDING_OS_OPENED_DOCUMENTS, OsOpenedDocumentState } from './os-opened-documents'
 
-// Why resolve(): the state uses the host platform by default, so fixture paths must already be
-// spelled the way the host's path module normalizes them (`\n\a.md` and a drive on Windows).
+// Normalize fixture paths with host rules, including Windows drive/separators.
 const hostPath = (name: string): string => resolve(sep, 'notes', name)
 
 describe('OsOpenedDocumentState', () => {
@@ -120,8 +119,7 @@ describe('OsOpenedDocumentState delivery cap', () => {
     )
   })
 
-  // Why: the cap drops files the user explicitly asked to open. Pin which end is
-  // dropped (the tail, in shell order) and that the loss is reported, not silent.
+  // Queue limits drop explicit user selections; pin shell order and require diagnostics for lost tail entries.
   it('keeps the first paths in shell order and reports the dropped tail', () => {
     const state = new OsOpenedDocumentState()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})

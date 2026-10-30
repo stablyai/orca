@@ -57,8 +57,7 @@ function getMarkdownDocLinkDocumentTarget(target: string): string {
   if (hashIndex <= 0) {
     return target
   }
-  // Why: Obsidian-style [[note#Heading]] links resolve the document first;
-  // the heading fragment is applied only after the file target is known.
+  // Resolve the document before applying Obsidian heading fragments.
   return target.slice(0, hashIndex)
 }
 
@@ -126,9 +125,7 @@ export function resolveMarkdownDocLink(
   const normalizedTarget = normalizeDocLinkKey(getMarkdownDocLinkDocumentTarget(target))
   const extensionlessTarget = stripMarkdownExtension(normalizedTarget)
 
-  // Why: exact relative path must be checked before the extensionless lookup
-  // so that [[docs/guide.md]] resolves uniquely even when docs/guide.mdx also
-  // exists (both share the extensionless key "docs/guide").
+  // Prefer exact paths so guide.md remains unambiguous when guide.mdx shares its extensionless key.
   const relativeWithExtension = resolveMatches(index.byRelativePath.get(normalizedTarget))
   if (relativeWithExtension) {
     return relativeWithExtension

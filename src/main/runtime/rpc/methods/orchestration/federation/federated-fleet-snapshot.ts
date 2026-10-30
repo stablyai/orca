@@ -226,7 +226,6 @@ export function applyFederatedFleetObservations(
   }
 }
 
-// Recompute every projection derived from the host's verdict.
 export function refreshFleetWorkerVerdict(
   worker: OrchestrationFleetPage['workers'][number],
   durable: ReadonlyMap<string, FleetDurableWorker>

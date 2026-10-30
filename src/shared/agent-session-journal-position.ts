@@ -1,14 +1,11 @@
-// The journal's own order: the sequence of the row that created an item, then the
-// item's place among that row's writes. Time never enters it — a row recovered
-// after a crash carries the provider's earlier clock at a later sequence.
+// Order by creation sequence then write index, never time: crash recovery can append an earlier provider clock at a later sequence.
 
 import type { AgentJournalPosition, AgentJournalRenderItem } from './agent-session-journal-types'
 import type { NativeChatMessage } from './native-chat-types'
 
 type PositionedItem = Pick<AgentJournalRenderItem, 'sequence' | 'sequenceIndex'>
 
-/** What every transcript row projected from a journal item carries, so a row
- *  that changes shape (a question once answered) keeps its identity and place. */
+/** Keep row identity/order when projection changes shape, such as an answered question. */
 export function agentJournalItemRowOrigin(
   item: AgentJournalRenderItem
 ): Pick<NativeChatMessage, 'id' | 'timestamp' | 'source' | 'journalPosition'> {

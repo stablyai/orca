@@ -341,7 +341,6 @@ describe('Task/Dispatch lifecycle guards', () => {
       lastError: 'worker server restarted'
     })
 
-    // A repeated report of the same uncertainty must not re-project any of the three entities.
     expect(database.getWorkerDispatch(started.dispatch.id)).toEqual(settled.worker)
     expect(database.getDispatchContextById(started.dispatch.id)).toEqual(settled.dispatch)
     expect(database.getTask(task.id)).toEqual(settled.task)

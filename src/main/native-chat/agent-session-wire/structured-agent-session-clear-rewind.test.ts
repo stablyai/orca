@@ -43,6 +43,8 @@ async function clear() {
     envelope: rig.envelope(fields, 'agentSession.conversationCommand', hostTestOperationId())
   })
   expect(result).toMatchObject({ ok: true })
+  await rig.host.drainStatusWrites()
+  expect(rig.store.getRecord(SESSION)?.lastTurn).toBeUndefined()
 }
 
 async function send(text: string, turn: string) {
@@ -140,9 +142,7 @@ describe('rewind behind a clear boundary', () => {
     const target = agentJournalSubmissionKey(later)
     const newer = await journal().queuedMessages.insert({
       messageId: 'queued-after-stop',
-      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'newer card' }] },
-      fingerprint: 'newer-card',
-      hostInstance: 'test'
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'newer card' }] }
     })
     const originalPause = structuredQueuePauses(journal()).find(
       (entry) => entry.reason === 'stopped'
@@ -194,7 +194,6 @@ describe('rewind behind a clear boundary', () => {
       expect(prepared.contextClearOperationId).toBe(
         rig.store.getRecord(SESSION)!.providerContextBoundary!.operationId
       )
-      // The record names the cut; the journal keeps the rows it keeps.
       expect(prepared).not.toHaveProperty('retained')
       return { ok: true }
     })
@@ -242,12 +241,14 @@ describe('rewind behind a clear boundary', () => {
       rig.store.getOperationRow(CALLER.callerKey, params.envelope.clientOperationId)?.outcome.status
     ).toBe('pending')
     db().exec('DROP TRIGGER fail_rewind')
-    await recoverStructuredRewind(
-      rig.host.deps,
-      SESSION,
-      journal(),
-      rig.store.getRecord(SESSION)!.lease.runtimeFence
-    )
+    await rig.host.close(SESSION, 'evict')
+    await rig.host.revealSession(SESSION)
+    await rig.host.drainStatusWrites()
+    expect(rig.host.readStatusSummary(SESSION)).toMatchObject({
+      status: 'idle',
+      latestPrompt: 'kept after clear'
+    })
+    expect(rig.store.getRecord(SESSION)?.lastTurn).toBeUndefined()
     const recovered = journal().snapshot()
     await recoverStructuredRewind(
       rig.host.deps,
