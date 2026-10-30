@@ -242,6 +242,21 @@ describe('UsageDashboardDrawerContent', () => {
     expect(screen.queryByText(/NaN/)).toBeNull()
   })
 
+  it('marks the footer cost with a plus when some in-range models are unpriced', async () => {
+    const priced = claudeBreakdown(0.2)[0]
+    installApi({
+      claudeUsage: providerApi(enabledScanState, claudeDaily, [
+        priced,
+        { ...priced, key: 'unpriced-model', label: 'unpriced-model', estimatedCostUsd: null }
+      ]).api
+    })
+    render(<UsageDashboardDrawerContent />)
+
+    const footer = await screen.findByTestId('usage-dashboard-footer')
+    // A partial total understates the bill; the marker mirrors the overview's partial-cost state.
+    expect(within(footer).getByText('$0.20+')).toBeInTheDocument()
+  })
+
   it('normalizes Codex cached input out of the input column', async () => {
     const codexDaily: CodexUsageDailyPoint[] = [
       {

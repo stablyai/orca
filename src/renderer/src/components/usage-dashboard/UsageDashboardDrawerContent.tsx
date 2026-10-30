@@ -156,6 +156,8 @@ export default function UsageDashboardDrawerContent(): React.JSX.Element {
     0
   )
   const hasKnownCost = (data?.modelRows ?? []).some((row) => row.costUsd !== null)
+  // Some rows priced and some not: the total understates the bill, so it reads as partial.
+  const hasPartialCost = hasKnownCost && (data?.modelRows ?? []).some((row) => row.costUsd === null)
   // Only omp prices individual days, so the period price comes from the model breakdown instead.
   const totalCost = (data?.modelRows ?? []).reduce((sum, row) => sum + (row.costUsd ?? 0), 0)
   const hasUsage = (data?.modelRows.length ?? 0) > 0 || totalTokens > 0
@@ -314,7 +316,7 @@ export default function UsageDashboardDrawerContent(): React.JSX.Element {
           <span>
             <span className="text-muted-foreground">{costLabel}</span>{' '}
             <span className="font-medium tabular-nums text-foreground">
-              {hasKnownCost ? formatCost(totalCost) : '—'}
+              {hasKnownCost ? `${formatCost(totalCost)}${hasPartialCost ? '+' : ''}` : '—'}
             </span>
           </span>
           <span className="text-muted-foreground">
