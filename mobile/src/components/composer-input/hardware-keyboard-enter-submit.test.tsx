@@ -3,12 +3,16 @@ import { act, create } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SoftKeyboardState } from '../../platform/keyboard-occlusion'
 
-const env = vi.hoisted((): { os: string; keyboard: SoftKeyboardState } => ({
+const env = vi.hoisted((): { os: string; keyboard: SoftKeyboardState; metrics: number } => ({
   os: 'ios',
-  keyboard: { height: 0, visible: false }
+  keyboard: { height: 0, visible: false },
+  metrics: 0
 }))
 vi.mock('../../platform/host-os', () => ({ hostOs: () => env.os }))
-vi.mock('../../platform/keyboard-occlusion', () => ({ useSoftKeyboard: () => env.keyboard }))
+vi.mock('../../platform/keyboard-occlusion', () => ({
+  useSoftKeyboard: () => env.keyboard,
+  currentSoftKeyboardHeight: () => env.metrics
+}))
 
 import { useHardwareKeyboardEnterSubmit } from './hardware-keyboard-enter-submit'
 
@@ -28,6 +32,7 @@ describe('hardware keyboard Return in the composer', () => {
   beforeEach(() => {
     env.os = 'ios'
     env.keyboard = { height: 0, visible: false }
+    env.metrics = 0
   })
 
   it('sends on Return when no soft keyboard is up', async () => {
@@ -45,6 +50,11 @@ describe('hardware keyboard Return in the composer', () => {
 
   it('keeps the on-screen Return as a newline', async () => {
     env.keyboard = { height: 336, visible: true }
+    expect(await propsFor(vi.fn())).toEqual({ submitBehavior: 'newline' })
+  })
+
+  it('keeps the newline when mounted under an already open soft keyboard', async () => {
+    env.metrics = 336
     expect(await propsFor(vi.fn())).toEqual({ submitBehavior: 'newline' })
   })
 

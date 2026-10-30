@@ -60,7 +60,11 @@ vi.mock('react-native', async () => ({
   TextInput: 'TextInput',
   ActivityIndicator: 'ActivityIndicator',
   Image: 'Image',
-  Keyboard: { dismiss: vi.fn(), addListener: () => ({ remove: () => {} }) },
+  Keyboard: {
+    dismiss: vi.fn(),
+    addListener: () => ({ remove: () => {} }),
+    metrics: () => undefined
+  },
   Platform: { OS: 'ios' },
   useWindowDimensions: () => ({ fontScale: 1 }),
   StyleSheet: { create: (styles: unknown) => styles }

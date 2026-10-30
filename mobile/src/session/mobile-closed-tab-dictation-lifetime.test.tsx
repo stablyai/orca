@@ -22,7 +22,11 @@ vi.mock('react-native', async () => {
     ...(await import('../test-support/react-native-motion-stub')).reactNativeMotionStub(),
     ActivityIndicator: 'ActivityIndicator',
     Image: 'Image',
-    Keyboard: { dismiss: vi.fn(), addListener: () => ({ remove: () => {} }) },
+    Keyboard: {
+      dismiss: vi.fn(),
+      addListener: () => ({ remove: () => {} }),
+      metrics: () => undefined
+    },
     Platform: { OS: 'ios' },
     Pressable: 'Pressable',
     ScrollView: ({ children, ...props }: { children?: ReactNode }) =>

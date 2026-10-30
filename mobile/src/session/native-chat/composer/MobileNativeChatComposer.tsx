@@ -230,7 +230,10 @@ export function MobileNativeChatComposer({
     }
   }, [])
 
-  const handleSend = async (intent?: MobileNativeChatSendIntent): Promise<void> => {
+  const handleSend = async (
+    intent?: MobileNativeChatSendIntent,
+    { keepFocus = false } = {}
+  ): Promise<void> => {
     if (!canSend || sendingRef.current) {
       return
     }
@@ -253,7 +256,8 @@ export function MobileNativeChatComposer({
         menu.resetCursor()
         // Why: the turn is now the agent's — the keyboard would cover the reply.
         // A rejected send keeps it up so the handed-back draft stays editable.
-        if (!editSession) {
+        // A hardware keyboard covers nothing, so its Return keeps the field focused.
+        if (!editSession && !keepFocus) {
           Keyboard.dismiss()
         }
       }
@@ -264,7 +268,7 @@ export function MobileNativeChatComposer({
   }
 
   const enterSubmit = useHardwareKeyboardEnterSubmit(
-    canSend && !showsStop ? () => void handleSend() : undefined
+    canSend && !showsStop ? () => void handleSend(undefined, { keepFocus: true }) : undefined
   )
 
   // A terminal-backed chat has only photos to add, so its + opens the library at once.
