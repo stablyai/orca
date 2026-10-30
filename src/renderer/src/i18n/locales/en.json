@@ -6080,11 +6080,9 @@
           "issueCommandRunTitle": "Run issue command from {{repo}}?",
           "vmRecipeRunTitle": "Run VM recipe from {{repo}}?",
           "setupChangedBody": "<code>orca.yaml</code> changed since you last approved. Re-review before it runs when this workspace is created.",
-          "archiveChangedBody": "<code>orca.yaml</code> changed since you last approved. Re-review before it runs when this workspace is removed.",
           "issueCommandChangedBody": "<code>orca.yaml</code> changed since you last approved. Re-review before it runs when this workspace launches with a linked issue.",
           "vmRecipeChangedBody": "<code>orca.yaml</code> changed since you last approved. Re-review before it runs before provisioning a VM.",
           "setupRunBody": "This repository's <code>orca.yaml</code> runs on your machine when this workspace is created. Only run if you trust <repo/>.",
-          "archiveRunBody": "This repository's <code>orca.yaml</code> runs on your machine when this workspace is removed. Only run if you trust <repo/>.",
           "issueCommandRunBody": "This repository's <code>orca.yaml</code> runs on your machine when this workspace launches with a linked issue. Only run if you trust <repo/>.",
           "vmRecipeRunBody": "This repository's <code>orca.yaml</code> runs on your machine before provisioning a VM. Only run if you trust <repo/>.",
           "newSetupScript": "New setup script",
@@ -8574,7 +8572,6 @@
           "fb6bebcf7e": "When to Run Setup",
           "30d555acd2": "Local and shared scripts that run after a new worktree is created.",
           "52b31baf02": "Setup Script",
-          "8567127a40": "Scripts that run when worktrees are created or archived. Local scripts are stored on this machine; `orca.yaml` scripts are shared with your team.",
           "ff082fe7c6": "Worktree Hooks",
           "5d940bde5c": "Add local script",
           "8c2893fae0": "Runs as a single shell script. Saved on this machine.",
@@ -23172,5 +23169,24 @@
   "wslDistroHold": {
     "terminalStopped": "The WSL distro {{distro}} is stopped, so Orca didn't start this terminal. Start the distro, then try again.",
     "terminalUnverifiable": "Orca couldn't check whether the WSL distro {{distro}} is running, so it didn't start this terminal. Start the distro, then try again."
+  },
+  "repositoryHooks": {
+    "lifecycleDescription": "Scripts that run when worktrees are created, archived or permanently removed. Local scripts are stored on this machine; `orca.yaml` scripts are shared with your team.",
+    "removeLabel": "Remove Script",
+    "removeSummary": "Required cleanup before permanent workspace deletion.",
+    "removeDescription": "Required before permanently deleting a Git worktree. May dispose retained resources and data. Replaces archive for deletion; failure keeps the checkout.",
+    "removePlaceholder": "# Remove only this workspace’s resources and data"
+  },
+  "removeHook": {
+    "confirmTitle": "Permanently remove workspace resources for {{repo}}?",
+    "confirmBody": "This configured removal script runs on the workspace host before its checkout is deleted. It may permanently delete associated resources and retained application data. Cancel keeps the workspace. A failed script blocks checkout deletion; cleanup may already have begun.",
+    "scriptHeading": "Required removal script",
+    "cancel": "Cancel removal",
+    "confirm": "Run cleanup and delete workspace"
+  },
+  "archiveHook": {
+    "changedBody": "<code>orca.yaml</code> changed since you last approved. Re-review before it runs when this workspace is archived or removed.",
+    "confirmBody": "This repository's <code>orca.yaml</code> runs on the workspace host before this workspace is archived or removed. Only run if you trust <repo/>.",
+    "cancelled": "Archive cancelled; the stop script was not approved."
   }
 }

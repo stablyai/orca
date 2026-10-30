@@ -118,7 +118,7 @@ export function RepositoryHooksSection({
         </h2>
         <p className="text-xs text-muted-foreground">
           {translate(
-            'auto.components.settings.RepositoryHooksSection.8567127a40',
+            'repositoryHooks.lifecycleDescription',
             'Scripts that run when worktrees are created, archived or permanently removed. Local scripts are stored on this machine; `orca.yaml` scripts are shared with your team.'
           )}
         </p>

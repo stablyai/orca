@@ -214,7 +214,13 @@ export function createUpdateWorktreeMeta(
           owner.kind === 'environment' ? owner.environmentId : undefined
         )
         if (consent !== 'run') {
-          return { ok: false, error: 'Archive cancelled; the stop script was not approved.' }
+          return {
+            ok: false,
+            error: translate(
+              'archiveHook.cancelled',
+              'Archive cancelled; the stop script was not approved.'
+            )
+          }
         }
       }
       await persistWorktreeMeta(
