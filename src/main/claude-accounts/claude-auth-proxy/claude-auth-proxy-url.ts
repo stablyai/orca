@@ -1,5 +1,4 @@
-/** Port of a loopback `/p/<slot>/` URL. Anything else is a user base URL, not this proxy. */
-export function claudeAuthProxySlotPort(url: string): number | null {
+function claudeAuthProxySlotUrl(url: string): URL | null {
   let parsed: URL
   try {
     parsed = new URL(url)
@@ -13,6 +12,20 @@ export function claudeAuthProxySlotPort(url: string): number | null {
     return null
   }
   if (!/^\/p\/[^/]+\/?$/.test(parsed.pathname)) {
+    return null
+  }
+  return parsed
+}
+
+/** Slot id of a loopback `/p/<slot>/` URL. Anything else is a user base URL, not this proxy. */
+export function claudeAuthProxySlotId(url: string): string | null {
+  return claudeAuthProxySlotUrl(url)?.pathname.match(/^\/p\/([^/]+)\/?$/)?.[1] ?? null
+}
+
+/** Port of a loopback `/p/<slot>/` URL. Anything else is a user base URL, not this proxy. */
+export function claudeAuthProxySlotPort(url: string): number | null {
+  const parsed = claudeAuthProxySlotUrl(url)
+  if (!parsed) {
     return null
   }
   const port = parsed.port ? Number(parsed.port) : 80

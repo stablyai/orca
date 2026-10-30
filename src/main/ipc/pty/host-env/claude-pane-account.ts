@@ -1,6 +1,7 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   forgetClaudePaneAccount,
+  getClaudePaneAccount,
   recordClaudePaneAccount
 } from '../../../claude-accounts/claude-pane-account-registry'
 import type { ClaudeEnvPatch } from '../../../claude-accounts/environment'
@@ -75,12 +76,16 @@ export function recordClaudePaneAccountForSpawn(args: {
   now?: number
 }): void {
   // Why: a reattach inherits the baked environment; re-recording it under today's selection would
-  // erase the account the launch recorded.
-  if (args.isReattach) {
+  // erase the account the launch recorded. An empty registry (orcad restarted) still needs a row
+  // so `account list` counts the live pane. The new proxy slot is not stored: the process kept
+  // the env it was born with.
+  if (args.isReattach && getClaudePaneAccount(args.ptyId)) {
     return
   }
   if (!args.isClaudeLaunch || !args.claudeAuth) {
-    forgetClaudePaneAccount(args.ptyId)
+    if (!args.isReattach) {
+      forgetClaudePaneAccount(args.ptyId)
+    }
     return
   }
   const accountId = claudeAccountIdFromProvenance(
@@ -90,10 +95,12 @@ export function recordClaudePaneAccountForSpawn(args: {
     args.claudeAccountId
   )
   if (!accountId) {
-    forgetClaudePaneAccount(args.ptyId)
+    if (!args.isReattach) {
+      forgetClaudePaneAccount(args.ptyId)
+    }
     return
   }
-  const proxySlot = proxySlotFromBaseUrl(args.claudeAuth.envPatch)
+  const proxySlot = args.isReattach ? undefined : proxySlotFromBaseUrl(args.claudeAuth.envPatch)
   recordClaudePaneAccount({
     ptyId: args.ptyId,
     paneKey: args.paneKey,

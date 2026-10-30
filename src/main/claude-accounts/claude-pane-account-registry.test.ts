@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
+import { bindClaudeAuthProxySlotToPty } from './claude-auth-proxy/claude-auth-proxy-slot-owners'
 import {
   _internals,
   assignClaudePaneAccount,
@@ -140,6 +141,20 @@ describe('claude pane account registry', () => {
     expect(released).toEqual(['slot-1'])
     expect(getClaudePaneAccount('pty-1')).toBeNull()
     expect(claudeAssignedAccountForProviderSession('sess-1')).toBe('b')
+  })
+
+  it('releases a proxy slot a re-record replaces, and a slot bound with no pane record', () => {
+    const released: string[] = []
+    setClaudePaneProxySlotReleaser((slot) => released.push(slot))
+    recordClaudePaneAccount({ ...record('pty-1', 'a'), proxySlot: 'slot-1' })
+    recordClaudePaneAccount({ ...record('pty-1', 'a'), proxySlot: 'slot-2' })
+    expect(released).toEqual(['slot-1'])
+
+    bindClaudeAuthProxySlotToPty('shell-slot', 'pty-shell')
+    forgetClaudePaneAccount('pty-shell')
+    forgetClaudePaneAccount('pty-1')
+    expect(released).toEqual(['slot-1', 'shell-slot', 'slot-2'])
+    expect(getClaudePaneAccount('pty-shell')).toBeNull()
   })
 
   it('keeps folder routing when the assignment still matches the spawn account', () => {

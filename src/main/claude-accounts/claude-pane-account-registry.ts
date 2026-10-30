@@ -1,4 +1,10 @@
 import { claudeAccountHomeKey } from './claude-account-home-attribution'
+import {
+  bindClaudeAuthProxySlotToPty,
+  forgetClaudeAuthProxySlotOwner,
+  resetClaudeAuthProxySlotOwners,
+  takeClaudeAuthProxySlotsForPty
+} from './claude-auth-proxy/claude-auth-proxy-slot-owners'
 import { normalizeClaudeConfigDir } from '../rate-limits/service/service-types'
 
 /**
@@ -75,6 +81,13 @@ export function claudeBillingAccountId(record: ClaudePaneAccountRecord): string 
 
 export function recordClaudePaneAccount(record: ClaudePaneAccountRecord): void {
   const previous = records.get(record.ptyId)
+  if (previous?.proxySlot && previous.proxySlot !== record.proxySlot) {
+    forgetClaudeAuthProxySlotOwner(previous.proxySlot)
+    releaseProxySlot?.(previous.proxySlot)
+  }
+  if (record.proxySlot) {
+    bindClaudeAuthProxySlotToPty(record.proxySlot, record.ptyId)
+  }
   records.set(record.ptyId, record)
   const nextAccountId = claudeBillingAccountId(record)
   if (
@@ -92,11 +105,16 @@ export function recordClaudePaneAccount(record: ClaudePaneAccountRecord): void {
 
 export function forgetClaudePaneAccount(ptyId: string): void {
   const record = records.get(ptyId)
+  const slots = new Set(takeClaudeAuthProxySlotsForPty(ptyId))
+  if (record?.proxySlot) {
+    slots.add(record.proxySlot)
+  }
+  for (const slot of slots) {
+    forgetClaudeAuthProxySlotOwner(slot)
+    releaseProxySlot?.(slot)
+  }
   if (!record) {
     return
-  }
-  if (record.proxySlot) {
-    releaseProxySlot?.(record.proxySlot)
   }
   records.delete(ptyId)
   publishPaneAssigned({ ptyId, paneKey: record.paneKey, accountId: null })
@@ -194,5 +212,6 @@ export const _internals = {
     sessionAssignments.clear()
     releaseProxySlot = null
     paneAssignedListeners.clear()
+    resetClaudeAuthProxySlotOwners()
   }
 }

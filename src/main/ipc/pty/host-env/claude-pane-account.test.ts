@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest'
+import { claudeListedPaneAccounts } from '../../../claude-accounts/claude-listed-pane-accounts'
 import {
   _internals,
   getClaudePaneAccount,
+  listClaudePaneAccounts,
   recordClaudePaneAccount
 } from '../../../claude-accounts/claude-pane-account-registry'
 import type { ClaudeRuntimeAuthPreparation } from '../../../claude-accounts/runtime-auth-service'
@@ -85,6 +87,26 @@ describe('recordClaudePaneAccountForSpawn', () => {
       pinned: false,
       source: 'spawn'
     })
+  })
+
+  it('counts a reattach into an empty registry without keeping the new proxy slot', () => {
+    spawn({
+      isReattach: true,
+      claudeAuth: {
+        ...auth('profile:b'),
+        envPatch: {
+          CLAUDE_CONFIG_DIR: '/data/claude-profiles/b/home',
+          ANTHROPIC_BASE_URL: 'http://127.0.0.1:9/p/fresh/'
+        }
+      }
+    })
+    expect(getClaudePaneAccount('pty-1')).toMatchObject({ accountId: 'b', source: 'spawn' })
+    expect(getClaudePaneAccount('pty-1')?.proxySlot).toBeUndefined()
+    expect(getClaudePaneAccount('pty-1')?.assignedAccountId).toBeUndefined()
+    expect(
+      claudeListedPaneAccounts([{ id: 'b', email: 'b@example.test' }], listClaudePaneAccounts())
+        .assignedSessions
+    ).toEqual([{ accountId: 'b', count: 1 }])
   })
 
   it('leaves a reattached PTY alone and forgets a reused id that runs something else', () => {

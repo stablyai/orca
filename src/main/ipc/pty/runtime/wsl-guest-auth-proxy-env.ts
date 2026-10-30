@@ -1,8 +1,10 @@
 import {
   bindClaudeAuthProxyAccountDir,
   claudeAuthProxyListeningPort,
-  claudeAuthProxyReady
+  claudeAuthProxyReady,
+  releaseOwnClaudeAuthProxySlot
 } from '../../../claude-accounts/claude-auth-proxy/claude-auth-proxy-host'
+import { noteClaudeAuthProxySlotAllocated } from '../../../claude-accounts/claude-auth-proxy/claude-auth-proxy-slot-owners'
 import { isForeignClaudeAuthProxyUrl } from '../../../claude-accounts/claude-auth-proxy/claude-auth-proxy-url'
 import type { ClaudeRuntimeAuthPreparation } from '../../../claude-accounts/runtime-auth/runtime-auth-types'
 import { readClaudeOAuthCredentials } from '../../../rate-limits/claude-oauth-credentials'
@@ -75,8 +77,10 @@ export async function applyWslGuestAuthProxyEnv(
   const slot = proxy.allocateSlot(configDir)
   const url = proxy.slotBaseUrl(slot)
   if (!url) {
+    releaseOwnClaudeAuthProxySlot(slot)
     return { env: next, auth: null }
   }
+  noteClaudeAuthProxySlotAllocated(slot)
   next.ANTHROPIC_BASE_URL = url
   return {
     env: next,

@@ -1,9 +1,20 @@
 import type { ClaudeAuthProxyStatus } from '../../../shared/claude-auth-proxy-status'
+import { listRegisteredPtys } from '../../memory/pty-registry'
 import { readClaudeOAuthCredentials } from '../../rate-limits/claude-oauth-credentials'
 import { getClaudeProfileRouter } from '../claude-profile-installed-router'
-import { setClaudePaneProxySlotReleaser } from '../claude-pane-account-registry'
+import {
+  listClaudePaneAccounts,
+  setClaudePaneProxySlotReleaser
+} from '../claude-pane-account-registry'
 import { noteUserAnthropicBaseUrl } from './claude-auth-proxy-note'
 import { createClaudeAuthProxy, type ClaudeAuthProxy } from './claude-auth-proxy'
+import {
+  bindClaudeAuthProxySlotToPty,
+  claudeAuthProxySlotShouldPrune,
+  forgetClaudeAuthProxySlotOwner,
+  noteClaudeAuthProxySlotAllocated,
+  resetClaudeAuthProxySlotOwners
+} from './claude-auth-proxy-slot-owners'
 
 export type ClaudeAuthSnapshotIdentity = {
   configDir: string | null
@@ -50,7 +61,7 @@ export function startClaudeAuthProxy(): Promise<void> {
     .start()
     .then(() => {
       proxy = created
-      setClaudePaneProxySlotReleaser((slot) => getClaudeAuthProxy()?.releaseSlot(slot))
+      setClaudePaneProxySlotReleaser((slot) => releaseOwnClaudeAuthProxySlot(slot))
     })
     .catch((error: unknown) => {
       pending = null
@@ -68,6 +79,7 @@ export async function stopClaudeAuthProxy(): Promise<void> {
   const current = proxy
   proxy = null
   accountConfigDirs.clear()
+  resetClaudeAuthProxySlotOwners()
   setClaudePaneProxySlotReleaser(null)
   if (current) {
     await current.stop()
@@ -78,7 +90,50 @@ export function getClaudeAuthProxy(): ClaudeAuthProxy | null {
   return proxy
 }
 
+export function releaseOwnClaudeAuthProxySlot(slot: string): void {
+  forgetClaudeAuthProxySlotOwner(slot)
+  getClaudeAuthProxy()?.releaseSlot(slot)
+}
+
+function liveClaudeAuthProxyPtyIds(): Set<string> {
+  const live = new Set<string>()
+  for (const pty of listRegisteredPtys()) {
+    live.add(pty.ptyId)
+  }
+  for (const record of listClaudePaneAccounts()) {
+    live.add(record.ptyId)
+  }
+  return live
+}
+
+/** Drops a slot whose PTY is gone, and an unbound slot older than the spawn grace. */
+function pruneClaudeAuthProxySlots(now = Date.now()): void {
+  const current = getClaudeAuthProxy()
+  if (!current) {
+    return
+  }
+  const live = liveClaudeAuthProxyPtyIds()
+  const referenced = new Map<string, string>()
+  for (const record of listClaudePaneAccounts()) {
+    if (record.proxySlot) {
+      referenced.set(record.proxySlot, record.ptyId)
+    }
+  }
+  for (const { slot } of current.status().slots) {
+    const panePty = referenced.get(slot)
+    if (panePty) {
+      bindClaudeAuthProxySlotToPty(slot, panePty, now)
+      continue
+    }
+    if (!claudeAuthProxySlotShouldPrune(slot, live, now)) {
+      continue
+    }
+    releaseOwnClaudeAuthProxySlot(slot)
+  }
+}
+
 export function claudeAuthProxyStatus(): ClaudeAuthProxyStatus {
+  pruneClaudeAuthProxySlots()
   return (
     getClaudeAuthProxy()?.status() ?? {
       listening: false,
@@ -149,7 +204,14 @@ export function claudeAuthProxyBaseUrl(
   if (!current || current.port() === null) {
     return undefined
   }
-  return current.slotBaseUrl(current.allocateSlot(accountId)) ?? undefined
+  const slot = current.allocateSlot(accountId)
+  const url = current.slotBaseUrl(slot)
+  if (!url) {
+    current.releaseSlot(slot)
+    return undefined
+  }
+  noteClaudeAuthProxySlotAllocated(slot)
+  return url
 }
 
 /** Cache miss path. Never refresh: a refresh would rotate the token into the spawn folder. */
