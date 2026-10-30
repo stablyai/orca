@@ -98,7 +98,7 @@ describe('formatTerminalSend', () => {
     ).toBe('Input refused by term_1.')
   })
 
-  it('shows the unsent draft and the --force escape hatch for a pending-input refusal', () => {
+  it('shows the unsent draft for a pending-input refusal', () => {
     expect(
       formatTerminalSend({
         send: {
@@ -111,7 +111,7 @@ describe('formatTerminalSend', () => {
       })
     ).toBe(
       'Refused: terminal term_1 has unsent input in its composer: "fix the\\nflaky test"\n' +
-        'Wait for the user to send or clear it, or re-run with --force to append to it.'
+        'Wait for the user to send or clear it.'
     )
   })
 

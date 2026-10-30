@@ -6,7 +6,6 @@ import type { PtyIncarnationId } from './pty-incarnation'
 import type { PtyLivenessVerdict } from './pty-liveness-verdict'
 import type { RuntimeListingHostScope } from './runtime-listing-host-scope'
 import type { RuntimeMobileSessionTabsResult } from './runtime-session-contracts'
-import type { RuntimeTerminalVisualLayout } from './runtime-terminal-visual-layout'
 import type { TabGroupLayoutNode } from './tab-types'
 import type { TerminalExitCause } from './terminal-exit-cause'
 import type { TerminalPaneLayoutNode } from './terminal-tab-types'
@@ -16,17 +15,6 @@ export type {
   RuntimeTerminalPromptStage,
   RuntimeTerminalPromptDelivery
 } from './runtime-terminal-send-contract'
-
-// Why: the visual layout tree is its own shape; the barrel keeps re-exporting it so
-// existing importers of these names are unaffected.
-export type {
-  RuntimeTerminalVisualGroupNode,
-  RuntimeTerminalVisualLayout,
-  RuntimeTerminalVisualLayoutNode,
-  RuntimeTerminalVisualPaneNode,
-  RuntimeTerminalVisualTab,
-  RuntimeTerminalVisualTerminalNode
-} from './runtime-terminal-visual-layout'
 
 export type RuntimeTerminalSummary = {
   handle: string
@@ -55,6 +43,54 @@ export type RuntimeTerminalSummary = {
   executionHostId?: ExecutionHostId
   /** Read verdict for host liveness: legacy connected can stay true while unreachable. Absent on older hosts. */
   verdict?: PtyLivenessVerdict['status']
+}
+
+export type RuntimeTerminalVisualTerminalNode = {
+  type: 'terminal'
+  handle: string
+  tabId: string
+  leafId: string
+  title: string | null
+  connected: boolean
+  active: boolean
+}
+
+export type RuntimeTerminalVisualPaneNode =
+  | RuntimeTerminalVisualTerminalNode
+  | {
+      type: 'pane-split'
+      direction: Extract<TerminalPaneLayoutNode, { type: 'split' }>['direction']
+      first: RuntimeTerminalVisualPaneNode
+      second: RuntimeTerminalVisualPaneNode
+    }
+
+export type RuntimeTerminalVisualTab = {
+  tabId: string
+  title: string | null
+  activeLeafId: string | null
+  panes: RuntimeTerminalVisualPaneNode
+}
+
+export type RuntimeTerminalVisualGroupNode = {
+  type: 'group'
+  groupId: string | null
+  activeTabId: string | null
+  tabs: RuntimeTerminalVisualTab[]
+}
+
+export type RuntimeTerminalVisualLayoutNode =
+  | RuntimeTerminalVisualGroupNode
+  | {
+      type: 'split'
+      direction: Extract<TabGroupLayoutNode, { type: 'split' }>['direction']
+      first: RuntimeTerminalVisualLayoutNode
+      second: RuntimeTerminalVisualLayoutNode
+    }
+
+export type RuntimeTerminalVisualLayout = {
+  worktreeId: string
+  worktreePath: string
+  root: RuntimeTerminalVisualLayoutNode
 }
 
 /** The shared listing-scope shape, kept under its incumbent name for existing consumers. */

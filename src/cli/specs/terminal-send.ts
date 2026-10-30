@@ -5,7 +5,7 @@ export const TERMINAL_SEND_COMMAND_SPEC: CommandSpec = {
   path: ['terminal', 'send'],
   summary: 'Send input to a live terminal',
   usage:
-    'orca terminal send [--terminal <handle>] [--text <text>] [--enter] [--interrupt] [--wait-submit <seconds>] [--retry-request <id>] [--force] [--json]',
+    'orca terminal send [--terminal <handle>] [--text <text>] [--enter] [--interrupt] [--wait-submit <seconds>] [--retry-request <id>] [--json]',
   allowedFlags: [
     ...GLOBAL_FLAGS,
     'terminal',
@@ -13,8 +13,7 @@ export const TERMINAL_SEND_COMMAND_SPEC: CommandSpec = {
     'enter',
     'interrupt',
     'wait-submit',
-    'retry-request',
-    'force'
+    'retry-request'
   ],
   notes: [
     "Without --enter, --text is written to the PTY verbatim, so control bytes pass through (Bash/Zsh: --text $'\\x1b' for Escape, $'\\x15' for Ctrl+U).",

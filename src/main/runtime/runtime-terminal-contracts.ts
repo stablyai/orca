@@ -279,8 +279,6 @@ export type RuntimeAgentPromptWriteOptions = Omit<RuntimeTerminalWriteOptions, '
   observationTimeoutMs?: number
   requestId?: string
   onInputAccepted?: (send: RuntimeTerminalSend) => void
-  /** Append to unsent composer text instead of refusing with AgentPromptPendingInputError. */
-  allowPendingInput?: boolean
   /** Wait through agent_prompt_blocked permissions until answer, exit, binding change or abort. */
   onPermission?: 'refuse' | 'wait'
   /** Refuse binding changes with terminal_handle_stale; never send admitted prompt text to a replacement process. */

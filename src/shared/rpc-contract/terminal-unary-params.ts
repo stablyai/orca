@@ -176,8 +176,6 @@ export const TerminalSend = TerminalHandle.extend({
     })
     .optional(),
   requireAgentStatus: z.enum(['sendable']).optional(),
-  // Why: opt-in to append to unsent composer text; older hosts strip it and keep appending.
-  allowPendingInput: z.literal(true).optional(),
   // Why: terminal-generated replies are valid input but must not transfer the shared terminal floor.
   inputKind: z.enum(['query-reply']).optional(),
   // Identify the driver; older clients fall back to the latest mobile actor (docs/mobile-presence-lock.md).

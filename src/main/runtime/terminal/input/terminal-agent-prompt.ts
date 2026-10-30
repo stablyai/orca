@@ -80,7 +80,7 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
     if (options.onPermission === 'wait') {
       this.throwIfAgentPromptPermissionReturned(permissionBaseline, permissionBaseline)
     }
-    await this.assertAgentPromptEntryGuards(permissionBaseline, ptyId, options, observationSignal)
+    await this.assertAgentPromptEntryGuards(permissionBaseline, ptyId, observationSignal)
     const writeHostPlatform = this.getPtyWriteHostPlatform(ptyId)
     const pty = this.ptysById.get(ptyId)
     // OMP needs paste and submit in one write; the foreground consumer wins, with launchAgent only a startup fallback.
@@ -131,7 +131,7 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
     let baseline: AgentPromptActivity
     try {
       await beforeWrite(admissionSignal)
-      assertWritable(admissionSignal)
+      await this.assertComposerStillClear(ptyId, admissionSignal, assertWritable)
       if (options.onPermission === 'wait') {
         this.throwIfAgentPromptPermissionReturned(
           permissionBaseline,

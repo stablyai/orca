@@ -24,10 +24,7 @@ export type TerminalComposerDraft = {
 
 type TerminalComposerMatch = TerminalComposerDraft & { placeholder: boolean }
 
-const COMPOSER_RULE_LINE = /^[\u2500\u2501-]{8,}\s*$/
-// Why: Claude Code writes a mode label into the composer's top rule (`──── ultracode ─`),
-// so a frame line is a rule that may carry text, as long as it ends in rule characters.
-const COMPOSER_FRAME_LINE = /^[\u2500\u2501-]{8,}(?:\s*\S.*?\s*[\u2500\u2501-]+)?\s*$/
+const COMPOSER_FRAME_LINE = /^[\u2500\u2501-]{8,}\s*$/
 const CODEX_FOOTER_LINE = /^\s*(?:gpt-\S+|o\d\S*)\s+[\u00B7\u2022]\s+\S.*$/i
 
 function composerContinuationRows(
@@ -130,21 +127,6 @@ function isStockPlaceholder(
   return /^Try\s+["\u201C]/.test(text) || STOCK_PLACEHOLDERS.has(text)
 }
 
-// Why: the row above the prompt is the only evidence the `❯` branch has, and ordinary tool output
-// prints labelled rules too (`──────── build ─` over a shell prompt). A labelled rule therefore
-// only counts as the composer's top border when the closing border is below the prompt — the box
-// an agent draws, which a one-off section divider in a shell transcript does not have.
-function isComposerTopFrame(context: TerminalCursorContext, promptIndex: number): boolean {
-  const above = context.rows[promptIndex - 1] ?? ''
-  if (COMPOSER_RULE_LINE.test(above)) {
-    return true
-  }
-  return (
-    COMPOSER_FRAME_LINE.test(above) &&
-    context.rowsBelow.some((row) => COMPOSER_FRAME_LINE.test(row))
-  )
-}
-
 function detectTerminalComposer(
   context: TerminalCursorContext | null | undefined
 ): TerminalComposerMatch | null {
@@ -166,7 +148,7 @@ function detectTerminalComposer(
     const matched = row.match(/^\s*([\u276F\u203A\u00BB])/)?.[1]
     const glyph = (['❯', '›', '»'] as const).find((candidate) => candidate === matched)
     if (glyph) {
-      if (glyph === '❯' && !isComposerTopFrame(context, index)) {
+      if (glyph === '❯' && !COMPOSER_FRAME_LINE.test(context.rows[index - 1] ?? '')) {
         return null
       }
       if (

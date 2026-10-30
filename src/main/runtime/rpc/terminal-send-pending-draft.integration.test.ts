@@ -4,7 +4,7 @@ import { RpcDispatcher } from './dispatcher'
 import type { RpcRequest } from './core'
 import { TERMINAL_METHODS } from './methods/terminal'
 import { AGENT_PROMPT_BRACKETED_PASTE_START } from '../../../shared/agent-prompt-injection'
-import { AgentPromptPendingInputError } from '../../../shared/agent-prompt-pending-input-error'
+import { AgentPromptPendingInputError } from '../terminal/input/agent-prompt-permission-hold'
 
 const CLAUDE_RULE = '─'.repeat(60)
 
@@ -203,15 +203,36 @@ describe('terminal.send into a composer with unsent input', () => {
     expect(write).not.toHaveBeenCalled()
   })
 
-  it('appends to the draft when the caller opts in with allowPendingInput', async () => {
-    vi.useFakeTimers()
-    const { runtime, write, handle } = await makeClaudeRuntime('❯ keep this draft')
-    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+  // Why: the composer re-read awaits the emulator, and a pane can stop mid-await. The
+  // writability assert therefore has to run AFTER that read — checking before it leaves the
+  // initial PTY write reachable on a pane that is already going away.
+  it('refuses when the pty stops while the composer re-read is in flight', async () => {
+    const { runtime, write, handle } = await makeClaudeRuntime('\u276F ')
+    await runtime.isTerminalRunningSettledPromptAgent(handle)
 
-    await expectPasted(
-      dispatcher.dispatch(cliPrompt(handle, ' and this', { allowPendingInput: true })),
-      write,
-      ' and this'
-    )
+    const internals = runtime as unknown as {
+      readVisibleTerminalState: (ptyId: string) => Promise<unknown>
+    }
+    const readVisibleTerminalState = internals.readVisibleTerminalState.bind(runtime)
+    // Armed inside beforeWrite so only the SECOND read — the one this guard owns — trips it.
+    let armed = false
+    internals.readVisibleTerminalState = async (ptyId: string): Promise<unknown> => {
+      const state = await readVisibleTerminalState(ptyId)
+      if (armed) {
+        runtime.markPtyStopRequested(ptyId)
+      }
+      return state
+    }
+
+    await expect(
+      runtime.sendTerminalAgentPrompt(handle, 'Status update: the build is green.', {
+        inputKind: 'driving',
+        beforeWrite: async () => {
+          armed = true
+        }
+      })
+    ).rejects.toThrow('terminal_not_writable')
+    expect(write).not.toHaveBeenCalled()
   })
+
 })

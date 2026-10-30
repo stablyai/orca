@@ -446,54 +446,6 @@ describe('terminal send CLI', () => {
     expect(process.exitCode).toBe(1)
   })
 
-  it('passes --force through as allowPendingInput', async () => {
-    const call = vi.fn().mockResolvedValue({
-      result: {
-        send: {
-          handle: 'term-1',
-          accepted: true,
-          bytesWritten: 7,
-          prompt: {
-            requestId: '22222222-2222-4222-8222-222222222222',
-            stages: ['input_accepted', 'turn_started'],
-            provider: 'claude',
-            observation: 'supported',
-            processIncarnation: 'inc-1',
-            generation: 1,
-            baselineWorkingSequence: 0
-          }
-        }
-      }
-    })
-    vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await TERMINAL_HANDLERS['terminal send']({
-      flags: new Map<string, string | true>([
-        ['terminal', 'term-1'],
-        ['text', 'review'],
-        ['enter', true],
-        ['force', true]
-      ]),
-      client: promptClient(call, true),
-      cwd: '/tmp/worktree',
-      json: true
-    })
-
-    expect(call).toHaveBeenCalledWith(
-      'terminal.send',
-      {
-        terminal: 'term-1',
-        text: 'review',
-        enter: true,
-        interrupt: false,
-        agentPrompt: true,
-        allowPendingInput: true,
-        client: { id: 'orca-cli', type: 'desktop' }
-      },
-      { terminalPromptPreflight: { runtimeId: 'runtime-current' } }
-    )
-  })
-
   it('exits non-zero and reports the draft when the send is refused for pending input', async () => {
     const call = vi.fn().mockResolvedValue({
       result: {
@@ -522,7 +474,6 @@ describe('terminal send CLI', () => {
 
       expect(process.exitCode).toBe(1)
       expect(String(log.mock.calls[0]?.[0])).toContain('"Refactor the login page so that it"')
-      expect(String(log.mock.calls[0]?.[0])).toContain('--force')
     } finally {
       process.exitCode = previousExitCode
     }

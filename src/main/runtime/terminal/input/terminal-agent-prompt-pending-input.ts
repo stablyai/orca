@@ -1,4 +1,4 @@
-import { AgentPromptPendingInputError } from '../../../../shared/agent-prompt-pending-input-error'
+import { AgentPromptPendingInputError } from './agent-prompt-permission-hold'
 import type { AgentPromptActivity } from '../../agent-prompt-submission-verification'
 import { isTerminalSendSettlementAgent } from '../../agent-prompt-submission-verification'
 import { assertAgentPromptRequestActive, waitForAgentPromptDelay } from '../../orca-runtime-core'
@@ -21,11 +21,28 @@ export abstract class OrcaRuntimeWithPendingComposerInputGuard extends OrcaRunti
   protected async assertAgentPromptEntryGuards(
     permissionBaseline: AgentPromptActivity,
     ptyId: string,
-    options: { allowPendingInput?: boolean },
     signal?: AbortSignal
   ): Promise<void> {
     this.assertAgentPromptPermissionSafe(permissionBaseline, permissionBaseline)
-    await this.assertNoPendingComposerInput(ptyId, options, signal)
+    await this.assertNoPendingComposerInput(ptyId, signal)
+  }
+
+  /**
+   * Second read, after the user hook. A sendable precondition can poll for up to a second,
+   * which is ample time for the user to start typing, so a draft that appears during
+   * `beforeWrite` must refuse rather than be pasted onto. Takes `assertWritable` and runs it
+   * because it replaces that call at the site — `terminal-agent-prompt.ts` is on the
+   * 300-line `max-lines` cap and cannot afford an extra statement. Order matters: the screen
+   * read awaits, and a pty that stopped or a handle that went stale during it would otherwise
+   * reach the write unchecked, so `assertWritable` stays the LAST thing before the caller writes.
+   */
+  protected async assertComposerStillClear(
+    ptyId: string,
+    signal: AbortSignal,
+    assertWritable: (signal: AbortSignal) => void
+  ): Promise<void> {
+    await this.assertNoPendingComposerInput(ptyId, signal)
+    assertWritable(signal)
   }
 
   // Why: the paste lands wherever the composer cursor is, and Enter submits the whole
@@ -33,12 +50,8 @@ export abstract class OrcaRuntimeWithPendingComposerInputGuard extends OrcaRunti
   // rendered draft refuses; an unreadable screen is unknown and never blocks a send.
   protected async assertNoPendingComposerInput(
     ptyId: string,
-    options: { allowPendingInput?: boolean },
     signal?: AbortSignal
   ): Promise<void> {
-    if (options.allowPendingInput === true) {
-      return
-    }
     const pty = this.ptysById.get(ptyId)
     // Why: the launch agent is stale once the user swaps agents in the pane.
     const agent = pty?.foregroundAgent ?? pty?.launchAgent
