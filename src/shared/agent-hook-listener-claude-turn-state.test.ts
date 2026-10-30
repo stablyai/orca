@@ -176,6 +176,37 @@ describe('shared agent-hook-listener', () => {
     expect(otherSession?.providerSession?.effort).toBeUndefined()
   })
 
+  it("records a Claude session's permission mode, ignoring its subagents' modes", () => {
+    const sessionId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+    normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'UserPromptSubmit',
+      session_id: sessionId,
+      prompt: 'go',
+      permission_mode: 'bypassPermissions'
+    })
+    const subagent = normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'PreToolUse',
+      session_id: sessionId,
+      agent_id: 'agent-1',
+      tool_name: 'Read',
+      permission_mode: 'default'
+    })
+    const omitted = normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'Stop',
+      session_id: sessionId
+    })
+    const switched = normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'UserPromptSubmit',
+      session_id: sessionId,
+      prompt: 'plan it',
+      permission_mode: 'plan'
+    })
+
+    expect(subagent?.providerSession?.permissionMode).toBe('bypassPermissions')
+    expect(omitted?.providerSession?.permissionMode).toBe('bypassPermissions')
+    expect(switched?.providerSession?.permissionMode).toBe('plan')
+  })
+
   it('resets stale Claude turn state when SessionStart announces a new session on the pane', () => {
     normalizeAndAccept(state, 'claude', { hook_event_name: 'UserPromptSubmit', prompt: 'fix bug' })
     normalizeAndAccept(state, 'claude', {

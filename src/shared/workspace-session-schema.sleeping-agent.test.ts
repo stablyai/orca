@@ -148,8 +148,13 @@ describe('parseWorkspaceSession sleeping agents', () => {
     }
   })
 
-  it("preserves a Claude session's effort level through hydration", () => {
-    const providerSession = { key: 'session_id', id: 'claude-session', effort: 'max' }
+  it("preserves a Claude session's effort level and permission mode through hydration", () => {
+    const providerSession = {
+      key: 'session_id',
+      id: 'claude-session',
+      effort: 'max',
+      permissionMode: 'bypassPermissions'
+    }
     const result = parseWorkspaceSession({
       activeRepoId: null,
       activeWorktreeId: null,
