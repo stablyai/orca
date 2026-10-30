@@ -81,7 +81,11 @@ export abstract class OrcaRuntimeWithTerminalSnapshotApplication extends OrcaRun
     const policyTitle = entry.sideEffectState.state.current.title
     const policyActivity = entry.sideEffectState.state.current.activity
     const titleChanged =
-      !previous || previous.current.title?.observedAt !== current.title?.observedAt
+      !previous ||
+      previous.current.title?.rawTitle !== current.title?.rawTitle ||
+      previous.current.title?.normalizedTitle !== current.title?.normalizedTitle ||
+      previous.current.title?.staleWorkingTitleClear !== current.title?.staleWorkingTitleClear ||
+      previous.current.title?.observedAt !== current.title?.observedAt
     const programActivity = current.program?.activity ?? null
     entry.applyingChunk = true
     try {
@@ -112,9 +116,7 @@ export abstract class OrcaRuntimeWithTerminalSnapshotApplication extends OrcaRun
           current.title
         )
         entry.lastTitle = { raw: current.title.rawTitle, normalized: current.title.normalizedTitle }
-        if (!previous || previous.current.title?.observedAt !== current.title.observedAt) {
-          entry.pendingFacts.push({ kind: 'title', ...current.title })
-        }
+        entry.pendingFacts.push({ kind: 'title', ...current.title })
       }
       if (!previous || previous.current.program?.activity !== programActivity) {
         this.applyPtyProgramActivity(ptyId, programActivity, current.program?.observedAt)
