@@ -28,6 +28,10 @@ import {
   normalizeMobilePairingCustomAddresses
 } from '../../../../shared/mobile-pairing-custom-address'
 import {
+  normalizeOrchestrationDefaultWorkerAgent,
+  normalizeOrchestrationWorkerPreferenceUpdates
+} from '../../../../shared/orchestration-worker-model-settings'
+import {
   hydrateOwnerWorktreeVisibilityDefaults,
   type WorktreeVisibilityDefaultsByHost
 } from './worktree-visibility-owner-settings'
@@ -56,8 +60,7 @@ type LegacyTerminalScrollbackSettingsUpdate = Partial<GlobalSettings> & {
 }
 
 function normalizeRuntimeEnvironmentId(value: string | null | undefined): string | null {
-  const trimmed = value?.trim()
-  return trimmed ? trimmed : null
+  return value?.trim() || null
 }
 
 function normalizeSettingsUpdates(
@@ -66,7 +69,6 @@ function normalizeSettingsUpdates(
 ): Partial<GlobalSettings> {
   const { terminalScrollbackBytes: _legacyScrollbackBytes, ...sanitizedUpdates } =
     updates as LegacyTerminalScrollbackSettingsUpdate
-  void _legacyScrollbackBytes
   if ('terminalQuickCommands' in updates) {
     sanitizedUpdates.terminalQuickCommands = normalizeTerminalQuickCommands(
       updates.terminalQuickCommands
@@ -107,6 +109,15 @@ function normalizeSettingsUpdates(
     sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
   }
   sanitizeAgentLaunchProfileUpdates(sanitizedUpdates, updates)
+  if ('orchestrationDefaultWorkerAgent' in updates) {
+    sanitizedUpdates.orchestrationDefaultWorkerAgent = normalizeOrchestrationDefaultWorkerAgent(
+      updates.orchestrationDefaultWorkerAgent
+    )
+  }
+  Object.assign(
+    sanitizedUpdates,
+    normalizeOrchestrationWorkerPreferenceUpdates(updates, currentSettings)
+  )
   if ('uiLanguage' in updates) {
     sanitizedUpdates.uiLanguage = normalizeUiLanguage(updates.uiLanguage)
   }

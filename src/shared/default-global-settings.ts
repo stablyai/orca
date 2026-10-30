@@ -230,6 +230,9 @@ export function buildDefaultSettings(args: {
     // Arguments hold only the user's own text; the permission flag comes from the choice below.
     agentDefaultArgs: {},
     agentDefaultEnv: {},
+    orchestrationDefaultWorkerAgent: null,
+    orchestrationWorkerModels: {},
+    orchestrationWorkerEfforts: {},
     agentYoloDefaultsMigrated: true,
     agentPermissionDefault: 'full-access',
     agentPermissionOverrides: {},

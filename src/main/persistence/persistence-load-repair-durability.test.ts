@@ -510,4 +510,40 @@ describe('load-time normalization durability', () => {
 
     expect(persisted.settings.notifications.enabled).toBe(true)
   })
+
+  it('persists repaired orchestration worker preferences and reloads them', async () => {
+    const settled = await settledProfile()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: load-time repair exists for values the type system cannot produce; this plants one.
+    settled.settings.orchestrationDefaultWorkerAgent = 'unknown' as never
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: load-time repair exists for values the type system cannot produce; this plants one.
+    settled.settings.orchestrationWorkerModels = {
+      codex: '  gpt-5.6-luna  ',
+      unknown: 'ignored'
+    } as never
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: load-time repair exists for values the type system cannot produce; this plants one.
+    settled.settings.orchestrationWorkerEfforts = { codex: ' max ', unknown: 'ignored' } as never
+    writeDataFile(settled)
+
+    const persisted = await reloadAndSettleWrites()
+
+    expect(persisted.settings.orchestrationDefaultWorkerAgent).toBeNull()
+    expect(persisted.settings.orchestrationWorkerModels).toEqual({ codex: 'gpt-5.6-luna' })
+    expect(persisted.settings.orchestrationWorkerEfforts).toEqual({ codex: 'max' })
+
+    const reloaded = createStore()
+    expect(reloaded.getSettings().orchestrationDefaultWorkerAgent).toBeNull()
+    expect(reloaded.getSettings().orchestrationWorkerModels).toEqual({ codex: 'gpt-5.6-luna' })
+    expect(reloaded.getSettings().orchestrationWorkerEfforts).toEqual({ codex: 'max' })
+  })
+
+  it('leaves an already-normalized orchestration worker profile unchanged', async () => {
+    const settled = await settledProfile()
+    settled.settings.orchestrationDefaultWorkerAgent = 'codex'
+    settled.settings.orchestrationWorkerModels = { codex: 'gpt-5.6-luna' }
+    settled.settings.orchestrationWorkerEfforts = { codex: 'max' }
+    writeDataFile(settled)
+    const raw = readDataFile()
+
+    expect(await reloadAndSettleWrites()).toEqual(raw)
+  })
 })

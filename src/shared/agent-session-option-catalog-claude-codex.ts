@@ -147,8 +147,9 @@ export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   }
 }
 
+// Why: `codex debug models` reports a prefix ladder starting at low; no model
+// offers minimal, so keeping it here would advertise a level the CLI rejects.
 const CODEX_EFFORT_CHOICES = [
-  { value: 'minimal', label: 'Minimal' },
   { value: 'low', label: 'Low' },
   { value: 'medium', label: 'Medium' },
   { value: 'high', label: 'High' },
@@ -158,16 +159,20 @@ const CODEX_EFFORT_CHOICES = [
 ]
 
 // Why: Codex can clamp higher values, so expose only each model's advertised levels.
-function codexEffort(ceiling: 'xhigh' | 'max' | 'ultra'): CatalogOption {
+function codexEffort(ceiling: 'xhigh' | 'max' | 'ultra', defaultValue = 'medium'): CatalogOption {
   const ceilingIndex = CODEX_EFFORT_CHOICES.findIndex((choice) => choice.value === ceiling)
+  const choices = CODEX_EFFORT_CHOICES.slice(0, ceilingIndex + 1)
+  if (!choices.some((choice) => choice.value === defaultValue)) {
+    throw new Error(`Codex effort default ${defaultValue} exceeds ${ceiling} ceiling`)
+  }
   return {
     id: 'effort',
     label: 'Reasoning effort',
     category: 'thought_level',
     kind: {
       type: 'select',
-      choices: CODEX_EFFORT_CHOICES.slice(0, ceilingIndex + 1),
-      defaultValue: 'medium'
+      choices,
+      defaultValue
     },
     apply: {
       ...agentChoiceCliApply(
@@ -193,7 +198,7 @@ export const CODEX_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   hostListingNamesConfiguredModel: true,
   // Auth scopes Codex access; keep a short seed and admit unknown persisted IDs.
   models: [
-    { id: 'gpt-5.6-sol', label: 'GPT-5.6 Sol', options: [codexEffort('ultra')] },
+    { id: 'gpt-5.6-sol', label: 'GPT-5.6 Sol', options: [codexEffort('ultra', 'low')] },
     { id: 'gpt-5.6-terra', label: 'GPT-5.6 Terra', options: [codexEffort('ultra')] },
     { id: 'gpt-5.6-luna', label: 'GPT-5.6 Luna', options: [codexEffort('max')] },
     { id: 'gpt-5.5', label: 'GPT-5.5', options: [codexEffort('xhigh')] },

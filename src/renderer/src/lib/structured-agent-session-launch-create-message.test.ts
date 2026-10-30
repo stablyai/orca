@@ -431,7 +431,7 @@ describe('the first message owned by create', () => {
         .map(([, , params]) => params)
     ).toEqual([
       expect.objectContaining({ key: 'model', value: 'gpt-5.6-sol' }),
-      expect.objectContaining({ key: 'effort', value: 'medium' })
+      expect.objectContaining({ key: 'effort', value: 'low' })
     ])
     expect(createParams()).not.toHaveProperty('options')
     expect(draft(launch.sessionId)).toBe('')
@@ -600,7 +600,7 @@ describe('the first message owned by create', () => {
     await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
     const original = createParams()
     expect(original.optionsMode).toBeUndefined()
-    expect(original.options?.effort).toBe('medium')
+    expect(original.options?.effort).toBe('low')
     expect(readStructuredAgentLaunchRecord(launch.sessionId)?.explicitLaunchOptions).toEqual({
       model: 'gpt-5.6-sol'
     })

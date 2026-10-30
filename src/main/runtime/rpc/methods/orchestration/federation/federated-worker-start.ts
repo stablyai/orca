@@ -18,7 +18,9 @@ import {
   assertWorkerLaunchPreferencesRuntimeSupported,
   assertWorkerLaunchPreferencesCreateTerminal,
   createPendingWorkerLaunchReceipt,
-  resolveFederatedWorkerLaunchReceipt
+  resolveFederatedWorkerLaunchParams,
+  resolveFederatedWorkerLaunchReceipt,
+  type OrchestrationWorkerLaunchDefaultsApplied
 } from '../worker/worker-launch-preferences'
 import { validateFederatedWorkerStartPlacement } from '../worker/worker-start-validation'
 import { resolveFederatedWorkerStartBudgets } from '../worker/worker-start-budgets'
@@ -49,6 +51,7 @@ export async function startFederatedWorker(args: {
   }
   /** The coordinator's resolved session, when it is one; recorded as the Dispatch creator. */
   callerSession?: OrchestrationSessionCaller
+  defaultsApplied?: OrchestrationWorkerLaunchDefaultsApplied
 }): Promise<unknown> {
   const { params, runtime, db, task, runId, orchestrationMutation } = args
   if (!isWorkerStartTimeoutWithinTimerLimit(params.timeoutMs)) {
@@ -73,11 +76,6 @@ export async function startFederatedWorker(args: {
   const createsWorktree = worktree === 'new-top-level'
   assertWorkerLaunchPreferencesCreateTerminal(params)
   validateFederatedWorkerStartPlacement(params, createsWorktree)
-  const requestedLaunch = createPendingWorkerLaunchReceipt({
-    agent: isTuiAgent(params.agent) ? params.agent : null,
-    model: params.model,
-    effort: params.effort
-  })
   const server = runtime.resolveOrchestrationWorkerServer(params.on as string)
   const pairingFence = { expectedEnvironmentPairingRevision: server.pairingRevision }
   const budgets = resolveFederatedWorkerStartBudgets(params.timeoutMs)
@@ -102,11 +100,21 @@ export async function startFederatedWorker(args: {
       `Connected server ${server.name} does not support orchestration federation.`
     )
   }
+  const launchParams = resolveFederatedWorkerLaunchParams({
+    params,
+    capabilities: status.capabilities,
+    defaultsApplied: args.defaultsApplied
+  })
   assertWorkerLaunchPreferencesRuntimeSupported({
-    model: params.model,
-    effort: params.effort,
+    model: launchParams.model,
+    effort: launchParams.effort,
     capabilities: status.capabilities,
     serverName: server.name
+  })
+  const requestedLaunch = createPendingWorkerLaunchReceipt({
+    agent: isTuiAgent(launchParams.agent) ? launchParams.agent : null,
+    model: launchParams.model,
+    effort: launchParams.effort
   })
   const supportsControlMail = status.capabilities?.includes(
     ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY
@@ -138,7 +146,7 @@ export async function startFederatedWorker(args: {
       repo: params.repo ?? null,
       baseBranch: params.baseBranch ?? null,
       terminal: params.terminal ?? null,
-      agent: params.agent ?? null,
+      agent: launchParams.agent ?? null,
       launch: requestedLaunch,
       timeoutMs: budgets.readinessTimeoutMs,
       setup: setupDecision,
@@ -189,9 +197,9 @@ export async function startFederatedWorker(args: {
               : 'orchestration_default'
             : undefined,
           terminal: params.terminal,
-          agent: params.agent,
-          model: params.model,
-          effort: params.effort,
+          agent: launchParams.agent,
+          model: launchParams.model,
+          effort: launchParams.effort,
           timeoutMs: budgets.readinessTimeoutMs,
           devMode: params.devMode
         },

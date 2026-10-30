@@ -9,6 +9,7 @@ import {
 import { resolveOrchestrationCaller } from '../runs/run-scope'
 import { assertHelperStartScope, resolveWorkerStartRun } from './worker-start-authority'
 import { WorkerStartParams } from '../../../../../../shared/rpc-contract/orchestration-worker-start-params'
+import { resolveOrchestrationWorkerLaunchDefaults } from './worker-launch-preferences'
 import {
   isWorkerStartTimeoutWithinTimerLimit,
   resolveWorkerStartReadinessTimeoutMs
@@ -57,8 +58,23 @@ export const ORCHESTRATION_WORKER_START_METHODS = [
         assertHelperStartScope(db, helperCreator, { task: existingTask, params })
       }
       await assertWorkerStartTaskSpecWithinPromptBudget(params.spec ?? existingTask!.spec)
+      const resolvedDefaults = resolveOrchestrationWorkerLaunchDefaults({
+        terminal: params.terminal,
+        agent: params.agent,
+        model: params.model,
+        effort: params.effort,
+        defaults: runtime.getOrchestrationWorkerLaunchDefaults()
+      })
+      const launchParams = {
+        ...params,
+        ...(resolvedDefaults.agent !== undefined ? { agent: resolvedDefaults.agent } : {}),
+        ...(resolvedDefaults.model !== undefined ? { model: resolvedDefaults.model } : {}),
+        ...(resolvedDefaults.effort !== undefined ? { effort: resolvedDefaults.effort } : {})
+      }
+      // Why: the stored worker agent decides whether a structured session exists at all;
+      // judging the bare flags would downgrade every launch that omits --agent.
       const mode = decideWorkerStartMode({
-        params,
+        params: launchParams,
         settings: readWorkerStartModeSettings(runtime)
       })
       if (params.on && params.terminal?.startsWith(ORCA_SESSION_ADDRESS_PREFIX)) {
@@ -72,18 +88,19 @@ export const ORCHESTRATION_WORKER_START_METHODS = [
       if (params.on) {
         // Remote workers are terminal-only; carry the mode receipt to explain structured-preference fallback.
         const receipt = await startFederatedWorker({
-          params,
+          params: launchParams,
           runtime,
           db,
           runId: run.id,
           task: existingTask,
           orchestrationMutation,
-          callerSession: orchestrationCaller
+          callerSession: orchestrationCaller,
+          defaultsApplied: resolvedDefaults.applied
         })
         return receipt && typeof receipt === 'object' ? { ...receipt, mode } : receipt
       }
       return startLocalWorker({
-        params: { ...params, timeoutMs: readinessTimeoutMs },
+        params: { ...launchParams, timeoutMs: readinessTimeoutMs },
         runtime,
         db,
         run,
