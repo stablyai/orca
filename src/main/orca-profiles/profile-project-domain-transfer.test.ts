@@ -273,21 +273,22 @@ describe('profile domain transfers', () => {
           marker !== undefined
         )
         expect(settings.futureSetting).toEqual({ retained: true })
-        vi.useFakeTimers()
         const loaded = new Store({
           dataFile: join(root, 'profiles', id, 'orca-data.json'),
           profileStateAuthority: new ProfileStateSqliteAuthority(dbPath(id), id)
         })
         try {
-          vi.advanceTimersByTime(5000)
-          await loaded.waitForPendingWrite()
-          expect(JSON.parse(raw(id).json).settings).toMatchObject({
-            uiLanguage: marker === true ? plugin : 'pt',
-            uiLanguagePortugueseMigrationApplied: true
-          })
+          // Observe real autosave completion without freezing asynchronous sidecar I/O.
+          await vi.waitFor(
+            () =>
+              expect(JSON.parse(raw(id).json).settings).toMatchObject({
+                uiLanguage: marker === true ? plugin : 'pt',
+                uiLanguagePortugueseMigrationApplied: true
+              }),
+            { timeout: 5000 }
+          )
         } finally {
           await loaded.freezeWritesAsync()
-          vi.useRealTimers()
         }
         const reopened = new Store({
           dataFile: join(root, 'profiles', id, 'orca-data.json'),
