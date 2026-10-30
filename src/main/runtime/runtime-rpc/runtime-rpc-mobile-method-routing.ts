@@ -155,8 +155,11 @@ export const EXECUTION_HOST_METHODS = [
   'nativeChat.readSession',
   'nativeChat.subscribe',
   'nativeChat.unsubscribe',
-  // Mobile reports takeover out of band, matching desktop renderer signaling.
+  // The worker's own host keeps it open and owns its countdown; older phones still report typing and viewing.
   'orchestration.workerTerminalUserInput',
+  'orchestration.workerChatTouch',
+  'orchestration.workerAutoClose',
+  'orchestration.workerKeepOpen',
   'projectGroup.list',
   'project.list',
   'projectHostSetup.list',

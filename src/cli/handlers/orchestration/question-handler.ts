@@ -2,7 +2,9 @@ import type { CommandHandler } from '../../dispatch'
 import { getOptionalStringFlag } from '../../flags'
 import { printResult } from '../../format'
 import { renderCommand } from '../../orchestration-mutation-recovery'
-import { RuntimeClientError } from '../../runtime-client'
+import { RuntimeClientError, type RuntimeClient } from '../../runtime-client'
+import type { RuntimeStatus } from '../../../shared/runtime-types'
+import { ORCHESTRATION_ASK_RETURNS_AT_ONCE_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import { resolveOrchestrationCliExecutable } from '../../runtime/orchestration-recovery-command'
 import {
   clampOrchestrationAskTimeoutMs,
@@ -11,6 +13,7 @@ import {
 } from '../../../shared/orchestration-ask-timeout'
 import type { LegacyCompatibilityResult } from '../../../shared/orchestration-check-output'
 import { callOrchestrationMutation } from './mutation-request'
+import { withReceiptNext } from './receipt-next-text'
 import { getOptionalPositiveIntegerValueFlag } from './numeric-flags'
 import {
   flushOrchestrationStdout,
@@ -18,6 +21,11 @@ import {
   resolvePackagedWindowsCompatibilityCommand
 } from './runtime-compatibility'
 import { resolveOrchestrationTerminalHandle } from './terminal-identity'
+
+async function runtimeLacksAskAtOnce(client: RuntimeClient): Promise<boolean> {
+  const status = await client.call<RuntimeStatus>('status.get')
+  return !status.result.capabilities?.includes(ORCHESTRATION_ASK_RETURNS_AT_ONCE_RUNTIME_CAPABILITY)
+}
 
 export const ORCHESTRATION_QUESTION_HANDLER: Record<string, CommandHandler> = {
   'orchestration ask': async ({ flags, client, cwd, json }) => {
@@ -44,6 +52,11 @@ export const ORCHESTRATION_QUESTION_HANDLER: Record<string, CommandHandler> = {
         '--options is only valid when creating a new question.'
       )
     }
+    // Only a new question returns at once, and only from an Orca that can; resume and --wait still wait.
+    const wait =
+      resume !== undefined ||
+      flags.has('wait') ||
+      (await runtimeLacksAskAtOnce(client).catch(() => true))
     const result = await callOrchestrationMutation<{
       answer: string | null
       messageId: string | null
@@ -53,6 +66,8 @@ export const ORCHESTRATION_QUESTION_HANDLER: Record<string, CommandHandler> = {
       cancelled?: boolean
       connectionLost?: boolean
       answerMessageId?: string | null
+      pending?: boolean
+      next?: string
       legacyCompatibility?: LegacyCompatibilityResult
     }>(
       client,
@@ -65,6 +80,7 @@ export const ORCHESTRATION_QUESTION_HANDLER: Record<string, CommandHandler> = {
         resume,
         options: getOptionalStringFlag(flags, 'options'),
         timeoutMs: parsedTimeoutMs === undefined ? undefined : timeoutMs,
+        ...(wait ? {} : { wait: false }),
         from,
         compatibilityCliCommand: resolveCompatibilityCliCommand(),
         compatibilityWindowsCommand: resolvePackagedWindowsCompatibilityCommand()
@@ -77,6 +93,8 @@ export const ORCHESTRATION_QUESTION_HANDLER: Record<string, CommandHandler> = {
     )
     if (json) {
       printResult(result, true, () => '')
+    } else if (result.result.pending) {
+      console.log(withReceiptNext(`Question ${result.result.messageId} sent.`, result.result))
     } else if (result.result.legacyCompatibility?.resumeRequired) {
       console.log(`Question ${result.result.messageId} committed.`)
       console.log(`Resume with: ${result.result.legacyCompatibility.resumeCommand}`)

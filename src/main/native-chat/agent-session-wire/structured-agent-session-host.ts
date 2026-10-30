@@ -179,8 +179,8 @@ export class StructuredAgentSessionHost {
     }
   }
   /** Release resources; user-close cancels cut turns, while eviction leaves their failure reportable. */
-  close: lifetime.StructuredAgentSessionConversationLifetime['close'] = (sessionId, cause) =>
-    this.lifetime.close(sessionId, cause)
+  close: lifetime.StructuredAgentSessionConversationLifetime['close'] = (sessionId, cause, admit) =>
+    this.lifetime.close(sessionId, cause, admit)
 
   /** Stop hidden children too, using one bounded host snapshot. */
   sleepWorkspace = createStructuredAgentSessionWorkspaceSleeper(() => ({

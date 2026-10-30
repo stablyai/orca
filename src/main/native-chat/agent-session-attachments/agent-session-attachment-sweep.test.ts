@@ -30,6 +30,7 @@ vi.mock('node:fs', async (original) => {
   }
 })
 import type Database from '../../sqlite/sync-database'
+import type { JournalHostDatabase } from '../agent-session-journal/journal-host-database'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import {
   closeTestJournalHostDatabases,
@@ -60,6 +61,7 @@ const CARRIED = '3e1f0a9b-8c7d-4e6f-a5b4-c3d2e1f0a903'
 
 let stateDirectory: string
 let store: AgentSessionAttachmentStore
+let journal: JournalHostDatabase
 let db: Database.Database
 let recorded: Set<string> | null
 
@@ -68,7 +70,8 @@ beforeEach(async () => {
   store = new AgentSessionAttachmentStore(agentSessionAttachmentStoreRoot(stateDirectory), {
     hasSession: () => true
   })
-  db = openTestJournalHostDatabase(stateDirectory).db
+  journal = openTestJournalHostDatabase(stateDirectory)
+  db = journal.db
   recorded = new Set(['session-1', 'session-2'])
 })
 
@@ -76,12 +79,18 @@ afterEach(async () => {
   fault.path = ''
   fault.sync = false
   store.clearInFlightForTests()
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
   await rm(stateDirectory, { recursive: true, force: true })
 })
 
 function facts(overrides: Partial<AgentSessionAttachmentSweepFacts> = {}) {
-  return { database: () => db, recordedSessionIds: () => recorded, ...overrides }
+  return {
+    database: () => db,
+    write: <T>(run: (db: Database.Database) => T) =>
+      overrides.database?.() === null ? undefined : journal.writeAutocommit(run),
+    recordedSessionIds: () => recorded,
+    ...overrides
+  }
 }
 
 async function seedUpload(

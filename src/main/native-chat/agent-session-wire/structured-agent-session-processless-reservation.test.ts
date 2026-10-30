@@ -14,7 +14,10 @@ import {
 } from './structured-agent-session-attach'
 import { openTestAttachConversation } from './structured-agent-session-attach-test-conversation'
 import { performAttach } from './structured-agent-session-attach-flow'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
@@ -27,6 +30,7 @@ let root: string | null = null
 
 afterEach(async () => {
   if (root) {
+    await closeTestJournalHostDatabases()
     await rm(root, { recursive: true, force: true })
   }
   root = null

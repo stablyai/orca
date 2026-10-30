@@ -127,7 +127,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  orchestration run-show    Show one lightweight orchestration Run',
   '  orchestration send        Send an inter-agent message',
   '  orchestration check       Check the bound Run mailbox',
-  '  orchestration ask         Ask the coordinator a blocking question',
+  '  orchestration ask         Ask the coordinator a question',
   '  orchestration reply       Reply to a message',
   '  orchestration inbox       Show all messages across recipients',
   '  orchestration task-create Create an orchestration task',

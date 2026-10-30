@@ -20,6 +20,8 @@ import type { PtyIncarnationId } from '../../../shared/pty-incarnation'
 import { forgetPtySurface } from '../pty-recorded-surface-topology'
 
 export abstract class OrcaRuntimeWithResolveKnownWorkspaceFileTarget extends OrcaRuntimeWithPersistHeadlessTerminalTitle {
+  protected abstract deliverPendingMessagesForPty(ptyId: string): void
+
   protected abstract listResolvedWorktrees(
     ...args: Parameters<RuntimeWorkspaceCatalog['listResolvedWorktrees']>
   ): ReturnType<RuntimeWorkspaceCatalog['listResolvedWorktrees']>
@@ -156,7 +158,7 @@ export abstract class OrcaRuntimeWithResolveKnownWorkspaceFileTarget extends Orc
       return existing
     }
     const handle = this.createPreAllocatedTerminalHandle()
-    this.handleByPtyId.set(ptyId, handle)
+    this.setPtyHandle(ptyId, handle)
     return handle
   }
 
@@ -202,10 +204,23 @@ export abstract class OrcaRuntimeWithResolveKnownWorkspaceFileTarget extends Orc
     } else {
       this.invalidatePtyIncarnationHandle(ptyId)
     }
-    this.handleByPtyId.set(ptyId, handle)
+    this.setPtyHandle(ptyId, handle)
     for (const leaf of this.getLeavesForPty(ptyId)) {
       this.adoptPreAllocatedHandle(leaf)
     }
+  }
+
+  protected setPtyHandle(ptyId: string, handle: string): void {
+    if (this.handleByPtyId.get(ptyId) !== handle) {
+      this.handleByPtyId.set(ptyId, handle)
+      this.wakeMailForNewPtyHandle(ptyId)
+    }
+  }
+
+  /** Mail waits for a PTY's handle, so every new one is that PTY's delivery edge. */
+  protected wakeMailForNewPtyHandle(ptyId: string): void {
+    // Deferred so issuance inside a read (a terminal list) never types mid-read.
+    queueMicrotask(() => this.deliverPendingMessagesForPty(ptyId))
   }
 
   protected adoptControllerTerminalHandle(

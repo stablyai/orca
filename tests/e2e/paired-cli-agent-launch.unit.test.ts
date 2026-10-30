@@ -94,7 +94,7 @@ describe.each([
     } finally {
       await server.stop()
       setAgentLaunchRecordStore(null)
-      closeTestJournalHostDatabase(directory)
+      await closeTestJournalHostDatabase(directory)
       rmSync(directory, { recursive: true, force: true })
     }
   })

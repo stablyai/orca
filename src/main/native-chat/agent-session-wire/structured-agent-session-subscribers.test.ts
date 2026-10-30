@@ -521,7 +521,7 @@ describe('AgentSessionSubscribers', () => {
       }
       opened.db.exec('COMMIT')
     } finally {
-      opened.close()
+      await opened.close()
     }
     const journal = await journals.open({
       identity: {
