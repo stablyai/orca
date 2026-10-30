@@ -1,10 +1,6 @@
-import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
-import {
-  clipboardImageCopyErrorDescription,
-  copyImageToClipboard
-} from '@/lib/clipboard/images/clipboard-image-copy'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
+import { captureImageSource } from '@/lib/image-source-actions'
+export { copyImageSource as copyNativeChatImage } from '@/lib/image-source-actions'
 
 /** The chat context menu offers "Copy image" for elements carrying this attribute. */
 const COPY_IMAGE_SRC_SELECTOR = '[data-native-chat-copy-image-src]'
@@ -15,18 +11,6 @@ export function copyableNativeChatImageSrc(src: string | undefined): string | un
 }
 
 export type NativeChatCopyImage = () => Promise<Blob>
-
-async function readImageBlob(src: string): Promise<Blob> {
-  const response = await fetch(src)
-  if (!response.ok) {
-    throw new Error(`Image request failed (HTTP ${response.status})`)
-  }
-  const blob = await response.blob()
-  if (blob.type.split(';', 1)[0] === 'text/html') {
-    throw new Error('The image URL returned a web page')
-  }
-  return blob
-}
 
 /** Captures revocable sources now; remote URLs are read only when copying is selected. */
 export function readNativeChatCopyImage(
@@ -39,13 +23,7 @@ export function readNativeChatCopyImage(
   if (!src) {
     return undefined
   }
-  if (/^https?:/i.test(src)) {
-    return () => readImageBlob(src)
-  }
-  const image = readImageBlob(src)
-  // Why: a read the user never copies must not surface as an unhandled rejection.
-  image.catch(() => {})
-  return () => image
+  return captureImageSource(src)
 }
 
 /** Keeps an image preview open through clicks on the chat context menu. */
@@ -56,17 +34,5 @@ export function keepPreviewOpenForChatMenu(event: {
   // Why: the menu portals outside the preview, so Radix counts a click on it as outside.
   if (event.target instanceof Element && event.target.closest('[data-native-chat-context-menu]')) {
     event.preventDefault()
-  }
-}
-
-export async function copyNativeChatImage(image: NativeChatCopyImage): Promise<void> {
-  try {
-    await copyImageToClipboard(await image())
-    toast.success(translate('components.native-chat.composer.imageCopied', 'Image copied'))
-  } catch (error) {
-    toast.error(
-      translate('components.native-chat.composer.copyImageFailed', "Couldn't copy image"),
-      { description: clipboardImageCopyErrorDescription(error) }
-    )
   }
 }

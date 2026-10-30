@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { chatImageAccess } from '@/lib/files/access/local-file-access'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
+import type { ImageActionSource } from '@/components/editor/ImageActions'
 import { basename } from '@/lib/path'
 import { useTranslate } from '@/i18n/use-translate'
 import type { LinkAction } from '@/components/link-actions/link-action-request'
@@ -180,6 +181,19 @@ function NativeChatMarkdownImagePreview({ src, alt }: MarkdownImageProps): React
       {t('components.native-chat.composer.imageUnavailable', 'Preview unavailable')}
     </span>
   )
+  const imageSource: ImageActionSource | undefined =
+    localSrc && target
+      ? {
+          path: target.absolutePath,
+          ...(runtimeContext?.target.kind === 'local' &&
+          !runtimeContext.connectionId &&
+          !runtimeContext.expectedExternalSshTargetId &&
+          (!runtimeContext.expectedExecutionHostId ||
+            runtimeContext.expectedExecutionHostId === 'local')
+            ? { localOwner: 'local' as const }
+            : {})
+        }
+      : undefined
   const copyAttributes = {
     'data-native-chat-copy-image-src': copyableNativeChatImageSrc(displaySrc)
   }
@@ -240,6 +254,7 @@ function NativeChatMarkdownImagePreview({ src, alt }: MarkdownImageProps): React
         }
       }}
       dialogProps={{
+        imageSource,
         fallback,
         onCloseAutoFocus: (event) => {
           if (handingOff.current) {

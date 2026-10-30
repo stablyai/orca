@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import userEvent from '@testing-library/user-event'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { NativeChatImageAttachmentPreview } from './NativeChatImageAttachmentPreview'
 import type { NativeChatComposerImageAttachment } from './native-chat-image-attachment'
@@ -58,6 +59,56 @@ async function clickOn(target: Element): Promise<void> {
 }
 
 describe('NativeChatImageAttachmentPreview', () => {
+  it.each([
+    {
+      name: 'client-local attachment in a remote chat',
+      attachment: { id: 'local', path: '/tmp/client-shot.png' },
+      hostEnvironmentId: 'env-1',
+      canOpenLocally: true
+    },
+    {
+      name: 'attachment stored on the paired server',
+      attachment: { id: 'server', path: '/srv/agent-session-attachments/u1/shot.png' },
+      hostEnvironmentId: 'env-1',
+      canOpenLocally: false
+    },
+    {
+      name: 'attachment read through SSH',
+      attachment: { id: 'ssh', path: '/tmp/ssh-shot.png', connectionId: 'ssh-1' },
+      hostEnvironmentId: undefined,
+      canOpenLocally: false
+    }
+  ])(
+    'offers local file actions only for a $name that belongs to this computer',
+    ({ attachment, hostEnvironmentId, canOpenLocally }) => {
+      mocks.useLocalImageSrc.mockReturnValue('blob:full-size')
+      renderPreview(attachment, hostEnvironmentId)
+      fireEvent.contextMenu(screen.getByRole('button', { name: /View image:/ }))
+
+      expect(screen.queryByRole('menuitem', { name: 'Open with default app' }) !== null).toBe(
+        canOpenLocally
+      )
+      expect(screen.getByRole('menuitem', { name: 'Copy image path' })).toBeTruthy()
+    }
+  )
+
+  it.each([
+    { name: 'pending upload', attachment: { id: 'pending', path: '', pending: true } },
+    { name: 'unreadable stored file', attachment: { id: 'stored', path: '/tmp/shot.png' } }
+  ])('does not copy or save a thumbnail for a $name', async ({ attachment }) => {
+    mocks.useLocalImageSrc.mockReturnValue(undefined)
+    renderPreview({ ...attachment, previewUrl: 'data:image/png;base64,dGh1bWJuYWls' })
+    fireEvent.click(screen.getByRole('button', { name: /^Image #1:/ }))
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Image actions' }))
+
+    expect(screen.getByRole('menuitem', { name: 'Copy image' }).hasAttribute('data-disabled')).toBe(
+      true
+    )
+    expect(
+      screen.getByRole('menuitem', { name: 'Save image as…' }).hasAttribute('data-disabled')
+    ).toBe(true)
+  })
+
   it('stays open through a click on the chat context menu, but not elsewhere outside', async () => {
     mocks.useLocalImageSrc.mockReturnValue('blob:on-disk-1')
     renderPreview({ id: 'a1', path: '/tmp/example.png', previewUrl: 'data:thumbnail' })
