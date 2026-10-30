@@ -111,6 +111,7 @@ export function createStructuredSessionMocks() {
     retryLaunch: vi.fn<(worktreeId: string, sessionId: string) => unknown>(),
     relaunchWithMessage: vi.fn<(worktreeId: string, sessionId: string, text: string) => void>(),
     controllerProps: nullable<{ transportEnabled?: boolean }>(),
+    controllerRender: vi.fn<(sessionId: string, queueFollowUps: boolean | undefined) => void>(),
     send: vi.fn<(text: string, attachments?: unknown[]) => boolean>(() => true),
     status: 'ready' as 'idle' | 'loading' | 'ready' | 'error',
     readRefusal: absent<AgentSessionRefusalReference>(),
@@ -182,7 +183,9 @@ export function createStructuredSessionMocks() {
           sessionId: string
           target: { kind: 'local' } | { kind: 'environment'; environmentId: string }
           transportEnabled?: boolean
+          queueFollowUps?: boolean
         }) => {
+          mocks.controllerRender(props.sessionId, props.queueFollowUps)
           mocks.controllerProps = props
           return {
             contextClear: { clearing: false, clears: 0 },
@@ -363,6 +366,7 @@ export function createStructuredSessionMocks() {
     mocks.relaunchWithMessage.mockReset()
     mocks.lifecycleLookup.mockReset()
     mocks.controllerProps = null
+    mocks.controllerRender.mockClear()
     mocks.send.mockClear()
     mocks.status = 'ready'
     mocks.readRefusal = undefined
