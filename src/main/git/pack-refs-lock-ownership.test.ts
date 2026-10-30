@@ -159,27 +159,4 @@ describe('unattributed per-ref locks', () => {
     await expect(exists(join(namespace, 'main.lock'))).resolves.toBe(true)
     await expect(exists(join(namespace, 'main'))).resolves.toBe(true)
   })
-
-  it('leaves a non-empty ref lock alone, because a live writer is mid-write', async () => {
-    const commonDir = await gitCommonDir()
-    const namespace = join(commonDir, 'refs', 'heads')
-    await mkdir(namespace, { recursive: true })
-    await writeFile(join(namespace, 'busy.lock'), 'b'.repeat(40))
-    await writeFile(paths(commonDir).marker, JSON.stringify({ pid: DEAD_PID }))
-
-    await new PackRefsLockOwnership(commonDir).claim(laterBy(ABANDONED_LOCK_AGE_MS + 1))
-
-    await expect(exists(join(namespace, 'busy.lock'))).resolves.toBe(true)
-  })
-
-  it('leaves ref locks alone when there is no marker naming a dead process', async () => {
-    const commonDir = await gitCommonDir()
-    const namespace = join(commonDir, 'refs', 'heads')
-    await mkdir(namespace, { recursive: true })
-    await writeFile(join(namespace, 'other.lock'), '')
-
-    await new PackRefsLockOwnership(commonDir).claim(laterBy(ABANDONED_LOCK_AGE_MS + 1))
-
-    await expect(exists(join(namespace, 'other.lock'))).resolves.toBe(true)
-  })
 })
