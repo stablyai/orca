@@ -1,3 +1,4 @@
+import { terminalStartError } from '../../../../../../shared/terminal-start-failure'
 import { createLocalWorkerStartDispatch } from './local-worker-start-dispatch'
 import { probeWorkerOpenCodeModelLaunchSupport } from './worker-opencode-model-preflight'
 import { resolveWorkerConfiguredAgentParams } from './worker-configured-agent-preflight'
@@ -219,12 +220,13 @@ export async function startLocalWorker(args: {
         if (setupReceipt.state === 'failed') {
           failedStage = 'setup_wait'
         }
-        throw new Error(
+        throw terminalStartError(
           wait.blockedReason
             ? `Agent startup blocked: ${describeTerminalWaitBlockedReason(wait.blockedReason)}`
             : structuredSession
               ? `Setup did not finish before the structured worker started (${wait.status}).`
-              : `Agent did not become ready (${wait.status}).`
+              : `Agent did not become ready (${wait.status}).`,
+          !params.terminal ? wait.exitCause : undefined
         )
       }
     }

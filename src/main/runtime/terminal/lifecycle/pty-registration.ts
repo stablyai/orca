@@ -1,3 +1,4 @@
+import { terminalStartError } from '../../../../shared/terminal-start-failure'
 import { OrcaRuntimeWithInvalidateAllHandlesForPty } from './pty-handle-invalidation'
 import type { PtyIncarnationId } from '../../../../shared/pty-incarnation'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -275,7 +276,14 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalida
       exits?.size &&
       (candidateIncarnation === undefined || exits.has(null) || exits.has(candidateIncarnation))
     ) {
-      throw new Error('agent_session_exited_during_start')
+      const verdict = this.ptyLivenessVerdictByPtyId.get(ptyId)?.verdict
+      const cause =
+        candidateIncarnation !== undefined &&
+        verdict?.status === 'exited' &&
+        verdict.incarnationId === candidateIncarnation
+          ? verdict.cause
+          : undefined
+      throw terminalStartError('agent_session_exited_during_start', cause, candidateIncarnation)
     }
   }
 }

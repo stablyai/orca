@@ -66,6 +66,31 @@ describe('localized startup failure surfaces', () => {
   })
 })
 
+it.each(['not-started', 'unconfirmed'] as const)(
+  'shows capacity once in a %s launch notice, retaining uncertainty',
+  (kind) => {
+    const pane = render(
+      React.createElement(AgentLaunchPaneNotice, {
+        refusal:
+          kind === 'not-started'
+            ? {
+                kind,
+                code: 'agent_session_exited_during_start',
+                initialOutputDiagnostic: 'git-bash-console-capacity'
+              }
+            : { kind, initialOutputDiagnostic: 'git-bash-console-capacity' },
+        agentId: 'codex',
+        tabId: 'capacity'
+      })
+    )
+    expect(pane.container.textContent).toContain('Close some Git Bash terminals')
+    expect(pane.container.textContent?.match(/128/g)).toHaveLength(1)
+    expect(pane.container.textContent?.includes("Couldn't confirm Codex started")).toBe(
+      kind === 'unconfirmed'
+    )
+  }
+)
+
 describe('which pane shows it', () => {
   const outcome = { kind: 'not-started' as const, code: 'boom' }
   const tab = { agentLaunchPane: { leafId: 'leaf-1', outcome } }

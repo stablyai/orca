@@ -1,3 +1,4 @@
+import { terminalStartError } from '../../../../../../shared/terminal-start-failure'
 import { waitForWorkerAgentReady } from '../../../../launched-agent-composer-readiness'
 import { describeTerminalWaitBlockedReason } from '../../../../../../shared/terminal-wait-blocked-reason-legacy-alias'
 import { buildDispatchPreamble } from '../../../../orchestration/preamble'
@@ -175,10 +176,11 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
           if (setup.state === 'failed') {
             failedStage = 'setup_wait'
           }
-          throw new Error(
+          throw terminalStartError(
             wait.blockedReason
               ? `Agent startup blocked: ${describeTerminalWaitBlockedReason(wait.blockedReason)}`
-              : `Agent did not become ready (${wait.status}).`
+              : `Agent did not become ready (${wait.status}).`,
+            !params.terminal ? wait.exitCause : undefined
           )
         }
         prepareFederatedAttachmentAuthority({

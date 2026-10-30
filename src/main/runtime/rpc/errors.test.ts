@@ -1,3 +1,4 @@
+import { terminalStartError } from '../../../shared/terminal-start-failure'
 import { describe, expect, it } from 'vitest'
 import { mapRuntimeError } from './errors'
 import {
@@ -31,6 +32,25 @@ class LineageError extends Error {
 }
 
 describe('mapRuntimeError', () => {
+  it('preserves replay uncertainty while explaining the nested failed start', () => {
+    const error = new Error('agent_session_operation_unknown', {
+      cause: terminalStartError('agent_session_exited_during_start', {
+        kind: 'exited',
+        exitCode: 256,
+        initialOutputDiagnostic: 'git-bash-console-capacity'
+      })
+    })
+    expect(mapRuntimeError('req', { runtimeId: 'runtime' }, error)).toMatchObject({
+      error: {
+        code: 'agent_session_operation_unknown',
+        message: expect.stringContaining("Couldn't confirm the terminal started.")
+      }
+    })
+    expect(mapRuntimeError('req', { runtimeId: 'runtime' }, error).error.message).toContain(
+      'Close some Git Bash terminals'
+    )
+  })
+
   it('keeps runtime_error and a readable message for a WSL host Windows drive refusal', () => {
     const error = new WslHostWindowsDriveRefusalError('C:\\src\\app')
     expect(mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, error)).toMatchObject({

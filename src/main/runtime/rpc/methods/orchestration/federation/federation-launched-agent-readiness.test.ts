@@ -1,3 +1,4 @@
+import { terminalExitError } from '../../../../../../shared/terminal-start-failure'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resolveWorkerStartReadinessTimeoutMs } from '../../../../../../shared/orchestration-timing-budgets'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
@@ -122,6 +123,22 @@ describe('federated worker first dispatch readiness', () => {
       state: 'failed',
       failedStage: 'agent_readiness',
       lastError: 'timeout'
+    })
+    expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+  })
+  it('persists the capacity remedy in the existing failed fresh-start receipt', async () => {
+    const runtime = createWorkerHost()
+    vi.mocked(runtime.waitForFreshWorkerComposer).mockRejectedValue(
+      terminalExitError('timeout', {
+        kind: 'exited',
+        exitCode: 256,
+        initialOutputDiagnostic: 'git-bash-console-capacity'
+      })
+    )
+    await expect(attach(runtime, { agent: 'opencode' })).resolves.toMatchObject({
+      state: 'failed',
+      failedStage: 'agent_readiness',
+      lastError: expect.stringContaining('Close some Git Bash terminals')
     })
     expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
   })

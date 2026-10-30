@@ -1,3 +1,4 @@
+import { readTerminalStartFailure } from '../../../shared/terminal-start-failure'
 import type { PtySpawnSizeSeed } from './spawn-options-assembly'
 import { isValidTerminalTabId } from '../../../shared/terminal-tab-id'
 import type { AgentSessionClaimedSpawnResult } from '../../../shared/agent-session-host-authority'
@@ -163,10 +164,12 @@ export async function commitPtySpawn(input: PtySpawnCommitInput): Promise<PtySpa
       shouldSkipCodexHomeEnvForWindowsShell(registration.shellOverride, state.cwd)
     )
     if (rejectedRegistration) {
+      let terminalStartFailure
       await rejectedRegistration.catch((error: unknown) => {
         if (!(error instanceof Error) || error.message !== 'agent_session_exited_during_start') {
           throw error
         }
+        terminalStartFailure = readTerminalStartFailure(error)
       })
       runtime?.cancelPendingPtyRegistration?.(
         result.id,
@@ -174,7 +177,11 @@ export async function commitPtySpawn(input: PtySpawnCommitInput): Promise<PtySpa
         state.pendingRegistrationClaim
       )
       state.pendingRegistrationPtyId = null
-      return { kind: 'registration-exited', result: input.response }
+      return {
+        kind: 'registration-exited',
+        result: input.response,
+        ...(terminalStartFailure ? { terminalStartFailure } : {})
+      }
     }
   } else if (state.pendingRegistrationPtyId) {
     runtime?.cancelPendingPtyRegistration?.(

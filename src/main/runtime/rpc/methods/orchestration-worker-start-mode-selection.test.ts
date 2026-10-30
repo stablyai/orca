@@ -150,6 +150,29 @@ describe('worker-start honours the settings default', () => {
     )
   }
 
+  it('reports the cause of a failed fresh terminal start in its existing receipt', async () => {
+    vi.mocked(runtime.waitForTerminal).mockResolvedValue({
+      handle: TERMINAL_HANDLE,
+      condition: 'tui-idle',
+      satisfied: false,
+      status: 'exited',
+      exitCode: 256,
+      exitCause: {
+        kind: 'exited',
+        exitCode: 256,
+        initialOutputDiagnostic: 'git-bash-console-capacity'
+      }
+    })
+    await expect(
+      startWorker({ ...STRUCTURED_DEFAULT, experimentalNativeChat: false })
+    ).resolves.toMatchObject({
+      state: 'failed',
+      failedStage: 'agent_readiness',
+      lastError: expect.stringContaining('Close some Git Bash terminals')
+    })
+    expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+  })
+
   it('starts a structured chat worker when structured native chat is the default', async () => {
     const result = await startWorker(STRUCTURED_DEFAULT)
 

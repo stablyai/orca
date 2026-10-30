@@ -1,3 +1,5 @@
+import { terminalStartError } from '../../shared/terminal-start-failure'
+import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 import type { TerminalCreationWork } from './terminal-creation-work'
 import type {
   ClaimedAgentPtyOwnerRegistry,
@@ -29,7 +31,16 @@ export async function createOrAttachClaimedAgentSession(args: {
     return await args.createOrAttach(args.options)
   }
   let created: CreateOrAttachResult | null = null
+  let observedExit: { incarnationId: string; cause?: TerminalExitCause } | undefined
   const ensured = await args.owners.ensure({
+    exitedDuringStart: () =>
+      terminalStartError(
+        'agent_session_exited_during_start',
+        created?.isNew && created.incarnationId === observedExit?.incarnationId
+          ? observedExit.cause
+          : undefined,
+        created?.incarnationId
+      ),
     creation: args.options.creationWork?.completion,
     onJoin: (creation) => {
       if (creation) {
@@ -43,7 +54,14 @@ export async function createOrAttachClaimedAgentSession(args: {
     spawn: async ({ generation }) => {
       created = await args.createOrAttach({
         ...args.options,
-        agentSessionGeneration: generation
+        agentSessionGeneration: generation,
+        streamClient: {
+          ...args.options.streamClient,
+          onExit: (code, incarnationId, cause) => {
+            observedExit = { incarnationId, cause }
+            args.options.streamClient.onExit(code, incarnationId, cause)
+          }
+        }
       })
       return { ptyId: args.options.sessionId }
     },

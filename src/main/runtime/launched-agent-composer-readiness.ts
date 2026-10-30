@@ -1,3 +1,14 @@
+import type { PtyLivenessVerdict } from '../../shared/pty-liveness-verdict'
+import { terminalExitError } from '../../shared/terminal-start-failure'
+import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
+import {
+  waitForWorktreeStartupDraft,
+  type WorktreeStartupReadinessHost
+} from './runtime-worktree-startup-readiness'
+import {
+  markTerminalStartFailure,
+  readTerminalStartFailure
+} from '../../shared/terminal-start-failure'
 /** Fresh-launch signals require shell handoff plus dialog/provisional-header vetoes; shells also enable bracketed paste.
  * Captured-marker agents wait for their marker; others may fall back to tui-idle within the remaining budget.
  * Readiness alone never authorizes writing: the foreground guard must still admit the agent. */
@@ -110,18 +121,22 @@ function firstAnswer(
   })
 }
 
-export function waitForWorkerAgentReady(
+export async function waitForWorkerAgentReady(
   runtime: LaunchedAgentReadinessRuntime,
   handle: string,
   args: { agent: TuiAgent | undefined; reusesTerminal: boolean; timeoutMs: number }
 ): Promise<RuntimeTerminalWait> {
-  return args.agent && !args.reusesTerminal
-    ? waitForWorkerStartComposer(runtime, handle, args.agent, args.timeoutMs)
-    : runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: args.timeoutMs })
+  try {
+    return await (args.agent && !args.reusesTerminal
+      ? waitForWorkerStartComposer(runtime, handle, args.agent, args.timeoutMs)
+      : runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: args.timeoutMs }))
+  } catch (error) {
+    throw args.reusesTerminal ? error : markTerminalStartFailure(error)
+  }
 }
 
 /** Fall back from composer detection to tui-idle using only the remaining launch budget. */
-export async function waitForLaunchedAgentComposer(
+async function waitForLaunchedAgentComposerImpl(
   runtime: LaunchedAgentReadinessRuntime,
   handle: string,
   agent: TuiAgent,
@@ -142,7 +157,10 @@ export async function waitForLaunchedAgentComposer(
       Math.min(timeoutMs, resolveDraftPasteReadyTimeoutMs(agent)),
       { requireComposerMarker: false, stopOnDialog: true, ...abort }
     )
-  } catch {
+  } catch (error) {
+    if (readTerminalStartFailure(markTerminalStartFailure(error))) {
+      throw error
+    }
     // tui-idle classifies timeout/dialog/unreadable panes and rejects lost handles.
   }
   return runtime.waitForTerminal(handle, {
@@ -151,4 +169,87 @@ export async function waitForLaunchedAgentComposer(
     launchReadiness: true,
     ...abort
   })
+}
+
+export async function waitForLaunchedAgentComposer(
+  ...args: Parameters<typeof waitForLaunchedAgentComposerImpl>
+): Promise<RuntimeTerminalWait> {
+  try {
+    return await waitForLaunchedAgentComposerImpl(...args)
+  } catch (error) {
+    throw markTerminalStartFailure(error)
+  }
+}
+
+export async function waitForFreshComposerPty(
+  host: WorktreeStartupReadinessHost,
+  handle: string,
+  agent: TuiAgent,
+  timeoutMs: number,
+  options: {
+    initialPtyId: string | null
+    requireComposerMarker: boolean
+    stopOnDialog: boolean
+    signal?: AbortSignal
+    failureCause: () => TerminalExitCause | null | undefined
+    isShellInFront: (ptyId: string) => Promise<boolean>
+    readHold: (ptyId: string) => 'dialog' | 'starting' | null
+  }
+): Promise<string> {
+  const { signal } = options
+  const stop = new AbortController()
+  const onAbort = (): void => stop.abort()
+  signal?.addEventListener('abort', onAbort, { once: true })
+  let ptyId: string | null
+  try {
+    ptyId = await waitForWorktreeStartupDraft(
+      { ...host, getPtyId: () => options.initialPtyId },
+      handle,
+      agent,
+      {
+        timeoutMs,
+        requireComposerMarker: options.requireComposerMarker,
+        // Every caller pastes and then presses Enter: a worker brief or a launch prompt.
+        submit: true,
+        signal: stop.signal,
+        isShellInFront: options.isShellInFront,
+        accept: (readyPtyId) => {
+          const hold = options.readHold(readyPtyId)
+          if (hold === 'dialog' && options.stopOnDialog) {
+            stop.abort()
+          }
+          return hold === null
+        }
+      }
+    )
+  } finally {
+    signal?.removeEventListener('abort', onAbort)
+  }
+  if (!ptyId) {
+    throw terminalExitError(
+      signal?.aborted
+        ? 'request_aborted'
+        : stop.signal.aborted
+          ? 'agent_startup_dialog'
+          : 'timeout',
+      signal?.aborted || stop.signal.aborted ? undefined : options.failureCause()
+    )
+  }
+  return ptyId
+}
+
+export function captureTerminalStartExitCause(
+  ptyId: string | null,
+  record: { incarnationId?: string | null; lastExitCause?: TerminalExitCause | null } | undefined,
+  readVerdict: (ptyId: string) => PtyLivenessVerdict | null | undefined
+): () => TerminalExitCause | null | undefined {
+  const incarnation = record?.incarnationId
+  return () => {
+    const verdict = ptyId ? readVerdict(ptyId) : null
+    return incarnation && verdict?.status === 'exited' && verdict.incarnationId === incarnation
+      ? verdict.cause
+      : incarnation && record?.incarnationId === incarnation
+        ? record.lastExitCause
+        : undefined
+  }
 }

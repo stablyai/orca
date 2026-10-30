@@ -1,3 +1,4 @@
+import { terminalExitError } from '../../../../shared/terminal-start-failure'
 import { OrcaRuntimeWithBindPtyIncarnationHandle } from '../identity/terminal-handle-bindings'
 import type {
   RuntimeLeafRecord,
@@ -50,7 +51,7 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       } else {
         // Why: after exit, conditions like tui-idle can never be satisfied — reject now instead of spinning the poll until timeout on a dead process.
         this.removeWaiter(waiter)
-        waiter.reject(new Error('terminal_exited'))
+        waiter.reject(terminalExitError('terminal_exited', leaf.lastExitCause))
       }
     }
   }
@@ -102,7 +103,7 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
         this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, 'exit', pty))
       } else {
         this.removeWaiter(waiter)
-        waiter.reject(new Error('terminal_exited'))
+        waiter.reject(terminalExitError('terminal_exited', pty.lastExitCause))
       }
     }
   }

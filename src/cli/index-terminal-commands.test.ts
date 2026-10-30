@@ -1,3 +1,6 @@
+import { mapRuntimeError } from '../main/runtime/rpc/errors'
+import { terminalStartError } from '../shared/terminal-start-failure'
+import { RuntimeRpcFailureError } from './runtime/types'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -292,6 +295,39 @@ describe('orca cli worktree awareness', () => {
       result: { visualLayouts }
     })
   })
+
+  it.each([{ remote: [] }, { remote: ['--pairing-code', 'remote-runtime'] }])(
+    'prints the host capacity cause through the real terminal create command ($remote)',
+    async ({ remote }) => {
+      const failure = mapRuntimeError(
+        'start',
+        { runtimeId: 'host' },
+        terminalStartError('agent_session_exited_during_start', {
+          kind: 'exited',
+          exitCode: 256,
+          initialOutputDiagnostic: 'git-bash-console-capacity'
+        })
+      )
+      callMock.mockRejectedValueOnce(new RuntimeRpcFailureError(failure))
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+      await main(
+        ['terminal', 'create', '--worktree', 'path:/tmp/host/workspace', ...remote, '--json'],
+        '/tmp/client'
+      )
+      expect(callMock).toHaveBeenCalledWith(
+        'terminal.create',
+        expect.objectContaining({ worktree: 'path:/tmp/host/workspace' })
+      )
+      expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toMatchObject({
+        ok: false,
+        error: {
+          code: 'agent_session_exited_during_start',
+          message: expect.stringContaining('Close some Git Bash terminals')
+        }
+      })
+      expect(process.exitCode).toBe(1)
+    }
+  )
 
   it('rejects implicit remote terminal create instead of resolving from client cwd', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})

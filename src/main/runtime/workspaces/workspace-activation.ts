@@ -1,3 +1,4 @@
+import { terminalExitError } from '../../../shared/terminal-start-failure'
 import { OrcaRuntimeWithListManagedWorktrees } from './managed-workspace-operations'
 import type { RuntimeNavigationTarget } from '../../../shared/runtime-navigation'
 import {
@@ -32,7 +33,6 @@ import { recordCreatedWorktreeLineage as recordCreatedWorktreeLineageState } fro
 import {
   deliverStartupFollowupPrompt,
   pasteWorktreeStartupDraftWhenReady,
-  waitForWorktreeStartupDraft,
   type WorktreeStartupReadinessHost
 } from '../runtime-worktree-startup-readiness'
 import type { CreateWorktreeResult } from '../../../shared/worktree/create-types'
@@ -40,7 +40,11 @@ import {
   provisionWorktreeTerminals,
   type WorktreeTerminalProvisioningHost
 } from '../runtime-worktree-terminal-provisioning'
-import { readFreshComposerHold } from '../launched-agent-composer-readiness'
+import {
+  captureTerminalStartExitCause,
+  readFreshComposerHold,
+  waitForFreshComposerPty
+} from '../launched-agent-composer-readiness'
 import { buildTerminalWaitText } from '../terminal-wait-tail-state'
 import {
   describeLaunchedAgentHost,
@@ -221,51 +225,46 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
       signal
     }: { requireComposerMarker?: boolean; stopOnDialog?: boolean; signal?: AbortSignal } = {}
   ): Promise<RuntimeTerminalWait> {
-    const initialPtyId =
-      this.getLivePtyForHandle(handle)?.pty.ptyId ?? this.getLiveLeafForHandle(handle).leaf.ptyId
-    const stop = new AbortController()
-    const onAbort = (): void => stop.abort()
-    signal?.addEventListener('abort', onAbort, { once: true })
-    const ptyId = await waitForWorktreeStartupDraft(
-      { ...this.getWorktreeStartupReadinessHost(), getPtyId: () => initialPtyId },
+    const initialPty = this.getLivePtyForHandle(handle)?.pty
+    const initialPtyId = initialPty?.ptyId ?? this.getLiveLeafForHandle(handle).leaf.ptyId
+    const initialRecord = initialPty ?? (initialPtyId ? this.ptysById.get(initialPtyId) : undefined)
+    const failureCause = captureTerminalStartExitCause(initialPtyId, initialRecord, (ptyId) =>
+      this.getPtyLivenessVerdict(ptyId)
+    )
+    const ptyId = await waitForFreshComposerPty(
+      this.getWorktreeStartupReadinessHost(),
       handle,
       agent,
+      timeoutMs,
       {
-        timeoutMs,
+        initialPtyId,
         requireComposerMarker,
-        // Every caller pastes and then presses Enter: a worker brief or a launch prompt.
-        submit: true,
-        signal: stop.signal,
+        stopOnDialog,
+        signal,
+        failureCause,
         isShellInFront: async (ownerPtyId) =>
           (await this.readLaunchedAgentForeground(ownerPtyId, agent)) === 'shell',
-        accept: (readyPtyId) => {
+        readHold: (readyPtyId) => {
           const pty = this.ptysById.get(readyPtyId)
-          const hold = pty
+          return pty
             ? readFreshComposerHold(
                 buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview),
                 this.readLiveTerminalScreenLines(readyPtyId)
               )
             : null
-          if (hold === 'dialog' && stopOnDialog) {
-            stop.abort()
-          }
-          return hold === null
         }
       }
     )
-    signal?.removeEventListener('abort', onAbort)
-    if (!ptyId) {
-      throw new Error(
-        signal?.aborted
-          ? 'request_aborted'
-          : stop.signal.aborted
-            ? 'agent_startup_dialog'
-            : 'timeout'
-      )
+    try {
+      this.assertLiveTerminalHandleTargetsPty(handle, ptyId)
+    } catch (error) {
+      if (error instanceof Error) {
+        Object.assign(error, { terminalExitCause: failureCause() })
+      }
+      throw error
     }
-    this.assertLiveTerminalHandleTargetsPty(handle, ptyId)
     if (!this.ptysById.get(ptyId)?.connected) {
-      throw new Error('terminal_handle_stale')
+      throw terminalExitError('terminal_handle_stale', failureCause())
     }
     return this.buildTuiIdleProbeResult(handle, null)
   }
