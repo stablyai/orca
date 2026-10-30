@@ -276,7 +276,9 @@ export function MobileSessionActiveContent({
             images={nativeChatImages}
             structuredComposer={nativeChatStructuredComposer}
             onAttachFiles={
-              nativeChatStructuredComposer ? undefined : () => void attachTerminalChatFiles()
+              nativeChatStructuredComposer || connState !== 'connected'
+                ? undefined
+                : () => void attachTerminalChatFiles()
             }
             onMicPress={dictationEnabled ? handleDictationToggle : undefined}
             micActive={dictation.isStarting || dictation.isRecording}
