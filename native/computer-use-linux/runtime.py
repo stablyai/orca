@@ -656,13 +656,13 @@ def bounded_png_payload(pixbuf):
 def first_descendant(root, predicate, max_nodes=MAX_NODES, max_depth=MAX_DEPTH):
     visited_count = 0
     stack = [(root, 0)]
-    seen = set()
+    seen = {}
     while stack and visited_count < max_nodes:
         node, depth = stack.pop()
         identity = id(node)
         if identity in seen:
             continue
-        seen.add(identity)
+        seen[identity] = node
         visited_count += 1
         if predicate(node):
             return node
