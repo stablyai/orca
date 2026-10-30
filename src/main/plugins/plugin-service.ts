@@ -80,6 +80,7 @@ export class PluginService {
       contentVerifier: this.contentVerifier,
       executeHostCall: (pluginKey, method, params, surface) =>
         this.executeHostCall(pluginKey, method, params, surface),
+      ensureWorker: (plugin) => this.workerController.ensure(plugin),
       log: (pluginKey) => this.installed.captureLog(pluginKey, 'error')
     })
     this.workerController = new PluginWorkerController({

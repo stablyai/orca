@@ -1,4 +1,5 @@
 import {
+  PANEL_METHODS,
   panelActionCallSchema,
   type PluginFrameEntry
 } from '../../../shared/plugins/frames/plugin-frame-bridge'
@@ -21,7 +22,9 @@ import {
   PLUGIN_PANEL_ENTRY_MAX_BYTES,
   readContainedPluginArtifactText
 } from '../plugin-artifact-validation'
+import type { PluginWorkerHandle } from '../workers/plugin-host-process'
 import { PluginPanelSessions, type PluginPanelSessionBinding } from './plugin-panel-sessions'
+import { deliverPluginPanelMessage } from './plugin-panel-worker-messages'
 
 type PluginPanelControllerOptions = {
   resolveApprovedPlugin: (pluginKey: string) => ValidDiscoveredPlugin | null
@@ -32,6 +35,8 @@ type PluginPanelControllerOptions = {
     params: unknown,
     surface: PluginSurface
   ) => Promise<PluginHostCallOutcome>
+  /** Starts the plugin's worker if needed; panel messages are delivered to it. */
+  ensureWorker: (plugin: ValidDiscoveredPlugin) => Promise<PluginWorkerHandle>
   log: (pluginKey: string) => (line: string) => void
   panelAdmission?: PluginPanelCallAdmission
 }
@@ -97,6 +102,15 @@ export class PluginPanelController {
       !findFrameContribution(plugin, binding.surface, binding.contributionId)
     ) {
       return { ok: false, code: 'unavailable', error: 'panel session is no longer available' }
+    }
+    if (binding.surface === 'panel' && parsed.data.action === PANEL_METHODS.postMessage) {
+      return deliverPluginPanelMessage({
+        plugin,
+        panelId: binding.contributionId,
+        message: parsed.data.params,
+        ensureWorker: this.options.ensureWorker,
+        log: this.options.log(binding.pluginKey)
+      })
     }
     return this.options.executeHostCall(
       binding.pluginKey,

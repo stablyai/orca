@@ -52,6 +52,7 @@ function controllerFor(plugin: ValidDiscoveredPlugin | null, verify = vi.fn()) {
     resolveApprovedPlugin: (pluginKey) => (plugin?.pluginKey === pluginKey ? plugin : null),
     contentVerifier: { verify },
     executeHostCall: vi.fn(),
+    ensureWorker: vi.fn(),
     log: () => vi.fn()
   })
 }
@@ -95,10 +96,12 @@ describe('PluginPanelController custom editor entries', () => {
   it('gives custom editors an editor session: frame methods only, never a panel', async () => {
     const plugin = await createEditorPlugin()
     const executeHostCall = vi.fn().mockResolvedValue({ ok: true, value: null })
+    const ensureWorker = vi.fn()
     const controller = new PluginPanelController({
       resolveApprovedPlugin: (pluginKey) => (plugin.pluginKey === pluginKey ? plugin : null),
       contentVerifier: { verify: vi.fn() },
       executeHostCall,
+      ensureWorker,
       log: () => vi.fn()
     })
     const entry = await controller.openCustomEditor('owner', plugin.pluginKey, 'excalidraw')
@@ -114,6 +117,19 @@ describe('PluginPanelController custom editor entries', () => {
       { title: 'hi' },
       'editor'
     )
+    // An editor has no panel id, so panel.postMessage is an ordinary unknown host method for it.
+    await controller.execute('owner', {
+      sessionToken: entry?.sessionToken,
+      action: 'panel.postMessage',
+      params: {}
+    })
+    expect(executeHostCall).toHaveBeenLastCalledWith(
+      plugin.pluginKey,
+      'panel.postMessage',
+      {},
+      'editor'
+    )
+    expect(ensureWorker).not.toHaveBeenCalled()
     // The editor id names no panel, so it cannot open one.
     await expect(controller.open('owner', plugin.pluginKey, 'excalidraw')).resolves.toBeNull()
   })

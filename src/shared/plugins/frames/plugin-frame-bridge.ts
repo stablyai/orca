@@ -35,6 +35,12 @@ export const EDITOR_METHODS = {
   flush: 'editor.flush'
 } as const
 
+/** Frame-local methods a panel calls on the same envelope; main answers them, never `executeHostCall`. */
+export const PANEL_METHODS = {
+  /** frame → host: JSON for the panel's own worker, answered with the worker's JSON reply. */
+  postMessage: 'panel.postMessage'
+} as const
+
 export type PluginFrameTheme = { colorScheme: 'light' | 'dark'; tokens: string }
 
 export type PluginFrameHello = {
@@ -48,6 +54,8 @@ export type PluginFrameHello = {
 /** Per-plugin bridge budgets, enforced host-side. */
 export const PANEL_MESSAGE_MAX_BYTES = 64 * 1024
 export const PANEL_MESSAGE_RATE_LIMIT = { maxMessages: 30, perMs: 10_000 }
+/** A worker's reply to `orca.panel.postMessage`; matches the storage value cap so it can carry a small image. */
+export const PANEL_WORKER_REPLY_MAX_BYTES = 256 * 1024
 
 /** Size-only liveness lane: count limits let a panel’s pongs exhaust the budget and starve genuine replies.
  * Pongs also spend the data budget, bounding aggregate cost; walks are capped here. */
