@@ -1,3 +1,4 @@
+import type { NativeChatFollowUpBehavior } from './native-chat-follow-up-behavior'
 import type { CreateWorktreeResult } from './worktree/create-types'
 import type {
   WorktreeDefaultTabsLaunch,
@@ -13,6 +14,7 @@ import type { SidebarInputsChangedEvent } from './sidebar-list/sidebar-inputs-fe
 
 export type RuntimeClientEvent =
   | { type: 'reposChanged' }
+  | { type: 'nativeChatFollowUpBehaviorChanged'; behavior: NativeChatFollowUpBehavior }
   /** The Workspace options UI state changed; a mirroring phone re-reads it. */
   | { type: 'workspaceViewChanged' }
   | {
@@ -65,6 +67,7 @@ export type RuntimeClientEvent =
 export type RuntimeClientEventStreamMessage =
   | ({ type: 'ready'; subscriptionId: string } & {
       snapshot?: {
+        nativeChatFollowUpBehavior?: NativeChatFollowUpBehavior
         repos?: unknown[]
         sshStates?: { targetId: string; state: SshConnectionState }[]
       }

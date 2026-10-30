@@ -1,3 +1,4 @@
+import { activateMobileUiLocale } from '../../../i18n/mobile-i18n'
 import { useMobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
 import {
   setMobileNativeChatDraftText,
@@ -112,9 +113,10 @@ const structured = (
 
 describe('MobileNativeChatComposer on a structured chat', () => {
   let renderer: ReactTestRenderer | null = null
-  afterEach(() => {
+  afterEach(async () => {
     act(() => renderer?.unmount())
     renderer = null
+    await activateMobileUiLocale('en')
   })
 
   const draw = (props: Partial<ComponentProps<typeof MobileNativeChatComposer>>) =>
@@ -389,33 +391,40 @@ describe('MobileNativeChatComposer on a structured chat', () => {
     expect(onAttachImage).toHaveBeenCalledTimes(1)
   })
 
-  it('holding Send mid-turn offers Queue and Steer: each sends once, and dismissing sends nothing', async () => {
-    const onSend = vi.fn().mockResolvedValue(true)
-    const choice = (label: string) =>
-      renderer!.root.find(
-        (node) =>
-          String(node.type) === 'Pressable' &&
-          node.findAll((child) => child.props.children === label).length > 0
-      )
-    await act(async () => {
-      renderer = create(draw({ value: 'hi', onSend, sendMenu: 'steer' }))
-    })
-    const send = () => labelled('Send message')[0]!
-    await act(async () => send().props.onLongPress())
-    await act(async () => drawers()[0]!.props.onClose())
-    expect(onSend).not.toHaveBeenCalled()
+  it.each([
+    { locale: 'en', send: 'Send message', queue: 'Queue', steer: 'Steer' },
+    { locale: 'de', send: 'Nachricht senden', queue: 'Einreihen', steer: 'Steuern' }
+  ] as const)(
+    'holding Send mid-turn offers Queue and Steer in $locale: each sends once, and dismissing sends nothing',
+    async (labels) => {
+      await activateMobileUiLocale(labels.locale)
+      const onSend = vi.fn().mockResolvedValue(true)
+      const choice = (label: string) =>
+        renderer!.root.find(
+          (node) =>
+            String(node.type) === 'Pressable' &&
+            node.findAll((child) => child.props.children === label).length > 0
+        )
+      await act(async () => {
+        renderer = create(draw({ value: 'hi', onSend, sendMenu: 'steer' }))
+      })
+      const send = () => labelled(labels.send)[0]!
+      await act(async () => send().props.onLongPress())
+      await act(async () => drawers()[0]!.props.onClose())
+      expect(onSend).not.toHaveBeenCalled()
 
-    await act(async () => send().props.onLongPress())
-    await act(async () => choice('Queue').props.onPress())
-    expect(onSend).toHaveBeenCalledExactlyOnceWith('hi', { alternate: true })
-    await act(async () => send().props.onLongPress())
-    await act(async () => choice('Steer').props.onPress())
-    expect(onSend).toHaveBeenCalledTimes(2)
-    expect(onSend).toHaveBeenLastCalledWith('hi')
+      await act(async () => send().props.onLongPress())
+      await act(async () => choice(labels.queue).props.onPress())
+      expect(onSend).toHaveBeenCalledExactlyOnceWith('hi', { alternate: true })
+      await act(async () => send().props.onLongPress())
+      await act(async () => choice(labels.steer).props.onPress())
+      expect(onSend).toHaveBeenCalledTimes(2)
+      expect(onSend).toHaveBeenLastCalledWith('hi')
 
-    await act(async () => renderer!.update(draw({ value: 'hi', onSend, sendMenu: null })))
-    expect(send().props.onLongPress).toBeUndefined()
-  })
+      await act(async () => renderer!.update(draw({ value: 'hi', onSend, sendMenu: null })))
+      expect(send().props.onLongPress).toBeUndefined()
+    }
+  )
 
   it('holds Send while a file is still uploading, and sends a stored file alone', async () => {
     const onSend = vi.fn().mockResolvedValue(true)

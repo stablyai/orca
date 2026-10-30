@@ -1,36 +1,23 @@
-import { useEffect, useState } from 'react'
-import { nativeChatFollowUpBehaviorRead } from '../transport/settings-read-operations'
+import { useCallback, useSyncExternalStore } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
-import { nativeChatFollowUpBehavior } from '../../../src/shared/native-chat-follow-up-behavior'
+import { mobileNativeChatFollowUpPreference } from './mobile-native-chat-follow-up-preference'
 
-// Read per connection and chat: the phone has no settings stream; until it answers, the default.
+const defaultSnapshot = (): boolean => false
+
 export function useMobileNativeChatQueueFollowUps(
   client: RpcClient | null,
   connected: boolean,
   sessionId: string | null
 ): boolean {
-  const [queueFollowUps, setQueueFollowUps] = useState(
-    () => nativeChatFollowUpBehavior(null) === 'queue'
+  const preference = client ? mobileNativeChatFollowUpPreference(client) : null
+  const subscribe = useCallback(
+    (listener: () => void) =>
+      preference && connected && sessionId ? preference.subscribe(listener) : () => {},
+    [preference, connected, sessionId]
   )
-  useEffect(() => {
-    if (!client || !connected || !sessionId) {
-      return
-    }
-    let stale = false
-    void nativeChatFollowUpBehaviorRead
-      .request(client)
-      .then((response) => {
-        const preference = nativeChatFollowUpBehaviorRead.interpret(response)
-        if (!stale && preference.accepted) {
-          setQueueFollowUps(preference.value === 'queue')
-        }
-      })
-      .catch(() => {
-        // Keep the last answer when the host is unreachable.
-      })
-    return () => {
-      stale = true
-    }
-  }, [client, connected, sessionId])
-  return queueFollowUps
+  return useSyncExternalStore(
+    subscribe,
+    preference?.getSnapshot ?? defaultSnapshot,
+    defaultSnapshot
+  )
 }

@@ -35,6 +35,8 @@ vi.mock('../ui/select', () => ({
 }))
 
 import { ChatBehaviorSetting } from './ChatBehaviorSetting'
+import { i18n } from '@/i18n/i18n'
+import de from '../../i18n/locales/de.json'
 import { TooltipProvider } from '../ui/tooltip'
 
 afterEach(() => {
@@ -200,4 +202,25 @@ describe('ChatBehaviorSetting follow-up behavior', () => {
     fireEvent.change(select, { target: { value: 'queue' } })
     expect(updateSettings).toHaveBeenCalledWith({ nativeChatFollowUpBehavior: 'queue' })
   })
+})
+
+it('renders the follow-up Select and its options using the German catalog', async () => {
+  setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY])
+  i18n.addResourceBundle('de', 'translation', de, true, true)
+  await act(async () => {
+    await i18n.changeLanguage('de')
+  })
+  try {
+    const { container } = renderSetting({ experimentalNativeChat: true })
+    const options = Array.from(container.querySelectorAll('select option')).map(
+      (option) => option.textContent
+    )
+    expect(options).toContain(de.components.settings.nativeChat.followUpSteer)
+    expect(options).toContain(de.components.settings.nativeChat.followUpQueue)
+    expect(container.textContent).toContain(de.components.settings.nativeChat.followUpBehaviorTitle)
+  } finally {
+    await act(async () => {
+      await i18n.changeLanguage('en')
+    })
+  }
 })

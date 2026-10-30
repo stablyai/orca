@@ -103,17 +103,14 @@ export function ChatBehaviorSetting({
                         )
                       }
                     >
-                      <SelectTrigger
-                        className="h-7 w-28 text-xs"
-                        aria-label={entries.queueFollowUps.title}
-                      >
+                      <SelectTrigger className="h-7 w-28" aria-label={entries.queueFollowUps.title}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="steer" className="text-xs">
+                        <SelectItem value="steer">
                           {translate('components.settings.nativeChat.followUpSteer', 'Steer')}
                         </SelectItem>
-                        <SelectItem value="queue" className="text-xs">
+                        <SelectItem value="queue">
                           {translate('components.settings.nativeChat.followUpQueue', 'Queue')}
                         </SelectItem>
                       </SelectContent>
