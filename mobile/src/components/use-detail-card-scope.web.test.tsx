@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, useRef } from 'react'
+import { Fragment, act, useRef } from 'react'
 import { createRoot } from 'react-dom/client'
 import { expect, it, vi } from 'vitest'
 import {
@@ -22,10 +22,21 @@ it('keeps outside actions and finite focus order while releasing a retained visu
   const renderer = createRoot(root)
   const dismiss = vi.fn()
   const action = vi.fn()
-  function Scope({ active, obscured = false }: { active: boolean; obscured?: boolean }) {
+  function Scope({
+    active,
+    obscured = false,
+    source = 'title'
+  }: {
+    active: boolean
+    obscured?: boolean
+    source?: 'title' | 'tab1' | 'tab2'
+  }) {
     const contentRef = useRef<HTMLDivElement>(null)
     const boundaryRefs = useRef<unknown[]>([])
-    const openerRef = useRef<HTMLButtonElement>(null)
+    const titleRef = useRef<HTMLButtonElement>(null)
+    const tab1Ref = useRef<HTMLButtonElement>(null)
+    const tab2Ref = useRef<HTMLButtonElement>(null)
+    const openerRef = source === 'title' ? titleRef : source === 'tab1' ? tab1Ref : tab2Ref
     const backRef = useRef<HTMLButtonElement>(null)
     useDetailCardScope({ active, obscured, openerRef, backRef, contentRef, boundaryRefs, dismiss })
     return (
@@ -34,14 +45,40 @@ it('keeps outside actions and finite focus order while releasing a retained visu
         <button ref={backRef} id="back">
           Back
         </button>
-        <DetailCardFocusBoundary refs={boundaryRefs} index={0} active={active} />
-        <button ref={openerRef} id="opener">
+        <DetailCardFocusBoundary
+          refs={boundaryRefs}
+          index={0}
+          active={active && source === 'title'}
+        />
+        <button ref={titleRef} id="opener">
           Title
         </button>
-        <DetailCardFocusBoundary refs={boundaryRefs} index={1} active={active} />
+        <DetailCardFocusBoundary
+          refs={boundaryRefs}
+          index={1}
+          active={active && source === 'title'}
+        />
         <button id="files" onClick={action}>
           Files
         </button>
+        {(['tab1', 'tab2'] as const).map((id) => (
+          <Fragment key={id}>
+            <DetailCardFocusBoundary
+              refs={boundaryRefs}
+              index={0}
+              active={active && source === id}
+            />
+            <button id={id} ref={id === 'tab1' ? tab1Ref : tab2Ref}>
+              {id}
+            </button>
+            <DetailCardFocusBoundary
+              refs={boundaryRefs}
+              index={1}
+              active={active && source === id}
+            />
+          </Fragment>
+        ))}
+        <button id="more">More</button>
         <DetailCardLayer>
           <DetailCardFocusBoundary refs={boundaryRefs} index={2} active={active} />
           <div ref={contentRef} id="card" tabIndex={-1} aria-hidden={!active}>
@@ -54,11 +91,11 @@ it('keeps outside actions and finite focus order while releasing a retained visu
       </>
     )
   }
-  const render = (active: boolean, obscured = false) =>
+  const render = (active: boolean, obscured = false, source: 'title' | 'tab1' | 'tab2' = 'title') =>
     act(() =>
       renderer.render(
         <DetailCardHostProvider>
-          <Scope active={active} obscured={obscured} />
+          <Scope active={active} obscured={obscured} source={source} />
         </DetailCardHostProvider>
       )
     )
@@ -129,6 +166,24 @@ it('keeps outside actions and finite focus order while releasing a retained visu
     render(false, true)
     expect(node('card').inert).toBe(true)
     expect(node('opener')).toBe(opener)
+    render(true)
+    render(true, false, 'tab1')
+    expect(document.querySelectorAll('#card')).toHaveLength(1)
+    key('keydown', 'Tab')
+    focusBoundary('tab1', false)
+    expect(document.activeElement).toBe(node('scroll'))
+    render(true, false, 'tab2')
+    key('keydown', 'Tab', true)
+    focusBoundary('card', true)
+    expect(document.activeElement).toBe(node('tab2'))
+    key('keydown', 'Tab')
+    focusBoundary('card', false)
+    expect(document.activeElement).toBe(node('more'))
+    render(false, false, 'tab2')
+    render(true, false, 'tab2')
+    const outsideActions = action.mock.calls.length
+    node('files').click()
+    expect(action).toHaveBeenCalledTimes(outsideActions + 1)
     act(() => renderer.unmount())
     expect(host?.isConnected).toBe(false)
   } finally {

@@ -14,6 +14,10 @@ import { useResponsiveLayout } from '../layout/responsive-layout'
 import { WorkspaceServerContext } from '../transport/use-workspace-client'
 import { useSessionTitleCard } from './use-session-title-card'
 import { useDetailCardScope } from '../components/use-detail-card-scope'
+import { useNow } from '../hooks/use-now'
+import { getMobileTerminalTabHostAgentIdentity } from './mobile-terminal-tab-agent'
+import { mobileSessionTabCardContent } from './mobile-session-tab-card-content'
+import { MobileSessionTabCardFooter } from './MobileSessionTabCardFooter'
 import { useSessionSideRail } from './session-side-rail'
 
 export function MobileSessionSurface({ controller }: { controller: MobileSessionController }) {
@@ -41,8 +45,23 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
     controller.showDictationSetup ||
     controller.deleteKeyTarget != null
   )
-  const details = useSessionTitleCard(besideTabs, obscured)
-  useDetailCardScope({ ...details, obscured })
+  const details = useSessionTitleCard(besideTabs, obscured, controller.visibleTabs)
+  const { missingTab } = details
+  const tab = controller.visibleTabs.find((candidate) => candidate.id === details.tabId)
+  const now = useNow(60_000)
+  const tabContent = tab
+    ? mobileSessionTabCardContent(
+        tab,
+        getMobileTerminalTabHostAgentIdentity(tab, controller.terminals),
+        now
+      )
+    : null
+  useDetailCardScope({
+    ...details,
+    openerRef: details.scopeOpenerRef,
+    active: details.active && !missingTab,
+    obscured: obscured || missingTab
+  })
   const rail = useSessionSideRail(controller, details)
   // Only a proven local record belongs to this route's desktop or server.
   const hostName =
@@ -71,13 +90,18 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
               bounds={details.bounds}
               contentRef={details.contentRef}
               boundaryRefs={details.boundaryRefs}
-              active={details.active}
-              obscured={obscured}
+              active={details.active && !missingTab}
+              obscured={obscured || missingTab}
               onSettled={details.onSettled}
-              title={controller.worktreeName || t('session.header.terminalTitle', 'Terminal')}
-              detail={controller.worktreePath}
+              title={
+                tabContent?.title ??
+                (controller.worktreeName || t('session.header.terminalTitle', 'Terminal'))
+              }
+              detail={tabContent ? tabContent.detail : controller.worktreePath}
               footer={
-                hostName ? (
+                tabContent ? (
+                  <MobileSessionTabCardFooter content={tabContent} />
+                ) : hostName ? (
                   <>
                     <StatusDot state={controller.connState} />
                     <Text style={styles.sessionMetaText}>{hostName}</Text>
