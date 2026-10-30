@@ -211,6 +211,35 @@ describe('mobile automation host contracts', () => {
     expect((await loadAutomationTargets(port.client)).workspaces).toEqual([])
   })
 
+  it('edits a Chat automation without Terminal argument rules or a surface patch', () => {
+    const saved = automationListSchema.parse({
+      automations: [
+        { ...savedAutomation(), surface: 'chat', extraAgentArgs: '--model old', reuseSession: true }
+      ],
+      items: [{ automationId: 'automation-1', selector: { kind: 'self' } }]
+    })[0]!.automation
+    const original = newAutomationDraft(saved)
+    const revised = { ...original, name: 'Renamed', extraAgentArgs: '--model revised' }
+    expect(validateAutomationDraft(revised, 2, saved)).toBeNull()
+    expect(automationUpdateParams(saved.id, revised, original, automationTargets())).toEqual({
+      id: saved.id,
+      updates: { name: 'Renamed', extraAgentArgs: '--model revised' }
+    })
+    const retargeted = automationUpdateParams(
+      saved.id,
+      {
+        ...revised,
+        targetEdited: true,
+        setupId: automationSetupKey(automationTargets().setups[0]!)
+      },
+      original,
+      automationTargets()
+    )
+    expect(retargeted.updates).toMatchObject({ extraAgentArgs: '--model revised' })
+    expect(retargeted.updates).not.toHaveProperty('launchSetupPatch')
+    expect(retargeted.updates).not.toHaveProperty('surface')
+  })
+
   it('creates enabled using real host selectors and a captured setup', () => {
     const draft = {
       ...newAutomationDraft(),

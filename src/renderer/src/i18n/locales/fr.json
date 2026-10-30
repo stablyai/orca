@@ -11918,7 +11918,6 @@
         },
         "PluginThemeUseNow": {
           "label": "Utiliser maintenant :",
-          "useName": "Utiliser maintenant : {{value0}}",
           "useForLight": "Utiliser en clair :",
           "useForDark": "Utiliser en sombre :"
         },
@@ -20397,6 +20396,10 @@
       "caution": "Attention"
     },
     "automations": {
+      "openIn": "Ouvrir dans",
+      "chat": "Chat",
+      "terminal": "Terminal",
+      "runChatUnavailable": "Le chat de cette exécution est indisponible. Son espace de travail est affiché ; toute sortie enregistrée reste dans les détails de l’exécution.",
       "runTerminalUnavailable": "Le terminal d'exécution est indisponible."
     },
     "jiraIssueTitleField": {

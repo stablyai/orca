@@ -52,15 +52,20 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     mutationBefore?: EnrichedAgentHookEventPayload,
     newRun = false
   ): EnrichedAgentHookEventPayload | undefined {
+    // Older relays can still forward a child's own session as the pane's resume identity.
+    const rootIdentityIncoming =
+      origin === 'hook' && incoming.payload.agentType === 'copilot' && incoming.toolAgentId
+        ? { ...incoming, providerSession: undefined }
+        : incoming
     const transitioned = transitionHookPresence(
-      incoming,
+      rootIdentityIncoming,
       this.state.lastStatusByPaneKey.get(incoming.paneKey)
     )
     if (!transitioned) {
       return undefined
     }
     const { authorityRestartId, codexRosterAuthority, ...payload } = {
-      ...incoming,
+      ...rootIdentityIncoming,
       ...transitioned
     }
     if (!this.canWriteLegacyStatusRow(payload)) {
@@ -173,18 +178,22 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       previous?.payload,
       codexRosterAuthority
     )
-    const previousCodexRoot =
-      stateReconciledPayload.payload.agentType === 'codex' &&
-      stateReconciledPayload.toolAgentId &&
-      previous?.payload.agentType === 'codex'
+    const previousRoot =
+      previous &&
+      previous.payload.agentType === stateReconciledPayload.payload.agentType &&
+      ((stateReconciledPayload.payload.agentType === 'codex' &&
+        stateReconciledPayload.toolAgentId) ||
+        (origin === 'hook' &&
+          stateReconciledPayload.payload.agentType === 'copilot' &&
+          this.sameTerminalOwner(previous, stateReconciledPayload)))
         ? previous
         : undefined
-    const preservedProviderSession = !stateReconciledPayload.providerSession
-      ? previousCodexRoot?.providerSession
-      : undefined
-    const preservedRootModel = !stateReconciledPayload.payload.model
-      ? previousCodexRoot?.payload.model
-      : undefined
+    const preservedProviderSession =
+      !stateReconciledPayload.providerSession && previousRoot?.providerSession
+    const preservedRootModel =
+      stateReconciledPayload.payload.agentType === 'codex' && !stateReconciledPayload.payload.model
+        ? previousRoot?.payload.model
+        : undefined
     // Relay restart loses root context; child hooks must not erase persisted resume/model identity.
     const rootContextPreservingPayload =
       preservedProviderSession || preservedRootModel

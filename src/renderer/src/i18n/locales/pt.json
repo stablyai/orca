@@ -21172,6 +21172,10 @@
       "caution": "Cuidado"
     },
     "automations": {
+      "openIn": "Abrir em",
+      "chat": "Chat",
+      "terminal": "Terminal",
+      "runChatUnavailable": "O chat da execução está indisponível. O espaço de trabalho está aberto; a saída salva continua nos detalhes da execução.",
       "runTerminalUnavailable": "O terminal da execução está indisponível."
     },
     "agentCombobox": {

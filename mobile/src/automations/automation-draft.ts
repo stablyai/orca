@@ -21,6 +21,7 @@ export type AutomationDraft = {
   name: string
   prompt: string
   agentId: TuiAgent | null
+  surface?: MobileAutomation['surface']
   setupId: string
   workspaceId: string
   workspaceMode: 'existing' | 'new_per_run'
@@ -40,6 +41,7 @@ export function newAutomationDraft(current?: MobileAutomation): AutomationDraft 
     name: current?.name ?? '',
     prompt: current?.prompt ?? '',
     agentId: current?.agentId ?? null,
+    surface: current?.surface,
     setupId: current?.runContext
       ? automationSetupKey({ ...current.runContext, id: current.runContext.projectHostSetupId })
       : '',

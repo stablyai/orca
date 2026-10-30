@@ -4,6 +4,7 @@ import { BrowserError } from '../../browser/browser-error'
 import { browserPopupPageWebContentsId } from '../../browser/browser-popup-page-id'
 import { webContents } from 'electron'
 import {
+  waitForTabFirstLoad,
   waitForTabRegistration,
   waitForWorktreeTabRegistration
 } from '../../ipc/browser-tab-registration-wait'
@@ -172,13 +173,17 @@ export class RuntimeBrowserCommandTargets {
 
   async ensureBrowserPageActive(
     worktreeId: string | undefined,
-    browserPageId: string
+    browserPageId: string,
+    options: { waitForFirstLoad?: boolean } = {}
   ): Promise<void> {
-    if (await this.host.serveBrowserTabs?.start(worktreeId, browserPageId)) {
-      return
+    if (!(await this.host.serveBrowserTabs?.start(worktreeId, browserPageId))) {
+      await this.sendActivateView(worktreeId ? { worktreeId, browserPageId } : { browserPageId })
+      await waitForTabRegistration(browserPageId)
     }
-    await this.sendActivateView(worktreeId ? { worktreeId, browserPageId } : { browserPageId })
-    await waitForTabRegistration(browserPageId)
+    // Why opt-in: a switched-to tab should read like one open all along, but streaming panes must not wait.
+    if (options.waitForFirstLoad) {
+      await waitForTabFirstLoad(browserPageId)
+    }
   }
 
   // A reloaded renderer drops activateView until it has restored the tab to mount.

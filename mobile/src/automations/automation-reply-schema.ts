@@ -26,6 +26,7 @@ export const automationSchema = z.looseObject({
   name: z.string(),
   prompt: z.string(),
   agentId,
+  surface: z.enum(['chat', 'terminal']).optional(),
   projectId: z.string(),
   workspaceMode: z.enum(['existing', 'new_per_run']),
   workspaceId: z.string().nullable(),

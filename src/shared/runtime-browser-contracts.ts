@@ -106,6 +106,8 @@ export type BrowserTabInfo = {
   profileLabel?: string | null
   /** Set on a popup window (OAuth, payment): the tab whose page opened it. */
   openerBrowserPageId?: string
+  /** False for a restored tab whose page has not loaded; a command aimed at it loads it. */
+  loaded?: boolean
 }
 
 export type BrowserTabListResult = { tabs: BrowserTabInfo[] }

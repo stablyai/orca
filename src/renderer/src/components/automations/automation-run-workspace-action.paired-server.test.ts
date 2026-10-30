@@ -2,6 +2,9 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { makeTabGroup, makeUnifiedTab } from '@/store/slices/store-test-helpers'
+import type { Tab } from '../../../../shared/tab-types'
+import { installAutomationChatRunCases } from './automation-run-workspace-chat.test-fixture'
 import type { AutomationRun } from '../../../../shared/automations-types'
 import type {
   AutomationAuthorityRef,
@@ -32,10 +35,14 @@ import { EMPTY_AUTOMATION_LIST_FILTER } from './automation-list-view'
 const mocks = vi.hoisted(() => {
   const state: Record<string, unknown> = {}
   const catalog: Record<string, unknown> = {}
+  const chatTabs: Tab[] = []
   return {
     state,
     listeners: new Set<() => void>(),
     catalog,
+    chatTabs,
+    activateTab: vi.fn(),
+    rpc: vi.fn(),
     toastError: vi.fn(),
     toastMessage: vi.fn(),
     activate: vi.fn(() => true),
@@ -53,6 +60,10 @@ vi.mock('@/store', () => ({
       }
     }
   )
+}))
+vi.mock('@/runtime/runtime-rpc-client', () => ({
+  callRuntimeRpc: mocks.rpc,
+  runtimeEnvironmentSupportsCapability: async () => true
 }))
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError, message: mocks.toastMessage } }))
 vi.mock('@/lib/worktree-activation', () => ({
@@ -75,6 +86,7 @@ vi.mock('./use-automation-list-search', () => ({
 
 const ENV = 'env-a'
 const WT = 'repo-a::/srv/app'
+const GROUP = 'recorded-chat-group'
 const LEAF = '11111111-1111-4111-8111-111111111111'
 const TAB = 'host-tab-1'
 const MIRROR = toWebTerminalSurfaceTabId(TAB)
@@ -268,6 +280,22 @@ beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true
   vi.clearAllMocks()
   mocks.activate.mockReturnValue(true)
+  mocks.chatTabs.length = 0
+  mocks.rpc.mockImplementation(async (_target, method, params) => {
+    if (method === 'agentSession.reveal') {
+      mocks.chatTabs.push(
+        makeUnifiedTab({
+          id: 'recorded-chat',
+          groupId: GROUP,
+          entityId: params.sessionId,
+          worktreeId: WT,
+          executionHostId: `runtime:${ENV}`,
+          contentType: 'agent-session'
+        })
+      )
+    }
+    return { ok: true }
+  })
 })
 afterEach(async () => {
   vi.unstubAllGlobals()
@@ -685,4 +713,40 @@ describe('historical affordance, physical owner, exact pane and serving authorit
     )
     expect(mocks.toastMessage).not.toHaveBeenCalled()
   })
+})
+
+function seedChat() {
+  const input = seed(
+    [worktree('local'), worktree('runtime:env-a', { runtimeOwnerEnvironmentId: ENV })],
+    runtime
+  )
+  mocks.state.unifiedTabsByWorktree = { [WT]: mocks.chatTabs }
+  mocks.state.activateTab = mocks.activateTab
+  mocks.state.focusGroup = vi.fn()
+  mocks.state.groupsByWorktree = {
+    [WT]: [
+      {
+        ...makeTabGroup({ id: GROUP, worktreeId: WT }),
+        get tabOrder() {
+          return mocks.chatTabs.map((tab) => tab.id)
+        },
+        get activeTabId() {
+          return mocks.chatTabs[0]?.id ?? null
+        }
+      }
+    ]
+  }
+  mocks.state.activeGroupIdByWorktree = { [WT]: GROUP }
+  return input
+}
+
+installAutomationChatRunCases({
+  mocks,
+  run,
+  workspaceId: WT,
+  environmentId: ENV,
+  groupId: GROUP,
+  seedChat,
+  mount,
+  open: (recorded) => current.open(recorded)
 })

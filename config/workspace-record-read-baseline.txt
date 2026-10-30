@@ -20,7 +20,7 @@
 3 src/renderer/src/components/sidebar/worktree-list/listing/use-main-list-model.ts # reads a passed-in copy
 2 src/renderer/src/components/sidebar/worktree-list/listing/use-window-list-model.ts # reads a passed-in copy
 1 src/renderer/src/components/sidebar/worktree-list/navigation/pending-reveal-inputs.ts # reads a passed-in copy
-2 src/renderer/src/components/sidebar/worktree-list/navigation/use-pending-reveal.ts # reads a passed-in copy
+1 src/renderer/src/components/sidebar/worktree-list/navigation/use-pending-reveal.ts # reads a passed-in copy
 2 src/renderer/src/components/sidebar/worktree-list/viewport/VirtualizedWorktreeViewport.tsx # reads a passed-in copy
 1 src/renderer/src/components/sidebar/worktree-manual-order-catalog.ts # reads a passed-in copy
 2 src/renderer/src/components/skills/skill-install-workspace-choices.ts # reads a passed-in copy

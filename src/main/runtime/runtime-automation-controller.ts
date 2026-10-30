@@ -4,8 +4,7 @@ import type { AutomationService } from '../automations/service'
 import type {
   Automation,
   AutomationRun,
-  AutomationUpdateInput,
-  AutomationWorkspaceMode
+  AutomationUpdateInput
 } from '../../shared/automations-types'
 import type { Repo } from '../../shared/repo-types'
 import type { RuntimeStore } from './runtime-store-contract'
@@ -114,6 +113,7 @@ export class RuntimeAutomationController {
         precheck: input.precheck,
         agentId: input.agentId,
         extraAgentArgs: input.extraAgentArgs,
+        launchSetupPatch: input.launchSetupPatch,
         runContext: input.runContext,
         sourceContext: input.sourceContext,
         projectId: target.projectId,
@@ -234,6 +234,7 @@ export class RuntimeAutomationController {
       'precheck',
       'agentId',
       'extraAgentArgs',
+      'launchSetupPatch',
       'runContext',
       'sourceContext',
       'baseBranch',
