@@ -5,7 +5,8 @@ import type {
 import {
   buildPtyTerminalWaitBlockedResult,
   buildPtyTerminalWaitExitError,
-  buildPtyTerminalWaitResult
+  buildPtyTerminalWaitResult,
+  getPtyTerminalState
 } from '../../terminal-wait-results'
 import { readsTrustedScreen } from '../../agent-state-rules/agent-state-rules-engine'
 import { showsScreenProbeBanner } from '../../agent-state-rules/agent-state-text-anchors'
@@ -73,10 +74,10 @@ export class RuntimeTerminalWait {
   ): Promise<RuntimeTerminalWaitResult> {
     const condition = options?.condition ?? 'exit'
     const { pty } = this.deps.getTerminalPty(handle)
-    if (!pty.connected && !this.deps.exitUnsettled(pty)) {
-      if (condition === 'exit') {
-        return buildPtyTerminalWaitResult(handle, condition, pty)
-      }
+    if (condition === 'exit' && !pty.connected && !this.deps.exitUnsettled(pty)) {
+      return buildPtyTerminalWaitResult(handle, condition, pty)
+    }
+    if (condition !== 'exit' && getPtyTerminalState(pty) === 'exited') {
       throw buildPtyTerminalWaitExitError(pty)
     }
     const waitText = buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
