@@ -56,3 +56,27 @@ export function isLegacySingleAgentSubmit(entries: ComposerAgentEntry[]): boolea
   const agentLaunches = entriesToLaunchList(entries)
   return !usesAgentLaunchList({ agent: agentLaunches[0]?.agent ?? null, agentLaunches })
 }
+
+/** Composer rows reach submit with the detection-resolved quick pick beside them; the legacy
+ * path uses that pick, while the list path maps these rows verbatim (row 0 may lag the pick). */
+export type ComposerAgentSubmitSelection = {
+  entries: ComposerAgentEntry[]
+  /** Folder/remote/VM targets collapse the rows to the legacy first-row pick. */
+  locked: boolean
+}
+
+/** Resolve the post-create launch list, or `null` to keep the legacy single-agent submit.
+ * The multi-agent list is local-git-worktree only (resolution 2) and only when a row carries
+ * flags, session options or a custom name (resolution 3). */
+export function resolveComposerAgentLaunchList(args: {
+  selection: ComposerAgentSubmitSelection | undefined
+  gitWorktree: boolean
+}): AgentLaunchListEntry[] | null {
+  const selection = args.selection
+  if (!selection || selection.locked || !args.gitWorktree || selection.entries.length === 0) {
+    return null
+  }
+  return isLegacySingleAgentSubmit(selection.entries)
+    ? null
+    : entriesToLaunchList(selection.entries)
+}

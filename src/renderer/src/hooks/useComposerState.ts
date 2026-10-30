@@ -152,13 +152,20 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     agentEntriesLocked
   }
   const { createDisabled } = builtCard
+  const modelSubmitQuick = model.submitQuick
+  // The rows live beside the model, so submit must read them at call time rather than at assembly.
+  const submitQuick = useCallback(
+    (agent: TuiAgent | null, options?: QuickSubmitOptions): Promise<void> =>
+      modelSubmitQuick(agent, options, { entries: agentEntries, locked: agentEntriesLocked }),
+    [agentEntries, agentEntriesLocked, modelSubmitQuick]
+  )
   return {
     cardProps,
     composerRef: model.composerRef,
     onComposerNodeChange: model.handleComposerNodeChange,
     promptTextareaRef: model.promptTextareaRef,
     nameInputRef: model.nameInputRef,
-    submitQuick: model.submitQuick,
+    submitQuick,
     createDisabled,
     selectAddedProjectRepo: model.selectAddedProjectRepo,
     selectAddedProjectGroup: model.selectAddedProjectGroup

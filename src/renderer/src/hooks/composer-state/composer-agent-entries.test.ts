@@ -5,6 +5,7 @@ import {
   createComposerAgentEntry,
   entriesToLaunchList,
   isLegacySingleAgentSubmit,
+  resolveComposerAgentLaunchList,
   type ComposerAgentEntry
 } from './composer-agent-entries'
 
@@ -117,5 +118,39 @@ describe('isLegacySingleAgentSubmit', () => {
 
   it('ignores a whitespace-only name and cleared arguments', () => {
     expect(isLegacySingleAgentSubmit([entryOf('codex', { arguments: null }, '   ')])).toBe(true)
+  })
+})
+
+describe('resolveComposerAgentLaunchList', () => {
+  it('keeps the legacy path for a single bare row and for no selection', () => {
+    expect(
+      resolveComposerAgentLaunchList({
+        selection: { entries: [entryOf('codex')], locked: false },
+        gitWorktree: true
+      })
+    ).toBeNull()
+    expect(resolveComposerAgentLaunchList({ selection: undefined, gitWorktree: true })).toBeNull()
+  })
+
+  it('maps rows verbatim when a second row exists', () => {
+    const entries = [
+      entryOf('codex', { arguments: '--profile fast' }, 'worker'),
+      entryOf('claude', { surface: 'chat' })
+    ]
+    expect(
+      resolveComposerAgentLaunchList({ selection: { entries, locked: false }, gitWorktree: true })
+    ).toEqual(entriesToLaunchList(entries))
+  })
+
+  it.each([
+    ['folder/remote/VM locked', { locked: true, gitWorktree: true }],
+    ['non-git workspace', { locked: false, gitWorktree: false }]
+  ])('collapses to the legacy path for %s', (_label, flags) => {
+    expect(
+      resolveComposerAgentLaunchList({
+        selection: { entries: [entryOf('codex'), entryOf('claude')], locked: flags.locked },
+        gitWorktree: flags.gitWorktree
+      })
+    ).toBeNull()
   })
 })

@@ -1,5 +1,5 @@
 import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
-import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
+import type { AgentLaunchListEntry, WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
@@ -31,6 +31,8 @@ export type QuickCreationRequestInput = {
   linkedPR: number | null
   pushTarget: GitPushTarget | undefined
   agent: TuiAgent | null
+  /** Post-create launches; when present the request stays agent-less and Retry replays the list. */
+  agentLaunches?: AgentLaunchListEntry[] | null
   agentLaunchRoute?: WorktreeCreationRequest['agentLaunchRoute']
   linkedLinearIssue: string | undefined
   linkedLinearIssueWorkspaceId: string | undefined
@@ -94,6 +96,7 @@ export function buildQuickCreationRequest(
     ...(input.linkedPR != null ? { linkedPR: input.linkedPR } : {}),
     ...(input.pushTarget ? { pushTarget: input.pushTarget } : {}),
     agent: input.agent,
+    ...(input.agentLaunches?.length ? { agentLaunches: input.agentLaunches } : {}),
     ...(input.agentLaunchRoute ? { agentLaunchRoute: input.agentLaunchRoute } : {}),
     ...(input.linkedLinearIssue ? { linkedLinearIssue: input.linkedLinearIssue } : {}),
     ...(input.linkedLinearIssueWorkspaceId !== undefined

@@ -1,9 +1,10 @@
 import { useAppStore } from '@/store'
 import { ensureAgentStartupInTerminal } from '@/lib/new-workspace'
 import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace-activation-terminal-focus'
-import { seedAgentTabStateAfterWorktreeCreate } from '@/lib/worktree-creation-agent-seeds'
 import type { ActivateAndRevealResult } from '@/lib/worktree-activation'
-import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
+import { usesAgentLaunchList, type WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
+import { runComposerAgentLaunchLoop } from '@/lib/composer-agent-launch-loop'
+import { seedAgentTabStateAfterWorktreeCreate } from '@/lib/worktree-creation-agent-seeds'
 
 export async function completeWorktreeCreation(args: {
   creationId: string
@@ -19,18 +20,30 @@ export async function completeWorktreeCreation(args: {
   focusOnCompletion: boolean
 }): Promise<void> {
   const { request } = args
+  const launchList = usesAgentLaunchList(request)
   // Why: clearing synchronously after activation lets React commit the panel-to-terminal swap in one frame.
   useAppStore.getState().removePendingWorktreeCreation(args.creationId, { cleanupVm: false })
   // Why: an agent the host planned but did not start has no tab to seed and is not the window's to start.
   const hostAgentMissing = args.hostPlannedStartup && !args.backendSpawned
   if (!args.structuredLaunchAccepted && !hostAgentMissing) {
-    seedAgentTabStateAfterWorktreeCreate({
-      request,
-      worktreeId: args.worktreeId,
-      primaryTabId: args.primaryTabId,
-      startupTerminalTabId: args.startupTerminalTabId,
-      backendSpawned: args.backendSpawned
-    })
+    if (launchList) {
+      runComposerAgentLaunchLoop({
+        worktreeId: args.worktreeId,
+        request,
+        quickPrompt: request.quickPrompt,
+        ...(request.promptDelivery ? { promptDelivery: request.promptDelivery } : {}),
+        linkedItemPrompt: request.launchDraftPrompt ?? null,
+        seededTerminalTabId: args.primaryTabId
+      })
+    } else {
+      seedAgentTabStateAfterWorktreeCreate({
+        request,
+        worktreeId: args.worktreeId,
+        primaryTabId: args.primaryTabId,
+        startupTerminalTabId: args.startupTerminalTabId,
+        backendSpawned: args.backendSpawned
+      })
+    }
   }
   if (
     !args.structuredLaunchAccepted &&
@@ -46,6 +59,7 @@ export async function completeWorktreeCreation(args: {
   }
   if (
     !args.structuredLaunchAccepted &&
+    !launchList &&
     !request.suppressTerminalFocusOnCompletion &&
     args.focusOnCompletion
   ) {
