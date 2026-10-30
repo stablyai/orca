@@ -31,21 +31,31 @@ export function promptTextContent(text: string): JSONContent {
   }
 }
 
+/** The document side of withoutImageReference: each chip goes with one space after it. */
 export function withoutImageReferenceNodes(
   document: JSONContent,
   attachmentId: string
 ): JSONContent {
-  return document.content
-    ? {
-        ...document,
-        content: document.content
-          .filter(
-            (node) =>
-              node.type !== IMAGE_REFERENCE_NODE || node.attrs?.attachmentId !== attachmentId
-          )
-          .map((node) => withoutImageReferenceNodes(node, attachmentId))
+  if (!document.content) {
+    return document
+  }
+  const content: JSONContent[] = []
+  let afterChip = false
+  for (const node of document.content) {
+    if (node.type === IMAGE_REFERENCE_NODE && node.attrs?.attachmentId === attachmentId) {
+      afterChip = true
+      continue
+    }
+    if (afterChip && node.type === 'text' && node.text?.startsWith(' ')) {
+      if (node.text.length > 1) {
+        content.push({ ...node, text: node.text.slice(1) })
       }
-    : document
+    } else {
+      content.push(withoutImageReferenceNodes(node, attachmentId))
+    }
+    afterChip = false
+  }
+  return { ...document, content }
 }
 
 /** Applies an appended text change without replacing existing picked nodes. */
