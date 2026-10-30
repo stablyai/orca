@@ -1,10 +1,9 @@
-import { useId, useState } from 'react'
+import { useState } from 'react'
 import { ExternalLink } from 'lucide-react'
 import { Trans } from 'react-i18next'
 import { getAgentCatalog, type AgentCatalogEntry } from '@/lib/agent-catalog'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { Switch } from '@/components/ui/switch'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { isNativeChatDefaultFor } from '../../../../shared/structured-native-chat-launch-route'
@@ -12,6 +11,7 @@ import { i18n, translate } from '@/i18n/i18n'
 import { openAppHttpLink } from '@/lib/app-http-link-open'
 import type { AgentSurface } from './use-onboarding-flow-types'
 import { AgentPickerButton, AgentSectionHeader } from './AgentPickerButton'
+import { YoloPermissionsControl } from './YoloPermissionsControl'
 import {
   AgentSurfaceModeRow,
   ChatModeTerminalTip,
@@ -249,36 +249,6 @@ export function AgentStep({
       <YoloPermissionsControl
         yoloPermissions={yoloPermissions}
         onYoloPermissionsChange={onYoloPermissionsChange}
-      />
-    </div>
-  )
-}
-
-function YoloPermissionsControl({
-  yoloPermissions,
-  onYoloPermissionsChange
-}: {
-  yoloPermissions: boolean
-  onYoloPermissionsChange?: (enabled: boolean) => void
-}): React.JSX.Element {
-  const switchId = useId()
-  return (
-    <div className="flex shrink-0 items-center justify-between gap-6 border-t border-border pt-4">
-      <label htmlFor={switchId} className="min-w-0 cursor-pointer space-y-0.5">
-        <span className="block text-sm font-medium text-foreground">
-          {translate('auto.components.onboarding.AgentStep.yoloModeLabel', 'Yolo mode')}
-        </span>
-        <span className="block text-xs text-muted-foreground">
-          {translate(
-            'auto.components.onboarding.AgentStep.yoloPermissionsDescription',
-            'Agents run commands and edit files without asking, and some also bypass their sandbox. Use only in projects you trust.'
-          )}
-        </span>
-      </label>
-      <Switch
-        id={switchId}
-        checked={yoloPermissions}
-        onCheckedChange={(checked) => onYoloPermissionsChange?.(checked)}
       />
     </div>
   )

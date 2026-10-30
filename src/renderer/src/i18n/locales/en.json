@@ -19433,6 +19433,14 @@
           "managePullRequests": "Read, comment on, and merge pull requests without leaving Orca"
         }
       },
+      "yoloPermissions": {
+        "overrideDescription": "These agents can still run commands and edit files without asking. Their individual settings override Yolo mode.",
+        "fullAccessOverride": "{{agent}} still has full access",
+        "useAgentOwnSettings": "Use {{agent}}’s own settings",
+        "useOwnSettings": "Use own settings",
+        "saveError": "Could not change permissions. Try again.",
+        "ownSettingsDescription": "Off uses each agent’s own settings. Individual agent permissions can override this switch."
+      },
       "agentStep": {
         "opensInTerminal": "Terminal",
         "worksInChat": "Works in Chat UI",
