@@ -12,6 +12,7 @@ import { clearClaudePendingWaitForAgent } from './claude-roster-state'
 import { claudeRowHasUnlistedLiveWork } from './claude-pane-hold-evidence'
 import {
   createClaudeTranscriptCursor,
+  clearClaudeTranscriptCursor,
   readClaudeTranscriptChunk,
   type ClaudeTranscriptCursor
 } from './claude-transcript-cursor'
@@ -94,11 +95,24 @@ export class ClaudeHelperKillPoller {
 
   clear(paneKey: string): void {
     this.scheduler.clear(paneKey)
+    const entry = this.observations.get(paneKey)
+    if (entry) {
+      clearClaudeTranscriptCursor(entry.parent)
+      for (const child of entry.children.values()) {
+        clearClaudeTranscriptCursor(child.cursor)
+      }
+    }
     this.observations.delete(paneKey)
   }
 
   clearAll(): void {
     this.scheduler.clearAll()
+    for (const entry of this.observations.values()) {
+      clearClaudeTranscriptCursor(entry.parent)
+      for (const child of entry.children.values()) {
+        clearClaudeTranscriptCursor(child.cursor)
+      }
+    }
     this.observations.clear()
   }
 
@@ -162,9 +176,12 @@ export class ClaudeHelperKillPoller {
         entry.killedAt = undefined
         entry.resumedAt.clear()
         entry.launches.clear()
+        for (const child of entry.children.values()) {
+          clearClaudeTranscriptCursor(child.cursor)
+        }
         entry.children.clear()
       },
-      consume: (record) => applyClaudeHelperEvidence(entry, record, current)
+      consume: (record, progress) => applyClaudeHelperEvidence(entry, record, current, progress)
     })
     if (!parent || !this.current(paneKey, entry)) {
       return
@@ -205,7 +222,7 @@ export class ClaudeHelperKillPoller {
         reset: () => {
           child.promptedAt = undefined
         },
-        consume: (record) => applyClaudeChildPrompt(child, record, current)
+        consume: (record, progress) => applyClaudeChildPrompt(child, record, current, progress)
       })
       if (!this.current(paneKey, entry)) {
         return

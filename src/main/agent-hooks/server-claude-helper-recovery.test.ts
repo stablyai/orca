@@ -418,9 +418,9 @@ it.each(['relay-spool', 'desktop-spool'])(
       const write = ClaudeTranscriptDecoder.prototype.write
       const decoding = vi
         .spyOn(ClaudeTranscriptDecoder.prototype, 'write')
-        .mockImplementation(function (this: ClaudeTranscriptDecoder, text) {
+        .mockImplementation(function (this: ClaudeTranscriptDecoder, text, input) {
           const before = this['tokens']
-          write.call(this, text)
+          write.call(this, text, input)
           tokens += this['tokens'] - before
           batches++
           head = Math.max(head, this['head'].length)

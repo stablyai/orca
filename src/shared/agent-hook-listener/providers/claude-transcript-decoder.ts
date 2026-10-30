@@ -11,6 +11,11 @@ type Frame = {
   facts: Record<string, unknown>[]
   text: boolean
 }
+export type ClaudeTranscriptInput = {
+  tokens?: Token[]
+  next: number
+  operation?: () => void
+}
 const fields: Record<Scope, readonly string[]> = {
   root: ['type', 'subtype', 'timestamp', 'isMeta', 'isCompactSummary', 'message', 'toolUseResult'],
   message: ['content'],
@@ -41,53 +46,60 @@ export class ClaudeTranscriptDecoder {
     return this.started
   }
 
-  write(text: string): void {
+  private readonly finalInput: ClaudeTranscriptInput = { next: 0 }
+
+  write(text: string, input: ClaudeTranscriptInput = { next: 0 }): void {
     if (text.length) {
       this.started = true
     }
-    this.run(text)
+    this.run(text, input)
   }
 
   end(): Record<string, unknown> | undefined {
-    this.run(none)
+    this.run(none, this.finalInput)
     return this.invalid ? undefined : this.value
   }
 
-  private run(text: string | typeof none): void {
+  private run(text: string | typeof none, input: ClaudeTranscriptInput): void {
     if (this.invalid) {
       return
     }
-    let consumerFailed = false
-    try {
-      const pending = this.parse(text, (token: Token) => {
-        try {
-          this.consume(token)
-        } catch (error) {
-          consumerFailed = true
-          throw error
+    if (!input.tokens) {
+      const tokens: Token[] = []
+      try {
+        this.parse(text, (token: Token) => {
+          tokens.push(token)
+        })
+        input.tokens = tokens
+      } catch (error) {
+        // Only native grammar rejection discards a frame; projection errors retain their checkpoint.
+        if (
+          error instanceof Error &&
+          error.constructor === Error &&
+          (error.message.startsWith('Parser cannot parse input:') ||
+            error.message.startsWith('Parser has expected'))
+        ) {
+          this.invalid = true
+          this.stack.length = 0
+          this.parts = []
+          this.head = ''
+          this.value = undefined
+          return
         }
-      })
-      if (pending) {
-        throw new Error('Claude JSON decoding requires synchronous tokens')
+        throw error
       }
-    } catch (error) {
-      // Only the grammar's syntax errors can discard a frame; capacity/consumer failure propagates.
-      if (
-        !consumerFailed &&
-        error instanceof Error &&
-        error.constructor === Error &&
-        (error.message.startsWith('Parser cannot parse input:') ||
-          error.message.startsWith('Parser has expected'))
-      ) {
-        this.invalid = true
-        this.stack.length = 0
-        this.parts = []
-        this.head = ''
-        this.value = undefined
-        return
-      }
-      throw error
     }
+    while (input.next < input.tokens.length) {
+      input.operation ??= this.prepare(input.tokens[input.next])
+      this.consume(input.operation)
+      input.operation = undefined
+      input.next++
+      this.tokens++
+    }
+  }
+
+  private consume(operation: () => void): void {
+    operation()
   }
 
   private target(): { scope: Scope; key: string } {
@@ -95,18 +107,20 @@ export class ClaudeTranscriptDecoder {
     return parent ? { scope: parent.scope, key: parent.key } : { scope: 'discard', key: '' }
   }
 
-  private assign(value: unknown): void {
+  private assignment(value: unknown): () => void {
     const parent = this.stack.at(-1)
-    if (parent && fields[parent.scope].includes(parent.key)) {
-      parent.object[parent.key] = value
+    const key = parent?.key ?? ''
+    return () => {
+      if (parent && fields[parent.scope].includes(key)) {
+        parent.object[key] = value
+      }
     }
   }
 
-  private consume(token: Token): void {
-    this.tokens++
+  private prepare(token: Token): () => void {
     if (token.name === 'startKey' || token.name === 'startString' || token.name === 'startNumber') {
       const { scope, key } = this.target()
-      this.scalar =
+      const scalar =
         token.name === 'startKey'
           ? 'key'
           : token.name === 'startNumber'
@@ -118,30 +132,43 @@ export class ClaudeTranscriptDecoder {
                   ) && fields[scope].includes(key)
                 ? 'selected'
                 : 'discard'
-      this.parts = []
-      this.head = ''
-      this.nonblank = false
-      return
+      const parts: string[] = []
+      return () => {
+        this.scalar = scalar
+        this.parts = parts
+        this.head = ''
+        this.nonblank = false
+      }
     }
     if (token.name === 'stringChunk' || token.name === 'numberChunk') {
       if (this.scalar === 'selected') {
-        this.parts.push(token.value)
-      } else if (this.scalar === 'text') {
-        this.head += token.value.slice(0, Math.max(0, 320 - this.head.length))
-        this.nonblank ||= token.value.trim() !== ''
-      } else if (this.scalar === 'key') {
-        // All recognized keys fit this window; long unknown keys must never match a prefix.
-        this.head = (this.head + token.value).slice(0, 32)
+        const index = this.parts.length
+        return () => {
+          this.parts[index] = token.value
+          this.parts.length = index + 1
+        }
       }
-      return
+      const head =
+        this.scalar === 'text'
+          ? this.head + token.value.slice(0, Math.max(0, 320 - this.head.length))
+          : this.scalar === 'key'
+            ? (this.head + token.value).slice(0, 32)
+            : this.head
+      const nonblank = this.nonblank || (this.scalar === 'text' && token.value.trim() !== '')
+      return () => {
+        this.head = head
+        this.nonblank = nonblank
+      }
     }
     if (token.name === 'endKey') {
       const parent = this.stack.at(-1)
-      if (parent) {
-        parent.key = fields[parent.scope].includes(this.head) ? this.head : ''
+      const key = parent && fields[parent.scope].includes(this.head) ? this.head : ''
+      return () => {
+        if (parent) {
+          parent.key = key
+        }
+        this.head = ''
       }
-      this.head = ''
-      return
     }
     if (token.name === 'endString' || token.name === 'endNumber') {
       const value =
@@ -152,10 +179,13 @@ export class ClaudeTranscriptDecoder {
               !isKnownHarnessInjectedUserTurnText(this.head)
             ? 'x'
             : undefined
-      this.assign(value)
-      this.parts = []
-      this.head = ''
-      return
+      const assign = this.assignment(value)
+      const parts: string[] = []
+      return () => {
+        assign()
+        this.parts = parts
+        this.head = ''
+      }
     }
     if (token.name === 'startObject' || token.name === 'startArray') {
       const { scope, key } = this.target()
@@ -171,32 +201,49 @@ export class ClaudeTranscriptDecoder {
                 : scope === 'content' && token.name === 'startObject'
                   ? 'block'
                   : 'discard'
-      this.stack.push({ scope: next, key: '', object: {}, facts: [], text: false })
-      return
+      const frame: Frame = { scope: next, key: '', object: {}, facts: [], text: false }
+      const index = this.stack.length
+      return () => {
+        this.stack[index] = frame
+        this.stack.length = index + 1
+      }
     }
     if (token.name === 'endObject' || token.name === 'endArray') {
-      const frame = this.stack.pop()!
-      const parent = this.stack.at(-1)
-      if (frame.scope === 'root') {
-        this.value = frame.object
-      } else if (frame.scope === 'block' && parent?.scope === 'content') {
-        if (frame.object.type === 'tool_use' || frame.object.type === 'tool_result') {
-          parent.facts.push(frame.object)
-        } else if (frame.object.type === 'text' && frame.object.text === 'x') {
-          parent.text = true
+      const index = this.stack.length - 1
+      const frame = this.stack[index]
+      const parent = this.stack[index - 1]
+      const key = parent?.key ?? ''
+      const factIndex = parent?.facts.length ?? 0
+      const textIndex = frame.facts.length
+      const textFact = { type: 'text', text: 'x' }
+      return () => {
+        this.stack.length = index
+        if (frame.scope === 'root') {
+          this.value = frame.object
+        } else if (frame.scope === 'block' && parent?.scope === 'content') {
+          if (frame.object.type === 'tool_use' || frame.object.type === 'tool_result') {
+            parent.facts[factIndex] = frame.object
+            parent.facts.length = factIndex + 1
+          } else if (frame.object.type === 'text' && frame.object.text === 'x') {
+            parent.text = true
+          }
+        } else if (parent && fields[parent.scope].includes(key)) {
+          if (frame.scope === 'content' && frame.text) {
+            frame.facts[textIndex] = textFact
+            frame.facts.length = textIndex + 1
+          }
+          parent.object[key] =
+            frame.scope === 'content'
+              ? frame.facts
+              : frame.scope === 'discard'
+                ? undefined
+                : frame.object
         }
-      } else if (frame.scope === 'content') {
-        if (frame.text) {
-          frame.facts.push({ type: 'text', text: 'x' })
-        }
-        this.assign(frame.facts)
-      } else {
-        this.assign(frame.scope === 'discard' ? undefined : frame.object)
       }
-      return
     }
     if (token.name === 'trueValue' || token.name === 'falseValue' || token.name === 'nullValue') {
-      this.assign(token.value)
+      return this.assignment(token.value)
     }
+    return () => {}
   }
 }
