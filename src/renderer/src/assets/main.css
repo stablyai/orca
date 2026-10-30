@@ -168,6 +168,12 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* Why: only the drawer that carries it reads the live sidebar width; don't restyle its subtree per drag frame. */
+@property --workspace-sidebar-live-width {
+  syntax: '*';
+  inherits: false;
+}
+
 :root {
   --app-font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-sans: var(--app-font-family);
@@ -192,6 +198,8 @@
   --orca-security-border: #e5e5e5;
   --orca-security-input: #e5e5e5;
   --orca-security-ring: #a1a1a1;
+  --orca-security-floating-surface: rgba(255, 255, 255, 0.82);
+  --orca-security-dialog-surface: rgba(255, 255, 255, 0.96);
   --background: #fff;
   --editor-surface: #ffffff;
   --foreground: #0a0a0a;
@@ -307,6 +315,8 @@
   --orca-security-border: rgb(255 255 255 / 0.07);
   --orca-security-input: rgb(255 255 255 / 0.15);
   --orca-security-ring: #737373;
+  --orca-security-floating-surface: rgba(0, 0, 0, 0.72);
+  --orca-security-dialog-surface: rgba(23, 23, 23, 0.96);
   --background: #0a0a0a;
   --editor-surface: #1e1e1e;
   --foreground: #fafafa;
@@ -482,6 +492,9 @@
   --border: var(--orca-security-border);
   --input: var(--orca-security-input);
   --ring: var(--orca-security-ring);
+  /* A plugin theme copies its --popover into these, so trust dialogs would paint on it. */
+  --floating-surface: var(--orca-security-floating-surface);
+  --dialog-surface: var(--orca-security-dialog-surface);
 }
 
 .linear-priority-bars {
@@ -1905,7 +1918,7 @@ html.native-shell .app-layout {
   inset: 0;
   z-index: 30;
   pointer-events: none;
-  background: color-mix(in srgb, var(--terminal-pane-locate) 12%, transparent);
+  background: color-mix(in srgb, var(--terminal-pane-locate) 6%, transparent);
   animation: editor-reveal-flash 1.2s ease-out forwards;
 }
 

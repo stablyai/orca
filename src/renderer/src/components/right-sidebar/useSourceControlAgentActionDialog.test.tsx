@@ -616,7 +616,7 @@ it.each([
     expect(plan?.launchCommand).toBe(
       agent === 'claude'
         ? `claude ${'defaultGroup' in row && !pair ? "'--effort' 'high' " : ''}'--verbose' '--model' 'sonnet'${pair ? " '--effort' 'low'" : ''} 'fix'`
-        : `codex ${'foreignDocument' in row ? "'--effort' 'high' " : ''}'--verbose' '-m' 'gpt-5.5' '-c' 'model_reasoning_effort=low' 'fix'`
+        : `codex '-c' 'disable_paste_burst=true' ${'foreignDocument' in row ? "'--effort' 'high' " : ''}'--verbose' '-m' 'gpt-5.5' '-c' 'model_reasoning_effort=low' 'fix'`
     )
     if (native) {
       expect(submitted.launchChoice?.requestedSurface).toBe('chat')

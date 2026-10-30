@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { Store } from '../persistence'
 import type * as PostHogTransport from './posthog-transport'
 import {
@@ -21,7 +22,15 @@ vi.mock('./posthog-transport', async (importOriginal) => ({
   createPostHogClient
 }))
 
+const realTransport = await vi.importActual<typeof PostHogTransport>('./posthog-transport')
 const { initTelemetry, setOptIn, shutdownTelemetry, track } = await import('./client')
+const realSetTimeout = globalThis.setTimeout
+// SDK gzip is really async, so wait in real time while the fake clock stands still.
+async function settle(done: () => boolean = () => false): Promise<void> {
+  for (let i = 0; i < 200 && !done(); i++) {
+    await new Promise((resolve) => realSetTimeout(resolve, 10))
+  }
+}
 const scheduleClientStart = vi.fn<(start: () => void) => void>()
 
 afterAll(() => {
@@ -31,28 +40,29 @@ afterAll(() => {
 
 describe('deferred PostHog client start', () => {
   let envStash: Record<string, string | undefined>
+  let settings: GlobalSettings
   let store: Store
-  let sdk: MockPostHog
+  let sdk: MockPostHog & { flush: ReturnType<typeof vi.fn> }
 
   beforeEach(() => {
     vi.useFakeTimers({ now: new Date('2026-10-29T00:00:00Z') })
     envStash = stashAndClearConsentEnv()
     vi.spyOn(console, 'warn').mockImplementation(() => {})
-    sdk = makeMockPostHog()
+    sdk = { ...makeMockPostHog(), flush: vi.fn(async () => {}) }
     createPostHogClient.mockImplementation(() => sdk)
-    store = makeFakeStore(
-      makeFakeSettings({
-        optedIn: true,
-        installId: BASE_COMMON.install_id,
-        existedBeforeTelemetryRelease: false
-      })
-    )
+    settings = makeFakeSettings({
+      optedIn: true,
+      installId: BASE_COMMON.install_id,
+      existedBeforeTelemetryRelease: false
+    })
+    store = makeFakeStore(settings)
     initTelemetry(store, scheduleClientStart)
   })
 
   afterEach(async () => {
     await shutdownTelemetry()
     vi.useRealTimers()
+    vi.unstubAllGlobals()
     vi.restoreAllMocks()
     createPostHogClient.mockReset()
     scheduleClientStart.mockReset()
@@ -74,6 +84,89 @@ describe('deferred PostHog client start', () => {
       ['app_opened', new Date('2026-10-29T00:00:00Z')],
       ['telemetry_opted_in', new Date('2026-10-29T00:00:01Z')]
     ])
+  })
+
+  it('flushes held events 10s after the first one, as an eager client would', () => {
+    track('app_opened', {})
+    vi.advanceTimersByTime(2_000)
+    scheduleClientStart.mock.calls[0][0]()
+    vi.advanceTimersByTime(7_999)
+    expect(sdk.flush).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(1)
+
+    expect(sdk.flush).toHaveBeenCalledTimes(1)
+  })
+
+  it('starts and flushes on that deadline when no window ever shows', () => {
+    track('app_opened', {})
+
+    vi.advanceTimersByTime(10_000)
+
+    expect(sdk.capture).toHaveBeenCalledWith(expect.objectContaining({ event: 'app_opened' }))
+    expect(sdk.flush).toHaveBeenCalledTimes(1)
+  })
+
+  it('sends a full batch of held events immediately, as the SDK flushAt threshold would', async () => {
+    const fetch = vi.fn(async () => new Response('{}', { status: 200 }))
+    vi.stubGlobal('fetch', fetch)
+    createPostHogClient.mockImplementation(realTransport.createPostHogClient)
+    for (let i = 0; i < realTransport.POSTHOG_FLUSH_AT; i++) {
+      vi.setSystemTime(new Date(Date.UTC(2026, 9, 29, 0, 0, 0, i)))
+      expect(track('telemetry_opted_in', { via: 'settings' })).toBe(true)
+    }
+
+    // Gzip is really async; waitFor's fake-clock advance stays under the 10s flush deadline.
+    await vi.waitFor(
+      () =>
+        expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/batch'), expect.anything()),
+      { timeout: 5_000, interval: 50 }
+    )
+  })
+
+  it.each([200, 400])(
+    'leaves batching to the SDK after a flushAt send answered %i, matching an eager client',
+    async (firstStatus) => {
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+      const fetch = vi.fn(async () => new Response('{}', { status: 200 }))
+      fetch.mockImplementationOnce(async () => new Response('{}', { status: firstStatus }))
+      vi.stubGlobal('fetch', fetch)
+      createPostHogClient.mockImplementation(realTransport.createPostHogClient)
+      for (let i = 0; i < realTransport.POSTHOG_FLUSH_AT; i++) {
+        track('telemetry_opted_in', { via: 'settings' })
+        vi.advanceTimersByTime(50)
+      }
+      await settle(() => fetch.mock.calls.length === 1)
+      await vi.advanceTimersByTimeAsync(1_000)
+      track('telemetry_opted_in', { via: 'settings' })
+      await settle(() => false)
+
+      // An eager client's interval restarted at the 2s capture; the startup deadline must not flush at 10s.
+      await vi.advanceTimersByTimeAsync(8_500)
+      await settle(() => fetch.mock.calls.length > 1)
+      expect(fetch).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(1_600)
+      await settle(() => fetch.mock.calls.length > 1)
+      expect(fetch).toHaveBeenCalledTimes(2)
+    }
+  )
+
+  it('drops held events when consent is withdrawn before the client starts', () => {
+    track('app_opened', {})
+    settings.telemetry!.optedIn = false
+
+    scheduleClientStart.mock.calls[0][0]()
+
+    expect(sdk.capture).not.toHaveBeenCalled()
+  })
+
+  it('drops held events at quit without loading the SDK when consent was withdrawn', async () => {
+    track('app_opened', {})
+    settings.telemetry!.optedIn = false
+
+    await shutdownTelemetry()
+
+    expect(createPostHogClient).not.toHaveBeenCalled()
   })
 
   it('starts the client early to flush held events and enqueue the opt-out before opting out', async () => {

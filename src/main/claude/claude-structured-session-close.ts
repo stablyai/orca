@@ -35,12 +35,27 @@ export function claudeAcquisitionCleanupError(
   cause: unknown
 ): Error {
   const verdict = connection?.exitVerdict
-  if (verdict?.processless === true) {
-    return new AgentSessionPreSpawnError(cause)
+  return verdict?.processless === true
+    ? new AgentSessionPreSpawnError(cause)
+    : claudeRootExitObserved(connection) || verdict?.killDelivered
+      ? new AgentSessionAcquisitionRootExitObservedError(
+          cause,
+          verdict?.root === 'exited' ? 'exit-observed' : 'kill-delivered'
+        )
+      : new AgentSessionAcquisitionExitUnprovenError(cause)
+}
+
+/** Completion and physical evidence are separate answers on a writer-terminal close. */
+export function claudeCloseReport(
+  connection: ClaudeStreamJsonConnection | null | undefined,
+  closed: boolean,
+  cause: unknown
+): Error | undefined {
+  const verdict = connection?.exitVerdict
+  if (closed && !verdict?.processless && (verdict?.root === 'exited' || !verdict?.killDelivered)) {
+    return undefined
   }
-  return claudeRootExitObserved(connection)
-    ? new AgentSessionAcquisitionRootExitObservedError(cause)
-    : new AgentSessionAcquisitionExitUnprovenError(cause)
+  return claudeAcquisitionCleanupError(connection, cause)
 }
 
 /** Retain unproven acquisitions so a later Stop can retry cleanup. */
@@ -60,11 +75,8 @@ export async function resolveClaudeAcquisitionError(input: {
       prompt.settle(null)
     }
     const closed = (await input.attempt.connection?.close()) ?? true
-    if (input.attempt.connection?.exitVerdict.processless === true) {
-      acquisitionError = new AgentSessionPreSpawnError(input.error)
-    } else if (!closed) {
-      acquisitionError = claudeAcquisitionCleanupError(input.attempt.connection, input.error)
-    }
+    acquisitionError =
+      claudeCloseReport(input.attempt.connection, closed, input.error) ?? input.error
   }
   if (!(acquisitionError instanceof AgentSessionAcquisitionExitUnprovenError)) {
     input.releaseAcquisition()
@@ -92,6 +104,7 @@ type CloseClaudePublishedSessionInput = {
   }) => Promise<void>
   onEvent?: (event: ClaudeStructuredSessionEvent) => void
   logger?: StructuredAgentSessionLogger
+  settledExitErrors?: Map<string, Error>
 }
 
 async function finalizeClaudePublishedSession(
@@ -105,17 +118,16 @@ async function finalizeClaudePublishedSession(
   }
   const connectionClosed = await session.connection.close()
   session.unbindReadingControl?.()
-  let rootExitVerdict: Error | undefined
-  if (connectionClosed !== true) {
-    const cleanupError = claudeAcquisitionCleanupError(
-      session.connection,
-      new Error('provider close unproven')
-    )
-    // Retain only unknown exits for retry; final verdicts release ownership and permit restart.
-    if (cleanupError instanceof AgentSessionAcquisitionExitUnprovenError) {
-      return false
-    }
-    rootExitVerdict = cleanupError
+  const rootExitVerdict = claudeCloseReport(
+    session.connection,
+    connectionClosed,
+    new Error('provider close unproven')
+  )
+  if (rootExitVerdict instanceof AgentSessionAcquisitionExitUnprovenError) {
+    return false
+  }
+  if (rootExitVerdict) {
+    input.settledExitErrors?.set(input.sessionId, rootExitVerdict)
   }
   // Retain held sends through close until the host receives the exit report.
   session.events?.observeExit?.(claudeHeldSends(session))
@@ -145,6 +157,10 @@ async function finalizeClaudePublishedSession(
       sessionId: input.sessionId,
       reason: 'claude session closed',
       cause: 'requested-close',
+      ...(rootExitVerdict instanceof AgentSessionAcquisitionRootExitObservedError &&
+      rootExitVerdict.deathEvidenceKind === 'kill-delivered'
+        ? { deathEvidenceKind: 'kill-delivered' as const }
+        : {}),
       fence: session.fence,
       acquisitionGeneration: session.acquisitionGeneration,
       observedAt
@@ -163,7 +179,9 @@ async function finalizeClaudePublishedSession(
   }
   session.closePersistence ??= persistClosedClaudeSession(input, session)
   if (rootExitVerdict) {
-    throw rootExitVerdict
+    throw callbackThrew
+      ? claudeAcquisitionCleanupError(session.connection, callbackError)
+      : rootExitVerdict
   }
   if (callbackThrew) {
     throw new AgentSessionAcquisitionExitProvenError(callbackError)
@@ -221,16 +239,7 @@ export async function closeClaudePublishedSession(
 export function closeClaudePublishedSessionForDeps(
   sessions: Map<string, ClaudeSession>,
   sessionId: string,
-  deps: {
-    persistHandle?: (handle: {
-      sessionId: string
-      providerSessionId: string
-      leafUuid: string | null
-      fence: number
-    }) => Promise<void>
-    onEvent?: (event: ClaudeStructuredSessionEvent) => void
-    logger?: StructuredAgentSessionLogger
-  }
+  deps: Omit<CloseClaudePublishedSessionInput, 'sessions' | 'sessionId'>
 ): Promise<boolean> {
   return closeClaudePublishedSession({ sessions, sessionId, ...deps })
 }
@@ -258,36 +267,29 @@ export function finishClaudeCloseAfterExit(input: {
     )
 }
 
-export async function closeClaudeSession(input: {
-  sessionId: string
-  sessions: Map<string, ClaudeSession>
-  acquisitions: ClaudeAcquisitionRegistry
-  persistHandle?: (handle: {
-    sessionId: string
-    providerSessionId: string
-    leafUuid: string | null
-    fence: number
-  }) => Promise<void>
-  onEvent?: (event: ClaudeStructuredSessionEvent) => void
-  logger?: StructuredAgentSessionLogger
-}): Promise<boolean> {
+export async function closeClaudeSession(
+  input: CloseClaudePublishedSessionInput & {
+    acquisitions: ClaudeAcquisitionRegistry
+  }
+): Promise<boolean> {
   const attempt = input.acquisitions.get(input.sessionId)
-  if (!(await cancelClaudeAcquisitionAttempt(attempt))) {
-    const cleanupError = claudeAcquisitionCleanupError(
-      attempt?.connection,
-      new Error('acquisition cancel unproven')
-    )
-    if (!(cleanupError instanceof AgentSessionAcquisitionExitUnprovenError)) {
-      // Release dead attempts so they cannot block the next start.
-      if (attempt) {
-        input.acquisitions.deleteIfCurrent(input.sessionId, attempt)
-      }
-      throw cleanupError
-    }
+  const cancelled = await cancelClaudeAcquisitionAttempt(attempt)
+  const report = claudeCloseReport(
+    attempt?.connection,
+    cancelled,
+    new Error('acquisition cancel unproven')
+  )
+  if (report instanceof AgentSessionAcquisitionExitUnprovenError) {
     return false
   }
   if (attempt) {
+    if (report && input.acquisitions.get(input.sessionId) === attempt) {
+      input.settledExitErrors?.set(input.sessionId, report)
+    }
     input.acquisitions.deleteIfCurrent(input.sessionId, attempt)
+  }
+  if (report) {
+    throw report
   }
   return closeClaudePublishedSession(input)
 }

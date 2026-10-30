@@ -1,24 +1,26 @@
 import {
   isLinearAuthError,
-  getLinearIssueCommentThreadRoot,
-  LinearWriteFailure
+  getLinearIssueCommentThreadRoot
 } from './runtime-linear-command-dependencies'
 import {
   LinearAgentAccessError,
   linearError,
-  sanitizeLinearErrorMessage,
   toLinearAccessError
 } from '../linear/issue-context/errors'
+import { runLinearWriteAction } from './runtime-linear-write-action'
+import type { LinearWriteFailure } from '../linear/linear-issue-write-support'
 import { RuntimeLinearWriteResultCommands } from './runtime-linear-write-result-commands'
 
 export class RuntimeLinearCommentLookupCommands extends RuntimeLinearWriteResultCommands {
   public async resolveLinearCommentParentId(
     issueId: string,
     commentId: string,
-    workspaceId: string
+    workspaceId: string,
+    signal?: AbortSignal
   ): Promise<string> {
+    signal?.throwIfAborted()
     try {
-      const root = await getLinearIssueCommentThreadRoot(issueId, commentId, workspaceId)
+      const root = await getLinearIssueCommentThreadRoot(issueId, commentId, workspaceId, signal)
       if (!root) {
         throw linearError(
           'linear_invalid_parent',
@@ -37,58 +39,31 @@ export class RuntimeLinearCommentLookupCommands extends RuntimeLinearWriteResult
     }
   }
 
-  public async runLinearAgentWrite<T>(
-    write: (signal: AbortSignal) => Promise<T>,
-    unconfirmed: (cause?: string) => LinearAgentAccessError
-  ): Promise<T> {
-    const controller = new AbortController()
-    const writePromise = write(controller.signal)
-    writePromise.catch(() => undefined)
-    let timer: ReturnType<typeof setTimeout> | null = null
-    try {
-      return await Promise.race([
-        writePromise,
-        new Promise<never>((_resolve, reject) => {
-          timer = setTimeout(() => {
-            controller.abort()
-            reject(
-              new LinearWriteFailure(
-                'unconfirmed',
-                'Linear write deadline elapsed before confirmation.'
-              )
-            )
-          }, 25_000)
-        })
-      ])
-    } catch (error) {
-      if (error instanceof LinearWriteFailure && error.kind === 'duplicate_id') {
-        throw error
-      }
-      if (error instanceof LinearWriteFailure && error.kind === 'unconfirmed') {
-        throw unconfirmed(this.linearWriteFailureCauseMessage(error))
-      }
-      if (error instanceof LinearWriteFailure && error.kind === 'network') {
-        throw linearError('linear_network_error', sanitizeLinearErrorMessage(error.message))
-      }
-      if (error instanceof LinearWriteFailure) {
-        throw linearError('linear_write_failed', sanitizeLinearErrorMessage(error.message))
-      }
-      throw this.mapLinearReadFailure(error)
-    } finally {
-      if (timer) {
-        clearTimeout(timer)
-      }
-    }
+  public runLinearAgentAction<Owner, Result>(
+    prepare: (signal: AbortSignal) => Promise<Owner>,
+    write: (
+      owner: Owner,
+      options: { signal: AbortSignal; beforeInvoke: () => void }
+    ) => Promise<Result>,
+    unconfirmed: (owner: Owner, cause?: string) => LinearAgentAccessError,
+    cancellation?: AbortSignal,
+    mapWriteFailure?: (error: LinearWriteFailure) => LinearAgentAccessError
+  ): Promise<{ owner: Owner; result: Result }> {
+    return runLinearWriteAction(
+      prepare,
+      write,
+      unconfirmed,
+      (error) => this.mapLinearReadFailure(error),
+      cancellation,
+      mapWriteFailure
+    )
   }
 
-  public linearWriteFailureCauseMessage(error: LinearWriteFailure): string {
-    if (error.cause instanceof Error) {
-      return sanitizeLinearErrorMessage(error.cause.message)
-    }
-    if (error.cause !== undefined) {
-      return sanitizeLinearErrorMessage(String(error.cause))
-    }
-    return sanitizeLinearErrorMessage(error.message)
+  public mapLinearCommentWriteFailure(error: LinearWriteFailure): LinearAgentAccessError {
+    return linearError(
+      error.kind === 'network' ? 'linear_network_error' : 'linear_write_failed',
+      'Linear could not complete the comment change. Retry after checking the comment.'
+    )
   }
 
   public mapLinearReadFailure(error: unknown): LinearAgentAccessError {

@@ -3,6 +3,7 @@ import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import {
   assertStructuredAgentResolutionCurrent,
   resolveAgainAfterRefreshOnMissingProgram,
+  type StructuredAgentCommand,
   type StructuredAgentResolutionOperation
 } from '../native-chat/structured-agent-command-resolution'
 // How a durable session record becomes a Codex process launch.
@@ -28,7 +29,10 @@ import {
 
 export type CodexStructuredLaunchPartDeps = {
   resolveLaunchArgs: () => Promise<string[]> | string[]
-  resolveCommand?: (options?: { pathEnv?: string | null; homePath?: string }) => string
+  resolveCommand?: (options?: {
+    pathEnv?: string | null
+    homePath?: string
+  }) => StructuredAgentCommand
 }
 
 export type CodexStructuredInvocationDeps = Pick<
@@ -47,6 +51,7 @@ export type CodexStructuredInvocationDeps = Pick<
 
 export type CodexStructuredInvocation = {
   command: string
+  prefixArgs: string[]
   environment: NodeJS.ProcessEnv | undefined
 }
 
@@ -87,11 +92,14 @@ async function readCodexStructuredInvocation(
       .map((entry) => (entry && !isAbsolute(entry) ? resolve(cwd ?? process.cwd(), entry) : entry))
       .join(delimiter) ?? null
   const homePath = environment?.HOME ?? environment?.USERPROFILE
-  const command = (deps.resolveCommand ?? resolveCodexCommand)({
+  const options = {
     pathEnv,
     ...(homePath ? { homePath } : {})
-  })
-  return { command, environment }
+  }
+  const invocation = deps.resolveCommand
+    ? deps.resolveCommand(options)
+    : { command: resolveCodexCommand(options), prefixArgs: [] }
+  return { ...invocation, environment }
 }
 
 /** Derive resume identity and account home from the durable record. */
@@ -101,7 +109,7 @@ export function codexStructuredLaunchPart(
   return async (basis) => {
     const { record } = basis
     const accountHome = requireLegacyAgentSessionAccountHome(record.accountHome)
-    const { command } = await resolveCodexStructuredInvocation({
+    const { command, prefixArgs } = await resolveCodexStructuredInvocation({
       ...(deps.resolveCommand ? { resolveCommand: deps.resolveCommand } : {}),
       refreshEnvironmentAfterMiss: basis.refreshAfterMissingProgram,
       resolveWorkingDirectory: basis.launchDirectory,
@@ -118,7 +126,8 @@ export function codexStructuredLaunchPart(
     return {
       launch: {
         command,
-        args: [...args, 'app-server'],
+        prefixArgs,
+        args: [...prefixArgs, ...args, 'app-server'],
         codexHome: accountHome.path,
         resumeThreadId,
         // Only created threads may be unsaved; resumed, forked and adopted threads were persisted.

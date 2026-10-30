@@ -1,3 +1,4 @@
+import { terminalInputSend } from '../terminal/mobile-terminal-operations'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -82,6 +83,7 @@ function fixture(title = 'Terminal', imagePath = '/tmp/orca-image.png', launchAg
   const liveInputRef = ref(null)
   const sendLiveTerminalInputRef = ref<TerminalLiveInputSender>(async () => false)
   const scope = {
+    sendTerminalUserInput: terminalInputSend.request,
     client,
     clientRef: ref(client),
     activeHandle: 'term-1',

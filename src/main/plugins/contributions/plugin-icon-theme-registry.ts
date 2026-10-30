@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import type { PluginThemeContribution } from '../../../shared/plugins/contributions/plugin-content-pack-contributions'
 import {
   PLUGIN_ICON_SVG_MAX_BYTES,
@@ -34,24 +35,34 @@ export class PluginIconThemeRegistry {
     this.descriptors = new PluginArtifactPackRegistry({
       contentVerifier,
       contributions: (plugin) => plugin.manifest.contributes.iconThemes,
-      load: async (plugin, contribution) => ({
-        id: `plugin:${plugin.pluginKey}/${contribution.id}`,
-        pluginKey: plugin.pluginKey,
-        label: contribution.title,
-        rootDir: plugin.rootDir,
-        artifact: parsePluginIconThemeArtifact(
-          await readContainedPluginArtifactText(
-            plugin.rootDir,
-            contribution.path,
-            PLUGIN_ICON_THEME_MAX_BYTES
-          )
+      load: async (plugin, contribution) => {
+        const text = await readContainedPluginArtifactText(
+          plugin.rootDir,
+          contribution.path,
+          PLUGIN_ICON_THEME_MAX_BYTES
         )
-      })
+        return {
+          id: `plugin:${plugin.pluginKey}/${contribution.id}`,
+          pluginKey: plugin.pluginKey,
+          label: contribution.title,
+          // Why the tree hash: SVGs load lazily, so it stands in for their bytes across updates.
+          revision: createHash('sha256')
+            .update(plugin.contentHash ?? '')
+            .update('\0')
+            .update(text)
+            .digest('hex')
+            .slice(0, 32),
+          rootDir: plugin.rootDir,
+          artifact: parsePluginIconThemeArtifact(text)
+        }
+      }
     })
   }
 
   list(): PluginIconThemeMetadata[] {
-    return this.descriptors.list().map(({ id, pluginKey, label }) => ({ id, pluginKey, label }))
+    return this.descriptors
+      .list()
+      .map(({ id, pluginKey, label, revision }) => ({ id, pluginKey, label, revision }))
   }
 
   error(pluginKey: string): string | null {
@@ -113,6 +124,7 @@ async function materialize(descriptor: IconThemeDescriptor): Promise<PluginIconT
     id: descriptor.id,
     pluginKey: descriptor.pluginKey,
     label: descriptor.label,
+    revision: descriptor.revision,
     svgs,
     icons: indexOf(artifact.icons),
     fileNames: indexOf(artifact.fileNames),

@@ -2,6 +2,7 @@ import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { TerminalTab } from '../../../../../../shared/terminal-tab-types'
 import type { Tab } from '../../../../../../shared/tab-types'
 import type { AppState } from '../../../types'
+import { forgetStructuredSessionSelection } from '@/lib/structured-agent-session-selection-controller'
 import { settleAgentLaunchPaneStart } from '@/lib/agent-launch-pane-start'
 import {
   getStructuredAgentSessionLaunchOwner,
@@ -44,6 +45,7 @@ export function retirePurgedTabLaunches(
       )
       const target = structuredAgentSessionTargetForTab(s, tab)
       if (target) {
+        forgetStructuredSessionSelection(tab.entityId, target)
         retireStructuredAgentSessionReadOwner(tab.entityId, target)
       }
     }

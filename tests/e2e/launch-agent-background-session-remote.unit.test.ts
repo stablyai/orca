@@ -140,6 +140,8 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
         terminal: { handle: 'prepared-background', worktreeId: 'wt-1', title: null }
       })
       expect(spawn).toHaveBeenCalledExactlyOnceWith('id:wt-1', {
+        // A paired client's terminal.create is the user's act (E9).
+        wslUserAct: true,
         command: plan.launchCommand,
         env: { ACTION_PROFILE: 'captured' },
         envToDelete: undefined,

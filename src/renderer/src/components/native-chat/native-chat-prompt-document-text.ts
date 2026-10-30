@@ -2,7 +2,7 @@ import type { JSONContent } from '@tiptap/react'
 import {
   imageReferenceToken,
   splitImageReferences
-} from '../../../../shared/native-chat-image-reference'
+} from '../../../../shared/native-chat/native-chat-image-reference'
 import { NATIVE_CHAT_PASTED_TEXT_TOKEN } from './native-chat-pasted-text-reference'
 
 export const IMAGE_REFERENCE_NODE = 'nativeChatImageReference'

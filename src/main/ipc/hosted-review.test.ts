@@ -402,6 +402,35 @@ describe('registerHostedReviewHandlers', () => {
     expect(getHostedReviewForBranchMock).toHaveBeenCalledTimes(reads)
   })
 
+  it.each([
+    ["refuses Source Control's mount-time eligibility read", {}, 0],
+    ["lets the user's Create PR start the distro", { wakeWslDistro: true }, 1]
+  ] as const)('%s for a stopped distro (E9)', async (_case, extra, reads) => {
+    setPlatform('win32')
+    const wslRepo = {
+      id: 'repo-wsl',
+      path: '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo',
+      displayName: 'wsl',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    store.getRepo.mockImplementation((repoId: string) => (repoId === wslRepo.id ? wslRepo : null))
+    store.getRepos.mockReturnValue([wslRepo])
+    readWslDistroRunningStateMock.mockResolvedValue('stopped')
+    getHostedReviewCreationEligibilityMock.mockResolvedValue({ canCreate: false })
+    registerHostedReviewHandlers(store as never, stats as never)
+
+    const read = handlers['hostedReview:getCreationEligibility'](null, {
+      repoPath: wslRepo.path,
+      repoId: wslRepo.id,
+      branch: 'feature/wsl',
+      ...extra
+    })
+
+    await (reads === 0 ? expect(read).rejects.toBeInstanceOf(WslDistroStoppedError) : read)
+    expect(getHostedReviewCreationEligibilityMock).toHaveBeenCalledTimes(reads)
+  })
+
   it('carries a selected-worktree claim and explicit refresh through to the branch lookup', async () => {
     getHostedReviewForBranchMock.mockResolvedValueOnce(null)
     registerHostedReviewHandlers(store as never, stats as never)

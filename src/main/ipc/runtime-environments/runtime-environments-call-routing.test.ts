@@ -120,6 +120,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   afterEach(() => {
     vi.restoreAllMocks()
     resetRuntimeEnvironmentStatusOwners()
+    vi.unstubAllGlobals()
     rmSync(userDataPath, { recursive: true, force: true })
   })
 

@@ -9,7 +9,7 @@ type ParentEligibilityArgs = {
   child: Worktree
   candidateParent: Worktree
   lineageById: Record<string, WorktreeLineage>
-  worktreeMap: Map<string, Worktree>
+  worktreeMap: ReadonlyMap<string, Worktree>
   cyclicLineageIds?: ReadonlySet<string>
 }
 

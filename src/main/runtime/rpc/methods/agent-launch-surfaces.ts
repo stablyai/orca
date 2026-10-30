@@ -140,6 +140,8 @@ export function agentLaunchSurfaceFactory(
         terminalSpawn.rethrow(new AgentLaunchTabClosedError())
       }
       const created = context.runtime.createTerminal(`id:${worktreeId}`, {
+        // An agent launch the caller asked for (CLI, window or paired client) is the user's act.
+        wslUserAct: true,
         // Let the runtime build the configured launcher: agent ids are not commands (cursor uses cursor-agent).
         startupAgent: agent,
         terminalImageViewerSupported: terminalImageViewerSupported(context),

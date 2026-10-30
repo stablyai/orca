@@ -462,7 +462,8 @@ describe('registerGitHubHandlers', () => {
       42,
       'pr',
       null,
-      localGitOptions
+      localGitOptions,
+      { preview: false }
     )
     expect(getWorkItemDetailsMock).toHaveBeenCalledWith(
       '/workspace/repo',

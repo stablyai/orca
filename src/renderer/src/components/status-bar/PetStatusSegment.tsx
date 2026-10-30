@@ -43,8 +43,12 @@ function PetStatusSegmentInner(): React.JSX.Element {
     ? activeBundled.label
     : activeCustom
       ? customPetLabel(activeCustom)
-      : 'Pet'
-  const label = petVisible ? activeLabel : `${activeLabel} hidden`
+      : translate('auto.components.status.bar.PetStatusSegment.petFallbackLabel', 'Pet')
+  const label = petVisible
+    ? activeLabel
+    : translate('auto.components.status.bar.PetStatusSegment.petHiddenLabel', '{{pet}} hidden', {
+        pet: activeLabel
+      })
 
   const handleImport = async (): Promise<void> => {
     console.log('[pet-overlay] upload: click')

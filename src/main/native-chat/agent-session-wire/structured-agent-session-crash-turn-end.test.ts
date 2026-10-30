@@ -1,3 +1,4 @@
+import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
 // Quiet tools may emit only start/end rows; pre-crash lease renewal supplies the latest observed work time.
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -105,7 +106,7 @@ function crashedClaudeRecord(): AgentSessionRecord {
 
 async function seedCrashedStore(): Promise<void> {
   await seedTestAgentSessionRecordStore(root, { records: [crashedClaudeRecord()] })
-  store = await openTestAgentSessionRecordStore(root)
+  store = await openTestAgentSessionRecordStore(root, { legacySessionTabIds: [SESSION] })
 }
 
 /** Seed an unacknowledged send with a started Bash call and no completion. */
@@ -202,7 +203,7 @@ describe('a turn a crash cut short mid-tool', () => {
   it('ends at the last renewal, not at the tool call the provider last reported', async () => {
     openHost({ probeOwner: async () => ({ outcome: 'pid-absent' }) })
 
-    await host.restoreReadableSessions()
+    await openTestChats(host)
 
     expect(store.getRecord(SESSION)?.lease.deathEvidence).toMatchObject({
       kind: 'pid-absent',
@@ -223,7 +224,7 @@ describe('a turn a crash cut short mid-tool', () => {
   it('explains the cut once, with one notice row and a turn bar that does not repeat it', async () => {
     openHost({ probeOwner: async () => ({ outcome: 'pid-absent' }) })
 
-    await host.restoreReadableSessions()
+    await openTestChats(host)
 
     const { items } = await host.journalSnapshot(SESSION)
     const statusRows = withNativeChatCutTurnNotices(items, { agentName: 'Claude' }).flatMap(
@@ -258,7 +259,7 @@ describe('a turn a crash cut short mid-tool', () => {
     })
     openHost({ probeOwner, stopOwnerProcess })
 
-    await host.restoreReadableSessions()
+    await openTestChats(host)
 
     expect(stopOwnerProcess).toHaveBeenCalledOnce()
     expect(store.getRecord(SESSION)?.lease.deathEvidence).toMatchObject({
@@ -363,7 +364,7 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
       ]
     })
     beginAgentSessionRuntimeRecord(root, 'runtime-crashed', TOOL_STARTED_AT - 60_000)
-    store = await openTestAgentSessionRecordStore(root)
+    store = await openTestAgentSessionRecordStore(root, { legacySessionTabIds: [SESSION] })
     openHost({ probeOwner: async () => ({ outcome: 'pid-absent' }) })
     expect(await settledTurn()).toMatchObject(INTERRUPTED_TURN)
 
@@ -398,7 +399,7 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
           host.collaboratorsForTests().sessions.get(SESSION)
         )
       )
-    await host.restoreReadableSessions()
+    await openTestChats(host)
 
     expect(await host.journalSnapshot(SESSION)).toEqual(settled)
   })
@@ -432,7 +433,7 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
     expect(await settledTurn()).toMatchObject(INTERRUPTED_TURN)
 
     // Reconciliation parks live orphans; recovery Stop supplies exit proof.
-    await host.restoreReadableSessions()
+    await openTestChats(host)
     await drainSession()
 
     expect(stopOwnerProcess).toHaveBeenCalledOnce()

@@ -1,4 +1,7 @@
-import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../src/shared/structured-agent-session-surface-capabilities'
+import {
+  AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY,
+  AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY
+} from '../../../src/shared/structured-agent-session-surface-capabilities'
 import {
   AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
   AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY,
@@ -13,6 +16,7 @@ import {
   AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY
 } from '../../../src/shared/protocol-version'
 import {
+  AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY,
   AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY,
   AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY
 } from '../../../src/shared/agent-session-create-capabilities'
@@ -27,6 +31,7 @@ import {
 import { SKILL_DISCOVER_WORKSPACE_CAPABILITY } from '../../../src/shared/skill-install-capability'
 
 export type StructuredAgentSessionHostSupport = {
+  commandsOnRequest?: boolean
   coherentModelCatalog?: boolean
   promptCancel: boolean
   questionAnswers: boolean
@@ -43,6 +48,8 @@ export type StructuredAgentSessionHostSupport = {
   // Hosts predating mobile access refuse this feed even if they implement it.
   statusFeed: boolean
   quietRepeatedStop: boolean
+  /** A send may carry the model and effort its turn runs on. */
+  sendSelection?: boolean
   sendOptions: boolean
   /** Older hosts refuse a send body carrying picked skill paths. */
   sendSkills?: boolean
@@ -61,6 +68,7 @@ export function structuredAgentSessionHostSupport(
   capabilities: readonly string[]
 ): StructuredAgentSessionHostSupport {
   return {
+    commandsOnRequest: capabilities.includes(AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY),
     coherentModelCatalog: capabilities.includes(AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY),
     promptCancel: capabilities.includes(AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY),
     questionAnswers: capabilities.includes(AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY),
@@ -78,6 +86,7 @@ export function structuredAgentSessionHostSupport(
     ),
     statusFeed: capabilities.includes(AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY),
     quietRepeatedStop: capabilities.includes(AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY),
+    sendSelection: capabilities.includes(AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY),
     sendOptions: capabilities.includes(AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY),
     sendSkills: capabilities.includes(AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY),
     discoverWorkspaceSkills: capabilities.includes(SKILL_DISCOVER_WORKSPACE_CAPABILITY),

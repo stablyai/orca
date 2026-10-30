@@ -43,6 +43,7 @@ export type StructuredAgentSessionLaunchIntent = {
   target: RuntimeClientTarget
   agent: TuiAgent
   params: StructuredAgentSessionCreateParams
+  sendSelectionSupport?: boolean
   createMessageSupport?: boolean
   createPrepared?: true
   prepareCreate?: (hostTakesExplicitOptions: boolean) => void
@@ -171,6 +172,7 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
   firstMessage?: StructuredAgentSessionFirstMessage
   optionsMode?: 'replace-model-selection'
   options?: Readonly<Record<string, string>>
+  sendSelectionSupport?: boolean
   createMessageSupport?: boolean
 }): StructuredAgentSessionLaunchIntent {
   const state = useAppStore.getState()

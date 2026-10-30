@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { requiredString } from './rpc-param-primitives'
+import { OptionalBoolean, requiredString } from './rpc-param-primitives'
 import { OptionalGitAdmissionTier } from './git-admission-tier-params'
 
 export const HostedReviewForBranch = z.object({
@@ -32,7 +32,9 @@ export const HostedReviewCreationEligibility = z.object({
   linkedGitLabMR: z.number().int().positive().nullable().optional(),
   linkedBitbucketPR: z.number().int().positive().nullable().optional(),
   linkedAzureDevOpsPR: z.number().int().positive().nullable().optional(),
-  linkedGiteaPR: z.number().int().positive().nullable().optional()
+  linkedGiteaPR: z.number().int().positive().nullable().optional(),
+  /** The user's Create PR; older hosts drop it. */
+  wakeWslDistro: OptionalBoolean
 })
 
 export const HostedReviewCreate = z.object({

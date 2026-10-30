@@ -7,10 +7,18 @@ vi.mock('../components/native-chat/StructuredAgentSessionStatusBridge', () => ({
   useStructuredAgentSessionStatusSummary: () => ({ summary: null, observation: 0 })
 }))
 // Existing non-Own action gates have their own unchanged request/recovery contracts.
-vi.mock('./structured-agent-session-host-capability', async (original) => ({
-  ...(await original<typeof HostCapability>()),
-  useStructuredAgentSessionHostCapability: () => false
-}))
+vi.mock('./structured-agent-session-host-capability', async (original) => {
+  const actual = await original<typeof HostCapability>()
+  return {
+    ...actual,
+    useStructuredAgentSessionHostCapability: (
+      ...[target, capability]: Parameters<typeof actual.useStructuredAgentSessionHostCapability>
+    ) =>
+      capability === 'agent-session.permission-modes.v1'
+        ? actual.useStructuredAgentSessionHostCapability(target, capability)
+        : false
+  }
+})
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 vi.mock('./structured-agent-session-client', () => ({
   callStructuredAgentSession: async () => ({
@@ -36,6 +44,7 @@ const owners: RuntimeHostStatusOwner[] = []
 afterEach(() => {
   owners.splice(0).forEach((owner) => owner.dispose())
   cleanup()
+  useAppStore.getState().setRuntimeEnvironments([])
   clearRuntimeCompatibilityCacheForTests()
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
@@ -44,22 +53,20 @@ afterEach(() => {
 it.each([10, 100])(
   'enables %s mounted consumers from the existing connection owner',
   async (count) => {
-    useAppStore.setState({
-      runtimeEnvironments: [
-        {
-          id: 'host',
-          name: 'host',
-          createdAt: 1,
-          updatedAt: 1,
-          pairingRevision: 1,
-          lastUsedAt: null,
-          runtimeId: null,
-          endpoints: [],
-          preferredEndpointId: 'host'
-        }
-      ],
-      runtimeStatusByEnvironmentId: new Map()
-    })
+    useAppStore.getState().setRuntimeEnvironments([
+      {
+        id: 'host',
+        name: 'host',
+        createdAt: 1,
+        updatedAt: 1,
+        pairingRevision: 1,
+        lastUsedAt: null,
+        runtimeId: null,
+        endpoints: [],
+        preferredEndpointId: 'host'
+      }
+    ])
+    useAppStore.setState({ runtimeStatusByEnvironmentId: new Map() })
     let response = Promise.withResolvers<ReturnType<typeof createCompatibleRuntimeStatusResponse>>()
     const request = vi.fn(() => response.promise)
     const owner = new RuntimeHostStatusOwner({

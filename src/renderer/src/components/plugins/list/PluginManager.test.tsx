@@ -170,20 +170,82 @@ afterEach(() => {
 
 describe('PluginManager', () => {
   it('lists each catalog plugin once, in catalog order, capped with Show all', async () => {
-    const container = await render()
+    const pastCap = { ...installedPlugin, pluginKey: 'stablyai.extra-13', name: 'Extra 13' }
+    const container = await render([installedPlugin, pastCap])
     const catalogCards = (): Element[] =>
-      Array.from(container.querySelectorAll('[data-plugin-key]')).filter(
-        (card) => !card.closest('[data-installed-carousel]')
-      )
+      Array.from(container.querySelectorAll('[data-plugin-key]'))
     const rows = catalogCards().map((row) => row.getAttribute('data-plugin-key'))
     // Why one grid: an installed catalog plugin keeps its card, so installing never moves it.
     expect(rows.filter((key) => key === 'stablyai.orca-nord-theme')).toHaveLength(1)
-    expect(rows).toHaveLength(PLUGIN_GROUP_ROW_CAP)
+    // Why: an installed plugin past the cap keeps its card, so its switch never hides behind Show all.
+    expect(rows).toHaveLength(PLUGIN_GROUP_ROW_CAP + 1)
+    expect(rows).toContain('stablyai.extra-13')
 
     await act(async () =>
       buttonNamed(container, `Show all ${PLUGIN_GROUP_ROW_CAP + 3} plugins`)?.click()
     )
     expect(catalogCards()).toHaveLength(PLUGIN_GROUP_ROW_CAP + 3)
+  })
+
+  it('filters one list by install state, keeping local plugins and inline switches', async () => {
+    const dev: PluginHostListEntry = {
+      ...installedPlugin,
+      pluginKey: 'local.dev-theme',
+      name: 'Dev Theme',
+      isDev: true,
+      source: undefined
+    }
+    const container = await render([installedPlugin, dev])
+    const keys = (): (string | null)[] =>
+      Array.from(container.querySelectorAll('[data-plugin-key]'), (card) =>
+        card.getAttribute('data-plugin-key')
+      )
+    const showFilter = (name: RegExp): void => {
+      const tab = Array.from(container.querySelectorAll('[role="tab"]')).find((node) =>
+        name.test(node.textContent ?? '')
+      )
+      act(() => {
+        tab?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }))
+      })
+    }
+    const nord = container.querySelector('[data-plugin-key="stablyai.orca-nord-theme"]')
+    expect(nord?.querySelector('[data-plugin-installed-badge]')).not.toBeNull()
+    expect(buttonNamed(container, 'Disable Orca Nord')?.getAttribute('role')).toBe('switch')
+    expect(keys()).toContain('local.dev-theme')
+    expect(container.textContent).toContain('not from a catalog')
+
+    showFilter(/^Not installed/)
+    expect(keys()).not.toContain('stablyai.orca-nord-theme')
+    expect(keys()).not.toContain('local.dev-theme')
+    expect(container.querySelector('[data-plugin-installed-badge]')).toBeNull()
+
+    showFilter(/^Installed/)
+    expect(keys().sort()).toEqual(['local.dev-theme', 'stablyai.orca-nord-theme'])
+  })
+
+  it('filters by one inline category chip at a time', async () => {
+    installApi({
+      listMarketplacePlugins: vi
+        .fn()
+        .mockResolvedValue([
+          ...catalogListings,
+          listing('stablyai.gleam', { categories: ['syntax'] })
+        ])
+    })
+    const container = await render()
+    const chip = Array.from(container.querySelectorAll('[data-slot="toggle-group-item"]')).find(
+      (node) => node.textContent === 'Languages'
+    )
+    expect(chip?.querySelector('svg')).not.toBeNull()
+    await act(async () => chip?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    expect(
+      Array.from(container.querySelectorAll('[data-plugin-key]'), (card) =>
+        card.getAttribute('data-plugin-key')
+      )
+    ).toEqual(['stablyai.gleam'])
+    // Why: single-select; clicking the active chip returns to every category.
+    await act(async () => chip?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    expect(container.querySelectorAll('[data-plugin-key]').length).toBeGreaterThan(1)
   })
 
   it('labels cards by category with an icon, keeping a chip only for full access', async () => {

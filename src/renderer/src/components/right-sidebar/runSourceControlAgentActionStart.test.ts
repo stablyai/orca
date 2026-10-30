@@ -613,7 +613,7 @@ it.each(['--model gpt-5.6-luna', '--model gpt-5.6-sol'])(
     expect(command).toMatchObject({
       ok: true,
       appliedSessionOptions: {},
-      command: `codex '--model' '${agentArgs.split(' ')[1]}'`
+      command: `codex '-c' 'disable_paste_burst=true' '--model' '${agentArgs.split(' ')[1]}'`
     })
     expect(mocks.onSaveAgentDefault).toHaveBeenCalledTimes(1)
     await runSourceControlAgentActionStart(

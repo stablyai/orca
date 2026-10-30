@@ -121,20 +121,14 @@ export function collectWslDriveUncScope(
 
 /** A bare path is re-keyed by the folder it lies in, so nested projects must convert together. */
 function refuseOverlaps(scope: WslDriveUncScope, repos: readonly Repo[], distro: string): void {
-  // A duplicate's folder is the project it duplicates, so it never splits a converted folder.
+  // A same-folder duplicate is the project it duplicates; nested ones: wslDriveUncDuplicatesSplitBy.
   const refusedIds = new Set(
     scope.refused
       .filter((entry) => entry.reason !== 'duplicate-windows-project')
       .map((entry) => entry.id)
   )
-  const comparable = (repo: Repo): string[] =>
-    wslMoveRepoPaths(repo).flatMap((path) => {
-      const drive = wslUncDrivePathToWindows(path, distro)
-      return drive ? [normalizeRuntimePathForComparison(drive)] : []
-    })
+  const comparable = (repo: Repo): string[] => driveRoots(wslMoveRepoPaths(repo), distro)
   const refusedRoots = repos.filter((repo) => refusedIds.has(repo.id)).flatMap(comparable)
-  const nests = (left: string, right: string): boolean =>
-    left === right || left.startsWith(`${right}/`) || right.startsWith(`${left}/`)
   const overlapping = new Set(
     repos
       .filter((repo) => scope.repoIds.includes(repo.id))
@@ -147,6 +141,102 @@ function refuseOverlaps(scope: WslDriveUncScope, repos: readonly Repo[], distro:
   for (const id of overlapping) {
     scope.refused.push({ kind: 'repo', id, reason: 'overlaps-refused-project' })
   }
+}
+
+/** The picked projects and every convertible one nesting with them, which must convert together. */
+export function withNestedWslDriveUncProjects(
+  scope: WslDriveUncScope,
+  distro: string,
+  picked: { repoIds: readonly string[]; folderWorkspaceIds: readonly string[] },
+  /** The folders a conversion of just this project rewrites, its saved worktrees included. */
+  rewriteRoots: (project: { repoIds: string[]; folderWorkspaceIds: string[] }) => string[]
+): { repoIds: string[]; folderWorkspaceIds: string[] } {
+  const repoIds = new Set(picked.repoIds)
+  const folderWorkspaceIds = new Set(picked.folderWorkspaceIds)
+  const candidates = [
+    ...scope.repoIds.map((id) => ({
+      ids: repoIds,
+      id,
+      roots: driveRoots(rewriteRoots({ repoIds: [id], folderWorkspaceIds: [] }), distro)
+    })),
+    ...scope.folderWorkspaceIds.map((id) => ({
+      ids: folderWorkspaceIds,
+      id,
+      roots: driveRoots(rewriteRoots({ repoIds: [], folderWorkspaceIds: [id] }), distro)
+    }))
+  ]
+  for (let added = true; added;) {
+    added = false
+    const roots = candidates
+      .filter((entry) => entry.ids.has(entry.id))
+      .flatMap((entry) => entry.roots)
+    for (const entry of candidates) {
+      if (
+        !entry.ids.has(entry.id) &&
+        entry.roots.some((root) => roots.some((other) => nests(root, other)))
+      ) {
+        entry.ids.add(entry.id)
+        added = true
+      }
+    }
+  }
+  return { repoIds: [...repoIds], folderWorkspaceIds: [...folderWorkspaceIds] }
+}
+
+/**
+ * Refused duplicates a conversion rewriting these folders would split: their paths inside them
+ * would move while their ids stay. A second spelling of a converting project is that project.
+ */
+export function wslDriveUncDuplicatesSplitBy(
+  state: WslDriveUncScopeState,
+  scope: WslDriveUncScope,
+  distro: string,
+  converting: { repoIds: readonly string[]; folderWorkspaceIds: readonly string[] },
+  rewriteRoots: () => readonly string[]
+): string[] {
+  const duplicates = scope.refused.filter((entry) => entry.reason === 'duplicate-windows-project')
+  if (duplicates.length === 0) {
+    return []
+  }
+  const convertingFolders = new Set(
+    driveRoots(
+      [
+        ...state.repos.filter(({ id }) => converting.repoIds.includes(id)).map(({ path }) => path),
+        ...state.folderWorkspaces
+          .filter(({ id }) => converting.folderWorkspaceIds.includes(id))
+          .map(({ folderPath }) => folderPath)
+      ],
+      distro
+    )
+  )
+  const roots = driveRoots(rewriteRoots(), distro)
+  const splits = (folder: string, paths: readonly string[]): boolean =>
+    !driveRoots([folder], distro).some((path) => convertingFolders.has(path)) &&
+    driveRoots(paths, distro).some((path) => roots.some((root) => isInside(path, root)))
+  return duplicates.flatMap(({ kind, id }) => {
+    if (kind === 'repo') {
+      const repo = state.repos.find((entry) => entry.id === id)
+      return repo && splits(repo.path, wslMoveRepoPaths(repo)) ? [id] : []
+    }
+    const folder = state.folderWorkspaces.find((entry) => entry.id === id)
+    return folder && splits(folder.folderPath, [folder.folderPath]) ? [id] : []
+  })
+}
+
+function driveRoots(paths: readonly string[], distro: string): string[] {
+  return paths.flatMap((path) => {
+    const drive = wslUncDrivePathToWindows(path, distro)
+    return drive ? [normalizeRuntimePathForComparison(drive)] : []
+  })
+}
+
+function nests(left: string, right: string): boolean {
+  return left === right || isInside(left, right) || isInside(right, left)
+}
+
+// Why: a drive root normalizes to `c:/`, which already ends in the separator.
+function isInside(path: string, folder: string): boolean {
+  return path.startsWith(folder.endsWith('/') ? folder : `${folder}/`)
 }
 
 /** The worktree id a converted project's worktree gets: same repo id, drive path. */

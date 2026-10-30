@@ -30,6 +30,7 @@ import type { LinearComment, LinearIssue } from '../../../shared/linear/issue-ty
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { LinearEditState, LinearLocalComment } from '@/components/linear-item-drawer-types'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 function LinearIcon({ className }: { className?: string }): React.JSX.Element {
   return (
@@ -136,7 +137,7 @@ export function renderLinearItemDrawerSheet({
                         variant="ghost"
                         size="icon"
                         className="size-7"
-                        onClick={() => window.api.shell.openUrl(displayed.url)}
+                        onClick={(event) => openAppHttpLink(displayed.url, { event })}
                         aria-label={translate(
                           'auto.components.LinearItemDrawer.0190b760c1',
                           'Open on Linear'

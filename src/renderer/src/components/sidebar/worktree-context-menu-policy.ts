@@ -29,6 +29,9 @@ export const EMPTY_DELETE_STATE_BY_WORKTREE_ID: AppState['deleteStateByWorktreeI
 export const EMPTY_WORKTREE_LINEAGE_BY_ID: AppState['worktreeLineageById'] = {}
 export const EMPTY_WORKSPACE_LINEAGE_BY_CHILD_KEY: AppState['workspaceLineageByChildKey'] = {}
 export const EMPTY_CYCLIC_LINEAGE_IDS: ReadonlySet<string> = new Set()
+export const EMPTY_WORKTREES: readonly Worktree[] = []
+export const EMPTY_WORKTREE_MAP: ReadonlyMap<string, Worktree> = new Map()
+export const EMPTY_REPO_MAP: ReadonlyMap<string, Repo> = new Map()
 
 // Return the shared empty reference while closed; open menus read current maps.
 export function selectMenuScopedMap<T>(menuOpen: boolean, live: T, empty: T): T {

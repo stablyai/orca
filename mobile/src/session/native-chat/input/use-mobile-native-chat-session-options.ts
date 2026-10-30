@@ -34,7 +34,7 @@ import {
   matchNativeChatCatalogModelId
 } from '../../../../../src/shared/native-chat/input/native-chat-session-option-state'
 import { setBoundedScopeCacheEntry } from '../../../../../src/shared/native-chat/native-chat-scope-cache'
-import { sayNativeChatSessionOptionEnglish } from '../../../../../src/shared/native-chat-session-option-labels'
+import { sayMobileNativeChatSessionOption } from './native-chat-session-option-copy'
 
 export type MobileNativeChatSessionOptionsController = {
   optionSurface?: SessionOptionsSurface
@@ -110,7 +110,7 @@ function createMobileSurfaceEntry(args: {
     agent,
     scopeKey: args.scopeKey,
     mode: 'live',
-    modelLabel: sayNativeChatSessionOptionEnglish('model'),
+    modelLabel: sayMobileNativeChatSessionOption('model'),
     canSwitchOmpModel: args.canSwitchOmpModel,
     dispatchCommand: async (command, options) => {
       // One controller serves every tab: a queued pick must not reach the tab opened since.

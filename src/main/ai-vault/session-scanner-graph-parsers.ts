@@ -5,9 +5,10 @@ import {
   type RemoteSessionContent
 } from './remote-session-content-lines'
 import { openTranscriptReadStream, wslGatedReadFile } from '../native-chat/wsl-transcript-fs-access'
-import { basename, dirname, join } from 'node:path'
+import { basename, dirname } from 'node:path'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
+import { rovoTranscriptPathForMetadata } from '../../shared/ai-vault-session-log-resource'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { withOmpSubagentTranscriptCount } from './session-scanner-omp-subagent-transcripts'
 import type {
@@ -84,7 +85,7 @@ export async function parseRovoSessionFile(
     extractString(metadata.updated_at) ?? extractString(metadata.updatedAt)
   )
 
-  const contextPath = join(dirname(file.path), 'session_context.json')
+  const contextPath = rovoTranscriptPathForMetadata(file.path)
   const context = await readJsonObjectIfExists(contextPath)
   if (context) {
     consumeRovoSessionContext(accumulator, context)

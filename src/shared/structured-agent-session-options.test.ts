@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { OMP_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-omp'
-import { CODEX_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-claude-codex'
+import {
+  CODEX_SESSION_OPTION_CATALOG,
+  CLAUDE_SESSION_OPTION_CATALOG
+} from './agent-session-option-catalog-claude-codex'
 import { buildNativeChatSessionOptionSnapshot } from './native-chat/input/native-chat-session-option-snapshot'
 import { createNativeChatSessionOptionRecord } from './native-chat/input/native-chat-session-option-state'
 import {
@@ -13,7 +16,10 @@ import {
   structuredAgentSessionOptionSnapshot,
   type StructuredAgentSessionOptionState
 } from './structured-agent-session-options'
-import { structuredAgentSessionOptionView } from './structured-agent-session-option-view'
+import {
+  structuredAgentSessionOptionView,
+  structuredAgentSessionMessageSelection
+} from './structured-agent-session-option-view'
 
 function viewModel(
   state: StructuredAgentSessionOptionState,
@@ -332,4 +338,166 @@ it('separates typed literal readiness from an empty or refreshing catalog', () =
       true
     )
   ).toBe(true)
+})
+
+it.each([false, true])(
+  'keeps queried origins when installed metadata arrives, preloaded=%s',
+  (preloaded) => {
+    const launch = { newLaunch: true, coherentCatalog: true }
+    const models = [
+      {
+        id: 'model-a',
+        label: 'Model A',
+        isDefault: true,
+        defaultEffort: 'high',
+        efforts: [
+          { value: 'low', label: 'Low' },
+          { value: 'high', label: 'High' }
+        ]
+      }
+    ]
+    const catalog = {
+      origin: 'probe' as const,
+      fetchedAt: 1,
+      listingNamesConfiguredModel: true,
+      models
+    }
+    const seed = createStructuredAgentSessionOptionState('codex', CODEX_SESSION_OPTION_CATALOG)
+    const state = applyStructuredAgentSessionOptions(
+      preloaded
+        ? applyStructuredAgentSessionModelCatalog(
+            seed,
+            CODEX_SESSION_OPTION_CATALOG,
+            catalog,
+            launch
+          )
+        : seed,
+      CODEX_SESSION_OPTION_CATALOG,
+      {
+        models,
+        current: {
+          model: 'model-a',
+          effort: 'high',
+          defaulted: ['model', 'effort'],
+          acceptedInputSources: {}
+        }
+      },
+      launch
+    )
+    expect(structuredAgentSessionMessageSelection(state)).toEqual({})
+    let refreshed = applyStructuredAgentSessionModelCatalog(
+      state,
+      CODEX_SESSION_OPTION_CATALOG,
+      catalog,
+      launch
+    )
+    refreshed = applyStructuredAgentSessionModelCatalog(
+      refreshed,
+      CODEX_SESSION_OPTION_CATALOG,
+      catalog,
+      launch
+    )
+    expect(structuredAgentSessionMessageSelection(refreshed)).toEqual({})
+    const stale = { model: 'old-unlisted', effort: 'low' }
+    expect(
+      structuredAgentSessionMessageSelection(
+        structuredAgentSessionOptionView(refreshed, stale, {}, stale)
+      )
+    ).toEqual({})
+    expect(
+      structuredAgentSessionMessageSelection(
+        structuredAgentSessionOptionView(refreshed, stale, { effort: 'low' }, stale)
+      )
+    ).toEqual({ effort: 'low' })
+    const legacy = applyStructuredAgentSessionOptions(
+      refreshed,
+      CODEX_SESSION_OPTION_CATALOG,
+      {
+        models,
+        current: { model: 'model-a', effort: 'high' }
+      },
+      launch
+    )
+    expect(
+      applyStructuredAgentSessionModelCatalog(legacy, CODEX_SESSION_OPTION_CATALOG, catalog, launch)
+        .acceptedInputSources
+    ).toBeUndefined()
+  }
+)
+
+it('rederives unanswered catalog policy while preserving stronger input and queried origins', () => {
+  const launch = { newLaunch: true, coherentCatalog: true }
+  const catalog = {
+    origin: 'probe' as const,
+    fetchedAt: 1,
+    listingNamesConfiguredModel: true,
+    fastModeSupport: { supported: true as const },
+    models: [
+      {
+        id: 'opus',
+        label: 'Opus',
+        isDefault: true,
+        supportsFastMode: true,
+        defaultEffort: 'high',
+        efforts: [
+          { value: 'low', label: 'Low' },
+          { value: 'high', label: 'High' }
+        ]
+      }
+    ]
+  }
+  const seed = CLAUDE_SESSION_OPTION_CATALOG
+  const initial = applyStructuredAgentSessionModelCatalog(
+    createStructuredAgentSessionOptionState('claude', seed),
+    seed,
+    catalog,
+    launch
+  )
+  expect(structuredAgentSessionMessageSelection(initial)).toEqual({
+    model: 'opus',
+    effort: 'high',
+    fastMode: 'false'
+  })
+  const noDefault = { ...catalog, listingNamesConfiguredModel: false }
+  expect(
+    applyStructuredAgentSessionModelCatalog(initial, seed, noDefault, launch).acceptedInputSources
+  ).toEqual({ fastMode: 'policy' })
+  for (const fastMode of ['true', 'false']) {
+    let chosen = commitStructuredAgentSessionOption(initial, 'model', 'unlisted', 'seeded')
+    chosen = commitStructuredAgentSessionOption(chosen, 'effort', 'low')
+    chosen = commitStructuredAgentSessionOption(chosen, 'fastMode', fastMode, 'seeded')
+    const refreshed = applyStructuredAgentSessionModelCatalog(chosen, seed, noDefault, launch)
+    expect(refreshed.acceptedInputSources).toEqual({
+      model: 'seeded',
+      effort: 'picked',
+      fastMode: 'seeded'
+    })
+    expect(structuredAgentSessionMessageSelection(refreshed)).toEqual({
+      model: 'unlisted',
+      effort: 'low',
+      fastMode
+    })
+  }
+  const answered = applyStructuredAgentSessionOptions(
+    initial,
+    seed,
+    {
+      models: catalog.models,
+      current: {
+        model: 'opus',
+        effort: 'low',
+        fastMode: false,
+        acceptedInputSources: { model: 'saved', effort: 'saved', fastMode: 'policy' },
+        defaulted: []
+      }
+    },
+    launch
+  )
+  const refreshed = applyStructuredAgentSessionModelCatalog(answered, seed, noDefault, launch)
+  expect(refreshed.acceptedInputSources).toEqual(answered.acceptedInputSources)
+  expect(structuredAgentSessionMessageSelection(refreshed)).toEqual({
+    model: 'opus',
+    effort: 'low',
+    fastMode: 'false'
+  })
 })

@@ -138,6 +138,73 @@
         "peerCheckFailed": "Orca konnte den WSL-Host nicht fragen, ob eine andere Orca-Instanz auf diesem Computer ihn noch nutzt: {{detail}}",
         "removalUnrecorded": "Orca konnte nicht erfassen, was nach dem Entfernen noch läuft: {{detail}}"
       }
+    },
+    "agentSummary": {
+      "state": {
+        "waiting": "wartend",
+        "blocked": "blockiert",
+        "interrupted": "unterbrochen",
+        "failed": "fehlgeschlagen",
+        "working": "in Arbeit",
+        "monitoring": "Überwachung aktiv",
+        "done": "erledigt",
+        "idle": "inaktiv",
+        "notReporting": "ohne Statusmeldung",
+        "unconfirmed": "unbestätigt",
+        "needsAttention": "Aufmerksamkeit erforderlich"
+      },
+      "mixedStates": "{{subject}}: {{states}}",
+      "agentIdentityState": "{{agent}}: {{status}}",
+      "agentCount_one": "{{count}} Agent",
+      "agentCount_other": "{{count}} Agenten",
+      "stateCount": {
+        "waiting_one": "{{count}} wartend",
+        "waiting_other": "{{count}} wartend",
+        "blocked_one": "{{count}} blockiert",
+        "blocked_other": "{{count}} blockiert",
+        "interrupted_one": "{{count}} unterbrochen",
+        "interrupted_other": "{{count}} unterbrochen",
+        "failed_one": "{{count}} fehlgeschlagen",
+        "failed_other": "{{count}} fehlgeschlagen",
+        "working_one": "{{count}} arbeitet",
+        "working_other": "{{count}} arbeiten",
+        "monitoring_one": "{{count}} mit aktiver Überwachung",
+        "monitoring_other": "{{count}} mit aktiver Überwachung",
+        "done_one": "{{count}} fertig",
+        "done_other": "{{count}} fertig",
+        "idle_one": "{{count}} inaktiv",
+        "idle_other": "{{count}} inaktiv",
+        "notReporting_one": "{{count}} ohne Statusmeldung",
+        "notReporting_other": "{{count}} ohne Statusmeldung",
+        "unconfirmed_one": "{{count}} unbestätigt",
+        "unconfirmed_other": "{{count}} unbestätigt",
+        "needsAttention_one": "{{count}} benötigt Aufmerksamkeit",
+        "needsAttention_other": "{{count}} benötigen Aufmerksamkeit"
+      },
+      "allInState": {
+        "waiting_one": "{{count}} Agent wartet",
+        "waiting_other": "Alle {{count}} Agenten warten",
+        "blocked_one": "{{count}} Agent blockiert",
+        "blocked_other": "Alle {{count}} Agenten blockiert",
+        "interrupted_one": "{{count}} Agent unterbrochen",
+        "interrupted_other": "Alle {{count}} Agenten unterbrochen",
+        "failed_one": "{{count}} Agent fehlgeschlagen",
+        "failed_other": "Alle {{count}} Agenten fehlgeschlagen",
+        "working_one": "{{count}} Agent arbeitet",
+        "working_other": "Alle {{count}} Agenten arbeiten",
+        "monitoring_one": "{{count}} Agent mit aktiver Überwachung",
+        "monitoring_other": "Alle {{count}} Agenten mit aktiver Überwachung",
+        "done_one": "{{count}} Agent fertig",
+        "done_other": "Alle {{count}} Agenten fertig",
+        "idle_one": "{{count}} Agent inaktiv",
+        "idle_other": "Alle {{count}} Agenten inaktiv",
+        "notReporting_one": "{{count}} Agent ohne Statusmeldung",
+        "notReporting_other": "Alle {{count}} Agenten ohne Statusmeldung",
+        "unconfirmed_one": "{{count}} Agent unbestätigt",
+        "unconfirmed_other": "Alle {{count}} Agenten unbestätigt",
+        "needsAttention_one": "{{count}} Agent benötigt Aufmerksamkeit",
+        "needsAttention_other": "Alle {{count}} Agenten benötigen Aufmerksamkeit"
+      }
     }
   },
   "app": {
@@ -429,15 +496,9 @@
       },
       "providers": {
         "title": "Anbieter",
-        "description": "Auswählen, welche Agenten als Chat geöffnet werden. Bei deaktivierter Option wird ein installierter Agent in einem Terminal geöffnet.",
         "searchAgents": "Agenten",
         "searchCli": "CLI",
         "searchTerminal": "Terminal",
-        "agentDisabled": "In den Agenteneinstellungen deaktiviert",
-        "installed": "Installiert",
-        "notInstalled": "Nicht installiert",
-        "install": "Installieren",
-        "toggleLabel": "{{value0}} als Chat öffnen",
         "antigravityDescription": "Antigravity-Chats nutzen einen Server, den Orca auf diesen Host herunterlädt, unabhängig von der agy-CLI.",
         "antigravityNotSignedIn": "Nicht angemeldet. Chats erfordern eine separate Antigravity-Anmeldung, unabhängig vom agy-Terminal-Konto.",
         "antigravityAccount": "Konto",
@@ -690,10 +751,8 @@
       "defaultOpensAs": "{{value0}} öffnen als",
       "defaultOpensAsChat": "Chat",
       "defaultOpensAsCli": "CLI",
-      "defaultOpensAsScope": "Gilt für neue {{value0}}-Sitzungen, die von diesem Computer aus gestartet werden, auch auf gekoppelten Hosts. Entspricht dem zugehörigen Schalter unter „Anbieter“.",
       "save": "Speichern",
       "clearDefault": "Standardagent-Auswahl aufheben",
-      "autoPermissions": "Automatisch",
       "autoUnsupported": "„Automatisch“ erfordert eine neuere Orca-Version auf diesem Host.",
       "permissionsDescription": "Legt fest, wie viel Agenten ohne Rückfrage tun dürfen. Agenten mit benutzerdefinierten Startargumenten behalten diese bei.",
       "permissionsAutoDescription": "<agents>Unterstützte Agenten</agents> genehmigen sichere Aktionen selbstständig.",
@@ -741,7 +800,11 @@
         "description": "Erlaubt jedem Codex-Konto und deinem eigenen ~/.codex, Unterhaltungen fortzusetzen, die in den anderen begonnen wurden. Schalte es aus, um den Verlauf jedes Kontos getrennt zu halten. Beim Ausschalten wird nichts entfernt, was bereits geteilt wurde.",
         "unsupported": "Aktualisiere Orca auf {{host}}, um diese Einstellung dort zu ändern.",
         "updateFailed": "Die Einstellung auf {{host}} konnte nicht aktualisiert werden."
-      }
+      },
+      "installCliForTerminal": "Installiere die {{value0}}-CLI, um es in einem Terminal zu öffnen.",
+      "chatRuntime": "Chat-Laufzeit",
+      "chatChoiceTitle": "Als Chat oder CLI öffnen",
+      "chatChoiceDescription": "Lege fest, ob jeder Agent als Chat oder in seiner CLI geöffnet wird."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "Symbolischer Link",
@@ -967,8 +1030,9 @@
       "clearHosts": "Host-Auswahl zurücksetzen",
       "clearProjects": "Projektauswahl zurücksetzen",
       "back": "Zurück",
-      "ariaActive": "Filter: {{value0}} aktiv.",
-      "scopedTo": "Beschränkt auf"
+      "scopedTo": "Beschränkt auf",
+      "ariaActiveCount_one": "Filter: {{count}} aktiv.",
+      "ariaActiveCount_other": "Filter: {{count}} aktiv."
     },
     "taskUrl": {
       "loadingHint": "{{value0}} wird geladen…",
@@ -1253,6 +1317,10 @@
             }
           }
         }
+      },
+      "pluginNewFile": {
+        "unavailable": "{{value0}} ist nicht mehr verfügbar. Aktiviere das zugehörige Plugin wieder.",
+        "failed": "Die Datei konnte nicht erstellt werden."
       }
     },
     "lib": {
@@ -1754,10 +1822,7 @@
       },
       "claudeAgentRowView": {
         "subagentNavigationSetup": "Die Navigation zwischen Claude-Subagenten unter Einstellungen → Agenten aktivieren, dann Claude 2.1.300+ in Orca starten. Prüfen, ob keybindings.json Ctrl+Alt+G, H oder V weiterhin command:orca-agent-view zuweist.",
-        "permissionPrompt": "Vor dem Wechseln zwischen Agenten Claudes Berechtigungsabfrage beantworten.",
-        "agentUnavailable": "Claude kann diesen Agenten nicht öffnen. Möglicherweise ist er nicht mehr verfügbar.",
-        "closeDialog": "Claude hat die Ansicht nicht gewechselt. Alle offenen Dialoge schließen und erneut versuchen.",
-        "hostUnavailable": "Die Subagenten-Navigation ist auf diesem Host nicht verfügbar. Orca aktualisieren und Claude in diesem Bereich neu starten."
+        "permissionPrompt": "Vor dem Wechseln zwischen Agenten Claudes Berechtigungsabfrage beantworten."
       },
       "wslHostWindowsDriveRefusal": {
         "addOnThisComputer": "Auf diesem Computer hinzufügen",
@@ -3603,7 +3668,6 @@
         "cleanup": {
           "WorkspaceCleanupDialog": {
             "3828408538": "{{value0}} entfernen",
-            "352f15d6fc": "Zuletzt aktiv",
             "b6bae1eed1": "Abbrechen",
             "38ca0b1400": "Dadurch werden die zugehörigen lokalen Dateien dauerhaft gelöscht. Dies lässt sich nicht rückgängig machen.",
             "e97e4580c7": "Geändert",
@@ -4340,7 +4404,9 @@
             "f395c9a685": "Dateiimport fehlgeschlagen",
             "e6234bcc17": "Das Hochladen eines eigenen Haustiers erfordert einen vollständigen Neustart der App (bloßes Neuladen reicht nicht).",
             "6d0a8cd179": "Haustier anzeigen",
-            "1fbc51cc77": "Haustier ausblenden"
+            "1fbc51cc77": "Haustier ausblenden",
+            "petFallbackLabel": "Haustier",
+            "petHiddenLabel": "{{pet}} ausgeblendet"
           },
           "PortsStatusSegment": {
             "4ebf90c12e": "Keine externen Ports erkannt",
@@ -5926,7 +5992,8 @@
           "c49fb13492": "Ordner konnte auf diesem Host nicht hinzugefügt werden",
           "9a766f33ac": "Dieser Pfad wurde auf dem SSH-Host geprüft.",
           "79fd02cf5f": "Dieser Pfad wurde auf {{hostName}} geprüft.",
-          "8851b77327": "Dieser Pfad wurde lokal geprüft."
+          "8851b77327": "Dieser Pfad wurde lokal geprüft.",
+          "sshConnectionUnavailable": "SSH-Verbindung „{{connection}}“ wurde nicht gefunden oder ist nicht verbunden"
         },
         "OrcaYamlTrustDialog": {
           "f3e2b868fb": "Hooks ausführen",
@@ -6012,8 +6079,8 @@
           "removeDescriptionSsh": "Dies entfernt {{name}} nur aus Orca. Die Dateien bleiben auf {{host}} — zum Wiederherstellen diesen SSH-Host erneut hinzufügen.",
           "removeDescriptionLocal": "Dies entfernt {{name}} nur aus Orca. Es bleibt auf dem Datenträger erhalten.",
           "removeDescriptionVmRecipe": "Dies entfernt {{name}} aus Orca. Das zugehörige VM-Rezept legt fest, ob die Umgebung und ihre Dateien dauerhaft gelöscht werden.",
-          "openTerminalWarningOne": "1 offenes Terminal in diesem Projekt wird geschlossen.",
-          "openTerminalWarningMany": "{{count}} offene Terminals in diesem Projekt werden geschlossen."
+          "openTerminalWarning_one": "{{count}} offenes Terminal in diesem Projekt wird geschlossen.",
+          "openTerminalWarning_other": "{{count}} offene Terminals in diesem Projekt werden geschlossen."
         },
         "ScrollToCurrentWorkspaceToolbarButton": {
           "23989bb663": "Aktiven Arbeitsbereich anzeigen"
@@ -6123,7 +6190,8 @@
           "4815c70605": "Keine passenden Projekte",
           "bbbc6e8e3b": "Keine passenden nicht ausgewählten Projekte",
           "allProjects": "Alle Projekte",
-          "selectedProjectsCount": "{{value0}} Projekte"
+          "selectedProjects_one": "{{count}} Projekt",
+          "selectedProjects_other": "{{count}} Projekte"
         },
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "Orca neu starten",
@@ -6184,8 +6252,6 @@
           "7bada3b1ab": "Sortieren nach",
           "dc0bb670bc": "Gruppieren nach",
           "9919ae1082": "Arbeitsbereichsoptionen",
-          "bc96dbd041": "Arbeitsbereichsoptionen ({{value0}})",
-          "optionsActiveLabel": "Arbeitsbereichsoptionen ({{value0}} aktiv)",
           "af9249c505": "Letzte Arbeitsbereichsaktivität",
           "b451c8b162": "Zuletzt aktiv",
           "6664282a7b": "Projekte zum Anordnen ziehen",
@@ -6219,7 +6285,11 @@
           "219ebf1961": "Branch-Name",
           "folderPathIdentity": "Branch / Ordnerpfad",
           "cli": "Orca CLI",
-          "workspaceOptions": "Arbeitsbereichsoptionen"
+          "workspaceOptions": "Arbeitsbereichsoptionen",
+          "optionsActiveFilters_one": "Arbeitsbereichsoptionen ({{count}} Filter aktiv)",
+          "optionsActiveFilters_other": "Arbeitsbereichsoptionen ({{count}} Filter aktiv)",
+          "optionsFilterCount_one": "Arbeitsbereichsoptionen ({{count}} Filter)",
+          "optionsFilterCount_other": "Arbeitsbereichsoptionen ({{count}} Filter)"
         },
         "SshTargetRow": {
           "4677394048": "Verbindung wird hergestellt…",
@@ -6289,7 +6359,8 @@
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agenten",
-          "agentUnavailable": "Agent ist nicht verfügbar"
+          "agentUnavailable": "Agent ist nicht verfügbar",
+          "sendingTarget": "Wird gesendet…"
         },
         "WorktreeCardMeta": {
           "3e65e11cc6": "Metadaten des Arbeitsbereichs",
@@ -7002,7 +7073,12 @@
           "xcodeLicense": "Die Apple-Entwicklerwerkzeuge erfordern die Annahme der Lizenz, bevor Git ausgeführt werden kann.",
           "developerTools": "Die Apple-Entwicklerwerkzeuge für die Befehlszeile fehlen oder sind nicht verfügbar.",
           "architectureMismatch": "Eine zu Git gehörende ausführbare Datei konnte nicht ausgeführt werden, da ihre CPU-Architektur mit diesem Ausführungshost inkompatibel ist. Git und zugehörige Werkzeuge für die Architektur des Hosts installieren.",
-          "copyDiagnostics": "Diagnosedaten kopieren"
+          "copyDiagnostics": "Diagnosedaten kopieren",
+          "wslStoppedTitle": "WSL-Distribution {{value0}} ist gestoppt",
+          "wslUnverifiableTitle": "Konnte nicht bestätigen, dass die WSL-Distribution {{value0}} läuft",
+          "wslRetained": "Angezeigt werden die Worktrees, die Orca bereits kannte. Sie werden aktualisiert, sobald Orca die Distribution laufen sieht.",
+          "wslStartAndScan": "Distribution starten und scannen",
+          "wslStartAndScanHint": "Klicke auf das Symbol, um die Distribution zu starten und erneut zu scannen."
         },
         "LocalGitToolchainScanBanner": {
           "xcodeLicenseTitle": "Xcode-Lizenz akzeptieren, um Git zu verwenden",
@@ -7430,8 +7506,6 @@
           "8fbe1f37c1": "Umgebung",
           "2d133152fa": "Keine Standardumgebung",
           "agentPermissions": "Agentenberechtigungen",
-          "agentPermissionsYolo": "Yolo",
-          "agentPermissionsManual": "Manuell",
           "3f1bdf3cb4": "Der Umgebungstext ist zu groß, um sicher analysiert zu werden.",
           "codexSessionSource": "Codex-Home-Verzeichnis für den Import",
           "codexSessionSourceInfo": "Informationen zum Import des Codex-Verlaufs",
@@ -11764,8 +11838,8 @@
           "managedOverSshHelp": "Dieser Desktop aktualisiert diesen Server über SSH. In dessen Zeile unter „Entfernte Orca-Server“ auf „Aktualisieren“ klicken."
         },
         "BrowserLinkRoutingSetting": {
-          "description": "http(s)-Links aus dem Terminal, Markdown und dem Editor im integrierten Browser von Orca öffnen. {{shortcut}} verwendet immer den Systembrowser.",
-          "descriptionBase": "http(s)-Links aus dem Terminal, Markdown und dem Editor im integrierten Browser von Orca öffnen."
+          "description": "http(s)-Links aus ganz Orca im integrierten Browser von Orca öffnen. Anmeldeseiten und {{shortcut}} verwenden immer den Systembrowser.",
+          "descriptionBase": "http(s)-Links aus ganz Orca im integrierten Browser von Orca öffnen. Anmeldeseiten öffnen sich weiterhin im Systembrowser."
         },
         "BrowserLinkRoutingModifierSetting": {
           "titleSystem": "Shift gedrückt halten, um im Webbrowser zu öffnen",
@@ -11802,7 +11876,9 @@
             "secrets": "Geheimnisse im eigenen verschlüsselten Tresor des Plugins speichern und lesen",
             "settingsOwn": "Die eigenen Einstellungen des Plugins lesen und ändern"
           },
-          "decisionFailed": "Die Berechtigungsentscheidung konnte nicht gespeichert werden. Erneut versuchen."
+          "decisionFailed": "Die Berechtigungsentscheidung konnte nicht gespeichert werden. Erneut versuchen.",
+          "fullAccessWarning": "Vollzugriff: läuft wie ein normales Programm und kann deine Dateien lesen, das Netzwerk nutzen und andere Programme ausführen.",
+          "uiWarning": "Führt den Code des Herausgebers in Orca aus, um seine Ansicht darzustellen. Orca zeigt, worauf er zugreifen kann, und fragt vor der Aktivierung."
         },
         "PluginConsentProvenance": {
           "official": "Offiziell",
@@ -12894,6 +12970,178 @@
               "windowsFailureDescription": "Benachrichtigungen für Orca in „Windows Settings“ aktivieren."
             }
           }
+        },
+        "PluginUpdateAllDialog": {
+          "review": "Prüfen"
+        },
+        "PluginUpdateReview": {
+          "title": "Update für {{value0}} prüfen",
+          "back": "Zurück",
+          "approve": "Genehmigen & aktualisieren",
+          "explain": "Dieses Update verlangt mehr als die Version, die du genehmigt hast. Es wird nur installiert, wenn du es hier genehmigst.",
+          "before": "Vorher",
+          "after": "Nachher"
+        },
+        "PluginNotOfficialWarning": {
+          "unknownPublisher": "seinem Herausgeber",
+          "install": "Stelle sicher, dass du {{value0}} vertraust, bevor du es installierst. Dieses Plugin führt den Code des Herausgebers in Orca aus.",
+          "update": "Stelle sicher, dass du {{value0}} vertraust, bevor du es aktualisierst. Dieses Plugin führt den Code des Herausgebers in Orca aus.",
+          "installed": "Stelle sicher, dass du {{value0}} vertraust. Dieses Plugin führt den Code des Herausgebers in Orca aus.",
+          "label": "Kein offizielles Plugin:",
+          "translations": "Übersetzungen können jeden Text in Orca ändern. Stelle sicher, dass du {{value0}} vertraust."
+        },
+        "PluginCardAction": {
+          "installed": "Installiert",
+          "installing": "Wird installiert…",
+          "reviewLabel": "{{value0}} prüfen und installieren",
+          "review": "Prüfen & installieren",
+          "retry": "Erneut versuchen"
+        },
+        "PluginContributionActionLanguage": {
+          "switch": "Sprache wechseln",
+          "switchTo": "Sprache zu {{value0}} wechseln",
+          "switchBack": "Zurückwechseln",
+          "switchBackFrom": "Von {{value0}} zurückwechseln",
+          "failed": "Sprache konnte nicht gewechselt werden"
+        },
+        "PluginContributionActionPanel": {
+          "open": "Panel öffnen",
+          "openName": "Panel öffnen: {{value0}}"
+        },
+        "PluginContributionActionSyntax": {
+          "openExtension": "Eine beliebige {{value0}}-Datei öffnen",
+          "openFilename": "{{value0}} öffnen"
+        },
+        "PluginDetailInfo": {
+          "previous": "Vorherige",
+          "updated": "Aktualisiert",
+          "license": "Lizenz",
+          "whatsNew": "Neuigkeiten"
+        },
+        "PluginDetailPage": {
+          "back": "Plugins",
+          "info": "Info",
+          "version": "Version",
+          "latest": "Neueste",
+          "requires": "Benötigt",
+          "requiresValue": "Orca {{value0}} oder neuer",
+          "categories": "Kategorien",
+          "pluginId": "Plugin-ID",
+          "repository": "Repository"
+        },
+        "PluginDetailSections": {
+          "typeLanguagePack": "Oberflächensprache",
+          "typeAppTheme": "App-Design",
+          "typeTerminalTheme": "Terminal-Design",
+          "typeIconTheme": "Dateisymbol-Design",
+          "typeSyntax": "Syntaxhervorhebung",
+          "typeInstructions": "Agent-Anweisungen",
+          "typePanel": "Seitenleisten-Panel",
+          "typeWorker": "Hintergrundcode",
+          "adds": "Fügt Orca hinzu",
+          "replaces": "Ersetzt dein Tastenkürzel für {{value0}}",
+          "changeShortcuts": "In Tastenkürzeln ändern",
+          "command": "Befehl",
+          "access": "Kann zugreifen auf",
+          "accessLoading": "Plugin wird gelesen…",
+          "accessFailed": "Zugriff konnte nicht gelesen werden",
+          "retry": "Erneut versuchen",
+          "customEditor": "Editor"
+        },
+        "PluginFilterPopover": {
+          "kind": "Kategorie",
+          "catalog": "Katalog",
+          "clear": "Filter zurücksetzen",
+          "themes": "Designs",
+          "languages": "Sprachen",
+          "icons": "Symbole",
+          "commands": "Befehle & Panels",
+          "catalogLabel": "Nach Katalog filtern",
+          "editors": "Editoren",
+          "remoteVms": "Remote/VMs",
+          "games": "Spiele",
+          "agents": "Agenten",
+          "integrations": "Integrationen"
+        },
+        "PluginInUseAction": {
+          "inUseDark": "Aktiv · Dunkel",
+          "inUseLight": "Aktiv · Hell",
+          "inUse": "Aktiv",
+          "useName": "{{value0}} verwenden",
+          "use": "Verwenden"
+        },
+        "PluginInstallConsent": {
+          "noOtherAccess": "Kein weiterer Zugriff",
+          "replacesShortcut": "{{value0}} ({{value1}}) ersetzt dein Tastenkürzel für {{value2}}.",
+          "updatesKeepApproval": "Updates fragen nur bei neuem Zugriff erneut",
+          "fullAccessUpdates": "Updates können seinen Code ohne Nachfrage ändern",
+          "editsFileTypes": "Öffnet und bearbeitet {{value0}}-Dateien in Orca. Es kann die Dateien lesen, die es öffnet."
+        },
+        "PluginListEmptyStates": {
+          "noFilterMatches": "Keine Plugins entsprechen diesen Filtern",
+          "clearBoth": "Suche und Filter zurücksetzen",
+          "pageGone": "Dieses Plugin ist nicht mehr installiert oder gelistet."
+        },
+        "PluginManager": {
+          "retry": "Erneut versuchen",
+          "installed": "Installiert",
+          "installedFailedTitle": "Deine installierten Plugins konnten nicht gelesen werden.",
+          "updatesTitle": "Updates",
+          "refreshLabel": "Kataloge aktualisieren",
+          "noResultsTitle": "Keine Plugins entsprechen „{{value0}}“",
+          "noneInstalledTitle": "Keine Plugins installiert",
+          "browseAll": "Alle Plugins durchsuchen",
+          "resultCount": "{{value0}} Plugins gefunden",
+          "resultCountOne": "1 Plugin gefunden",
+          "updateAll": "Alle aktualisieren…",
+          "notFromCatalog": "nicht aus einem Katalog",
+          "allInstalledTitle": "Alle Katalog-Plugins sind installiert",
+          "showInstalled": "Installierte Plugins anzeigen"
+        },
+        "PluginManagerRows": {
+          "reinstall": "Neu installieren",
+          "crashedCount": "{{value0}}-mal in Folge abgestürzt",
+          "crashed": "Beim Start abgestürzt",
+          "remove": "Entfernen…",
+          "review": "Prüfen",
+          "restart": "Neu starten",
+          "viewError": "Fehler anzeigen",
+          "copyId": "Plugin-ID kopieren",
+          "checkUpdate": "Nach Update suchen",
+          "bundledWithOrca": "Mit Orca mitgeliefert",
+          "installName": "{{value0}} installieren",
+          "crashedOnce": "Einmal abgestürzt",
+          "updateLabel": "{{value0}} auf {{value1}} aktualisieren",
+          "update": "Auf {{value0}} aktualisieren",
+          "needsOrca": "Benötigt Orca {{value0}}",
+          "rollbackTo": "Auf {{value0}} zurücksetzen…",
+          "copyContentHash": "Inhalts-Hash kopieren",
+          "reviewUpdate": "Update prüfen",
+          "dataLoadFailed": "Dateien konnten nicht geladen werden"
+        },
+        "pluginInstallAction": {
+          "installed": "{{value0}} installiert",
+          "tryIt": "Ausprobieren",
+          "mismatch": "Der Download stimmte nicht mit dem Katalog überein. Nichts wurde installiert.",
+          "catalogChanged": "Der Katalog hat sich geändert. Aktualisieren und erneut versuchen.",
+          "blocked": "Die Sicherheitsliste von Orca blockiert dieses Plugin.",
+          "downloadFailed": "Download fehlgeschlagen. Prüfe deine Verbindung."
+        },
+        "pluginThemeApply": {
+          "nowUsing": "Jetzt aktiv: {{value0}}",
+          "switchBack": "Zurückwechseln"
+        },
+        "pluginConsentCopy": {
+          "addsCommands": "Fügt Befehle hinzu",
+          "addsPanel": "Fügt ein Panel hinzu",
+          "contentOnly": "Nur Inhalte",
+          "fullAccess": "Vollzugriff",
+          "addsVmRecipes": "Fügt VM-Rezepte hinzu",
+          "opensAndEditsFiles": "Öffnet und bearbeitet Dateien",
+          "runsPluginCode": "Führt Plugin-Code aus"
+        },
+        "pluginTryAction": {
+          "incompleteLanguage": "Dieses Sprachpaket ist zu unvollständig, um dorthin zu wechseln."
         }
       },
       "right": {
@@ -14038,8 +14286,7 @@
             "trashFailed": "„{{name}}“ konnte nicht in den Papierkorb verschoben werden."
           },
           "useFileExplorerHandlers": {
-            "32cd9fd991": "Ziel des symbolischen Links kann nicht geöffnet werden",
-            "folderLinksOutsideProject": "Dieser Ordner verweist auf ein Ziel außerhalb des Projekts und kann daher hier nicht geöffnet werden."
+            "32cd9fd991": "Ziel des symbolischen Links kann nicht geöffnet werden"
           },
           "useFileExplorerImport": {
             "importFailedCount_one": "Import von {{count}} Datei fehlgeschlagen.",
@@ -14752,7 +14999,7 @@
           "aa97420ba4": "Installationslink kopieren",
           "ac1eb64952": "Android",
           "711e6f4b47": "iOS",
-          "e75647ace0": "Den QR-Code mit dem Smartphone scannen oder den Installationslink öffnen, um Orca Mobile herunterzuladen.",
+          "e75647ace0": "Scanne diesen Download-QR-Code mit der Kamera deines Smartphones. Orca Mobile ist schon installiert? Weiter zu Schritt 2 für den Kopplungs-QR-Code.",
           "0d9b33299e": "App herunterladen.",
           "92ddfdfa1f": "Schritt 1 von 2",
           "ff48d9d520": "Weiteres Gerät koppeln",
@@ -14940,6 +15187,9 @@
           "reconnectBody": "Erneut anmelden, um Orca Relay zu nutzen, oder LAN verwenden, um über Tailscale oder dasselbe Wi‑Fi-Netzwerk zu koppeln.",
           "notEntitledTitle": "Orca Relay ist in diesem Orca-Konto nicht enthalten.",
           "rateLimitedBody": "Orca Relay ist ausgelastet. Eine Minute warten und erneut versuchen oder LAN verwenden, um über Tailscale oder dasselbe Wi‑Fi-Netzwerk zu koppeln."
+        },
+        "relayClockSkewMessage": {
+          "message": "Die Uhr deines Computers geht um etwa {{seconds}} Sekunden falsch. Aktiviere die automatische Zeiteinstellung und versuche es erneut."
         }
       },
       "gitlab": {
@@ -16879,7 +17129,8 @@
                     "annotations": {
                       "0c7b9b2b7a": "Kopiert",
                       "c937229f19": "Screenshot erstellt",
-                      "1f5cb19034": "Anmerkung hinzugefügt"
+                      "1f5cb19034": "Anmerkung hinzugefügt",
+                      "limitReached": "Limit von {{limit}} Anmerkungen erreicht. Senden, entfernen oder löschen Sie einige, um weitere hinzuzufügen."
                     }
                   }
                 }
@@ -16894,7 +17145,10 @@
                     "024467ceac": "Abbrechen",
                     "449d2c2629": "Zweck der Anmerkung",
                     "38d320108c": "Anmerkungen einklappen",
-                    "9f209891a7": "Anmerkungen ausklappen"
+                    "9f209891a7": "Anmerkungen ausklappen",
+                    "includePageDetails": "Seitendetails einbeziehen",
+                    "copyFeedback": "Feedback kopieren",
+                    "copyFeedbackWithPageDetails": "Feedback mit Seitendetails kopieren"
                   }
                 }
               }
@@ -17274,9 +17528,6 @@
           "sortedAscending": "{{value0}}, aufsteigend sortiert",
           "sortedDescending": "{{value0}}, absteigend sortiert"
         },
-        "hostSummary": {
-          "partialFailure": "{{failed}} von {{total}} Hosts konnten nicht geladen werden"
-        },
         "emptyState": {
           "unknownHost": "dieser Host",
           "hostLoading": "Host wird geladen…",
@@ -17390,8 +17641,6 @@
           "failed24h": "Fehlgeschlagen · 24 h",
           "successful7d": "Erfolgreich · 7 Tage",
           "failed7d": "Fehlgeschlagen · 7 Tage",
-          "historyUnavailableOne": "Für 1 Automatisierung ist der Ausführungsverlauf nicht verfügbar. Die Zählungen berücksichtigen nur verfügbare Verlaufsdaten.",
-          "historyUnavailableMany": "Für {{count}} Automatisierungen ist der Ausführungsverlauf nicht verfügbar. Die Zählungen berücksichtigen nur verfügbare Verlaufsdaten.",
           "automation": "Automatisierung",
           "triggered": "Ausgelöst",
           "trigger": "Auslöser",
@@ -17400,7 +17649,9 @@
           "emptyDescription": "Ausführungen erscheinen hier, sobald eine Automatisierung ausgelöst wurde.",
           "runs": "Ausführungen",
           "local": "Lokal",
-          "remote": "Entfernt"
+          "remote": "Entfernt",
+          "historyUnavailable_one": "Für {{count}} Automatisierung ist kein Ausführungsverlauf verfügbar. Die Zählwerte berücksichtigen nur den verfügbaren Verlauf.",
+          "historyUnavailable_other": "Für {{count}} Automatisierungen ist kein Ausführungsverlauf verfügbar. Die Zählwerte berücksichtigen nur den verfügbaren Verlauf."
         },
         "AutomationsPageBreadcrumb": {
           "ariaLabel": "Navigationspfad für Automatisierungen",
@@ -17468,7 +17719,8 @@
         },
         "usage": {
           "tokensAndCost_one": "{{tokens}} Token · {{cost}}",
-          "tokensAndCost_other": "{{tokens}} Tokens · {{cost}}"
+          "tokensAndCost_other": "{{tokens}} Tokens · {{cost}}",
+          "costUnavailable": "k. A."
         },
         "externalDisplay": {
           "sshHost": "SSH-Host",
@@ -17480,6 +17732,10 @@
           "connectSshHost": "Diesen SSH-Host verbinden, um Automatisierungen von {{provider}} zu verwalten.",
           "cannotManageOnSshHost": "{{provider}} kann auf diesem SSH-Host keine Automatisierungen verwalten.",
           "cannotManageLocally": "{{provider}} kann auf diesem Rechner keine Automatisierungen verwalten."
+        },
+        "hostSummary": {
+          "partialFailureOfHosts_one": "Laden fehlgeschlagen: {{failed}} von {{count}} Host",
+          "partialFailureOfHosts_other": "Laden fehlgeschlagen: {{failed}} von {{count}} Hosts"
         }
       },
       "agent": {
@@ -17545,8 +17801,10 @@
           },
           "filtersSection": "Filter",
           "viewSection": "Ansicht",
-          "threadListOptionsActive": "Optionen für die Thread-Liste ({{value0}} aktiv)",
-          "activityOptionsActive": "Aktivitätsoptionen ({{value0}})"
+          "threadListOptionsActiveFilters_one": "Optionen für die Thread-Liste ({{count}} Filter aktiv)",
+          "threadListOptionsActiveFilters_other": "Optionen für die Thread-Liste ({{count}} Filter aktiv)",
+          "activityOptionsFilterCount_one": "Aktivitätsoptionen ({{count}} Filter)",
+          "activityOptionsFilterCount_other": "Aktivitätsoptionen ({{count}} Filter)"
         },
         "clearCompleted": {
           "undo": "Rückgängig machen",
@@ -17935,7 +18193,13 @@
           "all": "Alle",
           "installed": "Installiert",
           "searchLabel": "Plugins suchen",
-          "searchPlaceholder": "Plugins, Kategorien oder Herausgeber suchen"
+          "searchPlaceholder": "Plugins, Kategorien oder Herausgeber suchen",
+          "updates": "Updates",
+          "clearSearch": "Suche leeren",
+          "notInstalled": "Nicht installiert"
+        },
+        "PluginListRow": {
+          "official": "Offiziell"
         }
       },
       "terminalPane": {
@@ -18133,6 +18397,13 @@
           "password": "Passwort",
           "confirm": "Anmelden",
           "cancel": "Abbrechen"
+        },
+        "javaScriptDialog": {
+          "title": "{{origin}} meldet",
+          "anonymousTitle": "Diese Seite meldet",
+          "confirm": "OK",
+          "cancel": "Abbrechen",
+          "answer": "Antwort"
         },
         "sitePermission": {
           "label": {
@@ -19698,7 +19969,8 @@
           "selectionWithheldCount_one": "{{count}} ausgewählter Arbeitsbereich wird durch die aktuellen Filter ausgeblendet und wurde abgewählt.",
           "selectionWithheldCount_other": "{{count}} ausgewählte Arbeitsbereiche werden durch die aktuellen Filter ausgeblendet und wurden abgewählt.",
           "selectAllSafetyChecked_one": "{{count}} sicherheitsgeprüften Arbeitsbereich auswählen",
-          "selectAllSafetyChecked_other": "Alle {{count}} sicherheitsgeprüften Arbeitsbereiche auswählen"
+          "selectAllSafetyChecked_other": "Alle {{count}} sicherheitsgeprüften Arbeitsbereiche auswählen",
+          "lastActive": "Zuletzt aktiv: {{value0}}"
         },
         "scan": {
           "progress": "Arbeitsbereiche werden geprüft ({{value0}}/{{value1}})",
@@ -19949,7 +20221,7 @@
       "heroBody": "Einmaliger Download von {{size}} MB. Alle Chats mit {{agent}} auf dem Computer, auf dem dieser Chat läuft, verwenden ihn gemeinsam.",
       "heroBodyNoSize": "Einmaliger Download. Alle Chats mit {{agent}} auf dem Computer, auf dem dieser Chat läuft, verwenden ihn gemeinsam.",
       "stripSize": "Download von {{size}} MB auf dem Computer, auf dem dieser Chat läuft",
-      "settingsHint": "Auch unter Einstellungen › Chat › Anbieter",
+      "settingsHint": "Auch unter Einstellungen › Agenten",
       "installShort": "Installieren",
       "tryAgain": "Erneut versuchen",
       "cancelShort": "Abbrechen",
@@ -20347,7 +20619,13 @@
         "kimiContinueSessionConflict": "Kimi hat widersprüchliche Optionen erhalten: --continue, --session. Vor einem erneuten Versuch das Textgenerierungsrezept oder die CLI-Argumente korrigieren."
       },
       "enableSourceControlAi": "KI für die Quellcodeverwaltung unter Einstellungen -> Git aktivieren.",
-      "chooseBaseBranch": "Vor dem Generieren einen Basis-Branch auswählen."
+      "chooseBaseBranch": "Vor dem Generieren einen Basis-Branch auswählen.",
+      "savedCommitRecipeRepo": "Rezept für Commit-Nachrichten für dieses Repository gespeichert.",
+      "savedCommitRecipeGlobal": "Rezept für Commit-Nachrichten als globalen Standard gespeichert.",
+      "savedReviewRecipeRepo": "Rezept für gehostete Reviews für dieses Repository gespeichert.",
+      "savedReviewRecipeGlobal": "Rezept für gehostete Reviews als globalen Standard gespeichert.",
+      "savedBranchRecipeRepo": "Rezept für Branch-Namen für dieses Repository gespeichert.",
+      "savedBranchRecipeGlobal": "Rezept für Branch-Namen als globalen Standard gespeichert."
     },
     "remoteError": {
       "submodule": {
@@ -20421,6 +20699,13 @@
         "pull": "Pull blockiert — nicht versionierte Dateien zuerst verschieben, entfernen oder hinzufügen."
       },
       "authenticationFailed": "Authentifizierung fehlgeschlagen. Die Zugangsdaten für das Remote prüfen."
+    },
+    "submodule": {
+      "worktreeOnlyLabel": "Im Submodul vormerken",
+      "worktreeOnlyTooltip": "Das übergeordnete Repo (einschließlich „Alle vormerken“) kann Dateiänderungen in einem Submodul nicht vormerken",
+      "loading": "Submodul-Änderungen werden geladen…",
+      "empty": "Keine Änderungen im Submodul",
+      "loadFailed": "Submodul-Änderungen konnten nicht geladen werden"
     }
   },
   "agentsSidebarIntro": {
@@ -20632,7 +20917,8 @@
     },
     "codexSharedSettingsNotice": {
       "title": "Codex in Orca verwendet jetzt ~/.codex",
-      "description": "Codex fordert möglicherweise erneut dazu auf, Ordnern zu vertrauen oder Befehle zu genehmigen. MCP-Server, die nur in Orca hinzugefügt wurden, erneut hinzufügen."
+      "description": "Codex fordert möglicherweise erneut dazu auf, Ordnern zu vertrauen oder Befehle zu genehmigen. MCP-Server, die nur in Orca hinzugefügt wurden, erneut hinzufügen.",
+      "dismiss": "Ausblenden"
     },
     "codexSharedServerBanner": {
       "title": "Dieser Codex teilt sich einen Server mit den anderen Codex-Tabs",
@@ -22098,10 +22384,6 @@
       "workspaceApiKeyHint": "Einen persönlichen API-Schlüssel für {{workspace}} einfügen. Ist dieser Arbeitsbereich bereits verbunden, ersetzt Orca den gespeicherten Schlüssel."
     }
   },
-  "workspaceOptions": {
-    "activeFilterCount_one": "{{count}} Filter",
-    "activeFilterCount_other": "{{count}} Filter"
-  },
   "editorConflicts": {
     "kind": {
       "addedByUs": "Auf eigener Seite hinzugefügt",
@@ -22167,6 +22449,7 @@
       "agentNeverStarted": "Der Agent der Automatisierung wurde nach dem Absenden des Prompts nie gestartet.",
       "agentNoCompletion": "Der Agent der Automatisierung hat keinen Abschluss gemeldet.",
       "watchTimedOut": "Orca hat die Überwachung dieser Ausführung nach 6 Stunden ohne Abschlusssignal beendet.",
+      "wslDistroStopped": "Die WSL-Distribution {{distro}} ist gestoppt, daher hat dieser geplante Lauf sie nicht gestartet. Starte die Distribution oder nutze „Jetzt ausführen“; spätere Läufe finden statt, solange sie läuft.",
       "projectSetupState": {
         "notSetUp": "Das Projekt ist auf dem ausgewählten Automatisierungs-Host nicht eingerichtet.",
         "settingUp": "Das Projekt wird auf dem ausgewählten Automatisierungs-Host noch eingerichtet.",
@@ -22474,5 +22757,19 @@
       "image": "Benutzerdefiniertes Haustier",
       "bundle": "Haustierpaket"
     }
+  },
+  "diffComments": {
+    "lineRangeMeta": "Zeilen {{start}}-{{end}}",
+    "lineMeta": "Zeile {{line}}"
+  },
+  "agentSendTargets": {
+    "disabledReason": {
+      "needsPermission": "Agent benötigt eine Genehmigung",
+      "statusStale": "Agentenstatus ist veraltet"
+    }
+  },
+  "wslDistroHold": {
+    "terminalStopped": "Die WSL-Distribution {{distro}} ist gestoppt, daher hat Orca dieses Terminal nicht gestartet. Starte die Distribution und versuche es dann erneut.",
+    "terminalUnverifiable": "Orca konnte nicht prüfen, ob die WSL-Distribution {{distro}} läuft, und hat dieses Terminal daher nicht gestartet. Starte die Distribution und versuche es dann erneut."
   }
 }

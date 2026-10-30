@@ -14,17 +14,25 @@ import { useResponsiveLayout } from '../layout/responsive-layout'
 import { WorkspaceServerContext } from '../transport/use-workspace-client'
 import { useSessionTitleCard } from './use-session-title-card'
 import { useDetailCardScope } from '../components/use-detail-card-scope'
-import { useSessionSideRail } from './session-side-rail'
+import { useShellSideRail } from '../layout/use-shell-side-rail'
 
 export function MobileSessionSurface({ controller }: { controller: MobileSessionController }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const { setMobileSessionRootRef } = controller
   const server = useContext(WorkspaceServerContext)
-  const besideTabs = useResponsiveLayout().isLandscapePhone && controller.visibleTabs.length > 0
+  const layout = useResponsiveLayout()
+  const sideRail = useShellSideRail()
+  const hasTabs = controller.visibleTabs.length > 0
+  const besideTabs = (layout.isLandscapePhone || sideRail) && hasTabs
+  const titleVisible =
+    !sideRail || !hasTabs || controller.showConnectionRetry || controller.connectionEscalated
+  // The compact Duo header removes the opener, so its card must yield with it.
   const obscured = Boolean(
+    !titleVisible ||
     controller.showHeaderMoreActions ||
     controller.showCreateTabDrawer ||
+    controller.showTerminalLayout ||
     (controller.showQuickCommands && controller.quickCommandsSupported === true) ||
     controller.pendingDiffNotesDelivery != null ||
     controller.actionTarget != null ||
@@ -43,19 +51,15 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
   )
   const details = useSessionTitleCard(besideTabs, obscured)
   useDetailCardScope({ ...details, obscured })
-  const rail = useSessionSideRail(controller, details)
   // Only a proven local record belongs to this route's desktop or server.
   const hostName =
     controller.worktreeHostId === 'local' ? (server ? server.name : controller.hostName) : null
   return (
     <View ref={setMobileSessionRootRef} style={styles.container}>
       <View style={styles.kavInner}>
-        <MobileSessionHeader
-          controller={controller}
-          details={details}
-          backInRail={rail.backInRail}
-        />
-        <MobileSessionContentRow controller={controller} keysInRail={rail.keysInRail} />
+        <MobileSessionHeader controller={controller} details={details} />
+        {}
+        <MobileSessionContentRow controller={controller} />
       </View>
       <DetailCardLayer>
         <View

@@ -65,7 +65,6 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   }
   const { repo, executionHostId: repoOwnerHostId, target: repoOwnerTarget } = owner
 
-  const settings = store.settings
   const promptDelivery = args.promptDelivery ?? 'draft'
   const repoConnectionId = repo.connectionId?.trim() || null
   const githubIdentity =
@@ -141,8 +140,12 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     return false
   }
   const projectContext = projectPreflight.context
-  const { detectedAgentsPromise, prospectiveAgent, unavailable } =
-    await resolveDirectProspectiveAgent(store, repo, projectContext, args)
+  const { prospectiveAgent, unavailable } = await resolveDirectProspectiveAgent(
+    store,
+    repo,
+    projectContext,
+    args
+  )
   if (unavailable) {
     toast.error(unavailableAgentErrorMessage())
     return false
@@ -216,7 +219,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       worktreeId,
       worktreePath,
       repoId,
-      agentOverride: preflightPlan?.agent ?? agentOverride,
+      agentOverride,
       agentLaunchPreferences: args.agentLaunchPreferences,
       agentArgs: args.agentArgs,
       ...(args.sessionOptions ? { sessionOptions: args.sessionOptions } : {}),
@@ -226,9 +229,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
       repoConnectionId,
       repoHost: repo,
-      detectedAgentsPromise,
       latestStore: useAppStore.getState(),
-      settings,
       draftContent,
       promptDelivery,
       launchPlatform: args.launchPlatform,

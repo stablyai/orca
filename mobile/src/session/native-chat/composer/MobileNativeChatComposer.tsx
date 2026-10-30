@@ -11,7 +11,7 @@ import {
 import type { NativeChatSkillDiscoverySnapshot } from '../../../../../src/shared/native-chat/input/native-chat-picker-items'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Keyboard, Pressable, type TextInput, Text, View } from 'react-native'
-import { ArrowUp, Plus } from 'lucide-react-native'
+import { Plus } from 'lucide-react-native'
 import { colors } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
@@ -32,6 +32,8 @@ import { useMobileNativeChatComposerMenu } from './use-mobile-native-chat-compos
 import { mobileNativeChatComposerShowsStop } from './mobile-native-chat-composer-layout'
 import { MobileNativeChatStopButton } from '../input/MobileNativeChatStopButton'
 import { mobileNativeChatComposerStyles as styles } from './mobile-native-chat-composer-styles'
+import { composerInputStyles as inputStyles } from '../../../components/composer-input/composer-input-styles'
+import { ComposerSendButton } from '../../../components/composer-input/ComposerSendButton'
 import {
   MobileNativeChatComposerMic,
   type MobileNativeChatMicProps
@@ -44,6 +46,7 @@ const NO_FILES: PendingNativeChatFile[] = []
 export type MobileNativeChatStructuredComposer = {
   catalog: MobileComposerStructuredCatalog
   onSlashMenuOpen: () => void
+  onSlashMenuDemand?: (open: boolean) => void
   onAttachFiles?: () => void
   // An uploading attachment must hold Send.
   files: readonly PendingNativeChatFile[]
@@ -164,6 +167,7 @@ export function MobileNativeChatComposer({
     skillDiscovery,
     onNeedSkills,
     onSlashMenuOpen: structured?.onSlashMenuOpen,
+    onSlashMenuDemand: structured?.onSlashMenuDemand,
     focusField: () => fieldRef.current?.focus()
   })
   const dictation = useMobileNativeChatComposerDictation({
@@ -300,11 +304,11 @@ export function MobileNativeChatComposer({
             // The lock gates sending; the draft survives and rides the next send.
             textAlignVertical="top"
           />
-          <View style={styles.actionRow} testID="native-chat-composer-actions">
+          <View style={inputStyles.actionRow} testID="native-chat-composer-actions">
             {attachPress ? (
               <Pressable
                 accessibilityLabel={attachLabel}
-                style={({ pressed }) => [styles.controlButton, pressed && styles.pressed]}
+                style={({ pressed }) => [inputStyles.controlButton, pressed && inputStyles.pressed]}
                 onPress={attachPress}
                 disabled={isAttaching || disabled}
               >
@@ -330,7 +334,7 @@ export function MobileNativeChatComposer({
                 }}
               />
             ) : null}
-            <View style={styles.actionSpacer} />
+            <View style={inputStyles.actionSpacer} />
             {onMicPress ? (
               <MobileNativeChatComposerMic
                 onMicPress={onMicPress}
@@ -347,7 +351,7 @@ export function MobileNativeChatComposer({
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={t('chat.composer.cancelEditing', 'Cancel editing')}
-                style={styles.ghostButton}
+                style={inputStyles.ghostButton}
                 onPress={editSession.cancel}
               >
                 <Text style={{ color: colors.textSecondary }}>{t('common.cancel', 'Cancel')}</Text>
@@ -356,33 +360,27 @@ export function MobileNativeChatComposer({
             {showsStop && stop ? (
               // Only this phone's own request holds Stop: a repeat is how a stuck stop escalates.
               <MobileNativeChatStopButton onStop={stop.onStop} held={stop.held} />
-            ) : (
+            ) : editSession ? (
               <Pressable
-                accessibilityLabel={
-                  editSession
-                    ? t('chat.composer.saveEditedMessage', 'Save edited message')
-                    : t('chat.composer.sendMessage', 'Send message')
-                }
+                accessibilityLabel={t('chat.composer.saveEditedMessage', 'Save edited message')}
                 style={({ pressed }) => [
-                  styles.sendButton,
-                  !canSend && styles.sendButtonDisabled,
-                  pressed && canSend && styles.pressed
+                  inputStyles.sendButton,
+                  !canSend && inputStyles.sendButtonDisabled,
+                  pressed && canSend && inputStyles.pressed
                 ]}
                 onPress={handleSend}
                 disabled={!canSend}
               >
-                {editSession ? (
-                  <Text style={{ color: canSend ? colors.bgBase : colors.textMuted }}>
-                    {t('common.save', 'Save')}
-                  </Text>
-                ) : (
-                  <ArrowUp
-                    size={19}
-                    color={canSend ? colors.bgBase : colors.textMuted}
-                    strokeWidth={2.4}
-                  />
-                )}
+                <Text style={{ color: canSend ? colors.bgBase : colors.textMuted }}>
+                  {t('common.save', 'Save')}
+                </Text>
               </Pressable>
+            ) : (
+              <ComposerSendButton
+                onPress={handleSend}
+                canSend={canSend}
+                label={t('chat.composer.sendMessage', 'Send message')}
+              />
             )}
           </View>
         </View>

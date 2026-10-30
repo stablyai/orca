@@ -168,6 +168,13 @@
     "count": 1
   },
   {
+    "filePath": "mobile/src/diagnostics/native-render-log.ts",
+    "kind": "object-property:message",
+    "text": "Native screen failed to render",
+    "dynamic": false,
+    "count": 1
+  },
+  {
     "filePath": "mobile/src/files/mobile-file-preview-route.ts",
     "kind": "object-property:message",
     "text": "Unable to load preview",

@@ -34,7 +34,8 @@ export async function listProjects(
   query: string | undefined,
   limit = 20,
   workspaceId?: LinearWorkspaceSelection | null,
-  force = false
+  force = false,
+  signal?: AbortSignal
 ): Promise<LinearCollectionResult<LinearProjectSummary>> {
   const first = clampLimit(limit)
   const trimmed = query?.trim()
@@ -54,14 +55,16 @@ export async function listProjects(
         hasMore: !!connection?.pageInfo?.hasNextPage
       }
     },
-    force
+    force,
+    signal
   )
 }
 
 export async function listProjectsByExactName(
   name: string,
   workspaceId: LinearConcreteWorkspaceId,
-  force = false
+  force = false,
+  signal?: AbortSignal
 ): Promise<LinearProjectSummary[]> {
   const projectName = name.trim()
   if (!projectName) {
@@ -73,16 +76,17 @@ export async function listProjectsByExactName(
   return coalesce(
     key,
     async () => {
-      const entries = getClients(concreteWorkspaceId)
+      const entries = getClients(concreteWorkspaceId, signal)
       const entry = entries[0]
       if (!entry) {
         return []
       }
-      await acquire()
+      await acquire(signal)
       try {
         const matches: LinearProjectSummary[] = []
         let after: string | undefined
         while (true) {
+          signal?.throwIfAborted()
           const result = await entry.client.client.rawRequest<
             ProjectConnectionResponse,
             LinearRawVariables
@@ -118,14 +122,16 @@ export async function listProjectsByExactName(
         release()
       }
     },
-    force
+    force,
+    signal
   )
 }
 
 export async function getProject(
   id: string,
   workspaceId: LinearConcreteWorkspaceId,
-  force = false
+  force = false,
+  signal?: AbortSignal
 ): Promise<LinearProjectDetail | null> {
   const projectId = id.trim()
   const concreteWorkspaceId = normalizeConcreteWorkspaceId(workspaceId)
@@ -136,13 +142,14 @@ export async function getProject(
   return coalesce(
     key,
     async () => {
-      const entries = getClients(concreteWorkspaceId)
+      const entries = getClients(concreteWorkspaceId, signal)
       const entry = entries[0]
       if (!entry) {
         return null
       }
-      await acquire()
+      await acquire(signal)
       try {
+        signal?.throwIfAborted()
         const result = await entry.client.client.rawRequest<
           ProjectConnectionResponse,
           LinearRawVariables
@@ -159,7 +166,8 @@ export async function getProject(
         release()
       }
     },
-    force
+    force,
+    signal
   )
 }
 

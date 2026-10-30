@@ -19,6 +19,7 @@ import type { WebSessionIntentOwner } from './web-session-intent-owner'
 import { captureWebSessionIntentOwner } from './web-runtime-session-environment'
 import { callRuntimeRpc } from './runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import { forgetStructuredSessionSelection } from '@/lib/structured-agent-session-selection-controller'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 
 const inFlightRetirements = new Map<string, Promise<boolean>>()
@@ -38,6 +39,7 @@ export function retireStructuredAgentSessionTab(args: {
   onError?: (error: unknown) => void
 }): Promise<boolean> {
   retireStructuredAgentSessionReadOwner(args.sessionId, args.target)
+  forgetStructuredSessionSelection(args.sessionId, args.target)
   const key = retirementKey(args.target, args.worktreeId, args.sessionId)
   const existing = inFlightRetirements.get(key)
   if (existing) {

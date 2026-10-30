@@ -1,3 +1,4 @@
+import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
@@ -26,7 +27,10 @@ afterEach(async () => {
 })
 
 /** Refuse exit settlement and its retry so only conversation reopen can settle the old work. */
-async function exitWithUnwrittenSettlement(refusedWrites = 2): Promise<void> {
+async function exitWithUnwrittenSettlement(
+  refusedWrites = 2,
+  evidence?: 'kill-delivered'
+): Promise<void> {
   await foundRestTestChat(rig)
   const open = rig.host.collaboratorsForTests().sessions.get(SESSION)!
   const running = open.child!
@@ -46,6 +50,7 @@ async function exitWithUnwrittenSettlement(refusedWrites = 2): Promise<void> {
     type: 'ended',
     sessionId: SESSION,
     reason: 'killed',
+    ...(evidence ? { deathEvidenceKind: evidence } : {}),
     cause: 'unexpected-exit',
     fence: running.fence,
     acquisitionGeneration: running.generation!
@@ -53,7 +58,7 @@ async function exitWithUnwrittenSettlement(refusedWrites = 2): Promise<void> {
   await vi.waitFor(() =>
     expect(rig.store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'released',
-      deathEvidence: { kind: 'exit-observed' }
+      deathEvidence: { kind: evidence ?? 'exit-observed' }
     })
   )
   await rig.host.collaboratorsForTests().serialize(SESSION, async () => {})
@@ -79,8 +84,8 @@ describe('a turn its gone agent left running', () => {
     expect(rig.adapter.acquire).toHaveBeenCalledOnce()
   })
 
-  it('is settled when the idle-closed conversation is opened again, and its reader sees it', async () => {
-    await exitWithUnwrittenSettlement()
+  it('shows a killed generation as interrupted on the first subscription after idle reopen', async () => {
+    await exitWithUnwrittenSettlement(2, 'kill-delivered')
     expect(await workingTurnState()).toBe('running')
     rig.clock.now += IDLE_MS + 1
     await sweepOnce(rig.host)
@@ -103,7 +108,7 @@ describe('a turn its gone agent left running', () => {
     setStructuredAgentSessionHost(rig.host)
 
     expect(await workingTurnState()).toBe('interrupted')
-    await rig.host.restoreReadableSessions([SESSION])
+    await openTestChats(rig.host, [SESSION])
     expect(await workingTurnState()).toBe('interrupted')
     expect(rig.adapter.acquire).toHaveBeenCalledOnce()
   })

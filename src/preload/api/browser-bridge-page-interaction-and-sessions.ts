@@ -177,6 +177,8 @@ export const browserPageInteractionAndSessionsApi = {
     ipcRenderer.invoke('browser:session:deleteProfile', args),
   sessionImportCookies: (args: { profileId: string }) =>
     ipcRenderer.invoke('browser:session:importCookies', args),
+  sessionImportCookiesForClientHost: (args: { environmentId: string; profileId: string }) =>
+    ipcRenderer.invoke('browser:session:importCookiesForClientHost', args),
   sessionResolvePartition: (args: { profileId: string | null }): Promise<string | null> =>
     ipcRenderer.invoke('browser:session:resolvePartition', args),
   sessionDetectBrowsers: () => ipcRenderer.invoke('browser:session:detectBrowsers'),

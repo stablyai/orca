@@ -61,13 +61,11 @@ vi.mock('../components/AnchoredDetailCard', () => ({ AnchoredDetailCard: () => n
 vi.mock('../layout/responsive-layout', () => ({
   useResponsiveLayout: () => ({ isLandscapePhone: false })
 }))
+vi.mock('../layout/use-shell-side-rail', () => ({ useShellSideRail: () => false }))
 vi.mock('./use-session-title-card', () => ({ useSessionTitleCard: () => ({ anchor: null }) }))
 vi.mock('./MobileSessionHeader', () => ({ MobileSessionHeader: () => null }))
 vi.mock('./MobileSessionContentRow', () => ({ MobileSessionContentRow: () => null }))
 vi.mock('./MobileSessionSheets', () => ({ MobileSessionSheets: () => null }))
-vi.mock('./session-side-rail', () => ({
-  useSessionSideRail: () => ({ backInRail: false, keysInRail: false })
-}))
 import { useMobileSessionFeedbackCapabilities } from './use-mobile-session-feedback-capabilities'
 import { useMobileSessionAccessorySelection } from './use-mobile-session-accessory-selection'
 import { MobileSessionSurface } from './MobileSessionSurface'
@@ -101,6 +99,7 @@ function mounted(strict = false) {
     createWarningState: { source: '', visible: '' },
     setCreateWarningState: vi.fn(),
     setToastMessage,
+    onLiveInputSendFailureRef: { current: vi.fn() },
     toastOpacityRef: { current: {} },
     toastHideTimerRef: { current: null },
     toastSeqRef: { current: 0 },
@@ -146,9 +145,10 @@ function mounted(strict = false) {
     const accessory = useMobileSessionAccessorySelection(accessoryScope)
     const result = { ...feedback, ...accessory }
     read.value = result
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Actual surface reads the root ref and sheet visibility; its presentation children are stubbed.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Actual surface reads the root ref, tabs and sheet visibility; its presentation children are stubbed.
     const controller = {
       ...result,
+      visibleTabs: [],
       bulkCloseConfirm: { visible: false }
     } as unknown as SurfaceController
     return visible ? createElement(MobileSessionSurface, { key: surfaceKey, controller }) : null
@@ -181,6 +181,19 @@ function mounted(strict = false) {
       act(() => renderer.update(element(surfaceKey, visible)))
   }
 }
+it('routes a Live input failure through the session toast and retires the callback on unmount', () => {
+  const { root, scope, setToastMessage } = mounted()
+
+  act(() => scope.onLiveInputSendFailureRef.current('delivery-unconfirmed'))
+
+  expect(setToastMessage).toHaveBeenCalledExactlyOnceWith(
+    'Live input interrupted. Field cleared; check the terminal before continuing.'
+  )
+  act(() => root.unmount())
+  scope.onLiveInputSendFailureRef.current('delivery-unconfirmed')
+  expect(setToastMessage).toHaveBeenCalledTimes(1)
+})
+
 it.each([
   ['success', false],
   ['failure', false],

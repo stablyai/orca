@@ -23,7 +23,7 @@ import { nativeChatComposerDraftLeftAfterSend } from './native-chat-composer-dra
 import { withNativeChatComposerDraftAddition } from './native-chat-composer-draft-addition'
 import { formatNativeChatFileReference } from '../../../../shared/agent-image-paste'
 import { promptEditor, promptValue } from './native-chat-prompt-editor.test-support'
-import { imageReferenceToken as chip } from '../../../../shared/native-chat-image-reference'
+import { imageReferenceToken as chip } from '../../../../shared/native-chat/native-chat-image-reference'
 import { imageReferencesToPromptMarkers } from '../../../../shared/native-chat/transcript/native-chat-image-transcript-markers'
 
 vi.mock('@/i18n/i18n', () => ({

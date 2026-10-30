@@ -31,15 +31,13 @@ vi.mock('../components/AnchoredDetailCard', () => ({ AnchoredDetailCard: () => n
 vi.mock('../layout/responsive-layout', () => ({
   useResponsiveLayout: () => ({ isLandscapePhone: false })
 }))
+vi.mock('../layout/use-shell-side-rail', () => ({ useShellSideRail: () => false }))
 vi.mock('../session/use-session-title-card', () => ({
   useSessionTitleCard: () => ({ visual: null })
 }))
 vi.mock('../session/MobileSessionHeader', () => ({ MobileSessionHeader: () => null }))
 vi.mock('../session/MobileSessionContentRow', () => ({ MobileSessionContentRow: () => null }))
 vi.mock('../session/MobileSessionSheets', () => ({ MobileSessionSheets: () => null }))
-vi.mock('../session/session-side-rail', () => ({
-  useSessionSideRail: () => ({ backInRail: false, keysInRail: false })
-}))
 vi.mock('expo-router', async () => {
   const { useEffect } = await import('react')
   return { useFocusEffect: (effect: () => () => void) => useEffect(effect, [effect]) }
@@ -185,9 +183,10 @@ describe('leaving a workspace inside the host-area page', () => {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the accessory hook reads the listed scope and actual foundation callbacks.
       const accessoryScope = { ...scope, ...foundation } as unknown as AccessoryScope
       const accessory = useMobileSessionAccessorySelection(accessoryScope)
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the actual surface reads the root ref and sheet visibility; its presentation children are stubbed.
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the actual surface reads the root ref, tabs and sheet visibility; its presentation children are stubbed.
       const controller = {
         ...accessory,
+        visibleTabs: [],
         bulkCloseConfirm: { visible: false }
       } as unknown as SurfaceController
       return <MobileSessionSurface controller={controller} />

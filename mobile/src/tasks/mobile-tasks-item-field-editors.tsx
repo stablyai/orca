@@ -7,7 +7,7 @@ import {
 import {
   View,
   Text,
-  TextInput,
+  TextField,
   colors,
   Pressable,
   ActivityIndicator,
@@ -55,12 +55,10 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
         <Text style={styles.detailSectionTitle}>
           {translate('tasks.itemFieldEditors.title', 'Title')}
         </Text>
-        <TextInput
-          style={styles.input}
+        <TextField
           value={itemTitleDraft}
           onChangeText={setItemTitleDraft}
           placeholder={translate('tasks.itemFieldEditors.title', 'Title')}
-          placeholderTextColor={colors.textMuted}
         />
         <Pressable
           style={styles.inlineSaveButton}
@@ -145,26 +143,23 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
           )
         ) : (
           <>
-            <TextInput
-              style={styles.input}
+            <TextField
               value={itemAddLabelsDraft}
               onChangeText={setItemAddLabelsDraft}
               placeholder={translate(
                 'tasks.itemFieldEditors.addLabels',
                 'Add labels, comma separated'
               )}
-              placeholderTextColor={colors.textMuted}
               autoCapitalize="none"
             />
-            <TextInput
-              style={[styles.input, styles.stackedInput]}
+            <TextField
+              style={styles.stackedInput}
               value={itemRemoveLabelsDraft}
               onChangeText={setItemRemoveLabelsDraft}
               placeholder={translate(
                 'tasks.itemFieldEditors.removeLabels',
                 'Remove labels, comma separated'
               )}
-              placeholderTextColor={colors.textMuted}
               autoCapitalize="none"
             />
             <Pressable
@@ -255,26 +250,23 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
           )
         ) : actionItem.source.type === 'issue' ? (
           <>
-            <TextInput
-              style={styles.input}
+            <TextField
               value={itemAddAssigneesDraft}
               onChangeText={setItemAddAssigneesDraft}
               placeholder={translate(
                 'tasks.itemFieldEditors.addUsernames',
                 'Add usernames, comma separated'
               )}
-              placeholderTextColor={colors.textMuted}
               autoCapitalize="none"
             />
-            <TextInput
-              style={[styles.input, styles.stackedInput]}
+            <TextField
+              style={styles.stackedInput}
               value={itemRemoveAssigneesDraft}
               onChangeText={setItemRemoveAssigneesDraft}
               placeholder={translate(
                 'tasks.itemFieldEditors.removeUsernames',
                 'Remove usernames, comma separated'
               )}
-              placeholderTextColor={colors.textMuted}
               autoCapitalize="none"
             />
             <Pressable
