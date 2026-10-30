@@ -150,14 +150,21 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
     'hostedReview:getCreationEligibility',
     async (_event, args: HostedReviewCreationEligibilityArgs) => {
       const repo = assertRegisteredRepo(args.repoPath, store, args.repoId)
-      const worktreePath = await resolveHostedReviewWorktreePath(repo, store, args.worktreePath)
       const localGitOptions = getLocalProjectGhExecOptions(store, repo)
-      return getHostedReviewCreationEligibility({
-        ...args,
-        repoPath: worktreePath,
-        executionHostId: getStoredRepoExecutionHostId(repo),
-        localGitExecOptions: { ...localGitOptions, admissionTier: 'interactive' as const }
-      })
+      // Source Control asks on mount; only the user's Create PR may start a stopped distro (E9).
+      return guardWslUncPathAccess(
+        repo.path,
+        async () => {
+          const worktreePath = await resolveHostedReviewWorktreePath(repo, store, args.worktreePath)
+          return getHostedReviewCreationEligibility({
+            ...args,
+            repoPath: worktreePath,
+            executionHostId: getStoredRepoExecutionHostId(repo),
+            localGitExecOptions: { ...localGitOptions, admissionTier: 'interactive' as const }
+          })
+        },
+        { wake: args.wakeWslDistro === true, wslDistro: localGitOptions.wslDistro }
+      )
     }
   )
 

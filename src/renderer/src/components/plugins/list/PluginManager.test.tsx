@@ -169,7 +169,7 @@ afterEach(() => {
 })
 
 describe('PluginManager', () => {
-  it('lists each catalog plugin once, in catalog order, capped with Show more', async () => {
+  it('lists each catalog plugin once, in catalog order, capped with Show all', async () => {
     const container = await render()
     const catalogCards = (): Element[] =>
       Array.from(container.querySelectorAll('[data-plugin-key]')).filter(
@@ -180,7 +180,9 @@ describe('PluginManager', () => {
     expect(rows.filter((key) => key === 'stablyai.orca-nord-theme')).toHaveLength(1)
     expect(rows).toHaveLength(PLUGIN_GROUP_ROW_CAP)
 
-    await act(async () => buttonNamed(container, 'Show 3 more')?.click())
+    await act(async () =>
+      buttonNamed(container, `Show all ${PLUGIN_GROUP_ROW_CAP + 3} plugins`)?.click()
+    )
     expect(catalogCards()).toHaveLength(PLUGIN_GROUP_ROW_CAP + 3)
   })
 

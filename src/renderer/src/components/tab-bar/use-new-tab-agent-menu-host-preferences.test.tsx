@@ -25,7 +25,8 @@ import { mutateHostAgentLaunchSettings } from '../settings/agent-launch-settings
 import {
   ensureAgentLaunchPreferences,
   clearHostAgentMenuSettingsForTests,
-  readAgentLaunchPreferencesForWorktree
+  readAgentLaunchPreferencesForWorktree,
+  readAgentLaunchPreferencesForWorkspace
 } from '../settings/use-host-agent-launch-preferences'
 import { useNewTabAgentMenuRows } from './use-new-tab-agent-menu-rows'
 
@@ -441,3 +442,56 @@ it.each(['pairing', 'runtime'] as const)(
     }
   }
 )
+
+it.each([false, true])(
+  'shares prospective, git and folder owner snapshots, including old hosts (%s)',
+  async (supported) => {
+    rpc.supports.mockResolvedValue(supported)
+    const workspace = {
+      kind: 'git-worktree',
+      executionHostId: 'runtime:alpha',
+      repoId: TEST_REPO.id
+    } as const
+    const read = () =>
+      [
+        readAgentLaunchPreferencesForWorkspace(useAppStore.getState(), workspace),
+        readAgentLaunchPreferencesForWorkspace(useAppStore.getState(), {
+          kind: 'folder',
+          executionHostId: 'runtime:alpha'
+        }),
+        readAgentLaunchPreferencesForWorktree(useAppStore.getState(), 'wt'),
+        readAgentLaunchPreferencesForWorktree(useAppStore.getState(), 'folder:f1')
+      ].map((preferences) => preferences.defaultTuiAgent)
+    expect(read()).toEqual(Array(4).fill('opencode'))
+    expect(rpc.call).not.toHaveBeenCalled()
+    await ensureAgentLaunchPreferences(useAppStore.getState(), workspace)
+    expect(read()).toEqual(Array(4).fill(supported ? 'codex' : 'opencode'))
+    if (supported) {
+      useAppStore.setState({
+        runtimeStatusByEnvironmentId: new Map([['alpha', status('replacement')]])
+      })
+      expect(read()).toEqual(Array(4).fill('opencode'))
+      await ensureAgentLaunchPreferences(useAppStore.getState(), workspace)
+      expect(read()).toEqual(Array(4).fill('codex'))
+      replaceRuntimeEnvironmentRevisions([{ id: 'alpha', createdAt: 8 }])
+      expect(read()).toEqual(Array(4).fill('opencode'))
+    }
+  }
+)
+
+it('keeps a cold detected shortcut synchronous without starting a preference read', async () => {
+  const { resolveTerminalAgentTabShortcut } = await import('../terminal-agent-tab-shortcut')
+  const { getRuntimeAgentInventoryKey } = await import('@/store/slices/runtime-agent-inventory-key')
+  useAppStore.setState((state) => ({
+    settings: { ...state.settings!, defaultTuiAgent: 'claude', disabledTuiAgents: [] },
+    runtimeDetectedAgentIds: { [getRuntimeAgentInventoryKey('alpha', 'wt')]: ['claude', 'codex'] }
+  }))
+  expect(
+    resolveTerminalAgentTabShortcut({
+      activeWorktreeId: 'wt',
+      keybindings: {},
+      matchShortcut: (action) => action === 'tab.newAgent'
+    })
+  ).toEqual({ actionId: 'tab.newAgent', agent: 'claude' })
+  expect(rpc.call).not.toHaveBeenCalled()
+})

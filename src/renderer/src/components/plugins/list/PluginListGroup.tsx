@@ -12,6 +12,8 @@ type PluginListGroupProps = {
   /** Notice between the heading and the rows (a stale-catalog warning, a load error). */
   notice?: React.ReactNode
   hiddenCount?: number
+  /** Every row the group holds, shown and hidden, for the Show all label. */
+  totalCount?: number
   onShowAll?: () => void
   showHeading?: boolean
   /** `grid` lays its children out as catalog cards. */
@@ -26,6 +28,7 @@ export function PluginListGroup({
   aside,
   notice,
   hiddenCount = 0,
+  totalCount = 0,
   onShowAll,
   showHeading = true,
   layout = 'list',
@@ -57,30 +60,40 @@ export function PluginListGroup({
         </div>
       ) : null}
       {notice}
+      {/* Why 1056px for four columns: cards stay as wide as three were at the old page width. */}
       {children ? (
         <ul
           data-layout={layout}
-          className="list-none data-[layout=grid]:grid data-[layout=grid]:grid-cols-1 data-[layout=grid]:gap-4 data-[layout=grid]:@min-[460px]/plugin-catalog:grid-cols-2 data-[layout=grid]:@min-[720px]/plugin-catalog:grid-cols-3"
+          className="list-none data-[layout=grid]:grid data-[layout=grid]:grid-cols-1 data-[layout=grid]:gap-4 data-[layout=grid]:@min-[460px]/plugin-catalog:grid-cols-2 data-[layout=grid]:@min-[720px]/plugin-catalog:grid-cols-3 data-[layout=grid]:@min-[1056px]/plugin-catalog:grid-cols-4"
         >
           {children}
         </ul>
       ) : null}
       {hiddenCount > 0 && onShowAll ? (
-        <div
-          data-layout={layout}
-          className="border-t border-border px-2 py-1.5 data-[layout=grid]:mt-2 data-[layout=grid]:border-t-0 data-[layout=grid]:px-0"
-        >
-          <Button variant="ghost" size="xs" onClick={onShowAll}>
+        layout === 'grid' ? (
+          // Why full width: a small trailing link under a card grid read as the end of the list.
+          <Button variant="outline" size="sm" className="mt-4 w-full" onClick={onShowAll}>
             <ChevronDown />
             {translate(
-              'auto.components.pluginCatalog.PluginListGroup.showAll',
-              'Show {{value0}} more',
-              {
-                value0: hiddenCount
-              }
+              'auto.components.pluginCatalog.PluginListGroup.showAllTotal',
+              'Show all {{value0}} plugins',
+              { value0: totalCount }
             )}
           </Button>
-        </div>
+        ) : (
+          <div className="border-t border-border px-2 py-1.5">
+            <Button variant="ghost" size="xs" onClick={onShowAll}>
+              <ChevronDown />
+              {translate(
+                'auto.components.pluginCatalog.PluginListGroup.showAll',
+                'Show {{value0}} more',
+                {
+                  value0: hiddenCount
+                }
+              )}
+            </Button>
+          </div>
+        )
       ) : null}
     </section>
   )

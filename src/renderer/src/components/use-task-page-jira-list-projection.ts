@@ -1,6 +1,6 @@
 import type { TaskPageLinearBoardModel } from './task-page/linear/use-task-page-linear-board'
 import { useMemo, useCallback } from 'react'
-import { findTaskPageJiraIssue } from '@/components/task-page-jira-cache-selectors'
+import { findTaskPageJiraIssue } from '@/components/task-page/jira/task-page-jira-cache-selectors'
 import {
   getSingleJiraProjectScope,
   getTaskPageJiraStatusOrderScopeKey,
@@ -12,7 +12,7 @@ import {
   collectLinkedJiraIssueRefs,
   findJiraIssueWorkspaceAttachmentsInIndex
 } from '@/lib/jira-issue-workspace-attachment'
-import { filterLinkedJiraIssues } from './task-page-jira-linked-issues'
+import { filterLinkedJiraIssues } from './task-page/jira/task-page-jira-linked-issues'
 import { sortJiraIssues } from './jira-issue-sorter'
 export function useTaskPageJiraListProjection(model: TaskPageLinearBoardModel) {
   const {

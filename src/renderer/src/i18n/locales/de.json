@@ -138,6 +138,73 @@
         "peerCheckFailed": "Orca konnte den WSL-Host nicht fragen, ob eine andere Orca-Instanz auf diesem Computer ihn noch nutzt: {{detail}}",
         "removalUnrecorded": "Orca konnte nicht erfassen, was nach dem Entfernen noch läuft: {{detail}}"
       }
+    },
+    "agentSummary": {
+      "state": {
+        "waiting": "wartend",
+        "blocked": "blockiert",
+        "interrupted": "unterbrochen",
+        "failed": "fehlgeschlagen",
+        "working": "in Arbeit",
+        "monitoring": "Überwachung aktiv",
+        "done": "erledigt",
+        "idle": "inaktiv",
+        "notReporting": "ohne Statusmeldung",
+        "unconfirmed": "unbestätigt",
+        "needsAttention": "Aufmerksamkeit erforderlich"
+      },
+      "mixedStates": "{{subject}}: {{states}}",
+      "agentIdentityState": "{{agent}}: {{status}}",
+      "agentCount_one": "{{count}} Agent",
+      "agentCount_other": "{{count}} Agenten",
+      "stateCount": {
+        "waiting_one": "{{count}} wartend",
+        "waiting_other": "{{count}} wartend",
+        "blocked_one": "{{count}} blockiert",
+        "blocked_other": "{{count}} blockiert",
+        "interrupted_one": "{{count}} unterbrochen",
+        "interrupted_other": "{{count}} unterbrochen",
+        "failed_one": "{{count}} fehlgeschlagen",
+        "failed_other": "{{count}} fehlgeschlagen",
+        "working_one": "{{count}} arbeitet",
+        "working_other": "{{count}} arbeiten",
+        "monitoring_one": "{{count}} mit aktiver Überwachung",
+        "monitoring_other": "{{count}} mit aktiver Überwachung",
+        "done_one": "{{count}} fertig",
+        "done_other": "{{count}} fertig",
+        "idle_one": "{{count}} inaktiv",
+        "idle_other": "{{count}} inaktiv",
+        "notReporting_one": "{{count}} ohne Statusmeldung",
+        "notReporting_other": "{{count}} ohne Statusmeldung",
+        "unconfirmed_one": "{{count}} unbestätigt",
+        "unconfirmed_other": "{{count}} unbestätigt",
+        "needsAttention_one": "{{count}} benötigt Aufmerksamkeit",
+        "needsAttention_other": "{{count}} benötigen Aufmerksamkeit"
+      },
+      "allInState": {
+        "waiting_one": "{{count}} Agent wartet",
+        "waiting_other": "Alle {{count}} Agenten warten",
+        "blocked_one": "{{count}} Agent blockiert",
+        "blocked_other": "Alle {{count}} Agenten blockiert",
+        "interrupted_one": "{{count}} Agent unterbrochen",
+        "interrupted_other": "Alle {{count}} Agenten unterbrochen",
+        "failed_one": "{{count}} Agent fehlgeschlagen",
+        "failed_other": "Alle {{count}} Agenten fehlgeschlagen",
+        "working_one": "{{count}} Agent arbeitet",
+        "working_other": "Alle {{count}} Agenten arbeiten",
+        "monitoring_one": "{{count}} Agent mit aktiver Überwachung",
+        "monitoring_other": "Alle {{count}} Agenten mit aktiver Überwachung",
+        "done_one": "{{count}} Agent fertig",
+        "done_other": "Alle {{count}} Agenten fertig",
+        "idle_one": "{{count}} Agent inaktiv",
+        "idle_other": "Alle {{count}} Agenten inaktiv",
+        "notReporting_one": "{{count}} Agent ohne Statusmeldung",
+        "notReporting_other": "Alle {{count}} Agenten ohne Statusmeldung",
+        "unconfirmed_one": "{{count}} Agent unbestätigt",
+        "unconfirmed_other": "Alle {{count}} Agenten unbestätigt",
+        "needsAttention_one": "{{count}} Agent benötigt Aufmerksamkeit",
+        "needsAttention_other": "Alle {{count}} Agenten benötigen Aufmerksamkeit"
+      }
     }
   },
   "app": {
@@ -332,6 +399,41 @@
       "mobile-m": "Mobil M — 375 × 667",
       "mobile-s": "Mobil S — 320 × 568",
       "tablet": "Tablet — 768 × 1024"
+    },
+    "cookieImport": {
+      "errors": {
+        "notAuthorized": "Nicht autorisiert",
+        "profileNotFound": "Sitzungsprofil nicht gefunden.",
+        "invalidBrowserProfile": "Ungültiger Browser-Profilname.",
+        "browserNotFound": "Auf diesem System wurde kein Browser gefunden.",
+        "browserProfileDatabaseMissing": "Keine Cookie-Datenbank für Profil „{{profile}}“ gefunden.",
+        "fileUnreadable": "Die ausgewählte Datei konnte nicht gelesen werden.",
+        "fileInvalidJson": "Die Datei enthält kein gültiges JSON.",
+        "fileNotArray": "Ein JSON-Array mit Cookie-Objekten wurde erwartet.",
+        "fileEmpty": "Die Cookie-Datei ist leer.",
+        "fileNoValidCookies_one": "Keine gültigen Cookies gefunden. {{count}} Eintrag wurde wegen fehlender oder ungültiger Felder übersprungen.",
+        "fileNoValidCookies_other": "Keine gültigen Cookies gefunden. {{count}} Einträge wurden wegen fehlender oder ungültiger Felder übersprungen.",
+        "databaseNotFound": "Cookie-Datenbank von {{browser}} nicht gefunden.",
+        "databaseCopyFailed": "Die Cookie-Datenbank von {{browser}} konnte nicht kopiert werden. Zuerst {{browser}} schließen und erneut versuchen.",
+        "noCookies": "Keine Cookies in {{browser}} gefunden.",
+        "noValidCookies": "Keine gültigen Cookies in {{browser}} gefunden.",
+        "allCookiesExpired": "Alle Cookies von {{browser}} sind abgelaufen.",
+        "encryptionKeyDenied": "Auf den Verschlüsselungsschlüssel von {{browser}} konnte nicht zugegriffen werden. Möglicherweise hat das Betriebssystem den Zugriff verweigert.",
+        "readFailed": "Die Cookies von {{browser}} konnten nicht gelesen werden.",
+        "importFailed": "Cookies aus {{browser}} konnten nicht importiert werden.",
+        "importFailedTryClosing": "Cookies aus {{browser}} konnten nicht importiert werden. Zuerst {{browser}} schließen und erneut versuchen.",
+        "importFailedWithLog": "Cookies aus {{browser}} konnten nicht importiert werden: {{detail}}. Details wurden in {{logPath}} gespeichert.",
+        "safariFullDiskAccess": "macOS hat den Zugriff auf Safari-Cookies verweigert. Orca unter System Settings → Privacy & Security → Full Disk Access Festplattenvollzugriff gewähren.",
+        "connectionEnded": "Die Verbindung zu diesem Server wurde während des Imports beendet. Erneut verbinden und noch einmal versuchen.",
+        "serverRepaired": "Dieser Server wurde während des Imports erneut gekoppelt. Erneut versuchen."
+      },
+      "notice": {
+        "importedMore_one": "{{count}} Cookie für {{domains}} +{{more}} weitere importiert. Zur Verwendung die Seite neu laden.",
+        "importedMore_other": "{{count}} Cookies für {{domains}} +{{more}} weitere importiert. Zur Verwendung die Seite neu laden.",
+        "imported_one": "{{count}} Cookie für {{domains}} importiert. Zur Verwendung die Seite neu laden.",
+        "imported_other": "{{count}} Cookies für {{domains}} importiert. Zur Verwendung die Seite neu laden.",
+        "failed": "Cookie-Import fehlgeschlagen: {{reason}}"
+      }
     }
   },
   "editor": {
@@ -839,6 +941,12 @@
         "discardFailed": "Datei zur Prüfung konnte nicht verworfen werden",
         "deleteFailed": "Gesendete Diagnosedaten konnten nicht gelöscht werden"
       }
+    },
+    "repository": {
+      "iconPickErrors": {
+        "notPng": "Repository-Symbole müssen PNG-Dateien sein.",
+        "tooLarge": "Das Bild für das Repository-Symbol darf höchstens 256 KB groß sein."
+      }
     }
   },
   "menu": {
@@ -926,8 +1034,9 @@
       "clearHosts": "Host-Auswahl zurücksetzen",
       "clearProjects": "Projektauswahl zurücksetzen",
       "back": "Zurück",
-      "ariaActive": "Filter: {{value0}} aktiv.",
-      "scopedTo": "Beschränkt auf"
+      "scopedTo": "Beschränkt auf",
+      "ariaActiveCount_one": "Filter: {{count}} aktiv.",
+      "ariaActiveCount_other": "Filter: {{count}} aktiv."
     },
     "taskUrl": {
       "loadingHint": "{{value0}} wird geladen…",
@@ -1713,10 +1822,7 @@
       },
       "claudeAgentRowView": {
         "subagentNavigationSetup": "Die Navigation zwischen Claude-Subagenten unter Einstellungen → Agenten aktivieren, dann Claude 2.1.300+ in Orca starten. Prüfen, ob keybindings.json Ctrl+Alt+G, H oder V weiterhin command:orca-agent-view zuweist.",
-        "permissionPrompt": "Vor dem Wechseln zwischen Agenten Claudes Berechtigungsabfrage beantworten.",
-        "agentUnavailable": "Claude kann diesen Agenten nicht öffnen. Möglicherweise ist er nicht mehr verfügbar.",
-        "closeDialog": "Claude hat die Ansicht nicht gewechselt. Alle offenen Dialoge schließen und erneut versuchen.",
-        "hostUnavailable": "Die Subagenten-Navigation ist auf diesem Host nicht verfügbar. Orca aktualisieren und Claude in diesem Bereich neu starten."
+        "permissionPrompt": "Vor dem Wechseln zwischen Agenten Claudes Berechtigungsabfrage beantworten."
       },
       "wslHostWindowsDriveRefusal": {
         "addOnThisComputer": "Auf diesem Computer hinzufügen",
@@ -3562,7 +3668,6 @@
         "cleanup": {
           "WorkspaceCleanupDialog": {
             "3828408538": "{{value0}} entfernen",
-            "352f15d6fc": "Zuletzt aktiv",
             "b6bae1eed1": "Abbrechen",
             "38ca0b1400": "Dadurch werden die zugehörigen lokalen Dateien dauerhaft gelöscht. Dies lässt sich nicht rückgängig machen.",
             "e97e4580c7": "Geändert",
@@ -4299,7 +4404,9 @@
             "f395c9a685": "Dateiimport fehlgeschlagen",
             "e6234bcc17": "Das Hochladen eines eigenen Haustiers erfordert einen vollständigen Neustart der App (bloßes Neuladen reicht nicht).",
             "6d0a8cd179": "Haustier anzeigen",
-            "1fbc51cc77": "Haustier ausblenden"
+            "1fbc51cc77": "Haustier ausblenden",
+            "petFallbackLabel": "Haustier",
+            "petHiddenLabel": "{{pet}} ausgeblendet"
           },
           "PortsStatusSegment": {
             "4ebf90c12e": "Keine externen Ports erkannt",
@@ -5885,7 +5992,8 @@
           "c49fb13492": "Ordner konnte auf diesem Host nicht hinzugefügt werden",
           "9a766f33ac": "Dieser Pfad wurde auf dem SSH-Host geprüft.",
           "79fd02cf5f": "Dieser Pfad wurde auf {{hostName}} geprüft.",
-          "8851b77327": "Dieser Pfad wurde lokal geprüft."
+          "8851b77327": "Dieser Pfad wurde lokal geprüft.",
+          "sshConnectionUnavailable": "SSH-Verbindung „{{connection}}“ wurde nicht gefunden oder ist nicht verbunden"
         },
         "OrcaYamlTrustDialog": {
           "f3e2b868fb": "Hooks ausführen",
@@ -5971,8 +6079,8 @@
           "removeDescriptionSsh": "Dies entfernt {{name}} nur aus Orca. Die Dateien bleiben auf {{host}} — zum Wiederherstellen diesen SSH-Host erneut hinzufügen.",
           "removeDescriptionLocal": "Dies entfernt {{name}} nur aus Orca. Es bleibt auf dem Datenträger erhalten.",
           "removeDescriptionVmRecipe": "Dies entfernt {{name}} aus Orca. Das zugehörige VM-Rezept legt fest, ob die Umgebung und ihre Dateien dauerhaft gelöscht werden.",
-          "openTerminalWarningOne": "1 offenes Terminal in diesem Projekt wird geschlossen.",
-          "openTerminalWarningMany": "{{count}} offene Terminals in diesem Projekt werden geschlossen."
+          "openTerminalWarning_one": "{{count}} offenes Terminal in diesem Projekt wird geschlossen.",
+          "openTerminalWarning_other": "{{count}} offene Terminals in diesem Projekt werden geschlossen."
         },
         "ScrollToCurrentWorkspaceToolbarButton": {
           "23989bb663": "Aktiven Arbeitsbereich anzeigen"
@@ -6082,7 +6190,8 @@
           "4815c70605": "Keine passenden Projekte",
           "bbbc6e8e3b": "Keine passenden nicht ausgewählten Projekte",
           "allProjects": "Alle Projekte",
-          "selectedProjectsCount": "{{value0}} Projekte"
+          "selectedProjects_one": "{{count}} Projekt",
+          "selectedProjects_other": "{{count}} Projekte"
         },
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "Orca neu starten",
@@ -6143,8 +6252,6 @@
           "7bada3b1ab": "Sortieren nach",
           "dc0bb670bc": "Gruppieren nach",
           "9919ae1082": "Arbeitsbereichsoptionen",
-          "bc96dbd041": "Arbeitsbereichsoptionen ({{value0}})",
-          "optionsActiveLabel": "Arbeitsbereichsoptionen ({{value0}} aktiv)",
           "af9249c505": "Letzte Arbeitsbereichsaktivität",
           "b451c8b162": "Zuletzt aktiv",
           "6664282a7b": "Projekte zum Anordnen ziehen",
@@ -6178,7 +6285,11 @@
           "219ebf1961": "Branch-Name",
           "folderPathIdentity": "Branch / Ordnerpfad",
           "cli": "Orca CLI",
-          "workspaceOptions": "Arbeitsbereichsoptionen"
+          "workspaceOptions": "Arbeitsbereichsoptionen",
+          "optionsActiveFilters_one": "Arbeitsbereichsoptionen ({{count}} Filter aktiv)",
+          "optionsActiveFilters_other": "Arbeitsbereichsoptionen ({{count}} Filter aktiv)",
+          "optionsFilterCount_one": "Arbeitsbereichsoptionen ({{count}} Filter)",
+          "optionsFilterCount_other": "Arbeitsbereichsoptionen ({{count}} Filter)"
         },
         "SshTargetRow": {
           "4677394048": "Verbindung wird hergestellt…",
@@ -6248,7 +6359,8 @@
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agenten",
-          "agentUnavailable": "Agent ist nicht verfügbar"
+          "agentUnavailable": "Agent ist nicht verfügbar",
+          "sendingTarget": "Wird gesendet…"
         },
         "WorktreeCardMeta": {
           "3e65e11cc6": "Metadaten des Arbeitsbereichs",
@@ -6961,7 +7073,12 @@
           "xcodeLicense": "Die Apple-Entwicklerwerkzeuge erfordern die Annahme der Lizenz, bevor Git ausgeführt werden kann.",
           "developerTools": "Die Apple-Entwicklerwerkzeuge für die Befehlszeile fehlen oder sind nicht verfügbar.",
           "architectureMismatch": "Eine zu Git gehörende ausführbare Datei konnte nicht ausgeführt werden, da ihre CPU-Architektur mit diesem Ausführungshost inkompatibel ist. Git und zugehörige Werkzeuge für die Architektur des Hosts installieren.",
-          "copyDiagnostics": "Diagnosedaten kopieren"
+          "copyDiagnostics": "Diagnosedaten kopieren",
+          "wslStoppedTitle": "WSL-Distribution {{value0}} ist gestoppt",
+          "wslUnverifiableTitle": "Konnte nicht bestätigen, dass die WSL-Distribution {{value0}} läuft",
+          "wslRetained": "Angezeigt werden die Worktrees, die Orca bereits kannte. Sie werden aktualisiert, sobald Orca die Distribution laufen sieht.",
+          "wslStartAndScan": "Distribution starten und scannen",
+          "wslStartAndScanHint": "Klicke auf das Symbol, um die Distribution zu starten und erneut zu scannen."
         },
         "LocalGitToolchainScanBanner": {
           "xcodeLicenseTitle": "Xcode-Lizenz akzeptieren, um Git zu verwenden",
@@ -8439,7 +8556,8 @@
           "issueCommandDescription": "Optionale Überschreibung. <artifactUrl>{{artifact_url}}</artifactUrl> für die URL des verknüpften Issues oder PRs verwenden.",
           "issueCommandSharedDefault": "Leer lassen, um den Repository-Standard aus <yaml>orca.yaml</yaml> zu verwenden.",
           "issueCommandOptionalDefault": "Leer lassen, um den Repository-Standard aus <yaml>orca.yaml</yaml> zu verwenden, sofern vorhanden.",
-          "commandSourceDescription": "Wenn sowohl <yaml>orca.yaml</yaml> als auch lokale Befehle vorhanden sind, auswählen, welche ausgeführt werden."
+          "commandSourceDescription": "Wenn sowohl <yaml>orca.yaml</yaml> als auch lokale Befehle vorhanden sind, auswählen, welche ausgeführt werden.",
+          "issueCommandWslStopped": "Die WSL-Distribution {{distro}} ist gestoppt. Öffne darin ein Terminal, um diesen Befehl anzuzeigen oder zu bearbeiten."
         },
         "RepositoryIconPicker": {
           "2b7d27b93c": "Repository-Farbe {{value0}} verwenden",
@@ -11722,8 +11840,8 @@
           "managedOverSshHelp": "Dieser Desktop aktualisiert diesen Server über SSH. In dessen Zeile unter „Entfernte Orca-Server“ auf „Aktualisieren“ klicken."
         },
         "BrowserLinkRoutingSetting": {
-          "description": "http(s)-Links aus dem Terminal, Markdown und dem Editor im integrierten Browser von Orca öffnen. {{shortcut}} verwendet immer den Systembrowser.",
-          "descriptionBase": "http(s)-Links aus dem Terminal, Markdown und dem Editor im integrierten Browser von Orca öffnen."
+          "description": "http(s)-Links aus ganz Orca im integrierten Browser von Orca öffnen. Anmeldeseiten und {{shortcut}} verwenden immer den Systembrowser.",
+          "descriptionBase": "http(s)-Links aus ganz Orca im integrierten Browser von Orca öffnen. Anmeldeseiten öffnen sich weiterhin im Systembrowser."
         },
         "BrowserLinkRoutingModifierSetting": {
           "titleSystem": "Shift gedrückt halten, um im Webbrowser zu öffnen",
@@ -16837,7 +16955,8 @@
                     "annotations": {
                       "0c7b9b2b7a": "Kopiert",
                       "c937229f19": "Screenshot erstellt",
-                      "1f5cb19034": "Anmerkung hinzugefügt"
+                      "1f5cb19034": "Anmerkung hinzugefügt",
+                      "limitReached": "Limit von {{limit}} Anmerkungen erreicht. Senden, entfernen oder löschen Sie einige, um weitere hinzuzufügen."
                     }
                   }
                 }
@@ -16852,7 +16971,10 @@
                     "024467ceac": "Abbrechen",
                     "449d2c2629": "Zweck der Anmerkung",
                     "38d320108c": "Anmerkungen einklappen",
-                    "9f209891a7": "Anmerkungen ausklappen"
+                    "9f209891a7": "Anmerkungen ausklappen",
+                    "includePageDetails": "Seitendetails einbeziehen",
+                    "copyFeedback": "Feedback kopieren",
+                    "copyFeedbackWithPageDetails": "Feedback mit Seitendetails kopieren"
                   }
                 }
               }
@@ -17232,9 +17354,6 @@
           "sortedAscending": "{{value0}}, aufsteigend sortiert",
           "sortedDescending": "{{value0}}, absteigend sortiert"
         },
-        "hostSummary": {
-          "partialFailure": "{{failed}} von {{total}} Hosts konnten nicht geladen werden"
-        },
         "emptyState": {
           "unknownHost": "dieser Host",
           "hostLoading": "Host wird geladen…",
@@ -17348,8 +17467,6 @@
           "failed24h": "Fehlgeschlagen · 24 h",
           "successful7d": "Erfolgreich · 7 Tage",
           "failed7d": "Fehlgeschlagen · 7 Tage",
-          "historyUnavailableOne": "Für 1 Automatisierung ist der Ausführungsverlauf nicht verfügbar. Die Zählungen berücksichtigen nur verfügbare Verlaufsdaten.",
-          "historyUnavailableMany": "Für {{count}} Automatisierungen ist der Ausführungsverlauf nicht verfügbar. Die Zählungen berücksichtigen nur verfügbare Verlaufsdaten.",
           "automation": "Automatisierung",
           "triggered": "Ausgelöst",
           "trigger": "Auslöser",
@@ -17358,7 +17475,9 @@
           "emptyDescription": "Ausführungen erscheinen hier, sobald eine Automatisierung ausgelöst wurde.",
           "runs": "Ausführungen",
           "local": "Lokal",
-          "remote": "Entfernt"
+          "remote": "Entfernt",
+          "historyUnavailable_one": "Für {{count}} Automatisierung ist kein Ausführungsverlauf verfügbar. Die Zählwerte berücksichtigen nur den verfügbaren Verlauf.",
+          "historyUnavailable_other": "Für {{count}} Automatisierungen ist kein Ausführungsverlauf verfügbar. Die Zählwerte berücksichtigen nur den verfügbaren Verlauf."
         },
         "AutomationsPageBreadcrumb": {
           "ariaLabel": "Navigationspfad für Automatisierungen",
@@ -17426,7 +17545,8 @@
         },
         "usage": {
           "tokensAndCost_one": "{{tokens}} Token · {{cost}}",
-          "tokensAndCost_other": "{{tokens}} Tokens · {{cost}}"
+          "tokensAndCost_other": "{{tokens}} Tokens · {{cost}}",
+          "costUnavailable": "k. A."
         },
         "externalDisplay": {
           "sshHost": "SSH-Host",
@@ -17438,6 +17558,10 @@
           "connectSshHost": "Diesen SSH-Host verbinden, um Automatisierungen von {{provider}} zu verwalten.",
           "cannotManageOnSshHost": "{{provider}} kann auf diesem SSH-Host keine Automatisierungen verwalten.",
           "cannotManageLocally": "{{provider}} kann auf diesem Rechner keine Automatisierungen verwalten."
+        },
+        "hostSummary": {
+          "partialFailureOfHosts_one": "Laden fehlgeschlagen: {{failed}} von {{count}} Host",
+          "partialFailureOfHosts_other": "Laden fehlgeschlagen: {{failed}} von {{count}} Hosts"
         }
       },
       "agent": {
@@ -17503,8 +17627,10 @@
           },
           "filtersSection": "Filter",
           "viewSection": "Ansicht",
-          "threadListOptionsActive": "Optionen für die Thread-Liste ({{value0}} aktiv)",
-          "activityOptionsActive": "Aktivitätsoptionen ({{value0}})"
+          "threadListOptionsActiveFilters_one": "Optionen für die Thread-Liste ({{count}} Filter aktiv)",
+          "threadListOptionsActiveFilters_other": "Optionen für die Thread-Liste ({{count}} Filter aktiv)",
+          "activityOptionsFilterCount_one": "Aktivitätsoptionen ({{count}} Filter)",
+          "activityOptionsFilterCount_other": "Aktivitätsoptionen ({{count}} Filter)"
         },
         "clearCompleted": {
           "undo": "Rückgängig machen",
@@ -18510,6 +18636,7 @@
         "codexManagedNotSignedIn": "Dieses Codex-Konto ist nicht angemeldet. In den Einstellungen unter Codex-Konten erneut anmelden.",
         "antigravityNotSignedIn": "Antigravity ist nicht angemeldet. Unter Einstellungen → Konten → Antigravity anmelden. Anschließend die Nachricht erneut senden.",
         "cliMissing": "{{agent}} wurde auf dem Computer, auf dem dieser Chat läuft, nicht gefunden. Installieren oder den Befehl unter Einstellungen → Agenten prüfen.",
+        "cliMissingInWslDistro": "{{agent}} ist in der WSL-Distribution {{distro}} nicht installiert. In {{distro}} installieren oder den Befehl unter Einstellungen → Agenten prüfen.",
         "signInFirst": "Zuerst anmelden.",
         "signInThenRunCommand": "Anmelden und anschließend /{{command}} erneut ausführen.",
         "signInThenSend": "Anmelden und anschließend die Nachricht erneut senden.",
@@ -19263,7 +19390,9 @@
         "reconnecting": "{{hostName}} stellt die Verbindung wieder her…",
         "reconnect": "Erneut verbinden",
         "stopped": "{{distro}} ist gestoppt",
-        "start": "Starten"
+        "start": "Starten",
+        "unverifiable": "Orca konnte nicht prüfen, ob {{distro}} läuft",
+        "startToSend": "Starte {{distro}}, um zu senden."
       },
       "interruptedContinue": {
         "continue": "Fortfahren",
@@ -19653,7 +19782,8 @@
           "selectionWithheldCount_one": "{{count}} ausgewählter Arbeitsbereich wird durch die aktuellen Filter ausgeblendet und wurde abgewählt.",
           "selectionWithheldCount_other": "{{count}} ausgewählte Arbeitsbereiche werden durch die aktuellen Filter ausgeblendet und wurden abgewählt.",
           "selectAllSafetyChecked_one": "{{count}} sicherheitsgeprüften Arbeitsbereich auswählen",
-          "selectAllSafetyChecked_other": "Alle {{count}} sicherheitsgeprüften Arbeitsbereiche auswählen"
+          "selectAllSafetyChecked_other": "Alle {{count}} sicherheitsgeprüften Arbeitsbereiche auswählen",
+          "lastActive": "Zuletzt aktiv: {{value0}}"
         },
         "scan": {
           "progress": "Arbeitsbereiche werden geprüft ({{value0}}/{{value1}})",
@@ -20189,7 +20319,8 @@
         "stackCreationUnconfirmed": "Der Pull Request wurde möglicherweise bereits erstellt. Erneut versuchen, um die Stack-Registrierung abzuschließen.",
         "stackRegistrationUnavailable": "Der Pull Request wurde erstellt, aber GitHub-Stacks sind für dieses Repository nicht verfügbar.",
         "stackRegistrationFailed": "Der Pull Request wurde erstellt, aber GitHub konnte ihn nicht zum Stack hinzufügen. Erneut versuchen, um die Stack-Registrierung abzuschließen."
-      }
+      },
+      "baseHeadTitleRequired": "Basis-Branch, Quell-Branch und Titel sind erforderlich."
     },
     "model": {
       "auto": "Automatisch",
@@ -20266,10 +20397,128 @@
         "planAgentUnsupported": "Agent „{{agent}}“ unterstützt keine KI-generierten Commit-Nachrichten.",
         "planModelUnavailable": "Modell „{{model}}“ ist für {{label}} nicht verfügbar.",
         "planModelWithoutThinking": "Modell „{{model}}“ unterstützt keine Einstellung des Denkaufwands.",
-        "planThinkingLevelInvalid": "Die Denkstufe „{{level}}“ ist für {{model}} nicht gültig."
+        "planThinkingLevelInvalid": "Die Denkstufe „{{level}}“ ist für {{model}} nicht gültig.",
+        "openCodeInvalidEvents": "OpenCode hat ungültige JSON-Ereignisse zurückgegeben.",
+        "antigravityInvalidEvents": "Antigravity hat ungültige JSON-Ereignisse zurückgegeben.",
+        "antigravityInvalidResult": "Antigravity hat ein ungültiges Ergebnis zurückgegeben.",
+        "antigravityNoFinalResult": "Antigravity hat kein abschließendes Ergebnis zurückgegeben.",
+        "kimiUnreadableOutput": "Kimi hat eine Ausgabe zurückgegeben, die Orca nicht lesen konnte. Erneut versuchen.",
+        "kimiSessionOccupied": "Kimi konnte diese Sitzung nicht verwenden, da sie in einem anderen Client aktiv ist. Die Sitzung dort stoppen oder den Client beenden und erneut versuchen.",
+        "kimiInterrupted": "Kimi wurde vor Abschluss der Textgenerierung unterbrochen. Erneut versuchen.",
+        "kimiFailed": "Kimi konnte die Textgenerierung nicht abschließen. Vor einem erneuten Versuch Kimi auf dem Ausführungshost öffnen und den Fehler prüfen.",
+        "kimiAgentOptionsConflict": "Kimi hat widersprüchliche oder mehrfach angegebene Agentenoptionen erhalten. Im Textgenerierungsrezept oder in den CLI-Argumenten nur eine Option --agent oder --agent-file beibehalten und erneut versuchen.",
+        "kimiOptionRejected": "Kimi hat eine Option oder ein Argument abgelehnt. Das Textgenerierungsrezept oder die CLI-Argumente korrigieren und erneut versuchen.",
+        "kimiSessionNotFound": "Kimi konnte die angeforderte Sitzung nicht finden. Eine vorhandene Sitzung verwenden oder eine neue starten.",
+        "kimiSessionOtherDirectory": "Diese Kimi-Sitzung gehört zu einem anderen Verzeichnis. Sie dort fortsetzen oder eine für diesen Arbeitsbereich erstellte Sitzung verwenden.",
+        "kimiCredentialVariableMissing": "Kimi fehlt eine konfigurierte Umgebungsvariable für Zugangsdaten. Diese vor einem erneuten Versuch auf dem Ausführungshost setzen.",
+        "kimiCredentialsRequired": "Kimi benötigt Anbieter-Zugangsdaten. Kimi auf dem Ausführungshost öffnen, einen Anbieter konfigurieren oder sich anmelden und erneut versuchen.",
+        "kimiModelMissing": "Für Kimi ist kein nutzbares Modell konfiguriert. Kimi auf dem Ausführungshost öffnen, ein Modell konfigurieren oder auswählen und erneut versuchen.",
+        "kimiPromptHookBlocked": "Ein Kimi-Prompt-Hook hat die Anfrage blockiert oder der Dialogschritt konnte nicht gestartet werden. Vor einem erneuten Versuch die Hooks und die Konfiguration von Kimi prüfen.",
+        "kimiCancelled": "Kimi hat die Anfrage vor Abschluss der Textgenerierung abgebrochen. Erneut versuchen.",
+        "kimiEmptyPrompt": "Kimi hat einen leeren Prompt erhalten. Diese Eingabe im Textgenerierungsrezept oder in den CLI-Argumenten korrigieren und erneut versuchen.",
+        "kimiEmptyModel": "Kimi hat eine leere Modellangabe erhalten. Diese Eingabe im Textgenerierungsrezept oder in den CLI-Argumenten korrigieren und erneut versuchen.",
+        "kimiEmptyAgent": "Kimi hat eine leere Agentenangabe erhalten. Diese Eingabe im Textgenerierungsrezept oder in den CLI-Argumenten korrigieren und erneut versuchen.",
+        "kimiEmptyAgentFilePath": "Kimi hat einen leeren Pfad zur Agentendatei erhalten. Diese Eingabe im Textgenerierungsrezept oder in den CLI-Argumenten korrigieren und erneut versuchen.",
+        "kimiOutputFormatInvalid": "Das Kimi-Ausgabeformat erfordert den Prompt-Modus und einen unterstützten Wert: text oder stream-json. Vor einem erneuten Versuch das Textgenerierungsrezept oder die CLI-Argumente korrigieren.",
+        "kimiSessionIdRequired": "Kimi benötigt eine Sitzungs-ID zum Fortsetzen im Prompt-Modus. Das Textgenerierungsrezept oder die CLI-Argumente korrigieren und erneut versuchen.",
+        "kimiConflictingOptions": "Kimi hat widersprüchliche Optionen erhalten: {{option}} mit {{otherOption}}. Vor einem erneuten Versuch das Textgenerierungsrezept oder die CLI-Argumente korrigieren.",
+        "kimiAgentChangeOnResume": "Kimi kann den Agenten beim Fortsetzen einer Sitzung nicht ändern. Die Agentenüberschreibung entfernen oder im Textgenerierungsrezept oder in den CLI-Argumenten eine neue Sitzung starten.",
+        "kimiResponseBlocked": "Kimi konnte keine Antwort zurückgeben, da sie blockiert wurde. Vor einem erneuten Versuch den Prompt oder die Modellkonfiguration überarbeiten.",
+        "kimiAuthFailed": "Kimi konnte sich nicht authentifizieren. Auf dem Ausführungshost anmelden oder die Anbieter-Zugangsdaten korrigieren und erneut versuchen.",
+        "kimiConnectionFailed": "Kimi konnte keine Verbindung zum Anbieter herstellen. Das Netzwerk auf dem Ausführungshost prüfen und erneut versuchen.",
+        "kimiProviderLimited": "Kimi hat ein Anbieterlimit erreicht oder der Anbieter ist ausgelastet. Vor einem erneuten Versuch warten oder die Anfragehäufigkeit reduzieren.",
+        "kimiContextOverflow": "Der Kontext von Kimi ist ausgeschöpft. Den Prompt kürzen oder eine neue Sitzung starten und erneut versuchen.",
+        "kimiConfigInvalid": "Die Konfiguration von Kimi ist ungültig. Vor einem erneuten Versuch die Modell- und Anbieterkonfiguration auf dem Ausführungshost prüfen.",
+        "kimiContinueSessionConflict": "Kimi hat widersprüchliche Optionen erhalten: --continue, --session. Vor einem erneuten Versuch das Textgenerierungsrezept oder die CLI-Argumente korrigieren."
       },
       "enableSourceControlAi": "KI für die Quellcodeverwaltung unter Einstellungen -> Git aktivieren.",
-      "chooseBaseBranch": "Vor dem Generieren einen Basis-Branch auswählen."
+      "chooseBaseBranch": "Vor dem Generieren einen Basis-Branch auswählen.",
+      "savedCommitRecipeRepo": "Rezept für Commit-Nachrichten für dieses Repository gespeichert.",
+      "savedCommitRecipeGlobal": "Rezept für Commit-Nachrichten als globalen Standard gespeichert.",
+      "savedReviewRecipeRepo": "Rezept für gehostete Reviews für dieses Repository gespeichert.",
+      "savedReviewRecipeGlobal": "Rezept für gehostete Reviews als globalen Standard gespeichert.",
+      "savedBranchRecipeRepo": "Rezept für Branch-Namen für dieses Repository gespeichert.",
+      "savedBranchRecipeGlobal": "Rezept für Branch-Namen als globalen Standard gespeichert."
+    },
+    "remoteError": {
+      "submodule": {
+        "namedRemoteChanged": "Submodul „{{name}}“ hat Änderungen im Remote. Im Submodul pullen und erneut versuchen.",
+        "remoteChanged": "Ein Submodul hat Änderungen im Remote. Im Submodul pullen und erneut versuchen.",
+        "namedPushFailed": "Submodul „{{name}}“ konnte nicht gepusht werden. Den Push-Fehler des Submoduls beheben und erneut versuchen.",
+        "pushFailed": "Ein Submodul konnte nicht gepusht werden. Den Push-Fehler des Submoduls beheben und erneut versuchen."
+      },
+      "failedWithDetail": {
+        "publish": "Veröffentlichen des Branches fehlgeschlagen. {{detail}}",
+        "sync": "Synchronisierung fehlgeschlagen. {{detail}}",
+        "forcePush": "Erzwungener Push fehlgeschlagen. {{detail}}",
+        "push": "Push fehlgeschlagen. {{detail}}",
+        "fetch": "Fetch fehlgeschlagen. {{detail}}",
+        "fastForward": "Fast-Forward fehlgeschlagen. {{detail}}",
+        "rebase": "Rebase fehlgeschlagen. {{detail}}",
+        "pull": "Pull fehlgeschlagen. {{detail}}"
+      },
+      "hookBlocked": {
+        "lint": {
+          "publish": "Veröffentlichen des Branches blockiert — lint beim Push fehlgeschlagen.",
+          "sync": "Synchronisierung blockiert — lint beim Push fehlgeschlagen.",
+          "forcePush": "Erzwungener Push blockiert — lint beim Push fehlgeschlagen.",
+          "push": "Push blockiert — lint beim Push fehlgeschlagen."
+        },
+        "prePush": {
+          "publish": "Veröffentlichen des Branches blockiert — pre-push-Hook fehlgeschlagen.",
+          "sync": "Synchronisierung blockiert — pre-push-Hook fehlgeschlagen.",
+          "forcePush": "Erzwungener Push blockiert — pre-push-Hook fehlgeschlagen.",
+          "push": "Push blockiert — pre-push-Hook fehlgeschlagen."
+        },
+        "detail": {
+          "publish": "Veröffentlichen des Branches blockiert — {{detail}}",
+          "sync": "Synchronisierung blockiert — {{detail}}",
+          "forcePush": "Erzwungener Push blockiert — {{detail}}",
+          "push": "Push blockiert — {{detail}}"
+        }
+      },
+      "remoteAccessWithDetail": {
+        "publish": "Veröffentlichen des Branches fehlgeschlagen. {{detail}}. Den Zugriff auf das Remote prüfen und erneut versuchen.",
+        "sync": "Synchronisierung fehlgeschlagen. {{detail}}. Den Zugriff auf das Remote prüfen und erneut versuchen.",
+        "forcePush": "Erzwungener Push fehlgeschlagen. {{detail}}. Den Zugriff auf das Remote prüfen und erneut versuchen.",
+        "push": "Push fehlgeschlagen. {{detail}}. Den Zugriff auf das Remote prüfen und erneut versuchen."
+      },
+      "publishFailed": "Veröffentlichen des Branches fehlgeschlagen. Den Zugriff auf das Remote prüfen und erneut versuchen.",
+      "syncFailed": "Synchronisierung fehlgeschlagen. Die Verbindung prüfen und erneut versuchen.",
+      "forcePushFailed": "Erzwungener Push fehlgeschlagen. Die Verbindung prüfen und erneut versuchen.",
+      "pushFailed": "Push fehlgeschlagen. Die Verbindung prüfen und erneut versuchen.",
+      "localChangesBlocked": {
+        "rebase": "Rebase blockiert — lokale Änderungen zuerst committen oder stashen.",
+        "fastForward": "Fast-Forward blockiert — lokale Änderungen zuerst committen oder stashen.",
+        "pull": "Pull blockiert — lokale Änderungen zuerst committen oder stashen."
+      },
+      "operationFailed": "Remote-Operation fehlgeschlagen",
+      "unconcludedMerge": {
+        "rebase": "Rebase blockiert — zuerst bestehende Konflikte beheben.",
+        "sync": "Synchronisierung blockiert — zuerst bestehende Merge-Konflikte beheben.",
+        "pull": "Pull blockiert — zuerst bestehende Merge-Konflikte beheben."
+      },
+      "mergeConflicts": {
+        "rebase": "Rebase wegen Konflikten angehalten. Diese in der Quellcodeverwaltung beheben und dann den Rebase fortsetzen.",
+        "sync": "Synchronisierung wegen Merge-Konflikten angehalten. Diese in der Quellcodeverwaltung beheben und dann den Merge committen.",
+        "pull": "Pull wegen Merge-Konflikten angehalten. Diese in der Quellcodeverwaltung beheben und dann den Merge committen."
+      },
+      "syncRemoteMoved": "Synchronisierung fehlgeschlagen — das Remote hat sich während der Synchronisierung geändert. Erneut versuchen.",
+      "forcePushRejected": "Erzwungener Push abgelehnt — das Remote hat sich seit dem letzten Fetch geändert. Zuerst fetchen und erneut versuchen.",
+      "pushRejected": "Push abgelehnt — das Remote enthält Änderungen. Zuerst pullen und erneut versuchen.",
+      "untrackedFilesBlocked": {
+        "rebase": "Rebase blockiert — nicht versionierte Dateien zuerst verschieben, entfernen oder hinzufügen.",
+        "fastForward": "Fast-Forward blockiert — nicht versionierte Dateien zuerst verschieben, entfernen oder hinzufügen.",
+        "pull": "Pull blockiert — nicht versionierte Dateien zuerst verschieben, entfernen oder hinzufügen."
+      },
+      "authenticationFailed": "Authentifizierung fehlgeschlagen. Die Zugangsdaten für das Remote prüfen."
+    },
+    "submodule": {
+      "worktreeOnlyLabel": "Im Submodul vormerken",
+      "worktreeOnlyTooltip": "Das übergeordnete Repo (einschließlich „Alle vormerken“) kann Dateiänderungen in einem Submodul nicht vormerken",
+      "loading": "Submodul-Änderungen werden geladen…",
+      "empty": "Keine Änderungen im Submodul",
+      "loadFailed": "Submodul-Änderungen konnten nicht geladen werden"
     }
   },
   "agentsSidebarIntro": {
@@ -20452,6 +20701,7 @@
       "wslTranscriptFsProcessFailed": "WSL-Protokolldateien sind vorübergehend nicht verfügbar, weil der Dateisystem-Hilfsprozess fehlgeschlagen ist ({{detail}}). In Kürze erneut versuchen oder Orca neu starten, falls das Problem anhält.",
       "wslDistroNotRunning": "WSL-Protokolldateien sind nicht verfügbar, weil die WSL-Distribution „{{distro}}“ nicht läuft. Zum Starten ein Terminal darin öffnen.",
       "wslDistroUnverifiable": "WSL-Protokolldateien sind nicht verfügbar, weil WSL nicht geantwortet hat, ob „{{distro}}“ läuft. In Kürze erneut versuchen.",
+      "wslSessionsFromLastScan": "WSL konnte nicht geprüft werden; die Sitzungen stammen aus dem letzten Scan.",
       "scopePathsTruncated": "Nur die ersten {{limit}} Projektpfade wurden gescannt.",
       "invalidResultsSkipped_one": "{{count}} ungültiger Ergebniseintrag aus dem Verlauf der Agentensitzungen wurde übersprungen.",
       "invalidResultsSkipped_other": "{{count}} ungültige Ergebniseinträge aus dem Verlauf der Agentensitzungen wurden übersprungen.",
@@ -20770,7 +21020,12 @@
       "enterCode": "Diesen Code auf der Seite eingeben:",
       "copyCode": "Code kopieren",
       "cancelFailed": "Der Server konnte zum Abbrechen bisher nicht erreicht werden.",
-      "cancel": "Abbrechen"
+      "cancel": "Abbrechen",
+      "errors": {
+        "ownerSilent": "Das Gerät, auf dem diese Anmeldung gestartet wurde, antwortet nicht mehr.",
+        "superseded": "Eine Kontoänderung auf diesem Host hat die Anmeldung abgebrochen. Die Anmeldung erneut starten.",
+        "failed": "Anmeldung fehlgeschlagen. Erneut versuchen."
+      }
     },
     "remoteScopeAccountsAddHere": "Angezeigt werden Konten, die von {{value0}} verwaltet werden. Neue Konten werden dort angemeldet; der Abschluss erfolgt im Browser dieses Geräts."
   },
@@ -21024,7 +21279,9 @@
       "errors": {
         "noName": "Der Agent zur Chat-Benennung hat keinen Namen zurückgegeben.",
         "agentNotRun": "Orca konnte den Agenten zur Chat-Benennung nicht ausführen.",
-        "noAgentAvailable": "In diesem Arbeitsbereich kann kein Agent zur Chat-Benennung ausgeführt werden."
+        "noAgentAvailable": "In diesem Arbeitsbereich kann kein Agent zur Chat-Benennung ausgeführt werden.",
+        "grokFailed": "Grok konnte diesen Chat nicht benennen. Versuche erneut, den Namen zu generieren.",
+        "antigravityFailed": "Antigravity konnte diesen Chat nicht benennen. Versuche erneut, den Namen zu generieren."
       }
     }
   },
@@ -21061,7 +21318,37 @@
       "preparingAriaLabel": "Das Update wird vorbereitet. Zum Aufklappen klicken."
     },
     "wslMoveInstallHeld": "Ein Projekt wird auf seinen WSL-Host verschoben. Das Update nach Abschluss des Verschiebens installieren.",
-    "wslMoveUndoInstallHeld": "Ein Projekt wird von seinem WSL-Host zurückgeholt. Das Update danach installieren."
+    "wslMoveUndoInstallHeld": "Ein Projekt wird von seinem WSL-Host zurückgeholt. Das Update danach installieren.",
+    "failure": {
+      "releaseNotReady": "Für dieses Gerät ist noch keine neuere Version verfügbar. Später erneut prüfen.",
+      "updateServerUnreachable": "Der Update-Server konnte nicht erreicht werden. In einigen Minuten erneut versuchen.",
+      "channelUnsupportedPlatform": "{{channel}}-Builds werden nur für macOS und Windows erstellt.",
+      "unsignedDevChannel": "{{channel}}-Builds sind nicht signiert. Dieser signierte Build installiert nur Updates, die vom Herausgeber von Orca signiert wurden. Das Installationsprogramm von der Release-Seite herunterladen und einmal ausführen – danach funktionieren Updates wie gewohnt, auch zurück zu Stable.",
+      "linuxPackageMissing": "Das heruntergeladene Paket ist nicht mehr im Update-Cache vorhanden. Das Update erneut herunterladen oder von der offiziellen Release-Seite beziehen.",
+      "linuxPackageNotRegular": "Das heruntergeladene Paket ist im Update-Cache keine gültige Datei mehr. Das Update erneut herunterladen oder von der offiziellen Release-Seite beziehen.",
+      "linuxPackageHashMismatch": "Das heruntergeladene Paket stimmt nicht mehr mit der überprüften Version überein. Orca übergibt es daher nicht an eine Paketverwaltung. Das Update erneut herunterladen oder von der offiziellen Release-Seite beziehen.",
+      "linuxPackageReadFailed": "Orca konnte das heruntergeladene Paket nicht lesen. Das Update erneut herunterladen oder von der offiziellen Release-Seite beziehen.",
+      "linuxPackageNoSudo": "In den Systemverzeichnissen wurde kein sudo-Befehl gefunden. Orca kann daher keinen sicheren Installationsbefehl erstellen. Das Paket anzeigen und über die Paketverwaltung installieren.",
+      "linuxPackageNoPackageManager": "In den Systemverzeichnissen wurde keine unterstützte Paketverwaltung gefunden. Orca kann daher keinen sicheren Installationsbefehl erstellen. Das Paket anzeigen und über die Paketverwaltung installieren.",
+      "linuxPackageInvalidPath": "Das heruntergeladene Paket liegt nicht unter einem verwendbaren Pfad. Orca kann daher keinen sicheren Installationsbefehl erstellen. Das Paket anzeigen und über die Paketverwaltung installieren.",
+      "linuxPackageMarkerUnusable": "Orca konnte das Format des installierten Linux-Pakets nicht überprüfen und installiert dieses Update daher nicht automatisch. Das Update von der offiziellen Release-Seite herunterladen und manuell installieren.",
+      "linuxPackageExternallyManaged": "Diese Orca-Installation wird von der Paketverwaltung des Systems verwaltet. Orca kann Updates daher nicht selbst installieren. Orca stattdessen über die Distribution aktualisieren.",
+      "linuxPackageManualInstall": "Orca beenden, bevor der Systembefehl zur Paketinstallation ausgeführt wird.",
+      "linuxPackageMetadataUnusable": "Die Metadaten des heruntergeladenen Pakets konnten nicht überprüft werden. Orca beenden, bevor das Update von der offiziellen Release-Seite heruntergeladen und installiert wird.",
+      "unknownReleaseChannel": "Unbekannter Veröffentlichungskanal „{{channel}}“.",
+      "invalidReleaseTag": "„{{tag}}“ ist kein gültiges Release-Tag.",
+      "releaseRepoNotFound": "Unter {{repo}} wurde kein Release-Repository gefunden.",
+      "releaseListFailed": "{{channel}}-Builds konnten nicht aufgelistet werden (HTTP {{status}}).",
+      "releaseListUnreadable": "Die Release-Liste für {{channel}} konnte nicht gelesen werden.",
+      "rateLimitedSoon": "GitHub-Ratenlimit erreicht. In einigen Minuten erneut versuchen.",
+      "rateLimitedSoonSignedOut": "GitHub-Ratenlimit erreicht. In einigen Minuten erneut versuchen oder `gh auth login` ausführen, damit Orca das höhere Limit deines Kontos nutzen kann.",
+      "rateLimitedInMinute": "GitHub-Ratenlimit erreicht. In etwa einer Minute erneut versuchen.",
+      "rateLimitedInMinuteSignedOut": "GitHub-Ratenlimit erreicht. In etwa einer Minute erneut versuchen oder `gh auth login` ausführen, damit Orca das höhere Limit deines Kontos nutzen kann.",
+      "rateLimitedInMinutes_one": "GitHub-Ratenlimit erreicht. In etwa {{count}} Minute erneut versuchen.",
+      "rateLimitedInMinutes_other": "GitHub-Ratenlimit erreicht. In etwa {{count}} Minuten erneut versuchen.",
+      "rateLimitedInMinutesSignedOut_one": "GitHub-Ratenlimit erreicht. In etwa {{count}} Minute erneut versuchen oder `gh auth login` ausführen, damit Orca das höhere Limit deines Kontos nutzen kann.",
+      "rateLimitedInMinutesSignedOut_other": "GitHub-Ratenlimit erreicht. In etwa {{count}} Minuten erneut versuchen oder `gh auth login` ausführen, damit Orca das höhere Limit deines Kontos nutzen kann."
+    }
   },
   "jira": {
     "connect": {
@@ -21721,10 +22008,37 @@
       "automationHistory": "Automatisierungsverlauf",
       "onboarding": "Einrichtungsfortschritt",
       "other": "Sonstiger gespeicherter App-Zustand"
+    },
+    "startupFailure": {
+      "noneFound": "(keine gefunden)",
+      "sqlitePath": "SQLite-Pfad: {{path}}",
+      "sectionsDamaged": "Ein Teil des gespeicherten Zustands dieses Profils ist beschädigt: {{sections}}. Alles andere ist intakt.",
+      "repairCommand": "Orca beenden und dann `{{command}}` ausführen, um nur die beschädigten Teile aus Sicherungskopien zu ersetzen und alles andere beizubehalten. Orca bewahrt eine Kopie der beschädigten Datei auf.",
+      "restoreWholeBackup": "Um stattdessen eine vollständige Sicherungskopie wiederherzustellen, zuerst `{{exportsCommand}}` und dann `{{rollbackCommand}}` ausführen.",
+      "sqliteUnreadable": "Orca kann das aktive Profil nicht sicher öffnen, da sein SQLite-Zustand nicht lesbar ist.",
+      "legacyJsonPath": "Pfad der alten JSON-Datei: {{path}}",
+      "retainedBackups": "Aufbewahrte SQLite-Sicherungskopien:",
+      "retainedExports": "Aufbewahrte JSON-Exporte:",
+      "chooseRecoveryArtifact": "Orca beenden, dann `{{command}}` ausführen und einen nachweislich intakten Wiederherstellungsstand auswählen.",
+      "restoreCommands": "SQLite mit `{{backupCommand}}` oder einen JSON-Export mit `{{revisionCommand}}` wiederherstellen.",
+      "authorityAmbiguous": "Orca kann nicht sicher bestimmen, welcher Profilzustand maßgeblich ist: {{detail}}",
+      "authorityBothPreserved": "Ein älterer Build könnte die JSON-Datei geändert haben. Beide Kopien bleiben erhalten; keine wird automatisch ausgewählt.",
+      "authorityCopyFirst": "Orca beenden und das Profilverzeichnis kopieren, bevor ausgewählt wird, welcher Zustand beibehalten werden soll.",
+      "authorityKeepJson": "Um die aktuelle JSON-Datei einschließlich der Änderungen aus einem älteren Build beizubehalten, `{{command}}` ausführen. Dabei werden beide Kopien archiviert, ohne ihre Inhalte zusammenzuführen.",
+      "authorityInspect": "`{{command}}` ausführen, um die aufbewahrten Wiederherstellungspunkte zu prüfen.",
+      "authorityRestore": "`{{backupCommand}}` oder `{{revisionCommand}}` erst verwenden, nachdem der wiederherzustellende Zustand ausgewählt wurde.",
+      "newerSchema": "Dieses Profil wurde mit einer neueren Version von Orca gespeichert. Mit dieser oder einer noch neueren Version öffnen. Das Profil wurde nicht verändert.",
+      "revisionConflict": "Das aktive Profil wurde während des Starts von Orca geändert. Andere Orca-Prozesse schließen, die dieses Profil verwenden, und Orca dann neu starten.",
+      "writerUnavailable": "Orca konnte die Profilspeicherung nicht starten. Orca neu starten; falls das Problem weiterhin besteht, diesen Build reparieren oder neu installieren.",
+      "publicationUnavailable": "Orca konnte den Profilzustand nicht sicher in {{directory}} speichern.",
+      "publicationNeedsHardLinks": "Dieser Speicherort muss Hardlinks unterstützen, und Orca benötigt die Berechtigung, sie zu erstellen.",
+      "publicationMoveData": "Orca und orcad schließen, bevor die Ordnerberechtigungen geprüft werden oder das gesamte Orca-Datenverzeichnis auf ein beschreibbares lokales Dateisystem mit Hardlink-Unterstützung wie APFS, NTFS oder ext4 verschoben wird.",
+      "publicationKeepFiles": "Das ursprüngliche Verzeichnis und alle Wiederherstellungsdateien aufbewahren."
     }
   },
   "startupFailure": {
-    "title": "Orca konnte nicht gestartet werden"
+    "title": "Orca konnte nicht gestartet werden",
+    "finishFailed": "Orca konnte den Start nicht abschließen: {{detail}}"
   },
   "native": {
     "about": {
@@ -21771,6 +22085,26 @@
       "mixed": "Gemischt",
       "repair": "Erneute Kopplung erforderlich",
       "update": "Update erforderlich"
+    },
+    "remoteServerPairingErrors": {
+      "invalidPairingCode": "Ungültiger Kopplungscode. Eine URL im Format orca://pair?... oder reine Kopplungsdaten erwartet.",
+      "selfPairingCode": "Dieser Kopplungscode gehört zu dieser Orca-Instanz selbst. Den Code stattdessen auf dem anderen Computer erzeugen.",
+      "managedDeployment": "Orca betreibt diesen Server für dich auf einem SSH-Host; seine Kopplung kann hier nicht ersetzt oder entfernt werden. Zur Stilllegung `orca environment stop --environment <name> --yes` ausführen oder Einstellungen > Orca auf SSH-Hosts verwenden; falls der Host nicht mehr vorhanden ist, `orca environment forget --environment <name> --yes` ausführen.",
+      "sshAccessChangePending": "Die Änderung des SSH-Zugriffs für diesen Server wurde nicht abgeschlossen. Unter Einstellungen > Entfernte Orca-Server > SSH-Zugriff für gekoppelte Server erneut versuchen oder abbrechen, bevor die Kopplung ersetzt oder der Server entfernt wird.",
+      "sshAccessLinked": "Die Verknüpfung des SSH-Zugriffs für diesen Server unter Einstellungen > Entfernte Orca-Server > SSH-Zugriff für gekoppelte Server aufheben, bevor die Kopplung ersetzt oder der Server entfernt wird.",
+      "alreadyPairedCloudWorkspace": "Dieser Server ist bereits als „{{name}}“ gekoppelt. Er gehört zu einem Cloud-Arbeitsbereich, der ihn beim Fortsetzen erneut koppelt.",
+      "alreadyPairedCloudIdentity": "Dieser Server ist bereits als „{{name}}“ gekoppelt. Der Server des Cloud-Arbeitsbereichs verwendet die Identität dieses Servers erneut und wurde daher nicht gespeichert.",
+      "alreadyPairedWslHost": "Dieser Server ist bereits als „{{name}}“ gekoppelt. Orca verwaltet ihn als WSL-Host, daher kann seine Kopplung hier nicht ersetzt werden.",
+      "alreadyPairedManagedDeployment": "Dieser Server ist bereits als „{{name}}“ gekoppelt. Orca betreibt diesen Server für dich auf einem SSH-Host; seine Kopplung kann hier nicht ersetzt oder entfernt werden. Zur Stilllegung `orca environment stop --environment <name> --yes` ausführen oder Einstellungen > Orca auf SSH-Hosts verwenden; falls der Host nicht mehr vorhanden ist, `orca environment forget --environment <name> --yes` ausführen.",
+      "alreadyPairedSshAccessChangePending": "Dieser Server ist bereits als „{{name}}“ gekoppelt. Die Änderung des SSH-Zugriffs für diesen Server wurde nicht abgeschlossen. Unter Einstellungen > Entfernte Orca-Server > SSH-Zugriff für gekoppelte Server erneut versuchen oder abbrechen, bevor die Kopplung ersetzt oder der Server entfernt wird.",
+      "alreadyPairedSshAccessLinked": "Dieser Server ist bereits als „{{name}}“ gekoppelt. Die Verknüpfung des SSH-Zugriffs für diesen Server unter Einstellungen > Entfernte Orca-Server > SSH-Zugriff für gekoppelte Server aufheben, bevor die Kopplung ersetzt oder der Server entfernt wird.",
+      "alreadyPairedAddAgain": "Dieser Server ist bereits als „{{name}}“ gekoppelt. Zum Aktualisieren seiner Verbindung unter Einstellungen > Entfernte Orca-Server erneut hinzufügen.",
+      "alreadyPairedUnreadable": "Dieser Server ist bereits als „{{name}}“ gekoppelt, dessen gespeicherte Einstellungen diese Orca-Version nicht lesen kann.",
+      "nameTaken": "Ein Server namens „{{name}}“ ist bereits vorhanden.",
+      "idNeedsNewerOrca": "Ein Server mit dieser ID ist bereits in einem Format vorhanden, das eine neuere Orca-Version erfordert.",
+      "hostSaveFailed": "Orca hat den Host überprüft, konnte ihn aber nicht speichern. Den lokalen Einstellungsspeicher prüfen und erneut versuchen.",
+      "repairSaveFailed": "Orca hat den Server überprüft, konnte die neue Kopplung aber nicht speichern. Den lokalen Einstellungsspeicher prüfen und erneut versuchen.",
+      "repairCloudWorkspace": "Dieser Server gehört zu einem Cloud-Arbeitsbereich, der ihn beim Fortsetzen erneut koppelt."
     }
   },
   "taskProviders": {
@@ -21862,10 +22196,6 @@
       "workspaceApiKeyHint": "Einen persönlichen API-Schlüssel für {{workspace}} einfügen. Ist dieser Arbeitsbereich bereits verbunden, ersetzt Orca den gespeicherten Schlüssel."
     }
   },
-  "workspaceOptions": {
-    "activeFilterCount_one": "{{count}} Filter",
-    "activeFilterCount_other": "{{count}} Filter"
-  },
   "editorConflicts": {
     "kind": {
       "addedByUs": "Auf eigener Seite hinzugefügt",
@@ -21931,6 +22261,7 @@
       "agentNeverStarted": "Der Agent der Automatisierung wurde nach dem Absenden des Prompts nie gestartet.",
       "agentNoCompletion": "Der Agent der Automatisierung hat keinen Abschluss gemeldet.",
       "watchTimedOut": "Orca hat die Überwachung dieser Ausführung nach 6 Stunden ohne Abschlusssignal beendet.",
+      "wslDistroStopped": "Die WSL-Distribution {{distro}} ist gestoppt, daher hat dieser geplante Lauf sie nicht gestartet. Starte die Distribution oder nutze „Jetzt ausführen“; spätere Läufe finden statt, solange sie läuft.",
       "projectSetupState": {
         "notSetUp": "Das Projekt ist auf dem ausgewählten Automatisierungs-Host nicht eingerichtet.",
         "settingUp": "Das Projekt wird auf dem ausgewählten Automatisierungs-Host noch eingerichtet.",
@@ -22019,6 +22350,13 @@
         "mrSourceBranchMissing": "MR !{{number}} hat keinen Quell-Branch.",
         "forkHeadUnresolved": "Der Head von Fork-MR !{{number}} konnte nach dem Fetch nicht aufgelöst werden."
       }
+    },
+    "bitbucketConnect": {
+      "invalidInput": "Ungültige Bitbucket-Zugangsdaten",
+      "accessTokenRequired": "Einen Zugriffstoken eingeben.",
+      "emailAndApiTokenRequired": "E-Mail-Adresse und API-Token eingeben.",
+      "rejected": "Bitbucket hat diese Zugangsdaten abgelehnt. E-Mail-Adresse und Token prüfen und erneut versuchen.",
+      "unreachable": "Bitbucket konnte nicht erreicht werden. Verbindung oder API-Basis-URL prüfen und erneut versuchen."
     }
   },
   "featureWall": {
@@ -22189,6 +22527,57 @@
       "sshTargetRemoveFailed": "Das verborgene SSH-Ziel konnte nicht entfernt werden.",
       "recipeExitedWithoutCode": "Rezept wurde mit unbekanntem Code beendet.",
       "destroyExitedWithoutCode": "Löschen wurde mit unbekanntem Code beendet."
+    }
+  },
+  "installDirAcl": {
+    "cause": "Die Windows-Berechtigungen für den Installationsordner von Orca hindern dessen eigene Sandbox-Prozesse daran, die mitgelieferten Dateien zu lesen.",
+    "repaired": "Orca hat die Berechtigungen repariert. Neu laden, um sie anzuwenden.",
+    "repairing": "Orca repariert gerade die Berechtigungen.",
+    "repairFailed": "Orca konnte sie nicht reparieren. Meist sind für den Ordner Administratorrechte erforderlich.",
+    "runCommands": "Diese Befehle in einer Eingabeaufforderung mit Administratorrechten ausführen und Orca anschließend erneut starten:"
+  },
+  "pet": {
+    "importErrors": {
+      "unsupportedFile": "Nicht unterstützte Datei. PNG, APNG, JPG, GIF, WebP oder SVG auswählen.",
+      "fileUnreadable": "Die ausgewählte Datei konnte nicht gelesen werden.",
+      "notAFile": "Der ausgewählte Pfad ist keine Datei",
+      "fileTooLarge": "Die Datei ist zu groß ({{size}} MB). Maximal {{max}} MB.",
+      "saveFailed": "Das Haustier konnte nicht gespeichert werden.",
+      "pathUnreadable": "Der ausgewählte Pfad konnte nicht gelesen werden.",
+      "manifestMissing": "Im Paket fehlt pet.json.",
+      "manifestInvalid": "pet.json ist ungültig.",
+      "manifestSymlink": "pet.json darf kein symbolischer Link sein.",
+      "manifestParseFailed": "Ungültige pet.json: {{detail}}",
+      "bundleSaveFailed": "Das Haustierpaket konnte nicht gespeichert werden.",
+      "sheetPathNotRelative": "spritesheetPath muss relativ zum Paket sein.",
+      "sheetPathIsRoot": "spritesheetPath muss auf eine Datei verweisen, nicht auf das Stammverzeichnis des Pakets.",
+      "sheetPathEscapes": "spritesheetPath liegt außerhalb des Pakets.",
+      "sheetSymlink": "Das Spritesheet darf kein symbolischer Link sein.",
+      "sheetUnsupportedType": "Das Spritesheet muss eine PNG-, APNG-, JPG-, GIF- oder WebP-Datei sein.",
+      "sheetNotFound": "Spritesheet-Datei nicht gefunden.",
+      "sheetNotAFile": "Der Spritesheet-Pfad ist keine Datei.",
+      "sheetTooLarge": "Das Spritesheet ist zu groß ({{size}} MB).",
+      "sheetSizeLimitExceeded": "Das Spritesheet überschreitet die Größenbegrenzung.",
+      "sheetUndecodable": "Das Spritesheet-Bild konnte nicht dekodiert werden.",
+      "sheetFrameMismatch": "Spritesheet {{sheetWidth}}×{{sheetHeight}} ist kein ganzzahliges Vielfaches der Frame-Größe {{frameWidth}}×{{frameHeight}}.",
+      "animationRowOutOfRange": "Animation „{{name}}“ verweist auf Zeile {{row}}, aber die Zeilenanzahl im Spritesheet beträgt nur {{rows}}.",
+      "animationTooManyFrames": "Die Frame-Anzahl der Animation „{{name}}“ ({{frames}}) übersteigt die Spaltenanzahl des Spritesheets ({{columns}}).",
+      "animationDurationMismatch": "Bei der Animation „{{name}}“ stimmt die Anzahl der angegebenen Frame-Dauern ({{durations}}) nicht mit der Frame-Anzahl ({{frames}}) überein.",
+      "defaultAnimationMissing": "defaultAnimation „{{name}}“ ist nicht in animations enthalten."
+    },
+    "defaultLabels": {
+      "image": "Benutzerdefiniertes Haustier",
+      "bundle": "Haustierpaket"
+    }
+  },
+  "diffComments": {
+    "lineRangeMeta": "Zeilen {{start}}-{{end}}",
+    "lineMeta": "Zeile {{line}}"
+  },
+  "agentSendTargets": {
+    "disabledReason": {
+      "needsPermission": "Agent benötigt eine Genehmigung",
+      "statusStale": "Agentenstatus ist veraltet"
     }
   }
 }

@@ -319,6 +319,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     // Allow listener registration before init so providers can observe the first state change; it reads no unprimed value.
     onStateChange: (listener) => cache.onStateChange(listener),
     notifyForeground: notifications.notifyForeground,
+    probeLivenessNow: notifications.notifyLivenessProbe,
     notifyNavigate: notifications.notifyNavigate,
     notifyNavigateBack: notifications.notifyNavigateBack,
     notifyExternalLink: notifications.notifyExternalLink,

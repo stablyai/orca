@@ -97,8 +97,11 @@ export type StructuredAgentSessionProviderChild = StructuredAgentSessionProvider
   close?: StructuredAgentSessionChildClose
 }
 
-/** Root proof comes only from stopAgentSessionProviderRoot or observed exit. */
-export type StructuredAgentSessionStopVerdict = { rootGone: boolean }
+/** Writer death proof comes only from stopAgentSessionProviderRoot or observed exit. */
+export type StructuredAgentSessionStopVerdict = {
+  rootGone: boolean
+  deathEvidenceKind?: 'kill-delivered'
+}
 
 export type { StructuredAgentSessionChildEndCause }
 

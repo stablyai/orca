@@ -69,7 +69,12 @@ export function claudeAcceptsExecFormHooks(version: string | null | undefined): 
 /** Probe with the launch cwd and env so version-manager shims select the same CLI. */
 export async function probeClaudeCliVersion(
   executablePath: string,
-  launch?: { cwd: string; env: Record<string, string>; timeoutMs?: number }
+  launch?: {
+    cwd: string
+    env: Record<string, string>
+    timeoutMs?: number
+    prefixArgs?: readonly string[]
+  }
 ): Promise<string | null> {
   try {
     const pathKey = process.platform === 'win32' && process.env.Path !== undefined ? 'Path' : 'PATH'
@@ -77,7 +82,8 @@ export async function probeClaudeCliVersion(
     const inheritedPath = process.env[pathKey]
     const result = await runProcess({
       program: executablePath,
-      args: ['--version'],
+      args: [...(launch?.prefixArgs ?? []), '--version'],
+      terminationBarrier: true,
       // Keep the sibling runtime on PATH for version-manager shims using /usr/bin/env node.
       env: launch?.env ?? {
         ...process.env,

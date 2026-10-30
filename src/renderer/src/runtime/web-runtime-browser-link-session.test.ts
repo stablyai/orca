@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/browser-focus'
 import type { RuntimeMobileSessionBrowserTab } from '../../../shared/runtime-types'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import { getDefaultSettings } from '../../../shared/constants'
 import { useAppStore } from '../store'
 import { openWorkspaceBrowserTabForLink } from '../lib/workspace-browser-tab-open'
@@ -61,8 +62,7 @@ beforeEach(() => {
       ]
     },
     browserSessionHostIdOverride: 'local',
-    defaultBrowserSessionProfileId: null,
-    defaultBrowserSessionProfileIdByHostId: {},
+    settings: getDefaultSettings('/home/test'),
     browserSessionProfilesByHostId: {
       [HOST]: [
         {
@@ -81,6 +81,13 @@ afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
+
+function setDefaultProfiles(
+  browserDefaultProfileIdByHostId: Partial<Record<ExecutionHostId, string>>
+): void {
+  const settings = useAppStore.getState().settings!
+  useAppStore.setState({ settings: { ...settings, browserDefaultProfileIdByHostId } })
+}
 
 function open() {
   return openWorkspaceBrowserTabForLink({
@@ -134,31 +141,26 @@ function selectDestination() {
   )
 }
 
-it.each([undefined, null])(
-  'keeps the remote default independent of local workspace profiles (%s)',
-  async (remoteDefault) => {
-    useAppStore.setState({
-      settings: {
-        ...getDefaultSettings('/home/test'),
-        ...useAppStore.getState().settings,
-        browserProfileScope: 'worktree'
-      },
-      defaultBrowserSessionProfileId: 'local-only-profile',
-      defaultBrowserSessionProfileIdByHostId: { local: 'local-only-profile', [HOST]: remoteDefault }
-    })
-    const creating = open()
-    const sentProfile = pendingCreates[0]?.params.profileId
-    const stagedProfile = useAppStore
-      .getState()
-      .browserTabsByWorktree[WT]?.find(
-        (workspace) => workspace.activePageId === pendingCreates[0]?.params.page
-      )?.sessionProfileId
-    pendingCreates[0]?.resolve('profile-repro-page')
-    expect(await creating).toMatchObject({ status: 'opened' })
-    expect(sentProfile).toBeUndefined()
-    expect(stagedProfile).toBeNull()
-  }
-)
+it('keeps the remote default independent of local workspace profiles', async () => {
+  useAppStore.setState({
+    settings: {
+      ...useAppStore.getState().settings!,
+      browserProfileScope: 'worktree',
+      browserDefaultProfileIdByHostId: { local: 'local-only-profile' }
+    }
+  })
+  const creating = open()
+  const sentProfile = pendingCreates[0]?.params.profileId
+  const stagedProfile = useAppStore
+    .getState()
+    .browserTabsByWorktree[WT]?.find(
+      (workspace) => workspace.activePageId === pendingCreates[0]?.params.page
+    )?.sessionProfileId
+  pendingCreates[0]?.resolve('profile-repro-page')
+  expect(await creating).toMatchObject({ status: 'opened' })
+  expect(sentProfile).toBeUndefined()
+  expect(stagedProfile).toBeNull()
+})
 
 it.each(['other-profile', undefined])(
   'does not reuse a page published with an incompatible or missing profile (%s)',
@@ -171,7 +173,7 @@ it.each(['other-profile', undefined])(
 it.each([null, 'remote-profile'])(
   'reuses the host-confirmed default or custom profile (%s)',
   async (profileId) => {
-    useAppStore.setState({ defaultBrowserSessionProfileIdByHostId: { [HOST]: profileId } })
+    setDefaultProfiles(profileId ? { [HOST]: profileId } : {})
     publishProfileSnapshot(profileId ?? 'default')
     const creating = open()
     pendingCreates[0]?.resolve('unexpected-new-page')
@@ -204,14 +206,14 @@ it('uses the paired runtime profile catalog for its SSH-owned workspace', async 
     repos: state.repos.map((repo) => ({ ...repo, executionHostId: sshHost })),
     worktreesByRepo: {
       repo: state.worktreesByRepo.repo!.map((worktree) => ({ ...worktree, hostId: sshHost }))
-    },
-    defaultBrowserSessionProfileIdByHostId: { [HOST]: 'runtime-profile', [sshHost]: 'ssh-profile' }
+    }
   }))
+  setDefaultProfiles({ [HOST]: 'remote-profile', local: 'local-profile' })
   const creating = open()
   const sentProfile = pendingCreates[0]?.params.profileId
   pendingCreates[0]?.resolve('ssh-profile-page')
   expect(await creating).toMatchObject({ status: 'opened' })
-  expect(sentProfile).toBe('runtime-profile')
+  expect(sentProfile).toBe('remote-profile')
 })
 
 it.each(['unchanged', 'different-host', 'different-runtime'] as const)(

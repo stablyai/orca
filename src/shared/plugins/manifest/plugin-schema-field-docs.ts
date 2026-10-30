@@ -1,9 +1,7 @@
 /** First release that read plugins: manifest v1, its first seven contribution points, every
  *  capability, event and built-in command action of that era. */
 export const PLUGIN_SCHEMA_SINCE_V1 = '1.4.160'
-/** First release that reads manifest v2, the v2 catalog and the fields that arrived with them:
- *  the release after the latest tag when v2 landed. A test fails once a tag at or above it
- *  ships without v2, so the release that does ship v2 bumps this once if needed. */
+/** First release planned to read manifest v2, the v2 catalog and their new fields. */
 export const PLUGIN_MANIFEST_V2_SINCE = '1.4.245'
 
 type PluginFieldDoc = {

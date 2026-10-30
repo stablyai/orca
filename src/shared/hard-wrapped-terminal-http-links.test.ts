@@ -81,6 +81,19 @@ describe('hard-wrapped terminal HTTP candidate bounds', () => {
     expect(onTranslateWithColumns).not.toHaveBeenCalled()
   })
 
+  it('stops scanning back at a table border instead of walking every framed row', () => {
+    const rows = Array.from({ length: TERMINAL_HTTP_URL_MAX_HARD_WRAPPED_ROWS }, (_value, index) =>
+      bufferLine(
+        index % 10 === 0 ? '├──────────────────────┤' : `│ https://example.com/${index} │`,
+        () => undefined
+      )
+    )
+    const getLine = vi.fn((y: number) => rows[y])
+
+    buildHardWrappedHttpLogicalLineCandidates({ getLine }, TERMINAL_HTTP_URL_MAX_HARD_WRAPPED_ROWS)
+    expect(new Set(getLine.mock.calls.map(([y]) => y)).size).toBeLessThan(20)
+  })
+
   it('reconstructs framed URL rows aligned by cells when a fragment has wide characters', () => {
     const rowTexts = ['|http://a/ab|', '|a你你你你你|', '|tailzzzzzzz|']
     const rows = rowTexts.map(bufferLineWithCellColumns)

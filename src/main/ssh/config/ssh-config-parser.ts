@@ -241,17 +241,22 @@ function splitOpenSshArguments(input: string): string[] {
 
 /** Read and parse the user's ~/.ssh/config file. Returns empty array if not found. */
 export function loadUserSshConfig(): SshConfigHost[] {
+  return loadUserSshConfigWithText().hosts
+}
+
+/** The parsed hosts plus the Include-expanded text, which fingerprints the config for `ssh -G` caching. */
+export function loadUserSshConfigWithText(): { hosts: SshConfigHost[]; text: string } {
   const configPath = join(homedir(), '.ssh', 'config')
   if (!existsSync(configPath)) {
-    return []
+    return { hosts: [], text: '' }
   }
 
   try {
-    const content = expandSshConfigIncludes(configPath)
-    return parseSshConfig(content)
+    const text = expandSshConfigIncludes(configPath)
+    return { hosts: parseSshConfig(text), text }
   } catch {
     console.warn(`[ssh] Failed to read SSH config at ${configPath}`)
-    return []
+    return { hosts: [], text: '' }
   }
 }
 

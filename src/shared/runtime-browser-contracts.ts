@@ -161,7 +161,7 @@ export type BrowserInterceptDisableResult = { disabled: boolean }
 export type BrowserConsoleEntry = {
   level: string
   text: string
-  timestamp: number
+  timestamp?: number
   url?: string
   line?: number
 }
@@ -171,10 +171,11 @@ export type BrowserConsoleResult = { entries: BrowserConsoleEntry[]; truncated: 
 export type BrowserNetworkEntry = {
   url: string
   method: string
-  status: number
-  mimeType: string
-  size: number
-  timestamp: number
+  // Absent while a request is pending or after it failed.
+  status?: number
+  mimeType?: string
+  size?: number
+  timestamp?: number
 }
 
 export type BrowserNetworkLogResult = { entries: BrowserNetworkEntry[]; truncated: boolean }

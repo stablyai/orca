@@ -58,7 +58,7 @@ export async function runClaudeListing(
   }
 ): Promise<string> {
   // Explicitly pinning the default directory changes the CLI's Keychain identity.
-  const { command, env } = await waitForPromiseWithSignal(
+  const { command, prefixArgs, env } = await waitForPromiseWithSignal(
     resolveClaudeStructuredInvocation({ ...deps, signal: request.signal }, (base) => ({
       ...base,
       ...claudeConfigDirEnvPatch(request.accountHomePath, { env: base })
@@ -73,7 +73,7 @@ export async function runClaudeListing(
     return (deps.runListing ?? runAgentModelCatalogListing)(
       {
         command,
-        args: [...args],
+        args: [...prefixArgs, ...args],
         stdin: request.stdin,
         ...(request.cwd ? { cwd: request.cwd } : {})
       },
@@ -136,7 +136,7 @@ export function createClaudeModelCatalogProbe(
     }
     const sources = await resolveClaudeChildEnvSources(launchDeps)
     assertStructuredAgentResolutionCurrent(operation)
-    const { command, env } = await resolveClaudeStructuredInvocation(
+    const { command, prefixArgs, env } = await resolveClaudeStructuredInvocation(
       launchDeps,
       (base) => ({
         ...base,
@@ -148,7 +148,13 @@ export function createClaudeModelCatalogProbe(
     )
     assertStructuredAgentResolutionCurrent(operation)
     return {
-      identity: { command, args, cwd, overlay: Object.entries(sources.overlay ?? {}).sort() },
+      identity: {
+        command,
+        prefixArgs,
+        args,
+        cwd,
+        overlay: Object.entries(sources.overlay ?? {}).sort()
+      },
       run: async (signal?: AbortSignal): Promise<AgentModelCatalogSuccess> => {
         assertStructuredAgentResolutionCurrent(operation)
         signal?.throwIfAborted()
@@ -160,7 +166,7 @@ export function createClaudeModelCatalogProbe(
             return (deps.runListing ?? runAgentModelCatalogListing)(
               {
                 command,
-                args: argsFor(strictMcp),
+                args: [...prefixArgs, ...argsFor(strictMcp)],
                 ...(cwd ? { cwd } : {}),
                 stdin: `${CLAUDE_MODEL_LIST_STDIN}${JSON.stringify({ type: 'control_request', request_id: 'orca-model-settings', request: { subtype: 'get_settings' } })}\n`
               },

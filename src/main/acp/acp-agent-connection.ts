@@ -205,7 +205,7 @@ export class AcpAgentConnection extends AcpSessionRuntime {
     this.drainNotifications(error)
     return this.managed
       .close()
-      .then((result) => result.root === 'exited')
+      .then((result) => result.root === 'exited' || result.killDelivered === true)
       .finally(() => super.close(error))
   }
 }

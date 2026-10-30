@@ -10,6 +10,7 @@ import {
   type StructuredAgentSessionOptionState
 } from './structured-agent-session-options'
 import {
+  structuredAgentSessionMessageSelection,
   structuredAgentSessionOptionView,
   structuredAgentSessionSendSelection,
   structuredAgentSessionShownSnapshot
@@ -82,9 +83,25 @@ describe('a Claude model its CLI no longer lists', () => {
     }
   })
 
-  it('waits for an unlisted seed and carries a current effort without an offered menu', () => {
-    // The placeholder stands until the host answers with the chat's own model; create seeds it.
-    expect(carried(withHostList(), remembered)).toBeUndefined()
+  it('shows the literal seed when a built-in id has no host-listed label', () => {
+    const seed = { model: 'sonnet' }
+    const view = structuredAgentSessionOptionView(withHostList(), seed, {})
+    const model = structuredAgentSessionOptionSnapshot(view).find((entry) => entry.id === 'model')
+    expect(model?.kind).toMatchObject({
+      currentValue: 'sonnet',
+      choices: expect.arrayContaining([{ value: 'sonnet', label: 'sonnet' }])
+    })
+  })
+
+  it('shows an unlisted seed literally and carries a current effort without an offered menu', () => {
+    const view = structuredAgentSessionOptionView(withHostList(), remembered, {})
+    expect(carried(withHostList(), remembered)).toEqual(remembered)
+    expect(
+      structuredAgentSessionOptionSnapshot(view).find((entry) => entry.id === 'model')?.kind
+    ).toMatchObject({
+      currentValue: 'claude-gone',
+      choices: expect.arrayContaining([{ value: 'claude-gone', label: 'claude-gone' }])
+    })
     const haiku = { id: 'haiku', label: 'Haiku', isDefault: false, efforts: [] }
     const listed = applyStructuredAgentSessionOptions(fresh(), CLAUDE_SESSION_OPTION_CATALOG, {
       models: [OPUS, haiku],
@@ -191,4 +208,48 @@ describe("a chat's model and effort, apart from the defaults filling them in", (
       effort: 'xhigh'
     })
   })
+})
+
+it('bounds exact capture by catalog width at N and 10N', () => {
+  const work: number[] = []
+  for (const count of [10, 100]) {
+    let visits = 0
+    const models = Array.from({ length: count }, (_, index) => ({
+      id: `model-${index}`,
+      label: `Model ${index}`,
+      isDefault: false,
+      efforts: levels('high')
+    }))
+    const state = applyStructuredAgentSessionOptions(
+      fresh(),
+      CLAUDE_SESSION_OPTION_CATALOG,
+      {
+        models,
+        listedModelIds: models.map((row) => row.id),
+        current: {
+          model: `model-${count - 1}`,
+          effort: 'high',
+          acceptedInputSources: { model: 'saved', effort: 'saved' }
+        }
+      },
+      { newLaunch: false, coherentCatalog: false }
+    )
+    for (const row of state.catalog?.models ?? []) {
+      const id = row.id
+      Object.defineProperty(row, 'id', {
+        get() {
+          visits++
+          return id
+        }
+      })
+    }
+    expect(structuredAgentSessionMessageSelection(state)).toEqual({
+      model: `model-${count - 1}`,
+      effort: 'high'
+    })
+    expect(visits).toBeLessThanOrEqual(10 * count)
+    work.push(visits)
+  }
+  expect(work[1]).toBeLessThanOrEqual(11 * work[0])
+  console.info('selection-capture-catalog-visits', JSON.stringify(work))
 })

@@ -61,7 +61,8 @@ export type DeveloperPermissionsApi = {
 }
 
 export type ComputerUsePermissionsApi = {
-  getStatus: () => Promise<ComputerUsePermissionStatusResult>
+  // Passive badges pass background to accept a backed-off denial instead of relaunching the helper.
+  getStatus: (args?: { background?: boolean }) => Promise<ComputerUsePermissionStatusResult>
   openSetup: (args?: { id?: ComputerUsePermissionId }) => Promise<ComputerUsePermissionSetupResult>
   reset: () => Promise<ComputerUsePermissionResetResult>
 }

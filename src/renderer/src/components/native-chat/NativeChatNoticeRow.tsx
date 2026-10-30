@@ -138,7 +138,7 @@ export function NativeChatNoticeRow({
   }
   // Name Orca and its host as the stop cause; without host context, preserve the original words.
   const { orcaStop } = block
-  const { hostLabel, remoteHost, continueAvailable } = orcaStopView
+  const { hostLabel, remoteHost, continueAvailable, wslDistro } = orcaStopView
   // A paired server with no name to show is still a remote server; its id is not a name.
   const machine =
     hostLabel ?? (remoteHost ? sayNativeChatOrcaStopTranslated('unnamedServer') : null)
@@ -150,6 +150,13 @@ export function NativeChatNoticeRow({
   // Only reword auth text fully described by its fact; host text may also carry command advice.
   const authSurface =
     failure?.kind === 'notSignedIn'
+      ? (['row', 'rejection'] as const).find(
+          (surface) => block.text === agentSessionFailureSentence(failure, surface, { agentName })
+        )
+      : undefined
+  // The host can't tell it's a WSL host; name the distro only over its plain not-installed words.
+  const wslMissingSurface =
+    failure?.kind === 'cliMissing' && wslDistro
       ? (['row', 'rejection'] as const).find(
           (surface) => block.text === agentSessionFailureSentence(failure, surface, { agentName })
         )
@@ -178,7 +185,14 @@ export function NativeChatNoticeRow({
             { agentName },
             sayAgentSessionFailureTranslated
           )
-        : agentSessionGoalControlWords(block.text)
+        : failure && wslMissingSurface && wslDistro
+          ? agentSessionFailureSentence(
+              failure,
+              wslMissingSurface,
+              { agentName, wslDistro },
+              sayAgentSessionFailureTranslated
+            )
+          : agentSessionGoalControlWords(block.text)
   const failureDetail = agentSessionFailureDetailText(failure)
   const detail = failureDetail?.trim() !== text.trim() ? failureDetail : undefined
   const tone = named ? 'notice' : look.kind === 'line' ? look.tone : null

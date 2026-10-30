@@ -6,7 +6,7 @@ import type { SessionOptionValue } from '../../../shared/native-chat/input/nativ
 import type { RuntimeTerminalCreate } from '../../../shared/runtime-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import {
-  agentPermissionNeedsPreparedCommand,
+  agentLaunchNeedsPreparedCommand,
   toAgentLaunchPreferences
 } from '../../../shared/agent-launch-preferences'
 import {
@@ -40,7 +40,7 @@ export async function createRuntimeAgentBackgroundTerminal(args: {
   const launchPreferences = toAgentLaunchPreferences(args.sessionOptions, args.agent)
   return await runRemoteAgentSessionLaunch({
     environmentId: args.environmentId,
-    hostAuthority: agentPermissionNeedsPreparedCommand(args.agent, args.sessionOptions)
+    hostAuthority: agentLaunchNeedsPreparedCommand(args.agent, args.sessionOptions)
       ? undefined
       : () =>
           operation.run(async (clientOperationId) =>

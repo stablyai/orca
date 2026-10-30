@@ -1,8 +1,4 @@
 import { translateMain } from '../i18n/main-i18n'
-import {
-  validatePathExistenceBatch,
-  type ShellPathExistence
-} from '../../shared/path-existence-batch'
 import { ipcMain, shell, dialog } from 'electron'
 import { constants, copyFile, readFile, stat } from 'node:fs/promises'
 import { basename, extname, isAbsolute, normalize, posix, win32 } from 'node:path'
@@ -13,6 +9,10 @@ import type {
   ShellOpenLocalPathResult
 } from '../../shared/shell-open-types'
 import { MAX_REPO_ICON_UPLOAD_BYTES } from '../../shared/repo-icon'
+import {
+  repoIconPickFailure,
+  type RepoIconPickResult
+} from '../../shared/repo-icon-pick-failure-copy'
 import type { Store } from '../persistence'
 import {
   EXTERNAL_EDITOR_CLI_COMMAND,
@@ -28,11 +28,10 @@ import {
 } from './shell-editor-ssh-host'
 import {
   isLocallyOwned,
-  pathExists,
   resolveOwnedPathTarget,
   validateLocalPathTarget
 } from './shell-owned-path-target'
-import { guardWslUncPathAccess } from '../wsl/wsl-unc-access-gate'
+import { registerShellPathExistenceHandlers } from './shell-path-existence-handlers'
 
 export { EXTERNAL_EDITOR_CLI_COMMAND }
 
@@ -198,27 +197,7 @@ export function registerShellHandlers(
     await openWithSystemDefault(target.path, ownerHostId)
   })
 
-  ipcMain.handle(
-    'shell:pathsExist',
-    async (_event, paths: string[]): Promise<ShellPathExistence[]> => {
-      validatePathExistenceBatch(paths)
-      // Chat link renders and terminal hovers ask unprompted: a stat of a stopped distro's UNC path
-      // boots it (E9). Refuse that path alone, so the caller retries it and keeps the rest.
-      return Promise.all(
-        paths.map((path) =>
-          guardWslUncPathAccess(path, () => pathExists(path)).catch(
-            (error: unknown): ShellPathExistence => ({
-              error: error instanceof Error ? error.message : String(error)
-            })
-          )
-        )
-      )
-    }
-  )
-
-  ipcMain.handle('shell:pathExists', async (_event, filePath: string): Promise<boolean> => {
-    return pathExists(filePath)
-  })
+  registerShellPathExistenceHandlers()
 
   ipcMain.handle(
     'shell:pickDirectory',
@@ -270,41 +249,38 @@ export function registerShellHandlers(
     return result.filePaths[0]
   })
 
-  ipcMain.handle(
-    'shell:pickRepoIconImage',
-    async (): Promise<{ dataUrl: string; fileName: string } | null> => {
-      const result = await dialog.showOpenDialog({
-        properties: ['openFile'],
-        filters: [
-          {
-            name: translateMain('native.dialog.repoIconImages', 'Repo icon images'),
-            extensions: ['png']
-          }
-        ]
-      })
-      if (result.canceled || result.filePaths.length === 0) {
-        return null
-      }
-
-      const filePath = result.filePaths[0]
-      const extension = extname(filePath).toLowerCase()
-      const mimeType = REPO_ICON_IMAGE_MIME_TYPES[extension]
-      if (!mimeType) {
-        throw new Error('Repo icons must be PNG files.')
-      }
-
-      const stats = await stat(filePath)
-      if (stats.size > MAX_REPO_ICON_UPLOAD_BYTES) {
-        throw new Error('Repo icon image must be 256KB or smaller.')
-      }
-
-      const buffer = await readFile(filePath)
-      return {
-        dataUrl: `data:${mimeType};base64,${buffer.toString('base64')}`,
-        fileName: basename(filePath)
-      }
+  ipcMain.handle('shell:pickRepoIconImage', async (): Promise<RepoIconPickResult> => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openFile'],
+      filters: [
+        {
+          name: translateMain('native.dialog.repoIconImages', 'Repo icon images'),
+          extensions: ['png']
+        }
+      ]
+    })
+    if (result.canceled || result.filePaths.length === 0) {
+      return null
     }
-  )
+
+    const filePath = result.filePaths[0]
+    const extension = extname(filePath).toLowerCase()
+    const mimeType = REPO_ICON_IMAGE_MIME_TYPES[extension]
+    if (!mimeType) {
+      return repoIconPickFailure('notPng')
+    }
+
+    const stats = await stat(filePath)
+    if (stats.size > MAX_REPO_ICON_UPLOAD_BYTES) {
+      return repoIconPickFailure('tooLarge')
+    }
+
+    const buffer = await readFile(filePath)
+    return {
+      dataUrl: `data:${mimeType};base64,${buffer.toString('base64')}`,
+      fileName: basename(filePath)
+    }
+  })
 
   ipcMain.handle('shell:pickAudio', async (): Promise<string | null> => {
     const result = await dialog.showOpenDialog({

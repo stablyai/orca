@@ -49,6 +49,8 @@ import {
 } from '../runtime/runtime-browser-commands-factory'
 
 vi.mock('./orcad-browser-provider', () => ({ resolveOrcadBrowserProvider: vi.fn() }))
+// The fixture's /Applications/Orca.app path would open a real macOS install park.
+vi.mock('./orcad-browser-install-park', () => ({ openOrcadBrowserInstallPark: () => null }))
 
 vi.mock('electron', () => ({ app: { getPath: () => harnessRoot }, ipcMain: {} }))
 vi.mock('../browser/browser-manager', () => ({ browserManager: {} }))

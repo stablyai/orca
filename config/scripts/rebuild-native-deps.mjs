@@ -577,8 +577,8 @@ function loadNativeModule(moduleName) {
     return
   }
   if (moduleName === '@orca/windows-security') {
-    // Why: the addon loads on first call; the newest export also rejects a stale build that loads.
-    projectRequire(moduleName).clearStdHandleInheritance()
+    const security = projectRequire(moduleName)
+    if (!security.currentUserSid() || !security.hasNativeExport('spawnDetachedIsolated')) throw new Error('stale build without the newest export; rebuild it')
     return
   }
   if (moduleName === 'node-pty') {

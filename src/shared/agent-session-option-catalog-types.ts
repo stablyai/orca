@@ -1,3 +1,4 @@
+import type { AgentChoiceCliForm } from './agent-launch-choices'
 import type { AgentType } from './agent-status-types'
 import type {
   SessionOptionDescriptor,
@@ -20,6 +21,7 @@ export type CatalogMidSessionApply =
   | { kind: 'unsupported' }
 
 export type CatalogOptionApply = {
+  cli?: readonly AgentChoiceCliForm[]
   launchArgs?: (value: SessionOptionValue) => string[]
   /** Removes conflicting free-form args, or detects when to omit the pick from launch args and the record. */
   removeAgentArgs?: (tokens: readonly string[]) => string[]

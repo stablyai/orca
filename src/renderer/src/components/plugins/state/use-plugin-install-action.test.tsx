@@ -61,16 +61,15 @@ const codePreview: PluginMarketplaceHostInstallPreview = {
 }
 
 function setup() {
-  const onTryPlugin = vi.fn()
   const onInstalled = vi.fn().mockResolvedValue(undefined)
   const fetchPreview = vi.fn().mockResolvedValue({ ok: true, preview })
   const hook: { current: ReturnType<typeof usePluginInstallAction> | null } = { current: null }
   function Probe(): null {
-    hook.current = usePluginInstallAction({ fetchPreview, onInstalled, onTryPlugin })
+    hook.current = usePluginInstallAction({ fetchPreview, onInstalled })
     return null
   }
   act(() => createRoot(document.createElement('div')).render(<Probe />))
-  return { hook, onInstalled, onTryPlugin, fetchPreview }
+  return { hook, onInstalled, fetchPreview }
 }
 
 function installResult(on: boolean) {
@@ -121,7 +120,22 @@ describe('usePluginInstallAction', () => {
   })
 
   it('keeps the Try it toast up long enough to click', async () => {
-    const { hook } = setup()
+    const { hook, fetchPreview } = setup()
+    const manifest = pluginManifestSchema.parse({
+      ...preview.manifest,
+      contributes: {
+        syntaxes: [
+          {
+            id: 'gleam',
+            title: 'Gleam',
+            scopeName: 'source.gleam',
+            path: 'g.json',
+            extensions: ['.gleam']
+          }
+        ]
+      }
+    })
+    fetchPreview.mockResolvedValue({ ok: true, preview: { ...preview, manifest } })
     await act(async () => hook.current?.install(listing))
     expect(toast.success).toHaveBeenCalledWith(
       expect.any(String),
@@ -129,6 +143,15 @@ describe('usePluginInstallAction', () => {
         duration: 10_000,
         action: expect.objectContaining({ label: 'Try it' })
       })
+    )
+  })
+
+  it('offers no Try it when nothing shows the plugin off directly', async () => {
+    const { hook } = setup()
+    await act(async () => hook.current?.install(listing))
+    expect(toast.success).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ action: undefined })
     )
   })
 

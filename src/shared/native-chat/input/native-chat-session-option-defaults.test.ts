@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
-  clearNativeChatSessionOptionModel,
+  applyNativeChatSessionOptionSettingsMutation,
   narrowStructuredLaunchSeedOptions,
   resolveNativeChatSessionOptionDefaults,
-  resolveStructuredLaunchSeedOptions,
-  updateNativeChatSessionOptionDefaults
+  resolveStructuredLaunchSeedOptions
 } from './native-chat-session-option-defaults'
 import type { PersistedNativeChatSessionOptions } from './native-chat-session-options'
 
@@ -15,50 +14,26 @@ const persistedGrok = (
   grok: { ...(model ? { model } : {}), valuesByModel }
 })
 
-describe('clearNativeChatSessionOptionModel', () => {
-  it('drops the model a retired id would otherwise launch as -m', () => {
-    const cleared = clearNativeChatSessionOptionModel(
-      persistedGrok('grok-build', { 'grok-build': { effort: 'low' } }),
-      'grok'
-    )
-    expect(cleared.grok?.model).toBeUndefined()
-    // Resolution keys off `model`, so clearing it is what stops the flag going out.
-    expect(resolveNativeChatSessionOptionDefaults(cleared, 'grok')).toBeUndefined()
-  })
-
-  it('keeps the per-model values so a reselect restores the old effort', () => {
-    const cleared = clearNativeChatSessionOptionModel(
-      persistedGrok('grok-build', { 'grok-build': { effort: 'low' } }),
-      'grok'
-    )
-    expect(cleared.grok?.valuesByModel).toEqual({ 'grok-build': { effort: 'low' } })
-    const reselected = updateNativeChatSessionOptionDefaults({
-      persisted: cleared,
-      agent: 'grok',
-      modelId: 'grok-build',
-      optionId: 'model',
-      value: 'grok-build'
-    })
-    expect(resolveNativeChatSessionOptionDefaults(reselected, 'grok')).toEqual({
-      model: 'grok-build',
-      effort: 'low'
-    })
-  })
-
-  it('leaves every other agent untouched', () => {
-    const cleared = clearNativeChatSessionOptionModel(
-      { ...persistedGrok('grok-build'), claude: { model: 'opus', valuesByModel: {} } },
-      'grok'
-    )
-    expect(cleared.claude).toEqual({ model: 'opus', valuesByModel: {} })
-  })
-
-  it('is a no-op when nothing is persisted for the agent', () => {
-    expect(clearNativeChatSessionOptionModel(undefined, 'grok')).toEqual({})
-    expect(clearNativeChatSessionOptionModel({}, 'grok')).toEqual({})
-    const untouched = persistedGrok(undefined, { 'grok-4.5': { effort: 'high' } })
-    expect(clearNativeChatSessionOptionModel(untouched, 'grok')).toEqual(untouched)
-  })
+describe('older clients clearing a missing model', () => {
+  it.each(['grok', 'omp'] as const)(
+    'keeps the remembered %s model and its launch options',
+    (agent) => {
+      const persisted = {
+        [agent]: { model: 'retired', valuesByModel: { retired: { effort: 'low' } } }
+      }
+      expect(
+        applyNativeChatSessionOptionSettingsMutation(persisted, {
+          type: 'clear-model-if-missing',
+          agent,
+          availableModelIds: ['current']
+        })
+      ).toBeNull()
+      expect(resolveNativeChatSessionOptionDefaults(persisted, agent)).toEqual({
+        model: 'retired',
+        effort: 'low'
+      })
+    }
+  )
 })
 
 describe('resolveNativeChatSessionOptionDefaults', () => {
@@ -68,8 +43,7 @@ describe('resolveNativeChatSessionOptionDefaults', () => {
     expect(resolveNativeChatSessionOptionDefaults(persistedGrok('   '), 'grok')).toBeUndefined()
   })
 
-  it('returns a stale id verbatim, which is why retirement happens upstream', () => {
-    // Stale ids pass through into -m; retirement must clear persisted model upstream.
+  it('returns an unlisted saved id verbatim', () => {
     expect(resolveNativeChatSessionOptionDefaults(persistedGrok('grok-build'), 'grok')).toEqual({
       model: 'grok-build'
     })

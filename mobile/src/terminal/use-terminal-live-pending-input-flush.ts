@@ -18,14 +18,16 @@ import {
   createTerminalLivePendingFlushState,
   queueTerminalLiveControlSend,
   queueTerminalLiveMirrorSend,
-  waitForTerminalLivePendingFlush
+  waitForTerminalLivePendingFlush,
+  type TerminalLiveInputFailure
 } from './terminal-live-pending-flush-state'
 
 type TerminalLivePendingInputFlushOptions<TTabType extends string> = {
   readonly activeHandleRef: RefObject<string | null>
   readonly activeSessionTabTypeRef: RefObject<TTabType | null>
   readonly framesLivePaste?: (handle: string) => boolean
-  readonly onPasteEndsFieldSession?: (handle: string) => void
+  readonly onFieldSessionEnded?: (handle: string) => void
+  readonly onSendFailure?: (failure: TerminalLiveInputFailure) => void
   readonly liveInputRef: RefObject<TextInput | null>
   readonly liveInputTerminalHandlesRef: RefObject<Set<string>>
   readonly sendLiveTerminalInputRef: RefObject<TerminalLiveInputSender>
@@ -60,7 +62,8 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
   activeHandleRef,
   activeSessionTabTypeRef,
   framesLivePaste,
-  onPasteEndsFieldSession,
+  onFieldSessionEnded,
+  onSendFailure,
   liveInputRef,
   liveInputTerminalHandlesRef,
   sendLiveTerminalInputRef,
@@ -95,6 +98,18 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
     setLiveInputCapture('')
     writeTerminalLiveInputText(liveInputRef, '')
   }, [liveInputRef, resetMirrorState, setLiveInputCapture])
+
+  useEffect(() => {
+    const state = pendingLiveInputFlushRef.current
+    state.onFailure = (handle, failure) => {
+      onFieldSessionEnded?.(handle)
+      clearPendingLiveInputCommit()
+      onSendFailure?.(failure)
+    }
+    return () => {
+      state.onFailure = null
+    }
+  }, [clearPendingLiveInputCommit, onFieldSessionEnded, onSendFailure])
 
   const waitForPendingLiveInputFlush = useCallback(async (): Promise<boolean> => {
     return waitForTerminalLivePendingFlush(pendingLiveInputFlushRef.current)
@@ -179,7 +194,7 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
         sendQueuedMirrorPayload
       )
       if (pasted) {
-        onPasteEndsFieldSession?.(handle)
+        onFieldSessionEnded?.(handle)
         clearHeldCommitTimer()
         heldLiveInputTextRef.current = ''
         liveInputComposingRef.current = undefined
@@ -196,7 +211,7 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
       clearHeldCommitTimer,
       isFramedPasteAppend,
       liveInputRef,
-      onPasteEndsFieldSession,
+      onFieldSessionEnded,
       liveInputTerminalHandlesRef,
       resetMirrorState,
       sendQueuedMirrorPayload,
@@ -293,19 +308,7 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
     ]
   )
 
-  useEffect(() => {
-    return () => {
-      if (heldCommitTimerRef.current) {
-        clearTimeout(heldCommitTimerRef.current)
-        heldCommitTimerRef.current = null
-      }
-      heldLiveInputTextRef.current = ''
-      liveInputComposingRef.current = undefined
-      sentLiveInputTextRef.current = ''
-      pendingLiveInputHandleRef.current = null
-      cancelTerminalLivePendingFlush(pendingLiveInputFlushRef.current)
-    }
-  }, [])
+  useEffect(() => resetMirrorState, [resetMirrorState])
 
   return {
     applyLiveInputMirror,

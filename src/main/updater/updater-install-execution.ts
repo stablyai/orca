@@ -10,7 +10,7 @@ import { getMacUpdateRunningInstances } from '../macos-update-running-instances'
 import { commitServeSupervisorPark } from './serve-supervisor-install-park'
 import { armUpdateInstallExitWatchdog } from '../update-install-exit-watchdog'
 import { getLinuxPackageType } from '../linux-update-package-type'
-import { LINUX_PACKAGE_MARKER_UNUSABLE_MESSAGE } from '../linux-package-downloaded-status'
+import { updaterCodedMessage } from '../../shared/updater-failure-copy'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { requestServeUpdateHandoff, failServeUpdateHandoff } from '../serve-update-handoff'
 import { UpdaterMacInstallPreflight } from './updater-mac-install-preflight'
@@ -54,7 +54,7 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
       this.sendToMainWindow('updater:quitAndInstallAborted')
       this.sendInstallFailureStatus({
         state: 'error',
-        message: LINUX_PACKAGE_MARKER_UNUSABLE_MESSAGE,
+        ...updaterCodedMessage('linuxPackageMarkerUnusable'),
         ...(pendingVersion ? { version: pendingVersion } : {})
       })
       return

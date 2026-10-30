@@ -10,6 +10,7 @@ import { structuredAgentSessionThreadGoalReport } from './structured-agent-sessi
 // Saved choices, catalog defaults and actual execution reports remain separate facts.
 
 import type { AgentSessionOptionsResult } from '../../../shared/agent-session-wire'
+import type { AgentSessionAcceptedInputSources } from '../../../shared/agent-session-options-result'
 import { journalOpenReadRefusal } from '../agent-session-journal/journal-open-failure'
 import type { StructuredAgentSessionLiveOptions } from './structured-agent-session-adapter'
 import {
@@ -63,7 +64,7 @@ export async function readStructuredAgentSessionOptions(
     (rested ??= await readStructuredAgentSessionOptionsAtRest(context.deps, sessionId, reader))
   let options: Omit<AgentSessionOptionsResult, 'rewind'>
   if (live) {
-    const { catalogListing, ...answer } = live
+    const { catalogListing, effortFixed: _fixed, ...answer } = live
     options = answer
     // Fill missing live listings from saved catalog state; absent records keep the child’s answer.
     if (!catalogListing && !answer.listedModelIds && store.getConversation(sessionId)) {
@@ -94,22 +95,15 @@ export async function readStructuredAgentSessionOptions(
           (row) => row.isDefault
         )?.id
       : undefined
-  // Show saved intent unless the provider explicitly rejected that model; then show execution.
-  const refusedModel = live && !!adapter.readOptionRestoreFailures?.(sessionId).includes('model')
   const saved = record?.options ?? {}
-  const { model: _refused, ...selectedWithoutModel } = selected.current
-  const model = refusedModel
-    ? (options.current.model ?? displayDefault)
-    : (saved.model ?? (options.current.model || selected.current.model || displayDefault))
+  const model = saved.model ?? (options.current.model || selected.current.model || displayDefault)
   const current = {
-    ...(refusedModel ? selectedWithoutModel : selected.current),
+    ...selected.current,
     ...options.current,
     ...(model !== undefined ? { model } : {}),
     effort: saved.effort ?? options.current.effort,
-    fastMode:
-      saved.fastMode !== undefined
-        ? selected.current.fastMode
-        : (options.current.fastMode ?? selected.current.fastMode),
+    fastMode: selected.current.fastMode ?? options.current.fastMode,
+    // The saved tier as the shared speed rule runs it under the saved model.
     serviceTier:
       saved.serviceTier !== undefined
         ? selected.current.serviceTier
@@ -120,11 +114,26 @@ export async function readStructuredAgentSessionOptions(
     key === 'model' && !options.current.model
       ? displayDefault !== undefined || selected.current.defaulted?.includes(key) === true
       : options.current.defaulted?.includes(key) === true
-  const defaulted =
-    (agent !== 'codex' || !live || options.current.model) &&
-    structuredAgentSessionNeverSent(record, session.journal)
-      ? []
-      : (['model', 'effort'] as const).filter((key) => saved[key] === undefined && defaultedBy(key))
+  const neverSent = structuredAgentSessionNeverSent(record, session.journal)
+  const defaultKeys = (['model', 'effort'] as const).filter(
+    (key) => saved[key] === undefined && defaultedBy(key)
+  )
+  const pinsDefaults = neverSent && (agent !== 'codex' || !live || !!options.current.model)
+  const defaulted = pinsDefaults ? [] : defaultKeys
+  const acceptedInputSources: AgentSessionAcceptedInputSources = {}
+  for (const key of ['model', 'effort', 'fastMode', 'serviceTier'] as const) {
+    if (current[key] !== undefined && saved[key] !== undefined) {
+      acceptedInputSources[key] = 'saved'
+    }
+  }
+  for (const key of defaultKeys) {
+    if (pinsDefaults && current[key] !== undefined) {
+      acceptedInputSources[key] = 'policy'
+    }
+  }
+  if (saved.fastMode === undefined && selected.current.fastMode === false) {
+    acceptedInputSources.fastMode = 'policy'
+  }
   const confirmed = options.current.confirmed?.filter((key) =>
     key === 'model' || key === 'effort' || key === 'fastMode' || key === 'serviceTier'
       ? current[key] === options.current[key]
@@ -161,8 +170,17 @@ export async function readStructuredAgentSessionOptions(
   }
   return {
     ...options,
+    ...(live?.effortFixed
+      ? {
+          models: options.models.map(({ effortsKnown: _unknown, ...row }) => ({
+            ...row,
+            efforts: []
+          }))
+        }
+      : {}),
     current: {
       ...current,
+      acceptedInputSources,
       defaulted,
       confirmed,
       ...(options.current.fastModeState ? { fastModeState: options.current.fastModeState } : {}),

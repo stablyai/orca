@@ -70,8 +70,8 @@ describe('headless automation dispatch', () => {
         workspaceId: 'wt-1',
         agentId: 'goose'
       } as never,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the title is read.
-      run: { title: 'Nightly' } as never,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the title and trigger are read.
+      run: { title: 'Nightly', trigger: 'scheduled' } as never,
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: unused for an existing workspace.
       target: {} as never
     })

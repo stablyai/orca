@@ -1,3 +1,4 @@
+import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
 import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -115,7 +116,12 @@ async function restartAfterDeath(): Promise<void> {
 }
 
 async function reread() {
-  await host.restoreReadableSessions([SESSION])
+  if (!host.hasSession(SESSION)) {
+    await host.flushAllStreamedEvents()
+    host = new StructuredAgentSessionHost(host.deps)
+    replaceHostTestState({ store: host.deps.store, host })
+  }
+  await openTestChats(host, [SESSION])
   const { items } = await host.journalSnapshot(SESSION)
   const turnItemId = items.find((item) => item.body.kind === 'turn')?.itemId
   const stopRows = items.filter(
@@ -148,6 +154,7 @@ describe('the row a quit writes for the reply it cut', () => {
     expect(row?.turnScope).toEqual({ kind: 'turn', turnItemId })
     expect(readerErrors).toEqual([LEGACY_TEXT])
     expect(latestNativeChatOrcaStopCut(items, [])).toEqual({ turnItemId, cause: trigger })
+    expect(host.readStatusSummary(SESSION)?.turnOutcome).toBe('cancellation')
   })
 
   it('writes nothing for a turn the provider finished during the stop', async () => {
@@ -197,6 +204,7 @@ describe('the row a restart writes for a reply its Orca died in', () => {
     })
     expect(readerErrors).toEqual([LEGACY_TEXT])
     expect(latestNativeChatOrcaStopCut(items, [])).toEqual({ turnItemId, cause: 'crash' })
+    expect(host.readStatusSummary(SESSION)?.turnOutcome).toBe('interruption')
   })
 
   it('names the update an unfinished quit began, never a crash', async () => {
@@ -253,5 +261,6 @@ describe('an agent this Orca runs', () => {
     )
     const { stopRows } = await reread()
     expect(stopRows).toEqual([])
+    expect(host.readStatusSummary(SESSION)?.turnOutcome).toBe('interruption')
   })
 })

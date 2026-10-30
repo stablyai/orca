@@ -65,13 +65,17 @@ function insertClaims(
   uploadIds: Iterable<string>,
   sessionId: string,
   now: number
-): void {
+): string[] {
+  const inserted: string[] = []
   const insert = db.prepare(
     'INSERT OR IGNORE INTO agent_session_attachment_claims (upload_id, session_id, claimed_at) VALUES (?, ?, ?)'
   )
   for (const uploadId of uploadIds) {
-    insert.run(uploadId, sessionId, now)
+    if (Number(insert.run(uploadId, sessionId, now).changes) > 0) {
+      inserted.push(uploadId)
+    }
   }
+  return inserted
 }
 
 export type AgentSessionAttachmentClaim = {
@@ -89,11 +93,11 @@ export type AgentSessionAttachmentClaim = {
 export function claimAgentSessionAttachmentsInTransaction(
   db: Database.Database,
   claim: AgentSessionAttachmentClaim
-): void {
+): { referenced: Set<string>; inserted: string[] } {
   const root = agentSessionAttachmentStoreRoot(claim.stateDirectory)
   const uploadIds = agentSessionAttachmentReferences(root, claim.body)
   if (uploadIds.size === 0) {
-    return
+    return { referenced: uploadIds, inserted: [] }
   }
   const kept = claim.previous
     ? agentSessionAttachmentReferences(root, claim.previous)
@@ -102,15 +106,16 @@ export function claimAgentSessionAttachmentsInTransaction(
   if (required.some((uploadId) => isBeingSwept(db, uploadId) || !uploadIsStored(root, uploadId))) {
     throw new AgentSessionAttachmentExpiredError()
   }
-  insertClaims(db, required, claim.sessionId, claim.now)
+  const inserted = insertClaims(db, required, claim.sessionId, claim.now)
   const bestEffort = [...uploadIds].filter((id) => !required.includes(id))
   if (bestEffort.length === 0) {
-    return
+    return { referenced: uploadIds, inserted }
   }
   db.exec(`SAVEPOINT ${CLAIM_SAVEPOINT}`)
   try {
-    insertClaims(db, bestEffort, claim.sessionId, claim.now)
+    const acquired = insertClaims(db, bestEffort, claim.sessionId, claim.now)
     db.exec(`RELEASE ${CLAIM_SAVEPOINT}`)
+    inserted.push(...acquired)
   } catch (error) {
     db.exec(`ROLLBACK TO ${CLAIM_SAVEPOINT}`)
     db.exec(`RELEASE ${CLAIM_SAVEPOINT}`)
@@ -119,6 +124,7 @@ export function claimAgentSessionAttachmentsInTransaction(
       error: error instanceof Error ? error.message : String(error)
     })
   }
+  return { referenced: uploadIds, inserted }
 }
 
 /** Mark only unclaimed uploads; subsequent claims must refuse them. */

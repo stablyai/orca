@@ -47,7 +47,7 @@ export function PluginInUseAction({
           value0: name
         }
       )}
-      onClick={() => (pack ? switchToPluginLanguage(pack) : void applyPluginThemesNow(pluginKey))}
+      onClick={() => void (pack ? switchToPluginLanguage(pack) : applyPluginThemesNow(pluginKey))}
     >
       {translate('auto.components.settings.PluginInUseAction.use', 'Use')}
     </Button>

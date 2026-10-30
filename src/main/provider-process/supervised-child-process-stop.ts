@@ -33,6 +33,6 @@ export async function stopSupervisedChildProcess(
       ...rootOnlyProviderClosePolicy(true),
       signalSupervisorOnClose: closeRequest === 'stdin-end-and-sigterm'
     },
-    terminateTree: () => terminateProviderProcessTree(child, { site })
+    terminateTree: () => terminateProviderProcessTree(child, { site, supervised: true })
   })
 }

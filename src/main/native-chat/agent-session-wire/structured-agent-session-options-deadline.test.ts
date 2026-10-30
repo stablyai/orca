@@ -44,7 +44,7 @@ it('bounds legacy saved-scope preparation without changing saved Auto', async ()
       claude: createClaudeModelCatalogProbe({
         resolveLaunchArgs: resolving,
         resolveInheritedEnv: environment,
-        resolveCommand: () => '/fixture/claude',
+        resolveCommand: () => ({ command: '/fixture/claude', prefixArgs: [] }),
         resolveAuthPolicy: () => ({ account: 'system' })
       })
     }

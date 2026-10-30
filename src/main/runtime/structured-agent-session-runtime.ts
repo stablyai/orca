@@ -113,6 +113,7 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
   // The store launch admission may already have opened; a failed install leaves it to that slot.
   const recordStore = await openAgentSessionRecordStoreOnce({
     stateDirectory: deps.stateDirectory,
+    legacySessionTabIds: deps.legacySessionTabIds ?? [],
     hostId: deps.hostId,
     logger
   })

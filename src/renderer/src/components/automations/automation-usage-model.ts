@@ -20,7 +20,7 @@ export function formatAutomationTokens(value: number | null | undefined): string
 
 export function formatAutomationCost(value: number | null | undefined): string {
   if (value === null || value === undefined) {
-    return 'n/a'
+    return translate('auto.components.automations.usage.costUnavailable', 'n/a')
   }
   if (value > 0 && value < 0.01) {
     return `$${value.toFixed(4)}`

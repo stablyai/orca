@@ -14,6 +14,7 @@ import type {
   CreatedHostedReview,
   HostedReviewCreatedContext
 } from './hosted-review-creation-state'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 export function useSourceControlHostedReviewCreated({
   activeRepo,
@@ -123,7 +124,7 @@ export function useSourceControlHostedReviewCreated({
                 'Open on {{value0}}',
                 { value0: copy.providerName }
               ),
-              onClick: () => window.api.shell.openUrl(result.url)
+              onClick: () => openAppHttpLink(result.url, { worktreeId })
             }
           }
         )

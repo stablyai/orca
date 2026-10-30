@@ -52,6 +52,11 @@ it('consumes an actual Git toggle failure and lets the following Chat write succ
   const model = settingsModel()
   persist.mockRejectedValueOnce(new Error('Settings disk is unavailable'))
   render(<GitPersistenceHarness model={model} />)
+  const naming = document.getElementById('chat-names')
+  if (!naming) {
+    throw new Error('Chat naming section is missing')
+  }
+  fireEvent.click(within(naming).getByRole('button', { name: 'Advanced' }))
   const toggle = screen.getByRole('switch', { name: 'Show Source Control AI actions' })
   fireEvent.click(toggle)
   await waitFor(() =>
@@ -90,6 +95,11 @@ it('does not let a failed actual Git agent selection roll back a queued Chat sel
       })
   )
   render(<GitPersistenceHarness model={settingsModel()} />)
+  const naming = document.getElementById('chat-names')
+  if (!naming) {
+    throw new Error('Chat naming section is missing')
+  }
+  fireEvent.click(within(naming).getByRole('button', { name: 'Advanced' }))
   const agents = screen.getAllByRole('combobox')
   const gitAgent = agents[0]
   const chatAgent = agents.at(-1)
@@ -226,8 +236,11 @@ it('global owner: bounded controlled edits, failed/same selection and no-op save
     agentArgs: '--verbose newer',
     launchPreferences: {
       agentId: 'claude',
-      model: 'sonnet',
-      options: { effort: 'high' },
+      modelSelection: {
+        base: 'default',
+        model: { agentId: 'claude', value: 'sonnet' },
+        options: { effort: { agentId: 'claude', value: 'high' } }
+      },
       permissionMode: 'full-access'
     }
   })

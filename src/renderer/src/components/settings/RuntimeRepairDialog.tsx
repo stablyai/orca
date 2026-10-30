@@ -86,7 +86,7 @@ function RuntimeRepairForm({
       })
       if (!result.ok) {
         if (mountedRef.current) {
-          setFailure({ kind: result.kind, message: result.message })
+          setFailure(result)
         }
         return
       }

@@ -42,6 +42,7 @@ export type LegacyImportOptions = ResolveSessionFileOptions & {
   source?: AdoptedTranscriptSource
   limits?: JournalPayloadLimits
   decodedMessageIdentities?: true
+  signal?: AbortSignal
 }
 
 const MAX_LEGACY_IMPORT_RECORD_BYTES = 16 * 1024 * 1024
@@ -111,6 +112,7 @@ export async function prepareLegacyTranscriptImport(input: {
       agent: input.agent,
       sessionId: input.sessionId,
       source: options.source,
+      signal: options.signal,
       decodedMessageIdentities: options.decodedMessageIdentities,
       limits
     })
@@ -133,7 +135,7 @@ async function prepareOpenCodeImport(input: {
       return { ok: false, error: 'The conversation database is unavailable.' }
     }
     try {
-      await validateAdoptedOpenCodeSource(dbPath, input.options.source)
+      await validateAdoptedOpenCodeSource(dbPath, input.options.source, input.options.signal)
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
     }
@@ -199,6 +201,7 @@ async function decodeReplacementItems(input: {
   sessionId: string
   decodedMessageIdentities?: true
   source?: AdoptedTranscriptSource
+  signal?: AbortSignal
   limits: JournalPayloadLimits
 }): Promise<{ items: JournalReplacementItem[]; consumedBytes: number }> {
   const source = input.source
@@ -206,6 +209,7 @@ async function decodeReplacementItems(input: {
         agent: input.agent,
         filePath: input.filePath,
         source: input.source,
+        signal: input.signal,
         maxSourceBytes: MAX_LEGACY_IMPORT_RECORD_BYTES
       })
     : null

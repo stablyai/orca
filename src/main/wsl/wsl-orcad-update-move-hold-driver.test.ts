@@ -13,6 +13,7 @@ import { ORCAD_UPDATE_WSL_MOVE_RUNNING_CODE } from '../../shared/wsl-host-types'
 import type { WslMoveResult } from '../../shared/wsl-move/wsl-move-driver-types'
 import type { OrcadActivationRecord } from '../managed-server/activation/orcad-activation-record'
 import { resetOrcadUpdateFailuresForTests } from '../managed-server/lifecycle/orcad-managed-update-failure-memory'
+import type * as ActiveProbe from './wsl-orcad-active-probe'
 import type * as ManagedRuntimeContext from '../managed-server/lifecycle/orcad-managed-runtime-context'
 import type * as RemoteVersionedInstall from '../managed-server/install/remote-versioned-install'
 import { testState } from '../persistence/persistence-test-harness'
@@ -93,6 +94,14 @@ vi.mock('../managed-server/lifecycle/orcad-managed-version-gc', () => ({
 vi.mock('../managed-server/lifecycle/orcad-managed-runtime-context', async (importOriginal) => ({
   ...(await importOriginal<typeof ManagedRuntimeContext>()),
   probeManagedOrcadReadiness: host.probe
+}))
+
+vi.mock('./wsl-orcad-active-probe', async (importOriginal) => ({
+  ...(await importOriginal<typeof ActiveProbe>()),
+  probeWslActiveOrcad: async (...args: unknown[]) => ({
+    readiness: await host.probe(...args),
+    pid: 4242
+  })
 }))
 
 import { deployAndLaunchWslOrcad } from './wsl-orcad-deploy'

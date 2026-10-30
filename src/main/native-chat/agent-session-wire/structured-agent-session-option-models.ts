@@ -14,6 +14,8 @@ export type StructuredAgentSessionOptionProjection = {
 
 export type StructuredAgentSessionLiveOptions = AgentSessionOptionsResult & {
   catalogListing?: AgentModelCatalogLiveListing
+  /** The running CLI cannot change effort mid-chat, whatever its catalog lists. */
+  effortFixed?: true
 }
 
 export type StructuredAgentSessionRestingOptions = Pick<

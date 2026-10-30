@@ -203,6 +203,23 @@ describe('WSL hosts gate', () => {
       }
     )
 
+    // A blocked run's child inherits ORCA_INTERNAL_WSL_HOSTS=1; only the published state says closed.
+    it('lets a child that never configured the gate trust what main published', () => {
+      const gate = { ORCA_INTERNAL_WSL_HOSTS: '1' }
+      expect(isWslHostsServing({ ...gate, [WSL_HOSTS_GATE_STATE_ENV]: 'closed' })).toBe(false)
+      // Children of a serve-only run see no gate env at all, yet must still serve saved WSL work.
+      expect(isWslHostsServing({ [WSL_HOSTS_GATE_STATE_ENV]: 'serve-only' })).toBe(true)
+    })
+
+    // A child of an older Orca, or a garbled value, must keep today's env-only reading.
+    it('falls back to the internal gate env in a child when nothing valid was published', () => {
+      expect(isWslHostsServing({ ORCA_INTERNAL_WSL_HOSTS: '1' })).toBe(true)
+      // With the gate env on, a garbled value must not read as 'closed'.
+      expect(
+        isWslHostsServing({ ORCA_INTERNAL_WSL_HOSTS: '1', [WSL_HOSTS_GATE_STATE_ENV]: 'bogus' })
+      ).toBe(true)
+    })
+
     it('withdraws it on reset', () => {
       vi.stubEnv('ORCA_INTERNAL_WSL_HOSTS', '1')
       configureWslHostsGate(facts(false, false))

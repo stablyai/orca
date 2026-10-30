@@ -14,8 +14,27 @@ export function parseAgentBrowserJsonOutput(stdout: string): AgentBrowserEnvelop
   const parsed = JSON.parse(stdout)
   // Orca batches one command; a longer array is a passthrough `exec batch` reply.
   if (!Array.isArray(parsed) || parsed.length !== 1) {
-    return parsed
+    return withoutDaemonLifecycle(parsed)
   }
   const [entry] = parsed
-  return { success: entry?.success, data: entry?.result, error: entry?.error }
+  return withoutDaemonLifecycle({
+    success: entry?.success,
+    data: entry?.result,
+    error: entry?.error
+  })
+}
+
+// agent-browser 0.31+ adds its daemon's launch bookkeeping to every reply; it is not page data.
+function withoutDaemonLifecycle(envelope: AgentBrowserEnvelope): AgentBrowserEnvelope {
+  const data = envelope?.data
+  if (!data || typeof data !== 'object' || Array.isArray(data) || !('lifecycle' in data)) {
+    return envelope
+  }
+  const { lifecycle: _lifecycle, ...rest } = data
+  return { ...envelope, data: rest }
+}
+
+/** "Unknown ref" for a ref never issued; 0.39+ also says "Stale ref for role=…" once its element is gone. */
+export function isAgentBrowserStaleRefError(message: string): boolean {
+  return /unknown ref|stale ref|ref not found|element not found: @e/i.test(message)
 }

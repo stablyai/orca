@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { setClaudeStructuredOption } from './claude-structured-options'
 import { applyClaudeMessageOptions } from './claude-structured-message-options'
-import { resetClaudeRetiredModel } from './claude-structured-retired-model'
 import type { ClaudeSession } from './structured/claude-structured-session-state'
 import { ClaudeControlRequestTimeoutError } from './claude-agent-sdk-control-requests'
 import { ClaudeBackgroundTaskTracker } from './claude-background-task-tracker'
@@ -40,7 +39,6 @@ function sessionFor(setModel: ClaudeSession['connection']['setModel']): ClaudeSe
     reportedModelMutation: 0,
     confirmedOptions: new Set(),
     appliedInputOptions: new Map(),
-    launchedModel: null,
     fastModeAtStart: false,
     capabilities: [],
     events: undefined,
@@ -446,7 +444,7 @@ describe('Claude structured option write under the request deadline', () => {
 })
 
 describe('Claude applied inputs across native writer effects', () => {
-  it('retires old-model Fast refusal and reissues explicit inputs after promotion, reset and failure', async () => {
+  it('retires old-model Fast refusal and reissues explicit inputs after promotion and failure', async () => {
     const setModel = vi.fn<ClaudeSession['connection']['setModel']>().mockResolvedValue(undefined)
     const session = sessionFor(setModel)
     const flags = vi
@@ -469,12 +467,6 @@ describe('Claude applied inputs across native writer effects', () => {
     await applyClaudeMessageOptions(session, { model: 'opus[1m]', effort: 'high' }, undefined)
     expect(setModel).toHaveBeenCalledTimes(2)
     expect(flags.mock.calls.filter(([settings]) => settings.effortLevel === 'high')).toHaveLength(2)
-    resetClaudeRetiredModel(session, {}, 'chat', 'opus[1m]')
-    await vi.waitFor(() =>
-      expect(setModel).toHaveBeenLastCalledWith(undefined, { timeoutMs: undefined })
-    )
-    await applyClaudeMessageOptions(session, { effort: 'high' }, undefined)
-    expect(flags.mock.calls.filter(([settings]) => settings.effortLevel === 'high')).toHaveLength(3)
     flags.mockRejectedValueOnce(new Error('native effort failure'))
     await expect(applyClaudeMessageOptions(session, { effort: 'low' }, undefined)).rejects.toThrow(
       'native effort failure'

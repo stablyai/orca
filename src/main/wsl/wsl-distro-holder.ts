@@ -1,5 +1,5 @@
 import { runKeyedSerializedOperation } from '../cli/keyed-promise-queue'
-import { spawnProcess } from '@orca/process-host'
+import { spawnDetachedWithoutInheritance } from '@orca/process-host/isolated-detached-spawn'
 import { queryWindowsProcess } from '../daemon/daemon-process-inspection'
 import {
   listConfirmedRunningWslDistros,
@@ -42,14 +42,13 @@ export const WSL_HOLDER_UNVERIFIABLE_REPLACE_AFTER_MS = 5 * 60_000
 
 function spawnDetachedHolder(distro: string): WslDistroHolderChild {
   // Detached holders outlive Orca's libuv kill-on-close job; explicit taskkill /T still reaches descendants.
-  return spawnProcess({
+  // Inheriting none of Orca's handles keeps a launcher's pipe or a DevTools socket from outliving Orca.
+  return spawnDetachedWithoutInheritance({
     program: resolveWslExecutablePath(),
     args: buildWslDistroHolderArgs(distro),
     // A host-wide holder must never pin a worktree as its Windows cwd.
     cwd: resolveWslInteropSpawnCwd(),
-    env: { ...process.env, WSL_UTF8: '1' },
-    detached: true,
-    stdio: 'ignore'
+    env: { ...process.env, WSL_UTF8: '1' }
   })
 }
 

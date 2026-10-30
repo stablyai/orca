@@ -319,6 +319,8 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
       wrappedSetupCommand?: string
       // Background provisioning must not move the user's sidebar selection.
       surfaceOwner?: false
+      /** The create was the user's act: its terminals may start a stopped WSL distro. */
+      wslUserAct?: true
     },
     createdWorktree?: Worktree
   ): Promise<{ setupSpawned: boolean; setupTerminalHandle: string | null }> {

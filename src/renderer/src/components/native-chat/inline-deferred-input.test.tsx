@@ -66,7 +66,6 @@ function Field({ scope, disabled = false }: { scope: string; disabled?: boolean 
     resolvePendingImageAttachment: () => {},
     dropPendingImageAttachment: () => {},
     setNotice: () => {},
-    pastesInline: () => false,
     pastedTextEditor: () => input.current
   })
   useLayoutEffect(() => {

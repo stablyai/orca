@@ -5,6 +5,7 @@ import {
   discardUndispatchedKeystroke,
   drainTimedOutEchoCandidates,
   instrumentPaneEcho,
+  noteEchoOutputArrival,
   recordKeystroke,
   type EchoObservation,
   type InstrumentedPane
@@ -302,7 +303,7 @@ describe('instrumentPaneEcho', () => {
     terminal.dispose()
   })
 
-  it('measures input, dispatch, parse, and paint stages separately', () => {
+  it('splits event queueing, round trip, scheduler queueing, parse, and paint', () => {
     const fake = fakeTerminal()
     const observations: EchoObservation[] = []
     const entry = instrumentPaneEcho({ terminal: fake.terminal }, (value) =>
@@ -310,9 +311,11 @@ describe('instrumentPaneEcho', () => {
     )
     const now = vi.spyOn(performance, 'now')
 
-    recordKeystroke(entry, 10, 'direct', 'a')
+    recordKeystroke(entry, 10, 'direct', 'a', 4)
     now.mockReturnValueOnce(25)
     fake.emitData('a')
+    noteEchoOutputArrival(entry, 30)
+    now.mockReturnValueOnce(33)
     fake.terminal.write('echo')
     now.mockReturnValueOnce(40)
     fake.emitParsed()
@@ -328,6 +331,13 @@ describe('instrumentPaneEcho', () => {
         dispatchToParseMs: 15,
         parseToPaintMs: 10,
         inputToPaintMs: 40,
+        eventToHandlerMs: 6,
+        eventToPaintMs: 46,
+        dispatchToArrivalMs: 5,
+        arrivalToWriteMs: 3,
+        writeToParseMs: 7,
+        startedAt: 4,
+        paintedAt: 50,
         outputBytes: 4,
         outputWrites: 1
       }

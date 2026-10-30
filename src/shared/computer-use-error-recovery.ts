@@ -35,6 +35,11 @@ export function computerUseErrorRecoveryData(
         'Retry once with `--restore-window`.',
         'If `--restore-window` was already used, stop retrying restore; bring the app forward manually, check permissions, or prefer `set-value` for editable fields.'
       )
+    case 'background_unavailable':
+      return recoverWith(
+        'If the message names a popup menu or `<select>`, set its option with `orca computer set-value` on that element instead of clicking.',
+        'Otherwise retry once with `--restore-window`; that brings the app forward and uses foreground input, so tell the user it will take over their screen.'
+      )
     case 'window_stale':
       return recoverWith(
         'Run `orca computer list-windows --app <app> --json` and choose a current window selector.',
