@@ -1,4 +1,5 @@
 import { focusNativeChatCover } from '@/components/terminal-pane/native-chat-covered-pane'
+import { isDocumentBodyOrNull } from '@/components/terminal-pane/terminal-ime-input-context-refresh'
 import { hasVisibleOverlay } from '../visible-overlay'
 import type { ManagedPane } from './pane-manager-types'
 
@@ -20,4 +21,13 @@ export function focusPanePreservingOverlays(
     return
   }
   pane.terminal.focus()
+}
+
+/** Refocus only when focus fell to <body>, so an intentionally focused control keeps it. */
+export function focusPaneIfFocusUnclaimed(
+  pane: Pick<ManagedPane, 'container' | 'terminal'> | null
+): void {
+  if (pane && isDocumentBodyOrNull(document.activeElement, document)) {
+    focusPanePreservingOverlays(pane)
+  }
 }
