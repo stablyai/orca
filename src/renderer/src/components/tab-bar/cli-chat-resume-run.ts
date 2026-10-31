@@ -5,7 +5,6 @@ import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { holdEmptyWorkspaceDefaultSurfaceForLaunch } from '@/lib/empty-workspace-default-surface-claims'
 import { closeCliChatResumeTerminal } from './cli-chat-resume-close-terminal'
 import { toast } from 'sonner'
-import { namesCliConversation } from '../../../../shared/structured-agent-cli-conversation-adoption'
 import { structuredChatUnavailableText } from '@/lib/structured-agent-session-launch-failure'
 import { STRUCTURED_AGENT_SESSION_CLOSE_TERMINAL_FOR_CHAT_RUNTIME_CAPABILITY } from '../../../../shared/structured-agent-session-surface-capabilities'
 import { readStructuredChatHostPermissionVerdict } from '@/runtime/structured-chat-host-permission'
@@ -21,7 +20,10 @@ import {
 } from '@/runtime/structured-agent-session-client'
 import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
 import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
-import { CLI_CONVERSATION_ADOPTING_AGENTS } from '../../../../shared/structured-agent-cli-conversation-adoption'
+import {
+  CLI_CONVERSATION_ADOPTING_AGENTS,
+  namesCliConversation
+} from '../../../../shared/structured-agent-cli-conversation-adoption'
 import { toHostSessionPaneKey } from '../../../../shared/terminal-surface-id'
 import { resolveCliChatResumeSource, type CliChatResumeSource } from './cli-chat-resume-source'
 import {
