@@ -1,3 +1,4 @@
+import { rekeyWorktreeEntry, unionWorktreeLayoutRows } from './worktree-layout-records'
 import { ensureGroup } from '../tab-group-state'
 import type { AppState } from '../../types'
 import type { BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
@@ -140,24 +141,6 @@ export function removeWorktreeLayout(
   }
 }
 
-function rekeyWorktreeEntry<T>(
-  map: Record<string, T> | undefined,
-  oldWorktreeId: string,
-  newWorktreeId: string,
-  mapValue: (value: T) => T = (value) => value,
-  mergeExisting = false
-): Record<string, T> | undefined {
-  if (!map || !(oldWorktreeId in map)) {
-    return undefined
-  }
-  const next = { ...map }
-  if (!mergeExisting || !(newWorktreeId in map)) {
-    next[newWorktreeId] = mapValue(map[oldWorktreeId])
-  }
-  delete next[oldWorktreeId]
-  return next
-}
-
 /** Moves a renamed worktree's tabs, groups, pane layouts and selection to its new id. */
 export function renameWorktreeLayoutKeys(
   s: AppState,
@@ -206,23 +189,15 @@ export function renameWorktreeLayoutKeys(
     assign('openFiles', s.openFiles.map(withNewWorktreeId))
   }
   if (mergeExisting) {
-    const union = <T extends { id: string }>(destination: T[], source: T[]): T[] => {
-      const seen = new Set(destination.map((item) => item.id))
-      return [
-        ...destination,
-        ...source.filter((item) => {
-          if (seen.has(item.id)) return false
-          seen.add(item.id)
-          return true
-        })
-      ]
-    }
     const mergeRows = <T extends { id: string; worktreeId: string }>(
       map: Record<string, T[]>,
       remap: (row: T) => T = withNewWorktreeId
     ) => ({
       ...(rekey(map) ?? map),
-      [newWorktreeId]: union(map[newWorktreeId] ?? [], (map[oldWorktreeId] ?? []).map(remap))
+      [newWorktreeId]: unionWorktreeLayoutRows(
+        map[newWorktreeId] ?? [],
+        (map[oldWorktreeId] ?? []).map(remap)
+      )
     })
     patch.tabsByWorktree = mergeRows(s.tabsByWorktree)
     patch.browserTabsByWorktree = mergeRows(s.browserTabsByWorktree, renameBrowserWorkspace)
@@ -234,7 +209,7 @@ export function renameWorktreeLayoutKeys(
       newWorktreeId,
       s.activeGroupIdByWorktree[newWorktreeId]
     )
-    const mergedTabs = union(
+    const mergedTabs = unionWorktreeLayoutRows(
       destinationTabs,
       sourceTabs.map((tab) => ({
         ...withNewWorktreeId(tab),
@@ -275,7 +250,7 @@ export function renameWorktreeLayoutKeys(
         ])
       ]
     }
-    patch.openFiles = union(
+    patch.openFiles = unionWorktreeLayoutRows(
       s.openFiles.filter((file) => file.worktreeId !== oldWorktreeId),
       s.openFiles.filter((file) => file.worktreeId === oldWorktreeId).map(withNewWorktreeId)
     )

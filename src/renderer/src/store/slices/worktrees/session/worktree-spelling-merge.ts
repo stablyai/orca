@@ -42,7 +42,9 @@ export function mergeListedWorktreeSpellings(
   detected: DetectedWorktreeListResult
 ): Partial<AppState> {
   const ids = new Set(SESSION_MAPS.flatMap((key) => Object.keys(state[key] ?? {})))
-  for (const file of state.openFiles) ids.add(file.worktreeId)
+  for (const file of state.openFiles) {
+    ids.add(file.worktreeId)
+  }
   const listedByIdentity = new Map(
     detected.worktrees.map((row) => [worktreeIdentityKey(row.id), row])
   )
@@ -55,9 +57,13 @@ export function mergeListedWorktreeSpellings(
   let patch: Partial<AppState> = {}
   let current = state
   for (const oldId of ids) {
-    if (getRepoIdFromWorktreeId(oldId) !== repoId) continue
+    if (getRepoIdFromWorktreeId(oldId) !== repoId) {
+      continue
+    }
     const listed = listedByIdentity.get(worktreeIdentityKey(oldId))
-    if (!listed || listed.id === oldId) continue
+    if (!listed || listed.id === oldId) {
+      continue
+    }
     const newId = listed.id
     // A raw-id rename cannot move a co-claimant's state; those partitions remain separate.
     if (
@@ -80,10 +86,13 @@ export function mergeListedWorktreeSpellings(
               !isExecutionHostAliasForWorktree(tab.executionHostId, { ...listed, hostId })
           )
       )
-    )
+    ) {
       continue
+    }
     const sourceOwner = current.restoredRuntimeHostIdByWorkspaceSessionKey?.[oldId]
-    if (sourceOwner && sourceOwner !== hostId) continue
+    if (sourceOwner && sourceOwner !== hostId) {
+      continue
+    }
     const hasDestination =
       SESSION_MAPS.some((key) => Object.hasOwn(current[key] ?? {}, newId)) ||
       current.openFiles.some((file) => file.worktreeId === newId)
