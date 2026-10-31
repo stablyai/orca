@@ -1,6 +1,6 @@
 import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/browser-focus'
 import { requestBrowserFocus } from '@/components/browser-pane/host-guest/browser-focus'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi, type Mock } from 'vitest'
 import { toast } from 'sonner'
 import { createStoreCascadesMockApi } from '@/store/slices/store-cascades-test-harness'
 import {
@@ -13,7 +13,7 @@ import {
   registerWorkspaceHttpLinkBrowserOpener,
   type HttpLinkBrowserCompletion
 } from './http-link-routing'
-import { openRoutedHttpLink } from './http-link-destinations'
+import { openRoutedHttpLink, type WorkspaceHttpLinkBrowserOpener } from './http-link-destinations'
 import { openWorkspaceBrowserTabForLink } from './workspace-browser-tab-open'
 import { beginLinkOpenRequest } from './link-open-request'
 const mocks = vi.hoisted(() => ({ getState: vi.fn() }))
@@ -32,7 +32,7 @@ let resume: () => void
 let completed: Promise<void>
 let finish: () => void
 let released: Promise<void>
-let opening: ReturnType<typeof vi.fn>
+let opening: Mock<WorkspaceHttpLinkBrowserOpener>
 beforeEach(() => {
   store = createBrowserLinkTestStore()
   mocks.getState.mockImplementation(() => store.getState())
@@ -54,7 +54,7 @@ beforeEach(() => {
       }
     }
   )
-  opening = vi.fn(
+  opening = vi.fn<WorkspaceHttpLinkBrowserOpener>(
     async (
       request: Parameters<
         NonNullable<Parameters<typeof registerWorkspaceHttpLinkBrowserOpener>[0]>

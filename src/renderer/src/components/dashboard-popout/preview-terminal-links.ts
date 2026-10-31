@@ -1,10 +1,16 @@
-import type { ILinkHandler, Terminal } from '@xterm/xterm'
+import type { IBufferRange, ILinkHandler, Terminal } from '@xterm/xterm'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { installGuardedLinkProviderRegistration } from '@/lib/pane-manager/terminal-link-provider-guard'
 import { isTerminalHttpLinkActivation } from '@/components/terminal-pane/terminal-http-link-activation'
 import { TERMINAL_HTTP_URL_REGEX } from '../../../../shared/terminal-http-url-extraction'
 
-export type PreviewTerminalLinkHandlers = ILinkHandler | ((defaults: ILinkHandler) => ILinkHandler)
+type PreviewTerminalLinkHandler = Omit<ILinkHandler, 'activate'> & {
+  activate(event: MouseEvent, uri: string, range?: IBufferRange): void
+}
+
+export type PreviewTerminalLinkHandlers =
+  | PreviewTerminalLinkHandler
+  | ((defaults: ILinkHandler) => PreviewTerminalLinkHandler)
 
 /** Use pane-style Mod+click but open externally because pop-outs have no workspace-scoped browser pane. */
 export function installPreviewTerminalLinks(

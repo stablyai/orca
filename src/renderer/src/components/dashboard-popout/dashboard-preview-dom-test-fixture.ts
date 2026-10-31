@@ -82,7 +82,7 @@ export function observePreviewListeners(elements: HTMLElement[]) {
       ) {
         return
       }
-      const wrapped: EventListener = function (event) {
+      const wrapped: EventListener = function (this: EventTarget, event) {
         if (this === document || this === window) {
           callbacks++
         }

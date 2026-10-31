@@ -69,7 +69,7 @@ function observePreviewTimers() {
     records.push(record)
     const wrapped =
       typeof callback === 'function'
-        ? function (this: unknown, ...values: unknown[]) {
+        ? function (this: unknown, ...values: Parameters<Callback>) {
             try {
               return callback.apply(this, values)
             } finally {

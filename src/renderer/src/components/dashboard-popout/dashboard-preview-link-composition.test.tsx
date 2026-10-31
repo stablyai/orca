@@ -39,6 +39,9 @@ import { AgentKanbanBoard } from './AgentKanbanBoard'
 import { AgentTerminalPanel } from './AgentTerminalDialog'
 import { handleTerminalHttpLink } from '@/components/terminal-pane/terminal-url-link-hit-testing'
 import type { DashboardCard } from '../../../../shared/dashboard-snapshot'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { DashboardPreviewLinkSource } from './dashboard-preview-http-actions'
 
 const mocks = vi.hoisted(() => ({
   getState: vi.fn(),
@@ -110,11 +113,11 @@ beforeEach(() => {
     settings: {
       ...state.settings,
       ...getDefaultSettings('/home/test'),
-      terminalLigatures: false,
+      terminalLigatures: 'auto',
       terminalLinkClickBehavior: 'actions',
       terminalRightClickToPaste: false,
       openLinksInApp: false
-    }
+    } satisfies GlobalSettings
   }))
   mocks.getState.mockImplementation(() => store.getState())
   mocks.subscribe.mockImplementation((listener) => vi.fn(store.subscribe(listener)))
@@ -288,7 +291,11 @@ it.each(['actions', 'open'] as const)(
   }
 )
 
-function seedRemoteWorkspace(hostId: string, environmentId: string, streaming: boolean): void {
+function seedRemoteWorkspace(
+  hostId: ExecutionHostId,
+  environmentId: string,
+  streaming: boolean
+): void {
   store.setState((state) => ({
     activeWorkspaceExecutionHostId: hostId,
     worktreesByRepo: {
@@ -316,7 +323,11 @@ it.each([false, true])(
   async (streaming) => {
     const hostId = 'ssh:private-target'
     const ptyId = 'remote:hub-a@@handle-1'
-    const linkSource = { ...source, executionHostId: hostId, ptyId }
+    const linkSource = {
+      ...source,
+      executionHostId: hostId,
+      ptyId
+    } satisfies DashboardPreviewLinkSource
     const foreground = vi.fn()
     seedRemoteWorkspace(hostId, 'hub-a', streaming)
     const props = { ptyId, linkSource, onBrowserForeground: foreground }
@@ -360,7 +371,11 @@ it.each([false, true])(
 it('gives one useful refusal when a real saved chooser action loses runtime browser eligibility', async () => {
   const hostId = 'runtime:e'
   const ptyId = 'remote:e@@handle-1'
-  const linkSource = { ...source, executionHostId: hostId, ptyId }
+  const linkSource = {
+    ...source,
+    executionHostId: hostId,
+    ptyId
+  } satisfies DashboardPreviewLinkSource
   const foreground = vi.fn()
   seedRemoteWorkspace(hostId, 'e', true)
   const props = { ptyId, linkSource, onBrowserForeground: foreground }
