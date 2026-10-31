@@ -102,12 +102,17 @@ function boot(
   }
 }
 
-function fireTouch(type: string, touches: Array<{ x: number; y: number }>): void {
+function fireTouch(
+  type: string,
+  touches: Array<{ x: number; y: number }>,
+  changed: Array<{ x: number; y: number }> = []
+): void {
   const surface = document.getElementById('terminal-surface') as HTMLElement
   const ev = new Event(type, { bubbles: true, cancelable: true })
-  Object.defineProperty(ev, 'touches', {
-    value: touches.map((p, i) => ({ identifier: i, clientX: p.x, clientY: p.y, target: surface }))
-  })
+  const toTouches = (points: Array<{ x: number; y: number }>) =>
+    points.map((p, i) => ({ identifier: i, clientX: p.x, clientY: p.y, target: surface }))
+  Object.defineProperty(ev, 'touches', { value: toTouches(touches) })
+  Object.defineProperty(ev, 'changedTouches', { value: toTouches(changed) })
   surface.dispatchEvent(ev)
 }
 
@@ -152,6 +157,16 @@ describe('terminal WebView tap routing', () => {
     fireTouch('touchmove', [{ x: tapX + 11, y: tapY + 4 }])
     fireTouch('touchend', [])
     expect(posted.find((m) => m.type === 'open-url')?.url).toBe('https://example.com/foo')
+  })
+
+  it('does not report a tap when the finger lifts far from its start without a touchmove', async () => {
+    const { posted } = boot('plain prompt')
+    await settle()
+
+    fireTouch('touchstart', [{ x: 20, y: tapY }])
+    fireTouch('touchend', [], [{ x: 22, y: tapY + 80 }])
+
+    expect(posted.filter((message) => message.type === 'terminal-tap')).toHaveLength(0)
   })
 
   it('focuses native input after reporting a touch tap to a mouse-tracking TUI', async () => {
