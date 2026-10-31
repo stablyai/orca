@@ -159,6 +159,9 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
           }, [attach])
           return React.createElement('ShellViewProbe', props)
         },
+        clearRetainedNativeWebShellSlot: () => {
+          dependencies.clearRetainedNativeSlot()
+        },
         parseMobileWebShellLoadState: parseMobileWebShellLoadState
       }
     },

@@ -15,6 +15,10 @@ import {
   pageStorageKeysForRoute,
   type PageStorageForInit
 } from './page-storage-keys'
+import {
+  readRetainedPageHostSnapshot,
+  recordRetainedPageHostSnapshot
+} from './retained-shell-session-store'
 
 export type PageHostSnapshot = {
   host: BridgeInitHost
@@ -38,7 +42,9 @@ export function usePageHostSnapshot(
   routePathname: string,
   hostArea = false
 ): PageHostSnapshotView {
-  const [snapshot, setSnapshot] = useState<PageHostSnapshot | null>(null)
+  const [snapshot, setSnapshot] = useState<PageHostSnapshot | null>(() =>
+    readRetainedPageHostSnapshot(hostId)
+  )
   const [unreadable, setUnreadable] = useState(false)
   const [readAttempt, setReadAttempt] = useState(0)
   const releaseStorageRef = useRef<(() => void) | null>(null)
@@ -55,7 +61,7 @@ export function usePageHostSnapshot(
     const releaseStorage = retainMirroredStorage(keys)
     releaseStorageRef.current?.()
     releaseStorageRef.current = releaseStorage
-    setSnapshot(null)
+    setSnapshot((prev) => (prev?.host.id === hostId ? prev : readRetainedPageHostSnapshot(hostId)))
     setUnreadable(false)
     // Wait for profile and storage together; a fast profile would otherwise build a host that primes empty preferences.
     void Promise.all([hydrateMirroredStorage(keys), loadHosts()]).then(
@@ -68,25 +74,25 @@ export function usePageHostSnapshot(
           return
         }
         const found = hosts.find((profile) => profile.id === hostId)
-        setSnapshot(
-          found
-            ? {
-                host: {
-                  id: found.id,
-                  name: found.name,
-                  ...(found.personalName !== undefined ? { personalName: found.personalName } : {}),
-                  ...(found.lastKnownMachineName !== undefined
-                    ? { lastKnownMachineName: found.lastKnownMachineName }
-                    : {}),
-                  ...(found.lastKnownHostPlatform !== undefined
-                    ? { lastKnownHostPlatform: found.lastKnownHostPlatform }
-                    : {}),
-                  endpoint: found.endpoint,
-                  lastConnected: found.lastConnected
-                }
+        const nextSnapshot = found
+          ? {
+              host: {
+                id: found.id,
+                name: found.name,
+                ...(found.personalName !== undefined ? { personalName: found.personalName } : {}),
+                ...(found.lastKnownMachineName !== undefined
+                  ? { lastKnownMachineName: found.lastKnownMachineName }
+                  : {}),
+                ...(found.lastKnownHostPlatform !== undefined
+                  ? { lastKnownHostPlatform: found.lastKnownHostPlatform }
+                  : {}),
+                endpoint: found.endpoint,
+                lastConnected: found.lastConnected
               }
-            : null
-        )
+            }
+          : null
+        recordRetainedPageHostSnapshot(hostId, nextSnapshot)
+        setSnapshot(nextSnapshot)
       },
       () => {
         // Failed keychain reads neither prove host removal nor retry themselves; report failure instead of leaving ready unanswered.

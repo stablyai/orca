@@ -2,11 +2,13 @@ package expo.modules.orcamobilewebshell
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.MutableContextWrapper
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.net.Uri
 import android.os.Message
 import android.view.View
+import android.view.ViewGroup
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
@@ -29,17 +31,116 @@ import expo.modules.kotlin.viewevent.EventDispatcher
 import expo.modules.kotlin.views.ExpoView
 import java.io.ByteArrayInputStream
 
-/** Publish host and manifest map atomically/volatily: main-thread writes race Chromium’s interceptor. */
-private class MobileWebShellServed(
-  val generation: MobileWebShellGeneration,
-  val originHost: String
-)
-
 @SuppressLint("ViewConstructor", "SetJavaScriptEnabled")
 internal class OrcaMobileWebShellView(
   context: Context,
   appContext: AppContext
 ) : ExpoView(context, appContext) {
+  companion object {
+    private val activeViews =
+      java.util.Collections.newSetFromMap(java.util.WeakHashMap<OrcaMobileWebShellView, Boolean>())
+
+    private fun harvestRetiringView(
+      requester: OrcaMobileWebShellView,
+      target: MobileWebShellAppliedProps
+    ) {
+      val retiring = activeViews.firstOrNull { view ->
+        view !== requester && view.webView != null && view.applied?.matches(target) == true
+      } ?: return
+      retiring.destroyWebView()
+    }
+
+    private fun detachWebViewFromParent(view: View) {
+      val parent = view.parent as? ViewGroup ?: return
+      parent.endViewTransition(view)
+      parent.removeView(view)
+      parent.endViewTransition(view)
+    }
+
+    private fun disposeRetainedSlot(slot: RetainedMobileWebShellSlot) {
+      if (slot.bridgeInstalled) {
+        runCatching {
+          WebViewCompat.removeWebMessageListener(slot.webView, MOBILE_WEB_SHELL_BRIDGE_OBJECT)
+        }
+      }
+      runCatching { slot.blocker.remove() }
+      slot.bridgeChannel.owner = null
+      detachWebViewFromParent(slot.webView)
+      slot.webView.stopLoading()
+      slot.webView.destroy()
+    }
+
+    private val retainedPool = MobileWebShellSlotPool<RetainedMobileWebShellSlot> { slot ->
+      disposeRetainedSlot(slot)
+    }
+
+    fun clearRetainedSlot() {
+      retainedPool.clear()
+    }
+
+    private class ParkedWebViewClient(
+      private val served: MobileWebShellServed
+    ) : WebViewClient() {
+      override fun shouldInterceptRequest(
+        view: WebView,
+        request: WebResourceRequest
+      ): WebResourceResponse =
+        serveMobileWebShellRequest(served, request) ?: refusedMobileWebShellResponse()
+
+      override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
+        true
+
+      override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+        retainedPool.clear()
+        return true
+      }
+    }
+
+    private fun buildRequestParts(
+      url: Uri,
+      method: String = "GET",
+      hasRangeHeader: Boolean = false
+    ): MobileWebShellRequestParts = MobileWebShellRequestParts(
+      method = method,
+      hasRangeHeader = hasRangeHeader,
+      scheme = url.scheme,
+      host = url.host,
+      port = url.port,
+      userInfo = url.userInfo,
+      query = url.query,
+      fragment = url.fragment,
+      encodedPath = url.encodedPath,
+      urlLength = url.toString().length
+    )
+
+    private fun serveMobileWebShellRequest(
+      current: MobileWebShellServed?,
+      request: WebResourceRequest
+    ): WebResourceResponse? {
+      val active = current ?: return null
+      val parts = buildRequestParts(
+        request.url,
+        method = request.method,
+        hasRangeHeader = request.requestHeaders.keys.any { it.equals("Range", ignoreCase = true) }
+      )
+      val path = resolveMobileWebShellRequestPath(parts, active.originHost) ?: return null
+      val asset = active.generation.entries[path] ?: return null
+      val bytes = runCatching { asset.file.readBytes() }.getOrNull() ?: return null
+      val headers = mobileWebShellResponseHeaders(path, bytes.size)
+      val (mimeType, charset) = splitMobileWebShellContentType(asset.contentType)
+      return WebResourceResponse(mimeType, charset, 200, "OK", headers, ByteArrayInputStream(bytes))
+    }
+
+    private fun refusedMobileWebShellResponse(): WebResourceResponse = WebResourceResponse(
+      MOBILE_WEB_SHELL_REFUSAL_MIME_TYPE,
+      MOBILE_WEB_SHELL_REFUSAL_CHARSET,
+      MOBILE_WEB_SHELL_REFUSAL_STATUS,
+      MOBILE_WEB_SHELL_REFUSAL_REASON,
+      MOBILE_WEB_SHELL_REFUSAL_HEADERS,
+      ByteArrayInputStream(mobileWebShellRefusalBody())
+    )
+  }
+
   private val onLoadState by EventDispatcher<Map<String, Any>>()
   private val onBridgeMessage by EventDispatcher<Map<String, Any>>()
   private val onExternalNavigation by EventDispatcher<Map<String, Any>>()
@@ -47,7 +148,10 @@ internal class OrcaMobileWebShellView(
   private var generationDirectory = ""
   private var sessionId = ""
   private var bridgeEnabled = false
+  // Host page only. A child route must not take or replace the parked WebView.
+  private var retainsSlot = true
   private var bridgeInstalled = false
+  private var bridgeChannel: MobileWebShellBridgeChannel? = null
   private val bridgeGate = MobileWebShellBridgeGate()
   // The page sends ready before native replies; volatile proxy state crosses interceptor/UI threads.
   @Volatile private var replyProxy: JavaScriptReplyProxy? = null
@@ -55,13 +159,10 @@ internal class OrcaMobileWebShellView(
   private val loadState = MobileWebShellLoadStateMachine()
   // Failure state crosses main-thread callbacks and Chromium’s background interceptor.
   @Volatile private var documentFailed = false
+  private var renderProcessGone = false
   @Volatile private var served: MobileWebShellServed? = null
   private var blocker: ScriptHandler? = null
-  private var webView: WebView? = createWebView()
-
-  init {
-    addView(webView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
-  }
+  private var webView: WebView? = null
 
   fun setGenerationDirectory(value: String) {
     generationDirectory = value
@@ -75,18 +176,41 @@ internal class OrcaMobileWebShellView(
     bridgeEnabled = value
   }
 
-  /** Apply unordered props together; identical triples do not retry. Recovery requires a remount. */
+  fun setRetainsSlot(value: Boolean) {
+    retainsSlot = value
+  }
+
+  /**
+   * Props arrive in no defined order, so neither setter starts anything; this does, once both are
+   * in. A repeat of the same triple is not a retry: a retry is a remount under a new React key.
+   */
   fun propsDidUpdate() {
     val next = MobileWebShellAppliedProps(generationDirectory, sessionId, bridgeEnabled)
     if (applied?.matches(next) == true) return
+    if (renderProcessGone) {
+      // onRenderProcessGone destroyed it. Recovery is a remount, so a new prop pair on the corpse
+      // is still a failure, and one that says so beats one that goes quiet forever.
+      applied = next
+      loadState.reset()
+      emit(loadState.failed(MobileWebShellFailureReason.RENDER_PROCESS_GONE))
+      return
+    }
+    if (applied == null && webView == null) {
+      harvestRetiringView(this, next)
+      if (retainsSlot) {
+        val retained = retainedPool.takeMatchingOrEvict(next)
+        if (retained != null && attachRetainedSlot(retained)) {
+          return
+        }
+      }
+    }
     applied = next
     documentFailed = false
     loadState.reset()
-    val view = webView
-    if (view == null) {
-      // A dead renderer requires a remount; changed props must still report failure.
-      emit(loadState.failed(MobileWebShellFailureReason.RENDER_PROCESS_GONE))
-      return
+    val view = webView ?: createWebView().also { created ->
+      webView = created
+      activeViews.add(this)
+      addView(created, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
     }
     view.stopLoading()
     emit(loadState.started())
@@ -118,7 +242,58 @@ internal class OrcaMobileWebShellView(
     view.loadUrl("$origin/")
   }
 
-  /** Retire the old visible generation even when the replacement fails. */
+  override fun startViewTransition(view: View) {
+    // react-native-screens walks every ViewGroup in a popping screen and calls startViewTransition
+    // on its children. Starting a disappearing transition on the internal WebView keeps its parent
+    // reference alive in mDisappearingChildren after removeView(), which crashes re-attachment on
+    // the next mount with IllegalStateException("The specified child already has a parent").
+    if (view === webView || view is WebView) {
+      return
+    }
+    super.startViewTransition(view)
+  }
+
+  private fun attachRetainedSlot(slot: RetainedMobileWebShellSlot): Boolean {
+    val view = slot.webView
+    val attached = runCatching {
+      detachWebViewFromParent(view)
+      (view.context as? MutableContextWrapper)?.baseContext = context
+      view.webViewClient = ShellWebViewClient()
+      view.visibility = View.VISIBLE
+      addView(view, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+      if (width > 0 && height > 0) {
+        view.measure(
+          MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY),
+          MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY)
+        )
+        view.layout(0, 0, width, height)
+      }
+      view.onResume()
+    }.isSuccess
+    if (!attached) {
+      disposeRetainedSlot(slot)
+      return false
+    }
+    applied = slot.applied
+    documentFailed = false
+    served = slot.served
+    blocker = slot.blocker
+    bridgeChannel = slot.bridgeChannel.also { it.owner = this }
+    replyProxy = slot.replyProxy
+    bridgeInstalled = slot.bridgeInstalled
+    webView = view
+    activeViews.add(this)
+    loadState.reset()
+    loadState.committed()
+    loadState.started()
+    emit(loadState.finished())
+    return true
+  }
+
+  /**
+   * The generation that failed to apply replaces whatever was on screen; leaving the previous one
+   * served and visible would show a page the caller has just been told is not loaded.
+   */
   private fun failPropUpdate(reason: MobileWebShellFailureReason) {
     // Remove the old listener: stopLoading leaves its same-origin document alive and able to rearm replies.
     removeBridgeListener()
@@ -137,13 +312,15 @@ internal class OrcaMobileWebShellView(
     if (outcome != MobileWebShellBridgeInstall.INSTALL) {
       return outcome == MobileWebShellBridgeInstall.SKIP
     }
+    val channel = MobileWebShellBridgeChannel(this)
     return runCatching {
       WebViewCompat.addWebMessageListener(
         view,
         MOBILE_WEB_SHELL_BRIDGE_OBJECT,
         setOf(origin),
-        bridgeListener
+        channel
       )
+      bridgeChannel = channel
       bridgeInstalled = true
     }.isSuccess
   }
@@ -151,6 +328,8 @@ internal class OrcaMobileWebShellView(
   /** The one way the bridge goes away, so no disable path can leave a listener behind. */
   private fun removeBridgeListener() {
     val view = webView
+    bridgeChannel?.owner = null
+    bridgeChannel = null
     if (bridgeInstalled && view != null) {
       WebViewCompat.removeWebMessageListener(view, MOBILE_WEB_SHELL_BRIDGE_OBJECT)
     }
@@ -159,8 +338,11 @@ internal class OrcaMobileWebShellView(
   }
 
   /** Chromium calls this on the UI thread, which is also the only thread that may reply. */
-  private val bridgeListener = WebViewCompat.WebMessageListener {
-    _, message, _, isMainFrame, proxy ->
+  internal fun receiveBridgeMessage(
+    message: WebMessageCompat,
+    isMainFrame: Boolean,
+    proxy: JavaScriptReplyProxy
+  ) {
     val isStringMessage = message.type == WebMessageCompat.TYPE_STRING
     val json = if (isStringMessage) message.data else null
     if (
@@ -188,6 +370,55 @@ internal class OrcaMobileWebShellView(
 
   /** Expo calls this once React Native is done with the view, and onRenderProcessGone calls it. */
   fun destroyWebView() {
+    activeViews.remove(this)
+    val view = webView ?: return
+    val currentApplied = applied
+    val currentServed = served
+    val currentBlocker = blocker
+    val currentChannel = bridgeChannel
+    val canRetain =
+      !renderProcessGone &&
+      !documentFailed &&
+      loadState.hasCommittedDocument &&
+      (!bridgeEnabled || (bridgeInstalled && currentChannel != null)) &&
+      currentApplied != null &&
+      currentServed != null &&
+      currentBlocker != null
+    if (retainsSlot && canRetain) {
+      val channel = currentChannel ?: MobileWebShellBridgeChannel(null)
+      channel.owner = null
+      view.webViewClient = ParkedWebViewClient(currentServed)
+      view.onPause()
+      (view.context as? MutableContextWrapper)?.baseContext = context.applicationContext
+      detachWebViewFromParent(view)
+      webView = null
+      blocker = null
+      served = null
+      bridgeChannel = null
+      val savedProxy = replyProxy
+      val savedBridgeInstalled = bridgeInstalled
+      replyProxy = null
+      bridgeInstalled = false
+      loadState.documentEnded()
+      retainedPool.retain(
+        currentApplied,
+        RetainedMobileWebShellSlot(
+          applied = currentApplied,
+          webView = view,
+          served = currentServed,
+          blocker = currentBlocker,
+          bridgeChannel = channel,
+          replyProxy = savedProxy,
+          bridgeInstalled = savedBridgeInstalled
+        )
+      )
+      return
+    }
+    destroyWebViewImmediate()
+  }
+
+  private fun destroyWebViewImmediate() {
+    activeViews.remove(this)
     val view = webView ?: return
     removeBridgeListener()
     loadState.documentEnded()
@@ -197,7 +428,7 @@ internal class OrcaMobileWebShellView(
     served = null
     documentFailed = false
     view.stopLoading()
-    removeView(view)
+    detachWebViewFromParent(view)
     view.destroy()
   }
 
@@ -205,7 +436,7 @@ internal class OrcaMobileWebShellView(
   // B4 requires device proofs: no network, persistent state, file/content access, cleartext or navigation escape.
   @Suppress("DEPRECATION")
   private fun createWebView(): WebView {
-    val view = WebView(context)
+    val view = WebView(MutableContextWrapper(context))
     view.setBackgroundColor(Color.TRANSPARENT)
     view.settings.apply {
       javaScriptEnabled = true
@@ -273,42 +504,16 @@ internal class OrcaMobileWebShellView(
     url: Uri,
     method: String = "GET",
     hasRangeHeader: Boolean = false
-  ): MobileWebShellRequestParts = MobileWebShellRequestParts(
+  ): MobileWebShellRequestParts = buildRequestParts(
+    url = url,
     method = method,
-    hasRangeHeader = hasRangeHeader,
-    scheme = url.scheme,
-    host = url.host,
-    port = url.port,
-    userInfo = url.userInfo,
-    query = url.query,
-    fragment = url.fragment,
-    encodedPath = url.encodedPath,
-    urlLength = url.toString().length
+    hasRangeHeader = hasRangeHeader
   )
 
-  private fun serveRequest(request: WebResourceRequest): WebResourceResponse? {
-    val current = served ?: return null
-    val parts = requestParts(
-      request.url,
-      method = request.method,
-      hasRangeHeader = request.requestHeaders.keys.any { it.equals("Range", ignoreCase = true) }
-    )
-    val path = resolveMobileWebShellRequestPath(parts, current.originHost) ?: return null
-    val asset = current.generation.entries[path] ?: return null
-    val bytes = runCatching { asset.file.readBytes() }.getOrNull() ?: return null
-    val headers = mobileWebShellResponseHeaders(path, bytes.size)
-    val (mimeType, charset) = splitMobileWebShellContentType(asset.contentType)
-    return WebResourceResponse(mimeType, charset, 200, "OK", headers, ByteArrayInputStream(bytes))
-  }
+  private fun serveRequest(request: WebResourceRequest): WebResourceResponse? =
+    serveMobileWebShellRequest(served, request)
 
-  private fun refusedResponse(): WebResourceResponse = WebResourceResponse(
-    MOBILE_WEB_SHELL_REFUSAL_MIME_TYPE,
-    MOBILE_WEB_SHELL_REFUSAL_CHARSET,
-    MOBILE_WEB_SHELL_REFUSAL_STATUS,
-    MOBILE_WEB_SHELL_REFUSAL_REASON,
-    MOBILE_WEB_SHELL_REFUSAL_HEADERS,
-    ByteArrayInputStream(mobileWebShellRefusalBody())
-  )
+  private fun refusedResponse(): WebResourceResponse = refusedMobileWebShellResponse()
 
   private inner class ShellWebViewClient : WebViewClient() {
     /** Never null, so no request can fall through to the network. */
@@ -382,7 +587,8 @@ internal class OrcaMobileWebShellView(
 
     /** Return true to avoid killing the app; destroy the dead WebView and leave retry policy to the caller. */
     override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
-      destroyWebView()
+      renderProcessGone = true
+      destroyWebViewImmediate()
       emit(loadState.failed(MobileWebShellFailureReason.RENDER_PROCESS_GONE))
       return true
     }

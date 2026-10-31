@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Linking, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation, useNavigationContainerRef, useRouter } from 'expo-router'
 import {
+  clearRetainedNativeWebShellSlot,
   OrcaMobileWebShellView,
   parseMobileWebShellLoadState
 } from '../../modules/orca-mobile-web-shell/src'
+import { registerRetainedNativeWebShellClearer } from './retained-shell-session-store'
 import { HostRouteNoticeBanner } from '../components/HostRouteNoticeBanner'
 import { colors } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
@@ -34,7 +36,11 @@ import { isHostRouteOf } from './page-route-policy'
 import { nativeStackReturn } from './native-stack-return'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { storageReadParamsSchema, type BridgeNativeVerb } from './bridge/bridge-native-verbs'
-import { SHELL_OPENING_LABEL, ShellPageCover } from './ShellWaitingFrame'
+import {
+  SHELL_HOST_OPENING_LABEL,
+  SHELL_OPENING_LABEL,
+  ShellPageCover
+} from './ShellWaitingFrame'
 import { ShellStateScreen } from './ShellStateScreen'
 import { useReportedShellOverlayLoad, type ShellOverlayLoad } from './shell-overlay-load'
 import { pageSafeAreaInsets, usePublishedSafeAreaInsets } from './page-safe-area-insets'
@@ -42,6 +48,8 @@ import { usePageFoldDivision, usePublishedFoldDivision } from './page-fold-divis
 import { usePublishedShellKeyRail, useShellKeyRail } from './use-shell-key-rail'
 import { hostProfileUnreadableLine, pageFaultLine } from './shell-lifecycle-log'
 import { recordShellLifecycleLine } from './shell-lifecycle-line-recorder'
+
+registerRetainedNativeWebShellClearer(clearRetainedNativeWebShellSlot)
 
 // Do not promise a retry: the shell schedules no second update attempt.
 function updateNoticeMessage(notice: MobileWebShellUpdateNotice): string {
@@ -257,6 +265,16 @@ export function MobileWebShellScreen({
   })
   useReportedShellOverlayLoad(onOverlayLoad, state, pageFrame, downloadProgress)
 
+  const shellKindRef = useRef(state.kind)
+  useLayoutEffect(() => {
+    const previous = shellKindRef.current
+    shellKindRef.current = state.kind
+    // Destroy parks a host view whose slot was cleared before unmount; clear that refill.
+    if (previous === 'ready' && state.kind !== 'ready' && isHostRouteOf(route.pathname, hostId)) {
+      clearRetainedNativeWebShellSlot()
+    }
+  }, [hostId, route.pathname, state.kind])
+
   // Profile failures preserve verified bundle bytes and retry the device store.
   useEffect(() => {
     if (unreadable) {
@@ -273,6 +291,9 @@ export function MobileWebShellScreen({
   if (overlay && state.kind !== 'ready') {
     return null
   }
+  const openingLabel = isHostRouteOf(route.pathname, hostId)
+    ? SHELL_HOST_OPENING_LABEL
+    : SHELL_OPENING_LABEL
   if (state.kind !== 'ready') {
     return (
       <ShellStateScreen
@@ -318,6 +339,7 @@ export function MobileWebShellScreen({
         generationDirectory={state.generationDirectory}
         sessionId={state.sessionId}
         bridgeEnabled={bridge.bridgeEnabled}
+        retainsSlot={isHostRouteOf(route.pathname, hostId)}
         onBridgeMessage={bridge.onBridgeMessage}
         onExternalNavigation={(event) => {
           const target = cancelledShellNavigationTarget(event.nativeEvent.url)
@@ -345,7 +367,7 @@ export function MobileWebShellScreen({
         }}
       />
       {overlay ? null : (
-        <ShellPageCover label={SHELL_OPENING_LABEL} visible={pageFrame === 'unpainted'} />
+        <ShellPageCover label={openingLabel} visible={pageFrame === 'unpainted'} />
       )}
       <ShellDevFacts state={state} droppedBinaryFrames={droppedBinaryFrames} />
     </View>

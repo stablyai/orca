@@ -6,7 +6,14 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 export const SHELL_OPENING_LABEL = 'Opening workspace'
 
-// Ease in to hold opacity while the compositor catches up with the reported renderer paint; linear fade exposed two bare-surface frames.
+/** The same wait on the host root, which is not a workspace. */
+export const SHELL_HOST_OPENING_LABEL = 'Loading host'
+
+/**
+ * Eased in, so the cover holds near full opacity through the handover: the page reports its own
+ * renderer's paint, and the compositor needs a frame or two more to put that on the app's surface.
+ * A linear fade left two frames of bare surface between the two on an emulator.
+ */
 export const SHELL_PAGE_COVER_FADE_MS = 220
 
 // Keep indicator and caption layout fixed so waiting screens share the same label height.

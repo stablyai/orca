@@ -1,4 +1,8 @@
-import { requireNativeModule, requireNativeViewManager } from 'expo-modules-core'
+import {
+  requireNativeModule,
+  requireNativeViewManager,
+  requireOptionalNativeModule
+} from 'expo-modules-core'
 import type { ComponentType, RefAttributes } from 'react'
 import type { NativeSyntheticEvent, ViewProps } from 'react-native'
 import type { MobileWebShellLoadStatePayload } from './load-state'
@@ -16,6 +20,8 @@ export type OrcaMobileWebShellViewProps = ViewProps & {
   sessionId: string
   // Bridge is off by default with nothing registered. Opt-in on Android below WEB_MESSAGE_LISTENER/Chromium 88 fails isolation-unavailable instead of loading unfenced.
   bridgeEnabled?: boolean
+  /** False on every shell route except the host page, so a child route cannot evict the parked WebView. */
+  retainsSlot?: boolean
   onLoadState?: (event: NativeSyntheticEvent<MobileWebShellLoadStatePayload>) => void
   // Raw JSON from window.orcaBridge; native silently rejects other origins/frames/WebViews and envelopes above 640 KiB (MobileWebShellBridge.maxMessageByteCount).
   onBridgeMessage?: (event: NativeSyntheticEvent<MobileWebShellBridgeMessagePayload>) => void
@@ -39,6 +45,16 @@ export const OrcaMobileWebShellView: ComponentType<
 > = requireNativeViewManager<
   OrcaMobileWebShellViewProps & RefAttributes<OrcaMobileWebShellViewHandle>
 >('OrcaMobileWebShell')
+
+export function clearRetainedNativeWebShellSlot(): void {
+  try {
+    requireOptionalNativeModule<{ clearRetainedSlot?: () => void }>(
+      'OrcaMobileWebShell'
+    )?.clearRetainedSlot?.()
+  } catch {
+    // Native module is absent in Jest/Node unit tests.
+  }
+}
 
 // iOS shows the file:// URI in Quick Look; Android hands the content:// URI to the system PDF viewer with read access.
 // Android rejects with code native_pdf_no_viewer when no installed app opens PDFs.
