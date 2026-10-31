@@ -29,7 +29,7 @@ export function launchStructuredAgentFromNewTab(args: {
   beforeSurfaceOpen?: LaunchAgentInNewTabArgs['beforeSurfaceOpen']
   onHostDeclined?: () => StructuredLaunchTerminal
   openTerminal: (terminalPlan: AgentSessionLaunchPlan, activate?: false) => AgentTabLaunchOutcome
-}): StructuredFromNewTab | { refused: StructuredPromptDeliveryResult } | null {
+}): StructuredFromNewTab | null {
   const { plan, beforeSurfaceOpen } = args
   if (beforeSurfaceOpen?.({ kind: 'host-published' }) === false) {
     return null
@@ -67,14 +67,14 @@ export function launchStructuredAgentFromNewTab(args: {
       }
     }
   })
-  // The structured owner resolver has already reported a missing owner.
-  if (!launch) {
-    return { refused: { delivered: false, failureNotified: true } }
-  }
-  return {
-    surface: launch.tab ? { kind: 'local-chat', tabId: launch.tab.id } : { kind: 'host-published' },
-    pasteDraftAfterLaunch: false,
-    structuredSettlement: launch.settlement,
-    ...(launch.promptDeliveryResult ? { promptDeliveryResult: launch.promptDeliveryResult } : {})
-  }
+  return (
+    launch && {
+      surface: launch.tab
+        ? { kind: 'local-chat', tabId: launch.tab.id }
+        : { kind: 'host-published' },
+      pasteDraftAfterLaunch: false,
+      structuredSettlement: launch.settlement,
+      ...(launch.promptDeliveryResult ? { promptDeliveryResult: launch.promptDeliveryResult } : {})
+    }
+  )
 }

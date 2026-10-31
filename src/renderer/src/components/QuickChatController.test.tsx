@@ -59,6 +59,8 @@ afterEach(cleanup)
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.hasProjects = false
+  mocks.launch.mockReset()
+  mocks.activate.mockReset()
   mocks.start.mockResolvedValue('folder-chats')
   mocks.activate.mockReturnValue({ primaryTabId: null })
   mocks.model = {
@@ -118,6 +120,22 @@ it('does not launch after activation fails', async () => {
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'New chat' })))
   expect(mocks.launch).not.toHaveBeenCalled()
   expect(mocks.error).toHaveBeenCalledTimes(1)
+})
+it('reports an activation exception once without launching', async () => {
+  mocks.activate.mockImplementation(() => {
+    throw new Error('Activation failed')
+  })
+  mount()
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'New chat' })))
+  expect(mocks.launch).not.toHaveBeenCalled()
+  expect(mocks.error).toHaveBeenCalledTimes(1)
+})
+it('leaves a shared launch with no result to the existing New Chat machinery', async () => {
+  mocks.launch.mockReturnValue(undefined)
+  mount()
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'New chat' })))
+  expect(mocks.launch).toHaveBeenCalledTimes(1)
+  expect(mocks.error).not.toHaveBeenCalled()
 })
 it('waits for the folder fetch and agent rows before launching', async () => {
   let ready: (id: string) => void = () => {}

@@ -34,10 +34,11 @@ function useQuickChatDestination(worktreeId: string, open: boolean) {
         showQuickChatFailure()
         return
       }
-      launch(...args)
     } catch {
       showQuickChatFailure()
+      return
     }
+    launch(...args)
   }
   return { model, runLaunch }
 }

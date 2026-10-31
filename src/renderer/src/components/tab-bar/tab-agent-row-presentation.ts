@@ -1,5 +1,4 @@
 import { translate } from '@/i18n/i18n'
-import type { TuiAgent } from '../../../../shared/tui-agent'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import type { ChatUnavailableReason, NewTabAgentMenuRow } from '@/lib/new-tab-agent-menu-rows'
 
@@ -51,12 +50,8 @@ export function rowTitle(row: NewTabAgentMenuRow, label: string): string {
       )
 }
 
-export function agentLabel(agent: TuiAgent): string {
-  return getAgentCatalog().find((entry) => entry.id === agent)?.label ?? agent
-}
-
 export function rowLabel(row: NewTabAgentMenuRow): string {
-  const label = agentLabel(row.agent)
+  const label = getAgentCatalog().find((entry) => entry.id === row.agent)?.label ?? row.agent
   return row.kind === 'cli'
     ? `${label} ${translate('auto.components.tab.bar.QuickLaunchButton.cliTag', '(CLI)')}`
     : label
@@ -64,16 +59,4 @@ export function rowLabel(row: NewTabAgentMenuRow): string {
 
 export function rowId(row: NewTabAgentMenuRow): string {
   return `${row.kind === 'chat-unavailable' ? 'chat' : row.kind}:${row.agent}`
-}
-
-/** The same agent on the other surface: a chat's detected CLI, or a CLI-set agent's chat. */
-export function otherSurfaceRow(
-  row: Exclude<NewTabAgentMenuRow, { kind: 'chat-unavailable' }>,
-  detectedIds: readonly TuiAgent[] | null
-): NewTabAgentMenuRow | null {
-  const { agent, executionHostId } = row
-  if (row.kind === 'chat') {
-    return detectedIds?.includes(agent) ? { kind: 'cli', agent, executionHostId } : null
-  }
-  return row.kind === 'cli' && row.chat ? { kind: 'chat', agent, executionHostId } : null
 }

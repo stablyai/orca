@@ -6,7 +6,7 @@ import {
 } from '../../../../shared/agent-launch-picker'
 import React, { useCallback, useRef } from 'react'
 import { toast } from 'sonner'
-import { launchAgentInNewTabWithOutcome } from '@/lib/launch-agent-in-new-tab'
+import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { captureNativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
 import { newAgentPromptOutcome } from '@/lib/new-agent-prompt-outcome'
@@ -18,10 +18,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuShortcut
 } from '@/components/ui/dropdown-menu'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useAgentMenuShortcutLabels } from './agent-menu-shortcut-labels'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
@@ -29,14 +30,7 @@ import { cn } from '@/lib/utils'
 import type { NewTabAgentMenuRow } from '@/lib/new-tab-agent-menu-rows'
 import { useNewTabAgentMenuRows, type NewTabAgentMenuModel } from './use-new-tab-agent-menu-rows'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
-import {
-  agentLabel,
-  otherSurfaceRow,
-  chatUnavailableLabel,
-  rowTitle,
-  rowLabel,
-  rowId
-} from './tab-agent-row-presentation'
+import { chatUnavailableLabel, rowTitle, rowLabel, rowId } from './tab-agent-row-presentation'
 
 export type QuickLaunchAgentMenuItemsProps = {
   worktreeId: string
@@ -61,6 +55,10 @@ const ROW_NAVIGATION_KEYS = new Set(['ArrowLeft', 'ArrowUp', 'ArrowDown', 'Home'
 
 const PLACEHOLDER_WIDTHS = ['w-3/5', 'w-1/2', 'w-2/3', 'w-2/5', 'w-3/4', 'w-1/3', 'w-4/5', 'w-1/4']
 
+function getCatalogEntry(agent: TuiAgent): { id: TuiAgent; label: string } | null {
+  return getAgentCatalog().find((a) => a.id === agent) ?? null
+}
+
 export function useTabAgentMenuLaunch({
   worktreeId,
   groupId,
@@ -84,8 +82,9 @@ export function useTabAgentMenuLaunch({
         return
       }
       const { agent } = row
-      const label = agentLabel(agent)
-      const result = launchAgentInNewTabWithOutcome({
+      const entry = getCatalogEntry(agent)
+      const label = entry?.label ?? agent
+      const result = launchAgentInNewTab({
         requestId: newAgentLaunchRequestId(),
         focusIntent: captureNativeChatComposerFocusIntent(),
         ...(row.kind === 'chat' || row.kind === 'cli'
@@ -105,10 +104,7 @@ export function useTabAgentMenuLaunch({
         // Notes keep their text until it goes out, so the new chat's composer never gets a copy.
         ...(onPromptHandedOff ? { promptKeptByCaller: true as const } : {})
       })
-      if (result && 'refused' in result && result.refused.failureNotified) {
-        return
-      }
-      if (!result || 'refused' in result) {
+      if (!result) {
         toast.error(
           translate(
             'auto.components.tab.bar.QuickLaunchButton.465e432ef1',
@@ -265,7 +261,7 @@ export function ProjectedAgentMenuItems({
       ) : (
         rows.map((row, index) => {
           const { agent } = row
-          const label = agentLabel(agent)
+          const label = getCatalogEntry(agent)?.label ?? agent
           // Chat rows come first; the rows that open a terminal start their own group.
           const startsCliGroup = row.kind === 'cli' && index > 0 && rows[index - 1]?.kind !== 'cli'
           if (row.kind === 'chat-unavailable') {
@@ -321,6 +317,18 @@ export function ProjectedAgentMenuItems({
       <AgentSettingsMenuItem onSelect={openAgentSettings} />
     </>
   )
+}
+
+/** The same agent on the other surface: a chat's detected CLI, or a CLI-set agent's chat. */
+function otherSurfaceRow(
+  row: Exclude<NewTabAgentMenuRow, { kind: 'chat-unavailable' }>,
+  detectedIds: readonly TuiAgent[] | null
+): NewTabAgentMenuRow | null {
+  const { agent, executionHostId } = row
+  if (row.kind === 'chat') {
+    return detectedIds?.includes(agent) ? { kind: 'cli', agent, executionHostId } : null
+  }
+  return row.kind === 'cli' && row.chat ? { kind: 'chat', agent, executionHostId } : null
 }
 
 // Why: the row starts its own surface; its trailing button (or ArrowRight, then Enter) opens the other.

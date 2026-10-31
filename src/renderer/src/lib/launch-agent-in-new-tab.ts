@@ -66,7 +66,7 @@ export function launchAgentInNewTabWithOutcome(
   const executionContext = resolveAgentLaunchExecutionContext(store, { worktreeId, launchPlatform })
   if (!executionContext) {
     args.focusIntent?.cancel()
-    return { refused: { delivered: false, failureNotified: true } }
+    return null
   }
   const { resolvedLaunchPlatform, isRemote, queuedShell } = executionContext
   const trimmedPrompt = prompt?.trim() ?? ''
