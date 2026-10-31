@@ -2,6 +2,7 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { Automation } from '../../shared/automations-types'
 import type { Repo } from '../../shared/repo-types'
+import { getDefaultRepoHookSettings } from '../../shared/constants'
 import { buildHeadlessAutomationWorktreeCreateArgs } from './headless-workspace-create'
 
 const repoPath = path.join('tmp', 'orca')
@@ -52,6 +53,44 @@ const automation: Automation = {
 }
 
 describe('headless automation workspace create args', () => {
+  it.each([
+    ['run-by-default', 'run'],
+    ['skip-by-default', 'skip'],
+    ['ask', 'skip']
+  ] as const)('uses %s when no setup decision is saved', (setupRunPolicy, expected) => {
+    const args = buildHeadlessAutomationWorktreeCreateArgs({
+      automation: { ...automation, setupDecision: undefined },
+      run: { id: 'run-1', title: 'Nightly review', scheduledFor: 1 },
+      repo: { ...repo, hookSettings: { ...getDefaultRepoHookSettings(), setupRunPolicy } }
+    })
+
+    expect(args.setupDecision).toBe(expected)
+  })
+
+  it('uses the default repository policy when hook settings are absent', () => {
+    const args = buildHeadlessAutomationWorktreeCreateArgs({
+      automation: { ...automation, setupDecision: undefined },
+      run: { id: 'run-1', title: 'Nightly review', scheduledFor: 1 },
+      repo
+    })
+
+    expect(args.setupDecision).toBe('run')
+  })
+
+  it.each([
+    ['run-by-default', 'skip'],
+    ['skip-by-default', 'run'],
+    ['ask', 'run']
+  ] as const)('%s does not override a saved %s decision', (setupRunPolicy, setupDecision) => {
+    const args = buildHeadlessAutomationWorktreeCreateArgs({
+      automation: { ...automation, setupDecision },
+      run: { id: 'run-1', title: 'Nightly review', scheduledFor: 1 },
+      repo: { ...repo, hookSettings: { ...getDefaultRepoHookSettings(), setupRunPolicy } }
+    })
+
+    expect(args.setupDecision).toBe(setupDecision)
+  })
+
   it('stamps automation provenance for serve-mode new-per-run workspaces', () => {
     const args = buildHeadlessAutomationWorktreeCreateArgs({
       automation,
