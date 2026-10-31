@@ -1,3 +1,4 @@
+import { worktreeRemovalPathsForRepo } from './worktree-removal-table'
 // Mock Git for cross-platform coverage; real-Git cases live in runtime/runtime-failed-local-worktree-removal.test.ts.
 import { mkdir, mkdtemp, readdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -109,6 +110,7 @@ describe('a delete that fails after Git dropped the registration', () => {
     await failRemoval()
 
     expect(await listRows()).toEqual([mainWorktree, leftoverRow()])
+    expect([...worktreeRemovalPathsForRepo('repo-1')]).toEqual([checkout])
     const [record] = await readWorktreeRemovalRecords(join(directory, 'profile'))
     expect(record).toMatchObject({ worktreeId, failure: { message: GIT_ERROR } })
     expect(waitForPendingWorktreeRemoval(worktreeId)).toBeUndefined()
@@ -154,6 +156,7 @@ describe('a delete that fails after Git dropped the registration', () => {
     expect(await listRows()).toEqual([mainWorktree, { ...leftoverRow(), removalError: message }])
     _resetPendingWorktreeRemovalsForTests()
     await loadWorktreeRemovalRecords(join(directory, 'profile'))
+    expect([...worktreeRemovalPathsForRepo('repo-1')]).toEqual([checkout])
     expect(await listRows()).toEqual([mainWorktree, { ...leftoverRow(), removalError: message }])
   })
 
@@ -177,6 +180,7 @@ describe('a delete that fails after Git dropped the registration', () => {
       expect(await withUnregisteredRemovalCheckouts('repo-1', [original])).toEqual([leftoverRow()])
       const replacement = { ...original, [kind]: kind === 'branch' ? 'refs/heads/other' : 'def' }
       expect(await withUnregisteredRemovalCheckouts('repo-1', [replacement])).toEqual([replacement])
+      expect([...worktreeRemovalPathsForRepo('repo-1')]).toEqual([])
       await vi.waitFor(async () =>
         expect(await readWorktreeRemovalRecords(join(directory, 'profile'))).toEqual([])
       )
@@ -259,6 +263,7 @@ describe('a delete that fails after Git dropped the registration', () => {
     expect(run).toHaveBeenCalledTimes(1)
     expect(await readWorktreeRemovalRecords(join(directory, 'profile'))).toEqual([])
     expect(await listRows()).toEqual([mainWorktree])
+    expect([...worktreeRemovalPathsForRepo('repo-1')]).toEqual([])
     expect(retryFailedWorktreeRemoval(worktreeId, 'local', vi.fn())).toBeUndefined()
   })
 

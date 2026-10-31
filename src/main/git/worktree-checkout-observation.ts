@@ -1,11 +1,13 @@
 import { throwIfSignalAborted } from '../../shared/abort-signal-reason'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
 import type { GitWorktreeExecOptions } from './worktree-operation-options'
-import { getErrorCode, gitExecOptions } from './worktree-operation-options'
+import { gitExecOptions } from './worktree-operation-options'
 import { gitExecFileAsync } from './runner'
 import { assertWslUncPathRunning } from '../wsl/wsl-unc-access-gate'
 
-/** A failed read is unknown; only exit 1 with a verified HEAD establishes a detached checkout. */
+import { isWorktreeHeadOid, isWorktreeBranchRef } from '../../shared/git-worktree-checkout-facts'
+
+/** Empty prefix attributes the verified HEAD to this checkout root, never an enclosing repository. */
 export async function readWorktreeCheckout(
   worktreePath: string,
   options: GitWorktreeExecOptions = {},
@@ -30,23 +32,24 @@ export async function readWorktreeCheckout(
     }
   }
   await beforeRead()
-  const { stdout } = await gitExecFileAsync(['rev-parse', '--verify', 'HEAD'], execOptions)
-  const head = stdout.trim()
-  if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i.test(head)) {
-    throw new Error('Worktree HEAD could not be verified')
+  const { stdout } = await gitExecFileAsync(
+    ['rev-parse', '--show-prefix', '--verify', 'HEAD'],
+    execOptions
+  )
+  const lines = stdout.replace(/\r?\n$/, '').split(/\r?\n/)
+  const [prefix, head] = lines
+  if (lines.length !== 2 || prefix !== '' || !head || !isWorktreeHeadOid(head)) {
+    throw new Error('Worktree HEAD could not be attributed to its checkout')
   }
   await beforeRead()
-  try {
-    const ref = await gitExecFileAsync(['symbolic-ref', '--quiet', 'HEAD'], execOptions)
-    const branch = ref.stdout.trim()
-    if (!branch.startsWith('refs/heads/')) {
-      throw new Error('Worktree branch could not be verified')
-    }
-    return { head, branch }
-  } catch (error) {
-    if (getErrorCode(error) === '1') {
-      return { head, branch: '' }
-    }
-    throw error
+  const ref = await gitExecFileAsync(
+    ['rev-parse', '--symbolic-full-name', '--verify', 'HEAD'],
+    execOptions
+  )
+  const branch = ref.stdout.replace(/\r?\n$/, '')
+  if (branch !== 'HEAD' && !isWorktreeBranchRef(branch)) {
+    throw new Error('Worktree branch could not be verified')
   }
+  await beforeRead()
+  return { head, branch: branch === 'HEAD' ? '' : branch }
 }

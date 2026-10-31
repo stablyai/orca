@@ -27,7 +27,7 @@ import {
 } from '../ipc/worktree-logic'
 import { cleanupLocalOrphanedWorktreeDirectory } from '../local-orphaned-worktree-cleanup'
 import { recoverPartialLocalWorktreeRemoval } from '../local-worktree-removal-recovery'
-import { findRegisteredDeletableWorktree } from '../worktree-removal-safety'
+import { revalidateRegisteredDeletableWorktree } from '../worktree-removal-safety'
 import { CLIENT_REMOVAL_HOME } from '../worktree-removal-home-guard'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeWorktreeRemovalTarget } from './runtime-worktree-selection'
@@ -116,17 +116,14 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
   const refreshedWorktrees = args.hasLocalOptions
     ? await listWorktreesStrict(repo.path, localOptions)
     : await listWorktreesStrict(repo.path)
-  const refreshed = findRegisteredDeletableWorktree(
+  const refreshed = await revalidateRegisteredDeletableWorktree(
     repo.path,
-    canonicalPath,
+    args.target.path,
     refreshedWorktrees,
-    CLIENT_REMOVAL_HOME
+    CLIENT_REMOVAL_HOME,
+    canonicalPath,
+    localOptions
   )
-  if (!refreshed) {
-    throw new Error(
-      `Worktree registration changed during deletion: ${canonicalPath}. Retry deletion.`
-    )
-  }
   try {
     assertWorktreeUnlockedForRemoval(refreshed)
   } catch (error) {

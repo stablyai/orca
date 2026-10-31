@@ -1,3 +1,4 @@
+import { worktreeRemovalMembershipRevision } from '../../worktree-removal-table'
 import type { Repo } from '../../../shared/repo-types'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import {
@@ -29,6 +30,7 @@ export async function observeRuntimeRepoWorktrees(
 ): Promise<RuntimeWorktreeScanResult> {
   const { store, observations, cache, generations } = owner
   const inventory = knownWorktreeInventory(store)
+  const removalRevision = worktreeRemovalMembershipRevision(repo.id)
   const scope = inventory.read(repo)
   const route = inventory.route(repo)
   const generation = getLocalWorktreeScanGeneration(repo.id)
@@ -36,6 +38,7 @@ export async function observeRuntimeRepoWorktrees(
   const cacheGeneration = generations.get(scanKey)
   const current = () =>
     isLocalWorktreeScanGenerationCurrent(repo.id, generation) &&
+    worktreeRemovalMembershipRevision(repo.id) === removalRevision &&
     inventory.read(repo) === scope &&
     inventory.route(repo) === route &&
     generations.get(scanKey) === cacheGeneration
@@ -43,7 +46,7 @@ export async function observeRuntimeRepoWorktrees(
     const observation = await observations.observe({
       key: scanKey,
       scope,
-      route: `${repo.path}\0${route}\0${generation}\0${cacheGeneration}`,
+      route: `${repo.path}\0${route}\0${removalRevision}\0${generation}\0${cacheGeneration}`,
       ttlMs: resolveWorktreeScanCacheTtlMs(repo),
       reusable: inventory.reusable,
       signal,

@@ -1,6 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { execFileSync } from 'node:child_process'
-import { mkdtemp, mkdir, realpath, rm, symlink, unlink } from 'node:fs/promises'
+import {
+  mkdtemp,
+  mkdir,
+  realpath,
+  rm,
+  symlink,
+  unlink,
+  readFile,
+  writeFile
+} from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getDefaultWorkspaceSession } from '../shared/constants'
@@ -80,6 +89,76 @@ describe('saved worktree reconciliation with real Git and paths', () => {
       branch: ''
     })
     expect((await retainKnownWorktreesInListing(store, repo, main, options))[1]?.branch).toBe('')
+    const detachedRaw = await readWorktreeList(repo.path)
+    expect(
+      (await retainKnownWorktreesInListing(store, repo, detachedRaw, options))[1]?.branch
+    ).toBe('')
+  })
+
+  it('preserves all session and metadata owners sharing physical facts, including structural main and bare', async () => {
+    const child = join(directory, 'child')
+    git('worktree', 'add', '-b', 'feature', child)
+    const aliases = [join(directory, 'alias1'), join(directory, 'alias2')]
+    for (const alias of aliases) {
+      await symlink(child, alias, 'dir')
+    }
+    const raw = await readWorktreeList(repo.path)
+    for (const saved of [[child, ...aliases], aliases, [child, aliases[0]!]]) {
+      for (const sessions of [saved, [saved[0]!], []]) {
+        const store = fixture(saved)
+        store.getWorkspaceSession = () => ({
+          ...getDefaultWorkspaceSession(),
+          tabsByWorktree: Object.fromEntries(sessions.map((path) => [`r::${path}`, []]))
+        })
+        const rows = await retainKnownWorktreesInListing(store, repo, raw, options)
+        expect(rows.map((row) => row.path).sort()).toEqual([repo.path, ...saved].sort())
+        expect(rows.filter((row) => row.isMainWorktree).map((row) => row.path)).toEqual([repo.path])
+        expect(rows.every((row) => row.branch === 'refs/heads/feature' || row.isMainWorktree)).toBe(
+          true
+        )
+      }
+    }
+    const mainAlias = join(directory, 'main-alias')
+    await symlink(repo.path, mainAlias, 'dir')
+    const mainRows = await retainKnownWorktreesInListing(fixture([mainAlias]), repo, raw, options)
+    expect(mainRows.filter((row) => row.isMainWorktree).map((row) => row.path)).toEqual([repo.path])
+    expect(mainRows.find((row) => row.path === mainAlias)?.isMainWorktree).toBe(false)
+    const barePath = join(directory, 'bare')
+    git('clone', '--bare', repo.path, barePath)
+    const bareAlias = join(directory, 'bare-alias')
+    await symlink(barePath, bareAlias, 'dir')
+    const bareRows = await retainKnownWorktreesInListing(
+      fixture([bareAlias]),
+      { ...repo, path: barePath },
+      await readWorktreeList(barePath),
+      options
+    )
+    expect(bareRows.map((row) => [row.path, row.isBare, row.isMainWorktree])).toEqual([
+      [barePath, true, true],
+      [bareAlias, true, false]
+    ])
+  })
+
+  it('rejects enclosing-repository facts when a nested child loses its marker, and recovers', async () => {
+    const child = join(repo.path, 'nested-child')
+    git('worktree', 'add', '-b', 'feature', child)
+    const main = (await readWorktreeList(repo.path)).filter((row) => row.isMainWorktree)
+    const marker = await readFile(join(child, '.git'), 'utf8')
+    await unlink(join(child, '.git'))
+    expect(
+      execFileSync('git', ['-C', child, 'rev-parse', '--verify', 'HEAD'], {
+        encoding: 'utf8'
+      }).trim()
+    ).toBe(git('rev-parse', 'HEAD'))
+    await expect(
+      retainKnownWorktreesInListing(fixture([child]), repo, main, options)
+    ).rejects.toThrow('could not be verified')
+    await writeFile(join(child, '.git'), marker)
+    expect(
+      (await retainKnownWorktreesInListing(fixture([child]), repo, main, options)).find(
+        (row) => row.path === child
+      )?.branch
+    ).toBe('refs/heads/feature')
   })
 
   it('retains a real prunable registration with an existing directory using raw branch facts', async () => {

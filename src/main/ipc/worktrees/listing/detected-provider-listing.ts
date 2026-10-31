@@ -1,3 +1,4 @@
+import { worktreeRemovalMembershipRevision } from '../../../worktree-removal-table'
 import { knownWorktreeInventory } from '../../../known-worktree-inventory'
 import {
   projectPendingWorktreeRemovals,
@@ -126,17 +127,19 @@ export async function listDetectedWorktreesForCapturedRepo(
       repo.id,
       async () => {
         const generation = getLocalWorktreeScanGeneration(repo.id)
+        const removalRevision = worktreeRemovalMembershipRevision(repo.id)
         const scope = inventory.read(repo)
         const route = inventory.route(repo)
         const producerCurrent = () =>
           isLocalWorktreeScanGenerationCurrent(repo.id, generation) &&
+          worktreeRemovalMembershipRevision(repo.id) === removalRevision &&
           inventory.read(repo) === scope &&
           inventory.route(repo) === route
         try {
           const observation = await detectedListingObservations(store).observe({
             key: repo.id,
             scope,
-            route: `${repo.path}\0${route}\0${generation}`,
+            route: `${repo.path}\0${route}\0${removalRevision}\0${generation}`,
             ttlMs: DETECTED_WORKTREE_SCAN_CACHE_TTL_MS,
             reusable: inventory.reusable,
             signal: providerAbort?.signal,

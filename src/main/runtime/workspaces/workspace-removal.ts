@@ -27,7 +27,7 @@ import {
 } from '../../worktree-removal-execution-host-route'
 import { listWorktreesOnRemovalRoute } from '../worktree-removal-route-listing'
 import { authorizeUnregisteredWindowsRemoval } from '../../git/windows-worktree-removal'
-import { findRegisteredDeletableWorktree } from '../../worktree-removal-safety'
+import { resolveRegisteredDeletableWorktree } from '../../worktree-removal-safety'
 import { removeRuntimeUnregisteredWorktree } from '../runtime-unregistered-worktree-removal'
 import { removeStaleLocalWorktreeRegistration } from '../../local-worktree-removal-recovery'
 import { cleanupUnusedWorktreePushTargetRemote } from '../../ipc/worktree-remote'
@@ -164,11 +164,12 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWi
         )
         const removedPushTarget = removedMeta?.pushTarget ?? removalTarget.pushTarget
         const removalHome = resolveWorktreeRemovalHome(route)
-        const registeredWorktree = findRegisteredDeletableWorktree(
+        const registeredWorktree = await resolveRegisteredDeletableWorktree(
           repo!.path,
           removalTarget.path,
           registeredWorktrees,
-          removalHome
+          removalHome,
+          localWorktreeGitOptions
         )
         await authorizeUnregisteredWindowsRemoval(
           !!registeredWorktree,
@@ -177,18 +178,18 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWi
           force,
           localWorktreeGitOptions
         )
-        if (
-          await this.retryFailedRemoval(
-            route,
-            removalTarget,
-            registeredWorktrees,
-            options,
-            localWorktreeGitOptions
-          )
-        ) {
-          return { removing: true }
-        }
         if (!registeredWorktree) {
+          if (
+            await this.retryFailedRemoval(
+              route,
+              removalTarget,
+              registeredWorktrees,
+              options,
+              localWorktreeGitOptions
+            )
+          ) {
+            return { removing: true }
+          }
           return removeRuntimeUnregisteredWorktree({
             repo: repo!,
             target: removalTarget,

@@ -1,4 +1,7 @@
-import { listStoredWorktreeRowsForRepo } from './stored-repo-worktree-rows'
+import {
+  listStoredWorktreeRowsForRepo,
+  storedWorktreePresentation
+} from './stored-repo-worktree-rows'
 export { listStoredWorktreeRowsForRepo } from './stored-repo-worktree-rows'
 import { scanUntilNotOvertaken } from '../ipc/worktrees/listing/overtaken-scan-rerun'
 import {
@@ -197,7 +200,7 @@ function projectCurrentRepoWorktreeRows(
         isBare: gitWorktree.isBare,
         isMainWorktree: gitWorktree.isMainWorktree
       },
-      displayName: merged.displayName,
+      ...(!scan?.ok ? storedWorktreePresentation(meta, merged) : {}),
       comment: merged.comment
     }
   })

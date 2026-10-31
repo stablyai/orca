@@ -1,7 +1,12 @@
+import { Store } from '../../persistence/loading-store/store'
+import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../../shared/constants'
+import { listDetectedWorktreesForCapturedRepo } from '../../ipc/worktrees/listing/detected-provider-listing'
+import * as pathObservation from '../../local-worktree-path-presence'
+import { knownWorktreeInventory } from '../../known-worktree-inventory'
 import './unused-default-rpc-methods.test-fixture'
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, realpath, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, readFile, writeFile, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -668,4 +673,113 @@ it('reports actual safe branch preservation when forced checkout removal cannot 
     'warning: local branch "task" was kept because Git could not safely delete it'
   )
   expect(warnings()).toHaveLength(0)
+})
+
+it('deletes a published saved alias through actual CLI/RPC/registered background removal and rejects late listing consumption', async () => {
+  const alias = join(directory, 'saved-alias')
+  const mainAlias = join(directory, 'main-alias')
+  await symlink(checkout, alias, 'dir')
+  await symlink(repoPath, mainAlias, 'dir')
+  const aliasId = `repo::${alias}`,
+    mainAliasId = `repo::${mainAlias}`
+  const state = getDefaultPersistedState(directory)
+  state.repos = [repo]
+  state.worktreeMeta = {
+    [aliasId]: storeWorktreeMeta({ hostId: 'local', instanceId: 'alias', linkedPR: 42 }),
+    [mainAliasId]: storeWorktreeMeta({ hostId: 'local', instanceId: 'main-alias' }),
+    [id]: storeWorktreeMeta({
+      hostId: 'local',
+      instanceId: 'physical',
+      comment: 'Independent saved owner'
+    })
+  }
+  state.workspaceSession = {
+    ...getDefaultWorkspaceSession(),
+    tabsByWorktree: { [aliasId]: [], [id]: [] }
+  }
+  const store = new Store({
+    dataFile: join(directory, 'alias-state.json'),
+    serializedState: JSON.stringify(state)
+  })
+  runtime = new RemovalRuntime(store)
+  vi.spyOn(runtime, 'machineNameReady').mockResolvedValue(undefined)
+  vi.spyOn(runtime, 'acquireFileWatcherRemoval').mockResolvedValue({ finish: async () => {} })
+  vi.spyOn(runtime, 'closeFileWatchersForRemoval').mockResolvedValue(undefined)
+  vi.spyOn(runtime, 'stopPtysForDestructiveWorktreeRemoval').mockImplementation(stopped)
+  vi.spyOn(runtime, 'notifyWorktreesChanged').mockImplementation(() => {})
+  dispatcher = new RpcDispatcher({ runtime, methods: [...STATUS_METHODS, ...WORKTREE_METHODS] })
+  await discover(
+    process.platform === 'win32'
+      ? String.raw`\\.\pipe\orca-rm-${process.pid}`
+      : join(directory, 'rpc.sock')
+  )
+  const published = await listDetectedWorktreesForCapturedRepo(store, repo, () => true)
+  expect(published).toMatchObject({
+    authoritative: true,
+    worktrees: expect.arrayContaining([
+      expect.objectContaining({ id: aliasId }),
+      expect.objectContaining({ id })
+    ])
+  })
+  await writeFile(join(checkout, 'file'), 'unsaved')
+  for (const target of [id, aliasId]) {
+    await expect(
+      client.call('worktree.rm', { ...legacyParams(`id:${target}`), deleteBranch: false })
+    ).rejects.toThrow(/M file/)
+    expect(existsSync(checkout)).toBe(true)
+  }
+  expect(stopped).not.toHaveBeenCalled()
+  await git('-C', checkout, 'checkout', '--', 'file')
+  await expect(
+    client.call('worktree.rm', { ...legacyParams(`id:${mainAliasId}`), deleteBranch: false })
+  ).rejects.toThrow(/protected/)
+  expect(existsSync(repoPath)).toBe(true)
+  const realResolve = pathObservation.resolveLocalWorktreeRealpath
+  const entered = Promise.withResolvers<void>(),
+    release = Promise.withResolvers<void>()
+  let block = true
+  vi.spyOn(pathObservation, 'resolveLocalWorktreeRealpath').mockImplementation(
+    async (path, options) => {
+      if (path === alias && block) {
+        block = false
+        entered.resolve()
+        await release.promise
+      }
+      return realResolve(path, options)
+    }
+  )
+  const { invalidateDetectedWorktreeScanCache } =
+    await import('../../ipc/worktrees/listing/detected-worktree-scan-cache')
+  invalidateDetectedWorktreeScanCache(repo.id)
+  const late = listDetectedWorktreesForCapturedRepo(store, repo, () => true)
+  await entered.promise
+  try {
+    await main(['worktree', 'rm', '--worktree', `id:${aliasId}`, '--json'], repoPath)
+    expect(process.exitCode, JSON.stringify(vi.mocked(console.log).mock.calls)).not.toBe(1)
+    await _settlePendingWorktreeRemovalsForTests()
+    expect(existsSync(checkout)).toBe(false)
+    expect(store.getAllWorktreeMetaForHost('local')[aliasId]).toBeUndefined()
+    expect(store.getAllWorktreeMetaForHost('local')[id]?.comment).toBe('Independent saved owner')
+    expect(
+      knownWorktreeInventory(store)
+        .read(repo)
+        .paths.some((entry) => entry.path === alias)
+    ).toBe(false)
+    expect(store.getWorkspaceSession('local').tabsByWorktree[aliasId]).toBeUndefined()
+    const stamp = vi.spyOn(store, 'setWorktreeMeta')
+    stamp.mockClear()
+    release.resolve()
+    const consumed = await late
+    expect(consumed).toMatchObject({ authoritative: true })
+    if (!consumed || !('worktrees' in consumed)) {
+      throw new Error('missing final listing')
+    }
+    expect(consumed.worktrees.some((row) => row.id === aliasId || row.id === id)).toBe(false)
+    expect(stamp.mock.calls.some(([target]) => target.id === aliasId)).toBe(false)
+    expect(pendingWorktreeRemovals.size).toBe(0)
+  } finally {
+    release.resolve()
+    await late
+    await store.flushOrThrow()
+  }
 })

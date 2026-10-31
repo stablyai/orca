@@ -482,7 +482,9 @@ it('reprojects a repo overtaken during a later fleet await and withdraws branch/
   const id = 'live::/child'
   deps.metaById[id] = mergeWorktreeMetaForWrite(undefined, {
     hostId: 'local',
-    displayName: 'Saved child'
+    displayName: 'feature',
+    displayNameIsPinned: false,
+    comment: 'Before wait'
   })
   let current = true
   const wait = Promise.withResolvers<{ ok: boolean; worktrees: GitWorktreeInfo[] }>()
@@ -499,11 +501,23 @@ it('reprojects a repo overtaken during a later fleet await and withdraws branch/
   )
   await vi.waitFor(() => expect(deps.scanRepo).toHaveBeenCalledTimes(2))
   current = false
+  deps.metaById[id] = {
+    ...deps.metaById[id]!,
+    displayName: 'Current feature',
+    comment: 'Edited during wait'
+  }
   const writes = vi.spyOn(deps.store, 'setWorktreeMeta')
   wait.resolve({ ok: true, worktrees: [] })
   const scans = await pending
   const joined = joinResolvedWorktreeScans(deps.store, () => deps, scans)
-  expect(joined.worktrees).toEqual([expect.objectContaining({ id, displayName: 'Saved child' })])
+  expect(joined.worktrees).toEqual([
+    expect.objectContaining({
+      id,
+      displayName: 'Current feature',
+      displayNameMode: 'automatic',
+      comment: 'Edited during wait'
+    })
+  ])
   expect(joined.scannedRepoKeys.has(getRepoHostIdentityForParts(owner.id, 'local'))).toBe(false)
   expect(joined.gitRunById.size).toBe(0)
   expect(writes).not.toHaveBeenCalled()

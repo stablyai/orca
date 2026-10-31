@@ -1,18 +1,20 @@
+import {
+  repo,
+  child,
+  childId,
+  oid,
+  row,
+  fixture,
+  Runtime
+} from './known-worktree-listing-contract.test-fixture'
 import type * as WslUncAccessGateModule from '../../../wsl/wsl-unc-access-gate'
 import type * as WslStoppedWorktreeListingModule from './wsl-stopped-worktree-listing'
 import type * as AuthoritativeLocalWorktreeMetadataPruningModule from './authoritative-local-worktree-metadata-pruning'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { writeFile } from 'node:fs/promises'
 import type * as Fs from 'node:fs/promises'
-import type { Store as StoreType } from '../../../persistence/loading-store/store'
-import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import type { Repo } from '../../../../shared/repo-types'
-import type { RuntimeWorktreeScanResult } from '../../../runtime/repo-worktree-resolution-scan'
-import {
-  getDefaultPersistedState,
-  getDefaultSettings,
-  getDefaultWorkspaceSession
-} from '../../../../shared/constants'
+import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../../../shared/constants'
 import { useWorktreeAwarenessEnvironment } from '../../../../cli/index-test-harness'
 import { main as cliMain } from '../../../../cli/index'
 import { okFixture } from '../../../../cli/test-fixtures'
@@ -87,7 +89,6 @@ import {
   invalidateDetectedWorktreeScanCache
 } from './detected-worktree-scan-cache'
 import { WslDistroStoppedError } from '../../../wsl/wsl-unc-access-gate'
-import { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { Store } from '../../../persistence/loading-store/store'
 import { removeWorktreeMetaRow } from '../../../persistence/host-qualified-worktree-meta'
 import {
@@ -100,103 +101,12 @@ import { registerWorktreeChangeInvalidator } from '../../worktree-change-invalid
 import { knownWorktreeInventory } from '../../../known-worktree-inventory'
 import { scanRepoWorktreeRows } from '../../../runtime/repo-worktree-row-resolution'
 
-const repo: Repo = { id: 'r', path: '/repo', displayName: 'repo', addedAt: 1, badgeColor: 'blue' }
-const child = '/work/feature'
-const childId = `r::${child}`
-const oid = 'a'.repeat(40)
-function row(path = repo.path): GitWorktreeInfo {
-  return {
-    path,
-    head: oid,
-    branch: 'refs/heads/feature',
-    isMainWorktree: path === repo.path,
-    isBare: false
-  }
-}
-function fixture(repos = [repo], paths = [child]) {
-  let stateWrite: Parameters<StoreType['onStateWritten']>[0] = () => {}
-  let sessionWrite: Parameters<StoreType['onWorkspaceSessionWritten']>[0] = () => {}
-  const session = {
-    ...getDefaultWorkspaceSession(),
-    tabsByWorktree: Object.fromEntries(paths.map((path) => [`r::${path}`, []]))
-  }
-  const meta = Object.fromEntries(
-    paths.map((path) => [
-      `r::${path}`,
-      storeWorktreeMeta({
-        hostId: 'local',
-        instanceId: path,
-        displayName: `Saved ${path}`,
-        linkedPR: 42
-      })
-    ])
-  )
-  const store: StoreType = Object.create(null)
-  Object.assign(store, {
-    getRepos: () => repos,
-    getRepo: (id: string) => repos.find((repo) => repo.id === id),
-    getProjects: () => [],
-    getProjectHostSetups: () => [],
-    getSettings: () => getDefaultSettings('/fixture'),
-    getWorkspaceSession: () => session,
-    getAllWorktreeMeta: () => meta,
-    getAllWorktreeMetaForHost: () => meta,
-    getWorktreeMeta: (id: string) => meta[id],
-    getWorktreeMetaForHost: (id: string) => meta[id],
-    setWorktreeMeta: vi.fn(({ id }, updates) => {
-      const next = (meta[id] = storeWorktreeMeta({ ...meta[id], instanceId: id, ...updates }))
-      stateWrite(['worktreeMeta'])
-      return next
-    }),
-    getAllWorktreeLineage: () => ({}),
-    getAllWorkspaceLineage: () => ({}),
-    captureNativeLocalWorktreeMetadataScanExpectation: () => undefined,
-    onStateWritten: (listener: typeof stateWrite) => {
-      stateWrite = listener
-      return () => {}
-    },
-    onWorkspaceSessionWritten: (listener: typeof sessionWrite) => {
-      sessionWrite = listener
-      return () => {}
-    }
-  } satisfies Partial<StoreType>)
-  return {
-    store,
-    meta,
-    session,
-    changed: () => {
-      stateWrite(['worktreeMeta'])
-      sessionWrite('local')
-    }
-  }
-}
-class Runtime extends OrcaRuntimeService {
-  raw = vi.fn(async (_repo: Repo): Promise<RuntimeWorktreeScanResult> => ({
-    ok: true,
-    worktrees: [row()]
-  }))
-  protected override listRepoWorktreesForResolution(target: Repo) {
-    return this.raw(target)
-  }
-  listing(target = repo, signal?: AbortSignal) {
-    return this.listRepoWorktreesForListing(target, undefined, signal)
-  }
-  rows() {
-    return this.computeResolvedWorktrees()
-  }
-  memory() {
-    return this.projectCachedWorktrees()
-  }
-  scoped(id: string) {
-    return this.resolveExplicitWorktreeIdScoped(id, 'local')
-  }
-}
 beforeEach(() => {
   __resetDetectedWorktreeScanCacheForTests()
   statProbe.mockReset().mockResolvedValue({ isDirectory: () => true })
   realpathProbe.mockReset().mockImplementation(async (path) => path)
   gitRead.mockReset().mockImplementation(async (args: string[]) => ({
-    stdout: args[0] === 'rev-parse' ? oid : 'refs/heads/feature',
+    stdout: args.includes('--show-prefix') ? `\n${oid}\n` : 'refs/heads/feature',
     stderr: ''
   }))
   rawScan.mockReset().mockResolvedValue([row()])
@@ -237,7 +147,7 @@ it('publishes prunable saved rows through the final builder and safely fails unk
   expect(writes).not.toHaveBeenCalled()
   // Failed derived results cannot swallow a subsequent recovery against the same raw cache.
   gitRead.mockImplementation(async (args: string[]) => ({
-    stdout: args[0] === 'rev-parse' ? oid : 'refs/heads/feature',
+    stdout: args.includes('--show-prefix') ? `\n${oid}\n` : 'refs/heads/feature',
     stderr: ''
   }))
   expect(await listDetectedWorktreesForCapturedRepo(store, repo, () => true)).toMatchObject({
@@ -333,7 +243,7 @@ it('surviving runtime joiners own the entire tail; last-owner timeout stops late
   await vi.waitFor(() => expect(gitRead).toHaveBeenCalledTimes(1))
   departed.abort()
   expect((await first).ok).toBe(false)
-  head.resolve({ stdout: oid, stderr: '' })
+  head.resolve({ stdout: `\n${oid}\n`, stderr: '' })
   expect((await second).ok).toBe(true)
   expect(gitRead).toHaveBeenCalledTimes(2)
   expect((await runtime.listing()).ok).toBe(true)
@@ -352,11 +262,11 @@ it('surviving runtime joiners own the entire tail; last-owner timeout stops late
   expect(gitRead).toHaveBeenCalledTimes(1)
   await vi.advanceTimersByTimeAsync(5000)
   expect((await pending).ok).toBe(false)
-  stuckHead.resolve({ stdout: oid, stderr: '' })
+  stuckHead.resolve({ stdout: `\n${oid}\n`, stderr: '' })
   await vi.advanceTimersByTimeAsync(0)
   expect(gitRead).toHaveBeenCalledTimes(1)
   gitRead.mockImplementation(async (args: string[]) => ({
-    stdout: args[0] === 'rev-parse' ? oid : 'refs/heads/feature',
+    stdout: args.includes('--show-prefix') ? `\n${oid}\n` : 'refs/heads/feature',
     stderr: ''
   }))
   expect((await timeoutRuntime.listing()).ok).toBe(true)
@@ -396,7 +306,7 @@ it('rejects a late retained read after actual background Delete settlement and o
     expect(pendingWorktreeRemovals.size).toBe(0)
     expect(store.getAllWorktreeMetaForHost('local')[childId]).toBeUndefined()
     expect(knownWorktreeInventory(store).read(repo).paths).toEqual([])
-    late.resolve({ stdout: oid, stderr: '' })
+    late.resolve({ stdout: `\n${oid}\n`, stderr: '' })
     expect(await listing).toMatchObject({
       authoritative: true,
       worktrees: [expect.objectContaining({ path: repo.path })]
@@ -406,7 +316,7 @@ it('rejects a late retained read after actual background Delete settlement and o
     expect(failedWorktreeRemovals.size).toBe(0)
   } finally {
     detached()
-    late.resolve({ stdout: oid, stderr: '' })
+    late.resolve({ stdout: `\n${oid}\n`, stderr: '' })
     await listing
   }
 })
@@ -607,7 +517,7 @@ it('never extends a completed proof on cache hits or old raw fingerprints', asyn
   expect(statProbe.mock.calls.map(([path]) => path)).toEqual([child, child, repo.path, '/work'])
   statProbe.mockResolvedValue({ isDirectory: () => true })
   gitRead.mockImplementation(async (args: string[]) => ({
-    stdout: args[0] === 'rev-parse' ? oid : 'refs/heads/feature',
+    stdout: args.includes('--show-prefix') ? `\n${oid}\n` : 'refs/heads/feature',
     stderr: ''
   }))
   expect((await runtime.listing()).ok).toBe(true)
@@ -765,4 +675,143 @@ describe('owning-host retained catalog consumers', () => {
       phone.disconnect()
     }
   })
+})
+
+it('bounds the added removal index across omitted repos and unrelated history independently, and skips absent physical work', async () => {
+  const results: unknown[] = []
+  for (const [r, d] of [
+    [100, 100],
+    [100, 1000],
+    [1000, 100],
+    [1000, 1000]
+  ] as const) {
+    __resetDetectedWorktreeScanCacheForTests()
+    failedWorktreeRemovals.clear()
+    const repos = Array.from({ length: r }, (_, i) => ({
+      ...repo,
+      id: `omitted-${i}`,
+      path: `/omitted/${i}`
+    }))
+    const { store, meta, changed } = fixture(repos, [])
+    for (const entry of repos) {
+      meta[`${entry.id}::${entry.path}/child`] = storeWorktreeMeta({
+        hostId: 'local',
+        instanceId: `${entry.id}::${entry.path}/child`
+      })
+      meta[`${entry.id}::${entry.path}`] = storeWorktreeMeta({
+        hostId: 'local',
+        instanceId: `${entry.id}::${entry.path}`
+      })
+    }
+    changed()
+    for (let i = 0; i < d; i++) {
+      failedWorktreeRemovals.set(`history-${i}`, {
+        worktreeId: `history-${i}`,
+        repoId: 'other',
+        repoPath: '/other',
+        worktreePath: `/other/${i}`,
+        branch: 'feature',
+        head: oid,
+        force: false,
+        deleteBranch: false,
+        requestedAt: i
+      })
+    }
+    let addedMembershipVisits = 0,
+      baselineCompositionVisits = 0
+    const original = failedWorktreeRemovals.values.bind(failedWorktreeRemovals)
+    const visits = vi.spyOn(failedWorktreeRemovals, 'values').mockImplementation(function* () {
+      const membership = new Error('removal census origin').stack?.includes(
+        'worktreeRemovalPathsForRepo'
+      )
+      for (const record of original()) {
+        if (membership) {
+          addedMembershipVisits++
+        } else {
+          baselineCompositionVisits++
+        }
+        yield record
+      }
+    })
+    rawScan.mockImplementation(async (entry: Repo) => [
+      { ...row(entry.path), isMainWorktree: true }
+    ])
+    gitRead.mockClear()
+    realpathProbe.mockClear()
+    statProbe.mockClear()
+    const started = performance.now()
+    for (const entry of repos) {
+      expect(await listDetectedWorktreesForCapturedRepo(store, entry, () => true)).toMatchObject({
+        authoritative: true
+      })
+    }
+    expect(addedMembershipVisits).toBe(d)
+    expect(baselineCompositionVisits).toBe(2 * r * d)
+    expect(statProbe).toHaveBeenCalledTimes(r)
+    expect(gitRead).toHaveBeenCalledTimes(2 * r)
+    expect(realpathProbe).toHaveBeenCalledTimes(2 * r) // one candidate and lazy main fallback, once per complete observation
+    const before = [
+      statProbe.mock.calls.length,
+      gitRead.mock.calls.length,
+      addedMembershipVisits,
+      baselineCompositionVisits
+    ]
+    for (const entry of repos) {
+      await listDetectedWorktreesForCapturedRepo(store, entry, () => true)
+    }
+    expect([
+      statProbe.mock.calls.length,
+      gitRead.mock.calls.length,
+      addedMembershipVisits,
+      baselineCompositionVisits
+    ]).toEqual(before)
+    results.push({
+      omittedRepos: r,
+      unrelatedHistory: d,
+      addedMembershipVisits,
+      baselineCompositionVisits,
+      stats: statProbe.mock.calls.length,
+      checkoutReads: gitRead.mock.calls.length,
+      realpaths: realpathProbe.mock.calls.length,
+      elapsedMs: performance.now() - started
+    })
+    visits.mockRestore()
+  }
+  failedWorktreeRemovals.clear()
+  for (const w of [100, 1000]) {
+    __resetDetectedWorktreeScanCacheForTests()
+    const { store } = fixture()
+    rawScan.mockResolvedValue([row(), ...Array.from({ length: w }, (_, i) => row(`/raw/${i}`))])
+    statProbe.mockImplementation(async (path) => {
+      if (path === child) {
+        throw Object.assign(new Error('absent'), { code: 'ENOENT' })
+      }
+      return { isDirectory: () => true }
+    })
+    realpathProbe.mockClear()
+    gitRead.mockClear()
+    expect(await listDetectedWorktreesForCapturedRepo(store, repo, () => true)).toMatchObject({
+      authoritative: true
+    })
+    expect(realpathProbe).not.toHaveBeenCalled()
+    expect(gitRead).not.toHaveBeenCalled()
+    // Positive alias uses a single necessary realpath and the raw precise index, independent of W.
+    invalidateDetectedWorktreeScanCache(repo.id)
+    statProbe.mockResolvedValue({ isDirectory: () => true })
+    realpathProbe.mockImplementation(async (path) => (path === child ? '/raw/0' : path))
+    expect(await listDetectedWorktreesForCapturedRepo(store, repo, () => true)).toMatchObject({
+      authoritative: true,
+      worktrees: expect.arrayContaining([expect.objectContaining({ path: child })])
+    })
+    expect(realpathProbe).toHaveBeenCalledTimes(1)
+    expect(gitRead).not.toHaveBeenCalled()
+    results.push({
+      rawRows: w,
+      absentRealpaths: 0,
+      presentAliasRealpaths: realpathProbe.mock.calls.length
+    })
+  }
+  if (process.env.ORCA_WORKTREE_OMISSION_REPORT) {
+    await writeFile(process.env.ORCA_WORKTREE_OMISSION_REPORT, JSON.stringify(results, null, 2))
+  }
 })

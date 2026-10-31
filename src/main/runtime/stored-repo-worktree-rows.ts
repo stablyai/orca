@@ -2,6 +2,8 @@ import { knownWorktreeInventory, type WorktreeInventoryStore } from '../known-wo
 import { splitWorktreeId } from '../../shared/worktree/id'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import { areWorktreePathsEqual } from '../git/worktree-path-comparison'
+import type { WorktreeMeta } from '../../shared/worktree/meta-types'
+import type { Worktree } from '../../shared/worktree/types'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
 import type { Repo } from '../../shared/repo-types'
 import type { RuntimeStore } from './runtime-store-contract'
@@ -37,4 +39,19 @@ export function listStoredWorktreeRowsForRepo(
     })
   }
   return [...byWorktreeId.values()]
+}
+
+export function storedWorktreePresentation(
+  meta: WorktreeMeta | undefined,
+  merged: Worktree
+): Pick<Worktree, 'displayName' | 'displayNameMode'> {
+  return {
+    displayName: meta?.displayName ?? merged.displayName,
+    displayNameMode:
+      meta?.displayNameIsPinned === undefined
+        ? merged.displayNameMode
+        : meta.displayNameIsPinned
+          ? 'fixed'
+          : 'automatic'
+  }
 }

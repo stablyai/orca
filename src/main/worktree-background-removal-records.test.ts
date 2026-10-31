@@ -1,3 +1,4 @@
+import { worktreeRemovalPathsForRepo } from './worktree-removal-table'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -186,7 +187,9 @@ describe('durable worktree removal records', () => {
 
     _resetPendingWorktreeRemovalsForTests()
     expect(isPending()).toBe(false)
+    expect([...worktreeRemovalPathsForRepo('repo-1')]).toEqual([])
     await loadWorktreeRemovalRecords(directory)
+    expect([...worktreeRemovalPathsForRepo('repo-1')]).toEqual(['/work/feature'])
     const joined = waitForPendingWorktreeRemoval(removal.worktreeId)
     const rows: { id: string; hostId?: undefined }[] = [
       { id: removal.worktreeId },
@@ -216,6 +219,7 @@ describe('durable worktree removal records', () => {
     await _settlePendingWorktreeRemovalsForTests()
 
     expect(resumed).toEqual(['/work/feature feature true'])
+    expect([...worktreeRemovalPathsForRepo('repo-1')]).toEqual([])
     expect(isPending()).toBe(false)
     expect(await readWorktreeRemovalRecords(directory)).toEqual([])
     await expect(joined).resolves.toEqual({})

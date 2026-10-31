@@ -62,3 +62,19 @@ export function assertNestedWorktreeRemovalApproval(
     )
   }
 }
+
+export function assertRegisteredWorktreeRemovalApproval(
+  registered: GitWorktreeInfo | null,
+  requestedPath: string,
+  approved: NestedWorktreeRemovalApproval
+): void {
+  assertNestedWorktreeRemovalApproval(registered ? [registered] : [], [
+    {
+      ...approved,
+      path:
+        registered && areWorktreePathsEqual(approved.path, requestedPath)
+          ? registered.path
+          : approved.path
+    }
+  ])
+}

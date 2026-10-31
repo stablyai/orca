@@ -1,3 +1,4 @@
+import { worktreeCheckoutEvidence } from './git-worktree-checkout-facts'
 import { decodeGitCQuotedPath } from './git-cquoted-path'
 import type { GitWorktreeInfo } from './worktree/types'
 
@@ -16,6 +17,7 @@ export function parseWorktreeList(
     let path = ''
     let head = ''
     let branch = ''
+    let detached = false
     let isBare = false
     let isSparse = false
     let locked = false
@@ -30,6 +32,8 @@ export function parseWorktreeList(
         head = line.slice('HEAD '.length)
       } else if (line.startsWith('branch ')) {
         branch = line.slice('branch '.length)
+      } else if (line === 'detached') {
+        detached = true
       } else if (line === 'bare') {
         isBare = true
       } else if (line === 'sparse') {
@@ -48,18 +52,23 @@ export function parseWorktreeList(
 
     if (path) {
       // `git worktree list` always emits the main working tree first.
-      worktrees.push({
-        path,
-        head,
-        branch,
-        isBare,
-        ...(isSparse ? { isSparse } : {}),
-        ...(locked ? { locked: true } : {}),
-        ...(lockReason ? { lockReason } : {}),
-        ...(prunable ? { prunable: true } : {}),
-        ...(prunableReason ? { prunableReason } : {}),
-        isMainWorktree: worktrees.length === 0
-      })
+      worktrees.push(
+        Object.assign(
+          {
+            path,
+            head,
+            branch,
+            isBare,
+            ...(isSparse ? { isSparse } : {}),
+            ...(locked ? { locked: true } : {}),
+            ...(lockReason ? { lockReason } : {}),
+            ...(prunable ? { prunable: true } : {}),
+            ...(prunableReason ? { prunableReason } : {}),
+            isMainWorktree: worktrees.length === 0
+          },
+          detached && !branch && !isBare ? { [worktreeCheckoutEvidence]: true } : {}
+        )
+      )
     }
   }
 

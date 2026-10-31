@@ -2,7 +2,7 @@ import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../shared/execu
 import { isFolderRepo } from '../shared/repo-kind'
 import type { Repo } from '../shared/repo-types'
 import type { GitWorktreeInfo } from '../shared/worktree/types'
-import { areWorktreePathsEqual, canonicalWorktreePath } from './git/worktree-path-comparison'
+import { canonicalWorktreePath } from './git/worktree-path-comparison'
 import { readWorktreeCheckout } from './git/worktree-checkout-observation'
 import { posix, win32 } from 'node:path'
 import { isWindowsAbsolutePathLike } from '../shared/cross-platform-path'
@@ -14,7 +14,8 @@ import {
 } from './local-worktree-path-presence'
 import type { KnownWorktreePath, RepoWorktreeInventory } from './known-worktree-inventory'
 import { knownWorktreeInventory, type WorktreeInventoryStore } from './known-worktree-inventory'
-import { failedWorktreeRemovals, pendingWorktreeRemovals } from './worktree-removal-table'
+import { worktreeRemovalPathsForRepo } from './worktree-removal-table'
+import { hasWorktreeCheckoutEvidence } from '../shared/git-worktree-checkout-facts'
 
 export class KnownWorktreeListingError extends Error {
   constructor(cause: unknown) {
@@ -29,18 +30,6 @@ function pickKnownSpelling(listedPath: string, spellings: KnownWorktreePath[]): 
   const withSession = spellings.filter((spelling) => spelling.hasSession)
   const candidates = withSession.length > 0 ? withSession : spellings
   return (candidates.find((spelling) => spelling.path === listedPath) ?? candidates[0]).path
-}
-
-function removalPaths(repo: Repo): Set<string> {
-  const paths = new Set<string>()
-  for (const table of [pendingWorktreeRemovals, failedWorktreeRemovals]) {
-    for (const record of table.values()) {
-      if (record.repoId === repo.id) {
-        paths.add(canonicalWorktreePath(record.worktreePath))
-      }
-    }
-  }
-  return paths
 }
 
 /** Reconcile published membership, physical identity and checkout facts without inventing unknown facts. */
@@ -109,7 +98,7 @@ async function reconcileKnownWorktrees(
   if (unmatched.length === 0) {
     return listed
   }
-  const removals = removalPaths(repo)
+  const removals = worktreeRemovalPathsForRepo(repo.id)
   const candidates = unmatched.filter((path) => !removals.has(canonicalWorktreePath(path)))
   if (candidates.length === 0) {
     return listed
@@ -138,16 +127,26 @@ async function reconcileKnownWorktrees(
     }
   }
   const rows = new Map(listed.map((row) => [canonicalWorktreePath(row.path), row]))
-  const byPhysicalPath = new Map<string, string>()
-  if (candidates.some((path) => !rawByKey.has(canonicalWorktreePath(path)))) {
-    for (const [key, row] of rows) {
-      current()
-      const physical = await resolveLocalWorktreeRealpath(row.path, observationOptions)
-      if (physical) {
-        byPhysicalPath.set(canonicalWorktreePath(physical), key)
+  let byPhysicalPath: Map<string, GitWorktreeInfo> | undefined
+  const physicalFacts = async (physical: string): Promise<GitWorktreeInfo | undefined> => {
+    const key = canonicalWorktreePath(physical)
+    const direct = rawByKey.get(key)
+    if (direct) {
+      return direct
+    }
+    if (!byPhysicalPath) {
+      byPhysicalPath = new Map()
+      for (const row of gitWorktrees) {
+        current()
+        const resolved = await resolveLocalWorktreeRealpath(row.path, observationOptions)
+        if (resolved) {
+          byPhysicalPath.set(canonicalWorktreePath(resolved), row)
+        }
       }
     }
+    return byPhysicalPath.get(key)
   }
+  const checkoutByPhysicalPath = new Map<string, Awaited<ReturnType<typeof readWorktreeCheckout>>>()
   for (const path of candidates) {
     current()
     const key = canonicalWorktreePath(path)
@@ -161,28 +160,38 @@ async function reconcileKnownWorktrees(
       rows.delete(key)
       continue
     }
-    let aliasKey: string | undefined
-    if (!raw && states.get(path) === 'directory') {
+    if (states.get(path) !== 'directory') {
+      throw new Error('Worktree location could not be verified')
+    }
+    let facts = raw
+    let physicalKey: string | undefined
+    if (!raw) {
       const physical = await resolveLocalWorktreeRealpath(path, observationOptions)
       if (!physical) {
         throw new Error('Worktree physical identity could not be verified')
       }
-      aliasKey = byPhysicalPath.get(canonicalWorktreePath(physical))
+      physicalKey = canonicalWorktreePath(physical)
+      facts = await physicalFacts(physical)
     }
-    const facts = raw ?? (aliasKey ? rows.get(aliasKey) : undefined)
-    const checkout = facts?.head
-      ? { head: facts.head, branch: facts.branch }
-      : await readWorktreeCheckout(path, gitOptions, () => options.isCurrent?.() !== false)
+    const checkout =
+      facts && hasWorktreeCheckoutEvidence(facts)
+        ? { head: facts.head, branch: facts.branch }
+        : ((physicalKey ? checkoutByPhysicalPath.get(physicalKey) : undefined) ??
+          (await readWorktreeCheckout(path, gitOptions, () => options.isCurrent?.() !== false)))
     current()
-    if (aliasKey) {
-      rows.delete(aliasKey)
+    if (physicalKey) {
+      checkoutByPhysicalPath.set(physicalKey, checkout)
+    }
+    if (facts && !facts.isMainWorktree && !knownByKey.has(canonicalWorktreePath(facts.path))) {
+      rows.delete(canonicalWorktreePath(facts.path))
     }
     rows.set(key, {
       ...facts,
       path,
       ...checkout,
-      isBare: false,
-      isMainWorktree: facts?.isMainWorktree ?? areWorktreePathsEqual(path, repo.path),
+      isBare: facts?.isBare ?? false,
+      // Main is structural registration, never a transferable role of an alias.
+      isMainWorktree: raw?.isMainWorktree ?? false,
       prunable: false
     })
   }

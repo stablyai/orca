@@ -1,3 +1,7 @@
+import {
+  worktreeRemovalPathsForRepo,
+  worktreeRemovalMembershipRevision
+} from './worktree-removal-table'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../shared/execution-host'
 import {
@@ -57,6 +61,7 @@ describe('background worktree removal', () => {
     await _settlePendingWorktreeRemovalsForTests()
     expect(isPending()).toBe(false)
     expect(pendingAtPublish).toEqual([true, false])
+    expect([...worktreeRemovalPathsForRepo('repo-1')]).toEqual([])
   })
 
   it('gives a request that joins a running delete that delete’s result', async () => {
@@ -86,12 +91,18 @@ describe('background worktree removal', () => {
       run: () => first.promise,
       publish: () => {}
     })
+    expect([...worktreeRemovalPathsForRepo('repo-1')]).toEqual(['/work/feature'])
+    const firstRevision = worktreeRemovalMembershipRevision('repo-1')
+    const unrelatedRevision = worktreeRemovalMembershipRevision('unrelated')
     const secondResult = startBackgroundWorktreeRemoval({
       removal,
       run: () => second.promise,
       publish: () => {}
     })
 
+    expect(worktreeRemovalMembershipRevision('repo-1')).toBeGreaterThan(firstRevision)
+    expect(worktreeRemovalMembershipRevision('unrelated')).toBe(unrelatedRevision)
+    expect([...worktreeRemovalPathsForRepo('repo-1')]).toEqual(['/work/feature'])
     first.resolve({})
     await expect(firstResult).resolves.toEqual({})
     expect(isPending()).toBe(true)

@@ -1,11 +1,70 @@
 import { lstat } from 'node:fs/promises'
 import { getErrorCode } from './git/worktree-operation-options'
-import { areWorktreePathsEqual } from './git/worktree-path-comparison'
+import { canonicalWorktreePath, areWorktreePathsEqual } from './git/worktree-path-comparison'
 import { writeWorktreeRemovalRecords, type WorktreeRemovalRecord } from './worktree-removal-records'
 
-export const pendingWorktreeRemovals = new Map<string, WorktreeRemovalRecord>()
+let removalEpoch = 0
+const removalRepoRevisions = new Map<string, number>()
+function removalMembershipChanged(record: WorktreeRemovalRecord): void {
+  removalEpoch++
+  removalRepoRevisions.set(record.repoId, removalEpoch)
+}
+
+// All lifecycle writers, including load/retry and same-size replacement, invalidate at mutation.
+class WorktreeRemovalTable extends Map<string, WorktreeRemovalRecord> {
+  override set(key: string, record: WorktreeRemovalRecord): this {
+    const previous = this.get(key)
+    if (previous) {
+      removalMembershipChanged(previous)
+    }
+    removalMembershipChanged(record)
+    return super.set(key, record)
+  }
+  override delete(key: string): boolean {
+    const previous = this.get(key)
+    if (previous) {
+      removalMembershipChanged(previous)
+    }
+    return super.delete(key)
+  }
+  override clear(): void {
+    for (const record of this.values()) {
+      removalMembershipChanged(record)
+    }
+    super.clear()
+  }
+}
+
+export const pendingWorktreeRemovals = new WorktreeRemovalTable()
 // Failed leftovers stay visible until gone/replaced or their repo is removed; never retry without a request.
-export const failedWorktreeRemovals = new Map<string, WorktreeRemovalRecord>()
+export const failedWorktreeRemovals = new WorktreeRemovalTable()
+let indexedRemovalEpoch = -1
+const removalPathsByRepo = new Map<string, ReadonlySet<string>>()
+const noRemovalPaths: ReadonlySet<string> = new Set()
+
+export function worktreeRemovalMembershipRevision(repoId: string): number {
+  return removalRepoRevisions.get(repoId) ?? 0
+}
+
+/** One host-local census per consumed epoch; unrelated repo mutations do not invalidate observations. */
+export function worktreeRemovalPathsForRepo(repoId: string): ReadonlySet<string> {
+  if (indexedRemovalEpoch !== removalEpoch) {
+    removalPathsByRepo.clear()
+    const paths = new Map<string, Set<string>>()
+    for (const table of [pendingWorktreeRemovals, failedWorktreeRemovals]) {
+      for (const record of table.values()) {
+        const partition = paths.get(record.repoId) ?? new Set<string>()
+        partition.add(canonicalWorktreePath(record.worktreePath))
+        paths.set(record.repoId, partition)
+      }
+    }
+    for (const [id, partition] of paths) {
+      removalPathsByRepo.set(id, partition)
+    }
+    indexedRemovalEpoch = removalEpoch
+  }
+  return removalPathsByRepo.get(repoId) ?? noRemovalPaths
+}
 // In-flight listings retain completed records only until their stale Git read is projected.
 export const finishedWorktreeRemovals = new WeakSet<WorktreeRemovalRecord>()
 let recordsDirectory: string | null = null

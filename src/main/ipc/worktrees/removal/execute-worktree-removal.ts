@@ -18,8 +18,8 @@ import {
   usesNativeWindowsRemoval
 } from '../../../git/windows-worktree-removal'
 import { isPrunableGitFileWorktree } from '../../../worktree-prunable-git-file'
-import { findRegisteredDeletableWorktree } from '../../../worktree-removal-safety'
-import { assertNestedWorktreeRemovalApproval } from '../../../nested-worktree-removal-plan'
+import { resolveRegisteredDeletableWorktree } from '../../../worktree-removal-safety'
+import { assertRegisteredWorktreeRemovalApproval } from '../../../nested-worktree-removal-plan'
 import { removeStaleLocalWorktreeRegistration } from '../../../local-worktree-removal-recovery'
 import { resolveWorktreeRemovalHomeForHost } from '../../../worktree-removal-execution-host-route'
 import { getEffectiveHooks, runHook } from '../../../hooks'
@@ -66,16 +66,15 @@ export async function executeWorktreeRemoval(
     : await listGitWorktreesStrict(repo.path)
   const removedMeta = resolveWorktreeRemovalMetadata(store, repoId, args.worktreeId, removalHostId)
   const removedPushTarget = removedMeta?.pushTarget
-  const registeredWorktree = findRegisteredDeletableWorktree(
+  const registeredWorktree = await resolveRegisteredDeletableWorktree(
     repo.path,
     worktreePath,
     registeredWorktrees,
-    resolveWorktreeRemovalHomeForHost(removalHostId)
+    resolveWorktreeRemovalHomeForHost(removalHostId),
+    localWorktreeGitOptions
   )
   if (args.expectedCheckout) {
-    assertNestedWorktreeRemovalApproval(registeredWorktree ? [registeredWorktree] : [], [
-      args.expectedCheckout
-    ])
+    assertRegisteredWorktreeRemovalApproval(registeredWorktree, worktreePath, args.expectedCheckout)
   }
   await authorizeUnregisteredWindowsRemoval(
     !!registeredWorktree,
@@ -85,13 +84,14 @@ export async function executeWorktreeRemoval(
     localWorktreeGitOptions
   )
   if (
-    await retryFailedRemovalUnlessRegistered(
+    !registeredWorktree &&
+    (await retryFailedRemovalUnlessRegistered(
       args.worktreeId,
       worktreePath,
       registeredWorktrees,
       localWorktreeGitOptions,
       () => retryFailedLocalWorktreeRemoval(context, args, removalHostId)
-    )
+    ))
   ) {
     return { removing: true }
   }

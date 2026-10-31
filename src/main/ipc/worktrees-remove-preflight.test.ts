@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import * as pathObservation from '../local-worktree-path-presence'
 import * as scopedRootsInvalidation from './registered-worktree-roots-scoped-invalidation'
 import * as authorizedRootsCache from './registered-worktree-roots-cache'
 import {
@@ -235,6 +236,40 @@ describe('registerWorktreeHandlers', () => {
     expect(assertWorktreeCleanForRemovalMock).not.toHaveBeenCalled()
     expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
     expect(removeWorktreeMock).not.toHaveBeenCalled()
+  })
+
+  it('freshly routes saved alias approval to registered preflight and rejects a retarget before teardown', async () => {
+    mockKnownFeatureWorktree()
+    getEffectiveHooksMock.mockReturnValue(null)
+    const alias = '/workspace/alias-wt'
+    const physical = '/workspace/feature-wt'
+    const resolve = vi.spyOn(pathObservation, 'resolveLocalWorktreeRealpath')
+    try {
+      resolve.mockResolvedValue(physical)
+      assertWorktreeCleanForRemovalMock.mockRejectedValue(new Error('dirty checkout'))
+      await expect(
+        handlers['worktrees:remove'](null, {
+          worktreeId: `repo-1::${alias}`,
+          expectedCheckout: { path: alias, head: 'feature', branch: 'feature' }
+        })
+      ).rejects.toThrow('dirty checkout')
+      expect(assertWorktreeCleanForRemovalMock).toHaveBeenCalledWith(physical, false)
+      expect(removeWorktreeMock).not.toHaveBeenCalled()
+      expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
+      assertWorktreeCleanForRemovalMock.mockClear()
+      resolve.mockResolvedValue(null).mockResolvedValueOnce(physical)
+      await expect(
+        handlers['worktrees:remove'](null, {
+          worktreeId: `repo-1::${alias}`,
+          expectedCheckout: { path: alias, head: 'feature', branch: 'feature' }
+        })
+      ).rejects.toThrow('registration changed during deletion')
+      expect(assertWorktreeCleanForRemovalMock).not.toHaveBeenCalled()
+      expect(removeWorktreeMock).not.toHaveBeenCalled()
+      expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
+    } finally {
+      resolve.mockRestore()
+    }
   })
 
   it('formats preflight subprocess failures and does not tear down PTYs', async () => {

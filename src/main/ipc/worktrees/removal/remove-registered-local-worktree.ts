@@ -1,4 +1,7 @@
-import { assertRegisteredLocalWorktreePreflight } from './registered-local-worktree-preflight'
+import {
+  assertRegisteredLocalWorktreePreflight,
+  refreshRegisteredLocalWorktreeForRemoval
+} from './registered-local-worktree-preflight'
 import type { Repo } from '../../../../shared/repo-types'
 import {
   nativeWindowsMarkerMissing,
@@ -10,17 +13,11 @@ import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-ty
 import type { GitPushTarget, GitWorktreeInfo } from '../../../../shared/worktree/types'
 import { assertWorktreeUnlockedForRemoval } from '../../../../shared/worktree/removal'
 import type { LocalProjectWorktreeGitOptions } from '../../../project-runtime-git-options'
-import {
-  listWorktreesStrict as listGitWorktreesStrict,
-  removeWorktree
-} from '../../../git/worktree'
+import { removeWorktree } from '../../../git/worktree'
 import { getWorktreeSharedLinkPaths } from '../../../git/worktree-shared-directories'
 import { cleanupLocalOrphanedWorktreeDirectory } from '../../../local-orphaned-worktree-cleanup'
 import { recoverPartialLocalWorktreeRemoval } from '../../../local-worktree-removal-recovery'
 import { withWorktreeRemoveStageSpan } from '../../../observability/instrumentation'
-import { assertNestedWorktreeRemovalApproval } from '../../../nested-worktree-removal-plan'
-import { findRegisteredDeletableWorktree } from '../../../worktree-removal-safety'
-import { CLIENT_REMOVAL_HOME } from '../../../worktree-removal-home-guard'
 import { cleanupUnusedWorktreePushTargetRemote } from '../../worktree-remote'
 import {
   findExistingWorktreeSymlinkPaths,
@@ -59,23 +56,13 @@ export async function removeRegisteredLocalWorktree(
   deleteBranch: boolean
 ): Promise<RemoveWorktreeResult> {
   const { runtime } = context
-  const refreshedWorktrees = hasLocalWorktreeGitOptions
-    ? await listGitWorktreesStrict(repo.path, localWorktreeGitOptions)
-    : await listGitWorktreesStrict(repo.path)
-  const refreshedRegisteredWorktree = findRegisteredDeletableWorktree(
+  const refreshedRegisteredWorktree = await refreshRegisteredLocalWorktreeForRemoval(
     repo.path,
+    args,
     canonicalWorktreePath,
-    refreshedWorktrees,
-    CLIENT_REMOVAL_HOME
+    localWorktreeGitOptions,
+    hasLocalWorktreeGitOptions
   )
-  if (!refreshedRegisteredWorktree) {
-    throw new Error(
-      `Worktree registration changed during deletion: ${canonicalWorktreePath}. Retry deletion.`
-    )
-  }
-  if (args.expectedCheckout) {
-    assertNestedWorktreeRemovalApproval([refreshedRegisteredWorktree], [args.expectedCheckout])
-  }
   try {
     // Archive hooks can race external Git locks; recheck before destructive teardown.
     assertWorktreeUnlockedForRemoval(refreshedRegisteredWorktree)

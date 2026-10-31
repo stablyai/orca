@@ -1,3 +1,5 @@
+import { resolveLocalWorktreeRealpath } from './local-worktree-path-presence'
+import type { GitWorktreeExecOptions } from './git/worktree-operation-options'
 import { lstat, stat, readFile, realpath } from 'node:fs/promises'
 import type { WorktreeMeta } from '../shared/worktree/meta-types'
 import type { GitWorktreeInfo } from '../shared/worktree/types'
@@ -107,6 +109,58 @@ export function findRegisteredDeletableWorktree(
   }
   assertWorktreeDoesNotContainRegisteredWorktree(worktree.path, worktrees)
   return worktree
+}
+
+/** Fresh owning-host identity routes saved aliases through the same registered protections. */
+export async function resolveRegisteredDeletableWorktree(
+  repoPath: string,
+  requestedWorktreePath: string,
+  worktrees: readonly GitWorktreeInfo[],
+  home: WorktreeRemovalHomeAuthority,
+  options: GitWorktreeExecOptions = {}
+): Promise<GitWorktreeInfo | null> {
+  const lexical = findRegisteredDeletableWorktree(repoPath, requestedWorktreePath, worktrees, home)
+  if (lexical) {
+    return lexical
+  }
+  const physical = await resolveLocalWorktreeRealpath(requestedWorktreePath, options)
+  if (!physical) {
+    return null
+  }
+  const direct = worktrees.find((item) => areWorktreePathsEqual(item.path, physical))
+  if (direct) {
+    return findRegisteredDeletableWorktree(repoPath, direct.path, worktrees, home)
+  }
+  for (const item of worktrees) {
+    const registeredPhysical = await resolveLocalWorktreeRealpath(item.path, options)
+    if (registeredPhysical && areWorktreePathsEqual(registeredPhysical, physical)) {
+      return findRegisteredDeletableWorktree(repoPath, item.path, worktrees, home)
+    }
+  }
+  return null
+}
+
+export async function revalidateRegisteredDeletableWorktree(
+  repoPath: string,
+  requestedPath: string,
+  worktrees: readonly GitWorktreeInfo[],
+  home: WorktreeRemovalHomeAuthority,
+  expectedPath: string,
+  options: GitWorktreeExecOptions
+): Promise<GitWorktreeInfo> {
+  const refreshed = await resolveRegisteredDeletableWorktree(
+    repoPath,
+    requestedPath,
+    worktrees,
+    home,
+    options
+  )
+  if (!refreshed || !areWorktreePathsEqual(refreshed.path, expectedPath)) {
+    throw new Error(
+      `Worktree registration changed during deletion: ${expectedPath}. Retry deletion.`
+    )
+  }
+  return refreshed
 }
 
 export function assertWorktreeDoesNotContainRegisteredWorktree(
