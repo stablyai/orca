@@ -32,6 +32,7 @@ vi.mock('../components/BottomDrawer', () => ({
   BottomDrawer: ({ children }: { children: unknown }) => children
 }))
 vi.mock('../components/SmartSourceModeIcon', () => ({ SmartSourceModeIcon: () => null }))
+vi.mock('../components/nav-bar/SheetHeader', () => ({ SheetHeader: () => null }))
 vi.mock('../components/SmartWorkspaceSourceRow', () => ({ SmartWorkspaceSourceRow: () => null }))
 
 // Server-side SDK → handler → error-envelope cases run in the desktop Linear auth suite.
@@ -188,7 +189,7 @@ vi.mock('./mobile-tasks-project-detail-drawer', () => ({
   renderMobileTasksProjectDetailDrawer: () => null
 }))
 vi.mock('./mobile-tasks-item-detail-drawer', () => ({
-  renderMobileTasksItemDetailDrawer: () => null
+  MobileTasksItemDetailDrawer: () => null
 }))
 function Tasks() {
   const [error, setError] = useState('')

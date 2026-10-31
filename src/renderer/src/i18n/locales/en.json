@@ -210,6 +210,11 @@
     },
     "cardProperties": {
       "agentModel": "Agent model"
+    },
+    "wslHostOffer": {
+      "title": "Run {{distro}} as a host (recommended)",
+      "why": "Git, files and terminals then run natively in Linux instead of across the Windows file share.",
+      "accept": "Run as host"
     }
   },
   "app": {
@@ -2844,6 +2849,7 @@
         "8c967b4d15": "Later"
       },
       "TaskPage": {
+        "gitlabLoadFailed": "Could not load GitLab work items. Refresh to try again.",
         "ff69a30681": "Cancel",
         "8ff6fdc368": "Creating…",
         "919a20dd5b": "Enter {{value0}}",
@@ -3731,6 +3737,17 @@
             "vmProvisioningTitle": "Provisioning VM",
             "cancelProvisioning": "Cancel",
             "vmProvisioningLogEmpty": "Waiting for recipe output…"
+          },
+          "PendingNativeChatCreation": {
+            "sendBlockedFailed": "Retry creating the worktree to send",
+            "sendBlockedHeld": "Sends when the worktree is ready"
+          },
+          "WorktreeSetupSteps": {
+            "prepare": "Prepare workspace",
+            "fetch": "Fetch base branch",
+            "create": "Create worktree",
+            "setup": "Set up workspace",
+            "startAgent": "Start {{agent}}"
           }
         }
       },
@@ -7202,14 +7219,15 @@
           "distro": "Distro",
           "loading": "Looking for WSL distros…",
           "placeholder": "Choose a distro",
-          "none": "No WSL distros found. Install one with: wsl --install",
           "stoppedHint": "{{value0}} is stopped. Adding it starts it.",
           "addingHint": "Installing and starting the Orca server in the distro. The first time can take a minute.",
           "adding": "Setting up…",
           "startAndAdd": "Start and add",
           "add": "Add host",
           "refresh": "Refresh",
-          "wsl1Hint": "WSL 1 distros can’t be hosts. Convert one in a Windows terminal with: wsl --set-version {{value0}} 2"
+          "wsl1Reason": "WSL 1 can’t run an Orca host; convert with {{command}}",
+          "noWsl2Title": "No WSL 2 distros found",
+          "noWsl2Install": "Install one from a Windows terminal with {{command}}, then choose Refresh."
         },
         "wslHostRowStatus": {
           "connecting": "Starting",
@@ -19373,7 +19391,10 @@
         "orcaStopCrash": "Orca on {{machine}} stopped unexpectedly while this response was in progress.",
         "orcaStopRemote": "Orca on {{machine}} stopped while this response was in progress.",
         "orcaStopCanContinue": "You can continue in this conversation.",
-        "orcaStopUnnamedServer": "the remote server"
+        "orcaStopUnnamedServer": "the remote server",
+        "permissionDenied": "{{agent}} denied permission. View details.",
+        "safetyReview": "{{agent}} reported a safety review warning. View details.",
+        "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes)."
       },
       "composer": {
         "send": "Send",

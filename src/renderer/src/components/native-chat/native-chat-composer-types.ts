@@ -127,6 +127,10 @@ export type NativeChatComposerProps = {
   launchSeed?: NativeChatLaunchSeed
   /** Structured journal transport; absent keeps the existing PTY path unchanged. */
   structuredTransport?: NativeChatStructuredComposerTransport
+  /** The chat's worktree is still being created, so there is no session or file tree yet:
+   *  text and dictation only, with no command/skill/@-file pickers, `/resume`, attachments or
+   *  file-backed pastes. The pending transport reports no session options or context usage. */
+  workspacePending?: true
   /** Empty-composer Cmd/Ctrl+Enter steers the newest queued draft; false falls through to ordinary send. */
   steerQueued?: () => boolean
   /** The chat's own notices, shown in the composer's notice card above its input. */

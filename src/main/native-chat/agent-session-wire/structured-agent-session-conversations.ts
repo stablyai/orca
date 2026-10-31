@@ -30,9 +30,6 @@ export class StructuredAgentSessionConversations extends Map<
   private ended = false
   private readonly activity = new Map<string, number>()
 
-  loadedSessionIds = (): string[] =>
-    [...this].flatMap(([sessionId, { child }]) => (child ? [sessionId] : []))
-
   constructor(
     private readonly delivery: {
       observe?: (
@@ -52,6 +49,9 @@ export class StructuredAgentSessionConversations extends Map<
   ) {
     super()
   }
+
+  loadedSessionIds = (): string[] =>
+    [...this].flatMap(([sessionId, { child }]) => (child ? [sessionId] : []))
 
   override set(sessionId: string, session: StructuredAgentSessionHostSession): this {
     const { journal } = session

@@ -9,9 +9,9 @@ vi.mock('@react-native-async-storage/async-storage', () => ({ default: {} }))
 vi.mock('react-native', () => ({
   StyleSheet: { create: (value: unknown) => value },
   View: 'View',
-  Text: 'Text',
-  Switch: 'Switch'
+  Text: 'Text'
 }))
+vi.mock('../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
 
 it('shows only phone-specific controls while desktop owns category eligibility', () => {
   const onChange = vi.fn()

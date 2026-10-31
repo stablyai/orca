@@ -179,6 +179,9 @@ export const terminalDockStyles = themedStyleSheet(() => ({
     letterSpacing: 0.4,
     textTransform: 'uppercase'
   },
+  sheetKey: {
+    backgroundColor: colors.sheetGroup
+  },
   sheetGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',

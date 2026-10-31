@@ -15,7 +15,7 @@ export const mobileDiffReviewLayoutStyles = themedStyleSheet(() => ({
     justifyContent: 'center'
   },
   iconButtonPressed: {
-    backgroundColor: colors.bgRaised
+    backgroundColor: colors.borderSubtle
   },
   filterRow: {
     flexGrow: 1,

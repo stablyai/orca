@@ -6509,13 +6509,15 @@
           "distro": "发行版",
           "loading": "正在查找 WSL 发行版…",
           "placeholder": "选择发行版",
-          "none": "未找到 WSL 发行版。使用以下命令安装：wsl --install",
           "stoppedHint": "{{value0}} 已停止。添加后会自动启动。",
           "addingHint": "正在发行版中安装并启动 Orca 服务器。首次可能需要一分钟。",
           "adding": "正在设置…",
           "startAndAdd": "启动并添加",
           "add": "添加主机",
-          "refresh": "刷新"
+          "refresh": "刷新",
+          "wsl1Reason": "WSL 1 无法运行 Orca 主机；请使用 {{command}} 转换",
+          "noWsl2Title": "未找到 WSL 2 发行版",
+          "noWsl2Install": "在 Windows 终端中使用 {{command}} 安装一个，然后选择“刷新”。"
         },
         "wslHostRowStatus": {
           "connecting": "正在启动",
@@ -18809,7 +18811,10 @@
         "orcaStopCrash": "此回复进行期间，{{machine}} 上的 Orca 意外停止。",
         "orcaStopRemote": "此回复进行期间，{{machine}} 上的 Orca 已停止。",
         "orcaStopCanContinue": "你可以在此对话中继续。",
-        "orcaStopUnnamedServer": "远程服务器"
+        "orcaStopUnnamedServer": "远程服务器",
+        "permissionDenied": "{{agent}} 拒绝了权限。查看详情。",
+        "safetyReview": "{{agent}} 报告了安全审查警告。查看详情。",
+        "truncatedResponse": "提供方响应已截断（原始大小：{{bytes}} 字节）。"
       },
       "providerFrame": {
         "byteCount_other": "{{count}} 字节"
@@ -20205,6 +20210,11 @@
     },
     "cardProperties": {
       "agentModel": "智能体模型"
+    },
+    "wslHostOffer": {
+      "title": "将 {{distro}} 作为主机运行（推荐）",
+      "why": "Git、文件和终端将在 Linux 中原生运行，而不是通过 Windows 文件共享。",
+      "accept": "作为主机运行"
     }
   },
   "editor": {
