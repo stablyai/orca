@@ -140,6 +140,7 @@ export abstract class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInve
           ? (persistedWorktree?.id ?? null)
           : (session.worktreeId ??
             persistedWorktree?.id ??
+            persistedWorktreeId ??
             (recordedFloating ? FLOATING_TERMINAL_WORKTREE_ID : undefined) ??
             inferredWorktreeId ??
             findResolvedWorktreeIdForPath(resolvedWorktrees, session.cwd, targetWorktreeId))
