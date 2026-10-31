@@ -284,7 +284,7 @@ async function launchFixChecksAgent(args: StartFixChecksAgentArgs): Promise<bool
     return false
   }
 
-  return await launchWorkItemDirect({
+  const result = await launchWorkItemDirect({
     item: { ...args.item, pasteContent: prompt },
     repoId: args.repoId,
     agentLaunchPreferences,
@@ -308,4 +308,5 @@ async function launchFixChecksAgent(args: StartFixChecksAgentArgs): Promise<bool
       : {}),
     openModalFallback: args.openModalFallback
   })
+  return result === true
 }

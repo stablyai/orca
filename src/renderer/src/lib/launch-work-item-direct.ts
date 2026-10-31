@@ -1,4 +1,7 @@
-import { planAgentCliArgsSuffix } from '@/lib/tui-agent-startup'
+import {
+  prepareDirectWorkItemSetup,
+  type DirectWorkItemLaunchResult
+} from './direct-work-item-setup'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -9,21 +12,19 @@ import {
   unavailableAgentErrorMessage,
   workspaceActivationErrorMessage
 } from '@/lib/launch-work-item-direct-messages'
-import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import type { TuiAgent } from '../../../shared/tui-agent'
-import type { SetupDecision } from '../../../shared/worktree/create-types'
 import type { GitPushTarget } from '../../../shared/worktree/types'
-import { resolveGitHubWorkItemIdentity } from '@/lib/github-work-item-identity'
 import type { buildDirectWorkItemAgentStartupPlan } from '@/lib/launch-work-item-direct-agent'
 import { buildDirectWorkItemStartupOpts } from '@/lib/launch-work-item-direct-agent'
 import {
+  getDirectWorkItemIdentity,
   getDirectWorkItemDraftContent,
   getDirectWorkItemWorkspaceNames
 } from '@/lib/launch-work-item-direct-draft'
 import {
+  directWorkItemAgentArgsError,
   resolveDirectPrStartPoint,
   resolveDirectLaunchOwnerRow,
-  resolveDirectSetupDecision,
   planDirectWorkItemLaunch,
   resolveDirectProspectiveAgent
 } from '@/lib/launch-work-item-direct-preflight'
@@ -46,7 +47,9 @@ import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { loadProjectLaunchContext } from '@/lib/agent-detection-target-inventory'
 
 /** Create/activate a workspace and deliver work-item context to its agent. Setup decisions, unresolved repos or unavailable agents fall back to the modal; paste failures retain the usable workspace and surface a notice. */
-export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Promise<boolean> {
+export async function launchWorkItemDirect(
+  args: LaunchWorkItemDirectArgs
+): Promise<DirectWorkItemLaunchResult> {
   const {
     item,
     repoId,
@@ -67,16 +70,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
 
   const promptDelivery = args.promptDelivery ?? 'draft'
   const repoConnectionId = repo.connectionId?.trim() || null
-  const githubIdentity =
-    item.number !== null && (item.type === 'issue' || item.type === 'pr')
-      ? resolveGitHubWorkItemIdentity({
-          type: item.type,
-          number: item.number,
-          url: item.url
-        })
-      : null
-  const itemType = githubIdentity?.type ?? item.type
-  const itemNumber = githubIdentity?.number ?? item.number
+  const { itemType, itemNumber } = getDirectWorkItemIdentity(item)
   const repoProjectRuntime = repoConnectionId
     ? undefined
     : getLocalRepoProjectExecutionRuntimeContext(store, repoId, CLIENT_PLATFORM)
@@ -95,20 +89,10 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     () => null
   )
 
-  const setupResolution = await resolveDirectSetupDecision(repoId, repo, repoOwnerHostId)
-  if (setupResolution.kind === 'needs-modal') {
-    openModalFallback()
-    return false
+  const finalSetupDecision = await prepareDirectWorkItemSetup(repo, repoOwnerHostId, args.signal)
+  if (finalSetupDecision === 'cancelled') {
+    return 'cancelled'
   }
-
-  const trustDecision = await ensureHooksConfirmed(
-    useAppStore.getState(),
-    repoId,
-    'setup',
-    repoOwnerHostId
-  )
-  const finalSetupDecision: SetupDecision =
-    trustDecision === 'skip' ? 'skip' : setupResolution.decision
 
   const { workspaceIntentName, workspaceName } = getDirectWorkItemWorkspaceNames(
     item,
@@ -164,14 +148,14 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     sessionOptions: args.sessionOptions,
     launchChoice: args.launchChoice
   })
-  if (!projectContext || preflightPlan?.route !== 'structured-native-chat') {
-    const agentArgsPlan = planAgentCliArgsSuffix(args.agentArgs, shell)
-    if (!agentArgsPlan.ok) {
-      // Why: direct launches may create a worktree before the agent startup plan
-      // is built; reject malformed saved args before touching user workspaces.
-      toast.error(agentArgsPlan.error)
-      return false
-    }
+  const agentArgsError = directWorkItemAgentArgsError(
+    args.agentArgs,
+    shell,
+    Boolean(projectContext && preflightPlan?.route === 'structured-native-chat')
+  )
+  if (agentArgsError) {
+    toast.error(agentArgsError)
+    return false
   }
 
   let worktreeId: string,
@@ -184,6 +168,9 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   let structuredLaunchCompleted = false
   let startupPlanFailed = false
   try {
+    if (args.signal?.aborted) {
+      return 'cancelled'
+    }
     const result = await store.createWorktree(
       repoId,
       workspaceName,
@@ -212,6 +199,9 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       resolvedCompareBaseRef,
       { executionHostId: repoOwnerHostId }
     )
+    if (args.signal?.aborted) {
+      return 'cancelled'
+    }
     worktreeId = result.worktree.id
     worktreePath = result.worktree.path
 
@@ -239,6 +229,9 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       requestId,
       preflightPlan
     })
+    if (args.signal?.aborted) {
+      return 'cancelled'
+    }
     if (launchPreparation.unavailable) {
       activateAndRevealWorktree(worktreeId, {
         sidebarRevealBehavior: 'auto',
@@ -293,6 +286,9 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       ? structuredResult.primaryTabId
       : activation.primaryTabId
   } catch (error) {
+    if (args.signal?.aborted) {
+      return 'cancelled'
+    }
     const message = error instanceof Error ? error.message : 'Failed to create workspace.'
     toast.error(message)
     return false

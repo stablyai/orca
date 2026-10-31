@@ -1,6 +1,6 @@
 import React from 'react'
+import { WorkspaceSetupChoice } from './WorkspaceSetupChoice'
 import { toast } from 'sonner'
-import { Button } from '@/components/ui/button'
 import { SettingsSwitch } from '@/components/settings/SettingsFormControls'
 import SparseCheckoutPresetSelect from '@/components/sparse/SparseCheckoutPresetSelect'
 import { cn } from '@/lib/utils'
@@ -14,7 +14,7 @@ import { translate } from '@/i18n/i18n'
 import { ComposerParentWorktreePicker } from './ComposerParentWorktreePicker'
 import type { NewWorkspaceComposerCardProps } from './new-workspace-composer-card-props'
 
-function SetupCommandPreview({
+export function SetupCommandPreview({
   setupConfig
 }: {
   setupConfig: NonNullable<NewWorkspaceComposerCardProps['setupConfig']>
@@ -316,24 +316,12 @@ export function NewWorkspaceComposerAdvancedSection({
                   <div className="text-[11px] font-medium text-muted-foreground">
                     {setupAskLabel}
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      type="button"
-                      onClick={() => onSetupDecisionChange('run')}
-                      variant={setupDecision === 'run' ? 'default' : 'outline'}
-                      size="sm"
-                    >
-                      {setupRunButtonLabel}
-                    </Button>
-                    <Button
-                      type="button"
-                      onClick={() => onSetupDecisionChange('skip')}
-                      variant={setupDecision === 'skip' ? 'secondary' : 'outline'}
-                      size="sm"
-                    >
-                      {setupSkipButtonLabel}
-                    </Button>
-                  </div>
+                  <WorkspaceSetupChoice
+                    decision={setupDecision}
+                    onChange={onSetupDecisionChange}
+                    runLabel={setupRunButtonLabel}
+                    skipLabel={setupSkipButtonLabel}
+                  />
                   {!setupDecision ? (
                     <div className="text-xs text-muted-foreground">
                       {shouldWaitForSetupCheck

@@ -1,3 +1,5 @@
+import { planAgentCliArgsSuffix } from './tui-agent-startup'
+import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
 import { readAgentLaunchPreferencesForWorkspace } from '@/components/settings/use-host-agent-launch-preferences'
 import { useAppStore, type AppState } from '@/store'
 import { ensureDetectedAgentsForRepo } from './agent-detection-target-inventory'
@@ -45,18 +47,26 @@ export async function resolveDirectPrStartPoint(
   })
 }
 
+export type DirectSetupInspection =
+  | { kind: 'decided'; decision: SetupDecision }
+  | { kind: 'needs-modal'; setupConfig: NonNullable<ReturnType<typeof getSetupConfig>> }
+  | { kind: 'unavailable' }
+
 export async function resolveDirectSetupDecision(
   repoId: string,
   repo: { hookSettings?: RepoHookSettings },
   ownerHostId: ExecutionHostId
-): Promise<{ kind: 'decided'; decision: SetupDecision } | { kind: 'needs-modal' }> {
+): Promise<DirectSetupInspection> {
   let yamlHooks: OrcaHooks | null = null
   try {
     // Why: the same owner host as the PR start point and createWorktree, never focus.
     const result = await checkRuntimeHooks(ownerHostId, repoId)
+    if (result.status === 'error' || result.unavailable || (result.hasHooks && !result.hooks)) {
+      return { kind: 'unavailable' }
+    }
     yamlHooks = (result.hooks as OrcaHooks | null) ?? null
   } catch {
-    yamlHooks = null
+    return { kind: 'unavailable' }
   }
   const setupConfig = getSetupConfig(repo, yamlHooks)
   if (!setupConfig) {
@@ -67,7 +77,7 @@ export async function resolveDirectSetupDecision(
     true,
     repo.hookSettings?.setupRunPolicy ?? 'run-by-default'
   )
-  return decision ? { kind: 'decided', decision } : { kind: 'needs-modal' }
+  return decision ? { kind: 'decided', decision } : { kind: 'needs-modal', setupConfig }
 }
 
 export type DirectLaunchOwnerRow = {
@@ -174,4 +184,17 @@ export async function resolveDirectProspectiveAgent(
     !isTuiAgentEnabled(agentOverride, agentLaunchPreferences.disabledTuiAgents)
   )
   return { prospectiveAgent, unavailable }
+}
+
+export function directWorkItemAgentArgsError(
+  agentArgs: string | null | undefined,
+  shell: AgentStartupShell,
+  nativeChat: boolean
+): string | null {
+  if (nativeChat) {
+    return null
+  }
+  // Reject malformed saved arguments before creating a workspace.
+  const plan = planAgentCliArgsSuffix(agentArgs, shell)
+  return plan.ok ? null : plan.error
 }

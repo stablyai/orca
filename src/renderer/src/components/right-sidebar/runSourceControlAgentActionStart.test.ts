@@ -735,3 +735,19 @@ it('saves a foreign resolved literal as current raw and starts from the canonica
     expect.objectContaining({ agent: 'claude', agentArgs: '-c model=o3' })
   )
 })
+
+it('passes attempt cancellation to onStart and leaves cancellation quiet', async () => {
+  const attempt = new AbortController()
+  const onStart = vi.fn().mockResolvedValue('cancelled')
+  const onLaunched = vi.fn()
+  const onClose = vi.fn()
+  await expect(
+    runSourceControlAgentActionStart(
+      buildArgs({ onStart, onLaunched, onClose, signal: attempt.signal })
+    )
+  ).resolves.toBe(false)
+  expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ signal: attempt.signal }))
+  expect(mocks.toastError).not.toHaveBeenCalled()
+  expect(onLaunched).not.toHaveBeenCalled()
+  expect(onClose).not.toHaveBeenCalled()
+})
