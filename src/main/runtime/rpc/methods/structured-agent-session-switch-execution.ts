@@ -176,13 +176,11 @@ async function switchToChat(
         source: adopt.source
       }
     : retainedSource
-  // A terminal this switch stops with proof: a turn its transcript still shows open is the one
-  // that stop ends, whatever the status store last heard (a CLI paused with Ctrl+Z reports none).
   const stopped = before
     ? await host.captureSwitchStop(
         adopt ? undefined : sessionId,
         before,
-        row && mainAgentState(row) === 'working' ? true : close !== undefined && 'stopping',
+        Boolean(row && mainAgentState(row) === 'working'),
         deadline
       )
     : undefined

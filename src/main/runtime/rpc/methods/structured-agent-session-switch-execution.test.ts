@@ -559,7 +559,6 @@ it('settles a kept source once at the deadline while work after the stop is stil
   const readable = await savedTranscript(rig)
   const prepare = vi.mocked(cliTranscript.prepareStructuredChatCliTranscript)
   const work = holdUntilReleased()
-  const stopped = holdUntilReleased()
   prepare.mockReset()
   prepare.mockResolvedValueOnce(readable).mockImplementation(async () => {
     await work.held
@@ -567,11 +566,7 @@ it('settles a kept source once at the deadline while work after the stop is stil
   })
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
   try {
-    const { result, settled, stoppedSource } = startSwitchFromKeptTerminal({
-      afterStop: async () => stopped.release()
-    })
-    // The transcript is read before the stop (real I/O the fake clock doesn't wait for).
-    await stopped.held
+    const { result, settled, stoppedSource } = startSwitchFromKeptTerminal()
     await vi.advanceTimersByTimeAsync(0)
     expect(settled).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(AGENT_SESSION_SWITCH_HOST_MS)
@@ -589,17 +584,11 @@ it('settles a kept source once at the deadline while work after the stop is stil
 it('settles a kept source at once when its stop is proven only after the deadline', async () => {
   await savedTranscript(rig)
   const stop = holdUntilReleased()
-  const stopping = holdUntilReleased()
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
   try {
     const { result, settled, stoppedSource } = startSwitchFromKeptTerminal({
-      beforeStop: () => {
-        stopping.release()
-        return stop.held
-      }
+      beforeStop: () => stop.held
     })
-    // The transcript is read before the stop (real I/O the fake clock doesn't wait for).
-    await stopping.held
     await vi.advanceTimersByTimeAsync(AGENT_SESSION_SWITCH_HOST_MS)
     expect(await result).toMatchObject({ refusal: { details: { reason: 'operationExpired' } } })
     expect(settled).not.toHaveBeenCalled()

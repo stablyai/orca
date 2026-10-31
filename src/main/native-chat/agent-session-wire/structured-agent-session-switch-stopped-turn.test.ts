@@ -88,29 +88,3 @@ it('settles an imported turn a switch stopped as a Stop, with no invented elapse
     await rm(root, { recursive: true, force: true })
   }
 })
-
-// A Claude paused mid-reply (Ctrl+Z) sends no Stop: the switch knows only its own proven stop, so
-// the transcript must still show the turn open, and a finished one is never relabelled.
-it('takes a stopped Claude turn from the transcript alone, and only while it is open', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'orca-switch-stopped-turn-'))
-  const deadline = agentSessionSwitchDeadline()
-  try {
-    const recording = await readFile(
-      join(import.meta.dirname, '__fixtures__/claude-cli-switch-2.1.302.jsonl'),
-      'utf8'
-    )
-    const rows = recording.trimEnd().split('\n')
-    const sessionId: string = JSON.parse(rows[0]!).sessionId
-    const source = { agent: 'claude' as const, sessionId, filePath: join(root, 'cli.jsonl') }
-    await writeFile(source.filePath, `${rows.slice(0, 2).join('\n')}\n`)
-    expect(await captureSwitchStoppedCliTurn(source, 'stopping', deadline)).toMatchObject({
-      userItemKey: SWITCH_STOPPED_CLI_USER_ITEM_KEY,
-      turnId: SWITCH_STOPPED_CLI_TURN_ID
-    })
-    await writeFile(source.filePath, `${rows.join('\n')}\n`)
-    expect(await captureSwitchStoppedCliTurn(source, 'stopping', deadline)).toBeUndefined()
-  } finally {
-    deadline.dispose()
-    await rm(root, { recursive: true, force: true })
-  }
-})

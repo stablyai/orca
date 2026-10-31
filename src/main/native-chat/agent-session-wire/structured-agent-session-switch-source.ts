@@ -224,7 +224,7 @@ export function structuredAgentSessionSwitchSource(context: SwitchSourceContext)
     captureSwitchStop: async (
       retainedId: string | undefined,
       source: SwitchTranscriptSource,
-      working: boolean | 'stopping',
+      working: boolean,
       deadline: AgentSessionSwitchDeadline
     ) =>
       captureSwitchStoppedCliTurn(

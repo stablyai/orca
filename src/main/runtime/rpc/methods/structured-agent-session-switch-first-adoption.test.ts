@@ -114,11 +114,7 @@ function worktreeTarget(): WorktreeTarget {
   }
 }
 
-/** A Codex CLI on PTY_A mid-reply (its rollout opened turn `cli-turn`), which a switch stops. */
-async function codexMidReply(opts: {
-  rowState: 'working' | 'done' | null
-  duringStop?: (transcriptPath: string) => Promise<void>
-}) {
+it('keeps a proven stop when the rollout moved during the stop, so a retry reads Interrupted', async () => {
   const codexHome = join(rig.root, 'codex-account')
   const transcriptPath = join(codexHome, 'sessions', '2026', '10', '31', `rollout-${THREAD}.jsonl`)
   await mkdir(dirname(transcriptPath), { recursive: true })
@@ -153,53 +149,41 @@ async function codexMidReply(opts: {
   if (!pane.presentation) {
     throw new Error('missing captured source')
   }
-  const row: AgentStatusIpcPayload | null = opts.rowState && {
+  const row: AgentStatusIpcPayload = {
     paneKey: PANE,
     worktreeId: WORKTREE_ID,
     agentType: 'codex',
     connectionId: null,
     receivedAt: 1,
     stateStartedAt: 1,
-    state: opts.rowState,
+    state: 'working',
     prompt: 'A terminal prompt',
     providerSession: { key: 'session_id', id: THREAD, transcriptPath }
   }
-  vi.spyOn(runtime, 'getAgentProviderSessionRows').mockReturnValue(row ? [row] : [])
+  vi.spyOn(runtime, 'getAgentProviderSessionRows').mockReturnValue([row])
   vi.spyOn(runtime.agentTransitions, 'latestRow').mockReturnValue(row)
   vi.spyOn(runtime, 'getStructuredAgentSessionCreateSupport').mockResolvedValue({ supported: true })
   vi.spyOn(runtime, 'assertStructuredAdoptionTerminalWritersExited').mockResolvedValue()
   vi.spyOn(runtime, 'resolveRuntimeFileTarget').mockResolvedValue(worktreeTarget())
+  const moved = `${transcriptPath}.moved`
   runtime.setPtyController({
     write: () => true,
     kill: () => false,
+    // The rollout moves while Codex is stopped, before it can record why the turn ended.
     stopAndWait: async () => {
-      await opts.duringStop?.(transcriptPath)
+      await rename(transcriptPath, moved)
       await runtime.onPtyExit(PTY_A, 0, incarnationId, { hostExitConfirmed: true })
       return true
     },
     getForegroundProcess: async () => 'codex'
   })
-  const source = {
-    terminal: pane.handle,
-    expectedIncarnationId: incarnationId,
-    originalPresentation: pane.presentation
-  }
-  return { runtime, source, transcriptPath }
-}
 
-async function savedTurns(sessionId: string) {
-  const { journal } = await rig.host.collaboratorsForTests().lifetime.conversation(sessionId)
-  return journal.snapshot().items.flatMap(({ body }) => (body.kind === 'turn' ? [body] : []))
-}
-
-it('keeps a proven stop when the rollout moved during the stop, so a retry reads Interrupted', async () => {
-  // The rollout moves while Codex is stopped, before it can record why the turn ended.
-  const { runtime, source, transcriptPath } = await codexMidReply({
-    rowState: 'working',
-    duringStop: (path) => rename(path, `${path}.moved`)
-  })
   const failed = await executeStructuredSessionSwitch(
-    switchParams(SESSION, source),
+    switchParams(SESSION, {
+      terminal: pane.handle,
+      expectedIncarnationId: incarnationId,
+      originalPresentation: pane.presentation
+    }),
     { runtime },
     'chat'
   )
@@ -210,7 +194,7 @@ it('keeps a proven stop when the rollout moved during the stop, so a retry reads
   // The chat exists at rest, holding the stop, so the retry (a new create) switches to it.
   expect(rig.store.getRecord(SESSION)).toBeTruthy()
 
-  await rename(`${transcriptPath}.moved`, transcriptPath)
+  await rename(moved, transcriptPath)
   vi.mocked(runtime.agentTransitions.latestRow).mockReturnValue(null)
   const retried = await executeStructuredSessionSwitch(
     switchParams(`${SESSION}-retry`),
@@ -218,28 +202,12 @@ it('keeps a proven stop when the rollout moved during the stop, so a retry reads
     'chat'
   )
   expect(retried).toMatchObject({ status: 'completed', sessionId: SESSION })
-  expect(await savedTurns(SESSION)).toEqual([
+  const { journal } = await rig.host.collaboratorsForTests().lifetime.conversation(SESSION)
+  const turns = journal.snapshot().items.flatMap(({ body }) => (body.kind === 'turn' ? [body] : []))
+  expect(turns).toEqual([
     expect.objectContaining({ turnId: 'cli-turn', state: 'interrupted', outcome: 'cancellation' })
   ])
 })
-
-// A CLI paused mid-reply (Ctrl+Z) reports no Stop and its status may no longer read working; the
-// switch's own proven stop still ends the turn its transcript left open, so it reads Interrupted.
-it.each([{ rowState: 'done' as const }, { rowState: null }])(
-  'a mid-reply CLI the status store no longer calls working reads Interrupted (row $rowState)',
-  async ({ rowState }) => {
-    const { runtime, source } = await codexMidReply({ rowState })
-    const result = await executeStructuredSessionSwitch(
-      switchParams(SESSION, source),
-      { runtime },
-      'chat'
-    )
-    expect(result).toMatchObject({ status: 'completed', sessionId: SESSION })
-    expect(await savedTurns(SESSION)).toEqual([
-      expect.objectContaining({ turnId: 'cli-turn', state: 'interrupted', outcome: 'cancellation' })
-    ])
-  }
-)
 
 it('refuses a WSL pane before anything is stopped', async () => {
   const codexHome = join(rig.root, 'codex-account')
