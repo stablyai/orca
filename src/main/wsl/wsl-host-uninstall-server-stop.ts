@@ -54,7 +54,7 @@ export async function stopWslHostServerFromGuest(
   const cli = async (args: string): Promise<unknown> =>
     parseCliJson(await execCommand(transport, `${GUEST_CLI} ${args} --json`, { signal }))
   const listTerminals = async () =>
-    TerminalListSchema.parse(await cli('terminal list')).result.terminals
+    TerminalListSchema.parse(await cli('terminal list --limit 1000')).result.terminals
   try {
     return await stopWslHostServer({
       // Peers can't be asked without a paired connection; uninstall ends this host for everyone.

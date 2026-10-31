@@ -150,6 +150,12 @@ describe('stopWslHostServerFromGuest', () => {
     expect(
       execCommand.mock.calls.every(([, c]) => c.startsWith('"$HOME/.orca/cli/bin/orca" '))
     ).toBe(true)
+    // Remove host lists up to 1000; the CLI's default of 200 would leave terminals open.
+    const lists = execCommand.mock.calls
+      .map(([, c]) => c)
+      .filter((c) => c.includes('terminal list'))
+    expect(lists.length).toBeGreaterThan(0)
+    expect(lists.every((c) => c.includes('terminal list --limit 1000 --json'))).toBe(true)
     expect(dispose).toHaveBeenCalled()
   })
 
