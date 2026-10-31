@@ -4,7 +4,11 @@ import type { editor, IRange } from 'monaco-editor'
 import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
 import { useAppStore } from '@/store'
 import '@/lib/monaco-setup'
-import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
+import {
+  computeEditorFontSize,
+  computeEditorLineHeight,
+  resolveEditorFontFamily
+} from '@/lib/editor-font-zoom'
 
 import { useContextualCopySetup } from './useContextualCopySetup'
 import { MonacoGutterContextMenu } from './MonacoGutterContextMenu'
@@ -109,6 +113,7 @@ export default function MonacoEditor({
     settings?.terminalFontSize ?? 13,
     editorFontZoomLevel
   )
+  const editorLineHeight = computeEditorLineHeight(editorFontSize, settings?.terminalLineHeight)
   const editorFontFamily = resolveEditorFontFamily(settings)
   const editorWordWrap = settings?.editorWordWrap
   const modelOwnerKey = useAppStore((state) => {
@@ -126,12 +131,12 @@ export default function MonacoEditor({
     if (!autoHeight) {
       return null
     }
-    return getMonacoAutoHeightForContent(content, Math.ceil(editorFontSize * 1.45))
-  }, [autoHeight, content, editorFontSize])
+    return getMonacoAutoHeightForContent(content, Math.ceil(editorLineHeight))
+  }, [autoHeight, content, editorLineHeight])
   const renderedEditorHeight = autoHeight
     ? (autoHeightContentHeight ?? estimatedAutoHeight ?? 80)
     : null
-  const autoHeightLineHeight = Math.ceil(editorFontSize * 1.45)
+  const autoHeightLineHeight = Math.ceil(editorLineHeight)
   const autoHeightUsesInternalScroll =
     autoHeight && isMonacoAutoHeightCapped(renderedEditorHeight, autoHeightLineHeight)
   // The React wrapper skips first post-remount value sync; reconcile retained models from live contentRef, never the possibly stale lastSyncedContentRef.
@@ -188,10 +193,11 @@ export default function MonacoEditor({
     editorRef.current.updateOptions({
       fontSize: editorFontSize,
       fontFamily: editorFontFamily,
+      lineHeight: editorLineHeight,
       ...buildFileEditorWordWrapOptions(editorWordWrap),
       readOnly
     })
-  }, [editorFontFamily, editorFontSize, editorWordWrap, readOnly])
+  }, [editorFontFamily, editorFontSize, editorLineHeight, editorWordWrap, readOnly])
 
   const decorations = useMonacoEditorDecorations({
     editorRef,
@@ -303,6 +309,7 @@ export default function MonacoEditor({
           ...buildFileEditorWordWrapOptions(editorWordWrap),
           fontSize: editorFontSize,
           fontFamily: editorFontFamily,
+          lineHeight: editorLineHeight,
           lineNumbers: 'on',
           renderLineHighlight: 'line',
           automaticLayout: true,
