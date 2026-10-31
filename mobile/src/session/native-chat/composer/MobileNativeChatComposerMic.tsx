@@ -5,7 +5,10 @@ import { colors } from '../../../theme/mobile-theme'
 import { MobileDictationGrapes, MobileDictationTimer } from '../../MobileDictationMeter'
 import { MobileDictationMeterContext } from '../../mobile-dictation-meter-context'
 import { keepHeldPressThroughLongPress } from '../../held-press-long-press'
-import { composerInputStyles as inputStyles } from '../../../components/composer-input/composer-input-styles'
+import {
+  COMPOSER_CONTROL_HIT_SLOP,
+  composerInputStyles as inputStyles
+} from '../../../components/composer-input/composer-input-styles'
 import { mobileNativeChatComposerStyles as styles } from './mobile-native-chat-composer-styles'
 
 export type MobileNativeChatMicProps = {
@@ -61,6 +64,7 @@ export function MobileNativeChatComposerMic({
         onPressOut={dictationMode === 'hold' ? onMicPressOut : undefined}
         onLongPress={dictationMode === 'hold' ? keepHeldPressThroughLongPress : undefined}
         disabled={disabled && !micActive}
+        hitSlop={COMPOSER_CONTROL_HIT_SLOP}
       >
         {/* The icon swaps on press; as the page's touch target, its removal would send
             touchend to a detached node and lose the release. */}

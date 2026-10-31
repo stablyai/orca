@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { ListRow } from '../components/list/ListGroup'
 import { useAllHostClients } from '../transport/use-all-host-clients'
 import { loadHostCatalog } from '../transport/host-store'
 import { pushDeliveryTest } from '../notifications/mobile-push-delivery-test-operations'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { SettingsNote, SettingsSection } from './settings-screen-frame'
 import * as Notifications from 'expo-notifications'
 import { waitForPushFallback } from '../notifications/push-fallback'
 import {
@@ -215,80 +214,41 @@ export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: ()
     }
   }
   return (
-    <View style={styles.container}>
-      <Text style={styles.label}>
-        {t(
-          'settings.notificationDisplayTest.troubleReceivingAlerts',
-          'Having trouble receiving alerts?'
-        )}
-      </Text>
-      <Text style={styles.detail}>
-        {t(
-          'settings.notificationDisplayTest.description',
-          'Test push delivery, or a local notification when push is unavailable.'
-        )}
-      </Text>
-      <Pressable
-        accessibilityRole="button"
+    <SettingsSection
+      title={t(
+        'settings.notificationDisplayTest.troubleReceivingAlerts',
+        'Having trouble receiving alerts?'
+      )}
+      footer={
+        <>
+          <SettingsNote>
+            {t(
+              'settings.notificationDisplayTest.description',
+              'Test push delivery, or a local notification when push is unavailable.'
+            )}
+          </SettingsNote>
+          {message ? <SettingsNote alert>{message}</SettingsNote> : null}
+        </>
+      }
+    >
+      <ListRow
+        key="send"
+        title={t('settings.notificationDisplayTest.sendButton', 'Send test notification')}
+        value={sending ? t('settings.notificationDisplayTest.sending', 'Sending…') : undefined}
         accessibilityLabel={
           sending
             ? t('settings.notificationDisplayTest.sending', 'Sending…')
             : t('settings.notificationDisplayTest.sendButton', 'Send test notification')
         }
         disabled={sending}
-        accessibilityState={{ disabled: sending }}
-        style={({ pressed }) => [styles.button, pressed && styles.pressed]}
         onPress={() => void run()}
-      >
-        <View>
-          <Text accessible={false} style={[styles.buttonText, styles.sizingLabel]}>
-            {t('settings.notificationDisplayTest.sendButton', 'Send test notification')}
-          </Text>
-          <View pointerEvents="none" style={styles.buttonLabel}>
-            <Text accessible={false} style={styles.buttonText}>
-              {sending
-                ? t('settings.notificationDisplayTest.sending', 'Sending…')
-                : t('settings.notificationDisplayTest.sendButton', 'Send test notification')}
-            </Text>
-          </View>
-        </View>
-      </Pressable>
-      <Pressable accessibilityRole="link" onPress={onTroubleshoot} style={styles.troubleshootLink}>
-        <Text style={styles.linkText}>
-          {t('settings.notificationDisplayTest.troubleshooting', 'Troubleshooting')}
-        </Text>
-      </Pressable>
-      {message && (
-        <Text accessibilityRole="alert" style={styles.detail}>
-          {message}
-        </Text>
-      )}
-    </View>
+      />
+      <ListRow
+        key="troubleshoot"
+        title={t('settings.notificationDisplayTest.troubleshooting', 'Troubleshooting')}
+        navigates
+        onPress={onTroubleshoot}
+      />
+    </SettingsSection>
   )
 }
-const styles = themedStyleSheet(() => ({
-  container: { marginTop: spacing.xl, gap: spacing.sm },
-  label: { color: colors.textPrimary, fontSize: typography.bodySize, fontWeight: '600' },
-  detail: { color: colors.textMuted, fontSize: typography.metaSize, lineHeight: 18 },
-  button: {
-    alignSelf: 'flex-start',
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.control,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md
-  },
-  sizingLabel: { opacity: 0 },
-  buttonLabel: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  troubleshootLink: { alignSelf: 'flex-start', paddingVertical: spacing.sm },
-  linkText: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    textDecorationLine: 'underline'
-  },
-  pressed: { opacity: 0.6 },
-  buttonText: { color: colors.textPrimary, fontSize: typography.metaSize, fontWeight: '600' }
-}))

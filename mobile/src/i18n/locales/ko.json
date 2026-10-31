@@ -21,7 +21,6 @@
     "panel": {
       "all": "모두",
       "emptyScope": "이 범위에는 이전 에이전트 세션이 없습니다.",
-      "loadFailed": "로드 실패",
       "missingResumeId": "이 세션에는 재개 ID가 없습니다.",
       "noSearchResults": "검색 조건에 맞는 세션이 없습니다.",
       "noSessions": "에이전트 세션 없음",
@@ -654,7 +653,6 @@
       "loadingDiff": "차이점 로드 중…",
       "loadingReview": "리뷰 로드 중…",
       "noReviewableChanges": "리뷰할 변경 사항 없음",
-      "retryLabel": "리뷰 다시 불러오기",
       "reviewUnavailable": "리뷰 사용 불가",
       "selectFile": "리뷰할 파일을 선택하세요.",
       "tooLargeMessage": "이 차이점은 너무 커서 모바일에서 미리 볼 수 없습니다.",
@@ -848,10 +846,8 @@
       "selectRunTarget": "실행 대상 선택"
     },
     "prSidebar": {
-      "loadFailed": "문제가 발생했습니다.",
       "loading": "PR 로드 중…",
-      "notPermitted": "GitHub 계정이 연결되지 않아 접근이 허용되지 않습니다.",
-      "retryLoading": "PR 로드 다시 시도"
+      "notPermitted": "GitHub 계정이 연결되지 않아 접근이 허용되지 않습니다."
     },
     "protocolBlockScreen": {
       "backToHosts": "호스트로 돌아가기",
@@ -3065,7 +3061,6 @@
       "waitingForDesktop": "데스크톱 연결 대기 중…"
     },
     "panel": {
-      "loadFailedTitle": "로드 실패",
       "unavailableTitle": "소스 제어 사용 불가"
     },
     "prChip": {
@@ -3893,8 +3888,7 @@
       "noFilterMatches": "필터에 맞는 워크스페이스가 없습니다.",
       "noMatches": "일치하는 워크스페이스가 없습니다.",
       "reopen": "업데이트하려면 다시 여세요",
-      "reopenDetail": "이 페이지는 아직 이 호스트의 워크스페이스 목록 형식을 지원하지 않습니다.",
-      "retrying": "worktree.ps가 실패했습니다({{error}}). 자동으로 다시 시도합니다."
+      "reopenDetail": "이 페이지는 아직 이 호스트의 워크스페이스 목록 형식을 지원하지 않습니다."
     },
     "workspaceListSections": {
       "all": "모두",

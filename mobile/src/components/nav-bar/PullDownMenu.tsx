@@ -1,13 +1,16 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import {
   Animated,
+  Easing,
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
   View,
   useWindowDimensions
 } from 'react-native'
+import { useReducedMotionEnabled } from '../../platform/use-reduced-motion'
 import { colors, radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
@@ -17,6 +20,9 @@ import type { ActionSheetAction } from '../ActionSheetModal'
 const MENU_WIDTH = 252
 const ANCHOR_GAP = 6
 const EDGE_INSET = 8
+// About 250 ms to rest with a hint of overshoot, like an iOS menu growing out of its button.
+const OPEN_SPRING = { stiffness: 420, damping: 32, mass: 1 }
+const CLOSE_FADE_MS = 150
 
 type Anchor = { top: number; right: number }
 
@@ -34,13 +40,18 @@ export function PullDownMenu({ visible, anchorRef, groups, onClose }: PullDownMe
   useMobileColorScheme()
   const t = useMobileTranslation()
   const window = useWindowDimensions()
+  const reducedMotion = useReducedMotionEnabled()
   const [anchor, setAnchor] = useState<Anchor | null>(null)
+  // The Modal outlives `visible` by the exit fade, so the menu fades out instead of vanishing.
+  const [presented, setPresented] = useState(visible)
+  if (visible && !presented) {
+    setPresented(true)
+  }
   const pendingRef = useRef<(() => void) | null>(null)
   const appear = useRef(new Animated.Value(0)).current
 
   useLayoutEffect(() => {
     if (!visible) {
-      setAnchor(null)
       return
     }
     anchorRef.current?.measureInWindow((x, y, width, height) => {
@@ -52,23 +63,55 @@ export function PullDownMenu({ visible, anchorRef, groups, onClose }: PullDownMe
   }, [anchorRef, visible, window.width])
 
   useEffect(() => {
-    if (anchor === null) {
+    if (!visible || anchor === null) {
       return
     }
     appear.setValue(0)
-    Animated.timing(appear, { toValue: 1, duration: 160, useNativeDriver: true }).start()
-  }, [anchor, appear])
+    const open =
+      reducedMotion === true
+        ? Animated.timing(appear, {
+            toValue: 1,
+            duration: CLOSE_FADE_MS,
+            useNativeDriver: Platform.OS !== 'web'
+          })
+        : Animated.spring(appear, {
+            toValue: 1,
+            ...OPEN_SPRING,
+            useNativeDriver: Platform.OS !== 'web'
+          })
+    open.start()
+    return () => open.stop()
+  }, [anchor, appear, reducedMotion, visible])
+
+  useEffect(() => {
+    if (visible || !presented) {
+      return
+    }
+    const close = Animated.timing(appear, {
+      toValue: 0,
+      duration: CLOSE_FADE_MS,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: Platform.OS !== 'web'
+    })
+    close.start(({ finished }) => {
+      if (finished) {
+        setPresented(false)
+        setAnchor(null)
+      }
+    })
+    return () => close.stop()
+  }, [appear, presented, visible])
 
   // An action that opens its own sheet runs once the menu's modal is gone; iOS can't present over it.
   useEffect(() => {
-    if (visible || !pendingRef.current) {
+    if (presented || !pendingRef.current) {
       return
     }
     const run = pendingRef.current
     pendingRef.current = null
     const frame = requestAnimationFrame(run)
     return () => cancelAnimationFrame(frame)
-  }, [visible])
+  }, [presented])
 
   const press = (action: ActionSheetAction) => {
     if (action.closeBeforePress) {
@@ -84,10 +127,11 @@ export function PullDownMenu({ visible, anchorRef, groups, onClose }: PullDownMe
 
   const shown = groups.map((group) => group.filter(Boolean)).filter((group) => group.length > 0)
   return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
+    <Modal visible={presented} transparent animationType="none" onRequestClose={onClose}>
       <Pressable
         style={StyleSheet.absoluteFill}
         onPress={onClose}
+        disabled={!visible}
         accessibilityLabel={t('components.pullDownMenu.close', 'Close menu')}
       />
       {anchor ? (
@@ -96,10 +140,20 @@ export function PullDownMenu({ visible, anchorRef, groups, onClose }: PullDownMe
             styles.menu,
             { top: anchor.top, right: anchor.right },
             {
-              opacity: appear,
+              opacity: appear.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0, 1],
+                extrapolate: 'clamp'
+              }),
+              // Grows out of the button it hangs from rather than from its own middle.
+              transformOrigin: 'top right',
               transform: [
-                { translateY: appear.interpolate({ inputRange: [0, 1], outputRange: [-6, 0] }) },
-                { scale: appear.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) }
+                {
+                  scale: appear.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [reducedMotion === true ? 1 : 0.9, 1]
+                  })
+                }
               ]
             }
           ]}
@@ -174,7 +228,7 @@ const styles = themedStyleSheet(() => ({
     borderTopColor: colors.borderSubtle
   },
   itemPressed: {
-    backgroundColor: colors.bgPanel
+    backgroundColor: colors.translucentFill
   },
   itemDisabled: {
     opacity: 0.4

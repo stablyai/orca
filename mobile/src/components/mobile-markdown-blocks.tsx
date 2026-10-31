@@ -34,6 +34,7 @@ export type MarkdownBlockContext = MarkdownInlineContext & {
   /** The text is still arriving: a diagram stays code until it stops. */
   growing: boolean
   listText: StyleProp<TextStyle>
+  listMarker: StyleProp<TextStyle>
   /** Interactive children own their touches and must forward the row action. */
   rowLongPress?: () => void
   directives: readonly NativeChatVisualDirective[]
@@ -70,7 +71,7 @@ function renderList(node: List, key: number, ctx: MarkdownBlockContext, depth: n
     <View key={key} style={styles.list}>
       {node.children.map((item, itemIndex) => (
         <View key={itemIndex} style={styles.listItem}>
-          <NativeText style={[styles.listMarker, ctx.tone.secondary]}>
+          <NativeText style={ctx.listMarker}>
             {item.checked == null
               ? node.ordered
                 ? `${(node.start ?? 1) + itemIndex}.`
@@ -230,9 +231,7 @@ function renderBlock(
     case 'footnoteDefinition':
       return (
         <View key={key} style={styles.listItem}>
-          <NativeText style={[styles.listMarker, ctx.tone.secondary]}>
-            {`[${node.label ?? node.identifier}]`}
-          </NativeText>
+          <NativeText style={ctx.listMarker}>{`[${node.label ?? node.identifier}]`}</NativeText>
           <View style={styles.listItemBody}>
             {renderBlocks(node.children, ctx, { style: ctx.listText, selectable: true }, depth + 1)}
           </View>

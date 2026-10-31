@@ -10,7 +10,6 @@ import {
   Pressable,
   ChevronLeft,
   ChevronRight,
-  triggerMediumImpact,
   Linking,
   ExternalLink,
   GitBranch,
@@ -20,6 +19,7 @@ import {
   getHostedMergeLabel,
   type MobileColorScheme
 } from './mobile-tasks-dependencies'
+import { renderMobileTasksListState } from './mobile-tasks-list-state'
 import { styles, getPrSignalToneStyle } from './mobile-tasks-legacy-styles'
 import {
   taskRepositoryMeta,
@@ -51,7 +51,6 @@ export function renderMobileTasksProviderItemList(
 ) {
   const {
     displayedEntries,
-    emptyLabel,
     githubCanLoadUncountedNextPage,
     githubCanShowPagination,
     githubCurrentPage,
@@ -62,7 +61,6 @@ export function renderMobileTasksProviderItemList(
     githubTotalPages,
     handleGitHubPageChange,
     insets,
-    loading,
     provider,
     refreshTasks,
     refreshing,
@@ -72,15 +70,11 @@ export function renderMobileTasksProviderItemList(
     sortedItems,
     taskUiReady
   } = model
-  return loading ? (
-    <View style={[styles.centered, { paddingBottom: bottomBarHeight }]}>
-      <ActivityIndicator size="small" color={colors.textSecondary} />
-    </View>
-  ) : sortedItems.length === 0 ? (
-    <View style={[styles.centered, { paddingBottom: bottomBarHeight }]}>
-      <Text style={styles.emptyText}>{emptyLabel}</Text>
-    </View>
-  ) : (
+  const listState = renderMobileTasksListState(model, sortedItems.length, bottomBarHeight)
+  if (listState) {
+    return listState
+  }
+  return (
     <FlatList
       data={displayedEntries}
       extraData={colorScheme}
@@ -211,7 +205,6 @@ export function renderMobileTasksProviderItemList(
             ]}
             accessibilityRole={opensExternally ? 'link' : 'button'}
             onPress={() => {
-              triggerMediumImpact()
               if (item.provider === 'gitlabTodo') {
                 void Linking.openURL(item.source.targetUrl)
                 return

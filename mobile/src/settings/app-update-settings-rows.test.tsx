@@ -3,6 +3,14 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AppUpdateSettingsRows, type AppUpdateCheckRowStatus } from './app-update-settings-rows'
 
+vi.mock(
+  './settings-screen-frame',
+  async () => (await import('../test-support/settings-chrome-test-double')).settingsFrameDouble
+)
+vi.mock(
+  '../components/list/ListGroup',
+  async () => (await import('../test-support/settings-chrome-test-double')).listGroupDouble
+)
 vi.mock('react-native', () => ({
   Pressable: 'Pressable',
   StyleSheet: { create: <T,>(styles: T) => styles, hairlineWidth: 1 },
@@ -41,15 +49,21 @@ describe('AppUpdateSettingsRows', () => {
       )
     })
     const root = renderer!.root
-    const texts = root
-      .findAll((node) => String(node.type) === 'Text')
-      .map((node) => node.children.filter((child) => typeof child === 'string').join(''))
+    const rows = root.findAll((node) => String(node.type) === 'ListRow')
+    // Each row's words in reading order: its title, then its value or inline action.
+    const texts = rows.flatMap((row) => [
+      String(row.props.title),
+      ...(row.props.value === undefined ? [] : [String(row.props.value)]),
+      ...row
+        .findAll((node) => String(node.type) === 'Text')
+        .map((node) => node.children.filter((child) => typeof child === 'string').join(''))
+    ])
     return {
       root,
       texts,
       onUpdate,
       onCheck,
-      pressables: root.findAll((node) => String(node.type) === 'Pressable')
+      pressables: rows.filter((row) => row.props.onPress !== undefined)
     }
   }
 
@@ -81,7 +95,7 @@ describe('AppUpdateSettingsRows', () => {
     act(() => idle.pressables[0].props.onPress())
     expect(idle.onCheck).toHaveBeenCalledTimes(1)
     act(() => renderer?.unmount())
-    expect(render({ checkStatus: 'checking' }).pressables[0].props.disabled).toBe(true)
+    expect(render({ checkStatus: 'checking' }).pressables[0].props.busy).toBe(true)
     act(() => renderer?.unmount())
     expect(render({ checkStatus: 'up-to-date' }).texts.at(-1)).toBe('Up to date')
     act(() => renderer?.unmount())
