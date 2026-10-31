@@ -6,7 +6,7 @@ import {
 } from './status-bar-density'
 
 const TIGHTEST = STATUS_BAR_DENSITY_LEVELS.length - 1
-const w = (natural: number, fit = natural) => ({ natural, fit })
+const w = (natural: number, fit = natural) => ({ natural, fit, collapsed: '' })
 
 describe('recordStatusBarDensityWidth', () => {
   it('forgets other levels when a level re-measures differently', () => {

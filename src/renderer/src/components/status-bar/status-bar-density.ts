@@ -27,10 +27,15 @@ export type StatusBarLevelWidth = {
   natural: number
   /** Narrowest the level can get: natural, or with calm chips collapsed where the level allows it. */
   fit: number
+  /** Chips collapsed while measuring; widths taken under different collapses are not comparable. */
+  collapsed: string
 }
 const NO_COLLAPSED_USAGE: readonly string[] = []
 
 const WIDTH_TOLERANCE_PX = 1
+
+// Why: drifting measurements (e.g. right after a display DPR change) must not chain layout-effect updates into React's update-depth limit.
+const MAX_SETTLE_UPDATES = STATUS_BAR_DENSITY_LEVELS.length * 3
 
 /** Roomiest level known to fit; an unmeasured level is returned so it gets probed. */
 export function pickStatusBarDensityLevel(
@@ -54,11 +59,12 @@ export function recordStatusBarDensityWidth(
   width: StatusBarLevelWidth
 ): (StatusBarLevelWidth | undefined)[] {
   const previous = levelWidths[level]
+  // Why: an out-of-flow chip can measure off its in-row width, so collapsing alone must not read as a content change.
+  const comparable = previous !== undefined && previous.collapsed === width.collapsed
   const naturalChanged =
-    previous !== undefined && Math.abs(previous.natural - width.natural) > WIDTH_TOLERANCE_PX
+    comparable && Math.abs(previous.natural - width.natural) > WIDTH_TOLERANCE_PX
   // Why: urgency can change which chips pin without moving the natural width.
-  const fitChanged =
-    previous !== undefined && Math.abs(previous.fit - width.fit) > WIDTH_TOLERANCE_PX
+  const fitChanged = comparable && Math.abs(previous.fit - width.fit) > WIDTH_TOLERANCE_PX
   const next = naturalChanged
     ? []
     : fitChanged
@@ -96,6 +102,9 @@ export function useStatusBarDensity(): {
   const usageElementRef = useRef<HTMLElement | null>(null)
   const segmentsElementRef = useRef<HTMLElement | null>(null)
   const observerRef = useRef<ResizeObserver | null>(null)
+  const settleUpdatesRef = useRef(0)
+  const settlingRef = useRef(false)
+  const settleAvailableRef = useRef(Number.NaN)
 
   const evaluate = useCallback((): void => {
     const bar = barElementRef.current
@@ -112,12 +121,13 @@ export function useStatusBarDensity(): {
     levelWidthsRef.current = recordStatusBarDensityWidth(
       levelWidthsRef.current,
       committedLevelRef.current,
-      { natural: required, fit: collapses ? usage.pinnedWidth + fixedWidth : required }
+      {
+        natural: required,
+        fit: collapses ? usage.pinnedWidth + fixedWidth : required,
+        collapsed: collapsedUsageRef.current.join()
+      }
     )
     const nextLevel = pickStatusBarDensityLevel(levelWidthsRef.current, available)
-    if (nextLevel !== committedLevelRef.current) {
-      setLevel(nextLevel)
-    }
     const collapsible =
       nextLevel === committedLevelRef.current && STATUS_BAR_DENSITY_LEVELS[nextLevel].collapseUsage
     const nextCollapsed = collapsible
@@ -129,12 +139,31 @@ export function useStatusBarDensity(): {
           usage.unitLabelWidth
         )
       : NO_COLLAPSED_USAGE
-    if (nextCollapsed.join() !== collapsedUsageRef.current.join()) {
+    const nextOverflowing = usage.renderedWidth + fixedWidth > available + WIDTH_TOLERANCE_PX
+    const levelChanged = nextLevel !== committedLevelRef.current
+    const collapsedChanged = nextCollapsed.join() !== collapsedUsageRef.current.join()
+    const overflowingChanged = nextOverflowing !== overflowingRef.current
+    if (available !== settleAvailableRef.current) {
+      settleAvailableRef.current = available
+      settleUpdatesRef.current = 0
+    }
+    if (!levelChanged && !collapsedChanged && !overflowingChanged) {
+      settleUpdatesRef.current = 0
+      return
+    }
+    if (settleUpdatesRef.current >= MAX_SETTLE_UPDATES) {
+      return
+    }
+    settleUpdatesRef.current += 1
+    settlingRef.current = true
+    if (levelChanged) {
+      setLevel(nextLevel)
+    }
+    if (collapsedChanged) {
       collapsedUsageRef.current = nextCollapsed
       setCollapsedUsageProviders(nextCollapsed)
     }
-    const nextOverflowing = usage.renderedWidth + fixedWidth > available + WIDTH_TOLERANCE_PX
-    if (nextOverflowing !== overflowingRef.current) {
+    if (overflowingChanged) {
       overflowingRef.current = nextOverflowing
       setOverflowing(nextOverflowing)
     }
@@ -143,6 +172,11 @@ export function useStatusBarDensity(): {
   // Why: runs before paint, so probing a roomier level that turns out not to fit never flashes.
   useLayoutEffect(() => {
     committedLevelRef.current = level
+    // Only renders this hook caused continue a settle pass; any other render starts a fresh one.
+    if (!settlingRef.current) {
+      settleUpdatesRef.current = 0
+    }
+    settlingRef.current = false
     evaluate()
   })
 
