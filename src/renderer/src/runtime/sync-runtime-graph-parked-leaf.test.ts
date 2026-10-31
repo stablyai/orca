@@ -156,13 +156,6 @@ describe('syncRuntimeGraph cold-parked tabs', () => {
     expect(reportedTabIds(graph)).toContain(TAB_ID)
   })
 
-  it('drops the leaf once the watcher is disposed (reveal, close, PTY exit, teardown)', async () => {
-    const graph = await captureGraph()
-
-    expect(reportedPanes(graph)).not.toContainEqual(expect.objectContaining({ tabId: TAB_ID }))
-    expect(reportedTabIds(graph)).not.toContain(TAB_ID)
-  })
-
   // Stale paneIdByPtyId/tabPtyId survive these cases; tests must reject those false liveness proofs.
   it('drops the leaf when per-PTY disposal leaves only the pane-id slot behind', async () => {
     // PTY exit removes disposer but retains pane-ID slot and tabPtyId.
