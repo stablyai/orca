@@ -1,3 +1,4 @@
+import { selectWslHostsServing } from '../sidebar/use-wsl-hosts-enabled'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { isWslHostRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import { workspaceOwnerHostId } from '@/lib/workspace-row-owner-host'
@@ -25,7 +26,8 @@ export function selectWslHostUnavailableReason(
   if (state.wslHostServerFiles === 'missing') {
     return 'server-files-missing'
   }
-  return state.settings?.experimentalWslHosts === true ? null : 'turned-off'
+  // A saved host keeps serving with the setting off (it governs new work only), as in serve-only.
+  return selectWslHostsServing(state) ? null : 'turned-off'
 }
 
 export function useWslHostUnavailableReason(

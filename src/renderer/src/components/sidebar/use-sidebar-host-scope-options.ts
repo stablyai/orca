@@ -1,3 +1,4 @@
+import { selectWslHostsServing } from './use-wsl-hosts-enabled'
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
@@ -34,7 +35,7 @@ export function useSidebarHostScopeOptions(): {
         runtimeStatusByEnvironmentId,
         hostLabelOverrides,
         wslHostStatuses,
-        wslHostsEnabled: settings?.experimentalWslHosts === true,
+        wslHostsEnabled: selectWslHostsServing({ settings, runtimeEnvironments }),
         wslHostServerFilesMissing
       }),
     [

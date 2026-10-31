@@ -281,7 +281,8 @@ describe('WslHostService', () => {
     expect(connector.connect).toHaveBeenCalledTimes(3)
   })
 
-  it('refuses a connect while the experiment is off, but still removes the host', async () => {
+  // Stage 1: the setting governs new work only; a saved host keeps serving, as in serve-only.
+  it('keeps serving a saved host with the setting off: connect and Remove still work', async () => {
     const connector = makeConnector([UBUNTU])
     const service = makeService(connector)
     await service.add({ distro: 'Ubuntu' })
@@ -289,14 +290,21 @@ describe('WslHostService', () => {
     enabled = false
     await service.enabledChanged(false)
 
-    await expect(service.connect('wsl:ubuntu')).rejects.toThrow('turned off in Settings')
-    service.setVisibleWork(['wsl:ubuntu'])
-    await expect(service.ensureForRuntimeCall('wsl:ubuntu')).rejects.toThrow(
-      'turned off in Settings'
-    )
-    expect(connector.connect).not.toHaveBeenCalled()
+    await service.connect('wsl:ubuntu')
+    expect(connector.connect).toHaveBeenCalledExactlyOnceWith('Ubuntu', expect.anything())
 
     await service.remove('wsl:ubuntu')
+    expect(listEnvironments(userDataPath)).toEqual([])
+  })
+
+  it('refuses a new host while the setting is off', async () => {
+    const connector = makeConnector([UBUNTU])
+    const service = makeService(connector)
+    enabled = false
+    await expect(service.add({ distro: 'Ubuntu' })).resolves.toMatchObject({
+      ok: false,
+      kind: 'disabled'
+    })
     expect(listEnvironments(userDataPath)).toEqual([])
   })
 
@@ -358,7 +366,7 @@ describe('WslHostService', () => {
     expect(removed).toHaveBeenCalledWith('wsl:ubuntu')
   })
 
-  it('turning the experiment off closes every connection and releases holders; on resumes lazily', async () => {
+  it('turning the setting off keeps every connection and holder; turning it on boots nothing', async () => {
     const connector = makeConnector([UBUNTU])
     const service = makeService(connector)
     await service.add({ distro: 'Ubuntu' })
@@ -367,21 +375,16 @@ describe('WslHostService', () => {
 
     enabled = false
     await service.enabledChanged(false)
-    expect(connector.disconnect).toHaveBeenCalledWith('Ubuntu')
-    expect(connector.releaseHolder).toHaveBeenCalledWith('Ubuntu')
-    expect(published.at(-1)).toMatchObject({ environmentId: 'wsl:ubuntu', state: 'closed' })
-    // Disabled experiments cannot relaunch for visible work.
-    expect(service.hasUserVisibleWork('Ubuntu')).toBe(false)
-    service.setVisibleWork(['wsl:ubuntu'])
-    expect(connector.connect).not.toHaveBeenCalled()
+    expect(connector.disconnect).not.toHaveBeenCalled()
+    expect(connector.releaseHolder).not.toHaveBeenCalled()
+    expect(published.at(-1)).not.toMatchObject({ state: 'closed' })
+    // A moved project's work keeps its host up.
+    expect(service.hasUserVisibleWork('Ubuntu')).toBe(true)
 
     enabled = true
     await service.enabledChanged(true)
     // Nothing boots on enable; the window re-reports its focused host, which may.
     expect(connector.connect).not.toHaveBeenCalled()
-    expect(service.hasUserVisibleWork('Ubuntu')).toBe(true)
-    service.focusHost('wsl:ubuntu')
-    await vi.waitFor(() => expect(connector.connect).toHaveBeenCalledTimes(1))
   })
 
   it('turning the experiment on with nothing open connects nothing', async () => {
@@ -596,7 +599,7 @@ describe('WslHostService', () => {
     expect(connector.connect).toHaveBeenCalledWith('Ubuntu', { noBoot: true })
   })
 
-  it('a due automation boots a parked host once, and never with the experiment off', async () => {
+  it('a due automation boots a parked host once, with the setting off too (it serves saved hosts)', async () => {
     const connector = makeConnector([UBUNTU])
     const service = makeService(connector)
     await service.add({ distro: 'Ubuntu' })
@@ -608,9 +611,6 @@ describe('WslHostService', () => {
     })
     connector.connect.mockClear()
     enabled = false
-    await service.wakeForAutomation('wsl:ubuntu')
-    expect(connector.connect).not.toHaveBeenCalled()
-    enabled = true
     await service.wakeForAutomation('wsl:ubuntu')
     expect(connector.connect).toHaveBeenCalledExactlyOnceWith('Ubuntu')
     await expect(service.isConnected('wsl:ubuntu')).resolves.toBe(true)
@@ -764,14 +764,14 @@ describe('WslHostService', () => {
     expect(isWanted('Debian')).toBe(true)
   })
 
-  it('releases every startup holder while WSL hosts are off', async () => {
+  it("keeps a saved host's startup holder while the setting is off", async () => {
     const connector = makeConnector([UBUNTU])
     const service = makeService(connector)
     await service.add({ distro: 'Ubuntu' })
     enabled = false
     await service.start()
     const [isWanted] = connector.adoptHolders.mock.calls[0]
-    expect(isWanted('Ubuntu')).toBe(false)
+    expect(isWanted('Ubuntu')).toBe(true)
   })
 
   it.each([

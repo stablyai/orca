@@ -215,7 +215,8 @@
     "wslHostOffer": {
       "title": "Run {{distro}} as a host (recommended)",
       "why": "Git, files and terminals then run natively in Linux instead of across the Windows file share.",
-      "accept": "Run as host"
+      "accept": "Run as host",
+      "projectNotFound": "Could not find the added project to move. Use \"Move to {{distro}} host…\" on the project in the sidebar."
     }
   },
   "app": {

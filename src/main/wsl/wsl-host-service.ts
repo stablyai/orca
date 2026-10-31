@@ -158,21 +158,13 @@ export class WslHostService {
     return removal.serverStop
   }
 
-  /** Disable closes connections/watches and releases holders; reenable resumes only hosts needed by visible work. */
+  /**
+   * The setting governs new work only (Stage 1): turning it off refuses an add still in flight,
+   * but saved hosts keep serving their projects, as in serve-only. Turning it on boots nothing.
+   */
   async enabledChanged(enabled: boolean): Promise<void> {
-    const connector = this.connector
-    if (!connector) {
-      return
-    }
-    if (enabled) {
-      // Nothing boots here: the window re-reports its focused host, which connects only if running (E9).
-      return
-    }
-    this.disableGeneration += 1
-    for (const record of this.records()) {
-      await connector.disconnect(record.distro)
-      await connector.releaseHolder(record.distro)
-      this.setStatus(record, { state: 'closed' })
+    if (!enabled) {
+      this.disableGeneration += 1
     }
   }
 
