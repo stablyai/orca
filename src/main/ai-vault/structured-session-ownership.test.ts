@@ -160,7 +160,7 @@ describe('structured AI Vault ownership', () => {
       )
       const store = installChats(records)
       const base = listResult().sessions[0]!
-      const rows = records.map((record, index) => ({
+      const rows = records.map((_, index) => ({
         ...base,
         id: `local:codex:thread-${index}`,
         sessionId: `thread-${index}`,
