@@ -1509,7 +1509,8 @@
       "sourceControl": "소스 제어",
       "tasks": "작업",
       "terminal": "터미널",
-      "workspace": "워크스페이스"
+      "workspace": "워크스페이스",
+      "commit": "커밋"
     }
   },
   "newWorkspace": {
@@ -3232,7 +3233,40 @@
       "files_one": "파일 {{count}}개",
       "files_other": "파일 {{count}}개",
       "baseAhead_one": "{{base}}에 새 커밋 {{count}}개",
-      "baseAhead_other": "{{base}}에 새 커밋 {{count}}개"
+      "baseAhead_other": "{{base}}에 새 커밋 {{count}}개",
+      "todayAt": "오늘 {{time}}",
+      "yesterdayAt": "어제 {{time}}",
+      "dateAt": "{{date}} {{time}}"
+    },
+    "commitDetail": {
+      "agentWithAuthor": "{{agent}}, {{author}}와(과) 함께",
+      "author": "작성자",
+      "date": "날짜",
+      "status": "상태",
+      "sha": "SHA",
+      "copySha": "커밋 해시 복사",
+      "files": "파일",
+      "retryFiles": "커밋 파일 다시 불러오기",
+      "waitingForDesktop": "데스크톱 연결 대기 중…",
+      "noFileChanges": "파일 변경 사항 없음",
+      "title": "커밋",
+      "moreActions": "커밋 작업",
+      "reviewChanges": "변경 사항 리뷰",
+      "copyMessage": "커밋 메시지 복사",
+      "openRemote": "브라우저에서 커밋 열기",
+      "explain": "변경 사항 설명",
+      "copyFailed": "복사할 수 없습니다.",
+      "noWebRemote": "이 저장소에는 지원되는 웹 원격이 없습니다",
+      "openRemoteFailed": "브라우저에서 커밋을 열지 못했습니다",
+      "explainFailed": "에이전트를 실행하지 못했습니다.",
+      "messageCopied": "커밋 메시지 복사됨",
+      "shaCopied": "커밋 해시 복사됨",
+      "loadFilesFailed": "커밋 파일을 불러올 수 없습니다",
+      "invalidLink": "이 링크는 커밋을 가리키지 않습니다"
+    },
+    "commitDiff": {
+      "position": "{{count}}개 중 {{index}}개",
+      "parentUnknown": "이 차이점을 불러올 수 없습니다"
     }
   },
   "tasks": {

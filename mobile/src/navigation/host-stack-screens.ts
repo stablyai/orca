@@ -51,6 +51,12 @@ export const HOST_STACK_SCREENS = [
     }
   },
   {
+    name: '[hostId]/commit/[worktreeId]',
+    get title() {
+      return translate('navigation.hostStackScreens.commit', 'Commit')
+    }
+  },
+  {
     name: '[hostId]/pr/[worktreeId]',
     get title() {
       return translate('navigation.hostStackScreens.pullRequest', 'Pull Request')

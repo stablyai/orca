@@ -1509,7 +1509,8 @@
       "sourceControl": "原始碼控制",
       "tasks": "任務",
       "terminal": "終端機",
-      "workspace": "工作區"
+      "workspace": "工作區",
+      "commit": "提交"
     }
   },
   "newWorkspace": {
@@ -3232,7 +3233,40 @@
       "files_one": "{{count}} 個檔案",
       "files_other": "{{count}} 個檔案",
       "baseAhead_one": "{{base}} 有 {{count}} 筆較新的提交",
-      "baseAhead_other": "{{base}} 有 {{count}} 筆較新的提交"
+      "baseAhead_other": "{{base}} 有 {{count}} 筆較新的提交",
+      "todayAt": "今天 {{time}}",
+      "yesterdayAt": "昨天 {{time}}",
+      "dateAt": "{{date}} {{time}}"
+    },
+    "commitDetail": {
+      "agentWithAuthor": "{{agent}}，與 {{author}} 協作",
+      "author": "作者",
+      "date": "日期",
+      "status": "狀態",
+      "sha": "SHA",
+      "copySha": "複製提交雜湊",
+      "files": "檔案",
+      "retryFiles": "重新載入提交檔案",
+      "waitingForDesktop": "正在等待電腦…",
+      "noFileChanges": "沒有檔案變更",
+      "title": "提交",
+      "moreActions": "提交操作",
+      "reviewChanges": "審查變更",
+      "copyMessage": "複製提交訊息",
+      "openRemote": "在瀏覽器中開啟提交",
+      "explain": "解釋變更",
+      "copyFailed": "無法複製",
+      "noWebRemote": "此存放庫沒有受支援的網頁遠端存放庫",
+      "openRemoteFailed": "無法在瀏覽器中開啟提交",
+      "explainFailed": "啟動代理程式失敗",
+      "messageCopied": "已複製提交訊息",
+      "shaCopied": "已複製提交雜湊",
+      "loadFilesFailed": "無法載入提交檔案",
+      "invalidLink": "此連結未指向任何提交"
+    },
+    "commitDiff": {
+      "position": "{{index}} / {{count}}",
+      "parentUnknown": "無法載入此差異"
     }
   },
   "tasks": {

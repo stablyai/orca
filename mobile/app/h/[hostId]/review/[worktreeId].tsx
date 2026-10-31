@@ -22,6 +22,7 @@ export default withWorkspaceRoute(function MobileDiffReviewScreen() {
     scope?: string | string[]
     file?: string | string[]
     area?: string | string[]
+    commit?: string | string[]
   }>()
   const hostId = firstReviewParam(params.hostId)
   const worktreeId = firstReviewParam(params.worktreeId)
@@ -30,7 +31,7 @@ export default withWorkspaceRoute(function MobileDiffReviewScreen() {
   // Carry screen query params unchanged, omitting empty values: screen normalizers distinguish absence from empty scope/file/area.
   const routeParams: Record<string, string> = {
     ...Object.fromEntries(
-      (['name', 'scope', 'file', 'area'] as const)
+      (['name', 'scope', 'file', 'area', 'commit'] as const)
         .map((key) => [key, firstReviewParam(params[key])] as const)
         .filter(([, value]) => value !== '')
     ),

@@ -80,6 +80,7 @@ export const EXECUTION_HOST_METHODS = [
   'git.pull',
   'git.push',
   'git.rebaseFromBase',
+  'git.remoteCommitUrl',
   'git.resolveConflict',
   'git.stage',
   'git.status',

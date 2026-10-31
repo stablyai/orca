@@ -12,6 +12,7 @@ import { MobileLoadErrorState } from '../components/MobileLoadErrorState'
 import { connectionRetryAction } from '../transport/connection-retry-action'
 import { GIT_HISTORY_DEFAULT_LIMIT } from '../../../src/shared/git-history-types'
 import { fetchMobileGitHistory } from './mobile-git-history'
+import { rememberMobileCommitHistory } from './mobile-commit-history-cache'
 import type { MobileGitHistoryResult } from './git-history-reply-schema'
 import { buildMobileCommitTimeline, type MobileTimelineRow } from './mobile-commit-timeline'
 import type { GitHistoryUpstreamVerdict } from '../../../src/shared/git-history-push-state'
@@ -47,6 +48,7 @@ type Props = {
   // Push and Rebase run from here, so their failures show here too.
   actionError: string | null
   onOpenChanges: () => void
+  onOpenCommit: (commitId: string) => void
 }
 
 // Memoize the hidden, mounted timeline so commit-message keystrokes do not reconcile its FlatList.
@@ -66,7 +68,8 @@ export const MobileCommitTimeline = memo(function MobileCommitTimeline({
   uncommitted,
   pushAction,
   actionError,
-  onOpenChanges
+  onOpenChanges,
+  onOpenCommit
 }: Props) {
   const colorScheme = useMobileColorScheme()
   const t = useMobileTranslation()
@@ -115,7 +118,25 @@ export const MobileCommitTimeline = memo(function MobileCommitTimeline({
     return () => {
       active = false
     }
-  }, [baseRef, client, connState, headKey, reloadNonce, refreshNonce, settled, tree, worktreeId])
+  }, [
+    baseRef,
+    client,
+    connState,
+    headKey,
+    hostId,
+    reloadNonce,
+    refreshNonce,
+    settled,
+    tree,
+    worktreeId
+  ])
+
+  // The commit page reads the push state this timeline shows.
+  useEffect(() => {
+    if (page) {
+      rememberMobileCommitHistory(hostId, worktreeId, page.result, upstream)
+    }
+  }, [hostId, page, upstream, worktreeId])
 
   const hasUncommittedChanges = (uncommitted?.fileCount ?? 0) > 0
   const timeline = useMemo(() => {
@@ -165,10 +186,21 @@ export const MobileCommitTimeline = memo(function MobileCommitTimeline({
         todayStartMs={todayStartMs}
         historyLimit={historyLimit}
         onOpenChanges={onOpenChanges}
+        onOpenCommit={onOpenCommit}
       />
     ),
     // t: times and day names follow a language switch.
-    [base, historyLimit, nowMs, onOpenChanges, pushAction, t, todayStartMs, uncommitted]
+    [
+      base,
+      historyLimit,
+      nowMs,
+      onOpenChanges,
+      onOpenCommit,
+      pushAction,
+      t,
+      todayStartMs,
+      uncommitted
+    ]
   )
 
   const connected = client !== null && connState === 'connected'

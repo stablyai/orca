@@ -1557,7 +1557,8 @@
       "sourceControl": "Contrôle de code source",
       "tasks": "Tâches",
       "terminal": "Terminal",
-      "workspace": "Espace de travail"
+      "workspace": "Espace de travail",
+      "commit": "Commit"
     }
   },
   "newWorkspace": {
@@ -3330,7 +3331,40 @@
       "files_other": "{{count}} fichiers",
       "baseAhead_one": "{{base}} a 1 commit plus récent",
       "baseAhead_many": "{{base}} a {{count}} commits plus récents",
-      "baseAhead_other": "{{base}} a {{count}} commits plus récents"
+      "baseAhead_other": "{{base}} a {{count}} commits plus récents",
+      "todayAt": "Aujourd’hui à {{time}}",
+      "yesterdayAt": "Hier à {{time}}",
+      "dateAt": "{{date}} à {{time}}"
+    },
+    "commitDetail": {
+      "agentWithAuthor": "{{agent}}, avec {{author}}",
+      "author": "Auteur",
+      "date": "Date",
+      "status": "Statut",
+      "sha": "SHA",
+      "copySha": "Copier le hash du commit",
+      "files": "Fichiers",
+      "retryFiles": "Recharger les fichiers du commit",
+      "waitingForDesktop": "En attente de l'ordinateur…",
+      "noFileChanges": "Aucune modification de fichier",
+      "title": "Commit",
+      "moreActions": "Actions du commit",
+      "reviewChanges": "Examiner les modifications",
+      "copyMessage": "Copier le message de commit",
+      "openRemote": "Ouvrir le commit dans le navigateur",
+      "explain": "Expliquer les modifications",
+      "copyFailed": "Impossible de copier",
+      "noWebRemote": "Ce dépôt n'a aucun remote web pris en charge",
+      "openRemoteFailed": "Échec de l'ouverture du commit dans le navigateur",
+      "explainFailed": "Échec du lancement de l'agent",
+      "messageCopied": "Message de commit copié",
+      "shaCopied": "Hash du commit copié",
+      "loadFilesFailed": "Impossible de charger les fichiers du commit",
+      "invalidLink": "Ce lien ne désigne aucun commit"
+    },
+    "commitDiff": {
+      "position": "{{index}} sur {{count}}",
+      "parentUnknown": "Impossible de charger ce diff"
     }
   },
   "tasks": {

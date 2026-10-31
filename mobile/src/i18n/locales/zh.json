@@ -1509,7 +1509,8 @@
       "sourceControl": "源代码控制",
       "tasks": "任务",
       "terminal": "终端",
-      "workspace": "工作区"
+      "workspace": "工作区",
+      "commit": "提交"
     }
   },
   "newWorkspace": {
@@ -3232,7 +3233,40 @@
       "files_one": "{{count}} 个文件",
       "files_other": "{{count}} 个文件",
       "baseAhead_one": "{{base}} 有 {{count}} 个较新的提交",
-      "baseAhead_other": "{{base}} 有 {{count}} 个较新的提交"
+      "baseAhead_other": "{{base}} 有 {{count}} 个较新的提交",
+      "todayAt": "今天 {{time}}",
+      "yesterdayAt": "昨天 {{time}}",
+      "dateAt": "{{date}} {{time}}"
+    },
+    "commitDetail": {
+      "agentWithAuthor": "{{agent}}，与 {{author}} 合作",
+      "author": "作者",
+      "date": "日期",
+      "status": "状态",
+      "sha": "SHA",
+      "copySha": "复制提交哈希",
+      "files": "文件",
+      "retryFiles": "重新加载提交文件",
+      "waitingForDesktop": "等待桌面连接…",
+      "noFileChanges": "没有文件更改",
+      "title": "提交",
+      "moreActions": "提交操作",
+      "reviewChanges": "评审更改",
+      "copyMessage": "复制提交信息",
+      "openRemote": "在浏览器中打开提交",
+      "explain": "解释更改",
+      "copyFailed": "无法复制",
+      "noWebRemote": "此仓库没有受支持的网页远程库",
+      "openRemoteFailed": "无法在浏览器中打开提交",
+      "explainFailed": "启动智能体失败",
+      "messageCopied": "已复制提交信息",
+      "shaCopied": "已复制提交哈希",
+      "loadFilesFailed": "无法加载提交文件",
+      "invalidLink": "此链接未指向任何提交"
+    },
+    "commitDiff": {
+      "position": "{{index}} / {{count}}",
+      "parentUnknown": "无法加载此差异"
     }
   },
   "tasks": {

@@ -16,7 +16,8 @@ type Props = {
   comments: readonly DiffComment[]
   staleCommentIds: ReadonlySet<string>
   active: boolean
-  onAddNote: (lineNumber: number) => void
+  // Absent on read-only diffs, where lines take no notes.
+  onAddNote?: (lineNumber: number) => void
   onEditNote: (comment: DiffComment) => void
 }
 
@@ -52,7 +53,7 @@ export function MobileDiffReviewLine({
   const t = useMobileTranslation()
   useMobileColorScheme()
   const lineNumber = mobileDiffLineNumber(line)
-  const canComment = canCommentOnLine(line)
+  const canComment = onAddNote !== undefined && canCommentOnLine(line)
 
   return (
     <View
@@ -72,7 +73,7 @@ export function MobileDiffReviewLine({
         disabled={!canComment}
         onPress={() => {
           if (canComment && line.newLineNumber !== undefined) {
-            onAddNote(line.newLineNumber)
+            onAddNote?.(line.newLineNumber)
           }
         }}
         accessibilityRole={canComment ? 'button' : 'text'}

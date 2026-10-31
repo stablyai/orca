@@ -1509,7 +1509,8 @@
       "sourceControl": "ソース管理",
       "tasks": "タスク",
       "terminal": "ターミナル",
-      "workspace": "ワークスペース"
+      "workspace": "ワークスペース",
+      "commit": "コミット"
     }
   },
   "newWorkspace": {
@@ -3232,7 +3233,40 @@
       "files_one": "{{count}} 個のファイル",
       "files_other": "{{count}} 個のファイル",
       "baseAhead_one": "{{base}} に新しいコミットが {{count}} 件あります",
-      "baseAhead_other": "{{base}} に新しいコミットが {{count}} 件あります"
+      "baseAhead_other": "{{base}} に新しいコミットが {{count}} 件あります",
+      "todayAt": "今日 {{time}}",
+      "yesterdayAt": "昨日 {{time}}",
+      "dateAt": "{{date}} {{time}}"
+    },
+    "commitDetail": {
+      "agentWithAuthor": "{{agent}}（{{author}} と共同）",
+      "author": "著者",
+      "date": "日付",
+      "status": "状態",
+      "sha": "SHA",
+      "copySha": "コミットハッシュをコピー",
+      "files": "ファイル",
+      "retryFiles": "コミットのファイルを再読み込み",
+      "waitingForDesktop": "デスクトップへの接続待ち…",
+      "noFileChanges": "ファイルの変更はありません",
+      "title": "コミット",
+      "moreActions": "コミットの操作",
+      "reviewChanges": "変更をレビュー",
+      "copyMessage": "コミットメッセージをコピー",
+      "openRemote": "コミットをブラウザで開く",
+      "explain": "変更を説明",
+      "copyFailed": "コピーできませんでした",
+      "noWebRemote": "このリポジトリには対応するWebリモートがありません",
+      "openRemoteFailed": "コミットをブラウザで開けませんでした",
+      "explainFailed": "Agent の起動に失敗しました。",
+      "messageCopied": "コミットメッセージをコピーしました",
+      "shaCopied": "コミットハッシュをコピーしました",
+      "loadFilesFailed": "コミットのファイルを読み込めません",
+      "invalidLink": "このリンクはコミットを指していません"
+    },
+    "commitDiff": {
+      "position": "{{count}} 件中 {{index}} 件",
+      "parentUnknown": "この差分を読み込めません"
     }
   },
   "tasks": {

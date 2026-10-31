@@ -68,3 +68,20 @@ export function formatTimelineDay(dayStartMs: number, todayStartMs: number): str
   const sameYear = new Date(dayStartMs).getFullYear() === new Date(todayStartMs).getFullYear()
   return formatterFor(sameYear ? 'date' : 'dateWithYear').format(dayStartMs)
 }
+
+// The detail list's full date: "Today at 9:14 AM", "Yesterday at …", or the date and time.
+export function formatCommitDateTime(timestampMs: number, nowMs: number): string {
+  const locale = getUiIntlLocale()
+  const time = new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(
+    timestampMs
+  )
+  const daysAgo = Math.round((startOfLocalDay(nowMs) - startOfLocalDay(timestampMs)) / DAY_MS)
+  if (daysAgo === 0) {
+    return translate('sourceControl.commitTimeline.todayAt', 'Today at {{time}}', { time })
+  }
+  if (daysAgo === 1) {
+    return translate('sourceControl.commitTimeline.yesterdayAt', 'Yesterday at {{time}}', { time })
+  }
+  const date = new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(timestampMs)
+  return translate('sourceControl.commitTimeline.dateAt', '{{date}} at {{time}}', { date, time })
+}

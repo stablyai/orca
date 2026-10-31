@@ -1513,7 +1513,8 @@
       "sourceControl": "Quellcodeverwaltung",
       "tasks": "Aufgaben",
       "terminal": "Terminal",
-      "workspace": "Arbeitsbereich"
+      "workspace": "Arbeitsbereich",
+      "commit": "Commit"
     }
   },
   "newWorkspace": {
@@ -3236,7 +3237,40 @@
       "files_one": "{{count}} Datei",
       "files_other": "{{count}} Dateien",
       "baseAhead_one": "{{base}} hat 1 neueren Commit",
-      "baseAhead_other": "{{base}} hat {{count}} neuere Commits"
+      "baseAhead_other": "{{base}} hat {{count}} neuere Commits",
+      "todayAt": "Heute um {{time}}",
+      "yesterdayAt": "Gestern um {{time}}",
+      "dateAt": "{{date}} um {{time}}"
+    },
+    "commitDetail": {
+      "agentWithAuthor": "{{agent}}, mit {{author}}",
+      "author": "Autor",
+      "date": "Datum",
+      "status": "Status",
+      "sha": "SHA",
+      "copySha": "Commit-Hash kopieren",
+      "files": "Dateien",
+      "retryFiles": "Commit-Dateien erneut laden",
+      "waitingForDesktop": "Warten auf den Desktop…",
+      "noFileChanges": "Keine Dateiänderungen",
+      "title": "Commit",
+      "moreActions": "Commit-Aktionen",
+      "reviewChanges": "Änderungen prüfen",
+      "copyMessage": "Commit-Nachricht kopieren",
+      "openRemote": "Commit im Browser öffnen",
+      "explain": "Änderungen erklären",
+      "copyFailed": "Kopieren fehlgeschlagen",
+      "noWebRemote": "Dieses Repository hat kein unterstütztes Web-Remote",
+      "openRemoteFailed": "Commit konnte nicht im Browser geöffnet werden",
+      "explainFailed": "Agent konnte nicht gestartet werden",
+      "messageCopied": "Commit-Nachricht kopiert",
+      "shaCopied": "Commit-Hash kopiert",
+      "loadFilesFailed": "Commit-Dateien konnten nicht geladen werden",
+      "invalidLink": "Dieser Link verweist auf keinen Commit"
+    },
+    "commitDiff": {
+      "position": "{{index}} von {{count}}",
+      "parentUnknown": "Dieser Diff konnte nicht geladen werden"
     }
   },
   "tasks": {

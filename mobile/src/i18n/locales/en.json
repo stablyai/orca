@@ -686,7 +686,8 @@
       "agentSessionHistory": "Agent Session History",
       "changes": "Changes",
       "pullRequest": "Pull Request",
-      "workspace": "Workspace"
+      "workspace": "Workspace",
+      "commit": "Commit"
     }
   },
   "notifications": {
@@ -3381,7 +3382,40 @@
       "hours": "{{count}} hr",
       "yesterday": "Yesterday",
       "baseAhead_one": "{{base}} has 1 newer commit",
-      "baseAhead_other": "{{base}} has {{count}} newer commits"
+      "baseAhead_other": "{{base}} has {{count}} newer commits",
+      "todayAt": "Today at {{time}}",
+      "yesterdayAt": "Yesterday at {{time}}",
+      "dateAt": "{{date}} at {{time}}"
+    },
+    "commitDetail": {
+      "agentWithAuthor": "{{agent}}, with {{author}}",
+      "author": "Author",
+      "date": "Date",
+      "status": "Status",
+      "sha": "SHA",
+      "copySha": "Copy commit hash",
+      "files": "Files",
+      "retryFiles": "Retry commit files",
+      "waitingForDesktop": "Waiting for desktop...",
+      "noFileChanges": "No file changes",
+      "title": "Commit",
+      "moreActions": "Commit actions",
+      "reviewChanges": "Review Changes",
+      "copyMessage": "Copy commit message",
+      "openRemote": "Open commit in browser",
+      "explain": "Explain changes",
+      "copyFailed": "Could not copy",
+      "noWebRemote": "This repository has no supported web remote",
+      "openRemoteFailed": "Failed to open commit in browser",
+      "explainFailed": "Failed to launch agent",
+      "messageCopied": "Commit message copied",
+      "shaCopied": "Commit hash copied",
+      "loadFilesFailed": "Unable to load commit files",
+      "invalidLink": "This link does not name a commit"
+    },
+    "commitDiff": {
+      "position": "{{index}} of {{count}}",
+      "parentUnknown": "Unable to load this diff"
     }
   },
   "newWorkspace": {

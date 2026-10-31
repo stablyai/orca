@@ -18,6 +18,7 @@ import { MobileSourceControlSegments } from './MobileSourceControlSegments'
 import { MobileSourceControlBranchCard } from './MobileSourceControlBranchCard'
 import { MobileCommitTimeline } from './MobileCommitTimeline'
 import { useMobileCommitTimelineInputs } from './mobile-commit-timeline-inputs'
+import { buildMobileCommitDetailRoute } from './mobile-review-route'
 import { styles } from './mobile-source-control-styles'
 import { hubStyles } from './mobile-source-control-hub-styles'
 import type { SourceControlHubTab } from './mobile-source-control-hub-tab'
@@ -172,6 +173,13 @@ export function MobileSourceControlPanel({
     actionSheetActions
   })
   const openChangesTab = useCallback(() => selectTab('changes'), [selectTab])
+  const openCommit = useCallback(
+    (commitId: string) =>
+      router.push(
+        buildMobileCommitDetailRoute({ hostId, worktreeId, worktreeName: name, commitId })
+      ),
+    [hostId, name, router, worktreeId]
+  )
   const isHostedRepo = prController.prSidebarIsGithubRepo
   const prSidebarKind = prController.prSidebarState.kind
   const refetchPr = prController.refetchPRSidebar
@@ -395,6 +403,7 @@ export function MobileSourceControlPanel({
             {...timelineInputs}
             actionError={state.actionError}
             onOpenChanges={openChangesTab}
+            onOpenCommit={openCommit}
           />
         </View>
       ) : null}

@@ -1601,7 +1601,8 @@
       "sourceControl": "Управление версиями",
       "tasks": "Задачи",
       "terminal": "Терминал",
-      "workspace": "Рабочее пространство"
+      "workspace": "Рабочее пространство",
+      "commit": "Коммит"
     }
   },
   "newWorkspace": {
@@ -3424,7 +3425,40 @@
       "baseAhead_one": "В {{base}} {{count}} новый коммит",
       "baseAhead_few": "В {{base}} {{count}} новых коммита",
       "baseAhead_many": "В {{base}} {{count}} новых коммитов",
-      "baseAhead_other": "В {{base}} {{count}} новых коммита"
+      "baseAhead_other": "В {{base}} {{count}} новых коммита",
+      "todayAt": "Сегодня в {{time}}",
+      "yesterdayAt": "Вчера в {{time}}",
+      "dateAt": "{{date}} в {{time}}"
+    },
+    "commitDetail": {
+      "agentWithAuthor": "{{agent}} совместно с {{author}}",
+      "author": "Автор",
+      "date": "Дата",
+      "status": "Статус",
+      "sha": "SHA",
+      "copySha": "Скопировать хеш коммита",
+      "files": "Файлы",
+      "retryFiles": "Повторно загрузить файлы коммита",
+      "waitingForDesktop": "Ожидание подключения к компьютеру…",
+      "noFileChanges": "Нет изменений в файлах",
+      "title": "Коммит",
+      "moreActions": "Действия с коммитом",
+      "reviewChanges": "Проверить изменения",
+      "copyMessage": "Скопировать сообщение коммита",
+      "openRemote": "Открыть коммит в браузере",
+      "explain": "Объяснить изменения",
+      "copyFailed": "Не удалось скопировать",
+      "noWebRemote": "У этого репозитория нет поддерживаемого веб-адреса удалённого репозитория",
+      "openRemoteFailed": "Не удалось открыть коммит в браузере",
+      "explainFailed": "Не удалось запустить агента",
+      "messageCopied": "Сообщение коммита скопировано",
+      "shaCopied": "Хеш коммита скопирован",
+      "loadFilesFailed": "Не удалось загрузить файлы коммита",
+      "invalidLink": "Эта ссылка не указывает на коммит"
+    },
+    "commitDiff": {
+      "position": "{{index}} из {{count}}",
+      "parentUnknown": "Не удалось загрузить эти изменения"
     }
   },
   "tasks": {

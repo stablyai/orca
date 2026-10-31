@@ -90,7 +90,8 @@ const TIMELINE_PROPS = {
   upstream: null,
   uncommitted: null,
   pushAction: null,
-  onOpenChanges: () => {}
+  onOpenChanges: () => {},
+  onOpenCommit: () => {}
 }
 
 describe('MobileCommitTimeline', () => {

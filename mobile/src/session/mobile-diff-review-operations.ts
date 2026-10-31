@@ -82,3 +82,13 @@ export const reviewBranchFileDiffRead = bindDeferredRpcOperation(
     read: reviewDiffReader
   })
 )
+
+export const reviewCommitFileDiffRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'git.review-commit-file-diff',
+    method: 'git.commitDiff',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: reviewDiffReader
+  })
+)

@@ -21,11 +21,16 @@ function agentForEmail(email: string): TuiAgent | null {
   return AGENT_COMMIT_IDENTITIES.find((identity) => identity.matches(normalized))?.agent ?? null
 }
 
+// The agent when it authored the commit itself, rather than co-authoring a person's commit.
+export function detectCommitAuthorAgent(authorEmail: string | undefined): TuiAgent | null {
+  return authorEmail ? agentForEmail(authorEmail) : null
+}
+
 export function detectCommitAgent(commit: {
   authorEmail?: string
   message?: string
 }): TuiAgent | null {
-  const authorAgent = commit.authorEmail ? agentForEmail(commit.authorEmail) : null
+  const authorAgent = detectCommitAuthorAgent(commit.authorEmail)
   if (authorAgent) {
     return authorAgent
   }
@@ -36,4 +41,13 @@ export function detectCommitAgent(commit: {
     }
   }
   return null
+}
+
+// The message without the trailers that credit `agent`, which the author line already names.
+export function stripAgentCoAuthorTrailers(message: string, agent: TuiAgent): string {
+  return message
+    .replace(CO_AUTHOR_TRAILER, (line, email: string) =>
+      agentForEmail(email) === agent ? '' : line
+    )
+    .trimEnd()
 }

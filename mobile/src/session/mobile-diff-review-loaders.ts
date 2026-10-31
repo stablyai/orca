@@ -195,16 +195,36 @@ export async function loadMobileDiffReviewDiff(input: DiffLoadInput): Promise<Re
     item.scope === 'branch'
       ? await requestBranchFileDiff(client, worktreeId, item, branchCompare)
       : await requestWorktreeFileDiff(client, worktreeId, item)
-  if (input.signal?.aborted) {
+  return settleMobileReviewFileDiff(pending, {
+    itemKey: item.key,
+    filePath: item.filePath,
+    deleted: item.status === 'deleted',
+    ignoreTrimWhitespace: input.ignoreTrimWhitespace,
+    signal: input.signal
+  })
+}
+
+// One reply-to-render path for every diff source the review screens show.
+export function settleMobileReviewFileDiff(
+  pending: PendingFileDiff,
+  file: {
+    itemKey: string
+    filePath: string
+    deleted: boolean
+    ignoreTrimWhitespace?: boolean
+    signal?: AbortSignal
+  }
+): ReviewDiffState {
+  if (file.signal?.aborted) {
     return { kind: 'idle' }
   }
   if (!pending.reply.ok) {
     // Read the raw code because diff_too_large selects a render mode rather than a failure.
     if (pending.reply.error?.code === 'diff_too_large') {
-      return { kind: 'too-large', itemKey: item.key }
+      return { kind: 'too-large', itemKey: file.itemKey }
     }
-    if (item.status === 'deleted') {
-      return { kind: 'deleted', itemKey: item.key }
+    if (file.deleted) {
+      return { kind: 'deleted', itemKey: file.itemKey }
     }
   }
   let result: MobileReviewGitDiffResult
@@ -219,18 +239,18 @@ export async function loadMobileDiffReviewDiff(input: DiffLoadInput): Promise<Re
     )
   }
   if (result.kind === 'binary') {
-    return { kind: 'binary', itemKey: item.key }
+    return { kind: 'binary', itemKey: file.itemKey }
   }
   if (result.kind === 'too-large') {
-    return { kind: 'too-large', itemKey: item.key, byteLength: result.byteLength }
+    return { kind: 'too-large', itemKey: file.itemKey, byteLength: result.byteLength }
   }
   const diff = buildMobileDiffLines(result.originalContent, result.modifiedContent, {
-    ignoreTrimWhitespace: input.ignoreTrimWhitespace
+    ignoreTrimWhitespace: file.ignoreTrimWhitespace
   })
-  const language = resolveMobileSyntaxLanguage(item.filePath)
+  const language = resolveMobileSyntaxLanguage(file.filePath)
   return {
     kind: 'ready',
-    itemKey: item.key,
+    itemKey: file.itemKey,
     lines: highlightMobileDiffLines(diff.lines, language),
     hunks: buildMobileDiffHunks(diff.lines),
     truncated: diff.truncated

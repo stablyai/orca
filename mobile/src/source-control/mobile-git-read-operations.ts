@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import type { RpcCompatibleReader } from '../transport/rpc-operation-contract'
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
@@ -75,5 +76,16 @@ export const gitBranchDiffRead = bindDeferredRpcOperation(
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('branch-diff', gitDiffResultSchema)
+  })
+)
+
+// Null when the repository has no supported web remote.
+export const gitRemoteCommitUrlRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'git.remote-commit-url',
+    method: 'git.remoteCommitUrl',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('remote-commit-url', z.string().nullable())
   })
 )

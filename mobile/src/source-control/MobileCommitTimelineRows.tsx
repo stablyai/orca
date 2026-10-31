@@ -109,6 +109,7 @@ type RowProps = {
   todayStartMs: number
   historyLimit: number
   onOpenChanges: () => void
+  onOpenCommit: (commitId: string) => void
 }
 
 // Memoized: a timeline re-render passes the same row objects, so only changed rows rebuild their graph.
@@ -120,7 +121,8 @@ export const MobileCommitTimelineRow = memo(function MobileCommitTimelineRow({
   nowMs,
   todayStartMs,
   historyLimit,
-  onOpenChanges
+  onOpenChanges,
+  onOpenCommit
 }: RowProps) {
   const t = useMobileTranslation()
   const paddingLeft = textStart(rowLaneCount(row))
@@ -180,7 +182,11 @@ export const MobileCommitTimelineRow = memo(function MobileCommitTimelineRow({
       const author = commit.agent ? TUI_AGENT_DISPLAY_NAMES[commit.agent] : commit.author
       const time = formatTimelineCommitTime(commit.timestamp, nowMs, todayStartMs)
       return (
-        <View style={[styles.item, { paddingLeft }]}>
+        <Pressable
+          style={({ pressed }) => [styles.item, { paddingLeft }, pressed && styles.pressed]}
+          onPress={() => onOpenCommit(commit.id)}
+          accessibilityRole="button"
+        >
           <MobileCommitTimelineNodeGraph
             viewModel={row.graph}
             kind={commit.unpushed ? 'unpushed' : 'pushed'}
@@ -211,7 +217,7 @@ export const MobileCommitTimelineRow = memo(function MobileCommitTimelineRow({
             <View style={styles.spacer} />
             <CommitLineCounts added={commit.insertions} removed={commit.deletions} />
           </View>
-        </View>
+        </Pressable>
       )
     }
     case 'base': {

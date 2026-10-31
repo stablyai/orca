@@ -1513,7 +1513,8 @@
       "sourceControl": "Kaynak Kontrolü",
       "tasks": "Görevler",
       "terminal": "Terminal",
-      "workspace": "Çalışma Alanı"
+      "workspace": "Çalışma Alanı",
+      "commit": "Commit"
     }
   },
   "newWorkspace": {
@@ -3236,7 +3237,40 @@
       "files_one": "{{count}} dosya",
       "files_other": "{{count}} dosya",
       "baseAhead_one": "{{base}} üzerinde 1 yeni commit var",
-      "baseAhead_other": "{{base}} üzerinde {{count}} yeni commit var"
+      "baseAhead_other": "{{base}} üzerinde {{count}} yeni commit var",
+      "todayAt": "Bugün {{time}}",
+      "yesterdayAt": "Dün {{time}}",
+      "dateAt": "{{date}} {{time}}"
+    },
+    "commitDetail": {
+      "agentWithAuthor": "{{agent}}, {{author}} ile",
+      "author": "Yazar",
+      "date": "Tarih",
+      "status": "Durum",
+      "sha": "SHA",
+      "copySha": "Commit hash'ini kopyala",
+      "files": "Dosyalar",
+      "retryFiles": "Commit dosyalarını yeniden yükle",
+      "waitingForDesktop": "Masaüstü bekleniyor…",
+      "noFileChanges": "Dosya değişikliği yok",
+      "title": "Commit",
+      "moreActions": "Commit işlemleri",
+      "reviewChanges": "Değişiklikleri İncele",
+      "copyMessage": "Commit mesajını kopyala",
+      "openRemote": "Commit'i tarayıcıda aç",
+      "explain": "Değişiklikleri açıkla",
+      "copyFailed": "Kopyalanamadı",
+      "noWebRemote": "Bu repository'nin desteklenen bir web remote'u yok",
+      "openRemoteFailed": "Commit tarayıcıda açılamadı",
+      "explainFailed": "Ajan başlatılamadı",
+      "messageCopied": "Commit mesajı kopyalandı",
+      "shaCopied": "Commit hash'i kopyalandı",
+      "loadFilesFailed": "Commit dosyaları yüklenemedi",
+      "invalidLink": "Bu bağlantı bir commit belirtmiyor"
+    },
+    "commitDiff": {
+      "position": "{{count}} öğeden {{index}}",
+      "parentUnknown": "Bu diff yüklenemedi"
     }
   },
   "tasks": {

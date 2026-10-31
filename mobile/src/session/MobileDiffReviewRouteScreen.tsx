@@ -8,9 +8,32 @@ import { useForceReconnect } from '../transport/host-client-hooks'
 import { useWorkspaceClient } from '../transport/use-workspace-client'
 import { useHostProtocolGates } from '../components/host-protocol-gates-context'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
+import { MobileCommitDiffScreen } from '../source-control/MobileCommitDiffScreen'
+import { readCommitRouteSha } from '../source-control/mobile-review-route'
 
 // Keep the screen importable by the page: native route modules mount the shell.
 export function MobileDiffReviewRouteScreen() {
+  const params = useLocalSearchParams<{
+    hostId?: string | string[]
+    worktreeId?: string | string[]
+    area?: string | string[]
+    commit?: string | string[]
+    file?: string | string[]
+  }>()
+  if (firstReviewParam(params.area) === 'commit') {
+    return (
+      <MobileCommitDiffScreen
+        hostId={firstReviewParam(params.hostId)}
+        worktreeId={firstReviewParam(params.worktreeId)}
+        commitId={readCommitRouteSha(firstReviewParam(params.commit)) ?? ''}
+        initialFilePath={firstReviewParam(params.file)}
+      />
+    )
+  }
+  return <MobileWorkingTreeReviewScreen />
+}
+
+function MobileWorkingTreeReviewScreen() {
   const params = useLocalSearchParams<{
     hostId?: string | string[]
     worktreeId?: string | string[]

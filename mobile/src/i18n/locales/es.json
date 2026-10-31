@@ -1557,7 +1557,8 @@
       "sourceControl": "Control de código fuente",
       "tasks": "Tareas",
       "terminal": "Terminal",
-      "workspace": "Espacio de trabajo"
+      "workspace": "Espacio de trabajo",
+      "commit": "Commit"
     }
   },
   "newWorkspace": {
@@ -3330,7 +3331,40 @@
       "files_other": "{{count}} archivos",
       "baseAhead_one": "{{base}} tiene 1 commit más reciente",
       "baseAhead_many": "{{base}} tiene {{count}} commits más recientes",
-      "baseAhead_other": "{{base}} tiene {{count}} commits más recientes"
+      "baseAhead_other": "{{base}} tiene {{count}} commits más recientes",
+      "todayAt": "Hoy a las {{time}}",
+      "yesterdayAt": "Ayer a las {{time}}",
+      "dateAt": "{{date}} a las {{time}}"
+    },
+    "commitDetail": {
+      "agentWithAuthor": "{{agent}}, con {{author}}",
+      "author": "Autor",
+      "date": "Fecha",
+      "status": "Estado",
+      "sha": "SHA",
+      "copySha": "Copiar hash del commit",
+      "files": "Archivos",
+      "retryFiles": "Reintentar cargar los archivos del commit",
+      "waitingForDesktop": "Esperando al escritorio…",
+      "noFileChanges": "No hay cambios en archivos",
+      "title": "Commit",
+      "moreActions": "Acciones del commit",
+      "reviewChanges": "Revisar cambios",
+      "copyMessage": "Copiar mensaje del commit",
+      "openRemote": "Abrir commit en el navegador",
+      "explain": "Explicar los cambios",
+      "copyFailed": "No se pudo copiar",
+      "noWebRemote": "Este repositorio no tiene un remoto web compatible",
+      "openRemoteFailed": "No se pudo abrir el commit en el navegador",
+      "explainFailed": "No se pudo iniciar el agente",
+      "messageCopied": "Mensaje del commit copiado",
+      "shaCopied": "Hash del commit copiado",
+      "loadFilesFailed": "No se pudieron cargar los archivos del commit",
+      "invalidLink": "Este enlace no apunta a ningún commit"
+    },
+    "commitDiff": {
+      "position": "{{index}} de {{count}}",
+      "parentUnknown": "No se pudo cargar este diff"
     }
   },
   "tasks": {

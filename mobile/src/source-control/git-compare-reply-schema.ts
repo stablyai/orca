@@ -45,7 +45,20 @@ export const gitBranchCompareResultSchema = z.looseObject({
   entries: salvagingArray(gitBranchChangeEntrySchema).nullish()
 })
 
+// The diff needs the parent oid; hosts that omit the summary still list files.
+const gitCommitCompareSummarySchema = z.looseObject({
+  commitOid: z.string(),
+  parentOid: z.string().nullable().optional(),
+  // Unresolvable commits and failed listings arrive as ok replies with no entries.
+  status: salvagedOptional(
+    'status',
+    openEnum(['ready', 'invalid-commit', 'error'] as const, 'error')
+  ),
+  errorMessage: salvagedOptional('errorMessage', z.string())
+})
+
 export const gitCommitCompareResultSchema = z.looseObject({
+  summary: salvagedOptional('summary', gitCommitCompareSummarySchema),
   entries: salvagingArray(gitChangedFileSchema)
 })
 

@@ -49,6 +49,11 @@ export const MOBILE_WEB_PAGE_ROUTES = [
     pathname: '/h/[hostId]/source-control/[worktreeId]',
     grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write']
   },
+  // Commit detail opens the review route and copies/opens commits; match hub grants to stay in-document.
+  {
+    pathname: '/h/[hostId]/commit/[worktreeId]',
+    grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write']
+  },
   // Review grants cover Back/native-session navigation, shared layout, PR links and copy-notes.
   // Match hub grants so both directions stay in-document under opening session’s capabilities; census detects future mismatch.
   {

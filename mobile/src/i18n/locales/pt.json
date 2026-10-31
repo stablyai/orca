@@ -1557,7 +1557,8 @@
       "sourceControl": "Controle de Código-Fonte",
       "tasks": "Tarefas",
       "terminal": "Terminal",
-      "workspace": "Espaço de Trabalho"
+      "workspace": "Espaço de Trabalho",
+      "commit": "Commit"
     }
   },
   "newWorkspace": {
@@ -3330,7 +3331,40 @@
       "files_other": "{{count}} arquivos",
       "baseAhead_one": "{{base}} tem 1 commit mais recente",
       "baseAhead_many": "{{base}} tem {{count}} commits mais recentes",
-      "baseAhead_other": "{{base}} tem {{count}} commits mais recentes"
+      "baseAhead_other": "{{base}} tem {{count}} commits mais recentes",
+      "todayAt": "Hoje às {{time}}",
+      "yesterdayAt": "Ontem às {{time}}",
+      "dateAt": "{{date}} às {{time}}"
+    },
+    "commitDetail": {
+      "agentWithAuthor": "{{agent}}, com {{author}}",
+      "author": "Autor",
+      "date": "Data",
+      "status": "Status",
+      "sha": "SHA",
+      "copySha": "Copiar hash do commit",
+      "files": "Arquivos",
+      "retryFiles": "Tentar carregar os arquivos do commit novamente",
+      "waitingForDesktop": "Aguardando o desktop…",
+      "noFileChanges": "Nenhuma alteração em arquivos",
+      "title": "Commit",
+      "moreActions": "Ações do commit",
+      "reviewChanges": "Revisar alterações",
+      "copyMessage": "Copiar mensagem do commit",
+      "openRemote": "Abrir commit no navegador",
+      "explain": "Explicar alterações",
+      "copyFailed": "Não foi possível copiar",
+      "noWebRemote": "Este repositório não tem um remote web suportado",
+      "openRemoteFailed": "Falha ao abrir o commit no navegador",
+      "explainFailed": "Falha ao iniciar o agente",
+      "messageCopied": "Mensagem do commit copiada",
+      "shaCopied": "Hash do commit copiado",
+      "loadFilesFailed": "Não foi possível carregar os arquivos do commit",
+      "invalidLink": "Este link não aponta para um commit"
+    },
+    "commitDiff": {
+      "position": "{{index}} de {{count}}",
+      "parentUnknown": "Não foi possível carregar este diff"
     }
   },
   "tasks": {

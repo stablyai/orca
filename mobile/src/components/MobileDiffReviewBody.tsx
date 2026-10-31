@@ -17,13 +17,16 @@ import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-st
 type Props = {
   activeHunkIndex: number | null
   commentsByLine: ReadonlyMap<number, DiffComment[]>
-  currentItem: MobileDiffReviewQueueItem | null
+  currentItem: Pick<MobileDiffReviewQueueItem, 'key'> | null
   diffState: ReviewDiffState
   filteredCount: number
   listRef: RefObject<FlatList<ReviewDiffLine> | null>
-  screenState: ReviewScreenState
+  // The commit diff screen passes only the load gate, not a working-tree review.
+  screenState:
+    | Pick<Extract<ReviewScreenState, { kind: 'loading' | 'ready' }>, 'kind'>
+    | Extract<ReviewScreenState, { kind: 'error' | 'unavailable' }>
   staleCommentIds: ReadonlySet<string>
-  onAddNote: (lineNumber: number) => void
+  onAddNote?: (lineNumber: number) => void
   onEditNote: (comment: DiffComment) => void
   onRetry: (() => void) | undefined
 }
