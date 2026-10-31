@@ -157,6 +157,9 @@ describe('a send while the selected account folder is not set up yet', () => {
       // The real router prepares the selected account, joining or failing its setup, as a launch does.
       const recipe = await prepareClaudeReceivingAccount(router, {}, home('a'), input.accountRecipe)
       const acquired = await base(input)
+      if (!acquired.link) {
+        throw new Error('the rig acquisition always links a provider handle')
+      }
       return {
         ...acquired,
         accountHome: agentSessionAccountHome(CLAUDE_STRUCTURED_AGENT, recipe.home),
