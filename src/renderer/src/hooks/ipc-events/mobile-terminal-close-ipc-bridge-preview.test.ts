@@ -137,7 +137,7 @@ function hasEditTab(store: TestStore, filePath: string): boolean {
   return store.getState().openFiles.some((f) => f.filePath === filePath && f.mode === 'edit')
 }
 
-function screenState(store: TestStore): unknown {
+function screenState(store: TestStore): Record<string, unknown> {
   const s = store.getState()
   return {
     activeWorktreeId: s.activeWorktreeId,
@@ -145,7 +145,10 @@ function screenState(store: TestStore): unknown {
     activeTabType: s.activeTabType,
     activeFileId: s.activeFileId,
     activeTabId: s.activeTabId,
-    activeGroups: s.groupsByWorktree[VIEWED]?.map((group) => group.activeTabId)
+    activeGroupId: s.activeGroupIdByWorktree[VIEWED],
+    activeTabByGroup: Object.fromEntries(
+      (s.groupsByWorktree[VIEWED] ?? []).map((group) => [group.id, group.activeTabId])
+    )
   }
 }
 
@@ -173,7 +176,8 @@ describe('runtime file opens with preview', () => {
     await openFile({ worktreeId: VIEWED, ...file, navigation: 'caller', preview: true })
 
     expect(store.getState().unifiedTabsByWorktree[VIEWED]).toHaveLength(2)
-    expect(screenState(store)).toEqual(before)
+    // Why: toMatchObject lets a layout add a pane for the preview, as long as focus and existing panes stay put.
+    expect(screenState(store)).toMatchObject(before)
   })
 
   it('opens Markdown in its read-only preview tab', async () => {
