@@ -36,7 +36,7 @@ import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence
 import { planWorkerFollowUp, startWorkerFollowUp } from './worker-follow-up'
 import {
   followThroughWorkerReport,
-  takeHeldWorkerMail,
+  passHeldWorkerMail,
   settledDispatchId
 } from './settled-worker-follow-through'
 
@@ -225,9 +225,8 @@ export const ORCHESTRATION_SEND_METHODS = [
               : plan
           // A dispatch: address carries no recipient warnings, so `next` stays last.
           if (followUp?.kind === 'started') {
-            // Mail an earlier automatic continuation held joins this follow-up once it is ready.
-            if (plan?.kind === 'start') {
-              takeHeldWorkerMail(runtime, db, plan.latest.id, followUp.receipt)
+            if (typeof followUp.receipt.dispatchId === 'string') {
+              passHeldWorkerMail(runtime, db, followUp.receipt.dispatchId)
             }
             return followUp.receipt
           }

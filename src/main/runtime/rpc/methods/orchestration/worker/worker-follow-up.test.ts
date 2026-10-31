@@ -175,6 +175,29 @@ describe('a follow-up to a finished terminal worker', () => {
     expect(h.db.getDispatchContextById(dispatchId)?.follow_up_mail_at).toBeNull()
   })
 
+  it('counts a follow-up that reported before its start was observed as having taken the mail', async () => {
+    h.setup()
+    const { taskId, dispatchId } = await h.startWorker()
+    await send(dispatchId, 'DO NOT PUSH')
+    h.settle(taskId, dispatchId, 'succeeded')
+    vi.mocked(h.runtime.sendTerminalAgentPrompt).mockImplementationOnce(async (handle) => {
+      const followUp = getFollowUpDispatch(h.db, dispatchId)!
+      h.settle(followUp.task_id, followUp.id, 'succeeded')
+      return { handle, accepted: true, bytesWritten: 1 }
+    })
+
+    continueAllUnreadWorkerMail(h.runtime, h.db)
+
+    await vi.waitFor(() =>
+      expect(h.db.getDispatchContextById(dispatchId)?.follow_up_mail_at).toBeNull()
+    )
+    const followUp = getFollowUpDispatch(h.db, dispatchId)!
+    expect(h.db.getTask(followUp.task_id)?.spec).toContain('DO NOT PUSH')
+    expect(h.db.getUnreadMessages(`dispatch:${dispatchId}`)).toHaveLength(0)
+    expect(h.db.getUnreadMessages(`dispatch:${followUp.id}`)).toHaveLength(0)
+    expect(h.db.getUnreadMessages(`run:${h.activeRunId}`)).toHaveLength(0)
+  })
+
   it('keeps the mail a failed follow-up took, says so, and delivers it with the retry', async () => {
     h.setup()
     const { taskId, dispatchId } = await h.startWorker()

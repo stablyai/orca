@@ -20,6 +20,7 @@ import {
   type WorkerFollowUpOutcome
 } from './worker-follow-up'
 import { captureReportedWorkerResumeSession } from '../worker/worker-resume-session-capture'
+import { reportedWorkerOutcome } from '../worker/worker-start-receipt'
 
 /** After a report settles (or replays): save the worker's conversation, then continue mail it never read. */
 export function followThroughWorkerReport(
@@ -92,68 +93,81 @@ async function continueUnreadMail(
     )
     return
   }
-  const receipt = outcome?.kind === 'started' ? outcome.receipt : undefined
-  const to =
-    outcome?.kind === 'steer'
-      ? outcome.dispatchId
-      : typeof receipt?.dispatchId === 'string'
-        ? receipt.dispatchId
-        : undefined
-  // Mail counts as delivered only once the follow-up that takes it is ready.
-  if (!to || db.getWorkerDispatch(to)?.state !== 'ready') {
-    if (receipt) {
-      restoreFollowUpMail(
-        db,
-        unread.map((message) => message.id)
-      )
-      holdUnreadMailOnFailedFollowUp(runtime, db, dispatchId, receipt)
+  const startedId = outcome?.kind === 'started' ? outcome.receipt.dispatchId : undefined
+  const followUpId = outcome?.kind === 'steer' ? outcome.dispatchId : startedId
+  if (typeof followUpId !== 'string') {
+    return
+  }
+  if (outcome?.kind === 'started' && custodyOf(db, followUpId) === 'failed') {
+    // What it took goes back with the rest of the worker's held mail.
+    restoreFollowUpMail(
+      db,
+      unread.map((message) => message.id)
+    )
+  }
+  passHeldWorkerMail(runtime, db, followUpId)
+}
+
+/** Whether a follow-up took over its worker: ready or already reported, failed, or still starting. */
+function custodyOf(
+  db: OrchestrationDb,
+  dispatchId: string
+): 'ready' | 'reported' | 'starting' | 'failed' {
+  const worker = db.getWorkerDispatch(dispatchId)
+  if (reportedWorkerOutcome(worker)) {
+    return 'reported'
+  }
+  return worker?.state === 'ready' || worker?.state === 'starting' ? worker.state : 'failed'
+}
+
+/** Mail held anywhere in a worker's lineage follows its newest follow-up: delivered once that one is ready or
+ *  has reported, kept unread on it with one notice when its start failed (so the next send takes it). */
+export function passHeldWorkerMail(
+  runtime: OrcaRuntimeService,
+  db: OrchestrationDb,
+  followUpId: string
+): void {
+  const custody = custodyOf(db, followUpId)
+  if (custody === 'starting') {
+    return
+  }
+  const worker = db.getWorkerDispatch(followUpId)
+  const seen = new Set([followUpId])
+  let source = db.getDispatchContextById(followUpId)?.follow_up_of_dispatch_id
+  for (
+    ;
+    source && !seen.has(source);
+    source = db.getDispatchContextById(source)?.follow_up_of_dispatch_id
+  ) {
+    seen.add(source)
+    const first = db.getDispatchContextById(source)?.follow_up_mail_at
+      ? db.getUnreadMessages(`dispatch:${source}`, [...FOLLOW_UP_MESSAGE_TYPES])[0]
+      : undefined
+    if (first) {
+      if (custody === 'failed') {
+        const reason = worker?.last_error ?? worker?.state ?? 'unknown'
+        noticeUnreadMailNotContinued(runtime, db, source, reason)
+      }
+      let page
+      do {
+        page = db.routeUnreadDirectMessagesToDispatchMailbox(
+          followUpId,
+          first.run_id,
+          `dispatch:${source}`
+        )
+        for (const type of custody === 'failed' ? [] : page.types) {
+          runtime.notifyMessageArrived(`dispatch:${followUpId}`, type)
+        }
+      } while (page.hasMore)
     }
-    // A follow-up another send is still starting takes this mail once it is ready, or tells of it.
-    return
+    clearFollowUpMail(db, source)
   }
-  moveUnreadMail(runtime, db, first.run_id, dispatchId, to)
-  clearFollowUpMail(db, dispatchId)
-}
-
-/** After a send's own follow-up: mail held for it moves in once it is ready, or the coordinator hears it stayed. */
-export function takeHeldWorkerMail(
-  runtime: OrcaRuntimeService,
-  db: OrchestrationDb,
-  dispatchId: string,
-  receipt: Record<string, unknown>
-): void {
-  if (receipt.state === 'ready') {
-    continueUnreadWorkerMail(runtime, db, dispatchId)
-  } else {
-    holdUnreadMailOnFailedFollowUp(runtime, db, dispatchId, receipt)
+  if (custody !== 'ready') {
+    // A follow-up that already finished holds this mail as any finished worker does.
+    markUnreadFollowUpMail(db, followUpId)
   }
-}
-
-/** Held mail moves to the follow-up that failed, the worker's newest Dispatch, so the next send there takes it. */
-function holdUnreadMailOnFailedFollowUp(
-  runtime: OrcaRuntimeService,
-  db: OrchestrationDb,
-  dispatchId: string,
-  receipt: Record<string, unknown>
-): void {
-  const unread = db.getUnreadMessages(`dispatch:${dispatchId}`, [...FOLLOW_UP_MESSAGE_TYPES])
-  const first = unread[0]
-  if (!first || !db.getDispatchContextById(dispatchId)?.follow_up_mail_at) {
-    return
-  }
-  noticeUnreadMailNotContinued(runtime, db, dispatchId, String(receipt.lastError ?? receipt.state))
-  const failed = receipt.dispatchId
-  if (typeof failed === 'string' && failed !== dispatchId) {
-    let page
-    do {
-      page = db.routeUnreadDirectMessagesToDispatchMailbox(
-        failed,
-        first.run_id,
-        `dispatch:${dispatchId}`
-      )
-    } while (page.hasMore)
-    markUnreadFollowUpMail(db, failed)
-    clearFollowUpMail(db, dispatchId)
+  if (custody === 'reported') {
+    continueUnreadWorkerMail(runtime, db, followUpId)
   }
 }
 
@@ -186,23 +200,6 @@ function noticeUnreadMailNotContinued(
     },
     (handle, type) => runtime.notifyMessageArrived(handle, type)
   )
-}
-
-/** Moved mail is delivered like any Dispatch mail: a wake for each type that arrived. */
-function moveUnreadMail(
-  runtime: OrcaRuntimeService,
-  db: OrchestrationDb,
-  runId: string,
-  from: string,
-  to: string
-): void {
-  let page
-  do {
-    page = db.routeUnreadDirectMessagesToDispatchMailbox(to, runId, `dispatch:${from}`)
-    for (const type of page.types) {
-      runtime.notifyMessageArrived(`dispatch:${to}`, type)
-    }
-  } while (page.hasMore)
 }
 
 /** The Dispatch a worker_done receipt settled. */
