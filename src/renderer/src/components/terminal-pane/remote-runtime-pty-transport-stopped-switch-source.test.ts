@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createRemoteRuntimeTransportMocks,
+  readyHostSessionInventoryResponse,
   type MultiplexSubscriptionCallbacks
 } from './remote-runtime-pty-transport-test-harness'
 import type { StoppedSwitchSourceFact } from '../../../../shared/stopped-switch-source'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 
 // A paired client's pane whose process a switch stopped and kept: main's fact on the host row ends
 // recovery for that exact process instead of reattaching to it.
@@ -20,25 +22,37 @@ let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
 let resolvedPaneHandle = 'terminal-1'
 let hostFact: StoppedSwitchSourceFact | undefined
 
-const { runtimeCall, runtimeSubscribe, latestSubscribePayload, resetRemoteRuntimeTransport } =
-  createRemoteRuntimeTransportMocks({
-    getCallbacks: () => subscriptionCallbacks,
-    setCallbacks: (callbacks) => {
-      subscriptionCallbacks = callbacks
-    },
-    getResolvedPaneHandle: () => resolvedPaneHandle,
-    setResolvedPaneHandle: (handle) => {
-      resolvedPaneHandle = handle
-    }
-  })
+const {
+  runtimeCall,
+  runtimeSubscribe,
+  latestSubscribePayload,
+  emitSnapshot,
+  subscribeFrameCount,
+  resetRemoteRuntimeTransport
+} = createRemoteRuntimeTransportMocks({
+  getCallbacks: () => subscriptionCallbacks,
+  setCallbacks: (callbacks) => {
+    subscriptionCallbacks = callbacks
+  },
+  getResolvedPaneHandle: () => resolvedPaneHandle,
+  setResolvedPaneHandle: (handle) => {
+    resolvedPaneHandle = handle
+  }
+})
 
 type Listing = { ok: true; result: { tabs: Record<string, unknown>[] } }
 
 function stampHostRows(): void {
   const harnessCall = runtimeCall.getMockImplementation()
   runtimeCall.mockImplementation(async (request: { method: string }) => {
-    const reply = (await harnessCall?.(request)) as Listing
-    if (request.method !== 'session.tabs.activate' || !hostFact) {
+    const reply = (
+      request.method === 'session.tabs.list'
+        ? readyHostSessionInventoryResponse('terminal-1')
+        : await harnessCall?.(request)
+    ) as Listing
+    const listing =
+      request.method === 'session.tabs.activate' || request.method === 'session.tabs.list'
+    if (!listing || !hostFact) {
       return reply
     }
     const tabs = reply.result.tabs.map((tab) => ({ ...tab, stoppedSwitchSource: hostFact }))
@@ -67,7 +81,36 @@ async function attachedMirror() {
       ok: true,
       result: { type: 'end', streamId: latestSubscribePayload().streamId, verdict }
     })
-  return { transport, onPtyExit, endStream }
+  const answerStream = (result: Record<string, unknown>): void =>
+    subscriptionCallbacks?.onResponse({
+      ok: true,
+      result: { ...result, streamId: latestSubscribePayload().streamId }
+    })
+  return { transport, onPtyExit, endStream, answerStream }
+}
+
+function hostFrame(fact?: StoppedSwitchSourceFact): RuntimeMobileSessionTabsResult {
+  return {
+    worktree: 'wt-1',
+    publicationEpoch: 'epoch-2',
+    snapshotVersion: 2,
+    activeGroupId: null,
+    activeTabId: 'host-tab-1::pane:1',
+    activeTabType: 'terminal',
+    tabs: [
+      {
+        type: 'terminal',
+        id: 'host-tab-1::pane:1',
+        parentTabId: 'host-tab-1',
+        leafId: 'pane:1',
+        title: 'Terminal',
+        isActive: true,
+        status: 'ready',
+        terminal: 'terminal-1',
+        ...(fact ? { stoppedSwitchSource: fact } : {})
+      }
+    ]
+  }
 }
 
 describe.each(['claude', 'codex'] as const)(
@@ -110,30 +153,7 @@ describe.each(['claude', 'codex'] as const)(
       endStream('exited')
       await vi.waitFor(() => expect(runtimeCall).toHaveBeenCalled())
 
-      queueAcceptedWebSessionTerminalSnapshot(
-        {
-          worktree: 'wt-1',
-          publicationEpoch: 'epoch-2',
-          snapshotVersion: 2,
-          activeGroupId: null,
-          activeTabId: 'host-tab-1::pane:1',
-          activeTabType: 'terminal',
-          tabs: [
-            {
-              type: 'terminal',
-              id: 'host-tab-1::pane:1',
-              parentTabId: 'host-tab-1',
-              leafId: 'pane:1',
-              title: 'Terminal',
-              isActive: true,
-              status: 'ready',
-              terminal: 'terminal-1',
-              stoppedSwitchSource: fact
-            }
-          ]
-        },
-        'env-1'
-      )
+      queueAcceptedWebSessionTerminalSnapshot(hostFrame(fact), 'env-1')
 
       await vi.waitFor(() =>
         expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-1', undefined, {
@@ -141,6 +161,54 @@ describe.each(['claude', 'codex'] as const)(
         })
       )
       expect(runtimeSubscribe).toHaveBeenCalledTimes(1)
+      transport.destroy?.()
+    })
+
+    it('takes the fact from a frame that lands during a reattach backoff', async () => {
+      const { queueAcceptedWebSessionTerminalSnapshot } =
+        await import('@/runtime/web-session-terminal-handle-events')
+      const { transport, onPtyExit, endStream, answerStream } = await attachedMirror()
+      // The stop ends the stream; the host still lists the handle without the fact, so the
+      // client reattaches to the dead process, which ends at once, until the flaps back off.
+      endStream('exited')
+      for (const attempt of [2, 3]) {
+        await vi.waitFor(() => expect(subscribeFrameCount()).toBe(attempt))
+        answerStream({ type: 'subscribed', capabilities: { outputPause: 1 } })
+        emitSnapshot(latestSubscribePayload().streamId, 'last screen')
+        await vi.waitFor(() => expect(transport.isConnected()).toBe(true))
+        endStream('exited')
+      }
+      expect(transport.getRecoveryState?.().phase).toBe('backoff')
+
+      queueAcceptedWebSessionTerminalSnapshot(hostFrame(fact), 'env-1')
+
+      await vi.waitFor(
+        () =>
+          expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-1', undefined, {
+            stoppedSwitchSource: fact
+          }),
+        { timeout: 500 }
+      )
+      expect(subscribeFrameCount()).toBe(3)
+      transport.destroy?.()
+    })
+
+    it('takes the fact from main when its exited answer beats the frame', async () => {
+      const { transport, onPtyExit, endStream, answerStream } = await attachedMirror()
+      endStream('exited')
+      await vi.waitFor(() => expect(subscribeFrameCount()).toBe(2))
+      // Main recorded the fact before refusing the reattach; this client has not applied its frame.
+      hostFact = fact
+      answerStream({ type: 'error', message: 'terminal_exited' })
+      answerStream({ type: 'end' })
+
+      await vi.waitFor(() =>
+        expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-1', undefined, {
+          stoppedSwitchSource: fact
+        })
+      )
+      expect(onPtyExit).toHaveBeenCalledTimes(1)
+      expect(subscribeFrameCount()).toBe(2)
       transport.destroy?.()
     })
 
