@@ -1,13 +1,7 @@
-import { BrowserWindow, ipcMain } from 'electron'
+import { ipcMain } from 'electron'
 import { abortWhenRendererGone } from './renderer-lifetime-abort'
 import { noteWslHostUserAction } from '../wsl/wsl-host-user-actions'
-import {
-  WSL_HOST_CAPABILITY_CHANNEL,
-  WSL_HOST_STATUS_CHANNEL,
-  type WslHostAddResult,
-  type WslHostCapability,
-  type WslHostStatus
-} from '../../shared/wsl-host-types'
+import type { WslHostAddResult, WslHostCapability } from '../../shared/wsl-host-types'
 import type { Store } from '../persistence'
 import { createWslHostConnector } from '../wsl/wsl-host-connector'
 import { releaseUnwantedWslHolders, wslHolderKeepPolicy } from '../wsl/wsl-orphan-holder-release'
@@ -20,11 +14,11 @@ import { WslHostService } from '../wsl/wsl-host-service'
 import { WslHostVisibleWorkByWindow } from './wsl-host-visible-work-windows'
 import type { WslHostAutomationWake } from '../wsl/wsl-host-automation-wake'
 import { createWslHostAutomationWake } from './wsl-host-automation-wake-wiring'
+import { wslHostsAcceptNewWork, wslHostsServing } from '../wsl/wsl-host-gate'
 import {
-  onWslHostsNewWorkChanged,
-  wslHostsAcceptNewWork,
-  wslHostsServing
-} from '../wsl/wsl-host-gate'
+  publishWslHostStatus,
+  pushWslHostCapabilityOnNewWorkChange
+} from './wsl-host-window-broadcast'
 import { wslHostAddRefusal } from '../wsl/wsl-host-add-admission'
 import {
   getWslHostService,
@@ -60,24 +54,6 @@ export const WSL_HOST_HANDLER_CHANNELS = [
   'wslHosts:focusHost',
   'wslHosts:getCapability'
 ] as const
-
-function broadcast(channel: string, payload: unknown): void {
-  for (const window of BrowserWindow.getAllWindows()) {
-    if (!window.isDestroyed()) {
-      try {
-        window.webContents.send(channel, payload)
-      } catch {
-        /* A renderer can close during publication. */
-      }
-    }
-  }
-}
-
-function publish(status: WslHostStatus): void {
-  broadcast(WSL_HOST_STATUS_CHANNEL, status)
-}
-
-let stopCapabilityPush: (() => void) | null = null
 
 function wslHostRuntimeAccess(getUserDataPath: () => string): WslHostRuntimeAccess {
   return {
@@ -153,7 +129,7 @@ function createService(args: WslHostHandlerArgs): WslHostService | null {
   const created = new WslHostService({
     userDataPath: args.getUserDataPath,
     ...runGate,
-    publish,
+    publish: publishWslHostStatus,
     pairingChanged: (environmentId) => void args.invalidateTransport(environmentId),
     ready: (environmentId) => {
       void getRuntimeEnvironmentStatus(args.getUserDataPath(), environmentId, undefined, {
@@ -297,11 +273,7 @@ export function registerWslHostHandlers(args: WslHostHandlerArgs): void {
     acceptsNewWork: wslHostsAcceptNewWork()
   })
   ipcMain.handle('wslHosts:getCapability', capability)
-  // A block learned mid-run hides the offer and the add/move entry points without a relaunch.
-  stopCapabilityPush?.()
-  stopCapabilityPush = onWslHostsNewWorkChanged(() =>
-    broadcast(WSL_HOST_CAPABILITY_CHANNEL, capability())
-  )
+  pushWslHostCapabilityOnNewWorkChange(capability)
   ipcMain.handle('wslHosts:getStatuses', () => wsl.getStatuses())
   const visibleWork = new WslHostVisibleWorkByWindow()
   ipcMain.handle('wslHosts:setVisibleWork', (event, request: { environmentIds: string[] }) => {

@@ -7,6 +7,7 @@ import {
   onWslHostsNewWorkChanged,
   resetWslHostsGateForTests,
   wslHostsAcceptNewWork,
+  wslHostsOptedIn,
   wslHostsGateOpen,
   wslHostsAppliedMovedProjects,
   wslHostsAppliedPolicyState,
@@ -301,6 +302,17 @@ describe('WSL hosts gate', () => {
       expect(wslHostsServing()).toBe(true)
       expect(isGatedOffWslHost(wslHost)).toBe(false)
       expect(wslHostsWindowArguments()).toEqual([])
+    })
+
+    // Stage 1's opt-in (D1c Git routing, conversions, new-project Git default) ends with it.
+    it('ends the Stage 1 opt-in even with the setting on', () => {
+      vi.stubEnv('ORCA_INTERNAL_WSL_HOSTS', '1')
+      configureWslHostsGate(facts(false, false))
+      expect(wslHostsOptedIn({ experimentalWslHosts: true })).toBe(true)
+
+      noteWslHostsLivePolicyBlock()
+
+      expect(wslHostsOptedIn({ experimentalWslHosts: true })).toBe(false)
     })
 
     // Behind a gate that is already closed there is nothing new to stop, so nobody is told.

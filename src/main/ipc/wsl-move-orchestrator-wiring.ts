@@ -37,6 +37,7 @@ import {
 import { runTrackedWslMove } from '../telemetry/wsl-move-telemetry'
 import { readWslDistroRegistrations } from '../wsl/wsl-distro-registry-id'
 import { wslHostsAcceptNewWork, wslHostsGateOpen } from '../wsl/wsl-host-gate'
+import { wslHostAddRefusal } from '../wsl/wsl-host-add-admission'
 import { runAsWslUserAct } from '../wsl/wsl-unc-access-gate'
 import { getWslHostService } from '../wsl/wsl-host-service-instance'
 import { onWslHostUserAction } from '../wsl/wsl-host-user-actions'
@@ -100,7 +101,11 @@ function prepareHost(
       removalPending: () => wslHostRemovalPending(userDataPath, distro),
       hasHost: () => service.recordForEnvironment(environmentId) !== null,
       connect: () => service.connect(environmentId),
-      add: () => service.add({ distro, startIfStopped: false })
+      // Re-checked here: a block learned after the step began must still stop the add.
+      add: () =>
+        wslHostsAcceptNewWork()
+          ? service.add({ distro, startIfStopped: false })
+          : Promise.resolve(wslHostAddRefusal('disabled', 'newWorkPaused'))
     },
     distro,
     stillWanted
