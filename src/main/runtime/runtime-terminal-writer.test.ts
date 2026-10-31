@@ -184,3 +184,91 @@ it.each([
     )
   }
 })
+
+describe('submit settle before Enter', () => {
+  /** An idle proof the test settles by hand, after advancing the fake clock. */
+  function heldProof(): { claim: () => Promise<boolean>; settle: (idle: boolean) => void } {
+    let settle: (idle: boolean) => void = () => {
+      throw new Error('proof not started')
+    }
+    const proof = new Promise<boolean>((resolve) => {
+      settle = resolve
+    })
+    return { claim: () => proof, settle: (idle) => settle(idle) }
+  }
+
+  async function submitTimes(text: string, idleShell: boolean, proofMs = 0): Promise<number[]> {
+    vi.useFakeTimers()
+    const startedAt = Date.now()
+    const enters: number[] = []
+    const proof = heldProof()
+    const writer = new RuntimeTerminalWriter(
+      (_id, data) => {
+        if (data === '\r') {
+          enters.push(Date.now() - startedAt)
+        }
+        return true
+      },
+      () => 'linux',
+      () => null,
+      undefined,
+      proof.claim
+    )
+    const pending = writer.writeAction('pty', { text, enter: true }, `${text}\r`, {
+      inputKind: 'driving'
+    })
+    await vi.advanceTimersByTimeAsync(proofMs)
+    proof.settle(idleShell)
+    await vi.advanceTimersByTimeAsync(5000)
+    await pending
+    return enters
+  }
+
+  it('skips the settle for a single line sent to an idle shell prompt', async () => {
+    expect(await submitTimes('ls -la', true)).toEqual([0])
+  })
+
+  it('keeps the settle when the pane is not provably an idle shell', async () => {
+    const [at] = await submitTimes('ls -la', false)
+    expect(at).toBeGreaterThanOrEqual(500)
+  })
+
+  it('keeps the settle for multi-line text even at an idle prompt', async () => {
+    const [at] = await submitTimes('echo one\necho two', true)
+    expect(at).toBeGreaterThanOrEqual(500)
+  })
+
+  it('counts a failed idle proof toward the settle instead of adding to it', async () => {
+    const [unproven] = await submitTimes('ls -la', false)
+    const [slowProof] = await submitTimes('ls -la', false, 250)
+    expect(slowProof).toBe(unproven)
+  })
+
+  it('does not submit when the send is cancelled during a successful idle proof', async () => {
+    vi.useFakeTimers()
+    const writes: string[] = []
+    const controller = new AbortController()
+    const proof = heldProof()
+    const writer = new RuntimeTerminalWriter(
+      (_id, data) => {
+        writes.push(data)
+        return true
+      },
+      () => 'linux',
+      () => null,
+      undefined,
+      proof.claim
+    )
+    const pending = writer.writeAction('pty', { text: 'ls', enter: true }, 'ls\r', {
+      inputKind: 'driving',
+      signal: controller.signal
+    })
+    const rejected = expect(pending).rejects.toThrow('request_aborted')
+    await vi.advanceTimersByTimeAsync(100)
+    controller.abort()
+    proof.settle(true)
+    await vi.advanceTimersByTimeAsync(1000)
+    await rejected
+    expect(writes).toEqual(['ls'])
+  })
+})

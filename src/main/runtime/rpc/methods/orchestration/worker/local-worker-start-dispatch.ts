@@ -15,7 +15,8 @@ export function createLocalWorkerStartDispatch(
     callerSession,
     existingTask,
     orchestrationMutation,
-    helperCreator
+    helperCreator,
+    followUp
   }: Parameters<typeof startLocalWorker>[0],
   {
     params,
@@ -78,6 +79,9 @@ export function createLocalWorkerStartDispatch(
     retryOf: params.retryOf,
     startOptions,
     runtimeEpoch: runtime.getRuntimeId(),
-    mutationReceipt: orchestrationMutation
+    mutationReceipt: orchestrationMutation,
+    followUpOf: followUp?.of,
+    acceptedBy: followUp?.acceptedBy,
+    consumesMessageIds: followUp?.consumesMessageIds
   })
 }
