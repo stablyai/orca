@@ -240,13 +240,6 @@ it.each([10, 100])(
         yield entry
       }
     })
-    const loadingIterator = memory.transferSources[Symbol.iterator].bind(memory.transferSources)
-    vi.spyOn(memory.transferSources, Symbol.iterator).mockImplementation(function* () {
-      for (const entry of loadingIterator()) {
-        work.loading += entry[1].size
-        yield entry
-      }
-    })
     const move = pending.moveNativeChatPendingAttachments
     vi.spyOn(pending, 'moveNativeChatPendingAttachments').mockImplementation((from, to) => {
       work.pendingMoves++
@@ -268,7 +261,7 @@ it.each([10, 100])(
     expect(transition.attemptMembers).toBe(2 * count)
     expect(transition.observerMembers).toBeLessThanOrEqual(3 * count)
     expect(transition.listenerMembers).toBeLessThanOrEqual(8 * count + 1)
-    expect(transition.payloadWrites).toBeGreaterThan(0)
+    expect(transition.payloadWrites).toBe(0)
     expect(transition.payloadWrites).toBeLessThanOrEqual(3 * count)
     expect(transition.payloadCharacters).toBeLessThanOrEqual(1800 * count)
     expect(transition.removedStorageKeys).toBeLessThanOrEqual(2 * count)

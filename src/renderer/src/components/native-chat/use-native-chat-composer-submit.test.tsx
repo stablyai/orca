@@ -617,10 +617,9 @@ it.each([
         await loading
         await draftStore.nativeChatComposerDraftWritesSettled()
       })
-      expect(readNativeChatComposerDraft(target).text).toContain('unread target')
-      expect(seedStorage.drafts.get(lastKey)?.document).toEqual(
-        readNativeChatComposerDraft(target).document
-      )
+      expect(readNativeChatComposerDraft(target).text).not.toContain('unread target')
+      expect(seedStorage.drafts.get(lastKey)?.text).toBe('unread target')
+      expect(seedStorage.drafts.get(lastKey)?.document).toBeUndefined()
     }
     const recovered = readNativeChatComposerDraft(target)
     expect(recovered.text).toContain('new source input')

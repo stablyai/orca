@@ -46,6 +46,7 @@ import { useNativeChatDraft } from './use-native-chat-draft'
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
   clearNativeChatPendingAttachmentsForTests()
   clearNativeChatComposerDraftsForTests()
 })
@@ -430,7 +431,10 @@ import {
   createMemoryNativeChatComposerDraftStorage,
   setNativeChatComposerDraftStorageForTests
 } from './native-chat-composer-draft-storage'
-import { useRestoredNativeChatComposerDraftImageCheck } from './native-chat-composer-draft-image-check'
+import {
+  useRestoredNativeChatComposerDraftImageCheck,
+  recheckNativeChatComposerDraftImagesIn
+} from './native-chat-composer-draft-image-check'
 import {
   readLaunchSetupOptions,
   writeLaunchSetupOptions,
@@ -524,6 +528,21 @@ it.each([10, 100])(
       'true'
     )
     expect(renders.slice(1)).toEqual(initial.slice(1))
+    const paste = '/native-chat-pastes/orca-paste-1-ab.png'
+    act(() =>
+      updateNativeChatComposerDraft(
+        scopes[0],
+        { images: [{ id: 'live', path: paste }] },
+        'immediate'
+      )
+    )
+    expect(view.container.querySelector('[data-probe="0"]')?.getAttribute('data-images')).toBe('1')
+    expect(renders.slice(1)).toEqual(initial.slice(1))
+    const checked = Promise.withResolvers<{ path: string; kept: boolean; exists: boolean }[]>()
+    vi.stubGlobal('api', { ui: { restoreNativeChatPastes: vi.fn(() => checked.promise) } })
+    act(() => recheckNativeChatComposerDraftImagesIn('/native-chat-pastes'))
+    expect(view.container.querySelector('[data-probe="0"]')?.getAttribute('data-checks')).toBe('1')
+    expect(renders.slice(1)).toEqual(initial.slice(1))
     const { createTestStore } = await import('@/store/slices/store-test-helpers')
     act(() =>
       createTestStore()
@@ -536,10 +555,15 @@ it.each([10, 100])(
       await loading
       await nativeChatComposerDraftWritesSettled()
     })
-    expect(view.container.querySelector('[data-probe="0"]')?.textContent).toBe(
-      'saved target\n\nown input|chosen|1'
-    )
+    expect(view.container.querySelector('[data-probe="0"]')?.textContent).toBe('own input|chosen|1')
     expect(view.container.querySelector('[data-probe="0"]')?.getAttribute('data-images')).toBe('1')
+    expect(renders.slice(1)).toEqual(initial.slice(1))
+    expect(readNativeChatComposerDraft(scopes[0]).images).toEqual([{ id: 'live', path: paste }])
+    await act(async () => {
+      checked.resolve([{ path: paste, kept: true, exists: true }])
+      await checked.promise
+    })
+    expect(view.container.querySelector('[data-probe="0"]')?.getAttribute('data-checks')).toBe('0')
     expect(renders.slice(1)).toEqual(initial.slice(1))
     act(() => settleNativeChatPendingAttachment(scopes[0], 'own-chip', '/chip.png'))
     expect(view.container.querySelector('[data-probe="0"]')?.getAttribute('data-images')).toBe('2')

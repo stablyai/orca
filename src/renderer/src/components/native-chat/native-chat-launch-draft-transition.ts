@@ -1,9 +1,7 @@
 import {
-  beginNativeChatDraftTransfer,
-  moveNativeChatDraftTransferContext
-} from './native-chat-composer-draft-transfer'
-import { withIndependentNativeChatComposerDraft } from './native-chat-composer-draft-addition'
-import { flushNativeChatComposerDrafts } from './native-chat-composer-draft-persistence'
+  placeNativeChatComposerDraftAddition,
+  withIndependentNativeChatComposerDraft
+} from './native-chat-composer-draft-addition'
 import { moveNativeChatComposerDestinations } from './native-chat-composer-destination'
 import type { NativeChatComposerDraftOwner } from './native-chat-composer-draft-storage'
 import {
@@ -12,7 +10,9 @@ import {
   type LaunchDraftSource
 } from './native-chat-launch-draft-source'
 import {
-  transferDestinations,
+  installNativeChatDraftRecord,
+  nextSavedAt,
+  reconcileRestoredImageChecks,
   records,
   scopeListeners,
   appendListeners,
@@ -25,7 +25,7 @@ import {
   moveNativeChatPendingAttachments,
   moveLaunchPendingAttachmentListeners
 } from './native-chat-pending-attachment-cache'
-/** One accepted application rebinds references directly and transfers through ordinary persistence. */
+/** One accepted application rebinds references directly and joins complete current memory. */
 export function transitionLaunchDrafts(
   destination: (source: LaunchDraftSource) => NativeChatComposerDraftOwner | undefined
 ): void {
@@ -39,16 +39,17 @@ export function transitionLaunchDrafts(
       continue
     }
     const from = source.scopeKey
-    moveNativeChatDraftTransferContext(from)
     const target = relocateLaunchDraftSource(source, owner)
     const to = target.scopeKey
     const checks = restoredImageChecks.get(from)
     const draft = records.get(from)
-    const before = records.get(to) ?? { text: '', images: [], savedAt: 0 }
+    const before = records.get(to) ?? { text: '', images: [], savedAt: 0, owner: undefined }
     const sourceAppends = appendListeners.get(from)
+    const targetAppends = Array.from(appendListeners.get(to) ?? [])
+    const placed = draft && placeNativeChatComposerDraftAddition(before, draft)
     moveNativeChatComposerDestinations(from, to)
     mergeMembers(scopeListeners, from, to)
-    mergeMembers(transferDestinations, from, to)
+    mergeMembers(appendListeners, from, to)
     moveLaunchPendingAttachmentListeners(from, to)
     for (const submission of submissions.get(from) ?? []) {
       submission.scopeKey = to
@@ -64,8 +65,21 @@ export function transitionLaunchDrafts(
       ])
       restoredImageChecks.delete(from)
     }
-    beginNativeChatDraftTransfer(from, target.handles.values().next().value ?? target)
-    mergeMembers(appendListeners, from, to)
+    installNativeChatDraftRecord(from)
+    if (placed) {
+      const merged = withIndependentNativeChatComposerDraft(before, placed)
+      installNativeChatDraftRecord(to, {
+        ...before,
+        ...merged,
+        owner: before.owner ?? owner,
+        savedAt: nextSavedAt()
+      })
+      reconcileRestoredImageChecks(to, merged.images)
+    }
+    moveNativeChatPendingAttachments(from, to)
+    if (placed && records.get(to)?.text !== before.text) {
+      targetAppends.forEach((listener) => listener(placed, before))
+    }
     if (draft) {
       sourceAppends?.forEach((listener) =>
         listener(
@@ -77,11 +91,9 @@ export function transitionLaunchDrafts(
         )
       )
     }
-    moveNativeChatPendingAttachments(from, to)
     target.optionListeners.forEach((listener) => listener())
     notifyScope(to)
   }
-  flushNativeChatComposerDrafts()
 }
 function mergeMembers<T>(family: Map<string, Set<T>>, from: string, to: string): void {
   const held = family.get(from)

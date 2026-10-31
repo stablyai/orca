@@ -119,9 +119,7 @@ export function reconcileRestoredImageChecks(
 export const scopeListeners = new Map<string, Set<() => void>>()
 
 /** Pre-hydration appends replay over loaded drafts; ordinary edits replace them. */
-export type DraftAppend = ((
-  draft: StoredNativeChatComposerDraft
-) => StoredNativeChatComposerDraft) & { journalFull?: boolean }
+export type DraftAppend = (draft: StoredNativeChatComposerDraft) => StoredNativeChatComposerDraft
 
 /** Atomically append in storage, then replay onto hydration if that load could not have read it. */
 export type AppendBeforeLoad = {
@@ -129,15 +127,7 @@ export type AppendBeforeLoad = {
   readonly sequence: number
   readonly append: DraftAppend
   committed: boolean
-  before?: StoredNativeChatComposerDraft
-  appliedAt?: number
 }
-
-import type { DraftTransfer } from './native-chat-composer-draft-transfer'
-export type { DraftTransfer } from './native-chat-composer-draft-transfer'
-// Two memberships index the same finite operation, never another rich authority.
-export const transferSources = new Map<string, Set<DraftTransfer>>()
-export const transferDestinations = new Map<string, Set<DraftTransfer>>()
 
 type LoadBookkeeping = {
   hydrated: boolean
@@ -197,8 +187,6 @@ export function clearDraftMemoryForTests(): void {
   load.appendSequence = 0
   load.editedBeforeLoad.clear()
   load.appendsBeforeLoad.clear()
-  transferSources.clear()
-  transferDestinations.clear()
   load.deletionsBeforeLoad.length = 0
 }
 
@@ -257,9 +245,13 @@ export function isNativeChatEditDraft(scopeKey: string): boolean {
   return scopeKey.startsWith('queued-edit:')
 }
 
-/** Queued edits share input machinery without entering persistence. */
+/** Setup survives view close; only queued edits require an open editor lease. */
+export function isNativeChatSetupDraft(scopeKey: string): boolean {
+  return scopeKey.startsWith('agent-setup:')
+}
+
 export function isNativeChatMemoryOnlyDraft(scopeKey: string): boolean {
-  return isNativeChatEditDraft(scopeKey)
+  return isNativeChatEditDraft(scopeKey) || isNativeChatSetupDraft(scopeKey)
 }
 
 export function closeNativeChatEditDraft(scopeKey: string): void {

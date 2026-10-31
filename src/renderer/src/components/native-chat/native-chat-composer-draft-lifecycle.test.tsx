@@ -677,6 +677,78 @@ describe('native-chat composer draft lifecycle', () => {
     expect(seen.api?.draft).toBe('mine, unsaved')
   })
 
+  it('ignores foreign present/corrupt setup payloads, but keeps guarded absent-record removal through the real channel', async () => {
+    const hooks = await loadHooks()
+    const store = await import('./native-chat-composer-draft-store')
+    const memory = await import('./native-chat-composer-draft-memory')
+    const scope = store.nativeChatLaunchPromptDraftScopeKey('repo::/x', 'codex', 'ssh:new')
+    const raw = 'agent-setup:["ssh:new","repo::/x","codex"]'
+    const seen: { api?: ComposerApi } = {}
+    await mount(
+      createElement(
+        composer(hooks, (next) => (seen.api = next)),
+        { scopeKey: scope }
+      )
+    )
+    await act(async () => seen.api?.setDraft('live Q'))
+    const current = store.readNativeChatComposerDraft(scope)
+    const sender = new BroadcastChannel('orca-native-chat-composer-drafts')
+    const read = vi.spyOn(storage, 'read')
+    const notify = async (value: unknown) => {
+      const requested = Promise.withResolvers<void>()
+      const result = Promise.withResolvers<unknown>()
+      read.mockImplementationOnce(() => {
+        requested.resolve()
+        return result.promise
+      })
+      await act(async () => {
+        sender.postMessage({ scopeKey: raw })
+        await requested.promise
+        result.resolve(value)
+        await result.promise
+      })
+    }
+    try {
+      await notify({
+        text: 'old foreign setup',
+        images: [{ id: 'old', path: '/old.png' }],
+        savedAt: 100
+      })
+      expect(store.readNativeChatComposerDraft(scope)).toBe(current)
+      expect(seen.api?.draft).toBe('live Q')
+      expect(memory.restoredImageChecks.has(raw)).toBe(false)
+      await notify({ corrupt: true })
+      expect(store.readNativeChatComposerDraft(scope)).toBe(current)
+      expect(seen.api?.draft).toBe('live Q')
+      await notify(undefined)
+      expect(seen.api?.draft).toBe('')
+      await act(async () => seen.api?.setDraft('successor Q'))
+      const remove = vi
+        .spyOn(storage, 'remove')
+        .mockRejectedValueOnce(new DOMException('refused', 'QuotaExceededError'))
+      await act(async () => {
+        store.deleteNativeChatComposerDraft(scope)
+        await store.nativeChatComposerDraftWritesSettled()
+        seen.api?.setDraft('guarded Q')
+      })
+      remove.mockRestore()
+      // The actual ordinary local-change guard still refuses foreign removal while deletion is dirty.
+      read.mockClear()
+      sender.postMessage({ scopeKey: raw })
+      const barrier = Promise.withResolvers<void>()
+      sender.onmessage = () => barrier.resolve()
+      const peer = new BroadcastChannel('orca-native-chat-composer-drafts')
+      peer.postMessage({ scopeKey: raw })
+      await act(async () => barrier.promise)
+      peer.close()
+      expect(read).not.toHaveBeenCalled()
+      expect(seen.api?.draft).toBe('guarded Q')
+    } finally {
+      sender.close()
+      read.mockRestore()
+    }
+  })
+
   it('shows a composer its draft was refused, keeps it, and clears the mark once a retry lands', async () => {
     const hooks = await loadHooks()
     const { useNativeChatComposerDraftUnsaved } = await import('./use-native-chat-draft-unsaved')

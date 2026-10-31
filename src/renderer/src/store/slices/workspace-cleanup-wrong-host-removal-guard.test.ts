@@ -613,7 +613,7 @@ import {
   createMemoryNativeChatComposerDraftStorage,
   setNativeChatComposerDraftStorageForTests
 } from '@/components/native-chat/native-chat-composer-draft-storage'
-it('actual normal removal cancels held accepted hydration while refusal and later manual input retain authority', async () => {
+it('actual normal removal clears current setup while held residue stays inert and later manual input retains authority', async () => {
   launchDrafts.clearNativeChatComposerDraftsForTests()
   pendingChips.clearNativeChatPendingAttachmentsForTests()
   const storage = createMemoryNativeChatComposerDraftStorage()
@@ -668,7 +668,7 @@ it('actual normal removal cancels held accepted hydration while refusal and late
   await launchDrafts.nativeChatComposerDraftWritesSettled()
   expect(launchDrafts.readNativeChatComposerDraft(source).text).toBe('new explicit input')
   expect(launchDrafts.readNativeChatComposerDraft(source).images).toHaveLength(0)
-  expect(storage.drafts.has(originalKey)).toBe(false)
+  expect(storage.drafts.has(originalKey)).toBe(true)
   expect(launchDrafts.readNativeChatComposerDraft(live).text).toBe('live control')
   expect(pendingChips.settleNativeChatPendingAttachment(source, 'old-pending', '/late.png')).toBe(
     false

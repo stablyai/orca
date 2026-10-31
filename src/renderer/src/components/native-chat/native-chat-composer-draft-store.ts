@@ -14,10 +14,7 @@ import {
   withIndependentNativeChatComposerDraft,
   type NativeChatComposerDraftAddition
 } from './native-chat-composer-draft-addition'
-import {
-  journalNativeChatComposerDraftAddition,
-  journalNativeChatComposerDraftChanges
-} from './native-chat-composer-draft-journal'
+import { journalNativeChatComposerDraftAddition } from './native-chat-composer-draft-journal'
 import {
   clearDraftMemoryForTests,
   resolveNativeChatComposerDraftOwner,
@@ -35,10 +32,12 @@ import {
   ephemeralDrafts,
   isNativeChatEditDraft,
   isNativeChatMemoryOnlyDraft,
+  isNativeChatSetupDraft,
   reconcileRestoredImageChecks,
   type DraftAppend,
   type DraftRecord,
-  transferSources
+  releaseNativeChatComposerSubmission,
+  type DraftSubmission
 } from './native-chat-composer-draft-memory'
 import {
   persistNativeChatComposerDraft,
@@ -99,7 +98,7 @@ export function subscribeToNativeChatComposerDraft(
 /** A draft storage refused to save: it is kept in memory only until a later write lands. */
 export function isNativeChatComposerDraftUnsaved(scopeKey: string): boolean {
   scopeKey = currentDraftScope(scopeKey)
-  return refusedScopes.has(scopeKey) && records.has(scopeKey)
+  return !isNativeChatSetupDraft(scopeKey) && refusedScopes.has(scopeKey) && records.has(scopeKey)
 }
 
 function isEmptyDraft(draft: NativeChatComposerDraft): boolean {
@@ -112,7 +111,22 @@ export function readNativeChatComposerDraft(
   return records.get(currentDraftScope(scopeKey)) ?? EMPTY_DRAFT
 }
 
-export { finishNativeChatComposerSubmission } from './native-chat-composer-draft-transfer'
+export function finishNativeChatComposerSubmission(
+  scopeKey: string,
+  submission: DraftSubmission,
+  recover = false
+): void {
+  scopeKey = submission.scopeKey
+  const draft = releaseNativeChatComposerSubmission(scopeKey, submission)
+  if (recover && draft) {
+    appendToNativeChatComposerDraft(
+      scopeKey,
+      draft,
+      resolveNativeChatComposerDraftOwner(scopeKey) ?? draft.owner,
+      true
+    )
+  }
+}
 
 /** Coalesce typing, persist hand-backs/clears immediately, and remove empty drafts so sent input cannot return. */
 export function updateNativeChatComposerDraft(
@@ -147,9 +161,6 @@ export function updateNativeChatComposerDraft(
       persistNativeChatComposerDraft(scopeKey, 'immediate')
     }
     return
-  }
-  for (const transfer of transferSources.get(scopeKey) ?? []) {
-    transfer.sourceWritable = false
   }
   if (isEmptyDraft({ text, images })) {
     installNativeChatDraftRecord(scopeKey)
@@ -222,7 +233,7 @@ export function appendToNativeChatComposerDraft(
       ...(owner ? { owner } : {})
     },
     'immediate',
-    Object.assign(compose, { journalFull: independent })
+    compose
   )
   if (text !== current.text) {
     notifyDraftAppend(scopeKey, placed, current)
@@ -234,14 +245,6 @@ export function appendToNativeChatComposerDraft(
   // Why: a hand-back the draft already holds changes nothing, but that draft may not be saved yet.
   if (after === before && !hasLocalChange(scopeKey) && !refusedScopes.has(scopeKey)) {
     return true
-  }
-  if (independent) {
-    if (load.hydrated || load.editedBeforeLoad.has(scopeKey)) {
-      journalNativeChatComposerDraftChanges(
-        new Map([[scopeKey, { draft: after, at: after.savedAt }]])
-      )
-    }
-    return false
   }
   return (
     isNativeChatMemoryOnlyDraft(scopeKey) ||

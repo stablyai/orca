@@ -77,7 +77,7 @@ it('launches with the typed first prompt from Enter or either Launch button, and
   expect(onUse).toHaveBeenLastCalledWith(expect.not.objectContaining({ prompt: expect.anything() }))
   expect(onUse).toHaveBeenCalledTimes(3)
 
-  // The setup uses ordinary composer persistence, including its deterministic qualified key.
+  // Setup shares the rich store but retains input only for this renderer session.
   vi.useFakeTimers()
   try {
     changePrompt(prompt(), 'kept until launch')
@@ -88,10 +88,10 @@ it('launches with the typed first prompt from Enter or either Launch button, and
   expect(readNativeChatComposerDraft(agentLaunchPromptScopeKey(launchEntry)).text).toBe(
     'kept until launch'
   )
-  expect([...storage.drafts.keys()]).toEqual(['agent-setup:["local","wt-1","claude"]'])
-  expect([...storage.drafts.values()][0]).toMatchObject({
-    text: 'kept until launch',
-    owner: { workspaceId: 'wt-1', executionHostId: 'local' }
+  expect([...storage.drafts.keys()]).toEqual([])
+  expect(readNativeChatComposerDraft(agentLaunchPromptScopeKey(launchEntry)).owner).toEqual({
+    workspaceId: 'wt-1',
+    executionHostId: 'local'
   })
   setNativeChatComposerDraftStorageForTests(null)
 })

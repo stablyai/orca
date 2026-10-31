@@ -1,11 +1,8 @@
-import {
-  completeNativeChatDraftTransfers,
-  abandonNativeChatDraftTransfers
-} from './native-chat-composer-draft-transfer'
 // Preserve pre-hydration edits and replay appends on top of loaded drafts plus the unload journal.
 
 import {
   dirtyScopes,
+  isNativeChatSetupDraft,
   installNativeChatDraftRecord,
   load,
   nextSavedAt,
@@ -48,13 +45,7 @@ function withAppends(
   if (missing.length === 0) {
     return { draft: loaded, changed: false }
   }
-  const merged = missing.reduce(
-    (draft, entry) =>
-      entry.appliedAt !== undefined && draft.savedAt >= entry.appliedAt
-        ? draft
-        : entry.append(draft),
-    loaded
-  )
+  const merged = missing.reduce((draft, entry) => entry.append(draft), loaded)
   return { draft: { ...merged, savedAt: nextSavedAt() }, changed: true }
 }
 
@@ -67,7 +58,9 @@ function applyLoaded(
 ): void {
   const drafts = new Map<string, StoredNativeChatComposerDraft | null>()
   for (const [scopeKey, value] of loaded) {
-    drafts.set(scopeKey, parseStoredNativeChatComposerDraft(value))
+    if (!isNativeChatSetupDraft(scopeKey)) {
+      drafts.set(scopeKey, parseStoredNativeChatComposerDraft(value))
+    }
   }
   for (const scopeKey of replayNativeChatComposerDraftJournal(drafts, journal)) {
     dirtyScopes.add(scopeKey)
@@ -100,7 +93,6 @@ function applyLoaded(
     notifyScope(scopeKey)
   }
   load.hydrated = true
-  completeNativeChatDraftTransfers(drafts)
   load.editedBeforeLoad.clear()
   load.appendsBeforeLoad.clear()
   load.deletionsBeforeLoad.length = 0
@@ -116,7 +108,6 @@ function retryLater(error: unknown): void {
   if (delay === undefined) {
     // Given up: what was changed meanwhile is all there is, so nothing waits on a load any more.
     load.hydrated = true
-    abandonNativeChatDraftTransfers()
     load.editedBeforeLoad.clear()
     load.appendsBeforeLoad.clear()
     load.deletionsBeforeLoad.length = 0
@@ -136,7 +127,9 @@ export function hydrateNativeChatComposerDrafts(): Promise<void> {
     installNativeChatComposerDraftBroadcast()
     // Why read here: storage applies changes in order, so this load reads every append made so far.
     const readAtSequence = load.appendSequence
-    const journal = snapshotNativeChatComposerDraftJournal()
+    const journal = snapshotNativeChatComposerDraftJournal().filter(
+      (entry) => !isNativeChatSetupDraft(entry.scopeKey)
+    )
     applyLoaded(await nativeChatComposerDraftStorage().loadAll(), readAtSequence, journal)
   })().catch(retryLater)
   return hydration

@@ -56,7 +56,7 @@ const prefix = 'agent-setup:'
 const scopeOf = (owner: NativeChatComposerDraftOwner, agent: string): string =>
   prefix + JSON.stringify([owner.executionHostId, owner.workspaceId, agent])
 
-/** Session references follow accepted context changes; the ordinary persisted key stays reconstructible. */
+/** Session references follow accepted context changes; the qualified session key stays reconstructible. */
 export const launchDraftSource = (scope: string): LaunchDraftSource | undefined =>
   handles.get(scope) ?? setups.get(scope)
 export const currentDraftScope = (scope: string): string => handles.get(scope)?.scopeKey ?? scope
