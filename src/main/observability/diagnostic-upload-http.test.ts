@@ -76,7 +76,7 @@ describe('diagnostic upload HTTP', () => {
     request.emit('close')
     expect(request.destroy).toHaveBeenCalledTimes(1)
     expect(response.destroy).toHaveBeenCalledTimes(1)
-    expect(request.listenerCount('error')).toBe(0)
+    expect(() => request.emit('error', new Error('socket hang up'))).not.toThrow()
     expect(request.listenerCount('timeout')).toBe(0)
     expect(response.listenerCount('data')).toBe(0)
     expect(response.listenerCount('end')).toBe(0)
