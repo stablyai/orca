@@ -32,7 +32,7 @@ export function MobileQueuedCardText({
   )
   if (!clipped && !expanded) {
     return (
-      <View>
+      <View style={styles.measurementBounds}>
         {measure}
         <Text style={queuedMessageStyles.bodyText} numberOfLines={2}>
           {text}
@@ -65,7 +65,7 @@ export function MobileQueuedCardText({
     </Pressable>
   )
   return (
-    <View>
+    <View style={!expanded && styles.measurementBounds}>
       {expanded ? null : measure}
       {toggle}
     </View>
@@ -73,6 +73,10 @@ export function MobileQueuedCardText({
 }
 
 const styles = themedStyleSheet(() => ({
+  // The invisible full-text probe must not extend the queue's scroll range.
+  measurementBounds: {
+    overflow: 'hidden'
+  },
   measure: {
     position: 'absolute',
     left: 0,
