@@ -458,8 +458,10 @@ it('keeps page-N navigation and a shared workspace raw callback through acceptan
   list.mockReturnValue(gate.promise)
   let destination = -1,
     loading = true,
+    paginationLoading = false,
     sharedItems: readonly GitHubWorkItem[] = []
   const pagesRef = { current: context.pages },
+    currentPageRef = { current: 0 },
     noop = () => {}
   const foundation: Parameters<typeof useSmartWorkspaceGithubSearch>[0]['foundation'] = {
     debouncedQuery: '',
@@ -487,7 +489,7 @@ it('keeps page-N navigation and a shared workspace raw callback through acceptan
       selectedRepos: [repo],
       currentPage: 0,
       appliedTaskSearch: '',
-      paginationLoading: false,
+      paginationLoading,
       githubPerRepoPageLimit: 30,
       githubPageSize: 30,
       ...store.getState(),
@@ -495,15 +497,17 @@ it('keeps page-N navigation and a shared workspace raw callback through acceptan
       githubWorkItemMutationQueryKey: 'q',
       githubViewerLogin: 'alice',
       pagesRef,
-      currentPageRef: { current: 0 },
+      currentPageRef,
       paginationGenerationRef: { current: 1 },
       countedTotalPagesRef: { current: null },
       setPaginationLoading: (v) => {
-        loading = typeof v === 'function' ? v(loading) : v
+        paginationLoading = typeof v === 'function' ? v(paginationLoading) : v
+        loading = paginationLoading
       },
       setLoadingTargetPage: noop,
       setCurrentPage: (v) => {
-        destination = typeof v === 'function' ? v(destination) : v
+        currentPageRef.current = typeof v === 'function' ? v(currentPageRef.current) : v
+        destination = currentPageRef.current
       },
       setPages: (change: React.SetStateAction<typeof context.pages>) => {
         context.pages = typeof change === 'function' ? change(context.pages) : change
