@@ -1,5 +1,16 @@
 import { createTestStore } from './store-test-helpers'
 import { rawWorkspaceState } from '../workspace-composition'
+import {
+  beginHugeRepoWarningProbe,
+  clearHugeRepoWarningDismissalsForTests,
+  hasDismissedHugeRepoWarning,
+  markHugeRepoWarningDismissed
+} from '@/lib/source-control-huge-repo-warning-dismissals'
+import {
+  bumpHostedReviewLinkMutationGeneration,
+  getHostedReviewLinkMutationGeneration,
+  resetHostedReviewLinkMutationGenerationForTests
+} from './worktrees/metadata/hosted-review-link-mutation'
 import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildValidWorktreeIdsForSessionHydration } from '../../../../shared/worktree/degraded-repo-worktree-validity'
@@ -58,6 +69,8 @@ beforeEach(() => {
   resetRemoteRuntimeMocks()
   resetWorktreeSliceModuleMemory()
   recentlyRenamedWorktreeIdExpiry.clear()
+  clearHugeRepoWarningDismissalsForTests()
+  resetHostedReviewLinkMutationGenerationForTests()
 })
 
 afterEach(() => {
@@ -119,6 +132,9 @@ describe('saved worktree spelling recovery', () => {
         makeOpenFile({ id: 'kept-file', worktreeId: NEW })
       ]
     })
+    const oldWarning = beginHugeRepoWarningProbe({ id: OLD })
+    expect(markHugeRepoWarningDismissed(oldWarning)).toBe(true)
+    bumpHostedReviewLinkMutationGeneration(OLD)
     worktreeListMock.mockResolvedValue([listed])
 
     await store.getState().fetchWorktrees(repo.id)
@@ -156,6 +172,17 @@ describe('saved worktree spelling recovery', () => {
     ])
     expect(recentlyRenamedWorktreeIdExpiry.size).toBe(0)
     expect(mockApi.runtime.call).not.toHaveBeenCalled()
+    expect(markHugeRepoWarningDismissed(oldWarning)).toBe(false)
+    const recoveredWarning = beginHugeRepoWarningProbe({ id: NEW })
+    expect(hasDismissedHugeRepoWarning(recoveredWarning)).toBe(true)
+    expect(getHostedReviewLinkMutationGeneration(OLD)).toBe(0)
+    expect(getHostedReviewLinkMutationGeneration(NEW)).toBe(1)
+    for (let i = 0; i < 3; i++) {
+      expect(store.getState().unifiedTabsByWorktree[NEW]).toBe(state.unifiedTabsByWorktree[NEW])
+    }
+    await store.getState().fetchWorktrees(repo.id)
+    expect(markHugeRepoWarningDismissed(recoveredWarning)).toBe(true)
+    expect(getHostedReviewLinkMutationGeneration(NEW)).toBe(1)
   })
 
   it('renames an unsplit saved layout when the listed spelling has no state', async () => {
