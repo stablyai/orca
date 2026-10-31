@@ -54,6 +54,15 @@ describe('materializeWorktreePushTargetRemote', () => {
       if (args[0] === 'config' && args[1] === '--get-all') {
         throw new Error('no such section')
       }
+      // Orca's own minted remote: provenance marker reads true, so the narrow
+      // rewrite (not the add-only reuse path) applies.
+      if (
+        args[0] === 'config' &&
+        args[1] === '--get' &&
+        String(args[2]).endsWith('.orca-created')
+      ) {
+        return { stdout: 'true\n', stderr: '' }
+      }
       if (args[0] === 'symbolic-ref') {
         return { stdout: 'refs/heads/contributor/fix\n', stderr: '' }
       }
@@ -100,8 +109,11 @@ describe('materializeWorktreePushTargetRemote', () => {
     await expect(
       materializeWorktreePushTargetRemote(REPO_PATH, forkTarget(), null, 'repo-1')
     ).rejects.toBeInstanceOf(TypeError)
+    // No orca-created marker on this remote, so the PR's provenance probe runs first and
+    // the refspec widening is add-only: the user's tagOpt is left alone (#25703 semantics).
     expect(commands).toEqual([
       ['remote', 'get-url', FORK_REMOTE],
+      ['config', '--get', `remote.${FORK_REMOTE}.orca-created`],
       ['config', '--get-all', `remote.${FORK_REMOTE}.fetch`],
       [
         'config',
@@ -109,7 +121,6 @@ describe('materializeWorktreePushTargetRemote', () => {
         `remote.${FORK_REMOTE}.fetch`,
         `+refs/heads/contributor/fix*:refs/remotes/${FORK_REMOTE}/contributor/fix*`
       ],
-      ['config', `remote.${FORK_REMOTE}.tagOpt`, '--no-tags'],
       ['rev-parse', '--verify', '--quiet', `refs/remotes/${FORK_REMOTE}/contributor/fix`],
       ['symbolic-ref', '--quiet', 'HEAD'],
       ['branch', '--set-upstream-to', `${FORK_REMOTE}/contributor/fix`, 'contributor/fix']
@@ -136,6 +147,47 @@ describe('materializeWorktreePushTargetRemote', () => {
       ['branch', '--set-upstream-to', `${FORK_REMOTE}/${target.branchName}`, 'contributor/fix'],
       { cwd: REPO_PATH }
     )
+  })
+
+  // #25703: the deferred materialize path reaches user-created remotes too (the store may
+  // have persisted a reused remote's name). Without the provenance marker it must widen
+  // add-only, never rewrite the user's refspec config.
+  it('widens add-only on the short-circuit path when the remote has no orca-created marker', async () => {
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'remote' && args[1] === 'get-url') {
+        return { stdout: `${FORK_URL}\n`, stderr: '' }
+      }
+      if (args[0] === 'config' && args[1] === '--get-all') {
+        return { stdout: `+refs/heads/*:refs/remotes/${FORK_REMOTE}/*\n`, stderr: '' }
+      }
+      if (
+        args[0] === 'config' &&
+        args[1] === '--get' &&
+        String(args[2]).endsWith('.orca-created')
+      ) {
+        throw new Error('no marker')
+      }
+      if (args[0] === 'rev-parse') {
+        throw new Error('unknown revision')
+      }
+      if (args[0] === 'symbolic-ref') {
+        return { stdout: 'contributor/fix\n', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+    const target = forkTarget()
+
+    await materializeWorktreePushTargetRemote(REPO_PATH, target)
+
+    const calls = gitExecFileAsyncMock.mock.calls.map((call) => call[0] as string[])
+    expect(calls).not.toContainEqual(['config', '--unset-all', `remote.${FORK_REMOTE}.fetch`])
+    expect(calls).not.toContainEqual(['config', `remote.${FORK_REMOTE}.tagOpt`, '--no-tags'])
+    expect(calls).toContainEqual([
+      'config',
+      '--add',
+      `remote.${FORK_REMOTE}.fetch`,
+      `+refs/heads/${target.branchName}*:refs/remotes/${FORK_REMOTE}/${target.branchName}*`
+    ])
   })
 
   it('materializes the remote (add + provenance + fetch) when the probe misses', async () => {

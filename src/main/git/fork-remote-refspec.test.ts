@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, type Mock } from 'vitest'
 import {
   buildNarrowForkFetchRefspec,
+  ensureRemoteAlsoTracksBranch,
   ensureRemoteTracksBranchNarrowly,
   getRemoteFetchRefspecs,
   pruneUntrackedForkRemoteRefs,
@@ -131,6 +132,42 @@ describe('ensureRemoteTracksBranchNarrowly', () => {
       '+refs/heads/other*:refs/remotes/fork/other*',
       '+refs/heads/main*:refs/remotes/fork/main*'
     ])
+  })
+})
+
+describe('ensureRemoteAlsoTracksBranch', () => {
+  it('appends the narrow refspec without dropping the user-configured wide default (#25703)', async () => {
+    const { exec } = makeConfigExec({ fork: [wildcardForkFetchRefspec('fork')] })
+
+    await ensureRemoteAlsoTracksBranch(exec, REPO, 'fork', 'main')
+
+    await expect(getRemoteFetchRefspecs(exec, REPO, 'fork')).resolves.toEqual([
+      wildcardForkFetchRefspec('fork'),
+      '+refs/heads/main*:refs/remotes/fork/main*'
+    ])
+  })
+
+  it('is a no-op when the branch is already tracked', async () => {
+    const { exec } = makeConfigExec({ fork: ['+refs/heads/main*:refs/remotes/fork/main*'] })
+
+    await ensureRemoteAlsoTracksBranch(exec, REPO, 'fork', 'main')
+
+    const addCalls = exec.mock.calls.filter(([args]) => args[1] === '--add')
+    expect(addCalls).toEqual([])
+  })
+
+  it("keeps other branches' entries and never writes tagOpt", async () => {
+    const { exec, tagOptByRemote } = makeConfigExec({
+      fork: ['+refs/heads/other*:refs/remotes/fork/other*']
+    })
+
+    await ensureRemoteAlsoTracksBranch(exec, REPO, 'fork', 'main')
+
+    await expect(getRemoteFetchRefspecs(exec, REPO, 'fork')).resolves.toEqual([
+      '+refs/heads/other*:refs/remotes/fork/other*',
+      '+refs/heads/main*:refs/remotes/fork/main*'
+    ])
+    expect(tagOptByRemote.fork).toBeUndefined()
   })
 })
 
