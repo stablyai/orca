@@ -36,8 +36,14 @@ vi.mock('electron', () => ({
 
 const track = vi.hoisted(() => vi.fn())
 vi.mock('../telemetry/client', () => ({ track }))
+const cancelWslMove = vi.hoisted(() => vi.fn((_distro: string) => true))
+vi.mock('../persistence/moving-wsl-projects/wsl-move-driver', async (importOriginal) => ({
+  ...(await importOriginal<typeof WslMoveDriver>()),
+  cancelWslMove
+}))
 
 import { registerWslMoveHandlers } from './wsl-move-handlers'
+import type * as WslMoveDriver from '../persistence/moving-wsl-projects/wsl-move-driver'
 
 let userDataPath: string
 beforeEach(() => {
@@ -166,6 +172,28 @@ describe('WSL move IPC', () => {
       expect(invoke('wslMove:listPendingRendererRewrites')).toMatchObject([
         { migrationId: 'move-1' }
       ])
+    } finally {
+      resetWslHostsGateForTests()
+    }
+  })
+
+  // Stopping a move already running is never new work: a block must leave cancel available.
+  it('still cancels a running move after a live policy block', async () => {
+    registerWslMoveHandlers(
+      () => userDataPath,
+      (senderId) => senderId === MAIN_WINDOW_ID,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: cancel only checks that a driver exists; the driver is mocked.
+      () => ({}) as never
+    )
+    configureWslHostsGate({ hasSavedWslHost: () => true, hasWslMoveCutover: () => true })
+    try {
+      noteWslHostsLivePolicyBlock()
+
+      expect(
+        await invoke('wslMove:start', { distro: 'Ubuntu', repoIds: ['repo-1'] })
+      ).toMatchObject({ outcome: 'refused', code: 'wsl_move_unavailable' })
+      expect(await invoke('wslMove:cancel', 'Ubuntu')).toBe(true)
+      expect(cancelWslMove).toHaveBeenCalledWith('Ubuntu')
     } finally {
       resetWslHostsGateForTests()
     }
