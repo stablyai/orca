@@ -5,7 +5,9 @@ import { afterEach, beforeEach, expect, it } from 'vitest'
 import { armSwitchTurnBoundaryWait } from './structured-agent-session-switch-turn-boundary'
 
 const TURN = 'stopped-turn'
-const row = (payload: object) => `${JSON.stringify({ type: 'event_msg', payload })}\n`
+/** One Codex rollout event, as the agent appends it. */
+type CodexEventPayload = { type: string; turn_id?: string; message?: string }
+const row = (payload: CodexEventPayload) => `${JSON.stringify({ type: 'event_msg', payload })}\n`
 let root: string
 let filePath: string
 let controller: AbortController
