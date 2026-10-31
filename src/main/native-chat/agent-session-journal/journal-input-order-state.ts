@@ -1,7 +1,10 @@
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalCursor,
+  AgentJournalSubmission
+} from '../../../shared/agent-session-journal-types'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalInputEntry } from './journal-input-lineage'
-import { JournalInputOrder } from './journal-input-order'
+import type { JournalRow } from './journal-row-schema'
 
 export type JournalInputPlace = JournalInputEntry & {
   coordinate: AgentJournalCursor
@@ -47,22 +50,6 @@ export function currentJournalInputIdentity(
     : hasOverlay()
 }
 
-const owners = new WeakMap<JournalReducerState, JournalInputOrder>()
-export function initializeJournalInputOrder(
-  state: JournalReducerState,
-  originalAcceptance?: (id: string) => AgentJournalCursor | undefined
-): JournalInputOrder {
-  const owner = new JournalInputOrder(state, originalAcceptance)
-  owners.set(state, owner)
-  return owner
-}
-export function journalInputOrder(state: JournalReducerState): JournalInputOrder {
-  return owners.get(state) ?? initializeJournalInputOrder(state)
-}
-export function setJournalInputOrder(state: JournalReducerState, owner: JournalInputOrder): void {
-  owners.set(state, owner)
-}
-
 export function restoreJournalInputPlaces(state: JournalReducerState): number {
   let legacyPlaces = 0
   for (const [id, own] of state.inputEntries) {
@@ -73,4 +60,26 @@ export function restoreJournalInputPlaces(state: JournalReducerState): number {
     }
   }
   return legacyPlaces
+}
+
+export function journalInputOrderChanged(
+  state: JournalReducerState,
+  row: JournalRow,
+  receiptCount: () => number,
+  queueRevision: () => number
+): boolean {
+  return (
+    row.kind === 'submission' ||
+    row.kind === 'dispatch' ||
+    row.kind === 'tombstone' ||
+    receiptCount() !== state.receipts.size ||
+    queueRevision() !== state.queue.revision
+  )
+}
+
+export function isJournalInputOverride(
+  entry: AgentJournalSubmission,
+  recoveryPending: boolean
+): boolean {
+  return !recoveryPending && entry.origin === 'client' && entry.queuedMessageId !== undefined
 }

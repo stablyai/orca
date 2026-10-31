@@ -2,14 +2,10 @@ import {
   readJournalInputPlace,
   restoreJournalInputPlaces,
   currentJournalInputIdentity,
-  type JournalInputPlace
+  journalInputOrderChanged,
+  isJournalInputOverride
 } from './journal-input-order-state'
-export {
-  initializeJournalInputOrder,
-  journalInputOrder,
-  setJournalInputOrder,
-  type JournalInputPlace
-} from './journal-input-order-state'
+export type { JournalInputPlace } from './journal-input-order-state'
 
 import { JournalSubmissionLinks } from './journal-submission-links'
 import type {
@@ -24,6 +20,22 @@ import type { QueuedMessageRow } from './queued-message-table'
 import type { InputPlaceQuery } from './journal-input-place-index'
 import { JournalInputLineageOwner } from './journal-input-lineage'
 import { JournalInputCardIndex } from './journal-input-card-index'
+
+const owners = new WeakMap<JournalReducerState, JournalInputOrder>()
+export function initializeJournalInputOrder(
+  state: JournalReducerState,
+  originalAcceptance?: (id: string) => AgentJournalCursor | undefined
+): JournalInputOrder {
+  const owner = new JournalInputOrder(state, originalAcceptance)
+  owners.set(state, owner)
+  return owner
+}
+export function journalInputOrder(state: JournalReducerState): JournalInputOrder {
+  return owners.get(state) ?? initializeJournalInputOrder(state)
+}
+export function setJournalInputOrder(state: JournalReducerState, owner: JournalInputOrder): void {
+  owners.set(state, owner)
+}
 
 /** Own admission places and shared command witnesses are reconstructed by the journal fold. */
 export class JournalInputOrder {
@@ -149,7 +161,7 @@ export class JournalInputOrder {
     }
   }
 
-  place(id: string): JournalInputPlace | undefined {
+  place(id: string): ReturnType<typeof readJournalInputPlace> {
     return readJournalInputPlace(this.state, id, this.originals, this.originalAcceptance)
   }
   forced(id: string): boolean {
@@ -209,11 +221,12 @@ export class JournalInputOrder {
 
   afterRow(state: JournalReducerState, row: JournalRow): void {
     if (
-      row.kind === 'submission' ||
-      row.kind === 'dispatch' ||
-      row.kind === 'tombstone' ||
-      this.receiptCount !== state.receipts.size ||
-      this.queueRevision !== state.queue.revision
+      journalInputOrderChanged(
+        state,
+        row,
+        () => this.receiptCount,
+        () => this.queueRevision
+      )
     ) {
       this.revision++
     }
@@ -263,11 +276,7 @@ export class JournalInputOrder {
         this.queued.set(id, entry)
       }
       this.entered.delete(id)
-      if (
-        !this.recoveryOwed.has(id) &&
-        entry.origin === 'client' &&
-        entry.queuedMessageId !== undefined
-      ) {
+      if (isJournalInputOverride(entry, this.recoveryOwed.has(id))) {
         this.overrides.set(id, entry)
       }
     } else {
