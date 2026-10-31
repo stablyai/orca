@@ -77,7 +77,8 @@ Start a worker in your workspace with `--keep-open` when the user will keep usin
 its chat after it reports: they want to watch it or talk to it. To keep one already
 started, run
 `ORCA orchestration worker-keep-open --dispatch <dispatch_id>`.
-If `worker-list` shows no `autoReleaseAt` for a finished worker, release it yourself.
+If a finished worker you did not keep open shows no `autoReleaseAt` in `worker-list`,
+release it yourself.
 
 ## Task spec
 
