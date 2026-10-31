@@ -9599,7 +9599,9 @@
           "light": "Claro",
           "languageIncomplete": "{{value0}}% traduzido, incompleto demais para usar como idioma do Orca",
           "languageCoverage": "Idioma da interface · {{value0}}% traduzido",
-          "newFileMenu": "Adiciona ao menu +"
+          "newFileMenu": "Adiciona ao menu +",
+          "editorReplacesViewer": "Abre {{value0}} em vez do visualizador do Orca",
+          "editorMayReplaceViewer": "Pode abrir {{value0}} em vez do visualizador do Orca"
         },
         "PluginPageHero": {
           "screenshots": "Capturas de tela",
@@ -13214,7 +13216,10 @@
           "be27304574": "Diminuir zoom",
           "77bfc9b35a": "Abrir imagem em popup",
           "3ef9551ba2": "Carregando pré-visualização...",
-          "d9d2944855": "Falha ao carregar a pré-visualização do arquivo"
+          "d9d2944855": "Falha ao carregar a pré-visualização do arquivo",
+          "fitToView": "Ajustar à visualização",
+          "actualSize": "Tamanho real",
+          "expand": "Expandir imagem"
         },
         "MarkdownTemplatePicker": {
           "22cd94426f": "sem-titulo.md",

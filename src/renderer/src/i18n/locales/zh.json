@@ -12614,7 +12614,9 @@
           "light": "浅色",
           "languageIncomplete": "已翻译 {{value0}}%，不够完整，无法用作 Orca 的语言",
           "languageCoverage": "界面语言 · 已翻译 {{value0}}%",
-          "newFileMenu": "添加到 + 菜单"
+          "newFileMenu": "添加到 + 菜单",
+          "editorReplacesViewer": "以此打开 {{value0}}，取代 Orca 的查看器",
+          "editorMayReplaceViewer": "可能以此打开 {{value0}}，取代 Orca 的查看器"
         },
         "PluginInstallConsent": {
           "noOtherAccess": "无其他访问权限",
@@ -15495,7 +15497,10 @@
           "be27304574": "缩小",
           "77bfc9b35a": "在弹出窗口中打开图像",
           "3ef9551ba2": "正在加载预览...",
-          "d9d2944855": "无法加载文件预览"
+          "d9d2944855": "无法加载文件预览",
+          "fitToView": "适应视图",
+          "actualSize": "实际大小",
+          "expand": "放大图片"
         },
         "ImageViewerPopup": {
           "0ef78475e7": "按 Esc 关闭",

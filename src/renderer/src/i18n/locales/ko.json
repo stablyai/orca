@@ -12581,7 +12581,9 @@
           "light": "라이트",
           "languageIncomplete": "{{value0}}% 번역됨. Orca 언어로 사용하기에는 너무 불완전합니다",
           "languageCoverage": "인터페이스 언어 · {{value0}}% 번역됨",
-          "newFileMenu": "+ 메뉴에 추가"
+          "newFileMenu": "+ 메뉴에 추가",
+          "editorReplacesViewer": "Orca 뷰어 대신 {{value0}} 파일을 엽니다",
+          "editorMayReplaceViewer": "Orca 뷰어 대신 {{value0}} 파일을 열 수 있습니다"
         },
         "PluginInstallConsent": {
           "noOtherAccess": "다른 접근 권한 없음",
@@ -15495,7 +15497,10 @@
           "be27304574": "축소",
           "77bfc9b35a": "팝업으로 이미지 열기",
           "3ef9551ba2": "미리보기 로드 중...",
-          "d9d2944855": "파일 미리보기를 로드하지 못했습니다."
+          "d9d2944855": "파일 미리보기를 로드하지 못했습니다.",
+          "fitToView": "화면에 맞추기",
+          "actualSize": "실제 크기",
+          "expand": "이미지 크게 보기"
         },
         "ImageViewerPopup": {
           "0ef78475e7": "닫으려면 Esc를 누르세요.",

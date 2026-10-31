@@ -12869,7 +12869,9 @@
           "light": "Claro",
           "languageIncomplete": "{{value0}} % traducido, demasiado incompleto para usarlo como idioma de Orca",
           "languageCoverage": "Idioma de la interfaz · {{value0}} % traducido",
-          "newFileMenu": "Se añade al menú +"
+          "newFileMenu": "Se añade al menú +",
+          "editorReplacesViewer": "Abre {{value0}} en lugar del visor de Orca",
+          "editorMayReplaceViewer": "Puede abrir {{value0}} en lugar del visor de Orca"
         },
         "PluginInstallConsent": {
           "noOtherAccess": "Ningún otro acceso",
@@ -15888,7 +15890,10 @@
           "be27304574": "Alejar",
           "77bfc9b35a": "Abrir imagen en ventana emergente",
           "3ef9551ba2": "Cargando vista previa...",
-          "d9d2944855": "No se pudo cargar la vista previa del archivo"
+          "d9d2944855": "No se pudo cargar la vista previa del archivo",
+          "fitToView": "Ajustar a la vista",
+          "actualSize": "Tamaño real",
+          "expand": "Ampliar imagen"
         },
         "ImageViewerPopup": {
           "0ef78475e7": "Presione Esc para cerrar",
