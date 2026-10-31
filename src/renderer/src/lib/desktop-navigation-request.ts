@@ -35,19 +35,28 @@ export function hasNewerDesktopSelection(
   state: AppState,
   captured: DesktopNavigationRequest,
   worktreeId: string,
-  groupId: string
+  groupId: string,
+  experimentalOrigin: boolean
 ): boolean {
   const target = latest.selection
+  if (
+    (!experimentalOrigin && captured.experimentalGeneration === experimentalGeneration) ||
+    !target ||
+    target.id <= captured.id ||
+    target.worktreeId !== worktreeId ||
+    target.groupId !== groupId
+  ) {
+    return false
+  }
+  const group = state.groupsByWorktree[worktreeId]?.find((entry) => entry.id === groupId)
+  if (group?.activeTabId !== target.tabId) {
+    return false
+  }
+  const tab = state.unifiedTabsByWorktree[worktreeId]?.find((entry) => entry.id === target.tabId)
   return (
-    !!target &&
-    target.id > captured.id &&
-    target.worktreeId === worktreeId &&
-    target.groupId === groupId &&
-    state.getTab(target.tabId)?.worktreeId === worktreeId &&
-    state.getTab(target.tabId)?.executionHostId === target.executionHostId &&
-    state.getTab(target.tabId)?.groupId === groupId &&
-    state.groupsByWorktree[worktreeId]?.find((group) => group.id === groupId)?.activeTabId ===
-      target.tabId
+    tab?.worktreeId === worktreeId &&
+    tab.executionHostId === target.executionHostId &&
+    tab.groupId === groupId
   )
 }
 
@@ -66,19 +75,30 @@ function recordSelection(
   }
 }
 
+export function isExperimentalDesktopNavigation(
+  state: AppState,
+  destinationIsExperimental = false
+): boolean {
+  if (state.settings?.experimentalThreads !== true) {
+    return false
+  }
+  const selected = state.activeWorktreeId ? state.getActiveTab?.(state.activeWorktreeId) : null
+  const context = desktopWorkspaceContextView(state)
+  return (
+    destinationIsExperimental ||
+    context === 'thread-draft' ||
+    context === 'empty-workbench' ||
+    (!!selected && desktopThreadIds(state, selected.worktreeId).has(selected.id))
+  )
+}
+
 /** Ordinary completions keep their established behavior until an experimental interaction supersedes them. */
 export function beginDesktopNavigation(
   state: AppState,
   destinationIsExperimental = false
 ): DesktopNavigationRequest {
   latest = { id: ++sequence, selection: latest.selection }
-  const selected = state.activeWorktreeId ? state.getActiveTab?.(state.activeWorktreeId) : null
-  const experimental =
-    state.settings?.experimentalThreads === true &&
-    (destinationIsExperimental ||
-      desktopWorkspaceContextView(state) === 'thread-draft' ||
-      desktopWorkspaceContextView(state) === 'empty-workbench' ||
-      (!!selected && desktopThreadIds(state, selected.worktreeId).has(selected.id)))
+  const experimental = isExperimentalDesktopNavigation(state, destinationIsExperimental)
   if (experimental) {
     experimentalGeneration++
   }

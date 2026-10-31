@@ -2,7 +2,8 @@ import type { AppState } from '@/store/types'
 import {
   captureDesktopNavigation,
   canPresentDesktopNavigation,
-  hasNewerDesktopSelection
+  hasNewerDesktopSelection,
+  isExperimentalDesktopNavigation
 } from './desktop-navigation-request'
 import { desktopWorkspaceContextView, effectiveWorkspaceView } from './renderer-view'
 
@@ -11,6 +12,7 @@ export function captureDesktopRetirement(state: AppState, worktreeId: string, gr
   const group = state.groupsByWorktree[worktreeId]?.find((entry) => entry.id === groupId)
   return {
     navigation: captureDesktopNavigation(state),
+    experimentalOrigin: isExperimentalDesktopNavigation(state),
     hostId: state.activeWorkspaceExecutionHostId,
     worktreeId,
     groupId,
@@ -50,7 +52,8 @@ export function canRepairRetiredSelection(state: AppState, retirement: DesktopRe
     state,
     retirement.navigation,
     retirement.worktreeId,
-    retirement.groupId
+    retirement.groupId,
+    retirement.experimentalOrigin
   )
 }
 
