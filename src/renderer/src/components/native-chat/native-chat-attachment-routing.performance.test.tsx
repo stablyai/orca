@@ -6,8 +6,14 @@ import {
 } from './native-chat-markdown-image-owner'
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import * as appStore from '@/store'
-import * as githubRepoHooks from './native-chat-github-repo'
+import {
+  useAppStore,
+  instrumentRepoFilter,
+  incomingFilterWork,
+  IncomingOwnerReadMeter,
+  assertIncomingOwnerFilterBoundaries,
+  restoreIncomingFilterArrays
+} from './native-chat-owner-filter.test-fixture'
 import type { AppState } from '@/store/types'
 import { NativeChatTextAttachmentScope } from './NativeChatTextAttachments'
 import {
@@ -27,70 +33,12 @@ import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../s
 vi.mock('./NativeChatTextAttachmentPreview', () => ({
   NativeChatTextAttachmentPreview: () => null
 }))
-// STA-12852 owns incoming link-peek filter work; its preceding owner/index work still counts.
-let incomingHookDepth = 0,
-  incomingSelectorDepth = 0,
-  repoFilterDepth = 0,
-  incomingRepoFilterVisits = 0
-const realGithubRepoHook = githubRepoHooks.useNativeChatGitHubRepo
-vi.spyOn(githubRepoHooks, 'useNativeChatGitHubRepo').mockImplementation((...args) => {
-  incomingHookDepth++
-  try {
-    return realGithubRepoHook(...args)
-  } finally {
-    incomingHookDepth--
-  }
-})
-const realStore = appStore.useAppStore
-const storeSpy = vi.spyOn(appStore, 'useAppStore').mockImplementation((selector) => {
-  if (!incomingHookDepth || !selector) {
-    return selector ? realStore(selector) : realStore()
-  }
-  return realStore((state) => {
-    incomingSelectorDepth++
-    try {
-      return selector(state)
-    } finally {
-      incomingSelectorDepth--
-    }
-  })
-})
-Object.assign(storeSpy, realStore)
-const useAppStore = appStore.useAppStore
-
-function instrumentRepoFilter<T extends object>(rows: readonly T[]): readonly T[] {
-  Object.defineProperty(rows, 'filter', {
-    configurable: true,
-    value(
-      this: readonly T[],
-      predicate: (row: T, index: number, array: T[]) => unknown,
-      thisArg?: unknown
-    ) {
-      return Array.prototype.filter.call(
-        this,
-        function (this: unknown, row: T, index: number, array: T[]) {
-          if (incomingSelectorDepth > 0 && Object.getOwnPropertyDescriptor(row, 'id')?.get) {
-            incomingRepoFilterVisits++
-          }
-          repoFilterDepth++
-          try {
-            return predicate.call(this, row, index, array)
-          } finally {
-            repoFilterDepth--
-          }
-        },
-        thisArg
-      )
-    }
-  })
-  return rows
-}
-
 const ownerHook = vi.spyOn(runtimeContextHooks, 'useNativeChatImageRuntimeContext')
 const initial = useAppStore.getInitialState()
 afterEach(() => {
   cleanup()
   useAppStore.setState(initial, true)
+  restoreIncomingFilterArrays()
 })
 
 function ssh(
@@ -425,36 +373,22 @@ it('shares cold all-rival transport aggregation without losing ambiguity or cata
 })
 
 for (const mode of ['scope-only', 'with-probe', 'disabled'] as const) {
-  it.each(['inactive-detected', 'folder-twins', 'detected-twins', 'unstamped-project'] as const)(
+  it.each([
+    'inactive-detected',
+    'folder-twins',
+    'folder-own',
+    'detected-twins',
+    'unstamped-project'
+  ] as const)(
     `shares all directory and explicit-route derivation for %s (${mode})`,
     async (kind) => {
       for (const n of [10, 100]) {
-        let operations = 0,
-          rawOperations = 0,
-          excludedOperations = 0,
-          commits = 0,
+        const reads = new IncomingOwnerReadMeter()
+        let commits = 0,
           renders = 0
-        const meter = <T extends object, K extends keyof T>(
-          row: T,
-          key: K,
-          isExcluded = () => false
-        ): T => {
-          const value = row[key]
-          Object.defineProperty(row, key, {
-            enumerable: true,
-            get: () => {
-              rawOperations++
-              if (isExcluded()) {
-                excludedOperations++
-              } else {
-                operations++
-              }
-              return value
-            }
-          })
-          return row
-        }
-        const folderCase = kind === 'folder-twins'
+        const ambiguousFolder = kind === 'folder-twins'
+        const folderCase = ambiguousFolder || kind === 'folder-own'
+        const initialPath = ambiguousFolder ? null : '/own'
         const unstamped = kind === 'unstamped-project'
         const fixture = nativeChatFanoutFixture(n, 1, 0)
         const ws = folderCase ? 'folder:workspace-0' : 'wt-0'
@@ -469,7 +403,7 @@ for (const mode of ['scope-only', 'with-probe', 'disabled'] as const) {
               }
         )
         const detected = Array.from({ length: n }, (_, index) =>
-          meter(
+          reads.row(
             detectedListingFixture([
               worktreeFixture(
                 ws,
@@ -481,13 +415,15 @@ for (const mode of ['scope-only', 'with-probe', 'disabled'] as const) {
                     : { hostId: 'ssh:ssh-1', runtimeOwnerEnvironmentId: 'owner-a' }
               )
             ]).worktrees[0]!,
-            'runtimeOwnerEnvironmentId'
+            'runtimeOwnerEnvironmentId',
+            'nested'
           )
         )
         const folders = Array.from({ length: n }, (_, index) =>
-          meter(
+          reads.row(
             {
               ...fixture.folderWorkspaces[0]!,
+              id: kind === 'folder-own' && index < n - 1 ? `unrelated-${index}` : 'workspace-0',
               folderPath: index === n - 1 ? '/own' : '/other',
               executionHostId:
                 index === n - 1 ? ('runtime:owner-a' as const) : (`runtime:other-${index}` as const)
@@ -497,12 +433,12 @@ for (const mode of ['scope-only', 'with-probe', 'disabled'] as const) {
         )
         const repos = unstamped
           ? Array.from({ length: n }, (_, index) =>
-              meter(
+              reads.row(
                 repoFixture({
                   executionHostId: index % 2 ? 'runtime:owner-a' : 'local'
                 }),
                 'id',
-                () => incomingSelectorDepth > 0 && repoFilterDepth > 0
+                'repo'
               )
             )
           : [repoFixture({ executionHostId: 'runtime:owner-a' })]
@@ -532,73 +468,91 @@ for (const mode of ['scope-only', 'with-probe', 'disabled'] as const) {
           renders++
           return null
         }
-        operations = 0
-        rawOperations = 0
-        excludedOperations = 0
-        incomingRepoFilterVisits = 0
+        reads.reset()
         ownerHook.mockClear()
         const view = mountScopes(n, mode, () => commits++, Probe)
         await act(async () => {})
         expect(ownerHook).toHaveBeenCalledTimes(n)
         const bound = 20 * n
-        expect(rawOperations).toBe(operations + excludedOperations)
+        expect(reads.rawOperations).toBe(
+          reads.operations + reads.repoFilterExcluded + reads.nestedFilterExcluded
+        )
         // Main memoizes repeated selector reads; each mounted owner filters this cold snapshot once.
-        expect(excludedOperations).toBe(unstamped ? n * n : 0)
-        expect(excludedOperations).toBe(incomingRepoFilterVisits)
-        expect(operations).toBeLessThanOrEqual(bound)
-        if (mode === 'with-probe') {
-          expect(contexts).toHaveLength(n)
-          expect(contexts.every((context) => context?.worktreePath === '/own')).toBe(true)
-          expect(contexts[0]?.target).toEqual(
-            unstamped ? { kind: 'local' } : { kind: 'environment', environmentId: 'owner-a' }
-          )
+        expect(reads.repoFilterExcluded).toBe(unstamped ? n * n : 0)
+        expect(reads.nestedFilterExcluded).toBe(kind === 'detected-twins' ? 2 * n * n : 0)
+        if (kind === 'detected-twins') {
+          expect(incomingFilterWork.nestedFilters).toBe(2 * n)
+          expect(reads.operations).toBe(n + 1)
         }
+        expect(reads.repoFilterExcluded).toBe(incomingFilterWork.repoVisits)
+        expect(reads.nestedFilterExcluded).toBe(incomingFilterWork.nestedVisits)
+        expect(reads.operations).toBeLessThanOrEqual(bound)
+        const assertPath = (path: string | null) => {
+          for (const result of ownerHook.mock.results) {
+            expect(result.type).toBe('return')
+            if (path === null) {
+              expect(result.value).toBeNull()
+            } else {
+              expect(result.value?.worktreePath).toBe(path)
+              expect(result.value?.target).toEqual(
+                unstamped ? { kind: 'local' } : { kind: 'environment', environmentId: 'owner-a' }
+              )
+            }
+          }
+          if (mode === 'with-probe') {
+            expect(contexts).toHaveLength(n)
+            expect(
+              contexts.every((context) =>
+                path === null ? context === null : context?.worktreePath === path
+              )
+            ).toBe(true)
+          }
+        }
+        assertPath(initialPath)
         const metrics = [
           {
             event: 'cold',
-            rawOperations,
-            excludedOperations,
-            incomingRepoFilterVisits,
-            operations,
+            ...reads.snapshot(),
             commits,
             renders
           }
         ]
+        if (kind === 'detected-twins') {
+          const before = reads.snapshot()
+          void detected[n - 1]!.runtimeOwnerEnvironmentId
+          expect(reads.operations).toBe(before.operations + 1)
+          expect(reads.rawOperations).toBe(before.rawOperations + 1)
+          expect(reads.repoFilterExcluded).toBe(before.repoFilterExcluded)
+          expect(reads.nestedFilterExcluded).toBe(before.nestedFilterExcluded)
+        }
         const check = async (
           event: string,
           patch: Partial<AppState>,
           changed = false,
-          expectedPath: string | null = '/own',
+          expectedPath: string | null = initialPath,
           limit = bound
         ) => {
-          operations = 0
-          rawOperations = 0
-          excludedOperations = 0
-          incomingRepoFilterVisits = 0
+          reads.reset()
           commits = 0
           renders = 0
+          ownerHook.mockClear()
           if (patch.repos) {
             instrumentRepoFilter(patch.repos)
           }
           await act(async () => useAppStore.setState(patch))
-          expect(rawOperations).toBe(operations + excludedOperations)
-          expect(excludedOperations).toBe(incomingRepoFilterVisits)
-          expect(operations).toBeLessThanOrEqual(limit)
+          expect(reads.rawOperations).toBe(
+            reads.operations + reads.repoFilterExcluded + reads.nestedFilterExcluded
+          )
+          expect(reads.repoFilterExcluded).toBe(incomingFilterWork.repoVisits)
+          expect(reads.nestedFilterExcluded).toBe(incomingFilterWork.nestedVisits)
+          expect(reads.operations).toBeLessThanOrEqual(limit)
           expect(commits).toBe(changed ? n : 0)
           expect(renders).toBe(changed && mode === 'with-probe' ? n : 0)
-          if (mode === 'with-probe') {
-            expect(
-              contexts.every((context) =>
-                expectedPath === null ? context === null : context?.worktreePath === expectedPath
-              )
-            ).toBe(true)
-          }
+          expect(ownerHook).toHaveBeenCalledTimes(changed ? n : 0)
+          assertPath(expectedPath)
           metrics.push({
             event,
-            rawOperations,
-            excludedOperations,
-            incomingRepoFilterVisits,
-            operations,
+            ...reads.snapshot(),
             commits,
             renders
           })
@@ -626,7 +580,7 @@ for (const mode of ['scope-only', 'with-probe', 'disabled'] as const) {
             ])
           },
           false,
-          '/own',
+          initialPath,
           0
         )
         if (kind === 'inactive-detected') {
@@ -690,11 +644,20 @@ for (const mode of ['scope-only', 'with-probe', 'disabled'] as const) {
           )
           await check('SSH repo sibling removed', { repos: [...repos] }, true)
         }
+        if (kind === 'folder-own') {
+          await check('unrelated folder path', {
+            folderWorkspaces: [
+              reads.row({ ...folders[0]!, folderPath: '/unrelated-change' }, 'executionHostId'),
+              ...folders.slice(1)
+            ]
+          })
+        }
+        const currentFolders = useAppStore.getState().folderWorkspaces
         const ownPath = folderCase
           ? {
               folderWorkspaces: [
-                ...folders.slice(0, -1),
-                { ...folders[n - 1]!, folderPath: '/changed' }
+                ...currentFolders.slice(0, -1),
+                reads.row({ ...currentFolders[n - 1]!, folderPath: '/changed' }, 'executionHostId')
               ]
             }
           : kind === 'detected-twins'
@@ -702,14 +665,29 @@ for (const mode of ['scope-only', 'with-probe', 'disabled'] as const) {
                 detectedWorktreesByRepo: {
                   repo: {
                     ...detectedListingFixture([]),
-                    worktrees: [...detected.slice(0, -1), { ...detected[n - 1]!, path: '/changed' }]
+                    worktrees: [
+                      ...detected.slice(0, -1),
+                      reads.row(
+                        { ...detected[n - 1]!, path: '/changed' },
+                        'runtimeOwnerEnvironmentId',
+                        'nested'
+                      )
+                    ]
                   }
                 }
               }
             : { worktreesByRepo: { repo: [{ ...known, path: '/changed' }] } }
-        await check('own path', ownPath, true, '/changed')
+        await check('own path', ownPath, !ambiguousFolder, ambiguousFolder ? null : '/changed')
         console.info('attachment-catalog-derivation', JSON.stringify({ mode, kind, n, metrics }))
         view.unmount()
+        if (kind === 'detected-twins' && n === 10 && mode === 'scope-only') {
+          console.info(
+            'attachment-attribution-boundaries',
+            JSON.stringify(
+              assertIncomingOwnerFilterBoundaries(reads, useAppStore.getState(), known, ws)
+            )
+          )
+        }
       }
     }
   )
