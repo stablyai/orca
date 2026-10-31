@@ -305,7 +305,9 @@ const NATIVE_CACHE_FILES = new Set([
   'config/scripts/space-sharing-copy.mjs',
   'config/scripts/native-dependency-lock-digest.mjs',
   'config/scripts/orcad-prebuild-node-gyp.mjs',
-  'config/scripts/msbuild-file-tracking.mjs'
+  'config/scripts/msbuild-file-tracking.mjs',
+  'config/scripts/history-filesystem-probe.cjs',
+  'config/scripts/electron-native-probe-source.mjs'
 ])
 
 const NATIVE_CACHE_PREFIXES = [
@@ -315,7 +317,8 @@ const NATIVE_CACHE_PREFIXES = [
   'config/patches/@vscode__windows-process-tree',
   // The vendored addons' sources: build/ and bin/ beside them are ignored, so nothing else lands here.
   'native/windows-registry/',
-  'native/windows-security/'
+  'native/windows-security/',
+  'native/history-filesystem/'
 ]
 
 const SHARED_PACKAGE_PREFIXES = [

@@ -13,7 +13,10 @@ if (process.version !== `v${expectedVersion}`) {
 const pty = require(nodePtyDir)
 // A compat slot's own addons: loading proves their glibc and C++ runtime needs resolve here.
 for (const addon of addons) {
-  require(addon)
+  const binding = require(addon)
+  if (addon.endsWith('history-filesystem.node')) {
+    require('./history-filesystem-probe.cjs').probeHistoryFilesystem(binding)
+  }
 }
 if (process.platform === 'win32') {
   // Loaded only by the non-DLL kill path; prove the shipped module still loads under this Node.

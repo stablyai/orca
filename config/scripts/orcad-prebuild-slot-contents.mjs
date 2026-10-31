@@ -10,6 +10,7 @@ export const MANIFEST_SCHEMA_VERSION = 2
 
 // Pin N-API 8 so a Node header bump cannot silently raise the shipped addon ABI.
 export const SLOT_NAPI_VERSION = 8
+export const HISTORY_FILESYSTEM_FILENAME = 'history-filesystem.node'
 
 /** The one export every Node-API addon may carry; any other `node_api_*` name is a post-8 import. */
 const NODE_API_EXPORTS = new Set(['node_api_module_get_api_version_v1'])
@@ -21,6 +22,7 @@ export const COMPAT_SLOTS = Object.freeze({
 
 // Map compat-built addons into orcad paths; a compat target must ship no native file from the base build.
 export const COMPAT_SLOT_ADDONS = Object.freeze({
+  [HISTORY_FILESYSTEM_FILENAME]: HISTORY_FILESYSTEM_FILENAME,
   'parcel-watcher/watcher.node': 'node_modules/@parcel/watcher/watcher.node'
 })
 
@@ -191,8 +193,13 @@ export function findSlotProblems(manifest, prebuildsDir, requiredSlots) {
       problems.push(`${slot}: not built`)
       continue
     }
+    if (!Object.hasOwn(entry.files ?? {}, HISTORY_FILESYSTEM_FILENAME)) {
+      problems.push(`${slot}/${HISTORY_FILESYSTEM_FILENAME}: not built`)
+    }
     if (isCompatSlot(slot)) {
-      for (const addon of Object.keys(COMPAT_SLOT_ADDONS)) {
+      for (const addon of Object.keys(COMPAT_SLOT_ADDONS).filter(
+        (file) => file !== HISTORY_FILESYSTEM_FILENAME
+      )) {
         if (!Object.hasOwn(entry.files ?? {}, addon)) {
           problems.push(`${slot}/${addon}: not built`)
         }

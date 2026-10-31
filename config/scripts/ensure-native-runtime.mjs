@@ -37,6 +37,7 @@ const runtime = readRuntimeArg()
 const forceRebuild = process.argv.includes('--force')
 
 const NATIVE_MODULES = [
+  '@orca/history-filesystem',
   'node-pty',
   ...(process.platform === 'win32'
     ? ['@orca/windows-registry', '@orca/windows-security', '@vscode/windows-process-tree']
@@ -286,6 +287,10 @@ function loadNativeModule(moduleName) {
           'source. Rebuild it (pnpm run rebuild:electron) rather than using the published prebuild.'
       )
     }
+    return
+  }
+  if (moduleName === '@orca/history-filesystem') {
+    require('./history-filesystem-probe.cjs').probeHistoryFilesystem(require(moduleName))
     return
   }
   if (moduleName === '@orca/windows-registry') {

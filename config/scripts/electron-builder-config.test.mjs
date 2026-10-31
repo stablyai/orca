@@ -308,6 +308,24 @@ describe('electron-builder config', () => {
   })
 
   // Swept one-time /tmp asar extracts cause web-client 500s and phone bundle failures until restart (#27976).
+  it('unpacks the account setup worker, shared loader and history addon for plain Node consumers', () => {
+    const matcher = new FileMatcher(
+      '/app',
+      '/dest',
+      (value) => value,
+      electronBuilderConfig.asarUnpack
+    )
+    const filter = matcher.createFilter()
+    for (const path of [
+      'out/main/claude-profile-setup-worker-entry.js',
+      'out/shared/history-filesystem.js',
+      'node_modules/@orca/history-filesystem/index.js',
+      'node_modules/@orca/history-filesystem/build/Release/history_filesystem.node'
+    ]) {
+      expect(filter(join('/app', path), { isDirectory: () => false })).toBe(true)
+    }
+  })
+
   it('unpacks the web and mobile bundles a host serves by opening their files', () => {
     const matcher = new FileMatcher(
       '/app',

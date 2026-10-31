@@ -2,6 +2,7 @@
 # Explicit registry/security workspaces avoid file:-dependency relinks, whose virtual-store churn
 # raced Windows node-gyp and removed @vscode/windows-process-tree’s binding.gyp mid-rebuild.
 packages:
+  - native/history-filesystem
   - native/windows-registry
   - native/windows-security
   - src/packages/*
@@ -66,6 +67,7 @@ allowBuilds:
   msw: false
   node-pty: true
   ssh2: false
+  '@orca/history-filesystem': false
   '@orca/windows-registry': false
   '@orca/windows-security': false
 

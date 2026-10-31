@@ -1,14 +1,11 @@
 #!/usr/bin/env node
-// Ship self-contained builtins-only CommonJS WSL hook/network/profile/SQLite programs via out/relay/wsl extraResources.
+// Ship self-contained builtins-only CommonJS WSL hook/network/SQLite programs via out/relay/wsl extraResources.
 import { build } from 'esbuild'
 import { JSONC_PARSER_ESM_ALIAS } from '../build-plugins/jsonc-parser-esm.ts'
 import { createHash } from 'node:crypto'
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import {
-  OPENCODE_SQLITE_READER_FILENAME,
-  WSL_CLAUDE_PROFILE_HELPER_FILENAME
-} from '../../src/shared/remote-bundle-artifacts.ts'
+import { OPENCODE_SQLITE_READER_FILENAME } from '../../src/shared/remote-bundle-artifacts.ts'
 
 const __dirname = import.meta.dirname
 const ROOT = join(__dirname, '..', '..')
@@ -53,10 +50,6 @@ await bundle('src/wsl-guest/wsl-browser-network-relay.ts', 'wsl-browser-network-
 stampVersion('wsl-browser-network-relay.js', '.browser-network-version')
 console.log(`Built WSL browser network relay → ${outDir}/wsl-browser-network-relay.js`)
 
-await bundle(
-  'src/main/claude-accounts/claude-profile-wsl-entry.ts',
-  WSL_CLAUDE_PROFILE_HELPER_FILENAME
-)
 await bundle(
   'src/main/ai-vault/session-scanner-opencode-sqlite-process-entry.ts',
   OPENCODE_SQLITE_READER_FILENAME,

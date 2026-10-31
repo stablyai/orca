@@ -1,0 +1,18 @@
+{
+  "name": "@orca/history-filesystem",
+  "version": "1.0.0",
+  "private": true,
+  "license": "MIT",
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "binding.gyp",
+    "src",
+    "build/Release/*.node"
+  ],
+  "main": "index.js",
+  "types": "index.d.ts",
+  "dependencies": {
+    "node-addon-api": "^8.5.0"
+  }
+}

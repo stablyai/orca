@@ -2,6 +2,8 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { loadHistoryFilesystem } from '../../shared/history-filesystem'
+import { observeHistoryFilesystem } from '../../shared/history-filesystem-test-boundary'
 import type { HostAccountLaunchEnv } from '../../shared/host-account-launch-env'
 import { wslClaudeProfile } from '../claude-accounts/claude-profile-wsl-paths'
 import { provisionWslClaudeAccountProfile } from '../claude-accounts/claude-profile-wsl-provision'
@@ -94,6 +96,45 @@ describe('WSL host Claude folder refresh', () => {
     })
 
     expect(provision).not.toHaveBeenCalled()
+  })
+
+  // Why: the refresh runs on orcad's event loop before every host Claude launch, so a set-up folder
+  // must cost the same however much history the distro user has.
+  it('does constant history work per launch on a set-up folder, whatever the history size', async () => {
+    const home = guestHome()
+    await setUpAccountFolder(home)
+    const shared = join(home, '.claude')
+    let written = 0
+    const addRecords = (count: number): void => {
+      for (const end = written + count; written < end; written += 1) {
+        const [tree, file] = written % 2 ? ['projects', 'session.jsonl'] : ['file-history', 'v1']
+        const dir = join(shared, tree, `d${Math.floor(written / 20)}`)
+        mkdirSync(dir, { recursive: true })
+        writeFileSync(join(dir, `${written}-${file}`), '{}')
+      }
+    }
+    // A long wait so each count covers the whole refresh, never the launch-wait cap.
+    const refresh = createWslHostClaudeProfileRefresh({ userHome: home, waitMs: 60_000 })
+    const countLaunch = async (): Promise<Record<string, number>> => {
+      const calls: Record<string, number> = {}
+      const stop = observeHistoryFilesystem(loadHistoryFilesystem(), (operation) => {
+        calls[operation] = (calls[operation] ?? 0) + 1
+      })
+      try {
+        await refresh(launchEnvFor(home))
+      } finally {
+        stop()
+      }
+      return calls
+    }
+
+    addRecords(200)
+    const small = await countLaunch()
+    addRecords(1800)
+    const large = await countLaunch()
+
+    expect(Object.keys(small).length).toBeGreaterThan(0)
+    expect(large).toEqual(small)
   })
 
   it('caps the wait and never fails the launch', async () => {

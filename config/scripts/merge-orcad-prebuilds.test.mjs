@@ -6,6 +6,7 @@ import { mergeOrcadPrebuildTrees } from './merge-orcad-prebuilds.mjs'
 import {
   COMPAT_SLOT_ADDONS,
   findSlotProblems,
+  HISTORY_FILESYSTEM_FILENAME,
   isCompatSlot,
   mergeManifest,
   sha256Of
@@ -27,8 +28,12 @@ afterEach(() => {
 function laneTree(slot, { version = '1.1.0', nodeHeaders = '24.21.0', bytes = slot } = {}) {
   const dir = temp()
   const files = {}
-  // A compat slot also carries its own addons.
-  for (const file of ['pty.node', ...(isCompatSlot(slot) ? Object.keys(COMPAT_SLOT_ADDONS) : [])]) {
+  // Every slot carries the history addon; a compat slot also carries its own addons.
+  for (const file of new Set([
+    'pty.node',
+    HISTORY_FILESYSTEM_FILENAME,
+    ...(isCompatSlot(slot) ? Object.keys(COMPAT_SLOT_ADDONS) : [])
+  ])) {
     const binary = join(dir, slot, ...file.split('/'))
     mkdirSync(dirname(binary), { recursive: true })
     writeFileSync(binary, bytes)
