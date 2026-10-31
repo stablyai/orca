@@ -9,9 +9,11 @@ import {
   writeFileSync
 } from 'node:fs'
 import { join } from 'node:path'
+import { clearHookTrustKeySeparatorVariants } from './codex-mirrored-hook-runtime-trust'
 import {
   computeTrustKey,
   escapeTomlString,
+  getHookTrustKeyWriteVariants,
   readHookTrustEntries,
   removeHookTrustEntries,
   upsertHookTrustEntries,
@@ -196,6 +198,64 @@ describe('removeHookTrustEntries', () => {
     const written = readFileSync(configPath, 'utf-8')
     expect(written).not.toContain(`[hooks.state.'${key}']`)
     expect(written).not.toContain(`[hooks.state."${escapeTomlString(key)}"]`)
+  })
+
+  it('clears both Windows slash and backslash trust-key variants together', () => {
+    const backslashKey =
+      'C:\\Users\\Rod\\AppData\\Roaming\\orca\\codex-runtime-home\\home\\hooks.json:pre_tool_use:1:0'
+    const slashKey =
+      'C:/Users/Rod/AppData/Roaming/orca/codex-runtime-home/home/hooks.json:pre_tool_use:1:0'
+    writeFileSync(
+      configPath,
+      [
+        `[hooks.state.'${backslashKey}']`,
+        'enabled = true',
+        'trusted_hash = "sha256:system-source-hash"',
+        '',
+        `[hooks.state."${slashKey}"]`,
+        'enabled = true',
+        'trusted_hash = "sha256:other-separator-hash"',
+        ''
+      ].join('\n'),
+      'utf-8'
+    )
+
+    expect(getHookTrustKeyWriteVariants(backslashKey)).toEqual(
+      expect.arrayContaining([backslashKey, slashKey])
+    )
+    clearHookTrustKeySeparatorVariants(configPath, [backslashKey])
+
+    const written = readFileSync(configPath, 'utf-8')
+    expect(written).not.toContain(backslashKey)
+    expect(written).not.toContain(slashKey)
+    expect(written).not.toContain('sha256:system-source-hash')
+    expect(written).not.toContain('sha256:other-separator-hash')
+  })
+
+  it('clears both WSL UNC separator variants together', () => {
+    const backslashKey = '\\\\wsl$\\Ubuntu\\home\\user\\.orca\\hooks.json:post_tool_use:1:0'
+    const slashKey = '//wsl$/Ubuntu/home/user/.orca/hooks.json:post_tool_use:1:0'
+    writeFileSync(
+      configPath,
+      [
+        `[hooks.state.'${backslashKey}']`,
+        'enabled = true',
+        'trusted_hash = "sha256:system-source-hash"',
+        '',
+        `[hooks.state.'${slashKey}']`,
+        'enabled = true',
+        'trusted_hash = "sha256:other-separator-hash"',
+        ''
+      ].join('\n'),
+      'utf-8'
+    )
+
+    clearHookTrustKeySeparatorVariants(configPath, [slashKey])
+
+    const written = readFileSync(configPath, 'utf-8')
+    expect(written).not.toContain('post_tool_use')
+    expect(written).not.toContain('sha256:system-source-hash')
+    expect(written).not.toContain('sha256:other-separator-hash')
   })
 
   it('does not remove the target hook header text inside a multi-line string', () => {
