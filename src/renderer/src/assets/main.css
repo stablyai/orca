@@ -218,6 +218,7 @@
   --chat-composer-base: var(--chat-canvas);
   --chat-composer-border-mix: 11%;
   --chat-content-max-width: 46rem;
+  --markdown-document-max-width: 1000px;
   --card: #fff;
   --card-foreground: #0a0a0a;
   --popover: #fff;
@@ -335,6 +336,7 @@
   --chat-composer-base: transparent;
   --chat-composer-border-mix: 9%;
   --chat-content-max-width: 46rem;
+  --markdown-document-max-width: 1000px;
   --card: #171717;
   --card-foreground: #fafafa;
   --popover: #171717;
