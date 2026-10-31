@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { getCodexAccountDisplayLabel } from '@/lib/codex-account-display-label'
 import { useAppStore } from '../../store'
 import { selectFloatingWorkspaceHasUnread } from '../../store/selectors'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
@@ -84,6 +85,14 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   }, [ensureDetectedAgents])
 
   const refreshDetectedAgents = useAppStore((s) => s.refreshDetectedAgents)
+  const fetchInactiveCodexAccountUsage = useAppStore((s) => s.fetchInactiveCodexAccountUsage)
+  const fetchInactiveCodexIfLocal = useCallback(() => {
+    // Why: remote-owned accounts have no local cache for the inactive Codex probe.
+    if (remoteOwned) {
+      return
+    }
+    void fetchInactiveCodexAccountUsage()
+  }, [fetchInactiveCodexAccountUsage, remoteOwned])
   const handleRefresh = useCallback(async () => {
     if (isRefreshing) {
       return
@@ -95,12 +104,27 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
         (refreshRemote ?? refreshRateLimits)(),
         refreshDetectedAgents(undefined, { wakeWslDistro: true })
       ])
+      fetchInactiveCodexIfLocal()
     } finally {
       if (mountedRef.current) {
         setIsRefreshing(false)
       }
     }
-  }, [isRefreshing, refreshRemote, refreshRateLimits, refreshDetectedAgents])
+  }, [
+    fetchInactiveCodexIfLocal,
+    isRefreshing,
+    refreshRemote,
+    refreshRateLimits,
+    refreshDetectedAgents
+  ])
+  const codexAccountLabels = useMemo(() => {
+    const accounts = settings?.codexManagedAccounts ?? []
+    const labels: Record<string, string> = {}
+    for (const account of accounts) {
+      labels[account.id] = getCodexAccountDisplayLabel(account, accounts)
+    }
+    return labels
+  }, [settings?.codexManagedAccounts])
 
   if (!statusBarVisible) {
     return null
@@ -286,8 +310,10 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     handleUsageDetails,
     handleUsageMenuOpenChange,
     hasVisibleUsageMeters,
+    inactiveCodexAccounts: rateLimits.inactiveCodexAccounts,
     isEmptyUsageState,
     isRefreshing,
+    onFetchInactiveCodexAccounts: fetchInactiveCodexIfLocal,
     menuOpen,
     menuPoint,
     overflowing,
@@ -313,7 +339,8 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     usageMenuOpen,
     usagePercentageDisplay,
     usageRef,
-    usageTightestOnly
+    usageTightestOnly,
+    codexAccountLabels
   }
 }
 

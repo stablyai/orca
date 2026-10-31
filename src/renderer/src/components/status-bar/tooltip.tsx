@@ -17,6 +17,7 @@ import {
   type UsagePercentageDisplay
 } from '../../../../shared/usage-percentage-display'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
+import { formatRelativeTime } from './usage-roster-formatting'
 import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
 import { barColor, ProviderExtraUsageSection } from './provider-extra-usage-section'
 
@@ -35,19 +36,21 @@ export {
   getProviderUsageStatusLabel
 } from './usage-error-copy'
 
-export function formatTimeAgo(ts: number): string {
-  const diff = Date.now() - ts
-  if (diff < 60_000) {
+export function formatTimeAgo(ts: number, now = Date.now()): string {
+  const relative = formatRelativeTime(ts, now)
+  if (relative === 'just now') {
     return translate('auto.components.status.bar.tooltip.justNow', 'just now')
   }
-  const mins = Math.floor(diff / 60_000)
-  if (mins < 60) {
+  const minutes = /^(\d+)m ago$/.exec(relative)
+  if (minutes) {
     return translate('auto.components.status.bar.tooltip.minutesAgo', '{{minutes}}m ago', {
-      minutes: mins
+      minutes: minutes[1]
     })
   }
-  const hours = Math.floor(mins / 60)
-  return translate('auto.components.status.bar.tooltip.hoursAgo', '{{hours}}h ago', { hours })
+  const hours = /^(\d+)h ago$/.exec(relative)
+  return translate('auto.components.status.bar.tooltip.hoursAgo', '{{hours}}h ago', {
+    hours: hours?.[1] ?? '0'
+  })
 }
 
 // Preserve tooltip imports while sharing countdown formatting with mobile.

@@ -83,12 +83,15 @@ export function StatusBarSurface({
     handleUsageDetails,
     handleUsageMenuOpenChange,
     hasVisibleUsageMeters,
+    inactiveCodexAccounts,
     isEmptyUsageState,
     isRefreshing,
+    onFetchInactiveCodexAccounts,
     overflowing,
     petEnabled,
     remoteOwner,
     rosterProviders,
+    codexAccountLabels,
     segmentsIconOnly,
     segmentsRef,
     setMenuOpen,
@@ -212,6 +215,9 @@ export function StatusBarSurface({
                     canSignIn={canSignInFromUsageRow}
                     onManageAccounts={handleManageAccounts}
                     onUsageDetails={handleUsageDetails}
+                    inactiveCodexAccounts={inactiveCodexAccounts}
+                    codexAccountLabels={codexAccountLabels}
+                    onFetchInactiveCodexAccounts={onFetchInactiveCodexAccounts}
                     renderRow={(p, rowNode) => {
                       // Why: a placeholder has nothing to drill into; its row opens the host's accounts.
                       if (isOwnerNotSetUpPlaceholder(p)) {
