@@ -62,7 +62,7 @@ const incarnationId = 'source-incarnation'
 // The PTY dispatcher subscribes to exits once per module load; later panes share that listener.
 let dispatchExit: Parameters<typeof window.api.pty.onExit>[0] | undefined
 
-async function keptStoppedPane() {
+async function keptStoppedPane(opts: { visible?: boolean } = {}) {
   const modules = await load('linux')
   modules.sources.resetStoppedSwitchSourcesForTests()
   await installTerminalTestGlobals()
@@ -110,6 +110,8 @@ async function keptStoppedPane() {
     clearTabPtyId: vi.fn(store.getState().clearTabPtyId),
     updateTabPtyId: vi.fn(store.getState().updateTabPtyId)
   })
+  // A background tab: its output goes behind the hidden delivery gate.
+  deps.isVisibleRef.current = opts.visible ?? true
   const args = mockPanePtyArgs(pane, manager, deps)
   let binding = modules.pane.connectPanePty(...args)
   await flushAsyncTicks(20)
@@ -200,31 +202,39 @@ it('shows the kept pane exited at its own code once main settles it, with no clo
   }
 })
 
-it('keeps a mounted pane\u2019s own screen and scrollback when main settles it', async () => {
-  const kept = await keptStoppedPane()
-  try {
-    kept.stoppedForReplace()
-    await flushAsyncTicks(5)
-    kept.pane.terminal.write.mockClear()
-    kept.pane.terminal.resize.mockClear()
-    kept.modules.sources.noteStoppedSwitchSource({
-      ...kept.source,
-      switched: { agent: 'codex', screen: HELD_SCREEN }
-    })
-    await flushAsyncTicks(5)
-    // It saw the process to its stop: nothing erases the conversation it can scroll back through.
-    const output = written(kept)
-    expect(output).not.toContain('HELD-FRAME')
-    expect(output).not.toContain('\x1b[2J')
-    expect(output).not.toContain('\x1b[3J')
-    expect(kept.pane.terminal.resize).not.toHaveBeenCalled()
-    expect(kept.died).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ reason: 'switch-stopped', agent: 'codex' })
-    )
-  } finally {
-    kept.dispose()
+it.each([
+  ['visible', true],
+  ['hidden behind the delivery gate', false]
+])(
+  'paints main\u2019s held screen over a mounted %s pane on settle, keeping its saved lines',
+  async (_label, visible) => {
+    const kept = await keptStoppedPane({ visible })
+    try {
+      kept.stoppedForReplace()
+      await flushAsyncTicks(5)
+      kept.pane.terminal.write.mockClear()
+      kept.pane.terminal.resize.mockClear()
+      // Captured at the grid this mounted pane gave the process.
+      const { cols, rows } = kept.pane.terminal
+      kept.modules.sources.noteStoppedSwitchSource({
+        ...kept.source,
+        switched: { agent: 'codex', screen: { ...HELD_SCREEN, cols, rows } }
+      })
+      await flushAsyncTicks(5)
+      // A pane that stopped receiving output can't catch up once the process is gone; only the
+      // visible rows are replaced, so the conversation above stays scrollable.
+      const output = written(kept)
+      expect(output.indexOf('\x1b[2J')).toBeLessThan(output.indexOf('HELD-FRAME'))
+      expect(output).not.toContain('\x1b[3J')
+      expect(kept.pane.terminal.resize).not.toHaveBeenCalled()
+      expect(kept.died).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ reason: 'switch-stopped', agent: 'codex' })
+      )
+    } finally {
+      kept.dispose()
+    }
   }
-})
+)
 
 it.each([
   ['another process', { ptyId: 'successor-pty' }],

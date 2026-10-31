@@ -150,9 +150,22 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
     const isUnverifiedExit = !isProvenProcessExit(exitCode)
     const committedExit = consumeCommittedPtyShutdownExit(ptyId, session.runtimeEnvironmentId)
     const reversibleExit = opts.preserveRendererBinding === true || committedExit === true
-    const switchStopped =
-      opts.stoppedSwitchSource ??
-      readMirroredStoppedSwitchSource(session.deps.tabId, session.pane.leafId, ptyId)
+    const mirroredStop = readMirroredStoppedSwitchSource(
+      session.deps.tabId,
+      session.pane.leafId,
+      ptyId
+    )
+    // A stream sends the held screen once, so a later fact may lack it: the store kept the first.
+    const switchStopped = opts.stoppedSwitchSource
+      ? {
+          ...opts.stoppedSwitchSource,
+          screen:
+            opts.stoppedSwitchSource.screen ??
+            (mirroredStop?.incarnationId === opts.stoppedSwitchSource.incarnationId
+              ? mirroredStop.screen
+              : undefined)
+        }
+      : mirroredStop
     const preserveRendererBinding =
       reversibleExit ||
       !!switchStopped ||
@@ -216,8 +229,7 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
         return
       }
       if (switchStopped && !reversibleExit) {
-        // This pane saw the process to its stop: its own screen and scrollback stay.
-        showSwitchStoppedPane(session, ptyId, exitCode, switchStopped, false)
+        showSwitchStoppedPane(session, ptyId, exitCode, switchStopped)
       } else if (preserveRendererBinding && !reversibleExit) {
         holdClosingExit(session, ptyId, exitCode)
       }
