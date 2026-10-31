@@ -286,6 +286,10 @@ describe('applyPluginAppTheme', () => {
       '--foreground': '#cccccc'
     }
     expect(painted({ ...dim, '--diff-added': '#ffffff' })).toEqual(dim)
+    // A tint the theme set itself takes the blame alone.
+    expect(
+      painted({ ...dim, '--diff-added': '#3ddc84', '--diff-added-background': '#ffffff' })
+    ).toEqual({ ...dim, '--diff-added': '#3ddc84' })
     // Bubble text is chat's mixed foreground, not raw --foreground.
     const black = { '--background': '#000000', '--foreground': '#ffffff' }
     expect(painted({ ...black, '--chat-user-message': '#727272' })).toEqual(black)
