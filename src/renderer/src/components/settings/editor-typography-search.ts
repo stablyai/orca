@@ -45,7 +45,7 @@ export const getEditorTypographySearchEntries = createLocalizedCatalog(() => ({
     title: translate('auto.components.settings.editorTypography.lineHeight', 'Editor Line Height'),
     description: translate(
       'auto.components.settings.editorTypography.lineHeightDesc',
-      'Line spacing as a multiple of the editor font size. Leave empty for automatic spacing.'
+      'Line spacing as a multiple of the editor font size; values of 8 or more are read as pixels. Leave empty or 0 for automatic spacing.'
     ),
     keywords: [
       ...editorTypographyKeywords(),

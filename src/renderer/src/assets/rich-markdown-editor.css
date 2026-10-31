@@ -931,7 +931,7 @@
   border-radius: 5px;
   background: color-mix(in srgb, var(--foreground) 8%, transparent);
   font-size: 0.88em;
-  font-family: var(--font-mono, monospace);
+  font-family: var(--markdown-code-font-family, var(--font-mono, monospace));
 }
 
 .rich-markdown-code-block-wrapper {
@@ -989,6 +989,7 @@
 
 .rich-markdown-editor pre {
   padding: 14px 18px;
+  font-family: var(--markdown-code-font-family, var(--font-mono, monospace));
   border-radius: 8px;
   overflow-x: auto;
   line-height: 1.55;

@@ -43,6 +43,11 @@ describe('resolveEditorTypography', () => {
     expect(typography.lineHeight).toBe(31)
   })
 
+  it('reads line heights of 8 or more as pixels so they do not clamp to 3x', () => {
+    const typography = resolveEditorTypography({ ...terminal, editorLineHeight: 21 }, 0)
+    expect(typography.lineHeight).toBe(21)
+  })
+
   it('ignores hand-edited values that are not usable', () => {
     // Settings files are untyped JSON on disk, so corrupt values arrive through JSON.parse.
     const handEdited: EditorTypographyInputs = JSON.parse(

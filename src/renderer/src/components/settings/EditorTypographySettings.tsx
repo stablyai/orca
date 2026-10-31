@@ -9,8 +9,6 @@ import { fontFamilyHasKnownLigatures } from '../../../../shared/terminal-ligatur
 import {
   EDITOR_FONT_SIZE_MAX,
   EDITOR_FONT_SIZE_MIN,
-  EDITOR_LINE_HEIGHT_MAX,
-  EDITOR_LINE_HEIGHT_MIN,
   EDITOR_REGULAR_FONT_WEIGHT,
   resolveEditorFontFamily,
   resolveEditorLigaturesMode,
@@ -75,14 +73,13 @@ export function EditorTypographySettings({
           label={entries.lineHeight.title}
           description={entries.lineHeight.description}
           value={settings.editorLineHeight}
-          min={EDITOR_LINE_HEIGHT_MIN}
-          max={EDITOR_LINE_HEIGHT_MAX}
+          min={0}
           step={0.1}
+          clearOnZero
           placeholder={translate(
             'auto.components.settings.editorTypography.lineHeightAuto',
             'Auto'
           )}
-          suffix={`${EDITOR_LINE_HEIGHT_MIN}-${EDITOR_LINE_HEIGHT_MAX}`}
           onChange={(value) => updateSettings({ editorLineHeight: value })}
           onClear={() => updateSettings({ editorLineHeight: undefined })}
         />

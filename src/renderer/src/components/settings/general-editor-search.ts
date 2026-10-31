@@ -37,7 +37,7 @@ export const getGeneralEditorSearchEntries = createLocalizedCatalog(() => [
     ),
     description: translate(
       'auto.components.settings.general.search.editorFontFamilyDesc',
-      'Font used by file editors and diff views. Leave empty to follow the terminal font.'
+      'Font used by file editors and diff views, and by Markdown code when set. Leave empty to follow the terminal font.'
     ),
     keywords: [
       ...translateSearchKeyword('auto.components.settings.general.search.e1ee631696', 'editor'),

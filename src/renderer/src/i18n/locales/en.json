@@ -10379,7 +10379,7 @@
             "e61157e926": "Editor Word Wrap",
             "005be5c699": "Wrap long lines in file editors instead of requiring horizontal scrolling.",
             "editorFontFamily": "Editor Font Family",
-            "editorFontFamilyDesc": "Font used by file editors and diff views. Leave empty to follow the terminal font.",
+            "editorFontFamilyDesc": "Font used by file editors and diff views, and by Markdown code when set. Leave empty to follow the terminal font.",
             "collapseUnchanged": "Collapse Unchanged Regions",
             "collapseUnchangedDesc": "Show only changed lines and a little surrounding context in a file diff, hiding the rest behind expandable bands. The View All Changes diff always collapses this way.",
             "collapseUnchangedKw": "collapse",
@@ -11882,7 +11882,7 @@
         },
         "EditorFontFamilySetting": {
           "title": "Editor Font Family",
-          "description": "Font used by file editors and diff views. Leave empty to follow the terminal font.",
+          "description": "Font used by file editors and diff views, and by Markdown code when set. Leave empty to follow the terminal font.",
           "placeholder": "Same as terminal font"
         },
         "GeneralRemoteServerUpdates": {
@@ -13468,7 +13468,7 @@
           "weightKw": "weight",
           "boldKw": "bold",
           "lineHeight": "Editor Line Height",
-          "lineHeightDesc": "Line spacing as a multiple of the editor font size. Leave empty for automatic spacing.",
+          "lineHeightDesc": "Line spacing as a multiple of the editor font size; values of 8 or more are read as pixels. Leave empty or 0 for automatic spacing.",
           "lineHeightKw": "line height",
           "spacingKw": "spacing",
           "ligatures": "Editor Font Ligatures",

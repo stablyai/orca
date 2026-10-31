@@ -11,6 +11,8 @@ export const EDITOR_FONT_SIZE_MIN = 10
 export const EDITOR_FONT_SIZE_MAX = 24
 export const EDITOR_LINE_HEIGHT_MIN = 1
 export const EDITOR_LINE_HEIGHT_MAX = 3
+/** At or above this a line height is read as pixels, matching Monaco's own `lineHeight` rule. */
+const EDITOR_LINE_HEIGHT_PIXEL_THRESHOLD = 8
 export const EDITOR_REGULAR_FONT_WEIGHT = 400
 const FALLBACK_EDITOR_FONT_SIZE = 13
 /** Marks DOM code surfaces so opt-in font smoothing reaches them like Monaco. */
@@ -45,7 +47,7 @@ export function resolveEditorFontFamily(settings?: EditorTypographyInputs | null
 }
 
 /** Monaco adds fallback fonts itself; other code surfaces need an explicit stack or unknown names can fall back to serif. */
-function resolveEditorFontStack(settings?: EditorTypographyInputs | null): string {
+export function resolveEditorFontStack(settings?: EditorTypographyInputs | null): string {
   const family = settings?.editorFontFamily?.trim() || settings?.terminalFontFamily?.trim() || ''
   // A comma list is already a CSS stack; quoting it would make it one unknown family name.
   return family.includes(',') ? family : buildFontFamily(family)
@@ -61,7 +63,20 @@ export function resolveEditorBaseFontSize(settings?: EditorTypographyInputs | nu
   if (isPositiveNumber(editorFontSize)) {
     return Math.min(EDITOR_FONT_SIZE_MAX, Math.max(EDITOR_FONT_SIZE_MIN, editorFontSize))
   }
-  return settings?.terminalFontSize ?? FALLBACK_EDITOR_FONT_SIZE
+  const terminalFontSize = settings?.terminalFontSize
+  return isPositiveNumber(terminalFontSize) ? terminalFontSize : FALLBACK_EDITOR_FONT_SIZE
+}
+
+/**
+ * Multiplier of the base size, or undefined for automatic spacing. Why accept pixels and 0:
+ * code editors commonly take `22` as pixels and `0` as automatic, so neither may become 3x or 1x.
+ */
+function resolveEditorLineHeightRatio(value: unknown, baseFontSize: number): number | undefined {
+  if (!isPositiveNumber(value)) {
+    return undefined
+  }
+  const ratio = value >= EDITOR_LINE_HEIGHT_PIXEL_THRESHOLD ? value / baseFontSize : value
+  return Math.min(EDITOR_LINE_HEIGHT_MAX, Math.max(EDITOR_LINE_HEIGHT_MIN, ratio))
 }
 
 export function resolveEditorTypography(
@@ -75,7 +90,7 @@ export function resolveEditorTypography(
       ? computeDiffEditorFontSize(baseFontSize, zoomLevel)
       : computeEditorFontSize(baseFontSize, zoomLevel)
   const fontFamily = resolveEditorFontFamily(settings)
-  const lineHeightRatio = settings?.editorLineHeight
+  const lineHeightRatio = resolveEditorLineHeightRatio(settings?.editorLineHeight, baseFontSize)
   return {
     fontFamily,
     cssFontFamily: resolveEditorFontStack(settings),
@@ -83,12 +98,7 @@ export function resolveEditorTypography(
     fontWeight: isPositiveNumber(settings?.editorFontWeight)
       ? String(normalizeFontWeight(settings.editorFontWeight, EDITOR_REGULAR_FONT_WEIGHT))
       : 'normal',
-    lineHeight: isPositiveNumber(lineHeightRatio)
-      ? Math.round(
-          fontSize *
-            Math.min(EDITOR_LINE_HEIGHT_MAX, Math.max(EDITOR_LINE_HEIGHT_MIN, lineHeightRatio))
-        )
-      : 0,
+    lineHeight: lineHeightRatio ? Math.round(fontSize * lineHeightRatio) : 0,
     fontLigatures: resolveTerminalLigaturesEnabled(resolveEditorLigaturesMode(settings), fontFamily)
   }
 }
