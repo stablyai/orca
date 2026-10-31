@@ -118,7 +118,7 @@ it('refuses a live prefix-position record whose key the deliberately changed pre
     database.db
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
       .all()
-      .map(({ name }) => [name, database.db.prepare(`SELECT * FROM "${name}"`).all()])
+      .map(({ name }) => [name, database.db.prepare(`SELECT * FROM "${String(name)}"`).all()])
   const before = saved()
   const restored = restoreJournal(database.db, sessionId)
   expect(restored).toMatchObject({
