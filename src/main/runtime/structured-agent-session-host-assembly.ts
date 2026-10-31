@@ -91,8 +91,11 @@ export async function installOnJournal(
       ? { captureSessionSwitchStop: deps.captureSessionSwitchStop }
       : {}),
     ...(deps.onSessionTabHidden ? { onSessionTabHidden: deps.onSessionTabHidden } : {}),
+    ...(deps.launchAccountHome ? { launchAccountHome: deps.launchAccountHome } : {}),
+    ...(deps.parentAccountWork ? { parentAccountWork: deps.parentAccountWork } : {}),
     ...(deps.assertNoTerminalWriter ? { assertNoTerminalWriter: deps.assertNoTerminalWriter } : {}),
     ...(await modelCatalogHostDeps({
+      host: () => host,
       store,
       agents,
       registrations: STRUCTURED_AGENT_RUNTIME_REGISTRATIONS,

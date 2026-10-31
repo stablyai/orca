@@ -1,3 +1,4 @@
+import { createStructuredAgentSessionConversationReads } from './structured-agent-session-conversation-reads'
 import type { StructuredAgentSessionTaskQueue } from './structured-agent-session-task-queue'
 import type { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
 import type { StructuredAgentSessionLifetimeContext } from './structured-agent-session-host-lifetime'
@@ -26,6 +27,15 @@ export abstract class StructuredAgentSessionHostContexts {
   protected abstract readonly queued: ReturnType<typeof wireQueuedMessages>
   protected abstract now: () => number
   protected abstract serialize: StructuredAgentSessionTaskQueue['serialize']
+  protected readonly reads = createStructuredAgentSessionConversationReads(() => ({
+    deps: this.deps,
+    sessions: this.sessions,
+    serialize: this.serialize,
+    readCommands: (id, commandsOnRequest) =>
+      this.clientDelivery.readCommandsSettled(id, commandsOnRequest),
+    conversation: (id) => this.lifetime.conversation(id),
+    adoptOpened: this.conversationDelivery.adoptOpened
+  }))
   // Keep inference so publishStatus stays required in the attach-context spread.
   protected lifetimeContext() {
     return {

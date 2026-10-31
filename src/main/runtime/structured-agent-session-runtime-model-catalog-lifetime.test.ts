@@ -1,3 +1,4 @@
+import { hostTestCatalogReadOperation } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -59,6 +60,7 @@ afterEach(async () => {
 describe('the host catalog lifetime', () => {
   it('prewarms once the host is installed and stops its listings at teardown', async () => {
     const service = {
+      captureRead: hostTestCatalogReadOperation,
       snapshot: vi.fn(() => ({ origin: 'unknown' as const })),
       demand: vi.fn(async () => {}),
       prepareSaved: vi.fn(async () => ({ origin: 'unknown' as const })),

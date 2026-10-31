@@ -140,6 +140,7 @@ export function structuredHostStub(sessionId: string, workspaceId: string): Stru
 export function installableHost(hostCalls: StructuredHostCalls): StructuredAgentSessionHost {
   const host = {
     ...hostCalls,
+    readModelCatalog: hostCalls.modelCatalog,
     // The catalog read checks the session's record for a floating chat's own folder; none here.
     deps: {
       modelCatalog: { read: hostCalls.modelCatalog, demand: vi.fn(async () => {}) },

@@ -1,5 +1,6 @@
 import { isDeepStrictEqual } from 'node:util'
 import { abortSignalReason } from '../../../shared/abort-signal-reason'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
 import type {
   AgentSessionProcessIdentity,
   AgentSessionRecord
@@ -65,6 +66,7 @@ export async function acquireOwner(
 ): Promise<{
   record: AgentSessionRecord
   acquisitionGeneration: string
+  accountHome?: AgentSessionAccountHome
 }> {
   const fence = record.lease.runtimeFence
   const spawnToken = record.lease.reservedSpawnToken
@@ -83,6 +85,7 @@ export async function acquireOwner(
         throw new AgentSessionPreSpawnError(error)
       }
       const permissionMode = await input.launchPermissionMode?.(record)
+      const accountRecipe = await input.launchAccountRecipe?.(record)
       try {
         await input.assertNoTerminalWriter?.(record)
       } catch (error) {
@@ -107,6 +110,7 @@ export async function acquireOwner(
         // Retry the existing reservation instead of spawning a second child.
         spawnToken,
         ...(permissionMode ? { permissionMode } : {}),
+        ...(accountRecipe ? { accountRecipe } : {}),
         ...(input.eventSink ? { events: input.eventSink } : {}),
         ...(input.acquireSignal ? { signal: input.acquireSignal } : {}),
         ...(input.startupOptions ? { startupOptions: input.startupOptions } : {}),
@@ -148,11 +152,23 @@ export async function acquireOwner(
         sessionId: record.sessionId,
         fence,
         ...(acquired.link ? { link: acquired.link } : {}),
+        ...(acquired.accountRecipe
+          ? {
+              accountAcquisition: {
+                generation: acquired.acquisitionGeneration,
+                recipe: acquired.accountRecipe
+              }
+            }
+          : {}),
         now: input.now()
       },
       input.checkBeforeAcquire
     )
-    return { record: proved, acquisitionGeneration: acquired.acquisitionGeneration }
+    return {
+      record: proved,
+      acquisitionGeneration: acquired.acquisitionGeneration,
+      ...(acquired.accountHome ? { accountHome: acquired.accountHome } : {})
+    }
   } catch (error) {
     if (isAgentSessionPreSpawnError(error)) {
       physical.processless()
