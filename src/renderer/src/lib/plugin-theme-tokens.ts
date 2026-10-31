@@ -38,7 +38,7 @@ const GIT_DECORATIONS = [
 ]
 
 // Why: a theme must not be able to hide text, so every text/surface pair keeps WCAG AA contrast.
-const CONTRAST_RULES: readonly ContrastRule[] = [
+const CONTRAST_RULE_DEFINITIONS: readonly ContrastRule[] = [
   textPair('--background', '--foreground'),
   textPair('--background', '--muted-foreground'),
   // Notebook markdown renders directly on the editor surface.
@@ -92,6 +92,10 @@ const CONTRAST_RULES: readonly ContrastRule[] = [
     drop: [`--git-decoration-${status}`]
   }))
 ]
+const CONTRAST_RULES = CONTRAST_RULE_DEFINITIONS.map((rule) => ({
+  ...rule,
+  dropped: rule.drop ?? [rule.surface, rule.text]
+}))
 // Why 2:1, not WCAG's 3:1: Orca's own light ring is 2.6:1; the goal is a ring that never vanishes.
 const RINGS: readonly (readonly [string, string])[] = [
   ['--ring', '--background'],
@@ -190,10 +194,10 @@ export function safePluginThemeTokens(
   for (let changed = true; changed;) {
     changed = false
     for (const rule of CONTRAST_RULES) {
-      const dropped = [...(rule.drop ?? [rule.surface, rule.text])]
-      if (rule.surfaceSource && tokens[rule.surface] === undefined) {
-        dropped.push(rule.surfaceSource)
-      }
+      const dropped =
+        rule.surfaceSource && tokens[rule.surface] === undefined
+          ? [...rule.dropped, rule.surfaceSource]
+          : rule.dropped
       // Why skip: a check with nothing of the theme's to drop can't change the result, so a
       // theme that sets none of a check's tokens pays no probes for it.
       if (!dropped.some((token) => accepted.has(token))) {
@@ -215,9 +219,11 @@ export function safePluginThemeTokens(
     }
     for (const [ring, surface] of RINGS) {
       const ringColor = accepted.get(ring)
+      if (!ringColor) {
+        continue
+      }
       const surfaceColor = effective(surface)
       if (
-        ringColor &&
         surfaceColor &&
         contrastRatio(over(ringColor, surfaceColor), surfaceColor) < MIN_RING_CONTRAST
       ) {
