@@ -79,6 +79,8 @@ export type KeybindingActionId =
   | 'tab.previousRecent'
   | 'tab.nextTerminal'
   | 'tab.previousTerminal'
+  | 'tab.focusNextGroup'
+  | 'tab.focusPreviousGroup'
   | 'tab.selectByIndex'
   | 'tab.openQuickCommandsMenu'
   | 'browser.find'

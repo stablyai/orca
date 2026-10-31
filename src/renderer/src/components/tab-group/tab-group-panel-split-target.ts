@@ -39,7 +39,7 @@ function escapeCssAttrValue(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
 }
 
-function getTabGroupBodyElement(groupId: string, worktreeId: string): HTMLElement | null {
+export function getTabGroupBodyElement(groupId: string, worktreeId: string): HTMLElement | null {
   const escapedGroupId = escapeCssAttrValue(groupId)
   const escapedWorktreeId = escapeCssAttrValue(worktreeId)
   return document.querySelector<HTMLElement>(

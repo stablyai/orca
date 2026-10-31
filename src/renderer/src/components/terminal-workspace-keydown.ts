@@ -1,5 +1,6 @@
 import { toast } from 'sonner'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
+import { focusAdjacentTabGroup } from '@/lib/tab-group-focus-cycle'
 import type { KeybindingActionId } from '../../../shared/keybindings'
 import { keybindingMatchesAction } from '../../../shared/keybindings'
 import { matchesRecentTabSwitcherChord } from '../../../shared/window-shortcut-policy'
@@ -275,5 +276,19 @@ export function handleTerminalWorkspaceKeyDown(
       direction: terminalTabDirection,
       scope: 'terminal'
     })
+  }
+  const groupFocusDirection = matchShortcut('tab.focusNextGroup')
+    ? 1
+    : matchShortcut('tab.focusPreviousGroup')
+      ? -1
+      : null
+  if (groupFocusDirection !== null && claimTabSwitch()) {
+    notifyTerminalCapture(
+      groupFocusDirection === 1 ? 'tab.focusNextGroup' : 'tab.focusPreviousGroup'
+    )
+    focusAdjacentTabGroup(
+      floatingWorkspaceFocused ? FLOATING_TERMINAL_WORKTREE_ID : activeWorktreeId,
+      groupFocusDirection
+    )
   }
 }
