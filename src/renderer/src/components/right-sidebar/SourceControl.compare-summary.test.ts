@@ -195,6 +195,24 @@ describe('SourceControl compare summary', () => {
     ).toBeUndefined()
   })
 
+  it('prefers a remote-tracking repo base over a stale local worktree default', () => {
+    expect(
+      resolveSourceControlBaseRef({
+        worktreeBaseRef: 'master',
+        repoBaseRef: 'origin/master',
+        defaultBaseRef: 'origin/master'
+      })
+    ).toBe('origin/master')
+
+    expect(
+      resolveSourceControlBaseRef({
+        worktreeBaseRef: 'refs/heads/master',
+        repoBaseRef: null,
+        defaultBaseRef: 'origin/master'
+      })
+    ).toBe('origin/master')
+  })
+
   it('falls back to repo and default base refs when worktree metadata is absent', () => {
     expect(
       resolveSourceControlBaseRef({
@@ -252,6 +270,18 @@ describe('SourceControl compare summary', () => {
         fallbackBaseRef: 'origin/master'
       })
     ).toBe('origin/main')
+  })
+
+  it('prefers a remote-tracking repo pin over a stale local worktree default when on', () => {
+    expect(
+      resolveSourceControlCompareBaseRef({
+        enabled: true,
+        worktreeBaseRef: 'master',
+        repoBaseRef: 'origin/master',
+        upstreamName: 'origin/feature',
+        fallbackBaseRef: 'origin/master'
+      })
+    ).toBe('origin/master')
   })
 
   it('uses the current branch upstream when on and no base is pinned', () => {

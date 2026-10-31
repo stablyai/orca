@@ -9,6 +9,7 @@ import {
   resolveSourceControlBaseRef,
   resolveSourceControlCompareBaseRef
 } from '../../../src/shared/source-control-base-ref-resolution'
+import { preferRemoteTrackingCompareBase } from '../../../src/shared/worktree/base-ref'
 
 // The branch compare also honours desktop's compare-against-upstream setting.
 export type MobileBranchCompareTarget = {
@@ -54,8 +55,19 @@ export async function resolveMobileBranchBaseRefs(
     ? (repos.value.find((candidate) => candidate.id === repoId)?.worktreeBaseRef ?? null)
     : null
 
+  // A bare local pin such as master loses to the repo default origin/<branch>.
+  let comparableWorktreeBaseRef = worktreeBaseRef
+  if (worktreeBaseRef?.trim() && !repoBaseRef?.trim()) {
+    const defaultBaseRef = await readDefaultBaseRef(client, repoId)
+    comparableWorktreeBaseRef =
+      preferRemoteTrackingCompareBase(worktreeBaseRef, defaultBaseRef) ?? worktreeBaseRef
+  }
+
   // Desktop's resolution; the default is fetched only when nothing is pinned.
-  const pinnedBaseRef = resolveSourceControlBaseRef({ worktreeBaseRef, repoBaseRef })
+  const pinnedBaseRef = resolveSourceControlBaseRef({
+    worktreeBaseRef: comparableWorktreeBaseRef,
+    repoBaseRef
+  })
   if (pinnedBaseRef) {
     return { compareBaseRef: pinnedBaseRef, readEffectiveBaseRef: async () => pinnedBaseRef }
   }
