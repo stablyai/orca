@@ -188,6 +188,14 @@ describe('a page that was not granted the verbs', () => {
     expect(probe.pair.rpc.requests).toEqual([])
     // The frame left the page; assert the host’s refusal code rather than only lack of a handler call.
     expect(probe.pair.toShell.length).toBeGreaterThan(before)
+    expect(probe.pair.hostDiagnostics).toEqual([
+      {
+        kind: 'native-media-pick-refused',
+        source: 'library',
+        stage: 'pre-dispatch',
+        reason: 'native_verb_ungranted'
+      }
+    ])
   })
 })
 

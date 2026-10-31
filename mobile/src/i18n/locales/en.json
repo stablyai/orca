@@ -2568,7 +2568,9 @@
       "disconnected": "Attach failed (disconnected)",
       "permissionDenied": "Photo permission denied",
       "imageTooLarge": "Image too large to attach",
-      "attachFailed": "Attach failed"
+      "attachFailed": "Attach failed",
+      "mediaUnavailable": "Media attachments unavailable here",
+      "capacityReached": "Attachment capacity reached"
     },
     "ask": {
       "submit": "Submit",

@@ -595,7 +595,9 @@
       "attachFailed": "Не удалось прикрепить",
       "disconnected": "Не удалось прикрепить (нет соединения)",
       "imageTooLarge": "Изображение слишком большое для прикрепления",
-      "permissionDenied": "Нет доступа к фото"
+      "permissionDenied": "Нет доступа к фото",
+      "mediaUnavailable": "Здесь нельзя прикрепить медиафайлы",
+      "capacityReached": "Достигнут лимит вложений"
     }
   },
   "common": {
