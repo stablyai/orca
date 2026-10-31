@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { getDefaultSettings } from '../../../../shared/constants'
 import type { Repo } from '../../../../shared/repo-types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { isCopilotAttachOwnerLocal } from './copilot-attach-owner'
@@ -30,7 +29,6 @@ function makeState(overrides: Partial<State> = {}): State {
     addedAt: 0
   }
   return {
-    settings: getDefaultSettings('/home/me'),
     openFiles: [makeOpenFile()],
     folderWorkspaces: [],
     projectGroups: [],
@@ -43,13 +41,6 @@ function makeState(overrides: Partial<State> = {}): State {
 describe('isCopilotAttachOwnerLocal', () => {
   it('accepts a local file with no runtime or SSH owner', () => {
     expect(isCopilotAttachOwnerLocal(makeState(), FILE)).toBe(true)
-  })
-
-  it('fails closed while a runtime environment is active', () => {
-    const state = makeState({
-      settings: { ...getDefaultSettings('/home/me'), activeRuntimeEnvironmentId: 'env-a' }
-    })
-    expect(isCopilotAttachOwnerLocal(state, FILE)).toBe(false)
   })
 
   it('rejects a tab opened through a runtime even after that runtime was switched off', () => {

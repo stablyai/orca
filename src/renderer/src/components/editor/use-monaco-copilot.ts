@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import type { editor } from 'monaco-editor'
 import { useAppStore } from '@/store'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import { isCopilotAttachOwnerLocal } from '@/lib/monaco-copilot/copilot-attach-owner'
 import { attachMonacoCopilotDocument } from '@/lib/monaco-copilot/monaco-copilot-attach'
 import { useCopilotStatus } from '@/lib/monaco-copilot/copilot-status'
@@ -26,9 +27,11 @@ export function useMonacoCopilot(params: {
     }
     const scope = parseWorkspaceKey(worktreeId)
     if (scope?.type === 'folder') {
-      return s.folderWorkspaces.find((w) => w.id === scope.folderWorkspaceId)?.folderPath ?? null
+      return (
+        selectFolderWorkspaces(s).find((w) => w.id === scope.folderWorkspaceId)?.folderPath ?? null
+      )
     }
-    return findWorktreeById(s.worktreesByRepo, worktreeId)?.path ?? null
+    return findWorktreeById(selectWorktreesByRepo(s), worktreeId)?.path ?? null
   })
   const ownerLocal = useAppStore((s) =>
     isCopilotAttachOwnerLocal(s, { fileId, filePath, worktreeId: worktreeId ?? null })
