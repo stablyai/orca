@@ -1161,7 +1161,6 @@
 1 test-no-wall-clock:src/renderer/src/store/slices/store-sleep-agent-status-retention.test.ts
 2 test-no-wall-clock:src/renderer/src/store/slices/store-sleep-exact-runtime-stop.test.ts
 7 test-no-wall-clock:src/renderer/src/store/slices/tabs-unread-and-focus.test.ts
-1 test-no-wall-clock:src/renderer/src/store/slices/terminal-helpers.test.ts
 1 test-no-wall-clock:src/renderer/src/store/slices/ui-hydration-view-layout.test.ts
 1 test-no-wall-clock:src/renderer/src/store/slices/ui-hydration-workspace-cleanup-browse.test.ts
 2 test-no-wall-clock:src/renderer/src/store/slices/workspace-cleanup-agent-stop-preflight.test.ts
