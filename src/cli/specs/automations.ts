@@ -136,5 +136,51 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
       'orca automations runs --id 2f9e... --json',
       'orca automations runs --limit 20 --json'
     ]
+  },
+  {
+    path: ['automations', 'warn'],
+    summary: 'Report an incomplete result for this automation run',
+    usage:
+      'orca automations warn --key <id> --message <text> [--impact <text>] [--evidence <text>|--evidence-file <path>] [--json]\n       orca automations warn --key <id> --resolve [--message <text>] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'key',
+      'message',
+      'impact',
+      'evidence',
+      'evidence-file',
+      'resolve'
+    ],
+    notes: [
+      'Run it from the automation agent; Orca finds the run from the agent session it runs in.',
+      'Reporting the same --key again updates that warning. --resolve marks it recovered and keeps it in the run history.'
+    ],
+    examples: [
+      'orca automations warn --key linear --message "Linear issues were not included" --impact "The brief covers GitHub only"',
+      'orca automations warn --key linear --resolve --message "Linear loaded on retry"'
+    ]
+  },
+  {
+    path: ['automations', 'fail'],
+    summary: 'Report that this automation run could not do its task',
+    usage: 'orca automations fail --message <text> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'message'],
+    notes: [
+      'Run it from the automation agent. Orca marks the run failed with this message when the agent finishes.'
+    ],
+    examples: [
+      'orca automations fail --message "Linear access was denied, so no summary was produced"'
+    ]
+  },
+  {
+    path: ['automations', 'attach'],
+    summary: 'Attach an HTML or Markdown file to this automation run',
+    usage: 'orca automations attach --file <path> [--title <text>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'file', 'title'],
+    notes: [
+      'Run it from the automation agent. Orca stores a copy with the run; nothing is published.',
+      'Keep the file self-contained: previews load no external fonts, images, styles or scripts.'
+    ],
+    examples: ['orca automations attach --file report.html --title "Weekly brief"']
   }
 ]

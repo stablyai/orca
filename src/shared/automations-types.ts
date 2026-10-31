@@ -1,6 +1,11 @@
 import type { TuiAgent } from './tui-agent'
 import type { SetupDecision } from './worktree/create-types'
 import type { TaskSourceContext, WorkspaceRunContext } from './task-source-context'
+import type {
+  AutomationRunOutput,
+  AutomationRunReportedFailure,
+  AutomationRunWarning
+} from './automation-run-result-types'
 
 export type AutomationWorkspaceMode = 'existing' | 'new_per_run'
 export type AutomationExecutionTargetType = 'local' | 'ssh'
@@ -172,6 +177,14 @@ export type AutomationRun = {
   occurrenceCount?: number
   /** `scheduledFor` of the most recently folded occurrence; absent until one folds. */
   lastOccurrenceAt?: number
+  /** When the run first reached a final status; absent on older records. */
+  finishedAt?: number
+  /** Set when the agent prompt carried result-reporting instructions; silence then means none reported, not verified. */
+  resultReporting?: 'offered'
+  warnings?: AutomationRunWarning[]
+  outputs?: AutomationRunOutput[]
+  /** The agent said it could not do the task; completion records the run as failed with this message. */
+  reportedFailure?: AutomationRunReportedFailure
 }
 
 /** A bounded history response; older hosts may continue returning `runs` only. */

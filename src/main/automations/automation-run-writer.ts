@@ -1,3 +1,4 @@
+import { removeAutomationRunOutputs } from './automation-run-output-files'
 import type { Store } from '../persistence'
 import type { PublishAutomationsChanged } from '../../shared/runtime-client-events'
 import type { AutomationDispatchResult, AutomationRun } from '../../shared/automations-types'
@@ -9,6 +10,7 @@ type DurableWrite<T extends (...args: never[]) => unknown> = (
 export type AutomationRunWriter = {
   createRun: DurableWrite<Store['createAutomationRun']>
   updateRun: DurableWrite<Store['updateAutomationRun']>
+  recordReport: DurableWrite<Store['recordAutomationRunReport']>
   repeatSkip: DurableWrite<Store['recordRepeatedAutomationSkip']>
   advanceNextRun: DurableWrite<Store['advanceAutomationNextRun']>
 }
@@ -19,6 +21,8 @@ export function createAutomationRunWriter(
     Store,
     | 'createAutomationRun'
     | 'updateAutomationRun'
+    | 'recordAutomationRunReport'
+    | 'listAutomationRuns'
     | 'recordRepeatedAutomationSkip'
     | 'advanceAutomationNextRun'
     | 'automationChangeSelector'
@@ -41,8 +45,12 @@ export function createAutomationRunWriter(
       return automation
     },
     createRun: async (automation, scheduledFor, trigger): Promise<AutomationRun> => {
+      const previous = store.listAutomationRuns()
       const run = store.createAutomationRun(automation, scheduledFor, trigger)
+      const retained = new Set(store.listAutomationRuns().map((entry) => entry.id))
+      const pruned = previous.filter((entry) => !retained.has(entry.id))
       await store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
+      removeAutomationRunOutputs(pruned)
       announce(automation.id, 'run')
       return run
     },
@@ -51,6 +59,14 @@ export function createAutomationRunWriter(
       await store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
       announce(run.automationId, result.usage ? 'usage' : 'run')
       return run
+    },
+    recordReport: async (run, report) => {
+      const outcome = store.recordAutomationRunReport(run, report)
+      if (outcome.ok) {
+        await store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
+        announce(run.automationId, 'run')
+      }
+      return outcome
     },
     repeatSkip: async (automationId, error, scheduledFor): Promise<AutomationRun | null> => {
       const run = store.recordRepeatedAutomationSkip(automationId, error, scheduledFor)

@@ -28,6 +28,10 @@ import type { LegacyWorkerTerminalRecoveryPlan } from '../../orchestration/orche
 import type { LegacyWorkerTerminalRecoveryResult } from '../../runtime-legacy-worker-terminal-recovery-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
+import type {
+  AutomationRunReport,
+  AutomationRunReportOutcome
+} from '../../../../shared/automation-run-results'
 
 // Keyed by runtime, not a field: the database can open while the runtime is still constructing.
 const runtimesWatchingAutoReleaseSetting = new WeakSet<object>()
@@ -150,6 +154,14 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
 
   automationOwnerPrecondition(id: string): AutomationOwnerPrecondition | null {
     return this.automation.ownerPrecondition(id)
+  }
+
+  /** Same durable write and run publication as dispatch updates, for a run the caller resolved. */
+  async recordAutomationRunReport(
+    run: Pick<AutomationRun, 'automationId' | 'id'>,
+    report: AutomationRunReport
+  ): Promise<AutomationRunReportOutcome> {
+    return this.automation.recordReport(run, report)
   }
 
   // Defer until userData is final; tests can inject an in-memory DB.

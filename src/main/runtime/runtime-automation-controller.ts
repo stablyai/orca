@@ -1,3 +1,8 @@
+import { removeAutomationOutputs } from '../automations/automation-run-output-files'
+import type {
+  AutomationRunReport,
+  AutomationRunReportOutcome
+} from '../../shared/automation-run-results'
 import type { AutomationService } from '../automations/service'
 import type {
   Automation,
@@ -17,7 +22,10 @@ import type {
 } from '../../shared/automation-owner-precondition'
 import { runAutomationNowFenced } from '../automations/refused-manual-run'
 import { paginateAutomationRuns } from '../../shared/automation-run-cursor'
-import { hasRuntimeAutomationUpdateValue } from './runtime-automation-update-value'
+import {
+  copyAutomationUpdateValues,
+  hasRuntimeAutomationUpdateValue
+} from './runtime-automation-update-value'
 import { assertAutomationRunContextMatchesTarget } from './runtime-automation-run-context'
 
 export type RuntimeAutomationCreateInput = Omit<
@@ -158,7 +166,7 @@ export class RuntimeAutomationController {
     }
     const current = this.show(id)
     const patch: AutomationUpdateInput = {}
-    this.copyPatchValues(updates, patch)
+    copyAutomationUpdateValues(updates, patch)
     const targetChanged =
       hasRuntimeAutomationUpdateValue(updates, 'repo') ||
       hasRuntimeAutomationUpdateValue(updates, 'workspace') ||
@@ -202,7 +210,18 @@ export class RuntimeAutomationController {
     this.show(id)
     this.store.deleteAutomation(id, expectedOwner ? { expectedOwner } : undefined)
     await this.store.flushPendingOrThrowAsync?.({ drainToStableGeneration: false })
+    removeAutomationOutputs(id)
     return { removed: true, id }
+  }
+
+  recordReport(
+    run: Pick<AutomationRun, 'automationId' | 'id'>,
+    report: AutomationRunReport
+  ): Promise<AutomationRunReportOutcome> {
+    if (!this.service) {
+      throw new Error('runtime_unavailable')
+    }
+    return this.service.recordReport(run, report)
   }
 
   async runNow(id: string, expectedOwner?: AutomationOwnerPrecondition): Promise<AutomationRun> {
@@ -228,35 +247,6 @@ export class RuntimeAutomationController {
       return
     }
     this.store.assertAutomationOwnerFence({ id, expectedOwner, operation })
-  }
-
-  private copyPatchValues(
-    updates: RuntimeAutomationUpdateInput,
-    patch: AutomationUpdateInput
-  ): void {
-    const keys = [
-      'name',
-      'prompt',
-      'precheck',
-      'agentId',
-      'extraAgentArgs',
-      'launchSetupPatch',
-      'runContext',
-      'sourceContext',
-      'baseBranch',
-      'setupDecision',
-      'reuseSession',
-      'timezone',
-      'rrule',
-      'dtstart',
-      'enabled',
-      'missedRunGraceMinutes'
-    ] as const
-    for (const key of keys) {
-      if (hasRuntimeAutomationUpdateValue(updates, key)) {
-        Object.assign(patch, { [key]: updates[key] })
-      }
-    }
   }
 
   private async resolveTarget(

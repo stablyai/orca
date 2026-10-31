@@ -33,6 +33,7 @@ import {
   createAutomationRun as createAutomationRunOperation,
   listAutomationRuns as listAutomationRunsOperation,
   listAutomationRunsPage as listAutomationRunsOperationPage,
+  recordAutomationRunReport as recordAutomationRunReportOperation,
   recordRepeatedAutomationSkip as recordRepeatedAutomationSkipOperation,
   snapshotAutomationRunWorkspaceDisplayName as snapshotAutomationRunWorkspaceDisplayNameOperation,
   updateAutomationRun as updateAutomationRunOperation,
@@ -51,6 +52,10 @@ import {
   listAutomationsForScope as listAutomationsForScopeOperation
 } from '../scheduling-automations/automation-owner-projection'
 
+import type {
+  AutomationRunReport,
+  AutomationRunReportOutcome
+} from '../../../shared/automation-run-results'
 import type { StoreRuntimeState } from './store-runtime-state'
 import type { WriteFlushBarrierOperations } from './write-flush-barriers'
 import type { ProfilePreferences } from './profile-preferences'
@@ -198,6 +203,13 @@ export class AutomationPersistence {
 
   updateAutomationRun(result: AutomationDispatchResult): AutomationRun {
     return updateAutomationRunOperation(getAutomationRunOperations(this), result)
+  }
+
+  recordAutomationRunReport(
+    run: Pick<AutomationRun, 'automationId' | 'id'>,
+    report: AutomationRunReport
+  ): AutomationRunReportOutcome {
+    return recordAutomationRunReportOperation(getAutomationRunOperations(this), run.id, report)
   }
 
   snapshotAutomationRunWorkspaceDisplayName(

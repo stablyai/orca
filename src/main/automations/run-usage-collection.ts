@@ -61,7 +61,8 @@ export async function collectAutomationRunUsage({
   ): AutomationRunUsage =>
     createUnavailableAutomationUsage(collectedAt, provider, unavailableReason, unavailableMessage)
 
-  if (!automation || run.status !== 'completed') {
+  // A run the agent reported failed still spent tokens.
+  if (!automation || (run.status !== 'completed' && !run.reportedFailure)) {
     return unavailable(
       getAutomationUsageProvider(automation),
       'run_not_finished',

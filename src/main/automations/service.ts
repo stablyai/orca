@@ -28,8 +28,13 @@ import {
   AutomationRunCompletionWatcher,
   type AutomationRunTerminalObserver
 } from './run-completion-watcher'
+import type {
+  AutomationRunReport,
+  AutomationRunReportOutcome
+} from '../../shared/automation-run-results'
 import { createAutomationRunWriter, type AutomationRunWriter } from './automation-run-writer'
 import { reportAutomationScheduleDrift } from './schedule-drift-report'
+import { sweepAutomationRunOutputs } from './automation-run-output-files'
 import {
   describeScheduledTickRefusal,
   missedBeyondGrace,
@@ -125,6 +130,8 @@ export class AutomationService {
     }, this.tickMs)
     this.completionWatcher?.reconcileRetainedRuns(this.store.listAutomationRuns())
     reportAutomationScheduleDrift(this.store.listAutomations())
+    // Recover output cleanup interrupted by a crash or filesystem failure.
+    sweepAutomationRunOutputs(this.store.listAutomationRuns())
     // Headless hosts need startup catch-up without a renderer-ready notification.
     if (this.rendererReady || this.headlessDispatcher) {
       // Serve adopts PTYs and publishes its graph before start().
@@ -172,6 +179,13 @@ export class AutomationService {
     return runAutomationRequestPrecheck(this.store, automationId, runId, (automation) =>
       this.resolveTarget(automation)
     )
+  }
+
+  recordReport(
+    run: Pick<AutomationRun, 'automationId' | 'id'>,
+    report: AutomationRunReport
+  ): Promise<AutomationRunReportOutcome> {
+    return this.runs.recordReport(run, report)
   }
 
   async markDispatchResult(result: AutomationDispatchResult): Promise<AutomationRun> {
