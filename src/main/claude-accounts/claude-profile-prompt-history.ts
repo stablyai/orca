@@ -17,7 +17,9 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
-import { renameFileWithWindowsRetry, writeFileAtomically } from '../codex-accounts/fs-utils'
+import { loadHistoryFilesystem, type HistoryDirectory } from '../../shared/history-filesystem'
+import { runFileOperationWithWindowsRetry } from '../../shared/windows-retry-file-operations'
+import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import {
   ClaudeProfileSurfaceError,
   warnClaudeProfile,
@@ -28,6 +30,7 @@ import {
 export const CLAUDE_PROFILE_MERGE_SUFFIX = '.orca-profile-merge'
 const HISTORY = 'history.jsonl'
 const PENDING = `${HISTORY}${CLAUDE_PROFILE_MERGE_SUFFIX}`
+const CONFLICT = `${HISTORY}.orca-profile-conflict`
 // Track Windows hardlink identity to detect replacement of the shared file.
 const LINK_RECORD = `${HISTORY}.orca-profile-link`
 
@@ -107,12 +110,24 @@ function pendingGeneration(name: string): number | null {
   return name.startsWith(`${PENDING}-`) && /^\d+$/.test(suffix) ? Number(suffix) : null
 }
 
-function nextFreePath(base: string): string {
-  for (let generation = 0; ; generation++) {
-    const candidate = generation === 0 ? base : `${base}-${generation}`
-    if (!lstatIfPresent(candidate)) {
-      return candidate
+// An occupied generation is a collision, never a replacement; try the next one exclusively.
+function stageHistory(parent: HistoryDirectory, base: string, first: number): string | undefined {
+  for (let generation = first; ; generation++) {
+    const name = generation === 0 ? base : `${base}-${generation}`
+    const moved = runFileOperationWithWindowsRetry(() => parent.move(HISTORY, parent, name))
+    if (moved !== 'collision') {
+      return moved === 'moved' ? name : undefined
     }
+  }
+}
+
+// A collision keeps both; a staged pending copy is merged by the next setup.
+function restoreHistory(parent: HistoryDirectory, aside: string, profile: string): void {
+  if (runFileOperationWithWindowsRetry(() => parent.move(aside, parent, HISTORY)) === 'collision') {
+    throw new ClaudeProfileSurfaceError(
+      'retained-conflict',
+      `Prompt history kept at ${join(profile, aside)}`
+    )
   }
 }
 
@@ -178,60 +193,85 @@ export function mergeClaudeProfilePromptHistory(
       warnClaudeProfile(report, HISTORY, error)
     }
   }
-  const current = lstatIfPresent(source)
-  if (current?.isSymbolicLink()) {
-    return realpathSync(source) === realpathSync(destination) ? 'unchanged' : 'user-owned'
-  }
-  if (current && !current.isFile()) {
-    return 'user-owned'
-  }
-  const record = join(profile, LINK_RECORD)
-  let sharedIdentity: string | undefined
-  let replaced = false
-  if (platform === 'win32') {
-    sharedIdentity = fileIdentity(statSync(destination, { bigint: true }))
-    const identity = current ? fileIdentity(lstatSync(source, { bigint: true })) : undefined
-    if (identity === sharedIdentity) {
-      if (readLinkRecord(profile) !== sharedIdentity) {
-        writeFileAtomically(record, `${sharedIdentity}\n`, { mode: 0o600 })
-      }
-      return 'unchanged'
-    }
-    if (statSync(profile).dev !== statSync(destination).dev) {
-      throw crossFilesystem()
-    }
-    // A replaced shared file must not regain deleted history from the old hardlink.
-    replaced = identity !== undefined && identity === readLinkRecord(profile)
-  }
-  let aside: string | undefined
-  if (current) {
-    aside = nextFreePath(join(profile, replaced ? `${HISTORY}.orca-profile-conflict` : PENDING))
-    renameFileWithWindowsRetry(source, aside)
-  }
+  const parent = loadHistoryFilesystem().openDirectory(profile, false)
   try {
-    if (sharedIdentity === undefined) {
-      symlinkSync(destination, source)
-    } else {
-      linkSync(destination, source)
-      try {
-        writeFileAtomically(record, `${sharedIdentity}\n`, { mode: 0o600 })
-      } catch (error) {
-        // Without the record, a later replacement could restore deleted history.
-        unlinkSync(source)
-        throw error
+    const current = parent.kind(HISTORY)
+    if (current === 'link') {
+      return realpathSync(source) === realpathSync(destination) ? 'unchanged' : 'user-owned'
+    }
+    if (current !== null && current !== 'file') {
+      return 'user-owned'
+    }
+    const record = join(profile, LINK_RECORD)
+    let sharedIdentity: string | undefined
+    let replaced = false
+    if (platform === 'win32') {
+      sharedIdentity = fileIdentity(statSync(destination, { bigint: true }))
+      const identity = current ? fileIdentity(lstatSync(source, { bigint: true })) : undefined
+      if (identity === sharedIdentity) {
+        if (readLinkRecord(profile) !== sharedIdentity) {
+          writeFileAtomically(record, `${sharedIdentity}\n`, { mode: 0o600 })
+        }
+        return 'unchanged'
+      }
+      if (statSync(profile).dev !== statSync(destination).dev) {
+        throw crossFilesystem()
+      }
+      // A replaced shared file must not regain deleted history from the old hardlink.
+      replaced = identity !== undefined && identity === readLinkRecord(profile)
+    }
+    let aside: string | undefined
+    if (current) {
+      // A fresh pending generation is never reused, so a stale drain's path-based cursor
+      // write or cleanup cannot land on this original.
+      aside = replaced
+        ? stageHistory(parent, CONFLICT, 0)
+        : stageHistory(parent, PENDING, Date.now())
+      // A rival may have published its link after the check; that link is not an original.
+      if (
+        aside &&
+        (parent.kind(aside) !== 'file' ||
+          (sharedIdentity !== undefined &&
+            fileIdentity(lstatSync(join(profile, aside), { bigint: true })) === sharedIdentity))
+      ) {
+        restoreHistory(parent, aside, profile)
+        throw new ClaudeProfileSurfaceError(
+          'retained-conflict',
+          `Changed source restored from ${join(profile, aside)}`
+        )
       }
     }
-  } catch (error) {
-    if (aside && !lstatIfPresent(source)) {
-      renameFileWithWindowsRetry(aside, source)
+    try {
+      if (sharedIdentity === undefined) {
+        symlinkSync(destination, source)
+      } else {
+        linkSync(destination, source)
+        try {
+          writeFileAtomically(record, `${sharedIdentity}\n`, { mode: 0o600 })
+        } catch (error) {
+          // Without the record, a later replacement could restore deleted history.
+          unlinkSync(source)
+          throw error
+        }
+      }
+    } catch (error) {
+      if (aside) {
+        try {
+          restoreHistory(parent, aside, profile)
+        } catch (restoreError) {
+          warnClaudeProfile(report, HISTORY, restoreError)
+        }
+      }
+      throw new ClaudeProfileSurfaceError('link-failed', String(error))
     }
-    throw new ClaudeProfileSurfaceError('link-failed', String(error))
+    if (aside && replaced) {
+      const detail = `Shared prompt history was replaced; the old copy is kept at ${join(profile, aside)}`
+      warnClaudeProfile(report, HISTORY, new ClaudeProfileSurfaceError('retained-conflict', detail))
+    } else if (aside) {
+      drainHistory(join(profile, aside), destination, shared)
+    }
+    return 'linked'
+  } finally {
+    parent.close()
   }
-  if (aside && replaced) {
-    const detail = `Shared prompt history was replaced; the old copy is kept at ${aside}`
-    warnClaudeProfile(report, HISTORY, new ClaudeProfileSurfaceError('retained-conflict', detail))
-  } else if (aside) {
-    drainHistory(aside, destination, shared)
-  }
-  return 'linked'
 }

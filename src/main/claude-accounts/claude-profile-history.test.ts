@@ -10,7 +10,8 @@ vi.mock('node:fs', async (original) => {
   return {
     ...actual,
     renameSync: vi.fn(actual.renameSync),
-    statSync: vi.fn(actual.statSync)
+    statSync: vi.fn(actual.statSync),
+    symlinkSync: vi.fn(actual.symlinkSync)
   }
 })
 import { shareClaudeProfileHistory } from './claude-profile-history'
@@ -26,7 +27,12 @@ function fixture() {
   const share = (platform: NodeJS.Platform = 'linux') =>
     shareClaudeProfileHistory({ profileHome, userHome, platform })
   const history = (): string => fs.readFileSync(join(defaultHome, 'history.jsonl'), 'utf8')
-  return { profileHome, userHome, defaultHome, share, history }
+  const staged = (): string[] =>
+    fs
+      .readdirSync(profileHome)
+      .filter((name) => /^history\.jsonl\.orca-profile-merge(-\d+)?$/.test(name))
+      .map((name) => join(profileHome, name))
+  return { profileHome, userHome, defaultHome, share, history, staged }
 }
 afterEach(() => {
   vi.resetAllMocks()
@@ -145,7 +151,7 @@ describe('Claude profile history sharing', () => {
     fs.writeFileSync(join(f.defaultHome, 'history.jsonl'), 'default')
     fs.writeFileSync(join(f.profileHome, 'history.jsonl'), 'profile\n')
     await f.share()
-    const pending = join(f.profileHome, 'history.jsonl.orca-profile-merge')
+    const [pending] = f.staged()
     fs.appendFileSync(pending, 'late\n')
     await f.share()
     await f.share()
@@ -191,7 +197,7 @@ describe('Claude profile history sharing', () => {
     const f = fixture()
     fs.writeFileSync(join(f.profileHome, 'history.jsonl'), 'p1\n')
     await f.share()
-    const pending = join(f.profileHome, 'history.jsonl.orca-profile-merge')
+    const [pending] = f.staged()
     expect(fs.existsSync(`${pending}.offset`)).toBe(true)
     fs.appendFileSync(pending, 'late\n')
     await f.share()
@@ -376,4 +382,62 @@ describe('consuming publication interleavings with the actual addon', () => {
       stop()
     }
   })
+
+  itLinks(
+    'never replaces a staged prompt original when a rival published its link first',
+    async () => {
+      const f = fixture(),
+        source = join(f.profileHome, 'history.jsonl')
+      fs.writeFileSync(source, 'private\n')
+      let rival: string | undefined
+      const stop = observeHistoryFilesystem(loadHistoryFilesystem(), (operation, path, args) => {
+        if (
+          !rival &&
+          operation === 'move' &&
+          path === f.profileHome &&
+          args[0] === 'history.jsonl'
+        ) {
+          // The rival saw the same free generation, staged the original there and published.
+          rival = join(f.profileHome, String(args[2]))
+          fs.renameSync(source, rival)
+          fs.symlinkSync(join(f.defaultHome, 'history.jsonl'), source)
+        }
+      })
+      try {
+        const report = await f.share()
+        expect(report.warnings).toContainEqual(
+          expect.objectContaining({ surface: 'history.jsonl', code: 'retained-conflict' })
+        )
+      } finally {
+        stop()
+      }
+      expect(fs.readFileSync(rival!, 'utf8')).toBe('private\n')
+      expect(f.staged()).toEqual([rival])
+      expect(fs.lstatSync(source).isSymbolicLink()).toBe(true)
+      await f.share()
+      expect(f.history()).toBe('private\n')
+    }
+  )
+
+  itLinks(
+    'keeps both prompt files when a new one appears before a failed link is undone',
+    async () => {
+      const f = fixture(),
+        source = join(f.profileHome, 'history.jsonl')
+      fs.writeFileSync(source, 'private\n')
+      vi.mocked(fs.symlinkSync).mockImplementationOnce(() => {
+        fs.writeFileSync(source, 'native\n')
+        throw Object.assign(new Error('publication denied'), { code: 'EACCES' })
+      })
+      const report = await f.share()
+      expect(report.surfaces['history.jsonl']).toBe('failed')
+      expect(report.warnings).toContainEqual(
+        expect.objectContaining({ surface: 'history.jsonl', code: 'retained-conflict' })
+      )
+      expect(fs.readFileSync(source, 'utf8')).toBe('native\n')
+      expect(f.staged().map((file) => fs.readFileSync(file, 'utf8'))).toEqual(['private\n'])
+      await f.share()
+      expect(f.history()).toBe('private\nnative\n')
+    }
+  )
 })
