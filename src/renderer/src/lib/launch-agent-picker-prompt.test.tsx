@@ -10,7 +10,7 @@ import {
   launchErrorMocks
 } from './launch-agent-structured-chat-test-fixture'
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, expect, it, vi } from 'vitest'
 import { AgentLaunchPickerMenu } from '@/components/agent/AgentLaunchPickerMenu'
 import { useTabAgentMenuLaunch } from '@/components/tab-bar/QuickLaunchButton'
 import TabBarCreateEntry from '@/components/tab-bar/TabBarCreateEntry'
@@ -36,6 +36,13 @@ import type * as StructuredLaunch from './launch-structured-agent-session'
 import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/native-chat-composer-draft-store'
 import { resetStructuredAgentLaunchRegistryForTests } from './agent-session/launch/structured-agent-session-launch-registry'
 import { resetStructuredAgentLaunchPersistenceForTests } from './agent-session/launch/structured-agent-session-launch-persistence'
+
+let actualStructuredLaunch: typeof StructuredLaunch
+beforeAll(async () => {
+  actualStructuredLaunch = await vi.importActual<typeof StructuredLaunch>(
+    './launch-structured-agent-session'
+  )
+})
 
 const fileList = vi.hoisted(() => ({ files: [], loading: false, loadError: null }))
 vi.mock('@/components/quick-open-file-list', () => ({
@@ -216,13 +223,10 @@ it('keeps direct row launch empty even when that workspace has an unsent launch 
 it.each([true, false])(
   'preserves selected skill files in chat create and refusal hand-back, create-message=%s',
   async (createMessageSupport) => {
-    const actual = await vi.importActual<typeof StructuredLaunch>(
-      './launch-structured-agent-session'
-    )
     mockCreateSupport.mockResolvedValue({ supported: true })
     mockCreateStructuredCodexSessionLaunchIntent.mockImplementation(
       (worktreeId, agent, host, resume, seed) => {
-        const intent = actual.createStructuredAgentSessionLaunchIntent(
+        const intent = actualStructuredLaunch.createStructuredAgentSessionLaunchIntent(
           worktreeId,
           agent,
           host,

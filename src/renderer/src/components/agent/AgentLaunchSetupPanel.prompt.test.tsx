@@ -3,7 +3,7 @@ import type { AgentPickerEntry } from '../../../../shared/agent-launch-picker'
 import { entry, host, root, onUse } from './agent-launch-setup-panel-test-fixture'
 import { act } from 'react'
 import { fireEvent, waitFor } from '@testing-library/react'
-import { beforeEach, expect, it } from 'vitest'
+import { beforeEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AgentLaunchSetupPanel } from './AgentLaunchSetupPanel'
 import { agentLaunchPromptScopeKey } from './AgentLaunchPromptComposer'
@@ -75,8 +75,13 @@ it('launches with the typed first prompt from Enter or either Launch button, and
   expect(onUse).toHaveBeenCalledTimes(3)
 
   // A typed prompt lives in memory for this app session only.
-  changePrompt(prompt(), 'kept until launch')
-  await new Promise((resolve) => setTimeout(resolve, 400))
+  vi.useFakeTimers()
+  try {
+    changePrompt(prompt(), 'kept until launch')
+    await act(async () => vi.advanceTimersByTimeAsync(400))
+  } finally {
+    vi.useRealTimers()
+  }
   expect(readNativeChatComposerDraft(agentLaunchPromptScopeKey(launchEntry)).text).toBe(
     'kept until launch'
   )
