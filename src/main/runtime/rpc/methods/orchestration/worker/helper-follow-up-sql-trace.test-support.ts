@@ -1,10 +1,13 @@
 import { expect, vi } from 'vitest'
-import { z } from 'zod'
 import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { SqliteBindings, SqliteRow } from '../../../../../sqlite/sqlite-statement'
 import { installSqlVisitCounters } from '../../../../dispatch-predicate-visits.test-fixture'
 
+const CALLER_READ_NAMES = ['identity', 'formerOwner'] as const
+type CallerRead = (typeof CALLER_READ_NAMES)[number]
+
 /** How a follow-up's caller check reads saved custody: each statement by its SQL and the index its range must use. */
-const CALLER_READS = {
+const CALLER_READS: Record<CallerRead, { match: (sql: string) => boolean; index: string }> = {
   identity: {
     match: (sql: string) =>
       sql ===
@@ -16,39 +19,28 @@ const CALLER_READS = {
     index: ''
   }
 }
-type CallerRead = keyof typeof CALLER_READS
-
-/** One row a SQLite statement returns: column names to values. */
-const sqlRow = z.record(z.string(), z.unknown())
-type SqlRow = z.infer<typeof sqlRow>
 
 /** Executions of the caller's custody reads, the rows visited inside their index ranges, every field read off the rows
  *  they return, and their executed plans. */
 export function traceCallerReads(db: OrchestrationDb) {
   const visited: Record<CallerRead, number> = { identity: 0, formerOwner: 0 }
   const fieldReads: Record<CallerRead, number> = { identity: 0, formerOwner: 0 }
-  const executions: { read: CallerRead; query: string; parameters: unknown[] }[] = []
+  const executions: { read: CallerRead; query: string; parameters: SqliteBindings }[] = []
   const native = installSqlVisitCounters({
     caller_read_identity: () => ++visited.identity,
     caller_read_formerOwner: () => ++visited.formerOwner
   })
   // Each returned row counts its field reads, so work per row is measured whatever the caller keeps.
-  const counted = (read: CallerRead, result: unknown) => {
-    const row = sqlRow.safeParse(result)
-    return row.success
-      ? new Proxy<SqlRow>(row.data, {
-          get: (target, field) => {
-            fieldReads[read]++
-            return typeof field === 'string' ? target[field] : undefined
-          }
-        })
-      : result
-  }
+  const counted = (read: CallerRead, row: SqliteRow) =>
+    new Proxy(row, {
+      get: (target, field) => {
+        fieldReads[read]++
+        return typeof field === 'string' ? target[field] : undefined
+      }
+    })
   const prepare = db.db.prepare.bind(db.db)
   const spy = vi.spyOn(db.db, 'prepare').mockImplementation((query) => {
-    const read = (Object.keys(CALLER_READS) as CallerRead[]).find((name) =>
-      CALLER_READS[name].match(query)
-    )
+    const read = CALLER_READ_NAMES.find((name) => CALLER_READS[name].match(query))
     if (!read) {
       return prepare(query)
     }
@@ -61,22 +53,23 @@ export function traceCallerReads(db: OrchestrationDb) {
           `WHERE caller_read_${read}(rowid) AND prior_owner_dispatch_ids`
         )
     )
-    for (const method of ['all', 'get'] as const) {
-      const run = statement[method].bind(statement) as (...parameters: unknown[]) => unknown
-      vi.spyOn(statement, method).mockImplementation((...parameters: unknown[]) => {
-        executions.push({ read, query, parameters })
-        const result = run(...parameters)
-        return (
-          Array.isArray(result) ? result.map((row) => counted(read, row)) : counted(read, result)
-        ) as never
-      })
-    }
+    const all = statement.all.bind(statement)
+    vi.spyOn(statement, 'all').mockImplementation((...parameters) => {
+      executions.push({ read, query, parameters })
+      return all(...parameters).map((row) => counted(read, row))
+    })
+    const get = statement.get.bind(statement)
+    vi.spyOn(statement, 'get').mockImplementation((...parameters) => {
+      executions.push({ read, query, parameters })
+      const row = get(...parameters)
+      return row && counted(read, row)
+    })
     return statement
   })
   return {
     counts: () =>
       Object.fromEntries(
-        (Object.keys(CALLER_READS) as CallerRead[]).map((read) => [
+        CALLER_READ_NAMES.map((read) => [
           read,
           {
             executions: executions.filter((execution) => execution.read === read).length,
@@ -89,8 +82,8 @@ export function traceCallerReads(db: OrchestrationDb) {
     expectIndexedPlans() {
       for (const { read, query, parameters } of executions) {
         const plan = prepare(`EXPLAIN QUERY PLAN ${query}`)
-          .all(...(parameters as string[]))
-          .map((row) => String((row as { detail: string }).detail))
+          .all(...parameters)
+          .map((row) => String(row.detail))
         expect(plan).toContainEqual(expect.stringContaining(CALLER_READS[read].index))
         expect(plan.filter((detail) => detail.startsWith('SCAN'))).toEqual([])
       }
@@ -150,15 +143,19 @@ export function seedUnrelatedHistory(
 /** Calls of the per-Dispatch reads, by method and Dispatch id. */
 export function traceDispatchProbes(db: OrchestrationDb) {
   const calls = new Map<string, number>()
-  const spies = (['getDispatchContextById', 'getWorkerTerminalResourceByOwner'] as const).map(
-    (method) => {
-      const read = db[method].bind(db)
-      return vi.spyOn(db, method).mockImplementation((id: string) => {
-        calls.set(`${method} ${id}`, (calls.get(`${method} ${id}`) ?? 0) + 1)
-        return read(id) as never
-      })
-    }
-  )
+  const count = (call: string) => calls.set(call, (calls.get(call) ?? 0) + 1)
+  const dispatch = db.getDispatchContextById.bind(db)
+  const owner = db.getWorkerTerminalResourceByOwner.bind(db)
+  const spies = [
+    vi.spyOn(db, 'getDispatchContextById').mockImplementation((id) => {
+      count(`dispatch ${id}`)
+      return dispatch(id)
+    }),
+    vi.spyOn(db, 'getWorkerTerminalResourceByOwner').mockImplementation((id) => {
+      count(`owner ${id}`)
+      return owner(id)
+    })
+  ]
   return {
     counts: () => ({
       total: [...calls.values()].reduce((sum, count) => sum + count, 0),

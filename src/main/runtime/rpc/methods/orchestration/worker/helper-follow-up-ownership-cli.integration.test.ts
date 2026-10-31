@@ -223,22 +223,27 @@ describe('which helpers a worker may continue, through CLI argv, RPC and SQLite'
       if (origin === 'another worker') {
         await start('term_coord', 'term_other')
       }
-      const requester = { 'the coordinator': 'term_coord', 'another worker': 'term_other' }
-      const helper = await failedStart(
-        origin in requester ? requester[origin as keyof typeof requester] : 'term_worker',
-        'terminal create'
-      )
+      const requester =
+        origin === 'the coordinator'
+          ? 'term_coord'
+          : origin === 'another worker'
+            ? 'term_other'
+            : 'term_worker'
+      const helper = await failedStart(requester, 'terminal create')
       const latest = await failedAttempts(helper.dispatchId, 1)
-      const corrupt = {
-        'a missing predecessor': ['follow_up_of_dispatch_id', 'ctx_missing'],
-        'a cycle': ['follow_up_of_dispatch_id', latest],
-        'another Run': ['run_id', origin === 'another Run' ? otherRun() : '']
-      }[origin as string]
-      if (corrupt) {
+      const corruption: [column: string, value: string] | undefined =
+        origin === 'a missing predecessor'
+          ? ['follow_up_of_dispatch_id', 'ctx_missing']
+          : origin === 'a cycle'
+            ? ['follow_up_of_dispatch_id', latest]
+            : origin === 'another Run'
+              ? ['run_id', otherRun()]
+              : undefined
+      if (corruption) {
         h.db.db.pragma('foreign_keys = OFF')
         h.db.db
-          .prepare(`UPDATE dispatch_contexts SET ${corrupt[0]} = ? WHERE id = ?`)
-          .run(corrupt[1], helper.dispatchId)
+          .prepare(`UPDATE dispatch_contexts SET ${corruption[0]} = ? WHERE id = ?`)
+          .run(corruption[1], helper.dispatchId)
       }
       const before = effects()
       const probes = traceDispatchProbes(h.db)
