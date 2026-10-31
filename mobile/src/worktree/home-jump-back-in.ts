@@ -1,11 +1,10 @@
 import type { WorktreeStatus } from '../../../src/shared/worktree-status-rollup'
 import type { ConnectionState } from '../transport/types'
 import type { HomeResumeCard } from './home-resume-card'
-import {
-  HOME_WORKTREE_COUNTS_LIVE_MAX_AGE_MS,
-  type HomeAttentionWorktree,
-  type HomeWorktreeSummary,
-  type HostWorktreeInfo
+import type {
+  HomeAttentionWorktree,
+  HomeWorktreeSummary,
+  HostWorktreeInfo
 } from './home-worktree-info'
 import { getWorktreeDotStatus } from './workspace-list-ordering'
 
@@ -77,19 +76,12 @@ export function selectHomeJumpBackInRows(input: {
   hostStates: Readonly<Record<string, ConnectionState>>
   worktreeInfo: Readonly<Record<string, HostWorktreeInfo>>
   resumeCard: HomeResumeCard | null
-  now: number
 }): HomeJumpBackInRow[] {
   const candidates: (HomeJumpBackInRow & { rank: number; lastOutputAt?: number })[] = []
   for (const host of input.hosts) {
     const info = input.worktreeInfo[host.id]
-    // Agent states go stale fast; only a connected desktop's recent list can claim one.
-    if (
-      input.hostStates[host.id] !== 'connected' ||
-      !info?.attention ||
-      info.catalogUnavailable ||
-      typeof info.countsProvenAt !== 'number' ||
-      input.now - info.countsProvenAt > HOME_WORKTREE_COUNTS_LIVE_MAX_AGE_MS
-    ) {
+    // Agent states are shown only from a connected desktop's list read this session.
+    if (input.hostStates[host.id] !== 'connected' || !info?.attention || info.catalogUnavailable) {
       continue
     }
     for (const worktree of info.attention) {

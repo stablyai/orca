@@ -144,7 +144,6 @@ export function MobileHomeScreen() {
                 <MobileHomeJumpBackIn
                   rows={data.jumpBackInRows}
                   hosts={data.sortedHostCatalog}
-                  now={data.now}
                   onOpen={openWorktree}
                 />
               ) : null

@@ -15,14 +15,14 @@ function row(id: string, fields: Partial<HomeWorktreeSummary>): HomeWorktreeSumm
   }
 }
 
-function info(hostId: string, rows: HomeWorktreeSummary[], provenAt = NOW): HostWorktreeInfo {
+function info(hostId: string, rows: HomeWorktreeSummary[]): HostWorktreeInfo {
   return {
     hostId,
     totalWorktrees: rows.length,
     activeCount: 0,
     lastActiveWorktree: null,
     attention: selectHomeAttentionWorktrees(rows),
-    countsProvenAt: provenAt
+    countsProvenAt: NOW
   }
 }
 
@@ -43,18 +43,17 @@ describe('home jump back in', () => {
     ])
   })
 
-  it('claims no agent state for a desktop that is offline or whose list has gone stale', () => {
+  it('claims no agent state for a desktop that is offline or whose last read failed', () => {
     const blocked = [row('blocked', { sidebarStatus: 'permission' })]
     const rows = selectHomeJumpBackInRows({
-      hosts: [{ id: 'live' }, { id: 'offline' }, { id: 'stale' }],
-      hostStates: { live: 'connected', offline: 'disconnected', stale: 'connected' },
+      hosts: [{ id: 'live' }, { id: 'offline' }, { id: 'failed' }],
+      hostStates: { live: 'connected', offline: 'disconnected', failed: 'connected' },
       worktreeInfo: {
         live: info('live', blocked),
         offline: info('offline', blocked),
-        stale: info('stale', blocked, NOW - 11 * 60_000)
+        failed: { ...info('failed', blocked), catalogUnavailable: true }
       },
-      resumeCard: null,
-      now: NOW
+      resumeCard: null
     })
     expect(rows.map((entry) => entry.hostId)).toEqual(['live'])
   })
@@ -63,8 +62,7 @@ describe('home jump back in', () => {
     const resumeWorktree = row('resume', {})
     const base = {
       hosts: [{ id: 'host' }],
-      hostStates: { host: 'connected' as const },
-      now: NOW
+      hostStates: { host: 'connected' as const }
     }
     const appended = selectHomeJumpBackInRows({
       ...base,

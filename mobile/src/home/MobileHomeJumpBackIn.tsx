@@ -3,6 +3,7 @@ import { Fragment } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import type { WorktreeStatus } from '../../../src/shared/worktree-status-rollup'
 import { AgentSpinner, agentStatusColors } from '../components/AgentSpinner'
+import { useNow } from '../hooks/use-now'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -26,11 +27,11 @@ const TINTED_STATUSES: ReadonlySet<WorktreeStatus> = new Set(['permission', 'fai
 export function MobileHomeJumpBackIn(props: {
   rows: readonly HomeJumpBackInRow[]
   hosts: readonly HostCatalogEntry[]
-  now: number
   onOpen: (row: HomeJumpBackInRow) => void
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
+  const now = useNow()
   if (props.rows.length === 0) {
     return null
   }
@@ -49,7 +50,7 @@ export function MobileHomeJumpBackIn(props: {
               row={row}
               host={props.hosts.find((host) => host.id === row.hostId) ?? null}
               nameDesktop={nameDesktops}
-              now={props.now}
+              now={now}
               onOpen={props.onOpen}
             />
           </Fragment>

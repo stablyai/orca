@@ -24,6 +24,15 @@ import { selectHomeResumeCard } from '../worktree/home-resume-card'
 import { projectHomeHostConnections } from './home-host-connection-projection'
 import { useMobileHomeHostConnections } from './use-mobile-home-host-connections'
 
+// Agent states only mean something live; a saved copy may be days old, so a list read must prove them again.
+function withoutAgentStates(
+  info: Record<string, HostWorktreeInfo>
+): Record<string, HostWorktreeInfo> {
+  return Object.fromEntries(
+    Object.entries(info).map(([hostId, { attention: _attention, ...rest }]) => [hostId, rest])
+  )
+}
+
 export function useMobileHomeData() {
   const router = useRouter()
   const [hostCatalog, setHostCatalog] = useState<HostCatalogEntry[]>([])
@@ -33,7 +42,6 @@ export function useMobileHomeData() {
   const [lastVisited, setLastVisited] = useState<{ hostId: string; worktreeId: string } | null>(
     null
   )
-  const [now, setNow] = useState(() => Date.now())
   const onboardingCheckedRef = useRef(false)
   const hydratedRef = useRef(false)
   const focusedRef = useRef(false)
@@ -58,7 +66,7 @@ export function useMobileHomeData() {
         return
       }
       setWorktreeInfo((previous) =>
-        Object.keys(previous).length > 0 ? previous : snapshot.worktreeInfo
+        Object.keys(previous).length > 0 ? previous : withoutAgentStates(snapshot.worktreeInfo)
       )
       for (const [hostId, info] of Object.entries(snapshot.worktreeInfo)) {
         if (info.lastActiveWorktree) {
@@ -75,8 +83,6 @@ export function useMobileHomeData() {
     if (Object.keys(worktreeInfo).length > 0) {
       saveHomeSnapshot({ worktreeInfo, savedAt: Date.now() })
     }
-    // Relative times and the agent-state freshness cutoff are read against this clock.
-    setNow(Date.now())
   }, [worktreeInfo])
 
   useEffect(() => {
@@ -87,15 +93,18 @@ export function useMobileHomeData() {
     useCallback(() => {
       let stale = false
       focusedRef.current = true
-      setNow(Date.now())
       void loadHostCatalog()
-        .catch((): HostCatalogEntry[] => [])
+        // A failed read proves nothing about the desktops; keep the ones already shown.
+        .catch((): HostCatalogEntry[] | null => null)
         .then(async (catalog) => {
           if (stale) {
             return
           }
-          setHostCatalog(catalog)
           setHostCatalogLoaded(true)
+          if (!catalog) {
+            return
+          }
+          setHostCatalog(catalog)
           if (catalog.length === 0 || onboardingCheckedRef.current) {
             return
           }
@@ -141,10 +150,9 @@ export function useMobileHomeData() {
         hosts: sortedHosts,
         hostStates: connections.hostStates,
         worktreeInfo,
-        resumeCard,
-        now
+        resumeCard
       }),
-    [sortedHosts, connections.hostStates, worktreeInfo, resumeCard, now]
+    [sortedHosts, connections.hostStates, worktreeInfo, resumeCard]
   )
   const connectedHosts = useMemo(
     () => sortedHosts.filter((host) => connections.hostStates[host.id] === 'connected'),
@@ -162,7 +170,6 @@ export function useMobileHomeData() {
     hostCatalogLoaded,
     hostConnections,
     jumpBackInRows,
-    now,
     router,
     setHostCatalog,
     sortedHostCatalog,
