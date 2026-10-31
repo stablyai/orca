@@ -31,7 +31,7 @@ import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-he
 import { maybePushMode2031Flip } from './terminal-mode-2031-replies'
 import { resolveTerminalMinimumContrastRatio } from '../../../../shared/terminal-contrast-correction'
 import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal-inline-images-settings'
-import { activeWindowMaterial } from '@/lib/window-material-runtime'
+import { windowBackdropActive } from '@/lib/window-backdrop'
 
 export function hexToRgba(hex: string, alpha: number): string {
   let clean = hex.replace('#', '')
@@ -149,10 +149,10 @@ export function applyTerminalAppearance(
   const theme = composeActiveTerminalTheme(baseTheme, settings)
   publishTerminalViewAttributes(theme, appearance.mode, settings)
   const paneBackground = theme?.background ?? '#000000'
-  // Why: over a window material the split root is the one translucent paint; xterm's viewport,
-  // scrollable element and canvas each repainting it compounded 0.82 to ~0.99 (#36196).
-  const windowMaterialActive = activeWindowMaterial() !== 'off'
-  const xtermTheme = windowMaterialActive
+  // Why: over a window material or theme image the split root is the one translucent paint; xterm's
+  // viewport, scrollable element and canvas each repainting it compounded 0.82 to ~0.99 (#36196).
+  const backdropActive = windowBackdropActive()
+  const xtermTheme = backdropActive
     ? composeActiveTerminalTheme(baseTheme, { ...settings, terminalBackgroundOpacity: 0 })
     : theme
 
@@ -181,7 +181,7 @@ export function applyTerminalAppearance(
     }
     // Why clear explicitly: allowTransparency has rendering cost and a stale `true` could bleed in from a prior opacity.
     pane.terminal.options.allowTransparency =
-      windowMaterialActive ||
+      backdropActive ||
       (settings.terminalBackgroundOpacity !== undefined && settings.terminalBackgroundOpacity < 1)
     const cursorStyle = settings.terminalCursorStyle ?? 'block'
     pane.terminal.options.cursorStyle = cursorStyle

@@ -21,7 +21,7 @@ import { resolveClientHostedBrowserRowStripGroupId } from '../tab-bar/client-hos
 import { useEditorGroupFileDropOwner } from '../editor/use-editor-group-file-drop-owner'
 import { cn } from '@/lib/utils'
 import { UNFOCUSED_SPLIT_GROUP_OPACITY } from './split-group-dim'
-import { activeWindowMaterial } from '@/lib/window-material-runtime'
+import { useWindowBackdropActive } from '@/lib/window-backdrop'
 import { EditorRevealFlash } from './EditorRevealFlash'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
@@ -118,6 +118,7 @@ export default function TabGroupPanel({
     [groupId, setBodyDropRef]
   )
   const attachEditorFileDropOwner = useEditorGroupFileDropOwner({ worktreeId, groupId })
+  const backdropActive = useWindowBackdropActive()
   // Why: per-group anchor-name lets the worktree-level overlay position panes via CSS anchor positioning, so moving a tab between groups re-targets the anchor instead of remounting xterm (loses alt-screen TUI state) or reloading `<webview>`.
   const bodyAnchorName = tabGroupBodyAnchorName(groupId)
   // Why: memoize so a fresh style object each render doesn't break downstream memoization keyed on referential equality.
@@ -262,9 +263,9 @@ export default function TabGroupPanel({
             }`
           : ''
       }`}
-      // Why not over a window material: group opacity would let the desktop bleed through opaque chrome.
+      // Why not over a backdrop: group opacity would let the desktop or theme image bleed through chrome.
       style={
-        hasSplitGroups && !isFocused && activeWindowMaterial() === 'off'
+        hasSplitGroups && !isFocused && !backdropActive
           ? { opacity: UNFOCUSED_SPLIT_GROUP_OPACITY }
           : undefined
       }
