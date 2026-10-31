@@ -604,7 +604,7 @@
         "inheritFont": "Wie IDE-Schrift",
         "fontPreviewLabel": "Vorschau der Chat-Schrift",
         "fontPreview": "Der schnelle braune Fuchs springt über den faulen Hund.",
-        "title": "Chat",
+        "title": "Chat UI",
         "textSize": "Textgröße",
         "textSizeDescription": "Nachrichten, Werkzeugaktivitäten und das Nachrichtenfeld. {{increase}} / {{decrease}} in einem Chat ändern diese Einstellung ebenfalls.",
         "codeTextSize": "Code-Textgröße",

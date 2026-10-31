@@ -650,7 +650,7 @@
         "inheritFont": "Как в IDE",
         "fontPreviewLabel": "Предпросмотр шрифта чата",
         "fontPreview": "Съешь же ещё этих мягких французских булок, да выпей чаю.",
-        "title": "Чат",
+        "title": "Chat UI",
         "textSize": "Размер текста",
         "textSizeDescription": "Сообщения, действия инструментов и поле ввода. Сочетания {{increase}} / {{decrease}} в чате тоже меняют этот размер.",
         "codeTextSize": "Размер текста кода",
