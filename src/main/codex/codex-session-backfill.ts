@@ -25,6 +25,7 @@ import {
   getCodexSessionBackfillDate,
   mergeCodexSessionBackfillDates
 } from './codex-session-backfill-scan-dates'
+import { skippedBackfillForBlockedSourceHome } from './codex-session-source-home-wsl-gate'
 import type {
   CodexSessionBackfillDate,
   CodexSessionBackfillOptions,
@@ -79,6 +80,10 @@ async function runCodexSessionBackfillOncePerHost(
   options: CodexSessionBackfillOptions,
   systemCodexHomePathOverride?: string
 ): Promise<CodexSessionBackfillSummary | null> {
+  const skipped = await skippedBackfillForBlockedSourceHome(systemCodexHomePathOverride)
+  if (skipped) {
+    return skipped
+  }
   const paths = resolveCodexSessionBackfillPaths(systemCodexHomePathOverride)
   const markerGeneration = captureCodexSessionBackfillMarkerGeneration()
   const baseline = readCodexSessionBackfillBaseline(paths.markerPath, paths.systemSessionsRoot)

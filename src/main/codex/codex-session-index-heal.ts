@@ -4,6 +4,7 @@ import { isTransientSqliteContention } from '../sqlite/sqlite-read-failure'
 import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
 import { buildWslCodexAppServerArgs } from '../codex-accounts/wsl-codex-command'
 import { resolveWslExecutablePath } from '../wsl/wsl-executable-path'
+import { isCodexSessionSourceHomeBlocked } from './codex-session-source-home-wsl-gate'
 import { getCodexSessionBackfillStateDirPath } from './codex-home-paths'
 import { resolveCodexSessionBackfillPaths } from './codex-session-backfill'
 import {
@@ -85,13 +86,20 @@ export function startCodexSessionIndexHealInBackground(
   if (backgroundHealTask) {
     return backgroundHealTask
   }
-  const task = runCodexSessionIndexHeal(
-    resolveCodexSessionIndexHealPaths(systemCodexHomePathOverride),
-    options
-  ).catch((error: unknown) => {
-    console.warn('[codex-session-index-heal] Background index heal failed:', error)
-    return null
-  })
+  const task = isCodexSessionSourceHomeBlocked(systemCodexHomePathOverride)
+    .then((blocked) =>
+      // Its app-server reads the source home, which would boot a stopped WSL distro (E9).
+      blocked
+        ? null
+        : runCodexSessionIndexHeal(
+            resolveCodexSessionIndexHealPaths(systemCodexHomePathOverride),
+            options
+          )
+    )
+    .catch((error: unknown) => {
+      console.warn('[codex-session-index-heal] Background index heal failed:', error)
+      return null
+    })
   backgroundHealTask = task
   void task.finally(() => {
     if (backgroundHealTask === task) {
