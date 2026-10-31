@@ -2,6 +2,7 @@ import { mkdtemp, open, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
+import { parseAgentSessionFile } from './session-scanner-agent-parser'
 import { parseHermesSessionFile } from './session-scanner-hermes-parser'
 import { parseDevinSessionFile } from './session-scanner-devin-parser'
 import { parseGeminiSessionFile } from './session-scanner-gemini-parsers'
@@ -98,7 +99,7 @@ it.each(providers)(
 
 it.each(providers)(
   'cancels a streamed local $agent document before consuming the whole file',
-  async ({ agent, parse, array }) => {
+  async ({ agent, array }) => {
     const root = await mkdtemp(join(tmpdir(), 'orca-json-document-cancel-'))
     try {
       const path = join(root, 'session.json')
@@ -110,8 +111,12 @@ it.each(providers)(
       const controller = new AbortController()
       let emitted = 0
       await expect(
-        parse(
-          { path, mtimeMs: 1, modifiedAt: new Date(1).toISOString() },
+        parseAgentSessionFile(
+          {
+            agent,
+            codexHome: null,
+            file: { path, mtimeMs: 1, modifiedAt: new Date(1).toISOString() }
+          },
           'linux',
           {
             active: true,
