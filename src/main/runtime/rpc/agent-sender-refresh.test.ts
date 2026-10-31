@@ -7,8 +7,6 @@ import { createOrchestrationRpcHarness } from './methods/orchestration/rpc-test-
 import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'
 import { MIRROR_LEAVES_STEP_1 } from '../runtime-leaf-record-projection.test-fixture'
 import type { RuntimeAgentSenderAssociations } from '../runtime-agent-sender-associations'
-import type { RuntimeLeafRecord } from '../runtime-terminal-state-records'
-import type { OrcaRuntimeService } from '../orca-runtime'
 
 const harness = createOrchestrationRpcHarness()
 afterEach(() => {
@@ -18,14 +16,6 @@ afterEach(() => {
 
 const paneOf = (i: number) =>
   `tab_h${i}:${i.toString(16).padStart(8, '0')}-aaaa-4aaa-8aaa-aaaaaaaaaaaa`
-// The runtime's own state, reached the way its RPC refresh reaches it.
-type Internals = {
-  agentProjections: { senders: RuntimeAgentSenderAssociations }
-  leaves: Map<string, RuntimeLeafRecord>
-  ptysById: Map<string, unknown>
-  mobileSessionTabsByWorktree: Map<string, unknown>
-}
-const internals = (runtime: OrcaRuntimeService) => runtime as unknown as Internals
 /** History, chat and lineage reads, apart from the live-terminal walk each refresh makes. */
 const identityReads = (senders: RuntimeAgentSenderAssociations) => {
   const { leafVisits: _leaves, ptyVisits: _ptys, ...reads } = senders.workForTest()
@@ -46,19 +36,25 @@ it.each([50, 500])(
         senderPaneKey: paneOf(i)
       })
     }
-    const {
-      agentProjections: { senders },
-      leaves,
-      ptysById,
-      mobileSessionTabsByWorktree
-    } = internals(runtime)
+    // The runtime's own state, reached the way its RPC refresh reaches it.
+    const { senders } = runtime['agentProjections']
+    const leaves = runtime['leaves']
+    const ptysById = runtime['ptysById']
     leaves.set('live', {
       ...MIRROR_LEAVES_STEP_1[0],
       tabId: 'tab_h0',
       worktreeId: 'workspace',
       ptyId: 'pty-live'
     })
-    mobileSessionTabsByWorktree.set('workspace', {})
+    runtime.mobileSessionTabsByWorktree.set('workspace', {
+      worktree: 'workspace',
+      publicationEpoch: 'host',
+      snapshotVersion: 1,
+      activeGroupId: null,
+      activeTabId: null,
+      activeTabType: null,
+      tabs: []
+    })
     const touch = vi
       .spyOn(runtime, 'touchMobileSessionTabsForWorktree')
       .mockImplementation(() => undefined)

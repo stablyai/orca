@@ -88,7 +88,8 @@ function host(n: number) {
       }
     ).senders
   let senders = start()
-  const wire = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
+  // Round-trips through JSON as the host serves it; the declared type is what was sent.
+  const wire = <T>(value: T): T => JSON.parse(JSON.stringify(value))
   let rowsSent = 0
   const count = (publication: { associations: readonly unknown[] } | undefined) => {
     rowsSent += publication?.associations.length ?? 0

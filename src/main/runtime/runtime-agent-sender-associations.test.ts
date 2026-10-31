@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
+import { z } from 'zod'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -12,7 +13,8 @@ import { devicePrincipalOf } from './device-principal'
 import { OrchestrationDb } from './orchestration/db'
 import { createRootDispatch } from './orchestration/db/root-dispatch-test-fixture'
 import { MIRROR_LEAVES_STEP_1 } from './runtime-leaf-record-projection.test-fixture'
-import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+import type { RuntimeLeafRecord } from './runtime-terminal-state-records'
+import { makeTuiIdlePty } from './tui-idle-wait-test-harness'
 import {
   conversationRecordReader,
   type AgentSessionRecordReader
@@ -62,14 +64,8 @@ function harness(n = 1, records: AgentSessionRecordReader | null = null) {
     worktreeId: 'workspace',
     ptyId: `pty-${i}`
   }))
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the builder reads only these fields.
-  const ptys = leaves.map(
-    (l) =>
-      ({
-        ptyId: l.ptyId,
-        incarnationId: 'inc-1',
-        worktreeId: 'workspace'
-      }) as RuntimePtyWorktreeRecord
+  const ptys = Array.from({ length: n }, (_, i) =>
+    makeTuiIdlePty({ ptyId: `pty-${i}`, incarnationId: 'inc-1', worktreeId: 'workspace' })
   )
   // A warm restart keeps each terminal's handle; tests replace one to model a fresh terminal.
   const handles = new Map(leaves.map((l, i) => [l.tabId, handle(i)]))
@@ -258,13 +254,15 @@ it('does not take a respawned or fresh terminal for the one a card was sent from
   expect(h.located('term_fresh')).toBe(pane('tab-1'))
 })
 
+const planRow = z.object({ detail: z.string() })
+
 it('reads each live pane through an index, never every Dispatch or attachment it once had', () => {
   const h = harness()
   for (const sql of Object.values(AGENT_SENDER_PANE_READS)) {
     const plan = h.db.db
       .prepare(`EXPLAIN QUERY PLAN ${sql}`)
       .all('pane')
-      .map((row) => String((row as { detail: unknown }).detail))
+      .map((row) => planRow.parse(row).detail)
     expect(plan.join('\n')).toMatch(/USING (COVERING )?INDEX/)
     expect(plan.some((detail) => detail.startsWith('SCAN '))).toBe(false)
   }

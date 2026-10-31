@@ -24,7 +24,10 @@ import {
 } from '../../../../shared/structured-agent-session-projection'
 import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'
 import type { Tab } from '../../../../shared/tab-types'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import type {
+  RuntimeMobileSessionTabsRemovedResult,
+  RuntimeMobileSessionTabsResult
+} from '../../../../shared/runtime-types'
 import { applyWebSessionTabsSnapshot } from '@/runtime/web-session-tabs-sync/snapshot-api'
 import { applyReceivedAgentSenderPublications } from '@/runtime/web-session-tabs-sync/received-agent-sender-publications'
 
@@ -183,6 +186,11 @@ it('a worktree removal frame drops only its own scope and keeps the host authori
     tabs: [],
     ...(agentSenderAssociations ? { agentSenderAssociations } : {})
   })
+  const removal = (worktree: string): RuntimeMobileSessionTabsRemovedResult => ({
+    ...frame(worktree),
+    removed: true,
+    tabs: []
+  })
   // The receipt applies sender scopes; the accepted tab frame applies a worktree's removal.
   const apply = (snapshot: Parameters<typeof applyWebSessionTabsSnapshot>[1]) => {
     applyReceivedAgentSenderPublications('remote', [snapshot], undefined)
@@ -195,7 +203,7 @@ it('a worktree removal frame drops only its own scope and keeps the host authori
   const located = () =>
     selectAgentSenderAssociation(useAppStore.getState(), 'runtime:remote', sender('term_worker'))
   expect(located()?.worktreeId).toBe('w3')
-  apply({ ...frame('w1'), removed: true } as Parameters<typeof applyWebSessionTabsSnapshot>[1])
+  apply(removal('w1'))
   apply(frame('w2', publication()))
   expect(located()?.worktreeId).toBe('w3')
   expect(
@@ -203,7 +211,7 @@ it('a worktree removal frame drops only its own scope and keeps the host authori
   ).toEqual(['w2', 'w3'])
   // A frame that doesn't carry the field never makes a publishing host look old.
   apply(frame('w2'))
-  apply({ ...frame('w3'), removed: true } as Parameters<typeof applyWebSessionTabsSnapshot>[1])
+  apply(removal('w3'))
   const view = renderHook(() =>
     useAgentMessageSenderView(sender('term_worker'), 'w2', {
       kind: 'environment',
