@@ -1,6 +1,3 @@
-import { mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { afterEach, beforeEach, expect, vi } from 'vitest'
 import { z } from 'zod'
@@ -37,7 +34,7 @@ const failure = z.object({
 })
 
 /** Real CLI argv -> RPC schema and handlers -> SQLite, with terminal IO and native placement supplied by the fixture. */
-export function useHelperFollowUpCli(options: { fileBacked?: boolean } = {}) {
+export function useHelperFollowUpCli() {
   const h = createOrchestrationWorkerReleaseHarness()
   const output = vi.fn<(value: { result: unknown }) => void>()
   const panes = new Map<string, string>()
@@ -46,10 +43,14 @@ export function useHelperFollowUpCli(options: { fileBacked?: boolean } = {}) {
   let nextTerminal = 'term_worker'
   let rig: QueuedMessageTestRig | undefined
   let structuredHandle: string | undefined
-  let userDataDir: string | undefined
 
-  /** The fixture's terminals and CLI output; armed again after a restart drops every mock. */
-  function arm() {
+  beforeEach(async () => {
+    h.setup()
+    panes.clear()
+    for (const name of ['AGENT_SESSION_ID', 'TERMINAL_HANDLE', 'PANE_KEY', 'PAIRING_CODE']) {
+      vi.stubEnv(`ORCA_${name}`, '')
+    }
+    vi.stubEnv('ORCA_ENVIRONMENT', '')
     const pane = (handle: string) => {
       const structured = structuredWorkerIdentities.get(handle)
       if (structured) {
@@ -84,17 +85,6 @@ export function useHelperFollowUpCli(options: { fileBacked?: boolean } = {}) {
       title: nextTerminal
     }))
     logs = vi.spyOn(console, 'log').mockImplementation(() => {})
-  }
-
-  beforeEach(async () => {
-    userDataDir = options.fileBacked ? mkdtempSync(join(tmpdir(), 'helper-follow-up-')) : undefined
-    h.setup({ userDataDir })
-    panes.clear()
-    for (const name of ['AGENT_SESSION_ID', 'TERMINAL_HANDLE', 'PANE_KEY', 'PAIRING_CODE']) {
-      vi.stubEnv(`ORCA_${name}`, '')
-    }
-    vi.stubEnv('ORCA_ENVIRONMENT', '')
-    arm()
     vi.doMock('../../../../../../cli/runtime-client', async (original) => {
       const actual = await original<typeof CliRuntimeClient>()
       return {
@@ -135,9 +125,6 @@ export function useHelperFollowUpCli(options: { fileBacked?: boolean } = {}) {
     rig = undefined
     getWorkerTerminalAutoReleaseScheduler(h.runtime).clear()
     h.cleanup()
-    if (userDataDir) {
-      rmSync(userDataDir, { recursive: true, force: true })
-    }
     vi.doUnmock('../../../../../../cli/runtime-client')
     vi.doUnmock('../../../../../../cli/format')
     vi.unstubAllEnvs()
@@ -299,10 +286,6 @@ export function useHelperFollowUpCli(options: { fileBacked?: boolean } = {}) {
     otherRun,
     effects,
     reopenOn,
-    restart() {
-      h.restart()
-      arm()
-    },
     set nextTerminal(handle: string) {
       nextTerminal = handle
     }

@@ -4,6 +4,7 @@ import { continueAllUnreadWorkerMail } from '../messaging/settled-worker-follow-
 import { z } from 'zod'
 import * as setupGate from './worker-start-structured-setup-gate'
 import { receipt, type Started, useHelperFollowUpCli } from './helper-follow-up-cli.test-support'
+import { traceDispatchProbes } from './helper-follow-up-sql-trace.test-support'
 
 const failedReceipt = z.object({
   taskId: z.string(),
@@ -126,6 +127,29 @@ describe('which helpers a worker may continue, through CLI argv, RPC and SQLite'
     await continues('term_worker_fresh', early, fourth)
   })
 
+  it('refuses the helper of a worker re-placed on the user’s own terminal, which only its coordinator continues', async () => {
+    const worker = await takeOver('term_coord', 'term_user')
+    const helper = await start('term_user', 'term_user_helper')
+    await report('term_user_helper', helper, `dispatch:${worker.dispatchId}`)
+    // While at work, the worker continues its own helper.
+    const continued = await continues('term_user', helper, worker)
+    await report('term_user_helper', continued, `dispatch:${worker.dispatchId}`)
+    await report('term_user', worker, 'term_coord')
+    // Saved custody records no takeover of the user's terminal, so nothing ties the new start to the old one.
+    const reopened = await reopenOn(worker, 'term_user')
+    expect(h.db.getWorkerTerminalResourceByOwner(reopened.dispatchId)).toMatchObject({
+      ownership_state: 'external',
+      prior_owner_dispatch_ids: '[]'
+    })
+    const before = effects()
+    expect((await follow('term_user', helper.dispatchId)).error).toMatchObject({
+      code: 'task_not_found',
+      data: { effectsApplied: false }
+    })
+    expect(effects()).toEqual(before)
+    expect((await follow('term_coord', helper.dispatchId)).error).toBeUndefined()
+  })
+
   it('refuses a helper whose creator reached the caller only through another Run', async () => {
     const { worker, helper } = await pair()
     await report('term_worker', worker, 'term_coord')
@@ -217,11 +241,15 @@ describe('which helpers a worker may continue, through CLI argv, RPC and SQLite'
           .run(corrupt[1], helper.dispatchId)
       }
       const before = effects()
+      const probes = traceDispatchProbes(h.db)
       expect((await follow('term_worker', latest)).error).toMatchObject({
         code: 'task_not_found',
         data: { effectsApplied: false }
       })
       expect(effects()).toEqual(before)
+      // Even around a cycle, the walk to the first request reads each Dispatch a bounded number of times.
+      expect(probes.counts().perDispatch).toBeLessThanOrEqual(6)
+      probes.restore()
     }
   )
 

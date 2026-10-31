@@ -6,8 +6,11 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../../shared/agent-sessi
 import { activeProviderContext } from '../../../../../../shared/agent-session-provider-context'
 import { HOST_TEST_THREAD } from '../../../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { receipt, useHelperFollowUpCli } from './helper-follow-up-cli.test-support'
-import { seedUnrelatedHistory, traceCallerReads } from './helper-follow-up-sql-trace.test-support'
-import * as paneKeys from '../../../../orchestration/db/pane-key-match'
+import {
+  seedUnrelatedHistory,
+  traceCallerReads,
+  traceDispatchProbes
+} from './helper-follow-up-sql-trace.test-support'
 
 describe('helper follow-ups through CLI argv, RPC and SQLite', () => {
   const f = useHelperFollowUpCli()
@@ -377,20 +380,18 @@ describe('helper follow-ups through CLI argv, RPC and SQLite', () => {
       trace.restore()
     }
     // One indexed read of the agent's custody, visiting its one row, at both sizes; no former-owner scan.
-    expect(counts).toEqual(
-      Array(2).fill({
-        history: { executions: 0, visited: 0 },
-        identity: { executions: 1, visited: 1 },
-        formerOwner: { executions: 0, visited: 0 }
-      })
-    )
+    expect(counts[0]).toMatchObject({
+      identity: { executions: 1, visited: 1 },
+      formerOwner: { executions: 0, visited: 0 }
+    })
+    expect(counts[1]).toEqual(counts[0])
     for (const trace of traces) {
       expect(trace.expectIndexedPlans()).toEqual(['identity'])
     }
   })
 
-  it('decodes each custody history once however long the follow-up chain', async () => {
-    const decoded: number[] = []
+  it('reads custody once per row however long the follow-up chain and however many rows share its process', async () => {
+    const probed: ReturnType<ReturnType<typeof traceDispatchProbes>['counts']>[] = []
     for (const length of [3, 30]) {
       const sender = `term_sender_${length}`
       const child = `term_child_${length}`
@@ -398,24 +399,34 @@ describe('helper follow-ups through CLI argv, RPC and SQLite', () => {
       const helper = await start(sender, child)
       await report(child, helper, `dispatch:${worker.dispatchId}`)
       await success('worker-release', '--dispatch', helper.dispatchId)
-      // Each in-place follow-up also takes over the same pane, so the walk enters every ancestor by its follow-up.
+      // Each in-place follow-up also takes over the same pane, so every ancestor is found only through its process.
       for (let step = 0; step < length; step++) {
         await report(sender, worker, 'term_coord')
         worker = receipt.parse((await follow('term_coord', worker.dispatchId)).result)
       }
+      const { process_incarnation: incarnation, host_scope: host } = h.db.getDispatchContextById(
+        worker.dispatchId
+      )!
+      // As many other custody rows on the chain's exact process as the chain has ancestors.
+      const near = { pane: h.runtime.getTerminalPaneKey(sender)!, incarnation: incarnation!, host }
+      seedUnrelatedHistory(h.db, h.activeRunId, 4 * length, near, host)
       const trace = traceCallerReads(h.db)
-      const parse = vi.spyOn(paneKeys, 'parseWorkerTerminalPriorOwnerIds')
+      const probes = traceDispatchProbes(h.db)
       f.nextTerminal = `${child}_continued`
       expect((await follow(sender, helper.dispatchId)).error).toBeUndefined()
-      expect(trace.counts()).toMatchObject({
-        identity: { executions: 1, visited: 1 },
-        formerOwner: { executions: 0 }
-      })
-      decoded.push(parse.mock.calls.length)
-      parse.mockRestore()
+      const { identity, formerOwner } = trace.counts()
+      // One indexed read of the process's rows, each read a bounded number of times: linear, not ancestors x rows.
+      expect(identity).toMatchObject({ executions: 1, visited: length + 1 })
+      expect(identity.fieldReads).toBeLessThanOrEqual(4 * (2 * length + 1))
+      expect(formerOwner.executions).toBe(0)
+      probed.push(probes.counts())
+      probes.restore()
       trace.restore()
     }
-    expect(decoded[0]).toBeGreaterThan(0)
-    expect(decoded[1]).toBe(decoded[0])
+    // Each further ancestor costs one Dispatch read and one owner probe, and no Dispatch is read more often.
+    expect(probed[1]).toEqual({
+      total: probed[0].total + 2 * 27,
+      perDispatch: probed[0].perDispatch
+    })
   })
 })
