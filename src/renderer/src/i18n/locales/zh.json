@@ -19578,7 +19578,9 @@
       "TerminalInteraction": {
         "copyTrimsGutter": "修剪副本上的装订线",
         "copyTrimsGutterDescription": "将左侧装订线智能体输出绘制在后面，因此复制的文本不会缩进。仅删除每个选定行共享的缩进。",
-        "copyOnSelectDescription": "自动将在终端或聊天中选择的文本复制到剪贴板。"
+        "copyOnSelectDescription": "自动将在终端或聊天中选择的文本复制到剪贴板。",
+        "scrollOnUserInput": "输入时滚动到底部",
+        "scrollOnUserInputDescription": "在已向上滚动的窗格中键入或粘贴时，跳回最新输出。关闭此项可保持在回滚历史中的位置。"
       },
       "terminal": {
         "clipboard": {
@@ -19593,6 +19595,15 @@
             "highlight": "高亮",
             "chat": "聊天"
           }
+        },
+        "search": {
+          "typing": "键入",
+          "input": "输入",
+          "jump": "跳转",
+          "bottom": "底部",
+          "scrollback": "回滚",
+          "snap": "吸附",
+          "position": "位置"
         }
       },
       "nativeChat": {

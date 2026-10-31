@@ -20383,7 +20383,9 @@
       "TerminalInteraction": {
         "copyTrimsGutter": "Couper la gouttière lors de la copie",
         "copyTrimsGutterDescription": "Déposez la sortie de l'agent de gouttière gauche qui est peinte derrière, donc le texte copié n'est pas en retrait. Seul le retrait de chaque partage de ligne sélectionnée est supprimé.",
-        "copyOnSelectDescription": "Copier automatiquement vers le presse-papiers le texte sélectionné dans un terminal ou un chat."
+        "copyOnSelectDescription": "Copier automatiquement vers le presse-papiers le texte sélectionné dans un terminal ou un chat.",
+        "scrollOnUserInput": "Défiler vers le bas lors de la saisie",
+        "scrollOnUserInputDescription": "Lorsque vous tapez ou collez dans un volet défilé vers le haut, revient à la dernière sortie. Désactivez cette option pour conserver votre position dans l'historique."
       },
       "terminal": {
         "clipboard": {
@@ -20398,6 +20400,15 @@
             "highlight": "surligner",
             "chat": "chat"
           }
+        },
+        "search": {
+          "typing": "saisie",
+          "input": "entrée",
+          "jump": "sauter",
+          "bottom": "bas",
+          "scrollback": "historique",
+          "snap": "aligner",
+          "position": "position"
         }
       },
       "nativeChat": {

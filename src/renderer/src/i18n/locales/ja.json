@@ -19577,7 +19577,9 @@
       "TerminalInteraction": {
         "copyTrimsGutter": "コピー時に余白をトリミングする",
         "copyTrimsGutterDescription": "左側のガターをドロップすると、Agent の出力が後ろに描画されるため、コピーされたテキストはインデントされません。選択した行ごとに共有されるインデントのみが削除されます。",
-        "copyOnSelectDescription": "ターミナルやチャットで選択したテキストをクリップボードに自動的にコピーします。"
+        "copyOnSelectDescription": "ターミナルやチャットで選択したテキストをクリップボードに自動的にコピーします。",
+        "scrollOnUserInput": "入力時に一番下へスクロール",
+        "scrollOnUserInputDescription": "上にスクロールしたペインで入力または貼り付けを行うと、最新の出力に戻ります。オフにするとスクロールバック内の位置を維持します。"
       },
       "terminal": {
         "clipboard": {
@@ -19592,6 +19594,15 @@
             "highlight": "ハイライト",
             "chat": "チャット"
           }
+        },
+        "search": {
+          "typing": "タイピング",
+          "input": "入力",
+          "jump": "ジャンプ",
+          "bottom": "一番下",
+          "scrollback": "スクロールバック",
+          "snap": "スナップ",
+          "position": "位置"
         }
       },
       "nativeChat": {
