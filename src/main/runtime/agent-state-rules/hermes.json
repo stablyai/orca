@@ -49,6 +49,35 @@
       "answer": { "state": "idle", "strength": "strong", "requiresQuiet": false }
     },
     {
+      "id": "classic_composer_ready",
+      "why": "The classic Hermes screen (hermes without --tui, e.g. `hermes -p <profile> --model <model>`) paints no `─ ready │` status row (#35883). Idle shows the prompt row with one of the empty-composer placeholders from locales/en.yaml (placeholder.p01–p11, rotating) and the bottom bar's right segment reads `/ commands · @ files · ! shell`. A running turn replaces both with `type to redirect this turn · Tab queues it for after` and `enter interrupt · tab queue · ctrl+c stop`, so a busy classic screen keeps holding. A draft typed identical to a placeholder still reads as empty.",
+      "priority": 500,
+      "when": {
+        "region": "screen",
+        "rows": [
+          {
+            "any": [
+              {
+                "regex": "^(?:[a-z0-9][a-z0-9_-]{0,63} )?(?:❯|⚔|Ψ|◉|✦) (?:Ask anything, or type / for commands…|Summarize what's in this folder|Draft a reply to the last email in my inbox)$"
+              },
+              {
+                "regex": "^(?:[a-z0-9][a-z0-9_-]{0,63} )?(?:❯|⚔|Ψ|◉|✦) (?:Plan a feature, then build it step by step|Find and fix a failing test|Research this topic and write me a brief)$"
+              },
+              {
+                "regex": "^(?:[a-z0-9][a-z0-9_-]{0,63} )?(?:❯|⚔|Ψ|◉|✦) (?:What changed in this repo recently\\?|Turn these notes into a to-do list|Explain this error and how to fix it)$"
+              },
+              {
+                "regex": "^(?:[a-z0-9][a-z0-9_-]{0,63} )?(?:❯|⚔|Ψ|◉|✦) (?:Set a reminder or schedule a recurring task|Type / to browse commands, or Ctrl\\+P for the palette)$"
+              }
+            ]
+          },
+          { "optional": { "regex": "^─+$" } },
+          { "regex": "/ commands · @ files · ! shell$" }
+        ]
+      },
+      "answer": { "state": "idle", "strength": "strong", "requiresQuiet": false }
+    },
+    {
       "id": "composer_not_ready",
       "why": "A readable screen without the ready footer and available composer is still starting, handling input, running a turn or showing a picker; a quiet process cannot prove otherwise. Translated locales, a custom branding.prompt_symbol and tui_statusbar: off leave no screen this file recognizes, so they hold until the wait times out.",
       "priority": 100,
