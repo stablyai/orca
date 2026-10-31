@@ -31,6 +31,8 @@ import {
 } from './journal-projection-test-support'
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalRow } from './journal-row-schema'
+import { JournalOutcomeSweeper } from './journal-outcome-cleanup'
+import { encodeJournalState } from './journal-state-codec'
 
 const sessionId = 'session-1'
 let root: string
@@ -164,7 +166,7 @@ it.each(['claude', 'codex'] as const)(
           turnId = turn.id
         }
         if (record.method === 'turn/completed') {
-          for (const status of ['inProgress', 'completed']) {
+          for (const status of ['pending', 'inProgress', 'completed']) {
             translator.handle({
               type: 'notification',
               sessionId,
@@ -196,6 +198,13 @@ it.each(['claude', 'codex'] as const)(
       { kind: 'turn', turnId: 'stop-turn', state: 'running' },
       { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
+    for (let revision = 0; revision < 8; revision++) {
+      await journal.appendItem(
+        stoppedTurn,
+        { kind: 'turn', turnId: 'stop-turn', state: 'running', startedAt: at + revision },
+        { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      )
+    }
     await journal.appendStopEvent({ reason: 'user-stop', turnId: 'stop-turn' }, 1)
     const settle = journal.stopMarks.beginSettle(true)
     await journal.appendLifecycleBatch({
@@ -215,6 +224,35 @@ it.each(['claude', 'codex'] as const)(
     expect(
       restoreJournal(database.db, sessionId)?.state.appliedSettlementIds.has('stop-settlement')
     ).toBe(true)
+    const count = () =>
+      Number(database.db.prepare('SELECT COUNT(*) AS n FROM journal_outcomes').get()?.n)
+    const before = count()
+    const sweeper = new JournalOutcomeSweeper({ database: () => database, delay: async () => {} })
+    disposals.push(() => sweeper.stop())
+    await sweeper.pass()
+    expect(count()).toBeLessThan(before)
+    expectProjectionMatches(database, expected)
+    await journal.replaceEpochItems('handle_forked', 1, [
+      {
+        identity: stoppedTurn,
+        body: { kind: 'turn', turnId: 'stop-turn', state: 'interrupted', completedAt: at + 1 },
+        ownerFence: 1
+      }
+    ])
+    const rewound = journal.snapshot()
+    const saved = encodeJournalState(restoreJournal(database.db, sessionId)!.state)
+    await sweeper.pass()
+    expect(encodeJournalState(restoreJournal(database.db, sessionId)!.state)).toEqual(saved)
+    expect(
+      database.db
+        .prepare(`SELECT COUNT(*) AS n FROM journal_outcomes WHERE generation NOT IN
+      (SELECT generation FROM journal_outcome_epochs)`)
+        .get()?.n
+    ).toBe(0)
+    await journals.closeAll()
+    expect(
+      (await journals.open({ identity, stateDirectory: root, now: () => at })).snapshot()
+    ).toEqual(rewound)
   }
 )
 
