@@ -27,7 +27,6 @@
 1 test-no-in-test-import-actual:src/main/local-worktree-removal-recovery.test.ts
 2 test-no-in-test-import-actual:src/main/managed-server/activation/orcad-activation-crash-recovery.test.ts
 1 test-no-in-test-import-actual:src/main/managed-server/host-state/orcad-state-mutation-timeout.test.ts
-1 test-no-in-test-import-actual:src/main/node-runtime/managed-runtime-installation.test.ts
 1 test-no-in-test-import-actual:src/main/node-runtime/pinned-runtime-materializer.test.ts
 1 test-no-in-test-import-actual:src/main/omp/omp-session-cwd-lookup.test.ts
 6 test-no-in-test-import-actual:src/main/opencode/hook-service-legacy-acl.test.ts
@@ -340,7 +339,6 @@
 1 test-no-real-time-wait:src/main/ipc/pty/pty-agent-launch-pane-attach.test.ts
 1 test-no-real-time-wait:src/main/ipc/pty/pty-daemon-controller-teardown.test.ts
 1 test-no-real-time-wait:src/main/ipc/pty/pty-launch-parity.test.ts
-2 test-no-real-time-wait:src/main/ipc/pty/pty-spawn-cwd-fallback-hung-folder.test.ts
 1 test-no-real-time-wait:src/main/ipc/rebinding-file-watch-noise.test.ts
 1 test-no-real-time-wait:src/main/ipc/rebinding-file-watch.test.ts
 3 test-no-real-time-wait:src/main/ipc/runtime-environments/runtime-environment-preference.test.ts
@@ -382,7 +380,6 @@
 1 test-no-real-time-wait:src/main/native-chat/transcript-watch-error.test.ts
 2 test-no-real-time-wait:src/main/native-chat/transcript-watch-liveness.test.ts
 11 test-no-real-time-wait:src/main/native-chat/transcript-watch.test.ts
-1 test-no-real-time-wait:src/main/node-runtime/managed-runtime-installation.test.ts
 1 test-no-real-time-wait:src/main/opencode/hook-plugin-legacy-tui-ownership.test.ts
 6 test-no-real-time-wait:src/main/opencode/hook-plugin-module-contract.test.ts
 1 test-no-real-time-wait:src/main/opencode/hook-plugin-opencode2-tui-ownership.test.ts
@@ -497,7 +494,6 @@
 1 test-no-real-time-wait:src/renderer/src/components/native-chat/use-structured-agent-session-legacy-recovery.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/native-chat/use-structured-agent-session-options.learned-default.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/native-chat/use-structured-agent-session-read.test.tsx
-1 test-no-real-time-wait:src/renderer/src/components/repo/CreateFromPicker.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/right-sidebar/checks-panel/use-checks-panel-generation.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/right-sidebar/file-explorer-watch-refresh-scheduler.test.ts
 1 test-no-real-time-wait:src/renderer/src/components/right-sidebar/parent-pr-checks-refresh.test.ts
@@ -1107,7 +1103,6 @@
 5 test-no-wall-clock:src/renderer/src/components/status-bar/inline-usage-bars.test.tsx
 4 test-no-wall-clock:src/renderer/src/components/status-bar/provider-segment-balance.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/status-bar/status-bar-antigravity-segment.test.tsx
-3 test-no-wall-clock:src/renderer/src/components/status-bar/status-bar-provider-menu-focus.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/status-bar/workspace-space-worktree-row.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/tab-bar/TabBarCreateEntry.history.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/tab-bar/cli-chat-resume-run.test.ts
