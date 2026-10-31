@@ -229,7 +229,7 @@ function startLookup(
     timer.unref()
   }
   // Register before invoking so synchronous throws cannot leave a pinned record.
-  trackInflight(key, { token, startedAt, revision, promise, expire })
+  trackInflight(key, { token, startedAt, promise, expire })
 
   void (async () => {
     try {

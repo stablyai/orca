@@ -12,7 +12,6 @@ export type InflightToken = { readonly [inflightTokenBrand]?: never }
 export type InflightRecord = {
   /** Identity, so a detached lookup can only ever clear its own entry. */
   token: InflightToken
-  revision: number
   startedAt: number
   promise: Promise<HostedReviewInfo | null>
   /** Releases the callers and unpins the branch; idempotent. */

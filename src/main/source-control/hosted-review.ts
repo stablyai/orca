@@ -2,6 +2,7 @@ import { githubRepoContext, withGitHubRepoExecution } from '../github/github-rep
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { HostedReviewInfo } from '../../shared/hosted-review'
 import { assertRemoteUrlReadable } from '../git/remote-url-probe'
+import { forgetGiteaPullRequestReads } from '../gitea/pull-request-read-forgetting'
 import { getForgeProviderForRepository, type ForgeProviderId } from './forge-provider'
 import { hostedReviewSshConnectionId } from './hosted-review-execution-host'
 import { withHostedReviewBranchCache } from './hosted-review-branch-cache'
@@ -112,6 +113,13 @@ export async function getHostedReviewForBranch(
           return null
         }
         const providerOptions = provider.id === 'github' ? resolvedInput : input
+        if (input.userRefresh === true && provider.id === 'gitea') {
+          await forgetGiteaPullRequestReads({
+            repoPath: input.repoPath,
+            executionHostId: input.executionHostId,
+            localGitExecOptions: getHostedReviewLocalGitOptions(input)
+          })
+        }
         return provider.getReviewForBranch({
           repoPath: input.repoPath,
           executionHostId: input.executionHostId,
