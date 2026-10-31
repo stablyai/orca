@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
 import { useAppStore } from '@/store'
-import type { AppState } from '@/store/types'
+import { localWorktreeFetch } from '@/store/slices/local-worktree-fetch.test-fixture'
 import { startQuickChat } from '@/lib/start-quick-chat'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import { toast } from 'sonner'
@@ -124,7 +124,7 @@ it('keeps the Add Project WSL advisory but shows only normal success for the fir
   store.setState({
     settings,
     worktreesByRepo: { [folder.id]: [worktree] },
-    fetchWorktrees: vi.fn<AppState['fetchWorktrees']>().mockReturnValue(Promise.resolve(true))
+    fetchWorktrees: localWorktreeFetch(Promise.resolve(true))
   })
   Object.assign(window.api.repos, {
     ensureQuickChatFolder: async () => ({ path: folder.path, canonicalPath: folder.path })

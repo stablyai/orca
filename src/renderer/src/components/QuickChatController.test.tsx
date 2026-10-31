@@ -10,7 +10,7 @@ import {
 } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import type { AppState } from '@/store/types'
+import { localWorktreeFetch } from '@/store/slices/local-worktree-fetch.test-fixture'
 import {
   STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
@@ -143,7 +143,7 @@ beforeEach(() => {
     settings: settings(),
     worktreesByRepo: { [repo.id]: [worktree] },
     localDetectedAgentIdsByContext: { host: ['codex'] },
-    fetchWorktrees: vi.fn<AppState['fetchWorktrees']>().mockResolvedValue(true)
+    fetchWorktrees: localWorktreeFetch(Promise.resolve(true))
   })
   setLocalRuntimeCapabilitiesForTests([STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY])
 })
@@ -417,7 +417,7 @@ it.each(['add', 'fetch'])(
       })
     } else {
       useAppStore.setState({
-        fetchWorktrees: vi.fn<AppState['fetchWorktrees']>().mockReturnValue(
+        fetchWorktrees: localWorktreeFetch(
           new Promise<boolean>((resolve) => {
             release = () => resolve(true)
           })
@@ -432,7 +432,7 @@ it.each(['add', 'fetch'])(
     })
     expect(mocks.launch).not.toHaveBeenCalled()
     useAppStore.setState({
-      fetchWorktrees: vi.fn<AppState['fetchWorktrees']>().mockResolvedValue(true)
+      fetchWorktrees: localWorktreeFetch(Promise.resolve(true))
     })
     await act(async () => requestQuickChatFromShortcut())
     await waitFor(() => expect(mocks.launch).toHaveBeenCalledOnce())
@@ -689,7 +689,7 @@ it('retires removed in-flight preparation and allows a new identity before the s
   }
   useAppStore.setState({
     addRepoPath,
-    fetchWorktrees: vi.fn<AppState['fetchWorktrees']>().mockReturnValue(
+    fetchWorktrees: localWorktreeFetch(
       new Promise<boolean>((resolve) => {
         release = () => resolve(true)
       })
@@ -700,7 +700,7 @@ it('retires removed in-flight preparation and allows a new identity before the s
   await act(async () => useAppStore.setState({ repos: [], worktreesByRepo: {} }))
   mocks.ensure.mockResolvedValue({ path: repo.path, canonicalPath: repo.path, repoId: fresh.id })
   useAppStore.setState({
-    fetchWorktrees: vi.fn<AppState['fetchWorktrees']>().mockResolvedValue(true)
+    fetchWorktrees: localWorktreeFetch(Promise.resolve(true))
   })
   await act(async () => requestQuickChatFromShortcut())
   expect(mocks.launch).toHaveBeenCalledOnce()
