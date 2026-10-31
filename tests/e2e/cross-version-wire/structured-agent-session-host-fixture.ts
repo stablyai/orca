@@ -112,6 +112,7 @@ export function structuredHostStub(
     }),
     // Completions are edges: late subscribers get no opening snapshot.
     subscribeTurnCompletions: vi.fn(() => () => undefined),
+    publishAttentionRead: vi.fn(),
     unsubscribe: vi.fn(),
     agentDefinitions: vi.fn(() => [CODEX_STRUCTURED_AGENT]),
     knownAgentIds: vi.fn(() => [CODEX_STRUCTURED_AGENT.agent])

@@ -121,7 +121,14 @@ export const TEST_RUNNERS = [
         "include: ['src/main/runtime/push/push-owner-live.test-fixture.ts']"
       ],
       '.github/workflows/push-owner-integration.yml': [
-        'run: pnpm exec vitest run --config config/push-owner-root.vitest.config.mjs'
+        'run: pnpm exec vitest run --config config/push-owner-root.vitest.config.mjs',
+        '- src/main/cli/keyed-promise-queue.ts',
+        '- src/main/lib/unread-response-body.ts',
+        '- src/main/persistence/atomic-snapshot-writer.ts',
+        '- src/main/durable-file-write.ts',
+        '- src/main/codex-accounts/fs-utils.ts',
+        '- src/main/win32-utils.ts',
+        '- mobile/src/terminal/terminal-text-scales.ts'
       ],
       'src/main/runtime/push/push-owner-companions.test-fixture.ts': [
         "return ['cloud', 'mobile'].map(async (role) => {",

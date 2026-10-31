@@ -1,3 +1,4 @@
+import { PushDeviceRegistryStore } from './device-registry-store.js'
 import { afterEach, expect, it, vi } from 'vitest'
 import { DurablePushStore } from './durable-push-store.js'
 import type { PushDatabase } from './push-database.js'
@@ -113,17 +114,31 @@ it('reads changed retry bytes and a later writer update without carrying a parse
   expect(parse.mock.calls.filter(([value]) => value === changedPayload)).toHaveLength(1)
 })
 
-it('parses dismissed alerts once and removes them without returning a delivery', async () => {
+it('parses a covered leased alert once through pre-provider handoff and fenced finish', async () => {
   const { db, store, clock } = await fixture()
+  const devices = new PushDeviceRegistryStore(db, clock)
+  const registered = await devices.upsert({
+    hostFingerprint: 'host',
+    deviceId: 'phone',
+    platform: 'ios',
+    token: 'ab'.repeat(32)
+  })
+  if (!registered.ok) throw new Error('Registration failed')
+  const device = await devices.findById(registered.registrationId)
+  if (!device) throw new Error('Missing registered device')
   const input = notification(1)
-  await store.accept('host', 'phone', input)
+  await store.accept('host', device.registrationId, input)
   await db.query(
     'INSERT INTO push_dismissed_events(host_fingerprint, notification_epoch, notification_id, notification_seq, created_at) VALUES (?, ?, ?, ?, ?)',
     ['host', 'epoch', input.notificationId, 1, clock()]
   )
   const parse = vi.spyOn(JSON, 'parse')
+  const queued = await store.claim()
+  if (!queued) throw new Error('Missing covered lease')
+  expect(await store.admission(queued).acquire(device)).toBe('superseded')
+  await store.finish(queued)
   expect(await store.claim()).toBeNull()
-  expect(await store.pendingCount('phone')).toBe(0)
+  expect(await store.pendingCount(device.registrationId)).toBe(0)
   expect(parse.mock.calls.filter(([value]) => value === JSON.stringify(input))).toHaveLength(1)
 })
 

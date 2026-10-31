@@ -1,8 +1,16 @@
-import { createHash } from 'node:crypto'
-import type { PushNotification } from '@orca-cloud/push-contract'
 import type { PushDatabase } from './push-database.js'
 import type { PushDeviceRegistration } from './device-registry-store.js'
 import type { QueuedPushDelivery } from './durable-push-store.js'
+import {
+  fenceDismissedOccurrences,
+  occurrenceIdentity,
+  occurrenceLock,
+  occurrenceTarget,
+  type OccurrenceIdentity
+} from './push-occurrence-authority.js'
+import { isDismissedAlert } from './push-queued-dismissal.js'
+
+export { pushDestination } from './push-occurrence-authority.js'
 
 export type OccurrenceAdmission = 'admitted' | 'superseded' | 'deferred' | 'skipped'
 export type OccurrenceAdmissionPort = {
@@ -11,56 +19,83 @@ export type OccurrenceAdmissionPort = {
   renew(): Promise<void>
 }
 
-export function pushDestination(device: {
-  platform: string
-  token: string
-  apnsEnvironment?: string
-}): string {
-  return createHash('sha256')
-    .update(JSON.stringify([device.platform, device.apnsEnvironment ?? '', device.token]))
-    .digest('hex')
-}
-
-function claimKey(identity: unknown[]): string {
-  return `push-claim:${JSON.stringify(identity)}`
-}
-
 export function occurrenceAdmission(
   database: PushDatabase,
   queued: QueuedPushDelivery,
   now: () => number
 ): OccurrenceAdmissionPort {
   const { notification: n } = queued
-  let identity: string[] | undefined
+  let identity: OccurrenceIdentity | undefined
   return {
     async acquire(device) {
-      if (!n.origin || !n.occurrence || !device.routeKey) {
-        return 'skipped'
-      }
-      const candidate = [pushDestination(device), n.origin, n.occurrence]
       return database.transaction(async (tx) => {
-        if (!(await tx.tryLockScope(claimKey(candidate)))) {
+        if (!(await tx.tryLockScope(`push-events:${queued.hostFingerprint}`))) {
           return 'deferred'
         }
-        const [declaration] = await tx.query(
-          'SELECT hosts_json FROM push_route_declarations WHERE destination = ? AND route_key = ?',
-          [candidate[0], device.routeKey]
+        const lock = tx.dialect === 'postgres' ? ' FOR UPDATE SKIP LOCKED' : ''
+        const [batch] = await tx.query(
+          `SELECT batch_id FROM push_delivery_batches WHERE batch_id = ? AND host_fingerprint = ?
+          AND registration_id = ? AND lease_token = ? AND state = 'pending' AND lease_until > ? AND expires_at > ?${lock}`,
+          [queued.id, queued.hostFingerprint, queued.registrationId, queued.lease, now(), now()]
         )
-        if (
-          !declaration ||
-          !JSON.parse(String(declaration.hosts_json)).includes(queued.hostFingerprint)
-        ) {
+        if (!batch) {
+          return 'deferred'
+        }
+        if (await isDismissedAlert(tx, queued.hostFingerprint, n)) {
+          return (await fenceDismissedOccurrences(
+            tx,
+            queued.hostFingerprint,
+            queued.registrationId,
+            [{ id: queued.id, notification: n }],
+            now(),
+            true
+          ))
+            ? 'superseded'
+            : 'deferred'
+        }
+        if (!n.origin || !n.occurrence) {
           return 'skipped'
         }
+        const target = await occurrenceTarget(
+          tx,
+          queued.hostFingerprint,
+          queued.registrationId,
+          true
+        )
+        if (!target || target === 'deferred') {
+          return 'deferred'
+        }
+        const actual = target.device
+        if (
+          actual.platform !== device.platform ||
+          actual.token !== device.token ||
+          (actual.apns_environment ?? '') !== (device.apnsEnvironment ?? '') ||
+          (actual.route_key ?? undefined) !== device.routeKey ||
+          actual.dead_at != null ||
+          device.registrationId !== queued.registrationId ||
+          device.hostFingerprint !== queued.hostFingerprint
+        ) {
+          return 'deferred'
+        }
+        if (!device.routeKey || !target.domain) {
+          return 'skipped'
+        }
+        const candidate = occurrenceIdentity(target.domain, n)
+        if (!candidate) {
+          return 'skipped'
+        }
+        if (!(await tx.tryLockScope(occurrenceLock(candidate)))) {
+          return 'deferred'
+        }
         const [row] = await tx.query(
-          'SELECT * FROM push_occurrence_claims WHERE destination = ? AND origin = ? AND occurrence = ?',
+          'SELECT * FROM push_occurrence_domains WHERE destination = ? AND route_key = ? AND origin = ? AND occurrence = ?',
           candidate
         )
-        if (row?.state === 'dismissed') {
+        if (row?.state === 'dismissed' && Number(row.created_at) >= now() - 24 * 60 * 60_000) {
           return 'superseded'
         }
-        if (row && row.winner_route_key === device.routeKey) {
-          if (row.state === 'sent') {
+        if (row) {
+          if (row.state === 'sent' && Number(row.created_at) >= now() - 24 * 60 * 60_000) {
             return 'superseded'
           }
           if (
@@ -72,17 +107,14 @@ export function occurrenceAdmission(
           }
         }
         await tx.query(
-          `INSERT INTO push_occurrence_claims(destination, origin, occurrence, state, batch_id, attempt, winner_host, winner_route_key, lease_until, created_at)
-          VALUES (?, ?, ?, 'inflight', ?, ?, ?, ?, ?, ?) ON CONFLICT(destination, origin, occurrence) DO UPDATE SET state = excluded.state, batch_id = excluded.batch_id, attempt = excluded.attempt, winner_host = excluded.winner_host, winner_route_key = excluded.winner_route_key, lease_until = excluded.lease_until`,
-          [
-            ...candidate,
-            queued.id,
-            queued.lease,
-            queued.hostFingerprint,
-            device.routeKey,
-            now() + 30_000,
-            now()
-          ]
+          `INSERT INTO push_occurrence_domains(destination, route_key, origin, occurrence, state, batch_id, attempt, winner_host, lease_until, created_at)
+          VALUES (?, ?, ?, ?, 'inflight', ?, ?, ?, ?, ?) ON CONFLICT(destination, route_key, origin, occurrence) DO UPDATE SET state = excluded.state, batch_id = excluded.batch_id, attempt = excluded.attempt, winner_host = excluded.winner_host, lease_until = excluded.lease_until, created_at = excluded.created_at`,
+          [...candidate, queued.id, queued.lease, queued.hostFingerprint, now() + 30_000, now()]
+        )
+        await tx.query(
+          `INSERT INTO push_batch_admissions(batch_id, destination, route_key, attempt, expires_at)
+          VALUES (?, ?, ?, ?, ?) ON CONFLICT(batch_id, destination, route_key) DO UPDATE SET attempt = excluded.attempt`,
+          [queued.id, candidate[0], candidate[1], queued.lease, queued.expiresAt]
         )
         identity = candidate
         return 'admitted'
@@ -96,12 +128,12 @@ export function occurrenceAdmission(
       for (let attempt = 0; ; attempt++) {
         try {
           await database.transaction(async (tx) => {
-            await tx.lockScope(claimKey(admittedIdentity))
+            await tx.lockScope(occurrenceLock(admittedIdentity))
             const fence = [...admittedIdentity, queued.id, queued.lease]
             await tx.query(
               sent
-                ? "UPDATE push_occurrence_claims SET state = 'sent' WHERE destination = ? AND origin = ? AND occurrence = ? AND state = 'inflight' AND batch_id = ? AND attempt = ?"
-                : "DELETE FROM push_occurrence_claims WHERE destination = ? AND origin = ? AND occurrence = ? AND state = 'inflight' AND batch_id = ? AND attempt = ?",
+                ? "UPDATE push_occurrence_domains SET state = 'sent' WHERE destination = ? AND route_key = ? AND origin = ? AND occurrence = ? AND state = 'inflight' AND batch_id = ? AND attempt = ?"
+                : "DELETE FROM push_occurrence_domains WHERE destination = ? AND route_key = ? AND origin = ? AND occurrence = ? AND state = 'inflight' AND batch_id = ? AND attempt = ?",
               fence
             )
           })
@@ -120,51 +152,12 @@ export function occurrenceAdmission(
         return
       }
       await database.transaction(async (tx) => {
-        await tx.lockScope(claimKey(admittedIdentity))
+        await tx.lockScope(occurrenceLock(admittedIdentity))
         await tx.query(
-          "UPDATE push_occurrence_claims SET lease_until = ? WHERE destination = ? AND origin = ? AND occurrence = ? AND state = 'inflight' AND batch_id = ? AND attempt = ?",
+          "UPDATE push_occurrence_domains SET lease_until = ? WHERE destination = ? AND route_key = ? AND origin = ? AND occurrence = ? AND state = 'inflight' AND batch_id = ? AND attempt = ?",
           [now() + 30_000, ...admittedIdentity, queued.id, queued.lease]
         )
       })
     }
-  }
-}
-
-export async function fenceDismissedOccurrences(
-  tx: PushDatabase,
-  registrationId: string,
-  notifications: PushNotification[],
-  now: number
-): Promise<void> {
-  if (!notifications.some((notification) => notification.origin && notification.occurrence)) {
-    return
-  }
-  const [device] = await tx.query(
-    'SELECT platform, token, apns_environment FROM push_devices WHERE registration_id = ?',
-    [registrationId]
-  )
-  if (!device) {
-    return
-  }
-  const destination = pushDestination({
-    platform: String(device.platform),
-    token: String(device.token),
-    ...(device.apns_environment ? { apnsEnvironment: String(device.apns_environment) } : {})
-  })
-  const identities = new Map(
-    notifications
-      .filter((n) => n.origin && n.occurrence)
-      .map((n) => {
-        const identity = [destination, n.origin!, n.occurrence!]
-        return [claimKey(identity), identity]
-      })
-  )
-  for (const [key, identity] of [...identities].sort(([a], [b]) => a.localeCompare(b))) {
-    await tx.lockScope(key)
-    await tx.query(
-      `INSERT INTO push_occurrence_claims(destination, origin, occurrence, state, lease_until, created_at) VALUES (?, ?, ?, 'dismissed', 0, ?)
-      ON CONFLICT(destination, origin, occurrence) DO UPDATE SET state = 'dismissed'`,
-      [...identity, now]
-    )
   }
 }

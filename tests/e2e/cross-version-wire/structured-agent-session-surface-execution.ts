@@ -1,5 +1,8 @@
 import { expect, vi } from 'vitest'
-import { AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
+import {
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY
+} from '../../../src/shared/protocol-version'
 import { RuntimeSubscriptionRegistry } from '../../../src/main/runtime/runtime-subscription-registry'
 import { resetStructuredAgentSessionClosesBeforeCreateForTests } from '../../../src/main/runtime/rpc/methods/structured-agent-session-close-before-create'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session-create-capabilities'
@@ -52,13 +55,17 @@ export async function callBuild(
   method: string,
   params: unknown,
   client: RpcClientIdentity,
-  runtime: unknown = runtimeStub()
+  runtime: unknown = runtimeStub(),
+  onReply?: () => void
 ): Promise<RpcReply[]> {
   const replies: RpcReply[] = []
   await build.createDispatcher(runtime).dispatchStreaming(
     { id: `request-${method}`, authToken: 'cross-version-token', method, params },
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the build's RPC dispatcher serializes its own reply; result/error shape is asserted by each surface case.
-    (raw) => replies.push(JSON.parse(raw) as RpcReply),
+    (raw) => {
+      onReply?.()
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this build serializes its own reply; each caller asserts the envelope.
+      replies.push(JSON.parse(raw) as RpcReply)
+    },
     client
   )
   return replies
@@ -72,6 +79,30 @@ export async function expectDeclaredSurfaceExecutes(
 ): Promise<void> {
   const retirement = vi.fn()
   const runtime = runtimeStub({ retireStructuredAttention: retirement })
+  if (build.methodNames.includes('agentSession.acknowledgeAttention')) {
+    const before = hostCalls.publishAttentionRead.mock.calls.length
+    const refused = await callBuild(
+      build,
+      'agentSession.acknowledgeAttention',
+      ATTENTION_READ,
+      {
+        clientKind: 'runtime',
+        clientCapabilities: clientCapabilities.filter(
+          (capability) => capability !== STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+        )
+      },
+      runtime
+    )
+    expect(refused).toMatchObject([
+      {
+        ok: false,
+        error: { message: expect.stringContaining('structured_agent_session_unsupported') }
+      }
+    ])
+    expect(refused).toHaveLength(1)
+    expect(retirement).not.toHaveBeenCalled()
+    expect(hostCalls.publishAttentionRead.mock.calls.length).toBe(before)
+  }
   for (const { method, hostMethod, result, clientCapability } of STRUCTURED_CALLS) {
     const atRestCreate =
       method === 'agentSession.create' &&
@@ -83,12 +114,16 @@ export async function expectDeclaredSurfaceExecutes(
     // Shared host methods need per-call deltas; an earlier call must not satisfy this assertion.
     const before = expectedHostMethod ? hostCalls[expectedHostMethod].mock.calls.length : 0
     const otherBefore = otherCreateMethod ? hostCalls[otherCreateMethod].mock.calls.length : 0
+    const readBefore = retirement.mock.calls.length
+    const publishBefore = hostCalls.publishAttentionRead.mock.calls.length
+    const reply = vi.fn()
     const replies = await callBuild(
       build,
       method,
       paramsFor(method),
       { clientKind: 'runtime', clientCapabilities },
-      runtime
+      runtime,
+      reply
     )
     if (clientCapability && !clientCapabilities.includes(clientCapability)) {
       expect(replies).toMatchObject([
@@ -112,7 +147,24 @@ export async function expectDeclaredSurfaceExecutes(
       expect(hostCalls[otherCreateMethod].mock.calls.length - otherBefore).toBe(0)
     }
     if (method === 'agentSession.acknowledgeAttention') {
-      expect(retirement).toHaveBeenCalledExactlyOnceWith(ATTENTION_READ)
+      expect(retirement.mock.calls.slice(readBefore)).toEqual([[ATTENTION_READ]])
+      expect(hostCalls.publishAttentionRead.mock.calls.slice(publishBefore)).toEqual(
+        build.publishesAttentionReads ? [[ATTENTION_READ]] : []
+      )
+      expect(reply).toHaveBeenCalledTimes(1)
+      const retiredAt = retirement.mock.invocationCallOrder[readBefore]
+      if (retiredAt === undefined) {
+        throw new Error('Acknowledgment did not retire')
+      }
+      expect(reply.mock.invocationCallOrder[0]).toBeGreaterThan(retiredAt)
+      if (build.publishesAttentionReads) {
+        const publishedAt = hostCalls.publishAttentionRead.mock.invocationCallOrder[publishBefore]
+        if (publishedAt === undefined) {
+          throw new Error('Acknowledgment did not publish')
+        }
+        expect(publishedAt).toBeGreaterThan(retiredAt)
+        expect(reply.mock.invocationCallOrder[0]).toBeGreaterThan(publishedAt)
+      }
     }
     for (const reply of replies) {
       expect(

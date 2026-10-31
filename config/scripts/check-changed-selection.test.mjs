@@ -82,7 +82,14 @@ it('selects runner drift verification for each dedicated entry, config and launc
     'config/push-owner-root.vitest.config.mjs',
     'config/push-owner-mobile.vitest.config.mjs',
     'config/push-owner-cloud.vitest.config.mjs',
-    'mobile/vitest.config.ts'
+    'mobile/vitest.config.ts',
+    'src/main/cli/keyed-promise-queue.ts',
+    'src/main/lib/unread-response-body.ts',
+    'src/main/persistence/atomic-snapshot-writer.ts',
+    'src/main/durable-file-write.ts',
+    'src/main/codex-accounts/fs-utils.ts',
+    'src/main/win32-utils.ts',
+    'mobile/src/terminal/terminal-text-scales.ts'
   ]) {
     expect(checkNames([file]), file).toContain('test file runners')
   }

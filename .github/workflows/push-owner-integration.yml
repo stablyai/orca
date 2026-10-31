@@ -11,6 +11,13 @@ on:
       - src/main/notifications/**
       - src/main/ipc/**
       - src/shared/**
+      - src/main/cli/keyed-promise-queue.ts
+      - src/main/lib/unread-response-body.ts
+      - src/main/persistence/atomic-snapshot-writer.ts
+      - src/main/durable-file-write.ts
+      - src/main/codex-accounts/fs-utils.ts
+      - src/main/win32-utils.ts
+      - mobile/src/terminal/terminal-text-scales.ts
       - src/packages/process-host/**
       - cloud/apps/push/**
       - cloud/packages/push-contract/**

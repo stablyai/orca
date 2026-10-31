@@ -21,6 +21,11 @@ const retentionTables = [
     values: "'event', 'phone-' || n, created_at"
   },
   {
+    table: 'push_occurrence_domains',
+    columns: 'destination, route_key, origin, occurrence, state, lease_until, created_at',
+    values: "'destination', 'key-' || n, 'origin', 'occurrence', 'dismissed', 0, created_at"
+  },
+  {
     table: 'push_events',
     columns: 'event_id, host_fingerprint, kind, fingerprint, created_at, expires_at',
     values: "'event-' || n, 'host', 'alert', 'fingerprint', created_at, created_at"

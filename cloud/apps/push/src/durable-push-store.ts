@@ -1,8 +1,13 @@
-import { isDismissedAlert, reconcileQueuedDismissal } from './push-queued-dismissal.js'
+import {
+  reconcileQueuedDismissal,
+  retireCoveredPushBatches,
+  type CoveredPushBatch
+} from './push-queued-dismissal.js'
 import { parsePushDeliveryPayload } from './push-delivery-payload.js'
 import { createHash, randomUUID } from 'node:crypto'
 import { PUSH_LIMITS, type PushNotification } from '@orca-cloud/push-contract'
-import { fenceDismissedOccurrences, occurrenceAdmission } from './push-occurrence-admission.js'
+import { occurrenceAdmission } from './push-occurrence-admission.js'
+import { fenceDismissedOccurrences } from './push-occurrence-authority.js'
 import { WORKER_DRAINS } from './push-worker-concurrency.js'
 import type { PushDatabase, SqlRow } from './push-database.js'
 import { limitPushDatabaseConcurrency } from './push-background-database.js'
@@ -89,11 +94,18 @@ export class DurablePushStore {
         [eventId, registrationId]
       )
       if (recipient) return 'queued'
-      const fences: PushNotification[] = []
-      if (await reconcileQueuedDismissal(tx, host, registrationId, notification, now, fences)) {
-        await fenceDismissedOccurrences(tx, registrationId, fences, now)
-        return 'queued'
-      }
+      const fences: CoveredPushBatch[] = []
+      const covered = await reconcileQueuedDismissal(
+        tx,
+        host,
+        registrationId,
+        notification,
+        now,
+        fences
+      )
+      await fenceDismissedOccurrences(tx, host, registrationId, fences, now)
+      await retireCoveredPushBatches(tx, fences, now)
+      if (covered) return 'queued'
       await tx.query(
         `INSERT INTO push_delivery_batches(batch_id, host_fingerprint, registration_id, kind, payload_json, state, due_at, expires_at, lease_until, attempts, created_at)
         VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, 0, 0, ?)`,
@@ -112,7 +124,6 @@ export class DurablePushStore {
         'INSERT INTO push_event_recipients(event_id, registration_id, created_at) VALUES (?, ?, ?)',
         [eventId, registrationId, now]
       )
-      await fenceDismissedOccurrences(tx, registrationId, fences, now)
       return 'queued'
     })
   }
@@ -162,10 +173,6 @@ export class DurablePushStore {
     now: number
   ): Promise<QueuedPushDelivery | null> {
     const notification = parsePushDeliveryPayload(String(row.payload_json))
-    if (await isDismissedAlert(tx, String(row.host_fingerprint), notification)) {
-      await tx.query('DELETE FROM push_delivery_batches WHERE batch_id = ?', [row.batch_id])
-      return null
-    }
     const lease = randomUUID()
     await tx.query(
       'UPDATE push_delivery_batches SET lease_token = ?, lease_until = ?, attempts = attempts + 1 WHERE batch_id = ?',
@@ -199,10 +206,14 @@ export class DurablePushStore {
     const now = this.now()
     const retryAt = retryAfterMs === undefined ? Infinity : now + Math.max(1000, retryAfterMs)
     if (retryAt >= delivery.expiresAt) {
-      await this.background.query(
-        "DELETE FROM push_delivery_batches WHERE batch_id = ? AND lease_token = ? AND state = 'pending'",
-        [delivery.id, delivery.lease]
-      )
+      await this.background.transaction(async (tx) => {
+        const removed = await tx.query(
+          "DELETE FROM push_delivery_batches WHERE batch_id = ? AND lease_token = ? AND state = 'pending' RETURNING batch_id",
+          [delivery.id, delivery.lease]
+        )
+        if (removed.length)
+          await tx.query('DELETE FROM push_batch_admissions WHERE batch_id = ?', [delivery.id])
+      })
       return
     }
     await this.background.query(
@@ -246,18 +257,28 @@ export class DurablePushStore {
       ['push_dismissed_events', 'host_fingerprint, notification_epoch, notification_id'],
       ['push_event_recipients', 'event_id, registration_id'],
       ['push_events', 'event_id'],
-      ['push_occurrence_claims', 'destination, origin, occurrence']
+      ['push_occurrence_domains', 'destination, route_key, origin, occurrence']
     ] as const) {
       const sweep = await this.deleteInBatches(
         table,
         key,
-        'created_at < ?',
-        [now - RETENTION_MS],
+        table === 'push_occurrence_domains'
+          ? "created_at < ? AND (state <> 'inflight' OR lease_until <= ?) AND NOT EXISTS (SELECT 1 FROM push_batch_admissions a JOIN push_delivery_batches b ON b.batch_id = a.batch_id WHERE a.batch_id = push_occurrence_domains.batch_id AND b.state = 'pending' AND b.expires_at > ?)"
+          : 'created_at < ?',
+        table === 'push_occurrence_domains' ? [now - RETENTION_MS, now, now] : [now - RETENTION_MS],
         'created_at'
       )
       deleted += sweep.deleted
       saturated ||= sweep.saturated
     }
+    const orphans = await this.deleteInBatches(
+      'push_batch_admissions',
+      'batch_id, destination, route_key',
+      'expires_at <= ? AND NOT EXISTS (SELECT 1 FROM push_delivery_batches b WHERE b.batch_id = push_batch_admissions.batch_id)',
+      [now]
+    )
+    deleted += orphans.deleted
+    saturated ||= orphans.saturated
     const routes = await this.deleteInBatches(
       'push_route_declarations',
       'destination, route_key',

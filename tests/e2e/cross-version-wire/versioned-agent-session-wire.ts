@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises'
+import { resolve } from 'node:path'
 import type * as ClientReducer from '../../../src/shared/structured-agent-session-reducer'
 import type * as ClientProjection from '../../../src/shared/structured-agent-session-projection'
 import type * as ClientSchemas from '../../../src/shared/agent-session-journal-schemas'
@@ -56,6 +58,7 @@ export type AgentSessionWireBuild = {
   label: string
   /** `working-tree` for current code, otherwise the resolved release commit. */
   revision: string
+  publishesAttentionReads: boolean
   /** Capability strings this build defines. A peer cannot advertise — nor a client
    *  ask for — a string its own source never names. */
   capabilities: readonly string[]
@@ -161,6 +164,27 @@ function capabilityStrings(module: Record<string, unknown>): readonly string[] {
   return declared as readonly string[]
 }
 
+async function publishesAttentionReads(root: string): Promise<boolean> {
+  try {
+    const source = await readFile(
+      resolve(
+        root,
+        'src/main/runtime/rpc/methods/structured-agent-session-turn-completion-stream.ts'
+      ),
+      'utf8'
+    )
+    const acknowledgment = source
+      .split("name: 'agentSession.acknowledgeAttention'")[1]
+      ?.split('defineStreamingMethod')[0]
+    return Boolean(acknowledgment && /\.publishAttentionRead\s*\(/.test(acknowledgment))
+  } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+      return false
+    }
+    throw error
+  }
+}
+
 async function loadWorkingTreeBuild(): Promise<AgentSessionWireBuild> {
   const [protocol, dispatcher, methodRegistry] = await Promise.all([
     import('../../../src/shared/protocol-version'),
@@ -172,6 +196,9 @@ async function loadWorkingTreeBuild(): Promise<AgentSessionWireBuild> {
   return {
     label: WORKING_TREE,
     revision: WORKING_TREE,
+    publishesAttentionReads: await publishesAttentionReads(
+      resolve(import.meta.dirname, '../../..')
+    ),
     capabilities: capabilityStrings(protocol as unknown as Record<string, unknown>),
     protocolVersion: protocol.RUNTIME_PROTOCOL_VERSION,
     methodNames: registeredMethodNames(methods),
@@ -214,6 +241,7 @@ async function loadReleaseBuild(checkout: ReleaseCheckout): Promise<AgentSession
   return {
     label: checkout.ref,
     revision: checkout.commit,
+    publishesAttentionReads: await publishesAttentionReads(checkout.root),
     capabilities: capabilityStrings(protocol),
     protocolVersion: protocol.RUNTIME_PROTOCOL_VERSION as number,
     methodNames: registeredMethodNames(methods),

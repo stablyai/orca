@@ -105,9 +105,6 @@ describe('occurrence admission', () => {
     'waits for Postgres contention before committing %s without resending',
     async (outcome) => {
       const f = await setup()
-      if (outcome === 'dismissed') {
-        await f.store.defer(f.first)
-      }
       let attempted!: () => void
       const atAttempt = new Promise<void>((resolve) => (attempted = resolve))
       const contended = new DurablePushStore(
@@ -127,14 +124,17 @@ describe('occurrence admission', () => {
         f.clock
       )
       const admission = contended.admission(f.first)
-      await admission.acquire(f.device(f.first))
+      expect(await admission.acquire(f.device(f.first))).toBe('admitted')
+      if (outcome === 'dismissed') {
+        await f.store.defer(f.first)
+      }
       let releaseAgain!: () => void
       const blockedAgain = new Promise<void>((resolve) => (releaseAgain = resolve))
       let heldAgain!: () => void
       const atHeldAgain = new Promise<void>((resolve) => (heldAgain = resolve))
       const blocker = f.db.transaction(async (tx) => {
         await tx.lockScope(
-          `push-claim:${JSON.stringify([pushDestination(f.device(f.first)), origin, occurrence])}`
+          `push-claim:${JSON.stringify([pushDestination(f.device(f.first)), f.device(f.first).routeKey, origin, occurrence])}`
         )
         heldAgain()
         await blockedAgain
@@ -152,7 +152,7 @@ describe('occurrence admission', () => {
       try {
         await atAttempt
         expect(
-          required((await f.db.query('SELECT state FROM push_occurrence_claims'))[0]).state
+          required((await f.db.query('SELECT state FROM push_occurrence_domains'))[0]).state
         ).toBe('inflight')
       } finally {
         releaseAgain()
@@ -160,7 +160,7 @@ describe('occurrence admission', () => {
       }
       await completed
       expect(
-        required((await f.db.query('SELECT state FROM push_occurrence_claims'))[0]).state
+        required((await f.db.query('SELECT state FROM push_occurrence_domains'))[0]).state
       ).toBe(outcome)
       if (outcome === 'dismissed') {
         expect(
@@ -178,22 +178,21 @@ describe('occurrence admission', () => {
     const stale = f.store.admission(f.first)
     expect(await stale.acquire(f.device(f.first))).toBe('admitted')
     f.advance(30_001)
-    const successor = f.store.admission({ ...f.first, lease: 'successor' })
-    const peer = f.store.admission(f.second)
+    const reclaimed = [required(await f.store.claim()), required(await f.store.claim())]
+    const successor = f.store.admission(required(reclaimed[0]))
+    const peer = f.store.admission(required(reclaimed[1]))
     const results = await Promise.all([
-      successor.acquire(f.device(f.first)),
-      peer.acquire(f.device(f.second))
+      successor.acquire(f.device(required(reclaimed[0]))),
+      peer.acquire(f.device(required(reclaimed[1])))
     ])
     expect(results.filter((result) => result === 'admitted')).toHaveLength(1)
     await stale.finalize(false)
-    const [maybeRow] = await f.db.query('SELECT * FROM push_occurrence_claims')
-    const row = required(maybeRow)
+    const row = required((await f.db.query('SELECT * FROM push_occurrence_domains'))[0])
     expect(row.attempt).not.toBe(f.first.lease)
-    const admitted = results[0] === 'admitted' ? successor : peer
+    const index = results[0] === 'admitted' ? 0 : 1
+    const admitted = index === 0 ? successor : peer
     await admitted.finalize(true)
-    expect(
-      await admitted.acquire(results[0] === 'admitted' ? f.device(f.first) : f.device(f.second))
-    ).toBe('superseded')
+    expect(await admitted.acquire(f.device(required(reclaimed[index])))).toBe('superseded')
   })
 
   it('keeps an in-flight dismissal monotonic when the provider then fails', async () => {
@@ -209,7 +208,7 @@ describe('occurrence admission', () => {
     await winner.finalize(false)
     expect(await f.store.admission(f.second).acquire(f.device(f.second))).toBe('superseded')
     await f.store.accept(A, f.a.registrationId, { ...f.alert, notificationSeq: 1 })
-    expect(required((await f.db.query('SELECT state FROM push_occurrence_claims'))[0]).state).toBe(
+    expect(required((await f.db.query('SELECT state FROM push_occurrence_domains'))[0]).state).toBe(
       'dismissed'
     )
   })
@@ -233,11 +232,49 @@ describe('occurrence admission', () => {
 
   it('does not let a foreign route-key receipt suppress the phone', async () => {
     const f = await setup()
+    const foreignKey = nacl.sign.keyPair()
+    const foreign = Buffer.from(foreignKey.publicKey).toString('base64url')
+    const initial = f.device(f.first)
+    await f.devices.upsert({ ...initial, deviceId: 'phone', routeKey: foreign })
+    const body = {
+      action: 'replace' as const,
+      expectedVersion: null,
+      v: 1 as const,
+      platform: 'ios' as const,
+      token: initial.token,
+      apnsEnvironment: 'production' as const,
+      routeKey: foreign,
+      version: 1,
+      hosts: [initial.hostFingerprint]
+    }
+    expect(
+      (
+        await declarePushRoutes(
+          f.db,
+          {
+            ...body,
+            signature: Buffer.from(
+              nacl.sign.detached(
+                Buffer.from(pushRouteDeclarationContent(body)),
+                foreignKey.secretKey
+              )
+            ).toString('base64url')
+          },
+          f.clock()
+        )
+      ).status
+    ).toBe(200)
     const admitted = f.store.admission(f.first)
-    await admitted.acquire(f.device(f.first))
+    expect(await admitted.acquire(required(await f.devices.findById(initial.registrationId)))).toBe(
+      'admitted'
+    )
     await admitted.finalize(true)
-    await f.db.query('UPDATE push_occurrence_claims SET winner_route_key = ?', ['foreign'])
     expect(await f.store.admission(f.second).acquire(f.device(f.second))).toBe('admitted')
+    expect(
+      (await f.db.query('SELECT route_key FROM push_occurrence_domains'))
+        .map((row) => row.route_key)
+        .sort()
+    ).toEqual([initial.routeKey, foreign].sort())
   })
 
   it.each([
@@ -288,7 +325,7 @@ describe('occurrence admission', () => {
         expect(await f.store.pendingCount(f.a.registrationId)).toBe(0)
         expect(await f.store.pendingCount(f.b.registrationId)).toBe(0)
         expect(
-          required((await f.db.query('SELECT state FROM push_occurrence_claims'))[0]).state
+          required((await f.db.query('SELECT state FROM push_occurrence_domains'))[0]).state
         ).toBe('sent')
       } finally {
         await worker.stop()
@@ -346,6 +383,7 @@ describe('occurrence admission', () => {
           await within(park.promise, 5000)
           park = Promise.withResolvers<void>()
           expect(defer).toHaveBeenCalledTimes(wait + 1)
+          expect(await f.db.query('SELECT batch_id FROM push_batch_admissions')).toHaveLength(1)
         }
         expect(requests).toHaveLength(1)
         expect(onRetry).not.toHaveBeenCalled()
@@ -379,7 +417,7 @@ describe('occurrence admission', () => {
         expect(await f.store.pendingCount(f.a.registrationId)).toBe(0)
         expect(await f.store.pendingCount(f.b.registrationId)).toBe(0)
         expect(
-          required((await f.db.query('SELECT state FROM push_occurrence_claims'))[0]).state
+          required((await f.db.query('SELECT state FROM push_occurrence_domains'))[0]).state
         ).toBe('sent')
       } finally {
         release()
@@ -405,7 +443,7 @@ describe('occurrence admission', () => {
               ...tx,
               query: async (sql, params) => {
                 if (
-                  sql.startsWith("UPDATE push_occurrence_claims SET state = 'sent'") &&
+                  sql.startsWith("UPDATE push_occurrence_domains SET state = 'sent'") &&
                   failures++ < 2
                 ) {
                   throw new Error('database temporarily unavailable')
@@ -429,7 +467,7 @@ describe('occurrence admission', () => {
       expect(failures).toBe(3)
       expect(await store.pendingCount(f.first.registrationId)).toBe(0)
       expect(
-        required((await f.db.query('SELECT state FROM push_occurrence_claims'))[0]).state
+        required((await f.db.query('SELECT state FROM push_occurrence_domains'))[0]).state
       ).toBe('sent')
     } finally {
       await worker.stop()
@@ -443,6 +481,7 @@ describe('occurrence admission', () => {
       await f.store.finish(f.first)
       await f.store.finish(f.second)
       let queries = 0
+      let admissions = 0
       const store = new DurablePushStore(
         {
           ...f.db,
@@ -456,6 +495,9 @@ describe('occurrence admission', () => {
                 ...tx,
                 query: (sql, params) => {
                   queries++
+                  if (sql.startsWith('INSERT INTO push_batch_admissions')) {
+                    admissions++
+                  }
                   return tx.query(sql, params)
                 }
               })
@@ -483,6 +525,8 @@ describe('occurrence admission', () => {
         }
         samples.push({ count, queries, providers: transport.mock.calls.length })
         expect(transport).toHaveBeenCalledTimes(count)
+        expect(admissions).toBe(count)
+        expect(await f.db.query('SELECT * FROM push_batch_admissions')).toEqual([])
         expect(await store.pendingCount(f.a.registrationId)).toBe(0)
       } finally {
         await worker.stop()

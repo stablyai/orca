@@ -134,7 +134,14 @@ export const VERIFY_CHECKS = [
       'mobile/src/notifications/push-owner-live.test-fixture.ts',
       'cloud/apps/push/src/push-owner-live.test-fixture.ts',
       'src/main/runtime/push/push-owner-companions.test-fixture.ts',
-      '.github/workflows/push-owner-integration.yml'
+      '.github/workflows/push-owner-integration.yml',
+      'src/main/cli/keyed-promise-queue.ts',
+      'src/main/lib/unread-response-body.ts',
+      'src/main/persistence/atomic-snapshot-writer.ts',
+      'src/main/durable-file-write.ts',
+      'src/main/codex-accounts/fs-utils.ts',
+      'src/main/win32-utils.ts',
+      'mobile/src/terminal/terminal-text-scales.ts'
     ],
     matches: (files) =>
       files.some((file) => TEST_FILE.test(file) || /vitest[^/]*\.config/.test(file))
