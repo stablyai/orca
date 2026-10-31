@@ -702,6 +702,11 @@ body[data-modal-overlay-open]
     -moz-osx-font-smoothing: grayscale;
   }
 
+  /* macOS opt-in: native smoothing draws heavier code glyphs than the app-wide grayscale. */
+  :root[data-code-font-smoothing] :is(.xterm, .monaco-editor, .editor-typography-surface) {
+    -webkit-font-smoothing: auto;
+  }
+
   ul {
     list-style: none;
   }

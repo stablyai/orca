@@ -339,7 +339,10 @@ export function NumberField({
     const trimmed = draft.trim()
     if (trimmed === '') {
       if (onClear) {
-        onClear()
+        // Re-blurring an already-empty field must not write the setting again.
+        if (value !== undefined) {
+          onClear()
+        }
         return
       }
       // Empty input resets rather than committing zero.

@@ -1,5 +1,7 @@
 import { useEffect } from 'react'
 import { buildAppFontFamily } from '@/lib/app-font-family'
+import { applyCodeFontSmoothing } from '@/lib/code-font-smoothing'
+import { rebuildAllTerminalWebglRenderers } from '@/lib/pane-manager/pane-manager-registry'
 import { applyDocumentTheme, applyPluginAppTheme } from '../lib/document-theme'
 import { derivePluginMonacoTheme } from '../lib/plugin-monaco-theme'
 import { browserColorProbe } from '../lib/plugin-theme-tokens'
@@ -30,6 +32,7 @@ export function useDocumentAppearance(): void {
   usePluginTerminalPaletteRefresh()
   usePluginAppThemeSync()
   const appFontFamily = useAppStore((s) => s.settings?.appFontFamily)
+  const codeFontSmoothing = useAppStore((s) => s.settings?.codeFontSmoothing)
   usePluginIconThemeActivation(useAppStore((s) => s.settings?.pluginIconTheme))
 
   // Why `dark` too: a system theme repaints when the OS flips, before the slot paint below.
@@ -69,4 +72,11 @@ export function useDocumentAppearance(): void {
       buildAppFontFamily(appFontFamily)
     )
   }, [appFontFamily])
+
+  useEffect(() => {
+    // WebGL glyph atlases keep the smoothing they were created with; rebuild only on a real change.
+    if (applyCodeFontSmoothing(codeFontSmoothing)) {
+      rebuildAllTerminalWebglRenderers('code-font-smoothing')
+    }
+  }, [codeFontSmoothing])
 }
