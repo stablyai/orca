@@ -116,4 +116,53 @@ describe('ClaudeRuntimeAuthService', () => {
     await Promise.all([first, second])
     expect(order).toEqual(['host', 'first guests', 'host'])
   })
+
+  it('prepares the settings-selected account for a quota fetch, not the router snapshot', async () => {
+    const accountUsagePreparation = vi.fn(() => ({
+      configDir: '/data/orca/claude-accounts/a1',
+      envPatch: { CLAUDE_CONFIG_DIR: '/data/orca/claude-accounts/a1' },
+      provenance: 'profile:a1'
+    }))
+    const preparation = vi.fn(() => ({
+      configDir: '/host/.claude',
+      envPatch: {},
+      provenance: 'system'
+    }))
+    Object.assign(fakes.host, { accountUsagePreparation, preparation })
+    const auth = service('darwin', {
+      claudeManagedAccounts: [
+        {
+          id: 'a1',
+          email: 'a1@example.com',
+          managedAuthRuntime: 'host',
+          managedAuthPath: '/data/orca/claude-accounts/a1',
+          wslDistro: null,
+          authMethod: 'unknown',
+          organizationUuid: null,
+          organizationName: null,
+          createdAt: 0,
+          updatedAt: 0,
+          lastAuthenticatedAt: 0
+        }
+      ],
+      activeClaudeManagedAccountId: 'a1'
+    })
+    await expect(auth.prepareForRateLimitFetch()).resolves.toMatchObject({
+      provenance: 'profile:a1'
+    })
+    expect(accountUsagePreparation).toHaveBeenCalledWith('a1')
+    expect(preparation).not.toHaveBeenCalled()
+  })
+
+  it('keeps the router preparation when no account is selected', async () => {
+    const accountUsagePreparation = vi.fn()
+    const preparation = vi.fn(() => ({ configDir: '/host/.claude', provenance: 'system' }))
+    Object.assign(fakes.host, { accountUsagePreparation, preparation })
+    const auth = service('darwin')
+    await expect(auth.prepareForRateLimitFetch()).resolves.toMatchObject({
+      configDir: '/host/.claude'
+    })
+    expect(preparation).toHaveBeenCalledWith()
+    expect(accountUsagePreparation).not.toHaveBeenCalled()
+  })
 })
