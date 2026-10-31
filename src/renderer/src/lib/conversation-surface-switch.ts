@@ -229,11 +229,16 @@ async function switchRequest(
   abandonFocus?: () => void
 }> {
   const invocationId = createBrowserUuid()
-  if (args.direction === 'chat' && args.source) {
-    const captured = await deadline.wait(captureSourceTerminal(args.source))
-    if (!captured) {
-      throw new Error('source unavailable')
-    }
+  const captured =
+    args.direction === 'chat' && args.source
+      ? await deadline.wait(captureSourceTerminal(args.source))
+      : null
+  // A pane that can't be captured (a paired host's pane a failed switch stopped has lost its
+  // binding) still lets History open the conversation as a chat beside it, as before the switch.
+  if (args.direction === 'chat' && args.source && !captured && !args.history) {
+    throw new Error('source unavailable')
+  }
+  if (args.direction === 'chat' && args.source && captured) {
     const intent = createStructuredAgentSessionLaunchIntent(
       args.workspaceId,
       await deadline.wait(

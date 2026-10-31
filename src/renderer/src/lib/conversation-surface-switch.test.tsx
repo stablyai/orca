@@ -7,6 +7,7 @@ import type * as SessionOwner from '@/runtime/structured-agent-session-owner'
 import { useAppStore } from '@/store'
 import { runConversationSwitch } from './conversation-surface-switch'
 import { pendingNativeChatCliSwitches } from './pending-conversation-surface-switches'
+import { makeTabSessionHistoryRow } from '@/components/tab-bar/tab-session-history-test-fixture'
 const mocks = vi.hoisted(() => {
   function makeTarget(): { current: RuntimeClientTarget } {
     return { current: { kind: 'local' } }
@@ -314,3 +315,27 @@ it.each([
     expect(mocks.error).toHaveBeenCalledExactlyOnceWith(text)
   }
 )
+
+it('opens the conversation from History beside a stopped paired pane it can no longer capture', async () => {
+  // A failed switch stopped the pane on a paired host; its binding is gone, so it can't be captured.
+  mocks.target.current = { kind: 'environment', environmentId: 'paired' }
+  mocks.capture.mockResolvedValue(null)
+  mocks.prepare.mockResolvedValue({ sessionId: 'codex-session' })
+  mocks.call.mockResolvedValue({ status: 'completed', sessionId: 'chat' })
+  const history = makeTabSessionHistoryRow({ agent: 'codex', sessionId: 'codex-session' })
+  await expect(
+    runConversationSwitch({ direction: 'chat', ...fromPane, source: fromPane, history })
+  ).resolves.toBe(true)
+  expect(mocks.prepare).toHaveBeenCalledWith(history)
+  const [, method, params] = mocks.call.mock.calls[0]!
+  expect(method).toBe('agentSession.switchToChat')
+  expect(params.execution).toMatchObject({ create: expect.any(Object) })
+  expect(params.execution).not.toHaveProperty('source')
+  expect(mocks.error).not.toHaveBeenCalled()
+  // Without History's conversation, the pane's own controls still say it can't switch.
+  mocks.call.mockClear()
+  await expect(
+    runConversationSwitch({ direction: 'chat', ...fromPane, source: fromPane })
+  ).resolves.toBe(false)
+  expect(mocks.call).not.toHaveBeenCalled()
+})
