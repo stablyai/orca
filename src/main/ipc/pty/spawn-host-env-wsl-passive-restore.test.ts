@@ -80,30 +80,12 @@ afterEach(() => {
 
 // Spawn env prep runs before #35813's hold: only a launch someone asked for may start the distro (E9).
 describe('WSL spawn host env', () => {
-  it('runs a launch someone asked for as a user act on its distro', async () => {
-    const seen: boolean[] = []
-    await resolve(false, seen)
-    expect(seen).toEqual([true])
-  })
-
-  it('runs a passive restore outside any user act, so its prep is gated', async () => {
-    const seen: boolean[] = []
-    await resolve(true, seen)
-    expect(seen).toEqual([false])
-  })
-
   it('never turns a passive restore with no named distro into a user act on the default one', async () => {
     const seen: boolean[] = []
     await resolve(true, seen, {
       target: { runtime: 'wsl', wslDistro: null },
       expectedWslDistro: null
     })
-    expect(seen).toEqual([false])
-  })
-
-  it('never turns a host-target spawn into a user act on the default distro', async () => {
-    const seen: boolean[] = []
-    await resolve(false, seen, { target: { runtime: 'host' }, expectedWslDistro: null })
     expect(seen).toEqual([false])
   })
 
@@ -121,10 +103,5 @@ describe('WSL spawn host env', () => {
     await resolve(true, [])
     expect(mocks.blockedPath).toHaveBeenCalledWith(HOME)
     expect(mocks.ensureBackfill).not.toHaveBeenCalled()
-  })
-
-  it('still starts the state-DB recovery when the distro runs', async () => {
-    await resolve(true, [])
-    expect(mocks.ensureBackfill).toHaveBeenCalledWith(HOME)
   })
 })

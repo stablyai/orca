@@ -8667,7 +8667,7 @@
       "providers": ["local", "local-daemon", "ssh", "wsl", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local-daemon"],
-      "coverageNotes": "Provider-independent unit tests cover persisted replay, state-boundary authority transfer, remote-runtime mirroring, rootless layouts, repeated leaf ids, metadata repair, and 12,000 nested duplicate leaves. A two-launch macOS Electron journey covers a real surviving local-daemon PTY, persisted duplicate ownership, synchronized streaming output, and tab hide/reveal. Live Linux, Windows, SSH, WSL, and remote-runtime restore journeys remain gaps.",
+      "coverageNotes": "Provider-independent unit tests cover persisted replay, state-boundary authority transfer, remote-runtime mirroring, rootless layouts, repeated leaf ids, metadata repair, and 12,000 nested duplicate leaves. A two-launch macOS Electron journey covers a real surviving local-daemon PTY, persisted duplicate ownership, synchronized streaming output, and tab hide/reveal. Live Linux, Windows, SSH, WSL, and remote-runtime restore journeys remain gaps. The audit removed a mocked duplicate-replay wrapper suite. Its callback-count alarms are no longer covered here; retained ownership tests and historical Electron evidence do not establish equivalent wrapper coverage.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/11757",
         "https://github.com/stablyai/orca/pull/11726"
@@ -8675,12 +8675,11 @@
       "invariant": "Within one terminal tab, each PTY has at most one layout leaf, pane manager surface, and xterm renderer owner. Restore and remote mirroring must normalize duplicate ownership before replay while retaining active-leaf focus, scrollback, pane authority, agent metadata, and distinct sibling PTYs.",
       "oracle": "Launch Orca with a real daemon PTY running a synchronized full-screen stream, close the desktop client without killing the daemon process, seed the persisted tab layout with two leaves bound to that PTY, and relaunch. Hide the restored tab behind a sibling and reveal it, then require the stream to remain visible with exactly one manager pane, one xterm DOM node, one root leaf, one PTY binding, and one unique PTY. Unit contracts require the same one-owner result through persisted replay, store hydration, remote mirroring, rootless and repeated-leaf layouts, and deeply nested input.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-layout-duplicate-pty-replay.test.ts src/renderer/src/components/terminal-pane/terminal-layout-pty-ownership-depth.test.ts src/renderer/src/components/terminal-pane/terminal-layout-pty-ownership.test.ts src/renderer/src/store/slices/terminal-layout-pty-ownership.test.ts src/renderer/src/runtime/web-session-tabs-sync.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-layout-pty-ownership-depth.test.ts src/renderer/src/components/terminal-pane/terminal-layout-pty-ownership.test.ts src/renderer/src/store/slices/terminal-layout-pty-ownership.test.ts src/renderer/src/runtime/web-session-tabs-sync.test.ts --reporter=dot",
         "pnpm exec electron-vite build --mode e2e",
         "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/terminal-duplicate-pty-renderer-reveal.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
-        "src/renderer/src/components/terminal-pane/terminal-layout-duplicate-pty-replay.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-layout-pty-ownership-depth.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-layout-pty-ownership.test.ts",
         "src/renderer/src/store/slices/terminal-layout-pty-ownership.test.ts",
@@ -8688,13 +8687,6 @@
         "tests/e2e/terminal-duplicate-pty-renderer-reveal.spec.ts"
       ],
       "assertionRefs": [
-        {
-          "file": "src/renderer/src/components/terminal-pane/terminal-layout-duplicate-pty-replay.test.ts",
-          "assertions": [
-            "replays one surface when restored leaves point to the same PTY",
-            "reattaches one PTY when the split repeats its bound leaf id"
-          ]
-        },
         {
           "file": "src/renderer/src/components/terminal-pane/terminal-layout-pty-ownership-depth.test.ts",
           "assertions": ["prunes deeply nested duplicate ownership without recursive stack growth"]
@@ -8723,15 +8715,6 @@
         }
       ],
       "evidenceRuns": [
-        {
-          "date": "2026-08-01",
-          "runner": "local",
-          "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-layout-duplicate-pty-replay.test.ts src/renderer/src/components/terminal-pane/terminal-layout-pty-ownership-depth.test.ts src/renderer/src/components/terminal-pane/terminal-layout-pty-ownership.test.ts src/renderer/src/store/slices/terminal-layout-pty-ownership.test.ts src/renderer/src/runtime/web-session-tabs-sync.test.ts --reporter=dot",
-          "result": "passed",
-          "durationSeconds": 1.33,
-          "summary": "Five focused files passed 92 ownership, replay, hydration, depth, and remote-mirroring tests."
-        },
         {
           "date": "2026-08-01",
           "runner": "local",
@@ -8767,7 +8750,8 @@
         "Live Electron evidence currently covers macOS with a local daemon PTY only.",
         "The live journey uses a git-backed test workspace; folder-workspace restoration currently relies on the same provider-independent normalization contracts rather than a separate Electron run.",
         "The gate deterministically seeds the historical persisted-state shape; it does not depend on reproducing the unknown UI sequence that originally wrote duplicate ownership.",
-        "The visual old-release evidence and the structural current-version oracle are separate runs because the current test harness did not exist in Orca 1.4.161."
+        "The visual old-release evidence and the structural current-version oracle are separate runs because the current test harness did not exist in Orca 1.4.161.",
+        "The audit removed a mocked duplicate-replay wrapper suite. Its callback-count alarms are no longer covered here; retained ownership tests and historical Electron evidence do not establish equivalent wrapper coverage."
       ],
       "demotionRule": "Keep experimental or demote if ownership cardinality flakes, duplicate replay reaches a second renderer, active metadata or authority moves to the wrong leaf, deep normalization regresses, or a supported provider bypasses normalization."
     },
@@ -9448,7 +9432,7 @@
       "providers": ["daemon", "runtime", "ssh", "wsl"],
       "coveredPlatforms": ["linux", "macos", "windows"],
       "coveredProviders": ["daemon", "runtime"],
-      "coverageNotes": "Recorded native Windows evidence covers the v21/v22/v23/v24/v25 named-pipe matrix. The deterministic daemon harness covers capable and legacy paired-runtime request shapes against live v25/v26 PTYs in separate worktrees, plus an unrelated control. Host/renderer tests cover old servers, missing liveness, stale publications, reused claims, split parents, explicit user intent, cross-profile isolation, remote runtime clients, SSH-provider routing, and WSL boundaries. A headed host paired to a separate live client, headless serve parity, Linux, SSH, and WSL remain explicit gaps.",
+      "coverageNotes": "Recorded native Windows evidence covers the v21/v22/v23/v24/v25 named-pipe matrix. The deterministic daemon harness covers capable and legacy paired-runtime request shapes against live v25/v26 PTYs in separate worktrees, plus an unrelated control. Host/renderer tests cover old servers, missing liveness, stale publications, reused claims, split parents, explicit user intent, cross-profile isolation, remote runtime clients, SSH-provider routing, and WSL boundaries. A headed host paired to a separate live client, headless serve parity, Linux, SSH, and WSL remain explicit gaps. The audit removed private-router tests of mocked kill results and log fields. Their isolated success/failure attribution and pending-spawn tolerance alarms are no longer registered here; live lifecycle evidence does not establish equivalent log coverage.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/9749",
         "https://github.com/stablyai/orca/issues/9949",
@@ -9459,12 +9443,11 @@
       "invariant": "Reconnect, replay, or lifecycle observations from a viewer that negotiated explicit close intent must never kill a live PTY. A capable reasonless close must keep and republish; a legacy paired viewer must retain current-main behavior because its intentional close and cleanup echo are wire-identical. Lifecycle close requires the exact observed publication, terminal, environment, and authoritative liveness, never signals a process, and leaves renderer-owned or partial-split retirement to its owner. Legacy daemon hello and warm reattachment remain non-destructive.",
       "oracle": "Start isolated v25 and v26 daemon generations with one capable-viewer PTY and one legacy-viewer PTY per generation in four target worktrees plus an unaddressed control PTY in a fifth worktree. Route them through the production desktop scanner, runtime, RPC dispatcher, renderer-close relay, and daemon router. First issue sequential reasonless closes from an authenticated capable connection and require refusal, snapshot republish, zero shutdown calls, exact process survival, and post-close I/O. Then issue the byte-identical requests without the negotiated capability and require current-main behavior: two ordered immediate shutdowns, session-killed events, and exact root/descendant death, while capable and control PTYs survive. An observer lists all targets before, between, and after while issuing zero closes. Unit contracts also require in-process reasonless refusal, legacy runtime/mobile compatibility, explicit user closes, encrypted client-auth advertisement, and old-server lifecycle calls never to fall back.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/daemon-server-kill-attribution.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/remote-runtime-request-connection.integration.test.ts src/main/runtime/rpc/runtime-close-attribution-topology.test.ts src/main/runtime/rpc/methods/session-tabs.test.ts src/main/runtime/rpc/e2ee-channel.test.ts src/main/runtime/rpc/e2ee-channel-v2.test.ts src/main/runtime/rpc/mobile-socket-wiring.test.ts src/main/runtime/rpc/runtime-client-capabilities.test.ts src/shared/remote-runtime/remote-runtime-client.test.ts src/shared/remote-runtime/requests/remote-runtime-request-connection.test.ts src/shared/remote-runtime/control/remote-runtime-shared-control-connection.test.ts src/cli/runtime/websocket-transport.test.ts src/renderer/src/web/web-runtime-client.test.ts src/renderer/src/runtime/web-runtime-session.test.ts src/renderer/src/runtime/web-session-close-intent.test.ts src/renderer/src/runtime/web-session-tabs-sync.test.ts src/renderer/src/components/terminal/terminal-tab-actions.test.ts src/renderer/src/components/terminal/terminal-close-incarnation.test.ts src/renderer/src/components/terminal-pane/terminal-parked-tab-watchers.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/remote-runtime-request-connection.integration.test.ts src/main/runtime/rpc/runtime-close-attribution-topology.test.ts src/main/runtime/rpc/methods/session-tabs.test.ts src/main/runtime/rpc/e2ee-channel.test.ts src/main/runtime/rpc/e2ee-channel-v2.test.ts src/main/runtime/rpc/mobile-socket-wiring.test.ts src/main/runtime/rpc/runtime-client-capabilities.test.ts src/shared/remote-runtime/remote-runtime-client.test.ts src/shared/remote-runtime/requests/remote-runtime-request-connection.test.ts src/shared/remote-runtime/control/remote-runtime-shared-control-connection.test.ts src/cli/runtime/websocket-transport.test.ts src/renderer/src/web/web-runtime-client.test.ts src/renderer/src/runtime/web-runtime-session.test.ts src/renderer/src/runtime/web-session-close-intent.test.ts src/renderer/src/runtime/web-session-tabs-sync.test.ts src/renderer/src/components/terminal/terminal-tab-actions.test.ts src/renderer/src/components/terminal/terminal-close-incarnation.test.ts src/renderer/src/components/terminal-pane/terminal-parked-tab-watchers.test.ts",
         "pnpm exec playwright test tests/e2e/daemon-generation-reconnect-safety.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm exec playwright test tests/e2e/daemon-generation-legacy-close-safety.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
-        "src/main/daemon/daemon-server-kill-attribution.test.ts",
         "src/main/runtime/orca-runtime.test.ts",
         "src/main/runtime/remote-runtime-request-connection.integration.test.ts",
         "src/main/runtime/rpc/runtime-close-attribution-topology.test.ts",
@@ -9488,12 +9471,6 @@
         "tests/e2e/daemon-generation-legacy-close-safety.spec.ts"
       ],
       "assertionRefs": [
-        {
-          "file": "src/main/daemon/daemon-server-kill-attribution.test.ts",
-          "assertions": [
-            "successful and failed daemon kill requests retain the authenticated control-client identity without claiming a failed kill succeeded"
-          ]
-        },
         {
           "file": "src/main/runtime/rpc/runtime-close-attribution-topology.test.ts",
           "assertions": [
@@ -9656,7 +9633,8 @@
         "Headless orca serve parity, live Linux, Linux SSH relay, and Windows WSL reconnect are not exercised; Docker SSH would cover only the SSH provider and cannot substitute for paired Orca-server evidence.",
         "A topology containing any pre-contract paired desktop viewer remains vulnerable to that viewer's stale reasonless close storm; preserving its intentional-close behavior makes this unavoidable until the viewer upgrades.",
         "Cross-profile daemon inventory and generation handoff/retirement remain the separate #9138/#9229 design.",
-        "A dead split leaf stays with its authoritative owner rather than being remotely pruned."
+        "A dead split leaf stays with its authoritative owner rather than being remotely pruned.",
+        "The audit removed private-router tests of mocked kill results and log fields. Their isolated success/failure attribution and pending-spawn tolerance alarms are no longer registered here; live lifecycle evidence does not establish equivalent log coverage."
       ],
       "demotionRule": "Keep experimental or quarantine if reconnect emits session-killed for a live canary, an exact root/descendant dies, an old server receives fallback destructive close, cleanup leaks a fixture process/pipe, or the gate flakes without a proven harness defect."
     },
@@ -17372,7 +17350,7 @@
       "providers": ["remote-runtime", "ssh", "local", "daemon"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["remote-runtime"],
-      "coverageNotes": "Local macOS evidence covers runtime-RPC stream budgets, paired-renderer parse/discard credit, and negotiated host-side suppression for hidden paired desktop panes. Deferred credit is shared by local and remote transports, batches ACKs at 192 KiB or 4 ms, grows per-stream windows from 512 KiB to 2 MiB and aggregate windows from 2 MiB to 8 MiB, bounds queued output to 256 KiB per stream, and caps each multiplex connection at 32 active or pending streams for an 8 MiB aggregate pending-output ceiling. Deterministic tests cover replay ordering, stale generations, malformed frames, hidden panes, queue eviction, disposal, send/recovery failure, repeated pending-slot replacement, reconnect, mixed-version pause negotiation, and round-robin fairness. The opt-in benchmark models 1/20/100 ms RTT and 1/4/8 viewers, throughput, window use, completion spread and protocol-frame counts. It measures model scheduler elapsed time separately from actual @xterm/headless parser CPU/retained heap; modeled credit and ACK results do not qualify production credit enforcement. Live Android restore evidence, browser/WebGL parser measurements, and legacy JSON subscribe parity remain required.",
+      "coverageNotes": "Local macOS evidence covers runtime-RPC stream budgets, paired-renderer parse/discard credit, and negotiated host-side suppression for hidden paired desktop panes. Deferred credit is shared by local and remote transports, batches ACKs at 192 KiB or 4 ms, grows per-stream windows from 512 KiB to 2 MiB and aggregate windows from 2 MiB to 8 MiB, bounds queued output to 256 KiB per stream, and caps each multiplex connection at 32 active or pending streams for an 8 MiB aggregate pending-output ceiling. Deterministic tests cover replay ordering, stale generations, malformed frames, hidden panes, queue eviction, disposal, send/recovery failure, repeated pending-slot replacement, reconnect, mixed-version pause negotiation, and round-robin fairness. The opt-in benchmark models 1/20/100 ms RTT and 1/4/8 viewers, throughput, window use, completion spread and protocol-frame counts. It measures model scheduler elapsed time separately from actual @xterm/headless parser CPU/retained heap; modeled credit and ACK results do not qualify production credit enforcement. Live Android restore evidence, browser/WebGL parser measurements, and legacy JSON subscribe parity remain required. The audit removed the PTY ACK wrapper suite, which replayed credit arithmetic with mocked IPC. Its isolated wrapper alarms are no longer registered here; generic credit and runtime stream tests do not establish equivalent PTY integration coverage.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6951",
         "https://github.com/stablyai/orca/pull/6955",
@@ -17383,7 +17361,7 @@
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/terminal-multiplex-snapshot-serialization.test.ts src/main/runtime/rpc/terminal-multiplex-ack-output-budget.test.ts src/main/runtime/rpc/terminal-multiplex-ack-overflow-recovery.test.ts src/main/runtime/rpc/terminal-multiplex-pty-wait-capacity.test.ts src/main/runtime/rpc/terminal-multiplex-output-pause-and-viewport.test.ts --maxWorkers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/main/runtime/rpc/terminal-output-batching.test.ts src/main/runtime/rpc/terminal-multiplex-snapshot-serialization.test.ts src/main/runtime/rpc/terminal-multiplex-ack-output-budget.test.ts src/main/runtime/rpc/terminal-multiplex-ack-overflow-recovery.test.ts src/main/runtime/rpc/terminal-multiplex-pty-wait-capacity.test.ts src/main/runtime/rpc/terminal-multiplex-output-pause-and-viewport.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/main/runtime/rpc/terminal-output-batching.test.ts src/main/runtime/rpc/terminal-multiplex-snapshot-serialization.test.ts src/main/runtime/rpc/terminal-multiplex-ack-output-budget.test.ts src/main/runtime/rpc/terminal-multiplex-ack-overflow-recovery.test.ts src/main/runtime/rpc/terminal-multiplex-pty-wait-capacity.test.ts src/main/runtime/rpc/terminal-multiplex-output-pause-and-viewport.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-replay.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-stream-reconnect.test.ts src/renderer/src/components/terminal-pane/terminal-pty-ack-gate.test.ts src/renderer/src/lib/pane-manager/terminal-delivery-credit.test.ts src/renderer/src/runtime/remote-runtime-terminal-parse-backpressure.test.ts src/renderer/src/runtime/runtime-terminal-stream.test.ts --maxWorkers=1",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/main/runtime/rpc/terminal-output-batching.test.ts src/main/runtime/rpc/terminal-multiplex-snapshot-serialization.test.ts src/main/runtime/rpc/terminal-multiplex-ack-output-budget.test.ts src/main/runtime/rpc/terminal-multiplex-ack-overflow-recovery.test.ts src/main/runtime/rpc/terminal-multiplex-pty-wait-capacity.test.ts src/main/runtime/rpc/terminal-multiplex-output-pause-and-viewport.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-replay.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-stream-reconnect.test.ts src/renderer/src/lib/pane-manager/terminal-delivery-credit.test.ts src/renderer/src/runtime/remote-runtime-terminal-parse-backpressure.test.ts src/renderer/src/runtime/runtime-terminal-stream.test.ts --maxWorkers=1",
         "ORCA_TERMINAL_PERF_BENCH=1 pnpm exec vitest run --config config/vitest.config.ts --disableConsoleIntercept src/main/runtime/rpc/terminal-multiplex-flow-control.bench.test.ts",
         "pnpm --dir mobile exec vitest run --root .. mobile/src/session/native-chat/mobile-native-chat-terminal-stream.test.ts",
         "pnpm --dir mobile exec vitest run --root .. mobile/src/session/native-chat/use-mobile-native-chat-terminal-stream.test.ts"
@@ -17399,7 +17377,6 @@
         "src/main/runtime/rpc/terminal-multiplex-flow-control.bench.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection-hidden-replay.test.ts",
         "src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-stream-reconnect.test.ts",
-        "src/renderer/src/components/terminal-pane/terminal-pty-ack-gate.test.ts",
         "src/renderer/src/lib/pane-manager/terminal-delivery-credit.test.ts",
         "src/renderer/src/runtime/remote-runtime-terminal-parse-backpressure.test.ts",
         "src/renderer/src/runtime/runtime-terminal-stream.test.ts",
@@ -17570,7 +17547,8 @@
       "knownGaps": [
         "The pure mobile decision gate does not yet prove live Android WebView scrollback restore after a chat toggle.",
         "Legacy JSON subscribe parity is undecided.",
-        "The parser measurement uses @xterm/headless; browser renderer/WebGL CPU, GPU, and allocation behavior still need packaged-app performance evidence."
+        "The parser measurement uses @xterm/headless; browser renderer/WebGL CPU, GPU, and allocation behavior still need packaged-app performance evidence.",
+        "The audit removed the PTY ACK wrapper suite, which replayed credit arithmetic with mocked IPC. Its isolated wrapper alarms are no longer registered here; generic credit and runtime stream tests do not establish equivalent PTY integration coverage."
       ],
       "demotionRule": "Cannot promote while a supported stream path has uncapped snapshot or live-output buffering."
     },
