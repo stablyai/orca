@@ -13,6 +13,7 @@ const transport = vi.hoisted(() => ({
 }))
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
+  Animated: { View: 'View' },
   Alert: { alert: vi.fn() },
   BackHandler: { addEventListener: () => ({ remove: () => {} }) },
   Image: 'Image',
@@ -46,6 +47,7 @@ vi.mock('../components/BottomDrawer', () => ({
 }))
 vi.mock('./MobileFileMediaPreview', () => ({ MobileFileMediaPreview: () => null }))
 vi.mock('./MobileFileMarkdownPreview', () => ({ MobileFileMarkdownPreview: () => null }))
+vi.mock('../components/MobileSourceCopyButton', () => ({ MobileSourceCopyButton: () => null }))
 vi.mock('./MobileFilePreviewSourceText', () => ({ MobileFilePreviewSourceText: () => null }))
 
 const route = {

@@ -7,81 +7,22 @@ export const mobileDiffReviewLayoutStyles = themedStyleSheet(() => ({
     flex: 1,
     backgroundColor: colors.bgBase
   },
-  header: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle
-  },
-  topBar: {
-    minHeight: 50,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm
-  },
   iconButton: {
     width: 44,
     height: 44,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center'
   },
   iconButtonPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  titleBlock: {
-    flex: 1,
-    minWidth: 0
-  },
-  title: {
-    color: colors.textPrimary,
-    fontSize: typography.titleSize,
-    fontWeight: '700'
-  },
-  subtitle: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    marginTop: 2
-  },
-  progressRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: spacing.md
-  },
-  progressText: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
+    backgroundColor: colors.borderSubtle
   },
   filterRow: {
-    gap: spacing.sm,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xs
-  },
-  filterChip: {
-    minHeight: 34,
-    borderRadius: radii.button,
-    paddingHorizontal: spacing.md,
+    flexGrow: 1,
+    gap: spacing.xs,
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgPanel,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle
-  },
-  filterChipActive: {
-    backgroundColor: colors.textPrimary,
-    borderColor: colors.textPrimary
-  },
-  filterChipPressed: {
-    opacity: 0.78
-  },
-  filterText: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontWeight: '700'
-  },
-  filterTextActive: {
-    color: colors.bgBase
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.xs
   },
   fileHeader: {
     paddingHorizontal: spacing.lg,
@@ -99,7 +40,7 @@ export const mobileDiffReviewLayoutStyles = themedStyleSheet(() => ({
   statusBadge: {
     width: 28,
     height: 28,
-    borderRadius: radii.button,
+    borderRadius: radii.pill,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center'
@@ -151,7 +92,7 @@ export const mobileDiffReviewLayoutStyles = themedStyleSheet(() => ({
   fileNote: {
     minHeight: 44,
     padding: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgPanel,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle
@@ -176,7 +117,7 @@ export const mobileDiffReviewLayoutStyles = themedStyleSheet(() => ({
     justifyContent: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.md,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgPanel
   },
   hunkButtonPressed: {
@@ -192,7 +133,7 @@ export const mobileDiffReviewLayoutStyles = themedStyleSheet(() => ({
     marginTop: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgRaised,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.statusAmber
@@ -236,7 +177,7 @@ export const mobileDiffReviewLayoutStyles = themedStyleSheet(() => ({
     alignItems: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.md,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised
   },
   retryText: {

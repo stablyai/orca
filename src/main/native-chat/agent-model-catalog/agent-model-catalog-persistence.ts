@@ -6,6 +6,7 @@ import type {
 } from '../../../shared/agent-session-wire'
 import {
   agentModelCatalogEntry,
+  serializedAgentModelCatalogListing,
   type AgentModelCatalogEntry,
   type AgentModelCatalogListing
 } from './agent-model-catalog-entry'
@@ -152,8 +153,8 @@ function persistedEntry(entry: AgentModelCatalogEntry): unknown {
   return {
     agent: entry.agent,
     fingerprint: entry.fingerprint,
-    discovered: entry.discovered,
-    live: entry.live,
+    discovered: serializedAgentModelCatalogListing(entry.discovered),
+    live: serializedAgentModelCatalogListing(entry.live),
     ...(entry.configured ? { configured: entry.configured } : {})
   }
 }

@@ -45,8 +45,32 @@ export function getFolderWorkspaceHostIdentity(
 
 const folderWorkspaceWorktreeCache = new WeakMap<FolderWorkspace, Worktree>()
 
+const qualifiedFolderWorktreeCache = new WeakMap<
+  FolderWorkspace,
+  {
+    hostId: ExecutionHostId
+    connectionId: string | null
+    worktree: Worktree
+  }
+>()
 /** Stable synthetic row per folder workspace object, so selectors keep referential equality. */
-export function getFolderWorkspaceWorktree(folderWorkspace: FolderWorkspace): Worktree {
+export function getFolderWorkspaceWorktree(
+  folderWorkspace: FolderWorkspace,
+  resolved?: { hostId: ExecutionHostId; connectionId: string | null }
+): Worktree {
+  if (resolved) {
+    const cached = qualifiedFolderWorktreeCache.get(folderWorkspace)
+    if (cached?.hostId === resolved.hostId && cached.connectionId === resolved.connectionId) {
+      return cached.worktree
+    }
+    const worktree = folderWorkspaceToWorktree({
+      ...folderWorkspace,
+      executionHostId: resolved.hostId,
+      connectionId: resolved.connectionId
+    })
+    qualifiedFolderWorktreeCache.set(folderWorkspace, { ...resolved, worktree })
+    return worktree
+  }
   const cached = folderWorkspaceWorktreeCache.get(folderWorkspace)
   if (cached) {
     return cached

@@ -49,6 +49,7 @@ import { MobileNativeChatFloatingControls } from './MobileNativeChatFloatingCont
 import type { PendingNativeChatImage } from './native-chat/composer/mobile-native-chat-image-attachment'
 import {
   MobileNativeChatDraftComposer,
+  type MobileNativeChatSendProps,
   type MobileNativeChatStructuredComposer
 } from './native-chat/composer/MobileNativeChatComposer'
 import { MobileNativeChatPromptCard } from './native-chat/input/MobileNativeChatPromptCard'
@@ -71,7 +72,7 @@ export type MobileNativeChatInputLockReason = 'disconnected' | 'waiting'
 
 type Props = ComposerTrayProps & MobileNativeChatMicProps & ChatViewProps
 
-type ChatViewProps = {
+type ChatViewProps = MobileNativeChatSendProps & {
   // Keep raw messages to distinguish loading from a loaded transcript filtered to empty.
   messages: NativeChatMessage[]
   folded: NativeChatMessage[]
@@ -98,7 +99,6 @@ type ChatViewProps = {
   hasMore?: boolean
   olderPages?: OlderPagePhase
   onLoadEarlier?: () => void
-  onSend: (text: string) => Promise<boolean>
   // Fence send completion by route identity after tab/view switches.
   sendSurfaceId: string
   getSendCompletionGeneration: () => number
@@ -154,6 +154,7 @@ export function MobileNativeChatView({
   sessionLive,
   agentWorking,
   canStop = agentWorking,
+  sendFollowUp,
   awaitingInput = null,
   structuredActivityUi = false,
   turnIndicator = null,
@@ -236,8 +237,8 @@ export function MobileNativeChatView({
   const { jumpToTail, recordScrollMetrics, scrollMayLoadEarlier } = tail
 
   const handleSend = useCallback(
-    async (text: string): Promise<boolean> => {
-      const accepted = await onSend(text)
+    async (...send: Parameters<typeof onSend>): Promise<boolean> => {
+      const accepted = await onSend(...send)
       if (!accepted) {
         return false
       }
@@ -400,7 +401,7 @@ export function MobileNativeChatView({
           onChangeText={onComposerTextChange}
           onSend={handleSend}
           sendSurfaceId={sendSurfaceId}
-          {...{ getSendCompletionGeneration, getComposerEditGeneration, inputRef }}
+          {...{ getSendCompletionGeneration, getComposerEditGeneration, inputRef, sendFollowUp }}
           agent={agent}
           sessionOptions={sessionOptions}
           onAttachImage={onAttachImage}

@@ -1,5 +1,7 @@
 {
   "agentLaunch": {
+    "terminalPreparationFailed": "Couldn't open a terminal for {{value0}}. Check the workspace connection and agent settings, then try again.",
+    "terminalPromptFailed": "Orca opened a terminal for {{value0}}, but could not pass it your prompt. Send the prompt in that terminal.",
     "opencode": {
       "updateRequired": "OpenCode cannot safely start with a chosen model on this version. Update OpenCode to a supported release, or omit the model choice.",
       "invalidConfig": "OpenCode could not apply this model choice to the launch configuration. Check the OpenCode launch configuration and try again, or omit the model choice.",
@@ -208,6 +210,11 @@
     },
     "cardProperties": {
       "agentModel": "Agent model"
+    },
+    "wslHostOffer": {
+      "title": "Run {{distro}} as a host (recommended)",
+      "why": "Git, files and terminals then run natively in Linux instead of across the Windows file share.",
+      "accept": "Run as host"
     }
   },
   "app": {
@@ -691,7 +698,7 @@
       },
       "userAgent": {
         "title": "Browser identity",
-        "description": "Choose the user agent for every browser profile and page. Native mode disables Google sign-in. Changes take effect after a restart.",
+        "description": "Choose the user agent for every browser profile and page. Changes take effect after a restart.",
         "remoteUnsupported": "Manage browser identity on the remote host with the Orca CLI.",
         "loading": "Loading…",
         "resetRequired": "Identity data must be reset explicitly before it can be changed.",
@@ -699,7 +706,7 @@
         "optionClean": "Cleaned",
         "optionCleanTooltip": "Removes Orca and Electron tokens to match imported Chrome sessions.",
         "optionNative": "Native",
-        "optionNativeTooltip": "Keeps Electron's built-in identity for sites that reject the cleaned identity. Google sign-in is unavailable in Native mode.",
+        "optionNativeTooltip": "Keeps Electron's built-in identity for sites that reject the cleaned identity.",
         "restartRequired": "Restart required",
         "unavailable": "Browser identity is unavailable."
       },
@@ -850,7 +857,22 @@
       "installCliForTerminal": "Install the {{value0}} CLI to open it in a terminal.",
       "chatRuntime": "Chat runtime",
       "chatChoiceTitle": "Open as chat or CLI",
-      "chatChoiceDescription": "Choose whether each agent opens as a chat or in its CLI."
+      "chatChoiceDescription": "Choose whether each agent opens as a chat or in its CLI.",
+      "defaultSurfaceTitle": "Open agents as",
+      "defaultSurfaceDescription": "The default for agents on this computer.",
+      "defaultSurfaceChatDescription": "Rich messages, visuals and images.",
+      "defaultSurfaceTerminal": "Terminal",
+      "defaultSurfaceTerminalDescription": "Each agent’s own CLI.",
+      "defaultSurfacePerAgent": "Choose per agent",
+      "defaultSurfaceNowChat": "Agents now open as chats",
+      "defaultSurfaceNowTerminal": "Agents now open in the terminal",
+      "defaultSurfaceKeptTerminal_one": "{{agents}} stays in the terminal, as you set.",
+      "defaultSurfaceKeptTerminal_other": "{{agents}} stay in the terminal, as you set.",
+      "defaultSurfaceKeptChat_one": "{{agents}} stays as a chat, as you set.",
+      "defaultSurfaceKeptChat_other": "{{agents}} stay as chats, as you set.",
+      "defaultSurfaceSetAllChat": "Set all to Chat",
+      "defaultSurfaceSetAllTerminal": "Set all to Terminal",
+      "sameAsChoice": "Same as {{agent}} · {{choice}}"
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "symlink",
@@ -1326,9 +1348,7 @@
         "jira": {
           "856083302c": "Jira connection was superseded by a newer request."
         },
-        "linear": {
-          "37d36984d0": "Linear connection was superseded by a newer request."
-        },
+        "linear": {},
         "orca": {
           "profiles": {
             "612f7f6861": "Failed to create profile",
@@ -2829,6 +2849,7 @@
         "8c967b4d15": "Later"
       },
       "TaskPage": {
+        "gitlabLoadFailed": "Could not load GitLab work items. Refresh to try again.",
         "ff69a30681": "Cancel",
         "8ff6fdc368": "Creating…",
         "919a20dd5b": "Enter {{value0}}",
@@ -3716,6 +3737,17 @@
             "vmProvisioningTitle": "Provisioning VM",
             "cancelProvisioning": "Cancel",
             "vmProvisioningLogEmpty": "Waiting for recipe output…"
+          },
+          "PendingNativeChatCreation": {
+            "sendBlockedFailed": "Retry creating the worktree to send",
+            "sendBlockedHeld": "Sends when the worktree is ready"
+          },
+          "WorktreeSetupSteps": {
+            "prepare": "Prepare workspace",
+            "fetch": "Fetch base branch",
+            "create": "Create worktree",
+            "setup": "Set up workspace",
+            "startAgent": "Start {{agent}}"
           }
         }
       },
@@ -4183,6 +4215,7 @@
             "commandNotFound": "{{agent}} couldn't start because its command wasn't found on this machine.",
             "copyPrompt": "Copy prompt",
             "exitedDuringStart": "{{agent}} exited while starting.",
+            "gitBashConsoleCapacity": "Git Bash reported its limit of 128 open terminals on this PC while starting {{agent}}. Close some Git Bash terminals and try again.",
             "notStarted": "{{agent}} couldn't start.",
             "restoreWorkspace": "Restore the workspace folder or open an available workspace, then try again.",
             "tryInTerminal": "Run it in a terminal in this folder to see why, then try again.",
@@ -7186,14 +7219,15 @@
           "distro": "Distro",
           "loading": "Looking for WSL distros…",
           "placeholder": "Choose a distro",
-          "none": "No WSL distros found. Install one with: wsl --install",
           "stoppedHint": "{{value0}} is stopped. Adding it starts it.",
           "addingHint": "Installing and starting the Orca server in the distro. The first time can take a minute.",
           "adding": "Setting up…",
           "startAndAdd": "Start and add",
           "add": "Add host",
           "refresh": "Refresh",
-          "wsl1Hint": "WSL 1 distros can’t be hosts. Convert one in a Windows terminal with: wsl --set-version {{value0}} 2"
+          "wsl1Reason": "WSL 1 can’t run an Orca host; convert with {{command}}",
+          "noWsl2Title": "No WSL 2 distros found",
+          "noWsl2Install": "Install one from a Windows terminal with {{command}}, then choose Refresh."
         },
         "wslHostRowStatus": {
           "connecting": "Starting",
@@ -7952,10 +7986,6 @@
           "dd6f0a1d45": "Pet",
           "0e89a574ae": "Floating animated pet in the bottom-right corner.",
           "nativeChat": {
-            "title": "Chat UI",
-            "description": "Open supported new agents in Chat UI.",
-            "copy": "Supported new agents open in structured chat. Other agents open in the terminal; existing chats stay available.",
-            "toggleLabel": "Toggle Chat UI",
             "resumeTitle": "Resume working chats automatically after a restart",
             "resumeCopy": "When Orca quits or installs an update, chats that were working are automatically resumed when Orca is reopened.",
             "resumeToggleLabel": "Toggle automatic resume after a restart",
@@ -10169,19 +10199,6 @@
             "051203d37c": "pet",
             "6b5a56ac35": "Floating animated pet in the bottom-right corner.",
             "87d99e634b": "Pet",
-            "nativeChat": {
-              "title": "Chat UI",
-              "description": "Open supported new agents in Chat UI.",
-              "grok": "grok",
-              "native": "native",
-              "chat": "chat",
-              "claude": "claude",
-              "codex": "codex",
-              "openclaude": "openclaude",
-              "omp": "omp",
-              "terminal": "terminal",
-              "agent": "agent"
-            },
             "agentDashboard": {
               "title": "Agent Dashboard",
               "description": "Kanban board for monitoring agents across worktrees, in-window or as a pop-out.",
@@ -11979,8 +11996,7 @@
         "PluginInstallDialog": {
           "localRequired": "Enter the plugin folder path.",
           "gitUrlRequired": "Enter a repository URL.",
-          "gitUrlInvalid": "Use an HTTPS or SSH Git URL.",
-          "gitRefRequired": "Add a #tag or #commit, like #v0.1.0.",
+          "gitUrlInvalid": "Use a repository link like https://github.com/owner/repo, owner/repo, or an SSH URL.",
           "title": "Install plugin",
           "description": "Nothing runs until you enable it.",
           "source": "Install source",
@@ -11990,12 +12006,23 @@
           "localPlaceholder": "Path to a plugin folder",
           "localHelp": "The folder with orca-plugin.json",
           "gitLabel": "Repository URL",
-          "gitPlaceholder": "https://git.example/acme/orca-notes#v0.1.0",
-          "gitHelp": "End with #tag or #commit to pin a version",
+          "gitPlaceholder": "https://github.com/acme/orca-notes",
+          "gitHelp": "Paste a repository, release, or tag link. Without #tag or #commit, Orca uses the latest version tag.",
           "cancel": "Cancel",
           "installing": "Installing…",
           "install": "Install",
-          "installFailed": "Plugin installation failed. Check the source and try again."
+          "installFailed": "Plugin installation failed. Check the source and try again.",
+          "checking": "Checking…",
+          "continue": "Continue",
+          "gitUrlCredentials": "Remove the username or token from the URL. Orca uses your Git sign-in.",
+          "gitRefInvalid": "The version after # isn't a valid tag, branch, or commit name.",
+          "gitRefNotFound": "This repository has no tag or branch named {{value0}}.",
+          "gitUnreachable": "Couldn't read this repository. Check the URL and that your Git account can access it.",
+          "resolvedLatestTag": "Installs {{value0}}, the latest version, at commit {{value1}}.",
+          "resolvedTag": "Installs {{value0}} at commit {{value1}}.",
+          "resolvedBranch": "Installs branch {{value0}} as it is now, at commit {{value1}}.",
+          "resolvedCommit": "Installs commit {{value0}}.",
+          "resolvedDefaultBranch": "No version tag found, so this installs the latest commit, {{value0}}."
         },
         "PluginKeybindingConsentPreview": {
           "worktree": "Only in a workspace"
@@ -12108,7 +12135,8 @@
           "invalidManifest": "orca-plugin.json is invalid. Fix it, then refresh plugins.",
           "installedManifestUnloadable": "This version can't load in this Orca. Update or reinstall it.",
           "invalidArtifact": "A worker or panel file is missing or unsafe. Fix it, then refresh.",
-          "consentChanged": "This plugin changed while you were reviewing it. Review it again."
+          "consentChanged": "This plugin changed while you were reviewing it. Review it again.",
+          "installGitMoved": "The repository changed after Orca checked it. Try again."
         },
         "plugins": {
           "search": {
@@ -13219,7 +13247,9 @@
           "license": "License",
           "whatsNew": "What’s new",
           "hashCopied": "Content hash copied",
-          "hashCopyFailed": "Couldn't copy the hash."
+          "hashCopyFailed": "Couldn't copy the hash.",
+          "readme": "Read the README on {{value0}}",
+          "installs": "Installs"
         },
         "PluginListEmptyStates": {
           "noFilterMatches": "No plugins match these filters",
@@ -13383,6 +13413,33 @@
           "installed": "Make sure you trust {{value0}}. This plugin runs the publisher’s code inside Orca.",
           "label": "Not an official plugin:",
           "translations": "Translations can change any text in Orca. Make sure you trust {{value0}}."
+        },
+        "PluginUpdateReviewToast": {
+          "movedTitle": "{{value0}} {{value1}} comes from a different repository",
+          "accessTitle": "{{value0}} {{value1}} wants more access",
+          "manyTitle": "{{value0}} plugin updates need your review",
+          "oneDescription": "Published by {{value0}}. It won’t update until you review it.",
+          "manyDescription": "They won’t update until you review them.",
+          "review": "Review",
+          "dismiss": "Dismiss"
+        },
+        "PluginInstallTrustDialog": {
+          "titleFolder": "Make sure you trust this folder",
+          "title": "Make sure you trust {{value0}}",
+          "theme": "This theme is from {{value0}}, not Orca. Only install plugins from authors you trust.",
+          "content": "This plugin is from {{value0}}, not Orca. Only install plugins from authors you trust.",
+          "translations": "This translation is from {{value0}}, not Orca. Translations can change any text in Orca, so only install them from authors you trust.",
+          "code": "This plugin is from {{value0}}, not Orca. It runs the publisher’s code inside Orca, so only install it if you trust {{value0}}.",
+          "git": "Orca hasn’t checked this repository. A plugin from it can run its publisher’s code inside Orca, so only install it if you trust {{value0}}.",
+          "localFolder": "This is an unverified local folder. A plugin from it can run code inside Orca, so only install it if you trust where it came from.",
+          "devFolder": "This is an unverified local folder. Orca loads its plugin as it is, and later code edits run without asking, so only add folders you trust.",
+          "publisher": "Publisher",
+          "repository": "Repository",
+          "folder": "Folder",
+          "catalog": "Catalog",
+          "cancel": "Cancel",
+          "addFolder": "Add folder",
+          "install": "Install"
         }
       },
       "right": {
@@ -14790,7 +14847,8 @@
                   "79aa06bb2c": "Couldn't refresh. GitHub's API is temporarily unavailable. Showing the last known status.",
                   "6ec12cee0c": "Couldn't refresh. GitHub is unreachable right now. Showing the last known status.",
                   "de088015e8": "Couldn't refresh. GitHub is rate-limiting requests. Showing the last known status.",
-                  "d9dd7c6687": "Couldn't refresh from GitHub. Showing the last known status."
+                  "d9dd7c6687": "Couldn't refresh from GitHub. Showing the last known status.",
+                  "manual_provider": "Couldn't refresh from {{provider}}. Try again."
                 }
               }
             },
@@ -15317,29 +15375,25 @@
         },
         "slides": {
           "HomeSlide": {
-            "a7d9e2c44d": "7d",
-            "a3d5476811": "5h",
-            "8a350a4784": "Account usage",
-            "e27fdaee51": "New Workspace",
-            "4405f3c440": "Pair Desktop",
-            "0b00c98506": "Quick Actions",
-            "0bad5b07c8": "GitHub and Linear",
-            "d047197480": "GitHub · Linear",
             "a4c3f7b7aa": "Tasks",
-            "d33d7a9c29": "orca  ·  feat/mobile-page",
-            "25d6e8a491": "feat/mobile-page",
-            "c791677f2f": "Resume",
             "cf3f98fa3f": "Disconnected",
-            "091355da3d": "M1 Mini · home",
-            "0bc1881bc4": "Connected · 40 worktrees · 5 active",
             "19c212e25e": "MacBook Pro",
             "2f1a1d10c4": "Desktops",
-            "156db8a68a": "PRs created",
-            "4a40af029b": "Agent time",
-            "00a6903322": "Agents spawned",
-            "c0e2e9dcd9": "Welcome back",
             "af761a0c0d": "Settings",
-            "5d94e8ddcc": "Orca"
+            "5d94e8ddcc": "Orca",
+            "dc1f3f5535": "Jump back in",
+            "c2a0215163": "Waiting for input",
+            "0c14dac908": "2m",
+            "77c0dae863": "Done",
+            "3166f865af": "14m",
+            "609517273b": "Working",
+            "005afbad3d": "now",
+            "e986b282af": "Last opened",
+            "8a3ebdbdac": "1h",
+            "04a94cadee": "40 worktrees · 5 active",
+            "b5308d5e2c": "M1 Mini",
+            "aefd110ea5": "Pair a desktop",
+            "d08ee9c466": "New workspace"
           },
           "TerminalSlide": {
             "0bb39f8fe6": "Send",
@@ -17840,7 +17894,8 @@
         },
         "capturedOwner": {
           "orphan": "This automation has no host to run on. Delete it, or re-add the host it belongs to.",
-          "unfenced": "Orca on this host needs an update before you can view run history or manage this automation. Scheduled runs may still continue on the host."
+          "unfenced": "Orca on this host needs an update before you can view run history or manage this automation. Scheduled runs may still continue on the host.",
+          "hostReselection": "Edit the automation and reselect its host before running it."
         },
         "hostStatus": {
           "authority": {
@@ -18018,6 +18073,9 @@
         "hostSummary": {
           "partialFailureOfHosts_one": "{{failed}} of {{count}} host could not be loaded",
           "partialFailureOfHosts_other": "{{failed}} of {{count}} hosts could not be loaded"
+        },
+        "automationTargetAvailability": {
+          "hostMismatch": "The saved run host no longer matches this project setup."
         }
       },
       "agent": {
@@ -18933,6 +18991,9 @@
           "PluginsSectionDescription": {
             "openWith": "Open with (when focus is not in an editable field)"
           }
+        },
+        "pluginInstallCount": {
+          "installs": "{{value0}} installs"
         }
       }
     },
@@ -19371,7 +19432,10 @@
         "orcaStopCrash": "Orca on {{machine}} stopped unexpectedly while this response was in progress.",
         "orcaStopRemote": "Orca on {{machine}} stopped while this response was in progress.",
         "orcaStopCanContinue": "You can continue in this conversation.",
-        "orcaStopUnnamedServer": "the remote server"
+        "orcaStopUnnamedServer": "the remote server",
+        "permissionDenied": "{{agent}} denied permission. View details.",
+        "safetyReview": "{{agent}} reported a safety review warning. View details.",
+        "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes)."
       },
       "composer": {
         "send": "Send",
@@ -19872,7 +19936,6 @@
         "editMessage": "Edit message",
         "showFullMessage": "Show full message",
         "showLess": "Show less",
-        "turnOffQueueing": "Turn off queueing",
         "listLabel": "Queued messages",
         "alreadySent": "This message was already sent.",
         "withdrawnHold": "Stopped before it was sent",
@@ -20468,12 +20531,11 @@
         }
       },
       "nativeChat": {
-        "queueFollowUpsTitle": "Queue follow-ups",
+        "followUpBehaviorTitle": "Queue follow-ups",
         "inlineVisualsTitle": "Inline visuals",
         "inlineVisualsCopy": "Let the agent show charts, diagrams and mockups inside its replies. Applies to newly started chats.",
         "inlineVisualsToggleLabel": "Toggle inline visuals",
-        "queueFollowUpsCopy": "Messages you send while the agent is working wait as cards you can steer, edit, or delete. Messages with images send right away.",
-        "queueFollowUpsToggleLabel": "Toggle queue follow-ups",
+        "followUpBehaviorCopy": "Messages sent while the agent works wait as cards until the turn ends, instead of going into the running turn. Cmd/Ctrl+Enter does the opposite for one message.",
         "behaviorTitle": "Behavior",
         "resumeSearchUpdate": "update",
         "resumeSearchRelaunch": "relaunch",
@@ -20712,18 +20774,6 @@
     }
   },
   "featureTips": {
-    "nativeChatUpgrade": {
-      "eyebrow": "New",
-      "title": "Native chat got an upgrade",
-      "leaveOff": "Leave Off",
-      "enableNow": "Enable Now",
-      "enableError": "Could not enable chat mode.",
-      "intro": "New chats with supported agents now open in the upgraded chat view. To move between chat and CLI, open {{panel}} in the right sidebar:",
-      "resumeInNativeChat": "{{action}} opens a supported CLI conversation in native chat.",
-      "resumeInCli": "{{action}} copies a Claude or Codex chat into a new CLI session. The original chat stays as it is.",
-      "gotIt": "Got It",
-      "manageInSettings": "Manage Chat UI in <link>Settings → Experimental</link>."
-    },
     "voice": {
       "demoPrompt": "Review this diff for edge cases and add tests for anything you find.",
       "startDictation": "Start dictation",
@@ -20795,7 +20845,26 @@
       "title": "Jump to a worktree with <shortcut>",
       "description": "Search worktrees, switch tabs, tweak settings, or spin up a new worktree, all without leaving the keyboard."
     },
-    "gotIt": "Got it"
+    "gotIt": "Got it",
+    "chatUiHere": {
+      "title": "Chat UI is here",
+      "offIntro": "Agents can now open as a chat, with rich messages, visuals and images.",
+      "offTerminal": "Prefer the terminal? It stays fully supported. Your agents keep opening there until you choose Chat.",
+      "onIntro": "Chat UI is out of Experimental and now part of Orca. Your agents keep opening as chats, with rich messages, visuals and images.",
+      "onTerminal": "The terminal stays fully supported too. Switch any agent back anytime.",
+      "changeInSettings": "Change anytime in <link>Settings → Agents</link>.",
+      "stayInTerminal": "Stay in terminal",
+      "cta": "Use Chat UI",
+      "saveFailed": "Could not turn on Chat UI. Choose Chat in Settings → Agents.",
+      "demoTabTitle": "Explain login",
+      "demoPrompt": "Map out how login works",
+      "demoReply": "Login starts in {{file}}: the browser posts to /login, the server checks the password and creates a session, then redirects you to the app. Here’s the flow:",
+      "demoBrowser": "Browser",
+      "demoSession": "Session",
+      "demoApp": "App",
+      "demoPassword": "password",
+      "demoCookie": "cookie"
+    }
   },
   "quickOpen": {
     "moreMatchesAvailable": "More matches may be available. Refine your search to narrow the results.",
@@ -21233,6 +21302,8 @@
     }
   },
   "aiVault": {
+    "sessionAccount": "Account",
+    "sessionAccountUnknown": "Unknown",
     "antigravityReferenceDescription": "Continues in a new Antigravity CLI conversation using this transcript as a reference.",
     "searchHitSourceHost": "Found on {{value0}}",
     "antigravityIdeToCli": "IDE → CLI",
@@ -22720,12 +22791,7 @@
       "addAccess": "Add Linear access",
       "listLabel": "Linear list",
       "fetchMore": "Fetch more",
-      "projectsLoadFailed": "Failed to load projects.",
       "projectNotFound": "Project was not found.",
-      "projectLoadFailed": "Failed to load project.",
-      "projectIssuesLoadFailed": "Failed to load project issues.",
-      "viewsLoadFailed": "Failed to load views.",
-      "viewContentsLoadFailed": "Failed to load view contents.",
       "issuesLoadFailed": "Failed to load Linear issues.",
       "connectionFailed": "Connection failed",
       "apiKeyHint": "Paste a Personal API key for the Linear workspace you want Orca to use. If that workspace is already connected, Orca replaces its stored key.",

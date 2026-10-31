@@ -1,10 +1,18 @@
 import './rpc/unused-default-rpc-methods.test-fixture'
 
+import { execFile } from 'node:child_process'
+import { createRequire } from 'node:module'
+import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
+import { promisify } from 'node:util'
 import { describe, expect, it, vi } from 'vitest'
 import { formatOrcaSessionAddress } from '../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../shared/orca-session-address-test-fixture'
 import { idOf } from './rpc/orchestration-session-caller-test-fixture'
 import { closeStructuredAgentSessionChild } from './agent-session/structured-agent-session-close'
+import { restoreJournal } from '../native-chat/agent-session-journal/journal-open'
+import { OrcaRuntimeRpcServer } from './runtime-rpc'
+import { ORCHESTRATION_METHODS } from './rpc/methods/orchestration'
 import type { FakeConnection } from './structured-chat-coordinator-fake-codex-fixture'
 import {
   COORDINATOR,
@@ -13,17 +21,79 @@ import {
   call,
   clearChat,
   coordinatorRunAndTask,
+  codex,
   db,
   dispatcher,
   host,
   openChat,
   request,
+  root,
+  runtime,
   sendUserMessage,
   settleTurn,
   startClearedContext
 } from './structured-chat-coordinator-mail-rig.test-fixture'
 
 const WORKER = formatOrcaSessionAddress(testOrcaSessionId(PEER_CHAT))
+const cliPath = join(process.cwd(), 'src/cli/index.ts')
+const tsxLoader = pathToFileURL(createRequire(import.meta.url).resolve('tsx')).href
+
+async function readWorkerThroughCli(dispatchId: string): Promise<string> {
+  const env = { ...process.env }
+  for (const name of [
+    'HOME',
+    'USERPROFILE',
+    'APPDATA',
+    'LOCALAPPDATA',
+    'XDG_CONFIG_HOME',
+    'XDG_CACHE_HOME',
+    'XDG_DATA_HOME',
+    'XDG_STATE_HOME',
+    'XDG_RUNTIME_DIR',
+    'CLAUDE_CONFIG_DIR',
+    'CODEX_HOME',
+    'ORCA_E2E_HOME_DIR',
+    'ORCA_E2E_USER_DATA_DIR',
+    'ORCA_USER_DATA_PATH'
+  ]) {
+    env[name] = root
+  }
+  for (const name of [
+    'ORCA_ENVIRONMENT',
+    'ORCA_PAIRING_CODE',
+    'ORCA_REMOTE_PAIRING',
+    'ORCA_RUNTIME_SOURCE_ID',
+    'ORCA_RUNTIME_SOURCE_INCARNATION',
+    'ORCA_RUNTIME_SOURCE_PROFILE_PATH',
+    'ORCA_TERMINAL_HANDLE',
+    'ORCA_PANE_KEY',
+    'ORCA_AGENT_LAUNCH_TOKEN',
+    'ORCA_STRUCTURED_SESSION'
+  ]) {
+    env[name] = ''
+  }
+  env.ORCA_AGENT_SESSION_ID = COORDINATOR
+  env.ORCA_BACKGROUND_LAUNCH = '1'
+  env.ORCA_DISABLE_MACOS_LOGIN_SHELL = '1'
+  // execFile owns its child handle, bounds its lifetime, and awaits exit before server cleanup.
+  const { stdout } = await promisify(execFile)(
+    process.execPath,
+    [
+      '--import',
+      tsxLoader,
+      '--conditions=orca-source',
+      cliPath,
+      'orchestration',
+      'worker-read',
+      '--dispatch',
+      dispatchId,
+      '--source',
+      'transcript'
+    ],
+    { cwd: root, env, timeout: 15_000, windowsHide: true, encoding: 'utf8' }
+  )
+  return stdout
+}
 
 /** A Dispatch of the coordinator's task to the peer chat, both chats open. */
 async function dispatchToChat(): Promise<{
@@ -226,9 +296,36 @@ describe("a chat assignee's liveness, stop and close", () => {
     await vi.waitFor(() => expect(worker.turns).toHaveLength(1), WAIT)
     await settleTurn(PEER_CHAT, 0)
 
-    const read = await call('orchestration.workerRead', { dispatch: dispatchId })
+    const journal = host.collaboratorsForTests().sessions.get(PEER_CHAT)?.journal
+    if (!journal) {
+      throw new Error('Worker conversation was not opened')
+    }
+    const prefix = journal.cursor()
+    await host.close(PEER_CHAT, 'evict')
+    expect(host.hasSession(PEER_CHAT)).toBe(false)
+    const saved = restoreJournal(host.deps.journalDatabase.db, PEER_CHAT)?.state
+    expect(saved?.lastSequence).toBeGreaterThanOrEqual(prefix.sequence)
+    const acquisitions = codex.connections.length
+    const server = new OrcaRuntimeRpcServer({
+      runtime,
+      userDataPath: root,
+      enableWebSocket: false,
+      methods: ORCHESTRATION_METHODS
+    })
+    try {
+      await server.start()
+      const output = await readWorkerThroughCli(dispatchId)
+      expect(output).toContain('Source: transcript (provider=codex)')
+      expect(output).toContain('working on it')
+      expect(host.hasSession(PEER_CHAT)).toBe(true)
+      expect(codex.connections).toHaveLength(acquisitions)
 
-    expect(read).toMatchObject({ source: 'transcript', status: { liveness: 'live' } })
-    expect(JSON.stringify(read.transcript)).toContain('working on it')
+      const read = await call('orchestration.workerRead', { dispatch: dispatchId })
+
+      expect(read).toMatchObject({ source: 'transcript', status: { liveness: 'live' } })
+      expect(JSON.stringify(read.transcript)).toContain('working on it')
+    } finally {
+      await server.stop()
+    }
   })
 })

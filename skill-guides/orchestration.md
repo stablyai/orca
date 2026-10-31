@@ -27,7 +27,7 @@ Orca wakes you with the answer. To hand work off with nothing back, use `orca-cl
 place and use it for every command.
 
 ```text
-ORCA orchestration worker-start --spec "<task>" --worktree current --agent codex --json
+ORCA orchestration worker-start --spec "<task>" --worktree current --agent codex
 ```
 
 - Start every independent worker, then **end your turn**. "Report back" and
@@ -42,8 +42,13 @@ ORCA orchestration worker-start --spec "<task>" --worktree current --agent codex
 - Add `--model` only if the user named one.
 - If `worker-start` fails, do not rerun it; read `failedStage` and load
   `references/recovery-and-cleanup.md`.
-- To steer a worker, use
-  `ORCA orchestration send --to dispatch:<dispatch_id> --subject "<topic>" --body "<guidance>"`.
+- To talk to a worker, use
+  `ORCA orchestration send --to dispatch:<dispatch_id> --subject "<topic>" --body "<message>"`
+  in any state: a working worker reads it now; a finished or closed one gets it
+  as a follow-up Task and reports with `worker_done`. The receipt says which.
+  Except on a paired server: a finished worker there refuses `send`, so start
+  new work there with `worker-start --on <server>` (load
+  `references/placement-and-remote.md` first).
 
 Never:
 
@@ -54,18 +59,20 @@ Never:
 
 ## When Orca wakes you
 
-- Run the `check` command the wake gives you. Answer each `question` with
-  `ORCA orchestration reply --id <message_id> --body "<answer>" --json`.
+- Run the `check` command the wake gives you. Answer a `question` with
+  `ORCA orchestration reply --id <message_id> --body "<answer>"` when the answer
+  follows from the task or the user's instructions; otherwise ask the user first.
 - An `escalation` with `stopReason` means the worker stopped without
   `worker_done`: steer it with `send`, stop and retry it, or tell the user.
 - A `worker_done` settles its Task; never mark a reported failure completed.
 - When every worker has settled, report to the user per Task: outcome,
   evidence, open blockers.
-- Lost track? `ORCA orchestration inbox --terminal run:<run_id> --limit 50 --full --json`
+- Lost track? `ORCA orchestration inbox --terminal run:<run_id> --limit 50`
   shows mail `check` already handled.
 
-Finished workers close on their own unless the user chose Keep open. To keep one
-for a follow-up, run `ORCA orchestration worker-retain --dispatch <dispatch_id> --json`.
+Finished workers close on their own; `send` reopens one when you need it again.
+If the user wants to watch a worker, start it with `--keep-open`; to keep one
+already started, run `ORCA orchestration worker-keep-open --dispatch <dispatch_id>`.
 If `worker-list` shows no `autoReleaseAt` for a finished worker, release it yourself.
 
 ## Task spec
@@ -80,8 +87,10 @@ gap or contradiction.
 
 ## Safety
 
-Stop, retry, or abandon a worker only on proof its agent stopped; silence or an
-`unverifiable` reading proves nothing.
+Silence, a timeout, or `unverifiable` liveness alone never proves exit or authorizes
+autonomous recovery. For explicit user cancellation or assignment abandonment,
+load `references/recovery-and-cleanup.md`: requesting a guarded stop or fencing an
+assignment does not prove its agent stopped.
 
 ## References
 
@@ -89,7 +98,7 @@ Stop, retry, or abandon a worker only on proof its agent stopped; silence or an
 
 | Situation                                      | Reference                                 |
 | ---------------------------------------------- | ----------------------------------------- |
-| Task DAGs, several Runs, reusing a worker      | `references/coordinator-loop.md`          |
+| Task DAGs, several Runs                        | `references/coordinator-loop.md`          |
 | Child worktrees, SSH, WSL, a connected server  | `references/placement-and-remote.md`      |
 | Group messages, inbox scripts                  | `references/messaging-and-gates.md`       |
 | A failed or unknown worker; retry, stop, reset | `references/recovery-and-cleanup.md`      |

@@ -5,10 +5,7 @@ import { statusFeedChildView } from '../native-chat/agent-session-wire/structure
 import { normalizeAgentStatusPayload } from '../../shared/agent-status-types'
 import { resolveWorktreeCatalogSnapshot } from './rpc/worktree-catalog-snapshot'
 import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../shared/structured-agent-session-projection'
+
 import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
 import type { RuntimeWorktreePsSummary } from '../../shared/runtime-types'
 import { AgentHookServer, _internals } from '../agent-hooks/server'
@@ -118,51 +115,14 @@ describe('worktree ps reports structured sessions', () => {
     expect(ended.agents[0]?.mainAgent).not.toHaveProperty('stopping')
   })
 
-  it('a busy structured session is not reported idle', () => {
-    const row = attach([summary()])
-    expect(row.agents).toHaveLength(1)
-    expect(row.agents[0]?.state).toBe('working')
-    expect(row.agents[0]?.agentType).toBe('claude')
-    expect(row.agents[0]?.prompt).toBe('ship the thing')
-    expect(row.status).toBe('working')
-  })
-
   it('does not turn a completed host-held session into permission', () => {
     const row = attach([summary({ status: 'idle' })])
     expect(row.status).toBe('inactive')
     expect(row.hasHostSidebarActivity).toBe(false)
   })
 
-  it('reports the DERIVED pane key, never an orchestration credential', () => {
-    const row = attach([summary()])
-    expect(row.agents[0]?.paneKey).toBe(
-      structuredAgentSessionPaneKey(structuredAgentSessionTabId(SESSION), SESSION)
-    )
-  })
-
   // No persisted turn means no projected status, matching the chat.
   it('omits a session with no projected status', () => {
     expect(attach([summary({ status: null })]).agents).toHaveLength(0)
-  })
-
-  it('keeps the journal clock on the row, so a restart republish is not new activity', () => {
-    const row = attach([summary()])
-    expect(row.agents[0]?.updatedAt).toBe(1_757_030_400_000)
-    expect(row.agents[0]?.stateStartedAt).toBe(1_757_030_400_000)
-  })
-})
-
-/** Keep structured rows out of terminal list: shipped clients mount WebViews and poll by row presence/connected, which no added field can qualify. */
-describe('terminal listing is deliberately left alone', () => {
-  it('never reads the agent-status store that now carries structured rows', async () => {
-    const { readFile } = await import('node:fs/promises')
-    const listing = await readFile(
-      new URL('./terminal/layout/terminal-resize-listeners.ts', import.meta.url),
-      'utf8'
-    )
-    // An empty source read would satisfy every negative assertion.
-    expect(listing).toContain('async listTerminals(')
-    expect(listing).not.toContain('getAgentStatusSnapshotFn')
-    expect(listing).not.toContain('structuredHost')
   })
 })

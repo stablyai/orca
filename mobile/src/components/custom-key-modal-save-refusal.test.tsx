@@ -55,10 +55,10 @@ vi.mock('react-native', () => ({
   Text: hosts.Text,
   Pressable: hosts.Pressable,
   TextInput: hosts.TextInput,
-  Switch: hosts.Switch,
   StyleSheet: { create: <T,>(styles: T) => styles, absoluteFillObject: {} },
   Platform: { OS: 'ios', select: (options: Record<string, unknown>) => options.ios }
 }))
+vi.mock('./MobileSwitch', () => ({ MobileSwitch: hosts.Switch }))
 vi.mock('lucide-react-native', () => ({ ChevronLeft: hosts.View }))
 vi.mock('./BottomDrawer', () => ({ BottomDrawer: hosts.View }))
 

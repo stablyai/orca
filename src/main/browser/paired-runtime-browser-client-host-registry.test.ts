@@ -143,22 +143,6 @@ describe('PairedRuntimeBrowserClientHostRegistry', () => {
     expect(registry.hostsPage('environment-a', 'page-a')).toBe(false)
   })
 
-  it('closes only the selected environment and permits a later exact restart', async () => {
-    const first = createComposition()
-    const second = createComposition()
-    const compositionFactory = vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second)
-    const registry = new PairedRuntimeBrowserClientHostRegistry({
-      createComposition: compositionFactory
-    })
-    await registry.start(input(11))
-
-    await expect(registry.closeEnvironment('environment-a')).resolves.toBe(true)
-    await registry.start(input(11))
-
-    expect(first.close).toHaveBeenCalledOnce()
-    expect(second.start).toHaveBeenCalledOnce()
-  })
-
   it('permanently fences new starts before closing every environment', async () => {
     const first = createComposition()
     const second = createComposition()

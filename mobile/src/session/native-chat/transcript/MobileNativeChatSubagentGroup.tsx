@@ -13,7 +13,7 @@ import type {
   NativeChatSubagentState
 } from '../../../../../src/shared/native-chat-types'
 import { useNow } from '../../../hooks/use-now'
-import { colors, spacing, typography } from '../../../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 
@@ -152,7 +152,7 @@ const styles = themedStyleSheet(() => ({
   dot: {
     width: 6,
     height: 6,
-    borderRadius: 3
+    borderRadius: radii.pill
   },
   headline: {
     flexShrink: 0,

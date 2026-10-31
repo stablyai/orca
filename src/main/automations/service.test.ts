@@ -213,26 +213,30 @@ describe('AutomationService', () => {
     vi.setSystemTime(new Date('2026-05-13T08:00:00Z'))
     const store = await createStore()
     const runtimeHostId = toRuntimeExecutionHostId('gpu-server')
-    store.addRepo(makeRepo({ executionHostId: runtimeHostId }))
+    const repo = makeRepo({ executionHostId: runtimeHostId })
+    store.addRepo(repo)
     const setup = store.getProjectHostSetups()[0]!
-    const automation = store.createAutomation({
-      name: 'Remote check',
-      prompt: 'Check the remote repo',
-      agentId: 'claude',
-      projectId: 'r1',
-      runContext: {
-        kind: 'workspace-run',
-        projectId: setup.projectId,
-        hostId: runtimeHostId,
-        projectHostSetupId: setup.id,
-        repoId: setup.repoId,
-        path: setup.path
+    const automation = store.createAutomation(
+      {
+        name: 'Remote check',
+        prompt: 'Check the remote repo',
+        agentId: 'claude',
+        projectId: 'r1',
+        runContext: {
+          kind: 'workspace-run',
+          projectId: setup.projectId,
+          hostId: runtimeHostId,
+          projectHostSetupId: setup.id,
+          repoId: setup.repoId,
+          path: setup.path
+        },
+        workspaceMode: 'new_per_run',
+        timezone: 'UTC',
+        rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+        dtstart: new Date('2026-05-14T00:00:00Z').getTime()
       },
-      workspaceMode: 'new_per_run',
-      timezone: 'UTC',
-      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
-      dtstart: new Date('2026-05-14T00:00:00Z').getTime()
-    })
+      { resolvedRepo: repo }
+    )
     const send = vi.fn()
     const service = new AutomationService(store, { tickMs: 60_000 })
     service.setWebContents({
@@ -252,26 +256,30 @@ describe('AutomationService', () => {
     vi.setSystemTime(new Date('2026-05-13T08:00:00Z'))
     const store = await createStore()
     const runtimeHostId = toRuntimeExecutionHostId('gpu-server')
-    store.addRepo(makeRepo({ executionHostId: runtimeHostId }))
+    const repo = makeRepo({ executionHostId: runtimeHostId })
+    store.addRepo(repo)
     const setup = store.getProjectHostSetups()[0]!
-    const automation = store.createAutomation({
-      name: 'Remote check',
-      prompt: 'Check the remote repo',
-      agentId: 'claude',
-      projectId: 'r1',
-      runContext: {
-        kind: 'workspace-run',
-        projectId: setup.projectId,
-        hostId: runtimeHostId,
-        projectHostSetupId: setup.id,
-        repoId: setup.repoId,
-        path: setup.path
+    const automation = store.createAutomation(
+      {
+        name: 'Remote check',
+        prompt: 'Check the remote repo',
+        agentId: 'claude',
+        projectId: 'r1',
+        runContext: {
+          kind: 'workspace-run',
+          projectId: setup.projectId,
+          hostId: runtimeHostId,
+          projectHostSetupId: setup.id,
+          repoId: setup.repoId,
+          path: setup.path
+        },
+        workspaceMode: 'new_per_run',
+        timezone: 'UTC',
+        rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+        dtstart: new Date('2026-05-14T00:00:00Z').getTime()
       },
-      workspaceMode: 'new_per_run',
-      timezone: 'UTC',
-      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
-      dtstart: new Date('2026-05-14T00:00:00Z').getTime()
-    })
+      { resolvedRepo: repo }
+    )
     const send = vi.fn()
     const service = new AutomationService(store, {
       tickMs: 60_000,
@@ -299,26 +307,30 @@ describe('AutomationService', () => {
     vi.setSystemTime(new Date('2026-05-13T08:00:00Z'))
     const store = await createStore()
     const runtimeHostId = toRuntimeExecutionHostId('gpu-server')
-    store.addRepo(makeRepo({ executionHostId: runtimeHostId }))
+    const repo = makeRepo({ executionHostId: runtimeHostId })
+    store.addRepo(repo)
     const setup = store.getProjectHostSetups()[0]!
-    const automation = store.createAutomation({
-      name: 'Remote check',
-      prompt: 'Check the remote repo',
-      agentId: 'claude',
-      projectId: 'r1',
-      runContext: {
-        kind: 'workspace-run',
-        projectId: setup.projectId,
-        hostId: runtimeHostId,
-        projectHostSetupId: setup.id,
-        repoId: setup.repoId,
-        path: setup.path
+    const automation = store.createAutomation(
+      {
+        name: 'Remote check',
+        prompt: 'Check the remote repo',
+        agentId: 'claude',
+        projectId: 'r1',
+        runContext: {
+          kind: 'workspace-run',
+          projectId: setup.projectId,
+          hostId: runtimeHostId,
+          projectHostSetupId: setup.id,
+          repoId: setup.repoId,
+          path: setup.path
+        },
+        workspaceMode: 'new_per_run',
+        timezone: 'UTC',
+        rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+        dtstart: new Date('2026-05-14T00:00:00Z').getTime()
       },
-      workspaceMode: 'new_per_run',
-      timezone: 'UTC',
-      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
-      dtstart: new Date('2026-05-14T00:00:00Z').getTime()
-    })
+      { resolvedRepo: repo }
+    )
     const service = new AutomationService(store, {
       tickMs: 60_000,
       allowRemoteHostScheduling: true,
@@ -371,26 +383,30 @@ describe('AutomationService', () => {
     vi.setSystemTime(beforeRunAt)
     const store = await createStore()
     const runtimeHostId = toRuntimeExecutionHostId('gpu-server')
-    store.addRepo(makeRepo({ executionHostId: runtimeHostId }))
+    const repo = makeRepo({ executionHostId: runtimeHostId })
+    store.addRepo(repo)
     const setup = store.getProjectHostSetups()[0]!
-    const automation = store.createAutomation({
-      name: 'Morning check',
-      prompt: 'Check the repo',
-      agentId: 'claude',
-      projectId: 'r1',
-      runContext: {
-        kind: 'workspace-run',
-        projectId: setup.projectId,
-        hostId: runtimeHostId,
-        projectHostSetupId: setup.id,
-        repoId: setup.repoId,
-        path: setup.path
+    const automation = store.createAutomation(
+      {
+        name: 'Morning check',
+        prompt: 'Check the repo',
+        agentId: 'claude',
+        projectId: 'r1',
+        runContext: {
+          kind: 'workspace-run',
+          projectId: setup.projectId,
+          hostId: runtimeHostId,
+          projectHostSetupId: setup.id,
+          repoId: setup.repoId,
+          path: setup.path
+        },
+        workspaceMode: 'new_per_run',
+        timezone,
+        rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+        dtstart: new Date(2026, 4, 12, 0, 0).getTime()
       },
-      workspaceMode: 'new_per_run',
-      timezone,
-      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
-      dtstart: new Date(2026, 4, 12, 0, 0).getTime()
-    })
+      { resolvedRepo: repo }
+    )
 
     const headlessDispatcher = vi.fn().mockResolvedValue({
       workspaceId: 'wt1',

@@ -51,6 +51,7 @@ function parseGrokCatalogModels(stdout: string): CatalogModel[] {
 }
 
 export const GROK_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
+  supportsWorkerLaunchPreferences: true,
   // Account and model config scope access; seed verified models and discover the rest.
   models: [
     {

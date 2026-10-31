@@ -251,6 +251,7 @@ describe('structured chat adoption guard on the launch path', () => {
       store.setState({
         settings: {
           ...currentLaunchSettings(),
+          nativeChatPermissionMode: 'ask',
           nativeChatSessionOptions: {
             [agent]: {
               model: 'saved-unknown-model',
@@ -466,10 +467,14 @@ describe('structured chat adoption guard on the launch path', () => {
         })
         expect(searched.params).toMatchObject({
           agent,
-          worktree: 'id:wt-1',
-          options: { model: 'saved-unknown-model', effort: 'high' }
+          worktree: 'id:wt-1'
         })
-        expect(searched.explicit).toMatchObject({ model: 'saved-unknown-model', effort: 'high' })
+        expect(searched.params?.options).toEqual(
+          host === 'local'
+            ? { model: 'saved-unknown-model', effort: 'high', permissionMode: 'ask' }
+            : { model: 'saved-unknown-model', effort: 'high' }
+        )
+        expect(searched.explicit).toEqual({ model: 'saved-unknown-model', effort: 'high' })
         dispatch.mockRestore()
         expect(picker.target).toEqual(
           host === 'local'
@@ -480,10 +485,19 @@ describe('structured chat adoption guard on the launch path', () => {
           agent,
           worktree: 'id:wt-1'
         })
-        expect(picker.params).not.toHaveProperty('options')
+        if (host === 'local' && agent === 'claude') {
+          expect(picker.params?.options).toEqual({ model: 'saved-unknown-model', effort: 'high' })
+        } else {
+          expect(picker.params).not.toHaveProperty('options')
+        }
+        expect(picker.params).not.toHaveProperty('optionsMode')
         expect(picker.explicit).toBeUndefined()
         if (host === 'local') {
-          expect(picker.seed).toMatchObject({ model: 'saved-unknown-model', effort: 'high' })
+          expect(picker.seed).toEqual({
+            model: 'saved-unknown-model',
+            effort: 'high',
+            permissionMode: 'ask'
+          })
         } else {
           expect(picker.seed).toBeUndefined()
         }

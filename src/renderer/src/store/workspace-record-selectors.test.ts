@@ -80,7 +80,7 @@ describe('selectWorkspaceByHostTarget', () => {
     const row = selectWorkspaceByHostTarget(state, target)
     expect(row?.path).toBe(folder.folderPath)
     expect(metadataFolderRow).toBe(getFolderWorkspaceWorktree)
-    expect(row).toBe(metadataFolderRow(folder))
+    expect(row).toBe(metadataFolderRow(folder, { hostId: 'local', connectionId: null }))
     expect(selectWorkspaceByHostTarget(state, target)).toBe(row)
     const replaced = selectWorkspaceByHostTarget(
       makeState({ folderWorkspaces: [{ ...folder, folderPath: '/changed' }] }),

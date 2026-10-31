@@ -34,6 +34,35 @@ beforeAll(async () => {
 })
 
 describe('useMobileStructuredAgentOptions fast mode', () => {
+  it('unlocks after the latest key settles and never restores an earlier pending key', async () => {
+    const client = optionsClient(queuedReads(FAST_OPTIONS))
+    const earlier = deferred<StructuredAgentSessionMutationResult<AgentSessionOptionResult>>()
+    const latest = deferred<StructuredAgentSessionMutationResult<AgentSessionOptionResult>>()
+    const { mutate } = recordingMutate(async (index) =>
+      index === 0 ? earlier.promise : latest.promise
+    )
+    const harness = await mountOptions({ ...BASE, client: client.client, mutate })
+    let first!: Promise<boolean>
+    let second!: Promise<boolean>
+    await act(async () => {
+      first = harness.current().setStructuredOption('effort', 'high')
+      second = harness.current().setStructuredOption('fastMode', true)
+    })
+    expect(harness.current().pendingOptionId).toBe('fastMode')
+    await act(async () => {
+      latest.resolve(accepted({ key: 'fastMode', value: 'true' }, true))
+      await second
+    })
+    expect(harness.current().pendingOptionId).toBeNull()
+    await act(async () => {
+      expect(await harness.current().setStructuredOption('effort', 'medium')).toBe(false)
+      earlier.resolve(accepted({ key: 'effort', value: 'high' }, true))
+      await first
+    })
+    expect(harness.current().pendingOptionId).toBeNull()
+    await harness.unmount()
+  })
+
   it('round-trips a boolean fastMode pick as the wire string and remembers the decoded pick', async () => {
     const client = optionsClient(queuedReads(FAST_OPTIONS, FAST_OPTIONS_ON))
     const { calls, mutate } = recordingMutate(async () =>
@@ -477,7 +506,7 @@ describe('useMobileStructuredAgentOptions host catalog', () => {
     await harness.unmount()
   })
 
-  it('keeps a cold Codex picker usable on the built-in list and lands the listing in place', async () => {
+  it('keeps a cold Codex picker disabled until the host listing makes literal choices available', async () => {
     const listed = deferred<AgentSessionModelCatalogResult>()
     const catalog = vi.fn(async (params: unknown): Promise<AgentSessionModelCatalogResult> =>
       typeof params === 'object' && params !== null && 'waitForListing' in params
@@ -486,28 +515,32 @@ describe('useMobileStructuredAgentOptions host catalog', () => {
     )
     const client = optionsClient(() => deferred<AgentSessionOptionsResult>().promise, catalog)
     const { calls, mutate } = recordingMutate(async () =>
-      accepted({ key: 'model', value: '' }, true)
+      accepted({ key: 'model', value: 'grok-4' }, true)
     )
     const harness = await mountOptions({ ...BASE, client: client.client, mutate })
     await settle()
 
-    const seeded = descriptorFor(harness.current().optionSnapshot, 'model')
-    expect(seeded?.settable).toBe(true)
-    const seedChoices = seeded?.kind.type === 'select' ? seeded.kind.choices : []
-    expect(seedChoices.length).toBeGreaterThan(0)
-    await act(async () => {
-      await harness.current().setStructuredOption('model', seedChoices[0]!.value)
+    expect(descriptorFor(harness.current().optionSnapshot, 'model')).toMatchObject({
+      settable: false,
+      valueSource: 'unknown',
+      kind: { type: 'select', choices: [] }
     })
-    expect(calls).toHaveLength(1)
+    expect(calls).toEqual([])
 
     listed.resolve(HOST_CATALOG)
     await settle()
     const model = descriptorFor(harness.current().optionSnapshot, 'model')
+    expect(model?.settable).toBe(true)
     expect(model?.kind.type === 'select' && model.kind.choices.map((c) => c.value)).toEqual([
-      'grok-4',
-      seedChoices[0]!.value
+      'grok-4'
     ])
-    expect(currentValueOf(harness.current().optionSnapshot, 'model')).toBe(seedChoices[0]!.value)
+    await act(async () => {
+      expect(await harness.current().setStructuredOption('model', 'grok-4')).toBe(true)
+    })
+    expect(calls).toEqual([
+      { method: 'agentSession.setOption', fields: { key: 'model', value: 'grok-4' } }
+    ])
+    expect(currentValueOf(harness.current().optionSnapshot, 'model')).toBe('grok-4')
     await harness.unmount()
   })
 

@@ -1,3 +1,4 @@
+import { installTerminalLaunchInputAttempt } from '../terminal-launch-input-attempt'
 import { resolveLiveAgentStatusConnectionRouting } from '@/lib/agent-status-connection-ownership'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
@@ -11,11 +12,6 @@ import { isProvenProcessExit } from '../../../../../shared/terminal-exit-cause'
 import { getProviderSessionClaimKey } from '@/lib/sleeping-agent-pane-ownership'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session-resume'
 import { agentTurnEndedUncleanly } from '../../../../../shared/agent-main-agent-verdict'
-import {
-  createGitBashConsoleCapacityDetector,
-  type GitBashConsoleCapacityDetector
-} from '../git-bash-console-capacity'
-import type { PtyPaneStartup } from '../pty-connection-types'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import { isPtyExitReplacedByRestart } from '../pty-exit-delivery'
@@ -39,25 +35,7 @@ function keepsUntouchedFreshPane(session: ConnectPanePtySession, ptyId: string):
 }
 
 export function installPtyExitHibernate(session: ConnectPanePtySession): void {
-  type ProcessExitState = {
-    startup: PtyPaneStartup
-    detector: GitBashConsoleCapacityDetector
-  }
-  session.createProcessExitState = (startup: PtyPaneStartup): ProcessExitState => ({
-    startup,
-    detector: createGitBashConsoleCapacityDetector()
-  })
-  session.currentProcessExitState = session.createProcessExitState(session.paneStartup)
-  session.processExitStateByPtyId = new Map<string, ProcessExitState>()
-  session.bindProcessExitState = (ptyId: string, replacedPtyId?: string): void => {
-    const state =
-      (replacedPtyId ? session.processExitStateByPtyId.get(replacedPtyId) : undefined) ??
-      session.currentProcessExitState
-    session.processExitStateByPtyId.set(ptyId, state)
-    if (replacedPtyId && replacedPtyId !== ptyId) {
-      session.processExitStateByPtyId.delete(replacedPtyId)
-    }
-  }
+  installTerminalLaunchInputAttempt(session)
   session.focusSurvivingPtyPaneAfterKeptExit = (): void => {
     if (session.manager.getActivePane()?.id !== session.pane.id) {
       return
@@ -256,14 +234,20 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
       return
     }
     session.manager.setPaneGpuRendering(session.pane.id, true)
-    const failedLocalProcess = session.runtimeEnvironmentId === null && exitCode !== 0
-    if (failedLocalProcess && session.deps.onPaneProcessDied) {
-      const gitBashConsoleCapacityFailure = processExitState.detector.detected()
+    // Only the exact console failure owns this overlay; other exits keep the existing newborn guards.
+    const gitBashConsoleCapacityFailure =
+      session.isNativeWindowsConpty &&
+      session.runtimeEnvironmentId === null &&
+      exitCode !== 0 &&
+      session.spawnedFreshPtyId === ptyId &&
+      !processExitState.inputAttempt.attempted &&
+      processExitState.detector.detected()
+    if (gitBashConsoleCapacityFailure && session.deps.onPaneProcessDied) {
       session.deps.onPaneProcessDied({
         paneId: session.pane.id,
         exitCode,
-        startup: gitBashConsoleCapacityFailure ? processExitState.startup : null,
-        reason: gitBashConsoleCapacityFailure ? 'git-bash-console-capacity' : 'process-failed'
+        startup: processExitState.startup,
+        reason: 'git-bash-console-capacity'
       })
       return
     }

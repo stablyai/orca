@@ -221,3 +221,9 @@ function textKindForPreviewPath(relativePath: string): MobileFilePreviewTextKind
   }
   return isMarkdownPath(relativePath) ? 'markdown' : 'text'
 }
+
+export function saveErrorMessageFromPreviewResult(result: MobileFilePreviewResult): string {
+  return result.status === 'error' || result.status === 'waiting'
+    ? result.message
+    : translate('files.filePreviewScreen.saveFailed', 'Unable to save file')
+}

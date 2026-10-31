@@ -29,13 +29,8 @@ function journal() {
 }
 
 function stopEvents(): JournalStopEvent[] {
-  const since = journal().readSince({ epoch: journal().epoch, sequence: 0 })
-  if (!since.ok) {
-    throw new Error(`expected rows, got reset ${since.reset}`)
-  }
-  return since.rows.flatMap((row) =>
-    row.kind === 'tombstone' && row.stopEvent ? [row.stopEvent] : []
-  )
+  const mark = journal().stopMarks.latest()
+  return mark ? [mark.event] : []
 }
 
 async function turnRow(turnId: string, state: 'running' | 'interrupted', userId?: string) {
