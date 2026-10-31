@@ -1,6 +1,6 @@
 import type { AgentJournalCursor } from './agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from './agent-session-wire'
-import { createStructuredAgentSessionEventCoalescer } from './structured-agent-session-coalescer'
+import { createStructuredAgentSessionEventCoalescer } from './agent-session/structured-agent-session-coalescer'
 import {
   AGENT_SESSION_UNATTACHED_READ_GRACE_MS,
   isFinalAgentSessionReadRefusal,

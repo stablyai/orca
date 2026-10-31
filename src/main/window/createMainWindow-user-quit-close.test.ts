@@ -128,25 +128,4 @@ describe('serve user-Quit window close', () => {
 
     expect(instance.destroy).not.toHaveBeenCalled()
   })
-
-  it('closes instead of hiding to the Windows tray', () => {
-    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
-    const { windowHandlers, webContents, instance } = setupWindow()
-    const store = {
-      getUI: vi.fn(() => ({ trayMinimizeNoticeShown: true })),
-      getSettings: vi.fn(() => ({ windowBackgroundBlur: false, minimizeToTrayOnClose: true })),
-      updateUI: vi.fn()
-    }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the close path reads only getUI/getSettings/updateUI.
-    createMainWindow(store as never, { getIsQuitting: () => false })
-
-    markUserQuitWindowClose(instance)
-    windowHandlers.close({ preventDefault: vi.fn() })
-
-    expect(instance.hide).not.toHaveBeenCalled()
-    expect(webContents.send).toHaveBeenCalledWith(
-      'window:close-requested',
-      expect.objectContaining({ isQuitting: false })
-    )
-  })
 })

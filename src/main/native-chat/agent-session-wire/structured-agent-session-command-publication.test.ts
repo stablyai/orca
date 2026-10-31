@@ -8,7 +8,7 @@ import type {
   AgentSessionSlashCommand,
   AgentSessionSubscribeEvent
 } from '../../../shared/agent-session-wire'
-import { createStructuredAgentSessionEventCoalescer } from '../../../shared/structured-agent-session-coalescer'
+import { createStructuredAgentSessionEventCoalescer } from '../../../shared/agent-session/structured-agent-session-coalescer'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession

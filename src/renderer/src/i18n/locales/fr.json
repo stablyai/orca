@@ -19260,6 +19260,8 @@
       "composer": {
         "imageUnavailable": "Aperçu indisponible",
         "send": "Envoyer",
+        "alternateSteerHint": "{{shortcut}} pour envoyer maintenant",
+        "alternateQueueHint": "{{shortcut}} pour mettre en file d’attente",
         "noPty": "Aucun terminal actif — rebasculez pour vous reconnecter.",
         "locked": "La saisie est détenue par un autre appareil.",
         "placeholder": "Posez votre question, @ pour référencer des fichiers, / pour les commandes",
