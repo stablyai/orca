@@ -698,59 +698,37 @@ describe('close terminal then continue on capable hosts', () => {
     expect(mocks.call).toHaveBeenCalledOnce()
   })
 
+  // Only an open chat is answered before the close; the host's create judges terminals.
   it.each([
-    { name: 'another terminal', row: row('other:leaf'), closes: false, refuses: true },
-    {
-      name: 'another terminal restored after restart',
-      row: row('other:leaf', { restoredUnconfirmed: true }),
-      closes: false,
-      refuses: true
-    },
-    { name: 'a split pane of the closing tab', row: row(`tab-1:${HOST_LEAF}`), closes: true },
-    {
-      name: 'a relayed row the host skips',
-      row: row('other:leaf', { connectionId: 'wsl' }),
-      closes: true
-    },
+    { name: 'another terminal', row: row('other:leaf'), closes: true },
     {
       name: 'an open chat',
       row: row('chat-tab:leaf', { tabId: 'chat-tab', terminalResumeEligible: false }),
-      closes: false,
-      opensOwner: true
+      closes: false
     }
-  ])('pre-close holder check: $name', async ({ row: holder, closes, refuses, opensOwner }) => {
+  ])('before the close: $name', async ({ row: holder, closes }) => {
     useAppStore.setState((state) => ({
       agentStatusByPaneKey: { ...state.agentStatusByPaneKey, [holder.paneKey]: holder }
     }))
-    if (opensOwner) {
-      useAppStore.getState().createUnifiedTab('wt-1', 'agent-session', {
-        id: 'chat-tab',
-        entityId: 'owner-chat'
-      })
-    }
+    useAppStore.getState().createUnifiedTab('wt-1', 'agent-session', {
+      id: 'chat-tab',
+      entityId: 'owner-chat'
+    })
     await runCliChatResume(SOURCE, true)
     expect(mocks.closeTerminal).toHaveBeenCalledTimes(closes ? 1 : 0)
     expect(mocks.call).toHaveBeenCalledTimes(closes ? 1 : 0)
     expect(mocks.activate.mock.calls).toEqual(
-      opensOwner
-        ? [
+      closes
+        ? []
+        : [
             [
               { structuredSession: { sessionId: 'owner-chat', workspaceId: 'wt-1' } },
               undefined,
               { kind: 'local' }
             ]
           ]
-        : []
     )
-    expect(mocks.toast.mock.calls).toEqual(
-      refuses
-        ? [
-            [
-              'Claude is running this conversation in another terminal. Quit it there or close that terminal, then try again.'
-            ]
-          ]
-        : []
-    )
+    expect(mocks.toast).not.toHaveBeenCalled()
   })
 })
 

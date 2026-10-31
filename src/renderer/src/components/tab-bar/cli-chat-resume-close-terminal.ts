@@ -106,7 +106,8 @@ export async function closeCliChatResumeTerminal(
             return !next || !isRetainedTerminalSurfaceIdentity(original, next)
           })
         ) {
-          if (!started) {
+          // An aborted run was superseded or retired; whatever replaced it speaks for the click.
+          if (!started && !signal.aborted) {
             hooks.refused()
           }
           return false

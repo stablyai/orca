@@ -63,8 +63,12 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
         retained.incarnationId !== null &&
         pty !== undefined &&
         pty.incarnationId !== retained.incarnationId
-      if (!pty || incarnationReplaced || leaves.length !== 1 || this.handleByPtyId.has(ptyId)) {
+      if (!pty || incarnationReplaced || leaves.length > 1 || this.handleByPtyId.has(ptyId)) {
         this.invalidatePtyIncarnationHandle(ptyId)
+        continue
+      }
+      // No pane shows it: keep naming the process for exit waits, but bind no surface to it.
+      if (leaves.length === 0) {
         continue
       }
       retained.incarnationId = pty.incarnationId
@@ -169,12 +173,13 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
       return
     }
     const record = this.handles.get(handle)
-    if (record?.ptyId && this.handleByPtyIncarnation.get(record.ptyId)?.handle === handle) {
-      this.handleByPtyIncarnation.delete(record.ptyId)
-    }
     this.handleByLeafKey.delete(leafKey)
     this.handles.delete(handle)
-    this.syntheticTerminalHandles.delete(handle)
+    // A pane-issued handle names its PTY incarnation, which outlives the pane: a late exit wait
+    // still reads that record until it is pruned or replaced. Only the surface binding goes here.
+    if (!record?.ptyId || this.handleByPtyIncarnation.get(record.ptyId)?.handle !== handle) {
+      this.syntheticTerminalHandles.delete(handle)
+    }
   }
 
   protected adoptFirstPtyForLeafHandle(

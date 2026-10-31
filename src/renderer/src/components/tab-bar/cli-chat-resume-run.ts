@@ -1,13 +1,11 @@
 import { captureStructuredLaunchSurfaceAddress } from '@/lib/structured-agent-session-launch-surface'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { admitStructuredLaunchOnHost } from '@/lib/structured-agent-session-host-admission'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { holdEmptyWorkspaceDefaultSurfaceForLaunch } from '@/lib/empty-workspace-default-surface-claims'
 import { closeCliChatResumeTerminal } from './cli-chat-resume-close-terminal'
 import { toast } from 'sonner'
 import { namesCliConversation } from '../../../../shared/structured-agent-cli-conversation-adoption'
-import { cliConversationExitGuidance } from '@/lib/cli-conversation-exit-guidance'
 import { structuredChatUnavailableText } from '@/lib/structured-agent-session-launch-failure'
 import { STRUCTURED_AGENT_SESSION_CLOSE_TERMINAL_FOR_CHAT_RUNTIME_CAPABILITY } from '../../../../shared/structured-agent-session-surface-capabilities'
 import { readStructuredChatHostPermissionVerdict } from '@/runtime/structured-chat-host-permission'
@@ -152,22 +150,14 @@ export async function runCliChatResume(
     const agentLiveInPane =
       state.agentStatusByPaneKey[source.paneKey]?.providerSession?.id === source.providerSessionId
     if (closeSupported && agentLiveInPane) {
-      // Chats and terminals that name this conversation on its host; the source tab's panes all close.
-      const holders = Object.values(state.agentStatusByPaneKey).filter((row) => {
-        const tabId = row.tabId ?? parsePaneKey(row.paneKey)?.tabId
-        const workspaceId =
-          row.worktreeId ??
-          Object.entries(state.tabsByWorktree).find(([, tabs]) =>
-            tabs.some((tab) => tab.id === tabId)
-          )?.[0]
-        return (
-          tabId !== source.tabId &&
-          !!workspaceId &&
-          getExecutionHostIdForWorktree(state, workspaceId) === source.executionHostId &&
+      // Main's answer to a chat that already holds the conversation; the host's create judges terminals.
+      const ownerRow = Object.values(state.agentStatusByPaneKey).find(
+        (row) =>
+          row.terminalResumeEligible === false &&
+          !!row.worktreeId &&
+          getExecutionHostIdForWorktree(state, row.worktreeId) === source.executionHostId &&
           namesCliConversation(row, agent, source.providerSessionId)
-        )
-      })
-      const ownerRow = holders.find((row) => row.terminalResumeEligible === false)
+      )
       const ownerTab = ownerRow?.worktreeId
         ? state.unifiedTabsByWorktree[ownerRow.worktreeId]?.find((tab) => tab.id === ownerRow.tabId)
         : undefined
@@ -177,10 +167,6 @@ export async function runCliChatResume(
           openOwner,
           target
         )
-        return
-      }
-      if (holders.some((row) => row.terminalResumeEligible !== false)) {
-        toast.error(cliConversationExitGuidance(source.agent))
         return
       }
       const support = await waitForPromiseWithSignal(

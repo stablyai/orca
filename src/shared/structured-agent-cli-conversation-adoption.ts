@@ -37,8 +37,8 @@ export function cliConversationRowsShareAgent(
   return CLI_CONVERSATION_ADOPTING_AGENTS[left].some((agent) => rightAgents.includes(agent))
 }
 
-/** A local status row naming the conversation a chat of `agent` would take over. Hosts and the
- * renderer's pre-close check share this, so the click never refuses a row the host would skip. */
+/** A local status row naming the conversation a chat of `agent` would take over: the host's
+ * writer admission and the renderer's open-chat lookup read rows the same way. */
 export function namesCliConversation(
   row: { connectionId?: string | null; agentType?: string; providerSession?: { id: string } },
   agent: string,
