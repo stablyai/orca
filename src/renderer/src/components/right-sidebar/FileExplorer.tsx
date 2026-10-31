@@ -12,6 +12,7 @@ import {
   getExplorerEffectiveExpanded
 } from './file-explorer-display-root'
 import { FileExplorerScopeNotice } from './FileExplorerScopeNotice'
+import { explorerActiveFileId } from './file-explorer-active-file'
 import { useFileExplorerRootNavigation } from './use-file-explorer-root-navigation'
 import { useFileExplorerScopeTransition } from './use-file-explorer-scope-transition'
 import { basename } from '@/lib/path'
@@ -65,7 +66,7 @@ function FileExplorerFiles(): React.JSX.Element {
   )
   const expandedDirs = useAppStore((s) => s.expandedDirs)
   const collapseAllDirs = useAppStore((s) => s.collapseAllDirs)
-  const activeFileId = useAppStore((s) => s.activeFileId)
+  const activeFileId = useAppStore(explorerActiveFileId)
   const openFiles = useAppStore((s) => s.openFiles)
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const showDotfiles = useAppStore((s) =>
