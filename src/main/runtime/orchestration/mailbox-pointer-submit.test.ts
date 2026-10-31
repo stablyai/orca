@@ -582,7 +582,7 @@ describe('orchestration mailbox pointer submit', () => {
             options.replaced ? { terminal, processIncarnation: 'inc-replaced' } : expectedTarget,
           isLeafPtyProvenAbsent: async () => options.absent ?? false,
           isPtyAwaitingUserInput: () => options.dialogOpen ?? false,
-          readLastDrivingInputAt: () => (options.userTypedAfterStage ? Date.now() : null),
+          readLastDrivingInputAt: () => (options.userTypedAfterStage ? 1_000 : null),
           writePty,
           settle,
           redrive: vi.fn()
