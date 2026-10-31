@@ -79,6 +79,28 @@ export function nativeChatReceiptAnswers(
   return [{ question: null, answer: option?.label ?? null }]
 }
 
+export function nativeChatReceiptAnswerEntries(
+  body: NativeChatResolvedPrompt,
+  booleanLabels?: { yes: string; no: string }
+): { key: string | undefined; answer: NativeChatReceiptAnswer }[] {
+  let keys: string[]
+  if (body.kind === 'question') {
+    keys = agentSessionPromptQuestions(body).map((question) => question.id)
+  } else {
+    const content = body.resolution.state === 'resolved' ? body.resolution.formContent : undefined
+    keys =
+      body.form && content !== undefined
+        ? body.form.fields
+            .filter((field) => Object.hasOwn(content, field.name))
+            .map((field) => field.name)
+        : ['answer']
+  }
+  return nativeChatReceiptAnswers(body, booleanLabels).map((answer, index) => ({
+    key: keys[index],
+    answer
+  }))
+}
+
 /** Null for an approval, which shows its title instead. */
 export function nativeChatReceiptSubject(
   body: NativeChatResolvedPrompt

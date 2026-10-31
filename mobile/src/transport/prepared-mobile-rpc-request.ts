@@ -33,8 +33,8 @@ export async function withPreparedMobileRpcRequest<T>(
     if (!json) {
       throw new Error('Request abandoned')
     }
-    // SAFETY: the immutable JSON above was produced from this typed request.
-    return await send(JSON.parse(json) as Request)
+    const snapshot: Request = JSON.parse(json)
+    return await send(snapshot)
   } finally {
     releaseRemoteRuntimePreparedRequest(held)
     pending.delete(key)

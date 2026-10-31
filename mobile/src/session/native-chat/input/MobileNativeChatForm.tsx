@@ -81,9 +81,9 @@ export function MobileNativeChatForm({
               </Pressable>
             ) : null}
             {choices.length ? (
-              choices.map((choice, index) => (
+              choices.map((choice) => (
                 <Pressable
-                  key={index}
+                  key={String(choice.value)}
                   accessibilityRole="radio"
                   accessibilityLabel={`${title}: ${choice.label}`}
                   accessibilityState={{ checked: value === choice.value, disabled }}

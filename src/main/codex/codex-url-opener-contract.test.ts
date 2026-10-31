@@ -225,18 +225,18 @@ it('selects URL availability from the real shell support subscription without ir
   const long = `https://example.com/${'a'.repeat(8192 - 20)}`
   const shortRenders = vi.fn(),
     longRenders = vi.fn()
-  function Availability({ url, count }: { url: string; count: () => void }) {
-    const available = useExternalLinkAvailable(url)
-    count()
-    return createElement('button', { disabled: !available }, url)
+  function ShortAvailability() {
+    const available = useExternalLinkAvailable('https://example.com/a')
+    shortRenders()
+    return createElement('button', { disabled: !available }, 'https://example.com/a')
+  }
+  function LongAvailability() {
+    const available = useExternalLinkAvailable(long)
+    longRenders()
+    return createElement('button', { disabled: !available }, long)
   }
   const view = render(
-    createElement(
-      'div',
-      {},
-      createElement(Availability, { url: 'https://example.com/a', count: shortRenders }),
-      createElement(Availability, { url: long, count: longRenders })
-    )
+    createElement('div', {}, createElement(ShortAvailability), createElement(LongAvailability))
   )
   const legacy = { ...INIT, grants: { ...GRANTS, native: [BRIDGE_EXTERNAL_LINK_GRANT] } }
   await act(async () => {

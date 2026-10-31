@@ -2,11 +2,14 @@ import { activateMobileUiLocale, mobileI18n } from '../../../i18n/mobile-i18n'
 import { MobileNativeChatSettledBodyContext } from '../../mobile-native-chat-settled-body'
 import { createAgentSessionSettledBodyReader } from '../../../../../src/shared/agent-session-settled-body-reader'
 import { agentSessionJsonPiece } from '../../../../../src/shared/agent-session-json-pieces'
-import { AGENT_SESSION_SETTLED_BODY_CAPABILITY } from '../../../../../src/shared/agent-session-settled-body'
+import {
+  AGENT_SESSION_SETTLED_BODY_CAPABILITY,
+  type AgentSessionSettledBodyRead
+} from '../../../../../src/shared/agent-session-settled-body'
 import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat-resolution-receipt'
 import { structuredQuestionTranscript } from '../../../../../src/shared/structured-agent-question-projection'
 import type { AskPrompt } from '../../../../../src/shared/native-chat/input/native-chat-ask-types'
-import { createElement, useRef } from 'react'
+import { createElement, useLayoutEffect, useRef } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { Pressable, TextInput } from 'react-native'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -59,7 +62,7 @@ const ask = { questions: [{ question: 'Pick?', options: [{ label: 'East' }], mul
 it('automatically hydrates a projected saved phone receipt and displays exact selected enum and complete text', async () => {
   const red = 'a'.repeat(4000) + 'r'.repeat(4000),
     blue = 'a'.repeat(4000) + 'b'.repeat(4000)
-  const text = '  first\n' + 'x'.repeat(60000) + '\nlast  '
+  const text = `  first\n${'x'.repeat(60000)}\nlast  `
   const exact: NativeChatResolvedPrompt = {
     kind: 'approval',
     title: 'Saved full form',
@@ -109,11 +112,10 @@ it('automatically hydrates a projected saved phone receipt and displays exact se
       settledBody: descriptor
     }
   ]).receipts.get(source.itemId)!
-  const read = vi.fn(
-    async (
-      request: import('../../../../../src/shared/agent-session-settled-body').AgentSessionSettledBodyRead
-    ) => ({ source, ...agentSessionJsonPiece(JSON.stringify(exact), request.cursor) })
-  )
+  const read = vi.fn(async (request: AgentSessionSettledBodyRead) => ({
+    source,
+    ...agentSessionJsonPiece(JSON.stringify(exact), request.cursor)
+  }))
   const reader = createAgentSessionSettledBodyReader(read)
   let mounted!: ReactTestRenderer
   try {
@@ -273,7 +275,9 @@ it('submits the actual mobile form through its hook with exact defaults, editabl
       status: 'ready' as const,
       items: [prompt]
     })
-    stateRef.current = { ...stateRef.current, items: [current] }
+    useLayoutEffect(() => {
+      stateRef.current = { ...stateRef.current, items: [current] }
+    }, [current])
     const actions = useMobileStructuredPromptResponses({
       stateRef,
       sourceKey,
@@ -553,7 +557,7 @@ describe('MobileNativeChatPromptCard collapse', () => {
 
 it('keeps the known Open control present disabled without support while decisions and the complete address remain available', async () => {
   vi.mocked(useExternalLinkAvailable).mockReturnValue(false)
-  const url = 'https://example.com/' + 'x'.repeat(8192 - 20)
+  const url = `https://example.com/${'x'.repeat(8192 - 20)}`
   const answer = vi.fn(async () => true)
   let tree: ReactTestRenderer | undefined
   try {

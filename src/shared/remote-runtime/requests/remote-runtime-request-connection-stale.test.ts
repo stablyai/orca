@@ -39,6 +39,7 @@ type FakeOpenedSocket = {
 
 function createFakeOpenedSocket(callbacks: RemoteRuntimeWebSocketCallbacks): FakeOpenedSocket {
   const sent: string[] = []
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this network-free partial socket supplies send/close/state/bufferedAmount and real EventEmitter events at the mocked WebSocket callback boundary.
   const ws = Object.assign(new EventEmitter(), {
     bufferedAmount: 0,
     readyState: WebSocket.OPEN,

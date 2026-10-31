@@ -107,7 +107,7 @@ export function NativeChatForm({
                 }}
               >
                 {choices.map((choice, index) => (
-                  <div key={index} className="flex items-center gap-2">
+                  <div key={String(choice.value)} className="flex items-center gap-2">
                     <RadioGroupItem id={`${fieldId}-${index}`} value={String(index)} />
                     <Label htmlFor={`${fieldId}-${index}`}>{choice.label}</Label>
                   </div>

@@ -8,7 +8,7 @@ import { NativeChatAwaitingInputRow } from './NativeChatAwaitingInputRow'
 import {
   NATIVE_CHAT_RECEIPT_COPY,
   nativeChatReceiptAnswerHeading,
-  nativeChatReceiptAnswers,
+  nativeChatReceiptAnswerEntries,
   nativeChatReceiptSubject,
   type NativeChatResolvedPrompt
 } from '../../../../shared/native-chat-resolution-receipt'
@@ -45,7 +45,7 @@ export function NativeChatResolutionReceipt({
   // Non-empty only once resolved, and then each question is listed with its answer.
   const answers = incomplete
     ? []
-    : nativeChatReceiptAnswers(body, agentSessionFormBooleanLabels(translate))
+    : nativeChatReceiptAnswerEntries(body, agentSessionFormBooleanLabels(translate))
   return (
     <div
       className="space-y-1 border-l border-border pl-3 text-xs text-chat-foreground-faint"
@@ -76,16 +76,10 @@ export function NativeChatResolutionReceipt({
           </p>
         )
       ) : null}
-      {answers.map((answer, index) => {
+      {answers.map(({ key, answer }) => {
         const heading = nativeChatReceiptAnswerHeading(subject, answer)
         return (
-          <div
-            key={
-              body.kind === 'question'
-                ? (body.questions?.[index]?.id ?? 'answer')
-                : `${index}:${answer.question ?? ''}`
-            }
-          >
+          <div key={key}>
             {heading ? <p>{heading}</p> : null}
             <p
               className={

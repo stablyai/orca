@@ -100,6 +100,7 @@ export function useStructuredAgentSessionMutate(args: {
   const inFlightStops = useRef(new Map<string, Promise<ExecutionResult<unknown>>>())
   const presentation = useRef<object | null>(null)
   const hostKey = structuredAgentSessionHostKey(target)
+  // oxlint-disable-next-line react-hooks/exhaustive-deps -- Unknown submission identities belong to exactly this host/session lifetime.
   const formSubmissions = useMemo(() => createAgentSessionFormSubmissions(), [hostKey, sessionId])
   useLayoutEffect(() => {
     presentation.current = enabled ? {} : null

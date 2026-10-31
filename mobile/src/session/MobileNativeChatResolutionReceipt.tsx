@@ -3,7 +3,7 @@ import { useMobileNativeChatSettledBody } from './mobile-native-chat-settled-bod
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
 import {
   nativeChatReceiptAnswerHeading,
-  nativeChatReceiptAnswers,
+  nativeChatReceiptAnswerEntries,
   nativeChatReceiptSubject,
   type NativeChatResolvedPrompt
 } from '../../../src/shared/native-chat-resolution-receipt'
@@ -48,7 +48,9 @@ export function MobileNativeChatResolutionReceipt({
   const { resolution } = body
   const copy = nativeChatReceiptCopy(t, resolution.resolvedBy ?? undefined)
   const cancelled = resolution.state === 'cancelled'
-  const answers = incomplete ? [] : nativeChatReceiptAnswers(body, agentSessionFormBooleanLabels(t))
+  const answers = incomplete
+    ? []
+    : nativeChatReceiptAnswerEntries(body, agentSessionFormBooleanLabels(t))
   const outcome = [
     cancelled ? copy.cancelled : copy.resolved,
     resolution.resolvedBy ? (cancelled ? copy.cancelledBy : copy.resolver) : null
@@ -80,16 +82,10 @@ export function MobileNativeChatResolutionReceipt({
           <Text style={text}>{copy.unavailable}</Text>
         )
       ) : null}
-      {answers.map((answer, index) => {
+      {answers.map(({ key, answer }) => {
         const heading = nativeChatReceiptAnswerHeading(subject, answer)
         return (
-          <View
-            key={
-              body.kind === 'question'
-                ? (body.questions?.[index]?.id ?? 'answer')
-                : `${index}:${answer.question ?? ''}`
-            }
-          >
+          <View key={key}>
             {heading ? <Text style={text}>{heading}</Text> : null}
             <Text
               selectable={INLINE_TEXT_SELECTION}

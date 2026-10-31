@@ -10,15 +10,16 @@ import { useNativeChatLinkActions } from './use-native-chat-link-actions'
 import { NativeChatApprovalCard } from './NativeChatApprovalCard'
 import type * as HttpLinkRoutingModule from '@/lib/http-link-routing'
 
-const mocks = vi.hoisted(() => ({
-  openHttpLink: vi.fn(),
-  openFileLink: vi.fn(),
-  settings: { openLinksInApp: true, terminalLinkActionPopoverEnabled: true } as {
-    openLinksInApp?: boolean
-    terminalLinkActionPopoverEnabled?: boolean
-    terminalLinkClickBehavior?: 'none' | 'actions' | 'open'
-  }
-}))
+type LinkSettings = {
+  openLinksInApp?: boolean
+  terminalLinkActionPopoverEnabled?: boolean
+  terminalLinkClickBehavior?: 'none' | 'actions' | 'open'
+}
+
+const mocks = vi.hoisted(() => {
+  const settings: LinkSettings = { openLinksInApp: true, terminalLinkActionPopoverEnabled: true }
+  return { openHttpLink: vi.fn(), openFileLink: vi.fn(), settings }
+})
 
 vi.mock('@/lib/http-link-routing', async (importOriginal) => ({
   ...(await importOriginal<typeof HttpLinkRoutingModule>()),
