@@ -53,9 +53,11 @@ export function getMailboxesWithPointerWork(
            AND (delivered_at IS NULL OR pointer_enter_pending > 0)
            AND to_handle IN (${batch.map(() => '?').join(',')})`
       )
-      .all(...batch) as { to_handle: string }[]
+      .all(...batch)
     for (const row of rows) {
-      found.add(row.to_handle)
+      if (typeof row?.to_handle === 'string') {
+        found.add(row.to_handle)
+      }
     }
   }
   return found
