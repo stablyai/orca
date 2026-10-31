@@ -1,5 +1,6 @@
 import { DaemonConnectionLostError, DaemonRequestTimeoutError } from '../../../daemon/daemon-errors'
 import { isAgentSessionOperationOutcomeUnknown } from '../../runtime-agent-launch-resolution'
+import { TerminalRevealUnconfirmedError } from '../../session-tabs/terminal-not-placed-error'
 import type { AgentSessionSwitchResult } from '../../../../shared/agent-session-switch-execution'
 import {
   agentSessionRefusalError,
@@ -14,7 +15,9 @@ export function structuredSessionSwitchFailure(
     ? error.refusal
     : isAgentSessionOperationOutcomeUnknown(error) ||
         error instanceof DaemonConnectionLostError ||
-        error instanceof DaemonRequestTimeoutError
+        error instanceof DaemonRequestTimeoutError ||
+        // The terminal may already be in the chat's slot: the user is told to check the open tab.
+        error instanceof TerminalRevealUnconfirmedError
       ? agentSessionRefusalError('agent_session_operation_unknown', { reason: 'outcomeUnknown' })
           .refusal
       : refuseUnclassified(

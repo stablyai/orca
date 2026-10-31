@@ -9,7 +9,10 @@ import type { TerminalTabCreateReply } from '../../shared/terminal-reveal-identi
 import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
 import { requestAgentLaunchTabPublishFromRenderer } from './agent-launch-tab-publish-relay'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { TerminalNotPlacedError } from '../runtime/session-tabs/terminal-not-placed-error'
+import {
+  TerminalNotPlacedError,
+  TerminalRevealUnconfirmedError
+} from '../runtime/session-tabs/terminal-not-placed-error'
 import { registerRendererDocumentNavigation } from './renderer-document-navigation'
 import { createRuntimeRendererNotificationSender } from './runtime-renderer-notification-sender'
 import { requestSessionTabCloseFromRenderer } from './session-tab-close-request-relay'
@@ -87,7 +90,7 @@ export function registerRuntimeWindowLifecycle(
         }
         const timer = setTimeout(() => {
           ipcMain.removeListener('terminal:tabCreateReply', handler)
-          reject(new Error('Terminal reveal timed out'))
+          reject(new TerminalRevealUnconfirmedError('Terminal reveal timed out'))
         }, 10_000)
         const handler = (event: Electron.IpcMainEvent, reply: TerminalTabCreateReply): void => {
           // Renderer-supplied request IDs confer no authority; only this window can satisfy reveal.

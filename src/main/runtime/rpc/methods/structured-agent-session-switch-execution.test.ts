@@ -24,7 +24,10 @@ import {
   LEAF_B
 } from '../../main-owned-workspace-runtime-fixture'
 import { executeStructuredSessionSwitch } from './structured-agent-session-switch-execution'
-import { TerminalNotPlacedError } from '../../session-tabs/terminal-not-placed-error'
+import {
+  TerminalNotPlacedError,
+  TerminalRevealUnconfirmedError
+} from '../../session-tabs/terminal-not-placed-error'
 import type { AiVaultPrepareSessionResumeResult } from '../../../../shared/ai-vault-resume-preparation'
 import { refusedMobileSessionTabClose } from '../../mobile-session-tab-close-outcome'
 import { AGENT_SESSION_SWITCH_HOST_MS } from '../../../../shared/agent-session-switch-execution'
@@ -499,7 +502,7 @@ it.each([
     vi.spyOn(runtime, 'hasTerminalViewer').mockReturnValue(shape === 'viewed')
     vi.spyOn(runtime, 'placeSwitchTerminal').mockRejectedValue(
       shape === 'timed-out'
-        ? new Error('Terminal reveal timed out')
+        ? new TerminalRevealUnconfirmedError('Terminal reveal timed out')
         : new TerminalNotPlacedError('terminal_handle_stale')
     )
     const result = await executeStructuredSessionSwitch(
@@ -508,6 +511,13 @@ it.each([
       'terminal'
     )
     expect(result.status).not.toBe('completed')
+    if (shape === 'timed-out') {
+      // It may be on screen already, so the answer is "couldn't confirm", not "try again".
+      expect(result).toMatchObject({
+        status: 'uncertain',
+        refusal: { details: { reason: 'outcomeUnknown' } }
+      })
+    }
     expect(killFenced).toHaveBeenCalledTimes(discards)
     if (discards) {
       expect(killFenced).toHaveBeenCalledWith({
