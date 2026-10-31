@@ -59,7 +59,10 @@ vi.mock('lucide-react-native', () => ({
   User: 'User'
 }))
 
-vi.mock('../transport/host-store', () => ({ loadHosts: dependencies.loadHosts }))
+vi.mock('../transport/host-store', () => ({
+  loadHosts: dependencies.loadHosts,
+  peekHosts: () => null
+}))
 
 vi.mock('../transport/host-client-hooks', () => {
   const client = {
@@ -94,6 +97,7 @@ vi.mock('../transport/host-client-hooks', () => {
     }
   }
   return {
+    useForceReconnect: () => null,
     useHostClient: () => ({ client, state: 'connected' })
   }
 })

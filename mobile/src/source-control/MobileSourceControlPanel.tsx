@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, Text, View } from 'react-native'
+import { View } from 'react-native'
+import { GitBranch } from 'lucide-react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { colors } from '../theme/mobile-theme'
+import {
+  MobileLoadErrorState,
+  MobileOfflineState,
+  MobileStateView
+} from '../components/MobileStateView'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { connectionRetryAction } from '../transport/connection-retry-action'
@@ -260,23 +265,17 @@ export function MobileSourceControlPanel({
   })
   const statusGate =
     screenState.kind === 'loading' ? (
-      <View style={styles.state}>
-        <ActivityIndicator size="small" color={colors.textSecondary} />
-      </View>
-    ) : screenState.kind === 'error' || screenState.kind === 'unavailable' ? (
-      <View style={styles.state}>
-        <Text style={styles.stateTitle}>
-          {screenState.kind === 'unavailable'
-            ? t('sourceControl.panel.unavailableTitle', 'Source Control Unavailable')
-            : t('sourceControl.panel.loadFailedTitle', 'Unable to Load')}
-        </Text>
-        <Text style={styles.stateText}>{screenState.message}</Text>
-        {screenState.kind === 'error' && statusRetry ? (
-          <Pressable style={styles.retryButton} onPress={statusRetry}>
-            <Text style={styles.retryText}>{t('common.retry', 'Retry')}</Text>
-          </Pressable>
-        ) : null}
-      </View>
+      <MobileStateView loading title={t('sourceControl.panel.loading', 'Loading changes…')} />
+    ) : screenState.kind === 'unavailable' ? (
+      <MobileStateView
+        icon={GitBranch}
+        title={t('sourceControl.panel.unavailableTitle', 'Source Control Unavailable')}
+        message={screenState.message}
+      />
+    ) : screenState.kind === 'error' && connState !== 'connected' ? (
+      <MobileOfflineState onReconnect={statusRetry} />
+    ) : screenState.kind === 'error' ? (
+      <MobileLoadErrorState error={screenState.message} onRetry={statusRetry} />
     ) : null
 
   // History needs only RPC; Changes and PR also need branch/file status.

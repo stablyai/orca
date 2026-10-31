@@ -3,7 +3,6 @@ import { translate } from '../i18n/mobile-i18n'
 import { isBrokenCheck } from '../../../src/shared/pr-checks-fix-prompt'
 import {
   View,
-  ActivityIndicator,
   colors,
   Text,
   Pressable,
@@ -26,9 +25,9 @@ import {
   renderMobileTasksItemFiles
 } from './mobile-tasks-item-review-sections'
 import { renderMobileTasksItemFieldEditors } from './mobile-tasks-item-field-editors'
-import { ListGroup } from '../components/list/ListGroup'
+import { ListGroup, SectionHeader } from '../components/list/ListGroup'
+import { MobileLoadErrorState, MobileStateView } from '../components/MobileStateView'
 import { ListRow } from '../components/list/ListRow'
-import { SectionHeader } from '../components/list/SectionHeader'
 import type { ActionableTaskItem } from './mobile-tasks-project-workspace-types'
 import type { DetailPayload } from './mobile-tasks-provider-detail-types'
 
@@ -100,6 +99,7 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
     renderCommentComposer,
     renderDetailCommentGroup,
     rerunGitHubChecks,
+    setDetailRefreshSeq,
     setItemCommentDraft,
     setLinearCommentDraft,
     setLinearSubIssueTitle
@@ -108,13 +108,15 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
     return null
   }
   return detailLoading ? (
-    <View style={styles.detailLoading}>
-      <ActivityIndicator size="small" color={colors.textSecondary} />
-    </View>
+    <MobileStateView
+      loading
+      title={translate('tasks.itemDetailContent.loading', 'Loading details…')}
+    />
   ) : detailError ? (
-    <View style={styles.itemSectionBody}>
-      <Text style={styles.detailError}>{detailError}</Text>
-    </View>
+    <MobileLoadErrorState
+      error={detailError}
+      onRetry={() => setDetailRefreshSeq((current) => current + 1)}
+    />
   ) : detailPayload ? (
     <>
       <SectionHeader title={translate('tasks.itemDetailContent.details', 'Details')} />

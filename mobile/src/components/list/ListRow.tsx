@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { Check, ChevronRight } from 'lucide-react-native'
-import { colors, spacing } from '../../theme/mobile-theme'
+import { triggerSelection } from '../../platform/haptics'
+import { colors, feedback, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { LIST_LEADING_SLOT, LIST_ROW_PADDING } from './ListGroup'
@@ -21,7 +22,10 @@ type ListRowProps = {
   selected?: boolean
   destructive?: boolean
   onPress?: () => void
+  onLongPress?: () => void
   disabled?: boolean
+  /** Working on a press: stops taking taps without the disabled dimming. */
+  busy?: boolean
   accessibilityLabel?: string
   accessibilityRole?: 'button' | 'radio' | 'checkbox' | 'switch'
   testID?: string
@@ -38,7 +42,9 @@ export function ListRow({
   selected,
   destructive = false,
   onPress,
+  onLongPress,
   disabled = false,
+  busy = false,
   accessibilityLabel,
   accessibilityRole,
   testID
@@ -80,6 +86,7 @@ export function ListRow({
       {navigates ? <ChevronRight size={15} color={colors.textMuted} strokeWidth={2.2} /> : null}
     </>
   )
+  const inertState = { disabled: disabled || busy, ...(busy && { busy }) }
   if (onPress === undefined) {
     return (
       <View style={rowStyle} testID={testID}>
@@ -89,12 +96,20 @@ export function ListRow({
   }
   return (
     <Pressable
-      onPress={onPress}
-      disabled={disabled}
+      onPress={() => {
+        // Picking a new option ticks; re-tapping the picked one or opening a screen doesn't.
+        if (selected === false) {
+          triggerSelection()
+        }
+        onPress()
+      }}
+      onLongPress={onLongPress}
+      delayLongPress={onLongPress ? 400 : undefined}
+      disabled={inertState.disabled}
       accessibilityRole={accessibilityRole ?? (selected === undefined ? 'button' : 'radio')}
       accessibilityLabel={accessibilityLabel ?? (value ? `${title}, ${value}` : title)}
       accessibilityState={
-        selected === undefined ? { disabled } : { disabled, checked: selected, selected }
+        selected === undefined ? inertState : { ...inertState, checked: selected, selected }
       }
       testID={testID}
       style={({ pressed }) => [...rowStyle, pressed && styles.pressed]}
@@ -115,8 +130,8 @@ const styles = themedStyleSheet(() => ({
   },
   rowTwoLine: { minHeight: 60 },
   // A translucent wash: bgRaised matches sheetGroup in dark, so it would not show.
-  pressed: { backgroundColor: colors.borderSubtle },
-  disabled: { opacity: 0.4 },
+  pressed: { backgroundColor: colors.translucentFill },
+  disabled: { opacity: feedback.disabledOpacity },
   leading: { width: LIST_LEADING_SLOT, alignItems: 'center', justifyContent: 'center' },
   main: { flex: 1, minWidth: 0, gap: 2 },
   title: { fontSize: 15, color: colors.textPrimary },

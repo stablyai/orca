@@ -1,7 +1,8 @@
 import { useCallback, useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
+import { Pressable, ScrollView, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { VoiceSettingsOperations } from './voice-settings-operations'
+import { MobileStateView } from '../components/MobileStateView'
 import { voiceSettingsStyles as styles } from './voice-settings-styles'
 import { ChevronLeft, ChevronRight } from 'lucide-react-native'
 import { colors, spacing } from '../theme/mobile-theme'
@@ -60,10 +61,13 @@ function voiceSettingsErrorMessage(t: Translate, error: VoiceSettingsError | nul
 
 export default function VoiceSettingsScreen({
   operations,
+  connecting = false,
   focused,
   onBack
 }: {
   operations: VoiceSettingsOperations | null
+  /** A paired desktop is still dialing, so the screen is loading rather than unpaired. */
+  connecting?: boolean
   focused: boolean
   onBack: () => void
 }): React.JSX.Element {
@@ -260,7 +264,12 @@ export default function VoiceSettingsScreen({
         <Text style={styles.heading}>{t('settings.voiceSettingsScreen.title', 'Voice')}</Text>
       </View>
 
-      {!operations ? (
+      {(operations ? loading && setup === null : connecting) ? (
+        <MobileStateView
+          loading
+          title={t('settings.voiceSettingsScreen.loading', 'Loading voice settings…')}
+        />
+      ) : !operations ? (
         <View style={[styles.section, styles.sectionTopGap]}>
           <Text style={styles.emptyText}>
             {t(
@@ -268,10 +277,6 @@ export default function VoiceSettingsScreen({
               'Connect to a desktop to manage voice settings.'
             )}
           </Text>
-        </View>
-      ) : loading && setup === null ? (
-        <View style={styles.loading}>
-          <ActivityIndicator color={colors.textSecondary} />
         </View>
       ) : setup === null ? (
         <View style={[styles.section, styles.sectionTopGap]}>
