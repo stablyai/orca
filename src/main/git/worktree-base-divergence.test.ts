@@ -5,8 +5,17 @@ const mocks = vi.hoisted(() => ({ gitExecFileAsync: vi.fn() }))
 vi.mock('./runner', () => ({ gitExecFileAsync: mocks.gitExecFileAsync }))
 
 import { GitAdmissionScheduler } from './command-runner/git-subprocess-admission'
+import type { GitAdmissionTier } from './command-runner/git-exec-options'
 
 import { measureRetargetDivergence } from './worktree-base-divergence'
+
+type ExecOptions = {
+  cwd: string
+  timeout?: number
+  wslDistro?: string
+  signal?: AbortSignal
+  admissionTier?: GitAdmissionTier
+}
 
 function subcommands(): string[] {
   return mocks.gitExecFileAsync.mock.calls.map((call) => (call[0] as string[])[0]!)
