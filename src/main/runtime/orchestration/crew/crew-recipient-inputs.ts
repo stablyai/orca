@@ -1,3 +1,4 @@
+import { createCrewFollowUpAuthorityInputs } from './crew-follow-up-authority-inputs'
 import { createCrewRecipientFollowUpInputs } from './crew-recipient-follow-up-inputs'
 import {
   crewRecipientOwnerQueries,
@@ -241,7 +242,7 @@ export function createCrewRecipientInputs(
   const namedRuns = new Map<string, CrewRecipientRun | null>()
   const { followUpNodes, prepareFollowUps } = createCrewRecipientFollowUpInputs(query)
 
-  const { finish, prepareExplicit, explicit } = createCrewRecipientMailboxSelection({
+  const { finish, prepareExplicit, explicit, qualification } = createCrewRecipientMailboxSelection({
     query,
     running,
     listedSessions: () => {
@@ -259,12 +260,14 @@ export function createCrewRecipientInputs(
     namedRuns,
     followUpNodes,
     prepareFollowUps,
-    boundRuns
+    boundRuns,
+    authorityInputs: createCrewFollowUpAuthorityInputs(db)
   })
   return {
     prepare,
     prepareExplicit,
     explicit,
+    qualification,
     explicitDispatch: (id: string) => explicitDispatches.get(id),
     keyFor,
     identityCovered,

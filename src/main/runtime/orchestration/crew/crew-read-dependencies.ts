@@ -1,3 +1,4 @@
+import type { DispatchCreator } from '../db/dispatch-depth'
 import type { TerminalIdentityReadContext } from '../../terminal/query/terminal-identity-read-context'
 import type { AgentMessageSender } from '../../../../shared/agent-session/agent-session-message-source'
 import type { FleetAgentStatusEvidence } from '../../../../shared/orchestration-fleet-agent-status-evidence'
@@ -20,6 +21,8 @@ export type CrewReadDependencies = {
   callerPaneForHandle?: (handle: string) => string | null
   livePaneForHandle?: (handle: string) => string | null
   processForHandle?: (handle: string) => string | null
+  callerProjection?: (handle: string) => DispatchCreator
+  maxDepth?: () => number
   statuses: readonly FleetAgentStatusEvidence[]
   now?: number
   openIdentityRead?: () => CrewIdentityRead
@@ -28,6 +31,7 @@ export type CrewReadDependencies = {
 
 export type CrewIdentityRead = Pick<
   CrewReadDependencies,
+  | 'callerProjection'
   | 'liveHandle'
   | 'handleForPane'
   | 'paneForHandle'
