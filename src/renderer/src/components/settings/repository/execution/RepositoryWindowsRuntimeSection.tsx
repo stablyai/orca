@@ -11,7 +11,7 @@ import { useWslMoveTargetForRepo } from '../../../wsl-move/wsl-move-entry'
 import { WslMoveRuntimeRow } from '../../../wsl-move/WslMoveRuntimeRow'
 import { WslDriveProjectGitRow } from '../../../wsl-drive-project/WslDriveProjectGitRow'
 import { WslDriveUncConversionRow } from '../../../wsl-drive-project/WslDriveUncConversionRow'
-import { useWslHostsEnabled } from '../../../sidebar/use-wsl-hosts-enabled'
+import { useWslHostsAcceptNewWork } from '../../../sidebar/use-wsl-hosts-enabled'
 import { resolveProjectExecutionRuntime } from '../../../../../../shared/project-execution-runtime'
 import { isGitRepoKind } from '../../../../../../shared/repo-kind'
 
@@ -51,8 +51,8 @@ export function RepositoryWindowsRuntimeSection({
 }: RepositoryWindowsRuntimeSectionProps): React.JSX.Element | null {
   // Owner decision: for a WSL project with a host, the runtime toggle becomes "Move project".
   const wslMoveDistro = useWslMoveTargetForRepo(repo)
-  // Windows Git for WSL projects on a Windows drive ships with WSL hosts (D1c), not before.
-  const wslHostsEnabled = useWslHostsEnabled()
+  // D1c ships with WSL hosts; serve-only, a live block or the setting off hide it, as main refuses.
+  const d1cAvailable = useWslHostsAcceptNewWork()
   if (!settings || !project || !updateProject || !isLocalWindowsProject) {
     return null
   }
@@ -91,7 +91,7 @@ export function RepositoryWindowsRuntimeSection({
           updateProject={updateProject}
         />
       )}
-      {wslHostsEnabled && repo && isGitRepoKind(repo) && !wslCapabilitiesLoading ? (
+      {d1cAvailable && repo && isGitRepoKind(repo) && !wslCapabilitiesLoading ? (
         <WslDriveProjectGitRow
           projectId={project.id}
           repoPath={repo.path}
@@ -106,7 +106,7 @@ export function RepositoryWindowsRuntimeSection({
           updateProject={updateProject}
         />
       ) : null}
-      {wslHostsEnabled && repo ? <WslDriveUncConversionRow repo={repo} /> : null}
+      {d1cAvailable && repo ? <WslDriveUncConversionRow repo={repo} /> : null}
     </SearchableSetting>
   )
 }
