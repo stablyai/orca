@@ -14,7 +14,10 @@ import {
   usageProviderForAgent,
   USAGE_PROVIDER_NAMES
 } from './agent-usage-provider'
-import { ComposerUsageClientContext } from './composer-usage-client-context'
+import {
+  ComposerUsageClientContext,
+  ComposerUsageTabAgentContext
+} from './composer-usage-client-context'
 import { useComposerUsageWindow } from './composer-usage-window-preference'
 import { ComposerUsageSheet } from './ComposerUsageSheet'
 
@@ -40,11 +43,14 @@ export function ComposerUsageMeter({
   useMobileColorScheme()
   const t = useMobileTranslation()
   const client = useContext(ComposerUsageClientContext)
+  // Before a hook status names the agent, the host's own identification of the tab still does.
+  const tabAgent = useContext(ComposerUsageTabAgentContext)
+  const usageAgent = agent ?? tabAgent
   // Agentless tabs never open the accounts stream.
-  const snapshot = useAccountsSnapshot(usageProviderForAgent(agent) ? client : null)
+  const snapshot = useAccountsSnapshot(usageProviderForAgent(usageAgent) ? client : null)
   const choice = useComposerUsageWindow()
   const [open, setOpen] = useState(false)
-  const usage = selectAgentUsage(snapshot, agent)
+  const usage = selectAgentUsage(snapshot, usageAgent)
   const target = usage ? resolveComposerUsageTarget(usage, choice) : null
   if (!usage || !target) {
     return null
