@@ -127,6 +127,7 @@ describe('Codex context usage in the journal', () => {
 
     tokenUsage('turn-1', FIRST_RESPONSE)
     expect(await contextUsage()).toEqual({
+      model: 'unknown',
       usedTokens: 17611,
       windowTokens: 258400,
       percentage: 7,

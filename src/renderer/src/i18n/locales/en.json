@@ -19861,6 +19861,10 @@
       "contextUsage": {
         "label": "Context {{used}} of {{window}} tokens, {{percent}}% used",
         "title": "Context",
+        "lastReported": "Last reported context",
+        "reportedModel": "Reported model: {{model}}",
+        "modelNotReported": "Model not reported",
+        "selectedModelNotice": "May differ from the selected model.",
         "estimated": "Estimated from the last response."
       },
       "contextMenu": {

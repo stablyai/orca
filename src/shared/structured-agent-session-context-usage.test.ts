@@ -53,6 +53,26 @@ function turn(sequence: number, contextUsage: AgentSessionContextUsage): AgentJo
 }
 
 describe('selectStructuredAgentContextUsage', () => {
+  it('preserves report attribution while waiting for a new turn, then replaces it together', () => {
+    const previous = turn(1, { used: { kind: 'report', ...REPORT } })
+    const pending = item('turn-2', 2, { kind: 'turn', turnId: 'turn-2', state: 'running' })
+    expect(selectStructuredAgentContextUsage([previous, pending])).toMatchObject({
+      model: REPORT.model,
+      windowTokens: REPORT.windowTokens,
+      usedTokens: REPORT.usedTokens
+    })
+    const next = turn(2, {
+      used: { kind: 'report', ...REPORT, model: 'unknown', windowTokens: 475_000 }
+    })
+    expect(selectStructuredAgentContextUsage([previous, next])).toMatchObject({
+      model: 'unknown',
+      windowTokens: 475_000
+    })
+    expect(
+      selectStructuredAgentContextUsage([], { used: { kind: 'report', ...REPORT } })
+    ).toMatchObject({ model: REPORT.model })
+  })
+
   it('orders by journal position, not by the clock on the fact', () => {
     const late = { ...REPORT, capturedAt: 99_000 }
     expect(

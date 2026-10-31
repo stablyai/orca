@@ -21,6 +21,14 @@ const HOVER_CLOSE_DELAY_MS = 100
 
 type ContextUsageRow = NativeChatContextUsageSummary['rows'][number]
 
+function reportedModelLabel(model: string | undefined): string {
+  return model && model !== 'unknown'
+    ? translate('components.native-chat.contextUsage.reportedModel', 'Reported model: {{model}}', {
+        model
+      })
+    : translate('components.native-chat.contextUsage.modelNotReported', 'Model not reported')
+}
+
 /** The CLI can repeat a category name, so a row's key counts which repeat it is. */
 function keyRows(
   rows: NativeChatContextUsageSummary['rows']
@@ -87,11 +95,16 @@ export function NativeChatContextUsageRing({
   const critical = usage.percentage >= CRITICAL_PERCENTAGE
   const used = formatContextTokenCount(usage.usedTokens)
   const window = formatContextTokenCount(usage.windowTokens)
-  const label = translate(
+  const countLabel = translate(
     'components.native-chat.contextUsage.label',
     'Context {{used}} of {{window}} tokens, {{percent}}% used',
     { used, window, percent: String(usage.percentage) }
   )
+  const title = usage.estimated
+    ? translate('components.native-chat.contextUsage.title', 'Context')
+    : translate('components.native-chat.contextUsage.lastReported', 'Last reported context')
+  const attribution = reportedModelLabel(usage.model)
+  const label = usage.estimated ? countLabel : `${title}. ${attribution}. ${countLabel}`
   const { open, setOpen, setOpenAfterHover } = useContextCardOpen()
   const rows = keyRows(usage.rows)
   return (
@@ -171,14 +184,23 @@ export function NativeChatContextUsageRing({
         >
           <div className="p-4">
             <div className="flex items-baseline justify-between gap-3 text-sm">
-              <span className="font-medium text-foreground">
-                {translate('components.native-chat.contextUsage.title', 'Context')}
-              </span>
+              <span className="font-medium text-foreground">{title}</span>
               <span className="tabular-nums text-muted-foreground">
                 {used}/{window}
               </span>
             </div>
             <Progress value={filled} aria-label={label} className="mt-2 h-1.5" />
+            {!usage.estimated ? (
+              <div className="mt-3 space-y-1 text-2xs text-muted-foreground">
+                <p className="break-words">{attribution}</p>
+                <p>
+                  {translate(
+                    'components.native-chat.contextUsage.selectedModelNotice',
+                    'May differ from the selected model.'
+                  )}
+                </p>
+              </div>
+            ) : null}
             {rows.length > 0 ? (
               <ul className="mt-3 space-y-1 text-xs">
                 {rows.map(({ key, row }) => (
