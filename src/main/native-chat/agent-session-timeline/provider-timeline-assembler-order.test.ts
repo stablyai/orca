@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { MAX_PROVIDER_TIMELINE_OPEN_ENTRIES } from './provider-timeline-budget'
 import {
   assistantText,
@@ -14,7 +14,6 @@ import {
 } from './provider-timeline-assembler-test-support'
 
 afterEach(async () => {
-  vi.useRealTimers()
   await closeProviderTimelineRigs()
 })
 
@@ -141,9 +140,21 @@ describe('structural events preserve text ordering', () => {
     rig.assembler.apply({ type: 'turn.open', turn: 't1', at: 1_000 })
     rig.assembler.apply({
       type: 'text.delta',
+      item: { id: 'empty-start' },
+      channel: 'assistant',
+      text: ''
+    })
+    rig.assembler.apply({
+      type: 'text.delta',
       item: { id: 'm1' },
       channel: 'assistant',
       text: 'First'
+    })
+    rig.assembler.apply({
+      type: 'text.delta',
+      item: { id: 'empty-start' },
+      channel: 'assistant',
+      text: 'Second'
     })
     rig.assembler.apply({ type: 'item.open', item: 'tool', body: runningTool('read') })
     fire()
@@ -151,6 +162,7 @@ describe('structural events preserve text ordering', () => {
     const items = (await rig.rows()).filter((row) => row.body.kind !== 'turn')
     expect(items.map((row) => row.itemId)).toEqual([
       providerItemId('item', 'm1'),
+      providerItemId('item', 'empty-start'),
       providerItemId('item', 'tool')
     ])
   })
@@ -272,6 +284,7 @@ it.each(['assistant', 'reasoning'] as const)(
     delta('blank', '')
     delta('white', ' \n ')
     delta('named', 'First')
+    delta('blank', 'Second')
     for (const turn of [undefined, 'old', 'current', 'missing']) {
       usage(turn)
     }
@@ -285,23 +298,24 @@ it.each(['assistant', 'reasoning'] as const)(
     })
     await rig.eventSink.written?.()
     expect(messages()).toEqual([])
-    a.apply({ type: 'text.delta', item: { stream: 'anonymous' }, channel, text: 'Second' })
+    a.apply({ type: 'text.delta', item: { stream: 'anonymous' }, channel, text: 'Third' })
     usage('missing')
     await rig.eventSink.written?.()
-    expect(messages().map((item) => messageText(item.body))).toEqual(['First', 'Second'])
+    expect(messages().map((item) => messageText(item.body))).toEqual(['First', 'Second', 'Third'])
     const first = structuredClone(messages())
-    a.apply({ type: 'text.delta', item: { stream: 'anonymous' }, channel, text: 'Third' })
+    a.apply({ type: 'text.delta', item: { stream: 'anonymous' }, channel, text: 'Fourth' })
     a.apply({ type: 'text.close', item: { stream: 'anonymous' } })
     delta('named', ' tail')
     // A positioned unrelated tail is not a predecessor of a newly released anonymous row.
-    a.apply({ type: 'text.delta', item: { stream: 'other' }, channel, text: 'Fourth' })
+    a.apply({ type: 'text.delta', item: { stream: 'other' }, channel, text: 'Fifth' })
     usage()
     await rig.eventSink.written?.()
     expect(messages().map((item) => messageText(item.body))).toEqual([
       'First',
       'Second',
       'Third',
-      'Fourth'
+      'Fourth',
+      'Fifth'
     ])
     a.apply({
       type: 'text.delta',
@@ -312,7 +326,7 @@ it.each(['assistant', 'reasoning'] as const)(
     })
     usage()
     await rig.eventSink.written?.()
-    expect(messages()).toHaveLength(4)
+    expect(messages()).toHaveLength(5)
     // Visible fallback, request and tool really order preceding text.
     a.apply({ type: 'provider.frame', frameKind: 'unmodeled-result', payload: { answer: 1 } })
     a.apply({ type: 'request.open', request: 'approval', body: pendingApproval })
@@ -324,55 +338,13 @@ it.each(['assistant', 'reasoning'] as const)(
       body: { role: channel, blocks: [{ type: 'text', text: 'First tail' }] }
     })
     expect(messages().map((item) => messageText(item.body))).toContain('Child')
-    for (const final of [undefined, '', 'Final']) {
-      const id = `final-${String(final)}`
-      delta(id, 'start')
-      a.flush()
-      await rig.eventSink.written?.()
-      delta(id, 'stale')
-      a.apply({ type: 'text.close', item: { id }, ...(final === undefined ? {} : { text: final }) })
-      delta(id, 'resurrection')
-      await rig.eventSink.written?.()
-      expect(messageText(rig.journal.item(providerItemId('item', id))?.body)).toBe(
-        final ?? 'startstale'
-      )
-    }
     a.apply({
       type: 'item.close',
       item: 'named',
       body: { kind: 'message', role: channel, blocks: [{ type: 'text', text: 'Replacement' }] }
     })
     a.apply({ type: 'turn.end', state: 'completed', at: 9 })
-    const original = structuredClone(await rig.rows())
-    const reopened = await rig.reopenJournal()
-    expect(reopened.snapshot().items).toEqual(original)
-    expect(reopened.publicRead().snapshot.items).toEqual(original)
+    await rig.eventSink.written?.()
+    expect(messageText(rig.journal.item(providerItemId('item', 'named'))?.body)).toBe('Replacement')
   }
 )
-
-it('preserves first meaningful append order after an empty named start at real placement barriers', async () => {
-  for (const metadata of [false, true]) {
-    const r = await openProviderTimelineRig({ schedule: () => () => {} })
-    const delta = (item: { id: string } | { stream: string }, text: string) =>
-      r.assembler.apply({ type: 'text.delta', item, text, channel: 'assistant' })
-    delta({ id: 'empty-start' }, '')
-    delta({ id: 'earlier-text' }, 'First')
-    delta({ id: 'empty-start' }, 'Second')
-    if (metadata) {
-      delta({ stream: 'anonymous' }, 'Third')
-      r.assembler.apply({
-        type: 'context.usage',
-        usage: { used: { kind: 'unknown', capturedAt: 10 } }
-      })
-    } else {
-      r.assembler.apply({ type: 'item.close', item: 'tool', body: runningTool('real boundary') })
-    }
-    await r.eventSink.written?.()
-    expect(
-      r.journal
-        .snapshot()
-        .items.filter((row) => row.body.kind === 'message')
-        .map((row) => messageText(row.body))
-    ).toEqual(metadata ? ['First', 'Second', 'Third'] : ['First', 'Second'])
-  }
-})

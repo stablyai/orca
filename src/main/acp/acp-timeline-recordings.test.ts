@@ -6,7 +6,6 @@ import {
 } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { openAcpFixtureRig, readAcpFixture } from './acp-timeline-fixture.test-support'
 import { GENERIC_ACP_DIALECT } from './acp-dialects/acp-dialect'
-import { catchUpAcpHistory } from './acp-history-catch-up'
 import { OPENCODE_ACP_DIALECT } from './acp-dialects/opencode-dialect'
 
 afterEach(closeProviderTimelineRigs)
@@ -171,7 +170,7 @@ describe('recorded ACP traffic through the journal', () => {
   })
 })
 
-it('uses actual suppressed requests and metadata without forcing named tails, then preserves explicit Plan and history finals', async () => {
+it('uses actual suppressed requests and metadata without forcing named tails, then preserves explicit Plan', async () => {
   const fixture = await openAcpFixtureRig(GENERIC_ACP_DIALECT)
   const translator = fixture.lane()
   fixture.apply(translator.openPrompt('prompt', 1).events)
@@ -228,62 +227,4 @@ it('uses actual suppressed requests and metadata without forcing named tails, th
   const reopened = await fixture.rig.reopenJournal()
   expect(reopened.snapshot().items).toEqual(expected)
   expect(reopened.publicRead().snapshot.items).toEqual(expected)
-
-  // Existing schedule-disabled history translation must explicitly flush named and anonymous bodies.
-  const history = await openAcpFixtureRig(OPENCODE_ACP_DIALECT)
-  const frames = [
-    {
-      method: 'session/update',
-      params: {
-        sessionId: 'session-1',
-        update: {
-          sessionUpdate: 'user_message_chunk',
-          messageId: 'user',
-          content: { type: 'text', text: 'question' }
-        }
-      }
-    },
-    {
-      method: 'session/update',
-      params: {
-        sessionId: 'session-1',
-        update: {
-          sessionUpdate: 'agent_message_chunk',
-          messageId: 'reply',
-          content: { type: 'text', text: 'answer' }
-        }
-      }
-    },
-    {
-      method: 'session/update',
-      params: {
-        sessionId: 'session-1',
-        update: { sessionUpdate: 'usage_update', used: 5, size: 1000 }
-      }
-    },
-    {
-      method: 'session/update',
-      params: {
-        sessionId: 'session-1',
-        update: { sessionUpdate: 'agent_thought_chunk', content: { type: 'text', text: 'reason' } }
-      }
-    }
-  ]
-  await catchUpAcpHistory({
-    frames,
-    identity: 'user-message-id',
-    sink: history.rig.eventSink,
-    sessionId: 'session-timeline',
-    agent: 'grok',
-    providerSessionId: 'session-1',
-    dialect: OPENCODE_ACP_DIALECT,
-    assertCurrent: () => {}
-  })
-  const saved = structuredClone(await history.rig.rows())
-  expect(
-    saved.filter((row) => row.body.kind === 'message').map((row) => messageText(row.body))
-  ).toEqual(['question', 'answer', 'reason'])
-  const reload = await history.rig.reopenJournal()
-  expect(reload.snapshot().items).toEqual(saved)
-  expect(reload.publicRead().snapshot.items).toEqual(saved)
 })

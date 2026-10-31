@@ -230,7 +230,7 @@ export function createCodexJournalTranslator(
         event.method === CODEX_TOKEN_USAGE_METHOD &&
         event.threadId === (deps.primaryThreadId?.() ?? null)
       ) {
-        recordCodexContextUsage({
+        const contextAdmission = recordCodexContextUsage({
           sink: deps.sink,
           activeTurns,
           attributionFor,
@@ -238,6 +238,9 @@ export function createCodexJournalTranslator(
           params: event.params,
           capturedAt: deps.now?.() ?? Date.now()
         })
+        if (!contextAdmission.accepted) {
+          return contextAdmission
+        }
       }
       if (event.method === 'item/started' || event.method === 'item/completed') {
         const routed = routeThreadItem(event)

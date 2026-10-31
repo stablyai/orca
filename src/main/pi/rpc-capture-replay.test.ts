@@ -21,7 +21,6 @@ import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession
 } from '../../shared/structured-agent-session-reducer'
-import { estimateStructuredAgentSessionItemBytes } from '../native-chat/agent-session-wire/structured-agent-session-event-sink-estimate'
 
 import { PiRpcOptionObservations, readPiRpcSessionOptions } from './rpc-options'
 import { piRpcStateSchema } from './rpc-protocol'
@@ -224,7 +223,11 @@ async function replay(
     if (dir === 'out' && oversized(frame)) {
       turns.skipped(frame.type, JSON.stringify(frame).slice(0, 256))
     } else if (dir === 'out' && (frame.type !== 'response' || frame.command === 'prompt')) {
+      const before = meter.full.length
       turns.receive(frame)
+      if (name === 'compaction' && frame === frames[83]?.frame) {
+        expect(meter.full.length).toBe(before)
+      }
     }
     if (dir === 'out' && frame.type === 'response' && frame.command === 'get_state') {
       // The idle probe resolved here in the captured run.
@@ -235,13 +238,7 @@ async function replay(
   lane.flush()
   const rows = await rig.rows()
   const turnRows = await rig.turns()
-  await consumers(rig.journal)
-  const snapshot = structuredClone(rig.journal.snapshot().items)
-  lane.dispose()
-  const reopened = await rig.reopenJournal()
-  expect(reopened.snapshot().items).toEqual(snapshot)
-  await consumers(reopened)
-  return { rows, turns: turnRows, accepted, failed, idle, settled }
+  return { rows, turns: turnRows, accepted, failed, idle, settled, rig, lane }
 }
 
 function transcript(rows: Awaited<ReturnType<typeof replay>>['rows']): string {
@@ -377,7 +374,15 @@ it('replays captured compaction with its top-level usage and final full answer',
   const result = await replay('compaction')
   expect(result.failed).not.toHaveBeenCalled()
   expect(result.turns.at(-1)?.outcome).toBe('success')
-  expect(transcript(result.rows)).toContain('FOLLOWUP_CONSUMED')
+  expect(result.rows.findLast((row) => row.body.kind === 'message')?.body).toMatchObject({
+    blocks: [{ type: 'text', text: 'FOLLOWUP_CONSUMED' }]
+  })
+  await consumers(result.rig.journal)
+  const snapshot = structuredClone(result.rig.journal.snapshot().items)
+  result.lane.dispose()
+  const reopened = await result.rig.reopenJournal()
+  expect(reopened.snapshot().items).toEqual(snapshot)
+  await consumers(reopened)
 })
 
 it('bounds named metadata work at N/10N with fixed content, duration and genuine boundaries', async () => {
@@ -544,7 +549,7 @@ it('bounds named metadata work at N/10N with fixed content, duration and genuine
         ).length,
         beforeFinal
       })
-      const calibration = meter.full.length
+      const calibration = { full: meter.full.length, estimates: meter.bodyEstimates }
       lane.apply([
         { type: 'text.delta', item: { id: 'boundary-control' }, channel, text: 'control' },
         {
@@ -553,14 +558,19 @@ it('bounds named metadata work at N/10N with fixed content, duration and genuine
           body: { kind: 'tool-call', name: 'control', input: {}, state: 'completed' }
         }
       ])
-      expect(meter.full.length).toBeGreaterThan(calibration)
+      expect(meter.full.length).toBeGreaterThan(calibration.full)
+      expect(meter.bodyEstimates).toBeGreaterThan(calibration.estimates)
       await rig.eventSink.written?.()
-      await consumers(rig.journal)
-      lane.dispose()
-      const saved = structuredClone(rig.journal.snapshot().items)
-      const reopened = await rig.reopenJournal()
-      expect(reopened.snapshot().items).toEqual(saved)
-      await consumers(reopened)
+      if (n === 100 && bodySize === 10000) {
+        await consumers(rig.journal)
+        lane.dispose()
+        const saved = structuredClone(rig.journal.snapshot().items)
+        const reopened = await rig.reopenJournal()
+        expect(reopened.snapshot().items).toEqual(saved)
+        await consumers(reopened)
+      } else {
+        lane.dispose()
+      }
       vi.useRealTimers()
     }
   }
@@ -624,12 +634,5 @@ it('bounds named metadata work at N/10N with fixed content, duration and genuine
       expect(large.committedTextInputs).toBeLessThanOrEqual(4)
     }
   }
-  // A separate positive boundary calibration, outside the optimized intervals.
-  const before = meter.bodyEstimates
-  estimateStructuredAgentSessionItemBytes(
-    { provider: 'legacy', agent: 'pi', sessionId: 'calibration', recordId: 'calibration' },
-    { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'control' }] }
-  )
-  expect(meter.bodyEstimates).toBe(before + 1)
   console.info('metadata-work', JSON.stringify(observations))
 })

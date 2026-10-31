@@ -277,20 +277,14 @@ it.each([
         revision: first.revision + 1,
         body: { blocks: [{ type: 'text', text: 'P'.repeat(100) + 'T'.repeat(40) }] }
       })
-      const before = structuredClone(r.journal.snapshot().items)
-      expect(vi.getTimerCount()).toBe(0)
-      await r.journal.close()
-      await closeTestJournalHostDatabase(r.root)
-      const reopened = await r.reopen()
-      expect(reopened.snapshot().items).toEqual(before)
     } else {
       expect(onFailed).toHaveBeenCalledExactlyOnceWith(boundary)
-      expect(vi.getTimerCount()).toBe(0)
       expect(messageText(r.journal.item(first.itemId)?.body)).toBe('P'.repeat(100))
-      const before = structuredClone(r.journal.snapshot().items)
-      await r.journal.close()
-      await closeTestJournalHostDatabase(r.root)
-      expect((await r.reopen()).snapshot().items).toEqual(before)
     }
+    expect(vi.getTimerCount()).toBe(0)
+    const before = structuredClone(r.journal.snapshot().items)
+    await r.journal.close()
+    await closeTestJournalHostDatabase(r.root)
+    expect((await r.reopen()).snapshot().items).toEqual(before)
   }
 )
