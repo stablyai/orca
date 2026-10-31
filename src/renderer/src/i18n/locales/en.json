@@ -12609,7 +12609,8 @@
             "cancelLink": "Cancel",
             "linkedRoute": "Reached through {{host}}, server port {{port}}.",
             "connect": "Connect",
-            "chooseHost": "Choose a host"
+            "chooseHost": "Choose a host",
+            "linkedPorts": "Ports forwarded through {{host}}."
           },
           "search": {
             "title": "Orca on your SSH hosts",
@@ -12993,7 +12994,11 @@
           "settingUpInBackground": "Setting up Orca on {{name}} in the background. It appears in the list when it’s ready.",
           "setUpOnSshHost": "Set up Orca on an SSH host",
           "setUp": "Set up",
-          "overYourSsh": "Over your SSH connection"
+          "overYourSsh": "Over your SSH connection",
+          "sshPorts": "Forward ports through SSH…",
+          "portsThroughSsh": "Ports via {{host}}",
+          "sshPortsDialogTitle": "Forward ports of {{name}} through SSH",
+          "sshPortsDialogDescription": "The server stays connected as it is. Orca uses an SSH host that reaches it only to forward its ports to this computer."
         },
         "sshBulkRemove": {
           "removedCount": "{{count}} removed",

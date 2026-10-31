@@ -173,12 +173,14 @@ export function overlayRuntimeEnvironmentSidecar(
       ? { runtimeId: environment.runtimeId ?? current.runtimeId }
       : {}),
     ...(access && endpoint
-      ? {
-          connectionDependency: 'ssh-tunnel',
-          sshAccess: link,
-          endpoints: [...environment.endpoints.filter((e) => e.id !== endpoint.id), endpoint],
-          preferredEndpointId: endpoint.id
-        }
+      ? access.portsOnly
+        ? { sshAccess: link }
+        : {
+            connectionDependency: 'ssh-tunnel',
+            sshAccess: link,
+            endpoints: [...environment.endpoints.filter((e) => e.id !== endpoint.id), endpoint],
+            preferredEndpointId: endpoint.id
+          }
       : {}),
     ...(current.pendingSshAccessOperation
       ? { pendingSshAccessOperation: current.pendingSshAccessOperation }

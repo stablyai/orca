@@ -48,17 +48,23 @@ export class SshTargetOrcadClaims {
     return { targetId, targetLabel: target.label, claimable: blockers.length === 0, blockers }
   }
 
-  /** Caller must persist the claim before remote action; deployName identifies interrupted provisioning. */
+  /**
+   * Caller must persist the claim before remote action; deployName identifies interrupted provisioning.
+   * `allowSavedPortForwards` is for a claimer that restores the host's saved forwards itself.
+   */
   claim(
     targetId: string,
     environmentId: string,
-    options: { deployName?: string; ownerRecorded: boolean }
+    options: { deployName?: string; ownerRecorded: boolean; allowSavedPortForwards?: boolean }
   ): SshTarget {
     const { deployName } = options
     const blocker = this.preflight(targetId, {
       environmentId,
       recorded: options.ownerRecorded
-    }).blockers[0]
+    }).blockers.find(
+      (entry) =>
+        !(options.allowSavedPortForwards && entry.code === 'orcad_migration_saved_port_forwards')
+    )
     if (blocker) {
       throw new Error(orcadTargetBlockerMessage(targetId, blocker))
     }

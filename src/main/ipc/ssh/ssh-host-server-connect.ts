@@ -1,4 +1,6 @@
 import { getAppEnvironment } from '../../../shared/app-environment'
+import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
+import { listEnvironments } from '../../../shared/runtime-environment-store'
 import type {
   SshConnectionState,
   SshManagedServerLinkedProject,
@@ -20,6 +22,12 @@ import { isSshSessionStartFailure } from '../../ssh/ssh-session-start-failure'
 import { describeSshConnectFailure } from '../../ssh/ssh-connect-failure-next-step'
 
 export async function decideHostServer(target: SshTarget): Promise<HostServerOnConnectResult> {
+  const portsOnlyEnvironmentId = portsOnlyEnvironmentOf(target)
+  if (portsOnlyEnvironmentId) {
+    // It runs no server to decide: its connection carries only that paired server's forwards.
+    await connectionManager!.connect(target)
+    return { route: 'managed', environmentId: portsOnlyEnvironmentId }
+  }
   // Load managed-server deploy/migration/tunnel dependencies only when connecting.
   const [{ resolveHostServerOnConnect }, { hostServerOnConnectDeps }] = await Promise.all([
     import('../../ssh/ssh-host-server-on-connect'),
@@ -29,6 +37,17 @@ export async function decideHostServer(target: SshTarget): Promise<HostServerOnC
     target,
     hostServerOnConnectDeps(getAppEnvironment().getPath('userData'))
   )
+}
+
+/** The paired server whose SSH access, linked or still linking, uses this host only for forwards. */
+function portsOnlyEnvironmentOf(target: SshTarget): string | null {
+  const environmentId = getManagedOrcadFenceEnvironmentId(target)
+  const environment = environmentId
+    ? listEnvironments(getAppEnvironment().getPath('userData')).find((e) => e.id === environmentId)
+    : undefined
+  return (environment?.sshAccess ?? environment?.pendingSshAccessOperation)?.portsOnly
+    ? environmentId
+    : null
 }
 
 /** Rechecks a host another desktop's update held during this connect, until the fence clears. */

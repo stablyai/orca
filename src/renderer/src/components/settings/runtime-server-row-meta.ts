@@ -19,7 +19,7 @@ export function getRuntimeServerRoute(
     // Why not the host: the row's title already names it.
     return translate('auto.components.settings.serverList.overYourSsh', 'Over your SSH connection')
   }
-  if (environment.sshAccess) {
+  if (environment.sshAccess && !environment.sshAccess.portsOnly) {
     return translate(
       'auto.components.settings.serverList.throughSsh',
       'Through {{host}} → port {{port}}',
@@ -35,6 +35,20 @@ export function getRuntimeServerRoute(
         'SSH tunnel required'
       )
     : null
+}
+
+/** The SSH host that carries only this server's port forwards, if one is linked. */
+export function getRuntimeServerPortsRoute(
+  environment: PublicKnownRuntimeEnvironment,
+  targets: SshTarget[]
+): string | null {
+  const access = environment.sshAccess
+  if (!access?.portsOnly) {
+    return null
+  }
+  return translate('auto.components.settings.serverList.portsThroughSsh', 'Ports via {{host}}', {
+    host: targets.find((target) => target.id === access.sshTargetId)?.label ?? access.sshTargetId
+  })
 }
 
 /** Explain problems without repeating status; Last seen adds time to the Unreachable indicator. */

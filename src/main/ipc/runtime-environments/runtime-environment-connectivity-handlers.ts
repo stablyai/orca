@@ -41,7 +41,7 @@ import { publicRuntimeEnvironmentWithHostKey } from './runtime-environment-host-
 import { withWslOrcadAccountEnv } from '../../wsl/wsl-orcad-account-env'
 import { clearSshCredentialDeclinedForEnvironment } from '../../ssh/ssh-credential-decline'
 import {
-  disconnectManagedHostOfEnvironmentForUser,
+  disconnectSshHostOfEnvironmentForUser,
   disconnectRuntimeEnvironmentForUser,
   liftSshUserDisconnectForEnvironment
 } from '../ssh/ssh-host-user-disconnect'
@@ -153,8 +153,8 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       const runtimeLayer = { userDataPath: getUserDataPath(), invalidateTransport }
       disconnectRuntimeEnvironmentForUser(environment.id, runtimeLayer)
       closeLegacySelectorTransport(args.selector, environment.id)
-      // Also clear the managed host SSH connection shown in Settings (#30085).
-      await disconnectManagedHostOfEnvironmentForUser(environment, runtimeLayer)
+      // Also clear the SSH host connection shown in Settings (#30085) and close its forwards.
+      await disconnectSshHostOfEnvironmentForUser(environment, runtimeLayer)
       return { disconnected: redactRuntimeEnvironment(environment) }
     }
   )

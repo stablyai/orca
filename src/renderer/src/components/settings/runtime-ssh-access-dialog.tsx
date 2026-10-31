@@ -11,6 +11,7 @@ export function RuntimeSshAccessDialog({
   api,
   environment,
   targets,
+  portsOnly,
   onOpenChange,
   onChanged
 }: {
@@ -18,6 +19,7 @@ export function RuntimeSshAccessDialog({
   api: Pick<ManagedOrcadPreloadApi, 'linkSshAccess' | 'unlinkSshAccess'>
   environment: PublicKnownRuntimeEnvironment
   targets: SshTarget[]
+  portsOnly: boolean
   onOpenChange: (open: boolean) => void
   onChanged: () => void
 }): React.JSX.Element {
@@ -26,23 +28,35 @@ export function RuntimeSshAccessDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>
-            {translate(
-              'auto.components.settings.serverList.sshDialogTitle',
-              'Connect {{name}} through SSH',
-              { name: environment.name }
-            )}
+            {portsOnly
+              ? translate(
+                  'auto.components.settings.serverList.sshPortsDialogTitle',
+                  'Forward ports of {{name}} through SSH',
+                  { name: environment.name }
+                )
+              : translate(
+                  'auto.components.settings.serverList.sshDialogTitle',
+                  'Connect {{name}} through SSH',
+                  { name: environment.name }
+                )}
           </DialogTitle>
           <DialogDescription>
-            {translate(
-              'auto.components.settings.serverList.sshDialogDescription',
-              'Use this when the server isn’t reachable directly. Orca opens a tunnel through an SSH host.'
-            )}
+            {portsOnly
+              ? translate(
+                  'auto.components.settings.serverList.sshPortsDialogDescription',
+                  'The server stays connected as it is. Orca uses an SSH host that reaches it only to forward its ports to this computer.'
+                )
+              : translate(
+                  'auto.components.settings.serverList.sshDialogDescription',
+                  'Use this when the server isn’t reachable directly. Orca opens a tunnel through an SSH host.'
+                )}
           </DialogDescription>
         </DialogHeader>
         <RuntimeSshAccessControl
           api={api}
           environment={environment}
           targets={targets}
+          portsOnly={portsOnly}
           onChanged={() => {
             onChanged()
             onOpenChange(false)

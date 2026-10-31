@@ -94,7 +94,41 @@ describe("the status bar's Disconnect of a server", () => {
     expect(hoisted.invalidate).toHaveBeenCalledTimes(1)
   })
 
-  it('leaves SSH alone for a server that is not managed over SSH', async () => {
+  it('also disconnects the SSH host a paired server is linked through, closing its forwards', async () => {
+    hoisted.environment = { id: 'env-1', endpoints: [], sshAccess: { sshTargetId: 'ssh-1' } }
+
+    await invoke('runtimeEnvironments:disconnect')
+
+    expect(hoisted.teardown).toHaveBeenCalledWith('ssh-1')
+    expect(isSshUserDisconnected('ssh-1')).toBe(true)
+
+    await invoke('runtimeEnvironments:connect')
+
+    expect(isSshUserDisconnected('ssh-1')).toBe(false)
+    // Its tunnel redials the host; no managed verdict to republish.
+    expect(hoisted.connectHost).not.toHaveBeenCalled()
+  })
+
+  it('closes and reopens the host that carries only the forwards, without the server waiting on it', async () => {
+    hoisted.environment = {
+      id: 'env-1',
+      endpoints: [],
+      sshAccess: { sshTargetId: 'ssh-1', portsOnly: true }
+    }
+
+    await invoke('runtimeEnvironments:disconnect')
+
+    expect(hoisted.teardown).toHaveBeenCalledWith('ssh-1')
+    expect(isSshUserDisconnected('ssh-1')).toBe(true)
+
+    hoisted.connectHost.mockRejectedValue(new Error('host unreachable'))
+    await expect(invoke('runtimeEnvironments:connect')).resolves.toEqual({ ok: true })
+
+    expect(isRuntimeEnvironmentManuallyDisconnected('env-1')).toBe(false)
+    expect(hoisted.connectHost).toHaveBeenCalledWith('ssh-1')
+  })
+
+  it('leaves SSH alone for a server that is not reached over SSH', async () => {
     hoisted.environment = { id: 'env-1', endpoints: [] }
 
     await invoke('runtimeEnvironments:disconnect')

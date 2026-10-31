@@ -34,12 +34,8 @@ type AccessContext = {
 
 export function prepareRuntimeEnvironmentSshAccessLink(
   userDataPath: string,
-  args: {
+  args: Omit<RuntimeSshAccessOperation, 'operation'> & {
     expectedEnvironment: KnownRuntimeEnvironment
-    requestId: string
-    sshTargetId: string
-    sshTargetGeneration: number
-    remotePort: number
     targetFingerprint: string
   }
 ): KnownRuntimeEnvironment {
@@ -110,12 +106,13 @@ export function linkVerifiedRuntimeEnvironmentSshAccess(
   const { pendingSshAccessOperation: _intent, ...remaining } = context.entry
   return commit(userDataPath, context, {
     ...remaining,
-    pairingRevisionFloor: nextPairingRevision(existing, args.now ?? Date.now()),
+    ...revisionFloor(existing, args.now, intent.portsOnly),
     runtimeId: args.verifiedRuntimeId,
     sshAccess: {
       ...args.tunnel,
       requestId: intent.requestId,
       targetFingerprint: intent.targetFingerprint,
+      ...(intent.portsOnly ? { portsOnly: true } : {}),
       endpointId,
       previousPreferredEndpointId: existing.preferredEndpointId,
       endpoint: {
@@ -152,14 +149,15 @@ export function prepareRuntimeEnvironmentSshAccessUnlink(
   const { sshAccess: _access, ...remaining } = context.entry
   return commit(userDataPath, context, {
     ...remaining,
-    pairingRevisionFloor: nextPairingRevision(existing, args.now ?? Date.now()),
+    ...revisionFloor(existing, args.now, sshAccess.portsOnly),
     pendingSshAccessOperation: {
       requestId: args.requestId,
       operation: 'unlink',
       sshTargetId: sshAccess.sshTargetId,
       sshTargetGeneration: sshAccess.sshTargetGeneration,
       remotePort: sshAccess.remotePort,
-      targetFingerprint: sshAccess.targetFingerprint
+      targetFingerprint: sshAccess.targetFingerprint,
+      ...(sshAccess.portsOnly ? { portsOnly: true as const } : {})
     }
   })
 }
@@ -309,8 +307,10 @@ function requireUnchangedEnvironment(
   return existing
 }
 
-function nextPairingRevision(environment: KnownRuntimeEnvironment, now: number): number {
-  return Math.max(now, (environment.pairingRevision ?? environment.createdAt) + 1)
+/** Ports-only access leaves the server connection alone, so its transports keep their revision. */
+function revisionFloor(environment: KnownRuntimeEnvironment, now = Date.now(), portsOnly?: true) {
+  const next = Math.max(now, (environment.pairingRevision ?? environment.createdAt) + 1)
+  return portsOnly ? {} : { pairingRevisionFloor: next }
 }
 
 function invalid(message: string): RuntimeEnvironmentStoreError {

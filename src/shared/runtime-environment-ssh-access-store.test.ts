@@ -12,7 +12,12 @@ import {
   removeEnvironment,
   updateEnvironmentFromPairingCode
 } from './runtime-environment-store'
-import { getPreferredPairingOffer, PersistedRuntimeEnvironmentSchema } from './runtime-environments'
+import {
+  getPreferredPairingOffer,
+  getRuntimePortForwardSshTargetId,
+  getRuntimeSshAccess,
+  PersistedRuntimeEnvironmentSchema
+} from './runtime-environments'
 import {
   linkVerifiedRuntimeEnvironmentSshAccess,
   prepareRuntimeEnvironmentSshAccessLink,
@@ -103,6 +108,38 @@ describe('independent paired runtime SSH access persistence', () => {
     expect(unlinked.sshAccess).toBeUndefined()
     expect(unlinked.connectionDependency).toBeUndefined()
     expect(listEnvironments(userDataPath)).toEqual([unlinked])
+  })
+
+  it('links access that carries only port forwards without changing how the server is reached', () => {
+    const original = seed()
+    const linked = linkVerifiedRuntimeEnvironmentSshAccess(userDataPath, {
+      expectedEnvironment: prepareRuntimeEnvironmentSshAccessLink(userDataPath, {
+        expectedEnvironment: original,
+        requestId: 'link-request',
+        ...tunnel,
+        targetFingerprint: 'target-fingerprint',
+        portsOnly: true
+      }),
+      requestId: 'link-request',
+      verifiedRuntimeId: 'host-runtime',
+      verifiedConnection: pairedRuntimeConnectionFromOffer(verifiedPairing),
+      tunnel,
+      now: 90
+    })
+    expect(linked.sshAccess).toMatchObject({ ...tunnel, portsOnly: true })
+    expect(linked.endpoints).toEqual(original.endpoints)
+    expect(linked.preferredEndpointId).toBe(original.preferredEndpointId)
+    expect(linked.connectionDependency).toBeUndefined()
+    expect(linked.pairingRevision).toBe(original.pairingRevision)
+    expect(getPreferredPairingOffer(linked)).toEqual(pairing)
+    expect(getRuntimeSshAccess(linked)).toBeUndefined()
+    expect(getRuntimePortForwardSshTargetId(linked)).toBe('target')
+    expect(listEnvironments(userDataPath)).toEqual([linked])
+
+    const unlinked = unlink(linked, 80)
+    expect(unlinked.sshAccess).toBeUndefined()
+    expect(unlinked.endpoints).toEqual(original.endpoints)
+    expect(unlinked.pairingRevision).toBe(original.pairingRevision)
   })
 
   it('keeps SSH access across a server restart and relinks after an unlink (#32957)', () => {

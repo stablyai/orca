@@ -66,14 +66,17 @@ export const RuntimeSshAccessLinkSchema = RuntimeSshTunnelLinkSchema.extend({
   requestId: z.string().min(1).optional(),
   targetFingerprint: z.string().min(1).optional(),
   endpointId: z.string().min(1),
-  previousPreferredEndpointId: z.string().min(1)
+  previousPreferredEndpointId: z.string().min(1),
+  /** The SSH host carries only this client's port forwards; the server connection is unchanged. */
+  portsOnly: z.literal(true).optional()
 })
 
 export const RuntimeSshAccessOperationSchema = RuntimeSshTunnelLinkSchema.omit({ localPort: true })
   .extend({
     requestId: z.string().min(1),
     operation: z.enum(['link', 'unlink']),
-    targetFingerprint: z.string().min(1).optional()
+    targetFingerprint: z.string().min(1).optional(),
+    portsOnly: z.literal(true).optional()
   })
   .refine((intent) => intent.operation !== 'link' || !!intent.targetFingerprint, {
     message: 'Link intent requires a target fingerprint.'
@@ -119,6 +122,10 @@ export const KnownRuntimeEnvironmentSchema = PersistedRuntimeEnvironmentSchema.e
   .refine(
     (environment) => {
       const access = environment.sshAccess
+      if (access?.portsOnly) {
+        const keepsEndpoint = environment.preferredEndpointId === access.previousPreferredEndpointId
+        return keepsEndpoint && !environment.connectionDependency
+      }
       return (
         !access ||
         (environment.connectionDependency === 'ssh-tunnel' &&
@@ -132,7 +139,7 @@ export const KnownRuntimeEnvironmentSchema = PersistedRuntimeEnvironmentSchema.e
     },
     {
       message:
-        'Runtime SSH access must preserve its previous endpoint and prefer its loopback endpoint.',
+        'Runtime SSH access must preserve its previous endpoint and prefer its loopback endpoint, unless it carries only port forwards.',
       path: ['sshAccess']
     }
   )
@@ -313,7 +320,15 @@ export function getPreferredPairingOffer(environment: PreferredEndpointSource): 
 export function getRuntimeSshAccess(
   environment: Pick<KnownRuntimeEnvironment, 'orcadDeployment' | 'sshAccess'>
 ): RuntimeSshTunnelLink | undefined {
-  return getOrcadSshDeployment(environment) ?? environment.sshAccess
+  const access = environment.sshAccess
+  return getOrcadSshDeployment(environment) ?? (access?.portsOnly ? undefined : access)
+}
+
+/** The SSH host whose connection carries this client's port forwards for the server's workspaces. */
+export function getRuntimePortForwardSshTargetId(
+  environment: Pick<KnownRuntimeEnvironment, 'orcadDeployment' | 'sshAccess'>
+): string | undefined {
+  return (getOrcadSshDeployment(environment) ?? environment.sshAccess)?.sshTargetId
 }
 
 export function getPreferredLoopbackRuntimePort(environment: {

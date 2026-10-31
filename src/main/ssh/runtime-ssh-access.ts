@@ -54,7 +54,6 @@ function sshAccessBlockerMessage(targetId: string, blocker: OrcadMigrationBlocke
     case 'orcad_migration_direct_ssh_terminal_leases':
       return 'This SSH target still owns terminal sessions. Close them before linking SSH access.'
     case 'orcad_migration_saved_port_forwards':
-      return 'This SSH target has saved port forwards. Remove them, or link SSH access through another SSH target.'
     case 'orcad_migration_target_not_found':
     case 'orcad_migration_target_owned':
     case 'orcad_migration_owner_unrecorded':
@@ -66,10 +65,12 @@ function sshAccessBlockerMessage(targetId: string, blocker: OrcadMigrationBlocke
 function requireAccessOnlyTarget(claims: TargetClaims, targetId: string, environmentId: string) {
   const target = requireTarget(claims, targetId)
   // Omitting the environment bypasses the same-owner shortcut and rechecks direct authority.
+  // Saved forwards don't block: the linked host restores them on connect.
   const blockers = claims
     .preflight(targetId)
     .blockers.filter(
       (entry) =>
+        entry.code !== 'orcad_migration_saved_port_forwards' &&
         !(
           entry.code === 'orcad_migration_target_owned' &&
           getManagedOrcadFenceEnvironmentId(target) === environmentId
@@ -136,27 +137,31 @@ export function linkRuntimeSshAccess(
           environment.pendingSshAccessOperation ||
           access.requestId !== args.requestId ||
           access.sshTargetId !== args.sshTargetId ||
-          access.remotePort !== args.remotePort
+          access.remotePort !== args.remotePort ||
+          access.portsOnly !== args.portsOnly
         ) {
           throw new Error('This server already has a different SSH access request.')
         }
         requireFence(claims, environmentId, access)
-        await ensureOrcadManagedTunnel(userDataPath, environmentId)
-        requireFence(claims, environmentId, access)
-        await options.invalidateTransport?.(environmentId)
+        if (!access.portsOnly) {
+          await ensureOrcadManagedTunnel(userDataPath, environmentId)
+          requireFence(claims, environmentId, access)
+          await options.invalidateTransport?.(environmentId)
+        }
         return redactRuntimeEnvironment(resolveEnvironment(userDataPath, environmentId))
       }
       const prepared = prepareRuntimeEnvironmentSshAccessLink(userDataPath, {
         expectedEnvironment: environment,
         requestId: args.requestId,
         remotePort: args.remotePort,
+        ...(args.portsOnly ? { portsOnly: true as const } : {}),
         ...fence
       })
       await claims.flush()
       requireAccessOnlyTarget(claims, target.id, environmentId)
       requireFence(claims, environmentId, fence, true)
       // The durable link intent already binds this target to the environment.
-      claims.claim(target.id, environmentId, { ownerRecorded: true })
+      claims.claim(target.id, environmentId, { ownerRecorded: true, allowSavedPortForwards: true })
       await claims.flush()
       let tunnelStarted = false
       let linkCommitted = false
@@ -197,7 +202,10 @@ export function linkRuntimeSshAccess(
           })
         )
         linkCommitted = true
-        await options.invalidateTransport?.(environmentId)
+        // Ports only: the tunnel just proved this host reaches the server, whose connection stays.
+        await (args.portsOnly
+          ? closeOrcadManagedTunnel(environmentId)
+          : options.invalidateTransport?.(environmentId))
         return linked
       } catch (error) {
         if (tunnelStarted && !linkCommitted) {
@@ -212,7 +220,11 @@ export function linkRuntimeSshAccess(
 export function unlinkRuntimeSshAccess(
   userDataPath: string,
   input: RuntimeSshAccessUnlinkRequest,
-  options: { invalidateTransport: (environmentId: string) => void | Promise<void> }
+  options: {
+    invalidateTransport: (environmentId: string) => void | Promise<void>
+    /** Ends the host's SSH session within its lifecycle; saved forwards stay for a relink. */
+    endSshSession: (sshTargetId: string) => Promise<void>
+  }
 ) {
   const args = RuntimeSshAccessUnlinkRequestSchema.parse(input)
   const environmentId = resolveEnvironment(userDataPath, args.selector).id
@@ -239,8 +251,17 @@ export function unlinkRuntimeSshAccess(
               expectedEnvironment: environment,
               requestId: args.requestId
             })
-      await options.invalidateTransport(environmentId)
-      await closeOrcadManagedTunnel(environmentId)
+      try {
+        if (!access.portsOnly) {
+          await options.invalidateTransport(environmentId)
+        }
+        await closeOrcadManagedTunnel(environmentId)
+      } finally {
+        // Why: the Ports tab left with the link above, so its forwards end with the session that
+        // carries them even when a step fails; a restore in flight drops what it adds once the
+        // connection is gone.
+        await options.endSshSession(access.sshTargetId)
+      }
       const target = requireFence(claims, environmentId, access, true)
       if (target.orcadFence && !claims.release(target.id, environmentId)) {
         throw new Error('The SSH target owner changed before access could be released.')

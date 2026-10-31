@@ -1,10 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({ handle: vi.fn(), link: vi.fn(), unlink: vi.fn() }))
+const mocks = vi.hoisted(() => ({
+  handle: vi.fn(),
+  link: vi.fn(),
+  unlink: vi.fn(),
+  restoreForwards: vi.fn(),
+  connectHost: vi.fn(async () => ({})),
+  endSshSession: vi.fn(async () => {})
+}))
 vi.mock('electron', () => ({ ipcMain: { handle: mocks.handle } }))
 vi.mock('../ssh/runtime-ssh-access', () => ({
   linkRuntimeSshAccess: mocks.link,
   unlinkRuntimeSshAccess: mocks.unlink
+}))
+vi.mock('./ssh/ssh-managed-port-forward-restore', () => ({
+  restoreManagedHostPortForwards: mocks.restoreForwards
+}))
+vi.mock('./ssh/ssh-session-teardown', () => ({
+  disconnectRegisteredSshTargetInLifecycle: mocks.endSshSession
+}))
+vi.mock('../ssh/targets/ssh-target-registry', () => ({
+  connectRegisteredSshTarget: mocks.connectHost
 }))
 import { registerRuntimeSshAccessHandlers } from './runtime-ssh-access-handlers'
 import { EventEmitter } from 'node:events'
@@ -59,7 +75,8 @@ describe('existing paired server SSH access IPC', () => {
     expect(mocks.unlink).toHaveBeenCalledExactlyOnceWith(
       '/test-profile',
       { selector: 'host', requestId: 'unlink-1' },
-      { invalidateTransport }
+      // Unlink already holds the host's lifecycle queue, so it ends the session without queueing.
+      { invalidateTransport, endSshSession: mocks.endSshSession }
     )
   })
 
@@ -103,5 +120,20 @@ describe('existing paired server SSH access IPC', () => {
     const error = new Error('SSH endpoint identity was not verified')
     mocks.link.mockRejectedValue(error)
     await expect(handler('runtimeEnvironments:linkSshAccess')(event, request)).rejects.toBe(error)
+    expect(mocks.restoreForwards).not.toHaveBeenCalled()
+  })
+
+  it("restores the linked host's saved forwards once the link is saved", async () => {
+    mocks.link.mockResolvedValue({ id: 'host' })
+    await handler('runtimeEnvironments:linkSshAccess')(event, request)
+    expect(mocks.restoreForwards).toHaveBeenCalledExactlyOnceWith('ssh-host', { tunnelUp: true })
+    expect(mocks.connectHost).not.toHaveBeenCalled()
+  })
+
+  it('connects a ports-only host, which no server connection brings up, once it is linked', async () => {
+    mocks.link.mockResolvedValue({ id: 'host' })
+    await handler('runtimeEnvironments:linkSshAccess')(event, { ...request, portsOnly: true })
+    expect(mocks.connectHost).toHaveBeenCalledExactlyOnceWith('ssh-host')
+    expect(mocks.restoreForwards).not.toHaveBeenCalled()
   })
 })
