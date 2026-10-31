@@ -16,9 +16,7 @@ vi.mock('../../../wsl-move/wsl-move-entry', () => ({ useWslMoveTargetForRepo: ()
 vi.mock('../../ProjectWindowsRuntimeSetting', () => ({
   ProjectWindowsRuntimeSetting: () => <div>runtime</div>
 }))
-vi.mock('../../../wsl-drive-project/WslDriveProjectGitRow', () => ({
-  WslDriveProjectGitRow: () => <div>windows-git-row</div>
-}))
+vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: vi.fn() }) }))
 vi.mock('../../../wsl-drive-project/WslDriveUncConversionRow', () => ({
   WslDriveUncConversionRow: () => <div>unc-conversion-row</div>
 }))
@@ -33,12 +31,12 @@ const project: Project = {
   updatedAt: 0
 }
 
-function renderSection(): void {
+function renderSection(target: Project = project): void {
   render(
     <RepositoryWindowsRuntimeSection
       repo={repo}
       repoDisplayName="app"
-      project={project}
+      project={target}
       settings={{ localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' } }}
       isLocalWindowsProject
       wslAvailable
@@ -60,9 +58,9 @@ describe('RepositoryWindowsRuntimeSection D1c rows', () => {
   })
   afterEach(() => cleanup())
 
-  it('shows the Windows-drive Git and drive-path rows when WSL hosts take new work', () => {
+  it('offers Git for Windows and the drive-path row when WSL hosts take new work', () => {
     renderSection()
-    expect(screen.getByText('windows-git-row')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Use Git for Windows' })).toBeTruthy()
     expect(screen.getByText('unc-conversion-row')).toBeTruthy()
   })
 
@@ -70,11 +68,22 @@ describe('RepositoryWindowsRuntimeSection D1c rows', () => {
   it.each([
     ['serve-only or a live policy block', () => (state.wslHostsAcceptNewWork = false)],
     ['the WSL hosts setting off', () => (state.settings = { experimentalWslHosts: false })]
-  ])('hides both rows with %s', (_case, stop) => {
+  ])('hides both offers with %s', (_case, stop) => {
     stop()
     renderSection()
-    expect(screen.queryByText('windows-git-row')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Use Git for Windows' })).toBeNull()
     expect(screen.queryByText('unc-conversion-row')).toBeNull()
     expect(screen.getByText('runtime')).toBeTruthy()
+  })
+
+  // Its Git preference still applies, so the state must stay visible when no offer may show.
+  it('still shows a project already on Git for Windows with the setting off', () => {
+    state.settings = { experimentalWslHosts: false }
+    renderSection({
+      ...project,
+      localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu', git: 'windows-host' }
+    })
+    expect(screen.getByText(/Orca runs Git on Windows for this project/)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Use Git for Windows' })).toBeNull()
   })
 })
