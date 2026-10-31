@@ -22,6 +22,7 @@ import {
   getStatusBarEntries,
   getSystemTrayEntries,
   getThemeEntries,
+  getReduceVisualEffectsEntries,
   getTitlebarEntries,
   getTypographyEntries,
   getZoomEntries
@@ -139,6 +140,7 @@ export function AppearancePane({
     ...getTypographyEntries(),
     ...(SHOW_UI_LANGUAGE_SETTING ? getLanguageEntries() : []),
     ...getTitlebarEntries(),
+    ...getReduceVisualEffectsEntries(),
     ...getSystemTrayEntries({ showSystemTray: isDesktopWindows }),
     ...getMenuBarIconEntries({ showMenuBarIcon: isDesktopMac })
   ]

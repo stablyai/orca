@@ -67,6 +67,11 @@ export function updateSettings(
     // Loaded defaults are ambiguous; synchronize the legacy switch only on an explicit write.
     sanitizedUpdates.terminalLinkActionPopoverEnabled = linkBehavior === 'actions'
   }
+  const windowMaterial = updates.windowMaterial
+  if (windowMaterial === 'off' || windowMaterial === 'translucent' || windowMaterial === 'blur') {
+    // Every writer (settings, Ghostty import) mirrors the legacy switch an older Orca reads after rollback.
+    sanitizedUpdates.windowBackgroundBlur = windowMaterial !== 'off'
+  }
   // Normalize at the store boundary so every writer rejects truthy non-booleans.
   if ('minimizeToTrayOnClose' in updates) {
     sanitizedUpdates.minimizeToTrayOnClose = updates.minimizeToTrayOnClose === true

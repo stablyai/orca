@@ -221,6 +221,32 @@ export const getTitlebarEntries = createLocalizedCatalog((): SettingsSearchEntry
   }
 ])
 
+export const getReduceVisualEffectsEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
+  {
+    title: translate('settings.appearance.reduceVisualEffects.title', 'Reduce Visual Effects'),
+    description: translate(
+      'settings.appearance.reduceVisualEffects.description',
+      'Turn off blur behind dialogs and menus, and window translucency after a restart. Helps remote desktops and machines without a GPU.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('settings.appearance.reduceVisualEffects.keywords.blur', 'blur'),
+      ...translateSearchKeyword(
+        'settings.appearance.reduceVisualEffects.keywords.transparency',
+        'transparency'
+      ),
+      ...translateSearchKeyword(
+        'settings.appearance.reduceVisualEffects.keywords.performance',
+        'performance'
+      ),
+      ...translateSearchKeyword(
+        'settings.appearance.reduceVisualEffects.keywords.remote',
+        'remote'
+      ),
+      ...translateSearchKeyword('settings.appearance.reduceVisualEffects.keywords.gpu', 'gpu')
+    ]
+  }
+])
+
 export const getStatusBarEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   getUsagePercentageDisplayEntry(),
   ...getStatusBarToggles().map(({ title, description, keywords }) => ({
@@ -298,6 +324,7 @@ export function getAppearancePaneSearchEntries(
     ...getTerminalAppearanceSearchEntries(options),
     ...getLayoutEntries(),
     ...getTitlebarEntries(),
+    ...getReduceVisualEffectsEntries(),
     ...getStatusBarEntries(),
     ...getSidebarEntries(),
     ...getAppIconEntries(),

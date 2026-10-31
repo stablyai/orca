@@ -14,6 +14,7 @@ import {
   getCodeEditorThemeEntries,
   getLanguageEntries,
   getMenuBarIconEntries,
+  getReduceVisualEffectsEntries,
   getSystemTrayEntries,
   getThemeEntries,
   getTitlebarEntries,
@@ -111,8 +112,10 @@ export function AppearanceInterfaceSection({
   const titlebarEntry = getTitlebarEntries()[0]
   const typographyEntry = getTypographyEntries()[0]
   const zoomEntry = getZoomEntries()[0]
+  const reduceVisualEffectsEntry = getReduceVisualEffectsEntries()[0]
   const advancedEntries = [
     ...getTitlebarEntries(),
+    ...getReduceVisualEffectsEntries(),
     ...getSystemTrayEntries({ showSystemTray: isDesktopWindows }),
     ...getMenuBarIconEntries({ showMenuBarIcon: isDesktopMac })
   ]
@@ -343,6 +346,27 @@ export function AppearanceInterfaceSection({
                 checked={settings.showTitlebarAppName}
                 onChange={() =>
                   updateSettings({ showTitlebarAppName: !settings.showTitlebarAppName })
+                }
+              />
+            </SearchableSetting>
+
+            <SearchableSetting
+              title={translate(
+                'settings.appearance.reduceVisualEffects.title',
+                'Reduce Visual Effects'
+              )}
+              description={reduceVisualEffectsEntry?.description}
+              keywords={reduceVisualEffectsEntry?.keywords ?? ['blur', 'transparency']}
+            >
+              <SettingsSwitchRow
+                label={translate(
+                  'settings.appearance.reduceVisualEffects.title',
+                  'Reduce Visual Effects'
+                )}
+                description={reduceVisualEffectsEntry?.description}
+                checked={settings.reduceVisualEffects === true}
+                onChange={() =>
+                  updateSettings({ reduceVisualEffects: settings.reduceVisualEffects !== true })
                 }
               />
             </SearchableSetting>
