@@ -20,6 +20,16 @@ describe('structured chat configured Arguments', () => {
     }
   )
 
+  it('retains original configured raw until the actual native typed replacement is known', () => {
+    expect(
+      structuredAgentConfiguredArgs('claude', {
+        agentPermissionDefault: 'own',
+        agentLaunchChoices: { claude: { model: 'fresh-only', options: { effort: 'high' } } },
+        agentDefaultArgs: { claude: '--model literal --effort low --add-dir docs' }
+      })
+    ).toEqual(['--model', 'literal', '--effort', 'low', '--add-dir', 'docs'])
+  })
+
   it('preserves Windows paths under the configured shell', () => {
     expect(
       structuredAgentConfiguredArgs(

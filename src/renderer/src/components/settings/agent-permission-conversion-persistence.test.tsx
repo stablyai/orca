@@ -77,7 +77,9 @@ beforeEach(() => {
   if (!settings) {
     throw new Error('Missing settings fixture')
   }
-  useAppStore.setState({ settings: { ...settings, agentPermissionDefault: 'ask' } })
+  useAppStore.setState({
+    settings: { ...settings, agentLaunchChoices: undefined, agentPermissionDefault: 'ask' }
+  })
 })
 
 function AgentsHarness() {
@@ -426,7 +428,9 @@ it.each(['blur', 'reset'])('retains ordered Environment work when %s rejects', a
   } else {
     await act(async () => reset.resolve())
   }
-  await waitFor(() => expect(input.isConnected).toBe(false))
+  await waitFor(() => expect(input.readOnly).toBe(false))
+  expect(input.isConnected).toBe(true)
+  expect(input.value).toBe('')
   expect(useAppStore.getState().settings?.agentDefaultEnv?.claude).toEqual({})
   expect(persist).toHaveBeenCalledTimes(2)
   expect(toast.error).toHaveBeenCalledTimes(1)
@@ -676,3 +680,35 @@ it.each([false, true])(
     }
   }
 )
+
+it('writes local launch choices through the durable RPC as one dirty-text transaction', async () => {
+  useAppStore.setState(({ settings }) => ({
+    settings: settings && {
+      ...settings,
+      agentLaunchChoices: { claude: { model: 'opus', options: { effort: 'high' } } },
+      agentDefaultArgs: { claude: '--verbose' }
+    }
+  }))
+  render(<AgentsHarness />)
+  const input = argumentsInput('Claude')
+  fireEvent.change(input, { target: { value: '--model sonnet --verbose' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Remove --model opus' }))
+  await waitFor(() => expect(input.value).toBe('--model sonnet --verbose'))
+  await waitFor(() => expect(runtimeCall).toHaveBeenCalledTimes(1))
+  expect(runtimeCall.mock.calls[0]?.[0]).toMatchObject({
+    method: 'settings.mutateAgentLaunch',
+    params: {
+      type: 'launch-choices',
+      agent: 'claude',
+      patch: { model: null },
+      userArgs: '--model sonnet --verbose'
+    }
+  })
+  await waitFor(() =>
+    expect(screen.queryByRole('button', { name: 'Remove --model opus' })).toBeNull()
+  )
+  expect(persist).toHaveBeenCalledTimes(1)
+  expect(useAppStore.getState().settings?.agentLaunchChoices?.claude).toEqual({
+    options: { effort: 'high' }
+  })
+})

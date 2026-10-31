@@ -8,6 +8,11 @@ import {
 } from '@/lib/launch-parity-renderer.test-fixture'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
 import { getDefaultSettings } from '../../../shared/constants'
+import { projectAgentLaunchSettings } from '../../../shared/agent-launch-settings'
+import {
+  connectedRuntimeStatus,
+  publicRuntimeEnvironment
+} from '@/runtime/paired-runtime-environment-test-fixture'
 import { makeAutomation, makeRun } from '@/components/automations/automations-page-fixtures'
 import {
   AUTOMATION_LAUNCH_CASES,
@@ -54,6 +59,8 @@ const load = perClientLoader(async () => ({
   switch: await import('../../../shared/layout-owner-switch'),
   remoteCreate: await import('./runtime-agent-background-create'),
   remoteStream: await import('@/runtime/runtime-terminal-stream'),
+  preferences: await import('@/components/settings/use-host-agent-launch-preferences'),
+  settingsTransport: await import('@/components/settings/agent-launch-settings-transport'),
   workspace: await import('@/hooks/automation-dispatch-workspace')
 }))
 
@@ -484,10 +491,21 @@ describe('row 5: desktop automation pty:spawn request', () => {
         ])
       })
       const remote = vi
-        .spyOn(modules.remoteCreate, 'createRuntimeAgentBackgroundTerminal')
+        .fn<
+          Awaited<ReturnType<typeof modules.remoteCreate.prepareRuntimeAgentBackgroundTerminal>>
+        >()
         .mockResolvedValue({
           terminal: { handle: 'term_server', worktreeId: worktree.id, title: null }
         })
+      const prepare = vi
+        .spyOn(modules.remoteCreate, 'prepareRuntimeAgentBackgroundTerminal')
+        .mockResolvedValue(remote)
+      const readSettings = vi
+        .spyOn(modules.settingsTransport, 'readHostAgentLaunchSettings')
+        .mockResolvedValue(null)
+      const supportsChoices = vi
+        .spyOn(modules.settingsTransport, 'hostSupportsLaunchChoices')
+        .mockResolvedValue(false)
       const stream = vi
         .spyOn(modules.remoteStream, 'subscribeToRuntimeTerminalData')
         .mockResolvedValue(() => {})
@@ -511,6 +529,7 @@ describe('row 5: desktop automation pty:spawn request', () => {
             ?.executionHostId
         ).toBe(hostId)
         if (kind === 'runtime:server') {
+          expect(prepare).toHaveBeenCalledWith('server')
           expect(remote).toHaveBeenCalledWith(
             expect.objectContaining({ environmentId: 'server', worktreeId: worktree.id })
           )
@@ -523,14 +542,79 @@ describe('row 5: desktop automation pty:spawn request', () => {
               connectionId: kind === 'ssh:other' ? 'other' : null
             })
           )
+          expect(prepare).not.toHaveBeenCalled()
           expect(remote).not.toHaveBeenCalled()
         }
       } finally {
-        remote.mockRestore()
+        modules.preferences.clearHostAgentMenuSettingsForTests()
+        readSettings.mockRestore()
+        supportsChoices.mockRestore()
+        prepare.mockRestore()
         stream.mockRestore()
       }
     }
   )
+
+  it('keeps captured local launch defaults when a same-ID runtime workspace is focused', async () => {
+    const modules = await load('linux')
+    const store = modules.createStore()
+    holder.store = store
+    const settings = {
+      ...getDefaultSettings('/home/alice'),
+      agentLaunchChoices: { claude: { model: 'opus' } }
+    }
+    store.setState(launchWorkspaceState({ kind: 'repo', path: '/same' }, settings))
+    const repo = store.getState().repos[0]!
+    const worktree = store.getState().worktreesByRepo[repo.id]![0]!
+    store.setState({
+      repos: [repo, { ...repo, executionHostId: 'runtime:server' }],
+      worktreesByRepo: {
+        [repo.id]: [worktree, { ...worktree, hostId: 'runtime:server' }]
+      },
+      activeWorktreeId: worktree.id,
+      activeWorkspaceExecutionHostId: 'runtime:server',
+      runtimeEnvironments: [publicRuntimeEnvironment({ id: 'server' })],
+      runtimeEnvironmentCatalogHydrated: true,
+      runtimeStatusByEnvironmentId: new Map([['server', connectedRuntimeStatus('server', 1)]])
+    })
+    const readSettings = vi
+      .spyOn(modules.settingsTransport, 'readHostAgentLaunchSettings')
+      .mockResolvedValue(
+        projectAgentLaunchSettings(
+          {
+            ...settings,
+            agentLaunchChoices: { claude: { model: 'sonnet' } }
+          },
+          'linux'
+        )
+      )
+    const supportsChoices = vi
+      .spyOn(modules.settingsTransport, 'hostSupportsLaunchChoices')
+      .mockResolvedValue(true)
+    const spawn = vi.fn(async (_request: Record<string, unknown>) => ({ id: 'pty-local' }))
+    vi.stubGlobal('window', {
+      dispatchEvent: vi.fn(),
+      api: { pty: { spawn, write: vi.fn(), kill: vi.fn() }, runtime: { call: vi.fn() } }
+    })
+    try {
+      await modules.launch.launchAgentBackgroundSession({
+        agent: 'claude',
+        worktreeId: worktree.id,
+        resolvedTarget: { repo, worktree }
+      })
+      expect(readSettings).not.toHaveBeenCalled()
+      expect(spawn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          command: expect.stringContaining("'--model' 'opus'"),
+          connectionId: null
+        })
+      )
+    } finally {
+      modules.preferences.clearHostAgentMenuSettingsForTests()
+      readSettings.mockRestore()
+      supportsChoices.mockRestore()
+    }
+  })
 
   it.each(AUTOMATION_LAUNCH_CASES)('$name', async (c) => {
     const { spawn, phone } = await runAutomation(c)

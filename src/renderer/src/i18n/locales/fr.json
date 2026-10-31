@@ -4,7 +4,9 @@
       "updateRequired": "Cette version d’OpenCode ne peut pas démarrer de façon sûre avec le modèle choisi. Mettez OpenCode à jour vers une version compatible ou ne précisez pas de modèle.",
       "invalidConfig": "OpenCode n’a pas pu appliquer ce modèle à la configuration de lancement. Vérifiez la configuration de lancement d’OpenCode et réessayez, ou ne précisez pas de modèle.",
       "unsupportedLaunch": "OpenCode ne peut pas appliquer ce modèle à ce lancement. Ouvrez un nouveau terminal local avec des arguments de lancement compatibles ou ne précisez pas de modèle."
-    }
+    },
+    "terminalPreparationFailed": "Impossible d’ouvrir un terminal pour {{value0}}. Vérifiez la connexion de l’espace de travail et les paramètres de l’agent, puis réessayez.",
+    "terminalPromptFailed": "Orca a ouvert un terminal pour {{value0}}, mais n’a pas pu lui transmettre votre prompt. Envoyez le prompt dans ce terminal."
   },
   "app": {
     "saving": {
@@ -599,7 +601,8 @@
       "installCliForTerminal": "Installez la CLI {{value0}} pour l’ouvrir dans un terminal.",
       "chatRuntime": "Environnement de chat",
       "chatChoiceTitle": "Ouvrir en chat ou en CLI",
-      "chatChoiceDescription": "Choisissez si chaque agent s’ouvre en chat ou dans sa CLI."
+      "chatChoiceDescription": "Choisissez si chaque agent s’ouvre en chat ou dans sa CLI.",
+      "sameAsChoice": "Identique à {{agent}} · {{choice}}"
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "lien symbolique",
@@ -7663,7 +7666,8 @@
           "506f2acf7a": "Réinitialisation de l'accès...",
           "statusGranted": "Accordée",
           "statusUnsupported": "macOS uniquement",
-          "statusNotEnabled": "Non activé"
+          "statusNotEnabled": "Non activé",
+          "794807aa21": "Confidentialité et sécurité de macOS en attente ; une demande plus récente ou une réinitialisation peut la remplacer"
         },
         "DeveloperPermissionsPane": {
           "4c17304beb": "Actualiser",
@@ -8253,7 +8257,11 @@
           "191ac34567": "Orchestration d'agents",
           "nestedWorkerDepthTitle": "Profondeur du travailleur imbriqué",
           "nestedWorkerDepthDescription": "Combien de générations de travailleurs détachés peuvent engendrer leurs propres travailleurs. 1 maintient l'arborescence des agents à plat : un coordinateur répartit les travailleurs, et ces travailleurs ne répartissent pas.",
-          "7bc082f4de": "Copier la commande d'installation"
+          "7bc082f4de": "Copier la commande d'installation",
+          "workerAutoReleaseTitle": "Fermer automatiquement les workers terminés",
+          "workerAutoReleaseDescription": "Ferme le terminal ou le chat d’un worker 2 minutes après sa fin, sauf si vous choisissez Garder ouvert. S’il reprend son travail, le délai de 2 minutes recommence lorsqu’il termine.",
+          "workerAutoReleaseKeywordClose": "fermer",
+          "workerAutoReleaseKeywordRelease": "libérer"
         },
         "OrchestrationSetupCard": {
           "e7d2a5146c": "Permet aux agents de transmettre le contexte et de coordonner le travail via Orca.",
@@ -11904,7 +11912,10 @@
         "PluginThemeUseNow": {
           "label": "Utiliser maintenant :",
           "useForLight": "Utiliser en clair :",
-          "useForDark": "Utiliser en sombre :"
+          "useForDark": "Utiliser en sombre :",
+          "assignedLight": "{{value0}} défini comme thème clair",
+          "assignedDark": "{{value0}} défini comme thème sombre",
+          "saveFailed": "Impossible d’enregistrer le thème. Réessayez."
         },
         "PluginContributionActionCommand": {
           "run": "Exécuter",
@@ -13159,6 +13170,15 @@
         },
         "pluginTryAction": {
           "incompleteLanguage": "Ce pack de langue est trop incomplet pour l’utiliser."
+        },
+        "PluginUpdateReviewToast": {
+          "movedTitle": "{{value0}} {{value1}} provient d’un autre dépôt",
+          "accessTitle": "{{value0}} {{value1}} demande plus d’accès",
+          "manyTitle": "{{value0}} mises à jour de plugins attendent votre vérification",
+          "oneDescription": "Publié par {{value0}}. Il ne sera pas mis à jour tant que vous ne l’aurez pas vérifié.",
+          "manyDescription": "Elles ne seront pas installées tant que vous ne les aurez pas vérifiées.",
+          "review": "Vérifier",
+          "dismiss": "Ignorer"
         }
       },
       "right": {
@@ -13683,7 +13703,10 @@
             "clearNotesFromWorkspace_many": "Effacer {{count}} notes de cet espace de travail ?",
             "clearNotesFromFile_one": "Effacer {{count}} note de {{path}} ?",
             "clearNotesFromFile_other": "Effacer {{count}} notes de {{path}} ?",
-            "clearNotesFromFile_many": "Effacer {{count}} notes de {{path}} ?"
+            "clearNotesFromFile_many": "Effacer {{count}} notes de {{path}} ?",
+            "markResolved": "Marquer comme résolu",
+            "keepFile": "Conserver le fichier",
+            "keepDeletion": "Conserver la suppression"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Impossible de démarrer l'agent sélectionné.",
@@ -14283,7 +14306,8 @@
                     "edc2d82a2b": "Fusion en cours",
                     "5c3707aa44": "Rebase en cours",
                     "ffe53a1da6": "Cherry-pick en cours",
-                    "35eb76d323": "Opération en cours"
+                    "35eb76d323": "Opération en cours",
+                    "completeMerge": "Terminer la fusion"
                   }
                 }
               },
@@ -14312,7 +14336,8 @@
                   "e7876a2bde": "Indexez au moins un fichier pour générer un message.",
                   "0904be2505": "Effacez le message pour le régénérer.",
                   "1ea9ba37aa": "Choisissez un agent dans Paramètres -> Git -> IA du contrôle de code source."
-                }
+                },
+                "completeMergeFailed": "Impossible de terminer la fusion"
               }
             }
           },
@@ -16700,6 +16725,12 @@
           "view": "Voir le plugin",
           "notNow": "Pas maintenant",
           "never": "Ne plus suggérer pour .{{value0}}"
+        },
+        "RichMarkdownEmojiMenu": {
+          "chooseEmoji": "Choisir un emoji"
+        },
+        "richMarkdownBlobImagePaste": {
+          "saveFailed": "Impossible d’enregistrer l’image collée à côté du document. Elle risque de ne pas se charger après le redémarrage d’Orca."
         }
       },
       "diff": {
@@ -18813,6 +18844,13 @@
           "noMovableChat": "Impossible d’exécuter « {{action}} » — aucun chat déplaçable n’est actif.",
           "clientUnsupported": "Impossible d’exécuter « {{action}} » — ce client et cet environnement d’exécution ne le prennent pas en charge."
         }
+      },
+      "plugins": {
+        "list": {
+          "PluginsSectionDescription": {
+            "openWith": "Ouvrir avec (lorsqu’aucun champ modifiable n’a le focus)"
+          }
+        }
       }
     },
     "i18n": {
@@ -18860,6 +18898,12 @@
       "forgeCredentialTarget": {
         "unknownHost": "La machine qui possède ce dépôt n'est pas encore connue. Reconnectez-la et réessayez.",
         "thisComputer": "cet ordinateur"
+      },
+      "runtimeGitSyncClient": {
+        "completeMergeNeedsNewerHost": "Pour terminer une fusion, une version plus récente d’Orca est nécessaire sur cet hôte. Mettez Orca à jour sur cet hôte."
+      },
+      "runtimeGitWorkingTreeClient": {
+        "resolveConflictNeedsNewerHost": "Pour résoudre les conflits, une version plus récente d’Orca est nécessaire sur cet hôte. Mettez Orca à jour sur cet hôte."
       }
     },
     "ssh": {
@@ -19644,7 +19688,11 @@
       },
       "agentMessage": {
         "messageFrom": "Message de",
-        "unnamedSender": "un agent"
+        "unnamedSender": "un agent",
+        "messageFromCoordinator": "Message du coordinateur",
+        "startedWorker": "Worker démarré",
+        "taskFromCoordinator": "Tâche du coordinateur",
+        "updateFromWorker": "Nouvelles du worker"
       },
       "goal": {
         "placeholder": "Décrivez votre objectif, définissez des résultats mesurables pour de meilleurs résultats",
@@ -19924,7 +19972,8 @@
       "bar": {
         "SortableTabContextMenu": {
           "switchToTerminalView": "Continuer avec l’agent de terminal",
-          "switchToChatView": "Continuer dans l’interface de chat"
+          "switchToChatView": "Continuer dans l’interface de chat",
+          "allowAutoClose": "Autoriser la fermeture automatique"
         },
         "BrowserTab": {
           "closeOthers": "Fermer les autres",
@@ -20476,6 +20525,20 @@
       "stepDownload": "Télécharger",
       "stepUnpack": "Décompresser",
       "stepCheck": "Vérifier"
+    },
+    "linearWorkspacePicker": {
+      "search": "Rechercher des espaces de travail Linear",
+      "empty": "Aucun espace de travail trouvé.",
+      "label": "Espace de travail Linear",
+      "all": "Tous les espaces de travail Linear",
+      "unavailable": "Espace de travail Linear indisponible"
+    },
+    "orchestration": {
+      "workerAutoClose": {
+        "running": "Worker temporaire d’orchestration · Se ferme 2 minutes après sa fin",
+        "finished": "Worker temporaire d’orchestration terminé · Fermeture dans {{countdown}}",
+        "keepOpen": "Garder ouvert"
+      }
     }
   },
   "dashboardPopout": {
@@ -20866,6 +20929,9 @@
         "needsAttention_other": "Tous les {{count}} agents requièrent votre attention",
         "needsAttention_many": "Tous les {{count}} agents requièrent votre attention"
       }
+    },
+    "cardProperties": {
+      "agentModel": "Modèle de l’agent"
     }
   },
   "editor": {
@@ -21335,7 +21401,9 @@
       "scannerBusy": "Trop d’analyses de sessions en cours. Patientez un instant, puis actualisez.",
       "scannerMissing": "L’analyseur de sessions est absent de cette installation d’Orca. Réinstaller Orca permet de le restaurer.",
       "scannerStopped": "L’analyseur de sessions s’est arrêté de manière inattendue. Actualisez pour réessayer."
-    }
+    },
+    "sessionAccount": "Compte",
+    "sessionAccountUnknown": "Inconnu"
   },
   "common": {
     "retry": "Réessayer",
@@ -22393,7 +22461,8 @@
       "terminalSplitRight": "Scinder le terminal vers la droite",
       "terminalSplitDown": "Scinder le terminal vers le bas",
       "terminalSwitchInputSource": "Changer de source de saisie / langue (natif)",
-      "newAgentTab": "Nouvel onglet {{agent}}"
+      "newAgentTab": "Nouvel onglet {{agent}}",
+      "viewPlugins": "Ouvrir les plugins"
     },
     "group": {
       "global": "Global",
@@ -22792,7 +22861,15 @@
     "arguments": "Arguments",
     "argumentsHint": "S’applique uniquement aux lancements CLI.",
     "launchChat": "Lancer le chat",
-    "launchTerminal": "Lancer le terminal"
+    "launchTerminal": "Lancer le terminal",
+    "setByArguments": "Défini par vos arguments",
+    "searchModels": "Rechercher des modèles",
+    "noModels": "Aucun modèle ne correspond à votre recherche.",
+    "legacyModels": "Anciens modèles",
+    "toggleArguments": "Afficher ou masquer les arguments",
+    "argumentsTerminalHint": "S’applique uniquement aux lancements dans le terminal (CLI)",
+    "searchAgentModels": "Rechercher des modèles {{agent}}…",
+    "legacyModelCount": "{{total}} modèles"
   },
   "wslMove": {
     "entry": {

@@ -20,7 +20,7 @@ export const automationStyles = themedStyleSheet(() => ({
   card: {
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgPanel,
     padding: spacing.lg,
     gap: spacing.md
@@ -35,7 +35,7 @@ export const automationStyles = themedStyleSheet(() => ({
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgPanel,
-    borderRadius: radii.input,
+    borderRadius: radii.control,
     color: colors.textPrimary,
     padding: spacing.md,
     fontSize: TEXT_INPUT_FONT_SIZE,
@@ -46,7 +46,7 @@ export const automationStyles = themedStyleSheet(() => ({
     minHeight: 44,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     backgroundColor: colors.bgRaised
@@ -60,7 +60,7 @@ export const automationStyles = themedStyleSheet(() => ({
     color: colors.textPrimary,
     backgroundColor: colors.editorSurface,
     padding: spacing.md,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     fontFamily: typography.monoFamily,
     fontSize: typography.metaSize,
     lineHeight: 19

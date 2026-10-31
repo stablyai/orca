@@ -230,7 +230,9 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
     )
     // Why: agents that read the prompt after they start get it typed in, not on argv.
     if (startup.followup) {
-      this.sendStartupFollowupWhenReady(terminal.handle, startup.followup)
+      void this.deliverStartupFollowup(terminal.handle, startup.followup, {
+        terminalCreation: terminal
+      })
     }
     return terminal
   }

@@ -1,3 +1,4 @@
+import { ensureAgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
 import { useAppStore } from '@/store'
 import { buildAgentStartupPlan } from '@/lib/tui-agent-startup'
 import type {
@@ -19,7 +20,7 @@ import {
 import { subscribeToPtyData } from '@/components/terminal-pane/pty-data-sidecar-subscriptions'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { retireProvider } from '@/lib/retire-unowned-background-terminal'
-import { createRuntimeAgentBackgroundTerminal } from '@/lib/runtime-agent-background-create'
+import { prepareRuntimeAgentBackgroundTerminal } from '@/lib/runtime-agent-background-create'
 import { subscribeToRuntimeTerminalData } from '@/runtime/runtime-terminal-stream'
 import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import { isMainTerminalSideEffectAuthorityForPty } from '@/components/terminal-pane/terminal-side-effect-facts-handler'
@@ -60,13 +61,23 @@ export async function launchAgentBackgroundSession(
     // Why: that server rebuilds the command from its own settings and would drop the extras.
     throw new Error("Extra arguments can't be applied to a paired server's workspace from here.")
   }
+  const createRuntimeTerminal =
+    runtimeTarget.kind === 'environment'
+      ? await prepareRuntimeAgentBackgroundTerminal(runtimeTarget.environmentId)
+      : null
+  const preferences = await ensureAgentLaunchPreferences(useAppStore.getState(), {
+    kind: 'git-worktree',
+    runtimeEnvironmentId: runtimeTarget.kind === 'environment' ? runtimeTarget.environmentId : null
+  })
   // Why before any tab or PTY: an invalid launch must fail the run without creating a terminal.
   const planInputs = resolveAgentStartupPlanInputs({
     agent,
     // Why: the client's Windows shell setting describes this machine, not a remote host.
-    settings: isLocalHost
-      ? (store.settings ?? {})
-      : { ...store.settings, terminalWindowsShell: undefined },
+    settings: {
+      ...store.settings,
+      agentLaunchChoices: preferences.agentLaunchChoices ?? store.settings?.agentLaunchChoices,
+      ...(!isLocalHost ? { terminalWindowsShell: undefined } : {})
+    },
     platform: launchPlatform,
     isRemote,
     // The window quotes by its Settings shell, which its pane's spawn also reads.
@@ -142,17 +153,17 @@ export async function launchAgentBackgroundSession(
     agentStatusConsumer.consume(data)
   }
   try {
-    if (runtimeTarget.kind === 'environment') {
+    if (runtimeTarget.kind === 'environment' && createRuntimeTerminal) {
       // Runtime workspaces execute on their server; local pty.spawn would run automation on this client.
-      const created = await createRuntimeAgentBackgroundTerminal({
+      const created = await createRuntimeTerminal({
         environmentId: runtimeTarget.environmentId,
         worktreeId,
         tabId: reservedTabId,
         leafId,
         agent,
         ...(hasPrompt && !isFollowupPath ? { prompt: trimmedPrompt } : {}),
-        ...(startupPlan.sessionOptions ? { sessionOptions: startupPlan.sessionOptions } : {}),
         legacy: {
+          ...(startupPlan.sessionOptions ? { sessionOptions: startupPlan.sessionOptions } : {}),
           command: startupPlan.launchCommand,
           env: paneEnv,
           ...(startupPlan.startupCommandDelivery

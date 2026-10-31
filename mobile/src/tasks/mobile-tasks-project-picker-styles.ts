@@ -7,6 +7,7 @@ import {
   spacing,
   typography
 } from './mobile-tasks-dependencies'
+import { concentricRadius } from '../theme/mobile-theme'
 import { FIELD_MIN_HEIGHT } from '../components/composer-input/composer-input-styles'
 
 export const mobileTasksProjectPickerStyles = themedStyleSheet(() => ({
@@ -19,7 +20,7 @@ export const mobileTasksProjectPickerStyles = themedStyleSheet(() => ({
     maxHeight: '100%',
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgPanel,
     overflow: 'hidden'
   },
@@ -45,7 +46,7 @@ export const mobileTasksProjectPickerStyles = themedStyleSheet(() => ({
   boardCard: {
     margin: spacing.sm,
     marginBottom: 0,
-    borderRadius: radii.card,
+    borderRadius: concentricRadius(radii.surface, spacing.sm),
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgBase,
@@ -53,13 +54,13 @@ export const mobileTasksProjectPickerStyles = themedStyleSheet(() => ({
   },
   repoPickerGroup: {
     backgroundColor: colors.bgPanel,
-    borderRadius: 12,
+    borderRadius: radii.surface,
     overflow: 'hidden'
   },
   pagePickerList: {
     maxHeight: 420,
     backgroundColor: colors.bgPanel,
-    borderRadius: 12
+    borderRadius: radii.surface
   },
   projectPickerControls: {
     gap: spacing.sm,
@@ -74,7 +75,7 @@ export const mobileTasksProjectPickerStyles = themedStyleSheet(() => ({
     marginBottom: spacing.md,
     borderWidth: 1,
     borderColor: colors.statusAmber,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgPanel
   },
   projectWarningTextWrap: {
@@ -138,7 +139,7 @@ export const mobileTasksProjectPickerStyles = themedStyleSheet(() => ({
     maxWidth: '100%',
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     backgroundColor: colors.bgPanel,
     paddingHorizontal: spacing.sm,
     paddingVertical: 2

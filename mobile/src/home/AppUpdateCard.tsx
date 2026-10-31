@@ -60,7 +60,7 @@ const styles = themedStyleSheet(() => ({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgPanel,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
@@ -78,7 +78,7 @@ const styles = themedStyleSheet(() => ({
   icon: {
     width: 46,
     height: 46,
-    borderRadius: 13,
+    borderRadius: radii.tile,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.bgRaised,
@@ -91,7 +91,7 @@ const styles = themedStyleSheet(() => ({
     width: 40,
     height: 40,
     marginHorizontal: spacing.xs,
-    borderRadius: radii.row,
+    borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center'
   },

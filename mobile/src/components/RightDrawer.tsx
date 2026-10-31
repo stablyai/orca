@@ -12,7 +12,7 @@ import Animated, {
   Extrapolation
 } from 'react-native-reanimated'
 import { useBackClaim } from '../navigation/use-back-claim'
-import { colors, spacing } from '../theme/mobile-theme'
+import { colors, radii, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 // Reuse BottomDrawer’s anchor-independent mount-before-commit gate.
@@ -217,8 +217,8 @@ const styles = themedStyleSheet(() => ({
   drawer: {
     height: '100%',
     backgroundColor: colors.bgBase,
-    borderTopLeftRadius: 16,
-    borderBottomLeftRadius: 16,
+    borderTopLeftRadius: radii.surface,
+    borderBottomLeftRadius: radii.surface,
     paddingHorizontal: spacing.md,
     borderLeftWidth: StyleSheet.hairlineWidth,
     borderLeftColor: colors.borderSubtle,

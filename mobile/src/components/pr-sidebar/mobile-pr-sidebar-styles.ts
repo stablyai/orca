@@ -69,7 +69,7 @@ export const mobilePrSidebarStyles = themedStyleSheet(() => ({
     alignSelf: 'flex-start',
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,
-    borderRadius: radii.button,
+    borderRadius: radii.pill,
     borderWidth: StyleSheet.hairlineWidth,
     backgroundColor: colors.bgRaised
   },
@@ -118,7 +118,7 @@ export const mobilePrSidebarStyles = themedStyleSheet(() => ({
     backgroundColor: colors.bgRaised,
     paddingHorizontal: spacing.xs,
     paddingVertical: 2,
-    borderRadius: radii.button
+    borderRadius: radii.pill
   },
   row: {
     minHeight: 44,
@@ -147,7 +147,7 @@ export const mobilePrSidebarStyles = themedStyleSheet(() => ({
   statusDot: {
     width: 8,
     height: 8,
-    borderRadius: 4
+    borderRadius: radii.pill
   },
   emptyText: {
     color: colors.textSecondary,
@@ -208,7 +208,7 @@ export const mobilePrSidebarStyles = themedStyleSheet(() => ({
   checkDetailLogScroll: {
     maxHeight: 160,
     backgroundColor: colors.bgRaised,
-    borderRadius: radii.button,
+    borderRadius: radii.surface,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs
   },
@@ -244,7 +244,7 @@ export const mobilePrSidebarStyles = themedStyleSheet(() => ({
     alignItems: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.md,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised
   },
   retryText: {
@@ -263,7 +263,7 @@ export const mobilePrSidebarStyles = themedStyleSheet(() => ({
     minHeight: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   pickerTitle: {
     color: colors.textPrimary,

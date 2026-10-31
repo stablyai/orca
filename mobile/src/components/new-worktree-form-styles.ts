@@ -1,4 +1,4 @@
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, concentricRadius, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { composerInputStyles, COMPOSER_TEXT_SIZE } from './composer-input/composer-input-styles'
 
@@ -48,14 +48,14 @@ export const newWorktreeFormStyles = themedStyleSheet(() => ({
   repoDot: {
     width: 8,
     height: 8,
-    borderRadius: 999
+    borderRadius: radii.pill
   },
   disabled: {
     opacity: 0.55
   },
   sshBox: {
     backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
+    borderRadius: radii.surface,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     paddingHorizontal: spacing.md,
@@ -70,7 +70,7 @@ export const newWorktreeFormStyles = themedStyleSheet(() => ({
   sshDot: {
     width: 8,
     height: 8,
-    borderRadius: 999
+    borderRadius: radii.pill
   },
   sshDotConnected: {
     backgroundColor: colors.statusGreen
@@ -96,7 +96,7 @@ export const newWorktreeFormStyles = themedStyleSheet(() => ({
     marginTop: 1
   },
   sshConnectButton: {
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     paddingHorizontal: spacing.sm,
@@ -142,7 +142,7 @@ export const newWorktreeFormStyles = themedStyleSheet(() => ({
   },
   sourceBadge: {
     backgroundColor: colors.bgRaised,
-    borderRadius: 4,
+    borderRadius: radii.pill,
     paddingHorizontal: spacing.xs + 2,
     paddingVertical: 2
   },
@@ -154,7 +154,7 @@ export const newWorktreeFormStyles = themedStyleSheet(() => ({
   },
   setupBox: {
     backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
+    borderRadius: radii.surface,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     padding: spacing.md
@@ -179,7 +179,7 @@ export const newWorktreeFormStyles = themedStyleSheet(() => ({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     paddingVertical: spacing.sm
   },
   setupChoiceButtonSelected: {
@@ -196,7 +196,7 @@ export const newWorktreeFormStyles = themedStyleSheet(() => ({
   },
   setupCommandBlock: {
     backgroundColor: colors.bgBase,
-    borderRadius: 6,
+    borderRadius: concentricRadius(radii.surface, spacing.md),
     paddingHorizontal: spacing.sm + 2,
     paddingVertical: spacing.sm
   },
@@ -214,7 +214,7 @@ export const newWorktreeFormStyles = themedStyleSheet(() => ({
     backgroundColor: colors.textPrimary,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     minWidth: 160,
     alignItems: 'center'
   },

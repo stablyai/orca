@@ -121,7 +121,7 @@ const styles = themedStyleSheet(() => ({
     backgroundColor: colors.textPrimary,
     paddingHorizontal: 28,
     paddingVertical: 14,
-    borderRadius: radii.card
+    borderRadius: radii.control
   },
   primaryButtonText: { color: colors.bgBase, fontSize: 15, fontWeight: '700' },
   stepsSection: { paddingHorizontal: spacing.xl },
@@ -144,7 +144,7 @@ const styles = themedStyleSheet(() => ({
   stepNum: {
     width: 28,
     height: 28,
-    borderRadius: 8,
+    borderRadius: radii.pill,
     backgroundColor: colors.bgPanel,
     borderWidth: 1,
     borderColor: colors.borderSubtle,

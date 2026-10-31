@@ -15,7 +15,7 @@ import { repoMatchesHostIdentity } from '@/store/slices/repo-host-identity'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { normalizeAgentProviderSession } from '../../../shared/agent-session-resume'
 import {
-  resolveTuiAgentLaunchArgs,
+  resolveTuiAgentLaunchRawArgs,
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
 import type {
@@ -90,7 +90,12 @@ export function resolveAgentAccountRestartResumeStartup(
       launchConfig !== undefined
         ? launchConfig.agentArgs
         : unrecordedLaunchUsesDefaults
-          ? resolveTuiAgentLaunchArgs(agent, state.settings)
+          ? resolveTuiAgentLaunchRawArgs(
+              agent,
+              state.settings,
+              undefined,
+              resolveStartupShell(resumeTarget.platform, resumeTarget.shell)
+            )
           : null,
     agentEnv:
       launchConfig !== undefined

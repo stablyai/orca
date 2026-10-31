@@ -304,7 +304,8 @@ describe('OrcaRuntimeService', () => {
       })
     ])
     expect(summaries.worktrees[0]?.agents).toHaveLength(100)
-    expect(getRepo).not.toHaveBeenCalled()
+    // Naming reads the session once; the qualified summary lookup does not read a bare repo ID.
+    expect(getRepo).toHaveBeenCalledTimes(1)
   })
 
   it.each([

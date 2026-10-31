@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { AutomationRun } from '../../shared/automations-types'
+import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
 import { launchHeadlessAutomationAgent } from './headless-automation-agent-launch'
 
 const { deliverTerminalAgentLaunchPrompt } = vi.hoisted(() => ({
@@ -23,22 +24,35 @@ function harness(
     workspaceHostId?: ExecutionHostId
   } = {}
 ) {
+  const startupTerminalCreation: RuntimeTerminalCreate = {
+    handle: 'term_new',
+    tabId: 'tab-new',
+    paneKey: 'tab-new:leaf-1',
+    ptyId: 'pty-new',
+    worktreeId: 'repo-1::/wt/auto',
+    title: 'auto-nightly'
+  }
   const runtime = {
+    startupTerminalCreation,
     requireStore: () => ({ getSettings: () => CHAT_DEFAULT_ON }),
     getStructuredAgentSessionCreateSupport: vi.fn(async () => ({ supported: true })),
-    createManagedWorktree: vi.fn(async (_args: Record<string, unknown>) => ({
-      worktree: { id: 'repo-1::/wt/auto', displayName: 'auto-nightly' },
-      ...(options.startupTerminal === null
-        ? { warning: 'Startup terminal failed.' }
-        : {
-            startupTerminal: options.startupTerminal ?? {
-              handle: 'term_new',
-              tabId: 'tab-new',
-              paneKey: 'tab-new:leaf-1',
-              ptyId: 'pty-new'
-            }
-          })
-    })),
+    createManagedWorktree: vi.fn(
+      async (
+        args: Record<string, unknown> & {
+          onStartupTerminalCreated?: (terminal: RuntimeTerminalCreate) => void
+        }
+      ) => {
+        if (options.startupTerminal !== null) {
+          args.onStartupTerminalCreated?.(startupTerminalCreation)
+        }
+        return {
+          worktree: { id: 'repo-1::/wt/auto', displayName: 'auto-nightly' },
+          ...(options.startupTerminal === null
+            ? { warning: 'Startup terminal failed.' }
+            : { startupTerminal: options.startupTerminal ?? startupTerminalCreation })
+        }
+      }
+    ),
     launchAgentTerminal: vi.fn(async (_selector: string, _opts: Record<string, unknown>) => ({
       handle: 'term_existing',
       tabId: 'tab-1',
@@ -295,10 +309,14 @@ describe('headless automation agent launch', () => {
       { worktree: { displayName: 'repo' }, repo: TARGET.repo }
     )
     expect(runtime.deliverStartupFollowup).toHaveBeenCalledTimes(1)
-    expect(runtime.deliverStartupFollowup).toHaveBeenCalledWith('term_existing', {
-      agent: 'aider',
-      prompt: 'fix the flaky test'
-    })
+    expect(runtime.deliverStartupFollowup).toHaveBeenCalledWith(
+      'term_existing',
+      {
+        agent: 'aider',
+        prompt: 'fix the flaky test'
+      },
+      { terminalCreation: await runtime.launchAgentTerminal.mock.results[0].value }
+    )
     finishDelivery(true)
   })
 
@@ -344,10 +362,11 @@ describe('headless automation agent launch', () => {
 
     expect(runtime.createManagedWorktree.mock.calls[0]![0]).not.toHaveProperty('startupPrompt')
     expect(runtime.deliverStartupFollowup).toHaveBeenCalledTimes(1)
-    expect(runtime.deliverStartupFollowup).toHaveBeenCalledWith('term_new', {
-      agent: 'goose',
-      prompt: 'fix the flaky test'
-    })
+    expect(runtime.deliverStartupFollowup).toHaveBeenCalledWith(
+      'term_new',
+      { agent: 'goose', prompt: 'fix the flaky test' },
+      { terminalCreation: runtime.startupTerminalCreation }
+    )
   })
 
   it('fails the run with the create warning when no agent terminal started, without a second one', async () => {
