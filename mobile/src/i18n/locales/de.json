@@ -186,7 +186,11 @@
       "cancelEditing": "Bearbeitung abbrechen",
       "placeholder": "Frage stellen, @ für Dateiverweise, / für Befehle",
       "saveEditedMessage": "Bearbeitete Nachricht speichern",
-      "sendMessage": "Nachricht senden"
+      "sendMessage": "Nachricht senden",
+      "sendQueue": "Einreihen",
+      "sendSteer": "Steuern",
+      "sendQueueHint": "Läuft nach dem aktuellen Durchgang",
+      "sendSteerHint": "Fließt in das ein, was der Agent gerade tut"
     },
     "composerAttachments": {
       "attachedImage": "Angehängtes Bild",

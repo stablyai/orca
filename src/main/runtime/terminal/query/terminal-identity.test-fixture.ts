@@ -75,22 +75,8 @@ class IdentityRuntime extends OrcaRuntimeService {
       hasMobileSnapshot: (worktree) => this.mobileSessionTabsByWorktree.has(worktree),
       getLeavesForPty: this.getLeavesForPty.bind(this),
       markUnavailable: this.markGraphUnavailable.bind(this),
-      crewReaders: {
-        getTerminalWorktreeIdForHandle: (handle, context) =>
-          this.getTerminalWorktreeIdForHandle(handle, context),
-        getTerminalProcessIncarnation: (handle, context) =>
-          this.getTerminalProcessIncarnation(handle, context),
-        getTerminalHandleForPaneKey: (pane, context) =>
-          this.getTerminalHandleForPaneKey(pane, context),
-        getPaneKeyForTerminalHandle: (handle, context) =>
-          this.getPaneKeyForTerminalHandle(handle, context),
-        getTerminalPaneKey: (handle, context) => this.getTerminalPaneKey(handle, context),
-        getOrchestrationFleetAgentStatusSnapshot: (context) =>
-          this.getOrchestrationFleetAgentStatusSnapshot(context),
-        createTerminalIdentityRawInputs: () => this.createTerminalIdentityRawInputs(),
-        createTerminalIdentityReadContext: (inputs) =>
-          this.createTerminalIdentityReadContext(inputs),
-        orchestrationSenderNames: this.orchestrationSenderNames
+      get crewReaders() {
+        return current().crewRuntimeReaders()
       },
       get runtimeId() {
         return current().runtimeId

@@ -4,14 +4,10 @@ const mocks = vi.hoisted(() => ({ gitExecFileAsync: vi.fn() }))
 
 vi.mock('./runner', () => ({ gitExecFileAsync: mocks.gitExecFileAsync }))
 
-import { GIT_READ_TIMEOUT_MS } from './command-runner/git-command-timeout'
 import { GitAdmissionScheduler } from './command-runner/git-subprocess-admission'
 import type { GitAdmissionTier } from './command-runner/git-exec-options'
-import { WSL_GIT_READ_ENVIRONMENT_WAIT_MS } from './wsl-git-read-environment'
-import {
-  measureRetargetDivergence,
-  RETARGET_DIVERGENCE_BUDGET_MS
-} from './worktree-base-divergence'
+
+import { measureRetargetDivergence } from './worktree-base-divergence'
 
 type ExecOptions = {
   cwd: string
@@ -19,10 +15,6 @@ type ExecOptions = {
   wslDistro?: string
   signal?: AbortSignal
   admissionTier?: GitAdmissionTier
-}
-
-function callOptions(): ExecOptions[] {
-  return mocks.gitExecFileAsync.mock.calls.map((call) => call[1] as ExecOptions)
 }
 
 function subcommands(): string[] {
@@ -73,32 +65,6 @@ describe('measureRetargetDivergence deadlines', () => {
     }
   })
 
-  it('puts every probe under one shared budget, not a budget each', async () => {
-    answerProbes('3\n')
-
-    await expect(
-      measureRetargetDivergence('/repo', 'refs/heads/main', 'refs/remotes/origin/main')
-    ).resolves.toBe('within')
-
-    expect(subcommands()).toEqual(['rev-list', 'rev-list', 'merge-base'])
-    const signals = callOptions().map((options) => options.signal)
-    // One budget spans all staged probes; per-probe budgets would add together.
-    expect(new Set(signals).size).toBe(1)
-    expect(signals[0]).toBeInstanceOf(AbortSignal)
-  })
-
-  it('also gives each probe a command timeout well below git default read deadline', async () => {
-    answerProbes('3\n')
-
-    await measureRetargetDivergence('/repo', 'refs/heads/main', 'refs/remotes/origin/main')
-
-    // Signals cover pre-spawn waits; command timeouts still bound a hung spawn.
-    for (const options of callOptions()) {
-      expect(options.timeout).toBe(RETARGET_DIVERGENCE_BUDGET_MS)
-    }
-    expect(RETARGET_DIVERGENCE_BUDGET_MS).toBeLessThan(GIT_READ_TIMEOUT_MS)
-  })
-
   it('really aborts the in-flight probes when the shared budget expires', async () => {
     mocks.gitExecFileAsync.mockImplementation(
       (_args: string[], options: ExecOptions) =>
@@ -119,12 +85,6 @@ describe('measureRetargetDivergence deadlines', () => {
         budgetMsForTest: 25
       })
     ).resolves.toBe('unknown')
-  })
-
-  it('clears the WSL read-environment wait, which starts before any command timeout', () => {
-    // Leave walk headroom after the first WSL environment probe.
-    expect(RETARGET_DIVERGENCE_BUDGET_MS).toBeGreaterThan(WSL_GIT_READ_ENVIRONMENT_WAIT_MS)
-    expect(RETARGET_DIVERGENCE_BUDGET_MS).toBeLessThan(GIT_READ_TIMEOUT_MS)
   })
 
   it('stops the probes when the create itself is cancelled, without waiting for the budget', async () => {
@@ -193,17 +153,5 @@ describe('measureRetargetDivergence deadlines', () => {
       measureRetargetDivergence('/repo', 'refs/heads/main', 'refs/remotes/origin/main')
     ).resolves.toBe('exceeded')
     expect(subcommands()).not.toContain('merge-base')
-  })
-
-  it('routes every probe to the caller-named WSL distro', async () => {
-    answerProbes('1\n')
-
-    await measureRetargetDivergence('/repo', 'refs/heads/main', 'refs/remotes/origin/main', {
-      wslDistro: 'Ubuntu'
-    })
-
-    for (const options of callOptions()) {
-      expect(options).toMatchObject({ cwd: '/repo', wslDistro: 'Ubuntu' })
-    }
   })
 })

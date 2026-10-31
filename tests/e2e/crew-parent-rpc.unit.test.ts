@@ -79,15 +79,42 @@ it('composes actual local and paired RPC claims in either order and preserves de
         liveHandle: (value: string) => value === handle || value === 'term_coord',
         handleForPane: (value: string) => (value === pane ? handle : null),
         paneForHandle: (value: string) => (value === handle ? pane : null),
+        processForHandle: (value: string) => h.runtime.getTerminalProcessIncarnation(value),
         name: () => 'Manager'
       }
       const parents = buildCrewSnapshot(handle, deps).sections.managedBy
-      expect(parents.map((row) => row.sendAddress).sort()).toEqual(
-        ['term_coord', 'run:run_remote_home'].sort()
-      )
-      expect(
-        parents.find((row) => row.sendAddress === 'run:run_remote_home')?.openTarget
-      ).toBeUndefined()
+      const attachment = h.db.getRemoteDispatchAttachment('ctx_remote_parent')
+      if (!attachment) {
+        throw new Error('Expected the actual paired worker attachment')
+      }
+      const localKey = JSON.stringify(['local', 'term_coord'])
+      const homeKey = JSON.stringify([attachment.home_peer_fingerprint, 'run:run_remote_home'])
+      expect(parents.map((row) => row.partyKey).sort()).toEqual([localKey, homeKey].sort())
+      const localParent = parents.find((row) => row.partyKey === localKey)
+      const homeParent = parents.find((row) => row.partyKey === homeKey)
+      expect(localParent).toMatchObject({
+        role: 'manager',
+        openTarget: { kind: 'terminal', handle: 'term_coord' }
+      })
+      expect(localParent).not.toHaveProperty('sendAddress')
+      expect(homeParent).toMatchObject({ role: 'manager', sendAddress: 'run:run_remote_home' })
+      expect(homeParent?.openTarget).toBeUndefined()
+      if (!homeParent?.sendAddress) {
+        throw new Error('Expected the published attached Run-home address')
+      }
+      const delivery = vi.spyOn(h.runtime, 'deliverPendingMessagesForHandle')
+      const notification = vi.spyOn(h.runtime, 'notifyMessageArrived')
+      const effects = () => ({
+        messages: h.db.getInbox(),
+        relays: h.db.listFederationRelay({
+          dispatchId: 'ctx_remote_parent',
+          direction: 'to_home',
+          afterSequence: 0
+        }),
+        deliveries: delivery.mock.calls.length,
+        notifications: notification.mock.calls.length
+      })
+      const receipts: unknown[] = []
       const client = new RuntimeClient('/tmp/crew-parent-routing', 1000, null, null)
       vi.spyOn(client, 'call').mockImplementation(async (method: string, params: unknown) => {
         const response = await h.dispatch(
@@ -96,12 +123,62 @@ it('composes actual local and paired RPC claims in either order and preserves de
         if (!response.ok) {
           throw new RuntimeClientError(response.error.code, response.error.message)
         }
+        receipts.push(response.result)
         return {
           ...response,
           result: response.result,
           _meta: { runtimeId: 'crew-parent-test' }
         }
       })
+      const beforeWrongLocal = effects()
+      await expect(
+        dispatch(['orchestration', 'send'], {
+          client,
+          flags: new Map([
+            ['from', handle],
+            ['to', 'term_coord'],
+            ['subject', 'Attached local parent'],
+            ['body', 'Local must refuse']
+          ]),
+          cwd: '/tmp',
+          json: true
+        })
+      ).rejects.toMatchObject({
+        code: 'invalid_argument',
+        message: 'Federated Dispatch messages route to their Run home; omit --to and --run.'
+      })
+      expect(effects()).toEqual(beforeWrongLocal)
+      const beforeHome = effects()
+      await dispatch(['orchestration', 'send'], {
+        client,
+        flags: new Map([
+          ['from', handle],
+          ['to', homeParent.sendAddress],
+          ['subject', 'Attached home parent'],
+          ['body', 'Hello home'],
+          ['type', 'status']
+        ]),
+        cwd: '/tmp',
+        json: true
+      })
+      expect(receipts.at(-1)).toMatchObject({
+        relay: { dispatchId: 'ctx_remote_parent', destination: 'run_home', accepted: true }
+      })
+      const afterHome = effects()
+      expect(afterHome.messages).toEqual(beforeHome.messages)
+      expect(afterHome.deliveries).toBe(beforeHome.deliveries)
+      expect(afterHome.notifications).toBe(beforeHome.notifications)
+      expect(afterHome.relays.slice(0, beforeHome.relays.length)).toEqual(beforeHome.relays)
+      expect(afterHome.relays).toHaveLength(beforeHome.relays.length + 1)
+      const homeRelay = afterHome.relays.at(-1)
+      expect(homeRelay).toMatchObject({ dispatch_id: 'ctx_remote_parent', direction: 'to_home' })
+      expect(JSON.parse(homeRelay!.payload)).toMatchObject({
+        from: handle,
+        subject: 'Attached home parent',
+        body: 'Hello home',
+        type: 'status'
+      })
+      const beforeDetached = effects()
       await expect(
         dispatch(['orchestration', 'send'], {
           client,
@@ -118,6 +195,16 @@ it('composes actual local and paired RPC claims in either order and preserves de
       expect(
         h.db.db.prepare("SELECT sequence FROM messages WHERE subject = 'Detached parent'").all()
       ).toEqual([])
+      expect(effects()).toEqual(beforeDetached)
+      console.info('Crew paired parent command controls', {
+        order,
+        parents,
+        beforeWrongLocal,
+        beforeHome,
+        afterHome,
+        afterDetached: effects(),
+        receipts
+      })
     } finally {
       h.close()
     }

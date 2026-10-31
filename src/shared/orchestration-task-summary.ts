@@ -3,16 +3,18 @@ const TASK_SPEC_BRIEF_LENGTH = 160
 export function abbreviateOrchestrationTasks<T extends { spec: string }>(
   tasks: readonly T[]
 ): (T & { spec_truncated: boolean })[] {
-  return tasks.map((task) => {
-    const spec = task.spec.replace(/\s+/g, ' ').trim()
-    const truncated = spec.length > TASK_SPEC_BRIEF_LENGTH
-    return {
-      ...task,
-      spec: truncated ? `${truncateAtCodePoint(spec).trimEnd()}…` : spec,
-      // Whitespace cleanup alone must not trigger agents to refetch an already complete brief.
-      spec_truncated: truncated
-    }
-  })
+  return tasks.map((task) => ({
+    ...task,
+    spec: abbreviateOrchestrationText(task.spec),
+    // Whitespace cleanup alone must not trigger agents to refetch an already complete brief.
+    spec_truncated: task.spec.replace(/\s+/g, ' ').trim().length > TASK_SPEC_BRIEF_LENGTH
+  }))
+}
+
+/** One line of at most 160 characters, ending in … when cut. */
+export function abbreviateOrchestrationText(text: string): string {
+  const flat = text.replace(/\s+/g, ' ').trim()
+  return flat.length > TASK_SPEC_BRIEF_LENGTH ? `${truncateAtCodePoint(flat).trimEnd()}…` : flat
 }
 
 function truncateAtCodePoint(spec: string): string {

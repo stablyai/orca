@@ -573,9 +573,13 @@ it('keeps the genuine settled worker Dispatch preferred and sends its published 
     vi.mocked(f.runtime.getOrchestrationDispatchAuthority).mockImplementation((handle) =>
       handle === 'term_worker'
         ? {
+            runtimeId: f.runtime.getRuntimeId(),
             terminalHandle: handle,
+            ptyId: 'pty_term_worker',
+            worktreeId: 'folder-worker-host',
             paneKey: WORKER_PANE,
             processIncarnation: 'process:term_worker',
+            launchTokenHash: null,
             hostScope: { kind: 'local', hostId: 'local' }
           }
         : null

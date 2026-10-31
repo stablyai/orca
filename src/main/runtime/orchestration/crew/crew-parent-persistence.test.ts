@@ -13,6 +13,10 @@ it('reconstructs old-writer stub parents after real receipt pruning and reopen, 
   const dir = mkdtempSync(join(tmpdir(), 'orca-crew-parent-'))
   const path = join(dir, 'orchestration.db')
   const { deps, handles } = fixture()
+  const workerProcess = deps.processForHandle?.('term_worker')
+  if (typeof workerProcess !== 'string' || workerProcess.length === 0) {
+    throw new Error('Expected the current fixture worker process')
+  }
   let db = new OrchestrationDb(path)
   try {
     // Supported rollback writer shape: empty home_run_id is repaired only by normal DB open.
@@ -27,7 +31,7 @@ it('reconstructs old-writer stub parents after real receipt pruning and reopen, 
         'epoch',
         'term_worker',
         handles.get('term_worker')!,
-        'process_one'
+        workerProcess
       )
     db.db
       .prepare(`INSERT INTO mutation_receipts
@@ -41,6 +45,9 @@ it('reconstructs old-writer stub parents after real receipt pruning and reopen, 
     deps.db = db
     const stub = federatedStubHomeRunId('ctx_old_writer')
     expect(db.getRunRaw(stub)?.home_database).toBe('remote')
+    expect(db.getRemoteDispatchAttachment('ctx_old_writer')?.process_incarnation).toBe(
+      workerProcess
+    )
     const model = new CrewReadModel(() => deps, db.crewChanges.subscribe)
     let current = buildCrewSnapshot('term_worker', deps)
     const stop = subscribeCrew(
@@ -53,7 +60,11 @@ it('reconstructs old-writer stub parents after real receipt pruning and reopen, 
     )
     try {
       const before = current.sections.managedBy
-      expect(before.map((row) => row.sendAddress)).toEqual([`run:${stub}`])
+      expect(before.map((row) => row.partyKey)).toEqual([JSON.stringify(['home', `run:${stub}`])])
+      expect(before[0]).toMatchObject({ role: 'manager' })
+      expect(before[0]).not.toHaveProperty('sendAddress')
+      expect(before[0].openTarget).toBeUndefined()
+      console.info('Crew persisted terminal parent', { workerProcess, stub, before })
       db.resetMessages()
       await Promise.resolve()
       await Promise.resolve()

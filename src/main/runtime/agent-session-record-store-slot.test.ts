@@ -321,10 +321,17 @@ it('retires a sole Crew observer generation on empty-source open, real name writ
     await flush()
     expect(captures).toHaveBeenCalledTimes(beforeRename)
     expect(read().sections.talkingWith[0].label).toBe('Renamed without process')
+    const beforeSourceRelease = frames.length
     await stopStructuredAgentSessionRuntime()
     await flush()
     expect(captures.mock.calls.length).toBeGreaterThan(beforeRename)
-    expect(read().sections.talkingWith[0].label).not.toBe('Renamed without process')
+    expect(read).toThrow(new Error('Crew recipient source is unavailable'))
+    const releasedFrames = frames.slice(beforeSourceRelease)
+    expect(releasedFrames.slice(-2)).toEqual([
+      { type: 'begin', status: 'unknown' },
+      { type: 'complete' }
+    ])
+    console.info('Crew source release', { beforeSourceRelease, releasedFrames })
     stop()
     const afterStop = captures.mock.calls.length
     await openAgentSessionRecordStoreOnce(location())

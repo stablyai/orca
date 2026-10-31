@@ -25,6 +25,7 @@ import { useNativeChatRootInputRouting } from './use-native-chat-root-input-rout
 import { useNativeChatFontSize } from './use-native-chat-font-size'
 import { useNativeChatFind } from './use-native-chat-find'
 import { NativeChatFindBar } from './NativeChatFindBar'
+import { nativeChatQueueFollowUps } from '../../../../shared/native-chat-follow-up-behavior'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import { useNativeChatLinkActions } from './use-native-chat-link-actions'
 import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
@@ -77,8 +78,8 @@ export function NativeChatStructuredSession(
   // The host's own word on whether the provider child has answered startup yet.
   const hostExecution = useStructuredAgentSessionHostExecution(props.sessionId, props.target)
   const paneKey = structuredAgentSessionPaneKey(props.tabId, props.sessionId)
-  // Chat-wide: absent means on; only an explicit off keeps mid-turn sends immediate.
-  const queueFollowUps = useAppStore((store) => store.settings?.nativeChatQueueFollowUps !== false)
+  // Chat-wide preference; an alternate send flips it for one message.
+  const queueFollowUps = useAppStore((store) => nativeChatQueueFollowUps(store.settings))
   const composerRef = useRef<NativeChatComposerHandle>(null)
   // Paste target while a question card replaces the composer.
   const questionAnswerInputRef = useRef<HTMLInputElement>(null)
@@ -223,9 +224,6 @@ export function NativeChatStructuredSession(
     transport
   })
 
-  // Said once: on the pane when the failure took it, else in the composer's notices.
-  const sessionError =
-    viewState.kind === 'error' || !readFailure ? controller.error : readFailure.text
   const launch = { ...provisionalLaunch, retry: submits.retryLaunch }
   const availability = useNativeChatAvailabilityNotice({
     unavailable: controller.unavailable,
@@ -246,7 +244,8 @@ export function NativeChatStructuredSession(
   const notices = structuredSessionNotices({
     launch: install.slot.kind === 'install' ? { ...launch, lifecycle: null } : launch,
     agentLabel,
-    sessionError,
+    // Said once: on the pane when the failure took it, else in the composer's notices.
+    sessionError: viewState.kind === 'error' || !readFailure ? controller.error : readFailure.text,
     composerError: composerError ?? continuation.continueError,
     claudeSignIn,
     availability,
@@ -397,7 +396,7 @@ export function NativeChatStructuredSession(
                 agent={props.agent}
                 {...stopControls.composer}
                 unavailableHint={install.unavailableHint}
-                steerQueued={stopControls.stopping ? undefined : submits.queuedMessages.steerNewest}
+                steerHead={stopControls.stopping ? undefined : submits.queuedMessages.steerHead}
                 structuredTransport={transport}
                 notices={notices}
                 recallSource={{ messages: session.messages, withoutImageMarkers: true }}

@@ -88,11 +88,7 @@ describe('the permission mode picker', () => {
       )
     ).toBe(false)
     expect(
-      canSetStructuredAgentSessionOption(
-        { ...state, pendingId: 'permissionMode' },
-        'permissionMode',
-        'own'
-      )
+      canSetStructuredAgentSessionOption(state, 'permissionMode', 'own', undefined, true, true)
     ).toBe(false)
     expect(
       canSetStructuredAgentSessionOption(

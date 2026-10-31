@@ -15,24 +15,16 @@ import type { ProjectExecutionRuntimeResolution } from '../../../../shared/proje
 import { resolveLocalProjectRuntimeForWorktreeId } from '../../../local-project-runtime-resolution'
 import type { AgentDetectionHost } from '../../../preflight/workspace-agent-detection'
 import { resolveRuntimeAgentDetectionHost } from '../../runtime-agent-detection-host'
-import type {
-  RuntimeLeafRecord,
-  RuntimePtyWorktreeRecord
-} from '../../runtime-terminal-state-records'
-import {
-  localOrchestrationCliCommand,
-  resolveTerminalOrchestrationCliCommand,
-  runtimeOrchestrationCliCommand
-} from '../../orchestration/cli-command'
+import type { RuntimeLeafRecord } from '../../runtime-terminal-state-records'
+import { resolveRuntimeTerminalOrchestrationCliCommand } from '../../orchestration/cli-command'
 import {
   readOrchestrationFleetAgentStatusSnapshot,
   readAgentOrchestrationProjectionRecords,
   readCapturedOrchestrationFleetAgentStatusSnapshot
 } from '../../orchestration-fleet-agent-status-snapshot'
 import { resolveStructuredWorkerAuthority } from '../../structured-worker-authority'
-import { isStructuredWorkerHandle } from '../../../../shared/structured-worker-handle'
-import { parseOrcaSessionAddress } from '../../../../shared/orca-session-address'
 import { matchesProcessIncarnation } from '../../orchestration/worker-terminal-process-liveness'
+import { claimIdleShellPrompt } from '../input/idle-shell-prompt-claim'
 
 export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller {
   protected abstract issueHandle(
@@ -88,6 +80,26 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
       }
     }
     return paneKeys
+  }
+
+  protected claimIdleShellPromptForPty(ptyId: string): Promise<boolean> {
+    const confirm = this.ptyController?.confirmShellForeground?.bind(this.ptyController)
+    const readPane = this.getAgentStatusSnapshotForPaneFn
+    return claimIdleShellPrompt({
+      hasPaneAgent: () => {
+        const paneKeys = [...this.collectPaneKeysForPty(ptyId)]
+        // No store, no pane identity, or any row at all keeps the settle; a stale row costs only the wait.
+        return (
+          this.getPaneTerminalAgent(ptyId) !== null ||
+          !readPane ||
+          paneKeys.length === 0 ||
+          paneKeys.some((paneKey) => readPane(paneKey).length > 0)
+        )
+      },
+      claimPromptMarker: () =>
+        this.headlessTerminals.get(ptyId)?.ownership.claimIdlePrompt() === true,
+      confirmShellForeground: confirm ? () => confirm(ptyId) : null
+    })
   }
 
   /** Status cleanup also owns runtime-admitted legacy OSC rows; orchestration authority does not. */
@@ -277,28 +289,13 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
   }
 
   getTerminalOrchestrationCliCommand(handle: string) {
-    // A structured session runs in this process: it is told what the structured mail lane types.
-    if (isStructuredWorkerHandle(handle) || parseOrcaSessionAddress(handle)) {
-      return localOrchestrationCliCommand()
-    }
-    let pty: RuntimePtyWorktreeRecord | null = null
-    try {
-      const ptyId = this.resolveLeafForHandle(handle)?.ptyId
-      pty = ptyId ? (this.ptysById.get(ptyId) ?? null) : null
-    } catch {
-      return 'orca'
-    }
-    if (!pty) {
-      return 'orca'
-    }
-    return resolveTerminalOrchestrationCliCommand({
-      connectionId: pty.connectionId,
-      isWsl: pty.isWsl,
-      worktreeId: pty.worktreeId,
-      runtimeCliCommand: runtimeOrchestrationCliCommand(),
-      projectRuntime: this.store
-        ? resolveLocalProjectRuntimeForWorktreeId(this.requireStore(), pty.worktreeId)
-        : undefined
+    return resolveRuntimeTerminalOrchestrationCliCommand(handle, {
+      resolvePtyId: (handle) => this.resolveLeafForHandle(handle)?.ptyId,
+      getPty: (ptyId) => this.ptysById.get(ptyId),
+      getProjectRuntime: (pty) =>
+        this.store
+          ? resolveLocalProjectRuntimeForWorktreeId(this.requireStore(), pty.worktreeId)
+          : undefined
     })
   }
   /** Recover a handle only for an exact live process incarnation and known host scope; never close a replacement under a reused PTY id. workerShow also uses this without lease rechecks. */

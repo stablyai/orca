@@ -12,6 +12,8 @@ import {
   resetSenderStore
 } from '../native-chat/native-chat-agent-sender.test-fixture'
 import { AgentMessageAvatar } from '../AgentMessageAvatar'
+import { Button } from '../ui/button'
+import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { CrewAgentAvatar } from './CrewAgentAvatar'
 import { CrewPanelContent } from './OrchestrationCrewPanel'
 import { useAppStore } from '@/store'
@@ -61,6 +63,28 @@ afterEach(() => {
   useAppStore.setState(initialStore, true)
   vi.restoreAllMocks()
   vi.useRealTimers()
+})
+
+it('explicitly sizes every real avatar glyph outside the xs Button SVG fallback', () => {
+  for (const agentType of [...AGENT_CATALOG.map(({ id }) => id), 'dsb', 'unknown', '_custom']) {
+    const mounted = render(
+      <Button size="xs">
+        <AgentMessageAvatar
+          sender={undefined}
+          worktreeId={null}
+          fallback={{ agentType, dot: 'done' }}
+        />
+      </Button>
+    )
+    const glyph = mounted.container.querySelector('button > div > svg, button > div > img')
+    expect(glyph, agentType).toHaveClass('size-4')
+    expect(glyph, agentType).toHaveAttribute('width', '16')
+    expect(glyph, agentType).toHaveAttribute('height', '16')
+    expect(mounted.container.querySelector('button svg:not([class*="size-"])')).toBeNull()
+    expect(mounted.container.querySelector('button > div')).toHaveClass('size-8')
+    expect(screen.getByLabelText('Done').querySelector('svg')).toHaveClass('size-3')
+    mounted.unmount()
+  }
 })
 
 it('uses the card avatar live terminal state in the collapsed stack and expanded row with its existing tooltip', async () => {
