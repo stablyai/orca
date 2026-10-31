@@ -181,6 +181,7 @@ function ExpandableDiagram({
       <button
         ref={buttonRef}
         type="button"
+        data-orca-export-hide="true"
         aria-label={label}
         title={label}
         onClick={(event) => {
