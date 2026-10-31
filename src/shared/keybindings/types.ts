@@ -1,5 +1,6 @@
 import type { KeybindingReasonCode } from './keybinding-diagnostic-copy'
 import type { TuiAgent } from '../tui-agent'
+import type { TerminalCopyModeConfig } from '../terminal-copy-mode-config'
 
 export type KeybindingScope =
   | 'global'
@@ -107,6 +108,7 @@ export type KeybindingActionId =
   | 'fileExplorer.copyRelativePath'
   | 'fileExplorer.delete'
   | 'settings.search'
+  | 'terminal.enterCopyMode'
   | 'terminal.copySelection'
   | 'terminal.selectAll'
   | 'terminal.paste'
@@ -142,6 +144,7 @@ export type KeybindingFileDiagnostic = {
 }
 
 export type KeybindingFileSnapshot = {
+  copyMode?: TerminalCopyModeConfig
   path: string
   platform: KeybindingPlatform
   exists: boolean

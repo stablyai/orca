@@ -52,6 +52,8 @@ const SIMPLE_KEY_TOKENS = new Map<string, string>(
     DOWN: 'ArrowDown',
     PAGEUP: 'PageUp',
     PAGEDOWN: 'PageDown',
+    HOME: 'Home',
+    END: 'End',
     BACKSPACE: 'Backspace',
     DELETE: 'Delete',
     DEL: 'Delete',

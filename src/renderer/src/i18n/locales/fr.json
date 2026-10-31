@@ -21817,6 +21817,18 @@
       "review": "Vérifier les options de redémarrage",
       "title": "Le service de terminal doit peut-être être redémarré"
     },
+    "copyMode": {
+      "selecting": "Mode copie · Sélection",
+      "active": "Mode copie",
+      "move": "Déplacer",
+      "select": "Sélectionner",
+      "copy": "Copier",
+      "exit": "Quitter : {{keys}}",
+      "copyFailed": "Impossible de copier la sélection du terminal. Réessayez.",
+      "openFailed": "Impossible d’ouvrir le mode copie du terminal. Réessayez.",
+      "enter": "Activer le mode copie",
+      "description": "Sélectionnez et copiez le texte du terminal avec le clavier."
+    },
     "claudeDiffPanelNotice": {
       "gotIt": "J'ai compris",
       "title": "Claude Code peut ouvrir son propre panneau de différences à côté du chat dans les terminaux larges. Ce panneau appartient à Claude, pas à Orca.",

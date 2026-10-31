@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { normalizeTerminalCopyModeConfig } from '../../shared/terminal-copy-mode-config'
 import {
   findKeybindingConflicts,
   formatKeybindingList,
@@ -66,8 +67,14 @@ export function readKeybindingFile(
     ...platformOverrides[keybindingPlatform]
   }
   const overrides = removeConflictingOverrides(keybindingPlatform, mergedOverrides, diagnostics)
+  const copyMode = normalizeTerminalCopyModeConfig(
+    document.copyMode,
+    keybindingPlatform,
+    diagnostics
+  )
 
   return {
+    copyMode,
     path,
     platform: keybindingPlatform,
     exists: readResult.exists,

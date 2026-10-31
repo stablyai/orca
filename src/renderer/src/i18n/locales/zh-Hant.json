@@ -20978,7 +20978,10 @@
       "count_other": "{{count}} 個正在執行的終端機"
     },
     "restartedInputNotSent": "終端機在您輸入時重新啟動，部分輸入可能未送達。請先檢視新的 shell，再重新輸入。",
-    "typingBeforeStartNotSent": "終端機啟動期間輸入的部分按鍵未送出。"
+    "typingBeforeStartNotSent": "終端機啟動期間輸入的部分按鍵未送出。",
+    "copyMode": {
+      "openFailed": "無法進入終端機複製模式，請重試。"
+    }
   },
   "fileExplorer": {
     "root": {

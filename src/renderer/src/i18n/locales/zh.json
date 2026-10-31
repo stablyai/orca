@@ -21154,6 +21154,18 @@
       "review": "查看重新启动选项",
       "title": "终端服务可能需要重新启动"
     },
+    "copyMode": {
+      "selecting": "复制模式 · 选择中",
+      "active": "复制模式",
+      "move": "移动",
+      "select": "选择",
+      "copy": "复制",
+      "exit": "退出：{{keys}}",
+      "copyFailed": "无法复制终端选区，请重试。",
+      "openFailed": "无法进入终端复制模式，请重试。",
+      "enter": "进入复制模式",
+      "description": "使用键盘选择并复制终端文本。"
+    },
     "claudeDiffPanelNotice": {
       "gotIt": "知道了",
       "title": "Claude Code 可以在宽终端中的聊天旁边打开自己的差异面板。该面板是 Claude 的，而不是 Orca 的。",

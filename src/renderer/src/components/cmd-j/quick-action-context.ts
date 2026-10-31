@@ -1,4 +1,6 @@
 import type { AppState } from '@/store/types'
+import { useAppStore } from '@/store'
+import { resolveTerminalCopyModeTarget } from '@/components/terminal-pane/terminal-copy-mode-targets'
 import { translate } from '@/i18n/i18n'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -19,6 +21,7 @@ export type CmdJUnavailableReason =
   | 'ssh-disconnected'
   | 'no-active-group'
   | 'no-active-chat'
+  | 'no-active-terminal'
   | 'client-action-unsupported'
 
 export type CmdJQuickActionAvailability =
@@ -46,6 +49,8 @@ export type CmdJQuickActionContext = {
   openCreateWorkspace: () => void
   deleteActiveWorkspace: () => void
   openAddQuickCommand: () => void
+  canEnterCopyMode?: boolean
+  enterCopyMode?: () => boolean
   canSplitActiveChat?: boolean
   splitActiveChat?: (direction: NativeChatSplitDirection) => boolean
 }
@@ -201,6 +206,14 @@ export function buildCmdJQuickActionContext(args: {
     openCreateWorkspace: args.openCreateWorkspace,
     deleteActiveWorkspace: args.deleteActiveWorkspace,
     openAddQuickCommand: args.openAddQuickCommand,
+    canEnterCopyMode:
+      resolveTerminalCopyModeTarget(args.state, activeWorktreeId, activeGroupId) !== null,
+    enterCopyMode: () =>
+      resolveTerminalCopyModeTarget(
+        useAppStore.getState(),
+        activeWorktreeId,
+        activeGroupId
+      )?.enter() ?? false,
     canSplitActiveChat: canRunNativeChatSplitTarget(args.state, activeChatTarget),
     splitActiveChat: (direction) =>
       runActiveNativeChatSplit(activeWorktreeId, activeGroupId, direction)
@@ -238,6 +251,8 @@ export function getUnavailableQuickActionMessage(
         'Can’t run “{{action}}” — no tab group is available.',
         options
       )
+    case 'no-active-terminal':
+      return `Can't ${actionTitle.toLowerCase()} — no terminal pane is active.`
     case 'no-active-chat':
       return translate(
         'auto.components.cmdJ.quickActionUnavailable.noMovableChat',

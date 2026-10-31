@@ -21659,7 +21659,10 @@
       "count_one": "{{count}} terminal em execução"
     },
     "restartedInputNotSent": "O terminal reiniciou enquanto você digitava, então parte da entrada pode não ter chegado a ele. Verifique o novo shell antes de digitar novamente.",
-    "typingBeforeStartNotSent": "Algumas teclas digitadas enquanto o terminal iniciava não foram enviadas."
+    "typingBeforeStartNotSent": "Algumas teclas digitadas enquanto o terminal iniciava não foram enviadas.",
+    "copyMode": {
+      "openFailed": "Não foi possível abrir o modo de cópia do terminal. Tente novamente."
+    }
   },
   "fileExplorer": {
     "root": {

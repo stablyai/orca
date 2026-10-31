@@ -21428,7 +21428,19 @@
       "count_other": "{{count}} running terminals"
     },
     "restartedInputNotSent": "The terminal restarted while you were typing, so some input may not have reached it. Check the new shell before typing it again.",
-    "typingBeforeStartNotSent": "Some keys typed while the terminal was starting were not sent."
+    "typingBeforeStartNotSent": "Some keys typed while the terminal was starting were not sent.",
+    "copyMode": {
+      "selecting": "Copy mode · Selecting",
+      "active": "Copy mode",
+      "move": "Move",
+      "select": "Select",
+      "copy": "Copy",
+      "exit": "Exit: {{keys}}",
+      "copyFailed": "Could not copy terminal selection. Try again.",
+      "openFailed": "Could not open terminal copy mode. Try again.",
+      "enter": "Enter Copy Mode",
+      "description": "Select and copy terminal text with the keyboard."
+    }
   },
   "fileExplorer": {
     "root": {

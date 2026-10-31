@@ -21299,7 +21299,10 @@
       "count_other": "{{count}} laufende Terminals"
     },
     "restartedInputNotSent": "Das Terminal wurde während der Eingabe neu gestartet. Daher hat es möglicherweise einen Teil der Eingabe nicht erhalten. Die neue Shell prüfen, bevor die Eingabe wiederholt wird.",
-    "typingBeforeStartNotSent": "Einige Tasteneingaben während des Terminalstarts wurden nicht gesendet."
+    "typingBeforeStartNotSent": "Einige Tasteneingaben während des Terminalstarts wurden nicht gesendet.",
+    "copyMode": {
+      "openFailed": "Der Kopiermodus des Terminals konnte nicht geöffnet werden. Erneut versuchen."
+    }
   },
   "fileExplorer": {
     "root": {
