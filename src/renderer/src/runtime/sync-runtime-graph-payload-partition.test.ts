@@ -149,7 +149,7 @@ describe('mobile session graph payload partition', () => {
     ])
   })
 
-  it('drops a removed worktree from both the payload and the withheld list', async () => {
+  it('drops removed worktrees and republishes them without restarting the publisher version', async () => {
     const syncWindowGraph = vi.fn().mockResolvedValue({})
     const { setState } = startSync(makeState('f', 3), syncWindowGraph)
     await flushSync()
@@ -163,5 +163,20 @@ describe('mobile session graph payload partition', () => {
       'repo::/f-wt-0',
       'repo::/f-wt-1'
     ])
+
+    const before = graphOf(syncWindowGraph.mock.calls[0]).mobileSessionTabs?.find(
+      (snapshot) => snapshot.worktree === 'repo::/f-wt-2'
+    )
+    setState(makeState('f', 3))
+    scheduleRuntimeGraphSync()
+    await flushSync()
+
+    const rebuilt = graphOf(syncWindowGraph.mock.calls[2]).mobileSessionTabs?.find(
+      (snapshot) => snapshot.worktree === 'repo::/f-wt-2'
+    )
+    expect(before).toBeDefined()
+    expect(rebuilt).toBeDefined()
+    expect(rebuilt?.publicationEpoch).toBe(before?.publicationEpoch)
+    expect(rebuilt?.snapshotVersion).toBeGreaterThan(before!.snapshotVersion)
   })
 })

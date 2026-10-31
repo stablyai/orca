@@ -5,11 +5,11 @@ import { isWorkspacePresentationKey } from '../../shared/workspace-presentation'
 
 /** Client main publishes its placement cache locally; raw host frames keep their own structure. */
 export function workspacePresentationPublication(store: Store) {
+  if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
+    return (_reader: WebContents): void => {}
+  }
   const readers = new Set<WebContents>()
   store.onStateWritten((domains) => {
-    if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
-      return
-    }
     const keys = domains?.filter(isWorkspacePresentationKey)
     if (!keys?.length || !readers.size) {
       return

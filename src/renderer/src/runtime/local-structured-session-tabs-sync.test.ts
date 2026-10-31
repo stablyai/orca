@@ -416,7 +416,7 @@ describe('local structured session tab projection', () => {
     expect(late.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBeUndefined()
   })
 
-  it('forgets publisher versions when a worktree is removed', () => {
+  it('keeps a removed worktree fenced and admits its next publication', () => {
     type OwnerState = WebSessionTabsSyncState & WorktreeRuntimeOwnerState
     const owner = {
       id: WORKTREE_ID,
@@ -437,14 +437,18 @@ describe('local structured session tab projection', () => {
     )
     state = applyLocalStructuredSessionTabSnapshots(
       { ...state, worktreesByRepo: { 'repo-1': [owner] } },
-      [structuredInventory('epoch-1', 1, 'session-new')]
+      [structuredInventory('epoch-1', 1, 'session-stale')]
     )
+    expect(state.unifiedTabsByWorktree[WORKTREE_ID]).toBeUndefined()
+    state = applyLocalStructuredSessionTabSnapshots(state, [
+      structuredInventory('epoch-1', 11, 'session-new')
+    ])
     expect(state.unifiedTabsByWorktree[WORKTREE_ID]).toEqual(
       expect.arrayContaining([expect.objectContaining({ entityId: 'session-new' })])
     )
   })
 
-  it('forgets publisher versions when a folder workspace is removed', () => {
+  it('keeps a removed folder fenced and admits a rebuilt publisher', () => {
     type OwnerState = WebSessionTabsSyncState & WorktreeRuntimeOwnerState
     const folderKey = 'folder:folder-1'
     const folder = { id: 'folder-1' } as NonNullable<OwnerState['folderWorkspaces']>[number]
@@ -465,8 +469,13 @@ describe('local structured session tab projection', () => {
     )
     state = applyLocalStructuredSessionTabSnapshots(
       { ...state, folderWorkspaces: [folder], unifiedTabsByWorktree: { [folderKey]: [] } },
-      [folderSnapshot(1, 'session-new')]
+      [folderSnapshot(1, 'session-stale')]
     )
+    expect(state.unifiedTabsByWorktree[folderKey]).toEqual([])
+    state = applyLocalStructuredSessionTabSnapshots(state, [
+      { ...folderSnapshot(1, 'session-new'), publicationEpoch: 'structured:rebuilt' }
+    ])
+    state = applyLocalStructuredSessionTabSnapshots(state, [folderSnapshot(11, 'session-late')])
     expect(state.unifiedTabsByWorktree[folderKey]).toEqual(
       expect.arrayContaining([expect.objectContaining({ entityId: 'session-new' })])
     )
