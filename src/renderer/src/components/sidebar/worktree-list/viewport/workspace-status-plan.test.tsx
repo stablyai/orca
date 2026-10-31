@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
+import { getDefaultSettings } from '../../../../../../shared/constants'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { WorkspaceStatusDefinition } from '../../../../../../shared/worktree/types'
 import type { GroupHeaderRow } from '../../../../../../shared/sidebar-list/row-types'
@@ -268,7 +269,7 @@ it('retains first definition, decoder/default behavior and real header invalidat
   act(() => useAppStore.setState({ activeRepoId: 'unrelated' }))
   expect(renders).toBe(settled)
   act(() =>
-    useAppStore.setState({ settings: { ...initial.settings, projectGroupingMode: 'folder' } })
+    useAppStore.setState({ settings: { ...getDefaultSettings(''), projectGroupingMode: 'folder' } })
   )
   expect(renders).toBe(settled)
   act(() => useAppStore.setState({ repos: [{ ...repo, executionHostId: 'runtime:other' }] }))

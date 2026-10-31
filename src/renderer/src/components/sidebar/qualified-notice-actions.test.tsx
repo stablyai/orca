@@ -2,7 +2,16 @@
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, expect, it, vi } from 'vitest'
+import { z } from 'zod'
 import type { AppState } from '@/store/types'
+import type {
+  DirectSshWorktreeFetchOptions,
+  WorktreeFetchOptions
+} from '@/store/slices/worktree-helpers'
+import type {
+  HostQualifiedDetectedWorktreeResult,
+  ProviderRequestId
+} from '../../../../shared/detected-worktree-provider-contract'
 import { TooltipProvider } from '../ui/tooltip'
 import { useAppStore } from '@/store'
 import { getDefaultSettings } from '../../../../shared/constants'
@@ -30,6 +39,32 @@ import {
   renderNewExternalWorktreesInboxVirtualRow,
   renderImportedWorktreesVirtualRow
 } from './worktree-list/rows/notice-rows'
+
+function fetchWorktreesFixture() {
+  const providerRequestId = z
+    .custom<ProviderRequestId>((value) => value === 'qualified-notice-fixture')
+    .parse('qualified-notice-fixture')
+  const ordinary = vi.fn(async (_repoId: string, _options?: WorktreeFetchOptions) => false)
+  function fetchWorktrees(
+    repoId: string,
+    options: DirectSshWorktreeFetchOptions
+  ): Promise<HostQualifiedDetectedWorktreeResult>
+  function fetchWorktrees(repoId: string, options?: WorktreeFetchOptions): Promise<boolean>
+  async function fetchWorktrees(
+    repoId: string,
+    options?: WorktreeFetchOptions | DirectSshWorktreeFetchOptions
+  ): Promise<boolean | HostQualifiedDetectedWorktreeResult> {
+    if (options && 'directSshAuthority' in options) {
+      return {
+        providerRequestId,
+        executionHostId: options.executionHostId,
+        status: 'rejected'
+      }
+    }
+    return ordinary(repoId, options)
+  }
+  return { fetchWorktrees, ordinary }
+}
 
 const local = { ...repo, externalWorktreeVisibility: 'hide' as const }
 const remote = { ...local, path: '/server/repo', executionHostId: 'runtime:server' as const }
@@ -107,14 +142,13 @@ it('partitions full current ownership once, retaining opaque envelope and runtim
 
 it('routes a rendered concrete Show through mounted action/rollback adapters and rereads exact KeepHidden state after refresh', async () => {
   const updateRepo = vi.fn<AppState['updateRepo']>(async () => true)
-  const fetchWorktrees = vi.fn(async () => false)
+  const { fetchWorktrees: fetchWorktreesService, ordinary: fetchWorktrees } =
+    fetchWorktreesFixture()
   useAppStore.setState({
     repos: [local, remote],
     settings: getDefaultSettings('/tmp'),
     updateRepo,
-    // SAFETY: this fixture invokes only local/runtime refresh; the direct-SSH overload is never reached.
-    // oxlint-disable-next-line typescript/consistent-type-assertions
-    fetchWorktrees: fetchWorktrees as AppState['fetchWorktrees']
+    fetchWorktrees: fetchWorktreesService
   })
   let cards!: ReturnType<typeof useSidebarExternalWorktreeCards>
   let currentDetected = {
@@ -311,7 +345,7 @@ it('retains exact inbox dialog, failure and recovery identity across same-ID twi
     externalWorktreeVisibilityPromptDismissedAt: 1
   }))
   const updateRepo = vi.fn<AppState['updateRepo']>(async () => false)
-  const fetchWorktrees = vi.fn(async () => false)
+  const { fetchWorktrees: fetchWorktreesService } = fetchWorktreesFixture()
   const recovery = vi.fn()
   let cards!: ReturnType<typeof useSidebarExternalWorktreeCards>
   const source = {
@@ -324,9 +358,7 @@ it('retains exact inbox dialog, failure and recovery identity across same-ID twi
     repos: targets,
     settings: getDefaultSettings('/tmp'),
     updateRepo,
-    // SAFETY: this fixture invokes only local/runtime refresh; the direct-SSH overload is never reached.
-    // oxlint-disable-next-line typescript/consistent-type-assertions
-    fetchWorktrees: fetchWorktrees as AppState['fetchWorktrees']
+    fetchWorktrees: fetchWorktreesService
   })
   function Harness() {
     const repos = useAppStore((state) => state.repos)

@@ -530,7 +530,7 @@ it.each(['ssh', 'runtime'] as const)(
     rpc.mockClear()
     rpc.mockResolvedValue({ settings: host })
     useAppStore.setState({
-      settings: { ...settings, experimentalNativeChat: false, defaultTuiAgent: 'codex' },
+      settings: { ...settings, nativeChatProviders: {}, defaultTuiAgent: 'codex' },
       repos: [local, exact],
       settingsSearchQuery: '',
       detectedAgentIds: ['goose'],

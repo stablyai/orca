@@ -75,7 +75,7 @@ it('refuses status.get that starts while the real transport reopens and accepts 
     })
   })
   const transport = new WebRuntimeConnectionTransport(server.pairing, {
-    now: () => Date.now(),
+    now: () => 1_000,
     isDocumentVisible: () => true
   })
   try {

@@ -238,9 +238,7 @@ it('uses the runtime environment name and retains explicit host-copy precedence'
             id: 'socket',
             kind: 'websocket',
             label: 'Server',
-            endpoint: 'ws://server',
-            deviceToken: 'fixture',
-            publicKeyB64: 'fixture'
+            endpoint: 'ws://server'
           }
         ],
         preferredEndpointId: 'socket'
