@@ -1,8 +1,13 @@
 import { randomUUID } from 'node:crypto'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, expect, vi } from 'vitest'
 import { z } from 'zod'
-import type * as CliRuntimeClient from '../../../../../../cli/runtime-client'
-import { OrchestrationError } from '../../../../orchestration/orchestration-error'
+import { OrcaRuntimeRpcServer } from '../../../../runtime-rpc'
+import { ORCHESTRATION_METHODS } from '../../orchestration'
+import { STATUS_METHODS } from '../../status'
+import { TERMINAL_QUERY_METHODS } from '../../terminal/terminal-query-methods'
 import { getWorkerTerminalAutoReleaseScheduler } from '../../../../orchestration/worker-terminal-auto-release-scheduler'
 import { createOrchestrationWorkerReleaseHarness } from './worker-release.test-support'
 import {
@@ -25,6 +30,7 @@ export const receipt = z.object({
   state: z.literal('ready')
 })
 export type Started = { taskId: string; dispatchId: string }
+const printedResponse = z.object({ result: z.unknown().optional() })
 const failure = z.object({
   error: z.object({
     code: z.string(),
@@ -33,11 +39,13 @@ const failure = z.object({
   })
 })
 
-/** Real CLI argv -> RPC schema and handlers -> SQLite, with terminal IO and native placement supplied by the fixture. */
+/** Real CLI argv -> runtime client -> the runtime's RPC server, schema and handlers -> SQLite, with terminal IO and
+ *  native placement supplied by the fixture. */
 export function useHelperFollowUpCli() {
   const h = createOrchestrationWorkerReleaseHarness()
-  const output = vi.fn<(value: { result: unknown }) => void>()
   const panes = new Map<string, string>()
+  let directory: string
+  let server: OrcaRuntimeRpcServer | undefined
   let main: (argv: string[]) => Promise<void>
   let logs: ReturnType<typeof vi.spyOn<typeof console, 'log'>>
   let nextTerminal = 'term_worker'
@@ -47,10 +55,21 @@ export function useHelperFollowUpCli() {
   beforeEach(async () => {
     h.setup()
     panes.clear()
-    for (const name of ['AGENT_SESSION_ID', 'TERMINAL_HANDLE', 'PANE_KEY', 'PAIRING_CODE']) {
+    // The CLI must reach this runtime as an unattached local caller, whatever terminal runs the suite.
+    for (const name of [
+      'AGENT_SESSION_ID',
+      'TERMINAL_HANDLE',
+      'PANE_KEY',
+      'PAIRING_CODE',
+      'REMOTE_PAIRING',
+      'ENVIRONMENT',
+      'AGENT_LAUNCH_TOKEN'
+    ]) {
       vi.stubEnv(`ORCA_${name}`, '')
     }
-    vi.stubEnv('ORCA_ENVIRONMENT', '')
+    for (const name of ['ID', 'INCARNATION', 'PROFILE_PATH']) {
+      vi.stubEnv(`ORCA_RUNTIME_SOURCE_${name}`, '')
+    }
     const pane = (handle: string) => {
       const structured = structuredWorkerIdentities.get(handle)
       if (structured) {
@@ -85,32 +104,19 @@ export function useHelperFollowUpCli() {
       title: nextTerminal
     }))
     logs = vi.spyOn(console, 'log').mockImplementation(() => {})
-    vi.doMock('../../../../../../cli/runtime-client', async (original) => {
-      const actual = await original<typeof CliRuntimeClient>()
-      return {
-        ...actual,
-        RuntimeClient: function () {
-          return {
-            isRemote: false,
-            async call(method: string, params: unknown) {
-              const parsed = z.record(z.string(), z.unknown()).parse(params)
-              if (method === 'terminal.resolveIdentity') {
-                return { result: { identity: { handle: parsed.terminal, live: true } } }
-              }
-              try {
-                return { result: await h.call(method, parsed) }
-              } catch (error) {
-                if (error instanceof OrchestrationError) {
-                  throw new actual.RuntimeClientError(error.code, error.message, error.data)
-                }
-                throw error
-              }
-            }
-          }
-        }
-      }
+    vi.spyOn(h.runtime, 'resolveTerminalIdentity').mockImplementation((handle) => ({
+      handle,
+      live: true
+    }))
+    // The CLI finds this runtime as it finds the app's: through the metadata its server publishes.
+    directory = mkdtempSync(join(tmpdir(), 'helper-follow-up-'))
+    vi.stubEnv('ORCA_USER_DATA_PATH', directory)
+    server = new OrcaRuntimeRpcServer({
+      runtime: h.runtime,
+      userDataPath: directory,
+      methods: [...STATUS_METHODS, ...TERMINAL_QUERY_METHODS, ...ORCHESTRATION_METHODS]
     })
-    vi.doMock('../../../../../../cli/format', () => ({ printResult: output }))
+    await server.start()
     const cliPath = '../../../../../../cli/index'
     main = (await import(cliPath)).main
   })
@@ -124,23 +130,26 @@ export function useHelperFollowUpCli() {
     await rig?.dispose()
     rig = undefined
     getWorkerTerminalAutoReleaseScheduler(h.runtime).clear()
+    await server?.stop()
+    server = undefined
     h.cleanup()
-    vi.doUnmock('../../../../../../cli/runtime-client')
-    vi.doUnmock('../../../../../../cli/format')
+    rmSync(directory, { recursive: true, force: true })
     vi.unstubAllEnvs()
     vi.resetModules()
     process.exitCode = 0
   })
 
   async function cli(...args: string[]) {
-    output.mockClear()
     logs.mockClear()
     process.exitCode = 0
     await main(['orchestration', ...args, '--json', '--full'])
-    const printed = output.mock.lastCall?.[0]
     const lastLog = logs.mock.lastCall?.[0]
-    const error = typeof lastLog === 'string' ? failure.safeParse(JSON.parse(lastLog)) : undefined
-    return { result: printed?.result, error: error?.success ? error.data.error : undefined }
+    // The CLI prints its JSON response, success or failure, as its last line of output.
+    const printed: unknown = typeof lastLog === 'string' ? JSON.parse(lastLog) : {}
+    const error = failure.safeParse(printed)
+    return error.success
+      ? { result: undefined, error: error.data.error }
+      : { result: printedResponse.parse(printed).result, error: undefined }
   }
 
   async function success(...args: string[]) {

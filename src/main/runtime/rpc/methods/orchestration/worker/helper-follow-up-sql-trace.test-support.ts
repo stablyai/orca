@@ -1,4 +1,5 @@
 import { expect, vi } from 'vitest'
+import { z } from 'zod'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import { installSqlVisitCounters } from '../../../../dispatch-predicate-visits.test-fixture'
 
@@ -17,6 +18,10 @@ const CALLER_READS = {
 }
 type CallerRead = keyof typeof CALLER_READS
 
+/** One row a SQLite statement returns: column names to values. */
+const sqlRow = z.record(z.string(), z.unknown())
+type SqlRow = z.infer<typeof sqlRow>
+
 /** Executions of the caller's custody reads, the rows visited inside their index ranges, every field read off the rows
  *  they return, and their executed plans. */
 export function traceCallerReads(db: OrchestrationDb) {
@@ -28,15 +33,17 @@ export function traceCallerReads(db: OrchestrationDb) {
     caller_read_formerOwner: () => ++visited.formerOwner
   })
   // Each returned row counts its field reads, so work per row is measured whatever the caller keeps.
-  const counted = (read: CallerRead, row: unknown) =>
-    row && typeof row === 'object'
-      ? new Proxy(row, {
-          get: (target, field, receiver) => {
+  const counted = (read: CallerRead, result: unknown) => {
+    const row = sqlRow.safeParse(result)
+    return row.success
+      ? new Proxy<SqlRow>(row.data, {
+          get: (target, field) => {
             fieldReads[read]++
-            return Reflect.get(target, field, receiver)
+            return typeof field === 'string' ? target[field] : undefined
           }
         })
-      : row
+      : result
+  }
   const prepare = db.db.prepare.bind(db.db)
   const spy = vi.spyOn(db.db, 'prepare').mockImplementation((query) => {
     const read = (Object.keys(CALLER_READS) as CallerRead[]).find((name) =>

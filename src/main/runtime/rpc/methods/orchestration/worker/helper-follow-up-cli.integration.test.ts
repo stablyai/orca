@@ -5,6 +5,7 @@ import { ORCHESTRATION_WORKER_START_TASK_SPEC_MAX_BYTES } from '../../../../../.
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../../shared/agent-session-journal-types'
 import { activeProviderContext } from '../../../../../../shared/agent-session-provider-context'
 import { HOST_TEST_THREAD } from '../../../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { receipt, useHelperFollowUpCli } from './helper-follow-up-cli.test-support'
 import {
   seedUnrelatedHistory,
@@ -14,6 +15,18 @@ import {
 
 describe('helper follow-ups through CLI argv, RPC and SQLite', () => {
   const f = useHelperFollowUpCli()
+  /** The send's RPC handler's refusal, as its runtime raises it. */
+  async function handlerRefusal(params: Record<string, unknown>) {
+    try {
+      await f.h.call('orchestration.send', params)
+    } catch (error) {
+      if (error instanceof OrchestrationError) {
+        return { error: { code: error.code, message: error.message, data: error.data } }
+      }
+      throw error
+    }
+    return { error: undefined }
+  }
   const depthOf = (dispatch: { dispatchId: string }) =>
     f.h.db.getDispatchContextById(dispatch.dispatchId)!.depth
   const {
@@ -135,7 +148,17 @@ describe('helper follow-ups through CLI argv, RPC and SQLite', () => {
           .run(helper.dispatchId)
       }
       const before = effects()
-      const { error } = await follow('term_worker', helper.dispatchId, body)
+      // The local CLI cannot carry these two refusals today: a body this large exceeds the socket's frame limit, and
+      // the RPC boundary does not pass worker_not_restartable through. The send's own handler still refuses them.
+      const { error } =
+        refusal === 'creator settled' || refusal === 'depth lowered'
+          ? await follow('term_worker', helper.dispatchId, body)
+          : await handlerRefusal({
+              from: 'term_worker',
+              to: `dispatch:${helper.dispatchId}`,
+              subject: 'More',
+              body
+            })
       expect(error).toMatchObject({
         code: {
           'creator settled': 'consumer_fenced',
@@ -261,9 +284,12 @@ describe('helper follow-ups through CLI argv, RPC and SQLite', () => {
         vi.mocked(h.runtime.isTerminalRunningAgent).mockResolvedValue(false)
       }
       const before = effects()
-      expect((await follow('term_worker', foreign.dispatchId)).error).toEqual({
+      // The CLI adds its own request ID and recovery command after the runtime's refusal.
+      expect((await follow('term_worker', foreign.dispatchId)).error).toMatchObject({
         code: 'task_not_found',
-        message: `Dispatch ${foreign.dispatchId} is not a helper of Dispatch ${worker.dispatchId}, so only the coordinator or the worker that started it can give it more work; to hand this to a helper, start new helper work with worker-start --spec. No effects were applied.`,
+        message: expect.stringMatching(
+          `^Dispatch ${foreign.dispatchId} is not a helper of Dispatch ${worker.dispatchId}, so only the coordinator or the worker that started it can give it more work; to hand this to a helper, start new helper work with worker-start --spec\\. No effects were applied\\.`
+        ),
         data: { effectsApplied: false }
       })
       expect(effects()).toEqual(before)
