@@ -438,10 +438,15 @@
   --git-decoration-untracked: #007100;
   --git-decoration-copied: #007acc;
   --git-decoration-ignored: #8c8c8c;
-  --diff-added-ground: color-mix(in srgb, var(--git-decoration-added) 13%, transparent);
-  --diff-added-gutter: color-mix(in srgb, var(--git-decoration-added) 26%, transparent);
-  --diff-removed-ground: color-mix(in srgb, var(--git-decoration-deleted) 11%, transparent);
-  --diff-removed-gutter: color-mix(in srgb, var(--git-decoration-deleted) 22%, transparent);
+  /* Diff hunks use saturated hues; the git decoration hues read washed out once tinted to a row background. */
+  --diff-added: #0dbe4e;
+  --diff-removed: #ff2e3f;
+  --diff-added-ground: color-mix(in srgb, var(--diff-added) 12%, transparent);
+  --diff-added-gutter: color-mix(in srgb, var(--diff-added) 24%, transparent);
+  --diff-added-emphasis: color-mix(in srgb, var(--diff-added) 15%, transparent);
+  --diff-removed-ground: color-mix(in srgb, var(--diff-removed) 12%, transparent);
+  --diff-removed-gutter: color-mix(in srgb, var(--diff-removed) 24%, transparent);
+  --diff-removed-emphasis: color-mix(in srgb, var(--diff-removed) 15%, transparent);
 }
 
 .dark,
@@ -467,10 +472,14 @@
   --git-decoration-untracked: #73c991;
   --git-decoration-copied: #73c991;
   --git-decoration-ignored: #6e6e6e;
-  --diff-added-ground: color-mix(in srgb, var(--git-decoration-added) 16%, transparent);
-  --diff-added-gutter: color-mix(in srgb, var(--git-decoration-added) 30%, transparent);
-  --diff-removed-ground: color-mix(in srgb, var(--git-decoration-deleted) 18%, transparent);
-  --diff-removed-gutter: color-mix(in srgb, var(--git-decoration-deleted) 32%, transparent);
+  --diff-added: #5ecc71;
+  --diff-removed: #ff6762;
+  --diff-added-ground: color-mix(in srgb, var(--diff-added) 20%, transparent);
+  --diff-added-gutter: color-mix(in srgb, var(--diff-added) 32%, transparent);
+  --diff-added-emphasis: color-mix(in srgb, var(--diff-added) 20%, transparent);
+  --diff-removed-ground: color-mix(in srgb, var(--diff-removed) 20%, transparent);
+  --diff-removed-gutter: color-mix(in srgb, var(--diff-removed) 32%, transparent);
+  --diff-removed-emphasis: color-mix(in srgb, var(--diff-removed) 20%, transparent);
 }
 
 .plugin-security-chrome {
@@ -663,16 +672,8 @@ body[data-modal-overlay-open]
   --chat-warning: color-mix(in srgb, var(--status-warning) 70%, var(--chat-source-foreground));
   /* What the reader has not seen yet: the transcript's "New" marker, in the note hue. */
   --chat-unread: color-mix(in srgb, var(--callout-note) 70%, var(--chat-source-foreground));
-  --chat-diff-added: color-mix(
-    in srgb,
-    var(--git-decoration-added) 70%,
-    var(--chat-source-foreground)
-  );
-  --chat-diff-removed: color-mix(
-    in srgb,
-    var(--git-decoration-deleted) 70%,
-    var(--chat-source-foreground)
-  );
+  --chat-diff-added: color-mix(in srgb, var(--diff-added) 60%, var(--chat-source-foreground));
+  --chat-diff-removed: color-mix(in srgb, var(--diff-removed) 60%, var(--chat-source-foreground));
 }
 
 @layer base {
@@ -2431,6 +2432,17 @@ html.native-shell .app-layout {
 .monaco-editor .reference-zone-widget .preview.inline {
   height: 100%;
   width: 100%;
+}
+
+/* Why: Monaco's built-in diff tints are a pale lime; route its theme variables through Orca's diff tokens. `div.` outranks Monaco's runtime theme rule. */
+div.monaco-diff-editor,
+.monaco-diff-editor .monaco-editor {
+  --vscode-diffEditor-insertedLineBackground: var(--diff-added-ground);
+  --vscode-diffEditor-insertedTextBackground: var(--diff-added-emphasis);
+  --vscode-diffEditorGutter-insertedLineBackground: var(--diff-added-gutter);
+  --vscode-diffEditor-removedLineBackground: var(--diff-removed-ground);
+  --vscode-diffEditor-removedTextBackground: var(--diff-removed-emphasis);
+  --vscode-diffEditorGutter-removedLineBackground: var(--diff-removed-gutter);
 }
 
 .monaco-editor .orca-conflict-marker-line {
