@@ -6934,14 +6934,13 @@
           "932ff1fbff": "테마",
           "leftSidebarAppearance": {
             "title": "왼쪽 사이드바 모양",
-            "rowDescription": "왼쪽 사이드바를 terminal에 맞추거나 기본값을 유지하거나 은은한 색조를 적용합니다.",
             "default": "기본값",
-            "matchTerminal": "Terminal에 맞춤",
             "tinted": "색조 적용",
             "tintColor": "사이드바 색조",
             "tintColorDescription": "왼쪽 사이드바 표면에 섞을 색상입니다.",
             "tintOpacity": "색조 강도",
-            "tintOpacityDescription": "사이드바에 색조를 얼마나 강하게 섞을지 조절합니다."
+            "tintOpacityDescription": "사이드바에 색조를 얼마나 강하게 섞을지 조절합니다.",
+            "tintDescription": "왼쪽 사이드바를 기본값으로 두거나 색조를 적용합니다. 터미널을 따르려면 라이트 또는 다크 테마로 Terminal에 맞춤을 선택하세요."
           },
           "interfaceDefaultFont": "기본 글꼴",
           "terminalDefaultFont": "기본 글꼴",
@@ -9075,11 +9074,10 @@
             },
             "leftSidebarAppearance": {
               "title": "왼쪽 사이드바 모양",
-              "description": "왼쪽 사이드바를 terminal에 맞추거나 기본값을 유지하거나 은은한 색조를 적용합니다.",
               "project": "프로젝트",
-              "terminal": "터미널",
               "background": "배경",
-              "tint": "색조"
+              "tint": "색조",
+              "tintDescription": "왼쪽 사이드바를 기본값으로 두거나 색조를 적용합니다. 터미널을 따르려면 라이트 또는 다크 테마로 Terminal에 맞춤을 선택하세요."
             },
             "9a115966d3": "닫을 때 트레이로 최소화",
             "4d5b9427b5": "활성화하면 창을 닫아도 Orca가 종료되지 않고 시스템 트레이에서 계속 실행됩니다.",
@@ -9134,7 +9132,8 @@
             "zcodeUsageDescription": "상태 표시줄에 ZCode Coding Plan 할당량 사용량을 표시합니다.",
             "zcode": "zcode",
             "zai": "zai",
-            "glm": "glm"
+            "glm": "glm",
+            "matchTerminal": "Terminal에 맞춤"
           }
         },
         "auto": {
@@ -12398,7 +12397,9 @@
           "searchLabel": "빌드 검색"
         },
         "AppearanceThemeControl": {
-          "useTerminalTheme": "이 테마의 터미널 색상 사용"
+          "useTerminalTheme": "이 테마의 터미널 색상 사용",
+          "matchTerminal": "Terminal에 맞춤",
+          "dynamic": "동적"
         },
         "AppearanceInterfaceSection": {
           "pluginIconTheme": {

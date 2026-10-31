@@ -7399,14 +7399,13 @@
           "932ff1fbff": "主題",
           "leftSidebarAppearance": {
             "title": "左側邊欄外觀",
-            "rowDescription": "讓左側邊欄與終端機一致、保持預設，或使用色調。",
             "default": "預設",
-            "matchTerminal": "與終端機一致",
             "tinted": "色調",
             "tintColor": "側邊欄色調",
             "tintColorDescription": "混入左側邊欄表面的顏色。",
             "tintOpacity": "色調強度",
-            "tintOpacityDescription": "控制色調混入側邊欄的強度。"
+            "tintOpacityDescription": "控制色調混入側邊欄的強度。",
+            "tintDescription": "讓左側邊欄保持預設或套用色調。若要跟隨終端機，請將淺色或深色主題設為「與終端機一致」。"
           },
           "interfaceDefaultFont": "預設字型",
           "terminalDefaultFont": "預設字型",
@@ -9589,11 +9588,10 @@
             },
             "leftSidebarAppearance": {
               "title": "左側邊欄外觀",
-              "description": "讓左側邊欄與終端機一致、保持預設，或使用色調。",
               "project": "專案",
-              "terminal": "終端機",
               "background": "背景",
-              "tint": "著色"
+              "tint": "著色",
+              "tintDescription": "讓左側邊欄保持預設或套用色調。若要跟隨終端機，請將淺色或深色主題設為「與終端機一致」。"
             },
             "workspaceCardLayout": {
               "title": "工作區卡片版面配置",
@@ -9646,7 +9644,8 @@
               "kw": {
                 "cursor": "cursor"
               }
-            }
+            },
+            "matchTerminal": "與終端機一致"
           }
         },
         "auto": {
@@ -13182,6 +13181,10 @@
         },
         "PluginContributionActionNewFile": {
           "create": "建立"
+        },
+        "AppearanceThemeControl": {
+          "matchTerminal": "與終端機一致",
+          "dynamic": "動態"
         }
       },
       "right": {

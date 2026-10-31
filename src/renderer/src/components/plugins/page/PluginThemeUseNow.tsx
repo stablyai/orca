@@ -2,7 +2,7 @@ import { Check, SquareTerminal } from 'lucide-react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { usePluginIconThemes } from '@/store/plugin-icon-themes'
-import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
+import { useSettingsDarkTheme } from '@/hooks/use-document-dark-theme'
 import { selectTerminalTheme } from '../../../../../shared/terminal-theme-selection'
 import { pluginAppThemeSlotUpdate } from '../../../../../shared/plugin-theme-settings'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
@@ -41,7 +41,7 @@ export function PluginThemeUseNow({
   const terminals = terminalThemes.filter((theme) => theme.pluginKey === pluginKey)
   const settings = useAppStore((state) => state.settings)
   const updateSettingsOrThrow = useAppStore((state) => state.updateSettingsOrThrow)
-  const dark = useDocumentDarkTheme()
+  const dark = useSettingsDarkTheme()
   if (themes.length + icons.length + terminals.length === 0 || !settings) {
     return <>{fallback}</>
   }

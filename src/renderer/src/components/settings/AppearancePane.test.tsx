@@ -350,18 +350,18 @@ describe('AppearancePane', () => {
     const settings = getDefaultSettings('/tmp')
 
     const container = await renderAppearancePane(settings, updateSettings)
-    const matchTerminalButton = Array.from(
+    const tintedButton = Array.from(
       container.querySelectorAll<HTMLButtonElement>('button[role="radio"]')
-    ).find((button) => button.textContent === 'Match Terminal')
+    ).find((button) => button.textContent === 'Tinted')
 
-    expect(matchTerminalButton).toBeDefined()
+    expect(tintedButton).toBeDefined()
 
     await act(async () => {
-      matchTerminalButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      tintedButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
     expect(updateSettings).toHaveBeenCalledWith({
-      leftSidebarAppearanceMode: 'match-terminal'
+      leftSidebarAppearanceMode: 'tinted'
     })
   })
 

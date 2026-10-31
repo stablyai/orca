@@ -2,6 +2,7 @@ import type { CodeEditorThemeChoice } from '../../../shared/plugin-appearance-se
 import type { PluginThemeRegistration } from '../../../shared/plugins/artifacts/plugin-theme-artifact'
 import { pluginAppThemeCssFallback } from '../../../shared/plugins/artifacts/plugin-theme-css-fallbacks'
 import { derivePluginMonacoTheme, type PluginMonacoTheme } from './plugin-monaco-theme'
+import type { AppThemePaint } from './document-theme'
 import { safePluginThemeTokens, type ColorProbe } from './plugin-theme-tokens'
 
 type ThemeBase = 'light' | 'dark'
@@ -93,8 +94,8 @@ function monacoColors(theme: PluginMonacoTheme, base: ThemeBase): CodeEditorColo
 /** The theme every Monaco surface uses for the app's current mode. */
 export function resolveCodeEditorTheme(input: {
   dark: boolean
-  /** The plugin app theme painted for this mode, if any. */
-  appTheme: PluginThemeRegistration | null
+  /** The app theme painted for this mode (a plugin's or Match Terminal's), if any. */
+  appTheme: (AppThemePaint & Pick<PluginThemeRegistration, 'tokenColors'>) | null
   selected: ThemeBase | PluginThemeRegistration | null
   /** The tokens the app theme painted, after its contrast check. */
   appPainted: Readonly<Record<string, string>>

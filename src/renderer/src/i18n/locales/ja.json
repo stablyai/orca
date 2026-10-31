@@ -6932,14 +6932,13 @@
           "932ff1fbff": "テーマ",
           "leftSidebarAppearance": {
             "title": "左サイドバーの外観",
-            "rowDescription": "左サイドバーをターミナルに合わせるか、既定のままにするか、色合いを加えます。",
             "default": "デフォルト",
-            "matchTerminal": "ターミナルに合わせる",
             "tinted": "色合い",
             "tintColor": "サイドバーの色合い",
             "tintColorDescription": "左サイドバーの表面に混ぜる色です。",
             "tintOpacity": "色合いの強さ",
-            "tintOpacityDescription": "サイドバーに色合いをどの程度強く混ぜるかを調整します。"
+            "tintOpacityDescription": "サイドバーに色合いをどの程度強く混ぜるかを調整します。",
+            "tintDescription": "左サイドバーをデフォルトのままにするか、色合いを付けます。ターミナルに合わせるには、ライトまたはダークのテーマで「ターミナルに合わせる」を選択します。"
           },
           "2edf606c46": "閉じるときにトレイへ最小化",
           "b707773a0d": "有効にすると、ウィンドウを閉じても Orca は終了せず、システムトレイで実行を続けます。",
@@ -9112,11 +9111,10 @@
             },
             "leftSidebarAppearance": {
               "title": "左サイドバーの外観",
-              "description": "左サイドバーをターミナルに合わせるか、既定のままにするか、色合いを加えます。",
               "project": "プロジェクト",
-              "terminal": "ターミナル",
               "background": "背景",
-              "tint": "色合い"
+              "tint": "色合い",
+              "tintDescription": "左サイドバーをデフォルトのままにするか、色合いを付けます。ターミナルに合わせるには、ライトまたはダークのテーマで「ターミナルに合わせる」を選択します。"
             },
             "workspaceCardLayout": {
               "title": "ワークスペースカードのレイアウト",
@@ -9171,7 +9169,8 @@
             "zcodeUsageDescription": "ZCode コーディングプランのクォータの使用状況をステータスバーに表示します。",
             "zcode": "zコード",
             "zai": "ザイ",
-            "glm": "グルム"
+            "glm": "グルム",
+            "matchTerminal": "ターミナルに合わせる"
           }
         },
         "auto": {
@@ -12398,7 +12397,9 @@
           "noMatches": "一致するビルドはありません。"
         },
         "AppearanceThemeControl": {
-          "useTerminalTheme": "このテーマのターミナル配色を使う"
+          "useTerminalTheme": "このテーマのターミナル配色を使う",
+          "matchTerminal": "ターミナルに合わせる",
+          "dynamic": "動的"
         },
         "AppearanceInterfaceSection": {
           "pluginIconTheme": {

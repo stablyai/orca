@@ -4278,11 +4278,10 @@
             },
             "leftSidebarAppearance": {
               "title": "Aparência da Barra Lateral Esquerda",
-              "description": "Faça a barra lateral esquerda combinar com seu terminal, manter o padrão ou usar uma tonalidade.",
               "project": "projeto",
-              "terminal": "terminal",
               "background": "fundo",
-              "tint": "tonalidade"
+              "tint": "tonalidade",
+              "tintDescription": "Mantenha a barra lateral esquerda padrão ou aplique uma tonalidade. Para seguir o terminal, escolha Combinar com o Terminal como tema claro ou escuro."
             },
             "workspaceCardLayout": {
               "title": "Layout do Cartão de Espaço de Trabalho",
@@ -4335,7 +4334,8 @@
               "kw": {
                 "cursor": "cursor"
               }
-            }
+            },
+            "matchTerminal": "Combinar com o Terminal"
           }
         },
         "repository": {
@@ -5494,14 +5494,13 @@
           "932ff1fbff": "Tema",
           "leftSidebarAppearance": {
             "title": "Aparência da Barra Lateral Esquerda",
-            "rowDescription": "Faça a barra lateral esquerda combinar com seu terminal, manter o padrão ou usar uma tonalidade.",
             "default": "Padrão",
-            "matchTerminal": "Combinar com o Terminal",
             "tinted": "Tonalizado",
             "tintColor": "Tonalidade da Barra Lateral",
             "tintColorDescription": "A cor misturada na superfície da barra lateral esquerda.",
             "tintOpacity": "Intensidade da Tonalidade",
-            "tintOpacityDescription": "Controla com que intensidade a tonalidade é misturada na barra lateral."
+            "tintOpacityDescription": "Controla com que intensidade a tonalidade é misturada na barra lateral.",
+            "tintDescription": "Mantenha a barra lateral esquerda padrão ou aplique uma tonalidade. Para seguir o terminal, escolha Combinar com o Terminal como tema claro ou escuro."
           },
           "interfaceDefaultFont": "Fonte padrão",
           "terminalDefaultFont": "Fonte padrão",
@@ -9623,6 +9622,10 @@
         },
         "PluginContributionActionNewFile": {
           "create": "Criar"
+        },
+        "AppearanceThemeControl": {
+          "matchTerminal": "Combinar com o Terminal",
+          "dynamic": "dinâmico"
         }
       },
       "right": {

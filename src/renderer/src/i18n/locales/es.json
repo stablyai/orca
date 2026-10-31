@@ -7225,14 +7225,13 @@
           "932ff1fbff": "Tema",
           "leftSidebarAppearance": {
             "title": "Apariencia de la barra lateral izquierda",
-            "rowDescription": "Haz que la barra lateral izquierda coincida con tu terminal, mantén el valor predeterminado o usa un tinte.",
             "default": "Predeterminado",
-            "matchTerminal": "Coincidir con el terminal",
             "tinted": "Con tinte",
             "tintColor": "Tinte de la barra lateral",
             "tintColorDescription": "El color que se mezcla en la superficie de la barra lateral izquierda.",
             "tintOpacity": "Intensidad del tinte",
-            "tintOpacityDescription": "Controla con qué fuerza se mezcla el tinte en la barra lateral."
+            "tintOpacityDescription": "Controla con qué fuerza se mezcla el tinte en la barra lateral.",
+            "tintDescription": "Mantén la barra lateral izquierda predeterminada o aplícale un tinte. Para seguir el terminal, elige Coincidir con el terminal como tema claro u oscuro."
           },
           "2edf606c46": "Minimizar a la bandeja al cerrar",
           "b707773a0d": "Cuando está activado, cerrar la ventana mantiene Orca en ejecución en la bandeja del sistema en lugar de salir.",
@@ -9370,11 +9369,10 @@
             },
             "leftSidebarAppearance": {
               "title": "Apariencia de la barra lateral izquierda",
-              "description": "Haz que la barra lateral izquierda coincida con tu terminal, conserve el valor predeterminado o use un tinte.",
               "project": "proyecto",
-              "terminal": "Terminal",
               "background": "fondo",
-              "tint": "tinte"
+              "tint": "tinte",
+              "tintDescription": "Mantén la barra lateral izquierda predeterminada o aplícale un tinte. Para seguir el terminal, elige Coincidir con el terminal como tema claro u oscuro."
             },
             "workspaceCardLayout": {
               "title": "Diseño de tarjetas de espacios de trabajo",
@@ -9429,7 +9427,8 @@
               "close": "cerca",
               "notification": "área de notificaciones",
               "background": "fondo"
-            }
+            },
+            "matchTerminal": "Coincidir con el terminal"
           }
         },
         "auto": {
@@ -12686,7 +12685,9 @@
           "searchPlaceholder": "Buscar compilaciones…"
         },
         "AppearanceThemeControl": {
-          "useTerminalTheme": "Usar sus colores de terminal"
+          "useTerminalTheme": "Usar sus colores de terminal",
+          "matchTerminal": "Coincidir con el terminal",
+          "dynamic": "dinámico"
         },
         "AppearanceInterfaceSection": {
           "pluginIconTheme": {
