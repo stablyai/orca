@@ -55,6 +55,7 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-chat-canvas: var(--chat-canvas);
+  --color-chat-pane: var(--chat-pane);
   --color-chat-foreground: var(--chat-foreground);
   --color-chat-foreground-strong: var(--chat-foreground-strong);
   --color-chat-foreground-faint: var(--chat-foreground-faint);
@@ -632,6 +633,8 @@ body[data-modal-overlay-open]
     var(--chat-source-foreground) var(--chat-canvas-mix),
     var(--chat-source-background)
   );
+  /* Full-bleed strips; clear where the chat root alone paints over a theme image (native-chat-appearance.css). */
+  --chat-pane: var(--chat-canvas);
   --chat-foreground: color-mix(
     in srgb,
     var(--chat-source-foreground) var(--chat-foreground-mix),

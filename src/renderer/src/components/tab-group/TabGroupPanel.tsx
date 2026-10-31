@@ -15,6 +15,7 @@ import { registerTabGroupBody } from './tab-group-body-geometry'
 import { observeTabGroupBodyGridSize } from '@/runtime/sync-runtime-graph'
 import { translate } from '@/i18n/i18n'
 import type { TabGroup } from '../../../../shared/tab-types'
+import { isStructuredTab } from '../../../../shared/structured-agent-session-tab'
 import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
 import { useClientHostedBrowserRows } from '@/lib/pane-manager/client-hosted-browser-row-state'
 import { resolveClientHostedBrowserRowStripGroupId } from '../tab-bar/client-hosted-browser-row-strip-placement'
@@ -22,6 +23,7 @@ import { useEditorGroupFileDropOwner } from '../editor/use-editor-group-file-dro
 import { cn } from '@/lib/utils'
 import { UNFOCUSED_SPLIT_GROUP_OPACITY } from './split-group-dim'
 import { useWindowBackdropActive } from '@/lib/window-backdrop'
+import { useThemeBackgroundStore } from '@/store/theme-background'
 import { EditorRevealFlash } from './EditorRevealFlash'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
@@ -119,6 +121,7 @@ export default function TabGroupPanel({
   )
   const attachEditorFileDropOwner = useEditorGroupFileDropOwner({ worktreeId, groupId })
   const backdropActive = useWindowBackdropActive()
+  const themeBackgroundActive = useThemeBackgroundStore((state) => state.active)
   // Why: per-group anchor-name lets the worktree-level overlay position panes via CSS anchor positioning, so moving a tab between groups re-targets the anchor instead of remounting xterm (loses alt-screen TUI state) or reloading `<webview>`.
   const bodyAnchorName = tabGroupBodyAnchorName(groupId)
   // Why: memoize so a fresh style object each render doesn't break downstream memoization keyed on referential equality.
@@ -328,9 +331,14 @@ export default function TabGroupPanel({
       <div
         ref={setBodyRef}
         data-tab-group-body-id={groupId}
+        // Why: the pane overlays paint terminals and chats above this body; only they show the theme image.
+        data-translucent-tab-body={
+          activeTab?.contentType === 'terminal' ||
+          (activeTab && isStructuredTab(activeTab) && themeBackgroundActive)
+            ? ''
+            : undefined
+        }
         data-worktree-id={worktreeId}
-        // Why: the pane overlay paints terminals above this body; only they show the theme image.
-        data-translucent-tab-body={activeTab?.contentType === 'terminal' ? '' : undefined}
         className="relative flex-1 min-h-0 overflow-hidden"
         style={bodyAnchorStyle}
       >

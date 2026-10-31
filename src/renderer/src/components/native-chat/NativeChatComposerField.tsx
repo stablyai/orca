@@ -267,7 +267,7 @@ export function NativeChatComposerField({
   const focusComposer = useCallback(() => textareaRef.current?.focus(), [textareaRef])
 
   return (
-    <div className="shrink-0 bg-chat-canvas">
+    <div className="shrink-0 bg-chat-pane">
       <div className="px-3 pt-2 pb-4 sm:px-4">
         <div className="relative mx-auto w-full max-w-(--chat-content-max-width)">
           {autocomplete.mode === 'slash' ? (

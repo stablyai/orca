@@ -12,12 +12,15 @@ const PROPERTIES = [
   '--orca-theme-background-size',
   '--orca-theme-background-repeat',
   '--orca-theme-background-position',
-  '--orca-theme-background-opacity'
+  '--orca-theme-background-opacity',
+  '--orca-theme-background-surface-opacity'
 ] as const
 
-/** Paints (or clears) the theme's image as the body's static background layer; see main.css. */
+/** Paints (or clears) the theme's image as the body's static background layer; see main.css.
+ *  `surfaceOpacity` is Background Opacity, which chats over the image paint at too. */
 export function applyThemeBackground(
   background: PluginThemeBackground | null | undefined,
+  surfaceOpacity = 1,
   root: HTMLElement = document.documentElement
 ): void {
   if (!background) {
@@ -35,6 +38,7 @@ export function applyThemeBackground(
   root.style.setProperty('--orca-theme-background-repeat', repeat)
   root.style.setProperty('--orca-theme-background-position', background.position ?? 'center')
   root.style.setProperty('--orca-theme-background-opacity', String(background.opacity ?? 1))
+  root.style.setProperty('--orca-theme-background-surface-opacity', String(surfaceOpacity))
   root.dataset.themeBackground = ''
   useThemeBackgroundStore.setState({ active: true })
 }
