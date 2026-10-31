@@ -1,4 +1,4 @@
-import { vi } from 'vitest'
+import { vi, type Mock } from 'vitest'
 import type { AgentStatusState } from '../../shared/agent-status-types'
 import type { AutomationRun } from '../../shared/automations-types'
 import {
@@ -81,7 +81,7 @@ export function observe(
     startedAt: Date.now(),
     dispatchedAt: null
   }
-) {
+): { settled: Mock; failed: Mock; promise: Promise<void>; controller: AbortController } {
   const observer = createRuntimeAutomationRunTerminalObserver(pane.runtime, {
     getAgentStatusRowsForPane: (paneKey) => (paneKey === PANE_KEY ? pane.agentRows() : []),
     agentCommandsForRun: () => ['goose']
