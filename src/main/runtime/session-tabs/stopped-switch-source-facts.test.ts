@@ -40,9 +40,14 @@ const frame = (...tabs: RuntimeMobileSessionTerminalTab[]): RuntimeMobileSession
   activeTabType: null,
   tabs
 })
-const stoppedOn = (snapshot: RuntimeMobileSessionTabsSnapshot) => {
-  const tab = snapshot.tabs[0]
-  return tab?.type === 'terminal' ? tab.stoppedSwitchSource : undefined
+/** What the projection publishes for the pane after this frame. */
+const published = (
+  facts: StoppedSwitchSourceFacts,
+  snapshot: RuntimeMobileSessionTabsSnapshot,
+  current: Parameters<StoppedSwitchSourceFacts['reconcile']>[1]
+) => {
+  facts.reconcile(snapshot, current)
+  return facts.factFor(pane.worktreeId, pane.tabId, pane.leafId)
 }
 const exited = () => ({ connected: false, incarnationId: 'inc-1' })
 
@@ -52,10 +57,8 @@ it.each(['claude', 'codex'] as const)(
     const facts = new StoppedSwitchSourceFacts()
     facts.record(pane, fact(agent))
     // Before the window unbinds the pane, and after (a reconnect or new viewer re-reads it).
-    expect(stoppedOn(facts.stamp(frame(row({ ptyId: 'pty-stopped' })), exited))).toEqual(
-      fact(agent)
-    )
-    expect(stoppedOn(facts.stamp(frame(row()), exited))).toEqual(fact(agent))
+    expect(published(facts, frame(row({ ptyId: 'pty-stopped' })), exited)).toEqual(fact(agent))
+    expect(published(facts, frame(row()), exited)).toEqual(fact(agent))
     expect(facts.stoppedProcess('pty-stopped', 'inc-1')).toBe(true)
   }
 )
@@ -71,19 +74,34 @@ it.each([
 ] as const)('drops the fact for good when %s', (_case, next, current) => {
   const facts = new StoppedSwitchSourceFacts()
   facts.record(pane, fact('codex'))
-  facts.stamp(next, current)
-  expect(stoppedOn(facts.stamp(frame(row()), exited))).toBeUndefined()
+  facts.reconcile(next, current)
+  expect(published(facts, frame(row()), exited)).toBeUndefined()
   expect(facts.stoppedProcess('pty-stopped', 'inc-1')).toBe(false)
 })
 
-it('neither keeps a field a renderer republished nor costs a copy when there is none', () => {
-  const facts = new StoppedSwitchSourceFacts()
-  expect(stoppedOn(facts.stamp(frame(row({ stoppedSwitchSource: fact('codex') })), exited))).toBe(
-    undefined
-  )
-  const plain = frame(row({ ptyId: 'pty-live' }))
-  expect(facts.stamp(plain, exited)).toBe(plain)
-})
+it.each([50, 500])(
+  'does no row pass over a %i-terminal frame without a stopped source, and one pass with one',
+  (n) => {
+    const rows = Array.from({ length: n }, (_, index) => row({ leafId: `leaf-${index}` }))
+    let passes = 0
+    const counted: RuntimeMobileSessionTabsSnapshot = {
+      ...frame(),
+      get tabs() {
+        passes += 1
+        return rows
+      }
+    }
+    const facts = new StoppedSwitchSourceFacts()
+    facts.record({ ...pane, worktreeId: 'other' }, fact('codex'))
+    const current = vi.fn(exited)
+    facts.reconcile(counted, current)
+    expect(passes).toBe(0)
+    facts.record({ ...pane, leafId: 'leaf-0' }, fact('codex'))
+    facts.reconcile(counted, current)
+    expect(passes).toBe(1)
+    expect(current).toHaveBeenCalledOnce()
+  }
+)
 
 it('never names an unknown or other incarnation stopped', () => {
   const facts = new StoppedSwitchSourceFacts()

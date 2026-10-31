@@ -9,6 +9,7 @@ import type {
   RuntimeSyncedTab
 } from '../../shared/runtime-types'
 import type { TabGroupLayoutNode } from '../../shared/tab-types'
+import type { StoppedSwitchSourceFact } from '../../shared/stopped-switch-source'
 import type { RuntimeAgentRowSnapshot } from './runtime-worktree-agent-rows'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import type { TitleDisplayClear } from './runtime-worktree-status-projection'
@@ -42,6 +43,12 @@ export type RuntimeMobileSessionProjectionHost = {
   /** Display-only clear of a PTY's native title; every title/status read here is display. */
   getTitleDisplayClear(ptyId: string | null): TitleDisplayClear | null
   issuePtyHandle(pty: RuntimePtyWorktreeRecord): string
+  /** Main's fact that a switch stopped this pane's process; hosts without facts omit it. */
+  stoppedSwitchSource?(
+    worktreeId: string,
+    tabId: string,
+    leafId: string
+  ): StoppedSwitchSourceFact | undefined
   recordPty(
     ptyId: string,
     worktreeId: string,

@@ -4,7 +4,6 @@ import type {
 } from '../../../shared/runtime-types'
 import type { StoppedSwitchSourceFact } from '../../../shared/stopped-switch-source'
 
-type Row = RuntimeMobileSessionTabsSnapshot['tabs'][number]
 type Pane = { worktreeId: string; tabId: string; leafId: string }
 /** What main knows of a PTY now: a live successor on the same id ends the old process's fact. */
 type CurrentPty = (
@@ -15,9 +14,9 @@ const paneKey = (tabId: string, leafId: string): string => `${tabId}\0${leafId}`
 
 /**
  * The panes a switch stopped with proof and nothing replaced, kept in memory by main, which made
- * the stop. Every frame carries the fact on that pane's row (a renderer republish can neither drop
- * nor invent it), so the window and every paired client derive the stopped pane and its retry
- * from one source. It dies when the row leaves (close, or a retry's replace) or when the pane
+ * the stop. Every frame's projection publishes the field from here alone (a renderer republish
+ * can neither drop nor invent it), so the window and every paired client derive the stopped pane
+ * and its retry from one source. It dies when the row leaves (close, or a retry's replace) or when the pane
  * names another process (Restart, a rebind, a successor on the same PTY id).
  */
 export class StoppedSwitchSourceFacts {
@@ -41,60 +40,74 @@ export class StoppedSwitchSourceFacts {
     return false
   }
 
-  /** One pass over the frame's rows; a workspace with no fact and no stray field costs one scan. */
-  stamp(snapshot: RuntimeMobileSessionTabsSnapshot, current: CurrentPty) {
+  /** Main's fact for this pane, the only source of the field a frame publishes. */
+  factFor(worktreeId: string, tabId: string, leafId: string): StoppedSwitchSourceFact | undefined {
+    return this.byWorkspace.get(worktreeId)?.get(paneKey(tabId, leafId))
+  }
+
+  /** Drops the facts a frame no longer backs; a workspace with none does no row pass. */
+  reconcile(snapshot: RuntimeMobileSessionTabsSnapshot, current: CurrentPty): void {
     const entries = this.byWorkspace.get(snapshot.worktree)
+    if (!entries) {
+      return
+    }
     const present = new Set<string>()
-    let tabs: Row[] | undefined
-    snapshot.tabs.forEach((row, index) => {
-      if (row.type !== 'terminal') {
-        return
+    for (const row of snapshot.tabs) {
+      const key = row.type === 'terminal' ? paneKey(row.parentTabId, row.leafId) : undefined
+      const fact = key ? entries.get(key) : undefined
+      if (!key || !fact) {
+        continue
       }
-      const key = paneKey(row.parentTabId, row.leafId)
-      let fact = entries?.get(key)
-      const successor = fact && current(fact.ptyId)
-      if (
-        fact &&
-        ((row.ptyId && row.ptyId !== fact.ptyId) ||
-          (successor?.connected && successor.incarnationId !== fact.incarnationId))
-      ) {
-        entries!.delete(key)
-        fact = undefined
-      }
-      if (fact) {
+      const successor = current(fact.ptyId)
+      const replaced =
+        (row.type === 'terminal' && row.ptyId && row.ptyId !== fact.ptyId) ||
+        (successor?.connected && successor.incarnationId !== fact.incarnationId)
+      if (!replaced) {
         present.add(key)
       }
-      if (row.stoppedSwitchSource === fact) {
-        return
-      }
-      const { stoppedSwitchSource: _dropped, ...rest } = row
-      const next: RuntimeMobileSessionTerminalTab = fact
-        ? { ...rest, stoppedSwitchSource: fact }
-        : rest
-      tabs ??= [...snapshot.tabs]
-      tabs[index] = next
-    })
-    for (const key of entries?.keys() ?? []) {
+    }
+    for (const key of entries.keys()) {
       if (!present.has(key)) {
-        entries!.delete(key)
+        entries.delete(key)
       }
     }
-    if (entries?.size === 0) {
+    if (entries.size === 0) {
       this.byWorkspace.delete(snapshot.worktree)
     }
-    return tabs ? { ...snapshot, tabs } : snapshot
   }
+}
+
+type FactHost = {
+  stoppedSwitchSource?(
+    worktreeId: string,
+    tabId: string,
+    leafId: string
+  ): StoppedSwitchSourceFact | undefined
+}
+type PaneRow = Pick<RuntimeMobileSessionTerminalTab, 'parentTabId' | 'leafId'>
+const factOf = (host: FactHost, worktreeId: string, tab: PaneRow) =>
+  host.stoppedSwitchSource?.(worktreeId, tab.parentTabId, tab.leafId)
+
+/** The published field for a pane: main's fact alone, never one a renderer sent. */
+export function stoppedSourceField(
+  host: FactHost,
+  worktreeId: string,
+  tab: PaneRow
+): { stoppedSwitchSource?: StoppedSwitchSourceFact } {
+  const fact = factOf(host, worktreeId, tab)
+  return fact ? { stoppedSwitchSource: fact } : {}
 }
 
 /**
  * The exited process a stopped row still names, so the row keeps that process's own handle: an
  * attach to it (an older client's reattach) is answered exited instead of waiting for a handle.
  */
-export function stoppedSwitchSourcePty<Pty extends { incarnationId?: string | null }>(
-  row: Pick<RuntimeMobileSessionTerminalTab, 'stoppedSwitchSource'>,
-  ptysById: ReadonlyMap<string, Pty>
+export function stoppedSourcePty<Pty extends { incarnationId?: string | null }>(
+  host: FactHost & { ptysById: ReadonlyMap<string, Pty> },
+  worktreeId: string,
+  tab: PaneRow
 ): Pty | null {
-  const fact = row.stoppedSwitchSource
-  const pty = fact ? ptysById.get(fact.ptyId) : undefined
+  const fact = factOf(host, worktreeId, tab)
+  const pty = fact ? host.ptysById.get(fact.ptyId) : undefined
   return pty && pty.incarnationId === fact?.incarnationId ? pty : null
 }

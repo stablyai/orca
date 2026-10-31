@@ -80,10 +80,9 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
   protected toMobileSessionTabsResult(
     snapshot: RuntimeMobileSessionTabsSnapshot
   ): RuntimeMobileSessionTabsResult {
+    this.stoppedSwitchSources.reconcile(snapshot, (ptyId) => this.ptysById.get(ptyId))
     snapshot = titleStructuredConversationTabs(
-      this.stoppedSwitchSources.stamp(this.switchSlotAnchors.stamp(snapshot), (ptyId) =>
-        this.ptysById.get(ptyId)
-      ),
+      this.switchSlotAnchors.stamp(snapshot),
       (sessionId) => this.structuredConversationTabName(snapshot.worktree, sessionId)
     )
     return projectRuntimeMobileSessionTabs(snapshot, this.getMobileSessionProjectionHost())
@@ -120,6 +119,8 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
       tabs: this.tabs,
       leaves: this.leaves,
       ptysById: this.ptysById,
+      stoppedSwitchSource: (worktreeId, tabId, leafId) =>
+        this.stoppedSwitchSources.factFor(worktreeId, tabId, leafId),
       getPtyAvailability: (ptyId) => this.ptyController?.getPtyAvailability?.(ptyId) ?? null,
       getLiveBrowserTabs: (worktreeId) => this.getListedBrowserTabsByPageId(worktreeId),
       isRendererOwnedMobileBrowserTab: (...args) => this.isRendererOwnedMobileBrowserTab(...args),
