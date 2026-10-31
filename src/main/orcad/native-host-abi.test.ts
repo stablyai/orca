@@ -8,7 +8,6 @@ import {
   isBelowGlibcFloor,
   nativeSlotName,
   parseIncompatibleArchitecture,
-  parseMissingSharedLibrary,
   parseNodeAbiMismatch,
   parseUnmetGlibcVersion
 } from './native-host-abi'
@@ -106,18 +105,6 @@ describe('loader error parsing', () => {
     })
     expect(parseIncompatibleArchitecture('wrong ELF class: ELFCLASS32')).not.toBeNull()
     expect(parseIncompatibleArchitecture("version `GLIBC_2.34' not found")).toBeNull()
-  })
-
-  it('names the shared object the loader could not open, on either loader', () => {
-    expect(
-      parseMissingSharedLibrary(
-        'libstdc++.so.6: cannot open shared object file: No such file or directory'
-      )
-    ).toBe('libstdc++.so.6')
-    expect(parseMissingSharedLibrary('Library not loaded: /usr/local/lib/libfoo.dylib')).toBe(
-      '/usr/local/lib/libfoo.dylib'
-    )
-    expect(parseMissingSharedLibrary("/lib/libc.so.6: version `GLIBC_2.34' not found")).toBeNull()
   })
 })
 

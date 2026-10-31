@@ -1,4 +1,4 @@
-import { parseMissingSharedLibrary } from '../orcad/native-host-abi'
+import { parseMissingSharedLibrary } from '../../shared/missing-shared-library'
 import { RelayHostAnsweredError } from './remote-exec/remote-host-answered-failure'
 
 export const REMOTE_NODE_RUNTIME_READY = 'ORCA_NODE_RUNTIME_READY'
