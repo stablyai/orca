@@ -167,7 +167,7 @@ describe('rich Markdown live viewport', () => {
 
   it('observes a real explicit engine writer while handling only passive recovery', () => {
     const f = fixture()
-    f.editor.view.dom.focus({ preventScroll: true })
+    f.editor.view.focus()
     f.container.scrollTop = 1985
     f.editor.setOptions({
       editorProps: {
