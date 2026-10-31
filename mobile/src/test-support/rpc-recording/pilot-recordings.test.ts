@@ -25,39 +25,32 @@ describe('RPC main recordings', () => {
     const { id, scenario } = pilot
     it(pilot.title, async () => {
       let first = ''
-      const candidates = await (async () => {
-        const candidates: Recording[] = []
-        for (let run = 0; run < determinismRuns(); run++) {
-          const { adapters } = pilotMountAdapters(root, { device: scenario })
-          const recording = await runRecording(
-            scenario,
-            adapters[scenario.operation],
-            vitestRecordingScheduler()
-          )
-          if (id === 'b1') {
-            expect(visibleState(recording)).toEqual({ files: ['third.ts'] })
-          }
-          if (id === 'b2') {
-            // The checked reader must name the null reply and method instead of exposing a property-read exception.
-            expect(visibleState(recording)).toMatchObject({
-              error:
-                'The host sent a reply this app could not read (github.project.updateIssueBySlug)'
-            })
-          }
-          if (id === 'b3') {
-            expect(visibleState(recording)).toMatchObject({
-              error: 'comments transport error',
-              loading: false
-            })
-          }
-          if (id === 'settings-task-hydration-fulfilled') {
-            expect(visibleState(recording)).toMatchObject({ hydrated: true })
-          }
-          candidates.push(recording)
+      for (let run = 0; run < determinismRuns(); run++) {
+        const { adapters } = pilotMountAdapters(root, { device: scenario })
+        const recording = await runRecording(
+          scenario,
+          adapters[scenario.operation],
+          vitestRecordingScheduler()
+        )
+        if (id === 'b1') {
+          expect(visibleState(recording)).toEqual({ files: ['third.ts'] })
         }
-        return candidates
-      })()
-      for (const [run, recording] of candidates.entries()) {
+        if (id === 'b2') {
+          // The checked reader must name the null reply and method instead of exposing a property-read exception.
+          expect(visibleState(recording)).toMatchObject({
+            error:
+              'The host sent a reply this app could not read (github.project.updateIssueBySlug)'
+          })
+        }
+        if (id === 'b3') {
+          expect(visibleState(recording)).toMatchObject({
+            error: 'comments transport error',
+            loading: false
+          })
+        }
+        if (id === 'settings-task-hydration-fulfilled') {
+          expect(visibleState(recording)).toMatchObject({ hydrated: true })
+        }
         const golden = goldenRecording(pilot.scenarios(), recording)
         const bytes = goldenBytes(golden)
         if (run) {

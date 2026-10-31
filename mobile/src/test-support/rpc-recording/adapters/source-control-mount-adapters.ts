@@ -114,9 +114,7 @@ export function sourceControlMountAdapters(
           })
         },
         state: () => ({ result }),
-        dispose: () => {
-          current = false
-        }
+        dispose: () => {}
       }
     }
   }

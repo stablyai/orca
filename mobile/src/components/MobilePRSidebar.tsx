@@ -353,7 +353,6 @@ function PrSidebarSections({
       {/* Own titled section when present; null otherwise (no empty chrome). */}
       <PRConflictingFilesSection pr={data.pr} triage={conflictsTriage} />
       <PRReviewersSection
-        prRepo={data.pr.prRepo ?? null}
         details={data.details}
         actions={actions}
         client={client}

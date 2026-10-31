@@ -65,7 +65,6 @@ export function sessionTerminalCreateMountAdapters(
       const creatingTerminalRef: { current: string | null } = { current: null }
       const initializedHandlesRef = { current: new Set([PREVIOUS_HANDLE]) }
       const deviceTokenRef: { current: string | null } = { current: null }
-      const delayedActionTimers = new Set<ReturnType<typeof setTimeout>>()
 
       let actions: ReturnType<typeof useCreateActions> | undefined
       const hook = hookMount(() => {
@@ -109,7 +108,7 @@ export function sessionTerminalCreateMountAdapters(
             pendingSelectionRef,
             scheduleDelayedAction: (fn: () => void, ms: number) => {
               effect('schedule-delayed-action', { delayMs: ms })
-              delayedActionTimers.add(setTimeout(fn, ms))
+              setTimeout(fn, ms)
             },
             showToast: (message: string, durationMs?: number) =>
               effect('toast', { message, durationMs: durationMs ?? null }),
@@ -184,28 +183,7 @@ export function sessionTerminalCreateMountAdapters(
           pendingSelection: pendingSelectionRef.current,
           initializedHandles: [...initializedHandlesRef.current].sort()
         }),
-        dispose() {
-          const errors: unknown[] = []
-          try {
-            hook.unmount()
-          } catch (error) {
-            errors.push(error)
-          }
-          for (const timer of delayedActionTimers) {
-            try {
-              clearTimeout(timer)
-            } catch (error) {
-              errors.push(error)
-            }
-          }
-          delayedActionTimers.clear()
-          if (errors.length === 1) {
-            throw errors[0]
-          }
-          if (errors.length) {
-            throw new AggregateError(errors, 'Terminal fixture cleanup failed')
-          }
-        }
+        dispose: hook.unmount
       }
     }
   }

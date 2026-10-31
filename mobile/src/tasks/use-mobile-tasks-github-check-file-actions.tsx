@@ -1,4 +1,3 @@
-import { githubTaskKey, requireGitHubTaskTarget } from './github-task-identity'
 import type { HostedCommentReviewActionsModel } from './use-mobile-tasks-hosted-comment-review-actions'
 import { useCallback } from './mobile-tasks-dependencies'
 import {
@@ -17,62 +16,36 @@ import type {
   TaskItem
 } from './mobile-tasks-legacy-foundation'
 
-export type useMobileTasksGithubCheckFileActionsInput = Pick<
-  HostedCommentReviewActionsModel,
-  | 'claimPublication'
-  | 'actionItem'
-  | 'detailPayload'
-  | 'client'
-  | 'expandedPrFilePath'
-  | 'prFileCommentDrafts'
-  | 'prFileContents'
-  | 'setDetailPayload'
-  | 'setDetailRefreshSeq'
-  | 'setError'
-  | 'setExpandedPrFilePath'
-  | 'tryBeginMutation'
-  | 'setPrFileCommentDrafts'
-  | 'setPrFileContents'
-  | 'beginFileLoad'
->
-
-export function useMobileTasksGithubCheckFileActions<
-  Model extends useMobileTasksGithubCheckFileActionsInput
->(model: Model) {
+export function useMobileTasksGithubCheckFileActions(model: HostedCommentReviewActionsModel) {
   const {
-    claimPublication,
     client,
     detailPayload,
     expandedPrFilePath,
+    mutatingStatus,
     prFileCommentDrafts,
     prFileContents,
     setDetailPayload,
     setDetailRefreshSeq,
     setError,
     setExpandedPrFilePath,
-    tryBeginMutation,
+    setMutatingStatus,
     setPrFileCommentDrafts,
     setPrFileContents,
-    beginFileLoad
+    setPrFileLoadingPath
   } = model
   const rerunGitHubChecks = useCallback(
     async (item: Extract<TaskItem, { provider: 'github' }>, failedOnly: boolean): Promise<void> => {
-      if (!client || item.source.type !== 'pr') {
+      if (!client || mutatingStatus || item.source.type !== 'pr') {
         return
       }
-      const finish = tryBeginMutation()
-      if (!finish) {
-        return
-      }
+      setMutatingStatus(true)
       setError('')
-      const isCurrent = claimPublication(item, detailPayload)
       try {
         const reply = await githubPullRequestChecksRerun.request(
           client,
           {
             repo: `id:${item.source.repoId}`,
             prNumber: item.source.number,
-            prRepo: requireGitHubTaskTarget(item.source).repository,
             headSha: detailPayload?.provider === 'github' ? detailPayload.headSha : undefined,
             failedOnly
           },
@@ -82,20 +55,14 @@ export function useMobileTasksGithubCheckFileActions<
         if (result.ok === false) {
           throw new Error(result.error ?? 'Failed to rerun checks')
         }
-        if (!isCurrent()) {
-          return
-        }
         setDetailRefreshSeq((current) => current + 1)
       } catch (err) {
-        if (!isCurrent()) {
-          return
-        }
         setError(err instanceof Error ? err.message : 'Failed to rerun checks')
       } finally {
-        finish()
+        setMutatingStatus(false)
       }
     },
-    [claimPublication, client, detailPayload, tryBeginMutation]
+    [client, detailPayload, mutatingStatus]
   )
 
   const toggleGitHubFileViewed = useCallback(
@@ -103,31 +70,22 @@ export function useMobileTasksGithubCheckFileActions<
       item: Extract<TaskItem, { provider: 'github' }>,
       file: NonNullable<Extract<DetailPayload, { provider: 'github' }>['files'][number]>
     ): Promise<void> => {
-      if (!client || item.source.type !== 'pr') {
+      if (!client || mutatingStatus || item.source.type !== 'pr') {
         return
       }
-      if (
-        detailPayload?.provider !== 'github' ||
-        detailPayload.targetKey !== githubTaskKey(item.source) ||
-        !detailPayload.pullRequestId
-      ) {
+      if (detailPayload?.provider !== 'github' || !detailPayload.pullRequestId) {
         setError('Unable to sync viewed state for this pull request.')
         return
       }
       const viewed = file.viewerViewedState !== 'VIEWED'
-      const finish = tryBeginMutation()
-      if (!finish) {
-        return
-      }
+      setMutatingStatus(true)
       setError('')
-      const isCurrent = claimPublication(item, detailPayload)
       try {
         const reply = await githubPullRequestFileViewedWrite.request(
           client,
           {
             repo: `id:${item.source.repoId}`,
             pullRequestId: detailPayload.pullRequestId,
-            prRepo: requireGitHubTaskTarget(item.source).repository,
             path: file.path,
             viewed
           },
@@ -136,11 +94,8 @@ export function useMobileTasksGithubCheckFileActions<
         if (githubPullRequestFileViewedWrite.interpret(reply) !== true) {
           throw new Error('Failed to sync viewed state with GitHub.')
         }
-        if (!isCurrent()) {
-          return
-        }
         setDetailPayload((current) =>
-          current?.provider === 'github' && current.targetKey === githubTaskKey(item.source)
+          current?.provider === 'github'
             ? {
                 ...current,
                 files: current.files.map((candidate) =>
@@ -152,15 +107,12 @@ export function useMobileTasksGithubCheckFileActions<
             : current
         )
       } catch (err) {
-        if (!isCurrent()) {
-          return
-        }
         setError(err instanceof Error ? err.message : 'Failed to update viewed state')
       } finally {
-        finish()
+        setMutatingStatus(false)
       }
     },
-    [claimPublication, client, detailPayload, tryBeginMutation]
+    [client, detailPayload, mutatingStatus]
   )
 
   const toggleGitHubReviewThread = useCallback(
@@ -168,23 +120,18 @@ export function useMobileTasksGithubCheckFileActions<
       item: Extract<TaskItem, { provider: 'github' }>,
       comment: DetailComment
     ): Promise<void> => {
-      if (!client || item.source.type !== 'pr' || !comment.threadId) {
+      if (!client || mutatingStatus || item.source.type !== 'pr' || !comment.threadId) {
         return
       }
       const resolve = !comment.isResolved
-      const finish = tryBeginMutation()
-      if (!finish) {
-        return
-      }
+      setMutatingStatus(true)
       setError('')
-      const isCurrent = claimPublication(item, detailPayload)
       try {
         const reply = await githubReviewThreadResolve.request(
           client,
           {
             repo: `id:${item.source.repoId}`,
             threadId: comment.threadId,
-            prRepo: requireGitHubTaskTarget(item.source).repository,
             resolve
           },
           { timeoutMs: 30_000 }
@@ -192,11 +139,8 @@ export function useMobileTasksGithubCheckFileActions<
         if (githubReviewThreadResolve.interpret(reply) !== true) {
           throw new Error(resolve ? 'Failed to resolve thread' : 'Failed to reopen thread')
         }
-        if (!isCurrent()) {
-          return
-        }
         setDetailPayload((current) =>
-          current?.provider === 'github' && current.targetKey === githubTaskKey(item.source)
+          current?.provider === 'github'
             ? {
                 ...current,
                 comments: current.comments.map((candidate) =>
@@ -208,15 +152,12 @@ export function useMobileTasksGithubCheckFileActions<
             : current
         )
       } catch (err) {
-        if (!isCurrent()) {
-          return
-        }
         setError(err instanceof Error ? err.message : 'Failed to update review thread')
       } finally {
-        finish()
+        setMutatingStatus(false)
       }
     },
-    [claimPublication, client, tryBeginMutation]
+    [client, mutatingStatus]
   )
 
   const toggleGitHubFileExpansion = useCallback(
@@ -236,23 +177,20 @@ export function useMobileTasksGithubCheckFileActions<
         !client ||
         item.source.type !== 'pr' ||
         detailPayload?.provider !== 'github' ||
-        detailPayload.targetKey !== githubTaskKey(item.source) ||
         !detailPayload.headSha ||
         !detailPayload.baseSha
       ) {
         setError('Unable to load file contents for this pull request.')
         return
       }
+      setPrFileLoadingPath(file.path)
       setError('')
-      const request = beginFileLoad(file.path, claimPublication(item, detailPayload))
-      const isCurrent = request.canPublish
       try {
         const reply = await githubPullRequestFileContentsRead.request(
           client,
           {
             repo: `id:${item.source.repoId}`,
             prNumber: item.source.number,
-            prRepo: requireGitHubTaskTarget(item.source).repository,
             path: file.path,
             oldPath: file.oldPath,
             status: file.status ?? 'modified',
@@ -262,20 +200,14 @@ export function useMobileTasksGithubCheckFileActions<
           { timeoutMs: 30_000 }
         )
         const contents = githubPullRequestFileContentsRead.interpret(reply)
-        if (!isCurrent()) {
-          return
-        }
         setPrFileContents((current) => ({ ...current, [file.path]: contents }))
       } catch (err) {
-        if (!isCurrent()) {
-          return
-        }
         setError(err instanceof Error ? err.message : 'Failed to load file contents')
       } finally {
-        request.finish()
+        setPrFileLoadingPath(null)
       }
     },
-    [beginFileLoad, claimPublication, client, detailPayload, expandedPrFilePath, prFileContents]
+    [client, detailPayload, expandedPrFilePath, prFileContents]
   )
 
   const addGitHubFileReviewComment = useCallback(
@@ -284,14 +216,10 @@ export function useMobileTasksGithubCheckFileActions<
       file: GitHubDetailFile,
       line: number
     ): Promise<void> => {
-      if (!client || item.source.type !== 'pr') {
+      if (!client || mutatingStatus || item.source.type !== 'pr') {
         return
       }
-      if (
-        detailPayload?.provider !== 'github' ||
-        detailPayload.targetKey !== githubTaskKey(item.source) ||
-        !detailPayload.headSha
-      ) {
+      if (detailPayload?.provider !== 'github' || !detailPayload.headSha) {
         setError('Unable to comment without the PR head SHA.')
         return
       }
@@ -300,19 +228,14 @@ export function useMobileTasksGithubCheckFileActions<
       if (!body) {
         return
       }
-      const finish = tryBeginMutation()
-      if (!finish) {
-        return
-      }
+      setMutatingStatus(true)
       setError('')
-      const isCurrent = claimPublication(item, detailPayload)
       try {
         const reply = await githubReviewCommentWrite.request(
           client,
           {
             repo: `id:${item.source.repoId}`,
             prNumber: item.source.number,
-            prRepo: requireGitHubTaskTarget(item.source).repository,
             commitId: detailPayload.headSha,
             path: file.path,
             line,
@@ -323,9 +246,6 @@ export function useMobileTasksGithubCheckFileActions<
         const result = githubReviewCommentWrite.interpret(reply)
         if (result.ok === false) {
           throw new Error(result.error ?? 'Failed to add review comment')
-        }
-        if (!isCurrent()) {
-          return
         }
         const comment: DetailComment = result.comment ?? {
           id: `local-${Date.now()}`,
@@ -341,20 +261,17 @@ export function useMobileTasksGithubCheckFileActions<
           return next
         })
         setDetailPayload((current) =>
-          current?.provider === 'github' && current.targetKey === githubTaskKey(item.source)
+          current?.provider === 'github'
             ? { ...current, comments: [...current.comments, comment] }
             : current
         )
       } catch (err) {
-        if (!isCurrent()) {
-          return
-        }
         setError(err instanceof Error ? err.message : 'Failed to add review comment')
       } finally {
-        finish()
+        setMutatingStatus(false)
       }
     },
-    [claimPublication, client, detailPayload, tryBeginMutation, prFileCommentDrafts]
+    [client, detailPayload, mutatingStatus, prFileCommentDrafts]
   )
   return Object.assign(model, {
     rerunGitHubChecks,
@@ -365,5 +282,4 @@ export function useMobileTasksGithubCheckFileActions<
   })
 }
 
-export type GithubCheckFileActionsModel = HostedCommentReviewActionsModel &
-  ReturnType<typeof useMobileTasksGithubCheckFileActions>
+export type GithubCheckFileActionsModel = ReturnType<typeof useMobileTasksGithubCheckFileActions>

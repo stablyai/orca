@@ -1,4 +1,3 @@
-import type { GitHubOwnerRepo } from '../../../../src/shared/github/pull-request-types'
 import { useMemo, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { UserPlus, X } from 'lucide-react-native'
@@ -19,7 +18,6 @@ type Props = {
   details: GitHubWorkItemDetails | null
   actions: MobilePrActions
   client: RpcClient | null
-  prRepo: GitHubOwnerRepo | null
   worktreeId: string
 }
 
@@ -54,7 +52,7 @@ function reviewerStateLabel(
 }
 
 // Requested reviewers/latest verdicts with optimistic request/remove picker.
-export function PRReviewersSection({ details, actions, client, worktreeId, prRepo }: Props) {
+export function PRReviewersSection({ details, actions, client, worktreeId }: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   // Null details means heavy phase 2 still loading; synthetic placeholder means failure, neither means no reviewers.
@@ -156,7 +154,6 @@ export function PRReviewersSection({ details, actions, client, worktreeId, prRep
         })
       )}
       <ReviewerPickerDrawer
-        prRepo={prRepo}
         visible={pickerOpen}
         onClose={() => setPickerOpen(false)}
         client={client}

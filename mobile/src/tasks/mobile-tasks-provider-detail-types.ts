@@ -39,7 +39,6 @@ export type GitHubWorkItem = {
   changedFiles?: number
   repoId: string
   repoName: string
-  prRepo?: GitHubOwnerRepo
   reviewDecision?: string | null
   reviewRequests?: GitHubAssignableUser[]
   latestReviews?: GitHubPRReviewSummary[]
@@ -223,7 +222,6 @@ export type GitHubPRFileContents = {
 export type DetailPayload =
   | {
       provider: 'github'
-      targetKey?: string
       body: string
       comments: DetailComment[]
       labels: string[]

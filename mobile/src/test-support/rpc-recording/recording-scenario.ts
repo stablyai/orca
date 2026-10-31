@@ -10,22 +10,7 @@ export type Rejection = {
 }
 // Only generated completions may be optional after a divergence; manifest steps remain required.
 // Streaming frames always route to their opening id, assert subscribe params and carry whole host responses.
-export type ExecutionMode = 'native' | 'bridge'
-export type ScenarioLineage = {
-  baseScenario: string
-  mode: ExecutionMode
-  domain: 'paired' | 'bridge-only'
-  site?: string
-  partition?: string
-  schedule?: string
-  role?: 'prelude'
-}
-export type ScenarioStep = ScenarioStepValue & {
-  transport?: ExecutionMode
-  site?: string
-  bridgeSite?: true
-}
-type ScenarioStepValue =
+export type ScenarioStep =
   | { action: string; id: string; args?: Record<string, unknown> }
   | {
       complete: string
@@ -47,14 +32,6 @@ export type RecordingScenario = DeclaredDeviceState & {
   sites: string[]
   schedules: string[]
   namedDeltas?: string[]
-  replyBranches?: {
-    site: string
-    partitions: readonly string[]
-    request: string
-    params: unknown
-  }[]
-  bridgeOperations?: { request: string; probeSite: string; methods: readonly string[] }[]
-  lineage?: ScenarioLineage
   steps: ScenarioStep[]
 }
 export type MountedOperation = {
@@ -65,7 +42,6 @@ export type MountedOperation = {
 export type MountContext = {
   client: RpcClient
   effect: (name: string, value: unknown) => void
-  captureObservation?: <T>(origin: string, read: () => T) => T
 }
 export type MountAdapter = (context: MountContext) => MountedOperation
 export type RecordingScheduler = {
@@ -76,14 +52,6 @@ export type RecordingScheduler = {
   /** Virtual milliseconds since the pinned recording epoch. */
   elapsed: () => number
   stop: () => void
-  timerEvidence?: () => {
-    baseline: number
-    residual: number
-    stopped: boolean
-    stopAttempted?: boolean
-    clockRestored?: boolean
-    spiesRestored?: boolean
-  }
 }
 export type Observation = {
   sender: RecordedValue

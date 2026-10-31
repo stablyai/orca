@@ -16,7 +16,6 @@ type StreamingListener = (result: unknown) => void
 
 // Holding a client also exposes the raw port, so the boundary inventory must cover client holders.
 export type RpcClient = UnvalidatedRpcRequestPort & {
-  requestRoute?: (params: unknown) => { client: RpcClient; intermediary?: RpcClient }
   subscribe: (
     method: string,
     params: unknown,

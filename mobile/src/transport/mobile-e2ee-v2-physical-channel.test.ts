@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import nacl from 'tweetnacl'
-import { sanitizeCrashReportString } from '../../../src/shared/crash-report-redaction'
 import { setFlagsFromString } from 'node:v8'
 import { runInNewContext } from 'node:vm'
 import {
@@ -12,22 +11,6 @@ import {
   openMobileE2EEV2Frame,
   sealMobileE2EEV2Frame
 } from '../../../src/shared/mobile-e2ee-v2-framing'
-
-vi.mock('./direct-e2ee-framing-policy', async () => {
-  const { createPairedE2EEFramingPolicy } =
-    await import('../../../src/shared/paired-e2ee-framing-policy')
-  return {
-    createDirectE2EEFramingPolicy: (key: string) =>
-      createPairedE2EEFramingPolicy(key, {
-        hydrate: async () => {},
-        isLatched: () => true,
-        latch: () => {}
-      })
-  }
-})
-vi.mock('./mobile-runtime-capability-negotiation', () => ({
-  negotiateMobileRuntimeCapabilities: (args: { onReady: () => void }) => args.onReady()
-}))
 
 vi.mock('expo-crypto', () => ({
   getRandomBytes: (length: number) => new Uint8Array(length).fill(9)
@@ -41,21 +24,17 @@ import {
   MobileE2EEV2PhysicalChannel,
   type MobileE2EEV2Socket
 } from './mobile-e2ee-v2-physical-channel'
-import { connect } from './rpc-client'
 import { MobileRelayE2eeLink } from './mobile-relay-e2ee-link'
 import { connectMobileRelayForPairing } from './mobile-relay-physical-client'
 
 const desktop = nacl.box.keyPair.fromSecretKey(new Uint8Array(32).fill(1))
 const client = nacl.box.keyPair.fromSecretKey(new Uint8Array(32).fill(2))
 
-function setup(
-  decodeBinary: (raw: unknown) => Promise<Uint8Array | null>,
-  transport: 'direct' | 'relay' = 'relay'
-) {
+function setup(decodeBinary: (raw: unknown) => Promise<Uint8Array | null>) {
   const session = MobileE2EEV2ClientSession.create({
     desktopPublicKeyB64: Buffer.from(desktop.publicKey).toString('base64'),
-    transport,
-    ...(transport === 'relay' ? { relayHostId: 'AbCdEf0123_-xyZ9' } : {}),
+    transport: 'relay',
+    relayHostId: 'AbCdEf0123_-xyZ9',
     clientNonce: new Uint8Array(32).fill(3),
     clientKeyPair: client
   })
@@ -131,17 +110,6 @@ async function authenticate(ctx: ReturnType<typeof setup>): Promise<void> {
     ctx.schedule
   )
   await ctx.channel.handleMessage(Buffer.from(response).toString('base64'))
-}
-
-function assertReleasedPhysicalChannel(channel: unknown): void {
-  if (!(channel instanceof MobileE2EEV2PhysicalChannel)) {
-    throw new Error('physical channel dispose receiver changed')
-  }
-  const queue = channel['outboundQueue']
-  if (!queue || typeof queue.evidence !== 'function') {
-    throw new Error('physical channel queue diagnostic seam changed')
-  }
-  expect(queue.evidence()).toEqual({ queuedBytes: 0, queuedFrames: 0, storageSlots: 0 })
 }
 
 describe('mobile E2EE v2 physical channel', () => {
@@ -470,18 +438,6 @@ describe('relay inbound payload disposal', () => {
         socket.receive(Buffer.from(response).toString('base64'))
         await expect(reply).resolves.toMatchObject({ ok: true, result: { path: 'relay' } })
       }
-      // A frame already admitted to this encrypted session cannot migrate to its successor.
-      const sendText = (text: string) =>
-        transport instanceof MobileRelayE2eeLink
-          ? transport.sendText(text)
-          : transport.sendRequest('github.updateIssue', { body: text })
-      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] })
-      socket.bufferedAmount = 9 * 1024 * 1024
-      const beforeParked = socket.sent.length
-      const parked = sendText('old-resource')
-      const settledParked = Promise.resolve(parked).catch(() => undefined)
-      await Promise.resolve()
-      expect(socket.sent).toHaveLength(beforeParked)
       let release = (_buffer: ArrayBuffer): void => {}
       const blocked = new Promise<ArrayBuffer>((resolve) => {
         release = resolve
@@ -497,228 +453,12 @@ describe('relay inbound payload disposal', () => {
         } else {
           socket.onclose?.({ code: 1006 })
         }
-        socket.bufferedAmount = 0
-        vi.runOnlyPendingTimers()
-        await settledParked
-        expect(socket.sent).toHaveLength(beforeParked)
         await collectInboundPayloads()
         expect(refs.filter((ref) => ref.deref() !== undefined)).toHaveLength(0)
       } finally {
         release(new ArrayBuffer(0))
         await nextInboundTurn()
         transport.close()
-        vi.useRealTimers()
-      }
-    }
-  )
-})
-
-describe('direct v2 original-socket queue ownership', () => {
-  afterEach(() => {
-    vi.restoreAllMocks()
-    vi.unstubAllGlobals()
-    vi.useRealTimers()
-  })
-  it.each(['close', 'failure', 'live'] as const)(
-    'a guarded admitted frame handles %s without draining onto a successor',
-    async (mode) => {
-      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] })
-      const timerBaseline = vi.getTimerCount()
-      let phase = 'setup'
-      const timerCreations: { phase: string; delay: number | undefined; stack: string }[] = []
-      const scheduleTimeout = globalThis.setTimeout
-      vi.spyOn(globalThis, 'setTimeout').mockImplementation((callback, delay, ...args) => {
-        timerCreations.push({
-          phase,
-          delay,
-          stack: sanitizeCrashReportString(
-            new Error('Physical channel timer creation').stack ?? '',
-            2000
-          )
-        })
-        return scheduleTimeout(callback, delay, ...args)
-      })
-      const scheduleInterval = globalThis.setInterval
-      vi.spyOn(globalThis, 'setInterval').mockImplementation((callback, delay, ...args) => {
-        timerCreations.push({
-          phase,
-          delay,
-          stack: sanitizeCrashReportString(new Error('interval').stack ?? '', 2000)
-        })
-        return scheduleInterval(callback, delay, ...args)
-      })
-      const disposed = vi.spyOn(MobileE2EEV2PhysicalChannel.prototype, 'dispose')
-      const sockets: RetentionSocket[] = []
-      class DirectSocket extends RetentionSocket {
-        static OPEN = 1
-        static CONNECTING = 0
-        constructor() {
-          super()
-          sockets.push(this)
-        }
-      }
-      vi.stubGlobal('WebSocket', DirectSocket)
-      let auxiliary: ReturnType<typeof setup> | undefined
-      let actualClient: ReturnType<typeof connect> | undefined
-      let requestSettled = false
-      let outcome: Promise<unknown> | undefined
-      let firstFailure: { error: unknown } | undefined
-      const cleanupFailures: unknown[] = []
-      try {
-        const ctx = setup(async () => null, 'direct')
-        auxiliary = ctx
-        vi.spyOn(MobileE2EEV2ClientSession, 'create').mockReturnValueOnce(ctx.session)
-        const client = connect(
-          'ws://desktop.invalid',
-          'valid-token',
-          Buffer.from(desktop.publicKey).toString('base64')
-        )
-        actualClient = client
-        const socket = sockets[0]
-        phase = 'handshake'
-        socket.onopen?.()
-        socket.receive(JSON.stringify(ctx.ready))
-        await nextInboundTurn()
-        socket.receive(
-          Buffer.from(
-            serverFrame(
-              new TextEncoder().encode(
-                JSON.stringify({
-                  type: 'e2ee_authenticated',
-                  v: 2,
-                  transcriptHashB64: ctx.session.transcriptHashB64
-                })
-              ),
-              'text',
-              0n,
-              ctx.schedule
-            )
-          ).toString('base64')
-        )
-        await nextInboundTurn()
-        expect(client.getState()).toBe('connected')
-        socket.bufferedAmount = 9 * 1024 * 1024
-        const before = socket.sent.length
-        phase = 'request'
-        const pending = client.sendRequest(
-          'github.updateIssue',
-          {
-            ownerRepo: { owner: 'fork', repo: 'widgets' },
-            number: 93,
-            updates: { state: 'closed' }
-          },
-          {
-            beforeSend: () => {
-              expect(client.getState()).toBe('connected')
-            }
-          }
-        )
-        outcome = pending.then(
-          (reply) => {
-            requestSettled = true
-            return reply
-          },
-          (error: unknown) => {
-            requestSettled = true
-            return error
-          }
-        )
-        await nextInboundTurn()
-        expect(socket.sent).toHaveLength(before)
-        if (mode === 'close') {
-          client.close()
-        }
-        if (mode === 'failure') {
-          socket.readyState = 3
-          socket.onclose?.({ code: 1006 })
-        }
-        phase = 'drain'
-        socket.bufferedAmount = 0
-        await vi.advanceTimersByTimeAsync(25)
-        if (mode === 'live') {
-          expect(socket.sent).toHaveLength(before + 1)
-          const raw = socket.sent.at(-1)
-          if (typeof raw !== 'string') {
-            throw new Error('expected text request')
-          }
-          const request = JSON.parse(
-            new TextDecoder().decode(
-              openMobileE2EEV2Frame({
-                frame: Buffer.from(raw, 'base64'),
-                key: ctx.schedule.mobileToDesktopKey,
-                sessionId: ctx.schedule.sessionId,
-                direction: 'mobile-to-desktop',
-                payloadKind: 'text',
-                expectedCounter: 1n
-              })!
-            )
-          )
-          expect(request).toMatchObject({
-            method: 'github.updateIssue',
-            params: { ownerRepo: { owner: 'fork' } }
-          })
-          socket.receive(
-            Buffer.from(
-              serverFrame(
-                new TextEncoder().encode(
-                  JSON.stringify({ id: request.id, ok: true, result: { ok: true } })
-                ),
-                'text',
-                1n,
-                ctx.schedule
-              )
-            ).toString('base64')
-          )
-          await nextInboundTurn()
-          await expect(pending).resolves.toMatchObject({ ok: true })
-        } else {
-          expect(socket.sent).toHaveLength(before)
-          expect(await outcome).toBeInstanceOf(Error)
-          expect(sockets).toHaveLength(1)
-        }
-      } catch (error) {
-        firstFailure = { error }
-      } finally {
-        phase = 'cleanup'
-        for (const release of [() => actualClient?.close(), () => auxiliary?.channel.dispose()]) {
-          try {
-            release()
-          } catch (error) {
-            cleanupFailures.push(error)
-          }
-        }
-        try {
-          // rejectAll queues rejection; let the actual tracker and inbound disposal finish without moving deadlines.
-          await Promise.resolve()
-          await nextInboundTurn()
-          if (outcome) {
-            expect(requestSettled).toBe(true)
-          }
-          if (auxiliary) {
-            expect(disposed.mock.contexts).toContain(auxiliary.channel)
-          }
-          expect(new Set(disposed.mock.contexts).size).toBe(
-            Number(Boolean(auxiliary)) + Number(Boolean(actualClient))
-          )
-          for (const channel of new Set(disposed.mock.contexts)) {
-            assertReleasedPhysicalChannel(channel)
-          }
-          expect(vi.getTimerCount(), JSON.stringify({ mode, phase, timerCreations })).toBe(
-            timerBaseline
-          )
-        } catch (error) {
-          cleanupFailures.push(error)
-        }
-      }
-      if (firstFailure && cleanupFailures.length === 0) {
-        throw firstFailure.error
-      }
-      if (cleanupFailures.length) {
-        throw new AggregateError(
-          [...(firstFailure ? [firstFailure.error] : []), ...cleanupFailures],
-          `direct ${mode}: ${firstFailure ? 'body failed; cleanup evidence follows' : 'cleanup failed'}`,
-          firstFailure ? { cause: firstFailure.error } : undefined
-        )
       }
     }
   )

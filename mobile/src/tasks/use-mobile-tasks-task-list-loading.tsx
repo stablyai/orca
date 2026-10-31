@@ -1,13 +1,7 @@
 import { linearIssueReadFailureMessage } from '../../../src/shared/integration-credential-errors'
 import type { ProviderLoadActionsModel } from './use-mobile-tasks-provider-load-actions'
 import { fetchJiraTaskIssues } from './mobile-jira-task-source'
-import {
-  isHostedTaskRepo,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef
-} from './mobile-tasks-dependencies'
+import { isHostedTaskRepo, useCallback, useEffect, useRef } from './mobile-tasks-dependencies'
 import {
   GITHUB_REPO_CONCURRENCY,
   GITLAB_PER_PAGE,
@@ -308,27 +302,6 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
       tasksSupported
     ]
   )
-  const currentLoader = useRef<typeof loadTasks | null>(loadTasks)
-  useLayoutEffect(() => {
-    currentLoader.current = loadTasks
-    return () => {
-      currentLoader.current = null
-    }
-  }, [loadTasks])
-  const captureTaskListRefresh = useCallback(() => {
-    const generation = client?.getGeneration?.()
-    const loadGeneration = loadGenerationRef.current
-    return () => {
-      if (
-        currentLoader.current === loadTasks &&
-        loadGenerationRef.current === loadGeneration &&
-        clientRef.current === client &&
-        client?.getGeneration?.() === generation
-      ) {
-        void loadTasks({ silent: true })
-      }
-    }
-  }, [client, clientRef, loadTasks, loadGenerationRef])
   // Abandoning an in-flight load must release its spinners; a successor load in the same commit re-sets them.
   useEffect(
     () => () => {
@@ -357,7 +330,7 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
       void loadTasks({ silent: true })
     }
   }, [serverRepoList, loadTasks, effectiveRepoIds.size, provider, connState, taskStateHydrated])
-  return Object.assign(model, { loadTasks, captureTaskListRefresh })
+  return Object.assign(model, { loadTasks })
 }
 
 export type TaskListLoadingModel = ReturnType<typeof useMobileTasksTaskListLoading>

@@ -10,44 +10,29 @@ import { linearIssueRead } from './mobile-task-item-detail-operations'
 import { linearIssueCommentWrite } from './mobile-task-item-comment-operations'
 import { linearIssueCreate } from './mobile-task-item-state-operations'
 
-export function useMobileTasksLinearItemActions<
-  Model extends Pick<
-    GithubReplyMergeActionsModel,
-    | 'client'
-    | 'linearCommentDraft'
-    | 'linearSubIssueTitle'
-    | 'tryBeginMutation'
-    | 'setActionItem'
-    | 'setDetailPayload'
-    | 'setError'
-    | 'setLinearCommentDraft'
-    | 'setLinearSubIssueTitle'
-  >
->(model: Model) {
+export function useMobileTasksLinearItemActions(model: GithubReplyMergeActionsModel) {
   const {
     client,
     linearCommentDraft,
     linearSubIssueTitle,
-    tryBeginMutation,
+    mutatingStatus,
     setActionItem,
     setDetailPayload,
     setError,
     setLinearCommentDraft,
-    setLinearSubIssueTitle
+    setLinearSubIssueTitle,
+    setMutatingStatus
   } = model
   const addLinearComment = useCallback(
     async (item: Extract<TaskItem, { provider: 'linear' }>): Promise<void> => {
-      if (!client) {
+      if (!client || mutatingStatus) {
         return
       }
       const body = linearCommentDraft.trim()
       if (!body) {
         return
       }
-      const finish = tryBeginMutation()
-      if (!finish) {
-        return
-      }
+      setMutatingStatus(true)
       setError('')
       try {
         const reply = await linearIssueCommentWrite.request(
@@ -78,21 +63,18 @@ export function useMobileTasksLinearItemActions<
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to add Linear comment')
       } finally {
-        finish()
+        setMutatingStatus(false)
       }
     },
-    [client, linearCommentDraft, tryBeginMutation]
+    [client, linearCommentDraft, mutatingStatus]
   )
 
   const openLinearSubIssue = useCallback(
     async (child: LinearIssueChild, workspaceId?: string): Promise<void> => {
-      if (!client) {
+      if (!client || mutatingStatus) {
         return
       }
-      const finish = tryBeginMutation()
-      if (!finish) {
-        return
-      }
+      setMutatingStatus(true)
       setError('')
       try {
         const reply = await linearIssueRead.request(
@@ -108,25 +90,22 @@ export function useMobileTasksLinearItemActions<
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load Linear sub-issue')
       } finally {
-        finish()
+        setMutatingStatus(false)
       }
     },
-    [client, tryBeginMutation]
+    [client, mutatingStatus]
   )
 
   const createLinearSubIssue = useCallback(
     async (item: Extract<TaskItem, { provider: 'linear' }>): Promise<void> => {
-      if (!client) {
+      if (!client || mutatingStatus) {
         return
       }
       const title = linearSubIssueTitle.trim()
       if (!title) {
         return
       }
-      const finish = tryBeginMutation()
-      if (!finish) {
-        return
-      }
+      setMutatingStatus(true)
       setError('')
       try {
         const reply = await linearIssueCreate.request(
@@ -164,13 +143,12 @@ export function useMobileTasksLinearItemActions<
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to create Linear sub-issue')
       } finally {
-        finish()
+        setMutatingStatus(false)
       }
     },
-    [client, linearSubIssueTitle, tryBeginMutation]
+    [client, linearSubIssueTitle, mutatingStatus]
   )
   return Object.assign(model, { addLinearComment, openLinearSubIssue, createLinearSubIssue })
 }
 
-export type LinearItemActionsModel = GithubReplyMergeActionsModel &
-  ReturnType<typeof useMobileTasksLinearItemActions>
+export type LinearItemActionsModel = ReturnType<typeof useMobileTasksLinearItemActions>

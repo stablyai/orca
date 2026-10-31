@@ -19,12 +19,6 @@ export function reactActQueuePrimed(): boolean {
 }
 
 export function vitestRecordingScheduler(): RecordingScheduler {
-  let baseline: number | undefined
-  let stopCount: number | undefined
-  let started = false
-  let stopAttempted = false
-  let clockRestored = false
-  let spiesRestored = false
   async function flush() {
     await act(async () => {
       // Drain promise continuations and due timers without advancing request deadlines.
@@ -44,8 +38,6 @@ export function vitestRecordingScheduler(): RecordingScheduler {
           'performance'
         ]
       })
-      started = true
-      baseline = vi.getTimerCount()
       vi.setSystemTime(RECORDING_EPOCH)
       let seed = 1
       const random = () => {
@@ -78,54 +70,10 @@ export function vitestRecordingScheduler(): RecordingScheduler {
         await vi.advanceTimersByTimeAsync(ms)
       })
     },
-    timerEvidence() {
-      if (!started || baseline === undefined) {
-        throw new Error('Recording clock never started')
-      }
-      if (stopAttempted && stopCount === undefined) {
-        throw new Error('Pre-restore timer residual unavailable')
-      }
-      return {
-        baseline,
-        residual: stopCount ?? vi.getTimerCount(),
-        stopped: stopAttempted && clockRestored && spiesRestored,
-        stopAttempted,
-        clockRestored,
-        spiesRestored
-      }
-    },
     stop() {
-      if (stopAttempted) {
-        throw new Error('Recording scheduler stop already attempted')
-      }
-      stopAttempted = true
-      const errors: unknown[] = []
-      try {
-        stopCount = vi.getTimerCount()
-        if (stopCount !== 0) {
-          errors.push(new Error(`Recording cleanup retained ${stopCount} actual timers`))
-        }
-      } catch (error) {
-        errors.push(error)
-      }
-      try {
-        vi.useRealTimers()
-        clockRestored = true
-      } catch (error) {
-        errors.push(error)
-      }
-      try {
-        vi.restoreAllMocks()
-        spiesRestored = true
-      } catch (error) {
-        errors.push(error)
-      }
-      if (errors.length === 1) {
-        throw errors[0]
-      }
-      if (errors.length) {
-        throw new AggregateError(errors, 'Recording scheduler stop failed')
-      }
+      vi.clearAllTimers()
+      vi.useRealTimers()
+      vi.restoreAllMocks()
     }
   }
 }

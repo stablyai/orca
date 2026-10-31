@@ -36,12 +36,7 @@ export function observableModel(context: MountContext, initial: Record<string, u
         const field = key[3].toLowerCase() + key.slice(4)
         callbacks.set(key, (value) => {
           target[field] = typeof value === 'function' ? value(target[field]) : value
-          const publish = () => context.effect(field, projectObservable(target[field]))
-          if (context.captureObservation) {
-            context.captureObservation('model effect projection', publish)
-          } else {
-            publish()
-          }
+          context.effect(field, projectObservable(target[field]))
         })
       }
       return callbacks.get(key)

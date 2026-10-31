@@ -1,501 +1,356 @@
-import type * as BridgePortPairModule from '../../mobile-web-shell/bridge/bridge-port-pair-test-harness'
+import { strictReplayVerdict, type BridgedReplay } from '../bridged-parity/replay-verdict'
 import { resolve } from 'node:path'
-import { expect, it } from 'vitest'
-import { ScriptedRpcTransport } from './scripted-rpc-transport'
-import { recordingStep } from './recording-step'
-import { materializeScenario } from './scenario-execution-mode'
-import {
-  captureArguments,
-  captureValue,
-  type RecordedValue,
-  type Settlement
-} from './recording-values'
-import { GITHUB_CONNECTION_CHANGED } from '../../transport/github-target-invocation'
-import { GITHUB_EXACT_OPERATION_UNSUPPORTED } from '../../../../src/shared/github/work-item-target'
-import { operationModuleLoader, type OperationMutation } from './operation-module-loader'
+import { describe, expect, it } from 'vitest'
+import { readBridgeHostMessage } from '../../mobile-web-shell/bridge/bridge-envelope'
 import {
   createBridgePortPair,
-  disposeBridgePortPair
+  type BridgePortPair
 } from '../../mobile-web-shell/bridge/bridge-port-pair-test-harness'
-import { isKeyedObject, withReplyMeta } from '../bridged-parity/divergence-evidence'
+import type { RpcClient } from '../../transport/rpc-client'
+import {
+  bridgedParityMembershipDrift,
+  bridgedParityTallyDrift,
+  BRIDGED_PARITY_EXCLUSIONS,
+  BRIDGED_PARITY_FLAG,
+  BRIDGED_PARITY_NAMEABLE,
+  BRIDGED_PARITY_OFF,
+  classifyBridgedParity,
+  type BridgedParityClass,
+  type BridgedParityEvidence
+} from '../bridged-parity/divergence-classes'
+import { C5_PAGE_CLOSURE } from '../bridged-parity/c5-page-closure'
+import { C6_BROWSER_CLOSURE_FAMILIES } from '../bridged-parity/c6-browser-closure-families'
+import { C2_PAGE_CLOSURE } from '../bridged-parity/c2-page-closure'
+import { C3_PAGE_CLOSURE } from '../bridged-parity/c3-page-closure'
+import {
+  pageClosureDrift,
+  pageClosureRunTotals,
+  pageClosureTotals,
+  readPageClosure,
+  type BridgedParityVerdict,
+  type PageClosureObservation
+} from '../bridged-parity/page-closure'
+import {
+  divergingFields,
+  paramsMismatchEvidence,
+  recordingWithoutRpcMeta,
+  refusedFrames,
+  refusalReleasedStream,
+  scriptsAbsentResultReply,
+  withReplyMeta
+} from '../bridged-parity/divergence-evidence'
+import { familyGoldens, pilotGoldens } from './derived-goldens'
+import { compareGolden, readGolden } from './golden-recording'
 import { pilotMountAdapters } from './pilot-mount-adapters'
-import type { RecordingScenario, MountedOperation } from './recording-scenario'
+import type { Recording, RecordingScenario } from './recording-scenario'
 import { readScenarios } from './scenario-input'
+import type { ScriptedClientWrapper } from './scripted-rpc-transport'
+import { runRecording } from './run-recording'
 import { vitestRecordingScheduler } from './vitest-recording-scheduler'
+
+// Replay every golden through the page bridge; RPC_FOUNDATION_BRIDGE=0 skips locally.
+// Certify complete residuals for changed History goldens; unchanged corpus members retain legacy labels.
+// Preserve raw recordings and reply-meta counterfactuals; pin per-id verdicts, closure membership and totals.
 
 const root = resolve(import.meta.dirname, '../../../..')
 const input = readScenarios(
   process.env.RPC_FOUNDATION_SCENARIOS ??
     resolve(root, 'mobile/rpc-foundation/pilot-scenarios.json')
 )
+const directory =
+  process.env.RPC_FOUNDATION_GOLDENS ?? resolve(root, 'mobile/rpc-foundation/goldens')
 
-const probeInputs = [
-  [
-    'capable',
-    {
-      ok: true,
-      result: {
-        runtimeId: 'shell-runtime',
-        hostDescriptor: { installationId: 'shell-desktop' },
-        capabilities: ['github.exact-work-item-target.v1']
-      }
-    }
-  ],
-  ['unsupported', { ok: true, result: { capabilities: [] } }],
-  ['malformed', { ok: true, result: 17 }],
-  ['result-absent', { ok: true }],
-  ['result-null', { ok: true, result: null }],
-  ['outer-refused', { ok: false, error: { code: 'refused', message: 'outer refused' } }],
-  ['transport-throw', undefined],
-  ['deadline', undefined]
-] as const
+const SESSION_ID = 'recording-session'
+const BUILD_ID = 'recording-build'
+/** `ready` out, `init` back: two deliveries, and a round to see that the session landed. */
+const HANDSHAKE_ROUNDS = 4
 
-type ProbePartition = (typeof probeInputs)[number][0]
-type ProbeLifecycle = 'before-probe' | 'during-probe' | 'between-probe-and-operation'
-function probeFailure(partition: ProbePartition, lifecycle: ProbeLifecycle): string {
-  if (lifecycle === 'during-probe') {
-    return 'RPC interrupted by connection migration'
-  }
-  if (['malformed', 'result-absent', 'result-null'].includes(partition)) {
-    return 'The host sent a reply this app could not read (status.get)'
-  }
-  if (partition === 'outer-refused') {
-    return 'outer refused'
-  }
-  if (partition === 'transport-throw') {
-    return 'transport failure'
-  }
-  if (partition === 'deadline') {
-    return 'Request timed out: status.get'
-  }
-  return lifecycle === 'before-probe'
-    ? GITHUB_EXACT_OPERATION_UNSUPPORTED
-    : GITHUB_CONNECTION_CHANGED
+type Replay = BridgedReplay
+
+const counts: Record<BridgedParityClass, number> = {
+  'reply-meta-required': 0,
+  'result-absent-settlement': 0,
+  'result-absent-observation': 0,
+  'result-absent-stream-release': 0,
+  'params-undefined': 0,
+  'write-ordinal': 0,
+  unclassified: 0
 }
+let identical = 0
+const members = new Map<BridgedParityClass, string[]>()
+const samples = new Map<BridgedParityClass, string>()
+const observed = new Map<string, PageClosureObservation>()
 
-async function probeCase(
-  source: RecordingScenario,
-  mode: 'page-original' | 'page-reply-meta',
-  partition: ProbePartition,
-  lifecycle: ProbeLifecycle,
-  mutation?: OperationMutation
-) {
-  const selected = materializeScenario(source, 'bridge')
-  const declaration = selected.steps.find((step) => step.bridgeSite === true)
-  if (!declaration || !('complete' in declaration)) {
-    throw new Error('Missing original declared probe')
-  }
-  const operation = selected.bridgeOperations![0]!
-  const operationStep = selected.steps.find(
-    (step) => 'complete' in step && step.site === operation.request
-  )
-  if (!operationStep || !('complete' in operationStep)) {
-    throw new Error('Missing original operation completion')
-  }
-  const probeAt = selected.steps.indexOf(declaration)
-  let initiatingAction = probeAt
-  while (initiatingAction >= 0 && !('action' in selected.steps[initiatingAction]!)) {
-    initiatingAction -= 1
-  }
-  if (initiatingAction < 0) {
-    throw new Error('Missing actual initiating action')
-  }
-  const factory = mutation ? operationModuleLoader(root, mutation) : undefined
-  const pairModule = factory?.load<typeof BridgePortPairModule>(
-    'mobile/src/mobile-web-shell/bridge/bridge-port-pair-test-harness.ts'
-  )
-  const clock = vitestRecordingScheduler()
-  let transport: ScriptedRpcTransport | undefined
-  let mounted: MountedOperation | undefined
-  let started = false
-  let clockAttempted = false
-  const effects: { name: string; value: RecordedValue }[] = []
-  const checkpoints: { id: string; state: RecordedValue }[] = []
-  const settlements: Record<string, Settlement> = {}
-  const ids = new Set<string>()
-  const failures: unknown[] = []
-  const allowed = partition === 'capable' && lifecycle === 'before-probe'
-  let baseline: RecordedValue | undefined
-  try {
-    clockAttempted = true
-    await clock.start()
-    started = true
-    transport = new ScriptedRpcTransport(
-      clock.elapsed,
-      undefined,
-      (rpc, observation) => {
-        const pair = (pairModule?.createBridgePortPair ?? createBridgePortPair)({
-          rpc,
-          observation: observation.openBridge(),
-          ...(mode === 'page-reply-meta' ? { rewriteToPage: withReplyMeta } : {})
-        })
-        observation.onDispose(() =>
-          (pairModule?.disposeBridgePortPair ?? disposeBridgePortPair)(pair)
-        )
-        for (let turn = 0; turn < 4; turn += 1) {
-          pair.drainNow()
-        }
+// Deliver init before mounting: screen getters require a ready bridge on their first render, and nothing else is queued yet.
+function throughBridge(
+  keep: (pair: BridgePortPair<RpcClient>) => void,
+  rewriteToPage?: (json: string) => string
+): ScriptedClientWrapper {
+  return (client) => {
+    const pair = createBridgePortPair({
+      rpc: client,
+      sessionId: SESSION_ID,
+      buildId: BUILD_ID,
+      rewriteToPage
+    })
+    keep(pair)
+    for (let round = 0; round < HANDSHAKE_ROUNDS; round += 1) {
+      if (pair.client.getShellSession() !== null) {
         return pair.client
-      },
-      undefined,
-      undefined,
-      (acquired) => {
-        transport = acquired
       }
-    )
-    const active = transport
-    mounted = pilotMountAdapters(root, { device: selected }).adapters[selected.operation]!({
-      client: active.client,
-      effect: (name, value) => effects.push({ name, value: captureValue(value) })
-    })
-    for (const [index, originalStep] of selected.steps.entries()) {
-      let lateProbeReply: { value: unknown } | undefined
-      if (index === initiatingAction) {
-        baseline = checkpoints.at(-1)?.state
-        if (lifecycle === 'before-probe') {
-          await active.cutover()
-        }
-      }
-      if (index === probeAt) {
-        const parent = active.requests.find((request) => request.name === operation.request)!
-        expect(
-          parent.bridge!.posts[0]!.children.map((child) => child.method),
-          'actual probe must precede the operation'
-        ).toEqual(['status.get'])
-        expect(active.outstanding(declaration.complete)).toMatchObject({ params: undefined })
-        const child = parent.bridge!.posts[0]!.children[0]!
-        const actualPost: unknown = JSON.parse(parent.bridge!.posts[0]!.json)
-        if (!isKeyedObject(actualPost)) {
-          throw new Error('Missing actual page request')
-        }
-        expect(actualPost.options).toEqual({ timeoutMs: 30_000, failWhenDisconnected: true })
-        expect(child.args).toEqual(
-          captureArguments([
-            'status.get',
-            undefined,
-            { timeoutMs: 30_000, failWhenDisconnected: true, beforeSend: () => {} }
-          ])
-        )
-        expect(
-          active.payloads
-            .filter((row) => row.name.startsWith(`${operation.request}.`))
-            .map((row) => JSON.parse(row.json))
-        ).toEqual([{ id: child.frame!.id, deviceToken: 'recording-device', method: 'status.get' }])
-        if (lifecycle === 'during-probe') {
-          await active.cutover()
-        }
-        if (partition === 'deadline') {
-          await clock.advance(30_000)
-        } else {
-          const replacement = probeInputs.find(([name]) => name === partition)![1]
-          if (lifecycle === 'during-probe') {
-            if (partition !== 'transport-throw') {
-              lateProbeReply = { value: replacement }
-            }
-          } else {
-            active.complete(
-              declaration.complete,
-              declaration.params,
-              replacement,
-              partition === 'transport-throw'
-                ? { message: 'transport failure', deliveryUnknown: true }
-                : undefined
-            )
-          }
-        }
-        if (lifecycle === 'between-probe-and-operation') {
-          await active.cutover()
-        }
-      } else if ('advance' in originalStep) {
-        await clock.advance(originalStep.advance)
-      } else {
-        if (originalStep === operationStep) {
-          const parent = active.requests.find((request) => request.name === operation.request)!
-          const post = parent.bridge!.posts[0]!
-          const forwarded = post.children.filter((child) => child.method !== 'status.get')
-          expect(
-            post.children.map((child) => child.method),
-            'exact probe/forward count and order'
-          ).toEqual(allowed ? [...operation.methods] : ['status.get'])
-          expect(forwarded).toHaveLength(allowed ? 1 : 0)
-          if (allowed) {
-            const child = forwarded[0]!
-            const message: unknown = JSON.parse(post.json)
-            if (!isKeyedObject(message) || !isKeyedObject(message.envelope)) {
-              throw new Error('Missing actual operation envelope')
-            }
-            expect(message.params).toEqual(operationStep.params)
-            expect(
-              active.payloads.find((row) => row.name === child.name)?.json,
-              'exact final operation bytes'
-            ).toBe(
-              JSON.stringify({
-                ...message.envelope,
-                id: child.frame!.id,
-                deviceToken: 'recording-device',
-                method: message.method,
-                params: operationStep.params
-              })
-            )
-            expect(post.children[0]!.completion!.ordinal).toBeLessThan(child.ordinal)
-          }
-        }
-        if (originalStep === operationStep && !allowed) {
-          expect(active.outstanding(operationStep.complete)).toBeUndefined()
-        } else {
-          recordingStep(
-            selected,
-            originalStep,
-            active,
-            mounted,
-            settlements,
-            clock,
-            (name, value) => effects.push({ name, value: captureValue(value) }),
-            active.fault,
-            ids
-          )
-        }
-      }
-      await clock.flush()
-      active.check()
-      if (lateProbeReply) {
-        expect(active.lateReply(declaration.complete, lateProbeReply.value)).toBe(false)
-      }
-      if ('checkpoint' in originalStep) {
-        checkpoints.push({ id: originalStep.checkpoint, state: captureValue(mounted.state()) })
-      }
+      pair.drainNow()
     }
-    const parent = active.requests.find((request) => request.name === operation.request)!
-    const post = parent.bridge!.posts[0]!
-    expect(post.parent).toBe(parent.name)
-    expect(post.deliveries).toHaveLength(1)
-    expect(post.replies).toHaveLength(1)
-    const answer: unknown = JSON.parse(post.replies[0]!.delivered!)
-    if (!isKeyedObject(answer)) {
-      throw new Error('Missing actual page answer')
-    }
-    if (allowed) {
-      expect(parent.settlement.status).toBe('fulfilled')
-      expect(answer).toMatchObject({
-        type: 'reply',
-        id: post.id,
-        payload: {
-          ok: true,
-          result: isKeyedObject(operationStep.reply) ? operationStep.reply.result : undefined
-        }
-      })
-    } else {
-      const message = probeFailure(partition, lifecycle)
-      expect(parent.settlement).toMatchObject({
-        status: 'rejected',
-        error: {
-          message,
-          isRpcDeliveryUnknown:
-            lifecycle === 'during-probe' ||
-            partition === 'transport-throw' ||
-            partition === 'deadline'
-        }
-      })
-      expect(answer).toMatchObject({ type: 'error', id: post.id, error: { message } })
-    }
-    const checkpoint = checkpoints.find(
-      (row) =>
-        row.id ===
-        (source.id === 'pr-read-surface'
-          ? 'assignable'
-          : source.id === 'tk-item-detail-github'
-            ? 'mounted'
-            : source.id === 'tk-item-status-gitlab'
-              ? 'github-metadata-settled'
-              : 'issue-state-settled')
-    )!
-    if (!isKeyedObject(checkpoint.state)) {
-      throw new Error('Missing original product state')
-    }
-    if (source.operation === 'session.pr-reads') {
-      expect(checkpoint.state).toEqual({
-        ...(isKeyedObject(baseline) ? baseline : {}),
-        assignable: captureValue(
-          allowed
-            ? {
-                ok: true,
-                result: [{ login: 'octocat', name: 'Octo Cat', avatarUrl: '' }]
-              }
-            : { ok: false, error: probeFailure(partition, lifecycle) }
-        )
-      })
-      expect(effects).toEqual(
-        allowed
-          ? [
-              {
-                name: 'reply-salvage',
-                value: captureValue({
-                  operation: 'github.pr-assignable-users',
-                  method: 'github.listAssignableUsers',
-                  variant: 'pr-assignable-users',
-                  droppedPaths: ['0.avatarUrl'],
-                  droppedCount: 1
-                })
-              }
-            ]
-          : []
-      )
-    } else if (source.operation === 'tasks.item-detail-github') {
-      expect(checkpoint.state.loading).toBe(false)
-      expect(checkpoint.state.error).toBe(allowed ? '' : probeFailure(partition, lifecycle))
-      if (allowed) {
-        expect(checkpoint.state.payload).toMatchObject({
-          provider: 'github',
-          body: 'body',
-          comments: [],
-          labels: ['bug'],
-          assignees: ['octocat'],
-          headSha: 'head-sha',
-          baseSha: 'base-sha',
-          pullRequestId: 'PR_kwDO',
-          checks: [],
-          files: []
-        })
-      } else {
-        expect(checkpoint.state.payload).toEqual(captureValue(null))
-      }
-      expect(checkpoint.state.item).toMatchObject({
-        title: 'A pull request',
-        source: { number: 12, prRepo: { owner: 'owner', repo: 'repo', host: 'github.com' } }
-      })
-    } else {
-      // These actions target an unselected item; the committed selected detail/row must survive either outcome.
-      expect(baseline).toBeDefined()
-      expect(checkpoint.state).toEqual(baseline)
-    }
-    expect(checkpoints.map((row) => row.id)).toEqual(
-      selected.steps.flatMap((step) => ('checkpoint' in step ? [step.checkpoint] : []))
-    )
-    expect(
-      Object.values(settlements).every((settlement) => settlement.status === 'fulfilled')
-    ).toBe(true)
-    expect(active.pendingRequests()).toBe(0)
-    const fresh = active.client.sendRequest('status.get')
-    await clock.flush()
-    const freshChild = active.requests.at(-1)!.bridge!.posts[0]!.children[0]!
-    active.complete(freshChild.name, undefined, declaration.reply)
-    await clock.flush()
-    await expect(fresh).resolves.toMatchObject({
-      ok: true,
-      result: { capabilities: ['github.exact-work-item-target.v1'] }
-    })
-    expect(active.pendingRequests()).toBe(0)
-  } catch (error) {
-    failures.push(error)
-  } finally {
-    if (factory) {
-      try {
-        expect(factory.mutationsApplied()).toBe(1)
-      } catch (error) {
-        failures.push(error)
-      }
-    }
-    const cleanups = [
-      () => mounted?.dispose(),
-      ...(started ? [() => clock.flush()] : []),
-      () => transport?.dispose(),
-      ...(started ? [() => clock.flush()] : []),
-      () => transport?.causality.assertTransparentCalls(),
-      () => transport?.causality.close(),
-      ...(clockAttempted ? [() => clock.stop()] : [])
-    ]
-    for (const cleanup of cleanups) {
-      try {
-        await cleanup()
-      } catch (error) {
-        failures.push(error)
-      }
-    }
-  }
-  if (failures.length === 1) {
-    throw failures[0]
-  }
-  if (failures.length) {
-    throw new AggregateError(failures, `${source.id}/${partition}/${lifecycle}/${mode}`)
+    throw new Error('the page never received `init` from the bridge host')
   }
 }
 
-it('declared bridge-only probes preserve exact outcomes and never hide later differences', async () => {
-  for (const scenarioId of [
-    'pr-read-surface',
-    'tk-item-detail-github',
-    'tk-item-status-gitlab',
-    'tk-project-row-files-merge'
-  ]) {
-    const source = input.scenarios.find((scenario) => scenario.id === scenarioId)
-    if (!source) {
-      throw new Error(`Missing original pilot ${scenarioId}`)
-    }
-    for (const mode of ['page-original', 'page-reply-meta'] as const) {
-      for (const lifecycle of [
-        'before-probe',
-        'during-probe',
-        'between-probe-and-operation'
-      ] as const) {
-        for (const [partition] of probeInputs) {
-          await probeCase(source, mode, partition, lifecycle)
-        }
+async function replay(
+  id: string,
+  scenarios: readonly RecordingScenario[],
+  rewriteToPage?: (json: string) => string
+): Promise<Replay> {
+  const pairs: BridgePortPair<RpcClient>[] = []
+  const checkpoints: Recording['checkpoints'] = []
+  const named = scenarios.length > 1
+  try {
+    for (const scenario of scenarios) {
+      const { adapters } = pilotMountAdapters(root, { device: scenario })
+      const recording = await runRecording(
+        scenario,
+        adapters[scenario.operation],
+        vitestRecordingScheduler(),
+        throughBridge((pair) => pairs.push(pair), rewriteToPage)
+      )
+      for (const checkpoint of recording.checkpoints) {
+        checkpoints.push(
+          named ? { ...checkpoint, id: `${scenario.id}:${checkpoint.id}` } : checkpoint
+        )
       }
     }
+    return { recording: { scenario: id, checkpoints }, thrown: null, pairs }
+  } catch (error) {
+    return { recording: null, thrown: error, pairs }
   }
-  const source = input.scenarios.find((scenario) => scenario.id === 'pr-read-surface')!
-  // The untouched full producer reaches both the probe and the final operation before either mutant is credited.
-  await probeCase(source, 'page-original', 'capable', 'before-probe')
-  for (const mutant of [
-    {
-      name: 'omit-required-first-hop',
-      file: 'bridge-host-requests.ts',
-      before: 'const status = await invocation.status({ ...options, timeoutMs: remaining() })',
-      after: "const status = { capabilities: ['github.exact-work-item-target.v1'] }",
-      actual: ['github.listAssignableUsers'],
-      expected: ['status.get'],
-      partition: 'capable' as const
-    },
-    {
-      name: 'duplicate-required-first-hop',
-      file: 'bridge-host-requests.ts',
-      before: 'const status = await invocation.status({ ...options, timeoutMs: remaining() })',
-      after:
-        'const extra = invocation.status({ ...options, timeoutMs: remaining() }); void extra.catch(() => {}); const status = await invocation.status({ ...options, timeoutMs: remaining() })',
-      actual: ['status.get', 'status.get'],
-      expected: ['status.get'],
-      partition: 'capable' as const
-    },
-    {
-      name: 'operation-before-required-first-hop',
-      file: 'bridge-host-requests.ts',
-      before: 'const status = await invocation.status({ ...options, timeoutMs: remaining() })',
-      after:
-        'void client.sendRequest(message.method, params, { ...options, envelope: message.envelope }).catch(() => {}); const status = await invocation.status({ ...options, timeoutMs: remaining() })',
-      actual: ['github.listAssignableUsers', 'status.get'],
-      expected: ['status.get'],
-      partition: 'capable' as const
-    },
-    {
-      name: 'unsafe-unsupported-forward',
-      file: 'bridge-host-requests.ts',
-      before: 'requireExactGitHubOperations(status)',
-      after: 'void status',
-      actual: ['status.get', 'github.listAssignableUsers'],
-      expected: ['status.get'],
-      partition: 'unsupported' as const
+}
+
+function explain(fields: readonly string[], run: Replay): string {
+  const refused = refusedFrames(run.pairs.flatMap((pair) => pair.toPage))
+  const [refusal] = refused
+  const read = refusal === undefined ? null : readBridgeHostMessage(refusal)
+  const kinds = run.pairs.flatMap((pair) => pair.diagnostics).map((diagnostic) => diagnostic.kind)
+  return [
+    `  fields    ${fields.slice(0, 4).join(', ') || '(none)'}`,
+    `  threw     ${run.thrown instanceof Error ? run.thrown.message : '(nothing)'}`,
+    `  refused   ${refused.length} frame(s)${
+      read !== null && !read.ok ? `, first "${read.refusal}" on ${refusal?.slice(0, 200)}` : ''
+    }`,
+    `  page saw  ${kinds.join(', ') || '(no diagnostics)'}`
+  ].join('\n')
+}
+
+function describeParamsMismatch(evidence: BridgedParityEvidence): string {
+  const mismatch = evidence.paramsMismatch
+  if (mismatch === null) {
+    return ''
+  }
+  return [
+    `  refused   ${mismatch.step}`,
+    `  moved     ${mismatch.differingKeys.join(', ') || '(nothing)'}`,
+    `  scripted  \`undefined\` at ${mismatch.undefinedValuedKeys.join(', ') || '(nothing)'}`,
+    ''
+  ].join('\n')
+}
+
+// Replay divergent goldens with added meta to detect reader narrowing; strip injected meta before comparing observations.
+async function verdict(
+  id: string,
+  family: string,
+  scenarios: readonly RecordingScenario[],
+  run: Replay
+): Promise<void> {
+  const record = (name: BridgedParityVerdict): void => {
+    observed.set(id, { family, verdict: name })
+  }
+  const expected = readGolden(directory, id)
+  const certified =
+    Object.hasOwn(C5_PAGE_CLOSURE['aiVault.history'] ?? {}, id) ||
+    Object.hasOwn(C5_PAGE_CLOSURE['aiVault.history-screen'] ?? {}, id)
+  const fields = run.recording === null ? [] : divergingFields(expected.recording, run.recording)
+  if (!certified && run.recording !== null && fields.length === 0) {
+    // Not redundant with the field walk: this one also pins the encoding.
+    compareGolden(expected, { ...expected, recording: run.recording })
+    identical += 1
+    record('identical')
+    return
+  }
+  const asIf = await replay(id, scenarios, withReplyMeta)
+  if (certified) {
+    const result = strictReplayVerdict(expected.recording, scenarios, run, asIf)
+    if (result.name === 'unclassified') {
+      throw new Error(
+        `Unclassified bridged divergence: ${id}\noriginal (${result.original.name}):\n${explain(result.original.fields, run)}\nwith \`_meta\` supplied (${result.replyMeta.name}):\n${explain(result.replyMeta.fields, asIf)}`
+      )
     }
-  ]) {
-    let failure: { error: unknown } | undefined
-    try {
-      await probeCase(source, 'page-original', mutant.partition, 'before-probe', mutant)
-    } catch (error) {
-      failure = { error }
+    if (result.name === 'identical') {
+      compareGolden(expected, { ...expected, recording: run.recording! })
+      identical += 1
+      record('identical')
+      return
     }
-    expect(failure?.error).toMatchObject({
-      name: 'AssertionError',
-      actual: mutant.actual,
-      expected: mutant.expected
+    counts[result.name] += 1
+    record(result.name)
+    members.set(result.name, [...(members.get(result.name) ?? []), id])
+    if (!samples.has(result.name)) {
+      samples.set(result.name, `${id}\n${explain(fields, run)}`)
+    }
+    return
+  }
+  const asIfFields =
+    asIf.recording === null
+      ? []
+      : divergingFields(expected.recording, recordingWithoutRpcMeta(asIf.recording))
+  // A scenario is handed a pair as it starts, so the last pair belongs to the one that threw.
+  const failing = scenarios[asIf.pairs.length - 1]
+  const scriptsAbsent = scenarios.some(scriptsAbsentResultReply)
+  const evidence: BridgedParityEvidence = {
+    fixedByReplyMeta: asIf.recording !== null && asIfFields.length === 0,
+    threwWhileRecording: asIf.recording === null,
+    divergingFields: asIfFields,
+    absentResultExplainsResiduals: false,
+    paramsMismatch: paramsMismatchEvidence(asIf.thrown, failing, asIf.pairs.at(-1)?.toShell ?? []),
+    refusalReleasedStream:
+      scriptsAbsent && asIf.pairs.some((pair) => refusalReleasedStream(pair.diagnostics)),
+    legacyBaseline: {
+      firstField:
+        asIf.recording === null
+          ? undefined
+          : divergingFields(expected.recording, recordingWithoutRpcMeta(asIf.recording), false)[0],
+      scriptsAbsentResultReply: scriptsAbsent
+    }
+  }
+  const name = classifyBridgedParity(evidence)
+  counts[name] += 1
+  record(name)
+  if (name === 'unclassified') {
+    throw new Error(
+      `Unclassified bridged divergence: ${id}\n${explain(fields, run)}\n${describeParamsMismatch(evidence)}with \`_meta\` supplied:\n${explain(asIfFields, asIf)}`
+    )
+  }
+  members.set(name, [...(members.get(name) ?? []), id])
+  if (!samples.has(name)) {
+    samples.set(name, `${id}\n${explain(fields, run)}`)
+  }
+}
+
+describe.skipIf(process.env[BRIDGED_PARITY_FLAG] === BRIDGED_PARITY_OFF)(
+  'History parity certification and unchanged corpus baseline membership',
+  () => {
+    for (const pilot of pilotGoldens(input.scenarios)) {
+      it(`${pilot.id}: bridged parity`, async () => {
+        await verdict(
+          pilot.id,
+          pilot.family,
+          [pilot.scenario],
+          await replay(pilot.id, [pilot.scenario])
+        )
+      })
+    }
+    for (const golden of familyGoldens(input.scenarios)) {
+      it(
+        `${golden.id}: bridged parity`,
+        async () => {
+          const scenarios = [...golden.scenarios()]
+          await verdict(golden.id, golden.family, scenarios, await replay(golden.id, scenarios))
+        },
+        golden.timeoutMs
+      )
+    }
+    it('preserves measured strict and legacy membership without unexplained changed History residuals', () => {
+      const table = [
+        `identical ${identical}`,
+        ...Object.entries(counts).map(([name, count]) => {
+          const named = members.get(asClass(name)) ?? []
+          return count > 0 && count <= BRIDGED_PARITY_NAMEABLE
+            ? `${name} ${count}: ${named.join(', ')}`
+            : `${name} ${count}`
+        })
+      ].join('\n')
+      const corpus = identical + total(counts)
+      const excluded = Object.entries(counts).filter(
+        ([name]) => BRIDGED_PARITY_EXCLUSIONS[asClass(name)] !== undefined
+      )
+      const excludedCount = total(Object.fromEntries(excluded))
+      process.stdout.write(
+        `\nHistory certification and legacy membership over ${corpus} goldens\n${table}\n`
+      )
+      process.stdout.write(
+        `\nlabelled recorder limitations ${excludedCount} of ${corpus}; unchanged labels are baseline only\n`
+      )
+      for (const [name, count] of excluded) {
+        process.stdout.write(`  ${name} ${count}: ${BRIDGED_PARITY_EXCLUSIONS[asClass(name)]}\n`)
+      }
+      for (const [name, sample] of samples) {
+        process.stdout.write(`\n${name} sample\n${sample}\n`)
+      }
+      expect(counts.unclassified).toBe(0)
+      // Pin membership: one real refusal can enter an excluded class while another leaves without changing totals.
+      expect({ membership: bridgedParityMembershipDrift(members) }).toEqual({ membership: [] })
+      expect({ divergedOutsideAnExcludedClass: total(counts) - excludedCount }).toEqual({
+        divergedOutsideAnExcludedClass: 0
+      })
+      // Pin identical as well as divergence totals so improvements cannot silently hide class movement.
+      expect({ tally: bridgedParityTallyDrift({ identical, counts }) }).toEqual({ tally: [] })
+    })
+
+    it('gives every golden the C5 page closure records the verdict it is pinned to', () => {
+      process.stdout.write(readPageClosure('C5', C5_PAGE_CLOSURE, observed))
+      // Recheck inherited C1 families alongside C5’s additions so shared regressions fail both closures.
+      expect({ closure: pageClosureDrift(C5_PAGE_CLOSURE, observed) }).toEqual({ closure: [] })
+      // Independent totals detect a table and verdict reader agreeing on the same derivation error.
+      expect(pageClosureRunTotals(C5_PAGE_CLOSURE, observed)).toEqual(
+        pageClosureTotals(C5_PAGE_CLOSURE)
+      )
+    })
+
+    it('gives every golden the C2 page closure records the verdict it is pinned to', () => {
+      process.stdout.write(readPageClosure('C2', C2_PAGE_CLOSURE, observed))
+      // Recheck inherited families too; families with no identical golden can pin only their divergence class.
+      expect({ closure: pageClosureDrift(C2_PAGE_CLOSURE, observed) }).toEqual({ closure: [] })
+      expect(pageClosureRunTotals(C2_PAGE_CLOSURE, observed)).toEqual(
+        pageClosureTotals(C2_PAGE_CLOSURE)
+      )
+    })
+
+    // Check the C6 browser half now even though a later series composes its page closure.
+    it('gives every golden the C6 browser closure records the verdict it is pinned to', () => {
+      process.stdout.write(readPageClosure('C6', C6_BROWSER_CLOSURE_FAMILIES, observed))
+      expect({ closure: pageClosureDrift(C6_BROWSER_CLOSURE_FAMILIES, observed) }).toEqual({
+        closure: []
+      })
+      expect(pageClosureRunTotals(C6_BROWSER_CLOSURE_FAMILIES, observed)).toEqual(
+        pageClosureTotals(C6_BROWSER_CLOSURE_FAMILIES)
+      )
+    })
+
+    it('gives every golden the C3 page closure records the verdict it is pinned to', () => {
+      process.stdout.write(readPageClosure('C3', C3_PAGE_CLOSURE, observed))
+      // Recheck inherited C1 families; every added C3 family has byte-identical coverage.
+      expect({ closure: pageClosureDrift(C3_PAGE_CLOSURE, observed) }).toEqual({ closure: [] })
+      expect(pageClosureRunTotals(C3_PAGE_CLOSURE, observed)).toEqual(
+        pageClosureTotals(C3_PAGE_CLOSURE)
+      )
     })
   }
-}, 120_000)
+)
+
+function total(record: Record<string, number>): number {
+  return Object.values(record).reduce((sum, count) => sum + count, 0)
+}
+
+function asClass(name: string): BridgedParityClass {
+  if (!(name in counts)) {
+    throw new Error(`Not a bridged parity class: ${name}`)
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `name in counts` was just checked, and `counts` has exactly the union's keys.
+  return name as BridgedParityClass
+}

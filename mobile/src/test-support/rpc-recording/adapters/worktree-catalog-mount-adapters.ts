@@ -27,12 +27,7 @@ export function worktreeCatalogMountAdapters(
             HOST,
             (update: (value: Record<string, unknown>) => Record<string, unknown>) => {
               info = update(info)
-              const publish = () => context.effect('info', projectObservable(info))
-              if (context.captureObservation) {
-                context.captureObservation('catalog effect projection', publish)
-              } else {
-                publish()
-              }
+              context.effect('info', projectObservable(info))
             },
             () => disposed
           )
@@ -43,8 +38,7 @@ export function worktreeCatalogMountAdapters(
         }
       }
     },
-    'worktree.catalog-snapshot': (context) => {
-      const { client } = context
+    'worktree.catalog-snapshot': ({ client }) => {
       const SnapshotClient = modules.load<
         typeof import('../../../worktree/worktree-catalog-snapshot-client')
       >('mobile/src/worktree/worktree-catalog-snapshot-client.ts').WorktreeCatalogSnapshotClient
@@ -58,10 +52,7 @@ export function worktreeCatalogMountAdapters(
             // Admitting is what advances the snapshot token a later poll sends back.
             admitted = snapshots.admit(result.kind === 'response' ? result.pending : null)
             // The pending catalog carries the live client, which the recorder cannot observe.
-            const project = () => projectObservable(result)
-            return context.captureObservation
-              ? context.captureObservation('catalog action projection', project)
-              : project()
+            return projectObservable(result)
           }),
         state: () => projectObservable({ fetched, admitted }),
         dispose: () => {}

@@ -33,7 +33,6 @@ export function hoistPreludeCheckpoints(
       ...base,
       id: `${base.id}.prelude`,
       schedules: ['prelude'],
-      ...(base.lineage ? { lineage: { ...base.lineage, role: 'prelude' } } : {}),
       steps: preludeSteps
     })
   }

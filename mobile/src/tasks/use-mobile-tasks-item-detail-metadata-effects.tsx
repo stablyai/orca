@@ -1,11 +1,3 @@
-import type { GitHubOwnerRepo } from '../../../src/shared/github/pull-request-types'
-import type { SendRequestOptions } from '../transport/rpc-client'
-import {
-  SHOW_MOBILE_DETAIL_METADATA_EDITORS,
-  SHOW_MOBILE_DETAIL_REVIEW_PANELS
-} from './mobile-tasks-options'
-import { withGitHubTargetOperation } from './github-work-item-operation'
-import { requireGitHubTaskTarget } from './github-task-identity'
 import type { ListAndDetailEffectsModel } from './use-mobile-tasks-list-and-detail-effects'
 import { useEffect } from './mobile-tasks-dependencies'
 import {
@@ -14,25 +6,8 @@ import {
 } from './mobile-task-item-detail-operations'
 import { detailPayloadBody } from './mobile-tasks-provider-detail-types'
 
-export function useMobileTasksItemDetailMetadataEffects<
-  Model extends Pick<
-    ListAndDetailEffectsModel,
-    | 'claimPublication'
-    | 'actionItem'
-    | 'client'
-    | 'detailPayload'
-    | 'setItemAssignableUsers'
-    | 'setItemAssignableUsersError'
-    | 'setItemAssignableUsersLoading'
-    | 'setItemAvailableLabels'
-    | 'setItemBodyDraft'
-    | 'setItemLabelsError'
-    | 'setItemLabelsLoading'
-    | 'tasksSupported'
-  >
->(model: Model) {
+export function useMobileTasksItemDetailMetadataEffects(model: ListAndDetailEffectsModel) {
   const {
-    claimPublication,
     actionItem,
     client,
     detailPayload,
@@ -54,11 +29,6 @@ export function useMobileTasksItemDetailMetadataEffects<
   }, [detailPayload])
 
   useEffect(() => {
-    const wantsLabels = SHOW_MOBILE_DETAIL_METADATA_EDITORS
-    const wantsUsers = SHOW_MOBILE_DETAIL_METADATA_EDITORS || SHOW_MOBILE_DETAIL_REVIEW_PANELS
-    if (!wantsLabels && !wantsUsers) {
-      return
-    }
     if (!tasksSupported || !client || actionItem?.provider !== 'github') {
       setItemAvailableLabels([])
       setItemLabelsLoading(false)
@@ -70,43 +40,20 @@ export function useMobileTasksItemDetailMetadataEffects<
     }
 
     let stale = false
-    const canPublish = claimPublication(actionItem)
-    const loadRepositoryList = async <T,>(
-      send: (
-        selected: NonNullable<typeof client>,
-        exact: {
-          ownerRepo?: GitHubOwnerRepo
-        },
-        options: SendRequestOptions
-      ) => Promise<T>
-    ) => {
-      const target = requireGitHubTaskTarget(actionItem.source)
-      return withGitHubTargetOperation({
-        client,
-        params: { repo: `id:${actionItem.source.repoId}` },
-        ownerRepo: target.repository,
-        send
-      })
-    }
-    if (wantsLabels) {
+    if (actionItem.source.type === 'issue' || actionItem.source.type === 'pr') {
       setItemAvailableLabels([])
       setItemLabelsError('')
       setItemLabelsLoading(true)
-      void loadRepositoryList((selected, exact, options) =>
-        githubRepoLabelListRead.request(
-          selected,
-          { repo: `id:${actionItem.source.repoId}`, ...exact },
-          options
-        )
-      )
+      void githubRepoLabelListRead
+        .request(client, { repo: `id:${actionItem.source.repoId}` }, { timeoutMs: 30_000 })
         .then((response) => {
-          if (stale || !canPublish()) {
+          if (stale) {
             return
           }
           setItemAvailableLabels(githubRepoLabelListRead.interpret(response))
         })
         .catch((err) => {
-          if (!stale && canPublish()) {
+          if (!stale) {
             setItemLabelsError(err instanceof Error ? err.message : 'Failed to load labels')
           }
         })
@@ -121,43 +68,37 @@ export function useMobileTasksItemDetailMetadataEffects<
       setItemLabelsError('')
     }
 
-    if (wantsUsers) {
-      setItemAssignableUsers([])
-      setItemAssignableUsersError('')
-      setItemAssignableUsersLoading(true)
-      void loadRepositoryList((selected, exact, options) =>
-        githubAssignableUserListRead.request(
-          selected,
-          { repo: `id:${actionItem.source.repoId}`, ...exact },
-          options
-        )
-      )
-        .then((response) => {
-          if (stale || !canPublish()) {
-            return
-          }
-          setItemAssignableUsers(githubAssignableUserListRead.interpret(response))
-        })
-        .catch((err) => {
-          if (!stale && canPublish()) {
-            setItemAssignableUsersError(
-              err instanceof Error ? err.message : 'Failed to load assignees'
-            )
-          }
-        })
-        .finally(() => {
-          if (!stale) {
-            setItemAssignableUsersLoading(false)
-          }
-        })
-    }
+    setItemAssignableUsers([])
+    setItemAssignableUsersError('')
+    setItemAssignableUsersLoading(true)
+    void githubAssignableUserListRead
+      .request(client, { repo: `id:${actionItem.source.repoId}` }, { timeoutMs: 30_000 })
+      .then((response) => {
+        if (stale) {
+          return
+        }
+        setItemAssignableUsers(githubAssignableUserListRead.interpret(response))
+      })
+      .catch((err) => {
+        if (!stale) {
+          setItemAssignableUsersError(
+            err instanceof Error ? err.message : 'Failed to load assignees'
+          )
+        }
+      })
+      .finally(() => {
+        if (!stale) {
+          setItemAssignableUsersLoading(false)
+        }
+      })
 
     return () => {
       stale = true
     }
-  }, [actionItem, client, tasksSupported, claimPublication])
+  }, [actionItem, client, tasksSupported])
   return model
 }
 
-export type ItemDetailMetadataEffectsModel = ListAndDetailEffectsModel &
-  ReturnType<typeof useMobileTasksItemDetailMetadataEffects>
+export type ItemDetailMetadataEffectsModel = ReturnType<
+  typeof useMobileTasksItemDetailMetadataEffects
+>

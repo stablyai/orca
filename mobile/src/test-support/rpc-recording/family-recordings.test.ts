@@ -18,27 +18,20 @@ const directory =
   process.env.RPC_FOUNDATION_GOLDENS ?? resolve(root, 'mobile/rpc-foundation/goldens')
 async function certify(id: string, scenarios: RecordingScenario[]) {
   let first = ''
-  const candidates = await (async () => {
-    const candidates: Recording[] = []
-    for (let run = 0; run < determinismRuns(); run++) {
-      const checkpoints: Recording['checkpoints'] = []
-      for (const scenario of scenarios) {
-        const { adapters } = pilotMountAdapters(root, { device: scenario })
-        const recording = await runRecording(
-          scenario,
-          adapters[scenario.operation],
-          vitestRecordingScheduler()
-        )
-        for (const checkpoint of recording.checkpoints) {
-          checkpoints.push({ ...checkpoint, id: `${scenario.id}:${checkpoint.id}` })
-        }
+  for (let run = 0; run < determinismRuns(); run++) {
+    const checkpoints: Recording['checkpoints'] = []
+    for (const scenario of scenarios) {
+      const { adapters } = pilotMountAdapters(root, { device: scenario })
+      const recording = await runRecording(
+        scenario,
+        adapters[scenario.operation],
+        vitestRecordingScheduler()
+      )
+      for (const checkpoint of recording.checkpoints) {
+        checkpoints.push({ ...checkpoint, id: `${scenario.id}:${checkpoint.id}` })
       }
-      candidates.push({ scenario: id, checkpoints })
     }
-    return candidates
-  })()
-  for (const [run, recording] of candidates.entries()) {
-    const golden = goldenRecording(scenarios, recording)
+    const golden = goldenRecording(scenarios, { scenario: id, checkpoints })
     const bytes = goldenBytes(golden)
     if (run) {
       expect(bytes).toBe(first)

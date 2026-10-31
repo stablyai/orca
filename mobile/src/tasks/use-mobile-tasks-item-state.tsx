@@ -4,7 +4,7 @@ import {
   type DetailPayload,
   groupDetailComments
 } from './mobile-tasks-legacy-foundation'
-import { useCallback, useMemo, useRef, useState } from './mobile-tasks-dependencies'
+import { useMemo, useRef, useState } from './mobile-tasks-dependencies'
 
 export function useMobileTasksItemState() {
   const [detailPayload, setDetailPayload] = useState<DetailPayload | null>(null)
@@ -29,27 +29,6 @@ export function useMobileTasksItemState() {
   const [expandedPrFilePath, setExpandedPrFilePath] = useState<string | null>(null)
   const [prFileContents, setPrFileContents] = useState<Record<string, GitHubPRFileContents>>({})
   const [prFileLoadingPath, setPrFileLoadingPath] = useState<string | null>(null)
-  const fileRequest = useRef<object | null>(null)
-  const resetPrFiles = useCallback(() => {
-    fileRequest.current = null
-    setPrFileContents({})
-    setPrFileLoadingPath(null)
-    setExpandedPrFilePath(null)
-  }, [])
-  const beginFileLoad = useCallback((path: string, canObserve: () => boolean) => {
-    const request = {}
-    fileRequest.current = request
-    setPrFileLoadingPath(path)
-    return {
-      canPublish: () => fileRequest.current === request && canObserve(),
-      finish: () => {
-        if (fileRequest.current === request) {
-          fileRequest.current = null
-          setPrFileLoadingPath(null)
-        }
-      }
-    }
-  }, [])
   const [prFileCommentDrafts, setPrFileCommentDrafts] = useState<Record<string, string>>({})
   const [copiedLinkKey, setCopiedLinkKey] = useState<string | null>(null)
   const copiedLinkResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -104,8 +83,7 @@ export function useMobileTasksItemState() {
     prFileContents,
     setPrFileContents,
     prFileLoadingPath,
-    beginFileLoad,
-    resetPrFiles,
+    setPrFileLoadingPath,
     prFileCommentDrafts,
     setPrFileCommentDrafts,
     copiedLinkKey,

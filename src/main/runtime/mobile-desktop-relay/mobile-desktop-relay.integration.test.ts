@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { publishHostDescriptor } from '../host-descriptor'
 import { GITHUB_ISSUE_METHODS } from '../rpc/methods/github-issue-methods'
+import { classifyExactGitHubOperation } from '../../../shared/github/exact-work-item-operation'
 import '../rpc/unused-default-rpc-methods.test-fixture'
 import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
 import { mkdtempSync } from 'node:fs'
@@ -711,6 +712,38 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
         updates: { state: 'closed' },
         ownerRepo: { owner: 'fork', repo: 'widgets' }
       }
+      const { ownerRepo, ...legacyParams } = params
+      const authorityReplies = () =>
+        passthroughOpens.hostReplies.filter((frame) =>
+          JSON.parse(frame).id?.startsWith('relay-github-authority:')
+        )
+      for (const [index, optional] of [
+        { params: legacyParams, source: undefined },
+        { params, source: undefined },
+        { params: legacyParams, source: expectedA }
+      ].entries()) {
+        aWrite.mockClear()
+        const id = `optional-github-${index}`
+        phone.send(id, 'github.updateIssue', optional.params, TARGET, optional.source)
+        expect(await phone.next(id)).toMatchObject({ ok: true, result: { ok: true } })
+        expect(aWrite).toHaveBeenCalledExactlyOnceWith(
+          params.repo,
+          params.number,
+          params.updates,
+          ...(optional.params === params ? [ownerRepo] : [])
+        )
+        expect(passthroughOpens.hostReplies.some((frame) => JSON.parse(frame).id === id)).toBe(true)
+      }
+      aWrite.mockClear()
+      for (const [index, invalidOwner] of [null, { owner: '', repo: 'widgets' }].entries()) {
+        const id = `malformed-github-${index}`
+        const malformed = { ...params, ownerRepo: invalidOwner }
+        phone.send(id, 'github.updateIssue', malformed, TARGET, expectedA)
+        expect((await phone.next(id)).ok).toBe(false)
+        expect(aWrite).not.toHaveBeenCalled()
+      }
+      expect(authorityReplies()).toHaveLength(0)
+      expect(classifyExactGitHubOperation('github.listLabels', params, {})).toBeNull()
       phone.send('stable-a', 'github.updateIssue', params, TARGET, expectedA)
       expect(isOk(await phone.next('stable-a'))).toBe(true)
       expect(aWrite).toHaveBeenCalledWith('id:repo-1', 93, { state: 'closed' }, params.ownerRepo)

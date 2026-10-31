@@ -11,6 +11,7 @@ import {
 } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
 import { ConfirmationDialogProvider } from '@/components/confirmation-dialog'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -39,9 +40,14 @@ vi.mock('@/store', async () => {
       projects: [],
       projectHostSetups: [],
       folderWorkspacePathStatuses: {},
-      sshConnectionStates: {},
-      sshStateByEnvironment: {},
-      runtimeStatusByEnvironmentId: {},
+      ...({
+        sshConnectionStates: new Map(),
+        sshStateByEnvironment: new Map(),
+        runtimeStatusByEnvironmentId: new Map()
+      } satisfies Pick<
+        AppState,
+        'sshConnectionStates' | 'sshStateByEnvironment' | 'runtimeStatusByEnvironmentId'
+      >),
       patchWorkItem: vi.fn(),
       patchProjectRowContent: vi.fn(),
       recordFeatureInteraction: vi.fn(),

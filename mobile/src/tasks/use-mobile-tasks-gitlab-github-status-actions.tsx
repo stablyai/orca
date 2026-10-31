@@ -1,5 +1,3 @@
-import { withGitHubTargetOperation } from './github-work-item-operation'
-import { githubTaskKey, sameGitHubTask, requireGitHubTaskTarget } from './github-task-identity'
 import type { ProjectFileMergeActionsModel } from './use-mobile-tasks-project-file-merge-actions'
 import { useCallback } from './mobile-tasks-dependencies'
 import type { TaskItem } from './mobile-tasks-legacy-foundation'
@@ -9,30 +7,12 @@ import {
   gitlabMergeRequestStateUpdate
 } from './mobile-task-item-state-operations'
 
-export function useMobileTasksGitlabGithubStatusActions<
-  Model extends Pick<
-    ProjectFileMergeActionsModel,
-    | 'claimPublication'
-    | 'client'
-    | 'detailPayload'
-    | 'captureTaskListRefresh'
-    | 'tryBeginMutation'
-    | 'setActionItem'
-    | 'setDetailPayload'
-    | 'setError'
-    | 'setItemAddAssigneesDraft'
-    | 'setItemAddLabelsDraft'
-    | 'setItemRemoveAssigneesDraft'
-    | 'setItemRemoveLabelsDraft'
-    | 'setItems'
-  >
->(model: Model) {
+export function useMobileTasksGitlabGithubStatusActions(model: ProjectFileMergeActionsModel) {
   const {
-    claimPublication,
     client,
     detailPayload,
-    captureTaskListRefresh,
-    tryBeginMutation,
+    loadTasks,
+    mutatingStatus,
     setActionItem,
     setDetailPayload,
     setError,
@@ -40,18 +20,15 @@ export function useMobileTasksGitlabGithubStatusActions<
     setItemAddLabelsDraft,
     setItemRemoveAssigneesDraft,
     setItemRemoveLabelsDraft,
-    setItems
+    setItems,
+    setMutatingStatus
   } = model
   const toggleGitLabStatus = useCallback(
     async (item: Extract<TaskItem, { provider: 'gitlab' }>): Promise<void> => {
-      if (!client || item.source.state === 'merged') {
+      if (!client || mutatingStatus || item.source.state === 'merged') {
         return
       }
-      const finish = tryBeginMutation()
-      if (!finish) {
-        return
-      }
-      const refreshList = captureTaskListRefresh()
+      setMutatingStatus(true)
       setError('')
       const nextState = item.source.state === 'closed' ? 'opened' : 'closed'
       try {
@@ -77,14 +54,14 @@ export function useMobileTasksGitlabGithubStatusActions<
           throw new Error(updated.error ?? 'Failed to update GitLab item')
         }
         setActionItem(null)
-        refreshList()
+        await loadTasks({ silent: true })
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to update GitLab item')
       } finally {
-        finish()
+        setMutatingStatus(false)
       }
     },
-    [claimPublication, client, captureTaskListRefresh, tryBeginMutation]
+    [client, loadTasks, mutatingStatus]
   )
 
   const updateGitHubIssueMetadata = useCallback(
@@ -99,35 +76,26 @@ export function useMobileTasksGitlabGithubStatusActions<
         removeAssignees?: string[]
       }
     ): Promise<void> => {
-      if (!client) {
+      if (!client || mutatingStatus) {
         return
       }
-      const finish = tryBeginMutation()
-      if (!finish) {
-        return
-      }
-      const refreshList = captureTaskListRefresh()
+      setMutatingStatus(true)
       setError('')
-      const isCurrent = claimPublication(item)
       try {
-        const target = requireGitHubTaskTarget(item.source)
-        const params = { repo: `id:${item.source.repoId}`, number: item.source.number, updates }
-        const reply = await withGitHubTargetOperation({
+        const reply = await githubIssueUpdate.request(
           client,
-          params,
-          ownerRepo: target.repository,
-          send: (selected, exact, options) =>
-            githubIssueUpdate.request(selected, { ...params, ...exact }, options)
-        })
+          {
+            repo: `id:${item.source.repoId}`,
+            number: item.source.number,
+            updates
+          },
+          { timeoutMs: 30_000 }
+        )
         const result = githubIssueUpdate.interpret(reply)
         if (result.ok === false) {
           throw new Error(result.error ?? 'Failed to update GitHub issue')
         }
 
-        refreshList()
-        if (!isCurrent()) {
-          return
-        }
         const nextLabels = [
           ...new Set([
             ...(detailPayload?.provider === 'github'
@@ -153,7 +121,7 @@ export function useMobileTasksGitlabGithubStatusActions<
             : undefined
         const nextTitle = updates.title?.trim()
         setActionItem((current) =>
-          sameGitHubTask(current, item)
+          current?.provider === 'github' && current.source.id === item.source.id
             ? {
                 ...current,
                 ...(nextTitle ? { title: nextTitle } : {}),
@@ -167,7 +135,7 @@ export function useMobileTasksGitlabGithubStatusActions<
         )
         setItems((current) =>
           current.map((candidate) =>
-            sameGitHubTask(candidate, item)
+            candidate.provider === 'github' && candidate.source.id === item.source.id
               ? {
                   ...candidate,
                   ...(nextTitle ? { title: nextTitle } : {}),
@@ -181,7 +149,7 @@ export function useMobileTasksGitlabGithubStatusActions<
           )
         )
         setDetailPayload((current) =>
-          current?.provider === 'github' && current.targetKey === githubTaskKey(item.source)
+          current?.provider === 'github'
             ? {
                 ...current,
                 labels: nextLabels,
@@ -194,19 +162,18 @@ export function useMobileTasksGitlabGithubStatusActions<
         setItemRemoveLabelsDraft('')
         setItemAddAssigneesDraft('')
         setItemRemoveAssigneesDraft('')
+        await loadTasks({ silent: true })
       } catch (err) {
-        if (!isCurrent()) {
-          return
-        }
         setError(err instanceof Error ? err.message : 'Failed to update GitHub issue')
       } finally {
-        finish()
+        setMutatingStatus(false)
       }
     },
-    [claimPublication, client, detailPayload, captureTaskListRefresh, tryBeginMutation]
+    [client, detailPayload, loadTasks, mutatingStatus]
   )
   return Object.assign(model, { toggleGitLabStatus, updateGitHubIssueMetadata })
 }
 
-export type GitlabGithubStatusActionsModel = ProjectFileMergeActionsModel &
-  ReturnType<typeof useMobileTasksGitlabGithubStatusActions>
+export type GitlabGithubStatusActionsModel = ReturnType<
+  typeof useMobileTasksGitlabGithubStatusActions
+>

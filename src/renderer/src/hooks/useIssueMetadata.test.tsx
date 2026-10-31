@@ -176,8 +176,26 @@ describe('useIssueMetadata hooks', () => {
       { kind: 'environment', environmentId: 'env-explicit' },
       'github.listLabels',
       { repo: 'remote-repo-id' },
-      { timeoutMs: 15_000 }
+      {
+        timeoutMs: 15_000,
+        expectedEnvironmentPairingRevision: undefined,
+        expectedEnvironmentRuntimeId: undefined,
+        beforeSend: expect.any(Function)
+      }
     )
+    const options: unknown = runtimeMocks.callRuntimeRpc.mock.calls[0]?.[3]
+    if (
+      !options ||
+      typeof options !== 'object' ||
+      !('beforeSend' in options) ||
+      typeof options.beforeSend !== 'function'
+    ) {
+      throw new Error('metadata request did not supply its currentness callback')
+    }
+    expect(Object.hasOwn(options, 'expectedEnvironmentPairingRevision')).toBe(true)
+    expect(Object.hasOwn(options, 'expectedEnvironmentRuntimeId')).toBe(true)
+    const beforeSend = options.beforeSend
+    expect(() => beforeSend()).not.toThrow()
     expect(githubMocks.listLabels).not.toHaveBeenCalled()
   })
 

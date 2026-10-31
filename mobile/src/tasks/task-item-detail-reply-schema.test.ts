@@ -43,15 +43,7 @@ describe('the GitHub detail pane', () => {
     const details = reads(githubWorkItemDetailSchema, {
       body: 'body',
       comments: [],
-      item: {
-        url: 'https://github.com/owner/repo/pull/12',
-        number: 12,
-        type: 'pr',
-        labels: ['bug'],
-        reviewDecision: 'APPROVED',
-        reviewRequests: [],
-        latestReviews: []
-      },
+      item: { labels: ['bug'], reviewDecision: 'APPROVED', reviewRequests: [], latestReviews: [] },
       assignees: ['octocat'],
       headSha: 'head-sha',
       baseSha: 'base-sha',
@@ -70,14 +62,7 @@ describe('the GitHub detail pane', () => {
   })
 
   it('keeps an explicit reviewDecision null, which the call site falls back from itself', () => {
-    const details = reads(githubWorkItemDetailSchema, {
-      item: {
-        url: 'https://github.com/owner/repo/pull/12',
-        number: 12,
-        type: 'pr',
-        reviewDecision: null
-      }
-    })
+    const details = reads(githubWorkItemDetailSchema, { item: { reviewDecision: null } })
     expect(details?.item?.reviewDecision).toBeNull()
   })
 

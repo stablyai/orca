@@ -9,8 +9,8 @@ import { useHostRepoList, type HostRepoListResource } from './use-host-repo-list
 import { useMobileTasksTaskListLoading } from './use-mobile-tasks-task-list-loading'
 
 vi.mock('./mobile-tasks-dependencies', async () => {
-  const { useCallback, useEffect, useLayoutEffect, useRef } = await import('react')
-  return { useCallback, useEffect, useLayoutEffect, useRef }
+  const { useCallback, useEffect, useRef } = await import('react')
+  return { useCallback, useEffect, useRef }
 })
 vi.mock('./mobile-tasks-legacy-foundation', async () => import('./mobile-tasks-item-mapping'))
 

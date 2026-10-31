@@ -35,8 +35,8 @@ export function siblingSchedules(
   const suffix = base.steps.slice(secondIndex + 1).filter((step) => !('checkpoint' in step))
   const checkpoint = { checkpoint: 'sibling-pending' }
   const rejected = (step: Completion): Completion => ({
-    ...step,
-    reply: undefined,
+    complete: step.complete,
+    params: step.params,
     reject: { message: `${step.complete} rejected`, deliveryUnknown: true }
   })
   const variants: Record<string, ScenarioStep[]> = {
@@ -53,7 +53,6 @@ export function siblingSchedules(
     ...base,
     id: `${base.id}.${schedule}`,
     schedules: [schedule],
-    ...(base.lineage ? { lineage: { ...base.lineage, schedule } } : {}),
     steps: [...prefix, ...steps, ...suffix, { checkpoint: 'settled' }]
   }))
 }
@@ -62,14 +61,7 @@ export function bindCompletions(steps: readonly ScenarioStep[]): ScenarioStep[] 
   return steps.flatMap((step): ScenarioStep[] =>
     'complete' in step
       ? [
-          {
-            bind: `lifecycle-${step.complete}`,
-            request: step.complete,
-            params: step.params,
-            site: step.site,
-            transport: step.transport,
-            optional: step.optional
-          },
+          { bind: `lifecycle-${step.complete}`, request: step.complete, params: step.params },
           { ...step, complete: `lifecycle-${step.complete}` }
         ]
       : [step]
@@ -100,15 +92,6 @@ export function lifecycleSchedules(
           ...base,
           id: `${base.id}.${action}-${side}-${occurrence + 1}`,
           schedules: [`${action}-${side}-${occurrence + 1}`],
-          ...(base.lineage
-            ? {
-                lineage: {
-                  ...base.lineage,
-                  schedule: `${action}-${side}`,
-                  site: base.steps[index]?.site
-                }
-              }
-            : {}),
           steps: bindCompletions(steps)
         }
       }
@@ -129,7 +112,6 @@ export function interruptionSchedules(base: RecordingScenario): RecordingScenari
         ...base,
         id: `${base.id}.${interruption}`,
         schedules: [interruption],
-        ...(base.lineage ? { lineage: { ...base.lineage, schedule: interruption } } : {}),
         steps: [
           ...base.steps.slice(0, completion),
           interruption === 'timeout'

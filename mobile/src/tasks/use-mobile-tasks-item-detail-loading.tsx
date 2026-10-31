@@ -1,9 +1,3 @@
-import { withGitHubTargetOperation } from './github-work-item-operation'
-import { githubTaskKey, requireGitHubTaskTarget } from './github-task-identity'
-import {
-  matchesGitHubWorkItemTarget,
-  GitHubWorkItemTargetError
-} from '../../../src/shared/github/work-item-target'
 import type { ProviderCheckSummary } from '../../../src/shared/github/pull-request-types'
 import type { GitLabWorkItem } from './mobile-tasks-provider-detail-types'
 import type { ItemDetailMetadataEffectsModel } from './use-mobile-tasks-item-detail-metadata-effects'
@@ -85,28 +79,22 @@ export function useMobileTasksItemDetailLoading<Model extends ItemDetailLoadingI
 
     const loadDetails = async (): Promise<void> => {
       if (actionItem.provider === 'github') {
-        const target = requireGitHubTaskTarget(actionItem.source)
-        const params = {
-          repo: `id:${actionItem.source.repoId}`,
-          number: target.number,
-          type: target.type
-        }
-        const reply = await withGitHubTargetOperation({
+        const reply = await githubItemDetailRead.request(
           client,
-          params,
-          ownerRepo: target.repository,
-          read: true,
-          send: (selected, exact, options) =>
-            githubItemDetailRead.request(selected, { ...params, ...exact }, options)
-        })
+          {
+            repo: `id:${actionItem.source.repoId}`,
+            number: actionItem.source.number,
+            type: actionItem.source.type
+          },
+          { timeoutMs: 30_000 }
+        )
         const details = githubItemDetailRead.interpret(reply)
-        if (!details?.item || !matchesGitHubWorkItemTarget(details.item, target)) {
-          throw new GitHubWorkItemTargetError(target)
+        if (!details) {
+          throw new Error('Details not found')
         }
         if (!stale) {
           setDetailPayload({
             provider: 'github',
-            targetKey: githubTaskKey(actionItem.source),
             body: details.body ?? '',
             comments: details.comments ?? [],
             labels: details.item?.labels ?? actionItem.source.labels,

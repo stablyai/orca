@@ -38,12 +38,6 @@ export function routeRpcClientCalls(
   hostOf: (params: unknown) => ExecutionHostId | undefined
 ): RpcClient {
   return {
-    requestRoute: (params) => {
-      const executionHost = hostOf(params)
-      return executionHost
-        ? { client: scopeRpcClientToExecutionHost(client, executionHost), intermediary: client }
-        : { client }
-    },
     sendRequest: (method, params, options) =>
       client.sendRequest(method, params, onExecutionHost(options, hostOf(params))),
     subscribe: (method, params, onData, options) =>

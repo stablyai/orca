@@ -17,6 +17,28 @@ describe('web runtime environment identity', () => {
     vi.doUnmock('./web-runtime-client')
   })
 
+  it('defers a storage read failure to real installation and preserves the thrown value', async () => {
+    const globals = installBrowserGlobals('Linux')
+    const failure = new Error('storage access denied')
+    const read = vi.spyOn(globals.storage, 'getItem').mockImplementation(() => {
+      throw failure
+    })
+    const { webRuntimeState } = await import('./preload-api/web-runtime-session')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    expect(read).not.toHaveBeenCalled()
+    expect(webRuntimeState.activeEnvironment).toBeNull()
+    try {
+      installWebPreloadApi()
+      throw new Error('installation unexpectedly accepted inaccessible storage')
+    } catch (error) {
+      expect(error).toBe(failure)
+    }
+    expect(read).toHaveBeenCalledOnce()
+    expect(webRuntimeState.activeEnvironment).toBeNull()
+    expect(globals.window).not.toHaveProperty('api')
+    expect(globals.window).not.toHaveProperty('__ORCA_WEB_CLIENT__')
+  })
+
   it('does not resolve an old server selector through a differently keyed server', async () => {
     const globals = installBrowserGlobals('Linux')
     writeStoredRuntimeEnvironment(globals.storage, 'web-server-a')

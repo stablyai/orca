@@ -61,7 +61,7 @@ const metadataStore = create<
   RuntimeStatusStoreState & {
     unrelated: number
     repos: Repo[]
-    settings: { activeRuntimeEnvironmentId: string }
+    settings: { activeRuntimeEnvironmentId: string | null }
     recordFeatureInteraction: () => void
     projects: []
     projectHostSetups: []
@@ -735,3 +735,80 @@ it('in-flight account A→B→A publishes only its own details/options and dedup
   expect(container.textContent).toBe('B:B')
   expect(pending).toHaveLength(4)
 })
+
+it.each([
+  { sessionOnly: false, focus: null, revision: 101 },
+  { sessionOnly: true, focus: 'B', revision: 102 }
+])(
+  'selects paired S before first render ($sessionOnly/$focus)',
+  async ({ sessionOnly, focus, revision }) => {
+    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+    const { saveStoredWebRuntimeEnvironment, clearStoredWebRuntimeEnvironment } =
+      await import('../web/web-runtime-environment')
+    const { webRuntimeState } = await import('../web/preload-api/web-runtime-session')
+    const { installWebPreloadApi } = await import('../web/web-preload-api')
+    const root = createRoot(document.createElement('div'))
+    try {
+      clearStoredWebRuntimeEnvironment()
+      const pairing = {
+        ...environment(revision),
+        ...(sessionOnly ? { sessionOnly: true as const } : {}),
+        endpoints: environment(revision).endpoints.map((endpoint) => ({
+          ...endpoint,
+          deviceToken: 'fixture-token',
+          publicKeyB64: 'fixture-key'
+        }))
+      }
+      saveStoredWebRuntimeEnvironment(pairing)
+      expect(window.localStorage.getItem('orca.web.runtimeEnvironment.v1') === null).toBe(
+        sessionOnly
+      )
+      clearRuntimeEnvironmentConnectionGenerationsForTests()
+      metadataStore.setState({
+        repos: registeredRows(),
+        settings: { activeRuntimeEnvironmentId: focus },
+        runtimeEnvironments: [],
+        runtimeStatusByEnvironmentId: new Map()
+      })
+      metadataStore.getState().setRuntimeEnvironments([environment(revision)])
+      provider.rpc.mockReset().mockResolvedValue([`paired-${revision}`])
+      Object.defineProperty(window, 'api', { configurable: true, writable: true, value: undefined })
+      installWebPreloadApi()
+      expect(webRuntimeState.activeEnvironment).toEqual(pairing)
+      expect(webRuntimeState.activeEnvironment === pairing).toBe(sessionOnly)
+      const observations: { target: RuntimeClientTarget; scope: string }[] = []
+      let labels: string[] = []
+      const target: RuntimeClientTarget = { kind: 'local' }
+      function FirstScope() {
+        const owner = useGitHubOperationOwner({ target, repoId: 'shared', repoPath: '/shared' })
+        observations.push({ target: owner.target, scope: owner.scope })
+        labels = useRepoLabels('/shared', 'shared', { target }).data
+        return null
+      }
+      act(() => root.render(<FirstScope />))
+      expect(observations[0]).toEqual({
+        target: { kind: 'environment', environmentId: 'S' },
+        scope: `["environment","S","shared","/shared","shared","/shared","runtime:S",null,{"host":"github.corp","user":"A"},"origin",null,${revision},0]`
+      })
+      await act(async () => {})
+      expect(labels).toEqual([`paired-${revision}`])
+      expect(provider.rpc).toHaveBeenCalledExactlyOnceWith(
+        { kind: 'environment', environmentId: 'S' },
+        'github.listLabels',
+        { repo: 'shared' },
+        {
+          timeoutMs: 15_000,
+          expectedEnvironmentPairingRevision: revision,
+          expectedEnvironmentRuntimeId: undefined,
+          beforeSend: expect.any(Function)
+        }
+      )
+    } finally {
+      act(() => root.unmount())
+      clearStoredWebRuntimeEnvironment()
+      webRuntimeState.activeEnvironment = null
+      Reflect.deleteProperty(window, 'api')
+      Reflect.deleteProperty(window, '__ORCA_WEB_CLIENT__')
+    }
+  }
+)

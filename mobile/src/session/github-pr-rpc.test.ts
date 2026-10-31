@@ -1,4 +1,3 @@
-import { createFakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
 import { describe, expect, it, vi } from 'vitest'
 import type { RpcResponse } from '../transport/types'
 import { mobileRepoSelectorFromWorktreeId } from '../source-control/mobile-pr-create'
@@ -468,15 +467,13 @@ describe('fetch wrappers', () => {
     expect(none).toEqual({ ok: true, result: null })
   })
 
-  it('refuses missing accepted picker identity before any send', async () => {
+  it('fetchAssignableUsers returns empty list edge without prRepo', async () => {
     const { client, sendRequest } = mockClient(okResponse([]))
-    const out = await fetchAssignableUsers(
-      { ...createFakeRpcClient(), ...client },
-      WORKTREE_ID,
-      null
-    )
-    expect(out).toMatchObject({ ok: false, error: expect.stringContaining('identify') })
-    expect(sendRequest).not.toHaveBeenCalled()
+    const out = await fetchAssignableUsers(client, WORKTREE_ID)
+    expect(out).toEqual({ ok: true, result: [] })
+    const [method, params] = sendRequest.mock.calls[0]!
+    expect(method).toBe('github.listAssignableUsers')
+    expect('prRepo' in (params as object)).toBe(false)
   })
 
   it('surfaces { ok:false, error } on a failed response', async () => {

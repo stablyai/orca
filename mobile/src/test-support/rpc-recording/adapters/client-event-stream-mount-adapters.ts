@@ -62,10 +62,7 @@ export function clientEventStreamMountAdapters(
               fetchWorktrees: fetching('fetchWorktrees'),
               fetchRepoMetadata: fetching('fetchRepoMetadata'),
               syncViewSettings: () => Promise.resolve(),
-              appState: {
-                currentState: 'active',
-                addEventListener: () => ({ remove: () => {} })
-              }
+              appState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) }
             })
             return
           }
