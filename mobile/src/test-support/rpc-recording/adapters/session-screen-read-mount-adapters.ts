@@ -141,8 +141,10 @@ export function sessionScreenReadMountAdapters(
     },
     'session.native-chat-readability': ({ client }) => {
       const useReadability = modules.load<
-        typeof import('../../../session/use-mobile-native-chat-readability')
-      >('mobile/src/session/use-mobile-native-chat-readability.ts').useMobileNativeChatReadability
+        typeof import('../../../session/native-chat/transcript/use-mobile-native-chat-readability')
+      >(
+        'mobile/src/session/native-chat/transcript/use-mobile-native-chat-readability.ts'
+      ).useMobileNativeChatReadability
       let readable = false
       let worktreeId = `repo-1::/w`
       const hook = hookMount(() => {
