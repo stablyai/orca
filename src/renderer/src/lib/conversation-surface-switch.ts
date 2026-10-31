@@ -35,7 +35,10 @@ import { structuredLaunchFailure } from './structured-agent-session-launch-failu
 import { prepareAiVaultSessionForResume } from './ai-vault-session-resume-preparation'
 import type { CliChatResumeSource } from '@/components/tab-bar/cli-chat-resume-source'
 import { runLegacyConversationSwitch } from './conversation-switch-legacy'
-import { recordConversationSwitchFocus } from './conversation-switch-focus-intent'
+import {
+  recordConversationSwitchFocus,
+  uncapturedSwitchChat
+} from './conversation-switch-focus-intent'
 import {
   type ConversationSwitch,
   keyFor,
@@ -233,9 +236,9 @@ async function switchRequest(
     args.direction === 'chat' && args.source
       ? await deadline.wait(captureSourceTerminal(args.source))
       : null
-  // A pane that can't be captured (a paired host's pane whose shell exited, or that a failed
-  // switch stopped, has lost its binding) opens the conversation as a chat beside it, with no
-  // terminal to stop; History takes its own row's route.
+  // A pane that can't be captured (a paired host's pane whose shell exited has lost its binding)
+  // opens the conversation as a selected chat right after its tab, with no terminal to stop;
+  // History takes its own row's route.
   if (args.direction === 'chat' && args.source && (captured || !args.history)) {
     const intent = createStructuredAgentSessionLaunchIntent(
       args.workspaceId,
@@ -254,7 +257,7 @@ async function switchRequest(
       false
     )
     if (!captured) {
-      return { sessionId: intent.sessionId, execution: { invocationId, create: intent.params } }
+      return uncapturedSwitchChat(intent, invocationId, args.source.tabId)
     }
     return {
       sessionId: intent.sessionId,
@@ -291,7 +294,7 @@ async function switchRequest(
       undefined,
       false
     )
-    return { sessionId: intent.sessionId, execution: { invocationId, create: intent.params } }
+    return uncapturedSwitchChat(intent, invocationId, args.source?.tabId)
   }
   if (args.direction === 'terminal') {
     return {

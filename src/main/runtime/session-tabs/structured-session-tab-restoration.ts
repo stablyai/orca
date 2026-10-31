@@ -117,8 +117,7 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
     let activate = input.activate
     let selectionDecided = false
     // The switch's source: the replaced tab, or the split pane's tab the chat opens beside.
-    const source =
-      input.replaces ?? input.sourceTabId ?? (input.check ? input.placement?.afterTabId : undefined)
+    const source = input.replaces ?? input.sourceTabId
     const windowReplaces = Boolean(
       input.replaces && !ORCA_LAYOUT_OWNER_IS_MAIN && this.getAvailableAuthoritativeWindow()
     )

@@ -1,5 +1,10 @@
 import { useAppStore } from '@/store'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import {
+  HOST_TERMINAL_SURFACE_SEPARATOR,
+  toHostSessionTabId
+} from '../../../shared/terminal-surface-id'
+import type { StructuredAgentSessionLaunchIntent } from './launch-structured-agent-session'
 import { structuredAgentSessionFocusOwner } from '@/runtime/structured-agent-session-owner'
 import {
   clearWebSessionFocusIntentIfMatches,
@@ -41,4 +46,40 @@ export function recordConversationSwitchFocus(args: {
     args.hostSourceTabId
   )
   return () => clearWebSessionFocusIntentIfMatches(owner, args.workspaceId, hostTabId)
+}
+
+/**
+ * The request for a chat opened with no source to stop (History, or a pane whose binding is gone):
+ * selected where this client looks, as any chat the user opens is, and right after the source's
+ * tab when one is known (a chat the host reused lands by that slot). Returns how to withdraw the
+ * focus after a definite refusal.
+ */
+export function uncapturedSwitchChat(
+  intent: Pick<
+    StructuredAgentSessionLaunchIntent,
+    'target' | 'worktreeId' | 'sessionId' | 'params'
+  >,
+  invocationId: string,
+  /** This client's id for the source's tab. */
+  sourceTab: string | undefined
+) {
+  const { worktreeId } = intent
+  const owner = structuredAgentSessionFocusOwner(intent.target)
+  const hostTabId = `agent-session:${intent.sessionId}`
+  const sourceTabId = sourceTab
+    ? toHostSessionTabId(sourceTab).split(HOST_TERMINAL_SURFACE_SEPARATOR)[0]
+    : undefined
+  recordWebSessionFocusIntent(
+    owner,
+    worktreeId,
+    hostTabId,
+    undefined,
+    resolveWebSessionVisibleTabId(useAppStore.getState(), worktreeId),
+    sourceTabId
+  )
+  return {
+    sessionId: intent.sessionId,
+    abandonFocus: () => clearWebSessionFocusIntentIfMatches(owner, worktreeId, hostTabId),
+    execution: { invocationId, create: intent.params, ...(sourceTabId ? { sourceTabId } : {}) }
+  }
 }

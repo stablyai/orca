@@ -36,7 +36,7 @@ import { mainAgentState } from '../../../../shared/main-agent-status'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { isAiVaultAgent } from '../../../../shared/ai-vault-types'
-import { slotAnchor } from '../../session-tabs/switch-slot-anchors'
+import { switchChatSlot } from '../../session-tabs/switch-slot-anchors'
 
 type Prepared = Awaited<ReturnType<typeof prepareStructuredSessionSwitch>>
 
@@ -280,25 +280,27 @@ async function switchToChat(
     throw new AgentSessionRefusalError(revealed.openRefusal)
   }
   // The one layout write: the chat takes the terminal tab's slot. A split sibling keeps the tab,
-  // so the chat opens beside it; a source in another workspace keeps its tab untouched.
+  // so the chat opens beside it; a source in another workspace keeps its tab untouched. A source
+  // the client couldn't capture is only named, so the chat opens right after it.
   const sameWorkspace =
     close !== undefined && worktreeIdsEqual(close.source.worktreeId, record.location.workspaceId)
   const replaces = sameWorkspace && close.wholeTab() ? close.source.tabId : undefined
+  const slot = switchChatSlot(
+    replaces,
+    close ? (sameWorkspace ? close.source.tabId : undefined) : execution.sourceTabId,
+    close?.placement
+  )
   await ctx.runtime.switchSlotAnchors.recordFor(
     record.location.workspaceId,
     `agent-session:${sessionId}`,
-    sameWorkspace ? slotAnchor(replaces, close.source.tabId) : undefined,
+    slot.anchor,
     () =>
       ctx.runtime.publishStructuredAgentSessionTab({
         ...revealed,
         activate: true,
         check,
         focusWindow: agentLaunchMovesHostWindow(ctx),
-        ...(replaces
-          ? { replaces }
-          : sameWorkspace
-            ? { placement: close.placement(), sourceTabId: close.source.tabId }
-            : {})
+        ...slot.publish
       })
   )
   replacedBy = replaces ? sessionId : undefined

@@ -4,6 +4,11 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createTabsSliceMockApi } from '../store/slices/tabs-slice-test-harness'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type * as SessionOwner from '@/runtime/structured-agent-session-owner'
+import type * as FocusIntent from './conversation-switch-focus-intent'
+import {
+  peekWebSessionFocusIntent,
+  resetWebSessionFocusIntentForTests
+} from '@/runtime/web-session-focus-intent'
 import { useAppStore } from '@/store'
 import { runConversationSwitch } from './conversation-surface-switch'
 import { pendingNativeChatCliSwitches } from './pending-conversation-surface-switches'
@@ -53,7 +58,8 @@ vi.mock('@/runtime/runtime-rpc-client', async (original) => ({
 vi.mock('@/components/tab-bar/cli-chat-resume-terminal-capture', () => ({
   captureSourceTerminal: mocks.capture
 }))
-vi.mock('./conversation-switch-focus-intent', () => ({
+vi.mock('./conversation-switch-focus-intent', async (original) => ({
+  ...(await original<typeof FocusIntent>()),
   recordConversationSwitchFocus: () => mocks.abandonFocus
 }))
 vi.mock('./ai-vault-session-resume-preparation', () => ({
@@ -117,6 +123,7 @@ afterEach(() => {
   cleanup()
   vi.useRealTimers()
   pendingNativeChatCliSwitches.clear()
+  resetWebSessionFocusIntentForTests()
 })
 
 it('sends one switch, shows pending only while the host runs it, and settles without a message', async () => {
@@ -346,6 +353,33 @@ it.each([true, false])(
           }
     )
     expect(params.execution).not.toHaveProperty('source')
+    // The chat this user asked for lands selected here, right after the pane's tab.
+    expect(params.execution.sourceTabId).toBe('terminal')
+    expect(peekWebSessionFocusIntent({ environmentId: 'paired' }, 'workspace')).toMatchObject({
+      hostTabId: `agent-session:${params.sessionId}`,
+      afterHostTabId: 'terminal'
+    })
     expect(mocks.error).not.toHaveBeenCalled()
   }
 )
+
+it('opens a History chat with no pane selected, at the end, and withdraws that on a refusal', async () => {
+  mocks.target.current = { kind: 'environment', environmentId: 'paired' }
+  mocks.prepare.mockResolvedValue({ sessionId: 'history-session' })
+  mocks.call.mockResolvedValue({ status: 'completed', sessionId: 'chat' })
+  const history = makeTabSessionHistoryRow({ agent: 'codex', sessionId: 'history-session' })
+  const args = { ...fromPane, direction: 'chat' as const, history }
+  await expect(runConversationSwitch(args)).resolves.toBe(true)
+  const [, , params] = mocks.call.mock.calls[0]!
+  expect(params.execution).not.toHaveProperty('sourceTabId')
+  expect(peekWebSessionFocusIntent({ environmentId: 'paired' }, 'workspace')).toEqual(
+    expect.objectContaining({ hostTabId: `agent-session:${params.sessionId}` })
+  )
+  mocks.call.mockResolvedValue({
+    status: 'refused',
+    sessionId: 'chat',
+    refusal: { code: 'agent_session_operation_invalid', details: { reason: 'messagesUnsettled' } }
+  })
+  await expect(runConversationSwitch(args)).resolves.toBe(false)
+  expect(peekWebSessionFocusIntent({ environmentId: 'paired' }, 'workspace')).toBeNull()
+})

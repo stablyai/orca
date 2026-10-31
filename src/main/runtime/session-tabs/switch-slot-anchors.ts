@@ -1,6 +1,7 @@
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-types'
 import type { ReplacedTab } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import { AGENT_SESSION_SWITCH_HOST_MS } from '../../../shared/agent-session-switch-execution'
+import type { ChatTabPlacement } from '../agent-session/agent-session-tab-layout'
 
 type SlotAnchor = { replaces: ReplacedTab } | { after: ReplacedTab }
 type Entry = { anchor: SlotAnchor; seen: boolean; recordedAt: number }
@@ -107,6 +108,34 @@ export class SwitchSlotAnchors {
 /** The source's slot when the destination replaces its whole tab, else the place beside it. */
 export function slotAnchor(replacedTabId: string | undefined, sourceTabId: string): SlotAnchor {
   return replacedTabId ? { replaces: { tabId: replacedTabId } } : { after: { tabId: sourceTabId } }
+}
+
+/**
+ * Where a switch's chat opens: in the slot of the whole tab it replaces, right after the source's
+ * tab when it keeps that tab, else at the end with no anchor. A captured split pane's tab also
+ * decides the selection (the chat takes it only from that tab); a tab the client could only name
+ * (History, or a pane with no binding) just places the chat, which the user asked to see.
+ */
+export function switchChatSlot(
+  replaces: string | undefined,
+  besideTabId: string | undefined,
+  capturedPlacement?: () => ChatTabPlacement | undefined
+): {
+  anchor?: SlotAnchor
+  publish: { replaces?: string; placement?: ChatTabPlacement; sourceTabId?: string }
+} {
+  if (replaces) {
+    return { anchor: slotAnchor(replaces, replaces), publish: { replaces } }
+  }
+  if (!besideTabId) {
+    return { publish: {} }
+  }
+  return {
+    anchor: slotAnchor(undefined, besideTabId),
+    publish: capturedPlacement
+      ? { placement: capturedPlacement(), sourceTabId: besideTabId }
+      : { placement: { afterTabId: besideTabId } }
+  }
 }
 
 function sameSlot(a: SlotAnchor, b: SlotAnchor): boolean {
