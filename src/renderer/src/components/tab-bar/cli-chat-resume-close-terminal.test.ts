@@ -151,7 +151,7 @@ it('rechecks the source incarnation after an existing close dialog and says the 
   expect(closeHooks.closing).not.toHaveBeenCalled()
   expect(mocks.call.mock.calls.filter((call) => call[1] === 'terminal.wait')).toHaveLength(0)
 })
-it('says nothing for an aborted run when a merged confirmation re-enters its close', async () => {
+it('reports a vetoed confirmed close to its run even after the run was retired', async () => {
   const controller = new AbortController()
   let reenter: (() => boolean) | undefined
   mocks.close.mockImplementation((_tab, options) => {
@@ -163,5 +163,7 @@ it('says nothing for an aborted run when a merged confirmation re-enters its clo
   controller.abort()
   await expect(run).resolves.toBe(false)
   expect(reenter?.()).toBe(false)
-  expect(closeHooks.refused).not.toHaveBeenCalled()
+  // The run, not this helper, knows whether a newer continuation owns the confirmation.
+  expect(closeHooks.refused).toHaveBeenCalledOnce()
+  expect(closeHooks.closing).not.toHaveBeenCalled()
 })

@@ -33,7 +33,7 @@ import {
 } from './cli-chat-resume-feedback'
 import { adoptingAgentOnHost } from '../right-sidebar/ai-vault-session-resume-in-chat-launch'
 
-const pending = new Map<string, AbortController>()
+const pending = new Map<string, { controller: AbortController; source: CliChatResumeSource }>()
 const listeners = new Set<() => void>()
 const changed = () => listeners.forEach((listener) => listener())
 const keyFor = (source: CliChatResumeSource) =>
@@ -95,12 +95,12 @@ export async function runCliChatResume(
   }
   const surfaceAddress = captureStructuredLaunchSurfaceAddress(source.workspaceId)
   const release = () => {
-    if (pending.get(key) === controller) {
+    if (pending.get(key)?.controller === controller) {
       pending.delete(key)
       changed()
     }
   }
-  pending.set(key, controller)
+  pending.set(key, { controller, source })
   changed()
   const stopSource = useAppStore.subscribe(() => {
     if (!isCurrent()) {
@@ -204,7 +204,20 @@ export async function runCliChatResume(
             stopSource()
             releaseHold = holdEmptyWorkspaceDefaultSurfaceForLaunch(source.workspaceId)
           },
-          refused: () => reportCliChatResumeTerminalChanged(source)
+          refused: () => {
+            // A newer continuation of this terminal tab answers the merged confirmation itself.
+            const superseded =
+              controller.signal.aborted &&
+              [...pending.values()].some(
+                (other) =>
+                  other.controller !== controller &&
+                  other.source.tabId === source.tabId &&
+                  other.source.executionHostId === source.executionHostId
+              )
+            if (!superseded) {
+              reportCliChatResumeTerminalChanged(source)
+            }
+          }
         },
         controller.signal
       )
@@ -242,11 +255,15 @@ export async function runCliChatResume(
       return
     }
     const result = await waitForPromiseWithSignal(launch.settlement, controller.signal)
-    if (result.kind === 'failed' && !result.notified && pending.get(key) === controller) {
+    if (
+      result.kind === 'failed' &&
+      !result.notified &&
+      pending.get(key)?.controller === controller
+    ) {
       await reportCliChatResumeFailure(source, result.error, openOwner, target, closed, closing)
     }
   } catch (error) {
-    if (pending.get(key) === controller) {
+    if (pending.get(key)?.controller === controller) {
       await reportCliChatResumeFailure(source, error, false, target, closed, closing)
     }
   } finally {

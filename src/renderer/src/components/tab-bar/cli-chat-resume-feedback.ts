@@ -57,6 +57,21 @@ export async function reportCliChatResumeFailure(
       return
     }
     const reason = refusal?.details?.reason
+    // Another terminal still runs it; Session History refuses too until that one stops.
+    if (
+      refusal?.code === 'agent_session_conflict' &&
+      reason === 'conversationHeldElsewhere' &&
+      !refusal.owner
+    ) {
+      toast.error(
+        translate(
+          'components.native-chat.resumeInNewChat.otherTerminalAfterClose',
+          "{{agent}}'s terminal was closed, but {{agent}} is running this conversation in another terminal. Quit it there or close that terminal, then open the conversation from Session History.",
+          values
+        )
+      )
+      return
+    }
     // Nothing was written yet, so Session History has nothing to offer.
     if (reason === 'transcriptNotFound') {
       toast.error(

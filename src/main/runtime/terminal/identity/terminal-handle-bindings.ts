@@ -63,12 +63,20 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
         retained.incarnationId !== null &&
         pty !== undefined &&
         pty.incarnationId !== retained.incarnationId
-      if (!pty || incarnationReplaced || leaves.length > 1 || this.handleByPtyId.has(ptyId)) {
+      if (!pty || incarnationReplaced || leaves.length > 1) {
         this.invalidatePtyIncarnationHandle(ptyId)
         continue
       }
-      // No pane shows it: keep naming the process for exit waits, but bind no surface to it.
+      // No pane shows it: a known incarnation keeps naming the process for exit waits beside the
+      // terminal's own handle, and binds no surface; an unknown one proves nothing to keep.
       if (leaves.length === 0) {
+        if (retained.incarnationId === null) {
+          this.invalidatePtyIncarnationHandle(ptyId)
+        }
+        continue
+      }
+      if (this.handleByPtyId.has(ptyId)) {
+        this.invalidatePtyIncarnationHandle(ptyId)
         continue
       }
       retained.incarnationId = pty.incarnationId
@@ -112,7 +120,11 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
 
   private issuePtyHandleRecord(pty: RuntimePtyWorktreeRecord): string {
     const retained = this.handleByPtyIncarnation.get(pty.ptyId)
-    if (retained?.incarnationId === pty.incarnationId) {
+    // A paneless alias only answers exit waits; the terminal itself gets its own handle, as unshown terminals do.
+    if (
+      retained?.incarnationId === pty.incarnationId &&
+      this.getLeavesForPty(pty.ptyId).length > 0
+    ) {
       return retained.handle
     }
     const existingHandle =
@@ -173,13 +185,19 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
       return
     }
     const record = this.handles.get(handle)
+    const retained = record?.ptyId ? this.handleByPtyIncarnation.get(record.ptyId) : undefined
     this.handleByLeafKey.delete(leafKey)
     this.handles.delete(handle)
     // A pane-issued handle names its PTY incarnation, which outlives the pane: a late exit wait
-    // still reads that record until it is pruned or replaced. Only the surface binding goes here.
-    if (!record?.ptyId || this.handleByPtyIncarnation.get(record.ptyId)?.handle !== handle) {
-      this.syntheticTerminalHandles.delete(handle)
+    // still reads that record until it is pruned or replaced. An unknown incarnation proves no
+    // continuity, so its alias goes with the pane.
+    if (retained?.handle === handle && retained.incarnationId !== null) {
+      return
     }
+    if (record?.ptyId && retained?.handle === handle) {
+      this.handleByPtyIncarnation.delete(record.ptyId)
+    }
+    this.syntheticTerminalHandles.delete(handle)
   }
 
   protected adoptFirstPtyForLeafHandle(

@@ -698,6 +698,30 @@ describe('close terminal then continue on capable hosts', () => {
     expect(mocks.call).toHaveBeenCalledOnce()
   })
 
+  // The pane's conversation changes while the close dialog is open, then the user confirms Close.
+  it.each([false, true])('a vetoed confirmed close, newer continuation: %s', async (successor) => {
+    const next = { ...SOURCE, agent: 'codex' as const }
+    const held = deferred<boolean>()
+    let refuse = () => {}
+    mocks.closeTerminal.mockImplementationOnce(async (_source, _current, hooks, signal) => {
+      refuse = hooks.refused
+      return new Promise((resolve) => signal.addEventListener('abort', () => resolve(false)))
+    })
+    const first = runCliChatResume(SOURCE)
+    await vi.waitFor(() => expect(mocks.closeTerminal).toHaveBeenCalledOnce())
+    mocks.source = next
+    useAppStore.setState({})
+    await first
+    if (successor) {
+      mocks.closeTerminal.mockImplementationOnce(() => held.promise)
+      void runCliChatResume(next)
+      await vi.waitFor(() => expect(mocks.closeTerminal).toHaveBeenCalledTimes(2))
+    }
+    refuse()
+    expect(mocks.toast).toHaveBeenCalledTimes(successor ? 0 : 1)
+    held.resolve(false)
+  })
+
   // Only an open chat is answered before the close; the host's create judges terminals.
   it.each([
     { name: 'another terminal', row: row('other:leaf'), closes: true },
@@ -762,7 +786,7 @@ describe.each([
       older:
         'Claude is running this conversation in another terminal. Quit it there or close that terminal, then try again.',
       capable:
-        "Claude's terminal was closed, but the chat couldn't open: another chat or terminal is using it. Your conversation is saved. Open it from Session History."
+        "Claude's terminal was closed, but Claude is running this conversation in another terminal. Quit it there or close that terminal, then open the conversation from Session History."
     },
     {
       name: 'nothing saved yet',

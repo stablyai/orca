@@ -193,8 +193,9 @@ export abstract class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaR
   }
 
   protected getExistingTerminalHandlesForPtyId(ptyId: string): string[] {
+    const leaves = this.getLeavesForPty(ptyId)
     const handles = new Set(
-      this.getLeavesForPty(ptyId)
+      leaves
         .map((leaf) => this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId)))
         .filter((handle): handle is string => handle !== undefined)
     )
@@ -202,7 +203,9 @@ export abstract class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaR
     if (runtimeHandle) {
       handles.add(runtimeHandle)
     }
-    const incarnationHandle = this.handleByPtyIncarnation.get(ptyId)?.handle
+    // A paneless alias names the process for exit waits only, not as one of its control handles.
+    const incarnationHandle =
+      leaves.length > 0 ? this.handleByPtyIncarnation.get(ptyId)?.handle : undefined
     if (incarnationHandle) {
       handles.add(incarnationHandle)
     }

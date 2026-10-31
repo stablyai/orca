@@ -1887,6 +1887,7 @@
         "chatHeld": "another chat or terminal is using it",
         "startFailedAfterClose": "{{agent}}'s terminal was closed, but the chat couldn't open: {{reason}}. Your conversation is saved. Open it from Session History.",
         "notSavedAfterClose": "{{agent}}'s terminal was closed, but {{agent}} hadn't saved this conversation yet, so it can't continue in chat. Start a new chat instead.",
+        "otherTerminalAfterClose": "{{agent}}'s terminal was closed, but {{agent}} is running this conversation in another terminal. Quit it there or close that terminal, then open the conversation from Session History.",
         "chatFailedAfterClose": "{{agent}}'s terminal was closed, but the chat couldn't open. Your conversation is saved. Open it from Session History.",
         "terminalChanged": "The terminal running {{agent}} changed before it closed, so Orca left it open. Try again.",
         "terminalExitUnproven": "Orca closed {{agent}}'s terminal but couldn't confirm it stopped, so the chat didn't open. Check the host connection, then open the conversation from Session History.",

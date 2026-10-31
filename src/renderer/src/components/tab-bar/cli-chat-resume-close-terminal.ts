@@ -18,7 +18,8 @@ export type CliChatResumeCloseHooks = {
   /** The host answered for every pane; what follows waits on the user or on the exits. */
   prepared: () => void
   closing: () => void
-  /** The user agreed to close, but the terminal changed first, so it stays open. */
+  /** The user agreed to close, but the terminal changed first, so it stays open; the run
+   *  decides whether it, or a newer continuation of the tab, answers. */
   refused: () => void
 }
 
@@ -106,8 +107,7 @@ export async function closeCliChatResumeTerminal(
             return !next || !isRetainedTerminalSurfaceIdentity(original, next)
           })
         ) {
-          // An aborted run was superseded or retired; whatever replaced it speaks for the click.
-          if (!started && !signal.aborted) {
+          if (!started) {
             hooks.refused()
           }
           return false
