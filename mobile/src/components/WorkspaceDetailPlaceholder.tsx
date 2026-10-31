@@ -1,6 +1,6 @@
 import { View, Text } from 'react-native'
 import { SquareTerminal } from 'lucide-react-native'
-import { colors, spacing } from '../theme/mobile-theme'
+import { colors, radii, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -38,7 +38,7 @@ const styles = themedStyleSheet(() => ({
   icon: {
     width: 56,
     height: 56,
-    borderRadius: 16,
+    borderRadius: radii.tile,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.bgPanel,

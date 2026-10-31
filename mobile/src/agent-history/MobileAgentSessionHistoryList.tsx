@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { ActivityIndicator, Pressable, RefreshControl, SectionList, Text, View } from 'react-native'
 import { Play } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
+import { colors, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
@@ -22,6 +22,8 @@ type Props = {
   resumeActionStateBySessionId?: ReadonlyMap<string, { disabled: boolean; loading: boolean }>
   onResume?: (session: AiVaultSession) => void | Promise<void>
   onRefresh: () => void
+  /** Clears the bottom search bar floating over the list. */
+  bottomPadding?: number
 }
 
 export function MobileAgentSessionHistoryList({
@@ -31,7 +33,8 @@ export function MobileAgentSessionHistoryList({
   showCurrentWorktreeBadges,
   resumeActionStateBySessionId,
   onResume,
-  onRefresh
+  onRefresh,
+  bottomPadding = 0
 }: Props) {
   const colorScheme = useMobileColorScheme()
   useMobileTranslation()
@@ -69,7 +72,7 @@ export function MobileAgentSessionHistoryList({
       extraData={colorScheme}
       keyExtractor={(card) => card.id}
       stickySectionHeadersEnabled={false}
-      contentContainerStyle={styles.list}
+      contentContainerStyle={[styles.list, { paddingBottom: spacing.xl + bottomPadding }]}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}

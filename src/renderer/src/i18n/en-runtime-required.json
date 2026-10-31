@@ -176,6 +176,9 @@
           "automationCount_one": "{{count}} automation",
           "automationCount_other": "{{count}} automations"
         },
+        "capturedOwner": {
+          "hostReselection": "Edit the automation and reselect its host before running it."
+        },
         "externalScope": {
           "uncheckedHostCount_one": "External automation managers on {{count}} host could not be checked.",
           "uncheckedHostCount_other": "External automation managers on {{count}} hosts could not be checked."
@@ -633,11 +636,8 @@
           "detectedServers_other": "{{detected}} detected · {{count}} servers"
         },
         "OrchestrationPane": {
-          "chatErrorEscalationKeywordChat": "chat",
-          "chatErrorEscalationKeywordError": "error",
-          "heartbeatKeywordHeartbeat": "heartbeat",
-          "heartbeatKeywordInterval": "interval",
-          "heartbeatKeywordStalled": "stalled"
+          "workerAutoReleaseKeywordClose": "close",
+          "workerAutoReleaseKeywordRelease": "release"
         },
         "OrchestrationSkillAgentCoverage": {
           "fullCoverage_one": "All 1 detected agent has the skill.",
@@ -2114,6 +2114,10 @@
   },
   "settings": {
     "agents": {
+      "defaultSurfaceKeptChat_one": "{{agents}} stays as a chat, as you set.",
+      "defaultSurfaceKeptChat_other": "{{agents}} stay as chats, as you set.",
+      "defaultSurfaceKeptTerminal_one": "{{agents}} stays in the terminal, as you set.",
+      "defaultSurfaceKeptTerminal_other": "{{agents}} stay in the terminal, as you set.",
       "permissionOverrideMore_one": "and {{count}} more",
       "permissionOverrideMore_other": "and {{count}} more",
       "permissionOverridesFollow_one": "{{count}} agent now follows {{mode}}",

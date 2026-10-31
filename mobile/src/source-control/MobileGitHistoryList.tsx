@@ -297,7 +297,7 @@ const styles = themedStyleSheet(() => ({
     marginTop: spacing.md,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised
   },
   retryText: { color: colors.textPrimary, fontSize: typography.bodySize, fontWeight: '600' },

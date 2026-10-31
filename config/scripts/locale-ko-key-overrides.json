@@ -1208,15 +1208,6 @@
   "auto.components.mobile.PhoneCarousel.93217b41c1": {
     "ko": "워크트리 목록"
   },
-  "auto.components.mobile.slides.HomeSlide.0bad5b07c8": {
-    "ko": "GitHub 및 Linear"
-  },
-  "auto.components.mobile.slides.HomeSlide.0bc1881bc4": {
-    "ko": "연결됨 · 워크트리 40개 · 활성 5개"
-  },
-  "auto.components.mobile.slides.HomeSlide.c0e2e9dcd9": {
-    "ko": "다시 오신 것을 환영합니다"
-  },
   "auto.components.mobile.slides.TerminalSlide.2defc05141": {
     "ko": "dev@mac"
   },
@@ -4135,9 +4126,6 @@
   },
   "auto.store.slices.jira.856083302c": {
     "ko": "더 새로운 요청이 있어 Jira 연결 요청을 건너뛰었습니다."
-  },
-  "auto.store.slices.linear.37d36984d0": {
-    "ko": "더 새로운 요청이 있어 Linear 연결 요청을 건너뛰었습니다."
   },
   "auto.store.slices.repos.e649269645": {
     "ko": "선택한 호스트에 경로를 입력하려면 프로젝트 추가를 사용하세요."

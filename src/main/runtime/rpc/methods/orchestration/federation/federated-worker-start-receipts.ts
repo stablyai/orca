@@ -10,8 +10,40 @@ export function isKnownRemoteStartFailure(code: string): boolean {
   ].includes(code)
 }
 
+type FederatedStartWorker = {
+  dispatch_id: string
+  state: string
+  stage: string
+  last_error: string | null
+}
+
+export function federatedFailedReceipt(
+  worker: FederatedStartWorker,
+  ids: { runId: string; taskId: string },
+  server: { environmentId: string; name: string },
+  outcome: {
+    launch: OrchestrationWorkerLaunchReceipt
+    setup?: { state: string }
+    effects?: unknown[]
+    residualResources?: unknown[]
+  }
+): unknown {
+  return {
+    ...ids,
+    dispatchId: worker.dispatch_id,
+    state: worker.state,
+    stage: worker.stage,
+    server: { environmentId: server.environmentId, name: server.name },
+    failedStage: worker.stage,
+    lastError: worker.last_error,
+    ...outcome,
+    effects: outcome.effects ?? [],
+    residualResources: outcome.residualResources ?? []
+  }
+}
+
 export function federatedUnknownReceipt(
-  worker: { dispatch_id: string; state: string; stage: string; last_error: string | null },
+  worker: FederatedStartWorker,
   taskId: string,
   serverName: string,
   launch: OrchestrationWorkerLaunchReceipt

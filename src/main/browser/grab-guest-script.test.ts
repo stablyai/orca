@@ -7,8 +7,8 @@ import { clampGrabPayload } from './browser-grab-payload'
 
 describe('buildGuestOverlayScript', () => {
   it.each([
-    ['arm', '6aeefde63c7ca2d90a75777f06042bf2694a2b0b5636d23d02c304c7ed739b23'],
-    ['awaitClick', '4e7c30a9382cd18bf6286fbdbdfa70f7571cdddfc4914a9d9ffd4f9b0e430adb'],
+    ['arm', '439b0ce31b117a77e1191aab0cb7302be1dc3c237c007b5d28b427dadeba51c5'],
+    ['awaitClick', '8ba243bf8379049145b89cc11732364d323ab832e2f1b07139bfa7e3f14bfed5'],
     ['finalize', '91bd9836b0536c9579e0d4648d30679c0b4a5893d9a43110a70e67d6804fd291'],
     ['extractHover', 'cf0ee3ac61669daefa7db9389233c1abfe9f0fb9e7257300c761987aac914b02'],
     ['teardown', 'b794f7e6baadefdce1b34f4a68d744a765e5519312b228fae57628cf34a9a152']
@@ -96,12 +96,6 @@ describe('buildGuestOverlayScript', () => {
     const script = buildGuestOverlayScript('arm')
     expect(script).toContain('freezeHighlight')
     expect(script).toContain("pointerEvents = 'none'")
-  })
-
-  it('awaitClick script blocks right-click', () => {
-    const script = buildGuestOverlayScript('awaitClick')
-    expect(script).toContain('contextmenu')
-    expect(script).toContain('preventDefault')
   })
 
   it('teardown script cleans up the overlay', () => {
@@ -244,29 +238,24 @@ describe('awaitClick under a Zone.js-patched global Promise', () => {
     contextmenu: () => void
     cancel: () => void
   } {
-    const handlers: Record<string, (event: unknown) => void> = {}
-    const noopEvent = {
-      preventDefault(): void {},
-      stopPropagation(): void {},
-      stopImmediatePropagation(): void {}
-    }
     const grab: Record<string, unknown> = {
-      host: {
-        addEventListener(type: string, fn: (event: unknown) => void): void {
-          handlers[type] = fn
-        },
-        removeEventListener(): void {}
-      },
       extractPayload: options?.extractPayload ?? validPayload,
       getCurrentElement: options?.getCurrentElement ?? ((): unknown => ({})),
       freezeHighlight(): void {},
       cleanup(): void {}
     }
     const window = { __orcaGrab: grab }
+    // The overlay hands each real pointer pick to the awaiting script.
+    const pick = (type: string): void => {
+      const onPick = grab.onPick
+      if (typeof onPick === 'function') {
+        onPick({ type })
+      }
+    }
     return {
       window,
-      click: () => handlers.click?.(noopEvent),
-      contextmenu: () => handlers.contextmenu?.(noopEvent),
+      click: () => pick('click'),
+      contextmenu: () => pick('contextmenu'),
       cancel: () => (window.__orcaGrab.cancelAwait as (() => void) | undefined)?.()
     }
   }

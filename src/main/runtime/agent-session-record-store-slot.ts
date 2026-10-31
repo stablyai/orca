@@ -29,6 +29,20 @@ type RecordStoreSlot = {
 }
 
 let opening: RecordStoreSlot | null = null
+const pendingDatabaseClose = new Set<JournalHostDatabase>()
+
+/** Keep failed standalone/open-failure closes owned until a later stop or open retries them. */
+export async function closeAgentSessionRecordStoreDatabase(
+  database?: JournalHostDatabase
+): Promise<void> {
+  if (database) {
+    pendingDatabaseClose.add(database)
+  }
+  for (const pending of pendingDatabaseClose) {
+    await pending.close()
+    pendingDatabaseClose.delete(pending)
+  }
+}
 
 export function openAgentSessionRecordStoreOnce(
   location: AgentSessionRecordStoreLocation
@@ -67,6 +81,7 @@ export function peekOpenedAgentSessionRecordStore(): AgentSessionRecordStore | n
 async function openRecordStore(
   location: AgentSessionRecordStoreLocation
 ): Promise<OpenedAgentSessionRecordStore> {
+  await closeAgentSessionRecordStoreDatabase()
   const journalDatabase = openStructuredAgentSessionJournalDatabase(location)
   try {
     return {
@@ -78,7 +93,7 @@ async function openRecordStore(
       })
     }
   } catch (error) {
-    journalDatabase.close()
+    await closeAgentSessionRecordStoreDatabase(journalDatabase)
     throw error
   }
 }

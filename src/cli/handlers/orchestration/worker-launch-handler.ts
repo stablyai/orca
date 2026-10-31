@@ -1,5 +1,6 @@
 import type { CommandHandler } from '../../dispatch'
 import { printResult } from '../../format'
+import { withReceiptNext } from './receipt-next-text'
 import { getOptionalStringFlag, getPresentStringFlag } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
@@ -9,6 +10,9 @@ import { getOptionalPositiveIntegerValueFlag } from './numeric-flags'
 import { isDevCliInvocation } from './runtime-compatibility'
 import { resolveCoordinatorTerminalHandle } from './terminal-identity'
 import { formatWorkerStart } from './worker-output'
+import { WORKER_START_VIEW } from './worker-start-agent-view'
+import { printOrchestrationResult } from './agent-view'
+import { explainOlderRuntimeRunRequired } from './older-runtime-run-binding'
 import { renderResolvedOrchestrationCommand } from '../../orchestration-mutation-recovery'
 
 export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler> = {
@@ -46,6 +50,7 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       effects: unknown[]
       residualResources: unknown[]
       nextCommands?: string[]
+      next?: string
     }>(client, flags, 'orchestration.workerStart', {
       task,
       ...(spec ? { spec } : {}),
@@ -69,6 +74,8 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       run: getOptionalStringFlag(flags, 'run'),
       from: await resolveCoordinatorTerminalHandle(flags, cwd, client),
       devMode: isDevCliInvocation()
+    }).catch(async (error: unknown) => {
+      throw await explainOlderRuntimeRunRequired(client, error)
     })
     if (result.result.state !== 'ready') {
       process.exitCode = 1
@@ -84,6 +91,10 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
           }
         }
       : result
-    printResult(renderedResult, json, formatWorkerStart)
+    if (!flags.has('full')) {
+      printOrchestrationResult(renderedResult, json, WORKER_START_VIEW)
+      return
+    }
+    printResult(renderedResult, json, (value) => withReceiptNext(formatWorkerStart(value), value))
   }
 }

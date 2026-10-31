@@ -222,7 +222,7 @@ export const createMobileCommandMenuHostFixture: MobileCommandMenuHostFixtureMod
         preparation.resolve()
         await host.flushAllStreamedEvents()
         await omp?.dispose()
-        closeTestJournalHostDatabase(root)
+        await closeTestJournalHostDatabase(root)
         await rm(root, { recursive: true, force: true })
       }
     }

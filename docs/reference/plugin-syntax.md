@@ -26,10 +26,20 @@ A plugin adds highlighting for a language through `contributes.syntaxes` in `orc
 
 ## How Orca uses it
 
-- A plugin syntax applies only to files Orca would otherwise show as plain text. An exact file
-  name wins over an extension, and a longer extension wins over a shorter one. There is no
-  per-file override yet, so a plugin that claims a broad extension such as `.txt` highlights every
-  such file while it is enabled.
+- While a plugin is enabled, its syntax colors every file whose name or extension it declares,
+  replacing Orca's own guess for that file. For example, a MATLAB plugin that claims `.m` wins
+  over Orca's Objective-C, an OCaml plugin that claims `.ml` wins over F#, a Julia plugin wins
+  over Orca's basic Julia colors, and a Haskell or Erlang plugin colors `.hs` or `.erl` files that
+  Orca maps but has no grammar for.
+- The exception is a file Orca opens as TypeScript, JavaScript, JSON, CSS, SCSS, Less, HTML or
+  Markdown: those keep Orca's language, because it also drives completions, diagnostics, or
+  Markdown features that a plugin grammar would turn off. JSP (`.jsp`, `.jspf`) is not covered by
+  this exception; Orca shows it as HTML only until a real grammar is available.
+- When several enabled syntaxes claim a file, an exact file name wins over an extension, a longer
+  extension wins over a shorter one, and an exact tie goes to the lower syntax id
+  (`plugin:...`), so the winner does not depend on load order. There is no per-file language
+  picker yet, so a plugin that claims a broad extension such as `.txt` highlights every such file
+  while it is enabled; disable the plugin to get Orca's own colors back.
 - Grammars load when a matching file opens, compile once in a worker, and stay warm while you
   type. Each line has the same limits as Orca's own grammars (1,000 characters, 50 ms); from a
   line that exceeds them, the rest of the file stays plain.
