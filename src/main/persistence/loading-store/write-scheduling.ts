@@ -22,6 +22,7 @@ type WriteSchedulingOperationsRuntime = Pick<
   | 'automationListProjectionCache'
   | 'dirtyProfileStateDomains'
   | 'firstPendingSaveAt'
+  | 'lastWriteError'
   | 'pendingWrite'
   | 'profileMaintenancePending'
   | 'quitFlushStarted'
@@ -52,6 +53,9 @@ export class WriteSchedulingOperations {
   async waitForPendingWrite(): Promise<void> {
     const { runtime } = this[writeSchedulingOperationsContext]
     await Promise.all([runtime.pendingWrite, runtime.activeViewPreference.waitForPendingWrite()])
+    if (runtime.lastWriteError != null) {
+      throw runtime.lastWriteError
+    }
   }
 
   /** Observe in-memory session writes; callbacks must not throw or block. */
@@ -109,12 +113,24 @@ export function scheduleSave(
       trackedDomains.add(domain)
     }
   }
-  // A timer admitted after the final snapshot could outlive the awaited shutdown work.
-  if (runtime.quitFlushStarted || runtime.profileMaintenancePending) {
+  // A successful quit snapshot is the last write. A failed one is not disk-consistent.
+  if (runtime.profileMaintenancePending) {
+    return
+  }
+  if (runtime.quitFlushStarted && runtime.lastWriteError == null) {
     return
   }
   runtime.writeGeneration += 1
   if (runtime.writesFrozen) {
+    return
+  }
+  if (runtime.quitFlushStarted) {
+    if (runtime.writeTimer) {
+      clearTimeout(runtime.writeTimer)
+      runtime.writeTimer = null
+    }
+    runtime.firstPendingSaveAt = null
+    void enqueueWrite(writes).catch(() => {})
     return
   }
   const now = Date.now()
