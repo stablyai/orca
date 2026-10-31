@@ -19,7 +19,6 @@ export type AutomationRunOutput = {
   title: string
   format: AutomationRunOutputFormat
   bytes: number
-  sha256: string
   attachedAt: number
 }
 

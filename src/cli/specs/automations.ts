@@ -141,7 +141,7 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['automations', 'warn'],
     summary: 'Report an incomplete result for this automation run',
     usage:
-      'orca automations warn --key <id> --message <text> [--impact <text>] [--evidence <text>|--evidence-file <path>] [--resolve] [--json]',
+      'orca automations warn --key <id> --message <text> [--impact <text>] [--evidence <text>|--evidence-file <path>] [--json]\n       orca automations warn --key <id> --resolve [--message <text>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'key',
@@ -175,7 +175,7 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['automations', 'attach'],
     summary: 'Attach an HTML or Markdown file to this automation run',
-    usage: 'orca automations attach --file <path> --title <text> [--json]',
+    usage: 'orca automations attach --file <path> [--title <text>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'file', 'title'],
     notes: [
       'Run it from the automation agent. Orca stores a copy with the run; nothing is published.',

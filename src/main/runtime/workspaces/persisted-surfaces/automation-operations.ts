@@ -161,16 +161,7 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
     run: Pick<AutomationRun, 'automationId' | 'id'>,
     report: AutomationRunReport
   ): Promise<AutomationRunReportOutcome> {
-    const outcome = this.store?.recordAutomationRunReport?.(run, report)
-    if (!outcome || !this.store?.flushPendingOrThrowAsync) {
-      throw new Error('runtime_unavailable')
-    }
-    if (outcome.ok) {
-      await this.store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
-      const selector = this.automationChangeSelector(run.automationId)
-      this.notifyAutomationsChanged({ reason: 'run', ...(selector ? { selector } : {}) })
-    }
-    return outcome
+    return this.automation.recordReport(run, report)
   }
 
   // Defer until userData is final; tests can inject an in-memory DB.

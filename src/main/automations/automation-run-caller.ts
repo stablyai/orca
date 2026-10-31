@@ -1,6 +1,7 @@
 import { isFinalAutomationRunStatus, type AutomationRun } from '../../shared/automations-types'
 import { AUTOMATION_RUN_REPORT_GRACE_MS } from '../../shared/automation-run-results'
 import type { OrchestrationCompatibilityEvidence } from '../../shared/orchestration-compatibility-evidence'
+import { InvalidArgumentError } from '../runtime/rpc/core'
 import { isEquivalentPaneKey } from '../runtime/orchestration/db/pane-key-match'
 
 export const NOT_IN_AUTOMATION_RUN_MESSAGE =
@@ -8,10 +9,6 @@ export const NOT_IN_AUTOMATION_RUN_MESSAGE =
 
 export const REMOTE_TERMINAL_UNSUPPORTED_MESSAGE =
   'Reporting automation results from WSL or SSH terminals is not supported yet.'
-
-export class AutomationRunCallerError extends Error {
-  readonly code = 'automation_run_caller_unknown'
-}
 
 /** The caller's session as this host proved it: a live chat record, or a terminal pane whose PTY it hosts. */
 export type AutomationRunCallerSession =
@@ -80,7 +77,7 @@ export function resolveCallerAutomationRun(
         (right.dispatchedAt ?? right.createdAt) - (left.dispatchedAt ?? left.createdAt)
     )[0]
   if (!run || !acceptsReports(run, now)) {
-    throw new AutomationRunCallerError(NOT_IN_AUTOMATION_RUN_MESSAGE)
+    throw new InvalidArgumentError(NOT_IN_AUTOMATION_RUN_MESSAGE)
   }
   return run
 }

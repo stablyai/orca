@@ -41,6 +41,35 @@ export function removeAutomationRunOutputFile(
   rmSync(outputPath(root, run, output), { force: true })
 }
 
+// Startup sweeping retries filesystem cleanup that fails after durable removal.
+function removeOutputDirectory(path: string): void {
+  try {
+    rmSync(path, { recursive: true, force: true })
+  } catch (error) {
+    console.warn('[automations] Failed to remove run outputs:', error)
+  }
+}
+
+export function removeAutomationRunOutputs(
+  runs: readonly Pick<AutomationRun, 'automationId' | 'id'>[],
+  root = hasAppEnvironment() ? automationRunOutputsRoot() : null
+): void {
+  if (root) {
+    for (const run of runs) {
+      removeOutputDirectory(join(root, run.automationId, run.id))
+    }
+  }
+}
+
+export function removeAutomationOutputs(
+  automationId: string,
+  root = hasAppEnvironment() ? automationRunOutputsRoot() : null
+): void {
+  if (root) {
+    removeOutputDirectory(join(root, automationId))
+  }
+}
+
 export function readAutomationRunOutputFile(
   root: string,
   run: Pick<AutomationRun, 'automationId' | 'id'>,

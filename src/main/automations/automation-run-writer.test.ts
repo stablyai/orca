@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createAutomationRunWriter } from './automation-run-writer'
 import { buildProfileStateCutoverFixture } from '../persistence/profile-state-cutover-fixture'
 import type { Store } from '../persistence'
+import type { AutomationRunReportOutcome } from '../../shared/automation-run-results'
 
 const SSH_SELECTOR = { kind: 'ssh', targetId: 'ssh-1' } as const
 
@@ -16,6 +17,8 @@ function writerWith(selector: ReturnType<Store['automationChangeSelector']>) {
     flushPendingOrThrowAsync: vi.fn().mockResolvedValue(undefined),
     createAutomationRun: vi.fn(() => run),
     updateAutomationRun: vi.fn(() => run),
+    recordAutomationRunReport: vi.fn((): AutomationRunReportOutcome => ({ ok: true, run })),
+    listAutomationRuns: vi.fn(() => [run]),
     recordRepeatedAutomationSkip: vi.fn(() => null),
     advanceAutomationNextRun: vi.fn(() => automation),
     automationChangeSelector
@@ -50,6 +53,28 @@ describe('automation run writer publications', () => {
     await expect(writer.updateRun({ runId: 'run-1', status: 'completed' })).rejects.toThrow(
       'disk full'
     )
+    expect(publish).not.toHaveBeenCalled()
+  })
+
+  it('publishes accepted reports only after durable acknowledgement', async () => {
+    const { store, writer, publish } = writerWith(SSH_SELECTOR)
+    const acknowledgement = Promise.withResolvers<void>()
+    store.flushPendingOrThrowAsync.mockReturnValueOnce(acknowledgement.promise)
+    const pending = writer.recordReport(run, { kind: 'failure', message: 'Missing source' })
+    expect(publish).not.toHaveBeenCalled()
+    acknowledgement.resolve()
+    await pending
+    expect(publish).toHaveBeenCalledWith({ reason: 'run', selector: SSH_SELECTOR })
+  })
+
+  it('returns pre-mutation refusals without flushing or publishing', async () => {
+    const { store, writer, publish } = writerWith(SSH_SELECTOR)
+    const refusal = { ok: false, reason: 'output_limit' } as const
+    store.recordAutomationRunReport.mockReturnValueOnce(refusal)
+    expect(await writer.recordReport(run, { kind: 'failure', message: 'Missing source' })).toEqual(
+      refusal
+    )
+    expect(store.flushPendingOrThrowAsync).not.toHaveBeenCalled()
     expect(publish).not.toHaveBeenCalled()
   })
 })

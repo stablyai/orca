@@ -1,5 +1,5 @@
-import { createHash, randomUUID } from 'node:crypto'
-import { defineMethod, type RpcContext } from '../core'
+import { randomUUID } from 'node:crypto'
+import { defineMethod, InvalidArgumentError, type RpcContext } from '../core'
 import {
   AutomationRunFailureReport,
   AutomationRunOutputAttach,
@@ -9,12 +9,10 @@ import {
 import type { AutomationRun } from '../../../../shared/automations-types'
 import {
   MAX_AUTOMATION_RUN_OUTPUTS,
-  MAX_AUTOMATION_RUN_OUTPUT_BYTES,
   MAX_AUTOMATION_RUN_WARNINGS,
   type AutomationRunReport
 } from '../../../../shared/automation-run-results'
 import {
-  AutomationRunCallerError,
   NOT_IN_AUTOMATION_RUN_MESSAGE,
   REMOTE_TERMINAL_UNSUPPORTED_MESSAGE,
   resolveCallerAutomationRun,
@@ -25,7 +23,6 @@ import {
   automationRunOutputsRoot,
   readAutomationRunOutputFile,
   removeAutomationRunOutputFile,
-  sweepAutomationRunOutputs,
   writeAutomationRunOutputFile
 } from '../../../automations/automation-run-output-files'
 import { readLiveAgentSessionCaller } from '../orchestration-session-caller'
@@ -42,7 +39,7 @@ async function callerSession(
 ): Promise<AutomationRunCallerSession> {
   // Session identity is same-host only; a paired client cannot speak for this host's agents.
   if (context.pairedDeviceId !== undefined) {
-    throw new AutomationRunCallerError(NOT_IN_AUTOMATION_RUN_MESSAGE)
+    throw new InvalidArgumentError(NOT_IN_AUTOMATION_RUN_MESSAGE)
   }
   const evidence = context.orchestrationCompatibilityEvidence
   if (evidence?.agentSessionId !== undefined && !evidence.host) {
@@ -54,11 +51,11 @@ async function callerSession(
     return { kind: 'chat', sessionIds: [record.sessionId, evidence.agentSessionId] }
   }
   if (evidence?.host) {
-    throw new AutomationRunCallerError(REMOTE_TERMINAL_UNSUPPORTED_MESSAGE)
+    throw new InvalidArgumentError(REMOTE_TERMINAL_UNSUPPORTED_MESSAGE)
   }
   const terminal = terminalCallerSession(context.runtime, evidence)
   if (!terminal) {
-    throw new AutomationRunCallerError(NOT_IN_AUTOMATION_RUN_MESSAGE)
+    throw new InvalidArgumentError(NOT_IN_AUTOMATION_RUN_MESSAGE)
   }
   return terminal
 }
@@ -75,7 +72,7 @@ async function record(
 ): Promise<{ runId: string }> {
   const outcome = await context.runtime.recordAutomationRunReport(run, report)
   if (!outcome.ok) {
-    throw new Error(REFUSAL_COPY[outcome.reason])
+    throw new InvalidArgumentError(REFUSAL_COPY[outcome.reason])
   }
   return { runId: run.id }
 }
@@ -95,7 +92,7 @@ export const AUTOMATION_RUN_RESULT_METHODS = [
         })
       }
       if (!params.message) {
-        throw new Error('Missing message')
+        throw new InvalidArgumentError('Missing message')
       }
       return record(context, run, {
         kind: 'warning',
@@ -122,29 +119,24 @@ export const AUTOMATION_RUN_RESULT_METHODS = [
     handler: async (params, context) => {
       const run = await callerRun('automation.attachOutput', context)
       const bytes = Buffer.byteLength(params.content, 'utf8')
-      if (bytes > MAX_AUTOMATION_RUN_OUTPUT_BYTES) {
-        throw new Error(
-          `The file is ${Math.ceil(bytes / 1024)} KiB; attached files are limited to ${MAX_AUTOMATION_RUN_OUTPUT_BYTES / 1024} KiB.`
-        )
-      }
       const root = automationRunOutputsRoot()
       const output = {
         id: randomUUID(),
         title: params.title,
         format: params.format,
         bytes,
-        sha256: createHash('sha256').update(params.content).digest('hex'),
         attachedAt: Date.now()
       }
       // The file lands before the record so a listed output always has content.
       writeAutomationRunOutputFile(root, run, output, params.content)
-      try {
-        await record(context, run, { kind: 'output', output })
-      } catch (error) {
+      const outcome = await context.runtime.recordAutomationRunReport(run, {
+        kind: 'output',
+        output
+      })
+      if (!outcome.ok) {
         removeAutomationRunOutputFile(root, run, output)
-        throw error
+        throw new InvalidArgumentError(REFUSAL_COPY[outcome.reason])
       }
-      sweepAutomationRunOutputs(context.runtime.listAutomationRuns(), root)
       return { runId: run.id, outputId: output.id }
     }
   }),

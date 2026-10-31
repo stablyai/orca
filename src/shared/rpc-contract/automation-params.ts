@@ -10,6 +10,8 @@ import {
 } from './rpc-param-primitives'
 import { normalizeExecutionHostId } from '../execution-host'
 import {
+  AUTOMATION_RUN_OUTPUT_TOO_LARGE_MESSAGE,
+  MAX_AUTOMATION_RUN_OUTPUT_REQUEST_BYTES,
   MAX_AUTOMATION_RUN_EVIDENCE_LENGTH,
   MAX_AUTOMATION_RUN_MESSAGE_LENGTH,
   MAX_AUTOMATION_RUN_OUTPUT_TITLE_LENGTH,
@@ -274,11 +276,18 @@ export const AutomationRunFailureReport = z.object({
   message: boundedText('message', MAX_AUTOMATION_RUN_MESSAGE_LENGTH)
 })
 
-export const AutomationRunOutputAttach = z.object({
-  title: boundedText('title', MAX_AUTOMATION_RUN_OUTPUT_TITLE_LENGTH),
-  format: z.enum(['html', 'markdown'], { message: 'Attach an .html or .md file.' }),
-  content: z.string({ message: 'Missing file content' })
-})
+export const AutomationRunOutputAttach = z
+  .object({
+    title: boundedText('title', MAX_AUTOMATION_RUN_OUTPUT_TITLE_LENGTH),
+    format: z.enum(['html', 'markdown'], { message: 'Attach an .html or .md file.' }),
+    content: z.string({ message: 'Missing file content' })
+  })
+  .refine(
+    (request) =>
+      new TextEncoder().encode(JSON.stringify(request)).byteLength <=
+      MAX_AUTOMATION_RUN_OUTPUT_REQUEST_BYTES,
+    { message: AUTOMATION_RUN_OUTPUT_TOO_LARGE_MESSAGE }
+  )
 
 export const AutomationRunOutputRead = z.object({
   runId: requiredString('Missing run id'),

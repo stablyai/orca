@@ -1,11 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { InvalidArgumentError } from '../runtime/rpc/core'
 import type { AutomationRun } from '../../shared/automations-types'
 import { AUTOMATION_RUN_REPORT_GRACE_MS } from '../../shared/automation-run-results'
-import {
-  AutomationRunCallerError,
-  resolveCallerAutomationRun,
-  terminalCallerSession
-} from './automation-run-caller'
+import { resolveCallerAutomationRun, terminalCallerSession } from './automation-run-caller'
 
 function terminalRun(id: string, overrides: Partial<AutomationRun> = {}): AutomationRun {
   return {
@@ -52,13 +49,13 @@ describe('resolveCallerAutomationRun', () => {
     )
     expect(() =>
       resolveCallerAutomationRun(runs, session, 101 + AUTOMATION_RUN_REPORT_GRACE_MS)
-    ).toThrow(AutomationRunCallerError)
+    ).toThrow(InvalidArgumentError)
   })
 
   it('refuses a pane whose PTY was replaced since the run launched', () => {
     expect(() =>
       resolveCallerAutomationRun([terminalRun('r1')], { ...session, ptyId: 'pty-2' }, 2)
-    ).toThrow(AutomationRunCallerError)
+    ).toThrow(InvalidArgumentError)
   })
 
   it('matches chat runs by session id', () => {

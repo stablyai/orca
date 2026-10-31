@@ -21,6 +21,7 @@ function fixture(launch: HeadlessAutomationDispatchLaunch) {
     runs: {
       createRun: vi.fn(async () => run),
       updateRun: vi.fn(async () => dispatched),
+      recordReport: vi.fn(async () => ({ ok: true as const, run })),
       repeatSkip: vi.fn(async () => null),
       advanceNextRun: vi.fn(async () => automation)
     },

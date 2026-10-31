@@ -1,4 +1,4 @@
-import { extname, resolve } from 'node:path'
+import { basename, extname, resolve } from 'node:path'
 import type { CommandHandler } from '../dispatch'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
 import { printResult } from '../format'
@@ -6,6 +6,8 @@ import { RuntimeClientError, type RuntimeClient } from '../runtime-client'
 import { readArtifactFileWithinLimit } from '../../shared/artifact-file-read'
 import { open } from 'node:fs/promises'
 import {
+  AUTOMATION_RUN_OUTPUT_TOO_LARGE_MESSAGE,
+  MAX_AUTOMATION_RUN_OUTPUT_REQUEST_BYTES,
   MAX_AUTOMATION_RUN_EVIDENCE_LENGTH,
   MAX_AUTOMATION_RUN_OUTPUT_BYTES
 } from '../../shared/automation-run-results'
@@ -107,22 +109,28 @@ export const AUTOMATION_RUN_RESULT_HANDLERS: Record<string, CommandHandler> = {
     if (!format) {
       throw new RuntimeClientError('invalid_argument', 'Attach an .html or .md file.')
     }
-    const title = getRequiredStringFlag(flags, 'title')
+    const title = getOptionalStringFlag(flags, 'title') ?? basename(path, extname(path))
     const read = await readArtifactFileWithinLimit(path, MAX_AUTOMATION_RUN_OUTPUT_BYTES)
     if (read.status !== 'ok') {
       throw new RuntimeClientError(
         'invalid_argument',
         read.status === 'too-large'
-          ? `Attached files are limited to ${MAX_AUTOMATION_RUN_OUTPUT_BYTES / 1024} KiB.`
+          ? AUTOMATION_RUN_OUTPUT_TOO_LARGE_MESSAGE
           : read.status === 'empty'
             ? 'The file is empty.'
             : 'File was not found or is not a file.'
       )
     }
+    const request = { title, format, content: read.content }
+    if (
+      Buffer.byteLength(JSON.stringify(request), 'utf8') > MAX_AUTOMATION_RUN_OUTPUT_REQUEST_BYTES
+    ) {
+      throw new RuntimeClientError('invalid_argument', AUTOMATION_RUN_OUTPUT_TOO_LARGE_MESSAGE)
+    }
     await assertRunResultsSupported(client)
     const result = await client.call<{ runId: string; outputId: string }>(
       'automation.attachOutput',
-      { title, format, content: read.content }
+      request
     )
     printResult(result, json, () => `Attached "${title}" to this run.`)
   }

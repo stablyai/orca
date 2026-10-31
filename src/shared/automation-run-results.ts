@@ -8,8 +8,12 @@ export const MAX_AUTOMATION_RUN_WARNING_KEY_LENGTH = 100
 export const MAX_AUTOMATION_RUN_MESSAGE_LENGTH = 1_000
 export const MAX_AUTOMATION_RUN_EVIDENCE_LENGTH = 2_048
 export const MAX_AUTOMATION_RUN_OUTPUT_TITLE_LENGTH = 200
-/** Fits the CLI/SSH control frame and the mobile bridge frame in one request. */
+// Content and its JSON encoding are bounded separately; escaping can expand the file.
 export const MAX_AUTOMATION_RUN_OUTPUT_BYTES = 600 * 1024
+// Reserve 40 KiB for the RPC envelope below the smallest (mobile) frame cap.
+export const MAX_AUTOMATION_RUN_OUTPUT_REQUEST_BYTES = 600 * 1024
+export const AUTOMATION_RUN_OUTPUT_TOO_LARGE_MESSAGE =
+  'The attached report is too large for the Orca transport. Shorten the report and try again.'
 /** Late reports from an agent's final turn still land after the run settles. */
 export const AUTOMATION_RUN_REPORT_GRACE_MS = 15 * 60 * 1000
 
