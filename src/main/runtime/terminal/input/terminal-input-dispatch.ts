@@ -154,6 +154,9 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
         throw new Error('invalid_terminal_send')
       }
       await assertTerminalInputWithinLimitWithYield(action.text)
+      if (!(await this.launchComposerAdmitsSubmit(pty.pty.ptyId, action, options))) {
+        return { handle, accepted: false, bytesWritten: 0 }
+      }
       const writeSettlement = await this.writeTerminalAction(
         pty.pty.ptyId,
         action,
@@ -184,6 +187,9 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     if (await this.isLeafPtyProvenAbsent(leaf.ptyId)) {
       throw new Error('terminal_not_writable')
     }
+    if (!(await this.launchComposerAdmitsSubmit(leaf.ptyId, action, options))) {
+      return { handle, accepted: false, bytesWritten: 0 }
+    }
 
     const writeSettlement = await this.writeTerminalAction(leaf.ptyId, action, payload, options)
 
@@ -196,6 +202,24 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
           ? Buffer.byteLength(payload, 'utf8')
           : 0
     }
+  }
+
+  private async launchComposerAdmitsSubmit(
+    ptyId: string,
+    action: { enter?: boolean },
+    options: RuntimeTerminalWriteOptions
+  ): Promise<boolean> {
+    if (!(options.waitForLaunchComposer && action.enter)) {
+      return true
+    }
+    const generation = this.getPtyLifecycleGeneration(ptyId)
+    return (
+      // No pending watch: not a fresh launch, or its watch already settled.
+      ((await this.launchComposerReadyByPtyId.get(ptyId)) ?? true) &&
+      // A held send must not land in a replacement process or outlive its cancelled request.
+      this.getPtyLifecycleGeneration(ptyId) === generation &&
+      options.signal?.aborted !== true
+    )
   }
 
   async sendTerminalAgentPrompt(
