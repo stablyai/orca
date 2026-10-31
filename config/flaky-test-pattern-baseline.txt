@@ -1366,7 +1366,6 @@
 4 test-timeout-needs-reason:src/packages/process-host/src/run-process.test.ts
 5 test-timeout-needs-reason:src/renderer/src/components/sidebar/WorktreeCard.compact-hover.test.tsx
 2 test-timeout-needs-reason:src/renderer/src/components/sidebar/WorktreeCard.host-badge-toggle.test.tsx
-2 test-timeout-needs-reason:src/renderer/src/components/sidebar/WorktreeCard.lineage.test.tsx
 4 test-timeout-needs-reason:src/renderer/src/components/sidebar/WorktreeCard.pinned-repo-icon.test.tsx
 7 test-timeout-needs-reason:src/renderer/src/components/sidebar/WorktreeCard.pr-display.test.tsx
 1 test-timeout-needs-reason:src/renderer/src/components/sidebar/WorktreeCardAgents.send-target.test.tsx
