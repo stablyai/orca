@@ -4,6 +4,7 @@ import {
   type PanZoomView,
   getPanZoomViewOffset,
   getFittedPanZoomView,
+  panView,
   zoomViewAt
 } from './pan-zoom-view'
 
@@ -33,5 +34,17 @@ describe('pan and zoom view', () => {
     const after = pointAt(zoomed, anchor, fitScale * 3)
     expect(after.x).toBeCloseTo(before.x)
     expect(after.y).toBeCloseTo(before.y)
+  })
+
+  it('keeps contained content centered while it fits and stops it at its edges once zoomed', () => {
+    const content = { width: 500, height: 300 }
+    const fitted = getFittedPanZoomView(content)
+    expect(panView(fitted, { x: 200, y: 80 }, 1, content, viewport)).toEqual(fitted)
+
+    const zoomed = { zoom: 4, center: fitted.center }
+    expect(panView(zoomed, { x: 5000, y: -5000 }, 4, content, viewport).center).toEqual({
+      x: 125,
+      y: 225
+    })
   })
 })

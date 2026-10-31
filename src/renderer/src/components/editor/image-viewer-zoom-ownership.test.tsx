@@ -46,16 +46,6 @@ describe('ImageViewer app zoom ownership', () => {
     expect(screen.getByText('100%')).toBeTruthy()
   })
 
-  it('zooms the open popup instead of the hidden inline image', () => {
-    renderImage(true)
-    fireEvent.click(screen.getByTitle('Open image in popup'))
-
-    zoom('in')
-
-    expect(within(screen.getByRole('dialog')).getByText('125%')).toBeTruthy()
-    expect(screen.getAllByText('100%')).toHaveLength(1)
-  })
-
   it('releases zoom ownership when focus moves and removes its listener on unmount', () => {
     const image = (ownsCommands: boolean) => (
       <EditorCommandOwnerContext value={ownsCommands}>
@@ -77,7 +67,7 @@ describe('ImageViewer app zoom ownership', () => {
     expect(zoom('in')).toBe(false)
   })
 
-  it('zooms a diff popup without changing the other image behind it', () => {
+  it('zooms both sides of a diff together', () => {
     render(
       <EditorCommandOwnerContext value={true}>
         <ImageDiffViewer
@@ -89,13 +79,7 @@ describe('ImageViewer app zoom ownership', () => {
         />
       </EditorCommandOwnerContext>
     )
-    fireEvent.click(screen.getAllByTitle('Open image in popup')[1])
 
-    expect(zoom('in')).toBe(true)
-    expect(within(screen.getByRole('dialog')).getByText('125%')).toBeTruthy()
-    expect(screen.getAllByText('100%')).toHaveLength(2)
-
-    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }))
     expect(zoom('in')).toBe(true)
     expect(screen.getAllByText('125%')).toHaveLength(2)
   })
@@ -126,13 +110,6 @@ describe('ImageViewer app zoom ownership', () => {
 
     main.focus()
     expect(zoom('in')).toBe(true)
-    expect(within(main).getByText('125%')).toBeTruthy()
-    expect(within(floating).getByText('125%')).toBeTruthy()
-
-    floating.focus()
-    fireEvent.click(within(floating).getByTitle('Open image in popup'))
-    expect(zoom('in')).toBe(true)
-    expect(within(screen.getByRole('dialog')).getByText('156%')).toBeTruthy()
     expect(within(main).getByText('125%')).toBeTruthy()
     expect(within(floating).getByText('125%')).toBeTruthy()
   })
@@ -166,19 +143,14 @@ describe('ImageViewer app zoom ownership', () => {
     expect(screen.getByText('100%')).toBeTruthy()
   })
 
-  it('leaves editor font zoom alone in a combined diff of intrinsic images', () => {
+  it('leaves editor font zoom alone in a combined diff until an image is expanded', () => {
     renderImage(true, 'intrinsic')
-
     expect(zoom('in')).toBe(false)
-    expect(screen.getByText('100%')).toBeTruthy()
-  })
 
-  it('zooms the popup a combined-diff image opened', () => {
-    renderImage(true, 'intrinsic')
-    fireEvent.click(screen.getByTitle('Open image in popup'))
-
+    fireEvent.click(screen.getByRole('button', { name: 'Expand image' }))
+    const expanded = within(screen.getByRole('dialog')).getByRole('img', { name: 'shot.png' })
+    const fitted = expanded.style.width
     expect(zoom('in')).toBe(true)
-    expect(within(screen.getByRole('dialog')).getByText('125%')).toBeTruthy()
-    expect(screen.getAllByText('100%')).toHaveLength(1)
+    expect(expanded.style.width).not.toBe(fitted)
   })
 })
