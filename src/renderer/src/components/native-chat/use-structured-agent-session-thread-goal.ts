@@ -3,12 +3,12 @@ import type {
   AgentJournalRenderItem,
   AgentJournalThreadGoal
 } from '../../../../shared/agent-session-journal-types'
-import { currentAgentSessionThreadGoal } from '../../../../shared/agent-session-thread-goal'
+import { currentAgentSessionThreadGoal } from '../../../../shared/agent-session/agent-session-thread-goal'
 import type { AgentSessionOptionsResult } from '../../../../shared/agent-session-wire'
 import type {
   AgentSessionThreadGoalChange,
   AgentSessionThreadGoalResult
-} from '../../../../shared/agent-session-thread-goal-wire'
+} from '../../../../shared/agent-session/agent-session-thread-goal-wire'
 import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
 
 export type StructuredAgentSessionThreadGoal = {

@@ -115,17 +115,19 @@ type ArmKeys<T, A> = [A] extends [never]
  * output `S` leaves undeclared; `never` when it declares them all. An unknown-kind value never
  * reaches storage: admission refuses it. A primitive holds no keys; it is settled before `object`
  * because an open or branded string (`AgentType`'s `string & {}`) is assignable to `object`. */
-export type UndeclaredStorageKeys<T, S> = T extends { readonly kind: AgentJournalUnknownKind }
+export type UndeclaredStorageKeys<T, S> = unknown extends S
   ? never
-  : T extends string | number | boolean | bigint | symbol | null | undefined
+  : T extends { readonly kind: AgentJournalUnknownKind }
     ? never
-    : T extends readonly (infer E)[]
-      ? [Extract<S, readonly unknown[]>] extends [never]
-        ? 'an array storage does not declare'
-        : UndeclaredStorageKeys<E, Extract<S, readonly unknown[]>[number]>
-      : T extends object
-        ? ArmKeys<T, Arm<T, S>>
-        : never
+    : T extends string | number | boolean | bigint | symbol | null | undefined
+      ? never
+      : T extends readonly (infer E)[]
+        ? [Extract<S, readonly unknown[]>] extends [never]
+          ? 'an array storage does not declare'
+          : UndeclaredStorageKeys<E, Extract<S, readonly unknown[]>[number]>
+        : T extends object
+          ? ArmKeys<T, Arm<T, S>>
+          : never
 
 /** Compiles only when every persisted key is declared. */
 export type StorageDeclaresAll<Undeclared extends never> = Undeclared

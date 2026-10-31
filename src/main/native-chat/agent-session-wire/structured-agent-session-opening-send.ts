@@ -2,7 +2,8 @@ import { structuredAgentSessionSendOpeningTurn } from '../../../shared/structure
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
-import { oldestQueuedSubmission } from './structured-agent-session-start-failure-row'
+import type { oldestQueuedSubmission } from './structured-agent-session-start-failure-row'
+import { selectableStructuredSubmission } from './structured-agent-session-input-selection'
 
 /** Read opening-turn evidence from the journal fold without a snapshot. */
 export function structuredAgentSessionSendOpeningTurnInJournal(
@@ -25,9 +26,9 @@ export function structuredAgentSessionSendOpeningTurnInJournal(
 export function structuredAgentSessionNextHandover(
   session: Pick<StructuredAgentSessionHostSession, 'journal'>,
   fence: number,
-  work?: Pick<StructuredAgentSessionCurrentWork, 'publishedSubmission'> | null
+  work?: StructuredAgentSessionCurrentWork | null
 ): ReturnType<typeof oldestQueuedSubmission> {
   return structuredAgentSessionSendOpeningTurnInJournal(session.journal, fence, work)
     ? undefined
-    : oldestQueuedSubmission(session)
+    : selectableStructuredSubmission(session.journal, work ?? null)
 }

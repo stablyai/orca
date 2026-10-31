@@ -19,6 +19,8 @@ export function encodeJournalState(state: JournalReducerState): {
     tombstones: [...state.tombstones],
     removedTurnIds: [...state.removedTurnIds],
     submissions: [...state.submissions],
+    inputEntries: [...state.inputEntries],
+    inputCards: [...state.inputCards],
     receipts: [...state.receipts],
     aliases: [...state.aliases],
     itemEchoes: [...state.itemEchoes].map(([key, value]) =>
