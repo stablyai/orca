@@ -1,4 +1,5 @@
 import { getNativeChatAgentProfile } from '../../../../../src/shared/native-chat-agent-profiles'
+import type { NativeChatSendFollowUp } from '../../../../../src/shared/native-chat-follow-up-behavior'
 import {
   recordMobileNativeChatSkillPick,
   useMobileNativeChatDraft
@@ -34,10 +35,7 @@ import { MobileNativeChatStopButton } from '../input/MobileNativeChatStopButton'
 import { mobileNativeChatComposerStyles as styles } from './mobile-native-chat-composer-styles'
 import { composerInputStyles as inputStyles } from '../../../components/composer-input/composer-input-styles'
 import { MobileNativeChatSendButton } from './MobileNativeChatSendButton'
-import type {
-  MobileNativeChatSendFollowUp,
-  MobileNativeChatSendIntent
-} from '../mobile-native-chat-send'
+import type { MobileNativeChatSendIntent } from '../mobile-native-chat-send'
 import {
   MobileNativeChatComposerMic,
   type MobileNativeChatMicProps
@@ -70,7 +68,7 @@ type Props = MobileNativeChatMicProps & {
   onChangeText: (text: string) => void
   onSend: (text: string, intent?: MobileNativeChatSendIntent) => Promise<boolean>
   /** While the agent works on a host that queues: what a tap on Send does and whether holding it offers the other way; null otherwise. */
-  sendFollowUp?: MobileNativeChatSendFollowUp | null
+  sendFollowUp?: NativeChatSendFollowUp | null
   /** Changes whenever the route focuses a different chat composer surface. */
   sendSurfaceId: string
   /** Reads the retained route's focus generation without forcing a screen render. */

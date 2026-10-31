@@ -36,6 +36,8 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipContent: ({ children }: { children: ReactNode }) => <div>{children}</div>
 }))
 
+vi.mock('./native-chat-shortcut', () => ({ isMacPlatform: () => true }))
+
 vi.mock('./NativeChatSessionOptionPickers', () => ({
   NativeChatSessionOptionPickers: () => <div data-testid="session-option-pickers" />
 }))
@@ -99,6 +101,48 @@ describe('NativeChatComposerActions', () => {
     rerender(<NativeChatComposerActions {...props} sendDisabled={false} isStopping />)
 
     expect(screen.getByRole('button', { name: 'Stopping…' }).hasAttribute('disabled')).toBe(true)
+  })
+
+  it('beside Stop, says what Enter does mid-turn and names Cmd+Enter only when it differs', () => {
+    const onSend = vi.fn()
+    const onStop = vi.fn()
+    const props = {
+      attachDisabled: false,
+      dictationDisabled: false,
+      sendDisabled: false,
+      isWorking: true,
+      isDictating: false,
+      isDictationHoldMode: false,
+      onAttach: vi.fn(),
+      onDictationToggle: vi.fn(),
+      onDictationHoldStart: vi.fn(),
+      onDictationHoldEnd: vi.fn(),
+      onSend,
+      onStop,
+      sessionOptionsSurface: null,
+      sessionOptionsSnapshot: []
+    }
+    const { rerender, container } = render(<NativeChatComposerActions {...props} />)
+    expect(
+      screen.getAllByRole('button').map((button) => button.getAttribute('aria-label'))
+    ).toEqual(['Attach file', 'Start dictation', 'Stop the agent'])
+
+    rerender(
+      <NativeChatComposerActions {...props} followUp={{ action: 'queue', offersChoice: true }} />
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Queue message' }))
+    expect(onSend).toHaveBeenCalledExactlyOnceWith()
+    expect(onStop).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Stop the agent' })).toBeTruthy()
+    expect(container.textContent).toContain('Queue for after this turn⏎')
+    expect(container.textContent).toContain('Send into the running turn⌘+⏎')
+
+    rerender(
+      <NativeChatComposerActions {...props} followUp={{ action: 'steer', offersChoice: false }} />
+    )
+    expect(screen.getByRole('button', { name: 'Steer message' })).toBeTruthy()
+    expect(container.textContent).toContain('Send into the running turn⏎')
+    expect(container.textContent).not.toContain('Queue for after this turn')
   })
 
   it('marks the streaming Stop control as the critical hit target', () => {

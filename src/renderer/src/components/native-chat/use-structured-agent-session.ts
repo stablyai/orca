@@ -6,7 +6,10 @@ import { useStructuredAgentSessionSendOptions } from './use-structured-agent-ses
 import { useStructuredAgentSessionSends } from './use-structured-agent-session-sends'
 import { useStructuredAgentSessionCommandWrite } from './use-structured-agent-session-command-write'
 import { structuredAgentSessionSendQueues } from './structured-agent-session-queue-request'
-import { nativeChatQueueFollowUps } from '../../../../shared/native-chat-follow-up-behavior'
+import {
+  nativeChatQueueFollowUps,
+  nativeChatSendFollowUp
+} from '../../../../shared/native-chat-follow-up-behavior'
 import type { AgentSessionCancelResult } from '../../../../shared/agent-session-wire'
 import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
 import { useStructuredLegacyLaunchStop } from '@/lib/structured-agent-session-legacy-launch-stop'
@@ -281,6 +284,14 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     capturePresentation,
     /** A plain send would queue: the host takes it, the setting or a waiting command asks, and no unanswerable prompt blocks it. */
     sendsQueue: structuredAgentSessionSendQueues(queue),
+    /** Mid-turn on a host that queues: what Enter does, and whether Cmd/Ctrl+Enter would send differently. */
+    ...(queueCapability === 'supported' && isWorking && !stopControl.stopping
+      ? {
+          sendFollowUp: nativeChatSendFollowUp((alternate) =>
+            structuredAgentSessionSendQueues(queue, alternate)
+          )
+        }
+      : {}),
     cancel: (turnId: string | undefined, prompt?: { itemId: string; expectedRevision: number }) =>
       cancelStructuredAgentSessionPrompt(admit(), turnId, prompt),
     stopBackgroundTask: (taskId?: string) =>

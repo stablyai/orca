@@ -18960,6 +18960,10 @@
       "composer": {
         "imageUnavailable": "Vista previa no disponible",
         "send": "Enviar",
+        "queueMessage": "Poner mensaje en cola",
+        "steerMessage": "Enviar mensaje ahora",
+        "queueHint": "Poner en cola para después de este turno",
+        "steerHint": "Enviar al turno en curso",
         "noPty": "No hay terminal activa: vuelva a alternar para volver a conectarse.",
         "locked": "La entrada está retenida por otro dispositivo.",
         "placeholder": "Pregunta lo que quieras, @ para referenciar archivos, / para comandos",

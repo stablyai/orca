@@ -12,6 +12,7 @@ import type {
 import { NativeChatMentionMenu, NativeChatPickerMenu } from './NativeChatAutocompleteMenus'
 import type { NativeChatMentionFiles } from './use-native-chat-mention-files'
 import { NativeChatComposerActions } from './NativeChatComposerActions'
+import type { NativeChatSendFollowUp } from '../../../../shared/native-chat-follow-up-behavior'
 import { NativeChatComposerNotices } from './NativeChatComposerNotices'
 import type { NativeChatComposerNotice } from './native-chat-composer-notice'
 import type { NativeChatContextUsageSummary } from './native-chat-context-usage-summary'
@@ -60,6 +61,8 @@ export type NativeChatComposerFieldProps = {
   isStopping?: boolean
   /** After Stop, describe whether the host queues the next message as a card or holds the send. */
   afterStop?: NativeChatAfterStopSend
+  /** Mid-turn on a host that queues: what Enter does, and whether Cmd/Ctrl+Enter would differ. */
+  sendFollowUp?: NativeChatSendFollowUp
   attachDisabled: boolean
   dictationDisabled: boolean
   isDictating: boolean
@@ -143,6 +146,7 @@ export function NativeChatComposerField({
   isWorking,
   isStopping = false,
   afterStop,
+  sendFollowUp,
   attachDisabled,
   dictationDisabled,
   isDictating,
@@ -172,6 +176,18 @@ export function NativeChatComposerField({
   agent
 }: NativeChatComposerFieldProps): React.JSX.Element {
   const draftNotSaved = useNativeChatComposerDraftUnsaved(draftScopeKey)
+  // Mid-turn with something to send, a control beside Stop says what Enter does; never while Stopping.
+  const followUpAction =
+    !editSession && isWorking && !afterStop && (draft.trim() !== '' || imageAttachments.length > 0)
+      ? sendFollowUp?.action
+      : undefined
+  const followUpOffersChoice = sendFollowUp?.offersChoice === true
+  // Keyed on its parts: a fresh object each keystroke would re-render the memoized actions.
+  const followUp = useMemo(
+    () =>
+      followUpAction ? { action: followUpAction, offersChoice: followUpOffersChoice } : undefined,
+    [followUpAction, followUpOffersChoice]
+  )
   const optionCount =
     autocomplete.mode === 'slash'
       ? autocomplete.items.length
@@ -368,6 +384,7 @@ export function NativeChatComposerField({
                 draftNotSaved={draftNotSaved}
                 isWorking={isWorking}
                 isStopping={isStopping}
+                followUp={followUp}
                 isDictating={isDictating}
                 isDictationHoldMode={isDictationHoldMode}
                 onAttach={attach}

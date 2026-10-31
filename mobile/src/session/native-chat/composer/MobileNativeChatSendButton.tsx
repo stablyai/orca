@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import { CornerDownRight, ListEnd } from 'lucide-react-native'
-import type { NativeChatFollowUpBehavior } from '../../../../../src/shared/native-chat-follow-up-behavior'
+import type {
+  NativeChatFollowUpBehavior,
+  NativeChatSendFollowUp
+} from '../../../../../src/shared/native-chat-follow-up-behavior'
 import { ActionSheetModal } from '../../../components/ActionSheetModal'
 import { ComposerSendButton } from '../../../components/composer-input/ComposerSendButton'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import type {
-  MobileNativeChatSendFollowUp,
-  MobileNativeChatSendIntent
-} from '../mobile-native-chat-send'
+import type { MobileNativeChatSendIntent } from '../mobile-native-chat-send'
 
 const FOLLOW_UP_ICON = { queue: ListEnd, steer: CornerDownRight } as const
 
@@ -18,7 +18,7 @@ export function MobileNativeChatSendButton({
   onSend
 }: {
   canSend: boolean
-  sendFollowUp: MobileNativeChatSendFollowUp | null
+  sendFollowUp: NativeChatSendFollowUp | null
   onSend: (intent?: MobileNativeChatSendIntent) => void
 }): React.JSX.Element {
   const t = useMobileTranslation()

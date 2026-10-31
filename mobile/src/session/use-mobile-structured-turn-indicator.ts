@@ -5,7 +5,10 @@ import { isStructuredAgentSessionThinking } from '../../../src/shared/structured
 import { selectStructuredAgentTurnActivity } from '../../../src/shared/native-chat/transcript/native-chat-turn-activity'
 import { agentStopDisplayStatus } from '../../../src/shared/agent-stop-display-status'
 import { mobileStructuredSendQueues } from './use-mobile-structured-send-with-outcome'
-import type { MobileNativeChatSendFollowUp } from './native-chat/mobile-native-chat-send'
+import {
+  nativeChatSendFollowUp,
+  type NativeChatSendFollowUp
+} from '../../../src/shared/native-chat-follow-up-behavior'
 
 export function useMobileStructuredTurnIndicator(input: {
   state: StructuredAgentSessionState
@@ -21,7 +24,7 @@ export function useMobileStructuredTurnIndicator(input: {
   queueSendsNext: boolean
 }): NativeChatLiveTurnIndicator & {
   stopping: boolean
-  sendFollowUp?: MobileNativeChatSendFollowUp
+  sendFollowUp?: NativeChatSendFollowUp
 } {
   const { state, turnId, hostStopping, stopPressed, queueCapable, queueFollowUps } = input
   const activityText = useMemo(
@@ -37,26 +40,27 @@ export function useMobileStructuredTurnIndicator(input: {
       ? ('queue' as const)
       : ('send' as const)
     : undefined
-  const midTurn = queueCapable && working && !stopping
-  // The send's own resolver: a waiting command or unanswerable prompts can make both ways the same.
-  const send = { isWorking: input.isWorking || input.queueSendsNext, stopping }
-  const tapQueues = midTurn && mobileStructuredSendQueues(queueCapable, queueFollowUps, state, send)
-  const alternateQueues =
-    midTurn &&
-    mobileStructuredSendQueues(queueCapable, queueFollowUps, state, { ...send, alternate: true })
+  const isWorking = input.isWorking || input.queueSendsNext
+  const sendFollowUp =
+    queueCapable && working && !stopping
+      ? nativeChatSendFollowUp((alternate) =>
+          mobileStructuredSendQueues(queueCapable, queueFollowUps, state, {
+            alternate,
+            isWorking,
+            stopping
+          })
+        )
+      : null
+  const followUpAction = sendFollowUp?.action
+  const followUpOffersChoice = sendFollowUp?.offersChoice === true
   return useMemo(
     () => ({
       thinking,
       activityText,
       stopping,
       stopRequestInFlight,
-      ...(midTurn
-        ? {
-            sendFollowUp: {
-              action: tapQueues ? ('queue' as const) : ('steer' as const),
-              offersChoice: tapQueues !== alternateQueues
-            }
-          }
+      ...(followUpAction
+        ? { sendFollowUp: { action: followUpAction, offersChoice: followUpOffersChoice } }
         : {}),
       ...(afterStop ? { afterStop } : {})
     }),
@@ -65,9 +69,8 @@ export function useMobileStructuredTurnIndicator(input: {
       activityText,
       stopping,
       stopRequestInFlight,
-      midTurn,
-      tapQueues,
-      alternateQueues,
+      followUpAction,
+      followUpOffersChoice,
       afterStop
     ]
   )

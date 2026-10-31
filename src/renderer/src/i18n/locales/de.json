@@ -19080,6 +19080,10 @@
       },
       "composer": {
         "send": "Senden",
+        "queueMessage": "Nachricht einreihen",
+        "steerMessage": "Nachricht steuern",
+        "queueHint": "Für nach diesem Durchgang einreihen",
+        "steerHint": "In den laufenden Durchgang senden",
         "noPty": "Kein aktives Terminal — zurückwechseln, um die Verbindung wiederherzustellen.",
         "locked": "Die Eingabe wird von einem anderen Gerät gesteuert.",
         "placeholder": "Frage stellen, @ für Dateiverweise, / für Befehle",

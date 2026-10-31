@@ -1,4 +1,5 @@
 import type { NativeChatSkillDiscoverySnapshot } from '../../../src/shared/native-chat/input/native-chat-picker-items'
+import type { NativeChatSendFollowUp } from '../../../src/shared/native-chat-follow-up-behavior'
 import type { StructuredMobileSendAttachment } from './use-mobile-structured-send-with-outcome'
 import type { MobileSessionView } from '../storage/session-view-preferences'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
@@ -14,7 +15,6 @@ import type { NativeChatTurnJournal } from '../../../src/shared/native-chat-turn
 import type { NativeChatAwaitingInput } from '../../../src/shared/native-chat/native-chat-terminal-turn'
 import type { NativeChatResolvedPrompt } from '../../../src/shared/native-chat-resolution-receipt'
 import type {
-  MobileNativeChatSendFollowUp,
   MobileNativeChatSendIntent,
   MobileNativeChatSendOutcome
 } from './native-chat/mobile-native-chat-send'
@@ -59,7 +59,7 @@ export type MobileNativeChatController = {
   nativeChatCommandRefusalCauses: MobileNativeChatCommandRefusalCauses
   nativeChatCanStop: boolean
   /** While the agent works on a host that queues: what a tap on Send does and whether holding it offers the other way; null otherwise. */
-  nativeChatSendFollowUp: MobileNativeChatSendFollowUp | null
+  nativeChatSendFollowUp: NativeChatSendFollowUp | null
   nativeChatStreamingText?: string
   nativeChatPermission: MobileChatPermission | null
   // A new prompt occurrence resets local card submission state only.

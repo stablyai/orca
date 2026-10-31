@@ -19853,6 +19853,10 @@
       },
       "composer": {
         "send": "Enviar",
+        "queueMessage": "Colocar mensagem na fila",
+        "steerMessage": "Orientar mensagem",
+        "queueHint": "Colocar na fila para depois deste turno",
+        "steerHint": "Enviar ao turno em andamento",
         "noPty": "Nenhum terminal ativo — alterne de volta para reconectar.",
         "locked": "A entrada está retida por outro dispositivo.",
         "placeholder": "Enviar uma mensagem…",

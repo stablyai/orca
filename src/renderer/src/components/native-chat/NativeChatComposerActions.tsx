@@ -1,7 +1,8 @@
 import { memo } from 'react'
-import { ArrowUp, CircleAlert, Mic, Plus, Square } from 'lucide-react'
+import { ArrowUp, CircleAlert, CornerDownRight, ListEnd, Mic, Plus, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type {
@@ -14,6 +15,11 @@ import { NativeChatComposerGoalChip } from './NativeChatComposerGoalChip'
 import { NativeChatContextUsageRing } from './NativeChatContextUsageRing'
 import type { NativeChatContextUsageSummary } from './native-chat-context-usage-summary'
 import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
+import type {
+  NativeChatFollowUpBehavior,
+  NativeChatSendFollowUp
+} from '../../../../shared/native-chat-follow-up-behavior'
+import { isMacPlatform } from './native-chat-shortcut'
 
 export type NativeChatComposerActionsProps = {
   editSession?: { cancel: () => void }
@@ -27,6 +33,8 @@ export type NativeChatComposerActionsProps = {
   isWorking: boolean
   /** This client's Stop request is in flight: the Stop control is disabled and says so. */
   isStopping?: boolean
+  /** Mid-turn: a send control beside Stop, so the user sees what Enter does. */
+  followUp?: NativeChatSendFollowUp
   isDictating: boolean
   isDictationHoldMode: boolean
   onAttach: () => void
@@ -57,6 +65,7 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
   draftNotSaved,
   isWorking,
   isStopping = false,
+  followUp,
   isDictating,
   isDictationHoldMode,
   onAttach,
@@ -211,6 +220,9 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
             {translate('common.cancel', 'Cancel')}
           </Button>
         ) : null}
+        {followUp && stops && !editSession ? (
+          <NativeChatFollowUpSendButton followUp={followUp} onSend={onSend} />
+        ) : null}
         {sendReason ? (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -228,6 +240,64 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
     </div>
   )
 })
+
+const FOLLOW_UP_ICON = { queue: ListEnd, steer: CornerDownRight } as const
+
+/** Sends exactly as Enter does; its tooltip names Enter and, when it would differ, Cmd/Ctrl+Enter. */
+function NativeChatFollowUpSendButton({
+  followUp,
+  onSend
+}: {
+  followUp: NativeChatSendFollowUp
+  onSend: () => void
+}): React.JSX.Element {
+  const label = {
+    queue: translate('components.native-chat.composer.queueMessage', 'Queue message'),
+    steer: translate('components.native-chat.composer.steerMessage', 'Steer message')
+  }
+  const hint = {
+    queue: translate('components.native-chat.composer.queueHint', 'Queue for after this turn'),
+    steer: translate('components.native-chat.composer.steerHint', 'Send into the running turn')
+  }
+  const alternate: NativeChatFollowUpBehavior = followUp.action === 'queue' ? 'steer' : 'queue'
+  const isMac = isMacPlatform()
+  const Icon = FOLLOW_UP_ICON[followUp.action]
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          aria-label={label[followUp.action]}
+          // A press keeps focus in the draft, and a double-click's second press sends nothing more.
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={(event) => {
+            if (event.detail <= 1) {
+              onSend()
+            }
+          }}
+          size="icon"
+          className="size-8 rounded-full pointer-coarse:size-10"
+        >
+          <Icon className="size-4" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4}>
+        <span className="flex flex-col gap-1">
+          <span className="flex items-center justify-between gap-2">
+            <span>{hint[followUp.action]}</span>
+            <ShortcutKeyCombo keys={isMac ? ['⏎'] : ['Enter']} />
+          </span>
+          {followUp.offersChoice ? (
+            <span className="flex items-center justify-between gap-2">
+              <span>{hint[alternate]}</span>
+              <ShortcutKeyCombo keys={isMac ? ['⌘', '⏎'] : ['Ctrl', 'Enter']} />
+            </span>
+          ) : null}
+        </span>
+      </TooltipContent>
+    </Tooltip>
+  )
+}
 
 function DraftNotSavedIcon({ shown }: { shown: boolean }): React.JSX.Element | null {
   if (!shown) {

@@ -383,6 +383,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
           isWorking={isWorking}
           isStopping={isStopping}
           afterStop={afterStop}
+          sendFollowUp={structuredTransport?.sendFollowUp}
           attachDisabled={
             disabled ||
             (structuredTransport?.runtime === 'remote' &&
