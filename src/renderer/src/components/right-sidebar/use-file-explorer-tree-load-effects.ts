@@ -114,11 +114,14 @@ export function useFileExplorerTreeLoadEffects({
     runtimeEnvironmentIdOrLocalUnlessTwin(s, workspaceKey)
   )
   const retryAfterContactRef = useRef(() => {})
-  retryAfterContactRef.current = () => {
-    if (visibleFilesWorktreePath && rootError) {
-      resetAndLoad()
+  // Kept current from an effect, not render; the subscription below outlives renders.
+  useEffect(() => {
+    retryAfterContactRef.current = () => {
+      if (visibleFilesWorktreePath && rootError) {
+        resetAndLoad()
+      }
     }
-  }
+  }, [visibleFilesWorktreePath, rootError, resetAndLoad])
   useEffect(() => {
     if (!runtimeEnvironmentId) {
       return
