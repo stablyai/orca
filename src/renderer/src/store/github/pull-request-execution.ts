@@ -7,7 +7,7 @@ import type { GitHubSlice } from './slice-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import type { CacheEntry, GitHubPRFallbackSource } from './cache-model'
-import { prRefreshErrorState, type PRRefreshStateClearToken } from './pr-refresh-state'
+import { withDirectPRRefreshSettlement, type PRRefreshStateClearToken } from './pr-refresh-state'
 
 import type {
   GitHubPRRefreshCandidate,
@@ -137,16 +137,15 @@ export function startPullRequestLookup(args: {
         return githubPRTransportFailureOutcome()
       })
       const pr = outcome.kind === 'found' ? outcome.pr : null
+      // RPC and lost IPC replies get no coordinator settlement; a lost reply is reported only to the click that asked, so polls stay silent.
+      if (
+        prRequestGenerations.get(cacheKey) === generation &&
+        (outcome.kind !== 'upstream-error' ||
+          (transportFailed ? options?.userRefresh === true : runtimeRepo))
+      ) {
+        set((s) => withDirectPRRefreshSettlement(s, cacheKey, outcome, requestStartedAt))
+      }
       if (outcome.kind === 'upstream-error') {
-        // RPC and lost IPC replies have no coordinator settlement to publish their failure.
-        if ((runtimeRepo || transportFailed) && prRequestGenerations.get(cacheKey) === generation) {
-          set((s) => {
-            const nextStates = { ...s.prRefreshStates }
-            delete nextStates[cacheKey]
-            nextStates[cacheKey] = prRefreshErrorState(outcome)
-            return { prRefreshStates: nextStates }
-          })
-        }
         return cached?.data ?? null
       }
       if (prRequestGenerations.get(cacheKey) === generation) {

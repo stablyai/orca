@@ -417,6 +417,8 @@ it('link refresh reads the selected GitHub PR after the action at both read seam
     linkedPR: 43,
     linkedGitLabMR: null,
     fetchPRForBranch: useAppStore.getState().fetchPRForBranch,
+    // The card read's failure is not the link's failure: checks still load for the new head.
+    fetchHostedReviewForBranch: vi.fn().mockRejectedValue(new Error('lookup capacity reached')),
     fetchPRChecks: vi.fn(async () => []),
     fetchPRComments: vi.fn(async () => [])
   })
@@ -459,7 +461,12 @@ it('link refresh reads the selected GitHub PR after the action at both read seam
       input.branch,
       'head-b',
       selected.prRepo,
-      expect.anything()
+      expect.objectContaining({ userRefresh: true })
+    )
+    expect(input.fetchPRComments).toHaveBeenCalledWith(
+      repo.path,
+      43,
+      expect.objectContaining({ userRefresh: true })
     )
   } finally {
     old.resolve({ kind: 'found', pr: open, fetchedAt: 1 })

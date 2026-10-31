@@ -214,6 +214,9 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
           expireGitHubPRRefreshState(prCacheKey, startedPRRefreshToken)
         }
       }
+      // Read this click's settlement now; the key-wide slot can belong to another read after the card read.
+      const prLookupFailed =
+        !refreshedPR && useAppStore.getState().prRefreshStates[prCacheKey]?.status === 'error'
       if (!isCurrentRequest()) {
         return
       }
@@ -227,7 +230,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
       if (!isCurrentRequest()) {
         return
       }
-      if (!refreshedPR && useAppStore.getState().prRefreshStates[prCacheKey]?.status === 'error') {
+      if (prLookupFailed) {
         refreshOutcome = 'error'
         return
       }
@@ -252,7 +255,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
           branch,
           refreshedPR.headSha,
           refreshedPR.prRepo,
-          { force: true, repoId: repo.id, wakeWslDistro: true }
+          { force: true, repoId: repo.id, wakeWslDistro: true, userRefresh: true }
         ).then(
           (result) => {
             if (!isCurrentRequest() || !isCurrentAsyncResult(prRequestKey)) {
@@ -281,7 +284,8 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
         const refreshedComments = fetchPRComments(repo.path, refreshedPR.number, {
           force: true,
           repoId: repo.id,
-          prRepo: refreshedPR.prRepo
+          prRepo: refreshedPR.prRepo,
+          userRefresh: true
         }).then(
           (result) => {
             if (isCurrentRequest() && isCurrentAsyncResult(prRequestKey)) {

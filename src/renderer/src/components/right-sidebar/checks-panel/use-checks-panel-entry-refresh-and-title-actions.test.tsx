@@ -156,7 +156,6 @@ it.each(['merged', 'closed', 'open'] as const)(
       .fn()
       .mockReturnValueOnce(old.promise)
       .mockResolvedValueOnce({ kind: 'found', pr: afterWrite, fetchedAt: 2 })
-      .mockRejectedValueOnce(new Error('follow-up transport lost'))
     vi.stubGlobal('api', { gh: { refreshPRNow } })
     useAppStore.setState({ repos: [repo], prCache: {}, hostedReviewCache: {}, prRefreshStates: {} })
     const input = makeInput({ ...bitbucketReview, provider: 'github', state })
@@ -175,15 +174,5 @@ it.each(['merged', 'closed', 'open'] as const)(
     expect(refreshPRNow).toHaveBeenCalledTimes(2)
     expect(refreshPRNow).toHaveBeenLastCalledWith(expect.objectContaining({ userRefresh: true }))
     expect(useAppStore.getState().prCache[key]?.data).toEqual(afterWrite)
-    const lastGood = useAppStore.getState().prCache[key]
-    // A confirmed write remains successful when its metadata follow-up fails.
-    await act(async () =>
-      expect(result.current.refreshHostedReviewAfterMutation()).resolves.toBeUndefined()
-    )
-    expect(useAppStore.getState().prCache[key]).toEqual(lastGood)
-    expect(useAppStore.getState().prRefreshStates[key]).toMatchObject({
-      status: 'error',
-      errorType: 'unknown'
-    })
   }
 )

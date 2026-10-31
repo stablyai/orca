@@ -22,6 +22,7 @@ export type InflightChecks = {
 }
 export type InflightComments = {
   promise: Promise<PRComment[]>
+  requestId: number
   postedComments: PRComment[]
 }
 export type InflightWorkItems = {

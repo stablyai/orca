@@ -153,6 +153,16 @@ describe('registerGitHubHandlers', () => {
       null,
       expect.objectContaining({ userRefresh: true })
     )
+    await handlers['gh:prChecks'](null, {
+      repoPath: '/workspace/repo',
+      prNumber: 12,
+      noCache: true,
+      userRefresh: true
+    })
+    expect(mocks.client.getPRChecks.mock.calls[0]?.[4]).toEqual({
+      noCache: true,
+      userRefresh: true
+    })
   })
 
   it('skips stale visible PR refresh candidates without rejecting the batch', async () => {

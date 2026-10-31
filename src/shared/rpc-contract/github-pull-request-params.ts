@@ -40,7 +40,8 @@ export const PRCommentReaction = RepoSelector.extend({
 })
 
 export const PullRequestChecks = PullRequest.extend({
-  headSha: OptionalString
+  headSha: OptionalString,
+  userRefresh: z.boolean().optional()
 })
 
 export const PullRequestCheckDetails = RepoSelector.extend({

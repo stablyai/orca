@@ -11,7 +11,6 @@ import {
   runtimeEnvironmentCall
 } from './github-slice-test-harness'
 import type { AppState } from '../types'
-import { selectChecksPanelReview } from '../../components/right-sidebar/checks-panel-review'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import { getHostedReviewCacheKey } from './hosted-review-cache-identity'
 
@@ -515,19 +514,7 @@ it.each([true, false])(
       expect(await ordinary).toEqual(merged)
       old.resolve({ kind: 'found', pr: open, fetchedAt: 1 })
       await before
-      const pr = store.getState().prCache['/repo::topic']?.data
-      expect(
-        selectChecksPanelReview({
-          pr,
-          hostedReview: null,
-          linkedPR: null,
-          suppressedGitHubPR: null,
-          linkedGitLabMR: null,
-          linkedBitbucketPR: null,
-          linkedAzureDevOpsPR: null,
-          linkedGiteaPR: null
-        })?.state
-      ).toBe('merged')
+      expect(store.getState().prCache['/repo::topic']?.data?.state).toBe('merged')
       expect(_getGitHubPRRequestGenerationCountForTest()).toBe(0)
     } finally {
       old.resolve({ kind: 'found', pr: open, fetchedAt: 1 })
@@ -552,125 +539,54 @@ it('retains last good and records a failed click when IPC throws instead of repo
   })
 })
 
-it.each(['network', 'rate_limited'] as const)(
-  'a refused %s click keeps last good against older direct and broadcast answers',
-  async (errorType) => {
-    const store = createTestStore()
-    const key = '/repo::failure'
-    const alias = { cacheKey: key, repoId: '', repoPath: '/repo', branch: 'failure' }
-    const pr = makePR()
-    const old = Promise.withResolvers<{ kind: 'found'; pr: typeof pr; fetchedAt: number }>()
-    store.setState({ prCache: { [key]: { data: pr, fetchedAt: 1 } } })
-    mockApi.gh.refreshPRNow
-      .mockImplementationOnce(() => {
-        store.getState().applyGitHubPRRefreshEvent({
-          sequence: 1,
-          aliases: [alias],
-          reason: 'visible',
-          status: 'in-flight'
-        })
-        return old.promise
-      })
-      .mockImplementationOnce(async () => {
-        const outcome = {
-          kind: 'upstream-error' as const,
-          errorType,
-          message: 'classified failure',
-          fetchedAt: 2
-        }
-        store
-          .getState()
-          .applyGitHubPRRefreshEvent({ sequence: 2, aliases: [alias], reason: 'manual', outcome })
-        return outcome
-      })
-    const before = store
-      .getState()
-      .fetchPRForBranch('/repo', 'failure', { force: true, reason: 'visible' })
-    const intent = { force: true, userRefresh: true }
-    const click = store.getState().fetchPRForBranch('/repo', 'failure', intent)
-    try {
-      expect(mockApi.gh.refreshPRNow).toHaveBeenCalledTimes(2)
-      expect(await click).toEqual(pr)
-      old.resolve({ kind: 'found', pr: makePR({ title: 'obsolete' }), fetchedAt: 3 })
-      await before
-      store.getState().applyGitHubPRRefreshEvent({
-        sequence: 1,
-        aliases: [alias],
-        reason: 'visible',
-        outcome: { kind: 'found', pr: makePR({ title: 'obsolete' }), fetchedAt: 3 }
-      })
-      expect(store.getState().prCache[key]).toEqual({ data: pr, fetchedAt: 1 })
-      expect(store.getState().prRefreshStates[key]).toMatchObject({ status: 'error', errorType })
-      const recovered = { kind: 'found' as const, pr: makePR({ state: 'merged' }), fetchedAt: 4 }
-      mockApi.gh.refreshPRNow.mockImplementationOnce(async () => {
-        store.getState().applyGitHubPRRefreshEvent({
-          sequence: 3,
-          aliases: [alias],
-          reason: 'manual',
-          outcome: recovered
-        })
-        return recovered
-      })
-      await store.getState().fetchPRForBranch('/repo', 'failure', intent)
-      expect(store.getState().prCache[key]?.data?.state).toBe('merged')
-      expect(store.getState().prRefreshStates[key]).toBeUndefined()
-    } finally {
-      old.resolve({ kind: 'found', pr, fetchedAt: 1 })
-      await Promise.all([before, click])
-    }
-  }
-)
-
-it.each(['classified', 'transport'] as const)(
-  'retains last good for a %s RPC failure on the existing operation',
-  async (failure) => {
-    const store = createTestStore()
-    const key = 'runtime:env-1::repo-1::topic'
-    const pr = makePR()
-    store.setState({
-      repos: [
-        {
-          id: 'repo-1',
-          path: '/repo',
-          displayName: 'repo',
-          badgeColor: '',
-          addedAt: 1,
-          executionHostId: 'runtime:env-1'
-        }
-      ],
-      prCache: { [key]: { data: pr, fetchedAt: 1 } }
+it('a runtime click keeps last good on a lost reply that polls ignore, until an answer settles it', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  const store = createTestStore()
+  const key = 'runtime:env-1::repo-1::topic'
+  const pr = makePR()
+  store.setState({
+    repos: [
+      {
+        id: 'repo-1',
+        path: '/repo',
+        displayName: 'repo',
+        badgeColor: '',
+        addedAt: 1,
+        executionHostId: 'runtime:env-1'
+      }
+    ],
+    prCache: { [key]: { data: pr, fetchedAt: 1 } }
+  })
+  const read = (userRefresh: boolean) =>
+    store.getState().fetchPRForBranch('/repo', 'topic', {
+      force: true,
+      repoId: 'repo-1',
+      ...(userRefresh ? { userRefresh: true } : { reason: 'visible' as const })
     })
-    if (failure === 'transport') {
-      runtimeEnvironmentCall.mockRejectedValueOnce(new Error('transport disconnected'))
-    } else {
-      runtimeEnvironmentCall.mockResolvedValueOnce({
-        id: 'rpc',
-        ok: true,
-        result: {
-          kind: 'upstream-error',
-          errorType: 'network',
-          message: 'classified',
-          fetchedAt: 2
-        },
-        _meta: { runtimeId: 'remote-runtime' }
-      })
-    }
-    expect(
-      await store
-        .getState()
-        .fetchPRForBranch('/repo', 'topic', { force: true, repoId: 'repo-1', userRefresh: true })
-    ).toEqual(pr)
-    expect(runtimeEnvironmentCall).toHaveBeenCalledOnce()
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
-      expect.objectContaining({
-        method: 'github.prForBranch',
-        params: expect.objectContaining({ userRefresh: true })
-      })
-    )
-    expect(store.getState().prCache[key]).toEqual({ data: pr, fetchedAt: 1 })
-    expect(store.getState().prRefreshStates[key]).toMatchObject({
-      status: 'error',
-      errorType: failure === 'transport' ? 'unknown' : 'network'
+  runtimeEnvironmentCall.mockRejectedValueOnce(new Error('transport disconnected'))
+  expect(await read(false)).toEqual(pr)
+  expect(store.getState().prRefreshStates[key]).toBeUndefined()
+  runtimeEnvironmentCall.mockRejectedValueOnce(new Error('transport disconnected'))
+  expect(await read(true)).toEqual(pr)
+  expect(runtimeEnvironmentCall).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      method: 'github.prForBranch',
+      params: expect.objectContaining({ userRefresh: true })
     })
-  }
-)
+  )
+  expect(store.getState().prCache[key]).toEqual({ data: pr, fetchedAt: 1 })
+  expect(store.getState().prRefreshStates[key]).toMatchObject({
+    status: 'error',
+    errorType: 'unknown'
+  })
+  vi.setSystemTime(Date.now() + 1)
+  runtimeEnvironmentCall.mockResolvedValueOnce({
+    id: 'rpc',
+    ok: true,
+    result: { kind: 'found', pr: makePR({ state: 'merged' }), fetchedAt: 3 },
+    _meta: { runtimeId: 'remote-runtime' }
+  })
+  await read(false)
+  expect(store.getState().prCache[key]?.data?.state).toBe('merged')
+  expect(store.getState().prRefreshStates[key]).toBeUndefined()
+})

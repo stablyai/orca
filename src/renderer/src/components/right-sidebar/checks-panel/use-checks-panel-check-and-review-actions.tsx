@@ -194,7 +194,7 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
           linkedBitbucketPR,
           linkedAzureDevOpsPR,
           linkedGiteaPR
-        })
+        }).catch(() => null)
         if (!isCurrentRequestContext()) {
           return
         }
@@ -223,7 +223,8 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
             {
               force: true,
               repoId: repo.id,
-              wakeWslDistro: true
+              wakeWslDistro: true,
+              userRefresh: true
             }
           )
             .then(
@@ -248,7 +249,8 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
           fetchPRComments(repo.path, refreshedPR.number, {
             force: true,
             repoId: repo.id,
-            prRepo: refreshedPR.prRepo
+            prRepo: refreshedPR.prRepo,
+            userRefresh: true
           })
             .then(
               (result) => {
