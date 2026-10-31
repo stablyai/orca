@@ -40,7 +40,7 @@ describe('resolveWindowShortcutAction', () => {
   })
 
   it.each(['darwin', 'linux', 'win32'] as const)(
-    'leaves Cmd/Ctrl+, to terminal apps on %s unless explicitly rebound',
+    'opens Settings with Cmd+, only on macOS and respects overrides on %s',
     (platform) => {
       const input = {
         code: 'Comma',
@@ -50,13 +50,46 @@ describe('resolveWindowShortcutAction', () => {
         alt: false,
         shift: false
       }
-      expect(resolveWindowShortcutAction(input, platform)).toBeNull()
-      expect(resolveWindowShortcutAction(input, platform, { 'tab.close': ['Mod+W'] })).toBeNull()
+      const defaultAction = platform === 'darwin' ? { type: 'openSettings' } : null
+      expect(resolveWindowShortcutAction(input, platform)).toEqual(defaultAction)
+      expect(resolveWindowShortcutAction(input, platform, { 'tab.close': ['Mod+W'] })).toEqual(
+        defaultAction
+      )
+      expect(resolveWindowShortcutAction(input, platform, { 'app.settings': [] })).toBeNull()
+      expect(
+        resolveWindowShortcutAction(input, platform, { 'app.settings': ['Mod+Shift+Comma'] })
+      ).toBeNull()
       expect(
         resolveWindowShortcutAction(input, platform, { 'app.settings': ['Mod+Comma'] })
       ).toEqual({ type: 'openSettings' })
     }
   )
+
+  it('keeps macOS Ctrl+, available and respects terminal-first for Cmd+,', () => {
+    const input = {
+      code: 'Comma',
+      key: ',',
+      meta: true,
+      control: false,
+      alt: false,
+      shift: false
+    }
+    expect(
+      resolveWindowShortcutAction({ ...input, meta: false, control: true }, 'darwin')
+    ).toBeNull()
+    expect(
+      resolveWindowShortcutAction(input, 'darwin', undefined, {
+        context: 'terminal',
+        terminalShortcutPolicy: 'orca-first'
+      })
+    ).toEqual({ type: 'openSettings' })
+    expect(
+      resolveWindowShortcutAction(input, 'darwin', undefined, {
+        context: 'terminal',
+        terminalShortcutPolicy: 'terminal-first'
+      })
+    ).toBeNull()
+  })
 
   it('resolves customized quick-command menu shortcuts with terminal policy gating', () => {
     const input: WindowShortcutInput = {
