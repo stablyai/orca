@@ -1,16 +1,9 @@
 name: Cloud Verify
 
+# PR-only: post-merge runs on main paint the repo header red for users over CVE drift.
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
-    paths:
-      - cloud/**
-      - src/packages/process-host/**
-      - .github/workflows/cloud-*.yml
-      - .github/actions/cloud-sql-rollout-lease/**
-      - .github/actions/setup-pnpm/**
-  push:
-    branches: [main]
     paths:
       - cloud/**
       - src/packages/process-host/**
