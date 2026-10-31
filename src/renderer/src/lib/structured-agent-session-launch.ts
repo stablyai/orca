@@ -220,7 +220,8 @@ function structuredAgentLaunchState(
     options.executionHostId,
     options.resumeFrom,
     options.hostSeedOptions,
-    options.activate
+    options.activate,
+    options.surface
   )
   intent.explicitLaunchOptions = options.launchOptions ? { ...options.launchOptions } : undefined
   intent.beforeCreate = options.beforeCreate

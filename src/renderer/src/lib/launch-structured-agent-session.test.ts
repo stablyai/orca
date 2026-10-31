@@ -616,3 +616,36 @@ describe('structured agent session launch', () => {
     expect(error).not.toBeInstanceOf(StructuredAgentSessionCreateRefusalError)
   })
 })
+
+it('keeps thread create identity through retry and persisted launch recovery', async () => {
+  const { structuredAgentLaunchRecordFor, validRecord } =
+    await import('./agent-session/launch/structured-agent-session-launch-record')
+  const { structuredAgentSessionCreateFingerprint } =
+    await import('../../../shared/structured-agent-session-mutation')
+  const intent = createStructuredAgentSessionLaunchIntent(
+    'main-checkout',
+    'codex',
+    'runtime:server',
+    undefined,
+    undefined,
+    false,
+    'thread'
+  )
+  expect(intent.params.surface).toBe('thread')
+  const saved = structuredAgentLaunchRecordFor(intent, 'visibility-unknown')
+  expect(validRecord(saved)).toBe(true)
+  const restored = restoreStructuredAgentSessionLaunchIntent({
+    worktreeId: intent.worktreeId,
+    ...saved
+  })
+  expect(restored.params).toEqual(intent.params)
+  expect(retryStructuredAgentSessionLaunchIntent(restored).params.surface).toBe('thread')
+  expect(
+    structuredAgentSessionCreateFingerprint({ sessionId: restored.sessionId, ...restored.params })
+  ).toBe(saved.payloadFingerprint)
+  const { surface: _surface, ...ordinary } = restored.params
+  expect(
+    structuredAgentSessionCreateFingerprint({ sessionId: restored.sessionId, ...ordinary })
+  ).not.toBe(saved.payloadFingerprint)
+  expect(validRecord({ ...saved, surface: 'unknown' })).toBe(false)
+})

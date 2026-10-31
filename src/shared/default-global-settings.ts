@@ -263,6 +263,7 @@ export function buildDefaultSettings(args: {
     experimentalTerminalAttention: false,
     experimentalAgentHibernation: false,
     agentHibernationIdleMs: 30 * 60 * 1000,
+    experimentalThreads: false,
     experimentalNewWorktreeCardStyle: false,
     experimentalEphemeralVms: false,
     experimentalConnectors: false,

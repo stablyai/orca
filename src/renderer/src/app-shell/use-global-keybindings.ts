@@ -1,3 +1,4 @@
+import { openNewThread } from '@/components/threads/thread-actions'
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
@@ -127,6 +128,12 @@ export function useGlobalKeybindings(args: {
         })
       }
 
+      if (useAppStore.getState().settings?.experimentalThreads && matchShortcut('thread.create')) {
+        input.preventDefault()
+        notifyTerminalCapture('thread.create')
+        void openNewThread()
+        return
+      }
       const canRevealRightSidebar = !creationLayoutActive && canShowRightSidebarForView(activeView)
 
       if (matchShortcut('sidebar.search.toggle') && canRevealRightSidebar) {

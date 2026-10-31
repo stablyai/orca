@@ -3,6 +3,16 @@ import { platformBindings } from './definitions-support'
 
 export const KEYBINDING_DEFINITION_CORE_2: readonly KeybindingDefinition[] = [
   {
+    id: 'thread.create',
+    title: 'New thread',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['thread', 'chat', 'new'],
+    // Ctrl+Alt+letter is AltGr text input on Windows and Linux.
+    defaultBindings: { darwin: ['Mod+Alt+N'], linux: [], win32: [] },
+    allowInTerminal: true
+  },
+  {
     id: 'floatingWorkspace.minimize',
     title: 'Minimize Floating Workspace Panel',
     group: 'Global',

@@ -60,6 +60,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       recallSource,
       inputOwnedByCard = false,
       notices: chatNotices,
+      placeholder,
       workspacePending: pending = false
     },
     ref
@@ -138,12 +139,10 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       structuredWorktreeId: structuredTransport?.worktreeId
     })
 
-    const resolveTarget = useCallback(() => {
-      if (!targetPtyId) {
-        return null
-      }
-      return { ptyId: targetPtyId }
-    }, [targetPtyId])
+    const resolveTarget = useCallback(
+      () => (targetPtyId ? { ptyId: targetPtyId } : null),
+      [targetPtyId]
+    )
 
     const attachments = useNativeChatComposerAttachments({
       attachmentScopeKey: draftScopeKey,
@@ -368,6 +367,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
     return (
       <div ref={root} data-native-chat-composer-scope={draftScopeKey}>
         <NativeChatComposerField
+          placeholder={placeholder}
           draftScopeKey={draftScopeKey}
           positionTarget={editSession ? undefined : terminalTabId}
           textareaRef={textareaRef}

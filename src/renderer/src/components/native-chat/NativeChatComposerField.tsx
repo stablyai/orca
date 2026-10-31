@@ -33,6 +33,7 @@ import { useLatestHandler } from '@/lib/use-latest-handler'
 function noop(): void {}
 
 export type NativeChatComposerFieldProps = {
+  placeholder?: string
   editSession?: { cancel: () => void }
   /** Own draft persistence and native-drop routing by this pane so drops cannot land in another composer. */
   draftScopeKey: string
@@ -122,6 +123,7 @@ function imeComposedSegment(base: string, settled: string): string {
 }
 
 export function NativeChatComposerField({
+  placeholder,
   editSession,
   draftScopeKey,
   positionTarget,
@@ -348,7 +350,9 @@ export function NativeChatComposerField({
                         'components.native-chat.goal.placeholder',
                         'Describe your goal, define measurable outcomes for best results'
                       )
-                    : (unavailableHint ?? nativeChatComposerPlaceholder(hasPty, canSend, afterStop))
+                    : (unavailableHint ??
+                      placeholder ??
+                      nativeChatComposerPlaceholder(hasPty, canSend, afterStop))
               }
               // Let layout handle wrapping and touch targets; scroll after eight lines without JavaScript measurement.
               className={cn(

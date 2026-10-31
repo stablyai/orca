@@ -1,0 +1,79 @@
+import { afterPendingTab } from '@/runtime/layout-owner-pending-tabs'
+import { useAppStore } from '@/store'
+import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { createBrowserUuid } from '@/lib/browser-uuid'
+import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session-launch-plan'
+import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
+import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
+import type { Tab } from '../../../../shared/tab-types'
+import { structuredAgentSessionOwnerForTab } from '@/runtime/structured-agent-session-owner'
+import { eligibleThreadProjects, type ThreadProject } from './thread-projects'
+import { useThreadNavigation } from './thread-navigation'
+
+export async function openNewThread(): Promise<void> {
+  const state = useAppStore.getState()
+  if (!state.settings?.experimentalThreads) {
+    return
+  }
+  const projects = await eligibleThreadProjects(state)
+  if (!projects.length) {
+    useAppStore.getState().openModal('add-repo')
+    return
+  }
+  useAppStore.getState().setActiveView('terminal')
+  useThreadNavigation.setState({
+    selection: { kind: 'new', projectKey: projects[0].key, draftId: createBrowserUuid() }
+  })
+}
+
+export function selectThread(tab: Tab): void {
+  const state = useAppStore.getState()
+  const hostId = structuredAgentSessionOwnerForTab(state, tab)
+  if (!hostId) {
+    return
+  }
+  if (
+    !activateAndRevealWorktree(tab.worktreeId, {
+      executionHostId: hostId,
+      providesInitialSurface: true
+    })
+  ) {
+    return
+  }
+  state.setActiveView('terminal')
+  useThreadNavigation.setState({ selection: { kind: 'thread', tabId: tab.id } })
+}
+
+export function sendNewThread(project: ThreadProject, text: string) {
+  const state = useAppStore.getState()
+  const agent = state.settings?.defaultTuiAgent
+  const plan = adoptAgentSessionLaunchVerdict({
+    route: 'structured-native-chat',
+    requestedSurface: 'chat',
+    surface: 'thread',
+    requestId: newAgentLaunchRequestId(),
+    agent: agent && agent !== 'blank' ? agent : 'claude',
+    worktreeId: project.worktree.id,
+    executionHostId: project.hostId,
+    prompt: text,
+    promptDelivery: 'auto-submit'
+  })
+  const selection = useThreadNavigation.getState().selection
+  const launch = beginStructuredAgentSessionProvisionalLaunch({
+    plan,
+    hooks: {},
+    target: { worktreeId: project.worktree.id, executionHostId: project.hostId },
+    activate: false,
+    onOpened: (tab) =>
+      afterPendingTab(tab.id, (shown) => {
+        if (!shown || useThreadNavigation.getState().selection !== selection) {
+          return
+        }
+        const visible = useAppStore.getState().getTab(shown)
+        if (visible) {
+          selectThread(visible)
+        }
+      })
+  })
+  return launch
+}

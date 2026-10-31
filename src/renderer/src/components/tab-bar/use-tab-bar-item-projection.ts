@@ -1,5 +1,10 @@
 import { useStructuredChatTabNames } from '@/runtime/structured-chat-name-observation'
 import { useMemo, useState } from 'react'
+import { useAppStore } from '@/store'
+import {
+  useStructuredSessionSummaries,
+  isThreadTab
+} from '@/components/native-chat/structured-session-summary-store'
 import type { GitFileStatus } from '../../../../shared/git-status-types'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TabBarProps } from './tab-bar-props'
@@ -40,7 +45,7 @@ export function useTabBarItemProjection({
     tabs,
     editorFiles,
     browserTabs,
-    agentSessionTabs,
+    agentSessionTabs: allAgentSessionTabs,
     tabBarOrder,
     hoveredTabInsertion,
     activeTabId,
@@ -50,6 +55,12 @@ export function useTabBarItemProjection({
     activeTabType,
     expandedPaneByTabId
   } = props
+  const threadsEnabled = useAppStore((s) => s.settings?.experimentalThreads === true)
+  const threadTabIds = useStructuredSessionSummaries((s) => s.threadTabIds)
+  const agentSessionTabs = useMemo(
+    () => allAgentSessionTabs?.filter((tab) => !isThreadTab(threadsEnabled, tab.id, threadTabIds)),
+    [allAgentSessionTabs, threadsEnabled, threadTabIds]
+  )
   const terminalMap = useMemo(() => new Map(tabs.map((tab) => [tab.id, tab])), [tabs])
   const editorMap = useMemo(
     () => new Map((editorFiles ?? []).map((file) => [file.tabId ?? file.id, file])),

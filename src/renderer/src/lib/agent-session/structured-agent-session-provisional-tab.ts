@@ -70,6 +70,7 @@ function launchHooks(args: ProvisionalLaunchArgs): StructuredAgentLaunchHooks {
 export type ProvisionalLaunchArgs = {
   plan: AgentSessionLaunchPlan
   hooks: StructuredAgentLaunchHooks
+  onOpened?: (tab: OpenedAgentSessionTab) => void
   focusIntent?: NativeChatComposerFocusIntent
   target?: AgentSessionLaunchTarget
   targetGroupId?: string
@@ -109,6 +110,7 @@ export function beginStructuredAgentSessionProvisionalLaunch(
   ): ReturnType<typeof beginLocalProvisionalLaunch> => {
     if (launch?.tab) {
       tabOpened = true
+      args.onOpened?.(launch.tab)
       if (args.activate !== false) {
         focusIntent?.request(launch.tab.id)
       }

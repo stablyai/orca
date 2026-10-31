@@ -1,4 +1,5 @@
 import '../unused-default-rpc-methods.test-fixture'
+import type { AgentSessionStatusSummary } from '../../../../shared/agent-session-wire'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-create-capabilities'
@@ -360,4 +361,47 @@ it('answers an old client whose start failed before spawning in plain words', as
     }
   })
   expect(JSON.stringify(answer)).not.toContain(raw)
+})
+
+it('round-trips thread classification from create to the saved record and status stream', async () => {
+  const input = structuredAgentSessionCreateParams({
+    sessionId: SESSION,
+    worktree: 'id:workspace-1',
+    agent: 'codex',
+    surface: 'thread',
+    randomUuid: () => '00000000-0000-0000-0000-0000000000fa',
+    now: NOW
+  })
+  expect(await call('agentSession.create', input, capable)).toMatchObject({
+    ok: true,
+    result: { ok: true }
+  })
+  expect(rig.store.getRecord(SESSION)).toMatchObject({
+    surface: 'thread',
+    location: { workspaceId: 'workspace-1' }
+  })
+  const summaries: AgentSessionStatusSummary[] = []
+  const release = rig.host.subscribeStatus({
+    id: 'thread-roundtrip',
+    emit: (event) => {
+      if (event.type === 'snapshot') {
+        summaries.push(...event.sessions)
+      } else if (event.type === 'status') {
+        summaries.push(event.session)
+      }
+    }
+  })
+  try {
+    await vi.waitFor(() =>
+      expect(summaries).toContainEqual(
+        expect.objectContaining({ sessionId: SESSION, surface: 'thread' })
+      )
+    )
+    expect(await call('agentSession.create', input, capable)).toMatchObject({
+      ok: true,
+      result: { ok: true, replayed: true }
+    })
+  } finally {
+    release()
+  }
 })

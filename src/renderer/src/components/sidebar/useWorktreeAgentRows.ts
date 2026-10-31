@@ -1,5 +1,9 @@
 import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/structured-agent-session-tabs'
 import { useCallback, useMemo, useSyncExternalStore } from 'react'
+import {
+  useStructuredSessionSummaries,
+  isThreadTab
+} from '@/components/native-chat/structured-session-summary-store'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import { applyAgentRowLineage } from '@/components/dashboard/agent-row-lineage'
 import { migrationUnsupportedToAgentStatusEntry } from '../../../../shared/migration-unsupported-agent-entry'
@@ -46,6 +50,8 @@ export {
 
 /** Share indexed worktree inputs across cards; derive live/retained row freshness from the available evidence. */
 export function useWorktreeAgentRows(worktreeId: string, active = true): DashboardAgentRow[] {
+  const threadsEnabled = useAppStore((s) => s.settings?.experimentalThreads === true)
+  const threadTabIds = useStructuredSessionSummaries((s) => s.threadTabIds)
   const selectInputs = useMemo(() => {
     const selectAgentFreshness = createWorktreeAgentFreshnessSelector(worktreeId)
     const readInputs = (state: AppState) =>
@@ -130,10 +136,12 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
         paneForegroundAgentByPaneKey,
         now
       })
-    )
+    ).filter((row) => !isThreadTab(threadsEnabled, row.tab.id, threadTabIds))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     active,
+    threadTabIds,
+    threadsEnabled,
     tabs,
     liveEntries,
     migrationUnsupported,

@@ -1,3 +1,5 @@
+import { canInspectAgentActivationInventory } from './worktree-activation-pty-inventory'
+import { clearThreadSelection } from '@/components/threads/thread-navigation'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from './worktree-runtime-owner'
 import { noteUserWorkspaceOpen } from './workspace-switch-user-act'
 import { translate } from '@/i18n/i18n'
@@ -54,11 +56,6 @@ export type ActivateAndRevealResult = {
   primaryTabId: string | null
 }
 
-const canInspectAgentActivationInventory = (): boolean =>
-  typeof window !== 'undefined' &&
-  typeof window.api?.runtime?.call === 'function' &&
-  typeof window.api?.pty?.listSessions === 'function'
-
 export function activateAndRevealFolderWorkspace(
   folderWorkspaceId: string,
   opts?: WorktreeActivationSurfaceSelection & {
@@ -70,6 +67,7 @@ export function activateAndRevealFolderWorkspace(
     executionHostId?: ExecutionHostId
   }
 ): ActivateAndRevealResult | false {
+  clearThreadSelection()
   const state = useAppStore.getState()
   const folderWorkspaceOwner = findFolderWorkspaceOwner(
     state,
@@ -173,6 +171,7 @@ export function activateAndRevealWorktree(
   worktreeId: string,
   opts?: WorktreeActivationOptions
 ): ActivateAndRevealResult | false {
+  clearThreadSelection()
   const state = useAppStore.getState()
   // The floating workspace owns a separate panel, never the main window's selection.
   if (isFloatingWorkspaceId(worktreeId)) {

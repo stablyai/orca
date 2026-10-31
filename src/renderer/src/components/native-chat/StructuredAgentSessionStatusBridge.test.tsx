@@ -72,6 +72,7 @@ import {
 } from './StructuredAgentSessionStatusBridge'
 import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
 import { useAppStore } from '@/store'
+import { useStructuredSessionSummaries } from './structured-session-summary-store'
 
 const structuredTab = {
   id: 'structured-tab-1',
@@ -186,6 +187,15 @@ describe('StructuredAgentSessionStatusBridge', () => {
         providerSession
       })
     ])
+  })
+
+  it('projects session-owned thread identity onto its current tab and removes it with the tab', async () => {
+    render(<StructuredAgentSessionStatusBridge />)
+    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
+    act(() => feed().emit({ type: 'snapshot', sessions: [summary({ surface: 'thread' })] }))
+    expect(useStructuredSessionSummaries.getState().threadTabIds.has(structuredTab.id)).toBe(true)
+    act(() => mocks.store?.setState({ unifiedTabsByWorktree: {} }))
+    expect(useStructuredSessionSummaries.getState().threadTabIds.has(structuredTab.id)).toBe(false)
   })
 
   // Test summary projection here; structured-agent-session-subscribers.test.ts covers real unsubscribed host liveness.

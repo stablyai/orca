@@ -8,6 +8,7 @@ import {
 } from '@/runtime/structured-agent-session-owner'
 import { RetainedPaneHost } from '../tab-group/RetainedPaneHost'
 import NativeChatView from './NativeChatView'
+import { useStructuredSessionSummaries, isThreadTab } from './structured-session-summary-store'
 import { isStructuredTab } from '../../../../shared/structured-agent-session-tab'
 
 type StructuredAgentSessionTab = Tab & {
@@ -76,6 +77,8 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
         activeGroupId: state.activeGroupIdByWorktree[worktreeId]
       }))
     )
+    const threadsEnabled = useAppStore((s) => s.settings?.experimentalThreads === true)
+    const threadTabIds = useStructuredSessionSummaries((s) => s.threadTabIds)
     const focusGroup = useAppStore((state) => state.focusGroup)
     const focusOwningGroup = useCallback(
       (groupId: string) => focusGroup(worktreeId, groupId),
@@ -86,8 +89,12 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
       [groups]
     )
     const structuredTabs = useMemo(
-      () => unifiedTabs.filter((tab): tab is StructuredAgentSessionTab => isStructuredTab(tab)),
-      [unifiedTabs]
+      () =>
+        unifiedTabs.filter(
+          (tab): tab is StructuredAgentSessionTab =>
+            isStructuredTab(tab) && !isThreadTab(threadsEnabled, tab.id, threadTabIds)
+        ),
+      [unifiedTabs, threadTabIds, threadsEnabled]
     )
 
     return (

@@ -52,6 +52,7 @@ export { assertReservedTabUnheld } from '../agent-session-tab-table'
 
 export type AgentSessionReserveRequest = {
   /** Host-resolved floating directory committed with the first owner reservation. */
+  surface?: 'thread'
   launchDirectory?: string
   sessionId: string
   location: AgentSessionExecutionLocation

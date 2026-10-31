@@ -46,6 +46,7 @@ export function savedStructuredAgentSessionStatus(
       ? { permissionMode: record.permissionMode }
       : {}),
     ...(launchDirectory ? { launchDirectory } : {}),
+    ...(record?.surface ? { surface: record.surface } : {}),
     ...structuredSummaryConversationNaming(record, undefined),
     ...(typeof record.sleptAt === 'number' ? { sleptAt: record.sleptAt } : {}),
     updatedAt: at ?? record.createdAt

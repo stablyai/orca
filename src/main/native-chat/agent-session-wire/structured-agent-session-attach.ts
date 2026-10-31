@@ -51,6 +51,7 @@ export type AgentSessionAttachParams = {
   /** Host-only create defaults; remote schemas reject these. */
   options?: Readonly<Record<string, string>>
   /** Exclude tab placement from conversation identity/fingerprints. */
+  surface?: 'thread'
   surfaceTabId?: string
   launchArgs?: string[]
   /** Omit only for create intent; fingerprint the client wire form before adapter proof. */
@@ -210,6 +211,7 @@ export function reserveRequestFor(input: {
       : {}),
     ...(authority.launchArgs ? { launchArgs: authority.launchArgs } : {}),
     ...(authority.launchEnv ? { launchEnv: authority.launchEnv } : {}),
+    ...(params.surface ? { surface: params.surface } : {}),
     ...(authority.launchDirectory ? { launchDirectory: authority.launchDirectory } : {}),
     ...(params.adopt
       ? {

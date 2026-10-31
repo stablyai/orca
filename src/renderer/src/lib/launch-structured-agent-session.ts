@@ -94,7 +94,8 @@ export function createStructuredAgentSessionLaunchIntent(
   executionHostId?: ExecutionHostId,
   resumeFrom?: StructuredAgentSessionResumeSource,
   hostSeedOptions?: LaunchSeed,
-  activate = true
+  activate = true,
+  surface?: 'thread'
 ): StructuredAgentSessionLaunchIntent {
   const owner = structuredAgentSessionOwnerTarget(
     worktreeId,
@@ -116,7 +117,8 @@ export function createStructuredAgentSessionLaunchIntent(
     agent,
     sessionId,
     resumeFrom,
-    hostSeedOptions
+    hostSeedOptions,
+    surface
   )
 }
 
@@ -126,7 +128,8 @@ function buildStructuredAgentSessionLaunchIntent(
   agent: TuiAgent,
   sessionId: string,
   resumeFrom: StructuredAgentSessionResumeSource | undefined,
-  hostSeedOptions: LaunchSeed
+  hostSeedOptions: LaunchSeed,
+  surface?: 'thread'
 ): StructuredAgentSessionLaunchIntent {
   const state = useAppStore.getState()
   return {
@@ -137,6 +140,7 @@ function buildStructuredAgentSessionLaunchIntent(
     agent,
     params: structuredAgentSessionCreateParams({
       sessionId,
+      ...(surface ? { surface } : {}),
       worktree: toRuntimeWorktreeSelector(worktreeId),
       agent,
       ...(resumeFrom ? { resumeFrom } : {}),
@@ -157,7 +161,8 @@ export function retryStructuredAgentSessionLaunchIntent(
       intent.agent,
       intent.sessionId,
       intent.params.resumeFrom,
-      intent.seedOptions
+      intent.seedOptions,
+      intent.params.surface
     ),
     explicitLaunchOptions: intent.explicitLaunchOptions
   }
@@ -168,6 +173,7 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
   executionHostId: ExecutionHostId
   sessionId: string
   agent: TuiAgent
+  surface?: 'thread'
   clientOperationId: string
   payloadFingerprint: string
   expectedRuntimeFence: number | null
@@ -198,6 +204,7 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
       },
       worktree: toRuntimeWorktreeSelector(args.worktreeId),
       agent: args.agent,
+      ...(args.surface ? { surface: args.surface } : {}),
       ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {}),
       ...(args.firstMessage ? { firstMessage: args.firstMessage } : {}),
       ...(args.optionsMode ? { optionsMode: args.optionsMode } : {}),

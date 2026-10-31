@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { publishStructuredSessionSummaries } from './structured-session-summary-store'
 import type { AgentSessionStatusSummary } from '../../../../shared/agent-session-wire'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
@@ -114,12 +115,9 @@ function createTabOwnerCache(): (state: AppState, tab: StructuredTab) => Executi
 /** Unchanged feed facts for an unchanged tab cannot change its projection or companions. */
 function sameCapturedInput(previous: ProjectionInput | undefined, next: ProjectionInput): boolean {
   return (
-    previous?.tab === next.tab &&
-    previous.summary === next.summary &&
-    previous.observation === next.observation &&
-    previous.failedAt === next.failedAt &&
-    previous.sleptAt === next.sleptAt &&
-    previous.directory === next.directory
+    sameStatusInput(previous, next) &&
+    previous?.sleptAt === next.sleptAt &&
+    previous?.directory === next.directory
   )
 }
 
@@ -225,6 +223,12 @@ function installStatusProjection(): () => void {
       (input) => current(input) && !sameStatusInput(input.member.status, input)
     )
     const clean = (): void => {
+      publishStructuredSessionSummaries([
+        ...removed
+          .filter((old) => !membersByTabId.has(old.tab.id))
+          .map((old) => ({ tabId: old.tab.id, summary: null })),
+        ...inputs.filter(current).map((input) => ({ tabId: input.tab.id, summary: input.summary }))
+      ])
       for (const old of removed) {
         if (!members.has(old.paneKey)) {
           useAppStore.getState().setStructuredChatSleptAt(old.paneKey, undefined)
