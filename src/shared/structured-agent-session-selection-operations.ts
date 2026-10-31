@@ -146,7 +146,8 @@ export function createStructuredSessionSelectionController(
       key: string,
       value: string,
       model: string | null,
-      offers?: (key: string, value: string) => boolean
+      offers?: (key: string, value: string) => boolean,
+      onIssue?: (operation: SelectionOperation) => void
     ): SelectionOperation {
       if (!isCurrent()) {
         const outcome = { kind: 'superseded' } as const
@@ -189,6 +190,8 @@ export function createStructuredSessionSelectionController(
       pendingCounts.set(key, (pendingCounts.get(key) ?? 0) + 1)
       operations.set(operation.identity, operation)
       latest.set(key, operation.identity)
+      // Publish issue facts before subscribers project this pending operation.
+      onIssue?.(operation)
       notify()
       return operation
     },

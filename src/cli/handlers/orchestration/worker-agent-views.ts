@@ -21,6 +21,7 @@ export type WorkerShowResult = {
     taskId: string
     runId?: string
     status: string
+    followUpOf?: string | null
   } | null
   worker: {
     dispatchId?: string
@@ -43,6 +44,7 @@ type WorkerShowFields = {
   dispatchId: string
   taskId?: string
   runId?: string
+  followUpOf?: string
   state: string
   stage: string
   liveness?: string
@@ -63,6 +65,7 @@ export const WORKER_SHOW_VIEW: OrchestrationAgentView<WorkerShowResult, WorkerSh
       dispatchId: value.dispatch?.id ?? value.worker.dispatchId ?? 'unknown',
       taskId: value.dispatch?.taskId,
       runId: value.dispatch?.runId ?? value.projection?.runId,
+      followUpOf: value.dispatch?.followUpOf ?? undefined,
       state: value.worker.state,
       stage: value.worker.stage,
       liveness: value.projection?.liveness.verdict,

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   isWslDistroRegistered,
+  parseDefaultWslDistroId,
   parseWslDistroRegistrations,
   readWslDistroRegistryId,
   readWslDistroRegistryIdShared,
@@ -139,5 +140,21 @@ describe('resolveWslDistroName', () => {
     await expect(
       resolveWslDistroName('Ubuntu', undefined, async () => ({ code: 1, stdout: '' }))
     ).resolves.toBeNull()
+  })
+})
+
+describe('the default distro registration', () => {
+  it('reads DefaultDistribution from the Lxss root as a lowercase unbraced GUID', () => {
+    const output = [
+      LXSS,
+      '    DefaultDistribution    REG_SZ    {0283592D-BE56-40D4-B935-3DC18C3AA007}',
+      '    DefaultVersion    REG_DWORD    0x2',
+      REG_OUTPUT
+    ].join('\r\n')
+    expect(parseDefaultWslDistroId(output)).toBe('0283592d-be56-40d4-b935-3dc18c3aa007')
+  })
+
+  it('is null when no default is set', () => {
+    expect(parseDefaultWslDistroId(REG_OUTPUT)).toBeNull()
   })
 })

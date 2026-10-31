@@ -186,7 +186,11 @@
       "cancelEditing": "取消編輯",
       "placeholder": "隨心輸入，@ 引用檔案，/ 使用命令",
       "saveEditedMessage": "儲存編輯後的訊息",
-      "sendMessage": "傳送訊息"
+      "sendMessage": "傳送訊息",
+      "sendQueue": "加入佇列",
+      "sendSteer": "引導",
+      "sendQueueHint": "在目前回合結束後執行",
+      "sendSteerHint": "加入代理程式目前正在進行的工作"
     },
     "composerAttachments": {
       "attachedImage": "已附加的圖片",

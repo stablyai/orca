@@ -90,6 +90,7 @@ function QueuedTask({ message }: { message: AgentSessionQueuedMessage }) {
         card={cards[0]!}
         chatWorktreeId={null}
         showsSteerShortcut={false}
+        agentWorking
         onSteer={() => {}}
         onDelete={() => {}}
         onEdit={() => void begin(message.messageId)}

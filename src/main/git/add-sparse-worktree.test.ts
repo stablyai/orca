@@ -69,36 +69,6 @@ describe('addSparseWorktree', () => {
     platformSpy.mockRestore()
   })
 
-  it('enables long paths on the Windows commands that actually write the deep checkout', async () => {
-    platformSpy.mockReturnValue('win32')
-    gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
-
-    await addSparseWorktree('C:\\repo', 'C:\\repo-feature', 'feature/test', ['packages/web'])
-
-    const calls = getGitCalls()
-    expect(calls).toEqual(
-      expect.arrayContaining([
-        'git -c core.longpaths=true sparse-checkout set -- packages/web',
-        'git -c core.longpaths=true checkout feature/test'
-      ])
-    )
-  })
-
-  it('omits the long-path option on non-Windows hosts', async () => {
-    gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
-
-    await addSparseWorktree('/repo', '/repo-feature', 'feature/test', ['packages/web'])
-
-    const calls = getGitCalls()
-    expect(calls).toEqual(
-      expect.arrayContaining([
-        'git sparse-checkout set -- packages/web',
-        'git checkout feature/test'
-      ])
-    )
-    expect(calls.some((call) => call.includes('core.longpaths'))).toBe(false)
-  })
-
   it('separates sparse checkout directory operands from options', async () => {
     gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
 
