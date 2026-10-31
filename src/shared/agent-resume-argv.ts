@@ -84,6 +84,8 @@ export function getAgentResumeArgv(
       return providerSession.key === 'session_id' ? ['kiro-cli', '--resume-id', id] : null
     case 'hermes':
       return providerSession.key === 'session_id' ? ['hermes', '--resume', id] : null
+    case 'trae':
+      return providerSession.key === 'session_id' ? ['traecli', '--resume', id] : null
   }
 }
 
