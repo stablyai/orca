@@ -9,6 +9,7 @@ import type { OrcaRuntimeWithGetStructuredAgentSessionCreateSupport } from '../s
 import type { OrcaRuntimeWithGetPtyRecordForPaneKey } from '../orchestration/terminal-pane-mail-routing'
 import { OrcaRuntimeWithStartTuiIdleVisibleReadProbe } from '../terminal/wait/terminal-wait-visible-probe'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { StructuredAgentSessionAccountFollow } from '../../native-chat/agent-session-wire/structured-agent-session-account-follow'
 import { escalateChatWorkerError } from '../orchestration/chat-worker-error-escalation'
 import type { StructuredAgentSessionRequestFailure } from '../../native-chat/agent-session-wire/structured-agent-session-request-failures'
 
@@ -56,6 +57,7 @@ export abstract class OrcaRuntimeWithWorktreePsDependencies extends OrcaRuntimeW
   ): ReturnType<
     OrcaRuntimeWithGetStructuredAgentSessionCreateSupport['resolveStructuredAgentAccountHome']
   >
+  protected abstract structuredChatAccountFollow(): StructuredAgentSessionAccountFollow
   abstract onStructuredSessionStatusForMail(
     ...args: Parameters<OrcaRuntimeWithGetPtyRecordForPaneKey['onStructuredSessionStatusForMail']>
   ): ReturnType<OrcaRuntimeWithGetPtyRecordForPaneKey['onStructuredSessionStatusForMail']>

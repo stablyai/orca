@@ -1,3 +1,5 @@
+import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
+import type { StructuredAgentSessionAccountFollow } from './structured-agent-session-account-follow'
 import type { AgentModelCatalogSource } from '../agent-model-catalog/agent-model-catalog-service-contract'
 import type { StructuredAgentSessionDeliveryLoop } from './structured-agent-session-delivery-loop'
 import type {
@@ -134,6 +136,8 @@ export type StructuredAgentSessionHostSession = {
   lastEndedChild?: StructuredAgentSessionEndedChild
   /** Invalidates cached current work when generation ends without a row or lease write. */
   operationalRevision?: number
+  /** The account selection the last start tried to follow; a move that failed waits for the next. */
+  accountFollowTried?: AgentSessionAccountHome
   /** One live restart action owns progress. */
   restartResume?: NonNullable<AgentSessionStatusSummary['restartResume']> & { operationId: string }
 }
@@ -193,6 +197,8 @@ export type StructuredAgentSessionHostDeps = {
   conversationNaming?: StructuredAgentSessionConversationNaming
   /** Carries the user's chat name into the agent's own conversation; never delays the caller. */
   nameProviderConversation?: (record: AgentSessionRecord) => void
+  /** Absent keeps every chat on the account it last ran on. */
+  accountFollow?: StructuredAgentSessionAccountFollow
 }
 
 export type SetUserConversationName = StructuredAgentSessionConversationNaming['setUserName']

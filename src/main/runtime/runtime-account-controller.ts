@@ -66,6 +66,11 @@ export class RuntimeAccountController {
     this.services = services
   }
 
+  /** False where the desktop pushes this host's account env instead (a WSL host). */
+  ownsAccountServices(): boolean {
+    return this.services !== null
+  }
+
   setCommitMessageAgentEnvironment(resolvers: CommitMessageAgentEnvironmentResolvers): void {
     this.commitMessageAgentEnvironment = resolvers
   }

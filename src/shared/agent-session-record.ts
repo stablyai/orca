@@ -125,6 +125,9 @@ export type AgentSessionRecord = {
   providerHandleChain: AgentSessionProviderHandleLink[]
   providerContextBoundary?: AgentSessionProviderContextBoundary
   accountHome: AgentSessionAccountHome
+  /** Set once `accountHome` names the account the chat last ran on. Claude chats from older builds
+   *  followed the picker without repinning, so theirs may name only the account they began on. */
+  accountHomeConfirmed?: true
   /** Initial launch directory in host path syntax. Floating sessions resume here; worktree/folder IDs resolve their durable location. */
   launchDirectory?: string
   /** Provider options the user chose, replayed whenever a new owner starts the session. */
@@ -316,6 +319,7 @@ export function isPersistedAgentSessionObservationRecord(
       isAgentSessionExecutionLocation(record.location) &&
       isStructuredAgentId(record.provider) &&
       isAgentSessionAccountHome(record.accountHome) &&
+      (record.accountHomeConfirmed === undefined || record.accountHomeConfirmed === true) &&
       (record.launchDirectory === undefined ||
         isBoundedString(record.launchDirectory, MAX_PATH_LENGTH)) &&
       (record.options === undefined || isAgentSessionOptions(record.options)) &&

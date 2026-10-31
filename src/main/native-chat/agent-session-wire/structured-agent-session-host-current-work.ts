@@ -6,7 +6,11 @@ import {
   type StructuredAgentSessionCurrentWork,
   type StructuredAgentSessionCurrentWorkJournal
 } from './structured-agent-session-current-work'
-import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
+import type {
+  StructuredAgentSessionHostDeps,
+  StructuredAgentSessionHostSession
+} from './structured-agent-session-host-types'
+import type { StructuredAgentSessionClientDelivery } from './structured-agent-session-client-delivery'
 
 export type StructuredAgentSessionCurrentWorkHost = {
   store: Pick<AgentSessionRecordStore, 'getConversation' | 'replacedRuntime'>
@@ -49,4 +53,27 @@ export function heldStructuredAgentSessionCurrentWork(
     ...(ended ? { ended } : {}),
     revision: session?.operationalRevision ?? 0
   })
+}
+
+/** Work a child still owes: while any is open, neither the idle sweep nor a replacement stops it. */
+export function hostStructuredAgentSessionRetainedWork(
+  deps: Pick<StructuredAgentSessionHostDeps, 'store' | 'adapter' | 'hasOpenDispatch'>,
+  sessions: Map<string, StructuredAgentSessionHostSession>,
+  clientDelivery: Pick<StructuredAgentSessionClientDelivery, 'readChildWork' | 'childWorkOpen'>,
+  sessionId: string,
+  continuingId?: string
+) {
+  return {
+    currentWork: () =>
+      hostStructuredAgentSessionCurrentWork({ store: deps.store, sessions }, sessionId),
+    childWork: () => clientDelivery.readChildWork(sessionId),
+    childWorkOpen: () => clientDelivery.childWorkOpen(sessionId),
+    hasOpenDispatch: () => {
+      const record = deps.store.getConversation(sessionId)
+      return record !== null && deps.hasOpenDispatch?.(record) === true
+    },
+    providerHoldsDispatch: () =>
+      deps.adapter.holdsDispatch?.(sessionId) === true ||
+      [...(sessions.get(sessionId)?.child?.heldSends?.() ?? [])].some((id) => id !== continuingId)
+  }
 }
