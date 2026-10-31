@@ -123,6 +123,9 @@ playwright-report/
 
 # Generated Clawpatch state includes machine-local paths and review records.
 /.clawpatch/
+
+# Local omp agent state, including plan drafts.
+/.omp/
 /mobile/.clawpatch/
 
 # Agent hook runtime endpoints (machine-local secrets)

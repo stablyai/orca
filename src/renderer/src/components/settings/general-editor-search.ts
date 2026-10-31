@@ -57,6 +57,25 @@ export const getGeneralEditorSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
+      'auto.components.settings.general.search.editorKeybindings',
+      'Editor Keybindings'
+    ),
+    description: translate(
+      'auto.components.settings.general.search.editorKeybindingsDesc',
+      'Use Vim motions in writable file editors. Default keeps the current editor keys.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.general.search.vimKw', 'vim'),
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.keybindingsKw',
+        'keybindings'
+      ),
+      ...translateSearchKeyword('auto.components.settings.general.search.modalKw', 'modal'),
+      ...translateSearchKeyword('auto.components.settings.general.search.e1ee631696', 'editor')
+    ]
+  },
+  {
+    title: translate(
       'auto.components.settings.general.search.collapseUnchanged',
       'Collapse Unchanged Regions'
     ),

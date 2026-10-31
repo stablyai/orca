@@ -4,6 +4,7 @@ import type { editor, IRange } from 'monaco-editor'
 import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
 import { useAppStore } from '@/store'
 import '@/lib/monaco-setup'
+import { EditorVimStatusRow } from './use-monaco-vim-attachment'
 import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
 
 import { useContextualCopySetup } from './useContextualCopySetup'
@@ -270,12 +271,8 @@ export default function MonacoEditor({
     viewStateId
   ])
 
-  return (
-    <div
-      ref={editorContainerRef}
-      className={autoHeight ? 'relative' : 'relative h-full'}
-      style={renderedEditorHeight === null ? undefined : { height: renderedEditorHeight }}
-    >
+  const editorSurface = (
+    <>
       <MonacoMarkdownAnnotationOverlay
         shouldShowMarkdownAnnotations={annotations.shouldShowMarkdownAnnotations}
         commentPopover={annotations.commentPopover}
@@ -343,6 +340,40 @@ export default function MonacoEditor({
         filePath={filePath}
         relativePath={relativePath}
         worktreeId={worktreeId}
+      />
+    </>
+  )
+
+  if (autoHeight) {
+    return (
+      <div
+        ref={editorContainerRef}
+        className="relative"
+        style={renderedEditorHeight === null ? undefined : { height: renderedEditorHeight }}
+      >
+        {editorSurface}
+      </div>
+    )
+  }
+
+  return (
+    // Why: the status row is a sibling, so toggling Vim does not remount Monaco and drop undo.
+    <div className="flex h-full min-h-0 flex-col">
+      <div ref={editorContainerRef} className="relative min-h-0 flex-1">
+        {editorSurface}
+      </div>
+      <EditorVimStatusRow
+        editor={mountedEditor}
+        preset={settings?.editorKeybindings}
+        readOnly={readOnly}
+        autoHeight={autoHeight}
+        onWrite={() => {
+          const editor = editorRef.current
+          if (!editor) {
+            return
+          }
+          propsRef.current.onSave(editor.getValue())
+        }}
       />
     </div>
   )
