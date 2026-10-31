@@ -18,6 +18,7 @@ describe('agent chat permission modes', () => {
     expect(agentChatPermissionModes('claude')?.modes).toEqual(AGENT_CHAT_PERMISSION_MODES)
     expect(agentChatPermissionModes('codex')?.modes).toEqual(['ask', 'auto', 'full-access'])
     expect(agentChatPermissionModes('omp')?.modes).toEqual(['ask', 'full-access'])
+    expect(agentChatPermissionModes('hermes')?.modes).toEqual(['ask', 'full-access'])
     expect(agentChatPermissionModes('pi')).toBeNull()
   })
 
