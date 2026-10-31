@@ -1,0 +1,171 @@
+--- prosemirror-view@1.42.3/dist/index.js
++++ private-observed-index.mjs
+@@ -2213,6 +2213,7 @@
+ }
+ 
+ function selectionFromDOM(view, origin = null) {
++    globalThis.__PR35764_N1__?.("engine.selectionFromDOM", view, {origin});
+     let domSel = view.domSelectionRange(), doc = view.state.doc;
+     if (!domSel.focusNode)
+         return null;
+@@ -2263,6 +2264,7 @@
+         hasSelection(view) && document.activeElement && document.activeElement.contains(view.dom);
+ }
+ function selectionToDOM(view, force = false) {
++    globalThis.__PR35764_N1__?.("engine.selectionToDOM", view, {force});
+     let sel = view.state.selection;
+     syncNodeSelection(view, sel);
+     if (!editorOwnsSelection(view))
+@@ -2400,6 +2402,7 @@
+     }
+ }
+ function selectionBetween(view, $anchor, $head, bias) {
++    globalThis.__PR35764_N1__?.("engine.selectionBetween", view, {anchor: $anchor.pos, head: $head.pos, bias});
+     return view.someProp("createSelectionBetween", f => f(view, $anchor, $head))
+         || TextSelection.between($anchor, $head, bias);
+ }
+@@ -3393,6 +3396,7 @@
+     }
+     done() {
+         this.view.root.removeEventListener("mouseup", this.up);
++    globalThis.__PR35764_N1__?.("engine.tracker.baseDone", this.view, {});
+         this.view.root.removeEventListener("mousemove", this.move);
+         if (this.view.input.mouseDown == this)
+             this.view.input.mouseDown = null;
+@@ -3447,6 +3451,7 @@
+     }
+     done() {
+         super.done();
++    globalThis.__PR35764_N1__?.("engine.tracker.done", this.view, {delayed: this.delayedSelectionSync});
+         if (this.mightDrag && this.target) {
+             this.view.domObserver.stop();
+             if (this.mightDrag.addAttr)
+@@ -3457,6 +3462,7 @@
+         }
+         if (this.delayedSelectionSync)
+             setTimeout(() => {
++    globalThis.__PR35764_N1__?.("engine.tracker.delayedCallback", this.view, {});
+                 if (!this.view.isDestroyed)
+                     selectionToDOM(this.view);
+             });
+@@ -3508,6 +3514,7 @@
+     delaySelUpdate() {
+         if (!this.allowDefault)
+             return false;
++    globalThis.__PR35764_N1__?.("engine.tracker.delaySelUpdate", this.view, {});
+         this.delayedSelectionSync = true;
+         return true;
+     }
+@@ -3902,6 +3909,7 @@
+     view.dispatch(tr.setMeta("uiEvent", "drop"));
+ }
+ handlers.focus = view => {
++    globalThis.__PR35764_N1__?.("engine.core.focus", view, {});
+     view.input.lastFocus = Date.now();
+     if (!view.focused) {
+         view.domObserver.stop();
+@@ -3911,10 +3919,12 @@
+         setTimeout(() => {
+             if (view.docView && view.hasFocus() && !view.domObserver.currentSelection.eq(view.domSelectionRange()))
+                 selectionToDOM(view);
++    globalThis.__PR35764_N1__?.("engine.core.focusTimerComplete", view, {});
+         }, 20);
+     }
+ };
+ handlers.blur = (view, _event) => {
++    globalThis.__PR35764_N1__?.("engine.core.blur", view, {});
+     let event = _event;
+     if (view.focused) {
+         view.domObserver.stop();
+@@ -4708,10 +4718,12 @@
+         this.onSelectionChange = this.onSelectionChange.bind(this);
+     }
+     flushSoon() {
++    globalThis.__PR35764_N1__?.("engine.observer.flushSoon", this.view, {});
+         if (this.flushingSoon < 0)
+             this.flushingSoon = window.setTimeout(() => { this.flushingSoon = -1; this.flush(); }, 20);
+     }
+     forceFlush() {
++    globalThis.__PR35764_N1__?.("engine.observer.forceFlush", this.view, {});
+         if (this.flushingSoon > -1) {
+             window.clearTimeout(this.flushingSoon);
+             this.flushingSoon = -1;
+@@ -4719,6 +4731,7 @@
+         }
+     }
+     start() {
++    globalThis.__PR35764_N1__?.("engine.observer.start", this.view, {});
+         if (this.observer) {
+             this.observer.takeRecords();
+             this.observer.observe(this.view.dom, observeOptions);
+@@ -4728,6 +4741,7 @@
+         this.connectSelection();
+     }
+     stop() {
++    globalThis.__PR35764_N1__?.("engine.observer.stop", this.view, {});
+         if (this.observer) {
+             let take = this.observer.takeRecords();
+             if (take.length) {
+@@ -4742,9 +4756,11 @@
+         this.disconnectSelection();
+     }
+     connectSelection() {
++    globalThis.__PR35764_N1__?.("engine.observer.connectSelection", this.view, {});
+         this.view.dom.ownerDocument.addEventListener("selectionchange", this.onSelectionChange);
+     }
+     disconnectSelection() {
++    globalThis.__PR35764_N1__?.("engine.observer.disconnectSelection", this.view, {});
+         this.view.dom.ownerDocument.removeEventListener("selectionchange", this.onSelectionChange);
+     }
+     suppressSelectionUpdates() {
+@@ -4752,6 +4768,7 @@
+         setTimeout(() => this.suppressingSelectionUpdates = false, 50);
+     }
+     onSelectionChange() {
++    globalThis.__PR35764_N1__?.("engine.observer.onSelectionChange", this.view, {});
+         if (!hasFocusAndSelection(this.view))
+             return;
+         if (this.suppressingSelectionUpdates)
+@@ -4768,9 +4785,11 @@
+         this.flush();
+     }
+     setCurSelection() {
++    globalThis.__PR35764_N1__?.("engine.observer.setCurSelection", this.view, {});
+         this.currentSelection.set(this.view.domSelectionRange());
+     }
+     ignoreSelectionChange(sel) {
++    globalThis.__PR35764_N1__?.("engine.observer.ignore", this.view, {range: sel});
+         if (!sel.focusNode)
+             return true;
+         let ancestors = new Set, container;
+@@ -4798,6 +4817,7 @@
+     }
+     flush() {
+         let { view } = this;
++    globalThis.__PR35764_N1__?.("engine.observer.flush", view, {});
+         if (!view.docView || this.flushingSoon > -1)
+             return;
+         let mutations = this.pendingRecords();
+@@ -4862,6 +4882,7 @@
+             selectionCollapsed(sel) && (readSel = selectionFromDOM(view)) &&
+             readSel.eq(Selection.near(view.state.doc.resolve(0), 1))) {
+             view.input.lastFocus = 0;
++    globalThis.__PR35764_N1__?.("engine.focusResetRecovery", view, {});
+             selectionToDOM(view);
+             this.currentSelection.set(sel);
+             view.scrollToSelection();
+@@ -5105,11 +5126,14 @@
+ };
+ const isInline = /^(a|abbr|acronym|b|bd[io]|big|br|button|cite|code|data(list)?|del|dfn|em|i|img|ins|kbd|label|map|mark|meter|output|q|ruby|s|samp|small|span|strong|su[bp]|time|u|tt|var)$/i;
+ function readDOMChange(view, from, to, typeOver, addedNodes) {
++    globalThis.__PR35764_N1__?.("engine.readDOMChange", view, {from, to, typeOver, chrome, android});
+     let compositionID = view.input.compositionPendingChanges || (view.composing ? view.input.compositionID : 0);
+     view.input.compositionPendingChanges = 0;
++    globalThis.__PR35764_N1__?.("engine.compositionPendingConsumed", view, {compositionID});
+     if (from < 0) {
+         let origin = view.input.lastSelectionTime > Date.now() - 50 ? view.input.lastSelectionOrigin : null;
+         let newSel = selectionFromDOM(view, origin);
++    globalThis.__PR35764_N1__?.("engine.readerResult", view, {selection: newSel});
+         if (newSel && !view.state.selection.eq(newSel)) {
+             if (chrome && android &&
+                 view.input.lastKeyCode === 13 && Date.now() - 100 < view.input.lastKeyCodeTime &&

@@ -1,0 +1,197 @@
+import { Extension } from '@tiptap/core'
+import { Plugin, PluginKey, TextSelection } from '@tiptap/pm/state'
+import { CellSelection } from '@tiptap/pm/tables'
+import type { EditorView } from '@tiptap/pm/view'
+
+type NativeRange = {
+  anchorNode: Node | null
+  anchorOffset: number
+  focusNode: Node | null
+  focusOffset: number
+}
+
+type SelectionView = EditorView & {
+  input: { mouseDown: { allowDefault: boolean } | null }
+  domSelectionRange(): NativeRange
+  domObserver: {
+    onSelectionChange(): void
+    setCurSelection(): void
+    forceFlush(): void
+    flush(): void
+    stop(): void
+    start(): void
+    ignoreSelectionChange(selection: NativeRange): boolean
+    handleDOMChange(from: number, to: number, typeOver: boolean, added: Node[]): void
+  }
+}
+
+function selectionView(view: EditorView): SelectionView {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The pinned engine's existing observer bridge owns these internal input/selection hooks.
+  return view as SelectionView
+}
+
+/** Publish native input before an editor action consumes it or outgoing focus discards its endpoints. */
+export function completeRichMarkdownSelection(editorView: EditorView): false {
+  if (editorView.isDestroyed || !editorView.dom.isConnected || editorView.composing) return false
+  const view = selectionView(editorView)
+  const observer = view.domObserver
+  const D0 = view.state.doc
+  const S0 = view.state.selection
+  const plugins0 = view.state.plugins
+  const owner0 = view.dom.ownerDocument.activeElement
+  const snapshot = (): NativeRange => {
+    const live = view.domSelectionRange()
+    return { anchorNode: live.anchorNode, anchorOffset: live.anchorOffset,
+      focusNode: live.focusNode, focusOffset: live.focusOffset }
+  }
+  const C0 = snapshot()
+  const same = (a: NativeRange, b: NativeRange): boolean =>
+    a.anchorNode === b.anchorNode && a.anchorOffset === b.anchorOffset &&
+    a.focusNode === b.focusNode && a.focusOffset === b.focusOffset
+  const valid = (): boolean => !view.isDestroyed && view.dom.isConnected && !view.composing &&
+    view.state.doc === D0 && view.state.plugins === plugins0 &&
+    view.dom.ownerDocument.activeElement === owner0
+  const contained = (r: NativeRange): r is NativeRange & { anchorNode: Node; focusNode: Node } =>
+    !!r.anchorNode && !!r.focusNode && r.anchorNode.isConnected && r.focusNode.isConnected &&
+    view.dom.contains(r.anchorNode) && view.dom.contains(r.focusNode)
+  const stage = (name: string): void => {
+    // Logging is write-only evidence and is never consulted by this experiment.
+    globalThis.__PR35764_N1__?.('probe.' + name, view)
+  }
+  const restore = (r: NativeRange): void => {
+    if (!valid() || !contained(r) || observer.ignoreSelectionChange(r)) return
+    const anchor = view.posAtDOM(r.anchorNode, r.anchorOffset)
+    const head = view.posAtDOM(r.focusNode, r.focusOffset)
+    if (!view.state.selection.eq(S0) && view.state.selection instanceof TextSelection &&
+      view.state.selection.anchor === anchor && view.state.selection.head === head) {
+      observer.stop()
+      try {
+        if (valid() && contained(r)) {
+          view.dom.ownerDocument.getSelection()?.setBaseAndExtent(
+            r.anchorNode, r.anchorOffset, r.focusNode, r.focusOffset)
+          if (!view.isDestroyed) observer.setCurSelection()
+        }
+      } finally { if (!view.isDestroyed) observer.start() }
+    }
+  }
+  stage('C0')
+  observer.forceFlush()
+  stage('afterForceFlush')
+  if (!valid()) { stage('outsideStableDomain.forceFlush'); return false }
+  const L1 = snapshot()
+  if (!contained(L1) || observer.ignoreSelectionChange(L1)) return false
+  const selection = view.state.selection
+  if (!(selection instanceof TextSelection)) {
+    const anchor = view.posAtDOM(L1.anchorNode, L1.anchorOffset)
+    const head = view.posAtDOM(L1.focusNode, L1.focusOffset)
+    const presentation = TextSelection.between(selection.$anchor, selection.$head)
+    if ((anchor === selection.anchor && head === selection.head) ||
+      (anchor === presentation.anchor && head === presentation.head)) {
+      stage('structuredVeto.L1'); return false
+    }
+  }
+  stage('beforeFlush')
+  observer.flush()
+  stage('afterFlush')
+  if (!valid()) { stage('outsideStableDomain.flush'); return false }
+  const L2 = snapshot()
+  if (!contained(L2) || observer.ignoreSelectionChange(L2)) return false
+  if (!view.state.selection.eq(S0)) {
+    stage('a.modelChanged'); restore(C0); return false
+  }
+  if (!same(L2, L1)) { stage('b.nativeChanged'); return false }
+  stage('c.residualEquivalentOrSkipped')
+  const anchor = view.posAtDOM(L1.anchorNode, L1.anchorOffset)
+  const head = view.posAtDOM(L1.focusNode, L1.focusOffset)
+  observer.stop()
+  try {
+    observer.handleDOMChange(-1, -1, false, [])
+    stage('afterResidual')
+    if (valid() && contained(L1) && !observer.ignoreSelectionChange(L1) &&
+      !view.state.selection.eq(S0) && view.state.selection instanceof TextSelection &&
+      view.state.selection.anchor === anchor && view.state.selection.head === head) {
+      view.dom.ownerDocument.getSelection()?.setBaseAndExtent(
+        L1.anchorNode, L1.anchorOffset, L1.focusNode, L1.focusOffset)
+    }
+    if (!view.isDestroyed) observer.setCurSelection()
+  } finally { if (!view.isDestroyed) observer.start() }
+  return false
+}
+
+// These editor handlers run through the engine's NodeView stopEvent gating, before model-consuming handlers.
+export const richMarkdownSelectionCompletionEvents = {
+  mousedown: completeRichMarkdownSelection,
+  keydown: completeRichMarkdownSelection,
+  beforeinput: completeRichMarkdownSelection,
+  copy: completeRichMarkdownSelection,
+  cut: completeRichMarkdownSelection,
+  paste: completeRichMarkdownSelection,
+  compositionstart: completeRichMarkdownSelection,
+  dragstart: completeRichMarkdownSelection,
+  blur: completeRichMarkdownSelection
+}
+
+/** Protect native drags while the editor remains the sole owner of the remembered selection. */
+export const DragSelectionGuard = Extension.create({
+  name: 'dragSelectionGuard',
+
+  addProseMirrorPlugins() {
+    let viewRef: SelectionView | null = null
+    return [
+      new Plugin({
+        key: new PluginKey('dragSelectionGuard'),
+        filterTransaction(tr) {
+          const mouseDown = viewRef?.input.mouseDown
+          // Cell decorations force native selection rewrites during text drags (including Shift extension).
+          return !(mouseDown?.allowDefault && tr.selection instanceof CellSelection)
+        },
+        view(editorView) {
+          viewRef = selectionView(editorView)
+          const observer = viewRef.domObserver
+          const doc = editorView.dom.ownerDocument
+          const completeNativeGesture = (event: MouseEvent): void => {
+            if (
+              (event.type === 'mouseup' ? event.button === 0 : event.buttons === 0) &&
+              viewRef?.input.mouseDown?.allowDefault &&
+              editorView.hasFocus()
+            ) {
+              completeRichMarkdownSelection(editorView)
+            }
+          }
+          doc.addEventListener('mouseup', completeNativeGesture, true)
+          doc.addEventListener('mousemove', completeNativeGesture, true)
+          const originalOnSelectionChange = observer.onSelectionChange
+          doc.removeEventListener('selectionchange', originalOnSelectionChange)
+          const patchedOnSelectionChange = (): void => {
+            if (viewRef?.input.mouseDown?.allowDefault) {
+              observer.setCurSelection()
+              return
+            }
+            if (editorView.hasFocus()) {
+              completeRichMarkdownSelection(editorView)
+            }
+            originalOnSelectionChange()
+          }
+          observer.onSelectionChange = patchedOnSelectionChange
+          doc.addEventListener('selectionchange', patchedOnSelectionChange)
+          return {
+            destroy() {
+              doc.removeEventListener('mouseup', completeNativeGesture, true)
+              doc.removeEventListener('mousemove', completeNativeGesture, true)
+              doc.removeEventListener('selectionchange', patchedOnSelectionChange)
+              observer.onSelectionChange = originalOnSelectionChange
+              doc.addEventListener('selectionchange', originalOnSelectionChange)
+              // Plugin views die after observer disconnect; retain live reconfiguration without leaking on destruction.
+              queueMicrotask(() => {
+                if (editorView.isDestroyed) {
+                  doc.removeEventListener('selectionchange', originalOnSelectionChange)
+                }
+              })
+              viewRef = null
+            }
+          }
+        }
+      })
+    ]
+  }
+})
