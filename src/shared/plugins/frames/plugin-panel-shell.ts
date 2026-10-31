@@ -78,6 +78,7 @@ function frameApiScript(surface: PluginFrameSurface): string {
   var methods = C.methods.slice()
   var latest = null
   var waiting = []
+  var latestCards = null
   function post(message) { parent.postMessage(Object.assign({ orca: C.protocol }, message), '*') }
   function failure(error) {
     var e = new Error(String(error && error.message || 'host call failed'))
@@ -98,6 +99,9 @@ function frameApiScript(surface: PluginFrameSurface): string {
     listeners.set(name, set)
     var entry = function (payload) { return fn(payload) }
     set.add(entry)
+    // Why replay: backdrops subscribe after their bundle loads, when the first layout is in.
+    var cards = latestCards
+    if (name === E.worktreeSidebarCards && cards) Promise.resolve().then(function () { if (set.has(entry)) fn(cards) })
     return Object.freeze({ dispose: function () { set.delete(entry) } })
   }
   function call(method, params, options) {
@@ -145,6 +149,9 @@ function frameApiScript(surface: PluginFrameSurface): string {
       latest = Object.freeze(m.payload)
       waiting.splice(0).forEach(function (resolve) { resolve(latest) })
       emit(E.editorDocument, latest)
+    } else if (m.kind === 'evt' && m.event === E.worktreeSidebarCards) {
+      latestCards = m.payload
+      emit(m.event, m.payload)
     } else if (m.kind === 'evt') {
       emit(m.event, m.payload)
     } else if (m.kind === 'req') {

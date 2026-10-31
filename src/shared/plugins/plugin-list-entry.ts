@@ -11,6 +11,8 @@ export type PluginHostPanel = {
   /** Lucide icon name declared in the plugin manifest. */
   icon?: string
   tabKey: `plugin:${string}`
+  /** Absent on hosts that predate backdrops, and for right-sidebar panels. */
+  placement?: 'worktree-sidebar-backdrop'
 }
 
 /** pending awaits consent; idle defers worker startup; errored exhausted retries or failed startup. */

@@ -75,4 +75,27 @@ describe('buildPluginPanelShellHtml', () => {
     expect(style.textContent).toBe(':root{/stylescriptx/script}')
     style.remove()
   })
+
+  it('replays the latest card layout to a backdrop that subscribes after it arrived', async () => {
+    const html = buildPluginPanelShellHtml('<main>Plugin</main>')
+    const script = html.match(/<script>\n([\s\S]*?)<\/script>/)?.[1]
+    window.eval(script!.replaceAll('configurable: false', 'configurable: true'))
+    const layout = { width: 280, height: 900, cards: [] }
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: { orca: 1, kind: 'evt', event: 'worktreeSidebar.cards', payload: layout },
+        source: window.parent
+      })
+    )
+    window.eval(`
+      window.received = []
+      window.disposed = []
+      orca.on('worktreeSidebar.cards', (payload) => window.received.push(payload))
+      orca.on('worktreeSidebar.cards', (payload) => window.disposed.push(payload)).dispose()
+    `)
+    await Promise.resolve()
+
+    expect(window.eval('window.received')).toEqual([layout])
+    expect(window.eval('window.disposed')).toEqual([])
+  })
 })

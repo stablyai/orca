@@ -189,7 +189,30 @@ export function collectActivePluginPanels(
 ): ActivePluginPanel[] {
   return plugins
     .filter(isLivePlugin)
-    .flatMap((plugin) => plugin.panels.map((panel) => fromPlugin(plugin, panel)))
+    .flatMap((plugin) =>
+      plugin.panels.filter((panel) => !panel.placement).map((panel) => fromPlugin(plugin, panel))
+    )
+}
+
+export type ActivePluginSidebarBackdrop = ActivePluginPanel & {
+  /** Agent status reaches the frame only with the `agent:read` grant the user consented to. */
+  canReadAgents: boolean
+}
+
+/** The first enabled plugin's workspace-sidebar backdrop; one frame keeps the cost bounded. */
+export function collectActivePluginSidebarBackdrop(
+  plugins: readonly PluginHostListEntry[]
+): ActivePluginSidebarBackdrop | null {
+  for (const plugin of plugins.filter(isLivePlugin)) {
+    const panel = plugin.panels.find((entry) => entry.placement === 'worktree-sidebar-backdrop')
+    if (panel) {
+      return {
+        ...fromPlugin(plugin, panel),
+        canReadAgents: plugin.capabilities.some((capability) => capability.kind === 'agent:read')
+      }
+    }
+  }
+  return null
 }
 
 /** Installed keys normalize persisted routes: remove uninstalled panels, retain merely disabled ones. */
@@ -218,6 +241,10 @@ export function collectEditablePluginCommands(
 /** Panel contributions of enabled plugins, loading the list on first use. */
 export function usePluginPanels(): ActivePluginPanel[] {
   return usePluginListDerived(collectActivePluginPanels)
+}
+
+export function usePluginSidebarBackdrop(): ActivePluginSidebarBackdrop | null {
+  return usePluginListDerived(collectActivePluginSidebarBackdrop)
 }
 
 /** Commands of enabled plugins, sharing the authoritative plugin-list refresh. */

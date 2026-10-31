@@ -4,6 +4,7 @@ import { pluginIdSchema, pluginRelativePathSchema } from '../manifest/plugin-man
 import {
   pluginPathFieldDoc,
   pluginFieldDoc,
+  PLUGIN_MANIFEST_V2_SINCE,
   PLUGIN_SCHEMA_SINCE_V1
 } from '../manifest/plugin-schema-field-docs'
 
@@ -42,6 +43,11 @@ export const PLUGIN_PANEL_ICONS = [
 
 export type PluginPanelIconName = (typeof PLUGIN_PANEL_ICONS)[number]
 
+/** Where a panel renders: a right-sidebar tab, or behind the left sidebar's workspace cards. */
+export const PLUGIN_PANEL_PLACEMENTS = ['right-sidebar', 'worktree-sidebar-backdrop'] as const
+
+export type PluginPanelPlacement = (typeof PLUGIN_PANEL_PLACEMENTS)[number]
+
 const PANEL_ICON_BY_FOLDED_NAME = new Map<string, PluginPanelIconName>(
   PLUGIN_PANEL_ICONS.map((name) => [name.replaceAll('-', ''), name])
 )
@@ -73,6 +79,16 @@ export const pluginPanelContributionSchema = z
           'Icon shown in the right-sidebar activity bar. Defaults to `plug`.',
           PLUGIN_SCHEMA_SINCE_V1,
           ['database']
+        )
+      ),
+    placement: z
+      .enum(PLUGIN_PANEL_PLACEMENTS)
+      .optional()
+      .meta(
+        pluginFieldDoc(
+          'Where the panel renders. Defaults to `right-sidebar`. `worktree-sidebar-backdrop` draws it behind the workspace cards of the left sidebar, click-through, and sends it the `worktreeSidebar.cards` event; only the first enabled backdrop shows.',
+          PLUGIN_MANIFEST_V2_SINCE,
+          ['worktree-sidebar-backdrop']
         )
       ),
     entry: pluginRelativePathSchema.meta(

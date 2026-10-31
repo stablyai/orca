@@ -136,6 +136,24 @@ Theme changes do not reload the frame: the shell updates the `--orca-*` variable
 `light`/`dark` class on `<html>` in place and emits `theme`. Restyle from the variables, or
 listen with `orca.on('theme', …)`, to follow it.
 
+### Sidebar backdrops
+
+A panel with `"placement": "worktree-sidebar-backdrop"` is drawn behind the left sidebar's
+workspace cards instead of as a right-sidebar tab: decorative, click-through and hidden from
+assistive technology. Only the first enabled backdrop shows. Keep the page transparent and leave
+`color-scheme` unset, or Chromium paints the frame opaque. The frame receives the visible cards on
+every scroll, resize, hover and status change; a listener added later gets the latest one first:
+
+```js
+orca.on('worktreeSidebar.cards', ({ width, height, cards }) => {
+  // cards: [{ key, x, y, width, height, hovered, active, status? }], CSS pixels from the
+  // frame's top-left. `key` is stable while the frame lives; workspace ids never leave Orca.
+})
+```
+
+`status` is the card's agent status (`working`, `permission`, `done`, …) and is sent only to a
+plugin that declares the `agent:read` capability, which the user approves on install.
+
 ## 2. Load it while you work
 
 1. Settings → Plugins: click **Turn on plugins**.

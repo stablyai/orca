@@ -500,6 +500,18 @@
             "zap"
           ]
         },
+        "placement": {
+          "description": "Where the panel renders. Defaults to `right-sidebar`. `worktree-sidebar-backdrop` draws it behind the workspace cards of the left sidebar, click-through, and sends it the `worktreeSidebar.cards` event; only the first enabled backdrop shows.",
+          "x-orca-since": "1.4.245",
+          "examples": [
+            "worktree-sidebar-backdrop"
+          ],
+          "type": "string",
+          "enum": [
+            "right-sidebar",
+            "worktree-sidebar-backdrop"
+          ]
+        },
         "entry": {
           "type": "string",
           "minLength": 1,
