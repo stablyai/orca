@@ -25,7 +25,19 @@ function app(config: RelayConfig = cell) {
       headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
       body: JSON.stringify(body)
     })
-  return { post, reserve, demote }
+  const postChunked = (path: string, body: string) =>
+    routes.request(path, {
+      method: 'POST',
+      headers: { authorization: 'Bearer director-token', 'content-type': 'application/json' },
+      body: new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(body))
+          controller.close()
+        }
+      }),
+      duplex: 'half'
+    } as RequestInit)
+  return { post, postChunked, reserve, demote, routes }
 }
 
 const booking = {
@@ -59,4 +71,82 @@ describe('cell reserve routes', () => {
     expect(await reply.json()).toEqual({ v: 1, outcome: 'demoted' })
     expect(demote).toHaveBeenCalledWith({ ...seat, joinedAt: 1_000 })
   })
+
+  it.each(['/internal/reserve', '/internal/demote'])(
+    'rejects an oversized chunked body on %s without calling the handler',
+    async (path) => {
+      const { postChunked, reserve, demote } = app()
+      const response = await postChunked(path, ' '.repeat(16 * 1024 + 1))
+
+      expect(response.status).toBe(413)
+      expect(await response.json()).toEqual({ error: 'request_too_large' })
+      expect(reserve).not.toHaveBeenCalled()
+      expect(demote).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each(['/internal/reserve', '/internal/demote'])(
+    'refuses %s without waiting for a chunked body',
+    async (path) => {
+      const { routes, reserve, demote } = app()
+      const response = await Promise.race([
+        routes.request(path, {
+          method: 'POST',
+          headers: { authorization: 'Bearer someone-else', 'content-type': 'application/json' },
+          body: new ReadableStream<Uint8Array>({
+            pull: () => new Promise(() => {})
+          }),
+          duplex: 'half'
+        } as RequestInit),
+        new Promise<Response>((_, reject) => {
+          setTimeout(() => reject(new Error('waited for the body')), 200)
+        })
+      ])
+
+      expect(response.status).toBe(401)
+      expect(await response.json()).toEqual({ error: 'invalid_token' })
+      expect(reserve).not.toHaveBeenCalled()
+      expect(demote).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each(['/internal/reserve', '/internal/demote'])(
+    'refuses an unauthorized oversized %s before the size check',
+    async (path) => {
+      const { routes, reserve, demote } = app()
+      const response = await routes.request(path, {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer someone-else',
+          'content-type': 'application/json',
+          'content-length': String(16 * 1024 + 1)
+        },
+        body: '{}'
+      })
+
+      expect(response.status).toBe(401)
+      expect(await response.json()).toEqual({ error: 'invalid_token' })
+      expect(reserve).not.toHaveBeenCalled()
+      expect(demote).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each(['/internal/reserve', '/internal/demote'])(
+    'hides a missing %s route before measuring an oversized body',
+    async (path) => {
+      const { routes } = app({ ...cell, role: 'director' })
+      const response = await routes.request(path, {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer director-token',
+          'content-type': 'application/json',
+          'content-length': String(16 * 1024 + 1)
+        },
+        body: '{}'
+      })
+
+      expect(response.status).toBe(404)
+      expect(await response.json()).toEqual({ error: 'reserve_unavailable' })
+    }
+  )
 })
