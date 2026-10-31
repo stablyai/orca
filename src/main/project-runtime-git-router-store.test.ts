@@ -55,9 +55,37 @@ describe('project runtime Git routing on the real Store', () => {
     expect(distroFor(REPO)).toBeUndefined()
   })
 
-  it('never runs a Git call on a stale route after a runtime switch or a new worktree', async () => {
+  // Stage 1 is opt-in: the routing ships with WSL hosts and follows the user's setting both ways.
+  it('routes only while the WSL hosts setting is on, and stops when it is turned off', async () => {
     const { store } = await fixture()
     store.updateSettings({ localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' } })
+    store.addRepo({
+      id: 'app',
+      path: REPO,
+      displayName: 'app',
+      badgeColor: '',
+      addedAt: 0,
+      kind: 'git'
+    })
+    installProjectRuntimeGitRouter(store)
+    expect(isLocalGitRuntimeRouterInstalled()).toBe(false)
+    expect(distroFor(REPO)).toBeUndefined()
+
+    store.updateSettings({ experimentalWslHosts: true })
+    expect(isLocalGitRuntimeRouterInstalled()).toBe(true)
+    expect(distroFor(REPO)).toBe('Ubuntu')
+
+    store.updateSettings({ experimentalWslHosts: false })
+    expect(isLocalGitRuntimeRouterInstalled()).toBe(false)
+    expect(distroFor(REPO)).toBeUndefined()
+  })
+
+  it('never runs a Git call on a stale route after a runtime switch or a new worktree', async () => {
+    const { store } = await fixture()
+    store.updateSettings({
+      localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' },
+      experimentalWslHosts: true
+    })
     store.addRepo({
       id: 'app',
       path: REPO,
