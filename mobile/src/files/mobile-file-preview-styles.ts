@@ -74,6 +74,12 @@ export const filePreviewStyles = themedStyleSheet(() => ({
     color: colors.statusRed,
     fontSize: typography.metaSize
   },
+  previewSaveErrorText: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    color: colors.statusRed,
+    fontSize: typography.metaSize
+  },
   editInput: {
     flex: 1,
     color: colors.textPrimary,
