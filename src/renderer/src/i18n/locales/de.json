@@ -15957,7 +15957,8 @@
           "ac3bb87913": "Bearbeiten",
           "0d193dc03c": "Vorschau",
           "aff15f94f5": "Formatierter Editor",
-          "4d6ccb7ba6": "Quelltext"
+          "4d6ccb7ba6": "Quelltext",
+          "pluginViewTooltip": "{{title}} (Plugin-Ansicht von {{plugin}})"
         },
         "ImageDiffViewer": {
           "a651be62b0": "Geändert",

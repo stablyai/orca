@@ -88,7 +88,9 @@ describe('custom editor routing', () => {
       'changes'
     ])
     expect(result.effectiveToggleValue).toBe('plugin-editor:stablyai.excalidraw/draw')
-    expect(result.customEditorTitles).toEqual({ 'plugin-editor:stablyai.excalidraw/draw': 'Draw' })
+    expect(result.customEditorOptions).toEqual({
+      'plugin-editor:stablyai.excalidraw/draw': { title: 'Draw', pluginName: expect.any(String) }
+    })
   })
 
   it('shows Source when the user picked it', () => {

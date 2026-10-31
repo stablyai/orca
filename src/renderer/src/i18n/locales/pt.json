@@ -13028,7 +13028,8 @@
           "ac3bb87913": "Editar",
           "0d193dc03c": "Pré-visualização",
           "aff15f94f5": "Editor Rico",
-          "4d6ccb7ba6": "Origem"
+          "4d6ccb7ba6": "Origem",
+          "pluginViewTooltip": "{{title}} (visualização do plugin {{plugin}})"
         },
         "ExternalFileChangeCompareDialog": {
           "4b8de20a11": "Arquivo alterado no disco",

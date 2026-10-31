@@ -83,6 +83,10 @@ test('plugin custom editor edits and saves through Orca', async ({ orcaPage, see
     const frame = orcaPage.frameLocator(FRAME)
     const textarea = frame.locator('#doc')
     await expect(textarea).toHaveValue('first line\n', { timeout: 15_000 })
+    // The view switcher names the plugin editor in text, not just a generic icon.
+    await expect(orcaPage.getByRole('radio', { name: 'Sketch Pad', exact: true })).toHaveText(
+      'Sketch Pad'
+    )
     // Opening a file in its custom editor must not dirty it.
     expect(await activeFileDirty(orcaPage)).toBe(false)
 

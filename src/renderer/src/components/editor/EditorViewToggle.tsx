@@ -15,12 +15,19 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import type { MarkdownViewMode } from '@/store/slices/editor'
 import { translate } from '@/i18n/i18n'
+import { PluginContributionIcon } from '@/components/plugins/PluginContributionIcon'
 
 // Combine markdown modes with orthogonal edit/changes state in one mutually exclusive toggle; edit is the non-markdown source counterpart.
 type BuiltInEditorToggleValue = MarkdownViewMode | 'edit' | 'changes'
 /** A plugin custom editor, by its `<pluginKey>/<editorId>` key. */
 export type CustomEditorToggleValue = `plugin-editor:${string}`
 export type EditorToggleValue = BuiltInEditorToggleValue | CustomEditorToggleValue
+
+/** How a plugin editor presents in the toggle; all text is plugin-provided and rendered plain. */
+export type CustomEditorToggleOption = { title: string; pluginName: string; iconUrl?: string }
+export type CustomEditorToggleOptions = Readonly<
+  Record<CustomEditorToggleValue, CustomEditorToggleOption>
+>
 
 type ViewModeMetadata = { label: string; icon: LucideIcon; title?: string }
 
@@ -89,8 +96,8 @@ type EditorViewToggleProps = {
   modes: readonly EditorToggleValue[]
   onChange: (value: EditorToggleValue) => void
   metadataOverride?: Partial<Record<MarkdownViewMode | 'edit', ViewModeMetadata>>
-  /** Plugin-chosen editor titles, by toggle value. */
-  customEditorTitles?: Readonly<Record<CustomEditorToggleValue, string>>
+  /** The file's plugin editors, by toggle value. */
+  customEditorOptions?: CustomEditorToggleOptions
 }
 
 export function isCustomEditorToggleValue(
@@ -100,16 +107,51 @@ export function isCustomEditorToggleValue(
 }
 
 function viewModeMetadata(
-  viewMode: EditorToggleValue,
-  metadataOverride: EditorViewToggleProps['metadataOverride'],
-  customEditorTitles: EditorViewToggleProps['customEditorTitles']
+  viewMode: BuiltInEditorToggleValue,
+  metadataOverride: EditorViewToggleProps['metadataOverride']
 ): ViewModeMetadata {
-  if (isCustomEditorToggleValue(viewMode)) {
-    return { label: customEditorTitles?.[viewMode] ?? viewMode, icon: PenTool }
-  }
   // Changes keeps its default metadata; markdown modes and Source accept presentation overrides.
   const override = viewMode === 'changes' ? undefined : metadataOverride?.[viewMode]
   return override ?? DEFAULT_VIEW_MODE_METADATA[viewMode]
+}
+
+type TogglePresentation = { label: string; tooltip: string; content: React.ReactNode }
+
+function togglePresentation(
+  viewMode: EditorToggleValue,
+  metadataOverride: EditorViewToggleProps['metadataOverride'],
+  customEditorOptions: EditorViewToggleProps['customEditorOptions']
+): TogglePresentation {
+  if (!isCustomEditorToggleValue(viewMode)) {
+    const metadata = viewModeMetadata(viewMode, metadataOverride)
+    const Icon = metadata.icon
+    return {
+      label: metadata.label,
+      tooltip: metadata.title ?? metadata.label,
+      content: <Icon className="size-3.5" />
+    }
+  }
+  const option = customEditorOptions?.[viewMode]
+  const title = option?.title ?? viewMode
+  // Why named: an icon-only plugin view read as a built-in and went unnoticed; the cap keeps a long title from crowding the header.
+  return {
+    label: title,
+    tooltip: option?.pluginName
+      ? translate(
+          'auto.components.editor.EditorViewToggle.pluginViewTooltip',
+          '{{title}} (plugin view from {{plugin}})',
+          { title, plugin: option.pluginName }
+        )
+      : title,
+    content: (
+      <>
+        <PluginContributionIcon url={option?.iconUrl} fallback={PenTool} className="size-3.5" />
+        <span data-plugin-editor-label="" className="max-w-24 truncate text-xs">
+          {title}
+        </span>
+      </>
+    )
+  }
 }
 
 export default function EditorViewToggle({
@@ -117,7 +159,7 @@ export default function EditorViewToggle({
   modes,
   onChange,
   metadataOverride,
-  customEditorTitles
+  customEditorOptions
 }: EditorViewToggleProps): React.JSX.Element {
   // Metadata uses getters; subscribe here so language changes repaint labels.
   useTranslation()
@@ -136,22 +178,20 @@ export default function EditorViewToggle({
         }}
       >
         {modes.map((viewMode) => {
-          const metadata = viewModeMetadata(viewMode, metadataOverride, customEditorTitles)
-          const Icon = metadata.icon
-          const tooltipLabel = metadata.title ?? metadata.label
+          const presentation = togglePresentation(viewMode, metadataOverride, customEditorOptions)
           return (
             <Tooltip key={viewMode}>
               <TooltipTrigger asChild>
                 <ToggleGroupItem
                   value={viewMode}
-                  aria-label={metadata.label}
+                  aria-label={presentation.label}
                   className="h-[23px] min-w-[24px] px-2 aria-[checked=true]:border-foreground/20 aria-[checked=true]:bg-foreground/10 aria-[checked=true]:text-foreground aria-[checked=true]:shadow-xs aria-[checked=true]:hover:bg-foreground/15 aria-[checked=true]:hover:text-foreground data-[state=on]:border-foreground/20 data-[state=on]:bg-foreground/10 data-[state=on]:text-foreground data-[state=on]:shadow-xs data-[state=on]:hover:bg-foreground/15 data-[state=on]:hover:text-foreground"
                 >
-                  <Icon className="size-3.5" />
+                  {presentation.content}
                 </ToggleGroupItem>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={4}>
-                {tooltipLabel}
+                {presentation.tooltip}
               </TooltipContent>
             </Tooltip>
           )

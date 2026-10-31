@@ -16200,7 +16200,8 @@
           "ac3bb87913": "Edit",
           "0d193dc03c": "Preview",
           "aff15f94f5": "Rich Editor",
-          "4d6ccb7ba6": "Source"
+          "4d6ccb7ba6": "Source",
+          "pluginViewTooltip": "{{title}} (plugin view from {{plugin}})"
         },
         "ImageDiffViewer": {
           "a651be62b0": "Modified",

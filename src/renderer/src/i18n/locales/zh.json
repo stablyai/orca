@@ -15428,7 +15428,8 @@
           "ac3bb87913": "编辑",
           "0d193dc03c": "预览",
           "aff15f94f5": "富文本编辑器",
-          "4d6ccb7ba6": "源码"
+          "4d6ccb7ba6": "源码",
+          "pluginViewTooltip": "{{title}}（来自 {{plugin}} 的插件视图）"
         },
         "ImageDiffViewer": {
           "a651be62b0": "修改的",

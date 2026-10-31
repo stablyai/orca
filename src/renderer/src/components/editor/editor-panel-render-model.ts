@@ -241,10 +241,14 @@ export function getEditorPanelRenderModel({
     hasEditorToggle: toggleModes.length > 1,
     effectiveToggleValue,
     customEditors: customEditorToggle?.editors ?? [],
-    customEditorTitles: Object.fromEntries(
+    customEditorOptions: Object.fromEntries(
       (customEditorToggle?.editors ?? []).map((editor) => [
         customEditorToggleValue(editor),
-        editor.title
+        {
+          title: editor.title,
+          pluginName: editor.pluginName,
+          ...(editor.iconUrl ? { iconUrl: editor.iconUrl } : {})
+        }
       ])
     ),
     activeCustomEditor,

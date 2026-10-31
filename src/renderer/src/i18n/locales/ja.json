@@ -15428,7 +15428,8 @@
           "ac3bb87913": "編集",
           "0d193dc03c": "プレビュー",
           "aff15f94f5": "リッチエディター",
-          "4d6ccb7ba6": "ソース"
+          "4d6ccb7ba6": "ソース",
+          "pluginViewTooltip": "{{title}}（{{plugin}} のプラグインビュー）"
         },
         "ImageDiffViewer": {
           "a651be62b0": "修正済み",

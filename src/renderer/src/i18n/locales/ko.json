@@ -15428,7 +15428,8 @@
           "ac3bb87913": "편집",
           "0d193dc03c": "미리보기",
           "aff15f94f5": "리치 에디터",
-          "4d6ccb7ba6": "소스"
+          "4d6ccb7ba6": "소스",
+          "pluginViewTooltip": "{{title}} ({{plugin}} 플러그인 보기)"
         },
         "ImageDiffViewer": {
           "a651be62b0": "수정됨",
