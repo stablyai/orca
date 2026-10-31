@@ -97,11 +97,19 @@ it.each([false, true])(
   }
 )
 
+function providerEvents() {
+  const events = rig.adapter.acquire.mock.calls.at(-1)?.[0].events
+  if (!events) {
+    throw new Error('no provider child was started')
+  }
+  return events
+}
+
 it.each([false, true])(
   'sends the switch’s Stop only to a chat that is replying=%s, so an idle chat gets no Stop note',
   async (replying) => {
     await foundRestTestChat(rig)
-    const events = rig.adapter.acquire.mock.calls.at(-1)![0].events
+    const events = providerEvents()
     for (const state of replying ? (['running'] as const) : (['running', 'completed'] as const)) {
       events.appendItem(
         { provider: 'codex', threadId: REST_TEST_THREAD, turnId: 'turn', ordinal: 50 },
@@ -122,13 +130,11 @@ it.each([false, true])(
 
 it('refuses a replying chat, stopping nothing, when the client left consent to the host', async () => {
   await foundRestTestChat(rig)
-  rig.adapter.acquire.mock.calls
-    .at(-1)![0]
-    .events.appendItem(
-      { provider: 'codex', threadId: REST_TEST_THREAD, turnId: 'turn', ordinal: 50 },
-      { kind: 'turn', turnId: 'turn', state: 'running' },
-      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-    )
+  providerEvents().appendItem(
+    { provider: 'codex', threadId: REST_TEST_THREAD, turnId: 'turn', ordinal: 50 },
+    { kind: 'turn', turnId: 'turn', state: 'running' },
+    { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+  )
   await rig.host.flushStreamedEvents(id)
   const cancel = vi.spyOn(rig.host, 'cancel')
   await expect(rig.host.stopForSwitch(id, caller, deadline, false)).rejects.toMatchObject({

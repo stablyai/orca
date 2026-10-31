@@ -50,10 +50,10 @@ export class SwitchSlotAnchors {
     return {
       ...snapshot,
       tabs: snapshot.tabs.map((row) => {
-        const entry =
-          row.type === 'terminal' || row.type === 'agent-session'
-            ? entries.get(tabBarId(row))
-            : undefined
+        if (row.type !== 'terminal' && row.type !== 'agent-session') {
+          return row
+        }
+        const entry = entries.get(tabBarId(row))
         return entry && !row.replaces && !row.after ? { ...row, ...entry.anchor } : row
       })
     }

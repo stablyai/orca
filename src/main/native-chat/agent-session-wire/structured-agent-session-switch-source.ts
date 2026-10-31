@@ -75,9 +75,10 @@ export function structuredAgentSessionSwitchSource(context: SwitchSourceContext)
       }
       // A Stop with no turn running and nothing queued stops nothing (the common pattern makes it a
       // no-op, so no Stop note is written); the process stop below still ends the agent with proof.
-      const work = context.currentWork(sessionId, conversation.journal)
+      // The held session's work, the conversation just opened; none held reads as possibly working.
+      const work = context.currentWork(sessionId)
       const stops =
-        work === undefined ||
+        work == null ||
         work.working() ||
         conversation.journal.submissions().some(isQueuedAgentJournalSubmission)
       // Before any effect; later sends are fenced by the admitted-send count above.

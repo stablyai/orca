@@ -71,7 +71,8 @@ function open(sessionId: string) {
 
 /** Rows written after the chat's import carry times after it. */
 function later(rows: string[]): string[] {
-  const at = Date.now() + 60_000
+  // Any time after the import's own (written at the run's real time) will do.
+  const at = Date.parse('2999-01-01T00:00:00Z')
   return rows.map((row, index) => {
     const parsed = JSON.parse(row)
     return JSON.stringify({ ...parsed, timestamp: new Date(at + index).toISOString() })

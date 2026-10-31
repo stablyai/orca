@@ -54,7 +54,8 @@ async function openCliTurn() {
   await mkdir(join(codexHome, 'sessions'), { recursive: true })
   const filePath = join(codexHome, 'sessions', 'switch-source.jsonl')
   const nativeId = head.handle.nativeId
-  const at = Date.now() + 60_000
+  // After the chat's import, which is stamped at the run's real time.
+  const at = Date.parse('2999-01-01T00:00:00Z')
   await writeFile(
     filePath,
     `${[
