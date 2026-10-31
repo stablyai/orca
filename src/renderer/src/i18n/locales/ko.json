@@ -1455,7 +1455,8 @@
         "ef223fbb6b": "장치가 연결을 시도했지만 페어링되지 않았습니다.",
         "11992d0337": "귀하의 휴대폰이거나 다른 Orca 클라이언트인 경우 설정 → 모바일에서 다시 페어링하세요.",
         "6573cfe955": "Open Mobile Settings",
-        "unresolvedTerminalWorktreeOwner": "작업 트리 소유자를 확인할 수 없어 터미널 생성을 사용할 수 없습니다."
+        "unresolvedTerminalWorktreeOwner": "작업 트리 소유자를 확인할 수 없어 터미널 생성을 사용할 수 없습니다.",
+        "unrenderableTerminalWorktreeSurface": "이 창에 해당 워크트리의 화면이 없어 터미널을 만들 수 없습니다"
       },
       "useSettingsNavigationMetadata": {
         "4a728cd56b": "아직 구체화되고 있는 새로운 기능입니다. 한번 시도해 보세요.",

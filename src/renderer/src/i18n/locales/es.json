@@ -1465,7 +1465,8 @@
         "ef223fbb6b": "Un dispositivo intentó conectarse pero no está emparejado",
         "11992d0337": "Si este era su teléfono u otro cliente Orca, vuelva a vincularlo desde Configuración → Móvil.",
         "6573cfe955": "Open Mobile Settings",
-        "unresolvedTerminalWorktreeOwner": "La creación de terminal no está disponible porque no se pudo resolver el propietario del árbol de trabajo"
+        "unresolvedTerminalWorktreeOwner": "La creación de terminal no está disponible porque no se pudo resolver el propietario del árbol de trabajo",
+        "unrenderableTerminalWorktreeSurface": "No se puede crear el terminal porque esta ventana no tiene superficie para ese worktree"
       },
       "useSettingsNavigationMetadata": {
         "4a728cd56b": "Nuevas funciones que aún están tomando forma. Pruébalas.",
