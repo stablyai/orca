@@ -14555,7 +14555,8 @@
                   "79aa06bb2c": "Aktualisierung fehlgeschlagen. Die GitHub-API ist vorübergehend nicht verfügbar. Der letzte bekannte Status wird angezeigt.",
                   "6ec12cee0c": "Aktualisierung fehlgeschlagen. GitHub ist derzeit nicht erreichbar. Der letzte bekannte Status wird angezeigt.",
                   "de088015e8": "Aktualisierung fehlgeschlagen. GitHub begrenzt die Anfragerate. Der letzte bekannte Status wird angezeigt.",
-                  "d9dd7c6687": "Die Daten von GitHub konnten nicht aktualisiert werden. Der letzte bekannte Status wird angezeigt."
+                  "d9dd7c6687": "Die Daten von GitHub konnten nicht aktualisiert werden. Der letzte bekannte Status wird angezeigt.",
+                  "manual_provider": "Die Daten von {{provider}} konnten nicht aktualisiert werden. Erneut versuchen."
                 }
               }
             },

@@ -80,12 +80,12 @@ export function getChecksPanelRefreshErrorBannerLine(
 }
 
 export function getHostedReviewManualRefreshError(provider: HostedReviewProvider): string {
-  const providerName = localizedHostedReviewCopy(
-    resolveSupportedHostedReviewCopyProvider(provider)
-  ).providerName
-  const instruction = translate(
-    'auto.components.right.sidebar.SourceControl.97e7124eac',
-    'Could not refresh Source Control. Try again.'
+  return translate(
+    'auto.components.right.sidebar.github.refresh.error.copy.manual_provider',
+    "Couldn't refresh from {{provider}}. Try again.",
+    {
+      provider: localizedHostedReviewCopy(resolveSupportedHostedReviewCopyProvider(provider))
+        .providerName
+    }
   )
-  return `${providerName}: ${instruction}`
 }

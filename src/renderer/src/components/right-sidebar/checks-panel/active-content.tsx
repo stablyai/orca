@@ -101,11 +101,11 @@ export function ChecksPanelActiveContent({
     settings,
     Boolean(activeWorktreeId)
   )
+  // A classified GitHub failure says more than a manual one, so it wins; one banner either way.
   const refreshError =
-    manualRefreshError ??
     (activeReview.provider === 'github' && prRefreshState?.status === 'error'
       ? getChecksPanelRefreshErrorBannerLine(prRefreshState.errorType)
-      : null)
+      : null) ?? manualRefreshError
   return (
     <div ref={setChecksPanelContentRef} className="flex-1 overflow-auto scrollbar-sleek">
       {refreshError ? (

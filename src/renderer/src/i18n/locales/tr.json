@@ -14541,7 +14541,8 @@
                   "79aa06bb2c": "Yenilenemedi. GitHub'ın API'si geçici olarak kullanılamıyor. Bilinen son durum gösteriliyor.",
                   "6ec12cee0c": "Yenilenemedi. GitHub şu anda erişilemez durumda. Bilinen son durum gösteriliyor.",
                   "de088015e8": "Yenilenemedi. GitHub istekleri sınırlıyor. Bilinen son durum gösteriliyor.",
-                  "d9dd7c6687": "GitHub'dan yenilenemedi. Bilinen son durum gösteriliyor."
+                  "d9dd7c6687": "GitHub'dan yenilenemedi. Bilinen son durum gösteriliyor.",
+                  "manual_provider": "{{provider}} kaynağından yenilenemedi. Tekrar deneyin."
                 }
               }
             },

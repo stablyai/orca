@@ -10,6 +10,7 @@ vi.mock('../SourceControlAgentActionDialog', () => ({ SourceControlAgentActionDi
 
 import { ChecksPanelActiveContent } from './active-content'
 import { ChecksPanelEmptyContent } from './empty-content'
+import { getHostedReviewManualRefreshError } from '../github-refresh-error-copy'
 
 afterEach(cleanup)
 
@@ -95,16 +96,80 @@ describe('checks panel concrete content', () => {
     expect(screen.queryByText('Pull request unlinked')).toBeNull()
     rerender(
       <ChecksPanelEmptyContent
-        model={{
-          ...model,
-          manualRefreshError: 'GitLab: Could not refresh Source Control. Try again.'
-        }}
+        model={{ ...model, manualRefreshError: getHostedReviewManualRefreshError('gitlab') }}
       />
     )
     expect(screen.getByText('Refresh failed')).toBeTruthy()
-    expect(screen.getByText('GitLab: Could not refresh Source Control. Try again.')).toBeTruthy()
+    expect(screen.getByText("Couldn't refresh from GitLab. Try again.")).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Refresh' })).toBeTruthy()
   })
+
+  it.each([
+    [
+      'rate limited',
+      { status: 'error', errorType: 'rate_limited' },
+      'GitHub refresh paused',
+      'Orca will retry at',
+      true
+    ],
+    [
+      'signed out',
+      { status: 'error', errorType: 'auth' },
+      'GitHub authentication failed',
+      'Check the GitHub login',
+      false
+    ]
+  ] as const)(
+    'keeps the classified GitHub empty state over a manual failure (%s)',
+    (_name, refresh, title, nextStep, retryDisabled) => {
+      const now = Date.now()
+      const model = {
+        activeReview: null,
+        activeWorktree: { id: 'worktree-1' },
+        branch: 'without-pr',
+        checksPanelHasHardRefreshError: false,
+        checksPanelReviewLookup: 'unknown',
+        checksPanelReviewLookupResult: { openReviewUrl: null },
+        confirmedReadiness: { confirmed: false, needsPush: false },
+        conflictOperation: 'unknown',
+        createComposerOpen: false,
+        detachedHeadDisplay: null,
+        gitStatusInputs: { hasUncommittedChanges: false },
+        gitStatusProbeErrorContextKey: null,
+        hardRefreshError: null,
+        hostedReviewCreateCopy: { providerName: 'GitHub' },
+        hostedReviewCreateProvider: 'github',
+        hostedReviewCreation: null,
+        isFolder: false,
+        isGitHubReviewContext: true,
+        isPublishingBranch: false,
+        linkedGitLabMR: null,
+        linkedPR: null,
+        linkedReviewNumber: null,
+        manualRefreshError: getHostedReviewManualRefreshError('github'),
+        panelContextKey: 'worktree-1::without-pr',
+        prNumber: null,
+        prRefreshState: {
+          ...refresh,
+          reason: 'manual',
+          updatedAt: now,
+          nextAutoRetryAt: now + 600_000,
+          retryDisabledUntil: retryDisabled ? now + 600_000 : undefined
+        },
+        publishActionHasUncommittedChanges: false,
+        sourceControlAiActionsVisible: false,
+        suppressedGitHubPR: null,
+        handleRefresh: vi.fn(async () => {})
+      } as unknown as ChecksPanelEmptyContentModel
+
+      const { container } = render(<ChecksPanelEmptyContent model={model} />)
+
+      expect(container.textContent).toContain(title)
+      expect(container.textContent).toContain(nextStep)
+      expect(container.textContent).not.toContain('Refresh failed')
+      expect(container.textContent).not.toContain('Try again')
+    }
+  )
 
   it('renders the active review header and empty check/comment sections with accessible actions', async () => {
     const model = {
@@ -197,13 +262,13 @@ describe('checks panel concrete content', () => {
       ...model,
       checksError: 'Previous detail error',
       commentsError: 'Previous detail error',
-      manualRefreshError: "Couldn't refresh from GitLab. Try Refresh again.",
+      manualRefreshError: getHostedReviewManualRefreshError('gitlab'),
       activeReview: { ...model.activeReview, provider: 'gitlab' as const },
       isRefreshing: true
     }
     rerender(<ChecksPanelActiveContent model={failedModel} />)
     expect(screen.getAllByRole('alert')).toHaveLength(1)
-    expect(screen.getByRole('alert').textContent).toContain('GitLab. Try Refresh again.')
+    expect(screen.getByRole('alert').textContent).toBe("Couldn't refresh from GitLab. Try again.")
     expect(screen.getByText('Preserve mounted panel behavior')).toBeTruthy()
     expect(screen.queryByText('Previous detail error')).toBeNull()
     rerender(
@@ -215,8 +280,9 @@ describe('checks panel concrete content', () => {
         }}
       />
     )
+    // The classified GitHub line says more than the manual failure, so it is the one shown.
     expect(screen.getAllByRole('alert')).toHaveLength(1)
-    expect(screen.getByRole('alert').textContent).toContain('GitLab. Try Refresh again.')
+    expect(screen.getByRole('alert').textContent).toContain('GitHub is unreachable right now')
 
     const check: ChecksPanelActiveContentModel['checks'][number] = {
       name: 'Build',

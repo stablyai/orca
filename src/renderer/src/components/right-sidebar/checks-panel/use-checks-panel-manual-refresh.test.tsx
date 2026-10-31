@@ -49,6 +49,9 @@ function makeInput(): RefreshInput {
       return null
     }),
     gitStatusSnapshot: null,
+    hostedReview: null,
+    hostedReviewCacheKey: 'hosted-review-key',
+    hostedReviewCreateProvider: 'github',
     isCurrentAsyncResult: () => true,
     isFolder: false,
     isGitLabReviewContext: false,
@@ -186,14 +189,16 @@ describe('useChecksPanelManualRefresh ordering', () => {
     i18n.addResource(
       'es',
       'translation',
-      'auto.components.right.sidebar.SourceControl.97e7124eac',
-      'No se pudo actualizar el control de versiones. Inténtalo de nuevo.'
+      'auto.components.right.sidebar.github.refresh.error.copy.manual_provider',
+      'No se pudo actualizar desde {{provider}}. Vuelve a intentarlo.'
     )
     await i18n.changeLanguage('es')
     input.fetchHostedReviewForBranch = vi.fn().mockRejectedValueOnce(new Error('offline'))
     const { result, rerender } = renderHook(() => useChecksPanelManualRefresh(input))
     await act(async () => result.current.handleRefresh())
-    expect(result.current.manualRefreshError).toContain('GitLab: No se pudo')
+    expect(result.current.manualRefreshError).toBe(
+      'No se pudo actualizar desde GitLab. Vuelve a intentarlo.'
+    )
     let rejectOld: (error: Error) => void = () => {}
     input.fetchHostedReviewForBranch = vi.fn(
       () =>
@@ -206,7 +211,9 @@ describe('useChecksPanelManualRefresh ordering', () => {
     act(() => {
       old = result.current.handleRefresh()
     })
-    expect(result.current.manualRefreshError).toContain('GitLab: No se pudo')
+    expect(result.current.manualRefreshError).toBe(
+      'No se pudo actualizar desde GitLab. Vuelve a intentarlo.'
+    )
     input.panelContextKey = 'new-context'
     input.panelContextKeyRef.current = 'new-context'
     input.refreshInFlightRef.current = false
@@ -304,6 +311,92 @@ describe('useChecksPanelManualRefresh ordering', () => {
         Object.defineProperty(window, 'api', { configurable: true, writable: true, value: api })
         useAppStore.setState(original)
       }
+    }
+  )
+})
+
+describe('useChecksPanelManualRefresh failures', () => {
+  const refreshedPR = {
+    number: 42,
+    state: 'open',
+    title: 'Current review',
+    headSha: 'head-2',
+    prRepo: { owner: 'orca', repo: 'app', host: 'github.com' }
+  } as NonNullable<RefreshInput['pr']>
+  const gitLabReview: HostedReviewInfo = {
+    provider: 'gitlab',
+    number: 7,
+    title: 'MR',
+    url: 'https://gitlab.example.test/g/p/-/merge_requests/7',
+    state: 'merged',
+    status: 'success',
+    mergeable: 'UNKNOWN',
+    updatedAt: '2026-10-30'
+  }
+
+  it('drops a manual failure once a newer read for the panel lands, but not for an older one', async () => {
+    const original = useAppStore.getState()
+    const input = makeInput()
+    input.isGitLabReviewContext = true
+    input.linkedGitLabMR = 7
+    input.fetchHostedReviewForBranch = vi.fn().mockRejectedValueOnce(new Error('offline'))
+    const entry = (fetchedAt: number) => ({
+      hostedReviewCache: { 'hosted-review-key': { data: gitLabReview, fetchedAt } }
+    })
+    try {
+      useAppStore.setState(entry(Date.now() - 1_000))
+      const { result } = renderHook(() => useChecksPanelManualRefresh(input))
+      await act(async () => result.current.handleRefresh())
+      expect(result.current.manualRefreshError).toBe("Couldn't refresh from GitLab. Try again.")
+      // A background poll succeeding after the failed click replaces the failure, as a newer success would.
+      act(() => useAppStore.setState(entry(Date.now() + 1_000)))
+      expect(result.current.manualRefreshError).toBeNull()
+    } finally {
+      useAppStore.setState(original)
+    }
+  })
+
+  it('still refreshes GitHub checks and comments when only the hosted-review read fails', async () => {
+    const input = makeInput()
+    input.pr = refreshedPR
+    input.fetchPRForBranch = vi.fn(async () => refreshedPR)
+    input.fetchHostedReviewForBranch = vi.fn().mockRejectedValue(new Error('raw provider text'))
+    const { result } = renderHook(() => useChecksPanelManualRefresh(input))
+    await act(async () => result.current.handleRefresh())
+    expect(input.fetchPRChecks).toHaveBeenCalledTimes(1)
+    expect(input.fetchPRComments).toHaveBeenCalledTimes(1)
+    expect(result.current.manualRefreshError).toBe("Couldn't refresh from GitHub. Try again.")
+  })
+
+  // Old path: every provider without a GitLab review went through the GitHub branch (PR lookup + lists cleared).
+  it.each([
+    ['unlinked Bitbucket', { hostedReviewCreateProvider: 'bitbucket' }, 'Bitbucket', false],
+    ['linked Bitbucket', { linkedBitbucketPR: 3 }, 'Bitbucket', false],
+    ['Azure DevOps', { linkedAzureDevOpsPR: 3 }, 'Azure DevOps', false],
+    ['unlinked Gitea', { hostedReviewCreateProvider: 'gitea' }, 'Gitea', false],
+    ['GitLab with no MR', { hostedReviewCreateProvider: 'gitlab' }, 'GitLab', false],
+    ['GitLab with an MR', { linkedGitLabMR: 7, isGitLabReviewContext: true }, 'GitLab', false],
+    ['GitHub', {}, 'GitHub', true]
+  ] as const)(
+    '%s: routes the click to its provider and names it on failure',
+    async (_name, overrides, providerName, readsGitHubPR) => {
+      const input = Object.assign(makeInput(), overrides)
+      input.fetchHostedReviewForBranch = vi.fn().mockRejectedValue(new Error('unreachable'))
+      const { result } = renderHook(() => useChecksPanelManualRefresh(input))
+      await act(async () => result.current.handleRefresh())
+      expect(input.fetchHostedReviewForBranch).toHaveBeenCalledWith(
+        '/workspace/repo',
+        'main',
+        expect.objectContaining({ force: true, userRefresh: true })
+      )
+      expect(vi.mocked(input.fetchPRForBranch).mock.calls.length > 0).toBe(readsGitHubPR)
+      expect(input.fetchGitLabDetails).not.toHaveBeenCalled()
+      // Only the GitHub path owns checks and comments; it clears them when no PR is found.
+      expect(vi.mocked(input.setChecks).mock.calls.length > 0).toBe(readsGitHubPR)
+      expect(vi.mocked(input.setComments).mock.calls.length > 0).toBe(readsGitHubPR)
+      expect(result.current.manualRefreshError).toBe(
+        `Couldn't refresh from ${providerName}. Try again.`
+      )
     }
   )
 })

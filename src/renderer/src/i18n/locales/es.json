@@ -14416,7 +14416,8 @@
                   "79aa06bb2c": "No se pudo actualizar. La API de GitHub no está disponible temporalmente. Mostrando el último estado conocido.",
                   "6ec12cee0c": "No se pudo actualizar. GitHub es inalcanzable en este momento. Mostrando el último estado conocido.",
                   "de088015e8": "No se pudo actualizar. GitHub está limitando las solicitudes. Se muestra el último estado conocido.",
-                  "d9dd7c6687": "No se pudo actualizar desde GitHub. Mostrando el último estado conocido."
+                  "d9dd7c6687": "No se pudo actualizar desde GitHub. Mostrando el último estado conocido.",
+                  "manual_provider": "No se pudo actualizar desde {{provider}}. Vuelve a intentarlo."
                 }
               }
             },

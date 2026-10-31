@@ -1,7 +1,6 @@
-import { useCallback, useState } from 'react'
+import { useCallback } from 'react'
 import { useAppStore } from '@/store'
 import { buildGitHubPRRefreshStateClearToken } from '@/store/github/pr-refresh-state'
-import { refreshHostedReviewCard } from '@/store/slices/hosted-review-card-refresh'
 import { getRuntimeGitStatus } from '@/runtime/runtime-git-status-client'
 import { getRuntimeGitUpstreamStatus } from '@/runtime/runtime-git-sync-client'
 import { resolveWorktreeGitCopyNow } from '@/lib/worktree-git-copy'
@@ -17,7 +16,9 @@ import { getHostedReviewManualRefreshError } from '../github-refresh-error-copy'
 import type { PRInfo } from '../../../../../shared/github/pull-request-types'
 import {
   checksPanelManualRefreshProvider,
-  refreshChecksPanelHostedReview
+  refreshChecksPanelHostedReview,
+  refreshHostedReviewForClick,
+  useChecksPanelManualRefreshFailure
 } from './hosted-review-manual-refresh'
 import type { ChecksPanelManualRefreshInput } from './manual-refresh-dependencies'
 
@@ -34,17 +35,13 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
     branch,
     expireGitHubPRRefreshState,
     fallbackGitHubPRNumber,
-    fetchHostedReviewForBranch,
     fetchPRChecks,
     fetchPRComments,
     fetchPRForBranch,
     gitStatusSnapshot,
+    hostedReviewCacheKey,
     isCurrentAsyncResult,
     isFolder,
-    linkedAzureDevOpsPR,
-    linkedBitbucketPR,
-    linkedGiteaPR,
-    linkedGitLabMR,
     linkedPR,
     ownerCopyHostId,
     ownerTarget,
@@ -67,16 +64,10 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
     setIsRefreshing,
     updateWorktreeGitIdentity
   } = model
-  const [manualFailure, setManualFailure] = useState<{
-    contextKey: string
-    message: string | null
-  }>({
-    contextKey: panelContextKey,
-    message: null
-  })
-  if (manualFailure.contextKey !== panelContextKey) {
-    setManualFailure({ contextKey: panelContextKey, message: null })
-  }
+  const { manualRefreshError, setManualFailure } = useChecksPanelManualRefreshFailure(
+    panelContextKey,
+    hostedReviewCacheKey
+  )
   const handleRefresh = useCallback(async () => {
     if (!repo || !branch) {
       return
@@ -101,6 +92,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
     const refreshStartedAt = Date.now()
     const refreshProvider = checksPanelManualRefreshProvider(model)
     let refreshOutcome = 'started'
+    let hostedReviewFailedAt: number | null = null
     setIsRefreshing(true)
     recordChecksPanelPRRefreshBreadcrumb({
       event: 'start',
@@ -193,7 +185,11 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
         }
       }
       if (refreshProvider !== 'github') {
-        refreshOutcome = await refreshChecksPanelHostedReview(model, isCurrentRequest)
+        refreshOutcome = await refreshChecksPanelHostedReview(
+          model,
+          refreshProvider,
+          isCurrentRequest
+        )
         return
       }
       const refreshStoreState = useAppStore.getState()
@@ -221,19 +217,16 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
       if (!isCurrentRequest()) {
         return
       }
-      await refreshHostedReviewCard(fetchHostedReviewForBranch, {
-        repoPath: repo.path,
-        repoId: repo.id,
+      // GitHub checks and comments come from the PR read above, so a failed review-card read must not skip them.
+      hostedReviewFailedAt = await refreshHostedReviewForClick(
+        model,
+        repo,
         branch,
-        admissionTier: 'interactive',
-        userRefresh: true,
-        linkedGitHubPR: linkedPR,
-        fallbackGitHubPR: refreshedPR?.number ?? fallbackGitHubPRNumber,
-        linkedGitLabMR,
-        linkedBitbucketPR,
-        linkedAzureDevOpsPR,
-        linkedGiteaPR
-      })
+        refreshedPR?.number ?? fallbackGitHubPRNumber
+      ).then(
+        () => null,
+        () => Date.now()
+      )
       if (!isCurrentRequest()) {
         return
       }
@@ -319,12 +312,16 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
         setComments([])
         refreshOutcome = 'no-pr'
       }
+      if (hostedReviewFailedAt !== null) {
+        throw new Error('Hosted review refresh failed')
+      }
     } catch {
       refreshOutcome = 'error'
       if (isCurrentRequest()) {
         setManualFailure({
           contextKey: panelContextKey,
-          message: getHostedReviewManualRefreshError(refreshProvider)
+          message: getHostedReviewManualRefreshError(refreshProvider),
+          failedAt: hostedReviewFailedAt ?? Date.now()
         })
       }
     } finally {
@@ -345,7 +342,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
       })
       if (isCurrentRequest()) {
         if (['review', 'no-review', 'pr', 'no-pr'].includes(refreshOutcome)) {
-          setManualFailure({ contextKey: panelContextKey, message: null })
+          setManualFailure({ contextKey: panelContextKey, message: null, failedAt: 0 })
         }
         refreshInFlightRef.current = false
         setIsRefreshing(false)
@@ -370,17 +367,12 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
     prCacheKey,
     linkedPR,
     fallbackGitHubPRNumber,
-    linkedAzureDevOpsPR,
-    linkedBitbucketPR,
-    linkedGiteaPR,
-    linkedGitLabMR,
     isFolder,
     gitStatusSnapshot,
     panelContextKey,
     fetchPRForBranch,
     fetchPRChecks,
     fetchPRComments,
-    fetchHostedReviewForBranch,
     expireGitHubPRRefreshState,
     isCurrentAsyncResult,
     ownerCopyHostId,
@@ -397,12 +389,13 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
     setChecks,
     setComments,
     setGitStatusSnapshot,
+    setManualFailure,
     pollIntervalRef,
     refreshInFlightRef
   ])
   return {
     handleRefresh,
-    manualRefreshError: manualFailure.contextKey === panelContextKey ? manualFailure.message : null
+    manualRefreshError
   }
 }
 

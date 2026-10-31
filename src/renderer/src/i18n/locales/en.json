@@ -14798,7 +14798,8 @@
                   "79aa06bb2c": "Couldn't refresh. GitHub's API is temporarily unavailable. Showing the last known status.",
                   "6ec12cee0c": "Couldn't refresh. GitHub is unreachable right now. Showing the last known status.",
                   "de088015e8": "Couldn't refresh. GitHub is rate-limiting requests. Showing the last known status.",
-                  "d9dd7c6687": "Couldn't refresh from GitHub. Showing the last known status."
+                  "d9dd7c6687": "Couldn't refresh from GitHub. Showing the last known status.",
+                  "manual_provider": "Couldn't refresh from {{provider}}. Try again."
                 }
               }
             },

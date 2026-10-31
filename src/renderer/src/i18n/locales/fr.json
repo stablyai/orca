@@ -14640,7 +14640,8 @@
                   "79aa06bb2c": "Actualisation impossible. L'API de GitHub est temporairement indisponible. Affichage du dernier statut connu.",
                   "6ec12cee0c": "Actualisation impossible. GitHub est injoignable pour le moment. Affichage du dernier statut connu.",
                   "de088015e8": "Actualisation impossible. GitHub limite les requêtes. Affichage du dernier statut connu.",
-                  "d9dd7c6687": "Actualisation depuis GitHub impossible. Affichage du dernier statut connu."
+                  "d9dd7c6687": "Actualisation depuis GitHub impossible. Affichage du dernier statut connu.",
+                  "manual_provider": "Actualisation depuis {{provider}} impossible. Réessayez."
                 }
               }
             },
