@@ -367,7 +367,7 @@ describe('Refresh task with real shared record and mounted copy', () => {
 
   it('keeps the dialog body and a just-posted comment through a reconnect, reading on the new connection', async () => {
     setRuntimeEnvironmentConnectionGenerationForTests('p34245-dialog', 1)
-    const remote = { ...repo, executionHostId: 'runtime:p34245-dialog' }
+    const remote: Repo = { ...repo, executionHostId: 'runtime:p34245-dialog' }
     const remoteSource = buildTaskSourceContextFromRepo({
       provider: 'github',
       projectId: repo.id,

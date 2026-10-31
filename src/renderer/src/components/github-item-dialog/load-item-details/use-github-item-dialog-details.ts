@@ -132,20 +132,20 @@ export function useGitHubItemDialogDetails({
   }, [cachedEntry, workItem, optimisticKey, optimisticTick])
 
   const cache = useAppStore((s) => s.githubTaskCache)
-  // The opened row and the loaded item both show the current record's facts.
+  // The opened row and the loaded item both show the current record's facts; main's item lacks the row's repo.
   const taskItems = useMemo(
-    () => [...(workItem ? [workItem] : []), ...(rawDetails ? [rawDetails.item] : [])],
+    () =>
+      workItem ? [workItem, ...(rawDetails ? [{ ...workItem, ...rawDetails.item }] : [])] : [],
     [workItem, rawDetails]
   )
   const projectedItems = useGitHubTaskItems(taskItems)
   const projectedWorkItem = workItem ? (projectedItems[0] ?? workItem) : null
-  const projectedDetailsItem = rawDetails ? projectedItems[workItem ? 1 : 0] : undefined
   const details = useMemo(
     () =>
-      rawDetails && projectedDetailsItem && projectedDetailsItem !== rawDetails.item
-        ? withWorkItemDetailsItem(rawDetails, projectedDetailsItem)
+      rawDetails && projectedItems[1] && projectedItems[1] !== taskItems[1]
+        ? withWorkItemDetailsItem(rawDetails, projectedItems[1])
         : rawDetails,
-    [rawDetails, projectedDetailsItem]
+    [rawDetails, projectedItems, taskItems]
   )
 
   const loading = !!cachedEntry?.pending && !cachedEntry?.details

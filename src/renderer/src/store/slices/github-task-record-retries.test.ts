@@ -62,7 +62,7 @@ async function flush() {
 /** A paired server on its own connection; `reconnect` advances it the way a dropped transport does. */
 function remoteSetup(environmentId: string) {
   setRuntimeEnvironmentConnectionGenerationForTests(environmentId, 1)
-  const remote = { ...repo, executionHostId: `runtime:${environmentId}` }
+  const remote: Repo = { ...repo, executionHostId: `runtime:${environmentId}` }
   const store = createTestStore()
   store.setState({ repos: [remote] })
   const cache = store.getState().githubTaskCache

@@ -203,7 +203,7 @@ export function useGitHubTaskRefresh({
             userAction: true,
             accepts,
             onAccepted: (result) => {
-              onAcceptedRef.current?.(result.item)
+              onAcceptedRef.current?.({ ...target.item, ...result.item })
               if (mounted.current) {
                 setAcceptedRefresh((n) => n + 1)
               }
