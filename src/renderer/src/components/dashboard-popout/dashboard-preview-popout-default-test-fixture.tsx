@@ -124,7 +124,7 @@ export async function verifyPopoutDefaultLinkPath({
   expect(window.api.ui.writeClipboardText).not.toHaveBeenCalled()
   expect(subscribeToRouter).not.toHaveBeenCalled()
   expect(toast.error).not.toHaveBeenCalled()
-  fireEvent.click(popout.getByRole('button', { name: 'Close', exact: true }))
+  fireEvent.click(popout.getByRole('button', { name: 'Close' }))
   await waitFor(() => expect(document.querySelector('.xterm')).toBeNull())
   expect(Array.from(census.active)).toEqual(rootOwners)
   popout.unmount()
