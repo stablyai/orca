@@ -448,7 +448,7 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     if case let .cancelAndOffer(url) = verdict {
       onExternalNavigation(["url": url])
     }
-    if verdict == .allow {
+    if verdict == .allow && navigationAction.targetFrame?.isMainFrame == true {
       // Spend before handing back the decision so another main-frame action cannot reuse the allowance.
       loadState.shellLoadConsumed()
     }
@@ -460,10 +460,15 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     decidePolicyFor navigationResponse: WKNavigationResponse,
     decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void
   ) {
-    let allowed = navigationResponse.isForMainFrame &&
-      navigationResponse.canShowMIMEType &&
+    let inlineDocument = MobileWebShellNavigationPolicy.allowsInlineDocument(
+      url: navigationResponse.response.url?.absoluteString,
+      isMainFrame: navigationResponse.isForMainFrame,
+      isDownload: !navigationResponse.canShowMIMEType
+    )
+    let mainDocument = navigationResponse.isForMainFrame &&
       isDocumentUrl(navigationResponse.response.url)
-    if !allowed {
+    let allowed = navigationResponse.canShowMIMEType && (mainDocument || inlineDocument)
+    if !allowed && navigationResponse.isForMainFrame {
       reportDocumentFailure()
     }
     decisionHandler(allowed ? .allow : .cancel)

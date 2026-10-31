@@ -13,7 +13,7 @@ internal fun mobileWebShellDropsNavigation(
 
 /** Keep allow/refuse/opener routing in one decision shared across platforms. */
 internal sealed interface MobileWebShellNavigationVerdict {
-  /** The served document loading itself, which is the only navigation this WebView performs. */
+  /** The served main document or a sealed inline document loading itself. */
   data object Allow : MobileWebShellNavigationVerdict
 
   /** Refused, and the host is told nothing. Every navigation was this before the preview existed. */
@@ -32,7 +32,7 @@ internal fun mobileWebShellOfferableUrl(url: String?): String? {
   return if (url.length > MOBILE_WEB_SHELL_MAX_DROPPED_NAVIGATION_URL_CHARS) null else url
 }
 
-/** Refuse subframes and document-URL navigations; only gestured foreign URLs reach the host opener.
+/** Allow only srcdoc subframes and refuse other document-URL navigations; only gestured foreign URLs reach the host opener.
  * Android loadUrl bypasses this callback, so isShellLoad is always false; redirects do reach it.
  * Do not trust hasGesture to permit loads: human requests may lack it and subframes can target top without it.
  * isFromSubframe/isDownload mirror iOS; Chromium omits source frames and routes downloads to our no-op listener.
@@ -46,7 +46,13 @@ internal fun mobileWebShellNavigationVerdict(
   hasGesture: Boolean,
   isDownload: Boolean
 ): MobileWebShellNavigationVerdict {
-  if (!isForMainFrame) return MobileWebShellNavigationVerdict.Cancel
+  if (!isForMainFrame) {
+    return if (url == "about:srcdoc" && !isDownload) {
+      MobileWebShellNavigationVerdict.Allow
+    } else {
+      MobileWebShellNavigationVerdict.Cancel
+    }
+  }
   if (isDocumentUrl) {
     return if (isShellLoad && !isFromSubframe && !isDownload) {
       MobileWebShellNavigationVerdict.Allow

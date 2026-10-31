@@ -110,12 +110,22 @@ class MobileWebShellDroppedNavigationTest {
   }
 
   @Test
-  fun `offers nothing for a subframe, which is the sealed preview loading itself`() {
+  fun `offers nothing for a foreign subframe`() {
     assertEquals(MobileWebShellNavigationVerdict.Cancel, verdict(isForMainFrame = false))
     assertEquals(
       MobileWebShellNavigationVerdict.Cancel,
       verdict(isForMainFrame = false, hasGesture = false)
     )
+  }
+
+  @Test
+  fun `allows only inline srcdoc subframes without admitting main-frame or downloadable documents`() {
+    assertEquals(MobileWebShellNavigationVerdict.Allow, verdict(url = "about:srcdoc", isForMainFrame = false, hasGesture = false))
+    assertEquals(MobileWebShellNavigationVerdict.Cancel, verdict(url = "about:srcdoc", hasGesture = false))
+    assertEquals(MobileWebShellNavigationVerdict.Cancel, verdict(url = "about:srcdoc", isForMainFrame = false, isDownload = true))
+    for (url in listOf("about:blank", "about:srcdoc#jump", "about:srcdoc?x=1", "data:text/html,hello", DOCUMENT, FOREIGN)) {
+      assertEquals(MobileWebShellNavigationVerdict.Cancel, verdict(url = url, isForMainFrame = false, hasGesture = false))
+    }
   }
 
   @Test
