@@ -38,6 +38,7 @@ vi.mock('./NativeChatApprovalCard', () => moduleFactories.nativeChatApprovalCard
 vi.mock('./NativeChatQuestionCard', () => moduleFactories.nativeChatQuestionCard())
 
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
+import { ConfirmationDialogProvider } from '@/components/confirmation-dialog'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
 // The host's verdict is a notice that never holds Send: it can be wrong while a send would work.
@@ -57,14 +58,16 @@ afterEach(() => {
 function pane(agent: 'claude' | 'codex' = 'codex'): React.JSX.Element {
   return (
     <TooltipProvider>
-      <NativeChatStructuredSession
-        isVisible
-        isFocusedGroup
-        tabId="availability-tab"
-        sessionId="availability-session"
-        target={{ kind: 'local' }}
-        agent={agent}
-      />
+      <ConfirmationDialogProvider>
+        <NativeChatStructuredSession
+          isVisible
+          isFocusedGroup
+          tabId="availability-tab"
+          sessionId="availability-session"
+          target={{ kind: 'local' }}
+          agent={agent}
+        />
+      </ConfirmationDialogProvider>
     </TooltipProvider>
   )
 }

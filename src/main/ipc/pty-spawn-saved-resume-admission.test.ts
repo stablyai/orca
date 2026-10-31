@@ -77,6 +77,7 @@ describe('a pane restore of a conversation a native chat continues', () => {
         throw new Error('records unavailable')
       }
       const store: AgentSessionRecordStore = Object.create(AgentSessionRecordStore.prototype)
+      store.getRecord = (sessionId) => (sessionId === chat.sessionId ? chat : null)
       store.listConversations = () => [agentSessionConversationView(chat)]
       store.getVisibleSessionTabIndex = () => ({ present: true, sessionIds: openTabs })
       return store

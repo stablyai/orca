@@ -4,12 +4,15 @@ import { applyAgentLaunchPaneVerdict } from '@/lib/agent-launch-pane-verdict-app
 import { keepAgentLaunchTabMainWrote } from '@/lib/agent-launch-tab-main-written'
 import { afterLayoutFrame } from '@/runtime/layout-frame-position'
 
-function replyToPublish(request: AgentLaunchTabPublishRequest): void {
+function replyToPublish(
+  request: AgentLaunchTabPublishRequest,
+  kept?: ReturnType<typeof keepAgentLaunchTabMainWrote>
+): void {
   try {
     window.api.ui.replyAgentLaunchTabPublish({
       requestId: request.requestId,
       ...(request.shownByMain
-        ? keepAgentLaunchTabMainWrote(request)
+        ? (kept ?? keepAgentLaunchTabMainWrote(request))
         : publishAgentLaunchTab(request))
     })
   } catch (error) {
@@ -22,12 +25,15 @@ function replyToPublish(request: AgentLaunchTabPublishRequest): void {
 
 export function registerAgentLaunchTabIpcBridge(unsubs: (() => void)[]): void {
   unsubs.push(
-    window.api.ui.onPublishAgentLaunchTab((request) =>
-      // A tab main wrote is kept once this window holds the frame that draws it.
-      request.shownByMain
-        ? afterLayoutFrame(request.shownByMain.frameSeq, () => replyToPublish(request))
-        : replyToPublish(request)
-    ),
+    window.api.ui.onPublishAgentLaunchTab((request) => {
+      // Retain the exact publication before a verdict can overtake its frame.
+      if (request.shownByMain) {
+        const kept = keepAgentLaunchTabMainWrote(request)
+        afterLayoutFrame(request.shownByMain.frameSeq, () => replyToPublish(request, kept))
+      } else {
+        replyToPublish(request)
+      }
+    }),
     window.api.ui.onAgentLaunchPaneVerdict(applyAgentLaunchPaneVerdict)
   )
 }

@@ -5,6 +5,7 @@ import type * as ForkStartup from '@/lib/ai-vault-session-fork-startup'
 // @vitest-environment happy-dom
 import { cleanup, render, fireEvent, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import * as sessionSwitch from './ai-vault-session-in-place-switch'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { WebRuntimeTerminalCreateOutcome } from '@/runtime/web-runtime-session-types'
 
@@ -17,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   prepareAiVaultSessionForTerminalResume: vi.fn(),
   launchAiVaultSessionInNewTab: vi.fn(),
   activateAiVaultResumeWorkspace: vi.fn(),
+  switchToCli: vi.fn(async () => {}),
   rpc: vi.fn(),
   toastError: vi.fn(),
   toastSuccess: vi.fn()
@@ -45,6 +47,10 @@ vi.mock('@/lib/ai-vault-session-resume-preparation', () => ({
 }))
 vi.mock('@/lib/launch-ai-vault-session', () => ({
   launchAiVaultSessionInNewTab: mocks.launchAiVaultSessionInNewTab
+}))
+vi.mock('@/lib/conversation-surface-switch', () => ({
+  runNativeChatCliSwitch: mocks.switchToCli,
+  runConversationSwitch: vi.fn(async () => false)
 }))
 vi.mock('./ai-vault-session-launch-target', () => ({
   resolveAiVaultSessionLaunchTarget: (args: { targetWorktreeId?: string }) => ({
@@ -109,7 +115,11 @@ function renderActions(agentCmdOverrides?: { opencode?: string }) {
 
 beforeEach(() => {
   vi.resetAllMocks()
-  mocks.getState.mockReturnValue({ activeWorktreeId: 'worktree-1', settings: {} })
+  mocks.getState.mockReturnValue({
+    activeWorktreeId: 'worktree-1',
+    settings: {},
+    unifiedTabsByWorktree: {}
+  })
   mocks.prepareAiVaultSessionForFork.mockImplementation(async (session) => ({
     session,
     copied: false
@@ -119,9 +129,16 @@ beforeEach(() => {
   mocks.rpc.mockResolvedValue(undefined)
 })
 
-afterEach(() => cleanup())
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+})
 
-describe('Switch to Terminal launch', () => {
+describe('ordinary CLI copy launch when the switch action does not apply', () => {
+  beforeEach(() => {
+    vi.spyOn(sessionSwitch, 'switchAiVaultSessionToCli').mockReturnValue(false)
+  })
+
   // Either OpenCode chat may own a 2.x conversation, so the copy may open in either CLI.
   it.each([
     ['command', 'opencode'],
@@ -241,6 +258,7 @@ describe('Switch to Terminal launch', () => {
 })
 
 it('refuses the stale OMP row before creating a second terminal writer', async () => {
+  vi.clearAllMocks()
   mocks.prepareAiVaultSessionForTerminalResume.mockRejectedValue(
     new Error(
       "Error invoking remote method 'aiVault:prepareSessionResume': Error: agent_session_conflict"

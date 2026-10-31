@@ -235,7 +235,10 @@ function takenTabId(
   const workspace = layout.workspaces[key]
   const paneKey = leafId ? paneKeyOf(tabId, leafId) : null
   if (workspace && paneKey && locatePane(workspace, paneKey)) {
-    return { ok: true, result: { tabId, leafId, paneKey } }
+    // A switch's parked spawn already admitted its pane; the replace still moves it into the slot.
+    return command.adopt && command.replaces
+      ? null
+      : { ok: true, result: { tabId, leafId, paneKey } }
   }
   const holds = Object.values(layout.workspaces).some((entry) =>
     entry.tabs.some((tab) => tab.id === tabId || tab.entityId === tabId)

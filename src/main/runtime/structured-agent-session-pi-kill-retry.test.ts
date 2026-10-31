@@ -11,6 +11,7 @@ import {
   HOST_TEST_SESSION as SESSION
 } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
+import { agentSessionSwitchDeadline } from '../../shared/agent-session-switch-execution'
 import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../provider-process/provider-process-supervisor'
 import {
   ensureStructuredAgentSessionHost,
@@ -191,6 +192,21 @@ it('settles a production failed Pi start after background kill, then delivers on
     host['deps'].store.listOperationRows().some((row) => row.outcome.status === 'pending')
   ).toBe(false)
   expect(signal.mock.calls.filter(([pid]) => pid === -9000201)).toHaveLength(1)
+  const deadline = agentSessionSwitchDeadline()
+  let settled = false
+  const switching = host.stopForSwitch(SESSION, caller, deadline).then(
+    () => {
+      settled = true
+      return true
+    },
+    () => {
+      settled = true
+      return false
+    }
+  )
+  await vi.advanceTimersByTimeAsync(0)
+  await host.collaboratorsForTests().serialize(SESSION, async () => {})
+  expect(settled).toBe(false)
   expect(await send('A legitimate new user message.')).toMatchObject({ ok: true })
   await vi.waitFor(() => expect(prompts).toEqual(['A legitimate new user message.']))
   await vi.waitFor(async () => {
@@ -199,5 +215,9 @@ it('settles a production failed Pi start after background kill, then delivers on
     expect(JSON.stringify(snapshot.items)).toContain('Healthy Pi reply')
   })
   expect(connections).toHaveLength(3)
+  expect(observeStructuredSession(SESSION)).toEqual({ status: 'live' })
+  children[1]!.emit('exit', 0, null)
+  expect(await switching).toBe(false)
+  deadline.dispose()
   expect(observeStructuredSession(SESSION)).toEqual({ status: 'live' })
 })

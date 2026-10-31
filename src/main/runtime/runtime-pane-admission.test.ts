@@ -36,6 +36,7 @@ describe('startInAdmittedPane', () => {
       result: 'term-1'
     })
     expect(store.admitTerminalPane).toHaveBeenCalledWith(SPLIT, 'ssh:target-1')
+    expect(store.admitTerminalPane.mock.contexts).toEqual([runtimeStore])
     expect(start).toHaveBeenCalledWith('admitted')
   })
 

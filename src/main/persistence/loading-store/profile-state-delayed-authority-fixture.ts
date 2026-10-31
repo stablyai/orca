@@ -148,7 +148,7 @@ export async function fixture(
       reader.close()
     }
   }
-  return { store, authority, readState }
+  return { store, authority, readState, directory, path }
 }
 
 export async function withReopenedProfileStore(

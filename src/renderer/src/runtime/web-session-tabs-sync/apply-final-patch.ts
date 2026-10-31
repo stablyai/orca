@@ -3,6 +3,7 @@ import type { WebSessionTabsSyncState } from './state'
 import type { applyActiveStateUpdates } from './apply-active-state'
 import { buildMirroredAgentStatusPatch } from './agent-status-patch'
 import { buildMirroredRuntimePaneTitlePatch } from './runtime-pane-title-patch'
+import { buildMirroredStoppedSwitchSourcePatch } from './stopped-switch-source-patch'
 import {
   buildRemirroredClosedTabMarkerLiftPatch,
   buildRetractedMirroredTabSweepPatch
@@ -98,6 +99,18 @@ export function buildWebSessionTabsFinalPatch(
         retractionPaneKeys,
         batchContext
       )
+  const stoppedSwitchSourcePatch =
+    context.options?.terminalPtyMode === 'local'
+      ? null
+      : buildMirroredStoppedSwitchSourcePatch(
+          state,
+          retractedTabSweepPatch?.agentConversationsByPaneKey ??
+            state.agentConversationsByPaneKey ??
+            {},
+          terminalSurfaceTabs,
+          worktreeId,
+          removedTerminalResourceIds
+        )
   const remirroredClosedTabLiftPatch = buildRemirroredClosedTabMarkerLiftPatch(
     retractedTabSweepPatch?.recentlyClosedAgentStatusTabIds ??
       state.recentlyClosedAgentStatusTabIds,
@@ -121,6 +134,7 @@ export function buildWebSessionTabsFinalPatch(
     ...runtimePaneTitlePatch,
     ...agentStatusPatch,
     ...retractedTabSweepPatch,
+    ...stoppedSwitchSourcePatch,
     ...remirroredClosedTabLiftPatch,
     ...(adoptedEditorBuffers
       ? { openFiles: adoptedEditorBuffers.views, editorBuffers: adoptedEditorBuffers.editorBuffers }

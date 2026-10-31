@@ -1,3 +1,4 @@
+import { pruneGroupLayout } from '../../../../shared/workspace-session-terminal-tab-close'
 import { selectFreshAgentRowForMobileTab } from '../../runtime-hook-agent-row-selection'
 import { OrcaRuntimeWithScheduleMobileSessionTabsChanged } from '../../session-tabs/session-tabs-change-publication'
 import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
@@ -14,11 +15,7 @@ import { projectRuntimeMobileSessionTabs } from '../../runtime-mobile-session-pr
 import type { RuntimeMobileSessionProjectionHost } from '../../runtime-mobile-session-projection-contract'
 import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
 import type { RuntimeAgentRowSnapshot } from '../../runtime-worktree-agent-rows'
-import type {
-  AgentStatusEntry,
-  AgentStatusIpcPayload,
-  AgentStatusOrchestrationContext
-} from '../../../../shared/agent-status-types'
+import type * as AgentStatus from '../../../../shared/agent-status-types'
 import { buildRuntimeMobileAgentStatus } from '../../runtime-mobile-agent-status-builder'
 import { FIRST_PANE_ID } from '../../../../shared/pane-key'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
@@ -51,18 +48,7 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
     layout: TabGroupLayoutNode | null | undefined,
     validGroupIds: ReadonlySet<string>
   ): TabGroupLayoutNode | null {
-    if (!layout) {
-      return null
-    }
-    if (layout.type === 'leaf') {
-      return validGroupIds.has(layout.groupId) ? layout : null
-    }
-    const first = this.pruneMobileSessionTabGroupLayout(layout.first, validGroupIds)
-    const second = this.pruneMobileSessionTabGroupLayout(layout.second, validGroupIds)
-    if (first && second) {
-      return { ...layout, first, second }
-    }
-    return first ?? second
+    return pruneGroupLayout(layout ?? undefined, validGroupIds) ?? null
   }
 
   protected mergeMobileSessionTabGroups(
@@ -94,8 +80,10 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
   protected toMobileSessionTabsResult(
     snapshot: RuntimeMobileSessionTabsSnapshot
   ): RuntimeMobileSessionTabsResult {
-    snapshot = titleStructuredConversationTabs(snapshot, (sessionId) =>
-      this.structuredConversationTabName(snapshot.worktree, sessionId)
+    this.stoppedSwitchSources.reconcile(snapshot, (ptyId) => this.ptysById.get(ptyId))
+    snapshot = titleStructuredConversationTabs(
+      this.switchSlotAnchors.stamp(snapshot),
+      (sessionId) => this.structuredConversationTabName(snapshot.worktree, sessionId)
     )
     return projectRuntimeMobileSessionTabs(snapshot, this.getMobileSessionProjectionHost())
   }
@@ -131,6 +119,8 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
       tabs: this.tabs,
       leaves: this.leaves,
       ptysById: this.ptysById,
+      stoppedSwitchSource: (worktreeId, tabId, leafId) =>
+        this.stoppedSwitchSources.factFor(worktreeId, tabId, leafId),
       getPtyAvailability: (ptyId) => this.ptyController?.getPtyAvailability?.(ptyId) ?? null,
       getLiveBrowserTabs: (worktreeId) => this.getListedBrowserTabsByPageId(worktreeId),
       isRendererOwnedMobileBrowserTab: (...args) => this.isRendererOwnedMobileBrowserTab(...args),
@@ -160,9 +150,9 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
     tab: RuntimeMobileSessionTerminalTab,
     terminalHandle: string | null,
     retained: RuntimeAgentRowSnapshot | null,
-    getHookRowsForPane: (paneKey: string) => AgentStatusIpcPayload[]
-  ): { agentStatus: AgentStatusEntry } | Record<string, never> {
-    // Phone status uses display records to include stale-working title clears.
+    getHookRowsForPane: (paneKey: string) => AgentStatus.AgentStatusIpcPayload[]
+  ): { agentStatus: AgentStatus.AgentStatusEntry } | Record<string, never> {
+    // Why display records: a phone status is presentation, so it shows the stale-working clear.
     const displayPty = pty ? this.getPtyDisplayRecord(pty) : null
     return buildRuntimeMobileAgentStatus(
       displayPty,
@@ -188,7 +178,7 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
     paneKey: string,
     pty: RuntimePtyWorktreeRecord | null,
     _tab: RuntimeMobileSessionTerminalTab,
-    getRows: (paneKey: string, terminalHandle: string | null) => AgentStatusIpcPayload[]
+    getRows: (paneKey: string, terminalHandle: string | null) => AgentStatus.AgentStatusIpcPayload[]
   ): RuntimeAgentRowSnapshot | null {
     const paneMatch = selectFreshAgentRowForMobileTab({
       paneKey,
@@ -297,7 +287,7 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
 
   getAgentStatusOrchestrationContextForPaneKey(
     paneKey: string
-  ): AgentStatusOrchestrationContext | undefined {
+  ): AgentStatus.AgentStatusOrchestrationContext | undefined {
     const handle = this.getTerminalHandleForPaneKey(paneKey)
     return handle
       ? this.agentOrchestrationProjection.getForHandle(handle, undefined, { paneKey })
@@ -321,6 +311,11 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
     if (leaf?.ptyId) {
       return this.issueHandle(leaf)
     }
-    return panePty ? this.issuePtyHandle(panePty) : null
+    if (panePty) {
+      return this.issuePtyHandle(panePty)
+    }
+    const ended = leaf ? this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId)) : null
+    const ptyId = ended ? this.handles.get(ended)?.ptyId : null
+    return ptyId && this.getPtyLivenessVerdict(ptyId)?.status === 'exited' ? (ended ?? null) : null
   }
 }

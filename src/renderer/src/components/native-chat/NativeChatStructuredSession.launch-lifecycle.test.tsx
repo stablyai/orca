@@ -37,6 +37,7 @@ vi.mock('@/runtime/use-managed-runtime-install', () => ({
 }))
 
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
+import { ConfirmationDialogProvider } from '@/components/confirmation-dialog'
 import { agentSessionRefusalFailure } from '../../../../shared/agent-session-write-failure'
 import { structuredLaunchFailure } from '@/lib/structured-agent-session-launch-failure'
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/structured-agent-session-launch-errors'
@@ -56,14 +57,16 @@ const NOT_SIGNED_IN_TEXT = "Codex isn't signed in. Run `codex login`."
 
 function sessionView(agent: 'codex' | 'grok' = 'codex'): React.JSX.Element {
   return (
-    <NativeChatStructuredSession
-      isVisible
-      isFocusedGroup
-      tabId="structured-tab-1"
-      sessionId="session-1"
-      target={{ kind: 'local' }}
-      agent={agent}
-    />
+    <ConfirmationDialogProvider>
+      <NativeChatStructuredSession
+        isVisible
+        isFocusedGroup
+        tabId="structured-tab-1"
+        sessionId="session-1"
+        target={{ kind: 'local' }}
+        agent={agent}
+      />
+    </ConfirmationDialogProvider>
   )
 }
 

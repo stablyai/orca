@@ -1,3 +1,4 @@
+import { isNativeConversationMessage } from '../../shared/agent-session-native-content'
 import { stat } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import { getSystemCodexHomePath } from '../codex/codex-home-paths'
@@ -23,6 +24,33 @@ import {
   agentJournalSubmissionKey,
   parseAgentJournalItemKey
 } from '../../shared/agent-session-journal-item-key'
+
+export function nativeConversationContent(
+  snapshot: Pick<AgentJournalSnapshot, 'items' | 'submissions'>
+): 'saved' | 'empty' | 'uncertain' {
+  const submissions = new Map(
+    snapshot.submissions.map((submission) => [
+      agentJournalSubmissionKey(submission.clientMessageId),
+      submission
+    ])
+  )
+  const hasContent = snapshot.items.some(({ itemId, body }) => {
+    if (!isNativeConversationMessage(body)) {
+      return false
+    }
+    const identity = parseAgentJournalItemKey(itemId)
+    const submission = submissions.get(itemId)
+    if (submission?.dispatchState === 'accepted' || (identity && identity.provider !== 'orca')) {
+      return true
+    }
+    return false
+  })
+  return hasContent
+    ? 'saved'
+    : snapshot.items.length === 0 && snapshot.submissions.length === 0
+      ? 'empty'
+      : 'uncertain'
+}
 
 function assertNativeConversationContent(snapshot: AgentJournalSnapshot): void {
   const submissions = new Map(
@@ -72,14 +100,26 @@ export function isStructuredChatCliForkSourceCurrent(
   )
 }
 
-export async function prepareStructuredChatCliFork(
-  args: AiVaultPrepareChatForkArgs,
-  prepare: AiVaultSessionResumePreparation
-): Promise<AiVaultPrepareSessionResumeResult> {
+/** The saved conversation file is missing or unreadable. The message keeps the copy path's words;
+ *  a switch reads the reason, so a history it cannot read is never shown as a setup problem. */
+export class StructuredChatTranscriptError extends Error {
+  constructor(
+    message: string,
+    readonly reason: 'transcriptNotFound' | 'transcriptUnreadable'
+  ) {
+    super(message)
+  }
+}
+
+/** The chat's current conversation on this host, as its CLI would open it; `fork` keeps its copy rules. */
+export async function resolveStructuredChatCliSource(
+  sourceChat: AiVaultPrepareChatForkArgs['sourceChat'],
+  fork: boolean
+) {
   const host = getStructuredAgentSessionHost()
   const record =
-    host && host.deps.store.selectWritableRecord(args.sourceChat.sessionId).kind !== 'missing'
-      ? host.deps.store.requireWritableRecord(args.sourceChat.sessionId)
+    host && host.deps.store.selectWritableRecord(sourceChat.sessionId).kind !== 'missing'
+      ? host.deps.store.requireWritableRecord(sourceChat.sessionId)
       : undefined
   const metadata = record && structuredAgentRuntimeMetadata(record.provider)
   const head = record && agentSessionProviderHandleChainHead(record.providerHandleChain)
@@ -88,13 +128,13 @@ export async function prepareStructuredChatCliFork(
     !record ||
     !metadata ||
     !head ||
-    record.location.workspaceId !== args.sourceChat.workspaceId ||
+    record.location.workspaceId !== sourceChat.workspaceId ||
     record.location.executionHostId !== LOCAL_EXECUTION_HOST_ID ||
     record.location.wslDistro !== null ||
     // A typed locator has no CODEX_HOME path; forking would silently use the default account.
     (record.provider === 'codex' && !isLegacyAgentSessionAccountHome(record.accountHome)) ||
     !isAiVaultAgent(record.provider) ||
-    !agentForksConversations(record.provider)
+    (fork && !agentForksConversations(record.provider))
   ) {
     throw new Error('This chat has no saved conversation available on this host.')
   }
@@ -125,11 +165,24 @@ export async function prepareStructuredChatCliFork(
   }
   const providerSessionId = metadata.sessionHistory.rowSessionId(head)
   if (!providerSessionId.trim()) {
-    throw new Error('This chat has no saved conversation to copy.')
+    throw new StructuredChatTranscriptError(
+      'This chat has no saved conversation to copy.',
+      'transcriptNotFound'
+    )
   }
   assertNativeConversationContent(await host.journalSnapshot(record.sessionId))
+  return { host, record, metadata, head, agent, cwd, providerSessionId, requireCurrent }
+}
+
+/** Prepares the record's current conversation on its execution host, without a History inventory. */
+export async function prepareStructuredChatCliFork(
+  args: AiVaultPrepareChatForkArgs,
+  prepare: AiVaultSessionResumePreparation
+): Promise<AiVaultPrepareSessionResumeResult> {
+  const source = await resolveStructuredChatCliSource(args.sourceChat, true)
+  const { record, metadata, agent, cwd, providerSessionId } = source
   if (agentForksThroughChat(agent)) {
-    requireCurrent()
+    source.requireCurrent()
     const result = await copyStructuredChatRecordConversation(record, providerSessionId)
     const copy = result.forkedSession
     if (!copy || (agent === 'omp' && !copy.filePath)) {
@@ -148,6 +201,17 @@ export async function prepareStructuredChatCliFork(
       }
     }
   }
+  return prepareStructuredChatCliTranscript(source, prepare, true)
+}
+
+/** The transcript a terminal resume (or `fork`) opens, under the account home the host prepared.
+ *  A same-id resume refuses a substituted home: another home is another conversation. */
+export async function prepareStructuredChatCliTranscript(
+  source: Awaited<ReturnType<typeof resolveStructuredChatCliSource>>,
+  prepare: AiVaultSessionResumePreparation,
+  fork: boolean
+): Promise<AiVaultPrepareSessionResumeResult> {
+  const { host, record, metadata, head, agent, cwd, providerSessionId } = source
   const importer = metadata.transcriptImport
   if (!importer) {
     throw new Error('This chat cannot be opened in the CLI.')
@@ -157,11 +221,17 @@ export async function prepareStructuredChatCliFork(
   if (importer.handleNamesTranscript) {
     filePath = head.handle.nativeId
     if (head.handle.transport !== 'jsonl-rpc' || !isAbsolute(filePath) || isWslUncPath(filePath)) {
-      throw new Error('The chat has no valid saved session file.')
+      throw new StructuredChatTranscriptError(
+        'The chat has no valid saved session file.',
+        'transcriptUnreadable'
+      )
     }
     const header = await readPiSessionHeader(filePath)
     if (!header || header.id !== providerSessionId) {
-      throw new Error('The saved conversation does not match this chat.')
+      throw new StructuredChatTranscriptError(
+        'The saved conversation does not match this chat.',
+        'transcriptUnreadable'
+      )
     }
   } else {
     const store = importer.conversationStore({ accountHome: record.accountHome, launchEnv })
@@ -169,28 +239,34 @@ export async function prepareStructuredChatCliFork(
       ? await importer.findTranscript({ providerSessionId, store, launchEnv, workspaceCwd: cwd })
       : null
   }
-  if (!filePath || !isAbsolute(filePath) || isWslUncPath(filePath)) {
-    throw new Error('This chat has no saved conversation to copy.')
-  }
-  const saved = await stat(filePath)
-  if (!saved.isFile() || saved.size === 0) {
-    throw new Error('This chat has no saved conversation to copy.')
+  const saved =
+    filePath && isAbsolute(filePath) && !isWslUncPath(filePath)
+      ? await stat(filePath).catch(() => null)
+      : null
+  if (!filePath || !saved?.isFile() || saved.size === 0) {
+    throw new StructuredChatTranscriptError(
+      'This chat has no saved conversation to copy.',
+      'transcriptNotFound'
+    )
   }
   const codexHome =
     agent === 'codex' && isLegacyAgentSessionAccountHome(record.accountHome)
       ? record.accountHome.path
       : null
-  requireCurrent()
+  source.requireCurrent()
   const result = await prepare({
     agent,
     sessionId: providerSessionId,
     filePath,
     codexHome,
     executionHostId: LOCAL_EXECUTION_HOST_ID,
-    fork: true
+    ...(fork ? { fork: true } : {})
   })
   const preparedHome = result.useRealCodexHome ? null : (result.substituteCodexHome ?? codexHome)
   if (codexHome && (result.useRealCodexHome || result.substituteCodexHome)) {
+    if (!fork) {
+      throw new Error('This conversation is saved under a different Codex account here.')
+    }
     // Codex canonicalizes CODEX_HOME, so Windows transcripts can carry a \\?\ prefix (#27200).
     const relativePath = codexDatedRolloutRelativePath(join(codexHome, 'sessions'), filePath)
     if (!relativePath) {

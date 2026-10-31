@@ -33,7 +33,14 @@ import type {
   AgentJournalTurnItem
 } from '../../../../shared/agent-session-journal-types'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { selectStructuredAgentSettledTurns } from '../../../../shared/structured-agent-session-turn-timing'
+import {
+  selectStructuredAgentSettledTurns,
+  selectStructuredAgentTurnBars
+} from '../../../../shared/structured-agent-session-turn-timing'
+import {
+  SWITCH_STOPPED_CLI_TURN_ITEMS,
+  SWITCH_STOPPED_CLI_USER_ITEM_KEY
+} from '../../../../shared/native-chat/switch-stopped-cli-turn.test-fixture'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { installNativeChatMessageListTestViewport } from './native-chat-message-list-test-viewport'
@@ -148,6 +155,36 @@ const usageLimitView = {
   }
 
   describe('NativeChatMessageList folded turn headers', () => {
+    // The host's half (import, switch stop, catch-up → this journal) is main's switch-import test.
+    it('renders an imported explicit Stop without inventing elapsed time and keeps timed cancellation', () => {
+      const items = [...SWITCH_STOPPED_CLI_TURN_ITEMS, ...journal()]
+      const bars = selectStructuredAgentTurnBars(items, [], null)
+      expect(bars.settledTurns.get(SWITCH_STOPPED_CLI_USER_ITEM_KEY)).toEqual({
+        startedAt: null,
+        workedSeconds: null,
+        verdict: 'cancellation'
+      })
+      render(
+        <NativeChatMessageList
+          session={{
+            ...session(),
+            agent: 'claude',
+            messages: projectStructuredAgentSessionMessages(items, [], [])
+          }}
+          journalItems={items}
+          settledTurns={bars.settledTurns}
+          isWorking={false}
+          expandSignal={false}
+        />
+      )
+      expect(
+        screen.getByText('Interrupted').closest('[data-native-chat-turn-status]')
+      ).toHaveAttribute('data-native-chat-turn-status', 'settled')
+      expect(screen.getByText('Interrupted after 12s')).toBeInTheDocument()
+      expect(screen.getAllByText('Worked for 12s')).toHaveLength(2)
+      expect(screen.queryByText(/^Working for/)).toBeNull()
+    })
+
     it('says a crash-cut turn worked like a finished one and a stopped turn was interrupted', () => {
       render(
         <NativeChatMessageList

@@ -6,6 +6,7 @@ import { SortableContext } from '@dnd-kit/sortable'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { TooltipProvider } from '../ui/tooltip'
+import { ConfirmationDialogProvider } from '../confirmation-dialog'
 import BrowserTab from './BrowserTab'
 import EditorFileTab from './EditorFileTab'
 import SortableTab from './SortableTab'
@@ -39,7 +40,7 @@ vi.mock('@/runtime/runtime-layout-client', async (original) =>
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await original())
 )
-vi.mock('@/runtime/workspace-layout-frame-sync', async (original) => ({
+vi.mock('@/runtime/workspace-layout-frame-startup', async (original) => ({
   ...(await original<object>()),
   showStartupLayoutFrames: () => {}
 }))
@@ -220,7 +221,12 @@ async function mount(kind: Kind = 'browser', workspace = GIT_KEY, singleton = fa
   frames.start()
   stopFrames = () => frames.close()
   await settle()
-  return render(<Harness kind={kind} singleton={singleton} />)
+  // The app renders tab menus inside the confirmation provider; the chat switch items ask through it.
+  return render(
+    <ConfirmationDialogProvider>
+      <Harness kind={kind} singleton={singleton} />
+    </ConfirmationDialogProvider>
+  )
 }
 function source(): HTMLElement {
   const element = document.querySelector(`[data-tab-id="${ENTITY}"]`)

@@ -19521,8 +19521,8 @@
       "resumeInNewChat": {
         "hostUpdateRequired": "Mettez à jour Orca sur cet hôte pour continuer dans l'interface de chat.",
         "notSavedYet": "{{agent}} n'a pas encore enregistré cette conversation. Réessayez après sa réponse.",
-        "exitUnconfirmedFromTerminal": "{{agent}} exécute déjà cette conversation dans un autre terminal. Quittez {{agent}} là-bas ou fermez ce terminal, puis ouvrez cette conversation depuis l’historique des sessions.",
-        "exitUnconfirmed": "{{agent}} exécute déjà cette conversation dans un autre terminal. Quittez {{agent}} là-bas ou fermez ce terminal, puis ouvrez cette conversation depuis l’historique des sessions."
+        "exitUnconfirmedFromTerminal": "Orca n’a pas pu confirmer l’arrêt de {{agent}} dans ce terminal. Quittez {{agent}} ici, puis réessayez cette action.",
+        "exitUnconfirmed": "Orca n’a pas pu confirmer l’arrêt de {{agent}}. Quittez {{agent}} dans son terminal, puis réessayez cette action."
       },
       "state": {
         "loading": {
@@ -20054,8 +20054,18 @@
       "bar": {
         "SortableTabContextMenu": {
           "switchToTerminalView": "Continuer avec l’agent de terminal",
-          "switchToChatView": "Continuer dans l’interface de chat",
+          "continueInChatView": "Continuer dans l’interface de chat",
+          "switchToChatView": "Afficher en chat",
+          "showAsTerminal": "Afficher en terminal",
           "allowAutoClose": "Autoriser la fermeture automatique"
+        },
+        "switch": {
+          "toCli": "Passer à la CLI",
+          "toNativeChat": "Passer à l'interface de chat",
+          "toCliTooltip": "Passer à la CLI : arrête {{agent}} dans l'interface de chat et poursuit la même conversation dans un terminal.",
+          "openedInWorkspace": "Chat ouvert dans {{workspace}}.",
+          "toNativeChatTooltip": "Passer à l'interface de chat : poursuit la même conversation dans un chat, dans cet onglet.",
+          "noConversation": "Aucune conversation enregistrée n’est encore disponible dans ce terminal."
         },
         "BrowserTab": {
           "closeOthers": "Fermer les autres",

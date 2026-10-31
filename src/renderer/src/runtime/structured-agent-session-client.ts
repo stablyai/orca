@@ -1,3 +1,4 @@
+import type { RuntimeRpcDispatchObservation } from '../../../shared/runtime-rpc-envelope'
 import type {
   AgentJournalCursor,
   AgentJournalRenderItem
@@ -8,7 +9,7 @@ import type {
   AgentSessionTurnCompletionEvent
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionConversationOutline } from '../../../shared/agent-session/agent-session-conversation-outline'
-import { AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS } from '../../../shared/agent-session/agent-session-conversation-command'
+import { structuredAgentSessionMethodTimeoutMs } from './structured-agent-session-method-timeouts'
 import {
   AGENT_SESSION_ATTENTION_ACK_RUNTIME_CAPABILITY,
   AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY,
@@ -27,12 +28,14 @@ import {
   AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY,
   AGENT_SESSION_CREATE_OPTIONS_MODE_RUNTIME_CAPABILITY
 } from '../../../shared/agent-session-create-capabilities'
+import {
+  inPlaceSwitchCapability,
+  inPlaceSwitchExecutionCapability,
+  inPlaceSwitchEnabled
+} from '../../../shared/structured-agent-cli-conversation-adoption'
 import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import {
-  ensureLocalRuntimeCapabilities,
-  readLocalRuntimeCapabilitiesOrUnknown
-} from './local-runtime-capabilities'
+import { readStructuredAgentSessionHostSupport } from './structured-agent-session-host-support'
 import { subscribeRuntimeRpc } from './runtime-rpc-subscribe'
 /** Read a capability through the runtime's existing status cache. A failed/unknown
  *  probe is treated as legacy so a newer call is never made before the host has
@@ -42,12 +45,7 @@ export async function structuredAgentSessionHostSupports(
   capability: RuntimeCapability
 ): Promise<boolean> {
   try {
-    if (target.kind === 'local') {
-      const known = readLocalRuntimeCapabilitiesOrUnknown()
-      const capabilities = known ?? (await ensureLocalRuntimeCapabilities())
-      return capabilities?.includes(capability) === true
-    }
-    return await runtimeEnvironmentSupportsCapability(target.environmentId, capability)
+    return await readStructuredAgentSessionHostSupport(target, capability)
   } catch {
     return false
   }
@@ -90,6 +88,21 @@ export function supportsStructuredAgentSessionCliSource(
     target,
     STRUCTURED_AGENT_SESSION_CLI_SOURCE_RUNTIME_CAPABILITY
   )
+}
+
+/** Whether the destination host switches this agent's conversations in place; unknown is no. */
+export function supportsInPlaceSwitch(
+  target: RuntimeClientTarget,
+  agent: string,
+  execution = false
+): Promise<boolean> {
+  // The switch itself rejects on a probe it couldn't read, so it never mistakes a dropped
+  // connection for a host without the switch; surfaces only choose what to offer.
+  return !inPlaceSwitchEnabled(agent)
+    ? Promise.resolve(false)
+    : execution
+      ? readStructuredAgentSessionHostSupport(target, inPlaceSwitchExecutionCapability(agent))
+      : structuredAgentSessionHostSupports(target, inPlaceSwitchCapability(agent))
 }
 
 /** Whether the host writes no row for a Stop that stopped nothing, so a repeated Stop is quiet. */
@@ -150,17 +163,6 @@ export async function readStructuredAgentSessionItem(
   return result?.item ?? null
 }
 
-const STRUCTURED_AGENT_SESSION_METHOD_TIMEOUT_MS: ReadonlyMap<string, number> = new Map([
-  ['agentSession.conversationCommand', AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS],
-  // The host may start an agent at rest before rewinding it, as it does for a command.
-  ['agentSession.rewind', 195_000],
-  // Waiting model catalogs can take Claude’s 60s listing plus 15s account switch and 5s login environment.
-  ['agentSession.modelCatalog', 90_000],
-  ['agentSession.sleepWorkspace', 120_000],
-  // All bounded-concurrency provider starts and dispatch settlements precede the reply.
-  ['agentSession.restartContinue', 600_000]
-])
-
 export async function callStructuredAgentSession<TResult>(
   target: RuntimeClientTarget,
   method: string,
@@ -169,6 +171,9 @@ export async function callStructuredAgentSession<TResult>(
   options: {
     skipCompatibilityCheck?: true
     beforeSend?: () => void
+    onSent?: (sentAt?: number) => void
+    dispatchObservation?: () => RuntimeRpcDispatchObservation
+    signal?: AbortSignal
     expectedEnvironmentPairingRevision?: number
   } = {}
 ): Promise<TResult> {
@@ -182,7 +187,7 @@ export async function callStructuredAgentSession<TResult>(
   ) {
     throw new Error('Rewinding requires a newer Orca server. Update the server and try again.')
   }
-  const timeoutMs = STRUCTURED_AGENT_SESSION_METHOD_TIMEOUT_MS.get(method)
+  const timeoutMs = structuredAgentSessionMethodTimeoutMs(method, params)
   return timeoutMs === undefined && Object.keys(options).length === 0
     ? callRuntimeRpc<TResult>(target, method, params)
     : callRuntimeRpc<TResult>(target, method, params, {

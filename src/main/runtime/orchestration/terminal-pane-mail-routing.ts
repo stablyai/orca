@@ -14,15 +14,14 @@ import { resolveStructuredWorkerAuthority } from '../structured-worker-authority
 import type { StructuredPointerTarget } from './structured-mailbox-pointer-delivery'
 import {
   chatDispatchMailTarget,
-  handleLessCoordinatorSessionId,
+  resolveStructuredCoordinatorMailboxTarget,
   structuredSessionAddressTarget,
-  structuredSessionMailTarget,
   structuredSessionIdleEdgeMailboxes
 } from './structured-session-mail-target'
+import { captureStructuredWorkerSwitchStop } from './structured-worker-switch-stop'
 import { exitedChatDispatchesForSession } from './chat-assignee'
 import { OPERATOR_CLOSE_EXIT_CAUSE } from '../../../shared/terminal-exit-cause'
 import { resolveTerminalIdentityFromProbes } from '../terminal-identity-probe'
-
 export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneMobileSessionTabGroupLayout {
   protected getPtyRecordForPaneKey(paneKey: string): RuntimePtyWorktreeRecord | null {
     const parsed = parsePaneKey(paneKey)
@@ -194,6 +193,15 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     }
   }
 
+  captureSessionSwitchStop(sessionId: string) {
+    return captureStructuredWorkerSwitchStop(
+      sessionId,
+      this.getExistingOrchestrationDb(),
+      this.runtimeId,
+      this
+    )
+  }
+
   /** Settle ended chat Dispatches on tab hide; /clear successors retain their work. */
   onStructuredSessionTabHidden(sessionId: string): void {
     this.removeWindowlessAgentSessionTab(sessionId)
@@ -244,17 +252,7 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
   protected resolveStructuredCoordinatorMailboxTarget(
     runId: string
   ): StructuredPointerTarget | null {
-    const run = this._orchestrationDb?.getRun?.(runId)
-    const sessionId = run ? handleLessCoordinatorSessionId(run) : null
-    if (sessionId) {
-      return structuredSessionMailTarget(sessionId, this._orchestrationDb)
-    }
-    const coordinator = run?.coordinator_handle
-    if (!coordinator) {
-      return null
-    }
-    const workerSessionId = this.liveStructuredWorkerSessionId(coordinator)
-    return workerSessionId ? { sessionId: workerSessionId, dispatchId: null } : null
+    return resolveStructuredCoordinatorMailboxTarget(this._orchestrationDb, runId)
   }
 
   /** Route direct worker mail through its active Dispatch or a session-scoped ledger between Dispatches; downstream idle/lease gates decide safety. */

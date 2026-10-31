@@ -268,7 +268,7 @@ describe('resumeAiVaultSessionInNewChat', () => {
     [
       'agent_session_conflict',
       'conversationHeldElsewhere',
-      'Codex is already running this conversation in another terminal. Quit Codex there or close that terminal, then open this conversation from Session History.'
+      'Orca could not confirm Codex stopped. Quit Codex in its terminal, then try this action again.'
     ],
     [
       'agent_session_identity_required',

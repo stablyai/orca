@@ -60,6 +60,7 @@ import {
 export type AttachedOwner = 'acquired' | 'kept' | 'none'
 
 export type AttachFlowInput = {
+  checkBeforeAcquire?: () => void
   store: AgentSessionRecordStore
   adapter: StructuredAgentSessionAdapter
   agents: Pick<StructuredAgentRegistry, 'definition'>
@@ -100,6 +101,7 @@ export type AttachFlowInput = {
   eventSink?: StructuredAgentSessionEventSink
   /** Prevent acquisition-window events from reaching superseded journals. */
   onAcquiring?: () => Promise<void> | void
+  onPhysicalExit?: (exited: Promise<void>) => void
   /** Refuses the spawn while a terminal may still be writing the record's conversation. */
   assertNoTerminalWriter?: (record: AgentSessionRecord) => Promise<void>
   /** Settles writes already captured by the superseded journal before opening another. */
@@ -156,8 +158,9 @@ export async function performAttach(
   }
   try {
     const reserved = await withAgentSessionCreatePhase('reserve_owner', input.recordPhase, () =>
-      lock.commit(() =>
-        store.reserveOwner(
+      lock.commit(() => {
+        input.checkBeforeAcquire?.()
+        return store.reserveOwner(
           reserveRequestFor({
             sessionId,
             params,
@@ -166,9 +169,10 @@ export async function performAttach(
             fingerprint: admitted.fingerprint,
             now: input.now(),
             models: input.models
-          })
+          }),
+          input.checkBeforeAcquire
         )
-      )
+      })
     )
     record = reserved.record
     replayed = reserved.disposition === 'replayed'

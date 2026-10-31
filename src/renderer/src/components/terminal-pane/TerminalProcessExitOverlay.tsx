@@ -2,6 +2,7 @@ import { RotateCw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import type { PaneProcessExit } from './pty-connection-types'
+import { agentLabel } from '../../../../shared/ai-vault-session-filters'
 
 export function TerminalProcessExitOverlay({
   processExit,
@@ -13,24 +14,43 @@ export function TerminalProcessExitOverlay({
   onClose: () => void
 }): React.JSX.Element {
   const capacityError = processExit.reason === 'git-bash-console-capacity'
+  // A switch stopped the agent; a full-screen agent leaves no output here to keep.
+  const switchStopped = processExit.reason === 'switch-stopped'
+  const agent = processExit.agent ? agentLabel(processExit.agent) : null
   const title = capacityError
     ? translate(
         'auto.components.terminal.pane.TerminalProcessExitOverlay.capacityTitle',
         'Git Bash console limit reached'
       )
-    : translate(
-        'auto.components.terminal.pane.TerminalProcessExitOverlay.failedTitle',
-        'Terminal exited'
-      )
+    : switchStopped
+      ? agent
+        ? translate(
+            'auto.components.terminal.pane.TerminalProcessExitOverlay.agentStoppedTitle',
+            '{{agent}} stopped',
+            { agent }
+          )
+        : translate(
+            'auto.components.terminal.pane.TerminalProcessExitOverlay.stoppedTitle',
+            'Agent stopped'
+          )
+      : translate(
+          'auto.components.terminal.pane.TerminalProcessExitOverlay.failedTitle',
+          'Terminal exited'
+        )
   const detail = capacityError
     ? translate(
         'auto.components.terminal.pane.TerminalProcessExitOverlay.capacityDetail',
         'Git Bash reached its 128-console limit. Close unused Git Bash terminals, then restart this terminal.'
       )
-    : translate(
-        'auto.components.terminal.pane.TerminalProcessExitOverlay.failedDetail',
-        'The shell process ended with exit code {{code}}. Its output is preserved.'
-      ).replace('{{code}}', String(processExit.exitCode))
+    : switchStopped
+      ? translate(
+          'auto.components.terminal.pane.TerminalProcessExitOverlay.stoppedDetail',
+          'Orca stopped it to switch this conversation. Restart opens a new shell in this pane.'
+        )
+      : translate(
+          'auto.components.terminal.pane.TerminalProcessExitOverlay.failedDetail',
+          'The shell process ended with exit code {{code}}. Its output is preserved.'
+        ).replace('{{code}}', String(processExit.exitCode))
 
   return (
     <div className="pointer-events-none absolute inset-0 z-40 flex items-end justify-center p-4">

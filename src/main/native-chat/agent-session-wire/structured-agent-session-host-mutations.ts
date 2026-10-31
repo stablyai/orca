@@ -124,6 +124,8 @@ export function cancelStructuredAgentSessionTurn(
     scope?: 'background-tasks'
     taskId?: string
     prompt?: { itemId: string; expectedRevision: number }
+    onAccepted?: Parameters<typeof mutateWithChatStop>[2]['onAccepted']
+    waitForShutdown?: boolean
   }
 ): Promise<AgentSessionMutationResult<AgentSessionCancelResult>> {
   if (params.scope) {

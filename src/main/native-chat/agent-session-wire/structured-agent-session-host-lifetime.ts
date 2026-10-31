@@ -120,7 +120,8 @@ export async function holdRestartedStructuredAgentSessionSends(
 export async function stopStructuredAgentSessionAgentUnderSerialize(
   context: StructuredAgentSessionLifetimeContext,
   sessionId: string,
-  ending: StructuredAgentSessionStopEnding
+  ending: StructuredAgentSessionStopEnding,
+  check?: () => void
 ): Promise<void> {
   const session = context.sessions.get(sessionId)
   const child = session?.child
@@ -133,6 +134,7 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
     const recorded = (await stopEndsWork(context, sessionId, session, ending))
       ? recordStopEvent(context, sessionId, session, ending)
       : Promise.resolve(null)
+    check?.()
     child.close = {
       cause,
       ...('quit' in ending && ending.quit ? { quit: true as const } : {}),
@@ -161,11 +163,13 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
         () => context.restartWitness?.beforeStop(sessionId)
       )
     }
+    check?.()
     if (
       (await joinStructuredAgentSessionChildClose(
         context,
         sessionId,
         child,
+        check,
         'recorded' in ending ? ending.observeClose : undefined
       )) !== 'exited'
     ) {
@@ -205,9 +209,11 @@ export type StructuredAgentSessionCloseCause = Extract<
 /** Idle cache eviction also retains waiting cards so unseen closes cannot introduce reopen pauses. */
 export function structuredAgentSessionConversationClosable(
   session: StructuredAgentSessionHostSession,
-  atRest = false
+  atRest = false,
+  ownSwitch = false
 ): boolean {
   return (
+    (!session.switchCommand || ownSwitch) &&
     session.child === null &&
     ![...structuredAgentSessionHandingOver(session.journal).keys()].some((id) =>
       finalizingStructuredAgentSessionInput(session.journal, id)
@@ -224,10 +230,11 @@ export async function closeStructuredAgentSessionConversationUnderSerialize(
     closeStatus: (sessionId: string) => void
   },
   sessionId: string,
-  atRest = false
+  atRest = false,
+  ownSwitch = false
 ): Promise<boolean> {
   const session = context.sessions.get(sessionId)
-  if (!session || !structuredAgentSessionConversationClosable(session, atRest)) {
+  if (!session || !structuredAgentSessionConversationClosable(session, atRest, ownSwitch)) {
     return false
   }
   context.sessions.delete(sessionId)

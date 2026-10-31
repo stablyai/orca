@@ -38,6 +38,44 @@ it('consumes a committed late-exit guard only once', () => {
 
   expect(consumeCommittedPtyShutdownExit('pty-late-commit')).toBe(true)
   expect(consumeCommittedPtyShutdownExit('pty-late-commit')).toBe(false)
+
+  markCommittedPtyShutdowns(['pty-closing'], 'closing')
+  expect(consumeCommittedPtyShutdownExit('pty-closing')).toBe('closing')
+  expect(consumeCommittedPtyShutdownExit('pty-closing')).toBe(false)
+
+  markCommittedPtyShutdowns(['pty-overlap'])
+  markCommittedPtyShutdowns(['pty-overlap'], 'closing')
+  expect(consumeCommittedPtyShutdownExit('pty-overlap')).toBe(true)
+  expect(consumeCommittedPtyShutdownExit('pty-overlap')).toBe(false)
+
+  markCommittedPtyShutdowns(['pty-overlap'], 'closing')
+  markCommittedPtyShutdowns(['pty-overlap'])
+  expect(consumeCommittedPtyShutdownExit('pty-overlap')).toBe(true)
+  expect(consumeCommittedPtyShutdownExit('pty-overlap')).toBe(false)
+})
+
+it('bounds closing markers by the same count and expiry without reviving old wake authority', () => {
+  vi.useFakeTimers()
+  try {
+    vi.setSystemTime(new Date('2026-07-21T00:00:00Z'))
+    const ptyIds = Array.from({ length: 513 }, (_, index) => `pty-closing-bounded-${index}`)
+    markCommittedPtyShutdowns(ptyIds, 'closing')
+    expect(consumeCommittedPtyShutdownExit('pty-closing-bounded-0')).toBe(false)
+    for (const ptyId of ptyIds.slice(1)) {
+      expect(consumeCommittedPtyShutdownExit(ptyId)).toBe('closing')
+      expect(consumeCommittedPtyShutdownExit(ptyId)).toBe(false)
+    }
+
+    markCommittedPtyShutdowns(['pty-expired-reversible'])
+    markCommittedPtyShutdowns(['pty-expired-closing'], 'closing')
+    vi.advanceTimersByTime(30_001)
+    expect(consumeCommittedPtyShutdownExit('pty-expired-closing')).toBe(false)
+    markCommittedPtyShutdowns(['pty-expired-reversible'], 'closing')
+    expect(consumeCommittedPtyShutdownExit('pty-expired-reversible')).toBe('closing')
+    expect(consumeCommittedPtyShutdownExit('pty-expired-reversible')).toBe(false)
+  } finally {
+    vi.useRealTimers()
+  }
 })
 
 it('clears a committed guard when its deferred exit is replayed', () => {
@@ -69,7 +107,9 @@ it('preserves another client binding through host sleep until the host reports w
 
   applyHostWorktreeTerminalSleepState('env-a', { ...started, phase: 'committed' })
   expect(callback).toHaveBeenCalledWith('committed')
+  markCommittedPtyShutdowns([remotePtyId], 'closing')
   expect(consumeCommittedPtyShutdownExit(remotePtyId, 'env-a')).toBe(true)
+  expect(consumeCommittedPtyShutdownExit(remotePtyId, 'env-a')).toBe(false)
   expect(consumeCommittedPtyShutdownExit(remotePtyId, 'env-b')).toBe(false)
 
   applyHostWorktreeTerminalSleepState('env-a', { ...started, phase: 'woken' })

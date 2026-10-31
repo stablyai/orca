@@ -86,9 +86,14 @@ const REPLAY_BASELINE_BUFFER_RESET = '\x1b[r'
 export function buildSnapshotReplayPrologue(args: {
   targetAlternateScreen: boolean
   paneOnAlternateScreen: boolean
+  /** False for a screen-only normal payload: it brings no history, so the saved lines stay. */
+  carriesHistory?: boolean
 }): string {
   // ?1049h does not clear alt; explicitly clear it. Only normal payloads carry history, making 3J safe there.
-  const clear = args.targetAlternateScreen ? '\x1b[2J\x1b[H' : '\x1b[2J\x1b[3J\x1b[H'
+  const clear =
+    args.targetAlternateScreen || args.carriesHistory === false
+      ? '\x1b[2J\x1b[H'
+      : '\x1b[2J\x1b[3J\x1b[H'
   const ground = `${REPLAY_BASELINE_TERMINAL_RESET}${REPLAY_BASELINE_BUFFER_RESET}`
   if (args.paneOnAlternateScreen === args.targetAlternateScreen) {
     return `${ground}${clear}${SAVE_GROUNDED_CURSOR}`

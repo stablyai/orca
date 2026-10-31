@@ -65,3 +65,66 @@ it.each(['pty', 'leaf', 'unknown', 'disconnected'] as const)(
     }
   }
 )
+
+it('publishes a stopped source only from main’s fact, never from the renderer’s row', () => {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: projection reads only ptyId, connected and incarnationId from the record.
+  const stopped = {
+    ptyId: 'pty-stopped',
+    connected: false,
+    incarnationId: 'inc-1'
+  } as RuntimePtyWorktreeRecord
+  const fact = {
+    ptyId: 'pty-stopped',
+    incarnationId: 'inc-1',
+    agent: 'claude',
+    providerSessionId: 'c'
+  } as const
+  const project = (mainFact: typeof fact | undefined) => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub implements every host member this projection path calls.
+    const host = {
+      tabs: new Map(),
+      leaves: new Map(),
+      ptysById: new Map([[stopped.ptyId, stopped]]),
+      stoppedSwitchSource: () => mainFact,
+      getPtyAvailability: () => null,
+      getLiveBrowserTabs: () => new Map(),
+      getProviderSessionRows: () => [],
+      getProviderSessionSnapshot: () => [],
+      getLeafKey: () => 'leaf',
+      findPty: () => null,
+      getRetainedStatus: () => null,
+      getTrackedTitle: () => null,
+      getTitleDisplayClear: () => null,
+      issuePtyHandle: () => 'stopped-handle',
+      recordPty: vi.fn(),
+      buildPtyStatus: () => ({}),
+      sanitizeGroups: () => [],
+      pruneGroupLayout: () => null,
+      collectTabIds: () => new Set()
+    } as unknown as RuntimeMobileSessionProjectionHost
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: one terminal tab is the only snapshot field this projection path reads.
+    const snapshot = {
+      worktree: 'workspace',
+      publicationEpoch: 'epoch',
+      tabs: [
+        {
+          type: 'terminal',
+          id: 'tab::leaf',
+          parentTabId: 'tab',
+          leafId: 'leaf',
+          title: 'Shell',
+          isActive: true,
+          // A renderer republishing a field it holds: never trusted.
+          stoppedSwitchSource: fact
+        }
+      ]
+    } as RuntimeMobileSessionTabsSnapshot
+    return projectRuntimeMobileSessionTabs(snapshot, host).tabs[0]
+  }
+  expect(project(undefined)).not.toHaveProperty('stoppedSwitchSource')
+  expect(project(fact)).toMatchObject({
+    status: 'ready',
+    terminal: 'stopped-handle',
+    stoppedSwitchSource: fact
+  })
+})

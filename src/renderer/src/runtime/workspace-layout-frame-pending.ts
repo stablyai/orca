@@ -2,7 +2,10 @@
 
 import type { WorkspaceLayoutCache } from '@/store/workspace-layout-cache'
 import { stableJson } from '../../../shared/workspace-layout/workspace-layout-load-report'
-import type { WorkspaceLayoutRecordsFrame } from '../../../shared/workspace-layout/workspace-layout-stream-frames'
+import type {
+  WorkspaceLayoutChangeFrame,
+  WorkspaceLayoutRecordsFrame
+} from '../../../shared/workspace-layout/workspace-layout-stream-frames'
 import type {
   PublishedPane,
   PublishedTab,
@@ -121,5 +124,29 @@ export function notePendingRecordsFrame(
         change
       )
     }
+  }
+}
+
+/** A stream snapshot/whole workspace redraws; records accumulate against their prior cache. */
+export function noteReceivedLayoutFrame(
+  pending: Map<string, PendingWorkspaceChanges>,
+  shown: Set<string>,
+  before: WorkspaceLayoutCache,
+  after: WorkspaceLayoutCache,
+  frame: WorkspaceLayoutChangeFrame,
+  snapshotReceived: boolean
+): void {
+  switch (frame.type) {
+    case 'snapshot':
+      if (snapshotReceived) {
+        shown.clear()
+      }
+      return
+    case 'workspace':
+    case 'removed':
+      shown.delete(frame.key)
+      return
+    case 'records':
+      notePendingRecordsFrame(pending, shown, before, after, frame)
   }
 }

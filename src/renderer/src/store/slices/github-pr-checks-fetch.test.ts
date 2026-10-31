@@ -578,6 +578,8 @@ describe('createGitHubSlice.fetchPRCheckDetails', () => {
       selector: 'env-1',
       expectedEnvironmentPairingRevision: undefined,
       expectedEnvironmentRuntimeId: undefined,
+      dispatchObservation: undefined,
+      observeDispatch: false,
       method: 'github.prCheckDetails',
       params: {
         repo: repoId,
@@ -678,6 +680,8 @@ describe('createGitHubSlice.fetchPRCheckDetails', () => {
         selector: 'env-1',
         expectedEnvironmentPairingRevision: undefined,
         expectedEnvironmentRuntimeId: undefined,
+        dispatchObservation: undefined,
+        observeDispatch: false,
         method: 'github.prCheckDetails',
         params: {
           repo: repoId,

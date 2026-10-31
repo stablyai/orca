@@ -1,5 +1,6 @@
 import './rpc/unused-default-rpc-methods.test-fixture'
 import { expect, it, vi } from 'vitest'
+import type { OwnedMobileTerminalCreateOptions } from './terminal/launch/mobile-terminal-create'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
 import { buildAgentResumeStartupPlan } from '../../shared/tui-agent-startup'
 
@@ -14,6 +15,10 @@ const { bindPaneFirst, committingSpawn, registerBoundPty } =
 type SpawnPane = { worktreeId?: string; tabId?: string; leafId?: string }
 
 class QoderAdoptionRuntime extends OrcaRuntimeService {
+  createOwned(worktreeId: string, opts: OwnedMobileTerminalCreateOptions) {
+    return this.createRuntimeOwnedMobileSessionTerminal(worktreeId, false, undefined, opts)
+  }
+
   retainedRecipe(ptyId: string, worktreeId: string) {
     return this.recordPtyWorktree(ptyId, worktreeId)
   }
@@ -192,6 +197,7 @@ it.each([
         ).rejects.toThrow('runtime_unavailable')
         inventoryUnavailable = false
       }
+      let retryError: unknown
       const retryPromise = runtime
         .createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
           ...resume,
@@ -200,7 +206,10 @@ it.each([
             : {}),
           signal: connection.signal
         })
-        .catch(() => null)
+        .catch((error: unknown) => {
+          retryError = error
+          return null
+        })
       await vi.advanceTimersByTimeAsync(10_001)
       const retry = await retryPromise
       expect(acceptedCommands).toHaveLength(1)
@@ -209,7 +218,10 @@ it.each([
           ? "qoder '--resume' 'same-qoder-session'"
           : "qoder '--captured-option' '--resume' 'same-qoder-session'"
       )
-      expect(retry?.tab).toMatchObject({ ptyId: 'qoder-live-resume', launchAgent: 'qoder' })
+      expect(
+        retry?.tab,
+        retryError instanceof Error ? retryError.message : undefined
+      ).toMatchObject({ ptyId: 'qoder-live-resume', launchAgent: 'qoder' })
       expect(spawn).toHaveBeenCalledTimes(1)
       expect(send).not.toHaveBeenCalled()
       if (!retry) {

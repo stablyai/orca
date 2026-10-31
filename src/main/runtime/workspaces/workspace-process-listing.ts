@@ -295,6 +295,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
       },
       ...(this.structuredAgentStatusSinkFn ? { statusSink: this.structuredAgentStatusSinkFn } : {}),
       conversationNaming: nameChat,
+      captureSessionSwitchStop: (sessionId) => this.captureSessionSwitchStop(sessionId),
       onSessionTabHidden: (sessionId) => this.onStructuredSessionTabHidden(sessionId),
       assertNoTerminalWriter: (record) => this.assertStructuredChatAcquireAdmissible(record),
       attentionDelivery: createStructuredAttentionMobileDelivery({

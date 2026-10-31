@@ -4,6 +4,7 @@ import {
   isAgentSessionProviderHandleInNamespace
 } from '../../shared/agent-session-provider-handle-encoding'
 import {
+  AgentSessionPreSpawnError,
   launchPreparationFailure,
   type AgentSessionAcquisition,
   type StructuredAgentSessionAcquireInput
@@ -124,6 +125,11 @@ export async function acquireCodexStructuredSession(input: {
           }
     acquisitions.assertCurrent(sessionId, attempt)
     account = launch.codexHome ? deps.resolveAccountKind?.(launch.codexHome) : undefined
+    try {
+      acquireInput.checkBeforeSpawn?.()
+    } catch (error) {
+      throw new AgentSessionPreSpawnError(error)
+    }
     const connection = await open(
       {
         command: launch.command,
@@ -157,6 +163,7 @@ export async function acquireCodexStructuredSession(input: {
             Buffer.byteLength(JSON.stringify(payload ?? null), 'utf8')
           ),
         onSpawned: spawnIdentity.onSpawned,
+        onPhysicalExit: acquireInput.onPhysicalExit,
         onExit: (error, exit) => {
           acquisition.appliedSettings.end()
           try {

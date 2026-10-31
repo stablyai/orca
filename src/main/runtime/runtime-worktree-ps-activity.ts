@@ -149,7 +149,7 @@ export function applyRuntimeWorktreePsTerminalActivity(args: {
     summary.hasAttachedPty = true
     summary.hasHostSidebarActivity = true
     summary.lastOutputAt = maxTimestamp(summary.lastOutputAt, pty.lastOutputAt)
-    const ptyStatus = getSavedTabWorktreeStatus(owner.title, true)
+    const ptyStatus = getSavedTabWorktreeStatus(displayTitle ?? owner.title, true)
     if (ptyStatus === 'working' || ptyStatus === 'permission') {
       addTerminalTitleEvidence(titleEvidence, summary.worktreeId, {
         status: ptyStatus,

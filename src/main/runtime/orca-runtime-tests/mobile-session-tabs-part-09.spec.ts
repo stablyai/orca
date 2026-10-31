@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import { bindPaneFirst, committingSpawn, registerBoundPty } from '../bind-first-pane.test-fixture'
 import {
   OrcaRuntimeService,
@@ -28,7 +29,7 @@ describe('OrcaRuntimeService', () => {
     function makeParkedSessionStore(
       origin: SleepingAgentSessionRecord['origin'] | undefined,
       overrides: Partial<SleepingAgentSessionRecord> = {},
-      ownerHostId = 'local'
+      ownerHostId: ExecutionHostId = 'local'
     ) {
       return makeRuntimeStoreWithWorkspaceSession(
         makeWorkspaceSessionWithHeadlessTerminal({

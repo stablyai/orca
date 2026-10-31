@@ -1,13 +1,18 @@
-// Windowless main-owned layout fixture: apply in memory and notify writes so terminal listings refresh.
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import type { TerminalPaneLayoutNode } from '../../shared/terminal-tab-types'
 import type { LayoutCommand } from '../../shared/workspace-layout/workspace-layout-command-types'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-session-contracts'
+import { applyPtyBinding } from '../persistence/loading-store/pty-binding-session-update'
+import type { PersistPtyBindingArgs } from '../persistence/loading-store/pty-binding-persistence'
 import { applyCommandToSession } from '../persistence/terminal-topology/terminal-pane-admission'
 import { resolveHostId } from '../persistence/loading-store/session-host-partitions'
 import { withDurableRuntimeStore, withRuntimePaneAdmission } from './runtime-durable-store-fixture'
 import { OrcaRuntimeService } from './orca-runtime'
+import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+import { partialRuntimeStore } from './runtime-store-partial-fixture'
+
+// Windowless main-owned layout fixture: apply in memory and notify writes so terminal listings refresh.
 
 export const REPO = {
   id: 'repo-1',
@@ -60,7 +65,13 @@ function session(split: boolean, pinned: boolean): WorkspaceSessionState {
   }
 }
 
-export function setupMainOwnedWorkspace(opts: { split?: boolean; pinned?: boolean } = {}) {
+export function setupMainOwnedWorkspace(
+  opts: {
+    split?: boolean
+    pinned?: boolean
+    runtimeDeps?: ConstructorParameters<typeof OrcaRuntimeService>[2]
+  } = {}
+) {
   let current = session(opts.split === true, opts.pinned === true)
   const written = new Set<(hostId: string | null) => void>()
   const write = (next: WorkspaceSessionState): void => {
@@ -71,6 +82,7 @@ export function setupMainOwnedWorkspace(opts: { split?: boolean; pinned?: boolea
   }
   const store = withDurableRuntimeStore(
     withRuntimePaneAdmission({
+      ...partialRuntimeStore(),
       getRepos: () => [REPO],
       getRepo: (id: string) => (id === REPO.id ? REPO : undefined),
       getWorkspaceSession: () => current,
@@ -80,10 +92,20 @@ export function setupMainOwnedWorkspace(opts: { split?: boolean; pinned?: boolea
         return () => written.delete(listener)
       },
       setWorkspaceSession: (next: WorkspaceSessionState) => write(next),
-      applyLayoutCommand: async (command: LayoutCommand, hostIds: readonly string[] = []) => {
+      applyLayoutCommand: async (
+        command: LayoutCommand,
+        hostIds: readonly string[] = [],
+        run?: { admit?: () => boolean; onApplied?: () => void }
+      ) => {
+        if (run?.admit && !run.admit()) {
+          return { ok: false as const, code: 'tab_not_found' as const }
+        }
         const change = applyCommandToSession(resolveHostId(hostIds[0]), current, command)
         if (change.session) {
           write(change.session)
+        }
+        if (change.value.ok) {
+          run?.onApplied?.()
         }
         return change.value
       },
@@ -93,17 +115,8 @@ export function setupMainOwnedWorkspace(opts: { split?: boolean; pinned?: boolea
     })
   )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake carries every store method a close, rename and sleep reach.
-  const runtime = new OrcaRuntimeService(store as never)
+  const runtime = new OrcaRuntimeService(store as never, undefined, opts.runtimeDeps)
   const stopped: string[] = []
-  runtime.setPtyController({
-    write: () => true,
-    kill: () => true,
-    stopAndWait: async (ptyId: string) => {
-      stopped.push(ptyId)
-      return true
-    },
-    getForegroundProcess: async () => null
-  })
   runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
   const ptyIds = opts.split ? [PTY_A, PTY_B] : [PTY_A]
   for (const [index, ptyId] of ptyIds.entries()) {
@@ -113,10 +126,30 @@ export function setupMainOwnedWorkspace(opts: { split?: boolean; pinned?: boolea
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: both members are declared on OrcaRuntimeService's inheritance chain.
   const internals = runtime as unknown as {
     issuePtyHandle: (pty: unknown) => string
-    ptysById: Map<string, { title?: string | null; titleUpdatedAt?: number }>
+    ptysById: Map<string, RuntimePtyWorktreeRecord>
   }
   const handleOf = (ptyId: string): string =>
     internals.issuePtyHandle(internals.ptysById.get(ptyId))
+  runtime.setPtyController({
+    write: () => true,
+    kill: () => true,
+    stopAndWait: async (ptyId: string) => {
+      stopped.push(ptyId)
+      return true
+    },
+    getForegroundProcess: async () => null,
+    listProcesses: async () =>
+      [...internals.ptysById.values()]
+        .filter((pty) => pty.connected)
+        .map((pty) => ({
+          id: pty.ptyId,
+          cwd: REPO.path,
+          title: pty.title ?? '',
+          worktreeId: pty.worktreeId,
+          terminalHandle: handleOf(pty.ptyId),
+          ...(pty.incarnationId ? { incarnationId: pty.incarnationId } : {})
+        }))
+  })
   let frames = 0
   runtime.subscribeWorkspaceLayouts(() => {
     frames += 1
@@ -124,9 +157,14 @@ export function setupMainOwnedWorkspace(opts: { split?: boolean; pinned?: boolea
   return {
     runtime,
     stopped,
+    bindPty: (binding: PersistPtyBindingArgs) => {
+      applyPtyBinding(binding, current, WORKTREE_ID, `${binding.tabId}:${binding.leafId}`)
+      write(current)
+    },
     frames: () => frames,
     handleOf,
     ptyRecord: (ptyId: string) => internals.ptysById.get(ptyId),
-    session: () => current
+    session: () => current,
+    setSession: write
   }
 }

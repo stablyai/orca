@@ -717,11 +717,14 @@ describe('launch race parity, both spawn lanes', () => {
           shutdown
         })
         const runtime = createLaunchRaceRuntime()
-        const store = {
-          persistPtyBinding: vi.fn(async () => {
-            throw new Error('disk full')
-          })
-        }
+        const store = createPaneBindingStore()
+        await store.admitTerminalPane({
+          type: 'createTerminalTab',
+          workspace: pane.worktreeId,
+          tabId: pane.tabId,
+          leafId: pane.leafId
+        })
+        store.persistPtyBinding.mockRejectedValue(new Error('disk full'))
         const lanes = registerLaunchRaceLanes({ handlers, mainWindow, runtime, store })
         forgetPtyAfterTest(ptyId)
 
@@ -758,6 +761,7 @@ describe('launch race parity, both spawn lanes', () => {
           })
         )
         const records: AgentSessionRecordStore = Object.create(AgentSessionRecordStore.prototype)
+        records.getRecord = (sessionId) => (sessionId === chat.sessionId ? chat : null)
         records.listConversations = () => [agentSessionConversationView(chat)]
         records.getVisibleSessionTabIndex = () => ({ present: true, sessionIds: [chat.sessionId] })
         const forget = vi.fn(async () => {})

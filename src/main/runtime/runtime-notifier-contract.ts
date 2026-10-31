@@ -1,3 +1,5 @@
+import type { TerminalSurfaceCloseIdentity } from '../../shared/terminal-tab-close'
+import type { StoppedSwitchSource } from '../../shared/stopped-switch-source'
 import type {
   RuntimeEditorTabReveal,
   RuntimeFileOpenPosition
@@ -29,8 +31,17 @@ import type {
   RuntimeTerminalDriverState,
   RuntimeTerminalPresentation
 } from '../../shared/runtime-types'
+import type { ReplacedTab } from '../../shared/workspace-layout/workspace-layout-command-types'
 
 type DriverState = RuntimeTerminalDriverState
+
+type TerminalRevealReply = {
+  tabId: string
+  title?: string | null
+  identity?: TerminalRevealIdentity
+  /** Tabs the same window write closed: a replace's replaced tab. */
+  closed?: string[]
+}
 
 export type RuntimeNotifier = {
   automationsChanged?(payload: {
@@ -92,11 +103,10 @@ export type RuntimeNotifier = {
         terminalHandle: string
         incarnationId: string
       }
+      /** The tab this terminal takes the slot of, closed by the same window write. */
+      replaces?: ReplacedTab
     }
-  ):
-    | Promise<{ tabId: string; title?: string | null; identity?: TerminalRevealIdentity }>
-    | { tabId: string; title?: string | null; identity?: TerminalRevealIdentity }
-    | void
+  ): Promise<TerminalRevealReply> | TerminalRevealReply | void
   /** Shows an agent launch's tab before its process exists; the pane attaches when it does. */
   publishAgentLaunchTab?(
     request: Omit<AgentLaunchTabPublishRequest, 'requestId'>
@@ -130,8 +140,10 @@ export type RuntimeNotifier = {
   focusTerminal(tabId: string, worktreeId: string, leafId?: string | null): void
   /** Raises the window onto a pane it shows; resolves false when the window does not know the worktree. */
   revealTerminalPane?(target: TerminalPaneRevealTarget): Promise<boolean>
-  focusEditorTab?(tabId: string, worktreeId: string): void
-  closeSessionTab?(tabId: string, worktreeId: string): void | Promise<void>
+  /** `sourceTabId`: a switch's source; the window focuses the tab only while that source, or
+   *  nothing, holds its group's selection in the workspace the user is in. */
+  focusEditorTab?(tabId: string, worktreeId: string, sourceTabId?: string): void
+  closeSessionTab?(tabId: string, worktreeId: string): void | Promise<void | boolean>
   moveSessionTab?(worktreeId: string, move: RuntimeMobileSessionTabMove): void
   /** Host window only: host/all move it; caller/clients open without moving it; absence keeps legacy switching. Paired clients never navigate (all means host). */
   openFile?(
@@ -157,9 +169,15 @@ export type RuntimeNotifier = {
   closeTerminal(tabId: string): void
   /** Drops one split pane main already closed; never closes its tab. */
   closeTerminalPane?(tabId: string, leafId: string): void
+  /** A switch stopped this exact pane's process; the window shows it exited unless it is gone. */
+  settleStoppedSwitchSource?(source: StoppedSwitchSource): void
   closeTerminalTab?(
     tabId: string,
-    options?: { localPtyTeardownOwnedExternally?: boolean; force?: boolean }
+    options?: {
+      localPtyTeardownOwnedExternally?: boolean
+      force?: boolean
+      originalSurface?: TerminalSurfaceCloseIdentity
+    }
   ): Promise<void>
   /** A sleep main runs, for the window to follow; optional as only the real bridge wires it. */
   workspaceSleepChanged?(notice: WorkspaceSleepNotice): void

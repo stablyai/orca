@@ -170,8 +170,8 @@ export function SortableTabContextMenu({
           <ContextMenuItem onSelect={onToggleViewMode}>
             <SquareTerminal className="size-3.5 shrink-0" />
             {translate(
-              'components.tab.bar.SortableTabContextMenu.switchToTerminalView',
-              'Continue with Terminal Agent'
+              'components.tab.bar.SortableTabContextMenu.showAsTerminal',
+              'Show as terminal'
             )}
           </ContextMenuItem>
         </>

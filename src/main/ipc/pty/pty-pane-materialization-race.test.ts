@@ -9,6 +9,7 @@ import { makePaneKey } from '../../../shared/stable-pane-id'
 import { registerPtyHandlers } from './register-handlers'
 import { getPtyIdForPaneKey } from './pane/key-state'
 import { setLocalPtyProvider } from './provider/registry'
+import { createPaneBindingStore } from './pty-launch-race-test-fixture'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -312,9 +313,7 @@ describe('registerPtyHandlers', () => {
       getDefaultShell: vi.fn(),
       getProfiles: vi.fn()
     } as never)
-    const store = {
-      persistPtyBinding: vi.fn()
-    }
+    const store = createPaneBindingStore()
     let registeredPane: { ptyId: string; tabId: string; leafId: string } | null = null
     let controller: RuntimeSpawnController | null = null
     const runtime = {
@@ -509,12 +508,18 @@ describe('registerPtyHandlers', () => {
         projectGroupId: 'folder-group'
       }
       const store = {
-        persistPtyBinding: vi.fn(),
+        ...createPaneBindingStore(),
         getFolderWorkspace: vi.fn(() => folderWorkspace),
         getFolderWorkspaces: vi.fn(() => [folderWorkspace]),
         getProjectGroups: vi.fn(() => []),
         getRepos: vi.fn(() => [])
       }
+      await store.admitTerminalPane({
+        type: 'createTerminalTab',
+        workspace: worktreeId,
+        tabId,
+        leafId
+      })
       const prepareClaudeAuth = vi.fn(() => {
         throw new Error('replacement auth preflight must not run')
       })

@@ -1,5 +1,7 @@
 // @vitest-environment happy-dom
 
+import { ConfirmationDialogProvider } from '@/components/confirmation-dialog'
+
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { StructuredAgentSessionCommandRefusalCause } from '../../../../shared/structured-agent-session-composer'
@@ -29,14 +31,16 @@ afterEach(() => {
 {
   function renderPane(): void {
     render(
-      <NativeChatStructuredSession
-        isVisible
-        isFocusedGroup
-        tabId="structured-read-error-tab"
-        sessionId="read-error-session"
-        target={{ kind: 'local' }}
-        agent="codex"
-      />
+      <ConfirmationDialogProvider>
+        <NativeChatStructuredSession
+          isVisible
+          isFocusedGroup
+          tabId="structured-read-error-tab"
+          sessionId="read-error-session"
+          target={{ kind: 'local' }}
+          agent="codex"
+        />
+      </ConfirmationDialogProvider>
     )
   }
 
@@ -141,14 +145,16 @@ afterEach(() => {
     mocks.status = 'error'
 
     render(
-      <NativeChatStructuredSession
-        isVisible
-        isFocusedGroup
-        tabId="structured-read-error-tab"
-        sessionId="read-error-session"
-        target={{ kind: 'environment', environmentId: 'remote-host' }}
-        agent="codex"
-      />
+      <ConfirmationDialogProvider>
+        <NativeChatStructuredSession
+          isVisible
+          isFocusedGroup
+          tabId="structured-read-error-tab"
+          sessionId="read-error-session"
+          target={{ kind: 'environment', environmentId: 'remote-host' }}
+          agent="codex"
+        />
+      </ConfirmationDialogProvider>
     )
 
     expect(screen.getByTestId('message-list')).toBeTruthy()
@@ -175,14 +181,16 @@ afterEach(() => {
 
   function renderPane() {
     const pane = () => (
-      <NativeChatStructuredSession
-        isVisible
-        isFocusedGroup
-        tabId="refusal-line-tab"
-        sessionId="refusal-line-session"
-        target={{ kind: 'local' }}
-        agent="claude"
-      />
+      <ConfirmationDialogProvider>
+        <NativeChatStructuredSession
+          isVisible
+          isFocusedGroup
+          tabId="refusal-line-tab"
+          sessionId="refusal-line-session"
+          target={{ kind: 'local' }}
+          agent="claude"
+        />
+      </ConfirmationDialogProvider>
     )
     const view = render(pane())
     // A fresh element: the mocked controller reads the chat's state only when the pane renders.

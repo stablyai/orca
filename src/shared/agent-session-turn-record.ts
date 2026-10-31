@@ -94,3 +94,36 @@ export function legacyAgentJournalTurnStatusBody(
   const name = agent === null ? 'Agent' : (tuiAgentDisplayName(agent) ?? agent)
   return { kind: 'status', text: agentTurnLifecycleText(name, turn.state), turnLifecycle: turn }
 }
+
+/**
+ * The opener a turn record names once a direct batch (switch stop, CLI import) revises it. A record
+ * keeps the saved row it names (aliases resolved), so a batch naming none or another row never
+ * erases or moves it; it may refine a record naming itself, or a row not saved yet, to its opener.
+ */
+export function revisedAgentJournalTurnAnchor(
+  recordItemId: string,
+  saved: string | undefined,
+  next: string | undefined,
+  savedRow: (key: string) => string | undefined
+): string | undefined {
+  const row = saved === undefined || saved === recordItemId ? undefined : savedRow(saved)
+  return row ?? next ?? saved
+}
+
+/**
+ * The opener after a live lifecycle write. The live owner has attributed what it names to this
+ * exact turn (Codex by dispatch order and turn start, Claude and the timeline by the opening
+ * submission), so a prompt it names corrects the record. A write naming none, the record itself,
+ * or a name no row backs over a saved prompt never erases or replaces that prompt.
+ */
+export function liveAgentJournalTurnAnchor(
+  recordItemId: string,
+  saved: string | undefined,
+  next: string | undefined,
+  savedRow: (key: string) => boolean
+): string | undefined {
+  if (next === undefined || saved === undefined || saved === recordItemId) {
+    return next ?? saved
+  }
+  return next === recordItemId || (savedRow(saved) && !savedRow(next)) ? saved : next
+}

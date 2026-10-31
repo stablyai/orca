@@ -1,6 +1,7 @@
 import { withRuntimePaneAdmission } from './runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
+import type { ExecutionHostId } from '../../shared/execution-host'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
 import type { TerminalLayoutSnapshot } from '../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
@@ -98,7 +99,7 @@ function createHarness(
 ) {
   let session = persistedSession(includeSource)
   const connectionId = options.connectionId ?? null
-  const ownerHostId = connectionId ? `ssh:${connectionId}` : 'local'
+  const ownerHostId: ExecutionHostId = connectionId ? `ssh:${connectionId}` : 'local'
   const requestedSessionHostIds: (string | undefined)[] = []
   // Exclude fixture spawn-commit reads from split-read assertions.
   let committingPane = false
@@ -146,7 +147,8 @@ function createHarness(
           (_args: { worktreeId?: string; tabId?: string; leafId?: string }) =>
             new Promise<{ id: string; incarnationId?: string }>((resolve) => {
               resolveSpawn = resolve
-            })
+            }),
+          ownerHostId
         )
       )
     : vi.fn(
@@ -154,9 +156,17 @@ function createHarness(
           runtime,
           async (_args: { worktreeId?: string; tabId?: string; leafId?: string }) => ({
             id: SPLIT_PTY_ID
-          })
+          }),
+          ownerHostId
         )
       )
+  let afterSpawnCommit: (() => void) | undefined
+  const committedSpawn = spawn.getMockImplementation()!
+  spawn.mockImplementation(async (args) => {
+    const result = await committedSpawn(args)
+    afterSpawnCommit?.()
+    return result
+  })
   Object.assign(runtime, {
     resolveTerminalWorkspaceLaunchScope: vi.fn(async () => ({
       id: WORKTREE_ID,
@@ -248,6 +258,9 @@ function createHarness(
     getSession: () => session,
     getSnapshot: () => internals.mobileSessionTabsByWorktree.get(WORKTREE_ID),
     requestedSessionHostIds,
+    afterSpawnCommit: (run: () => void) => {
+      afterSpawnCommit = run
+    },
     replaceSourceIncarnation: (incarnationId: string) => registerSource(incarnationId),
     replacePersistedSourceIncarnation: (incarnationId: string) => {
       session = {
@@ -515,7 +528,7 @@ describe('remote runtime terminal split authority', () => {
 
     const split = harness.runtime.splitTerminal(harness.handle, { direction: 'horizontal' })
     await vi.waitFor(() => expect(harness.spawn).toHaveBeenCalledOnce())
-    harness.replacePersistedSourceIncarnation('persisted-after')
+    harness.afterSpawnCommit(() => harness.replacePersistedSourceIncarnation('persisted-after'))
     harness.resolveSpawn()
 
     await expect(split).rejects.toThrow('terminal_split_source_not_found')
@@ -554,7 +567,7 @@ describe('remote runtime terminal split authority', () => {
 
     const split = harness.runtime.splitTerminal(harness.handle, { direction: 'horizontal' })
     await vi.waitFor(() => expect(harness.spawn).toHaveBeenCalledOnce())
-    harness.replacePersistedSourceIncarnation('persisted-after')
+    harness.afterSpawnCommit(() => harness.replacePersistedSourceIncarnation('persisted-after'))
     harness.resolveSpawn()
 
     await expect(split).rejects.toThrow('terminal_split_source_not_found')

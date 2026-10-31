@@ -1,4 +1,4 @@
-import { OrcaRuntimeWithListManagedWorktrees } from './managed-workspace-operations'
+import { OrcaRuntimeWithBuildWorktreeStartup } from './startup/workspace-agent-startup'
 import type { RuntimeNavigationTarget } from '../../../shared/runtime-navigation'
 import {
   navigationTargetsClients,
@@ -7,20 +7,12 @@ import {
 } from '../../../shared/runtime-navigation'
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { phoneWakeReport } from '../../../shared/workspace-sleep'
-import type { Repo } from '../../../shared/repo-types'
-import type { TerminalWorkspaceLaunchScope } from '../runtime-legacy-worker-terminal-recovery-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { RuntimeTerminalWait } from '../../../shared/runtime-terminal-contracts'
 import type {
   WorktreeStartupDraftPaste,
   WorktreeStartupFollowup
 } from '../runtime-worktree-agent-startup'
-import {
-  buildWorktreeStartupForAgent,
-  buildWorktreeStartupForDraft,
-  resolveWorktreeStartupDraftAgent
-} from '../runtime-worktree-agent-startup'
-import type { AgentLaunchPreferences } from '../../../shared/agent-session-host-authority'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { WorktreeLineageResolution } from '../runtime-worktree-lineage-resolution'
 import type {
@@ -55,10 +47,7 @@ import {
   type FreshComposerPtyHost
 } from '../launch-composer-watch'
 
-export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListManagedWorktrees {
-  protected abstract toAgentSessionOptions(
-    preferences: AgentLaunchPreferences | undefined
-  ): Record<string, string> | undefined
+export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithBuildWorktreeStartup {
   protected abstract getWorktreeStartupReadinessHost(): WorktreeStartupReadinessHost
   protected abstract getWorktreeTerminalProvisioningHost(
     createdWorktree?: Worktree
@@ -78,14 +67,17 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     /** unsupported-headless means no renderer holds wake records; clients must not claim agents resumed. */
     sleepingAgentWake: 'requested' | 'unsupported-headless' | 'not-applicable'
   }> {
+    const navigation = resolveRuntimeNavigationTarget({ ...opts, defaultTarget: 'host' })
+    const targetsHost = navigationTargetsHost(navigation)
+    if (targetsHost) {
+      this.clientSessionTabSelections.noteHostNavigation()
+    }
     this.assertGraphReady()
     const worktree = await this.resolveGitWorktreeSelector(worktreeSelector)
     const repo = this.store?.getRepo(worktree.repoId)
     if (!repo) {
       throw new Error('repo_not_found')
     }
-    const navigation = resolveRuntimeNavigationTarget({ ...opts, defaultTarget: 'host' })
-    const targetsHost = navigationTargetsHost(navigation)
     const targetsClients = navigationTargetsClients(navigation)
 
     const target = this.store ? worktreeRowTarget(this.store, worktree) : undefined
@@ -132,72 +124,6 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
       }
     }
     return { repoId: repo.id, worktreeId: worktree.id, activated: true, sleepingAgentWake }
-  }
-
-  /** Use buildStartupForDraft's selection so launches can name the agent before creation. */
-  async resolveStartupDraftAgent(repo: Repo, requestedAgent?: TuiAgent): Promise<TuiAgent | null> {
-    if (!this.store) {
-      return null
-    }
-    return resolveWorktreeStartupDraftAgent({
-      repo,
-      settings: this.store.getSettings(),
-      ...(requestedAgent ? { requestedAgent } : {})
-    })
-  }
-
-  protected async buildStartupForDraft(
-    repo: Repo,
-    draft: string,
-    requestedAgent?: TuiAgent,
-    launchSource?: string
-  ): ReturnType<typeof buildWorktreeStartupForDraft> {
-    if (!this.store) {
-      return null
-    }
-    return buildWorktreeStartupForDraft({
-      repo,
-      draft,
-      ...(requestedAgent ? { requestedAgent } : {}),
-      ...(launchSource ? { launchSource } : {}),
-      settings: this.store.getSettings(),
-      getLaunchRuntime: (agent) => this.resolveStartupAgentLaunchRuntime(repo, agent)
-    })
-  }
-
-  protected buildStartupForAgent(
-    repo: Repo,
-    agent: TuiAgent,
-    prompt: string | undefined,
-    launchPreferences?: AgentLaunchPreferences,
-    launchInputs?: {
-      agentArgs?: string | null
-      extraAgentArgs?: string
-      suppressStartupUpdatePrompt?: boolean
-      launchSource?: string
-      onPromptCarry?: (carried: boolean) => void
-      /** The existing workspace it starts in; absent is a new workspace of `repo`. */
-      launchScope?: TerminalWorkspaceLaunchScope
-    }
-  ): ReturnType<typeof buildWorktreeStartupForAgent> {
-    if (!this.store) {
-      throw new Error('runtime_unavailable')
-    }
-    return buildWorktreeStartupForAgent({
-      repo,
-      agent,
-      ...(prompt !== undefined ? { prompt } : {}),
-      ...(launchPreferences ? { launchPreferences } : {}),
-      ...(launchInputs?.agentArgs !== undefined ? { agentArgs: launchInputs.agentArgs } : {}),
-      ...(launchInputs?.extraAgentArgs ? { extraAgentArgs: launchInputs.extraAgentArgs } : {}),
-      ...(launchInputs?.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {}),
-      ...(launchInputs?.launchSource ? { launchSource: launchInputs.launchSource } : {}),
-      ...(launchInputs?.onPromptCarry ? { onPromptCarry: launchInputs.onPromptCarry } : {}),
-      settings: this.store.getSettings(),
-      getLaunchRuntime: (agent) =>
-        this.resolveStartupAgentLaunchRuntime(repo, agent, launchInputs?.launchScope),
-      toSessionOptions: (preferences) => this.toAgentSessionOptions(preferences)
-    })
   }
 
   protected recordCreatedWorktreeLineage(

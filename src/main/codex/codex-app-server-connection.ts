@@ -38,6 +38,7 @@ async function connectCodexAppServer(
     site: 'codex-app-server-teardown'
   })
   const { child } = managed
+  handlers.onPhysicalExit?.(managed.exitPromise)
   const tree = createClaudeChildTreeReaper(child, {
     exited: () => managed.rootVerdict === 'exited',
     supervised: managed.supervised

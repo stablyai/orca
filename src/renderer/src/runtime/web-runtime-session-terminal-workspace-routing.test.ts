@@ -1,3 +1,9 @@
+import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
+import type * as SnapshotApi from './web-session-tabs-sync/snapshot-api'
+import type * as StorePatch from './web-session-tabs-sync/store-patch'
+import type * as TrackingMappings from './web-session-tabs-sync/tracking-mappings'
+import type * as TrackingDecisions from './web-session-tabs-sync/tracking-decisions'
+import type * as TrackingLifecycle from './web-session-tabs-sync/tracking-lifecycle'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { createWebRuntimeSessionTerminal } from './web-runtime-terminal-creation'
@@ -13,6 +19,7 @@ import {
 import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
 const mocks = vi.hoisted(() => ({
+  realStore: false,
   getState: vi.fn(),
   setState: vi.fn(),
   subscribe: vi.fn(),
@@ -23,7 +30,9 @@ const mocks = vi.hoisted(() => ({
   setRemoteBrowserPageHandle: vi.fn(),
   focusBrowserTabInWorktree: vi.fn(),
   applyWebSessionTabsSnapshot: vi.fn(),
-  decideWebSessionTabsSnapshot: vi.fn(() => ({ apply: true, settlesHostMirror: true })),
+  decideWebSessionTabsSnapshot: vi.fn<typeof TrackingDecisions.decideWebSessionTabsSnapshot>(
+    () => ({ apply: true, settlesHostMirror: true })
+  ),
   acceptReplayedWebSessionTabsSnapshot: vi.fn(),
   resolveHostSessionTabIdForWebSessionTab: vi.fn(),
   trackTerminalPaneSplit: vi.fn(),
@@ -40,24 +49,69 @@ vi.mock('../store', () => ({
   }
 }))
 
-vi.mock('./web-session-tabs-sync/tracking-lifecycle', () => ({
-  acceptReplayedWebSessionTabsSnapshot: mocks.acceptReplayedWebSessionTabsSnapshot
-}))
-vi.mock('./web-session-tabs-sync/snapshot-api', () => ({
-  applyWebSessionTabsSnapshot: mocks.applyWebSessionTabsSnapshot
-}))
-vi.mock('./web-session-tabs-sync/tracking-decisions', () => ({
-  decideWebSessionTabsSnapshot: mocks.decideWebSessionTabsSnapshot
-}))
-vi.mock('./web-session-tabs-sync/store-patch', () => ({
-  applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
-    mocks.setState(buildPatch)
-    return () => {}
+vi.mock('./web-session-tabs-sync/tracking-lifecycle', async (original) => {
+  const actual = await original<typeof TrackingLifecycle>()
+  return {
+    ...actual,
+    acceptReplayedWebSessionTabsSnapshot: (
+      ...args: Parameters<typeof actual.acceptReplayedWebSessionTabsSnapshot>
+    ) =>
+      mocks.realStore
+        ? actual.acceptReplayedWebSessionTabsSnapshot(...args)
+        : mocks.acceptReplayedWebSessionTabsSnapshot(...args)
   }
-}))
-vi.mock('./web-session-tabs-sync/tracking-mappings', () => ({
-  resolveHostSessionTabIdForWebSessionTab: mocks.resolveHostSessionTabIdForWebSessionTab
-}))
+})
+vi.mock('./web-session-tabs-sync/snapshot-api', async (original) => {
+  const actual = await original<typeof SnapshotApi>()
+  return {
+    ...actual,
+    applyWebSessionTabsSnapshot: (
+      ...args: Parameters<typeof actual.applyWebSessionTabsSnapshot>
+    ) =>
+      mocks.realStore
+        ? actual.applyWebSessionTabsSnapshot(...args)
+        : mocks.applyWebSessionTabsSnapshot(...args)
+  }
+})
+vi.mock('./web-session-tabs-sync/tracking-decisions', async (original) => {
+  const actual = await original<typeof TrackingDecisions>()
+  return {
+    ...actual,
+    decideWebSessionTabsSnapshot: (
+      ...args: Parameters<typeof actual.decideWebSessionTabsSnapshot>
+    ) =>
+      mocks.realStore
+        ? actual.decideWebSessionTabsSnapshot(...args)
+        : mocks.decideWebSessionTabsSnapshot(...args)
+  }
+})
+vi.mock('./web-session-tabs-sync/store-patch', async (original) => {
+  const actual = await original<typeof StorePatch>()
+  return {
+    ...actual,
+    applyWebSessionTabsStorePatch: (
+      ...args: Parameters<typeof actual.applyWebSessionTabsStorePatch>
+    ) => {
+      if (mocks.realStore) {
+        return actual.applyWebSessionTabsStorePatch(...args)
+      }
+      mocks.setState(args[0])
+      return () => {}
+    }
+  }
+})
+vi.mock('./web-session-tabs-sync/tracking-mappings', async (original) => {
+  const actual = await original<typeof TrackingMappings>()
+  return {
+    ...actual,
+    resolveHostSessionTabIdForWebSessionTab: (
+      ...args: Parameters<typeof actual.resolveHostSessionTabIdForWebSessionTab>
+    ) =>
+      mocks.realStore
+        ? actual.resolveHostSessionTabIdForWebSessionTab(...args)
+        : mocks.resolveHostSessionTabIdForWebSessionTab(...args)
+  }
+})
 
 vi.mock('@/lib/feature-education-telemetry', () => ({
   trackTerminalPaneSplit: mocks.trackTerminalPaneSplit
@@ -96,6 +150,8 @@ afterEach(() => resetWebSessionCloseIntentForTests())
 
 describe('web-runtime-session terminal workspace routing', () => {
   beforeEach(() => {
+    resetWebSessionTabsSnapshotFreshnessForTests()
+    mocks.realStore = false
     stubTerminalCreateEnvironment(mocks)
   })
 

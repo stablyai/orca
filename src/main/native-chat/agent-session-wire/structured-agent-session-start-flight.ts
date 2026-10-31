@@ -7,6 +7,7 @@ import type { StructuredAgentSessionEndedEvent } from './structured-agent-sessio
 import { sameProviderChild } from './structured-agent-session-provider-child'
 import type { StructuredAgentSessionProviderChildIdentity } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionResumeOutcome } from './structured-agent-session-agent-start'
+import { agentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
 
 export type StructuredAgentSessionStartFlight = {
   readonly abort: () => void
@@ -21,6 +22,44 @@ export class StructuredAgentSessionStartFlights {
   private readonly flying = new Map<string, StructuredAgentSessionStartFlight>()
   /** Buffer exits before child publication. */
   private readonly exits = new Map<string, StructuredAgentSessionEndedEvent[]>()
+  private readonly physical = new Map<string, { owners: Set<Promise<void>>; covered: boolean }>()
+
+  observePhysicalExit(sessionId: string, exited: Promise<void>, priorRootProven: boolean): void {
+    let history = this.physical.get(sessionId)
+    if (!history) {
+      history = { owners: new Set(), covered: priorRootProven }
+      this.physical.set(sessionId, history)
+    }
+    const owners = history.owners
+    owners.add(exited)
+    const captured = owners
+    void exited.then(
+      () => captured.delete(exited),
+      () => {}
+    )
+  }
+
+  /** Empty coverage survives handle eviction; completed process graphs do not. */
+  physicalExit(sessionId: string, retiredWithoutRoot: boolean) {
+    return {
+      wait: (signal?: AbortSignal): Promise<void> => {
+        throwIfSignalAborted(signal)
+        const history = this.physical.get(sessionId)
+        if (history ? !history.covered : retiredWithoutRoot) {
+          throw agentSessionRefusalError('agent_session_ownership_unknown', {
+            reason: 'ownerUnproven'
+          })
+        }
+        // Rejoin the live set after each exact exit; expired callers detach from this observer.
+        const pending = history?.owners.values().next().value
+        return pending ? waitForPromiseWithSignal(pending, signal) : Promise.resolve()
+      },
+      current: (): boolean => {
+        const history = this.physical.get(sessionId)
+        return history ? history.covered && history.owners.size === 0 : !retiredWithoutRoot
+      }
+    }
+  }
 
   get(sessionId: string): StructuredAgentSessionStartFlight | undefined {
     return this.flying.get(sessionId)

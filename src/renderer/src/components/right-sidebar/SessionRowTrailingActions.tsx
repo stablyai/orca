@@ -1,3 +1,5 @@
+import type { AiVaultOriginalPaneTarget } from './ai-vault-original-pane'
+import { useAiVaultInPlaceAgent, useInPlaceSwitchCapability } from '@/lib/in-place-switch-support'
 import { useEffect, useState } from 'react'
 import type React from 'react'
 import {
@@ -39,6 +41,7 @@ const HOVER_ACTION_GROUP_CLASS = `${HOVER_ACTION_GROUP_BASE} ${HOVER_ACTION_GROU
 
 export function SessionRowTrailingActions({
   session,
+  originalPaneTarget,
   detailsExpanded,
   detailsId,
   detailsTooltip,
@@ -65,6 +68,7 @@ export function SessionRowTrailingActions({
   actionsHidden = false
 }: {
   session: AiVaultSession
+  originalPaneTarget?: AiVaultOriginalPaneTarget | null
   detailsExpanded: boolean
   detailsId: string
   detailsTooltip: string
@@ -92,6 +96,9 @@ export function SessionRowTrailingActions({
   /** Only the details toggle shows. */
   actionsHidden?: boolean
 }) {
+  const inPlaceAgent = useAiVaultInPlaceAgent(session)
+  const switchLoading =
+    useInPlaceSwitchCapability(session.executionHostId, session.agent) === undefined
   const jumpToWorktreeTooltip = aiVaultWorktreeJumpTooltip(worktreeInfo)
   const [menuOpen, setMenuOpen] = useState(false)
 
@@ -280,6 +287,8 @@ export function SessionRowTrailingActions({
           </Tooltip>
           <DropdownMenuContent align="end">
             <SessionActionMenuItems
+              originalPaneTarget={originalPaneTarget}
+              session={session}
               resumeDisabled={resumeDisabled}
               resumeHidden={resumeHidden}
               resumeLabel={resumeLabel}
@@ -287,6 +296,8 @@ export function SessionRowTrailingActions({
               onContinueInNewSession={onContinueInNewSession}
               onResumeInNewChat={onResumeInNewChat}
               onResumeInNewCli={onResumeInNewCli}
+              inPlaceAgent={inPlaceAgent}
+              switchLoading={switchLoading}
               onJumpToOriginalPane={onJumpToOriginalPane}
               showJumpToWorktree={showJumpToWorktree}
               jumpWorkspaceId={worktreeInfo?.worktreeId}

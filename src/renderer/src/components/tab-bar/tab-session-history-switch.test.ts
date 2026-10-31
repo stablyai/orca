@@ -1,54 +1,60 @@
-import { makeTabSessionHistoryRow as row } from './tab-session-history-test-fixture'
-import { applyProviderSessionOnlyUpdate } from '@/hooks/ipc-events/agent-status-partial-updates'
+import {
+  WORKTREE_ID,
+  row,
+  makeState,
+  PANEL_REQUEST,
+  liveClaudeEntry,
+  chatSubject,
+  cliSubject
+} from './tab-session-history-fixtures.test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { makeRepo, makeTerminalTab, makeWorktree } from '../worktree-jump-palette-test-fixtures'
+import { makeTerminalTab } from '../worktree-jump-palette-test-fixtures'
 import { makeAgentStatusEntry } from '@/runtime/sync-runtime-graph-test-harness'
 import { collectAiVaultTitleRequests } from '@/lib/ai-vault-tab-title-requests'
 import { resolveCliChatResumeSource } from './cli-chat-resume-source'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import { makeFolderWorkspace } from '@/store/slices/worktrees-slice-test-fixtures'
+import { applyProviderSessionOnlyUpdate } from '@/hooks/ipc-events/agent-status-partial-updates'
 import type { AiVaultListArgs, AiVaultSession } from '../../../../shared/ai-vault-types'
 import { getDefaultSettings } from '../../../../shared/constants'
-import {
-  STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from '../../../../shared/protocol-version'
-import {
-  claimAiVaultForcedRescan,
-  resetAiVaultForcedRescanThrottleForTest
-} from '../right-sidebar/ai-vault-session-refresh'
-import {
-  cacheAiVaultSessionList,
-  readCachedAiVaultSessionList
-} from '../right-sidebar/ai-vault-session-list-request'
+import * as protocol from '../../../../shared/protocol-version'
+import * as sessionRefresh from '../right-sidebar/ai-vault-session-refresh'
+import * as listCache from '../right-sidebar/ai-vault-session-list-request'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { makeFolderWorkspace } from '@/store/slices/worktrees-slice-test-fixtures'
 import {
   canPaneOfferResumeInNewChat,
   findTabSessionHistoryRow,
   lookupTabSessionHistoryRow,
   resolveTabSessionHistorySubject,
   resolveNativeChatCliForkIdentity,
-  resolveTabSessionSwitch,
-  type TabSessionHistorySubject
+  resolveTabSessionSwitch
 } from './tab-session-history-switch'
+
+import type * as LaunchPlan from '@/lib/agent-session-launch-plan'
 
 const mocks = vi.hoisted(() => {
   const state: {
     resumeState: { blocked: boolean; worktreeId: string | null }
     platform: string
   } = { resumeState: { blocked: false, worktreeId: 'repo-1::/repo/wt' }, platform: 'darwin' }
-  return { ...state, resumeInChat: vi.fn() }
+  return {
+    ...state,
+    switchOwner: vi.fn(async () => true),
+    resumeInChat: vi.fn(),
+    inPlaceSwitch: false,
+    remoteFeasible: false
+  }
 })
+
+vi.mock('@/lib/conversation-surface-switch', () => ({ runConversationSwitch: mocks.switchOwner }))
 
 // Staged host answers: its capabilities arrive over IPC at boot, and the platform from preload.
 vi.mock('@/runtime/local-runtime-capabilities', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   readLocalRuntimeCapabilitiesOrUnknown: () => [
-    STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
-    STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
+    protocol.STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+    protocol.STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
   ]
 }))
 vi.mock('@/runtime/host-structured-agents', async (importOriginal) => ({
@@ -60,6 +66,19 @@ vi.mock('@/runtime/host-structured-agents', async (importOriginal) => ({
     }))
 }))
 vi.mock('@/lib/renderer-app-platform', () => ({ getRendererAppPlatform: () => mocks.platform }))
+vi.mock('@/lib/in-place-switch-support', () => ({
+  inPlaceSwitchSupportedNow: () => mocks.inPlaceSwitch
+}))
+// A paired host's chat support arrives in its runtime status; staged here as the route's answer.
+vi.mock('@/lib/agent-session-launch-plan', async (importOriginal) => {
+  const actual = await importOriginal<typeof LaunchPlan>()
+  return {
+    ...actual,
+    structuredAgentSessionLaunchFeasible: (
+      ...args: Parameters<typeof actual.structuredAgentSessionLaunchFeasible>
+    ) => mocks.remoteFeasible || actual.structuredAgentSessionLaunchFeasible(...args)
+  }
+})
 
 // Parity with the panel's real composition is pinned in tab-session-history-switch.parity.test.ts.
 vi.mock('../right-sidebar/ai-vault-session-resume-in-chat-workspace', () => ({
@@ -69,66 +88,8 @@ vi.mock('../right-sidebar/ai-vault-session-resume-in-chat-workspace', () => ({
   })
 }))
 
-const WORKTREE_ID = 'repo-1::/repo/wt'
-
-const SIBLING_ID = 'repo-1::/repo/sibling'
-
-function makeState(
-  agentStatusByPaneKey: AppState['agentStatusByPaneKey'] = {},
-  repo: Partial<ReturnType<typeof makeRepo>> = {}
-): AppState {
-  useAppStore.setState(useAppStore.getInitialState(), true)
-  useAppStore.setState({
-    agentStatusByPaneKey,
-    activeRepoId: 'repo-1',
-    activeWorktreeId: WORKTREE_ID,
-    repos: [{ ...makeRepo(), ...repo }],
-    tabsByWorktree: {
-      [WORKTREE_ID]: [makeTerminalTab('term-1', WORKTREE_ID, 'claude')]
-    },
-    worktreesByRepo: {
-      'repo-1': [
-        makeWorktree(WORKTREE_ID, 'wt', { path: '/repo/wt' }),
-        makeWorktree(SIBLING_ID, 'sibling', { path: '/repo/sibling' })
-      ]
-    }
-  })
-  return useAppStore.getState()
-}
-
-const PANEL_REQUEST = {
-  scopePaths: ['/repo/wt'],
-  executionHostScope: 'local',
-  sessionLimit: 250
-} as const
-
-const liveClaudeEntry = {
-  'term-1:leaf-1': makeAgentStatusEntry({
-    agentType: 'claude',
-    paneKey: 'term-1:leaf-1',
-    tabId: 'term-1',
-    worktreeId: WORKTREE_ID,
-    providerSession: { key: 'session_id', id: 'claude-session-1' }
-  })
-}
-
-const chatSubject: TabSessionHistorySubject = {
-  kind: 'chat',
-  sessionId: 'orca-chat-1',
-  workspaceId: WORKTREE_ID,
-  request: PANEL_REQUEST
-}
-
-const cliSubject: TabSessionHistorySubject = {
-  kind: 'cli',
-  agent: 'claude',
-  providerSessionId: 'claude-session-1',
-  workspaceId: WORKTREE_ID,
-  request: PANEL_REQUEST
-}
-
 beforeEach(() => {
-  resetAiVaultForcedRescanThrottleForTest()
+  sessionRefresh.resetAiVaultForcedRescanThrottleForTest()
   mocks.resumeState = { blocked: false, worktreeId: WORKTREE_ID }
   mocks.platform = 'darwin'
   mocks.resumeInChat.mockReset()
@@ -164,6 +125,33 @@ const exitedAgentRecords: Record<string, Partial<AppState>> = {
     }
   }
 }
+
+/** server-1's runtime status: structured chats, with or without History resume. */
+const serverWithChat = (resumeHistory: boolean): AppState['runtimeStatusByEnvironmentId'] =>
+  new Map([
+    [
+      'server-1',
+      {
+        checkedAt: 1,
+        status: {
+          runtimeId: 'server-runtime',
+          rendererGraphEpoch: 0,
+          graphStatus: 'ready',
+          authoritativeWindowId: null,
+          liveTabCount: 1,
+          liveLeafCount: 1,
+          capabilities: [
+            protocol.STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
+            protocol.STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+            protocol.STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
+            ...(resumeHistory
+              ? [protocol.STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY]
+              : [])
+          ]
+        }
+      }
+    ]
+  ])
 
 describe('resolveTabSessionHistorySubject', () => {
   it('retains the chosen pane in the direct CLI create identity without a History row', () => {
@@ -206,28 +194,7 @@ describe('resolveTabSessionHistorySubject', () => {
         }
       }
 
-      state.runtimeStatusByEnvironmentId = new Map([
-        [
-          'server-1',
-          {
-            checkedAt: 1,
-            status: {
-              runtimeId: 'server-runtime',
-              rendererGraphEpoch: 0,
-              graphStatus: 'ready',
-              authoritativeWindowId: null,
-              liveTabCount: 1,
-              liveLeafCount: 1,
-              capabilities: [
-                STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
-                STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
-                STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
-                ...(supported ? [STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY] : [])
-              ]
-            }
-          }
-        ]
-      ])
+      state.runtimeStatusByEnvironmentId = serverWithChat(supported)
       const source = resolveCliChatResumeSource(state, {
         tab: { id: 'term-1', worktreeId: workspaceId }
       })
@@ -514,6 +481,39 @@ describe('one pane of a terminal tab', () => {
     expect(paneGate(state, claudePane)).toBe(true)
   })
 
+  it.each(['local', 'runtime:server-1'] as const)(
+    "still offers an exited agent's conversation on a %s pane, bound to its terminal or not",
+    (host) => {
+      makeState({}, host === 'local' ? {} : { executionHostId: host })
+      useAppStore.setState({ runtimeStatusByEnvironmentId: serverWithChat(true) })
+      const leaf = '11111111-1111-4111-8111-111111111111'
+      const pane = `term-1:${leaf}`
+      const bind = (ptyIdsByLeafId?: Record<string, string>) =>
+        useAppStore.setState({
+          terminalLayoutsByTabId: {
+            'term-1': { root: null, activeLeafId: leaf, expandedLeafId: null, ptyIdsByLeafId }
+          }
+        })
+      bind({ [leaf]: 'pty-1' })
+      const store = () => useAppStore.getState()
+      store().setAgentStatus(
+        pane,
+        { state: 'done', prompt: 'hi', agentType: 'claude' },
+        undefined,
+        undefined,
+        { tabId: 'term-1', worktreeId: WORKTREE_ID },
+        { providerSession: { key: 'session_id', id: 'claude-session-1' } }
+      )
+      store().removeAgentStatus(pane)
+      expect(store().agentStatusByPaneKey).toEqual({})
+      expect(paneGate(store(), pane)).toBe(true)
+      // The shell's exit (or a failed switch) unbinds the pane; its controls still offer the
+      // switch, which opens the chat beside it.
+      bind(undefined)
+      expect(paneGate(store(), pane)).toBe(true)
+    }
+  )
+
   it.each(Object.keys(exitedAgentRecords))(
     'offers nothing once the agent exited and only a %s record remains, as the tab menu does',
     (kind) => {
@@ -586,7 +586,7 @@ describe('one pane of a terminal tab', () => {
         tab: { id: 'term-1', worktreeId: WORKTREE_ID },
         paneKey: pane
       })
-    ).toMatchObject({ agent: 'codex', providerSessionId: 'thread-c' })
+    ).toMatchObject({ agent: 'codex', providerSessionId: 'thread-c', ptyId: 'pty-1' })
     expect(paneGate(state, `term-1:${L2}`)).toBe(false)
     useAppStore
       .getState()
@@ -739,20 +739,20 @@ describe('lookupTabSessionHistoryRow', () => {
       force: undefined,
       requestToken: 't'
     })
-    expect(readCachedAiVaultSessionList(PANEL_REQUEST)).toBeNull()
+    expect(listCache.readCachedAiVaultSessionList(PANEL_REQUEST)).toBeNull()
   })
 
   it("leaves the panel's cached list as it was, even after a forced rescan", async () => {
-    cacheAiVaultSessionList(PANEL_REQUEST, listResult([row({ id: 'panel-row' })]), {
+    listCache.cacheAiVaultSessionList(PANEL_REQUEST, listResult([row({ id: 'panel-row' })]), {
       replaceHostEntries: false
     })
     const listSessions = vi.fn(async (_args: AiVaultListArgs) => listResult([emptyRow]))
     await lookupTabSessionHistoryRow(cliSubject, listSessions, lookupOptions)
 
     expect(listSessions).toHaveBeenLastCalledWith(expect.objectContaining({ force: true }))
-    expect(readCachedAiVaultSessionList(PANEL_REQUEST)?.sessions.map((s) => s.id)).toEqual([
-      'panel-row'
-    ])
+    expect(
+      listCache.readCachedAiVaultSessionList(PANEL_REQUEST)?.sessions.map((s) => s.id)
+    ).toEqual(['panel-row'])
   })
 
   it('rescans once on a miss, from the shared forced-rescan budget', async () => {
@@ -793,7 +793,7 @@ describe('lookupTabSessionHistoryRow', () => {
       isCancelled: () => !menuOpen
     })
     expect(listSessions).toHaveBeenCalledTimes(1)
-    expect(claimAiVaultForcedRescan()).toBe(true)
+    expect(sessionRefresh.claimAiVaultForcedRescan()).toBe(true)
   })
 
   it('forces no scan on a remote Orca server', async () => {
@@ -816,11 +816,11 @@ describe('lookupTabSessionHistoryRow', () => {
       lookupTabSessionHistoryRow(cliSubject, listSessions, lookupOptions)
     ).resolves.toMatchObject({ structuredSession: { sessionId: 'orca-chat-1' } })
     expect(listSessions).toHaveBeenCalledTimes(1)
-    expect(claimAiVaultForcedRescan()).toBe(true)
+    expect(sessionRefresh.claimAiVaultForcedRescan()).toBe(true)
   })
 
   it('forces a rescan for a click even while the budget is spent, and takes the budget', async () => {
-    expect(claimAiVaultForcedRescan()).toBe(true)
+    expect(sessionRefresh.claimAiVaultForcedRescan()).toBe(true)
     const listSessions = vi
       .fn()
       .mockResolvedValueOnce(listResult([emptyRow]))
@@ -830,13 +830,13 @@ describe('lookupTabSessionHistoryRow', () => {
       lookupTabSessionHistoryRow(cliSubject, listSessions, clickOptions)
     ).resolves.toMatchObject({ messageCount: 2 })
     expect(listSessions).toHaveBeenLastCalledWith(expect.objectContaining({ force: true }))
-    resetAiVaultForcedRescanThrottleForTest()
+    sessionRefresh.resetAiVaultForcedRescanThrottleForTest()
     await lookupTabSessionHistoryRow(
       cliSubject,
       vi.fn().mockResolvedValue(listResult([])),
       clickOptions
     )
-    expect(claimAiVaultForcedRescan()).toBe(false)
+    expect(sessionRefresh.claimAiVaultForcedRescan()).toBe(false)
   })
 
   it('reports no answer when the lookup is cancelled', async () => {
@@ -845,6 +845,6 @@ describe('lookupTabSessionHistoryRow', () => {
       lookupTabSessionHistoryRow(cliSubject, listSessions, lookupOptions)
     ).resolves.toBeUndefined()
     expect(listSessions).toHaveBeenCalledTimes(1)
-    expect(readCachedAiVaultSessionList(PANEL_REQUEST)).toBeNull()
+    expect(listCache.readCachedAiVaultSessionList(PANEL_REQUEST)).toBeNull()
   })
 })

@@ -328,14 +328,13 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
       const isVisibleRef = { current: false }
       const transport = createResumingTransport()
       transportFactoryQueue.push(transport)
-      const binding = connectPane(
-        buildPaneConnectionDeps(() => mockStoreState, {
-          restoredLeafId: LEAF_2,
-          restoredPtyIdByLeafId: {},
-          consumeSuppressedPtyExit: vi.fn(() => true),
-          isVisibleRef
-        })
-      )
+      const deps = buildPaneConnectionDeps(() => mockStoreState, {
+        restoredLeafId: LEAF_2,
+        restoredPtyIdByLeafId: {},
+        consumeSuppressedPtyExit: vi.fn(() => true),
+        isVisibleRef
+      })
+      const binding = connectPane(deps)
       await flushAsyncTicks(10)
       isVisibleRef.current = true
       binding.noteVisibilityResume()
@@ -351,7 +350,10 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
       if (typeof onPtyExit !== 'function') {
         throw new Error('expected the transport exit handler')
       }
+      const { settleDeferredPtyShutdownExits } = await import('./pty-shutdown-exit-deferral')
+      deps.isPtyShutdownPending.mockReturnValueOnce(true)
       onPtyExit(resumedPtyId)
+      settleDeferredPtyShutdownExits([resumedPtyId], 'committed')
       await flushAsyncTicks(10)
 
       expect(isPaneSpawnDeferred(PANE_KEY)).toBe(false)

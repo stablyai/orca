@@ -63,8 +63,7 @@ import {
   selectWritableAgentSessionRecord,
   listAgentSessionConversations,
   requireWritableAgentSessionRecord,
-  heldAgentSessionIds,
-  type AgentSessionStoreState
+  heldAgentSessionIds
 } from './agent-session-store-state'
 import { AgentSessionRecordTabs } from './agent-session/agent-session-tab-table'
 import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
@@ -113,10 +112,6 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
       args.legacySessionTabIds
     )
     return new AgentSessionRecordStore(transactions, args.hostId, args.journalDatabase.db)
-  }
-
-  private get state(): AgentSessionStoreState {
-    return this.transactions.state
   }
 
   /** Newer-build databases permit reads, never writes. */

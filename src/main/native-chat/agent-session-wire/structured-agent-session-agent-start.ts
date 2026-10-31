@@ -32,11 +32,15 @@ import {
   joinClosingStructuredAgentSessionChild,
   releaseLeaseOfEndedStructuredAgentSessionChild
 } from './structured-agent-session-child-close'
-export { joinClosingStructuredAgentSessionChild }
 import {
   refusedStructuredAgentSessionStart,
   structuredAgentSessionStartParams
 } from './structured-agent-session-start-eligibility'
+
+// Only queued work or provider operations start children. Run waits outside serialization;
+// fence each state commit so concurrent sends remain immediately acceptable.
+
+export { joinClosingStructuredAgentSessionChild }
 
 /** Preserve attach refusal verdicts so callers distinguish recovery in progress from permanent loss. */
 export type StructuredAgentSessionResumeOutcome =
@@ -54,19 +58,23 @@ export type StructuredAgentSessionResumeOutcome =
       retry?: boolean
       failure?: SubmissionRejectionFact
       startKey?: string | null
+      failureItemId?: string
     }
 
 const AGENT_START_CALLER_KEY = 'trusted-local:agent-start'
 
 export type StructuredAgentSessionStartClaim = {
   outcome: Promise<StructuredAgentSessionResumeOutcome>
+  ownsStart?: true
 }
 
 /** Claim under the ordered decision; wait outside its lane. */
 export function claimStructuredAgentSessionAgent(
   context: StructuredAgentSessionAttachContext,
   sessionId: string,
-  startedFor?: string
+  startedFor?: string,
+  check?: () => void,
+  switchStart = false
 ): StructuredAgentSessionStartClaim {
   try {
     context.deps.store.requireWritableRecord(sessionId)
@@ -89,11 +97,14 @@ export function claimStructuredAgentSessionAgent(
     return { outcome: Promise.resolve({ ok: true }) }
   }
   return {
+    ownsStart: true,
     outcome: registerStructuredAgentSessionStart(
       context,
       sessionId,
       startedFor,
-      (lock, attemptId) => runStart(context, sessionId, startedFor, lock, attemptId)
+      (lock, attemptId) =>
+        runStart(context, sessionId, startedFor, lock, attemptId, check, switchStart),
+      switchStart
     )
   }
 }
@@ -120,10 +131,14 @@ export function startStructuredAgentSessionAgentForOperation(
 
 export function claimOperationStart(
   context: StructuredAgentSessionAttachContext,
-  sessionId: string
+  sessionId: string,
+  check?: () => void,
+  switchStart = false
 ): StructuredAgentSessionStartClaim {
-  const claim = claimStructuredAgentSessionAgent(context, sessionId)
+  check?.()
+  const claim = claimStructuredAgentSessionAgent(context, sessionId, undefined, check, switchStart)
   return {
+    ...claim,
     outcome: claim.outcome.catch((error: unknown) => {
       context.deps.logger.warn('starting the agent for an operation failed', {
         scope: 'operation-agent-start',
@@ -140,8 +155,13 @@ async function runStart(
   sessionId: string,
   startedFor: string | undefined,
   lock: StructuredAgentSessionAttachLock,
-  attemptId: string
+  attemptId: string,
+  check?: () => void,
+  switchStart = false
 ): Promise<StructuredAgentSessionResumeOutcome> {
+  if (!switchStart && context.waitSwitchPhysical) {
+    await lock.wait(context.waitSwitchPhysical(sessionId))
+  }
   // Never start beside a closing child; unverifiable exit refuses the restart.
   const closed = await joinClosingStructuredAgentSessionChild(context, sessionId, lock)
   if (!closed.ok) {
@@ -171,6 +191,7 @@ async function runStart(
   try {
     attached = await attachStructuredAgentSessionForStart(context, callerKey, params, {
       lock,
+      checkBeforeAcquire: check,
       startupAttemptId: attemptId,
       ...(startedFor === undefined ? {} : { startedFor }),
       ...(startupOptions ? { startupOptions } : {}),

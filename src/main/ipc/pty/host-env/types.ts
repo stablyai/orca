@@ -1,5 +1,9 @@
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session-resume'
+import type {
+  AgentProviderSessionMetadata,
+  SleepingAgentSessionRecord
+} from '../../../../shared/agent-session-resume'
+import type { RefusedPaneResume } from '../../../../shared/agent-status-types'
 import type { NetworkProxySettings } from '../../../../shared/network-proxy'
 import type { ClaudeRuntimeAuthPreparation } from '../../../claude-accounts/runtime-auth-service'
 import type { ClaudeAccountSelectionTarget } from '../../../claude-accounts/runtime-selection'
@@ -74,3 +78,15 @@ export function allocatePtyLifecycleSequence(): number {
 export type PrepareClaudeAuth = (
   target?: ClaudeAccountSelectionTarget
 ) => Promise<ClaudeRuntimeAuthPreparation>
+
+/** `chat-home`: an automatic restore of a conversation an open chat continues; `chat-writing`:
+ *  any start of one a chat may be writing; `unverifiable`: an automatic restore with no records. */
+export type ResumeSpawnRefusal = {
+  sourceRecord?: SleepingAgentSessionRecord
+  verdict: 'chat-home' | 'chat-writing' | 'unverifiable'
+  refused: RefusedPaneResume
+}
+
+export type ResumeSpawnAdmission =
+  | { verdict: 'admitted'; refused: RefusedPaneResume; sourceRecord?: SleepingAgentSessionRecord }
+  | ResumeSpawnRefusal

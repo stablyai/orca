@@ -1,10 +1,19 @@
+import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
+import { makeRepo, makeWorktree } from '../worktree-jump-palette-test-fixtures'
+import { agentSessionTabFixture } from './native-chat-workspace-test-fixtures'
+import { useAppStore } from '@/store'
+import { makeTabGroup } from '@/store/slices/store-test-helpers'
 // @vitest-environment happy-dom
 
-import { cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compatibility-test-fixture'
+import type { RuntimeStatus } from '../../../../shared/runtime-types'
+import { inPlaceSwitchCapability } from '../../../../shared/structured-agent-cli-conversation-adoption'
 
 const { mocks, moduleFactories, resetStructuredSessionMocks } = await vi.hoisted(async () =>
   (await import('./NativeChatStructuredSession.test-harness')).createStructuredSessionMocks()
@@ -29,6 +38,7 @@ afterEach(() => {
   cleanup()
   localStorage.clear()
   resetStructuredSessionMocks()
+  vi.restoreAllMocks()
 })
 
 {
@@ -235,3 +245,73 @@ afterEach(() => {
     expect(document.querySelector('[data-native-chat-background-tasks]')).not.toBeNull()
   })
 }
+
+it('holds the native header switch until capabilities hydrate, with no copy button beside it', async () => {
+  const tab = agentSessionTabFixture('native-controls', 'wt-1', {
+    entityId: '019fd532-7c11-7a90-b6de-4e1a2c3d5f60'
+  })
+  useAppStore.setState(useAppStore.getInitialState(), true)
+  useAppStore.setState({
+    settings: createGlobalSettingsFixture(),
+    repos: [makeRepo()],
+    worktreesByRepo: { 'repo-1': [makeWorktree('wt-1', 'native', { path: '/repo' })] },
+    unifiedTabsByWorktree: { 'wt-1': [tab] },
+    groupsByWorktree: {
+      'wt-1': [
+        makeTabGroup({
+          id: tab.groupId,
+          worktreeId: 'wt-1',
+          tabOrder: [tab.id],
+          activeTabId: tab.id
+        })
+      ]
+    },
+    activeGroupIdByWorktree: { 'wt-1': tab.groupId }
+  })
+  mocks.status = 'ready'
+  setLocalRuntimeCapabilitiesForTests(null)
+  let answer: (status: RuntimeStatus) => void = () => {
+    throw new Error('Capability probe did not start')
+  }
+  const status = new Promise<RuntimeStatus>((resolve) => {
+    answer = resolve
+  })
+  const getStatus = vi.fn(() => status)
+  Object.assign(window, { api: { ...window.api, runtime: { getStatus } } })
+  render(
+    <TooltipProvider>
+      <NativeChatStructuredSession
+        isVisible
+        isFocusedGroup
+        groupId={tab.groupId}
+        tabId={tab.id}
+        sessionId={tab.entityId}
+        target={{ kind: 'local' }}
+        agent="codex"
+      />
+    </TooltipProvider>
+  )
+  // An agent that switches in place has the switch control, not the copy-in-a-new-terminal button.
+  expect(
+    screen.queryAllByRole('button', { name: 'Continue with Terminal Agent', hidden: true })
+  ).toHaveLength(0)
+  const loadingButtons = screen.getAllByRole('button', { name: 'Switch to CLI', hidden: true })
+  for (const button of loadingButtons) {
+    expect(button.hasAttribute('disabled')).toBe(true)
+  }
+  const response = createCompatibleRuntimeStatusResponse('local')
+  if (!response.ok) {
+    throw new Error('Expected status fixture')
+  }
+  await act(async () => {
+    answer({
+      ...response.result,
+      capabilities: [inPlaceSwitchCapability('codex')]
+    })
+    await status
+  })
+  const buttons = screen.getAllByRole('button', { name: 'Switch to CLI', hidden: true })
+  for (const button of buttons) {
+    expect(button.hasAttribute('disabled')).toBe(false)
+  }
+})

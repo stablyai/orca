@@ -1,7 +1,7 @@
 import { emitNativeChatToggled } from '@/lib/native-chat-telemetry'
 import type { TuiAgent } from '../../../../../shared/tui-agent'
 import type { AppState } from '../../types'
-import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
+import type { TabsSliceGet, TabsSliceSet, TabsLabelActions } from './tabs-slice-contract'
 import { findTabAndWorktree, patchTab, updateGroup } from '../tab-group-state'
 import {
   applyTabOrderSortValues,
@@ -24,20 +24,7 @@ function oppositeViewMode(mode: 'terminal' | 'chat'): 'terminal' | 'chat' {
   return mode === 'chat' ? 'terminal' : 'chat'
 }
 
-export function createTabsLabelActions(
-  set: TabsSliceSet,
-  get: TabsSliceGet
-): Pick<
-  TabsSlice,
-  | 'reorderUnifiedTabs'
-  | 'setTabLabel'
-  | 'setTabViewMode'
-  | 'toggleTabViewMode'
-  | 'setTabCustomLabel'
-  | 'setUnifiedTabColor'
-  | 'pinTab'
-  | 'unpinTab'
-> {
+export function createTabsLabelActions(set: TabsSliceSet, get: TabsSliceGet): TabsLabelActions {
   function setTabViewModeHere(tabId: string, mode: 'terminal' | 'chat'): void {
     set((state) => {
       const tabPatch = patchTab(state.unifiedTabsByWorktree, tabId, { viewMode: mode })

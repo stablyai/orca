@@ -1,3 +1,4 @@
+import { inPlaceSwitchSupportedNow } from '@/lib/in-place-switch-support'
 import { resolveHostCapabilities, workspaceKindForWorktreeId } from '@/lib/agent-launch-route-input'
 import {
   structuredAgentSessionLaunchFeasible,
@@ -9,7 +10,8 @@ import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { normalizeExecutionHostId } from '../../../../shared/execution-host'
 import {
   adoptsCliConversations,
-  CLI_CONVERSATION_ADOPTING_AGENTS
+  CLI_CONVERSATION_ADOPTING_AGENTS,
+  inPlaceSwitchEnabled
 } from '../../../../shared/structured-agent-cli-conversation-adoption'
 import {
   STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
@@ -35,9 +37,11 @@ export function resolveAiVaultSessionResumeInChatForWorkspace(args: {
   targetState: AiVaultSessionResumeTargetState
   settings: AgentSessionStructuredFeasibilityRequest['settings']
 }): AiVaultResumeInChatEligibility {
-  const targetWorkspaceId = args.resumeState.usesSessionWorktree
-    ? args.resumeState.worktreeId
-    : (args.resumeState.worktreeId ?? args.activeWorkspaceId)
+  const targetWorkspaceId =
+    args.session.structuredSession?.workspaceId ??
+    (args.resumeState.usesSessionWorktree
+      ? args.resumeState.worktreeId
+      : (args.resumeState.worktreeId ?? args.activeWorkspaceId))
   const targetWorkspacePath = targetWorkspaceId
     ? resolveAiVaultTargetWorkspacePath(args.targetState, targetWorkspaceId)
     : null
@@ -55,25 +59,30 @@ export function resolveAiVaultSessionResumeInChatForWorkspace(args: {
     session: args.session,
     targetWorkspaceId,
     targetWorkspacePath,
-    structuredRouteAvailable:
-      adoptsCliConversations(args.session.agent) &&
-      targetWorkspaceId !== null &&
+    inPlaceSwitchAvailable:
       targetOwner !== null &&
       targetOwner === normalizeExecutionHostId(args.session.executionHostId) &&
-      CLI_CONVERSATION_ADOPTING_AGENTS[args.session.agent].some((agent) =>
-        structuredAgentSessionLaunchFeasible(state, {
-          agent,
-          workspace: {
-            kind: workspaceKindForWorktreeId(targetWorkspaceId),
-            worktreeId: targetWorkspaceId
-          },
-          settings: args.settings
-        })
-      ) &&
-      (!aliasDependent ||
-        capabilities?.includes(STRUCTURED_AGENT_SESSION_RESUME_LINKED_CWD_RUNTIME_CAPABILITY) ===
-          true) &&
-      capabilities?.includes(STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY) === true
+      inPlaceSwitchSupportedNow(targetOwner, args.session.agent),
+    structuredRouteAvailable:
+      Boolean(args.session.structuredSession && inPlaceSwitchEnabled(args.session.agent)) ||
+      (adoptsCliConversations(args.session.agent) &&
+        targetWorkspaceId !== null &&
+        targetOwner !== null &&
+        targetOwner === normalizeExecutionHostId(args.session.executionHostId) &&
+        CLI_CONVERSATION_ADOPTING_AGENTS[args.session.agent].some((agent) =>
+          structuredAgentSessionLaunchFeasible(state, {
+            agent,
+            workspace: {
+              kind: workspaceKindForWorktreeId(targetWorkspaceId),
+              worktreeId: targetWorkspaceId
+            },
+            settings: args.settings
+          })
+        ) &&
+        (!aliasDependent ||
+          capabilities?.includes(STRUCTURED_AGENT_SESSION_RESUME_LINKED_CWD_RUNTIME_CAPABILITY) ===
+            true) &&
+        capabilities?.includes(STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY) === true)
   })
 }
 

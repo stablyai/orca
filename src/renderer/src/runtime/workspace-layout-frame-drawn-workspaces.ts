@@ -10,10 +10,16 @@ type HeldWorkspacesStore = {
 }
 
 /** Which workspaces frames draw: ones the window holds that no paired server mirrors. */
-export function framesDrawWorkspace(state: AppState): (key: string) => boolean {
+export function framesDrawWorkspace(
+  state: AppState,
+  openedWorkspaces?: ReadonlySet<string>
+): (key: string) => boolean {
   const mirrored = pairedServerMirrors(state)
   return (key) =>
-    (key in state.groupsByWorktree || key in state.unifiedTabsByWorktree) && !mirrored(key)
+    (key in state.groupsByWorktree ||
+      key in state.unifiedTabsByWorktree ||
+      openedWorkspaces?.has(key) === true) &&
+    !mirrored(key)
 }
 
 /** Notify first visits to main-only workspaces; no later frame is guaranteed to trigger drawing. */

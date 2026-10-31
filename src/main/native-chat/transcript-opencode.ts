@@ -2,7 +2,7 @@ import {
   OPENCODE_CAPTURE_RECORD_LIMIT,
   OPENCODE_CAPTURE_TEXT_LIMIT
 } from '../ai-vault/opencode-transcript-capture-limits'
-import type { NativeChatMessage } from '../../shared/native-chat-types'
+import type { NativeChatMessage, NativeChatTurnLifecycle } from '../../shared/native-chat-types'
 import { errorMessage } from '../ai-vault/session-scanner-values'
 import type { ReadTranscriptResult } from './transcript-reader'
 import {
@@ -106,6 +106,7 @@ export async function readOpenCodeNativeChatTranscriptFull(
   let bytes = 0
   let cursor: number | undefined
   let sourceEmpty = false
+  let lifecycle: NativeChatTurnLifecycle | undefined
   try {
     const dbPath = await (deps.resolveDbPath ?? openCodeTranscriptDefaultDeps.resolveDbPath)(
       sessionId,
@@ -136,6 +137,7 @@ export async function readOpenCodeNativeChatTranscriptFull(
       if (pages.length === 0) {
         sourceEmpty = page.beforeMessageRowId === null && !page.hasMore
       }
+      lifecycle ??= page.lifecycle
       pages.push(page.items.map((item) => item.message))
       records += page.items.length
       bytes += Buffer.byteLength(JSON.stringify(page.items))
@@ -150,5 +152,12 @@ export async function readOpenCodeNativeChatTranscriptFull(
   } catch (err) {
     return { error: errorMessage(err) }
   }
-  return { messages: pages.toReversed().flat(), sourceEmpty }
+  const messages = pages.toReversed().flat()
+  if (lifecycle && !lifecycle.turnId) {
+    lifecycle = {
+      ...lifecycle,
+      turnId: messages.findLast((message) => message.role === 'user')?.id ?? ''
+    }
+  }
+  return { messages, sourceEmpty, ...(lifecycle ? { lifecycle } : {}) }
 }

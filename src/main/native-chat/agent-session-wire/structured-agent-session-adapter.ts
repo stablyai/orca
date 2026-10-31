@@ -157,7 +157,10 @@ export type StructuredAgentSessionAcquireInput = Pick<
   'identity' | 'fence' | 'spawnToken'
 > &
   Partial<Omit<StructuredAgentSessionStartupAttempt, 'identity' | 'fence' | 'spawnToken'>> & {
+    checkBeforeSpawn?: () => void
     recordPhase?: AgentSessionCreatePhaseRecorder
+    /** Exact managed-root completion, independent of logical writer retirement. */
+    onPhysicalExit?: (exited: Promise<void>) => void
     /** Persist process identity before handshake so mid-start crashes leave a recoverable owner; returned process must match. */
     onSpawned?: (process: AgentSessionProcessIdentity) => Promise<void>
   }

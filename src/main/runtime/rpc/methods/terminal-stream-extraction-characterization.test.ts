@@ -159,6 +159,7 @@ describe('terminal stream extraction characterization', () => {
       getPtyExecutionHostMetadata: () => ({}),
       getTerminalLaunchResult: () => undefined,
       resolveLiveLeafForHandle: () => ({ ptyId: stream.ptyId }),
+      isStoppedSwitchSourceHandle: () => false,
       readTerminal: vi.fn(async () => {
         readCount += 1
         if (readCount === 2) {

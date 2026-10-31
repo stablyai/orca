@@ -1,3 +1,5 @@
+import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
+import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import type { AgentLaunchChoices } from '../../shared/agent-launch-choices'
 import { prepareStructuredAgentSessionCreateForWorktree } from './rpc/methods/structured-agent-session-create'
 import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
@@ -12,8 +14,6 @@ vi.mock('../agent-workspace-trust', () => ({ applyAgentWorkspaceTrust }))
 
 import { OrcaRuntimeService } from './orca-runtime'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
-import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
-import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import { attachFingerprintFields } from '../native-chat/agent-session-wire/structured-agent-session-attach'
 

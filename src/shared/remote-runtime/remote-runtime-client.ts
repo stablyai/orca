@@ -26,6 +26,7 @@ export type RemoteRuntimeSubscription = {
 }
 
 export type RemoteRuntimeSubscriptionCallbacks<TResult = unknown> = {
+  beforeSend?: () => void
   onResponse: (response: RuntimeRpcResponse<TResult>) => void
   onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
   onError: (error: RemoteRuntimeClientError) => void

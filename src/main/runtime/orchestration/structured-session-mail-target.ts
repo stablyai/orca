@@ -1,5 +1,4 @@
-/** Resolve structured-owned mail to a session turn, covering Run, session, Dispatch and worker-handle addresses. */
-
+import { resolveStructuredWorkerAuthority } from '../structured-worker-authority'
 import {
   ORCA_SESSION_ADDRESS_PREFIX,
   isOrcaSessionId,
@@ -19,6 +18,7 @@ import {
 } from './structured-session-lineage'
 import type { DispatchContextRow, RunRow } from './types'
 import { chatAssigneeSessionId } from './chat-assignee'
+/** Resolve structured-owned mail to a session turn, covering Run, session, Dispatch and worker-handle addresses. */
 
 /** A handle-less coordinator uses its generation-current session id; structured workers resolve by handle. */
 export function handleLessCoordinatorSessionId(
@@ -108,4 +108,21 @@ export function structuredSessionIdleEdgeMailboxes(
     return []
   }
   return db ? structuredSessionOwnedMailboxes(sessionId, db) : []
+}
+
+export function resolveStructuredCoordinatorMailboxTarget(
+  db: OrchestrationDb | null,
+  runId: string
+): StructuredPointerTarget | null {
+  const run = db?.getRun?.(runId)
+  const sessionId = run ? handleLessCoordinatorSessionId(run) : null
+  if (sessionId) {
+    return structuredSessionMailTarget(sessionId, db)
+  }
+  const coordinator = run?.coordinator_handle
+  if (!coordinator) {
+    return null
+  }
+  const workerSessionId = resolveStructuredWorkerAuthority(coordinator, db)?.running.sessionId
+  return workerSessionId ? { sessionId: workerSessionId, dispatchId: null } : null
 }

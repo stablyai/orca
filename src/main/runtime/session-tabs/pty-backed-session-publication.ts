@@ -3,6 +3,7 @@ import { OrcaRuntimeWithHasLiveOrPersistedServeOrSshOwnedPtyBinding } from '../s
 import type { RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
 import { normalizeCompatibleAgentTitleForOwner } from '../../../shared/agent-title-owner'
 import { getLatestPtyTitle } from '../runtime-worktree-status-projection'
+import { replaceSessionTabInSnapshot } from './session-tab-replace'
 import type { OrcaRuntimeWithBuildPtyTerminalSummary as PtyTerminalSummaryMethods } from '../terminal/query/pty-terminal-summary'
 import type {
   RuntimeMobileSessionTabsSnapshot,
@@ -17,8 +18,14 @@ import {
   mergeMobileSessionSnapshotTabs,
   mergeMobileSessionTabGroups
 } from '../mobile-session-tab-merge'
+import { SwitchSlotAnchors } from './switch-slot-anchors'
+import { StoppedSwitchSourceFacts } from './stopped-switch-source-facts'
 
 export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal extends OrcaRuntimeWithHasLiveOrPersistedServeOrSshOwnedPtyBinding {
+  /** Where switches put their destinations, for each destination's life (memory only). */
+  readonly switchSlotAnchors = new SwitchSlotAnchors()
+  /** Panes a switch stopped with proof and nothing replaced (memory only). */
+  readonly stoppedSwitchSources = new StoppedSwitchSourceFacts()
   protected abstract markPaneLiveTitlesDirty(): void
   protected abstract getPtyManualTitle(
     ...args: Parameters<PtyTerminalSummaryMethods['getPtyManualTitle']>
@@ -52,6 +59,8 @@ export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal exten
       viewMode?: 'terminal' | 'chat'
       split?: { splitFromLeafId: string; direction: 'horizontal' | 'vertical' }
       notify?: boolean
+      /** A same-slot switch: this row takes that tab's slot and the tab's rows leave, in one write. */
+      replaces?: string
     }
   ): void {
     if (
@@ -127,6 +136,21 @@ export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal exten
       parentLayout,
       isActive:
         args.activate || (args.selectIfNoActiveTab !== false && existing?.activeTabId == null)
+    }
+    if (args.replaces) {
+      this.storeMobileSessionSnapshot(
+        worktreeId,
+        replaceSessionTabInSnapshot(existing, {
+          workspaceId: worktreeId,
+          replacedTabId: args.replaces,
+          row: tab,
+          activate: args.activate
+        })
+      )
+      if (args.notify !== false) {
+        this.notifyMobileSessionTabsChanged(worktreeId)
+      }
+      return
     }
     const existingTabs = (existing?.tabs ?? []).filter(
       (candidate) =>

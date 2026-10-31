@@ -1,6 +1,7 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from './types'
 import type { StoreSetArgs } from './react-commit-cascade-write-probe'
+import { protectedConversationPaneKeys } from '@/lib/pending-conversation-surface-switches'
 import {
   classifyPaneKeyLiveness,
   MAX_LIVE_AGENT_STATUSES
@@ -18,7 +19,8 @@ function cappedConversations(state: AppState, previous: Conversations): Conversa
   let evicted: string[] = []
   if (keys.length > MAX_LIVE_AGENT_STATUSES) {
     const classify = classifyPaneKeyLiveness(state)
-    const eligible = keys.filter((key) => classify(key) !== 'live')
+    const protectedKeys = protectedConversationPaneKeys(entries)
+    const eligible = keys.filter((key) => classify(key) !== 'live' && !protectedKeys.has(key))
     evicted = eligible.slice(0, Math.max(0, eligible.length - MAX_LIVE_AGENT_STATUSES))
   }
   if (evicted.length === 0 && keys.every((key, index) => key === incoming[index])) {

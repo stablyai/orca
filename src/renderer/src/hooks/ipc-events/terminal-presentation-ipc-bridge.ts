@@ -7,11 +7,12 @@ import { SPLIT_TERMINAL_PANE_EVENT } from '@/constants/terminal'
 import type { SplitTerminalPaneDetail } from '@/constants/terminal'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { verifyTerminalRevealIdentity } from '@/lib/terminal-reveal-identity'
-import { insertUnifiedTabAfterAnchor } from '@/lib/unified-tab-anchor-insertion'
+import { findUnifiedTab, placeCreatedTerminalTab } from '@/lib/unified-tab-anchor-insertion'
 import { tryMakePaneKey } from './agent-status-routing'
 import { registerLaunchRecipe } from './launch-recipe-registration'
 import { wasAgentLaunchPaneClosedByUser } from '@/lib/agent-launch-pane-closes'
 import { revealWorkspaceSurface } from '@/lib/workspace-surface-reveal'
+import { replacementSelection, selectReplacementInGroup } from '@/lib/replaced-tab-selection'
 import { useAppStore } from '../../store'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import {
@@ -50,12 +51,20 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
         leafId,
         splitFromLeafId,
         splitDirection,
-        splitTelemetrySource
+        splitTelemetrySource,
+        replaces
       }) => {
+        // Once a tab holds the terminal, a later failure says so: it may already be on screen.
+        let heldBy: string | undefined
         try {
           const store = useAppStore.getState()
+          // A replace opens in the replaced tab's group and takes its slot once the tab exists.
+          const replaced = replaces && findUnifiedTab(worktreeId, replaces.tabId)
+          // Decided in this write: otherwise the terminal fills the slot without moving the user.
+          const selection = replaced ? replacementSelection(store, worktreeId, replaced) : 'none'
+          const takesSelection = replaced ? selection === 'focus' : !replaces
           const terminalPresentation = resolveTerminalPresentation({
-            presentation,
+            presentation: takesSelection ? presentation : 'background',
             activate,
             focus
           })
@@ -107,7 +116,7 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
           const tab =
             reusedTab ??
             (ptyId
-              ? store.createTab(worktreeId, targetGroupId, shellOverride, {
+              ? store.createTab(worktreeId, replaced?.groupId ?? targetGroupId, shellOverride, {
                   initialPtyId: ptyId,
                   activate:
                     shouldActivate ||
@@ -130,7 +139,7 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
                 })
               : store.createTab(
                   worktreeId,
-                  targetGroupId,
+                  replaced?.groupId ?? targetGroupId,
                   shellOverride,
                   shouldActivate
                     ? cwd
@@ -142,15 +151,11 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
                         ...(cwd ? { startupCwd: cwd } : {})
                       }
                 ))
-          if (afterTabId) {
-            const unifiedTabs = useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? []
-            const createdUnified = unifiedTabs.find((item) => item.entityId === tab.id)?.id
-            const anchorUnified = unifiedTabs.find(
-              (item) => item.id === afterTabId || item.entityId === afterTabId
-            )?.id
-            if (createdUnified && anchorUnified) {
-              insertUnifiedTabAfterAnchor(worktreeId, createdUnified, anchorUnified)
-            }
+          heldBy = tab.id
+          const closedReplaced =
+            placeCreatedTerminalTab(worktreeId, tab.id, { afterTabId, replaced }) && replaces
+          if (closedReplaced && selection === 'group') {
+            selectReplacementInGroup(worktreeId, tab.id)
           }
           // Different reused IDs break the PTY’s baked-in paneKey attribution; warn in dev.
           if (tabId !== undefined && tab.id !== tabId) {
@@ -266,7 +271,8 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
               requestId,
               tabId: tab.id,
               title: title ?? tab.title,
-              ...(identity ? { identity } : {})
+              ...(identity ? { identity } : {}),
+              ...(closedReplaced ? { closed: [closedReplaced.tabId] } : {})
             })
           }
         } catch (err) {
@@ -275,7 +281,8 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
           }
           window.api.ui.replyTerminalCreate({
             requestId,
-            error: err instanceof Error ? err.message : 'Terminal reveal failed'
+            error: err instanceof Error ? err.message : 'Terminal reveal failed',
+            ...(heldBy ? { tabId: heldBy } : {})
           })
         }
       }

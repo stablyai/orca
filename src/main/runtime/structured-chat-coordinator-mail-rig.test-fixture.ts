@@ -251,10 +251,9 @@ beforeEach(async () => {
     resolveEnvironment: async () => ({ PATH: '/usr/bin' }),
     ...scriptedCodexTransport(codex.openConnection),
     onRequestFailure: (failure) => runtime.onStructuredRequestFailureForErrorMail(failure),
-    onSessionStatusChanged: (summary) => {
-      runtime.onStructuredSessionStatusForMail(summary)
-    },
-    onSessionTabHidden: (sessionId) => runtime.onStructuredSessionTabHidden(sessionId)
+    onSessionStatusChanged: (summary) => runtime.onStructuredSessionStatusForMail(summary),
+    onSessionTabHidden: (sessionId) => runtime.onStructuredSessionTabHidden(sessionId),
+    captureSessionSwitchStop: (sessionId) => runtime.captureSessionSwitchStop(sessionId)
   })
   dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
 })

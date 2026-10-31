@@ -175,6 +175,7 @@ export async function subscribeRuntimeEnvironment(
         | { type: 'close' }
     ) => void
     onClose: () => void
+    beforeSend?: () => void
   },
   isCurrent: () => boolean = () => true,
   signal?: AbortSignal,
@@ -196,6 +197,7 @@ export async function subscribeRuntimeEnvironment(
     recordRuntimeEnvironmentUsage(userDataPath, environment.id, { runtimeId })
   }
   const callbacksWithMarkUsed = {
+    beforeSend: rawCallbacks.beforeSend,
     onResponse: (response: RuntimeRpcResponse<unknown>) => {
       if (response.ok === true) {
         markUsedOnce(response._meta.runtimeId)

@@ -1,21 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { OrcaRuntimeService, electronMocks } from '../orca-runtime-test-mocks.spec'
-import type { SleepingAgentSessionRecord } from '../orca-runtime-test-mocks.spec'
-import {
-  HEADLESS_LEAF_ID,
-  HEADLESS_SECOND_LEAF_ID,
-  TEST_WINDOW_ID,
-  TEST_WORKTREE_ID,
-  makeRuntimeStoreWithWorkspaceSession,
-  makeWorkspaceSessionWithHeadlessTerminal
-} from '../orca-runtime-test-fixtures.spec'
+import type { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
+import { HEADLESS_SECOND_LEAF_ID, TEST_WORKTREE_ID } from '../orca-runtime-test-fixtures.spec'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
 import type { TerminalLaunchResult } from '../../../shared/agent-session-resume'
-import type { PtyProcessInfo } from '../../providers/pty-provider-contract'
-import { deterministicAgentSessionUuid } from '../runtime-agent-launch-resolution'
 import { deriveRemoteRuntimeTerminalCreateHandle } from '../remote-runtime-terminal-create-identity'
-import type { RuntimePtyController } from '../runtime-pty-controller-contract'
 import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { AgentSessionRecordStore } from '../agent-session-record-store'
 import {
@@ -26,34 +14,20 @@ import {
   chooseSavedResumeFreshLaunch,
   savedResumeResult
 } from '../../ipc/pty/host-env/saved-resume-admission'
+import {
+  PANE_KEY,
+  SESSION,
+  MUTATION_ID,
+  makeSleptWorkspace,
+  makeRuntime,
+  sessionRow,
+  spawnedCommands,
+  resumeSpawns,
+  storedRecord,
+  type Fixture
+} from './targeted-agent-resume.test-fixture'
 
-const PANE_KEY = `host-tab:${HEADLESS_LEAF_ID}`
-const SESSION = { key: 'session_id', id: 'provider-session-1' } as const
-const MUTATION_ID = '["dev","thread-1","delivery-1"]'
 const PANE_OWNED = { origin: 'worktree-sleep', state: 'done', restoreOnTabOpenOnly: true }
-
-function makeSleptWorkspace() {
-  const record: SleepingAgentSessionRecord = {
-    paneKey: PANE_KEY,
-    tabId: 'host-tab',
-    worktreeId: TEST_WORKTREE_ID,
-    agent: 'claude',
-    providerSession: SESSION,
-    prompt: 'do the thing',
-    state: 'working',
-    capturedAt: 1,
-    updatedAt: 1,
-    origin: 'worktree-sleep',
-    launchConfig: { agentArgs: '--permission-mode plan', agentEnv: {} }
-  }
-  return makeRuntimeStoreWithWorkspaceSession(
-    makeWorkspaceSessionWithHeadlessTerminal({
-      sleepingAgentSessionsByPaneKey: { [PANE_KEY]: record }
-    })
-  )
-}
-
-type Fixture = ReturnType<typeof makeSleptWorkspace>
 
 type DurableMutationStore = { runDurableMutation: (mutate: unknown) => Promise<unknown> }
 
@@ -74,88 +48,6 @@ function hasWorkspaceScopeResolver(
     'resolveTerminalWorkspaceLaunchScope' in runtime &&
     typeof runtime.resolveTerminalWorkspaceLaunchScope === 'function'
   )
-}
-
-function sessionRow(paneKey: string, receivedAt = 0): AgentStatusIpcPayload {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resume guards read only paneKey, providerSession and the observation clocks.
-  return { paneKey, providerSession: SESSION, receivedAt } as never
-}
-
-function makeRuntime(
-  fixture: Fixture,
-  opts: {
-    spawn?: NonNullable<RuntimePtyController['spawn']>
-    rows?: () => AgentStatusIpcPayload[]
-    checkHookAgentPresence?: () => Promise<'live' | 'unverifiable' | 'exited' | null>
-    listProcesses?: () => Promise<PtyProcessInfo[]>
-    subscribeAgentProviderSessionChanges?: (
-      listener: (sessions: readonly { paneKey: string; sessionId: string }[]) => void
-    ) => () => void
-  } = {}
-) {
-  const spawn = vi.fn<NonNullable<RuntimePtyController['spawn']>>(
-    opts.spawn ?? (() => Promise.resolve({ id: 'resumed-pty' }))
-  )
-  const runtime = new OrcaRuntimeService(fixture.runtimeStore, undefined, {
-    getDesktopWindowStatus: () => 'openable',
-    ...(opts.rows ? { getAgentProviderSessionSnapshot: opts.rows } : {}),
-    ...(opts.checkHookAgentPresence ? { checkHookAgentPresence: opts.checkHookAgentPresence } : {}),
-    ...(opts.subscribeAgentProviderSessionChanges
-      ? { subscribeAgentProviderSessionChanges: opts.subscribeAgentProviderSessionChanges }
-      : {})
-  })
-  runtime.setPtyController({
-    spawn,
-    write: () => true,
-    kill: () => true,
-    getForegroundProcess: async () => null,
-    listProcesses: opts.listProcesses ?? (async () => [])
-  })
-  runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
-  electronMocks.BrowserWindow.fromId.mockReturnValue(null)
-  const attachWindow = (webContents?: { send: (...args: unknown[]) => void }): void => {
-    runtime.attachWindow(TEST_WINDOW_ID)
-    runtime.markGraphReady(TEST_WINDOW_ID)
-    electronMocks.BrowserWindow.fromId.mockReturnValue({
-      isDestroyed: () => false,
-      ...(webContents ? { webContents } : {})
-    })
-  }
-  const resume = (
-    overrides: {
-      captureHostId?: 'local' | `ssh:${string}`
-      mutationId?: string
-      signal?: AbortSignal
-    } = {}
-  ) =>
-    runtime.resumeAgentSessionInWorkspace(TEST_WORKTREE_ID, {
-      agent: 'claude',
-      providerSession: SESSION,
-      captureHostId: overrides.captureHostId ?? 'local',
-      mutationId: overrides.mutationId ?? MUTATION_ID,
-      signal: overrides.signal
-    })
-  const openOldPane = () =>
-    runtime.activateMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab', HEADLESS_LEAF_ID, {
-      notifyClients: false,
-      navigation: 'caller',
-      intent: 'user'
-    })
-  return { runtime, spawn, attachWindow, resume, openOldPane }
-}
-
-function spawnedCommands(spawn: ReturnType<typeof vi.fn>): string[] {
-  return spawn.mock.calls.map(([args]: unknown[]) =>
-    typeof args === 'object' && args !== null && 'command' in args ? String(args.command ?? '') : ''
-  )
-}
-
-function resumeSpawns(spawn: ReturnType<typeof vi.fn>): number {
-  return spawnedCommands(spawn).filter((command) => command.includes('provider-session-1')).length
-}
-
-function storedRecord(fixture: Fixture) {
-  return fixture.getSession().sleepingAgentSessionsByPaneKey?.[PANE_KEY]
 }
 
 describe('resumeAgentSessionInWorkspace', () => {
@@ -179,6 +71,7 @@ describe('resumeAgentSessionInWorkspace', () => {
       chat.providerHandleChain[0]!.handle.nativeId = SESSION.id
       let nativeOpen = true
       const store: AgentSessionRecordStore = Object.create(AgentSessionRecordStore.prototype)
+      store.getRecord = (sessionId) => (sessionId === chat.sessionId ? chat : null)
       store.listConversations = () => [agentSessionConversationView(chat)]
       store.getVisibleSessionTabIndex = () => ({
         present: true,
@@ -682,194 +575,3 @@ describe('resumeAgentSessionInWorkspace', () => {
     await expect(resume()).resolves.toMatchObject({ ok: true })
   })
 })
-
-describe('resumeAgentSessionInWorkspace retries, cancellation and a failed publication', () => {
-  it('reconciles the same request after its own hook arrives', async () => {
-    let rows: AgentStatusIpcPayload[] = []
-    const terminalHandle = deriveRemoteRuntimeTerminalCreateHandle(
-      'agent-session-resume',
-      TEST_WORKTREE_ID,
-      MUTATION_ID
-    )
-    const { resume, spawn } = makeRuntime(makeSleptWorkspace(), {
-      rows: () => rows,
-      checkHookAgentPresence: async () => 'live',
-      listProcesses: async () =>
-        spawn.mock.calls.length > 0
-          ? [
-              {
-                id: 'resumed-pty',
-                cwd: '',
-                title: 'claude',
-                terminalHandle,
-                worktreeId: TEST_WORKTREE_ID
-              }
-            ]
-          : []
-    })
-    const first = await resume()
-    if (!first.ok) {
-      throw new Error(first.reason)
-    }
-    rows = [sessionRow(first.paneKey, Date.now() + 1)]
-    await expect(resume()).resolves.toEqual(first)
-    expect(spawn).toHaveBeenCalledOnce()
-  })
-
-  it('honors cancellation during create inventory lookup before dispatch', async () => {
-    const controller = new AbortController()
-    const { resume, spawn } = makeRuntime(makeSleptWorkspace(), {
-      listProcesses: async () => {
-        controller.abort()
-        return []
-      }
-    })
-    await expect(resume({ signal: controller.signal })).resolves.toMatchObject({ ok: false })
-    expect(spawn).not.toHaveBeenCalled()
-  })
-
-  it('settles a failed post-spawn publication when that PTY exits', async () => {
-    const { runtime, resume } = makeRuntime(makeSleptWorkspace())
-    const unsubscribe = runtime.onMobileSessionTabsChanged(() => {
-      throw new Error('publication failed')
-    })
-    await expect(resume()).resolves.toEqual({ ok: false, reason: 'create_failed' })
-    unsubscribe()
-    runtime.onPtyExit('resumed-pty', 0)
-    await expect(resume({ mutationId: 'next-delivery' })).resolves.toMatchObject({ ok: true })
-  })
-})
-
-describe('resumeAgentSessionInWorkspace claim lifetime', () => {
-  it('releases the hold after a proven exit before registration', async () => {
-    let first = true
-    const { runtime, resume } = makeRuntime(makeSleptWorkspace(), {
-      spawn: async () => {
-        if (first) {
-          first = false
-          runtime.beginPtyRegistration('resumed-pty')
-          runtime.onPtyExit('resumed-pty', 0)
-        }
-        return { id: 'resumed-pty' }
-      }
-    })
-    await expect(resume()).resolves.toEqual({ ok: false, reason: 'create_failed' })
-    await expect(resume({ mutationId: 'after-proven-exit' })).resolves.toMatchObject({ ok: true })
-  })
-
-  it('does not settle a lost reply using another caller terminal in the same pane', async () => {
-    let rejectFirst!: (error: Error) => void
-    let started!: () => void
-    const start = new Promise<void>((resolve) => {
-      started = resolve
-    })
-    let calls = 0
-    const { runtime, resume, spawn } = makeRuntime(makeSleptWorkspace(), {
-      spawn: async () => {
-        calls += 1
-        if (calls === 1) {
-          started()
-          return new Promise<{ id: string }>((_resolve, reject) => {
-            rejectFirst = reject
-          })
-        }
-        return { id: `other-pty-${calls}` }
-      }
-    })
-    const first = resume()
-    await start
-    const args = spawn.mock.calls[0]?.[0]
-    if (
-      !args ||
-      typeof args !== 'object' ||
-      !('tabId' in args) ||
-      !('leafId' in args) ||
-      typeof args.tabId !== 'string' ||
-      typeof args.leafId !== 'string'
-    ) {
-      throw new Error('missing pane identity')
-    }
-    const other = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
-      tabId: args.tabId,
-      leafId: args.leafId,
-      command: 'echo another caller',
-      focus: false
-    })
-    rejectFirst(new Error('lost spawn reply'))
-    await expect(first).resolves.toEqual({ ok: false, reason: 'create_failed' })
-    if (!other.ptyId) {
-      throw new Error('missing other PTY')
-    }
-    runtime.onPtyExit(other.ptyId, 0)
-    await expect(resume({ mutationId: 'other-delivery' })).resolves.toEqual({
-      ok: false,
-      reason: 'held_elsewhere'
-    })
-  })
-
-  it('does not settle an ambiguous resume using an earlier exited shell in its pane', async () => {
-    const seed = `${TEST_WORKTREE_ID}\0${MUTATION_ID}`
-    const tabId = deterministicAgentSessionUuid(`agent-session-resume-tab\0${seed}`)
-    const leafId = deterministicAgentSessionUuid(`agent-session-resume-leaf\0${seed}`)
-    let firstInventory = true
-    let spawns = 0
-    const { runtime, resume } = makeRuntime(makeSleptWorkspace(), {
-      listProcesses: async () => {
-        if (firstInventory) {
-          firstInventory = false
-          const other = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
-            tabId,
-            leafId,
-            command: 'echo another caller',
-            focus: false
-          })
-          if (!other.ptyId) {
-            throw new Error('missing shell PTY')
-          }
-          runtime.onPtyExit(other.ptyId, 0)
-        }
-        return []
-      },
-      spawn: async () => {
-        spawns += 1
-        if (spawns === 2) {
-          throw new Error('resume started but reply lost')
-        }
-        return { id: `sequential-pty-${spawns}` }
-      }
-    })
-    await expect(resume()).resolves.toEqual({ ok: false, reason: 'create_failed' })
-    await expect(resume({ mutationId: 'next-delivery' })).resolves.toEqual({
-      ok: false,
-      reason: 'held_elsewhere'
-    })
-  })
-})
-
-it.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)(
-  'hands a numbered-record resume claim to the stable pane hook',
-  async () => {
-    const fixture = makeSleptWorkspace()
-    const record = storedRecord(fixture)
-    if (!record) {
-      throw new Error('missing sleep record')
-    }
-    fixture.setSession({
-      ...fixture.getSession(),
-      sleepingAgentSessionsByPaneKey: {
-        'host-tab:1': { ...record, paneKey: 'host-tab:1', state: 'done' }
-      }
-    })
-    let rows: AgentStatusIpcPayload[] = []
-    let spawned = 0
-    const { resume, openOldPane, spawn } = makeRuntime(fixture, {
-      rows: () => rows,
-      checkHookAgentPresence: async () => 'exited',
-      spawn: async () => ({ id: `numbered-resume-${++spawned}` })
-    })
-    await openOldPane()
-    expect(resumeSpawns(spawn)).toBe(1)
-    rows = [sessionRow(PANE_KEY, Date.now() + 1)]
-    await expect(resume()).resolves.toMatchObject({ ok: true })
-  }
-)

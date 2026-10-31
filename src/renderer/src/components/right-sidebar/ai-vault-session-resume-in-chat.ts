@@ -65,13 +65,16 @@ export function resolveAiVaultSessionResumeInChatEligibility(args: {
   targetWorkspacePath: string | null
   /** Reuse structured route capability/platform/WSL gates to prevent drift; the Chat | CLI choice does not apply. */
   structuredRouteAvailable: boolean
+  /** Unknown switch capability keeps an eligible disabled action on its existing surface. */
+  inPlaceSwitchAvailable?: boolean
 }): AiVaultResumeInChatEligibility {
   const { session } = args
   if (isAntigravityReferenceSession(session) || !adoptsCliConversations(session.agent)) {
     return { available: false, reason: 'agent' }
   }
-  // Already-adopted rows reopen their owner; a second adoption would conflict.
-  if (session.structuredSession) {
+  const canSwitch =
+    args.inPlaceSwitchAvailable === true && !isWslStoredAiVaultSessionFile(session.filePath)
+  if (session.structuredSession && !canSwitch) {
     return { available: false, reason: 'already-structured' }
   }
   const recordingHost = parseRoutableExecutionHostId(session.executionHostId)

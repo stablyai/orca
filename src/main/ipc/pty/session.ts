@@ -2,7 +2,7 @@ import type { BrowserWindow, WebContents } from 'electron'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { Store } from '../../persistence'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { IPtyProvider } from '../../providers/pty-provider-contract'
+import type { shutdownProviderAndDetectExit } from './provider/shutdown-detect'
 import type { PtyModelRestoreReason } from '../../../shared/pty-model-restore-marker'
 import type {
   PtyDeliveryWriteOff,
@@ -146,11 +146,7 @@ export type PtyIpcSession = {
     ptyId: string,
     opts?: { scrollbackRows?: number }
   ) => Promise<SerializeResult>
-  shutdownProviderAndDetectExit: (
-    provider: IPtyProvider,
-    id: string,
-    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
-  ) => Promise<boolean>
+  shutdownProviderAndDetectExit: typeof shutdownProviderAndDetectExit
   rememberSyntheticKillExit: (id: string, incarnationId?: string) => void
   rememberRetiredRejectedPty: (id: string) => void
   consumeSyntheticKillExit: (id: string, incarnationId?: string) => boolean

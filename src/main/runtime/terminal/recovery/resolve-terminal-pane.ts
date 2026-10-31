@@ -1,36 +1,22 @@
+import {
+  captureTerminalSurfaceCloseIdentity,
+  captureAddressedTerminalPresentation
+} from '../../workspace-session-terminal-tab-retirement-identity'
 import { terminalLaunchFacts } from '../../../../shared/agent-session-resume'
 import type { OrcaRuntimeWithCreateTerminal } from '../launch/terminal-create'
-import { OrcaRuntimeWithRestoredHandlePaneStart } from '../surface/restored-handle-pane-start'
-import type {
-  RuntimeTerminalRead,
-  RuntimeTerminalResolvePane,
-  RuntimeTerminalShow
-} from '../../../../shared/runtime-types'
-import type {
-  RuntimeTerminalCreate,
-  RuntimeTerminalSummary
-} from '../../../../shared/runtime-terminal-contracts'
-import type {
-  RuntimeProviderSnapshotReadOptions,
-  TerminalHandleRecord
-} from '../../runtime-terminal-contracts'
+import type * as Read from '../../../../shared/runtime-types'
+import type { RuntimeTerminalResolvePane } from '../../../../shared/runtime-types'
+import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-contracts'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
 } from '../../runtime-terminal-state-records'
 import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
-import {
-  buildVisibleSnapshotReadFallback,
-  labelTerminalReadSource,
-  readTerminalTail
-} from '../../terminal-tail-read'
-import { getTerminalState } from '../../terminal-wait-results'
-import { readStructuredWorkerTerminal } from '../../structured-worker-terminal-read'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { OrcaRuntimeWithReadTerminalPane } from './terminal-pane-read'
 
-export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWithRestoredHandlePaneStart {
-  protected abstract assertLiveTerminalHandleTargetsPty(handle: string, expectedPtyId: string): void
+export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWithReadTerminalPane {
   abstract createTerminal(
     ...args: Parameters<OrcaRuntimeWithCreateTerminal['createTerminal']>
   ): ReturnType<OrcaRuntimeWithCreateTerminal['createTerminal']>
@@ -44,21 +30,13 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
   protected abstract buildPtyTerminalSummary(
     pty: RuntimePtyWorktreeRecord,
     worktreesById: Map<string, ResolvedWorktree>
-  ): RuntimeTerminalSummary
-  protected abstract getLiveLeafForHandle(handle: string): {
-    record: TerminalHandleRecord
-    leaf: RuntimeLeafRecord
-  }
+  ): Read.RuntimeTerminalSummary
+
   protected abstract buildTerminalSummary(
     leaf: RuntimeLeafRecord,
     worktreesById: Map<string, ResolvedWorktree>,
     provenLivePtyIds?: ReadonlySet<string> | null
-  ): RuntimeTerminalSummary
-  protected abstract readPtyTerminal(
-    handle: string,
-    pty: RuntimePtyWorktreeRecord,
-    opts?: { cursor?: number; limit?: number }
-  ): RuntimeTerminalRead
+  ): Read.RuntimeTerminalSummary
 
   resolveTerminalPane(paneKey: string, expectedWorktreeId?: string): RuntimeTerminalResolvePane {
     // Why: the renderer context menu only knows the stable pane key; main owns
@@ -83,15 +61,68 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
       // Why: pane coordinates restored by a paired client must not cross workspace ownership.
       throw new Error('terminal_not_found')
     }
+    const holders =
+      worktreeId && parsed
+        ? this.getWorkspaceSessionHostIdsForTab(worktreeId, parsed.tabId).map((hostId) => ({
+            hostId,
+            identity: captureTerminalSurfaceCloseIdentity(
+              this.store?.getWorkspaceSession?.(hostId),
+              worktreeId,
+              parsed.tabId,
+              parsed.leafId
+            )
+          }))
+        : []
+    const rowIdentity = holders[0]?.identity
+    const executionPtyId = pty?.ptyId ?? record?.ptyId ?? leaf?.ptyId ?? null
+    const retained = executionPtyId ? this.handleByPtyIncarnation.get(executionPtyId) : null
+    const execution = this.getPtyExecutionHostMetadata(executionPtyId)
+    if (
+      !execution.incarnationId &&
+      retained?.handle === handle &&
+      executionPtyId &&
+      this.getPtyLivenessVerdict(executionPtyId)?.status === 'exited'
+    ) {
+      execution.incarnationId = retained.incarnationId ?? undefined
+    }
+    const identity =
+      parsed && worktreeId
+        ? captureAddressedTerminalPresentation({
+            runtimeId: this.runtimeId,
+            record,
+            currentPty: pty,
+            paneOfPty: (current) => this.paneOfPty(current),
+            leaf,
+            row: rowIdentity,
+            address: { worktreeId, ...parsed },
+            ptyId: executionPtyId,
+            incarnationId: execution.incarnationId
+          })
+        : null
     return {
+      ...(identity ? { presentation: { identity, holders } } : {}),
       handle,
       tabId: parsed?.tabId ?? record?.tabId ?? '',
       leafId: parsed?.leafId ?? record?.leafId ?? '',
-      ptyId: record?.ptyId ?? null,
+      ptyId: executionPtyId,
       connected: pty?.connected === true,
       ...(worktreeId ? { worktreeId } : {}),
-      ...this.getPtyExecutionHostMetadata(record?.ptyId ?? pty?.ptyId ?? null)
+      ...execution
     }
+  }
+
+  /** Actual placement of an exact live child; a launch claim's original coordinates can be stale. */
+  resolveLiveTerminalSurface(ptyId: string, incarnationId: string | undefined) {
+    const pty = this.ptysById.get(ptyId)
+    if (!pty?.connected || !incarnationId || pty.incarnationId !== incarnationId) {
+      return null
+    }
+    const pane = this.paneOfPty(pty)
+    const parsed = pane.paneKey ? parsePaneKey(pane.paneKey) : null
+    if (!parsed) {
+      return null
+    }
+    return { ...parsed, worktreeId: pty.worktreeId, terminalHandle: this.issuePtyHandle(pty) }
   }
 
   /** Whether the caller's handle still names the pane it asks to recover. */
@@ -187,7 +218,7 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
     return recovery
   }
 
-  async showTerminal(handle: string): Promise<RuntimeTerminalShow> {
+  async showTerminal(handle: string): Promise<Read.RuntimeTerminalShow> {
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
       const worktreesById = await this.getResolvedWorktreeMap()
@@ -228,80 +259,5 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
       rendererGraphEpoch: this.rendererGraphEpoch,
       ...(agentWait !== undefined ? { agentWait } : {})
     }
-  }
-
-  async readTerminal(
-    handle: string,
-    opts: { cursor?: number; limit?: number; screen?: boolean } = {},
-    providerSnapshot: RuntimeProviderSnapshotReadOptions = {}
-  ): Promise<RuntimeTerminalRead> {
-    // Structured workers have no PTY/leaf; read their journal before PTY lookup can falsely call the handle stale.
-    const structured = await readStructuredWorkerTerminal({
-      handle,
-      db: this.getOrchestrationDbIfAvailable?.() ?? null,
-      ...(opts.cursor === undefined ? {} : { cursor: opts.cursor }),
-      ...(opts.limit === undefined ? {} : { limit: opts.limit })
-    })
-    if (structured) {
-      // `screen` asks for a rendered grid; there is none, and the journal is the whole record.
-      return { ...structured, source: opts.screen ? 'screen-unavailable' : 'stream' }
-    }
-    // Switch point: a saved pane main holds with no terminal yet starts first (once, shared).
-    const starting = ORCA_LAYOUT_OWNER_IS_MAIN ? this.startRestoredHandlePane(handle) : null
-    if (starting) {
-      const target = await starting
-      return { ...(await this.readTerminal(target, opts, providerSnapshot)), handle }
-    }
-    const pty = this.getLivePtyForHandle(handle)
-    if (pty) {
-      const read = this.readPtyTerminal(handle, pty.pty, opts)
-      const visibleRead = opts.screen
-        ? await this.readRenderedScreen(pty.pty.ptyId, read, opts)
-        : await this.withVisibleSnapshotFallback(pty.pty.ptyId, read, opts, providerSnapshot)
-      this.assertLiveTerminalHandleTargetsPty(handle, pty.pty.ptyId)
-      return labelTerminalReadSource(visibleRead)
-    }
-
-    const { leaf } = this.getLiveLeafForHandle(handle)
-    const read = readTerminalTail({
-      handle,
-      status: getTerminalState(leaf),
-      previewLines: leaf.tailBuffer,
-      completedLines: leaf.tailTranscriptBuffer,
-      partialLine: leaf.tailPartialLine,
-      completedLineCount: leaf.tailLinesTotal,
-      bufferTruncated: leaf.tailTruncated,
-      cursor: opts.cursor,
-      limit: opts.limit
-    })
-    if (!leaf.ptyId) {
-      return { ...read, source: opts.screen ? 'screen-unavailable' : 'stream' }
-    }
-    const visibleRead = opts.screen
-      ? await this.readRenderedScreen(leaf.ptyId, read, opts)
-      : await this.withVisibleSnapshotFallback(leaf.ptyId, read, opts, providerSnapshot)
-    this.assertLiveTerminalHandleTargetsPty(handle, leaf.ptyId)
-    return labelTerminalReadSource(visibleRead)
-  }
-
-  protected async readRenderedScreen(
-    ptyId: string,
-    read: RuntimeTerminalRead,
-    opts: { limit?: number } = {}
-  ): Promise<RuntimeTerminalRead> {
-    const visibleState = await this.readVisibleTerminalState(ptyId)
-    const projection =
-      visibleState ??
-      (await this.readProviderTerminalTailLines(ptyId, opts.limit, { visibleScreenOnly: true }))
-    if (projection.lines.length === 0) {
-      return { ...read, source: 'screen-unavailable' }
-    }
-    return buildVisibleSnapshotReadFallback(
-      read,
-      projection.lines,
-      opts.limit,
-      projection.draft,
-      projection.tailRows
-    )
   }
 }

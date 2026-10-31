@@ -5,7 +5,6 @@ import {
   readBoundChildRewind,
   type AttachAttempt
 } from './structured-agent-session-attach-publish'
-
 import { agentSessionLeaseAdmitsWriter } from '../../../shared/agent-session-lease-adjudication'
 import { refuse } from '../../../shared/agent-session-wire-refusals'
 import { randomUUID } from 'node:crypto'
@@ -112,7 +111,6 @@ export function attachStructuredAgentSession(
     }
   })
 }
-
 async function runAttach(
   context: StructuredAgentSessionAttachContext,
   callerKey: string,
@@ -169,6 +167,12 @@ async function runAttachUnderAbort(
       models: priorRecord ? undefined : options.catalogModels,
       store: context.deps.store,
       adapter: context.deps.adapter,
+      onPhysicalExit: (exited) =>
+        context.runtimeState.startFlights.observePhysicalExit(
+          sessionId,
+          exited,
+          priorDeathEvidence?.kind !== 'kill-delivered'
+        ),
       agents: context.deps.agents,
       logger: context.deps.logger,
       eventSink: attemptSink.sink,
@@ -195,6 +199,7 @@ async function runAttachUnderAbort(
       now: () => context.now(),
       recordPhase,
       acquireSignal: lock.signal,
+      checkBeforeAcquire: options.checkBeforeAcquire,
       lock,
       ...(options.startupAttemptId ? { startupAttemptId: options.startupAttemptId } : {}),
       onStartupAttempt: (startup) => {

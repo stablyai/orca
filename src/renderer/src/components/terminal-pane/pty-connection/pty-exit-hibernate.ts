@@ -14,8 +14,10 @@ import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-ses
 import { agentTurnEndedUncleanly } from '../../../../../shared/agent-main-agent-verdict'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
-import { isPtyExitReplacedByRestart } from '../pty-exit-delivery'
+import { isPtyExitReplacedByRestart, type PtyExitOptions } from '../pty-exit-delivery'
 import { armRestartReplacement } from './restart-replacement-on-show'
+import { holdClosingExit, showSwitchStoppedPane } from './stopped-switch-source-exit'
+import { readMirroredStoppedSwitchSource } from '../stopped-switch-sources'
 import { noteHiddenAgentResumePtyEnded } from './hidden-agent-resume-deferral'
 import { expectExitedSplitPaneClose } from './exited-split-pane-close'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
@@ -68,7 +70,7 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
   session.handledExitPtyId = null
   // Only genuine fresh, never-typed PTYs keep startup errors visible; dead reattached sessions must still close normally.
   session.spawnedFreshPtyId = null
-  // Suppressed hidden hibernation exits still owe a wake; retain the exact PTY/record so a later session cannot be adopted.
+  // Reversible hidden hibernation exits still owe a wake; retain the exact PTY/record so a later session cannot be adopted.
   session.hibernatedWakeTarget = null
   session.wakeHibernatedAgentPane = null
   // Latch mobile wakes between record write and kill-exit arming; mobile never reveals the desktop to retry the lost edge.
@@ -129,11 +131,7 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
       })
     return claimKey
   }
-  session.onExit = (
-    ptyId: string,
-    exitCode = 0,
-    opts: { preserveRendererBinding?: boolean } = {}
-  ): void => {
+  session.onExit = (ptyId: string, exitCode = 0, opts: PtyExitOptions = {}): void => {
     if (session.handledExitPtyId === ptyId) {
       return
     }
@@ -150,9 +148,29 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
       return
     }
     const isUnverifiedExit = !isProvenProcessExit(exitCode)
+    const committedExit = consumeCommittedPtyShutdownExit(ptyId, session.runtimeEnvironmentId)
+    const reversibleExit = opts.preserveRendererBinding === true || committedExit === true
+    const mirroredStop = readMirroredStoppedSwitchSource(
+      session.deps.tabId,
+      session.pane.leafId,
+      ptyId
+    )
+    // A stream sends the held screen once, so a later fact may lack it: the store kept the first.
+    const switchStopped = opts.stoppedSwitchSource
+      ? {
+          ...opts.stoppedSwitchSource,
+          screen:
+            opts.stoppedSwitchSource.screen ??
+            (mirroredStop?.incarnationId === opts.stoppedSwitchSource.incarnationId
+              ? mirroredStop.screen
+              : undefined)
+        }
+      : mirroredStop
     const preserveRendererBinding =
-      opts.preserveRendererBinding === true ||
-      consumeCommittedPtyShutdownExit(ptyId, session.runtimeEnvironmentId)
+      reversibleExit ||
+      !!switchStopped ||
+      opts.preserveRendererBinding === 'closing' ||
+      committedExit === 'closing'
     session.resetRendererOrderedSeqForPtyExit(ptyId)
     const currentPaneTransport = session.deps.paneTransportsRef.current.get(session.pane.id)
     if (currentPaneTransport && currentPaneTransport !== session.transport) {
@@ -203,16 +221,24 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
     }
     // Consume intentional-exit suppression before split close logic so in-place restart keeps its pane.
     if (isSuppressedExit) {
-      // Why: the action that suppressed the exit owns whether the leaf binding
-      // is a wake hint or should be discarded; runtime cleanup above is enough.
+      // Why: retention alone grants no wake; only the committed reversible owner supplies that authority.
       session.manager.setPaneGpuRendering(session.pane.id, true)
       if (replacedByRestart) {
         // Nothing else will replace this process; the pane takes it back when shown.
         armRestartReplacement(session, ptyId)
         return
       }
+      if (switchStopped && !reversibleExit) {
+        showSwitchStoppedPane(session, ptyId, exitCode, switchStopped)
+      } else if (preserveRendererBinding && !reversibleExit) {
+        holdClosingExit(session, ptyId, exitCode)
+      }
       const sleepingRecordEntry = session.getSleepingRecordForPane(useAppStore.getState())
-      if (sleepingRecordEntry && noteArmsHibernatedPaneWake(sleepingRecordEntry.record)) {
+      if (
+        reversibleExit &&
+        sleepingRecordEntry &&
+        noteArmsHibernatedPaneWake(sleepingRecordEntry.record)
+      ) {
         // Disarm input-eating modes on the dead frozen TUI, then arm its reveal wake.
         session.writeInputModeGround(POST_REPLAY_MODE_RESET)
         session.hibernatedWakeTarget = { ptyId, record: sleepingRecordEntry.record }

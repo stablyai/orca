@@ -38,6 +38,9 @@ export abstract class RuntimeHeadlessTabProperties extends OrcaRuntimeWithHeadle
     worktreeSelector: string,
     args: SessionTabProps
   ): Promise<{ updated: true }> {
+    if (args.viewMode !== undefined) {
+      this.clientSessionTabSelections.noteHostNavigation()
+    }
     const explicitWorktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector)
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorkspaceSelector(worktreeSelector)).id

@@ -359,7 +359,13 @@ describe('session runtime reentry', () => {
     await runtime.publishStructuredAgentSessionTab(input)
 
     expect(list).toHaveBeenCalledExactlyOnceWith('client')
-    expect(project).toHaveBeenCalledExactlyOnceWith(input)
+    // The projection gets what this write decided (no switch source here, so nothing gated it),
+    // not the request as sent.
+    expect(project).toHaveBeenCalledExactlyOnceWith({
+      ...input,
+      activate: false,
+      selectionDecided: false
+    })
   })
 
   it('re-enters the protected graph reload override', () => {

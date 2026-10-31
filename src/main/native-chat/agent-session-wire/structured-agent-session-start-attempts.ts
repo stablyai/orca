@@ -31,7 +31,8 @@ export function registerStructuredAgentSessionStart(
   run: (
     lock: StructuredAgentSessionAttachLock,
     attemptId: string
-  ) => Promise<StructuredAgentSessionResumeOutcome>
+  ) => Promise<StructuredAgentSessionResumeOutcome>,
+  recordUnrequestedFailure = false
 ): Promise<StructuredAgentSessionResumeOutcome> {
   const { startFlights: flights, startupAttempts: attempts, acquireAborts } = context.runtimeState
   const acquire = acquireAborts.begin(sessionId)
@@ -146,12 +147,15 @@ export function registerStructuredAgentSessionStart(
                   : { aborted: true as const })
               }
             : result
-          if (!settled.aborted && (startedFor !== undefined || children.length > 0)) {
+          if (
+            !settled.aborted &&
+            (startedFor !== undefined || children.length > 0 || recordUnrequestedFailure)
+          ) {
             const session = context.sessions.get(sessionId)
             if (session) {
               const record = context.deps.store.getRecord(sessionId)
               const failure = failedStart(record, settled)
-              await recordStructuredAgentSessionStartFailure(
+              const failureItemId = await recordStructuredAgentSessionStartFailure(
                 { journal: session.journal, fence: record?.lease.runtimeFence ?? 0 },
                 {
                   startKey:
@@ -163,6 +167,10 @@ export function registerStructuredAgentSessionStart(
                 },
                 startedFor ?? null
               )
+              if (failureItemId) {
+                context.subscribers.publish(sessionId, session.journal)
+              }
+              return { ...settled, ...(failureItemId ? { failureItemId } : {}) }
             }
           }
           return settled

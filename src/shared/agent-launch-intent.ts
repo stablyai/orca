@@ -61,7 +61,7 @@ export type AgentLaunchIntent = {
 }
 
 /** Placement cannot fail a launch: missing groups fall back to the anchor's group, then the active group. */
-export type AgentLaunchPlacement = { groupId?: string; afterTabId?: string }
+export type AgentLaunchPlacement = { groupId?: string; afterTabId?: string; index?: number }
 
 /** Whether the caller's own view moves to the new tab. Never names another viewer's screen. */
 export type AgentLaunchPresentation = 'focused' | 'background'

@@ -1,4 +1,6 @@
 // @vitest-environment happy-dom
+
+import { ConfirmationDialogProvider } from '@/components/confirmation-dialog'
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterAll, afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest'
@@ -159,9 +161,11 @@ async function mount(): Promise<ReturnType<typeof render>> {
   let view: ReturnType<typeof render>
   await act(async () => {
     view = render(
-      <TooltipProvider>
-        <StructuredAgentSessionPaneOverlayLayer worktreeId={WORKSPACE} isWorktreeActive />
-      </TooltipProvider>
+      <ConfirmationDialogProvider>
+        <TooltipProvider>
+          <StructuredAgentSessionPaneOverlayLayer worktreeId={WORKSPACE} isWorktreeActive />
+        </TooltipProvider>
+      </ConfirmationDialogProvider>
     )
   })
   return view!

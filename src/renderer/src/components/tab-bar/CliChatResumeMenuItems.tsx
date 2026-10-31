@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useConversationSwitchReadiness, runCliChatResume } from '@/lib/conversation-surface-switch'
+import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { ContextMenuSeparator } from '@/components/ui/context-menu'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { AiVaultSessionSurfaceSwitchMenuItems } from '../right-sidebar/AiVaultSessionSurfaceSwitchMenuItems'
-import { resolveCliChatResumeSource } from './cli-chat-resume-source'
-import { runCliChatResume, useCliChatResumePending } from './cli-chat-resume-run'
+import { resolveCliChatResumeSource, useCliChatResumeCapability } from './cli-chat-resume-source'
 
 export function CliChatResumeMenuItems({
   tab,
@@ -15,9 +15,11 @@ export function CliChatResumeMenuItems({
   leadingSeparator: boolean
   onComplete?: () => void
 }): React.JSX.Element | null {
-  const [source] = useState(() => resolveCliChatResumeSource(useAppStore.getState(), { tab }))
-  const pending = useCliChatResumePending(source)
-  // Radix disables pointer events on disabled items, so a tooltip-less "update" item would only confuse.
+  const source = useAppStore(useShallow((state) => resolveCliChatResumeSource(state, { tab })))
+  const capability = useCliChatResumeCapability(tab.worktreeId, source?.agent)
+  const readiness = useConversationSwitchReadiness(
+    source ? { direction: 'chat', ...source, source } : null
+  )
   if (!source || source.hostUpdateRequired) {
     return null
   }
@@ -26,9 +28,12 @@ export function CliChatResumeMenuItems({
       {leadingSeparator ? <ContextMenuSeparator /> : null}
       <AiVaultSessionSurfaceSwitchMenuItems
         action="switch"
+        switchesInPlace={capability !== false}
+        switchLoading={!readiness.ready}
+        switchExplanation={readiness.explanation}
         menuKind="context"
         tooltipSide="right"
-        chatPending={pending}
+        chatPending={readiness.pending}
         onResumeInNewChat={(event) => {
           event.preventDefault()
           void runCliChatResume(source).finally(() => onComplete?.())

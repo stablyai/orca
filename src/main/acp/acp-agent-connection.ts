@@ -30,6 +30,7 @@ export type AcpAgentConnectionOptions = Omit<AcpSessionRuntimeOptions, 'peer'> &
   /** Process exit evidence, including expected closes and processless spawn failures. */
   onExit?: (error: Error, context: { expected: boolean; exit: ProviderProcessExit }) => void
   onOutput?: () => void
+  onPhysicalExit?: (exited: Promise<void>) => void
   signIn?: AcpSignInWatch
 }
 
@@ -86,6 +87,7 @@ export class AcpAgentConnection extends AcpSessionRuntime {
           }
         : {})
     })
+    options.onPhysicalExit?.(managed.exitPromise)
     const lifecycle: { closing: boolean; error?: Error } = { closing: false }
     const diagnose = (message: string): void => {
       try {

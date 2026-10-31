@@ -1,3 +1,7 @@
+import type {
+  RuntimeRpcDispatchObservation,
+  RuntimeRpcResponse
+} from '../../shared/runtime-rpc-envelope'
 import { ipcRenderer } from 'electron'
 import {
   RUNTIME_HOST_STATUS_CHANNEL,
@@ -5,7 +9,6 @@ import {
 } from '../../shared/runtime-host-status'
 import type { VerifyAndAddRuntimeEnvironmentResult } from '../../shared/remote-pairing-verification'
 import type { RuntimeStatus } from '../../shared/runtime-types'
-import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import type {
   PublicKnownRuntimeEnvironment,
   RuntimeEnvironmentRemoval
@@ -118,6 +121,8 @@ export const runtimeEnvironmentsApi = {
     params?: unknown
     timeoutMs?: number
     expectedEnvironmentPairingRevision?: number
+    observeDispatch?: boolean
+    dispatchObservation?: RuntimeRpcDispatchObservation
     expectedEnvironmentRuntimeId?: string
   }): Promise<RuntimeRpcResponse<unknown>> => ipcRenderer.invoke('runtimeEnvironments:call', args),
   cancelSubscription: (args: { subscriptionId: string }): Promise<void> =>
@@ -130,9 +135,12 @@ export const runtimeEnvironmentsApi = {
       params?: unknown
       timeoutMs?: number
       expectedEnvironmentPairingRevision?: number
+      observeDispatch?: boolean
+      dispatchObservation?: RuntimeRpcDispatchObservation
       expectedEnvironmentRuntimeId?: string
     },
     callbacks: {
+      onSent?: (sentAt?: number) => void
       onResponse: (response: RuntimeRpcResponse<unknown>) => void
       onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
       onError?: (error: { code: string; message: string }) => void

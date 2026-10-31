@@ -27,7 +27,7 @@ vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 // The test opens its own stream: boot's document-long one would outlive the test's transport.
-vi.mock('@/runtime/workspace-layout-frame-sync', async (importOriginal) => ({
+vi.mock('@/runtime/workspace-layout-frame-startup', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   showStartupLayoutFrames: () => {}
 }))

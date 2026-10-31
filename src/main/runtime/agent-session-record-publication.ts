@@ -1,6 +1,5 @@
 import type { AgentSessionStoreState } from './agent-session-store-state'
 import type { AgentSessionStoreTransactions } from './agent-session-store-transactions'
-
 export abstract class AgentSessionRecordPublication {
   constructor(protected readonly transactions: AgentSessionStoreTransactions) {}
   abstract holdsRecords(): boolean
@@ -48,5 +47,9 @@ export abstract class AgentSessionRecordPublication {
       this.firstRecordListeners.forEach((listener) => listener())
     }
     return result
+  }
+
+  protected get state(): AgentSessionStoreState {
+    return this.transactions.state
   }
 }

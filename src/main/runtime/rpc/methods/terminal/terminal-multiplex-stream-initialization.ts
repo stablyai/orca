@@ -17,6 +17,7 @@ import {
 } from './terminal-multiplex-connection'
 import type { TerminalMultiplexStream } from './terminal-stream-types'
 import { subscribeToPtyEndpointLoss } from '../../../terminal/pty-endpoint-loss-signal'
+import { subscribeToPtyPresentationRelease } from '../../../terminal/pty-presentation-release-signal'
 
 export async function initializeMultiplexStream(
   state: TerminalMultiplexConnection,
@@ -90,10 +91,25 @@ export async function initializeMultiplexStream(
   )
   onInstalled(stream)
 
+  const releasePresentation = (): void => {
+    if (!stream.presentationHeld) {
+      return
+    }
+    stream.presentationHeld = false
+    stream.outputBatcher.flush()
+    state.sendFrame(stream.streamId, TerminalStreamOpcode.PausedOutputDropped)
+  }
   const unsubscribeStreamData = runtime.subscribeToTerminalData(ptyId, (data, meta) => {
     if (!isMultiplexStreamAttached(state, stream)) {
       return
     }
+    // Only a client that restores after a drop can be held: one without that notice would carry on
+    // across a silent gap if the stop isn't proven, so it keeps receiving the output.
+    if (meta?.presentationHeld && stream.supportsOutputPauseDropNotice) {
+      stream.presentationHeld = true
+      return
+    }
+    releasePresentation()
     if (stream.outputPaused) {
       notePausedOutputDropped(state, stream)
       return
@@ -119,10 +135,19 @@ export async function initializeMultiplexStream(
         }
       })
     : () => {}
+  // An unproven stop releases the hold when it settles; a quiet process would otherwise keep the old screen.
+  const unsubscribePresentationRelease = stream.supportsOutputPauseDropNotice
+    ? subscribeToPtyPresentationRelease(ptyId, () => {
+        if (isMultiplexStreamAttached(state, stream)) {
+          releasePresentation()
+        }
+      })
+    : () => {}
   stream.unsubscribeData = () => {
     releaseViewSubscriber()
     unsubscribeStreamData()
     unsubscribeEndpointLoss()
+    unsubscribePresentationRelease()
   }
 
   if (isMobile && request.client?.id) {

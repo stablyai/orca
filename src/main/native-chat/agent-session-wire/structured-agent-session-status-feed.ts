@@ -279,10 +279,8 @@ export class StructuredAgentSessionStatusFeed {
 
   childWorkOpen = (sessionId: string): boolean => this.ownership.childWorkOpen(sessionId)
 
-  captureChildWorkStops = (
-    sessionId: string,
-    handleIds: readonly string[]
-  ): CapturedChildWorkStops => this.ownership.captureChildWorkStops(sessionId, handleIds)
+  captureChildWorkStops = (sessionId: string, ids: readonly string[]): CapturedChildWorkStops =>
+    this.ownership.captureChildWorkStops(sessionId, ids)
 
   childWorkIncomplete = (sessionId: string): boolean => {
     try {

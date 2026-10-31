@@ -1,5 +1,7 @@
 // @vitest-environment happy-dom
 
+import { ConfirmationDialogProvider } from '@/components/confirmation-dialog'
+
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -74,14 +76,16 @@ function setHost(status: RuntimeEnvironmentStatus): void {
 
 function paneElement(): React.JSX.Element {
   return (
-    <NativeChatStructuredSession
-      isVisible
-      isFocusedGroup
-      tabId="structured-host-outage-tab"
-      sessionId="host-outage-session"
-      target={{ kind: 'environment', environmentId: 'remote-host' }}
-      agent="claude"
-    />
+    <ConfirmationDialogProvider>
+      <NativeChatStructuredSession
+        isVisible
+        isFocusedGroup
+        tabId="structured-host-outage-tab"
+        sessionId="host-outage-session"
+        target={{ kind: 'environment', environmentId: 'remote-host' }}
+        agent="claude"
+      />
+    </ConfirmationDialogProvider>
   )
 }
 

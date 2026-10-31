@@ -229,6 +229,15 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
       const existingRecord = this.handles.get(existingHandle)
       if (
         existingRecord &&
+        existingRecord.worktreeId === leaf.worktreeId &&
+        existingRecord.ptyId &&
+        !leaf.ptyId &&
+        this.getPtyLivenessVerdict(existingRecord.ptyId)?.status === 'exited'
+      ) {
+        return existingHandle
+      }
+      if (
+        existingRecord &&
         existingRecord.rendererGraphEpoch === this.rendererGraphEpoch &&
         existingRecord.ptyId === leaf.ptyId &&
         existingRecord.ptyGeneration === leaf.ptyGeneration

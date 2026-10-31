@@ -1,3 +1,5 @@
+import { mapMessageRows } from './transcript-opencode-message-rows'
+import type { MessageRow } from './transcript-opencode-message-rows'
 import { openOpenCodeDatabaseReadonly } from '../ai-vault/session-scanner-opencode-sqlite-open'
 import { zcodeVisibleMessageFilter } from '../ai-vault/session-scanner-zcode-visibility'
 import { zcodeTranscriptOrder } from '../ai-vault/session-scanner-zcode-order'
@@ -5,16 +7,20 @@ import {
   readOpenCode2TranscriptPage,
   readOpenCode2TranscriptSignal
 } from './transcript-opencode2-sqlite'
-import type { NativeChatMessage } from '../../shared/native-chat-types'
+import type { NativeChatMessage, NativeChatTurnLifecycle } from '../../shared/native-chat-types'
 import { openCodeTranscriptPageLimit } from '../../shared/opencode-transcript-page-limit'
 import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
 import { asRecord, extractString, parseJsonObject } from '../ai-vault/session-scanner-values'
 import type SyncDatabase from '../sqlite/sync-database'
 import { rowsOf, rowsWithinBudget } from './transcript-opencode-row-budget'
-import {
-  opencodeMessages,
-  OPENCODE_TRANSCRIPT_MAX_ROW_BYTES
-} from './transcript-opencode-part-blocks'
+import { OPENCODE_TRANSCRIPT_MAX_ROW_BYTES } from './transcript-opencode-part-blocks'
+export {
+  PART_ID_BATCH,
+  type MessageRow,
+  type PartRow,
+  mapMessageRows
+} from './transcript-opencode-message-rows'
+
 // Cursors are opaque provider order: SQLite rowid in v1, session sequence in v2.
 
 export type OpenCodeTranscriptItem = {
@@ -27,6 +33,7 @@ export type OpenCodeTranscriptPage = {
   items: OpenCodeTranscriptItem[]
   hasMore: boolean
   beforeMessageRowId: number | null
+  lifecycle?: NativeChatTurnLifecycle
 }
 
 export type OpenCodeTranscriptSignal = {
@@ -36,8 +43,6 @@ export type OpenCodeTranscriptSignal = {
   maxMessageRowId: number
   maxPartTimeUpdated: number
 }
-
-const PART_ID_BATCH = 100
 
 function sessionExists(db: SyncDatabase, sessionId: string): boolean {
   return (
@@ -157,6 +162,7 @@ export function readOpenCodeTranscriptPage(args: {
     const rawBudget = { bytes: 0 }
     let cursor: number | undefined = args.beforeMessageRowId
     let hasMore = false
+    let lifecycle: NativeChatTurnLifecycle | undefined
     for (;;) {
       const rows = rowsWithinBudget<MessageRow>(
         select,
@@ -175,6 +181,40 @@ export function readOpenCodeTranscriptPage(args: {
       }
       hasMore = rows.length > limit
       const selected = hasMore ? rows.slice(0, limit) : rows
+      for (const row of selected) {
+        if (lifecycle || row.data === null) {
+          continue
+        }
+        const record = parseJsonObject(row.data)
+        const time = asRecord(record?.time)
+        if (record?.role === 'user') {
+          lifecycle = { state: 'working', turnId: row.id, timestamp: row.time_created }
+        } else if (
+          record?.role === 'assistant' &&
+          typeof record.parentID === 'string' &&
+          typeof time?.completed === 'number'
+        ) {
+          const error = asRecord(record.error)
+          const state =
+            error?.name === 'MessageAbortedError'
+              ? 'interrupted'
+              : error || record.finish === 'error'
+                ? 'failed'
+                : typeof record.finish === 'string' &&
+                    record.finish !== 'tool-calls' &&
+                    record.finish !== 'unknown'
+                  ? 'completed'
+                  : null
+          if (state) {
+            lifecycle = {
+              state: state === 'failed' ? 'completed' : state,
+              ...(state === 'failed' ? { outcome: 'failure' as const } : {}),
+              turnId: record.parentID,
+              timestamp: time.completed
+            }
+          }
+        }
+      }
       cursor = selected.at(-1)!.message_rowid
       const mapped = mapMessageRows(db, args.sessionId, selected, rawBudget, args.agent)
       pageBytes += Buffer.byteLength(JSON.stringify(mapped))
@@ -200,95 +240,10 @@ export function readOpenCodeTranscriptPage(args: {
     return {
       items,
       hasMore: hasMore || overshot,
-      beforeMessageRowId: overshot ? items[0]!.rowid : (cursor ?? null)
+      beforeMessageRowId: overshot ? items[0]!.rowid : (cursor ?? null),
+      ...(lifecycle ? { lifecycle } : {})
     }
   } finally {
     db.close()
   }
-}
-
-type MessageRow = {
-  message_rowid: number
-  transcript_order: number
-  id: string
-  time_created: number
-  time_updated: number
-  data: string | null
-}
-
-type PartRow = {
-  message_id: string
-  time_updated: number
-  data: string | null
-}
-
-function mapMessageRows(
-  db: SyncDatabase,
-  sessionId: string,
-  rows: MessageRow[],
-  rawBudget: { bytes: number },
-  agent?: 'zcode'
-): OpenCodeTranscriptItem[] {
-  if (rows.length === 0) {
-    return []
-  }
-  const partsByMessage = new Map<string, PartRow[]>()
-  const ids = rows.map((row) => row.id)
-  for (let start = 0; start < ids.length; start += PART_ID_BATCH) {
-    const batch = ids.slice(start, start + PART_ID_BATCH)
-    const placeholders = batch.map(() => '?').join(', ')
-    const partRows = rowsWithinBudget<PartRow>(
-      db.prepare(
-        `SELECT message_id, time_updated, CASE WHEN length(CAST(data AS BLOB)) <= ${OPENCODE_TRANSCRIPT_MAX_ROW_BYTES} THEN data ELSE NULL END AS data FROM part p
-         WHERE session_id = ? AND message_id IN (${placeholders})
-         ORDER BY ${agent === 'zcode' ? zcodeTranscriptOrder(db, agent, 'part', 'p', 'ASC') : 'rowid'} LIMIT 10001`
-      ),
-      rawBudget,
-      sessionId,
-      ...batch
-    )
-    if (partRows.length > 10000) {
-      throw new Error('OpenCode transcript parts exceed their read limit')
-    }
-    for (const partRow of partRows) {
-      const list = partsByMessage.get(partRow.message_id)
-      if (list) {
-        list.push(partRow)
-      } else {
-        partsByMessage.set(partRow.message_id, [partRow])
-      }
-    }
-  }
-  const items: OpenCodeTranscriptItem[] = []
-  for (const row of rows) {
-    const partList = partsByMessage.get(row.id) ?? []
-    const record = row.data === null ? null : parseJsonObject(row.data)
-    const role = extractString(record?.role)
-    const messages = opencodeMessages(
-      {
-        id: row.id,
-        role: role === 'user' ? 'user' : role === 'assistant' ? 'assistant' : 'system',
-        timestamp: Number.isFinite(row.time_created) ? row.time_created : null
-      },
-      row.data === null
-        ? [{ message_id: row.id, time_updated: row.time_updated, data: null }]
-        : partList
-    )
-    const updated = partList.reduce(
-      (max, row) => (row.time_updated > max ? row.time_updated : max),
-      0
-    )
-    for (const message of messages.toReversed()) {
-      items.push({
-        rowid: row.message_rowid,
-        fingerprint: `${row.time_updated}:${partList.length}:${updated}`,
-        message: {
-          ...message,
-          transcriptOffset: row.message_rowid,
-          ...(agent === 'zcode' ? { transcriptOrder: row.transcript_order } : {})
-        }
-      })
-    }
-  }
-  return items
 }

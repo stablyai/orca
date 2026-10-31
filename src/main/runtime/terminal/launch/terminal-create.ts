@@ -1,10 +1,5 @@
 import type { TerminalWorkspaceCreationEvidence } from './terminal-workspace-scope'
-import {
-  recordTerminalLaunchMetadata,
-  resolveTerminalLaunchResult,
-  terminalLaunchPublicFacts
-} from './terminal-launch-result'
-import { revealCreatedTerminal } from './terminal-create-reveal'
+import { recordTerminalLaunchMetadata, resolveTerminalLaunchResult } from './terminal-launch-result'
 import type { PaneSpawnOperation } from '../../../ipc/pty/pane/pane-spawn-operation'
 import { OrcaRuntimeWithTerminalCreateDeduplication } from './terminal-create-deduplication'
 import * as dependencies from '../../orca-runtime-create-terminal-dependencies'
@@ -15,7 +10,8 @@ import { recordPtySurface, spawnSurfaceClaimSequence } from '../../pty-recorded-
 import { agentLaunchTokenFor, withAgentLaunchToken } from '../../../agent-launch/agent-launch-token'
 import { seedPtyLaunchTitle } from './pty-launch-title'
 import { migratedPaneRestoreHint } from '../../migrated-pane-restore-cwd'
-import { paneSize, resolvePtyFirstSize } from '../../../ipc/pty/pty-first-size'
+import { prepareTerminalCreateCompletion } from './terminal-create-completion'
+import { terminalCreateSize } from './terminal-create-size'
 
 export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreateDeduplication {
   protected abstract paneStartStatusArgs: dependencies.PaneStartArgsOf
@@ -46,18 +42,15 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
       const launchTitleAt = { sequence: this.nextTitleObservationSequence(), epochMs: Date.now() }
       let cwd = this.resolveWorkspaceTerminalStartupCwd(workspace, launchOpts.cwd) ?? workspace.path
       const session = this.getWorkspaceSessionForWorktree(workspace.id)
-      // The window's latest published active group is where its reveal places the tab.
-      const groupId =
-        launchOpts.targetGroupId ??
-        this.mobileSessionTabsByWorktree.get(workspace.id)?.activeGroupId ??
-        session?.activeGroupIdByWorktree?.[workspace.id]
-      // Unshown workspaces have no measured group; a single group can use the common workspace geometry.
-      const singleGroup =
-        (session?.tabGroups?.[workspace.id]?.length ?? 0) <= 1
-          ? this.singleGroupWorkspaceGridSize
-          : undefined
-      const group = groupId ? this.terminalGroupGridSizes?.[groupId] : undefined
-      const initialSize = resolvePtyFirstSize({ pane: paneSize(session, opts), group, singleGroup })
+      const initialSize = terminalCreateSize({
+        workspaceId: workspace.id,
+        targetGroupId: launchOpts.targetGroupId,
+        activeGroupId: this.mobileSessionTabsByWorktree.get(workspace.id)?.activeGroupId,
+        session,
+        opts,
+        singleGroupSize: this.singleGroupWorkspaceGridSize,
+        groupSizes: this.terminalGroupGridSizes
+      })
       let preAllocatedHandle =
         launchOpts.preAllocatedHandle ?? this.createPreAllocatedTerminalHandle()
       let { tabId, leafId, paneKey } = dependencies.allocateTerminalPaneIdentity(launchOpts)
@@ -130,7 +123,9 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
               launchOpts.envToDelete,
               agentTeamsPlan?.envToDelete
             ),
-            resumeProviderSession: launchOpts.resumeProviderSession,
+            ...(launchOpts.resumeProviderSession
+              ? { resumeProviderSession: launchOpts.resumeProviderSession }
+              : {}),
             ...(launchOpts.resumeOrigin ? { resumeOrigin: launchOpts.resumeOrigin } : {}),
             telemetry: launchOpts.telemetry,
             connectionId: workspace.connectionId,
@@ -262,41 +257,25 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
             ...(savedStartupCwd !== workspace.path ? { startupCwd: savedStartupCwd } : {})
           })
         }
-        const reveal = revealCreatedTerminal({
+        const completion = prepareTerminalCreateCompletion({
           notifier: this.notifier,
           workspace,
-          ptyId: result.id,
-          handle,
-          cwd: savedStartupCwd,
-          launchOpts: {
-            ...launchOpts,
-            title: pty?.title ?? launch.effectiveTitle ?? undefined,
-            launchAgent: pty?.launchAgent ?? undefined,
-            viewMode: launch.effectiveViewMode
-          },
-          effectiveLaunchConfig: pty?.launchConfig ?? undefined,
-          launchToken: pty?.launchToken ?? undefined,
-          adoptedStablePane: launch.adoptedStablePane,
+          result,
+          pty,
+          launch,
+          launchOpts,
           presentation,
           opts,
           tabId,
-          leafId
-        })
-        const { surface, warning } = reveal instanceof Promise ? await reveal : reveal
-        return {
-          ...terminalLaunchPublicFacts(result, launch.adoptedStablePane, pty),
+          leafId,
+          paneKey,
           handle,
           savedStartupCwd,
-          tabId,
-          paneKey,
-          ptyId: result.id,
-          worktreeId: workspace.id,
-          title: pty?.title ?? launch.effectiveTitle ?? null,
-          ...this.getPtyExecutionHostMetadata(result.id),
-          surface,
-          ...(result.startupCwdFallback ? { startupCwdFallback: result.startupCwdFallback } : {}),
-          ...(warning ? { warning } : {})
-        }
+          executionMetadata: () => this.getPtyExecutionHostMetadata(result.id)
+        })
+        const revealed =
+          completion.reveal instanceof Promise ? await completion.reveal : completion.reveal
+        return completion.result(revealed)
       } finally {
         teamAllocation.release()
         releaseStablePaneCreate()

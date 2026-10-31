@@ -18812,8 +18812,8 @@
       "resumeInNewChat": {
         "hostUpdateRequired": "チャット UI で続けるには、このホストの Orca を更新してください。",
         "notSavedYet": "{{agent}} はまだこの会話を保存していません。応答してから再度お試しください。",
-        "exitUnconfirmedFromTerminal": "{{agent}} は別のターミナルですでにこの会話を実行しています。そちらの {{agent}} を終了するか、そのターミナルを閉じてから、セッション履歴でこの会話を開いてください。",
-        "exitUnconfirmed": "{{agent}} は別のターミナルですでにこの会話を実行しています。そちらの {{agent}} を終了するか、そのターミナルを閉じてから、セッション履歴でこの会話を開いてください。"
+        "exitUnconfirmedFromTerminal": "Orca は、このターミナルで {{agent}} が停止したことを確認できませんでした。ここで {{agent}} を終了してから、この操作をもう一度試してください。",
+        "exitUnconfirmed": "Orca は {{agent}} が停止したことを確認できませんでした。{{agent}} を実行中のターミナルで終了してから、この操作をもう一度試してください。"
       },
       "state": {
         "loading": {
@@ -19300,8 +19300,18 @@
       "bar": {
         "SortableTabContextMenu": {
           "switchToTerminalView": "ターミナル Agent で続ける",
-          "switchToChatView": "チャット UI で続ける",
+          "continueInChatView": "チャット UI で続ける",
+          "switchToChatView": "チャットとして表示",
+          "showAsTerminal": "ターミナルとして表示",
           "allowAutoClose": "自動終了を許可"
+        },
+        "switch": {
+          "toCli": "CLI に切り替える",
+          "toNativeChat": "チャット UI に切り替える",
+          "toCliTooltip": "CLI に切り替え: チャット UI で {{agent}} を停止し、ターミナルで同じ会話を続けます。",
+          "openedInWorkspace": "{{workspace}} でチャットを開きました。",
+          "toNativeChatTooltip": "チャット UI に切り替え: このタブのチャットで同じ会話を続けます。",
+          "noConversation": "このターミナルには、保存された会話がまだありません。"
         },
         "BrowserTab": {
           "closeOthers": "その他を閉じる",

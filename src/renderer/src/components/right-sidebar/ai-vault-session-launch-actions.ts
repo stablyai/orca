@@ -1,3 +1,4 @@
+import type { AiVaultOriginalPaneTarget } from './ai-vault-original-pane'
 import {
   notifyAiVaultSessionPreparationFailure,
   resolveAiVaultSessionLaunchTargetOrNotify
@@ -35,6 +36,10 @@ import { adoptsCliConversations } from '../../../../shared/structured-agent-cli-
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { describeAiVaultResumeFailure } from '@/lib/ai-vault-resume-refusal'
 import { resumeAiVaultSessionInNewChat } from './ai-vault-session-resume-in-chat-launch'
+import {
+  switchAiVaultSessionToCli,
+  switchAiVaultSessionToNativeChat
+} from './ai-vault-session-in-place-switch'
 import { resolveAiVaultTargetWorkspacePath } from './ai-vault-session-launch-target'
 
 export function useAiVaultSessionLaunchActions({
@@ -144,9 +149,12 @@ export function useAiVaultSessionLaunchActions({
     [buildResumeStartup, launchInTerminal]
   )
 
-  // Native chat keeps the conversation it owns; the terminal gets a copy (see the fork builder).
+  // Supported chats transfer the same conversation; other history rows keep their ordinary resume.
   const handleResumeInNewCli = useCallback(
     (session: AiVaultSession, targetWorktreeId: string): void => {
+      if (switchAiVaultSessionToCli(session)) {
+        return
+      }
       const prepareStartup = async (worktreeId: string): Promise<AiVaultResumeStartup> => {
         assertAiVaultCopiedSessionLaunchAllowed({
           state: useAppStore.getState(),
@@ -189,8 +197,19 @@ export function useAiVaultSessionLaunchActions({
   )
 
   const handleResumeInNewChat = useCallback(
-    (session: AiVaultSession, targetWorktreeId?: string): void => {
-      if (!adoptsCliConversations(session.agent)) {
+    (
+      session: AiVaultSession,
+      targetWorktreeId?: string,
+      pane?: AiVaultOriginalPaneTarget | null
+    ): void => {
+      if (
+        !adoptsCliConversations(session.agent) ||
+        switchAiVaultSessionToNativeChat(
+          session,
+          targetWorktreeId ?? activeWorktreeId ?? activeWorktree?.id,
+          pane
+        )
+      ) {
         return
       }
       const worktreeId = targetWorktreeId ?? activeWorktreeId ?? activeWorktree?.id ?? null

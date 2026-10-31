@@ -9,7 +9,9 @@ import type { RpcContext } from '../core'
 import { projectSessionTabAgentStatus } from './session-tab-agent-status-projection'
 import { projectSessionTabBrowserPlacements } from './session-tab-browser-placement-projection'
 import { projectSessionTabFileHosts } from './session-tab-file-host-projection'
+import { projectSessionTabStoppedSources } from './session-tab-stopped-source-projection'
 import { createSessionTabsRetirementProofDelta } from './session-tabs-retirement-proof-delta'
+import { createSessionTabsStoppedScreenOnce } from './session-tabs-stopped-screen-once'
 import { prepareStructuredTabsIfSupported } from './structured-session-tab-restore'
 import { createSessionTabsTabDeltaEncoder } from '../../../../shared/session-tabs-tab-delta'
 
@@ -33,7 +35,11 @@ export function projectSessionTabsForClient(
 ): RuntimeMobileSessionTabsResult {
   return projectSessionTabBrowserPlacements(
     projectSessionTabFileHosts(
-      projectSessionTabAgentStatus(snapshot, clientKind, clientCapabilities),
+      projectSessionTabAgentStatus(
+        projectSessionTabStoppedSources(snapshot, clientKind),
+        clientKind,
+        clientCapabilities
+      ),
       clientKind
     ),
     clientCapabilities
@@ -88,6 +94,7 @@ export async function subscribeSessionTabsInventory(
   let censusChangeSequence: number | undefined
   let censusInvalidated = false
   const withProofDelta = createSessionTabsRetirementProofDelta(context.clientCapabilities)
+  const withScreenOnce = createSessionTabsStoppedScreenOnce()
   const tabDelta = createSessionTabsTabDeltaEncoder(context.clientCapabilities)
   const canonicalSnapshotsByWorktree = new Map<string, SessionTabsChange>()
   const projectChange = (snapshot: SessionTabsChange): SessionTabsChange =>
@@ -172,7 +179,7 @@ export async function subscribeSessionTabsInventory(
     }
     emit({
       type: 'updated',
-      ...tabDelta.update(withProofDelta(projected))
+      ...tabDelta.update(withProofDelta(withScreenOnce(projected)))
     })
     if (projected.removed === true) {
       publishedSnapshotsByWorktree.delete(snapshot.worktree)
@@ -205,7 +212,7 @@ export async function subscribeSessionTabsInventory(
       if (isDeepStrictEqual(publishedSnapshotsByWorktree.get(snapshot.worktree), projected)) {
         continue
       }
-      emit({ type: 'updated', ...tabDelta.update(withProofDelta(projected)) })
+      emit({ type: 'updated', ...tabDelta.update(withProofDelta(withScreenOnce(projected))) })
       publishedSnapshotsByWorktree.set(snapshot.worktree, projected)
     }
   })
@@ -273,7 +280,7 @@ export async function subscribeSessionTabsInventory(
       ? { authoritative: true as const }
       : {}),
     snapshots: inventory.snapshots.map((snapshot) =>
-      tabDelta.full(withProofDelta(projectChange(snapshot)))
+      tabDelta.full(withProofDelta(withScreenOnce(projectChange(snapshot))))
     )
   })
   for (const snapshot of inventory.snapshots) {

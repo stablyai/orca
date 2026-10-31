@@ -25,6 +25,7 @@ import type { DescendantTreeVerdict } from '../pty-descendant-exit-verification'
 import type { AgentSessionStopOutcome } from '../native-chat/agent-session-wire/structured-agent-session-adapter-stop'
 import { agentVerdictDisplayMark } from '../../shared/agent-main-agent-verdict'
 import { activeProviderContext } from '../../shared/agent-session-provider-context'
+import { nativeSwitchPhysicalFixture } from './structured-native-switch-physical.test-fixture'
 
 const os = vi.hoisted(() => ({
   capture: vi.fn<(pid: number) => Promise<DescendantSnapshot | null>>(),
@@ -266,6 +267,37 @@ const warnings = (items: Awaited<ReturnType<typeof fixture.host.journalSnapshot>
   items.filter(
     (item) => item.body.kind === 'status' && item.body.failure?.kind === 'cancelUnconfirmed'
   )
+
+it('joins the exact Codex root after ordinary replying Stop before opening one terminal', async () => {
+  await fixture.start()
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  expect(await fixture.stop()).toMatchObject({ ok: true, value: { cancelled: true } })
+  await forceTime()
+  await fixture.drain()
+  expect(fixture.record().lease.deathEvidence?.kind).toBe('kill-delivered')
+  expect(fixture.connections[0]!.closeResult?.root).toBe('live')
+  const switching = await nativeSwitchPhysicalFixture(
+    fixture.host,
+    SESSION,
+    fixture.directory,
+    'codex'
+  )
+  try {
+    const operation = switching.run()
+    await vi.advanceTimersByTimeAsync(0)
+    await fixture.drain()
+    expect(switching.spawn).not.toHaveBeenCalled()
+    const kills = fixture.signal.mock.calls.length
+    fixture.children[0]!.emit('exit', 0, null)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(await operation).toMatchObject({ status: 'completed' })
+    expect(switching.spawn).toHaveBeenCalledOnce()
+    expect(fixture.signal.mock.calls).toHaveLength(kills)
+    expect(fixture.connections).toHaveLength(1)
+  } finally {
+    switching.dispose()
+  }
+})
 
 it.each(['fresh', 'cached-before-ack', 'retired-before-join'] as const)(
   'uses exact delivered writer evidence for %s Stop without inventing root exit',

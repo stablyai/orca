@@ -18,7 +18,10 @@ vi.mock('./parked-terminal-byte-watcher', () => ({
   }
 }))
 
-type ExitCallback = (code: number, context: { hadPrimary: boolean }) => void
+type ExitCallback = (
+  code: number,
+  context: { hadPrimary: boolean; exitOptions?: PtyExitOptions }
+) => void
 const exitCallbacksByPtyId = new Map<string, ExitCallback>()
 vi.mock('./pty-dispatcher', () => ({
   subscribeToPtyExit: (ptyId: string, callback: ExitCallback) => {
@@ -61,6 +64,7 @@ import {
 } from './pty-shutdown-exit-deferral'
 import { startParkedPtyWatcher } from './terminal-parked-pty-watcher'
 import { deliverPtyExitToHandlers } from './pty-exit-delivery'
+import type { PtyExitOptions } from './pty-exit-delivery'
 import type { ParkedTabWatcherEntry } from './terminal-parked-watcher-registry'
 
 function startSplitWatchers(): ParkedTabWatcherEntry {
@@ -113,12 +117,24 @@ describe('sleep-preserved parked exits (sole-owner sidecar)', () => {
   it.each([
     ['pending renderer shutdown', () => mockStoreState.isPtyShutdownPending.mockReturnValue(true)],
     ['suppressed intentional restart', () => (mockStoreState.suppressedPtyExitIds[PTY_ID] = true)],
-    ['committed sleep marker', () => markCommittedPtyShutdowns([PTY_ID])]
+    ['committed sleep marker', () => markCommittedPtyShutdowns([PTY_ID])],
+    [
+      'closing marker with generic suppression',
+      () => {
+        markCommittedPtyShutdowns([PTY_ID], 'closing')
+        mockStoreState.suppressedPtyExitIds[PTY_ID] = true
+      }
+    ]
   ] as const)('keeps the tab and layout on a %s exit', (_marker, arm) => {
     const entry = startSplitWatchers()
     arm()
 
-    exitCallbacksByPtyId.get(PTY_ID)?.(0, { hadPrimary: false })
+    const exitOptions: PtyExitOptions =
+      _marker === 'committed sleep marker' ? { preserveRendererBinding: 'closing' } : {}
+    exitCallbacksByPtyId.get(PTY_ID)?.(0, { hadPrimary: false, exitOptions })
+    if (_marker === 'committed sleep marker') {
+      expect(exitOptions.preserveRendererBinding).toBe(true)
+    }
 
     expect(closeTerminalTab).not.toHaveBeenCalled()
     expect(mockStoreState.setTabLayout).not.toHaveBeenCalled()
@@ -151,16 +167,19 @@ describe('sleep-preserved parked exits (sole-owner sidecar)', () => {
     expect(entry.disposersByPtyId.size).toBe(0)
   })
 
-  it('leaves the committed marker to the primary when one handled the exit', () => {
-    startSplitWatchers()
-    markCommittedPtyShutdowns([PTY_ID])
+  it.each([true, 'closing'] as const)(
+    'leaves the committed marker %s to the primary when one handled the exit',
+    (disposition) => {
+      startSplitWatchers()
+      markCommittedPtyShutdowns([PTY_ID], disposition)
 
-    exitCallbacksByPtyId.get(PTY_ID)?.(0, { hadPrimary: true })
+      exitCallbacksByPtyId.get(PTY_ID)?.(0, { hadPrimary: true })
 
-    // hadPrimary skips the guard entirely: marker untouched, watcher disposed.
-    expect(consumeCommittedPtyShutdownExit(PTY_ID, null)).toBe(true)
-    expect(startedWatcherDisposers[0]).toHaveBeenCalled()
-  })
+      // hadPrimary skips the guard entirely: marker untouched, watcher disposed.
+      expect(consumeCommittedPtyShutdownExit(PTY_ID, null)).toBe(disposition)
+      expect(startedWatcherDisposers[0]).toHaveBeenCalled()
+    }
+  )
 
   it('still collapses the dead leaf on an ordinary parked split exit', () => {
     startSplitWatchers()

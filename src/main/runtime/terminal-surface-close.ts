@@ -1,3 +1,8 @@
+import { markAgentLaunchesClosedByUser } from '../agent-launch/agent-launch-pane-attachment'
+import {
+  matchesTerminalSurfaceCapture,
+  type TerminalSurfaceCloseCapture
+} from '../../shared/terminal-tab-close'
 import type { RuntimeSessionTabCloseReason } from '../../shared/runtime-session-contracts'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import {
@@ -160,6 +165,8 @@ export type TerminalSurfaceCloseOptions = {
   /** The desktop renderer's own close: its layout owner already removed the tab. Goes away with
    *  D1, once main owns the terminal layout. */
   closedByLayoutOwner?: boolean
+  originalPresentation?: TerminalSurfaceCloseCapture
+  onClosed?: (closedTab: boolean) => void
 }
 
 /** The desktop renderer's close intent as its IPC delivers it; main alone passes 'pty-exit'. */
@@ -178,7 +185,7 @@ export type TerminalSurfaceCloseCommit = {
   requestedSession: WorkspaceSessionState | null | undefined
   /** The tab's owner identity still matches the one the close was asked against. */
   ownerMatches: () => boolean
-  /** The partitions holding the tab, routed partition first; empty when unroutable. */
+  /** The tab's partitions, routed first; original-aware calls return captured and current holders. */
   hostIds: () => readonly ExecutionHostId[]
   /** Fence every holder against new/rebound copies, not just ownerMatches' first holder; capture snapshots because binding writes mutate sessions in place. */
   requestedHolders?: ReadonlyMap<ExecutionHostId, PersistedTerminalTabCopy>
@@ -217,7 +224,12 @@ export function terminalSurfaceCloseMutation(
         ]
       : undefined
   return () => {
-    if (!commit.ownerMatches()) {
+    const original = commit.options.originalPresentation
+    const hostIds = commit.hostIds()
+    if (
+      !commit.ownerMatches() ||
+      (original && !matchesTerminalSurfaceCapture(original, hostIds, commit.getSession))
+    ) {
       return { value: new Error('terminal_pane_owner_changed'), persist: false }
     }
     const results: {
@@ -225,16 +237,31 @@ export function terminalSurfaceCloseMutation(
       session: WorkspaceSessionState
       result: TerminalSurfaceCloseResult
     }[] = []
-    for (const hostId of commit.hostIds()) {
+    for (const hostId of hostIds) {
       const session = commit.getSession(hostId)
       if (!session) {
         return { value: new Error('workspace_session_unavailable'), persist: false }
       }
-      const result = closeTerminalSurfaceInWorkspaceSession(session, commit.worktreeId, target, {
-        force: commit.options.force,
-        paneIncarnationId,
-        reason: commit.options.reason ?? 'user'
-      })
+      const resolvedTarget =
+        commit.options.originalPresentation &&
+        target.kind === 'pane' &&
+        (resolvePaneClose(
+          collectTerminalLayoutLeafIds(session.terminalLayoutsByTabId[target.tabId]?.root),
+          target.leafId
+        ) === 'last-pane' ||
+          !session.tabsByWorktree[commit.worktreeId]?.some((row) => row.id === target.tabId))
+          ? { kind: 'tab' as const, tabId: target.tabId }
+          : target
+      const result = closeTerminalSurfaceInWorkspaceSession(
+        session,
+        commit.worktreeId,
+        resolvedTarget,
+        {
+          force: commit.options.force,
+          paneIncarnationId: original?.identity.incarnationId ?? paneIncarnationId,
+          reason: commit.options.reason ?? 'user'
+        }
+      )
       if (result.pinned) {
         return { value: new Error('terminal_tab_pinned'), persist: false }
       }
@@ -243,6 +270,7 @@ export function terminalSurfaceCloseMutation(
     const { requestedHolders } = commit
     const changedCopy =
       requestedHolders !== undefined &&
+      !commit.options.originalPresentation &&
       results
         .slice(1)
         .some(
@@ -257,6 +285,7 @@ export function terminalSurfaceCloseMutation(
       return { value: new Error('terminal_pane_owner_changed'), persist: false }
     }
     const closed = results.filter(({ result }) => result.closed)
+    commit.options.onClosed?.(results[0]?.result.resolution === 'tab')
     if (closed.length === 0) {
       const routed = results[0]
       if (!routed) {
@@ -266,7 +295,7 @@ export function terminalSurfaceCloseMutation(
       // Stamp missing tabs in the routed partition to reject late spawns; repeated close echoes need no second write.
       if (
         commit.options.allowMissing &&
-        target.kind === 'tab' &&
+        (target.kind === 'tab' || (original && routed.result.resolution === 'tab')) &&
         !hasClosedTerminalTabRecord(routed.session.closedTerminalTabTombstonesByTabId, target.tabId)
       ) {
         commit.setSession(routed.result.session, routed.hostId)
@@ -280,6 +309,9 @@ export function terminalSurfaceCloseMutation(
     // Why every holder: a legacy relay reattach can leave one tab in two partitions.
     for (const { hostId, result } of closed) {
       commit.setSession(result.session, hostId)
+    }
+    if (original) {
+      markAgentLaunchesClosedByUser(commit.worktreeId, target)
     }
     commit.onClosed([...new Set(closed.flatMap(({ result }) => result.ptyIdsToKill))])
     // Bookkeeping cannot undo user close or skip kill; failed persistence leaves the in-memory removal dirty for the next write.

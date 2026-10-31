@@ -11,15 +11,10 @@ import {
   WorktreeCreateCollisionError,
   WORKTREE_CREATE_COLLISION_CODE
 } from '../../../../shared/new-workspace/worktree-create-collision'
-import { executeAgentLaunch } from '../../../agent-launch/agent-launch-executor'
 import { trackTerminalSpawnDispatch } from '../../../agent-launch/agent-launch-not-started'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { defineMethod, type RpcContext } from '../core'
-import {
-  admitAgentLaunchOperation,
-  agentLaunchOperationCallerKey,
-  type ReplaySafeLaunch
-} from './agent-launch-replay'
+import { admitAgentLaunchOperation, agentLaunchOperationCallerKey } from './agent-launch-replay'
 import {
   AgentLaunchExecutionError,
   agentLaunchRefusalError,
@@ -33,70 +28,20 @@ import {
   AgentLaunchReplay,
   type AgentLaunchParams
 } from '../../../../shared/rpc-contract/agent-launch-params'
-import { agentLaunchSurfaceFactory } from './agent-launch-surfaces'
 import {
   agentLaunchFailureCode,
   launchFailureWithoutEffectsCode
 } from './agent-launch-failure-code'
-import {
-  agentLaunchCallerNavigationId,
-  callerRendersLaunchedChat,
-  selectAgentLaunchTabForCaller
-} from './agent-launch-caller-selection'
-import { agentLaunchWorkspaceFactory } from './agent-launch-worktree-creation'
+import { callerRendersLaunchedChat } from './agent-launch-caller-selection'
 import {
   assertAgentLaunchTargetAuthorized,
   supportsAgentLaunch
 } from './agent-launch-target-authorization'
 import { resolveUnlaunchedIntent } from './agent-launch-intent-resolution'
-import {
-  publishEarlyTab,
-  withPlacement,
-  type AgentLaunchView
-} from './agent-launch-tab-publication'
+import { publishEarlyTab, type AgentLaunchView } from './agent-launch-tab-publication'
+import { runAgentLaunch, type HostLaunchContext } from './agent-launch-surface-execution'
 
 export { supportsAgentLaunch } from './agent-launch-target-authorization'
-
-type HostLaunchContext = RpcContext & {
-  agentLaunchPolicy?: { onSurfacePublished?: (surface: AgentLaunchResult) => void }
-}
-
-async function runAgentLaunch(
-  { intent, decidedMode }: Awaited<ReturnType<typeof resolveUnlaunchedIntent>>,
-  context: HostLaunchContext,
-  view: AgentLaunchView,
-  replaySafe?: ReplaySafeLaunch
-): Promise<AgentLaunchResult> {
-  const callerNavigationId = agentLaunchCallerNavigationId(intent.target, context)
-  const result = await executeAgentLaunch({
-    runtime: context.runtime,
-    intent,
-    decidedMode,
-    surfaces: agentLaunchSurfaceFactory(
-      context,
-      replaySafe?.attachOperationId,
-      replaySafe?.callerKey,
-      callerNavigationId !== null,
-      replaySafe?.terminalSpawn,
-      view
-    ),
-    workspaces: agentLaunchWorkspaceFactory(context, intent.agent),
-    // The tab is shown as it is published, not after a prompt that can take a minute to land.
-    onSurfacePublished: (surface) => {
-      try {
-        context.agentLaunchPolicy?.onSurfacePublished?.(surface)
-      } catch (error) {
-        console.warn('[agent-launch] publication bookkeeping failed', error)
-      }
-      view.early?.surfacePublished(surface)
-      replaySafe?.recordSurface(withPlacement(surface, view))
-      if (callerNavigationId !== null && view.presentation !== 'background') {
-        selectAgentLaunchTabForCaller(context.runtime, surface, callerNavigationId)
-      }
-    }
-  })
-  return withPlacement(result, view)
-}
 
 /** Legacy unnamed launches retain the 60-second create dedupe cache (repo/mutation id, no caller partition).
  * Named operations bypass it: durable admission alone decides execution, including existing-workspace launches. */

@@ -107,8 +107,15 @@ export function withRuntimePaneAdmission<
     return value
   }
   return Object.assign(store, {
-    admitTerminalPane: async (admission: TerminalPaneAdmission, hostId?: string) =>
-      commit(hostId, (session) => admitPaneToSession(resolveHostId(hostId), session, admission)),
+    admitTerminalPane: async (
+      admission: TerminalPaneAdmission,
+      hostId?: string,
+      check?: () => void
+    ) =>
+      commit(hostId, (session) => {
+        check?.()
+        return admitPaneToSession(resolveHostId(hostId), session, admission)
+      }),
     withdrawTerminalPane: async (
       pane: CommandOf<'closePane'>,
       hostId?: string,

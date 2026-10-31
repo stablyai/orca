@@ -3,6 +3,8 @@ export type RuntimeTerminalDataMeta = Readonly<{
   rawLength?: number
   transformed?: boolean
   cwd?: string
+  /** A whole-tab close owns this process: views leave its teardown output unshown. */
+  presentationHeld?: true
 }>
 
 type TerminalDataListener = (data: string, meta?: RuntimeTerminalDataMeta) => void

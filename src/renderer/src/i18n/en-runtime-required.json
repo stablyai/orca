@@ -55,6 +55,9 @@
   },
   "auto": {
     "components": {
+      "AgentStateDot": {
+        "interrupted": "Interrupted"
+      },
       "GitHubItemDialog": {
         "filesViewed_one": "{{viewed}} / {{count}} file viewed",
         "filesViewed_other": "{{viewed}} / {{count}} files viewed",
@@ -1902,6 +1905,24 @@
           "left": "Close tabs to the left?",
           "others": "Close other tabs?",
           "right": "Close tabs to the right?"
+        },
+        "switch": {
+          "openElsewhere": "{{agent}} is open in another chat or terminal. Continue there, then try switching again.",
+          "stopUnknown": "Orca could not confirm {{agent}} stopped. Check its open chats and terminals, then try switching again.",
+          "outcomeUnknown": "Orca could not confirm the {{agent}} switch. Check the open chat and terminal before trying again.",
+          "historyUnavailable": "{{agent}} couldn't open this conversation's history. Check that its saved conversation is available, then try again.",
+          "chatSwitchFailed": "{{agent}} could not switch to chat. Try again.",
+          "chatSwitchFailedFromTerminal": "{{agent}} could not switch to chat. Use Switch to Chat UI to try again.",
+          "historyUnavailableFromTerminal": "{{agent}} couldn't open this conversation's history. Check that its saved conversation is available, then use Switch to Chat UI to try again.",
+          "terminalSwitchFailed": "{{agent}} could not switch to a terminal. Try again.",
+          "writerUnconfirmed": "Orca could not confirm {{agent}} stopped. Check its open chats and terminals, then try this action again.",
+          "sourceKept": "{{agent}} opened successfully. The original tab was kept; continue in the new tab.",
+          "sourceStopUnknown": "Orca could not confirm {{agent}} stopped. Check {{agent}} in the original terminal, then try switching again.",
+          "changeInProgress": "{{agent}} is still finishing another change to this conversation. Try again in a moment.",
+          "conversationMissing": "Orca could not find this {{agent}} conversation. Open it from Session History, then try again."
+        },
+        "SortableTabContextMenu": {
+          "switchToTerminalView": "Continue with Terminal Agent"
         }
       }
     },

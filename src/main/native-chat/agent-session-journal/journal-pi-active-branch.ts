@@ -16,10 +16,11 @@ function closePiImportDatabase(db: Database.Database | null): void {
 // Spool the full tree until the saved leaf identifies the active branch.
 export function createPiTranscriptCollector<T>(
   toItem: (message: NativeChatMessage, identity: AgentJournalItemIdentity) => T,
-  identify: (line: string, lineIndex: number) => AgentJournalItemIdentity
+  identify: (line: string, lineIndex: number) => AgentJournalItemIdentity,
+  observeSelected?: (line: string, fallbackId: string) => void
 ): {
   record(line: string, fallbackId: string, lineIndex: number): void
-  project(keep: (item: T) => void): Promise<void>
+  project(keep: (item: T) => void, afterEntry?: string): Promise<void>
   close(): void
 } {
   let db: Database.Database
@@ -113,7 +114,7 @@ export function createPiTranscriptCollector<T>(
         db.exec('COMMIT; BEGIN')
       }
     },
-    async project(keep) {
+    async project(keep, afterEntry) {
       db.exec('COMMIT')
       if (leafId === null) {
         return
@@ -147,6 +148,52 @@ export function createPiTranscriptCollector<T>(
         }
       }
       db.exec('COMMIT')
+      if (observeSelected) {
+        let processedRows = 0
+        let processedBytes = 0
+        let sliceStartedAt = performance.now()
+        for (const row of db
+          .prepare(
+            'SELECT raw_line, fallback_id FROM entries WHERE branch_depth IS NOT NULL ORDER BY branch_depth DESC'
+          )
+          .iterate()) {
+          if (typeof row.raw_line === 'string' && typeof row.fallback_id === 'string') {
+            observeSelected(row.raw_line, row.fallback_id)
+            processedRows += 1
+            processedBytes += Buffer.byteLength(row.raw_line, 'utf8')
+            if (
+              processedBytes >= 1024 * 1024 ||
+              performance.now() - sliceStartedAt >= 8 ||
+              processedRows >= 256
+            ) {
+              await new Promise<void>((resolve) => setImmediate(resolve))
+              processedRows = 0
+              processedBytes = 0
+              sliceStartedAt = performance.now()
+            }
+          }
+        }
+      }
+      let throughDepth = depth - 1
+      if (afterEntry) {
+        const visited = new Set<string>()
+        let boundary: string | null = afterEntry
+        for (;;) {
+          if (!boundary || visited.has(boundary)) {
+            throw new Error('Pi history claim is not in its tree')
+          }
+          visited.add(boundary)
+          const row = byId.get(boundary)
+          if (!row) {
+            throw new Error('Pi history claim is not in its tree')
+          }
+          if (typeof row.branch_depth === 'number') {
+            throughDepth = row.branch_depth - 1
+            break
+          }
+          boundary = typeof row.parent_id === 'string' ? row.parent_id : null
+        }
+      }
       const selected = db.prepare(`SELECT raw_line, fallback_id, line_index FROM entries
         WHERE branch_depth IS NOT NULL AND branch_depth >= ? AND branch_depth <= ?
         ORDER BY branch_depth DESC`)
@@ -154,7 +201,7 @@ export function createPiTranscriptCollector<T>(
         let processedRows = 0
         let processedBytes = 0
         let sliceStartedAt = performance.now()
-        for (const row of selected.iterate(from, through)) {
+        for (const row of selected.iterate(from, Math.min(through, throughDepth))) {
           if (
             typeof row.raw_line !== 'string' ||
             typeof row.fallback_id !== 'string' ||

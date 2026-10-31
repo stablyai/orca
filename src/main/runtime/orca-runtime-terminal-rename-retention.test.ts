@@ -54,10 +54,7 @@ describe('terminal rename before renderer graph hydration', () => {
 
       expect(getSession().tabsByWorktree[TEST_WORKTREE_ID][0].customTitle).toBe(title)
       expect(renameTerminal).toHaveBeenCalledWith('host-tab', title)
-      // Main-owned last-pane exit closes its tab; model restart with a fresh runtime over the saved session instead.
-      if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
-        runtime.onPtyExit('omp-initial-pty', 0)
-      }
+      // A permanent last-pane exit closes its tab; restart reuses the retained saved session.
       const restored = new OrcaRuntimeService(checkedStore)
       restored.setPtyController({
         spawn: vi.fn(committingSpawn(restored, async () => ({ id: 'omp-replacement-pty' }))),

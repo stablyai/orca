@@ -17,6 +17,7 @@ type SubscriptionFrameRouterOptions<TResult> = {
   // Responses to requests the caller sent over this same socket; unmatched ids stay a hard failure.
   resolvePendingRequest?: (response: RuntimeRpcResponse<unknown>) => boolean
   callbacks: {
+    beforeSend?: () => void
     onResponse: (response: RuntimeRpcResponse<TResult>) => void
     onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
   }
@@ -104,6 +105,17 @@ export class RemoteRuntimeSubscriptionFrameRouter<TResult> {
         authenticated.errorCode === 'unauthorized' ? 'unauthorized' : 'invalid_runtime_response'
       this.options.fail(
         new RemoteRuntimeClientError(code, 'Remote Orca runtime rejected the pairing token.')
+      )
+      return
+    }
+    if (this.options.isSettled()) {
+      return
+    }
+    try {
+      this.options.callbacks.beforeSend?.()
+    } catch {
+      this.options.fail(
+        new RemoteRuntimeClientError('runtime_unavailable', 'Request expired before dispatch.')
       )
       return
     }

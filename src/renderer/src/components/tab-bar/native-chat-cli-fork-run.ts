@@ -51,6 +51,8 @@ export async function runNativeChatCliFork(args: {
   subject: NativeChatCliForkSubject
   tab: { id: string; worktreeId: string }
   agent: AiVaultAgent
+  queuedMessage?: string
+  describeFailure?: (message: string) => string
   onComplete?: () => void
   commandOverrides?: Partial<Record<AiVaultAgent, string | null>>
 }): Promise<void> {
@@ -143,15 +145,20 @@ export async function runNativeChatCliFork(args: {
     }
     stop()
     await launchAiVaultSessionAndReveal(
-      { agent: target.agent, worktreeId: subject.workspaceId, ...startup },
-      describeAiVaultCliForkFailure
+      {
+        agent: target.agent,
+        worktreeId: subject.workspaceId,
+        ...startup
+      },
+      args.describeFailure ?? describeAiVaultCliForkFailure,
+      args.queuedMessage
     )
   } catch (error) {
     if (pending.get(key) === controller) {
       notifyAiVaultSessionPreparationFailure(
         new Error(readIpcErrorMessage(error)),
         args.agent,
-        describeAiVaultCliForkFailure
+        args.describeFailure ?? describeAiVaultCliForkFailure
       )
     }
   } finally {

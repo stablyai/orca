@@ -166,11 +166,17 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
         (!livePty.pty.launchAgent || livePty.pty.launchAgent === dispatchedRecipe.launchAgent)
           ? dispatchedRecipe
           : null
-      if (opts.launchConfig && !livePty.pty.launchConfig && !recipe?.launchConfig) {
+      if (
+        !terminal.agentResumeRefused &&
+        !terminal.agentResumeUnavailable &&
+        opts.launchConfig &&
+        !livePty.pty.launchConfig &&
+        !recipe?.launchConfig
+      ) {
         // Missing original dispatch evidence cannot authorize a retry's captured recipe.
         throw new Error('runtime_unavailable')
       }
-      if (recipe) {
+      if (recipe && !terminal.agentResumeRefused && !terminal.agentResumeUnavailable) {
         livePty.pty.launchAgent ??= recipe.launchAgent ?? null
         if (!livePty.pty.launchConfig && recipe.launchConfig) {
           livePty.pty.launchConfig = copySleepingAgentLaunchConfig(recipe.launchConfig)
@@ -223,7 +229,9 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
         ? { startupCwd: terminal.savedStartupCwd ?? cwd }
         : {}),
       ...(livePty.pty.launchAgent ? { launchAgent: livePty.pty.launchAgent } : {}),
-      ...(!terminal.agentResumeRefused && opts.viewMode ? { viewMode: opts.viewMode } : {}),
+      ...(!terminal.agentResumeRefused && !terminal.agentResumeUnavailable && opts.viewMode
+        ? { viewMode: opts.viewMode }
+        : {}),
       parentLayout,
       isActive: activate
     }
@@ -295,6 +303,8 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
     }
     return {
       tab: created,
+      ...(terminal.agentResumeUnavailable ? { agentResumeUnavailable: true as const } : {}),
+      ...(terminal.agentResumeRefused ? { agentResumeRefused: true as const } : {}),
       publicationEpoch: result.publicationEpoch,
       snapshotVersion: result.snapshotVersion,
       ...(terminal.startupCwdFallback ? { startupCwdFallback: 'workspace-root' as const } : {})

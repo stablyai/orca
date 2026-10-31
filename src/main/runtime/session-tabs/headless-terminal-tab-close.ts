@@ -150,6 +150,9 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
     worktreeSelector: string,
     move: RuntimeMobileSessionTabMove
   ): Promise<RuntimeMobileSessionTabMoveResult> {
+    if (move.kind !== 'reorder') {
+      this.clientSessionTabSelections.noteHostNavigation()
+    }
     const explicitWorktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector)
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorkspaceSelector(worktreeSelector)).id

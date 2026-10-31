@@ -202,8 +202,8 @@ export async function handleAutomationDispatchRequest({
         }
         completion.handleAgentDone()
       },
-      onExit: (_ptyId, code) => {
-        completion.handleExit(code)
+      onExit: (_ptyId, code, options) => {
+        completion.handleExit(code, options)
       }
     })
     if (!result) {

@@ -125,15 +125,15 @@ describe('TerminalHost agent-session claims', () => {
     )
   })
 
-  it('adopts one claimed provider session across different requested daemon ids', async () => {
-    const first = await host.createOrAttach({
+  it('joins a pending claimed creation and later adopts its owner across requested daemon ids', async () => {
+    const creating = host.createOrAttach({
       sessionId: 'session-claimed-first',
       cols: 80,
       rows: 24,
       streamClient: { onData: vi.fn(), onExit: vi.fn() },
       agentSessionEnsure: { claim, surface }
     })
-    const second = await host.createOrAttach({
+    const joining = host.createOrAttach({
       sessionId: 'session-claimed-retry',
       cols: 80,
       rows: 24,
@@ -144,11 +144,24 @@ describe('TerminalHost agent-session claims', () => {
       }
     })
 
+    const [first, second] = await Promise.all([creating, joining])
+
     expect(first.agentSessionEnsure).toMatchObject({
       disposition: 'created',
       owner: { ptyId: 'session-claimed-first', surface }
     })
     expect(second.agentSessionEnsure).toMatchObject({
+      disposition: 'adopted',
+      owner: { ptyId: 'session-claimed-first', surface }
+    })
+    const later = await host.createOrAttach({
+      sessionId: 'session-claimed-later',
+      cols: 80,
+      rows: 24,
+      streamClient: { onData: vi.fn(), onExit: vi.fn() },
+      agentSessionEnsure: { claim, surface: { ...surface, terminalHandle: 'term_later' } }
+    })
+    expect(later.agentSessionEnsure).toMatchObject({
       disposition: 'adopted',
       owner: { ptyId: 'session-claimed-first', surface }
     })

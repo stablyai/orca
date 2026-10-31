@@ -31,7 +31,7 @@ export type PaneSplitOptions = Omit<PaneSpawnHints, 'placement'> & {
 export type ClosedPaneInfo = {
   paneId: number
   leafId: TerminalLeafId
-  reason?: 'close' | 'detach' | 'retire'
+  reason?: 'close' | 'detach' | 'retire' | 'remove'
 }
 
 export type PaneExternalDropTarget = {

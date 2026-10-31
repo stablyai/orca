@@ -109,7 +109,10 @@ export class LocalPtyProvider implements IPtyProvider {
     return getLocalPtyAppliedSize(id)
   }
 
-  shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
+  shutdown(
+    id: string,
+    opts: { immediate?: boolean; keepHistory?: boolean; expectedIncarnationId?: string }
+  ): Promise<void> {
     return shutdownLocalPty(id, opts)
   }
 

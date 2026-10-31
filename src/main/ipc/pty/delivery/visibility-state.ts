@@ -30,6 +30,9 @@ export const KEEP_HISTORY_STOP_SETTLE_MS = 1_000
 export const KEEP_HISTORY_STOP_POLL_MS = 100
 // Keep using provider snapshots after daemon tail thinning; main's mirror no longer holds full history.
 export const providerSnapshotRequiredPtys = new Set<string>()
+// Output a whole-tab close held from the pane, with its release subscription; a stop that wasn't
+// proven restores the pane when it settles.
+export const presentationHeldPtys = new Map<string, () => void>()
 
 export function setInvalidatePendingPtyDrainPriority(
   fn: (id?: string, schedule?: boolean) => void

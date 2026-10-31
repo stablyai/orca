@@ -65,6 +65,7 @@ export abstract class OrcaRuntimeWithMainLayoutAgentLaunchTabs extends OrcaRunti
       viewMode: request.viewMode,
       ...(placement?.groupId ? { groupId: placement.groupId } : {}),
       ...(placement?.afterTabId ? { afterTabId: placement.afterTabId } : {}),
+      ...(placement?.index !== undefined ? { index: placement.index } : {}),
       creation: { launchAgent: request.launchAgent }
     }).then((reply) => {
       if (!reply.ok) {

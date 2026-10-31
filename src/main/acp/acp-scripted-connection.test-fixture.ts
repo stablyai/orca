@@ -23,6 +23,7 @@ export class FakeAcpChild extends AcpSessionRuntime implements AcpStructuredConn
   private closing = false
   private lostWith: Error | undefined
   private exitedWith: ProviderProcessExit | null = null
+  private readonly physical = Promise.withResolvers<void>()
   closes = 0
 
   constructor(
@@ -38,6 +39,7 @@ export class FakeAcpChild extends AcpSessionRuntime implements AcpStructuredConn
     })
     lifecycle.child = this
     this.agent = agent
+    connectionOptions.onPhysicalExit?.(this.physical.promise)
   }
 
   get exited() {
@@ -78,6 +80,7 @@ export class FakeAcpChild extends AcpSessionRuntime implements AcpStructuredConn
       return
     }
     this.exitedWith = status
+    this.physical.resolve()
     // As the real connection: a spawn ENOENT marks the exit error with what it proved absent.
     const error = withProviderSpawnAbsence(
       this.lostWith ?? new AcpConnectionClosedError(this.stderr || `${this.launch.command} exited`),

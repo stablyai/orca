@@ -607,6 +607,8 @@ import {
   SleepWorkspaceParams,
   SubscribeParams,
   SubscribeTurnCompletionsParams,
+  SwitchToChatParams,
+  SwitchToTerminalParams,
   ThreadGoalParams,
   UnsubscribeParams
 } from './structured-agent-session-params'
@@ -628,6 +630,7 @@ import {
 import {
   AgentTeamsPrepareLaunch,
   AgentTeamsTmuxCompat,
+  TerminalClose,
   TerminalCloseAll,
   TerminalCreateParams,
   TerminalFocus,
@@ -798,6 +801,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.subscribeAvailability': AvailabilityParams,
   'agentSession.subscribeStatus': null,
   'agentSession.subscribeTurnCompletions': SubscribeTurnCompletionsParams,
+  'agentSession.switchToChat': SwitchToChatParams,
+  'agentSession.switchToTerminal': SwitchToTerminalParams,
   'agentSession.threadGoal': ThreadGoalParams,
   'agentSession.unsubscribe': UnsubscribeParams,
   'agentSessionAttachment.read': AttachmentReadParams,
@@ -1437,7 +1442,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'terminal.adoptOrphans': TerminalAdoptOrphans,
   'terminal.agentStatus': TerminalHandle,
   'terminal.clearBuffer': TerminalHandle,
-  'terminal.close': TerminalHandle,
+  'terminal.close': TerminalClose,
   'terminal.closeAll': TerminalCloseAll,
   'terminal.closeTab': TerminalHandle,
   'terminal.create': TerminalCreateParams,

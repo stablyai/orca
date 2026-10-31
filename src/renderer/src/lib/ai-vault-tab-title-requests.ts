@@ -55,7 +55,8 @@ function registerCandidate<Agent extends AgentType>(
     refresh: boolean
     tabId?: string
     worktreeId?: string
-  }
+  },
+  allPanes = false
 ): void {
   if (!isAgent(args.agent) || !args.providerSession?.id) {
     return
@@ -74,7 +75,7 @@ function registerCandidate<Agent extends AgentType>(
     return
   }
   const priority = args.priority + (activePaneKey(state, tabId) === args.paneKey ? 100 : 0)
-  const key = tabId
+  const key = allPanes ? args.paneKey : tabId
   if ((candidates.get(key)?.priority ?? -1) >= priority) {
     return
   }
@@ -142,6 +143,8 @@ export function collectAgentPaneConversations<Agent extends AgentType>(
   options: {
     /** Skip retained and sleeping records: those remember a conversation after its agent exited. */
     runningAgentsOnly?: boolean
+    /** History addresses a conversation in any pane, including an inactive split. */
+    allPanes?: boolean
     includeLastReported?: boolean
     pane?: { worktreeId: string; paneKey: string }
     tab?: { worktreeId: string; tabId: string }
@@ -189,35 +192,63 @@ export function collectAgentPaneConversations<Agent extends AgentType>(
     for (const identity of records(state.agentConversationsByPaneKey)) {
       const candidate = lastReportedCandidate(state, identity, tabsById)
       if (candidate) {
-        registerCandidate(state, tabsById, candidates, isAgent, candidate)
+        registerCandidate(
+          state,
+          tabsById,
+          candidates,
+          isAgent,
+          candidate,
+          options.allPanes || !!options.pane
+        )
       }
     }
   }
 
   for (const entry of retained) {
-    registerCandidate(state, tabsById, candidates, isAgent, {
-      agent: entry.agentType,
-      paneKey: entry.entry.paneKey,
-      priority: 10,
-      providerSession: entry.entry.providerSession,
-      refresh: false,
-      tabId: entry.entry.tabId,
-      worktreeId: entry.worktreeId
-    })
+    registerCandidate(
+      state,
+      tabsById,
+      candidates,
+      isAgent,
+      {
+        agent: entry.agentType,
+        paneKey: entry.entry.paneKey,
+        priority: 10,
+        providerSession: entry.entry.providerSession,
+        refresh: false,
+        tabId: entry.entry.tabId,
+        worktreeId: entry.worktreeId
+      },
+      options.allPanes || !!options.pane
+    )
   }
   for (const record of sleeping) {
-    registerCandidate(state, tabsById, candidates, isAgent, {
-      agent: record.agent,
-      paneKey: record.paneKey,
-      priority: 20,
-      providerSession: record.providerSession,
-      refresh: false,
-      tabId: record.tabId,
-      worktreeId: record.worktreeId
-    })
+    registerCandidate(
+      state,
+      tabsById,
+      candidates,
+      isAgent,
+      {
+        agent: record.agent,
+        paneKey: record.paneKey,
+        priority: 20,
+        providerSession: record.providerSession,
+        refresh: false,
+        tabId: record.tabId,
+        worktreeId: record.worktreeId
+      },
+      options.allPanes || !!options.pane
+    )
   }
   for (const entry of records(state.agentStatusByPaneKey)) {
-    registerCandidate(state, tabsById, candidates, isAgent, liveCandidate(entry))
+    registerCandidate(
+      state,
+      tabsById,
+      candidates,
+      isAgent,
+      liveCandidate(entry),
+      options.allPanes || !!options.pane
+    )
   }
 
   return [...candidates.values()]
@@ -231,6 +262,12 @@ export function resolvePaneAgentConversation<Agent extends AgentType>(
   isAgent: (agent: AgentType | null | undefined) => agent is Agent
 ): AgentPaneConversation<Agent> | null {
   return collectAgentPaneConversations(state, isAgent, { pane, runningAgentsOnly: true })[0] ?? null
+}
+
+/** The PTY a pane is bound to now. */
+export function panePtyId(state: AppState, paneKey: string): string | undefined {
+  const pane = parsePaneKey(paneKey)
+  return pane ? state.terminalLayoutsByTabId[pane.tabId]?.ptyIdsByLeafId?.[pane.leafId] : undefined
 }
 
 /** One pane's conversation survives occupancy cleanup after its agent exits. */

@@ -22,6 +22,12 @@ import type {
   MirroredAgentTab
 } from './state'
 import type { Tab } from '../../../../shared/tab-types'
+import {
+  adoptInheritedChatPin,
+  inheritedChatPinHolds,
+  pruneInheritedChatPins
+} from './inherited-chat-pins'
+import { replacedTabPinned } from './slot-anchor'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
 import { hasStructuredAgentSessionLaunchCancellationTombstone } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
@@ -81,35 +87,47 @@ export function buildMirroredAgentTabs(
   const assignedIds = new Set<string>()
   const replacementTabs = new Map<string, Tab>()
   const replacementIds = new Set<string>()
+  const currentAgentTabs = new Map<string, { tabs: Tab[]; nextAvailable: number }>()
+  for (const tab of currentUnifiedTabs) {
+    if (tab.contentType === 'agent-session') {
+      const indexed = currentAgentTabs.get(tab.entityId) ?? { tabs: [], nextAvailable: 0 }
+      indexed.tabs.push(tab)
+      currentAgentTabs.set(tab.entityId, indexed)
+    }
+  }
+  const firstUnreplaced = (sessionId: string): Tab | undefined => {
+    const indexed = currentAgentTabs.get(sessionId)
+    if (!indexed) {
+      return undefined
+    }
+    // Exclusions only grow during this apply; retain original candidate order, including duplicates.
+    while (
+      indexed.nextAvailable < indexed.tabs.length &&
+      replacementIds.has(indexed.tabs[indexed.nextAvailable]!.id)
+    ) {
+      indexed.nextAvailable++
+    }
+    return indexed.tabs[indexed.nextAvailable]
+  }
   for (const tab of agentTabs) {
     if (!tab.replacesSessionId) {
       continue
     }
     const existing =
-      currentUnifiedTabs.find(
-        (candidate) =>
-          candidate.contentType === 'agent-session' && candidate.entityId === tab.sessionId
-      ) ??
-      currentUnifiedTabs.find(
-        (candidate) =>
-          !replacementIds.has(candidate.id) &&
-          candidate.contentType === 'agent-session' &&
-          candidate.entityId === tab.replacesSessionId
-      )
+      currentAgentTabs.get(tab.sessionId)?.tabs[0] ?? firstUnreplaced(tab.replacesSessionId)
     if (existing) {
       replacementTabs.set(tab.sessionId, existing)
       replacementIds.add(existing.id)
     }
   }
+  const pinScope = `${executionHostId}\0${snapshot.worktree}`
+  pruneInheritedChatPins(pinScope, new Set(agentTabs.map((tab) => tab.sessionId)))
   return agentTabs.map((tab, index) => {
-    const existing =
-      replacementTabs.get(tab.sessionId) ??
-      currentUnifiedTabs.find(
-        (candidate) =>
-          !replacementIds.has(candidate.id) &&
-          candidate.contentType === 'agent-session' &&
-          candidate.entityId === tab.sessionId
-      )
+    const existing = replacementTabs.get(tab.sessionId) ?? firstUnreplaced(tab.sessionId)
+    const inheritedPin = existing ? undefined : replacedTabPinned(currentUnifiedTabs, tab)
+    if (inheritedPin !== undefined) {
+      adoptInheritedChatPin(pinScope, tab.sessionId, tab.isPinned === true)
+    }
     const launch = readStructuredAgentLaunchRecord(tab.sessionId)
     const address =
       executionHostId === 'local' &&
@@ -149,7 +167,14 @@ export function buildMirroredAgentTabs(
         color: tab.color !== undefined ? tab.color : (existing?.color ?? null),
         sortOrder: sortOffset + index,
         createdAt: existing?.createdAt ?? now + sortOffset + index,
-        isPinned: tab.isPinned !== undefined ? tab.isPinned : existing?.isPinned === true
+        // A chat in a replaced tab's slot keeps the pin it took from that tab here until the
+        // host's own flag on it changes (inherited-chat-pins.ts).
+        isPinned: existing
+          ? tab.isPinned !== undefined &&
+            !inheritedChatPinHolds(pinScope, tab.sessionId, tab.isPinned)
+            ? tab.isPinned
+            : existing.isPinned === true
+          : (inheritedPin ?? tab.isPinned === true)
       }
     }
   })

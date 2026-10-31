@@ -85,6 +85,7 @@ describe('wake through main in a layout-owner build', () => {
   // Main's start of the revealed pane is its wake: the window records none of its own.
   it('asks main to start the revealed pane alone, and records no wake itself', async () => {
     const { connectPanePty } = await import('./pty-connection')
+    const { settleDeferredPtyShutdownExits } = await import('./pty-shutdown-exit-deferral')
     const transport = createMockTransport('pty-pane-2')
     transportFactoryQueue.push(transport)
     const deps = buildPaneConnectionDeps(() => mockStoreState, {
@@ -112,9 +113,11 @@ describe('wake through main in a layout-owner build', () => {
     const binding = connectPanePty(...args)
     await flushAsyncTicks()
     const onPtyExit = createdTransportOptions[0]?.onPtyExit
+    deps.isPtyShutdownPending.mockReturnValueOnce(true)
     if (typeof onPtyExit === 'function') {
       onPtyExit('tab-pty')
     }
+    settleDeferredPtyShutdownExits(['tab-pty'], 'committed')
     await flushAsyncTicks()
     // Hidden: the sleep holds until the pane is shown.
     expect(mocks.wake).not.toHaveBeenCalled()

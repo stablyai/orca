@@ -4,6 +4,7 @@ import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-statu
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import type { AppState } from '../types'
+import type { StoppedSwitchSourceFact } from '../../../../shared/stopped-switch-source'
 import { findAgentPaneWorktreeId } from './agent-status/agent-status-pane-key-tab-binding'
 
 export type AgentPaneConversationIdentity = {
@@ -13,6 +14,8 @@ export type AgentPaneConversationIdentity = {
   connectionId: string | null
   agent: AgentType
   providerSession: AgentProviderSessionMetadata
+  /** A paired client's pane only: main's fact that a switch stopped this pane's process. */
+  stoppedSwitchSource?: StoppedSwitchSourceFact
 }
 
 /** Conversation identity outlives turn occupancy; it never requests an automatic resume. */

@@ -27,7 +27,6 @@ import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-path
 import { isFloatingWorkspaceSelector } from '../../../shared/floating-workspace-worktree'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
 import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
-
 export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends StructuredSessionWorkspaceScope {
   protected abstract restoreStructuredAgentSessionTabsOnce(
     ...args: Parameters<
@@ -59,24 +58,6 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
     return support
   }
 
-  /** Use this runtime's registered definition to pin account home; reads/create must not install the host just to inspect it. */
-  protected requireRegisteredStructuredAgent(agent: StructuredAgentId) {
-    const definition = structuredAgentRuntimeMetadata(agent)?.definition
-    if (!definition) {
-      throw agentSessionRefusalError('structured_agent_session_unsupported', {
-        reason: 'hostUnsupported'
-      })
-    }
-    return definition
-  }
-
-  /** Share new-chat selection between create and createSupport so client pickers show what create will run. */
-  structuredAgentSessionLaunchSeedOptions(
-    agent: StructuredAgentId
-  ): Record<string, string> | undefined {
-    return structuredLaunchSeedOptions(this.requireStore().getSettings(), agent)
-  }
-
   async resolveStructuredAgentSessionCreateIntent(
     input: StructuredAgentSessionCreateIntentInput
   ): Promise<AgentSessionAttachParams & { hostLaunchDirectory?: string }> {
@@ -99,6 +80,14 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
         throw ownerConflict
       }
     }
+    return this.resolveStructuredAgentSessionCreateIdentity(input, 'launch')
+  }
+
+  /** Resolve registered account/transcript identity without acquiring or admitting a writer. */
+  async resolveStructuredAgentSessionCreateIdentity(
+    input: StructuredAgentSessionCreateIntentInput,
+    purpose: 'read' | 'launch' = 'read'
+  ): Promise<AgentSessionAttachParams & { hostLaunchDirectory?: string }> {
     const structuredAgentCliSourceEvidence =
       input.structuredAgentCliSourceEvidence ??
       (input.resumeFrom?.cliSource
@@ -114,7 +103,7 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
     const resolveAccountHome = this.structuredAgentAccountHomeResolver(
       input.agent,
       input.worktree,
-      'launch',
+      purpose,
       hostLaunchDirectory
     )
     if (!resolveAccountHome) {
@@ -124,7 +113,8 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
     }
     const resolved = await this.resolveStructuredAgentSessionIntent(
       { ...input, structuredAgentCliSourceEvidence },
-      resolveAccountHome
+      resolveAccountHome,
+      purpose
     )
     return hostLaunchDirectory ? { ...resolved, hostLaunchDirectory } : resolved
   }
@@ -155,7 +145,8 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
         workspaceId: string
         workspaceKind: 'folder' | 'git-worktree'
       }
-    }) => AgentSessionAccountHome | Promise<AgentSessionAccountHome>
+    }) => AgentSessionAccountHome | Promise<AgentSessionAccountHome>,
+    purpose: 'read' | 'launch' = 'launch'
   ): Promise<AgentSessionAttachParams> {
     const support = await this.getStructuredAgentSessionCreateSupport(input.worktree, input.agent)
     // Adopting a conversation reads the agent's own transcript, so only an agent registered with an
@@ -189,7 +180,7 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
       return committedReplay
     }
     const resumeFrom = input.resumeFrom
-    if (resumeFrom) {
+    if (purpose === 'launch' && resumeFrom) {
       await this.assertStructuredAdoptionTerminalWritersExited(
         input.agent,
         resumeFrom.providerSessionId,
@@ -215,7 +206,9 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
                 workspaceId: location.workspaceId,
                 evidence: input.structuredAgentCliSourceEvidence
               }),
-            prepareCodexResume: this.prepareAiVaultSessionResumeFn ?? undefined,
+            prepareCodexResume:
+              purpose === 'launch' ? (this.prepareAiVaultSessionResumeFn ?? undefined) : undefined,
+            pinnedAdoption: input.pinnedAdoption,
             selectedAccountHome,
             launchEnv: await resolveHostStructuredAgentLaunchEnvironment(input.agent, settings),
             workspaceCwd: workspaceCwd

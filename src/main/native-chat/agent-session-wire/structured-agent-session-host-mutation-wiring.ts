@@ -14,6 +14,11 @@ import {
 } from './structured-agent-session-options-read'
 import { IN_PROCESS_OPTIONS_READER } from './structured-agent-session-option-observation'
 import { settleStructuredAgentSessionLateDispatch } from './structured-agent-session-late-dispatch'
+import {
+  startStructuredAgentSessionForSwitch,
+  openStructuredAgentSessionForSwitch
+} from './structured-agent-session-switch-to-chat'
+import type { AgentSessionSwitchDeadline } from '../../../shared/agent-session-switch-execution'
 import * as agentStart from './structured-agent-session-agent-start'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import type { AgentSessionRewindParams } from '../../../shared/agent-session-rewind'
@@ -67,7 +72,8 @@ export function createStructuredAgentSessionHostMutationContext(
     childWorkIncomplete: input.clientDelivery.childWorkIncomplete,
     serialize: input.serialize,
     openConversation: input.conversationDelivery.open,
-    claimAgent: (sessionId) => agentStart.claimOperationStart(input.attachContext(), sessionId),
+    claimAgent: (sessionId, check, switchStart) =>
+      agentStart.claimOperationStart(input.attachContext(), sessionId, check, switchStart),
     startFlights: input.runtimeState.startFlights,
     startupAttempts: input.runtimeState.startupAttempts,
     deliveryOrder: input.runtimeState.deliveryOrder,
@@ -112,6 +118,10 @@ export function structuredAgentSessionMutationDelegates(
       reader: StructuredAgentSessionOptionsReader = IN_PROCESS_OPTIONS_READER
     ) => readStructuredAgentSessionOptions(context(), sessionId, reader),
     settleLateDispatch: (input: Parameters<typeof settleStructuredAgentSessionLateDispatch>[1]) =>
-      settleStructuredAgentSessionLateDispatch(context(), input)
+      settleStructuredAgentSessionLateDispatch(context(), input),
+    openSwitchToChat: (sessionId: string, deadline?: AgentSessionSwitchDeadline) =>
+      openStructuredAgentSessionForSwitch(context(), sessionId, deadline),
+    switchToChat: (sessionId: string, deadline?: AgentSessionSwitchDeadline) =>
+      startStructuredAgentSessionForSwitch(context(), sessionId, deadline)
   }
 }

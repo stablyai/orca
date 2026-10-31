@@ -39,9 +39,13 @@ export function applyTerminalPaneCloseRequest(args: {
   }
   if (args.detail.preservePty) {
     if (args.detail.retireSurface) {
-      args.manager.retirePanePreservingPty(paneRuntimeId)
+      if (!args.manager.retirePanePreservingPty(paneRuntimeId)) {
+        return 'ignored'
+      }
     } else {
-      args.manager.detachPaneForExternalMove(paneRuntimeId)
+      if (!args.manager.detachPaneForExternalMove(paneRuntimeId)) {
+        return 'ignored'
+      }
     }
   } else {
     args.manager.closePane(paneRuntimeId)
@@ -78,13 +82,14 @@ export function retireMountedTerminalPaneSurface(args: {
   ) => void
   clearExitedPanePtyLayoutBindingForLeaf?: (leafId: string, exitedPtyId: string) => void
   clearTabPtyId: (tabId: string, ptyId: string) => void
+  permanent?: boolean
   transport?: {
     detach?: (options?: { preserveExitObserver?: boolean }) => void
     destroy?: () => void
   }
 }): void {
   args.retireAgentPaneAuthority(args.paneKey, {
-    preserveSleepingAgentSession: true
+    preserveSleepingAgentSession: !args.permanent
   })
   if (args.ptyId) {
     if (args.clearExitedPanePtyLayoutBindingForLeaf) {

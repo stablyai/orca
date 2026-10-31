@@ -28,6 +28,7 @@ export function buildWorktreePurgeSurfacePatch(
   } = omitters
   const nextAgentStatusByPaneKey = omitByPaneKeyTabPrefix(s.agentStatusByPaneKey, changedPaneKeys)
   return {
+    agentConversationsByPaneKey: omitByPaneKeyTabPrefix(s.agentConversationsByPaneKey),
     localOnlyScrollbackByTabId: omitByTabId(s.localOnlyScrollbackByTabId),
     runtimePaneTitlesByTabId: omitByTabId(s.runtimePaneTitlesByTabId),
     automaticAgentResumeClaimsByTabId: omitByTabId(s.automaticAgentResumeClaimsByTabId),

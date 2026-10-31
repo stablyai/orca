@@ -156,7 +156,7 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
     wslUncDirectoryExistsAsyncMock.mockReset()
     wslUncDirectoryExistsAsyncMock.mockResolvedValue(null)
     trackMock.mockReset()
-    classifyErrorMock.mockReset()
+    classifyErrorMock.mockReset().mockReturnValue({ error_class: 'unknown' })
     registerPtyMock.mockReset()
     unregisterPtyMock.mockReset()
     setMigrationUnsupportedPtyMock.mockReset()

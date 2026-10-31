@@ -18,6 +18,12 @@ const testStore = vi.hoisted(() => {
 })
 vi.mock('@/store', () => ({
   useAppStore: {
+    setState: (patch: Parameters<ReturnType<typeof createTestStore>['setState']>[0]) => {
+      if (!testStore.current) {
+        throw new Error('no test store')
+      }
+      testStore.current.setState(patch)
+    },
     getState: () => {
       if (!testStore.current) {
         throw new Error('no test store')

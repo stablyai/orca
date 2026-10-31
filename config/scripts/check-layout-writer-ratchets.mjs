@@ -320,6 +320,27 @@ function isSameNameCopy(property, name) {
   return ts.isPropertyAccessExpression(value) && value.name.text === name
 }
 
+/** Only the property-name argument of the standard presence read is a read. */
+function isOwnPresenceRead(node) {
+  const call = node.parent
+  if (
+    !ts.isCallExpression(call) ||
+    call.questionDotToken ||
+    call.arguments.length !== 2 ||
+    call.arguments[1] !== node
+  ) {
+    return false
+  }
+  const callee = call.expression
+  return (
+    ts.isPropertyAccessExpression(callee) &&
+    !callee.questionDotToken &&
+    callee.name.text === 'hasOwn' &&
+    ts.isIdentifier(callee.expression) &&
+    callee.expression.text === 'Object'
+  )
+}
+
 /** Layout writes in one file under one ratchet's rules. */
 export function countLayoutWrites(sourceText, ratchet, fileName = 'file.tsx') {
   const names = [...ratchet.writerNames, ...ratchet.assignedFields]
@@ -381,18 +402,8 @@ export function countLayoutWrites(sourceText, ratchet, fileName = 'file.tsx') {
       !(ts.isPropertyAssignment(node.parent) && node.parent.name === node) &&
       !ts.isComputedPropertyName(node.parent) &&
       !(ts.isElementAccessExpression(node.parent) && node.parent.argumentExpression === node) &&
-      !(
-        ts.isCallExpression(node.parent) &&
-        !node.parent.questionDotToken &&
-        node.parent.arguments.length === 2 &&
-        node.parent.arguments[1] === node &&
-        ts.isPropertyAccessExpression(node.parent.expression) &&
-        !node.parent.expression.questionDotToken &&
-        ts.isIdentifier(node.parent.expression.expression) &&
-        node.parent.expression.expression.text === 'Object' &&
-        node.parent.expression.name.text === 'hasOwn'
-      ) &&
-      !ts.isLiteralTypeNode(node.parent)
+      !ts.isLiteralTypeNode(node.parent) &&
+      !isOwnPresenceRead(node)
     ) {
       count += 1
     }

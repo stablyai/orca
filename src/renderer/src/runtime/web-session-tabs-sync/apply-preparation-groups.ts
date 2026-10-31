@@ -9,6 +9,7 @@ import { peekWebSessionTerminalPlacementGroup } from '../web-session-terminal-pl
 import { reconcileClientOwnedTabPlacement } from '../web-session-client-owned-tab-placement'
 import { buildMirroredHostGroups, retainClientPlacedMirroredTabs } from './layout-groups'
 import { sanitizeRecentTabIds, pushRecentTabId } from './state-equality-core'
+import { slotAnchorLocalTabIds, slotAnchorOf } from './slot-anchor'
 
 export function prepareWebSessionTabsSnapshotGroups(
   base: ReturnType<typeof prepareWebSessionTabsSnapshotUnified>
@@ -93,11 +94,27 @@ export function prepareWebSessionTabsSnapshotGroups(
         })
       }
     }
+    // A switch's destination goes where this client showed its source, on first appearance.
+    const anchors = new Map(
+      snapshot.tabs.flatMap((row) => {
+        const anchor = slotAnchorOf(row)
+        const tabId = hostToLocalTabId.get(row.type === 'terminal' ? row.parentTabId : row.id)
+        const tabIds =
+          anchor &&
+          slotAnchorLocalTabIds(
+            state.unifiedTabsByWorktree[worktreeId] ?? [],
+            anchor.hostTabId,
+            hostToLocalTabId
+          )
+        return anchor && tabId && tabIds ? [[tabId, { tabIds, after: anchor.after }] as const] : []
+      })
+    )
     const adoptedTabs = mirroredUnifiedTabs
       .filter((tab) => !knownGroupTabIds.has(tab.id))
       .map((tab) => ({
         tabId: tab.id,
-        groupId: clientGroupIdByLocalTabId.get(tab.id) ?? tab.groupId
+        groupId: clientGroupIdByLocalTabId.get(tab.id) ?? tab.groupId,
+        anchor: anchors.get(tab.id)
       }))
     return reconcileClientOwnedTabPlacement({
       currentGroups,

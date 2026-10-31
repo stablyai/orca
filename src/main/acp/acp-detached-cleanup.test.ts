@@ -29,7 +29,13 @@ it.each(['delivered', 'root-exited', 'unproven', 'error'] as const)(
       vi.spyOn(rig.rig.eventSink, 'tryAppendTransition').mockImplementation((transition) =>
         refuse ? { accepted: false, reason: 'closed' } : append(transition)
       )
-      await rig.acquire()
+      const physical = vi.fn<(exited: Promise<void>) => void>()
+      let exited = false
+      await rig.acquire({ onPhysicalExit: physical })
+      expect(physical).toHaveBeenCalledOnce()
+      void physical.mock.calls[0]![0].then(() => {
+        exited = true
+      })
       const child = rig.child()
       const terminal = outcome === 'delivered' || outcome === 'root-exited'
       Object.defineProperty(child, 'lastCloseResult', {
@@ -87,6 +93,7 @@ it.each(['delivered', 'root-exited', 'unproven', 'error'] as const)(
       expect(rig.ended).toHaveLength(terminal ? 1 : 0)
       if (outcome === 'delivered') {
         expect(rig.ended[0]).toMatchObject({ deathEvidenceKind: 'kill-delivered' })
+        expect(exited).toBe(false)
       }
       if (terminal) {
         await rig.acquire({ fence: 2 })
@@ -96,6 +103,9 @@ it.each(['delivered', 'root-exited', 'unproven', 'error'] as const)(
         child.exit()
         return true
       }
+      child.exit()
+      await Promise.resolve()
+      expect(exited).toBe(true)
       await rig.adapter.closeAll()
     }
   }

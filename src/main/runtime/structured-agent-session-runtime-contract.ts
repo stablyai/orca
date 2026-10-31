@@ -71,6 +71,7 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   prepareCodexCatalogProbeHome?: (homePath: string) => void
   /** See `StructuredAgentSessionHostDeps.onSessionTabHidden`. */
   onSessionTabHidden?: StructuredAgentSessionHostDeps['onSessionTabHidden']
+  captureSessionSwitchStop?: StructuredAgentSessionHostDeps['captureSessionSwitchStop']
   assertNoTerminalWriter?: StructuredAgentSessionHostDeps['assertNoTerminalWriter']
   /** Host-owned phone delivery and reconciliation from the current journal projection. */
   attentionDelivery?: StructuredAttentionMobileDelivery

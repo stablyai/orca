@@ -7,7 +7,7 @@ import {
   opencodeMessages,
   OPENCODE_TRANSCRIPT_MAX_ROW_BYTES
 } from './transcript-opencode-part-blocks'
-import type { NativeChatBlock } from '../../shared/native-chat-types'
+import type { NativeChatBlock, NativeChatTurnLifecycle } from '../../shared/native-chat-types'
 import type {
   OpenCodeTranscriptPage,
   OpenCodeTranscriptSignal,
@@ -199,6 +199,7 @@ export function readOpenCode2TranscriptPage(
   let bytes = 0
   let pageBytes = 0
   let hasMore = false
+  let lifecycle: NativeChatTurnLifecycle | undefined
   while (items.length < limit) {
     const rows = statement.all(args.sessionId, cursor, Math.min(limit + 1, 8))
     hasMore = rows.length === Math.min(limit + 1, 8)
@@ -216,6 +217,33 @@ export function readOpenCode2TranscriptPage(
       )
       if (++scannedRows > MAX_SCAN_ROWS || bytes > MAX_PAGE_BYTES) {
         throw new Error('OpenCode transcript page exceeds its read limit')
+      }
+      if (!lifecycle && typeof row.data === 'string') {
+        const record = parseJsonObject(row.data)
+        if (row.type === 'user' && typeof row.id === 'string') {
+          lifecycle = {
+            state: 'working',
+            turnId: `opencode:${row.id}`,
+            timestamp: typeof row.time_created === 'number' ? row.time_created : null
+          }
+        } else if (row.type === 'idle' && record) {
+          const state =
+            record.outcome === 'succeeded'
+              ? 'completed'
+              : record.outcome === 'interrupted'
+                ? 'interrupted'
+                : record.outcome === 'failed'
+                  ? 'failed'
+                  : null
+          if (state) {
+            lifecycle = {
+              state: state === 'failed' ? 'completed' : state,
+              ...(state === 'failed' ? { outcome: 'failure' as const } : {}),
+              turnId: '',
+              timestamp: typeof row.time_created === 'number' ? row.time_created : null
+            }
+          }
+        }
       }
       const mapped = messageItems(value)
       cursor = row.cursor
@@ -238,5 +266,10 @@ export function readOpenCode2TranscriptPage(
       break
     }
   }
-  return { items: items.toReversed(), hasMore, beforeMessageRowId: scannedRows ? cursor : null }
+  return {
+    items: items.toReversed(),
+    hasMore,
+    beforeMessageRowId: scannedRows ? cursor : null,
+    ...(lifecycle ? { lifecycle } : {})
+  }
 }

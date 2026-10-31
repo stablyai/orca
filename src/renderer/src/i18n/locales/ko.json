@@ -18812,8 +18812,8 @@
       "resumeInNewChat": {
         "hostUpdateRequired": "채팅 UI에서 계속하려면 이 호스트의 Orca를 업데이트하세요.",
         "notSavedYet": "{{agent}}이(가) 아직 이 대화를 저장하지 않았습니다. 응답한 후 다시 시도하세요.",
-        "exitUnconfirmedFromTerminal": "{{agent}}이(가) 다른 터미널에서 이미 이 대화를 실행 중입니다. 그곳에서 {{agent}}을(를) 종료하거나 해당 터미널을 닫은 다음 세션 기록에서 이 대화를 여세요.",
-        "exitUnconfirmed": "{{agent}}이(가) 다른 터미널에서 이미 이 대화를 실행 중입니다. 그곳에서 {{agent}}을(를) 종료하거나 해당 터미널을 닫은 다음 세션 기록에서 이 대화를 여세요."
+        "exitUnconfirmedFromTerminal": "Orca가 이 터미널에서 {{agent}}이(가) 중지되었는지 확인할 수 없습니다. 여기서 {{agent}}을(를) 종료한 다음 이 작업을 다시 시도하세요.",
+        "exitUnconfirmed": "Orca가 {{agent}}이(가) 중지되었는지 확인할 수 없습니다. 해당 터미널에서 {{agent}}을(를) 종료한 다음 이 작업을 다시 시도하세요."
       },
       "state": {
         "loading": {
@@ -19300,8 +19300,18 @@
       "bar": {
         "SortableTabContextMenu": {
           "switchToTerminalView": "터미널 에이전트로 계속하기",
-          "switchToChatView": "채팅 UI에서 계속하기",
+          "continueInChatView": "채팅 UI에서 계속하기",
+          "switchToChatView": "채팅으로 표시",
+          "showAsTerminal": "터미널로 표시",
           "allowAutoClose": "자동 닫기 허용"
+        },
+        "switch": {
+          "toCli": "CLI로 전환",
+          "toNativeChat": "채팅 UI로 전환",
+          "toCliTooltip": "CLI로 전환: 채팅 UI에서 {{agent}}을(를) 중지하고 터미널에서 같은 대화를 이어갑니다.",
+          "openedInWorkspace": "{{workspace}}에서 채팅을 열었습니다.",
+          "toNativeChatTooltip": "채팅 UI로 전환: 이 탭의 채팅에서 같은 대화를 이어갑니다.",
+          "noConversation": "이 터미널에는 아직 저장된 대화가 없습니다."
         },
         "BrowserTab": {
           "closeOthers": "다른 탭 닫기",

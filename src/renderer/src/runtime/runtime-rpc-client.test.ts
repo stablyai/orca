@@ -1,12 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeStatus } from '../../../shared/runtime-types'
-import {
-  callRuntimeRpc,
-  assertRuntimeEnvironmentCapability,
-  clearRecentRuntimeCompatibilityFailure,
-  clearRuntimeCompatibilityCacheForTests,
-  runtimeEnvironmentSupportsCapability
-} from './runtime-rpc-client'
+import { describe, expect, it, vi } from 'vitest'
+import { callRuntimeRpc, clearRecentRuntimeCompatibilityFailure } from './runtime-rpc-client'
 import { RuntimeRpcCallError, unwrapRuntimeRpcResult } from './runtime-rpc-result'
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
@@ -17,25 +10,14 @@ import {
   ORCA_RUNTIME_RPC_FEATURE_INTERACTION_SOURCE_KEY
 } from '../../../shared/runtime-rpc-feature-interaction-source'
 
-const runtimeCall = vi.fn()
-const runtimeEnvironmentCall = vi.fn()
-const runtimeEnvironmentSubscribe = vi.fn()
+import {
+  installRuntimeRpcClientTestBridge,
+  runtimeCall,
+  runtimeEnvironmentCall,
+  runtimeEnvironmentSubscribe
+} from './runtime-rpc-client-test-bridge'
 
-beforeEach(() => {
-  clearRuntimeCompatibilityCacheForTests()
-  runtimeCall.mockReset()
-  runtimeEnvironmentCall.mockReset()
-  runtimeEnvironmentSubscribe.mockReset()
-  vi.stubGlobal('window', {
-    api: {
-      runtime: { call: runtimeCall },
-      runtimeEnvironments: {
-        call: runtimeEnvironmentCall,
-        subscribe: runtimeEnvironmentSubscribe
-      }
-    }
-  })
-})
+installRuntimeRpcClientTestBridge()
 
 describe('runtime RPC client routing', () => {
   it('routes local runtime calls through window.api.runtime.call', async () => {
@@ -117,6 +99,55 @@ describe('runtime RPC client routing', () => {
     await expect(request).rejects.toMatchObject({ name: 'AbortError' })
     await vi.waitFor(() => expect(unsubscribe).toHaveBeenCalledTimes(1))
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  it.each([false, true])(
+    'never sends a paired-runtime request whose pre-send guard throws (abortable=%s)',
+    async (abortable) => {
+      const onSent = vi.fn()
+      const request = callRuntimeRpc(
+        { kind: 'environment', environmentId: 'env-1' },
+        'status.get',
+        undefined,
+        {
+          ...(abortable ? { signal: new AbortController().signal } : {}),
+          beforeSend: () => {
+            throw new Error('superseded')
+          },
+          onSent
+        }
+      )
+
+      await expect(request).rejects.toThrow('superseded')
+      expect(runtimeEnvironmentSubscribe).not.toHaveBeenCalled()
+      expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+      expect(onSent).not.toHaveBeenCalled()
+    }
+  )
+
+  it("reports the paired host's send time separately from the pre-send guard", async () => {
+    const order: string[] = []
+    runtimeEnvironmentSubscribe.mockImplementation(
+      async (_args: unknown, callbacks: { onSent: (sentAt?: number) => void }) => {
+        order.push('dispatch')
+        callbacks.onSent(1234)
+        return { unsubscribe: vi.fn(), sendBinary: vi.fn() }
+      }
+    )
+    const controller = new AbortController()
+    const request = callRuntimeRpc(
+      { kind: 'environment', environmentId: 'env-1' },
+      'status.get',
+      undefined,
+      {
+        signal: controller.signal,
+        beforeSend: () => order.push('guard'),
+        onSent: (sentAt) => order.push(`sent ${sentAt}`)
+      }
+    )
+    await vi.waitFor(() => expect(order).toEqual(['guard', 'dispatch', 'sent 1234']))
+    controller.abort()
+    await expect(request).rejects.toMatchObject({ name: 'AbortError' })
   })
 
   it('rejects an abortable paired-runtime request at the response deadline', async () => {
@@ -463,277 +494,6 @@ describe('runtime RPC client routing', () => {
       'status.get',
       'worktree.detectedList'
     ])
-  })
-
-  it('checks advertised runtime capabilities after protocol compatibility', async () => {
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'status',
-      ok: true,
-      result: {
-        runtimeId: 'remote-runtime',
-        graphStatus: 'ready',
-        runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
-        minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
-        capabilities: ['project-host-setup.v1']
-      },
-      _meta: { runtimeId: 'remote-runtime' }
-    })
-
-    await expect(
-      assertRuntimeEnvironmentCapability(
-        'env-1',
-        'project-host-setup.v1',
-        'Project setup is unavailable.'
-      )
-    ).resolves.toBeUndefined()
-  })
-
-  it('re-probes capability support after a failed compatibility cache entry', async () => {
-    let statusCalls = 0
-    runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
-      if (method === 'status.get') {
-        statusCalls += 1
-        if (statusCalls === 1) {
-          return Promise.resolve({
-            id: 'status',
-            ok: false,
-            error: { code: 'runtime_unavailable', message: 'offline' },
-            _meta: { runtimeId: 'remote-runtime' }
-          })
-        }
-        return Promise.resolve({
-          id: 'status',
-          ok: true,
-          result: {
-            runtimeId: 'remote-runtime',
-            graphStatus: 'ready',
-            runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
-            minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
-            capabilities: ['linear.issue-attribute-filter.v1']
-          },
-          _meta: { runtimeId: 'remote-runtime' }
-        })
-      }
-      return Promise.resolve({
-        id: method,
-        ok: true,
-        result: { ok: true },
-        _meta: { runtimeId: 'remote-runtime' }
-      })
-    })
-    const target = { kind: 'environment', environmentId: 'env-cap-recover' } as const
-
-    await expect(callRuntimeRpc(target, 'repo.list')).rejects.toThrow('offline')
-    await expect(
-      runtimeEnvironmentSupportsCapability('env-cap-recover', 'linear.issue-attribute-filter.v1')
-    ).resolves.toBe(true)
-    expect(statusCalls).toBe(2)
-  })
-
-  it('re-probes a missing capability on retry so a runtime upgrade can recover', async () => {
-    let statusCalls = 0
-    runtimeEnvironmentCall.mockImplementation(() => {
-      statusCalls += 1
-      return Promise.resolve({
-        id: 'status',
-        ok: true,
-        result: {
-          runtimeId: 'remote-runtime',
-          graphStatus: 'ready',
-          runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
-          minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
-          capabilities: statusCalls === 1 ? [] : ['linear.issue-attribute-filter.v1']
-        },
-        _meta: { runtimeId: 'remote-runtime' }
-      })
-    })
-
-    await expect(
-      runtimeEnvironmentSupportsCapability('env-cap-upgrade', 'linear.issue-attribute-filter.v1')
-    ).resolves.toBe(false)
-    await expect(
-      runtimeEnvironmentSupportsCapability('env-cap-upgrade', 'linear.issue-attribute-filter.v1')
-    ).resolves.toBe(true)
-    expect(statusCalls).toBe(2)
-  })
-
-  it('dispatches capability-selected legacy without a redundant status probe', async () => {
-    const methods: string[] = []
-    runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
-      methods.push(method)
-      if (method === 'status.get') {
-        return Promise.resolve({
-          id: 'status',
-          ok: true,
-          result: {
-            runtimeId: 'old-runtime',
-            graphStatus: 'ready',
-            runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
-            minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
-            capabilities: []
-          },
-          _meta: { runtimeId: 'old-runtime' }
-        })
-      }
-      return Promise.resolve({
-        id: method,
-        ok: true,
-        result: { terminal: { handle: 'legacy' } },
-        _meta: { runtimeId: 'old-runtime' }
-      })
-    })
-    const target = { kind: 'environment', environmentId: 'env-legacy' } as const
-
-    await expect(
-      runtimeEnvironmentSupportsCapability('env-legacy', 'agent-session.host-authority.v1')
-    ).resolves.toBe(false)
-    await callRuntimeRpc(target, 'terminal.create', {}, { skipCompatibilityCheck: true })
-
-    expect(methods).toEqual(['status.get', 'terminal.create'])
-  })
-
-  it('coalesces concurrent cold-cache capability probes onto one status.get', async () => {
-    let statusCalls = 0
-    runtimeEnvironmentCall.mockImplementation(() => {
-      statusCalls += 1
-      return Promise.resolve({
-        id: 'status',
-        ok: true,
-        result: {
-          runtimeId: 'remote-runtime',
-          graphStatus: 'ready',
-          runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
-          minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
-          capabilities: ['linear.issue-attribute-filter.v1']
-        },
-        _meta: { runtimeId: 'remote-runtime' }
-      })
-    })
-
-    const [a, b, c] = await Promise.all([
-      runtimeEnvironmentSupportsCapability(
-        'env-cap-concurrent',
-        'linear.issue-attribute-filter.v1'
-      ),
-      runtimeEnvironmentSupportsCapability(
-        'env-cap-concurrent',
-        'linear.issue-attribute-filter.v1'
-      ),
-      runtimeEnvironmentSupportsCapability('env-cap-concurrent', 'linear.issue-attribute-filter.v1')
-    ])
-
-    expect([a, b, c]).toEqual([true, true, true])
-    expect(statusCalls).toBe(1)
-  })
-
-  it('expires a supported capability verdict so a runtime downgrade is detected', async () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date(0))
-    try {
-      let statusCalls = 0
-      runtimeEnvironmentCall.mockImplementation(() => {
-        statusCalls += 1
-        return Promise.resolve({
-          id: 'status',
-          ok: true,
-          result: {
-            runtimeId: 'remote-runtime',
-            graphStatus: 'ready',
-            runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
-            minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
-            capabilities: statusCalls === 1 ? ['linear.issue-attribute-filter.v1'] : []
-          },
-          _meta: { runtimeId: 'remote-runtime' }
-        })
-      })
-
-      await expect(
-        runtimeEnvironmentSupportsCapability(
-          'env-cap-downgrade',
-          'linear.issue-attribute-filter.v1'
-        )
-      ).resolves.toBe(true)
-      vi.setSystemTime(new Date(59_999))
-      await expect(
-        runtimeEnvironmentSupportsCapability(
-          'env-cap-downgrade',
-          'linear.issue-attribute-filter.v1'
-        )
-      ).resolves.toBe(true)
-      vi.setSystemTime(new Date(60_000))
-      await expect(
-        runtimeEnvironmentSupportsCapability(
-          'env-cap-downgrade',
-          'linear.issue-attribute-filter.v1'
-        )
-      ).resolves.toBe(false)
-      expect(statusCalls).toBe(2)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('invalidates a positive capability verdict when the endpoint runtime changes', async () => {
-    let statusCalls = 0
-    runtimeEnvironmentCall.mockImplementation(() => {
-      statusCalls += 1
-      const runtimeId = statusCalls === 1 ? 'runtime-before-restart' : 'runtime-after-restart'
-      return Promise.resolve({
-        id: 'status',
-        ok: true,
-        result: {
-          runtimeId,
-          graphStatus: 'ready',
-          runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
-          minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
-          capabilities: statusCalls === 1 ? ['agent-session.host-authority.v1'] : []
-        },
-        _meta: { runtimeId }
-      })
-    })
-
-    await expect(
-      runtimeEnvironmentSupportsCapability(
-        'env-runtime-replaced',
-        'agent-session.host-authority.v1'
-      )
-    ).resolves.toBe(true)
-    clearRecentRuntimeCompatibilityFailure('env-runtime-replaced', {
-      runtimeId: 'runtime-after-restart',
-      graphStatus: 'ready',
-      runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
-      minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
-    } as RuntimeStatus)
-    await expect(
-      runtimeEnvironmentSupportsCapability(
-        'env-runtime-replaced',
-        'agent-session.host-authority.v1'
-      )
-    ).resolves.toBe(false)
-    expect(statusCalls).toBe(2)
-  })
-
-  it('rejects missing advertised runtime capabilities with the caller message', async () => {
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'status',
-      ok: true,
-      result: {
-        runtimeId: 'remote-runtime',
-        graphStatus: 'ready',
-        runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
-        minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
-        capabilities: []
-      },
-      _meta: { runtimeId: 'remote-runtime' }
-    })
-
-    await expect(
-      assertRuntimeEnvironmentCapability(
-        'env-1',
-        'project-host-setup.v1',
-        'Project setup is unavailable.'
-      )
-    ).rejects.toThrow('Project setup is unavailable.')
   })
 
   it('marks remote UI-owned runtime calls so feature interaction tracking can ignore them', async () => {

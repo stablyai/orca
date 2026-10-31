@@ -10,9 +10,14 @@ import type { Tab } from '../../../../shared/tab-types'
 import { AGENT_SESSION_WORKSPACE_SLEEP_MARK_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-workspace-sleep'
 import { AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 
-const mocks = vi.hoisted(() => ({ subscribe: vi.fn(), supports: vi.fn() }))
+const mocks = vi.hoisted(() => ({
+  subscribe: vi.fn(),
+  supports: vi.fn(),
+  supportsInPlaceSwitch: vi.fn(async () => false)
+}))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
-  subscribeStructuredAgentSessionStatus: mocks.subscribe
+  subscribeStructuredAgentSessionStatus: mocks.subscribe,
+  supportsInPlaceSwitch: mocks.supportsInPlaceSwitch
 }))
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),

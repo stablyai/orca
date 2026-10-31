@@ -1,5 +1,7 @@
 // @vitest-environment happy-dom
 
+import { ConfirmationDialogProvider } from '@/components/confirmation-dialog'
+
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
@@ -58,14 +60,16 @@ afterEach(() => {
     mocks.turnId = 'turn-1'
     mocks.promptItems = [NEWER_APPROVAL]
     render(
-      <NativeChatStructuredSession
-        isVisible
-        isFocusedGroup
-        tabId="newer-approval-tab"
-        sessionId="newer-approval-session"
-        target={{ kind: 'local' }}
-        agent="claude"
-      />
+      <ConfirmationDialogProvider>
+        <NativeChatStructuredSession
+          isVisible
+          isFocusedGroup
+          tabId="newer-approval-tab"
+          sessionId="newer-approval-session"
+          target={{ kind: 'local' }}
+          agent="claude"
+        />
+      </ConfirmationDialogProvider>
     )
     expect(mocks.approvalCardProps).toMatchObject({
       approval: { subject: { kind: 'diff' } }
@@ -81,14 +85,16 @@ afterEach(() => {
   it('sends nothing for the card when no turn is running', () => {
     mocks.promptItems = [NEWER_APPROVAL]
     render(
-      <NativeChatStructuredSession
-        isVisible
-        isFocusedGroup
-        tabId="newer-approval-tab"
-        sessionId="newer-approval-session"
-        target={{ kind: 'local' }}
-        agent="claude"
-      />
+      <ConfirmationDialogProvider>
+        <NativeChatStructuredSession
+          isVisible
+          isFocusedGroup
+          tabId="newer-approval-tab"
+          sessionId="newer-approval-session"
+          target={{ kind: 'local' }}
+          agent="claude"
+        />
+      </ConfirmationDialogProvider>
     )
     mocks.approvalCardProps?.onCancel?.()
     expect(mocks.cancel).not.toHaveBeenCalled()
@@ -97,14 +103,16 @@ afterEach(() => {
   it('cancels a Pi extension dialog outside a model turn', () => {
     mocks.promptItems = [NEWER_APPROVAL]
     render(
-      <NativeChatStructuredSession
-        isVisible
-        isFocusedGroup
-        tabId="pi-dialog-tab"
-        sessionId="pi-dialog-session"
-        target={{ kind: 'local' }}
-        agent="pi"
-      />
+      <ConfirmationDialogProvider>
+        <NativeChatStructuredSession
+          isVisible
+          isFocusedGroup
+          tabId="pi-dialog-tab"
+          sessionId="pi-dialog-session"
+          target={{ kind: 'local' }}
+          agent="pi"
+        />
+      </ConfirmationDialogProvider>
     )
     mocks.approvalCardProps?.onCancel?.()
     expect(mocks.cancel).toHaveBeenCalledWith(undefined, {
@@ -115,14 +123,16 @@ afterEach(() => {
 
   function renderSession() {
     render(
-      <NativeChatStructuredSession
-        isVisible
-        isFocusedGroup
-        tabId="newer-approval-tab"
-        sessionId="newer-approval-session"
-        target={{ kind: 'local' }}
-        agent="claude"
-      />
+      <ConfirmationDialogProvider>
+        <NativeChatStructuredSession
+          isVisible
+          isFocusedGroup
+          tabId="newer-approval-tab"
+          sessionId="newer-approval-session"
+          target={{ kind: 'local' }}
+          agent="claude"
+        />
+      </ConfirmationDialogProvider>
     )
   }
 
@@ -205,14 +215,16 @@ afterEach(() => {
       JSON.stringify(messages.map((message) => message.outbox))
     )
     render(
-      <NativeChatStructuredSession
-        isVisible
-        isFocusedGroup
-        tabId="start-failure-tab"
-        sessionId={SESSION_ID}
-        target={{ kind: 'local' }}
-        agent={agent}
-      />
+      <ConfirmationDialogProvider>
+        <NativeChatStructuredSession
+          isVisible
+          isFocusedGroup
+          tabId="start-failure-tab"
+          sessionId={SESSION_ID}
+          target={{ kind: 'local' }}
+          agent={agent}
+        />
+      </ConfirmationDialogProvider>
     )
   }
 

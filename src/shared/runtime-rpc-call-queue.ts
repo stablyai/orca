@@ -56,7 +56,12 @@ export function isBackgroundRuntimeMethod(method: string): boolean {
 // Slow worktree removal/model listing waits get a separate lane so foreground refresh/send slots remain free;
 // background slots belong to status.
 function isLongWaitRuntimeMethod(method: string): boolean {
-  return method === 'worktree.rm' || method === 'agentSession.modelCatalog'
+  return (
+    method === 'worktree.rm' ||
+    method === 'agentSession.modelCatalog' ||
+    method === 'agentSession.switchToChat' ||
+    method === 'agentSession.switchToTerminal'
+  )
 }
 
 // Byte-range reads (media, paged files, downloads) are bulk: a playing video must not hold terminal or workspace slots.

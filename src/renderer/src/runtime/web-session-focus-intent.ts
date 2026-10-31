@@ -8,6 +8,9 @@ export type WebSessionFocusIntent = {
   hostTabId: string
   leafId?: string
   expectedCurrentLocalTabId?: string | null
+  /** Also matches a row this client hasn't shown that the host placed beside this tab: a split
+   *  pane's switch, whose host may answer with a chat other than the one this client named. */
+  afterHostTabId?: string
 }
 
 export const MAX_WEB_SESSION_FOCUS_INTENTS = 512
@@ -126,7 +129,8 @@ export function recordWebSessionFocusIntent(
   worktreeId: string,
   hostTabId: string,
   leafId?: string,
-  expectedCurrentLocalTabId?: string | null
+  expectedCurrentLocalTabId?: string | null,
+  afterHostTabId?: string
 ): void {
   const trimmed = hostTabId.trim()
   if (!worktreeId || !trimmed) {
@@ -138,7 +142,8 @@ export function recordWebSessionFocusIntent(
   pendingFocusByOwnerAndWorktree.set(key, {
     hostTabId: trimmed,
     ...(trimmedLeafId ? { leafId: trimmedLeafId } : {}),
-    ...(expectedCurrentLocalTabId !== undefined ? { expectedCurrentLocalTabId } : {})
+    ...(expectedCurrentLocalTabId !== undefined ? { expectedCurrentLocalTabId } : {}),
+    ...(afterHostTabId ? { afterHostTabId } : {})
   })
   while (pendingFocusByOwnerAndWorktree.size > MAX_WEB_SESSION_FOCUS_INTENTS) {
     const oldest = pendingFocusByOwnerAndWorktree.keys().next()

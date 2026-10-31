@@ -18,6 +18,7 @@ import {
   type EagerPtyHandle
 } from '@/components/terminal-pane/pty-dispatcher'
 import { subscribeToPtyData } from '@/components/terminal-pane/pty-data-sidecar-subscriptions'
+import type { PtyExitOptions } from '@/components/terminal-pane/pty-exit-delivery'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { retireProvider } from '@/lib/retire-unowned-background-terminal'
 import { prepareRuntimeAgentBackgroundTerminal } from '@/lib/runtime-agent-background-create'
@@ -32,8 +33,8 @@ import {
   reserveAgentBackgroundSessionIdentity
 } from '@/lib/adopt-agent-background-session-tab'
 import { createBackgroundAgentStatusConsumer } from '@/lib/background-agent-status-consumer'
-import { runtimeWaitExitCode, settleTabPtyBinding } from '@/lib/agent-background-session-exit'
 import { isWslUncPath } from '../../../shared/wsl-paths'
+import * as backgroundExit from '@/lib/agent-background-session-exit'
 
 export async function launchAgentBackgroundSession(
   args: LaunchAgentBackgroundSessionArgs
@@ -121,18 +122,14 @@ export async function launchAgentBackgroundSession(
   let unsubscribeExit = (): void => {},
     unsubscribeData = (): void => {},
     releaseRuntimeObservers = (): void => {}
-  const handleExit = (exitPtyId: string, code: number): void => {
+  const handleExit = (exitPtyId: string, code: number, options?: PtyExitOptions): void => {
     if (exitHandled) {
       return
     }
     exitHandled = true
     unsubscribeExit()
     unsubscribeData()
-    if (tab) {
-      settleTabPtyBinding(tab.id, exitPtyId, code)
-    }
-    useAppStore.getState().clearAgentLaunchConfig(paneKey)
-    onExit?.(exitPtyId, code)
+    backgroundExit.settleAgentBackgroundExit(tab?.id, paneKey, onExit, exitPtyId, code, options)
   }
   // Main owns local/SSH status scanning; runtime bytes still need renderer-side writes.
   const mainOwnsAgentStatusWrites = isMainTerminalSideEffectAuthorityForPty({
@@ -274,14 +271,16 @@ export async function launchAgentBackgroundSession(
         { terminal: runtimeTerminalHandle, for: 'exit' },
         { timeoutMs: 24 * 60 * 60 * 1000, signal: exitWait.signal }
       )
-        .then((result) => handleExit(ptyId, runtimeWaitExitCode(result.wait)))
+        .then((result) => handleExit(ptyId, backgroundExit.runtimeWaitExitCode(result.wait)))
         .catch(() => {})
     } else {
       // Incarnation prevents recycled relay IDs from delivering the previous session’s exit.
       eagerPtyBuffer = registerEagerPtyBuffer(ptyId, handleExit, spawned.incarnationId)
       unsubscribeData = subscribeToPtyData(ptyId, handleData)
       // A mounted transport disposes the eager exit handler; this sidecar preserves completion tracking across hidden/visible transitions.
-      unsubscribeExit = subscribeToPtyExit(ptyId, (code) => handleExit(ptyId, code))
+      unsubscribeExit = subscribeToPtyExit(ptyId, (code, context) =>
+        handleExit(ptyId, code, context.exitOptions)
+      )
     }
     // Bind PTY/ownership before mount to prevent duplicate spawn without missing user takeover.
     requestBackgroundTerminalWorktreeMount({ worktreeId, tabIds: [tab.id] })

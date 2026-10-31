@@ -129,6 +129,9 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
   ): Promise<RuntimeMobileSessionTabActivationResult> {
     const navigation = opts.navigation ?? (opts.notifyClients === false ? 'caller' : 'all')
     const targetsHost = navigationTargetsHost(navigation)
+    if (targetsHost && !isAutomaticTabActivation(opts.intent)) {
+      this.clientSessionTabSelections.noteHostNavigation()
+    }
     const explicitWorktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector)
     let worktreeId =
       explicitWorktreeId ?? (await this.resolveWorkspaceSelector(worktreeSelector)).id

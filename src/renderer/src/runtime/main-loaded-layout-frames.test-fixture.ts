@@ -14,7 +14,6 @@ import {
   indexPublishedLayout
 } from '../../../shared/workspace-layout/workspace-layout-records'
 import type { WorkspaceLayoutChangeFrame } from '../../../shared/workspace-layout/workspace-layout-stream-frames'
-
 /** The model main loads from one stored partition, with the ids it mints at load. */
 export function loadMainLayoutModel(
   hostId: ExecutionHostId,

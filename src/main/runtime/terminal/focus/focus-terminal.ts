@@ -19,6 +19,9 @@ export abstract class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithWaitFo
     options: { navigateHost?: boolean } = {}
   ): Promise<RuntimeTerminalFocus> {
     const navigateHost = options.navigateHost !== false
+    if (navigateHost) {
+      this.clientSessionTabSelections.noteHostNavigation()
+    }
     const livePtyIdentity = (): RuntimeTerminalFocus => {
       const live = this.getLivePtyForHandle(handle)
       if (!live?.pty.connected) {

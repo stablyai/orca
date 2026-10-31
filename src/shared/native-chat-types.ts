@@ -1,3 +1,4 @@
+import type { AgentJournalTurnOutcome } from './agent-turn-outcome'
 import type { AgentSessionProviderContextBoundary } from './agent-session-provider-context'
 // IPC-serializable conversation contract: plain JSON only, no classes/Maps/Dates. Sources prefer transcripts, then hooks,
 // then degraded scrollback; docs/plans/2026-06-17-001-feat-native-chat-view-plan.md (KTD2).
@@ -283,6 +284,7 @@ export const NATIVE_CHAT_INTERRUPTED_STATUS_TEXT = 'Conversation interrupted'
 /** Replay-safe provider completion/interruption evidence recovered from transcripts, unlike assistant prose. */
 export type NativeChatTurnLifecycle = {
   state: NativeChatTurnLifecycleState
+  outcome?: AgentJournalTurnOutcome
   /** Stable provider id when available, otherwise the JSONL record position. */
   turnId: string
   /** Provider timestamp; null only when the transcript omitted one. */

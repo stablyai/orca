@@ -19589,8 +19589,8 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "Sohbet arayüzünde devam etmek için bu sunucudaki Orca'yı güncelleyin.",
-        "exitUnconfirmedFromTerminal": "{{agent}} bu sohbeti zaten başka bir terminalde yürütüyor. O terminalde {{agent}} uygulamasından çıkın veya terminali kapatın, ardından bu sohbeti Oturum geçmişi bölümünden açın.",
-        "exitUnconfirmed": "{{agent}} bu sohbeti zaten başka bir terminalde yürütüyor. O terminalde {{agent}} uygulamasından çıkın veya terminali kapatın, ardından bu sohbeti Oturum geçmişi bölümünden açın.",
+        "exitUnconfirmedFromTerminal": "Orca, {{agent}} uygulamasının bu terminalde durduğunu doğrulayamadı. Burada {{agent}} uygulamasından çıkın ve bu işlemi yeniden deneyin.",
+        "exitUnconfirmed": "Orca, {{agent}} uygulamasının durduğunu doğrulayamadı. {{agent}} uygulamasından çalıştığı terminalde çıkın ve bu işlemi yeniden deneyin.",
         "notSavedYet": "{{agent}} bu sohbeti henüz kaydetmedi. Yanıt verdikten sonra yeniden deneyin."
       },
       "state": {
@@ -19996,7 +19996,9 @@
       "bar": {
         "SortableTabContextMenu": {
           "switchToTerminalView": "Terminal ajanıyla devam et",
-          "switchToChatView": "Sohbet arayüzünde devam et",
+          "continueInChatView": "Sohbet arayüzünde devam et",
+          "switchToChatView": "Sohbet olarak göster",
+          "showAsTerminal": "Terminal olarak göster",
           "allowAutoClose": "Otomatik Kapatmaya İzin Ver"
         },
         "BrowserTab": {

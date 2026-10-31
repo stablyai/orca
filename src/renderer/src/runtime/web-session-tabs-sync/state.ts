@@ -19,6 +19,7 @@ import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { OpenFile } from '../../store/slices/editor'
 import type { RuntimeBrowserPlacement } from '../../../../shared/runtime-browser-placement'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 
 export const WEB_SESSION_GROUP_PREFIX = 'web-session-tabs:'
 export const WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS = 100
@@ -230,6 +231,10 @@ export type WebSessionTabsSyncState = Pick<
   Partial<
     Pick<
       AppState,
+      | 'acknowledgedAgentsByPaneKey'
+      | 'activityClearedAtByPaneKey'
+      | 'agentLaunchConfigByPaneKey'
+      | 'agentConversationsByPaneKey'
       | 'automaticAgentResumeClaimsByTabId'
       // Client draft proves dirty-flag ownership (#21392); without one, follow host save state.
       | 'editorDrafts'
@@ -239,7 +244,8 @@ export type WebSessionTabsSyncState = Pick<
       | 'pendingStartupByTabId'
       | 'runtimePaneTitlesByTabId'
     >
-  >
+  > &
+  Partial<Pick<WorkspaceSessionState, 'terminalPtyIncarnationsByPaneKey'>>
 
 export type WebSessionTabsBatchRecordKey =
   | 'activeBrowserTabIdByWorktree'

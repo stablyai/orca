@@ -343,6 +343,26 @@ describe('adopting a provider conversation on create', () => {
     }
   )
 
+  it('refuses unreadable physical ancestry before acquisition or publication', async () => {
+    root = await mkdtemp(join(tmpdir(), 'orca-adopt-lineage-'))
+    const { filePath } = await writeCodexHistoryFixture(root, THREAD, ['ice'], {
+      thread_id: '01a17c7f-6f58-7a73-b87a-a8702ff2da17',
+      end_ordinal_exclusive: 5,
+      end_byte_offset: 1024
+    })
+    const sessionAdapter = adapter()
+    const publish = vi.fn()
+    expect(await attach(filePath, sessionAdapter, publish)).toMatchObject({
+      ok: false,
+      refusal: { code: 'agent_session_identity_required' }
+    })
+    expect(sessionAdapter.acquire).not.toHaveBeenCalled()
+    expect(sessionAdapter.dispatch).not.toHaveBeenCalled()
+    expect(publish).not.toHaveBeenCalled()
+    expect(store?.getRecord(SESSION)).toBeNull()
+    expect(store?.listOperationRows()).toEqual([])
+  })
+
   it('still releases acquisition on an import write failure, and leaves the conversation open', async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-adopt-write-failure-'))
     const transcriptPath = join(root, 'rollout.jsonl')

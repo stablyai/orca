@@ -58,7 +58,17 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
     for (const [ptyId, retained] of this.handleByPtyIncarnation) {
       const pty = this.ptysById.get(ptyId)
       const leaves = this.getLeavesForPty(ptyId)
-      // Learning a previously unknown incarnation fences the handle; only known-to-different means replacement.
+      const retainedLeaf = this.leaves.get(retained.leafKey)
+      if (
+        (!pty || (!pty.connected && pty.incarnationId === retained.incarnationId)) &&
+        this.getPtyLivenessVerdict(ptyId)?.status === 'exited' &&
+        retainedLeaf &&
+        (!retainedLeaf.ptyId || retainedLeaf.ptyId === ptyId)
+      ) {
+        continue
+      }
+      // Why: a handle issued before the host reported the incarnation is un-fenced, so
+      // learning it is not a replacement; only a known-to-different incarnation is.
       const incarnationReplaced =
         retained.incarnationId !== null &&
         pty !== undefined &&
@@ -163,12 +173,20 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
     }
   }
 
-  protected invalidateLeafHandle(leafKey: string): void {
+  protected invalidateLeafHandle(leafKey: string, bindingCleared = false): void {
     const handle = this.handleByLeafKey.get(leafKey)
     if (!handle) {
       return
     }
     const record = this.handles.get(handle)
+    // A cleared binding after certified exit still addresses that readable ended process.
+    if (
+      bindingCleared &&
+      record?.ptyId &&
+      this.getPtyLivenessVerdict(record.ptyId)?.status === 'exited'
+    ) {
+      return
+    }
     if (record?.ptyId && this.handleByPtyIncarnation.get(record.ptyId)?.handle === handle) {
       this.handleByPtyIncarnation.delete(record.ptyId)
     }

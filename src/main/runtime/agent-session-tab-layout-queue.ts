@@ -1,3 +1,4 @@
+import type { LayoutCommandRunOptions } from './runtime-layout-apply'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { LayoutApplyReply } from '../../shared/workspace-layout/workspace-layout-command-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
@@ -19,8 +20,11 @@ export function createChatTabLayoutQueue(deps: {
   sessionOf: (worktreeId: string) => WorkspaceSessionState | null
   /** Called only with a saved session; unplaceable worktrees throw. */
   hostIdOf: (worktreeId: string) => ExecutionHostId
-  apply: (command: ChatTabLayoutCommand) => Promise<LayoutApplyReply>
-}): (changesNow: () => readonly QueuedChatTabChange[]) => void {
+  apply: (
+    command: ChatTabLayoutCommand,
+    options?: LayoutCommandRunOptions
+  ) => Promise<LayoutApplyReply>
+}): (changesNow: () => readonly QueuedChatTabChange[], admit?: () => boolean) => Promise<boolean> {
   let queue: Promise<void> = Promise.resolve()
   const commandNow = ({ worktreeId, change }: QueuedChatTabChange) => {
     const session = deps.sessionOf(worktreeId)
@@ -36,14 +40,15 @@ export function createChatTabLayoutQueue(deps: {
       change
     )
   }
-  return (changesNow) => {
-    queue = queue.then(async () => {
+  return (changesNow, admit) => {
+    const result = queue.then(async () => {
+      let applied = true
       let changes: readonly QueuedChatTabChange[]
       try {
         changes = changesNow()
       } catch (error) {
         console.warn('[agent-session-tabs] reading chat tab changes failed:', error)
-        return
+        return false
       }
       for (const queued of changes) {
         try {
@@ -51,14 +56,22 @@ export function createChatTabLayoutQueue(deps: {
             continue
           }
           const command = commandNow(queued)
-          const reply = command ? await deps.apply(command) : null
+          if (!command && admit && 'close' in queued.change) {
+            applied = false
+          }
+          const reply = command ? await deps.apply(command, admit ? { admit } : undefined) : null
           if (command && reply && !reply.ok) {
+            applied = false
             console.warn(`[agent-session-tabs] ${command.type} refused:`, reply.code)
           }
         } catch (error) {
+          applied = false
           console.warn('[agent-session-tabs] a chat tab change failed:', error)
         }
       }
+      return applied
     })
+    queue = result.then(() => {})
+    return result
   }
 }

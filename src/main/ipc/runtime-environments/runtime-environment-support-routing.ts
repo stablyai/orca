@@ -49,6 +49,7 @@ type SubscriptionCallbacks = {
       | { type: 'close' }
   ) => void
   onClose: () => void
+  beforeSend?: () => void
 }
 
 export function shouldRouteCallBySupport(method: string, environmentId: string): boolean {
@@ -141,17 +142,20 @@ export async function subscribeSupportRoutedRuntimeEnvironment(args: {
 }): Promise<RemoteRuntimeSubscription> {
   let markedUsed = false
   let supportOutcome: SupportRoute['outcome'] | null = null
-  const callbacks = subscriptionCallbacks(args, () => {
-    if (
-      markedUsed ||
-      !args.isCurrent() ||
-      (supportOutcome && !isRuntimeEnvironmentCapabilityOutcomeCurrent(supportOutcome))
-    ) {
-      return false
-    }
-    markedUsed = true
-    return true
-  })
+  const callbacks = {
+    beforeSend: args.callbacks.beforeSend,
+    ...subscriptionCallbacks(args, () => {
+      if (
+        markedUsed ||
+        !args.isCurrent() ||
+        (supportOutcome && !isRuntimeEnvironmentCapabilityOutcomeCurrent(supportOutcome))
+      ) {
+        return false
+      }
+      markedUsed = true
+      return true
+    })
+  }
   const routed = await routeRuntimeEnvironmentSubscriptionBySupport({
     userDataPath: args.userDataPath,
     environment: args.environment,

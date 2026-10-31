@@ -19306,8 +19306,8 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "請更新此主機上的 Orca，以便在聊天介面中繼續。",
-        "exitUnconfirmedFromTerminal": "{{agent}} 已在另一個終端機中執行此對話。請在該處結束 {{agent}} 或關閉該終端機，再從「工作階段歷史記錄」開啟此對話。",
-        "exitUnconfirmed": "{{agent}} 已在另一個終端機中執行此對話。請在該處結束 {{agent}} 或關閉該終端機，再從「工作階段歷史記錄」開啟此對話。",
+        "exitUnconfirmedFromTerminal": "Orca 無法確認 {{agent}} 已在此終端機中停止。請在此處結束 {{agent}}，然後重試此操作。",
+        "exitUnconfirmed": "Orca 無法確認 {{agent}} 已停止。請在其所在的終端機中結束 {{agent}}，然後重試此操作。",
         "notSavedYet": "{{agent}} 尚未儲存此對話。請在它回覆後重試。"
       },
       "state": {
@@ -19705,7 +19705,9 @@
       "bar": {
         "SortableTabContextMenu": {
           "switchToTerminalView": "使用終端機代理程式繼續",
-          "switchToChatView": "在聊天介面中繼續",
+          "continueInChatView": "在聊天介面中繼續",
+          "switchToChatView": "以聊天顯示",
+          "showAsTerminal": "以終端機顯示",
           "allowAutoClose": "允許自動關閉"
         },
         "BrowserTab": {

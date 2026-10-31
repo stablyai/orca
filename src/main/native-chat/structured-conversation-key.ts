@@ -48,7 +48,9 @@ export function terminalConversationKey(agent: string, id: string | null): Conve
 export function keysMayMatch(left: ConversationKey, right: ConversationKey): boolean {
   return (
     left.family === right.family &&
-    (left.id === null || right.id === null || sameConversationId(left.family, left.id, right.id)) &&
+    (left.id === null ||
+      right.id === null ||
+      conversationKeyId(left) === conversationKeyId(right)) &&
     (left.home === null ||
       right.home === null ||
       agentSessionAccountHomesEqual(left.home, right.home))
@@ -56,11 +58,9 @@ export function keysMayMatch(left: ConversationKey, right: ConversationKey): boo
 }
 
 // A session-file agent's terminal may name the file; Session History lists its file-name id.
-function sameConversationId(family: string, left: string, right: string): boolean {
-  if (family === 'opencode') {
-    return left === right
+export function conversationKeyId(key: ConversationKey): string | null {
+  if (key.id === null || key.family === 'opencode') {
+    return key.id
   }
-  const normalize = (id: string) =>
-    (/[\\/]/.test(id) ? sessionIdFromFileName(id) : id).toLowerCase()
-  return normalize(left) === normalize(right)
+  return (/[/\\]/.test(key.id) ? sessionIdFromFileName(key.id) : key.id).toLowerCase()
 }

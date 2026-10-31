@@ -17,7 +17,7 @@ import { framesDrawWorkspace } from './workspace-layout-frame-drawn-workspaces'
 /** Whose layout stream a sync shows, and which of the window's workspaces it draws. */
 export type LayoutFrameSource = {
   target: RuntimeClientTarget
-  draws: (state: AppState) => (key: string) => boolean
+  draws: (state: AppState, openedWorkspaces?: ReadonlySet<string>) => (key: string) => boolean
   /** Tabs this window draws that the source's frames never carry: every build keeps them as drawn. */
   heldTabs?: HeldDrawnTabs
   /** Frames under this window's ids; the local stream's already are. */

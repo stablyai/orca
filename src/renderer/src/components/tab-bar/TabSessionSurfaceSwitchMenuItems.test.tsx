@@ -1,4 +1,7 @@
 // @vitest-environment happy-dom
+import { useAppStore } from '@/store'
+import { makeRepo, makeWorktree } from '../worktree-jump-palette-test-fixtures'
+import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import { useSyncExternalStore } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -10,16 +13,24 @@ const mocks = vi.hoisted(() => {
   const state: {
     subject: Record<string, unknown> | null
     cliSource: Record<string, unknown> | null
-  } = { subject: null, cliSource: null }
+    capability: boolean | undefined
+  } = { subject: null, cliSource: null, capability: true }
   return {
     ...state,
     pending: false,
     pendingListeners: new Set<() => void>(),
     runNativeChatCliFork: vi.fn(),
+    runNativeChatCliSwitch: vi.fn(),
     runCliChatResume: vi.fn(async () => {}),
     listSessions: vi.fn()
   }
 })
+
+// The host's answer for agents that can switch in place; any other agent reads as no.
+vi.mock('@/lib/in-place-switch-support', () => ({
+  useInPlaceSwitchCapability: (_host: unknown, agent: string | undefined) =>
+    agent === 'omp' ? false : mocks.capability
+}))
 
 vi.mock('./native-chat-cli-fork-run', () => ({
   runNativeChatCliFork: mocks.runNativeChatCliFork,
@@ -33,22 +44,28 @@ vi.mock('./native-chat-cli-fork-run', () => ({
     )
 }))
 
-vi.mock('@/store', () => ({
-  useAppStore: Object.assign(
-    (selector: (state: Record<string, unknown>) => unknown) => selector({ settings: null }),
-    { getState: () => ({}) }
-  )
-}))
-
 vi.mock('./tab-session-history-switch', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   resolveTabSessionHistorySubject: () => mocks.subject
 }))
 
-vi.mock('./cli-chat-resume-source', () => ({ resolveCliChatResumeSource: () => mocks.cliSource }))
-vi.mock('./cli-chat-resume-run', () => ({
+vi.mock('./cli-chat-resume-source', () => ({
+  useCliChatResumeCapability: (_worktreeId: string, agent: string) => agent !== 'omp',
+  resolveCliChatResumeSource: () => mocks.cliSource
+}))
+vi.mock('@/lib/conversation-surface-switch', () => ({
   runCliChatResume: mocks.runCliChatResume,
-  useCliChatResumePending: () => false
+  runNativeChatCliSwitch: mocks.runNativeChatCliSwitch,
+  useConversationSwitchReadiness: () => {
+    const pending = useSyncExternalStore(
+      (listener) => {
+        mocks.pendingListeners.add(listener)
+        return () => mocks.pendingListeners.delete(listener)
+      },
+      () => mocks.pending
+    )
+    return { ready: !pending && mocks.capability !== undefined, pending }
+  }
 }))
 
 const CHAT_SUBJECT = {
@@ -59,10 +76,18 @@ const CHAT_SUBJECT = {
 }
 
 beforeEach(() => {
+  useAppStore.setState(useAppStore.getInitialState(), true)
+  useAppStore.setState({
+    settings: createGlobalSettingsFixture(),
+    repos: [makeRepo()],
+    worktreesByRepo: { 'repo-1': [makeWorktree('wt-1', 'Worktree', { path: '/repo/wt' })] }
+  })
   mocks.subject = null
   mocks.cliSource = null
   mocks.pending = false
+  mocks.capability = true
   mocks.runNativeChatCliFork.mockReset()
+  mocks.runNativeChatCliSwitch.mockReset()
   mocks.runCliChatResume.mockClear()
   mocks.listSessions.mockReset()
   mocks.listSessions.mockReturnValue(new Promise(() => {}))
@@ -75,7 +100,7 @@ beforeEach(() => {
 
 afterEach(cleanup)
 
-function renderItemsNow(structuredSessionId?: string): void {
+function renderItemsNow(structuredSessionId?: string, agent = 'claude'): void {
   render(
     <TooltipProvider>
       <ContextMenu>
@@ -83,9 +108,7 @@ function renderItemsNow(structuredSessionId?: string): void {
         <ContextMenuContent>
           <TabSessionSurfaceSwitchMenuItems
             tab={{ id: 'tab-1', worktreeId: 'wt-1' }}
-            nativeChat={
-              structuredSessionId ? { sessionId: structuredSessionId, agent: 'claude' } : undefined
-            }
+            nativeChat={structuredSessionId ? { sessionId: structuredSessionId, agent } : undefined}
             leadingSeparator
           />
         </ContextMenuContent>
@@ -112,14 +135,59 @@ describe('TabSessionSurfaceSwitchMenuItems', () => {
     mocks.subject = CHAT_SUBJECT
     renderItemsNow('orca-chat-1')
     expect(mocks.listSessions).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Continue with Terminal Agent' }))
-    expect(mocks.runNativeChatCliFork).toHaveBeenCalledWith(
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Switch to CLI' }))
+    expect(mocks.runNativeChatCliSwitch).toHaveBeenCalledWith(
       expect.objectContaining({
-        subject: CHAT_SUBJECT,
-        tab: { id: 'tab-1', worktreeId: 'wt-1' },
+        sessionId: 'orca-chat-1',
+        workspaceId: 'wt-1',
+        chatTabId: 'tab-1',
         agent: 'claude'
       })
     )
+  })
+
+  it('keeps the copy-in-a-new-terminal item for a chat agent that cannot switch in place', async () => {
+    mocks.subject = CHAT_SUBJECT
+    renderItemsNow('orca-chat-1', 'omp')
+    expect(screen.queryByRole('menuitem', { name: 'Switch to CLI' })).toBeNull()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Continue with Terminal Agent' }))
+    expect(mocks.runNativeChatCliFork).toHaveBeenCalledWith(
+      expect.objectContaining({ subject: CHAT_SUBJECT, agent: 'omp' })
+    )
+    expect(mocks.runNativeChatCliSwitch).not.toHaveBeenCalled()
+  })
+
+  it("keeps the copy item where the chat's host answered that it cannot switch in place", async () => {
+    mocks.subject = CHAT_SUBJECT
+    mocks.capability = false
+    renderItemsNow('orca-chat-1')
+    expect(screen.queryByRole('menuitem', { name: 'Switch to CLI' })).toBeNull()
+    fireEvent.click(screen.getByRole('menuitem'))
+    expect(mocks.runNativeChatCliFork).toHaveBeenCalledOnce()
+    expect(mocks.runNativeChatCliSwitch).not.toHaveBeenCalled()
+  })
+
+  it('shows the switch disabled while the host has not answered', async () => {
+    mocks.subject = CHAT_SUBJECT
+    mocks.capability = undefined
+    renderItemsNow('orca-chat-1')
+    const item = screen.getByRole('menuitem', { name: 'Switch to CLI' })
+    expect(item.getAttribute('data-disabled')).not.toBeNull()
+    expect(mocks.runNativeChatCliFork).not.toHaveBeenCalled()
+  })
+
+  it("keeps main's label where the terminal's chat opens beside it", () => {
+    mocks.cliSource = {
+      tabId: 'tab-1',
+      workspaceId: 'wt-1',
+      paneKey: 'tab-1:leaf',
+      agent: 'omp',
+      providerSessionId: 'provider-1',
+      executionHostId: 'local'
+    }
+    renderItemsNow()
+    expect(screen.queryByRole('menuitem', { name: 'Switch to Chat UI' })).toBeNull()
+    expect(screen.getByRole('menuitem', { name: 'Continue in Chat UI' })).toBeTruthy()
   })
 
   it('offers and dispatches a CLI identity while History never answers', async () => {
@@ -133,7 +201,7 @@ describe('TabSessionSurfaceSwitchMenuItems', () => {
     }
     mocks.cliSource = source
     renderItemsNow()
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Continue in Chat UI' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Switch to Chat UI' }))
     await act(async () => {})
     expect(mocks.runCliChatResume).toHaveBeenCalledWith(source)
     expect(mocks.listSessions).not.toHaveBeenCalled()
@@ -142,13 +210,13 @@ describe('TabSessionSurfaceSwitchMenuItems', () => {
 
 it('keeps an accepted native action visible with shared disabled spinner feedback', async () => {
   mocks.subject = CHAT_SUBJECT
-  mocks.runNativeChatCliFork.mockImplementation(() => {
+  mocks.runNativeChatCliSwitch.mockImplementation(() => {
     mocks.pending = true
     mocks.pendingListeners.forEach((listener) => listener())
   })
   await renderItems('orca-chat-1')
-  fireEvent.click(screen.getByRole('menuitem', { name: 'Continue with Terminal Agent' }))
-  const item = screen.getByRole('menuitem', { name: 'Continue with Terminal Agent' })
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Switch to CLI' }))
+  const item = screen.getByRole('menuitem', { name: 'Switch to CLI' })
   expect(item.getAttribute('aria-busy')).toBe('true')
   expect(item.getAttribute('data-disabled')).not.toBeNull()
   expect(item.querySelector('.animate-spin')).not.toBeNull()

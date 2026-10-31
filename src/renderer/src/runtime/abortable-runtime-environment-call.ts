@@ -1,5 +1,8 @@
 import { createBrowserUuid } from '@/lib/browser-uuid'
-import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type {
+  RuntimeRpcDispatchObservation,
+  RuntimeRpcResponse
+} from '../../../shared/runtime-rpc-envelope'
 
 export function createRuntimeRpcAbortError(): Error {
   const error = new Error('Runtime request aborted')
@@ -14,7 +17,9 @@ export async function callAbortableRuntimeEnvironment(
   timeoutMs: number | undefined,
   signal: AbortSignal,
   expectedEnvironmentPairingRevision?: number,
-  expectedEnvironmentRuntimeId?: string
+  expectedEnvironmentRuntimeId?: string,
+  onSent?: (sentAt?: number) => void,
+  dispatchObservation?: RuntimeRpcDispatchObservation
 ): Promise<RuntimeRpcResponse<unknown>> {
   if (signal.aborted) {
     throw createRuntimeRpcAbortError()
@@ -24,13 +29,26 @@ export async function callAbortableRuntimeEnvironment(
     const subscriptionId = createBrowserUuid()
     let handle: { unsubscribe: () => void } | null = null
     let settled = false
+    let sent = false
     // Subscription timeout bounds start only; retain the response deadline or connected unresponsive hosts stall forever.
-    const deadline =
+    let deadline =
       timeoutMs === undefined
         ? null
-        : setTimeout(() => {
-            finish(() => reject(new Error(`Runtime request timed out before ${method} completed`)))
-          }, timeoutMs)
+        : setTimeout(
+            () => {
+              finish(() =>
+                reject(new Error(`Runtime request timed out before ${method} completed`))
+              )
+            },
+            dispatchObservation
+              ? Math.max(
+                  0,
+                  (dispatchObservation.responseExpiresAt ??
+                    dispatchObservation.expiresAt + dispatchObservation.responseTimeoutMs) -
+                    Date.now()
+                )
+              : timeoutMs
+          )
     const finish = (complete: () => void): void => {
       if (settled) {
         return
@@ -59,9 +77,38 @@ export async function callAbortableRuntimeEnvironment(
           params,
           timeoutMs,
           expectedEnvironmentPairingRevision,
-          expectedEnvironmentRuntimeId
+          expectedEnvironmentRuntimeId,
+          observeDispatch: Boolean(onSent),
+          dispatchObservation
         },
         {
+          onSent: (sentAt) => {
+            if (sent || settled) {
+              return
+            }
+            sent = true
+            try {
+              onSent?.(sentAt)
+            } catch (error) {
+              finish(() => reject(error))
+              return
+            }
+            if (deadline !== null) {
+              clearTimeout(deadline)
+            }
+            if (timeoutMs !== undefined) {
+              deadline = setTimeout(
+                () => finish(() => reject(new Error('Request timed out'))),
+                dispatchObservation
+                  ? Math.max(
+                      0,
+                      (dispatchObservation.responseExpiresAt ??
+                        (sentAt ?? Date.now()) + dispatchObservation.responseTimeoutMs) - Date.now()
+                    )
+                  : timeoutMs
+              )
+            }
+          },
           onResponse: (response) => finish(() => resolve(response)),
           onError: (error) => finish(() => reject(new Error(error.message))),
           onClose: () =>

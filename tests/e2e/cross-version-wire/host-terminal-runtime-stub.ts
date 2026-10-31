@@ -112,6 +112,7 @@ export function createHostTerminalRuntimeStub(
     getTerminalLaunchResult: () => undefined,
     resolveLiveLeafForHandle: (handle: string) => (handle === terminalHandle ? { ptyId } : null),
     resolveLeafForHandle: (handle: string) => (handle === terminalHandle ? { ptyId } : null),
+    isStoppedSwitchSourceHandle: () => false,
     registerRemoteTerminalViewSubscriber: () => () => {},
     isSoleRemoteTerminalQueryOwner: () => false,
     answerYieldedTerminalQueries: () => {},

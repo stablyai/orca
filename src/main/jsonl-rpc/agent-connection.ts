@@ -24,6 +24,7 @@ import { resolveJsonlRpcPeerOptions, type JsonlRpcPeerOptions } from './peer-lim
 export type JsonlRpcAgentConnectionOptions = JsonlRpcPeerHandlers & {
   peer?: JsonlRpcPeerOptions
   onExit?: (error: Error, context: { expected: boolean; exit: ProviderProcessExit }) => void
+  onPhysicalExit?: (exited: Promise<void>) => void
 }
 
 /** The owning runtime keeps process exit evidence separate from transport closure. */
@@ -45,6 +46,7 @@ export class JsonlRpcAgentConnection {
       site: 'jsonl-rpc-agent-teardown'
     })
     const managed = this.managed
+    options.onPhysicalExit?.(managed.exitPromise)
     this.peer = new JsonlRpcPeer(
       managed.child.stdout,
       managed.child.stdin,

@@ -1,5 +1,4 @@
 import { pairedRuntimeConnectionFromOffer } from '../../../../shared/paired-runtime-connection'
-const pendingSubscriptions = new Map<string, AbortController>()
 import type { PreloadApi } from '../../../../preload/api-types'
 import { parseHostAccessLink } from '../../../../shared/remote-pairing-address'
 import { verifyRemotePairingRuntimeStatus } from '../../../../shared/remote-pairing-verification'
@@ -15,7 +14,11 @@ import {
 } from '../web-runtime-environment'
 import { translate } from '@/i18n/i18n'
 import { translateHostAccessLinkError } from '@/lib/remote-pairing-copy'
-import { assertEnvironmentPairing, callEnvironmentEnvelope } from './web-runtime-calls'
+import { callEnvironmentEnvelope } from './web-runtime-calls'
+import {
+  cancelWebRuntimeEnvironmentSubscription,
+  subscribeWebRuntimeEnvironment
+} from './web-runtime-environment-subscribe'
 import {
   closeActiveRuntimeClients,
   subscribeWebRuntimeStatus,
@@ -27,10 +30,7 @@ import {
   removeActiveRuntimeEnvironment,
   requireActiveEnvironmentOrNull,
   resolveEnvironment,
-  webRuntimeState,
-  runtimeCallQueuePool,
-  updateEnvironmentFromResponse,
-  manuallyDisconnectedResponse
+  webRuntimeState
 } from './web-runtime-session'
 
 export function createRuntimeEnvironmentsApi(): NonNullable<
@@ -227,73 +227,7 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
         expectedEnvironmentPairingRevision,
         expectedEnvironmentRuntimeId
       ),
-    cancelSubscription: async ({ subscriptionId }) => {
-      pendingSubscriptions.get(subscriptionId)?.abort()
-    },
-    subscribe: async (
-      { selector, method, params, timeoutMs, subscriptionId, expectedEnvironmentPairingRevision },
-      callbacks
-    ) => {
-      const environment = resolveEnvironment(selector)
-      assertEnvironmentPairing(selector, expectedEnvironmentPairingRevision)
-      const client = getClientForEnvironment(environment)
-      const controller = new AbortController()
-      if (subscriptionId) {
-        if (pendingSubscriptions.has(subscriptionId)) {
-          throw new Error('Subscription id already exists')
-        }
-        pendingSubscriptions.set(subscriptionId, controller)
-      }
-      let subscription
-      try {
-        subscription = await runtimeCallQueuePool.enqueue(
-          environment.id,
-          method,
-          () => {
-            assertEnvironmentPairing(selector, expectedEnvironmentPairingRevision)
-            if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
-              throw new Error('runtime_manually_disconnected')
-            }
-            return client.subscribe(
-              method,
-              params,
-              {
-                ...callbacks,
-                onResponse: (response) => {
-                  try {
-                    assertEnvironmentPairing(selector, expectedEnvironmentPairingRevision)
-                  } catch (error) {
-                    callbacks.onError?.({
-                      code: 'runtime_environment_changed',
-                      message: String(error)
-                    })
-                    callbacks.onClose?.()
-                    controller.abort()
-                    return
-                  }
-                  const result = manuallyDisconnectedEnvironmentIds.has(environment.id)
-                    ? manuallyDisconnectedResponse(environment)
-                    : response
-                  updateEnvironmentFromResponse(environment, result)
-                  callbacks.onResponse(result)
-                }
-              },
-              { timeoutMs, signal: controller.signal }
-            )
-          },
-          0,
-          controller.signal
-        )
-      } finally {
-        if (subscriptionId && pendingSubscriptions.get(subscriptionId) === controller) {
-          pendingSubscriptions.delete(subscriptionId)
-        }
-      }
-      if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
-        subscription.unsubscribe()
-        throw new Error('runtime_manually_disconnected')
-      }
-      return subscription
-    }
+    cancelSubscription: cancelWebRuntimeEnvironmentSubscription,
+    subscribe: subscribeWebRuntimeEnvironment
   }
 }

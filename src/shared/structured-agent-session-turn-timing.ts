@@ -72,10 +72,12 @@ function readTiming(
   }
 }
 
-/** One root-turn scan, indexed by provider ID and opener/self anchor (structuredAgentTurnAnchors).
- * Omit untimed anchor rows unless explicitly unverifiable (null). */
+/** One root-turn scan; cancellation remains meaningful without a host clock. */
 type StructuredAgentJournalTurns = {
-  byAnchor: ReadonlyMap<string, StructuredAgentTurnTiming | null>
+  byAnchor: ReadonlyMap<
+    string,
+    { timing: StructuredAgentTurnTiming | null; verdict: AgentTurnOutcome | null }
+  >
   byTurnId: ReadonlyMap<string, StructuredAgentTurnTiming | null>
 }
 
@@ -84,7 +86,10 @@ function readStructuredAgentJournalTurns(
   submissions: readonly AgentJournalSubmission[] = []
 ): StructuredAgentJournalTurns {
   const anchors = structuredAgentTurnAnchors(items, submissions)
-  const byAnchor = new Map<string, StructuredAgentTurnTiming | null>()
+  const byAnchor = new Map<
+    string,
+    { timing: StructuredAgentTurnTiming | null; verdict: AgentTurnOutcome | null }
+  >()
   const byTurnId = new Map<string, StructuredAgentTurnTiming | null>()
   let precedingTurnEndedAt: number | undefined
   for (const item of items) {
@@ -94,10 +99,18 @@ function readStructuredAgentJournalTurns(
       continue
     }
     const timing = readTiming(item, precedingTurnEndedAt)
+    const verdict =
+      turn.state === 'interrupted'
+        ? agentTurnVerdict({ state: turn.state, outcome: readAgentJournalTurnOutcome(turn) })
+        : null
     precedingTurnEndedAt = timing?.completedAt ?? item.observedAt
     byTurnId.set(turn.turnId, timing)
-    if (timing || turn.state === 'unverifiable') {
-      byAnchor.set(anchor, timing)
+    if (
+      timing ||
+      turn.state === 'unverifiable' ||
+      (turn.state === 'interrupted' && verdict === 'cancellation')
+    ) {
+      byAnchor.set(anchor, { timing, verdict })
     }
   }
   return { byAnchor, byTurnId }
@@ -107,7 +120,12 @@ export function selectStructuredAgentTurnTimings(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[] = []
 ): ReadonlyMap<string, StructuredAgentTurnTiming | null> {
-  return readStructuredAgentJournalTurns(items, submissions).byAnchor
+  return new Map(
+    [...readStructuredAgentJournalTurns(items, submissions).byAnchor].flatMap(
+      ([anchor, { timing, verdict }]) =>
+        timing === null && verdict === 'cancellation' ? [] : [[anchor, timing] as const]
+    )
+  )
 }
 
 /** Null timing on older hosts without a host start lets surfaces fall back to local observation. */
@@ -172,12 +190,14 @@ function settledTurnsOf(
   submissions: readonly AgentJournalSubmission[]
 ): NativeChatSettledTurns {
   const settled = new Map<string, NativeChatSettledTurn | null>()
-  for (const [userItemId, timing] of turns.byAnchor) {
+  for (const [userItemId, { timing, verdict }] of turns.byAnchor) {
     const workedSeconds = completedStructuredAgentTurnSeconds(timing)
     settled.set(
       userItemId,
       workedSeconds === null || timing === null
-        ? null
+        ? verdict === 'cancellation'
+          ? { startedAt: timing?.startedAt ?? null, workedSeconds: null, verdict }
+          : null
         : {
             startedAt: timing.startedAt,
             workedSeconds,

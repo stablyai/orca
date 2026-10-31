@@ -14,12 +14,14 @@ const runtimeMocks = vi.hoisted(() => ({
   isWebRuntimeSessionActive: vi.fn(() => false)
 }))
 
+const unifiedTabsByWorktree: Record<string, { id: string; groupId: string }[]> = {}
 const mockState = {
   createTab: mockCreateTab,
   createEmptySplitGroup: mockCreateEmptySplitGroup,
   closeEmptyGroup: mockCloseEmptyGroup,
   setActiveTabType: mockSetActiveTabType,
   setTabBarOrder: mockSetTabBarOrder,
+  unifiedTabsByWorktree,
   tabsByWorktree: {} as Record<string, { id: string }[]>,
   openFiles: [] as { id: string; worktreeId: string }[],
   browserTabsByWorktree: {} as Record<string, { id: string }[]>,
@@ -64,6 +66,7 @@ describe('launchAiVaultSessionInNewTab', () => {
     runtimeMocks.runtimeEnvironmentIdOrLocalUnlessTwin.mockReturnValue(null)
     runtimeMocks.isWebRuntimeSessionActive.mockReturnValue(false)
     runtimeMocks.createWebRuntimeSessionTerminal.mockResolvedValue({ status: 'created' })
+    mockState.unifiedTabsByWorktree = {}
     mockState.tabsByWorktree = {}
     mockState.openFiles = []
     mockState.browserTabsByWorktree = {}

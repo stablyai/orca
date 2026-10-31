@@ -1,5 +1,5 @@
 import type { OrcaRuntimeWithGetTerminalInteractiveWait as GetTerminalInteractiveWaitMethods } from '../terminal/wait/terminal-interactive-wait'
-import { OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal } from './pty-backed-session-publication'
+import { OrcaRuntimeWithSwitchTerminalPlacement } from './switch-terminal-placement'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { hasHostAuthoritativeTerminalMembership } from '../../persistence/terminal-topology/terminal-topology-membership'
@@ -11,7 +11,7 @@ import { retireTerminalSurfacesFromSnapshot } from '../mobile-session-terminal-r
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { startedMainTerminalSurfaces } from '../terminal/surface/main-terminal-surfaces'
 
-export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal {
+export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends OrcaRuntimeWithSwitchTerminalPlacement {
   abstract getTerminalWorktreeIdForPaneKey(
     ...args: Parameters<GetTerminalInteractiveWaitMethods['getTerminalWorktreeIdForPaneKey']>
   ): ReturnType<GetTerminalInteractiveWaitMethods['getTerminalWorktreeIdForPaneKey']>

@@ -1,4 +1,6 @@
-// In main-owned layouts, phone row closes use main's pane/tab close with or without a window.
+import type { MobileSessionLifecycleCloseHost } from '../../mobile-session-lifecycle-close-adjudication'
+// Layout-owner builds: a phone's close of a terminal row in a workspace main owns is main's own
+// layout close, window or not, as the CLI's close by handle is.
 import { OrcaRuntimeWithRefuseUnattributedMobileSessionTabClose } from './refuse-unattributed-mobile-session-tab-close'
 import type {
   RuntimeMobileSessionTerminalTab,
@@ -84,6 +86,16 @@ export abstract class OrcaRuntimeWithCloseMobileRowInMainLayout extends OrcaRunt
     if (snapshot && rows.length > 0) {
       this.storeMobileSessionSnapshot(worktreeId, snapshot)
       this.notifyMobileSessionTabsChanged(worktreeId)
+    }
+  }
+  protected getMobileSessionLifecycleCloseHost(): MobileSessionLifecycleCloseHost {
+    return {
+      tabs: this.tabs,
+      leaves: this.leaves,
+      ptysById: this.ptysById,
+      findPtyForMobileTerminalTab: (worktreeId, tab) =>
+        this.findPtyForMobileTerminalTab(worktreeId, tab),
+      republishSnapshot: (worktreeId) => this.republishMobileSessionTabsSnapshot(worktreeId)
     }
   }
 }

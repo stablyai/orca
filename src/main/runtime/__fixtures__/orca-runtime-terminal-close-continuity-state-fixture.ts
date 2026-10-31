@@ -71,6 +71,17 @@ export const canaryProcess = {
   title: 'Canary shell'
 }
 
+export function makeRepo() {
+  return {
+    id: REPO_ID,
+    path: WORKTREE_PATH,
+    displayName: 'close-continuity',
+    upstream: null,
+    badgeColor: '#000000',
+    addedAt: 1
+  }
+}
+
 export function makeSession(ptyId = PTY_ID, includeCanary = false): WorkspaceSessionState {
   return {
     ...getDefaultWorkspaceSession(),

@@ -18,10 +18,12 @@ export async function joinStructuredAgentSessionChildClose(
   context: StructuredAgentSessionLifetimeContext,
   sessionId: string,
   child: StructuredAgentSessionProviderChild,
+  check?: () => void,
   observeClose?: AgentSessionCloseObserver
 ): Promise<StructuredAgentSessionChildCloseVerdict> {
   // Capture startup state before provider release loses that evidence.
   const unanswered = child.phase === 'starting'
+  check?.()
   const closed = await closeProviderRoot(context, sessionId, observeClose)
   if (!closed) {
     return 'unverifiable'

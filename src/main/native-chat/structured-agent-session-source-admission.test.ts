@@ -254,6 +254,53 @@ it('creates from the host hook path when Claude filename differs, then checks ac
   expect(find).not.toHaveBeenCalled()
 })
 
+it.each([true, false])(
+  'a CLI whose transcript is gone reads as unreadable once it took a prompt=%s, never "not saved"',
+  async (conversed) => {
+    await expect(
+      resolveStructuredAgentSessionAdoptionForCreate({
+        settings: {},
+        agent: 'claude',
+        transcriptImport: CLAUDE_CLI_CONVERSATIONS.transcriptImport!,
+        providerSessionId: id,
+        selectedAccountHome: { variable: 'CLAUDE_CONFIG_DIR', path: root },
+        launchEnv: {},
+        workspaceCwd: root,
+        resolveTranscriptSource: () =>
+          structuredAgentCliSourceFromEvidence({
+            agent: 'claude',
+            workspaceId: 'folder',
+            resumeFrom: {
+              providerSessionId: id,
+              cliSource: { workspaceId: 'folder', paneKey: 'tab:leaf' }
+            },
+            evidence: {
+              rows: [
+                {
+                  paneKey: 'tab:leaf',
+                  worktreeId: 'folder',
+                  agentType: 'claude',
+                  state: 'done',
+                  prompt: conversed ? 'Fix the build' : '',
+                  connectionId: null,
+                  receivedAt: 1,
+                  stateStartedAt: 1,
+                  providerSession: {
+                    key: 'session_id',
+                    id,
+                    transcriptPath: join(root, 'projects', 'folder', `${id}.jsonl`)
+                  }
+                }
+              ]
+            }
+          })
+      })
+    ).rejects.toMatchObject({
+      refusal: { details: { reason: conversed ? 'transcriptUnreadable' : 'transcriptNotFound' } }
+    })
+  }
+)
+
 it('imports early and late Claude history with an absent locator and captured native source', async () => {
   const transcriptPath = await file(join(root, 'projects', 'folder', `${id}.jsonl`), [
     {

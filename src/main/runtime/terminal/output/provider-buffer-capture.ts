@@ -38,6 +38,27 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     rows: number
   }): Promise<RuntimeTerminalProjection>
 
+  protected async readRenderedScreen(
+    ptyId: string,
+    read: RuntimeTerminalRead,
+    opts: { limit?: number } = {}
+  ): Promise<RuntimeTerminalRead> {
+    const visibleState = await this.readVisibleTerminalState(ptyId)
+    const projection =
+      visibleState ??
+      (await this.readProviderTerminalTailLines(ptyId, opts.limit, { visibleScreenOnly: true }))
+    if (projection.lines.length === 0) {
+      return { ...read, source: 'screen-unavailable' }
+    }
+    return buildVisibleSnapshotReadFallback(
+      read,
+      projection.lines,
+      opts.limit,
+      projection.draft,
+      projection.tailRows
+    )
+  }
+
   protected async captureProviderTerminalBuffer(
     ptyId: string,
     opts: { scrollbackRows?: number },

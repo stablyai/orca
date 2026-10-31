@@ -19301,8 +19301,8 @@
       "resumeInNewChat": {
         "hostUpdateRequired": "Actualiza Orca en este host para continuar en la interfaz de chat.",
         "notSavedYet": "{{agent}} aún no ha guardado esta conversación. Inténtalo de nuevo cuando responda.",
-        "exitUnconfirmed": "{{agent}} ya está ejecutando esta conversación en otra terminal. Sal de {{agent}} allí o cierra esa terminal; luego abre esta conversación desde el Historial de sesiones.",
-        "exitUnconfirmedFromTerminal": "{{agent}} ya está ejecutando esta conversación en otra terminal. Sal de {{agent}} allí o cierra esa terminal; luego abre esta conversación desde el Historial de sesiones."
+        "exitUnconfirmed": "Orca no pudo confirmar que {{agent}} se detuvo. Sal de {{agent}} en su terminal y vuelve a intentar esta acción.",
+        "exitUnconfirmedFromTerminal": "Orca no pudo confirmar que {{agent}} se detuvo en esta terminal. Sal de {{agent}} aquí y vuelve a intentar esta acción."
       },
       "state": {
         "loading": {
@@ -19834,8 +19834,18 @@
       "bar": {
         "SortableTabContextMenu": {
           "switchToTerminalView": "Continuar con el agente de terminal",
-          "switchToChatView": "Continuar en la interfaz de chat",
+          "continueInChatView": "Continuar en la interfaz de chat",
+          "switchToChatView": "Mostrar como chat",
+          "showAsTerminal": "Mostrar como terminal",
           "allowAutoClose": "Permitir cierre automático"
+        },
+        "switch": {
+          "toCli": "Cambiar a la CLI",
+          "toNativeChat": "Cambiar a la interfaz de chat",
+          "toCliTooltip": "Cambiar a la CLI: detiene {{agent}} en la interfaz de chat y continúa la misma conversación en una terminal.",
+          "openedInWorkspace": "Chat abierto en {{workspace}}.",
+          "toNativeChatTooltip": "Cambiar a la interfaz de chat: continúa la misma conversación en un chat, en esta pestaña.",
+          "noConversation": "Todavía no hay una conversación guardada disponible en este terminal."
         },
         "BrowserTab": {
           "closeOthers": "Cerrar otras",

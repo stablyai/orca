@@ -26,6 +26,9 @@ import {
 
 export type MobileTerminalCommandOptions = {
   command?: string
+  sessionOptions?: Record<string, string>
+  commandOverride?: string
+  launchRuntime?: AgentLaunchRuntime
   env?: Record<string, string>
   envToDelete?: string[]
   startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
@@ -121,6 +124,7 @@ export abstract class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends
     if (opts.command || !opts.agent) {
       return {
         command: opts.command,
+        launchRuntime: opts.launchRuntime,
         env: opts.env,
         envToDelete: opts.envToDelete,
         launchConfig: opts.launchConfig,
@@ -140,7 +144,17 @@ export abstract class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends
       ...resolveWslHostAgentLaunchInputs(
         resolveAgentStartupPlanInputs({
           agent: opts.agent,
-          settings,
+          sessionOptions: opts.sessionOptions,
+          settings:
+            opts.commandOverride === undefined
+              ? settings
+              : {
+                  ...settings,
+                  agentCmdOverrides: {
+                    ...settings.agentCmdOverrides,
+                    [opts.agent]: opts.commandOverride
+                  }
+                },
           // Quote for the execution host, even when the mobile client runs another OS.
           platform: launchRuntime.platform,
           shell: agentLaunchQuotingShell(launchRuntime),

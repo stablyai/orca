@@ -17,6 +17,8 @@ export {
   ModelCatalogParams,
   MutationEnvelope,
   OptionsParams,
+  SwitchToChatParams,
+  SwitchToTerminalParams,
   QueuedMessageActionParams,
   QueuedMessagesResumeParams,
   RespondParams,

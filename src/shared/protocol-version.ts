@@ -1,3 +1,4 @@
+import { IN_PLACE_SWITCH_RUNTIME_CAPABILITIES } from './structured-agent-cli-conversation-adoption'
 import { ACCOUNT_RUNTIME_CAPABILITIES } from './account-runtime-capabilities'
 import * as agentLaunchCapabilities from './agent-launch-runtime-capability'
 import {
@@ -131,6 +132,7 @@ export const SAVED_RESUME_ORIGIN_RUNTIME_CAPABILITY =
   'agent-session.saved-resume-origin.v1' as const
 
 export const RUNTIME_CAPABILITIES = [
+  ...IN_PLACE_SWITCH_RUNTIME_CAPABILITIES,
   SAVED_RESUME_ORIGIN_RUNTIME_CAPABILITY,
   ...HOST_RUNTIME_CAPABILITIES,
   ...DEVICE_KEY_RUNTIME_CAPABILITIES,

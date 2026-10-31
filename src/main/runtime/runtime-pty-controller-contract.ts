@@ -17,7 +17,6 @@ import type {
 import type { AgentProviderSessionMetadata } from '../../shared/agent-session-resume'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
-import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { PtyBindingSourceExpectation } from '../persistence'
 import type { TerminalPanePlacement } from '../../shared/terminal-pane-placement'
 import type { ExecutionHostId } from '../../shared/execution-host'
@@ -26,11 +25,18 @@ import type {
   PtyProcessInfo,
   PtySpawnResult
 } from '../providers/pty-provider-contract'
-import type { PtyProcessInspection } from '../providers/pty-process-inspection'
+import type {
+  PtyProcessInspection,
+  PtyProcessInspectionOptions
+} from '../providers/pty-process-inspection'
 import type { WriteSettlement } from '../../shared/pty-write-settlement'
 import type { StartupCwdFallback } from '../../shared/startup-cwd-fallback'
 import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 import type { PaneResumeOutcome } from '../../shared/workspace-layout/workspace-layout-published'
+import type {
+  PtyFencedTerminationRequest,
+  PtyFencedTerminationOutcome
+} from '../../shared/pty-fenced-termination'
 
 export type PtyInventoryRefreshOptions = {
   includeForegroundProcessEvidence?: boolean
@@ -81,7 +87,7 @@ export type RuntimePtyController = {
     env?: Record<string, string>
     envToDelete?: string[]
     resumeProviderSession?: AgentProviderSessionMetadata
-    resumeOrigin?: 'saved'
+    resumeOrigin?: 'saved' | 'switch'
     telemetry?: WorktreeStartupLaunch['telemetry']
     connectionId?: string | null
     worktreeId?: string
@@ -150,18 +156,19 @@ export type RuntimePtyController = {
   ): WriteSettlement | Promise<WriteSettlement>
   /** Attach existing local daemon output without creating, resizing or focusing; refuse uncertain, SSH-scoped or non-daemon sessions. */
   attach?(ptyId: string): Promise<boolean>
+  killFenced?: (request: PtyFencedTerminationRequest) => Promise<PtyFencedTerminationOutcome>
   kill(ptyId: string): boolean
   /** `incarnationId` is the rejected spawn's; a same-id respawn since then is left alone. */
   retireRejectedPty?(ptyId: string, stopConfirmed: boolean, incarnationId: string | undefined): void
   stopAndWait?(
     ptyId: string,
-    opts?: { keepHistory?: boolean; deadlineMs?: number }
+    opts?: { keepHistory?: boolean; deadlineMs?: number; expectedIncarnationId?: string }
   ): Promise<boolean>
   getCwd?(ptyId: string): Promise<string | null>
   getForegroundProcess(ptyId: string): Promise<string | null>
   inspectProcess?(
     ptyId: string,
-    options?: { expectedIncarnationId?: PtyIncarnationId; scanChildProcesses?: boolean }
+    options?: PtyProcessInspectionOptions
   ): Promise<PtyProcessInspection>
   confirmForegroundProcess?(ptyId: string): Promise<string | null>
   confirmShellForeground?(ptyId: string): Promise<boolean>

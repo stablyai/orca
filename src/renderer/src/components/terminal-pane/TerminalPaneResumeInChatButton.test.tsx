@@ -2,52 +2,70 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { useAppStore } from '@/store'
+import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import { TerminalPaneResumeInChatButton } from './TerminalPaneResumeInChatButton'
 import type { CliChatResumeSource } from '../tab-bar/cli-chat-resume-source'
 
-const LOCAL_SOURCE: CliChatResumeSource = {
-  tabId: 'tab-1',
-  workspaceId: 'wt-1',
-  paneKey: 'tab-1:leaf',
-  agent: 'claude',
-  providerSessionId: 'provider-1',
-  executionHostId: 'local'
-}
-
 const mocks = vi.hoisted(() => {
-  const source: { current: CliChatResumeSource | null } = { current: null }
+  const source: CliChatResumeSource = {
+    tabId: 'tab-1',
+    workspaceId: 'wt-1',
+    paneKey: 'tab-1:leaf',
+    agent: 'claude',
+    providerSessionId: 'provider-1',
+    executionHostId: 'local',
+    ptyId: 'pty-1'
+  }
   return { source, resolve: vi.fn(), run: vi.fn(), pending: false }
 })
-vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: Record<string, unknown>) => unknown) => selector({})
-}))
 vi.mock('../tab-bar/cli-chat-resume-source', () => ({
+  useCliChatResumeCapability: (_worktreeId: string, agent: string) => agent !== 'omp',
   resolveCliChatResumeSource: (_state: unknown, args: unknown) => {
     mocks.resolve(args)
-    return mocks.source.current
+    return mocks.source
   }
 }))
-vi.mock('../tab-bar/cli-chat-resume-run', () => ({
+vi.mock('@/lib/conversation-surface-switch', () => ({
   runCliChatResume: mocks.run,
-  useCliChatResumePending: () => mocks.pending
+  useConversationSwitchReadiness: (args: { source?: CliChatResumeSource } | null) => ({
+    ready: !mocks.pending && !args?.source?.hostUpdateRequired,
+    pending: mocks.pending
+  }),
+  // The real hook only delays the busy look; pending already disables the button.
+  useConversationSwitchBusy: (pending: boolean) => pending
 }))
-beforeEach(() => {
-  mocks.source.current = LOCAL_SOURCE
-})
 afterEach(cleanup)
+beforeEach(() => {
+  mocks.source.agent = 'claude'
+  delete mocks.source.hostUpdateRequired
+  mocks.pending = false
+  useAppStore.setState(useAppStore.getInitialState(), true)
+  useAppStore.setState({ settings: createGlobalSettingsFixture() })
+  vi.clearAllMocks()
+})
 
-it('dispatches the exact pane with owner-opening intent and shares pending', () => {
+it.each([
+  ['claude', 'Switch to Chat UI'],
+  ['codex', 'Switch to Chat UI'],
+  // The route that opens the chat beside the pane keeps main's label.
+  ['omp', 'Continue in Chat UI']
+] as const)('offers the %s action for the exact pane and shares pending', (agent, label) => {
+  mocks.source.agent = agent
+  if (agent === 'claude') {
+    useAppStore.getState().setPaneForegroundAgent('tab-1:leaf', { agent, shellForeground: false })
+  }
   const { rerender } = render(
     <TooltipProvider>
       <TerminalPaneResumeInChatButton tabId="tab-1" worktreeId="wt-1" paneKey="tab-1:leaf" />
     </TooltipProvider>
   )
-  fireEvent.click(screen.getByRole('button', { name: 'Continue in Chat UI' }))
+  fireEvent.click(screen.getByRole('button', { name: label }))
   expect(mocks.resolve).toHaveBeenCalledWith({
     tab: { id: 'tab-1', worktreeId: 'wt-1' },
     paneKey: 'tab-1:leaf'
   })
-  expect(mocks.run).toHaveBeenCalledWith(LOCAL_SOURCE, true)
+  expect(mocks.run).toHaveBeenCalledWith(mocks.source)
   mocks.pending = true
   rerender(
     <TooltipProvider>
@@ -61,18 +79,17 @@ it('dispatches the exact pane with owner-opening intent and shares pending', () 
 it('keeps an older host visible but disabled, telling the user to update it', async () => {
   mocks.pending = false
   mocks.run.mockClear()
-  mocks.source.current = {
-    ...LOCAL_SOURCE,
+  Object.assign(mocks.source, {
     executionHostId: 'runtime:server-1',
     hostUpdateRequired: true
-  }
+  })
   render(
     <TooltipProvider delayDuration={0}>
       <TerminalPaneResumeInChatButton tabId="tab-1" worktreeId="wt-1" paneKey="tab-1:leaf" />
     </TooltipProvider>
   )
   const button = screen.getByRole('button', {
-    name: 'Continue in Chat UI. Update Orca on this host to continue in Chat UI.'
+    name: 'Switch to Chat UI. Update Orca on this host to continue in Chat UI.'
   })
   expect(button.hasAttribute('disabled')).toBe(true)
   const trigger = button.parentElement

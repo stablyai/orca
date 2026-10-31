@@ -221,18 +221,10 @@ export const SwitchToChatParams = OptionsParams.extend({
   execution: z
     .object({
       invocationId: Identifier('Invalid invocation'),
-      observe: z.boolean().optional(),
-      receipt: z
-        .object({
-          generation: Identifier('Invalid generation'),
-          shown: z.boolean(),
-          retained: z.boolean().optional(),
-          converged: z.boolean().optional()
-        })
-        .strict()
-        .optional(),
       create: CreateIntentParams.omit({ firstMessage: true }).optional(),
-      source: TerminalClose.required().optional()
+      source: TerminalClose.required().optional(),
+      /** With no source to stop: the tab the chat opens right after, when the client knows it. */
+      sourceTabId: Identifier('Invalid tab').optional()
     })
     .strict()
     .optional()
@@ -241,16 +233,6 @@ export const SwitchToTerminalParams = OptionsParams.extend({
   execution: z
     .object({
       invocationId: Identifier('Invalid invocation'),
-      observe: z.boolean().optional(),
-      receipt: z
-        .object({
-          generation: Identifier('Invalid generation'),
-          shown: z.boolean(),
-          retained: z.boolean().optional(),
-          converged: z.boolean().optional()
-        })
-        .strict()
-        .optional(),
       sourceTabId: Identifier('Invalid tab').optional(),
       groupId: Identifier('Invalid group').optional(),
       commandOverride: z.string().max(8192).optional()

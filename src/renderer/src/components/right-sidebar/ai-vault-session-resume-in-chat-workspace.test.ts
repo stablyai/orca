@@ -13,6 +13,11 @@ const mocks = vi.hoisted(() => ({
   state: { runtimeStatusByEnvironmentId: new Map<string, unknown>() }
 }))
 
+vi.mock('@/lib/in-place-switch-support', () => ({
+  inPlaceSwitchCapabilityNow: () => false,
+  inPlaceSwitchSupportedNow: () => false
+}))
+
 vi.mock('@/store', () => ({ useAppStore: { getState: () => mocks.state } }))
 vi.mock('@/runtime/structured-agent-session-owner', () => ({
   resolveStructuredAgentSessionOwner: mocks.owner

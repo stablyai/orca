@@ -2,6 +2,7 @@ import { vi } from 'vitest'
 import type { Mock } from 'vitest'
 import type * as Wsl from '../../wsl'
 import type * as FsPromises from 'node:fs/promises'
+import type { classifyError } from '../../telemetry/classify-error'
 
 // vi.mock hoists per file; shared factories keep every split suite on the same spy instances.
 export const handleMock: Mock = vi.fn()
@@ -34,7 +35,7 @@ export const forgetRefusedPaneResumeMock: Mock = vi.fn()
 export const piBuildPtyEnvMock: Mock = vi.fn()
 export const piClearPtyMock: Mock = vi.fn()
 export const trackMock: Mock = vi.fn()
-export const classifyErrorMock: Mock = vi.fn()
+export const classifyErrorMock = vi.fn<typeof classifyError>(() => ({ error_class: 'unknown' }))
 export const registerPtyMock: Mock = vi.fn()
 export const unregisterPtyMock: Mock = vi.fn()
 export const setMigrationUnsupportedPtyMock: Mock = vi.fn()
@@ -135,6 +136,8 @@ export const mimoHookServiceModuleMock = (): {
 export const noChatsRuntimeMembers = () => ({
   openAgentSessionRecordStore: vi.fn(async () => ({
     listRecords: () => [],
+    listConversations: () => [],
+    getRecord: () => null,
     getVisibleSessionTabIndex: () => ({ present: true, sessionIds: [] })
   }))
 })

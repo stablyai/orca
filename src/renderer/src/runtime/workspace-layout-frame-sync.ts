@@ -1,7 +1,6 @@
 // Layout-owner windows draw main’s locally owned, held workspaces; paired servers remain mirror-owned. Local tab changes stay drawn until main answers (layout-owner-drawn-tab-holds). Records frames apply binding/title deltas directly and rebuild other changed workspaces from store. Startup/reopen/new/whole workspaces use full save/Loader builds (E2a/E2b).
 
 import { showFramePatch, withMovedTabsSelected } from '@/store/slices/tabs/moved-tab-selection'
-import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { applyLayoutFrame, EMPTY_WORKSPACE_LAYOUT_CACHE } from '@/store/workspace-layout-cache'
@@ -11,9 +10,8 @@ import {
   layoutHoldsBoundPane,
   onWorkspaceStartsDrawing
 } from './workspace-layout-frame-drawn-workspaces'
-import type { TerminalTabTitleUpdate } from '@/store/slices/terminal-tab-title-batch'
 import type { WorkspaceLayoutChangeFrame } from '../../../shared/workspace-layout/workspace-layout-stream-frames'
-import { liveTitleUpdates } from './workspace-layout-frame-changes'
+import { planLayoutFrameFlush } from './workspace-layout-frame-flush-plan'
 import { terminalLayoutsWithFramePaneTrees } from './workspace-layout-frame-pane-trees'
 import { framePaneFactsShown, showFramePaneStarts } from './workspace-layout-frame-pane-starts'
 import {
@@ -26,15 +24,12 @@ import { heldTabGroupFocus } from './held-tab-group-follow'
 import { shownContentRekeyPatch } from './layout-owner-content-rekeys'
 import { provideLayoutFrameWorkspaces } from './layout-frame-workspaces'
 import {
-  notePendingRecordsFrame,
+  noteReceivedLayoutFrame,
   pendingWorkspaceChanges,
   type PendingWorkspaceChanges
 } from './workspace-layout-frame-pending'
 import { layoutFrameApplyObserver } from './workspace-layout-frame-apply-observer'
-import {
-  provideLayoutFrameTerminalPanes,
-  type LayoutFrameTerminalQueries
-} from './layout-frame-terminal-panes'
+import type { LayoutFrameTerminalQueries } from './layout-frame-terminal-panes'
 import {
   isTabPaneTreeHeld,
   onTabPaneTreeRedraw,
@@ -92,25 +87,6 @@ export function openWorkspaceLayoutFrameSync(
     selectionsTaken.push(...showFramePatch(store, patch, rebuiltWorkspaces))
   }
 
-  // Each change against the cache's copy it applies to, before the frame replaces it.
-  const noteFrame = (before: WorkspaceLayoutCache, frame: WorkspaceLayoutChangeFrame): void => {
-    switch (frame.type) {
-      case 'snapshot':
-        // A reopened stream's snapshot redraws every workspace: the window drew alone meanwhile.
-        if (snapshotReceived) {
-          shown.clear()
-        }
-        return
-      case 'workspace':
-      case 'removed':
-        // An older host's whole workspace: only a full build shows it.
-        shown.delete(frame.key)
-        return
-      case 'records':
-        notePendingRecordsFrame(pending, shown, before, cache, frame)
-    }
-  }
-
   // Pane trees show at once; only a tab the window's own pane command holds waits.
   const showPaneTrees = (state: AppState): void => {
     const shownTrees = terminalLayoutsWithFramePaneTrees(
@@ -131,7 +107,6 @@ export function openWorkspaceLayoutFrameSync(
       return
     }
     const state = store.getState()
-    const drawn = source.draws(state)
     const rowFieldsTaken = new Map<string, Partial<TerminalTab>>()
     const holds: LayoutFrameBuildHolds = {
       ...FRAME_BUILD_HOLDS,
@@ -144,48 +119,13 @@ export function openWorkspaceLayoutFrameSync(
         return fields
       }
     }
-    const changed: string[] = []
-    const fullBuilt: string[] = []
-    const workspaceBuilt: string[] = []
-    const rebound = new Map<string, ReadonlySet<string>>()
-    const titleUpdates: TerminalTabTitleUpdate[] = []
-    for (const [key, layout] of Object.entries(cache)) {
-      const changes = pending.get(key)
-      if (!drawn(key)) {
-        // Frames the window did not draw: its next draw takes the full build.
-        if (changes) {
-          shown.delete(key)
-        }
-        continue
-      }
-      if (shown.has(key) && !changes) {
-        continue
-      }
-      changed.push(key)
-      if (!shown.has(key)) {
-        fullBuilt.push(key)
-      } else if (changes?.rebuild) {
-        workspaceBuilt.push(key)
-      } else if (changes) {
-        titleUpdates.push(
-          ...liveTitleUpdates(
-            changes.titled,
-            layout,
-            (tabId) => state.terminalLayoutsByTabId[tabId]?.activeLeafId
-          )
-        )
-        if (changes.rebound.size > 0) {
-          rebound.set(key, changes.rebound)
-        }
-      }
-    }
-    pending.clear()
-    // A workspace main stopped publishing keeps what the window shows; main has nothing to say.
-    for (const key of shown) {
-      if (!(key in cache)) {
-        shown.delete(key)
-      }
-    }
+    const { changed, fullBuilt, workspaceBuilt, rebound, titleUpdates } = planLayoutFrameFlush(
+      state,
+      cache,
+      pending,
+      shown,
+      source
+    )
     // One update: a move's or rename's content rekeys with the frame that shows it.
     const rekeyed = shownContentRekeyPatch(state, cache)
     const base: AppState = { ...state, ...rekeyed }
@@ -246,7 +186,7 @@ export function openWorkspaceLayoutFrameSync(
   const receive = (frame: WorkspaceLayoutChangeFrame): void => {
     const before = cache
     cache = applyLayoutFrame(cache, frame)
-    noteFrame(before, frame)
+    noteReceivedLayoutFrame(pending, shown, before, cache, frame, snapshotReceived)
     if (frame.type === 'snapshot') {
       snapshotReceived = true
       live = started
@@ -328,16 +268,4 @@ export function openWorkspaceLayoutFrameSync(
 const FRAME_BUILD_HOLDS: Omit<LayoutFrameBuildHolds, 'newRowFields'> = {
   keepsTerminalLayout: isTabPaneTreeHeld,
   held: { isTabHeld: isDrawnTabHeld, isGroupLayoutHeld: isDrawnGroupLayoutHeld }
-}
-
-let startupFrames: WorkspaceLayoutFrameSync | null = null
-
-/** After restore: the window's one layout stream shows the frames' workspaces from now on. */
-export function showStartupLayoutFrames(): void {
-  // Kept for the document's life: a local stream ends only with main, and a re-run boot reuses it.
-  if (!startupFrames) {
-    startupFrames = openWorkspaceLayoutFrameSync(useAppStore)
-    provideLayoutFrameTerminalPanes(startupFrames)
-  }
-  startupFrames.start()
 }

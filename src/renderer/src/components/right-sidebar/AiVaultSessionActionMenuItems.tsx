@@ -1,3 +1,4 @@
+import type { AiVaultOriginalPaneTarget } from './ai-vault-original-pane'
 import {
   Copy,
   FileJson,
@@ -13,6 +14,7 @@ import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-m
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { AiVaultSessionSurfaceSwitchMenuItems } from './AiVaultSessionSurfaceSwitchMenuItems'
+import type { AiVaultAgent, AiVaultSession } from '../../../../shared/ai-vault-types'
 import { isAiVaultFolderWorkspaceId } from './ai-vault-session-worktree-affordances'
 
 export function SessionActionMenuItems({
@@ -35,9 +37,14 @@ export function SessionActionMenuItems({
   onRevealLog,
   onOpenCwd,
   deleteBlockedReason,
-  onDelete
+  onDelete,
+  inPlaceAgent,
+  switchLoading,
+  originalPaneTarget,
+  session
 }: {
   menuKind?: 'dropdown' | 'context'
+  originalPaneTarget?: AiVaultOriginalPaneTarget | null
   resumeDisabled: boolean
   resumeLabel: string
   resumeHidden?: boolean
@@ -60,6 +67,9 @@ export function SessionActionMenuItems({
   // Null when Delete is offered; otherwise the tooltip explaining why it isn't.
   deleteBlockedReason: string | null
   onDelete?: () => void
+  session?: AiVaultSession
+  switchLoading?: boolean
+  inPlaceAgent?: AiVaultAgent
 }) {
   const Item = menuKind === 'context' ? ContextMenuItem : DropdownMenuItem
   const Separator = menuKind === 'context' ? ContextMenuSeparator : DropdownMenuSeparator
@@ -119,11 +129,15 @@ export function SessionActionMenuItems({
         </Item>
       ) : null}
       <AiVaultSessionSurfaceSwitchMenuItems
+        originalPaneTarget={originalPaneTarget}
+        session={session}
         action="resume"
         menuKind={menuKind}
         tooltipSide={menuKind === 'context' ? 'right' : 'left'}
         onResumeInNewChat={onResumeInNewChat}
         onResumeInNewCli={onResumeInNewCli}
+        inPlaceAgent={inPlaceAgent}
+        switchLoading={switchLoading}
       />
       {onCopyResume ? (
         <Item onSelect={onCopyResume}>

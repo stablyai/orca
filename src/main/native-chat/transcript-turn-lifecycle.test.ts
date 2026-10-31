@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   decodeClaudeTurnLifecycle,
   decodeCodexTurnLifecycle,
+  decodePiTurnLifecycle,
   nativeChatTurnLifecycleDecoderForAgent
 } from './transcript-turn-lifecycle'
 
@@ -55,9 +56,21 @@ describe('native chat transcript turn lifecycle', () => {
       )
     ).toEqual({
       state: 'interrupted',
+      outcome: 'cancellation',
       turnId: 'turn-2',
       timestamp: Date.parse('2026-07-16T23:46:01.000Z')
     })
+
+    // Only the user's interrupt is a Stop; Codex's other abort reasons keep no verdict.
+    expect(
+      decodeCodexTurnLifecycle(
+        JSON.stringify({
+          type: 'event_msg',
+          payload: { type: 'turn_aborted', reason: 'replaced', turn_id: 'turn-3' }
+        }),
+        'fallback'
+      )
+    ).toEqual({ state: 'interrupted', turnId: 'turn-3', timestamp: null })
   })
 
   it('does not mistake a Codex assistant message for completion', () => {
@@ -332,8 +345,48 @@ describe('native chat transcript turn lifecycle', () => {
       )
     ).toEqual({
       state: 'interrupted',
+      outcome: 'cancellation',
       turnId: 'assistant-request-1',
       timestamp: Date.parse('2026-07-16T23:46:01.000Z')
+    })
+  })
+
+  it("reads each agent's own stop record as the user's Stop", () => {
+    // Esc before Claude replied: the notice names no interrupted message.
+    for (const text of [
+      '[Request interrupted by user]',
+      '[Request interrupted by user for tool use]'
+    ]) {
+      expect(
+        decodeClaudeTurnLifecycle(
+          JSON.stringify({
+            type: 'user',
+            uuid: 'notice-row',
+            message: { role: 'user', content: [{ type: 'text', text }] }
+          }),
+          'fallback'
+        )
+      ).toEqual({
+        state: 'interrupted',
+        outcome: 'cancellation',
+        turnId: 'notice-row',
+        timestamp: null
+      })
+    }
+    expect(
+      decodePiTurnLifecycle(
+        JSON.stringify({
+          type: 'message',
+          id: 'pi-reply',
+          message: { role: 'assistant', stopReason: 'aborted' }
+        }),
+        'fallback'
+      )
+    ).toEqual({
+      state: 'interrupted',
+      outcome: 'cancellation',
+      turnId: 'pi-reply',
+      timestamp: null
     })
   })
 })

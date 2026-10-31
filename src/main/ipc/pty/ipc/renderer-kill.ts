@@ -8,7 +8,7 @@ import { getPtyIpc } from '../pty-host-bindings'
 import type { Store } from '../../../persistence'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { TerminalIntentionalStopKind } from '../../../runtime/terminal-intentional-stops'
-import type { IPtyProvider } from '../../../providers/pty-provider-contract'
+import type { shutdownProviderAndDetectExit } from '../provider/shutdown-detect'
 import { SSH_PROVIDER_UNREGISTERED_REASON } from '../../../../shared/pty-liveness-verdict'
 import { ptyIncarnationById } from '../provider/ownership-state'
 import {
@@ -26,11 +26,7 @@ export type PtyKillIpcDeps = {
   store?: Store
   runtime?: OrcaRuntimeService
   getLocalPtyProviderStartupPromise: (hostId?: ResolvedPtyHost) => Promise<void> | undefined
-  shutdownProviderAndDetectExit: (
-    provider: IPtyProvider,
-    id: string,
-    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
-  ) => Promise<boolean>
+  shutdownProviderAndDetectExit: typeof shutdownProviderAndDetectExit
   rememberSyntheticKillExit: (id: string, incarnationId?: string) => void
   sendPtyExitToRenderer: (payload: { id: string; code: number; incarnationId?: string }) => void
 }

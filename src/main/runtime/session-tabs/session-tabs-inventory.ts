@@ -6,7 +6,7 @@ import type { OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs as BuildHeadl
 import type { OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminals as RestoreLivePairedRendererSessionOwnedMobileTerminalsMethods } from './renderer-session-terminal-rescue'
 import type { OrcaRuntimeWithTouchMobileSessionTabsForWorktree as TouchMobileSessionTabsForWorktreeMethods } from './mobile-session-membership'
 import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout as PruneMobileSessionTabGroupLayoutMethods } from '../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
-import { OrcaRuntimeWithSyncWindowGraph } from '../session-graph/session-window-graph'
+import { RuntimeSessionTabsGraphChanges } from './session-tabs-graph-changes'
 import {
   mainTerminalSurfaces,
   type MainTerminalSurfacesHost
@@ -14,16 +14,15 @@ import {
 import type { WorkspaceLayoutReads } from '../workspace-layout-stream'
 import type {
   RuntimeMobileSessionTabsResult,
-  RuntimeSyncedTab,
   RuntimeSyncWindowGraph
 } from '../../../shared/runtime-types'
-import type { RuntimeLeafRecord } from '../runtime-terminal-state-records'
 import type { PtyControllerInventory } from '../runtime-pty-controller-contract'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import type { PaneStartStatuses } from '../pane-start-statuses'
+import type { AgentSessionSwitchResult } from '../../../shared/agent-session-switch-execution'
 import { paneOfPty, type PtyPane, type PtyPaneSource } from '../terminal/surface/pty-pane-query'
 
-export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees extends OrcaRuntimeWithSyncWindowGraph {
+export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees extends RuntimeSessionTabsGraphChanges {
   abstract get workspaceLayoutReads(): WorkspaceLayoutReads
   declare protected readonly paneStartStatuses: PaneStartStatuses | null
 
@@ -140,42 +139,6 @@ export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees e
     >
   ): ReturnType<SessionTabsInventoryPublicationMethods['waitForSessionTabsInventoryPublication']>
 
-  // Graph changes can alter projected handles/titles without changing snapshot bytes; compare projection fields and fan out affected workspaces.
-  protected collectMobileVisibleGraphChangedWorktrees(
-    previousTabs: Map<string, RuntimeSyncedTab>,
-    previousLeaves: Map<string, RuntimeLeafRecord>
-  ): Set<string> {
-    const changed = new Set<string>()
-    for (const [tabId, tab] of this.tabs) {
-      const prev = previousTabs.get(tabId)
-      if (!prev || prev.title !== tab.title) {
-        changed.add(tab.worktreeId)
-      }
-    }
-    for (const [tabId, tab] of previousTabs) {
-      if (!this.tabs.has(tabId)) {
-        changed.add(tab.worktreeId)
-      }
-    }
-    for (const [leafKey, leaf] of this.leaves) {
-      const prev = previousLeaves.get(leafKey)
-      if (
-        !prev ||
-        prev.ptyId !== leaf.ptyId ||
-        prev.connected !== leaf.connected ||
-        prev.paneTitle !== leaf.paneTitle
-      ) {
-        changed.add(leaf.worktreeId)
-      }
-    }
-    for (const [leafKey, leaf] of previousLeaves) {
-      if (!this.leaves.has(leafKey)) {
-        changed.add(leaf.worktreeId)
-      }
-    }
-    return changed
-  }
-
   async listMobileSessionTabs(
     worktreeSelector: string,
     clientNavigationId?: string,
@@ -204,6 +167,29 @@ export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees e
     await this.refreshMobileSessionPtyRecords()
     this.restoreLivePairedRendererSessionOwnedMobileTerminals(worktree.id)
     return this.getMobileSessionTabsForWorktree(worktree.id, clientNavigationId, options)
+  }
+
+  currentSessionSwitchDestination(
+    worktreeId: string,
+    result: AgentSessionSwitchResult
+  ): boolean | undefined {
+    if (this.getAuthoritativeSessionTabsInventoryEpoch() === null) {
+      return undefined
+    }
+    const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+    if (
+      !('terminal' in result && result.terminal) &&
+      this.structuredAgentSessionInventoryUnverifiable
+    ) {
+      return undefined
+    }
+    return (
+      snapshot?.tabs.some((tab) =>
+        'terminal' in result && result.terminal
+          ? tab.type === 'terminal' && tab.id === result.terminal
+          : tab.type === 'agent-session' && tab.sessionId === result.sessionId
+      ) ?? false
+    )
   }
 
   async listAllMobileSessionTabs(

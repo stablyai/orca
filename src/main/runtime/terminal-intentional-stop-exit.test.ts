@@ -20,7 +20,9 @@ import { createPtyIpcSession } from '../ipc/pty/session'
 import type { IPtyProvider } from '../providers/pty-provider-contract'
 import { OrcaRuntimeService } from './orca-runtime'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import { createCloseContinuityGraphFixture } from './__fixtures__/orca-runtime-terminal-close-continuity-graph-fixture'
 import {
+  CANARY_TAB_ID,
   INCARNATION_ID,
   LEAF_ID,
   PTY_ID,
@@ -53,7 +55,9 @@ afterEach(() => {
 })
 
 /** Use real store/runtime with renderer stub; lateProviderExit lets the kill reply overtake the provider exit and force a synthetic one. */
-function createHarness(opts: { lateProviderExit?: boolean; folder?: boolean } = {}) {
+function createHarness(
+  opts: { lateProviderExit?: boolean; folder?: boolean; includeCanary?: boolean } = {}
+) {
   const directory = mkdtempSync(join(tmpdir(), 'orca-intentional-stop-'))
   directories.push(directory)
   const store = new Store({
@@ -73,7 +77,9 @@ function createHarness(opts: { lateProviderExit?: boolean; folder?: boolean } = 
     // Why: a folder workspace resolves without git, which the sleep transaction needs.
     ...(opts.folder ? { kind: 'folder' as const } : {})
   })
-  store.setWorkspaceSession(advanceTerminalTopologyRevision(makeSession(), WORKTREE_ID))
+  store.setWorkspaceSession(
+    advanceTerminalTopologyRevision(makeSession(PTY_ID, opts.includeCanary), WORKTREE_ID)
+  )
   store.flushOrThrow()
   const runtime = new OrcaRuntimeService(store)
   runtime.registerPty(PTY_ID, WORKTREE_ID, null, {
@@ -138,6 +144,111 @@ function createHarness(opts: { lateProviderExit?: boolean; folder?: boolean } = 
 }
 
 describe('intentional stops keep the pane through the exit', () => {
+  it('keeps a captured typed source through provider exit until explicit retirement', async () => {
+    const harness = createHarness({ includeCanary: true })
+    const { runtime, store } = harness
+    const closeTerminalTab = vi.fn(async () => {})
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn(),
+      closeTerminalTab
+    })
+    runtime.attachWindow(1)
+    createCloseContinuityGraphFixture({
+      runtime,
+      ptyId: PTY_ID,
+      publishMobileSurface: true,
+      includeCanary: true,
+      getSession: () => store.getWorkspaceSession(),
+      setSession: (session) => store.setWorkspaceSession(session),
+      markSiblingPtyIncluded: () => {}
+    }).syncFixtureGraph()
+    runtime.terminalRunFacts.recordSpawnCommit({ id: PTY_ID, incarnationId: INCARNATION_ID })
+    runtime.terminalRunFacts.recordInput(PTY_ID, 'driving', 'claude --resume fixture\r')
+    runtime.onPtyData(PTY_ID, 'Retained terminal reply\r\n', Date.now())
+    const source = runtime.resolveTerminalPane(`${TAB_ID}:${LEAF_ID}`, WORKTREE_ID)
+    if (!source.presentation || !source.incarnationId) {
+      throw new Error('Missing authenticated source')
+    }
+    const captured = runtime.captureTerminalSwitchClose(
+      source.handle,
+      source.incarnationId,
+      source.presentation
+    )
+    const before = structuredClone(store.getWorkspaceSession())
+    const entered = Promise.withResolvers<void>()
+    const exit = Promise.withResolvers<void>()
+    const stopAndWait = vi.fn(async () => {
+      entered.resolve()
+      await exit.promise
+      harness.emitProviderExit(INCARNATION_ID)
+      return runtime.getPtyLivenessVerdict(PTY_ID)?.status === 'exited'
+    })
+    const kill = vi.fn(() => true)
+    runtime.setPtyController({
+      write: () => true,
+      kill,
+      stopAndWait,
+      getForegroundProcess: async () => 'claude'
+    })
+    let stopped = false
+    const stopping = captured.stop().then(() => {
+      stopped = true
+    })
+    await entered.promise
+    expect(stopped).toBe(false)
+    expect(harness.rendererExits()).toEqual([])
+    expect(closeTerminalTab).not.toHaveBeenCalled()
+    exit.resolve()
+    await stopping
+
+    expect(runtime.getPtyLivenessVerdict(PTY_ID)).toMatchObject({ status: 'exited' })
+    expect(await runtime.readTerminal(source.handle)).toMatchObject({
+      status: 'exited',
+      tail: ['Retained terminal reply']
+    })
+    expect(harness.tabIds()).toEqual([TAB_ID, CANARY_TAB_ID])
+    expect(harness.boundPtyId()).toBe(PTY_ID)
+    expect(store.getWorkspaceSession().terminalLayoutsByTabId).toEqual(
+      before.terminalLayoutsByTabId
+    )
+    expect(harness.rendererExits()).toEqual([
+      {
+        id: PTY_ID,
+        code: 0,
+        incarnationId: INCARNATION_ID,
+        hostId: 'local',
+        preserveRendererBinding: 'closing'
+      }
+    ])
+    expect(closeTerminalTab).not.toHaveBeenCalled()
+    await expect(captured.retire()).resolves.toMatchObject({ ptyKilled: true })
+    expect(harness.tabIds()).toEqual([CANARY_TAB_ID])
+    expect(store.getWorkspaceSession().terminalLayoutsByTabId[CANARY_TAB_ID]).toEqual(
+      before.terminalLayoutsByTabId[CANARY_TAB_ID]
+    )
+    expect(closeTerminalTab).toHaveBeenCalledExactlyOnceWith(TAB_ID, {
+      localPtyTeardownOwnedExternally: true,
+      originalSurface: source.presentation.identity
+    })
+    expect(stopAndWait).toHaveBeenCalledExactlyOnceWith(
+      PTY_ID,
+      expect.objectContaining({
+        expectedIncarnationId: INCARNATION_ID,
+        deadlineMs: expect.any(Number)
+      })
+    )
+    expect(kill).not.toHaveBeenCalled()
+  })
+
   it('retires the pane when an ordinary close ends the process', async () => {
     const harness = createHarness()
 

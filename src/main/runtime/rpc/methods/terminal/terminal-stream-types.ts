@@ -71,6 +71,8 @@ export type TerminalMultiplexStream = {
   // Why: lets the client skip the reveal snapshot when a pause discarded nothing.
   supportsOutputPauseDropNotice: boolean
   pausedOutputDropNoticeSent: boolean
+  /** Teardown output a whole-tab close held back; a resumed stream tells the client to restore. */
+  presentationHeld?: boolean
   supportsWriteUnavailable: boolean
   // Also sends WriteUnavailable unprompted when the PTY's daemon endpoint drops.
   supportsEndpointLossNotice: boolean

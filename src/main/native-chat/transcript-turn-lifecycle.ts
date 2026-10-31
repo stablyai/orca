@@ -22,14 +22,15 @@ export type NativeChatTurnLifecycleDecoder = (
 ) => NativeChatTurnLifecycle | null
 
 export function nativeChatTurnLifecycleDecoderForAgent(
-  agent: AgentType
+  agent: AgentType,
+  explicitOnly = false
 ): NativeChatTurnLifecycleDecoder | null {
   const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
   if (transcriptAgent === 'codex') {
     return decodeCodexTurnLifecycle
   }
   if (transcriptAgent === 'claude') {
-    return decodeClaudeTurnLifecycle
+    return (line, fallbackId) => decodeClaudeTurnLifecycle(line, fallbackId, explicitOnly)
   }
   return null
 }
@@ -58,6 +59,10 @@ export function decodeCodexTurnLifecycle(
         : 'completed'
   return {
     state,
+    // Only a user's interrupt is a Stop; replaced, review-ended and budget-limited aborts aren't.
+    ...(state === 'interrupted' && payload.reason === 'interrupted'
+      ? { outcome: 'cancellation' as const }
+      : {}),
     turnId: extractString(payload.turn_id) ?? fallbackId,
     timestamp: lifecycleTimestamp(record.timestamp)
   }
@@ -71,7 +76,8 @@ function isClaudeTerminalStopReason(value: unknown): boolean {
 
 export function decodeClaudeTurnLifecycle(
   line: string,
-  fallbackId: string
+  fallbackId: string,
+  explicitOnly = false
 ): NativeChatTurnLifecycle | null {
   const record = parseJsonObject(line)
   if (!record) {
@@ -80,16 +86,23 @@ export function decodeClaudeTurnLifecycle(
   const message = asRecord(record.message)
   const timestamp = lifecycleTimestamp(record.timestamp)
   const interruptedMessageId = claudeInterruptedMessageId(record)
-  if (interruptedMessageId) {
-    // Injected interruption notices end the active generation; they never open a user turn.
-    return { state: 'interrupted', turnId: interruptedMessageId, timestamp }
+  if (interruptedMessageId || (record.type === 'user' && isClaudeInterruptionNotice(message))) {
+    // Injected interruption notices end the active generation as the user's Stop; they never open
+    // a user turn. Esc before any reply writes the notice without the interrupted message's id.
+    return {
+      state: 'interrupted',
+      outcome: 'cancellation',
+      turnId: interruptedMessageId ?? extractString(record.uuid) ?? fallbackId,
+      timestamp
+    }
   }
   if (record.type === 'assistant') {
     const stopReason = message?.stop_reason
     // Legacy rows may omit stop_reason; only complete prose without tool_use can supply that fallback.
     const isTerminal =
       isClaudeTerminalStopReason(stopReason) ||
-      (stopReason == null &&
+      (!explicitOnly &&
+        stopReason == null &&
         assistantHasRenderableContent(message) &&
         !assistantHasToolUse(message))
     if (isTerminal) {
@@ -114,6 +127,19 @@ export function decodeClaudeTurnLifecycle(
     return null
   }
   return { state: 'working', turnId: decoded.id, timestamp }
+}
+
+const CLAUDE_INTERRUPTION_NOTICE = /^\[Request interrupted by user( for tool use)?\]$/
+
+function isClaudeInterruptionNotice(message: Record<string, unknown> | null): boolean {
+  const content = message?.content
+  const text =
+    typeof content === 'string'
+      ? content
+      : Array.isArray(content) && content.length === 1
+        ? extractString(asRecord(content[0])?.text)
+        : null
+  return message?.role === 'user' && text != null && CLAUDE_INTERRUPTION_NOTICE.test(text)
 }
 
 // ! commands are not prompts; without a reply terminal, a working mark would stick.
@@ -166,4 +192,44 @@ function assistantHasToolUse(message: Record<string, unknown> | null): boolean {
     return false
   }
   return content.some((block) => asRecord(block)?.type === 'tool_use')
+}
+
+/** Pi persists explicit assistant stop reasons on the selected session branch. */
+export function decodePiTurnLifecycle(
+  line: string,
+  fallbackId: string
+): NativeChatTurnLifecycle | null {
+  const record = parseJsonObject(line)
+  const message = asRecord(record?.message)
+  if (record?.type !== 'message' || !message) {
+    return null
+  }
+  const turnId = extractString(record.id) ?? fallbackId
+  const timestamp = lifecycleTimestamp(record.timestamp)
+  if (message.role === 'user') {
+    return { state: 'working', turnId, timestamp }
+  }
+  if (message.role !== 'assistant') {
+    return null
+  }
+  const state =
+    message.stopReason === 'aborted'
+      ? 'interrupted'
+      : message.stopReason === 'error'
+        ? 'failed'
+        : message.stopReason === 'stop' || message.stopReason === 'length'
+          ? 'completed'
+          : null
+  return state
+    ? {
+        state: state === 'failed' ? 'completed' : state,
+        ...(state === 'failed'
+          ? { outcome: 'failure' as const }
+          : state === 'interrupted'
+            ? { outcome: 'cancellation' as const }
+            : {}),
+        turnId,
+        timestamp
+      }
+    : null
 }

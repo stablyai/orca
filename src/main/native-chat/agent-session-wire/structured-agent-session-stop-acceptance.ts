@@ -1,5 +1,4 @@
-// Commit Stop receipt/effects before interrupting; failed acceptance acts on nothing and retries never retarget.
-
+import type { ChatStopTarget } from './structured-agent-session-chat-stop-target'
 import { agentSessionFailureSentence } from '../../../shared/agent-session-failure-words'
 import { refuse, type AgentSessionCancelResult } from '../../../shared/agent-session-wire'
 import {
@@ -23,8 +22,10 @@ import {
 } from './structured-agent-session-mutation-plans'
 import type {
   AgentSessionOperationReceipt,
-  AgentSessionTurnContext
+  AgentSessionTurnContext,
+  TurnOutcome
 } from './structured-agent-session-turns'
+// Commit Stop receipt/effects before interrupting; failed acceptance acts on nothing and retries never retarget.
 
 /** Preserve the first committed result, including no-op; later failures answer from that receipt. */
 export const STOP_COMMAND_RECEIPT: MutationCommandReceipt<AgentSessionCancelResult> = {
@@ -150,4 +151,47 @@ export function stopNotSaved(
     return { ok: false, refusal: journalOpenRefusal(error) }
   }
   return { ok: false, refusal: notSaved.refusal() }
+}
+
+export async function acceptCapturedChatStop(
+  callerKey: string,
+  stoppedSend: boolean | undefined,
+  ctx: AgentSessionTurnContext,
+  target: ChatStopTarget
+): Promise<TurnOutcome<{ settled: boolean; turnId: string | null }>> {
+  if (!target.marks) {
+    const accepted = await acceptStopTarget(ctx)
+    return accepted.ok ? { ok: true, value: { settled: false, turnId: null } } : accepted
+  }
+  const sinceStop = ctx.journal.queuedMessages.userStopInForce()?.sequence
+  const handed = ctx.journal
+    .submissions()
+    .some(
+      (entry) =>
+        entry.fence === ctx.fence &&
+        (entry.handoverRecorded !== true || entry.handedOverAt !== undefined) &&
+        (entry.dispatchState === 'pending' ||
+          (entry.dispatchState === 'unknown' && !entry.recovered)) &&
+        (sinceStop === undefined || (entry.submittedSequence ?? -1) > sinceStop)
+    )
+  const accepted = await acceptChatStop(ctx, {
+    event: {
+      reason: 'user-stop',
+      caller: callerKey,
+      ...(target.eventTurnId !== null ? { turnId: target.eventTurnId } : {})
+    },
+    fence: ctx.fence
+  })
+  return accepted.ok
+    ? {
+        ok: true,
+        value: {
+          settled:
+            (accepted.value.withdrawn?.length ?? (target.queued ? 1 : 0)) > 0 ||
+            handed ||
+            stoppedSend === true,
+          turnId: accepted.value.turnId
+        }
+      }
+    : accepted
 }

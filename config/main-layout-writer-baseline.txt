@@ -5,7 +5,7 @@
 1 src/main/ipc/pty/ipc/leaf-move.ts
 1 src/main/ipc/pty/pane/pane-owner-replacement.ts
 3 src/main/ipc/pty/pane/stable-owner.ts
-2 src/main/ipc/pty/spawn-commit-binding.ts
+3 src/main/ipc/pty/spawn-commit-binding.ts # Replacement/fresh queued checks differ from recovery of an already-dispatched child.
 1 src/main/ipc/renderer-shutdown-checkpoint.ts
 1 src/main/ipc/runtime-environments/runtime-environment-removal-cleanup.ts
 1 src/main/ipc/runtime-environments/runtime-environment-session-reconcile.ts
@@ -60,10 +60,10 @@
 1 src/main/runtime/runtime-workspace-session-controller.ts
 2 src/main/runtime/session-graph/session-graph-promotion.ts
 2 src/main/runtime/session-lifecycle/projection/apply-mobile-session-tab-navigation.ts
-2 src/main/runtime/session-lifecycle/projection/build-headless-mobile-session-browser-tabs.ts
 2 src/main/runtime/session-tabs/headless-tab-group-moves.ts
 6 src/main/runtime/session-tabs/headless-tab-properties.ts
 1 src/main/runtime/session-tabs/structured-session-tab-close.ts
+2 src/main/runtime/session-tabs/terminal-surface-close-commit.ts
 1 src/main/runtime/session-tabs/terminal-surface-retirements.ts
 2 src/main/runtime/terminal/adoption/adopt-terminal-orphans-from-inventory.ts
 1 src/main/runtime/terminal/driver/terminal-driver-resources.ts

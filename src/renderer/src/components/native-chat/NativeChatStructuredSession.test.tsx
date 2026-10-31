@@ -2,11 +2,19 @@ import * as terminalThemeSelection from '../../../../shared/terminal-theme-selec
 import { getDefaultSettings } from '../../../../shared/constants'
 // @vitest-environment happy-dom
 
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render as renderWithConfirmation,
+  screen,
+  waitFor
+} from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import { useAppStore } from '@/store'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { ConfirmationDialogProvider } from '@/components/confirmation-dialog'
 import {
   claudeGroupedQuestionPromptItems,
   legacySingleQuestionPromptItems
@@ -33,6 +41,10 @@ vi.mock('./NativeChatQuestionCard', () => moduleFactories.nativeChatQuestionCard
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
 import { structuredAgentSessionDraftScopeKey } from './native-chat-composer-draft-store'
+
+function render(ui: React.ReactNode) {
+  return renderWithConfirmation(ui, { wrapper: ConfirmationDialogProvider })
+}
 
 describe('NativeChatStructuredSession', () => {
   it('isolates mounted chats from unrelated settings and renders their live follow-up choice', async () => {

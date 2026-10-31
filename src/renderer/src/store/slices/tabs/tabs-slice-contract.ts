@@ -104,6 +104,8 @@ export type TabsSlice = {
       preserveWorktreeSelection?: boolean
       recordInteraction?: boolean
       terminalRetirementHandled?: boolean
+      /** Another tab took this one's slot; its host already owns what the content does next. */
+      replaced?: boolean
     }
   ) => { closedTabId: string; wasLastTab: boolean; worktreeId: string } | null
   reorderUnifiedTabs: (
@@ -194,3 +196,15 @@ export type TabsSlice = {
 type TabsStateCreator = StateCreator<AppState, [], [], TabsSlice>
 export type TabsSliceSet = Parameters<TabsStateCreator>[0]
 export type TabsSliceGet = Parameters<TabsStateCreator>[1]
+
+export type TabsLabelActions = Pick<
+  TabsSlice,
+  | 'reorderUnifiedTabs'
+  | 'setTabLabel'
+  | 'setTabViewMode'
+  | 'toggleTabViewMode'
+  | 'setTabCustomLabel'
+  | 'setUnifiedTabColor'
+  | 'pinTab'
+  | 'unpinTab'
+>

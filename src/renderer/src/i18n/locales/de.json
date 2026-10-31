@@ -19602,8 +19602,8 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "Orca auf diesem Host aktualisieren, um in der Chat-Oberfläche fortzufahren.",
-        "exitUnconfirmedFromTerminal": "{{agent}} führt diese Unterhaltung bereits in einem anderen Terminal aus. Dort {{agent}} beenden oder das Terminal schließen und anschließend diese Unterhaltung über den Sitzungsverlauf öffnen.",
-        "exitUnconfirmed": "{{agent}} führt diese Unterhaltung bereits in einem anderen Terminal aus. Dort {{agent}} beenden oder das Terminal schließen und anschließend diese Unterhaltung über den Sitzungsverlauf öffnen.",
+        "exitUnconfirmedFromTerminal": "Orca konnte nicht bestätigen, dass {{agent}} in diesem Terminal beendet wurde. Beende {{agent}} hier und versuche diese Aktion erneut.",
+        "exitUnconfirmed": "Orca konnte nicht bestätigen, dass {{agent}} beendet wurde. Beende {{agent}} in seinem Terminal und versuche diese Aktion erneut.",
         "notSavedYet": "{{agent}} hat diese Unterhaltung noch nicht gespeichert. Nach der Antwort erneut versuchen."
       },
       "state": {
@@ -20012,7 +20012,9 @@
       "bar": {
         "SortableTabContextMenu": {
           "switchToTerminalView": "Mit Terminal-Agenten fortfahren",
-          "switchToChatView": "In der Chat-Oberfläche fortfahren",
+          "continueInChatView": "In der Chat-Oberfläche fortfahren",
+          "switchToChatView": "Als Chat anzeigen",
+          "showAsTerminal": "Als Terminal anzeigen",
           "allowAutoClose": "Automatisches Schließen erlauben"
         },
         "BrowserTab": {

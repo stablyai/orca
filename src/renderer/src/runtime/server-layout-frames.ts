@@ -35,7 +35,7 @@ import {
 
 type FramesStore = {
   getState: () => AppState
-  setState: (patch: Partial<AppState>) => void
+  setState: (patch: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void
   subscribe: (listener: (state: AppState) => void) => () => void
 }
 
@@ -47,9 +47,13 @@ type ServerFrames = {
 }
 
 /** Workspaces this server's stream draws: ones the window holds that it mirrors from this server. */
-function serverDraws(environmentId: string): (state: AppState) => (key: string) => boolean {
-  return (state) => (key) =>
-    (key in state.groupsByWorktree || key in state.unifiedTabsByWorktree) &&
+function serverDraws(
+  environmentId: string
+): (state: AppState, openedWorkspaces?: ReadonlySet<string>) => (key: string) => boolean {
+  return (state, openedWorkspaces) => (key) =>
+    (key in state.groupsByWorktree ||
+      key in state.unifiedTabsByWorktree ||
+      openedWorkspaces?.has(key) === true) &&
     mirroredRuntimeEnvironmentIdForWorkspace(state, key) === environmentId
 }
 
@@ -153,8 +157,8 @@ function openServerFrames(
   const sync = openWorkspaceLayoutFrameSync(frameStore, {
     target: { kind: 'environment', environmentId },
     // Only gated workspaces: a handed-back one is the mirror's, whatever the frozen frames still hold.
-    draws: (state) => {
-      const ours = draws(state)
+    draws: (state, openedWorkspaces) => {
+      const ours = draws(state, openedWorkspaces)
       return (key) => gated.has(key) && ours(key)
     },
     heldTabs: DESKTOP_CREATED_SERVER_TAB_HOLDS,

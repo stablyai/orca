@@ -1,3 +1,4 @@
+import { conversationSwitchFailureText } from '@/lib/conversation-switch-feedback'
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CliChatResumeSource } from './cli-chat-resume-source'
@@ -91,7 +92,7 @@ import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-
 import { useAppStore } from '@/store'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
-import { runCliChatResume } from './cli-chat-resume-run'
+import { runOrdinaryCliChatResume as runCliChatResume } from './cli-chat-resume-ordinary-run'
 import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
 import {
   resetStructuredAgentLaunchRegistryForTests,
@@ -116,10 +117,12 @@ const SOURCE: CliChatResumeSource = {
   paneKey: 'tab-1:leaf',
   agent: 'claude',
   providerSessionId: 'provider-1',
-  executionHostId: 'local'
+  executionHostId: 'local',
+  ptyId: undefined
 }
 const tabs = () => useAppStore.getState().unifiedTabsByWorktree['wt-1'] ?? []
 let main: TabsDrawnFromMain | undefined
+let snapshotVersion = 0
 afterEach(() => {
   vi.unstubAllGlobals()
   main?.close()
@@ -142,6 +145,7 @@ function refuse(reason: 'transcriptNotFound' | 'transcriptUnreadable'): AgentSes
 }
 
 beforeEach(async () => {
+  snapshotVersion = 0
   vi.clearAllMocks()
   resetLocalStructuredSessionVersionForTests()
   resetWebSessionTabsSnapshotFreshnessForTests()
@@ -169,7 +173,7 @@ function snapshot(sessionId?: string): RuntimeMobileSessionTabsResult {
   return {
     worktree: 'wt-1',
     publicationEpoch: 'publication-test',
-    snapshotVersion: Date.now(),
+    snapshotVersion: ++snapshotVersion,
     activeGroupId: null,
     activeTabId: null,
     activeTabType: null,
@@ -352,7 +356,7 @@ describe('CLI identity resume through the existing launch owner', () => {
     }
   })
 
-  it('keeps the terminal and directs a refused terminal writer to Session History', async () => {
+  it('keeps the terminal and directs a refused terminal writer to quit in this terminal', async () => {
     mocks.call.mockResolvedValue({
       ok: false,
       refusal: {
@@ -365,7 +369,7 @@ describe('CLI identity resume through the existing launch owner', () => {
     await runCliChatResume(SOURCE, true)
     expect(mocks.toast).toHaveBeenCalledTimes(1)
     expect(mocks.toast.mock.calls[0]?.[0]).toBe(
-      'Claude is already running this conversation in another terminal. Quit Claude there or close that terminal, then open this conversation from Session History.'
+      'Orca could not confirm Claude stopped in this terminal. Quit Claude here, then try this action again.'
     )
     expect(mocks.activate).not.toHaveBeenCalled()
     expect(tabs()).toEqual([])
@@ -535,9 +539,7 @@ describe('CLI identity resume through the existing launch owner', () => {
       ).toEqual(expectedOrder)
       expect(useAppStore.getState().activeGroupIdByWorktree['wt-1']).toBe(other.groupId)
       useAppStore.getState().moveUnifiedTabToGroup(slotId, other.groupId)
-      applyStructuredSessionTabSnapshots([
-        { ...snapshot(sessionId), snapshotVersion: Date.now() + 1 }
-      ])
+      applyStructuredSessionTabSnapshots([snapshot(sessionId)])
       expect(tabs().find((tab) => tab.entityId === sessionId)?.groupId).toBe(other.groupId)
     }
   )
@@ -640,3 +642,34 @@ describe('CLI identity resume through the existing launch owner', () => {
     expect(useAppStore.getState().groupsByWorktree['wt-1'][0].recentTabIds ?? []).toEqual([])
   })
 })
+
+it.each(['preparation', 'refusal'])(
+  'unified strict legacy admission reports %s through the common formatter once',
+  async (stage) => {
+    if (stage === 'preparation') {
+      mocks.sourceCapability.mockRejectedValue(new Error('raw provider transport text'))
+    } else {
+      mocks.call.mockResolvedValue({ ok: false, refusal: refuse('transcriptUnreadable') })
+    }
+    await runCliChatResume(SOURCE, true, {
+      sourceCurrent: () => true,
+      afterTabId: SOURCE.tabId,
+      reportFailure: (error) => {
+        mocks.toast(
+          conversationSwitchFailureText(error, {
+            agent: SOURCE.agent,
+            direction: 'chat',
+            source: SOURCE
+          })
+        )
+      }
+    })
+    expect(mocks.toast).toHaveBeenCalledExactlyOnceWith(
+      stage === 'refusal'
+        ? "Claude couldn't open this conversation's history. Check that its saved conversation is available, then use Switch to Chat UI to try again."
+        : 'Claude could not switch to chat. Use Switch to Chat UI to try again.'
+    )
+    expect(tabs()).toEqual([])
+    expect(mocks.activate).not.toHaveBeenCalled()
+  }
+)

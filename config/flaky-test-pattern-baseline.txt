@@ -39,7 +39,6 @@
 1 test-no-in-test-import-actual:src/main/runtime/mobile-pairing-userdata-path.test.ts
 1 test-no-in-test-import-actual:src/main/runtime/orca-runtime-files-mobile-explorer-reads.test.ts
 1 test-no-in-test-import-actual:src/main/runtime/orca-runtime-files-terminal-artifact-swap-detection.test.ts
-1 test-no-in-test-import-actual:src/main/runtime/structured-agent-cli-writers.test.ts
 1 test-no-in-test-import-actual:src/main/speech/openai-api-key-store.test.ts
 5 test-no-in-test-import-actual:src/main/ssh/config/ssh-config-loader-regression.test.ts
 2 test-no-in-test-import-actual:src/main/ssh/connection/ssh-connection-auth-fallback.test.ts
@@ -1098,7 +1097,6 @@
 2 test-no-wall-clock:src/renderer/src/components/status-bar/status-bar-antigravity-segment.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/status-bar/workspace-space-worktree-row.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/tab-bar/TabBarCreateEntry.history.test.tsx
-2 test-no-wall-clock:src/renderer/src/components/tab-bar/cli-chat-resume-run.test.ts
 1 test-no-wall-clock:src/renderer/src/components/tab-bar/open-tab-search.test.ts
 4 test-no-wall-clock:src/renderer/src/components/task-page/jira/task-page-jira-cache-selectors.test.ts
 1 test-no-wall-clock:src/renderer/src/components/task-page-jira-saved-filter-load-failure.test.tsx

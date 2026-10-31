@@ -2,8 +2,7 @@ import type { StructuredAgentSessionConversationLifetimeHost } from './structure
 import { agentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
 import type {
   AgentSessionSwitchDeadline,
-  AgentSessionSwitchResult,
-  AgentSessionSwitchReceipt
+  AgentSessionSwitchResult
 } from '../../../shared/agent-session-switch-execution'
 import {
   selectStructuredSessionSwitchCommand,
@@ -14,21 +13,15 @@ export function createStructuredAgentSessionSwitchCommands(
   host: StructuredAgentSessionConversationLifetimeHost,
   isDisposed: () => boolean
 ) {
-  const { serialize } = host
-  const deps = () => host.context().deps
   const commands = new Map<string, SwitchCommand>()
-  const unsubscribeAcceptance = deps().store.onAcceptedSend((id) => {
+  const unsubscribe = host.context().deps.store.onAcceptedSend((id) => {
     const command = commands.get(id)
-    if (!command?.revokeOnSend || command.settled) {
-      return
+    if (command?.workCurrent && !command.settled && !command.workCurrent()) {
+      command.deadline.revoke(
+        agentSessionRefusalError('agent_session_operation_invalid', { reason: 'messagesUnsettled' })
+      )
     }
-    command.deadline.revoke(
-      agentSessionRefusalError('agent_session_operation_invalid', {
-        reason: 'messagesUnsettled'
-      })
-    )
   })
-
   return {
     controls: {
       runSwitch: async (
@@ -36,64 +29,40 @@ export function createStructuredAgentSessionSwitchCommands(
         invocationId: string,
         deadline: AgentSessionSwitchDeadline,
         run: () => Promise<AgentSessionSwitchResult>,
-        revokeOnSend = true,
-        phase?: {
-          observe?: boolean
-          receipt?: AgentSessionSwitchReceipt
-        },
-        onRetained?: (check: () => void) => Promise<void>,
-        allowUncreated = false,
-        onConverged?: (generation: string) => void
+        options: {
+          conversationKey?: string
+          direction: SwitchCommand['direction']
+          allowUncreated?: boolean
+          destinationCurrent?: (result: AgentSessionSwitchResult) => boolean | undefined
+          onAccepted?: () => void
+        }
       ): Promise<AgentSessionSwitchResult> => {
-        const selected = await deadline.wait(
-          serialize(id, async () => {
-            return selectStructuredSessionSwitchCommand({
-              host,
-              commands,
-              isDisposed,
-              id,
-              invocationId,
-              deadline,
-              run,
-              revokeOnSend,
-              phase,
-              onRetained,
-              allowUncreated
-            })
+        const selected = await deadline
+          .wait(
+            host.serialize(options.conversationKey ?? id, async () =>
+              selectStructuredSessionSwitchCommand({
+                host,
+                commands,
+                isDisposed,
+                id,
+                invocationId,
+                deadline,
+                run,
+                ...options
+              })
+            )
+          )
+          .catch((error: unknown) => {
+            deadline.dispose()
+            throw error
           })
-        )
         if (selected.deadline !== deadline) {
           deadline.dispose()
         }
-        if (phase?.receipt) {
-          if (phase.receipt.generation !== selected.generation) {
-            throw agentSessionRefusalError('agent_session_operation_invalid', {
-              reason: 'handoffInFlight'
-            })
-          }
-          if (phase.receipt.converged) {
-            onConverged?.(selected.generation)
-            return { status: 'completed', sessionId: id }
-          }
-          if (phase.receipt.retained) {
-            selected.deadline.revoke(
-              agentSessionRefusalError('agent_session_operation_invalid', {
-                reason: 'messagesUnsettled'
-              })
-            )
-            await selected.retain?.()
-            return { status: 'completed', sessionId: id, sourceRetained: true }
-          }
-          selected.deadline.check()
-          selected.acknowledge(phase.receipt.shown)
-          return Promise.race([selected.completion, selected.opened])
-        }
-        return phase?.observe
-          ? selected.completion
-          : Promise.race([selected.completion, selected.presentation])
+        return selected.completion
       },
       adoptSwitch: (from: string, to: string) =>
-        serialize(to, async () => {
+        host.serialize(to, async () => {
           const command = commands.get(from)
           const prior = commands.get(to)
           command?.deadline.check()
@@ -104,42 +73,18 @@ export function createStructuredAgentSessionSwitchCommands(
           }
           commands.set(to, command)
         }),
-      switchGeneration: (id: string) => commands.get(id)?.generation,
-      retainSwitch: async (id: string) => {
-        await commands.get(id)?.retain?.()
-      },
-      presentSwitch: async (
-        id: string,
-        view: Omit<
-          Extract<AgentSessionSwitchResult, { status: 'present' }>,
-          'status' | 'generation'
-        >
-      ) => {
+      guardSwitchWork: (id: string, current: () => boolean) => {
         const command = commands.get(id)
-        if (!command) {
-          throw agentSessionRefusalError('agent_session_operation_expired', {
-            reason: 'operationExpired'
-          })
+        if (command) {
+          command.workCurrent = current
         }
-        command.deadline.check()
-        command.present({ ...view, status: 'present', generation: command.generation })
-        if (!(await command.deadline.wait(command.shown))) {
-          throw agentSessionRefusalError('agent_session_operation_unknown', {
-            reason: 'tabUnconfirmed'
-          })
-        }
-        command.deadline.check()
       },
-      openedSwitch: (id: string, result: AgentSessionSwitchResult) =>
-        commands.get(id)?.openedResult(result),
-      switchExecuting: (id: string) => Boolean(commands.get(id) && !commands.get(id)?.settled),
+      switchGeneration: (id: string) => commands.get(id)?.generation,
+      /** Stop and spawn work already dispatched settles even when the observing request expired. */
       trackSwitchPhysical: <T>(id: string, work: Promise<T>): Promise<T> => {
         const command = commands.get(id)
         if (command) {
-          command.physical = work.then(
-            () => {},
-            () => {}
-          )
+          command.physical = Promise.allSettled([command.physical, work]).then(() => {})
         }
         return work
       },
@@ -147,17 +92,17 @@ export function createStructuredAgentSessionSwitchCommands(
         await commands.get(id)?.physical
       }
     },
-    revoke: (id: string) => {
+    revoke: (id: string): boolean => {
       const command = commands.get(id)
-      if (command) {
-        command.retentionAllowed = false
-        command.deadline.revoke()
+      if (!command) {
+        return false
       }
+      command.deadline.revoke()
+      return true
     },
     dispose: () => {
-      unsubscribeAcceptance()
+      unsubscribe()
       for (const command of commands.values()) {
-        command.retentionAllowed = false
         clearTimeout(command.cleanupTimer)
         command.deadline.revoke()
       }

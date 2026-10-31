@@ -1,6 +1,6 @@
 import type { ExecutionHostId } from './execution-host'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
-import type { TerminalPaneLayoutNode } from './terminal-tab-types'
+import type { TerminalPaneLayoutNode, TerminalTab } from './terminal-tab-types'
 
 export type TerminalTabCloseRequest = {
   requestId: string
@@ -72,6 +72,20 @@ export function captureTerminalSurfaceIdentity(
   leafId: string
 ): TerminalSurfaceCloseIdentity | null {
   const row = state?.tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)
+  return captureTerminalSurfaceIdentityFromRow(state, row, worktreeId, tabId, leafId)
+}
+
+export function captureTerminalSurfaceIdentityFromRow(
+  state:
+    | (Pick<WorkspaceSessionState, 'terminalLayoutsByTabId'> &
+        Partial<Pick<WorkspaceSessionState, 'terminalPtyIncarnationsByPaneKey'>>)
+    | null
+    | undefined,
+  row: TerminalTab | undefined,
+  worktreeId: string,
+  tabId: string,
+  leafId: string
+): TerminalSurfaceCloseIdentity | null {
   if (!row || !state) {
     return null
   }

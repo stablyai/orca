@@ -1,5 +1,7 @@
 // @vitest-environment happy-dom
 
+import { ConfirmationDialogProvider } from '@/components/confirmation-dialog'
+
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -61,14 +63,16 @@ function goal(status: AgentJournalThreadGoal['status']): AgentJournalThreadGoal 
 function sessionView(agent: 'codex' | 'claude' = 'codex'): React.JSX.Element {
   return (
     <TooltipProvider>
-      <NativeChatStructuredSession
-        isVisible
-        isFocusedGroup
-        tabId="structured-tab-goal"
-        sessionId="session-goal"
-        target={{ kind: 'local' }}
-        agent={agent}
-      />
+      <ConfirmationDialogProvider>
+        <NativeChatStructuredSession
+          isVisible
+          isFocusedGroup
+          tabId="structured-tab-goal"
+          sessionId="session-goal"
+          target={{ kind: 'local' }}
+          agent={agent}
+        />
+      </ConfirmationDialogProvider>
     </TooltipProvider>
   )
 }
