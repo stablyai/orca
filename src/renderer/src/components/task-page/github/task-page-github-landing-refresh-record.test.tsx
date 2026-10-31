@@ -18,10 +18,13 @@ import type { GitHubWorkItem } from '../../../../../shared/github/work-item-type
 import type { GitHubProjectTable } from '../../../../../shared/github/project-types'
 import { getTaskPageRepoSourceContext } from '@/lib/task-repo-source-context'
 import { runTaskPageGitHubLandingRefresh } from './task-page-github-landing-refresh-run'
-import type { TaskPageGitHubSearchPaginationModel } from './use-task-page-github-search-pagination'
+import type { TaskPageGitHubLandingRefreshModel } from './task-page-github-landing-refresh-model'
 import { resetTaskPageGitHubMutationRegistryForTests } from './task-page-github-work-item-mutation-registry'
 
-const mocks = vi.hoisted(() => ({ store: null as ReturnType<typeof createTestStore> | null }))
+const mocks = vi.hoisted(() => {
+  const hoisted: { store: ReturnType<typeof createTestStore> | null } = { store: null }
+  return hoisted
+})
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(
@@ -65,7 +68,7 @@ const sources = {
 const source = getTaskPageRepoSourceContext(repo, 'github')
 type Pages = (GitHubWorkItem[] | null)[]
 /** The same issue on a local Project board, as the board's own fetch stored it. */
-const board = {
+const board: GitHubProjectTable = {
   project: {
     id: 'p',
     owner: 'acme',
@@ -74,30 +77,49 @@ const board = {
     title: 'Board',
     url: ''
   },
-  selectedView: { id: 'v', number: 1, name: 'Table', layout: 'TABLE_LAYOUT', filter: '' },
+  selectedView: {
+    id: 'v',
+    number: 1,
+    name: 'Table',
+    layout: 'TABLE_LAYOUT',
+    filter: '',
+    fields: [],
+    groupByFields: [],
+    sortByFields: []
+  },
   rows: [
     {
       id: 'r',
+      position: 0,
       itemType: 'ISSUE',
+      updatedAt: '2026-10-31T12:00:02Z',
+      fieldValuesByFieldId: {},
       content: {
         title: row.title,
+        body: null,
         url: row.url,
         repository: 'acme/widgets',
         number: 42,
         state: 'OPEN',
+        stateReason: null,
+        isDraft: null,
+        parentIssue: null,
+        issueType: null,
         labels: [],
         assignees: []
       }
     }
-  ]
-} as unknown as GitHubProjectTable
+  ],
+  totalCount: 1,
+  parentFieldDropped: false
+}
 const LOCAL = { kind: 'local' } as const
 const NO_ROWS: GitHubWorkItem[] = []
 let root: Root, node: HTMLDivElement
 let mutationModel: ReturnType<typeof useTaskPageGitHubWorkItemMutation>
 let picker: ReturnType<typeof useWorkItemSourceState>
 let setPages: (next: Pages | ((previous: Pages) => Pages)) => void
-const pagesRef = { current: [] as Pages }
+const pagesRef: { current: Pages } = { current: [] }
 /** Tasks, the new-workspace picker and a Project board each project their own stored rows. */
 function Harness() {
   const [pages, set] = useState<Pages>([])
@@ -124,7 +146,7 @@ const noop = () => {}
 /** A non-forced landing refresh with the Tasks page's own setters, refs and store actions. */
 async function landingRefresh() {
   const state = mocks.store!.getState()
-  const model = {
+  const model: TaskPageGitHubLandingRefreshModel = {
     fetchWorkItemsAcrossRepos: state.fetchWorkItemsAcrossRepos,
     getCachedWorkItems: state.getCachedWorkItems,
     fetchWorkItemsNextPage: state.fetchWorkItemsNextPage,
@@ -139,37 +161,33 @@ async function landingRefresh() {
     lastFetchedNonceRef: ref(0),
     lastFetchedInvalidationNonceRef: ref(0),
     paginationGenerationRef: ref(0),
-    landingGitHubRefreshKeysRef: ref(new Set<string>()),
+    landingGitHubRefreshKeysRef: ref<ReadonlySet<string>>(new Set()),
     githubPerRepoPageLimit: 20,
     githubPageSize: 20,
     githubResumeContextKey: 'landing',
     githubResumeConsumedRef: ref(true),
     githubResumeContextRef: ref('landing'),
-    pendingGithubScrollRestoreRef: ref(null),
-    countedTotalPagesRef: ref(null),
+    pendingGithubScrollRestoreRef: ref<number | null>(null),
+    countedTotalPagesRef: ref<number | null>(null),
     hardRefreshEpochRef: ref(0),
     currentPageRef: ref(0),
     pagesRef,
     setPages,
     retryingSourceKeys: new Set<string>(),
     githubWorkItemMutationQueryKey: 'landing',
-    ...Object.fromEntries(
-      [
-        'setTasksLoading',
-        'setTasksRefreshing',
-        'setTasksFiltering',
-        'setTasksError',
-        'setFailedCount',
-        'setGithubUnavailable',
-        'setCurrentPage',
-        'setPaginationLoading',
-        'setLoadingTargetPage',
-        'setCountedTotalPages',
-        'setProvenPageLimit',
-        'setRetryingSourceKeys'
-      ].map((name) => [name, noop])
-    )
-  } as unknown as TaskPageGitHubSearchPaginationModel
+    setTasksLoading: noop,
+    setTasksRefreshing: noop,
+    setTasksFiltering: noop,
+    setTasksError: noop,
+    setFailedCount: noop,
+    setGithubUnavailable: noop,
+    setCurrentPage: noop,
+    setPaginationLoading: noop,
+    setLoadingTargetPage: noop,
+    setCountedTotalPages: noop,
+    setProvenPageLimit: noop,
+    setRetryingSourceKeys: noop
+  }
   await act(async () => {
     runTaskPageGitHubLandingRefresh(model)
     for (let i = 0; i < 8; i++) {

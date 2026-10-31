@@ -85,7 +85,7 @@ export async function lookupGitHubWorkItemForSource(
           number: args.number,
           type: args.type
         })
-  const row = item ? ({ ...item, repoId: args.repoId } as GitHubWorkItem) : null
+  const row: GitHubWorkItem | null = item ? { ...item, repoId: args.repoId } : null
   return row && records ? records.cache.acceptSearch([row], records.binding)[0] : row
 }
 
@@ -135,7 +135,7 @@ export async function lookupGitHubWorkItemByOwnerRepoForSource(
   if (args.accepts?.() === false) {
     return null
   }
-  const row = item ? ({ ...item, repoId: args.repoId } as GitHubWorkItem) : null
+  const row: GitHubWorkItem | null = item ? { ...item, repoId: args.repoId } : null
   // A canonical verification read publishes through its record, not as a search reading.
   return row && records && !args.accepts
     ? records.cache.acceptSearch([row], records.binding)[0]

@@ -36,6 +36,9 @@ function sameLogins(a: string[] | undefined, b: string[]): boolean {
   return !!a && key(a) === key(b)
 }
 
+// One shared empty list, so callbacks that read the unknown-assignee case keep their identity.
+const NO_ASSIGNEES: string[] = []
+
 export function GHEditSection(props: GitHubItemDialogEditSectionProps): React.JSX.Element | null {
   const { item, projectOrigin } = props
   const repository = projectOrigin ?? parseOwnerRepoFromItemUrl(item.url)
@@ -171,7 +174,8 @@ function GHEditSectionItem({
   if (staleEdit) {
     setAssigneeEdit(null)
   }
-  const localAssignees = !staleEdit && assigneeEdit ? assigneeEdit.value : (assignees ?? [])
+  const localAssignees =
+    !staleEdit && assigneeEdit ? assigneeEdit.value : (assignees ?? NO_ASSIGNEES)
   const setLocalAssignees = useCallback(
     (value: string[]) => {
       setAssigneeEdit((current) => ({

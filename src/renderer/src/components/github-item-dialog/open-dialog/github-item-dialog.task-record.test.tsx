@@ -2,7 +2,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { useStore } from 'zustand'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import {
   createTestStore,
   mockApi,
@@ -20,13 +20,16 @@ import { toast } from 'sonner'
 import { workItemDetailsCache } from '../load-item-details/work-item-details-cache'
 import GitHubItemDialog from './github-item-dialog'
 
-const mocks = vi.hoisted(() => ({
-  store: null as ReturnType<typeof createTestStore> | null,
-  details: vi.fn(),
-  item: vi.fn(),
-  update: vi.fn(),
-  onUse: vi.fn()
-}))
+const mocks = vi.hoisted(() => {
+  const hoisted: {
+    store: ReturnType<typeof createTestStore> | null
+    details: Mock
+    item: Mock
+    update: Mock
+    onUse: Mock
+  } = { store: null, details: vi.fn(), item: vi.fn(), update: vi.fn(), onUse: vi.fn() }
+  return hoisted
+})
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(
     (selector: (s: AppState) => unknown) => useStore(mocks.store!, selector),
@@ -244,7 +247,7 @@ describe('issue dialog edits reach the Tasks row through the shared record', () 
       repos: [repo],
       recordFeatureInteraction: vi.fn(),
       allWorktrees: () => []
-    } as Partial<AppState>)
+    })
     mocks.details.mockResolvedValue({ item: row, body: 'Body', comments: [], assignees: [] })
     mocks.item.mockResolvedValue({ ...row, assignees: [alice], updatedAt: '2026-10-31T12:00:03Z' })
     mocks.update.mockResolvedValue({ ok: true })

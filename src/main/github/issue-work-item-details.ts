@@ -188,7 +188,8 @@ export async function getIssueBodyAndComments(
       if (fresh && !('body' in issue)) {
         throw new Error('GitHub details unavailable')
       }
-      const parsedComments = JSON.parse(commentsResult.stdout) as RESTComment[][] | RESTComment[]
+      // A slurped (paginated) read nests one array per page; an ordinary read is one page.
+      const parsedComments: RESTComment[][] | RESTComment[] = JSON.parse(commentsResult.stdout)
       const comments = parsedComments.flat().map((comment): PRComment => ({
         id: comment.id,
         author: comment.user?.login ?? 'ghost',

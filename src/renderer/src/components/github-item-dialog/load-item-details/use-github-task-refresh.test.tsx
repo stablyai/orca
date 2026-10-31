@@ -4,7 +4,7 @@ import { useTaskPageGitHubWorkItemMutation } from '@/hooks/useTaskPageGitHubWork
 import { act, useMemo } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { useStore } from 'zustand'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import {
   createTestStore,
   mockApi,
@@ -23,12 +23,15 @@ import { setRuntimeEnvironmentConnectionGenerationForTests } from '@/store/slice
 import { patchCachedWorkItemBody, workItemDetailsCache } from './work-item-details-cache'
 import { useGitHubTaskItems } from '@/hooks/useGitHubTaskItems'
 
-const mocks = vi.hoisted(() => ({
-  store: null as ReturnType<typeof createTestStore> | null,
-  details: vi.fn(),
-  item: vi.fn(),
-  toastError: vi.fn()
-}))
+const mocks = vi.hoisted(() => {
+  const hoisted: {
+    store: ReturnType<typeof createTestStore> | null
+    details: Mock
+    item: Mock
+    toastError: Mock
+  } = { store: null, details: vi.fn(), item: vi.fn(), toastError: vi.fn() }
+  return hoisted
+})
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(
