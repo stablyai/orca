@@ -10,7 +10,7 @@ export function cliConversationExitGuidance(
   return fromTerminal
     ? translate(
         'components.native-chat.resumeInNewChat.exitUnconfirmedFromTerminal',
-        '{{agent}} is still running this conversation in this terminal. Quit {{agent}} here, then try again.',
+        '{{agent}} is still running this conversation in this terminal. Quit {{agent}} here, then open this conversation from Session History.',
         values
       )
     : translate(
