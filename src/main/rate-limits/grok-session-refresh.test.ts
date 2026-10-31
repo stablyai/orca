@@ -110,6 +110,113 @@ describe('refreshGrokAccessTokenViaSessionsList', () => {
     expect(runProcess).not.toHaveBeenCalled()
   })
 
+  it('releases shared usage reads when command lookup never settles and permits a debounced retry', async () => {
+    const lookup = Promise.withResolvers<string | null>()
+    const started = Promise.withResolvers<void>()
+    vi.mocked(resolveCommandOnLocalPath).mockImplementationOnce(() => {
+      started.resolve()
+      return lookup.promise
+    })
+    const stale = session(Date.now() + 60_000)
+    vi.mocked(readGrokAuthSession).mockReturnValue(stale)
+    const settled = vi.fn()
+    const first = readGrokAuthForUsage({ authReadResult: stale }).then(settled)
+    const second = readGrokAuthForUsage({ authReadResult: stale }).then(settled)
+    await started.promise
+
+    await vi.advanceTimersByTimeAsync(9_999)
+    expect(settled).not.toHaveBeenCalled()
+    expect(resolveCommandOnLocalPath).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1)
+    await Promise.all([first, second])
+    expect(settled).toHaveBeenCalledTimes(2)
+    expect(settled).toHaveBeenCalledWith(stale)
+    expect(runProcess).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+
+    await refreshGrokAccessTokenViaSessionsList()
+    expect(resolveCommandOnLocalPath).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(40_000)
+    await refreshGrokAccessTokenViaSessionsList()
+    expect(resolveCommandOnLocalPath).toHaveBeenCalledTimes(2)
+    expect(runProcess).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['timeout', 'abort'] as const)(
+    'does not spawn a late command lookup after setup %s',
+    async (ending) => {
+      const lookup = Promise.withResolvers<string | null>()
+      const started = Promise.withResolvers<void>()
+      const controller = new AbortController()
+      vi.mocked(resolveCommandOnLocalPath).mockImplementationOnce(() => {
+        started.resolve()
+        return lookup.promise
+      })
+      const first = refreshGrokAccessTokenViaSessionsList(controller.signal)
+      const second = refreshGrokAccessTokenViaSessionsList()
+      await started.promise
+
+      if (ending === 'timeout') {
+        await vi.advanceTimersByTimeAsync(10_000)
+      } else {
+        controller.abort()
+      }
+      await Promise.all([first, second])
+      expect(runProcess).not.toHaveBeenCalled()
+      expect(vi.getTimerCount()).toBe(0)
+
+      await vi.advanceTimersByTimeAsync(50_000)
+      await refreshGrokAccessTokenViaSessionsList()
+      expect(runProcess).toHaveBeenCalledTimes(1)
+      lookup.resolve('/late/grok')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(runProcess).toHaveBeenCalledTimes(1)
+    }
+  )
+
+  it.each(['timeout', 'abort'] as const)(
+    'bounds shell environment preparation on %s',
+    async (ending) => {
+      const environment = Promise.withResolvers<NodeJS.ProcessEnv>()
+      const started = Promise.withResolvers<void>()
+      const controller = new AbortController()
+      vi.mocked(hostShellEnvironment).mockImplementationOnce(() => {
+        started.resolve()
+        return environment.promise
+      })
+      const refresh = refreshGrokAccessTokenViaSessionsList(controller.signal)
+      await started.promise
+
+      if (ending === 'timeout') {
+        await vi.advanceTimersByTimeAsync(10_000)
+      } else {
+        controller.abort()
+      }
+      await refresh
+      expect(resolveCommandOnLocalPath).not.toHaveBeenCalled()
+      expect(runProcess).not.toHaveBeenCalled()
+      expect(vi.getTimerCount()).toBe(0)
+    }
+  )
+
+  it('runs a command resolved before the setup deadline and clears the setup timer', async () => {
+    const lookup = Promise.withResolvers<string | null>()
+    const started = Promise.withResolvers<void>()
+    vi.mocked(resolveCommandOnLocalPath).mockImplementationOnce(() => {
+      started.resolve()
+      return lookup.promise
+    })
+    const refresh = refreshGrokAccessTokenViaSessionsList()
+    await started.promise
+
+    await vi.advanceTimersByTimeAsync(9_999)
+    expect(runProcess).not.toHaveBeenCalled()
+    lookup.resolve('/resolved/grok')
+    await refresh
+    expect(runProcess).toHaveBeenCalledWith(expect.objectContaining({ program: '/resolved/grok' }))
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
   it('shares one in-flight CLI run', async () => {
     const run = Promise.withResolvers<Awaited<ReturnType<typeof runProcess>>>()
     const started = Promise.withResolvers<void>()
