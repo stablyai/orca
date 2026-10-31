@@ -79,8 +79,7 @@ export function createManagedPaneInternal(
     (paneId, options) => {
       if (!host.isDestroyed()) {
         host.setActivePane(paneId, {
-          focus: options?.focusTerminal !== false,
-          explicitUserSelection: true
+          focus: options?.focusTerminal !== false
         })
       }
     },
@@ -129,6 +128,6 @@ function handleManagedPaneMouseEnter(
       managerDestroyed: host.isDestroyed()
     })
   ) {
-    host.setActivePane(paneId, { focus: true, explicitUserSelection: true })
+    host.setActivePane(paneId, { focus: true })
   }
 }

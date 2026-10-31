@@ -635,14 +635,15 @@ it('applies structured UTF-8 admission to the expanded final body before any sen
 })
 
 type MentionInput = 'ready' | 'disabled' | 'ime' | 'none' | 'plain' | 'missing-handle'
-function mountedMention() {
+function mountedMention(managed = false) {
   crewRows.push({
     partyKey: 'worker',
     role: 'worker',
     label: first.label,
     agentKind: 'codex',
     status: 'working',
-    sendAddress: first.address
+    sendAddress: first.address,
+    ...(managed ? { task: { title: 'Inspect', state: 'dispatched' as const } } : {})
   })
   const input = createRef<NativeChatComposerInput>()
   const handle = createRef<NativeChatComposerHandle>()
@@ -709,10 +710,10 @@ function mountedMention() {
   }
 }
 
-it('keeps direct and real menu Mention on the current native handle, caret and captured host after dismissal', async () => {
-  for (const route of ['direct', 'menu']) {
+it('keeps direct, Mention all and real menu Mention on the current native handle, caret and captured host after dismissal', async () => {
+  for (const route of ['direct', 'all', 'menu']) {
     const user = userEvent.setup()
-    const view = mountedMention()
+    const view = mountedMention(route === 'all')
     const input = view.input.current!
     act(() => {
       input.focus()
@@ -731,10 +732,14 @@ it('keeps direct and real menu Mention on the current native handle, caret and c
     await user.click(
       route === 'menu'
         ? within(document.body).getByRole('menuitem', { name: 'Mention in message' })
-        : view.getByRole('button', { name: new RegExp(`${first.label} No shared task`) })
+        : route === 'all'
+          ? view.getByRole('button', { name: 'Mention all' })
+          : view.getByRole('button', { name: new RegExp(`${first.label} No shared task`) })
     )
     expect(insert).toHaveBeenCalledExactlyOnceWith([{ ...first, hostKey: 'captured-host' }])
     expect(insert.mock.results[0]?.value).toBe(true)
+    expect(input.contains?.(document.activeElement)).toBe(true)
+    expect(view.getByRole('button', { name: 'Collapse crew panel' }).isConnected).toBe(true)
     await waitFor(() => expect(within(document.body).queryByRole('menu')).toBeNull())
     if (popup) {
       await waitFor(() => expect(closed).toHaveBeenCalledOnce())

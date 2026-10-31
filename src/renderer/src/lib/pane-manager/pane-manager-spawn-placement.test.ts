@@ -38,55 +38,6 @@ describe('PaneManager spawn placement hints', () => {
     vi.restoreAllMocks()
   })
 
-  it('retains only the latest immutable explicit selection, including same-ID pointer selection, and clears it on destroy', () => {
-    const pane = manager.createInitialPane({ focus: false, leafId: LEAF_A })
-    const heading = document.createElement('h2')
-    heading.dataset.panePreventTerminalFocus = ''
-    pane.container.append(heading)
-    const focus = vi.spyOn(pane.terminal, 'focus')
-    expect(manager.getExplicitPaneSelection()).toBeNull()
-    heading.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
-    const first = manager.getExplicitPaneSelection()
-    expect(first).toEqual({ paneId: pane.id, leafId: pane.leafId })
-    expect(Object.isFrozen(first)).toBe(true)
-    heading.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
-    const latest = manager.getExplicitPaneSelection()
-    expect(latest).toEqual(first)
-    expect(latest).not.toBe(first)
-    expect(focus).not.toHaveBeenCalled()
-    expect(onActivePaneChange).not.toHaveBeenCalled()
-    manager.setActivePane(pane.id, { focus: false })
-    manager.setActivePane(-1, { explicitUserSelection: true })
-    expect(manager.getExplicitPaneSelection()).toBe(latest)
-    manager.destroy()
-    expect(manager.getExplicitPaneSelection()).toBeNull()
-  })
-
-  it('records only accepted configured focus-follows-mouse selection before requesting focus', () => {
-    const first = manager.createInitialPane({ focus: false, leafId: LEAF_A })
-    const second = manager.splitPane(first.id, 'vertical', { leafId: LEAF_B })!
-    manager.setActivePane(first.id, { focus: false })
-    vi.spyOn(document, 'hasFocus').mockReturnValue(true)
-    second.container.dispatchEvent(new MouseEvent('mouseenter'))
-    expect(manager.getExplicitPaneSelection()).toBeNull()
-    manager.setPaneStyleOptions({ focusFollowsMouse: true })
-    second.container.dispatchEvent(new MouseEvent('mouseenter', { buttons: 1 }))
-    expect(manager.getExplicitPaneSelection()).toBeNull()
-    vi.spyOn(second.terminal, 'focus').mockImplementation(() => {
-      expect(manager.getExplicitPaneSelection()).toEqual({
-        paneId: second.id,
-        leafId: second.leafId
-      })
-    })
-    second.container.dispatchEvent(new MouseEvent('mouseenter'))
-    const receipt = manager.getExplicitPaneSelection()
-    expect(receipt).toEqual({ paneId: second.id, leafId: second.leafId })
-    expect(second.terminal.focus).toHaveBeenCalledOnce()
-    manager.retirePanePreservingPty(second.id)
-    expect(manager.getActivePane()?.id).toBe(first.id)
-    expect(manager.getExplicitPaneSelection()).toBe(receipt)
-  })
-
   it('publishes a split placed before a mounted subtree with its final order', () => {
     const first = manager.createInitialPane({ leafId: LEAF_A })
     manager.splitPane(first.id, 'vertical', { leafId: LEAF_B })

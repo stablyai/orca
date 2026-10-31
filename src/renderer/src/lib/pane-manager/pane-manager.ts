@@ -5,8 +5,7 @@ import type {
   ManagedPaneInternal,
   PaneRenderingDiagnostics,
   DropZone,
-  PaneActivationOptions,
-  ExplicitPaneSelection
+  PaneActivationOptions
 } from './pane-manager-types'
 import type { SplitPaneAroundLeafIdsOptions } from './pane-subtree-split'
 import type { PaneManagerHost } from './pane-manager-host'
@@ -72,7 +71,6 @@ export class PaneManager {
   private root: HTMLElement
   private panes = new Map<number, ManagedPaneInternal>()
   private activePaneId: number | null = null
-  private explicitPaneSelection: ExplicitPaneSelection | null = null
   private nextPaneId = FIRST_PANE_ID
   private options: PaneManagerOptions
   private styleOptions: PaneStyleOptions = {}
@@ -222,17 +220,10 @@ export class PaneManager {
     return this.identities.adoptPaneLeafId(numericPaneId, pane, leafId)
   }
 
-  getExplicitPaneSelection(): ExplicitPaneSelection | null {
-    return this.explicitPaneSelection
-  }
-
   setActivePane(paneId: number, opts?: PaneActivationOptions): void {
     const pane = this.panes.get(paneId)
     if (!pane) {
       return
-    }
-    if (opts?.explicitUserSelection) {
-      this.explicitPaneSelection = Object.freeze({ paneId, leafId: pane.leafId })
     }
     activateManagedPane(this.host, pane, opts)
   }
@@ -332,7 +323,6 @@ export class PaneManager {
 
   destroy(): void {
     this.destroyed = true
-    this.explicitPaneSelection = null
     unregisterLivePaneManager(this)
     releaseHiddenWebglRetention(this)
     cancelActivePaneDrag(this.dragState)

@@ -27,24 +27,6 @@ type CrewPaneController = Pick<
   | 'chatPane'
 >
 
-function selectedCrewSurface() {
-  const state = useAppStore.getState()
-  const worktreeId = state.activeWorktreeId
-  if (!worktreeId) {
-    return null
-  }
-  const group = state.groupsByWorktree[worktreeId]?.find(
-    (item) => item.id === state.activeGroupIdByWorktree[worktreeId]
-  )
-  if (!group) {
-    return null
-  }
-  const tab = state.unifiedTabsByWorktree[worktreeId]?.find(
-    (item) => item.id === group.activeTabId && item.groupId === group.id
-  )
-  return tab ? ([worktreeId, group.id, tab.id, tab.contentType, tab.entityId] as const) : null
-}
-
 function TerminalCrewPortal({
   pane,
   controller
@@ -84,8 +66,6 @@ function TerminalCrewPortal({
           row.sendAddress ? [{ label: row.label, address: row.sendAddress, hostKey }] : []
         )
         if (manager) {
-          const selectionAtInvocation = manager.getExplicitPaneSelection()
-          const surfaceAtInvocation = selectedCrewSurface()
           const rejected = () =>
             toast.error(
               translate(
@@ -93,6 +73,15 @@ function TerminalCrewPortal({
                 'The terminal did not accept the agent reference. Try again.'
               )
             )
+          if (
+            !pane.container.isConnected ||
+            !getCurrentTerminalDropTransport(manager, paneTransportsRef.current, captured)
+          ) {
+            rejected()
+            return
+          }
+          manager.setActivePane(captured.paneId, { focus: false })
+          pane.terminal.focus()
           void insertTerminalCrewMention(
             manager,
             paneTransportsRef.current,
@@ -101,27 +90,6 @@ function TerminalCrewPortal({
           ).then((accepted) => {
             if (!accepted) {
               rejected()
-            } else if (
-              managerRef.current === manager &&
-              getCurrentTerminalDropTransport(manager, paneTransportsRef.current, captured)
-            ) {
-              const selection = manager.getExplicitPaneSelection()
-              const active = manager.getActivePane()
-              const surface = selectedCrewSurface()
-              const laterPaneSelected =
-                selection !== selectionAtInvocation &&
-                selection !== null &&
-                selection.paneId !== captured.paneId &&
-                active?.id === selection.paneId &&
-                active.leafId === selection.leafId &&
-                active.container.isConnected
-              const laterSurfaceSelected =
-                surface !== null &&
-                surface.some((value, index) => value !== surfaceAtInvocation?.[index])
-              if (laterPaneSelected || laterSurfaceSelected) {
-                return
-              }
-              manager.setActivePane(captured.paneId)
             }
           }, rejected)
         }
