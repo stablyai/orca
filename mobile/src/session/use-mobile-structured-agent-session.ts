@@ -180,7 +180,8 @@ export function useMobileStructuredAgentSession(
     hostStopping,
     stopPressed: stopPress.pressed,
     queueCapable,
-    queueFollowUps
+    queueFollowUps,
+    queueSendsNext
   })
   const { stopping } = turnIndicator
   const sendWithOutcome = useMobileStructuredSendWithOutcome({
@@ -286,7 +287,7 @@ export function useMobileStructuredAgentSession(
     },
     isWorking: isWorking || queueSendsNext,
     canStop,
-    sendMenu: turnIndicator.sendMenu ?? null,
+    sendFollowUp: turnIndicator.sendFollowUp ?? null,
     turnId,
     turnIndicator,
     ...turnTiming,

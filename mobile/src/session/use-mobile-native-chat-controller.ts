@@ -261,7 +261,7 @@ export function useMobileNativeChatController(args: {
     nativeChatActionablePromptIds: structuredNativeChat.actionablePromptIds,
     nativeChatCommandRefusalCauses: structuredNativeChat.commandRefusalCauses,
     nativeChatCanStop: activeChatStructured ? structuredNativeChat.canStop : nativeChatAgentWorking,
-    nativeChatSendMenu: activeChatStructured ? structuredNativeChat.sendMenu : null,
+    nativeChatSendFollowUp: activeChatStructured ? structuredNativeChat.sendFollowUp : null,
     nativeChatStreamingText: terminalTurn.streamingText,
     ...prompts,
     handleNativeChatStop: activeChatStructured ? structuredNativeChat.cancel : terminalTurn.stop,

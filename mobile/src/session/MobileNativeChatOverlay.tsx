@@ -193,7 +193,7 @@ export function MobileNativeChatOverlay({
                     agentWorking={controller.nativeChatTurnActive}
                     awaitingInput={controller.nativeChatAwaitingInput}
                     canStop={controller.nativeChatCanStop}
-                    sendMenu={controller.nativeChatSendMenu}
+                    sendFollowUp={controller.nativeChatSendFollowUp}
                     structuredActivityUi={controller.nativeChatStructured}
                     turnIndicator={controller.nativeChatTurnIndicator}
                     workingStartedAt={controller.nativeChatWorkingStartedAt}

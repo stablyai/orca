@@ -2552,7 +2552,9 @@
       "saveEditedMessage": "Save edited message",
       "sendMessage": "Send message",
       "sendQueue": "Queue",
-      "sendSteer": "Steer"
+      "sendSteer": "Steer",
+      "sendQueueHint": "Runs after the current turn",
+      "sendSteerHint": "Goes into what the agent is doing now"
     },
     "composerAttachments": {
       "file": "File",

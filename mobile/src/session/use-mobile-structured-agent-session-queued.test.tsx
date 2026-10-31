@@ -310,7 +310,7 @@ describe('mobile structured queued messages', () => {
         })
         await act(async () => {})
         expect(hook!.isWorking).toBe(true)
-        expect(hook!.sendMenu).toBe(behavior)
+        expect(hook!.sendFollowUp).toEqual({ action: behavior, offersChoice: true })
         for (const alternate of [false, true]) {
           await act(async () => {
             await hook!.sendWithOutcome(
@@ -364,7 +364,7 @@ describe('mobile structured queued messages', () => {
           nextQueuedMessageId: null
         }
       })
-      expect(hook!.sendMenu).toBe('queue')
+      expect(hook!.sendFollowUp).toEqual({ action: 'queue', offersChoice: true })
       await act(async () => {
         await hook!.sendWithOutcome('queue by default')
       })
@@ -372,7 +372,7 @@ describe('mobile structured queued messages', () => {
       await act(async () =>
         preferenceListener?.({ type: 'nativeChatQueueFollowUpsChanged', queueFollowUps: false })
       )
-      expect(hook!.sendMenu).toBe('steer')
+      expect(hook!.sendFollowUp).toEqual({ action: 'steer', offersChoice: true })
       await act(async () => {
         await hook!.sendWithOutcome('now steer')
       })

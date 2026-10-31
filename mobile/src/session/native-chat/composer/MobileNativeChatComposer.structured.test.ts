@@ -16,6 +16,8 @@ import { useMobileStructuredAgentSession } from '../../use-mobile-structured-age
 import {
   CAPABLE,
   SESSION_ID,
+  batchEvent,
+  queuedDraft,
   snapshotEvent,
   mutationOk,
   ok
@@ -23,6 +25,8 @@ import {
 import { structuredSendResultFixture } from '../../structured-agent-send-result.test-fixture'
 import { findByHostType } from '../../../test-support/react-test-renderer-host-nodes'
 import type { RpcClient } from '../../../transport/rpc-client'
+import { structuredAgentSessionHostSupport } from '../../mobile-structured-agent-session-host-support'
+import { AGENT_SESSION_RUNTIME_CAPABILITIES } from '../../../../../src/shared/agent-session-runtime-capabilities'
 vi.mock('../../../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
 vi.mock('../../../platform/media-picker', () => ({
   useMediaPicker: () => ({ pickImages: async () => [] })
@@ -31,7 +35,7 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
   default: { getItem: async () => null, setItem: async () => {}, removeItem: async () => {} }
 }))
 import { createElement, type ComponentProps } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   MobileNativeChatComposer as NativeChatComposer,
@@ -393,39 +397,192 @@ describe('MobileNativeChatComposer on a structured chat', () => {
   })
 
   it.each([
-    { locale: 'en', send: 'Send message', queue: 'Queue', steer: 'Steer' },
-    { locale: 'de', send: 'Nachricht senden', queue: 'Einreihen', steer: 'Steuern' }
+    {
+      locale: 'en',
+      send: 'Send message',
+      queue: 'Queue',
+      steer: 'Steer',
+      queueHint: 'Runs after the current turn',
+      steerHint: 'Goes into what the agent is doing now'
+    },
+    {
+      locale: 'de',
+      send: 'Nachricht senden',
+      queue: 'Einreihen',
+      steer: 'Steuern',
+      queueHint: 'Läuft nach dem aktuellen Durchgang',
+      steerHint: 'Fließt in das ein, was der Agent gerade tut'
+    }
   ] as const)(
-    'holding Send mid-turn offers Queue and Steer in $locale: each sends once, and dismissing sends nothing',
+    'mid-turn Send shows what a tap does, and holding it offers the other way first-marked in $locale',
     async (labels) => {
       await activateMobileUiLocale(labels.locale)
       const onSend = vi.fn().mockResolvedValue(true)
-      const choice = (label: string) =>
-        renderer!.root.find(
-          (node) =>
-            String(node.type) === 'Pressable' &&
-            node.findAll((child) => child.props.children === label).length > 0
+      const choices = () =>
+        drawers()[0]!.findAll(
+          (node) => String(node.type) === 'Pressable' && node.props.onPress !== undefined
         )
+      const text = (node: ReactTestInstance) =>
+        node
+          .findAll((child) => typeof child.props.children === 'string')
+          .map((child) => child.props.children)
       await act(async () => {
-        renderer = create(draw({ value: 'hi', onSend, sendMenu: 'steer' }))
+        renderer = create(
+          draw({ value: 'hi', onSend, sendFollowUp: { action: 'steer', offersChoice: true } })
+        )
       })
-      const send = () => labelled(labels.send)[0]!
+      const send = () => labelled(labels.steer)[0]!
+      expect(send().findAll((node) => String(node.type) === 'CornerDownRight')).toHaveLength(1)
       await act(async () => send().props.onLongPress())
       await act(async () => drawers()[0]!.props.onClose())
       expect(onSend).not.toHaveBeenCalled()
 
       await act(async () => send().props.onLongPress())
-      await act(async () => choice(labels.queue).props.onPress())
+      expect(choices().map(text)).toEqual([
+        [labels.steer, labels.steerHint],
+        [labels.queue, labels.queueHint]
+      ])
+      expect(choices().map((choice) => choice.props.accessibilityState?.checked)).toEqual([
+        true,
+        undefined
+      ])
+      await act(async () => choices()[1]!.props.onPress())
       expect(onSend).toHaveBeenCalledExactlyOnceWith('hi', { alternate: true })
       await act(async () => send().props.onLongPress())
-      await act(async () => choice(labels.steer).props.onPress())
+      await act(async () => choices()[0]!.props.onPress())
       expect(onSend).toHaveBeenCalledTimes(2)
       expect(onSend).toHaveBeenLastCalledWith('hi')
 
-      await act(async () => renderer!.update(draw({ value: 'hi', onSend, sendMenu: null })))
-      expect(send().props.onLongPress).toBeUndefined()
+      // A waiting command queues either way: the button says so, and a hold is a tap.
+      await act(async () =>
+        renderer!.update(
+          draw({ value: 'hi', onSend, sendFollowUp: { action: 'queue', offersChoice: false } })
+        )
+      )
+      expect(labelled(labels.queue)[0]!.props.onLongPress).toBeUndefined()
+      await act(async () => renderer!.update(draw({ value: 'hi', onSend, sendFollowUp: null })))
+      expect(labelled(labels.send)[0]!.props.onLongPress).toBeUndefined()
     }
   )
+
+  it('the hold choice and a tap reach the outgoing request through the real send path', async () => {
+    const scope = mobileNativeChatScopeKey('host', 'worktree', 'hold-choice')!
+    resetMobileNativeChatDraftInputsForTests()
+    setMobileNativeChatDraftText(scope, 'hi')
+    // The phone's own mapping of what this build's host advertises.
+    const advertised = structuredAgentSessionHostSupport(AGENT_SESSION_RUNTIME_CAPABILITIES)
+    expect(advertised.queuedMessages).toBe(true)
+    let publish: ((data: unknown) => void) | undefined
+    const sendRequest = vi.fn<RpcClient['sendRequest']>(async (method) =>
+      method === 'agentSession.send'
+        ? mutationOk(structuredSendResultFixture('accepted'))
+        : method === 'settings.get'
+          ? ok({ settings: {} })
+          : ok({ models: [], current: {} })
+    )
+    const client: RpcClient = {
+      sendRequest,
+      subscribe: (method, _p, listener) => {
+        if (method === 'agentSession.subscribe') {
+          publish = listener
+        }
+        return () => {}
+      },
+      updateTerminalSubscriptionViewport: () => {},
+      getState: () => 'connected',
+      getReconnectAttempt: () => 0,
+      getLastConnectedAt: () => null,
+      onStateChange: () => () => {},
+      notifyForeground: () => {},
+      close: () => {}
+    }
+    function Conversation() {
+      const session = useMobileStructuredAgentSession({
+        client,
+        sessionId: SESSION_ID,
+        sourceIdentity: 'host',
+        enabled: true,
+        connected: true,
+        agent: 'claude',
+        hostSupport: { ...CAPABLE, queuedMessages: advertised.queuedMessages },
+        composerScopeKey: scope,
+        onSendError: vi.fn()
+      })
+      const drafts = useMobileNativeChatDrafts({
+        hostId: 'host',
+        worktreeId: 'worktree',
+        tabId: 'hold-choice',
+        sessionId: SESSION_ID,
+        messages: [],
+        transcriptSettled: true
+      })
+      const bridge = useMobileStructuredNativeChatSendBridge({
+        ...drafts,
+        agent: 'claude',
+        sendStructured: session.sendWithOutcome,
+        onSendError: vi.fn()
+      })
+      const image = useMobileNativeChatImageAttachments({
+        client,
+        agent: 'claude',
+        activeHandleRef: { current: null },
+        deviceTokenRef: { current: null },
+        getActiveWorktreeConnectionId: async () => null,
+        connState: 'connected',
+        scopeKey: scope,
+        enabled: true,
+        structuredNativeChat: true,
+        showToast: vi.fn(),
+        onSendError: vi.fn(),
+        baseSend: bridge.sendWithOutcome,
+        readSeededLaunchDraft: () => null
+      })
+      return draw({
+        value: 'hi',
+        onSend: image.sendNativeChat,
+        sendFollowUp: session.sendFollowUp,
+        structured: structured()
+      })
+    }
+    await act(async () => {
+      renderer = create(createElement(Conversation))
+    })
+    await act(async () =>
+      publish?.({
+        ...snapshotEvent(),
+        page: {
+          ...snapshotEvent().page,
+          working: true,
+          latestTurn: null,
+          nextQueuedMessageId: null
+        }
+      })
+    )
+    const sends = () =>
+      sendRequest.mock.calls.filter(([method]) => method === 'agentSession.send').map(([, p]) => p)
+    const send = () => labelled('Queue')[0]!
+    await act(async () => send().props.onLongPress())
+    const steer = drawers()[0]!.findAll(
+      (node) =>
+        String(node.type) === 'Pressable' &&
+        node.findAll((child) => child.props.children === 'Steer').length > 0
+    )[0]!
+    await act(async () => steer.props.onPress())
+    expect(sends()).toHaveLength(1)
+    expect(sends()[0]).not.toHaveProperty('delivery')
+
+    await act(async () => send().props.onPress())
+    expect(sends()).toHaveLength(2)
+    expect(sends()[1]).toHaveProperty('delivery', 'queue-if-active')
+
+    // A waiting command queues either way, so a hold is a tap.
+    const compact = queuedDraft({
+      messageId: 'compact',
+      body: { kind: 'message', role: 'user', blocks: [], command: { name: 'compact' } }
+    })
+    await act(async () => publish?.(batchEvent([compact])))
+    expect(send().props.onLongPress).toBeUndefined()
+  })
 
   it('holds Send while a file is still uploading, and sends a stored file alone', async () => {
     const onSend = vi.fn().mockResolvedValue(true)

@@ -196,7 +196,9 @@
       "saveEditedMessage": "Сохранить изменённое сообщение",
       "sendMessage": "Отправить сообщение",
       "sendQueue": "В очередь",
-      "sendSteer": "Направить"
+      "sendSteer": "Направить",
+      "sendQueueHint": "Выполнится после текущего хода",
+      "sendSteerHint": "Попадёт в то, что агент делает сейчас"
     },
     "composerAttachments": {
       "attachedImage": "Прикреплённое изображение",

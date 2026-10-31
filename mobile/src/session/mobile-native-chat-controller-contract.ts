@@ -14,10 +14,10 @@ import type { NativeChatTurnJournal } from '../../../src/shared/native-chat-turn
 import type { NativeChatAwaitingInput } from '../../../src/shared/native-chat/native-chat-terminal-turn'
 import type { NativeChatResolvedPrompt } from '../../../src/shared/native-chat-resolution-receipt'
 import type {
+  MobileNativeChatSendFollowUp,
   MobileNativeChatSendIntent,
   MobileNativeChatSendOutcome
 } from './native-chat/mobile-native-chat-send'
-import type { NativeChatFollowUpBehavior } from '../../../src/shared/native-chat-follow-up-behavior'
 import type { MobileNativeChatCommandRefusalCauses } from './native-chat/use-mobile-native-chat-send-error'
 import type { MobileStructuredQueuedMessageControls } from './use-mobile-structured-queued-message-controls'
 import type { MobileStructuredBackgroundTasks } from './use-mobile-structured-background-tasks'
@@ -58,8 +58,8 @@ export type MobileNativeChatController = {
   nativeChatActionablePromptIds: readonly string[] | undefined
   nativeChatCommandRefusalCauses: MobileNativeChatCommandRefusalCauses
   nativeChatCanStop: boolean
-  /** The host's follow-up setting while Send's hold menu offers Queue and Steer; null otherwise. */
-  nativeChatSendMenu: NativeChatFollowUpBehavior | null
+  /** While the agent works on a host that queues: what a tap on Send does and whether holding it offers the other way; null otherwise. */
+  nativeChatSendFollowUp: MobileNativeChatSendFollowUp | null
   nativeChatStreamingText?: string
   nativeChatPermission: MobileChatPermission | null
   // A new prompt occurrence resets local card submission state only.

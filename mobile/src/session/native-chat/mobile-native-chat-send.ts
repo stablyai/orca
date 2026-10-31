@@ -1,4 +1,5 @@
 import type { RpcClient } from '../../transport/rpc-client'
+import type { NativeChatFollowUpBehavior } from '../../../../src/shared/native-chat-follow-up-behavior'
 import { isRpcDeliveryUnknown } from '../../transport/rpc-delivery-ambiguity'
 import { isLogicalClientCutoverError } from '../../transport/stable-logical-rpc-client'
 import { nativeChatTerminalWrite } from '../mobile-session-write-operations'
@@ -29,6 +30,12 @@ export type MobileNativeChatSendOutcome = 'accepted' | 'rejected' | 'unknown' | 
 
 /** How one send goes: `alternate` does the other thing than the host's follow-up setting. */
 export type MobileNativeChatSendIntent = { alternate?: true }
+
+/** While the agent works on a host that queues: what a tap on Send does, and whether the other way would actually differ. */
+export type MobileNativeChatSendFollowUp = {
+  action: NativeChatFollowUpBehavior
+  offersChoice: boolean
+}
 
 export type MobileNativeChatWriteOutcome = Exclude<MobileNativeChatSendOutcome, 'queued'>
 

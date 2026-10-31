@@ -5,7 +5,7 @@ import { isStructuredAgentSessionThinking } from '../../../src/shared/structured
 import { selectStructuredAgentTurnActivity } from '../../../src/shared/native-chat/transcript/native-chat-turn-activity'
 import { agentStopDisplayStatus } from '../../../src/shared/agent-stop-display-status'
 import { mobileStructuredSendQueues } from './use-mobile-structured-send-with-outcome'
-import type { NativeChatFollowUpBehavior } from '../../../src/shared/native-chat-follow-up-behavior'
+import type { MobileNativeChatSendFollowUp } from './native-chat/mobile-native-chat-send'
 
 export function useMobileStructuredTurnIndicator(input: {
   state: StructuredAgentSessionState
@@ -17,10 +17,11 @@ export function useMobileStructuredTurnIndicator(input: {
   stopPressed: boolean
   queueCapable: boolean
   queueFollowUps: boolean
+  /** The send's own working test counts a queued card about to send. */
+  queueSendsNext: boolean
 }): NativeChatLiveTurnIndicator & {
   stopping: boolean
-  /** The setting while Send's hold menu offers Queue and Steer: the two differ only mid-turn. */
-  sendMenu?: NativeChatFollowUpBehavior
+  sendFollowUp?: MobileNativeChatSendFollowUp
 } {
   const { state, turnId, hostStopping, stopPressed, queueCapable, queueFollowUps } = input
   const activityText = useMemo(
@@ -36,17 +37,38 @@ export function useMobileStructuredTurnIndicator(input: {
       ? ('queue' as const)
       : ('send' as const)
     : undefined
-  const sendMenu =
-    queueCapable && working && !stopping ? (queueFollowUps ? 'queue' : 'steer') : null
+  const midTurn = queueCapable && working && !stopping
+  // The send's own resolver: a waiting command or unanswerable prompts can make both ways the same.
+  const send = { isWorking: input.isWorking || input.queueSendsNext, stopping }
+  const tapQueues = midTurn && mobileStructuredSendQueues(queueCapable, queueFollowUps, state, send)
+  const alternateQueues =
+    midTurn &&
+    mobileStructuredSendQueues(queueCapable, queueFollowUps, state, { ...send, alternate: true })
   return useMemo(
     () => ({
       thinking,
       activityText,
       stopping,
       stopRequestInFlight,
-      ...(sendMenu ? { sendMenu } : {}),
+      ...(midTurn
+        ? {
+            sendFollowUp: {
+              action: tapQueues ? ('queue' as const) : ('steer' as const),
+              offersChoice: tapQueues !== alternateQueues
+            }
+          }
+        : {}),
       ...(afterStop ? { afterStop } : {})
     }),
-    [thinking, activityText, stopping, stopRequestInFlight, sendMenu, afterStop]
+    [
+      thinking,
+      activityText,
+      stopping,
+      stopRequestInFlight,
+      midTurn,
+      tapQueues,
+      alternateQueues,
+      afterStop
+    ]
   )
 }

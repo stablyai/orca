@@ -34,8 +34,10 @@ import { MobileNativeChatStopButton } from '../input/MobileNativeChatStopButton'
 import { mobileNativeChatComposerStyles as styles } from './mobile-native-chat-composer-styles'
 import { composerInputStyles as inputStyles } from '../../../components/composer-input/composer-input-styles'
 import { MobileNativeChatSendButton } from './MobileNativeChatSendButton'
-import type { MobileNativeChatSendIntent } from '../mobile-native-chat-send'
-import type { NativeChatFollowUpBehavior } from '../../../../../src/shared/native-chat-follow-up-behavior'
+import type {
+  MobileNativeChatSendFollowUp,
+  MobileNativeChatSendIntent
+} from '../mobile-native-chat-send'
 import {
   MobileNativeChatComposerMic,
   type MobileNativeChatMicProps
@@ -67,8 +69,8 @@ type Props = MobileNativeChatMicProps & {
   value: string
   onChangeText: (text: string) => void
   onSend: (text: string, intent?: MobileNativeChatSendIntent) => Promise<boolean>
-  /** The host's follow-up setting while Send's hold menu offers Queue and Steer; null otherwise. */
-  sendMenu?: NativeChatFollowUpBehavior | null
+  /** While the agent works on a host that queues: what a tap on Send does and whether holding it offers the other way; null otherwise. */
+  sendFollowUp?: MobileNativeChatSendFollowUp | null
   /** Changes whenever the route focuses a different chat composer surface. */
   sendSurfaceId: string
   /** Reads the retained route's focus generation without forcing a screen render. */
@@ -94,7 +96,7 @@ type Props = MobileNativeChatMicProps & {
 }
 
 /** What a chat's composer sends through, which the chat view hands down from its route. */
-export type MobileNativeChatSendProps = Pick<Props, 'onSend' | 'sendMenu'>
+export type MobileNativeChatSendProps = Pick<Props, 'onSend' | 'sendFollowUp'>
 
 export function MobileNativeChatComposer({
   inputRef,
@@ -130,7 +132,7 @@ export function MobileNativeChatComposer({
   skillDiscovery,
   onNeedSkills,
   stop = null,
-  sendMenu = null
+  sendFollowUp = null
 }: Props): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -386,7 +388,7 @@ export function MobileNativeChatComposer({
             ) : (
               <MobileNativeChatSendButton
                 canSend={canSend}
-                sendMenu={sendMenu}
+                sendFollowUp={sendFollowUp}
                 onSend={(intent) => void handleSend(intent)}
               />
             )}

@@ -1,5 +1,5 @@
 import { ActivityIndicator, Pressable } from 'react-native'
-import { ArrowUp } from 'lucide-react-native'
+import { ArrowUp, type LucideIcon } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { composerInputStyles as styles } from './composer-input-styles'
@@ -9,7 +9,8 @@ export function ComposerSendButton({
   onLongPress,
   canSend,
   sending = false,
-  label = 'Send'
+  label = 'Send',
+  icon: Icon = ArrowUp
 }: {
   onPress: () => void
   /** A hold offers more ways to send; absent, a hold is a plain press. */
@@ -17,6 +18,8 @@ export function ComposerSendButton({
   canSend: boolean
   sending?: boolean
   label?: string
+  /** What a tap does when it isn't a plain send. */
+  icon?: LucideIcon
 }): React.JSX.Element {
   useMobileColorScheme()
   const enabled = canSend && !sending
@@ -39,7 +42,7 @@ export function ComposerSendButton({
       {sending ? (
         <ActivityIndicator size="small" color={colors.bgBase} />
       ) : (
-        <ArrowUp size={19} color={canSend ? colors.bgBase : colors.textMuted} strokeWidth={2.4} />
+        <Icon size={19} color={canSend ? colors.bgBase : colors.textMuted} strokeWidth={2.4} />
       )}
     </Pressable>
   )

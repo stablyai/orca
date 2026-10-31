@@ -188,7 +188,9 @@
       "saveEditedMessage": "Düzenlenen mesajı kaydet",
       "sendMessage": "Mesaj gönder",
       "sendQueue": "Sıraya al",
-      "sendSteer": "Yönlendir"
+      "sendSteer": "Yönlendir",
+      "sendQueueHint": "Geçerli tur bittikten sonra çalışır",
+      "sendSteerHint": "Ajanın şu anda yaptığı işe katılır"
     },
     "composerAttachments": {
       "attachedImage": "Ekli görsel",

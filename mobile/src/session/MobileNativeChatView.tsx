@@ -154,7 +154,7 @@ export function MobileNativeChatView({
   sessionLive,
   agentWorking,
   canStop = agentWorking,
-  sendMenu,
+  sendFollowUp,
   awaitingInput = null,
   structuredActivityUi = false,
   turnIndicator = null,
@@ -401,7 +401,7 @@ export function MobileNativeChatView({
           onChangeText={onComposerTextChange}
           onSend={handleSend}
           sendSurfaceId={sendSurfaceId}
-          {...{ getSendCompletionGeneration, getComposerEditGeneration, inputRef, sendMenu }}
+          {...{ getSendCompletionGeneration, getComposerEditGeneration, inputRef, sendFollowUp }}
           agent={agent}
           sessionOptions={sessionOptions}
           onAttachImage={onAttachImage}

@@ -2,10 +2,10 @@ import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session
 import type { RpcClient } from '../transport/rpc-client'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 import type {
+  MobileNativeChatSendFollowUp,
   MobileNativeChatSendIntent,
   MobileNativeChatSendOutcome
 } from './native-chat/mobile-native-chat-send'
-import type { NativeChatFollowUpBehavior } from '../../../src/shared/native-chat-follow-up-behavior'
 import type { MobileNativeChatVisualSource } from './native-chat/visual/mobile-native-chat-visual-read'
 import type { MobileChatPermission } from './native-chat/input/mobile-native-chat-permission'
 import type { MobileChatQuestion } from './native-chat/input/mobile-native-chat-question'
@@ -30,8 +30,8 @@ export type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgent
     isWorking: boolean
     /** Desktop's Stop rule: a running turn, or conversation Stop while working or sending. */
     canStop: boolean
-    /** The host's follow-up setting while Send's hold menu offers Queue and Steer; null otherwise. */
-    sendMenu: NativeChatFollowUpBehavior | null
+    /** While the agent works on a host that queues: what a tap on Send does and whether holding it offers the other way; null otherwise. */
+    sendFollowUp: MobileNativeChatSendFollowUp | null
     turnId: string | null
     turnIndicator: NativeChatLiveTurnIndicator
     sendWithOutcome: (

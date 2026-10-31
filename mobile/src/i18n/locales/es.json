@@ -192,7 +192,9 @@
       "saveEditedMessage": "Guardar mensaje editado",
       "sendMessage": "Enviar mensaje",
       "sendQueue": "Poner en cola",
-      "sendSteer": "Enviar ahora"
+      "sendSteer": "Enviar ahora",
+      "sendQueueHint": "Se ejecuta después del turno actual",
+      "sendSteerHint": "Entra en lo que el agente está haciendo ahora"
     },
     "composerAttachments": {
       "attachedImage": "Imagen adjunta",

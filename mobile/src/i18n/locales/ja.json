@@ -188,7 +188,9 @@
       "saveEditedMessage": "編集したメッセージを保存",
       "sendMessage": "メッセージを送信",
       "sendQueue": "キューに入れる",
-      "sendSteer": "今すぐ送信"
+      "sendSteer": "今すぐ送信",
+      "sendQueueHint": "現在のターンの後に実行します",
+      "sendSteerHint": "Agent が今行っている作業に加えます"
     },
     "composerAttachments": {
       "attachedImage": "添付画像",
