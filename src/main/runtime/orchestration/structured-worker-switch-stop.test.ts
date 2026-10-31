@@ -143,3 +143,35 @@ it('refuses a replying chat, stopping nothing, when the client left consent to t
   expect(cancel).not.toHaveBeenCalled()
   expect(rig.adapter.closeSession).not.toHaveBeenCalled()
 })
+
+it('stops a paused queue without asking, since nothing is replying', async () => {
+  await foundRestTestChat(rig)
+  const events = providerEvents()
+  for (const state of ['running', 'completed'] as const) {
+    events.appendItem(
+      { provider: 'codex', threadId: REST_TEST_THREAD, turnId: 'turn', ordinal: 50 },
+      { kind: 'turn', turnId: 'turn', state },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+  }
+  await rig.host.flushStreamedEvents(id)
+  const { journal } = await rig.host.collaboratorsForTests().lifetime.conversation(id)
+  vi.spyOn(journal, 'submissions').mockReturnValue([
+    {
+      clientMessageId: 'queued',
+      fence: 1,
+      payloadFingerprint: 'queued',
+      dispatchState: 'pending',
+      providerItemId: null,
+      reason: null,
+      submittedAt: 1,
+      resolvedAt: null,
+      handoverRecorded: true
+    }
+  ])
+  // Queued before this host opened the conversation: held paused, not handed over.
+  vi.spyOn(journal, 'wroteBeforeOpen').mockReturnValue(true)
+  const cancel = vi.spyOn(rig.host, 'cancel').mockResolvedValue({ ok: true, value: {} })
+  await rig.host.stopForSwitch(id, caller, deadline, false)
+  expect(cancel).toHaveBeenCalledTimes(1)
+})

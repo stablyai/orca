@@ -77,12 +77,14 @@ export function structuredAgentSessionSwitchSource(context: SwitchSourceContext)
       // no-op, so no Stop note is written); the process stop below still ends the agent with proof.
       // The held session's work, the conversation just opened; none held reads as possibly working.
       const work = context.currentWork(sessionId)
+      const replying = work?.working() === true
       const stops =
         work == null ||
-        work.working() ||
+        replying ||
         conversation.journal.submissions().some(isQueuedAgentJournalSubmission)
-      // Before any effect; later sends are fenced by the admitted-send count above.
-      if (consented === false && stops) {
+      // Consent is asked only while a turn runs: queued sends still get the Stop that fences them,
+      // without a dialog. Before any effect; later sends are fenced by the admitted-send count above.
+      if (consented === false && replying) {
         throw agentSessionRefusalError('agent_session_operation_invalid', { reason: 'turnActive' })
       }
       let settleWorker: ((proven: boolean) => void) | undefined
