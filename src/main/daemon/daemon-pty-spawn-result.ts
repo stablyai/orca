@@ -1,5 +1,5 @@
-import { daemonPtyReattachResult } from './daemon-pty-reattach-result'
 import { isAgentSessionClaimedSpawnResult } from '../../shared/agent-session-host-authority'
+import { parseTerminalKittyKeyboardFlags } from '../../shared/terminal-kitty-keyboard-flags'
 import { daemonSpawnResultIdentity } from './daemon-spawn-result-identity'
 import { retireUnexpectedAttachOnlySpawn } from './daemon-attach-only-retirement'
 import { DaemonPtySpawnRequest, type DaemonPtySpawnContext } from './daemon-pty-spawn-request'
@@ -8,6 +8,7 @@ import { takeHistoryRecoveryFreeze } from './daemon-history-recovery-freeze'
 import { getRecoveredHistorySeedSegments } from './terminal-history-seed-segments'
 import { SessionNotFoundError, type CreateOrAttachResult } from './types'
 import type { PtySpawnResult } from '../providers/pty-provider-contract'
+
 export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
   protected async finishSpawn(
     context: DaemonPtySpawnContext,
@@ -279,15 +280,47 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
     }
 
     const reattachSnapshot = await this.overlayDurableRestoreSnapshot(sessionId, result.snapshot)
-    return finalizeSpawnResult(
-      daemonPtyReattachResult(
-        sessionId,
-        result,
-        pid,
-        providerWslDistro,
-        reattachSnapshot,
-        providerSequence
-      )
+    const reattachProviderSequence =
+      typeof reattachSnapshot.outputSequence === 'number'
+        ? { value: reattachSnapshot.outputSequence, generation: 'continued' as const }
+        : providerSequence
+    const isAltScreen = reattachSnapshot.modes.alternateScreen
+    const snapshotPrefix = reattachSnapshot.scrollbackAnsi + reattachSnapshot.rehydrateSequences
+    const snapshotFrame = reattachSnapshot.snapshotAnsi
+    // Reassert kitty flags after payload screen switches; carry known zero separately from unknown.
+    const kittyKeyboardFlags = parseTerminalKittyKeyboardFlags(
+      reattachSnapshot.modes.kittyKeyboardFlags
     )
+    return finalizeSpawnResult({
+      id: sessionId,
+      ...daemonSpawnResultIdentity(result),
+      pid,
+      ...(providerWslDistro !== undefined ? { wslDistro: providerWslDistro } : {}),
+      snapshot: snapshotPrefix + snapshotFrame,
+      snapshotCols: reattachSnapshot.cols,
+      snapshotRows: reattachSnapshot.rows,
+      // Only alt frames need a separate restore; normal history can replay at its captured grid.
+      ...(isAltScreen && snapshotFrame && reattachSnapshot.frameRestoreAnsi
+        ? {
+            snapshotPrefixAnsi: snapshotPrefix,
+            snapshotFrameAnsi: snapshotFrame,
+            snapshotFrameRestoreAnsi: reattachSnapshot.frameRestoreAnsi
+          }
+        : {}),
+      ...(reattachProviderSequence ? { providerSequence: reattachProviderSequence } : {}),
+      ...(kittyKeyboardFlags !== undefined
+        ? { snapshotKittyKeyboardFlags: kittyKeyboardFlags }
+        : {}),
+      ...(reattachSnapshot.terminalOwner
+        ? { snapshotTerminalOwner: reattachSnapshot.terminalOwner }
+        : {}),
+      isAlternateScreen: isAltScreen,
+      // Snapshot ANSI lacks title frames; carry the title separately across relaunch.
+      ...(reattachSnapshot.lastTitle ? { lastTitle: reattachSnapshot.lastTitle } : {}),
+      // Replay the mid-escape tail after renderer reset so split escapes do not render literally.
+      ...(reattachSnapshot.pendingEscapeTailAnsi
+        ? { pendingEscapeTailAnsi: reattachSnapshot.pendingEscapeTailAnsi }
+        : {})
+    })
   }
 }

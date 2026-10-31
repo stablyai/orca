@@ -75,21 +75,6 @@ export abstract class DaemonPtySessionInput extends DaemonPtySessionSpawn {
     this.reconnectAfterWriteFailure()
   }
 
-  async sendSignal(id: string, signal: string): Promise<void> {
-    await this.client.request('signal', { sessionId: id, signal })
-  }
-
-  async getCwd(id: string): Promise<string> {
-    try {
-      const result = await this.client.request<{ cwd: string | null }>('getCwd', {
-        sessionId: id
-      })
-      return result.cwd ?? ''
-    } catch {
-      return ''
-    }
-  }
-
   resize(id: string, cols: number, rows: number): void {
     this.markSessionDirty(id)
     this.client.notify('resize', { sessionId: id, cols, rows })

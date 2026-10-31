@@ -1,14 +1,14 @@
-import type { DaemonPtySpawnContext } from './daemon-pty-spawn-context'
-import { DaemonPtyRuntimeState } from './daemon-pty-runtime-state'
-import { HISTORY_SEED_TRANSFER_PROTOCOL_VERSION } from './daemon-protocol-version'
 import type { SpawnIntent } from '../../shared/host-spawn-admission'
 import type { ColdRestorePayload } from './cold-restore-payload-cache'
 import type { DaemonAuditObservation } from './daemon-audit-classifier'
-import type {
-  PendingDaemonSpawnOperation,
-  SnapshotCheckpointResult
+import {
+  DaemonPtyRuntimeState,
+  type HistoryRecoveryContext,
+  type PendingDaemonSpawnOperation,
+  type SnapshotCheckpointResult
 } from './daemon-pty-runtime-state'
 import { isDaemonGoneError } from './daemon-endpoint-errors'
+import { HISTORY_SEED_TRANSFER_PROTOCOL_VERSION } from './daemon-protocol-version'
 import type { ColdRestoreInfo } from './history-reader'
 import { NdjsonLineTooLongError } from './ndjson'
 import {
@@ -17,14 +17,33 @@ import {
   TERMINAL_HISTORY_INLINE_SEED_CODE_UNITS
 } from './terminal-history-seed-chunks'
 import type { CreateOrAttachResult, GetSnapshotResult } from './types'
-import type { PtySpawnResult } from '../providers/pty-provider-contract'
+import type { PtySpawnOptions, PtySpawnResult } from '../providers/pty-provider-contract'
 import { resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
 import { isMissingWorkingDirectoryError } from '../providers/working-directory-validation'
-export { type DaemonPtySpawnContext } from './daemon-pty-spawn-context'
 
 /** A daemon kept running across an update trusts `interactive` even for a claimed resume. */
 function forwardedSpawnIntent(intent: SpawnIntent, claim: unknown): SpawnIntent {
   return intent === 'interactive' && claim !== undefined ? 'automatic-restore' : intent
+}
+
+export type DaemonPtySpawnContext = {
+  opts: PtySpawnOptions
+  operation: PendingDaemonSpawnOperation
+  historyRecovery: HistoryRecoveryContext
+  requestedSessionId: string
+  attachOnly: boolean
+  emulateLegacyAttachOnly: boolean
+  sessionId: string
+  wslDistro: string | undefined
+  restoreInfo: ColdRestoreInfo | null
+  restoreSkippedForLiveSession: boolean
+  effectiveCwd: string | undefined
+  effectiveCols: number
+  effectiveRows: number
+  shellReadySupported: boolean
+  shellReadyTimeoutMs: number | undefined
+  historySeedSegments: readonly string[] | null
+  detectColdRestore(options?: { ignoreCleanEnd?: boolean }): Promise<ColdRestoreInfo | null>
 }
 
 export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
@@ -87,7 +106,7 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
     context: DaemonPtySpawnContext,
     historySeedSegments: readonly string[] | null
   ): Promise<CreateOrAttachResult> {
-    const requestCreateOrAttach = async (
+    const requestCreateOrAttach = (
       historySeed: string | undefined,
       historySeedTransferId: string | undefined
     ) => {

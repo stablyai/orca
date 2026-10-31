@@ -7,11 +7,10 @@ import type { DaemonPtyAdapterOptions } from './daemon-pty-runtime-state'
 import { DaemonServer } from './daemon-server'
 import { getDaemonSocketPath } from './daemon-spawner'
 import type { SubprocessHandle } from './session-subprocess-handle'
-import type { TerminalHostOptions } from './terminal-host-options'
 import type { DaemonFileLog } from './daemon-file-log'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 
-export type SpawnSubprocess = TerminalHostOptions['spawnSubprocess']
+export type SpawnSubprocess = ConstructorParameters<typeof DaemonServer>[0]['spawnSubprocess']
 
 export type DaemonAdapterHarness = {
   dir: string
@@ -28,7 +27,6 @@ function createTestDir(): string {
 }
 
 export function createMockSubprocess(dataOnSubscribe?: string): SubprocessHandle & {
-  forceKill: ReturnType<typeof vi.fn<SubprocessHandle['forceKill']>>
   write: ReturnType<typeof vi.fn<(data: string) => void>>
   pause: ReturnType<typeof vi.fn<() => void>>
   resume: ReturnType<typeof vi.fn<() => void>>

@@ -12,6 +12,7 @@ import { isProvenProcessExit } from '../../shared/terminal-exit-cause'
 import { DaemonPtyDaemonRecovery } from './daemon-pty-daemon-recovery'
 import type { DaemonPtyAdapterOptions } from './daemon-pty-runtime-state'
 import { supportsMode2031UnsubscribeFact, type DaemonEvent } from './types'
+import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
 import type { IPtyProvider } from '../providers/pty-provider-contract'
 import type { DeveloperPermissionStatus } from '../../shared/developer-permissions-types'
 import {
@@ -123,6 +124,11 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
       // Older daemons and lost host contact cannot establish a permission verdict.
     }
     return 'unknown'
+  }
+
+  /** Identity of the daemon behind this adapter; null until hello completes or after a disconnect. */
+  getDaemonIdentity(): DaemonEndpointIdentity | null {
+    return this.client.getDaemonIdentity()
   }
 
   protected setupEventRouting(): void {

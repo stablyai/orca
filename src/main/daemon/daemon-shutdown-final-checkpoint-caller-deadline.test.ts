@@ -113,7 +113,6 @@ describe('STA-4228 keep-history stop bounds only the caller wait on the final ch
     rmSync(dir, { recursive: true, force: true })
   })
 
-  /** Wedges one session's checkpoint at the history-write layer until explicitly released. */
   function stallCheckpointFor(stalledSessionId: string): { release: () => void } {
     const manager = adapter.getHistoryManager()
     expect(manager).not.toBeNull()

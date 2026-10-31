@@ -1,13 +1,4 @@
-import '../mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { spawnNativeDaemonPty } from './native-pty-spawn'
-import { createDaemonPtySubprocessHandle } from './subprocess-handle'
-import { TerminalCreationWork } from '../terminal-creation-work'
-import {
-  _resetConptyStartupTrustForTest,
-  CONPTY_NO_INPUT_READER_NOTICE,
-  CONPTY_STARTUP_DECISION_LIMIT_MS
-} from './conpty-startup-input-reader'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 
@@ -20,12 +11,21 @@ const ptyJob = vi.hoisted(() => ({
 }))
 vi.mock('../../windows/windows-pty-job', () => ptyJob)
 
+import '../mock-descendant-sweep'
 import { TerminalHost } from '../terminal-host'
 import { TerminalSpawnGate } from '../terminal-spawn-gate'
+import { TerminalCreationWork } from '../terminal-creation-work'
 import { IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS } from '../immediate-kill-reply-budget'
+import { createDaemonPtySubprocessHandle } from './subprocess-handle'
+import { spawnNativeDaemonPty } from './native-pty-spawn'
 import { Session } from '../session'
 import { readTerminalStartFailure } from '../../../shared/terminal-start-failure'
 import { mapRuntimeError } from '../../runtime/rpc/errors'
+import {
+  _resetConptyStartupTrustForTest,
+  CONPTY_NO_INPUT_READER_NOTICE,
+  CONPTY_STARTUP_DECISION_LIMIT_MS
+} from './conpty-startup-input-reader'
 
 const attempts = ['pwsh.exe', 'powershell.exe', 'cmd.exe'].map((shellPath) => ({
   shellPath,
@@ -51,7 +51,7 @@ const CAPACITY_MARKER = 'too many consoles in use, max consoles is 128'
 /** A pane that writes `chunks` on later ticks, as ConPTY's output socket does. */
 function fakePane(pid: number, chunks: string[], exitCode?: number) {
   const dataListeners = new Set<(data: string) => void>()
-  const exitListeners = new Set<(event: { exitCode: number; signal?: number }) => void>()
+  const exitListeners = new Set<(event: { exitCode: number }) => void>()
   const pane = {
     pid,
     kill: vi.fn(() => {
@@ -69,12 +69,6 @@ function fakePane(pid: number, chunks: string[], exitCode?: number) {
         listener(data)
       }
     },
-    exitSubscriberCount: () => exitListeners.size,
-    exit: (exitCode: number, signal?: number) => {
-      for (const listener of exitListeners) {
-        listener({ exitCode, ...(signal !== undefined ? { signal } : {}) })
-      }
-    },
     emitExit: (exitCode: number) => {
       for (const listener of exitListeners) {
         listener({ exitCode })
@@ -84,7 +78,7 @@ function fakePane(pid: number, chunks: string[], exitCode?: number) {
       dataListeners.add(listener)
       return { dispose: () => dataListeners.delete(listener) }
     },
-    onExit: (listener: (event: { exitCode: number; signal?: number }) => void) => {
+    onExit: (listener: (event: { exitCode: number }) => void) => {
       exitListeners.add(listener)
       return { dispose: () => exitListeners.delete(listener) }
     }
@@ -124,42 +118,6 @@ describe('Windows shell fallback over node-pty ConPTY', () => {
     vi.useRealTimers()
     vi.restoreAllMocks()
   })
-
-  it.each(['physical', 'exited'] as const)(
-    'keeps every %s predecessor when a later native invocation fails',
-    async (predecessor) => {
-      const creationWork = new TerminalCreationWork()
-      const pane = healthyPane(999_999_999)
-      nodePty.spawn.mockReturnValueOnce(pane)
-      await spawnNativeDaemonPty({ ...args, creationWork })
-      if (predecessor === 'exited') {
-        pane.emitExit(0)
-      }
-      nodePty.spawn.mockImplementation(() => {
-        throw new Error('later no-export failure')
-      })
-      await expect(spawnNativeDaemonPty({ ...args, creationWork })).rejects.toThrow(
-        'later no-export failure'
-      )
-      await creationWork.finish()
-      const disposition = await creationWork.completion
-      if (disposition.kind !== 'failed') {
-        throw new Error('failed aggregate was collapsed')
-      }
-      let completed = false
-      void disposition.completion.then(() => {
-        completed = true
-      })
-      await Promise.resolve()
-      if (predecessor === 'physical') {
-        expect(completed).toBe(false)
-      }
-      expect(disposition.recover).toBeTypeOf('function')
-      pane.emitExit(0)
-      await disposition.completion
-      expect((await creationWork.completion).kind).toBe('failed')
-    }
-  )
 
   it('classifies installed-DLL-format-derived bytes through fresh rejection and the RPC envelope', async () => {
     // Expanded installed DLL format strings with max 128/PID 4242; not a console-exhaustion capture.
@@ -401,12 +359,7 @@ describe('Windows shell fallback over node-pty ConPTY', () => {
       }
       return proc
     })
-    const creationWork = new TerminalCreationWork()
-    const result = await spawnNativeDaemonPty({ ...args, creationWork })
-    await creationWork.finish()
-    // Ordinary fallback keeps the actual returned owner and earlier failed physical-unknown fact.
-    expect(await creationWork.completion).toMatchObject({ kind: 'failed' })
-    proc.emitExit(0)
+    const result = await spawnNativeDaemonPty(args)
     expect(nodePty.spawn.mock.calls.map(([file]) => file)).toEqual([
       'pwsh.exe',
       'powershell.exe',
@@ -422,23 +375,9 @@ describe('Windows shell fallback over node-pty ConPTY', () => {
     // Measured on CI: such a pane prints its banner and prompt, then ignores every keystroke.
     const broken = fakePane(990001, ['Microsoft Windows [Version 10.0.20348]\r\n'])
     const healthy = fakePane(990002, ['\x1b[1t', '\x1b[c\x1b[?1004h', 'Microsoft Windows'])
-    broken.kill.mockImplementation(() => broken.emitExit(137))
     nodePty.spawn.mockReturnValueOnce(broken).mockReturnValueOnce(healthy)
-    const creationWork = new TerminalCreationWork()
-    const result = await spawnNativeDaemonPty({ ...args, creationWork })
-    await creationWork.finish()
-    const disposition = await creationWork.completion
-    if (disposition.kind !== 'physical') {
-      throw new Error('native attempts lost their owners')
-    }
-    let completed = false
-    void disposition.completion.then(() => {
-      completed = true
-    })
-    await Promise.resolve()
-    expect(completed).toBe(false)
-    healthy.emitExit(0)
-    await disposition.completion
+
+    const result = await spawnNativeDaemonPty(args)
 
     expect(nodePty.spawn.mock.calls.map(([file]) => file)).toEqual(['pwsh.exe', 'pwsh.exe'])
     expect(ptyJob.terminatePtyJob).toHaveBeenCalledWith(broken)
@@ -450,26 +389,6 @@ describe('Windows shell fallback over node-pty ConPTY', () => {
     expect(result.claimStartupEvents?.().data).toEqual(['\x1b[1t\x1b[?1004h'])
   })
 
-  it('keeps failed after a retained ConPTY predecessor really exits before the native retry throws', async () => {
-    const creationWork = new TerminalCreationWork()
-    const broken = deadPane(999_999_999)
-    broken.kill.mockImplementation(() => broken.emitExit(137))
-    nodePty.spawn.mockReturnValueOnce(broken).mockImplementationOnce(() => {
-      throw new Error('retry exported no handle')
-    })
-    await expect(
-      spawnNativeDaemonPty({ ...args, windowsFallbackAttempts: attempts.slice(0, 1), creationWork })
-    ).rejects.toThrow('retry exported no handle')
-    await creationWork.finish()
-    const disposition = await creationWork.completion
-    if (disposition.kind !== 'failed') {
-      throw new Error('failed retry was collapsed into exit')
-    }
-    await disposition.completion
-    expect(nodePty.spawn.mock.calls.map(([file]) => file)).toEqual(['pwsh.exe', 'pwsh.exe'])
-    expect(broken.kill).toHaveBeenCalledOnce()
-    expect(broken.write).not.toHaveBeenCalled()
-  })
   it.each(['physical-exit', 'deadline', 'observation-retry'] as const)(
     'ordinary create keeps the startup predecessor owned through %s and host disposal',
     async (outcome) => {
@@ -671,108 +590,7 @@ describe('Windows shell fallback over node-pty ConPTY', () => {
     const result = await spawnNativeDaemonPty(args)
 
     expect(nodePty.spawn).toHaveBeenCalledOnce()
-    const exits = vi.fn()
-    result.physicalOwner?.onExit(exits)
-    expect(exits).toHaveBeenCalledExactlyOnceWith({ exitCode: 3 })
-    expect(result.claimStartupEvents?.().data).toEqual([])
-  })
-
-  it('commits one receipt before reentrant, disposed and throwing consumers receive it', async () => {
-    const pane = healthyPane(990001)
-    const subscribe = pane.onExit
-    let nativeExit: Parameters<typeof subscribe>[0] | undefined
-    pane.onExit = (listener) => {
-      nativeExit = listener
-      return subscribe(listener)
-    }
-    nodePty.spawn.mockReturnValue(pane)
-    const result = await spawnNativeDaemonPty(args)
-    result.claimStartupEvents?.()
-    const owner = result.physicalOwner
-    if (!owner) {
-      throw new Error('selected physical owner missing')
-    }
-    const late = vi.fn()
-    const removed = vi.fn()
-    const surviving = vi.fn()
-    const first = vi.fn()
-    let remove = (): void => {}
-    const failure = new Error('exit consumer failed')
-    owner.onExit((event) => {
-      first(event)
-      expect(owner.hasExited()).toBe(true)
-      expect(owner.exitCode()).toBe(7)
-      owner.onExit(late)
-      remove()
-      throw failure
-    })
-    const subscription = owner.onExit(removed)
-    remove = () => subscription.dispose()
-    owner.onExit(surviving)
-    expect(() => pane.exit(7, 15)).toThrow(failure)
-    await owner.completion
-    expect(first).toHaveBeenCalledExactlyOnceWith({ exitCode: 7, signal: 15 })
-    expect(late).toHaveBeenCalledExactlyOnceWith({ exitCode: 7, signal: 15 })
-    expect(surviving).toHaveBeenCalledExactlyOnceWith({ exitCode: 7, signal: 15 })
-    expect(removed).not.toHaveBeenCalled()
-    expect(pane.exitSubscriberCount()).toBe(0)
-    nativeExit?.({ exitCode: 99 })
-    const replay = vi.fn()
-    owner.onExit(replay).dispose()
-    expect(replay).toHaveBeenCalledExactlyOnceWith({ exitCode: 7, signal: 15 })
-    expect(first).toHaveBeenCalledOnce()
-    expect(surviving).toHaveBeenCalledOnce()
-    expect(pane.kill).not.toHaveBeenCalled()
-  })
-
-  it('retires native observation even when exit arrives during subscription installation', async () => {
-    const pane = fakePane(990001, [])
-    const retired = vi.fn(() => true)
-    pane.onExit = (listener) => {
-      listener({ exitCode: 3, signal: 15 })
-      return { dispose: retired }
-    }
-    nodePty.spawn.mockReturnValue(pane)
-    const result = await spawnNativeDaemonPty(args)
-    const exits = vi.fn()
-    result.physicalOwner?.onExit(exits)
-    expect(exits).toHaveBeenCalledExactlyOnceWith({ exitCode: 3, signal: 15 })
-    expect(retired).toHaveBeenCalledOnce()
-    expect(result.claimStartupEvents?.().data).toEqual([])
-    expect(nodePty.spawn).toHaveBeenCalledOnce()
-  })
-
-  it('does not deliver a queued exit into a handle disposed by an earlier consumer', async () => {
-    const pane = healthyPane(990001)
-    nodePty.spawn.mockReturnValue(pane)
-    const result = await spawnNativeDaemonPty(args)
-    const owner = result.physicalOwner
-    if (!owner) {
-      throw new Error('selected physical owner missing')
-    }
-    const retire = owner.onExit(() => handle.dispose())
-    const handle = createDaemonPtySubprocessHandle({
-      process: result.process,
-      physicalOwner: owner,
-      shellPath: result.shellPath,
-      spawnCwd: result.spawnCwd,
-      env: {},
-      reportsChildExitStatus: result.reportsChildExitStatus,
-      startupCommandDeliveredInShellArgs: false,
-      startupAgentRecognition: null,
-      sessionId: 'disposed-during-exit',
-      startupEvents: result.claimStartupEvents?.()
-    })
-    const exits = vi.fn()
-    handle.onExit(exits)
-    pane.emitExit(0)
-    await owner.completion
-    expect(exits).not.toHaveBeenCalled()
-    expect(pane.exitSubscriberCount()).toBe(0)
-    handle.write('after disposal')
-    expect(pane.write).toHaveBeenCalledExactlyOnceWith('\x1b[?61;4c')
-    retire.dispose()
-    handle.dispose()
+    expect(result.claimStartupEvents?.().exit).toEqual({ exitCode: 3 })
   })
 
   it('kills the pane tree when the spawn is canceled while startup is awaited', async () => {

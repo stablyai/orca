@@ -1,4 +1,3 @@
-import { handleDaemonRequest } from './daemon-server-request'
 import { randomUUID } from 'node:crypto'
 import type { Socket } from 'node:net'
 import { setImmediate as waitForImmediate } from 'node:timers/promises'
@@ -23,8 +22,12 @@ import { checkPtySpawnHealth } from './pty-subprocess'
 import { TerminalHistorySeedTransferRegistry } from './terminal-history-seed-transfer-registry'
 import { TerminalHost } from './terminal-host'
 import { DaemonAutomaticWorkGuard } from './daemon-automatic-work-guard'
+import { answerAutomaticWorkRequest } from './daemon-automatic-work-protocol'
 import { HostTerminalPolicy } from './host-terminal-policy'
+import { answerTerminalLimitRequest } from './daemon-terminal-limit-protocol'
 import { CLEAN_DISCONNECT_PROTOCOL_VERSION, PROTOCOL_VERSION, type DaemonRequest } from './types'
+import { answerDaemonControlRequest } from './daemon-control-request'
+
 export class DaemonServer {
   private static readonly INITIAL_ADOPTION_TIMEOUT_MS = 2 * 60 * 1000
 
@@ -285,19 +288,24 @@ export class DaemonServer {
     this.connections.dispose()
   }
 
-  private handleRequest(socket: Socket, clientId: string, request: DaemonRequest): Promise<void> {
-    return handleDaemonRequest(
-      {
-        automaticWork: this.automaticWork,
-        endpoint: this.endpoint,
-        requestRouter: this.requestRouter,
-        lifecycle: this.lifecycle,
-        terminalPolicy: this.terminalPolicy,
-        terminalPolicyNonce: this.terminalPolicyNonce
-      },
+  private async handleRequest(
+    socket: Socket,
+    clientId: string,
+    request: DaemonRequest
+  ): Promise<void> {
+    return answerDaemonControlRequest(
       socket,
-      clientId,
-      request
+      request,
+      async () =>
+        answerTerminalLimitRequest(
+          request,
+          this.terminalPolicy,
+          this.terminalPolicyNonce,
+          () => this.lifecycle.isAcceptingWork() && !this.endpoint.hasLostOwnership()
+        ) ??
+        answerAutomaticWorkRequest(request, this.automaticWork, this.endpoint) ??
+        this.requestRouter.route(clientId, request),
+      () => this.lifecycle.startPendingShutdownReply(clientId, request.id)
     )
   }
 }

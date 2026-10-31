@@ -1,19 +1,3 @@
-import type {
-  PendingDaemonSpawnOperation,
-  DaemonPtyAdapterOptions,
-  DaemonIdentityChangeEvent,
-  DaemonIdleRetirementResult
-} from './daemon-pty-adapter-contract'
-export type {
-  PendingDaemonSpawnOperation,
-  HistoryRecoveryContext,
-  SnapshotCheckpointResult,
-  DaemonPtyShutdownOptions,
-  DaemonPtyAdapterOptions,
-  DaemonRespawnReason,
-  DaemonIdentityChangeEvent,
-  DaemonIdleRetirementResult
-} from './daemon-pty-adapter-contract'
 import { DaemonClient } from './client'
 import { DaemonPtyInputClosedIncarnations } from './daemon-pty-input-closed-incarnations'
 import { DaemonPtyInventoryObservation } from './daemon-pty-inventory-observation'
@@ -36,15 +20,71 @@ import {
   GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION,
   PROTOCOL_VERSION,
   supportsMode2031UnsubscribeFact,
-  supportsPtyStartupIngress
+  supportsPtyStartupIngress,
+  type TakePendingOutputResult
 } from './types'
 import { ColdRestorePayloadCache } from './cold-restore-payload-cache'
-import { HistoryManager } from './history-manager'
+import {
+  HistoryManager,
+  type HistoryCheckpointResult,
+  type HistoryRecoveryFreeze
+} from './history-manager'
 import { HistoryReader } from './history-reader'
 import type { PtyBackgroundStreamEvent } from '../providers/pty-provider-contract'
 import type { DaemonPtyRouterDataEvent, DaemonPtyRouterExitEvent } from './daemon-pty-router-events'
 import type { ReadRunningWslDistros } from './daemon-wsl-bridge-exit'
 import { WslBridgeBootIdentity } from './daemon-wsl-bridge-boot-identity'
+
+export type PendingDaemonSpawnOperation = {
+  exitsBySessionId: Map<string, Omit<DaemonPtyRouterExitEvent, 'id'>[]>
+  ignoredExitIncarnationIds: Set<string>
+  ignoreNextExit: boolean
+}
+
+export type HistoryRecoveryContext = {
+  freeze: HistoryRecoveryFreeze | null
+  unreadableSessionId: string | null
+  identityChanged: boolean
+}
+
+export type SnapshotCheckpointResult = {
+  checkpoint: HistoryCheckpointResult
+  snapshot: NonNullable<TakePendingOutputResult['snapshot']> | null
+}
+
+export type DaemonPtyAdapterOptions = {
+  socketPath: string
+  tokenPath: string
+  pidPath?: string
+  profileScope?: string
+  protocolVersion?: number
+  historyPath?: string
+  runtimeDir?: string
+  packagedAppVersion?: string | null
+  respawn?: (reason: DaemonRespawnReason) => Promise<void | (() => void)>
+  /** Test seam; production reads the shared, coalesced `wsl --list --running`. */
+  readRunningWslDistros?: ReadRunningWslDistros
+  /** Test seam; production reads each distro's boot id through the background-work gate. */
+  wslBridgeBootIdentity?: WslBridgeBootIdentity
+}
+
+export type DaemonRespawnReason =
+  | 'daemon_died'
+  | 'unhealthy_resolver'
+  | 'stale_bundle'
+  | 'severed_tcc_attribution'
+
+export type DaemonIdentityChangeEvent = {
+  previous: DaemonEndpointIdentity
+  current: DaemonEndpointIdentity
+}
+
+export type DaemonIdleRetirementResult =
+  | { state: 'retiring' }
+  | { state: 'busy'; liveSessions: number | null; admissionReopened?: true }
+  | { state: 'unsupported' }
+  | { state: 'unverifiable' }
+
 export abstract class DaemonPtyRuntimeState {
   protected readonly readRunningWslDistros: ReadRunningWslDistros | undefined
   protected readonly wslBridgeBootIdentity: WslBridgeBootIdentity
@@ -253,11 +293,6 @@ export abstract class DaemonPtyRuntimeState {
 
   getHistoryManager(): HistoryManager | null {
     return this.historyManager
-  }
-
-  /** Identity of the daemon behind this adapter; null until hello completes or after a disconnect. */
-  getDaemonIdentity(): DaemonEndpointIdentity | null {
-    return this.client.getDaemonIdentity()
   }
 
   getLastAuthenticatedDaemonIdentity(): DaemonEndpointIdentity | null {

@@ -2,8 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import type { InternalCreateOrAttachOptions } from './terminal-host-agent-session-claim'
 import { TerminalHost } from './terminal-host'
-import { TerminalSpawnGate } from './terminal-spawn-gate'
-import type { PtyCreationDisposition } from '../../shared/claimed-agent-pty-owner'
 
 import './mock-descendant-sweep'
 
@@ -47,17 +45,12 @@ function subprocess() {
 
 const streamClient = { onData() {}, onExit() {} }
 
-function startWithInputs(
-  host: TerminalHost,
-  sessionId: string,
-  onCreationDisposition?: InternalCreateOrAttachOptions['onCreationDisposition']
-) {
+function startWithInputs(host: TerminalHost, sessionId: string) {
   const controller = new AbortController()
   const env = { RETENTION_FIXTURE: 'x'.repeat(1024) }
   const historySeedChunks = ['retention-seed\r\n']
   const options: InternalCreateOrAttachOptions = {
     sessionId,
-    ...(onCreationDisposition ? { onCreationDisposition } : {}),
     cols: 80,
     rows: 24,
     env,
@@ -215,80 +208,3 @@ describe('TerminalHost completed spawn inputs', () => {
     }
   })
 })
-
-it('collects completed inputs while unpublished physical work still owns recovery, capacity and same-ID exclusion', async () => {
-  const handle = {
-    ...subprocess(),
-    forceKill: vi.fn(() => {}),
-    onInputClosed() {
-      throw new Error('input-observer-install-failed')
-    }
-  }
-  let spawns = 0
-  const spawn = async () => (++spawns === 1 ? handle : subprocess())
-  const spawnGate = new TerminalSpawnGate({ log: () => {} })
-  const host = new TerminalHost({ spawnSubprocess: spawn, spawnGate })
-  const retained: { disposition?: PtyCreationDisposition } = {}
-  const refs = await observeUnpublishedFailure(host, retained)
-  try {
-    expect(retained.disposition?.kind).toBe('physical')
-    expect(host.listSessions()).toEqual([])
-    expect(spawnGate.snapshot().terminals).toBe(1)
-    await collect()
-    expect(refs.map((ref) => ref.deref() === undefined)).toEqual(Array(4).fill(true))
-    const canceled = new AbortController()
-    const blocked = host.createOrAttach({
-      sessionId: 'unpublished-retained',
-      cols: 80,
-      rows: 24,
-      streamClient,
-      cancelSignal: canceled.signal,
-      isCanceled: () => canceled.signal.aborted
-    })
-    const rejected = expect(blocked).rejects.toThrow('canceled')
-    canceled.abort()
-    await rejected
-    expect(spawns).toBe(1)
-    expect(spawnGate.snapshot().terminals).toBe(1)
-    const recovered =
-      retained.disposition?.kind !== 'no-fork' ? retained.disposition?.recover?.() : undefined
-    handle.emitExit(7)
-    await recovered
-    if (retained.disposition?.kind !== 'physical') {
-      throw new Error('missing physical owner')
-    }
-    await retained.disposition.completion
-    expect(retained.disposition.exitCode()).toBe(7)
-    await new Promise<void>((resolve) => setImmediate(resolve))
-    expect(spawnGate.snapshot().terminals).toBe(0)
-    expect(
-      (
-        await host.createOrAttach({
-          sessionId: 'unpublished-retained',
-          cols: 80,
-          rows: 24,
-          streamClient
-        })
-      ).isNew
-    ).toBe(true)
-    expect(spawns).toBe(2)
-  } finally {
-    handle.emitExit(7)
-    await host.dispose()
-  }
-})
-
-async function observeUnpublishedFailure(
-  host: TerminalHost,
-  retained: { disposition?: PtyCreationDisposition }
-): Promise<WeakRef<object>[]> {
-  const created = startWithInputs(host, 'unpublished-retained', (disposition) => {
-    retained.disposition = disposition
-  })
-  const failure = await created.creation.then(
-    () => 'unexpected-success',
-    (error: unknown) => (error instanceof Error ? error.message : 'unexpected-error')
-  )
-  expect(failure).toBe('input-observer-install-failed')
-  return created.refs
-}

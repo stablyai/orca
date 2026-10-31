@@ -1,4 +1,4 @@
-import { createAdmissionStreamClient } from './daemon-terminal-stream-client'
+import { performance } from 'node:perf_hooks'
 import type { BackgroundTransientFactRelay } from './daemon-background-transient-facts'
 import type { DaemonClientConnections } from './daemon-client-connections'
 import type { DaemonEndpointLifecycle } from './daemon-endpoint-lifecycle'
@@ -9,9 +9,10 @@ import type {
   PendingPtySpawnPreparation
 } from './daemon-pty-spawn-preparations'
 import type { DaemonSessionAttachments } from './daemon-session-attachments'
+import { recordDaemonStreamBacklogEvent } from './daemon-stream-backlog-probe'
 import type { DaemonStreamDataBatcher } from './daemon-stream-data-batcher'
 import type { TerminalHistorySeedTransferRegistry } from './terminal-history-seed-transfer-registry'
-import type { CreateOrAttachResult, TerminalHost } from './terminal-host'
+import type { CreateOrAttachOptions, CreateOrAttachResult, TerminalHost } from './terminal-host'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { isSpawnIntent } from '../../shared/host-spawn-admission'
 import { parsePtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
@@ -20,6 +21,7 @@ import {
   isAgentSessionSurfaceBinding
 } from '../../shared/agent-session-host-authority'
 import { type DaemonRequest, TerminalAttachCanceledError } from './types'
+
 type CreateOrAttachRequest = Extract<DaemonRequest, { type: 'createOrAttach' }>
 
 const MAX_SPAWN_ADMISSION_WINDOW_MS = 12_000
@@ -33,7 +35,7 @@ function resolveSpawnAdmissionDeadline(cancelAfterMs: unknown): number {
   return Date.now() + windowMs
 }
 
-export type DaemonTerminalAdmissionOptions = {
+type DaemonTerminalAdmissionOptions = {
   host: TerminalHost
   connections: DaemonClientConnections
   endpoint: DaemonEndpointLifecycle
@@ -49,6 +51,8 @@ export type DaemonTerminalAdmissionOptions = {
 }
 
 export class DaemonTerminalAdmission {
+  private static readonly INTERACTIVE_OUTPUT_WINDOW_MS = 100
+  private static readonly INTERACTIVE_OUTPUT_MAX_CHARS = 1024
   private createOrAttachInFlight = 0
 
   constructor(private readonly options: DaemonTerminalAdmissionOptions) {}
@@ -128,13 +132,12 @@ export class DaemonTerminalAdmission {
           declaredIntent: isSpawnIntent(payload.spawnIntent) ? payload.spawnIntent : null,
           deadlineAt: resolveSpawnAdmissionDeadline(payload.cancelAfterMs)
         },
-        isCanceled: () =>
-          spawnPreparation !== null && this.options.preparations.isCanceled(spawnPreparation),
+        isCanceled: () => spawnPreparation?.canceled === true,
         cancelSignal: spawnPreparation.controller.signal,
         onSessionResolved: (sessionId) => {
           routedSessionId = sessionId
         },
-        streamClient: createAdmissionStreamClient(this.options, clientId, () => routedSessionId)
+        streamClient: this.createStreamClient(clientId, () => routedSessionId)
       })
     } finally {
       if (spawnPreparation) {
@@ -181,6 +184,62 @@ export class DaemonTerminalAdmission {
         ? { cwdReadableByDaemon: result.cwdReadableByDaemon }
         : {}),
       ...(result.inputClosed ? { inputClosed: true as const } : {})
+    }
+  }
+
+  private createStreamClient(
+    clientId: string,
+    sessionId: () => string
+  ): CreateOrAttachOptions['streamClient'] {
+    return {
+      onData: (data, rawLength = data.length, transformed = false, seq) => {
+        const routedSessionId = sessionId()
+        this.options.transientFactRelay.onSessionData(routedSessionId, data)
+        const lastInputAt = this.options.attachments.lastInputAt(routedSessionId)
+        const isInteractiveOutput =
+          data.length <= DaemonTerminalAdmission.INTERACTIVE_OUTPUT_MAX_CHARS &&
+          lastInputAt !== undefined &&
+          performance.now() - lastInputAt <= DaemonTerminalAdmission.INTERACTIVE_OUTPUT_WINDOW_MS
+        this.options.streamDataBatcher.enqueue(clientId, routedSessionId, data, {
+          flushImmediately: isInteractiveOutput,
+          flushMaxChars: DaemonTerminalAdmission.INTERACTIVE_OUTPUT_MAX_CHARS,
+          rawLength,
+          transformed,
+          seq
+        })
+      },
+      onInputClosed: (incarnationId) => {
+        const routedSessionId = sessionId()
+        this.options.streamDataBatcher.enqueueControlEvent(clientId, routedSessionId, {
+          type: 'event',
+          event: 'inputClosed',
+          sessionId: routedSessionId,
+          payload: { incarnationId }
+        })
+        this.options.streamDataBatcher.flush(clientId)
+      },
+      onExit: (code, incarnationId, cause) => {
+        const routedSessionId = sessionId()
+        this.options.log.log('session-exited', {
+          sessionId: routedSessionId,
+          code,
+          cause: cause?.kind
+        })
+        this.options.streamDataBatcher.enqueueControlEvent(clientId, routedSessionId, {
+          type: 'event',
+          event: 'exit',
+          sessionId: routedSessionId,
+          payload: { code, incarnationId, ...(cause ? { cause } : {}) }
+        })
+        this.options.streamDataBatcher.flush(clientId)
+        recordDaemonStreamBacklogEvent('sessionExit', {
+          sessionIdSuffix: routedSessionId.slice(-10)
+        })
+        this.options.transientFactRelay.onSessionExit(routedSessionId)
+        this.options.streamDataBatcher.refreshSessionDroppability(routedSessionId)
+        this.options.attachments.release(routedSessionId)
+        this.options.reevaluateIdleShutdown()
+      }
     }
   }
 }

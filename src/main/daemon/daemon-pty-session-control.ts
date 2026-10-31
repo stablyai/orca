@@ -1,4 +1,3 @@
-import type { DaemonPtyShutdownOptions } from './daemon-pty-runtime-state'
 import { coldRestorePayloadFromInfo, type ColdRestorePayload } from './cold-restore-payload-cache'
 import { isUnknownRequestTypeError } from './daemon-endpoint-errors'
 import { GET_SIZE_PROTOCOL_VERSION } from './daemon-protocol-version'
@@ -13,11 +12,14 @@ import { logSleepFolderRead, readDaemonWslSleepCwdWithFacts } from './daemon-wsl
 import * as unlistedSession from './daemon-unlisted-session'
 import { SessionNotFoundError, type ListSessionsResult } from './types'
 import { resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
-import type { PtySpawnResult } from '../providers/pty-provider-contract'
+import type { IPtyProvider, PtySpawnResult } from '../providers/pty-provider-contract'
+
+type DaemonPtyShutdownOptions = Parameters<IPtyProvider['shutdown']>[1]
 
 export const LIVENESS_PROBE_TIMEOUT_MS = 2_000
 
 const MAX_TOMBSTONES = 1000
+// A busy daemon must not eat the final checkpoint's share of the Sleep deadline.
 
 export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
   protected abstract adoptListedSessionForSleep(
@@ -298,6 +300,21 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
 
   protected buildColdRestorePayload(restoreInfo: ColdRestoreInfo): ColdRestorePayload | null {
     return coldRestorePayloadFromInfo(restoreInfo)
+  }
+
+  async sendSignal(id: string, signal: string): Promise<void> {
+    await this.client.request('signal', { sessionId: id, signal })
+  }
+
+  async getCwd(id: string): Promise<string> {
+    try {
+      const result = await this.client.request<{ cwd: string | null }>('getCwd', {
+        sessionId: id
+      })
+      return result.cwd ?? ''
+    } catch {
+      return ''
+    }
   }
 
   async getInitialCwd(id: string): Promise<string> {

@@ -1,4 +1,3 @@
-import type { Session } from './session'
 import type { InternalCreateOrAttachOptions } from './terminal-host-agent-session-claim'
 import { waitForTerminalAttachOperation } from './terminal-attach-cancellation'
 import type { PtyCreationDisposition } from '../../shared/claimed-agent-pty-owner'
@@ -95,7 +94,7 @@ export function reconcileUnpublishedTerminalCreation(
   sessionId: string
 ): (release: () => Promise<void>) => Promise<void> {
   return async (release) => {
-    // Registered Sessions retain their ordinary teardown owner.
+    // Registered Sessions retain their ordinary current/use-fenced close authority.
     if (!sessions.has(sessionId)) {
       await release()
     }
@@ -172,7 +171,7 @@ export function recoverUnpublishedTerminalCreation(disposition: PtyCreationDispo
 
 export async function runTerminalCreation<Result>(
   opts: InternalCreateOrAttachOptions,
-  sessions: ReadonlyMap<string, Session>,
+  sessions: ReadonlyMap<string, unknown>,
   pendingCreations: Map<string, PendingTerminalCreation>,
   assertCreateAllowed: (options: InternalCreateOrAttachOptions) => void,
   operation: (

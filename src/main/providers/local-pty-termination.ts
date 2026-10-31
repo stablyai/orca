@@ -1,4 +1,5 @@
 import type * as pty from 'node-pty'
+import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import { killWithDescendantSweep } from '../pty-descendant-termination'
 import { terminateShutdownDescendants } from '../daemon/terminal-descendant-shutdown'
 import {
@@ -21,7 +22,6 @@ import {
   ptyTerminationMode,
   ptyLoadGeneration,
   runPtyCleanup,
-  waitForPtyPhysicalExit,
   type PtyShutdownOperation
 } from './local-pty-provider-state'
 import {
@@ -29,13 +29,23 @@ import {
   cancelPendingLocalPtySpawns
 } from './local-pty-spawn-state'
 
+export const LOCAL_PTY_PHYSICAL_EXIT_TIMEOUT_MS = 8_000
 export const LOCAL_PTY_GRACEFUL_FORCE_TIMEOUT_MS = 5_000
 export const LOCAL_PTY_FORCE_KILL_RETRY_MS = 250
 
-export {
-  createPtyPhysicalExit,
-  LOCAL_PTY_PHYSICAL_EXIT_TIMEOUT_MS
-} from './local-pty-provider-state'
+export function createPtyPhysicalExit(id: string): void {
+  ptyPhysicalExits.set(id, new PhysicalExitTracker())
+}
+
+function waitForPtyPhysicalExit(id: string, physicalExit?: PhysicalExitTracker): Promise<void> {
+  if (!physicalExit) {
+    return Promise.reject(new Error(`PTY "${id}" exit tracking unavailable`))
+  }
+  return physicalExit.waitForExit(
+    LOCAL_PTY_PHYSICAL_EXIT_TIMEOUT_MS,
+    () => new Error(`Timed out waiting for PTY process exit: ${id}`)
+  )
+}
 
 const groupSweeps = new WeakMap<pty.IPty, PendingPtyGroupSweep>()
 

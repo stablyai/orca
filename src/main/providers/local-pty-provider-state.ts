@@ -1,5 +1,5 @@
 import type * as pty from 'node-pty'
-import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
+import type { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import type { PtyStartupIngress } from '../../shared/pty-startup-ingress'
 import type { IPtyProvider } from './pty-provider-contract'
 import type { PtyDataEvent } from './pty-provider-events'
@@ -53,26 +53,6 @@ export const ptyExitDisposables = new Map<string, { dispose: () => void }>()
 export const ptyCleanupCallbacks = new Map<string, () => void>()
 export const ptyTerminationMode = new Map<string, 'graceful' | 'force'>()
 export const ptyPhysicalExits = new Map<string, PhysicalExitTracker>()
-
-export const LOCAL_PTY_PHYSICAL_EXIT_TIMEOUT_MS = 8_000
-
-export function createPtyPhysicalExit(id: string): void {
-  ptyPhysicalExits.set(id, new PhysicalExitTracker())
-}
-
-export function waitForPtyPhysicalExit(
-  id: string,
-  physicalExit?: PhysicalExitTracker
-): Promise<void> {
-  if (!physicalExit) {
-    return Promise.reject(new Error(`PTY "${id}" exit tracking unavailable`))
-  }
-  return physicalExit.waitForExit(
-    LOCAL_PTY_PHYSICAL_EXIT_TIMEOUT_MS,
-    () => new Error(`Timed out waiting for PTY process exit: ${id}`)
-  )
-}
-
 // macOS TCC wrapper status is not the shell/agent exit status (STA-4536).
 export const ptyReportsChildExitStatus = new Map<string, boolean>()
 export const ptyForceKillTimers = new Map<string, ReturnType<typeof setTimeout>>()

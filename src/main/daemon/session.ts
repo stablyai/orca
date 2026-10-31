@@ -6,12 +6,13 @@ import { SessionProducerPause } from './session-producer-pause'
 import type { SessionShellReadyBarrier } from './session-shell-ready-barrier'
 import type { TerminalShellRecoveryBarrier } from './terminal-shell-recovery-barrier'
 import { SessionTerminationController } from './session-termination-controller'
-import type { SubprocessHandle } from './session-subprocess-handle'
+import type { ChildProcessVerdictRead, SubprocessHandle } from './session-subprocess-handle'
 import type { JobTerminationOutcome } from '../windows/windows-pty-job'
 import type { SessionOptions } from './session-options'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { randomUUID } from 'node:crypto'
 import { PtyStartupIngress } from '../../shared/pty-startup-ingress'
+
 import type {
   SessionState,
   ShellReadyState,
@@ -19,8 +20,8 @@ import type {
   TerminalSnapshot
 } from './types'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
-import { SessionProcessInspection } from './session-process-inspection'
-export class Session extends SessionProcessInspection {
+
+export class Session {
   readonly sessionId: string
   readonly incarnationId = randomUUID()
   readonly terminalHandle: string | null
@@ -33,18 +34,16 @@ export class Session extends SessionProcessInspection {
   exitCause: TerminalExitCause | undefined
   private readonly initialOutput: ReturnType<typeof createSessionInitialOutput>
   private _disposed = false
-
-  protected subprocess: SubprocessHandle
+  private subprocess: SubprocessHandle
   private readonly onSessionExit?: (code: number) => void
-  protected readonly output: SessionOutputPlane
+  private readonly output: SessionOutputPlane
   private readonly producerPause: SessionProducerPause
-  protected readonly shellReady: SessionShellReadyBarrier
-  protected readonly termination: SessionTerminationController
+  private readonly shellReady: SessionShellReadyBarrier
+  private readonly termination: SessionTerminationController
   readonly startupIngress: PtyStartupIngress
-  protected readonly recoveryBarrier: TerminalShellRecoveryBarrier
+  private readonly recoveryBarrier: TerminalShellRecoveryBarrier
 
   constructor(opts: SessionOptions) {
-    super()
     this.initialOutput = createSessionInitialOutput(opts)
     this.sessionId = opts.sessionId
     this.terminalHandle = opts.terminalHandle ?? null
@@ -73,9 +72,7 @@ export class Session extends SessionProcessInspection {
     this.startupIngress = new PtyStartupIngress({
       ...(opts.startupIngress ? { intent: opts.startupIngress } : {}),
       ...(opts.ownerBackend ? { ownerBackend: opts.ownerBackend } : {}),
-      write: (data) => {
-        this.subprocess.write(data)
-      },
+      write: (data) => this.subprocess.write(data),
       onEmission: (emission) => this.recoveryBarrier.accept(emission)
     })
     try {
@@ -141,21 +138,15 @@ export class Session extends SessionProcessInspection {
   }
 
   write(data: string): void {
-    if (this._state === 'exited' || this._disposed) {
-      return
-    }
     // Human input must reach rc-file readers while automatic startup commands wait for readiness.
-    if (!this.startupIngress.answerLiveQueryReply(data)) {
+    if (this.isAlive && !this._disposed && !this.startupIngress.answerLiveQueryReply(data)) {
       this.subprocess.write(data)
     }
   }
 
   /** Orca's own startup command: held by the shell-ready barrier until the shell can read it. */
   writeStartupCommand(data: string): void {
-    if (this._state === 'exited' || this._disposed) {
-      return
-    }
-    if (!this.shellReady.tryEnqueue(data)) {
+    if (this._state !== 'exited' && !this._disposed && !this.shellReady.tryEnqueue(data)) {
       this.subprocess.write(data)
     }
   }
@@ -181,8 +172,22 @@ export class Session extends SessionProcessInspection {
   }
 
   /** Signal the root only after its descendant snapshot has completed. */
+  signalTerminationRoot(): void {
+    this.termination.signalTerminationRoot()
+  }
 
   /** Arm escalation after a coordinator begins snapshot-first teardown. */
+  scheduleForceDisposeFallback(): void {
+    this.termination.scheduleForceDisposeFallback()
+  }
+
+  async forceKillAndWaitForExit(timeoutMs?: number): Promise<void> {
+    await this.termination.forceKillAndWaitForExit(timeoutMs)
+  }
+
+  signal(sig: string): void {
+    this.termination.signal(sig)
+  }
 
   attachClient(client: Omit<AttachedClient, 'token'>): symbol {
     return this.output.attachClient(client)
@@ -206,6 +211,14 @@ export class Session extends SessionProcessInspection {
     return this.output.getSnapshot(opts)
   }
 
+  getPartialEscapeTailAnsi(): string {
+    return this.output.getPartialEscapeTailAnsi()
+  }
+
+  getAppliedSize(): { cols: number; rows: number } | null {
+    return this.output.getAppliedSize()
+  }
+
   takePendingOutput(
     includeSnapshot: boolean,
     opts: { teardownSnapshot?: boolean } = {}
@@ -216,6 +229,34 @@ export class Session extends SessionProcessInspection {
     const heldBytes =
       includeSnapshot && opts.teardownSnapshot === true ? this.prepareForFinalSnapshot() : ''
     return this.output.takePendingOutput(includeSnapshot, heldBytes, () => this.getSnapshot())
+  }
+
+  getCwd(): string | null {
+    return this.output.getCwd()
+  }
+
+  inspectChildProcesses(fresh?: boolean, ignoreDetached?: boolean): ChildProcessVerdictRead {
+    return this.subprocess.inspectChildProcesses?.(fresh, ignoreDetached) ?? 'unverifiable'
+  }
+
+  getForegroundProcess(options?: { rawFallback?: boolean; cachedOnly?: boolean }): string | null {
+    return this.subprocess.getForegroundProcess(options)
+  }
+
+  async confirmForegroundProcess(context?: { decision?: boolean }): Promise<string | null> {
+    return (
+      this.subprocess.confirmForegroundProcess?.(context) ?? this.subprocess.getForegroundProcess()
+    )
+  }
+
+  confirmShellForeground(): Promise<boolean> {
+    return this.recoveryBarrier.confirmOwnerSettled()
+  }
+
+  async settleShellOwnershipConfirmation(): Promise<void> {
+    await this.recoveryBarrier.awaitProofSettled()
+    // Snapshot only after the drained prompt is parsed into the model.
+    await this.output.flushParsedWrites()
   }
 
   clearScrollback(): void {

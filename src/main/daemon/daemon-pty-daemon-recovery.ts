@@ -9,8 +9,11 @@ import type { DaemonRespawnReason } from './daemon-pty-runtime-state'
 import type { ListSessionsResult } from './types'
 import type { PtyBackgroundStreamEvent } from '../providers/pty-provider-contract'
 import type { TerminalLimitStatus, TerminalLimitUpdate } from '../../shared/terminal-limit-policy'
+import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
 
 export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersistence {
+  abstract getDaemonIdentity(): DaemonEndpointIdentity | null
+
   async terminalLimit(update?: TerminalLimitUpdate): Promise<TerminalLimitStatus | null> {
     await this.ensureConnected()
     const identity = this.getDaemonIdentity()

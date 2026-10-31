@@ -3,7 +3,8 @@ import { runTerminalCreation, type PendingTerminalCreation } from './terminal-cr
 import { beginTerminalHostFencedTermination } from './terminal-host-fenced-termination'
 import type { PtyFencedTerminationRequest } from '../../shared/pty-fenced-termination'
 import type { Session } from './session'
-import type { SessionInfo } from './types'
+import type { PtyProcessInspectionOptions } from '../providers/pty-process-inspection'
+import type { SessionInfo, TakePendingOutputResult, TerminalSnapshot } from './types'
 import type { CreateOrAttachResult } from './terminal-host-create-contract'
 import type { TerminalHostOptions } from './terminal-host-options'
 import { recordTerminalHostSessionExit } from './terminal-host-session-exit'
@@ -15,20 +16,35 @@ import { ClaimedAgentPtyOwnerRegistry } from '../../shared/claimed-agent-pty-own
 import { createOrAttachClaimedAgentSession } from './terminal-host-agent-session-claim'
 import type { InternalCreateOrAttachOptions } from './terminal-host-agent-session-claim'
 import { TerminalHostAgentSessionGenerations } from './terminal-host-agent-session-generations'
+import { resolveTerminalHostSessionCwd } from './terminal-host-session-cwd'
 import { TerminalHostTombstones } from './terminal-host-tombstones'
-import { listLiveTerminalHostSessions } from './terminal-host-session-listing'
+import {
+  listLiveTerminalHostSessions,
+  hasLiveTerminalHostSessions
+} from './terminal-host-session-listing'
 import { createOrAttachTerminalSession } from './terminal-host-session-create'
 import { TerminalAttachCanceledError } from './daemon-errors'
 import { randomUUID } from 'node:crypto'
-import { TerminalHostInspection } from './terminal-host-inspection'
+import { inspectTerminalHostSession } from './terminal-host-process-inspection'
+import type { TerminalHostProcessInspection } from './terminal-host-process-inspection'
+import {
+  confirmTerminalHostForegroundProcess,
+  confirmTerminalHostShellForeground,
+  getSettledTerminalHostSnapshot,
+  getTerminalHostAppliedSize,
+  getTerminalHostPartialEscapeTail,
+  getTerminalHostSnapshot,
+  takeTerminalHostPendingOutput
+} from './terminal-host-session-inspection-operations'
+
 export type { CreateOrAttachOptions, CreateOrAttachResult } from './terminal-host-create-contract'
 
 export type { TerminalHostOptions } from './terminal-host-options'
 
 const DEFAULT_MAX_TOMBSTONES = 1000
 
-export class TerminalHost extends TerminalHostInspection {
-  protected sessions = new Map<string, Session>()
+export class TerminalHost {
+  private sessions = new Map<string, Session>()
   // Serializes creates for one id across async spawn validation.
   private pendingCreations = new Map<string, PendingTerminalCreation>()
   private sessionTeardown = new TerminalSessionTeardown(this.sessions)
@@ -41,15 +57,14 @@ export class TerminalHost extends TerminalHostInspection {
   private disposePromise: Promise<void> | null = null
   private readonly agentSessionOwners = new ClaimedAgentPtyOwnerRegistry()
   private readonly agentSessionGenerations = new TerminalHostAgentSessionGenerations()
-  protected readonly authorityGeneration = randomUUID()
-  protected observationEpoch = 0
-  protected readonly retiredIncarnations = new Map<
+  private readonly authorityGeneration = randomUUID()
+  private observationEpoch = 0
+  private readonly retiredIncarnations = new Map<
     string,
     { incarnationId: string; code: number; expiresAt: number }
   >()
 
   constructor(opts: TerminalHostOptions) {
-    super()
     this.spawnOptions = opts
     this.onSessionReaped = opts.onSessionReaped
     this.reportReadinessEvent = opts.reportReadinessEvent
@@ -182,12 +197,107 @@ export class TerminalHost extends TerminalHostInspection {
     this.onSessionReaped?.(sessionId)
   }
 
+  signal(sessionId: string, sig: string): void {
+    getAliveTerminalHostSession(this.sessions, sessionId).signal(sig)
+  }
+
+  detach(sessionId: string, token: symbol): void {
+    this.detachClients([{ sessionId, token }])
+  }
+
+  detachClients(attachments: readonly { sessionId: string; token: symbol }[]): void {
+    for (const { sessionId, token } of attachments) {
+      this.sessions.get(sessionId)?.detachClient(token)
+    }
+  }
+
+  async getCwd(sessionId: string): Promise<string | null> {
+    return await resolveTerminalHostSessionCwd(
+      getAliveTerminalHostSession(this.sessions, sessionId)
+    )
+  }
+
+  // A vanished pane has no agent icon to display.
+  getForegroundProcess(sessionId: string): string | null {
+    const session = this.sessions.get(sessionId)
+    if (!session || !session.isAlive) {
+      return null
+    }
+    return session.getForegroundProcess()
+  }
+
+  inspectProcess(
+    sessionId: string,
+    options?: PtyProcessInspectionOptions
+  ): Promise<TerminalHostProcessInspection> {
+    return inspectTerminalHostSession(
+      this.sessions,
+      this.retiredIncarnations,
+      sessionId,
+      options,
+      this.authorityGeneration,
+      () => ++this.observationEpoch
+    )
+  }
+
+  async confirmForegroundProcess(sessionId: string): Promise<string | null> {
+    return confirmTerminalHostForegroundProcess(this.sessions.get(sessionId))
+  }
+
+  async confirmShellForeground(sessionId: string): Promise<boolean> {
+    return confirmTerminalHostShellForeground(this.sessions.get(sessionId), () =>
+      this.sessions.get(sessionId)
+    )
+  }
+
+  clearScrollback(sessionId: string): void {
+    getAliveTerminalHostSession(this.sessions, sessionId).clearScrollback()
+  }
+
+  resetInputModes(sessionId: string): void {
+    getAliveTerminalHostSession(this.sessions, sessionId).resetInputModes()
+  }
+
+  // Checkpoint reads tolerate sessions that have just exited.
+  getSnapshot(sessionId: string, opts: { scrollbackRows?: number } = {}): TerminalSnapshot | null {
+    return getTerminalHostSnapshot(this.sessions.get(sessionId), opts)
+  }
+
+  async getSettledSnapshot(
+    sessionId: string,
+    opts: { scrollbackRows?: number } = {}
+  ): Promise<TerminalSnapshot | null> {
+    return getSettledTerminalHostSnapshot(this.sessions.get(sessionId), opts)
+  }
+
+  // Seed scan-authority handoff with the incomplete escape at the current stream position.
+  getPartialEscapeTailAnsi(sessionId: string): string {
+    return getTerminalHostPartialEscapeTail(this.sessions.get(sessionId))
+  }
+
+  // Let the renderer detect dropped or coerced resizes from the applied dimensions.
+  getAppliedSize(sessionId: string): { cols: number; rows: number } | null {
+    return getTerminalHostAppliedSize(this.sessions.get(sessionId))
+  }
+
+  takePendingOutput(
+    sessionId: string,
+    includeSnapshot: boolean,
+    opts: { teardownSnapshot?: boolean } = {}
+  ): TakePendingOutputResult | null {
+    return takeTerminalHostPendingOutput(this.sessions.get(sessionId), includeSnapshot, opts)
+  }
+
   isKilled(sessionId: string): boolean {
     return this.killedTombstones.has(sessionId)
   }
 
   listSessions(): SessionInfo[] {
     return listLiveTerminalHostSessions(this.sessions, this.agentSessionOwners)
+  }
+
+  hasLiveSessions(): boolean {
+    return hasLiveTerminalHostSessions(this.sessions)
   }
 
   /** Last resort when shutdown overruns its deadline: an async group sweep may not have signalled yet. */
