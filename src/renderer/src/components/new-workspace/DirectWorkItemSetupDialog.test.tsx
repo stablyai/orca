@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { readDirectSetupRequest } from '@/lib/direct-work-item-setup-test-fixture'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
@@ -16,8 +17,7 @@ afterEach(() => {
   useAppStore.setState(initial, true)
 })
 function request(): DirectWorkItemSetupRequest {
-  // SAFETY: each test reads the typed modal entry just installed by requestDirectWorkItemSetup.
-  return useAppStore.getState().modalData.directSetup as DirectWorkItemSetupRequest
+  return readDirectSetupRequest(useAppStore.getState().modalData.directSetup)
 }
 const recovered: DirectSetupInspection = {
   kind: 'needs-modal',

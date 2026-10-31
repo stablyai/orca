@@ -68,11 +68,16 @@ export function requestDirectWorkItemSetup(
 export async function prepareDirectWorkItemSetup(
   repo: Repo,
   ownerHostId: ExecutionHostId,
-  signal?: AbortSignal
-): Promise<SetupDecision | 'cancelled'> {
+  signal?: AbortSignal,
+  onSetupRequired?: () => void
+): Promise<SetupDecision | 'cancelled' | 'review-request'> {
   const inspection = await resolveDirectSetupDecision(repo.id, repo, ownerHostId)
   if (signal?.aborted) {
     return 'cancelled'
+  }
+  if (inspection.kind !== 'decided' && onSetupRequired) {
+    onSetupRequired()
+    return 'review-request'
   }
   const decision =
     inspection.kind === 'decided'
@@ -92,7 +97,8 @@ export async function prepareDirectWorkItemSetup(
     'setup',
     ownerHostId,
     undefined,
-    () => signal?.aborted === true
+    () => signal?.aborted === true,
+    signal
   )
   if (signal?.aborted) {
     return 'cancelled'

@@ -1,3 +1,4 @@
+import { readDirectSetupRequest } from '@/lib/direct-work-item-setup-test-fixture'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import {
@@ -11,8 +12,7 @@ afterEach(() => {
   useAppStore.setState(initial, true)
 })
 function request(): DirectWorkItemSetupRequest {
-  // SAFETY: the real preparation function installed this typed modal entry immediately before this read.
-  return useAppStore.getState().modalData.directSetup as DirectWorkItemSetupRequest
+  return readDirectSetupRequest(useAppStore.getState().modalData.directSetup)
 }
 
 it('settles replacement as cancellation without closing the successor, and ignores late choices', async () => {

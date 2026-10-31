@@ -107,6 +107,7 @@ export async function fixBrokenPullRequestChecks(args: {
       basePrompt,
       launchSource: 'task_page',
       telemetrySource: 'sidebar',
+      onSetupRequired: () => args.setFixChecksComposerPrompt(basePrompt),
       openModalFallback: () => {
         args.setFixChecksComposerPrompt(basePrompt)
       }

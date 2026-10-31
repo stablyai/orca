@@ -54,6 +54,7 @@ type StartFixChecksAgentArgs = {
   launchSource: LaunchSource
   telemetrySource?: WorkspaceCreateTelemetrySource
   openModalFallback?: () => void
+  onSetupRequired?: () => void
 }
 
 type SavedAgentOverrideResult =
@@ -306,7 +307,8 @@ async function launchFixChecksAgent(args: StartFixChecksAgentArgs): Promise<bool
           }
         }
       : {}),
-    openModalFallback: args.openModalFallback
+    openModalFallback: args.openModalFallback,
+    onSetupRequired: args.onSetupRequired
   })
   return result === true
 }

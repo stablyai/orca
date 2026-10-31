@@ -2,7 +2,14 @@ import { planAgentCliArgsSuffix } from './tui-agent-startup'
 import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
 import { readAgentLaunchPreferencesForWorkspace } from '@/components/settings/use-host-agent-launch-preferences'
 import { useAppStore, type AppState } from '@/store'
-import { ensureDetectedAgentsForRepo } from './agent-detection-target-inventory'
+import {
+  ensureDetectedAgentsForRepo,
+  loadProjectLaunchContext
+} from './agent-detection-target-inventory'
+import { toast } from 'sonner'
+import { CLIENT_PLATFORM } from './new-workspace'
+import { getLocalRepoProjectExecutionRuntimeContext } from './local-preflight-context'
+import { refineLocalLaunchPlatform, resolveRepoExecutionHostPlatform } from './execution-host-facts'
 import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
 import { resolveDefaultAgentForWorkspace } from './agent-tab-shortcuts'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
@@ -14,6 +21,7 @@ import {
   planAgentSessionLaunch,
   type AgentSessionLaunchRequest
 } from './agent-session-launch-plan'
+import { resolveHookCommandSourcePolicy } from '../../../shared/hook-command-source-policy'
 import { getDefaultSetupDecision, getSetupConfig } from '../../../shared/orca-hook-setup-config'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
 import { resolveGitHubPrStartPointForRepo } from '@/lib/github-pr-start-point'
@@ -59,12 +67,19 @@ export async function resolveDirectSetupDecision(
 ): Promise<DirectSetupInspection> {
   let yamlHooks: OrcaHooks | null = null
   try {
-    // Why: the same owner host as the PR start point and createWorktree, never focus.
-    const result = await checkRuntimeHooks(ownerHostId, repoId)
-    if (result.status === 'error' || result.unavailable || (result.hasHooks && !result.hooks)) {
-      return { kind: 'unavailable' }
+    // Only inspect shared configuration when the effective source uses it.
+    if (
+      resolveHookCommandSourcePolicy(repo.hookSettings?.commandSourcePolicy, {
+        hasLocalScript: Boolean(repo.hookSettings?.scripts?.setup?.trim())
+      }) !== 'local-only'
+    ) {
+      // Why: the same owner host as the PR start point and createWorktree, never focus.
+      const result = await checkRuntimeHooks(ownerHostId, repoId)
+      if (result.status === 'error' || result.unavailable || (result.hasHooks && !result.hooks)) {
+        return { kind: 'unavailable' }
+      }
+      yamlHooks = (result.hooks as OrcaHooks | null) ?? null
     }
-    yamlHooks = (result.hooks as OrcaHooks | null) ?? null
   } catch {
     return { kind: 'unavailable' }
   }
@@ -197,4 +212,44 @@ export function directWorkItemAgentArgsError(
   // Reject malformed saved arguments before creating a workspace.
   const plan = planAgentCliArgsSuffix(agentArgs, shell)
   return plan.ok ? null : plan.error
+}
+
+export function prepareDirectLaunchContext(
+  store: AppState,
+  args: Pick<LaunchWorkItemDirectArgs, 'repoId' | 'launchPlatform' | 'openModalFallback'>
+) {
+  const owner = resolveDirectLaunchOwnerRow(store.repos, args.repoId)
+  if (!owner) {
+    args.openModalFallback()
+    return null
+  }
+  const { repo, target: repoOwnerTarget } = owner
+
+  const repoConnectionId = repo.connectionId?.trim() || null
+  const repoProjectRuntime = repoConnectionId
+    ? undefined
+    : getLocalRepoProjectExecutionRuntimeContext(store, args.repoId, CLIENT_PLATFORM)
+  // Why: the agent runs on the repo's execution host, so its OS decides quoting, not this client's (#27971).
+  const repoLaunchFact = resolveRepoExecutionHostPlatform(store, repo, () => repoProjectRuntime)
+  if (repoLaunchFact.kind === 'withheld') {
+    toast.error(repoLaunchFact.reason)
+    return null
+  }
+  const repoLaunchHost = refineLocalLaunchPlatform(repoLaunchFact, args.launchPlatform)
+  const shell: AgentStartupShell = repoLaunchHost.platform === 'win32' ? 'powershell' : 'posix'
+  // Why: agent detection shells out and can be cold/slow. Start it now, but
+  // don't let it serialize setup-policy resolution or git worktree creation.
+  const projectContextPromise = loadProjectLaunchContext(repoOwnerTarget, args.repoId).then(
+    (context) => ({ context }),
+    () => null
+  )
+
+  return {
+    ...owner,
+    repoConnectionId,
+    repoProjectRuntime,
+    repoLaunchHost,
+    shell,
+    projectContextPromise
+  }
 }

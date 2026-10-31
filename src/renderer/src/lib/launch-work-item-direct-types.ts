@@ -25,6 +25,7 @@ export type LaunchableWorkItem = {
 
 export type LaunchWorkItemDirectArgs = {
   signal?: AbortSignal
+  onSetupRequired?: () => void
   item: LaunchableWorkItem
   repoId: string
   openModalFallback: () => void

@@ -26,7 +26,7 @@ vi.mock('@/lib/ensure-hooks-confirmed', () => ({
 }))
 vi.mock('@/lib/launch-work-item-direct-preflight', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  resolveDirectSetupDecision: vi.fn().mockResolvedValue({ kind: 'resolved', decision: 'inherit' })
+  resolveDirectSetupDecision: vi.fn().mockResolvedValue({ kind: 'decided', decision: 'inherit' })
 }))
 vi.mock('@/lib/agent-detection-target-inventory', () => ({
   loadProjectLaunchContext: vi.fn().mockResolvedValue(undefined),
