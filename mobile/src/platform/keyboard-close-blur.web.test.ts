@@ -25,6 +25,10 @@ function shellReports(height: number): void {
   }
 }
 
+function touch(target: Element): void {
+  target.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+}
+
 function focusedField(userAgent: string): HTMLInputElement {
   Object.defineProperty(navigator, 'userAgent', { configurable: true, value: userAgent })
   const field = document.createElement('input')
@@ -45,6 +49,7 @@ describe('a keyboard the phone closes', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     shellListeners.clear()
     shellHeight = 0
     publishShellKeyboardSource(null)
@@ -57,6 +62,52 @@ describe('a keyboard the phone closes', () => {
     shellReports(300)
     expect(document.activeElement).toBe(field)
 
+    shellReports(0)
+
+    expect(document.activeElement).not.toBe(field)
+  })
+
+  it('refocuses its field with the caret kept when the keyboard closes right after a touch on it, as for a suggestion menu', () => {
+    vi.useFakeTimers()
+    const field = focusedField('Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36')
+    field.value = 'reader here'
+    field.setSelectionRange(3, 3)
+    let focusSessions = 0
+    field.addEventListener('focus', () => focusSessions++)
+    startBlurringOnKeyboardClose()
+    shellReports(300)
+
+    touch(field)
+    shellReports(0)
+    vi.advanceTimersByTime(50)
+
+    expect(document.activeElement).toBe(field)
+    expect(focusSessions).toBe(1)
+    expect([field.selectionStart, field.selectionEnd]).toEqual([3, 3])
+  })
+
+  it('still ends focus when the last touch landed outside the field', () => {
+    const field = focusedField('Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36')
+    const terminal = document.createElement('div')
+    document.body.append(terminal)
+    startBlurringOnKeyboardClose()
+    shellReports(300)
+
+    touch(field)
+    touch(terminal)
+    shellReports(0)
+
+    expect(document.activeElement).not.toBe(field)
+  })
+
+  it('still ends focus on a Back press long after the field was touched', () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    const field = focusedField('Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36')
+    startBlurringOnKeyboardClose()
+    shellReports(300)
+
+    touch(field)
+    vi.advanceTimersByTime(5000)
     shellReports(0)
 
     expect(document.activeElement).not.toBe(field)
