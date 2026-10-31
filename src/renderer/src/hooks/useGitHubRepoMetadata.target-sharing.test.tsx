@@ -14,6 +14,7 @@ import { GitHubWorkItemTargetContext } from '@/components/github-item-dialog/loa
 import { useGitHubWorkItemDetails } from '@/components/github-item-dialog/load-item-details/use-github-work-item-details'
 import { listAssignableUsers, listLabels } from '../../../main/github/issue-field-options'
 import { resolveGitHubRepoOperationOwner } from '@/lib/github-source-runtime-context'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import { create } from 'zustand'
 import { createRepoUpdateActions } from '@/store/repos/repo-update'
 import type { RepoUpdate } from '@/store/repos/repo-state'
@@ -78,8 +79,8 @@ const metadataStore = create<
   settings: { activeRuntimeEnvironmentId: 'S' },
   recordFeatureInteraction: () => {}
 }))
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this partial store includes every field the production account update reads; persistence is the only substituted boundary.
 const repoActions = createRepoUpdateActions(
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this partial store includes every field the production account update reads; persistence is the only substituted boundary.
   ...([metadataStore.setState, metadataStore.getState] as unknown as Parameters<
     typeof createRepoUpdateActions
   >)
@@ -465,13 +466,12 @@ it.each([10, 100])(
       useGitHubOperationOwner({ repoId: 'shared', repoPath: '/shared', sourceContext: source })
       return null
     }
+    const redundantOwners = Array.from({ length: 4 * count }, () => ({ id: createBrowserUuid() }))
     const redundantRoot = createRoot(document.createElement('div'))
     try {
       await act(async () =>
         redundantRoot.render(
-          Array.from({ length: 4 * count }, (_, index) => (
-            <RedundantOwnerSubscription key={index} />
-          ))
+          redundantOwners.map((owner) => <RedundantOwnerSubscription key={owner.id} />)
         )
       )
       await act(async () => {})

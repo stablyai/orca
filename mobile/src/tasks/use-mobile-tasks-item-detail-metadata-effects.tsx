@@ -1,3 +1,5 @@
+import type { GitHubOwnerRepo } from '../../../src/shared/github/pull-request-types'
+import type { SendRequestOptions } from '../transport/rpc-client'
 import {
   SHOW_MOBILE_DETAIL_METADATA_EDITORS,
   SHOW_MOBILE_DETAIL_REVIEW_PANELS
@@ -73,9 +75,9 @@ export function useMobileTasksItemDetailMetadataEffects<
       send: (
         selected: NonNullable<typeof client>,
         exact: {
-          ownerRepo?: import('../../../src/shared/github/pull-request-types').GitHubOwnerRepo
+          ownerRepo?: GitHubOwnerRepo
         },
-        options: import('../transport/rpc-client').SendRequestOptions
+        options: SendRequestOptions
       ) => Promise<T>
     ) => {
       const target = requireGitHubTaskTarget(actionItem.source)

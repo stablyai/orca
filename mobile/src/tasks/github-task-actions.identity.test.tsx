@@ -140,8 +140,8 @@ async function mount() {
       taskStateHydrated: true,
       tasksSupported: true
     }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture supplies every member the production list owner reads; inactive provider branches are not entered.
     const listOwner = useMobileTasksTaskListLoading(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture supplies every member the production list owner reads; inactive provider branches are not entered.
       listInput as unknown as Parameters<typeof useMobileTasksTaskListLoading>[0]
     )
     const [linearCommentDraft, setLinearCommentDraft] = useState('linear comment')

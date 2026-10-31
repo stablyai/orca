@@ -1,4 +1,4 @@
-import { RecordingFault } from './recording-fault'
+import type { RecordingFault } from './recording-fault'
 import {
   captureError,
   observeSettlement,
@@ -6,7 +6,7 @@ import {
   type Settlement
 } from './recording-values'
 import type { RecordingScenario, RecordingScheduler, MountedOperation } from './recording-scenario'
-import { ScriptedRpcTransport } from './scripted-rpc-transport'
+import type { ScriptedRpcTransport } from './scripted-rpc-transport'
 
 export function recordingStep(
   scenario: RecordingScenario,

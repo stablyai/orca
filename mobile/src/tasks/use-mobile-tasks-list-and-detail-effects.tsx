@@ -1,7 +1,7 @@
 import { githubTaskKey } from './github-task-identity'
 import type { ProjectLoadingActionsModel } from './use-mobile-tasks-project-loading-actions'
 import {
-  View,
+  type View,
   clearMobileTaskCopyFeedbackTimer,
   dropFailedGitHubRepoSlugEntries,
   useCallback,

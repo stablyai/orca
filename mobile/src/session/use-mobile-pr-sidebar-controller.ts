@@ -75,7 +75,9 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
     detailsSeqRef.current += 1
     detailsInFlightRef.current = null
     stateIdentityRef.current = null
-    setState({ kind: 'hidden' })
+    const hidden: PrSidebarState = { kind: 'hidden' }
+    stateRef.current = hidden
+    setRenderedState(hidden)
     return () => {
       loadSeqRef.current += 1
       detailsSeqRef.current += 1
@@ -133,7 +135,9 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
       loadSeqRef.current += 1
       detailsSeqRef.current += 1
       stateIdentityRef.current = null
-      setState({ kind: 'hidden' })
+      const hidden: PrSidebarState = { kind: 'hidden' }
+      stateRef.current = hidden
+      setRenderedState(hidden)
       return
     }
     if (stateIdentityRef.current !== null && stateIdentityRef.current !== identity) {
@@ -141,7 +145,9 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
       loadSeqRef.current += 1
       detailsSeqRef.current += 1
       stateIdentityRef.current = null
-      setState({ kind: 'hidden' })
+      const hidden: PrSidebarState = { kind: 'hidden' }
+      stateRef.current = hidden
+      setRenderedState(hidden)
     }
   }, [identity])
 

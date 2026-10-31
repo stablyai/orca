@@ -1,3 +1,4 @@
+import type * as BridgePortPairModule from '../../mobile-web-shell/bridge/bridge-port-pair-test-harness'
 import { resolve } from 'node:path'
 import { expect, it } from 'vitest'
 import { ScriptedRpcTransport } from './scripted-rpc-transport'
@@ -100,9 +101,9 @@ async function probeCase(
     throw new Error('Missing actual initiating action')
   }
   const factory = mutation ? operationModuleLoader(root, mutation) : undefined
-  const pairModule = factory?.load<
-    typeof import('../../mobile-web-shell/bridge/bridge-port-pair-test-harness')
-  >('mobile/src/mobile-web-shell/bridge/bridge-port-pair-test-harness.ts')
+  const pairModule = factory?.load<typeof BridgePortPairModule>(
+    'mobile/src/mobile-web-shell/bridge/bridge-port-pair-test-harness.ts'
+  )
   const clock = vitestRecordingScheduler()
   let transport: ScriptedRpcTransport | undefined
   let mounted: MountedOperation | undefined

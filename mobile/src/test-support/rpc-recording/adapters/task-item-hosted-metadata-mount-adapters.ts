@@ -1,3 +1,5 @@
+import type * as WorkspaceAndProjectStateModule from '../../../tasks/use-mobile-tasks-workspace-and-project-state'
+import type * as HostedMetadataModule from '../../../tasks/use-mobile-tasks-hosted-metadata-actions'
 import { useLayoutEffect, useRef } from 'react'
 import { useCommittedOwnerProjection, useTaskActionMountOwners } from '../task-action-mount-owners'
 import { hookMount, performHookAction } from '../hook-mount'
@@ -199,11 +201,9 @@ export function taskItemHostedMetadataMountAdapters(
     return (context: Parameters<MountAdapter>[0]) =>
       mountModelHook(modules, context, {
         useHook: (
-          model: Parameters<
-            typeof import('../../../tasks/use-mobile-tasks-hosted-metadata-actions').useMobileTasksHostedMetadataActions
-          >[0]
+          model: Parameters<typeof HostedMetadataModule.useMobileTasksHostedMetadataActions>[0]
         ) =>
-          load<typeof import('../../../tasks/use-mobile-tasks-hosted-metadata-actions')>(
+          load<typeof HostedMetadataModule>(
             'use-mobile-tasks-hosted-metadata-actions.tsx'
           ).useMobileTasksHostedMetadataActions(model),
         fixture: {
@@ -239,9 +239,9 @@ export function taskItemHostedMetadataMountAdapters(
     const useActions = load<typeof import('../../../tasks/use-mobile-tasks-linear-item-actions')>(
       'use-mobile-tasks-linear-item-actions.tsx'
     ).useMobileTasksLinearItemActions
-    const useWorkspace = load<
-      typeof import('../../../tasks/use-mobile-tasks-workspace-and-project-state')
-    >('use-mobile-tasks-workspace-and-project-state.tsx').useMobileTasksWorkspaceAndProjectState
+    const useWorkspace = load<typeof WorkspaceAndProjectStateModule>(
+      'use-mobile-tasks-workspace-and-project-state.tsx'
+    ).useMobileTasksWorkspaceAndProjectState
     return mountModelHook(modules, context, {
       useHook: (model: Parameters<typeof useActions>[0]) => {
         const initialDraft = useRef(model.linearCommentDraft)

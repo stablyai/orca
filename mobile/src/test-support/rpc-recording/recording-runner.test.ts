@@ -1,3 +1,4 @@
+import type * as GithubPrRpcModule from '../../session/github-pr-rpc'
 import {
   createBridgePortPair,
   disposeBridgePortPair,
@@ -565,9 +566,7 @@ describe('actual invocation ownership and fatal output boundaries', () => {
             }
           : undefined
       )
-      const reads = loader.load<typeof import('../../session/github-pr-rpc')>(
-        'mobile/src/session/github-pr-rpc.ts'
-      )
+      const reads = loader.load<typeof GithubPrRpcModule>('mobile/src/session/github-pr-rpc.ts')
       const steps: RecordingScenario['steps'] = [{ action: 'read', id: 'read' }]
       if (origin !== 'arguments') {
         steps.push({

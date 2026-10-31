@@ -1,3 +1,6 @@
+import type * as WorkspaceAndProjectStateModule from '../../tasks/use-mobile-tasks-workspace-and-project-state'
+import type * as GithubTaskIdentityModule from '../../tasks/github-task-identity'
+import type * as TaskItemStateModule from '../../tasks/use-mobile-tasks-item-state'
 import { useLayoutEffect, useRef } from 'react'
 import type { operationModuleLoader } from './operation-module-loader'
 import type { ActionableTaskItem } from '../../tasks/mobile-tasks-project-workspace-types'
@@ -13,12 +16,12 @@ function useTaskStateAndSelection(
   model: Record<string, unknown>,
   fixture: Record<string, unknown>
 ) {
-  const { useMobileTasksItemState } = modules.load<
-    typeof import('../../tasks/use-mobile-tasks-item-state')
-  >('mobile/src/tasks/use-mobile-tasks-item-state.tsx')
-  const { useMobileTasksSelection, githubTaskKey } = modules.load<
-    typeof import('../../tasks/github-task-identity')
-  >('mobile/src/tasks/github-task-identity.ts')
+  const { useMobileTasksItemState } = modules.load<typeof TaskItemStateModule>(
+    'mobile/src/tasks/use-mobile-tasks-item-state.tsx'
+  )
+  const { useMobileTasksSelection, githubTaskKey } = modules.load<typeof GithubTaskIdentityModule>(
+    'mobile/src/tasks/github-task-identity.ts'
+  )
   const state = useMobileTasksItemState()
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mount adapter stores its actual recording client in this field.
   const selection = useMobileTasksSelection(model.client as RpcClient, state.detailPayload)
@@ -88,9 +91,9 @@ export function useTaskActionMountOwners(
   fixture: Record<string, unknown>
 ): void {
   const { state, selection } = useTaskStateAndSelection(modules, model, fixture)
-  const { useMobileTasksMutation } = modules.load<
-    typeof import('../../tasks/use-mobile-tasks-workspace-and-project-state')
-  >('mobile/src/tasks/use-mobile-tasks-workspace-and-project-state.tsx')
+  const { useMobileTasksMutation } = modules.load<typeof WorkspaceAndProjectStateModule>(
+    'mobile/src/tasks/use-mobile-tasks-workspace-and-project-state.tsx'
+  )
   const mutation = useMobileTasksMutation()
   const owners = { ...state, ...mutation, ...selection }
   Object.assign(model, owners, {
@@ -131,9 +134,9 @@ export function useTaskFileMountOwner(
   context: MountContext,
   model: Record<string, unknown>
 ): void {
-  const { useMobileTasksItemState } = modules.load<
-    typeof import('../../tasks/use-mobile-tasks-item-state')
-  >('mobile/src/tasks/use-mobile-tasks-item-state.tsx')
+  const { useMobileTasksItemState } = modules.load<typeof TaskItemStateModule>(
+    'mobile/src/tasks/use-mobile-tasks-item-state.tsx'
+  )
   const state = useMobileTasksItemState()
   const owners = {
     expandedPrFilePath: state.expandedPrFilePath,

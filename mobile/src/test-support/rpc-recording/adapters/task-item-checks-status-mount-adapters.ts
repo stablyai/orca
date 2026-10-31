@@ -1,3 +1,4 @@
+import type * as GitlabGithubStatusModule from '../../../tasks/use-mobile-tasks-gitlab-github-status-actions'
 import { useTaskActionMountOwners } from '../task-action-mount-owners'
 import { hookMount, performHookAction } from '../hook-mount'
 import { observableModel, projectObservable } from '../observable-model'
@@ -229,10 +230,10 @@ export function taskItemChecksStatusMountAdapters(
       mountModelHook(modules, context, {
         useHook: (
           model: Parameters<
-            typeof import('../../../tasks/use-mobile-tasks-gitlab-github-status-actions').useMobileTasksGitlabGithubStatusActions
+            typeof GitlabGithubStatusModule.useMobileTasksGitlabGithubStatusActions
           >[0]
         ) =>
-          load<typeof import('../../../tasks/use-mobile-tasks-gitlab-github-status-actions')>(
+          load<typeof GitlabGithubStatusModule>(
             'use-mobile-tasks-gitlab-github-status-actions.tsx'
           ).useMobileTasksGitlabGithubStatusActions(model),
         fixture: {

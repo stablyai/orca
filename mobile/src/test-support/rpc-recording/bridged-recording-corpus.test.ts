@@ -313,7 +313,7 @@ function comparison(
       }
       ids.set(frame.id, original.id)
     }
-    const sender = attempts(after).map((attempt, index) => {
+    const sender: RecordedValue[] = attempts(after).map((attempt, index) => {
       const original = attempts(before)[index]
       if (!original || original.name !== attempt.name) {
         throw new Error('Changed actual caller sequence')
@@ -332,10 +332,9 @@ function comparison(
       }
       return value
     })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this comparison-only copy retains the captured sender fields and changes only bound protocol response IDs.
     const actual: Observation = {
       ...after,
-      sender: sender as unknown as RecordedValue,
+      sender,
       payloads: kept.map((row) => ({
         ...row,
         name: names.get(String(row.name)) ?? row.name,
@@ -617,16 +616,14 @@ describe.skipIf(process.env[BRIDGED_PARITY_FLAG] === BRIDGED_PARITY_OFF)(
       it(
         `${golden.id}: bridged parity`,
         async () => {
-          if (golden.lineage.domain === 'bridge-only') {
-            await bridgeOnlyVerdict(golden.id, golden.family, golden.scenarios())
-          } else {
-            await verdict(
-              golden.id,
-              golden.family,
-              native.get(golden.id)!.scenarios(),
-              golden.scenarios()
-            )
-          }
+          await (golden.lineage.domain === 'bridge-only'
+            ? bridgeOnlyVerdict(golden.id, golden.family, golden.scenarios())
+            : verdict(
+                golden.id,
+                golden.family,
+                native.get(golden.id)!.scenarios(),
+                golden.scenarios()
+              ))
         },
         // Replay every real native/page-original/page-reply-meta partition within the family's allowance.
         golden.timeoutMs

@@ -75,17 +75,20 @@ vi.mock('../open-dialog/github-item-dialog-pr-tabs', () => ({
   }
 }))
 
-const io = vi.hoisted(() => ({
-  gh: vi.fn(),
-  host: 'github.com',
-  capable: true,
-  rpc: vi.fn(),
-  setViewed: vi.fn(),
-  preference: 'upstream' as 'upstream' | 'origin',
-  upstreamIsIssue: false,
-  recordInteraction: vi.fn(),
-  unexpected: new Array<string>()
-}))
+const io = vi.hoisted(() => {
+  const target: { preference: 'upstream' | 'origin' } = { preference: 'upstream' }
+  return {
+    gh: vi.fn(),
+    host: 'github.com',
+    capable: true,
+    rpc: vi.fn(),
+    setViewed: vi.fn(),
+    preference: target.preference,
+    upstreamIsIssue: false,
+    recordInteraction: vi.fn(),
+    unexpected: new Array<string>()
+  }
+})
 vi.mock('../../../../../main/git/runner', async (original) => ({
   ...(await original<typeof GitRunner>()),
   ghExecFileAsync: io.gh

@@ -36,7 +36,7 @@ const PR: PRInfo = {
   mergeable: 'MERGEABLE',
   reviewDecision: null,
   headSha: 'sha-pr'
-} as unknown as PRInfo
+}
 const DETAILS: GitHubWorkItemDetails = {
   item: {
     id: 'PR_7',

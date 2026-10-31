@@ -106,11 +106,9 @@ it.each([false, true])(
     await refused
     expect(a.writes).toEqual([])
     expect(b.writes).toEqual([])
-    if (capable) {
-      await expect(update(logical)).resolves.toMatchObject({ ok: true })
-    } else {
-      await expect(update(logical)).rejects.toThrow('Update Orca')
-    }
+    await (capable
+      ? expect(update(logical)).resolves.toMatchObject({ ok: true })
+      : expect(update(logical)).rejects.toThrow('Update Orca'))
     expect(b.writes).toHaveLength(capable ? 1 : 0)
     logical.close()
   }

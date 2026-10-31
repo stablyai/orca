@@ -1,3 +1,4 @@
+import type { SendRequestOptions } from './rpc-client'
 import { isRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connect } from './rpc-client'
@@ -213,11 +214,7 @@ describe('hosted GitHub operation physical authority', () => {
       ...createFakeRpcClient(),
       ...direct,
       // Methods on DirectRpcClient's prototype are bound by this facade.
-      sendRequest: (
-        method: string,
-        params?: unknown,
-        options?: import('./rpc-client').SendRequestOptions
-      ) => {
+      sendRequest: (method: string, params?: unknown, options?: SendRequestOptions) => {
         const pending = direct.sendRequest(method, params, options)
         if (cutOnMutation && method === 'github.updateIssue') {
           socket.close()

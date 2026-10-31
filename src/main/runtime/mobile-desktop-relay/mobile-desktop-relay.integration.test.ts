@@ -46,13 +46,15 @@ import type * as PassthroughSocketModule from '../../../shared/remote-runtime/re
 
 const passthroughOpens = vi.hoisted(() => {
   const hostReplies: string[] = []
+  const heldOpen: (() => void)[] = []
+  const heldStatus: (() => void)[] = []
   return {
     count: 0,
     hostReplies,
     holdStatus: false,
     holdOpen: false,
-    heldOpen: [] as (() => void)[],
-    heldStatus: [] as (() => void)[]
+    heldOpen,
+    heldStatus
   }
 })
 vi.mock(

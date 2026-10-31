@@ -1,3 +1,4 @@
+import type { SendRequestOptions } from './rpc-client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   BrowserScreencastOpcode,
@@ -480,11 +481,7 @@ it('carries captured GitHub authority through the production relay physical awai
   const retire = true
   const client = {
     ...session,
-    sendRequest: (
-      method: string,
-      params?: unknown,
-      options?: import('./rpc-client').SendRequestOptions
-    ) => {
+    sendRequest: (method: string, params?: unknown, options?: SendRequestOptions) => {
       const result = session.sendRequest(method, params, options)
       if (method === 'github.updateIssue' && retire) {
         session.close()

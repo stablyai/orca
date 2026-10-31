@@ -1,3 +1,5 @@
+import type * as GithubReplyMergeModule from '../../../tasks/use-mobile-tasks-github-reply-merge-actions'
+import type * as HostedCommentReviewModule from '../../../tasks/use-mobile-tasks-hosted-comment-review-actions'
 import { useTaskActionMountOwners } from '../task-action-mount-owners'
 import { hookMount, performHookAction } from '../hook-mount'
 import { observableModel, projectObservable } from '../observable-model'
@@ -202,10 +204,10 @@ export function taskItemConversationMountAdapters(
       mountModelHook(modules, context, {
         useHook: (
           model: Parameters<
-            typeof import('../../../tasks/use-mobile-tasks-hosted-comment-review-actions').useMobileTasksHostedCommentReviewActions
+            typeof HostedCommentReviewModule.useMobileTasksHostedCommentReviewActions
           >[0]
         ) =>
-          load<typeof import('../../../tasks/use-mobile-tasks-hosted-comment-review-actions')>(
+          load<typeof HostedCommentReviewModule>(
             'use-mobile-tasks-hosted-comment-review-actions.tsx'
           ).useMobileTasksHostedCommentReviewActions(model),
         fixture: {
@@ -237,11 +239,9 @@ export function taskItemConversationMountAdapters(
     return (context: Parameters<MountAdapter>[0]) =>
       mountModelHook(modules, context, {
         useHook: (
-          model: Parameters<
-            typeof import('../../../tasks/use-mobile-tasks-github-reply-merge-actions').useMobileTasksGithubReplyMergeActions
-          >[0]
+          model: Parameters<typeof GithubReplyMergeModule.useMobileTasksGithubReplyMergeActions>[0]
         ) =>
-          load<typeof import('../../../tasks/use-mobile-tasks-github-reply-merge-actions')>(
+          load<typeof GithubReplyMergeModule>(
             'use-mobile-tasks-github-reply-merge-actions.tsx'
           ).useMobileTasksGithubReplyMergeActions(model),
         fixture: {

@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useLayoutEffect } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
 import {
@@ -34,7 +34,8 @@ const details = (owner: string) => ({
 })
 
 it('runs phase-two failure, Retry, prior isolation and late A/B claim settlement through the production controller and decoders', async () => {
-  const client = createFakeRpcClient()
+  let generation = 1
+  const client = createFakeRpcClient({ getGeneration: () => generation })
   const pending: { owner: string; resolve: (reply: RpcResponse) => void }[] = []
   let owner = 'fork'
   client.sendRequest = async (method, params) => {
@@ -65,6 +66,7 @@ it('runs phase-two failure, Retry, prior isolation and late A/B claim settlement
     }
     return rpcSuccess(method, result)
   }
+  const beforeEffects: string[] = []
   let controller: MobilePrSidebarController
   function Probe() {
     controller = useMobilePrSidebarController({
@@ -74,6 +76,9 @@ it('runs phase-two failure, Retry, prior isolation and late A/B claim settlement
       branch: 'feat',
       headSha: 'head'
     })
+    useLayoutEffect(() => {
+      beforeEffects.push(controller.prSidebarState.kind)
+    }, [generation])
     return null
   }
   await act(async () => {
@@ -111,5 +116,29 @@ it('runs phase-two failure, Retry, prior isolation and late A/B claim settlement
   expect(controller!.prSidebarState).toMatchObject({
     kind: 'ready',
     data: { details: { body: 'upstream body', pullRequestId: 'PR_upstream' } }
+  })
+
+  await act(async () => controller.retryPRSidebar())
+  expect(pending).toHaveLength(1)
+  const oldGeneration = pending.shift()!
+  generation += 1
+  await act(async () => renderer!.update(<Probe />))
+  // Layout sees the existing ready render; the original passive reset then hides it.
+  expect(beforeEffects).toEqual(['hidden', 'ready'])
+  expect(controller!.prSidebarState).toEqual({ kind: 'hidden' })
+  await act(async () => oldGeneration.resolve(rpcSuccess('old-generation', details('upstream'))))
+  expect(controller!.prSidebarState).toEqual({ kind: 'hidden' })
+  owner = 'new-generation'
+  await act(async () => controller.openPRSidebar())
+  expect(pending).toHaveLength(1)
+  await act(async () =>
+    pending.shift()!.resolve(rpcSuccess('current-generation', details('new-generation')))
+  )
+  expect(controller!.prSidebarState).toMatchObject({
+    kind: 'ready',
+    data: {
+      pr: { title: 'new-generation' },
+      details: { body: 'new-generation body', pullRequestId: 'PR_new-generation' }
+    }
   })
 })

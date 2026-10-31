@@ -1,3 +1,5 @@
+import type * as GithubPrEntityReplySchemaModule from '../../../session/github-pr-entity-reply-schema'
+import type * as TaskItemDetailReplySchemaModule from '../../../tasks/task-item-detail-reply-schema'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { pilotGoldens } from '../derived-goldens'
@@ -76,9 +78,9 @@ describe('RPC main recording mutants', () => {
       operationMutation('assignable-user-avatar-null-collapse')
     )
     const read = (modules: ReturnType<typeof operationModuleLoader>) => {
-      const { githubAssignableUsersSchema } = modules.load<
-        typeof import('../../../tasks/task-item-detail-reply-schema')
-      >('mobile/src/tasks/task-item-detail-reply-schema.ts')
+      const { githubAssignableUsersSchema } = modules.load<typeof TaskItemDetailReplySchemaModule>(
+        'mobile/src/tasks/task-item-detail-reply-schema.ts'
+      )
       const result = githubAssignableUsersSchema.safeParse(users)
       if (!result.success) {
         throw result.error
@@ -97,9 +99,9 @@ describe('RPC main recording mutants', () => {
     expect(changed).not.toStrictEqual(accepted)
 
     for (const modules of [original, mutated]) {
-      const { assignableUsersSchema } = modules.load<
-        typeof import('../../../session/github-pr-entity-reply-schema')
-      >('mobile/src/session/github-pr-entity-reply-schema.ts')
+      const { assignableUsersSchema } = modules.load<typeof GithubPrEntityReplySchemaModule>(
+        'mobile/src/session/github-pr-entity-reply-schema.ts'
+      )
       const session = assignableUsersSchema.safeParse(users)
       if (!session.success) {
         throw session.error
