@@ -6,9 +6,11 @@ import {
   clearPendingSendCacheForTests,
   isLaunchPromptMessageId,
   launchPromptAsMessage,
+  NATIVE_CHAT_EXIT_SUPPRESS_AFTER_SEND_MS,
   nextNativeChatPendingSendId,
   readPendingSendCache,
   shouldPruneLaunchPrompt,
+  shouldSuppressNativeChatExitForPane,
   writePendingSendCache
 } from './native-chat-pending'
 import {
@@ -154,6 +156,43 @@ describe('launchPromptAsMessage', () => {
 
     expect(launchPromptAsMessage(entry, oldHistory)).not.toBeNull()
     expect(shouldPruneLaunchPrompt(entry, oldHistory)).toBe(false)
+  })
+})
+
+describe('shouldSuppressNativeChatExitForPane', () => {
+  it('suppresses exit while an optimistic send is pending or within grace (#10098)', () => {
+    clearPendingSendCacheForTests()
+    const scope = { paneKey: 'tab-1:leaf-a', agent: 'codex' }
+    const sentAt = 1_000
+    appendPendingSendCache(scope, {
+      id: 'p1',
+      text: 'ordinary prose',
+      sentAt
+    })
+    expect(shouldSuppressNativeChatExitForPane(scope.paneKey, sentAt + 10)).toBe(true)
+    // Pruned (transcript caught up) but still inside grace window.
+    writePendingSendCache(scope, [])
+    expect(
+      shouldSuppressNativeChatExitForPane(
+        scope.paneKey,
+        sentAt + NATIVE_CHAT_EXIT_SUPPRESS_AFTER_SEND_MS - 1
+      )
+    ).toBe(true)
+    expect(
+      shouldSuppressNativeChatExitForPane(
+        scope.paneKey,
+        sentAt + NATIVE_CHAT_EXIT_SUPPRESS_AFTER_SEND_MS
+      )
+    ).toBe(false)
+  })
+
+  it('does not suppress unrelated panes', () => {
+    clearPendingSendCacheForTests()
+    appendPendingSendCache(
+      { paneKey: 'tab-1:leaf-a', agent: 'codex' },
+      { id: 'p1', text: 'hi', sentAt: 50 }
+    )
+    expect(shouldSuppressNativeChatExitForPane('tab-1:leaf-b', 60)).toBe(false)
   })
 })
 
