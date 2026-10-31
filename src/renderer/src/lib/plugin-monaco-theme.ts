@@ -15,6 +15,13 @@ const BUILT_IN_SYNTAX: Record<'light' | 'dark', readonly string[]> = {
   dark: ['#608b4e', '#ce9178', '#569cd6', '#3dc9b0', '#b5cea8']
 }
 
+// Why only the ruler: main.css repaints the diff rows from these tokens through Monaco's CSS
+// variables, but the overview ruler is a canvas drawn from the theme's colors.
+const MONACO_DIFF_RULER_COLORS: readonly (readonly [string, string])[] = [
+  ['diffEditorOverview.insertedForeground', '--diff-added'],
+  ['diffEditorOverview.removedForeground', '--diff-removed']
+]
+
 function hex([r, g, b, a]: Rgba): string {
   const byte = (value: number): string =>
     Math.round(Math.min(255, Math.max(0, value)))
@@ -87,6 +94,17 @@ export function derivePluginMonacoTheme(input: {
   }
   if (border) {
     colors['editorWidget.border'] = hex(border)
+  }
+  for (const [key, token] of MONACO_DIFF_RULER_COLORS) {
+    const value = color(token)
+    if (value) {
+      colors[key] = hex(value)
+    }
+  }
+  const link = color('--text-link')
+  if (link) {
+    colors['textLink.foreground'] = hex(link)
+    colors['textLink.activeForeground'] = hex(link)
   }
   const data: Monaco.editor.IStandaloneThemeData = {
     base: input.base === 'dark' ? 'vs-dark' : 'vs',
