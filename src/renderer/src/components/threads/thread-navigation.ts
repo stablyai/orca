@@ -1,22 +1,56 @@
 import { create } from 'zustand'
+import type { AgentPickerDraft } from '../../../../shared/agent-launch-picker'
+import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
 import type { AppState } from '@/store/types'
 import { EMPTY_THREAD_IDS } from '../native-chat/structured-session-summary-store'
 import { desktopThreadIds, visibleGroupActiveTabId } from './desktop-tab-projection'
 
 // Only pages that have no selected session need window-local intent.
 export type ThreadSelection =
-  | { kind: 'new'; projectKey: string; draftId: string }
+  | { kind: 'new'; projectKey: string; draftId: string; launchDraft?: AgentPickerDraft }
   | { kind: 'workbench'; worktreeId: string; executionHostId: string | null }
 export type ThreadPage =
   | Extract<ThreadSelection, { kind: 'new' }>
   | { kind: 'thread'; tabId: string; worktreeId: string }
   | null
-export const useThreadNavigation = create<{ selection: ThreadSelection | null }>(() => ({
-  selection: null
+export const useThreadNavigation = create<{
+  selection: ThreadSelection | null
+  request: number
+  projectRequest: { request: number; selection: ThreadSelection | null } | null
+}>(() => ({
+  selection: null,
+  request: 0,
+  projectRequest: null
 }))
-export function clearThreadSelection(): void {
-  if (useThreadNavigation.getState().selection) {
-    useThreadNavigation.setState({ selection: null })
+export function clearThreadSelection(): number {
+  const request = useThreadNavigation.getState().request + 1
+  useThreadNavigation.setState({ selection: null, request, projectRequest: null })
+  return request
+}
+
+/** recordFocus:false is layout maintenance, and floating panels own their own foreground. */
+export function commitDesktopTabNavigation(
+  state: Pick<AppState, 'activeWorktreeId' | 'activeWorkspaceExecutionHostId'>,
+  worktreeId: string,
+  hostId: string | undefined,
+  recordFocus?: boolean
+): void {
+  if (
+    recordFocus !== false &&
+    !isFloatingWorkspaceId(worktreeId) &&
+    state.activeWorktreeId === worktreeId &&
+    (!hostId ||
+      !state.activeWorkspaceExecutionHostId ||
+      state.activeWorkspaceExecutionHostId === hostId)
+  ) {
+    clearThreadSelection()
+  }
+}
+
+export function changeThreadDraftProject(draftId: string, projectKey: string): void {
+  const { selection } = useThreadNavigation.getState()
+  if (selection?.kind === 'new' && selection.draftId === draftId) {
+    useThreadNavigation.setState({ selection: { ...selection, projectKey } })
   }
 }
 
@@ -103,4 +137,9 @@ export function openDesktopWorkbench(state: AppState, worktreeId: string): void 
       }
     })
   }
+}
+
+export function requestThreadProjectAdd(): void {
+  const { request, selection } = useThreadNavigation.getState()
+  useThreadNavigation.setState({ projectRequest: { request, selection } })
 }

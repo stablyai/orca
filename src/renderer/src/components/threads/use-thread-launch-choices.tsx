@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useCallback } from 'react'
 import { useAppStore } from '@/store'
 import { useNewTabAgentMenuRows } from '../tab-bar/use-new-tab-agent-menu-rows'
 import { useAgentLaunchPickerInventory } from '../agent/use-agent-launch-picker-inventory'
@@ -20,14 +20,31 @@ import type {
 } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { ThreadProject } from './thread-projects'
 import { workspaceKindForWorktreeId } from '../../../../shared/workspace-launch-kind'
+import { useThreadNavigation } from './thread-navigation'
 import { ThreadLaunchPicker } from './ThreadLaunchPicker'
 
 export function useThreadLaunchChoices(
   project: ThreadProject | undefined,
-  focusComposer: () => void
+  focusComposer: () => void,
+  draftId: string
 ) {
   const defaultAgent = useAppStore((s) => s.settings?.defaultTuiAgent)
-  const [edited, setDraft] = useState<AgentPickerDraft | null>(null)
+  const edited = useThreadNavigation((s) =>
+    s.selection?.kind === 'new' && s.selection.draftId === draftId
+      ? s.selection.launchDraft
+      : undefined
+  )
+  const setDraft = useCallback(
+    (edit: (current: AgentPickerDraft | null) => AgentPickerDraft) => {
+      const { selection } = useThreadNavigation.getState()
+      if (selection?.kind === 'new' && selection.draftId === draftId) {
+        useThreadNavigation.setState({
+          selection: { ...selection, launchDraft: edit(selection.launchDraft ?? null) }
+        })
+      }
+    },
+    [draftId]
+  )
   const draft = useMemo<AgentPickerDraft>(
     () =>
       edited ?? {
@@ -104,7 +121,7 @@ export function useThreadLaunchChoices(
       invokeAction: async () => ({ snapshot }),
       subscribe: () => () => {}
     }),
-    [snapshot, draft]
+    [snapshot, draft, setDraft]
   )
   return {
     agent: draft.agent,

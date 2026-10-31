@@ -18,11 +18,12 @@ export function visibleGroupActiveTabId(
   group: TabGroup,
   hidden: ReadonlySet<string>
 ): string | null {
-  if (group.activeTabId && !hidden.has(group.activeTabId)) {
+  if (!hidden.size || (group.activeTabId && !hidden.has(group.activeTabId))) {
     return group.activeTabId
   }
+  const valid = new Set(group.tabOrder)
   return (
-    group.recentTabIds?.find((id) => group.tabOrder.includes(id) && !hidden.has(id)) ??
+    group.recentTabIds?.find((id) => !hidden.has(id) && valid.has(id)) ??
     group.tabOrder.find((id) => !hidden.has(id)) ??
     null
   )

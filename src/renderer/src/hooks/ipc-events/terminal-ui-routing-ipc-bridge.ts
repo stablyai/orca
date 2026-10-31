@@ -168,6 +168,9 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
       }
       if (!tab) {
         if (browserTarget) {
+          if (userInitiated) {
+            clearThreadSelection()
+          }
           // Why: older/mobile fallback snapshots identify browser tabs by workspace id when no unified tab wrapper exists.
           revealWorkspaceSurface(store, worktreeId)
           store.setActiveBrowserTab(browserTarget.workspaceId)
@@ -175,14 +178,12 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
         }
         return
       }
-      if (userInitiated) {
-        clearThreadSelection()
-      } else if (useThreadNavigation.getState().selection) {
+      if (!userInitiated && useThreadNavigation.getState().selection) {
         return
       }
       revealWorkspaceSurface(store, worktreeId)
       store.focusGroup(worktreeId, tab.groupId)
-      store.activateTab(tab.id)
+      store.activateTab(tab.id, { recordFocus: userInitiated === true })
       if (tab.contentType === 'agent-session') {
         store.setActiveTabType('agent-session', worktreeId)
       } else if (browserTarget) {

@@ -78,18 +78,28 @@ export function useThreadMembership(worktreeId: string | null | undefined, enabl
 }
 
 export function publishStructuredSessionSummaries(
-  updates: readonly { tabId: string; tab?: Tab; summary: AgentSessionStatusSummary | null }[]
+  updates: readonly {
+    tabId: string
+    tab?: Tab
+    summary: AgentSessionStatusSummary | null
+    surface?: 'thread'
+  }[]
 ): void {
   const previous = useStructuredSessionSummaries.getState()
   let membership: Set<string> | undefined
   let workspaces: Map<string, ReadonlySet<string>> | undefined
   let reorder = false
+  const workspaceDrafts = new Map<string, Set<string>>()
   const changedWorkspaces = new Set<string>()
   const changed = new Set<string>()
   const editWorkspace = (workspaceId: string, id: string, add: boolean) => {
     changedWorkspaces.add(workspaceId)
     workspaces ??= new Map(previous.byWorktree)
-    const ids = new Set(workspaces.get(workspaceId) ?? EMPTY_THREAD_IDS)
+    let ids = workspaceDrafts.get(workspaceId)
+    if (!ids) {
+      ids = new Set(previous.byWorktree.get(workspaceId) ?? EMPTY_THREAD_IDS)
+      workspaceDrafts.set(workspaceId, ids)
+    }
     if (add) {
       ids.add(id)
     } else {
@@ -101,20 +111,20 @@ export function publishStructuredSessionSummaries(
       workspaces.delete(workspaceId)
     }
   }
-  for (const { tabId, tab, summary } of updates) {
+  for (const { tabId, tab, summary, surface } of updates) {
     const old = rows.get(tabId)
-    const thread = summary?.surface === 'thread' ? summary : null
+    const thread = summary ? summary.surface === 'thread' : surface === 'thread'
     if (!thread && !old) {
       continue
     }
     if (thread) {
       const status =
-        thread.status === null
+        summary?.status == null
           ? null
           : structuredAgentSessionAgentStatus({
-              ...thread,
-              status: thread.status,
-              childWork: thread.children ?? thread.backgroundTasks
+              ...summary,
+              status: summary.status,
+              childWork: summary.children ?? summary.backgroundTasks
             })
       const next: ThreadRowSnapshot = {
         tab:
@@ -126,18 +136,18 @@ export function publishStructuredSessionSummaries(
           tab.executionHostId === old.tab.executionHostId
             ? old.tab
             : (tab ?? old?.tab),
-        workspaceId: tab?.worktreeId ?? thread.workspaceId,
+        workspaceId: tab?.worktreeId ?? summary?.workspaceId ?? '',
         title:
-          thread.conversationName ||
-          getAgentRowPrimaryText({ prompt: thread.latestPrompt }) ||
+          summary?.conversationName ||
+          getAgentRowPrimaryText({ prompt: summary?.latestPrompt ?? '' }) ||
           tab?.label ||
           old?.tab?.label ||
           '',
-        agent: thread.agent,
+        agent: summary?.agent ?? tab?.agentSessionAgent ?? old?.agent ?? 'claude',
         state: status
           ? (agentVerdictDisplayMark(status) ?? agentRowDotState(status.state, status.workingMode))
           : 'idle',
-        updatedAt: thread.updatedAt
+        updatedAt: summary?.updatedAt ?? tab?.createdAt ?? old?.updatedAt ?? 0
       }
       if (
         old &&

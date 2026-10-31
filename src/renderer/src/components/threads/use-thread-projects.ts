@@ -2,12 +2,11 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
-import { lastVerifiedRuntimeStatus } from '../../../../shared/runtime-host-status'
 import {
   readLocalRuntimeCapabilitiesOrUnknown,
   subscribeLocalRuntimeCapabilityObservation
 } from '@/runtime/local-runtime-capabilities'
-import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
+import { useThreadHostGeneration } from './use-thread-host-generation'
 import {
   threadProjectCandidates,
   supportedThreadProjects,
@@ -60,28 +59,7 @@ export function useThreadProjects(): { projects: ThreadProject[]; loading: boole
     ]
   )
   const hosts = useMemo(() => [...new Set(candidates.map((p) => p.hostId))], [candidates])
-  const remoteGeneration = useAppStore((state) =>
-    JSON.stringify(
-      hosts.flatMap((host) => {
-        if (!host.startsWith('runtime:')) {
-          return []
-        }
-        const id = host.slice(8)
-        const entry = state.runtimeStatusByEnvironmentId.get(id)
-        const verified = lastVerifiedRuntimeStatus(entry)
-        return [
-          [
-            id,
-            getRuntimeEnvironmentRevision(id),
-            entry?.hostContactEpoch,
-            entry?.connectionGeneration,
-            verified?.runtimeId,
-            verified?.capabilities
-          ]
-        ]
-      })
-    )
-  )
+  const remoteGeneration = useThreadHostGeneration(hosts)
   const local = hosts.includes('local')
   const localGeneration = useSyncExternalStore(
     local ? subscribeLocalRuntimeCapabilityObservation : subscribeToNothing,

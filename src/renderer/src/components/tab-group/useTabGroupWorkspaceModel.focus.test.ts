@@ -147,6 +147,7 @@ function resetStore(): void {
     activeWorktreeId: 'wt-1',
     browserTabsByWorktree: {},
     expandedPaneByTabId: {},
+    activeGroupIdByWorktree: {},
     groupsByWorktree: {
       'wt-1': [
         {

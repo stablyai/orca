@@ -8,6 +8,7 @@ import {
 } from '../native-chat/NativeChatComposer'
 import { useNativeChatComposerRevealFocus } from '../native-chat/use-native-chat-composer-reveal-focus'
 import { makeUnifiedTab, makeTabGroup } from '@/store/slices/store-test-helpers'
+import type { TabGroup } from '../../../../shared/tab-types'
 import { launchStructuredAgentFromNewTab } from '@/lib/launch-agent-in-new-tab-structured-route'
 import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session-launch-plan'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
@@ -16,6 +17,19 @@ import { useAppStore } from '@/store'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import { promptEditor } from '../native-chat/native-chat-prompt-editor.test-support'
 import { TooltipProvider } from '../ui/tooltip'
+import { useDesktopVisibleGroups } from './use-desktop-tab-projection'
+import { useDesktopThreadPage } from './use-desktop-thread-page'
+import { ThreadSurface } from './ThreadSurface'
+import { StructuredAgentSessionStatusBridge } from '../native-chat/StructuredAgentSessionStatusBridge'
+import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
+import {
+  useStructuredSessionSummaries,
+  publishStructuredSessionSummaries
+} from '../native-chat/structured-session-summary-store'
+import {
+  getStructuredLaunchStateBySessionId,
+  getPersistedStructuredAgentLaunchRecord
+} from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import { NewThread } from './NewThread'
 import { ThreadsSection } from './ThreadsSection'
 import { useGlobalKeybindings } from '@/app-shell/use-global-keybindings'
@@ -39,11 +53,21 @@ import type { AgentPickerEntry } from '../../../../shared/agent-launch-picker'
 
 const mocks = vi.hoisted(() => ({
   support: vi.fn(),
+  subscribe: vi.fn(),
   launch: vi.fn(),
   menu: vi.fn(),
   inventory: vi.fn(),
   loading: false,
   model: null
+}))
+vi.mock('../native-chat/NativeChatView', () => ({
+  default: ({ sessionId }: { sessionId: string }) => (
+    <div data-testid="selected-thread">{sessionId}</div>
+  )
+}))
+vi.mock('@/runtime/structured-agent-session-client', async (original) => ({
+  ...(await original<object>()),
+  subscribeStructuredAgentSessionStatus: mocks.subscribe
 }))
 vi.mock('@/app-shell/app-window-chrome', async (original) => ({
   ...(await original<object>()),
@@ -129,14 +153,29 @@ vi.mock('./thread-projects', async (original) => ({
 vi.mock('./use-thread-projects', () => ({
   useThreadProjects: () => ({ projects, loading: mocks.loading })
 }))
+const NO_GROUPS: TabGroup[] = []
+function HostProjection() {
+  const groups = useAppStore((s) => s.groupsByWorktree[projects[0].worktree.id] ?? NO_GROUPS)
+  const enabled = useAppStore((s) => s.settings?.experimentalThreads === true)
+  const visible = useDesktopVisibleGroups(projects[0].worktree.id, groups, enabled)
+  return (
+    <output data-testid="host-projection">
+      {visible.map((group) => group.activeTabId).join(',')}
+    </output>
+  )
+}
 function Draft() {
+  const page = useDesktopThreadPage()
+  const view = useAppStore((s) => s.activeView)
   const selected = useThreadNavigation((s) => s.selection)
   return (
     <TooltipProvider>
-      {selected?.kind === 'new' ? (
+      {view === 'settings' ? (
+        <button onClick={() => useAppStore.getState().closeSettingsPage()}>Settings Back</button>
+      ) : selected?.kind === 'new' ? (
         <NewThread key={selected.draftId} {...selected} />
       ) : (
-        <div>Opened conversation</div>
+        <div>Opened conversation{page?.kind === 'thread' ? <ThreadSurface /> : null}</div>
       )}
     </TooltipProvider>
   )
@@ -159,6 +198,8 @@ beforeEach(async () => {
   clearNativeChatComposerDraftsForTests()
   resetStructuredAgentLaunchRegistryForTests()
   vi.clearAllMocks()
+  mocks.subscribe.mockResolvedValue({ unsubscribe: () => {} })
+  resetStructuredAgentSessionStatusFeedsForTests()
   mocks.loading = false
   mocks.inventory.mockReturnValue(inventory)
   mocks.support.mockResolvedValue({ kind: 'admitted' })
@@ -195,6 +236,13 @@ beforeEach(async () => {
 afterEach(() => {
   cleanup()
   main.close()
+  resetStructuredAgentSessionStatusFeedsForTests()
+  publishStructuredSessionSummaries(
+    [...useStructuredSessionSummaries.getState().threadTabIds].map((tabId) => ({
+      tabId,
+      summary: null
+    }))
+  )
 })
 async function submit() {
   const composer = screen.getByRole('textbox', {
@@ -209,7 +257,13 @@ it('renders real first-send agent/model and permission controls and captures exp
   const admission = Promise.withResolvers<{ kind: 'admitted' }>()
   const creation =
     Promise.withResolvers<Awaited<ReturnType<typeof LaunchModule.launchStructuredAgentSession>>>()
-  mocks.launch.mockReturnValue(creation.promise)
+  mocks.launch.mockImplementation(async (intent) => {
+    await Promise.resolve()
+    intent.createMessageSupport = true
+    intent.prepareCreate?.(true)
+    intent.createPrepared = true
+    return creation.promise
+  })
   mocks.support.mockReturnValue(admission.promise)
   const view = render(<Draft />)
   expect(screen.getByRole('button', { name: /Agent Opus/ })).toBeTruthy()
@@ -265,7 +319,13 @@ it.each(['before', 'after'] as const)(
     const creation =
       Promise.withResolvers<Awaited<ReturnType<typeof LaunchModule.launchStructuredAgentSession>>>()
     mocks.support.mockReturnValue(admission.promise)
-    mocks.launch.mockReturnValue(creation.promise)
+    mocks.launch.mockImplementation(async (intent) => {
+      await Promise.resolve()
+      intent.createMessageSupport = true
+      intent.prepareCreate?.(true)
+      intent.createPrepared = true
+      return creation.promise
+    })
     render(<Draft />)
     const composer = await submit()
     fireEvent.click(screen.getByRole('button', { name: 'Choose project' }))
@@ -305,7 +365,13 @@ it('promotes a same-project draft after an equivalent selection object was repla
   const creation =
     Promise.withResolvers<Awaited<ReturnType<typeof LaunchModule.launchStructuredAgentSession>>>()
   mocks.support.mockReturnValue(admission.promise)
-  mocks.launch.mockReturnValue(creation.promise)
+  mocks.launch.mockImplementation(async (intent) => {
+    await Promise.resolve()
+    intent.createMessageSupport = true
+    intent.prepareCreate?.(true)
+    intent.createPrepared = true
+    return creation.promise
+  })
   render(<Draft />)
   await submit()
   act(() =>
@@ -453,6 +519,12 @@ it.each(['declined', 'admitted'] as const)(
     )
     const openTerminal = vi.fn(() => null)
     const launchOptions = { model: 'opus[1m]', permissionMode: 'ask' }
+    render(
+      <>
+        <StructuredAgentSessionStatusBridge />
+        <HostProjection />
+      </>
+    )
     const ordinary = launchStructuredAgentFromNewTab({
       plan: adoptAgentSessionLaunchVerdict({
         route: 'structured-native-chat',
@@ -472,6 +544,12 @@ it.each(['declined', 'admitted'] as const)(
       throw new Error('ordinary explicit chat was not launched')
     }
     expect((await ordinary.structuredSettlement).kind).toBe('failed')
+    await act(async () => main.settle())
+    const ordinaryTab = Object.values(useAppStore.getState().unifiedTabsByWorktree).flat()[0]
+    if (ordinaryTab) {
+      expect(useStructuredSessionSummaries.getState().threadTabIds.has(ordinaryTab.id)).toBe(false)
+      expect(screen.getByTestId('host-projection').textContent).toBe(ordinaryTab.id)
+    }
     const admission = mocks.support.mock.calls[0]
     const ordinaryInput = mocks.launch.mock.calls[0]?.[0]
     mocks.support.mockClear()
@@ -500,3 +578,209 @@ it.each(['declined', 'admitted'] as const)(
     }
   }
 )
+
+it.each([true, false])(
+  'retains logical draft launch choices through real Settings Back (edited=%s)',
+  async (edited) => {
+    mocks.launch.mockRejectedValue(
+      new StructuredAgentSessionCreateRefusalError('structured_agent_session_unsupported')
+    )
+    if (!edited) {
+      useAppStore.setState({
+        settings: { ...useAppStore.getState().settings!, defaultTuiAgent: 'codex' }
+      })
+    }
+    render(<Draft />)
+    if (edited) {
+      fireEvent.click(screen.getByRole('button', { name: /Agent Opus/ }))
+      fireEvent.click(screen.getByRole('option', { name: /Codex/ }))
+      fireEvent.click(screen.getByRole('button', { name: /Agent gpt/ }))
+      fireEvent.click(screen.getAllByRole('option').find((node) => node.textContent === 'Opus 1M')!)
+      fireEvent.pointerDown(screen.getByRole('button', { name: /Ask/ }), {
+        button: 0,
+        ctrlKey: false
+      })
+      fireEvent.click(screen.getByRole('menuitemradio', { name: /Approve for me/ }))
+    }
+    const composer = screen.getByRole('textbox', { name: /Ask for changes/ })
+    act(() => promptEditor(composer).commands.insertContent('P through Settings'))
+    act(() => useAppStore.getState().openSettingsPage())
+    expect(screen.queryByRole('textbox')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Settings Back' }))
+    expect(screen.getByRole('button', { name: edited ? /Agent Opus/ : /Agent gpt/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: edited ? /Approve for me/ : /Ask/ })).toBeTruthy()
+    const restored = screen.getByRole('textbox', { name: /Ask for changes/ })
+    expect(restored.textContent).toBe('P through Settings')
+    fireEvent.keyDown(restored, { key: 'Enter' })
+    await waitFor(() => expect(mocks.launch).toHaveBeenCalledOnce())
+    expect(mocks.launch.mock.calls[0][0]).toMatchObject({
+      agent: 'codex',
+      explicitLaunchOptions: edited ? { model: 'opus[1m]', permissionMode: 'auto' } : undefined
+    })
+    // A different logical draft follows preferences instead of inheriting these edits.
+    act(() =>
+      useThreadNavigation.setState({
+        selection: { kind: 'new', projectKey: projects[0].key, draftId: 'unrelated' }
+      })
+    )
+    expect(screen.getByRole('button', { name: edited ? /Agent Opus/ : /Agent gpt/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Ask/ })).toBeTruthy()
+  }
+)
+
+it.each(['refused', 'published', 'unknown'] as const)(
+  'keeps a production admitted thread classified through %s and canonical handoff/retirement',
+  async (outcome) => {
+    const creation =
+      Promise.withResolvers<Awaited<ReturnType<typeof LaunchModule.launchStructuredAgentSession>>>()
+    mocks.launch.mockImplementation(async (intent) => {
+      await Promise.resolve()
+      intent.createMessageSupport = true
+      intent.prepareCreate?.(true)
+      intent.createPrepared = true
+      return creation.promise
+    })
+    const view = render(
+      <TooltipProvider>
+        <StructuredAgentSessionStatusBridge />
+        <Draft />
+        <ThreadsSection />
+        <HostProjection />
+      </TooltipProvider>
+    )
+    await submit()
+    await act(async () => {
+      await main.settle()
+    })
+    await waitFor(() => expect(mocks.launch).toHaveBeenCalledOnce())
+    const tab = Object.values(useAppStore.getState().unifiedTabsByWorktree).flat()[0]
+    expect(screen.getByTestId('selected-thread').textContent).toBe(tab.entityId)
+    expect(
+      useStructuredSessionSummaries.getState().byWorktree.get(tab.worktreeId)?.has(tab.id)
+    ).toBe(true)
+    expect(screen.getByRole('button', { name: /Claude Chat/ })).toBeTruthy()
+    expect(screen.getByTestId('host-projection').textContent).toBe('')
+    await act(async () => {
+      if (outcome === 'unknown') {
+        creation.reject(new Error('connection lost'))
+      } else if (outcome === 'refused') {
+        creation.reject(
+          new StructuredAgentSessionCreateRefusalError('structured_agent_session_unsupported')
+        )
+      } else {
+        const message = mocks.launch.mock.calls[0][0].params.firstMessage
+        creation.resolve({
+          sessionId: tab.entityId,
+          fence: 1,
+          firstMessage: {
+            clientMessageId: message.clientMessageId,
+            fence: 1,
+            payloadFingerprint: 'created-message',
+            dispatchState: 'accepted',
+            providerItemId: null,
+            reason: null,
+            submittedAt: 1,
+            resolvedAt: null
+          },
+          cursor: { epoch: 'created', sequence: 1 }
+        })
+      }
+    })
+    if (outcome === 'unknown') {
+      await waitFor(() =>
+        expect(getStructuredLaunchStateBySessionId(tab.entityId)?.visibilityUnknown).toBe(true)
+      )
+    }
+    if (outcome === 'published') {
+      await waitFor(() => expect(getStructuredLaunchStateBySessionId(tab.entityId)).toBeUndefined())
+    }
+    expect(screen.getByTestId('selected-thread').textContent).toBe(tab.entityId)
+    // A successful receipt can clean up before the status feed ever lists this session.
+    const emit = mocks.subscribe.mock.calls[0][1]
+    if (outcome === 'published') {
+      act(() =>
+        emit({
+          type: 'snapshot',
+          sessions: [
+            {
+              sessionId: tab.entityId,
+              workspaceId: tab.worktreeId,
+              agent: 'claude',
+              status: 'idle',
+              latestPrompt: 'P',
+              updatedAt: 3,
+              surface: 'thread',
+              conversationName: 'Published thread'
+            }
+          ]
+        })
+      )
+      expect(screen.getAllByText('Published thread').length).toBeGreaterThan(0)
+    }
+    view.unmount()
+    if (outcome !== 'published') {
+      expect(getPersistedStructuredAgentLaunchRecord(tab.entityId)).toMatchObject({
+        surface: 'thread',
+        sessionId: tab.entityId,
+        executionHostId: 'local'
+      })
+      resetStructuredAgentLaunchRegistryForTests()
+      resetStructuredAgentSessionStatusFeedsForTests()
+      // Reload the projection owner from the real retained persisted launch, with no status snapshot.
+      render(
+        <>
+          <StructuredAgentSessionStatusBridge />
+          <Draft />
+        </>
+      )
+      expect(screen.getByTestId('selected-thread').textContent).toBe(tab.entityId)
+    }
+    await act(async () => {
+      useAppStore.getState().closeUnifiedTab(tab.id)
+      await main.settle()
+    })
+    expect(useStructuredSessionSummaries.getState().threadTabIds.has(tab.id)).toBe(false)
+  }
+)
+
+it('newer same-id explicit navigation fences the real delayed onOpened completion', async () => {
+  const existing = makeUnifiedTab({
+    id: 'existing',
+    entityId: 'selected',
+    worktreeId: projects[0].worktree.id,
+    contentType: 'agent-session',
+    agentSessionAgent: 'codex',
+    executionHostId: 'local',
+    groupId: 'existing-group'
+  })
+  useAppStore.setState({
+    unifiedTabsByWorktree: { [existing.worktreeId]: [existing] },
+    groupsByWorktree: {
+      [existing.worktreeId]: [
+        makeTabGroup({
+          id: 'existing-group',
+          worktreeId: existing.worktreeId,
+          tabOrder: [existing.id],
+          activeTabId: existing.id
+        })
+      ]
+    },
+    activeGroupIdByWorktree: { [existing.worktreeId]: 'existing-group' }
+  })
+  const admission = Promise.withResolvers<{ kind: 'admitted' }>()
+  mocks.support.mockReturnValue(admission.promise)
+  mocks.launch.mockRejectedValue(
+    new StructuredAgentSessionCreateRefusalError('structured_agent_session_unsupported')
+  )
+  render(<Draft />)
+  await submit()
+  act(() => useAppStore.getState().activateTab(existing.id, { worktreeId: existing.worktreeId }))
+  await act(async () => {
+    admission.resolve({ kind: 'admitted' })
+    await main.settle()
+  })
+  await waitFor(() => expect(mocks.launch).toHaveBeenCalledOnce())
+  expect(useAppStore.getState().getActiveTab(existing.worktreeId)?.id).toBe(existing.id)
+  expect(useThreadNavigation.getState().selection).toBeNull()
+  expect(screen.queryByRole('textbox')).toBeNull()
+})

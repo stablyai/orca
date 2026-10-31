@@ -1,3 +1,4 @@
+import { useThreadProjectAddController } from '@/components/threads/use-thread-project-add-controller'
 import { useTranslation } from 'react-i18next'
 import { ModalBoundary, OverlayBoundary } from './app-root-surface-boundaries'
 import { OnboardingLanguageLoading } from '../components/onboarding/OnboardingLanguageLoading'
@@ -122,6 +123,7 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
   const { mountedLazyModalIds, shouldMountAddRepoDialog } = useLazyModalMounts()
   usePreloadWorktreeJumpPalette()
   const activeView = useAppStore((s) => s.activeView)
+  const threadProjectAdd = useThreadProjectAddController()
   const activeModal = useAppStore((s) => s.activeModal)
   // Subscribe only to consumed settings so unrelated preferences cannot rerender every overlay.
   const voiceEnabled = useAppStore(selectAppRootSurfaceVoiceEnabled)
@@ -189,7 +191,7 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
       <Suspense fallback={null}>
         {shouldMountAddRepoDialog ? (
           <ModalBoundary boundaryId="modal.add-repo" resetKey={activeModal === 'add-repo'}>
-            <AddRepoDialog />
+            <AddRepoDialog hosted={threadProjectAdd} />
           </ModalBoundary>
         ) : null}
         {/* Settings can add projects without Sidebar; host its handoff dialogs here too. */}

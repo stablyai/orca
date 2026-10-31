@@ -23,6 +23,8 @@ import * as statusProjection from './structured-agent-session-status-projection'
 import { tabActivationPatch } from '@/store/slices/tabs/tabs-focus-actions'
 import { makeWorktree } from '@/store/slices/store-test-helpers'
 
+vi.mock('./NativeChatView', () => ({ default: () => null }))
+
 type TestStore = {
   getState: () => AppState
   setState: (state: Partial<AppState>) => void

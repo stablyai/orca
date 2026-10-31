@@ -2,13 +2,14 @@ import type { CompleteGitRepoAdd } from './use-complete-git-repo-add'
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 /** Nest Add Project in a host surface rather than replacing the store modal. */
 export type AddRepoDialogHostedController = {
   open: boolean
   onOpenChange: (open: boolean) => void
   /** Select the added Git project instead of navigating to its default checkout. */
-  onProjectAdded: (repoId: string) => void | Promise<void>
+  onProjectAdded: (repoId: string, executionHostId?: ExecutionHostId) => void | Promise<void>
   onProjectGroupImported?: (groupId: string) => boolean | Promise<boolean>
   /** Let the host redirect focus because the opening combobox row may already be unmounted. */
   onCloseAutoFocus?: (event: Event) => void
@@ -36,7 +37,7 @@ export function useAddRepoHostedController(hosted: AddRepoDialogHostedController
   const finishProjectAdd = useMemo<CompleteGitRepoAdd | undefined>(
     () =>
       hostedOnOpenChange && hostedOnProjectAdded
-        ? async (repoId, _source, _executionHostId, outcome): Promise<void> => {
+        ? async (repoId, _source, executionHostId, outcome): Promise<void> => {
             await markOnboardingProjectAdded('addedRepo')
             hostedOnOpenChange(false)
             if (
@@ -45,7 +46,7 @@ export function useAddRepoHostedController(hosted: AddRepoDialogHostedController
             ) {
               return
             }
-            await hostedOnProjectAdded(repoId)
+            await hostedOnProjectAdded(repoId, executionHostId)
           }
         : undefined,
     [hostedOnOpenChange, hostedOnProjectAdded, hostedOnProjectGroupImported]

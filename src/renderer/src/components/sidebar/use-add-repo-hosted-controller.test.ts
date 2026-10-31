@@ -70,23 +70,26 @@ describe('useAddRepoHostedController', () => {
     expect(mocks.state.closeModal).toHaveBeenCalledTimes(1)
   })
 
-  it('finishProjectAdd closes the hosted dialog and hands the repo to the host', async () => {
-    const order: string[] = []
-    const onOpenChange = vi.fn(() => order.push('close'))
-    const onProjectAdded = vi.fn(() => {
-      order.push('added')
-    })
-    const { finishProjectAdd } = useAddRepoHostedController({
-      open: true,
-      onOpenChange,
-      onProjectAdded
-    })
-    await finishProjectAdd?.('repo-1', 'local_folder_picker')
-    expect(mocks.markOnboardingProjectAdded).toHaveBeenCalledWith('addedRepo')
-    expect(onProjectAdded).toHaveBeenCalledWith('repo-1')
-    // Close the nested dialog before selecting the project so its animation reveals the composer.
-    expect(order).toEqual(['close', 'added'])
-  })
+  it.each([undefined, 'runtime:box'] as const)(
+    'finishProjectAdd closes before selecting the added repo on %s',
+    async (hostId) => {
+      const order: string[] = []
+      const onOpenChange = vi.fn(() => order.push('close'))
+      const onProjectAdded = vi.fn(() => {
+        order.push('added')
+      })
+      const { finishProjectAdd } = useAddRepoHostedController({
+        open: true,
+        onOpenChange,
+        onProjectAdded
+      })
+      await finishProjectAdd?.('repo-1', 'local_folder_picker', hostId)
+      expect(mocks.markOnboardingProjectAdded).toHaveBeenCalledWith('addedRepo')
+      expect(onProjectAdded).toHaveBeenCalledWith('repo-1', hostId)
+      // Close the nested dialog before selecting the project so its animation reveals the composer.
+      expect(order).toEqual(['close', 'added'])
+    }
+  )
   it.each([true, false])(
     'prefers the imported group when host accepts it (%s)',
     async (accepted) => {

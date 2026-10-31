@@ -153,8 +153,10 @@ export function createBrowserTabActions(
           browserTab,
           page,
           options,
-          showView: () => {
-            set((s) => browserTabOpenView(s, worktreeId, browserTab, page, options))
+          showView: (activate) => {
+            set((s) =>
+              browserTabOpenView(s, worktreeId, browserTab, page, { ...options, activate })
+            )
             admitLinkPageMount()
           },
           drawHere

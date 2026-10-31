@@ -24,7 +24,7 @@ import {
   CommandSeparator
 } from '../ui/command'
 import { useThreadProjects } from './use-thread-projects'
-import { useThreadNavigation } from './thread-navigation'
+import { changeThreadDraftProject, requestThreadProjectAdd } from './thread-navigation'
 import { sendNewThread } from './thread-actions'
 import { useThreadLaunchChoices } from './use-thread-launch-choices'
 
@@ -45,7 +45,7 @@ export function NewThread({
   const [sending, setSending] = useState(false)
   const project = projects.find((item) => item.key === projectKey) ?? projects[0]
   const focusComposer = useCallback(() => composer.current?.focus(), [])
-  const choices = useThreadLaunchChoices(project, focusComposer)
+  const choices = useThreadLaunchChoices(project, focusComposer, draftId)
   const chosenAgent = choices.agent
   const appearance = useNativeChatStoreAppearanceStyle()
   useNativeChatComposerRevealFocus({
@@ -162,9 +162,7 @@ export function NewThread({
                         key={item.key}
                         value={`${item.repo.displayName} ${item.key}`}
                         onSelect={() => {
-                          useThreadNavigation.setState({
-                            selection: { kind: 'new', projectKey: item.key, draftId }
-                          })
+                          changeThreadDraftProject(draftId, item.key)
                           setPickerOpen(false)
                         }}
                       >
@@ -178,6 +176,7 @@ export function NewThread({
                     <CommandItem
                       onSelect={() => {
                         setPickerOpen(false)
+                        requestThreadProjectAdd()
                         useAppStore.getState().openModal('add-repo')
                       }}
                     >

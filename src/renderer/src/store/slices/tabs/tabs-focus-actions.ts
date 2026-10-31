@@ -1,3 +1,4 @@
+import { commitDesktopTabNavigation } from '@/components/threads/thread-navigation'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import {
   findTabAndWorktree,
@@ -120,6 +121,7 @@ export function createTabsFocusActions(
           return state
         }
         const { tab, worktreeId } = found
+        commitDesktopTabNavigation(state, worktreeId, tab.executionHostId, opts?.recordFocus)
         if (ORCA_LAYOUT_OWNER_IS_MAIN && tab.isPreview && !opts?.preservePreview) {
           promoted.push(tab)
         }

@@ -1,3 +1,4 @@
+import { useThreadNavigation } from '@/components/threads/thread-navigation'
 // Propose browser tab/record/page IDs to main; select only after frame draws them with window page state. Record consumers wait through afterPendingTab.
 
 import type { BrowserPage, BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
@@ -12,7 +13,7 @@ type BrowserTabOpen = {
   page: BrowserPage
   options: CreateBrowserTabOptions | undefined
   /** The window's own view of the tab, written once main's frame drew it. */
-  showView: () => void
+  showView: (activate: boolean) => void
   /** Today's draw, for a twin main may route to a paired server. */
   drawHere: () => void
 }
@@ -23,6 +24,7 @@ export function openBrowserTabThroughLayoutOwner(
   open: BrowserTabOpen
 ): boolean {
   const { worktreeId, browserTab, page, options } = open
+  const request = useThreadNavigation.getState().request
   const state = get()
   const tabId = createBrowserUuid()
   const placement = contentTabOpenPlacement(state, worktreeId, tabId, {
@@ -49,8 +51,9 @@ export function openBrowserTabThroughLayoutOwner(
     },
     facts: { label: browserTab.title, browser: { record: browserTab, pages: [page] } },
     shown: (shownId) => {
-      open.showView()
-      if (!activate) {
+      const foreground = activate && useThreadNavigation.getState().request === request
+      open.showView(foreground)
+      if (!foreground) {
         return
       }
       get().activateTab(shownId, { worktreeId })

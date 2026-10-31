@@ -6,23 +6,22 @@ import { useThreadNavigation, resolveDesktopThreadPage, type ThreadPage } from '
 
 export function useDesktopThreadPage(): ThreadPage {
   const intent = useThreadNavigation((s) => s.selection)
-  const [enabled, activeView, worktreeId, hostId, tabId] = useAppStore(
+  const [enabled, activeView, worktreeId, hostId, groups, groupId] = useAppStore(
     useShallow((s) => {
+      const enabled = s.settings?.experimentalThreads === true
+      const relevant = enabled && s.activeView === 'terminal' && intent?.kind !== 'new'
       const worktreeId = s.activeWorktreeId
-      const group = worktreeId
-        ? s.groupsByWorktree[worktreeId]?.find(
-            (g) => g.id === s.activeGroupIdByWorktree[worktreeId]
-          )
-        : null
       return [
-        s.settings?.experimentalThreads === true,
+        enabled,
         s.activeView,
         worktreeId,
         s.activeWorkspaceExecutionHostId,
-        group?.activeTabId
+        relevant && worktreeId ? s.groupsByWorktree[worktreeId] : undefined,
+        relevant && worktreeId ? s.activeGroupIdByWorktree[worktreeId] : undefined
       ] as const
     })
   )
+  const tabId = useMemo(() => groups?.find((g) => g.id === groupId)?.activeTabId, [groups, groupId])
   const hidden = useThreadMembership(worktreeId, enabled)
   return useMemo(
     () =>

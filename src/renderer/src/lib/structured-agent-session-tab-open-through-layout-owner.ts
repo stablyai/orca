@@ -1,3 +1,4 @@
+import { useThreadNavigation } from '@/components/threads/thread-navigation'
 // Send open with the chat’s own tab ID, select only after main draws it, and use afterPendingTab before reading the returned tab from store.
 
 import type { ExecutionHostId } from '../../../shared/execution-host'
@@ -30,6 +31,7 @@ export function openAgentSessionTabThroughLayoutOwner(
   open: AgentSessionTabOpen
 ): OpenedAgentSessionTab | null {
   const { worktreeId, sessionId } = open
+  const request = useThreadNavigation.getState().request
   const state = useAppStore.getState()
   const tabId = structuredAgentSessionTabId(sessionId)
   const label = defaultAgentChatLabel(open.agent)
@@ -52,7 +54,7 @@ export function openAgentSessionTabThroughLayoutOwner(
     command: { type: 'openAgentSessionTab', tabId, sessionId, agent: open.agent, ...placement },
     facts: { label },
     shown: (shownId) => {
-      if (!open.activate) {
+      if (!open.activate || useThreadNavigation.getState().request !== request) {
         return
       }
       // As the window's own open: the chat is selected in its group; the focused group stays.

@@ -1,4 +1,5 @@
 import { act, render, screen, waitFor } from '@testing-library/react'
+import { Profiler } from 'react'
 import { expect, it, vi } from 'vitest'
 import type {
   AgentSessionStatusEvent,
@@ -14,7 +15,10 @@ import {
 import { useWorktreeAgentRows } from '../sidebar/useWorktreeAgentRows'
 import { useDesktopVisibleGroups } from '../threads/use-desktop-tab-projection'
 import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
+import { makeTabGroup } from '@/store/slices/store-test-helpers'
+import { useTabGroupItemProjections } from '../tab-group/useTabGroupItemProjections'
 import { StructuredAgentSessionStatusBridge } from './StructuredAgentSessionStatusBridge'
+import StructuredAgentSessionPaneOverlayLayer from './StructuredAgentSessionPaneOverlayLayer'
 
 export function registerThreadProjectionContractTests({
   floatingTab,
@@ -44,10 +48,35 @@ export function registerThreadProjectionContractTests({
         worktreeId: 'other',
         executionHostId: 'runtime:paired' as const
       }
-      const tabs = [...ordinary, thread, other]
+      const peers = Array.from({ length: count }, (_, i) => ({
+        ...thread,
+        id: `peer-${i}`,
+        entityId: `peer-${i}`,
+        worktreeId: `peer-${i}`
+      }))
+      const peerGroups = Object.fromEntries(
+        peers.map((tab) => [
+          tab.worktreeId,
+          [
+            makeTabGroup({
+              id: tab.groupId,
+              worktreeId: tab.worktreeId,
+              activeTabId: tab.id,
+              tabOrder: [tab.id]
+            })
+          ]
+        ])
+      )
+      const tabs = [...ordinary, thread, other, ...peers]
       useAppStore.setState({
         settings: { ...useAppStore.getState().settings!, experimentalThreads: true },
-        unifiedTabsByWorktree: { ordinary, shown: [thread], other: [other] }
+        unifiedTabsByWorktree: {
+          ordinary,
+          shown: [thread],
+          other: [other],
+          ...Object.fromEntries(peers.map((tab) => [tab.worktreeId, [tab]]))
+        },
+        groupsByWorktree: peerGroups
       })
       const counts = new Map<string, number>()
       const bump = (key: string) => counts.set(key, (counts.get(key) ?? 0) + 1)
@@ -58,7 +87,24 @@ export function registerThreadProjectionContractTests({
       }
       function Workspace({ id, active = true }: { id: string; active?: boolean }) {
         useThreadMembership(id, active)
-        useDesktopVisibleGroups(id, [], active)
+        const groups = peerGroups[id] ?? []
+        useDesktopVisibleGroups(id, groups, active)
+        useTabGroupItemProjections({
+          worktreeId: id,
+          groupId: groups[0]?.id ?? 'empty',
+          worktreeState: {
+            groups,
+            unifiedTabs: peers.filter((tab) => tab.worktreeId === id),
+            terminalTabs: [],
+            openFiles: [],
+            browserTabs: [],
+            expandedPaneByTabId: {},
+            terminalLayoutsByTabId: {},
+            threadsEnabled: true,
+            generatedTabTitlesEnabled: false,
+            mobileEmulatorEnabled: false
+          }
+        })
         useWorktreeAgentRows(id, active)
         bump(`${id}-workspace`)
         return null
@@ -68,6 +114,20 @@ export function registerThreadProjectionContractTests({
           <StructuredAgentSessionStatusBridge />
           <Row id="thread" />
           <Row id="other" />
+          {peers.map((tab) => (
+            <Row key={tab.id} id={tab.id} />
+          ))}
+          {peers.map((tab) => (
+            <Workspace key={tab.id} id={tab.worktreeId} />
+          ))}
+          {peers.map((tab) => (
+            <Profiler key={`overlay-${tab.id}`} id={`overlay-${tab.id}`} onRender={bump}>
+              <StructuredAgentSessionPaneOverlayLayer
+                worktreeId={tab.worktreeId}
+                isWorktreeActive
+              />
+            </Profiler>
+          ))}
           <Workspace id="shown" />
           <Workspace id="off" active={false} />
         </>
@@ -82,7 +142,7 @@ export function registerThreadProjectionContractTests({
               summary({
                 sessionId: t.entityId,
                 workspaceId: t.worktreeId,
-                ...(t === thread ? { surface: 'thread' as const } : {})
+                ...(t === thread || peers.includes(t) ? { surface: 'thread' as const } : {})
               })
             )
         })
@@ -96,7 +156,7 @@ export function registerThreadProjectionContractTests({
       counts.clear()
       const structure = useStructuredSessionSummaries.getState()
       let visits = 0
-      const existingFeedSnapshot = getStructuredAgentSessionStatusFeed({
+      let existingFeedSnapshot = getStructuredAgentSessionStatusFeed({
         kind: 'local'
       }).getSnapshot()
       const iterator = Map.prototype[Symbol.iterator]
@@ -149,6 +209,10 @@ export function registerThreadProjectionContractTests({
         expect(counts.has('thread')).toBe(false)
         expect(counts.has('shown-workspace')).toBe(false)
         expect(counts.has('off-workspace')).toBe(false)
+        expect(peers.some((tab) => counts.has(tab.id) || counts.has(`${tab.id}-workspace`))).toBe(
+          false
+        )
+        expect(peers.some((tab) => counts.has(`overlay-${tab.id}`))).toBe(false)
         counts.clear()
         act(() =>
           feed(0).emit({
@@ -184,7 +248,11 @@ export function registerThreadProjectionContractTests({
             settings: { ...useAppStore.getState().settings!, experimentalThreads: false }
           })
         )
-        view.unmount()
+        // Keep the existing bridge live, but remove every consumer before the idle publication.
+        view.rerender(<StructuredAgentSessionStatusBridge />)
+        expect(subscriptionCount()).toBe(2)
+        visits = 0
+        existingFeedSnapshot = getStructuredAgentSessionStatusFeed({ kind: 'local' }).getSnapshot()
         const quiet = useStructuredSessionSummaries.getState()
         act(() =>
           feed(0).emit({
@@ -193,8 +261,85 @@ export function registerThreadProjectionContractTests({
           })
         )
         expect(useStructuredSessionSummaries.getState()).toBe(quiet)
+        expect(visits).toBeLessThanOrEqual(2)
+        view.unmount()
       } finally {
         spy.mockRestore()
+      }
+    }
+  )
+  it.each([20, 200])(
+    'constructs one affected workspace bucket per batch for %i threads, moves and removals',
+    async (count) => {
+      const tabs = Array.from({ length: count }, (_, i) => ({
+        ...floatingTab,
+        id: `batched-${i}`,
+        entityId: `batched-${i}`,
+        worktreeId: 'bucket'
+      }))
+      useAppStore.setState({ unifiedTabsByWorktree: { bucket: tabs } })
+      const view = render(<StructuredAgentSessionStatusBridge />)
+      await waitFor(() => expect(subscriptionCount()).toBe(1))
+      let copies = 0
+      const buckets = new WeakSet<Set<unknown>>()
+      const get = Map.prototype.get
+      const lookup = vi.spyOn(Map.prototype, 'get').mockImplementation(function (
+        this: Map<unknown, unknown>,
+        key: unknown
+      ) {
+        const result = get.call(this, key)
+        if ((key === 'bucket' || key === 'moved') && result instanceof Set) {
+          buckets.add(result)
+        }
+        return result
+      })
+      const iterator = Set.prototype[Symbol.iterator]
+      const spy = vi.spyOn(Set.prototype, Symbol.iterator).mockImplementation(function (
+        this: Set<unknown>
+      ) {
+        const entries = iterator.call(this)
+        const next = entries.next.bind(entries)
+        entries.next = () => {
+          const item = next()
+          if (!item.done && buckets.has(this)) {
+            copies++
+          }
+          return item
+        }
+        return entries
+      })
+      try {
+        act(() =>
+          feed().emit({
+            type: 'snapshot',
+            sessions: tabs.map((t) =>
+              summary({ sessionId: t.entityId, workspaceId: t.worktreeId, surface: 'thread' })
+            )
+          })
+        )
+        expect(copies).toBeLessThanOrEqual(2 * count)
+        const old = useStructuredSessionSummaries.getState().byWorktree.get('bucket')!
+        expect(old.size).toBe(count)
+        copies = 0
+        act(() =>
+          useAppStore.setState({
+            unifiedTabsByWorktree: { moved: tabs.map((t) => ({ ...t, worktreeId: 'moved' })) }
+          })
+        )
+        expect(copies).toBeLessThanOrEqual(2 * count)
+        expect(old.size).toBe(count)
+        expect(useStructuredSessionSummaries.getState().byWorktree.has('bucket')).toBe(false)
+        const moved = useStructuredSessionSummaries.getState().byWorktree.get('moved')!
+        expect(moved.size).toBe(count)
+        copies = 0
+        act(() => useAppStore.setState({ unifiedTabsByWorktree: {} }))
+        expect(copies).toBeLessThanOrEqual(2 * count)
+        expect(moved.size).toBe(count)
+        expect(useStructuredSessionSummaries.getState().byWorktree.has('moved')).toBe(false)
+      } finally {
+        spy.mockRestore()
+        lookup.mockRestore()
+        view.unmount()
       }
     }
   )

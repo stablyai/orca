@@ -10,6 +10,8 @@ import { structuredAgentSessionPaneKey } from '../../../../shared/structured-age
 import { projectStatus } from './structured-agent-session-status-projection'
 import {
   getStructuredAgentSessionLaunchLifecycle,
+  getStructuredLaunchStateBySessionId,
+  getPersistedStructuredAgentLaunchRecord,
   subscribeStructuredAgentLaunchStatus
 } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import { getStructuredAgentSessionLaunchFailedAt } from '@/lib/agent-session/launch/structured-agent-session-launch-failed-at'
@@ -49,6 +51,7 @@ type ProjectionInput = {
   failedAt: number | null
   sleptAt: number | null | undefined
   directory: string | undefined
+  surface: 'thread' | undefined
 }
 type Member = {
   paneKey: string
@@ -57,13 +60,15 @@ type Member = {
   group: HostGroup | null
   status?: ProjectionInput
   captured?: ProjectionInput
+  surface?: 'thread'
 }
 /** Unchanged feed facts for an unchanged tab cannot change its projection or companions. */
 function sameCapturedInput(previous: ProjectionInput | undefined, next: ProjectionInput): boolean {
   return (
     sameStatusInput(previous, next) &&
     previous?.sleptAt === next.sleptAt &&
-    previous?.directory === next.directory
+    previous?.directory === next.directory &&
+    previous?.surface === next.surface
   )
 }
 
@@ -173,9 +178,12 @@ function installStatusProjection(): () => void {
         ...removed
           .filter((old) => !membersByTabId.has(old.tab.id))
           .map((old) => ({ tabId: old.tab.id, summary: null })),
-        ...inputs
-          .filter(current)
-          .map((input) => ({ tabId: input.tab.id, tab: input.tab, summary: input.summary }))
+        ...inputs.filter(current).map((input) => ({
+          tabId: input.tab.id,
+          tab: input.tab,
+          summary: input.summary,
+          surface: input.surface
+        }))
       ])
       for (const old of removed) {
         if (!members.has(old.paneKey)) {
@@ -235,14 +243,37 @@ function installStatusProjection(): () => void {
     for (const member of selected) {
       const { tab, group } = member
       const summary = group?.feed.getSnapshot().get(tab.entityId) ?? null
+      const lifecycle = group
+        ? getStructuredAgentSessionLaunchLifecycle(tab.worktreeId, tab.entityId)
+        : null
+      if (summary) {
+        member.surface = summary.surface
+      } else if (lifecycle === 'cancelled') {
+        member.surface = undefined
+      } else if (!member.surface && lifecycle) {
+        const launch = getStructuredLaunchStateBySessionId(tab.entityId)
+        const record = launch ? undefined : getPersistedStructuredAgentLaunchRecord(tab.entityId)
+        const host = ownerForTab(useAppStore.getState(), tab)
+        const requested = launch
+          ? launch.intent.worktreeId === tab.worktreeId &&
+            launch.intent.executionHostId === host &&
+            launch.intent.params.surface === 'thread'
+          : record?.executionHostId === host &&
+            record.surface === 'thread' &&
+            (!record.surfaceAddress || record.surfaceAddress.worktreeId === tab.worktreeId)
+        // The represented tab carries identity across receipt cleanup until canonical takeover or retirement.
+        if (requested) {
+          member.surface = 'thread'
+        }
+      }
       const input: ProjectionInput = {
+        surface: member.surface,
         member,
         tab,
         summary,
         observation: group?.feed.getSessionObservation(tab.entityId) ?? 'unverifiable',
         failedAt:
-          group &&
-          getStructuredAgentSessionLaunchLifecycle(tab.worktreeId, tab.entityId) === 'failed'
+          lifecycle === 'failed'
             ? (getStructuredAgentSessionLaunchFailedAt(tab.entityId) ?? tab.createdAt)
             : null,
         sleptAt: group ? group.feed.getSessionSleepState(tab.entityId) : null,
@@ -284,7 +315,7 @@ function installStatusProjection(): () => void {
       }
       const old = members.get(paneKey)
       const member: Member =
-        old?.group === (group ?? null)
+        old?.group === (group ?? null) && old.tab.worktreeId === tab.worktreeId
           ? old
           : {
               paneKey,

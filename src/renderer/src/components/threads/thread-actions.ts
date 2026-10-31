@@ -13,15 +13,24 @@ import { eligibleThreadProjects, type ThreadProject } from './thread-projects'
 import { activateStructuredAgentSessionTab } from '@/lib/agent-session/structured-agent-session-tab-activation'
 import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import { useThreadNavigation } from './thread-navigation'
+import {
+  useThreadNavigation,
+  clearThreadSelection,
+  requestThreadProjectAdd
+} from './thread-navigation'
 
 export async function openNewThread(): Promise<void> {
   const state = useAppStore.getState()
   if (!state.settings?.experimentalThreads) {
     return
   }
+  const request = clearThreadSelection()
   const projects = await eligibleThreadProjects(state)
+  if (useThreadNavigation.getState().request !== request) {
+    return
+  }
   if (!projects.length) {
+    requestThreadProjectAdd()
     useAppStore.getState().openModal('add-repo')
     return
   }
@@ -72,7 +81,7 @@ export function sendNewThread(
     prompt: text,
     promptDelivery: 'auto-submit'
   })
-  const selection = useThreadNavigation.getState().selection
+  const { selection, request } = useThreadNavigation.getState()
   let openedTabId: string | undefined
   let openedSessionId: string | undefined
   const launch = beginStructuredAgentSessionProvisionalLaunch({
@@ -87,6 +96,7 @@ export function sendNewThread(
         const current = useThreadNavigation.getState().selection
         if (
           !shown ||
+          useThreadNavigation.getState().request !== request ||
           selection?.kind !== 'new' ||
           current?.kind !== 'new' ||
           current.draftId !== selection.draftId ||

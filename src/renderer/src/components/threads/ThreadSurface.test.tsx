@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { Tab } from '../../../../shared/tab-types'
+import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import type { AgentSessionStatusSummary } from '../../../../shared/agent-session-wire'
 
 vi.mock('@/runtime/runtime-rpc-client', async (original) =>
@@ -29,7 +29,13 @@ import { makeWorktree, makeUnifiedTab, makeTabGroup } from '@/store/slices/store
 import { TooltipProvider } from '../ui/tooltip'
 import { ThreadsSection } from './ThreadsSection'
 import { ThreadSurface, useThreadSurfaceActive } from './ThreadSurface'
+import { useDesktopVisibleGroups } from './use-desktop-tab-projection'
 import { useThreadNavigation } from './thread-navigation'
+import { useDesktopThreadPage } from './use-desktop-thread-page'
+import {
+  isBrowserPageMountAdmitted,
+  releaseBrowserPageMount
+} from '../browser-pane/host-guest/browser-page-mount-admission'
 import {
   publishStructuredSessionSummaries,
   useStructuredSessionSummaries
@@ -424,6 +430,25 @@ it.each([20, 200])(
   }
 )
 
+it('draws a delayed browser open without superseding newer explicit conversation navigation', async () => {
+  classify(first)
+  classify(second)
+  render(<Desktop />)
+  let browser: ReturnType<ReturnType<typeof useAppStore.getState>['createBrowserTab']>
+  act(() => {
+    browser = useAppStore.getState().createBrowserTab(W, 'https://example.com', {
+      validateLinkPlacement: () => {},
+      focusAddressBar: false
+    })
+    selectThread(second)
+  })
+  await act(async () => main.settle())
+  expect(visibleConversation()).toEqual(['second'])
+  expect(useAppStore.getState().tabBarOrderByWorktree[W]).toContain(browser!.id)
+  expect(isBrowserPageMountAdmitted(browser!.activePageId!)).toBe(true)
+  releaseBrowserPageMount(browser!.activePageId!)
+})
+
 it('the rendered Threads row activates and labels the same conversation as the page', () => {
   classify(first)
   classify(second)
@@ -441,3 +466,242 @@ it('the rendered Threads row activates and labels the same conversation as the p
   expect(screen.getByRole('button', { name: /Chosen conversation/ })).toBeTruthy()
   expect(screen.getAllByText('Chosen conversation')).toHaveLength(2)
 })
+
+it.each(['draft', 'empty'] as const)(
+  'newer flag-off cycle supersedes retained %s through Settings and the rendered page',
+  (kind) => {
+    classify(first)
+    classify(second)
+    useAppStore.setState({
+      unifiedTabsByWorktree: { [W]: [first, second] },
+      groupsByWorktree: {
+        [W]: [
+          makeTabGroup({
+            id: 'g',
+            worktreeId: W,
+            activeTabId: first.id,
+            tabOrder: [first.id, second.id]
+          })
+        ]
+      }
+    })
+    if (kind === 'draft') {
+      useThreadNavigation.setState({
+        selection: { kind: 'new', projectKey: 'local|repo', draftId: 'retained' }
+      })
+    } else {
+      activateAndRevealWorktree(W, { executionHostId: 'local', navigationIntent: 'user-open' })
+    }
+    render(<Desktop />)
+    act(() => useAppStore.getState().openSettingsPage())
+    act(() =>
+      useAppStore.setState({
+        settings: { ...useAppStore.getState().settings!, experimentalThreads: false }
+      })
+    )
+    act(() => useAppStore.getState().closeSettingsPage())
+    act(() => handleSwitchTabAcrossAllTypes(1))
+    expect(useAppStore.getState().getActiveTab(W)?.id).toBe(second.id)
+    act(() => useAppStore.getState().openSettingsPage())
+    act(() =>
+      useAppStore.setState({
+        settings: { ...useAppStore.getState().settings!, experimentalThreads: true }
+      })
+    )
+    act(() => useAppStore.getState().closeSettingsPage())
+    expect(visibleConversation()).toEqual([second.entityId])
+    expect(screen.queryByTestId('strip-g')).toBeNull()
+  }
+)
+
+it.each(['same-id', 'number', 'palette'] as const)(
+  'explicit %s navigation supersedes a draft even with the flag on',
+  async (entry) => {
+    classify(first)
+    useThreadNavigation.setState({
+      selection: { kind: 'new', projectKey: 'local|repo', draftId: 'retained' }
+    })
+    render(<Desktop />)
+    if (entry === 'palette') {
+      const editor = { ...ordinary, id: 'editor', entityId: 'file', contentType: 'editor' as const }
+      act(() =>
+        useAppStore.setState({
+          unifiedTabsByWorktree: { [W]: [ordinary, first, second, editor] },
+          openFiles: [
+            {
+              id: 'file',
+              worktreeId: W,
+              filePath: '/main/file',
+              relativePath: 'file',
+              language: 'text',
+              isDirty: false
+            }
+          ]
+        })
+      )
+      const { activateWorkspaceTabPaletteResult } =
+        await import('@/lib/workspace-tab-palette-activation')
+      act(() =>
+        expect(
+          activateWorkspaceTabPaletteResult({
+            worktreeId: W,
+            executionHostId: 'local',
+            groupId: 'g',
+            tabId: editor.id,
+            entityId: 'file',
+            contentType: 'editor'
+          }).status
+        ).toBe('activated')
+      )
+      expect(screen.getByTestId('strip-g').dataset.active).toBe(editor.id)
+    } else if (entry === 'number') {
+      const { activateTabNumberShortcut } = await import('@/lib/tab-number-shortcuts')
+      act(() => expect(activateTabNumberShortcut(1)).toBe(true))
+      expect(visibleConversation()).toEqual([first.entityId])
+    } else {
+      act(() => useAppStore.getState().activateTab(first.id, { worktreeId: W }))
+      expect(visibleConversation()).toEqual([first.entityId])
+    }
+    expect(screen.queryByText('Draft retained')).toBeNull()
+    expect(useThreadNavigation.getState().selection).toBeNull()
+  }
+)
+
+it('plain Settings/flag roundtrip and non-user layout activation retain draft intent', () => {
+  useThreadNavigation.setState({
+    selection: { kind: 'new', projectKey: 'local|repo', draftId: 'retained' }
+  })
+  render(<Desktop />)
+  act(() => useAppStore.getState().openSettingsPage())
+  act(() =>
+    useAppStore.setState({
+      settings: { ...useAppStore.getState().settings!, experimentalThreads: false }
+    })
+  )
+  act(() => useAppStore.getState().activateTab(second.id, { worktreeId: W, recordFocus: false }))
+  act(() =>
+    useAppStore.setState({
+      settings: { ...useAppStore.getState().settings!, experimentalThreads: true }
+    })
+  )
+  act(() => useAppStore.getState().closeSettingsPage())
+  expect(screen.getByText('Draft retained')).toBeTruthy()
+})
+
+it.each([20, 200])(
+  'admits the always-mounted page hook inputs before discovering %i groups',
+  (count) => {
+    const groups = Array.from({ length: count }, (_, i) =>
+      makeTabGroup({ id: `g${i}`, worktreeId: W, activeTabId: first.id, tabOrder: [first.id] })
+    )
+    useAppStore.setState({
+      groupsByWorktree: { [W]: groups },
+      activeGroupIdByWorktree: { [W]: groups.at(-1)!.id }
+    })
+    let predicates = 0
+    const findGroup = Array.prototype.find
+    const find = vi.spyOn(groups, 'find').mockImplementation((predicate) =>
+      findGroup.call(groups, (group, i) => {
+        predicates++
+        return predicate(group, i, groups)
+      })
+    )
+    function PageObserver() {
+      const page = useDesktopThreadPage()
+      return (
+        <output data-testid="page-hook">
+          {page?.kind === 'thread' ? page.tabId : (page?.kind ?? 'host')}
+        </output>
+      )
+    }
+    render(<PageObserver />)
+    expect(predicates).toBeGreaterThanOrEqual(count)
+    expect(predicates).toBeLessThanOrEqual(3 * count)
+    for (const enabled of [false, true]) {
+      act(() =>
+        useAppStore.setState({
+          settings: { ...useAppStore.getState().settings!, experimentalThreads: enabled }
+        })
+      )
+      for (const intent of [
+        null,
+        { kind: 'new' as const, projectKey: 'local|repo', draftId: 'retained' }
+      ]) {
+        act(() => useThreadNavigation.setState({ selection: intent }))
+        find.mockClear()
+        predicates = 0
+        for (const value of ['one', 'two', 'three']) {
+          act(() => useAppStore.setState({ settingsSearchQuery: value }))
+        }
+        expect(find).not.toHaveBeenCalled()
+        expect(predicates).toBe(0)
+      }
+    }
+    act(() => useThreadNavigation.setState({ selection: null }))
+    act(() => classify(first))
+    expect(screen.getByTestId('page-hook').textContent).toBe(first.entityId)
+    predicates = 0
+    act(() => useAppStore.getState().focusGroup(W, groups[0].id))
+    expect(screen.getByTestId('page-hook').textContent).toBe(first.entityId)
+    expect(predicates).toBeGreaterThan(0)
+    expect(predicates).toBeLessThanOrEqual(3 * count)
+    find.mockRestore()
+  }
+)
+
+it.each([20, 200])(
+  'projects %i hidden MRU entries with linear indexed validity and unchanged policy',
+  (count) => {
+    const hiddenTabs = Array.from({ length: count }, (_, i) => ({
+      ...first,
+      id: `hidden-${i}`,
+      entityId: `session-${i}`
+    }))
+    hiddenTabs.forEach((tab) => classify(tab))
+    const ids = hiddenTabs.map((tab) => tab.id)
+    let projection: readonly TabGroup[] = []
+    function Fallback({ groups, enabled }: { groups: TabGroup[]; enabled: boolean }) {
+      projection = useDesktopVisibleGroups(W, groups, enabled)
+      return <output>{projection[0].activeTabId ?? 'empty'}</output>
+    }
+    for (const ordinaryVisible of [false, true]) {
+      const order = [...ids, ...(ordinaryVisible ? [ordinary.id] : [])]
+      const recent = ['stale', ...ids, ...(ordinaryVisible ? [ordinary.id] : [])]
+      const group = makeTabGroup({
+        worktreeId: W,
+        activeTabId: ids[0],
+        tabOrder: order,
+        recentTabIds: recent
+      })
+      let indexed = 0,
+        visited = 0
+      const iterator = Array.prototype[Symbol.iterator]
+      const index = vi.spyOn(order, Symbol.iterator).mockImplementation(function* () {
+        for (const id of iterator.call(order)) {
+          indexed++
+          yield id
+        }
+      })
+      const find = Array.prototype.find
+      const candidates = vi.spyOn(recent, 'find').mockImplementation((predicate) =>
+        find.call(recent, (id, i) => {
+          visited++
+          return predicate(id, i, recent)
+        })
+      )
+      const includes = vi.spyOn(order, 'includes')
+      const view = render(<Fallback groups={[group]} enabled />)
+      expect(screen.getByText(ordinaryVisible ? ordinary.id : 'empty')).toBeTruthy()
+      expect(indexed).toBe(order.length)
+      expect(visited).toBe(recent.length)
+      expect(includes).not.toHaveBeenCalled()
+      view.rerender(<Fallback groups={[group]} enabled={false} />)
+      expect(projection[0]).toBe(group)
+      expect(screen.getByText(ids[0])).toBeTruthy()
+      view.unmount()
+      index.mockRestore()
+      candidates.mockRestore()
+      includes.mockRestore()
+    }
+  }
+)
