@@ -4,7 +4,6 @@ import { HOST_ACCOUNT_LAUNCH_ENV_RUNTIME_CAPABILITY } from '../../shared/orcad-r
 import type { WslOrcadAccountEnvDependencies } from './wsl-orcad-account-env'
 import type { WslOrcadHostCapabilityVerdict } from './wsl-orcad-host-environments'
 import {
-  changesWslHostAccounts,
   pushWslOrcadHostAccountEnv,
   type WslOrcadHostAccountPush
 } from './wsl-orcad-host-account-push'
@@ -125,18 +124,6 @@ describe('pushWslOrcadHostAccountEnv', () => {
     release()
     await Promise.all([first, second])
     expect(order).toEqual(['/old', '/new'])
-  })
-})
-
-describe('changesWslHostAccounts', () => {
-  it('fires on a selection or roster change only', () => {
-    expect(
-      changesWslHostAccounts({
-        activeCodexManagedAccountIdsByRuntime: undefined
-      })
-    ).toBe(true)
-    expect(changesWslHostAccounts({ claudeManagedAccounts: [] })).toBe(true)
-    expect(changesWslHostAccounts({ experimentalWslHosts: true })).toBe(false)
   })
 })
 

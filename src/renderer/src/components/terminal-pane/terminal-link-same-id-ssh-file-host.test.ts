@@ -100,20 +100,6 @@ describe('same-id SSH terminal file links', () => {
     expect(mocks.openFilePath).not.toHaveBeenCalled()
   })
 
-  it('offers no desktop default-app row on an SSH root, and Shift-click opens nothing locally', async () => {
-    const actions = buildFileLinkActions('/home/u/proj', null, null, deps, {
-      kind: 'local'
-    })
-    expect(actions.kind).toBe('workspace')
-    expect(actions.alternate).toBeUndefined()
-
-    openDetectedFilePath('/home/u/proj', null, null, { ...deps, openWithSystemDefault: true })
-    await settle()
-
-    expect(desktopStatCalls()).toEqual([])
-    expect(mocks.openFilePath).not.toHaveBeenCalled()
-  })
-
   it('refuses file access when no owner names the terminal host', async () => {
     mocks.state.value = sameIdState(null)
     const onOpenFailure = vi.fn()

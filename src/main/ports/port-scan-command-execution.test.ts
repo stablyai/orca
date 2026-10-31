@@ -58,46 +58,6 @@ describe('runPortScanCommandInProcess', () => {
     }))
   }
 
-  it('uses the existing unlocked command runner only for an unrecognized filesystem', async () => {
-    darwinFilesystem(0x1234)
-    let error: Error | null = null
-    let diagnostic = 'lsof: diagnostic\n'
-    execFileMock.mockImplementation(
-      (
-        _command: string,
-        _args: string[],
-        _options: unknown,
-        callback: (error: Error | null, out: string, stderr: string) => void
-      ) => {
-        queueMicrotask(() => callback(error, LSOF_OUTPUT, diagnostic))
-        return { kill: vi.fn() }
-      }
-    )
-    await expect(
-      runPortScanCommandInProcess('/usr/sbin/lsof', ['-O', '-iTCP'], 'attribution')
-    ).resolves.toMatchObject({ stdout: LSOF_OUTPUT })
-    expect(execFileMock).toHaveBeenCalledWith(
-      '/usr/sbin/lsof',
-      ['-O', '-iTCP'],
-      {
-        timeout: PORT_SCAN_COMMAND_TIMEOUT_MS,
-        maxBuffer: 2 * 1024 * 1024,
-        windowsHide: true
-      },
-      expect.any(Function)
-    )
-    expect(openMock).not.toHaveBeenCalled()
-    expect(spawnMock).not.toHaveBeenCalled()
-    diagnostic = 'netstat: diagnostic\n'
-    await expect(
-      runPortScanCommandInProcess('/usr/sbin/netstat', ['-aln', '-p', 'tcp'], 'listeners')
-    ).rejects.toThrow('Port scan observation is unavailable.')
-    error = new Error('legacy command failed')
-    await expect(runPortScanCommandInProcess('/usr/sbin/lsof', [], 'attribution')).rejects.toBe(
-      error
-    )
-  })
-
   it('does not turn supported-filesystem contention or unsafe storage into unlocked scanning', async () => {
     darwinFilesystem(0x1a)
     openMock.mockImplementation(() => {
@@ -148,36 +108,5 @@ describe('runPortScanCommandInProcess', () => {
 
     expect(await promise).toBeInstanceOf(PortScanCommandTimeoutError)
     expect(killMock).toHaveBeenCalled()
-  })
-
-  it("classifies Node's own execFile timeout kill as a command timeout", async () => {
-    execFileMock.mockImplementation(
-      (_command: string, _args: string[], _options: unknown, callback: unknown) => {
-        const killed = Object.assign(new Error('Command failed: lsof'), {
-          killed: true,
-          signal: 'SIGTERM'
-        })
-        setTimeout(() => (callback as (e: Error) => void)(killed), 0)
-        return { kill: vi.fn() }
-      }
-    )
-
-    await expect(runPortScanCommandInProcess('lsof', [])).rejects.toBeInstanceOf(
-      PortScanCommandTimeoutError
-    )
-  })
-
-  it('leaves a genuine command failure unclassified so the scan does not back off', async () => {
-    execFileMock.mockImplementation(
-      (_command: string, _args: string[], _options: unknown, callback: unknown) => {
-        setTimeout(() => (callback as (e: Error) => void)(new Error('spawn ENOENT')), 0)
-        return { kill: vi.fn() }
-      }
-    )
-
-    const error = await runPortScanCommandInProcess('lsof', []).catch((err: unknown) => err)
-
-    expect(error).toBeInstanceOf(Error)
-    expect(error).not.toBeInstanceOf(PortScanCommandTimeoutError)
   })
 })

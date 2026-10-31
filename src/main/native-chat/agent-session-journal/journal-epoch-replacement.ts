@@ -1,3 +1,4 @@
+import { journalInputOrder } from './journal-input-order'
 import { journalOutcomeSource } from './journal-outcome-format'
 import { publishJournalOutcomeEpoch } from './journal-outcome-write'
 import {
@@ -53,6 +54,8 @@ import { AgentSessionJournalError, assertJournalFence } from './journal-write-gu
 import type { JournalOperationReceipt } from './journal-row-writer'
 
 import type { JournalAttachmentClaim } from './journal-submission-hook'
+import { copyJournalNativeState } from './journal-input-conversion'
+import { journalInputAcceptance, journalQueueRebase } from './journal-input-provenance'
 
 export type JournalReplacementItem = AgentJournalProducerLinkage & {
   echoOf?: JournalItemEcho['echoOf']
@@ -88,7 +91,13 @@ export function replaceJournalEpoch(input: {
   onPublished: (loaded: JournalLoad) => void
 }): void {
   const epoch = input.mintEpoch()
-  const state = createJournalReducerState(input.identity.sessionId, epoch)
+  const state = createJournalReducerState(input.identity.sessionId, epoch, (id) =>
+    journalInputAcceptance(input.database.db, input.identity.sessionId, id)
+  )
+  if (input.previous) {
+    copyJournalNativeState(input.previous, state)
+  }
+  journalInputOrder(state).beginReconstruction()
   const providerHandle = agentSessionJournalProviderHandle(input.identity)
   const previousOrigin = input.previous?.historyOrigin
   const restate =
@@ -96,6 +105,9 @@ export function replaceJournalEpoch(input: {
     input.reason !== 'session_created' &&
     previousOrigin &&
     sameJournalConversation(previousOrigin.providerHandle, providerHandle)
+  const queued = [...(input.previous?.submissions.values() ?? [])]
+    .filter(isQueuedAgentJournalSubmission)
+    .sort((a, b) => a.submittedSequence! - b.submittedSequence!)
   const epochRow: JournalRow = {
     kind: 'epoch',
     reason:
@@ -133,23 +145,12 @@ export function replaceJournalEpoch(input: {
     applyJournalRow(state, row)
     rows.push(row)
   }
-  for (const { messageId, change } of input.queue.cards) {
-    if (change) {
-      const row = buildJournalQueueRow(
-        state,
-        messageId,
-        change,
-        state.lastSequence + 1,
-        input.now()
-      )
-      applyJournalRow(state, row)
-      rows.push(row)
-    }
+  const appendQueue = (messageId: string, change: Parameters<typeof buildJournalQueueRow>[2]) => {
+    const row = buildJournalQueueRow(state, messageId, change, state.lastSequence + 1, input.now())
+    applyJournalRow(state, row)
+    rows.push(row)
   }
-  // Accepted-but-unhanded messages must survive provider history replacement.
-  const queued = [...(input.previous?.submissions.values() ?? [])]
-    .filter(isQueuedAgentJournalSubmission)
-    .sort((a, b) => (a.acceptedSequence ?? 0) - (b.acceptedSequence ?? 0))
+  const rebuilt = new Map<string, number>()
   for (const submission of queued) {
     const body = input.previous?.items.get(
       agentJournalSubmissionKey(submission.clientMessageId)
@@ -168,6 +169,34 @@ export function replaceJournalEpoch(input: {
     })
     applyJournalRow(state, row)
     rows.push(row)
+    rebuilt.set(submission.clientMessageId, row.seq)
+  }
+  const rebase = journalQueueRebase(
+    input.database.db,
+    input.identity.sessionId,
+    epoch,
+    input.previous?.epoch,
+    queued,
+    rebuilt
+  )
+  for (const { messageId, change } of input.queue.cards) {
+    if (!change) {
+      continue
+    }
+    const prior = input.previous?.queue.cards.get(messageId)
+    const queuedAt = change.op === 'queued' ? rebase(change.queuedAt) : null
+    appendQueue(
+      messageId,
+      change.op === 'queued'
+        ? {
+            ...change,
+            queuedAt,
+            ...(prior?.state === 'dispatched' && prior.consumedAs
+              ? { attempt: prior.consumedAs }
+              : {})
+          }
+        : change
+    )
   }
   const { lifted, liveStop, reopened } = input.queuePause
   const place = () => ({ state, seq: state.lastSequence + 1, fence: input.fence, ts: input.now() })
@@ -192,6 +221,8 @@ export function replaceJournalEpoch(input: {
     rows.push(row)
   }
 
+  journalInputOrder(state).restore(state)
+  journalInputOrder(state).finishReconstruction(state)
   const { sessionId } = input.identity
   const receipt = input.receipt?.({ epoch, sequence: state.lastSequence })
   const claimsCommitted: (() => void)[] = []
@@ -225,7 +256,7 @@ export function replaceJournalEpoch(input: {
       input.queue.receipt.write(db)
       publishJournalSessionEpoch(db, input.identity, epoch)
       receipt?.write(db)
-      return publishJournalOutcomeEpoch(db, sessionId, state.epoch, rows)
+      return publishJournalOutcomeEpoch(db, sessionId, state.epoch, rows, input.previous)
     },
     false,
     (publication) => {

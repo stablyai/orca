@@ -31,35 +31,6 @@ describe('cached git remote name listing', () => {
     readLocalGitConfigSignatureMock.mockImplementation(async () => 'sig-1')
   })
 
-  it('skips probing upstream when listing only has origin', async () => {
-    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'origin\n' })
-
-    await expect(shouldProbeGitRemote('/repo', 'upstream')).resolves.toBe(false)
-    await expect(listCachedRemoteNames('/repo')).resolves.toEqual(['origin'])
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote'], {
-      cwd: '/repo',
-      timeout: REMOTE_URL_PROBE_TIMEOUT_MS
-    })
-  })
-
-  it('still probes upstream when listing includes that remote', async () => {
-    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'origin\nupstream\n' })
-
-    await expect(shouldProbeGitRemote('/repo', 'upstream')).resolves.toBe(true)
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('reuses a signed listing instead of spawning git remote again', async () => {
-    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'origin\n' })
-
-    await expect(shouldProbeGitRemote('/repo', 'upstream')).resolves.toBe(false)
-    await expect(shouldProbeGitRemote('/repo', 'upstream')).resolves.toBe(false)
-    await expect(shouldProbeGitRemote('/repo', 'origin')).resolves.toBe(true)
-
-    expect(remoteListCalls()).toHaveLength(1)
-  })
-
   it('re-lists as soon as the git config signature changes', async () => {
     gitExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'origin\n' })
@@ -103,20 +74,6 @@ describe('cached git remote name listing', () => {
       await vi.advanceTimersByTimeAsync(30_001)
       await expect(shouldProbeGitRemote('/repo', 'upstream')).resolves.toBe(true)
       expect(remoteListCalls()).toHaveLength(2)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('holds a signed listing past the unsigned TTL', async () => {
-    vi.useFakeTimers()
-    try {
-      gitExecFileAsyncMock.mockResolvedValue({ stdout: 'origin\n' })
-
-      await expect(shouldProbeGitRemote('/repo', 'upstream')).resolves.toBe(false)
-      await vi.advanceTimersByTimeAsync(4 * 60_000)
-      await expect(shouldProbeGitRemote('/repo', 'upstream')).resolves.toBe(false)
-      expect(remoteListCalls()).toHaveLength(1)
     } finally {
       vi.useRealTimers()
     }

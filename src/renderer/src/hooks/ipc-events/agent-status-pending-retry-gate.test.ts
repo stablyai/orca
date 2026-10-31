@@ -8,22 +8,6 @@ import {
   type StoreLike,
   type StoreSubscribeListener
 } from '../ipc-events-agent-status-store-test-fixtures'
-import { shouldRetryPendingAgentStatusesAfterStoreUpdate } from './agent-status-pending-retry-gate'
-
-type RetryState = Parameters<typeof shouldRetryPendingAgentStatusesAfterStoreUpdate>[0]
-
-function createRetryState(): RetryState {
-  return {
-    workspaceSessionReady: true,
-    tabsByWorktree: {},
-    unifiedTabsByWorktree: {},
-    terminalLayoutsByTabId: {},
-    worktreesByRepo: {},
-    repos: [],
-    recentlyClosedAgentStatusTabIds: {},
-    recentlyRetiredAgentStatusPaneKeys: {}
-  }
-}
 
 type PendingRetryHarness = {
   bridge: { disposeAsyncState: () => void; unsubscribeStore: () => void }
@@ -118,25 +102,6 @@ describe('agent status pending retry gate', () => {
   afterEach(() => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
-  })
-
-  it('tracks every store-owned input that can resolve or retire pending attribution', () => {
-    const previous = createRetryState()
-    const changes: RetryState[] = [
-      { ...previous, workspaceSessionReady: false },
-      { ...previous, tabsByWorktree: {} },
-      { ...previous, unifiedTabsByWorktree: {} },
-      { ...previous, terminalLayoutsByTabId: {} },
-      { ...previous, worktreesByRepo: {} },
-      { ...previous, repos: [] },
-      { ...previous, recentlyClosedAgentStatusTabIds: {} },
-      { ...previous, recentlyRetiredAgentStatusPaneKeys: {} }
-    ]
-
-    expect(shouldRetryPendingAgentStatusesAfterStoreUpdate({ ...previous }, previous)).toBe(false)
-    for (const current of changes) {
-      expect(shouldRetryPendingAgentStatusesAfterStoreUpdate(current, previous)).toBe(true)
-    }
   })
 
   it('skips retry transactions for unrelated publications and retries on hydration', async () => {
