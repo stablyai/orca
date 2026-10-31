@@ -168,6 +168,44 @@ it.each([
 )
 
 it.each([
+  ['the initiator, looking at another tab when it asked', true, 'chat'],
+  ['another viewer on that tab', false, 'host-b']
+] as const)(
+  'Session History switches a stopped tab in place; only its initiator moves to the chat: %s',
+  (_name, initiated, selected) => {
+    const { state, a, b, c } = shownThree('host-b')
+    if (initiated) {
+      // History named the source while this client looked at host-b; the host reused its chat.
+      recordWebSessionFocusIntent(
+        { environmentId: ENV },
+        WT,
+        'agent-session:minted',
+        undefined,
+        b,
+        'host-a'
+      )
+    }
+    const next = apply(
+      state,
+      makeSnapshot(
+        [{ ...chat, replaces: { tabId: 'host-a' } }, terminal('host-b'), terminal('host-c')],
+        {
+          snapshotVersion: 2,
+          tabGroups: [
+            { id: 'host-group-1', activeTabId: null, tabOrder: [chat.id, 'host-b', 'host-c'] }
+          ]
+        }
+      )
+    )
+    const group = next.groupsByWorktree[WT]![0]!
+    const chatTab = next.unifiedTabsByWorktree[WT]!.find((tab) => tab.entityId === 'session-1')!
+    expect(group.tabOrder).toEqual([c, chatTab.id, b])
+    expect(group.activeTabId).toBe({ chat: chatTab.id, 'host-b': b }[selected])
+    expect(a).not.toBe(chatTab.id)
+  }
+)
+
+it.each([
   [true, undefined, true],
   // The pin is this client's own: a host flag on the new row never overrides it.
   [false, true, false]

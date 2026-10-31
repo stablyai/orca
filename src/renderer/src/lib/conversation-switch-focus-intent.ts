@@ -14,7 +14,9 @@ import {
 
 /**
  * A paired client's switch of a terminal pane to chat: the chat lands where this client looks only
- * if the source still holds its selection when the chat arrives. Recorded before the request, so
+ * if the source still holds its selection when the chat arrives. From Session History the user
+ * asked from wherever they look, so the chat is selected as any chat they open is (if that tab
+ * still holds the selection). Recorded before the request, so
  * a snapshot ahead of the answer, or a lost answer, still finds it; matched by the slot the host
  * names, so a chat the host reused still lands. On this host's own window, main focuses instead.
  * Returns how to withdraw it after a definite refusal.
@@ -26,12 +28,13 @@ export function recordConversationSwitchFocus(args: {
   sourceTabId: string
   hostSourceTabId: string | undefined
   chatSessionId: string
+  fromHistory?: boolean
 }): () => void {
-  const state = useAppStore.getState()
+  const visible = resolveWebSessionVisibleTabId(useAppStore.getState(), args.workspaceId)
   if (
     args.target.kind === 'local' ||
     !args.hostSourceTabId ||
-    resolveWebSessionVisibleTabId(state, args.workspaceId) !== args.sourceTabId
+    (!args.fromHistory && visible !== args.sourceTabId)
   ) {
     return () => {}
   }
@@ -42,7 +45,7 @@ export function recordConversationSwitchFocus(args: {
     args.workspaceId,
     hostTabId,
     undefined,
-    args.sourceTabId,
+    args.fromHistory ? visible : args.sourceTabId,
     args.hostSourceTabId
   )
   return () => clearWebSessionFocusIntentIfMatches(owner, args.workspaceId, hostTabId)

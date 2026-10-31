@@ -93,12 +93,10 @@ export function prepareWebSessionTabsSnapshotBase(
               (tab.type === 'terminal' && tab.parentTabId === focusIntentHostTabId) ||
               (tab.type === 'browser' && tab.browserPageId === focusIntentHostTabId)
           ) ??
+          // Beside or in place of the source: a chat the host reused still lands for its initiator.
           (afterHostTabId
             ? snapshot.tabs.find(
-                (tab) =>
-                  slotAnchorOf(tab)?.after === true &&
-                  slotAnchorOf(tab)?.hostTabId === afterHostTabId &&
-                  !shownHere(tab)
+                (tab) => slotAnchorOf(tab)?.hostTabId === afterHostTabId && !shownHere(tab)
               )
             : undefined) ??
           null)

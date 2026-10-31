@@ -58,3 +58,20 @@ it.each([
   record(target)
   expect(peekWebSessionFocusIntent(structuredAgentSessionFocusOwner(target), 'ws')).toBeNull()
 })
+
+it('selects the chat for Session History’s switch from wherever this client looks', () => {
+  store.activeTabId = 'other'
+  recordConversationSwitchFocus({
+    target: remote,
+    workspaceId: 'ws',
+    sourceTabId: 'local-source',
+    hostSourceTabId: 'host-source',
+    chatSessionId: 'chat',
+    fromHistory: true
+  })
+  expect(peekWebSessionFocusIntent({ environmentId: 'env' }, 'ws')).toEqual({
+    hostTabId: 'agent-session:chat',
+    expectedCurrentLocalTabId: 'other',
+    afterHostTabId: 'host-source'
+  })
+})

@@ -50,13 +50,11 @@ import {
 
 export { conversationSwitchFailureText } from './conversation-switch-feedback'
 
-export function runCliChatResume(
+export async function runCliChatResume(
   source: CliChatResumeSource,
   confirm?: ConfirmationDialogContextValue
 ): Promise<void> {
-  return runConversationSwitch({ direction: 'chat', ...source, source, confirm }).then(
-    () => undefined
-  )
+  await runConversationSwitch({ direction: 'chat', ...source, source, confirm })
 }
 export function runNativeChatCliSwitch(
   args: Omit<ConversationSwitch, 'direction'> & { onComplete?: () => void }
@@ -266,7 +264,8 @@ async function switchRequest(
         workspaceId: args.workspaceId,
         sourceTabId: args.source.tabId,
         hostSourceTabId: captured.presentation?.identity.tabId,
-        chatSessionId: intent.sessionId
+        chatSessionId: intent.sessionId,
+        fromHistory: Boolean(args.history)
       }),
       execution: {
         invocationId,
