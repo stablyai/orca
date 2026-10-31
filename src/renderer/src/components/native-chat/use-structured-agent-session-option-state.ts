@@ -5,7 +5,7 @@ import {
 import { useStructuredSessionSelectionReads } from './use-structured-session-selection-reads'
 import { projectRuntimePermission } from '../../../../shared/structured-agent-session-permission-option'
 import { useStructuredAgentSessionStatusSummary } from './StructuredAgentSessionStatusBridge'
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { AgentSessionOptionsResult } from '../../../../shared/agent-session-wire'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { AgentSessionOptionCatalog } from '../../../../shared/agent-session-option-catalog'
@@ -74,22 +74,26 @@ export function useStructuredAgentSessionOptionState(args: {
     )
   )
   const { optionState, support } = useSyncExternalStore(reader.subscribe, reader.getSnapshot)
-  const conversationSupport =
-    support && support.sessionId !== null
-      ? {
-          sessionId: support.sessionId,
-          commands: support.result.conversationCommands ?? [],
-          threadGoal: support.result.threadGoal,
-          reportedThreadGoal: support.result.reportedThreadGoal,
-          contextUsage: support.result.contextUsage,
-          acceptsImages: support.result.acceptsImages,
-          rewind: support.result.rewind ?? {
-            supported: false as const,
-            reason: 'unsupported' as const
-          },
-          fence: support.fence
-        }
-      : null
+  // Projected once per accepted answer so consumers keep stable references between answers.
+  const conversationSupport = useMemo(
+    () =>
+      support && support.sessionId !== null
+        ? {
+            sessionId: support.sessionId,
+            commands: support.result.conversationCommands ?? [],
+            threadGoal: support.result.threadGoal,
+            reportedThreadGoal: support.result.reportedThreadGoal,
+            contextUsage: support.result.contextUsage,
+            acceptsImages: support.result.acceptsImages,
+            rewind: support.result.rewind ?? {
+              supported: false as const,
+              reason: 'unsupported' as const
+            },
+            fence: support.fence
+          }
+        : null,
+    [support]
+  )
   const contextRefresh = conversationSupport?.contextUsage ? (args.unloadedTurnRevisions ?? 0) : 0
   const {
     optionStateRef,

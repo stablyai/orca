@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { mobileStructuredSessionStatusFeed } from './mobile-structured-session-status-feed'
 import { projectRuntimePermission } from '../../../src/shared/structured-agent-session-permission-option'
 import { useMobileStructuredSelectionController } from './use-mobile-structured-selection-controller'
@@ -84,22 +84,25 @@ export function useMobileStructuredOptionState(args: {
     () => contextRef.current.key === contextKey && contextRef.current.client === client,
     [contextKey, client]
   )
-  const conversationSupport =
-    support && support.sessionId !== null
-      ? {
-          sessionId: support.sessionId,
-          fence: support.fence,
-          commands: support.result.conversationCommands ?? []
-        }
-      : null
-  const imageSupport =
-    support && support.sessionId !== null
-      ? {
-          sessionId: support.sessionId,
-          acceptsImages: support.result.acceptsImages,
-          statesPermissionMode: support.result.current?.permissionMode !== undefined
-        }
-      : null
+  // Projected once per accepted answer so consumers keep stable references between answers.
+  const { conversationSupport, imageSupport } = useMemo(
+    () =>
+      support && support.sessionId !== null
+        ? {
+            conversationSupport: {
+              sessionId: support.sessionId,
+              fence: support.fence,
+              commands: support.result.conversationCommands ?? []
+            },
+            imageSupport: {
+              sessionId: support.sessionId,
+              acceptsImages: support.result.acceptsImages,
+              statesPermissionMode: support.result.current?.permissionMode !== undefined
+            }
+          }
+        : { conversationSupport: null, imageSupport: null },
+    [support]
+  )
   const awaitingOptions =
     conversationSupport?.sessionId === sessionId && conversationSupport.fence !== fence
   useEffect(
