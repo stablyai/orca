@@ -144,7 +144,7 @@ export const resume = buildTaskPageGitHubResumeContextKey({
 export type TaskRefreshCalls = {
   direct: GithubWorkItemApi['workItemDetails']
   update: (
-    args: (
+    args?: (
       | Parameters<GithubWorkItemApi['updateIssue']>[0]
       | Parameters<GithubPullRequestApi['updatePRState']>[0]
       | Parameters<GithubPullRequestApi['mergePR']>[0]

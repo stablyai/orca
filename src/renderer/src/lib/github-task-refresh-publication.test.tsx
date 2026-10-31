@@ -711,7 +711,7 @@ it.each([
     await click('Start workspace from issue')
     expect(useItem.mock.calls.at(-1)?.[0].assignees).toEqual(members ?? [user('bob')])
     await click('Add Bob')
-    expect(update.mock.calls.at(-1)?.[0].updates).toEqual(
+    expect(update.mock.calls.at(-1)?.[0]?.updates).toEqual(
       members ? { addAssignees: ['bob'] } : { removeAssignees: ['bob'] }
     )
   }
