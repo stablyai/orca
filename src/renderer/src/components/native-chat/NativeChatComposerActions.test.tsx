@@ -36,7 +36,8 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipContent: ({ children }: { children: ReactNode }) => <div>{children}</div>
 }))
 
-vi.mock('./native-chat-shortcut', () => ({ isMacPlatform: () => true }))
+const platform = vi.hoisted(() => ({ isMac: true }))
+vi.mock('./native-chat-shortcut', () => ({ isMacPlatform: () => platform.isMac }))
 
 vi.mock('./NativeChatSessionOptionPickers', () => ({
   NativeChatSessionOptionPickers: () => <div data-testid="session-option-pickers" />
@@ -49,6 +50,7 @@ import { dispatchDictationControl } from '../dictation/dictation-control-events'
 afterEach(() => {
   cleanup()
   voice.dictationState = 'idle'
+  platform.isMac = true
   vi.clearAllMocks()
 })
 
@@ -192,6 +194,39 @@ describe('NativeChatComposerActions', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Queue message' }), { metaKey: true })
     expect(onSend).toHaveBeenLastCalledWith()
     expect(onSend).toHaveBeenCalledTimes(3)
+  })
+
+  it('a Ctrl-click sends the other way off the Mac, and a Cmd-click there does not', () => {
+    platform.isMac = false
+    const onSend = vi.fn()
+    const { container } = render(
+      <NativeChatComposerActions
+        attachDisabled={false}
+        dictationDisabled={false}
+        sendDisabled={false}
+        isWorking
+        isDictating={false}
+        isDictationHoldMode={false}
+        onAttach={vi.fn()}
+        onDictationToggle={vi.fn()}
+        onDictationHoldStart={vi.fn()}
+        onDictationHoldEnd={vi.fn()}
+        onSend={onSend}
+        onStop={vi.fn()}
+        sessionOptionsSurface={null}
+        sessionOptionsSnapshot={[]}
+        followUp={{ action: 'queue', offersChoice: true, held: false }}
+      />
+    )
+    expect(container.textContent).toContain('Send into the running turnCtrl+Enter/Ctrl+Click')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Queue message' }), { metaKey: true })
+    expect(onSend).toHaveBeenLastCalledWith()
+    fireEvent.keyDown(window, { key: 'Control', ctrlKey: true })
+    fireEvent.click(screen.getByRole('button', { name: 'Steer message' }), { ctrlKey: true })
+    expect(onSend).toHaveBeenLastCalledWith({ alternate: true })
+    fireEvent.keyUp(window, { key: 'Control', ctrlKey: false })
+    expect(screen.getByRole('button', { name: 'Queue message' })).toBeTruthy()
   })
 
   it('marks the streaming Stop control as the critical hit target', () => {
