@@ -588,6 +588,71 @@ function startupGateFor(runs: Receipt[], targetP50Ms: number) {
   }
 }
 
+// EXPERIMENT (not for merge): where warm create→first output goes.
+async function warmSplitRun(repoPath: string): Promise<Receipt> {
+  createManager()
+  const started = performance.now()
+  const at = () => Math.round(performance.now() - started)
+  const connection = await manager.ensure(PLAIN)
+  const ready = at()
+  const held = openHeldRpc(connection)
+  try {
+    await held.call('status.get')
+    const socket = at()
+    const created = await held.call<{ terminal: { handle: string } }>('terminal.create', {
+      worktree: `path:${repoPath}`
+    })
+    const createdAt = at()
+    const handle = created.terminal.handle
+    const tail = async () =>
+      (
+        (await held.call<{ terminal: { tail?: unknown[] } }>('terminal.read', { terminal: handle }))
+          .terminal.tail ?? []
+      )
+        .map(String)
+        .join('\n')
+    await waitFor('the prompt', async () => ((await tail()).trim() ? true : null), 60_000, 10)
+    const prompt = at()
+    const probe = outputProbe()
+    await held.call('terminal.send', { terminal: handle, text: probe.command, enter: true })
+    const sent = at()
+    await waitFor(
+      'the probe',
+      async () => ((await tail()).includes(probe.token) ? true : null),
+      60_000,
+      10
+    )
+    const output = at()
+    await held.call('terminal.close', { terminal: handle }).catch(() => {})
+    return { ready, socket, createdAt, prompt, sent, output }
+  } finally {
+    held.close()
+    await manager.dispose()
+  }
+}
+
+async function guestShellStartupTimings(): Promise<Receipt> {
+  const rcfile = (
+    await guest(`find "$HOME" -path '*bash/rcfile' -newer /etc/hostname 2>/dev/null | head -n 1`)
+  ).trim()
+  const time = async (command: string): Promise<number[]> => {
+    const out = await guest(
+      `for i in 1 2 3 4 5; do s=$(date +%s%N); ${command} </dev/null >/dev/null 2>&1; e=$(date +%s%N); echo $(( (e - s) / 1000000 )); done`
+    )
+    return out.trim().split(/\s+/).map(Number)
+  }
+  return {
+    rcfile,
+    bare: await time('bash --noprofile --norc -i -c true'),
+    userInteractive: await time('bash -i -c true'),
+    userLoginInteractive: await time('bash -l -i -c true'),
+    orcaRcfile: rcfile
+      ? await time(`ORCA_SHELL_FEATURES=ready bash --rcfile ${quotePosixShell(rcfile)} -i -c true`)
+      : [],
+    profileD: (await guest('ls /etc/profile.d; grep -c . "$HOME/.bashrc" 2>/dev/null')).trim()
+  }
+}
+
 /**
  * Distro restart (VM warm) to first command output, median of 5 each, alternating so neither path
  * always runs on a warmer VM.
@@ -626,6 +691,11 @@ async function distroRestartBaseline(): Promise<void> {
   for (let i = 0; i < RESTART_RUNS; i++) {
     warm.push(await restartThroughHost(repoPath, true))
   }
+  receipt.warmSplit = []
+  for (let i = 0; i < RESTART_RUNS; i++) {
+    ;(receipt.warmSplit as unknown[]).push(await warmSplitRun(repoPath))
+  }
+  receipt.guestShellStartup = await guestShellStartupTimings()
   receipt.startupGate = {
     warm: startupGateFor(warm, WARM_START_P50_TARGET_MS),
     cold: startupGateFor(host, COLD_START_P50_TARGET_MS)
