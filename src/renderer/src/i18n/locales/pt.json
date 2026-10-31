@@ -1246,7 +1246,8 @@
         "portuguese": "Português (Brasil)",
         "russian": "Русский",
         "turkish": "Türkçe",
-        "german": "Deutsch"
+        "german": "Deutsch",
+        "polish": "Polski"
       },
       "statusBar": {
         "claudeToggleDescription": "Mostra o uso de tokens e custo do Claude para o espaço de trabalho ativo.",

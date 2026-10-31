@@ -540,7 +540,8 @@
         "portuguese": "Português (Brasil)",
         "russian": "Русский",
         "turkish": "Türkçe",
-        "german": "Deutsch"
+        "german": "Deutsch",
+        "polish": "Polski"
       },
       "statusBar": {
         "claudeToggleDescription": "顯示目前工作區的 Claude token 用量與費用。",

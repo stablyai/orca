@@ -567,7 +567,8 @@
         "portuguese": "Português (Brasil)",
         "russian": "Русский",
         "turkish": "Türkçe",
-        "german": "Deutsch"
+        "german": "Deutsch",
+        "polish": "Polski"
       },
       "statusBar": {
         "claudeToggleDescription": "Etkin çalışma alanı için Claude token ve maliyet kullanımını göster.",
