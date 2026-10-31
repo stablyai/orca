@@ -1,12 +1,12 @@
 import { ipcMain } from 'electron'
 import { sanitizeOnboardingUpdate, type Store } from '../persistence'
 import type { OnboardingState } from '../../shared/onboarding-state-types'
-import type { NativeChatUpgradeTipVariant } from '../../shared/native-chat/native-chat-upgrade-tip-audience'
+import type { ChatUiLaunchTipVariant } from '../../shared/native-chat/chat-ui-launch-tip-audience'
 
 export function registerOnboardingHandlers(store: Store): void {
   ipcMain.removeHandler('onboarding:get')
   ipcMain.removeHandler('onboarding:update')
-  ipcMain.removeHandler('onboarding:getNativeChatUpgradeTipVariant')
+  ipcMain.removeHandler('onboarding:getChatUiLaunchTipVariant')
   ipcMain.removeHandler('onboarding:getProjectGroupingUpgradeTipAudience')
   ipcMain.handle('onboarding:getProjectGroupingUpgradeTipAudience', () =>
     store.getProjectGroupingUpgradeTipAudience()
@@ -17,7 +17,7 @@ export function registerOnboardingHandlers(store: Store): void {
   ipcMain.handle('onboarding:update', (_event, updates: unknown): OnboardingState => {
     return store.updateOnboarding(sanitizeOnboardingUpdate(updates))
   })
-  ipcMain.handle('onboarding:getNativeChatUpgradeTipVariant', (): NativeChatUpgradeTipVariant =>
-    store.getNativeChatUpgradeTipVariant()
+  ipcMain.handle('onboarding:getChatUiLaunchTipVariant', (): ChatUiLaunchTipVariant =>
+    store.getChatUiLaunchTipVariant()
   )
 }

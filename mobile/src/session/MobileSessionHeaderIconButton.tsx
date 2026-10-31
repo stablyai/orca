@@ -1,5 +1,5 @@
-import type { ComponentType } from 'react'
-import { Pressable } from 'react-native'
+import type { ComponentType, Ref } from 'react'
+import { Pressable, type View } from 'react-native'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { styles } from './mobile-session-styles'
@@ -11,6 +11,7 @@ type HeaderIconProps = {
 }
 
 type MobileSessionHeaderIconButtonProps = {
+  ref?: Ref<View>
   active?: boolean
   disabled?: boolean
   accessibilityLabel: string
@@ -19,6 +20,7 @@ type MobileSessionHeaderIconButtonProps = {
 }
 
 export function MobileSessionHeaderIconButton({
+  ref,
   active = false,
   disabled = false,
   accessibilityLabel,
@@ -28,6 +30,7 @@ export function MobileSessionHeaderIconButton({
   useMobileColorScheme()
   return (
     <Pressable
+      ref={ref}
       style={({ pressed }) => [
         styles.headerButton,
         pressed && styles.headerButtonPressed,

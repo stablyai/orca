@@ -7,10 +7,8 @@ import { parseLegacyNumericPaneKey, parsePaneKey } from '../../shared/stable-pan
 import { agentVerdictFields } from '../../shared/agent-main-agent-verdict'
 import { isLocalHookConnectionId } from '../../shared/wsl-hook-relay-contract'
 import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../shared/structured-agent-session-projection'
+import { structuredAgentSessionPaneKey } from '../../shared/structured-agent-session-projection'
+import { structuredAgentSessionIdFromTabId } from '../../shared/structured-agent-session-tab-id'
 import type { RuntimeWorktreeAgentSource } from './runtime-worktree-agent-source'
 
 export type ConnectedPtyEvidence = {
@@ -25,12 +23,11 @@ function publishedStructuredChildren(
   entry: AgentStatusIpcPayload,
   read: ((sessionId: string) => AgentSessionStatusSummary | undefined) | undefined
 ) {
-  const prefix = structuredAgentSessionTabId('')
   const tabId = entry.tabId
-  if (!read || !entry.structuredHost || entry.connectionId !== null || !tabId?.startsWith(prefix)) {
+  const sessionId = tabId ? structuredAgentSessionIdFromTabId(tabId) : null
+  if (!read || !entry.structuredHost || entry.connectionId !== null || !tabId || !sessionId) {
     return undefined
   }
-  const sessionId = tabId.slice(prefix.length)
   if (entry.paneKey !== structuredAgentSessionPaneKey(tabId, sessionId)) {
     return undefined
   }
@@ -68,6 +65,7 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
       state: entry.state,
       ...(entry.workingMode ? { workingMode: entry.workingMode } : {}),
       agentType: entry.agentType ?? null,
+      ...(entry.providerSession?.id ? { providerSessionId: entry.providerSession.id } : {}),
       prompt: entry.prompt,
       lastAssistantMessage: entry.lastAssistantMessage ?? null,
       toolName: entry.toolName ?? null,

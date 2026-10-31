@@ -32,8 +32,8 @@ export function createUiFeatureActions(set: UISliceSet, get: UISliceGet): Partia
     projectGroupingUpgradeTipAudience: null,
     setProjectGroupingUpgradeTipAudience: (audience) =>
       set({ projectGroupingUpgradeTipAudience: audience }),
-    nativeChatUpgradeTipVariant: null,
-    setNativeChatUpgradeTipVariant: (variant) => set({ nativeChatUpgradeTipVariant: variant }),
+    chatUiLaunchTipVariant: null,
+    setChatUiLaunchTipVariant: (variant) => set({ chatUiLaunchTipVariant: variant }),
     featureInteractions: {},
     recordFeatureInteraction: (id) => {
       let tourProgression: ReturnType<typeof getContextualTourProgressionForFeatureInteraction> =

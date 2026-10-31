@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { EVERY_AGENT_CHAT } from '../../../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, render, cleanup, fireEvent } from '@testing-library/react'
 import '../../__fixtures__/settings-persistence-test-fixture'
@@ -142,7 +143,7 @@ describe('RepositorySourceControlAiActionRows', () => {
         repos: [{ ...TEST_REPO, id: 'repo-1' }],
         settings: {
           ...settings,
-          experimentalNativeChat: false,
+          nativeChatProviders: {},
           defaultTuiAgent: 'claude',
           sourceControlAi: source
         },
@@ -225,10 +226,13 @@ describe('RepositorySourceControlAiActionRows', () => {
           )
         ).toBe(true)
       }
-      for (const experimentalNativeChat of [true, false]) {
+      for (const chat of [true, false]) {
         await act(() =>
           useAppStore.setState({
-            settings: { ...useAppStore.getState().settings!, experimentalNativeChat }
+            settings: {
+              ...useAppStore.getState().settings!,
+              nativeChatProviders: chat ? EVERY_AGENT_CHAT : {}
+            }
           })
         )
         for (const card of cards) {
@@ -236,7 +240,7 @@ describe('RepositorySourceControlAiActionRows', () => {
           expect(input?.value).toBe(
             surface === 'terminal'
               ? '--saved-cli'
-              : surface === 'chat' || (experimentalNativeChat && agent !== 'opencode')
+              : surface === 'chat' || (chat && agent !== 'opencode')
                 ? undefined
                 : '--saved-cli'
           )
@@ -319,7 +323,7 @@ it.each(['', '--model raw'])(
 it('keeps default and missing-agent editors disabled only until the host inventory settles', async () => {
   const settings = useAppStore.getState().settings!
   useAppStore.setState({
-    settings: { ...settings, experimentalNativeChat: false },
+    settings: { ...settings, nativeChatProviders: {} },
     detectedAgentIds: null,
     ensureDetectedAgents: vi.fn(() => new Promise<TuiAgent[]>(() => {}))
   })
@@ -382,7 +386,7 @@ it.each([1, 10])(
     useAppStore.setState({
       settings: {
         ...settings,
-        experimentalNativeChat: false,
+        nativeChatProviders: {},
         defaultTuiAgent: 'claude',
         disabledTuiAgents: ['codex']
       },

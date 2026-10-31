@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { View, Text, Pressable } from 'react-native'
+import { View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
   ChevronLeft,
@@ -14,7 +14,8 @@ import {
 import { MobileSessionHeaderIconButton } from './MobileSessionHeaderIconButton'
 import { MobileSessionHeaderMoreActionsSheet } from './MobileSessionHeaderMoreActionsSheet'
 import { MobileSessionTabStrip } from './MobileSessionTabStrip'
-import { StatusDot } from '../components/StatusDot'
+import { MobileSessionTitleBlock } from './MobileSessionTitleBlock'
+import type { SessionTitleCard } from './use-session-title-card'
 import { styles } from './mobile-session-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -24,7 +25,13 @@ import type { MobileSessionController } from './use-mobile-session-controller'
 import { useTopChromeSpace } from '../layout/use-top-chrome-space'
 import { useShellSideRail } from '../layout/use-shell-side-rail'
 
-export function MobileSessionHeader({ controller }: { controller: MobileSessionController }) {
+export function MobileSessionHeader({
+  controller,
+  details
+}: {
+  controller: MobileSessionController
+  details: SessionTitleCard
+}) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const {
@@ -69,6 +76,7 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
     <MobileSessionTabStrip
       controller={controller}
       inTopBar={tabsInTopBar}
+      details={details.tabDetails}
       actionsCollapsed={actionsCollapsed}
     />
   ) : null
@@ -86,8 +94,10 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
         edges={topChrome.space ? [] : ['top']}
       >
         <View
+          ref={details.barRef}
           style={styles.sessionTopBar}
           onLayout={(event) => {
+            details.onAnchorLayout()
             const width = event.nativeEvent.layout.width
             setHeaderWidth((previous) => (previous === width ? previous : width))
           }}
@@ -102,37 +112,27 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
           <MobileSessionHeaderIconButton
             accessibilityLabel={t('session.header.backToWorktrees', 'Back to worktrees')}
             icon={ChevronLeft}
-            onPress={requestLeaveSession}
+            ref={details.backRef}
+            onPress={() => {
+              if (!details.closeFirst()) {
+                requestLeaveSession()
+              }
+            }}
           />
 
           {!sideRail || !hasTabs || showConnectionRetry || connectionEscalated ? (
-            <View
-              style={[styles.sessionTitleBlock, tabsInTopBar && styles.sessionTitleBlockBesideTabs]}
-            >
-              <Text style={styles.sessionTitle} numberOfLines={1}>
-                {worktreeName || t('session.header.terminalTitle', 'Terminal')}
-              </Text>
-              <Pressable
-                style={styles.sessionMetaRow}
-                disabled={!showConnectionRetry}
-                onPress={() => {
-                  if (hostId && forceReconnectHost) {
-                    void forceReconnectHost(hostId)
-                  }
-                }}
-                accessibilityRole={showConnectionRetry ? 'button' : undefined}
-                accessibilityLabel={
-                  showConnectionRetry
-                    ? t('session.header.reconnectToDesktop', 'Reconnect to desktop')
-                    : undefined
+            <MobileSessionTitleBlock
+              title={worktreeName || t('session.header.terminalTitle', 'Terminal')}
+              connState={presentedConnState}
+              details={details}
+              meta={terminalSummary}
+              showConnectionRetry={showConnectionRetry}
+              onRetry={() => {
+                if (hostId && forceReconnectHost) {
+                  void forceReconnectHost(hostId)
                 }
-              >
-                <StatusDot state={presentedConnState} />
-                <Text style={styles.sessionMetaText} numberOfLines={1}>
-                  {terminalSummary}
-                </Text>
-              </Pressable>
-            </View>
+              }}
+            />
           ) : null}
           {tabsInTopBar ? tabStrip : null}
           {!actionsCollapsed && !isFloatingWorkspaceRoute && (

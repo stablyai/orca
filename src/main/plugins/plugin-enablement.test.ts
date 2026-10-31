@@ -150,4 +150,16 @@ describe('applyPluginEnablement', () => {
 
     expect(harness.updateSettings).not.toHaveBeenCalled()
   })
+
+  it('tells every window, including the one that clicked, so its themes stop painting', async () => {
+    const harness = createStore()
+    const pluginService = createPluginService(() => 'sha256-current')
+
+    await applyPluginEnablement({ store: harness.store, pluginService, pluginKey, enabled: false })
+
+    expect(harness.updateSettings).toHaveBeenCalledWith(
+      { disabledPlugins: [pluginKey] },
+      { notifyListeners: true }
+    )
+  })
 })

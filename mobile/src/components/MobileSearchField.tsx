@@ -8,7 +8,7 @@ import {
 } from 'react-native'
 import { Search, X } from 'lucide-react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors, spacing } from '../theme/mobile-theme'
+import { colors, radii, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { TextField } from './composer-input/TextField'
@@ -142,7 +142,7 @@ const styles = themedStyleSheet(() => ({
   clearChip: {
     width: 24,
     height: 24,
-    borderRadius: 12,
+    borderRadius: radii.pill,
     alignItems: 'center',
     justifyContent: 'center',
     // A solid textMuted chip reads as a control; borderSubtle looked decorative.

@@ -4,7 +4,7 @@ import type { AgentType } from './agent-status-types'
 
 function effortOption(
   model: AgentSessionOptionsResult['models'][number],
-  agent: AgentType | undefined
+  agent: AgentType
 ): CatalogOption | null {
   // Pi menus are exact; other agents (OMP's recorded menus) still offer unconfirmed choices.
   if ((agent === 'pi' && model.effortsKnown === false) || model.efforts.length === 0) {
@@ -52,7 +52,7 @@ export function serviceTierOption(tiers: readonly AgentSessionOptionChoice[]): C
 export function discoveredModel(
   model: AgentSessionOptionsResult['models'][number],
   sessionSupportsFastMode: boolean,
-  agent?: AgentType
+  agent: AgentType
 ): CatalogModel {
   const effort = effortOption(model, agent)
   const serviceTier = model.serviceTiers?.length ? serviceTierOption(model.serviceTiers) : null

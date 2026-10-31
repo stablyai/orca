@@ -1,3 +1,4 @@
+import { EVERY_AGENT_CHAT } from '../../../shared/native-chat/every-agent-chat.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import {
   mockCreateTab,
@@ -66,13 +67,13 @@ describe('launchAgentInNewTab', () => {
     )
   })
 
-  it('keeps prompted Codex launches on the ordinary terminal path', async () => {
+  it('keeps prompted resolved-CLI Codex launches on their owned pane path', async () => {
     store.settings = {
       agentCmdOverrides: {},
       agentDefaultArgs: {},
       agentDefaultEnv: {},
       activeRuntimeEnvironmentId: null,
-      experimentalNativeChat: true
+      nativeChatProviders: EVERY_AGENT_CHAT
     }
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
@@ -87,6 +88,9 @@ describe('launchAgentInNewTab', () => {
     expect(mockCreateTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
       launchAgent: 'codex',
       quickCommandLabel: undefined,
+      id: 'tab-1',
+      initialLeafId: 'tab-1',
+      agentLaunchPane: { leafId: 'tab-1' },
       pendingStartup: expect.anything()
     })
     expect(queuedStartups()).toContainEqual(
@@ -94,22 +98,24 @@ describe('launchAgentInNewTab', () => {
         command: expect.not.stringContaining('large generated prompt')
       })
     )
-    expect(mockSeedNativeChatLaunchPrompt).toHaveBeenCalledWith({
-      tabId: 'tab-1',
-      agent: 'codex',
-      text: 'large generated prompt',
-      createdAt: expect.any(Number)
+    await vi.waitFor(() => {
+      expect(mockSeedNativeChatLaunchPrompt).toHaveBeenCalledWith({
+        tabId: 'tab-1',
+        agent: 'codex',
+        text: 'large generated prompt',
+        createdAt: expect.any(Number)
+      })
     })
     expect(mockSetTabViewMode).not.toHaveBeenCalled()
   })
 
-  it('opens local Grok submit-after-ready launches in native chat', async () => {
+  it('keeps unsupported Grok submit-after-ready launches on their owned terminal path', async () => {
     store.settings = {
       agentCmdOverrides: {},
       agentDefaultArgs: {},
       agentDefaultEnv: {},
       activeRuntimeEnvironmentId: null,
-      experimentalNativeChat: true
+      nativeChatProviders: EVERY_AGENT_CHAT
     }
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
@@ -124,13 +130,18 @@ describe('launchAgentInNewTab', () => {
     expect(mockCreateTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
       launchAgent: 'grok',
       quickCommandLabel: undefined,
+      id: 'tab-1',
+      initialLeafId: 'tab-1',
+      agentLaunchPane: { leafId: 'tab-1' },
       pendingStartup: expect.anything()
     })
-    expect(mockSeedNativeChatLaunchPrompt).toHaveBeenCalledWith({
-      tabId: 'tab-1',
-      agent: 'grok',
-      text: 'large generated prompt',
-      createdAt: expect.any(Number)
+    await vi.waitFor(() => {
+      expect(mockSeedNativeChatLaunchPrompt).toHaveBeenCalledWith({
+        tabId: 'tab-1',
+        agent: 'grok',
+        text: 'large generated prompt',
+        createdAt: expect.any(Number)
+      })
     })
   })
 
@@ -140,7 +151,7 @@ describe('launchAgentInNewTab', () => {
       agentDefaultArgs: {},
       agentDefaultEnv: {},
       activeRuntimeEnvironmentId: null,
-      experimentalNativeChat: true
+      nativeChatProviders: EVERY_AGENT_CHAT
     }
     store.repos = [{ id: 'repo-1', connectionId: 'ssh-target-1', path: '/repo' }]
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
@@ -160,7 +171,7 @@ describe('launchAgentInNewTab', () => {
       agentDefaultArgs: {},
       agentDefaultEnv: {},
       activeRuntimeEnvironmentId: null,
-      experimentalNativeChat: true
+      nativeChatProviders: EVERY_AGENT_CHAT
     }
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
@@ -189,7 +200,7 @@ describe('launchAgentInNewTab', () => {
       agentDefaultArgs: {},
       agentDefaultEnv: {},
       activeRuntimeEnvironmentId: null,
-      experimentalNativeChat: true
+      nativeChatProviders: EVERY_AGENT_CHAT
     }
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
@@ -231,7 +242,7 @@ describe('launchAgentInNewTab', () => {
       agentDefaultArgs: { codex: '--profile team' },
       agentDefaultEnv: {},
       activeRuntimeEnvironmentId: null,
-      experimentalNativeChat: false,
+      nativeChatProviders: {},
       nativeChatSessionOptions: {
         codex: {
           model: 'gpt-5.2-codex',
@@ -263,7 +274,7 @@ describe('launchAgentInNewTab', () => {
       agentDefaultArgs: {},
       agentDefaultEnv: {},
       activeRuntimeEnvironmentId: null,
-      experimentalNativeChat: true,
+      nativeChatProviders: EVERY_AGENT_CHAT,
       nativeChatSessionOptions: {
         codex: {
           model: 'gpt-5.2-codex',
@@ -303,7 +314,7 @@ describe('launchAgentInNewTab', () => {
       agentDefaultArgs: {},
       agentDefaultEnv: {},
       activeRuntimeEnvironmentId: 'web-runtime',
-      experimentalNativeChat: true,
+      nativeChatProviders: EVERY_AGENT_CHAT,
       nativeChatSessionOptions: {
         claude: {
           model: 'opus',
@@ -324,6 +335,7 @@ describe('launchAgentInNewTab', () => {
 
     expect(result?.surface).toEqual({ kind: 'host-published' })
     expect(result?.pasteDraftAfterLaunch).toBe(false)
+    await result?.terminalCompletion
     expect(mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft).toHaveBeenCalledWith(
       expect.objectContaining({
         launchAgent: 'claude',
@@ -348,38 +360,19 @@ describe('launchAgentInNewTab', () => {
       agentDefaultArgs: {},
       agentDefaultEnv: {},
       activeRuntimeEnvironmentId: 'web-runtime',
-      experimentalNativeChat: true
+      nativeChatProviders: EVERY_AGENT_CHAT
     }
     // The client stamps a server's rows on arrival; focus alone never names the owner.
     Object.assign(store.repos[0], { executionHostId: 'runtime:web-runtime' })
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({ requestId: 'request-12', agent: 'codex', worktreeId: 'wt-1' })
-
-    expect(mockCreateWebRuntimeSessionTerminal.mock.calls[0]?.[0]).toMatchObject({
-      worktreeId: 'wt-1',
-      environmentId: 'web-runtime',
-      agentSessionKind: 'fresh',
-      launchAgent: 'codex',
-      viewMode: 'terminal'
+    const result = launchAgentInNewTab({
+      requestId: 'request-12',
+      agent: 'codex',
+      worktreeId: 'wt-1'
     })
-  })
 
-  it('propagates the resolved terminal mode to paired web runtime launches', async () => {
-    mockIsWebRuntimeSessionActive.mockReturnValue(true)
-    store.settings = {
-      agentCmdOverrides: {},
-      agentDefaultArgs: {},
-      agentDefaultEnv: {},
-      activeRuntimeEnvironmentId: 'web-runtime',
-      experimentalNativeChat: true
-    }
-    // The client stamps a server's rows on arrival; focus alone never names the owner.
-    Object.assign(store.repos[0], { executionHostId: 'runtime:web-runtime' })
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-    launchAgentInNewTab({ requestId: 'request-13', agent: 'codex', worktreeId: 'wt-1' })
-
+    await result?.terminalCompletion
     expect(mockCreateWebRuntimeSessionTerminal.mock.calls[0]?.[0]).toMatchObject({
       worktreeId: 'wt-1',
       environmentId: 'web-runtime',
@@ -405,9 +398,7 @@ describe('launchAgentInNewTab', () => {
 
     await launchAgentInNewTab({ requestId: 'request-14', agent: 'claude', worktreeId: 'wt-1' })
       ?.terminalCompletion
-    expect(mockToastError).toHaveBeenCalledWith(
-      'Upgrade the remote Orca host before starting or resuming agent sessions.'
-    )
+    expect(mockToastError).toHaveBeenCalledWith(expect.stringMatching(/Claude.*try again/))
     expect(mockSetActiveTabType).not.toHaveBeenCalled()
   })
 
@@ -457,7 +448,7 @@ describe('launchAgentInNewTab', () => {
       launchPlatform: 'win32'
     })
 
-    expect(result).not.toHaveProperty('promptDeliveryResult')
+    expect(result?.promptDeliveryResult).toBeDefined()
     expect(queuedStartups()).toContainEqual(
       expect.objectContaining({
         command: "claude '--dangerously-skip-permissions'"
@@ -474,7 +465,7 @@ describe('launchAgentInNewTab', () => {
     )
   })
 
-  it('logs rejected non-deferred prompt delivery without exposing it to callers', async () => {
+  it('exposes rejected draft delivery while keeping its existing error observer', async () => {
     const error = new Error('paste failed')
     const originalConsole = console
     const consoleError = vi.fn()
@@ -493,8 +484,7 @@ describe('launchAgentInNewTab', () => {
         launchPlatform: 'win32'
       })
 
-      expect(result).not.toHaveProperty('promptDeliveryResult')
-      await new Promise((resolve) => setTimeout(resolve, 0))
+      await expect(result?.promptDeliveryResult).rejects.toBe(error)
       expect(consoleError).toHaveBeenCalledWith('Prompt delivery failed after launch', error)
     } finally {
       vi.stubGlobal('console', originalConsole)
@@ -703,9 +693,16 @@ describe('launchAgentInNewTab', () => {
 
     expect(queuedStartups()).toContainEqual(
       expect.objectContaining({
-        // Codex's update prompt would take the Enter that submits the pasted prompt (#18153).
-        command:
-          "codex '-c' 'check_for_update_on_startup=false' '-c' 'disable_paste_burst=true' '--model' 'gpt-5.5'"
+        command: '',
+        agentLaunch: {
+          launch: {
+            agent: 'codex',
+            target: { kind: 'existing', worktree: 'id:wt-1' },
+            agentArgs: '--model gpt-5.5',
+            launchSource: 'tab_bar_quick_launch'
+          },
+          suppressStartupUpdatePrompt: true
+        }
       })
     )
   })

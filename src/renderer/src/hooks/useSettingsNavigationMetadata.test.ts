@@ -3,7 +3,6 @@ import {
   getSettingsTargetHostSelection,
   buildSettingsProjectList
 } from '../components/settings/settings-project-list'
-import { buildCmdJSettingsResults } from '../components/cmd-j/palette-results'
 import { matchesSettingsSearch } from '../components/settings/settings-search'
 import { describe, expect, it } from 'vitest'
 import { buildSettingsNavigationMetadata } from './useSettingsNavigationMetadata'
@@ -38,28 +37,6 @@ function ids(
 }
 
 describe('settings navigation metadata', () => {
-  it.each([false, undefined])(
-    'omits Chat navigation and search when the opt-in is %s',
-    (enabled) => {
-      const sections = buildSettingsNavigationMetadata({
-        isMac: false,
-        isWindows: false,
-        isWebClient: false,
-        nativeChatEnabled: enabled,
-        repos: []
-      })
-      expect(sections.some((section) => section.id === 'chat')).toBe(false)
-      expect(buildCmdJSettingsResults(sections).some((result) => result.sectionId === 'chat')).toBe(
-        false
-      )
-      for (const query of ['Code text size', 'Reset chat appearance']) {
-        expect(
-          sections.some((section) => matchesSettingsSearch(query, section.searchEntries))
-        ).toBe(false)
-      }
-    }
-  )
-
   it('gives repeated repo IDs on distinct hosts unique navigable Settings sections in split modes', () => {
     const common = { ...repo, upstream: { owner: 'org', repo: 'app' } }
     const repos = [
@@ -98,7 +75,6 @@ describe('settings navigation metadata', () => {
       isMac: false,
       isWindows: false,
       isWebClient: false,
-      nativeChatEnabled: true,
       repos: []
     })
     const appearanceIndex = sections.findIndex((section) => section.id === 'appearance')

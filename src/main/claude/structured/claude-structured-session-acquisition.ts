@@ -19,11 +19,10 @@ import { adoptClaudeStructuredSpawnOptions } from '../claude-structured-spawn-op
 import { observeClaudeExecutionModel } from '../claude-structured-execution-observations'
 import { observeClaudeFastModeFacts } from '../claude-structured-session-options'
 import {
-  claudeSessionInitialization,
   createClaudeSessionPublication,
   reportClaudeOptions
 } from './claude-structured-session-publication'
-import * as sessionState from './claude-structured-session-state'
+import type * as sessionState from './claude-structured-session-state'
 import { resolveClaudeAcquisitionError } from '../claude-structured-session-close'
 import { withObservedProviderExit } from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
 import { readClaudeTranscriptEntryUuid } from '../claude-transcript-entry-uuid'
@@ -42,6 +41,7 @@ export async function acquireClaudeSession({
   sessions,
   acquisitions,
   exits,
+  naming,
   callbacks
 }: Omit<
   Parameters<typeof resolveClaudeAcquisitionLaunch>[0],
@@ -183,6 +183,7 @@ export async function acquireClaudeSession({
       attempt
     })
     expectedProviderSessionId = launch.providerSessionId
+    naming?.launch(launch)
     attempt.account = launch.account
     observedLeafUuid = launch.resumeLeafUuid
     const open = deps.openConnection ?? openClaudeStreamJsonConnection
@@ -210,6 +211,7 @@ export async function acquireClaudeSession({
           },
           onExit: (error, exit) => {
             if (exit?.expected) {
+              naming?.failed()
               callbacks.finishClose(sessionId, attempt)
               return
             }
@@ -223,6 +225,7 @@ export async function acquireClaudeSession({
       )
     )
     attempt.connection = connection
+    naming?.attach(connection)
     unbindReadingControl = bindClaudeConnectionJournalControls(
       input.events,
       connection,
@@ -249,24 +252,21 @@ export async function acquireClaudeSession({
     }
     const { session, acquisition } = createClaudeSessionPublication({
       connection,
-      providerSessionId: launch.providerSessionId,
+      launch,
+      request: input,
+      deps,
       leafUuid: observedLeafUuid,
-      turnEndLeafUuid: launch.resumeLeafUuid,
-      fence: input.fence,
-      continuesChain: launch.continuesChain,
-      ...(launch.forkedFromKey ? { forkedFromKey: launch.forkedFromKey } : {}),
       prompts,
       translator,
-      events: input.events,
       ...(unbindReadingControl ? { unbindReadingControl } : {}),
       process,
-      acquisitionGeneration: sessionState.mintClaudeAcquisitionGeneration(deps),
-      options: launch.savedOptions.options,
-      initialization: claudeSessionInitialization(launch, initProof, contextActivity, (error) =>
-        callbacks.handleExit(sessionId, attempt, error)
-      ),
-      ...(deps.mintLinkId ? { linkId: deps.mintLinkId() } : {}),
-      observedAt: deps.now?.() ?? Date.now()
+      initialization: {
+        proof: initProof,
+        contextActivity,
+        onLateRefusal: (error) => callbacks.handleExit(sessionId, attempt, error),
+        emit,
+        naming
+      }
     })
     session.reportedOptions = observedOptions
     liveSession = session

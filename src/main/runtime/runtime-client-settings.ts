@@ -92,10 +92,6 @@ export class RuntimeClientSettingsController {
         : null,
       githubProjects: settings.githubProjects,
       experimentalNewWorktreeCardStyle: settings.experimentalNewWorktreeCardStyle === true,
-      experimentalNativeChat: settings.experimentalNativeChat === true,
-      // Older clients use this key to fall back to terminal-backed chat. Keep their default terminal.
-      openAgentTabsInChatByDefault: false,
-      experimentalStructuredNativeChat: settings.experimentalNativeChat === true,
       compactWorktreeCards: settings.compactWorktreeCards === true,
       minimaxGroupId: settings.minimaxGroupId ?? '',
       minimaxUsageModels: settings.minimaxUsageModels ?? 'general',
@@ -135,10 +131,11 @@ export class RuntimeClientSettingsController {
     }
     const beforeSettings = this.store.getSettings()
     const before = beforeSettings.agentStatusHooksEnabled !== false
+    const { agentDefaultArgs, agentDefaultEnv, ...otherUpdates } = updates
     // Legacy clients can select an agent or a shell, but cannot select None.
     this.store.updateSettings(
       {
-        ...updates,
+        ...otherUpdates,
         ...(updates.defaultRepoSelection !== undefined
           ? {
               defaultRepoSelection: replaceRawTaskRepoSelection(
@@ -148,13 +145,10 @@ export class RuntimeClientSettingsController {
             }
           : {}),
         // An older client writes Arguments as it reads them, flag included.
-        ...(updates.agentDefaultArgs !== undefined || updates.agentDefaultEnv !== undefined
+        ...(agentDefaultArgs !== undefined || agentDefaultEnv !== undefined
           ? legacyLaunchTextUpdates(
               beforeSettings,
-              {
-                agentDefaultArgs: updates.agentDefaultArgs,
-                agentDefaultEnv: updates.agentDefaultEnv
-              },
+              { agentDefaultArgs, agentDefaultEnv },
               process.platform
             )
           : {}),
