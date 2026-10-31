@@ -6,7 +6,11 @@ vi.mock('react-native', async () => {
     ActivityIndicator: 'ActivityIndicator',
     Image: 'Image',
     Platform: { OS: 'ios' },
-    Keyboard: { dismiss: vi.fn() },
+    Keyboard: {
+      dismiss: vi.fn(),
+      addListener: () => ({ remove: () => {} }),
+      metrics: () => undefined
+    },
     FlatList: React.forwardRef((props, ref) => {
       React.useImperativeHandle(ref, () => ({ scrollToEnd: vi.fn(), scrollToOffset: vi.fn() }), [])
       return React.createElement('FlatList', props)

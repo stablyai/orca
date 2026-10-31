@@ -204,6 +204,10 @@
     {
       "file": "src/platform/shell-storage.web.ts",
       "reason": "Native settings screens can cover a still-mounted page. Observe same-session storage snapshots so preference readers refresh on return without remounting the terminal."
+    },
+    {
+      "file": "src/components/composer-input/hardware-keyboard-enter-submit.web.ts",
+      "reason": "react-native-web ignores submitBehavior, and its blurOnSubmit drops focus after every send. The native file switches submitBehavior so a hardware Return sends; this one cancels the plain Enter keydown instead, which also keeps Shift+Enter as a newline."
     }
   ]
 }

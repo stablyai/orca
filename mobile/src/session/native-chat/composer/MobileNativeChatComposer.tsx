@@ -34,6 +34,7 @@ import { MobileNativeChatStopButton } from '../input/MobileNativeChatStopButton'
 import { mobileNativeChatComposerStyles as styles } from './mobile-native-chat-composer-styles'
 import { composerInputStyles as inputStyles } from '../../../components/composer-input/composer-input-styles'
 import { ComposerSendButton } from '../../../components/composer-input/ComposerSendButton'
+import { useHardwareKeyboardEnterSubmit } from '../../../components/composer-input/hardware-keyboard-enter-submit'
 import {
   MobileNativeChatComposerMic,
   type MobileNativeChatMicProps
@@ -216,7 +217,7 @@ export function MobileNativeChatComposer({
     }
   }, [])
 
-  const handleSend = async (): Promise<void> => {
+  const handleSend = async ({ keepFocus = false } = {}): Promise<void> => {
     if (!canSend || sendingRef.current) {
       return
     }
@@ -239,7 +240,8 @@ export function MobileNativeChatComposer({
         menu.resetCursor()
         // Why: the turn is now the agent's — the keyboard would cover the reply.
         // A rejected send keeps it up so the handed-back draft stays editable.
-        if (!editSession) {
+        // A hardware keyboard covers nothing, so its Return keeps the field focused.
+        if (!editSession && !keepFocus) {
           Keyboard.dismiss()
         }
       }
@@ -248,6 +250,10 @@ export function MobileNativeChatComposer({
       setSending(false)
     }
   }
+
+  const enterSubmit = useHardwareKeyboardEnterSubmit(
+    canSend && !showsStop ? () => void handleSend({ keepFocus: true }) : undefined
+  )
 
   // A terminal-backed chat has only photos to add, so its + opens the library at once.
   const attachPress = structured ? () => setAttachOpen(true) : onAttachImage
@@ -303,6 +309,7 @@ export function MobileNativeChatComposer({
             // field, so a transient lock would yank the keyboard mid-typing (#10681).
             // The lock gates sending; the draft survives and rides the next send.
             textAlignVertical="top"
+            {...enterSubmit}
           />
           <View style={inputStyles.actionRow} testID="native-chat-composer-actions">
             {attachPress ? (
@@ -368,7 +375,7 @@ export function MobileNativeChatComposer({
                   !canSend && inputStyles.sendButtonDisabled,
                   pressed && canSend && inputStyles.pressed
                 ]}
-                onPress={handleSend}
+                onPress={() => void handleSend()}
                 disabled={!canSend}
               >
                 <Text style={{ color: canSend ? colors.bgBase : colors.textMuted }}>
@@ -377,7 +384,7 @@ export function MobileNativeChatComposer({
               </Pressable>
             ) : (
               <ComposerSendButton
-                onPress={handleSend}
+                onPress={() => void handleSend()}
                 canSend={canSend}
                 label={t('chat.composer.sendMessage', 'Send message')}
               />

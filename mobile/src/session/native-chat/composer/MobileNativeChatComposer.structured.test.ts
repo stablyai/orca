@@ -53,7 +53,12 @@ vi.mock('react-native', async () => {
   return {
     ActivityIndicator: 'ActivityIndicator',
     Image: 'Image',
-    Keyboard: { dismiss: vi.fn() },
+    Keyboard: {
+      dismiss: vi.fn(),
+      addListener: () => ({ remove: () => {} }),
+      metrics: () => undefined
+    },
+    Platform: { OS: 'ios' },
     Pressable: 'Pressable',
     ScrollView: ({ children, ...props }: { children?: React.ReactNode }) =>
       React.createElement('ScrollView', props, children),
