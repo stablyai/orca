@@ -4520,8 +4520,7 @@
   },
   "composerUsage": {
     "meter": {
-      "label": "{{provider}} {{window}} usage: {{percent}}% used. Show details",
-      "labelIdle": "{{provider}} {{window}} usage: no active window. Show details"
+      "label": "{{provider}} {{window}} usage: {{percent}}% used. Show details"
     },
     "sheet": {
       "title": "{{provider}} usage",
