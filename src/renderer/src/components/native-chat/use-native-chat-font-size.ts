@@ -12,12 +12,13 @@ const PINCH_STEP_DELTA = 12
 const PINCH_IDLE_RESET_MS = 250
 
 export function useNativeChatFontSize(
-  enabled: boolean,
+  focused: boolean,
   rootRef?: RefObject<HTMLDivElement | null>,
-  wheelEnabled: boolean = enabled
+  active: boolean = true
 ): void {
+  const enabled = focused && active
   useEffect(() => {
-    if (!wheelEnabled) {
+    if (!active) {
       return
     }
     const root = rootRef?.current
@@ -54,7 +55,7 @@ export function useNativeChatFontSize(
     }
     root.addEventListener('wheel', onWheel, { capture: true, passive: false })
     return () => root.removeEventListener('wheel', onWheel, { capture: true })
-  }, [wheelEnabled, rootRef])
+  }, [active, rootRef])
 
   useEffect(() => {
     if (!enabled || !isWebClientLocation()) {

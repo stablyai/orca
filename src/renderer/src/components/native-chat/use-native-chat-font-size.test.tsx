@@ -119,7 +119,7 @@ describe('persisted chat font-size shortcuts', () => {
     const text = document.createElement('p')
     root.append(text)
     document.body.append(root)
-    renderHook(() => useNativeChatFontSize(false, { current: root }, true))
+    renderHook(() => useNativeChatFontSize(false, { current: root }))
     const wheel = (deltaY: number): WheelEvent => {
       const event = new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY })
       Object.defineProperty(event, 'ctrlKey', { value: true })
