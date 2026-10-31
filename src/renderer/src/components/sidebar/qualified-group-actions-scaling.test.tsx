@@ -217,10 +217,11 @@ it('refreshes the open selected operation and predicates together, with equal/un
     worktree: { ...worktree, repoId: 'a', hostId: 'local' }
   }
   let commits = 0
-  let selected: ReturnType<typeof useProjectGroupOperation> = null
+  const observed: { selected: ReturnType<typeof useProjectGroupOperation> } = { selected: null }
   const resolver = vi.spyOn(groupOperations, 'resolveProjectGroupOperation')
   function Probe() {
-    selected = useProjectGroupOperation(true, entrance)
+    const selected = useProjectGroupOperation(true, entrance)
+    observed.selected = selected
     useLayoutEffect(() => {
       commits++
     })
@@ -271,8 +272,8 @@ it('refreshes the open selected operation and predicates together, with equal/un
       }))
     )
     expect(commits).toBe(2)
-    expect(selected?.grouped).toBe(true)
-    expect(selected?.uniformGroupId).toBeUndefined()
+    expect(observed.selected?.grouped).toBe(true)
+    expect(observed.selected?.uniformGroupId).toBeUndefined()
     act(() =>
       useAppStore.setState((state) => ({
         projectGroups: state.projectGroups.map((group) =>

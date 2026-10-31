@@ -107,7 +107,7 @@ export function prepareSettingsProjectRemoval(
       members.push(member)
     }
   }
-  const recipeHosts = new Set(
+  const recipeHosts = new Set<ExecutionHostId>(
     state.runtimeEnvironments.flatMap((environment) => {
       const host = toRuntimeExecutionHostId(environment.id)
       return getRecipeVmSshTargetForHost([environment], host) ? [host] : []

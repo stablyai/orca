@@ -13,10 +13,24 @@ import { EMPTY_RETIRED_NAME_REGISTRY } from '../../../../shared/worktree/retired
 import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
 import { expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
+import type { Repo } from '../../../../shared/repo-types'
 import { useAppStore } from '@/store'
 import { getDefaultSettings } from '../../../../shared/constants'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
 import { worktree } from './worktree-list-groups-test-fixtures'
+
+function hasConcreteRepoUpdates(
+  updates: Parameters<AppState['updateRepo']>[1]
+): updates is Parameters<AppState['updateRepo']>[1] & Partial<Repo> {
+  return (
+    updates.sourceControlAi !== null &&
+    updates.externalWorktreeVisibility !== null &&
+    updates.agentWorktreeVisibility !== null &&
+    updates.externalWorktreeDiscoverySuppressedAt !== null &&
+    updates.ghAccount !== null
+  )
+}
+
 it('keeps beta recoverable after its real Keep hidden action through the shipping merged header and one exact recovery list', async () => {
   const alpha = {
     ...local,
@@ -36,6 +50,9 @@ it('keeps beta recoverable after its real Keep hidden action through the shippin
     hostId: 'local'
   })
   const updateRepo = vi.fn<AppState['updateRepo']>(async (id, updates, options) => {
+    if (!hasConcreteRepoUpdates(updates)) {
+      throw new Error('This fixture expects concrete repo updates, not clear sentinels')
+    }
     useAppStore.setState((state) => ({
       repos: state.repos.map((entry) =>
         entry.id === id && getRepoExecutionHostId(entry) === (options?.hostId ?? 'local')
@@ -231,7 +248,11 @@ it('routes the shipping merged Remove Project menu to current Settings scope and
       if (repoId === beta.id && failBeta) {
         throw new Error('beta host refused')
       }
-      disk.removeProjectForHost({ id: repoId, executionHostId: hostId })
+      const host = parseExecutionHostId(hostId)
+      if (!host || host.id !== hostId) {
+        throw new Error('Expected the original exact execution host')
+      }
+      disk.removeProjectForHost({ id: repoId, executionHostId: host.id })
     }
   )
   Object.assign(window, {

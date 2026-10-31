@@ -159,13 +159,10 @@ it('uses the actual runtime host-copy New dialog once and retains its ID on fail
     })
     const quiet = vi.spyOn(console, 'error').mockImplementation(() => {})
     try {
-      await user.click(screen.getByRole('button', { name: 'Create', exact: true }))
+      await user.click(screen.getByRole('button', { name: 'Create' }))
       await waitFor(() => expect(fixture.moves).toHaveLength(2))
       await waitFor(() =>
-        expect(screen.getByRole('button', { name: 'Create', exact: true })).toHaveProperty(
-          'disabled',
-          false
-        )
+        expect(screen.getByRole('button', { name: 'Create' })).toHaveProperty('disabled', false)
       )
       expect(screen.getByRole('dialog')).toBeTruthy()
       expect(fixture.createRemote).toHaveBeenCalledTimes(1)
@@ -174,7 +171,7 @@ it('uses the actual runtime host-copy New dialog once and retains its ID on fail
       expect(fixture.remoteDisk.getRepo('c')?.projectGroupId).toBe(created.id)
       expect(fixture.remoteDisk.getRepo('d')?.projectGroupId ?? null).toBeNull()
       failD = false
-      await user.click(screen.getByRole('button', { name: 'Create', exact: true }))
+      await user.click(screen.getByRole('button', { name: 'Create' }))
       await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
       expect(fixture.createRemote).toHaveBeenCalledTimes(1)
       expect(fixture.moves.map((move) => move.id)).toEqual(['c', 'd', 'd', 'e'])
@@ -249,15 +246,12 @@ it('keeps row New bound to its captured own name and draft through foreign, equa
         })
       }
     })
-    await user.click(screen.getByRole('button', { name: 'Create', exact: true }))
+    await user.click(screen.getByRole('button', { name: 'Create' }))
     await waitFor(() => expect(release).toBeTypeOf('function'))
     publishForeignName('Latest Quay')
     expect(screen.getByRole('dialog')).toBe(dialog)
     expect(input).toHaveProperty('value', 'My Harbor group')
-    expect(screen.getByRole('button', { name: 'Saving...', exact: true })).toHaveProperty(
-      'disabled',
-      true
-    )
+    expect(screen.getByRole('button', { name: 'Saving...' })).toHaveProperty('disabled', true)
     expect(fixture.createLocal).toHaveBeenCalledTimes(1)
     expect(fixture.createLocal).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'My Harbor group' })
@@ -429,10 +423,10 @@ it('fences an old card New continuation and dialog completion when closed and re
     await user.click(screen.getByRole('menuitem', { name: 'New group from project' }))
     await user.clear(screen.getByRole('textbox', { name: 'Group Name' }))
     await user.type(screen.getByRole('textbox', { name: 'Group Name' }), 'Old row draft')
-    await user.click(screen.getByRole('button', { name: 'Create', exact: true }))
+    await user.click(screen.getByRole('button', { name: 'Create' }))
     await waitFor(() => expect(release).toBeTypeOf('function'))
     const oldGroup = fixture.createLocal.mock.results[0]!.value
-    await user.click(screen.getByRole('button', { name: 'Cancel', exact: true }))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
     await user.click(screen.getByRole('button', { name: 'Project actions for Harbor' }))
     await user.click(screen.getByRole('menuitem', { name: 'New group from project' }))
     const successor = screen.getByRole('dialog')
@@ -451,15 +445,12 @@ it('fences an old card New continuation and dialog completion when closed and re
       'value',
       'Successor group'
     )
-    expect(screen.getByRole('button', { name: 'Create', exact: true })).toHaveProperty(
-      'disabled',
-      false
-    )
+    expect(screen.getByRole('button', { name: 'Create' })).toHaveProperty('disabled', false)
     expect(fixture.moves.map((move) => move.id)).toEqual(['a'])
     expect(fixture.localDisk.getRepo('b')?.projectGroupId ?? null).toBeNull()
     expect(oldGroup).toBeDefined()
     fixture.intercept()
-    await user.click(screen.getByRole('button', { name: 'Create', exact: true }))
+    await user.click(screen.getByRole('button', { name: 'Create' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     expect(fixture.createLocal).toHaveBeenCalledTimes(2)
     expect(fixture.createLocal.mock.calls.map(([args]) => args.name)).toEqual([
@@ -487,30 +478,27 @@ it('prevalidates finite original sources before New, keeps create failure in the
     act(() =>
       useAppStore.setState((state) => ({ repos: state.repos.filter((entry) => entry.id !== 'b') }))
     )
-    await user.click(screen.getByRole('button', { name: 'Create', exact: true }))
+    await user.click(screen.getByRole('button', { name: 'Create' }))
     expect(fixture.createLocal).not.toHaveBeenCalled()
     expect(fixture.moves).toEqual([])
     expect(feedback).toHaveBeenCalledTimes(1)
     expect(screen.getByRole('dialog')).toBeTruthy()
-    await user.click(screen.getByRole('button', { name: 'Cancel', exact: true }))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
     act(() => useAppStore.setState({ repos: fixture.repos }))
     fixture.createLocal.mockRejectedValueOnce(new Error('create disconnected'))
     await user.click(screen.getByRole('button', { name: 'Project actions for Harbor' }))
     await user.click(screen.getByRole('menuitem', { name: 'New group from project' }))
-    await user.click(screen.getByRole('button', { name: 'Create', exact: true }))
+    await user.click(screen.getByRole('button', { name: 'Create' }))
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Create', exact: true })).toHaveProperty(
-        'disabled',
-        false
-      )
+      expect(screen.getByRole('button', { name: 'Create' })).toHaveProperty('disabled', false)
     )
-    await user.click(screen.getByRole('button', { name: 'Create', exact: true }))
+    await user.click(screen.getByRole('button', { name: 'Create' }))
     expect(fixture.createLocal).toHaveBeenCalledTimes(1)
     expect(fixture.moves).toEqual([])
-    await user.click(screen.getByRole('button', { name: 'Cancel', exact: true }))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
     await user.click(screen.getByRole('button', { name: 'Project actions for Harbor' }))
     await user.click(screen.getByRole('menuitem', { name: 'New group from project' }))
-    await user.click(screen.getByRole('button', { name: 'Create', exact: true }))
+    await user.click(screen.getByRole('button', { name: 'Create' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     expect(fixture.createLocal).toHaveBeenCalledTimes(2)
     expect((await fixture.saved()).local[0]?.projectGroupId).toBe(

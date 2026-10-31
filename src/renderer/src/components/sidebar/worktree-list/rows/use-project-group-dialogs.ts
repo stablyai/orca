@@ -128,7 +128,7 @@ export function useProjectGroupDialogs(args: {
   )
 
   const handleSubmitProjectGroupName = useCallback(
-    async (name: string) => {
+    async (name: string): Promise<boolean | void> => {
       if (!nameDialog) {
         return
       }

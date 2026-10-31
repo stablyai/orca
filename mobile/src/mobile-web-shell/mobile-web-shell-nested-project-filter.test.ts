@@ -25,6 +25,7 @@ import { WORKSPACE_OPTION_CONTROLS } from '../host-screen/workspace-option-contr
 import { projectHostSetupProjectionFromRepos } from '../../../src/shared/project-host-setup-projection'
 import { buildFilterRepos } from '../worktree/workspace-filter-repos'
 import type { HostScreenController } from '../host-screen/use-host-screen-controller'
+// Keep the integration bound for real encrypted RPC, held ACKs and persisted-state settlement.
 it('joins normally published nested Hx through the actual Projects pending writer and marked owner', async () => {
   const acknowledgements: (() => void)[] = []
   const owner = await createProjectGroupingSocketOwner({

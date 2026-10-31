@@ -15,7 +15,7 @@ import { registerUIHandlers } from '../../../../main/ipc/ui'
 import {
   createStore,
   closeTestStores,
-  readDataFile,
+  readPersistedState,
   testState,
   writeDataFile
 } from '../../../../main/persistence/persistence-test-harness'
@@ -686,7 +686,7 @@ it('completes the actual adopted nested Hx in Projects without borrowing Hy from
     expect(setFilterRepoIds).toHaveBeenLastCalledWith(['offline', 'ssh:x\0r'])
     expect(store.getUI().filterRepoIds).toEqual(['offline', 'ssh:x\0r'])
     store.flush()
-    expect(readDataFile().ui.filterRepoIds).toEqual(['offline', 'ssh:x\0r'])
+    expect(readPersistedState().ui.filterRepoIds).toEqual(['offline', 'ssh:x\0r'])
     const rows = [
       { id: 'r', host: 'ssh:x' as const, name: 'wx' },
       { id: 'r', host: 'ssh:y' as const, name: 'wy' },

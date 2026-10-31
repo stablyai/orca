@@ -279,7 +279,7 @@ it('completes row New through the existing list dialog lifetime while its first 
     render(<ShippingSidebar />)
     await user.pointer({ target: screen.getByText('b checkout'), keys: '[MouseRight]' })
     await user.click(screen.getByRole('menuitem', { name: 'New group from project' }))
-    await user.click(screen.getByRole('button', { name: 'Create', exact: true }))
+    await user.click(screen.getByRole('button', { name: 'Create' }))
     await waitFor(() => expect(fixture.moves).toHaveLength(3))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     expect(fixture.createLocal).toHaveBeenCalledTimes(1)

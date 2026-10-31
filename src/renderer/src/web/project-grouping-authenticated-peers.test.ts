@@ -82,7 +82,14 @@ it.each(['web', 'mobile', 'old'] as const)(
       readonly OPEN: WebSocket['OPEN'] = 1
       readyState: WebSocket['readyState'] = 1
       bufferedAmount = 0
-      send = vi.fn<WebSocket['send']>()
+      send =
+        vi.fn<
+          (
+            data: Parameters<WebSocket['send']>[0],
+            optionsOrCallback?: Parameters<WebSocket['send']>[1] | Parameters<WebSocket['send']>[2],
+            callback?: Parameters<WebSocket['send']>[2]
+          ) => void
+        >()
       close = vi.fn<WebSocket['close']>()
     }
     const Q = 'runtime:server\0same'

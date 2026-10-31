@@ -613,7 +613,7 @@ it('retains own display and original beta-first context when host-mode ordering 
       { ...worktree, id: 'alpha-main', repoId: 'same', hostId: 'ssh:gpu-vm' }
     ],
     {
-      repoMap: new Map([
+      repoMap: new Map<string, Repo>([
         [local.id, local],
         [sshBeta.id, sshBeta]
       ]),

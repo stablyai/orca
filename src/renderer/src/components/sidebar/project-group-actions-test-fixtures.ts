@@ -1,4 +1,5 @@
 import type { Store } from '../../../../main/persistence'
+import { ProjectGroupMoveProjectArgs } from '../../../../main/ipc/repos/repo-ipc-arg-schemas'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type userEvent from '@testing-library/user-event'
@@ -103,7 +104,7 @@ export async function groupActionFixture(input: {
     )
   }
   const createLocal = vi.fn<Window['api']['projectGroups']['create']>(async (args) =>
-    localDisk.createProjectGroup(args)
+    localDisk.createProjectGroup({ ...args, createdFrom: args.createdFrom ?? 'manual' })
   )
   const createRemote = vi.fn((name: string) =>
     remoteDisk.createProjectGroup({ name, createdFrom: 'manual' })
@@ -115,18 +116,24 @@ export async function groupActionFixture(input: {
       projectGroups: {
         ...window.api?.projectGroups,
         create: createLocal,
-        moveProject: async (args: Parameters<Window['api']['projectGroups']['moveProject']>[0]) =>
-          receivingMove('local', localDisk, {
+        moveProject: async (
+          input: Parameters<Window['api']['projectGroups']['moveProject']>[0]
+        ) => {
+          const args = ProjectGroupMoveProjectArgs.parse(input)
+          return receivingMove('local', localDisk, {
             id: args.projectId,
             hostId: args.hostId,
             groupId: args.groupId,
             order: args.order
           })
+        }
       },
       runtimeEnvironments: {
         ...window.api?.runtimeEnvironments,
         call: async (request: Parameters<Window['api']['runtimeEnvironments']['call']>[0]) => {
-          const compatible = createCompatibleRuntimeStatusResponseIfNeeded(request)
+          const compatible = createCompatibleRuntimeStatusResponseIfNeeded({
+            method: request.method
+          })
           if (compatible) {
             return compatible
           }

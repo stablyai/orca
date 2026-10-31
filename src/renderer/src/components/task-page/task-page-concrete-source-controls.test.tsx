@@ -127,7 +127,10 @@ it.each(['github', 'gitlab'] as const)(
       failedCount: 0,
       githubUnavailable: false
     }))
-    const count = vi.fn<LandingInput['countWorkItemsAcrossRepos']>(async () => ({ totalPages: 1 }))
+    const count = vi.fn<LandingInput['countWorkItemsAcrossRepos']>(async () => ({
+      totalCount: 0,
+      totalPages: 1
+    }))
     const workItem: GitHubWorkItem = {
       id: 'issue:1',
       repoId: 'same',

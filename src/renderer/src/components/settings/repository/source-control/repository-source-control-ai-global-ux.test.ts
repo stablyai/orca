@@ -57,6 +57,7 @@ describe('useRepositorySourceControlAiGlobalUx', () => {
         return originalQueue(options)
       })
     const available = { ...withRecipe('original'), enabled: false }
+    const initialProps: { snapshot: RepoSourceControlAiOverrides | null } = { snapshot: available }
     const updateRepo = vi.fn().mockResolvedValue(true)
     type Ux = ReturnType<typeof useRepositorySourceControlAiGlobalUx>
     let onCommit: ((ux: Ux) => void) | undefined
@@ -77,7 +78,7 @@ describe('useRepositorySourceControlAiGlobalUx', () => {
         })
         return ux
       },
-      { initialProps: { snapshot: available } }
+      { initialProps }
     )
     try {
       act(() => {

@@ -448,7 +448,7 @@ it.each(['refusal', 'unique', 'absence'] as const)(
     expect(f.survivors()).toEqual(['r/x', 'r/y', 'q/y'])
     expect(listPendingRuntimeRepoRemovals('E')).toEqual([])
     const action = vi.mocked(toast.error).mock.calls.at(-1)?.[1]?.action
-    if (!action || !('onClick' in action)) {
+    if (!action || typeof action !== 'object' || !('onClick' in action)) {
       throw new Error('real unreachable toast must offer its action')
     }
     render(createElement('button', { onClick: action.onClick }, action.label))

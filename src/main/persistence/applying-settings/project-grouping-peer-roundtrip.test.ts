@@ -20,7 +20,13 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { closeTestStores, createStore, readDataFile, testState } from '../persistence-test-harness'
+import {
+  closeTestStores,
+  createStore,
+  readDataFile,
+  readPersistedState,
+  testState
+} from '../persistence-test-harness'
 import { RpcDispatcher } from '../../runtime/rpc/dispatcher'
 import { CLIENT_UI_METHODS } from '../../runtime/rpc/methods/client-ui'
 import { RUNTIME_CLIENT_CAPABILITY_METHODS } from '../../runtime/rpc/methods/runtime-client-capabilities'
@@ -331,7 +337,7 @@ it('saves the actual nested Hx edit exactly through native and marked RPC owners
   electron.handlers.get('ui:set')!({}, { filterRepoIds: edited })
   expect(store.getUI().filterRepoIds).toEqual(edited)
   store.flush()
-  expect(readDataFile().ui.filterRepoIds).toEqual(edited)
+  expect(readPersistedState().ui.filterRepoIds).toEqual(edited)
   const runtime = new OrcaRuntimeService(store)
   const dispatcher = new RpcDispatcher({
     runtime,
@@ -384,7 +390,7 @@ it('saves the actual nested Hx edit exactly through native and marked RPC owners
     unresolved: ['offline']
   })
   store.flush()
-  expect(readDataFile().ui.filterRepoIds).toEqual(edited)
+  expect(readPersistedState().ui.filterRepoIds).toEqual(edited)
   await closeTestStores()
   const restored = createStore().getUI().filterRepoIds
   // Hydration may prune absent literal raw ids; the existing qualified physical address survives while r exists.
@@ -447,12 +453,12 @@ it.each([100, 1000])(
       expect(writes.mock.calls.at(-1)?.[0].filterRepoIds).toEqual(produced)
       expect(store.getUI().filterRepoIds).toEqual(produced)
       store.flush()
-      expect(readDataFile().ui.filterRepoIds).toEqual(produced)
+      expect(readPersistedState().ui.filterRepoIds).toEqual(produced)
       const matches = projectRepoFilterMatcher(store.getUI().filterRepoIds)
       const included = authored.filter((repo) => matches(repo.id, repo.executionHostId))
       expect(included).toEqual(authored.slice(0, q))
       process.stdout.write(
-        `F1 owner ${JSON.stringify({ n, q, sends: writes.mock.calls.length - before, returned: response.ok, savedTokens: readDataFile().ui.filterRepoIds.length, included: included.length })}\n`
+        `F1 owner ${JSON.stringify({ n, q, sends: writes.mock.calls.length - before, returned: response.ok, savedTokens: readPersistedState().ui.filterRepoIds.length, included: included.length })}\n`
       )
     }
     writes.mockRestore()
