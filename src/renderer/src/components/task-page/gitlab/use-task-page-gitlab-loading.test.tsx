@@ -5,6 +5,7 @@ import { useState } from 'react'
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../../shared/repo-types'
+import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { GitLabWorkItem } from '../../../../../shared/gitlab-types'
 import { i18n } from '@/i18n/i18n'
 
@@ -48,15 +49,16 @@ describe('useTaskPageGitLabLoading', () => {
     executionHostId = 'local'
   }: {
     view: 'issues' | 'mrs'
-    executionHostId?: string
+    executionHostId?: ExecutionHostId
   }) {
     const [gitlabItems, setGitlabItems] = useState<GitLabWorkItem[]>([])
     const [gitlabError, setGitlabError] = useState<string | null>(null)
     const [gitlabLoading, setGitlabLoading] = useState(false)
+    const repo: Repo = { ...serverRepo, executionHostId }
     useTaskPageGitLabLoading({
-      selectedRepos: [{ ...serverRepo, executionHostId }],
+      selectedRepos: [repo],
       selectedReposKey: executionHostId,
-      primaryRepo: null,
+      primaryRepo: repo,
       taskSource: 'gitlab',
       setGitlabItems,
       setGitlabLoading,
@@ -123,7 +125,7 @@ describe('useTaskPageGitLabLoading', () => {
       executionHostId: 'local',
       expected: 'No se pudieron cargar los elementos de GitLab. Actualiza para volver a intentarlo.'
     }
-  ])('renders $failure', async ({ executionHostId, expected }) => {
+  ] as const)('renders $failure', async ({ executionHostId, expected }) => {
     const language = i18n.language
     const resources = i18n.getResourceBundle('es', 'translation')
     try {
