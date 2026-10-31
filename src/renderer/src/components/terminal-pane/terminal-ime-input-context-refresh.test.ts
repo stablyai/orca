@@ -1,8 +1,10 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  isTerminalFocusUnclaimed,
   isTerminalImeInputContextRefreshing,
-  refreshTerminalImeInputContext
+  refreshTerminalImeInputContext,
+  terminalHelperAwaitingImeRefocus
 } from './terminal-ime-input-context-refresh'
 
 describe('refreshTerminalImeInputContext', () => {
@@ -39,6 +41,114 @@ describe('refreshTerminalImeInputContext', () => {
     }
     expect(focus).toHaveBeenCalledOnce()
     expect(document.activeElement).toBe(helper)
+  })
+
+  it('reports the helper as awaiting refocus until its frame runs', () => {
+    const helper = appendHelper()
+    helper.focus()
+    const scheduled: (() => void)[] = []
+    expect(terminalHelperAwaitingImeRefocus()).toBeNull()
+    expect(isTerminalFocusUnclaimed(document.activeElement, document)).toBe(false)
+
+    refreshTerminalImeInputContext(helper, {
+      isMac: true,
+      scheduleRefocus: (callback) => scheduled.push(callback)
+    })
+
+    expect(document.activeElement).toBe(document.body)
+    expect(terminalHelperAwaitingImeRefocus()).toBe(helper)
+    expect(isTerminalFocusUnclaimed(document.activeElement, document)).toBe(false)
+    expect(isTerminalFocusUnclaimed(document.activeElement, document, helper)).toBe(true)
+
+    for (const run of scheduled) {
+      run()
+    }
+    expect(terminalHelperAwaitingImeRefocus()).toBeNull()
+    helper.blur()
+    expect(isTerminalFocusUnclaimed(document.activeElement, document)).toBe(true)
+  })
+
+  it('keeps the newer refresh pending when an older refresh of the same helper fires first', () => {
+    const helper = appendHelper()
+    helper.focus()
+    const scheduled: (() => void)[] = []
+    const schedule = (callback: () => void): number => scheduled.push(callback)
+    const staleSkipped = vi.fn()
+    const skipped = vi.fn()
+
+    refreshTerminalImeInputContext(helper, {
+      isMac: true,
+      scheduleRefocus: schedule,
+      onRefocusSkipped: staleSkipped
+    })
+    helper.focus()
+    refreshTerminalImeInputContext(helper, {
+      isMac: true,
+      scheduleRefocus: schedule,
+      onRefocusSkipped: skipped
+    })
+    expect(scheduled).toHaveLength(2)
+
+    scheduled[0]?.()
+    expect(terminalHelperAwaitingImeRefocus()).toBe(helper)
+    expect(isTerminalFocusUnclaimed(document.activeElement, document)).toBe(false)
+    // Why: the stale callback saw the newer refresh's body gap, not a lost focus.
+    expect(staleSkipped).not.toHaveBeenCalled()
+
+    scheduled[1]?.()
+    expect(terminalHelperAwaitingImeRefocus()).toBeNull()
+    expect(document.activeElement).toBe(helper)
+    expect(skipped).not.toHaveBeenCalled()
+  })
+
+  it('lets the newest refresh win when two helpers refresh back to back', () => {
+    const first = appendHelper()
+    const second = appendHelper()
+    const scheduled: (() => void)[] = []
+    const schedule = (callback: () => void): number => scheduled.push(callback)
+    const firstSkipped = vi.fn()
+    first.focus()
+    refreshTerminalImeInputContext(first, {
+      isMac: true,
+      scheduleRefocus: schedule,
+      onRefocusSkipped: firstSkipped
+    })
+    second.focus()
+    refreshTerminalImeInputContext(second, { isMac: true, scheduleRefocus: schedule })
+    expect(terminalHelperAwaitingImeRefocus()).toBe(second)
+
+    for (const run of scheduled) {
+      run()
+    }
+
+    expect(document.activeElement).toBe(second)
+    // Why: the first helper's owner must learn that the second one took over, even though the
+    // document still reported body when the stale callback ran.
+    expect(firstSkipped).toHaveBeenCalledOnce()
+    expect(firstSkipped).toHaveBeenCalledWith(second)
+    expect(terminalHelperAwaitingImeRefocus()).toBeNull()
+  })
+
+  it('still reports a stale refresh when a different control took focus for real', () => {
+    const helper = appendHelper()
+    const input = document.createElement('input')
+    document.body.appendChild(input)
+    const scheduled: (() => void)[] = []
+    const schedule = (callback: () => void): number => scheduled.push(callback)
+    const staleSkipped = vi.fn()
+    helper.focus()
+    refreshTerminalImeInputContext(helper, {
+      isMac: true,
+      scheduleRefocus: schedule,
+      onRefocusSkipped: staleSkipped
+    })
+    helper.focus()
+    refreshTerminalImeInputContext(helper, { isMac: true, scheduleRefocus: schedule })
+    input.focus()
+
+    scheduled[0]?.()
+
+    expect(staleSkipped).toHaveBeenCalledWith(input)
   })
 
   it('marks only the synchronous refresh blur so focus ownership can stay latched', () => {

@@ -3,6 +3,10 @@ import { focusTerminalTabSurface } from './focus-terminal-tab-surface'
 
 const mocks = vi.hoisted(() => ({
   refreshTerminalImeInputContext: vi.fn(),
+  isTerminalFocusUnclaimed: vi.fn(
+    (activeElement: unknown, ownerDocument: { body: unknown }) =>
+      activeElement === null || activeElement === ownerDocument.body
+  ),
   requestNativeChatComposerFocus: vi.fn()
 }))
 
@@ -11,6 +15,7 @@ vi.mock('@/components/native-chat/use-native-chat-composer-reveal-focus', () => 
 }))
 
 vi.mock('@/components/terminal-pane/terminal-ime-input-context-refresh', () => ({
+  isTerminalFocusUnclaimed: mocks.isTerminalFocusUnclaimed,
   refreshTerminalImeInputContext: mocks.refreshTerminalImeInputContext
 }))
 
@@ -23,6 +28,7 @@ const GLOBAL_HELPER_SELECTOR =
 describe('focusTerminalTabSurface', () => {
   afterEach(() => {
     mocks.refreshTerminalImeInputContext.mockClear()
+    mocks.isTerminalFocusUnclaimed.mockClear()
     mocks.requestNativeChatComposerFocus.mockClear()
     vi.unstubAllGlobals()
   })
@@ -93,6 +99,25 @@ describe('focusTerminalTabSurface', () => {
     expect(textarea.focus).not.toHaveBeenCalled()
   })
 
+  it('does not take body focus that another helper is about to reclaim after its IME refresh', () => {
+    flushAnimationFrames()
+    const textarea = { focus: vi.fn() }
+    const body = {}
+    vi.stubGlobal('document', {
+      activeElement: body,
+      body,
+      querySelector: vi.fn((selector: string) =>
+        selector === TAB_HELPER_SELECTOR ? textarea : null
+      )
+    })
+    mocks.isTerminalFocusUnclaimed.mockReturnValueOnce(false)
+
+    focusTerminalTabSurface('tab-1', null, { onlyIfFocusUnclaimed: true })
+
+    expect(mocks.isTerminalFocusUnclaimed).toHaveBeenCalledWith(body, document, textarea)
+    expect(textarea.focus).not.toHaveBeenCalled()
+  })
+
   it('does not steal focus while inline tab rename is open', () => {
     flushAnimationFrames()
     const textarea = { focus: vi.fn() }
@@ -128,6 +153,26 @@ describe('focusTerminalTabSurface', () => {
 
     expect(textarea.focus).not.toHaveBeenCalled()
     expect(mocks.requestNativeChatComposerFocus).toHaveBeenCalledWith('tab-1')
+  })
+
+  it('does not hand guarded recovery focus to the chat composer while another helper awaits its IME refocus', () => {
+    flushAnimationFrames()
+    const body = {}
+    vi.stubGlobal('document', {
+      activeElement: body,
+      body,
+      querySelector: vi.fn((selector: string) =>
+        selector === '[data-terminal-tab-id="tab-1"]'
+          ? { getAttribute: (name: string) => (name === 'data-terminal-chat-view' ? 'true' : null) }
+          : null
+      )
+    })
+    mocks.isTerminalFocusUnclaimed.mockReturnValueOnce(false)
+
+    focusTerminalTabSurface('tab-1', null, { onlyIfFocusUnclaimed: true })
+
+    expect(mocks.isTerminalFocusUnclaimed).toHaveBeenCalledWith(body, document)
+    expect(mocks.requestNativeChatComposerFocus).not.toHaveBeenCalled()
   })
 
   it('keeps unclaimed chat focus replayable unless the caller asks for a one-shot rename return', () => {

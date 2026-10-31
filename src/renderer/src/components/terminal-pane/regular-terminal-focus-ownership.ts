@@ -1,5 +1,5 @@
 import {
-  isDocumentBodyOrNull,
+  isTerminalFocusUnclaimed,
   refreshTerminalImeInputContext,
   scheduleNextFrame,
   type TerminalImeInputContextRefocusScheduler
@@ -87,7 +87,8 @@ export function resyncTerminalFocusForWindowFocus(args: {
       releasedHelper &&
       releasedHelper.isConnected &&
       args.container.contains(releasedHelper) &&
-      isDocumentBodyOrNull(args.activeElement, ownerDocument)
+      // Why: another terminal mid IME refresh still owns focus even though body is active.
+      isTerminalFocusUnclaimed(args.activeElement, ownerDocument)
     ) {
       helper = releasedHelper
       needsProgrammaticFocus = true
@@ -109,7 +110,7 @@ export function resyncTerminalFocusForWindowFocus(args: {
       const active = reclaimedHelper.ownerDocument.activeElement
       if (
         active === reclaimedHelper ||
-        isDocumentBodyOrNull(active, reclaimedHelper.ownerDocument)
+        isTerminalFocusUnclaimed(active, reclaimedHelper.ownerDocument, reclaimedHelper)
       ) {
         reclaimedHelper.focus()
         if (reclaimedHelper.ownerDocument.activeElement === reclaimedHelper) {
