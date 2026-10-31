@@ -170,6 +170,7 @@ export async function startFederatedWorker(args: {
   const taskForRemote = task ?? createdTask
   db.recordWorkerStage({ dispatchId: started.dispatch.id, stage: 'remote_attach_requested' })
   let readyResult: unknown
+  let launch = requestedLaunch
   try {
     const remote = parseRemoteFederatedWorkerStartReceipt(
       await runtime.callOrchestrationWorkerServer(
@@ -214,7 +215,7 @@ export async function startFederatedWorker(args: {
         'The worker server returned a different Dispatch attachment.'
       )
     }
-    const launch = resolveFederatedWorkerLaunchReceipt(
+    launch = resolveFederatedWorkerLaunchReceipt(
       remote.launch,
       requestedLaunch,
       remote.state === 'ready'
@@ -292,7 +293,7 @@ export async function startFederatedWorker(args: {
       dispatchId: started.dispatch.id,
       workerAddress: `dispatch:${started.dispatch.id}`,
       task: taskForRemote.spec,
-      agent: requestedLaunch.requested.agent
+      agent: launch.effective?.agent ?? launch.requested.agent
     })
   }
   return readyResult

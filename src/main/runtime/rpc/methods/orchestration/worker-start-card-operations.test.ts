@@ -42,7 +42,13 @@ it.each([10, 100])(
       coordinatorPaneKey: null
     })
     const tabs: ReturnType<typeof createMinimalPersistedTerminalTab>[] = []
-    const facts: { dispatchId: string; workerAddress: string; task: string; name: string }[] = []
+    const facts: {
+      dispatchId: string
+      workerAddress: string
+      task: string
+      name: string
+      agent: null
+    }[] = []
     for (let index = 0; index < 10 * count; index++) {
       const handle = `term_scale_${index}`
       const tabId = `scale-tab-${index}`
@@ -92,7 +98,8 @@ it.each([10, 100])(
           dispatchId: dispatch.id,
           workerAddress: handle,
           task: task.spec,
-          name: `Scale worker ${index}`
+          name: `Scale worker ${index}`,
+          agent: null
         })
       }
     }

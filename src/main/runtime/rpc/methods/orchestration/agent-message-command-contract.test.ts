@@ -36,6 +36,21 @@ import { latestStructuredAgentSessionPrompt } from '../../../../../shared/struct
 import { isOrcaDispatchPrompt } from '../../../../../shared/agent-row-primary-text'
 import * as placement from './worker/worker-start-agent-placement'
 import * as topology from './worker/worker-topology'
+import {
+  ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
+  ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY
+} from '../../../../../shared/protocol-version'
+import { projectStructuredAgentStartItem } from '../../../../../shared/structured-agent-start-projection'
+import { projectStructuredItemToNativeChat } from '../../../../../shared/structured-agent-session-projection'
+import {
+  agentSessionMessagePayload,
+  agentSessionSendBodyFingerprint
+} from '../../../../../shared/structured-agent-session-send-mutation'
+import {
+  agentMessageHeading,
+  agentMessageSenderCanOpen
+} from '../../../../../shared/agent-session/agent-message-presentation'
+import { closeTestJournalHostDatabase } from '../../../../native-chat/agent-session-journal/journal-host-database-test-support'
 
 const h = createOrchestrationRpcHarness()
 let rig: QueuedMessageTestRig | undefined
@@ -57,13 +72,18 @@ afterEach(async () => {
   process.exitCode = 0
 })
 
-it.each(['worker-start', 'saved-task', 'dispatch'] as const)(
+it.each(['worker-start', 'saved-task', 'dispatch', 'federated', 'configured-federated'] as const)(
   'real %s argv constructs, persists and delivers canonical input with a derived task display',
   async (command) => {
+    const federated = command === 'federated' || command === 'configured-federated'
     rig = await createQueuedMessageTestRig({ sessionId: WORKER })
     const current = rig
     setStructuredAgentSessionHost(current.host)
     const attach = hostTestAttachParams(null, {
+      provider: 'claude',
+      agent: 'claude',
+      providerHandle: { kind: 'claude', sessionId: 'coordinator-thread', leafUuid: null },
+      accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/private-fixture/claude' },
       envelope: {
         sessionId: COORD,
         clientOperationId: hostTestOperationId(),
@@ -76,6 +96,105 @@ it.each(['worker-start', 'saved-task', 'dispatch'] as const)(
       false,
       partialRuntimeStore({ getSettings: () => ({ agentDefaultSurface: 'terminal' }) })
     )
+    if (federated) {
+      vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockReturnValue({
+        environmentId: 'remote',
+        name: 'remote',
+        peerFingerprint: 'peer',
+        pairingRevision: 1
+      })
+      vi.spyOn(runtime, 'ensureOrchestrationFederationRelay').mockImplementation(() => {})
+      vi.spyOn(runtime, 'callOrchestrationWorkerServer').mockImplementation(
+        async (_host, method, params) => {
+          if (method === 'status.get') {
+            return {
+              capabilities: [
+                ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
+                ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY
+              ]
+            }
+          }
+          if (
+            !params ||
+            typeof params !== 'object' ||
+            !('dispatchId' in params) ||
+            typeof params.dispatchId !== 'string'
+          ) {
+            throw new Error('missing remote dispatch')
+          }
+          const dispatchId = params.dispatchId
+          if (method === 'orchestration.federationAttachStart') {
+            expect(params).toMatchObject({
+              agent: command === 'configured-federated' ? 'codex-fugu' : 'codex'
+            })
+            return {
+              dispatchId,
+              state: 'ready',
+              runtimeEpoch: 'remote-epoch',
+              worktreeId: 'remote-workspace',
+              terminalHandle: 'term_remote',
+              ...(command === 'configured-federated'
+                ? {
+                    launch: {
+                      requested: { agent: 'codex', model: null, effort: null },
+                      effective: { agent: 'codex', model: null, effort: null }
+                    }
+                  }
+                : {})
+            }
+          }
+          if (method === 'orchestration.federationShow') {
+            return {
+              runtimeEpoch: 'remote-epoch',
+              attachment: {
+                state: 'succeeded',
+                stage: 'worker_report_queued',
+                last_error: null,
+                worktree_id: 'remote-workspace',
+                terminal_handle: 'term_remote',
+                setup_state: 'not_applicable',
+                effects: [],
+                residualResources: []
+              },
+              terminal: null,
+              observation: { status: 'exited', exactWorker: true }
+            }
+          }
+          if (method === 'orchestration.federationPull') {
+            const dispatch = db.getDispatchContextById(dispatchId)!
+            return {
+              runtimeEpoch: 'remote-epoch',
+              items: ['status', 'worker_done'].map((type, index) => ({
+                dispatch_id: dispatchId,
+                direction: 'to_home',
+                sequence: index + 1,
+                message_id: `remote-${type}`,
+                kind: type,
+                payload: JSON.stringify({
+                  from: 'term_remote',
+                  subject: type,
+                  body: 'Remote result',
+                  type,
+                  ...(type === 'worker_done'
+                    ? {
+                        payload: JSON.stringify({
+                          dispatchId,
+                          taskId: dispatch.task_id,
+                          outcome: 'succeeded'
+                        })
+                      }
+                    : {})
+                })
+              }))
+            }
+          }
+          if (method === 'orchestration.federationAck') {
+            return { acknowledgedThrough: 2 }
+          }
+          throw new Error(`unexpected remote method ${method}`)
+        }
+      )
+    }
     vi.spyOn(runtime, 'ensureStructuredAgentSessionHost').mockResolvedValue()
     vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
     type WorkspaceLookup = {
@@ -278,7 +397,8 @@ it.each(['worker-start', 'saved-task', 'dispatch'] as const)(
         '--spec',
         task,
         '--agent',
-        'codex',
+        command === 'configured-federated' ? 'codex-fugu' : 'codex',
+        ...(federated ? ['--on', 'remote', '--worktree', 'id:remote-workspace'] : []),
         '--timeout-ms',
         '1000',
         '--retry-request',
@@ -296,7 +416,7 @@ it.each(['worker-start', 'saved-task', 'dispatch'] as const)(
       argv.splice(argv.indexOf('--spec'), 2, '--task', created.id)
     }
     const running = main(argv)
-    if (command !== 'dispatch') {
+    if (command !== 'dispatch' && !federated) {
       await eventually(() => expect(current.dispatch).toHaveBeenCalled())
       const id = current.dispatch.mock.calls[0][0].clientMessageId
       await current.settleAccepted(id, 'task-turn')
@@ -319,7 +439,8 @@ it.each(['worker-start', 'saved-task', 'dispatch'] as const)(
       if (!fact) {
         throw new Error('ready caller fact missing')
       }
-      expect(fact.body).toMatchObject({ task })
+      expect(fact.body).toMatchObject({ task, worker: { agent: 'codex' } })
+      expect(projectStructuredAgentStartItem(fact)?.from?.senders[0].agent).toBe('codex')
       const callerHistory = await current.host.history({ sessionId: COORD, direction: 'tail' })
       expect(callerHistory).toMatchObject({ ok: true, page: { items: [fact] } })
       const formed = CLIENT_HISTORY_READER.form(fact)
@@ -374,6 +495,51 @@ it.each(['worker-start', 'saved-task', 'dispatch'] as const)(
       expect(requests).toHaveLength(beforeRequests)
       expect(db.listTasks({ runId: run.id })).toHaveLength(beforeWrites)
     }
+    if (federated) {
+      const dispatch = db.getDispatchContextById(
+        z.string().parse(output.mock.lastCall?.[0].result.dispatchId)
+      )!
+      if (command === 'federated') {
+        await main(['orchestration', 'worker-show', '--dispatch', dispatch.id, '--json', '--full'])
+        expect(requests).toContain('orchestration.workerShow')
+        await eventually(async () => {
+          const items = (await current.host.journalSnapshot(COORD)).items
+          const mail = items.flatMap(({ body }) =>
+            body.kind === 'message' ? (readAgentMessageSource(body.from)?.senders ?? []) : []
+          )
+          const messages = items.flatMap(({ body }) => {
+            const source = body.kind === 'message' ? readAgentMessageSource(body.from) : null
+            return source?.orchestration?.message === 'mail-notice'
+              ? source.orchestration.messages
+              : []
+          })
+          expect(messages.map((message) => message.messageId)).toEqual(
+            expect.arrayContaining(['remote-status', 'remote-worker_done'])
+          )
+          expect(mail).toContainEqual(
+            expect.objectContaining({
+              party: expect.objectContaining({ address: `dispatch:${dispatch.id}` }),
+              agent: 'codex'
+            })
+          )
+        })
+      }
+      const saved = (await current.host.journalSnapshot(COORD)).items
+      await current.quitRestartHostProcess()
+      await closeTestJournalHostDatabase(current.root)
+      current.crashRestartHostProcess()
+      const reopened = (await current.host.journalSnapshot(COORD)).items
+      expect(
+        reopened.filter(
+          ({ body }) => body.kind === 'agent-start' || (body.kind === 'message' && body.from)
+        )
+      ).toEqual(
+        saved.filter(
+          ({ body }) => body.kind === 'agent-start' || (body.kind === 'message' && body.from)
+        )
+      )
+      return
+    }
     const snapshot = await current.host.journalSnapshot(WORKER)
     const history = await current.host.history({ sessionId: WORKER, direction: 'tail' })
     if (!history.ok) {
@@ -400,6 +566,31 @@ it.each(['worker-start', 'saved-task', 'dispatch'] as const)(
     }
     expect(from?.senders[0].party.orcaSessionId).toBe(COORD)
     expect(from?.senders[0].relation).toBe('coordinator')
+    expect(from?.senders[0].agent).toBe('claude')
+    if (!from) {
+      throw new Error('sender source missing')
+    }
+    expect(agentMessageHeading(from)).toBe('task')
+    expect(agentMessageSenderCanOpen(from.senders[0], true)).toBe(true)
+    expect(agentSessionMessagePayload(body)).not.toHaveProperty('from')
+    expect(agentSessionSendBodyFingerprint(WORKER, body)).toBe(
+      agentSessionSendBodyFingerprint(WORKER, agentSessionMessagePayload(body))
+    )
+    const projected = projectStructuredItemToNativeChat({
+      itemId: 'task-projection',
+      sequence: 1,
+      revision: 1,
+      observedAt: 1,
+      body
+    })
+    expect(projected?.from?.senders[0].agent).toBe('claude')
+    const attributionPath = '../../../../../../mobile/src/session/mobile-agent-message-attribution'
+    const queuePath = '../../../../../../mobile/src/session/mobile-structured-queued-message-cards'
+    const { agentMessageAttribution } = await import(attributionPath)
+    const { mobileQueuedMessageCards } = await import(queuePath)
+    expect(agentMessageAttribution('Message from', projected?.from)).toBe(
+      'Message from Claude Chat'
+    )
     expect(agentMessageDisplayText(body.blocks, from)).toBe(task)
     const raw = nativeChatMessageCopyText(body)
     expect(raw).toContain('You are working inside Orca')
@@ -414,7 +605,12 @@ it.each(['worker-start', 'saved-task', 'dispatch'] as const)(
     }
     expect(prompt).toContain(`Your task ID is: ${from.orchestration.taskId}`)
     if (queued) {
+      const [mobileCard] = mobileQueuedMessageCards([queued], [])
+      expect(mobileCard.attribution).toBe('From Claude Chat')
+      expect(mobileCard.line).toBe(task)
+      expect(mobileCard.from.senders[0].agent).toBe('claude')
       const [card] = projectQueuedMessageCards([queued], [], {})
+      expect(card.from?.senders[0].agent).toBe('claude')
       expect(queuedMessageCardLine(card)).toBe(task)
       expect(card.text).toBe(raw) // Exactly what the editor opens.
       const journal = current.host.collaboratorsForTests().sessions.get(WORKER)!.journal
@@ -456,6 +652,42 @@ it.each(['worker-start', 'saved-task', 'dispatch'] as const)(
       })
     } else {
       expect(nativeChatMessageCopyText(current.dispatch.mock.calls[0][0].body)).toBe(raw)
+      await main([
+        'orchestration',
+        'send',
+        '--to',
+        `orca_session_id:${WORKER}`,
+        '--subject',
+        'Follow-up',
+        '--body',
+        'Review result',
+        '--json',
+        '--full'
+      ])
+      expect(requests).toContain('orchestration.send')
+      await eventually(async () => {
+        const items = (await current.host.journalSnapshot(WORKER)).items
+        const mail = items.filter(
+          ({ body }) =>
+            body.kind === 'message' &&
+            readAgentMessageSource(body.from)?.orchestration?.message === 'mail-notice'
+        )
+        expect(mail).toHaveLength(1)
+        expect(mail[0].body).toMatchObject({
+          from: { senders: [expect.objectContaining({ agent: 'claude' })] }
+        })
+      })
+      const saved = (await current.host.journalSnapshot(WORKER)).items.filter(
+        ({ body }) => body.kind === 'message' && body.from
+      )
+      await current.quitRestartHostProcess()
+      await closeTestJournalHostDatabase(current.root)
+      current.crashRestartHostProcess()
+      expect(
+        (await current.host.journalSnapshot(WORKER)).items.filter(
+          ({ body }) => body.kind === 'message' && body.from
+        )
+      ).toEqual(saved)
     }
   },
   30000

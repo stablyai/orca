@@ -11,6 +11,7 @@ import type { Tab } from '../../../shared/tab-types'
 import type { OrchestrationDb } from './db'
 import type { DispatchContextRow } from './types'
 import { lineageLiveSession, type AgentSessionRecordReader } from './structured-session-lineage'
+import { parseStartOptions } from '../rpc/methods/orchestration/worker/worker-earlier-work'
 
 export type TerminalSenderNaming = {
   /** The tab as this host mirrors the workspace session. */
@@ -62,10 +63,10 @@ export function orchestrationSenderName(
   )
 }
 
-/** The sender's agent: a chat's provider, else what its terminal runs; unknown for a federated address. */
+/** The sender's live provider, or its recorded launch when it belongs to another host. */
 export function orchestrationSenderAgent(
   party: Party,
-  sources: Pick<SenderNamingSources, 'records' | 'terminal'>
+  sources: Pick<SenderNamingSources, 'records' | 'terminal' | 'db'>
 ): AgentType | null {
   const record =
     party.orcaSessionId && sources.records
@@ -74,9 +75,11 @@ export function orchestrationSenderAgent(
   if (record) {
     return record.provider
   }
-  return !party.address.startsWith('dispatch:') && party.terminalHandle
-    ? (sources.terminal(party.terminalHandle)?.agent ?? null)
-    : null
+  if (party.address.startsWith('dispatch:')) {
+    const worker = sources.db?.getWorkerDispatch(party.address.slice('dispatch:'.length))
+    return worker ? (parseStartOptions(worker.start_options).agent ?? null) : null
+  }
+  return party.terminalHandle ? (sources.terminal(party.terminalHandle)?.agent ?? null) : null
 }
 
 /** A chat's own name (the person's rename, else its saved name) and the label its tab falls back to. */
