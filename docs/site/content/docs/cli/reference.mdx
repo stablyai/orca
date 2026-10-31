@@ -82,10 +82,13 @@ orca serve --port 6768 --pairing-address 100.64.1.20 --json
 ```bash
 orca repo list --json
 orca repo add --path /abs/path/to/repo --json
+orca repo add --path /abs/path/to/repo-tree --kind folder --json
 orca repo show --repo id:<repoId> --json
 orca repo set-base-ref --repo id:<repoId> --ref origin/main --json
 orca repo search-refs --repo id:<repoId> --query main --limit 10 --json
 ```
+
+`repo add` defaults to `--kind git`, which requires a git checkout. Pass `--kind folder` to open a directory without its own `.git` — for example a repo-tool checkout whose top level holds `.repo/` and one git repo per project.
 
 Set the repo base ref before creating lots of worktrees so new tasks branch from the right place by default.
 

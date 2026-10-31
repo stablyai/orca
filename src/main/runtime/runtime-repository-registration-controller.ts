@@ -25,6 +25,7 @@ import {
 } from '../../shared/wsl-host-windows-drive-refusal'
 import { describeWslUncAccessDenied } from '../wsl/wsl-unc-access-denied'
 import { repoCreateFailure, type RepoCreateFailure } from '../../shared/repo-create-failure-copy'
+import { describeNonGitRepoAddRefusal } from './repo-add-refusal-copy'
 
 type RuntimeRepositoryRegistrationDependencies = {
   getStore: () => RuntimeStore | null
@@ -53,7 +54,7 @@ export class RuntimeRepositoryRegistrationController {
     const gitInfo = kind === 'git' ? await inspectGitRepoForRegistrationAsync(path) : null
     if (gitInfo && !gitInfo.isRepo) {
       throw new Error(
-        (await describeWslUncAccessDenied(path)) ?? `Not a valid git repository: ${path}`
+        (await describeWslUncAccessDenied(path)) ?? (await describeNonGitRepoAddRefusal(path))
       )
     }
     // Store Git's resolved toplevel; symlink aliases/subfolders hide the main checkout as external.
