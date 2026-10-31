@@ -28,8 +28,8 @@ vi.mock('../components/MobileRichMarkdownEditor', () => ({
   MobileRichMarkdownEditor: 'MobileRichMarkdownEditor'
 }))
 vi.mock('./mobile-session-styles', () => ({ styles: {} }))
-vi.mock('../files/MobileFileMarkdownPreview', () => ({
-  MobileFileMarkdownPreview: 'MobileFileMarkdownPreview'
+vi.mock('./MobileSessionMarkdownPreview', () => ({
+  MobileSessionMarkdownPreview: 'MobileSessionMarkdownPreview'
 }))
 const { pushFile } = vi.hoisted(() => ({ pushFile: vi.fn() }))
 vi.mock('../navigation/workspace-route-handoff', () => ({

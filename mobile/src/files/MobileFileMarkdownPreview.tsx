@@ -16,7 +16,6 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 type Props = {
   relativePath: string
-  documentAbsolutePath?: string
   content: string
   truncated: boolean
   byteLength: number
@@ -28,7 +27,6 @@ type Props = {
 
 export function MobileFileMarkdownPreview({
   relativePath,
-  documentAbsolutePath,
   content,
   truncated,
   byteLength,
@@ -104,11 +102,10 @@ export function MobileFileMarkdownPreview({
               worktreeId
                 ? (href, alt) => (
                     <MobileMarkdownPreviewImage
-                      key={`${worktreeId}:${relativePath}:${documentAbsolutePath ?? ''}:${href}`}
+                      key={`${worktreeId}:${relativePath}:${href}`}
                       client={client ?? null}
                       worktreeId={worktreeId}
                       documentPath={relativePath}
-                      documentAbsolutePath={documentAbsolutePath}
                       href={href}
                       alt={alt}
                     />

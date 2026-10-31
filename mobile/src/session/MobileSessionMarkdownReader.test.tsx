@@ -16,8 +16,8 @@ vi.mock('../components/MobileRichMarkdownEditor', () => ({
   MobileRichMarkdownEditor: 'MobileRichMarkdownEditor'
 }))
 vi.mock('./mobile-session-styles', () => ({ styles: {} }))
-vi.mock('../files/MobileFileMarkdownPreview', () => ({
-  MobileFileMarkdownPreview: 'MobileFileMarkdownPreview'
+vi.mock('./MobileSessionMarkdownPreview', () => ({
+  MobileSessionMarkdownPreview: 'MobileSessionMarkdownPreview'
 }))
 const { pushFile } = vi.hoisted(() => ({ pushFile: vi.fn() }))
 vi.mock('../navigation/workspace-route-handoff', () => ({
@@ -101,7 +101,7 @@ describe('live session markdown reader copy', () => {
 
   it('opens in reading mode and carries edits from the editor into the preview', () => {
     render({ ...doc, isDirty: true, localContent: '# Draft' })
-    const preview = () => renderer!.root.findByType('MobileFileMarkdownPreview')
+    const preview = () => renderer!.root.findByType('MobileSessionMarkdownPreview')
     expect(preview().props.content).toBe('# Draft')
     act(() =>
       buttons()
@@ -165,7 +165,7 @@ describe('live session markdown reader copy', () => {
     render()
     act(() =>
       renderer!.root
-        .findByType('MobileFileMarkdownPreview')
+        .findByType('MobileSessionMarkdownPreview')
         .props.onOpenFile('/remote/project/assets/photo.png')
     )
     expect(pushFile).toHaveBeenLastCalledWith(photoRoute)

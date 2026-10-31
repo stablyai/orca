@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { MobileFileMarkdownPreview } from '../files/MobileFileMarkdownPreview'
+import { MobileSessionMarkdownPreview } from './MobileSessionMarkdownPreview'
 import type { MobileFilePreviewRpcSender } from '../files/mobile-file-preview-operations'
 import { mobileMarkdownFileLink } from '../files/mobile-markdown-file-link'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
@@ -101,7 +101,7 @@ export function MarkdownReader({
           onKeyboardInsetChange={setWebviewKeyboardInset}
         />
       ) : (
-        <MobileFileMarkdownPreview
+        <MobileSessionMarkdownPreview
           key={documentId}
           relativePath={relativePath ?? documentId}
           documentAbsolutePath={filePath}
