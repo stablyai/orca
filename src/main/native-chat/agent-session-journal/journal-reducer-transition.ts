@@ -18,7 +18,7 @@ type DraftNode = {
   listen: (changed: () => void) => void
 }
 
-function draftProperty(value: object, key: PropertyKey): unknown {
+function draftProperty<Value extends object>(value: Value, key: PropertyKey): unknown {
   const descriptor = Reflect.getOwnPropertyDescriptor(value, key)
   return descriptor && ('value' in descriptor ? descriptor.value : descriptor.get?.call(value))
 }
