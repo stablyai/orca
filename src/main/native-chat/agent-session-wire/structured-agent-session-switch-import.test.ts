@@ -19,8 +19,21 @@ import { importLegacyTranscriptIntoJournal } from '../agent-session-journal/jour
 import { catchUpStructuredSessionAtRest } from './structured-agent-session-at-rest-catch-up'
 import {
   captureSwitchStoppedCliTurn,
-  catchUpSwitchedCliTranscript
+  catchUpSwitchedCliTranscript,
+  commitSwitchStoppedCliTurn
 } from './structured-agent-session-switch-import'
+import { switchLifecycleRecord } from './structured-agent-session-switch-import-plan'
+import type * as newestWindow from '../agent-session-journal/journal-newest-item-window'
+
+// The import keeps its newest 16 MiB; a test shrinks that window to evict a prompt cheaply.
+const retainedWindow = vi.hoisted(() => ({ bytes: Number.POSITIVE_INFINITY }))
+vi.mock('../agent-session-journal/journal-newest-item-window', async (load) => {
+  const actual = await load<typeof newestWindow>()
+  return {
+    createNewestItemWindow: (bytes: number) =>
+      actual.createNewestItemWindow(Math.min(bytes, retainedWindow.bytes))
+  }
+})
 
 vi.mock('../../ai-vault/session-scanner-opencode-sqlite-worker-spawn', async () => {
   const query = await import('../transcript-opencode-sqlite-query')
@@ -40,6 +53,7 @@ beforeEach(async () => {
   deadline = agentSessionSwitchDeadline()
 })
 afterEach(async () => {
+  retainedWindow.bytes = Number.POSITIVE_INFINITY
   deadline.dispose()
   await journals.closeAll()
   await rm(root, { recursive: true, force: true })
@@ -505,5 +519,82 @@ it('names the prompt that opened Claude’s latest turn, never a later user row 
     .items.flatMap(({ body }) => (body.kind === 'turn' ? [body] : []))
   expect(records).toEqual([
     expect.objectContaining({ turnId: first.uuid, state: 'interrupted', userItemId: opener })
+  ])
+})
+
+// The latest turn opened in view but its prompt isn't among the rows read: the stop's record names
+// itself, so the turn still reads "Interrupted", and never another turn's prompt.
+it('records a stopped Codex turn whose prompt was not written yet, anchored to itself', async () => {
+  const thread = '019aef12-1234-7000-8000-123456789abc'
+  const filePath = join(root, 'rollout.jsonl')
+  const at = (index: number) => new Date(Date.UTC(2999, 0, 1, 0, 0, index)).toISOString()
+  await writeFile(
+    filePath,
+    `${[
+      { type: 'session_meta', payload: { id: thread } },
+      { timestamp: at(1), type: 'event_msg', payload: { type: 'task_started', turn_id: 'a' } },
+      { timestamp: at(2), type: 'event_msg', payload: { type: 'user_message', message: 'A' } },
+      { timestamp: at(3), type: 'event_msg', payload: { type: 'task_complete', turn_id: 'a' } },
+      // Stopped here, before the opener's row lands.
+      { timestamp: at(4), type: 'event_msg', payload: { type: 'task_started', turn_id: 'b' } }
+    ]
+      .map((row) => JSON.stringify(row))
+      .join('\n')}\n`
+  )
+  const source = { agent: 'codex' as const, sessionId: thread, filePath }
+  const self = agentJournalItemKey(switchLifecycleRecord(source, 'b').identity)
+  const journal = await journals.open(options())
+  expect(
+    await importLegacyTranscriptIntoJournal({
+      journal,
+      agent: 'codex',
+      sessionId: thread,
+      fence: 1,
+      options: { filePath }
+    })
+  ).toMatchObject({ ok: true })
+  const stopped = await captureSwitchStoppedCliTurn(source, true, deadline)
+  expect(stopped).toMatchObject({ turnId: 'b', userItemKey: self })
+  await commitSwitchStoppedCliTurn({ journal, stopped: stopped!, fence: 1 })
+  await refresh({ journal, source, fence: 1, deadline, stopped })
+  const records = journal
+    .snapshot()
+    .items.flatMap(({ body }) => (body.kind === 'turn' ? [body] : []))
+  expect(records.find((turn) => turn.turnId === 'b')).toMatchObject({
+    state: 'interrupted',
+    outcome: 'cancellation',
+    userItemId: self
+  })
+})
+
+it('records a stopped Claude turn whose prompt left the read window, anchored to itself', async () => {
+  const rows = claudeRecording.trimEnd().split('\n')
+  const first = JSON.parse(rows[0]!)
+  const filePath = join(root, 'claude.jsonl')
+  // The running turn: its prompt, then the reply's rows, with only the newest row kept.
+  await writeFile(filePath, `${rows.slice(0, 3).join('\n')}\n`)
+  retainedWindow.bytes = 1
+  const source = { agent: 'claude' as const, sessionId: claudeRecordingId, filePath }
+  const self = agentJournalItemKey(switchLifecycleRecord(source, first.uuid).identity)
+  const stopped = await captureSwitchStoppedCliTurn(source, true, deadline)
+  expect(stopped).toMatchObject({ turnId: first.uuid, userItemKey: self })
+  const journal = await journals.open({
+    ...options(),
+    identity: {
+      ...options().identity,
+      agent: 'claude',
+      providerHandle: claudeProviderHandle(claudeRecordingId, null)
+    }
+  })
+  await catchUpSwitchedCliTranscript({ journal, source, fence: 1, deadline, stopped })
+  expect(
+    journal.snapshot().items.flatMap(({ body }) => (body.kind === 'turn' ? [body] : []))
+  ).toEqual([
+    expect.objectContaining({
+      turnId: first.uuid,
+      state: 'interrupted',
+      outcome: 'cancellation',
+      userItemId: self
+    })
   ])
 })

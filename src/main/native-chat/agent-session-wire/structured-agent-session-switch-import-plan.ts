@@ -20,14 +20,24 @@ import {
 export type PreparedSwitchRead = Extract<PreparedLegacyImport, { ok: true }>
 
 /**
- * The prompt that opened a read's latest turn: its first user row where the read marks turns (a
- * steer stays under it), none if that row fell outside the read, else the last user row.
+ * The anchor of a read's latest turn record: its first user row where the read marks turns (a
+ * steer stays under it), else the last user row. A turn that opened in view whose prompt fell
+ * outside the read names its own record, never another turn's prompt.
  */
-export function latestTurnUserItem({ items, latestTurnOpener }: PreparedSwitchRead) {
-  if (latestTurnOpener !== undefined) {
-    return items.find((item) => agentJournalItemKey(item.identity) === latestTurnOpener)
+export function latestTurnUserKey(
+  { items, latestTurnOpener, latestTurn }: PreparedSwitchRead,
+  source: Pick<SwitchTranscriptSource, 'agent' | 'sessionId'>
+): string | undefined {
+  if (latestTurnOpener === null) {
+    return (
+      latestTurn && agentJournalItemKey(switchLifecycleRecord(source, latestTurn.turnId).identity)
+    )
   }
-  return items.findLast((item) => item.body.kind === 'message' && item.body.role === 'user')
+  const user =
+    latestTurnOpener !== undefined
+      ? items.find((item) => agentJournalItemKey(item.identity) === latestTurnOpener)
+      : items.findLast((item) => item.body.kind === 'message' && item.body.role === 'user')
+  return user && agentJournalItemKey(user.identity)
 }
 
 /** The rows a read holds that this chat doesn't, in transcript order, then the turn records. */
@@ -41,8 +51,7 @@ export function planSwitchTranscriptAdditions(input: {
 }): JournalReplacementItem[] {
   const { prepared } = input
   const items = prepared.items
-  const user = latestTurnUserItem(prepared)
-  const userKey = user && agentJournalItemKey(user.identity)
+  const userKey = latestTurnUserKey(prepared, input.source)
   const latest = prepared.latestTurn
   const interrupted =
     input.stopped?.sessionId === input.source.sessionId &&

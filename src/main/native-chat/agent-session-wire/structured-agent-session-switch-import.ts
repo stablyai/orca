@@ -16,7 +16,7 @@ import type { AgentSessionJournal } from '../agent-session-journal/journal-store
 import { prepareLegacyTranscriptImport } from '../agent-session-journal/journal-legacy-import'
 import type { JournalReplacementItem } from '../agent-session-journal/journal-epoch-replacement'
 import {
-  latestTurnUserItem,
+  latestTurnUserKey,
   planSwitchTranscriptAdditions,
   switchLifecycleRecord,
   switchTranscriptMutations,
@@ -108,11 +108,10 @@ export async function captureSwitchStoppedCliTurn(
     return undefined
   }
   const prepared = await prepare(source, deadline, cut?.entry)
-  const user = latestTurnUserItem(prepared)
-  if (!user || (prepared.latestTurn && prepared.latestTurn.state !== 'working')) {
+  const key = latestTurnUserKey(prepared, source)
+  if (!key || (prepared.latestTurn && prepared.latestTurn.state !== 'working')) {
     return undefined
   }
-  const key = agentJournalItemKey(user.identity)
   return {
     agent: source.agent,
     sessionId: source.sessionId,
@@ -121,6 +120,14 @@ export async function captureSwitchStoppedCliTurn(
     turnId: prepared.latestTurn?.turnId ?? key,
     baseline: prepared
   }
+}
+
+/** Its prompt fell outside the read before the stop, so its record names itself. */
+function selfAnchored(stopped: SwitchStoppedCliTurn): boolean {
+  return (
+    stopped.userItemKey ===
+    agentJournalItemKey(switchLifecycleRecord(stopped, stopped.turnId).identity)
+  )
 }
 
 /** The turn a switch stopped with proof of exit, as the turn record every later import keeps. */
@@ -143,7 +150,10 @@ export function withSwitchStoppedTurn(
   stopped: SwitchStoppedCliTurn
 ): AdoptedTranscriptRead {
   const items = read.ok ? read.items : [...stopped.baseline.items]
-  if (!items?.some((item) => agentJournalItemKey(item.identity) === stopped.userItemKey)) {
+  const anchored =
+    selfAnchored(stopped) ||
+    items?.some((item) => agentJournalItemKey(item.identity) === stopped.userItemKey)
+  if (!items || !anchored) {
     return read
   }
   return { ok: true, items: [...items, stoppedTurnRecord(stopped, stopped.userItemKey)] }
@@ -166,7 +176,7 @@ export async function commitSwitchStoppedCliTurn(input: {
     throw transcriptUnreadable()
   }
   const prompt =
-    stopped.agent === 'codex'
+    stopped.agent === 'codex' && !selfAnchored(stopped)
       ? codexRestingPromptKey(journal, stopped.sessionId, stopped.userItemKey)
       : stopped.userItemKey
   const additions =
