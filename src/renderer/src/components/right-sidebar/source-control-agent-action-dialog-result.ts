@@ -34,6 +34,7 @@ export type UseSourceControlAgentActionDialogResult = {
   deliveryPlan: SourceControlAgentActionDeliveryPlanState
   canStart: boolean
   isStarting: boolean
+  isCreateAccepted: boolean
   onAgentPick: (agent: TuiAgent, surface?: AgentLaunchSurface) => void
   onAgentArgsChange: (value: string) => void
   onCommandTemplateChange: (value: string) => void

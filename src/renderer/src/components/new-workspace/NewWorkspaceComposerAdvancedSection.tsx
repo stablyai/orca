@@ -1,6 +1,7 @@
 import React from 'react'
+import { WorkspaceSetupChoice } from './WorkspaceSetupChoice'
+import { SetupCommandPreview } from './SetupCommandPreview'
 import { toast } from 'sonner'
-import { Button } from '@/components/ui/button'
 import { SettingsSwitch } from '@/components/settings/SettingsFormControls'
 import SparseCheckoutPresetSelect from '@/components/sparse/SparseCheckoutPresetSelect'
 import { cn } from '@/lib/utils'
@@ -13,20 +14,6 @@ import {
 import { translate } from '@/i18n/i18n'
 import { ComposerParentWorktreePicker } from './ComposerParentWorktreePicker'
 import type { NewWorkspaceComposerCardProps } from './new-workspace-composer-card-props'
-
-function SetupCommandPreview({
-  setupConfig
-}: {
-  setupConfig: NonNullable<NewWorkspaceComposerCardProps['setupConfig']>
-}): React.JSX.Element {
-  return (
-    <div className="rounded-md border border-border/60 bg-muted/40 shadow-inner">
-      <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words px-4 py-3 font-mono text-[12px] leading-5 text-foreground/90 scrollbar-sleek">
-        {setupConfig.command}
-      </pre>
-    </div>
-  )
-}
 
 type NewWorkspaceComposerAdvancedSectionProps = Pick<
   NewWorkspaceComposerCardProps,
@@ -316,24 +303,12 @@ export function NewWorkspaceComposerAdvancedSection({
                   <div className="text-[11px] font-medium text-muted-foreground">
                     {setupAskLabel}
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      type="button"
-                      onClick={() => onSetupDecisionChange('run')}
-                      variant={setupDecision === 'run' ? 'default' : 'outline'}
-                      size="sm"
-                    >
-                      {setupRunButtonLabel}
-                    </Button>
-                    <Button
-                      type="button"
-                      onClick={() => onSetupDecisionChange('skip')}
-                      variant={setupDecision === 'skip' ? 'secondary' : 'outline'}
-                      size="sm"
-                    >
-                      {setupSkipButtonLabel}
-                    </Button>
-                  </div>
+                  <WorkspaceSetupChoice
+                    decision={setupDecision}
+                    onChange={onSetupDecisionChange}
+                    runLabel={setupRunButtonLabel}
+                    skipLabel={setupSkipButtonLabel}
+                  />
                   {!setupDecision ? (
                     <div className="text-xs text-muted-foreground">
                       {shouldWaitForSetupCheck

@@ -20530,7 +20530,14 @@
     },
     "newWorkspace": {
       "agentOptional": "Agent (facultatif)",
-      "createDescription": "Choisissez le projet et le nom de l'espace de travail. Sélectionnez un agent si vous souhaitez en démarrer un."
+      "createDescription": "Choisissez le projet et le nom de l'espace de travail. Sélectionnez un agent si vous souhaitez en démarrer un.",
+      "directSetup": {
+        "run": "Run setup",
+        "skip": "Skip setup",
+        "description": "Choisissez si le setup doit être exécuté avant de créer cet espace de travail.",
+        "cancel": "Annuler",
+        "retry": "Réessayer"
+      }
     },
     "JiraIssueWorkspace": {
       "pendingChange": "Une autre modification d'issue est en cours."

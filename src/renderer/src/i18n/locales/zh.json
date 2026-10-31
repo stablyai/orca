@@ -19725,7 +19725,14 @@
     },
     "newWorkspace": {
       "agentOptional": "智能体 [可选]",
-      "createDescription": "选择项目和工作区名称。如果想启动智能体，请选择一个。"
+      "createDescription": "选择项目和工作区名称。如果想启动智能体，请选择一个。",
+      "directSetup": {
+        "run": "Run setup",
+        "skip": "Skip setup",
+        "description": "选择是否在创建此工作区前运行设置。",
+        "cancel": "取消",
+        "retry": "重试"
+      }
     },
     "JiraIssueWorkspace": {
       "pendingChange": "另一个议题更改正在进行中。"

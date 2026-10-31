@@ -81,7 +81,10 @@ describe('launchWorkItemDirect owner row', () => {
       expect.anything(),
       'repo-1',
       'setup',
-      'runtime:env-b'
+      'runtime:env-b',
+      undefined,
+      expect.any(Function),
+      undefined
     )
     expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
       { kind: 'environment', environmentId: 'env-b' },

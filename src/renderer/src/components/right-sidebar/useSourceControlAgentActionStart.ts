@@ -72,6 +72,7 @@ type UseSourceControlAgentActionStartResult = {
   resetDeliveryPlan: () => void
   cancelStart: () => void
   isStarting: boolean
+  isCreateAccepted: boolean
   handleStart: () => Promise<void>
   startWithDetectedAgents: (
     args: SourceControlAgentActionStartWithDetectedAgentsArgs
@@ -114,13 +115,20 @@ export function useSourceControlAgentActionStart({
   const [deliveryPlan, setDeliveryPlan] = useState<SourceControlAgentActionDeliveryPlanState>({
     status: 'idle'
   })
-  const [isStarting, setIsStarting] = useState(false)
-  const attemptRef = useRef<AbortController | null>(null)
+  const [phase, setPhase] = useState<'idle' | 'preparing' | 'accepted'>('idle')
+  const attemptRef = useRef<{
+    controller: AbortController
+    accepted: boolean
+  } | null>(null)
   const resetDeliveryPlan = useCallback(() => setDeliveryPlan({ status: 'idle' }), [])
   const cancelStart = useCallback(() => {
-    attemptRef.current?.abort()
-    attemptRef.current = null
-    setIsStarting(false)
+    const attempt = attemptRef.current
+    attempt?.controller.abort()
+    // Hiding detaches the UI; only settlement releases an issued creation.
+    if (!attempt?.accepted) {
+      attemptRef.current = null
+      setPhase('idle')
+    }
   }, [])
   useEffect(() => cancelStart, [open, worktreeId, connectionId, actionId, cancelStart])
 
@@ -170,9 +178,9 @@ export function useSourceControlAgentActionStart({
         setDeliveryPlan(buildSourceControlAgentConnectionErrorPlan())
         return false
       }
-      const attempt = new AbortController()
+      const attempt = { controller: new AbortController(), accepted: false }
       attemptRef.current = attempt
-      setIsStarting(true)
+      setPhase('preparing')
       try {
         const submitted = prepareRecipe ? prepareRecipe(selectedAgent) : recipe
         const nextPlan = buildPlan(nextAgents, submitted)
@@ -198,21 +206,29 @@ export function useSourceControlAgentActionStart({
           launchPlatform,
           launchSource,
           recoveryContext,
-          signal: attempt.signal,
+          signal: attempt.controller.signal,
+          onCreateAccepted: () => {
+            if (attemptRef.current === attempt) {
+              attempt.accepted = true
+              setPhase('accepted')
+            }
+          },
           onStart,
           onSaveAgentDefault,
           onLaunchAccepted,
           onLaunchAborted,
           onLaunched,
           onClose: () => {
-            resetDeliveryPlan()
-            onClose()
+            if (attemptRef.current === attempt && !attempt.controller.signal.aborted) {
+              resetDeliveryPlan()
+              onClose()
+            }
           }
         })
       } finally {
         if (attemptRef.current === attempt) {
           attemptRef.current = null
-          setIsStarting(false)
+          setPhase('idle')
         }
       }
     },
@@ -256,7 +272,8 @@ export function useSourceControlAgentActionStart({
     deliveryPlan,
     resetDeliveryPlan,
     cancelStart,
-    isStarting,
+    isStarting: phase !== 'idle',
+    isCreateAccepted: phase === 'accepted',
     handleStart,
     startWithDetectedAgents
   }
