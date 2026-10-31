@@ -17,7 +17,7 @@ import {
 } from '@/lib/reveal-in-file-manager'
 import { isRevealOrEditorOpenBlocked } from '@/lib/local-path-open-guard'
 import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
-import { basename } from '@/lib/path'
+import { absolutePathBasename } from '@/lib/path'
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 import { CopyTabIdMenuItem } from './CopyTabIdMenuItem'
 import {
@@ -203,7 +203,7 @@ export function EditorFileTabContextMenu({
             <ContextMenuItem
               inset
               onSelect={() => {
-                void window.api.ui.writeClipboardText(basename(file.filePath))
+                void window.api.ui.writeClipboardText(absolutePathBasename(file.filePath))
               }}
             >
               {translate(

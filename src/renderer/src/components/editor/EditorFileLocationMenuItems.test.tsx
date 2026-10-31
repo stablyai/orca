@@ -79,6 +79,12 @@ describe('EditorFileLocationMenuItems', () => {
     expect(writeClipboardText).toHaveBeenCalledWith('src/file.ts')
   })
 
+  it('keeps a backslash in a POSIX file name when copying the name', () => {
+    renderMenu({ filePath: '/repo/src/foo\\bar.ts', relativePath: 'src/foo\\bar.ts' })
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Copy File Name' }))
+    expect(writeClipboardText).toHaveBeenCalledWith('foo\\bar.ts')
+  })
+
   it('keeps the path actions but hides Copy File Name for a conflict review', () => {
     renderMenu({ mode: 'conflict-review', filePath: '/repo', relativePath: 'Conflict Review' })
     expect(screen.queryByRole('menuitem', { name: 'Copy File Name' })).toBeNull()

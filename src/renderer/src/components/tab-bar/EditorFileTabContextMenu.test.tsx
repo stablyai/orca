@@ -407,22 +407,26 @@ describe('EditorFileTabContextMenu reveal in file manager', () => {
     vi.unstubAllGlobals()
   })
 
-  it('copies the file name without directory prefixes', async () => {
-    const writeClipboardText = vi.fn().mockResolvedValue(undefined)
-    vi.stubGlobal('window', { api: { ui: { writeClipboardText } } })
-    const tree = expandNode(
-      await renderMenu({ filePath: '/repo/src/foo.ts', relativePath: 'src/foo.ts' })
-    )
-    const item = findElementsByType(tree, 'ContextMenuItem').find(
-      (candidate) => extractText(candidate.props.children) === 'Copy File Name'
-    )
-    const onSelect = item?.props.onSelect
-    if (typeof onSelect !== 'function') {
-      throw new Error('Missing Copy File Name action')
+  it.each([
+    ['/repo/src/foo.ts', 'src/foo.ts', 'foo.ts'],
+    ['/repo/src/foo\\bar.ts', 'src/foo\\bar.ts', 'foo\\bar.ts']
+  ])(
+    'copies the file name of %s without directory prefixes',
+    async (filePath, relativePath, name) => {
+      const writeClipboardText = vi.fn().mockResolvedValue(undefined)
+      vi.stubGlobal('window', { api: { ui: { writeClipboardText } } })
+      const tree = expandNode(await renderMenu({ filePath, relativePath }))
+      const item = findElementsByType(tree, 'ContextMenuItem').find(
+        (candidate) => extractText(candidate.props.children) === 'Copy File Name'
+      )
+      const onSelect = item?.props.onSelect
+      if (typeof onSelect !== 'function') {
+        throw new Error('Missing Copy File Name action')
+      }
+      onSelect()
+      expect(writeClipboardText).toHaveBeenCalledExactlyOnceWith(name)
     }
-    onSelect()
-    expect(writeClipboardText).toHaveBeenCalledExactlyOnceWith('foo.ts')
-  })
+  )
 
   it.each([
     ['a conflict review', { mode: 'conflict-review' }],

@@ -5,7 +5,7 @@ import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { isWorktreeRootEditorFile } from '@/store/slices/editor/tabs/editor-tab-content-type'
 import { isRevealOrEditorOpenBlocked } from '@/lib/local-path-open-guard'
-import { basename } from '@/lib/path'
+import { absolutePathBasename } from '@/lib/path'
 import {
   getRevealInFileManagerLabel,
   getOpenFileRevealOwner,
@@ -43,7 +43,9 @@ export function EditorFileLocationMenuItems({
       </DropdownMenuItem>
       {!isWorktreeRootEditorFile(file) && (
         <DropdownMenuItem
-          onSelect={() => void window.api.ui.writeClipboardText(basename(file.filePath))}
+          onSelect={() =>
+            void window.api.ui.writeClipboardText(absolutePathBasename(file.filePath))
+          }
         >
           <Copy />
           {translate('auto.components.editor.EditorPanelHeader.copyFileName', 'Copy File Name')}
