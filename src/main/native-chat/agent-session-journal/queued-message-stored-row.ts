@@ -6,6 +6,10 @@ import { readAgentJournalMessageBody } from '../../../shared/agent-session-journ
 import { readStoredRejectionFact } from './journal-dispatch-reducer'
 import type { QueuedMessageRow } from './queued-message-table'
 import { readAgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
+import { storedMessageBody } from './journal-storage-schema'
+import { storageVerdict, strictStorage } from './journal-storage-strict'
+
+const strictBody = strictStorage(storedMessageBody)
 
 export const LEGACY_QUEUED_MESSAGE_COLUMNS =
   'message_id, position, body_json, fingerprint, state, hold_reason, returned_reason, returned_rejection, consumed_as, queued_epoch, queued_sequence, options_json'
@@ -34,8 +38,10 @@ export function readStoredQueuedMessageRow(row: unknown): QueuedMessageRow | nul
     return null
   }
   const state = record.state
+  // A body key this build does not declare stays on disk with the card, never adopted without it.
   if (
     readAgentJournalMessageBody(body) !== 'readable' ||
+    storageVerdict(strictBody, body) === 'newer' ||
     (state !== 'waiting' && state !== 'dispatched' && state !== 'returned' && state !== 'withdrawn')
   ) {
     return null

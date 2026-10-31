@@ -1,3 +1,4 @@
+import { abbreviateOrchestrationText } from '../../../shared/orchestration-task-summary'
 import type { CommandHandler } from '../../dispatch'
 import { printResult } from '../../format'
 import { printOrchestrationResult } from './agent-view'
@@ -94,7 +95,8 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
         fields: (r) => ({
           runs: r.runs.map((run) => {
             const { runId, ...rest } = runFields(run)
-            return { id: runId, ...rest }
+            // Objectives are caller-written and unbounded; --full prints them whole.
+            return { id: runId, ...rest, objective: abbreviateOrchestrationText(run.objective) }
           }),
           nextCursor: r.nextCursor ?? undefined
         })
