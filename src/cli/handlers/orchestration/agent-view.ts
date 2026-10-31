@@ -33,14 +33,17 @@ export function printOrchestrationResult<TResult, TFields extends AgentViewField
   ctx: Pick<HandlerContext, 'flags' | 'json'>,
   view: OrchestrationAgentView<TResult, TFields>
 ): void {
+  const failure = view.failure?.(response.result)
   if (ctx.flags.has('full')) {
     printResult(response, ctx.json, view.fullText)
   } else {
-    printOrchestrationFields(ctx.json, view.fields(response.result), (fields) =>
-      view.text ? view.text(fields, response.result) : formatAgentFieldsText(fields)
+    printOrchestrationFields(
+      ctx.json,
+      view.fields(response.result),
+      (fields) => (view.text ? view.text(fields, response.result) : formatAgentFieldsText(fields)),
+      !failure || failure.exitCode === 0
     )
   }
-  const failure = view.failure?.(response.result)
   if (failure) {
     reportOrchestrationFailure(
       ctx.flags.has('full') && failure.fullExitCode !== undefined
@@ -53,9 +56,11 @@ export function printOrchestrationResult<TResult, TFields extends AgentViewField
 export function printOrchestrationFields<TFields extends AgentViewFields>(
   json: boolean,
   fields: TFields,
-  text: (fields: TFields) => string
+  text: (fields: TFields) => string,
+  // A failed outcome reads ok:false even though its fields still describe what happened.
+  ok = true
 ): void {
-  console.log(json ? JSON.stringify({ ok: true, result: withNextLast(fields) }) : text(fields))
+  console.log(json ? JSON.stringify({ ok, result: withNextLast(fields) }) : text(fields))
 }
 
 /** Small receipts whose result already is the agent's fields; JSON only loses the envelope. */

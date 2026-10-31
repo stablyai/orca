@@ -383,4 +383,31 @@ describe('orchestration agent views', () => {
     })
     expect(result.formatted).toBe(`banner\n${body}`)
   })
+
+  it('marks a failed concise JSON receipt ok:false and keeps its fields', async () => {
+    const { stdout } = await run(
+      'worker-list',
+      [['run', 'run_1']],
+      {
+        workers: [],
+        counts: {},
+        partialHostErrors: [
+          { environmentId: 'env_1', name: 'linux', code: 'unreachable', dispatchIds: [] }
+        ]
+      },
+      true
+    )
+    expect(JSON.parse(stdout)).toMatchObject({ ok: false, result: { workers: [] } })
+  })
+
+  it('says when worker-show never evaluated an interactive wait', async () => {
+    const show = (observation: unknown) =>
+      run('worker-show', [['dispatch', 'ctx_1']], {
+        dispatch: { id: 'ctx_1', taskId: 'task_1', status: 'dispatched' },
+        worker: { state: 'running', stage: 'working', agentTerminalHandle: 'term_agent' },
+        ...(observation === undefined ? {} : { observation })
+      })
+    expect((await show(undefined)).stdout).toContain('waitingOnHuman=unknown')
+    expect((await show({ agentWait: null })).stdout).not.toContain('waitingOnHuman')
+  })
 })

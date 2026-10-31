@@ -126,19 +126,23 @@ export const ORCHESTRATION_QUESTION_HANDLER: Record<string, CommandHandler> = {
             ? `Resume with: ${value.legacyCompatibility.resumeCommand}`
             : value.next && resolveOrcaCommandsInText(value.next)
       }
-      printOrchestrationFields(json, fields, (shown) =>
-        shown.answer !== undefined
-          ? shown.answer
-          : withReceiptNext(
-              value.pending
-                ? `Question ${shown.messageId} sent.`
-                : value.legacyCompatibility?.resumeRequired
-                  ? `Question ${shown.messageId} committed.`
-                  : value.timedOut
-                    ? `Question ${shown.messageId ?? '(unknown id)'} is still pending after ${waitedMs}ms.`
-                    : `Wait for question ${shown.messageId} ${value.connectionLost ? 'lost its connection' : 'was cancelled'}.`,
-              shown
-            )
+      printOrchestrationFields(
+        json,
+        fields,
+        (shown) =>
+          shown.answer !== undefined
+            ? shown.answer
+            : withReceiptNext(
+                value.pending
+                  ? `Question ${shown.messageId} sent.`
+                  : value.legacyCompatibility?.resumeRequired
+                    ? `Question ${shown.messageId} committed.`
+                    : value.timedOut
+                      ? `Question ${shown.messageId ?? '(unknown id)'} is still pending after ${waitedMs}ms.`
+                      : `Wait for question ${shown.messageId} ${value.connectionLost ? 'lost its connection' : 'was cancelled'}.`,
+                shown
+              ),
+        !value.timedOut && !value.cancelled && !value.legacyCompatibility?.resumeRequired
       )
     }
     if (value.legacyCompatibility?.resumeRequired) {

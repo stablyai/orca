@@ -78,9 +78,13 @@ export function workerShowView(
           undefined,
         workspace: value.projection?.workspace?.id ?? value.worker.worktreeId ?? undefined,
         attention: nonEmpty(value.projection?.attention?.categories),
-        waitingOnHuman: wait
-          ? `${wait.reason ?? 'interactive prompt'} (via ${wait.source})`
-          : undefined,
+        // Silence means checked and clear; an older host or unreadable pane never evaluated it.
+        waitingOnHuman:
+          value.observation === undefined || !('agentWait' in value.observation)
+            ? 'unknown'
+            : wait
+              ? `${wait.reason ?? 'interactive prompt'} (via ${wait.source})`
+              : undefined,
         lastError: value.worker.lastError ?? undefined,
         autoReleaseAt: value.autoReleaseAt ?? undefined,
         next: value.projection
