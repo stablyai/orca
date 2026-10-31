@@ -294,8 +294,8 @@ it('keeps explicitly opaque annotation values whole without hiding sibling or ne
   expect(declared<UndeclaredStorageKeys<Actual, Stored>>()).toBeUndefined()
   // @ts-expect-error an opaque annotation does not declare a sibling key
   expect(declared<UndeclaredStorageKeys<Actual & { extra: string }, Stored>>()).toBeUndefined()
-  // @ts-expect-error structured siblings still recursively declare their nested keys
   expect(
+    // @ts-expect-error structured siblings still recursively declare their nested keys
     declared<UndeclaredStorageKeys<Actual & { nested: { kept: string; extra: number } }, Stored>>()
   ).toBeUndefined()
 })
