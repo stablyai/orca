@@ -536,6 +536,7 @@ describe('registerCoreHandlers', () => {
     const codexUsage = { marker: 'codexUsage' }
     const openCodeUsage = { marker: 'openCodeUsage' }
     const museUsage = { marker: 'museUsage' }
+    const zcodeUsage = { marker: 'zcodeUsage' }
     const codexAccounts = { marker: 'codexAccounts', runtimeHomeService: { marker: 'runtimeHome' } }
     const claudeAccounts = { marker: 'claudeAccounts' }
     const rateLimits = { marker: 'rateLimits' }
@@ -552,6 +553,8 @@ describe('registerCoreHandlers', () => {
       openCodeUsage as never,
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registration only forwards this marker to the mocked usage registrar.
       museUsage as never,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registration only forwards this marker to the mocked usage registrar.
+      zcodeUsage as never,
       codexAccounts as never,
       claudeAccounts as never,
       rateLimits as never,
@@ -579,7 +582,8 @@ describe('registerCoreHandlers', () => {
       claudeUsage,
       codexUsage,
       openCodeUsage,
-      museUsage
+      museUsage,
+      zcodeUsage
     })
     expect(registerAppHandlersMock).toHaveBeenCalledWith(store, {
       quitResumeRecordsFor: expect.any(Function),
@@ -774,6 +778,7 @@ describe('registerCoreHandlers', () => {
     const codexUsage2 = { marker: 'codexUsage2' }
     const openCodeUsage2 = { marker: 'openCodeUsage2' }
     const museUsage2 = { marker: 'museUsage2' }
+    const zcodeUsage2 = { marker: 'zcodeUsage2' }
     const codexAccounts2 = { marker: 'codexAccounts2' }
     const claudeAccounts2 = { marker: 'claudeAccounts2' }
     const rateLimits2 = { marker: 'rateLimits2' }
@@ -787,6 +792,8 @@ describe('registerCoreHandlers', () => {
       openCodeUsage2 as never,
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registration only forwards this marker to the mocked usage registrar.
       museUsage2 as never,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registration only forwards this marker to the mocked usage registrar.
+      zcodeUsage2 as never,
       codexAccounts2 as never,
       claudeAccounts2 as never,
       rateLimits2 as never,
