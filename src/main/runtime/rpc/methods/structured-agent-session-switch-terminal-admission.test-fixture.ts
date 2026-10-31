@@ -64,20 +64,43 @@ export function executionOwnerRig(
   const pendingSpawns: ((error: Error) => void)[] = []
   let started = 0
   let listingFails = false
-  const provider = {
+  const unused = async (): Promise<never> => {
+    throw new Error('Unexpected PTY effect')
+  }
+  // A switch and main's claimed create reach only the claim probe, owner listing and inventory.
+  const ptyProvider: IPtyProvider = {
     supportsAgentSessionClaims: async () => opts.supportsClaims ?? true,
     providesAgentSessionOwnerListings: () => listsOwners,
-    listProcesses: async (args?: { ptyIds?: string[] }) => {
+    listProcesses: async (args) => {
       if (listingFails) {
         throw new Error('listing failed')
       }
       return [...sessions.values()].filter(
         (session) => !args?.ptyIds?.length || args.ptyIds.includes(session.id)
       )
-    }
+    },
+    spawn: unused,
+    attach: unused,
+    write: () => {},
+    writeWithSettlement: unused,
+    resize: () => {},
+    shutdown: unused,
+    sendSignal: unused,
+    getCwd: unused,
+    getInitialCwd: unused,
+    clearBuffer: unused,
+    resetInputModes: unused,
+    acknowledgeDataEvent: () => {},
+    hasChildProcesses: async () => false,
+    getForegroundProcess: async () => null,
+    serialize: unused,
+    revive: unused,
+    getDefaultShell: unused,
+    getProfiles: unused,
+    onData: () => () => {},
+    onReplay: () => () => {},
+    onExit: () => () => {}
   }
-  // A switch and main's claimed create reach only these three provider members.
-  const ptyProvider = provider as unknown as IPtyProvider
   const previousProvider = getLocalPtyProvider()
   setLocalPtyProvider(ptyProvider)
   const list = (owner?: AgentSessionOwnerBinding, ptyId = owner?.ptyId ?? ''): string => {
@@ -91,6 +114,13 @@ export function executionOwnerRig(
     })
     return incarnationId
   }
+  /** One CLI started for a claimed create: the execution owner lists it from then on. */
+  const start = (owner: Pick<AgentSessionOwnerBinding, 'claim' | 'surface' | 'generation'>) => {
+    const ptyId = `switch-pty-${++started}`
+    const live = { ...owner, phase: 'live' as const, ptyId }
+    ptyIncarnationById.set(ptyId, list(live))
+    return listsOwners ? { ptyId, owner: live, disposition: 'created' as const } : { ptyId }
+  }
   const spawn: NonNullable<RuntimePtyController['spawn']> = async (args) => {
     const ensure = args.agentSessionEnsure
     if (!ensure) {
@@ -101,19 +131,7 @@ export function executionOwnerRig(
     const ensured = await agentSessionOwners.ensure({
       claim: ensure.claim,
       surface: ensure.surface,
-      spawn: async ({ generation }) => {
-        const owner = {
-          claim: ensure.claim,
-          generation,
-          phase: 'live' as const,
-          ptyId: `switch-pty-${++started}`,
-          surface: ensure.surface
-        }
-        ptyIncarnationById.set(owner.ptyId, list(owner))
-        return listsOwners
-          ? { ptyId: owner.ptyId, owner, disposition: 'created' as const }
-          : { ptyId: owner.ptyId }
-      },
+      spawn: async ({ generation }) => start({ ...ensure, generation }),
       isLive: isRegisteredAgentSessionOwnerLive
     })
     const ptyId = ensured.owner.ptyId
@@ -198,15 +216,30 @@ export function executionOwnerRig(
     failListing: () => {
       listingFails = true
     },
-    /** A claimed create for `claim` still starting: its reservation stands until disposal. */
-    pendingCreate: (claim: AgentSessionExecutionClaim) => {
+    /** A claimed create for `claim` in this worktree still starting, on the pane it returns: it
+     *  starts its CLI on the next turn when it `resolves`, else it stands until disposal. */
+    pendingCreate: (claim: AgentSessionExecutionClaim, resolves = false) => {
+      const surface = {
+        worktreeId: WORKTREE_ID,
+        tabId: randomUUID(),
+        leafId: randomUUID(),
+        terminalHandle: 'pending-handle'
+      }
       void agentSessionOwners
         .ensure({
           claim,
-          surface: ownerOf(claim, 'pending-pty').surface,
-          spawn: () => new Promise((_resolve, reject) => pendingSpawns.push(reject))
+          surface,
+          spawn: ({ generation }) =>
+            new Promise((resolve, reject) => {
+              if (resolves) {
+                setTimeout(() => resolve(start({ claim, surface, generation })), 0)
+              } else {
+                pendingSpawns.push(reject)
+              }
+            })
         })
         .catch(() => {})
+      return surface
     },
     /** Main restarts while the execution owner keeps its terminals: main's claim state is empty. */
     relaunch: () => {

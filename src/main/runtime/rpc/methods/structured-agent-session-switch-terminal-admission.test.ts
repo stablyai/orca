@@ -195,6 +195,12 @@ async function lostFirstAttempt(r: ExecutionOwnerRig) {
   return t1
 }
 
+const fill = (r: ExecutionOwnerRig, claim: AgentSessionExecutionClaim, count: number) => {
+  for (let index = 0; index < count; index++) {
+    r.list(ownerOf({ ...claim, identityDigest: `other-${index}` }, `other-pty-${index}`))
+  }
+}
+
 it.each([
   { route: 'daemon, after main relaunched', listsOwners: true, relaunch: true },
   {
@@ -212,9 +218,7 @@ it.each([
     r.relaunch()
   }
   if (c.full) {
-    for (let index = 0; index < 1023; index++) {
-      r.list(ownerOf({ ...claim, identityDigest: `other-${index}` }, `other-pty-${index}`))
-    }
+    fill(r, claim, 1023)
   }
   const retried = await r.run('to-terminal-retry')
   expect(retried).toMatchObject({ status: 'completed', sessionId: id, terminal: t1.tabId })
@@ -225,6 +229,30 @@ it.each([
     [id, t1.ptyId]
   ])
 })
+
+it.each([{ full: false }, { full: true }])(
+  'a switch joins a create of its claim still starting and adopts what it starts (registry full: $full)',
+  async (c) => {
+    let pending: { tabId: string; leafId: string } | undefined
+    const r = await switchRig({
+      seed: (claim) => {
+        pending = r.pendingCreate(claim, true)
+        r.row(`${pending.tabId}:${pending.leafId}`)
+        if (c.full) {
+          fill(r, claim, 1023)
+        }
+      }
+    })
+    const result = await r.run('to-terminal-join')
+    expect(result).toMatchObject({
+      status: 'completed',
+      sessionId: id,
+      terminal: pending!.tabId
+    })
+    expect(r.started()).toBe(1)
+    expect(r.spawned.map((terminal) => terminal.ptyId)).toEqual(['switch-pty-1'])
+  }
+)
 
 const foreign = (claim: AgentSessionExecutionClaim) => ({
   ...claim,
@@ -310,7 +338,18 @@ it.each([
     return stop(...args)
   })
   const retried = await r.run('to-terminal-retry')
-  expect(retried).toMatchObject({ status: c.completes ? 'completed' : 'refused' })
+  // A holder that appeared during the stop reads as it would have before it.
+  expect(retried).toMatchObject(
+    c.completes
+      ? { status: 'completed' }
+      : {
+          status: 'refused',
+          refusal: {
+            code: 'agent_session_conflict',
+            details: { reason: 'conversationHeldElsewhere' }
+          }
+        }
+  )
   // Never the stale terminal, never two owners of the claim; a refusal keeps the source tab.
   expect(r.spawned.map((terminal) => terminal.ptyId)).toEqual(
     c.completes ? [t1.ptyId, 'switch-pty-2'] : [t1.ptyId]

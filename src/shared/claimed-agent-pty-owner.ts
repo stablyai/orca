@@ -18,6 +18,7 @@ import {
   agentSessionSurfacesEqual,
   buildClaimedAgentPtyOwnerIndex,
   cloneAgentSessionClaim as cloneClaim,
+  cloneAgentSessionOwnerBinding as cloneOwnerBinding,
   cloneAgentSessionOwner as cloneOwner,
   cloneAgentSessionSurface as cloneSurface,
   prepareRegisteredAgentSessionOwner,
@@ -83,7 +84,7 @@ export class ClaimedAgentPtyOwnerRegistry {
     if (decision.kind === 'join') {
       args.onJoin?.(decision.reserved.creation)
       const result = await decision.reserved.promise
-      return { disposition: 'adopted', owner: cloneOwner(result.owner as LiveOwner) }
+      return { disposition: 'adopted', owner: cloneOwnerBinding(result.owner) }
     }
 
     const generation = randomUUID()
@@ -300,7 +301,7 @@ export class ClaimedAgentPtyOwnerRegistry {
       )
     }
     if (decision.kind === 'join') {
-      return cloneOwner((await decision.reserved.promise).owner as LiveOwner)
+      return cloneOwnerBinding((await decision.reserved.promise).owner)
     }
     return decision.kind === 'adopt' ? cloneOwner(decision.owner) : null
   }

@@ -25,6 +25,14 @@ export type SwitchTerminalSpawn = {
   resumeSupported?: boolean
 }
 
+/** Another worktree's terminal, or several, own the conversation's claim: met before the stop by
+ *  the admission or at the spawn by a holder that appeared during it, the same refusal. */
+function refuseClaimHeldElsewhere(error: unknown): never {
+  throw error instanceof Error && error.message === 'agent_session_conflict'
+    ? agentSessionRefusalError('agent_session_conflict', { reason: 'conversationHeldElsewhere' })
+    : error
+}
+
 export abstract class OrcaRuntimeWithSpawnSwitchTerminal extends OrcaRuntimeWithGetAgentSessionExecutionNamespace {
   protected abstract resolveMobileSessionTerminalCommand(
     workspace: TerminalWorkspaceLaunchScope,
@@ -57,7 +65,7 @@ export abstract class OrcaRuntimeWithSpawnSwitchTerminal extends OrcaRuntimeWith
     if (args.signal?.aborted) {
       throw new Error('client_disconnected')
     }
-    return this.createTerminal(`id:${workspace.id}`, {
+    return await this.createTerminal(`id:${workspace.id}`, {
       wslUserAct: true,
       command: startup.command,
       env: startup.env,
@@ -76,7 +84,7 @@ export abstract class OrcaRuntimeWithSpawnSwitchTerminal extends OrcaRuntimeWith
       persistHostSessionBinding: true,
       deferMobileSessionPublish: true,
       signal: args.signal
-    })
+    }).catch(refuseClaimHeldElsewhere)
   }
 
   /**
@@ -105,14 +113,7 @@ export abstract class OrcaRuntimeWithSpawnSwitchTerminal extends OrcaRuntimeWith
       ? this.switchTerminalClaim(workspace, args.agent, providerSession)
       : undefined
     const owner = claim
-      ? await this.ptyController?.prepareAgentSessionOwner?.(claim).catch((error: unknown) => {
-          // Another worktree's terminal, or several, own this conversation's claim.
-          throw error instanceof Error && error.message === 'agent_session_conflict'
-            ? agentSessionRefusalError('agent_session_conflict', {
-                reason: 'conversationHeldElsewhere'
-              })
-            : error
-        })
+      ? await this.ptyController?.prepareAgentSessionOwner?.(claim).catch(refuseClaimHeldElsewhere)
       : null
     return {
       resumeSupported,
