@@ -10,6 +10,9 @@ import {
   type HostedReviewForBranchArgs,
   type HostedReviewInfo
 } from '../../../../../shared/hosted-review'
+import { makePR } from '../../../../../main/github/pr-refresh-coordinator-test-harness'
+import { getGitHubPRCacheKey } from '../../../../../shared/github/github-cache-key'
+import { selectChecksPanelReview } from '../checks-panel-review'
 import type { PRInfo } from '../../../../../shared/github/pull-request-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import {
@@ -452,4 +455,132 @@ describe('a Checks refresh click', () => {
     )
     expect(forBranch).toHaveBeenLastCalledWith(expect.objectContaining({ userRefresh: true }))
   })
+})
+
+it.each(['merged', 'open'] as const)(
+  'a GitHub click uses the post-click %s PR head and keeps metadata when transport then fails',
+  async (state) => {
+    const old = Promise.withResolvers<{ kind: 'found'; pr: PRInfo; fetchedAt: number }>()
+    const open = makePR({ number: 42, headSha: 'head-a' })
+    const merged = makePR({ number: 42, state, headSha: 'head-b' })
+    const refreshPRNow = vi
+      .fn()
+      .mockReturnValueOnce(old.promise)
+      .mockResolvedValueOnce({ kind: 'found', pr: merged, fetchedAt: 2 })
+      .mockRejectedValueOnce(new Error('transport lost'))
+    vi.stubGlobal('api', { gh: { refreshPRNow } })
+    const key = getGitHubPRCacheKey(
+      repo.path,
+      repo.id,
+      'main',
+      useAppStore.getState().settings,
+      undefined,
+      undefined,
+      true
+    )
+    useAppStore.setState({ prCache: { [key]: { data: open, fetchedAt: 1 } }, prRefreshStates: {} })
+    const fetchPR = useAppStore.getState().fetchPRForBranch
+    const before = fetchPR(repo.path, 'main', { force: true, reason: 'visible', repoId: repo.id })
+    const input = { ...baseInput(), pr: open, prCacheKey: key, fetchPRForBranch: fetchPR }
+    input.fetchPRChecks = vi.fn(async () => [
+      { name: 'build', status: 'completed' as const, conclusion: 'success' as const, url: null }
+    ])
+    const panel = renderPanel(input)
+    let click: Promise<void> = Promise.resolve()
+    act(() => {
+      click = panel.result.current.handleRefresh()
+    })
+    // Let main's pre-click response finish too, so a buggy joined click completes with head-a.
+    old.resolve({ kind: 'found', pr: open, fetchedAt: 1 })
+    await act(async () => {
+      await Promise.all([before, click])
+    })
+    expect(input.fetchPRChecks).toHaveBeenCalledWith(
+      repo.path,
+      42,
+      'main',
+      'head-b',
+      merged.prRepo,
+      expect.anything()
+    )
+    const pr = useAppStore.getState().prCache[key]?.data
+    const review = selectChecksPanelReview({
+      pr,
+      hostedReview: null,
+      linkedPR: null,
+      suppressedGitHubPR: null,
+      linkedGitLabMR: null,
+      linkedBitbucketPR: null,
+      linkedAzureDevOpsPR: null,
+      linkedGiteaPR: null
+    })
+    expect(review?.state).toBe(state)
+    if (!review) {
+      throw new Error('missing review')
+    }
+    const worktree: Worktree = {
+      id: 'worktree-1',
+      repoId: repo.id,
+      path: '/workspace/worktree',
+      branch: 'main',
+      isMainWorktree: false,
+      head: 'head',
+      isBare: false,
+      displayName: 'workspace',
+      comment: '',
+      linkedIssue: null,
+      linkedPR: null,
+      linkedLinearIssue: null,
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0
+    }
+    if (state === 'merged') {
+      render(
+        <HostedReviewActions
+          review={review}
+          repo={repo}
+          worktree={worktree}
+          onRefreshReview={async () => {}}
+        />
+      )
+      expect(screen.getByRole('button', { name: /Delete Workspace/ })).toBeTruthy()
+    }
+    const cached = useAppStore.getState().prCache[key]
+    await act(async () => panel.result.current.handleRefresh())
+    expect(useAppStore.getState().prCache[key]).toEqual(cached)
+    expect(useAppStore.getState().prRefreshStates[key]).toMatchObject({
+      status: 'error',
+      errorType: 'unknown'
+    })
+    expect(input.setChecks).not.toHaveBeenCalledWith([])
+    expect(panel.result.current.manualRefreshError).toBeNull()
+    expect(input.refreshInFlightRef.current).toBe(false)
+  }
+)
+
+it('a failed GitHub click without cached metadata is not a successful no-PR answer', async () => {
+  vi.stubGlobal('api', {
+    gh: { refreshPRNow: vi.fn().mockRejectedValue(new Error('transport unavailable')) }
+  })
+  useAppStore.setState({ prCache: {}, prRefreshStates: {} })
+  const key = getGitHubPRCacheKey(repo.path, repo.id, 'main')
+  const input = {
+    ...baseInput(),
+    prCacheKey: key,
+    fetchPRForBranch: useAppStore.getState().fetchPRForBranch
+  }
+  const panel = renderPanel(input)
+  await act(async () => panel.result.current.handleRefresh())
+  expect(useAppStore.getState().prCache[key]).toBeUndefined()
+  expect(useAppStore.getState().prRefreshStates[key]).toMatchObject({
+    status: 'error',
+    errorType: 'unknown'
+  })
+  expect(input.setChecks).not.toHaveBeenCalled()
+  expect(input.setComments).not.toHaveBeenCalled()
+  expect(panel.result.current.manualRefreshError).toBeNull()
+  expect(input.refreshInFlightRef.current).toBe(false)
 })

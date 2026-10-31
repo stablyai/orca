@@ -6,6 +6,8 @@ import { useAppStore } from '@/store'
 import { refreshHostedReviewCard } from '@/store/slices/hosted-review-card-refresh'
 import { _clearHostedReviewRequestGenerationsForTest } from '@/store/slices/hosted-review-request-state'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makePR } from '../../../../../main/github/pr-refresh-coordinator-test-harness'
+import { getGitHubPRCacheKey } from '../../../../../shared/github/github-cache-key'
 import type { HostedReviewInfo } from '../../../../../shared/hosted-review'
 import { isGitLabChecksPanelReview } from './gitlab-review-client'
 import { useChecksPanelEntryRefreshAndTitleActions } from './use-checks-panel-entry-refresh-and-title-actions'
@@ -139,3 +141,49 @@ describe('refreshHostedReviewAfterMutation', () => {
     }
   )
 })
+
+it.each(['merged', 'closed', 'open'] as const)(
+  'GitHub post-write %s refresh cannot reuse a pre-write PR read',
+  async (state) => {
+    const old = Promise.withResolvers<{
+      kind: 'found'
+      pr: ReturnType<typeof makePR>
+      fetchedAt: number
+    }>()
+    const open = makePR({ headSha: 'head-a' })
+    const afterWrite = makePR({ state, headSha: 'head-b' })
+    const refreshPRNow = vi
+      .fn()
+      .mockReturnValueOnce(old.promise)
+      .mockResolvedValueOnce({ kind: 'found', pr: afterWrite, fetchedAt: 2 })
+      .mockRejectedValueOnce(new Error('follow-up transport lost'))
+    vi.stubGlobal('api', { gh: { refreshPRNow } })
+    useAppStore.setState({ repos: [repo], prCache: {}, hostedReviewCache: {}, prRefreshStates: {} })
+    const input = makeInput({ ...bitbucketReview, provider: 'github', state })
+    input.fetchHostedReviewForBranch = vi.fn(async () => null)
+    input.fetchPRForBranch = useAppStore.getState().fetchPRForBranch
+    const before = input.fetchPRForBranch(repo.path, 'main', {
+      force: true,
+      repoId: repo.id,
+      reason: 'visible'
+    })
+    const { result } = renderHook(() => useChecksPanelEntryRefreshAndTitleActions(input))
+    await act(async () => result.current.refreshHostedReviewAfterMutation())
+    old.resolve({ kind: 'found', pr: open, fetchedAt: 1 })
+    await before
+    const key = getGitHubPRCacheKey(repo.path, repo.id, 'main')
+    expect(refreshPRNow).toHaveBeenCalledTimes(2)
+    expect(refreshPRNow).toHaveBeenLastCalledWith(expect.objectContaining({ userRefresh: true }))
+    expect(useAppStore.getState().prCache[key]?.data).toEqual(afterWrite)
+    const lastGood = useAppStore.getState().prCache[key]
+    // A confirmed write remains successful when its metadata follow-up fails.
+    await act(async () =>
+      expect(result.current.refreshHostedReviewAfterMutation()).resolves.toBeUndefined()
+    )
+    expect(useAppStore.getState().prCache[key]).toEqual(lastGood)
+    expect(useAppStore.getState().prRefreshStates[key]).toMatchObject({
+      status: 'error',
+      errorType: 'unknown'
+    })
+  }
+)

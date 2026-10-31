@@ -178,7 +178,8 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
           force: true,
           repoId: repo.id,
           worktreeId: activeWorktreeId ?? undefined,
-          linkedPRNumber
+          linkedPRNumber,
+          userRefresh: true
         })
         if (!isCurrentRequestContext()) {
           return
@@ -188,6 +189,7 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
           repoId: repo.id,
           branch,
           linkedGitHubPR: linkedPRNumber,
+          userRefresh: true,
           linkedGitLabMR,
           linkedBitbucketPR,
           linkedAzureDevOpsPR,

@@ -13,6 +13,8 @@ vi.mock('./github-api-repository', () =>
 vi.mock('./rate-limit', () => moduleMocks.rateLimitModuleMock(coordinatorMocks))
 vi.mock('../ipc/ui', () => moduleMocks.ipcUiModuleMock(coordinatorMocks))
 
+import { runCoalescedProbe, type CoalescedProbes } from '../git/coalesced-probe'
+import type { PRRefreshOutcome } from '../../shared/github/pull-request-refresh-types'
 import { makeCandidate, makePR } from './pr-refresh-coordinator-test-harness'
 
 const { getAllWebContentsMock, getPRForBranchOutcomeMock } = coordinatorMocks
@@ -137,8 +139,9 @@ describe('pr-refresh-coordinator', () => {
 
     reportVisiblePRRefreshCandidates([visibleCandidate], 1, 1)
     await vi.advanceTimersByTimeAsync(0)
-    await refreshPRNow(candidate)
+    await refreshPRNow(candidate, 'manual', { userRefresh: true })
 
+    expect(getPRForBranchOutcomeMock.mock.calls[1]?.[5]).toMatchObject({ userRefresh: true })
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
 
     await vi.advanceTimersByTimeAsync(2_499)
@@ -148,6 +151,7 @@ describe('pr-refresh-coordinator', () => {
     await vi.advanceTimersByTimeAsync(1)
 
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(3)
+    expect(getPRForBranchOutcomeMock.mock.calls[2]?.[5]).not.toHaveProperty('userRefresh')
   })
 
   it('stops polling settled merged PRs, including repeated visibility reports', async () => {
@@ -259,4 +263,49 @@ describe('pr-refresh-coordinator', () => {
       expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
     }
   )
+})
+
+it('a scheduled manual follow-up joins ordinary pending work after intent is consumed', async () => {
+  moduleMocks.resetPRRefreshCoordinatorMocks(coordinatorMocks)
+  try {
+    const { refreshPRNow, reportVisiblePRRefreshCandidates } =
+      await import('./pr-refresh-coordinator')
+    const probes: CoalescedProbes<PRRefreshOutcome> = new Map()
+    const pending = Promise.withResolvers<PRRefreshOutcome>()
+    const found: PRRefreshOutcome = {
+      kind: 'found',
+      pr: makePR({ checksStatus: 'success', mergeable: 'UNKNOWN' }),
+      fetchedAt: Date.now()
+    }
+    const provider = vi
+      .fn<() => Promise<PRRefreshOutcome>>()
+      .mockResolvedValueOnce(found)
+      .mockReturnValueOnce(pending.promise)
+    getPRForBranchOutcomeMock.mockImplementation(
+      (_path, _branch, _linked, _host, _fallback, options) =>
+        runCoalescedProbe(probes, 'follow-up', provider, 120_000, options)
+    )
+    const candidate = makeCandidate({
+      cachedFetchedAt: Date.now(),
+      cachedHasPR: true,
+      cachedPRState: 'open',
+      cachedChecksStatus: 'success',
+      cachedMergeable: 'MERGEABLE'
+    })
+    reportVisiblePRRefreshCandidates([candidate], 1, 1)
+    await refreshPRNow(candidate, 'manual', { userRefresh: true })
+    expect(getPRForBranchOutcomeMock.mock.calls[0]?.[5]).toMatchObject({ userRefresh: true })
+    const ordinary = runCoalescedProbe(probes, 'follow-up', provider, 120_000)
+    await vi.advanceTimersByTimeAsync(2_499)
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
+    expect(getPRForBranchOutcomeMock.mock.calls[1]?.[5]).not.toHaveProperty('userRefresh')
+    expect(provider).toHaveBeenCalledTimes(2)
+    pending.resolve({ kind: 'no-pr', fetchedAt: Date.now() })
+    await ordinary
+    await vi.advanceTimersByTimeAsync(0)
+  } finally {
+    vi.useRealTimers()
+  }
 })

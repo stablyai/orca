@@ -44,10 +44,12 @@ export type GithubPullRequestApi = {
     acceptMergedFallbackPR?: boolean
     currentHeadOid?: string | null
     wakeWslDistro?: boolean
+    userRefresh?: boolean
   }) => Promise<PRInfo | null>
   refreshPRNow: (args: {
     candidate: GitHubPRRefreshCandidate
     reason?: GitHubPRRefreshReason
+    userRefresh?: boolean
   }) => Promise<PRRefreshOutcome>
   enqueuePRRefresh: (args: {
     candidate: GitHubPRRefreshCandidate

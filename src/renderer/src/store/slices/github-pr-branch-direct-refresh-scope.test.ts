@@ -7,28 +7,30 @@ import {
   createTestStore,
   makePR,
   mockApi,
-  resetRemoteRuntimeMocks
+  resetRemoteRuntimeMocks,
+  runtimeEnvironmentCall
 } from './github-slice-test-harness'
 import type { AppState } from '../types'
+import { selectChecksPanelReview } from '../../components/right-sidebar/checks-panel-review'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import { getHostedReviewCacheKey } from './hosted-review-cache-identity'
 
+beforeEach(() => {
+  vi.clearAllMocks()
+  resetRemoteRuntimeMocks()
+  mockApi.gh.prForBranch.mockResolvedValue(null)
+  mockApi.gh.refreshPRNow.mockReset()
+  mockApi.gh.refreshPRNow.mockResolvedValue({ kind: 'no-pr', fetchedAt: Date.now() })
+  mockApi.hostedReview.forBranch.mockResolvedValue(null)
+  _clearGitHubPRRefreshStartedEntriesForTest()
+})
+
+afterEach(() => {
+  _clearGitHubPRRefreshStartedEntriesForTest()
+  vi.useRealTimers()
+})
+
 describe('createGitHubSlice.fetchPRForBranch', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    resetRemoteRuntimeMocks()
-    mockApi.gh.prForBranch.mockResolvedValue(null)
-    mockApi.gh.refreshPRNow.mockReset()
-    mockApi.gh.refreshPRNow.mockResolvedValue({ kind: 'no-pr', fetchedAt: Date.now() })
-    mockApi.hostedReview.forBranch.mockResolvedValue(null)
-    _clearGitHubPRRefreshStartedEntriesForTest()
-  })
-
-  afterEach(() => {
-    _clearGitHubPRRefreshStartedEntriesForTest()
-    vi.useRealTimers()
-  })
-
   it('lets a forced refresh bypass a non-forced inflight request and keeps the newer result', async () => {
     const store = createTestStore()
     const repoPath = '/repo'
@@ -480,3 +482,195 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     }
   })
 })
+
+// Explicit actions have a newer boundary than cache-strength upgrades.
+it.each([true, false])(
+  'a click supersedes an already forced poll (old first: %s)',
+  async (oldFirst) => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    const store = createTestStore()
+    const old = Promise.withResolvers<{
+      kind: 'found'
+      pr: ReturnType<typeof makePR>
+      fetchedAt: number
+    }>()
+    const fresh = Promise.withResolvers<typeof old.promise extends Promise<infer T> ? T : never>()
+    const open = makePR({ headSha: 'head-a' })
+    const merged = makePR({ state: 'merged', headSha: 'head-b' })
+    mockApi.gh.refreshPRNow.mockReturnValueOnce(old.promise).mockReturnValueOnce(fresh.promise)
+    const before = store
+      .getState()
+      .fetchPRForBranch('/repo', 'topic', { force: true, reason: 'visible' })
+    const intent = { force: true, reason: 'manual' as const, userRefresh: true }
+    const click = store.getState().fetchPRForBranch('/repo', 'topic', intent)
+    try {
+      expect(mockApi.gh.refreshPRNow).toHaveBeenCalledTimes(2)
+      const ordinary = store.getState().fetchPRForBranch('/repo', 'topic', { force: true })
+      if (oldFirst) {
+        old.resolve({ kind: 'found', pr: open, fetchedAt: 1 })
+        await before
+      }
+      fresh.resolve({ kind: 'found', pr: merged, fetchedAt: 2 })
+      expect(await click).toEqual(merged)
+      expect(await ordinary).toEqual(merged)
+      old.resolve({ kind: 'found', pr: open, fetchedAt: 1 })
+      await before
+      const pr = store.getState().prCache['/repo::topic']?.data
+      expect(
+        selectChecksPanelReview({
+          pr,
+          hostedReview: null,
+          linkedPR: null,
+          suppressedGitHubPR: null,
+          linkedGitLabMR: null,
+          linkedBitbucketPR: null,
+          linkedAzureDevOpsPR: null,
+          linkedGiteaPR: null
+        })?.state
+      ).toBe('merged')
+      expect(_getGitHubPRRequestGenerationCountForTest()).toBe(0)
+    } finally {
+      old.resolve({ kind: 'found', pr: open, fetchedAt: 1 })
+      fresh.resolve({ kind: 'found', pr: merged, fetchedAt: 2 })
+      await Promise.all([before, click])
+      vi.useRealTimers()
+    }
+  }
+)
+
+it('retains last good and records a failed click when IPC throws instead of reporting no PR', async () => {
+  const store = createTestStore()
+  const pr = makePR()
+  store.setState({ prCache: { '/repo::topic': { data: pr, fetchedAt: 1 } } })
+  mockApi.gh.refreshPRNow.mockRejectedValueOnce(new Error('transport disconnected'))
+  const intent = { force: true, userRefresh: true }
+  expect(await store.getState().fetchPRForBranch('/repo', 'topic', intent)).toEqual(pr)
+  expect(store.getState().prCache['/repo::topic']).toEqual({ data: pr, fetchedAt: 1 })
+  expect(store.getState().prRefreshStates['/repo::topic']).toMatchObject({
+    status: 'error',
+    errorType: 'unknown'
+  })
+})
+
+it.each(['network', 'rate_limited'] as const)(
+  'a refused %s click keeps last good against older direct and broadcast answers',
+  async (errorType) => {
+    const store = createTestStore()
+    const key = '/repo::failure'
+    const alias = { cacheKey: key, repoId: '', repoPath: '/repo', branch: 'failure' }
+    const pr = makePR()
+    const old = Promise.withResolvers<{ kind: 'found'; pr: typeof pr; fetchedAt: number }>()
+    store.setState({ prCache: { [key]: { data: pr, fetchedAt: 1 } } })
+    mockApi.gh.refreshPRNow
+      .mockImplementationOnce(() => {
+        store.getState().applyGitHubPRRefreshEvent({
+          sequence: 1,
+          aliases: [alias],
+          reason: 'visible',
+          status: 'in-flight'
+        })
+        return old.promise
+      })
+      .mockImplementationOnce(async () => {
+        const outcome = {
+          kind: 'upstream-error' as const,
+          errorType,
+          message: 'classified failure',
+          fetchedAt: 2
+        }
+        store
+          .getState()
+          .applyGitHubPRRefreshEvent({ sequence: 2, aliases: [alias], reason: 'manual', outcome })
+        return outcome
+      })
+    const before = store
+      .getState()
+      .fetchPRForBranch('/repo', 'failure', { force: true, reason: 'visible' })
+    const intent = { force: true, userRefresh: true }
+    const click = store.getState().fetchPRForBranch('/repo', 'failure', intent)
+    try {
+      expect(mockApi.gh.refreshPRNow).toHaveBeenCalledTimes(2)
+      expect(await click).toEqual(pr)
+      old.resolve({ kind: 'found', pr: makePR({ title: 'obsolete' }), fetchedAt: 3 })
+      await before
+      store.getState().applyGitHubPRRefreshEvent({
+        sequence: 1,
+        aliases: [alias],
+        reason: 'visible',
+        outcome: { kind: 'found', pr: makePR({ title: 'obsolete' }), fetchedAt: 3 }
+      })
+      expect(store.getState().prCache[key]).toEqual({ data: pr, fetchedAt: 1 })
+      expect(store.getState().prRefreshStates[key]).toMatchObject({ status: 'error', errorType })
+      const recovered = { kind: 'found' as const, pr: makePR({ state: 'merged' }), fetchedAt: 4 }
+      mockApi.gh.refreshPRNow.mockImplementationOnce(async () => {
+        store.getState().applyGitHubPRRefreshEvent({
+          sequence: 3,
+          aliases: [alias],
+          reason: 'manual',
+          outcome: recovered
+        })
+        return recovered
+      })
+      await store.getState().fetchPRForBranch('/repo', 'failure', intent)
+      expect(store.getState().prCache[key]?.data?.state).toBe('merged')
+      expect(store.getState().prRefreshStates[key]).toBeUndefined()
+    } finally {
+      old.resolve({ kind: 'found', pr, fetchedAt: 1 })
+      await Promise.all([before, click])
+    }
+  }
+)
+
+it.each(['classified', 'transport'] as const)(
+  'retains last good for a %s RPC failure on the existing operation',
+  async (failure) => {
+    const store = createTestStore()
+    const key = 'runtime:env-1::repo-1::topic'
+    const pr = makePR()
+    store.setState({
+      repos: [
+        {
+          id: 'repo-1',
+          path: '/repo',
+          displayName: 'repo',
+          badgeColor: '',
+          addedAt: 1,
+          executionHostId: 'runtime:env-1'
+        }
+      ],
+      prCache: { [key]: { data: pr, fetchedAt: 1 } }
+    })
+    if (failure === 'transport') {
+      runtimeEnvironmentCall.mockRejectedValueOnce(new Error('transport disconnected'))
+    } else {
+      runtimeEnvironmentCall.mockResolvedValueOnce({
+        id: 'rpc',
+        ok: true,
+        result: {
+          kind: 'upstream-error',
+          errorType: 'network',
+          message: 'classified',
+          fetchedAt: 2
+        },
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+    }
+    expect(
+      await store
+        .getState()
+        .fetchPRForBranch('/repo', 'topic', { force: true, repoId: 'repo-1', userRefresh: true })
+    ).toEqual(pr)
+    expect(runtimeEnvironmentCall).toHaveBeenCalledOnce()
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'github.prForBranch',
+        params: expect.objectContaining({ userRefresh: true })
+      })
+    )
+    expect(store.getState().prCache[key]).toEqual({ data: pr, fetchedAt: 1 })
+    expect(store.getState().prRefreshStates[key]).toMatchObject({
+      status: 'error',
+      errorType: failure === 'transport' ? 'unknown' : 'network'
+    })
+  }
+)

@@ -206,7 +206,8 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
           worktreeId: activeWorktreeId ?? undefined,
           linkedPRNumber: linkedPR,
           fallbackPRNumber: fallbackGitHubPRNumber,
-          reason: 'manual'
+          reason: 'manual',
+          userRefresh: true
         })
       } finally {
         if (startedPRRefreshToken) {
@@ -224,6 +225,10 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
         refreshedPR?.number ?? fallbackGitHubPRNumber
       ).catch(() => null)
       if (!isCurrentRequest()) {
+        return
+      }
+      if (!refreshedPR && useAppStore.getState().prRefreshStates[prCacheKey]?.status === 'error') {
+        refreshOutcome = 'error'
         return
       }
       if (refreshedPR) {

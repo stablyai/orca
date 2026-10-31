@@ -1,7 +1,8 @@
 import type {
   GitHubPRRefreshReason,
   GitHubPRRefreshSkippedReason,
-  PRRefreshErrorType
+  PRRefreshErrorType,
+  PRRefreshOutcome
 } from '../../../../shared/github/pull-request-refresh-types'
 import { capRecordByInsertionOrder } from './cache-policy'
 
@@ -15,6 +16,20 @@ export type PRRefreshState = {
   skippedReason?: GitHubPRRefreshSkippedReason
   nextAutoRetryAt?: number
   retryDisabledUntil?: number
+}
+
+export function prRefreshErrorState(
+  outcome: Extract<PRRefreshOutcome, { kind: 'upstream-error' }>
+): PRRefreshState {
+  return {
+    status: 'error',
+    reason: 'swr',
+    updatedAt: Date.now(),
+    message: outcome.message,
+    errorType: outcome.errorType,
+    nextAutoRetryAt: outcome.nextAutoRetryAt,
+    retryDisabledUntil: outcome.retryDisabledUntil
+  }
 }
 
 export type PRRefreshStateClearToken = {

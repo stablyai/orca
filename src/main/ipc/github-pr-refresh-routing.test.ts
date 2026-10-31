@@ -121,6 +121,40 @@ describe('registerGitHubHandlers', () => {
     expect(refreshPRNowMock).not.toHaveBeenCalled()
   })
 
+  it('forwards explicit intent on the invocation, never the reusable candidate', async () => {
+    registerGitHubHandlers(store as never, stats as never)
+    refreshPRNowMock.mockResolvedValue({ kind: 'no-pr', fetchedAt: 1 })
+    await handlers['gh:refreshPRNow'](null, {
+      candidate: {
+        cacheKey: 'click',
+        repoPath: '/workspace/repo',
+        repoId: 'repo-1',
+        branch: 'main',
+        repoKind: 'git'
+      },
+      reason: 'manual',
+      userRefresh: true
+    })
+    expect(refreshPRNowMock).toHaveBeenCalledWith(
+      expect.not.objectContaining({ userRefresh: true }),
+      'manual',
+      { userRefresh: true }
+    )
+    await handlers['gh:prForBranch'](null, {
+      repoPath: '/workspace/repo',
+      branch: 'main',
+      userRefresh: true
+    })
+    expect(mocks.client.getPRForBranch).toHaveBeenCalledWith(
+      '/workspace/repo',
+      'main',
+      null,
+      null,
+      null,
+      expect.objectContaining({ userRefresh: true })
+    )
+  })
+
   it('skips stale visible PR refresh candidates without rejecting the batch', async () => {
     registerGitHubHandlers(store as never, stats as never)
 
