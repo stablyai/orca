@@ -1,3 +1,4 @@
+import * as profile from '../../../../shared/agent-launch-profile'
 import { entry } from './source-control-agent-picker-test-fixture'
 import { readFileSync } from 'node:fs'
 
@@ -204,13 +205,14 @@ it.each(['claude', 'codex'] as const)(
       key: agent === 'claude' ? 'fastMode' : 'serviceTier',
       value: agent === 'claude' ? 'true' : 'fast'
     }
-    for (const events of [
+    const editOrders: AgentPickerEdit[][] = [
       [raw],
       [raw, permission],
       [permission, raw],
       [raw, speed],
       [speed, raw]
-    ]) {
+    ]
+    for (const events of editOrders) {
       const draft = events.reduce(
         (draft, edit) => applyAgentPickerEdit(inventory, draft, edit),
         sourceControlPickerDraft(selection, inventory, 'terminal')
@@ -368,7 +370,7 @@ it.each(['global', 'own repo', 'inherited repo'] as const)(
       expect(draft.choices.model).toBeUndefined()
       expect(draft.choices.options?.effort).toBeUndefined()
       const full = agentPickerLaunchInputs(draft, entry)
-      const parse = (value: string | undefined) => {
+      const parse = (value: string | null | undefined) => {
         const parsed = tokenizeStartupCommand(value ?? '', 'posix')
         if (!parsed.ok) {
           throw new Error(parsed.error)
@@ -648,13 +650,13 @@ it('orders raw and control picks once and gives one-shot and sparse consumers th
 it('bounds actual acceptance work and retained source independently of edit history', () => {
   const reconcile = vi.spyOn(reconciliation, 'reconcileAgentChoiceArgsDetailed')
   try {
-    const results = []
+    const results: { calls: number; size: number }[] = []
     for (const count of [10, 100]) {
       const selection = canonicalSourceControlActionSelection({ agentId: 'claude', agentArgs: '' })
       let draft = sourceControlPickerDraft(selection, entry, 'terminal')
       const acceptedSource = draft.recipeEdits?.selection
       reconcile.mockClear()
-      const pendingSizes = []
+      const pendingSizes: number[] = []
       for (let index = 0; index < count; index++) {
         draft = applyAgentPickerEdit(entry, draft, {
           kind: 'arguments',
@@ -685,5 +687,40 @@ it('bounds actual acceptance work and retained source independently of edit hist
     expect(results[0].calls).toBeLessThanOrEqual(30)
   } finally {
     reconcile.mockRestore()
+  }
+})
+
+it('preserves the public normalized Args property boundary and both complete route maps', () => {
+  const project = vi.spyOn(profile, 'projectAgentLaunchInputViews')
+  try {
+    for (const view of [
+      {},
+      { agentArgs: undefined },
+      { agentArgs: null },
+      { agentArgs: '' },
+      { agentArgs: '  --search  ' }
+    ]) {
+      const base = { effort: 'high' }
+      const chat = {}
+      project.mockReturnValue({ ...view, sessionOptions: base, chatSessionOptions: chat })
+      const output = projectSourceControlActionLaunch({ agentId: 'codex' }, 'codex', {
+        basePrompt: '  fix  '
+      })
+      expect(Object.hasOwn(output, 'agentArgs')).toBe(Object.hasOwn(view, 'agentArgs'))
+      expect(output.agentArgs).toBe(view.agentArgs?.trim())
+      expect(output.commandInput).toBe('fix')
+      expect(output.sessionOptions).toBe(base)
+      expect(output.chatSessionOptions).toBe(chat)
+      expect(output).toEqual({
+        commandInput: 'fix',
+        ...('agentArgs' in view ? { agentArgs: view.agentArgs?.trim() } : {}),
+        sessionOptions: { effort: 'high' },
+        chatSessionOptions: {},
+        requestedSurface: undefined,
+        selectedExecutionHostId: undefined
+      })
+    }
+  } finally {
+    project.mockRestore()
   }
 })

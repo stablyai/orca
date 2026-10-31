@@ -12,7 +12,7 @@ import { act } from 'react'
 import { fireEvent } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { readPiRpcModelOptions } from '../../../../main/pi/rpc-options'
+import { readPiRpcModelOptions } from '../../../../main/pi/rpc-model-options'
 
 import {
   agentPickerDraft,

@@ -1,3 +1,4 @@
+import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import {
   selectWorkspaceByHostTarget,
@@ -69,7 +70,7 @@ export function useAgentLaunchPickerInventory(
         hostId &&
         selectWorkspaceByHostTarget(
           { worktreesByRepo: worktrees ?? {}, folderWorkspaces: folders ?? [] },
-          { id: workspaceId, hostId }
+          hostWorktreeTarget({ id: workspaceId, hostId })
         )
       ),
     [workspaceId, hostId, worktrees, folders]

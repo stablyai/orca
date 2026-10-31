@@ -236,7 +236,7 @@ it.each([3, 30])(
             ? {
                 origin: 'probe',
                 fetchedAt: generation,
-                listingInProgress: phase === 'listing',
+                ...(phase === 'listing' ? { listingInProgress: true as const } : {}),
                 models: [
                   live,
                   {
@@ -379,8 +379,8 @@ it.each(['ordinary', 'search'] as const)(
   'keeps actual worktree + %s accepted/pending owners across W1/W2 and retires actual target death',
   async (kind) => {
     const previous = useAppStore.getState()
-    const first = makeWorktree({ id: 'repo1::/w1', path: '/w1', hostId: 'local' })
-    const second = makeWorktree({ id: 'repo1::/w2', path: '/w2', hostId: 'local' })
+    const first = makeWorktree({ repoId: 'repo1', id: 'repo1::/w1', path: '/w1', hostId: 'local' })
+    const second = makeWorktree({ repoId: 'repo1', id: 'repo1::/w2', path: '/w2', hostId: 'local' })
     useAppStore.setState({
       repos: [TEST_REPO],
       worktreesByRepo: { repo1: [first, second] },
@@ -465,6 +465,7 @@ it.each([3, 30])(
   async (generations) => {
     const previous = useAppStore.getState()
     const worktree = makeWorktree({
+      repoId: 'repo1',
       id: `repo1::/acquisition-${generations}`,
       path: '/acquisition',
       hostId: 'local'
@@ -618,7 +619,7 @@ it('uses definitive inactive model/effort evidence only and fences retired owner
   const scope = {}
   const target = { key: 'boundary-target', executionHostId: 'local' }
   const source = { ...entry, ownerKey: 'boundary-authority', draftTarget: target }
-  const initial = {
+  const initial: AgentPickerDraft = {
     agent: 'codex' as const,
     surface: 'terminal' as const,
     choices: { model: 'live', options: { effort: 'high' } }
@@ -659,8 +660,16 @@ it('uses definitive inactive model/effort evidence only and fences retired owner
     catalog: {
       origin: 'probe',
       fetchedAt: 2,
-      listingInProgress,
-      models: [{ id: 'live', label: 'Live', isDefault: true, efforts, effortsKnown }]
+      ...(listingInProgress ? { listingInProgress: true as const } : {}),
+      models: [
+        {
+          id: 'live',
+          label: 'Live',
+          isDefault: true,
+          efforts,
+          ...(!effortsKnown ? { effortsKnown: false as const } : {})
+        }
+      ]
     }
   })
   act(() => retireAgentPickerDrafts([catalog([])], scope))

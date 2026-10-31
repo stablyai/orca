@@ -230,7 +230,7 @@ export function inventoryModel(
     }
   }
 }
-export const inventoryCatalog: picker.AgentPickerEntry['catalog'] = {
+export const inventoryCatalog = {
   origin: 'probe',
   fetchedAt: 1,
   models: [
@@ -241,7 +241,7 @@ export const inventoryCatalog: picker.AgentPickerEntry['catalog'] = {
       efforts: [{ value: 'low', label: 'Low' }]
     }
   ]
-}
+} satisfies picker.AgentPickerEntry['catalog']
 
 export async function exerciseRetainedAgentPickerPublications({
   menu,

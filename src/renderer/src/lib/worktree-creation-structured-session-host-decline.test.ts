@@ -257,21 +257,25 @@ describe.each(['git', 'folder'] as const)('foreground %s implicit Chat decline',
           agentPermissionDefault: 'own'
         }
       }))
-      const projection = projectSourceControlActionLaunch(
-        {
-          agentId: 'codex',
-          ...(agentArgs !== undefined ? { agentArgs } : {}),
-          launchPreferences: {
+      const projection: Omit<
+        ReturnType<typeof projectSourceControlActionLaunch>,
+        'sessionOptions' | 'chatSessionOptions'
+      > & { sessionOptions?: Record<string, string>; chatSessionOptions?: Record<string, string> } =
+        projectSourceControlActionLaunch(
+          {
             agentId: 'codex',
-            modelSelection: {
-              base: 'default',
-              options: { effort: { agentId: 'codex', value: 'high' } }
+            ...(agentArgs !== undefined ? { agentArgs } : {}),
+            launchPreferences: {
+              agentId: 'codex',
+              modelSelection: {
+                base: 'default',
+                options: { effort: { agentId: 'codex', value: 'high' } }
+              }
             }
-          }
-        },
-        'codex',
-        { basePrompt: '' }
-      )
+          },
+          'codex',
+          { basePrompt: '' }
+        )
       expect(projection.sessionOptions).toEqual({ effort: 'high' })
       expect(projection.chatSessionOptions).toEqual(
         agentArgs?.includes('model=') ? { model: 'true', effort: 'high' } : undefined

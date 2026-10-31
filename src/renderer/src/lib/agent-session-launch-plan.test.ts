@@ -68,7 +68,11 @@ describe('planAgentSessionLaunch', () => {
     expect(mocks.resolveAgentLaunchRoute).toHaveBeenCalledOnce()
   })
 
-  it.each([undefined, {}, { model: 'true', effort: 'high' }])(
+  it.each<Readonly<Record<string, string>> | undefined>([
+    undefined,
+    {},
+    { model: 'true', effort: 'high' }
+  ])(
     'captures the owner route views and selects a complete Chat replacement (%j)',
     async (alternative) => {
       const projection = projectSourceControlActionLaunch(

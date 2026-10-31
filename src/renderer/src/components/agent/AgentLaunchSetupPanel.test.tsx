@@ -471,7 +471,13 @@ it.each(['chat', 'terminal'] as const)(
           cmdOverrides: { claude: 'claude' },
           platform: 'linux',
           shell: 'posix',
-          ...terminalSessionOptionInputs({ agent: 'claude', ...launch, shell: 'posix' })
+          ...terminalSessionOptionInputs({
+            agent: 'claude',
+            ...launch,
+            agentArgs: launch.agentArgs,
+            sessionOptions: launch.sessionOptions,
+            shell: 'posix'
+          })
         })
         expect(compiled.ok).toBe(true)
         if (!compiled.ok) {
@@ -717,7 +723,13 @@ it.each([
           cmdOverrides: { claude: 'claude' },
           platform: 'linux',
           shell: 'posix',
-          ...terminalSessionOptionInputs({ agent: 'claude', ...launch, shell: 'posix' })
+          ...terminalSessionOptionInputs({
+            agent: 'claude',
+            ...launch,
+            agentArgs: launch.agentArgs,
+            sessionOptions: launch.sessionOptions,
+            shell: 'posix'
+          })
         })
         expect(compiled.ok).toBe(true)
         if (!compiled.ok) {

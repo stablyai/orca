@@ -22836,6 +22836,7 @@
     }
   },
   "agentPicker": {
+    "workspaceStartupFailed": "Could not start {{agent}}. Check Arguments in this setup and try again.",
     "search": "Search agents and setups…",
     "configure": "Configure {{agent}}",
     "arguments": "Arguments",

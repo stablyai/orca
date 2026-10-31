@@ -22,9 +22,13 @@ export function registerActionEffortCreateTests(
   created: () => unknown
 ): void {
   const target = { kind: 'local' } as const
-  it.each(['local', 'runtime:owner'] as const)(
-    'carries a canonical raw source through actual admitted %s planning, create and recovery serialization',
-    async (host) => {
+  it.each([
+    { host: 'local', ordinary: false },
+    { host: 'runtime:owner', ordinary: false },
+    { host: 'local', ordinary: true }
+  ] as const)(
+    'carries captured raw source through actual admitted $host planning, create and recovery (ordinary=$ordinary)',
+    async ({ host, ordinary }) => {
       const { planAgentSessionLaunch } = await import('./agent-session-launch-plan')
       const { useAppStore } = await import('@/store')
       const { setLocalRuntimeCapabilitiesForTests } =
@@ -50,14 +54,21 @@ export function registerActionEffortCreateTests(
       const projection = projectSourceControlActionLaunch(
         {
           agentId: 'codex',
-          agentArgs: `-c 'model="true"'`,
-          launchPreferences: {
-            agentId: 'codex',
-            modelSelection: {
-              base: 'default',
-              options: { effort: { agentId: 'codex', value: 'high' } }
-            }
-          }
+          agentArgs: ordinary ? '--add-dir docs' : `-c 'model="true"'`,
+          launchPreferences: ordinary
+            ? {
+                agentId: 'codex',
+                model: 'astra',
+                options: { effort: 'low' },
+                permissionMode: 'ask'
+              }
+            : {
+                agentId: 'codex',
+                modelSelection: {
+                  base: 'default',
+                  options: { effort: { agentId: 'codex', value: 'high' } }
+                }
+              }
         },
         'codex',
         { basePrompt: 'Fix checks' }
@@ -82,15 +93,24 @@ export function registerActionEffortCreateTests(
           }
           await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
           const params = CreateIntentParams.parse(mocks.call.mock.calls[0][2])
+          const choices = ordinary
+            ? { model: 'astra', effort: 'low', permissionMode: 'ask' }
+            : { model: 'true', effort: 'high' }
           const expected = {
             ...(host === 'local' ? { permissionMode: 'ask' } : {}),
-            ...(emptyChat ? {} : { model: 'true', effort: 'high' })
+            ...(emptyChat ? {} : choices)
           }
           expect(params.options ?? {}).toEqual(expected)
           expect(params.firstMessage?.selection ?? {}).toEqual(
-            emptyChat ? {} : { model: 'true', effort: 'high' }
+            emptyChat
+              ? {}
+              : ordinary
+                ? { model: 'astra', effort: 'low' }
+                : { model: 'true', effort: 'high' }
           )
-          expect(plan.launchOptions).toEqual({ effort: 'high' })
+          expect(plan.launchOptions).toEqual(
+            ordinary ? { model: 'astra', effort: 'low', permissionMode: 'ask' } : { effort: 'high' }
+          )
           const state = getStructuredLaunchStateBySessionId(handle.sessionId)
           expect(state).toBeDefined()
           const persisted = readStructuredAgentLaunchRecord(handle.sessionId)

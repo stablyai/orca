@@ -321,7 +321,13 @@ it('bounds catalog projection independently of raw model operands and retains Co
           cmdOverrides: { codex: 'cx' },
           platform: 'linux',
           shell: 'posix',
-          ...terminalSessionOptionInputs({ agent: 'codex', ...launch, shell: 'posix' })
+          ...terminalSessionOptionInputs({
+            agent: 'codex',
+            ...launch,
+            agentArgs: launch.agentArgs,
+            sessionOptions: launch.sessionOptions,
+            shell: 'posix'
+          })
         })
         expect(compiled.ok).toBe(true)
         if (!compiled.ok) {
@@ -361,7 +367,13 @@ it('bounds catalog projection independently of raw model operands and retains Co
       cmdOverrides: { cursor: 'cursor-agent' },
       platform: 'linux',
       shell: 'posix',
-      ...terminalSessionOptionInputs({ agent: 'cursor', ...launch, shell: 'posix' })
+      ...terminalSessionOptionInputs({
+        agent: 'cursor',
+        ...launch,
+        agentArgs: launch.agentArgs,
+        sessionOptions: launch.sessionOptions,
+        shell: 'posix'
+      })
     })
     expect(compiled.ok).toBe(true)
     if (!compiled.ok) {

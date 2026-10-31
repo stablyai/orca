@@ -137,21 +137,25 @@ describe('agent launch caller routing', () => {
           answer = resolve
         })
       )
-      const projection = projectSourceControlActionLaunch(
-        {
-          agentId: 'codex',
-          agentArgs: `-c 'model="true"'`,
-          launchPreferences: {
+      const projection: Omit<
+        ReturnType<typeof projectSourceControlActionLaunch>,
+        'sessionOptions' | 'chatSessionOptions'
+      > & { sessionOptions?: Record<string, string>; chatSessionOptions?: Record<string, string> } =
+        projectSourceControlActionLaunch(
+          {
             agentId: 'codex',
-            modelSelection: {
-              base: 'default',
-              options: { effort: { agentId: 'codex', value: 'high' } }
+            agentArgs: `-c 'model="true"'`,
+            launchPreferences: {
+              agentId: 'codex',
+              modelSelection: {
+                base: 'default',
+                options: { effort: { agentId: 'codex', value: 'high' } }
+              }
             }
-          }
-        },
-        'codex',
-        { basePrompt: 'Fix checks' }
-      )
+          },
+          'codex',
+          { basePrompt: 'Fix checks' }
+        )
       expect(projection.sessionOptions).toEqual({ effort: 'high' })
       expect(projection.chatSessionOptions).toEqual({ model: 'true', effort: 'high' })
       const { useAppStore } = await import('@/store')
@@ -226,20 +230,24 @@ describe('agent launch caller routing', () => {
     mockAwaitCapabilities.mockReturnValue({ known: known.promise, stop })
     mockCreateSupport.mockResolvedValue({ supported: false })
     await useActualAdmission()
-    const projection = projectSourceControlActionLaunch(
-      {
-        agentArgs: `-c 'model="true"'`,
-        launchPreferences: {
-          agentId: 'codex',
-          modelSelection: {
-            base: 'default',
-            options: { effort: { agentId: 'codex', value: 'high' } }
+    const projection: Omit<
+      ReturnType<typeof projectSourceControlActionLaunch>,
+      'sessionOptions' | 'chatSessionOptions'
+    > & { sessionOptions?: Record<string, string>; chatSessionOptions?: Record<string, string> } =
+      projectSourceControlActionLaunch(
+        {
+          agentArgs: `-c 'model="true"'`,
+          launchPreferences: {
+            agentId: 'codex',
+            modelSelection: {
+              base: 'default',
+              options: { effort: { agentId: 'codex', value: 'high' } }
+            }
           }
-        }
-      },
-      'codex',
-      { basePrompt: 'Fix checks' }
-    )
+        },
+        'codex',
+        { basePrompt: 'Fix checks' }
+      )
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
     const result = launchAgentInNewTab({
       requestId: 'wait-q',

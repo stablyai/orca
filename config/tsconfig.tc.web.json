@@ -24,6 +24,8 @@
     "../src/preload/renderer-restart-wiring.ts",
     "../src/preload/runtime-environment-subscriptions.ts",
     "../src/preload/usage-provider-api.ts",
+    "../src/main/pi/rpc-model-schema.ts",
+    "../src/main/pi/rpc-model-options.ts",
     "../src/shared/**/*",
     "../mobile/src/worktree/worktree-agent-child-rows.ts",
     "../src/packages/process-host/src/__fixtures__/**/*",

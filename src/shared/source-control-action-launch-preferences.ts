@@ -1,6 +1,6 @@
 import { projectAgentLaunchInputViews } from './agent-launch-profile'
 import { reconcileAgentChoiceArgsDetailed } from './agent-choice-reconciliation'
-import type { AgentLaunchInputViews } from './agent-launch-choices'
+import type { AgentDedicatedChoices, AgentLaunchInputViews } from './agent-launch-choices'
 import {
   sourceControlActionRecipeEntry,
   type SelectedSourceControlActionRecipe
@@ -69,7 +69,10 @@ export function resolveSourceControlActionSessionOptions(
   return selectedActionSessionOptions(sourceControlActionRecipeEntry(recipe), agent)
 }
 
-function selectedActionSessionOptions(recipe: SelectedSourceControlActionRecipe, agent: TuiAgent) {
+function selectedActionSessionOptions(
+  recipe: SelectedSourceControlActionRecipe,
+  agent: TuiAgent
+): Readonly<Record<string, string>> | undefined {
   const { model, permission } = recipe.resolvedChoiceSources
   const literal = actionLiteralProjection(recipe, agent).choices
   const choices = actionModelSelectionChoices(model, agent)
@@ -94,7 +97,7 @@ function selectedActionInputViews(
   const selected = selectedActionSessionOptions(recipe, agent)
   const { model, permissionMode, ...options } = selected ?? {}
   const permission = agentPermissionChoices(agent).find((value) => value === permissionMode)
-  const choices = {
+  const choices: AgentDedicatedChoices & { options: Record<string, string> } = {
     ...(model ? { model } : {}),
     options,
     ...(permission ? { permissionMode: permission } : {})
@@ -176,6 +179,7 @@ export function projectSelectedSourceControlActionLaunch(
   liveChoice?: ActionLaunchLiveChoice
 ) {
   const views = selectedActionInputViews(recipe, agent, input.settings, 'settings' in input)
+  const { agentArgs, ...optionViews } = views
   return {
     commandInput: ('renderedPrompt' in input
       ? input.renderedPrompt
@@ -183,8 +187,8 @@ export function projectSelectedSourceControlActionLaunch(
           basePrompt: input.basePrompt
         })
     ).trim(),
-    ...views,
-    ...(views.agentArgs !== undefined ? { agentArgs: views.agentArgs?.trim() } : {}),
+    ...optionViews,
+    ...('agentArgs' in views ? { agentArgs: agentArgs?.trim() } : {}),
     requestedSurface:
       liveChoice?.requestedSurface ?? resolveSourceControlActionRequestedSurface(recipe, agent),
     selectedExecutionHostId: liveChoice?.executionHostId

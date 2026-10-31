@@ -134,7 +134,11 @@ describe('launchAgentInNewTab', () => {
         { basePrompt: '' }
       )
       const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-      const perform = async (input: Partial<Parameters<typeof launchAgentInNewTab>[0]>) => {
+      const perform = async (
+        input: Partial<
+          Extract<Parameters<typeof launchAgentInNewTab>[0], { agentSessionLaunchPlan?: undefined }>
+        >
+      ) => {
         mockCreateTab.mockClear()
         mockCreateWebRuntimeSessionTerminal.mockClear()
         const result = launchAgentInNewTab({
