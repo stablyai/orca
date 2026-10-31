@@ -1,3 +1,6 @@
+import { prepareTerminalAgentStopRelease } from './session-tabs/terminal-agent-stop-release'
+import { stopTerminalAgentForChat } from './session-tabs/terminal-agent-stop-for-chat'
+import type { ProcessTableRow } from '../../shared/process-table-snapshot'
 import type * as ProcessTableReader from '../../shared/process-table-snapshot-reader'
 import { hostSleepKey } from './terminal/stop/worktree-terminal-sleep-key'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -25,6 +28,15 @@ const snapshot = vi.hoisted(() => vi.fn())
 vi.mock('../../shared/process-table-snapshot-reader', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   getFreshShellForegroundSnapshot: snapshot
+}))
+const stopRows = vi.hoisted(() => vi.fn())
+vi.mock('../pty/pane-agent-identity-posix', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  readPosixPaneProcessRows: stopRows
+}))
+vi.mock('../pty/windows-pane-agent-stop-rows', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  readWindowsPaneAgentStopRows: stopRows
 }))
 const probe = vi.hoisted(() => vi.fn())
 vi.mock('../../shared/agent-process-presence-probe', () => ({ probeAgentProcessPresence: probe }))
@@ -685,4 +697,111 @@ describe('execution-host conversation writer inspection', () => {
     register('tab-b', 'i2')
     await expect(check('opencode')).resolves.toBeUndefined()
   })
+})
+
+it('keeps a scoped survivor release through create and successive acquisitions, revoking an opaque relaunch', async () => {
+  const store = writerLayoutStore()
+  class ReleaseRuntime extends OrcaRuntimeService {
+    ptyForRelease() {
+      const pty = this.ptysById.get('pty')
+      if (!pty) {
+        throw new Error('missing test pty')
+      }
+      return pty
+    }
+  }
+  const runtime = new ReleaseRuntime(store)
+  const leaf = '11111111-1111-4111-8111-111111111111'
+  const paneKey = `tab-a:${leaf}`
+  store.setWorkspaceSession?.(getDefaultWorkspaceSession())
+  bindPaneFirst(runtime, { worktreeId: 'workspace', tabId: 'tab-a', leafId: leaf, ptyId: 'pty' })
+  runtime.registerPty('pty', 'workspace', null, {
+    tabId: 'tab-a',
+    leafId: leaf,
+    incarnationId: 'i1'
+  })
+  const shell: ProcessTableRow = {
+    pid: 10,
+    ppid: 1,
+    command: 'bash',
+    startTime: '10',
+    stat: 'S',
+    pgid: 10,
+    tpgid: 10
+  }
+  const agent: ProcessTableRow = { ...shell, pid: 20, ppid: 10, command: 'codex', startTime: '20' }
+  const job: ProcessTableRow = {
+    ...shell,
+    pid: 30,
+    ppid: 10,
+    command: 'node server.js',
+    startTime: '30'
+  }
+  let processes = [shell, agent, job]
+  stopRows.mockImplementation(async () => processes)
+  const identity = (pid: number) => ({ pid, startTime: String(pid) })
+  const prepared = {
+    ...prepareTerminalAgentStopRelease({
+      pty: runtime.ptyForRelease(),
+      agent: 'codex',
+      providerSessionId: 'conversation',
+      current: () => true,
+      rows: processes,
+      readRows: async () => processes,
+      root: identity(10),
+      shell: identity(10),
+      stopRoot: identity(20),
+      observedAgent: identity(20),
+      platform: 'posix'
+    }),
+    hasAgent: true,
+    paused: false,
+    current: () => true,
+    beforeInterrupt: async () => {},
+    stop: async () => {
+      processes = [shell, job]
+      return 'exited' as const
+    }
+  }
+  await stopTerminalAgentForChat({
+    prepare: async () => prepared,
+    readRow: () => row,
+    predict: async () => {
+      expect(await prepared.released(true)).toBe(true)
+    },
+    interrupt: async () => ({ outcome: 'accepted' }),
+    subscribe: () => () => {}
+  })
+  runtime.recordCliWriterConversation({
+    paneKey,
+    connectionId: null,
+    receivedAt: 1,
+    stateStartedAt: 1,
+    providerSession: { key: 'session_id', id: 'conversation' },
+    payload: { state: 'done', prompt: '', agentType: 'codex' }
+  })
+  const census = (agentId: 'codex' | 'claude' = 'codex') =>
+    runtime.assertStructuredAdoptionTerminalWritersExited(agentId, 'conversation', {
+      workspaceId: 'workspace',
+      paneKey
+    })
+  await expect(census()).resolves.toBeUndefined()
+  await expect(census('claude')).rejects.toMatchObject(refusal)
+  processes = [shell, job, { ...job, pid: 40, ppid: 30, startTime: '40', command: 'worker' }]
+  await expect(census()).resolves.toBeUndefined()
+  processes = [shell, job, { ...job, pid: 41, ppid: 30, startTime: '41', command: 'worker' }]
+  await expect(census()).resolves.toBeUndefined()
+  processes.push({ ...job, pid: 50, startTime: '50', command: 'opaque-agent' })
+  await expect(census()).rejects.toMatchObject(refusal)
+  expect(runtime.ptyForRelease().cliAgentStopRelease).toBeUndefined()
+  prepared.commitRelease()
+  runtime.recordCliWriterConversation({
+    paneKey,
+    connectionId: null,
+    receivedAt: 2,
+    stateStartedAt: 2,
+    providerSession: { key: 'session_id', id: 'conversation' },
+    payload: { state: 'done', prompt: '', agentType: 'codex', sessionBoundary: true }
+  })
+  expect(runtime.ptyForRelease().cliAgentStopRelease).toBeUndefined()
 })

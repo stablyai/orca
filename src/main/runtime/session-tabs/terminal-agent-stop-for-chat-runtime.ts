@@ -26,7 +26,12 @@ export abstract class OrcaRuntimeWithStopTerminalAgentForChat extends OrcaRuntim
         reason: 'hostUnsupported'
       })
     }
-    const readRow = () => this.agentTransitions.latestRow(input.cliSource.paneKey)
+    const readRow = () =>
+      this.agentTransitions.latestRow(input.cliSource.paneKey) ??
+      this.getAgentStatusRowsForPane(input.cliSource.paneKey).toSorted(
+        (a, b) => b.receivedAt - a.receivedAt
+      )[0] ??
+      null
     const signal = AbortSignal.timeout(13_000)
     return stopTerminalAgentForChat({
       readRow,
@@ -39,7 +44,7 @@ export abstract class OrcaRuntimeWithStopTerminalAgentForChat extends OrcaRuntim
             agent: input.agent,
             resumeFrom: { providerSessionId: input.providerSessionId, cliSource: input.cliSource }
           },
-          { source: input.cliSource, prepared }
+          prepared.hasAgent ? { source: input.cliSource, prepared } : undefined
         ),
       interrupt: (beforeWrite) =>
         interruptWorkingAgent(this, () => readRow(), input.cliSource.paneKey, {

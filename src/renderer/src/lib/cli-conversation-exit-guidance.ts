@@ -4,9 +4,17 @@ import type { CliConversationRowAgent } from '../../../shared/structured-agent-c
 
 export function cliConversationExitGuidance(
   agent: CliConversationRowAgent,
-  fromTerminal = false
+  fromTerminal = false,
+  agentExited = false
 ): string {
   const values = { agent: agentLabel(agent) }
+  if (agentExited) {
+    return translate(
+      'components.native-chat.resumeInNewChat.otherProgramsAfterExit',
+      '{{agent}} has exited. Stop any other programs in this terminal or any other terminal running this conversation, then try again.',
+      values
+    )
+  }
   return fromTerminal
     ? translate(
         'components.native-chat.resumeInNewChat.exitUnconfirmedFromTerminal',

@@ -1,3 +1,7 @@
+import { paneAgentStopReleaseAdmits } from '../../pty/pane-agent-stop-release'
+import { readPosixPaneProcessRows } from '../../pty/pane-agent-identity-posix'
+import { readWindowsPaneAgentStopRows } from '../../pty/windows-pane-agent-stop-rows'
+import { chatAgentsShareConversations } from '../../../shared/structured-agent-cli-conversation-adoption'
 import { hostSleepKey } from '../terminal/stop/worktree-terminal-sleep-key'
 import {
   terminalLaunchFacts,
@@ -119,6 +123,18 @@ export abstract class OrcaRuntimeWithStructuredSessionCliWriterHost extends Orca
     if (!agent || !binding || !pty) {
       return
     }
+    const released = pty.cliAgentStopRelease
+    const processIdentity = event.agentPresence?.process
+    if (
+      released &&
+      !event.isReplay &&
+      (event.payload.sessionBoundary ||
+        (processIdentity &&
+          (processIdentity.pid !== released.stopped.pid ||
+            processIdentity.startTime !== released.stopped.startTime)))
+    ) {
+      delete pty.cliAgentStopRelease
+    }
     if (event.agentPresence?.process) {
       delete pty.savedTerminalLaunchResult
     }
@@ -214,13 +230,34 @@ export abstract class OrcaRuntimeWithStructuredSessionCliWriterHost extends Orca
           ),
         shellAlone: async (pane) => {
           if (
-            prediction &&
+            prediction?.prepared.hasAgent &&
             this.cliWriterTerminal({
               paneKey: prediction.source.paneKey,
               worktreeId: prediction.source.workspaceId
             })?.pane?.identity === pane.identity
           ) {
             return prediction.prepared.current() && (await prediction.prepared.released(true))
+          }
+          const ptyRecord = this.ptysById.get(pane.ptyId)
+          const released = ptyRecord?.cliAgentStopRelease
+          if (
+            released &&
+            released.incarnationId === pane.incarnationId &&
+            released.providerSessionId === providerSessionId &&
+            chatAgentsShareConversations(released.agent, agent)
+          ) {
+            const rows = await (process.platform === 'win32'
+              ? readWindowsPaneAgentStopRows()
+              : readPosixPaneProcessRows())
+            if (
+              paneAgentStopReleaseAdmits(rows, released.proof) &&
+              this.ptysById.get(pane.ptyId) === ptyRecord &&
+              ptyRecord.incarnationId === pane.incarnationId &&
+              ptyRecord.cliAgentStopRelease === released
+            ) {
+              return true
+            }
+            delete ptyRecord.cliAgentStopRelease
           }
           if (process.platform === 'win32') {
             const provider = getProviderForPty(pane.ptyId)

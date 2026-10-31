@@ -61,3 +61,23 @@ describe('exact pane agent selection', () => {
     ).toThrow('hook process changed')
   })
 })
+
+it('captures a pure script wrapper across its nested PTY without confusing it with the source shell', () => {
+  const wrapper = {
+    ...agent,
+    pid: 150,
+    ppid: 100,
+    command: '/usr/bin/script -q /dev/null',
+    startTime: '9:2'
+  }
+  const inner = { ...agent, ppid: 150, tty: '32', stat: 'Ss+', startTime: '9:3' }
+  const captured = capturePosixPaneAgent([shell, wrapper, inner], 100, 'claude', {
+    pid: 200,
+    platform: 'darwin',
+    startTime: inner.hookStartTime!
+  })
+  expect(captured?.stopRoot).toEqual({ pid: 150, startTime: '9:2' })
+  expect(captured?.targets?.map((row) => row.pid)).toEqual([150, 200])
+  expect(captured?.tty).toBe('16')
+  expect(captured?.agentTty).toBe('32')
+})

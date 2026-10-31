@@ -14,12 +14,15 @@ export async function reportCliChatResumeFailure(
   error: unknown,
   openOwner: boolean,
   target: RuntimeClientTarget,
-  stopped = false
+  stopped = false,
+  stopRequested = false
 ): Promise<void> {
   const refusal = structuredLaunchFailure(error)
   const values = { agent: agentLabel(source.agent) }
   const stopReason = refusal?.details?.reason
   const stopMessages: Record<string, string> = {
+    conversationHeldInOtherTerminal:
+      '{{agent}} is also running this conversation in another terminal. Quit it there, then try again.',
     agentPaused:
       '{{agent}} is paused in this terminal. Resume it there with fg or quit it, then try again.',
     conversationMoved: '{{agent}} moved to a different conversation in this terminal. Try again.',
@@ -52,7 +55,19 @@ export async function reportCliChatResumeFailure(
     )
     return
   }
+  if (stopRequested && !refusal) {
+    toast.error(
+      translate(
+        'components.native-chat.resumeInNewChat.stopContactUnconfirmed',
+        "Orca couldn't confirm that {{agent}} stopped. Check this terminal and the host connection, then try again.",
+        values
+      )
+    )
+    return
+  }
   const row = useAppStore.getState().agentStatusByPaneKey[source.paneKey]
+  const agentExited =
+    row?.providerSession?.id === source.providerSessionId && !!row.agentPresence?.ended
   const inThisTerminal =
     !!row && !row.agentPresence?.ended && row.providerSession?.id === source.providerSessionId
   if (
@@ -68,7 +83,7 @@ export async function reportCliChatResumeFailure(
       refusal.code === 'agent_session_conflict' &&
         refusal.details?.reason === 'conversationHeldElsewhere' &&
         !owner
-        ? cliConversationExitGuidance(source.agent, inThisTerminal)
+        ? cliConversationExitGuidance(source.agent, inThisTerminal, agentExited)
         : translate(
             'auto.components.right.sidebar.AiVaultPanel.resumeInChatConflict',
             'Another chat is already holding this conversation.'
@@ -81,7 +96,7 @@ export async function reportCliChatResumeFailure(
     refusal?.code === 'agent_session_operation_invalid' &&
     refusal.details?.reason === 'conversationOpenInTerminal'
   ) {
-    toast.error(cliConversationExitGuidance(source.agent, inThisTerminal))
+    toast.error(cliConversationExitGuidance(source.agent, inThisTerminal, agentExited))
     return
   }
   if (refusal?.code === 'agent_session_identity_required') {

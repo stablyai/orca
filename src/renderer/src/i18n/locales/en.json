@@ -19711,6 +19711,9 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "Update Orca on this host to continue in Chat UI.",
+        "conversationHeldInOtherTerminal": "{{agent}} is also running this conversation in another terminal. Quit it there, then try again.",
+        "stopContactUnconfirmed": "Orca couldn't confirm that {{agent}} stopped. Check this terminal and the host connection, then try again.",
+        "otherProgramsAfterExit": "{{agent}} has exited. Stop any other programs in this terminal or any other terminal running this conversation, then try again.",
         "exitUnconfirmedFromTerminal": "{{agent}} is still running this conversation in this terminal. Quit {{agent}} here, then try again.",
         "exitUnconfirmed": "{{agent}} is running this conversation in another terminal. Quit it there, then try again.",
         "notSavedYet": "{{agent}} hasn't saved this conversation yet. Try again after it replies.",

@@ -237,7 +237,9 @@ describe('CLI identity resume through the existing launch owner', () => {
     expect(mocks.call.mock.calls[0][1]).toBe('agentSession.stopTerminalAgentForChat')
     expect(tabs()).toEqual([])
     expect(mocks.toast).toHaveBeenCalledOnce()
-    expect(mocks.toast.mock.calls[0][0]).not.toContain('private')
+    expect(mocks.toast.mock.calls[0][0]).toBe(
+      "Orca couldn't confirm that Claude stopped. Check this terminal and the host connection, then try again."
+    )
   })
 
   it.each([true, false])(
@@ -674,4 +676,43 @@ describe('CLI identity resume through the existing launch owner', () => {
     )
     expect(useAppStore.getState().groupsByWorktree['wt-1'][0].recentTabIds ?? []).toEqual([])
   })
+})
+
+it('reports one actionable failure when chat creation fails after a proven stop', async () => {
+  mocks.stopCapability.mockResolvedValue(true)
+  mocks.call.mockImplementation(async (_target, method) =>
+    method === 'agentSession.stopTerminalAgentForChat'
+      ? { ok: true }
+      : {
+          ok: false,
+          refusal: { ...refuse('transcriptNotFound'), createAttemptRefusedBeforeCommit: true }
+        }
+  )
+  await runCliChatResume(SOURCE)
+  expect(mocks.call.mock.calls.map((call) => call[1])).toEqual([
+    'agentSession.stopTerminalAgentForChat',
+    'agentSession.create'
+  ])
+  expect(mocks.toast).toHaveBeenCalledOnce()
+  expect(mocks.toast.mock.calls[0][0]).toBe(
+    "Claude was stopped, but the chat couldn't start. Check the agent's installation and sign-in, then try Continue in Chat UI again."
+  )
+  expect(tabs()).toEqual([])
+})
+
+it('identifies an additional terminal holder without stopping the source', async () => {
+  mocks.stopCapability.mockResolvedValue(true)
+  mocks.call.mockResolvedValue({
+    ok: false,
+    refusal: {
+      code: 'agent_session_operation_invalid',
+      details: { reason: 'conversationHeldInOtherTerminal' }
+    }
+  })
+  await runCliChatResume(SOURCE)
+  expect(mocks.call).toHaveBeenCalledOnce()
+  expect(mocks.toast).toHaveBeenCalledExactlyOnceWith(
+    'Claude is also running this conversation in another terminal. Quit it there, then try again.'
+  )
+  expect(tabs()).toEqual([])
 })

@@ -1,3 +1,4 @@
+import type { PaneAgentStopRelease, PaneProcessIdentity } from '../pty/pane-agent-stop-release'
 import type { AgentStatus } from '../../shared/agent-detection'
 import type { AgentStatusState } from '../../shared/agent-status-types'
 import type {
@@ -89,6 +90,13 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   cliConversations?: {
     incarnationId: PtyIncarnationId | null
     byKey: Map<string, CliWriterConversation>
+  }
+  cliAgentStopRelease?: {
+    incarnationId: PtyIncarnationId | null
+    agent: string
+    providerSessionId: string
+    stopped: PaneProcessIdentity
+    proof: PaneAgentStopRelease
   }
   foregroundAgent: TerminalAgent | null
   connected: boolean

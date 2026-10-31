@@ -1,3 +1,4 @@
+import { paneAgentStopLineageRoot } from './pane-agent-stop-release'
 import { readFile, readdir } from 'node:fs/promises'
 import { loadLibprocAddon } from '../../shared/libproc-addon'
 import { formatLibprocStat, formatLstart } from '../../shared/libproc-ps-format'
@@ -12,6 +13,7 @@ import { isShellProcess } from '../../shared/shell-process-detection'
 import type { AgentProcessIdentity } from '../../shared/agent-process-presence'
 import type { TerminalAgent } from '../../shared/terminal-agent'
 import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
+import { chatAgentsShareConversations } from '../../shared/structured-agent-cli-conversation-adoption'
 import type { PaneAgentStopCapture } from './pane-agent-stop'
 
 export type PaneProcessRow = ProcessTableRow & { hookStartTime?: string }
@@ -128,16 +130,6 @@ export function paneHasNoRecognizedAgent(
   )
 }
 
-export function paneCanContinueInChat(
-  rows: readonly ProcessTableRow[],
-  shellPid: number,
-  excluding?: ReadonlySet<number>
-): boolean {
-  return collectDescendantsFromIndex(buildProcessTableIndex(rows), shellPid, (row) =>
-    row.stat.includes('s')
-  ).every((row) => excluding?.has(row.pid))
-}
-
 export function capturePosixPaneAgent(
   rows: readonly PaneProcessRow[],
   rootPid: number,
@@ -149,7 +141,7 @@ export function capturePosixPaneAgent(
     throw new Error('shell identity unavailable')
   }
   const index = buildProcessTableIndex(rows)
-  const descendants = collectDescendantsFromIndex(index, shell.pid, (row) => row.stat.includes('s'))
+  const descendants = collectDescendantsFromIndex(index, shell.pid)
   const recognized = descendants.filter((row) => recognizeAgentProcessFromCommandLine(row.command))
   const family = (row: ProcessTableRow) => {
     const name = recognizeAgentProcessFromCommandLine(row.command)?.agent
@@ -171,23 +163,42 @@ export function capturePosixPaneAgent(
   }
   if (
     roots.length !== 1 ||
-    recognizeAgentProcessFromCommandLine(roots[0].command)?.agent !== agentType
+    !chatAgentsShareConversations(
+      recognizeAgentProcessFromCommandLine(roots[0].command)?.agent ?? '',
+      agentType
+    )
   ) {
     throw agentSessionRefusalError('agent_session_operation_invalid', { reason: 'agentAmbiguous' })
   }
   const agent = roots[0]
-  if (!agent.startTime || !agent.pgid || agent.tty !== shell.tty) {
+  if (!agent.startTime || !agent.pgid || !agent.tty) {
     throw new Error('agent identity unavailable')
   }
-  if (
-    hookProcess &&
-    (hookProcess.pid !== agent.pid ||
-      rows.find((row) => row.pid === agent.pid)?.hookStartTime?.replace(/\s+/g, ' ') !==
-        hookProcess.startTime.replace(/\s+/g, ' '))
-  ) {
-    throw new Error('hook process changed')
+  if (hookProcess) {
+    const hooked = rows.find((row) => row.pid === hookProcess.pid)
+    if (
+      !hooked ||
+      !chatAgentsShareConversations(
+        recognizeAgentProcessFromCommandLine(hooked.command)?.agent ?? '',
+        agentType
+      ) ||
+      !(
+        hooked.pid === agent.pid ||
+        collectDescendantsFromIndex(index, agent.pid).some((row) => row.pid === hooked.pid)
+      ) ||
+      hooked.hookStartTime?.replace(/\s+/g, ' ') !== hookProcess.startTime.replace(/\s+/g, ' ')
+    ) {
+      throw new Error('hook process changed')
+    }
   }
-  const targets = [agent, ...collectDescendantsFromIndex(index, agent.pid)]
+  const stopRoot = paneAgentStopLineageRoot(rows, shell.pid, {
+    pid: agent.pid,
+    startTime: agent.startTime
+  })
+  const targets = [
+    index.byPid.get(stopRoot.pid)!,
+    ...collectDescendantsFromIndex(index, stopRoot.pid)
+  ]
   if (
     targets.some((row) => !row.startTime) ||
     !paneHasNoRecognizedAgent(rows, shell.pid, new Set(targets.map((row) => row.pid)))
@@ -197,9 +208,12 @@ export function capturePosixPaneAgent(
   return {
     shell: { pid: shell.pid, startTime: shell.startTime },
     agent: { pid: agent.pid, startTime: agent.startTime },
+    stopRoot,
+    targets: targets.map((target) => ({ pid: target.pid, startTime: target.startTime! })),
     agentType,
+    agentTty: agent.tty,
     tty: shell.tty,
     agentPgid: agent.pgid,
-    paused: /^[Tt]/.test(agent.stat)
+    paused: targets.some((target) => /^[Tt]/.test(target.stat))
   }
 }

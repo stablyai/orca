@@ -5,7 +5,9 @@ import {
 } from '../../shared/process-table-index'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import type { TerminalAgent } from '../../shared/terminal-agent'
+import { chatAgentsShareConversations } from '../../shared/structured-agent-cli-conversation-adoption'
 import { isShellProcess } from '../../shared/shell-process-detection'
+import { paneAgentStopLineageRoot } from './pane-agent-stop-release'
 import { paneHasNoRecognizedAgent } from './pane-agent-identity-posix'
 
 type Identity = { pid: number; startTime: string }
@@ -13,8 +15,11 @@ type Identity = { pid: number; startTime: string }
 export type PaneAgentStopCapture = {
   shell: Identity
   agent: Identity
+  stopRoot?: Identity
+  targets?: Identity[]
   agentType: TerminalAgent
   tty: string
+  agentTty?: string
   agentPgid: number
   paused: boolean
 }
@@ -84,18 +89,25 @@ export async function stopPaneAgentAndWait(
     const agent = initial.index.byPid.get(capture.agent.pid)
     const shellTree = collectDescendantsFromIndex(initial.index, capture.shell.pid)
     if (
-      !same(agent, capture.agent) ||
-      !agent ||
-      !shellTree.some((row) => row.pid === agent.pid) ||
-      agent.pgid !== capture.agentPgid ||
-      ttyName(agent.tty) !== ttyName(capture.tty) ||
-      recognizeAgentProcessFromCommandLine(agent.command)?.agent !== capture.agentType ||
+      (agent && !same(agent, capture.agent)) ||
+      (!agent && !capture.targets) ||
+      (agent && !capture.targets && !shellTree.some((row) => row.pid === agent.pid)) ||
+      (agent &&
+        ((!capture.targets &&
+          (agent.pgid !== capture.agentPgid ||
+            ttyName(agent.tty) !== ttyName(capture.agentTty ?? capture.tty))) ||
+          !chatAgentsShareConversations(
+            recognizeAgentProcessFromCommandLine(agent.command)?.agent ?? '',
+            capture.agentType
+          ))) ||
       !paneHasNoRecognizedAgent(
         initial.rows,
         capture.shell.pid,
         new Set([
-          agent.pid,
-          ...collectDescendantsFromIndex(initial.index, agent.pid).map((row) => row.pid)
+          capture.agent.pid,
+          ...(capture.targets ?? collectDescendantsFromIndex(initial.index, capture.agent.pid)).map(
+            (row) => row.pid
+          )
         ])
       )
     ) {
@@ -112,8 +124,24 @@ export async function stopPaneAgentAndWait(
       }
       targets.set(row.pid, { pid: row.pid, startTime: row.startTime })
     }
-    remember(agent)
-    collectDescendantsFromIndex(initial.index, agent.pid).forEach(remember)
+    const stopRoot = capture.stopRoot ?? capture.agent
+    if (agent && !capture.targets) {
+      const freshRoot = paneAgentStopLineageRoot(initial.rows, capture.shell.pid, capture.agent)
+      if (freshRoot.pid !== stopRoot.pid || freshRoot.startTime !== stopRoot.startTime) {
+        return 'unproven'
+      }
+    }
+    for (const target of capture.targets ?? []) {
+      targets.set(target.pid, target)
+    }
+    const root = initial.index.byPid.get(stopRoot.pid)
+    if (root) {
+      if (!same(root, stopRoot)) {
+        return 'unproven'
+      }
+      remember(root)
+      collectDescendantsFromIndex(initial.index, root.pid).forEach(remember)
+    }
     if (deps.interruptReply) {
       await bounded(deps.interruptReply())
     }

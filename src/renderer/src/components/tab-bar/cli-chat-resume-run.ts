@@ -94,6 +94,7 @@ export async function runCliChatResume(
   )
   let dispatched = false
   let stopped = false
+  let stopRequested = false
   const handoff = () => {
     if (dispatched) {
       return true
@@ -142,6 +143,7 @@ export async function runCliChatResume(
         notifyHostPermissionRefused(agent, permission.kind)
         return
       }
+      stopRequested = true
       const result = await waitForPromiseWithSignal(
         callStructuredAgentSession<
           { ok: true } | { ok: false; refusal: AgentSessionRefusalReference }
@@ -187,11 +189,18 @@ export async function runCliChatResume(
     }
     const result = await waitForPromiseWithSignal(launch.settlement, controller.signal)
     if (result.kind === 'failed' && !result.notified && pending.get(key) === controller) {
-      await reportCliChatResumeFailure(source, result.error, openOwner, target, stopped)
+      await reportCliChatResumeFailure(
+        source,
+        result.error,
+        openOwner,
+        target,
+        stopped,
+        stopRequested
+      )
     }
   } catch (error) {
     if (pending.get(key) === controller) {
-      await reportCliChatResumeFailure(source, error, openOwner, target, stopped)
+      await reportCliChatResumeFailure(source, error, openOwner, target, stopped, stopRequested)
     }
   } finally {
     clearTimeout(timer)

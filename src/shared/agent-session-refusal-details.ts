@@ -96,6 +96,7 @@ export const AGENT_SESSION_REFUSAL_REASONS = {
     'launchPreparationFailed',
     /** A terminal may still be writing the chat's conversation, so its agent did not start. */
     'conversationOpenInTerminal',
+    'conversationHeldInOtherTerminal',
     'conversationOpenElsewhere',
     /** The agent started, then Orca could not open the chat's conversation for it. */
     'attachFailed'

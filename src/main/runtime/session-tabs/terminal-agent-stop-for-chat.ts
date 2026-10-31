@@ -1,6 +1,9 @@
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status-ipc-payload'
 import { mainAgentState } from '../../../shared/main-agent-status'
-import { agentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
+import {
+  agentSessionRefusalError,
+  isAgentSessionRefusalError
+} from '../../../shared/agent-session-wire-refusals'
 
 export type TerminalAgentStopPreparation = {
   hasAgent: boolean
@@ -8,6 +11,7 @@ export type TerminalAgentStopPreparation = {
   current: () => boolean
   released: (predict?: boolean) => Promise<boolean>
   stop: () => Promise<'exited' | 'unproven'>
+  commitRelease: () => void
   beforeInterrupt: () => Promise<void>
 }
 
@@ -29,7 +33,23 @@ export async function stopTerminalAgentForChat(input: {
   if (prepared.paused) {
     throw agentSessionRefusalError('agent_session_operation_invalid', { reason: 'agentPaused' })
   }
-  await input.predict(prepared)
+  try {
+    await input.predict(prepared)
+  } catch (error) {
+    if (
+      prepared.hasAgent &&
+      isAgentSessionRefusalError(error) &&
+      error.refusal.code === 'agent_session_conflict' &&
+      error.refusal.details?.reason === 'conversationHeldElsewhere' &&
+      !error.refusal.details.owner &&
+      (await prepared.released(true))
+    ) {
+      throw agentSessionRefusalError('agent_session_operation_invalid', {
+        reason: 'conversationHeldInOtherTerminal'
+      })
+    }
+    throw error
+  }
   if (!prepared.current()) {
     throw unproven()
   }
@@ -79,5 +99,6 @@ export async function stopTerminalAgentForChat(input: {
   if ((await prepared.stop()) !== 'exited' || !prepared.current() || !(await prepared.released())) {
     throw unproven()
   }
+  prepared.commitRelease()
   return { ok: true }
 }

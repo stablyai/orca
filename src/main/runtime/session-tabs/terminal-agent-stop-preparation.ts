@@ -1,20 +1,16 @@
+import { prepareTerminalAgentStopRelease } from './terminal-agent-stop-release'
+import { windowsPaneAgentStopRows } from '../../pty/windows-pane-agent-stop-rows'
+import { paneAgentStopLineageRoot } from '../../pty/pane-agent-stop-release'
 import { OrcaRuntimeWithGetWorktreePs } from '../workspaces/workspace-process-listing'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import {
   captureWindowsPaneAgentStop,
-  stopWindowsPaneAgentAndWait,
-  windowsPaneAgentStopReleased
+  stopWindowsPaneAgentAndWait
 } from '../../pty/windows-pane-agent-stop'
 import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
 import type { CliWriterTerminal } from '../structured-agent-cli-writers'
 import {
-  buildProcessTableIndex,
-  collectDescendantsFromIndex
-} from '../../../shared/process-table-index'
-import {
   capturePosixPaneAgent,
-  paneCanContinueInChat,
-  paneHasNoRecognizedAgent,
   posixPaneShell,
   readPosixPaneProcessRows,
   samePaneProcess
@@ -115,11 +111,29 @@ export abstract class OrcaRuntimeWithTerminalAgentStopPreparation extends OrcaRu
             reason: captured.refusal
           })
         }
+        const rows = windowsPaneAgentStopRows(await captured.deps.readRows())
+        const stopRoot =
+          captured.agent && paneAgentStopLineageRoot(rows, captured.shell.pid, captured.agent)
+        const release = stopRoot
+          ? prepareTerminalAgentStopRelease({
+              pty,
+              agent: row.agentType,
+              providerSessionId: input.providerSessionId,
+              current: conversationCurrent,
+              rows,
+              readRows: async () => windowsPaneAgentStopRows(await captured.deps.readRows()),
+              root: captured.root,
+              shell: captured.shell,
+              stopRoot,
+              observedAgent: row.agentPresence?.process ?? captured.agent!,
+              platform: 'win32'
+            })
+          : { released: async () => false, commitRelease: () => {} }
         return {
+          ...release,
           hasAgent: !!captured.agent,
           paused: false,
           current: conversationCurrent,
-          released: (predict) => windowsPaneAgentStopReleased(captured, predict),
           beforeInterrupt: async () => {
             const fresh = await captureWindowsPaneAgentStop(request)
             if (
@@ -147,43 +161,31 @@ export abstract class OrcaRuntimeWithTerminalAgentStopPreparation extends OrcaRu
         throw new Error('shell unavailable')
       }
       const current = conversationCurrent
-      const released = async (predict = false) => {
-        const fresh = await readPosixPaneProcessRows()
-        const nowShell = fresh.find((item) => item.pid === shell.pid)
-        if (
-          !samePaneProcess(nowShell, { pid: shell.pid, startTime: shell.startTime! }) ||
-          !conversationCurrent()
-        ) {
-          return false
-        }
-        const excluded =
-          predict && captured
-            ? new Set(
-                fresh
-                  .filter((item) => item.pid === captured.agent.pid)
-                  .flatMap(() => {
-                    const index = buildProcessTableIndex(fresh)
-                    if (!samePaneProcess(index.byPid.get(captured.agent.pid), captured.agent)) {
-                      return []
-                    }
-                    return [
-                      captured.agent.pid,
-                      ...collectDescendantsFromIndex(index, captured.agent.pid).map(
-                        (item) => item.pid
-                      )
-                    ]
-                  })
-              )
-            : undefined
-        return predict
-          ? paneCanContinueInChat(fresh, shell.pid, excluded)
-          : paneHasNoRecognizedAgent(fresh, shell.pid)
+      const root = rows.find((item) => item.pid === entry.rootProcessId)
+      if (!root?.startTime) {
+        throw new Error('root identity unavailable')
       }
+      const stopRoot = captured && paneAgentStopLineageRoot(rows, shell.pid, captured.agent)
+      const release = stopRoot
+        ? prepareTerminalAgentStopRelease({
+            pty,
+            agent: row.agentType,
+            providerSessionId: input.providerSessionId,
+            current,
+            rows,
+            readRows: readPosixPaneProcessRows,
+            root: { pid: root.pid, startTime: root.startTime },
+            shell: { pid: shell.pid, startTime: shell.startTime },
+            stopRoot,
+            observedAgent: row.agentPresence?.process ?? captured!.agent,
+            platform: 'posix'
+          })
+        : { released: async () => false, commitRelease: () => {} }
       return {
+        ...release,
         hasAgent: !!captured,
         paused: captured?.paused ?? false,
         current: conversationCurrent,
-        released,
         beforeInterrupt: async () => {
           const fresh = await readPosixPaneProcessRows()
           const agent = captured && fresh.find((item) => item.pid === captured.agent.pid)

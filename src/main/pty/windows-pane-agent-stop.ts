@@ -1,3 +1,5 @@
+import { paneAgentStopLineageRoot } from './pane-agent-stop-release'
+import { windowsPaneAgentStopRows, windowsPaneRows } from './windows-pane-agent-stop-rows'
 import type { AgentProcessIdentity } from '../../shared/agent-process-presence'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { TerminalAgent } from '../../shared/terminal-agent'
@@ -8,10 +10,7 @@ import {
   recognizeAgentProcessFromCommandLine
 } from '../../shared/agent-process-recognition'
 import { isShellProcess } from '../../shared/shell-process-detection'
-import {
-  buildProcessTableIndex,
-  collectDescendantsFromIndex
-} from '../../shared/process-table-index'
+import { collectDescendantsFromIndex } from '../../shared/process-table-index'
 import { resolveWindowsForegroundIdentity } from '../providers/windows-agent-foreground-process'
 import { readWindowsConsoleAttachedProcessIds } from '../providers/windows-console-attached-processes'
 import {
@@ -71,21 +70,6 @@ async function bounded<T>(pending: Promise<T>, deadline: number): Promise<T> {
   return result
 }
 
-function paneRows(rows: WindowsProcessRow[], root: Identity) {
-  const index = buildProcessTableIndex(rows)
-  if (index.byPid.size !== rows.length || !same(index.byPid.get(root.pid), root)) {
-    throw new Error('pane root changed')
-  }
-  const children = collectDescendantsFromIndex(index, root.pid)
-  for (const child of children) {
-    const parent = index.byPid.get(child.ppid)
-    if (!parent || Number(identity(parent).startTime) > Number(identity(child).startTime)) {
-      throw new Error('parent identity unproven')
-    }
-  }
-  return { index, children }
-}
-
 export function windowsPaneAgentStopAvailable(): boolean {
   return (
     process.platform === 'win32' &&
@@ -112,7 +96,7 @@ export async function captureWindowsPaneAgentStop(
       return null
     }
     const root = identity(rootRow)
-    const { children, index } = paneRows(rows, root)
+    const { children, index } = windowsPaneRows(rows, root)
     const shells = isShellProcess(rootRow.name)
       ? [rootRow]
       : children.filter((row) => row.ppid === root.pid && isShellProcess(row.name))
@@ -159,14 +143,23 @@ export async function captureWindowsPaneAgentStop(
     if (
       input.hookProcess &&
       (input.hookProcess.platform !== 'win32' ||
-        input.hookProcess.pid !== agent.pid ||
-        input.hookProcess.startTime !== capture.agent.startTime)
+        ![agent, ...collectDescendantsFromIndex(index, agent.pid)].some(
+          (row) =>
+            row.pid === input.hookProcess?.pid &&
+            String(row.creationTimeMs) === input.hookProcess.startTime &&
+            chatAgentsShareConversations(recognize(row)?.agent ?? '', input.agent)
+        ))
     ) {
       return null
     }
+    const stopRoot = paneAgentStopLineageRoot(
+      windowsPaneAgentStopRows(rows),
+      shell.pid,
+      capture.agent
+    )
     capture.targets = [
-      { ...capture.agent, depth: 0 },
-      ...collectDescendantsFromIndex(index, agent.pid).map((row) => ({
+      { ...stopRoot, depth: 0 },
+      ...collectDescendantsFromIndex(index, stopRoot.pid).map((row) => ({
         ...identity(row),
         depth: row.depth
       }))
@@ -196,7 +189,7 @@ export async function windowsPaneAgentStopReleased(
       return false
     }
     const rows = await capture.deps.readRows()
-    const { index, children } = paneRows(rows, capture.root)
+    const { index, children } = windowsPaneRows(rows, capture.root)
     if (!same(index.byPid.get(capture.shell.pid), capture.shell)) {
       return false
     }
@@ -226,7 +219,7 @@ export async function stopWindowsPaneAgentAndWait(
     let absences = 0
     while (Date.now() < deadline) {
       const rows = await bounded(capture.deps.readRows(), deadline)
-      const { index, children } = paneRows(rows, capture.root)
+      const { index, children } = windowsPaneRows(rows, capture.root)
       if (!ownsPane() || !same(index.byPid.get(capture.shell.pid), capture.shell)) {
         return 'unproven'
       }

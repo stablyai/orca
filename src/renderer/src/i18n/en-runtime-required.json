@@ -1891,6 +1891,9 @@
         "ownerUnproven": "Orca couldn't confirm {{agent}} stopped in this terminal. Check the terminal, then try again.",
         "startFailedAfterStop": "{{agent}} was stopped, but the chat couldn't start. Check the agent's installation and sign-in, then try Continue in Chat UI again.",
         "resumeFailed": "{{agent}} couldn't continue in chat. Check this terminal and the host connection, then try again.",
+        "conversationHeldInOtherTerminal": "{{agent}} is also running this conversation in another terminal. Quit it there, then try again.",
+        "stopContactUnconfirmed": "Orca couldn't confirm that {{agent}} stopped. Check this terminal and the host connection, then try again.",
+        "otherProgramsAfterExit": "{{agent}} has exited. Stop any other programs in this terminal or any other terminal running this conversation, then try again.",
         "exitUnconfirmedFromTerminal": "{{agent}} is still running this conversation in this terminal. Quit {{agent}} here, then try again.",
         "exitUnconfirmed": "{{agent}} is running this conversation in another terminal. Quit it there, then try again."
       }

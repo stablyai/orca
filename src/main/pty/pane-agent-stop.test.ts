@@ -120,3 +120,52 @@ describe('stopPaneAgentAndWait', () => {
     expect(reusedSignals).toEqual(['SIGTERM'])
   })
 })
+
+it('stops an entire pure wrapper chain, retaining children captured before Escape', async () => {
+  vi.useFakeTimers()
+  const wrapper = {
+    ...agent,
+    pid: 150,
+    ppid: shell.pid,
+    startTime: 'wrapper',
+    stat: 'S',
+    command: 'npx'
+  }
+  const inner = { ...wrapper, pid: 160, ppid: 150, startTime: 'inner', command: 'node wrapper.js' }
+  let rows: ProcessTableRow[] = [
+    { ...shell, tpgid: shell.pgid },
+    wrapper,
+    inner,
+    { ...agent, ppid: 160, stat: 'S' }
+  ]
+  const signals: number[] = []
+  const wrapped = { ...capture, stopRoot: { pid: 150, startTime: 'wrapper' } }
+  const result = stopPaneAgentAndWait(wrapped, {
+    readRows: async () => rows,
+    ownsPane: () => true,
+    signal: (target) => {
+      signals.push(target.pid)
+      rows = rows.filter((row) => row.pid !== target.pid)
+    }
+  })
+  await vi.runAllTimersAsync()
+  expect(await result).toBe('exited')
+  expect(signals).toEqual([200, 160, 150])
+  rows = [
+    { ...shell, tpgid: shell.pgid },
+    { ...child, ppid: 1 }
+  ]
+  const retained = stopPaneAgentAndWait(
+    { ...capture, targets: [capture.agent, { pid: child.pid, startTime: child.startTime! }] },
+    {
+      readRows: async () => rows,
+      ownsPane: () => true,
+      signal: (target) => {
+        rows = rows.filter((row) => row.pid !== target.pid)
+      }
+    }
+  )
+  await vi.runAllTimersAsync()
+  expect(await retained).toBe('exited')
+  expect(rows).toEqual([{ ...shell, tpgid: shell.pgid }])
+})

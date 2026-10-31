@@ -34,6 +34,7 @@ describe('terminal stop admission order', () => {
       paused: reason === 'agentPaused',
       current: () => reason !== 'conversationMoved',
       released: async () => true,
+      commitRelease: () => {},
       stop,
       beforeInterrupt: async () => {}
     }
@@ -42,11 +43,9 @@ describe('terminal stop admission order', () => {
       state: reason === 'agentPaused' ? 'working' : 'done'
     }
     const expected =
-      reason === 'otherHolder'
-        ? 'agent_session_conflict'
-        : reason === 'transcriptNotFound'
-          ? 'agent_session_identity_required'
-          : 'agent_session_operation_invalid'
+      reason === 'transcriptNotFound'
+        ? 'agent_session_identity_required'
+        : 'agent_session_operation_invalid'
     await expect(
       stopTerminalAgentForChat({
         readRow: () => latest,
@@ -86,6 +85,7 @@ describe('terminal stop admission order', () => {
         paused: false,
         current: () => true,
         released: async () => true,
+        commitRelease: () => {},
         stop,
         beforeInterrupt: async () => {}
       }),
@@ -102,3 +102,81 @@ describe('terminal stop admission order', () => {
     expect(input.interrupt).toHaveBeenCalledOnce()
   })
 })
+
+it('mints a release only after a captured target and its descendants are proven exited', async () => {
+  for (const hasAgent of [false, true]) {
+    const commitRelease = vi.fn()
+    const prepared = {
+      hasAgent,
+      paused: false,
+      current: () => true,
+      released: async () => true,
+      stop: vi.fn(async () => 'exited' as const),
+      beforeInterrupt: async () => {},
+      commitRelease
+    }
+    await stopTerminalAgentForChat({
+      prepare: async () => prepared,
+      readRow: () => row,
+      predict: async () => {},
+      interrupt: async () => ({ outcome: 'accepted' }),
+      subscribe: () => () => {}
+    })
+    expect(commitRelease).toHaveBeenCalledTimes(hasAgent ? 1 : 0)
+    expect(prepared.stop).toHaveBeenCalledTimes(hasAgent ? 1 : 0)
+  }
+})
+
+it('fences a conversation that moves during preflight before any stop', async () => {
+  let current = true
+  const stop = vi.fn(async () => 'exited' as const)
+  const commitRelease = vi.fn()
+  await expect(
+    stopTerminalAgentForChat({
+      prepare: async () => ({
+        hasAgent: true,
+        paused: false,
+        current: () => current,
+        released: async () => true,
+        stop,
+        commitRelease,
+        beforeInterrupt: async () => {}
+      }),
+      readRow: () => row,
+      predict: async () => {
+        current = false
+      },
+      interrupt: async () => ({ outcome: 'accepted' }),
+      subscribe: () => () => {}
+    })
+  ).rejects.toMatchObject({ refusal: { code: 'agent_session_ownership_unknown' } })
+  expect(stop).not.toHaveBeenCalled()
+  expect(commitRelease).not.toHaveBeenCalled()
+})
+
+it.each(['unproven', 'survivorChanged'] as const)(
+  'never releases or opens chat when stop proof is %s',
+  async (result) => {
+    const commitRelease = vi.fn()
+    await expect(
+      stopTerminalAgentForChat({
+        prepare: async () => ({
+          hasAgent: true,
+          paused: false,
+          current: () => true,
+          released: async () => result !== 'survivorChanged',
+          stop: async () => (result === 'unproven' ? 'unproven' : 'exited'),
+          commitRelease,
+          beforeInterrupt: async () => {}
+        }),
+        readRow: () => row,
+        predict: async () => {},
+        interrupt: async () => ({ outcome: 'accepted' }),
+        subscribe: () => () => {}
+      })
+    ).rejects.toMatchObject({
+      refusal: { code: 'agent_session_ownership_unknown', details: { reason: 'ownerUnproven' } }
+    })
+    expect(commitRelease).not.toHaveBeenCalled()
+  }
+)
