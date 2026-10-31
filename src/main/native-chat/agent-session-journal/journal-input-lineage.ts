@@ -5,16 +5,10 @@ export type JournalInputContext = {
   basis: 'observed' | 'legacy'
   cut: number
 }
-export type JournalCardAlias = {
-  from: number
-  until?: number
-  coordinate: AgentJournalCursor | null
-  present: boolean
-}
 export type JournalCardLineage = {
   messageId: string
   introduced: number
-  aliases: JournalCardAlias[]
+  baseline?: { coordinate: AgentJournalCursor | null }
 }
 export type JournalInputLineage = { clock: number; cards: JournalCardLineage[] }
 
@@ -51,31 +45,16 @@ export function isInputLineage(value: unknown): value is JournalInputLineage {
       !card.messageId ||
       ids.has(card.messageId) ||
       !ordinal(card.introduced) ||
-      card.introduced > clock ||
-      !Array.isArray(card.aliases)
+      card.introduced > clock
     ) {
       return false
     }
     ids.add(card.messageId)
-    let until = card.introduced
-    return card.aliases.every((alias) => {
-      if (
-        !object(alias) ||
-        !ordinal(alias.from) ||
-        alias.from < until ||
-        alias.from > clock ||
-        !(alias.coordinate === null || isInputCoordinate(alias.coordinate)) ||
-        typeof alias.present !== 'boolean' ||
-        !(
-          alias.until === undefined ||
-          (ordinal(alias.until) && alias.until > alias.from && alias.until <= clock)
-        )
-      ) {
-        return false
-      }
-      until = alias.until ?? Infinity
-      return true
-    })
+    return (
+      card.baseline === undefined ||
+      (object(card.baseline) &&
+        (card.baseline.coordinate === null || isInputCoordinate(card.baseline.coordinate)))
+    )
   })
 }
 
@@ -93,26 +72,18 @@ export function queryInputContext<T>(
   return original ? merge(source, before(original)) : source
 }
 
-/** Scalar alias intervals, independent of bodies, holds and current display positions. */
+/** Initial source coordinates and introduction cuts never follow physical restatement rows. */
 export class JournalInputLineageOwner {
   readonly cards = new Map<string, JournalCardLineage>()
-  private protectedThrough = -1
   private base = 0
   clock = 0
 
   load(lineage: JournalInputLineage): void {
-    this.protectedThrough = lineage.clock
     this.base = lineage.clock
     this.clock = lineage.clock
     for (const card of lineage.cards) {
-      this.cards.set(card.messageId, {
-        ...card,
-        aliases: card.aliases.map((alias) => ({ ...alias }))
-      })
+      this.cards.set(card.messageId, { ...card })
     }
-  }
-  protect(cut: number): void {
-    this.protectedThrough = Math.max(this.protectedThrough, cut)
   }
   at(sequence: number): number {
     return this.base + sequence
@@ -121,107 +92,38 @@ export class JournalInputLineageOwner {
     this.clock = Math.max(this.clock, this.at(sequence))
   }
 
-  change(
-    messageId: string,
-    coordinate: AgentJournalCursor | null,
-    present: boolean,
-    sequence: number
-  ): boolean {
-    const cut = this.at(sequence)
-    const card = this.cards.get(messageId)
-    const prior = card?.aliases.at(-1)
-    if (
-      prior &&
-      prior.present === present &&
-      prior.coordinate?.epoch === coordinate?.epoch &&
-      prior.coordinate?.sequence === coordinate?.sequence
-    ) {
-      return false
+  change(messageId: string, coordinate: AgentJournalCursor | null, sequence: number): void {
+    if (!this.cards.has(messageId)) {
+      this.cards.set(messageId, {
+        messageId,
+        introduced: this.at(sequence),
+        baseline: { coordinate }
+      })
     }
-    if (prior && prior.from > this.protectedThrough) {
-      card!.aliases.pop()
-    } else if (prior) {
-      prior.until = cut
-    }
-    const alias = { from: cut, coordinate, present }
-    if (card) {
-      card.aliases.push(alias)
-    } else {
-      this.cards.set(messageId, { messageId, introduced: cut, aliases: [alias] })
-    }
-    return true
   }
-
   releaseHistory(keep: (id: string) => boolean): void {
-    this.protectedThrough = -1
     for (const [id, card] of this.cards) {
       if (!keep(id)) {
         this.cards.delete(id)
       } else {
-        card.aliases = card.aliases.slice(-1)
+        delete card.baseline
       }
     }
   }
-
   snapshot(
-    places: readonly { context: JournalInputContext; original?: AgentJournalCursor }[],
+    places: readonly { context: JournalInputContext }[],
     ids: ReadonlySet<string>
   ): JournalInputLineage {
-    const legacy = places.filter((place) => place.context.basis === 'legacy')
-    const cuts = legacy.map((place) => place.context.cut).sort((a, b) => a - b)
-    const bases = new Map(
-      legacy.map(({ context }) => [context.source.epoch, context.cut - context.source.sequence])
-    )
-    const exact = new Set(
-      legacy.flatMap(({ context, original }) =>
-        original && original.epoch !== context.source.epoch ? [original.epoch] : []
-      )
-    )
-    const hasCut = (from: number, until: number) => {
-      let low = 0,
-        high = cuts.length
-      while (low < high) {
-        const mid = (low + high) >>> 1
-        if (cuts[mid] < from) {
-          low = mid + 1
-        } else {
-          high = mid
-        }
-      }
-      return low < cuts.length && cuts[low] < until
-    }
+    const legacy = places.some((place) => place.context.basis === 'legacy')
     const cards: JournalCardLineage[] = []
     for (const card of this.cards.values()) {
-      if (!ids.has(card.messageId)) {
-        continue
+      if (ids.has(card.messageId)) {
+        cards.push({
+          messageId: card.messageId,
+          introduced: card.introduced,
+          ...(legacy && card.baseline ? { baseline: card.baseline } : {})
+        })
       }
-      const aliases = card.aliases.filter(
-        (alias) => hasCut(alias.from, alias.until ?? Infinity) || alias === card.aliases.at(-1)
-      )
-      const normalized: JournalCardAlias[] = []
-      for (const alias of aliases) {
-        const base = alias.coordinate ? bases.get(alias.coordinate.epoch) : undefined
-        const coordinate =
-          alias.coordinate &&
-          base !== undefined &&
-          !exact.has(alias.coordinate.epoch) &&
-          alias.coordinate.sequence <= alias.from - base
-            ? { ...alias.coordinate, sequence: 0 }
-            : alias.coordinate
-        const prior = normalized.at(-1)
-        if (
-          prior &&
-          prior.present === alias.present &&
-          prior.coordinate?.epoch === coordinate?.epoch &&
-          prior.coordinate?.sequence === coordinate?.sequence &&
-          !hasCut(prior.until ?? alias.from, alias.from)
-        ) {
-          prior.until = alias.until
-        } else {
-          normalized.push({ ...alias, coordinate })
-        }
-      }
-      cards.push({ ...card, aliases: normalized })
     }
     return { clock: this.clock, cards }
   }

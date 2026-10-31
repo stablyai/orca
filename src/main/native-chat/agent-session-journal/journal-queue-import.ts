@@ -61,9 +61,9 @@ function unconfirmedHandOff(
   | { attempt: string; holdReason?: undefined }
   | { attempt?: undefined; holdReason: string }
   | null {
-  const attempts = [...state.submissions.values()]
-    .filter((submission) => submission.queuedMessageId === row.messageId)
-    .sort((a, b) => (a.submittedSequence ?? 0) - (b.submittedSequence ?? 0))
+  const attempts = [...state.inputOrder.linkedTo(row.messageId)].sort(
+    (a, b) => (a.submittedSequence ?? 0) - (b.submittedSequence ?? 0)
+  )
   if (!attempts.some(handOffInDoubt)) {
     return null
   }
@@ -95,7 +95,10 @@ export class LegacyQueuedCards {
     owner: JournalReducerState
     key: string
     cards: readonly QueuedMessageRow[]
+    byId: ReadonlyMap<string, QueuedMessageRow>
     display?: JournalReducerState
+    displayThrough?: number
+    handedOff: readonly AgentJournalSubmission[]
   } | null = null
 
   constructor(private readonly deps: LegacyDeps) {}
@@ -105,8 +108,8 @@ export class LegacyQueuedCards {
     if (this.rows().length === 0) {
       return ''
     }
-    const { epoch, lastSequence } = this.deps.state()
-    return `${this.revision}:${epoch}:${lastSequence}`
+    const state = this.deps.state()
+    return `${this.revision}:${state.epoch}:${state.inputOrder.linkedVersion()}`
   }
 
   cards(): readonly QueuedMessageRow[] {
@@ -121,23 +124,38 @@ export class LegacyQueuedCards {
         const change = legacyQueuedChange(state, row)
         return change ? [queuedCardFromChange(state, row.messageId, change)] : []
       })
-      this.viewed = { owner: state, key, cards }
+      const handedOff = cards.flatMap((card) => {
+        const submission =
+          card.consumedAs === null ? undefined : state.submissions.get(card.consumedAs)
+        return submission && handOffInDoubt(submission) ? [submission] : []
+      })
+      this.viewed = {
+        owner: state,
+        key,
+        cards,
+        handedOff,
+        byId: new Map(cards.map((card) => [card.messageId, card]))
+      }
     }
     return this.viewed.cards
+  }
+
+  get(messageId: string): QueuedMessageRow | undefined {
+    this.cards()
+    return this.viewed?.byId.get(messageId)
   }
 
   // Failed adoption cannot hide spent sends; derive display changes only on copied state.
   displayState(): JournalReducerState {
     const state = this.deps.state()
-    const cards = this.cards()
-    if (this.viewed?.display) {
+    this.cards()
+    if (this.viewed?.display && this.viewed.displayThrough === state.lastSequence) {
       return this.viewed.display
     }
-    const handedOff = cards.flatMap((card) => {
-      const submission =
-        card.consumedAs === null ? undefined : state.submissions.get(card.consumedAs)
-      return submission && handOffInDoubt(submission) ? [{ ...submission }] : []
-    })
+    const handedOff = this.viewed?.handedOff ?? []
+    if (this.viewed) {
+      this.viewed.displayThrough = state.lastSequence
+    }
     if (handedOff.length === 0) {
       if (this.viewed) {
         this.viewed.display = state
@@ -150,7 +168,8 @@ export class LegacyQueuedCards {
       items: new Map(state.items),
       submissions: new Map(state.submissions)
     }
-    for (const submission of handedOff) {
+    for (const entry of handedOff) {
+      const submission = { ...entry }
       display.submissions.set(submission.clientMessageId, submission)
       foldQueuedHandOffInDoubt(display, submission)
     }

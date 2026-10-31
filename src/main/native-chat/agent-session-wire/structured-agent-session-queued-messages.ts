@@ -21,8 +21,6 @@ import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 import { QueuedMessageNotConsumableError } from '../agent-session-journal/queued-message-consume-error'
 import type { QueuedMessageRow } from '../agent-session-journal/queued-message-table'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
-import { structuredQueuePauses } from './structured-agent-session-queued-pause'
-import { nextSendableQueuedCard } from '../agent-session-journal/queued-message-pause'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { agentSessionAttachmentExpiredRefusal } from './structured-agent-session-turns'
 import { isAgentSessionAttachmentExpiredError } from '../agent-session-attachments/agent-session-attachment-claims'
@@ -38,12 +36,7 @@ function oldestActionableQueuedMessage(
   journal: Pick<AgentSessionJournal, 'queuedMessages'>,
   automatic: boolean
 ): QueuedMessageRow | null {
-  const rows = journal.queuedMessages.list()
-  if (!rows.some((row) => row.state === 'waiting')) {
-    return null
-  }
-  const edited = automatic ? journal.queuedMessages.editLeases.heldIds(rows) : undefined
-  return nextSendableQueuedCard(structuredQueuePauses(journal), rows, edited)
+  return journal.queuedMessages.nextInputCard(automatic)
 }
 
 /** Host-local gate shared by admission, drain and Send-now; only Send-now overrides working. */

@@ -155,6 +155,11 @@ export function replaceJournalEpoch(input: {
     applyJournalRow(state, row)
     rows.push(row)
   }
+  const deactivate = (id: string) => {
+    if (state.queue.cards.get(id)?.state !== 'dispatched') {
+      appendQueue(id, { op: 'withdrawn' })
+    }
+  }
   let activeWitness: (typeof witnesses extends Map<string, infer V> ? V : never) | undefined
   const rebuilt = new Map<string, number>()
   for (const submission of queued) {
@@ -162,7 +167,7 @@ export function replaceJournalEpoch(input: {
     const witness = place?.witness
     if (activeWitness !== witness) {
       if (activeWitness) {
-        appendQueue(activeWitness.messageId, { op: 'withdrawn' })
+        deactivate(activeWitness.messageId)
       }
       if (witness) {
         appendQueue(witness.messageId, queuedChangeOf(witness))
@@ -195,11 +200,11 @@ export function replaceJournalEpoch(input: {
     rows.push(row)
     rebuilt.set(submission.clientMessageId, row.seq)
     if (linked && linked !== activeWitness) {
-      appendQueue(linked.messageId, { op: 'withdrawn' })
+      deactivate(linked.messageId)
     }
   }
   if (activeWitness) {
-    appendQueue(activeWitness.messageId, { op: 'withdrawn' })
+    deactivate(activeWitness.messageId)
   }
   const rebase = journalQueueRebase(
     input.database.db,

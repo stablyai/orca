@@ -592,9 +592,7 @@ it('keeps ordering context additive and treats malformed optional facts as legac
     providerHandle: row.providerHandle,
     inputOrderLineage: {
       clock: 10,
-      cards: [
-        { messageId: 'C', introduced: 1, aliases: [{ from: 1, coordinate: null, present: true }] }
-      ]
+      cards: [{ messageId: 'C', introduced: 1, baseline: { coordinate: null } }]
     }
   }
   expect(parseJournalRow(JSON.stringify(epoch))).toMatchObject({
@@ -609,10 +607,7 @@ it('keeps ordering context additive and treats malformed optional facts as legac
         {
           messageId: 'C',
           introduced: 1,
-          aliases: [
-            { from: 1, until: 5, coordinate: null, present: true },
-            { from: 3, coordinate: null, present: true }
-          ]
+          baseline: { coordinate: { epoch: 'old', sequence: -1 } }
         }
       ]
     }

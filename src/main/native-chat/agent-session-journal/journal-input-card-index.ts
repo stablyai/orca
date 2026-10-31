@@ -12,11 +12,7 @@ import {
   mergeInputPlaces,
   type InputPlaceQuery
 } from './journal-input-place-index'
-import {
-  type JournalInputLineageOwner,
-  type JournalCardAlias,
-  queryInputContext
-} from './journal-input-lineage'
+import { type JournalInputLineageOwner, queryInputContext } from './journal-input-lineage'
 import { JournalInputDomainIndex } from './journal-input-domain-index'
 
 export class JournalInputCardIndex {
@@ -27,12 +23,34 @@ export class JournalInputCardIndex {
     string,
     {
       card: QueuedMessageRow
-      aliases: JournalCardAlias[]
       actionable: boolean
       handoff: boolean
     }
   >()
+  private overlayRows: readonly QueuedMessageRow[] = []
+  private overlays = new Map<string, QueuedMessageRow>()
+  overlay(state: JournalReducerState, rows: readonly QueuedMessageRow[]): void {
+    if (rows === this.overlayRows || (rows.length === 0 && this.overlays.size === 0)) {
+      return
+    }
+    this.ensure(state)
+    const next = new Map(rows.map((card) => [card.messageId, card]))
+    for (const card of this.overlays.values()) {
+      if (!next.has(card.messageId) && !state.queue.cards.has(card.messageId)) {
+        this.indexCard(state, { ...card, state: 'withdrawn' })
+      }
+    }
+    this.overlayRows = rows
+    this.overlays = next
+    for (const card of rows) {
+      if (!state.queue.cards.has(card.messageId)) {
+        this.lineage.change(card.messageId, card.queuedAt, state.lastSequence)
+        this.indexCard(state, card)
+      }
+    }
+  }
   private pauseKey: readonly unknown[] = []
+  private floor: { epoch: string; sequence: number } | null = null
   private pauses: readonly DerivedQueuePause[] = []
   private cleared = new Set<string>()
   constructor(private readonly lineage: JournalInputLineageOwner) {}
@@ -41,9 +59,16 @@ export class JournalInputCardIndex {
   }
   releaseHistory(): void {
     this.domains = undefined
-    for (const record of this.indexed.values()) {
-      record.aliases = this.lineage.cards.get(record.card.messageId)?.aliases ?? []
-    }
+  }
+  head(): QueuedMessageRow | undefined {
+    return this.index?.allPlaces().head
+  }
+  paused(card: QueuedMessageRow): boolean {
+    return (
+      card.state === 'waiting' &&
+      card.holdReason === null &&
+      (this.cleared.has(card.messageId) || Boolean(queuePauseHolding(this.pauses, card)))
+    )
   }
   queryCurrent(place: JournalInputPlace): InputPlaceQuery {
     return queryInputContext(
@@ -61,23 +86,30 @@ export class JournalInputCardIndex {
     }
     if (!this.domains) {
       this.domains = new JournalInputDomainIndex()
-      for (const record of this.indexed.values()) {
-        record.aliases = record.aliases.map((alias) => ({ ...alias }))
-        const { card, aliases, actionable, handoff } = record
-        for (const alias of aliases) {
-          this.domains.set(card, alias, actionable, handoff)
+      for (const { card, actionable, handoff } of this.indexed.values()) {
+        const source = this.lineage.cards.get(card.messageId)
+        if (source) {
+          this.domains.set(card, source, actionable, handoff)
         }
       }
     }
     return this.domains.query(place.context, place.original)
   }
 
-  ensure(state: JournalReducerState): void {
+  ensure(state: JournalReducerState, floor?: { epoch: string; sequence: number } | null): void {
+    if (floor !== undefined) {
+      this.floor = floor
+    }
+    floor = this.floor
     const marks = state.queuePauseMarks
     const lifted = Math.max(state.latestAcceptedTurnSequence, marks.resumedSequence)
+    const reopened = Math.max(
+      marks.reopenedSequence,
+      floor?.epoch === state.epoch ? floor.sequence : 0
+    )
     const key = [
       journalQueueStopHolds(marks, state.latestAcceptedTurnSequence) ? marks.latestStop : null,
-      marks.reopenedSequence > lifted ? marks.reopenedSequence : 0,
+      reopened > lifted ? reopened : 0,
       marks.cleared && !marks.cleared.lifted && marks.cleared.sequence > lifted
         ? marks.cleared
         : null
@@ -102,11 +134,16 @@ export class JournalInputCardIndex {
           ? [
               {
                 reason: 'restarted' as const,
-                since: { epoch: state.epoch, sequence: marks.reopenedSequence }
+                since: { epoch: state.epoch, sequence: reopened }
               }
             ]
           : [])
       ]
+      for (const card of this.overlays.values()) {
+        if (!state.queue.cards.has(card.messageId)) {
+          this.indexCard(state, card)
+        }
+      }
       for (const card of state.queue.cards.values()) {
         this.indexCard(state, card)
       }
@@ -133,27 +170,11 @@ export class JournalInputCardIndex {
     ) {
       return
     }
-    this.removeDomain(card.messageId)
-    this.lineage.change(
-      card.messageId,
-      card.queuedAt,
-      card.state !== 'withdrawn',
-      state.lastSequence
-    )
+    this.lineage.change(card.messageId, card.queuedAt, state.lastSequence)
     this.indexCard(state, card)
   }
 
-  private removeDomain(id: string): void {
-    const prior = this.indexed.get(id)
-    if (prior && this.domains) {
-      for (const alias of prior.aliases) {
-        this.domains.set(prior.card, alias, prior.actionable, prior.handoff, true)
-      }
-    }
-  }
-
   indexCard(state: JournalReducerState, card: QueuedMessageRow): void {
-    this.removeDomain(card.messageId)
     const attempt = card.consumedAs ? state.submissions.get(card.consumedAs) : undefined
     const cleared = this.cleared.has(card.messageId)
     const actionable =
@@ -163,24 +184,19 @@ export class JournalInputCardIndex {
       !queuePauseHolding(this.pauses, card)
     const handoff = attempt !== undefined && isQueuedAgentJournalSubmission(attempt)
     const lineage = this.lineage.cards.get(card.messageId)
-    const aliases = this.domains
-      ? (lineage?.aliases.map((alias) => ({ ...alias })) ?? [])
-      : (lineage?.aliases ?? [])
     this.currentCoordinates!.set(card, actionable, handoff)
     this.index!.set(card, actionable, handoff, {
       epoch: 'introduction',
       sequence: lineage?.introduced ?? this.lineage.at(state.lastSequence)
     })
+    if (this.domains && lineage) {
+      this.domains.set(card, lineage, actionable, handoff)
+    }
     if (card.state === 'withdrawn') {
       this.indexed.delete(card.messageId)
       return
     }
-    this.indexed.set(card.messageId, { card, aliases, actionable, handoff })
-    if (this.domains) {
-      for (const alias of aliases) {
-        this.domains.set(card, alias, actionable, handoff)
-      }
-    }
+    this.indexed.set(card.messageId, { card, actionable, handoff })
   }
 
   relation(card: QueuedMessageRow, place: JournalInputPlace): boolean {
@@ -191,26 +207,10 @@ export class JournalInputCardIndex {
     if (place.context.basis === 'observed') {
       return true
     }
-    const aliases = lineage.aliases
-    let low = 0,
-      high = aliases.length
-    while (low < high) {
-      const mid = (low + high) >>> 1
-      if (aliases[mid].from <= place.context.cut) {
-        low = mid + 1
-      } else {
-        high = mid
-      }
-    }
-    const alias = aliases[low - 1]
-    if (
-      !alias ||
-      (alias.until !== undefined && alias.until <= place.context.cut) ||
-      !alias.present
-    ) {
+    if (!lineage.baseline) {
       return false
     }
-    const coordinate = alias.coordinate
+    const coordinate = lineage.baseline.coordinate
     return queryInputContext(
       place.context,
       place.original,

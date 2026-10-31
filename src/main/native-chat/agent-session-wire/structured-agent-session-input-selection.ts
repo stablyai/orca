@@ -1,13 +1,6 @@
-import type {
-  AgentJournalSubmission,
-  AgentJournalCursor
-} from '../../../shared/agent-session-journal-types'
+import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { QueuedMessageRow } from '../agent-session-journal/queued-message-table'
-import {
-  nextSendableQueuedCard,
-  queuePauseHolding
-} from '../agent-session-journal/queued-message-pause'
 import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import { pendingPromptsAllUnanswerableHere } from '../../../shared/agent-session-approval-subject'
 
@@ -16,86 +9,46 @@ export type StructuredInputSelection =
   | { kind: 'submission'; submission: AgentJournalSubmission }
   | { kind: 'none' }
 
-const selections = new WeakMap<
-  AgentSessionJournal,
-  {
-    cards: readonly QueuedMessageRow[]
-    revision: number
-    editRevision: number
-    reopenFloor: AgentJournalCursor | null
-    selection: StructuredInputSelection
-  }
->()
-
 /** One live checkpoint owns automatic input order; debt alone is not execution. */
 export function selectStructuredAgentSessionInput(
   journal: AgentSessionJournal,
   currentInput?: string,
   unanswerable = false
 ): StructuredInputSelection {
-  const cards = journal.queuedMessages.list()
-  const revision = journal.inputOrder.version()
-  const editRevision = journal.queuedMessages.editLeases.version()
-  const reopenFloor = journal.reopenFloor()
-  const prior = selections.get(journal)
-  if (
-    !unanswerable &&
-    currentInput === undefined &&
-    prior?.cards === cards &&
-    prior.revision === revision &&
-    prior.editRevision === editRevision &&
-    prior.reopenFloor === reopenFloor
-  ) {
-    return prior.selection
-  }
-  const pauses = journal.queuedMessages.pauses()
-  const edited = journal.queuedMessages.editLeases.heldIds(cards)
-  const remember = (selection: StructuredInputSelection): StructuredInputSelection => {
-    if (!unanswerable && currentInput === undefined) {
-      selections.set(journal, {
-        cards,
-        revision,
-        editRevision: journal.queuedMessages.editLeases.version(),
-        reopenFloor,
-        selection
-      })
-    }
-    return selection
-  }
   const queued = journal.inputOrder.firstQueued()
   const current = currentInput ? journal.submission(currentInput) : undefined
-  let selected =
+  const selected =
     current?.dispatchState === 'pending' &&
     (!queued || current.submittedSequence! < queued.submittedSequence!)
       ? current
       : queued
-  const nextCard = nextSendableQueuedCard(pauses, cards, edited)
+  const nextCard = journal.queuedMessages.nextInputCard()
   if (!selected) {
-    return remember(nextCard ? { kind: 'card', card: nextCard } : { kind: 'none' })
+    return nextCard ? { kind: 'card', card: nextCard } : { kind: 'none' }
   }
   // Explicit card Send intentionally overrides the automatic queue place.
   const override = journal.inputOrder.explicitSend()
   if (override) {
-    return remember({ kind: 'submission', submission: override })
+    return { kind: 'submission', submission: override }
   }
   if (unanswerable) {
     return { kind: 'submission', submission: selected }
   }
   const predecessors = journal.inputOrder.predecessors(
-    journal.queuedMessages.displayState(),
+    journal.queuedMessages.inputState(),
     selected.clientMessageId
   )
   const handoff = predecessors.handoff?.consumedAs
   if (handoff) {
     const submission = journal.submission(handoff)
     if (submission) {
-      return remember({ kind: 'submission', submission })
+      return { kind: 'submission', submission }
     }
   }
-  if (predecessors.waiting && !queuePauseHolding(pauses, predecessors.waiting)) {
-    return remember(nextCard ? { kind: 'card', card: nextCard } : { kind: 'none' })
+  if (predecessors.head) {
+    return nextCard ? { kind: 'card', card: nextCard } : { kind: 'none' }
   }
-  return remember({ kind: 'submission', submission: selected })
+  return { kind: 'submission', submission: selected }
 }
 
 export function selectedStructuredSubmission(

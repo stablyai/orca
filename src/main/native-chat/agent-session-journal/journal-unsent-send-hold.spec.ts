@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentJournalMessageItem,
   AgentJournalSubmission,
@@ -371,32 +371,28 @@ export function registerJournalUnsentSendHoldTests(): void {
         await accept(earlier, 'A', { origin: 'client', source: USER_MESSAGE_SOURCE })
         await accept(earlier, 'B', { origin: 'client', source: USER_MESSAGE_SOURCE })
       })
-      // Simulate a crash after keeping A at a stale position but before settling B.
-      await interrupted.resolveDispatch(
-        {
-          clientMessageId: 'A',
-          state: 'rejected',
-          ...HOST_RESTARTED,
-          fence: 0,
-          recovered: true,
+      const resolve = interrupted.resolveDispatch.bind(interrupted)
+      const fault = vi
+        .spyOn(interrupted, 'resolveDispatch')
+        .mockImplementation((...args) =>
+          args[0].clientMessageId === 'B'
+            ? Promise.reject(new Error('keep and fallback unavailable'))
+            : resolve(...args)
+        )
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      try {
+        await expect(hold(interrupted)).rejects.toThrow('settling unsent sends failed')
+        expect(interrupted.submission('A')).toMatchObject({
+          dispatchState: 'rejected',
           keptAsQueuedMessageId: 'A'
-        },
-        () =>
-          interrupted.queuedMessages.plan([
-            {
-              messageId: 'A',
-              change: {
-                op: 'queued',
-                body: message('text of A'),
-                queuedAt: {
-                  epoch: 'epoch-1',
-                  sequence: interrupted.submission('A')!.acceptedSequence!
-                },
-                position: 5
-              }
-            }
-          ])
-      )
+        })
+        expect(interrupted.submission('B')?.dispatchState).toBe('pending')
+        expect(interrupted.queuedMessages.get('A')?.position).toBe(0)
+        expect(interrupted.queuedMessages.get('C')?.position).toBe(2)
+      } finally {
+        fault.mockRestore()
+        warn.mockRestore()
+      }
       await interrupted.close()
       const journal = await open()
       await hold(journal)

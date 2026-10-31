@@ -1,4 +1,9 @@
+import { journalInputIndexProbe } from '../agent-session-journal/journal-input-index-probe.test-support'
+import { JournalQueuedMessages } from '../agent-session-journal/journal-queued-messages'
+import { QueuedMessageEditLeases } from '../agent-session-journal/queued-message-edit-leases'
+import * as pause from '../agent-session-journal/queued-message-pause'
 import { expect, it, vi } from 'vitest'
+import { JournalInputCardIndex } from '../agent-session-journal/journal-input-card-index'
 import { JournalInputOrder } from '../agent-session-journal/journal-input-order'
 import { JournalInputPlaceIndex } from '../agent-session-journal/journal-input-place-index'
 import { JournalInputDomainIndex } from '../agent-session-journal/journal-input-domain-index'
@@ -48,39 +53,163 @@ it.each([10, 100])(
         nodes: 0,
         nodeReads: 0
       })
-    // Count production node reads; instrumentation discovers nodes using descriptors, never getters.
-    const seen = new WeakMap<object, Map<string, unknown>>()
-    const inspect = (node: unknown): void => {
-      if (typeof node !== 'object' || node === null) {
-        return
+    const consumers: Record<
+      string,
+      {
+        heads: number
+        lists: number
+        pauses: number
+        leases: number
+        gets: number
+        waitingRows: number
+        leaseRows: number
+        headVisits: number
+        predicates: number
+        indexedCards: number
       }
-      const prior = seen.get(node)
-      if (prior) {
-        inspect(prior.get('left'))
-        inspect(prior.get('right'))
-        return
+    > = {}
+    const upstream: Record<
+      string,
+      Record<string, { calls: number; returned: number; materialized: number }>
+    > = {}
+    const source = (): string => {
+      const stack = new Error('Attribute production queue reads').stack ?? ''
+      if (selecting || stack.includes('selectStructuredAgentSessionInput')) {
+        return 'selection'
       }
-      const values = new Map<string, unknown>()
-      seen.set(node, values)
-      metric().nodes++
-      for (const key of ['left', 'right', 'entry', 'result', 'height']) {
-        values.set(key, Object.getOwnPropertyDescriptor(node, key)?.value)
-        if (key === 'left' || key === 'right') {
-          inspect(values.get(key))
+      if (stack.includes('insert')) {
+        return 'insertion'
+      }
+      if (stack.includes('snapshot') || stack.includes('Snapshot')) {
+        return 'publication'
+      }
+      return 'other'
+    }
+    let selecting = 0
+    const seam = () =>
+      (consumers[phase] ??= {
+        heads: 0,
+        lists: 0,
+        pauses: 0,
+        leases: 0,
+        gets: 0,
+        waitingRows: 0,
+        leaseRows: 0,
+        headVisits: 0,
+        predicates: 0,
+        indexedCards: 0
+      })
+    const stackLimit = Error.stackTraceLimit
+    Error.stackTraceLimit = 40
+    const indexCard = JournalInputCardIndex.prototype.indexCard
+    const indexed = vi
+      .spyOn(JournalInputCardIndex.prototype, 'indexCard')
+      .mockImplementation(function (this: JournalInputCardIndex, ...args) {
+        if (selecting) {
+          seam().indexedCards++
         }
-        Object.defineProperty(node, key, {
-          configurable: true,
-          get: () => {
-            metric().nodeReads++
-            return values.get(key)
-          },
-          set: (next) => {
-            values.set(key, next)
+        return indexCard.apply(this, args)
+      })
+    const next = JournalQueuedMessages.prototype.nextInputCard
+    const head = vi
+      .spyOn(JournalQueuedMessages.prototype, 'nextInputCard')
+      .mockImplementation(function (this: JournalQueuedMessages, ...args) {
+        selecting++
+        seam().heads++
+        try {
+          return next.apply(this, args)
+        } finally {
+          selecting--
+        }
+      })
+    const list = JournalQueuedMessages.prototype.list
+    const lists = vi.spyOn(JournalQueuedMessages.prototype, 'list')
+    lists.mockImplementation(function (this: JournalQueuedMessages) {
+      const caller = source(),
+        before = this['viewed'],
+        result = list.call(this)
+      const callers = (upstream[phase] ??= {})
+      const row = (callers[caller] ??= { calls: 0, returned: 0, materialized: 0 })
+      row.calls++
+      row.returned += result.length
+      if (before !== this['viewed']) {
+        row.materialized += result.length
+      }
+      if (caller === 'selection') {
+        seam().lists++
+      }
+      return result
+    })
+    const derive = pause.deriveQueuePauses
+    const pauses = vi.spyOn(pause, 'deriveQueuePauses')
+    pauses.mockImplementation((...args) => {
+      if (source() === 'selection') {
+        seam().pauses++
+        seam().waitingRows += args[0].cards.length
+      }
+      return derive(...args)
+    })
+    const held = QueuedMessageEditLeases.prototype.heldIds
+    const leases = vi.spyOn(QueuedMessageEditLeases.prototype, 'heldIds')
+    leases.mockImplementation(function (this: QueuedMessageEditLeases, ...args) {
+      if (source() === 'selection') {
+        seam().leases++
+        seam().leaseRows += args[0]?.length ?? 0
+      }
+      return held.apply(this, args)
+    })
+    const pick = pause.nextSendableQueuedCard
+    const picks = vi
+      .spyOn(pause, 'nextSendableQueuedCard')
+      .mockImplementation((pauses, rows, held) => {
+        const counting = source() === 'selection'
+        const counted = new Proxy(rows, {
+          get(target, key, receiver) {
+            if (key === Symbol.iterator && counting) {
+              return function* () {
+                for (const row of target) {
+                  seam().headVisits++
+                  yield row
+                }
+              }
+            }
+            return Reflect.get(target, key, receiver)
           }
         })
+        return pick(pauses, counted, held)
+      })
+    const predicate = pause.queuePauseHolding
+    const predicates = vi.spyOn(pause, 'queuePauseHolding').mockImplementation((...args) => {
+      if (source() === 'selection') {
+        seam().predicates++
       }
-    }
+      return predicate(...args)
+    })
+    const get = JournalQueuedMessages.prototype.get
+    const gets = vi.spyOn(JournalQueuedMessages.prototype, 'get')
+    gets.mockImplementation(function (this: JournalQueuedMessages, ...args) {
+      if (selecting) {
+        seam().gets++
+      }
+      return get.apply(this, args)
+    })
+    const inspect = journalInputIndexProbe(['left', 'right', 'entry', 'result', 'height'], {
+      allocated: () => {
+        metric().nodes++
+      },
+      read: () => {
+        metric().nodeReads++
+      }
+    })
 
+    const boundaryCalls: Record<string, number> = {}
+    const predecessor = JournalInputOrder.prototype.predecessors
+    const predecessors = vi
+      .spyOn(JournalInputOrder.prototype, 'predecessors')
+      .mockImplementation(function (this: JournalInputOrder, ...args) {
+        boundaryCalls[phase] = (boundaryCalls[phase] ?? 0) + 1
+        return predecessor.apply(this, args)
+      })
     const set = JournalInputPlaceIndex.prototype.set
     const indexSet = vi.spyOn(JournalInputPlaceIndex.prototype, 'set').mockImplementation(function (
       this: JournalInputPlaceIndex,
@@ -291,7 +420,7 @@ it.each([10, 100])(
           new Set(journal.queuedMessages.list().map((card) => card.messageId))
         )
         expect(
-          envelope.cards.reduce((sum, card) => sum + card.aliases.length, 0)
+          envelope.cards.filter((card) => card.baseline !== undefined).length
         ).toBeLessThanOrEqual(2 * n + 4)
         phase = `output-replay-${pass}`
         const replay = loadTestJournal(rig.root, SESSION)!
@@ -356,6 +485,9 @@ it.each([10, 100])(
         const input = rig.dispatch.mock.calls[base + i]![0]
         const submission = await rig.submission(input.clientMessageId)
         actual.push(submission!.queuedMessageId!)
+        if (submission!.queuedMessageId === 'Q1') {
+          expect(input.body).toEqual(hostTestMessage(`Q1-edit-${n - 1}`))
+        }
         await rig.settleAccepted(input.clientMessageId, `actual-${i}`)
         expect(await rig.submission(input.clientMessageId)).toMatchObject({
           dispatchState: 'accepted'
@@ -382,7 +514,8 @@ it.each([10, 100])(
       for (let pass = 0; pass < 2; pass++) {
         for (const name of [`replacement-${pass}`, `output-replay-${pass}`]) {
           expect(phases[name].sets, name).toBeLessThanOrEqual(4 * n + 16)
-          expect(phases[name].queries, name).toBeLessThanOrEqual(n + 1)
+          // One fold query per admitted input; each actual consumer boundary call adds one point query.
+          expect(phases[name].queries, name).toBeLessThanOrEqual(n + (boundaryCalls[name] ?? 0))
           expect(phases[name].lineage, name).toBeLessThanOrEqual(2 * n + 4)
         }
       }
@@ -392,6 +525,22 @@ it.each([10, 100])(
       expect(phases.recovery.queries).toBe(2 * n)
       expect(phases.delivery.sets).toBeLessThanOrEqual(32 * n + 8)
       expect(phases.delivery.queries).toBe(0)
+      console.info('current-consumer-evidence', JSON.stringify({ n, consumers, upstream }))
+      for (const [name, count] of Object.entries(consumers)) {
+        expect(count.lists, name).toBe(0)
+        expect(count.pauses, name).toBe(0)
+        expect(count.leases, name).toBe(0)
+        expect(count.waitingRows, name).toBe(0)
+        expect(count.leaseRows, name).toBe(0)
+        expect(count.headVisits, name).toBe(0)
+        // Each head or effective-pause reindex evaluates at most one predicate per affected card.
+        expect(count.predicates, name).toBeLessThanOrEqual(count.heads + count.indexedCards)
+        // One latest-value get and one lease fingerprint get at most per head.
+        expect(count.gets, name).toBeLessThanOrEqual(2 * count.heads)
+      }
+      expect(consumers['edits-growth'].indexedCards).toBe(0)
+      expect(consumers['edits-growth'].heads).toBeGreaterThan(n)
+      console.info('current-consumer-counts', JSON.stringify({ n, consumers }))
       console.info(
         'ordered-place-counts',
         JSON.stringify({
@@ -404,6 +553,16 @@ it.each([10, 100])(
       )
     } finally {
       await rig.dispose()
+      Error.stackTraceLimit = stackLimit
+      indexed.mockRestore()
+      picks.mockRestore()
+      predicates.mockRestore()
+      predecessors.mockRestore()
+      head.mockRestore()
+      lists.mockRestore()
+      pauses.mockRestore()
+      leases.mockRestore()
+      gets.mockRestore()
       indexSet.mockRestore()
       indexQuery.mockRestore()
       domain.mockRestore()

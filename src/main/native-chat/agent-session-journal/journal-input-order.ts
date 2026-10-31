@@ -1,3 +1,4 @@
+import { JournalSubmissionLinks } from './journal-submission-links'
 import type {
   AgentJournalCursor,
   AgentJournalSubmission
@@ -24,6 +25,7 @@ export type JournalInputPlace = {
 
 /** Own admission places and shared command witnesses are reconstructed by the journal fold. */
 export class JournalInputOrder {
+  private readonly links = new JournalSubmissionLinks()
   private legacyPlaces = 0
   private readonly witnesses = new Map<string, number>()
   private readonly recoveryOwed = new Set<string>()
@@ -50,7 +52,7 @@ export class JournalInputOrder {
         this.lineage.cards.set(row.keptAsQueuedMessageId, {
           messageId: row.keptAsQueuedMessageId,
           introduced: place.context.cut,
-          aliases: []
+          baseline: { coordinate: place.coordinate }
         })
       }
     }
@@ -69,9 +71,6 @@ export class JournalInputOrder {
       source: coordinate,
       basis: 'legacy',
       cut: this.lineage.at(row.seq)
-    }
-    if (context.basis === 'legacy') {
-      this.lineage.protect(context.cut)
     }
     const original =
       context.basis === 'legacy' ? this.originalAcceptance?.(row.clientMessageId) : undefined
@@ -96,6 +95,16 @@ export class JournalInputOrder {
       this.witnesses.set(witness.messageId, (this.witnesses.get(witness.messageId) ?? 0) + 1)
     }
     this.places.set(row.clientMessageId, { ...place, ...(witness ? { witness } : {}) })
+  }
+
+  linkedVersion(): number {
+    return this.links.version()
+  }
+  linkedTo(id: string): Iterable<AgentJournalSubmission> {
+    return this.links.to(id)
+  }
+  overlay(state: JournalReducerState, rows: readonly QueuedMessageRow[]): void {
+    this.cards.overlay(state, rows)
   }
 
   markOpeningRecovery(): void {
@@ -145,6 +154,20 @@ export class JournalInputOrder {
   }
   version(): number {
     return this.revision
+  }
+
+  head(state: JournalReducerState, floor: AgentJournalCursor | null): QueuedMessageRow | undefined {
+    this.cards.ensure(state, floor)
+    const head = this.cards.head()
+    return head
+  }
+  paused(
+    state: JournalReducerState,
+    card: QueuedMessageRow,
+    floor: AgentJournalCursor | null
+  ): boolean {
+    this.cards.ensure(state, floor)
+    return this.cards.paused(card)
   }
 
   predecessors(state: JournalReducerState, id: string): InputPlaceQuery {
@@ -209,6 +232,7 @@ export class JournalInputOrder {
 
   private refresh(state: JournalReducerState, id: string): void {
     const entry = state.submissions.get(id)
+    this.links.refresh(id, entry)
     if (entry?.dispatchState === 'pending' || entry?.dispatchState === 'unknown') {
       if (this.unsettled.get(id) !== entry) {
         this.unsettled.set(id, entry)

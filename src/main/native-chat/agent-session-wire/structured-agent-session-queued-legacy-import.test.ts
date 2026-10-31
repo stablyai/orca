@@ -499,7 +499,8 @@ it.each([100, 1_000])('raw selection reuse: %i waiting cards', async (size) => {
     const turn = { provider: 'codex' as const, threadId: 'progress', turnId: 't', ordinal: 0 }
     await journal.appendItem(turn, message('progress'), threadWrite)
     feed.publish(SESSION, journal)
-    expect(visits).toBe(2 * size)
+    // Provider progress cannot change a legacy card's exact handoff classification.
+    expect(visits).toBe(0)
     expect(journal.publicRead().normalizationKey).toBe('')
     expect(journal.queuedMessages.list().filter((c) => c.state === 'waiting')).toHaveLength(size)
     for (const events of received) {

@@ -2,6 +2,7 @@ import type { AgentJournalCursor } from '../../../shared/agent-session-journal-t
 import type { QueuedMessageRow } from './queued-message-table'
 
 export type InputPlaceQuery = {
+  head?: QueuedMessageRow
   command?: QueuedMessageRow
   waiting?: QueuedMessageRow
   handoff?: QueuedMessageRow
@@ -20,6 +21,7 @@ const first = (a?: QueuedMessageRow, b?: QueuedMessageRow) =>
   !a || (b && b.position < a.position) ? b : a
 export function mergeInputPlaces(a: InputPlaceQuery, b: InputPlaceQuery): InputPlaceQuery {
   return {
+    head: first(a.head, b.head),
     command: first(a.command, b.command),
     waiting: first(a.waiting, b.waiting),
     handoff: first(a.handoff, b.handoff),
@@ -120,6 +122,9 @@ export class JournalInputPlaceIndex {
       sequence: coordinate?.sequence ?? 0,
       domain: coordinate?.epoch ?? '',
       position: card.position,
+      ...((card.state === 'waiting' && card.holdReason === null) || card.state === 'returned'
+        ? { head: card }
+        : {}),
       ...(actionable ? { waiting: card, ...(card.body.command ? { command: card } : {}) } : {}),
       ...(handoff ? { handoff: card } : {})
     }

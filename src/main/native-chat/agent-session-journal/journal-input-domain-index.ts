@@ -1,6 +1,6 @@
 import {
   queryInputContext,
-  type JournalCardAlias,
+  type JournalCardLineage,
   type JournalInputContext
 } from './journal-input-lineage'
 import {
@@ -14,68 +14,68 @@ import type { AgentJournalCursor } from '../../../shared/agent-session-journal-t
 type Node = { index: JournalInputPlaceIndex; left?: Node; right?: Node }
 const LIMIT = Number.MAX_SAFE_INTEGER
 
-/** Interval decomposition shares alias domains; a cut visits one logarithmic root-to-leaf path. */
+/** A fixed-width introduction prefix, with coordinate summaries on each of its 53 levels. */
 export class JournalInputDomainIndex {
   private readonly root: Node = { index: new JournalInputPlaceIndex('') }
 
   set(
     card: QueuedMessageRow,
-    alias: JournalCardAlias,
+    source: JournalCardLineage,
     actionable: boolean,
-    handoff: boolean,
-    remove = false
+    handoff: boolean
   ): void {
-    const update = (node: Node, low: number, high: number): void => {
-      if (alias.from >= high || (alias.until ?? LIMIT) <= low) {
-        return
-      }
-      if (alias.from <= low && (alias.until ?? LIMIT) >= high) {
-        node.index.set(
-          remove ? { ...card, state: 'withdrawn' } : card,
-          actionable,
-          handoff,
-          alias.coordinate
-        )
-        return
+    if (!source.baseline) {
+      return
+    }
+    let node = this.root,
+      low = 0,
+      high = LIMIT
+    while (true) {
+      node.index.set(card, actionable, handoff, source.baseline.coordinate)
+      if (high - low <= 1) {
+        break
       }
       const mid = low + Math.floor((high - low) / 2)
-      if (alias.from < mid) {
-        update((node.left ??= { index: new JournalInputPlaceIndex('') }), low, mid)
+      if (source.introduced < mid) {
+        node = node.left ??= { index: new JournalInputPlaceIndex('') }
+        high = mid
+      } else {
+        node = node.right ??= { index: new JournalInputPlaceIndex('') }
+        low = mid
       }
-      if ((alias.until ?? LIMIT) > mid) {
-        update((node.right ??= { index: new JournalInputPlaceIndex('') }), mid, high)
-      }
-      if (node.left?.index.isEmpty() && !node.left.left && !node.left.right) {
-        delete node.left
-      }
-      if (node.right?.index.isEmpty() && !node.right.left && !node.right.right) {
-        delete node.right
-      }
-    }
-    if (alias.present) {
-      update(this.root, 0, LIMIT)
     }
   }
 
   query(context: JournalInputContext, original?: AgentJournalCursor): InputPlaceQuery {
     let result: InputPlaceQuery = { position: -Infinity }
-    let node: Node | undefined = this.root
-    let low = 0,
-      high = LIMIT
-    while (node) {
-      const at = queryInputContext(
-        context,
-        original,
-        (coordinate) => node!.index.query(coordinate.epoch, coordinate.sequence),
-        () => node!.index.allPlaces(),
-        mergeInputPlaces
+    const append = (node: Node) => {
+      result = mergeInputPlaces(
+        result,
+        queryInputContext(
+          context,
+          original,
+          (coordinate) => node.index.query(coordinate.epoch, coordinate.sequence),
+          () => node.index.allPlaces(),
+          mergeInputPlaces
+        )
       )
-      result = mergeInputPlaces(result, at)
+    }
+    let node: Node | undefined = this.root,
+      low = 0,
+      high = LIMIT
+    while (node && low < context.cut) {
+      if (high <= context.cut) {
+        append(node)
+        break
+      }
       const mid = low + Math.floor((high - low) / 2)
-      if (context.cut < mid) {
+      if (context.cut <= mid) {
         node = node.left
         high = mid
       } else {
+        if (node.left) {
+          append(node.left)
+        }
         node = node.right
         low = mid
       }

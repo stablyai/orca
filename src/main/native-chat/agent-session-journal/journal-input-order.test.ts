@@ -1,3 +1,4 @@
+import { journalInputIndexProbe } from './journal-input-index-probe.test-support'
 import { JournalInputDomainIndex } from './journal-input-domain-index'
 import { JournalInputPlaceIndex } from './journal-input-place-index'
 import { insertCommandReceiptIfAbsent, readCommandReceipt } from './command-receipt-table'
@@ -572,10 +573,10 @@ it('retries partial keeps from committed facts and carries rank moves on the fir
 it.each([10, 100])(
   'indexes the initial legacy writer shape without promoting foreign/null comparison N=%i',
   async (n) => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-legacy-alias-'))
+    const root = await mkdtemp(join(tmpdir(), 'orca-legacy-baseline-'))
     const journals = createTrackedJournalOpener()
     const identity = {
-      sessionId: 'aliases',
+      sessionId: 'baseline',
       workspaceId: 'folder',
       hostId: 'ssh',
       agent: 'claude' as const,
@@ -588,8 +589,31 @@ it.each([10, 100])(
     })
     let journal = await journals.open({ identity, stateDirectory: root })
     const database = openTestJournalHostDatabase(root)
-    const domainSets = vi.spyOn(JournalInputDomainIndex.prototype, 'set')
-    const domainQueries = vi.spyOn(JournalInputDomainIndex.prototype, 'query')
+    const cost = { sets: 0, queries: 0, nodes: 0, reads: 0 }
+    const inspect = journalInputIndexProbe(['index', 'left', 'right'], {
+      allocated: () => {
+        cost.nodes++
+      },
+      read: () => {
+        cost.reads++
+      }
+    })
+    const set = JournalInputDomainIndex.prototype.set
+    const domainSets = vi
+      .spyOn(JournalInputDomainIndex.prototype, 'set')
+      .mockImplementation(function (this: JournalInputDomainIndex, ...args) {
+        cost.sets++
+        inspect(this['root'])
+        set.apply(this, args)
+        inspect(this['root'])
+      })
+    const query = JournalInputDomainIndex.prototype.query
+    const domainQueries = vi
+      .spyOn(JournalInputDomainIndex.prototype, 'query')
+      .mockImplementation(function (this: JournalInputDomainIndex, ...args) {
+        cost.queries++
+        return query.apply(this, args)
+      })
     const indexSets = vi.spyOn(JournalInputPlaceIndex.prototype, 'set')
     try {
       const { epoch, sequence } = journal.cursor()
@@ -698,7 +722,7 @@ it.each([10, 100])(
             replay.state.inputOrder.predecessors(replay.state, id)
           }
           expect(domainQueries).toHaveBeenCalledTimes(2 * n)
-          // Each independent fold adds at most one current command-witness transition beyond the normalized table. A safe-integer interval has <=106 canonical nodes.
+          // Each independent fold adds at most one command-witness transition beyond the frozen baseline; each update traverses at most 54 introduction nodes.
           expect(domainSets.mock.calls.length).toBeLessThanOrEqual(4 * (n + 6) + 2 * rows.length)
           expect(indexSets.mock.calls.length).toBeLessThanOrEqual(
             54 * domainSets.mock.calls.length + 8 * rows.length
@@ -722,7 +746,7 @@ it.each([10, 100])(
       indexSets.mockClear()
       await holdUnsentSends(journal, { fence: 0, hold: { cause: 'hostRestarted' } })
       expect(domainQueries).toHaveBeenCalledTimes(n)
-      // One finite-rank move per current card and one keep per input, each touching at most its two scalar aliases.
+      // One finite-rank move per current card and one keep per input, each updating its one frozen coordinate through at most 54 introduction nodes.
       expect(domainSets.mock.calls.length).toBeLessThanOrEqual(16 * (n + 6))
       expect(indexSets.mock.calls.length).toBeLessThanOrEqual(
         54 * domainSets.mock.calls.length + 16 * (n + 6)
@@ -749,6 +773,10 @@ it.each([10, 100])(
       expect(
         ranks.every((rank, i) => Number.isFinite(rank) && (i === 0 || rank > ranks[i - 1]))
       ).toBe(true)
+      // One point path allocates at most 54 nodes; point/prefix traversals read at most four fields per level.
+      expect(cost.nodes).toBeLessThanOrEqual(54 * cost.sets)
+      expect(cost.reads).toBeLessThanOrEqual(4 * 54 * (cost.sets + cost.queries))
+      console.info('frozen-baseline-nodes', JSON.stringify({ n, ...cost }))
       expect(journal.inputOrder['cards']['domains']).toBeUndefined()
       expect(journal.inputOrder['places'].size).toBe(0)
       expect(journal.inputOrder['witnesses'].size).toBe(0)

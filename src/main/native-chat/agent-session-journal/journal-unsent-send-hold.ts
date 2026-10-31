@@ -91,7 +91,7 @@ export async function holdUnsentSends(
       journal.itemBody(agentJournalSubmissionKey(submission.clientMessageId))
     )
   }))
-  const positions = headOfQueuePositions(journal, kept)
+  const positions = headOfQueuePositions(journal, kept, Boolean(input.unrun))
   const rejection = agentSessionFailureWords(agentSessionFailureFact(hold.cause), {
     surface: 'rejection'
   })
@@ -170,7 +170,8 @@ export async function holdUnsentSends(
 /** Merge logical places once, then materialize finite ranks with the first successful keep. */
 function headOfQueuePositions(
   journal: AgentSessionJournal,
-  batch: readonly { submission: AgentJournalSubmission; body: AgentJournalMessageItem | null }[]
+  batch: readonly { submission: AgentJournalSubmission; body: AgentJournalMessageItem | null }[],
+  unrun: boolean
 ): { placed: Map<string, number>; moves: QueuedMessagePositionMove[] } {
   const cards = journal.queuedMessages.list()
   const keptIds = new Set(
@@ -180,11 +181,6 @@ function headOfQueuePositions(
   const state = journal.queuedMessages.displayState()
   const forcedBatch = batch.some(({ submission }) =>
     journal.inputOrder.forced(submission.clientMessageId)
-  )
-  const firstCut = Math.min(
-    ...batch.flatMap(
-      ({ submission }) => journal.inputOrder.place(submission.clientMessageId)?.context.cut ?? []
-    )
   )
   const earlier: string[] = []
   const rest: (typeof cards)[number][] = []
@@ -203,12 +199,9 @@ function headOfQueuePositions(
       continue
     }
     if (
+      !forcedBatch &&
       card.state === 'waiting' &&
-      (!forcedBatch ||
-        (journal.inputOrder.lineage.cards.get(card.messageId)?.introduced ?? Infinity) <
-          firstCut) &&
-      (keptIds.has(card.messageId) ||
-        (!forcedBatch && card.queuedAt && card.queuedAt.epoch !== epoch))
+      ((unrun && keptIds.has(card.messageId)) || (card.queuedAt && card.queuedAt.epoch !== epoch))
     ) {
       earlier.push(card.messageId)
     } else {
@@ -217,17 +210,33 @@ function headOfQueuePositions(
   }
   const at = new Map<number, string[]>()
   const head: string[] = []
+  const firstCut = batch
+    .flatMap(
+      ({ submission }) => journal.inputOrder.place(submission.clientMessageId)?.context.cut ?? []
+    )
+    .reduce((a, b) => Math.min(a, b), Infinity)
   let previousBoundary = 0
+  for (let i = 0; i < rest.length; i++) {
+    if (
+      rest[i].state === 'waiting' &&
+      keptIds.has(rest[i].messageId) &&
+      (journal.inputOrder.lineage.cards.get(rest[i].messageId)?.introduced ?? -Infinity) < firstCut
+    ) {
+      previousBoundary = i + 1
+    }
+  }
   for (const { submission, body } of batch) {
     const id = body ? submission.clientMessageId : explicitHeads.get(submission.clientMessageId)
     if (!id || keptIds.has(id)) {
       continue
     }
-    if (!body || !journal.inputOrder.forced(submission.clientMessageId)) {
+    if (!body && previousBoundary > 0) {
       head.push(id)
       continue
     }
-    const after = journal.inputOrder.predecessors(state, submission.clientMessageId).position
+    const after = journal.inputOrder.forced(submission.clientMessageId)
+      ? journal.inputOrder.predecessors(state, submission.clientMessageId).position
+      : -Infinity
     let low = 0,
       high = rest.length
     while (low < high) {
