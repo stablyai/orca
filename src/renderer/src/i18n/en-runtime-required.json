@@ -55,6 +55,9 @@
   },
   "auto": {
     "components": {
+      "AgentStateDot": {
+        "interrupted": "Interrupted"
+      },
       "GitHubItemDialog": {
         "filesViewed_one": "{{viewed}} / {{count}} file viewed",
         "filesViewed_other": "{{viewed}} / {{count}} files viewed",
