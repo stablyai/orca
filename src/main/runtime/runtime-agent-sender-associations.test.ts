@@ -392,7 +392,11 @@ it('reports only worktrees whose scope changed since their last frame', () => {
 })
 
 it('keeps the last good publication when a read fails and retries on the next identity change', () => {
-  const h = harness(3)
+  const chats: ReturnType<typeof agentSessionConversationView>[] = []
+  const h = harness(3, {
+    getRecord: (id) => chats.find((r) => r.sessionId === id) ?? null,
+    listRecords: () => chats
+  })
   h.worker(0)
   const good = h.projection.build()
   const prepare = h.db.db.prepare.bind(h.db.db)
@@ -402,14 +406,31 @@ it('keeps the last good publication when a read fails and retries on the next id
     }
     return prepare(sql)
   })
-  vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
   h.worker(1)
   expect(h.projection.build()).toBe(good)
   expect(h.projection.build()).toBe(good)
   expect(identityReads(h).historyReads).toBe(2)
+  // A chat opens in the same refresh as another failing read: the chat is published beside the
+  // last good terminal rows.
+  const chat = testOrcaSessionId('33333333-3333-4333-8333-333333333333')
+  chats.push(
+    agentSessionConversationView(
+      agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId: chat }))
+    )
+  )
+  // tab-1 now runs under a fresh handle, so its terminal rows are read again, and fail.
+  h.handles.set('tab-1', 'term_fresh')
+  const warned = warn.mock.calls.length
+  const withChat = h.projection.build().associations
+  expect(withChat.filter((r) => !r.sessionId)).toEqual(good.associations)
+  expect(withChat.map((r) => r.identity)).toContain(`orca_session_id:${chat}`)
+  // The failure still reaches the build's warning.
+  expect(warn.mock.calls.length).toBe(warned + 1)
   vi.mocked(h.db.db.prepare).mockRestore()
   const third = h.worker(2)
   expect(h.located(`dispatch:${third.id}`)).toBe(pane('tab-2'))
+  expect(h.located(`orca_session_id:${chat}`)).toBeDefined()
 })
 
 it('publishes one principal per paired peer and attachments only while their worker runs there', () => {

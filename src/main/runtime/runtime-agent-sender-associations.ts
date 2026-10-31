@@ -247,16 +247,21 @@ export class RuntimeAgentSenderAssociations {
       this.chats = readAgentSenderSessions(records, this.work)
       this.chatKey = chatKey
     }
-    if (terminalChanged) {
-      this.readTerminals(db, generation?.principals ?? '', panes, terminalKey)
-    }
-    if (terminalChanged || chatsChanged) {
-      this.publisher.publish({
-        associations: [...this.terminal.associations, ...this.chats],
-        principals: db ? this.principals : [],
-        attachments: this.terminal.attachments,
-        ...(peerFingerprint ? { peerFingerprint } : {})
-      })
+    try {
+      if (terminalChanged) {
+        this.readTerminals(db, generation?.principals ?? '', panes, terminalKey)
+      }
+    } finally {
+      // A failed terminal read still publishes the chats read with it, beside the last good
+      // terminal rows; publishing unchanged rows moves no revision.
+      if (terminalChanged || chatsChanged) {
+        this.publisher.publish({
+          associations: [...this.terminal.associations, ...this.chats],
+          principals: db ? this.principals : [],
+          attachments: this.terminal.attachments,
+          ...(peerFingerprint ? { peerFingerprint } : {})
+        })
+      }
     }
   }
 
