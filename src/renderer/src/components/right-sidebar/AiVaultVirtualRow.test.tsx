@@ -322,7 +322,8 @@ describe('AiVaultVirtualRow CLI surface actions', () => {
   const owner = { sessionId: 'chat-1', workspaceId: 'worktree-1' }
 
   it.each(['claude', 'codex'] as const)(
-    'offers the ordinary CLI switch on an older host for a chat-owned %s row from both menus',
+    // A host that can't switch in place offers the copy instead of a switch it would refuse.
+    'offers the terminal copy on an older host for a chat-owned %s row from both menus',
     async (agent) => {
       useAppStore.setState((state) => ({
         settings: {
@@ -336,13 +337,14 @@ describe('AiVaultVirtualRow CLI surface actions', () => {
       const user = userEvent.setup()
 
       await user.click(screen.getByTestId('ai-vault-session-more-actions'))
-      await user.click(await screen.findByRole('menuitem', { name: 'Switch to CLI' }))
+      await user.click(await screen.findByRole('menuitem', { name: 'Resume in New Terminal' }))
       expect(onResumeInNewCli).toHaveBeenCalledExactlyOnceWith(session, 'worktree-1')
 
       fireEvent.contextMenu(screen.getByText('CLI session'))
-      await user.click(await screen.findByRole('menuitem', { name: 'Switch to CLI' }))
+      await user.click(await screen.findByRole('menuitem', { name: 'Resume in New Terminal' }))
       expect(onResumeInNewCli).toHaveBeenCalledTimes(2)
       expect(onResume).not.toHaveBeenCalled()
+      expect(screen.queryByRole('menuitem', { name: 'Switch to CLI' })).toBeNull()
     }
   )
 

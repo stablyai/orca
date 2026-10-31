@@ -13,7 +13,8 @@ const mocks = vi.hoisted(() => {
   const state: {
     subject: Record<string, unknown> | null
     cliSource: Record<string, unknown> | null
-  } = { subject: null, cliSource: null }
+    capability: boolean | undefined
+  } = { subject: null, cliSource: null, capability: true }
   return {
     ...state,
     pending: false,
@@ -21,8 +22,7 @@ const mocks = vi.hoisted(() => {
     runNativeChatCliFork: vi.fn(),
     runNativeChatCliSwitch: vi.fn(),
     runCliChatResume: vi.fn(async () => {}),
-    listSessions: vi.fn(),
-    capability: true as boolean | undefined
+    listSessions: vi.fn()
   }
 })
 

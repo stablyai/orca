@@ -7,10 +7,10 @@ import { inPlaceSwitchCapability } from '../../../../shared/structured-agent-cli
 import { makeTabSessionHistoryRow } from '../tab-bar/tab-session-history-test-fixture'
 import { switchAiVaultSessionToCli } from './ai-vault-session-in-place-switch'
 
-const mocks = vi.hoisted(() => ({
-  capabilities: null as readonly string[] | null,
-  runNativeChatCliSwitch: vi.fn(async () => {})
-}))
+const mocks = vi.hoisted(() => {
+  const state: { capabilities: readonly string[] | null } = { capabilities: null }
+  return Object.assign(state, { runNativeChatCliSwitch: vi.fn(async () => {}) })
+})
 
 vi.mock('@/runtime/local-runtime-capabilities', async (original) => ({
   ...(await original<object>()),

@@ -12,11 +12,10 @@ import { NativeChatTopRightControls } from './NativeChatTopRightControls'
 import { NativeChatResumeInCliButton } from './NativeChatResumeInCliButton'
 import type { NativeChatFind } from './use-native-chat-find'
 
-const mocks = vi.hoisted(() => ({
-  capability: undefined as boolean | undefined,
-  resolveIdentity: vi.fn(),
-  resolveSubject: vi.fn()
-}))
+const mocks = vi.hoisted(() => {
+  const state: { capability: boolean | undefined } = { capability: undefined }
+  return Object.assign(state, { resolveIdentity: vi.fn(), resolveSubject: vi.fn() })
+})
 
 vi.mock('@/lib/in-place-switch-support', async (original) => ({
   ...(await original<typeof InPlaceSwitchSupport>()),
