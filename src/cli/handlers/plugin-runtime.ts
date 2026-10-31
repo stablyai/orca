@@ -63,6 +63,32 @@ function nextStepsOf(data: unknown): string[] {
     : []
 }
 
+type PendingApproval = { pluginKey: string; approvalFingerprint: string }
+
+function pendingApprovalsOf(data: unknown): PendingApproval[] {
+  if (typeof data !== 'object' || data === null || !('approvals' in data)) {
+    return []
+  }
+  const { approvals } = data
+  return Array.isArray(approvals)
+    ? approvals.filter(
+        (entry): entry is PendingApproval =>
+          typeof entry === 'object' &&
+          entry !== null &&
+          typeof entry.pluginKey === 'string' &&
+          typeof entry.approvalFingerprint === 'string'
+      )
+    : []
+}
+
+/** `update --all` re-runs per plugin: the same command with the key in place of --all. */
+function perPluginApprovalCommands(ctx: HandlerContext, approvals: PendingApproval[]): string[] {
+  return approvals.map((approval) => {
+    const args = (ctx.rawArgs ?? []).map((arg) => (arg === '--all' ? approval.pluginKey : arg))
+    return `To approve ${approval.pluginKey}, run: ${approvalRerunCommand(args, approval.approvalFingerprint)}`
+  })
+}
+
 export function translatePluginRpcError(
   ctx: HandlerContext,
   method: string,
@@ -80,6 +106,14 @@ export function translatePluginRpcError(
     )
   }
   const fingerprint = approvalFingerprintOf(data)
+  const pending = pendingApprovalsOf(data)
+  if (APPROVAL_CODES.has(code) && fingerprint === null && pending.length > 0) {
+    const nextSteps = nextStepsOf(data).filter((step) => !step.startsWith('To approve '))
+    return new RuntimeClientError(code, message, {
+      ...(typeof data === 'object' ? data : {}),
+      nextSteps: [...nextSteps, ...perPluginApprovalCommands(ctx, pending)]
+    })
+  }
   if (!APPROVAL_CODES.has(code) || fingerprint === null || typeof data !== 'object') {
     return error
   }
@@ -137,7 +171,7 @@ export function devTargetParams(
     : { path: resolveHostPluginPath(ctx, target) }
 }
 
-function formatPluginRow(plugin: PluginHostListEntry): string {
+export function formatPluginRow(plugin: PluginHostListEntry): string {
   const tags = [plugin.execution, plugin.isDev ? 'dev' : null, plugin.official ? 'official' : null]
   return `${plugin.pluginKey} ${plugin.version}  ${plugin.status}  ${tags.filter(Boolean).join(', ')}${plugin.error ? `\n  ${plugin.error}` : ''}`
 }

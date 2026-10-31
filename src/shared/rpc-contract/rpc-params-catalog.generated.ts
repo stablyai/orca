@@ -515,12 +515,15 @@ import {
 import { WorkerStartParams } from './orchestration-worker-start-params'
 import { WorkerDispatchParams as WorkerDispatchParamsOfOrchestrationWorkerStopParams } from './orchestration-worker-stop-params'
 import {
+  PluginCatalogAddParams,
+  PluginCatalogRemoveParams,
   PluginDevEmitParams,
   PluginDevInspectParams,
   PluginDevLoadParams,
   PluginDevRequestParams,
   PluginDevUnloadParams,
   PluginGetLogsParams,
+  PluginInstallParams,
   PluginInvokeCommandParams,
   PluginOpenParams,
   PluginReadPanelEntryParams,
@@ -532,6 +535,8 @@ import {
   PluginShotEditorParams,
   PluginShotParams,
   PluginShotReplayParams,
+  PluginUninstallParams,
+  PluginUpdateParams,
   PluginsPanelActionParams
 } from './plugins-params'
 import {
@@ -1350,6 +1355,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'pairing.getEndpoints': PairingGetEndpointsParamsSchema,
   'pairing.provisionRelay': PairingProvisionRelayParamsSchema,
   'pairing.registerDeviceKey': RegisterDeviceKeyParamsSchema,
+  'plugins.catalogAdd': PluginCatalogAddParams,
+  'plugins.catalogList': null,
+  'plugins.catalogRemove': PluginCatalogRemoveParams,
   'plugins.consent': PluginRpcConsentParams,
   'plugins.devEmit': PluginDevEmitParams,
   'plugins.devHook': PluginDevEmitParams,
@@ -1358,6 +1366,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'plugins.devRequest': PluginDevRequestParams,
   'plugins.devUnload': PluginDevUnloadParams,
   'plugins.getLogs': PluginGetLogsParams,
+  'plugins.install': PluginInstallParams,
   'plugins.invokeCommand': PluginInvokeCommandParams,
   'plugins.list': null,
   'plugins.open': PluginOpenParams,
@@ -1371,6 +1380,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'plugins.shotChrome': PluginShotChromeParams,
   'plugins.shotEditor': PluginShotEditorParams,
   'plugins.shotReplay': PluginShotReplayParams,
+  'plugins.uninstall': PluginUninstallParams,
+  'plugins.update': PluginUpdateParams,
   'preflight.check': PreflightCheck,
   'preflight.detectAgents': PreflightProjectAgentDetection,
   'preflight.detectRemoteAgents': PreflightDetectRemoteAgents,

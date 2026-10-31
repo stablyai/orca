@@ -25,6 +25,7 @@ import { clearPluginFrameStorage } from '../plugins/panels/plugin-frame-guest-se
 import { setPluginServiceForRpc } from '../runtime/rpc/methods/plugins/plugins'
 import { bindPluginDesktopViews } from '../plugins/view/plugin-view-desktop-binding'
 import { openPluginFrameGuestDevTools } from '../plugins/panels/plugin-frame-guest-diagnostics'
+import { setPluginInstallServicesForRpc } from '../runtime/rpc/methods/plugins/plugin-install-methods'
 import {
   normalizePluginConsents,
   normalizePluginIdList
@@ -251,6 +252,16 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
     openFrameDevTools: openPluginFrameGuestDevTools
   })
   bindPluginDesktopViews(state.isServeMode, pluginService, () => state.mainWindow)
+  setPluginInstallServicesForRpc({
+    pluginService,
+    catalogs: {
+      marketplace: state.pluginMarketplaceService,
+      installer: state.pluginMarketplaceInstaller
+    },
+    applyConsent: (request) => applyPluginConsent({ store, pluginService, ...request }),
+    store,
+    afterUninstall: clearPluginFrameStorage
+  })
   // Initialization discovers manifests only; workers/panel reads wait for explicit triggers.
   void state.pluginService
     .initialize()
