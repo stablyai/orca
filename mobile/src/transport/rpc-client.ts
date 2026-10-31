@@ -1,4 +1,5 @@
 import type { BrowserScreencastFrame } from './browser-screencast-protocol'
+import type { BrowserTunnelFrameChannel } from './browser-tunnel-frame-channel'
 import { DirectRpcClient } from './direct-rpc-client'
 import type { RpcEnvelopeFields } from './rpc-envelope-fields'
 import type { ConnectionLogSink, ConnectionState, ForegroundNudgeReason } from './types'
@@ -38,6 +39,8 @@ export type RpcClient = UnvalidatedRpcRequestPort & {
   notifyForeground: (reason?: ForegroundNudgeReason) => void
   // A caller that stopped hearing back asks for one decisive probe, so a silently dead socket ends in seconds.
   probeLivenessNow?: () => void
+  // Absent where frames cannot reach the host directly, e.g. calls relayed to another server.
+  browserTunnel?: BrowserTunnelFrameChannel
   // Settle every pending request before returning; only the physical sender knows which reached the wire.
   // Reject written requests with markRpcDeliveryUnknown: the host may already have executed them.
   close: () => void

@@ -32,6 +32,11 @@ export type BrowserNetworkTunnelOpen = {
   port: number
 }
 
+/** Tells tunnel frames apart from terminal (0x74) and screencast frames sharing one socket. */
+export function isBrowserNetworkTunnelFrameKind(bytes: Uint8Array<ArrayBufferLike>): boolean {
+  return bytes.byteLength > 0 && bytes[0] === BROWSER_NETWORK_TUNNEL_KIND
+}
+
 export function encodeBrowserNetworkTunnelFrame(frame: BrowserNetworkTunnelFrame): Uint8Array {
   validateFrameIdentity(frame)
   validatePayload(frame.opcode, frame.payload)

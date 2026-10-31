@@ -84,6 +84,21 @@ export class RpcClientSocketSession {
     return false
   }
 
+  // Tunnel frames are lossless but replayable: the tunnel restarts on a new socket, so a failed write just ends it.
+  sendBinary(bytes: Uint8Array): boolean {
+    if (this.socket.readyState !== WebSocket.OPEN || !this.framing || !this.authenticated) {
+      return false
+    }
+    try {
+      return this.framing.sendBinary(bytes)
+    } catch {
+      if (this.options.getCurrentSocket() === this.socket) {
+        this.options.onForcedClose(this)
+      }
+      return false
+    }
+  }
+
   close(): void {
     this.socket.close()
   }

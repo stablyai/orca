@@ -160,6 +160,8 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
 
   serveBrowserPageNavigated(page: ServeBrowserPageState): void {
     this.serveBrowserTabs.navigated(page)
+    // A phone drawing the tab itself gets no screencast; the tab list is how it learns the page's address.
+    this.notifyMobileSessionTabsChanged(page.worktreeId)
   }
 
   protected readonly edgeCommands = new RuntimeEdgeCommandController({

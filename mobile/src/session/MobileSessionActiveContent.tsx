@@ -3,7 +3,7 @@ import { computeActiveTerminalKeyboardLift } from '../terminal/terminal-keyboard
 import { terminalPaneDirection, terminalPaneKeyboardLayout } from './mobile-terminal-pane-layout'
 import { Animated, View, Text, Pressable, ActivityIndicator } from 'react-native'
 import { saveTerminalTextScale } from '../storage/preferences'
-import { MobileBrowserPane } from '../browser/MobileBrowserPane'
+import { MobileBrowserSurface } from '../browser/MobileBrowserSurface'
 import { TerminalPaneView } from './TerminalPaneView'
 import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
 import { MobileNativeChatDictationPreviewContext } from './native-chat/composer/mobile-native-chat-dictation-preview-context'
@@ -195,8 +195,9 @@ export function MobileSessionActiveContent({
   ) : activeBrowserTab ? (
     <View style={styles.browserFrame}>
       {/* Why: pane owns imperative frame refs; don't render a stale frame while the old stream effect cleans up. */}
-      <MobileBrowserPane
+      <MobileBrowserSurface
         key={activeBrowserTab.browserPageId ?? activeBrowserTab.id}
+        hostId={hostId}
         client={client}
         worktreeId={worktreeId}
         tab={activeBrowserTab}

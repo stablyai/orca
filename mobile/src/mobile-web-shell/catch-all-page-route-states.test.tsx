@@ -104,6 +104,10 @@ vi.mock('../../modules/orca-mobile-web-shell/src', async () => {
     parseMobileWebShellLoadState: loadState.parseMobileWebShellLoadState
   }
 })
+vi.mock('../../modules/orca-proxied-browser/src', () => ({
+  OrcaProxiedBrowser: null,
+  orcaProxiedBrowserView: () => () => null
+}))
 vi.mock('../app-update/use-wall-app-update', () => ({
   useWallAppUpdate: () => null
 }))

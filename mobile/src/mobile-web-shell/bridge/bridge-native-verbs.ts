@@ -35,10 +35,19 @@ export const BRIDGE_NATIVE_VERB_NAMES = [
   'native.audio.read',
   'native.audio.stop',
   'native.storage.read',
-  'native.pdf.view'
+  'native.pdf.view',
+  'native.browser.local',
+  'native.browser.view'
 ] as const
 
 export type BridgeNativeVerb = (typeof BRIDGE_NATIVE_VERB_NAMES)[number]
+
+// Verbs the shell grants every page without a manifest declaration: routes are capped at 16 grants, and these only
+// open an in-app view of something the page already shows.
+export const BRIDGE_IMPLICIT_NATIVE_VERBS = [
+  'native.browser.local',
+  'native.browser.view'
+] as const satisfies readonly BridgeNativeVerb[]
 
 // Keep clipboard reads text-only; images use media.pick and chunked reads instead of exceeding inline reply limits.
 export const BRIDGE_CLIPBOARD_MIMES = ['text'] as const
@@ -85,6 +94,67 @@ export type BridgePdfOpenParams = Omit<
   'action'
 >
 
+// The shell draws a browser tab in its own web view, with traffic through the host; relayed servers stay streamed.
+const browserViewModeSchema = z.enum(['web', 'mobile'])
+// Only shells that serve native.browser.view take a layout; older ones refuse params they do not know.
+export const browserLocalParamsSchema = z.strictObject({
+  worktreeId: z.string().min(1),
+  url: z.string().max(8192),
+  viewMode: browserViewModeSchema.optional()
+})
+export const browserLocalResultSchema = z.strictObject({})
+
+export type BridgeBrowserLocalParams = z.infer<typeof browserLocalParamsSchema>
+
+// The pane's place in the page, in the page's CSS pixels; an empty frame keeps the view alive but hidden.
+const browserViewFrameSchema = z.strictObject({
+  x: z.number().finite().min(-100_000).max(100_000),
+  y: z.number().finite().min(-100_000).max(100_000),
+  width: z.number().finite().min(0).max(100_000),
+  height: z.number().finite().min(0).max(100_000)
+})
+export type BridgeBrowserViewFrame = z.infer<typeof browserViewFrameSchema>
+
+// The shell draws the tab in a native web view placed over the page's pane. show answers when the view ends,
+// so the page learns that the user chose streaming without a shell-to-page message. The id ties move and hide to
+// one show: a hide can arrive while its show is still starting.
+const browserViewIdSchema = z.string().min(1).max(64)
+export const browserViewParamsSchema = z.discriminatedUnion('action', [
+  z.strictObject({
+    action: z.literal('show'),
+    id: browserViewIdSchema,
+    worktreeId: z.string().min(1),
+    url: z.string().max(8192),
+    viewMode: browserViewModeSchema,
+    frame: browserViewFrameSchema
+  }),
+  z.strictObject({
+    action: z.literal('move'),
+    id: browserViewIdSchema,
+    frame: browserViewFrameSchema
+  }),
+  z.strictObject({ action: z.literal('hide'), id: browserViewIdSchema })
+])
+// streamed: the user chose streaming; setting: the browser settings stream tabs; replaced: another pane took the
+// view; failed: the tunnel through the host failed.
+export const BRIDGE_BROWSER_VIEW_ENDINGS = [
+  'streamed',
+  'setting',
+  'replaced',
+  'hidden',
+  'failed'
+] as const
+export const browserViewResultSchema = z.strictObject({
+  ended: z.enum(BRIDGE_BROWSER_VIEW_ENDINGS).optional()
+})
+
+export type BridgeBrowserViewParams = z.infer<typeof browserViewParamsSchema>
+export type BridgeBrowserViewShowParams = Omit<
+  Extract<BridgeBrowserViewParams, { action: 'show' }>,
+  'action'
+>
+export type BridgeBrowserViewEnding = (typeof BRIDGE_BROWSER_VIEW_ENDINGS)[number]
+
 export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNativeVerbSpec>> = {
   'native.clipboard.write': {
     params: clipboardWriteParamsSchema,
@@ -129,6 +199,14 @@ export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNative
   'native.pdf.view': {
     params: pdfViewParamsSchema,
     result: pdfViewResultSchema
+  },
+  'native.browser.local': {
+    params: browserLocalParamsSchema,
+    result: browserLocalResultSchema
+  },
+  'native.browser.view': {
+    params: browserViewParamsSchema,
+    result: browserViewResultSchema
   }
 }
 

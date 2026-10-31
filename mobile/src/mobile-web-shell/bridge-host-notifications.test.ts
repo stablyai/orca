@@ -195,7 +195,9 @@ describe('navigate-back', () => {
     bridge.host.receive(clientFrame({ type: 'ready' }))
     expect(bridge.last()).toMatchObject({
       type: 'init',
-      grants: { native: ['fault', 'rpcEnvelope', 'navigate'] }
+      grants: {
+        native: ['fault', 'rpcEnvelope', 'navigate', 'native.browser.local', 'native.browser.view']
+      }
     })
     bridge.host.receive(back)
     expect(bridge.backPops).toEqual(['popped'])

@@ -13,6 +13,7 @@ import {
   type BridgeConnectionSnapshot
 } from './bridge/bridge-envelope'
 import { BridgePageRouteGrantsSchema } from './bridge/bridge-page-route-grants'
+import { BRIDGE_IMPLICIT_NATIVE_VERBS } from './bridge/bridge-native-verbs'
 import { createBridgeInitFrame } from './bridge/bridge-init-frame'
 import { splitBridgeReply } from './bridge/bridge-reply-chunking'
 import { createBridgeHostFrames } from './bridge-host-frames'
@@ -31,7 +32,8 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   const granted: readonly string[] = [
     BRIDGE_FAULT_GRANT,
     BRIDGE_RPC_ENVELOPE_GRANT,
-    ...options.routeGrants
+    ...options.routeGrants,
+    ...BRIDGE_IMPLICIT_NATIVE_VERBS
   ]
   // Validate manifest pairs like the route: a pair refused by the page would invalidate the entire init.
   const parsedRouteGrants =

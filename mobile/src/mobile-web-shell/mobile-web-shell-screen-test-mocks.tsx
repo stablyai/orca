@@ -129,6 +129,11 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
       useFocusEffect: (effect: () => undefined | (() => void)) => React.useEffect(effect, [effect])
     }),
     // Use a component to observe keyed remounts; host-string prop updates cannot prove WebView replacement.
+    // The shell can host the proxied browser; these screens never open it, so the module is absent.
+    '../../modules/orca-proxied-browser/src': () => ({
+      OrcaProxiedBrowser: null,
+      orcaProxiedBrowserView: () => () => null
+    }),
     '../../modules/orca-mobile-web-shell/src': () => {
       return {
         OrcaMobileWebShellView: (props: {

@@ -10,7 +10,7 @@ import {
   type StyleProp,
   type ViewStyle
 } from 'react-native'
-import { ArrowUp, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react-native'
+import { ArrowUp, ChevronLeft, ChevronRight, RefreshCw, Smartphone } from 'lucide-react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -58,6 +58,7 @@ type MobileBrowserPaneViewProps = {
   keyboardValue: string
   layoutRef: RefObject<BrowserTouchLayout | null>
   navigateToAddress: () => Promise<void>
+  onRenderLocally?: () => void
   panResponder: PanResponderInstance
   pointerModifiers: BrowserPointerModifier[]
   reloadPage: () => void
@@ -98,6 +99,7 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
     keyboardValue,
     layoutRef,
     navigateToAddress,
+    onRenderLocally,
     panResponder,
     pointerModifiers,
     reloadPage,
@@ -155,6 +157,14 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
           value={browserViewMode}
           onChange={selectBrowserViewMode}
         />
+        {onRenderLocally && (
+          <MobileBrowserToolbarIconButton
+            label={t('browser.paneView.renderLocally', 'Draw the page on this phone')}
+            onPress={onRenderLocally}
+          >
+            <Smartphone size={15} color={buttonColor(true)} />
+          </MobileBrowserToolbarIconButton>
+        )}
       </View>
 
       <View

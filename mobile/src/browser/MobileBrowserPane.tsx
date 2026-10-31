@@ -55,6 +55,8 @@ type MobileBrowserPaneProps = {
   keyboardLift: number
   bottomInset: number
   onToast: (message: string, durationMs?: number) => void
+  // Offered when this phone can draw the page itself instead of streaming it.
+  onRenderLocally?: () => void
 }
 
 type PanGesture = {
@@ -73,7 +75,8 @@ export function MobileBrowserPane({
   screencastSupported,
   keyboardLift,
   bottomInset,
-  onToast
+  onToast,
+  onRenderLocally
 }: MobileBrowserPaneProps) {
   useMobileTranslation()
   const [browserViewMode, setBrowserViewMode] = useState<MobileBrowserViewMode>(() =>
@@ -326,6 +329,7 @@ export function MobileBrowserPane({
       keyboardValue={keyboardValue}
       layoutRef={layoutRef}
       navigateToAddress={navigateToAddress}
+      onRenderLocally={onRenderLocally}
       panResponder={panResponder}
       pointerModifiers={pointerModifiers}
       reloadPage={reloadPage}

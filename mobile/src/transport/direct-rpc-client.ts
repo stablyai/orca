@@ -165,6 +165,10 @@ export class DirectRpcClient implements RpcClient {
 
   getLastInboundAt = (): number | null => this.liveness.getLastInboundAt() || null
 
+  get browserTunnel() {
+    return this.socketFactory.browserTunnel
+  }
+
   onStateChange = (listener: (state: ConnectionState) => void): (() => void) =>
     this.connectionState.addListener(listener)
 

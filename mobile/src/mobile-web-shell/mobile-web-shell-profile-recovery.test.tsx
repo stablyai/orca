@@ -22,6 +22,7 @@ vi.mock('lucide-react-native', mocks['lucide-react-native'])
 vi.mock('react-native-safe-area-context', mocks['react-native-safe-area-context'])
 vi.mock('expo-router', mocks['expo-router'])
 vi.mock('../../modules/orca-mobile-web-shell/src', mocks['../../modules/orca-mobile-web-shell/src'])
+vi.mock('../../modules/orca-proxied-browser/src', mocks['../../modules/orca-proxied-browser/src'])
 vi.mock('../app-update/use-wall-app-update', mocks['../app-update/use-wall-app-update'])
 vi.mock('../transport/host-client-hooks', () => ({
   useHostClient: () => ({ client: dependencies.client, state: 'connected' })

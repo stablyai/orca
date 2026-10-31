@@ -30,7 +30,7 @@ vi.mock('react-native', () => ({
   StyleSheet: { create: <T,>(styles: T) => styles, hairlineWidth: 1 }
 }))
 vi.mock('../storage/preferences', () => ({ saveTerminalTextScale: () => Promise.resolve() }))
-vi.mock('../browser/MobileBrowserPane', () => ({ MobileBrowserPane: () => null }))
+vi.mock('../browser/MobileBrowserSurface', () => ({ MobileBrowserSurface: () => null }))
 vi.mock('./TerminalPaneView', () => ({ TerminalPaneView: () => null }))
 vi.mock('./MobileNativeChatOverlay', () => ({ MobileNativeChatOverlay: () => null }))
 vi.mock('../transport/use-host-profile', () => ({ useHostProfile: () => null }))

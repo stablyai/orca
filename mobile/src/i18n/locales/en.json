@@ -51,7 +51,16 @@
       "linksDescription": "Choose where HTTP(S) links tapped in terminal output open.",
       "loadFailed": "Could not load browser preferences. Try again.",
       "saveFailed": "Could not save browser preferences. Try again.",
-      "openTerminalLinks": "Open terminal links"
+      "openTerminalLinks": "Open terminal links",
+      "tabsHeading": "BROWSER TABS",
+      "tabsDescription": "Choose how browser tabs show on the phone, and the network pages drawn here use.",
+      "showTabs": "Show tabs",
+      "streamDrawing": "Stream from the host",
+      "streamDrawingDescription": "Show pictures of the desktop's browser; the phone button still draws a tab here.",
+      "hostDrawing": "Draw on the phone, through the host",
+      "hostNetworkDescription": "Traffic goes out from your paired desktop, using its network and proxy settings.",
+      "phoneDrawing": "Draw on the phone, on its network",
+      "phoneNetworkDescription": "Traffic goes out from this phone, like any app on it."
     },
     "menuItems": {
       "appearance": "Appearance",
@@ -1581,7 +1590,8 @@
       "reload": "Reload",
       "dialogTitle": "Browser Dialog",
       "keyboardPlaceholder": "Type on page…",
-      "sendText": "Send text to browser"
+      "sendText": "Send text to browser",
+      "renderLocally": "Draw the page on this phone"
     },
     "pointerModifiers": {
       "clickModifier": "{{key}} click modifier"
@@ -1594,6 +1604,21 @@
       "sent": "Sent",
       "deliveryUnconfirmed": "Delivery unconfirmed — check page before retrying",
       "dialogAnswerFailed": "That answer did not reach the page."
+    },
+    "localPane": {
+      "streamFromHost": "Stream from the host instead",
+      "loadFailed": "Page did not load: {{error}}",
+      "throughHost": "Connect through the host",
+      "phoneNetwork": "Connect on the phone's network",
+      "fullScreen": "Full screen",
+      "leaveFullScreen": "Leave full screen"
+    },
+    "surface": {
+      "localFailed": "Streaming from the host: {{reason}}"
+    },
+    "shellLocal": {
+      "failed": "Could not draw the page here: {{reason}}",
+      "starting": "Connecting through the host…"
     }
   },
   "files": {
