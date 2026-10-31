@@ -1,7 +1,8 @@
 import { useCallback, useMemo, useState } from 'react'
 import { computeActiveTerminalKeyboardLift } from '../terminal/terminal-keyboard-avoidance-lift'
 import { terminalPaneDirection, terminalPaneKeyboardLayout } from './mobile-terminal-pane-layout'
-import { Animated, View, Text, Pressable, ActivityIndicator } from 'react-native'
+import { Animated, View, Text, Pressable, ActivityIndicator, StyleSheet } from 'react-native'
+import { sideStripMargin, sideStripOffset, useSessionSideStripInset } from './session-side-strip-inset'
 import { saveTerminalTextScale } from '../storage/preferences'
 import { MobileBrowserPane } from '../browser/MobileBrowserPane'
 import { TerminalPaneView } from './TerminalPaneView'
@@ -33,6 +34,9 @@ export function MobileSessionActiveContent({
   const t = useMobileTranslation()
   const executionHost = useWorkspaceExecutionHost()
   const [paneFrame, setPaneFrame] = useState({ width: 0, height: 0 })
+  const { main: stripInset } = useSessionSideStripInset(
+    controller.canDockPanel && controller.activePanel !== null
+  )
   const paneDirection = terminalPaneDirection(paneFrame, controller.terminalSplitLayout)
   const {
     hostId,
@@ -134,6 +138,7 @@ export function MobileSessionActiveContent({
     controller
   )
   const { presentedConnState, showOfflineState, forceReconnectHost } = controller
+  const terminalBranch = !(showLoadingState || showEmptyState || showOfflineState || activeMarkdownTab || activeFileTab || activeBrowserTab || activePendingTerminalTab)
   const content =
     showLoadingState || showEmptyState || showOfflineState ? (
       <MobileSessionContentState
@@ -252,6 +257,7 @@ export function MobileSessionActiveContent({
       </View>
     ) : (
       <View style={styles.terminalFrame}>
+        <View style={[StyleSheet.absoluteFillObject, sideStripOffset(stripInset)]}>
         {terminals.map((terminal) => (
           <TerminalPaneView
             key={terminal.handle}
@@ -315,6 +321,7 @@ export function MobileSessionActiveContent({
             onOpenUrl={handleTerminalOpenUrl}
           />
         ))}
+        </View>
         <MobileNativeChatDictationPreviewContext.Provider value={chatDictationPreview}>
           <MobileDictationMeterContext.Provider value={dictation.meter}>
             <MobileAgentMessageProvider
@@ -363,14 +370,15 @@ export function MobileSessionActiveContent({
       // Why: one frame under every branch; react-native-web observes onLayout only on a View that mounts with it.
       style={styles.contentFrame}
       onLayout={(e) => {
-        const { width, height } = e.nativeEvent.layout
+        const { height } = e.nativeEvent.layout
+        const width = e.nativeEvent.layout.width - (stripInset?.width ?? 0)
         notifyTerminalFrame({ width, height })
         setPaneFrame((previous) =>
           previous.width === width && previous.height === height ? previous : { width, height }
         )
       }}
     >
-      {content}
+      {terminalBranch ? content : <View style={[styles.contentFrame, sideStripMargin(stripInset)]}>{content}</View>}
     </View>
   )
 }
