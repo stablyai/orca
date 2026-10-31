@@ -79,7 +79,7 @@ type BuiltDump = { dump: Buffer }
 function buildDump(options: {
   annotations?: Record<string, string>
   simpleAnnotations?: Record<string, string>
-  exception?: { code: number; address: bigint }
+  exception?: { code: number; address: bigint; instructionPointer?: bigint }
   modules?: { base: bigint; size: number; name: string }[]
 }): BuiltDump {
   const streamCount =
@@ -174,6 +174,13 @@ function buildDump(options: {
     exceptionBuf.writeUInt32LE(1234, 0) // ThreadId
     exceptionBuf.writeUInt32LE(options.exception.code, 8)
     exceptionBuf.writeBigUInt64LE(options.exception.address, 24)
+    if (options.exception.instructionPointer !== undefined) {
+      // Crashpad's MinidumpContextAMD64: ContextFlags at 0x30 (CONTEXT_AMD64), Rip at 0xf8.
+      const contextBuf = Buffer.alloc(0x4d0)
+      contextBuf.writeUInt32LE(0x0010_0000, 0x30)
+      contextBuf.writeBigUInt64LE(options.exception.instructionPointer, 0xf8)
+      location(contextBuf.length, builder.append(contextBuf)).copy(exceptionBuf, 160)
+    }
     streams.push({
       type: STREAM_TYPE_EXCEPTION,
       size: exceptionBuf.length,
@@ -343,6 +350,28 @@ describe('parseMinidumpCrashSignature', () => {
     expect(signature?.faultingModule).toBe('chrome_elf.dll')
     expect(signature?.faultingModuleOffset).toBe('0x1234')
   })
+
+  it.each([
+    { signal: 'SIGTRAP', code: 5, address: 0n },
+    { signal: 'SIGSEGV', code: 11, address: 0x18n }
+  ])(
+    'names the module from RIP when a Linux $signal address is outside every module',
+    async ({ code, address }) => {
+      const { dump } = buildDump({
+        exception: { code, address, instructionPointer: 0x5555_0000_4321n },
+        modules: [{ base: 0x5555_0000_0000n, size: 0x10_0000, name: '/opt/Orca/orca-ide' }]
+      })
+
+      const signature = await parseMinidumpCrashSignature(dump)
+
+      expect(signature?.exceptionAddress).toBe(`0x${address.toString(16)}`)
+      expect(signature?.faultingModule).toBe('orca-ide')
+      expect(signature?.faultingModuleOffset).toBe('0x4321')
+      expect(signature && minidumpSignatureDetails(signature).minidumpFaultingModuleSource).toBe(
+        'instruction-pointer'
+      )
+    }
+  )
 
   it('resolves a faulting module past index 1024 on a real macOS image count', async () => {
     const modules = Array.from({ length: 1042 }, (_, index) => ({

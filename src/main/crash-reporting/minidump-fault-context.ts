@@ -15,6 +15,7 @@ const AMD64_CONTEXT_SIZE = 0x4d0
 const AMD64_CONTEXT_FLAGS_OFFSET = 0x30
 const CONTEXT_AMD64 = 0x00100000
 const AMD64_RSP_OFFSET = 0x98
+const AMD64_RIP_OFFSET = 0xf8
 
 const MEMORY_DESCRIPTOR_SIZE = 16
 const MAX_MEMORY_RANGES = 16_384
@@ -37,9 +38,10 @@ export type MinidumpFaultContext = {
   readonly codeBytes?: string
 }
 
-async function readAmd64StackPointer(
+async function readAmd64Register(
   view: MinidumpView,
-  exceptionRva: number
+  exceptionRva: number,
+  registerOffset: number
 ): Promise<bigint | null> {
   const context = await view.location(exceptionRva + THREAD_CONTEXT_OFFSET)
   if (!context || context.size < AMD64_CONTEXT_SIZE) {
@@ -49,7 +51,15 @@ async function readAmd64StackPointer(
   if (flags === null || (flags & CONTEXT_AMD64) === 0) {
     return null
   }
-  return view.u64(context.rva + AMD64_RSP_OFFSET)
+  return view.u64(context.rva + registerOffset)
+}
+
+/** The crashed thread's RIP names the faulting code even when the exception address does not. */
+export function readAmd64InstructionPointer(
+  view: MinidumpView,
+  exceptionRva: number
+): Promise<bigint | null> {
+  return readAmd64Register(view, exceptionRva, AMD64_RIP_OFFSET)
 }
 
 async function readCapturedBytes(view: MinidumpView, address: bigint): Promise<string | null> {
@@ -110,7 +120,7 @@ export async function readMinidumpFaultContext(
     return result
   }
   result.faultAddress = `0x${faultAddress.toString(16)}`
-  const stackPointer = await readAmd64StackPointer(view, exceptionRva)
+  const stackPointer = await readAmd64Register(view, exceptionRva, AMD64_RSP_OFFSET)
   if (stackPointer !== null) {
     const delta = faultAddress - stackPointer
     const magnitude = delta < 0n ? -delta : delta
