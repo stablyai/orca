@@ -41,7 +41,8 @@ export const ProviderRateLimitsSchema = z
       'minimax',
       'grok',
       'antigravity',
-      'cursor'
+      'cursor',
+      'zcode'
     ]),
     session: RateLimitWindowSchema.nullable(),
     weekly: RateLimitWindowSchema.nullable(),
@@ -156,8 +157,37 @@ const CodexAccountSummarySchema = z
     }
   })
 
+const ManagedDataAccountSummarySchema = z
+  .object({
+    id: AccountIdSchema,
+    label: z.string().min(1),
+    integrations: z.array(z.string()),
+    createdAt: TimestampSchema
+  })
+  .passthrough()
+
+const ManagedDataAccountsStateSchema = z
+  .object({
+    accounts: z.array(ManagedDataAccountSummarySchema),
+    activeAccountId: AccountIdSchema.nullable()
+  })
+  .passthrough()
+
+const OPTIONAL_RATE_LIMIT_IDENTITIES = [
+  ['gemini', 'gemini', 'Gemini'],
+  ['opencodeGo', 'opencode-go', 'OpenCode Go'],
+  ['antigravity', 'antigravity', 'Antigravity'],
+  ['minimax', 'minimax', 'MiniMax'],
+  ['grok', 'grok', 'Grok'],
+  ['cursor', 'cursor', 'Cursor'],
+  ['zcode', 'zcode', 'Zcode']
+] as const
+
 export const AccountsSnapshotSchema = z
   .object({
+    // Older hosts omit managed OpenCode and Devin profiles.
+    opencode: ManagedDataAccountsStateSchema.optional(),
+    devin: ManagedDataAccountsStateSchema.optional(),
     claude: z
       .object({
         accounts: z.array(ClaudeAccountSummarySchema),
@@ -180,7 +210,21 @@ export const AccountsSnapshotSchema = z
         claudeTarget: RateLimitRuntimeTargetSchema.default(HostRateLimitRuntimeTarget),
         codexTarget: RateLimitRuntimeTargetSchema.default(HostRateLimitRuntimeTarget),
         inactiveClaudeAccounts: z.array(InactiveAccountUsageSchema),
-        inactiveCodexAccounts: z.array(InactiveAccountUsageSchema)
+        inactiveCodexAccounts: z.array(InactiveAccountUsageSchema),
+        // Older hosts omit these providers. Each field matches the desktop rate-limit snapshot.
+        gemini: ProviderRateLimitsSchema.nullable().optional(),
+        opencodeGo: ProviderRateLimitsSchema.nullable().optional(),
+        antigravity: ProviderRateLimitsSchema.nullable().optional(),
+        minimax: ProviderRateLimitsSchema.nullable().optional(),
+        grok: ProviderRateLimitsSchema.nullable().optional(),
+        cursor: ProviderRateLimitsSchema.nullable().optional(),
+        zcode: ProviderRateLimitsSchema.nullable().optional(),
+        minimaxCookieConfigured: z.boolean().optional(),
+        minimaxApiKeyConfigured: z.boolean().optional(),
+        opencodeGoApiKeyConfigured: z.boolean().optional(),
+        grokAuthConfigured: z.boolean().optional(),
+        cursorAuthConfigured: z.boolean().optional(),
+        zcodePlanApiKeyConfigured: z.boolean().optional()
       })
       .passthrough()
   })
@@ -199,6 +243,16 @@ export const AccountsSnapshotSchema = z
         message: 'Codex limits use the wrong provider identity',
         path: ['rateLimits', 'codex', 'provider']
       })
+    }
+    for (const [field, provider, label] of OPTIONAL_RATE_LIMIT_IDENTITIES) {
+      const limits = snapshot.rateLimits[field]
+      if (limits && limits.provider !== provider) {
+        context.addIssue({
+          code: 'custom',
+          message: `${label} limits use the wrong provider identity`,
+          path: ['rateLimits', field, 'provider']
+        })
+      }
     }
     for (const [index, entry] of snapshot.rateLimits.inactiveClaudeAccounts.entries()) {
       if (entry.rateLimits && entry.rateLimits.provider !== 'claude') {
@@ -226,6 +280,8 @@ export type InactiveAccountUsage = z.infer<typeof InactiveAccountUsageSchema>
 export type RateLimitRuntimeTarget = z.infer<typeof RateLimitRuntimeTargetSchema>
 export type ClaudeAccountSummary = z.infer<typeof ClaudeAccountSummarySchema>
 export type CodexAccountSummary = z.infer<typeof CodexAccountSummarySchema>
+export type ManagedDataAccountSummary = z.infer<typeof ManagedDataAccountSummarySchema>
+export type ManagedDataAccountsState = z.infer<typeof ManagedDataAccountsStateSchema>
 export type AccountsSnapshot = z.infer<typeof AccountsSnapshotSchema>
 
 export class AccountsSnapshotError extends Error {
