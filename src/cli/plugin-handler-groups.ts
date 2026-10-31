@@ -19,5 +19,17 @@ export const PLUGIN_HANDLER_GROUPS: readonly HandlerGroup[] = [
       'plugin dev unload'
     ],
     load: async () => (await import('./handlers/plugin-runtime.js')).PLUGIN_RUNTIME_HANDLERS
+  },
+  {
+    name: 'plugin-install',
+    keys: [
+      'plugin install',
+      'plugin update',
+      'plugin uninstall',
+      'plugin catalog list',
+      'plugin catalog add',
+      'plugin catalog rm'
+    ],
+    load: async () => (await import('./handlers/plugin-install.js')).PLUGIN_INSTALL_HANDLERS
   }
 ]

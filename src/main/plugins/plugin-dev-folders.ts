@@ -38,7 +38,9 @@ export type PluginDevLoadResult = {
   approval: PluginCliApprovalOutcome
 }
 
-function assertPluginSystemEnabled(service: PluginDevFolderService): void {
+export function assertPluginSystemEnabled(service: {
+  options: Pick<PluginDevFolderService['options'], 'isPluginSystemEnabled'>
+}): void {
   if (!service.options.isPluginSystemEnabled()) {
     throw new PluginCliError(
       PLUGIN_SYSTEM_DISABLED_CODE,
@@ -57,7 +59,7 @@ async function samePath(path: string): Promise<string> {
 }
 
 /** Host-local folder identity; the caller's string is resolved here, on the machine that loads it. */
-async function resolveDevFolder(path: string): Promise<string> {
+export async function resolveHostPluginFolder(path: string): Promise<string> {
   if (!isAbsolute(path)) {
     throw new PluginCliError(
       'invalid_argument',
@@ -102,7 +104,7 @@ export async function loadPluginDevFolder(input: {
 }): Promise<PluginDevLoadResult> {
   const { service } = input
   assertPluginSystemEnabled(service)
-  const real = await resolveDevFolder(input.path)
+  const real = await resolveHostPluginFolder(input.path)
   const stored = service.options.getDevPluginPaths()
   const existing = await findStoredPath(stored, real)
   const path = existing ?? real

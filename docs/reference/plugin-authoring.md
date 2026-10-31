@@ -148,6 +148,8 @@ From a terminal (or a coding agent), `orca plugin dev load <dir>` does the same.
 plugin loads at once; anything that runs code fails with `approval_required`, which lists what it
 would be granted and the command to re-run with `--approve <fingerprint>`. `orca plugin logs
 <publisher.id>` prints its logs and `orca plugin dev unload <dir>` removes it.
+`orca plugin install <owner/repo[@ref]>` installs a published plugin the same way, with the Orca
+host's own Git credentials for private repositories, and `orca plugin update` keeps it current.
 
 Orca watches development folders and reloads the plugin when its manifest or files change.
 Theme, syntax and translation edits show up as you save. Panels and workers are not bound to

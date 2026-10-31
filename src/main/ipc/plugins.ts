@@ -1,28 +1,25 @@
-import { pluginThemeSettingsAfterRemoval } from '../../shared/plugin-theme-settings'
 import { ipcMain, type IpcMainInvokeEvent } from 'electron'
 import { z } from 'zod'
 import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { PluginFrameEntry } from '../../shared/plugins/frames/plugin-frame-bridge'
 import type { PluginHostCallOutcome } from '../../shared/plugins/frames/plugin-protocol'
-import { getUserPluginsDir, getPluginsDataDir } from '../plugins/plugin-discovery'
+import { getUserPluginsDir } from '../plugins/plugin-discovery'
 import {
   installPluginFromGit,
-  installPluginFromLocalPath,
-  readPluginLockfile,
-  removeInstalledPlugin
+  installPluginFromLocalPath
 } from '../plugins/installation/plugin-install'
+import { uninstallInstalledPlugin } from '../plugins/installation/plugin-uninstall'
+export { canRemoveInstalledPlugin } from '../plugins/installation/plugin-uninstall'
 import { applyPluginConsent, applyPluginEnablement } from '../plugins/plugin-enablement'
 import { readApprovedPluginNewFileTemplate } from '../plugins/plugin-new-file-template'
 import type { PluginService } from '../plugins/plugin-service'
 import { bindPluginPanelOwnerLifecycle } from '../plugins/panels/plugin-panel-owner-lifecycle'
 import { isQualifiedPluginKey } from '../../shared/plugins/manifest/plugin-manifest'
 import { pluginConsentRequestSchema } from '../../shared/plugins/approval/plugin-consent-request'
-import { normalizePluginIdList } from '../../shared/plugins/approval/plugin-consent-state'
 import {
   isAllowedPluginGitUrl,
-  PLUGIN_COMMIT_PATTERN,
-  type PluginLockfile
+  PLUGIN_COMMIT_PATTERN
 } from '../../shared/plugins/installation/plugin-install-lockfile'
 import { resolvePluginGitSource } from '../plugins/installation/plugin-git-ref-resolution'
 import {
@@ -88,17 +85,6 @@ const logsArgsSchema = z.object({ pluginKey: z.string().min(1) })
 
 // Preserve import compatibility; runtime RPC uses the Electron-free client-list module.
 import { listPluginsForClients, readInstalledPluginManifest } from '../plugins/plugin-client-list'
-
-export function canRemoveInstalledPlugin(
-  pluginService: PluginService,
-  pluginKey: string,
-  lock?: PluginLockfile
-): boolean {
-  return (
-    lock?.plugins[pluginKey]?.source.kind !== 'bundled' &&
-    pluginService.getDiscovered().some((plugin) => plugin.pluginKey === pluginKey && !plugin.isDev)
-  )
-}
 
 function rendererPanelOwner(webContentsId: number): string {
   return `renderer:${webContentsId}`
@@ -258,34 +244,16 @@ export function registerPluginHandlers(
   ipcMain.handle('plugins:remove', async (_event, args: unknown) => {
     await pluginService.whenReady()
     const parsed = removeArgsSchema.parse(args)
-    const pluginsDir = getUserPluginsDir(pluginService.options.userDataPath)
-    const lock = await readPluginLockfile(pluginsDir)
-    if (!canRemoveInstalledPlugin(pluginService, parsed.pluginKey, lock)) {
+    const removed = await uninstallInstalledPlugin({
+      pluginService,
+      getSettings: () => store.getSettings(),
+      // Why no origin: the uninstalling window must also drop the plugin's theme choices.
+      updateSettings: (patch) => store.updateSettings(patch, { notifyListeners: true }),
+      pluginKey: parsed.pluginKey
+    })
+    if (!removed) {
       throw new Error(`cannot remove protected or non-installed plugin ${parsed.pluginKey}`)
     }
-    await pluginService.removePlugin(parsed.pluginKey, () =>
-      removeInstalledPlugin({
-        pluginsDir,
-        pluginsDataDir: getPluginsDataDir(pluginService.options.userDataPath),
-        pluginKey: parsed.pluginKey
-      })
-    )
-    const settings = store.getSettings()
-    const consents = { ...settings.pluginConsents }
-    delete consents[parsed.pluginKey]
-    const disabledPlugins = normalizePluginIdList(settings.disabledPlugins).filter(
-      (pluginKey) => pluginKey !== parsed.pluginKey
-    )
-    store.updateSettings(
-      {
-        pluginConsents: consents,
-        disabledPlugins,
-        ...pluginThemeSettingsAfterRemoval(settings, parsed.pluginKey)
-      },
-      // Why no origin: the uninstalling window must also drop the plugin's theme choices.
-      { notifyListeners: true }
-    )
-    await pluginService.refresh()
     return listPluginsForClients(pluginService)
   })
 
