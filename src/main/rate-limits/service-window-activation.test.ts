@@ -267,6 +267,60 @@ describe('RateLimitService', () => {
     }
   })
 
+  it('retries an expired Claude token on its backoff while the window stays focused', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(fetchClaudeRateLimits)
+        .mockResolvedValueOnce({
+          ...errorProvider('claude', 'Claude usage updates the next time Claude runs.'),
+          usageMetadata: { failureKind: 'stale-token' }
+        })
+        .mockResolvedValue(okProvider('claude', 12))
+      mockFreshBackgroundProviderFetches()
+
+      const service = new RateLimitService()
+      const window = new FakeRateLimitWindow()
+      service.attach(asRateLimitWindow(window))
+      service.start()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(service.getState().claude?.status).toBe('error')
+
+      await vi.advanceTimersByTimeAsync(30 * 1000)
+
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
+      expect(fetchCodexRateLimits).toHaveBeenCalledTimes(1)
+      expect(service.getState().claude?.status).toBe('ok')
+
+      service.stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('leaves an expired Claude token to activation while the window is unfocused', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValue({
+        ...errorProvider('claude', 'Claude usage updates the next time Claude runs.'),
+        usageMetadata: { failureKind: 'stale-token' }
+      })
+      mockFreshBackgroundProviderFetches()
+
+      const service = new RateLimitService()
+      const window = new FakeRateLimitWindow()
+      window.focused = false
+      service.attach(asRateLimitWindow(window))
+      service.start()
+      await vi.advanceTimersByTimeAsync(5 * 60 * 1000)
+
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+
+      service.stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('resets the retry backoff once Claude recovers', async () => {
     vi.useFakeTimers()
     try {
