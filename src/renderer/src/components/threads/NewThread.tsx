@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { Plus } from 'lucide-react'
 import { useAppStore } from '@/store'
+import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
 import { translate } from '@/i18n/i18n'
 import {
   NativeChatComposer,
@@ -57,6 +58,7 @@ export function NewThread({
         if (!project || loading || sent.current) {
           return false
         }
+        setError(null)
         sent.current = true
         setSending(true)
         try {
@@ -82,7 +84,7 @@ export function NewThread({
             translate(
               'threads.createFailed',
               '{{agent}} could not start this chat. Try sending again.',
-              { agent: chosenAgent }
+              { agent: structuredAgentLabel(chosenAgent) }
             )
           )
           return false

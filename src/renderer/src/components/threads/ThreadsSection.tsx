@@ -4,6 +4,8 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { AgentStateDot } from '@/components/AgentStateDot'
+import { agentRowDotState } from '@/lib/agent-row-dot-state'
+import { agentVerdictDisplayMark } from '../../../../shared/agent-main-agent-verdict'
 import { AgentTypeIcon } from '@/lib/agent-type-icon'
 import { formatShortTimeAgo } from '@/lib/short-time-ago'
 import { Button } from '@/components/ui/button'
@@ -64,14 +66,18 @@ export function ThreadsSection(): React.JSX.Element {
       </div>
       <div className="worktree-sidebar-scrollbar max-h-56 overflow-y-auto px-2">
         {rows.map(({ tab, summary }) => {
-          const state =
+          const status =
             summary.status === null
-              ? 'idle'
+              ? null
               : structuredAgentSessionAgentStatus({
                   ...summary,
                   status: summary.status,
                   childWork: summary.children ?? summary.backgroundTasks
-                }).state
+                })
+          const state = status
+            ? (agentVerdictDisplayMark(status) ??
+              agentRowDotState(status.state, status.workingMode))
+            : 'idle'
           const title =
             summary.conversationName ||
             getAgentRowPrimaryText({ prompt: summary.latestPrompt }) ||
