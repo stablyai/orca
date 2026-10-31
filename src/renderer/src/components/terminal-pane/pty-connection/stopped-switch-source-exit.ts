@@ -24,13 +24,14 @@ export function holdClosingExit(
       session.deps.clearTabPtyId(session.deps.tabId, ptyId)
       // Main keeps a `closing` stop's binding, so a Restart must name the stopped process as the
       // one it replaces; otherwise main reattaches to it and finds its session killed.
+      // Only a switch's stop is named as one; a close that stopped it exits as any pane does.
       session.deps.onPaneProcessDied?.({
         paneId: session.pane.id,
         exitCode,
         startup: null,
-        reason: 'switch-stopped',
+        reason: notice.switched ? 'switch-stopped' : 'process-failed',
         replacesPtyId: ptyId,
-        ...(notice.agent ? { agent: notice.agent } : {})
+        ...(notice.switched?.agent ? { agent: notice.switched.agent } : {})
       })
     }
   )

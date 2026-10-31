@@ -87,7 +87,9 @@ export async function stopStructuredSwitchTerminalSource(input: {
     await host.trackSwitchPhysical(sessionId, close.stop(replacing))
     // The window decides whether the stopped pane is still there; a chat that replaced it is
     // named so the window waits for that replace's own pass.
-    input.keepSource((replacedBy) => close.settleStoppedSource(replacedBy, input.agent))
+    input.keepSource((replacedBy) =>
+      close.settleStoppedSource({ replacedBySessionId: replacedBy, agent: input.agent })
+    )
   } catch {
     host.deps.logger.warn('switch source exit was not confirmed', {
       scope: 'session-switch',

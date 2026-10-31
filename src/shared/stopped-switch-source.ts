@@ -9,6 +9,7 @@ export type StoppedSwitchSource = {
   incarnationId?: string
   /** The chat a replace put in this tab's slot; the window settles the pane only once it has it. */
   replacedBySessionId?: string
-  /** The agent the switch stopped, which the stopped pane names. */
-  agent?: AiVaultAgent
+  /** Present when a switch stopped it, naming the agent the pane shows as stopped; absent when an
+   *  addressed close stopped it but could not remove its tab, which exits as any pane does. */
+  switched?: { agent?: AiVaultAgent }
 }

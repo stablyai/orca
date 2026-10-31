@@ -648,8 +648,8 @@ function keptSourceTerminal(options: KeptTerminalSwitchOptions = {}) {
     leafId: LEAF_A,
     ptyId: PTY_A,
     incarnationId,
-    // The stopped pane names it.
-    agent: 'codex' as const
+    // A switch stopped it, and the stopped pane names the agent.
+    switched: { agent: 'codex' as const }
   }
   return {
     runtime,
@@ -783,5 +783,6 @@ it('settles a kept source once when an addressed close stops it but cannot retir
     runtime.closeTerminal(source.handle, incarnationId, source.presentation)
   ).rejects.toThrow('terminal_pane_close_failed')
   // An ordinary close, not a switch: no agent to name.
-  expect(settled).toHaveBeenCalledExactlyOnceWith({ ...stoppedSource, agent: undefined })
+  // No switch happened: the pane exits as any pane does, never with the switch's copy.
+  expect(settled).toHaveBeenCalledExactlyOnceWith({ ...stoppedSource, switched: undefined })
 })

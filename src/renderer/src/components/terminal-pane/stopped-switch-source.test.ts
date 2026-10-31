@@ -160,7 +160,7 @@ it('shows the kept pane exited at its own code once main settles it, with no clo
     kept.stoppedForReplace()
     await flushAsyncTicks(5)
     expect(kept.died).not.toHaveBeenCalled()
-    kept.modules.sources.noteStoppedSwitchSource({ ...kept.source, agent: 'codex' })
+    kept.modules.sources.noteStoppedSwitchSource({ ...kept.source, switched: { agent: 'codex' } })
     await flushAsyncTicks(5)
     // It names the agent the switch stopped, and its Restart replaces that process with a fresh
     // shell session: main kept the stopped process's binding, whose session is killed.
@@ -236,6 +236,24 @@ it.each([
     }
   }
 )
+
+it('shows a pane a close stopped, but could not remove, as an ordinary exit', async () => {
+  const kept = await keptStoppedPane()
+  try {
+    kept.stoppedForReplace()
+    kept.modules.sources.noteStoppedSwitchSource(kept.source)
+    await flushAsyncTicks(5)
+    expect(kept.died).toHaveBeenCalledExactlyOnceWith({
+      paneId: kept.pane.id,
+      exitCode: 0,
+      startup: null,
+      reason: 'process-failed',
+      replacesPtyId: kept.source.ptyId
+    })
+  } finally {
+    kept.dispose()
+  }
+})
 
 it('settles a pane that was parked when main settled it, once it is shown', async () => {
   const kept = await keptStoppedPane()
