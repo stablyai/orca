@@ -67,6 +67,7 @@ export function installBrowserSessionUserAgentPolicy(
   resolveRequestUserAgent?: BrowserSessionRequestUserAgentResolver
 ): () => void {
   const googleAuthUa = googleAuthUserAgent()
+  const processUa = getBrowserProcessUserAgentIdentity().userAgent
   const applyUserAgentPolicy = (details: Electron.OnBeforeSendHeadersListenerDetails): void => {
     const headers = details.requestHeaders
     const requestUserAgent = currentUserAgent(headers)
@@ -79,11 +80,8 @@ export function installBrowserSessionUserAgentPolicy(
     if (
       shouldUseGoogleAuthIdentity(details.url, details.referrer ?? '', details.resourceType ?? '')
     ) {
-      // Chromium's own hints match the Electron UA; mobile-preset hints describe another device.
-      if (
-        requestUserAgent !== googleAuthUa &&
-        requestUserAgent !== getBrowserProcessUserAgentIdentity().userAgent
-      ) {
+      // Chromium's own hints match the Electron UA; hints under any other UA came from an override.
+      if (requestUserAgent !== googleAuthUa && requestUserAgent !== processUa) {
         stripClientHints(headers)
       }
       setUserAgentHeader(headers, googleAuthUa)
