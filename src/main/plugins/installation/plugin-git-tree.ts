@@ -32,7 +32,10 @@ function validatePath(path: string): void {
     segments.length > MAX_PATH_DEPTH ||
     segments.some((segment) => {
       // Why: HFS+ ignores these code points and NTFS 8.3 names alias `.git`.
-      const name = portablePathIdentity(segment).replace(/[‌-‏‪-‮⁪-⁯﻿]/g, '')
+      const name = portablePathIdentity(segment).replace(
+        /[\u200c-\u200f\u202a-\u202e\u206a-\u206f\ufeff]/g,
+        ''
+      )
       return name === '.git' || /^\.?git~[0-9]+$/.test(name)
     })
   ) {

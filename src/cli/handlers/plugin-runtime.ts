@@ -18,7 +18,7 @@ type LogsResult = { pluginKey: string; lines: { ts: number; level: string; line:
 
 const APPROVAL_CODES = new Set(['approval_required', 'approval_stale'])
 
-function stringFlag(ctx: HandlerContext, name: string): string | undefined {
+export function stringFlag(ctx: HandlerContext, name: string): string | undefined {
   const value = ctx.flags.get(name)
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
 }
@@ -58,6 +58,32 @@ function nextStepsOf(data: unknown): string[] {
     : []
 }
 
+type PendingApproval = { pluginKey: string; approvalFingerprint: string }
+
+function pendingApprovalsOf(data: unknown): PendingApproval[] {
+  if (typeof data !== 'object' || data === null || !('approvals' in data)) {
+    return []
+  }
+  const { approvals } = data
+  return Array.isArray(approvals)
+    ? approvals.filter(
+        (entry): entry is PendingApproval =>
+          typeof entry === 'object' &&
+          entry !== null &&
+          typeof entry.pluginKey === 'string' &&
+          typeof entry.approvalFingerprint === 'string'
+      )
+    : []
+}
+
+/** `update --all` re-runs per plugin: the same command with the key in place of --all. */
+function perPluginApprovalCommands(ctx: HandlerContext, approvals: PendingApproval[]): string[] {
+  return approvals.map((approval) => {
+    const args = (ctx.rawArgs ?? []).map((arg) => (arg === '--all' ? approval.pluginKey : arg))
+    return `To approve ${approval.pluginKey}, run: ${approvalRerunCommand(args, approval.approvalFingerprint)}`
+  })
+}
+
 function translatePluginRpcError(ctx: HandlerContext, method: string, error: unknown): unknown {
   if (!(error instanceof RuntimeRpcFailureError)) {
     return error
@@ -71,6 +97,14 @@ function translatePluginRpcError(ctx: HandlerContext, method: string, error: unk
     )
   }
   const fingerprint = approvalFingerprintOf(data)
+  const pending = pendingApprovalsOf(data)
+  if (APPROVAL_CODES.has(code) && fingerprint === null && pending.length > 0) {
+    const nextSteps = nextStepsOf(data).filter((step) => !step.startsWith('To approve '))
+    return new RuntimeClientError(code, message, {
+      ...(typeof data === 'object' ? data : {}),
+      nextSteps: [...nextSteps, ...perPluginApprovalCommands(ctx, pending)]
+    })
+  }
   if (!APPROVAL_CODES.has(code) || fingerprint === null || typeof data !== 'object') {
     return error
   }
@@ -81,16 +115,21 @@ function translatePluginRpcError(ctx: HandlerContext, method: string, error: unk
   return new RuntimeClientError(code, message, { ...data, command, nextSteps })
 }
 
-async function callPlugins<T>(ctx: HandlerContext, method: string, params?: unknown): Promise<T> {
+export async function callPlugins<T>(
+  ctx: HandlerContext,
+  method: string,
+  params?: unknown,
+  options?: { timeoutMs: number }
+): Promise<T> {
   try {
-    return (await ctx.client.call<T>(method, params)).result
+    return (await ctx.client.call<T>(method, params, options)).result
   } catch (error) {
     throw translatePluginRpcError(ctx, method, error)
   }
 }
 
 /** Development folders are paths on the Orca host, which may not be this machine. */
-function resolveHostPluginPath(ctx: HandlerContext, value: string): string {
+export function resolveHostPluginPath(ctx: HandlerContext, value: string): string {
   if (process.env.ORCA_CLI_CWD) {
     throw new RuntimeClientError(
       'invalid_environment',
@@ -109,7 +148,7 @@ function resolveHostPluginPath(ctx: HandlerContext, value: string): string {
   return resolve(ctx.cwd, value)
 }
 
-function formatPluginRow(plugin: PluginHostListEntry): string {
+export function formatPluginRow(plugin: PluginHostListEntry): string {
   const tags = [plugin.execution, plugin.isDev ? 'dev' : null, plugin.official ? 'official' : null]
   return `${plugin.pluginKey} ${plugin.version}  ${plugin.status}  ${tags.filter(Boolean).join(', ')}${plugin.error ? `\n  ${plugin.error}` : ''}`
 }
@@ -138,7 +177,7 @@ async function devLoad(ctx: HandlerContext, path: string): Promise<void> {
   printPluginResult(ctx, result, formatDevLoad(result))
 }
 
-function requirePluginKey(ctx: HandlerContext): string {
+export function requirePluginKey(ctx: HandlerContext): string {
   const key = stringFlag(ctx, 'plugin')
   if (!key || !isQualifiedPluginKey(key)) {
     throw new RuntimeClientError(

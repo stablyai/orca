@@ -281,7 +281,7 @@ export async function rollbackInstalledPlugin(input: {
 }
 
 /** Publisher of an existing install from the same source, so reinstalling keeps its key. */
-async function installedPublisherFor(
+export async function installedPublisherFor(
   pluginsDir: string,
   sameSource: (source: PluginLockEntry['source']) => boolean
 ): Promise<string | null> {
@@ -290,7 +290,7 @@ async function installedPublisherFor(
   return entry ? (splitQualifiedPluginKey(entry.pluginKey)?.publisher ?? null) : null
 }
 
-async function declaredPublisher(rootDir: string): Promise<string | undefined> {
+export async function declaredPublisher(rootDir: string): Promise<string | undefined> {
   try {
     const raw: unknown = JSON.parse(await readPluginManifestText(rootDir))
     const publisher =

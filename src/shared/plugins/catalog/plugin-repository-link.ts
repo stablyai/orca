@@ -59,3 +59,16 @@ export function pluginListingRepositoryUrl(listing: {
   }
   return listing.source.url
 }
+
+/** Orca's own reading of a Git URL: `host/owner/repo` plus the owner, never the manifest's claim. */
+export function pluginRepositoryOrigin(
+  url: string,
+  path?: string
+): { owner: string; repository: string } | null {
+  const identity = parseGitRepositoryIdentity(url)
+  if (!identity) {
+    return null
+  }
+  const repository = `${identity.host}/${identity.path}`
+  return { owner: identity.owner, repository: path ? `${repository} (${path})` : repository }
+}
