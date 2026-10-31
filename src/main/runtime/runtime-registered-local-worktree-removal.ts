@@ -80,7 +80,7 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
     rememberBranch: boolean,
     // Archive hooks may move the branch; re-read the fallback head afterward.
     fallbackHead: string | undefined
-  ) => void
+  ) => void | Promise<void>
   /** Fired when Git finished, not on acceptance. */
   onRemoved: () => void
   publish: () => void
@@ -274,7 +274,7 @@ export async function finishRuntimeLocalWorktreeRemoval(
         )
         await pruneGitWorktrees({ cwd: repo.path, ...localOptions }).catch(() => {})
         await cleanupRemovedWorktreePushTarget(args)
-        args.finishRemoval(undefined, false, refreshed.head)
+        await args.finishRemoval(undefined, false, refreshed.head)
         completed = true
         return {}
       } else {
@@ -288,7 +288,9 @@ export async function finishRuntimeLocalWorktreeRemoval(
     await gate.finish(completed)
   }
   await cleanupRemovedWorktreePushTarget(args)
-  args.finishRemoval(removalResult, true, refreshed.head)
+  // Awaited so the removal result lands only after the host-state purge (and
+  // the Codex pretrust deletion inside it) has finished.
+  await args.finishRemoval(removalResult, true, refreshed.head)
   return removalResult ?? {}
 }
 

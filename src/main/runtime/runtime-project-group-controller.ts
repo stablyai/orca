@@ -35,7 +35,7 @@ type RuntimeProjectGroupDependencies = {
   notifyReposChanged: () => void
   resolveFolderConnectionId: (workspace: FolderWorkspace) => string | null
   teardownFolderWorkspacePtys: (worktreeId: string, connectionId: string | null) => Promise<void>
-  cleanupRemovedFolderWorkspaceState: (worktreeId: string) => void
+  cleanupRemovedFolderWorkspaceState: (worktreeId: string) => void | Promise<void>
   emitWorktreeLifecycle: (event: RuntimeWorktreeLifecycleEvent) => void
 }
 
@@ -263,6 +263,7 @@ export class RuntimeProjectGroupController {
     if (workspace && isLocalWslMoveRow(workspace)) {
       assertWslMoveProjectWritable(store, { folderWorkspaceId })
     }
+    let cleanupState: void | Promise<void> = undefined
     if (workspace) {
       const worktreeId = folderWorkspaceKey(folderWorkspaceId)
       // Mixed-host groups have no single PTY target; skip the sweep so forgetting still succeeds.
@@ -275,7 +276,11 @@ export class RuntimeProjectGroupController {
       if (connectionId !== undefined) {
         await this.deps.teardownFolderWorkspacePtys(worktreeId, connectionId)
       }
-      this.deps.cleanupRemovedFolderWorkspaceState(worktreeId)
+      // Fired here (timing unchanged) but awaited at the end: the delete may
+      // only resolve after the purge has landed. `folder:<uuid>` ids parse to
+      // no filesystem path, so the pretrust drop inside the purge skips here —
+      // safe: the folder itself stays and sibling workspaces may share its path.
+      cleanupState = this.deps.cleanupRemovedFolderWorkspaceState(worktreeId)
     }
     const deleted = store.removeFolderWorkspace(folderWorkspaceId)
     if (deleted) {
@@ -289,6 +294,7 @@ export class RuntimeProjectGroupController {
         })
       }
     }
+    await cleanupState
     return { deleted }
   }
 }
