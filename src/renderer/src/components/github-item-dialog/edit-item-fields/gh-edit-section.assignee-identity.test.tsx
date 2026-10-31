@@ -184,14 +184,35 @@ describe('opened issue assignee ownership', () => {
     resetTaskPageGitHubMutationRegistryForTests()
   })
 
-  it('publishes a confirmed dialog assignment to the Tasks row without Refresh', async () => {
+  it('publishes only a confirmed dialog assignment to Tasks copies, keeping their other members', async () => {
+    let resolveUpdate: (value: { ok: boolean }) => void = () => {}
+    mocks.update.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveUpdate = resolve
+        })
+    )
     await render()
     await click()
+    expect(mocks.patchWorkItem).not.toHaveBeenCalled()
+    await act(async () => resolveUpdate({ ok: true }))
+    expect(mocks.patchWorkItem).toHaveBeenCalledOnce()
     const [id, patch, repoId] = mocks.patchWorkItem.mock.calls[0]
     expect([id, repoId]).toEqual([item.id, item.repoId])
-    expect(patch({ ...item, assignees: [] })).toEqual({
-      assignees: [expect.objectContaining({ login: 'candidate-user' })]
-    })
+    const bob = { login: 'bob', name: null, avatarUrl: '' }
+    expect(
+      patch({ ...item, assignees: [bob] }).assignees.map((u: { login: string }) => u.login)
+    ).toEqual(['bob', 'candidate-user'])
+    const candidate = { login: 'candidate-user', name: 'Candidate', avatarUrl: 'c.png' }
+    expect(patch({ ...item, assignees: [bob, candidate] })).toEqual({})
+  })
+
+  it('leaves Tasks copies alone when a dialog assignee add fails', async () => {
+    mocks.update.mockRejectedValue(new Error('edit failed'))
+    await render(item, [])
+    await click()
+    expect(selected()).toBe('')
+    expect(mocks.patchWorkItem).not.toHaveBeenCalled()
   })
 
   it('accepts external assignees while the edited dialog stays open', async () => {
@@ -354,25 +375,8 @@ describe('opened issue assignee ownership', () => {
       expect(container.querySelector(`[data-field="${field}"]`)?.textContent).toBe(expected)
       await act(async () => rejectUpdate(new Error('held edit failed')))
       expect(container.querySelector(`[data-field="${field}"]`)?.textContent).toBe(expected)
-      const [id, patch, repoId, options] = mocks.patchWorkItem.mock.lastCall!
-      expect([id, repoId, options]).toEqual([
-        item.id,
-        item.repoId,
-        {
-          sourceContext: undefined,
-          ownerRepo: { owner: 'upstream', repo: 'widgets', host: 'github.com' }
-        }
-      ])
-      // The rollback removes only this edit's change from the upstream copy's current value.
-      expect(
-        patch({
-          ...item,
-          state: 'closed',
-          labels: ['upstream-original-label', 'candidate-label', 'other']
-        })
-      ).toEqual(
-        field === 'labels' ? { labels: ['upstream-original-label', 'other'] } : { state: 'open' }
-      )
+      // A failed edit without a tracked owner never touched other copies, so it has nothing to undo there.
+      expect(mocks.patchWorkItem).not.toHaveBeenCalled()
     }
   )
 

@@ -232,6 +232,32 @@ describe('Refresh task with real shared record and mounted copy', () => {
     expect(workItemDetailsCache.get(model.detailsCacheKey!)?.details?.body).toBe('Saved body')
   })
 
+  it('reads for a Refresh clicked after the dialog closed mid-Refresh and reopened', async () => {
+    await render()
+    const first = deferred<GitHubWorkItemDetails>()
+    mocks.details
+      .mockReturnValueOnce(first.promise)
+      .mockResolvedValueOnce({ ...details, item: { ...row, title: 'Fresh' } })
+    await act(async () => {
+      void model.refreshTask()
+      await Promise.resolve()
+    })
+    await act(async () => root.unmount())
+    root = createRoot(node)
+    await render()
+    let second!: Promise<void>
+    await act(async () => {
+      second = model.refreshTask()
+      await Promise.resolve()
+    })
+    await act(async () => {
+      first.resolve({ ...details, item: { ...row, title: 'Closed dialog' } })
+      await second
+    })
+    expect(mocks.details).toHaveBeenCalledTimes(2)
+    expect(node.textContent).toBe('Fresh|idle')
+    expect(mocks.toastError).not.toHaveBeenCalled()
+  })
   it('discards old-account deferred mounted copies on A to B to A', async () => {
     await render()
     const response = deferred<GitHubWorkItemDetails>()

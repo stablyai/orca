@@ -32,7 +32,6 @@ import {
   composeTaskChanges,
   isEmptyTaskChange,
   publishTaskChange,
-  revertTaskChange,
   untrackedTaskOperation,
   type TaskChange,
   type TaskFacts
@@ -265,14 +264,8 @@ export class GitHubTaskRecordCache {
   }
   private emit(record: AcceptedTask) {
     record.stamp = {}
-    if (record.base) {
-      const visible = contribute(record.base, record)
-      const changed = !record.visible || !sameFacts(visible, record.visible, false)
-      record.visible = visible
-      if (changed) {
-        this.publish(visible, record.binding.observation)
-      }
-    }
+    // Pending changes reach users only through projection; stored copies never hold them.
+    record.visible = record.base && contribute(record.base, record)
     const { associations, hostId } = record.binding.observation
     const scopes: (string | null)[] = associations.map((association) => association.scope)
     if (hostId === 'local') {
@@ -285,6 +278,24 @@ export class GitHubTaskRecordCache {
       deleteConfirmedListSnapshot(scope, repoId, id, 'assignees')
     }
     this.notify()
+  }
+  /** Installs an accepted reading; stored copies take its facts (never pending changes). */
+  private accept(record: AcceptedTask, base: GitHubWorkItem) {
+    const previous = record.base
+    record.base = base
+    if (!previous || !sameFacts(previous, base, false)) {
+      this.publish(base, record.binding.observation)
+    }
+  }
+  /** What a stored copy may hold: the accepted facts or confirmed changes, never pending ones. */
+  private stored(row: GitHubWorkItem, record: AcceptedTask): GitHubWorkItem {
+    const base = record.base
+    if (!base) {
+      return applyTaskChange(row, record.confirmed)
+    }
+    return sameFacts(row, base) && (row.assignees !== undefined || base.assignees === undefined)
+      ? row
+      : withFacts(row, base)
   }
   private publish(value: GitHubWorkItem, observation: GitHubTaskObservation) {
     const ownerRepo = parseGitHubIssueOrPRLink(value.url)?.slug
@@ -343,15 +354,9 @@ export class GitHubTaskRecordCache {
       if (!record) {
         return item
       }
-      if (!record.base) {
-        // Search can't prove it includes an unverified edit: the stored row keeps the confirmed change
-        // (pending ones stay projection-only), and this delivery wakes the read still owed.
-        if (record.needsRead) {
-          void this.verify(record)
-        }
-        return applyTaskChange(item, record.confirmed)
-      }
+      // Search can't prove it includes an unverified edit, so an owner without a base never adopts it.
       if (
+        record.base &&
         !record.needsRead &&
         !record.pending.size &&
         Number.isFinite(version(item)) &&
@@ -359,10 +364,13 @@ export class GitHubTaskRecordCache {
       ) {
         // A newer search row for a complete field family is the newest reading; unknown assignees stay owed.
         record.needsRead = item.assignees === undefined && record.base.assignees !== undefined
-        record.base =
+        this.accept(
+          record,
           item.assignees === undefined ? { ...item, assignees: record.base.assignees } : item
+        )
         this.emit(record)
       } else if (
+        record.base &&
         !sameFacts(item, record.base) &&
         (record.needsRead ||
           !Number.isFinite(version(item)) ||
@@ -371,10 +379,11 @@ export class GitHubTaskRecordCache {
       ) {
         record.needsRead = true
       }
+      // This delivery wakes a read still owed; the caller stores the row, so it carries no pending change.
       if (record.needsRead) {
         void this.verify(record)
       }
-      return this.projectWith(item, record)
+      return this.stored(item, record)
     })
   }
   /** A live record keeps tracking its started edits even after its server proves unsupported. */
@@ -418,9 +427,11 @@ export class GitHubTaskRecordCache {
           record.confirmed = composeTaskChanges(record.confirmed, change)
         }
       }
+      // Stored copies never held this pending change: a failure only drops its token, and a success
+      // applies just its own change to each copy's current value.
       if (!live) {
-        // Disposed mid-flight: the owner still settles through its reducer, but only its own change
-        // reaches copies, and a replacement record reconciles through its own canonical read.
+        // Disposed mid-flight: the owner still settles through its reducer, and a replacement record
+        // reconciles through its own canonical read.
         record.visible = record.base && contribute(record.base, record)
         const replacement = this.records.get(this.key(item, binding.observation.hostId))
         if (replacement && this.current(replacement.binding)) {
@@ -428,18 +439,10 @@ export class GitHubTaskRecordCache {
           void this.verify(replacement)
         } else if (success) {
           publishTaskChange(this.store, item, change, sources(record))
-        } else if (record.visible) {
-          // Only an accepted owner published its pending change to copies; undo just that change.
-          publishTaskChange(
-            this.store,
-            item,
-            revertTaskChange(change, record.visible),
-            sources(record)
-          )
         }
         return value()
       }
-      if (success && !record.base) {
+      if (success) {
         publishTaskChange(this.store, item, change, sources(record))
       }
       this.retire(record)
@@ -501,17 +504,20 @@ export class GitHubTaskRecordCache {
     load: (accepts: () => boolean) => Promise<GitHubWorkItem | null>,
     light = false
   ): Promise<boolean> {
-    if (item.type !== 'issue' || !this.canTrack(binding)) {
-      return false
-    }
-    const record = this.remember(item, binding)
+    // Admission is re-entered after every wait: the owner this read queued behind may have retired,
+    // been replaced, or lost its binding or server support meanwhile.
+    const admit = () =>
+      item.type === 'issue' && this.canTrack(binding) ? this.remember(item, binding) : undefined
+    let owner = admit()
     // A full conversation read waits for the existing item read.
-    while (record.read) {
-      await record.read.promise
+    while (owner?.read) {
+      await owner.read.promise
+      owner = admit()
     }
-    if (record.pending.size || this.record(item, binding) !== record) {
+    if (!owner || owner.pending.size) {
       return false
     }
+    const record = owner
     const revision = record.revision,
       readOrder = nextProviderRequestId()
     const attempt = { revision, light, promise: Promise.resolve(false) }
@@ -537,7 +543,7 @@ export class GitHubTaskRecordCache {
           return false
         }
         // This reading was captured after every confirmed edit settled, so it covers them.
-        record.base = { ...item, ...result }
+        this.accept(record, { ...item, ...result })
         record.confirmed = undefined
         record.readOrder = readOrder
         record.needsRead = false
@@ -656,7 +662,8 @@ export class GitHubTaskRecordCache {
     return [...owners.values()].flatMap(({ repo, address }) => {
       const binding = getRepoExecutionHostId(repo) === scope ? this.capture(repo) : undefined
       const item = address ?? buildProjectWorkItem(row, repo, host)
-      return binding && item ? [{ address: item, binding }] : []
+      // A binding known to lack the item route keeps main's board-only edit; a live owner still drains.
+      return binding && item && this.canTrack(binding, item) ? [{ address: item, binding }] : []
     })
   }
   /** Matching records per Project row: execution source, GitHub host, owner/repo and issue number. */

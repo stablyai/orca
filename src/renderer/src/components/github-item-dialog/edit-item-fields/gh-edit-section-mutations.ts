@@ -75,7 +75,8 @@ export function runGHEditStateChange({
             : { state: newState }
       }),
     onOptimistic: () => {
-      settle = beginEdit(item, sourceContext, { state: newState })
+      // Rollback restores what this dialog showed, as main's prevState did.
+      settle = beginEdit({ ...item, state: localState }, sourceContext, { state: newState })
       onStateChange(newState)
       patchProjectRowIfNeeded({ state: newState })
     },
@@ -132,7 +133,9 @@ export function runGHEditLabelToggle({
         updates: isAdding ? { addLabels: [label] } : { removeLabels: [label] }
       }),
     onOptimistic: () => {
-      settle = beginEdit(item, sourceContext, { labels: { [label]: isAdding } })
+      settle = beginEdit({ ...item, labels: localLabels }, sourceContext, {
+        labels: { [label]: isAdding }
+      })
       onLabelsChange(newLabels)
       patchProjectRowIfNeeded({ labels: newLabels })
     },

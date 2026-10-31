@@ -60,27 +60,6 @@ export function composeTaskChanges(earlier: TaskChange | undefined, later: TaskC
     assignees: { ...earlier?.assignees, ...later.assignees }
   }
 }
-/** Returns the fields and members `change` touches to how they read in `value`, skipping those already there. */
-export function revertTaskChange(change: TaskChange, value: TaskFacts): TaskChange {
-  const users = value.assignees
-  return {
-    ...(change.title === undefined || change.title === value.title ? {} : { title: value.title }),
-    ...(change.state === undefined || change.state === value.state ? {} : { state: value.state }),
-    labels: Object.fromEntries(
-      Object.entries(change.labels ?? {})
-        .filter(([name, present]) => value.labels.includes(name) !== present)
-        .map(([name, present]): [string, boolean] => [name, !present])
-    ),
-    assignees: Object.fromEntries(
-      Object.entries(change.assignees ?? {}).flatMap(
-        ([key, user]): [string, GitHubAssignableUser | null][] => {
-          const had = users?.find((entry) => login(entry.login) === key)
-          return !users || !had === !user ? [] : [[key, had ?? null]]
-        }
-      )
-    )
-  }
-}
 /** Applies a change to each matching copy's current value, leaving its unrelated facts and members alone. */
 export function publishTaskChange(
   store: Pick<StoreApi<AppState>, 'getState'>,
@@ -107,17 +86,19 @@ export function publishTaskChange(
       .patchWorkItem(item.id, patch, item.repoId, { sourceContext: source, ownerRepo })
   }
 }
-/** Without a tracked owner (no binding, unsupported server), copies get only this edit's change. */
+/**
+ * Without a tracked owner (no binding, unsupported server), other copies take only a confirmed change;
+ * the origin keeps its own optimism and rollback, so a failure has nothing to undo here.
+ */
 export function untrackedTaskOperation(
   store: Pick<StoreApi<AppState>, 'getState'>,
   item: GitHubWorkItem,
   change: TaskChange,
   sources: TaskSources
 ) {
-  publishTaskChange(store, item, change, sources)
   return (success: boolean) => {
-    if (!success) {
-      publishTaskChange(store, item, revertTaskChange(change, item), sources)
+    if (success) {
+      publishTaskChange(store, item, change, sources)
     }
     return success ? applyTaskChange(item, change) : item
   }
