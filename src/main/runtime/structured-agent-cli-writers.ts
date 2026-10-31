@@ -23,7 +23,6 @@ export async function assertCliConversationWritersExited(
     if (
       row.connectionId ||
       row.structuredHost ||
-      row.agentPresence?.ended ||
       !adoptsCliConversations(row.agentType) ||
       row.providerSession?.id !== providerSessionId ||
       !CLI_CONVERSATION_ADOPTING_AGENTS[row.agentType].some((chat) =>

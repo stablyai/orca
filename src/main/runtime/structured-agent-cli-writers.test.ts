@@ -87,12 +87,11 @@ describe('canonical status store conversation admission', () => {
     await expect(run(true)).resolves.toBeUndefined()
   })
 
-  it('admits absent, ended, structured, foreign-host and other-conversation rows', async () => {
+  it('admits absent, structured, foreign-host and other-conversation rows', async () => {
     await expect(check([], 'live')).resolves.toBeUndefined()
     await expect(
       check(
         [
-          { ...row, agentPresence: { agent: 'claude', ended: true } },
           { ...row, structuredHost: 'owned' },
           { ...row, connectionId: 'ssh' },
           { ...row, providerSession: { key: 'session_id', id: 'another' } }
