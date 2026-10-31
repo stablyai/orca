@@ -96,20 +96,25 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
       />
     )
   }
-  if (preview.kind === 'svg' && !options.editable && !preview.truncated) {
+  if (preview.kind === 'svg' && !preview.truncated) {
     return (
       <MobileSvgPreview
-        markup={preview.content}
+        // A writable artifact previews its unsaved draft, as desktop does.
+        markup={options.editable ? options.draftContent : preview.content}
         title={options.title}
-        renderSource={() => (
-          <MobileFilePreviewSourceText
-            relativePath={options.relativePath}
-            content={preview.content}
-            truncated={false}
-            byteLength={preview.byteLength}
-            initialLine={options.lineColumn?.line}
-          />
-        )}
+        renderSource={() =>
+          options.editable ? (
+            <EditablePreviewSource {...options} />
+          ) : (
+            <MobileFilePreviewSourceText
+              relativePath={options.relativePath}
+              content={preview.content}
+              truncated={false}
+              byteLength={preview.byteLength}
+              initialLine={options.lineColumn?.line}
+            />
+          )
+        }
       />
     )
   }

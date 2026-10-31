@@ -4,12 +4,14 @@ import {
   type PanZoomPoint,
   type PanZoomSize,
   type PanZoomView,
+  containPanZoomView,
   getFittedPanZoomView,
   getPanZoomFitScale,
   getPanZoomViewOffset,
   panView,
   zoomViewAt
 } from '../../../src/shared/pan-zoom-view'
+import { useBackClaim } from '../navigation/use-back-claim'
 
 const DOUBLE_TAP_MS = 300
 const TAP_SLOP_PX = 10
@@ -78,7 +80,23 @@ export function useMobilePanZoom(content: PanZoomSize | null, upscale: boolean):
         : null,
     [content, viewport, upscale]
   )
-  const view = manualView ?? (content ? getFittedPanZoomView(content) : null)
+  // Rotation can leave a panned view past the new edges; contain it against the current viewport.
+  const view =
+    manualView && geometry
+      ? containPanZoomView(manualView, geometry)
+      : content
+        ? getFittedPanZoomView(content)
+        : null
+
+  // While zoomed, Back returns to fit; on iOS this also stops the full-screen back swipe from eating a pan.
+  useBackClaim(
+    manualView && manualView.zoom !== 1
+      ? () => {
+          setManualView(null)
+          return true
+        }
+      : null
+  )
 
   const handlers = useMemo<MobilePanZoom['handlers']>(() => {
     const local = (event: React.PointerEvent<HTMLDivElement>): PanZoomPoint => {
@@ -156,24 +174,18 @@ export function useMobilePanZoom(content: PanZoomSize | null, upscale: boolean):
           const next = pinchOf([...pointers.current.values()])
           pinch.current = next
           setManualView((current) => {
-            const from = current ?? getFittedPanZoomView(geometry.content)
-            const zoomed = zoomAt(
-              from,
-              from.zoom * (next.distance / previousPinch.distance),
-              next.mid,
-              geometry
-            )
-            const delta = {
-              x: next.mid.x - previousPinch.mid.x,
-              y: next.mid.y - previousPinch.mid.y
-            }
-            return panView(
-              zoomed,
-              delta,
-              geometry.fitScale * zoomed.zoom,
-              geometry.content,
-              geometry.viewport
-            )
+            const from = current
+              ? containPanZoomView(current, geometry)
+              : getFittedPanZoomView(geometry.content)
+            // Zoom by the spread and carry the content under the old midpoint to the new one.
+            return zoomViewAt({
+              ...geometry,
+              view: from,
+              nextZoom: from.zoom * (next.distance / previousPinch.distance),
+              anchor: previousPinch.mid,
+              target: next.mid,
+              contain: true
+            })
           })
           return
         }
@@ -182,7 +194,9 @@ export function useMobilePanZoom(content: PanZoomSize | null, upscale: boolean):
         }
         const delta = { x: point.x - last.x, y: point.y - last.y }
         setManualView((current) => {
-          const from = current ?? getFittedPanZoomView(geometry.content)
+          const from = current
+            ? containPanZoomView(current, geometry)
+            : getFittedPanZoomView(geometry.content)
           return panView(
             from,
             delta,
