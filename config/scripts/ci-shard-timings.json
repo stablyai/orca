@@ -9060,7 +9060,7 @@
       "src/renderer/src/components/task-page/jira/task-page-jira-saved-filter-application.test.tsx": 1838,
       "src/renderer/src/components/task-page-jira-saved-filter-load-failure.test.tsx": 2974,
       "src/renderer/src/components/task-page/jira/task-page-jira-search.test.ts": 42,
-      "src/renderer/src/components/task-page-jira-sorting.test.ts": 107,
+      "src/renderer/src/components/task-page/jira/task-page-jira-sorting.test.ts": 107,
       "src/renderer/src/components/task-page-jira-status-catalog.test.ts": 60,
       "src/renderer/src/components/task-page/jira/task-page-jira-status-order-session.test.tsx": 2111,
       "src/renderer/src/components/task-page/jira/task-page-jira-text-fallback-notice.test.tsx": 375,
