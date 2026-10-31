@@ -11,6 +11,10 @@ const DIFF_UNCHANGED_CONTEXT_LINE_ESTIMATE = 12
 const MAX_UNMEASURED_TEXT_BODY_LINES = 80
 const LARGE_DIFF_FALLBACK_BODY_HEIGHT = 160
 
+export function getMeasuredDiffSectionBodyHeight(contentHeight: number): number {
+  return contentHeight + DIFF_SECTION_PADDING_HEIGHT
+}
+
 type DiffSectionBodyHeightInput = {
   measuredContentHeight: number | undefined
   originalContent: string
@@ -56,7 +60,7 @@ export function getDiffSectionBodyHeight({
   }
 
   if (measuredContentHeight !== undefined && measuredContentHeight > 0) {
-    return measuredContentHeight + DIFF_SECTION_PADDING_HEIGHT
+    return getMeasuredDiffSectionBodyHeight(measuredContentHeight)
   }
 
   const fullLineCount = lineCounts

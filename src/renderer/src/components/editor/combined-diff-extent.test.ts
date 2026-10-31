@@ -63,7 +63,10 @@ afterEach(() => {
 
 it('materializes trailing slack before the sole bottom-expansion write, then consumes a late 20px publication', () => {
   const f = fixture([60000, 977], 60277)
-  f.owner.transact(1, 400, () => f.owner.publish(items([60000, 1357])))
+  const edit = f.owner.beginEdit(1, 277)
+  f.owner.publish(items([60000, 1357]))
+  expect(f.writes).toEqual([])
+  edit?.commit(677)
   expect(f.position()).toBe(60677)
   expect(f.owner.trailingSlack).toBe(20)
   expect(f.writes).toEqual([60677])
@@ -167,7 +170,9 @@ it('restores a negative saved offset with leading slack and exports it without a
 
 it('consumes slack on manual scrolling and drops removed identities without a deferred writer', () => {
   const f = fixture([60000, 977], 60277)
-  f.owner.transact(1, 400, () => f.owner.publish(items([60000, 1357])))
+  const edit = f.owner.beginEdit(1, 277)
+  f.owner.publish(items([60000, 1357]))
+  edit?.commit(677)
   f.input(60500)
   expect(f.owner.trailingSlack).toBe(0)
   f.owner.publish(items([60000, 1377]))
@@ -226,7 +231,9 @@ it('uses real virtualizer staged measurements with a lagging DOM range and no in
   virtualizer._willUpdate()
   publishCombinedDiffMeasurements(virtualizer)
   const owner = getCombinedDiffExtent(viewport)
-  owner.transact(1, 400, () => virtualizer.resizeItem(1, 1357))
+  const edit = owner.beginEdit(1, 277)
+  virtualizer.resizeItem(1, 1357)
+  edit?.commit(677)
   expect(top).toBe(60677)
   expect(viewport.scrollHeight).toBe(61377)
   expect(owner.trailingSlack).toBe(20)

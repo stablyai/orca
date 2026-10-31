@@ -42,12 +42,13 @@ it('installs the reveal contract and refuses a version bump that leaves its patc
     expect(widget).toContain('this.onDidRequestReveal =')
     expect(widget).toContain("kind: 'save'")
     expect(widget).toContain("kind: 'restore'")
+    expect(widget).toContain('setScrollAnchorHandler(handler)')
     expect(
       readFileSync(
         join(esm, 'browser/widget/diffEditor/features/hideUnchangedRegionsFeature.js'),
         'utf8'
       )
-    ).toContain("kind: 'anchor'")
+    ).toContain('editor._runWithScrollAnchor(')
     expect(readFileSync(join(esm, 'common/viewModelEventDispatcher.js'), 'utf8')).toContain(
       'this.scrollSource !== other.scrollSource'
     )

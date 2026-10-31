@@ -20,15 +20,16 @@ diff --git a/esm/vs/editor/browser/widget/diffEditor/utils/editorGutter.js b/esm
 diff --git a/esm/vs/editor/browser/widget/codeEditor/codeEditorWidget.js b/esm/vs/editor/browser/widget/codeEditor/codeEditorWidget.js
 --- a/esm/vs/editor/browser/widget/codeEditor/codeEditorWidget.js
 +++ b/esm/vs/editor/browser/widget/codeEditor/codeEditorWidget.js
-@@ -29,6 +29,7 @@
+@@ -29,6 +29,8 @@
  import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
  import { MonospaceLineBreaksComputerFactory } from '../../../common/viewModel/monospaceLineBreaksComputer.js';
  import { ViewModel } from '../../../common/viewModel/viewModelImpl.js';
 +import { ViewEventHandler } from '../../../common/viewEventHandler.js';
++import { transaction } from '../../../../base/common/observableInternal/transaction.js';
  import { localize } from '../../../../nls.js';
  import { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
  import { ICommandService } from '../../../../platform/commands/common/commands.js';
-@@ -86,6 +87,8 @@
+@@ -86,6 +88,8 @@
          //#region Eventing
          this._deliveryQueue = createEventDeliveryQueue();
          this._contributions = this._register(new CodeEditorContributions());
@@ -37,16 +38,53 @@ diff --git a/esm/vs/editor/browser/widget/codeEditor/codeEditorWidget.js b/esm/v
          this._onDidDispose = this._register(new Emitter());
          this.onDidDispose = this._onDidDispose.event;
          this._onDidChangeModelContent = this._register(new Emitter({ deliveryQueue: this._deliveryQueue }));
-@@ -686,7 +689,7 @@
+@@ -288,6 +292,7 @@
+         this._overlayWidgets = {};
+         this._removeDecorationTypes();
+         this._postDetachModelCleanup(this._detachModel());
++        this._scrollAnchorHandler = undefined;
+         this._onDidDispose.fire();
+         super.dispose();
+     }
+@@ -686,7 +691,36 @@
              scrollLeft: newScrollLeft
          }, scrollType);
      }
 -    setScrollTop(newScrollTop, scrollType = 1 /* editorCommon.ScrollType.Immediate */) {
++    setScrollAnchorHandler(handler) {
++        this._scrollAnchorHandler = handler;
++        return { dispose: () => {
++            if (this._scrollAnchorHandler === handler) this._scrollAnchorHandler = undefined;
++        } };
++    }
++    _runWithScrollAnchor(lineNumber, update) {
++        const model = this.getModel();
++        const point = () => lineNumber > model.getLineCount()
++            ? this.getContentHeight() : this.getTopForLineNumber(lineNumber);
++        const before = model ? point() : 0;
++        let consumed = false;
++        const apply = () => {
++            if (consumed) return;
++            consumed = true;
++            // Returning from this transaction includes native zone restoration and reaction drain.
++            transaction(tx => update(tx));
++        };
++        const handler = model ? this._scrollAnchorHandler : undefined;
++        let claimed = !!handler;
++        try {
++            if (handler) claimed = handler({ model, lineNumber, update: apply }) !== false;
++        } finally {
++            apply();
++        }
++        if (!claimed && model && this.getModel() === model) {
++            this.setScrollTop(this.getScrollTop() + point() - before);
++        }
++    }
 +    setScrollTop(newScrollTop, scrollType = 1 /* editorCommon.ScrollType.Immediate */, scrollSource) {
          if (!this._modelData) {
              return;
          }
-@@ -695,7 +698,7 @@
+@@ -695,7 +729,7 @@
          }
          this._modelData.viewModel.viewLayout.setScrollPosition({
              scrollTop: newScrollTop
@@ -55,7 +93,7 @@ diff --git a/esm/vs/editor/browser/widget/codeEditor/codeEditorWidget.js b/esm/v
      }
      setScrollPosition(position, scrollType = 1 /* editorCommon.ScrollType.Immediate */) {
          if (!this._modelData) {
-@@ -716,11 +719,13 @@
+@@ -716,11 +750,13 @@
          const contributionsState = this._contributions.saveViewState();
          const cursorState = this._modelData.viewModel.saveCursorState();
          const viewState = this._modelData.viewModel.saveState();
@@ -70,7 +108,7 @@ diff --git a/esm/vs/editor/browser/widget/codeEditor/codeEditorWidget.js b/esm/v
      }
      restoreViewState(s) {
          if (!this._modelData || !this._modelData.hasRealView) {
-@@ -741,6 +746,7 @@
+@@ -741,6 +777,7 @@
              this._contributions.restoreViewState(codeEditorState.contributionsState || {});
              const reducedState = this._modelData.viewModel.reduceRestoreState(codeEditorState.viewState);
              this._modelData.view.restoreState(reducedState);
@@ -78,7 +116,7 @@ diff --git a/esm/vs/editor/browser/widget/codeEditor/codeEditorWidget.js b/esm/v
          }
      }
      handleInitialized() {
-@@ -1358,6 +1364,25 @@
+@@ -1358,6 +1395,25 @@
              }
          }));
          const [view, hasRealView] = this._createView(viewModel);
@@ -136,26 +174,33 @@ diff --git a/monaco.d.ts b/monaco.d.ts
  	readonly scrollTop: number;
  	readonly scrollLeft: number;
  	readonly scrollWidth: number;
-@@ -5967,7 +5970,18 @@
+@@ -5967,7 +5970,25 @@
  	/**
  	 * A rich code editor.
  	 */
 +	/** Repository-owned navigation and view-state notifications; state identity is not serialized. */
 +	export type IEditorRevealRequest = { kind: 'find'; model: ITextModel; height: number } |
-+	{ kind: 'anchor'; model: ITextModel; delta: number } |
 +	{ kind: 'save'; model: ITextModel; state: ICodeEditorViewState } |
 +	{ kind: 'restore'; model: ITextModel; state: ICodeEditorViewState } | {
 +		kind: 'range'; model: ITextModel; source: string | null; minimal: boolean;
 +		top: number; bottom: number; verticalType: number;
 +	};
 +
++	/** Repository-owned before-mutation anchor; update completes native observable reactions once. */
++	export interface IEditorScrollAnchorRequest {
++		readonly model: ITextModel;
++		readonly lineNumber: number;
++		readonly update: () => void;
++	}
++
  	export interface ICodeEditor extends IEditor {
++		setScrollAnchorHandler(handler: (request: IEditorScrollAnchorRequest) => boolean): IDisposable;
 +		readonly onDidRequestReveal: IEvent$1<IEditorRevealRequest>;
 +
  		/**
  		 * An event emitted when the content of the current model has changed.
  		 * @event
-@@ -6216,7 +6230,7 @@
+@@ -6216,7 +6237,7 @@
  		/**
  		 * Change the scrollTop of the editor's viewport.
  		 */
@@ -177,26 +222,33 @@ diff --git a/esm/vs/editor/editor.api.d.ts b/esm/vs/editor/editor.api.d.ts
  	readonly scrollTop: number;
  	readonly scrollLeft: number;
  	readonly scrollWidth: number;
-@@ -5967,7 +5970,18 @@
+@@ -5967,7 +5970,25 @@
  	/**
  	 * A rich code editor.
  	 */
 +	/** Repository-owned navigation and view-state notifications; state identity is not serialized. */
 +	export type IEditorRevealRequest = { kind: 'find'; model: ITextModel; height: number } |
-+	{ kind: 'anchor'; model: ITextModel; delta: number } |
 +	{ kind: 'save'; model: ITextModel; state: ICodeEditorViewState } |
 +	{ kind: 'restore'; model: ITextModel; state: ICodeEditorViewState } | {
 +		kind: 'range'; model: ITextModel; source: string | null; minimal: boolean;
 +		top: number; bottom: number; verticalType: number;
 +	};
 +
++	/** Repository-owned before-mutation anchor; update completes native observable reactions once. */
++	export interface IEditorScrollAnchorRequest {
++		readonly model: ITextModel;
++		readonly lineNumber: number;
++		readonly update: () => void;
++	}
++
  	export interface ICodeEditor extends IEditor {
++		setScrollAnchorHandler(handler: (request: IEditorScrollAnchorRequest) => boolean): IDisposable;
 +		readonly onDidRequestReveal: IEvent<IEditorRevealRequest>;
 +
  		/**
  		 * An event emitted when the content of the current model has changed.
  		 * @event
-@@ -6216,7 +6230,7 @@
+@@ -6216,7 +6237,7 @@
  		/**
  		 * Change the scrollTop of the editor's viewport.
  		 */
@@ -208,19 +260,46 @@ diff --git a/esm/vs/editor/editor.api.d.ts b/esm/vs/editor/editor.api.d.ts
 diff --git a/esm/vs/editor/browser/widget/diffEditor/features/hideUnchangedRegionsFeature.js b/esm/vs/editor/browser/widget/diffEditor/features/hideUnchangedRegionsFeature.js
 --- a/esm/vs/editor/browser/widget/diffEditor/features/hideUnchangedRegionsFeature.js
 +++ b/esm/vs/editor/browser/widget/diffEditor/features/hideUnchangedRegionsFeature.js
-@@ -371,6 +371,7 @@
-                     ? editor.getContentHeight()
-                     : editor.getTopForLineNumber(this._unchangedRegionRange.endLineNumberExclusive);
-                 editor.setScrollTop(editor.getScrollTop() + (top2 - top));
-+                editor._onDidRequestReveal.fire({ kind: 'anchor', model: editor.getModel(), delta: top2 - top });
+@@ -332,11 +332,13 @@
+                 didMove = didMove || Math.abs(delta) > 2;
+                 const lineDelta = Math.round(delta / editor.getOption(75 /* EditorOption.lineHeight */));
+                 const newVal = Math.max(0, Math.min(cur + lineDelta, this._unchangedRegion.getMaxVisibleLineCountTop()));
+-                this._unchangedRegion.visibleLineCountTop.set(newVal, undefined);
++                editor._runWithScrollAnchor(Math.max(1, this._unchangedRegionRange.startLineNumber - 1),
++                    tx => this._unchangedRegion.visibleLineCountTop.set(newVal, tx));
+             });
+             const mouseUpListener = addDisposableListener(window, 'mouseup', e => {
+                 if (!didMove) {
+-                    this._unchangedRegion.showMoreAbove(this._options.hideUnchangedRegionsRevealLineCount.get(), undefined);
++                    editor._runWithScrollAnchor(Math.max(1, this._unchangedRegionRange.startLineNumber - 1),
++                        tx => this._unchangedRegion.showMoreAbove(this._options.hideUnchangedRegionsRevealLineCount.get(), tx));
+                 }
+                 this._nodes.top.classList.toggle('dragging', false);
+                 this._nodes.root.classList.toggle('dragging', false);
+@@ -363,22 +365,14 @@
+                 didMove = didMove || Math.abs(delta) > 2;
+                 const lineDelta = Math.round(delta / editor.getOption(75 /* EditorOption.lineHeight */));
+                 const newVal = Math.max(0, Math.min(cur - lineDelta, this._unchangedRegion.getMaxVisibleLineCountBottom()));
+-                const top = this._unchangedRegionRange.endLineNumberExclusive > editor.getModel().getLineCount()
+-                    ? editor.getContentHeight()
+-                    : editor.getTopForLineNumber(this._unchangedRegionRange.endLineNumberExclusive);
+-                this._unchangedRegion.visibleLineCountBottom.set(newVal, undefined);
+-                const top2 = this._unchangedRegionRange.endLineNumberExclusive > editor.getModel().getLineCount()
+-                    ? editor.getContentHeight()
+-                    : editor.getTopForLineNumber(this._unchangedRegionRange.endLineNumberExclusive);
+-                editor.setScrollTop(editor.getScrollTop() + (top2 - top));
++                editor._runWithScrollAnchor(this._unchangedRegionRange.endLineNumberExclusive,
++                    tx => this._unchangedRegion.visibleLineCountBottom.set(newVal, tx));
              });
              const mouseUpListener = addDisposableListener(window, 'mouseup', e => {
                  this._unchangedRegion.isDragged.set(undefined, undefined);
-@@ -379,6 +380,7 @@
-                     this._unchangedRegion.showMoreBelow(this._options.hideUnchangedRegionsRevealLineCount.get(), undefined);
-                     const top2 = editor.getTopForLineNumber(this._unchangedRegionRange.endLineNumberExclusive);
-                     editor.setScrollTop(editor.getScrollTop() + (top2 - top));
-+                editor._onDidRequestReveal.fire({ kind: 'anchor', model: editor.getModel(), delta: top2 - top });
+                 if (!didMove) {
+-                    const top = editor.getTopForLineNumber(this._unchangedRegionRange.endLineNumberExclusive);
+-                    this._unchangedRegion.showMoreBelow(this._options.hideUnchangedRegionsRevealLineCount.get(), undefined);
+-                    const top2 = editor.getTopForLineNumber(this._unchangedRegionRange.endLineNumberExclusive);
+-                    editor.setScrollTop(editor.getScrollTop() + (top2 - top));
++                    editor._runWithScrollAnchor(this._unchangedRegionRange.endLineNumberExclusive,
++                        tx => this._unchangedRegion.showMoreBelow(this._options.hideUnchangedRegionsRevealLineCount.get(), tx));
                  }
                  this._nodes.bottom.classList.toggle('dragging', false);
                  this._nodes.root.classList.toggle('dragging', false);

@@ -91,6 +91,7 @@ function fixture() {
       getContainerDomNode: () => node,
       getContentHeight: () => contentHeight,
       getScrollTop: () => scroll,
+      setScrollAnchorHandler: () => ({ dispose() {} }),
       setScrollTop: (value: number) => {
         scroll = value + padding
         change.fire({ scrollTop: scroll, scrollTopChanged: true })
@@ -203,28 +204,6 @@ function fixture() {
 afterEach(() => {
   document.body.replaceChildren()
   vi.unstubAllGlobals()
-})
-
-it('publishes expanded extent before preserving the lower anchor, independent of pane scroll baselines', async () => {
-  const f = fixture()
-  f.viewport.scrollTop = 3700
-  f.viewport.dispatchEvent(new Event('scroll'))
-  f.setContentHeight(4200)
-  f.original.set(400)
-  f.modified.set(381)
-  f.original.change.fire({ scrollTop: 400, scrollTopChanged: true })
-  f.modified.change.fire({ scrollTop: 381, scrollTopChanged: true })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only this model's identity participates in the anchor contract.
-  f.original.reveal.fire({
-    kind: 'anchor',
-    model: f.model as unknown as editor.ITextModel,
-    delta: 400
-  })
-  await Promise.resolve()
-  expect(f.publishExtent).toHaveBeenCalledWith(4200)
-  expect(f.viewport.scrollTop).toBe(4100)
-  expect(f.writes()).toBe(2)
-  f.dispose()
 })
 
 it('keeps a screen-sized cap for a partial following file and uses actual visible code edges', () => {
@@ -434,23 +413,6 @@ it('keeps the restored file anchor when a virtualized predecessor publishes afte
   f.growPrefix(200)
   expect(f.viewport.scrollTop).toBe(200)
   f.dispose()
-})
-
-it('does not commit a native anchor if its editor is disposed during extent publication', async () => {
-  const f = fixture()
-  f.viewport.scrollTop = 3700
-  f.publishExtent.mockImplementation(() => {
-    f.dispose()
-  })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only this fixture model identity is read by the native anchor notification.
-  f.modified.reveal.fire({
-    kind: 'anchor',
-    model: f.model as unknown as editor.ITextModel,
-    delta: 400
-  })
-  await Promise.resolve()
-  expect(f.viewport.scrollTop).toBe(3700)
-  expect(f.writes()).toBe(1)
 })
 
 it.each(['before', 'after'] as const)(

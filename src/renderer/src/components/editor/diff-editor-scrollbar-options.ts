@@ -13,5 +13,9 @@ export const diffEditorScrollbarOptions = {
 export const combinedDiffSectionScrollbarOptions = {
   ...diffEditorScrollbarOptions,
   vertical: 'hidden',
+  ignoreHorizontalScrollbarInContentHeight: true,
   handleMouseWheel: false
 } satisfies editor.IEditorScrollbarOptions
+
+// Reserve the same clearance in both panes even when only one horizontal bar is visible.
+export const combinedDiffSectionPadding = { bottom: DIFF_EDITOR_SCROLLBAR_SIZE }

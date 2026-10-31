@@ -1,5 +1,32 @@
 import type { VirtualItem } from '@tanstack/react-virtual'
-import type { CombinedDiffItemAnchor } from './combined-diff-extent'
+import type { CombinedDiffItemAnchor, CombinedDiffViewImport } from './combined-diff-extent'
+
+export function getCombinedDiffViewExport(
+  items: readonly VirtualItem[],
+  anchor: CombinedDiffItemAnchor | null,
+  index: number,
+  scrollTop: number,
+  leading: number,
+  height: number
+): CombinedDiffViewImport {
+  const item = items[index]
+  const position = scrollTop - leading
+  const fallbackKeys: string[] = []
+  for (let next = index + 1; next < items.length; next += 1) {
+    const candidate = items[next]!
+    if (candidate.start >= position + height) {
+      break
+    }
+    fallbackKeys.push(String(candidate.key))
+  }
+  return {
+    scrollTop,
+    anchor:
+      anchor && item && typeof anchor.key === 'string'
+        ? { key: anchor.key, offset: position - item.start, fallbackKeys }
+        : null
+  }
+}
 
 export function getCombinedDiffTopAnchor(
   items: readonly VirtualItem[],

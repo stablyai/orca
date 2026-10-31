@@ -7,7 +7,10 @@ import { AlertCircle, RefreshCw } from 'lucide-react'
 import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { combinedDiffSectionScrollbarOptions } from './diff-editor-scrollbar-options'
+import {
+  combinedDiffSectionPadding,
+  combinedDiffSectionScrollbarOptions
+} from './diff-editor-scrollbar-options'
 import { isCombinedDiffSizeUnknown } from './combined-diff-on-demand-load'
 import type { DiffSection } from './diff-section-types'
 import { translate } from '@/i18n/i18n'
@@ -304,6 +307,7 @@ export function DiffSectionBody({
               overflowWidgetsDomNode: surface.overflow,
               renderOverviewRuler: false,
               scrollbar: combinedDiffSectionScrollbarOptions,
+              padding: combinedDiffSectionPadding,
               hideUnchangedRegions: { enabled: true },
               find: monacoFindOptions
             }}

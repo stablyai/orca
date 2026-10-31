@@ -1,3 +1,4 @@
+import type { editor } from 'monaco-editor'
 import {
   COMBINED_DIFF_HEADER_SELECTOR,
   COMBINED_DIFF_ROW_SELECTOR,
@@ -72,4 +73,53 @@ export function resolveCombinedDiffReveal(
     return Math.max(0, bottom - viewport, top - header - (viewport - header) * 0.2)
   }
   return Math.max(0, top < start ? top - header : bottom > end ? bottom - viewport : scroll)
+}
+
+export function createCombinedDiffSliceLayout(
+  diff: editor.IStandaloneDiffEditor,
+  body: HTMLElement,
+  host: HTMLElement,
+  viewport: HTMLElement,
+  geometry: {
+    headerHeight: () => number
+    bodyTop: () => number
+    acknowledge: (action: () => void) => void
+    disposed: () => boolean
+  }
+): (target?: number) => void {
+  const panes = [diff.getOriginalEditor(), diff.getModifiedEditor()]
+  let width = -1
+  let height = -1
+  return (target = viewport.scrollTop): void => {
+    if (geometry.disposed() || !viewport.clientHeight || !body.clientWidth) {
+      return
+    }
+    const content = Math.max(...panes.map((pane) => pane.getContentHeight()))
+    const slice = getCombinedDiffSlice(
+      content,
+      viewport.clientHeight,
+      geometry.headerHeight(),
+      geometry.bodyTop(),
+      target
+    )
+    host.style.position = 'absolute'
+    host.style.width = '100%'
+    host.style.height = `${slice.height}px`
+    geometry.acknowledge(() => {
+      if (width !== body.clientWidth || height !== slice.height) {
+        width = body.clientWidth
+        height = slice.height
+        diff.layout({ width, height })
+      }
+      diff.getModifiedEditor().setScrollTop(slice.offset, 1, 'geometry')
+    })
+    // Native clamping and peer alignment determine the applied pane-to-item transform.
+    const offset = diff.getModifiedEditor().getScrollTop()
+    host.style.top = `${offset}px`
+    const visibleTop = geometry.bodyTop() + offset - target
+    host.style.visibility =
+      visibleTop < viewport.clientHeight && visibleTop + slice.height > geometry.headerHeight()
+        ? ''
+        : 'hidden'
+  }
 }
