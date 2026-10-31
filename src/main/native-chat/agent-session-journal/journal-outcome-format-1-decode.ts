@@ -12,14 +12,12 @@ import {
 
 type JournalStateDecode = {
   entry: (path: string, entryJson: string) => void
-  has: (path: string, key: unknown) => boolean
   remove: (path: string, key: unknown) => void
   finish: () => JournalReducerState
 }
 
 type Target = {
   set: (entry: unknown) => void
-  has: (key: unknown) => boolean
   remove: (key: unknown) => void
 }
 
@@ -48,7 +46,6 @@ export function decodeOutcomeFormat1Onto(
   }
   return {
     entry: (path, entryJson) => target(path).set(JSON.parse(entryJson)),
-    has: (path, key) => target(path).has(key),
     remove: (path, key) => target(path).remove(key),
     finish: () => state
   }
@@ -117,7 +114,6 @@ function collectionTargets(state: JournalReducerState): Map<string, Target> {
       const [key, value] = schema.parse(entry)
       target.set(key, value)
     },
-    has: (key) => isKey(key) && target.has(key),
     remove: (key) => {
       if (isKey(key)) {
         target.delete(key)
@@ -128,7 +124,6 @@ function collectionTargets(state: JournalReducerState): Map<string, Target> {
     set: (entry) => {
       target.add(schema.parse(entry)[0])
     },
-    has: (key) => isString(key) && target.has(key),
     remove: (key) => {
       if (isString(key)) {
         target.delete(key)
@@ -145,7 +140,6 @@ function collectionTargets(state: JournalReducerState): Map<string, Target> {
           const item = outcomeFormat1Fields.items.element.parse(entry)
           items.set(item.itemId, item)
         },
-        has: (key) => isString(key) && items.has(key),
         remove: (key) => {
           if (isString(key)) {
             items.delete(key)
@@ -168,7 +162,6 @@ function collectionTargets(state: JournalReducerState): Map<string, Target> {
           const echo = p.itemEchoes.parse(entry)
           state.itemEchoes.set(echo[0], echo[1])
         },
-        has: (key) => isString(key) && state.itemEchoes.has(key),
         remove: (key) => {
           if (isString(key)) {
             state.itemEchoes.delete(key)

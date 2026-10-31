@@ -101,6 +101,23 @@ it("keeps an existing chat's rows byte for byte, starts its records after one ap
   expect(read(7)).toEqual([8, 9, 10])
 })
 
+it('keeps a record that updated a prefix key when a later prefix fold no longer yields that key', async () => {
+  seedProjectionRows(database, [projectionEpochRow, item(2, 'a'), item(3, 'b')])
+  const rig = projectionWriter(database, restoreJournal(database.db, sessionId)!.state)
+  rigs.push(rig)
+  await rig.writer.enqueue((seq, ts) => ({ ...item(seq, 'b'), ts }))
+  await rig.writer.enqueue((seq, ts) => ({ ...item(seq, 'c'), ts }))
+  // A later reducer reads the old row for b as another item: the prefix no longer holds b.
+  database.db
+    .prepare('UPDATE journal_rows SET row_json = ? WHERE session_id = ? AND seq = 3')
+    .run(JSON.stringify({ ...item(3, 'renamed'), revision: 3 }), sessionId)
+  const restored = restoreJournal(database.db, sessionId)
+  expect(restored).toMatchObject({ newer: null, damage: null })
+  // b keeps its newest value, appended after the prefix and before the tail's own keys.
+  expect([...restored!.state.items.keys()]).toEqual(['a', 'renamed', 'b', 'c'])
+  expect(restored!.state.items.get('b')).toEqual(rig.state().items.get('b'))
+})
+
 it('fences opens and every writer before mutation, while the old parser refuses the founding row', async () => {
   const state = seedOutcomeRows(database, [projectionEpochRow, item(2)])
   const anchor = liveTestJournalRows(database.db, sessionId)[0]

@@ -137,7 +137,9 @@ export class JournalOutcomeFold {
 
   /** Applies the latest values over `baseline` (the folded input prefix) or over the scalars alone:
    * a deletion removes, a prefix-ordinal value replaces in place, and every other value takes its
-   * canonical place after the prefix. Each record was admitted as format 1 on read. */
+   * canonical place after the prefix. Each record was admitted as format 1 on read. A prefix-ordinal
+   * value the prefix no longer yields (a later fold reads the old rows differently) is still the
+   * key's newest value: it is appended, so only that key's place can change. */
   finish(
     sessionId: string,
     epoch: string,
@@ -163,8 +165,6 @@ export class JournalOutcomeFold {
         decodingOutcome(() => {
           if (value.deleted || value.ordinal !== JOURNAL_PREFIX_ORDINAL) {
             decode.remove(field, JSON.parse(value.key))
-          } else if (!decode.has(field, JSON.parse(value.key))) {
-            throw new Error('journal outcome replaces a value the prefix does not hold')
           }
           if (!value.deleted) {
             decode.entry(field, value.json)
