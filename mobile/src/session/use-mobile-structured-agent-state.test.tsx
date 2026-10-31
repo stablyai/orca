@@ -6,7 +6,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalResetReason
 } from '../../../src/shared/agent-session-journal-types'
-import { STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS } from '../../../src/shared/structured-agent-session-coalescer'
+import { STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS } from '../../../src/shared/agent-session/structured-agent-session-coalescer'
 import type {
   AgentSessionSubscribeEvent,
   AgentSessionHistoryPage

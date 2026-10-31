@@ -8,7 +8,7 @@ import type {
   AgentSessionHistoryResult
 } from '../../../shared/agent-session-wire'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
-import { structuredChildWorkLegacyTasks } from '../../../shared/structured-agent-session-child-work-legacy'
+import { structuredChildWorkLegacyTasks } from '../../../shared/agent-session/structured-agent-session-child-work-legacy'
 import { structuredRunningChildWork } from '../../../shared/agent-child-work-listing'
 import { readStructuredAgentSessionHistoryResult } from './structured-agent-session-history-result'
 import { hostStructuredAgentSessionCurrentWork } from './structured-agent-session-host-current-work'

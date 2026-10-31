@@ -619,24 +619,46 @@ export function registerCodexInputFinalization(current: typeof codexInputFinaliz
         results.map((result) => (result.type === 'return' ? result.value : undefined))
       )
     }
+    const stoppedX = 'stopped-before-carrier'
+    if (boundary === 'retire') {
+      await host.collaboratorsForTests().serialize(SESSION, async () => {
+        await journal.appendSubmission({
+          clientMessageId: stoppedX,
+          payloadFingerprint: stoppedX,
+          body: hostTestMessage('earlier stopped X'),
+          source: { kind: 'user' },
+          origin: 'client',
+          handoverRecorded: true,
+          fence: original.fence
+        })
+        await journal.stops.accept({
+          event: { reason: 'user-stop' },
+          fence: original.fence,
+          liveTurnId: () => null
+        })
+      })
+      expect(journal.submission(stoppedX)?.rejection).toMatchObject({ neverReachedAgent: true })
+    }
     const id = await permissionSend('same original input', { personality: 'friendly' })
     const waiting = host.waitForSendSettlement(SESSION, id)
     const originalBody = hostTestMessage('same original input')
     // Ready replacement-child exit proof settles before lease release; terminal rows keep that fence.
     const settlesAtChildFence = ['readiness', 'rebind'].includes(boundary)
-    let boundFence = journal.submission(id)!.fence
     let stopping: Promise<unknown> = Promise.resolve()
     try {
       await entered.promise
       expect(continuingStructuredAgentSessionInput(journal, id)).toBe(true)
       expect(signal?.aborted).toBe(false)
+      if (boundary === 'retire') {
+        expect(journal.stoppedHistoryCarried().get(id)).toEqual([stoppedX])
+      }
       const child = sessions.get(SESSION)?.child
       expect(journal.submission(id)).toMatchObject({
         clientMessageId: id,
         options: { personality: 'friendly' }
       })
       expect(journal.itemBody(agentJournalSubmissionKey(id))).toEqual(originalBody)
-      boundFence = child?.fence ?? journal.submission(id)!.fence
+      const boundFence = child?.fence ?? journal.submission(id)!.fence
       if (boundary === 'rebind') {
         expect(reboundFence).toBe(child!.fence)
       }
@@ -755,6 +777,19 @@ export function registerCodexInputFinalization(current: typeof codexInputFinaliz
       expect(journal.submission(id)?.rejection).not.toHaveProperty('neverReachedAgent')
       expect(starts()).toHaveLength(0)
       expect(codex.connections).toHaveLength(boundary === 'retire' ? 1 : 2)
+      const next = await permissionSend('new question after Stop')
+      await vi.waitFor(() => expect(starts()).toHaveLength(1))
+      expect(starts()[0]?.params).toMatchObject({
+        clientUserMessageId: next,
+        input: [{ type: 'text', text: 'new question after Stop' }]
+      })
+      turns.start()
+      turns.echo(next)
+      expect(
+        current().submission((await host.waitForSendSettlement(SESSION, next))?.value)
+      ).toMatchObject({ clientMessageId: next, dispatchState: 'accepted' })
+      expect(journal.stoppedHistoryCarried().get(next) ?? []).toEqual([])
+      await current().waitForInputFinalization(journal, next)
     } finally {
       held.resolve()
       retryReady.resolve()

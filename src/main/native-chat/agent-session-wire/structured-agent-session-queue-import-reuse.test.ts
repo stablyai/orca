@@ -1,3 +1,9 @@
+import { JournalWriteProjection } from '../agent-session-journal/journal-write-projection'
+import { encodeJournalState } from '../agent-session-journal/journal-state-codec'
+import { journalOutcomeSource } from '../agent-session-journal/journal-outcome-format'
+import { LegacyQueuedCards } from '../agent-session-journal/journal-queue-import'
+import { openRigTurnFor } from './structured-agent-session-queued-rig-turn.test-fixture'
+import { loadTestJournal } from '../agent-session-journal/journal-host-database-test-support'
 import { expect, it, vi } from 'vitest'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
@@ -60,7 +66,8 @@ it.each([100, 1_000])('raw selection reuse: %i waiting cards', async (size) => {
     const turn = { provider: 'codex' as const, threadId: 'progress', turnId: 't', ordinal: 0 }
     await journal.appendItem(turn, message('progress'), threadWrite)
     feed.publish(SESSION, journal)
-    expect(visits).toBe(2 * size)
+    // Provider progress cannot change a legacy card’s exact handoff classification.
+    expect(visits).toBe(0)
     expect(journal.publicRead().normalizationKey).toBe('')
     expect(journal.queuedMessages.list().filter((c) => c.state === 'waiting')).toHaveLength(size)
     for (const events of received) {
@@ -204,4 +211,233 @@ it('a rewind while the import has failed moves the legacy cards first: a refused
   expect(await fixture.rig.drafts()).toEqual(held)
   await nothingSentTo('edited')
   expect(legacyIds()).toEqual([])
+})
+
+it.each([
+  { importNext: false, format1: false },
+  { importNext: true, format1: false },
+  { importNext: false, format1: true }
+])(
+  'persists fallback identity through recovery (next import=$importNext, format1=$format1)',
+  async ({ importNext, format1 }) => {
+    const rig = fixture.rig
+    await rig.host.close(SESSION, 'evict')
+    const seed = journalFor(SESSION)
+    await seed.open()
+    await seed.queuedMessages.insert({ messageId: 'C', body: message('/compact') })
+    await seed.close()
+    if (format1) {
+      db().exec(
+        "DELETE FROM journal_outcomes WHERE field IN ('inputEntries','inputCards'); UPDATE journal_outcomes SET format=1; UPDATE journal_outcome_epochs SET format=1"
+      )
+    }
+    seedLegacy(SESSION, [['D', 'waiting', 'original D']])
+    db().prepare('UPDATE queued_messages SET position = 2 WHERE message_id = ?').run('D')
+    db().exec(`CREATE TEMP TRIGGER overlay_import_failure BEFORE DELETE ON queued_messages
+    BEGIN SELECT RAISE(ABORT, 'import failure'); END`)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const importAtOpen = LegacyQueuedCards.prototype.importAtOpen
+    const fault = vi
+      .spyOn(LegacyQueuedCards.prototype, 'importAtOpen')
+      .mockImplementation(function (this: LegacyQueuedCards) {
+        return importAtOpen
+          .call(this)
+          .finally(() => db().exec('DROP TRIGGER IF EXISTS overlay_import_failure'))
+      })
+    try {
+      const w = await rig.workingSend()
+      await openRigTurnFor(rig, w)
+      await rig.settleAccepted(w, 'W')
+      const live = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
+      expect(journalOutcomeSource(db(), SESSION, live.epoch)?.format).toBe(2)
+      expect(live.queuedMessages.get('C')?.state).toBe('waiting')
+      expect(legacyIds()).toEqual(['D'])
+      live.publicRead()
+      const m = rig.send('original M', undefined, { carried: { effort: 'high' } })
+      const result = await m.result
+      expect(result).toMatchObject({ ok: true, value: { submission: { clientMessageId: m.id } } })
+      const receipt = rig.store.readCommandReceipt({ kind: 'global' }, m.id)
+      expect(live.inputOrder.forced(m.id)).toBe(true)
+      expect(live.submission(m.id)?.handedOverAt).toBeUndefined()
+      expect(live.inputOrder.precedes(live.queuedMessages.get('D')!, live.submission(m.id)!)).toBe(
+        true
+      )
+      if (!importNext) {
+        db().exec(`CREATE TEMP TRIGGER overlay_import_failure BEFORE DELETE ON queued_messages
+      BEGIN SELECT RAISE(ABORT, 'import failure'); END`)
+      }
+      await rig.host.flushAllStreamedEvents()
+      rig.crashRestartHostProcess()
+      await rig.submission(m.id)
+      const reopened = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
+      const order = reopened.queuedMessages
+        .list()
+        .filter((c) => c.state === 'waiting')
+        .map((c) => c.messageId)
+      // Let the complete production iteration expose even the causal wrong C,M,D ordering.
+      expect(await rig.resume()).toMatchObject({ ok: true, value: { resumed: true } })
+      const delivered: string[] = []
+      for (const id of order) {
+        if (id === 'C') {
+          await eventually(() => expect(rig.compact).toHaveBeenCalledOnce())
+          rig.finishCompact()
+        } else {
+          await eventually(async () => expect((await rig.handoff(id))?.handedOverAt).toBeDefined())
+          const h = await rig.handoffId(id)
+          const calls = rig.dispatch.mock.calls.filter(([input]) => input.clientMessageId === h)
+          expect(calls).toHaveLength(1)
+          expect(calls[0]![0].body).toEqual(message(id === 'D' ? 'original D' : 'original M'))
+          if (id === m.id) {
+            expect(calls[0]![0].executionOptions).toMatchObject({ effort: 'high' })
+          }
+          await rig.settleAccepted(h, id)
+          expect(await rig.submission(h)).toMatchObject({
+            dispatchState: 'accepted',
+            queuedMessageId: id
+          })
+        }
+        delivered.push(id)
+      }
+      expect(rig.store.readCommandReceipt({ kind: 'global' }, m.id)).toEqual(receipt)
+      expect(reopened.item(agentJournalSubmissionKey(m.id))?.body).toEqual(message('original M'))
+      expect(reopened.submission(m.id)?.options).toEqual({ effort: 'high' })
+      expect(reopened.queuedMessages.list().filter((c) => c.state === 'waiting')).toEqual([])
+      const restored = loadTestJournal(rig.root, SESSION)!
+      expect(restored.damage).toBeNull()
+      expect(restored.state.inputEntries.size).toBe(0)
+      expect(restored.state.inputCards.size).toBe(0)
+      expect(reopened['state'].inputCards.size).toBe(0)
+      expect(rig.dispatch.mock.calls.filter(([input]) => input.clientMessageId === w)).toHaveLength(
+        1
+      )
+      expect(delivered).toEqual(['C', 'D', m.id])
+    } finally {
+      db().exec('DROP TRIGGER IF EXISTS overlay_import_failure')
+      fault.mockRestore()
+      warn.mockRestore()
+    }
+  }
+)
+
+it.each([
+  { readFirst: false, legacyCommand: false },
+  { readFirst: true, legacyCommand: false },
+  { readFirst: false, legacyCommand: true }
+])(
+  'keeps reads derivative and persists fallback (public=$readFirst, legacyCommand=$legacyCommand)',
+  async ({ readFirst, legacyCommand }) => {
+    const seed = journalFor('overlay-direct')
+    await seed.open()
+    if (!legacyCommand) {
+      await seed.queuedMessages.insert({ messageId: 'C', body: message('/compact') })
+    }
+    await seed.close()
+    seedLegacy(
+      'overlay-direct',
+      legacyCommand
+        ? [
+            ['C', 'waiting', '/compact'],
+            ['D', 'waiting', 'D']
+          ]
+        : [['D', 'waiting', 'D']]
+    )
+    db().exec(`CREATE TEMP TRIGGER overlay_direct_import_failure BEFORE DELETE ON queued_messages
+    BEGIN SELECT RAISE(ABORT, 'import failure'); END`)
+    const journal = journalFor('overlay-direct')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      await journal.open()
+      const state = journal['state']
+      const before = encodeJournalState(state)
+      if (readFirst) {
+        journal.publicRead()
+        journal.queuedMessages.nextInputCard()
+        expect(encodeJournalState(state)).toEqual(before)
+        JournalWriteProjection.verifyEachCommit = true
+        await journal.appendItem(
+          { provider: 'orca', clientMessageId: 'unrelated' },
+          message('unrelated'),
+          threadWrite
+        )
+      }
+      const target = await journal.appendSubmission({
+        clientMessageId: 'original-M',
+        payloadFingerprint: 'original',
+        body: message('original M'),
+        handoverRecorded: true,
+        origin: 'client',
+        fence: 0,
+        options: { effort: 'high' }
+      })
+      expect(journal.inputOrder.forced('original-M')).toBe(true)
+      expect(
+        journal.inputOrder.precedes(
+          journal.queuedMessages.get('D')!,
+          journal.submission('original-M')!
+        )
+      ).toBe(true)
+      const saved = loadTestJournal(fixture.rig.root, 'overlay-direct')!
+      expect(saved.damage).toBeNull()
+      expect(saved.state.inputCards.get('D')).toEqual(journal['state'].inputCards.get('D'))
+      expect(saved.state.inputCards.has('D')).toBe(true)
+      expect(
+        db()
+          .prepare(
+            "SELECT COUNT(*) AS n FROM journal_outcomes WHERE field='inputCards' AND entry_key=? AND deleted=0"
+          )
+          .get(JSON.stringify('D'))?.n
+      ).toBe(1)
+      expect(target).toEqual({
+        epoch: journal.epoch,
+        sequence: journal.submission('original-M')!.acceptedSequence
+      })
+      const introduction = journal['state'].inputCards.get('D')!.introduced
+      db().exec('DROP TRIGGER overlay_direct_import_failure')
+      for (let pass = 0; pass < 2; pass++) {
+        await journal.replaceEpochItems('unreconcilable_prefix', 0, [])
+        const restored = loadTestJournal(fixture.rig.root, 'overlay-direct')!
+        expect(restored.damage).toBeNull()
+        expect(restored.state.inputCards.get('D')?.introduced).toBe(introduction)
+        expect(
+          journal.inputOrder.precedes(
+            journal.queuedMessages.get('D')!,
+            journal.submission('original-M')!
+          )
+        ).toBe(true)
+        expect(restored.state.inputEntries.get('original-M')).toEqual(
+          journal['state'].inputEntries.get('original-M')
+        )
+      }
+    } finally {
+      JournalWriteProjection.verifyEachCommit = false
+      db().exec('DROP TRIGGER IF EXISTS overlay_direct_import_failure')
+      warn.mockRestore()
+      await journal.close()
+    }
+  }
+)
+
+it('discovers real overlay ownership before pruning a genuinely saved native identity', async () => {
+  const session = 'overlay-saved'
+  const seed = journalFor(session)
+  await seed.open()
+  await seed.queuedMessages.insert({ messageId: 'D', body: message('saved D') })
+  const saved = seed['state'].inputCards.get('D')
+  const native = db()
+    .prepare(
+      "SELECT value_json FROM journal_outcomes WHERE field='inputCards' AND entry_key=? ORDER BY seq DESC LIMIT 1"
+    )
+    .get(JSON.stringify('D'))
+  expect(native?.value_json).toBe(JSON.stringify(['D', saved]))
+  await seed.close()
+  // Independent fixture control: retain the writer's genuine native record, with only legacy body ownership.
+  db()
+    .prepare("DELETE FROM journal_outcomes WHERE field='queue.cards' AND entry_key=?")
+    .run(JSON.stringify('D'))
+  seedLegacy(session, [['D', 'waiting', 'saved D']])
+  const restored = loadTestJournal(fixture.rig.root, session)!
+  expect(restored.damage).toBeNull()
+  expect(restored.state.queue.cards.has('D')).toBe(false)
+  expect(restored.state.inputEntries.size).toBe(0)
+  expect(restored.state.inputCards.get('D')).toEqual(saved)
 })

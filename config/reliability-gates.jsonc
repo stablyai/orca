@@ -9051,17 +9051,16 @@
       "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime", "mobile-relay"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "daemon", "ssh"],
-      "coverageNotes": "Local macOS deterministic evidence covers the renderer snapshot/coordinator, exact local and SSH-shaped PTY request settlement, active-last and pinned terminal-tab routing, component-unmount continuation, and the existing current/legacy daemon management contract. Windows Electron process absence, live SSH/WSL behavior, and remote-runtime/mobile host completion remain explicit gaps.",
+      "coverageNotes": "Local macOS deterministic evidence covers the renderer snapshot/coordinator, exact local and SSH-shaped PTY request settlement, active-last and pinned terminal-tab routing, component-unmount continuation, and the existing current/legacy daemon management contract. Windows Electron process absence, live SSH/WSL behavior, and remote-runtime/mobile host completion remain explicit gaps. The audit removed the isolated terminal-tab close routing suite. Forced-pin close-call shape, editor-before-browser fallback, browser fallback, empty-worktree deactivation and no replacement-terminal routing lose their supplied-store spy assertions. Remaining lifecycle/coordinator suites are not claimed to reproduce those isolated routing alarms.",
       "motivatingLinks": ["https://github.com/stablyai/orca/issues/8001"],
       "invariant": "Every terminal surface confirmed in the invoking renderer is force-closed exactly once after daemon management settles, later-created surfaces and non-terminal tabs survive, and exact shutdown requests are limited to deduplicated current non-runtime PTY bindings of the confirmed surfaces.",
       "oracle": "Snapshot terminal entity IDs before the first await; mutate ownership, active selection, bindings, and tab presence while daemon management is pending and between bounded close batches; then assert only the immutable targets disappear from both terminal stores, active targets close last with valid editor/browser/deactivated post-state, every captured exact PTY promise settles before callbacks, and no provider inventory sweep or late-tab kill occurs.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts src/renderer/src/components/shared/useDaemonActions.test.tsx src/renderer/src/components/terminal/terminal-tab-actions-kill-all.test.ts src/main/ipc/pty/pty-management.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts src/renderer/src/components/shared/useDaemonActions.test.tsx src/main/ipc/pty/pty-management.test.ts"
       ],
       "testFiles": [
         "src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts",
         "src/renderer/src/components/shared/useDaemonActions.test.tsx",
-        "src/renderer/src/components/terminal/terminal-tab-actions-kill-all.test.ts",
         "src/main/ipc/pty/pty-management.test.ts"
       ],
       "assertionRefs": [
@@ -9086,13 +9085,6 @@
           ]
         },
         {
-          "file": "src/renderer/src/components/terminal/terminal-tab-actions-kill-all.test.ts",
-          "assertions": [
-            "force closes pinned terminals without a second confirmation",
-            "closing the last active terminal preserves and activates editor or browser content, otherwise deactivates without auto-spawn"
-          ]
-        },
-        {
           "file": "src/main/ipc/pty/pty-management.test.ts",
           "assertions": [
             "killAll fires one shutdown for each initial daemon session and polls those initial IDs until empty",
@@ -9107,10 +9099,10 @@
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts src/renderer/src/components/shared/useDaemonActions.test.tsx src/renderer/src/components/terminal/terminal-tab-actions-kill-all.test.ts src/main/ipc/pty-management.test.ts",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts src/renderer/src/components/shared/useDaemonActions.test.tsx src/renderer/src/components/terminal/terminal-tab-actions-kill-all.test.ts src/main/ipc/pty/pty-management.test.ts",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts src/renderer/src/components/shared/useDaemonActions.test.tsx src/main/ipc/pty/pty-management.test.ts",
           "result": "passed",
           "durationSeconds": 1.18,
-          "summary": "4 test files and 27 tests passed locally, including the existing daemon handler contract and a real 100-terminal Zustand cleanup fixture."
+          "summary": "4 test files and 27 tests passed locally, including the existing daemon handler contract and a real 100-terminal Zustand cleanup fixture. Historical four-file record only: its date, result, duration and 27-test count describe the original command. currentCommand maps the three surviving roots; that three-file invocation was not rerun here, and this record does not restore the removed routing alarms."
         }
       ],
       "runtimeBudget": {
@@ -9139,7 +9131,8 @@
         "Windows Electron screenshots and live process/xterm absence evidence were not produced by this local macOS run.",
         "Live SSH and WSL process absence, Linux local/daemon behavior, and mobile/relay shutdown remain unproved.",
         "Runtime-host terminal close is best-effort because closeTerminalTab still discards the existing async host result and its close-intent lifetime is shorter than the possible RPC flow.",
-        "Daemon adapter listing failures remain suppressed by the existing management API, so reported daemon counts are not authoritative verification of every process."
+        "Daemon adapter listing failures remain suppressed by the existing management API, so reported daemon counts are not authoritative verification of every process.",
+        "The audit removed the isolated terminal-tab close routing suite. Forced-pin close-call shape, editor-before-browser fallback, browser fallback, empty-worktree deactivation and no replacement-terminal routing lose their supplied-store spy assertions. Remaining lifecycle/coordinator suites are not claimed to reproduce those isolated routing alarms."
       ],
       "demotionRule": "Keep experimental or demote to protection none if the gate flakes, permits a late-created tab or unrelated PTY to close, duplicates provider shutdown, or performs more than one ownership replan per bounded yield."
     },

@@ -19306,6 +19306,8 @@
       },
       "composer": {
         "send": "Senden",
+        "alternateSteerHint": "{{shortcut}} zum Steuern",
+        "alternateQueueHint": "{{shortcut}} zum Einreihen",
         "noPty": "Kein aktives Terminal — zurückwechseln, um die Verbindung wiederherzustellen.",
         "locked": "Die Eingabe wird von einem anderen Gerät gesteuert.",
         "placeholder": "Frage stellen, @ für Dateiverweise, / für Befehle",
