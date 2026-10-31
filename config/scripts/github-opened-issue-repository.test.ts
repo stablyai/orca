@@ -80,19 +80,6 @@ import {
   setTaskPageGitHubMutationQueryKey
 } from '../../src/renderer/src/components/task-page/github/task-page-github-work-item-mutation-registry'
 
-const metadataStore = create<
-  Pick<AppState, 'repos' | 'patchWorkItem' | 'patchProjectRowContent' | 'recordFeatureInteraction'>
->()(() => ({
-  repos: [],
-  patchWorkItem: vi.fn(),
-  patchProjectRowContent: vi.fn(),
-  recordFeatureInteraction: vi.fn()
-}))
-
-function renderEditSection(props: Parameters<typeof GHEditSection>[0]): void {
-  renderToStaticMarkup(createElement(GHEditSection, props))
-}
-
 const registeredRepo: Repo = {
   id: 'repo-1',
   path: join(tmpdir(), 'orca-opened-issue-repository-fixture'),
@@ -100,6 +87,19 @@ const registeredRepo: Repo = {
   badgeColor: 'primary',
   addedAt: 1,
   upstream: { owner: 'upstream-owner', repo: 'widgets', host: 'github.com' }
+}
+
+const metadataStore = create<
+  Pick<AppState, 'repos' | 'patchWorkItem' | 'patchProjectRowContent' | 'recordFeatureInteraction'>
+>()(() => ({
+  repos: [registeredRepo],
+  patchWorkItem: vi.fn(),
+  patchProjectRowContent: vi.fn(),
+  recordFeatureInteraction: vi.fn()
+}))
+
+function renderEditSection(props: Parameters<typeof GHEditSection>[0]): void {
+  renderToStaticMarkup(createElement(GHEditSection, props))
 }
 
 function sourceFor(preference: 'origin' | 'upstream'): TaskSourceContext {
