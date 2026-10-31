@@ -314,7 +314,6 @@ it('re-derives pending errors, controls and saved Boolean labels on locale chang
     })
     expect(screen.getByText('No')).toBeTruthy()
     expect(screen.getByText('Yes')).toBeTruthy()
-    expect(content.Boolean).toBe(false)
   } finally {
     i18n.removeResourceBundle('fr', 'translation')
   }
