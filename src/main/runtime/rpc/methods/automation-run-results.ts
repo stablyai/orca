@@ -26,6 +26,7 @@ import {
   writeAutomationRunOutputFile
 } from '../../../automations/automation-run-output-files'
 import { readLiveAgentSessionCaller } from '../orchestration-session-caller'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 
 const REFUSAL_COPY = {
   warning_limit: `This run already has ${MAX_AUTOMATION_RUN_WARNINGS} warnings. Reuse an existing --key for the same problem.`,
@@ -48,7 +49,17 @@ async function callerSession(
       evidence.agentSessionId,
       method
     )
-    return { kind: 'chat', sessionIds: [record.sessionId, evidence.agentSessionId] }
+    const host = getStructuredAgentSessionHost()
+    if (!host) {
+      throw new InvalidArgumentError(NOT_IN_AUTOMATION_RUN_MESSAGE)
+    }
+    const { submissions } = await host.journalSnapshot(record.sessionId)
+    return {
+      kind: 'chat',
+      sessionIds: [record.sessionId, evidence.agentSessionId],
+      submissions,
+      store: host.deps.store
+    }
   }
   if (evidence?.host) {
     throw new InvalidArgumentError(REMOTE_TERMINAL_UNSUPPORTED_MESSAGE)
