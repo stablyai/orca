@@ -1,3 +1,4 @@
+import { cliWriterExecutionMatcher, type CliWriterExecutionMatches } from './cli-writer-observation'
 import { isTmuxInnerSubject } from '../../../shared/tmux-agent-hook-owner'
 import type {
   AgentStatusClearIpcPayload,
@@ -29,6 +30,11 @@ const UNORDERED_STATUS_ROW = Number.MAX_SAFE_INTEGER
 
 export abstract class AgentHookServerListeners extends AgentHookServerState {
   protected statusChangeNotificationVersion = 0
+  protected cliWriterExecutionMatches: CliWriterExecutionMatches | null = null
+
+  setCliWriterExecutionMatcher(...args: Parameters<typeof cliWriterExecutionMatcher>): void {
+    this.cliWriterExecutionMatches = cliWriterExecutionMatcher(...args)
+  }
   protected readonly programStatusFacets = new ProgramStatusFacetStore()
   /** Retry yielded OSC 7501 reports when hook precedence expires; programs may not resend. */
   protected readonly hookSilenceRechecks = new PaneTimers()

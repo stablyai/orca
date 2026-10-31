@@ -273,7 +273,8 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       this.refreshTerminalStatusEvidence(
         previous,
         mutationBefore,
-        mutationBefore !== undefined || event.renewsProgramStatusLease === true
+        mutationBefore !== undefined || event.renewsProgramStatusLease === true,
+        newRun
       )
       return
     }
@@ -317,6 +318,7 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       event.origin ?? 'osc',
       undefined,
       mutationBefore,
+      newRun,
       !preservedProviderSession
     )
   }
