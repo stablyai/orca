@@ -19,7 +19,7 @@ async function claudeTranscriptIn(
     return transcript ? { transcript, mtimeMs: (await stat(transcript)).mtimeMs } : null
   } catch (error) {
     // Skipping where it ran could let an older copy win and drop its newest turns.
-    if (!ranHere && ['ENOENT', 'EACCES'].includes(errnoCodeOrUnknown(error))) {
+    if (!ranHere && ['ENOENT', 'EACCES', 'EPERM'].includes(errnoCodeOrUnknown(error))) {
       return null
     }
     throw error

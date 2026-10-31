@@ -104,17 +104,20 @@ describe('carryClaudeConversationToAccountHome', () => {
     expect(readFileSync(own, 'utf8')).toBe('turn 1\nturn 2b\n')
   })
 
-  it('skips another account it cannot read instead of giving up on the rest', async () => {
-    unreadable.set(join(homeC, 'projects'), 'EACCES')
-    writeTranscript(homeA, 'from a\n')
-    expect(await carry()).toBe(true)
-    expect(readFileSync(join(homeB, 'projects', PROJECT, `${SESSION}.jsonl`), 'utf8')).toBe(
-      'from a\n'
-    )
-    expect(resolveSessionFilePath).toHaveBeenCalledWith('claude', SESSION, {
-      claudeProjectsDir: join(homeC, 'projects')
-    })
-  })
+  it.each(['EACCES', 'EPERM'])(
+    'skips another account it cannot read (%s; Windows reports EPERM) instead of giving up on the rest',
+    async (code) => {
+      unreadable.set(join(homeC, 'projects'), code)
+      writeTranscript(homeA, 'from a\n')
+      expect(await carry()).toBe(true)
+      expect(readFileSync(join(homeB, 'projects', PROJECT, `${SESSION}.jsonl`), 'utf8')).toBe(
+        'from a\n'
+      )
+      expect(resolveSessionFilePath).toHaveBeenCalledWith('claude', SESSION, {
+        claudeProjectsDir: join(homeC, 'projects')
+      })
+    }
+  )
 
   it('fails when the account it ran on cannot be read, so an older copy cannot win', async () => {
     unreadable.set(join(homeA, 'projects'), 'EACCES')
