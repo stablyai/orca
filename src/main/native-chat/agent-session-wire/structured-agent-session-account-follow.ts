@@ -2,7 +2,12 @@
 // to that account, repins the record, and leaves a quiet row saying so.
 
 import { randomUUID } from 'node:crypto'
-import { agentSessionAccountSwitchBody } from '../../../shared/agent-session-account-switch-row'
+import {
+  agentSessionAccountSwitchBody,
+  agentSessionAccountSwitchFailedBody,
+  type AgentSessionAccountSwitch
+} from '../../../shared/agent-session-account-switch-row'
+import type { AgentJournalPlainStatusItem } from '../../../shared/agent-session-journal-types'
 import {
   agentSessionAccountHomesEqual,
   type AgentSessionAccountHome
@@ -24,6 +29,16 @@ export type StructuredAgentSessionAccountMove = {
   account?: string
   /** Repin without the row: the chat may already run there. */
   quiet?: true
+}
+
+/** A move that failed once it knew both accounts, so the chat can say where it stayed. */
+export class StructuredAgentSessionAccountMoveError extends Error {
+  constructor(
+    readonly accounts: AgentSessionAccountSwitch,
+    options: { cause: unknown }
+  ) {
+    super('moving a chat to the selected account failed', options)
+  }
 }
 
 /** The execution host's account selection, as a chat sees it. */
@@ -79,6 +94,11 @@ export async function followSelectedAccountBeforeStart(
       sessionId,
       error
     })
+    if (error instanceof StructuredAgentSessionAccountMoveError) {
+      await lock.commit(() =>
+        appendAccountRow(context, sessionId, agentSessionAccountSwitchFailedBody(error.accounts))
+      )
+    }
     return
   }
   if (
@@ -100,23 +120,33 @@ export async function followSelectedAccountBeforeStart(
       return
     }
     await deps.store.repinAccountHome(sessionId, accountHome)
-    const journal = context.sessions.get(sessionId)?.journal
-    if (quiet || !journal || !activeProviderContext(current).head) {
-      return
+    if (!quiet && activeProviderContext(current).head) {
+      await appendAccountRow(context, sessionId, agentSessionAccountSwitchBody(account))
     }
-    const fence = structuredAgentSessionConversationFence(deps.store, sessionId)
-    await journal
-      .appendItem(
-        { provider: 'orca', clientMessageId: `account-switch:${randomUUID()}` },
-        agentSessionAccountSwitchBody(account),
-        { fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-      )
-      .catch((error: unknown) =>
-        deps.logger.warn('recording a chat account move failed', {
-          scope: 'account-follow',
-          sessionId,
-          error
-        })
-      )
   })
+}
+
+async function appendAccountRow(
+  context: Pick<StructuredAgentSessionAttachContext, 'deps' | 'sessions'>,
+  sessionId: string,
+  body: AgentJournalPlainStatusItem
+): Promise<void> {
+  const { deps } = context
+  const journal = context.sessions.get(sessionId)?.journal
+  if (!journal) {
+    return
+  }
+  const fence = structuredAgentSessionConversationFence(deps.store, sessionId)
+  await journal
+    .appendItem({ provider: 'orca', clientMessageId: `account-switch:${randomUUID()}` }, body, {
+      fence,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
+    .catch((error: unknown) =>
+      deps.logger.warn('recording a chat account move failed', {
+        scope: 'account-follow',
+        sessionId,
+        error
+      })
+    )
 }

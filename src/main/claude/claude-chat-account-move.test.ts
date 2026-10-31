@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   mkdirSync,
   mkdtempSync,
@@ -10,7 +10,25 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
+import type * as SessionFileResolver from '../native-chat/session-file-resolver'
 import { carryClaudeConversationToAccountHome } from './claude-chat-account-move'
+
+const unreadable = new Set<string>()
+vi.mock('../native-chat/session-file-resolver', async (importOriginal) => {
+  const actual = await importOriginal<typeof SessionFileResolver>()
+  return {
+    ...actual,
+    resolveSessionFilePath: vi.fn(
+      async (...args: Parameters<typeof actual.resolveSessionFilePath>) => {
+        if (unreadable.has(args[2]?.claudeProjectsDir ?? '')) {
+          throw Object.assign(new Error('permission denied'), { code: 'EACCES' })
+        }
+        return actual.resolveSessionFilePath(...args)
+      }
+    )
+  }
+})
 
 const SESSION = '11111111-2222-4333-8444-555555555555'
 const PROJECT = '-Users-dev-repo'
@@ -32,6 +50,7 @@ describe('carryClaudeConversationToAccountHome', () => {
   })
 
   afterEach(() => {
+    unreadable.clear()
     rmSync(root, { recursive: true, force: true })
   })
 
@@ -82,6 +101,18 @@ describe('carryClaudeConversationToAccountHome', () => {
     writeTranscript(homeA, 'turn 1\nturn 2a\nturn 3a\n')
     expect(await carry()).toBe(true)
     expect(readFileSync(own, 'utf8')).toBe('turn 1\nturn 2b\n')
+  })
+
+  it('skips an account it cannot read instead of giving up on the others', async () => {
+    unreadable.add(join(homeA, 'projects'))
+    writeTranscript(homeC, 'from c\n')
+    expect(await carry()).toBe(true)
+    expect(readFileSync(join(homeB, 'projects', PROJECT, `${SESSION}.jsonl`), 'utf8')).toBe(
+      'from c\n'
+    )
+    expect(resolveSessionFilePath).toHaveBeenCalledWith('claude', SESSION, {
+      claudeProjectsDir: join(homeA, 'projects')
+    })
   })
 
   it('reports a conversation no known account holds', async () => {

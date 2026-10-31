@@ -61,7 +61,7 @@ export type NativeChatTextBlock = {
   orcaStop?: AgentSessionOrcaStop & { turnItemId?: string }
   /** On a usage-limit line: the turn the limit ended, which its Continue picks up. */
   usageLimitTurnItemId?: string
-  /** On the line recording a move to the selected account. */
+  /** On the line recording a move to the selected account, or one that failed. */
   accountSwitch?: AgentSessionAccountSwitch
 }
 
