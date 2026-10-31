@@ -1,7 +1,3 @@
-import {
-  areTaskSourceContextsEqual,
-  type TaskSourceContext
-} from '../../../../../shared/task-source-context'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 
 export const TASK_PAGE_GITHUB_RESUME_CACHE_LIMIT = 5
@@ -32,39 +28,11 @@ export function buildTaskPageGitHubResumeContextKey(args: {
   return JSON.stringify(['github', 'items', args.selectedReposKey, args.query, args.pageSize])
 }
 
-export function taskPageResumeContextHasSource(
-  key: string,
-  repoId: string,
-  source: TaskSourceContext,
-  observationKey?: string
-): boolean {
-  try {
-    const context: unknown = JSON.parse(key)
-    if (!Array.isArray(context) || typeof context[2] !== 'string') {
-      return false
-    }
-    const repos: unknown = JSON.parse(context[2])
-    return (
-      Array.isArray(repos) &&
-      repos.some(
-        (row) =>
-          Array.isArray(row) &&
-          row[0] === repoId &&
-          areTaskSourceContextsEqual(row[4], source) &&
-          (!observationKey || row[5] === observationKey)
-      )
-    )
-  } catch {
-    return false
-  }
-}
-
 export function createTaskPageResumePageCache<T>(options: TaskPageResumePageCacheOptions = {}): {
   read: (contextKey: string, page: number, now?: number) => TaskPageResumeCachedPage<T> | null
   write: (contextKey: string, page: number, items: readonly T[], now?: number) => void
   clear: () => void
   size: () => number
-  patch: (matchesContext: (contextKey: string) => boolean, update: (item: T) => T) => void
 } {
   const maxEntries = options.maxEntries ?? TASK_PAGE_GITHUB_RESUME_CACHE_LIMIT
   const ttlMs = options.ttlMs ?? TASK_PAGE_GITHUB_RESUME_CACHE_TTL_MS
@@ -80,16 +48,6 @@ export function createTaskPageResumePageCache<T>(options: TaskPageResumePageCach
   }
 
   return {
-    patch(matchesContext, update) {
-      for (const [key, entry] of entries) {
-        if (matchesContext(key.slice(0, key.lastIndexOf('\u0000')))) {
-          const items = entry.items.map(update)
-          if (items.some((item, index) => item !== entry.items[index])) {
-            entries.set(key, { ...entry, items })
-          }
-        }
-      }
-    },
     read(contextKey, page, now = Date.now()) {
       pruneExpired(now)
       const key = keyFor(contextKey, page)

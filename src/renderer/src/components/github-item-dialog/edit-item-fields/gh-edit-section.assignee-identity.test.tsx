@@ -184,12 +184,32 @@ describe('opened issue assignee ownership', () => {
     resetTaskPageGitHubMutationRegistryForTests()
   })
 
+  it('publishes a confirmed dialog assignment to the Tasks row without Refresh', async () => {
+    await render()
+    await click()
+    expect(mocks.patchWorkItem).toHaveBeenCalledWith(
+      item.id,
+      expect.objectContaining({
+        assignees: [expect.objectContaining({ login: 'candidate-user' })]
+      }),
+      item.repoId,
+      expect.anything()
+    )
+  })
+
+  it('accepts external assignees while the edited dialog stays open', async () => {
+    await render()
+    await click()
+    await render(item, ['external-user'])
+    expect(selected()).toBe('external-user')
+  })
+
   it('retires an optimistic selection across fork and return navigation', async () => {
     await render()
     await click()
     expect(selected()).toBe('candidate-user')
     await render(item, [])
-    expect(selected()).toBe('candidate-user')
+    expect(selected()).toBe('')
 
     await render({ ...item, url: 'https://github.com/fork/widgets/issues/5' }, ['fork-user'])
     expect(selected()).toBe('fork-user')
@@ -243,8 +263,10 @@ describe('opened issue assignee ownership', () => {
   it('preserves optimistic edits across canonical URL casing and trailing paths', async () => {
     await render()
     await click()
-    await render({ ...item, url: 'https://GITHUB.COM/Upstream/Widgets/issues/5#activity' }, [])
-    expect(selected()).toBe('candidate-user')
+    await render({ ...item, url: 'https://GITHUB.COM/Upstream/Widgets/issues/5#activity' }, [
+      'canonical-user'
+    ])
+    expect(selected()).toBe('canonical-user')
   })
 
   it('uses the Project row repository before an unrelated item URL', async () => {
@@ -264,7 +286,7 @@ describe('opened issue assignee ownership', () => {
       [],
       projectOrigin
     )
-    expect(selected()).toBe('candidate-user')
+    expect(selected()).toBe('')
     await render(item, ['fork-user'], { ...projectOrigin, owner: 'fork' })
     expect(selected()).toBe('fork-user')
   })
@@ -343,10 +365,7 @@ describe('opened issue assignee ownership', () => {
         item.repoId,
         {
           sourceContext: undefined,
-          ownerRepo: { owner: 'upstream', repo: 'widgets', host: 'github.com' },
-          ...(field === 'state'
-            ? { observation: undefined, valueOrigins: { state: undefined } }
-            : {})
+          ownerRepo: { owner: 'upstream', repo: 'widgets', host: 'github.com' }
         }
       )
     }

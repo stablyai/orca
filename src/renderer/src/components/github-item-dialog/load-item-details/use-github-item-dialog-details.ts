@@ -1,3 +1,4 @@
+import { useGitHubTaskItems } from '@/hooks/useGitHubTaskItems'
 import { useGitHubTaskRefresh } from './use-github-task-refresh'
 
 import { addressedGitHubIssueItem, type GitHubTaskRefreshHandler } from '@/lib/github-task-target'
@@ -25,6 +26,7 @@ import {
   invalidateWorkItemDetailsCacheForKey,
   subscribeWorkItemDetailsCache,
   touchWorkItemDetailsCache,
+  withWorkItemDetailsItem,
   workItemDetailsCache
 } from './work-item-details-cache'
 import { startWorkItemDetailsFetch } from './work-item-details-fetch-settle'
@@ -101,7 +103,7 @@ export function useGitHubItemDialogDetails({
   const [optimisticTick, setOptimisticTick] = useState(0)
 
   // Depend on stable cache-entry identity rather than a freshly built optimistic array.
-  const details = useMemo<GitHubWorkItemDetails | null>(() => {
+  const rawDetails = useMemo<GitHubWorkItemDetails | null>(() => {
     const cachedDetails = cachedEntry?.details ?? null
     const opt = optimisticCommentsRef.current.get(optimisticKey) ?? []
     if (!cachedDetails) {
@@ -127,6 +129,23 @@ export function useGitHubItemDialogDetails({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cachedEntry, workItem, optimisticKey, optimisticTick])
 
+  const cache = useAppStore((s) => s.githubTaskCache)
+  const detailItems = useMemo(() => (rawDetails ? [rawDetails.item] : []), [rawDetails])
+  const projectedItems = useGitHubTaskItems(detailItems)
+  const details = useMemo(
+    () =>
+      rawDetails && projectedItems[0]
+        ? {
+            ...rawDetails,
+            item: projectedItems[0],
+            ...(projectedItems[0].assignees === undefined
+              ? {}
+              : { assignees: projectedItems[0].assignees.map((user) => user.login) })
+          }
+        : rawDetails,
+    [rawDetails, projectedItems]
+  )
+
   const loading = !!cachedEntry?.pending && !cachedEntry?.details
   const error = cachedEntry?.error && !cachedEntry?.details ? cachedEntry.error : null
   const detailsLoaded = Boolean(cachedEntry?.details)
@@ -150,18 +169,16 @@ export function useGitHubItemDialogDetails({
     prevItemIdRef.current = workItem.id
 
     const cached = workItemDetailsCache.get(detailsCacheKey)
-    const now = Date.now()
-    const hasFreshData = cached?.details && now - cached.fetchedAt <= WORK_ITEM_DETAILS_FRESH_MS
-
-    if (hasFreshData) {
+    if (cached?.details && Date.now() - cached.fetchedAt <= WORK_ITEM_DETAILS_FRESH_MS) {
       return
     }
 
     if (cached?.pending) {
       return
     }
-    startWorkItemDetailsFetch(detailsCacheKey, () =>
-      lookupGitHubWorkItemDetailsForSource({
+    const binding = target && cache?.capture(target.repo, target.source)
+    startWorkItemDetailsFetch(detailsCacheKey, async () => {
+      const result = await lookupGitHubWorkItemDetailsForSource({
         repoPath: repoPath ?? '',
         repoId: effectiveRepoId,
         sourceContext,
@@ -172,7 +189,15 @@ export function useGitHubItemDialogDetails({
         accepts: cached?.route ? target?.current : undefined,
         rpcOptions: cached?.route ? target?.rpcOptions : undefined
       })
-    )
+      if (binding && !cache.current(binding)) {
+        return null
+      }
+      if (!result || !binding) {
+        return result
+      }
+      const accepted = cache.acceptSearch([{ ...workItem, ...result.item }], binding)[0]
+      return accepted ? withWorkItemDetailsItem(result, accepted) : null
+    })
   }, [
     canUseDetailsRepoContext,
     repoPath,
@@ -183,7 +208,8 @@ export function useGitHubItemDialogDetails({
     issueRepository,
     refetchTick,
     cachedEntry?.fetchedAt,
-    target
+    target,
+    cache
   ])
 
   const addressedWorkItem = useMemo(

@@ -1,4 +1,3 @@
-import { plainGitHubWorkItem, getGitHubTaskObservation } from '@/lib/github-task-observation'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createTestStore,
@@ -185,14 +184,10 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       },
       timeoutMs: 30_000
     })
-    expect({ ...result, items: result.items.map(plainGitHubWorkItem) }).toEqual({
-      items: [{ ...item, repoId: 'caller-repo-id' }],
+    expect(result).toEqual({
+      items: [expect.objectContaining({ ...item, repoId: 'caller-repo-id' })],
       failedCount: 0,
       errorTypes: []
-    })
-    expect(getGitHubTaskObservation(result.items[0])).toMatchObject({
-      repoId: 'runtime-repo-id',
-      hostId: 'runtime:env-1'
     })
   })
 

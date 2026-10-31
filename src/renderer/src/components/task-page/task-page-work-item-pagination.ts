@@ -15,27 +15,21 @@ export function buildSelectedReposKey<
     connectionId?: string | null
     executionHostId?: string | null
   }
->(
-  repos: readonly T[],
-  sourceContextFor: (repo: T) => unknown,
-  bindingFor?: (repo: T) => unknown
-): string {
-  return JSON.stringify(
-    repos.map((r) => [
-      r.id,
-      r.path,
-      r.connectionId ?? '',
-      r.executionHostId ?? '',
-      sourceContextFor(r),
-      bindingFor?.(r)
-    ])
-  )
+>(repos: readonly T[], sourceContextFor: (repo: T) => unknown): string {
+  return repos
+    .map(
+      (r) =>
+        `${r.id}|${r.path}|${r.connectionId ?? ''}|${r.executionHostId ?? ''}|${JSON.stringify(
+          sourceContextFor(r)
+        )}`
+    )
+    .join(',')
 }
 
 export type WorkItemPageFetchResult = { items: GitHubWorkItem[] }
 
 export type AccumulateWorkItemPagesArgs = {
-  existingPages: readonly (readonly GitHubWorkItem[])[]
+  existingPages: readonly GitHubWorkItem[][]
   /** updatedAt of the oldest currently-loaded row — the first fetch cursor. */
   initialCursor: string
   /** 0-indexed page the user is trying to reach. */
@@ -108,18 +102,4 @@ export async function accumulateWorkItemPages(
   }
 
   return { cancelled: false, newPages, loadedPages }
-}
-
-export function clearDispatchedTaskSourceRetries(
-  previous: ReadonlySet<string>,
-  dispatched: ReadonlySet<string>
-): ReadonlySet<string> {
-  if (dispatched.size === 0) {
-    return previous
-  }
-  const next = new Set(previous)
-  for (const key of dispatched) {
-    next.delete(key)
-  }
-  return next
 }

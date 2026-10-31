@@ -17,39 +17,7 @@ import { supersedeGitHubListScrollRestore } from './task-page-github-list-scroll
 export function TaskPageGitHubList({
   model
 }: {
-  model: Pick<
-    TaskPageComposerActionsModel,
-    | 'activeGithubTaskKind'
-    | 'currentPage'
-    | 'currentPageRef'
-    | 'failedCount'
-    | 'filteredWorkItems'
-    | 'githubEmptyState'
-    | 'githubListRestoreWriteRef'
-    | 'githubListScrollRef'
-    | 'githubListScrollTopRef'
-    | 'githubResumeContextKey'
-    | 'githubTaskGridClass'
-    | 'githubUnavailable'
-    | 'handleLoadNextPage'
-    | 'handleRetryIssuesFetch'
-    | 'loadingTargetPage'
-    | 'pages'
-    | 'pendingGithubScrollRestoreRef'
-    | 'perRepoSourceState'
-    | 'retryingSourceKeys'
-    | 'selectedRepos'
-    | 'setCurrentPage'
-    | 'showGitHubTaskSkeletons'
-    | 'showPRManagementColumns'
-    | 'softHiddenVisibleCount'
-    | 'taskListPositionRef'
-    | 'tasksError'
-    | 'tasksLoading'
-    | 'totalPages'
-    | 'unresolvedSourceRepos'
-  > &
-    Parameters<typeof TaskPageGitHubRows>[0]['model']
+  model: TaskPageComposerActionsModel
 }): React.JSX.Element | null {
   const {
     selectedRepos,

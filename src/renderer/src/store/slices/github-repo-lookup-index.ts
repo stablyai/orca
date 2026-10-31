@@ -7,9 +7,7 @@ type IndexedRepo = {
 }
 
 export type GitHubRepoLookupIndex = {
-  findForWorkItem: (item: { repoId: string; repoHostId?: string }) => Repo | undefined
   findById: (repoId: string) => Repo | undefined
-  findByHostAndId: (hostId: string, repoId: string) => Repo | undefined
   findByPath: (repoPath: string) => Repo | undefined
   findByIdOrPath: (repoId: string | undefined, repoPath: string) => Repo | undefined
   /** The row for `repoPath` on `hostId`, preferring the caller's `repoId`. */
@@ -34,11 +32,8 @@ export function getGitHubRepoLookupIndex(
   }
 
   const byId = new Map<string, IndexedRepo>()
-  const lastById = new Map<string, Repo>()
-  const countsById = new Map<string, number>()
   const byPath = new Map<string, IndexedRepo>()
   const byIdAndPath = new Map<string, IndexedRepo>()
-  const byHostAndId = new Map<string, IndexedRepo>()
   const byHostAndPath = new Map<string, IndexedRepo>()
   const byHostIdAndPath = new Map<string, IndexedRepo>()
   let indexedCount = 0
@@ -52,8 +47,6 @@ export function getGitHubRepoLookupIndex(
       indexedCount += 1
       const repoId = repo.id
       const repoPath = repo.path
-      lastById.set(repoId, repo)
-      countsById.set(repoId, (countsById.get(repoId) ?? 0) + 1)
       if (!byId.has(repoId)) {
         byId.set(repoId, { index, repo })
       }
@@ -65,10 +58,6 @@ export function getGitHubRepoLookupIndex(
         byIdAndPath.set(idAndPath, { index, repo })
       }
       const hostId = getRepoExecutionHostId(repo)
-      const hostAndId = idAndPathKey(hostId, repoId)
-      if (!byHostAndId.has(hostAndId)) {
-        byHostAndId.set(hostAndId, { index, repo })
-      }
       const hostAndPath = idAndPathKey(hostId, repoPath)
       if (!byHostAndPath.has(hostAndPath)) {
         byHostAndPath.set(hostAndPath, { index, repo })
@@ -85,20 +74,6 @@ export function getGitHubRepoLookupIndex(
   }
 
   const lookup: GitHubRepoLookupIndex = {
-    findForWorkItem: (item) => {
-      scanUntil(() => false)
-      const exact =
-        item.repoHostId && byHostAndId.get(idAndPathKey(item.repoHostId, item.repoId))?.repo
-      if (exact) {
-        return exact
-      }
-      return item.repoHostId && (countsById.get(item.repoId) ?? 0) > 1
-        ? undefined
-        : lastById.get(item.repoId)
-    },
-    findByHostAndId: (hostId, repoId) =>
-      byHostAndId.get(idAndPathKey(hostId, repoId))?.repo ??
-      scanUntil((id, _path, host) => id === repoId && host === hostId),
     findById: (repoId) => byId.get(repoId)?.repo ?? scanUntil((id) => id === repoId),
     findByPath: (repoPath) =>
       byPath.get(repoPath)?.repo ?? scanUntil((_id, path) => path === repoPath),

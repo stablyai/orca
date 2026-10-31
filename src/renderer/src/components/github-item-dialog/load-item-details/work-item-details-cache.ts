@@ -5,7 +5,10 @@ import type {
   GitHubPRFileViewedState
 } from '../../../../../shared/github/pull-request-types'
 import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
-import type { GitHubWorkItemDetails } from '../../../../../shared/github/work-item-types'
+import type {
+  GitHubWorkItem,
+  GitHubWorkItemDetails
+} from '../../../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import { getGitHubSourceRuntimeHost } from '@/lib/github-source-runtime-context'
 import { onGitHubWorkItemDetailsCacheMutation } from '@/lib/github-work-item-details-cache-events'
@@ -22,6 +25,17 @@ export type WorkItemDetailsCacheEntry = {
   route?: { ownerRepo: GitHubOwnerRepo; bindingKey: string }
 }
 export const workItemDetailsCache = new Map<string, WorkItemDetailsCacheEntry>()
+
+export function withWorkItemDetailsItem(
+  details: GitHubWorkItemDetails,
+  item: GitHubWorkItem
+): GitHubWorkItemDetails {
+  return {
+    ...details,
+    item,
+    ...(item.assignees === undefined ? {} : { assignees: item.assignees.map((user) => user.login) })
+  }
+}
 
 // Replace entry identity on every write so useSyncExternalStore snapshots stay stable between notifications.
 const workItemDetailsCacheListeners = new Set<() => void>()

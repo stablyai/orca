@@ -1,12 +1,4 @@
-import {
-  beginGitHubTaskRead,
-  acquireProviderRequestSlot as acquireWorkItemSlot,
-  inflightProjectViewRequests,
-  nextProviderRequestId,
-  ownsInflightRequest,
-  releaseProviderRequestSlot as releaseWorkItemSlot
-} from './request-coordination'
-import { reconcileProjectTaskRead } from './project-task-content-actions'
+import { captureHostIdentityFence, isHostIdentityFenceCurrent } from '../host-catalog-fencing'
 import { translate } from '@/i18n/i18n'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
@@ -19,7 +11,13 @@ import {
   projectViewSourceScope
 } from './cache-identity'
 import { withBoundedCacheEntry, WORK_ITEMS_CACHE_TTL } from './cache-policy'
-
+import {
+  acquireProviderRequestSlot as acquireWorkItemSlot,
+  inflightProjectViewRequests,
+  nextProviderRequestId,
+  ownsInflightRequest,
+  releaseProviderRequestSlot as releaseWorkItemSlot
+} from './request-coordination'
 import { createProjectFieldActions } from './project-field-mutations'
 
 export const createProjectActions = (
@@ -30,6 +28,8 @@ export const createProjectActions = (
   'fetchProjectViewTable' | 'updateProjectFieldValue' | 'clearProjectFieldValue'
 > => ({
   fetchProjectViewTable: async (target, args, options) => {
+    const cache = get().githubTaskCache
+    const fence = captureHostIdentityFence({ target, at: 'local' })
     const sourceScope = projectViewSourceScope(target)
     const requestKey = projectViewRequestKey(args, sourceScope)
 
@@ -52,7 +52,6 @@ export const createProjectActions = (
       }
     }
 
-    const read = beginGitHubTaskRead([], target)
     let waitedForUpgrade = false
     for (;;) {
       const existing = inflightProjectViewRequests.get(requestKey)
@@ -61,7 +60,7 @@ export const createProjectActions = (
       }
       // Forced callers must await weaker in-flight work then refetch, like fetchWorkItems.
       if (!options?.force || existing.force) {
-        return existing.promise.finally(read.dispose)
+        return existing.promise
       }
       // Wait only once for weaker work so peers share upgrades without starvation.
       if (waitedForUpgrade) {
@@ -75,7 +74,7 @@ export const createProjectActions = (
     const request = (async (): Promise<GetProjectViewTableResult> => {
       await acquireWorkItemSlot()
       try {
-        const envelope =
+        let envelope =
           target.kind === 'environment'
             ? await callRuntimeRpc<GetProjectViewTableResult>(
                 target,
@@ -84,12 +83,21 @@ export const createProjectActions = (
                 { timeoutMs: 60_000 }
               )
             : await window.api.gh.getProjectViewTable(args)
+        if (!isHostIdentityFenceCurrent(fence)) {
+          return {
+            ok: false,
+            error: { type: 'unknown', message: 'Task source changed. Try again.' }
+          }
+        }
+        if (envelope.ok) {
+          envelope = { ...envelope, data: cache.observeProject(envelope.data, target, fence) }
+        }
         // Bounded waits may overlap stronger requests; late non-OK results must not overwrite their newer data/errors.
         if (!ownsInflightRequest(inflightProjectViewRequests, requestKey, requestId)) {
           return envelope
         }
         if (envelope.ok) {
-          let table = envelope.data
+          const table = envelope.data
           const key = projectViewCacheKey(
             table.project.ownerType,
             table.project.owner,
@@ -99,7 +107,6 @@ export const createProjectActions = (
             sourceScope,
             table.project.host
           )
-          table = reconcileProjectTaskRead(read, table, get().projectViewCache[key]?.data)
           set((s) => ({
             projectViewCache: withBoundedCacheEntry(s.projectViewCache, key, {
               data: table,
@@ -134,7 +141,6 @@ export const createProjectActions = (
         releaseWorkItemSlot()
       }
     })().finally(() => {
-      read.dispose()
       if (ownsInflightRequest(inflightProjectViewRequests, requestKey, requestId)) {
         inflightProjectViewRequests.delete(requestKey)
       }

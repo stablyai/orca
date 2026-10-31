@@ -75,7 +75,7 @@ function graphQLIssueResponse(assignee: string): { stdout: string } {
             body: `${assignee} body`,
             assignees: { nodes: [{ login: assignee }] },
             participants: { nodes: [] },
-            comments: { nodes: [] }
+            comments: { nodes: [], pageInfo: { hasNextPage: false } }
           }
         }
       }

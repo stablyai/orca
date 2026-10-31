@@ -94,7 +94,7 @@ export function applyRowPatch(
         ...s.projectViewCache,
         [cacheKey]: {
           ...entry,
-          data: { ...entry.data, rows }
+          data: s.githubTaskCache.copyProjectTable(entry.data, { ...entry.data, rows })
         }
       }
     }

@@ -1,12 +1,7 @@
-import { useAppStore } from '@/store'
-import type { Repo } from '../../../../../shared/repo-types'
-import { captureGitHubTaskObservation, observeGitHubWorkItem } from '@/lib/github-task-observation'
-import { parseTaskQuery } from '../../../../../shared/task-query'
-import { beforeEach, afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import { getTaskSourceCacheScope } from '../../../../../shared/task-source-context'
 import { assertTaskPageGitHubDialogStateAuthority } from './task-page-github-dialog-state-authority'
-import { clearTaskPageGitHubAuthorityAbsentFromLoadedItems } from './task-page-github-work-item-authority-refresh'
 import { adoptQuietSearchFieldsForItem } from './task-page-github-work-item-quiet-adopt'
 import {
   applyPendingTaskPageGitHubMutationsToItems,
@@ -25,8 +20,7 @@ import {
 } from './task-page-github-work-item-mutation-registry'
 import {
   taskPageGitHubFamilyDirtyKey,
-  taskPageGitHubOwnedItemKey,
-  taskPageGitHubAuthorityItemKeys
+  taskPageGitHubItemKey
 } from './task-page-github-work-item-mutation-keys'
 
 function item(overrides: Partial<GitHubWorkItem> = {}): GitHubWorkItem {
@@ -54,22 +48,7 @@ const sourceContext = {
   repoId: 'repo-1'
 }
 
-const repo: Repo = { id: 'repo-1', path: '/repo', displayName: 'repo', badgeColor: '', addedAt: 0 }
-const owner = captureGitHubTaskObservation(repo, sourceContext)!
-const scopedContext = {
-  query: parseTaskQuery('is:open'),
-  queryKey: 'q',
-  viewerLogin: 'me',
-  ownerOf: () => owner
-}
-function scoped() {
-  useAppStore.setState({ repos: [repo] })
-}
-beforeEach(() => useAppStore.setState({ repos: [] }))
-afterEach(() => {
-  resetTaskPageGitHubMutationRegistryForTests()
-  useAppStore.setState({ repos: [] })
-})
+afterEach(() => resetTaskPageGitHubMutationRegistryForTests())
 
 describe('dialog state authority (STA-3343)', () => {
   it('without authority a stale search refetch reverts a cache-only patch (external edits adopt)', () => {
@@ -107,17 +86,14 @@ describe('dialog state authority (STA-3343)', () => {
     const store = new Map<string, GitHubWorkItem>([['issue:1', item({ state: 'open' })]])
     reapplyPendingTaskPageGitHubMutationsToCache({
       items: [item({ state: 'open' })],
-      patchWorkItems: (patches) => {
-        for (const { itemId, patch } of patches) {
-          store.set(itemId, { ...(store.get(itemId) ?? item()), ...patch })
-        }
+      patchWorkItem: (id, patch) => {
+        store.set(id, { ...(store.get(id) ?? item()), ...patch })
       }
     })
     expect(store.get('issue:1')?.state).toBe('closed')
   })
 
   it('records authority under the mutation source scope so other scopes are untouched', () => {
-    scoped()
     setTaskPageGitHubMutationQueryKey('q')
     assertTaskPageGitHubDialogStateAuthority({
       repoId: 'repo-1',
@@ -128,12 +104,8 @@ describe('dialog state authority (STA-3343)', () => {
     const scope = getTaskSourceCacheScope(sourceContext)
     expect(getLastConfirmedClientValue(scope, 'repo-1', 'issue:1', 'state')).toBe('closed')
     expect(getLastConfirmedClientValue(null, 'repo-1', 'issue:1', 'state')).toBeUndefined()
-    const overlaid = applyPendingTaskPageGitHubMutationsToItems(
-      [observeGitHubWorkItem(item(), owner)],
-      scopedContext
-    )
+    const overlaid = applyPendingTaskPageGitHubMutationsToItems([item({ state: 'open' })])
     expect(overlaid[0]?.state).toBe('closed')
-    expect(applyPendingTaskPageGitHubMutationsToItems([item()])[0]?.state).toBe('open')
   })
 
   it('marks the state family dirty so quiet revalidation trails the stale row', () => {
@@ -148,7 +120,7 @@ describe('dialog state authority (STA-3343)', () => {
     expect(quiet.dirtyGeneration).toBe(before + 1)
     expect(
       quiet.familyDirtyAt.get(
-        taskPageGitHubFamilyDirtyKey(taskPageGitHubOwnedItemKey(null, 'repo-1', 'issue:1'), 'state')
+        taskPageGitHubFamilyDirtyKey(taskPageGitHubItemKey('repo-1', 'issue:1'), 'state')
       )
     ).toBe(quiet.dirtyGeneration)
   })
@@ -254,73 +226,6 @@ describe('dialog state authority (STA-3343)', () => {
       getLastConfirmedClientValue(null, 'repo-1', 'issue:1', 'state', ownerRepo)
     ).toBeUndefined()
     expect(applyPendingTaskPageGitHubMutationsToItems([item()])[0]?.state).toBe('open')
-  })
-
-  it.each(['closed', 'merged'] as const)(
-    'retains ownerless PR %s through loaded-row cleanup and stale search',
-    (state) => {
-      scoped()
-      setTaskPageGitHubMutationQueryKey('q')
-      const pr = observeGitHubWorkItem(
-        item({ id: 'pr:1', type: 'pr', url: 'https://github.com/o/r/pull/1' }),
-        owner
-      )
-      assertTaskPageGitHubDialogStateAuthority({
-        repoId: pr.repoId,
-        itemId: pr.id,
-        state,
-        sourceContext
-      })
-      clearTaskPageGitHubAuthorityAbsentFromLoadedItems(
-        new Set(taskPageGitHubAuthorityItemKeys(pr))
-      )
-      expect(
-        materializeTaskPageItemList({
-          networkItems: [pr],
-          previousItems: [pr],
-          queryKey: 'q',
-          context: scopedContext
-        })[0]?.state
-      ).toBe(state)
-    }
-  )
-
-  it('replaces upstream scalar authority when a fork edit shares the same query and source', () => {
-    scoped()
-    setTaskPageGitHubMutationQueryKey('q')
-    const upstream = item({ url: 'https://github.com/upstream/r/issues/1' })
-    const upstreamOwner = { owner: 'upstream', repo: 'r', host: 'github.com' }
-    assertTaskPageGitHubDialogStateAuthority({
-      repoId: upstream.repoId,
-      itemId: upstream.id,
-      state: 'closed',
-      sourceContext,
-      ownerRepo: upstreamOwner
-    })
-    expect(applyPendingTaskPageGitHubMutationsToItems([upstream], scopedContext)[0]?.state).toBe(
-      'closed'
-    )
-    assertTaskPageGitHubDialogStateAuthority({
-      repoId: upstream.repoId,
-      itemId: upstream.id,
-      state: 'closed',
-      sourceContext,
-      ownerRepo: { ...upstreamOwner, owner: 'o' }
-    })
-    const patches: Partial<GitHubWorkItem>[] = []
-    adoptQuietSearchFieldsForItem({
-      item: upstream,
-      serverItem: upstream,
-      sourceScope: getTaskSourceCacheScope(sourceContext),
-      observation: owner,
-      queryKey: 'q',
-      fetchStartedAtGeneration: getOrCreateQuietRevalidateState('q').dirtyGeneration,
-      patchWorkItem: (_id, patch) => patches.push(patch)
-    })
-    expect(patches).toContainEqual({ state: 'open' })
-    expect(applyPendingTaskPageGitHubMutationsToItems([upstream], scopedContext)[0]?.state).toBe(
-      'open'
-    )
   })
 
   it('keeps another repository confirmation when an older qualified edit rolls back', () => {

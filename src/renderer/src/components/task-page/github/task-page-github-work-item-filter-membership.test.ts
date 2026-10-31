@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { ParsedTaskQuery } from '../../../../../shared/task-query'
-import { shouldSoftHideTaskPageGitHubWorkItem } from './task-page-github-work-item-filter-membership'
+import {
+  recomputeTaskPageGitHubItemSoftHide,
+  shouldSoftHideTaskPageGitHubWorkItem
+} from './task-page-github-work-item-filter-membership'
 
 const baseQuery = (overrides: Partial<ParsedTaskQuery> = {}): ParsedTaskQuery => ({
   scope: 'all',
@@ -134,5 +137,34 @@ describe('shouldSoftHideTaskPageGitHubWorkItem', () => {
         skipMeQualifiers: false
       })
     ).toBe(true)
+  })
+})
+
+describe('recomputeTaskPageGitHubItemSoftHide', () => {
+  it('includes sticky hide for matching queryKey', () => {
+    const itemKey = 'repo\0item'
+    const options = {
+      item: {
+        state: 'open',
+        assignees: [{ login: 'me', name: null, avatarUrl: '' }],
+        reviewRequests: []
+      },
+      query: baseQuery({ state: 'open' }),
+      viewerLogin: 'me',
+      skipMeQualifiers: false,
+      queryKey: 'q1',
+      sticky: new Map([
+        [
+          itemKey,
+          { itemKey, sourceScope: null, queryKey: 'q1', reason: 'filter_membership' as const }
+        ]
+      ]),
+      itemKey
+    } satisfies Parameters<typeof recomputeTaskPageGitHubItemSoftHide>[0]
+    expect(recomputeTaskPageGitHubItemSoftHide(options)).toEqual({ hide: true, sticky: true })
+    expect(recomputeTaskPageGitHubItemSoftHide({ ...options, queryKey: 'q2' })).toEqual({
+      hide: false,
+      sticky: false
+    })
   })
 })

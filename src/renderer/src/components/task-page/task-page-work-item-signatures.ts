@@ -1,12 +1,8 @@
-import { getGitHubTaskObservation, gitHubTaskFamilyOrigin } from '@/lib/github-task-observation'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
-import { parseGitHubIssueOrPRLink } from '../../../../shared/github/links'
-import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
 
 // Why the host: a twin's two hosts return the same PR under one repo id.
 export function taskPageWorkItemKey(item: GitHubWorkItem): string {
-  const repository = parseGitHubIssueOrPRLink(item.url)?.slug
-  return `${item.repoId}\u0000${item.repoHostId ?? ''}\u0000${item.id}\u0000${repository ? githubRepoIdentityKey(repository) : item.url}`
+  return `${item.repoId}\u0000${item.repoHostId ?? ''}\u0000${item.id}`
 }
 
 export function sortedStrings(values: readonly string[] | undefined): string {
@@ -22,11 +18,6 @@ function sortedLogins(users: readonly { login: string | null | undefined }[] | u
 
 export function taskPageWorkItemStatusSignature(item: GitHubWorkItem): string {
   return JSON.stringify([
-    getGitHubTaskObservation(item)?.key,
-    ...(['state', 'autoMerge', 'assignees', 'reviewRequests'] as const).map((family) => {
-      const origin = gitHubTaskFamilyOrigin(item, family)
-      return origin && [origin.kind, origin.owner?.key, origin.coordinate, origin.generation]
-    }),
     item.type,
     item.number,
     item.title,

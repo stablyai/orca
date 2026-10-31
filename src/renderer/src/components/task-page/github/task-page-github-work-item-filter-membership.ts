@@ -1,6 +1,7 @@
 import type { ParsedTaskQuery } from '../../../../../shared/task-query'
 import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import type { StickyHideEntry } from './task-page-github-work-item-registry-types'
 
 function includesLogin(users: readonly GitHubAssignableUser[] | undefined, login: string): boolean {
   const target = login.toLowerCase()
@@ -67,4 +68,28 @@ export function shouldSoftHideTaskPageGitHubWorkItem(args: {
 
   // author @me / labels / free text: do not soft-hide from those alone
   return false
+}
+
+export function recomputeTaskPageGitHubItemSoftHide(args: {
+  item: Pick<GitHubWorkItem, 'state' | 'assignees' | 'reviewRequests'>
+  query: ParsedTaskQuery
+  viewerLogin: string | null
+  skipMeQualifiers: boolean
+  queryKey: string
+  sticky: ReadonlyMap<string, StickyHideEntry>
+  itemKey: string
+}): { hide: boolean; sticky: boolean } {
+  const membershipHide = shouldSoftHideTaskPageGitHubWorkItem({
+    item: args.item,
+    query: args.query,
+    viewerLogin: args.viewerLogin,
+    skipMeQualifiers: args.skipMeQualifiers
+  })
+  const stickyEntry = args.sticky.get(args.itemKey)
+  const stickyActive = Boolean(stickyEntry && stickyEntry.queryKey === args.queryKey)
+  // Sticky hides retain confirmed membership exits after pending operations clear.
+  return {
+    hide: membershipHide || stickyActive,
+    sticky: stickyActive
+  }
 }

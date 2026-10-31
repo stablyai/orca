@@ -1,20 +1,17 @@
-import type { GitHubTaskValueOrigin } from '@/lib/github-task-observation'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import type { useImmediateMutation } from '@/hooks/useIssueMetadata'
 import {
   buildTaskPageGitHubCloseUpdate,
-  getTaskPageGitHubDuplicateTargetErrorMessage,
-  validateTaskPageGitHubDuplicateTarget,
   type TaskPageGitHubCloseAction
 } from '@/components/task-page/github/task-page-github-status-actions'
-import { assertTaskPageGitHubDialogStateAuthority } from '@/components/task-page/github/task-page-github-dialog-state-authority'
+import { beginEdit } from './gh-edit-task-record'
+import type { TaskDelta } from '@/store/github/task-record-cache'
 import { runIssueUpdate } from '@/components/github/github-work-item-edit-mutations'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import type { GitHubPatchWorkItemOptions } from '@/store/github/cache-model'
-import { translate } from '@/i18n/i18n'
 import type { GitHubItemDialogProjectOrigin } from '../load-item-details/github-item-dialog-types'
 
 export type GHEditProjectRowPatch = {
@@ -26,6 +23,7 @@ export type GHEditProjectRowPatch = {
 export type GHEditMutationRun = ReturnType<typeof useImmediateMutation>['run']
 
 type GHEditMutationBase = {
+  item: GitHubWorkItem
   itemNumber: GitHubWorkItem['number']
   itemRepoId: GitHubWorkItem['repoId']
   repoPath: string | null
@@ -38,10 +36,10 @@ type GHEditMutationBase = {
 }
 
 export function runGHEditStateChange({
+  item,
   newState,
   closeAction,
   localState,
-  previousOrigin,
   itemId,
   itemNumber,
   itemRepoId,
@@ -59,7 +57,6 @@ export function runGHEditStateChange({
   newState: 'open' | 'closed'
   closeAction?: TaskPageGitHubCloseAction
   localState: GitHubWorkItem['state']
-  previousOrigin?: GitHubTaskValueOrigin
   onStateChange: (state: GitHubWorkItem['state']) => void
   patchWorkItem: (
     id: string,
@@ -72,15 +69,11 @@ export function runGHEditStateChange({
   if (newState === localState && !closeAction) {
     return
   }
-  const prevState = localState
-  // Keep registry authority so search-lagged Tasks refetches cannot revert this mutation.
-  let authority: ReturnType<typeof assertTaskPageGitHubDialogStateAuthority> | null = null
+  let settle: (success: boolean) => GitHubWorkItem | null = () => item
   const patchState = (state: GitHubWorkItem['state']) =>
     patchWorkItem(itemId, { state }, itemRepoId, {
       sourceContext,
-      ownerRepo: projectOrigin ?? issueRepo,
-      observation: authority?.observation,
-      valueOrigins: { state: authority?.origin() }
+      ownerRepo: projectOrigin ?? issueRepo
     })
   void run('state', {
     mutate: () =>
@@ -97,62 +90,38 @@ export function runGHEditStateChange({
             : { state: newState }
       }),
     onOptimistic: () => {
-      authority = assertTaskPageGitHubDialogStateAuthority({
-        repoId: itemRepoId,
-        itemId,
-        state: newState,
-        previousOrigin,
-        sourceContext,
-        ownerRepo: projectOrigin ?? issueRepo
-      })
+      settle = beginEdit(item, sourceContext, (base) => ({ ...base, state: newState }))
       onStateChange(newState)
       patchState(newState)
       patchProjectRowIfNeeded({ state: newState })
     },
     onRevert: () => {
-      if (authority?.revert()) {
-        onStateChange(prevState)
-        patchState(prevState)
-        patchProjectRowIfNeeded({ state: prevState })
+      const current = settle(false)
+      if (!current) {
+        return
       }
+      onStateChange(current.state)
+      patchState(current.state)
+      patchProjectRowIfNeeded({ state: current.state })
     },
     onSuccess: () => {
+      const current = settle(true)
+      if (!current) {
+        return
+      }
       useAppStore.getState().recordFeatureInteraction('github-tasks')
-      patchState(newState)
-      patchProjectRowIfNeeded({ state: newState })
+      patchState(current.state)
+      patchProjectRowIfNeeded({ state: current.state })
       onMutated()
     },
     onError: (err) => toast.error(err)
   })
 }
 
-export function closeGHEditAsDuplicate({
-  targetIssueNumber,
-  itemNumber,
-  setDuplicateError,
-  handleStateChange,
-  setStatusPopoverOpen,
-  setDuplicatePickerOpen
-}: {
-  targetIssueNumber: number | string
-  itemNumber: number
-  setDuplicateError: (value: string | null) => void
-  handleStateChange: (newState: 'open' | 'closed', closeAction?: TaskPageGitHubCloseAction) => void
-  setStatusPopoverOpen: (value: boolean) => void
-  setDuplicatePickerOpen: (value: boolean) => void
-}): void {
-  const validation = validateTaskPageGitHubDuplicateTarget(String(targetIssueNumber), itemNumber)
-  if (!validation.ok) {
-    setDuplicateError(getTaskPageGitHubDuplicateTargetErrorMessage(validation, translate))
-    return
-  }
-  setDuplicateError(null)
-  handleStateChange('closed', { stateReason: 'duplicate', duplicateOf: validation.duplicateOf })
-  setStatusPopoverOpen(false)
-  setDuplicatePickerOpen(false)
-}
+export { closeGHEditAsDuplicate } from './gh-edit-close-as-duplicate'
 
 export function runGHEditLabelToggle({
+  item,
   label,
   localLabels,
   itemId,
@@ -180,6 +149,7 @@ export function runGHEditLabelToggle({
   ) => void
 }): void {
   const isAdding = !localLabels.includes(label)
+  let settle: (success: boolean) => GitHubWorkItem | null = () => item
   const prevLabels = localLabels
   const newLabels = isAdding ? [...prevLabels, label] : prevLabels.filter((l) => l !== label)
 
@@ -195,6 +165,12 @@ export function runGHEditLabelToggle({
         updates: isAdding ? { addLabels: [label] } : { removeLabels: [label] }
       }),
     onOptimistic: () => {
+      settle = beginEdit(item, sourceContext, (base) => ({
+        ...base,
+        labels: isAdding
+          ? [...new Set([...base.labels, label])]
+          : base.labels.filter((value) => value !== label)
+      }))
       onLabelsChange(newLabels)
       patchWorkItem(itemId, { labels: newLabels }, itemRepoId, {
         sourceContext,
@@ -203,14 +179,19 @@ export function runGHEditLabelToggle({
       patchProjectRowIfNeeded({ labels: newLabels })
     },
     onRevert: () => {
-      onLabelsChange(prevLabels)
-      patchWorkItem(itemId, { labels: prevLabels }, itemRepoId, {
+      const current = settle(false)
+      if (!current) {
+        return
+      }
+      onLabelsChange(current.labels)
+      patchWorkItem(itemId, { labels: current.labels }, itemRepoId, {
         sourceContext,
         ownerRepo: projectOrigin ?? issueRepo
       })
-      patchProjectRowIfNeeded({ labels: prevLabels })
+      patchProjectRowIfNeeded({ labels: current.labels })
     },
     onSuccess: () => {
+      settle(true)
       useAppStore.getState().recordFeatureInteraction('github-tasks')
       onMutated()
     },
@@ -219,6 +200,7 @@ export function runGHEditLabelToggle({
 }
 
 export function runGHEditAssigneeToggle({
+  item,
   login,
   localAssignees,
   assigneesItemKey,
@@ -246,38 +228,18 @@ export function runGHEditAssigneeToggle({
     ? prevAssignees.filter((l) => l !== login)
     : [...prevAssignees, login]
 
-  // Why: scope the optimistic guard to this repo item so switching items doesn't suppress the next item's assignee sync.
-  editedAssigneesItemKeyRef.current = assigneesItemKey
-  if (isAssigned) {
-    void run('assignees', {
-      mutate: () =>
-        runIssueUpdate({
-          repoId: itemRepoId,
-          repoPath,
-          sourceContext,
-          projectOrigin,
-          issueRepo,
-          number: itemNumber,
-          updates: { removeAssignees: [login] }
-        }),
-      onOptimistic: () => {
-        setLocalAssignees(newAssignees)
-        patchProjectRowIfNeeded({ assignees: newAssignees })
-      },
-      onRevert: () => {
-        // Why: leaving the guard set after a failed toggle suppresses assignee prop syncs indefinitely.
-        editedAssigneesItemKeyRef.current = null
-        setLocalAssignees(prevAssignees)
-        patchProjectRowIfNeeded({ assignees: prevAssignees })
-      },
-      onSuccess: () => {
-        useAppStore.getState().recordFeatureInteraction('github-tasks')
-        onMutated()
-      },
-      onError: (err) => toast.error(err)
-    })
-    return
+  const delta: TaskDelta = (base) => {
+    const current = base.assignees ?? []
+    return {
+      ...base,
+      assignees: isAssigned
+        ? current.filter((user) => user.login.toLowerCase() !== login.toLowerCase())
+        : current.some((user) => user.login.toLowerCase() === login.toLowerCase())
+          ? current
+          : [...current, { login, name: null, avatarUrl: '' }]
+    }
   }
+  let settle: (success: boolean) => GitHubWorkItem | null = () => item
   void run('assignees', {
     mutate: () =>
       runIssueUpdate({
@@ -287,21 +249,45 @@ export function runGHEditAssigneeToggle({
         projectOrigin,
         issueRepo,
         number: itemNumber,
-        updates: { addAssignees: [login] }
+        updates: isAssigned ? { removeAssignees: [login] } : { addAssignees: [login] }
       }),
     onOptimistic: () => {
+      settle = beginEdit(
+        {
+          ...item,
+          assignees: localAssignees.map(
+            (login) =>
+              item.assignees?.find((user) => user.login.toLowerCase() === login.toLowerCase()) ?? {
+                login,
+                name: null,
+                avatarUrl: ''
+              }
+          )
+        },
+        sourceContext,
+        delta
+      )
+      editedAssigneesItemKeyRef.current = assigneesItemKey
       setLocalAssignees(newAssignees)
       patchProjectRowIfNeeded({ assignees: newAssignees })
     },
+    onRevert: () => {
+      const accepted = settle(false)
+      if (!accepted) {
+        return
+      }
+      const current = accepted.assignees?.map((user) => user.login) ?? prevAssignees
+      editedAssigneesItemKeyRef.current = null
+      setLocalAssignees(current)
+      patchProjectRowIfNeeded({ assignees: current })
+    },
     onSuccess: () => {
+      if (!settle(true)) {
+        return
+      }
+      editedAssigneesItemKeyRef.current = null
       useAppStore.getState().recordFeatureInteraction('github-tasks')
       onMutated()
-    },
-    onRevert: () => {
-      // Why: leaving the guard set after a failed toggle suppresses assignee prop syncs indefinitely.
-      editedAssigneesItemKeyRef.current = null
-      setLocalAssignees(prevAssignees)
-      patchProjectRowIfNeeded({ assignees: prevAssignees })
     },
     onError: (err) => toast.error(err)
   })

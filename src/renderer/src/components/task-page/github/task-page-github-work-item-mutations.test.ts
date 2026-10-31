@@ -5,25 +5,28 @@ import { adoptQuietSearchFieldsForItem } from './task-page-github-work-item-quie
 import {
   applyPendingTaskPageGitHubMutationsToItems,
   materializeTaskPageItemList,
-  overlayPendingOnTaskPagePages
+  overlayPendingOnTaskPagePages,
+  reapplyPendingTaskPageGitHubMutationsToCache
 } from './task-page-github-work-item-mutation-pages'
-import { beginTaskPageGitHubWorkItemMutation } from './task-page-github-work-item-mutations'
+import {
+  beginTaskPageGitHubWorkItemMutation,
+  getTaskPageGitHubStickyHideForTests
+} from './task-page-github-work-item-mutations'
 import {
   confirmTaskPageGitHubWorkItemMutation,
   rollbackTaskPageGitHubWorkItemMutation
 } from './task-page-github-work-item-mutation-lifecycle'
-import {
-  getRegistryMergedTaskPageGitHubWorkItem,
-  createTaskPageGitHubMembershipProjection
-} from './task-page-github-work-item-mutation-composition'
+import { getRegistryMergedTaskPageGitHubWorkItem } from './task-page-github-work-item-mutation-composition'
 import { settleQuietSearchRevalidate } from './task-page-github-work-item-quiet-revalidate'
 import {
+  clearTaskPageGitHubConfirmedAuthority,
   getConfirmedListSnapshot,
+  getTaskPageGitHubSoftHiddenItemKeys,
   resetTaskPageGitHubMutationRegistryForTests
 } from './task-page-github-work-item-mutation-registry'
 import { getLastConfirmedClientValue } from './task-page-github-confirmed-client-values'
 import { getOrCreateQuietRevalidateState } from './task-page-github-work-item-quiet-state'
-import { taskPageGitHubMutationItemId } from './task-page-github-work-item-mutation-keys'
+import { taskPageGitHubItemKey } from './task-page-github-work-item-mutation-keys'
 
 function query(overrides: Partial<ParsedTaskQuery> = {}): ParsedTaskQuery {
   return {
@@ -58,14 +61,9 @@ function item(overrides: Partial<GitHubWorkItem> = {}): GitHubWorkItem {
   }
 }
 
-const issueListId = taskPageGitHubMutationItemId(item())
-const assigneeSnapshot = () => getConfirmedListSnapshot(null, 'repo-1', issueListId, 'assignees')
-
 function createPatchRecorder() {
   const patches: { id: string; patch: Partial<GitHubWorkItem>; repoId?: string }[] = []
-  const patchWorkItem: Parameters<
-    typeof beginTaskPageGitHubWorkItemMutation
-  >[0]['patchWorkItem'] = (id, patch, repoId): void => {
+  const patchWorkItem = (id: string, patch: Partial<GitHubWorkItem>, repoId?: string): void => {
     patches.push({ id, patch, repoId })
   }
   return { patches, patchWorkItem }
@@ -119,7 +117,11 @@ describe('TaskPage GitHub work item mutations', () => {
 
     const merged = getRegistryMergedTaskPageGitHubWorkItem(base, null)
     expect(merged.assignees?.map((u) => u.login.toLowerCase()).sort()).toEqual(['alice', 'bob'])
-    expect(assigneeSnapshot()?.map((u) => u.login.toLowerCase())).toEqual(['alice'])
+    expect(
+      getConfirmedListSnapshot(null, 'repo-1', 'issue:1', 'assignees')?.map((u) =>
+        u.login.toLowerCase()
+      )
+    ).toEqual(['alice'])
 
     void bob
   })
@@ -157,9 +159,8 @@ describe('TaskPage GitHub work item mutations', () => {
       patchWorkItem,
       scheduleQuiet: false
     })
-    const prId = taskPageGitHubMutationItemId(base)
     expect(
-      getConfirmedListSnapshot(null, 'repo-1', prId, 'reviewRequests')?.map((u) =>
+      getConfirmedListSnapshot(null, 'repo-1', 'pr:1', 'reviewRequests')?.map((u) =>
         u.login.toLowerCase()
       )
     ).toEqual(['bob', 'carol'])
@@ -259,7 +260,7 @@ describe('TaskPage GitHub work item mutations', () => {
       patchWorkItem
     })
 
-    const snap = assigneeSnapshot()
+    const snap = getConfirmedListSnapshot(null, 'repo-1', 'issue:1', 'assignees')
     expect(snap).toBeUndefined()
     expect(
       patches
@@ -327,7 +328,11 @@ describe('TaskPage GitHub work item mutations', () => {
       patchWorkItem
     })
     expect(result.needTrailing).toBe(true)
-    expect(assigneeSnapshot()?.map((u) => u.login.toLowerCase())).toEqual(['alice', 'bob'])
+    expect(
+      getConfirmedListSnapshot(null, 'repo-1', 'issue:1', 'assignees')?.map((u) =>
+        u.login.toLowerCase()
+      )
+    ).toEqual(['alice', 'bob'])
   })
 
   it('K21: fat search after confirmed remove does not force-accept', () => {
@@ -358,7 +363,11 @@ describe('TaskPage GitHub work item mutations', () => {
       patchWorkItem,
       scheduleQuiet: false
     })
-    expect(assigneeSnapshot()?.map((u) => u.login.toLowerCase())).toEqual(['alice'])
+    expect(
+      getConfirmedListSnapshot(null, 'repo-1', 'issue:1', 'assignees')?.map((u) =>
+        u.login.toLowerCase()
+      )
+    ).toEqual(['alice'])
 
     const quiet = getOrCreateQuietRevalidateState('q')
     quiet.fetchStartedAtGeneration = quiet.dirtyGeneration
@@ -376,10 +385,14 @@ describe('TaskPage GitHub work item mutations', () => {
       fetchStartedAtGeneration: quiet.fetchStartedAtGeneration,
       patchWorkItem
     })
-    expect(assigneeSnapshot()?.map((u) => u.login.toLowerCase())).toEqual(['alice'])
+    expect(
+      getConfirmedListSnapshot(null, 'repo-1', 'issue:1', 'assignees')?.map((u) =>
+        u.login.toLowerCase()
+      )
+    ).toEqual(['alice'])
   })
 
-  it('K21: lagging open after close confirm keeps closed and invisible', () => {
+  it('K21: lagging open after close confirm keeps closed + sticky', () => {
     const { patchWorkItem } = createPatchRecorder()
     const base = item({ state: 'open' })
     const began = beginTaskPageGitHubWorkItemMutation({
@@ -400,13 +413,9 @@ describe('TaskPage GitHub work item mutations', () => {
       scheduleQuiet: false
     })
     expect(getLastConfirmedClientValue(null, 'repo-1', 'issue:1', 'state')).toBe('closed')
-    expect(
-      createTaskPageGitHubMembershipProjection({
-        query: query(),
-        queryKey: 'q',
-        viewerLogin: 'me'
-      })(base, null).hide
-    ).toBe(true)
+    const itemKey = taskPageGitHubItemKey('repo-1', 'issue:1')
+    expect(getTaskPageGitHubStickyHideForTests(itemKey)).toBeTruthy()
+    expect(getTaskPageGitHubSoftHiddenItemKeys().has(itemKey)).toBe(true)
 
     const quiet = getOrCreateQuietRevalidateState('q')
     quiet.fetchStartedAtGeneration = quiet.dirtyGeneration
@@ -423,16 +432,10 @@ describe('TaskPage GitHub work item mutations', () => {
       })
     }
     expect(getLastConfirmedClientValue(null, 'repo-1', 'issue:1', 'state')).toBe('closed')
-    expect(
-      createTaskPageGitHubMembershipProjection({
-        query: query(),
-        queryKey: 'q',
-        viewerLogin: 'me'
-      })(base, null).hide
-    ).toBe(true)
+    expect(getTaskPageGitHubStickyHideForTests(itemKey)).toBeTruthy()
   })
 
-  it('K22: confirm close then open under Open restores membership', () => {
+  it('K22: confirm close then open under Open clears sticky', () => {
     const { patchWorkItem } = createPatchRecorder()
     const base = item({ state: 'open' })
     const close = beginTaskPageGitHubWorkItemMutation({
@@ -452,13 +455,8 @@ describe('TaskPage GitHub work item mutations', () => {
       patchWorkItem,
       scheduleQuiet: false
     })
-    expect(
-      createTaskPageGitHubMembershipProjection({
-        query: query(),
-        queryKey: 'q',
-        viewerLogin: 'me'
-      })(base, null).hide
-    ).toBe(true)
+    const itemKey = taskPageGitHubItemKey('repo-1', 'issue:1')
+    expect(getTaskPageGitHubStickyHideForTests(itemKey)).toBeTruthy()
 
     const reopen = beginTaskPageGitHubWorkItemMutation({
       item: { ...base, state: 'closed' },
@@ -477,13 +475,8 @@ describe('TaskPage GitHub work item mutations', () => {
       patchWorkItem,
       scheduleQuiet: false
     })
-    expect(
-      createTaskPageGitHubMembershipProjection({
-        query: query(),
-        queryKey: 'q',
-        viewerLogin: 'me'
-      })(base, null).hide
-    ).toBe(false)
+    expect(getTaskPageGitHubStickyHideForTests(itemKey)).toBeUndefined()
+    expect(getTaskPageGitHubSoftHiddenItemKeys().has(itemKey)).toBe(false)
   })
 
   it('whole-field supersede: stale rollback/confirm no-ops', () => {
@@ -696,14 +689,10 @@ describe('TaskPage GitHub work item mutations', () => {
       queryKey: 'q',
       networkItems: [thin],
       fetchStartedAtGeneration: g0,
-      patchWorkItems: (patches) => {
-        for (const { itemId, patch, repoId, options } of patches) {
-          patchWorkItem(itemId, patch, repoId, options)
-        }
-      }
+      patchWorkItem
     })
     expect(settle.needTrailing).toBe(true)
-    const snap = assigneeSnapshot()
+    const snap = getConfirmedListSnapshot(null, 'repo-1', 'issue:1', 'assignees')
     expect(snap?.map((u) => u.login.toLowerCase()).sort()).toEqual(['alice', 'bob', 'carol'])
   })
 
@@ -745,5 +734,102 @@ describe('TaskPage GitHub work item mutations', () => {
     })
     expect(getLastConfirmedClientValue(null, 'repo-1', 'issue:1', 'state')).toBe('open')
     vi.useRealTimers()
+  })
+})
+
+describe('post-confirm authority with non-null sourceScope', () => {
+  const sourceContext = {
+    kind: 'task-source' as const,
+    provider: 'github' as const,
+    hostId: 'local' as const,
+    projectId: 'proj',
+    projectHostSetupId: 'setup',
+    repoId: 'repo-1'
+  }
+
+  it('holds closed after confirm when overlay sees open network item', () => {
+    const { patchWorkItem } = createPatchRecorder()
+    const base = item({ state: 'open' })
+    const began = beginTaskPageGitHubWorkItemMutation({
+      item: base,
+      intent: { type: 'setState', state: 'closed' },
+      sourceContext,
+      query: query(),
+      queryKey: 'q',
+      viewerLogin: 'me',
+      skipMeQualifiers: false,
+      patchWorkItem
+    })
+    expect(began.key.sourceScope).not.toBeNull()
+    confirmTaskPageGitHubWorkItemMutation(began.key, began.generation, {
+      query: query(),
+      queryKey: 'q',
+      viewerLogin: 'me',
+      item: { ...base, state: 'closed' },
+      patchWorkItem,
+      sourceContext
+    })
+    const overlaid = applyPendingTaskPageGitHubMutationsToItems([item({ state: 'open' })])
+    expect(overlaid[0].state).toBe('closed')
+  })
+
+  it('reapply after confirm holds closed when network returns open', () => {
+    const store = new Map<string, GitHubWorkItem>()
+    const base = item({ state: 'open' })
+    store.set(base.id, base)
+    const patchWorkItem = (id: string, patch: Partial<GitHubWorkItem>): void => {
+      const current = store.get(id) ?? base
+      store.set(id, { ...current, ...patch })
+    }
+    const began = beginTaskPageGitHubWorkItemMutation({
+      item: base,
+      intent: { type: 'setState', state: 'closed' },
+      sourceContext,
+      query: query(),
+      queryKey: 'q',
+      viewerLogin: 'me',
+      skipMeQualifiers: false,
+      patchWorkItem
+    })
+    confirmTaskPageGitHubWorkItemMutation(began.key, began.generation, {
+      query: query(),
+      queryKey: 'q',
+      viewerLogin: 'me',
+      item: { ...base, state: 'closed' },
+      patchWorkItem,
+      sourceContext
+    })
+    store.set(base.id, item({ state: 'open' }))
+    reapplyPendingTaskPageGitHubMutationsToCache({
+      items: [item({ state: 'open' })],
+      patchWorkItem
+    })
+    expect(store.get(base.id)?.state).toBe('closed')
+  })
+
+  it('user-style clearConfirmedAuthority allows network open after hard refresh', () => {
+    const { patchWorkItem } = createPatchRecorder()
+    const base = item({ state: 'open' })
+    const began = beginTaskPageGitHubWorkItemMutation({
+      item: base,
+      intent: { type: 'setState', state: 'closed' },
+      sourceContext,
+      query: query(),
+      queryKey: 'q',
+      viewerLogin: 'me',
+      skipMeQualifiers: false,
+      patchWorkItem
+    })
+    confirmTaskPageGitHubWorkItemMutation(began.key, began.generation, {
+      query: query(),
+      queryKey: 'q',
+      viewerLogin: 'me',
+      item: { ...base, state: 'closed' },
+      patchWorkItem,
+      sourceContext
+    })
+    clearTaskPageGitHubConfirmedAuthority()
+    const overlaid = applyPendingTaskPageGitHubMutationsToItems([item({ state: 'open' })])
+    expect(overlaid[0].state).toBe('open')
   })
 })

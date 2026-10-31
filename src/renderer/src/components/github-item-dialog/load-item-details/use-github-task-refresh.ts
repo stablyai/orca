@@ -1,5 +1,4 @@
 import { translate } from '@/i18n/i18n'
-import { qualifyGitHubTaskLists } from '@/lib/github-task-observation'
 import { getTaskPageRepoSourceContext } from '@/components/task-page/task-page-source-context'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
 import {
@@ -14,8 +13,6 @@ import {
   githubTaskWriteKey
 } from '@/lib/github-task-target'
 import { observeGitHubWorkItemWrites } from '@/lib/github-work-item-writes'
-import { publishGitHubTaskRefresh } from '@/lib/github-task-refresh-publication'
-import { captureTaskPageGitHubRefreshMasks } from '@/components/task-page/github/task-page-github-refresh-masks'
 import {
   useCallback,
   useLayoutEffect,
@@ -23,10 +20,10 @@ import {
   useEffectEvent,
   useMemo,
   useRef,
-  useState
+  useState,
+  useSyncExternalStore
 } from 'react'
 import { useAppStore } from '@/store'
-import { lookupGitHubWorkItemDetailsForSource } from '@/lib/github-work-item-source-lookup'
 
 import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
@@ -35,8 +32,15 @@ import {
   type TaskSourceContext
 } from '../../../../../shared/task-source-context'
 
-import { getWorkItemDetailsCacheKey, workItemDetailsCache } from './work-item-details-cache'
-import { startWorkItemDetailsFetch } from './work-item-details-fetch-settle'
+import {
+  getWorkItemDetailsCacheKey,
+  workItemDetailsCache,
+  touchWorkItemDetailsCache
+} from './work-item-details-cache'
+import {
+  startWorkItemDetailsFetch,
+  loadCanonicalGitHubTaskDetails
+} from './work-item-details-fetch-settle'
 import { getWorkItemRepo } from '@/lib/work-item-repo-row'
 import { useMountedRef } from '@/hooks/useMountedRef'
 
@@ -80,6 +84,14 @@ export function useGitHubTaskRefresh({
     }),
     [workItem, sourceContext, registeredRepo, executionIdentity]
   )
+  const cache = useAppStore((s) => s.githubTaskCache)
+  const binding = useMemo(
+    () => (target ? cache.capture(target.repo, target.source) : undefined),
+    [cache, target]
+  )
+  const bindingKey = binding ? `${target?.key}\0${cache.bindingIdentity(binding)}` : target?.key
+  useSyncExternalStore(cache.subscribe, cache.snapshot, cache.snapshot)
+  const verificationFailed = !!target && cache.hasFailed(target.item, binding)
   const [refreshCapability, setRefreshCapability] = useState<string | null>(null)
   const checkRefreshCapability = useEffectEvent(() => {
     let cancelled = false
@@ -115,7 +127,14 @@ export function useGitHubTaskRefresh({
     null
   )
   const refreshError =
-    refreshFailure?.key === target?.key ? (refreshFailure?.message ?? null) : null
+    refreshFailure?.key === bindingKey
+      ? (refreshFailure?.message ?? null)
+      : verificationFailed
+        ? translate(
+            'auto.components.GitHubItemDialog.refreshTaskFailed',
+            'Unable to refresh this task. Try again.'
+          )
+        : null
   const [acceptedRefresh, setAcceptedRefresh] = useState(0)
   const mounted = useMountedRef()
   const onRefreshRef = useRef(onTaskRefresh)
@@ -127,7 +146,7 @@ export function useGitHubTaskRefresh({
     () => () => {
       intentRef.current?.()
     },
-    [target?.key]
+    [bindingKey]
   )
   const canUseDetailsRepoContext = canUseGitHubRepoContext(repoPath, sourceContext)
   const cacheKey = (canonical: boolean) =>
@@ -143,7 +162,7 @@ export function useGitHubTaskRefresh({
           number: workItem.number,
           ownerRepo: issueRepository,
           canonical,
-          bindingKey: target?.key
+          bindingKey
         })
       : null
   const canonicalCacheKey = target ? cacheKey(true) : null
@@ -203,49 +222,38 @@ export function useGitHubTaskRefresh({
         const interrupted = new Promise<null>((resolve) => {
           wake = () => resolve(null)
         })
-        const retire = captureTaskPageGitHubRefreshMasks(
-          target.item,
-          target.sources,
-          target.observations
-        )
-        const accepts = () => live && target.current() && !writes.changed()
+        if (!binding) {
+          break
+        }
+        const revision = cache.readRevision(target.item, binding)
+        const accepts = () =>
+          live &&
+          target.current() &&
+          cache.current(binding) &&
+          cache.readRevision(target.item, binding) === revision &&
+          !writes.changed()
         attempt = startWorkItemDetailsFetch(
           canonicalCacheKey,
-          () =>
-            lookupGitHubWorkItemDetailsForSource({
-              repoPath: target.repo.path,
-              repoId: target.repo.id,
-              sourceContext: target.source,
-              type: 'issue',
-              number: target.item.number,
-              ownerRepo: target.ownerRepo,
-              canonical: true,
-              accepts,
-              rpcOptions: target.rpcOptions
-            }),
+          () => loadCanonicalGitHubTaskDetails(cache, binding, target, accepts),
           {
             seed: workItemDetailsCache.get(detailsCacheKey ?? ''),
-            route: { ownerRepo: target.ownerRepo, bindingKey: target.key },
-            accepts: (result) => {
-              if (!accepts()) {
-                return false
-              }
-              if (
-                result &&
-                !retire(
-                  result.item,
-                  qualifyGitHubTaskLists(
-                    { ...result.item, githubObservation: target.observation },
-                    target.observation
-                  )
-                )
-              ) {
-                throw new Error('Task changed during refresh. Try again.')
-              }
-              return true
-            },
+            route: { ownerRepo: target.ownerRepo, bindingKey },
+            accepts,
             onAccepted: (result) => {
-              publishGitHubTaskRefresh(target, result, onRefreshRef.current)
+              // Publication renews Map insertion order, so iterate a snapshot.
+              const entries = [...workItemDetailsCache]
+              for (const [key, entry] of entries) {
+                if (entry.route?.bindingKey === bindingKey && entry.details) {
+                  touchWorkItemDetailsCache(key, {
+                    ...entry,
+                    details: result,
+                    fetchedAt: Date.now(),
+                    pending: undefined,
+                    error: undefined
+                  })
+                }
+              }
+              onRefreshRef.current?.(result.item, target)
               if (mounted.current) {
                 setAcceptedRefresh((n) => n + 1)
               }
@@ -261,7 +269,7 @@ export function useGitHubTaskRefresh({
         }
         if (outcome?.status !== 'accepted') {
           setRefreshFailure({
-            key: target.key,
+            key: bindingKey ?? target.key,
             message: translate(
               'auto.components.GitHubItemDialog.refreshTaskFailed',
               'Unable to refresh this task. Try again.'
@@ -273,7 +281,7 @@ export function useGitHubTaskRefresh({
     } finally {
       dispose()
     }
-  }, [target, canonicalCacheKey, detailsCacheKey, mounted])
+  }, [target, canonicalCacheKey, detailsCacheKey, mounted, binding, bindingKey, cache])
 
   return {
     target,

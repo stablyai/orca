@@ -1,29 +1,16 @@
-import { markGitHubTaskListWrites, markGitHubTaskDeliveryWrites } from './task-read-reconciliation'
-import {
-  batchTaskPageGitHubMutationRegistry,
-  observeExistingListBase
-} from '@/components/task-page/github/task-page-github-work-item-mutation-registry'
-
 import type { StateCreator } from 'zustand'
-
 import type { AppState } from '../types'
-
 import type { GitHubSlice } from './slice-types'
-
 import { toast } from 'sonner'
-
+import { parseGitHubIssueOrPRLink } from '../../../../shared/github/links'
+import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
+import { getTaskSourceCacheScope } from '../../../../shared/task-source-context'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
-
 import { translate } from '@/i18n/i18n'
-
 import { repoMatchesHostIdentity } from '../slices/repo-host-identity'
-
 import { evictRepoCacheEntries, repoCacheEviction, type RepoCacheEviction } from './cache-identity'
-
 import { ERROR_TOAST_DURATION } from './cache-policy'
-
 import { clearInflightWorkItemsForRepo } from './request-coordination'
-
 import { findRepoForGitHubOwner } from './repository-routing'
 
 // Why: the row's own host is the bucket to drop; a same-id twin on another host keeps its own.
@@ -41,30 +28,49 @@ function repoCacheEvictionForRow(
 export const createWorkItemMutationActions = (
   set: Parameters<StateCreator<AppState>>[0],
   get: Parameters<StateCreator<AppState>>[1]
-): Pick<
-  GitHubSlice,
-  'patchWorkItem' | 'patchWorkItems' | 'setIssueSourcePreference' | 'evictGitHubRepoCaches'
-> => ({
-  patchWorkItems: (patches) =>
-    batchTaskPageGitHubMutationRegistry(() => {
-      const prepared = prepareWorkItemPatches(get(), patches, true)
-      for (const { address, input } of prepared.existingEntryBaseObservations) {
-        observeExistingListBase(address, input, true)
+): Pick<GitHubSlice, 'patchWorkItem' | 'setIssueSourcePreference' | 'evictGitHubRepoCaches'> => ({
+  patchWorkItem: (itemId, patch, repoId, options) => {
+    set((s) => {
+      const nextCache = { ...s.workItemsCache }
+      let changed = false
+      const sourceScope =
+        options?.sourceContext?.provider === 'github'
+          ? getTaskSourceCacheScope(options.sourceContext)
+          : null
+      const repositoryKey = options?.ownerRepo ? githubRepoIdentityKey(options.ownerRepo) : null
+      for (const key of Object.keys(nextCache)) {
+        // Why: don't patch another host/account's visually identical issue/PR cache entry.
+        if (sourceScope && key !== sourceScope && !key.startsWith(`${sourceScope}::`)) {
+          continue
+        }
+        const entry = nextCache[key]
+        if (!entry?.data) {
+          continue
+        }
+        // Why: issue/PR ids are only unique within a repo; cross-repo views can share `pr:42`.
+        const idx = entry.data.findIndex((item) => {
+          if (item.id !== itemId || (repoId && item.repoId !== repoId)) {
+            return false
+          }
+          if (!repositoryKey) {
+            return true
+          }
+          const itemRepository = parseGitHubIssueOrPRLink(item.url)?.slug
+          return (
+            itemRepository !== undefined && githubRepoIdentityKey(itemRepository) === repositoryKey
+          )
+        })
+        if (idx === -1) {
+          continue
+        }
+        const updatedItems = [...entry.data]
+        updatedItems[idx] = { ...updatedItems[idx], ...patch }
+        nextCache[key] = { ...entry, data: updatedItems }
+        changed = true
       }
-      set(prepared.storePatch)
-      markGitHubTaskDeliveryWrites(prepared.deliveryWrites)
-      markGitHubTaskListWrites(patches.flatMap((request) => request.options?.listComposition ?? []))
-    }),
-  patchWorkItem: (itemId, patch, repoId, options) =>
-    batchTaskPageGitHubMutationRegistry(() => {
-      const prepared = prepareWorkItemPatches(get(), [{ itemId, patch, repoId, options }], false)
-      for (const { address, input } of prepared.existingEntryBaseObservations) {
-        observeExistingListBase(address, input, true)
-      }
-      set(prepared.storePatch)
-      markGitHubTaskDeliveryWrites(prepared.deliveryWrites)
-      markGitHubTaskListWrites(options?.listComposition ?? [])
-    }),
+      return changed ? { workItemsCache: nextCache } : s
+    })
+  },
 
   setIssueSourcePreference: async (repoId, repoPath, preference, hostId) => {
     // Why: map 'auto' to undefined so persistence drops the key entirely (see main/persistence.ts#updateRepo).
@@ -131,4 +137,3 @@ export const createWorkItemMutationActions = (
     })
   }
 })
-import { prepareWorkItemPatches } from './work-item-cache-patches'

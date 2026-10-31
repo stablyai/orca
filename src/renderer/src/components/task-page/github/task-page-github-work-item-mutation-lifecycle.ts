@@ -1,54 +1,85 @@
-import type { GitHubTaskObservation } from '@/lib/github-task-observation'
-
-import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/links'
-
 import type { ParsedTaskQuery } from '../../../../../shared/task-query'
-
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
-
+import { applyTaskPageGitHubListOps } from './task-page-github-work-item-mutation-patches'
 import {
   familiesFromPendingOp,
+  freezeTaskPageGitHubUsers,
   getRegistryMergedTaskPageGitHubWorkItem,
-  establishTaskPageGitHubMembership
+  recomputeSoftHideForItem
 } from './task-page-github-work-item-mutation-composition'
-
 import {
   deletePendingTaskPageGitHubOp,
-  getListEntry,
-  listInput,
-  confirmListOperation,
-  completedListClaim,
-  deleteConfirmedListSnapshot,
+  getConfirmedListSnapshot,
   getPendingTaskPageGitHubOp,
+  getTaskPageGitHubMutationQueryKey,
   listPendingTaskPageGitHubOpsForItem,
   notifyTaskPageGitHubMutationRegistry,
+  setConfirmedListSnapshot,
   setLastConfirmedClientValue,
   isTaskPageGitHubMutationQueryKeyCurrent
 } from './task-page-github-work-item-mutation-registry'
-
 import { markTaskPageGitHubFamiliesDirty } from './task-page-github-work-item-quiet-state'
-
-import { taskPageGitHubOwnedItemKey } from './task-page-github-work-item-mutation-keys'
-
+import { taskPageGitHubItemKey } from './task-page-github-work-item-mutation-keys'
 import type { TaskPageGitHubMutationKey } from './task-page-github-work-item-registry-types'
-
-import type {
-  CurrentListInputResolver,
-  TaskPageGitHubPatchWorkItem
-} from './task-page-github-work-item-mutation-types'
-
+import type { TaskPageGitHubPatchWorkItem } from './task-page-github-work-item-mutation-types'
+function applyServerEntityIfPresent(
+  key: TaskPageGitHubMutationKey,
+  opts: {
+    serverEntity?: Partial<GitHubWorkItem>
+    patchWorkItem?: TaskPageGitHubPatchWorkItem
+    sourceContext?: TaskSourceContext | null
+  }
+): void {
+  if (!opts.serverEntity || !opts.patchWorkItem) {
+    return
+  }
+  const entityPatch: Partial<GitHubWorkItem> = {}
+  if (opts.serverEntity.state !== undefined) {
+    entityPatch.state = opts.serverEntity.state
+    setLastConfirmedClientValue(
+      key.sourceScope,
+      key.repoId,
+      key.itemId,
+      'state',
+      opts.serverEntity.state
+    )
+  }
+  if (opts.serverEntity.autoMergeEnabled !== undefined) {
+    entityPatch.autoMergeEnabled = opts.serverEntity.autoMergeEnabled
+    setLastConfirmedClientValue(
+      key.sourceScope,
+      key.repoId,
+      key.itemId,
+      'autoMerge',
+      opts.serverEntity.autoMergeEnabled
+    )
+  }
+  if (opts.serverEntity.assignees) {
+    const users = freezeTaskPageGitHubUsers(opts.serverEntity.assignees)
+    setConfirmedListSnapshot(key.sourceScope, key.repoId, key.itemId, 'assignees', users)
+    entityPatch.assignees = users
+  }
+  if (opts.serverEntity.reviewRequests) {
+    const users = freezeTaskPageGitHubUsers(opts.serverEntity.reviewRequests)
+    setConfirmedListSnapshot(key.sourceScope, key.repoId, key.itemId, 'reviewRequests', users)
+    entityPatch.reviewRequests = users
+  }
+  if (Object.keys(entityPatch).length > 0) {
+    opts.patchWorkItem(key.itemId, entityPatch, key.repoId, {
+      sourceContext: opts.sourceContext
+    })
+  }
+}
 export function confirmTaskPageGitHubWorkItemMutation(
   key: TaskPageGitHubMutationKey,
   generation: number,
   opts: {
-    currentObservation?: GitHubTaskObservation
     query: ParsedTaskQuery
     queryKey: string
     viewerLogin: string | null
     item: GitHubWorkItem
-    resolveCurrentListInput?: CurrentListInputResolver
+    serverEntity?: Partial<GitHubWorkItem>
     patchWorkItem?: TaskPageGitHubPatchWorkItem
     sourceContext?: TaskSourceContext | null
     scheduleQuiet?: boolean
@@ -59,80 +90,68 @@ export function confirmTaskPageGitHubWorkItemMutation(
     return 'stale'
   }
   const { skipMeQualifiers, listOp, next } = pending
-  if (listOp) {
-    const address = { ...key, family: listOp.family }
-    const fallback = {
-      ...opts.item,
-      ...pending.previous,
-      githubValueOrigins: pending.previousOrigins
-    }
-    confirmListOperation(
-      key,
-      generation,
-      opts.resolveCurrentListInput?.(address, fallback) ??
-        listInput(fallback, listOp.family, key.observation)
-    )
-  } else {
-    if (next.state !== undefined) {
-      setLastConfirmedClientValue(
-        key.sourceScope,
-        key.repoId,
-        opts.item.id,
-        'state',
-        next.state,
-        undefined,
-        key.observation
+  if (listOp && !pending.settleAccepted) {
+    const snapshot =
+      getConfirmedListSnapshot(key.sourceScope, key.repoId, key.itemId, listOp.family) ??
+      freezeTaskPageGitHubUsers(
+        listOp.family === 'assignees'
+          ? (opts.item.assignees ?? [])
+          : (opts.item.reviewRequests ?? [])
       )
+    // Confirm list ops into snapshots immediately; lastConfirmedClientValue stores scalar authority only.
+    const applied = applyTaskPageGitHubListOps(snapshot, [listOp])
+    setConfirmedListSnapshot(key.sourceScope, key.repoId, key.itemId, listOp.family, applied)
+  } else {
+    if (next.state !== undefined && !pending.settleAccepted) {
+      setLastConfirmedClientValue(key.sourceScope, key.repoId, key.itemId, 'state', next.state)
     }
     if (next.autoMergeEnabled !== undefined) {
       setLastConfirmedClientValue(
         key.sourceScope,
         key.repoId,
-        opts.item.id,
+        key.itemId,
         'autoMerge',
-        next.autoMergeEnabled,
-        undefined,
-        key.observation
+        next.autoMergeEnabled
       )
     }
   }
   deletePendingTaskPageGitHubOp(key)
-  const merged = getRegistryMergedTaskPageGitHubWorkItem(
-    opts.item,
-    key.sourceScope,
-    key.observation
-  )
-  if (opts.patchWorkItem && listOp) {
-    opts.patchWorkItem(opts.item.id, {}, key.repoId, {
-      sourceContext: opts.sourceContext,
-      ownerRepo:
-        opts.item.type === 'issue' ? parseGitHubIssueOrPRLink(opts.item.url)?.slug : undefined,
-      observation: key.observation,
-      listComposition: [{ address: { ...key, family: listOp.family } }]
-    })
+  const accepted = pending.settleAccepted?.(true)
+  if (pending.settleAccepted && !accepted) {
+    notifyTaskPageGitHubMutationRegistry()
+    return 'stale'
   }
-  if (
-    isTaskPageGitHubMutationQueryKeyCurrent(opts.queryKey) &&
-    key.observation?.key === opts.currentObservation?.key
-  ) {
-    establishTaskPageGitHubMembership({
-      item: { ...opts.item, ...merged },
-      sourceScope: key.sourceScope,
-      queryKey: opts.queryKey,
-      skipMeQualifiers,
-      observation: key.observation
-    })
-    markTaskPageGitHubFamiliesDirty(
-      opts.queryKey,
-      taskPageGitHubOwnedItemKey(
-        key.sourceScope,
-        key.repoId,
-        pending.listOp ? key.itemId : opts.item.id,
-        key.observation?.key
-      ),
-      familiesFromPendingOp(pending)
+  const item = accepted ?? opts.item
+  if (!pending.settleAccepted) {
+    applyServerEntityIfPresent(key, opts)
+  }
+  const remaining = listPendingTaskPageGitHubOpsForItem(key.repoId, key.itemId, key.sourceScope)
+  const merged = getRegistryMergedTaskPageGitHubWorkItem(item, key.sourceScope)
+  if (opts.patchWorkItem && remaining.some((op) => op.listOp)) {
+    opts.patchWorkItem(
+      key.itemId,
+      { assignees: merged.assignees, reviewRequests: merged.reviewRequests },
+      key.repoId,
+      { sourceContext: opts.sourceContext }
     )
   }
+  if (isTaskPageGitHubMutationQueryKeyCurrent(opts.queryKey)) {
+    recomputeSoftHideForItem({
+      item: { ...item, ...merged },
+      sourceScope: key.sourceScope,
+      query: opts.query,
+      queryKey: opts.queryKey,
+      viewerLogin: opts.viewerLogin,
+      skipMeQualifiers,
+      updateSticky: true
+    })
+  }
+  const itemKey = taskPageGitHubItemKey(key.repoId, key.itemId)
+  markTaskPageGitHubFamiliesDirty(
+    getTaskPageGitHubMutationQueryKey() ?? opts.queryKey,
+    itemKey,
+    familiesFromPendingOp(pending)
+  )
   notifyTaskPageGitHubMutationRegistry()
   return 'confirmed'
 }
@@ -141,12 +160,10 @@ export function rollbackTaskPageGitHubWorkItemMutation(args: {
   generation: number
   patchWorkItem: TaskPageGitHubPatchWorkItem
   sourceContext?: TaskSourceContext | null
-  currentObservation?: GitHubTaskObservation
   query: ParsedTaskQuery
   queryKey: string
   viewerLogin: string | null
   item: GitHubWorkItem
-  resolveCurrentListInput?: CurrentListInputResolver
 }): 'rolled_back' | 'stale' {
   const pending = getPendingTaskPageGitHubOp(args.key)
   if (!pending || pending.generation !== args.generation) {
@@ -154,75 +171,49 @@ export function rollbackTaskPageGitHubWorkItemMutation(args: {
   }
   const { skipMeQualifiers, listOp } = pending
   deletePendingTaskPageGitHubOp(args.key)
-  if (listOp) {
-    const address = { ...args.key, family: listOp.family }
-    const entry = getListEntry(address)
-    const remaining = listPendingTaskPageGitHubOpsForItem(
-      args.key.repoId,
+  const accepted = pending.settleAccepted?.(false)
+  if (pending.settleAccepted && !accepted) {
+    notifyTaskPageGitHubMutationRegistry()
+    return 'stale'
+  }
+  const item = accepted ?? args.item
+  const merged = getRegistryMergedTaskPageGitHubWorkItem(item, args.key.sourceScope)
+  if (pending.settleAccepted) {
+    // The common base has already published the surviving operations.
+  } else if (listOp) {
+    args.patchWorkItem(
       args.key.itemId,
-      args.key.sourceScope,
-      args.key.observation
+      listOp.family === 'assignees'
+        ? { assignees: merged.assignees }
+        : { reviewRequests: merged.reviewRequests },
+      args.key.repoId,
+      { sourceContext: args.sourceContext }
     )
-    const retired =
-      entry &&
-      !completedListClaim(entry) &&
-      !remaining.some((op) => op.listOp?.family === listOp.family)
-        ? entry
-        : undefined
-    const retirement =
-      retired &&
-      deleteConfirmedListSnapshot(
-        address.sourceScope,
-        address.repoId,
-        address.itemId,
-        address.family,
-        address.observation,
-        address.itemType
-      )
-    args.patchWorkItem(args.item.id, {}, args.key.repoId, {
-      sourceContext: args.sourceContext,
-      ownerRepo:
-        args.item.type === 'issue' ? parseGitHubIssueOrPRLink(args.item.url)?.slug : undefined,
-      observation: args.key.observation,
-      listComposition: [{ address, retirement }]
-    })
   } else {
     const recomposed = getRegistryMergedTaskPageGitHubWorkItem(
       { ...args.item, ...pending.previous },
-      args.key.sourceScope,
-      args.key.observation
+      args.key.sourceScope
     )
     args.patchWorkItem(
-      args.item.id,
+      args.key.itemId,
       {
         state: recomposed.state,
         autoMergeEnabled: recomposed.autoMergeEnabled
       },
       args.key.repoId,
-      {
-        sourceContext: args.sourceContext,
-        ownerRepo:
-          args.item.type === 'issue' ? parseGitHubIssueOrPRLink(args.item.url)?.slug : undefined,
-        observation: args.key.observation,
-        valueOrigins: pending.previousOrigins
-      }
+      { sourceContext: args.sourceContext }
     )
   }
-  const after = getRegistryMergedTaskPageGitHubWorkItem(
-    args.item,
-    args.key.sourceScope,
-    args.key.observation
-  )
-  if (
-    isTaskPageGitHubMutationQueryKeyCurrent(args.queryKey) &&
-    args.key.observation?.key === args.currentObservation?.key
-  ) {
-    establishTaskPageGitHubMembership({
-      item: { ...args.item, ...after },
+  const after = getRegistryMergedTaskPageGitHubWorkItem(item, args.key.sourceScope)
+  if (isTaskPageGitHubMutationQueryKeyCurrent(args.queryKey)) {
+    recomputeSoftHideForItem({
+      item: { ...item, ...after },
       sourceScope: args.key.sourceScope,
+      query: args.query,
       queryKey: args.queryKey,
+      viewerLogin: args.viewerLogin,
       skipMeQualifiers,
-      observation: args.key.observation
+      updateSticky: true
     })
   }
   notifyTaskPageGitHubMutationRegistry()

@@ -1,38 +1,19 @@
-import {
-  admitTaskPageGitHubListInputs,
-  createTaskPageGitHubProjectionContext
-} from './task-page-github-work-item-mutation-pages'
-
-import { parseTaskQuery } from '../../../../../shared/task-query'
-
-import type { ListComposition } from './task-page-github-work-item-mutation-registry'
-
-import type { ObservedGitHubWorkItem } from '@/lib/github-task-observation'
-
 import type { TaskPageGitHubDetailModel } from './use-task-page-github-detail'
-
 import { useCallback, useMemo, useEffect, useRef, useState } from 'react'
-
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-
 import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
-
 import {
   patchTaskPageGitHubWorkItemPages,
   overlayPendingOnTaskPagePages
 } from '@/components/task-page/github/task-page-github-work-item-mutation-pages'
-
 import {
   type TaskPageRepoSourceState,
   buildTaskPageRepoSourceState,
   selectTaskPageUnresolvedSourceRepos,
   reconcileTaskPagePagesWithWorkItemsCache
 } from '@/components/task-page/task-page-cache-selectors'
-
 import { toast } from 'sonner'
-
 import { translate } from '@/i18n/i18n'
-
 export function useTaskPageGitHubCacheReconciliation(model: TaskPageGitHubDetailModel) {
   const {
     selectedRepos,
@@ -49,18 +30,11 @@ export function useTaskPageGitHubCacheReconciliation(model: TaskPageGitHubDetail
         id: string
         repoId: string
       },
-      patch: Partial<ObservedGitHubWorkItem>,
-      shouldPatch?: (item: GitHubWorkItem) => boolean,
-      listComposition?: readonly ListComposition[]
+      patch: Partial<GitHubWorkItem>,
+      shouldPatch?: (item: GitHubWorkItem) => boolean
     ): void => {
       setPages((current) => {
-        return patchTaskPageGitHubWorkItemPages(
-          current,
-          itemKey,
-          patch,
-          shouldPatch,
-          listComposition
-        )
+        return patchTaskPageGitHubWorkItemPages(current, itemKey, patch, shouldPatch)
       })
     },
     [setPages]
@@ -95,18 +69,13 @@ export function useTaskPageGitHubCacheReconciliation(model: TaskPageGitHubDetail
     if (taskSource !== 'github' || githubMode !== 'items') {
       return
     }
-    admitTaskPageGitHubListInputs(
-      selectedWorkItemsCacheEntries.flatMap((entry) => entry?.data ?? []),
-      createTaskPageGitHubProjectionContext(selectedRepos, parseTaskQuery(''), '', null),
-      true
-    )
     // Copy patched cache rows into local pages and overlay pending mutations so refetches cannot clobber coordinator fields.
     setPages((current) =>
       reconcileTaskPagePagesWithWorkItemsCache(current, selectedWorkItemsCacheEntries).map(
         (page) => (page ? (overlayPendingOnTaskPagePages([page])[0] ?? []) : null)
       )
     )
-  }, [githubMode, selectedWorkItemsCacheEntries, selectedRepos, taskSource, setPages])
+  }, [githubMode, selectedWorkItemsCacheEntries, taskSource, setPages])
 
   // Toast upstream fallback once per repo; keep the preference so re-adding upstream restores it.
   const fellBackToastedRef = useRef<Set<string>>(new Set())

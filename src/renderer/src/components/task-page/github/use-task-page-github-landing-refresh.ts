@@ -1,10 +1,7 @@
-import type { TaskPageGitHubLandingRefreshInput } from './task-page-github-delivery-inputs'
 import type { TaskPageGitHubSearchPaginationModel } from './use-task-page-github-search-pagination'
 import { useEffect } from 'react'
 import { runTaskPageGitHubLandingRefresh } from './task-page-github-landing-refresh-run'
-export function useTaskPageGitHubLandingRefresh<T extends TaskPageGitHubLandingRefreshInput>(
-  model: T
-) {
+export function useTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPaginationModel) {
   const {
     workItemsInvalidationNonce,
     selectedReposKey,
@@ -33,6 +30,4 @@ export function useTaskPageGitHubLandingRefresh<T extends TaskPageGitHubLandingR
   // Nonce rerenders must not cancel shared in-flight/trailing bookkeeping; only true unmount does.
   return model
 }
-export type TaskPageGitHubLandingRefreshModel = ReturnType<
-  typeof useTaskPageGitHubLandingRefresh<TaskPageGitHubSearchPaginationModel>
->
+export type TaskPageGitHubLandingRefreshModel = ReturnType<typeof useTaskPageGitHubLandingRefresh>

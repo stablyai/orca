@@ -1,3 +1,5 @@
+import { getWorkItemRepo } from './work-item-repo-row'
+import { observeGitHubWorkItem } from './github-task-observation'
 import type { GitHubWorkItem, GitHubWorkItemDetails } from '../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import type { GitHubOwnerRepo } from '../../../shared/github/pull-request-types'
@@ -26,6 +28,8 @@ type GitHubWorkItemByOwnerRepoLookupArgs = GitHubWorkItemLookupArgs & {
   type: 'issue' | 'pr'
   /** One light call for hover cards; older hosts ignore it. */
   preview?: boolean
+  accepts?: () => boolean
+  rpcOptions?: Parameters<typeof callRuntimeRpc>[3]
 }
 
 type GitHubWorkItemDetailsLookupArgs = {
@@ -47,6 +51,16 @@ function runtimeRepoId(args: Pick<GitHubWorkItemLookupArgs, 'repoId' | 'sourceCo
 export async function lookupGitHubWorkItemForSource(
   args: GitHubWorkItemLookupArgs
 ): Promise<GitHubWorkItem | null> {
+  const { useAppStore } = await import('@/store')
+  const state = useAppStore.getState()
+  const cache = state.githubTaskCache
+  const binding = cache?.capture(
+    getWorkItemRepo(state.repos ?? [], {
+      repoId: args.repoId,
+      repoHostId: args.sourceContext?.hostId
+    }),
+    args.sourceContext
+  )
   const target = getGitHubSourceRuntimeTarget(args.sourceContext)
   const item =
     target.kind === 'environment'
@@ -66,12 +80,28 @@ export async function lookupGitHubWorkItemForSource(
           number: args.number,
           type: args.type
         })
-  return item ? ({ ...item, repoId: args.repoId } as GitHubWorkItem) : null
+  if (binding && !cache.current(binding)) {
+    return null
+  }
+  return item ? (cache?.acceptSearch([{ ...item, repoId: args.repoId }], binding)[0] ?? null) : null
 }
 
 export async function lookupGitHubWorkItemByOwnerRepoForSource(
   args: GitHubWorkItemByOwnerRepoLookupArgs
 ): Promise<GitHubWorkItem | null> {
+  if (args.accepts?.() === false) {
+    return null
+  }
+  const { useAppStore } = await import('@/store')
+  const state = useAppStore.getState()
+  const cache = state.githubTaskCache
+  const binding = cache?.capture(
+    getWorkItemRepo(state.repos ?? [], {
+      repoId: args.repoId,
+      repoHostId: args.sourceContext?.hostId
+    }),
+    args.sourceContext
+  )
   const target = getGitHubSourceRuntimeTarget(args.sourceContext)
   const item =
     target.kind === 'environment'
@@ -87,7 +117,15 @@ export async function lookupGitHubWorkItemByOwnerRepoForSource(
             type: args.type,
             ...(args.preview ? { preview: true } : {})
           },
-          { timeoutMs: 30_000 }
+          {
+            timeoutMs: 30_000,
+            ...args.rpcOptions,
+            beforeSend: () => {
+              if (args.accepts?.() === false || (binding && !cache.current(binding))) {
+                throw new Error('Task source changed.')
+              }
+            }
+          }
         )
       : await window.api.gh.workItemByOwnerRepo({
           repoPath: args.repoPath,
@@ -100,7 +138,14 @@ export async function lookupGitHubWorkItemByOwnerRepoForSource(
           type: args.type,
           ...(args.preview ? { preview: true } : {})
         })
-  return item ? ({ ...item, repoId: args.repoId } as GitHubWorkItem) : null
+  if (args.accepts?.() === false || (binding && !cache.current(binding))) {
+    return null
+  }
+  return item
+    ? args.accepts
+      ? observeGitHubWorkItem({ ...item, repoId: args.repoId }, binding?.observation)
+      : (cache?.acceptSearch([{ ...item, repoId: args.repoId }], binding)[0] ?? null)
+    : null
 }
 
 export async function lookupGitHubWorkItemDetailsForSource(
@@ -172,7 +217,9 @@ export async function lookupGitHubWorkItemDetailsForSource(
     ) {
       throw new Error('GitHub returned a different task. Refresh this task again.')
     }
-    return { ...result, assignees: (result.item.assignees ?? []).map((user) => user.login) }
+    return result.item.assignees === undefined
+      ? result
+      : { ...result, assignees: result.item.assignees.map((user) => user.login) }
   }
   return result
 }

@@ -1,11 +1,11 @@
-import type { TaskPageGitHubListProjectionInput } from './task-page-github-delivery-inputs'
-import { createGitHubTaskObservationIndex } from '@/lib/github-task-observation'
-import { githubTaskSourceKey } from '@/lib/github-task-target'
+import { shouldSoftHideTaskPageGitHubWorkItem } from './task-page-github-work-item-filter-membership'
 import { shouldSkipLocalViewerQualifiers } from '@/hooks/useTaskPageGitHubWorkItemMutation'
+import { useGitHubTaskItems } from '@/hooks/useGitHubTaskItems'
 import type { TaskPageJiraCreationMetadataModel } from '../jira/use-task-page-jira-creation-metadata'
 import { getWorkItemRepo } from '@/lib/work-item-repo-row'
 import { useCallback, useMemo, useEffect } from 'react'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import { taskPageGitHubItemKey } from '@/components/task-page/github/task-page-github-work-item-mutation-keys'
 import { deriveTaskPagePRCheckSummary } from '../task-page-pr-check-summary'
 import { deriveAdvertisedTotalPages } from '../../../../../shared/work-item-empty-page'
 import {
@@ -15,10 +15,7 @@ import {
   getTaskPageRepoSourceContext
 } from '../task-page-source-context'
 import { sameOptionalGitHubOwnerRepo } from './task-page-github-review-model'
-
-export function useTaskPageGitHubListProjection<T extends TaskPageGitHubListProjectionInput>(
-  model: T
-) {
+export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetadataModel) {
   const {
     repos,
     fetchPRChecks,
@@ -36,7 +33,6 @@ export function useTaskPageGitHubListProjection<T extends TaskPageGitHubListProj
     activeGithubTaskKind,
     githubWorkItemMutation
   } = model
-  const { membershipProjection } = githubWorkItemMutation
   // Why: defense-in-depth — keep stale cache rows from leaking across the issue/PR split tabs.
   const applyTypeFilter = useCallback(
     (items: readonly GitHubWorkItem[]) => {
@@ -46,38 +42,39 @@ export function useTaskPageGitHubListProjection<T extends TaskPageGitHubListProj
     },
     [activeGithubTaskKind]
   )
-  const currentPageItems = useMemo(() => pages[currentPage] ?? [], [pages, currentPage])
+  const rawCurrentPageItems = useMemo(() => pages[currentPage] ?? [], [pages, currentPage])
+  const currentPageItems = useGitHubTaskItems(rawCurrentPageItems)
   const typeFilteredCurrentPageItems = useMemo(
     () => applyTypeFilter(currentPageItems),
     [applyTypeFilter, currentPageItems]
   )
-  const filteredWorkItems = useMemo(() => {
-    const ownerOf = createGitHubTaskObservationIndex(repos, (repo) =>
-      getTaskPageRepoSourceContext(repo, 'github')
-    )
-    const project = membershipProjection({
-      query: model.appliedTaskQuery,
-      queryKey: model.githubWorkItemMutationQueryKey,
-      viewerLogin: model.githubViewerLogin
-    })
-    return typeFilteredCurrentPageItems.flatMap((item) => {
-      const owner = ownerOf(item)
-      const projected = project(
-        item,
-        owner ? githubTaskSourceKey(owner.source) : null,
-        owner,
-        shouldSkipLocalViewerQualifiers(owner?.source)
-      )
-      return projected.hide ? [] : [projected.item]
-    })
-  }, [
-    membershipProjection,
-    typeFilteredCurrentPageItems,
-    repos,
-    model.appliedTaskQuery,
-    model.githubWorkItemMutationQueryKey,
-    model.githubViewerLogin
-  ])
+  // Retain membership-exit rows for rollback/cursors while sticky and pending hides remove them from display.
+  const filteredWorkItems = useMemo(
+    () =>
+      typeFilteredCurrentPageItems.filter((workItem) => {
+        const repo = getWorkItemRepo(repos, workItem)
+        return (
+          !shouldSoftHideTaskPageGitHubWorkItem({
+            item: workItem,
+            query: model.appliedTaskQuery,
+            viewerLogin: model.githubViewerLogin,
+            skipMeQualifiers: shouldSkipLocalViewerQualifiers(
+              repo ? getTaskPageRepoSourceContext(repo, 'github') : undefined
+            )
+          }) &&
+          !githubWorkItemMutation.softHiddenItemKeys.has(
+            taskPageGitHubItemKey(workItem.repoId, workItem.id)
+          )
+        )
+      }),
+    [
+      githubWorkItemMutation.softHiddenItemKeys,
+      typeFilteredCurrentPageItems,
+      model.appliedTaskQuery,
+      model.githubViewerLogin,
+      repos
+    ]
+  )
   const softHiddenVisibleCount = useMemo(
     () => typeFilteredCurrentPageItems.length - filteredWorkItems.length,
     [filteredWorkItems.length, typeFilteredCurrentPageItems.length]
@@ -221,6 +218,4 @@ export function useTaskPageGitHubListProjection<T extends TaskPageGitHubListProj
   nextModel.totalPages = totalPages
   return nextModel
 }
-export type TaskPageGitHubListProjectionModel = ReturnType<
-  typeof useTaskPageGitHubListProjection<TaskPageJiraCreationMetadataModel>
->
+export type TaskPageGitHubListProjectionModel = ReturnType<typeof useTaskPageGitHubListProjection>

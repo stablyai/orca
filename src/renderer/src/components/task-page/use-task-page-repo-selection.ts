@@ -1,4 +1,3 @@
-import { captureGitHubTaskObservation } from '@/lib/github-task-observation'
 import type { TaskPageStoreBindingsModel } from './use-task-page-store-bindings'
 import { useMemo, useState, useRef, useEffect, useCallback } from 'react'
 import {
@@ -101,12 +100,7 @@ export function useTaskPageRepoSelection(model: TaskPageStoreBindingsModel) {
 
   // Reuse this provider-independent key while GitLab supplies no projectRef; adding one requires GitLab provider identity in the key.
   const selectedReposKey = useMemo(
-    () =>
-      buildSelectedReposKey(
-        selectedRepos,
-        (r) => getTaskPageRepoSourceContext(r, 'github'),
-        (r) => captureGitHubTaskObservation(r, getTaskPageRepoSourceContext(r, 'github'))?.key
-      ),
+    () => buildSelectedReposKey(selectedRepos, (r) => getTaskPageRepoSourceContext(r, 'github')),
     [selectedRepos]
   )
 

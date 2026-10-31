@@ -12,7 +12,7 @@ import { githubRepoIdentityKey } from '../../../shared/github/repository-identit
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { parseHostAuthorityKey } from '../../../shared/host-authority'
 import type { AppState } from '@/store/types'
-import { getGitHubRepoLookupIndex } from '@/store/slices/github-repo-lookup-index'
+import { getWorkItemRepo } from './work-item-repo-row'
 import { getGitHubSourceRuntimeTarget } from './github-source-runtime-context'
 import { hostRouteForAuthority } from '@/runtime/runtime-client-target'
 import { captureHostIdentityFence, isHostIdentityFenceCurrent } from '@/store/host-catalog-fencing'
@@ -79,7 +79,7 @@ export function captureGitHubTaskTarget(
   taskPageSource: TaskSourceContext | null
 ) {
   const resolve = () =>
-    getGitHubRepoLookupIndex(get().repos).findForWorkItem({
+    getWorkItemRepo(get().repos, {
       repoId: item.repoId,
       repoHostId: item.repoHostId ?? source.hostId
     })
@@ -92,7 +92,7 @@ export function captureGitHubTaskTarget(
   if (hostId !== source.hostId) {
     return null
   }
-  const unstamped = getGitHubRepoLookupIndex(get().repos).findForWorkItem({ repoId: item.repoId })
+  const unstamped = getWorkItemRepo(get().repos, { repoId: item.repoId })
   const authority = parseHostAuthorityKey(hostId)
   if (!authority) {
     return null

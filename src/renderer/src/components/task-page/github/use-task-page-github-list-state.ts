@@ -1,4 +1,3 @@
-import { useGitHubTaskDeliveryState } from '@/hooks/useGitHubTaskDeliveryState'
 import type { TaskPageProviderStateModel } from '../use-task-page-provider-state'
 import { useState, useRef, useEffect, useLayoutEffect } from 'react'
 import type { TaskViewPresetId } from '../../../../../shared/ui-chrome-types'
@@ -67,7 +66,7 @@ export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
     pageSize: githubPageSize
   })
   // Null slots permit direct numbered-page loading without reading intermediate pages.
-  const [pages, setPages] = useGitHubTaskDeliveryState<(readonly GitHubWorkItem[] | null)[]>(() => {
+  const [pages, setPages] = useState<(GitHubWorkItem[] | null)[]>(() => {
     const trimmed = initialTaskQuery.trim()
     const merged: GitHubWorkItem[] = []
     for (const r of selectedRepos) {

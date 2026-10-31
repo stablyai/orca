@@ -135,7 +135,9 @@ export async function getWorkItemDetails(
                 item.number,
                 resolvedRepository,
                 connectionId,
-                localGitOptions
+                localGitOptions,
+                false,
+                !!issueRepositoryOverride
               )
             : issueDetails
         if (collapsed) {
@@ -146,7 +148,7 @@ export async function getWorkItemDetails(
             ]),
             body: collapsed.body,
             comments: collapsed.comments,
-            assignees: collapsed.assignees,
+            assignees: item.assignees?.map((user) => user.login) ?? collapsed.assignees,
             participants: collapsed.participants,
             timelineItems: collapsed.timelineItems
           }
@@ -157,7 +159,8 @@ export async function getWorkItemDetails(
             item.number,
             resolvedRepository,
             connectionId,
-            localGitOptions
+            localGitOptions,
+            !!issueRepositoryOverride
           ),
           getWorkItemParticipants(repoPath, item, resolvedRepository, connectionId, localGitOptions)
         ])
@@ -174,7 +177,7 @@ export async function getWorkItemDetails(
           item: enrichItemDisplayAvatars(item, mentionParticipants),
           body,
           comments,
-          assignees,
+          assignees: item.assignees?.map((user) => user.login) ?? assignees,
           participants: mentionParticipants,
           timelineItems
         }

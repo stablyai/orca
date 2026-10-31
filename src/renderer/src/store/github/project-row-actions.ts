@@ -1,12 +1,10 @@
-import { createProjectTaskContentAction } from './project-task-content-actions'
-
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import { observeGitHubProjectWrite } from '@/lib/github-work-item-writes'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
-import type { ProjectRowContentPatch } from './cache-model'
 import type { GitHubProjectRow } from '../../../../shared/github/project-types'
 import type { GitHubProjectMutationResult } from '../../../../shared/github/project-result-types'
+import type { ProjectRowContentPatch } from './cache-model'
 import { translate } from '@/i18n/i18n'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import { runtimeTargetForProjectRowOwner } from '../slices/github-project-row-owner'
@@ -15,166 +13,170 @@ import { applyRowPatch, parseSlugAndNumber, rollbackRowIfPresent } from './proje
 
 export const createProjectRowActions = (
   set: Parameters<StateCreator<AppState>>[0],
-  get: Parameters<StateCreator<AppState>>[1],
-  onValidatedWrite?: (row: GitHubProjectRow, target: RuntimeClientTarget) => void
+  get: Parameters<StateCreator<AppState>>[1]
 ): Pick<
   GitHubSlice,
-  | 'patchProjectIssueOrPr'
-  | 'patchProjectRowIssueType'
-  | 'patchProjectRowContent'
-  | 'patchProjectTaskContent'
+  'patchProjectIssueOrPr' | 'patchProjectRowIssueType' | 'patchProjectRowContent'
 > => ({
-  patchProjectIssueOrPr: async (cacheKey, rowId, updates) => {
-    const state = get()
-    const entry = state.projectViewCache[cacheKey]
-    const table = entry?.data
-    if (!table) {
-      return {
-        ok: false,
-        error: {
-          type: 'unknown',
-          message: translate('auto.store.slices.github.a967f23983', 'Project view not loaded')
+  patchProjectIssueOrPr: (cacheKey, rowId, updates) =>
+    observeGitHubProjectWrite(async (start) => {
+      const state = get()
+      const entry = state.projectViewCache[cacheKey]
+      const table = entry?.data
+      if (!table) {
+        return {
+          ok: false,
+          error: {
+            type: 'unknown',
+            message: translate('auto.store.slices.github.a967f23983', 'Project view not loaded')
+          }
         }
       }
-    }
-    const rowIndex = table.rows.findIndex((r) => r.id === rowId)
-    if (rowIndex === -1) {
-      return {
-        ok: false,
-        error: {
-          type: 'unknown',
-          message: translate('auto.store.slices.github.f963485d37', 'Row not found')
+      const rowIndex = table.rows.findIndex((r) => r.id === rowId)
+      if (rowIndex === -1) {
+        return {
+          ok: false,
+          error: {
+            type: 'unknown',
+            message: translate('auto.store.slices.github.f963485d37', 'Row not found')
+          }
         }
       }
-    }
-    const previousRow = table.rows[rowIndex]
-    const { owner, repo, number } = parseSlugAndNumber(previousRow) ?? {}
-    if (!owner || !repo || !number) {
-      return {
-        ok: false,
-        error: {
-          type: 'validation_error',
-          message: translate(
-            'auto.store.slices.github.87020f6605',
-            'Row has no owner/repo/number — cannot patch underlying item'
-          )
+      const previousRow = table.rows[rowIndex]
+      const { owner, repo, number } = parseSlugAndNumber(previousRow) ?? {}
+      if (!owner || !repo || !number) {
+        return {
+          ok: false,
+          error: {
+            type: 'validation_error',
+            message: translate(
+              'auto.store.slices.github.87020f6605',
+              'Row has no owner/repo/number — cannot patch underlying item'
+            )
+          }
         }
       }
-    }
-    const target = runtimeTargetForProjectRowOwner(
-      get(),
-      owner,
-      repo,
-      table.project.host,
-      projectViewCacheKeyTarget(cacheKey)
-    )
-    onValidatedWrite?.(previousRow, target)
-    const nextContent = { ...previousRow.content }
-    if (updates.title !== undefined) {
-      nextContent.title = updates.title
-    }
-    if (updates.body !== undefined) {
-      nextContent.body = updates.body
-    }
-    if (updates.addLabels || updates.removeLabels) {
-      const next = new Map(nextContent.labels.map((l) => [l.name, l]))
-      for (const name of updates.addLabels ?? []) {
-        if (!next.has(name)) {
-          next.set(name, { name, color: '808080' })
+      const nextContent = { ...previousRow.content }
+      if (updates.title !== undefined) {
+        nextContent.title = updates.title
+      }
+      if (updates.body !== undefined) {
+        nextContent.body = updates.body
+      }
+      if (updates.addLabels || updates.removeLabels) {
+        const next = new Map(nextContent.labels.map((l) => [l.name, l]))
+        for (const name of updates.addLabels ?? []) {
+          if (!next.has(name)) {
+            next.set(name, { name, color: '808080' })
+          }
         }
-      }
-      for (const name of updates.removeLabels ?? []) {
-        next.delete(name)
-      }
-      nextContent.labels = Array.from(next.values())
-    }
-    if (updates.addAssignees || updates.removeAssignees) {
-      const next = new Map(nextContent.assignees.map((u) => [u.login, u]))
-      for (const login of updates.addAssignees ?? []) {
-        if (!next.has(login)) {
-          next.set(login, { login, name: null, avatarUrl: null })
+        for (const name of updates.removeLabels ?? []) {
+          next.delete(name)
         }
+        nextContent.labels = Array.from(next.values())
       }
-      for (const login of updates.removeAssignees ?? []) {
-        next.delete(login)
+      if (updates.addAssignees || updates.removeAssignees) {
+        const next = new Map(nextContent.assignees.map((u) => [u.login, u]))
+        for (const login of updates.addAssignees ?? []) {
+          if (!next.has(login)) {
+            next.set(login, { login, name: null, avatarUrl: null })
+          }
+        }
+        for (const login of updates.removeAssignees ?? []) {
+          next.delete(login)
+        }
+        nextContent.assignees = Array.from(next.values())
       }
-      nextContent.assignees = Array.from(next.values())
-    }
-    const optimisticRow: GitHubProjectRow = { ...previousRow, content: nextContent }
-    applyRowPatch(set, cacheKey, rowId, optimisticRow)
+      const optimisticRow: GitHubProjectRow = { ...previousRow, content: nextContent }
+      applyRowPatch(set, cacheKey, rowId, optimisticRow)
 
-    // Labels/assignees use issue endpoints for both kinds; title/body require PR-versus-issue endpoints.
-    let envelope: GitHubProjectMutationResult = { ok: true }
-    // Why: slug-only Project rows have no registered Orca repo, so fall back to the view source in the cache key, not the focused host.
-
-    if (
-      previousRow.itemType === 'PULL_REQUEST' &&
-      (updates.title !== undefined || updates.body !== undefined)
-    ) {
-      const args = {
+      // Labels/assignees use issue endpoints for both kinds; title/body require PR-versus-issue endpoints.
+      let envelope: GitHubProjectMutationResult = { ok: true }
+      // Why: slug-only Project rows have no registered Orca repo, so fall back to the view source in the cache key, not the focused host.
+      const target = runtimeTargetForProjectRowOwner(
+        get(),
         owner,
         repo,
-        host: table.project.host,
-        number,
-        updates: {
-          ...(updates.title !== undefined ? { title: updates.title } : {}),
-          ...(updates.body !== undefined ? { body: updates.body } : {})
+        table.project.host,
+        projectViewCacheKeyTarget(cacheKey)
+      )
+      start(previousRow, target)
+      const settle = get().githubTaskCache.projectOperation(previousRow, target, updates)
+      try {
+        if (
+          previousRow.itemType === 'PULL_REQUEST' &&
+          (updates.title !== undefined || updates.body !== undefined)
+        ) {
+          const args = {
+            owner,
+            repo,
+            host: table.project.host,
+            number,
+            updates: {
+              ...(updates.title !== undefined ? { title: updates.title } : {}),
+              ...(updates.body !== undefined ? { body: updates.body } : {})
+            }
+          }
+          const prRes =
+            target.kind === 'environment'
+              ? await callRuntimeRpc<GitHubProjectMutationResult>(
+                  target,
+                  'github.project.updatePullRequestBySlug',
+                  args,
+                  { timeoutMs: 30_000 }
+                )
+              : await window.api.gh.updatePullRequestBySlug({ ...args, wakeWslDistro: true })
+          if (!prRes.ok) {
+            envelope = prRes
+          }
         }
-      }
-      const prRes =
-        target.kind === 'environment'
-          ? await callRuntimeRpc<GitHubProjectMutationResult>(
-              target,
-              'github.project.updatePullRequestBySlug',
-              args,
-              { timeoutMs: 30_000 }
-            )
-          : await window.api.gh.updatePullRequestBySlug({ ...args, wakeWslDistro: true })
-      if (!prRes.ok) {
-        envelope = prRes
-      }
-    }
-    if (
-      envelope.ok &&
-      (updates.addLabels?.length ||
-        updates.removeLabels?.length ||
-        updates.addAssignees?.length ||
-        updates.removeAssignees?.length ||
-        (previousRow.itemType === 'ISSUE' &&
-          (updates.title !== undefined || updates.body !== undefined)))
-    ) {
-      const args = {
-        owner,
-        repo,
-        host: table.project.host,
-        number,
-        updates: {
-          ...(updates.title !== undefined ? { title: updates.title } : {}),
-          ...(updates.body !== undefined ? { body: updates.body } : {}),
-          ...(updates.addLabels ? { addLabels: updates.addLabels } : {}),
-          ...(updates.removeLabels ? { removeLabels: updates.removeLabels } : {}),
-          ...(updates.addAssignees ? { addAssignees: updates.addAssignees } : {}),
-          ...(updates.removeAssignees ? { removeAssignees: updates.removeAssignees } : {})
+        if (
+          envelope.ok &&
+          (updates.addLabels?.length ||
+            updates.removeLabels?.length ||
+            updates.addAssignees?.length ||
+            updates.removeAssignees?.length ||
+            (previousRow.itemType === 'ISSUE' &&
+              (updates.title !== undefined || updates.body !== undefined)))
+        ) {
+          const args = {
+            owner,
+            repo,
+            host: table.project.host,
+            number,
+            updates: {
+              ...(updates.title !== undefined ? { title: updates.title } : {}),
+              ...(updates.body !== undefined ? { body: updates.body } : {}),
+              ...(updates.addLabels ? { addLabels: updates.addLabels } : {}),
+              ...(updates.removeLabels ? { removeLabels: updates.removeLabels } : {}),
+              ...(updates.addAssignees ? { addAssignees: updates.addAssignees } : {}),
+              ...(updates.removeAssignees ? { removeAssignees: updates.removeAssignees } : {})
+            }
+          }
+          const issueRes =
+            target.kind === 'environment'
+              ? await callRuntimeRpc<GitHubProjectMutationResult>(
+                  target,
+                  'github.project.updateIssueBySlug',
+                  args,
+                  { timeoutMs: 30_000 }
+                )
+              : await window.api.gh.updateIssueBySlug({ ...args, wakeWslDistro: true })
+          if (!issueRes.ok) {
+            envelope = issueRes
+          }
         }
+        if (!envelope.ok) {
+          rollbackRowIfPresent(set, get, cacheKey, rowId, previousRow)
+        }
+        settle(envelope.ok)
+        return envelope
+      } catch (error) {
+        settle(false)
+        rollbackRowIfPresent(set, get, cacheKey, rowId, previousRow)
+        throw error
       }
-      const issueRes =
-        target.kind === 'environment'
-          ? await callRuntimeRpc<GitHubProjectMutationResult>(
-              target,
-              'github.project.updateIssueBySlug',
-              args,
-              { timeoutMs: 30_000 }
-            )
-          : await window.api.gh.updateIssueBySlug({ ...args, wakeWslDistro: true })
-      if (!issueRes.ok) {
-        envelope = issueRes
-      }
-    }
-    if (!envelope.ok) {
-      rollbackRowIfPresent(set, get, cacheKey, rowId, previousRow)
-    }
-    return envelope
-  },
+    }),
 
   patchProjectRowIssueType: async (cacheKey, rowId, issueType) => {
     const state = get()
@@ -221,6 +223,12 @@ export const createProjectRowActions = (
         }
       }
     }
+    const previousRow = row
+    const optimistic: GitHubProjectRow = {
+      ...previousRow,
+      content: { ...previousRow.content, issueType }
+    }
+    applyRowPatch(set, cacheKey, rowId, optimistic)
     // Why: slug-only Project rows belong to the host that loaded the view, which may differ from the now-focused host.
     const target = runtimeTargetForProjectRowOwner(
       get(),
@@ -229,13 +237,6 @@ export const createProjectRowActions = (
       table.project.host,
       projectViewCacheKeyTarget(cacheKey)
     )
-    onValidatedWrite?.(row, target)
-    const previousRow = row
-    const optimistic: GitHubProjectRow = {
-      ...previousRow,
-      content: { ...previousRow.content, issueType }
-    }
-    applyRowPatch(set, cacheKey, rowId, optimistic)
     const args = {
       owner,
       repo,
@@ -258,7 +259,6 @@ export const createProjectRowActions = (
     return res
   },
 
-  patchProjectTaskContent: createProjectTaskContentAction(set),
   patchProjectRowContent: (cacheKey, rowId, patch) => {
     const state = get()
     const entry = state.projectViewCache[cacheKey]
@@ -276,10 +276,10 @@ export const createProjectRowActions = (
 })
 
 export function patchGitHubProjectRowContent(
-  row: GitHubProjectRow,
+  previousRow: GitHubProjectRow,
   patch: ProjectRowContentPatch
 ): GitHubProjectRow {
-  const nextContent = { ...row.content }
+  const nextContent = { ...previousRow.content }
   if (patch.title !== undefined) {
     nextContent.title = patch.title
   }
@@ -291,16 +291,17 @@ export function patchGitHubProjectRowContent(
     nextContent.state = patch.state.toUpperCase()
   }
   if (patch.labels !== undefined) {
-    const existingByName = new Map(row.content.labels.map((l) => [l.name, l]))
+    const existingByName = new Map(previousRow.content.labels.map((l) => [l.name, l]))
     nextContent.labels = patch.labels.map(
       (name) => existingByName.get(name) ?? { name, color: '808080' }
     )
   }
   if (patch.assignees !== undefined) {
-    const existingByLogin = new Map(row.content.assignees.map((u) => [u.login, u]))
+    const existingByLogin = new Map(previousRow.content.assignees.map((u) => [u.login, u]))
     nextContent.assignees = patch.assignees.map(
       (login) => existingByLogin.get(login) ?? { login, name: null, avatarUrl: null }
     )
   }
-  return { ...row, content: nextContent }
+  const nextRow: GitHubProjectRow = { ...previousRow, content: nextContent }
+  return nextRow
 }

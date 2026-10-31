@@ -1,21 +1,12 @@
-import {
-  createTaskPageGitHubRefreshHandler,
-  TaskPageGitHubIssueDialog
-} from './task-page-github-issue-dialog'
 import type { TaskPageComposerActionsModel } from './use-task-page-composer-actions'
 import PullRequestPage from '@/components/PullRequestPage'
-
+import GitHubItemDialog from '@/components/GitHubItemDialog'
 import { translate } from '@/i18n/i18n'
 import ProjectViewWrapper from '@/components/github-project/ProjectViewWrapper'
-
 import { TaskPageGitHubList } from './github/List'
-
 import { TaskPageGitLabTodoList } from './gitlab/TodoList'
-
 import { TaskPageGitLabItemList } from './gitlab/ItemList'
-
 import { TaskPageJiraContent } from './jira/Content'
-
 export function TaskPageContent({
   model
 }: {
@@ -36,7 +27,6 @@ export function TaskPageContent({
     closeTaskDetailPage,
     handleUseWorkItem
   } = model
-  const onTaskRefresh = createTaskPageGitHubRefreshHandler(model)
   return taskSource === 'github' && dialogWorkItem ? (
     dialogWorkItem.type === 'pr' ? (
       <PullRequestPage
@@ -54,14 +44,26 @@ export function TaskPageContent({
         onClose={closeTaskDetailPage}
       />
     ) : (
-      <TaskPageGitHubIssueDialog model={model} />
+      <GitHubItemDialog
+        workItem={dialogWorkItem}
+        initialTab={dialogInitialTab}
+        repoPath={dialogRepoPath}
+        repoId={dialogWorkItem.repoId}
+        sourceContext={dialogSourceContext}
+        backLabel={translate('auto.components.TaskPage.backToGitHubList', 'GitHub list')}
+        onUse={(item) => {
+          setDialogWorkItem(null)
+          handleUseWorkItem(item)
+        }}
+        onReviewRequestsChange={handleDialogReviewRequestsChange}
+        onClose={closeTaskDetailPage}
+      />
     )
   ) : taskSource === 'github' && githubMode === 'project' ? (
     <div className="mt-3 flex min-h-0 min-w-0 max-h-full flex-col overflow-hidden rounded-md border border-border/50 bg-muted/50 shadow-sm">
       <ProjectViewWrapper
         selectedRepoIds={repoSelection}
         sourceHostId={accountBackedTaskSourceHostId}
-        onTaskRefresh={onTaskRefresh}
       />
     </div>
   ) : taskSource === 'github' ? (

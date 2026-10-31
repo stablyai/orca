@@ -1,39 +1,21 @@
-import { createTaskPageGitHubScalarAuthorityIndex } from './task-page-github-confirmed-client-values'
-
-import { createTaskPageGitHubAuthorityProjection } from './task-page-github-work-item-mutation-composition'
-
-import {
-  taskPageGitHubAuthorityItemKeys,
-  taskPageGitHubOwnedItemKey,
-  taskPageGitHubFamilyDirtyKey
-} from './task-page-github-work-item-mutation-keys'
-
-import { getGitHubTaskObservation } from '@/lib/github-task-observation'
-
-import { githubTaskSourceKey } from '@/lib/github-task-target'
-
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-
+import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import {
   adoptQuietSearchFieldsForItem,
   MAX_LAG_TRAILS
 } from './task-page-github-work-item-quiet-adopt'
-
 import {
-  createListEntryRetirement,
   clearConfirmedAuthorityForItem,
-  getTaskPageGitHubConfirmedAuthorities,
-  getTaskPageGitHubPendingEntries,
-  getTaskPageGitHubMembershipBases,
-  deleteTaskPageGitHubMembershipBasis,
-  batchTaskPageGitHubMutationRegistry,
-  getTaskPageGitHubPendingOwnerKeys,
-  notifyTaskPageGitHubMutationRegistry
+  gcStickyHidesAbsentFromPages,
+  getAllStickyHideEntries,
+  hasConfirmedAuthorityForItem,
+  hasPendingTaskPageGitHubOpsForItem,
+  notifyTaskPageGitHubMutationRegistry,
+  resolveItemSourceScope
 } from './task-page-github-work-item-mutation-registry'
-
 import { getOrCreateQuietRevalidateState } from './task-page-github-work-item-quiet-state'
-
-import type { GitHubWorkItemPatch } from '@/store/github/cache-model'
+import { taskPageGitHubItemKey } from './task-page-github-work-item-mutation-keys'
+import type { TaskPageGitHubPatchWorkItem } from './task-page-github-work-item-mutation-types'
 
 export type TaskPageQuietRevalidateScope = { queryKey: string; generation: number }
 
@@ -70,112 +52,112 @@ export function getTaskPageQuietRevalidateBackoffAttempt(attempts: Iterable<numb
   return eligible.length === 0 ? 0 : Math.max(...eligible)
 }
 
-function settleQuietSearchRevalidateNow(args: {
+export function settleQuietSearchRevalidate(args: {
   queryKey: string
   networkItems: readonly GitHubWorkItem[]
   fetchStartedAtGeneration: number
-  patchWorkItems: (patches: readonly GitHubWorkItemPatch[]) => void
+  patchWorkItem: TaskPageGitHubPatchWorkItem
+  resolveSourceScope?: (item: GitHubWorkItem) => string | null
+  sourceContextByRepoId?: ReadonlyMap<string, TaskSourceContext | null | undefined>
   revalidatedItemKeys?: ReadonlySet<string>
 }): { needTrailing: boolean } {
-  const retireListEntry = createListEntryRetirement()
-  const patches: GitHubWorkItemPatch[] = []
   let needTrailing = false
-  const scalarFor = createTaskPageGitHubScalarAuthorityIndex()
-  const projection = createTaskPageGitHubAuthorityProjection()
-  const pageKeys = new Set(args.networkItems.flatMap(taskPageGitHubAuthorityItemKeys))
   for (const serverItem of args.networkItems) {
-    const observation = getGitHubTaskObservation(serverItem)
+    const sourceScope =
+      args.resolveSourceScope?.(serverItem) ??
+      resolveItemSourceScope(serverItem.repoId, serverItem.id)
     const result = adoptQuietSearchFieldsForItem({
-      scalarFor,
-      retireListEntry,
-      projection,
       item: serverItem,
       serverItem,
-      sourceScope: observation ? githubTaskSourceKey(observation.source) : null,
-      observation,
+      sourceScope,
       queryKey: args.queryKey,
       fetchStartedAtGeneration: args.fetchStartedAtGeneration,
-      patchWorkItem: (itemId, patch, repoId, options) => {
-        patches.push({ itemId, patch, repoId: repoId ?? serverItem.repoId, options })
-      },
-      sourceContext: observation?.source
+      patchWorkItem: args.patchWorkItem,
+      sourceContext: args.sourceContextByRepoId?.get(serverItem.repoId)
     })
-    needTrailing ||= result.needTrailing
-  }
-  const pendingKeys = getTaskPageGitHubPendingOwnerKeys()
-  const safeKeys = new Set(pageKeys)
-  for (const record of getTaskPageGitHubConfirmedAuthorities()) {
-    const { sourceScope, repoId, itemId, observation, itemType } = record
-    const key = taskPageGitHubOwnedItemKey(sourceScope, repoId, itemId, observation?.key)
-    if (!pageKeys.has(key) && args.revalidatedItemKeys?.has(key) && !pendingKeys.has(key)) {
-      clearConfirmedAuthorityForItem(
-        repoId,
-        itemId,
-        sourceScope,
-        observation,
-        itemType,
-        retireListEntry
-      )
-    } else {
-      safeKeys.add(key)
+    if (result.needTrailing) {
+      needTrailing = true
     }
   }
-  for (const op of getTaskPageGitHubPendingEntries().values()) {
-    safeKeys.add(
-      taskPageGitHubOwnedItemKey(
-        op.key.sourceScope,
-        op.key.repoId,
-        op.key.itemId,
-        op.key.observation?.key
-      )
-    )
-  }
-  const safeLagKeys = new Set<string>()
-  for (const key of safeKeys) {
-    for (const family of ['state', 'autoMerge', 'assignees', 'reviewRequests']) {
-      safeLagKeys.add(taskPageGitHubFamilyDirtyKey(key, family))
-    }
-  }
-  for (const [key, basis] of getTaskPageGitHubMembershipBases()) {
-    const ownerKey = taskPageGitHubOwnedItemKey(
-      basis.sourceScope,
-      basis.repoId,
-      basis.itemId,
-      basis.observation?.key
-    )
+  // Retain sticky hides for search-omitted rows with pending/confirmed authority so lag cannot unhide a successful membership exit.
+  const pageKeys = new Set(
+    args.networkItems.map((item) => taskPageGitHubItemKey(item.repoId, item.id))
+  )
+  for (const [itemKey, entry] of getAllStickyHideEntries()) {
     if (
-      basis.queryKey === args.queryKey &&
-      args.revalidatedItemKeys?.has(ownerKey) &&
-      !safeKeys.has(ownerKey)
+      entry.queryKey !== args.queryKey ||
+      pageKeys.has(itemKey) ||
+      !args.revalidatedItemKeys?.has(itemKey)
     ) {
-      deleteTaskPageGitHubMembershipBasis(key)
+      continue
+    }
+    const separator = itemKey.indexOf('\0')
+    if (
+      separator !== -1 &&
+      !hasPendingTaskPageGitHubOpsForItem(itemKey.slice(0, separator), itemKey.slice(separator + 1))
+    ) {
+      clearConfirmedAuthorityForItem(itemKey.slice(0, separator), itemKey.slice(separator + 1))
     }
   }
+  const safeGcKeys = new Set(pageKeys)
+  for (const [itemKey] of getAllStickyHideEntries()) {
+    if (pageKeys.has(itemKey)) {
+      continue
+    }
+    const sep = itemKey.indexOf('\0')
+    if (sep === -1) {
+      continue
+    }
+    const repoId = itemKey.slice(0, sep)
+    const itemId = itemKey.slice(sep + 1)
+    if (
+      hasPendingTaskPageGitHubOpsForItem(repoId, itemId) ||
+      hasConfirmedAuthorityForItem(repoId, itemId)
+    ) {
+      safeGcKeys.add(itemKey)
+    }
+  }
+  gcStickyHidesAbsentFromPages(safeGcKeys, args.queryKey)
   const quiet = getOrCreateQuietRevalidateState(args.queryKey)
-  for (const key of quiet.lagSkipAttempts.keys()) {
-    if (!safeLagKeys.has(key)) {
-      quiet.lagSkipAttempts.delete(key)
+  // Drop orphan lag counters once page/pending/authority references are gone so unrelated rows retain their retry budget.
+  for (const lagKey of quiet.lagSkipAttempts.keys()) {
+    const itemKey = lagKey.slice(0, lagKey.lastIndexOf('\0'))
+    if (safeGcKeys.has(itemKey)) {
+      continue
+    }
+    const sep = itemKey.indexOf('\0')
+    if (sep === -1) {
+      continue
+    }
+    if (
+      !hasPendingTaskPageGitHubOpsForItem(itemKey.slice(0, sep), itemKey.slice(sep + 1)) &&
+      !hasConfirmedAuthorityForItem(itemKey.slice(0, sep), itemKey.slice(sep + 1))
+    ) {
+      quiet.lagSkipAttempts.delete(lagKey)
     }
   }
   if (quiet.dirtyGeneration > args.fetchStartedAtGeneration) {
     needTrailing = true
   }
-  args.patchWorkItems(patches)
   notifyTaskPageGitHubMutationRegistry()
   return { needTrailing }
 }
-export function processTaskPageQuietRevalidateSettle(
-  args: Omit<Parameters<typeof settleQuietSearchRevalidate>[0], 'fetchStartedAtGeneration'>
-): { needTrailing: boolean } {
+export function processTaskPageQuietRevalidateSettle(args: {
+  queryKey: string
+  networkItems: readonly GitHubWorkItem[]
+  patchWorkItem: TaskPageGitHubPatchWorkItem
+  resolveSourceScope?: (item: GitHubWorkItem) => string | null
+  sourceContextByRepoId?: ReadonlyMap<string, TaskSourceContext | null | undefined>
+  revalidatedItemKeys?: ReadonlySet<string>
+}): { needTrailing: boolean } {
   const state = getOrCreateQuietRevalidateState(args.queryKey)
   return settleQuietSearchRevalidate({
-    ...args,
-    fetchStartedAtGeneration: state.fetchStartedAtGeneration
+    queryKey: args.queryKey,
+    networkItems: args.networkItems,
+    fetchStartedAtGeneration: state.fetchStartedAtGeneration,
+    patchWorkItem: args.patchWorkItem,
+    resolveSourceScope: args.resolveSourceScope,
+    sourceContextByRepoId: args.sourceContextByRepoId,
+    revalidatedItemKeys: args.revalidatedItemKeys
   })
-}
-
-export function settleQuietSearchRevalidate(
-  ...args: Parameters<typeof settleQuietSearchRevalidateNow>
-): ReturnType<typeof settleQuietSearchRevalidateNow> {
-  return batchTaskPageGitHubMutationRegistry(() => settleQuietSearchRevalidateNow(...args))
 }

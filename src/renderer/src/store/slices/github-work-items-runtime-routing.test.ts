@@ -1,4 +1,3 @@
-import { plainGitHubWorkItem, getGitHubTaskObservation } from '@/lib/github-task-observation'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { workItemsCacheKey } from '../github/cache-identity'
 import {
@@ -443,11 +442,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     const result = await queued
     await Promise.all(blockers)
 
-    expect(result.map(plainGitHubWorkItem)).toEqual([{ ...item, repoId: 'caller-repo-id' }])
-    expect(getGitHubTaskObservation(result[0])).toMatchObject({
-      repoId: 'repo-start',
-      hostId: 'runtime:env-start'
-    })
+    expect(result).toEqual([])
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-start',
       method: 'github.listWorkItems',
@@ -545,14 +540,9 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       },
       _meta: { runtimeId: 'new-runtime' }
     })
-    const newRows = await newFetch
-    expect(newRows.map(plainGitHubWorkItem)).toEqual([
-      { ...newRuntimeItem, repoId: 'caller-repo-id' }
+    await expect(newFetch).resolves.toEqual([
+      expect.objectContaining({ ...newRuntimeItem, repoId: 'caller-repo-id' })
     ])
-    expect(getGitHubTaskObservation(newRows[0])).toMatchObject({
-      repoId: 'repo-new-runtime',
-      hostId: 'runtime:env-new'
-    })
 
     const oldRuntimeItem = {
       type: 'issue',
@@ -570,16 +560,12 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       },
       _meta: { runtimeId: 'old-runtime' }
     })
-    const oldRows = await oldFetch
-    expect(oldRows.map(plainGitHubWorkItem)).toEqual([
-      { ...oldRuntimeItem, repoId: 'caller-repo-id' }
-    ])
-    expect(getGitHubTaskObservation(oldRows[0])).toMatchObject({ hostId: 'runtime:env-old' })
+    await expect(oldFetch).resolves.toEqual([])
     expect(
       store.getState().workItemsCache[
         workItemsCacheKey('caller-repo-id', 24, 'is:open', 'runtime:env-new')
       ]?.data
-    ).toEqual(newRows)
+    ).toEqual([expect.objectContaining({ ...newRuntimeItem, repoId: 'caller-repo-id' })])
   })
 
   it('bounds work-item cache entries across many repos', async () => {

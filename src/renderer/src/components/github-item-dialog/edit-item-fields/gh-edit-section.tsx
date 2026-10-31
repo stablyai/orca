@@ -1,4 +1,3 @@
-import { gitHubTaskFamilyOrigin } from '@/lib/github-task-observation'
 import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { githubWorkItemWriteKey } from '@/lib/github-work-item-writes'
 import { useShallow } from 'zustand/react/shallow'
@@ -169,8 +168,7 @@ function GHEditSectionItem({
   const staleEdit =
     assigneeEdit &&
     !assigneePending &&
-    (assigneeEdit.acceptedRefresh !== acceptedRefresh ||
-      (!assigneeEdit.edited && assigneeEdit.input !== assignees))
+    (assigneeEdit.acceptedRefresh !== acceptedRefresh || assigneeEdit.input !== assignees)
   if (staleEdit) {
     setAssigneeEdit(null)
   } else if (assigneeEdit && assigneeEdit.input !== assignees) {
@@ -189,15 +187,14 @@ function GHEditSectionItem({
     },
     [assignees, assigneesItemKey, acceptedRefresh]
   )
-  const previousStateOrigin = gitHubTaskFamilyOrigin(item, 'state')
 
   const handleStateChange = useCallback(
     (newState: 'open' | 'closed', closeAction?: TaskPageGitHubCloseAction) => {
       runGHEditStateChange({
+        item,
         newState,
         closeAction,
         localState,
-        previousOrigin: previousStateOrigin,
         itemId: item.id,
         itemNumber: item.number,
         itemRepoId: item.repoId,
@@ -217,11 +214,8 @@ function GHEditSectionItem({
       })
     },
     [
-      item.id,
-      item.number,
-      item.repoId,
+      item,
       localState,
-      previousStateOrigin,
       repoPath,
       sourceContext,
       projectOrigin,
@@ -270,6 +264,7 @@ function GHEditSectionItem({
   const handleLabelToggle = useCallback(
     (label: string) => {
       runGHEditLabelToggle({
+        item,
         label,
         localLabels,
         itemId: item.id,
@@ -291,9 +286,7 @@ function GHEditSectionItem({
       })
     },
     [
-      item.id,
-      item.number,
-      item.repoId,
+      item,
       localLabels,
       repoPath,
       sourceContext,
@@ -311,6 +304,7 @@ function GHEditSectionItem({
   const handleAssigneeToggle = useCallback(
     (login: string) => {
       runGHEditAssigneeToggle({
+        item,
         login,
         localAssignees,
         assigneesItemKey,
@@ -329,7 +323,7 @@ function GHEditSectionItem({
     },
     [
       item.number,
-      item.repoId,
+      item,
       assigneesItemKey,
       repoPath,
       sourceContext,

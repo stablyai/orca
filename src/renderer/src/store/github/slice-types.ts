@@ -1,3 +1,4 @@
+import type { GitHubTaskRecordCache } from './task-record-cache'
 import type { ClassifiedError } from '../../../../shared/classified-error'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/check-types'
 import type {
@@ -32,7 +33,6 @@ import type {
   CacheEntry,
   FetchOptions,
   GitHubPatchWorkItemOptions,
-  GitHubWorkItemPatch,
   GitHubPRFallbackSource,
   ProjectRowContentPatch,
   ProjectRowContentUpdate,
@@ -44,6 +44,7 @@ import type {
 import type { PRRefreshState, PRRefreshStateClearToken } from './pr-refresh-state'
 
 export type GitHubSlice = {
+  githubTaskCache: GitHubTaskRecordCache
   prCache: Record<string, CacheEntry<PRInfo>>
   issueCache: Record<string, CacheEntry<IssueInfo>>
   checksCache: Record<string, CacheEntry<PRCheckDetail[]>>
@@ -214,7 +215,7 @@ export type GitHubSlice = {
     displayLimit: number,
     query: string,
     page: number,
-    options?: Pick<FetchOptions, 'noCache' | 'requireComplete' | 'taskRead' | 'wakeWslDistro'>
+    options?: Pick<FetchOptions, 'noCache' | 'requireComplete' | 'wakeWslDistro'>
   ) => Promise<{
     items: GitHubWorkItem[]
     failedCount: number
@@ -240,7 +241,6 @@ export type GitHubSlice = {
     query?: string,
     options?: { sourceContext?: TaskSourceContext | null }
   ) => void
-  patchWorkItems: (patches: readonly GitHubWorkItemPatch[]) => void
   patchWorkItem: (
     itemId: string,
     patch: Partial<GitHubWorkItem>,
@@ -288,6 +288,5 @@ export type GitHubSlice = {
     issueType: { id: string; name: string; color: string | null; description: string | null } | null
   ) => Promise<GitHubProjectMutationResult>
   /** Patch ProjectV2 content without IPC; patchWorkItem updates only workItemsCache and leaves boards stale. */
-  patchProjectTaskContent: (item: GitHubWorkItem, body: string, source: TaskSourceContext) => void
   patchProjectRowContent: (cacheKey: string, rowId: string, patch: ProjectRowContentPatch) => void
 }

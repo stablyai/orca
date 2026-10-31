@@ -1,10 +1,45 @@
 import type { GitHubWorkItemDetails } from '../../../../../shared/github/work-item-types'
+import type { GitHubTaskRecordCache, TaskBinding } from '@/store/github/task-record-cache'
+import type { GitHubTaskTarget } from '@/lib/github-task-target'
+import { lookupGitHubWorkItemDetailsForSource } from '@/lib/github-work-item-source-lookup'
 import {
   WORK_ITEM_DETAILS_UNAVAILABLE_MESSAGE,
   touchWorkItemDetailsCache,
   workItemDetailsCache,
+  withWorkItemDetailsItem,
   type WorkItemDetailsCacheEntry
 } from './work-item-details-cache'
+
+export async function loadCanonicalGitHubTaskDetails(
+  cache: GitHubTaskRecordCache,
+  binding: TaskBinding,
+  target: GitHubTaskTarget,
+  accepts: () => boolean
+): Promise<GitHubWorkItemDetails | null> {
+  const loaded: { details: GitHubWorkItemDetails | null } = { details: null }
+  const accepted = await cache.readCanonical(target.item, binding, async (owned) => {
+    loaded.details = await lookupGitHubWorkItemDetailsForSource({
+      repoPath: target.repo.path,
+      repoId: target.repo.id,
+      sourceContext: target.source,
+      type: 'issue',
+      number: target.item.number,
+      ownerRepo: target.ownerRepo,
+      canonical: true,
+      accepts: () => accepts() && owned(),
+      rpcOptions: target.rpcOptions
+    })
+    return loaded.details && accepts() && owned()
+      ? { ...target.item, ...loaded.details.item }
+      : null
+  })
+  return accepted && loaded.details
+    ? withWorkItemDetailsItem(
+        loaded.details,
+        cache.projectItem({ ...target.item, ...loaded.details.item }, binding)
+      )
+    : null
+}
 
 type FetchAcceptance = {
   accepts?: (result: GitHubWorkItemDetails | null) => boolean

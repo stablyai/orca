@@ -1,8 +1,3 @@
-import {
-  gitHubTaskFamilyOrigin,
-  type GitHubTaskValueOrigin,
-  type GitHubTaskObservation
-} from '@/lib/github-task-observation'
 import React, { useCallback, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { CircleDot, GitPullRequest, GitPullRequestClosed, LoaderCircle } from 'lucide-react'
@@ -86,17 +81,9 @@ export function PRActionsPanel({
   )
 
   const applyStatePatch = useCallback(
-    (
-      state: GitHubWorkItem['state'],
-      origin?: GitHubTaskValueOrigin,
-      observation?: GitHubTaskObservation
-    ) => {
+    (state: GitHubWorkItem['state']) => {
       onStateChange(state)
-      patchWorkItem(item.id, { state }, item.repoId, {
-        sourceContext,
-        observation,
-        valueOrigins: { state: origin }
-      })
+      patchWorkItem(item.id, { state }, item.repoId, { sourceContext })
       patchProjectRowIfNeeded(state)
     },
     [item.id, item.repoId, onStateChange, patchProjectRowIfNeeded, patchWorkItem, sourceContext]
@@ -135,10 +122,9 @@ export function PRActionsPanel({
       repoId: item.repoId,
       itemId: item.id,
       state: nextState,
-      previousOrigin: gitHubTaskFamilyOrigin(item, 'state'),
       sourceContext
     })
-    applyStatePatch(nextState, authority.origin(), authority.observation)
+    applyStatePatch(nextState)
     try {
       await runPullRequestStateUpdate({
         repoPath,
@@ -158,7 +144,7 @@ export function PRActionsPanel({
       onMutated()
     } catch (err) {
       if (authority.revert()) {
-        applyStatePatch(previousState, authority.origin(), authority.observation)
+        applyStatePatch(previousState)
       }
       // Why: full sentences per branch — interpolating a lowercased label breaks locales with different casing rules.
       toast.error(
@@ -226,13 +212,13 @@ export function PRActionsPanel({
         return
       }
       // Why: merge is confirmed here; hold 'merged' against search-lagged refetches.
-      const authority = assertTaskPageGitHubDialogStateAuthority({
+      assertTaskPageGitHubDialogStateAuthority({
         repoId: item.repoId,
         itemId: item.id,
         state: 'merged',
         sourceContext
       })
-      applyStatePatch('merged', authority.origin(), authority.observation)
+      applyStatePatch('merged')
       if (mergeTarget.kind === 'environment') {
         notifyWorkItemDetailsMutation(
           {

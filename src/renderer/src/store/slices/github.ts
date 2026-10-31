@@ -1,4 +1,4 @@
-import { observeGitHubProjectWrite } from '@/lib/github-work-item-writes'
+import { GitHubTaskRecordCache } from '../github/task-record-cache'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GitHubSlice as GitHubSliceContract } from '../github/slice-types'
@@ -27,99 +27,101 @@ import { createRefreshEventActions } from '../github/refresh-event-actions'
 import { createRefreshSweepActions } from '../github/refresh-sweep-actions'
 export type GitHubSlice = GitHubSliceContract
 
-export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (
-  set,
-  get,
-  store
-) => ({
-  prCache: {},
-  issueCache: {},
-  checksCache: {},
-  commentsCache: {},
-  reviewThreadResolutionsInFlight: {},
-  prRefreshSequences: {},
-  prRefreshStates: {},
-  prVisibleRefreshGeneration: 0,
-  visibleReviewWorktreeIds: [],
-  visibleReviewCardWorktreeIds: [],
-  workItemsCache: {},
-  workItemsInvalidationNonce: 0,
-  projectViewCache: {},
-
-  getEffectiveGitHubPRRefreshState: (cacheKey, now) =>
-    getEffectiveGitHubPRRefreshState(get().prRefreshStates, cacheKey, now),
-
-  expireGitHubPRRefreshState: (cacheKey, token, now = Date.now()) => {
-    const currentState = get()
-    const currentRefreshState = currentState.prRefreshStates[cacheKey]
-    if (
-      !currentRefreshState ||
-      !ACTIVE_PR_REFRESH_STATUSES.has(currentRefreshState.status) ||
-      !isExpiredActivePRRefreshState(currentRefreshState, now) ||
-      (currentState.prRefreshSequences[cacheKey] ?? 0) !== token.sequence ||
-      currentRefreshState.status !== token.status ||
-      currentRefreshState.updatedAt !== token.updatedAt
-    ) {
-      return
+export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (set, get, store) => {
+  const githubTaskCache = new GitHubTaskRecordCache(store)
+  store.subscribe((state, previous) => {
+    const sourceChanged =
+      state.runtimeStatusByEnvironmentId !== previous.runtimeStatusByEnvironmentId ||
+      state.runtimeEnvironments !== previous.runtimeEnvironments ||
+      state.sshConnectionStates !== previous.sshConnectionStates ||
+      state.sshStateByEnvironment !== previous.sshStateByEnvironment
+    if (state.repos !== previous.repos || sourceChanged) {
+      githubTaskCache.syncBindings(state.repos ?? [], sourceChanged)
     }
-    set((s) => {
-      const state = s.prRefreshStates[cacheKey]
+  })
+  return {
+    githubTaskCache,
+    prCache: {},
+    issueCache: {},
+    checksCache: {},
+    commentsCache: {},
+    reviewThreadResolutionsInFlight: {},
+    prRefreshSequences: {},
+    prRefreshStates: {},
+    prVisibleRefreshGeneration: 0,
+    visibleReviewWorktreeIds: [],
+    visibleReviewCardWorktreeIds: [],
+    workItemsCache: {},
+    workItemsInvalidationNonce: 0,
+    projectViewCache: {},
+
+    getEffectiveGitHubPRRefreshState: (cacheKey, now) =>
+      getEffectiveGitHubPRRefreshState(get().prRefreshStates, cacheKey, now),
+
+    expireGitHubPRRefreshState: (cacheKey, token, now = Date.now()) => {
+      const currentState = get()
+      const currentRefreshState = currentState.prRefreshStates[cacheKey]
       if (
-        !state ||
-        !ACTIVE_PR_REFRESH_STATUSES.has(state.status) ||
-        !isExpiredActivePRRefreshState(state, now) ||
-        (s.prRefreshSequences[cacheKey] ?? 0) !== token.sequence ||
-        state.status !== token.status ||
-        state.updatedAt !== token.updatedAt
+        !currentRefreshState ||
+        !ACTIVE_PR_REFRESH_STATUSES.has(currentRefreshState.status) ||
+        !isExpiredActivePRRefreshState(currentRefreshState, now) ||
+        (currentState.prRefreshSequences[cacheKey] ?? 0) !== token.sequence ||
+        currentRefreshState.status !== token.status ||
+        currentRefreshState.updatedAt !== token.updatedAt
       ) {
-        return s
+        return
       }
-      const nextStates = { ...s.prRefreshStates }
-      delete nextStates[cacheKey]
-      return { prRefreshStates: nextStates }
-    })
-  },
-
-  ...createProjectActions(set, get),
-  ...createProjectRowActions(set, get),
-  patchProjectIssueOrPr: (...args) =>
-    observeGitHubProjectWrite((start) =>
-      createProjectRowActions(set, get, start).patchProjectIssueOrPr(...args)
-    ),
-  patchProjectRowIssueType: (...args) =>
-    observeGitHubProjectWrite((start) =>
-      createProjectRowActions(set, get, start).patchProjectRowIssueType(...args)
-    ),
-  ...createWorkItemFetchActions(set, get),
-  ...createWorkItemAggregateActions(get),
-  ...createPullRequestActions(set, get),
-  ...createIssueActions(set, get),
-  ...createCheckActions(set, get),
-  ...createCommentFetchActions(set, get),
-  ...createCommentMutationActions(set, get),
-  ...createConversationCommentActions(set, get),
-  ...createReviewThreadActions(set, get),
-  ...createStaleWorktreeRefreshActions(get),
-  ...createRefreshRoutingActions(set, get),
-  ...createRefreshEventActions(set, get),
-  ...createRefreshSweepActions(set, get),
-  ...createWorkItemMutationActions(set, get),
-
-  initGitHubCache: async () => {
-    let persisted: Awaited<ReturnType<typeof window.api.cache.getGitHub>> | null = null
-    try {
-      persisted = await window.api.cache.getGitHub()
-    } catch (err) {
-      console.error('Failed to load GitHub cache from disk:', err)
-    }
-    // Why after the read: an earlier write would replace main's copy with a partial cache.
-    // Before hydrating, so main also drops entries hydration evicts.
-    persistGitHubCacheChanges(store)
-    if (persisted) {
-      set({
-        prCache: evictStaleEntries(persisted.pr || {}),
-        issueCache: evictStaleEntries(persisted.issue || {})
+      set((s) => {
+        const state = s.prRefreshStates[cacheKey]
+        if (
+          !state ||
+          !ACTIVE_PR_REFRESH_STATUSES.has(state.status) ||
+          !isExpiredActivePRRefreshState(state, now) ||
+          (s.prRefreshSequences[cacheKey] ?? 0) !== token.sequence ||
+          state.status !== token.status ||
+          state.updatedAt !== token.updatedAt
+        ) {
+          return s
+        }
+        const nextStates = { ...s.prRefreshStates }
+        delete nextStates[cacheKey]
+        return { prRefreshStates: nextStates }
       })
+    },
+
+    ...createProjectActions(set, get),
+    ...createProjectRowActions(set, get),
+    ...createWorkItemFetchActions(set, get),
+    ...createWorkItemAggregateActions(get),
+    ...createPullRequestActions(set, get),
+    ...createIssueActions(set, get),
+    ...createCheckActions(set, get),
+    ...createCommentFetchActions(set, get),
+    ...createCommentMutationActions(set, get),
+    ...createConversationCommentActions(set, get),
+    ...createReviewThreadActions(set, get),
+    ...createStaleWorktreeRefreshActions(get),
+    ...createRefreshRoutingActions(set, get),
+    ...createRefreshEventActions(set, get),
+    ...createRefreshSweepActions(set, get),
+    ...createWorkItemMutationActions(set, get),
+
+    initGitHubCache: async () => {
+      let persisted: Awaited<ReturnType<typeof window.api.cache.getGitHub>> | null = null
+      try {
+        persisted = await window.api.cache.getGitHub()
+      } catch (err) {
+        console.error('Failed to load GitHub cache from disk:', err)
+      }
+      // Why after the read: an earlier write would replace main's copy with a partial cache.
+      // Before hydrating, so main also drops entries hydration evicts.
+      persistGitHubCacheChanges(store)
+      if (persisted) {
+        set({
+          prCache: evictStaleEntries(persisted.pr || {}),
+          issueCache: evictStaleEntries(persisted.issue || {})
+        })
+      }
     }
   }
-})
+}

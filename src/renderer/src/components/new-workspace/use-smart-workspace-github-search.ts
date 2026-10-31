@@ -1,5 +1,4 @@
-import { beginGitHubTaskRead } from '@/store/github/request-coordination'
-import { useEffect, useEffectEvent, useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { normalizeGitHubLinkQuery, parseGitHubIssueOrPRLink } from '@/lib/github-links'
 import {
   lookupGitHubWorkItemByOwnerRepoForSource,
@@ -18,24 +17,7 @@ export function useSmartWorkspaceGithubSearch({
   sourceQueryWithinLimit,
   shouldQueryGithub
 }: {
-  foundation: Pick<
-    Foundation,
-    | 'crossRepoSwitchTarget'
-    | 'debouncedQuery'
-    | 'disabled'
-    | 'fetchWorkItems'
-    | 'fetchWorkItemsAcrossRepos'
-    | 'getCachedWorkItems'
-    | 'githubSourceContext'
-    | 'handledCrossRepoUrlRef'
-    | 'repoBackedSearchTargets'
-    | 'repoSlugCacheRef'
-    | 'repos'
-    | 'selectedRepo'
-    | 'setCrossRepoPrompt'
-    | 'setGithubItems'
-    | 'setGithubLoading'
-  > & { githubItems?: Foundation['githubItems'] }
+  foundation: Foundation
   sourceQueryWithinLimit: boolean
   shouldQueryGithub: boolean
 }): void {
@@ -63,19 +45,6 @@ export function useSmartWorkspaceGithubSearch({
   const parsedGhLink = useMemo(
     () => (sourceQueryWithinLimit ? parseGitHubIssueOrPRLink(debouncedQuery) : null),
     [debouncedQuery, sourceQueryWithinLimit]
-  )
-
-  const acquireRead = useEffectEvent(() =>
-    beginGitHubTaskRead(
-      repoBackedSearchTargets.map((target) => ({
-        repoId: target.repo.id,
-        path: target.repo.path,
-        sourceContext: target.githubSourceContext
-      })),
-      undefined,
-      { repos },
-      foundation.githubItems
-    )
   )
 
   useEffect(() => {
@@ -179,7 +148,6 @@ export function useSmartWorkspaceGithubSearch({
       }
     }
 
-    const read = acquireRead()
     const trimmed = normalizedGhQuery.query.trim()
     const query = trimmed ? normalizedGhQuery.query : ''
     if (repoBackedSearchTargets.length === 1) {
@@ -192,29 +160,25 @@ export function useSmartWorkspaceGithubSearch({
         target.githubSourceContext
       )
       if (cached) {
-        read.borrow(cached)
-        read.deliver(cached.slice(0, RESULT_LIMIT), setGithubItems)
+        setGithubItems(cached.slice(0, RESULT_LIMIT))
         setGithubLoading(false)
       } else {
         setGithubLoading(true)
       }
       void fetchWorkItems(target.repo.id, target.repo.path, RESULT_LIMIT, query, {
-        sourceContext: target.githubSourceContext,
-        taskRead: read
+        sourceContext: target.githubSourceContext
       })
         .then((items) => {
           if (!stale) {
-            read.deliver(items.slice(0, RESULT_LIMIT), setGithubItems)
+            setGithubItems(items.slice(0, RESULT_LIMIT))
           }
         })
         .catch(() => {
           if (!stale) {
-            read.dispose()
             setGithubItems([])
           }
         })
         .finally(() => {
-          read.finish()
           if (!stale) {
             setGithubLoading(false)
           }
@@ -230,22 +194,19 @@ export function useSmartWorkspaceGithubSearch({
         })),
         RESULT_LIMIT,
         RESULT_LIMIT,
-        query,
-        { taskRead: read }
+        query
       )
         .then((result) => {
           if (!stale) {
-            read.deliver(result.items, setGithubItems)
+            setGithubItems(result.items)
           }
         })
         .catch(() => {
           if (!stale) {
-            read.dispose()
             setGithubItems([])
           }
         })
         .finally(() => {
-          read.finish()
           if (!stale) {
             setGithubLoading(false)
           }
@@ -253,7 +214,6 @@ export function useSmartWorkspaceGithubSearch({
     }
     return () => {
       stale = true
-      read.dispose()
     }
   }, [
     debouncedQuery,

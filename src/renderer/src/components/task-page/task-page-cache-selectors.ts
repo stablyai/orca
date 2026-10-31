@@ -44,7 +44,7 @@ export type TaskPageWorkItemsFetchOptions = {
 }
 
 type WorkItemsCache = Record<string, CacheEntry<readonly GitHubWorkItem[]>>
-export type TaskPageWorkItemPages = readonly (readonly GitHubWorkItem[] | null)[]
+export type TaskPageWorkItemPages = readonly (GitHubWorkItem[] | null)[]
 
 export function deriveTaskPageGitHubWorkItemsFetchOptions(
   forcedFetch: boolean,
@@ -122,17 +122,9 @@ export function selectTaskPageUnresolvedSourceRepos(
 }
 
 export function reconcileTaskPagePagesWithWorkItemsCache(
-  pages: (readonly GitHubWorkItem[] | null)[],
-  entries: readonly (CacheEntry<readonly GitHubWorkItem[]> | undefined)[]
-): (readonly GitHubWorkItem[] | null)[]
-export function reconcileTaskPagePagesWithWorkItemsCache(
   pages: TaskPageWorkItemPages,
   entries: readonly (CacheEntry<readonly GitHubWorkItem[]> | undefined)[]
-): TaskPageWorkItemPages
-export function reconcileTaskPagePagesWithWorkItemsCache(
-  pages: TaskPageWorkItemPages,
-  entries: readonly (CacheEntry<readonly GitHubWorkItem[]> | undefined)[]
-): TaskPageWorkItemPages {
+): (GitHubWorkItem[] | null)[] {
   const cachedItems = new Map<string, GitHubWorkItem>()
   for (const entry of entries) {
     for (const item of entry?.data ?? []) {
@@ -158,7 +150,7 @@ export function reconcileTaskPagePagesWithWorkItemsCache(
     return pageChanged ? nextPage : page
   })
 
-  return changed ? nextPages : pages
+  return changed ? nextPages : (pages as (GitHubWorkItem[] | null)[])
 }
 
 export function shouldReplaceTaskPageItemsAfterRefresh(
@@ -221,24 +213,16 @@ export function shouldResetTaskPagePaginationAfterLandingRefresh(
 }
 
 export function reconcileTaskPagePagesAfterLandingRefresh(
-  pages: (readonly GitHubWorkItem[] | null)[],
-  refreshedItems: readonly GitHubWorkItem[]
-): (readonly GitHubWorkItem[] | null)[]
-export function reconcileTaskPagePagesAfterLandingRefresh(
   pages: TaskPageWorkItemPages,
   refreshedItems: readonly GitHubWorkItem[]
-): TaskPageWorkItemPages
-export function reconcileTaskPagePagesAfterLandingRefresh(
-  pages: TaskPageWorkItemPages,
-  refreshedItems: readonly GitHubWorkItem[]
-): TaskPageWorkItemPages {
+): (GitHubWorkItem[] | null)[] {
   const firstPage = pages[0] ?? []
   if (shouldResetTaskPagePaginationAfterLandingRefresh(firstPage, refreshedItems)) {
     return [[...refreshedItems]]
   }
   const nextFirstPage = reconcileTaskPageItemsAfterLandingRefresh(firstPage, refreshedItems)
   if (nextFirstPage === firstPage) {
-    return pages
+    return pages as (GitHubWorkItem[] | null)[]
   }
   return [nextFirstPage, ...pages.slice(1)]
 }

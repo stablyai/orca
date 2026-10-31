@@ -1,5 +1,13 @@
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore
+} from 'react'
 import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
@@ -33,6 +41,7 @@ export function useProjectViewTable(
   selectedRepoIds: ReadonlySet<string>,
   sourceTarget: RuntimeClientTarget
 ) {
+  const taskCache = useAppStore((s) => s.githubTaskCache)
   const settings = useAppStore((state) => state.settings)
   const projectViewCache = useAppStore((state) => state.projectViewCache)
   const fetchProjectViewTable = useAppStore((state) => state.fetchProjectViewTable)
@@ -104,7 +113,17 @@ export function useProjectViewTable(
           activeProject.host
         )
       : null
-  const table = currentCacheKey ? (projectViewCache[currentCacheKey]?.data ?? null) : null
+  const rawTable = currentCacheKey ? (projectViewCache[currentCacheKey]?.data ?? null) : null
+  const taskRevision = useSyncExternalStore(
+    taskCache.subscribe,
+    taskCache.snapshot,
+    taskCache.snapshot
+  )
+  const table = useMemo(() => {
+    void taskRevision
+    return rawTable ? taskCache.projectObservedTable(rawTable) : null
+  }, [rawTable, taskCache, taskRevision])
+  useEffect(() => (table ? taskCache.pinProject(table) : undefined), [taskCache, table])
 
   useEffect(() => {
     if (!activeProject || !viewId || !currentCacheKey || projectViewCache[currentCacheKey]?.data) {

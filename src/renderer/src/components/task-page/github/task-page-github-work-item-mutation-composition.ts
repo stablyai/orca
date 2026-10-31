@@ -1,42 +1,27 @@
-import { composeListDestination } from './task-page-github-work-item-list-output'
-
-export {
-  dependsOnTaskPageGitHubListRetirement,
-  restoreTaskPageGitHubListOutput
-} from './task-page-github-work-item-list-output'
-import { getTaskSourceCacheScope } from '../../../../../shared/task-source-context'
-
+import type { ParsedTaskQuery } from '../../../../../shared/task-query'
 import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
-
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-
+import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/links'
 import {
-  getTaskPageGitHubPendingEntries,
-  getTaskPageGitHubListEntries,
-  type ListEntry,
-  type ListAddress,
-  type ListInput,
-  type ListComposition
+  recomputeTaskPageGitHubItemSoftHide,
+  shouldSoftHideTaskPageGitHubWorkItem
+} from './task-page-github-work-item-filter-membership'
+import { applyTaskPageGitHubListOps } from './task-page-github-work-item-mutation-patches'
+import {
+  deleteStickyHideEntry,
+  getAllStickyHideEntries,
+  getConfirmedListSnapshot,
+  getTaskPageGitHubSoftHiddenItemKeys,
+  hasConfirmedAuthorityForItem,
+  listPendingTaskPageGitHubOpsForItem,
+  resolveItemSourceScope,
+  notifyTaskPageGitHubMutationRegistry,
+  setSoftHiddenItemKeys,
+  setStickyHideEntry,
+  updateSoftHiddenItemKey
 } from './task-page-github-work-item-mutation-registry'
-
-import { captureTaskPageGitHubScalarAuthorityIndex } from './task-page-github-confirmed-client-values'
-
-import {
-  taskPageGitHubMutationItemId,
-  taskPageGitHubOwnedItemKey,
-  taskPageGitHubLastConfirmedKey,
-  serializeTaskPageGitHubMutationKey
-} from './task-page-github-work-item-mutation-keys'
-
-import {
-  getGitHubTaskObservation,
-  patchObservedGitHubWorkItem,
-  type GitHubTaskObservation,
-  type GitHubTaskFamily,
-  type GitHubTaskValueOrigin,
-  type ObservedGitHubWorkItem
-} from '@/lib/github-task-observation'
-
+import { getLastConfirmedClientValue } from './task-page-github-confirmed-client-values'
+import { taskPageGitHubItemKey } from './task-page-github-work-item-mutation-keys'
 import type {
   PendingListOp,
   PendingOp,
@@ -80,212 +65,175 @@ export function pendingListOpsForFamily(
     }, [])
 }
 
-export function createTaskPageGitHubAuthorityProjection() {
-  const groups = new Map<
-    string,
-    {
-      ops: PendingOp[]
-      next: Partial<GitHubWorkItem>
-      origins: Partial<Record<GitHubTaskFamily, GitHubTaskValueOrigin>>
-      familyOps: Partial<Record<TaskPageGitHubListFamily, PendingListOp[]>>
-      lists: Partial<Record<TaskPageGitHubListFamily, ListEntry>>
-    }
-  >()
-  const groupFor = (
-    sourceScope: string | null,
-    repoId: string,
-    itemId: string,
-    observation?: GitHubTaskObservation
-  ) => {
-    const key = taskPageGitHubOwnedItemKey(sourceScope, repoId, itemId, observation?.key)
-    let group = groups.get(key)
-    if (!group) {
-      group = { ops: [], next: {}, origins: {}, familyOps: {}, lists: {} }
-      groups.set(key, group)
-    }
-    return group
-  }
-  for (const op of getTaskPageGitHubPendingEntries().values()) {
-    groupFor(op.key.sourceScope, op.key.repoId, op.key.itemId, op.key.observation).ops.push(op)
-  }
-  for (const entry of getTaskPageGitHubListEntries().values()) {
-    groupFor(entry.sourceScope, entry.repoId, entry.itemId, entry.observation).lists[entry.family] =
-      entry
-  }
-  for (const group of groups.values()) {
-    group.ops.sort((a, b) => a.startedAt - b.startedAt)
-    for (const op of group.ops) {
-      if (op.listOp) {
-        continue
+export function stripFamilyPendingFromList(
+  item: GitHubWorkItem,
+  family: TaskPageGitHubListFamily,
+  ops: readonly PendingOp[]
+): GitHubAssignableUser[] {
+  const current = freezeTaskPageGitHubUsers(
+    family === 'assignees' ? (item.assignees ?? []) : (item.reviewRequests ?? [])
+  )
+  let list = current
+  const familyOps = pendingListOpsForFamily(ops, family)
+  // Reverse pending adds/removes so lazy snapshots exclude in-flight intent.
+  for (let i = familyOps.length - 1; i >= 0; i--) {
+    const op = familyOps[i]
+    for (let j = 0; j < op.logins.length; j++) {
+      const login = op.logins[j]
+      if (op.kind === 'add') {
+        list = list.filter((user) => user.login.toLowerCase() !== login)
+      } else if (!list.some((user) => user.login.toLowerCase() === login)) {
+        const restored = op.users?.[j] ?? { login, name: null, avatarUrl: '' }
+        list.push(restored)
       }
-      Object.assign(group.next, op.next)
-      for (const family of ['state', 'autoMerge'] as const) {
-        if ((family === 'state' ? op.next.state : op.next.autoMergeEnabled) !== undefined) {
-          group.origins[family] = {
-            kind: 'pending',
-            owner: op.key.observation,
-            coordinate: serializeTaskPageGitHubMutationKey(op.key),
-            generation: op.generation
-          }
-        }
-      }
-    }
-    for (const family of ['assignees', 'reviewRequests'] as const) {
-      group.familyOps[family] = pendingListOpsForFamily(group.ops, family)
     }
   }
-  const scalarFor = captureTaskPageGitHubScalarAuthorityIndex()
-  const compose = (
-    item: ObservedGitHubWorkItem,
-    sourceScope: string | null,
-    observation = getGitHubTaskObservation(item)
-  ): ObservedGitHubWorkItem => {
-    const itemId = taskPageGitHubMutationItemId(item)
-    const coordinate = taskPageGitHubOwnedItemKey(
-      sourceScope,
-      item.repoId,
-      itemId,
-      observation?.key
-    )
-    const group = groups.get(coordinate)
-    const origins: Partial<Record<GitHubTaskFamily, GitHubTaskValueOrigin>> = {}
-    const patch: Partial<GitHubWorkItem> = {}
-    for (const family of ['state', 'autoMerge'] as const) {
-      const entry = scalarFor(item, sourceScope, observation, family)
-      if (!entry) {
-        continue
-      }
-      const value = entry.value
-      if (
-        family === 'state' &&
-        (value === 'open' || value === 'closed' || value === 'merged' || value === 'draft')
-      ) {
-        patch.state = value
-      }
-      if (family === 'autoMerge' && typeof value === 'boolean') {
-        patch.autoMergeEnabled = value
-      }
-      origins[family] = {
-        kind: 'scalar',
-        owner: entry.observation,
-        coordinate: taskPageGitHubLastConfirmedKey(entry.sourceScope, item.repoId, item.id, family)
-      }
-    }
-    Object.assign(patch, group?.next)
-    Object.assign(origins, group?.origins)
-    let merged = Object.keys(patch).length
-      ? patchObservedGitHubWorkItem(item, patch, origins)
-      : item
-    for (const family of ['assignees', 'reviewRequests'] as const) {
-      merged = composeListDestination(
-        merged,
-        family,
-        group?.lists[family],
-        group?.familyOps[family] ?? []
-      )
-    }
-    return merged
-  }
-  return Object.assign(compose, {
-    observe: (address: ListAddress, input: ListInput) => {
-      const group = groups.get(
-        taskPageGitHubOwnedItemKey(
-          address.sourceScope,
-          address.repoId,
-          address.itemId,
-          address.observation?.key
-        )
-      )
-      const entry = group?.lists[address.family]
-      if (group && entry && input.kind === 'full' && entry.base.kind !== 'full') {
-        group.lists[address.family] = { ...entry, base: input }
-      }
-    },
-    list: (item: ObservedGitHubWorkItem, plan: ListComposition) => {
-      const { address } = plan
-      if (item.repoId !== address.repoId || taskPageGitHubMutationItemId(item) !== address.itemId) {
-        return item
-      }
-      const group = groups.get(
-        taskPageGitHubOwnedItemKey(
-          address.sourceScope,
-          address.repoId,
-          address.itemId,
-          address.observation?.key
-        )
-      )
-      return composeListDestination(
-        item,
-        address.family,
-        group?.lists[address.family],
-        group?.familyOps[address.family] ?? [],
-        plan.retirement
-      )
-    },
-    pending: (
-      item: GitHubWorkItem,
-      sourceScope: string | null,
-      observation?: GitHubTaskObservation
-    ) =>
-      groups.get(
-        taskPageGitHubOwnedItemKey(
-          sourceScope,
-          item.repoId,
-          taskPageGitHubMutationItemId(item),
-          observation?.key
-        )
-      )?.ops ?? []
-  })
-}
-
-export function createTaskPageGitHubListCompositionProgram(plans: readonly ListComposition[]) {
-  const byLifetime = new Map<object, ListComposition[]>()
-  const byAddress = new Map<string, ListComposition[]>()
-  for (const plan of plans) {
-    const { address } = plan
-    const key =
-      taskPageGitHubOwnedItemKey(
-        address.sourceScope,
-        address.repoId,
-        address.itemId,
-        address.observation?.key
-      ) + address.family
-    const group = byAddress.get(key) ?? []
-    group.push(plan)
-    byAddress.set(key, group)
-    if (plan.retirement) {
-      byLifetime.set(plan.retirement.fromLifetime, group)
-    }
-  }
-  const projection = createTaskPageGitHubAuthorityProjection()
-  return (item: ObservedGitHubWorkItem): ObservedGitHubWorkItem => {
-    let result = item
-    for (const family of ['assignees', 'reviewRequests'] as const) {
-      const origin = item.githubValueOrigins?.[family]
-      const owner = origin?.owner ?? getGitHubTaskObservation(item)
-      const key =
-        taskPageGitHubOwnedItemKey(
-          owner ? getTaskSourceCacheScope(owner.source) : null,
-          item.repoId,
-          taskPageGitHubMutationItemId(item),
-          owner?.key
-        ) + family
-      const group =
-        (origin?.listLifetime && byLifetime.get(origin.listLifetime)) || byAddress.get(key)
-      for (const plan of group ?? []) {
-        result = projection.list(result, plan)
-      }
-    }
-    return result
-  }
+  return list
 }
 
 export function getRegistryMergedTaskPageGitHubWorkItem(
   item: GitHubWorkItem,
-  sourceScope: string | null,
-  observation = getGitHubTaskObservation(item)
-): ObservedGitHubWorkItem {
-  return createTaskPageGitHubAuthorityProjection()(item, sourceScope, observation)
+  sourceScope: string | null
+): GitHubWorkItem {
+  const ops = listPendingTaskPageGitHubOpsForItem(item.repoId, item.id, sourceScope).filter(
+    (op) => !op.settleAccepted
+  )
+  let merged: GitHubWorkItem = { ...item }
+
+  // Hold confirmed whole-field values after pending clears until matching search adoption or newer intent.
+  const lastState = getLastConfirmedClientValue(
+    sourceScope,
+    item.repoId,
+    item.id,
+    'state',
+    parseGitHubIssueOrPRLink(item.url)?.slug ?? null
+  )
+  if (typeof lastState === 'string') {
+    merged = { ...merged, state: lastState as GitHubWorkItem['state'] }
+  }
+  const lastAutoMerge = getLastConfirmedClientValue(sourceScope, item.repoId, item.id, 'autoMerge')
+  if (typeof lastAutoMerge === 'boolean') {
+    merged = { ...merged, autoMergeEnabled: lastAutoMerge }
+  }
+
+  const wholeByOpKey = new Map<string, PendingOp>()
+  for (const op of ops) {
+    if (op.listOp) {
+      continue
+    }
+    wholeByOpKey.set(op.key.opKey, op)
+  }
+  for (const op of wholeByOpKey.values()) {
+    merged = { ...merged, ...op.next }
+  }
+
+  for (const family of ['assignees', 'reviewRequests'] as const) {
+    const familyOps = pendingListOpsForFamily(ops, family)
+    let snapshot = getConfirmedListSnapshot(sourceScope, item.repoId, item.id, family)
+    if (!snapshot && familyOps.length === 0) {
+      continue
+    }
+    if (!snapshot) {
+      snapshot = stripFamilyPendingFromList(item, family, ops)
+    }
+    const composed = applyTaskPageGitHubListOps(snapshot, familyOps)
+    merged =
+      family === 'assignees'
+        ? { ...merged, assignees: composed }
+        : { ...merged, reviewRequests: composed }
+  }
+
+  return merged
+}
+
+export function recomputeSoftHideForItem(args: {
+  item: GitHubWorkItem
+  sourceScope: string | null
+  query: ParsedTaskQuery
+  queryKey: string
+  viewerLogin: string | null
+  skipMeQualifiers: boolean
+  /** When true (confirm/rollback), set or clear sticky per K22. */
+  updateSticky: boolean
+}): boolean {
+  const merged = getRegistryMergedTaskPageGitHubWorkItem(args.item, args.sourceScope)
+  const itemKey = taskPageGitHubItemKey(args.item.repoId, args.item.id)
+  const membershipHide = shouldSoftHideTaskPageGitHubWorkItem({
+    item: merged,
+    query: args.query,
+    viewerLogin: args.viewerLogin,
+    skipMeQualifiers: args.skipMeQualifiers
+  })
+
+  if (args.updateSticky) {
+    if (membershipHide) {
+      setStickyHideEntry({
+        itemKey,
+        sourceScope: args.sourceScope,
+        queryKey: args.queryKey,
+        reason: 'filter_membership'
+      })
+    } else {
+      deleteStickyHideEntry(itemKey)
+    }
+  }
+
+  const result = recomputeTaskPageGitHubItemSoftHide({
+    item: merged,
+    query: args.query,
+    viewerLogin: args.viewerLogin,
+    skipMeQualifiers: args.skipMeQualifiers,
+    queryKey: args.queryKey,
+    sticky: getAllStickyHideEntries(),
+    itemKey
+  })
+  updateSoftHiddenItemKey(itemKey, result.hide)
+  return result.hide
+}
+
+export function rebuildSoftHiddenKeysFromPendingAndSticky(args: {
+  query: ParsedTaskQuery
+  queryKey: string
+  viewerLogin: string | null
+  items: readonly GitHubWorkItem[]
+  skipMeByItemKey?: ReadonlyMap<string, boolean>
+}): void {
+  const next = new Set<string>()
+  for (const [itemKey, entry] of getAllStickyHideEntries()) {
+    if (entry.queryKey === args.queryKey) {
+      next.add(itemKey)
+    }
+  }
+  for (const item of args.items) {
+    const ops = listPendingTaskPageGitHubOpsForItem(item.repoId, item.id)
+    const itemKey = taskPageGitHubItemKey(item.repoId, item.id)
+    if (
+      ops.length === 0 &&
+      !next.has(itemKey) &&
+      !hasConfirmedAuthorityForItem(item.repoId, item.id)
+    ) {
+      continue
+    }
+    const sourceScope = ops[0]?.key.sourceScope ?? resolveItemSourceScope(item.repoId, item.id)
+    const skipMe = args.skipMeByItemKey?.get(itemKey) ?? ops[0]?.skipMeQualifiers ?? false
+    const merged = getRegistryMergedTaskPageGitHubWorkItem(item, sourceScope)
+    if (
+      shouldSoftHideTaskPageGitHubWorkItem({
+        item: merged,
+        query: args.query,
+        viewerLogin: args.viewerLogin,
+        skipMeQualifiers: skipMe
+      })
+    ) {
+      next.add(itemKey)
+    }
+  }
+  const current = getTaskPageGitHubSoftHiddenItemKeys()
+  if (next.size === current.size && [...next].every((itemKey) => current.has(itemKey))) {
+    return
+  }
+  setSoftHiddenItemKeys(next)
+  notifyTaskPageGitHubMutationRegistry()
 }
 
 export function familiesFromPendingOp(op: PendingOp): string[] {
@@ -303,9 +251,3 @@ export function familiesFromPendingOp(op: PendingOp): string[] {
   }
   return [op.key.opKey]
 }
-
-export {
-  establishTaskPageGitHubMembership,
-  adoptTaskPageGitHubMembershipFamilies,
-  createTaskPageGitHubMembershipProjection
-} from './task-page-github-work-item-membership-projection'

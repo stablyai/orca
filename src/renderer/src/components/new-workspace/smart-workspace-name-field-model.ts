@@ -75,7 +75,7 @@ export type RepoSlugTarget = {
 
 export type SmartWorkspaceNameFieldSearchState = {
   debouncedQuery: string
-  githubItems: readonly GitHubWorkItem[]
+  githubItems: GitHubWorkItem[]
   gitlabItems: GitLabWorkItem[]
   branches: BaseRefSearchResult[]
   branchResultsSource: { repoId: string; query: string } | null

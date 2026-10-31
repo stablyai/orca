@@ -5,7 +5,7 @@ import {
   type TaskSourceContext
 } from '../../../shared/task-source-context'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
-import { parseExecutionHostId, getRepoExecutionHostId } from '../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../shared/execution-host'
 export function getTaskPageRepoSourceContext(
   repo: Repo | null | undefined,
   provider: 'github' | 'gitlab',
@@ -46,20 +46,4 @@ export function buildGitLabProviderIdentity(projectRef: GitLabProjectRef) {
     project: projectName,
     webUrl: `https://${projectRef.host}/${projectRef.path}`
   }
-}
-
-export function shouldSkipLocalViewerQualifiers(sourceContext?: TaskSourceContext | null): boolean {
-  if (!sourceContext) {
-    return false
-  }
-  // The local gh viewer cannot evaluate @me soft-hide for SSH/environment rows.
-  const hostKind = parseExecutionHostId(sourceContext.hostId)?.kind
-  if (hostKind === 'ssh' || hostKind === 'runtime') {
-    return true
-  }
-  const providerHost =
-    sourceContext.providerIdentity?.provider === 'github'
-      ? sourceContext.providerIdentity.host?.toLowerCase()
-      : undefined
-  return Boolean(providerHost && providerHost !== 'github.com')
 }

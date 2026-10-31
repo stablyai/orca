@@ -1,15 +1,9 @@
 import type { PRCheckDetail } from '../../../../shared/github/check-types'
-
 import type { PRComment } from '../../../../shared/github/comment-types'
-
 import type { IssueInfo, PRInfo } from '../../../../shared/github/pull-request-types'
-
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
-
 import type { GetProjectViewTableResult } from '../../../../shared/github/project-result-types'
-
 import type { AppState } from '../types'
-
 import { matchesRepoCacheEviction, type RepoCacheEviction } from './cache-identity'
 
 export type InflightPR = {
@@ -113,10 +107,3 @@ export function clearInflightWorkItemsForRepo(eviction: RepoCacheEviction): void
     }
   }
 }
-
-export {
-  beginGitHubTaskRead,
-  markGitHubTaskReads,
-  markGitHubTaskListRetirements,
-  type GitHubTaskRead
-} from './task-read-reconciliation'

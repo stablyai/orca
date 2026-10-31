@@ -78,7 +78,7 @@ export function GitHubItemDialogIssueBody({
         {(canUseDetailsRepoContext || projectOrigin) && (
           <div className="mb-5 border-b border-border/60 px-4 pb-5">
             <GHEditSection
-              item={workItem}
+              item={displayWorkItem ?? workItem}
               acceptedRefresh={acceptedRefresh}
               repoPath={repoPath}
               repoId={effectiveRepoId}

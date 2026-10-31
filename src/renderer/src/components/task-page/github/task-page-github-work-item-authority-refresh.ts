@@ -1,155 +1,117 @@
+import { taskPageGitHubFamilyDirtyKey } from './task-page-github-work-item-mutation-keys'
 import {
-  taskPageGitHubMutationItemId,
-  taskPageGitHubFamilyDirtyKey,
-  taskPageGitHubOwnedItemKey
-} from './task-page-github-work-item-mutation-keys'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import { getGitHubTaskObservation } from '@/lib/github-task-observation'
-import type { GitHubTaskObservation } from '@/lib/github-task-observation'
-
-import {
-  createListEntryRetirement,
-  listInput,
   clearConfirmedAuthorityForItem,
   deleteConfirmedListSnapshot,
-  getTaskPageGitHubConfirmedAuthorities,
-  batchTaskPageGitHubMutationRegistry,
-  getTaskPageGitHubPendingOwnerKeys,
-  notifyTaskPageGitHubMutationRegistry
+  deleteStickyHideEntry,
+  getConfirmedListSnapshot,
+  getStickyHideEntry,
+  getTaskPageGitHubConfirmedAuthorityItemKeys,
+  hasPendingTaskPageGitHubOpsForItem,
+  listPendingTaskPageGitHubOpsForItem,
+  notifyTaskPageGitHubMutationRegistry,
+  resolveItemSourceScope,
+  updateSoftHiddenItemKey
 } from './task-page-github-work-item-mutation-registry'
-
 import {
   deleteLastConfirmedClientValue,
-  getLastConfirmedClientEntry
+  getLastConfirmedClientValue
 } from './task-page-github-confirmed-client-values'
-
 import { getQuietRevalidateState } from './task-page-github-work-item-quiet-state'
-
 import { MAX_LAG_TRAILS } from './task-page-github-work-item-quiet-adopt'
 
-function clearTaskPageGitHubAuthorityAbsentFromLoadedItemsNow(
-  loadedItemKeys: ReadonlySet<string>,
-  owns?: (owner: GitHubTaskObservation | undefined) => boolean
+const AUTHORITY_FAMILIES = ['state', 'autoMerge', 'assignees', 'reviewRequests'] as const
+
+export function clearTaskPageGitHubAuthorityAbsentFromLoadedItems(
+  loadedItemKeys: ReadonlySet<string>
 ): void {
-  const retire = createListEntryRetirement()
-  const pendingKeys = getTaskPageGitHubPendingOwnerKeys()
   let changed = false
-  for (const record of getTaskPageGitHubConfirmedAuthorities()) {
-    const { sourceScope, repoId, itemId, observation, itemType } = record
-    if (owns && !owns(observation)) {
+  for (const itemKey of getTaskPageGitHubConfirmedAuthorityItemKeys()) {
+    if (loadedItemKeys.has(itemKey)) {
       continue
     }
-    if (
-      loadedItemKeys.has(
-        taskPageGitHubOwnedItemKey(sourceScope, repoId, itemId, observation?.key)
-      ) ||
-      pendingKeys.has(taskPageGitHubOwnedItemKey(sourceScope, repoId, itemId, observation?.key))
-    ) {
+    const separator = itemKey.indexOf('\0')
+    const repoId = itemKey.slice(0, separator)
+    const itemId = itemKey.slice(separator + 1)
+    if (hasPendingTaskPageGitHubOpsForItem(repoId, itemId)) {
       continue
     }
-    clearConfirmedAuthorityForItem(repoId, itemId, sourceScope, observation, itemType, retire)
+    clearConfirmedAuthorityForItem(repoId, itemId)
+    deleteStickyHideEntry(itemKey)
+    updateSoftHiddenItemKey(itemKey, false)
     changed = true
   }
   if (changed) {
     notifyTaskPageGitHubMutationRegistry()
   }
 }
+
 export function getTaskPageGitHubRevalidatableAuthorityItemKeys(
   queryKey: string
 ): ReadonlySet<string> {
   const keys = new Set<string>()
   const quiet = getQuietRevalidateState(queryKey)
-  for (const record of getTaskPageGitHubConfirmedAuthorities()) {
-    const key = taskPageGitHubOwnedItemKey(
-      record.sourceScope,
-      record.repoId,
-      record.itemId,
-      record.observation?.key
+  for (const itemKey of getTaskPageGitHubConfirmedAuthorityItemKeys()) {
+    const separator = itemKey.indexOf('\0')
+    if (separator === -1) {
+      continue
+    }
+    const repoId = itemKey.slice(0, separator)
+    const itemId = itemKey.slice(separator + 1)
+    const sourceScope = resolveItemSourceScope(repoId, itemId)
+    const activeFamilies = AUTHORITY_FAMILIES.filter((family) =>
+      family === 'assignees' || family === 'reviewRequests'
+        ? getConfirmedListSnapshot(sourceScope, repoId, itemId, family) !== undefined
+        : getLastConfirmedClientValue(sourceScope, repoId, itemId, family) !== undefined
     )
     if (
-      record.families.some(
+      activeFamilies.some(
         (family) =>
-          (quiet?.lagSkipAttempts.get(taskPageGitHubFamilyDirtyKey(key, family)) ?? 0) <
+          (quiet?.lagSkipAttempts.get(taskPageGitHubFamilyDirtyKey(itemKey, family)) ?? 0) <
           MAX_LAG_TRAILS
       )
     ) {
-      keys.add(key)
+      keys.add(itemKey)
     }
   }
   return keys
 }
-function clearTaskPageGitHubAuthorityThroughGenerationNow(
+
+export function clearTaskPageGitHubAuthorityThroughGeneration(
   queryKey: string,
-  generation: number,
-  owns?: (owner: GitHubTaskObservation | undefined) => boolean,
-  items: readonly GitHubWorkItem[] = []
+  generation: number
 ): void {
-  const replacements = new Map<string, GitHubWorkItem>()
-  for (const item of items) {
-    const owner = getGitHubTaskObservation(item)
-    for (const association of owner?.associations ?? []) {
-      const key = taskPageGitHubOwnedItemKey(
-        association.scope,
-        item.repoId,
-        taskPageGitHubMutationItemId(item),
-        association.key
-      )
-      if (!replacements.has(key)) {
-        replacements.set(key, item)
-      }
-    }
-  }
   const quiet = getQuietRevalidateState(queryKey)
-  const retire = createListEntryRetirement()
-  for (const {
-    sourceScope,
-    repoId,
-    itemId,
-    observation,
-    itemType,
-    families
-  } of getTaskPageGitHubConfirmedAuthorities()) {
-    if (owns && !owns(observation)) {
-      continue
-    }
-    const key = taskPageGitHubOwnedItemKey(sourceScope, repoId, itemId, observation?.key)
-    for (const family of families) {
-      if ((quiet?.familyDirtyAt.get(taskPageGitHubFamilyDirtyKey(key, family)) ?? 0) > generation) {
+  for (const itemKey of getTaskPageGitHubConfirmedAuthorityItemKeys()) {
+    const separator = itemKey.indexOf('\0')
+    const repoId = itemKey.slice(0, separator)
+    const itemId = itemKey.slice(separator + 1)
+    const sourceScope = resolveItemSourceScope(repoId, itemId)
+    for (const family of AUTHORITY_FAMILIES) {
+      const dirtyAt = quiet?.familyDirtyAt.get(taskPageGitHubFamilyDirtyKey(itemKey, family)) ?? 0
+      if (dirtyAt > generation) {
         continue
       }
       if (family === 'assignees' || family === 'reviewRequests') {
-        deleteConfirmedListSnapshot(
-          sourceScope,
-          repoId,
-          itemId,
-          family,
-          observation,
-          itemType,
-          retire,
-          replacements.has(key) ? listInput(replacements.get(key)!, family, observation) : undefined
-        )
-      } else if (
-        getLastConfirmedClientEntry(sourceScope, repoId, itemId, family)?.observation?.key ===
-        observation?.key
-      ) {
+        deleteConfirmedListSnapshot(sourceScope, repoId, itemId, family)
+      } else {
         deleteLastConfirmedClientValue(sourceScope, repoId, itemId, family)
+      }
+    }
+    const hasMembershipAuthority =
+      getLastConfirmedClientValue(sourceScope, repoId, itemId, 'state') !== undefined ||
+      getConfirmedListSnapshot(sourceScope, repoId, itemId, 'assignees') !== undefined ||
+      getConfirmedListSnapshot(sourceScope, repoId, itemId, 'reviewRequests') !== undefined
+    const hasPendingMembership = listPendingTaskPageGitHubOpsForItem(repoId, itemId).some(
+      (op) => op.listOp !== undefined || op.key.opKey === 'state' || op.key.opKey === 'merge'
+    )
+    if (!hasMembershipAuthority && !hasPendingMembership) {
+      if (getStickyHideEntry(itemKey)?.queryKey === queryKey) {
+        deleteStickyHideEntry(itemKey)
+      }
+      if (!hasPendingTaskPageGitHubOpsForItem(repoId, itemId)) {
+        updateSoftHiddenItemKey(itemKey, false)
       }
     }
   }
   notifyTaskPageGitHubMutationRegistry()
-}
-
-export function clearTaskPageGitHubAuthorityAbsentFromLoadedItems(
-  ...args: Parameters<typeof clearTaskPageGitHubAuthorityAbsentFromLoadedItemsNow>
-): void {
-  batchTaskPageGitHubMutationRegistry(() =>
-    clearTaskPageGitHubAuthorityAbsentFromLoadedItemsNow(...args)
-  )
-}
-export function clearTaskPageGitHubAuthorityThroughGeneration(
-  ...args: Parameters<typeof clearTaskPageGitHubAuthorityThroughGenerationNow>
-): void {
-  batchTaskPageGitHubMutationRegistry(() =>
-    clearTaskPageGitHubAuthorityThroughGenerationNow(...args)
-  )
 }
