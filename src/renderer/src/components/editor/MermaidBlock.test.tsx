@@ -42,6 +42,8 @@ describe('MermaidBlock rendering', () => {
 
     await act(async () => pending.resolve({ svg: diagram }))
     const expand = screen.getByRole('button', { name: 'Expand diagram' })
+    // PDF/HTML export strips this marker; the export page has no Tailwind to hide the button.
+    expect(expand.hasAttribute('data-orca-export-hide')).toBe(true)
     fireEvent.click(container.querySelector('svg')!)
     expect(onExpand).toHaveBeenCalledWith({ svg: diagram, background: undefined })
     expect(document.activeElement).toBe(expand)
