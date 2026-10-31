@@ -8,7 +8,7 @@ import {
 } from './transcript/mobile-native-chat-disclosure-store'
 import { type NativeScrollEvent, type NativeSyntheticEvent, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
+import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import type { AskAnswerSelection } from '../../../../src/shared/native-chat-ask-answer'
 import type { AskPrompt } from '../../../../src/shared/native-chat/input/native-chat-ask-types'
 import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
@@ -216,7 +216,7 @@ export function MobileNativeChatView({
   const t = useMobileTranslation()
   const insets = useSafeAreaInsets()
   const bottomPad = keyboardInset > 0 ? keyboardInset + insets.bottom : insets.bottom
-  const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
+  const { fontScale, pinchGesture, pinchTarget } = useMobileNativeChatPinchGesture()
 
   // Memoize list derivation to keep downstream autoscroll/renderItem dependencies stable.
   const { data } = useMemo(
@@ -346,16 +346,16 @@ export function MobileNativeChatView({
               roots={disclosures.roots}
               runPlacements={rowKeys.runPlacements}
             >
-              <GestureDetector gesture={pinchGesture}>
-                <MobileNativeChatRowList
-                  {...{ tail, rowKeys, renderItem, footer, emptyStateView, onScroll, layoutKey }}
-                  {...{ header, hasHeader: hasMore === true, onNearTop: loadEarlierNearTop }}
-                  rows={turns.listMessages}
-                  runs={turns.presentation.workRuns.heads}
-                  roots={disclosures.roots}
-                  contentContainerStyle={styles.listContent}
-                />
-              </GestureDetector>
+              <MobileNativeChatRowList
+                {...{ tail, rowKeys, renderItem, footer, emptyStateView, onScroll, layoutKey }}
+                {...{ header, hasHeader: hasMore === true, onNearTop: loadEarlierNearTop }}
+                pinchGesture={pinchGesture}
+                pinchTarget={pinchTarget}
+                rows={turns.listMessages}
+                runs={turns.presentation.workRuns.heads}
+                roots={disclosures.roots}
+                contentContainerStyle={styles.listContent}
+              />
             </MobileNativeChatScrollRootsBoundary>
           </MobileNativeChatDisclosureContext.Provider>
           <MobileNativeChatFloatingControls

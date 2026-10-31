@@ -2,8 +2,27 @@ import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FONT_SCALE_STEP, quantizeFontScale } from './mobile-native-chat-message-text'
+import { NATIVE_CHAT_TEXT_SCALE_KEY } from './mobile-native-chat-text-scale'
 
 const handlers: { start?: () => void; update?: (e: { scale: number }) => void } = {}
+const storage = vi.hoisted(() => {
+  const saved = new Map<string, string>()
+  const gate: { read: (key: string) => Promise<string | null> } = {
+    read: async (key) => saved.get(key) ?? null
+  }
+  return {
+    saved,
+    gate,
+    getItem: (key: string) => gate.read(key),
+    setItem: async (key: string, value: string) => {
+      saved.set(key, value)
+    }
+  }
+})
+
+vi.mock('@react-native-async-storage/async-storage', () => ({
+  default: { getItem: storage.getItem, setItem: storage.setItem }
+}))
 
 vi.mock('react-native-gesture-handler', () => {
   const pinch = {
@@ -61,6 +80,7 @@ describe('useMobileNativeChatPinchGesture', () => {
   })
 
   afterEach(() => {
+    storage.gate.read = async (key) => storage.saved.get(key) ?? null
     act(() => renderer?.unmount())
     renderer = null
   })
@@ -82,5 +102,69 @@ describe('useMobileNativeChatPinchGesture', () => {
     expect(latest).toBe(1.35)
     act(() => handlers.update?.({ scale: 1.42 }))
     expect(latest).toBe(1.4)
+  })
+
+  it('stores the pinched size and reloads it after the chat view is gone', async () => {
+    act(() => renderer?.unmount())
+    storage.saved.clear()
+    vi.resetModules()
+    const first = await import('./use-mobile-native-chat-pinch-gesture')
+    let scale = 1
+    function First(): null {
+      scale = first.useMobileNativeChatPinchGesture().fontScale
+      return null
+    }
+    await act(async () => {
+      renderer = create(createElement(First))
+    })
+    await act(async () => {
+      handlers.start?.()
+      handlers.update?.({ scale: 1.34 })
+    })
+    expect(scale).toBe(1.35)
+    expect(storage.saved.get(NATIVE_CHAT_TEXT_SCALE_KEY)).toBe('1.35')
+    act(() => renderer?.unmount())
+
+    vi.resetModules()
+    const second = await import('./use-mobile-native-chat-pinch-gesture')
+    function Second(): null {
+      scale = second.useMobileNativeChatPinchGesture().fontScale
+      return null
+    }
+    await act(async () => {
+      renderer = create(createElement(Second))
+    })
+    expect(scale).toBe(1.35)
+  })
+
+  it('keeps a pinch that lands before the stored size is read', async () => {
+    act(() => renderer?.unmount())
+    storage.saved.clear()
+    vi.resetModules()
+    let release: (value: string | null) => void = () => {}
+    storage.gate.read = () =>
+      new Promise((resolve) => {
+        release = resolve
+      })
+    const { useMobileNativeChatPinchGesture: usePinch } =
+      await import('./use-mobile-native-chat-pinch-gesture')
+    let scale = 1
+    function Reloaded(): null {
+      scale = usePinch().fontScale
+      return null
+    }
+    await act(async () => {
+      renderer = create(createElement(Reloaded))
+    })
+    await act(async () => {
+      handlers.start?.()
+      handlers.update?.({ scale: 1.34 })
+    })
+    expect(scale).toBe(1.35)
+    await act(async () => {
+      release('1')
+    })
+    expect(scale).toBe(1.35)
+    expect(storage.saved.get(NATIVE_CHAT_TEXT_SCALE_KEY)).toBe('1.35')
   })
 })
