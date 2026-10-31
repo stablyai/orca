@@ -1,3 +1,11 @@
+import { JournalInputDomainIndex } from './journal-input-domain-index'
+import { JournalInputPlaceIndex } from './journal-input-place-index'
+import { insertCommandReceiptIfAbsent, readCommandReceipt } from './command-receipt-table'
+import { writeCommandReceiptTestRecord } from './command-receipt-test-support'
+import type { JournalRow } from './journal-row-schema'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import type { AgentSessionJournal } from './journal-store'
+import type { JournalReducerState } from './journal-reducer'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -16,6 +24,16 @@ import {
   selectedStructuredSubmission,
   selectStructuredAgentSessionInput
 } from '../agent-session-wire/structured-agent-session-input-selection'
+
+function knownPredecessors(owner: AgentSessionJournal | JournalReducerState, id: string): string[] {
+  const state = 'queuedMessages' in owner ? owner.queuedMessages.displayState() : owner
+  const submission = state.submissions.get(id)
+  return submission
+    ? [...state.queue.cards.values()]
+        .filter((card) => state.inputOrder.precedes(card, submission))
+        .map((card) => card.messageId)
+    : []
+}
 
 it('preserves the forced queue place through command removal, two epoch replacements, replay and recovery', async () => {
   const root = await mkdtemp(join(tmpdir(), 'orca-input-order-'))
@@ -55,7 +73,7 @@ it('preserves the forced queue place through command removal, two epoch replacem
     })
     for (let round = 0; round < 2; round++) {
       await journal.replaceEpochItems('unreconcilable_prefix', 0, [])
-      expect(journal.inputOrder.prefix('M').map((card) => card.messageId)).toEqual(['C', 'D'])
+      expect(knownPredecessors(journal, 'M')).toEqual(['C', 'D'])
       expect(journal.queuedMessages.get('C')?.state).toBe('withdrawn')
       expect(selectStructuredAgentSessionInput(journal)).toMatchObject({
         kind: 'card',
@@ -64,7 +82,7 @@ it('preserves the forced queue place through command removal, two epoch replacem
     }
     await journal.close()
     const reopened = await journals.open({ identity, stateDirectory: root })
-    expect(reopened.inputOrder.prefix('M').map((card) => card.messageId)).toEqual(['C', 'D'])
+    expect(knownPredecessors(reopened, 'M')).toEqual(['C', 'D'])
     await holdUnsentSends(reopened, { fence: 0, hold: { cause: 'hostRestarted' } })
     expect(
       reopened.queuedMessages
@@ -194,31 +212,27 @@ it.each(['resume', 'accepted'] as const)(
         queueReopenSince: floor.sequence,
         seq: cursor.sequence - 1
       })
-      expect(journal.inputOrder.prefix('M').map((c) => c.messageId)).toEqual(
-        release === 'resume' ? ['C'] : []
-      )
+      expect(knownPredecessors(journal, 'M')).toEqual(release === 'resume' ? ['C'] : [])
       if (release === 'accepted') {
         expect(journal.queuedMessages.pauses().map((p) => p.reason)).toEqual(['restarted'])
         await append('N')
-        expect(journal.inputOrder.prefix('N')).toEqual([])
+        expect(knownPredecessors(journal, 'N')).toEqual([])
         await accept('N')
         expect(journal.queuedMessages.pauses()).toEqual([])
         await append('ordinary-held')
         // The accepted N released C; this later input genuinely belongs behind it.
-        expect(journal.inputOrder.prefix('ordinary-held').map((c) => c.messageId)).toEqual(['C'])
+        expect(knownPredecessors(journal, 'ordinary-held')).toEqual(['C'])
       } else {
         expect(journal.queuedMessages.pauses()).toEqual([])
       }
       const beforePrefixes = ['forced', 'M', 'ordinary-held'].map((id) =>
-        journal.inputOrder.prefix(id).map((c) => c.messageId)
+        knownPredecessors(journal, id)
       )
       const replay = loadTestJournal(root, identity.sessionId)!
       expect(replay.damage).toBeNull()
       expect(replay.newer).toBeNull()
       expect(
-        ['forced', 'M', 'ordinary-held'].map((id) =>
-          replay.state.inputOrder.prefix(id).map((c) => c.messageId)
-        )
+        ['forced', 'M', 'ordinary-held'].map((id) => knownPredecessors(replay.state, id))
       ).toEqual(beforePrefixes)
       const lateMark = vi
         .spyOn(journal, 'appendQueueReopen')
@@ -232,21 +246,17 @@ it.each(['resume', 'accepted'] as const)(
       const beforeForeign = journal.cursor()
       await append('new-epoch')
       expect(journal.cursor().sequence).toBe(beforeForeign.sequence + 1)
-      expect(journal.inputOrder.prefix('new-epoch')).toEqual([])
-      expect(
-        ['forced', 'M', 'ordinary-held'].map((id) =>
-          journal.inputOrder.prefix(id).map((c) => c.messageId)
-        )
-      ).toEqual(beforePrefixes)
+      expect(knownPredecessors(journal, 'new-epoch')).toEqual([])
+      expect(['forced', 'M', 'ordinary-held'].map((id) => knownPredecessors(journal, id))).toEqual(
+        beforePrefixes
+      )
       await journal.close()
       journal = await journals.open({ identity, stateDirectory: root })
-      expect(
-        ['forced', 'M', 'ordinary-held'].map((id) =>
-          journal.inputOrder.prefix(id).map((c) => c.messageId)
-        )
-      ).toEqual(beforePrefixes)
+      expect(['forced', 'M', 'ordinary-held'].map((id) => knownPredecessors(journal, id))).toEqual(
+        beforePrefixes
+      )
       await accept('forced')
-      expect(journal.inputOrder.prefix('forced')).toEqual([])
+      expect(knownPredecessors(journal, 'forced')).toEqual([])
     } finally {
       await journals.closeAll()
       await rm(root, { recursive: true, force: true })
@@ -302,11 +312,466 @@ it('keeps the receipt callback live after replacement of a legacy null-boundary 
     const replay = loadTestJournal(root, identity.sessionId)!
     expect(replay.damage).toBeNull()
     expect(replay.state.queue.cards.get('legacy-C')?.queuedAt).toBeNull()
-    expect(replay.state.inputOrder.prefix('M-after-replace')).toEqual(
-      journal.inputOrder.prefix('M-after-replace')
+    expect(knownPredecessors(replay.state, 'M-after-replace')).toEqual(
+      knownPredecessors(journal, 'M-after-replace')
     )
   } finally {
     await journals.closeAll()
     await rm(root, { recursive: true, force: true })
   }
 })
+
+it.each(['legacy', 'observed'] as const)(
+  'retains %s import evidence through two production replacements and replay',
+  async (basis) => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-source-domain-'))
+    const journals = createTrackedJournalOpener()
+    const identity = {
+      sessionId: 'domain',
+      workspaceId: 'folder',
+      hostId: 'ssh',
+      agent: 'claude' as const,
+      providerHandle: claudeProviderHandle('thread', null)
+    }
+    const message = (text: string): AgentJournalMessageItem => ({
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text }]
+    })
+    let journal = await journals.open({ identity, stateDirectory: root })
+    const database = openTestJournalHostDatabase(root)
+    try {
+      const a = journal.cursor()
+      await journal.close()
+      let seq = a.sequence
+      const row = (
+        fields: Pick<Extract<JournalRow, { kind: 'queue' }>, 'kind' | 'messageId' | 'change'>
+      ): JournalRow => ({ v: 3, epoch: a.epoch, seq: ++seq, fence: 0, ts: 1, ...fields })
+      for (const [id, queuedAt] of [
+        ['D', { epoch: 'foreign', sequence: 1 }],
+        ['N', null],
+        ['C', { epoch: a.epoch, sequence: seq }]
+      ] as const) {
+        insertTestJournalRow(
+          database.db,
+          identity.sessionId,
+          row({
+            kind: 'queue',
+            messageId: id,
+            change: {
+              op: 'queued',
+              body:
+                id === 'C' ? { ...message('/compact'), command: { name: 'compact' } } : message(id),
+              position: seq,
+              queuedAt
+            }
+          })
+        )
+      }
+      database.transaction((db) => writeCommandReceiptTestRecord(db, identity.sessionId))
+      journal = await journals.open({ identity, stateDirectory: root })
+      const originals = new Map<string, string>()
+      for (const id of ['M1', 'M2', 'M3']) {
+        const receipt =
+          id === 'M2'
+            ? undefined
+            : {
+                write: (
+                  db: Parameters<typeof insertCommandReceiptIfAbsent>[0],
+                  target?: JournalRow
+                ) => {
+                  expect(target).toMatchObject({ kind: 'submission', clientMessageId: id })
+                  const result = {
+                    kind: 'journal-row' as const,
+                    epoch: target!.epoch,
+                    sequence: target!.seq
+                  }
+                  insertCommandReceiptIfAbsent(
+                    db,
+                    { kind: 'global' },
+                    {
+                      operationId: id,
+                      sessionId: identity.sessionId,
+                      callerKey: 'fixture',
+                      method: 'agentSession.send',
+                      fingerprint: id,
+                      status: 'accepted',
+                      acceptedAt: 1,
+                      result
+                    }
+                  )
+                  originals.set(id, JSON.stringify(result))
+                },
+                committed: () => {}
+              }
+        if (basis === 'observed') {
+          await journal.appendSubmission(
+            {
+              clientMessageId: id,
+              payloadFingerprint: id,
+              body: message(id),
+              handoverRecorded: true,
+              origin: 'client',
+              options: { effort: 'high' },
+              fence: 0
+            },
+            undefined,
+            receipt
+          )
+        } else {
+          await journal.close()
+          const target: JournalRow = {
+            kind: 'submission',
+            v: 3,
+            epoch: a.epoch,
+            seq: journal.cursor().sequence + 1,
+            ts: 1,
+            fence: 0,
+            clientMessageId: id,
+            payloadFingerprint: id,
+            body: message(id),
+            providerHandle: identity.providerHandle,
+            handoverRecorded: true,
+            origin: 'client',
+            options: { effort: 'high' }
+          }
+          insertTestJournalRow(database.db, identity.sessionId, target)
+          if (receipt) {
+            database.transaction((db) => receipt.write(db, target))
+          }
+          journal = await journals.open({ identity, stateDirectory: root })
+        }
+      }
+      const expected = basis === 'legacy' ? [true, false, true] : [true, true, true]
+      const check = (state: JournalReducerState) => {
+        for (const card of ['D', 'N']) {
+          expect(
+            ['M1', 'M2', 'M3'].map((id) =>
+              state.inputOrder.precedes(state.queue.cards.get(card)!, state.submissions.get(id)!)
+            )
+          ).toEqual(expected)
+        }
+        expect(['M1', 'M2', 'M3'].map((id) => state.inputOrder.forced(id))).toEqual([
+          true,
+          true,
+          true
+        ])
+        expect(
+          ['M1', 'M2', 'M3'].map((id) =>
+            state.inputOrder.precedes(state.queue.cards.get('L')!, state.submissions.get(id)!)
+          )
+        ).toEqual([false, false, false])
+      }
+      await journal.queuedMessages.insert({ messageId: 'L', body: message('later') })
+      for (let pass = 0; pass < 3; pass++) {
+        if (pass) {
+          await journal.replaceEpochItems('unreconcilable_prefix', 0, [])
+        }
+        check(journal.queuedMessages.displayState())
+        const replay = loadTestJournal(root, identity.sessionId)!
+        expect(replay.damage).toBeNull()
+        expect(replay.newer).toBeNull()
+        check(replay.state)
+        for (const id of ['M1', 'M3']) {
+          expect(JSON.stringify(readCommandReceipt(database.db, { kind: 'global' }, id))).toContain(
+            originals.get(id)!
+          )
+        }
+        expect(readCommandReceipt(database.db, { kind: 'global' }, 'M2').verdict).toBe('absent')
+        expect(journal.itemBody(agentJournalSubmissionKey('M2'))).toEqual(message('M2'))
+        expect(journal.submission('M2')?.options).toEqual({ effort: 'high' })
+      }
+    } finally {
+      await journals.closeAll()
+      await rm(root, { recursive: true, force: true })
+    }
+  }
+)
+
+it('retries partial keeps from committed facts and carries rank moves on the first successful keep', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'orca-partial-order-'))
+  const journals = createTrackedJournalOpener()
+  const identity = {
+    sessionId: 'partial',
+    workspaceId: 'folder',
+    hostId: 'ssh',
+    agent: 'claude' as const,
+    providerHandle: claudeProviderHandle('thread', null)
+  }
+  const message = (text: string): AgentJournalMessageItem => ({
+    kind: 'message',
+    role: 'user',
+    blocks: [{ type: 'text', text }]
+  })
+  let journal = await journals.open({ identity, stateDirectory: root })
+  try {
+    await journal.queuedMessages.insert({
+      messageId: 'C',
+      body: { ...message('/compact'), command: { name: 'compact' } }
+    })
+    await journal.queuedMessages.insert({ messageId: 'D', body: message('D') })
+    for (const id of ['M1', 'M2']) {
+      await journal.appendSubmission({
+        clientMessageId: id,
+        payloadFingerprint: id,
+        body: message(id),
+        handoverRecorded: true,
+        origin: 'client',
+        fence: 0
+      })
+    }
+    await journal.queuedMessages.insert({ messageId: 'L', body: message('L') })
+    await journal.close()
+    journal = await journals.open({ identity, stateDirectory: root })
+    const resolve = journal.resolveDispatch.bind(journal)
+    const fault = vi
+      .spyOn(journal, 'resolveDispatch')
+      .mockImplementation((...args) =>
+        args[0].clientMessageId === 'M1'
+          ? Promise.reject(new Error('keep and fallback unavailable'))
+          : resolve(...args)
+      )
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    await expect(
+      holdUnsentSends(journal, { fence: 0, hold: { cause: 'hostRestarted' } })
+    ).rejects.toThrow('settling unsent sends failed')
+    expect(journal.submission('M1')?.dispatchState).toBe('pending')
+    expect(journal.submission('M2')?.keptAsQueuedMessageId).toBe('M2')
+    expect(journal.queuedMessages.get('L')?.position).toBeGreaterThan(
+      journal.queuedMessages.get('M2')!.position
+    )
+    fault.mockRestore()
+    warn.mockRestore()
+    await holdUnsentSends(journal, { fence: 0, hold: { cause: 'hostRestarted' } })
+    const saved = journal.queuedMessages.list().filter((card) => card.state === 'waiting')
+    expect(saved.map((card) => card.messageId)).toEqual(['C', 'D', 'M1', 'M2', 'L'])
+    expect(
+      saved.every(
+        (card, i) =>
+          Number.isFinite(card.position) && (i === 0 || card.position > saved[i - 1].position)
+      )
+    ).toBe(true)
+    await journal.close()
+    journal = await journals.open({ identity, stateDirectory: root })
+    await holdUnsentSends(journal, { fence: 0, hold: { cause: 'hostRestarted' } })
+    expect(
+      journal.queuedMessages
+        .list()
+        .filter((card) => card.state === 'waiting')
+        .map((card) => card.messageId)
+    ).toEqual(saved.map((card) => card.messageId))
+  } finally {
+    await journals.closeAll()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+it.each([10, 100])(
+  'normalizes old staged/restore aliases without promoting foreign/null comparison N=%i',
+  async (n) => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-legacy-alias-'))
+    const journals = createTrackedJournalOpener()
+    const identity = {
+      sessionId: 'aliases',
+      workspaceId: 'folder',
+      hostId: 'ssh',
+      agent: 'claude' as const,
+      providerHandle: claudeProviderHandle('thread', null)
+    }
+    const message = (text: string): AgentJournalMessageItem => ({
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text }]
+    })
+    let journal = await journals.open({ identity, stateDirectory: root })
+    const database = openTestJournalHostDatabase(root)
+    const domainSets = vi.spyOn(JournalInputDomainIndex.prototype, 'set')
+    const domainQueries = vi.spyOn(JournalInputDomainIndex.prototype, 'query')
+    const indexSets = vi.spyOn(JournalInputPlaceIndex.prototype, 'set')
+    try {
+      const { epoch, sequence } = journal.cursor()
+      let seq = sequence
+      await journal.close()
+      const base = () => ({ v: 3, epoch, seq: ++seq, fence: 0, ts: 1 })
+      const queue = (
+        id: string,
+        queuedAt: { epoch: string; sequence: number } | null,
+        command = false
+      ) =>
+        insertTestJournalRow(database.db, identity.sessionId, {
+          ...base(),
+          kind: 'queue',
+          messageId: id,
+          change: {
+            op: 'queued',
+            body: command ? { ...message('/compact'), command: { name: 'compact' } } : message(id),
+            position: id === 'C' ? 1 : id === 'D' ? 2 : 3,
+            queuedAt
+          }
+        })
+      queue('C', { epoch, sequence: seq }, true)
+      queue('F', { epoch: 'original-foreign', sequence: 1 })
+      queue('N', null)
+      database.transaction((db) => writeCommandReceiptTestRecord(db, identity.sessionId))
+      const ids = Array.from({ length: n }, (_, i) => `M${i + 1}`)
+      for (const id of ids) {
+        for (let i = 0; i < n; i++) {
+          queue(`ordinary-${i}`, { epoch, sequence: seq })
+        }
+        if (id !== 'M2') {
+          queue('D', { epoch, sequence: seq })
+        } else {
+          insertTestJournalRow(database.db, identity.sessionId, {
+            ...base(),
+            kind: 'queue',
+            messageId: 'D',
+            change: { op: 'withdrawn' }
+          })
+        }
+        const target: JournalRow = {
+          ...base(),
+          kind: 'submission',
+          clientMessageId: id,
+          payloadFingerprint: id,
+          body: message(id),
+          providerHandle: identity.providerHandle,
+          handoverRecorded: true,
+          origin: 'client'
+        }
+        insertTestJournalRow(database.db, identity.sessionId, target)
+        if (id !== 'M2') {
+          database.transaction((db) =>
+            insertCommandReceiptIfAbsent(
+              db,
+              { kind: 'global' },
+              {
+                operationId: id,
+                sessionId: identity.sessionId,
+                callerKey: 'fixture',
+                method: 'agentSession.send',
+                fingerprint: id,
+                status: 'accepted',
+                acceptedAt: 1,
+                result: { kind: 'journal-row', epoch: 'original-foreign', sequence: 100 }
+              }
+            )
+          )
+        }
+      }
+      for (let i = 0; i < n; i++) {
+        queue(`ordinary-${i}`, { epoch: 'restored-canonical', sequence: 1 })
+      }
+      queue('D', { epoch: 'restored-canonical', sequence: 1 })
+      queue('later-F', { epoch: 'original-foreign', sequence: 1 })
+      journal = await journals.open({ identity, stateDirectory: root })
+      const check = (state: JournalReducerState) => {
+        for (const card of ['F', 'D']) {
+          expect(
+            ['M1', 'M2', 'M3'].map((id) =>
+              state.inputOrder.precedes(state.queue.cards.get(card)!, state.submissions.get(id)!)
+            )
+          ).toEqual([true, false, true])
+        }
+        for (const card of ['N', 'later-F']) {
+          expect(
+            ['M1', 'M2', 'M3'].map((id) =>
+              state.inputOrder.precedes(state.queue.cards.get(card)!, state.submissions.get(id)!)
+            )
+          ).toEqual([false, false, false])
+        }
+        expect(['M1', 'M2', 'M3'].every((id) => state.inputOrder.forced(id))).toBe(true)
+      }
+      for (let pass = 0; pass < 3; pass++) {
+        domainSets.mockClear()
+        domainQueries.mockClear()
+        indexSets.mockClear()
+        if (pass) {
+          await journal.replaceEpochItems('unreconcilable_prefix', 0, [])
+        }
+        check(journal.queuedMessages.displayState())
+        const replay = loadTestJournal(root, identity.sessionId)!
+        expect(replay.damage).toBeNull()
+        check(replay.state)
+        if (pass) {
+          const rows = liveTestJournalRows(database.db, identity.sessionId).map((row) =>
+            JSON.parse(row.rowJson)
+          )
+          expect(rows.length).toBeLessThanOrEqual(2 * n + 12)
+          const aliases = journal.inputOrder
+            .replacementLineage(
+              new Set(journal.queuedMessages.list().map((card) => card.messageId))
+            )
+            .cards.reduce((sum, card) => sum + card.aliases.length, 0)
+          // Each ordinary entry needs its source-current alias and final foreign canonical alias.
+          expect(aliases).toBeLessThanOrEqual(2 * n + 10)
+          for (const id of ids) {
+            journal.inputOrder.predecessors(journal.queuedMessages.displayState(), id)
+            replay.state.inputOrder.predecessors(replay.state, id)
+          }
+          expect(domainQueries).toHaveBeenCalledTimes(2 * n)
+          // Each independent fold adds at most one current command-witness transition beyond the normalized table. A safe-integer interval has <=106 canonical nodes.
+          expect(domainSets.mock.calls.length).toBeLessThanOrEqual(2 * (aliases + 1))
+          expect(indexSets.mock.calls.length).toBeLessThanOrEqual(
+            106 * domainSets.mock.calls.length + 8 * rows.length
+          )
+          console.info(
+            'legacy-normalized-output',
+            JSON.stringify({
+              n,
+              pass,
+              rows: rows.length,
+              aliases,
+              domainSets: domainSets.mock.calls.length,
+              domainQueries: domainQueries.mock.calls.length,
+              indexSets: indexSets.mock.calls.length
+            })
+          )
+        }
+      }
+      domainSets.mockClear()
+      domainQueries.mockClear()
+      indexSets.mockClear()
+      await holdUnsentSends(journal, { fence: 0, hold: { cause: 'hostRestarted' } })
+      expect(domainQueries).toHaveBeenCalledTimes(n)
+      // One finite-rank move per current card and one keep per input, each touching at most its two scalar aliases.
+      expect(domainSets.mock.calls.length).toBeLessThanOrEqual(16 * (n + 6))
+      expect(indexSets.mock.calls.length).toBeLessThanOrEqual(
+        106 * domainSets.mock.calls.length + 16 * (n + 6)
+      )
+      console.info(
+        'legacy-recovery-index',
+        JSON.stringify({
+          n,
+          domainSets: domainSets.mock.calls.length,
+          domainQueries: domainQueries.mock.calls.length,
+          indexSets: indexSets.mock.calls.length
+        })
+      )
+      for (const id of ids) {
+        expect(journal.submission(id)).toMatchObject({
+          dispatchState: 'rejected',
+          keptAsQueuedMessageId: id
+        })
+      }
+      const ranks = journal.queuedMessages
+        .list()
+        .filter((card) => card.state === 'waiting')
+        .map((card) => card.position)
+      expect(
+        ranks.every((rank, i) => Number.isFinite(rank) && (i === 0 || rank > ranks[i - 1]))
+      ).toBe(true)
+      expect(journal.inputOrder['cards']['domains']).toBeUndefined()
+      expect(journal.inputOrder['places'].size).toBe(0)
+      expect(journal.inputOrder['witnesses'].size).toBe(0)
+      expect(
+        [...journal.inputOrder.lineage.cards.values()].every((card) => card.aliases.length <= 1)
+      ).toBe(true)
+    } finally {
+      domainSets.mockRestore()
+      domainQueries.mockRestore()
+      indexSets.mockRestore()
+      await journals.closeAll()
+      await rm(root, { recursive: true, force: true })
+    }
+  }
+)

@@ -1,3 +1,4 @@
+import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { expect, it, vi } from 'vitest'
 import {
   createQueuedMessageTestRig,
@@ -82,8 +83,8 @@ it.each([false, true])(
       const replayBefore = loadTestJournal(rig.root, SESSION)!
       expect(replayBefore.damage).toBeNull()
       expect(replayBefore.newer).toBeNull()
-      expect(journal.inputOrder.prefix(m.id)).toEqual([])
-      expect(replayBefore.state.inputOrder.prefix(m.id)).toEqual([])
+      expect(journal.inputOrder.forced(m.id)).toBe(false)
+      expect(replayBefore.state.inputOrder.forced(m.id)).toBe(false)
       waiting.mockRestore()
 
       await rig.restartHostProcess()
@@ -173,14 +174,17 @@ it.each([false, true])(
         value: { submission: { clientMessageId: m.id } }
       })
       await serialize(SESSION, async () => {})
-      expect(journal.inputOrder.prefix(m.id)).toEqual([])
+      expect(journal.inputOrder.forced(m.id)).toBe(false)
       expect(rig.compact).not.toHaveBeenCalled()
       await eventually(async () => expect((await rig.submission(m.id))?.handedOverAt).toBeDefined())
       await rig.settleAccepted(n.id, 'N')
       expect(journal.queuedMessages.pauses()).toEqual([])
       const later = rig.send('later admission after actual accepted N')
       expect(await later.result).toMatchObject({ ok: true })
-      expect(journal.inputOrder.prefix(later.id).map((c) => c.messageId)).toEqual(['C'])
+      expect(journal.inputOrder.forced(later.id)).toBe(true)
+      expect(
+        journal.inputOrder.precedes(journal.queuedMessages.get('C')!, journal.submission(later.id)!)
+      ).toBe(true)
       await rig.settleAccepted(m.id, 'M')
       await openRigTurnFor(rig, n.id, 'interrupted')
       await eventually(() => expect(rig.compact).toHaveBeenCalledOnce())
@@ -208,3 +212,131 @@ it.each([false, true])(
     }
   }
 )
+
+it('keeps an earlier-process recovery identity through two adoptions after both writes fail, then delivers the observed C,N,M place', async () => {
+  const rig = await createQueuedMessageTestRig({
+    restartable: true,
+    probeOwner: async () => ({ outcome: 'pid-absent' })
+  })
+  const resolve = AgentSessionJournal.prototype.resolveDispatch
+  let blocked = true
+  let older = ''
+  const warned = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const failure = vi
+    .spyOn(AgentSessionJournal.prototype, 'resolveDispatch')
+    .mockImplementation(function (this: AgentSessionJournal, ...args) {
+      return blocked && args[0].clientMessageId === older
+        ? Promise.reject(new Error('both recovery writes unavailable'))
+        : resolve.apply(this, args)
+    })
+  let release = () => {}
+  try {
+    const w = await rig.workingSend()
+    await openRigTurnFor(rig, w)
+    const initial = rig.host.collaboratorsForTests()
+    const reservation = initial.conversationDelivery.loop['deps'].deliveryOrder.reserve(SESSION)
+    release = reservation.release
+    const o = rig.send('older O')
+    older = o.id
+    expect(await o.result).toMatchObject({ ok: true })
+    expect((await rig.submission(older))?.handedOverAt).toBeUndefined()
+    await initial.serialize(SESSION, async () => {
+      const journal = initial.sessions.get(SESSION)!.journal
+      await journal.queuedMessages.insert({
+        messageId: 'C',
+        body: { ...hostTestMessage('/compact'), command: { name: 'compact' } }
+      })
+      await journal.queuedMessages['write'](() => ({
+        changes: [
+          {
+            messageId: 'N',
+            change: { op: 'queued', body: hostTestMessage('null N'), position: 2, queuedAt: null }
+          }
+        ],
+        result: undefined
+      }))
+    })
+    await rig.restartHostProcess()
+    expect(await rig.submission(older)).toMatchObject({ dispatchState: 'pending' })
+    rig.host.stopDelivery()
+    const { serialize, sessions } = rig.host.collaboratorsForTests()
+    const journal = sessions.get(SESSION)!.journal
+    expect(journal.inputOrder.recoveryPending(older)).toBe(true)
+    const fence = journal.queuedMessages.displayState().highestFence
+    await serialize(SESSION, () => journal.appendQueueResume(fence).then(() => {}))
+    const m = rig.send('fresh M')
+    expect(await m.result).toMatchObject({ ok: true })
+    expect(journal.inputOrder.forced(m.id)).toBe(true)
+    expect(
+      journal.inputOrder.precedes(journal.queuedMessages.get('N')!, journal.submission(m.id)!)
+    ).toBe(true)
+    for (let pass = 0; pass < 2; pass++) {
+      await serialize(SESSION, () =>
+        journal.replaceEpochItems('unreconcilable_prefix', fence, []).then(() => {})
+      )
+      expect(journal.inputOrder.recoveryPending(older)).toBe(true)
+      expect(journal.inputOrder.recoveryPending(m.id)).toBe(false)
+      expect(
+        journal.inputOrder.precedes(journal.queuedMessages.get('N')!, journal.submission(m.id)!)
+      ).toBe(true)
+      const replay = loadTestJournal(rig.root, SESSION)!
+      expect(replay.damage).toBeNull()
+      expect(
+        replay.state.inputOrder.precedes(
+          replay.state.queue.cards.get('N')!,
+          replay.state.submissions.get(m.id)!
+        )
+      ).toBe(true)
+    }
+    blocked = false
+    release()
+    await rig.restartHostProcess()
+    for (const id of [older, m.id]) {
+      expect(await rig.submission(id)).toMatchObject({
+        dispatchState: 'rejected',
+        keptAsQueuedMessageId: id
+      })
+    }
+    const reopened = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
+    expect(
+      reopened.queuedMessages
+        .list()
+        .filter((card) => card.state === 'waiting')
+        .map((card) => card.messageId)
+    ).toEqual([older, 'C', 'N', m.id])
+    expect(reopened.inputOrder.recoveryPending(older)).toBe(false)
+    const base = rig.dispatch.mock.calls.length
+    expect(await rig.resume()).toMatchObject({ ok: true })
+    const actual: string[] = []
+    await eventually(() => expect(rig.dispatch.mock.calls).toHaveLength(base + 1))
+    actual.push(
+      (await rig.submission(rig.dispatch.mock.calls[base]![0].clientMessageId))!.queuedMessageId!
+    )
+    await rig.settleAccepted(rig.dispatch.mock.calls[base]![0].clientMessageId, 'O')
+    await eventually(() => expect(rig.compact).toHaveBeenCalledOnce())
+    actual.push('C')
+    const command = rig.compact.mock.calls[0]![0].command
+    rig.finishCompact()
+    await eventually(() =>
+      expect(reopened.item(agentJournalItemKey(command.identity))?.body).toMatchObject({
+        kind: 'turn',
+        state: 'completed'
+      })
+    )
+    for (let i = 0; i < 2; i++) {
+      await eventually(() => expect(rig.dispatch.mock.calls).toHaveLength(base + i + 2))
+      const input = rig.dispatch.mock.calls[base + i + 1]![0]
+      actual.push((await rig.submission(input.clientMessageId))!.queuedMessageId!)
+      await rig.settleAccepted(input.clientMessageId, `after-C-${i}`)
+    }
+    expect(actual).toEqual([older, 'C', 'N', m.id])
+    expect(new Set(actual).size).toBe(4)
+    expect(reopened.queuedMessages.list().filter((card) => card.state === 'waiting')).toEqual([])
+  } finally {
+    blocked = false
+    release()
+    failure.mockRestore()
+    warned.mockRestore()
+    await rig.dispose()
+  }
+}, 60_000)

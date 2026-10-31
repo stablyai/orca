@@ -2,7 +2,6 @@ import type {
   AgentJournalSubmission,
   AgentJournalCursor
 } from '../../../shared/agent-session-journal-types'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { QueuedMessageRow } from '../agent-session-journal/queued-message-table'
 import {
@@ -21,7 +20,6 @@ const selections = new WeakMap<
   AgentSessionJournal,
   {
     cards: readonly QueuedMessageRow[]
-    pending: readonly AgentJournalSubmission[]
     revision: number
     editRevision: number
     reopenFloor: AgentJournalCursor | null
@@ -36,7 +34,6 @@ export function selectStructuredAgentSessionInput(
   unanswerable = false
 ): StructuredInputSelection {
   const cards = journal.queuedMessages.list()
-  const owed = journal.inputOrder.unsettledSubmissions()
   const revision = journal.inputOrder.version()
   const editRevision = journal.queuedMessages.editLeases.version()
   const reopenFloor = journal.reopenFloor()
@@ -45,7 +42,6 @@ export function selectStructuredAgentSessionInput(
     !unanswerable &&
     currentInput === undefined &&
     prior?.cards === cards &&
-    prior.pending === owed &&
     prior.revision === revision &&
     prior.editRevision === editRevision &&
     prior.reopenFloor === reopenFloor
@@ -58,7 +54,6 @@ export function selectStructuredAgentSessionInput(
     if (!unanswerable && currentInput === undefined) {
       selections.set(journal, {
         cards,
-        pending: owed,
         revision,
         editRevision: journal.queuedMessages.editLeases.version(),
         reopenFloor,
@@ -67,49 +62,37 @@ export function selectStructuredAgentSessionInput(
     }
     return selection
   }
-  const pending = owed
-    .filter(
-      (entry) =>
-        isQueuedAgentJournalSubmission(entry) ||
-        (entry.clientMessageId === currentInput && entry.dispatchState === 'pending')
-    )
-    .sort((a, b) => (a.acceptedSequence ?? 0) - (b.acceptedSequence ?? 0))
+  const queued = journal.inputOrder.firstQueued()
+  const current = currentInput ? journal.submission(currentInput) : undefined
+  let selected =
+    current?.dispatchState === 'pending' &&
+    (!queued || current.submittedSequence! < queued.submittedSequence!)
+      ? current
+      : queued
   const nextCard = nextSendableQueuedCard(pauses, cards, edited)
-  let selected = pending[0]
   if (!selected) {
     return remember(nextCard ? { kind: 'card', card: nextCard } : { kind: 'none' })
   }
   // Explicit card Send intentionally overrides the automatic queue place.
-  const override = pending.find(
-    (entry) => entry.origin === 'client' && entry.queuedMessageId !== undefined
-  )
+  const override = journal.inputOrder.explicitSend()
   if (override) {
     return remember({ kind: 'submission', submission: override })
   }
   if (unanswerable) {
     return { kind: 'submission', submission: selected }
   }
-  const predecessors = cards.filter((card) => journal.inputOrder.precedes(card, selected))
-  const handoffs = new Map<string, AgentJournalSubmission>()
-  for (const entry of pending) {
-    if (entry.queuedMessageId !== undefined && !handoffs.has(entry.queuedMessageId)) {
-      handoffs.set(entry.queuedMessageId, entry)
+  const predecessors = journal.inputOrder.predecessors(
+    journal.queuedMessages.displayState(),
+    selected.clientMessageId
+  )
+  const handoff = predecessors.handoff?.consumedAs
+  if (handoff) {
+    const submission = journal.submission(handoff)
+    if (submission) {
+      return remember({ kind: 'submission', submission })
     }
   }
-  for (const card of predecessors) {
-    const handoff = handoffs.get(card.messageId)
-    if (handoff) {
-      selected = handoff
-      break
-    }
-  }
-  if (
-    selected === pending[0] &&
-    predecessors.some(
-      (card) =>
-        card.state === 'waiting' && card.holdReason === null && !queuePauseHolding(pauses, card)
-    )
-  ) {
+  if (predecessors.waiting && !queuePauseHolding(pauses, predecessors.waiting)) {
     return remember(nextCard ? { kind: 'card', card: nextCard } : { kind: 'none' })
   }
   return remember({ kind: 'submission', submission: selected })
@@ -127,6 +110,9 @@ export function selectableStructuredSubmission(
   work: StructuredAgentSessionCurrentWork | null,
   currentInput?: string
 ): AgentJournalSubmission | undefined {
+  if (!journal.inputOrder.firstQueued() && currentInput === undefined) {
+    return undefined
+  }
   const unanswerable = work !== null && pendingPromptsAllUnanswerableHere(work.actionablePrompts())
   const selected = selectStructuredAgentSessionInput(journal, currentInput, unanswerable)
   if (selected.kind !== 'submission') {
@@ -136,7 +122,7 @@ export function selectableStructuredSubmission(
   if (unanswerable) {
     return submission
   }
-  return journal.inputOrder.prefix(submission.clientMessageId).length > 0 &&
+  return journal.inputOrder.forced(submission.clientMessageId) &&
     work &&
     structuredInputExecutionWorking(journal, work, currentInput)
     ? undefined
@@ -149,15 +135,13 @@ export function structuredInputExecutionWorking(
   work: StructuredAgentSessionCurrentWork,
   currentInput?: string
 ): boolean {
-  return (
-    work.activeTurnId() !== null ||
-    journal.inputOrder
-      .unsettledSubmissions()
-      .some(
-        (entry) =>
-          entry.clientMessageId !== currentInput &&
-          !isQueuedAgentJournalSubmission(entry) &&
-          work.owesSend(entry)
-      )
-  )
+  if (work.activeTurnId() !== null) {
+    return true
+  }
+  for (const entry of journal.inputOrder.enteredSubmissions()) {
+    if (entry.clientMessageId !== currentInput && work.owesSend(entry)) {
+      return true
+    }
+  }
+  return false
 }

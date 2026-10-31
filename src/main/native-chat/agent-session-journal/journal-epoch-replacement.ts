@@ -53,7 +53,6 @@ import type { JournalOperationReceipt } from './journal-row-writer'
 
 import type { JournalAttachmentClaim } from './journal-submission-hook'
 import { queuedChangeOf } from './journal-queue-retention'
-import type { QueuedMessageRow } from './queued-message-table'
 import { journalInputAcceptance, journalQueueRebase } from './journal-input-provenance'
 
 export type JournalReplacementItem = AgentJournalProducerLinkage & {
@@ -98,8 +97,23 @@ export function replaceJournalEpoch(input: {
     input.reason !== 'session_created' &&
     previousOrigin &&
     sameJournalConversation(previousOrigin.providerHandle, providerHandle)
+  const queued = [...(input.previous?.submissions.values() ?? [])]
+    .filter(isQueuedAgentJournalSubmission)
+    .sort((a, b) => a.submittedSequence! - b.submittedSequence!)
+  const witnesses = new Map(
+    queued.flatMap((submission) => {
+      const witness = input.previous?.inputOrder.place(submission.clientMessageId)?.witness
+      return witness ? [[witness.messageId, witness] as const] : []
+    })
+  )
+  const lineageIds = new Set([
+    ...input.queue.cards.map((card) => card.messageId),
+    ...witnesses.keys()
+  ])
+  const lineage = input.previous?.inputOrder.replacementLineage(lineageIds)
   const epochRow: JournalRow = {
     kind: 'epoch',
+    ...(lineage ? { inputOrderLineage: lineage } : {}),
     reason:
       input.reason === 'legacy_import' && input.items.length === 0
         ? 'session_created'
@@ -135,46 +149,31 @@ export function replaceJournalEpoch(input: {
     applyJournalRow(state, row)
     rows.push(row)
   }
-  // Accepted-but-unhanded messages must survive provider history replacement.
-  const queued = [...(input.previous?.submissions.values() ?? [])]
-    .filter(isQueuedAgentJournalSubmission)
-    .sort((a, b) => (a.acceptedSequence ?? 0) - (b.acceptedSequence ?? 0))
-  const staged = new Map<string, QueuedMessageRow>()
-  let lastPrefix: readonly QueuedMessageRow[] | undefined
-  let lastLinked: QueuedMessageRow | undefined
+  // A shared command witness recreates force; ordinary card values are restated only once.
   const appendQueue = (messageId: string, change: Parameters<typeof buildJournalQueueRow>[2]) => {
     const row = buildJournalQueueRow(state, messageId, change, state.lastSequence + 1, input.now())
     applyJournalRow(state, row)
     rows.push(row)
   }
+  let activeWitness: (typeof witnesses extends Map<string, infer V> ? V : never) | undefined
   const rebuilt = new Map<string, number>()
   for (const submission of queued) {
-    // Restate changes between admission contexts; equal contexts share their existing rows.
-    const prefix = input.previous?.inputOrder.prefix(submission.clientMessageId) ?? []
+    const place = input.previous?.inputOrder.place(submission.clientMessageId)
+    const witness = place?.witness
+    if (activeWitness !== witness) {
+      if (activeWitness) {
+        appendQueue(activeWitness.messageId, { op: 'withdrawn' })
+      }
+      if (witness) {
+        appendQueue(witness.messageId, queuedChangeOf(witness))
+      }
+      activeWitness = witness
+    }
     const linked = submission.queuedMessageId
       ? input.previous?.queue.cards.get(submission.queuedMessageId)
       : undefined
-    if (prefix !== lastPrefix || linked !== lastLinked) {
-      const desired = new Map(
-        (linked ? [...prefix, linked] : prefix).map((card) => [card.messageId, card])
-      )
-      for (const messageId of staged.keys()) {
-        if (!desired.has(messageId)) {
-          appendQueue(messageId, { op: 'withdrawn' })
-          staged.delete(messageId)
-        }
-      }
-      for (const [messageId, card] of desired) {
-        if (staged.get(messageId) !== card) {
-          appendQueue(messageId, {
-            ...queuedChangeOf(card),
-            queuedAt: { epoch, sequence: state.lastSequence }
-          })
-          staged.set(messageId, card)
-        }
-      }
-      lastPrefix = prefix
-      lastLinked = linked
+    if (linked) {
+      appendQueue(linked.messageId, queuedChangeOf(linked))
     }
     const body = input.previous?.items.get(
       agentJournalSubmissionKey(submission.clientMessageId)
@@ -184,6 +183,7 @@ export function replaceJournalEpoch(input: {
     }
     const row = buildJournalSubmissionRow({
       ...submission,
+      ...(place ? { inputOrderContext: place.context } : {}),
       state,
       body,
       providerHandle: agentSessionJournalProviderHandle(input.identity),
@@ -194,9 +194,12 @@ export function replaceJournalEpoch(input: {
     applyJournalRow(state, row)
     rows.push(row)
     rebuilt.set(submission.clientMessageId, row.seq)
+    if (linked && linked !== activeWitness) {
+      appendQueue(linked.messageId, { op: 'withdrawn' })
+    }
   }
-  for (const messageId of staged.keys()) {
-    appendQueue(messageId, { op: 'withdrawn' })
+  if (activeWitness) {
+    appendQueue(activeWitness.messageId, { op: 'withdrawn' })
   }
   const rebase = journalQueueRebase(
     input.database.db,

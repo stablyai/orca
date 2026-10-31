@@ -104,6 +104,7 @@ export class AgentSessionJournal {
       readOnly: () => this.database.readOnly,
       cursor: this.cursor,
       adopt: (loaded) => {
+        loaded.state.inputOrder.carryRecovery(this.state.inputOrder)
         this.state = loaded.state
         this.onCommitted?.()
       },
@@ -158,6 +159,7 @@ export class AgentSessionJournal {
   async open(): Promise<void> {
     await this.restore()
     this.openedThrough = this.cursor()
+    this.state.inputOrder.markOpeningRecovery()
   }
 
   /** Refuse future writes and drain admitted ones; the host retains database ownership. */

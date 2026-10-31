@@ -1,3 +1,4 @@
+import type { JournalInputContext, JournalInputLineage } from './journal-input-lineage'
 import type { JournalItemEcho } from './journal-item-echo'
 // Upcast on read; preserve unknown versions/kinds and fail load instead of skipping history.
 // New kinds need reader-first rollout or a version bump because older builds may delete them.
@@ -41,6 +42,7 @@ export type JournalEpochRow = JournalRowBase & {
   kind: 'epoch'
   reason: AgentJournalEpochReason
   providerHandle: AgentSessionJournalProviderHandle
+  inputOrderLineage?: JournalInputLineage
   /** Preserve original adoption through same-conversation epoch replacement. */
   historyOrigin?: unknown
 }
@@ -118,6 +120,7 @@ export function isJournalStopOrResumeRow(row: JournalRow): row is JournalStopOrR
 /** Persist before dispatch; the optimistic bubble gives provider echoes a slot without duplication. */
 export type JournalSubmissionRow = JournalRowBase & {
   kind: 'submission'
+  inputOrderContext?: JournalInputContext
   clientMessageId: string
   payloadFingerprint: string
   providerHandle: AgentSessionJournalProviderHandle

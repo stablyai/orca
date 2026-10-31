@@ -210,8 +210,10 @@ function spendReportedCommandCards(state: JournalReducerState): void {
 
 function setCard(state: JournalReducerState, card: QueuedMessageRow): void {
   if (state.queue.cards.get(card.messageId) !== card) {
+    const prior = state.queue.cards.get(card.messageId)
     state.queue.cards.set(card.messageId, card)
     state.queue.revision += 1
+    state.inputOrder.queueChanged(state, prior, card)
   }
 }
 

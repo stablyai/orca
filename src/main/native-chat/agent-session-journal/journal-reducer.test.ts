@@ -61,7 +61,8 @@ function fold(rows: JournalRow[]): JournalReducerState {
     )
     for (const entry of state.submissions.values()) {
       if (entry.dispatchState !== 'pending') {
-        expect(state.inputOrder.prefix(entry.clientMessageId)).toEqual([])
+        expect(state.inputOrder.forced(entry.clientMessageId)).toBe(false)
+        expect(state.inputOrder.place(entry.clientMessageId)).toBeUndefined()
       }
     }
   }

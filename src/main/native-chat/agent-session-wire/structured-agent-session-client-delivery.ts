@@ -320,7 +320,7 @@ export class StructuredAgentSessionClientDelivery {
         journal.submissions().map(this.currentWork(sessionId, journal).publishedSubmission),
       cursor: () => journal.cursor(),
       activeTurnId: () => this.currentWork(sessionId, journal).activeTurnId(),
-      behindCommand: (id: string) => journal.inputOrder.prefix(id).length > 0
+      behindCommand: (id: string) => journal.inputOrder.forced(id)
     }
   }
 
