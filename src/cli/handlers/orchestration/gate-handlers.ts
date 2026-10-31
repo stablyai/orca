@@ -60,7 +60,18 @@ export const ORCHESTRATION_GATE_HANDLERS: Record<string, CommandHandler> = {
       from
     })
     if (!flags.has('full')) {
-      printOrchestrationResult(result, json, { fields: (value) => value })
+      // Rows also carry options, resolutions, and timestamps that no next command takes.
+      printOrchestrationResult(result, json, {
+        fields: (value) => ({
+          gates: value.gates.map((gate) => ({
+            id: gate.id,
+            taskId: gate.task_id,
+            status: gate.status,
+            question: gate.question
+          })),
+          runId: value.runId
+        })
+      })
       return
     }
     printResult(result, json, (value) => {
