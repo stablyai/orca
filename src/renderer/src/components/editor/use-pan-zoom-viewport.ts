@@ -5,6 +5,7 @@ import {
   type PanZoomPoint,
   type PanZoomSize,
   type PanZoomView,
+  containPanZoomView,
   getFittedPanZoomView,
   getMaxPanZoom,
   getPanZoomFitScale,
@@ -37,6 +38,11 @@ export type PanZoomViewport = {
   zoomBy: (factor: number) => void
   fit: () => void
   showActualSize: () => void
+}
+
+// A pane resize can leave a contained view past the new edges.
+function settleView(view: PanZoomView, geometry: PanZoomGeometry): PanZoomView {
+  return geometry.contain ? containPanZoomView(view, geometry) : view
 }
 
 /** Fit, wheel/pinch zoom at the cursor, and drag to pan, for content of a known natural size. */
@@ -80,7 +86,10 @@ export function usePanZoomViewport({
       contain
     }
   }, [content, viewport, upscale, contain])
-  const view = manualView ?? (content ? getFittedPanZoomView(content) : null)
+  const view =
+    manualView && geometry
+      ? settleView(manualView, geometry)
+      : (manualView ?? (content ? getFittedPanZoomView(content) : null))
 
   useEffect(() => {
     if (!canvas) {
@@ -105,7 +114,7 @@ export function usePanZoomViewport({
         const rect = canvas.getBoundingClientRect()
         const anchor = { x: event.clientX - rect.left, y: event.clientY - rect.top }
         setManualView((current) => {
-          const from = current ?? fitted
+          const from = current ? settleView(current, geometry) : fitted
           return zoomViewAt({
             ...geometry,
             view: from,
@@ -121,7 +130,7 @@ export function usePanZoomViewport({
       const deltaY = getWheelDeltaPixels(event.deltaY, event.deltaMode)
       const delta = sideways ? { x: -deltaY, y: 0 } : { x: -deltaX, y: -deltaY }
       setManualView((current) => {
-        const from = current ?? fitted
+        const from = current ? settleView(current, geometry) : fitted
         return panView(
           from,
           delta,
@@ -142,7 +151,9 @@ export function usePanZoomViewport({
         return
       }
       setManualView((current) => {
-        const from = current ?? getFittedPanZoomView(geometry.content)
+        const from = current
+          ? settleView(current, geometry)
+          : getFittedPanZoomView(geometry.content)
         return zoomViewAt({
           ...geometry,
           view: from,
@@ -180,7 +191,9 @@ export function usePanZoomViewport({
         const delta = { x: event.clientX - last.x, y: event.clientY - last.y }
         // Compose every pointer move even when several arrive before React renders.
         setManualView((current) => {
-          const from = current ?? getFittedPanZoomView(geometry.content)
+          const from = current
+            ? settleView(current, geometry)
+            : getFittedPanZoomView(geometry.content)
           return panView(
             from,
             delta,
