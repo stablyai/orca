@@ -264,10 +264,10 @@ describe('useAutomationDispatchEvents setup launch', () => {
     ).toEqual([])
   })
 
-  it('defaults legacy automations without a setup choice to skipping setup', async () => {
-    await registerAndDispatch(makeAutomation({ setupDecision: undefined }))
+  it.each(['run', 'skip', undefined] as const)('creates with saved setup %s', async (setup) => {
+    await registerAndDispatch(makeAutomation({ setupDecision: setup }))
 
-    expect(mockCreateWorktree.mock.calls[0][3]).toBe('skip')
+    expect(mockCreateWorktree.mock.calls[0][3]).toBe(setup ?? 'skip')
     expect(mockLaunchAgentBackgroundSession).toHaveBeenCalled()
   })
 

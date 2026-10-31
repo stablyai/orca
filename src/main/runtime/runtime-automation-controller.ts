@@ -137,7 +137,8 @@ export class RuntimeAutomationController {
   async update(
     id: string,
     updates: RuntimeAutomationUpdateInput,
-    options?: { expectedOwner?: AutomationOwnerPrecondition; destination?: AutomationDestination }
+    // Forwarded unchanged so the store checks every precondition against the record it writes.
+    options?: Parameters<NonNullable<RuntimeStore['updateAutomation']>>[2]
   ): Promise<Automation> {
     if (!this.store?.updateAutomation) {
       throw new Error('runtime_unavailable')

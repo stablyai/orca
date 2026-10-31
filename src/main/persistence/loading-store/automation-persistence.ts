@@ -17,7 +17,8 @@ import type {
 import type {
   AutomationDestination,
   AutomationOwnerFenceOperation,
-  AutomationOwnerPrecondition
+  AutomationOwnerPrecondition,
+  AutomationUpdatePreconditions
 } from '../../../shared/automation-owner-precondition'
 import type { WorkspaceRunContext } from '../../../shared/task-source-context'
 import { getWorktreePathBasenameFromId } from '../../../shared/worktree/id'
@@ -154,11 +155,7 @@ export class AutomationPersistence {
   updateAutomation(
     id: string,
     updates: AutomationUpdateInput,
-    options?: {
-      expectedOwner?: AutomationOwnerPrecondition
-      destination?: AutomationDestination
-      resolvedRepo?: Repo
-    }
+    options?: AutomationUpdatePreconditions & { resolvedRepo?: Repo }
   ): Automation {
     return updateAutomationOperation(getAutomationDefinitionOperations(this), id, updates, options)
   }

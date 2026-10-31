@@ -75,6 +75,26 @@ describe('formatAutomationShow reports the host the authority projects', () => {
   })
 })
 
+describe('formatAutomationShow reports the saved setup choice', () => {
+  it.each([
+    ['run', 'setup: run'],
+    ['skip', 'setup: skip'],
+    [undefined, 'setup: not set']
+  ] as const)('shows saved %s as %s for new-per-run automations', (setupDecision, line) => {
+    const output = formatAutomationShow({ automation: automation({ setupDecision }) })
+
+    expect(output.split('\n')).toContain(line)
+  })
+
+  it('omits setup for existing-workspace automations', () => {
+    const output = formatAutomationShow({
+      automation: automation({ workspaceMode: 'existing', workspaceId: 'wt-1' })
+    })
+
+    expect(output).not.toContain('setup:')
+  })
+})
+
 describe('formatAutomationList reports each row host', () => {
   it('names the orphan issue so the list explains why a row cannot run', () => {
     const output = formatAutomationList({
