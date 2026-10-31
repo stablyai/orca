@@ -51,7 +51,7 @@ export function continueUnreadWorkerMail(
 // The Task only points at the mail, which the follow-up's mailbox holds however much there is.
 const FOLLOW_UP_TASK = {
   subject: 'New messages',
-  body: 'You have new orchestration messages. Read them with `orchestration check`, then continue.'
+  body: 'You have new orchestration messages. Run `orchestration check` until it returns none, then continue.'
 }
 
 async function continueUnreadMail(
@@ -177,7 +177,10 @@ export function passHeldWorkerMail(
     }
     clearFollowUpMail(db, source)
   }
-  if (custody !== 'ready') {
+  if (custody === 'ready') {
+    // A working worker's own report marks whatever it leaves unread.
+    clearFollowUpMail(db, followUpId)
+  } else {
     // A follow-up that already finished holds this mail as any finished worker does.
     markUnreadFollowUpMail(db, followUpId)
   }

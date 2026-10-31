@@ -170,6 +170,8 @@ export function takeFollowUpMail(
         WHERE to_handle = ? AND read = 0 AND delivery_contract = 'current_delivery'`
     )
     .run(`dispatch:${toDispatchId}`, `dispatch:${fromDispatchId}`)
+  // Until the follow-up is ready, a restart must find this mail on it.
+  markUnreadFollowUpMail(db, toDispatchId)
 }
 
 /** Mail a follow-up held from before it started is what its Task pointed at; only newer mail starts another. */

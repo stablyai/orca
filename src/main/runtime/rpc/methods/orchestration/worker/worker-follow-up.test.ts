@@ -180,6 +180,34 @@ describe('a follow-up to a finished terminal worker', () => {
     ).toEqual(Array.from({ length: 25 }, (_, index) => String(index)))
   })
 
+  it('keeps the mail a follow-up took for the next start when the app quits during its start', async () => {
+    h.setup()
+    const { taskId, dispatchId } = await h.startWorker()
+    await send(dispatchId, 'DO NOT PUSH')
+    h.settle(taskId, dispatchId, 'succeeded')
+    // The claim commits; the start never finishes, and the next launch finds it failed.
+    const claimed = h.db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: 9,
+      taskSpec: 'New messages',
+      taskRunId: h.activeRunId,
+      startOptions: { agent: 'codex' },
+      followUpOf: dispatchId,
+      takesMailOf: dispatchId
+    })
+    h.db.failWorkerStart(claimed.dispatch.id, 'terminal_create', 'The app quit.')
+
+    continueAllUnreadWorkerMail(h.runtime, h.db)
+
+    await vi.waitFor(() => expect(getFollowUpDispatch(h.db, claimed.dispatch.id)).toBeDefined())
+    const retry = getFollowUpDispatch(h.db, claimed.dispatch.id)!
+    await vi.waitFor(() =>
+      expect(h.db.getUnreadMessages(`dispatch:${retry.id}`)).toMatchObject([
+        { body: 'DO NOT PUSH' }
+      ])
+    )
+  })
+
   it('holds unread mail for a follow-up another send is starting and moves it in once that one is ready', async () => {
     h.setup()
     const { taskId, dispatchId } = await h.startWorker()
