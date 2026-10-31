@@ -238,7 +238,7 @@ it.each([10, 100])(
       }
       check(loadTestJournal(rig.root, SESSION)!.state)
       const journal = new AgentSessionJournal({
-        identity: original.identity,
+        identity: original['identity'],
         database: openTestJournalHostDatabase(rig.root)
       })
       await journal.open()

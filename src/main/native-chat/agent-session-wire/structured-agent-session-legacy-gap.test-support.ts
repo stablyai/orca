@@ -7,12 +7,13 @@ import {
   openTestJournalHostDatabase
 } from '../agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import type { JournalSubmissionRow } from '../agent-session-journal/journal-row-schema'
 import { hostTestMessage } from './structured-agent-session-host-test-data'
 
 /** Actual unannotated initial-source writer shape, including terminal direct inputs between consumers. */
 export function writeLegacyGapFixture(root: string, journal: AgentSessionJournal, n: number): void {
   const database = openTestJournalHostDatabase(root)
-  const { sessionId } = journal.identity
+  const { sessionId } = journal['identity']
   const { epoch, sequence } = journal.cursor()
   let seq = sequence
   const base = () => ({ v: 3, epoch, seq: ++seq, fence: 1, ts: 1 })
@@ -34,13 +35,13 @@ export function writeLegacyGapFixture(root: string, journal: AgentSessionJournal
     })
   }
   const submission = (id: string) => {
-    const row = {
+    const row: JournalSubmissionRow = {
       ...base(),
       kind: 'submission' as const,
       clientMessageId: id,
       payloadFingerprint: id,
       body: hostTestMessage(id),
-      providerHandle: agentSessionJournalProviderHandle(journal.identity),
+      providerHandle: agentSessionJournalProviderHandle(journal['identity']),
       handoverRecorded: true,
       origin: 'client' as const,
       options: { effort: 'high' }
@@ -55,7 +56,7 @@ export function writeLegacyGapFixture(root: string, journal: AgentSessionJournal
       epoch,
       sequence: seq,
       fence: 1,
-      providerHandle: agentSessionJournalProviderHandle(journal.identity)
+      providerHandle: agentSessionJournalProviderHandle(journal['identity'])
     },
     n
   )
