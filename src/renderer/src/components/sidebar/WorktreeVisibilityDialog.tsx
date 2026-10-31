@@ -203,7 +203,8 @@ export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
       updateTargetRepo,
       setActionState,
       setIsToggling,
-      setListState
+      setListState,
+      currentMutationScopeRef
     ]
   )
 

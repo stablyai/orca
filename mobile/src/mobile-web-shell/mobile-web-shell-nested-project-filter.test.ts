@@ -15,7 +15,7 @@ import { createElement, useEffect } from 'react'
 import { type ReactTestRenderer, act, create } from 'react-test-renderer'
 import { expect, it, vi } from 'vitest'
 import WebSocket from 'ws'
-import { readDataFile } from '../../../src/main/persistence/persistence-test-harness'
+import { readPersistedState } from '../../../src/main/persistence/persistence-test-harness'
 import { createProjectGroupingSocketOwner } from '../../../src/main/persistence/applying-settings/project-grouping-socket-owner.test-fixture'
 import { DirectRpcClient } from '../transport/direct-rpc-client'
 import { useHostStatusGates } from '../transport/host-status-gates'
@@ -172,8 +172,8 @@ it('joins normally published nested Hx through the actual Projects pending write
     await act(async () => acknowledgements.splice(0).forEach((deliver) => deliver()))
     await vi.waitFor(() => expect(currentSettings!.pendingViewChanges.pending).toEqual([]))
     owner.store.flush()
-    expect(readDataFile().ui.filterRepoIds).toEqual(['offline', 'ssh:x\0r'])
-    expect(readDataFile().ui).not.toHaveProperty('filterRepoIdsMode')
+    expect(readPersistedState().ui.filterRepoIds).toEqual(['offline', 'ssh:x\0r'])
+    expect(readPersistedState().ui).not.toHaveProperty('filterRepoIdsMode')
   } finally {
     await act(async () => {
       tree?.unmount()

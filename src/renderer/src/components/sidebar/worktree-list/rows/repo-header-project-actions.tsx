@@ -146,14 +146,15 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
   const [open, setOpen] = useState(false)
   const catalogHostId =
     hostId ?? projectScope?.catalogHostId ?? (repo ? getRepoExecutionHostId(repo) : undefined)
+  const groupKey = projectScope ? projectScope.key : null
   const entrance = useMemo(
     () =>
-      projectScope && catalogHostId
-        ? { kind: 'header' as const, groupKey: projectScope.key, catalogHostId }
+      groupKey !== null && catalogHostId
+        ? { kind: 'header' as const, groupKey, catalogHostId }
         : repo
           ? { kind: 'repo' as const, repo }
           : null,
-    [projectScope?.key, catalogHostId, repo]
+    [groupKey, catalogHostId, repo]
   )
   const operation = useProjectGroupOperation(open, entrance)
   if (!contextRepo) {

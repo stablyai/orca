@@ -20,7 +20,7 @@ import WebSocket from 'ws'
 import {
   closeTestStores,
   createStore,
-  readDataFile
+  readPersistedState
 } from '../../../src/main/persistence/persistence-test-harness'
 import { createProjectGroupingSocketOwner } from '../../../src/main/persistence/applying-settings/project-grouping-socket-owner.test-fixture'
 import { DirectRpcClient } from '../transport/direct-rpc-client'
@@ -86,14 +86,15 @@ it.each(['released-page/current-native', 'current-page/released-native'] as cons
     })
     const rawRepos = buildFilterRepos(catalogRepos, [])
     const mountControls = async (client: RpcClient, released: boolean) => {
-      const Control = released
+      const SelectedControl = released
         ? ReleasedProjectsPage
         : WORKSPACE_OPTION_CONTROLS.projects.kind === 'page'
           ? WORKSPACE_OPTION_CONTROLS.projects.Page
           : null
-      if (!Control) {
+      if (!SelectedControl) {
         throw new Error('Missing Project page')
       }
+      const Control = SelectedControl
       function GateOwner() {
         const gates = useHostStatusGates({
           client,
@@ -234,7 +235,7 @@ it.each(['released-page/current-native', 'current-page/released-native'] as cons
         installs.every((r) => !JSON.stringify(r.params).includes('ui.project-repo-filter-exact'))
       ).toBe(true)
       owner.store.flush()
-      expect(readDataFile().ui).not.toHaveProperty('filterRepoIdsMode')
+      expect(readPersistedState().ui).not.toHaveProperty('filterRepoIdsMode')
       await closeTestStores()
       expect(createStore().getUI().filterRepoIds).toEqual([])
     } catch (error) {
@@ -299,17 +300,26 @@ it.each(['exact', 'legacy'] as const)(
     )
     const Q = 'runtime:server\0same'
     const repos = [
-      { id: 'same', displayName: 'Local', path: '/local', badgeColor: '', addedAt: 0 },
+      {
+        id: 'same',
+        displayName: 'Local',
+        path: '/local',
+        badgeColor: '',
+        addedAt: 0,
+        upstream: { owner: 'org', repo: 'app' }
+      },
       {
         id: 'same',
         displayName: 'Server',
         path: '/server',
         executionHostId: 'runtime:server' as const,
         badgeColor: '',
-        addedAt: 0
+        addedAt: 0,
+        upstream: { owner: 'org', repo: 'app' }
       }
     ]
-    let options = buildFilterRepos(repos, [])
+    const rawOptions = buildFilterRepos(repos, [])
+    let options = rawOptions
     let tree: ReactTestRenderer | undefined
     let successorOwner: Awaited<ReturnType<typeof createProjectGroupingSocketOwner>> | undefined
     let successorClient: DirectRpcClient | undefined
@@ -333,7 +343,9 @@ it.each(['exact', 'legacy'] as const)(
       const projectPagePort = {
         state,
         settings,
-        sectionsResult: { uniqueRepos: options }
+        sectionsResult: {
+          uniqueRepos: settings.projectRepoFilterMeaning === 'exact' ? options : rawOptions
+        }
       } satisfies {
         state: HostScreenController['state']
         settings: HostScreenController['settings']
@@ -383,14 +395,27 @@ it.each(['exact', 'legacy'] as const)(
         projectHostSetups: projection.setups,
         settings: { projectGroupingMode: 'folder' }
       })
+      expect(options.map((option) => option.name)).toEqual(['Local', 'Server'])
+      expect(
+        options.map((option) =>
+          option.grouping?.groupByKey.get(option.key)?.registrations.map((setup) => ({
+            repoId: setup.repoId,
+            hostId: setup.hostId,
+            path: setup.path
+          }))
+        )
+      ).toEqual([
+        [{ repoId: 'same', hostId: 'local', path: '/local' }],
+        [{ repoId: 'same', hostId: 'runtime:server', path: '/server' }]
+      ])
       await act(async () => tree!.update(createElement(GateOwner, { client: direct })))
       await vi.waitFor(() => expect(delayedWrites).toHaveLength(1))
       const originalAck = delayedWrites.shift()!
       await vi.waitFor(() => expect(owner.store.getUI().filterRepoIds).toEqual(['offline']))
       expect(owner.requests.filter((request) => request.method === 'ui.set')).toHaveLength(1)
       owner.store.flush()
-      expect(readDataFile().ui.filterRepoIds).toEqual(['offline'])
-      expect(readDataFile().ui).not.toHaveProperty('filterRepoIdsMode')
+      expect(readPersistedState().ui.filterRepoIds).toEqual(['offline'])
+      expect(readPersistedState().ui).not.toHaveProperty('filterRepoIdsMode')
 
       successorOwner = await createProjectGroupingSocketOwner({
         deviceScope: 'mobile',
@@ -459,8 +484,8 @@ it.each(['exact', 'legacy'] as const)(
       await act(async () => successorAcks.splice(0).forEach((deliver) => deliver()))
       await vi.waitFor(() => expect(currentSettings!.pendingViewChanges.pending).toEqual([]))
       successorOwner.store.flush()
-      expect(readDataFile().ui.filterRepoIds).toEqual(['successor-offline'])
-      expect(readDataFile().ui).not.toHaveProperty('filterRepoIdsMode')
+      expect(readPersistedState().ui.filterRepoIds).toEqual(['successor-offline'])
+      expect(readPersistedState().ui).not.toHaveProperty('filterRepoIdsMode')
     } finally {
       await act(async () => {
         tree?.unmount()

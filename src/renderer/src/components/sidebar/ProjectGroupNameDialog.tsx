@@ -37,15 +37,27 @@ export function ProjectGroupNameDialog({
   const inputId = useId()
   const [name, setName] = useState(initialName)
   const [submitting, setSubmitting] = useState(false)
-  const [previousOpenState, setPreviousOpenState] = useState({ open, initialName, sessionKey })
+  const [previousOpenState, setPreviousOpenState] = useState({
+    open,
+    initialName,
+    sessionKey,
+    generation: 0
+  })
+  const generation = previousOpenState.generation
   const mountedRef = useRef(true)
   const sessionRef = useRef(0)
   const trimmedName = name.trim()
 
-  const handleDialogContentRef = useCallback((node: HTMLDivElement | null): void => {
-    // Track content attachment so late saves cannot update closed dialog state.
-    mountedRef.current = node !== null
-  }, [])
+  const handleDialogContentRef = useCallback(
+    (node: HTMLFormElement | null): void => {
+      // Publish only the attached session so abandoned renders cannot invalidate a live save.
+      mountedRef.current = node !== null
+      if (node) {
+        sessionRef.current = generation
+      }
+    },
+    [generation]
+  )
 
   // Seed before paint so selection sees the current name instead of the prior draft.
   if (
@@ -53,8 +65,7 @@ export function ProjectGroupNameDialog({
     initialName !== previousOpenState.initialName ||
     sessionKey !== previousOpenState.sessionKey
   ) {
-    sessionRef.current++
-    setPreviousOpenState({ open, initialName, sessionKey })
+    setPreviousOpenState({ open, initialName, sessionKey, generation: generation + 1 })
     if (open) {
       setName(initialName)
       setSubmitting(false)
@@ -67,7 +78,7 @@ export function ProjectGroupNameDialog({
       if (!trimmedName || submitting) {
         return
       }
-      const session = sessionRef.current
+      const session = generation
       setSubmitting(true)
       try {
         const confirmed = await onSubmit(trimmedName)
@@ -85,13 +96,12 @@ export function ProjectGroupNameDialog({
         }
       }
     },
-    [onOpenChange, onSubmit, submitting, trimmedName]
+    [onOpenChange, onSubmit, submitting, trimmedName, generation]
   )
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        ref={handleDialogContentRef}
         className="max-w-sm sm:max-w-sm"
         onOpenAutoFocus={(event) => {
           event.preventDefault()
@@ -103,7 +113,7 @@ export function ProjectGroupNameDialog({
           <DialogTitle className="text-sm">{title}</DialogTitle>
           <DialogDescription className="text-xs">{description}</DialogDescription>
         </DialogHeader>
-        <form className="space-y-4" onSubmit={handleSubmit}>
+        <form ref={handleDialogContentRef} className="space-y-4" onSubmit={handleSubmit}>
           <div className="space-y-1">
             <Label htmlFor={inputId} className="text-[11px] text-muted-foreground">
               {translate('auto.components.sidebar.ProjectGroupNameDialog.83dfbc5313', 'Group Name')}

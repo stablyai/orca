@@ -48,6 +48,14 @@ vi.mock('../notifications/push-registration', () => ({ unregisterPushForRemovedH
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: { getItem: async () => null, setItem: async () => {}, removeItem: async () => {} }
 }))
+// Native feedback stays inert while real drawer selection and close timing execute.
+vi.mock('expo-haptics', () => ({
+  impactAsync: () => Promise.resolve(),
+  notificationAsync: () => Promise.resolve(),
+  selectionAsync: () => Promise.resolve(),
+  ImpactFeedbackStyle: { Light: 'light', Medium: 'medium' },
+  NotificationFeedbackType: { Error: 'error', Success: 'success' }
+}))
 vi.mock('expo-secure-store', () => ({
   WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'when-unlocked',
   getItemAsync: async () => null,

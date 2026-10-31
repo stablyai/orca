@@ -41,7 +41,7 @@ import {
   isRuntimeOwnedSshTargetId,
   toRuntimeExecutionHostId
 } from '../../../../../shared/execution-host'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Trash2 } from 'lucide-react'
 
 import { Button } from '../../ui/button'
@@ -351,8 +351,16 @@ export function RepositoryRemoveProjectButton({
   removeProject: (repoId: string, accepted?: SettingsProjectRemoval) => void
   readCurrentRemoval?: () => SettingsProjectRemoval
 }) {
-  const [confirmingRemove, setConfirmingRemove] = useState<string | null>(null)
-  useEffect(() => setConfirmingRemove(null), [confirmationKey])
+  const [confirmation, setConfirmation] = useState<{
+    observedKey: string
+    arm: string | null
+  }>({ observedKey: confirmationKey, arm: null })
+  if (confirmation.observedKey !== confirmationKey) {
+    setConfirmation({ observedKey: confirmationKey, arm: null })
+  }
+  const confirmingRemove = confirmation.arm
+  const setConfirmingRemove = (arm: string | null) =>
+    setConfirmation({ observedKey: confirmationKey, arm })
   const removeProjectLabel =
     confirmingRemove === confirmationKey ? 'Confirm Remove Project' : 'Remove Project'
 

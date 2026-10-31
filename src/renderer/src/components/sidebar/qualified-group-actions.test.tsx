@@ -13,6 +13,7 @@ import { withRepoHostOwnership } from '@/store/slices/worktrees/listing/worktree
 import { useAppStore } from '@/store'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { worktree } from './worktree-list-groups-test-fixtures'
+import { ProjectGroupNameDialog } from './ProjectGroupNameDialog'
 it('joins the shipping header/group owner to exact real persistence, mixed predicates, null, late receiving refusal and reload/reanchor', async () => {
   const fixture = await groupActionFixture({
     localRepos: [groupRepo('a'), groupRepo('b')],
@@ -510,3 +511,100 @@ it('prevalidates finite original sources before New, keeps create failure in the
     await fixture.dispose()
   }
 })
+
+it.each([
+  ['tuple', 'success'],
+  ['tuple', 'false'],
+  ['tuple', 'reject'],
+  ['reopen', 'success'],
+  ['reopen', 'false'],
+  ['reopen', 'reject']
+] as const)(
+  'fences old %s session %s settlement while the same dialog successor saves',
+  async (transition, outcome) => {
+    const pending: { resolve: (value: boolean) => void; reject: (error: Error) => void }[] = []
+    const onSubmit = vi.fn(
+      () =>
+        new Promise<boolean>((resolve, reject) => {
+          pending.push({ resolve, reject })
+        })
+    )
+    const onOpenChange = vi.fn()
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const sessionKey = {}
+    const props = {
+      open: true,
+      initialName: 'Alpha',
+      sessionKey,
+      title: 'Name project group',
+      description: 'Choose a group name.',
+      confirmLabel: 'Save',
+      onOpenChange,
+      onSubmit
+    }
+    const rendered = render(<ProjectGroupNameDialog {...props} />)
+    const user = userEvent.setup()
+    try {
+      const originalInput = screen.getByRole('textbox', { name: 'Group Name' })
+      expect(document.activeElement).toBe(originalInput)
+      expect(originalInput).toHaveProperty('selectionStart', 0)
+      expect(originalInput).toHaveProperty('selectionEnd', 5)
+      await user.clear(originalInput)
+      await user.type(originalInput, 'Old draft')
+      await user.click(screen.getByRole('button', { name: 'Save' }))
+      expect(onSubmit).toHaveBeenNthCalledWith(1, 'Old draft')
+      expect(originalInput).toHaveProperty('disabled', false)
+      await user.type(originalInput, ' edited')
+      expect(originalInput).toHaveProperty('value', 'Old draft edited')
+      if (transition === 'tuple') {
+        rendered.rerender(<ProjectGroupNameDialog {...props} initialName="Beta" sessionKey={{}} />)
+        expect(screen.getByRole('textbox', { name: 'Group Name' })).toBe(originalInput)
+        expect(originalInput).toHaveProperty('value', 'Beta')
+      } else {
+        rendered.rerender(<ProjectGroupNameDialog {...props} open={false} />)
+        expect(screen.queryByRole('dialog')).toBeNull()
+      }
+      rendered.rerender(<ProjectGroupNameDialog {...props} />)
+      const input = screen.getByRole('textbox', { name: 'Group Name' })
+      const dialog = screen.getByRole('dialog')
+      expect(input).toHaveProperty('value', 'Alpha')
+      expect(screen.getByRole('button', { name: 'Save' })).toHaveProperty('disabled', false)
+      await user.clear(input)
+      await user.type(input, 'Successor draft')
+      await user.click(screen.getByRole('button', { name: 'Save' }))
+      expect(onSubmit).toHaveBeenNthCalledWith(2, 'Successor draft')
+      await act(async () => {
+        if (outcome === 'reject') {
+          pending[0]!.reject(new Error('Old save failed'))
+        } else {
+          pending[0]!.resolve(outcome === 'success')
+        }
+      })
+      expect(onOpenChange).not.toHaveBeenCalled()
+      expect(screen.getByRole('dialog')).toBe(dialog)
+      expect(screen.getByRole('textbox', { name: 'Group Name' })).toBe(input)
+      expect(input).toHaveProperty('value', 'Successor draft')
+      expect(screen.getByRole('button', { name: 'Saving...' })).toHaveProperty('disabled', true)
+      await act(async () => {
+        if (outcome === 'reject') {
+          pending[1]!.reject(new Error('Current save failed'))
+        } else {
+          pending[1]!.resolve(outcome === 'success')
+        }
+      })
+      if (outcome !== 'success') {
+        expect(onOpenChange).not.toHaveBeenCalled()
+        expect(input).toHaveProperty('value', 'Successor draft')
+        expect(screen.getByRole('button', { name: 'Save' })).toHaveProperty('disabled', false)
+        await user.click(screen.getByRole('button', { name: 'Save' }))
+        expect(onSubmit).toHaveBeenNthCalledWith(3, 'Successor draft')
+        await act(async () => pending[2]!.resolve(true))
+      }
+      expect(onOpenChange).toHaveBeenCalledExactlyOnceWith(false)
+      expect(quiet).toHaveBeenCalledTimes(outcome === 'reject' ? 2 : 0)
+    } finally {
+      rendered.unmount()
+      quiet.mockRestore()
+    }
+  }
+)

@@ -108,9 +108,9 @@ export function resolveQualifiedIndexedRepoOwnerForHost<T extends RepoOwnerRecor
   resolveIndexedRepoOwner(repos, repoId)
   const key = `${repoId}\0${hostId}${connectionId === undefined ? '' : `\0${connectionId ?? ''}`}`
   const result = qualifiedRepoOwnerIndexCache.get(repos)?.get(key)
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the index retains rows from this exact input array.
   return result?.kind === 'resolved'
-    ? { kind: 'resolved', owner: result.owner as T }
+    ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the index retains rows from this exact input array.
+      { kind: 'resolved', owner: result.owner as T }
     : (result ?? { kind: 'missing' })
 }
 

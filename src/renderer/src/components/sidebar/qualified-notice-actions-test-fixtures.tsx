@@ -95,17 +95,20 @@ vi.mock('@/lib/desktop-window-chrome', async (original) => ({
 }))
 vi.mock('@tanstack/react-virtual', async (original) => ({
   ...(await original<typeof ReactVirtualModule>()),
-  useVirtualizer: (options: ReactVirtualModule.VirtualizerOptions<HTMLDivElement, Element>) =>
+  useVirtualizer: ({
+    count,
+    getItemKey
+  }: ReactVirtualModule.VirtualizerOptions<HTMLDivElement, Element>) =>
     useMemo(
       () => ({
         elementsCache: new Map(),
         itemSizeCache: new Map(),
         scrollOffset: 0,
-        getTotalSize: () => options.count * 56,
+        getTotalSize: () => count * 56,
         getVirtualItems: () =>
-          Array.from({ length: options.count }, (_, index) => ({
+          Array.from({ length: count }, (_, index) => ({
             index,
-            key: options.getItemKey?.(index) ?? index,
+            key: getItemKey?.(index) ?? index,
             start: index * 56,
             size: 56,
             end: (index + 1) * 56,
@@ -115,7 +118,7 @@ vi.mock('@tanstack/react-virtual', async (original) => ({
         scrollToIndex: () => {},
         scrollToOffset: () => {}
       }),
-      [options.count, options.getItemKey]
+      [count, getItemKey]
     )
 }))
 vi.mock('@/components/sidebar/WorktreeCard', async (original) => {
