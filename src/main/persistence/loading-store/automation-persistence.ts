@@ -1,3 +1,4 @@
+import { AutomationRunMembership } from './automation-run-membership'
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import type {
   Automation,
@@ -19,8 +20,7 @@ import type {
   AutomationOwnerPrecondition
 } from '../../../shared/automation-owner-precondition'
 import type { WorkspaceRunContext } from '../../../shared/task-source-context'
-import { getWorktreePathBasenameFromId } from '../../../shared/worktree/id'
-import { normalizeAutomationRunWorkspaceDisplayName } from '../scheduling-automations/automation-context-migration'
+import { getAutomationRunWorkspaceDisplayName } from '../scheduling-automations/automation-context-migration'
 import {
   createAutomation as createAutomationOperation,
   deleteAutomation as deleteAutomationOperation,
@@ -60,6 +60,7 @@ type AutomationPersistenceRuntime = Pick<
   StoreRuntimeState,
   | 'automationListProjectionCache'
   | 'dirtyProfileStateDomains'
+  | 'durableWriteListeners'
   | 'pendingAutomationRunsAfter'
   | 'state'
   | 'storageAuthority'
@@ -70,6 +71,7 @@ type AutomationPersistenceContext = {
   runtime: AutomationPersistenceRuntime
   flushBarriers: WriteFlushBarrierOperations
   preferences: ProfilePreferences
+  membership: AutomationRunMembership
 }
 
 export class AutomationPersistence {
@@ -80,7 +82,15 @@ export class AutomationPersistence {
     flushBarriers: WriteFlushBarrierOperations,
     preferences: ProfilePreferences
   ) {
-    this[automationPersistenceContext] = { runtime, flushBarriers, preferences }
+    this[automationPersistenceContext] = {
+      runtime,
+      flushBarriers,
+      preferences,
+      membership: new AutomationRunMembership(
+        () => runtime.state.automationRuns,
+        runtime.durableWriteListeners
+      )
+    }
   }
 
   listAutomations(): Automation[] {
@@ -129,9 +139,11 @@ export class AutomationPersistence {
   }
 
   hasAutomationRun(id: string): boolean {
-    return this[automationPersistenceContext].runtime.state.automationRuns.some(
-      (run) => run.id === id
-    )
+    return this[automationPersistenceContext].membership.has(id)
+  }
+
+  observeAutomationRunRemovals(listener: (id: string) => void): () => void {
+    return this[automationPersistenceContext].membership.observe(listener)
   }
 
   listAutomationRuns(automationId?: string): AutomationRun[] {
@@ -219,6 +231,7 @@ export class AutomationPersistence {
     const { runtime, flushBarriers } = this[automationPersistenceContext]
     return markAutomationRunSeenOperation(runtime.state, automationId, runId, (runs) => {
       runtime.pendingAutomationRunsAfter = runs
+      this[automationPersistenceContext].membership.sync()
       runtime.dirtyProfileStateDomains?.add('automationRuns')
       flushBarriers.flush()
     })
@@ -279,6 +292,7 @@ export function getAutomationDefinitionOperations(
       ),
     recordAutomationRunsMutation: (runs) => {
       owner[automationPersistenceContext].runtime.pendingAutomationRunsAfter = runs
+      owner[automationPersistenceContext].membership.sync()
       owner[automationPersistenceContext].runtime.dirtyProfileStateDomains?.add('automationRuns')
     }
   }
@@ -293,25 +307,16 @@ export function getAutomationRunOperations(owner: AutomationPersistence): Automa
     },
     recordAutomationRunsMutation: (runs) => {
       owner[automationPersistenceContext].runtime.pendingAutomationRunsAfter = runs
+      owner[automationPersistenceContext].membership.sync()
     },
     recordManualRun: () =>
       owner[automationPersistenceContext].preferences.recordFeatureInteraction('automation-run'),
     getWorkspaceDisplayName: (workspaceId) =>
-      getAutomationRunWorkspaceDisplayName(owner, workspaceId)
+      getAutomationRunWorkspaceDisplayName(
+        owner[automationPersistenceContext].runtime.state,
+        workspaceId
+      )
   }
-}
-
-export function getAutomationRunWorkspaceDisplayName(
-  owner: AutomationPersistence,
-  workspaceId: string | null | undefined
-): string | null {
-  if (!workspaceId) {
-    return null
-  }
-  return normalizeAutomationRunWorkspaceDisplayName(
-    owner[automationPersistenceContext].runtime.state.worktreeMeta[workspaceId]?.displayName ??
-      getWorktreePathBasenameFromId(workspaceId)
-  )
 }
 
 function markAutomationDomains(owner: AutomationPersistence): void {

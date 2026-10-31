@@ -12,6 +12,8 @@ import {
 } from './persistence-test-harness'
 import { buildProfileStateCutoverFixture } from './profile-state-cutover-fixture'
 import { Store } from './loading-store/store'
+import { ProfileStateSqliteAuthority } from './profile-state/profile-state-sqlite-authority'
+import { prepareLegacyProfileState } from './profile-state/legacy-json/profile-state-legacy-import'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({
@@ -139,4 +141,67 @@ it('acknowledges only one retained failed row, survives restart, and deletes the
   reopened.deleteAutomation(automation.id)
   expect(reopened.listAutomationRuns(automation.id)).toEqual([])
   expect(reopened.markAutomationRunSeen(automation.id, first.id)).toBe(false)
+})
+
+it('carries a legacy frozen activation into its destination and preserves the sync first-full-write obligation after failure', async () => {
+  const source = buildProfileStateCutoverFixture(testState.dir)
+  delete source.automationFailureSeenVersion
+  source.automationRuns[0].status = 'dispatch_failed'
+  const original = JSON.stringify(source)
+  const path = join(testState.dir, 'legacy-source.json')
+  writeFileSync(path, original)
+  const prepared = prepareLegacyProfileState(path, original).prepared.json
+  expect(readFileSync(path, 'utf8')).toBe(original)
+  const imported = JSON.parse(prepared)
+  expect(imported.automationFailureSeenVersion).toBe(1)
+  expect(imported.automationRuns[0].failureSeenAt).toEqual(expect.any(Number))
+  const authority = new ProfileStateSqliteAuthority(
+    join(testState.dir, 'destination.db'),
+    'attention-destination'
+  )
+  authority.writeSerializedState(Buffer.from(original))
+  const store = new Store({
+    dataFile: join(testState.dir, 'destination.json'),
+    profileStateAuthority: authority
+  })
+  try {
+    const first = vi
+      .spyOn(authority, 'writeCompleteSerializedDomains')
+      .mockImplementationOnce(() => {
+        throw new Error('first complete write failed')
+      })
+    await expect(store.flushPendingOrThrowAsync()).rejects.toThrow('first complete write failed')
+    expect(
+      JSON.parse(authority.readSerializedState()!).automationFailureSeenVersion
+    ).toBeUndefined()
+    const newer = store.createAutomationRun(store.listAutomations()[0], 1_800_000_000_010, 'manual')
+    store.updateAutomationRun({ runId: newer.id, status: 'dispatch_failed' })
+    await store.flushPendingOrThrowAsync()
+    const disk = JSON.parse(authority.readSerializedState()!)
+    expect(first).toHaveBeenCalled()
+    expect(disk.automationFailureSeenVersion).toBe(1)
+    expect(
+      disk.automationRuns.find((row: { id: string }) => row.id === source.automationRuns[0].id)
+        .failureSeenAt
+    ).toEqual(expect.any(Number))
+    expect(
+      disk.automationRuns.find((row: { id: string }) => row.id === newer.id).failureSeenAt
+    ).toBeUndefined()
+    store.freezeWrites()
+    const destination = new ProfileStateSqliteAuthority(
+      join(testState.dir, 'imported.db'),
+      'attention-import'
+    )
+    destination.writeSerializedState(Buffer.from(prepared))
+    const loaded = new Store({
+      dataFile: join(testState.dir, 'imported.json'),
+      profileStateAuthority: destination
+    })
+    expect(loaded.listAutomationRuns()[0].failureSeenAt).toBe(
+      imported.automationRuns[0].failureSeenAt
+    )
+    loaded.freezeWrites()
+  } finally {
+    await store.freezeWritesAsync()
+  }
 })

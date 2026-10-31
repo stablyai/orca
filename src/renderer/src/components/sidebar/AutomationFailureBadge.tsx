@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge'
 import { translate } from '@/i18n/i18n'
 
 export function AutomationFailureBadge() {
-  const { unseenFailureCount } = useAutomationHostCatalog()
+  const { unseenFailureCount } = useAutomationHostCatalog({ failureCountOnly: true })
   return unseenFailureCount > 0 ? (
     <Badge
       variant="destructive"

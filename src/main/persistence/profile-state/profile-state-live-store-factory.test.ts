@@ -1,3 +1,4 @@
+import { ProfileStateWorkerAuthority } from './profile-state-worker-authority'
 import { build } from 'esbuild'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -5,7 +6,7 @@ import { join, resolve } from 'node:path'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { agentHookServer } from '../../agent-hooks/server'
 import { buildProfileStateCutoverFixture } from '../profile-state-cutover-fixture'
-import { Store } from '../loading-store/store'
+import type { Store } from '../loading-store/store'
 import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
 import { createLiveProfileStateStore } from './profile-state-live-store-factory'
 import {
@@ -214,28 +215,80 @@ describe('live profile authority admission', () => {
   })
 })
 
-it('does not expose schedulers or capabilities before activation is durable, and closes after a refused activation', async () => {
-  const input = options()
-  const gate = Promise.withResolvers<void>()
-  const original = Store.prototype.flushPendingOrThrowAsync
-  const flush = vi
-    .spyOn(Store.prototype, 'flushPendingOrThrowAsync')
-    .mockImplementationOnce(async function (this: Store, ...args) {
+it.each(['pending', 'rejected'] as const)(
+  'publishes the admitted Store before a %s primary normalization save, preserving ordinary execution',
+  async (mode) => {
+    const input = options()
+    const source = buildProfileStateCutoverFixture(join(input.dataFile, '..'))
+    source.automationFailureSeenVersion = 1
+    writeFileSync(input.dataFile, JSON.stringify(source))
+    const gate = Promise.withResolvers<void>()
+    const started = Promise.withResolvers<void>()
+    const original = ProfileStateWorkerAuthority.prototype.writeCompleteSerializedDomains
+    vi.spyOn(
+      ProfileStateWorkerAuthority.prototype,
+      'writeCompleteSerializedDomains'
+    ).mockImplementationOnce(async function (this: ProfileStateWorkerAuthority, ...args) {
+      started.resolve()
       await gate.promise
+      if (mode === 'rejected') {
+        throw new Error('recoverable primary failure')
+      }
       return original.apply(this, args)
     })
-  let published = false
-  const opening = open(input).then((value) => {
-    published = true
-    return value
-  })
-  await vi.waitFor(() => expect(flush).toHaveBeenCalled())
-  expect(published).toBe(false)
-  gate.resolve()
-  await opening
-  expect(readState(input).automationFailureSeenVersion).toBe(1)
-  flush.mockRejectedValueOnce(new Error('activation refused'))
-  const freeze = vi.spyOn(Store.prototype, 'freezeWritesAsync')
-  await expect(open(options())).rejects.toThrow('activation refused')
-  expect(freeze).toHaveBeenCalledOnce()
+    let published = false
+    const opening = open(input).then((value) => {
+      published = true
+      return value
+    })
+    const first = await Promise.race([
+      opening.then(() => 'published' as const),
+      started.promise.then(() => 'write' as const)
+    ])
+    try {
+      expect(first).toBe('published')
+      expect(published).toBe(true)
+      const { store } = await opening
+      const saving = store.flushPendingOrThrowAsync()
+      const result = saving.then(
+        () => null,
+        (error: unknown) => error
+      )
+      await started.promise
+      store.updateSettings({ theme: 'dark' })
+      expect(store.getSettings().theme).toBe('dark')
+      gate.resolve()
+      if (mode === 'rejected') {
+        expect(await result).toMatchObject({ message: 'recoverable primary failure' })
+      } else {
+        expect(await result).toBeNull()
+      }
+      await store.flushPendingOrThrowAsync()
+      expect(readState(input).automationFailureSeenVersion).toBe(1)
+    } finally {
+      gate.resolve()
+      await opening.catch(() => {})
+    }
+  }
+)
+
+it('keeps a cache-sidecar failure nonfatal after a successful primary commit', async () => {
+  const input = options()
+  const { store } = await open(input)
+  mkdirSync(join(input.dataFile, '..', 'orca-github-cache.json'))
+  const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  try {
+    store.setGitHubCache({ pr: {}, issue: {} })
+    store.updateSettings({ theme: 'dark' })
+    await expect(store.flushPendingOrThrowAsync()).resolves.toBeUndefined()
+    expect(warning).toHaveBeenCalledWith(
+      '[persistence] Failed to write github cache snapshot:',
+      expect.anything()
+    )
+    expect(store.automationDurableWriteGeneration()).toBeGreaterThanOrEqual(
+      store.automationWriteGeneration()
+    )
+  } finally {
+    warning.mockRestore()
+  }
 })

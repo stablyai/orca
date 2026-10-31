@@ -42,16 +42,18 @@ export function createAutomationRunWriter(
 ): AutomationRunWriter {
   const pending = new Map<string, { outcome: AutomationRunOutcome; generation: number }>()
   let disposed = false
-  const drain = (generation: number): void => {
+  const drain = (generation: number, runId?: string): void => {
     if (disposed || pending.size === 0) {
       return
     }
-    for (const [id, intent] of pending) {
-      if (!store.hasAutomationRun?.(id)) {
-        pending.delete(id)
+    const single = runId ? pending.get(runId) : undefined
+    const entries = runId ? (single ? [[runId, single] as const] : []) : pending
+    for (const [id, intent] of entries) {
+      if (intent.generation > generation) {
         continue
       }
-      if (intent.generation > generation) {
+      if (!store.hasAutomationRun?.(id)) {
+        pending.delete(id)
         continue
       }
       pending.delete(id)
@@ -114,10 +116,10 @@ export function createAutomationRunWriter(
           }
         })
         // Synchronous authorities may commit before the transition intent is installed.
-        drain(store.automationDurableWriteGeneration?.() ?? 0)
+        drain(store.automationDurableWriteGeneration?.() ?? 0, run.id)
       }
       await store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
-      drain(store.automationDurableWriteGeneration?.() ?? 0)
+      drain(store.automationDurableWriteGeneration?.() ?? 0, run.id)
       announce(run.automationId, result.usage ? 'usage' : 'run')
       return run
     },

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AUTOMATION_HANDLERS } from './automations'
+import type { RuntimeClient } from '../runtime-client'
 
 const owner = { selector: { kind: 'ssh', targetId: 'box', targetGeneration: 4 } }
 
@@ -88,4 +89,37 @@ describe('CLI automation mutations carry the owner they read', () => {
     expect(call).toHaveBeenCalledTimes(1)
     expect(call).toHaveBeenCalledWith('automation.runs', { automationId: 'a1', limit: 25 })
   })
+})
+
+it('prints additive failure attention fields in list/runs JSON without acknowledging a read', async () => {
+  const list = {
+    automations: [{ id: 'a1', name: 'Daily' }],
+    items: [{ automationId: 'a1', selector: { kind: 'self' }, unseenFailureCount: 2 }],
+    orphanCount: 0
+  }
+  const runs = [
+    { id: 'r1', automationId: 'a1', status: 'dispatch_failed', failureSeenAt: 123 },
+    { id: 'r2', automationId: 'a1', status: 'dispatch_failed' }
+  ]
+  const call = vi.fn(async (method: string) => ok(method === 'automation.list' ? list : { runs }))
+  const print = vi.spyOn(console, 'log').mockImplementation(() => {})
+  // SAFETY: these read-only CLI handlers use RuntimeClient.call only.
+  const client = { call } as unknown as RuntimeClient
+  await AUTOMATION_HANDLERS['automations list']!({
+    client,
+    cwd: '/tmp',
+    flags: new Map(),
+    json: true
+  })
+  await AUTOMATION_HANDLERS['automations runs']!({
+    client,
+    cwd: '/tmp',
+    flags: new Map([['id', 'a1']]),
+    json: true
+  })
+  expect(call.mock.calls.map(([method]) => method)).toEqual(['automation.list', 'automation.runs'])
+  const output = print.mock.calls.map(([raw]) => JSON.parse(String(raw)))
+  expect(output[0]).toMatchObject({ result: list })
+  expect(output[1]).toMatchObject({ result: { runs } })
+  expect(runs[1]).not.toHaveProperty('failureSeenAt')
 })

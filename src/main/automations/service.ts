@@ -1,4 +1,5 @@
-import type { AgentSessionTurnCompletion } from '../../shared/agent-session-wire'
+import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
+import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
 import {
   AutomationDispatchCancelledError,
   requestAutomationDispatch,
@@ -61,11 +62,10 @@ export class AutomationService {
   private readonly chatDispatcher: HeadlessAutomationDispatcher | null
   private readonly automationLanes = new Map<string, Promise<void>>()
   /** Close unused completed terminals on headless hosts; return the count. */
+  attachChatOwnership:
+    | ((host: StructuredAgentSessionHost, records: AgentSessionRecordStore) => void)
+    | null = null
   releaseFinishedRunTerminals: (() => Promise<number>) | null = null
-  ownsChatCompletion: ((completion: AgentSessionTurnCompletion) => Promise<boolean>) | null = null
-  async settleDispatches(): Promise<void> {
-    await Promise.allSettled(this.automationLanes.values())
-  }
   private readonly publish: PublishAutomationsChanged | null
   private readonly runs: AutomationRunWriter
   private readonly completionWatcher: AutomationRunCompletionWatcher | null

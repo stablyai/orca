@@ -613,7 +613,7 @@ it.each([false, true])(
 
 it('keeps automation completion edges readable by old clients and adds only an optional notification ownership hint', async () => {
   const stream: unknown[] = []
-  await dispatcher({ ownsAutomationChatCompletion: async () => true }).dispatchStreaming(
+  await dispatcher().dispatchStreaming(
     {
       id: 'automation-notify',
       authToken: 'token',
@@ -636,9 +636,8 @@ it('keeps automation completion edges readable by old clients and adds only an o
       workspaceKind: 'git-worktree'
     }
   }
-  input.emit({ type: 'completion', completion })
-  await Promise.resolve()
-  await Promise.resolve()
+  input.emit({ type: 'completion', completion: { ...completion, automationOwned: true } })
+  input.emit({ type: 'end' })
   expect(stream).toContainEqual(
     expect.objectContaining({
       result: { type: 'completion', completion: { ...completion, automationOwned: true } }

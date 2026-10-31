@@ -413,3 +413,83 @@ it('a tab publication failure after commit never calls the prompt undelivered', 
   ])
   expect(rig.adapter.acquire).not.toHaveBeenCalled()
 })
+
+it('owns a fresh live provider completion before the launch receipt returns', async () => {
+  const { launchAgentOnHost } = await import('./agent-launch')
+  const { agentJournalSubmissionKey } =
+    await import('../../../../shared/agent-session-journal-item-key')
+  const { AGENT_JOURNAL_THREAD_SCOPE } =
+    await import('../../../../shared/agent-session-journal-types')
+  const runtime = launchRuntime()
+  const published = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<void>()
+  const recordOutcome = rig.store.recordOperationOutcome.bind(rig.store)
+  const launchId = `${HOST_TEST_NOW}-000000000000000000000000000000ef`
+  vi.spyOn(rig.store, 'recordOperationOutcome').mockImplementation(async (input) => {
+    if (input.operationId === launchId && input.outcome.status === 'succeeded') {
+      published.resolve()
+      await release.promise
+    }
+    return recordOutcome(input)
+  })
+  const acquired = rig.adapter.acquire.getMockImplementation()!
+  let provider: Parameters<typeof acquired>[0]['events'] | undefined
+  rig.adapter.acquire.mockImplementation(async (input) => {
+    provider = input.events
+    return acquired(input)
+  })
+  const edges: unknown[] = []
+  rig.host.subscribeTurnCompletions({
+    id: 'fast-automation',
+    includePrompts: true,
+    emit: (event) => edges.push(event)
+  })
+  let returned = false
+  const pending = launchAgentOnHost(
+    {
+      agent: 'codex',
+      operationId: launchId,
+      sessionId: SESSION,
+      surface: 'chat',
+      target: { kind: 'existing', worktree: 'id:wt-7' },
+      prompt: { text: 'fast automation', delivery: 'submit' }
+    },
+    rpcContext(runtime, CLI),
+    {
+      beforeChatSubmit: (sessionId, messageId) =>
+        rig.host.registerAutomationChatRun('fresh-run', sessionId, messageId)
+    }
+  ).then((result) => {
+    returned = true
+    return result
+  })
+  try {
+    await published.promise
+    await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledOnce())
+    const message = rig.adapter.dispatch.mock.calls[0][0].clientMessageId
+    provider!.appendItem(
+      { provider: 'codex', threadId: 'fast-thread', turnId: 'fast-provider-turn', ordinal: 1 },
+      {
+        kind: 'turn',
+        turnId: 'fast-provider-turn',
+        userItemId: agentJournalSubmissionKey(message),
+        state: 'completed',
+        outcome: 'success'
+      },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE, lifecycle: true }
+    )
+    provider!.publish({ lifecycle: true })
+    expect(await provider!.written?.()).toEqual({ ok: true })
+    await rig.host.flushStreamedEvents(SESSION)
+    expect(returned).toBe(false)
+    expect(edges).toContainEqual(
+      expect.objectContaining({
+        type: 'completion',
+        completion: expect.objectContaining({ turnId: 'fast-provider-turn', automationOwned: true })
+      })
+    )
+  } finally {
+    release.resolve()
+    await pending
+  }
+})

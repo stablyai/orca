@@ -1,4 +1,5 @@
-import type { AgentSessionTurnCompletion } from '../../shared/agent-session-wire'
+import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
+import type { AgentSessionRecordStore } from './agent-session-record-store'
 import type { AutomationService } from '../automations/service'
 import type {
   Automation,
@@ -54,8 +55,8 @@ export class RuntimeAutomationController {
     private readonly resolvers: RuntimeAutomationTargetResolvers
   ) {}
 
-  ownsChatCompletion(completion: AgentSessionTurnCompletion): Promise<boolean> {
-    return this.service?.ownsChatCompletion?.(completion) ?? Promise.resolve(false)
+  attachChatOwnership(host: StructuredAgentSessionHost, records: AgentSessionRecordStore): void {
+    this.service?.attachChatOwnership?.(host, records)
   }
 
   setService(service: AutomationService): void {

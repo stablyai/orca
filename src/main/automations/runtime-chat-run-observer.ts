@@ -40,6 +40,7 @@ export async function observeAutomationChatRun(
   }
   const messageId = receipt.messageId
   const sessionId = run.chatSessionId
+  host.registerAutomationChatRun?.(run.id, sessionId, messageId)
   return new Promise((resolve, reject) => {
     let release: (() => void) | undefined
     let settled = false
@@ -111,11 +112,30 @@ export async function observeAutomationChatRun(
           const version = revision
           const readingSource = source
           const current = () => !settled && version === revision && readingSource === source
+          const identity = host.automationChatInterests?.identity(run.id)
+          if (identity && currentJournal) {
+            submissionId = identity.submissionId
+            turnItemId = identity.turnItemId
+            const root = turnItemId ? currentJournal.item(turnItemId) : null
+            const turn = root ? readAgentJournalTurn(root.body) : null
+            const queued = currentJournal.queuedMessages.get(messageId)
+            const submission = currentJournal.submission(submissionId)
+            if (
+              queued?.state !== 'returned' &&
+              queued?.state !== 'withdrawn' &&
+              submission?.dispatchState !== 'rejected' &&
+              submission?.dispatchState !== 'unknown' &&
+              (!turn || turn.state === 'running')
+            ) {
+              fingerprint = interest()
+              continue
+            }
+          }
           const snapshot = await host.journalSnapshot(sessionId)
           if (!current()) {
             continue
           }
-          const queued = await host.queuedSendAnswer(sessionId, messageId)
+          const queued = await host.queuedSendAnswer(sessionId, messageId, identity?.submissionId)
           if (!current()) {
             continue
           }
@@ -123,7 +143,8 @@ export async function observeAutomationChatRun(
             snapshot,
             messageId,
             agent,
-            queued
+            queued,
+            host.automationChatInterests?.identity(run.id)
           )
           if (submission) {
             submissionId = submission.clientMessageId
@@ -162,6 +183,11 @@ export async function observeAutomationChatRun(
           return
         }
         currentJournal = hint.journal
+        const identity = host.automationChatInterests?.identity(run.id)
+        if (identity) {
+          submissionId = identity.submissionId
+          turnItemId = identity.turnItemId
+        }
         const semantic = interest()
         const rows = hint.rows
         const currentCursor = cursor

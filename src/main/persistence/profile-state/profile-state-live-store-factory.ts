@@ -23,27 +23,26 @@ export async function createLiveProfileStateStore(
     initial.authority.retireForWorker(),
     workerOptions
   )
-  let store: Store | undefined
   try {
     await authority.ready
     const initialAuthorityState = initial.takeParsedState
       ? { authority, takeParsedState: () => parsed }
       : { authority, serializedState }
-    store = new Store({
-      dataFile: options.dataFile,
-      storageAuthority: options.storageAuthority,
-      profileStateAuthority: authority,
-      initialAuthorityState: {
-        ...initialAuthorityState,
-        unboundPaneAliases: initial.unboundPaneAliases
-      }
-    })
-    // Commit activation and its historical marks before schedulers or capability readers exist.
-    await store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
-    return { ...prepared, store }
+    return {
+      ...prepared,
+      store: new Store({
+        dataFile: options.dataFile,
+        storageAuthority: options.storageAuthority,
+        profileStateAuthority: authority,
+        initialAuthorityState: {
+          ...initialAuthorityState,
+          unboundPaneAliases: initial.unboundPaneAliases
+        }
+      })
+    }
   } catch (error) {
     try {
-      await (store ? store.freezeWritesAsync() : authority.close())
+      await authority.close()
     } catch (closeError) {
       console.error('[persistence] Failed to close a refused profile writer:', closeError)
     }

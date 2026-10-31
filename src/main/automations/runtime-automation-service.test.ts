@@ -77,6 +77,7 @@ function fixture(headless: boolean, definitionSurface: 'chat' | 'terminal' = 'ch
   createRuntimeAutomationService({
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: construction and recovery use only these store boundaries.
     store: {
+      observeAutomationRunRemovals: () => () => {},
       listAutomationRuns: () => [],
       listAutomations: () => [
         { id: run.automationId, agentId: 'claude', surface: definitionSurface }
@@ -301,7 +302,10 @@ describe('headless automation dispatch', () => {
     }
     createRuntimeAutomationService({
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked service never reads the store; the dispatcher reads only past runs.
-      store: { listAutomationRuns: () => [] } as never,
+      store: {
+        listAutomationRuns: () => [],
+        observeAutomationRunRemovals: () => () => {}
+      } as never,
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the dispatcher reads only the members faked above.
       runtime: runtime as never,
       headless: true

@@ -1,3 +1,4 @@
+import { fixture } from '../persistence/loading-store/profile-state-delayed-authority-fixture'
 import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { describe, expect, it, vi } from 'vitest'
@@ -139,3 +140,62 @@ it.each(['completed', 'dispatch_failed'] as const)(
     })
   }
 )
+
+it.each([true, false])(
+  'sends the real outcome through unchanged phone live/replay routing (workspace=%s) without acknowledging',
+  async (workspace) => {
+    const { RuntimeMobileNotificationController } =
+      await import('../runtime/runtime-mobile-notification-controller')
+    const { store } = await fixture()
+    const automation = store.listAutomations()[0]
+    const run = store.createAutomationRun(automation, 1_800_000_000_000, 'manual')
+    store.updateAutomationRun({ runId: run.id, status: 'dispatch_failed' })
+    const seen = vi.spyOn(store, 'markAutomationRunSeen')
+    const phone = new RuntimeMobileNotificationController()
+    const delivered = vi.fn()
+    const stop = phone.onDispatched(delivered)
+    // SAFETY: publisher needs the established phone dispatcher and ordinary change publication only.
+    const runtime = {
+      dispatchMobileNotification: phone.dispatch.bind(phone),
+      notifyAutomationsChanged: vi.fn()
+    } as unknown as OrcaRuntimeService
+    publishAutomationOutcome(runtime, store, {
+      settledRun: {
+        ...outcome(),
+        run: {
+          ...outcome().run,
+          id: run.id,
+          automationId: automation.id,
+          status: 'dispatch_failed',
+          workspaceId: workspace ? 'workspace' : null,
+          chatSessionId: workspace ? 'chat' : null,
+          dispatchedAt: workspace ? 2 : null
+        }
+      }
+    })
+    expect(delivered).toHaveBeenCalledOnce()
+    const event = delivered.mock.calls[0][0]
+    expect(event).toMatchObject({
+      type: 'notification',
+      source: 'agent-task-complete',
+      agentState: 'done'
+    })
+    expect(event.worktreeId).toBe(workspace ? 'workspace' : undefined)
+    expect(event.paneKey === undefined || typeof event.paneKey === 'string').toBe(true)
+    expect(phone.getMissedSince(0)).toMatchObject([event])
+    expect(seen).not.toHaveBeenCalled()
+    expect(
+      store.listAutomationRuns().find((row) => row.id === run.id)?.failureSeenAt
+    ).toBeUndefined()
+    stop()
+  }
+)
+
+vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
+vi.mock('../telemetry/cohort-classifier', () => ({
+  getCohortAtEmit: () => ({ nth_repo_added: 2 })
+}))
+vi.mock('../ssh/config/ssh-config-parser', () => ({
+  loadUserSshConfig: () => ({ hosts: [] }),
+  sshConfigHostsToTargets: () => []
+}))

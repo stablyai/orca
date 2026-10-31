@@ -1,7 +1,9 @@
-import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
+import type {
+  AutomationAuthorityRef,
+  AutomationOwnerRef
+} from '../../../../shared/automation-owner-ref'
 /** Carry the listed owner into actions so a host move fences against the incarnation the user saw. Owned rows act normally, orphans allow pause/delete/history but cannot execute, and unfenced legacy rows stay view-only. */
 
-import type { AutomationOwnerRef } from '../../../../shared/automation-owner-ref'
 import { ownerKey } from '../../../../shared/automation-owner-key'
 import type { AutomationOwnerPrecondition } from '../../../../shared/automation-owner-precondition'
 import { translate } from '@/i18n/i18n'

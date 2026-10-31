@@ -66,6 +66,7 @@ export type AutomationHostCatalogView = {
 }
 
 export type AutomationHostCatalogOptions = {
+  failureCountOnly?: boolean
   /** Stable keys a stored automation or persisted filter still points at. */
   referencedStableKeys?: Iterable<string>
   /** Authorities whose most recent unscoped list attempt failed. */
@@ -116,10 +117,21 @@ export function useAutomationHostCatalog(
     }
   }, [controller, makeController])
 
+  const countSelection = useRef<{ catalog: AutomationHostCatalog; key: string } | null>(null)
   const [cacheVersion, setCacheVersion] = useState(0)
   useEffect(() => {
-    return controller.cache.subscribe(() => setCacheVersion((version) => version + 1))
-  }, [controller])
+    return controller.cache.subscribe(() => {
+      const selected = countSelection.current
+      if (options.failureCountOnly && selected) {
+        const next = failureSummary(controller, selected.catalog)
+        if (next.key === selected.key) {
+          return
+        }
+        selected.key = next.key
+      }
+      setCacheVersion((version) => version + 1)
+    })
+  }, [controller, options.failureCountOnly])
 
   const orphanCount = useCallback(
     (authority: StableAutomationAuthorityRef) => controller.authorityOrphanCount(authority),
@@ -249,6 +261,24 @@ export function useAutomationHostCatalog(
     void controller.applyCatalog(queryCatalog, { selectedStableKey, force: true })
   }, [controller, queryCatalog, selectedStableKey])
 
+  const summary = failureSummary(controller, catalog)
+  countSelection.current = { catalog, key: summary.key }
+
+  return {
+    unseenFailureCount: summary.count,
+    catalog,
+    entries: catalog.entries,
+    resolution,
+    rows,
+    loadCounts: useMemo(() => automationHostLoadCounts(catalog), [catalog]),
+    selectHost: setAutomationHostFilter,
+    recover,
+    refreshHosts,
+    notifyAuthorityChange: controller.handleAuthorityEvent
+  }
+}
+
+function failureSummary(controller: AutomationHostQueryController, catalog: AutomationHostCatalog) {
   const seen = new Set<string>()
   let unseenFailureCount = 0
   for (const entry of catalog.entries) {
@@ -265,15 +295,10 @@ export function useAutomationHostCatalog(
   }
 
   return {
-    unseenFailureCount,
-    catalog,
-    entries: catalog.entries,
-    resolution,
-    rows,
-    loadCounts: useMemo(() => automationHostLoadCounts(catalog), [catalog]),
-    selectHost: setAutomationHostFilter,
-    recover,
-    refreshHosts,
-    notifyAuthorityChange: controller.handleAuthorityEvent
+    count: unseenFailureCount,
+    key: JSON.stringify([
+      unseenFailureCount,
+      ...catalog.entries.map((entry) => controller.authorityOrphanCount(entry.stableRef.authority))
+    ])
   }
 }

@@ -152,3 +152,140 @@ it.each([1_000, 10_000])(
     writer.dispose()
   }
 )
+
+it('keeps activation and live outcomes atomic when the first complete write fails', async () => {
+  const { store, authority, readState, reopen } = await fixture(
+    undefined,
+    (initial) => {
+      delete initial.automationFailureSeenVersion
+      initial.automationRuns[0].status = 'dispatch_failed'
+      initial.automationRuns.push({
+        ...initial.automationRuns[0],
+        id: 'recovered',
+        status: 'dispatched'
+      })
+    },
+    false
+  )
+  const historical = store.listAutomationRuns().find((row) => row.id !== 'recovered')!
+  expect(historical.failureSeenAt).toEqual(expect.any(Number))
+  const publish = vi.fn()
+  const writer = createAutomationRunWriter(store, publish)
+  const gate = authority.pause()
+  authority.failNextWrite()
+  const first = store.flushPendingOrThrowAsync()
+  const rejected = expect(first).rejects.toThrow('profile_state_write_failed')
+  await gate.started.promise
+  const final = writer.updateRun({ runId: 'recovered', status: 'dispatch_failed' })
+  store.updateSettings({ theme: 'dark' })
+  expect(readState().automationFailureSeenVersion).toBeUndefined()
+  expect(
+    readState().automationRuns.find((row: { id: string }) => row.id === 'recovered').status
+  ).toBe('dispatched')
+  expect(publish.mock.calls.filter(([event]) => event.settledRun)).toHaveLength(0)
+  gate.finish.resolve()
+  await rejected
+  await final
+  await store.flushPendingOrThrowAsync()
+  const committed = readState()
+  expect(committed.automationFailureSeenVersion).toBe(1)
+  expect(
+    committed.automationRuns.find((row: { id: string }) => row.id === historical.id).failureSeenAt
+  ).toBe(historical.failureSeenAt)
+  expect(
+    committed.automationRuns.find((row: { id: string }) => row.id === 'recovered')
+  ).toMatchObject({ status: 'dispatch_failed' })
+  expect(
+    committed.automationRuns.find((row: { id: string }) => row.id === 'recovered').failureSeenAt
+  ).toBeUndefined()
+  expect(
+    publish.mock.calls.flatMap(([event]) => (event.settledRun ? [event.settledRun.run.id] : []))
+  ).toEqual(['recovered'])
+  const next = await reopen()
+  expect(
+    next.listAutomationRuns().find((row) => row.id === 'recovered')?.failureSeenAt
+  ).toBeUndefined()
+  writer.dispose()
+})
+
+it.each([1_000, 10_000])('bounds pending membership work at %i raw rows', async (size) => {
+  const { store, authority } = await fixture(undefined, (initial) => {
+    const run = initial.automationRuns[0]
+    initial.automationRuns = Array.from({ length: size }, (_, index) => ({
+      ...run,
+      id: `pressure-${index}`,
+      status: 'dispatched'
+    }))
+  })
+  const publish = vi.fn()
+  const writer = createAutomationRunWriter(store, publish)
+  const failures = [
+    vi.spyOn(authority, 'writeSerializedAutomationRuns').mockRejectedValue(new Error('disk full')),
+    vi.spyOn(authority, 'writeSerializedDomains').mockRejectedValue(new Error('disk full')),
+    vi.spyOn(authority, 'writeCompleteSerializedDomains').mockRejectedValue(new Error('disk full'))
+  ]
+  for (let index = 0; index < 10; index++) {
+    await expect(
+      writer.updateRun({ runId: `pressure-${index}`, status: 'completed' })
+    ).rejects.toThrow('disk full')
+  }
+  for (const failure of failures) {
+    failure.mockRestore()
+  }
+  let rawVisits = 0
+  for (const row of store['state'].automationRuns) {
+    const id = row.id
+    Object.defineProperty(row, 'id', {
+      get: () => {
+        rawVisits++
+        return id
+      },
+      enumerable: true,
+      configurable: true
+    })
+  }
+  const membership = vi.spyOn(store, 'hasAutomationRun')
+  const history = vi.spyOn(store, 'listAutomationRuns')
+  store.updateSettings({ theme: 'dark' })
+  await store.flushPendingOrThrowAsync()
+  expect(rawVisits).toBeLessThan(size * 4)
+  expect(membership).toHaveBeenCalledTimes(10)
+  expect(history).not.toHaveBeenCalled()
+  expect(publish.mock.calls.filter(([event]) => event.settledRun)).toHaveLength(10)
+  const settled = rawVisits
+  store.updateSettings({ theme: 'light' })
+  await store.flushPendingOrThrowAsync()
+  expect(membership).toHaveBeenCalledTimes(10)
+  expect(rawVisits - settled).toBeLessThan(size * 3)
+  writer.dispose()
+})
+
+it('loads the committed receipt before a lost primary acknowledgement without reseeding live failures', async () => {
+  const { store, authority, readState, loadBeforeAck } = await fixture(
+    undefined,
+    (initial) => {
+      delete initial.automationFailureSeenVersion
+      initial.automationRuns[0].status = 'dispatch_failed'
+    },
+    false
+  )
+  const automation = store.listAutomations()[0]
+  const fresh = store.createAutomationRun(automation, 1_800_000_000_000, 'manual')
+  store.updateAutomationRun({ runId: fresh.id, status: 'dispatch_failed' })
+  const gate = authority.pause(true)
+  const saving = store.flushPendingOrThrowAsync()
+  try {
+    await gate.started.promise
+    expect(readState().automationFailureSeenVersion).toBe(1)
+    expect(store.automationDurableWriteGeneration()).toBeLessThan(store.automationWriteGeneration())
+    const loaded = loadBeforeAck()
+    expect(
+      loaded.listAutomationRuns().find((row) => row.id === fresh.id)?.failureSeenAt
+    ).toBeUndefined()
+    expect(JSON.parse(loaded.prepareProfileStateExport().json).automationFailureSeenVersion).toBe(1)
+    loaded.freezeWrites()
+  } finally {
+    gate.finish.resolve()
+    await saving
+  }
+})

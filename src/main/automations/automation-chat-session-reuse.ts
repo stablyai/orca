@@ -75,6 +75,7 @@ export async function reuseAutomationChat(
       }
       const operationId = automationRunOperationId(run, 'reuse-send')
       const callerKey = rpcCallerOperationKey(AUTOMATION_AGENT_CALLER)
+      host.registerAutomationChatRun(run.id, id, operationId)
       const sent = await host.send(
         { callerKey },
         structuredAgentSessionMessageSendMutation({

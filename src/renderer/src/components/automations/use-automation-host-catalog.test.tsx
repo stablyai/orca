@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   state: {} as Record<string, unknown>,
   listeners: new Set<() => void>(),
   renders: 0,
+  failureCountOnly: false,
   callRuntimeRpc: vi.fn(),
   getRuntimeEnvironmentStatus: vi.fn()
 }))
@@ -39,6 +40,11 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
 vi.mock('@/runtime/runtime-rpc-result', () => ({ hasRuntimeRpcErrorCode: () => false }))
 
 import { useAutomationHostCatalog } from './use-automation-host-catalog'
+import { resetAutomationCapabilityProbes } from './automation-capability-probe'
+import {
+  AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,
+  AUTOMATION_RUN_SEEN_CAPABILITY
+} from '../../../../shared/automation-runtime-capabilities'
 
 const ENVIRONMENT_ID = 'env-1'
 const PROJECT_ID = 'shared-project'
@@ -110,7 +116,7 @@ let view: AutomationHostCatalogView | null = null
 
 function Harness(): null {
   mocks.renders++
-  view = useAutomationHostCatalog()
+  view = useAutomationHostCatalog({ failureCountOnly: mocks.failureCountOnly })
   return null
 }
 
@@ -145,6 +151,8 @@ function runtimeSelfAutomationIds(): string[] {
 let desktopListScoped = vi.fn()
 
 beforeEach(() => {
+  resetAutomationCapabilityProbes()
+  mocks.failureCountOnly = false
   globalThis.IS_REACT_ACT_ENVIRONMENT = true
   view = null
   mocks.callRuntimeRpc.mockReset()
@@ -311,3 +319,63 @@ it.each([1_000, 10_000])(
     expect(upstreamReads).toBe(0)
   }
 )
+
+it('keeps the badge count consumer quiet for equal other-host refreshes and updates the global total', async () => {
+  mocks.failureCountOnly = true
+  const capabilities = [
+    AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,
+    AUTOMATION_RUN_SEEN_CAPABILITY
+  ]
+  mocks.state = storeState([repo({ id: PROJECT_ID, executionHostId: `runtime:${ENVIRONMENT_ID}` })])
+  mocks.state.runtimeStatusByEnvironmentId = new Map([
+    [ENVIRONMENT_ID, { status: { capabilities } }]
+  ])
+  mocks.getRuntimeEnvironmentStatus.mockResolvedValue({ capabilities })
+  const initial = mocks.callRuntimeRpc.getMockImplementation()!
+  mocks.callRuntimeRpc.mockImplementation(async (...args) => {
+    const result = await initial(...args)
+    return args[1] === 'automation.list' && args[0]?.kind !== 'local'
+      ? {
+          ...result,
+          items: [{ automationId: 'a-legacy', selector: { kind: 'self' }, unseenFailureCount: 0 }],
+          orphanCount: 0
+        }
+      : result
+  })
+  await renderCatalogWithState()
+  const renders = mocks.renders
+  const localReads = desktopListScoped.mock.calls.length
+  const remoteReads = mocks.callRuntimeRpc.mock.calls.length
+  const original = mocks.callRuntimeRpc.getMockImplementation()!
+  let count = 0
+  mocks.callRuntimeRpc.mockImplementation(async (...args) => {
+    const result = await original(...args)
+    if (args[1] === 'automation.list') {
+      return {
+        ...result,
+        items: [{ automationId: 'a-legacy', selector: { kind: 'self' }, unseenFailureCount: count }]
+      }
+    }
+    return result
+  })
+  await act(async () => {
+    view?.notifyAuthorityChange({
+      authority: { kind: 'runtime', environmentId: ENVIRONMENT_ID },
+      selector: { kind: 'self' },
+      reason: 'usage'
+    })
+  })
+  expect(mocks.callRuntimeRpc.mock.calls.length).toBeGreaterThan(remoteReads)
+  expect(desktopListScoped).toHaveBeenCalledTimes(localReads)
+  expect(mocks.renders).toBe(renders)
+  await act(async () => {
+    count = 1
+    view?.notifyAuthorityChange({
+      authority: { kind: 'runtime', environmentId: ENVIRONMENT_ID },
+      selector: { kind: 'self' },
+      reason: 'run'
+    })
+  })
+  expect(view?.unseenFailureCount).toBe(1)
+  expect(mocks.renders).toBeGreaterThan(renders)
+})

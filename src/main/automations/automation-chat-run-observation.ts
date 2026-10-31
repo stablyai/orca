@@ -12,13 +12,20 @@ export function resolveChatAutomationRun(
   snapshot: AgentJournalSnapshot,
   messageId: string,
   agent: string,
-  queued: AgentSessionSendResult | null = null
+  queued: AgentSessionSendResult | null = null,
+  identity?: { submissionId: string; turnItemId: string | null }
 ) {
   const submission =
     queued && 'submission' in queued
       ? queued.submission
-      : snapshot.submissions.find((entry) => entry.clientMessageId === messageId)
-  const turnItem = submission ? submissionTurn(snapshot, submission) : undefined
+      : snapshot.submissions.find(
+          (entry) => entry.clientMessageId === (identity?.submissionId ?? messageId)
+        )
+  const turnItem = identity
+    ? snapshot.items.find((item) => item.itemId === identity.turnItemId)
+    : submission
+      ? submissionTurn(snapshot, submission)
+      : undefined
   return {
     submission,
     turnItem,

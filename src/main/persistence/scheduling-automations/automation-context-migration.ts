@@ -5,6 +5,7 @@ import type {
   AutomationRunOutputSnapshot,
   AutomationSchedulerOwner
 } from '../../../shared/automations-types'
+import { getWorktreePathBasenameFromId } from '../../../shared/worktree/id'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { ProjectHostSetup } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
@@ -242,4 +243,16 @@ export function backfillLegacyAutomationContexts(
     },
     changed: true
   }
+}
+
+export function getAutomationRunWorkspaceDisplayName(
+  state: Pick<PersistedState, 'worktreeMeta'>,
+  workspaceId: string | null | undefined
+): string | null {
+  if (!workspaceId) {
+    return null
+  }
+  return normalizeAutomationRunWorkspaceDisplayName(
+    state.worktreeMeta[workspaceId]?.displayName ?? getWorktreePathBasenameFromId(workspaceId)
+  )
 }

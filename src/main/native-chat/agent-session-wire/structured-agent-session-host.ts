@@ -301,12 +301,18 @@ export class StructuredAgentSessionHost {
 
   readonly continuationContext: ReturnType<typeof contextReader>
 
+  readonly automationChatInterests = this.sessions.automationChatInterests
+
+  registerAutomationChatRun = this.sessions.registerAutomationChatRun
+  settleAutomationChatRun = this.sessions.settleAutomationChatRun
+  reconcileAutomationChatOwnership = this.sessions.reconcileAutomationChatOwnership
+
   observeConversationPublications: typeof this.sessions.observeConversationPublications = (
     ...args
   ) => this.sessions.observeConversationPublications(...args)
   journalSnapshot = (sessionId: string) => this.backgroundTasks.journalSnapshot(sessionId)
-  queuedSendAnswer = (sessionId: string, messageId: string) =>
-    this.backgroundTasks.queuedSendAnswer(sessionId, messageId)
+  queuedSendAnswer = (sessionId: string, messageId: string, handoffId?: string) =>
+    this.backgroundTasks.queuedSendAnswer(sessionId, messageId, handoffId)
 
   private readonly startJournal = structuredAgentStartJournal(
     () => this.deps,

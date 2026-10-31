@@ -2,7 +2,7 @@ import { resetHostStructuredAgentsForTests } from '@/runtime/host-structured-age
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 /** Record child props to test page orchestration rather than presentation. Import this harness first so shared vi.mock registrations precede AutomationsPage loading. */
 
-import { act, createElement, StrictMode, type ReactNode } from 'react'
+import { act, createElement, StrictMode, Fragment, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, type Mock, vi } from 'vitest'
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
@@ -349,9 +349,10 @@ export function scopedList(automations: Automation[]): void {
 
 const roots: Root[] = []
 
-export async function renderPage(options?: { strict?: boolean }): Promise<{
+export async function renderPage(options?: { strict?: boolean; peer?: ReactNode }): Promise<{
   container: HTMLDivElement
   rerender: () => Promise<void>
+  unmount: () => Promise<void>
 }> {
   const container = document.createElement('div')
   document.body.appendChild(container)
@@ -363,11 +364,18 @@ export async function renderPage(options?: { strict?: boolean }): Promise<{
       const page = options?.strict
         ? createElement(StrictMode, null, createElement(AutomationsPage))
         : createElement(AutomationsPage)
-      root.render(page)
+      root.render(createElement(Fragment, null, page, options?.peer))
     })
   }
   await rerender()
-  return { container, rerender }
+  return {
+    container,
+    rerender,
+    unmount: async () => {
+      await act(async () => root.unmount())
+      roots.splice(roots.indexOf(root), 1)
+    }
+  }
 }
 
 /** Lets the per-host queries, their capability probes, and the history read settle. */

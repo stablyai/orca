@@ -1,4 +1,3 @@
-import type { AgentSessionTurnCompletion } from '../../shared/agent-session-wire'
 // Push phone attention from the execution host so headless sessions need no desktop relay. Desktop retains presentation and marks local delivery to avoid duplicate pushes.
 // Read labels synchronously at the raising commit so alerts cannot outlive prompts; edge ids dedupe delivery and address retirement.
 import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
@@ -36,7 +35,6 @@ export type StructuredAttentionMobileDeliveryDeps = {
   dispatch: (event: MobileNotificationDispatchEvent) => void
   /** Withdraws a notification this host delivered; a no-op for one it never sent. */
   reconcile: (state: StructuredAttentionState) => void
-  ownsCompletion?: (completion: AgentSessionTurnCompletion) => Promise<boolean>
   now: () => number
 }
 
@@ -130,21 +128,9 @@ export function createStructuredAttentionMobileDelivery(
   }
   return {
     deliver: (edge, summary) => {
-      if (edge.type !== 'completion' || !deps.ownsCompletion) {
+      if (edge.type !== 'completion' || edge.completion.automationOwned !== true) {
         deliver(edge, summary)
-        return
       }
-      void deps
-        .ownsCompletion(edge.completion)
-        .then((owned) => {
-          if (!owned) {
-            deliver(edge, summary)
-          }
-        })
-        .catch((error) => {
-          console.warn('[automations] Could not resolve Chat notification owner:', error)
-          deliver(edge, summary)
-        })
     },
     reconcile: deps.reconcile
   }

@@ -44,8 +44,8 @@ export class StructuredAgentSessionBackgroundTaskChannel {
   journalSnapshot = async (sessionId: string) =>
     (await this.conversation(sessionId)).journal.snapshot()
 
-  queuedSendAnswer = async (sessionId: string, messageId: string) =>
-    queuedSendAnswer((await this.conversation(sessionId)).journal, messageId)
+  queuedSendAnswer = async (sessionId: string, messageId: string, handoffId?: string) =>
+    queuedSendAnswer((await this.conversation(sessionId)).journal, messageId, handoffId)
 
   async history(
     request: AgentSessionHistoryRequest,

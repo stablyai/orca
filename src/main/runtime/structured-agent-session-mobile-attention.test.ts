@@ -207,18 +207,18 @@ it('preserves the missing notification settings failure before dispatch', () => 
   expect(h.sent).toEqual([])
 })
 
-it('reserves automation-owned Chat outcomes for the settled writer but preserves later user completions and prompts', async () => {
-  const owner = Promise.withResolvers<boolean>()
-  const ownsCompletion = vi.fn(() => owner.promise)
-  const h = harness({ ownsCompletion })
-  h.delivery.deliver(completion('success'), SUMMARY)
+it('uses the captured host ownership immediately while preserving later user completions and prompts', () => {
+  const h = harness()
+  const edge = completion('success')
+  if (edge.type !== 'completion') {
+    throw new Error('Expected completion')
+  }
+  h.delivery.deliver(
+    { ...edge, completion: { ...edge.completion, automationOwned: true } },
+    SUMMARY
+  )
   h.delivery.deliver(PROMPT, SUMMARY)
   expect(h.sent).toHaveLength(1)
-  owner.resolve(true)
-  await Promise.resolve()
-  expect(h.sent).toHaveLength(1)
-  ownsCompletion.mockResolvedValue(false)
-  h.delivery.deliver(completion('success'), SUMMARY)
-  await Promise.resolve()
+  h.delivery.deliver(edge, SUMMARY)
   expect(h.sent).toHaveLength(2)
 })

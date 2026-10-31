@@ -314,7 +314,7 @@ describe('Pi dialog-shape client capability', () => {
           type: 'completion',
           completion: { ...completion, sessionId: 'codex-session' }
         })
-        queueMicrotask(() => subscriber.emit({ type: 'end' }))
+        subscriber.emit({ type: 'end' })
         return () => undefined
       }
     )

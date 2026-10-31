@@ -1,10 +1,12 @@
-import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
+import type {
+  AutomationAuthorityRef,
+  AutomationOwnerRef
+} from '../../../../shared/automation-owner-ref'
 /** Rows retain captured owners, null when unqualified; requests retain all three generations required by their commit fence. */
 
 import type { Automation } from '../../../../shared/automations-types'
 import type { AutomationListItemSelector } from '../../../../shared/automation-list-scope'
 import type { LegacyAutomationSelector } from '../../../../shared/automation-legacy-list-partition'
-import type { AutomationOwnerRef } from '../../../../shared/automation-owner-ref'
 import type { AutomationUsageSummary } from '../../../../shared/automation-usage-summary'
 
 /** A legacy SSH row carries no registration generation, which is why it can never be fenced. */

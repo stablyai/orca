@@ -1,4 +1,3 @@
-import { ownsAutomationChatCompletion } from './automation-chat-notification-owner'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { publishAutomationOutcome } from './automation-outcome-notification'
 import { observeAutomationChatRun } from './runtime-chat-run-observer'
@@ -12,13 +11,9 @@ import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { AutomationService } from './service'
 import { createHeadlessRunTerminalRetention } from './headless-run-terminal-retention'
-import {
-  getTuiAgentDetectCommands,
-  isTuiAgent,
-  TUI_AGENT_CONFIG
-} from '../../shared/tui-agent-config'
 import { launchHeadlessAutomationAgent, runOwnHandle } from './headless-automation-agent-launch'
 import {
+  automationAgentCommands,
   AGENT_HOOKS_REVIEW_BLOCKED_ERROR,
   createRuntimeAutomationRunTerminalObserver
 } from './runtime-terminal-run-observer'
@@ -152,17 +147,25 @@ export function createRuntimeAutomationService(input: {
     onAutomationsChanged: (payload) => publishAutomationOutcome(runtime, store, payload),
     allowRemoteHostScheduling: input.headless,
     chatDispatcher: async (request) => {
-      const { terminalHandle, ...launch } = await launchAutomationChatAgent(runtime, {
-        ...request,
-        runs: store.listAutomationRuns(request.automation.id)
-      })
-      if (launch.terminalPaneKey && terminalHandle) {
-        launchedHandles.set(launch.terminalPaneKey, terminalHandle)
-        if (launchedHandles.size > MAX_REMEMBERED_LAUNCHES) {
-          launchedHandles.delete(launchedHandles.keys().next().value ?? '')
+      let accepted = false
+      try {
+        const { terminalHandle, ...launch } = await launchAutomationChatAgent(runtime, {
+          ...request,
+          runs: store.listAutomationRuns(request.automation.id)
+        })
+        if (launch.terminalPaneKey && terminalHandle) {
+          launchedHandles.set(launch.terminalPaneKey, terminalHandle)
+          if (launchedHandles.size > MAX_REMEMBERED_LAUNCHES) {
+            launchedHandles.delete(launchedHandles.keys().next().value ?? '')
+          }
+        }
+        accepted = launch.sessionKind === 'chat'
+        return launch
+      } finally {
+        if (!accepted) {
+          getStructuredAgentSessionHost()?.settleAutomationChatRun(request.run.id)
         }
       }
-      return launch
     },
     headlessDispatcher: input.headless
       ? async (request) => {
@@ -181,20 +184,31 @@ export function createRuntimeAutomationService(input: {
         }
       : undefined
   })
-  service.ownsChatCompletion = async (completion) => {
-    const records = await runtime.openAgentSessionRecordStore()
-    return ownsAutomationChatCompletion(completion, {
-      settleDispatches: () => service.settleDispatches(),
-      runs: () => store.listAutomationRuns(),
-      receipt: (run) => readAutomationRunReceipt(records, run),
-      snapshot: async (sessionId) => {
-        const host = getStructuredAgentSessionHost()
-        if (!host) {
-          throw new Error('Chat unavailable')
-        }
-        return host.journalSnapshot(sessionId)
+  let ownedHost: ReturnType<typeof getStructuredAgentSessionHost> = null
+  const releaseRemovals = store.observeAutomationRunRemovals((id) => {
+    ownedHost?.automationChatInterests.forget(id)
+  })
+  service.attachChatOwnership = (host, records) => {
+    if (ownedHost === host) {
+      return
+    }
+    ownedHost?.automationChatInterests.clear()
+    ownedHost = host
+    for (const run of store.listAutomationRuns()) {
+      const receipt = readAutomationRunReceipt(records, run)
+      if (receipt?.kind === 'chat' && receipt.accepted && receipt.messageId) {
+        host.registerAutomationChatRun(run.id, receipt.sessionId, receipt.messageId)
       }
-    })
+    }
+    host.reconcileAutomationChatOwnership()
+  }
+  const stop = service.stop.bind(service)
+  service.stop = () => {
+    releaseRemovals()
+    ownedHost?.automationChatInterests.clear()
+    ownedHost = null
+    service.attachChatOwnership = null
+    stop()
   }
   runtime.setAutomationService(service)
   if (input.headless) {
@@ -287,12 +301,4 @@ function bindHeadlessRunTerminalRetention(
     retention.stop()
     stop()
   }
-}
-
-function automationAgentCommands(agentId: string | undefined): string[] {
-  if (!isTuiAgent(agentId)) {
-    return []
-  }
-  const config = TUI_AGENT_CONFIG[agentId]
-  return [...getTuiAgentDetectCommands(config), config.launchCmd]
 }
