@@ -74,11 +74,12 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
         envelope
       })
     )
+  const selectedStatusRequest = serializedStatusRequest
   const pendingRequest: { preparedRequest: ReturnType<typeof prepare> | null } = {
     // Reserve this connection before authentication; select mutation params only after status.
     preparedRequest:
-      requestSelection && serializedStatusRequest
-        ? prepareRemoteRuntimeRequest(new Map(), () => serializedStatusRequest)
+      requestSelection && selectedStatusRequest
+        ? prepareRemoteRuntimeRequest(new Map(), () => selectedStatusRequest)
         : prepare(params)
   }
   if (

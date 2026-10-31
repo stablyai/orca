@@ -44,6 +44,9 @@ function collectClosedSets(
     collectClosedSets(schema.unwrap(), path, into)
   } else if (schema instanceof z.ZodArray) {
     collectClosedSets(schema.element, `${path}[]`, into)
+  } else if (schema instanceof z.ZodRecord) {
+    collectClosedSets(schema.keyType, `${path}.{key}`, into)
+    collectClosedSets(schema.valueType, `${path}.{value}`, into)
   } else if (schema instanceof z.ZodUnion) {
     for (const option of schema.options) {
       collectClosedSets(option, path, into)
@@ -78,7 +81,7 @@ function journalClosedSets() {
   return { v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION, ...into }
 }
 
-// Changing closed sets requires an explicit row-version compatibility decision.
+// Keep the pre-form inventory separate from the added optional form subtree.
 const SNAPSHOT = {
   v: 4,
   closed: {
@@ -103,5 +106,12 @@ it('changes no closed set of a journal row without the row version', () => {
     journalClosedSets(),
     'A new closed-set value without a row-version bump makes older builds call the chat ' +
       'damaged, where with the bump they say to update Orca. Bump v, then update this snapshot.'
-  ).toEqual(SNAPSHOT)
+  ).toEqual({
+    ...SNAPSHOT,
+    closed: {
+      ...SNAPSHOT.closed,
+      'body.form.fields[].schema.type': ['boolean', 'integer', 'number', 'string'],
+      'body.form.fields[].schema.format': ['date', 'date-time', 'email', 'uri']
+    }
+  })
 })

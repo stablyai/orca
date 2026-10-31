@@ -29,20 +29,29 @@ async function journalHarness(constrainedSink = false) {
   const adapter = adapterFor(codex, { resumeThreadId: HOST_TEST_THREAD })
   const fence = state.store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence
   const journal = state.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
-  const deferred = constrainedSink
-    ? createDeferredStructuredAgentSessionEventSink({
-        sessionId: HOST_TEST_SESSION,
-        logger: state.log.logger,
-        watermarks: {
-          maxQueuedOperations: 0,
-          maxLifecycleQueuedOperations: 8,
-          pauseQueuedBytes: 16_000,
-          lowQueuedBytes: 0,
-          lowQueuedOperations: 0
+  const deferred = createDeferredStructuredAgentSessionEventSink({
+    sessionId: HOST_TEST_SESSION,
+    logger: state.log.logger,
+    ...(constrainedSink
+      ? {
+          watermarks: {
+            maxQueuedOperations: 0,
+            maxLifecycleQueuedOperations: 8,
+            pauseQueuedBytes: 16_000,
+            lowQueuedBytes: 0,
+            lowQueuedOperations: 0
+          }
         }
-      })
-    : undefined
-  const target = { journal, fence, publish: () => {} }
+      : {})
+  })
+  const published: ReturnType<typeof journal.snapshot>[] = []
+  const target = {
+    journal,
+    fence,
+    publish: () => {
+      published.push(journal.snapshot())
+    }
+  }
   deferred?.bind(target)
   let paused = false
   let registry: CodexPromptRegistry | undefined
@@ -71,21 +80,30 @@ async function journalHarness(constrainedSink = false) {
     kind: 'approval' | 'questions' | 'form',
     count = 1,
     turnId = 'turn-1',
-    optionText = 'yes'
+    optionText = 'yes',
+    questions?: {
+      id: string
+      header: string
+      question: string
+      options: { label: string; description: string }[]
+    }[]
   ) => {
     const before = ids.length
     const params =
       kind === 'questions'
         ? {
             itemId: `request-${id}`,
-            questions: Array.from({ length: count }, (_, i) => ({
-              id: `q${i}`,
-              question: `Question ${i}?`,
-              options: [
-                { label: optionText },
-                ...(optionText === 'yes' ? [] : [{ label: 'Other', isOther: true }])
-              ]
-            }))
+            questions:
+              questions ??
+              Array.from({ length: count }, (_, i) => ({
+                id: `q${i}`,
+                header: `Question ${i}`,
+                question: `Question ${i}?`,
+                options: [
+                  { label: optionText },
+                  ...(optionText === 'yes' ? [] : [{ label: 'Other', isOther: true }])
+                ]
+              }))
           }
         : kind === 'form'
           ? {
@@ -113,7 +131,7 @@ async function journalHarness(constrainedSink = false) {
     if (!paused) {
       await deferred?.drained()
     }
-    return { ids: ids.slice(before) }
+    return { ids: [...new Set(ids.slice(before))] }
   }
   const answer = async (itemId: string, other?: string) => {
     const item = journal.snapshot().items.find((item) => item.itemId === itemId)
@@ -148,6 +166,7 @@ async function journalHarness(constrainedSink = false) {
   return {
     codex,
     journal,
+    published,
     deliver,
     answer,
     deferred,
@@ -298,6 +317,83 @@ async function harness() {
 }
 
 describe('whole incoming prompt obligations', () => {
+  it.each([false, true])(
+    'completes original ID0 repeated questions with ordered revisions and unique partial ownership (mixed=%s)',
+    async (mixed) => {
+      const h = await journalHarness()
+      try {
+        const question = (id: string, text: string, labels: string[]) => ({
+          id,
+          header: text,
+          question: text,
+          options: labels.map((label) => ({ label, description: label }))
+        })
+        const questions = [
+          question('pick', 'First?', ['A', 'B']),
+          question('pick', 'Later?', ['C', 'D']),
+          ...(mixed ? [question('other', 'Other?', ['E', 'F'])] : [])
+        ]
+        const commits = vi.fn()
+        const unobserve = h.journal.observeCommits(commits)
+        const publications = h.published.length
+        const batch = await h.deliver(0, 'questions', questions.length, 'turn-1', 'yes', questions)
+        expect(commits).toHaveBeenCalledOnce()
+        expect(h.published.slice(publications)).toHaveLength(1)
+        expect(h.published.at(-1)).toEqual(h.journal.snapshot())
+        expect(batch.ids).toHaveLength(mixed ? 2 : 1)
+        expect(h.registry().sizes).toEqual({ prompts: 1, journalBindings: mixed ? 2 : 1 })
+        expect(h.codex.connections[0].replies).toEqual([])
+        const saved = h.journal.snapshot().items.filter((item) => item.body.kind === 'question')
+        expect(
+          saved.map((item) => [item.revision, item.body.kind === 'question' && item.body.question])
+        ).toEqual(
+          mixed
+            ? [
+                [2, 'Later?'],
+                [1, 'Other?']
+              ]
+            : [[2, 'Later?']]
+        )
+        const before = h.journal.snapshot()
+        const bytes = h.registry().bytes
+        await h.deliver(0, 'questions', questions.length, 'turn-1', 'yes', questions)
+        expect(h.journal.snapshot()).toEqual(before)
+        expect(h.registry().bytes).toBe(bytes)
+        expect(commits).toHaveBeenCalledOnce()
+        unobserve()
+        await h.answer(batch.ids[0]!)
+        if (mixed) {
+          expect(h.codex.connections[0].replies).toEqual([])
+          expect(h.registry().sizes).toEqual({ prompts: 1, journalBindings: 1 })
+          expect(h.registry().find(batch.ids[0]!)).toBeNull()
+          expect(h.registry().find(batch.ids[1]!)).not.toBeNull()
+          expect(h.registry().bytes).toBeGreaterThan(0)
+          await h.answer(batch.ids[1]!)
+        }
+        expect(h.codex.connections[0].replies).toEqual([
+          {
+            id: 0,
+            result: {
+              answers: {
+                pick: { answers: ['C'] },
+                ...(mixed ? { other: { answers: ['E'] } } : {})
+              }
+            }
+          }
+        ])
+        expect(h.registry().sizes).toEqual({ prompts: 0, journalBindings: 0 })
+        expect(h.registry().bytes).toBe(0)
+        expect(h.deferred.state()).toMatchObject({
+          queuedOperations: 0,
+          queuedBytes: 0,
+          failed: false
+        })
+      } finally {
+        await h.dispose()
+      }
+    }
+  )
+
   it('refuses the exact newcomer at retained-byte pressure, keeps all admitted bindings, and releases them through real answers', async () => {
     const h = await journalHarness()
     try {

@@ -254,7 +254,7 @@ describe('codex journal translation', () => {
       }),
       expect.objectContaining({ kind: 'turn', turnId: TURN_ID, state: 'interrupted' })
     ])
-    expect(publishes).toHaveLength(2)
+    expect(publishes).toHaveLength(3)
   })
 
   it('retries a rejected terminal admission without losing tool, prompt, turn, or session truth', () => {

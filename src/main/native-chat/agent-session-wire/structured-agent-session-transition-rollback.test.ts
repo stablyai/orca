@@ -12,40 +12,56 @@ import {
   tool
 } from './structured-agent-session-transition-contract-test-fixture'
 
-it('leaves no row of a settlement durable when a later one of its rows fails to write', async () => {
-  const { root, journal, deferred, sink, bind } = await rig()
-  bind()
-  const running = Array.from({ length: 250 }, (_, index) => identity(`tool-${index}`))
-  for (const id of running) {
-    sink.tryAppendItem?.(id, tool('read', 'running'), { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
-  }
-  await deferred.drained()
-  const before = journal.cursor().sequence
-  // Abort the second insert to verify settlement transaction atomicity.
-  openTestJournalHostDatabase(root).db.exec(`CREATE TEMP TRIGGER fail_second_chunk
+it.each(['resolved', 'ordinary'] as const)(
+  'leaves no row of an atomic %s batch durable or published when its later row fails',
+  async (kind) => {
+    const { root, journal, deferred, sink, bind, publishes } = await rig()
+    bind()
+    const running = Array.from({ length: 250 }, (_, index) => identity(`tool-${index}`))
+    for (const id of running) {
+      sink.tryAppendItem?.(id, tool('read', 'running'), { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
+    }
+    await deferred.drained()
+    const before = journal.cursor().sequence
+    // Abort the second insert to verify settlement transaction atomicity.
+    openTestJournalHostDatabase(root).db.exec(`CREATE TEMP TRIGGER fail_second_chunk
 BEFORE INSERT ON main.journal_rows WHEN NEW.seq = ${before + 2}
 BEGIN SELECT RAISE(ABORT, 'second chunk refused'); END`)
-  sink.tryAppendTransition?.({
-    lifecycle: true,
-    publish: true,
-    steps: [
-      {
-        kind: 'settlement',
-        settlementId: 'settle-all',
-        reservedBytes: 1,
-        resolve: () => running.map(failedTool)
-      }
-    ]
-  })
-
-  await expect(deferred.drained()).resolves.toMatchObject({ ok: false })
-  expect(journal.cursor().sequence).toBe(before)
-  expect(
-    journal
-      .snapshot()
-      .items.filter((item) => item.body.kind === 'tool-call' && item.body.state === 'failed')
-  ).toEqual([])
-})
+    if (kind === 'ordinary') {
+      expect(
+        sink.tryAppendLifecycleBatch?.('settle-all', running.map(failedTool), {
+          lifecycle: true,
+          publish: true
+        })
+      ).toEqual({ accepted: true })
+    } else {
+      sink.tryAppendTransition?.({
+        lifecycle: true,
+        publish: true,
+        steps: [
+          {
+            kind: 'settlement',
+            settlementId: 'settle-all',
+            reservedBytes: 1,
+            resolve: () => running.map(failedTool)
+          }
+        ]
+      })
+    }
+    await expect(deferred.drained()).resolves.toMatchObject({ ok: false })
+    expect(publishes).toEqual([])
+    expect(
+      sink.tryAppendLifecycleBatch?.('later', running.map(failedTool), { publish: true })
+    ).toEqual({ accepted: false, reason: 'failed' })
+    expect(journal.snapshot().items).toHaveLength(250)
+    expect(journal.cursor().sequence).toBe(before)
+    expect(
+      journal
+        .snapshot()
+        .items.filter((item) => item.body.kind === 'tool-call' && item.body.state === 'failed')
+    ).toEqual([])
+  }
+)
 
 it('writes and announces nothing when a step resolves to nothing', async () => {
   const { journal, deferred, sink, publishes, bind } = await rig()

@@ -1,3 +1,4 @@
+import { clientSupportsSnapshotCatchUp } from './structured-agent-session-history-capability'
 import { STRUCTURED_AGENT_SESSION_HISTORY_METHODS } from './structured-agent-session-history'
 import { clientReadsSettledBodies } from './structured-agent-session-item'
 import { clientRequestsCommands } from './structured-agent-session-policy'

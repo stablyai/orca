@@ -3,13 +3,18 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
-import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import {
+  createTrackedJournalOpener,
+  liveTestJournalRows,
+  openTestJournalHostDatabase
+} from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { parseJournalRow } from '../native-chat/agent-session-journal/journal-row-schema'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 
 const SESSION = 'codex-questions'
-const journals = createTrackedJournalOpener()
+const journals = createTrackedJournalOpener({ legacyInputs: true })
 let root: string | undefined
 
 afterEach(async () => {
@@ -86,6 +91,24 @@ it.each([
       saved.map((item) => (item.body.kind === 'question' ? item.body.question : null))
     ).toEqual(questions)
     expect(saved.map((item) => item.revision)).toEqual(ids[0] === ids[1] ? [2] : [1, 1])
+    const occurrences = liveTestJournalRows(openTestJournalHostDatabase(root).db, SESSION).flatMap(
+      (stored) => {
+        const parsed = parseJournalRow(stored.rowJson)
+        if (!parsed.ok) {
+          throw new Error('Invalid saved row')
+        }
+        const row = parsed.row
+        return (
+          row.kind === 'lifecycle-batch' ? row.mutations : row.kind === 'item' ? [row] : []
+        ).filter((mutation) => mutation.kind === 'item' && mutation.body.kind === 'question')
+      }
+    )
+    expect(occurrences).toMatchObject(
+      ids.map((_id, index) => ({
+        revision: ids[0] === ids[1] ? index + 1 : 1,
+        body: { question: `Question ${index}?` }
+      }))
+    )
     expect(published.at(-1)).toEqual(journal.snapshot())
     translator.dispose()
     deferred.close()

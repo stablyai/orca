@@ -131,9 +131,23 @@ describe('the managed tunnel over the stdio bridge', () => {
       })
       const socket = await dial(forward.entry.localPort)
       const payload = 'A'.repeat(4 * Math.ceil((4 * 1024 * 1024 + 82) / 3))
-      const echoed = echoOf(socket, payload)
+      let readReady = () => {}
+      const readable = new Promise<void>((resolve) => {
+        readReady = resolve
+      })
+      socket.on('readable', readReady)
+      let complete = false
+      const echoed = echoOf(socket, payload).then((value) => {
+        complete = true
+        return value
+      })
       socket.pause()
-      await new Promise((resolve) => setTimeout(resolve, 25))
+      expect(socket.writableNeedDrain).toBe(true)
+      await readable
+      expect(socket.isPaused()).toBe(true)
+      expect(complete).toBe(false)
+      expect(socket.readableLength).toBeGreaterThan(0)
+      socket.off('readable', readReady)
       socket.resume()
       expect(await echoed).toBe(payload)
       await forward.close()

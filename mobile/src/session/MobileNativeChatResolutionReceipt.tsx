@@ -1,7 +1,6 @@
 import { agentSessionFormBooleanLabels } from '../../../src/shared/agent-session-form-copy'
-import { ActivityIndicator } from 'react-native'
 import { useMobileNativeChatSettledBody } from './mobile-native-chat-settled-body'
-import { StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
 import {
   nativeChatReceiptAnswerHeading,
   nativeChatReceiptAnswers,

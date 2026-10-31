@@ -1,5 +1,4 @@
 import { MobileNativeChatForm } from './MobileNativeChatForm'
-import type { MobilePermissionResponse } from './mobile-native-chat-permission'
 import { memo, useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { ShieldQuestion } from 'lucide-react-native'
@@ -14,7 +13,10 @@ import {
   isNewerApprovalSubject,
   isPlanApprovalSubject
 } from '../../../../../src/shared/agent-session-approval-subject'
-import type { MobileChatPermission } from './mobile-native-chat-permission'
+import type {
+  MobileChatPermission,
+  MobilePermissionResponse
+} from './mobile-native-chat-permission'
 import { openExternalLink, useExternalLinkAvailable } from '../../../platform/external-link'
 
 function MobileNativeChatPermissionImpl({

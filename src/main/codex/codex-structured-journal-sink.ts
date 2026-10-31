@@ -159,35 +159,14 @@ export function admitCodexLifecycleItems(
   if (items.length === 0) {
     return { accepted: false, reason: 'untranslated' }
   }
-  if (sink.tryAppendTransition) {
-    const mutations = items.map((item) =>
-      journalLifecycleItemMutation(attribution, item.identity, item.body)
-    )
-    return criticalAdmission(
-      sink.tryAppendTransition({
-        steps: [
-          {
-            kind: 'settlement',
-            settlementId,
-            reservedBytes:
-              Buffer.byteLength(JSON.stringify({ settlementId, mutations }), 'utf8') + 512,
-            resolve: () => mutations
-          }
-        ],
-        lifecycle: true,
-        publish: true
-      })
-    )
-  }
   if (sink.tryAppendLifecycleBatch) {
-    const admission = criticalAdmission(
+    return criticalAdmission(
       sink.tryAppendLifecycleBatch(
         settlementId,
         items.map((item) => journalLifecycleItemMutation(attribution, item.identity, item.body)),
-        { lifecycle: true }
+        { lifecycle: true, publish: true }
       )
     )
-    return admission.accepted ? publishCodexLifecycle(sink) : admission
   }
   for (const item of items) {
     const admission = appendCodexLifecycleItem(sink, item.identity, item.body, attribution)

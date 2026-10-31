@@ -86,10 +86,10 @@ export class CodexPromptRegistry {
     prompt.requestFingerprint = digestPayload(JSON.stringify(request.params))
     if (
       rows.length === 0 ||
-      prompt.journalRows.size !== rows.length ||
+      prompt.journalRows.size !== new Set(rows.map((row) => row.questionId)).size ||
       (prompt.method === CODEX_USER_INPUT_METHOD &&
         (rows.length !== prompt.questionIds.length ||
-          new Set(prompt.questionIds).size !== rows.length ||
+          new Set(prompt.questionIds).size !== prompt.journalRows.size ||
           rows.some(
             (row) => row.questionId === null || !prompt.questionIds.includes(row.questionId)
           )))
@@ -121,7 +121,7 @@ export class CodexPromptRegistry {
     )
     if (
       retained.size + 1 > MAX_CODEX_PROMPT_REGISTRY_ENTRIES ||
-      reserved + rows.length >
+      reserved + prompt.journalRows.size >
         Math.min(MAX_CODEX_PENDING_PROMPTS, MAX_CODEX_PROMPT_JOURNAL_BINDINGS) ||
       this.retainedPromptBytes() + codexPromptRegistryEntryBytes(prompt) >
         MAX_CODEX_PROMPT_REGISTRY_BYTES

@@ -37,7 +37,17 @@ describe('Codex blocking server request dispositions', () => {
       method,
       params:
         method === CODEX_USER_INPUT_METHOD
-          ? { ...promptParams, questions: [{ id: 'q1' }] }
+          ? {
+              ...promptParams,
+              questions: [
+                {
+                  id: 'q1',
+                  header: 'Choice',
+                  question: 'Proceed?',
+                  options: [{ label: 'Yes', description: 'Continue' }]
+                }
+              ]
+            }
           : promptParams
     })
 
@@ -133,6 +143,21 @@ describe('Codex blocking server request dispositions', () => {
       -32001,
       'Orca could not model item/commandExecution/requestApproval as a durable prompt'
     )
+  })
+
+  it('refuses an unrenderable ordinary request whole with one error and no owner', () => {
+    const { registry, connection } = harness()
+    expect(
+      disposeCodexServerRequest(registry, connection, {
+        id: 0,
+        method: CODEX_USER_INPUT_METHOD,
+        params: { ...promptParams, questions: [{ id: 'q1' }] }
+      }).kind
+    ).toBe('admission-refused')
+    expect(connection.respond).not.toHaveBeenCalled()
+    expect(connection.respondWithError).toHaveBeenCalledOnce()
+    expect(registry.sizes).toEqual({ prompts: 0, journalBindings: 0 })
+    expect(registry.bytes).toBe(0)
   })
 
   it('bounds the future-method fallback to one explicit rejection', () => {
