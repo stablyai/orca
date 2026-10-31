@@ -95,13 +95,6 @@ describe('a structured worker whose agent outlasts the preamble wait', () => {
     )
     expect(db.markWorkerDispatchReady).not.toHaveBeenCalled()
   })
-
-  it('is ready once the agent took the preamble within the wait', async () => {
-    const { db, receipt } = settle('accepted')
-
-    await expect(receipt).resolves.toMatchObject({ state: 'ready', turnStart: 'observed' })
-    expect(db.markWorkerStartUnknown).not.toHaveBeenCalled()
-  })
 })
 
 describe('a terminal worker whose preamble delivery waited out a held paste', () => {

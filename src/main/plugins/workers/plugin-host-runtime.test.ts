@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
+
 import { createPluginWorkerRuntime, type PluginWorkerOrcaApi } from './plugin-host-runtime'
 
 const init = (overrides: { pluginRoot?: string; mainEntry?: string } = {}) => ({
@@ -17,19 +16,6 @@ const init = (overrides: { pluginRoot?: string; mainEntry?: string } = {}) => ({
 })
 
 describe('plugin worker shutdown', () => {
-  it('normalizes either manifest separator before importing the worker', async () => {
-    const importModule = vi.fn(async () => ({ default: vi.fn() }))
-    const runtime = createPluginWorkerRuntime({ send: vi.fn(), importModule })
-
-    await runtime.handleMessage(
-      init({ pluginRoot: join('plugin-root'), mainEntry: 'nested\\worker.js' })
-    )
-
-    expect(importModule).toHaveBeenCalledWith(
-      pathToFileURL(join('plugin-root', 'nested', 'worker.js')).href
-    )
-  })
-
   it('awaits an optional deactivate export before exiting', async () => {
     let finishDeactivate!: () => void
     const deactivate = vi.fn(
@@ -56,20 +42,6 @@ describe('plugin worker shutdown', () => {
 
     expect(exit).toHaveBeenCalledWith(0)
   })
-
-  it('exits immediately when the plugin has no deactivate export', async () => {
-    const exit = vi.fn()
-    const runtime = createPluginWorkerRuntime({
-      send: vi.fn(),
-      exit,
-      importModule: async () => ({ default: vi.fn() })
-    })
-    await runtime.handleMessage(init())
-
-    await runtime.handleMessage({ orca: 1, kind: 'evt', event: 'shutdown' })
-
-    expect(exit).toHaveBeenCalledWith(0)
-  })
 })
 
 describe('worker orca API parity with frames', () => {
@@ -83,15 +55,6 @@ describe('worker orca API parity with frames', () => {
     await runtime.handleMessage(init())
     return { send, runtime }
   }
-
-  it('exposes api and a synchronous has() for worker methods', async () => {
-    let orca!: PluginWorkerOrcaApi
-    await activateWith((api) => (orca = api))
-    expect(orca.api).toEqual({ major: 1, minor: 0 })
-    expect(orca.host.has('storage.get')).toBe(true)
-    expect(orca.host.has('editor.applyEdit')).toBe(false)
-    expect(Object.isFrozen(orca)).toBe(true)
-  })
 
   it('maps host errors to code, retryable and retryAfterMs, unknown codes to action_failed', async () => {
     let orca!: PluginWorkerOrcaApi

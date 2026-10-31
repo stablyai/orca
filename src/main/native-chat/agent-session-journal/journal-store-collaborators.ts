@@ -139,6 +139,7 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     rowWriter,
     submissionWriter: new JournalSubmissionWriter({
       state: host.state,
+      reopenFloor: () => host.journal().reopenFloor(),
       identity: host.identity,
       rowWriter,
       queuedMessages,
