@@ -1006,6 +1006,10 @@
       "label": "{{title}} 그림",
       "previewDrawing": "그림 미리보기",
       "viewSource": "SVG 소스 보기"
+    },
+    "mermaidDiagram": {
+      "expand": "다이어그램 확대",
+      "label": "Mermaid 다이어그램"
     }
   },
   "connection": {

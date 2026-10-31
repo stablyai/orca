@@ -1096,6 +1096,10 @@
       "label": "Рисунок {{title}}",
       "previewDrawing": "Просмотр рисунка",
       "viewSource": "Показать исходный код SVG"
+    },
+    "mermaidDiagram": {
+      "expand": "Развернуть диаграмму",
+      "label": "Диаграмма Mermaid"
     }
   },
   "connection": {

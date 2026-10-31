@@ -1053,6 +1053,10 @@
       "label": "Dessin {{title}}",
       "previewDrawing": "Aperçu du dessin",
       "viewSource": "Afficher la source SVG"
+    },
+    "mermaidDiagram": {
+      "expand": "Agrandir le diagramme",
+      "label": "Diagramme Mermaid"
     }
   },
   "connection": {
