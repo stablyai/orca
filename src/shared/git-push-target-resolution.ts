@@ -2,6 +2,7 @@ import type { GitCommandRunner } from './git-effective-upstream'
 import { gitRefTargetsBranchOnRemote } from './git-remote-branch-name'
 import { findGitRemoteNameByFetchUrl } from './git-remote-url-index'
 import { createGitConfigSnapshotRunner } from './git-config-snapshot-runner'
+import { getGitCurrentBranchName } from './git-current-branch'
 
 export type ResolvedGitPushTarget = {
   remote: string
@@ -106,8 +107,7 @@ export async function resolveConfiguredGitPushTarget(
 ): Promise<ResolvedGitPushTarget | null> {
   const runGit = createGitConfigSnapshotRunner(execGit)
   try {
-    const { stdout: branchStdout } = await runGit(['symbolic-ref', '--quiet', '--short', 'HEAD'])
-    const branch = branchStdout.trim()
+    const branch = await getGitCurrentBranchName(runGit)
     if (!branch) {
       return null
     }

@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 
 export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
@@ -44,67 +44,52 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
     marginLeft: spacing.lg + 24,
     marginRight: spacing.lg
   },
-  filterModalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.xs,
-    marginBottom: spacing.md
-  },
-  filterModalHeading: {
-    flexShrink: 1
-  },
-  filterModalTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
   filterModalSubtitle: {
-    fontSize: 11,
-    color: colors.textMuted,
-    marginTop: 2
+    fontSize: typography.metaSize,
+    color: colors.textMuted
   },
   optionPending: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: spacing.xs,
-    marginTop: spacing.xs
+    marginBottom: spacing.sm
   },
-  clearFiltersText: {
-    fontSize: 13,
-    color: colors.textSecondary
-  },
+  // Settings-style group caption: sentence case, over the group's leading edge.
   filterSectionLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: spacing.xs,
-    paddingHorizontal: spacing.xs
+    fontSize: 13,
+    color: colors.textSecondary,
+    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.lg
+  },
+  optionSectionGap: {
+    height: spacing.xs
   },
   filterGroup: {
     backgroundColor: colors.bgPanel,
-    borderRadius: 12,
+    borderRadius: radii.surface,
     overflow: 'hidden',
     marginBottom: spacing.md
   },
   filterRow: {
+    minHeight: 50,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
     gap: spacing.sm
   },
   filterRowText: {
     flex: 1,
-    fontSize: typography.bodySize,
+    fontSize: 15,
     color: colors.textPrimary
   },
+  // Inset from the leading edge, like a settings list.
   filterSeparator: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
+    marginLeft: spacing.lg
   },
   optionRowLabel: {
     flex: 1
@@ -115,7 +100,7 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
     marginTop: 2
   },
   optionRowIndented: {
-    paddingLeft: spacing.md + 2 + spacing.lg
+    paddingLeft: spacing.lg * 2
   },
   optionRowDisabled: {
     opacity: 0.5
@@ -126,34 +111,24 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
   optionRowValue: {
     flexShrink: 1,
     maxWidth: '45%',
-    fontSize: 13,
-    color: colors.textMuted
+    fontSize: 15,
+    color: colors.textSecondary
   },
   // On the drawer's base color, so the track takes the panel color the option cards use.
   optionSegmented: {
     backgroundColor: colors.bgPanel,
     marginBottom: spacing.md
   },
-  optionBack: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    alignSelf: 'flex-start',
-    paddingVertical: spacing.xs,
-    marginBottom: spacing.xs
-  },
-  optionBackText: {
-    fontSize: 14,
-    color: colors.textSecondary
-  },
-  optionPageTitle: {
-    paddingHorizontal: spacing.xs,
-    marginBottom: spacing.md
+  // Over the sheet header's empty leading side, centred in its 52pt row.
+  optionPageBack: {
+    position: 'absolute',
+    top: 8,
+    left: spacing.xs
   },
   filterRepoDot: {
     width: 8,
     height: 8,
-    borderRadius: 4
+    borderRadius: radii.pill
   },
   confirmContent: {
     paddingBottom: spacing.lg
@@ -176,7 +151,7 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
   confirmBtn: {
     flex: 1,
     paddingVertical: spacing.sm + 2,
-    borderRadius: 10,
+    borderRadius: radii.control,
     alignItems: 'center'
   },
   confirmBtnCancel: {

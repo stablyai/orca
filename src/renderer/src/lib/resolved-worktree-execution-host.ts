@@ -1,6 +1,5 @@
 import {
   LOCAL_EXECUTION_HOST_ID,
-  getRepoExecutionHostId,
   parseExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
@@ -9,12 +8,10 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   findIndexedFolderWorkspaceOwner,
-  findIndexedProjectGroupOwner,
-  findIndexedRepoOwner,
-  findIndexedRepoOwnerForHost,
-  findIndexedWorktreeOwner,
-  findIndexedWorktreeOwnerForHost
+  findIndexedProjectGroupOwner
 } from './worktree-runtime-owner-index'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { resolveQualifiedWorktreeExecutionOwner } from './qualified-worktree-execution-owner'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 import { runtimeRpcTargetForAuthorityKey } from '@/runtime/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
@@ -66,30 +63,26 @@ export function getResolvedWorktreeExecutionOwner<
   state: WorktreeRuntimeOwnerState & { worktreesByRepo?: Record<string, readonly T[]> },
   worktreeId: string
 ): { hostId: ExecutionHostId; workspace: T } | null {
+  const owner = getQualifiedWorktreeOwner<T>(state, worktreeId)
+  return owner ? { hostId: owner.physicalHostId, workspace: owner.worktree } : null
+}
+
+function getQualifiedWorktreeOwner<
+  T extends NonNullable<WorktreeRuntimeOwnerState['worktreesByRepo']>[string][number]
+>(
+  state: WorktreeRuntimeOwnerState & { worktreesByRepo?: Record<string, readonly T[]> },
+  worktreeId: string
+) {
   const preferredHostId =
     state.activeWorktreeId === worktreeId
       ? (state.activeWorkspaceExecutionHostId ?? undefined)
       : undefined
-  const qualifiedWorktree = preferredHostId
-    ? findIndexedWorktreeOwnerForHost(state.worktreesByRepo, worktreeId, preferredHostId)
-    : null
-  const physicalOwner = parseExecutionHostId(qualifiedWorktree?.hostId)
-  if (qualifiedWorktree && physicalOwner) {
-    return { hostId: physicalOwner.id, workspace: qualifiedWorktree }
-  }
-  const worktree = qualifiedWorktree ?? findIndexedWorktreeOwner(state.worktreesByRepo, worktreeId)
-  if (!worktree) {
-    return null
-  }
-  const repo =
-    (preferredHostId
-      ? findIndexedRepoOwnerForHost(state.repos, worktree.repoId, preferredHostId)
-      : null) ?? findIndexedRepoOwner(state.repos, worktree.repoId)
-  const hostId =
-    parseExecutionHostId(worktree.hostId)?.id ?? (repo ? getRepoExecutionHostId(repo) : null)
-  return hostId && (!preferredHostId || hostId === preferredHostId)
-    ? { hostId, workspace: worktree }
-    : null
+  return resolveQualifiedWorktreeExecutionOwner<T>(
+    selectWorktreesByRepo(state),
+    state.repos,
+    worktreeId,
+    preferredHostId
+  )
 }
 
 function restoredFolderRuntimeHost(
@@ -100,22 +93,40 @@ function restoredFolderRuntimeHost(
   return host?.kind === 'runtime' ? host.id : null
 }
 
-/** Require hydrated ownership: restored SSH worktrees can collide with local repo rows while catalogs load. */
-export function getResolvedExecutionHostIdForWorktree(
+function getWorkspaceExecutionHosts(
   state: WorktreeRuntimeOwnerState,
   worktreeId: string | null | undefined
-): ExecutionHostId | null {
+) {
   if (!worktreeId) {
     return null
   }
   if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
-    return LOCAL_EXECUTION_HOST_ID
+    return { hostId: LOCAL_EXECUTION_HOST_ID, physicalHostId: LOCAL_EXECUTION_HOST_ID }
   }
   const scope = parseWorkspaceKey(worktreeId)
-  return scope?.type === 'folder'
-    ? (getResolvedFolderExecutionOwner(state, scope.folderWorkspaceId)?.hostId ??
-        restoredFolderRuntimeHost(state, folderWorkspaceKey(scope.folderWorkspaceId)))
-    : (getResolvedWorktreeExecutionOwner(state, worktreeId)?.hostId ?? null)
+  if (scope?.type === 'folder') {
+    const hostId =
+      getResolvedFolderExecutionOwner(state, scope.folderWorkspaceId)?.hostId ??
+      restoredFolderRuntimeHost(state, folderWorkspaceKey(scope.folderWorkspaceId))
+    return hostId ? { hostId, physicalHostId: hostId } : null
+  }
+  return getQualifiedWorktreeOwner(state, worktreeId)
+}
+
+/** Require hydrated ownership before addressing a workspace operation. */
+export function getResolvedExecutionHostIdForWorktree(
+  state: WorktreeRuntimeOwnerState,
+  worktreeId: string | null | undefined
+): ExecutionHostId | null {
+  return getWorkspaceExecutionHosts(state, worktreeId)?.hostId ?? null
+}
+
+/** Filesystem ownership for unstamped OS paths, independent of the selected operation address. */
+export function getResolvedPhysicalExecutionHostIdForWorktree(
+  state: WorktreeRuntimeOwnerState,
+  worktreeId: string | null | undefined
+): ExecutionHostId | null {
+  return getWorkspaceExecutionHosts(state, worktreeId)?.physicalHostId ?? null
 }
 
 /**

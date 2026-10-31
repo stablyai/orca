@@ -19,6 +19,8 @@ import {
   getResolvedWorktreeExecutionOwner
 } from '@/lib/resolved-worktree-execution-host'
 import { getWorkspaceFileRevealOwner } from '@/lib/reveal-in-file-manager'
+import { getLocalPreflightContext } from '@/lib/local-preflight-context'
+import { getEnvironmentRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { selectNativeChatWslProject } from '../components/terminal-pane/terminal-pane-host-state'
 import {
   getAgentDetectionTargetKeyForWorktree,
@@ -144,6 +146,7 @@ describe('useDetectedAgents when the runtime host reconnects', () => {
     useAppStore.setState({
       activeWorktreeId: workspace.id,
       activeWorkspaceExecutionHostId: 'runtime:hub',
+      settings: { ...useAppStore.getState().settings, activeRuntimeEnvironmentId: 'elsewhere' },
       repos: [{ ...makeRepo(), id: 'repo', executionHostId: 'runtime:hub' }],
       worktreesByRepo: { repo: [workspace] }
     })
@@ -158,6 +161,7 @@ describe('useDetectedAgents when the runtime host reconnects', () => {
       hostId: 'ssh:private',
       workspace: aliased
     })
+    expect(getResolvedWorktreeExecutionOwner(state, workspace.id)?.workspace).toBe(aliased)
     const key = getAgentDetectionTargetKeyForWorktree(state, workspace.id)
     expect(key).toBe(`runtime:hub:${encodeURIComponent(workspace.id)}`)
     expect(parseAgentDetectionTargetKey(key)).toEqual({
@@ -177,7 +181,13 @@ describe('useDetectedAgents when the runtime host reconnects', () => {
     expect(window.api.preflight.detectRemoteAgents).not.toHaveBeenCalled()
     expect(selectNativeChatWslProject(state, workspace.id)).toBe(false)
     expect(getWorkspaceFileRevealOwner(state, workspace.id, {})).toBe('ssh:private')
-    expect(getActiveWorkspaceOwnerTarget(state)).toBeNull()
+    expect(getActiveWorkspaceOwnerTarget(state)).toEqual({
+      kind: 'environment',
+      environmentId: 'hub'
+    })
+    expect(getLocalPreflightContext(state)).toEqual({
+      runtimeContextKey: getEnvironmentRuntimeContextKey('hub')
+    })
 
     const calls = runtimeEnvironmentCall.mock.calls.length
     await act(async () => useAppStore.setState({ activeWorkspaceExecutionHostId: 'runtime:rival' }))

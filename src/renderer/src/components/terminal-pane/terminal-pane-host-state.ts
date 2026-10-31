@@ -51,7 +51,7 @@ function reconnectErrorText(
 
 type LocalRuntimeWorkspace = NonNullable<
   Parameters<typeof getLocalProjectExecutionRuntimeContext>[4]
->
+>['worktree']
 const localReposByCatalog = new WeakMap<AppState['repos'], AppState['repos']>()
 const localGroupsByCatalog = new WeakMap<AppState['projectGroups'], AppState['projectGroups']>()
 
@@ -110,7 +110,7 @@ function selectLocalWslRuntime(state: AppState, workspace: LocalRuntimeWorkspace
     workspace.id,
     'win32',
     {},
-    workspace
+    { worktree: workspace }
   )
   const value = runtime?.status === 'resolved' ? runtime.runtime.kind === 'wsl' : null
   localRuntimeCache.set(workspace, {
@@ -156,7 +156,8 @@ export function selectNativeChatWslProject(state: AppState, worktreeId: string):
           repos: localCatalogRows(state.repos, localReposByCatalog),
           projectGroups: localCatalogRows(state.projectGroups, localGroupsByCatalog)
         },
-        worktreeId
+        worktreeId,
+        { ...folder, executionHostId: owner.id }
       ) ?? {
         id: worktreeId,
         repoId: '',

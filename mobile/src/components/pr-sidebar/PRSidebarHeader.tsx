@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { ArrowRight, ExternalLink, Pencil } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
@@ -12,7 +12,8 @@ import { statusColor } from './pr-sidebar-status-color'
 import { canEditPRTitle } from '../../session/pr-title-edit'
 import { openMobilePrUrl } from '../mobile-pr-url'
 import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
-import { prCommentComposerStyles as composerStyles } from './pr-comment-composer-styles'
+import { prTitleEditStyles as editStyles } from './pr-title-edit-styles'
+import { TextField } from '../composer-input/TextField'
 
 type Props = {
   pr: PRInfo
@@ -154,19 +155,12 @@ function PRTitle({
 
   if (editing) {
     return (
-      <View style={composerStyles.container}>
-        <TextInput
-          style={composerStyles.input}
-          value={draft}
-          onChangeText={setDraft}
-          placeholderTextColor={colors.textMuted}
-          editable={!titleAction.saving}
-          autoFocus
-        />
-        {titleAction.error ? <Text style={composerStyles.error}>{titleAction.error}</Text> : null}
-        <View style={composerStyles.actions}>
+      <View style={editStyles.container}>
+        <TextField value={draft} onChangeText={setDraft} editable={!titleAction.saving} autoFocus />
+        {titleAction.error ? <Text style={editStyles.error}>{titleAction.error}</Text> : null}
+        <View style={editStyles.actions}>
           <Pressable
-            style={({ pressed }) => [composerStyles.cancel, pressed && composerStyles.pressed]}
+            style={({ pressed }) => [editStyles.cancel, pressed && editStyles.pressed]}
             onPress={cancel}
             disabled={titleAction.saving}
             accessibilityRole="button"
@@ -175,10 +169,10 @@ function PRTitle({
               'Cancel editing title'
             )}
           >
-            <Text style={composerStyles.cancelText}>{t('common.cancel', 'Cancel')}</Text>
+            <Text style={editStyles.cancelText}>{t('common.cancel', 'Cancel')}</Text>
           </Pressable>
           <Pressable
-            style={({ pressed }) => [composerStyles.submit, pressed && composerStyles.pressed]}
+            style={({ pressed }) => [editStyles.submit, pressed && editStyles.pressed]}
             onPress={() => void save()}
             disabled={titleAction.saving}
             accessibilityRole="button"
@@ -187,7 +181,7 @@ function PRTitle({
             {titleAction.saving ? (
               <ActivityIndicator size="small" color={colors.bgBase} />
             ) : (
-              <Text style={composerStyles.submitText}>{t('common.save', 'Save')}</Text>
+              <Text style={editStyles.submitText}>{t('common.save', 'Save')}</Text>
             )}
           </Pressable>
         </View>

@@ -166,73 +166,83 @@ it('refuses a detected preview whose owner changed despite a retained active hos
   expect(store.getState().activeGroupIdByWorktree[WORKSPACE]).toBe('c')
 })
 
-it('SSH document links reuse the source page and its grant without a website-browser capability', async () => {
-  const host = 'ssh:ssh-test'
-  store.setState((state) => ({
-    repos: state.repos.map((repo) => ({
-      ...repo,
-      connectionId: 'ssh-test',
-      executionHostId: host
-    })),
-    worktreesByRepo: {
-      repo1: state.worktreesByRepo.repo1!.map((worktree) => ({ ...worktree, hostId: host }))
-    },
-    activeWorkspaceExecutionHostId: host,
-    unifiedTabsByWorktree: {
-      [WORKSPACE]: state.unifiedTabsByWorktree[WORKSPACE]!.map((tab) => ({
-        ...tab,
+it.each([null, 'hub'] as const)(
+  'SSH document links reuse the source page and its grant (runtime alias: %s)',
+  async (runtimeEnvironmentId) => {
+    const host = runtimeEnvironmentId
+      ? (`runtime:${runtimeEnvironmentId}` as const)
+      : 'ssh:ssh-test'
+    store.setState((state) => ({
+      repos: state.repos.map((repo) => ({
+        ...repo,
+        connectionId: 'ssh-test',
         executionHostId: host
-      }))
-    },
-    runtimeStatusByEnvironmentId: new Map()
-  }))
-  const docLocation = {
-    kind: 'workspace-doc' as const,
-    worktreeId: WORKSPACE,
-    filePath: '/repo/doc.html'
-  }
-  const original = store.getState().createBrowserTab(WORKSPACE, '', {
-    targetGroupId: 'a',
-    executionHostId: host,
-    browserRuntimeEnvironmentId: null,
-    docLocation,
-    activate: false
-  })
-  let outcome: BrowserOpenOutcome | undefined
-  let plan: ReturnType<typeof openFileInBrowserTab> | undefined
-  await new Promise<void>((resolve) => {
-    plan = openFileInBrowserTab({
-      filePath: docLocation.filePath,
+      })),
+      worktreesByRepo: {
+        repo1: state.worktreesByRepo.repo1!.map((worktree) => ({
+          ...worktree,
+          hostId: 'ssh:ssh-test' as const,
+          runtimeOwnerEnvironmentId: runtimeEnvironmentId
+        }))
+      },
+      activeWorkspaceExecutionHostId: host,
+      unifiedTabsByWorktree: {
+        [WORKSPACE]: state.unifiedTabsByWorktree[WORKSPACE]!.map((tab) => ({
+          ...tab,
+          executionHostId: host
+        }))
+      },
+      runtimeStatusByEnvironmentId: new Map()
+    }))
+    const docLocation = {
+      kind: 'workspace-doc' as const,
       worktreeId: WORKSPACE,
-      linkContext: { linkIntent: captureLinkOpenIntent(store.getState(), WORKSPACE, 'source') },
-      onLinkOutcome: (value) => {
-        outcome = value
-        resolve()
-      }
+      filePath: '/repo/doc.html'
+    }
+    const original = store.getState().createBrowserTab(WORKSPACE, '', {
+      targetGroupId: 'a',
+      executionHostId: host,
+      browserRuntimeEnvironmentId: null,
+      docLocation,
+      activate: false
     })
-  })
-  expect(plan?.status).toBe('doc-preview')
-  expect(outcome).toMatchObject({
-    status: 'opened',
-    result: { groupId: 'a', executionHostId: host }
-  })
-  if (outcome?.status !== 'opened' || !original.activePageId) {
-    throw new Error('Expected preview pages')
+    let outcome: BrowserOpenOutcome | undefined
+    let plan: ReturnType<typeof openFileInBrowserTab> | undefined
+    await new Promise<void>((resolve) => {
+      plan = openFileInBrowserTab({
+        filePath: docLocation.filePath,
+        worktreeId: WORKSPACE,
+        linkContext: { linkIntent: captureLinkOpenIntent(store.getState(), WORKSPACE, 'source') },
+        onLinkOutcome: (value) => {
+          outcome = value
+          resolve()
+        }
+      })
+    })
+    expect(plan?.status).toBe('doc-preview')
+    expect(outcome).toMatchObject({
+      status: 'opened',
+      result: { groupId: 'a', executionHostId: host }
+    })
+    if (outcome?.status !== 'opened' || !original.activePageId) {
+      throw new Error('Expected preview pages')
+    }
+    expect(outcome.result.browserPageId).toBe(original.activePageId)
+    expect(store.getState().activeWorkspaceExecutionHostId).toBe(host)
+    const location = buildDocPreviewGrantRequest(store.getState(), WORKSPACE, docLocation.filePath)
+    if (!location) {
+      throw new Error('Expected grant owner')
+    }
+    grants.push(original.activePageId)
+    const first = await ensureDocPreviewGrant(original.activePageId, location)
+    expect(await ensureDocPreviewGrant(outcome.result.browserPageId, location)).toBe(first)
+    expect(mocks.mint).toHaveBeenCalledTimes(1)
+    store.getState().closeBrowserTab(original.id)
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(mocks.revoke).toHaveBeenCalledExactlyOnceWith(first.grantId)
   }
-  expect(outcome.result.browserPageId).toBe(original.activePageId)
-  const location = buildDocPreviewGrantRequest(store.getState(), WORKSPACE, docLocation.filePath)
-  if (!location) {
-    throw new Error('Expected grant owner')
-  }
-  grants.push(original.activePageId)
-  const first = await ensureDocPreviewGrant(original.activePageId, location)
-  expect(await ensureDocPreviewGrant(outcome.result.browserPageId, location)).toBe(first)
-  expect(mocks.mint).toHaveBeenCalledTimes(1)
-  store.getState().closeBrowserTab(original.id)
-  await Promise.resolve()
-  await Promise.resolve()
-  expect(mocks.revoke).toHaveBeenCalledExactlyOnceWith(first.grantId)
-})
+)
 
 it('a folder workspace uses its own layout and activates its browser without Git metadata', async () => {
   const folder = 'folder:folder-1'

@@ -5,7 +5,7 @@ import {
   editableProjectFields,
   projectFieldValueLabel
 } from './mobile-tasks-legacy-foundation'
-import { View, Text, Pressable, Check, colors, TextInput } from './mobile-tasks-dependencies'
+import { View, Text, Pressable, Check, colors, TextField } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
 
 export function renderMobileTasksProjectFieldEditors(model: ConnectionPresentationModel) {
@@ -159,8 +159,7 @@ export function renderMobileTasksProjectFieldEditors(model: ConnectionPresentati
               </View>
             ) : (
               <>
-                <TextInput
-                  style={styles.input}
+                <TextField
                   value={draftValue}
                   onChangeText={(next) =>
                     setProjectFieldDrafts((current) => ({
@@ -175,7 +174,6 @@ export function renderMobileTasksProjectFieldEditors(model: ConnectionPresentati
                         ? translate('tasks.projectFieldEditors.numberPlaceholder', 'Number')
                         : translate('tasks.projectFieldEditors.textPlaceholder', 'Text')
                   }
-                  placeholderTextColor={colors.textMuted}
                   keyboardType={field.dataType === 'NUMBER' ? 'numeric' : 'default'}
                   autoCapitalize="none"
                 />

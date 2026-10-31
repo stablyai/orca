@@ -1,10 +1,14 @@
 import { loadMobileResumeMetadata } from './mobile-agent-history-resume-metadata'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { ActivityIndicator, Pressable, Text, View } from 'react-native'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ChevronLeft, RefreshCw } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { MobileSegmentedControl, type MobileSegment } from '../components/MobileSegmentedControl'
+import { BottomSearchBar } from '../components/nav-bar/BottomSearchBar'
+import { NavBar } from '../components/nav-bar/NavBar'
+import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { useWorkspaceClient } from '../transport/use-workspace-client'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 import { useSessionScreenHandlers } from '../session/session-screen-handlers'
@@ -41,11 +45,11 @@ export type MobileAgentSessionHistoryPanelProps = {
   origin?: string
 }
 
-function scopeTabs(t: Translate): { scope: AiVaultScope; label: string }[] {
+function scopeSegments(t: Translate): MobileSegment<AiVaultScope>[] {
   return [
-    { scope: 'workspace', label: t('agentHistory.panel.workspace', 'Workspace') },
-    { scope: 'project', label: t('agentHistory.panel.project', 'Project') },
-    { scope: 'all', label: t('agentHistory.panel.all', 'All') }
+    { value: 'workspace', label: t('agentHistory.panel.workspace', 'Workspace') },
+    { value: 'project', label: t('agentHistory.panel.project', 'Project') },
+    { value: 'all', label: t('agentHistory.panel.all', 'All') }
   ]
 }
 
@@ -74,6 +78,8 @@ function MobileAgentSessionHistoryPanelContent({
   const [worktrees, setWorktrees] = useState<Worktree[]>([])
   const [worktreesLoaded, setWorktreesLoaded] = useState(false)
   const [query, setQuery] = useState('')
+  const [searchBarHeight, setSearchBarHeight] = useState(0)
+  const insets = useSafeAreaInsets()
   const [resumingSessionId, setResumingSessionId] = useState<string | null>(null)
   const [resumeMessage, setResumeMessage] = useState<string | null>(null)
   const now = useNow(30_000)
@@ -285,33 +291,35 @@ function MobileAgentSessionHistoryPanelContent({
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.header} edges={['top']}>
-        <View style={styles.topBar}>
-          <Pressable
-            style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
-            onPress={() => router.back()}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={t('common.back', 'Back')}
-          >
-            <ChevronLeft size={22} color={colors.textSecondary} strokeWidth={2.2} />
-          </Pressable>
-          <View style={styles.titleBlock}>
-            <Text style={styles.title} numberOfLines={1}>
-              {t('agentHistory.panel.title', 'Agent Session History')}
-            </Text>
-            <Text style={styles.meta} numberOfLines={1}>
-              {worktreeLabel}
-            </Text>
-          </View>
-          <Pressable
-            style={({ pressed }) => [styles.refreshButton, pressed && styles.refreshButtonPressed]}
-            onPress={() => void onRefresh()}
-            hitSlop={8}
-            accessibilityLabel={t('agentHistory.panel.refreshSessions', 'Refresh agent sessions')}
-          >
-            <RefreshCw size={18} color={colors.textSecondary} strokeWidth={2.1} />
-          </Pressable>
-        </View>
+        <NavBar
+          leading={
+            <NavBarButton
+              icon={ChevronLeft}
+              onPress={() => router.back()}
+              accessibilityLabel={t('common.back', 'Back')}
+            />
+          }
+          title={t('agentHistory.panel.title', 'Agent Session History')}
+          subtitle={worktreeLabel}
+          trailing={
+            <NavBarButton
+              icon={RefreshCw}
+              onPress={() => void onRefresh()}
+              accessibilityLabel={t('agentHistory.panel.refreshSessions', 'Refresh agent sessions')}
+            />
+          }
+          accessory={
+            screenState.kind === 'ready' ? (
+              <MobileSegmentedControl
+                segments={scopeSegments(t)}
+                selected={scope}
+                onSelect={onSelectScope}
+                fill
+                style={styles.scopeTabs}
+              />
+            ) : null
+          }
+        />
       </SafeAreaView>
 
       {screenState.kind === 'loading' ? (
@@ -344,33 +352,6 @@ function MobileAgentSessionHistoryPanelContent({
         </View>
       ) : (
         <>
-          <View style={styles.scopeTabs}>
-            {scopeTabs(t).map((tab) => {
-              const active = scope === tab.scope
-              return (
-                <Pressable
-                  key={tab.scope}
-                  style={[styles.scopeTab, active && styles.scopeTabActive]}
-                  onPress={() => onSelectScope(tab.scope)}
-                >
-                  <Text style={[styles.scopeTabText, active && styles.scopeTabTextActive]}>
-                    {tab.label}
-                  </Text>
-                </Pressable>
-              )
-            })}
-          </View>
-          <View style={styles.searchRow}>
-            <TextInput
-              style={styles.searchInput}
-              value={query}
-              onChangeText={setQuery}
-              placeholder={t('agentHistory.panel.placeholder', 'Search sessions, repo:, path:')}
-              placeholderTextColor={colors.textMuted}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-          </View>
           {issues.length > 0 ? (
             <View style={styles.noticeBanner}>
               <Text style={styles.noticeText}>
@@ -390,7 +371,7 @@ function MobileAgentSessionHistoryPanelContent({
             </View>
           ) : null}
           {sections.length === 0 ? (
-            <View style={styles.state}>
+            <View style={[styles.state, { paddingBottom: searchBarHeight }]}>
               <Text style={styles.stateTitle}>
                 {t('agentHistory.panel.noSessions', 'No agent sessions')}
               </Text>
@@ -409,8 +390,16 @@ function MobileAgentSessionHistoryPanelContent({
               resumeActionStateBySessionId={resumeActionStateBySessionId}
               onResume={onResumeSession}
               onRefresh={() => void onRefresh()}
+              bottomPadding={searchBarHeight}
             />
           )}
+          <BottomSearchBar
+            value={query}
+            onChangeText={setQuery}
+            placeholder={t('agentHistory.panel.placeholder', 'Search sessions, repo:, path:')}
+            bottomInset={insets.bottom}
+            onCoveredHeightChange={setSearchBarHeight}
+          />
         </>
       )}
     </View>

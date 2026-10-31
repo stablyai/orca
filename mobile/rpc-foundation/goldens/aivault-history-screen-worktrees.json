@@ -262,7 +262,7 @@
         }
       }
     },
-    "d22bb2f62cea": {
+    "d13f6fc48675": {
       "crash": {
         "$rpc": "null"
       },
@@ -273,7 +273,7 @@
         "RefreshCw": 1,
         "SafeAreaView": 1,
         "Text": 2,
-        "View": 4
+        "View": 7
       },
       "labels": ["Back", "Refresh agent sessions"],
       "text": ["Agent Session History", "orca-history"]
@@ -303,7 +303,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "d22bb2f62cea",
+          "state": "d13f6fc48675",
           "effects": []
         }
       },
@@ -321,7 +321,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "d22bb2f62cea",
+          "state": "d13f6fc48675",
           "effects": []
         }
       },
@@ -339,7 +339,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "d22bb2f62cea",
+          "state": "d13f6fc48675",
           "effects": ["40fa6811eb00"]
         }
       }

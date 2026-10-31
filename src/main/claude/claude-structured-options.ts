@@ -22,8 +22,8 @@ const EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
 
 const OPTION_ORDER = ['model', 'effort', 'fastMode'] as const
 
-/** Approval mode is fixed at startup: a fallback mode is dropped only by reopening for a newly picked model.
- *  Compares with what Orca itself launched, so the reopened child never matches again. */
+/** A fallback approval mode is dropped only by reopening for a newly picked model (only an approved plan
+ *  changes the live mode). Compares with what Orca itself launched, so the reopened child never matches again. */
 export function claudeModelTransitionRestart(
   sessions: ReadonlyMap<string, ClaudeSession>
 ): NonNullable<StructuredAgentSessionAdapter['requiresModelTransitionRestart']> {

@@ -353,42 +353,6 @@
         }
       }
     },
-    "6118d05454f8": {
-      "name": "orchestration.workerTerminalUserInput#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "orchestration.workerTerminalUserInput"
-        },
-        {
-          "name": "params",
-          "value": {
-            "terminal": "terminal-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "budgetSpansConnect": true,
-            "failWhenDisconnected": true,
-            "timeoutMs": 5000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "reported": true
-          }
-        }
-      }
-    },
     "7291a73df186": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -432,11 +396,6 @@
           "ok": true
         }
       }
-    },
-    "85a38010bc83": {
-      "name": "orchestration.workerTerminalUserInput#1",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}"
     },
     "9bd3ea1ff2bb": {
       "status": "fulfilled",
@@ -537,8 +496,8 @@
       {
         "id": "native-chat-write-accepted.normal:accepted",
         "observation": {
-          "sender": ["0c75127e9c76", "6118d05454f8"],
-          "payloads": ["37750614a050", "85a38010bc83"],
+          "sender": ["0c75127e9c76"],
+          "payloads": ["37750614a050"],
           "settlements": {
             "body": "7291a73df186"
           },

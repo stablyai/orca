@@ -162,15 +162,26 @@ export const spacing = {
   xl: 24
 } as const
 
+// Three shape types: one radius for what you tap, one for what holds content, and concentric nesting.
 export const radii = {
-  row: 6,
-  card: 14,
-  button: 6,
-  input: 6,
-  camera: 8,
-  composer: 24,
-  composerItem: 12
+  /** Everything you tap: buttons, icon buttons, text fields, pickers, segmented controls, key caps. */
+  control: 12,
+  /** Labels and round buttons: badges, chips, status pills, dots, avatars, and the composer's own buttons. */
+  pill: 999,
+  /** Everything that holds content: cards, groups, sheets, banners, code boxes, multi-line boxes, menus. */
+  surface: 16,
+  /** Layers floating over content: the composer box and dialogs. */
+  floating: 24,
+  /** Square icon tiles. */
+  tile: 10,
+  /** Inline code, check squares and tiny icons. */
+  mark: 4
 } as const
+
+/** A shape inside another keeps its curve parallel to the parent's: the parent radius minus the gap between them. */
+export function concentricRadius(parentRadius: number, inset: number): number {
+  return Math.max(radii.mark, parentRadius - inset)
+}
 
 export const typography = {
   titleSize: 18,

@@ -26,7 +26,7 @@ export const sessionOptionPickerStyles = themedStyleSheet(() => ({
   sheetNav: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.bgRaised,
@@ -61,7 +61,7 @@ export const sessionOptionPickerStyles = themedStyleSheet(() => ({
   },
   group: {
     overflow: 'hidden',
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgRaised
   },
   groupSpaced: {

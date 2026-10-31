@@ -6,6 +6,7 @@ import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-ses
 import { ClaudeStructuredSessionAdapter } from '../../claude/claude-structured-session-adapter'
 import {
   fakeClaude,
+  type FakeConnection,
   PROVIDER_SESSION_ID
 } from '../../claude/claude-structured-session-test-support'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
@@ -20,7 +21,10 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
@@ -40,15 +44,31 @@ let host: StructuredAgentSessionHost
 let adapter: ClaudeStructuredSessionAdapter
 let claude: ReturnType<typeof fakeClaude>
 let lifecycle: Promise<void>[]
-/** Gate initialization explicitly so assertions never race a timer. */
-let initGate: Promise<void>
+type OpenEntry = {
+  connection: FakeConnection
+  sessionId: string
+  fence: number
+  generation: string
+  opened: Promise<unknown>
+}
+let entries: OpenEntry[]
+let opens: Promise<unknown>[]
+let changed: ReturnType<typeof Promise.withResolvers<void>>
+let firstFailure: ReturnType<typeof Promise.withResolvers<void>>
+let driver: Promise<void> | undefined
+let stopped: boolean
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-view-start-after-failed-start-'))
   resetHostTestOperationIds()
   lifecycle = []
-  initGate = Promise.resolve()
-  claude = fakeClaude({ initDelayMs: 20, exitBeforeInit: LAUNCH_FAILURE })
+  entries = []
+  opens = []
+  changed = Promise.withResolvers<void>()
+  firstFailure = Promise.withResolvers<void>()
+  driver = undefined
+  stopped = false
+  claude = fakeClaude({ holdInit: true })
   adapter = new ClaudeStructuredSessionAdapter({
     resolveLaunch: async () => ({
       pathToClaudeCodeExecutable: 'claude',
@@ -67,19 +87,34 @@ beforeEach(async () => {
         lifecycle.push(host.handleAdapterEvent(mapped))
       }
     },
-    openConnection: async (launch, handlers) => {
-      const connection = await claude.openConnection(launch, handlers)
-      const initialize = connection.initializationResult
-      return Object.assign(connection, {
-        initializationResult: async () => {
-          await initGate
-          return initialize()
-        }
-      })
-    },
+    openConnection: claude.openConnection,
     readProcessStartTime: async () => 1_700_000_000_000,
     now: () => NOW
   })
+  const open = adapter.open.bind(adapter)
+  adapter.open = (request) => {
+    const session = adapter['sessions'].get(request.sessionId)
+    const connection = claude.connections.find((candidate) => candidate === session?.connection)
+    if (
+      !session ||
+      !connection ||
+      session.acquisitionGeneration !== request.acquisitionGeneration
+    ) {
+      throw new Error('open entry must identify the acquired connection generation')
+    }
+    const opened = open(request)
+    void opened.catch(() => {})
+    opens.push(opened)
+    entries.push({
+      connection,
+      sessionId: request.sessionId,
+      fence: request.fence,
+      generation: request.acquisitionGeneration,
+      opened
+    })
+    changed.resolve()
+    return opened
+  }
   store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
     agents: NO_STRUCTURED_AGENTS,
@@ -94,10 +129,51 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  host.stopDelivery()
+  stopped = true
+  firstFailure.resolve()
+  changed.resolve()
+  claude.dispose()
+  await Promise.allSettled(driver ? [driver] : [])
+  await Promise.allSettled(opens)
   await adapter.closeAll()
+  await Promise.all(lifecycle)
   await host.flushAllStreamedEvents()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
+
+async function driveFailures(): Promise<void> {
+  for (let attempt = 0; attempt < 6 && !stopped; attempt++) {
+    while (entries.length === 0 && !stopped) {
+      await changed.promise
+      changed = Promise.withResolvers<void>()
+    }
+    const entry = entries.shift()
+    if (!entry || stopped) {
+      return
+    }
+    if (attempt === 0) {
+      await firstFailure.promise
+    }
+    if (stopped) {
+      return
+    }
+    expect(host['sessions'].get(entry.sessionId)?.child).toMatchObject({
+      phase: 'starting',
+      fence: entry.fence,
+      generation: entry.generation
+    })
+    expect(store.getRecord(entry.sessionId)?.lease).toMatchObject({
+      claimStatus: 'live',
+      ownerProcess: { pid: entry.connection.pid }
+    })
+    entry.connection.closed = true
+    entry.connection.handlers.onExit?.(new Error(LAUNCH_FAILURE))
+    entry.connection.initialization.reject(new Error('Query closed before response received'))
+    await entry.opened.catch(() => {})
+  }
+}
 
 async function settleExits(): Promise<void> {
   await eventually(async () => {
@@ -148,16 +224,8 @@ describe('a fresh chat whose Claude start fails', () => {
   ] as const)(
     'starts once for the open and retries a send five times, one final row each, when the view binds %s',
     async (_when, createStillStarting) => {
-      // Bind views before releasing create, independent of runner speed.
-      let releaseCreate = (): void => {}
-      const createGate = new Promise<void>((resolve) => {
-        releaseCreate = resolve
-      })
-      if (!createStillStarting) {
-        releaseCreate()
-      }
-      initGate = createGate
-      claude = fakeClaude({ exitBeforeInit: LAUNCH_FAILURE })
+      driver = driveFailures()
+      void driver.catch(() => {})
       await expect(
         host.attach(
           CALLER,
@@ -170,13 +238,14 @@ describe('a fresh chat whose Claude start fails', () => {
         )
       ).resolves.toMatchObject({ ok: true })
       if (!createStillStarting) {
+        firstFailure.resolve()
         await settleExits()
       }
       const unsubscribe = await view(SURFACE)
       await view('desktop-chat:2')
       if (createStillStarting) {
         expect(await timeline()).toEqual([])
-        releaseCreate()
+        firstFailure.resolve()
       }
       await settleExits()
       const startFailure =
@@ -191,6 +260,7 @@ describe('a fresh chat whose Claude start fails', () => {
         ).toMatchObject({ dispatchState: 'rejected', reason: startFailure })
       )
       await settleExits()
+      await driver
       expect(claude.connections).toHaveLength(6)
       expect(await timeline()).toEqual([startFailure, 'message', startFailure])
 

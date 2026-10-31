@@ -1,13 +1,6 @@
-import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
-import {
-  ActivityIndicator,
-  FlatList,
-  Pressable,
-  Text,
-  View,
-  type ListRenderItem
-} from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react'
+import { ActivityIndicator, FlatList, Text, View, type ListRenderItem } from 'react-native'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ChevronLeft, X } from 'lucide-react-native'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
@@ -15,12 +8,7 @@ import { useForceReconnect } from '../transport/host-client-hooks'
 import { useWorkspaceClient } from '../transport/use-workspace-client'
 import { connectionRetryAction } from '../transport/connection-retry-action'
 import { getWorktreeLabel } from '../session/worktree-label'
-import {
-  flattenDirectoryCache,
-  getDirectoryCacheState,
-  type DirectoryCache,
-  type FileExplorerRow
-} from './file-tree'
+import { getDirectoryCacheState, type DirectoryCache, type FileExplorerRow } from './file-tree'
 import { colors, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import {
@@ -34,9 +22,13 @@ import { isMobileMethodUnavailableError } from '../transport/mobile-method-unava
 import { directoryCacheFromFileList } from './file-list-fallback'
 import { fileDirectoryRead, legacyFileListRead } from './mobile-file-explorer-operations'
 import { fileExplorerStyles as styles } from './mobile-file-explorer-styles'
+import { MobileFileExplorerNoMatches, useMobileFileExplorerRows } from './mobile-file-explorer-rows'
 import { MobileFileExplorerRow } from './mobile-file-explorer-row'
 import { navigateToMobileFilePreview } from './mobile-file-preview-navigation'
 import { MobileLoadErrorState } from '../components/MobileLoadErrorState'
+import { BottomSearchBar } from '../components/nav-bar/BottomSearchBar'
+import { NavBar } from '../components/nav-bar/NavBar'
+import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
@@ -66,6 +58,8 @@ export function MobileFileExplorerPanel(props: {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [legacyListTruncated, setLegacyListTruncated] = useState(false)
+  const [filterBarHeight, setFilterBarHeight] = useState(0)
+  const insets = useSafeAreaInsets()
   const worktreeLabel = getWorktreeLabel(name, worktreeId)
 
   const loadDirectory = useCallback(
@@ -272,29 +266,8 @@ export function MobileFileExplorerPanel(props: {
     }
   }, [connState, loadDirectory])
 
-  const rows = useMemo(
-    () => flattenDirectoryCache(directoryCache, expanded),
-    [directoryCache, expanded]
-  )
-
-  const toggleDirectory = useCallback(
-    (relativePath: string) => {
-      setExpanded((prev) => {
-        const next = new Set(prev)
-        if (next.has(relativePath)) {
-          next.delete(relativePath)
-        } else {
-          next.add(relativePath)
-        }
-        return next
-      })
-      const state = getDirectoryCacheState(directoryCache, relativePath)
-      if (!expanded.has(relativePath) && !state?.loading && (!state?.entries || state.error)) {
-        void loadDirectory(relativePath)
-      }
-    },
-    [directoryCache, expanded, loadDirectory]
-  )
+  const { filter, setFilter, filtering, rows, shownExpanded, onToggleDirectory } =
+    useMobileFileExplorerRows({ scope, directoryCache, expanded, setExpanded, loadDirectory })
 
   const retryDirectory = useCallback(
     (relativePath: string) => {
@@ -331,49 +304,40 @@ export function MobileFileExplorerPanel(props: {
       <MobileFileExplorerRow
         item={item}
         maximumIndentation={Math.max(0, panelWidth / 3 - spacing.lg)}
-        expanded={expanded}
+        expanded={shownExpanded}
         onPreviewFile={previewFile}
         onRetryDirectory={retryDirectory}
-        onToggleDirectory={toggleDirectory}
+        onToggleDirectory={onToggleDirectory}
       />
     )
   }
 
   const headerBar = (
-    <View style={styles.topBar}>
-      {embedded ? (
-        <Pressable
-          style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
-          onPress={() => onRequestClose?.()}
-          hitSlop={8}
-          accessibilityLabel={t('files.fileExplorerPanel.closeFiles', 'Close files')}
-        >
-          <X size={20} color={colors.textSecondary} strokeWidth={2.2} />
-        </Pressable>
-      ) : (
-        <Pressable
-          style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
-          onPress={() => router.back()}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={t('files.fileExplorerPanel.backToSession', 'Back to session')}
-        >
-          <ChevronLeft size={22} color={colors.textSecondary} strokeWidth={2.2} />
-        </Pressable>
-      )}
-      <View style={styles.titleBlock}>
-        <Text style={styles.title} numberOfLines={1}>
-          {t('files.fileExplorerPanel.title', 'Files')}
-        </Text>
-        <Text style={styles.meta} numberOfLines={1}>
-          {legacyListTruncated
-            ? t('files.fileExplorerPanel.truncatedList', '{{worktreeLabel}} - Showing first 5000', {
-                worktreeLabel
-              })
-            : worktreeLabel}
-        </Text>
-      </View>
-    </View>
+    <NavBar
+      leading={
+        embedded ? (
+          <NavBarButton
+            icon={X}
+            onPress={() => onRequestClose?.()}
+            accessibilityLabel={t('files.fileExplorerPanel.closeFiles', 'Close files')}
+          />
+        ) : (
+          <NavBarButton
+            icon={ChevronLeft}
+            onPress={() => router.back()}
+            accessibilityLabel={t('files.fileExplorerPanel.backToSession', 'Back to session')}
+          />
+        )
+      }
+      title={t('files.fileExplorerPanel.title', 'Files')}
+      subtitle={
+        legacyListTruncated
+          ? t('files.fileExplorerPanel.truncatedList', '{{worktreeLabel}} - Showing first 5000', {
+              worktreeLabel
+            })
+          : worktreeLabel
+      }
+    />
   )
 
   // Revive the parked transport while disconnected (#5049); the connected effect retries loadDirectory.
@@ -383,12 +347,18 @@ export function MobileFileExplorerPanel(props: {
     forceReconnect,
     reload: () => void loadDirectory('')
   })
+  const treeReady = !loading && !error && (rows.length > 0 || filtering)
   const body = loading ? (
     <View style={styles.state}>
       <ActivityIndicator size="small" color={colors.textSecondary} />
     </View>
   ) : error ? (
     <MobileLoadErrorState message={error} onRetry={rootRetry} />
+  ) : rows.length === 0 && filtering ? (
+    <MobileFileExplorerNoMatches
+      bottomPadding={filterBarHeight}
+      onClearFilter={() => setFilter('')}
+    />
   ) : rows.length === 0 ? (
     <View style={styles.state}>
       <Text style={styles.emptyText}>
@@ -400,8 +370,13 @@ export function MobileFileExplorerPanel(props: {
       data={rows}
       renderItem={renderItem}
       keyExtractor={(item) => item.id}
-      contentContainerStyle={styles.listContent}
+      contentContainerStyle={[
+        styles.listContent,
+        treeReady && { paddingBottom: spacing.sm + filterBarHeight }
+      ]}
       style={styles.list}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
     />
   )
 
@@ -419,6 +394,15 @@ export function MobileFileExplorerPanel(props: {
         </SafeAreaView>
       )}
       {body}
+      {treeReady ? (
+        <BottomSearchBar
+          value={filter}
+          onChangeText={setFilter}
+          placeholder={t('files.fileExplorerPanel.filterPlaceholder', 'Filter files')}
+          bottomInset={insets.bottom}
+          onCoveredHeightChange={setFilterBarHeight}
+        />
+      ) : null}
     </View>
   )
 }

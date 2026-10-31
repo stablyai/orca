@@ -25,6 +25,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { translate } from '@/i18n/i18n'
 import type { LinearIssue } from '../../../shared/linear/issue-types'
 import { copyLinearIssueText } from './linear-issue-clipboard'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 export function LinearIssueWorkspaceHeader({
   issue,
@@ -102,7 +103,7 @@ export function LinearIssueWorkspaceHeader({
               type="button"
               variant="ghost"
               size="icon-sm"
-              onClick={() => void window.api.shell.openUrl(issue.url)}
+              onClick={(event) => openAppHttpLink(issue.url, { event })}
               aria-label={translate(
                 'auto.components.LinearIssueWorkspace.openOnLinear',
                 'Open on Linear'

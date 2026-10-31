@@ -76,6 +76,7 @@ vi.mock('@/lib/agent-catalog', () => ({
 }))
 
 import { retryStructuredAgentSessionLaunch } from '../../structured-agent-session-launch'
+import { structuredLaunchOptionOverlay } from '../../structured-agent-session-launch-options'
 import { resetStructuredAgentLaunchPersistenceForTests } from './structured-agent-session-launch-persistence'
 import {
   resetStructuredAgentLaunchRegistryForTests,
@@ -192,10 +193,11 @@ describe('structured agent launch reload recovery', () => {
       .mockResolvedValueOnce([publishedSnapshot(worktreeId, sessionId)])
 
     expect(retryStructuredAgentSessionLaunch(worktreeId, sessionId)).toBe(true)
-    expect(getStructuredLaunchStateBySessionId(sessionId)?.selection).toMatchObject({
-      explicit: { model: 'action-model', fastMode: 'false' },
-      held: {}
+    const restored = getStructuredLaunchStateBySessionId(sessionId)!
+    expect(restored.selection).toMatchObject({
+      explicit: { model: 'action-model', fastMode: 'false' }
     })
+    expect(structuredLaunchOptionOverlay(restored)).toEqual({})
     await flushLaunchSettlement()
 
     expect(mocks.launch).toHaveBeenCalledWith(

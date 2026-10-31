@@ -22,6 +22,7 @@ import {
   type AgentBrowserConsoleOutput,
   type AgentBrowserNetworkOutput
 } from './agent-browser-log-entries'
+import { touchEmulationParams } from './guest-touch-emulation'
 
 export abstract class AgentBrowserBridgeStateCommands extends AgentBrowserBridgeInteractionCommands {
   async cookieGet(
@@ -110,6 +111,11 @@ export abstract class AgentBrowserBridgeStateCommands extends AgentBrowserBridge
         deviceScaleFactor: scale,
         mobile
       })
+      await sendGuestCdpCommand(
+        wc,
+        'Emulation.setTouchEmulationEnabled',
+        touchEmulationParams(mobile)
+      )
       // Metrics-only resize can leave the compositor at its old size and crop remote screencasts.
       await sendGuestCdpCommand(wc, 'Emulation.setVisibleSize', { width, height }).catch(() => {})
 
@@ -257,10 +263,39 @@ export abstract class AgentBrowserBridgeStateCommands extends AgentBrowserBridge
   }
 
   async exec(command: string, worktreeId?: string, browserPageId?: string): Promise<unknown> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      // Passthrough arguments must not override Orca's selected page or CDP proxy.
-      const args = stripAgentBrowserTargetArgs(parseShellArgs(command.trim()))
-      return await this.execAgentBrowser(sessionName, args, { cliArgv: true })
-    })
+    // Passthrough arguments must not override Orca's selected page or CDP proxy.
+    const args = stripAgentBrowserTargetArgs(parseShellArgs(command.trim()))
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      browserPageId,
+      async (sessionName) => await this.execAgentBrowser(sessionName, args, { cliArgv: true }),
+      { elements: passthroughElementArgs(args) }
+    )
   }
+}
+
+// Commands whose first operand is an element, where agent-browser reads a bare `e2` as a ref.
+const ELEMENT_FIRST_COMMANDS = new Set([
+  'click',
+  'dblclick',
+  'hover',
+  'focus',
+  'check',
+  'uncheck',
+  'fill',
+  'type',
+  'select',
+  'scrollintoview',
+  'upload',
+  'highlight',
+  'download',
+  'drag'
+])
+
+// Free text such as `keyboard type e2` is not a ref; explicit `@e2`/`ref=e2` are refs anywhere.
+function passthroughElementArgs([command, ...operands]: string[]): string[] {
+  const explicit = operands.filter((arg) => arg.startsWith('@') || arg.startsWith('ref='))
+  return command && ELEMENT_FIRST_COMMANDS.has(command) && operands[0]
+    ? [operands[0], ...explicit]
+    : explicit
 }

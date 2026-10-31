@@ -2,6 +2,7 @@ import { vi, type Mock } from 'vitest'
 import { create } from 'zustand'
 import { createBrowserSlice } from './browser'
 import type { AppState } from '../types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
@@ -71,6 +72,9 @@ export function createTestStore() {
         activateTab: vi.fn(),
         setTabLabel: vi.fn(),
         recordFeatureInteraction: vi.fn(),
+        updateSettings: vi.fn(async (updates: Partial<GlobalSettings>) =>
+          a[0]((s) => ({ settings: { ...s.settings!, ...updates } }))
+        ),
         ...createBrowserSlice(...a)
       }) as unknown as AppState
   )

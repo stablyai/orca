@@ -1,6 +1,9 @@
-import { structuredLaunchRequestedOptions } from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
 import { useCallback } from 'react'
-import { structuredAgentSessionSendSelection } from '../../../../shared/structured-agent-session-option-view'
+import type { StructuredAgentSessionSendControl } from '../../../../shared/structured-agent-session-send-mutation'
+import {
+  structuredAgentSessionMessageSelection,
+  structuredAgentSessionSendSelection
+} from '../../../../shared/structured-agent-session-option-view'
 import { getStructuredAgentSessionLaunchSelection } from '@/lib/structured-agent-session-launch-options'
 import type { StructuredAgentSessionLaunchView } from './use-native-chat-provisional-launch'
 import type { useStructuredAgentSessionOptionState } from './use-structured-agent-session-option-state'
@@ -11,29 +14,24 @@ export function useStructuredAgentSessionSendOptions(
   launch: StructuredAgentSessionLaunchView | undefined,
   source: Pick<
     ReturnType<typeof useStructuredAgentSessionOptionState>,
-    'optionStateRef' | 'optionPicks' | 'optionView' | 'takesSendOptions'
+    'optionStateRef' | 'optionView' | 'takesSendOptions' | 'takesSelection'
   >
-): () => Readonly<Record<string, string>> | undefined {
-  const { optionStateRef, optionView, optionPicks, takesSendOptions } = source
+): () => Pick<StructuredAgentSessionSendControl, 'options' | 'selection'> {
+  const { optionStateRef, optionView, takesSendOptions, takesSelection } = source
   return useCallback(() => {
-    if (!takesSendOptions) {
-      return undefined
+    if (!takesSendOptions && !takesSelection) {
+      return {}
     }
     // Read held picks directly because launch acceptance can precede this render’s props.
     const selection = getStructuredAgentSessionLaunchSelection(sessionId)
-    const requested = structuredLaunchRequestedOptions({
-      seed: selection?.seed ?? launch?.seedOptions,
-      explicit: selection?.explicit ?? launch?.explicitOptions,
-      held: { ...(selection?.held ?? launch?.heldOptions), ...optionPicks.current.pending }
-    })
-    if (requested?.model !== undefined) {
-      return requested
-    }
-    // A pick on its way resolves as the picker shows it, keeping the model it names.
-    const view = optionView(optionStateRef.current, selection?.seed ?? launch?.seedOptions, {
-      ...(selection?.held ?? launch?.heldOptions),
-      ...optionPicks.current.pending
-    })
-    return structuredAgentSessionSendSelection(view)
-  }, [launch, optionStateRef, optionView, optionPicks, sessionId, takesSendOptions])
+    // A pick on its way resolves as the picker shows it.
+    const view = optionView(
+      optionStateRef.current,
+      selection?.seed ?? launch?.seedOptions,
+      selection?.explicit ?? launch?.explicitOptions
+    )
+    return takesSelection
+      ? { selection: structuredAgentSessionMessageSelection(view) }
+      : { options: structuredAgentSessionSendSelection(view) }
+  }, [launch, optionStateRef, optionView, sessionId, takesSendOptions, takesSelection])
 }

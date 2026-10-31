@@ -52,11 +52,14 @@ const downloadFailed = (): string =>
  */
 export function usePluginInstallAction({
   fetchPreview,
-  onInstalled
+  onInstalled,
+  isFromInstallLink
 }: {
   fetchPreview: (listing: PluginMarketplaceHostListing) => Promise<PluginPagePreview>
   /** Reloads the list; opens review on the page for any plugin still waiting for it. */
   onInstalled: (pluginKey: string) => Promise<void>
+  /** Whether this install is on the page an install link opened; only labels telemetry. */
+  isFromInstallLink?: (pluginKey: string) => boolean
 }): {
   phaseOf: (pluginKey: string) => PluginInstallPhase | null
   install: (
@@ -124,6 +127,7 @@ export function usePluginInstallAction({
           marketplaceCommit: preview.marketplaceCommit,
           pluginKey,
           resolvedCommit: preview.resolvedCommit,
+          ...(isFromInstallLink?.(pluginKey) ? { fromInstallLink: true as const } : {}),
           // Why the fingerprint: main turns on only the exact bytes this preview showed.
           ...(execution === 'data'
             ? { enableIfData: true as const, expectedFingerprint: preview.consentFingerprint }
@@ -183,7 +187,7 @@ export function usePluginInstallAction({
         setPhase(pluginKey, { kind: 'error', message: catalogInstallErrorMessage(cause) })
       }
     },
-    [dismiss, fetchPreview, onInstalled, setPhase]
+    [dismiss, fetchPreview, isFromInstallLink, onInstalled, setPhase]
   )
 
   const phaseOf = useCallback(

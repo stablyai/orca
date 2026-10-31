@@ -1,3 +1,5 @@
+import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
+import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
 import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
 import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../../../shared/execution-host'
@@ -9,6 +11,23 @@ import { getAppEnvironment } from '../../../../shared/app-environment'
 import { DISPATCH_REJECTED_WRITE_FAILED } from '../../../../shared/structured-agent-session-dispatch-rejection'
 import { agentSessionFailureFact } from '../../../../shared/agent-session-failure'
 import { codexDispatchRejection } from '../../../codex/codex-structured-turn-end-settlement'
+
+type WorkerHost = Pick<
+  StructuredAgentSessionHost,
+  | 'hasSession'
+  | 'getSessionTabId'
+  | 'notifySessionTabHidden'
+  | 'setSessionTabVisibility'
+  | 'close'
+  | 'observeJournalPublications'
+> & {
+  deps: {
+    store: Pick<
+      StructuredAgentSessionHost['deps']['store'],
+      'requireWritableRecord' | 'getConversation' | 'getSessionTabId' | 'isSessionTabRetired'
+    >
+  }
+}
 
 const hostRef: { current: unknown } = { current: null }
 const createSpy = vi.fn()
@@ -35,19 +54,32 @@ function installHost(
     wslDistro: null
   }
 ) {
+  const hidden = new Set<string>()
+  const record = (sessionId: string) => agentSessionRecordFixture({ sessionId, location })
   const dispose = vi.fn()
   const observeJournalPublications = vi.fn(() => dispose)
   hostRef.current = {
-    setSessionTabVisibility: async () => {},
+    hasSession: () => false,
+    getSessionTabId: (id: string) => (hidden.has(id) ? null : `agent-session:${id}`),
+    notifySessionTabHidden: () => {},
+    setSessionTabVisibility: async (id: string, visible: boolean) => {
+      if (visible) {
+        hidden.delete(id)
+      } else {
+        hidden.add(id)
+      }
+    },
     close: async () => {},
     deps: {
       store: {
-        requireWritableRecord: (sessionId: string) =>
-          agentSessionRecordFixture({ sessionId, location })
+        requireWritableRecord: record,
+        getConversation: (id: string) => agentSessionConversationView(record(id)),
+        getSessionTabId: (id: string) => (hidden.has(id) ? null : `agent-session:${id}`),
+        isSessionTabRetired: (id: string) => hidden.has(id)
       }
     },
     observeJournalPublications
-  }
+  } satisfies WorkerHost
   return { observeJournalPublications, dispose }
 }
 
@@ -78,10 +110,10 @@ describe('structured worker session', () => {
     )
     expect(dispose).not.toHaveBeenCalled()
 
-    releaseStructuredWorkerSession('d1')
+    releaseStructuredWorkerSession(created.identity.sessionId)
     expect(dispose).toHaveBeenCalledTimes(1)
     expect(structuredWorkerIdentities.get(created.identity.handle)).toBeNull()
-    releaseStructuredWorkerSession('d1')
+    releaseStructuredWorkerSession(created.identity.sessionId)
     expect(dispose).toHaveBeenCalledTimes(1)
   })
 
@@ -111,7 +143,7 @@ describe('structured worker session', () => {
       )
     )
     expect(envAtSpawn?.ORCA_PANE_KEY).toBeUndefined()
-    releaseStructuredWorkerSession('d_spawn')
+    releaseStructuredWorkerSession(created.identity.sessionId)
   })
 
   it('forgets the identity and discards the session when the start fails', async () => {
@@ -201,12 +233,12 @@ describe('structured worker session', () => {
     expect(structuredWorkerIdentities.getBySessionId(created.identity.sessionId)?.agent).toBe(
       'codex'
     )
-    releaseStructuredWorkerSession('d2')
+    releaseStructuredWorkerSession(created.identity.sessionId)
   })
 
   it('does not activate the worker session, so a dispatch cannot steal the surface', async () => {
     installHost()
-    await createStructuredWorkerSession({
+    const created = await createStructuredWorkerSession({
       runtime: { ensureStructuredAgentSessionHost: async () => {} } as never,
       worktreeId: 'wt_1',
       agent: 'claude',
@@ -214,7 +246,7 @@ describe('structured worker session', () => {
       onJournalActivity: () => {}
     })
     expect(createSpy.mock.calls[0]![0].activate).toBe(false)
-    releaseStructuredWorkerSession('d3')
+    releaseStructuredWorkerSession(created.identity.sessionId)
   })
 
   it('refuses a session pinned to a non-local execution host', async () => {

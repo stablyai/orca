@@ -60,7 +60,7 @@ export type MobileNativeChatPickerPresentation = { page: string | null; refocus:
 
 export type MobileNativeChatSessionOptionPickersProps = {
   controller: MobileNativeChatSessionOptionsController
-  // Mid-turn model commands would interleave with agent output.
+  // Mid-turn terminal model commands would interleave with agent output.
   isWorking: boolean
   // Block applies during composer send: the host’s body/Enter delay could submit the setting as prompt text.
   sendInFlight?: boolean
@@ -119,16 +119,26 @@ export function MobileNativeChatSessionOptionPickers({
     wasOpen.current = open
   }, [open, controller.optionSurface])
   const { snapshot, pendingId } = controller
+  const hasControls = snapshot.some((descriptor) => descriptor.settable)
+  const canOpen = !sendInFlight && pendingId === null && hasControls
+  useEffect(() => {
+    if (open && !hasControls) {
+      onNavigate(null)
+    }
+  }, [open, hasControls, onNavigate])
   const model = snapshot.find((descriptor) => descriptor.category === 'model')
   const permission = snapshot.find(
     (descriptor) => descriptor.id === AGENT_CHAT_PERMISSION_MODE_OPTION_ID
   )
-  const activeDescriptor = snapshot.find((descriptor) => descriptor.id === presentation?.page)
+  const activeDescriptor = hasControls
+    ? snapshot.find((descriptor) => descriptor.id === presentation?.page)
+    : undefined
   const permissionView = activeDescriptor !== undefined && activeDescriptor === permission
   const showWorkingNotice =
     (model !== undefined || permission !== undefined) &&
     activeDescriptor !== undefined &&
     isWorking &&
+    activeDescriptor.transport !== 'agent-session' &&
     !permissionView
 
   useEffect(() => {
@@ -151,8 +161,9 @@ export function MobileNativeChatSessionOptionPickers({
   const home = model ?? permission!
   const homeView = activeDescriptor !== undefined && activeDescriptor === home
   const busy = pendingId !== null || sendInFlight
-  // Permission mode affects the next send, so a working turn must not lock it.
-  const locked = isWorking || busy
+  // Structured picks and permission mode affect the next send, not the running turn.
+  const locked = (descriptor: SessionOptionDescriptor): boolean =>
+    busy || (isWorking && descriptor.transport !== 'agent-session' && descriptor !== permission)
   const reason = nativeChatSessionOptionDisabledReason(activeDescriptor?.disabledReason, say)
   const permissionChoice = selectedChoice(permission)
   const permissionColor = permissionChoiceColor(permissionChoice?.value)
@@ -171,6 +182,7 @@ export function MobileNativeChatSessionOptionPickers({
     if (
       descriptor !== permission &&
       descriptor.valueSource !== 'unknown' &&
+      descriptor.valueSource !== 'default' &&
       descriptor.kind.type === 'select' &&
       descriptor.kind.currentValue === value
     ) {
@@ -218,8 +230,11 @@ export function MobileNativeChatSessionOptionPickers({
                 value: primary
               })
         }
-        disabled={busy || (!model && permission?.settable === false)}
+        disabled={!canOpen}
         onPress={() => {
+          if (!canOpen) {
+            return
+          }
           onDrawerOpen(home.id)
           Keyboard.dismiss()
         }}
@@ -286,7 +301,7 @@ export function MobileNativeChatSessionOptionPickers({
             <View style={styles.group}>
               <DescriptorRows
                 descriptor={activeDescriptor}
-                disabled={permissionView ? busy : locked}
+                disabled={locked(activeDescriptor)}
                 grouped
                 onSetOption={(value) => applyOption(activeDescriptor, value)}
                 onInvokeAction={() => invokeAction(activeDescriptor)}
@@ -299,7 +314,7 @@ export function MobileNativeChatSessionOptionPickers({
                   <SessionOptionSegments
                     key={descriptor.id}
                     descriptor={descriptor}
-                    disabled={locked}
+                    disabled={locked(descriptor)}
                     onSetOption={(value) => applyOption(descriptor, value)}
                   />
                 ))}
@@ -308,7 +323,6 @@ export function MobileNativeChatSessionOptionPickers({
                   permission={permission}
                   permissionColor={permissionColor}
                   locked={locked}
-                  busy={busy}
                   onNavigate={onNavigate}
                   onSetOption={applyOption}
                 />
@@ -326,15 +340,13 @@ function OptionRows({
   permission,
   permissionColor,
   locked,
-  busy,
   onNavigate,
   onSetOption
 }: {
   descriptors: readonly SessionOptionDescriptor[]
   permission: SessionOptionDescriptor | undefined
   permissionColor: string | undefined
-  locked: boolean
-  busy: boolean
+  locked: (descriptor: SessionOptionDescriptor) => boolean
   onNavigate: (page: string) => void
   onSetOption: (descriptor: SessionOptionDescriptor, value: SessionOptionValue) => void
 }): React.JSX.Element | null {
@@ -347,7 +359,7 @@ function OptionRows({
     <View style={[styles.group, styles.groupSpaced]}>
       {descriptors.map((descriptor, index) => {
         const isPermission = descriptor === permission
-        const disabled = isPermission ? busy || !descriptor.settable : locked
+        const disabled = locked(descriptor) || !descriptor.settable
         if (descriptor.kind.type === 'boolean' && !descriptor.action) {
           return (
             <View key={descriptor.id} style={index < descriptors.length - 1 && styles.divided}>

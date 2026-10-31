@@ -1,3 +1,7 @@
+import {
+  combinedDiffViewportAttributes,
+  combinedDiffRowAttributes
+} from '../../combined-diff-viewport'
 import type React from 'react'
 import { useMemo } from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
@@ -82,6 +86,7 @@ export function CombinedDiffSectionList({
   return (
     <div className="relative min-w-0 flex-1">
       <div
+        {...combinedDiffViewportAttributes}
         ref={setScrollContainerRef}
         className="combined-diff-scroll-container h-full overflow-auto pr-5 scrollbar-editor"
         onWheel={markDirectScrollInput}
@@ -99,7 +104,7 @@ export function CombinedDiffSectionList({
               <div
                 key={virtualItem.key}
                 data-index={virtualItem.index}
-                data-combined-diff-section-row
+                {...combinedDiffRowAttributes}
                 data-combined-diff-section-key={section.key}
                 ref={virtualizer.measureElement}
                 className="absolute left-0 top-0 w-full"

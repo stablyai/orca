@@ -33,7 +33,8 @@ import {
 
 export function renderMobileTasksProviderItemList(
   model: ConnectionPresentationModel,
-  colorScheme: MobileColorScheme
+  colorScheme: MobileColorScheme,
+  bottomBarHeight: number
 ) {
   const {
     displayedEntries,
@@ -59,11 +60,11 @@ export function renderMobileTasksProviderItemList(
     taskUiReady
   } = model
   return loading ? (
-    <View style={styles.centered}>
+    <View style={[styles.centered, { paddingBottom: bottomBarHeight }]}>
       <ActivityIndicator size="small" color={colors.textSecondary} />
     </View>
   ) : sortedItems.length === 0 ? (
-    <View style={styles.centered}>
+    <View style={[styles.centered, { paddingBottom: bottomBarHeight }]}>
       <Text style={styles.emptyText}>{emptyLabel}</Text>
     </View>
   ) : (
@@ -76,7 +77,10 @@ export function renderMobileTasksProviderItemList(
           <View style={styles.separator} />
         )
       }
-      contentContainerStyle={[styles.list, { paddingBottom: spacing.lg + insets.bottom }]}
+      contentContainerStyle={[
+        styles.list,
+        { paddingBottom: spacing.lg + Math.max(insets.bottom, bottomBarHeight) }
+      ]}
       refreshing={refreshing}
       onRefresh={refreshTasks}
       ListFooterComponent={
@@ -178,6 +182,11 @@ export function renderMobileTasksProviderItemList(
         const isGitLabMr = item.provider === 'gitlab' && item.source.type === 'mr'
         const githubPrDelta = isGitHubPr ? formatGitHubPRDelta(item.source) : null
         const branchSummary = hostedBranchSummary(item)
+        const mergeLabel = isGitHubPr
+          ? getGitHubMergeLabel(item.source)
+          : isGitLabMr
+            ? getHostedMergeLabel(item.source)
+            : null
         return (
           <Pressable
             style={({ pressed }) => [styles.taskRow, pressed && styles.taskRowPressed]}
@@ -256,7 +265,7 @@ export function renderMobileTasksProviderItemList(
                       {getHostedChecksLabel(item.source)}
                     </Text>
                   </View>
-                  {isGitHubPr || isGitLabMr ? (
+                  {mergeLabel ? (
                     <View
                       style={[
                         styles.prSignalChip,
@@ -264,9 +273,7 @@ export function renderMobileTasksProviderItemList(
                       ]}
                     >
                       <Text style={styles.prSignalText} numberOfLines={1}>
-                        {isGitHubPr
-                          ? getGitHubMergeLabel(item.source)
-                          : getHostedMergeLabel(item.source)}
+                        {mergeLabel}
                       </Text>
                     </View>
                   ) : null}

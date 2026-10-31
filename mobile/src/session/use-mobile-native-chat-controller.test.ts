@@ -91,6 +91,7 @@ vi.mock('./use-mobile-native-chat-session', () => ({
 }))
 vi.mock('./use-mobile-structured-agent-session', () => ({
   useMobileStructuredAgentSession: () => ({
+    asyncQuestionSourceScope: 'journal/host/session/epoch',
     session: structuredSessionState,
     ...structuredActivity,
     queued: { cards: [], send: vi.fn(), delete: vi.fn(), edit: vi.fn() },

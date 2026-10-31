@@ -152,6 +152,20 @@ describe('binary custom editor reloads', () => {
 })
 
 describe('binary custom editor tabs', () => {
+  it('skips the tab sweep on store writes that leave the tabs and bytes alone', () => {
+    storeListener.current?.(state, { ...state, openFiles: [...state.openFiles] })
+    const find = vi.spyOn(state.openFiles, 'find')
+    for (let i = 0; i < 3; i++) {
+      storeListener.current?.(state, { ...state })
+    }
+    expect(find).not.toHaveBeenCalled()
+    setEditorBytesDraft('book', edited)
+    find.mockClear()
+    storeListener.current?.(state, { ...state })
+    expect(find).toHaveBeenCalled()
+    find.mockRestore()
+  })
+
   it('ignores a read that started before an edit and save it does not include', async () => {
     const editsAtRead = editorBytesEdits('book')
     setEditorBytesDraft('book', edited)

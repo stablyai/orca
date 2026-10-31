@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { safePluginDisplayText } from '../manifest/plugin-display-text'
 import { pluginIdSchema, pluginRelativePathSchema } from '../manifest/plugin-manifest-fields'
 import {
   pluginPathFieldDoc,
@@ -59,15 +60,11 @@ export const pluginPanelContributionSchema = z
         ['dashboard']
       )
     ),
-    title: z
-      .string()
-      .min(1)
-      .max(256)
-      .meta(
-        pluginFieldDoc('Title shown on the panel tab and its tooltip.', PLUGIN_SCHEMA_SINCE_V1, [
-          'Dashboard'
-        ])
-      ),
+    title: safePluginDisplayText(z.string().min(1).max(256)).meta(
+      pluginFieldDoc('Title shown on the panel tab and its tooltip.', PLUGIN_SCHEMA_SINCE_V1, [
+        'Dashboard'
+      ])
+    ),
     icon: z
       .enum(PLUGIN_PANEL_ICONS)
       .optional()
@@ -80,7 +77,7 @@ export const pluginPanelContributionSchema = z
       ),
     entry: pluginRelativePathSchema.meta(
       pluginPathFieldDoc(
-        'HTML file, relative to the plugin root, rendered inside a sandboxed panel frame.',
+        'HTML file, relative to the plugin root, rendered inside a panel frame. It is trusted code: install panels you trust.',
         PLUGIN_SCHEMA_SINCE_V1,
         ['dist/panel.html']
       )

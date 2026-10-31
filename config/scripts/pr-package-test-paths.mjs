@@ -42,6 +42,7 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/main/windows-registry-addon.test.ts',
   'src/main/daemon/daemon-host-process-package.test.ts',
   'src/shared/windows-security-addon.win32.test.ts',
+  'src/shared/windows-private-credential-file.test.ts',
   'config/scripts/windows-process-tree-gyp-path.test.mjs',
   'config/scripts/windows-process-tree-gyp-rebuild.test.mjs',
   'config/scripts/package-electron-runtime-contract.test.mjs',

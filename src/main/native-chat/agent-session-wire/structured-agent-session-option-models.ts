@@ -5,6 +5,7 @@ import type {
   AgentSessionModelOption,
   AgentSessionOptionsResult
 } from '../../../shared/agent-session-wire'
+import { labelFromModelId } from '../../../shared/model-id-label'
 import type { AgentModelCatalogLiveListing } from '../agent-model-catalog/agent-model-catalog-entry'
 
 export type StructuredAgentSessionOptionProjection = {
@@ -13,6 +14,8 @@ export type StructuredAgentSessionOptionProjection = {
 }
 
 export type StructuredAgentSessionLiveOptions = AgentSessionOptionsResult & {
+  /** Child/request-scoped actual or raw future intent; never serialized as a callback. */
+  projectCurrent?: (saved: Readonly<Record<string, string>>) => AgentSessionOptionsResult['current']
   catalogListing?: AgentModelCatalogLiveListing
   /** The running CLI cannot change effort mid-chat, whatever its catalog lists. */
   effortFixed?: true
@@ -34,7 +37,14 @@ export function structuredAgentSessionOptionModels<TModel extends AgentSessionMo
   const models = [...catalog]
   if (current && !models.some((entry) => entry.id === current)) {
     models.push(
-      row({ id: current, label: current, isDefault: false, efforts: [], effortsKnown: false })
+      row({
+        id: current,
+        label: labelFromModelId(current),
+        description: current,
+        isDefault: false,
+        efforts: [],
+        effortsKnown: false
+      })
     )
   }
   return models
@@ -66,4 +76,16 @@ export function structuredAgentSessionCapabilityView(
       (row) => row.serviceTiers?.map((tier) => tier.value) ?? []
     )
   }
+}
+
+export function confirmedCurrentOptions(
+  current: AgentSessionOptionsResult['current'],
+  reported: AgentSessionOptionsResult['current'],
+  confirmed = reported.confirmed
+): AgentSessionOptionsResult['current']['confirmed'] {
+  return confirmed?.filter((key) =>
+    key === 'model' || key === 'effort' || key === 'fastMode' || key === 'serviceTier'
+      ? current[key] === reported[key]
+      : false
+  )
 }

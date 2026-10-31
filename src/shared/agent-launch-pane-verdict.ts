@@ -7,9 +7,9 @@
 /** Why a launch pane shows no agent, kept on the tab for this session only. */
 export type AgentLaunchPaneOutcome =
   /** The launch failed before its agent ran; `code` is the reason, for the window to word. */
-  | { kind: 'not-started'; code: string }
+  | { kind: 'not-started'; code: string; initialOutputDiagnostic?: 'git-bash-console-capacity' }
   /** The launch may have started its agent and nothing can tell. */
-  | { kind: 'unconfirmed' }
+  | { kind: 'unconfirmed'; initialOutputDiagnostic?: 'git-bash-console-capacity' }
 
 export type AgentLaunchPaneVerdict =
   /** No launch owns the pane, or its agent runs or ran there: the pane's own spawn decides. */

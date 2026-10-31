@@ -9,6 +9,7 @@ import type { AgentSessionLease } from '../../../../shared/agent-session-record'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { partialRuntimeStore } from '../../runtime-store-partial-fixture'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { OrchestrationDb } from '../../orchestration/db'
 import type { WorkerTerminalResourceRow } from '../../orchestration/worker-terminal-ownership'
@@ -77,7 +78,7 @@ async function runtimeShowingStructuredTab(): Promise<{
   runtime: OrcaRuntimeService
   emit: ReturnType<typeof vi.fn>
 }> {
-  const runtime = new OrcaRuntimeService()
+  const runtime = new OrcaRuntimeService(partialRuntimeStore())
   const internal = runtime as unknown as RuntimeInternals
   internal.ensureStructuredAgentSessionHost = async () => undefined
   internal.notifyMessageArrived = vi.fn()
@@ -131,7 +132,7 @@ describe('structured worker stop retires the chat tab', () => {
     const { runtime, emit } = await runtimeShowingStructuredTab()
     expect(await structuredTabIds(runtime)).toEqual([`agent-session:${SESSION}`])
 
-    await expect(stopStructuredWorker(identity, 'd1', runtime)).resolves.toEqual({
+    await expect(stopStructuredWorker(identity, runtime)).resolves.toEqual({
       stopped: true,
       closeAttempted: true
     })
@@ -149,7 +150,7 @@ describe('structured worker stop retires the chat tab', () => {
     const identity = registerIdentity()
     const { runtime } = await runtimeShowingStructuredTab()
 
-    const stop = await stopStructuredWorker(identity, 'd1', runtime)
+    const stop = await stopStructuredWorker(identity, runtime)
 
     expect(stop.stopped).toBe(false)
     expect(await structuredTabIds(runtime)).toEqual([`agent-session:${SESSION}`])
@@ -165,7 +166,7 @@ describe('structured worker stop retires the chat tab', () => {
       })
     } as unknown as OrcaRuntimeService
 
-    await expect(stopStructuredWorker(identity, 'd1', runtime)).resolves.toEqual({
+    await expect(stopStructuredWorker(identity, runtime)).resolves.toEqual({
       stopped: true,
       closeAttempted: true
     })
@@ -175,7 +176,7 @@ describe('structured worker stop retires the chat tab', () => {
   it('settles a runtime that has no tab surface at all', async () => {
     installHost()
     const identity = registerIdentity()
-    await expect(stopStructuredWorker(identity, 'd1')).resolves.toEqual({
+    await expect(stopStructuredWorker(identity)).resolves.toEqual({
       stopped: true,
       closeAttempted: true
     })
@@ -294,7 +295,7 @@ describe('structured worker release retires the chat tab', () => {
 describe('structured worker discard retires the chat tab', () => {
   it('prunes the tab a half-started worker published', async () => {
     const { close } = installHost()
-    const runtime = new OrcaRuntimeService()
+    const runtime = new OrcaRuntimeService(partialRuntimeStore())
     const internal = runtime as unknown as RuntimeInternals
     internal.ensureStructuredAgentSessionHost = async () => undefined
     let createdSessionId = ''
@@ -320,7 +321,7 @@ describe('structured worker discard retires the chat tab', () => {
       })
     ).rejects.toThrow(/was refused/)
 
-    expect(close).toHaveBeenCalledWith(createdSessionId, 'evict')
+    expect(close).toHaveBeenCalledWith(createdSessionId, 'evict', undefined)
     expect(await structuredTabIds(runtime)).toEqual([])
   })
 })

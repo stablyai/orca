@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, concentricRadius, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 
 export const filePreviewStyles = themedStyleSheet(() => ({
@@ -8,40 +8,7 @@ export const filePreviewStyles = themedStyleSheet(() => ({
     backgroundColor: colors.bgBase
   },
   header: {
-    backgroundColor: colors.bgPanel,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle
-  },
-  topBar: {
-    minHeight: 58,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.md
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button
-  },
-  backButtonPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  titleBlock: {
-    flex: 1,
-    minWidth: 0
-  },
-  title: {
-    color: colors.textPrimary,
-    fontSize: typography.titleSize,
-    fontWeight: '600'
-  },
-  meta: {
-    marginTop: 2,
-    color: colors.textSecondary,
-    fontSize: typography.metaSize
+    backgroundColor: colors.bgBase
   },
   state: {
     flex: 1,
@@ -59,17 +26,6 @@ export const filePreviewStyles = themedStyleSheet(() => ({
     color: colors.statusRed,
     fontSize: typography.bodySize,
     textAlign: 'center'
-  },
-  saveButton: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button,
-    backgroundColor: colors.bgRaised
-  },
-  saveButtonDisabled: {
-    opacity: 0.42
   },
   scroll: {
     flex: 1,
@@ -101,7 +57,7 @@ export const filePreviewStyles = themedStyleSheet(() => ({
     padding: 1,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgPanel
   },
   modeToggle: {
@@ -109,7 +65,7 @@ export const filePreviewStyles = themedStyleSheet(() => ({
     height: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.row,
+    borderRadius: concentricRadius(radii.control, 2),
     backgroundColor: 'transparent',
     opacity: 0.72
   },

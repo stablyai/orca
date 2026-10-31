@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import { useAllWorktrees, useRepoById, useRepoMap, useWorktreeMap } from '@/store/selectors'
+import { useRepoById } from '@/store/selectors'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
   getCyclicProjectedWorktreeLineageIds,
   getLineageRenderInfo
 } from '../../../../shared/sidebar-list/worktree-lineage-projection'
 import { useContextWorkspaceStatuses } from './use-workspace-board-statuses'
+import { useMenuScopedWorktreeCatalog } from './use-menu-scoped-worktree-catalog'
 import { getEligibleWorktreeParents } from './worktree-parent-candidates'
 import {
   hasSleepableWorkspaceActivity,
@@ -93,9 +94,7 @@ export function useWorktreeContextMenuModel({
   const parentPickerUnmountTimerRef = useRef<number | null>(null)
   const lifecycleStartedRef = useRef(false)
   const isDeleting = deleteState?.isDeleting ?? false
-  const repoMap = useRepoMap()
-  const worktreeMap = useWorktreeMap()
-  const allWorktrees = useAllWorktrees()
+  const { repoMap, worktreeMap, allWorktrees } = useMenuScopedWorktreeCatalog(menuOpen)
   // Closed menus select stable empty maps; opening reads live maps without subscribing idle wrappers to teardown churn.
   const worktreeLineageById = useAppStore((s) =>
     selectMenuScopedMap(menuOpen, s.worktreeLineageById, EMPTY_WORKTREE_LINEAGE_BY_ID)
@@ -164,7 +163,7 @@ export function useWorktreeContextMenuModel({
     [activeContextWorktrees, sleepActivity]
   )
   const lineageMenuActions = useWorkspaceLineageMenuActions({
-    enabled: !isMultiContext,
+    enabled: menuOpen && !isMultiContext,
     parent: worktree,
     worktrees: allWorktrees,
     lineageById: worktreeLineageById,
@@ -355,7 +354,6 @@ export function useWorktreeContextMenuModel({
   return {
     ...commands,
     activeContextWorktrees,
-    allWorktrees,
     batchDeleteWorktrees,
     browserTabsByWorktree,
     children,

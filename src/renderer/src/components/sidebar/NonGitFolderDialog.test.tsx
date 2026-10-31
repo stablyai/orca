@@ -1,6 +1,11 @@
+import type * as RuntimeRpc from '@/runtime/runtime-rpc-client'
+import { makeDetectedResult } from '@/store/slices/worktrees-detected-listing-fixtures'
+import { clearHostAgentMenuSettingsForTests } from '@/components/settings/use-host-agent-launch-preferences'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+import { getDefaultOnboardingState } from '../../../../shared/onboarding-defaults'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type * as ReactModule from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
@@ -16,6 +21,8 @@ type ButtonCapture = {
 }
 
 const mocks = vi.hoisted(() => ({
+  capability: vi.fn(async () => false),
+  hostRpc: vi.fn(),
   buttons: [] as ButtonCapture[],
   state: {
     activeModal: 'confirm-non-git-folder',
@@ -61,8 +68,12 @@ vi.mock('@/store', () => {
       selector(dialogStore?.getState() ?? mocks.state),
     {
       getState: () => dialogStore?.getState() ?? mocks.state,
-      setState: (next: Partial<typeof mocks.state>) => {
-        Object.assign(mocks.state, next)
+      setState: (next: Partial<AppState>) => {
+        if (dialogStore) {
+          dialogStore.setState(next)
+        } else {
+          Object.assign(mocks.state, next)
+        }
       }
     }
   )
@@ -93,6 +104,16 @@ vi.mock('sonner', () => ({
     success: vi.fn()
   }
 }))
+
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof RuntimeRpc>()),
+  runtimeEnvironmentSupportsCapability: mocks.capability,
+  callRuntimeRpc: mocks.hostRpc
+}))
+afterEach(() => {
+  clearHostAgentMenuSettingsForTests()
+  vi.unstubAllGlobals()
+})
 
 vi.mock('@/runtime/runtime-ssh-target-management', () => ({
   addRuntimeSshRepo: mocks.addRuntimeSshRepo
@@ -131,6 +152,7 @@ function makeWorktree(id: string, path: string, hostId: Worktree['hostId']): Wor
 describe('NonGitFolderDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.capability.mockResolvedValue(false)
     dialogStore = undefined
     mocks.buttons.length = 0
     mocks.state.activeModal = 'confirm-non-git-folder'
@@ -386,6 +408,85 @@ describe('NonGitFolderDialog', () => {
       localWorktree.id,
       expect.anything()
     )
+  })
+
+  it('keeps the SSH add and ordinary reveal after its real optional preference wait is cancelled', async () => {
+    const store = createTestStore()
+    dialogStore = store
+    const folder = makeWorktree('ssh-folder::/srv/non-git', '/srv/non-git', 'runtime:env-1')
+    folder.repoId = 'ssh-folder'
+    store.setState({
+      activeModal: 'confirm-non-git-folder',
+      modalData: { folderPath: folder.path, connectionId: 'ssh-1', runtimeEnvironmentId: 'env-1' },
+      settings: createGlobalSettingsFixture({
+        defaultTuiAgent: 'claude',
+        activeRuntimeEnvironmentId: 'env-1'
+      })
+    })
+    store.setState({
+      runtimeStatusByEnvironmentId: new Map([
+        [
+          'env-1',
+          {
+            checkedAt: 1,
+            status: {
+              runtimeId: 'env-runtime',
+              rendererGraphEpoch: 0,
+              graphStatus: 'ready',
+              authoritativeWindowId: null,
+              liveTabCount: 0,
+              liveLeafCount: 0,
+              hostPlatform: 'linux',
+              capabilities: []
+            }
+          }
+        ]
+      ])
+    })
+    Object.assign(window.api.onboarding, { update: vi.fn(async () => undefined) })
+    mocks.onboardingGet.mockResolvedValue({ ...getDefaultOnboardingState(), outcome: 'dismissed' })
+    mocks.addRuntimeSshRepo.mockResolvedValue({
+      id: 'ssh-folder',
+      path: folder.path,
+      displayName: 'SSH folder',
+      badgeColor: '',
+      addedAt: 1,
+      kind: 'folder'
+    })
+    const pending = Promise.withResolvers<unknown>()
+    mocks.capability.mockResolvedValue(true)
+    mocks.hostRpc.mockImplementation(async (_target, method) => {
+      if (method === 'settings.getAgentLaunch') {
+        return pending.promise
+      }
+      if (method === 'worktree.detectedList') {
+        return makeDetectedResult('ssh-folder', [folder])
+      }
+      if (method === 'worktree.lineageList') {
+        return { lineage: {} }
+      }
+      throw new Error(`Unexpected RPC ${method}`)
+    })
+    replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1 }])
+    renderToStaticMarkup(<NonGitFolderDialog />)
+    mocks.buttons.find((entry) => entry.label.includes('Open as Folder'))?.onClick?.()
+    await vi.waitFor(() =>
+      expect(
+        mocks.hostRpc.mock.calls.filter(([, method]) => method === 'settings.getAgentLaunch')
+      ).toHaveLength(1)
+    )
+    expect(store.getState().repos).toContainEqual(expect.objectContaining({ id: 'ssh-folder' }))
+    replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 2 }])
+    await vi.waitFor(() =>
+      expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(folder.id, {
+        sidebarRevealBehavior: 'auto',
+        executionHostId: 'runtime:env-1'
+      })
+    )
+    pending.resolve({ settings: {} })
+    await Promise.resolve()
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledOnce()
+    expect(toast.error).not.toHaveBeenCalled()
   })
 
   it('refuses an SSH folder with no server to add it, never adding it on this computer', async () => {

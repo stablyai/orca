@@ -70,7 +70,10 @@ export function mobileQueuedMessageCards(
     ...card,
     line: queuedMessageCardLine({
       ...card,
-      text: stripSentImagePromptMarkers(card.text, card.images?.length ?? 0)
+      displayText: stripSentImagePromptMarkers(
+        card.displayText ?? card.text,
+        card.images?.length ?? 0
+      )
     }),
     needsAttention: queuedMessageCardNeedsAttention(card),
     caption: queuedMessageCardCaption(card, facts.agentName, facts.statedFailures ?? []),

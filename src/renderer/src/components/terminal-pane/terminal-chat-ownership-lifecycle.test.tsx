@@ -41,12 +41,13 @@ const LEFT = '11111111-1111-4111-8111-111111111111'
 const RIGHT = '22222222-2222-4222-8222-222222222222'
 const mocks = vi.hoisted(() => {
   const layouts: Record<string, TerminalLayoutSnapshot> = {}
+  const settings: { nativeChatProviders?: Record<string, boolean> } = {}
   const tab = { id: 'tab', entityId: 'tab', contentType: 'terminal', viewMode: 'chat' }
   const state = {
     terminalLayoutsByTabId: layouts,
     unifiedTabsByWorktree: { wt: [tab] },
     tabsByWorktree: {},
-    settings: { experimentalNativeChat: true },
+    settings,
     pendingPaneAccountRestarts: [],
     runtimePaneTitlesByTabId: { tab: { 1: 'codex', 2: 'codex' } },
     agentStatusByPaneKey: {},
@@ -217,8 +218,13 @@ beforeEach(() => {
     paneForegroundAgentByPaneKey: {},
     tabsByWorktree: { wt: [{ ...makeTerminalTab('tab', 'wt', 'codex'), viewMode: 'chat' }] }
   })
-  mocks.state.settings.experimentalNativeChat = true
-  useAppStore.setState({ runtimePaneTitlesByTabId: { tab: { 1: 'codex', 2: 'codex' } } })
+  useAppStore.setState({
+    settings: {
+      ...useAppStore.getState().settings,
+      nativeChatProviders: { claude: true, codex: true }
+    },
+    runtimePaneTitlesByTabId: { tab: { 1: 'codex', 2: 'codex' } }
+  })
   mocks.state.setTabViewMode('tab', 'chat')
   mocks.state.setTabLayout('tab', {
     root: {
@@ -658,7 +664,7 @@ describe('terminal chat ownership lifecycle', () => {
     expect(mocks.state.terminalLayoutsByTabId.tab.chatLeafId).toBeUndefined()
   })
 
-  it('keeps a saved legacy chat and its explicit toggle available with Chat UI off', () => {
+  it('keeps a saved legacy chat and its explicit toggle available with its agents set to CLI', () => {
     const push = vi.fn()
     const fixture = makeFixture(undefined, { push })
     useAppStore.setState({ runtimePaneTitlesByTabId: { tab: { 1: 'bash', 2: 'codex' } } })
@@ -667,7 +673,14 @@ describe('terminal chat ownership lifecycle', () => {
       [RIGHT]: 'remote:host:chat'
     }
     const hook = renderHook(() => useFixture(fixture, RIGHT))
-    mocks.state.settings.experimentalNativeChat = false
+    act(() =>
+      useAppStore.setState({
+        settings: {
+          ...useAppStore.getState().settings,
+          nativeChatProviders: { claude: false, codex: false }
+        }
+      })
+    )
     hook.rerender()
     hook.result.current.persistLayoutSnapshot()
     expect(hook.result.current.effectiveChatViewMode).toBe(true)

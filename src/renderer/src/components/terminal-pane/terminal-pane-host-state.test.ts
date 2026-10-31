@@ -468,6 +468,18 @@ describe('qualified native chat runtime facts', () => {
         worktreesByRepo: { repo: reverse ? [remote, local] : [local, remote] }
       })
       expect(selectNativeChatWslProject(state, 'wt')).toBe(true)
+      const selectedProjects = state.projects
+      state.projects = state.projects.filter((project) => project.id !== 'local-project')
+      // The absent explicit project falls back to its UNC path, never the rival repo match.
+      expect(selectNativeChatWslProject(state, 'wt')).toBe(true)
+      state.projects = selectedProjects.map((project) =>
+        project.id === 'local-project'
+          ? { ...project, localWindowsRuntimePreference: { kind: 'windows-host' } }
+          : project
+      )
+      expect(selectNativeChatWslProject(state, 'wt')).toBe(false)
+      state.projects = selectedProjects
+      expect(selectNativeChatWslProject(state, 'wt')).toBe(true)
       expect(
         selectNativeChatWslProject({ ...state, activeWorkspaceExecutionHostId: null }, 'wt')
       ).toBeNull()

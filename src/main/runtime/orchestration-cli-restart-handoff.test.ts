@@ -98,7 +98,8 @@ it("retains CLI work and mail across restart, refuses a worker's own Run, and co
         cliPath,
         'orchestration',
         ...args,
-        '--json'
+        '--json',
+        '--full'
       ],
       {
         cwd: home,
@@ -172,14 +173,16 @@ it("retains CLI work and mail across restart, refuses a worker's own Run, and co
     expect(await cli(coord, ['task-list'])).toMatchObject({
       result: { tasks: [{ id: task, status: 'dispatched', dispatch_id: dispatch }] }
     })
-    expect(check.parse(await cli(coord, ['check'])).result).toEqual(retainedBatch)
+    expect(await cli(coord, ['check'])).toMatchObject({ result: { count: 0, deliveryId: null } })
+    expect(await cli(coord, ['check', '--all'])).toMatchObject({
+      result: { runId: root, messages: [{ id: retainedMessage }] }
+    })
 
     const bindingBefore = db.getRunRaw(root)
     expect(await cli(worker, ['run-use', '--id', root], 1)).toMatchObject({
       error: { code: 'worker_cannot_coordinate_own_run', data: { effectsApplied: false } }
     })
     expect(db.getRunRaw(root)).toEqual(bindingBefore)
-    expect(check.parse(await cli(coord, ['check'])).result).toEqual(retainedBatch)
     expect(await cli(coord, ['check', '--ack', retainedBatch.deliveryId])).toMatchObject({
       result: { acknowledged: retainedBatch.deliveryId, count: 0 }
     })
@@ -221,11 +224,10 @@ it("retains CLI work and mail across restart, refuses a worker's own Run, and co
         }
       ]
     })
-    expect(db.getMessageById(reply)?.read).toBe(0)
+    expect(db.getMessageById(reply)?.read).toBe(1)
     expect(await cli(worker, ['check', '--ack', replyBatch.deliveryId])).toMatchObject({
       result: { runId: separate, acknowledged: replyBatch.deliveryId, count: 0 }
     })
-    expect(db.getMessageById(reply)?.read).toBe(1)
     await cli(coord, ['check', '--ack', questionBatch.deliveryId])
 
     const continuedDispatch = idOf(

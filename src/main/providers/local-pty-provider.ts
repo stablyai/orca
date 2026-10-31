@@ -83,6 +83,8 @@ export class LocalPtyProvider implements IPtyProvider {
   hasPty(id: string): boolean {
     return ptyProcesses.has(id)
   }
+  getPtyAvailability = (id: string): boolean => this.hasPty(id)
+
   write(id: string, data: string): boolean {
     return writeLocalPty(id, data)
   }

@@ -230,6 +230,29 @@ describe('NativeChatStructuredSession launch lifecycle', () => {
     expect(mocks.retryLaunch).toHaveBeenCalledWith('wt-1', 'session-1')
   })
 
+  it('renders the direct SSH refusal with the host setup and terminal return routes', () => {
+    mocks.launchLifecycle = 'failed'
+    mocks.launchFailure =
+      structuredLaunchFailure(
+        new StructuredAgentSessionCreateRefusalError(
+          'unsupported',
+          'structured_agent_session_unsupported',
+          undefined,
+          'remote'
+        )
+      ) ?? null
+    render(sessionView())
+    expect(
+      screen.getByText(
+        'Chat could not be started. This host isn’t on Orca’s server yet. Connect again to set it up, or open the agent in a terminal.'
+      )
+    ).toBeTruthy()
+    expect(screen.queryByText(/structured_agent_session_unsupported/)).toBeNull()
+    expect(mocks.retryLaunch).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(mocks.retryLaunch).toHaveBeenCalledWith('wt-1', 'session-1')
+  })
+
   it("keeps a step the Retry doesn't take, and drops one it does", () => {
     mocks.launchLifecycle = 'failed'
     mocks.launchFailure = {

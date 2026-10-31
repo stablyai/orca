@@ -38,6 +38,9 @@ export function structuredSessionTabRetired(
   sessionId: string
 ): boolean {
   try {
+    if (typeof host.deps?.store?.isSessionTabRetired === 'function') {
+      return host.deps.store.isSessionTabRetired(sessionId)
+    }
     const index = host.getPersistedVisibleSessionTabIndex?.()
     return index?.present === true && !index.sessionIds.includes(sessionId)
   } catch {

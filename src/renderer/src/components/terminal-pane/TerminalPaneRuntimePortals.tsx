@@ -5,6 +5,7 @@ import { CodexSharedServerBanner } from './CodexSharedServerBanner'
 import { ClaudeOldTerminalBanner } from './ClaudeOldTerminalBanner'
 import { ClaudeDiffPanelNoticeBanner } from './ClaudeDiffPanelNoticeBanner'
 import { NewerDaemonHoldBanner } from './NewerDaemonHoldBanner'
+import { WorkerAutoCloseBanner } from './WorkerAutoCloseBanner'
 import { WslDistroStoppedHoldCard } from './WslDistroStoppedHoldCard'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { TerminalSshReconnectOverlay } from './TerminalSshReconnectOverlay'
@@ -31,7 +32,8 @@ export function TerminalPaneCodexRestartPortals({
     managerRef,
     paneTransportsRef,
     savedLayout,
-    tabId
+    tabId,
+    worktreeId
   } = controller
   return (
     <>
@@ -90,6 +92,13 @@ export function TerminalPaneCodexRestartPortals({
               tabId={tabId}
               leafId={pane.leafId}
               container={pane.container}
+            />
+            <WorkerAutoCloseBanner
+              key={`worker-auto-close-${pane.id}`}
+              tabId={tabId}
+              leafId={pane.leafId}
+              worktreeId={worktreeId}
+              isVisible={isVisible}
             />
             {holdBanner}
           </>,

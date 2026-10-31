@@ -169,7 +169,7 @@ export const codexScriptedChild = (
     deps: {
       openCodexConnection: open,
       readProcessStartTime: async () => 1_700_000_000_000,
-      resolveCodexCommand: () => '/nonexistent/scripted-codex',
+      resolveCodexCommand: () => ({ command: '/nonexistent/scripted-codex', prefixArgs: [] }),
       resolveEnvironment: async () => ({})
     },
     get holdHandshakes() {

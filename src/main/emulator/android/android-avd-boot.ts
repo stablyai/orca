@@ -64,10 +64,11 @@ async function waitForNewBootedSerial(
     const fresh = (await listRunningAdbDevices(runner, sdk)).filter(
       (device) => device.isEmulator && !known.has(device.serial)
     )
-    for (const device of fresh) {
-      const booted = await runner(sdk.adb, bootCompletedArgs(device.serial))
+    const serial = await findRunningAvdSerial(runner, sdk, avdName, fresh)
+    if (serial) {
+      const booted = await runner(sdk.adb, bootCompletedArgs(serial))
       if (isBootCompleted(booted.stdout)) {
-        return device.serial
+        return serial
       }
     }
     await options.sleep(options.pollIntervalMs)

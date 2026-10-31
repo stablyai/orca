@@ -134,7 +134,13 @@ describe('command aliases dispatch to the canonical handler', () => {
       2,
       'worktree.rm',
       expect.objectContaining({ waitForBackgroundRemoval: true }),
-      { timeoutMs: worktreeRemovalReplyTimeoutMs(true) }
+      {
+        timeoutMs: worktreeRemovalReplyTimeoutMs(true),
+        requestSelection: {
+          paramsForStatus: expect.any(Function),
+          onDispatch: expect.any(Function)
+        }
+      }
     )
     expect(logSpy).toHaveBeenCalledWith('removed: true')
   })
@@ -151,6 +157,23 @@ describe('command aliases dispatch to the canonical handler', () => {
     expect(logSpy).toHaveBeenCalledWith(
       'removed: false\nOrca is still deleting the checkout in the background.'
     )
+  })
+
+  it('leaves missing removal and branch outcomes unconfirmed', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('show', { worktree: { hostId: 'local' } }),
+      okFixture('rm', {})
+    )
+    await main(['worktree', 'rm', '--worktree', 'id:wt-1', '--delete-branch'], '/tmp/repo')
+    expect(logSpy).toHaveBeenCalledWith('Removal is not confirmed.')
+    queueFixtures(
+      callMock,
+      okFixture('show', { worktree: { hostId: 'local' } }),
+      okFixture('rm', {})
+    )
+    await main(['worktree', 'rm', '--worktree', 'id:wt-1', '--json'], '/tmp/repo')
+    expect(JSON.parse(String(logSpy.mock.calls.at(-1)?.[0])).result).toEqual({})
   })
 
   it('fails closed when worktree removal cannot resolve a host', async () => {
@@ -370,7 +393,7 @@ describe('unknown command surfaces a suggestion', () => {
       expect(process.exitCode).toBe(1)
       const output = logSpy.mock.calls.flat().join('\n')
       expect(output).toContain('invalid_argument')
-      expect(output).toContain('"runtimeId": null')
+      expect(JSON.parse(output)).toHaveProperty('ok', false)
       expect(output).not.toContain(`orca ${forbidden}`)
       expect(output).not.toContain(`"${forbidden}"`)
       expect(runtimeClientConstructorMock).not.toHaveBeenCalled()
@@ -395,6 +418,7 @@ describe('unknown command surfaces a suggestion', () => {
   })
 
   it('names the offending --worktree value and the valid forms on selector_not_found', async () => {
+    const stdoutSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const { RuntimeRpcFailureError } = await import('./runtime/types.js')
     callMock.mockRejectedValue(
       new RuntimeRpcFailureError({
@@ -422,14 +446,17 @@ describe('unknown command surfaces a suggestion', () => {
     )
 
     expect(process.exitCode).toBe(1)
+    // Orchestration failures keep one stderr line and print the recovery detail on stdout.
     const stderr = errorSpy.mock.calls.map((call) => String(call[0])).join('\n')
+    const stdout = stdoutSpy.mock.calls.map((call) => String(call[0])).join('\n')
     expect(callMock).toHaveBeenCalledExactlyOnceWith(
       'orchestration.workerStart',
       expect.objectContaining({ worktree: 'repo-1', from: 'term-caller' })
     )
-    expect(stderr).toContain('No Orca workspace matched the worktree selector "repo-1"')
-    expect(stderr).toContain('id:repo-1::<absolute-path>')
-    expect(stderr).toContain('Valid selector forms:')
+    expect(stderr).toBe('error: selector_not_found: selector_not_found')
+    expect(stdout).toContain('No Orca workspace matched the worktree selector "repo-1"')
+    expect(stdout).toContain('id:repo-1::<absolute-path>')
+    expect(stdout).toContain('Valid selector forms:')
   })
 
   it('reports a pre-command flag that belongs to another command', async () => {
