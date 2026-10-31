@@ -662,6 +662,26 @@ describe('BrowserSessionRegistry', () => {
       })
     })
 
+    it('drops mobile-preset client hints on Google auth hosts', () => {
+      const callback = vi.fn()
+      install()(
+        {
+          url: 'https://accounts.google.com/gsi/button',
+          resourceType: 'subFrame',
+          requestHeaders: {
+            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) CriOS/150.0.0.0',
+            'sec-ch-ua': '"Google Chrome";v="150"',
+            'sec-ch-ua-mobile': '?1',
+            'sec-ch-ua-platform': '"iOS"'
+          }
+        },
+        callback
+      )
+      expect(callback.mock.calls[0][0].requestHeaders).toEqual({
+        'User-Agent': googleAuthUserAgent()
+      })
+    })
+
     it('keeps native requests untouched on Google auth hosts', () => {
       processUserAgentMode.value = 'native'
       const callback = vi.fn()

@@ -1324,7 +1324,7 @@
       },
       "userAgent": {
         "title": "Identidade do navegador",
-        "description": "Escolha o user agent para cada perfil e página do navegador. O modo nativo desativa o login do Google. As alterações têm efeito após reiniciar.",
+        "description": "Escolha o user agent para cada perfil e página do navegador. As alterações têm efeito após reiniciar.",
         "remoteUnsupported": "Gerencie a identidade do navegador no host remoto com a CLI do Orca.",
         "loading": "Carregando…",
         "resetRequired": "Os dados de identidade precisam ser redefinidos explicitamente antes de poderem ser alterados.",

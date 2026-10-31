@@ -222,7 +222,7 @@
       },
       "userAgent": {
         "title": "浏览器身份",
-        "description": "为每个浏览器配置文件和页面选择用户代理。本机模式会禁用 Google 登录。更改在重新启动后生效。",
+        "description": "为每个浏览器配置文件和页面选择用户代理。更改在重新启动后生效。",
         "remoteUnsupported": "使用 Orca CLI 管理远程主机上的浏览器身份。",
         "loading": "加载中…",
         "resetRequired": "身份数据必须在更改之前显式重置。",

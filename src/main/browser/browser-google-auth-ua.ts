@@ -28,6 +28,14 @@ export function googleAuthUserAgent(): string {
   return getBrowserProcessUserAgentIdentity().electronUserAgent
 }
 
+export function stripClientHints(headers: Record<string, string>): void {
+  for (const key of Object.keys(headers)) {
+    if (key.toLowerCase().startsWith('sec-ch-ua')) {
+      delete headers[key]
+    }
+  }
+}
+
 // Replace case-insensitively to avoid duplicate User-Agent headers.
 export function setUserAgentHeader(headers: Record<string, string>, value: string): void {
   const existing = Object.keys(headers).find((key) => key.toLowerCase() === 'user-agent')

@@ -693,7 +693,7 @@
       },
       "userAgent": {
         "title": "Browser identity",
-        "description": "Choose the user agent for every browser profile and page. Native mode disables Google sign-in. Changes take effect after a restart.",
+        "description": "Choose the user agent for every browser profile and page. Changes take effect after a restart.",
         "remoteUnsupported": "Manage browser identity on the remote host with the Orca CLI.",
         "loading": "Loading…",
         "resetRequired": "Identity data must be reset explicitly before it can be changed.",

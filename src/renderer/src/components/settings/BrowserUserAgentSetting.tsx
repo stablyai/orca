@@ -22,7 +22,7 @@ export function BrowserUserAgentSetting({
   const title = translate('settings.browser.userAgent.title', 'Browser identity')
   const description = translate(
     'settings.browser.userAgent.description',
-    'Choose the user agent for every browser profile and page. Native mode disables Google sign-in. Changes take effect after a restart.'
+    'Choose the user agent for every browser profile and page. Changes take effect after a restart.'
   )
   const isLocal = hostId === LOCAL_EXECUTION_HOST_ID
 

@@ -222,7 +222,7 @@
       },
       "userAgent": {
         "title": "Identidad del navegador",
-        "description": "Elija el agente de usuario para cada perfil y página del navegador. El modo nativo deshabilita el inicio de sesión de Google. Los cambios surten efecto después de un reinicio.",
+        "description": "Elija el agente de usuario para cada perfil y página del navegador. Los cambios surten efecto después de un reinicio.",
         "remoteUnsupported": "Gestiona la identidad del navegador en el host remoto con la CLI de Orca.",
         "loading": "Cargando…",
         "resetRequired": "Los datos de identidad deben restablecerse explícitamente antes de que se puedan cambiar.",

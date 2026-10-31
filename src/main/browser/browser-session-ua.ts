@@ -9,7 +9,8 @@ import {
   currentUserAgent,
   googleAuthUserAgent,
   setUserAgentHeader,
-  shouldUseGoogleAuthIdentity
+  shouldUseGoogleAuthIdentity,
+  stripClientHints
 } from './browser-google-auth-ua'
 
 export type BrowserSessionRequestUserAgentResolver = (args: {
@@ -75,11 +76,16 @@ export function installBrowserSessionUserAgentPolicy(
     } catch {
       // The request can race guest teardown; the header and manager state still provide a fallback.
     }
+    const processIdentity = getBrowserProcessUserAgentIdentity()
     // Native mode must keep its process identity on auth requests.
     if (
-      getBrowserProcessUserAgentIdentity().mode === 'clean' &&
+      processIdentity.mode === 'clean' &&
       shouldUseGoogleAuthIdentity(details.url, details.referrer ?? '', details.resourceType ?? '')
     ) {
+      // Chromium's own hints match the Electron UA; mobile-preset hints describe another device.
+      if (requestUserAgent !== googleAuthUa && requestUserAgent !== processIdentity.userAgent) {
+        stripClientHints(headers)
+      }
       setUserAgentHeader(headers, googleAuthUa)
       return
     }

@@ -653,7 +653,7 @@
       },
       "userAgent": {
         "title": "Browser-Identität",
-        "description": "Den User-Agent für alle Browser-Profile und Seiten auswählen. Der Modus „Nativ“ deaktiviert die Google-Anmeldung. Änderungen werden nach einem Neustart wirksam.",
+        "description": "Den User-Agent für alle Browser-Profile und Seiten auswählen. Änderungen werden nach einem Neustart wirksam.",
         "remoteUnsupported": "Die Browser-Identität auf dem Remote-Host mit der Orca-CLI verwalten.",
         "loading": "Wird geladen…",
         "resetRequired": "Die Identitätsdaten müssen vor einer Änderung ausdrücklich zurückgesetzt werden.",
