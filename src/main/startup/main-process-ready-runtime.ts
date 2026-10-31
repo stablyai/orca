@@ -31,6 +31,7 @@ import { collectWorktreeTrashSweepRoots, sweepStaleWorktreeTrash } from '../work
 import { loadWorktreeRemovalRecordsForStore } from './worktree-removal-records-load'
 import { runAfterFirstWindowShown } from './first-window-deferral'
 import { logStartupMilestone } from './startup-diagnostics'
+import { sweepStalePermissionStatusHelpers } from '../computer/macos-computer-use-permission-helper-sweep'
 import { refreshInstalledOpenCodeStatusPlugins } from '../opencode/opencode-status-plugin-startup-refresh'
 import { pruneDesktopOrcadArtifactCache } from '../orcad/orcad-artifact-cache-retention'
 import { runGatedWslMoveDesktopRewritePass } from '../persistence/moving-wsl-projects/wsl-move-desktop-rewrite'
@@ -64,6 +65,8 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   runtime.setAgentBrowserBridge(state.agentBrowserBridge)
   // Reclaim browser daemons orphaned by prior crashes/SIGKILL.
   void state.agentBrowserBridge.sweepOrphanedSessions()
+  // Why: permission-check helpers a previous run left wedged stay registered with LaunchServices until killed.
+  void sweepStalePermissionStatusHelpers()
   const browserClientAutomationDispatcher = new RpcDispatcher({ runtime })
   configureBrowserClientPageAutomationRuntime({
     browserManager,
