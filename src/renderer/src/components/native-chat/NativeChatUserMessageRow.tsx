@@ -1,6 +1,7 @@
 import { ChevronRight, Goal } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { splitAutomationRunMessage } from '../../../../shared/automation-run-preamble'
+import { isAutomationInstructionsBlock } from '../../../../shared/automation-run-preamble'
+import { nativeChatProseToMarkdown } from '../../../../shared/native-chat/transcript/native-chat-prose'
 import { useNativeChatDisclosure } from './native-chat-disclosure-store'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -89,8 +90,12 @@ export function NativeChatUserMessageRow({
 }): React.JSX.Element {
   // Agent-authored input belongs to the turn but uses a left-aligned sender row instead of the person’s bubble.
   const from = message.from
-  const automation = !from ? splitAutomationRunMessage(markdown) : null
-  const task = automation?.task ?? markdown
+  const instructions = !from
+    ? nativeChatProseToMarkdown(prose.filter(isAutomationInstructionsBlock))
+    : ''
+  const task = instructions
+    ? nativeChatProseToMarkdown(prose.filter((block) => !isAutomationInstructionsBlock(block)))
+    : markdown
   const disclosure = useNativeChatDisclosure(`automation-instructions:${message.id}`, false)
   const sending = deliveryNotice?.sending === true
   return (
@@ -103,7 +108,7 @@ export function NativeChatUserMessageRow({
       data-native-chat-rewind-item={rewind && !sending ? message.id : undefined}
       className={cn('group relative flex flex-col gap-0.5', from ? 'items-start' : 'items-end')}
     >
-      {automation ? (
+      {instructions ? (
         <CollapsibleTrigger asChild>
           <button
             type="button"
@@ -128,12 +133,12 @@ export function NativeChatUserMessageRow({
         />
       ) : (
         <div className="max-w-[80%] rounded-xl border border-chat-user-border bg-chat-user-surface px-3.5 py-2.5 text-sm text-chat-foreground-strong">
-          {automation ? (
+          {instructions ? (
             <CollapsibleContent>
               <div className="text-chat-foreground-faint">
                 <NativeChatMarkdown
                   rowKey={`${message.id}:automation`}
-                  content={automation.instructions}
+                  content={instructions}
                   variant="document"
                   className="text-sm"
                   renderCodeBlock={NativeChatCodeBlock}

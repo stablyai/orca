@@ -1,3 +1,7 @@
+import {
+  automationRunMessageBody,
+  buildAutomationRunPreamble
+} from '../../shared/automation-run-preamble'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -157,4 +161,13 @@ describe('claudeDispatchInvokesSlashCommand', () => {
     expect(claudeDispatchInvokesSlashCommand([{ type: 'text', text: 'ship it' }])).toBe(false)
     expect(claudeDispatchInvokesSlashCommand([])).toBe(false)
   })
+})
+
+it('dispatches tagged automation instructions and task with the original prompt text', async () => {
+  const preamble = buildAutomationRunPreamble('orca')
+  const task = '  Write the brief'
+  const body = automationRunMessageBody(task, preamble.trimEnd())
+  expect(await claudeDispatchMessageContent(body)).toEqual([
+    { type: 'text', text: `${preamble}${task}` }
+  ])
 })

@@ -56,6 +56,8 @@ export const AgentLaunchFields = z.object({
   prompt: z
     .object({
       text: z.string(),
+      /** Host-produced chat automation instructions, journaled as a separate presentation block. */
+      automationInstructions: z.string().optional(),
       delivery: z.enum(['submit', 'draft'])
     })
     .optional(),

@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { ChevronRight } from 'lucide-react-native'
-import { splitAutomationRunMessage } from '../../../../../src/shared/automation-run-preamble'
-import { deriveNativeChatRowContent } from '../../../../../src/shared/native-chat-row-content'
+import { isAutomationInstructionsBlock } from '../../../../../src/shared/automation-run-preamble'
+import { nativeChatProseToMarkdown } from '../../../../../src/shared/native-chat/transcript/native-chat-prose'
 import { isImageRefBlock, type NativeChatBlock } from '../../../../../src/shared/native-chat-types'
 import { MobileMarkdown } from '../../../components/MobileMarkdown'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
@@ -42,12 +42,12 @@ export function MobileNativeChatUserMessageBubble({
 }): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const markdown = deriveNativeChatRowContent(blocks).markdown
-  const automation = splitAutomationRunMessage(markdown)
-  const task = automation?.task ?? markdown
+  const instructions = nativeChatProseToMarkdown(blocks.filter(isAutomationInstructionsBlock))
+  const taskBlocks = blocks.filter((block) => !isAutomationInstructionsBlock(block))
+  const task = nativeChatProseToMarkdown(taskBlocks)
   return (
     <>
-      {automation ? (
+      {instructions ? (
         <Pressable
           style={styles.toggle}
           hitSlop={6}
@@ -70,11 +70,11 @@ export function MobileNativeChatUserMessageBubble({
         onLongPress={onLongPress}
         style={[messageStyles.content, messageStyles.userBubble]}
       >
-        {automation && instructionsOpen ? (
+        {instructions && instructionsOpen ? (
           <View style={styles.instructions}>
             <View style={styles.faint}>
               <MobileMarkdown
-                content={automation.instructions}
+                content={instructions}
                 tone="userMessage"
                 rangeSelectable
                 textScale={CHAT_PROSE_SCALE * fontScale}
@@ -93,11 +93,7 @@ export function MobileNativeChatUserMessageBubble({
           recovery={recovery}
           status={status}
         >
-          {renderProse(
-            automation
-              ? [{ type: 'text', text: task }]
-              : blocks.filter((block) => !isImageRefBlock(block))
-          )}
+          {renderProse(taskBlocks.filter((block) => !isImageRefBlock(block)))}
         </MobileNativeChatUserMessageFold>
         {children}
       </MobileNativeChatLongPressContent>

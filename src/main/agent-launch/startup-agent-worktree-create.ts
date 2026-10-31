@@ -1,6 +1,6 @@
 /** Preserve worktree.create’s terminal startup and prompt delivery through the shared executor. */
 
-import type { AgentLaunchPrompt } from '../../shared/agent-launch-intent'
+import { agentLaunchPromptText, type AgentLaunchPrompt } from '../../shared/agent-launch-intent'
 import { getRepoSshConnectionId } from '../../shared/execution-host'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
@@ -102,11 +102,11 @@ function legacyStartupFields(
   prompt: AgentLaunchPrompt | undefined
 ): Partial<RuntimeManagedWorktreeCreateArgs> {
   if (prompt?.delivery === 'draft') {
-    return { startupDraftAgent: agent, startupDraft: prompt.text }
+    return { startupDraftAgent: agent, startupDraft: agentLaunchPromptText(prompt) }
   }
   return {
     startupAgent: agent,
-    ...(prompt ? { startupPrompt: prompt.text } : {})
+    ...(prompt ? { startupPrompt: agentLaunchPromptText(prompt) } : {})
   }
 }
 

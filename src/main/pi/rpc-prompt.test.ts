@@ -1,3 +1,7 @@
+import {
+  automationRunMessageBody,
+  buildAutomationRunPreamble
+} from '../../shared/automation-run-preamble'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
 import { PiRpcPromptError, preparePiRpcPrompt } from './rpc-prompt'
@@ -60,4 +64,11 @@ describe('Pi RPC prompt preparation', () => {
       preparePiRpcPrompt(message([{ type: 'text', text: oversizedText }]))
     ).rejects.toThrow('RPC write limit')
   })
+})
+
+it('dispatches tagged automation instructions and task with the original prompt text', async () => {
+  const preamble = buildAutomationRunPreamble('orca')
+  const task = '  Write the brief'
+  const body = automationRunMessageBody(task, preamble.trimEnd())
+  expect((await preparePiRpcPrompt(body)).message).toBe(`${preamble}${task}`)
 })
