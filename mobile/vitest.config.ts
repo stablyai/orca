@@ -19,6 +19,7 @@ export default defineConfig({
   resolve: {
     // A faithful Node stand-in for the native module, rather than a mock in every test that reaches it.
     alias: {
+      '@project-grouping-test-host': fileURLToPath(new URL('../src', import.meta.url)),
       '@': fileURLToPath(new URL('../src/renderer/src', import.meta.url)),
       '@renderer': fileURLToPath(new URL('../src/renderer/src', import.meta.url)),
       'expo-crypto': fileURLToPath(

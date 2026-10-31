@@ -1,4 +1,4 @@
-import '../../../src/main/persistence/applying-settings/mobile-project-controls-host.test-fixture'
+import '@project-grouping-test-host/main/persistence/applying-settings/mobile-project-controls-host.test-fixture'
 import { doubles } from './mobile-web-shell-protocol-test-fixtures'
 import {
   type Mounted,
@@ -21,8 +21,8 @@ import {
   closeTestStores,
   createStore,
   readPersistedState
-} from '../../../src/main/persistence/persistence-test-harness'
-import { createProjectGroupingSocketOwner } from '../../../src/main/persistence/applying-settings/project-grouping-socket-owner.test-fixture'
+} from '@project-grouping-test-host/main/persistence/persistence-test-harness'
+import { createProjectGroupingSocketOwner } from '@project-grouping-test-host/main/persistence/applying-settings/project-grouping-socket-owner.test-fixture'
 import { DirectRpcClient } from '../transport/direct-rpc-client'
 import { createBridgePortPair } from './bridge/bridge-port-pair-test-harness'
 import { useHostStatusGates } from '../transport/host-status-gates'

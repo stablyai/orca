@@ -15,11 +15,15 @@ const ERROR_LINE = /^(\S.*?)\(\d+,\d+\): error TS\d+:/
 export const TESTS_OUTSIDE_PROGRAM = new Map([
   [
     'src/mobile-web-shell/mobile-web-shell-project-controls.test.ts',
-    'Node-side: real persistence/socket/bridge joins; checked by config/tsconfig.test.mobile-project-controls.json after both installs and executed by the Mobile CI Node role'
+    'Real persistence/socket/bridge joins: checked whole by config/tsconfig.test.mobile-project-controls.json after checked host declaration emit and both installs; executed by the Mobile CI Node role'
   ],
   [
     'src/mobile-web-shell/mobile-web-shell-nested-project-filter.test.ts',
-    'Node-side: normal publisher/persistence/socket join; checked by config/tsconfig.test.mobile-project-controls.json after both installs and executed by the Mobile CI Node role'
+    'Normal publisher/persistence/socket join: checked whole by config/tsconfig.test.mobile-project-controls.json after checked host declaration emit and both installs; executed by the Mobile CI Node role'
+  ],
+  [
+    'src/components/new-workspace-owner-controls.test.tsx',
+    'Real publisher/controller creation joins: checked whole by config/tsconfig.test.mobile-project-controls.json after checked host declaration emit and both installs; executed by the Mobile CI Bun role'
   ],
   [
     'src/worktree/project-sections-owner-recovery.test.ts',

@@ -1,15 +1,20 @@
 {
   "extends": ["../mobile/tsconfig.json", "./tsconfig.test.pane-launch.json"],
-  "include": [
+  "files": [
     "../mobile/src/mobile-web-shell/mobile-web-shell-project-controls.test.ts",
     "../mobile/src/mobile-web-shell/mobile-web-shell-nested-project-filter.test.ts",
-    "../src/renderer/src/env.d.ts",
-    "../src/types/**/*"
+    "../mobile/src/components/new-workspace-owner-controls.test.tsx",
+    "../.cache/typecheck/mobile-project-controls-host/src/renderer/src/env.d.ts",
+    "../.cache/typecheck/mobile-project-controls-host/src/preload/api-types.d.ts",
+    "../src/types/build-constants.d.ts"
   ],
+  "include": [],
+  "exclude": [],
   "compilerOptions": {
     "paths": {
-      "@renderer/*": ["../src/renderer/src/*"],
-      "@/*": ["../src/renderer/src/*"],
+      "@project-grouping-test-host/*": ["../.cache/typecheck/mobile-project-controls-host/src/*"],
+      "@renderer/*": ["../.cache/typecheck/mobile-project-controls-host/src/renderer/src/*"],
+      "@/*": ["../.cache/typecheck/mobile-project-controls-host/src/renderer/src/*"],
       "@noble/hashes/*": ["../mobile/node_modules/@noble/hashes/*"],
       "tweetnacl": ["../mobile/node_modules/tweetnacl"],
       "ws": ["../mobile/node_modules/@types/ws"],

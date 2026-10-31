@@ -32,6 +32,22 @@ on:
       # Mobile typechecks run through the root compiler selection.
       - 'config/scripts/run-typecheck-projects-in-parallel.mjs'
       - 'config/tsconfig.test.mobile-project-controls.json'
+      - 'config/tsconfig.test.mobile-host-declarations.json'
+      - 'config/tsconfig.test.pane-launch.json'
+      - 'config/tsconfig.web.json'
+      # Checked declarations follow the real desktop fixture, renderer ambient and preload graph.
+      - 'src/main/**'
+      - 'src/renderer/**'
+      - 'src/preload/**'
+      - 'src/types/**'
+      - 'src/wsl-guest/claude-agent-view-plugin.ts'
+      - 'src/wsl-guest/omp-status-extension.ts'
+      - 'src/wsl-guest/opencode-canonical-config.ts'
+      - 'src/wsl-guest/opencode-overlay-mirror.ts'
+      - 'src/wsl-guest/plugin-overlay.ts'
+      - 'src/wsl-guest/plugin-sources.ts'
+      - 'config/scripts/vitest-host-ports-setup.ts'
+      - 'package.json'
       - 'config/scripts/tsrs-typecheck-compiler.mjs'
       - 'config/scripts/pinned-bun-executable.mjs'
       - 'config/oxlint-code-quality-native-plugins.json'
@@ -56,6 +72,9 @@ on:
       - '!src/main/**/*.test.[jt]s'
       - '!src/main/**/*.test.[jt]sx'
       - '!src/main/**/*.test.[cm][jt]s'
+      - '!src/renderer/**/*.test.[jt]s'
+      - '!src/renderer/**/*.test.[jt]sx'
+      - '!src/renderer/**/*.test.[cm][jt]s'
   # Check matching source inputs on main too: independently passing PRs can conflict after merge, and verify is PR-only.
   push:
     branches:
@@ -79,6 +98,22 @@ on:
       - 'config/scripts/run-mobile-ci-tests.mjs'
       - 'config/scripts/run-typecheck-projects-in-parallel.mjs'
       - 'config/tsconfig.test.mobile-project-controls.json'
+      - 'config/tsconfig.test.mobile-host-declarations.json'
+      - 'config/tsconfig.test.pane-launch.json'
+      - 'config/tsconfig.web.json'
+      # Checked declarations follow the real desktop fixture, renderer ambient and preload graph.
+      - 'src/main/**'
+      - 'src/renderer/**'
+      - 'src/preload/**'
+      - 'src/types/**'
+      - 'src/wsl-guest/claude-agent-view-plugin.ts'
+      - 'src/wsl-guest/omp-status-extension.ts'
+      - 'src/wsl-guest/opencode-canonical-config.ts'
+      - 'src/wsl-guest/opencode-overlay-mirror.ts'
+      - 'src/wsl-guest/plugin-overlay.ts'
+      - 'src/wsl-guest/plugin-sources.ts'
+      - 'config/scripts/vitest-host-ports-setup.ts'
+      - 'package.json'
       - 'config/scripts/tsrs-typecheck-compiler.mjs'
       - 'config/scripts/pinned-bun-executable.mjs'
       - 'config/.bun-version'
@@ -94,6 +129,9 @@ on:
       - '!src/main/**/*.test.[jt]s'
       - '!src/main/**/*.test.[jt]sx'
       - '!src/main/**/*.test.[cm][jt]s'
+      - '!src/renderer/**/*.test.[jt]s'
+      - '!src/renderer/**/*.test.[jt]sx'
+      - '!src/renderer/**/*.test.[cm][jt]s'
 
 concurrency:
   # Key main concurrency by commit: GitHub replaces pending runs even with cancel-in-progress:false, hiding middle-merge regressions.
@@ -194,7 +232,7 @@ jobs:
       - name: Typecheck
         id: production-types
         background: true
-        run: node ../config/scripts/run-typecheck-projects-in-parallel.mjs --compiler=bun --bun-threads=2 --project=mobile/tsconfig.json --project=config/tsconfig.test.mobile-project-controls.json
+        run: node ../config/scripts/run-typecheck-projects-in-parallel.mjs --compiler=bun --bun-threads=2 --project=mobile/tsconfig.json --project=config/tsconfig.test.mobile-project-controls.json --mobile-host-declarations
 
       # Why a ratchet and not the raw typecheck: mobile/tsconfig.json excludes test files, so until
       # tsconfig.test.json existed nothing checked them, and at introduction 127 of the 632 had
@@ -342,7 +380,7 @@ jobs:
       - name: Typecheck
         id: production-types
         background: true
-        run: node ../config/scripts/run-typecheck-projects-in-parallel.mjs --compiler=bun --bun-threads=2 --project=mobile/tsconfig.json --project=config/tsconfig.test.mobile-project-controls.json
+        run: node ../config/scripts/run-typecheck-projects-in-parallel.mjs --compiler=bun --bun-threads=2 --project=mobile/tsconfig.json --project=config/tsconfig.test.mobile-project-controls.json --mobile-host-declarations
 
       - name: Typecheck tests (ratchet)
         id: test-types

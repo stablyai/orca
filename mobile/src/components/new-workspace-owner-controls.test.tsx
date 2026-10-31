@@ -159,7 +159,7 @@ import { HostScreenOverlays } from '../host-screen/host-screen-overlays'
 import { useHostScreenController } from '../host-screen/use-host-screen-controller'
 import { NewWorktreeProjectTargetFields } from './NewWorktreeProjectTargetFields'
 import { BOTTOM_DRAWER_HIDE_DURATION_MS } from './bottom-drawer-constants'
-import type * as PublisherFixture from '../../../src/renderer/src/runtime/project-grouping-owner-publication.test-fixture'
+import type * as PublisherFixture from '@project-grouping-test-host/renderer/src/runtime/project-grouping-owner-publication.test-fixture'
 
 let renderer: ReactTestRenderer | undefined
 let createProjectGroupingPublisher: typeof PublisherFixture.createProjectGroupingPublisher
@@ -168,7 +168,7 @@ beforeEach(async () => {
   // A new desktop process starts without the catalog retained by a previous process.
   vi.resetModules()
   ;({ createProjectGroupingPublisher } =
-    await import('../../../src/renderer/src/runtime/project-grouping-owner-publication.test-fixture'))
+    await import('@project-grouping-test-host/renderer/src/runtime/project-grouping-owner-publication.test-fixture'))
 })
 const reply = (result: unknown): RpcResponse => ({ id: 'reply', ok: true, result })
 const executionOptions = z.object({ envelope: z.object({ executionHost: z.string() }) })

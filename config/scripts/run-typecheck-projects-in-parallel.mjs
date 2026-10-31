@@ -1,5 +1,5 @@
-import { runProcessSync, spawnProcess } from '@orca/process-host'
-import { readFileSync } from 'node:fs'
+import { runProcess, runProcessSync, spawnProcess } from '@orca/process-host'
+import { copyFileSync, mkdirSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { availableParallelism, totalmem } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -89,6 +89,8 @@ export function parseTypecheckOptions(args) {
   for (const argument of args) {
     if (/^--compiler=(auto|tsrs|bun|native)$/.test(argument)) {
       options.compiler = argument.slice('--compiler='.length)
+    } else if (argument === '--mobile-host-declarations') {
+      options.mobileHostDeclarations = true
     } else if (argument.startsWith('--bun-concurrency=')) {
       options.bunConcurrency = Number(argument.slice('--bun-concurrency='.length))
     } else if (argument.startsWith('--bun-threads=')) {
@@ -226,8 +228,15 @@ export function resolveTypecheckCommand(
 
 function checkProject(
   config,
-  { compiler, bunExecutable, bunThreads, checkers, root, spawnCompiler }
+  { compiler, bunExecutable, bunThreads, checkers, root, spawnCompiler, runCompiler }
 ) {
+  if (runCompiler) {
+    return Promise.resolve().then(() =>
+      runCompiler(
+        resolveTypecheckCommand(config, { compiler, bunExecutable, bunThreads, checkers, root })
+      )
+    )
+  }
   return new Promise((resolve, reject) => {
     const child = spawnCompiler({
       ...resolveTypecheckCommand(config, { compiler, bunExecutable, bunThreads, checkers, root }),
@@ -255,6 +264,7 @@ export async function runTypecheckProjects({
   root = repoRoot,
   projects = TYPECHECK_PROJECTS,
   spawnCompiler = spawnProcess,
+  runCompiler,
   memoryBytes = totalmem(),
   parallelism = availableParallelism()
 } = {}) {
@@ -275,7 +285,8 @@ export async function runTypecheckProjects({
               bunThreads,
               checkers,
               root,
-              spawnCompiler
+              spawnCompiler,
+              runCompiler
             })
           } catch (reason) {
             failures.push({ index, reason })
@@ -296,7 +307,8 @@ export async function runTypecheckProjects({
           bunThreads,
           checkers,
           root,
-          spawnCompiler
+          spawnCompiler,
+          runCompiler
         })
       )
     )
@@ -309,13 +321,130 @@ export async function runTypecheckProjects({
   return failures
 }
 
+const MOBILE_JOINED_PROJECT = 'config/tsconfig.test.mobile-project-controls.json'
+const MOBILE_HOST_DECLARATIONS_PROJECT = 'config/tsconfig.test.mobile-host-declarations.json'
+const MOBILE_HOST_DECLARATION_ROOTS = [
+  'src/main/persistence/applying-settings/mobile-project-controls-host.test-fixture.d.ts',
+  'src/main/persistence/applying-settings/project-grouping-socket-owner.test-fixture.d.ts',
+  'src/main/persistence/persistence-test-harness.d.ts',
+  'src/main/runtime/mobile-project-sections-snapshot.d.ts',
+  'src/renderer/src/runtime/project-grouping-owner-publication.test-fixture.d.ts',
+  'src/preload/api-types.d.ts'
+]
+
+// This job-owned output must outlive every consumer, including interrupted compiler children.
+export async function runMobileHostTypecheck(options) {
+  const root = options.root ?? repoRoot
+  if (!options.projects.some((project) => project.config === MOBILE_JOINED_PROJECT)) {
+    throw new Error('--mobile-host-declarations requires the complete Mobile joined project')
+  }
+  const output = join(root, '.cache/typecheck/mobile-project-controls-host')
+  const abort = new AbortController()
+  const active = new Set()
+  const failures = []
+  const onInterrupt = () => abort.abort()
+  process.on('SIGINT', onInterrupt)
+  process.on('SIGTERM', onInterrupt)
+
+  async function runCompiler(command) {
+    if (abort.signal.aborted) {
+      throw new Error('Mobile typecheck interrupted')
+    }
+    const invocation = {}
+    active.add(invocation)
+    let terminated = false
+    try {
+      const result = await runProcess({
+        ...command,
+        stdio: 'inherit',
+        timeoutMs: null,
+        signal: abort.signal,
+        terminationBarrier: true,
+        onChildTerminated: () => {
+          terminated = true
+        }
+      })
+      if (result.code !== 0 || result.signal) {
+        throw new Error(
+          `${command.program} ${command.args.join(' ')} exited with ${result.signal ?? result.code}`
+        )
+      }
+    } finally {
+      if (terminated) {
+        active.delete(invocation)
+      } else {
+        abort.abort()
+      }
+    }
+  }
+
+  try {
+    rmSync(output, { recursive: true, force: true })
+    mkdirSync(output, { recursive: true })
+    let declarationsReady = false
+    try {
+      await runCompiler({
+        program: process.execPath,
+        args: [
+          resolveProjectCompiler(MOBILE_HOST_DECLARATIONS_PROJECT, root),
+          '-p',
+          MOBILE_HOST_DECLARATIONS_PROJECT
+        ],
+        cwd: root
+      })
+      for (const declaration of MOBILE_HOST_DECLARATION_ROOTS) {
+        if (!statSync(join(output, declaration)).isFile()) {
+          throw new Error(`Missing emitted Mobile host declaration: ${declaration}`)
+        }
+      }
+      const ambient = 'src/renderer/src/env.d.ts'
+      mkdirSync(dirname(join(output, ambient)), { recursive: true })
+      copyFileSync(join(root, ambient), join(output, ambient))
+      declarationsReady = true
+    } catch (error) {
+      failures.push(error)
+    }
+    if (!abort.signal.aborted) {
+      failures.push(
+        ...(await runTypecheckProjects({
+          ...options,
+          root,
+          projects: options.projects.filter(
+            (project) => declarationsReady || project.config !== MOBILE_JOINED_PROJECT
+          ),
+          runCompiler
+        }))
+      )
+    }
+  } catch (error) {
+    failures.push(error)
+  } finally {
+    process.removeListener('SIGINT', onInterrupt)
+    process.removeListener('SIGTERM', onInterrupt)
+    if (abort.signal.aborted) {
+      failures.push(new Error('Mobile typecheck interrupted or child termination unverifiable'))
+    }
+    if (active.size === 0) {
+      try {
+        rmSync(output, { recursive: true, force: true })
+      } catch (error) {
+        failures.push(error)
+      }
+    } else {
+      failures.push(new Error(`Compiler child closure is unverifiable; retained ${output}`))
+    }
+  }
+  return failures
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const options = parseTypecheckOptions(process.argv.slice(2))
   const selection = selectTypecheckCompiler(options.compiler, {
     root: repoRoot,
     resolveBunExecutable: resolveTypecheckBunExecutable
   })
-  const failures = await runTypecheckProjects({ ...options, ...selection })
+  const run = options.mobileHostDeclarations ? runMobileHostTypecheck : runTypecheckProjects
+  const failures = await run({ ...options, ...selection })
   if (failures.length > 0) {
     for (const failure of failures) {
       console.error(failure.message ?? failure)
