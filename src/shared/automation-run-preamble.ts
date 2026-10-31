@@ -1,5 +1,7 @@
-export function buildAutomationRunPreamble(cli: string): string {
-  return `You are running an Orca automation. Orca records this run's result: use the
+// Append versions so saved messages remain recognizable after preamble changes.
+export const automationRunPreambleVersions = [
+  (cli: string): string => {
+    return `You are running an Orca automation. Orca records this run's result: use the
 commands below to report to it. They apply to the current run automatically.
 
 === CLI COMMANDS ===
@@ -28,21 +30,36 @@ Attaching a report does not mark the run successful or clear a warning.
 
 === TASK ===
 `
+  }
+] as const
+
+export function buildAutomationRunPreamble(cli: string): string {
+  const version = automationRunPreambleVersions.at(-1)
+  if (!version) {
+    throw new Error('Automation preamble versions must not be empty')
+  }
+  return version(cli)
 }
 
 export function splitAutomationRunMessage(
   text: string
 ): { instructions: string; task: string } | null {
-  const cli = /^  (.+) automations warn --key /m.exec(text)?.[1]
-  if (!cli) {
-    return null
+  for (const version of automationRunPreambleVersions) {
+    const [beforeCli, afterCli] = version('\0').split('\0')
+    if (!afterCli || !text.startsWith(beforeCli)) {
+      continue
+    }
+    const cliEnd = text.indexOf(afterCli, beforeCli.length)
+    if (cliEnd <= beforeCli.length) {
+      continue
+    }
+    const preamble = version(text.slice(beforeCli.length, cliEnd))
+    if (text.startsWith(preamble)) {
+      return {
+        instructions: preamble.slice(0, -'=== TASK ===\n'.length).trimEnd(),
+        task: text.slice(preamble.length)
+      }
+    }
   }
-  const preamble = buildAutomationRunPreamble(cli)
-  if (!text.startsWith(preamble)) {
-    return null
-  }
-  return {
-    instructions: preamble.slice(0, -'=== TASK ===\n'.length).trimEnd(),
-    task: text.slice(preamble.length)
-  }
+  return null
 }
