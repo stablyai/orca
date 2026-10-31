@@ -6,7 +6,6 @@ import type {
 } from '../../../../shared/stopped-switch-source'
 import { isWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 
 /**
  * A pane whose process a switch stopped for a replace, and main's word that no replace removed it.
@@ -137,25 +136,39 @@ export function noteStoppedSwitchSource(notice: StoppedSwitchSource): void {
   track()
 }
 
-/** Main's fact on the terminal rows of frames this window applied; its notice only wakes. */
-export function noteFrameStoppedSwitchSources(
-  snapshots: readonly RuntimeMobileSessionTabsResult[]
+/** A terminal row of a frame this window applied, carrying main's stopped fact. */
+export type FrameStoppedSwitchSourceRow = {
+  parentTabId: string
+  leafId: string
+  stoppedSwitchSource: StoppedSwitchSourceFact
+}
+
+/**
+ * Main's fact on a row of a frame this window applied; its notice only wakes. Main repeats the
+ * fact on every frame while it stands, so the one already held for that process costs nothing.
+ */
+export function noteFrameStoppedSwitchSource(
+  worktreeId: string,
+  row: FrameStoppedSwitchSourceRow
 ): void {
-  for (const snapshot of snapshots) {
-    for (const row of snapshot.tabs) {
-      if (row.type === 'terminal' && row.stoppedSwitchSource) {
-        const fact = row.stoppedSwitchSource
-        noteStoppedSwitchSource({
-          worktreeId: snapshot.worktree,
-          tabId: row.parentTabId,
-          leafId: row.leafId,
-          ptyId: fact.ptyId,
-          incarnationId: fact.incarnationId,
-          switched: { agent: fact.agent }
-        })
-      }
-    }
+  const fact = row.stoppedSwitchSource
+  const held = entries.get(keyOf(row.parentTabId, row.leafId))?.notice
+  if (
+    held?.switched?.agent === fact.agent &&
+    !held.replacedBySessionId &&
+    held.ptyId === fact.ptyId &&
+    held.incarnationId === fact.incarnationId
+  ) {
+    return
   }
+  noteStoppedSwitchSource({
+    worktreeId,
+    tabId: row.parentTabId,
+    leafId: row.leafId,
+    ptyId: fact.ptyId,
+    incarnationId: fact.incarnationId,
+    switched: { agent: fact.agent }
+  })
 }
 
 /**

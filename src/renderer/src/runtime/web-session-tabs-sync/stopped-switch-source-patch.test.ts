@@ -2,6 +2,7 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
 import { applyWebSessionTabsSnapshot } from './snapshot-api'
+import { buildMirroredStoppedSwitchSourcePatch } from './stopped-switch-source-patch'
 import {
   ENV,
   LEAF_ID,
@@ -70,4 +71,59 @@ it('carries main’s fact into the pane’s conversation through every frame, un
   )
   expect(closed.agentConversationsByPaneKey).toBeDefined()
   expect({ ...shown, ...closed }.agentConversationsByPaneKey?.[paneKey]).toBeUndefined()
+})
+
+it('costs a frame nothing it can see when no fact changed, and sweeps retracted tabs in one pass', () => {
+  const surfaces = (count: number, withStopped: boolean): Terminal[] => [
+    ...(withStopped ? [stopped] : []),
+    ...Array.from({ length: count }, (_, i) => ({
+      ...other,
+      id: `host-tab-${i + 2}::${LEAF_ID}`,
+      parentTabId: `host-tab-${i + 2}`,
+      terminal: `handle-${i + 2}`
+    }))
+  ]
+  const held = {
+    paneKey,
+    worktreeId: 'wt-1',
+    executionHostId: null,
+    connectionId: null,
+    agent: fact.agent,
+    providerSession: { key: 'session_id' as const, id: fact.providerSessionId },
+    stoppedSwitchSource: fact
+  }
+  // Every conversation the store holds, each read counted.
+  let reads = 0
+  const conversations: NonNullable<ReturnType<typeof makeState>['agentConversationsByPaneKey']> = {}
+  for (let i = 0; i < 50; i += 1) {
+    const key = i === 0 ? paneKey : `${toWebTerminalSurfaceTabId(`live-${i}`)}:${LEAF_ID}`
+    const value = i === 0 ? held : { ...held, paneKey: key, stoppedSwitchSource: undefined }
+    Object.defineProperty(conversations, key, {
+      enumerable: true,
+      get: () => {
+        reads += 1
+        return value
+      }
+    })
+  }
+  const state = makeState()
+  for (const count of [50, 500]) {
+    // No fact anywhere and none held for these panes: no store write.
+    expect(
+      buildMirroredStoppedSwitchSourcePatch(state, {}, surfaces(count, false), 'wt-1', [])
+    ).toBeNull()
+    // Main repeats the held fact on every frame: still no store write.
+    expect(
+      buildMirroredStoppedSwitchSourcePatch(state, conversations, surfaces(count, true), 'wt-1', [])
+    ).toBeNull()
+    // However many tabs retract, the held conversations are read once each.
+    reads = 0
+    const retractedTabIds = Array.from({ length: count }, (_, i) =>
+      toWebTerminalSurfaceTabId(`gone-${i}`)
+    )
+    expect(
+      buildMirroredStoppedSwitchSourcePatch(state, conversations, [], 'wt-1', retractedTabIds)
+    ).toBeNull()
+    expect(reads).toBe(50)
+  }
 })

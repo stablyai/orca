@@ -40,7 +40,8 @@ const load = perClientLoader(async () => ({
   pane: await import('./pty-connection'),
   parked: await import('./terminal-parked-tab-watchers'),
   parkedRegistry: await import('./terminal-parked-watcher-registry'),
-  sources: await import('./stopped-switch-sources')
+  sources: await import('./stopped-switch-sources'),
+  frames: await import('@/runtime/local-structured-session-tabs-sync/snapshot-apply')
 }))
 
 beforeAll(async () => {
@@ -349,38 +350,90 @@ it('does no settlement work for store writes outside the held pane, however many
   }
 })
 
+type KeptPane = Awaited<ReturnType<typeof keptStoppedPane>>
+
+/** A frame main sends this window: other terminals, and the kept pane's row with or without the fact. */
+function windowFrame(
+  kept: KeptPane,
+  epoch: string,
+  version: number,
+  others: number,
+  fact: boolean
+) {
+  const row = {
+    type: 'terminal' as const,
+    id: `${kept.tab.id}::${kept.pane.leafId}`,
+    parentTabId: kept.tab.id,
+    leafId: kept.pane.leafId,
+    title: 'Terminal',
+    isActive: true,
+    status: 'ready' as const,
+    terminal: kept.source.ptyId
+  }
+  const stoppedSwitchSource = {
+    ptyId: kept.source.ptyId,
+    incarnationId,
+    agent: 'claude' as const,
+    providerSessionId: 'claude-conversation'
+  }
+  return {
+    worktree: kept.source.worktreeId,
+    publicationEpoch: `epoch-${epoch}`,
+    snapshotVersion: version,
+    activeGroupId: null,
+    activeTabId: null,
+    activeTabType: null,
+    tabs: [
+      fact ? { ...row, stoppedSwitchSource } : row,
+      ...Array.from({ length: others }, (_, i) => ({
+        ...row,
+        id: `other-${i}::pane:1`,
+        parentTabId: `other-${i}`,
+        terminal: `other-pty-${i}`
+      }))
+    ]
+  }
+}
+
+it('does no stopped-source work for frames without the fact, and none new for a repeated one', async () => {
+  const kept = await keptStoppedPane()
+  try {
+    kept.park()
+    const { getStoppedSwitchSourceReconcileCountForTests: reconciles, readStoppedSwitchSource } =
+      kept.modules.sources
+    const { applyStructuredSessionTabSnapshots } = kept.modules.frames
+    const subscribe = vi.spyOn(kept.store, 'subscribe')
+    const frames = async (others: number, fact: boolean, from: number): Promise<number> => {
+      const before = reconciles()
+      for (let version = from; version < from + 5; version += 1) {
+        applyStructuredSessionTabSnapshots([windowFrame(kept, 'repeat', version, others, fact)])
+        await flushAsyncTicks(1)
+      }
+      return reconciles() - before
+    }
+    // Without the fact: no notice, no reconcile, no watcher, at N and at 10N rows.
+    expect(await frames(50, false, 1)).toBe(0)
+    expect(await frames(500, false, 6)).toBe(0)
+    expect(readStoppedSwitchSource(kept.tab.id, kept.pane.leafId, kept.source.ptyId)).toBeNull()
+    // The first frame with the fact notes it once; main repeats it, which costs nothing more.
+    expect(await frames(50, true, 11)).toBe(1)
+    expect(await frames(500, true, 16)).toBe(0)
+    expect(readStoppedSwitchSource(kept.tab.id, kept.pane.leafId, kept.source.ptyId)).toEqual(
+      expect.objectContaining({ ptyId: kept.source.ptyId })
+    )
+    expect(subscribe).toHaveBeenCalledTimes(1)
+  } finally {
+    kept.dispose()
+  }
+})
+
 it('shows a pane that never saw its exit stopped from main’s frame, without reattaching', async () => {
   const kept = await keptStoppedPane()
   try {
     // Parked before the stop, and its exit never reached this window: only the frame names it.
     kept.park()
-    kept.modules.sources.noteFrameStoppedSwitchSources([
-      {
-        worktree: kept.source.worktreeId,
-        publicationEpoch: 'epoch-1',
-        snapshotVersion: 2,
-        activeGroupId: null,
-        activeTabId: null,
-        activeTabType: null,
-        tabs: [
-          {
-            type: 'terminal',
-            id: `${kept.tab.id}::${kept.pane.leafId}`,
-            parentTabId: kept.tab.id,
-            leafId: kept.pane.leafId,
-            title: 'Terminal',
-            isActive: true,
-            status: 'ready',
-            terminal: kept.source.ptyId,
-            stoppedSwitchSource: {
-              ptyId: kept.source.ptyId,
-              incarnationId,
-              agent: 'claude',
-              providerSessionId: 'claude-conversation'
-            }
-          }
-        ]
-      }
+    kept.modules.frames.applyStructuredSessionTabSnapshots([
+      windowFrame(kept, 'never-saw', 2, 0, true)
     ])
     kept.spawn.mockClear()
     await kept.reveal()

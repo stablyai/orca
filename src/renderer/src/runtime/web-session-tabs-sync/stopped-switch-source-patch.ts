@@ -31,13 +31,13 @@ export function buildMirroredStoppedSwitchSourcePatch(
   retractedTabIds: readonly string[]
 ): Pick<WebSessionTabsSyncState, 'agentConversationsByPaneKey'> | null {
   let next: Conversations | null = null
-  // The retraction sweep keeps pane conversations for a rekeyed pane; a stopped fact dies with its tab.
-  for (const tabId of retractedTabIds) {
-    for (const [paneKey, conversation] of Object.entries(conversations)) {
-      if (conversation.stoppedSwitchSource && paneKey.startsWith(`${tabId}:`)) {
-        next ??= { ...conversations }
-        delete next[paneKey]
-      }
+  // The retraction sweep keeps pane conversations for a rekeyed pane; a stopped fact dies with its
+  // tab. One pass however many tabs retract: a pane key's tab id ends at its first ':'.
+  const retracted = new Set(retractedTabIds)
+  for (const [paneKey, conversation] of retracted.size > 0 ? Object.entries(conversations) : []) {
+    if (conversation.stoppedSwitchSource && retracted.has(paneKey.slice(0, paneKey.indexOf(':')))) {
+      next ??= { ...conversations }
+      delete next[paneKey]
     }
   }
   for (const surface of surfaces) {

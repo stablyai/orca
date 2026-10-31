@@ -35,7 +35,10 @@ import { LOCAL_STRUCTURED_SESSION_OWNER } from '../local-structured-session-owne
 import { closeStructuredAgentSession } from '../structured-agent-session-close'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { useAppStore } from '../../store'
-import { noteFrameStoppedSwitchSources } from '@/components/terminal-pane/stopped-switch-sources'
+import {
+  noteFrameStoppedSwitchSource,
+  type FrameStoppedSwitchSourceRow
+} from '@/components/terminal-pane/stopped-switch-sources'
 import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
 import { replacementSelection, selectReplacementInGroup } from '@/lib/replaced-tab-selection'
 import { takeReplacedTabSlot } from '@/lib/unified-tab-anchor-insertion'
@@ -66,6 +69,8 @@ export type StructuredSessionSnapshotApplyOptions = {
   onDrawnChatLabel?: (change: DrawnChatLabel) => void
   /** Collects chats the host put in another tab's slot; that tab closes after the store patch. */
   onReplacedTab?: (replacement: ReplacedSessionTab) => void
+  /** Collects main's stopped-source facts from the applied rows; noted after the store patch. */
+  onStoppedSwitchSource?: (worktreeId: string, row: FrameStoppedSwitchSourceRow) => void
 }
 
 type ReplacedSessionTab = { worktreeId: string; tabId: string; sessionId: string }
@@ -78,6 +83,7 @@ export function applyStructuredSessionTabSnapshots(
   const acceptedAgentSessions: { worktreeId: string; sessionId: string }[] = []
   const drawnChatLabels: DrawnChatLabel[] = []
   const replacements: ReplacedSessionTab[] = []
+  const stoppedSources: [string, FrameStoppedSwitchSourceRow][] = []
   const settleStructuredSessionMirror = applyWebSessionTabsStorePatch(
     (state, changedAgentPaneKeys) =>
       applyLocalStructuredSessionTabSnapshots(
@@ -94,7 +100,8 @@ export function applyStructuredSessionTabSnapshots(
           // Switch point: main places the listed chats' tabs; its frames draw them.
           framesDraw: ORCA_LAYOUT_OWNER_IS_MAIN ? framesDrawWorkspace(state) : undefined,
           onDrawnChatLabel: (change) => drawnChatLabels.push(change),
-          onReplacedTab: (replacement) => replacements.push(replacement)
+          onReplacedTab: (replacement) => replacements.push(replacement),
+          onStoppedSwitchSource: (worktreeId, row) => stoppedSources.push([worktreeId, row])
         },
         changedAgentPaneKeys
       ),
@@ -104,7 +111,9 @@ export function applyStructuredSessionTabSnapshots(
     snapshots.map(({ worktree }) => worktree)
   )
   settleStructuredSessionMirror()
-  noteFrameStoppedSwitchSources(snapshots)
+  for (const [worktreeId, row] of stoppedSources) {
+    noteFrameStoppedSwitchSource(worktreeId, row)
+  }
   const { setTabLabel } = useAppStore.getState()
   for (const { tabId, label } of drawnChatLabels) {
     setTabLabel(tabId, label)
@@ -177,9 +186,16 @@ export function applyLocalStructuredSessionTabSnapshots<
       continue
     }
     const effectiveSnapshot = suppressCancelledStructuredSessionTabs(snapshot, { kind: 'local' })
+    // One pass over the rows: a frame without main's stopped fact costs that feature nothing more.
     for (const tab of effectiveSnapshot.tabs) {
       if (tab.type === 'agent-session') {
         options.onAcceptedAgentSession?.(snapshot.worktree, tab.sessionId)
+      } else if (tab.type === 'terminal' && tab.stoppedSwitchSource) {
+        options.onStoppedSwitchSource?.(snapshot.worktree, {
+          parentTabId: tab.parentTabId,
+          leafId: tab.leafId,
+          stoppedSwitchSource: tab.stoppedSwitchSource
+        })
       }
     }
     // Runs for a drawn workspace too: its tab-id, focus and close-intent ledgers still follow the host.
