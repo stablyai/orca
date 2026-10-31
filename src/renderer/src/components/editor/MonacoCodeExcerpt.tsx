@@ -100,7 +100,7 @@ export default function MonacoCodeExcerpt({
           lineNumber >= highlightedStartLine && lineNumber <= highlightedEndLine
         const html = htmlLines[index] || (codeLine ? undefined : '&nbsp;')
         return (
-          <div key={lineNumber} className={cn('flex', isCommentedLine && 'bg-emerald-500/10')}>
+          <div key={lineNumber} className={cn('flex', isCommentedLine && 'bg-ring/15')}>
             <span className="w-12 shrink-0 select-none border-r border-border/40 px-2 text-right text-muted-foreground tabular-nums">
               {lineNumber}
             </span>

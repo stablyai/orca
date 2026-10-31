@@ -171,7 +171,6 @@ function IpynbSourceEditor({
   const fitHeightRef = useRef<(() => void) | null>(null)
   // The mount-once fit closure must cap height with the live line height, which typography can change.
   const lineHeightRef = useRef(typographyOptions.lineHeight)
-  lineHeightRef.current = typographyOptions.lineHeight
 
   useLayoutEffect(() => {
     callbacksRef.current = { onChange, onDeactivate }
@@ -269,6 +268,7 @@ function IpynbSourceEditor({
     if (model.getLanguageId() !== cell.language) {
       monaco.editor.setModelLanguage(model, cell.language)
     }
+    lineHeightRef.current = typographyOptions.lineHeight
     editorInstance.updateOptions({
       ...typographyOptions,
       wordWrap: cell.kind === 'code' ? 'off' : 'on'
