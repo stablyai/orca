@@ -4,9 +4,12 @@ import {
   parseLegacyNumericPaneKey,
   parsePaneKey
 } from '../../../shared/workspace-layout/stable-pane-id'
+import { markSleepingAgentWakeRequest } from './sleeping-agent-wake-request-registry'
 
-// Why record identity: a replaced or cleared record drops its request, so a stale ask never wakes a later sleep.
-const requestedRecords = new WeakSet<SleepingAgentSessionRecord>()
+export {
+  hasSleepingAgentWakeRequest,
+  takeSleepingAgentWakeRequest
+} from './sleeping-agent-wake-request-registry'
 
 export function getSleepingRecordTabId(record: SleepingAgentSessionRecord): string | null {
   return (
@@ -26,11 +29,7 @@ export function requestSleepingAgentWakeOnMount(
   for (const record of Object.values(useAppStore.getState().sleepingAgentSessionsByPaneKey)) {
     const tabId = getSleepingRecordTabId(record)
     if (record.worktreeId === worktreeId && tabId !== null && wanted.has(tabId)) {
-      requestedRecords.add(record)
+      markSleepingAgentWakeRequest(record)
     }
   }
-}
-
-export function takeSleepingAgentWakeRequest(record: SleepingAgentSessionRecord): boolean {
-  return requestedRecords.delete(record)
 }

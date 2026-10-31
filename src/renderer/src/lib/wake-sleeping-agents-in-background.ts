@@ -155,8 +155,8 @@ export function wakeSleepingAgentsForWorktreeInBackground(worktreeId: string): v
   if (worktreeRecords.length === 0) {
     return
   }
-  // Only passive completed-hibernation records need fresh-connect mounting; nonpassive recovery creates/mounts new tabs later.
-  const passiveTabIds = new Set<string>()
+  // Only passive completed-hibernation records need fresh-connect mounting; nonpassive recovery resumes in the record's own pane once mounted.
+  const targetTabIds = new Set<string>()
   let hasUntargetablePassiveRecord = false
   // Phone workspace opens must preserve explicit sleep until each tab opens (#11598). Filter before canonicalization so lazy records cannot steal/delete active hibernation claims.
   const backgroundWakeRecords = worktreeRecords.filter(
@@ -165,16 +165,29 @@ export function wakeSleepingAgentsForWorktreeInBackground(worktreeId: string): v
   for (const record of getCanonicalPassiveWakeRecords(backgroundWakeRecords, wokenClaimKeys)) {
     const tabId = getSleepingRecordTabId(record)
     if (tabId) {
-      passiveTabIds.add(tabId)
+      targetTabIds.add(tabId)
     } else {
       hasUntargetablePassiveRecord = true
     }
   }
-  if (passiveTabIds.size > 0 || hasUntargetablePassiveRecord) {
+  // Why mount nonpassive records' own tabs too: their panes cold-restore the record in place, and
+  // the wake-on-mount mark the mount records tells the sweep the pane owns its record — otherwise
+  // every open forks a duplicate resume tab for each pane whose PTY died with the project close.
+  const liveTabIds = new Set((state.tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id))
+  for (const record of backgroundWakeRecords) {
+    if (activationTreatsNoteAsFinished(record)) {
+      continue
+    }
+    const tabId = getSleepingRecordTabId(record)
+    if (tabId !== null && liveTabIds.has(tabId)) {
+      targetTabIds.add(tabId)
+    }
+  }
+  if (targetTabIds.size > 0 || hasUntargetablePassiveRecord) {
     // If tab identity is unresolved, mount the whole workspace rather than strand recovery.
     dispatchBackgroundMount(
       worktreeId,
-      hasUntargetablePassiveRecord ? undefined : [...passiveTabIds]
+      hasUntargetablePassiveRecord ? undefined : [...targetTabIds]
     )
   }
   const resumeOptions = {
