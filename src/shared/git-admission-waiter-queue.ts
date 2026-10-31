@@ -45,6 +45,11 @@ export class GitAdmissionWaiterQueue {
     general: new CandidateHeap(),
     network: new CandidateHeap()
   }
+  private readonly nativeStatusCandidates: Record<GitAdmissionTier, CandidateHeap> = {
+    interactive: new CandidateHeap(),
+    status: new CandidateHeap(),
+    background: new CandidateHeap()
+  }
   private totalCount = 0
 
   get count(): number {
@@ -58,6 +63,9 @@ export class GitAdmissionWaiterQueue {
       for (const tier of TIERS) {
         count += this.baseCandidates[admissionClass][tier].size
       }
+    }
+    for (const tier of TIERS) {
+      count += this.nativeStatusCandidates[tier].size
     }
     return count
   }
@@ -152,6 +160,7 @@ export class GitAdmissionWaiterQueue {
     effectiveTier: (waiter: AdmissionWaiter) => number,
     allowBase: boolean,
     allowHeadroom: boolean,
+    allowNativeStatus: boolean,
     abort: (waiter: AdmissionWaiter) => void
   ): SelectedWaiter | null {
     while (true) {
@@ -162,6 +171,13 @@ export class GitAdmissionWaiterQueue {
           const candidate = this.peekValid(this.baseCandidates[admissionClass][tier], 'base')
           if (candidate) {
             candidates.push({ waiter: candidate.waiter, slotKind: 'base' })
+          }
+          const status =
+            admissionClass === 'general' && allowNativeStatus
+              ? this.peekValid(this.nativeStatusCandidates[tier], 'base')
+              : null
+          if (status) {
+            candidates.push({ waiter: status.waiter, slotKind: 'base' })
           }
         }
       }
@@ -195,7 +211,10 @@ export class GitAdmissionWaiterQueue {
     }
     const candidate = { lane, waiter, version: lane.version }
     if (lane.baseEligible) {
-      this.baseCandidates[admissionClass][tier].push(candidate)
+      const heap = waiter.route?.startsWith('status:')
+        ? this.nativeStatusCandidates[tier]
+        : this.baseCandidates[admissionClass][tier]
+      heap.push(candidate)
     }
     if (tier === 'interactive' && lane.headroomEligible) {
       this.headroomCandidates[admissionClass].push(candidate)
@@ -221,6 +240,11 @@ export class GitAdmissionWaiterQueue {
     this.baseCandidates[admissionClass][tier].compactIfOversized(liveLaneCount, (candidate) =>
       this.candidateIsValid(candidate, 'base')
     )
+    if (admissionClass === 'general') {
+      this.nativeStatusCandidates[tier].compactIfOversized(liveLaneCount, (candidate) =>
+        this.candidateIsValid(candidate, 'base')
+      )
+    }
     if (tier === 'interactive') {
       this.headroomCandidates[admissionClass].compactIfOversized(liveLaneCount, (candidate) =>
         this.candidateIsValid(candidate, 'headroom')
