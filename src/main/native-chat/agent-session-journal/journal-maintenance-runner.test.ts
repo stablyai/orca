@@ -244,7 +244,9 @@ it('parks a rebuild its records cannot pass while the chat keeps writing, servin
   expect([...maintenance.parked.keys()]).toEqual(['session-1'])
   expect(cached('other')).toBe(true)
   const attempts = () =>
-    page.mock.instances.filter((rebuild) => rebuild.sessionId === 'session-1').length
+    page.mock.instances.filter(
+      (rebuild) => rebuild instanceof JournalOutcomeRebuild && rebuild.sessionId === 'session-1'
+    ).length
   expect(attempts()).toBe(1)
   for (let write = 0; write < 5; write++) {
     // Each write finds the cache behind and asks the runner again.
