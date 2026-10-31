@@ -105,4 +105,23 @@ describe('structured launch draft persistence', () => {
       expect(composerDraft(launch.sessionId)).toBe('')
     }
   )
+
+  it('moves a draft written before the chat existed into the new chat', async () => {
+    setNativeChatComposerDraftStorageForTests(createMemoryNativeChatComposerDraftStorage())
+    const intent = launchIntent('created-worktree', 'moved-draft-session')
+    mocks.createIntent.mockReturnValueOnce(intent)
+    mocks.launch.mockResolvedValue({ sessionId: intent.sessionId, fence: 1 })
+    updateNativeChatComposerDraft('pending-chat', { text: 'and add a test' }, 'immediate')
+
+    const launch = startStructuredAgentLaunch(intent.worktreeId, 'claude', {
+      requestId: 'request-2',
+      prompt: 'fix the bug',
+      promptDelivery: 'auto-submit',
+      draftFromScope: 'pending-chat'
+    })
+    await launch.launchResult
+
+    expect(composerDraft(launch.sessionId)).toBe('and add a test')
+    expect(readNativeChatComposerDraft('pending-chat').text).toBe('')
+  })
 })

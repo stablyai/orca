@@ -87,7 +87,7 @@ beforeEach(() => {
       ...getDefaultSettings('/home/me'),
       defaultTuiAgent: 'opencode',
       disabledTuiAgents: ['codex'],
-      experimentalNativeChat: false
+      nativeChatProviders: {}
     },
     runtimeStatusByEnvironmentId: new Map([
       ['alpha', status()],

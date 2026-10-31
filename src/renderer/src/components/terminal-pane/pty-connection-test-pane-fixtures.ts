@@ -1,6 +1,7 @@
 import type { TerminalInputCall } from './terminal-input-call'
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
+import type { ITerminalOptions } from '@xterm/xterm'
 import type { PtyTransport } from './pty-transport-types'
 
 export const LEAF_1 = '11111111-1111-4111-8111-111111111111' as const
@@ -103,6 +104,7 @@ export type MockPaneTerminal = {
   buffer: { active: MockPaneBuffer }
   modes: { bracketedPasteMode: boolean; sendFocusMode: boolean }
   options: {
+    windowsPty?: ITerminalOptions['windowsPty']
     scrollback: number
     ignoreBracketedPasteMode: boolean
     theme: { foreground: string; background: string }

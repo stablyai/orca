@@ -37,7 +37,7 @@ const MODEL_STATE = {
       name: 'Grok Build',
       _meta: {
         supportsReasoningEffort: true,
-        // A session pick must not become a catalog default.
+        // Reported model defaults take precedence over the menu's recommendation.
         reasoningEffort: 'low',
         reasoningEfforts: [
           { value: 'low', id: 'fast', label: 'Fast' },
@@ -192,18 +192,26 @@ describe('ACP model catalog probes', () => {
           { value: 'fast', label: 'Fast' },
           { value: 'deep', label: 'Deep' }
         ],
-        defaultEffort: 'deep'
+        defaultEffort: 'deep',
+        declaredDefaultEffort: 'fast'
       },
       {
         id: 'grok-mini',
         label: 'Grok Mini',
         isDefault: false,
+        declaredDefaultEffort: null,
         efforts: ['minimal', 'low', 'medium', 'high', 'xhigh'].map((value) => ({
           value,
           label: expect.any(String)
         }))
       },
-      { id: 'grok-chat', label: 'Grok Chat', isDefault: false, efforts: [] }
+      {
+        id: 'grok-chat',
+        label: 'Grok Chat',
+        isDefault: false,
+        declaredDefaultEffort: null,
+        efforts: []
+      }
     ])
   })
 
@@ -253,7 +261,13 @@ describe('ACP model catalog probes', () => {
       expect.objectContaining({ site: 'opencode-model-catalog-probe' })
     )
     expect(success.models).toEqual([
-      { id: 'opencode/big-pickle', label: 'opencode/Big Pickle', isDefault: false, efforts: [] }
+      {
+        id: 'opencode/big-pickle',
+        label: 'opencode/Big Pickle',
+        isDefault: false,
+        declaredDefaultEffort: null,
+        efforts: []
+      }
     ])
   })
 

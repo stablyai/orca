@@ -62,3 +62,19 @@ function compareAutomationProjectSource(a: Repo, b: Repo): number {
   }
   return (a.addedAt ?? 0) - (b.addedAt ?? 0) || a.id.localeCompare(b.id)
 }
+
+export function getAutomationProjectRepoDetail(repo: Repo, hostLabel?: string | null): string {
+  const label = hostLabel?.trim()
+  return label ? `${label} · ${repo.path}` : repo.path
+}
+
+export function hasMultipleAutomationProjectHosts(repos: readonly Repo[]): boolean {
+  const hostIds = new Set<string>()
+  for (const repo of repos) {
+    hostIds.add(getRepoExecutionHostId(repo))
+    if (hostIds.size > 1) {
+      return true
+    }
+  }
+  return false
+}

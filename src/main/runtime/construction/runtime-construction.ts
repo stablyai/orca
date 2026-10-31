@@ -94,7 +94,7 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
   declare protected readonly skillCommands: ServiceState['skillCommands']
 
   abstract showManagedWorktree(
-    worktreeSelector: string
+    ...args: Parameters<ListManagedWorktrees['showManagedWorktree']>
   ): ReturnType<ListManagedWorktrees['showManagedWorktree']>
   abstract resolveProjectRuntimeForWorktree(
     worktreeId: string | null | undefined
@@ -210,7 +210,7 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
     )
     this.automation = new RuntimeAutomationController(store, {
       showRepo: (selector) => this.showRepo(selector),
-      showManagedWorktree: (selector) => this.showManagedWorktree(selector)
+      showManagedWorktree: (selector, hostId) => this.showManagedWorktree(selector, hostId)
     })
     const persistedClientTabSelections = store?.getMobileClientTabSelections?.()
     if (persistedClientTabSelections) {

@@ -375,22 +375,49 @@ async function readOrcadStartupTiming() {
   return parseOrcadStartupTimingLine(line)
 }
 
+/** SIGTERM the active orcad, as its idle exit ends it, and wait until it is gone; the distro stays up. */
+async function stopOrcadKeepingDistro(): Promise<void> {
+  const pid = Number(
+    (
+      await guest(
+        `v=$(sed -n 's/.*"active": *"\\([^"]*\\)".*/\\1/p' "$HOME/.orca-remote/orcad-active.json") && cat "$HOME/.orca-remote/orcad-$v/.orcad-pid"`
+      )
+    ).trim()
+  )
+  if (!Number.isSafeInteger(pid) || pid <= 0) {
+    throw new Error('No active orcad pid to stop')
+  }
+  await guest(`kill -TERM ${pid}`)
+  await waitFor(
+    'orcad to exit',
+    async () =>
+      (await guest(`kill -0 ${pid} 2>/dev/null && echo up || echo gone`)).trim() === 'gone'
+        ? true
+        : null,
+    30_000,
+    100
+  )
+}
+
 /**
  * (a) WSL host: holder boots the distro, orcad deploys and starts, a terminal spawns and prints.
  * `warm` keeps the distro (and the orcad an earlier connect left serving) running: an app relaunch
- * or reconnect, not a distro restart.
+ * or reconnect, not a distro restart. `orcad` stops only orcad first, as its idle exit does: the
+ * reopen-after-idle case.
  */
 async function restartThroughHost(
   repoPath: string,
-  warm = false
+  start: 'distro' | 'warm' | 'orcad' = 'distro'
 ): Promise<
   Receipt & {
     phases: WslOrcadEnsurePhases | null
     orcadStartup: OrcadStartupTimingReport | null
   }
 > {
-  if (!warm) {
+  if (start === 'distro') {
     await terminatePlain()
+  } else if (start === 'orcad') {
+    await stopOrcadKeepingDistro()
   }
   createManager()
   const trace = createWslOrcadEnsureTrace()
@@ -429,7 +456,7 @@ async function restartThroughHost(
     const firstOutputMs = Math.round(performance.now() - started)
     const sendToFirstOutputMs = Math.round(performance.now() - sendStarted)
     // A warm connect starts no orcad, so the newest timing line is an earlier launch's.
-    const orcadStartup = warm ? null : await readOrcadStartupTiming()
+    const orcadStartup = start === 'warm' ? null : await readOrcadStartupTiming()
     await held.call('terminal.close', { terminal: created.terminal.handle }).catch(() => {})
     return {
       ensureMs,
@@ -624,11 +651,21 @@ async function distroRestartBaseline(): Promise<void> {
   await restartThroughHost(repoPath)
   const warm: Awaited<ReturnType<typeof restartThroughHost>>[] = []
   for (let i = 0; i < RESTART_RUNS; i++) {
-    warm.push(await restartThroughHost(repoPath, true))
+    warm.push(await restartThroughHost(repoPath, 'warm'))
+  }
+  const orcadCold: Awaited<ReturnType<typeof restartThroughHost>>[] = []
+  for (let i = 0; i < RESTART_RUNS; i++) {
+    orcadCold.push(await restartThroughHost(repoPath, 'orcad'))
   }
   receipt.startupGate = {
     warm: startupGateFor(warm, WARM_START_P50_TARGET_MS),
-    cold: startupGateFor(host, COLD_START_P50_TARGET_MS)
+    cold: startupGateFor(host, COLD_START_P50_TARGET_MS),
+    // Reopening Orca after orcad's idle exit, distro still up: tracked against the warm bar, not gated.
+    orcadCold: {
+      ...startupGateFor(orcadCold, WARM_START_P50_TARGET_MS),
+      gated: false,
+      medianOrcadStartup: medianOrcadStartupTiming(orcadCold.map((run) => run.orcadStartup))
+    }
   }
   receipt.orcadStartupProfiles = await profileOrcadRestart(repoPath)
   await terminatePlain()
@@ -656,7 +693,8 @@ describe.runIf(RUN && process.platform === 'win32')('WSL distro idle release', (
     RELEASE_BUDGET_MS + 2 * HELD_WITH_TERMINAL_MS + 6 * 60_000
   )
 
-  // After the idle phase: fifteen distro restarts, five warm reconnects and one profiled restart.
+  // After the idle phase: fifteen distro restarts, five warm reconnects, five orcad restarts and one
+  // profiled restart.
   it(
     'measures distro restart to first output for the WSL host and an old-bridge exec lower bound',
     distroRestartBaseline,

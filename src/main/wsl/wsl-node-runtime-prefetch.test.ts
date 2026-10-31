@@ -92,6 +92,26 @@ describe('wireWslNodeRuntimePrefetch', () => {
     settings.set(true)
     expect(scheduled).toHaveLength(1)
   })
+
+  it('skips the download when the setting turned off before the delay ended, and reschedules on turn-on', async () => {
+    const { settings, scheduled, materialize } = wire({ enabled: true, gateOpen: true })
+    settings.set(false)
+    scheduled[0]()
+    expect(materialize).not.toHaveBeenCalled()
+    settings.set(true)
+    expect(scheduled).toHaveLength(2)
+    scheduled[1]()
+    await prefetchWslNodeRuntime({ userDataPath })
+    expect(materialize).toHaveBeenCalledTimes(1)
+  })
+
+  it('skips the download when the gate is closed by the time the delay ends', () => {
+    const options = { enabled: true, gateOpen: true }
+    const { scheduled, materialize } = wire(options)
+    options.gateOpen = false
+    scheduled[0]()
+    expect(materialize).not.toHaveBeenCalled()
+  })
 })
 
 describe('prefetchWslNodeRuntime', () => {

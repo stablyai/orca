@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { EVERY_AGENT_CHAT } from '../../src/shared/native-chat/every-agent-chat.test-fixture'
 import { mocks, store } from './launch-agent-web-terminal.test-fixture'
 import { createElement, useState } from 'react'
 import { act, fireEvent, render, screen } from '@testing-library/react'
@@ -433,7 +434,7 @@ describe('launchAgentInNewTab paired web runtime', () => {
       mocks.actualOperation = true
       mocks.capability.mockResolvedValue(true)
       vi.mocked(pasteDraftWhenAgentReady).mockResolvedValue(true)
-      store.settings.experimentalNativeChat = true
+      store.settings.nativeChatProviders = { ...EVERY_AGENT_CHAT }
       store.runtimeStatusByEnvironmentId.get('web-runtime')!.status = {
         hostPlatform: 'linux',
         runtimeId: 'runtime-1',

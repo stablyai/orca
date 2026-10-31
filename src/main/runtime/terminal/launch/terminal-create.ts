@@ -1,4 +1,5 @@
 import { admitTerminalCreate } from './terminal-create-admission'
+import type { TerminalWorkspaceCreationEvidence } from './terminal-workspace-scope'
 import {
   recordTerminalLaunchMetadata,
   resolveTerminalLaunchResult,
@@ -21,20 +22,21 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
   protected abstract paneStartStatusArgs: dependencies.PaneStartArgsOf
 
   async createTerminal(
-    worktreeSelector?: string,
+    selector?: string,
     opts: dependencies.TerminalCreateOptions = {},
     // Internal creation evidence; RPC and preload callers never supply it.
-    created?: dependencies.Worktree
+    ...evidence: TerminalWorkspaceCreationEvidence
   ): Promise<dependencies.RuntimeTerminalCreate> {
-    const launcherSpawnArgs = admitTerminalCreate(worktreeSelector, opts)
+    const launcherSpawnArgs = admitTerminalCreate(selector, opts)
     const presentation = dependencies.resolveTerminalPresentation(opts)
-    // Start host-placeable terminals here; timing out a window-made start still ran it later and retries duplicated it.
-    if (worktreeSelector !== undefined) {
+    // Why: this process starts every terminal it can place, so a slow window only delays showing
+    // it; a window-made create that timed out here still ran later, and a retry duplicated it.
+    if (selector !== undefined) {
       const { ptyController } = this
       if (!ptyController?.spawn) {
         throw new Error('runtime_unavailable')
       }
-      const workspace = await this.resolveTerminalCreateLaunchScope(worktreeSelector, created, opts)
+      const workspace = await this.resolveTerminalCreateLaunchScope(selector, opts, ...evidence)
       const launchOpts = await this.resolveAgentTerminalCreateOptions(workspace, opts)
       const launchTitleAt = { sequence: this.nextTitleObservationSequence(), epochMs: Date.now() }
       let cwd = this.resolveWorkspaceTerminalStartupCwd(workspace, launchOpts.cwd) ?? workspace.path
@@ -54,10 +56,8 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
       let preAllocatedHandle =
         launchOpts.preAllocatedHandle ?? this.createPreAllocatedTerminalHandle()
       let { tabId, leafId, paneKey } = dependencies.allocateTerminalPaneIdentity(launchOpts)
-      const restoreHint = migratedPaneRestoreHint(this.store, workspace, paneKey)
-      const reportPtySpawnCommitted = createIdempotentCallback(
-        restoreHint.consumeThen(launchOpts.onPtySpawnCommitted)
-      )
+      const hint = migratedPaneRestoreHint(this.store, workspace, paneKey)
+      const commit = createIdempotentCallback(hint.consumeThen(launchOpts.onPtySpawnCommitted))
       // Claimed before any await, so a concurrent create of this pane cannot slip in between.
       const claimedStablePaneCreate = ptyController.claimStablePaneCreate?.({
         worktreeId: workspace.id,
@@ -130,6 +130,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
             telemetry: launchOpts.telemetry,
             connectionId: workspace.connectionId,
             worktreeId: workspace.id,
+            resolvedWorkspace: workspace,
             preAllocatedHandle,
             tabId,
             leafId,
@@ -156,9 +157,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
                 }
               : {}),
             ...dependencies.callerSpawnScope(launchOpts),
-            ...(launchOpts.onPtySpawnCommitted
-              ? { onPtySpawnCommitted: reportPtySpawnCommitted }
-              : {}),
+            ...(launchOpts.onPtySpawnCommitted ? { onPtySpawnCommitted: commit } : {}),
             paneSpawnOperation: operation,
             ...dependencies.newTabIn(launchOpts),
             ...(launchOpts.afterTabId ? { afterTabId: launchOpts.afterTabId } : {}),
@@ -174,7 +173,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
       }
       try {
         // A pane moved from another host reopens where it last was, until a spawn commits.
-        cwd = (await restoreHint.peekCwd(launchOpts.cwd)) ?? cwd
+        cwd = (await hint.peekCwd(launchOpts.cwd)) ?? cwd
         if (launchOpts.signal?.aborted) {
           throw new Error('client_disconnected')
         }
@@ -201,9 +200,9 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           teamAllocation.acceptFresh(result)
         }
         if (!result.stablePaneOwner) {
-          reportPtySpawnCommitted()
+          commit()
         }
-        restoreHint.consume()
+        hint.consume()
         const savedStartupCwd = result.savedStartupCwd ?? cwd
         // Why here: refused before a handle, snapshot or reveal could pose the live PTY as new.
         const launch = resolveTerminalLaunchResult(result, {

@@ -18,12 +18,9 @@ export const AWAIT_CLICK_SCRIPT = `(async function() {
       }
     }
 
-    function onClick(e) {
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-      grab.host.removeEventListener('click', onClick, true);
-      grab.host.removeEventListener('contextmenu', onContext, true);
+    // The overlay blocks the press and hands it here; a later await replaces this one.
+    grab.onPick = function(e) {
+      grab.onPick = null;
       var el = grab.getCurrentElement();
       if (!el) {
         grab.cleanup();
@@ -34,34 +31,11 @@ export const AWAIT_CLICK_SCRIPT = `(async function() {
       if (!payload) return;
       // Keep the selected element outlined while the renderer shows its copy menu.
       grab.freezeHighlight(payload.page.capturedAt);
-      resolve(payload);
-    }
-
-    function onContext(e) {
       // The marker opens the action menu instead of auto-copying.
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-      grab.host.removeEventListener('click', onClick, true);
-      grab.host.removeEventListener('contextmenu', onContext, true);
-      var el = grab.getCurrentElement();
-      if (!el) {
-        grab.cleanup();
-        reject(new Error('cancelled'));
-        return;
-      }
-      var payload = extractSelectedPayload(el);
-      if (!payload) return;
-      grab.freezeHighlight(payload.page.capturedAt);
-      resolve({ __orcaContextMenu: true, payload: payload });
-    }
-
-    grab.host.addEventListener('click', onClick, true);
-    grab.host.addEventListener('contextmenu', onContext, true);
+      resolve(e.type === 'contextmenu' ? { __orcaContextMenu: true, payload: payload } : payload);
+    };
 
     grab.cancelAwait = function() {
-      grab.host.removeEventListener('click', onClick, true);
-      grab.host.removeEventListener('contextmenu', onContext, true);
       grab.cleanup();
       // Resolve cancellation to avoid guest-console errors during normal teardown.
       resolve({ __orcaCancelled: true });

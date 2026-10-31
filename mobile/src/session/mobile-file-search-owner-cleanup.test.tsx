@@ -6,6 +6,7 @@ import { MobileNativeChatComposer } from './native-chat/composer/MobileNativeCha
 import { useMobileNativeChatFileSearch } from './native-chat/composer/use-mobile-native-chat-file-search'
 import { stubRpcClient } from '../transport/rpc-client-test-stub'
 
+vi.mock('../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
 vi.mock('react-native', async () => {
   const React = await import('react')
   return {

@@ -1,3 +1,5 @@
+import { registerPtyConnectionForegroundHostRoutingTests } from './pty-connection-foreground-host-routing.spec'
+import type * as IpcPtyTransportModule from './pty-transport'
 import { foregroundSemantics } from './pty-connection-test-store-fixtures'
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -30,6 +32,7 @@ import {
 } from './pty-connection-test-environment'
 
 export function registerPtyConnectionForegroundAgentSamplingTests(): void {
+  let realIpcTransportFactory: typeof IpcPtyTransportModule.createIpcPtyTransport | undefined
   let mockStoreState: StoreState
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
@@ -43,12 +46,14 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
     beforeEach(async () => {
       vi.resetModules()
       vi.clearAllMocks()
+      realIpcTransportFactory = undefined
       transportFactoryQueue = []
       createdTransportOptions = []
       storeSubscribers = []
       mockStoreState = createInitialStoreState(() => mockStoreState)
       bindPtyConnectionTestMocks({
         getState: () => mockStoreState,
+        getIpcTransportFactory: () => realIpcTransportFactory,
         getTransportQueue: () => transportFactoryQueue,
         getTransportOptions: () => createdTransportOptions,
         getStoreSubscribers: () => storeSubscribers,
@@ -138,6 +143,16 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
           .mocked(window.api.pty.getForegroundProcess)
           .mock.calls.filter(([calledPtyId]) => calledPtyId === ptyId)
       }
+
+      registerPtyConnectionForegroundHostRoutingTests({
+        getState: () => mockStoreState,
+        createDeps,
+        useIpcTransport: (factory) => {
+          realIpcTransportFactory = factory
+        },
+        advanceVisibleForegroundRead,
+        foregroundReadCallsFor
+      })
 
       it('does not inspect foreground process for a fresh visible spawn', async () => {
         vi.useFakeTimers()

@@ -27,7 +27,7 @@ Orca wakes you with the answer. To hand work off with nothing back, use `orca-cl
 place and use it for every command.
 
 ```text
-ORCA orchestration worker-start --spec "<task>" --worktree current --agent codex --json
+ORCA orchestration worker-start --spec "<task>" --worktree current --agent codex
 ```
 
 - Start every independent worker, then **end your turn**. "Report back" and
@@ -54,18 +54,19 @@ Never:
 
 ## When Orca wakes you
 
-- Run the `check` command the wake gives you. Answer each `question` with
-  `ORCA orchestration reply --id <message_id> --body "<answer>" --json`.
+- Run the `check` command the wake gives you. Answer a `question` with
+  `ORCA orchestration reply --id <message_id> --body "<answer>"` when the answer
+  follows from the task or the user's instructions; otherwise ask the user first.
 - An `escalation` with `stopReason` means the worker stopped without
   `worker_done`: steer it with `send`, stop and retry it, or tell the user.
 - A `worker_done` settles its Task; never mark a reported failure completed.
 - When every worker has settled, report to the user per Task: outcome,
   evidence, open blockers.
-- Lost track? `ORCA orchestration inbox --terminal run:<run_id> --limit 50 --full --json`
+- Lost track? `ORCA orchestration inbox --terminal run:<run_id> --limit 50`
   shows mail `check` already handled.
 
 Finished workers close on their own unless the user chose Keep open. To keep one
-for a follow-up, run `ORCA orchestration worker-retain --dispatch <dispatch_id> --json`.
+for a follow-up, run `ORCA orchestration worker-retain --dispatch <dispatch_id>`.
 If `worker-list` shows no `autoReleaseAt` for a finished worker, release it yourself.
 
 ## Task spec

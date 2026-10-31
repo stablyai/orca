@@ -44,7 +44,11 @@ vi.mock('./popup-origin-bar-window', () => ({
 vi.mock('./browser-process-user-agent', () => ({
   getBrowserProcessUserAgentIdentity: () => ({
     mode: browserMocks.processUserAgentMode,
-    userAgent: browserMocks.processUserAgent
+    userAgent: browserMocks.processUserAgent,
+    electronUserAgent:
+      browserMocks.processUserAgentMode === 'native'
+        ? browserMocks.processUserAgent
+        : 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) orca/1.0.0 Chrome/134.0.0.0 Electron/30.0.0 Safari/537.36'
   })
 }))
 
@@ -84,7 +88,7 @@ describe('browserManager', () => {
     vi.useRealTimers()
   })
 
-  it('presents the Firefox UA on Google auth hosts and restores the base UA off them', async () => {
+  it('presents the Electron UA on Google auth hosts and restores the base UA off them', async () => {
     let currentUa = guestBaseUserAgent
     const sendCommand = vi.fn().mockResolvedValue(undefined)
     const setUserAgent = vi.fn((ua: string) => {
@@ -126,7 +130,7 @@ describe('browserManager', () => {
     didStartNavigation(null, 'https://accounts.google.com/v3/signin/identifier', false, true)
     expect(setUserAgent).toHaveBeenLastCalledWith(googleAuthUserAgent())
 
-    // The session UA remains authoritative while WebContents still presents Firefox.
+    // The session UA remains authoritative while WebContents still presents the auth UA.
     sendCommand.mockClear()
     willRedirect(null, 'https://myaccount.google.com/', false, true)
     const uaOverrideIndex = sendCommand.mock.calls.findIndex(
@@ -391,8 +395,8 @@ describe('browserManager', () => {
 
   // Direct navigation permits setUserAgent before request dispatch.
 
-  // Keep the process UA override until direct navigation can replace the stale Firefox base UA.
-  it('never clears the override onto a stale Firefox WebContents UA and heals it on the next navigation', async () => {
+  // Keep the process UA override until direct navigation can replace the stale auth base UA.
+  it('never clears the override onto a stale auth WebContents UA and heals it on the next navigation', async () => {
     browserMocks.processUserAgent = GUEST_CLEAN_UA
     const { guest, debuggerSendCommand, presentedUserAgent, standingUserAgentOverride } =
       makeViewportGuest(9001)
