@@ -1,20 +1,12 @@
 import { ensureAgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
-import {
-  resolveAgentStartupPlanInputs,
-  type AgentStartupSettings
-} from '../../../../shared/agent-startup-plan-inputs'
-import { ensureAgentStartupInTerminal, type LinkedWorkItemSummary } from '@/lib/new-workspace'
+import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-startup-plan-inputs'
+import { ensureAgentStartupInTerminal } from '@/lib/new-workspace'
 import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-launch-prompt-delivery'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { buildAgentStartupPlan } from '@/lib/tui-agent-startup'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { activateAndRevealFolderWorkspace } from '@/lib/worktree-activation'
 import { shouldApplyWorkspaceSourceAutoName } from '../../../../shared/new-workspace/workspace-source'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { LaunchSource } from '../../../../shared/telemetry-events'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   getLinkedItemDisplayName,
@@ -24,7 +16,6 @@ import {
   planAgentSessionLaunch,
   adoptAgentSessionLaunchVerdict
 } from '@/lib/agent-session-launch-plan'
-import type { AgentLaunchChoice } from '@/lib/agent-menu-selection'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import { getNewWorkspaceProjectGroupHostId } from '@/lib/new-workspace-project-options'
@@ -43,40 +34,7 @@ export {
 } from './folder-workspace-agent-startup'
 import { translate } from '@/i18n/i18n'
 import { getAgentLabel } from '@/lib/agent-catalog'
-
-type FolderWorkspaceCreateInput = {
-  projectGroupId: string
-  name: string
-  connectionId?: string | null
-  linkedTask: FolderWorkspace['linkedTask']
-  linkedTaskSourceContext?: TaskSourceContext | null
-  createdWithAgent?: TuiAgent
-  pendingFirstAgentMessageRename?: boolean
-}
-
-type SubmitFolderWorkspaceCreateParams = {
-  projectGroup: ProjectGroup
-  name: string
-  lastAutoName: string
-  linkedWorkItem: LinkedWorkItemSummary | null
-  linkedTaskSourceContext?: TaskSourceContext | null
-  note: string
-  quickAgent: TuiAgent | null
-  launchChoice?: AgentLaunchChoice
-  sessionOptions?: Record<string, string>
-  chatSessionOptions?: Readonly<Record<string, string>>
-  autoRenameBranchFromWork: boolean | undefined
-  settings?: AgentStartupSettings
-  agentCmdOverrides: Record<string, string> | undefined
-  agentArgs?: string | null
-  agentEnv?: Record<string, string>
-  terminalWindowsShell?: string | null
-  isRemote?: boolean
-  launchSource?: LaunchSource
-  runtimeEnvironmentId?: string | null
-  createFolderWorkspace: (input: FolderWorkspaceCreateInput) => Promise<FolderWorkspace | null>
-  onOpenChange: (open: boolean) => void
-}
+import type { SubmitFolderWorkspaceCreateParams } from './folder-workspace-composer-submit-input'
 
 export async function submitFolderWorkspaceCreate({
   projectGroup,
@@ -87,12 +45,13 @@ export async function submitFolderWorkspaceCreate({
   note,
   quickAgent,
   launchChoice,
-  sessionOptions,
-  chatSessionOptions,
+  launchInputs,
+  sessionOptions: requestedSessionOptions,
+  chatSessionOptions: requestedChatSessionOptions,
   autoRenameBranchFromWork,
   settings,
   agentCmdOverrides,
-  agentArgs,
+  agentArgs: requestedAgentArgs,
   agentEnv,
   terminalWindowsShell,
   launchSource = 'sidebar',
@@ -100,6 +59,11 @@ export async function submitFolderWorkspaceCreate({
   createFolderWorkspace,
   onOpenChange
 }: SubmitFolderWorkspaceCreateParams): Promise<boolean> {
+  const agentArgs = launchInputs ? launchInputs.agentArgs : requestedAgentArgs
+  const sessionOptions = launchInputs ? launchInputs.sessionOptions : requestedSessionOptions
+  const chatSessionOptions = launchInputs
+    ? launchInputs.chatSessionOptions
+    : requestedChatSessionOptions
   const linkedName = linkedWorkItem ? getLinkedItemDisplayName(linkedWorkItem) : null
   const nameIsAutoManaged = shouldApplyWorkspaceSourceAutoName({
     currentName: name,
@@ -135,7 +99,9 @@ export async function submitFolderWorkspaceCreate({
   const effectiveSettings = settings
     ? {
         ...settings,
-        agentLaunchChoices: preferences?.agentLaunchChoices ?? settings.agentLaunchChoices
+        agentLaunchChoices: launchInputs
+          ? {}
+          : (preferences?.agentLaunchChoices ?? settings.agentLaunchChoices)
       }
     : settings
   const startupPlan =
@@ -165,7 +131,6 @@ export async function submitFolderWorkspaceCreate({
               isRemote: launchIsRemote
             }),
             ...(agentEnv ? { agentEnv } : {}),
-            sessionOptions,
             prompt: note,
             allowEmptyPromptLaunch: true
           })

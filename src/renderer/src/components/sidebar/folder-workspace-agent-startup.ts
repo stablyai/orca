@@ -53,7 +53,7 @@ export function buildFolderWorkspaceLinkedStartupPlan(args: {
   note: string
   agentCmdOverrides: Record<string, string> | undefined
   agentArgs?: string | null
-  sessionOptions?: Record<string, SessionOptionValue>
+  sessionOptions?: Readonly<Record<string, SessionOptionValue>>
   sessionOptionsOverrideAgentArgs?: boolean
   agentEnv?: Record<string, string>
   platform: NodeJS.Platform

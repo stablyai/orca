@@ -247,9 +247,6 @@ function QuickTabBody({
     let launchInputs = pickerDraft
       ? agentPickerLaunchInputs(pickerDraft, quickAgentPick.entry)
       : undefined
-    if (launchInputs && Object.keys(launchInputs).length === 0) {
-      launchInputs = undefined
-    }
     if (
       launchInputs &&
       pickerDraft?.surface === 'terminal' &&

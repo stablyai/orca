@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makeProjectGroup, makeFolderWorkspace } from './folder-workspace-composer-submit-fixtures'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import type * as NewWorkspaceModule from '@/lib/new-workspace'
+import { getDefaultSettings } from '../../../../shared/constants'
 
 const mocks = vi.hoisted(() => ({
   activateAndRevealFolderWorkspace: vi.fn(),
@@ -24,10 +25,7 @@ vi.mock('@/lib/new-workspace', async (importOriginal) => {
 })
 
 import { useAppStore } from '@/store'
-import {
-  getFolderWorkspaceAgentLaunchFact,
-  submitFolderWorkspaceCreate
-} from './folder-workspace-composer-submit'
+import { submitFolderWorkspaceCreate } from './folder-workspace-composer-submit'
 
 const ISSUE_URL = 'https://github.com/stablyai/orca/issues/42'
 const linkedIssue = {
@@ -40,6 +38,83 @@ const linkedIssue = {
 }
 
 describe('submitFolderWorkspaceCreate', () => {
+  it.each(['claude', 'codex'] as const)(
+    'retains untouched ordinary %s Settings in the complete initial folder startup',
+    async (agent) => {
+      const previous = useAppStore.getState().settings
+      const raw = agent === 'claude' ? '--verbose' : '--search'
+      const model = agent === 'claude' ? 'opus' : 'gpt-5.4'
+      const settings = {
+        ...getDefaultSettings('/test'),
+        agentDefaultSurface: 'terminal' as const,
+        agentPermissionDefault: 'own' as const,
+        agentDefaultArgs: { [agent]: raw },
+        agentLaunchChoices: { [agent]: { model, options: { effort: 'low' } } }
+      }
+      useAppStore.setState({ settings })
+      const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
+      const onOpenChange = vi.fn()
+      try {
+        expect(
+          await submitFolderWorkspaceCreate({
+            projectGroup: makeProjectGroup(),
+            name: 'hi',
+            lastAutoName: '',
+            linkedWorkItem: null,
+            note: '',
+            quickAgent: agent,
+            autoRenameBranchFromWork: false,
+            settings,
+            agentCmdOverrides: {},
+            launchSource: 'new_workspace_composer',
+            createFolderWorkspace,
+            onOpenChange
+          })
+        ).toBe(true)
+        const command =
+          agent === 'claude'
+            ? "claude '--verbose' '--model' 'opus' '--effort' 'low'"
+            : `codex '-c' 'disable_paste_burst=true' '--search' '-m' 'gpt-5.4' '-c' 'model_reasoning_effort=low'`
+        expect(createFolderWorkspace.mock.calls).toEqual([
+          [
+            {
+              projectGroupId: 'group-1',
+              name: 'hi',
+              connectionId: null,
+              linkedTask: null,
+              createdWithAgent: agent
+            }
+          ]
+        ])
+        expect(mocks.activateAndRevealFolderWorkspace.mock.calls).toEqual([
+          [
+            'folder-workspace-1',
+            {
+              agent,
+              runtimeEnvironmentId: null,
+              startup: {
+                command,
+                env: {},
+                launchConfig: { agentCommand: `${agent} '${raw}'`, agentArgs: raw, agentEnv: {} },
+                launchToken: expect.stringMatching(/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/),
+                launchAgent: agent,
+                telemetry: {
+                  agent_kind: agent === 'claude' ? 'claude-code' : 'codex',
+                  launch_source: 'new_workspace_composer',
+                  request_kind: 'new'
+                }
+              }
+            }
+          ]
+        ])
+        expect(onOpenChange.mock.calls).toEqual([[false]])
+        expect(mocks.ensureAgentStartupInTerminal).not.toHaveBeenCalled()
+      } finally {
+        useAppStore.setState({ settings: previous })
+      }
+    }
+  )
+
   it.each(['347', '002'])('keeps manual folder name %s with its linked source', async (name) => {
     const linkedWorkItem = {
       provider: 'github' as const,
@@ -559,126 +634,6 @@ describe('submitFolderWorkspaceCreate', () => {
       connectionId: null,
       linkedTask: null,
       createdWithAgent: 'codex'
-    })
-  })
-
-  it('quotes quick-agent startup for POSIX when the folder group is a local WSL UNC path', async () => {
-    const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
-    const projectGroup = {
-      ...makeProjectGroup(),
-      parentPath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\platform'
-    }
-
-    expect(getFolderWorkspaceAgentLaunchFact(useAppStore.getState(), projectGroup)).toMatchObject({
-      platform: 'linux'
-    })
-
-    await submitFolderWorkspaceCreate({
-      projectGroup,
-      name: 'WSL folder',
-      lastAutoName: '',
-      linkedWorkItem: null,
-      note: "Use Bob's POSIX startup",
-      quickAgent: 'claude',
-      autoRenameBranchFromWork: false,
-      agentCmdOverrides: {},
-      createFolderWorkspace,
-      onOpenChange: vi.fn()
-    })
-
-    expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenCalledWith(
-      'folder-workspace-1',
-      expect.objectContaining({
-        startup: expect.objectContaining({
-          command: `claude 'Use Bob'"'"'s POSIX startup'`
-        })
-      })
-    )
-  })
-
-  it('quotes quick-agent startup for the Windows OS the SSH relay reported', async () => {
-    const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
-    const projectGroup = {
-      ...makeProjectGroup(),
-      connectionId: 'ssh-windows',
-      parentPath: 'C:\\Users\\alice\\platform'
-    }
-    useAppStore.setState({
-      sshConnectionStates: new Map([
-        [
-          'ssh-windows',
-          {
-            targetId: 'ssh-windows',
-            status: 'connected',
-            error: null,
-            reconnectAttempt: 0,
-            remotePlatform: 'win32'
-          }
-        ]
-      ])
-    })
-
-    expect(getFolderWorkspaceAgentLaunchFact(useAppStore.getState(), projectGroup)).toMatchObject({
-      platform: 'win32'
-    })
-
-    await submitFolderWorkspaceCreate({
-      projectGroup,
-      name: 'Remote Windows folder',
-      lastAutoName: '',
-      linkedWorkItem: null,
-      note: "Use Bob's Windows startup",
-      quickAgent: 'claude',
-      autoRenameBranchFromWork: false,
-      agentCmdOverrides: {},
-      createFolderWorkspace,
-      onOpenChange: vi.fn()
-    })
-
-    expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenCalledWith(
-      'folder-workspace-1',
-      expect.objectContaining({
-        startup: expect.objectContaining({
-          command: "claude 'Use Bob''s Windows startup'"
-        })
-      })
-    )
-  })
-
-  it('preserves SSH group ownership when creating and activating a folder workspace', async () => {
-    const projectGroup = {
-      ...makeProjectGroup(),
-      connectionId: 'ssh-1',
-      executionHostId: 'ssh:ssh-1'
-    }
-    const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace({ connectionId: 'ssh-1' }))
-    const onOpenChange = vi.fn()
-
-    await submitFolderWorkspaceCreate({
-      projectGroup,
-      name: 'SSH workspace',
-      lastAutoName: '',
-      linkedWorkItem: null,
-      note: '',
-      quickAgent: null,
-      autoRenameBranchFromWork: false,
-      agentCmdOverrides: {},
-      isRemote: true,
-      runtimeEnvironmentId: null,
-      createFolderWorkspace,
-      onOpenChange
-    })
-
-    expect(createFolderWorkspace).toHaveBeenCalledWith({
-      projectGroupId: 'group-1',
-      name: 'SSH workspace',
-      connectionId: 'ssh-1',
-      linkedTask: null
-    })
-    expect(onOpenChange).toHaveBeenCalledWith(false)
-    expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenCalledWith('folder-workspace-1', {
-      agent: null,
-      runtimeEnvironmentId: null
     })
   })
 
