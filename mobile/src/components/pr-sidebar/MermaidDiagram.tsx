@@ -51,7 +51,12 @@ export const MermaidDiagram = memo(function MermaidDiagram({ source, base }: Mer
         // Only mermaid sanitizes its serialization; strict mode already made returned SVG safe to parse.
         const readable = readableMermaidFlowchartSvg(svg, colors.textPrimary, colors.bgRaised)
         host.innerHTML = readable
-        setDrawn({ source, svg: readable })
+        // An image is an XML document: re-serialize the parsed drawing so HTML-only output like <br> and &nbsp; still loads.
+        const drawing = host.querySelector('svg')
+        setDrawn({
+          source,
+          svg: drawing ? new XMLSerializer().serializeToString(drawing) : readable
+        })
       } catch {
         if (!disposed) {
           setFailedSource(source)

@@ -276,7 +276,8 @@ describeMermaid(
         it('expands the drawn diagram into the pan and zoom viewer as an image', async () => {
           const { page, consoleErrors } = await openPage(browser)
           try {
-            await show(page, FIXTURE)
+            // HTML serialization writes a nonbreaking space as &nbsp;, which an XML image document rejects.
+            await show(page, 'flowchart LR\n  A["first#nbsp;second"] --> B[done]', 'second')
             await page.getByRole('button', { name: 'Expand diagram' }).click()
             const image = page.getByRole('img', { name: 'Mermaid diagram' })
             await image.waitFor()
