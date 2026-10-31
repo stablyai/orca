@@ -424,8 +424,9 @@ it.each([10, 100])(
           forcedSaves: 1,
           publications: publish.mock.calls.length,
           fullCommits: levels.length,
-          insertedBodyBytes: bodyBytes,
-          insertedEnvelopeBytes: envelopeBytes,
+          committedInputBodyBytes: bodyBytes,
+          committedInputEnvelopeBytes: envelopeBytes,
+          // All retained item values, including superseded versions; excludes other fields and SQL/index/DB/WAL overhead.
           retainedLogicalItemBytes: openTestJournalHostDatabase(fixture.root)
             .db.prepare(
               "SELECT COALESCE(SUM(length(CAST(value_json AS BLOB))), 0) AS bytes FROM journal_outcomes WHERE field = 'items'"

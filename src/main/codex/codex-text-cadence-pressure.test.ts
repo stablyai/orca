@@ -13,6 +13,10 @@ import { CodexPromptRegistry } from './codex-structured-prompt-replies'
 import { createCodexTurnOpenWaits } from './codex-structured-turn-open-wait'
 import type { CodexSession } from './codex-structured-session-state'
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
+import {
+  openTestJournalHostDatabase,
+  readTestJournalOutcomes
+} from '../native-chat/agent-session-journal/journal-host-database-test-support'
 
 afterEach(closeCheckpointTestJournals)
 
@@ -244,15 +248,24 @@ it.each(
         expect(
           h.r.journal.publicRead().snapshot.items.find((item) => item.itemId === original.itemId)
         ).toEqual(original)
-        const raw = h.r.journal.readSince({ epoch: h.r.journal.epoch, sequence: 0 })
+        const incoming = h.row('m256', h.r.journal, thread, type)!
+        const changes = h.r.journal.readSince({ epoch: h.r.journal.epoch, sequence: 0 })
         expect(
-          raw.ok &&
-            raw.rows.filter(
-              (row) =>
-                row.kind === 'item' &&
-                row.itemId === h.row('m256', h.r.journal, thread, type)?.itemId
+          changes.ok &&
+            changes.rows.filter(
+              (row) => row.kind === 'outcome' && row.itemIds.includes(incoming.itemId)
             )
         ).toHaveLength(1)
+        expect(
+          readTestJournalOutcomes(openTestJournalHostDatabase(h.r.root).db, 'recovery')
+            .filter(
+              (value) =>
+                value.field === 'items' &&
+                value.key === JSON.stringify(incoming.itemId) &&
+                !value.deleted
+            )
+            .map((value) => JSON.parse(value.json))
+        ).toEqual([incoming])
       }
       const reopened = await h.reopen()
       expect(h.text('m0', reopened, 'thread', type)).toBe(P + T)

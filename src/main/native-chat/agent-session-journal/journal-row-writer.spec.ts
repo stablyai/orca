@@ -73,18 +73,13 @@ export function registerJournalRowWriterTests(): void {
       return { writer, committedRows }
     }
 
-    function textRow(
-      seq: number,
-      itemId: string,
-      revision: number
-    ): JournalItemRow & { observedAt: number } {
+    function textRow(seq: number, itemId: string, revision: number): JournalItemRow {
       return {
-        ...row(seq, 0),
+        ...row(seq, 11),
         kind: 'item',
         v: 2,
         itemId,
         revision,
-        observedAt: 11,
         ownerFence: 0,
         executionOwner: 0,
         providerParentRef: 'parent',
@@ -147,7 +142,7 @@ export function registerJournalRowWriterTests(): void {
           expect(committed).not.toHaveBeenCalled()
           expect(committedRows).toEqual(folded)
           // Read disk through a fresh connection before any retry can hide a failed write.
-          database.close()
+          await database.close()
           database = openTestJournalHostDatabase(root)
           expect(readTestJournalRows(database.db, SESSION_ID, EPOCH)).toEqual(original)
           expect(database.db.prepare('SELECT * FROM receipt_fact').all()).toEqual([])

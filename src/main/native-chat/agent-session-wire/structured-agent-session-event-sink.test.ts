@@ -279,6 +279,26 @@ describe('deferred structured agent-session event sink', () => {
           )
           .all()
       )
+    const canonicalRows = () => {
+      const db = openTestJournalHostDatabase(root).db
+      return structuredClone({
+        generations: db
+          .prepare(
+            'SELECT generation, session_id, epoch FROM journal_outcome_generations ORDER BY generation'
+          )
+          .all(),
+        sources: db
+          .prepare(
+            'SELECT session_id, epoch, generation, format, through_seq, prefix_seq FROM journal_outcome_epochs ORDER BY session_id'
+          )
+          .all(),
+        outcomes: db
+          .prepare(
+            'SELECT generation, seq, field, entry_key, format, ordinal, value_json, deleted FROM journal_outcomes ORDER BY generation, seq, field, entry_key'
+          )
+          .all()
+      })
+    }
     const committed = vi.fn()
     const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
     try {
@@ -289,9 +309,15 @@ describe('deferred structured agent-session event sink', () => {
       const original = structuredClone(journal.snapshot())
       const originalPublic = structuredClone(journal.publicRead().snapshot)
       const originalRows = rawRows()
+      const originalCanonical = canonicalRows()
+      expect(
+        originalCanonical.outcomes
+          .filter((value) => value.field === 'items' && value.deleted === 0)
+          .map((value) => JSON.parse(String(value.value_json)))
+      ).toEqual(original.items)
       journal.observeCommits(committed)
       openTestJournalHostDatabase(root).db
-        .exec(`CREATE TRIGGER reject_insert BEFORE INSERT ON journal_rows
+        .exec(`CREATE TRIGGER reject_insert BEFORE INSERT ON journal_outcomes
         BEGIN SELECT RAISE(ROLLBACK, 'native insert failure'); END`)
       deferred.bind({ journal, fence: 1, publish })
       deferred.sink.appendItem(
@@ -312,6 +338,7 @@ describe('deferred structured agent-session event sink', () => {
       expect(committed).not.toHaveBeenCalled()
       expect(journal.snapshot()).toEqual(original)
       expect(rawRows()).toEqual(originalRows)
+      expect(canonicalRows()).toEqual(originalCanonical)
       expect(
         deferred.sink.tryAppendItem?.(identity(1), BODY, {
           turnScope: AGENT_JOURNAL_THREAD_SCOPE
@@ -319,11 +346,12 @@ describe('deferred structured agent-session event sink', () => {
       ).toMatchObject({ accepted: false, reason: 'failed' })
       expect(deferred.sink.tryPublish?.()).toMatchObject({ accepted: false, reason: 'failed' })
       await journal.close()
-      closeTestJournalHostDatabase(root)
+      await closeTestJournalHostDatabase(root)
       reopened = await open()
       expect(reopened.snapshot()).toEqual(original)
       expect(reopened.publicRead().snapshot).toEqual(originalPublic)
       expect(rawRows()).toEqual(originalRows)
+      expect(canonicalRows()).toEqual(originalCanonical)
       openTestJournalHostDatabase(root).db.exec('DROP TRIGGER reject_insert')
       await reopened.appendItem(
         identity(0),
@@ -343,7 +371,7 @@ describe('deferred structured agent-session event sink', () => {
       deferred.close()
       await journal.close()
       await reopened?.close()
-      closeTestJournalHostDatabase(root)
+      await closeTestJournalHostDatabase(root)
       await rm(root, { recursive: true, force: true })
     }
   })
