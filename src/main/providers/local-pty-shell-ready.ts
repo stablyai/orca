@@ -112,6 +112,10 @@ export function getShellLaunchConfig(
   }
 
   if (isPowerShellExecutableName(shellName)) {
+    // Why no marker on win32: pwsh startup commands ride the launch args when
+    // they fit (see windows-shell-args.ts); oversized ones fall back to stdin
+    // with no barrier. Nothing queues behind a marker that never arms.
+    const supportsReadyMarker = process.platform !== 'win32' && features.includes('ready')
     return {
       args: [
         '-NoLogo',
@@ -120,8 +124,13 @@ export function getShellLaunchConfig(
         '-EncodedCommand',
         encodePowerShellCommand(getPowerShellOsc133Bootstrap())
       ],
-      env: {},
-      supportsReadyMarker: false
+      // Why feature-gated: the bootstrap reads this to decide whether the prompt
+      // function publishes the ready marker, and removes the variable before any
+      // child process can inherit it.
+      env: supportsReadyMarker
+        ? { [SHELL_STARTUP_FEATURE_ENV]: encodeShellStartupFeatures(wrapperFeatures) }
+        : {},
+      supportsReadyMarker
     }
   }
 

@@ -29,11 +29,18 @@ if ($ExecutionContext.SessionState.LanguageMode -eq "FullLanguage" -and
 ${getPowerShellOmpShellWrapper()}
 ${getPowerShellAgentWrappers()}
 
+    # Read the startup-feature allowlist before anything can see it: the wrapper
+    # semantics are "an inherited or stale value can only ever mean fewer
+    # features", so the variable must not survive into user code or children.
+    $__orcaStartupFeatures = @($env:ORCA_SHELL_FEATURES -split ',')
+    Remove-Item Env:\\ORCA_SHELL_FEATURES -ErrorAction Ignore
+
     $Global:__OrcaOsc133State = @{
         OriginalPrompt = $function:prompt
         OriginalReadLine = $function:PSConsoleHostReadLine
         HasSeenPrompt = $false
         HasPSReadLine = $null -ne (Get-Module -Name PSReadLine)
+        PublishesReadyMarker = $__orcaStartupFeatures -contains 'ready'
         Esc = [char]27
         Bel = [char]7
     }
@@ -43,6 +50,14 @@ ${getPowerShellAgentWrappers()}
         $fakeExitCode = [int](!$global:?)
         Set-StrictMode -Off
         $result = ""
+
+        # Announce readiness once the prompt can accept input: the daemon's
+        # shell-ready barrier releases queued stdin on this marker, so a startup
+        # command lands after PSReadLine owns the console instead of inside the
+        # startup window where pwsh's cursor-position read consumes it (#27293).
+        if ((-not $Global:__OrcaOsc133State.HasSeenPrompt) -and $Global:__OrcaOsc133State.PublishesReadyMarker) {
+            $result += "$($Global:__OrcaOsc133State.Esc)]777;orca-shell-ready$($Global:__OrcaOsc133State.Bel)"
+        }
 
         # Emit D from prompt, not readline state. Some profile setups bypass
         # PSConsoleHostReadLine; the consumer only needs completion.

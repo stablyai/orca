@@ -1,5 +1,6 @@
 import { shellReadyMarkerComesFromLineEditor } from '../../shared/shell-ready-marker-timing'
 import {
+  installCursorPositionResponder,
   installDeviceAttributesResponder,
   STARTUP_DA1_RESPONSE
 } from './startup-device-attributes-responder'
@@ -36,6 +37,7 @@ export class SessionShellReadyBarrier {
   private scanState: ShellStartupOutputScanState | null = null
   private readyTimer: ReturnType<typeof setTimeout> | null = null
   private releaseDeviceAttributesResponder: (() => void) | null = null
+  private releaseCursorPositionResponder: (() => void) | null = null
   private preReadyStdinQueue: string[] = []
   private readonly postReadyFlushGate: PostReadyFlushGate
 
@@ -47,6 +49,14 @@ export class SessionShellReadyBarrier {
       this.releaseDeviceAttributesResponder = installDeviceAttributesResponder({
         parser: deps.responderParser,
         response: STARTUP_DA1_RESPONSE,
+        reply: (data) => deps.subprocess.write(data)
+      })
+      // Why: pwsh's .NET console queries the cursor position during startup and
+      // reads stdin while waiting for the reply -- with the barrier holding the
+      // renderer's reply, only a daemon-side answer past the queue unblocks the
+      // prompt (and with it the ready marker).
+      this.releaseCursorPositionResponder = installCursorPositionResponder({
+        parser: deps.responderParser,
         reply: (data) => deps.subprocess.write(data)
       })
       deps.installDeviceAttributesFilter()
@@ -115,6 +125,8 @@ export class SessionShellReadyBarrier {
   releaseDeviceAttributes(): void {
     this.releaseDeviceAttributesResponder?.()
     this.releaseDeviceAttributesResponder = null
+    this.releaseCursorPositionResponder?.()
+    this.releaseCursorPositionResponder = null
     this.deps.releaseDeviceAttributesFilter()
   }
 
