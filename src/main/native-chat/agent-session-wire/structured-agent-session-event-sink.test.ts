@@ -254,6 +254,128 @@ describe('deferred structured agent-session event sink', () => {
     expect(readingControl.resumeReading).not.toHaveBeenCalled()
   })
 
+  it('publishes no failed successor after native journal failure, then permits a new writer after reopen', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-event-sink-native-failure-'))
+    const open = () =>
+      openAgentSessionJournal({
+        identity: JOURNAL_IDENTITY,
+        database: openTestJournalHostDatabase(root),
+        mintEpoch: () => 'epoch-1'
+      })
+    const journal = await open()
+    let reopened: AgentSessionJournal | undefined
+    const publications: { journal: unknown; public: unknown }[] = []
+    const publish = vi.fn(() => {
+      publications.push({
+        journal: structuredClone(journal.snapshot()),
+        public: structuredClone(journal.publicRead().snapshot)
+      })
+    })
+    const rawRows = () =>
+      structuredClone(
+        openTestJournalHostDatabase(root)
+          .db.prepare(
+            'SELECT session_id, epoch, seq, ts, row_json FROM journal_rows ORDER BY session_id, epoch, seq'
+          )
+          .all()
+      )
+    const canonicalRows = () => {
+      const db = openTestJournalHostDatabase(root).db
+      return structuredClone({
+        generations: db
+          .prepare(
+            'SELECT generation, session_id, epoch FROM journal_outcome_generations ORDER BY generation'
+          )
+          .all(),
+        sources: db
+          .prepare(
+            'SELECT session_id, epoch, generation, format, through_seq, prefix_seq FROM journal_outcome_epochs ORDER BY session_id'
+          )
+          .all(),
+        outcomes: db
+          .prepare(
+            'SELECT generation, seq, field, entry_key, format, ordinal, value_json, deleted FROM journal_outcomes ORDER BY generation, seq, field, entry_key'
+          )
+          .all()
+      })
+    }
+    const committed = vi.fn()
+    const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
+    try {
+      await journal.appendItem(identity(0), BODY, {
+        fence: 1,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
+      const original = structuredClone(journal.snapshot())
+      const originalPublic = structuredClone(journal.publicRead().snapshot)
+      const originalRows = rawRows()
+      const originalCanonical = canonicalRows()
+      expect(
+        originalCanonical.outcomes
+          .filter((value) => value.field === 'items' && value.deleted === 0)
+          .map((value) => JSON.parse(String(value.value_json)))
+      ).toEqual(original.items)
+      journal.observeCommits(committed)
+      openTestJournalHostDatabase(root).db
+        .exec(`CREATE TRIGGER reject_insert BEFORE INSERT ON journal_outcomes
+        BEGIN SELECT RAISE(ROLLBACK, 'native insert failure'); END`)
+      deferred.bind({ journal, fence: 1, publish })
+      deferred.sink.appendItem(
+        identity(0),
+        { ...BODY, blocks: [{ type: 'text', text: 'successor' }] },
+        {
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        }
+      )
+      deferred.sink.publish()
+      await expect(deferred.drained()).resolves.toMatchObject({ ok: false })
+      await expect(deferred.sink.written?.()).resolves.toMatchObject({ ok: false })
+      console.info('Native rollback committed-state refresh callbacks:', publish.mock.calls.length)
+      expect(publish.mock.calls).toHaveLength(publications.length)
+      for (const publication of publications) {
+        expect(publication).toEqual({ journal: original, public: originalPublic })
+      }
+      expect(committed).not.toHaveBeenCalled()
+      expect(journal.snapshot()).toEqual(original)
+      expect(rawRows()).toEqual(originalRows)
+      expect(canonicalRows()).toEqual(originalCanonical)
+      expect(
+        deferred.sink.tryAppendItem?.(identity(1), BODY, {
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        })
+      ).toMatchObject({ accepted: false, reason: 'failed' })
+      expect(deferred.sink.tryPublish?.()).toMatchObject({ accepted: false, reason: 'failed' })
+      await journal.close()
+      await closeTestJournalHostDatabase(root)
+      reopened = await open()
+      expect(reopened.snapshot()).toEqual(original)
+      expect(reopened.publicRead().snapshot).toEqual(originalPublic)
+      expect(rawRows()).toEqual(originalRows)
+      expect(canonicalRows()).toEqual(originalCanonical)
+      openTestJournalHostDatabase(root).db.exec('DROP TRIGGER reject_insert')
+      await reopened.appendItem(
+        identity(0),
+        { ...BODY, blocks: [{ type: 'text', text: 'successor' }] },
+        {
+          fence: 1,
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        }
+      )
+      expect(reopened.cursor().sequence).toBe(original.cursor.sequence + 1)
+      expect(reopened.snapshot().items[0]).toMatchObject({
+        ...original.items[0],
+        revision: original.items[0].revision + 1,
+        body: { ...BODY, blocks: [{ type: 'text', text: 'successor' }] }
+      })
+    } finally {
+      deferred.close()
+      await journal.close()
+      await reopened?.close()
+      await closeTestJournalHostDatabase(root)
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
   it('replaces a failed cached sink before recovery drain', async () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the cached-sink path reads only the logger, on the failed drain.
     const deps = {
@@ -505,11 +627,15 @@ describe('deferred structured agent-session event sink', () => {
         method,
         params: { threadId: 'thread-1', turnId: 'turn-1', turn: { id: 'turn-1' }, ...params }
       })
+    let checkpointAt = performance.now()
     const checkpoint = (text: string) => {
       notify('item/agentMessage/delta', { itemId: 'reply', delta: text })
+      checkpointAt += 400
+      const clock = vi.spyOn(performance, 'now').mockReturnValue(checkpointAt)
       for (const run of window.splice(0)) {
         run()
       }
+      clock.mockRestore()
     }
     notify('turn/started', {})
     notify('item/started', { item: { type: 'agentMessage', id: 'reply', text: '' } })

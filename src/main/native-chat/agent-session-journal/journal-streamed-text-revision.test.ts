@@ -1,4 +1,7 @@
 import { expect, it, vi } from 'vitest'
+import { createCodexJournalTranslator } from '../../codex/codex-structured-journal-translation'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type { JournalRow } from './journal-row-schema'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { codexImageItemBody } from '../../codex/codex-image-item-translation'
 import { journalPragmaNumber } from './journal-database'
@@ -15,9 +18,14 @@ import {
   fixture,
   commitLevels,
   openJournal,
-  text,
+  text as fixtureText,
   uploadedInput
 } from './journal-streamed-revision-contract-test-fixture'
+
+const text = (role: 'assistant' | 'user' | 'reasoning', value: string): AgentJournalMessageItem =>
+  role === 'reasoning'
+    ? { kind: 'message', role, blocks: [{ type: 'text', text: value }] }
+    : fixtureText(role, value)
 
 it('keeps image and goal transitions FULL, streams text at NORMAL, and restores FULL', async () => {
   const database = openTestJournalHostDatabase(fixture.root)
@@ -61,7 +69,11 @@ it('keeps image and goal transitions FULL, streams text at NORMAL, and restores 
     codexImageItemBody({ ...image, status: 'completed', result: 'AAAA' }),
     text('assistant', 'Image preview unavailable'),
     { ...text('assistant', 'Goal'), sentAs: 'goal' as const },
-    text('assistant', 'Goal reached')
+    text('assistant', 'Goal reached'),
+    { ...text('reasoning', 'Thinking'), state: 'running' as const },
+    { ...text('reasoning', 'Thinking more'), state: 'running' as const },
+    { ...text('reasoning', 'Done thinking'), state: 'completed' as const, completedAt: 100 },
+    text('assistant', 'Answer')
   ]) {
     await journal.appendItem(
       { provider: 'codex', threadId: 'thread', turnId: 'turn', ordinal: 1 },
@@ -69,7 +81,7 @@ it('keeps image and goal transitions FULL, streams text at NORMAL, and restores 
       { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
   }
-  expect(levels).toEqual([2, 1, 2, 2, 2, 2])
+  expect(levels).toEqual([2, 1, 2, 2, 2, 2, 2, 1, 2, 2])
   expect(journalPragmaNumber(database.db, 'synchronous')).toBe(2)
   levels.length = 0
   for (const options of [
@@ -132,6 +144,7 @@ it.each([1, 10])(
     if (!sink) {
       throw new Error('missing production transition sink')
     }
+    const clock = vi.spyOn(performance, 'now').mockReturnValue(0)
     const windows = new Set<() => void>()
     const assembler = createProviderTimelineAssembler({
       sink,
@@ -166,6 +179,7 @@ it.each([1, 10])(
       expect(levels).toEqual([2])
       levels.length = 0
       for (let n = 0; n < count; n++) {
+        clock.mockReturnValue((n + 1) * 400)
         expect(delta().admission).toEqual({ accepted: true })
         await flush()
       }
@@ -200,6 +214,243 @@ it.each([1, 10])(
     } finally {
       assembler.dispose()
       deferred.close()
+    }
+  }
+)
+
+it('retains admitted full snapshots and replays the final body with its original position and annotations', async () => {
+  const database = openTestJournalHostDatabase(fixture.root)
+  const options = {
+    database,
+    identity: {
+      sessionId: 'retention',
+      workspaceId: 'workspace',
+      hostId: 'host',
+      agent: 'codex' as const,
+      providerHandle: null
+    }
+  }
+  const journal = await openAgentSessionJournal(options)
+  const identity = { provider: 'codex' as const, threadId: 'thread', turnId: 'turn', ordinal: 1 }
+  const savedItems = () =>
+    database.db
+      .prepare("SELECT value_json FROM journal_outcomes WHERE field = 'items' ORDER BY seq")
+      .all()
+      .map((row) => JSON.parse(String(row.value_json)))
+  let original = ''
+  for (let index = 1; index <= 100; index += 1) {
+    await journal.appendItem(identity, text('assistant', 'x'.repeat(index * 4096)), {
+      fence: 1,
+      ownerFence: 1,
+      executionOwner: 1,
+      observedAt: index,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE,
+      agentId: 'child',
+      providerParentRef: 'parent'
+    })
+    if (index === 1) {
+      original = JSON.stringify(savedItems()[0])
+    }
+  }
+  const final = text('assistant', `${'x'.repeat(100 * 4096)} final`)
+  await journal.appendItem(identity, final, { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE })
+  const snapshot = journal.snapshot().items
+  const saved = savedItems()
+  expect(saved[0]).toEqual(JSON.parse(original))
+  const storedBytes = saved.reduce(
+    (bytes, item) => bytes + Buffer.byteLength(JSON.stringify(item)),
+    0
+  )
+  expect(saved).toHaveLength(101)
+  expect(saved.flatMap((item) => item.body.blocks)).toEqual([
+    ...Array.from({ length: 100 }, (_, index) => ({
+      type: 'text',
+      text: 'x'.repeat((index + 1) * 4096)
+    })),
+    ...final.blocks
+  ])
+  expect(storedBytes).toBeGreaterThan(
+    Buffer.byteLength(JSON.stringify(final)) + (4096 * 100 * 101) / 2
+  )
+  expect(snapshot[0]).toMatchObject({
+    sequence: 2,
+    observedAt: 1,
+    turnScope: AGENT_JOURNAL_THREAD_SCOPE,
+    agentId: 'child',
+    providerParentRef: 'parent',
+    body: final
+  })
+  await journal.close()
+  const reopened = await openAgentSessionJournal(options)
+  expect(reopened.snapshot().items).toEqual(snapshot)
+  await reopened.close()
+})
+
+it.each([10, 100])(
+  'commits %i timer-delivered plan-status checkpoints at FULL, skipping not-due arrivals before assembly',
+  async (count) => {
+    const options = {
+      database: openTestJournalHostDatabase(fixture.root),
+      identity: {
+        sessionId: 'plan-cadence',
+        workspaceId: 'folder',
+        hostId: 'local',
+        agent: 'codex' as const,
+        providerHandle: null
+      }
+    }
+    const journal = await openAgentSessionJournal(options)
+    const levels = commitLevels()
+    const publish = vi.fn()
+    const deferred = createDeferredStructuredAgentSessionEventSink(
+      testEventSinkLogging('plan-cadence')
+    )
+    deferred.bind({ journal, fence: 1, publish })
+    const translator = createCodexJournalTranslator({
+      sink: deferred.sink,
+      bindPromptItemId: () => {}
+    })
+    vi.useFakeTimers({ toFake: ['Date', 'performance', 'setTimeout', 'clearTimeout'] })
+    vi.setSystemTime(500000)
+    const notify = (method: string, params: unknown) =>
+      translator.handle({
+        type: 'notification',
+        sessionId: 'plan-cadence',
+        threadId: 'thread',
+        method,
+        params
+      })
+    const prefix = 'P'.repeat(100)
+    const committedRows: JournalRow[] = []
+    journal.observeCommits((rows) => committedRows.push(...(rows ?? [])))
+    const tick = async (ms: number) => {
+      vi.advanceTimersByTime(ms)
+      await deferred.drained()
+    }
+    let expected = prefix
+    try {
+      notify('item/started', { item: { type: 'plan', id: 'plan', text: '' } })
+      expect(notify('item/plan/delta', { itemId: 'plan', delta: '' })).toEqual({ accepted: true })
+      await tick(60)
+      expect(levels).toEqual([])
+      expect(notify('item/plan/delta', { itemId: 'plan', delta: expected })).toEqual({
+        accepted: true
+      })
+      await tick(59)
+      expect(levels).toEqual([])
+      await tick(1)
+      const first = journal.snapshot().items[0]
+      const snapshots = [prefix]
+      const join = Array.prototype.join
+      let assemblies = 0
+      const observer = vi.spyOn(Array.prototype, 'join').mockImplementation(function (
+        this: string[],
+        separator
+      ) {
+        if (this[0] === prefix) {
+          assemblies++
+        }
+        return join.call(this, separator)
+      })
+      try {
+        for (let i = 0; i < count; i++) {
+          expect(notify('item/plan/delta', { itemId: 'plan', delta: 'x' })).toEqual({
+            accepted: true
+          })
+          await tick(60)
+          expect(assemblies).toBe(0)
+          expect(levels).toHaveLength(i + 1)
+          expect(publish).toHaveBeenCalledTimes(i + 1)
+          expect(vi.getTimerCount()).toBe(1)
+          vi.setSystemTime(100 - i)
+          await tick(339)
+          expect(assemblies).toBe(0)
+          await tick(1)
+          expected += 'x'
+          snapshots.push(expected)
+          expect(journal.snapshot().items[0].body).toEqual({
+            kind: 'status',
+            text: expected,
+            presentation: 'plan-document'
+          })
+          expect(assemblies).toBeGreaterThan(0)
+          assemblies = 0
+        }
+        expect(notify('item/plan/delta', { itemId: 'plan', delta: ' tail' })).toEqual({
+          accepted: true
+        })
+        await tick(60)
+        expect(assemblies).toBe(0)
+        expect(levels).toHaveLength(count + 1)
+        translator.flush()
+        await deferred.drained()
+        expected += ' tail'
+        snapshots.push(expected)
+      } finally {
+        observer.mockRestore()
+      }
+      expect(levels).toEqual(Array(count + 2).fill(2))
+      expect(publish).toHaveBeenCalledTimes(count + 2)
+      const rows = committedRows.filter((row) => row.kind === 'item')
+      expect(rows.map((row) => row.body)).toEqual(
+        snapshots.map((value) => ({ kind: 'status', text: value, presentation: 'plan-document' }))
+      )
+      const bodyBytes = rows.reduce(
+        (sum, row) => sum + Buffer.byteLength(JSON.stringify(row.body)),
+        0
+      )
+      const envelopeBytes = rows.reduce(
+        (sum, row) => sum + Buffer.byteLength(JSON.stringify(row)),
+        0
+      )
+      expect(bodyBytes).toBe(
+        snapshots.reduce(
+          (sum, value) =>
+            sum +
+            Buffer.byteLength(
+              JSON.stringify({ kind: 'status', text: value, presentation: 'plan-document' })
+            ),
+          0
+        )
+      )
+      expect(envelopeBytes).toBeGreaterThan(bodyBytes)
+      console.info(
+        'plan-cadence-metrics',
+        JSON.stringify({
+          count,
+          acceptedDeltas: count + 3,
+          ordinarySaves: count + 1,
+          skippedWindows: count + 1,
+          forcedSaves: 1,
+          publications: publish.mock.calls.length,
+          fullCommits: levels.length,
+          committedInputBodyBytes: bodyBytes,
+          committedInputEnvelopeBytes: envelopeBytes,
+          // All retained item values, including superseded versions; excludes other fields and SQL/index/DB/WAL overhead.
+          retainedLogicalItemBytes: openTestJournalHostDatabase(fixture.root)
+            .db.prepare(
+              "SELECT COALESCE(SUM(length(CAST(value_json AS BLOB))), 0) AS bytes FROM journal_outcomes WHERE field = 'items'"
+            )
+            .get()?.bytes
+        })
+      )
+      expect(journal.snapshot().items[0]).toMatchObject({
+        sequence: first.sequence,
+        observedAt: first.observedAt,
+        turnScope: first.turnScope
+      })
+      translator.dispose()
+      await journal.close()
+      const reopened = await openAgentSessionJournal(options)
+      expect(reopened.snapshot().items[0]).toMatchObject({
+        sequence: first.sequence,
+        observedAt: first.observedAt,
+        turnScope: first.turnScope,
+        body: { text: expected }
+      })
+    } finally {
+      translator.dispose()
+      vi.useRealTimers()
     }
   }
 )

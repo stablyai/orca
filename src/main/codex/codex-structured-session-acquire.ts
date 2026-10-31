@@ -73,6 +73,17 @@ export async function acquireCodexStructuredSession(input: {
   let account: AgentSessionAccountKind | undefined
   // Frame row identities include this generation.
   const acquisitionGeneration = mintCodexAcquisitionGeneration(deps)
+  const scheduledOwner = (): CodexSession | undefined => {
+    const session = sessions.get(sessionId)
+    return session &&
+      session.connection === acquisition.connection &&
+      session.fence === acquireInput.fence &&
+      session.acquisitionGeneration === acquisitionGeneration &&
+      !session.ended &&
+      !session.orcaClose
+      ? session
+      : undefined
+  }
   const translator = createCodexSessionJournalTranslator({
     sink: acquireInput.events,
     account: () => account,
@@ -82,7 +93,22 @@ export async function acquireCodexStructuredSession(input: {
     primaryThreadId: () => primaryThreadId,
     dispatchEchoes,
     subagentExecutions,
-    prompts: acquisition.prompts
+    prompts: acquisition.prompts,
+    isCurrent: () => scheduledOwner() !== undefined,
+    onScheduledFailure: (admission) => {
+      const session = scheduledOwner()
+      if (!session) {
+        return
+      }
+      notificationRetries.clear(sessionId, session.connection)
+      session.connection.resumeReading?.()
+      void input.forceCloseUnexpected(
+        sessionId,
+        acquireInput.fence,
+        acquisitionGeneration,
+        new Error(`scheduled plan admission failed (${admission.reason})`)
+      )
+    }
   })
   const open = deps.openConnection ?? spawnCodexAppServerConnection
   const spawnIdentity = codexSpawnedProcessIdentity(acquireInput, deps.readProcessStartTime)

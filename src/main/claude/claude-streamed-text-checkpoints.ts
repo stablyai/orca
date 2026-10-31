@@ -3,19 +3,20 @@ import type { AgentJournalItemIdentity } from '../../shared/agent-session-journa
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import type { StructuredAgentSessionAppendOptions } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import {
+  AGENT_SESSION_TEXT_CHECKPOINT_MS,
   createAgentSessionDeltaCoalescer,
   type AgentSessionDeltaCoalescerDeps
 } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
 import type { ClaudeSubagentLinkageSource } from './claude-subagent-linkage'
 
 export type ClaudeStreamedTextCheckpointDeps = {
-  /** Rewrite accumulated text; ended marks the last write when no final frame will arrive. */
+  /** Return whether the content append and publication were admitted. */
   persist: (
     identity: AgentJournalItemIdentity,
     text: string,
     options: StructuredAgentSessionAppendOptions,
     ended?: ClaudeStreamedBlockEnd
-  ) => void
+  ) => boolean
   producer: ClaudeSubagentLinkageSource
   coalesceMs?: number
   schedule?: AgentSessionDeltaCoalescerDeps['schedule']
@@ -25,7 +26,7 @@ export type ClaudeStreamedTextCheckpointDeps = {
 export type ClaudeStreamedBlockEnd = { completedAt?: number }
 
 export type ClaudeStreamedTextCheckpoints = {
-  /** Coalesce deltas and widen checkpoint intervals to avoid per-token journal rewrites. */
+  /** Coalesce ordinary full-text saves. */
   append: (
     identity: AgentJournalItemIdentity,
     text: string,
@@ -63,10 +64,11 @@ export function createClaudeStreamedTextCheckpoints(
   const identities = new Map<string, AgentJournalItemIdentity>()
   /** Retain producer scope because persist has no frame to read. */
   const scopes = new Map<string, string | null>()
-  /** Last written linkage, used only to skip revisions that change nothing. */
+  /** Last attempted linkage, used only to skip revisions that change nothing. */
   const writtenLinkage = new Map<string, StructuredAgentSessionAppendOptions>()
   const latestText = new Map<string, string>()
   const checkpointLengths = new Map<string, number>()
+  const acceptedAt = new Map<string, number>()
 
   /** Resolve each checkpoint afresh; later announcements revise provisional producers on the same row. */
   const producerOptions = (key: string): StructuredAgentSessionAppendOptions => {
@@ -79,9 +81,12 @@ export function createClaudeStreamedTextCheckpoints(
 
   const persist = (key: string, text: string, force: boolean): void => {
     latestText.set(key, text)
-    const checkpointLength = checkpointLengths.get(key) ?? 0
-    const nextLength = Math.max(checkpointLength + 32, Math.ceil(checkpointLength * 1.125))
-    if (!force && checkpointLength > 0 && text.length < nextLength) {
+    const previous = acceptedAt.get(key)
+    if (
+      !force &&
+      previous !== undefined &&
+      performance.now() - previous < AGENT_SESSION_TEXT_CHECKPOINT_MS
+    ) {
       return
     }
     const identity = identities.get(key)
@@ -91,7 +96,9 @@ export function createClaudeStreamedTextCheckpoints(
     const options = producerOptions(key)
     checkpointLengths.set(key, text.length)
     writtenLinkage.set(key, options)
-    deps.persist(identity, text, options)
+    if (deps.persist(identity, text, options)) {
+      acceptedAt.set(key, performance.now())
+    }
   }
 
   const coalescer = createAgentSessionDeltaCoalescer({
@@ -107,6 +114,7 @@ export function createClaudeStreamedTextCheckpoints(
     writtenLinkage.delete(key)
     latestText.delete(key)
     checkpointLengths.delete(key)
+    acceptedAt.delete(key)
   }
 
   return {
@@ -136,7 +144,9 @@ export function createClaudeStreamedTextCheckpoints(
           continue
         }
         writtenLinkage.set(key, options)
-        deps.persist(identity, text, options)
+        if (deps.persist(identity, text, options)) {
+          acceptedAt.set(key, performance.now())
+        }
       }
     },
     forget: drop,
@@ -169,6 +179,7 @@ export function createClaudeStreamedTextCheckpoints(
       writtenLinkage.clear()
       latestText.clear()
       checkpointLengths.clear()
+      acceptedAt.clear()
     }
   }
 }

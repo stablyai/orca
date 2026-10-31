@@ -1,18 +1,68 @@
+import type * as DeltaCoalescerModule from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemIdentity
 } from '../../shared/agent-session-journal-types'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { parseAgentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import { selectStructuredAgentContextUsage } from '../../shared/structured-agent-session-context-usage'
+import type {
+  JournalItemRow,
+  JournalRow
+} from '../native-chat/agent-session-journal/journal-row-schema'
 import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
-import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import {
+  createDeferredStructuredAgentSessionEventSink,
+  type StructuredAgentSessionSinkAdmission
+} from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
+
+// Observe real full-value materialization at the public coalescer boundary; never replace admission.
+const fullValues = vi.hoisted(() => {
+  const state: { texts: string[] } = { texts: [] }
+  return state
+})
+vi.mock('../native-chat/agent-session-wire/agent-session-delta-coalescer', async (original) => {
+  const actual = await original<typeof DeltaCoalescerModule>()
+  const record = (text: string) => {
+    fullValues.texts.push(text)
+  }
+  return {
+    ...actual,
+    createAgentSessionDeltaCoalescer: (
+      deps: Parameters<typeof actual.createAgentSessionDeltaCoalescer>[0]
+    ) => {
+      const coalescer = actual.createAgentSessionDeltaCoalescer({
+        ...deps,
+        emit: (key, text, snapshot) => {
+          record(text)
+          return deps.emit(key, text, snapshot)
+        }
+      })
+      return {
+        ...coalescer,
+        snapshot: (key: string) => {
+          const value = coalescer.snapshot(key)
+          if (value) {
+            record(value.text)
+          }
+          return value
+        },
+        dirty: (...args: Parameters<typeof coalescer.dirty>) => {
+          const values = coalescer.dirty(...args)
+          values.forEach((value) => record(value.snapshot.text))
+          return values
+        }
+      }
+    }
+  }
+})
 
 const SESSION = 'session-codex-context'
 const THREAD = 'thread-main'
@@ -101,6 +151,7 @@ async function session() {
       })
     return {
       translator,
+      deferred,
       on,
       tokenUsage: (turnId: string, tokenUsage: unknown, threadId = THREAD) =>
         on('thread/tokenUsage/updated', { turnId, tokenUsage }, threadId),
@@ -227,6 +278,98 @@ describe('Codex context usage in the journal', () => {
     expect(await contextUsage()).toMatchObject({ usedTokens: 6033, windowTokens: 475000 })
   })
 
+  it.each(['backpressure', 'closed', 'failed'] as const)(
+    'returns the original context %s admission at the checked caller',
+    async (reason) => {
+      const r = await session()
+      r.on('turn/started', { turn: { id: 'turn' } })
+      await r.deferred.drained()
+      const original: StructuredAgentSessionSinkAdmission = { accepted: false, reason }
+      const revise = vi.fn(() => original)
+      r.deferred.sink.tryReviseResolvedItemAndPublish = revise
+      expect(r.tokenUsage('turn', FIRST_RESPONSE)).toBe(original)
+      expect(revise).toHaveBeenCalledOnce()
+      expect(await r.contextUsage()).toBeNull()
+    }
+  )
+
+  it('keeps invalid, nonprimary and unsupported publishing context as genuine no-ops', async () => {
+    const r = await session()
+    const nonpublishing = vi.fn(r.deferred.sink.tryReviseResolvedItem!.bind(r.deferred.sink))
+    const publishing = vi.fn(r.deferred.sink.tryReviseResolvedItemAndPublish!.bind(r.deferred.sink))
+    r.deferred.sink.tryReviseResolvedItem = nonpublishing
+    r.deferred.sink.tryReviseResolvedItemAndPublish = publishing
+    for (const totalTokens of [undefined, 0, -1, Infinity, Number.NaN]) {
+      expect(
+        r.tokenUsage('missing', { last: { totalTokens }, modelContextWindow: 258400 })
+      ).toEqual({ accepted: true })
+    }
+    expect(r.tokenUsage('helper', FIRST_RESPONSE, 'helper-thread')).toEqual({ accepted: true })
+    const withoutPrimary = createCodexJournalTranslator({ sink: r.deferred.sink })
+    expect(
+      withoutPrimary.handle({
+        type: 'notification',
+        sessionId: SESSION,
+        threadId: THREAD,
+        method: 'thread/tokenUsage/updated',
+        params: { tokenUsage: FIRST_RESPONSE }
+      })
+    ).toEqual({ accepted: true })
+    withoutPrimary.dispose()
+    expect(publishing).not.toHaveBeenCalled()
+    r.deferred.sink.tryReviseResolvedItemAndPublish = undefined
+    expect(r.tokenUsage('missing', FIRST_RESPONSE)).toEqual({ accepted: true })
+    expect(nonpublishing).not.toHaveBeenCalled()
+    expect(await r.contextUsage()).toBeNull()
+    expect(r.journal.snapshot().items).toEqual([])
+  })
+
+  it('resolves context after an externally ended predecessor and preserves its other fields', async () => {
+    const r = await session()
+    r.on('turn/started', { turn: { id: 'turn' } })
+    await r.deferred.drained()
+    const first = r.journal.snapshot().items.find((item) => item.body.kind === 'turn')!
+    if (first.body.kind !== 'turn') {
+      throw new Error('missing turn')
+    }
+    const identity = parseAgentJournalItemKey(first.itemId)!
+    const gate = Promise.withResolvers<void>()
+    await r.journal.readInOrder(() => {
+      void r.journal.readInOrder(() => gate.promise)
+    })
+    try {
+      const external = {
+        ...first.body,
+        state: 'completed' as const,
+        completedAt: 2000,
+        outcome: 'success' as const,
+        durationMs: 1000,
+        contextUsage: { window: { tokens: 300000, capturedAt: 1 } }
+      }
+      const ended = r.journal.appendItem(identity, external, {
+        fence: 1,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
+      expect(r.tokenUsage('turn', FIRST_RESPONSE)).toEqual({ accepted: true })
+      gate.resolve()
+      await ended
+      await r.deferred.drained()
+      expect(r.journal.item(first.itemId)).toMatchObject({
+        ...first,
+        revision: first.revision + 2,
+        body: {
+          ...external,
+          contextUsage: {
+            ...external.contextUsage,
+            used: { kind: 'report', usedTokens: 17611, windowTokens: 258400 }
+          }
+        }
+      })
+    } finally {
+      gate.resolve()
+    }
+  })
+
   it('keeps the saved reading through a resume that restores history, then takes the replayed frame', async () => {
     const { on, tokenUsage, connect } = await session()
     on('turn/started', { turn: { id: 'turn-1' } })
@@ -244,4 +387,92 @@ describe('Codex context usage in the journal', () => {
     resumed.tokenUsage('turn-before-restart', FINAL_RESPONSE)
     expect(await resumed.contextUsage()).toMatchObject({ usedTokens: 17714, windowTokens: 475000 })
   })
+})
+
+it('metadata-barrier-class-confirmation', async () => {
+  for (const type of ['agentMessage', 'reasoning'] as const) {
+    for (const withUsage of [false, true]) {
+      const r = await session()
+      vi.useFakeTimers({ toFake: ['Date', 'performance', 'setTimeout', 'clearTimeout'] })
+      try {
+        vi.setSystemTime(100000)
+        const planInteraction = type === 'agentMessage' && withUsage
+        if (planInteraction) {
+          r.tokenUsage('missing', FIRST_RESPONSE)
+          await r.deferred.drained()
+          expect(r.journal.snapshot().items).toEqual([])
+        }
+        const inputs: JournalRow[] = []
+        r.journal.observeCommits((rows) => inputs.push(...(rows ?? [])))
+        r.on('turn/started', { turn: { id: 'turn' } })
+        r.on('item/started', { turnId: 'turn', item: { type, id: 'text' } })
+        if (planInteraction) {
+          r.on('item/plan/delta', { itemId: 'plan', delta: 'Plan' })
+        }
+        const delta =
+          type === 'agentMessage' ? 'item/agentMessage/delta' : 'item/reasoning/textDelta'
+        const prefix = 'P'.repeat(100),
+          tail = 'T'.repeat(40)
+        r.on(delta, { itemId: 'text', delta: prefix })
+        await vi.advanceTimersByTimeAsync(60)
+        await r.deferred.drained()
+        const first = r.journal.snapshot().items.find((item) => item.body.kind === 'message')!
+        expect(first.body).toMatchObject({ blocks: [{ type: 'text', text: prefix }] })
+        await vi.advanceTimersByTimeAsync(40)
+        r.on(delta, { itemId: 'text', delta: tail })
+        if (planInteraction) {
+          r.on('item/plan/delta', { itemId: 'plan', delta: ' tail' })
+        }
+        await vi.advanceTimersByTimeAsync(10)
+        const before = fullValues.texts.length
+        if (withUsage) {
+          r.tokenUsage('turn', FIRST_RESPONSE)
+        }
+        await r.deferred.drained()
+        const text = inputs.filter(
+          (row): row is JournalItemRow => row.kind === 'item' && row.body.kind === 'message'
+        )
+        expect(fullValues.texts.length - before).toBe(0)
+        expect(text).toHaveLength(1)
+        expect(await r.contextUsage()).toEqual(
+          withUsage
+            ? {
+                usedTokens: 17611,
+                windowTokens: 258400,
+                percentage: 7,
+                estimated: false,
+                categories: []
+              }
+            : null
+        )
+        if (planInteraction) {
+          await vi.advanceTimersByTimeAsync(349)
+          await r.deferred.drained()
+          expect(
+            r.journal.snapshot().items.find((item) => item.body.kind === 'status')?.body
+          ).toMatchObject({ text: 'Plan' })
+          await vi.advanceTimersByTimeAsync(1)
+          await r.deferred.drained()
+          expect(
+            r.journal.snapshot().items.find((item) => item.body.kind === 'status')?.body
+          ).toMatchObject({ text: 'Plan tail' })
+          expect(r.journal.item(first.itemId)?.body).toMatchObject({
+            blocks: [{ type: 'text', text: prefix }]
+          })
+        }
+        r.translator.flush()
+        await r.deferred.drained()
+        expect(
+          r.journal.snapshot().items.find((item) => item.itemId === first.itemId)
+        ).toMatchObject({
+          ...first,
+          revision: first.revision + 1,
+          body: { blocks: [{ type: 'text', text: prefix + tail }] }
+        })
+      } finally {
+        r.translator.dispose()
+        vi.useRealTimers()
+      }
+    }
+  }
 })

@@ -191,3 +191,35 @@ describe('what the assembler holds open is bounded', () => {
     expect(admitted).toBe(MAX_PROVIDER_TIMELINE_OPEN_ENTRIES)
   })
 })
+
+it('a skipped timeline key creates no retry, while a genuinely refused key wakes and lands without more input', async () => {
+  const { vi } = await import('vitest')
+  vi.useFakeTimers({ toFake: ['performance', 'setTimeout', 'clearTimeout'] })
+  const rig = await openProviderTimelineRig()
+  let refuse = false
+  const assembler = rig.assemble({
+    sink: refusingSink(rig.sink, () => refuse),
+    schedule: (run, ms) => {
+      const timer = setTimeout(run, ms)
+      return () => clearTimeout(timer)
+    }
+  })
+  assembler.apply({ type: 'text.delta', item: { id: 'a' }, channel: 'assistant', text: 'P' })
+  vi.advanceTimersByTime(60)
+  await rig.eventSink.written?.()
+  assembler.apply({ type: 'text.delta', item: { id: 'a' }, channel: 'assistant', text: 'T' })
+  assembler.apply({ type: 'text.delta', item: { id: 'b' }, channel: 'reasoning', text: 'B' })
+  refuse = true
+  vi.advanceTimersByTime(60)
+  expect(vi.getTimerCount()).toBe(1)
+  expect(messageText((await rig.row(providerItemId('item', 'a')))?.body)).toBe('P')
+  refuse = false
+  vi.advanceTimersByTime(60)
+  expect(messageText((await rig.row(providerItemId('item', 'b')))?.body)).toBe('B')
+  expect(messageText((await rig.row(providerItemId('item', 'a')))?.body)).toBe('P')
+  expect(vi.getTimerCount()).toBe(0)
+  assembler.apply({ type: 'text.close', item: { id: 'a' } })
+  expect(messageText((await rig.row(providerItemId('item', 'a')))?.body)).toBe('PT')
+  assembler.dispose()
+  vi.useRealTimers()
+})

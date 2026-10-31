@@ -1,6 +1,9 @@
 import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
 import { toolExecutionMetadata } from '../../shared/native-chat/tools/native-chat-tool-identity'
-import type { CodexItemStreamState } from './codex-structured-item-stream-contracts'
+import type {
+  CodexItemStreamState,
+  CodexPendingItemPatch
+} from './codex-structured-item-stream-contracts'
 import type { CodexThreadItem } from './codex-thread-item-identity'
 
 export const MAX_CODEX_ITEM_STREAM_STATES = 256
@@ -51,4 +54,28 @@ export function codexItemStreamState(
     identity,
     ...(startedAt === undefined ? {} : { startedAt })
   }
+}
+
+export function codexOutputGrowthCheckpointDue(
+  checkpointLength: number,
+  textLength: number
+): boolean {
+  const nextLength = Math.max(checkpointLength + 32, Math.ceil(checkpointLength * 1.125))
+  return !(checkpointLength > 0 && textLength < nextLength)
+}
+
+export function trimCodexPendingPatches(patches: Map<string, CodexPendingItemPatch>): number {
+  let releasedBytes = 0
+  while (patches.size > MAX_CODEX_ITEM_STREAM_PENDING_PATCHES) {
+    const oldest = patches.keys().next().value
+    if (typeof oldest !== 'string') {
+      break
+    }
+    const pending = patches.get(oldest)
+    if (pending) {
+      releasedBytes += pendingPatchBytes(pending)
+    }
+    patches.delete(oldest)
+  }
+  return releasedBytes
 }

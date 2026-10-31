@@ -1,6 +1,7 @@
 import {
   providerTimelineSettlementId,
-  type ProviderTimelineContext
+  type ProviderTimelineContext,
+  type ProviderTimelineStream
 } from './provider-timeline-context'
 import type {
   ProviderTimelineDecidedEvent,
@@ -27,7 +28,14 @@ export function planProviderTimelineBarrier(
   const { streams, state } = input
   // Full snapshots supersede deltas for the same row; do not flush stale text.
   const replaced = decision.closes ? streams.get(decision.closes) : undefined
-  streams.planFlush(plan, replaced)
+  const agentId = 'producer' in event ? event.producer?.agentId : undefined
+  const anonymous = (stream: ProviderTimelineStream) =>
+    !stream.named && stream.producer?.agentId === agentId
+  streams.planFlush(
+    plan,
+    replaced,
+    event.type === 'context.usage' || decision.suppressedFrame ? anonymous : undefined
+  )
   if (replaced) {
     streams.planRelease(plan, (stream) => stream === replaced)
   }
@@ -55,8 +63,7 @@ export function planProviderTimelineBarrier(
     return
   }
   if (event.type !== 'input.accepted') {
-    const agentId = 'producer' in event ? event.producer?.agentId : undefined
-    streams.planRelease(plan, (stream) => !stream.named && stream.producer?.agentId === agentId)
+    streams.planRelease(plan, anonymous)
   }
 }
 

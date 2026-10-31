@@ -16,7 +16,7 @@ describe('protected provider streams', () => {
     for (let index = 1; index < 448; index += 1) {
       const key = `command-${index}`
       protectedKeys.add(key)
-      expect(coalescer.append(key, 'before')).toBe(true)
+      expect(coalescer.append(key, 'before').accepted).toBe(true)
     }
     coalescer.append('ordinary-1', 'temporary')
     coalescer.append('ordinary-2', 'latest')
@@ -55,3 +55,56 @@ describe('protected provider streams', () => {
     coalescer.dispose()
   })
 })
+
+it.each(['existing', 'protected', 'room', 'count', 'late-one', 'late-all', 'empty-key'] as const)(
+  'predicts only actual count eviction, preserving UTF8 byte policy: %s',
+  (shape) => {
+    const protectedKeys = new Set<string>()
+    const c = createAgentSessionDeltaCoalescer({
+      maxStreams: 2,
+      maxRetainedBytes: 80,
+      maxTotalRetainedBytes: 120,
+      isProtected: (key) => protectedKeys.has(key),
+      emit: () => true,
+      schedule: () => () => {}
+    })
+    const oldest = shape === 'empty-key' ? '' : 'oldest'
+    try {
+      c.append(oldest, 'é'.repeat(40))
+      if (shape !== 'room') {
+        c.append('other', 'é'.repeat(40))
+      }
+      if (shape === 'late-one' || shape === 'late-all') {
+        protectedKeys.add(oldest)
+      }
+      if (shape === 'late-all') {
+        protectedKeys.add('other')
+      }
+      if (shape === 'protected') {
+        protectedKeys.add('incoming')
+      }
+      const key = shape === 'existing' ? 'other' : 'incoming'
+      const before = c.snapshot(oldest)
+      const predicted = c.evictionFor(key)
+      expect(c.snapshot(oldest)).toEqual(before)
+      expect(predicted).toBe(shape === 'count' ? oldest : undefined)
+      expect(c.append(key, '😀'.repeat(40)).accepted).toBe(true)
+      expect(c.snapshot(oldest) === null).toBe(predicted === oldest)
+      const incoming = c.snapshot(key)!
+      expect(incoming.observedBytes).toBe(shape === 'existing' ? 240 : 160)
+      expect(incoming.truncated).toBe(true)
+      const snapshots = [...new Set([oldest, 'other', key])].flatMap((id) => {
+        const snapshot = c.snapshot(id)
+        return snapshot ? [snapshot] : []
+      })
+      for (const snapshot of snapshots) {
+        expect(snapshot.text).not.toContain('�')
+      }
+      expect(
+        snapshots.reduce((bytes, snapshot) => bytes + Buffer.byteLength(snapshot.text, 'utf8'), 0)
+      ).toBeLessThanOrEqual(120)
+    } finally {
+      c.dispose()
+    }
+  }
+)

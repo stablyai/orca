@@ -1,5 +1,6 @@
 import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { CodexJournalTranslatorDeps } from './codex-structured-journal-contracts'
 import type { CodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 import type { CodexSubagentExecutions } from './codex-subagent-executions'
@@ -17,6 +18,8 @@ export function createCodexSessionJournalTranslator(input: {
   primaryThreadId: () => string | null
   dispatchEchoes: CodexDispatchEchoes
   subagentExecutions: CodexSubagentExecutions
+  isCurrent: NonNullable<CodexJournalTranslatorDeps['isCurrent']>
+  onScheduledFailure: NonNullable<CodexJournalTranslatorDeps['onScheduledFailure']>
   prompts: CodexAcquisitionAttempt['window']['prompts']
 }) {
   const { sink, account, sessionId, acquisitionId, deps, dispatchEchoes, prompts } = input
@@ -26,6 +29,8 @@ export function createCodexSessionJournalTranslator(input: {
         account,
         sessionId,
         acquisitionId,
+        isCurrent: input.isCurrent,
+        onScheduledFailure: input.onScheduledFailure,
         ...(deps.now ? { now: deps.now } : {}),
         primaryThreadId: input.primaryThreadId,
         dispatchRequestOrigin: (clientMessageId) => dispatchEchoes.requestOrigin(clientMessageId),

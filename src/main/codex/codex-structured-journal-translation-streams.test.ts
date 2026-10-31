@@ -732,36 +732,27 @@ describe('notice journal pipeline', () => {
 })
 
 describe('Codex streamed checkpoint admission', () => {
-  it('skips joining a below-threshold prefix and still writes its final text', () => {
+  it('keeps a not-due prefix quiet and writes its complete tail at a barrier', () => {
     const { translator, tap, window } = translatorWith()
     const prefix = 'checkpoint '.repeat(12)
     translator.handle(notification('item/agentMessage/delta', { itemId: 'reply', delta: prefix }))
     window.fire()
     const rows = tap.rows.length
     const publications = tap.publishes()
-    const join = vi.spyOn(Array.prototype, 'join')
-    const prefixJoins = () =>
-      join.mock.contexts.filter(
-        (chunks) =>
-          Array.isArray(chunks) && chunks.length === 2 && chunks[0] === prefix && chunks[1] === 'x'
-      )
     try {
       translator.handle(notification('item/agentMessage/delta', { itemId: 'reply', delta: 'x' }))
       window.fire()
-      expect(prefixJoins()).toHaveLength(0)
       expect(tap.rows).toHaveLength(rows)
       expect(tap.publishes()).toBe(publications)
       expect(window.idle()).toBe(true)
 
       translator.flush()
-      expect(prefixJoins()).toHaveLength(1)
       expect(tap.rows.at(-1)?.body).toMatchObject({
         kind: 'message',
         blocks: [{ type: 'text', text: `${prefix}x` }]
       })
       expect(tap.publishes()).toBe(publications + 1)
     } finally {
-      join.mockRestore()
       translator.dispose()
     }
   })
@@ -781,6 +772,7 @@ describe('Codex streamed checkpoint admission', () => {
     delta('a'.repeat(128))
     window.fire()
     const rows = tap.rows.length
+    const clock = vi.spyOn(performance, 'now').mockReturnValue(performance.now() + 400)
     reject = true
     delta('b'.repeat(32))
     window.fire()
@@ -801,6 +793,47 @@ describe('Codex streamed checkpoint admission', () => {
     expect(tap.rows.at(-1)?.body).toMatchObject({
       blocks: [{ type: 'text', text: `${'a'.repeat(128)}${'b'.repeat(32)}x` }]
     })
+    clock.mockRestore()
     translator.dispose()
   })
 })
+
+it.each([false, true])(
+  'keeps an unpublished other-thread first row before a tool; missing start=%s',
+  (missingStart) => {
+    const { translator, tap } = translatorWith()
+    const child = (method: string, params: unknown) =>
+      translator.handle({
+        type: 'notification',
+        sessionId: SESSION_ID,
+        threadId: 'child',
+        method,
+        params
+      })
+    if (!missingStart) {
+      child('item/started', { item: { type: 'agentMessage', id: 'child-reply', text: '' } })
+    }
+    child('item/agentMessage/delta', { itemId: 'child-reply', delta: 'B' })
+    translator.handle(
+      notification('item/started', {
+        item: { type: 'commandExecution', id: 'tool', command: 'pwd', status: 'inProgress' }
+      })
+    )
+    const relevant = () =>
+      tap.rows.filter(
+        (row) =>
+          (row.body.kind === 'message' && row.body.role === 'assistant') ||
+          row.body.kind === 'tool-call'
+      )
+    expect(relevant().map((row) => row.body.kind)).toEqual(['message', 'tool-call'])
+    for (let i = 0; i < 10; i++) {
+      translator.handle(
+        notification('item/started', {
+          item: { type: 'commandExecution', id: `tool-${i}`, command: 'pwd', status: 'inProgress' }
+        })
+      )
+    }
+    expect(relevant().filter((row) => row.body.kind === 'message')).toHaveLength(1)
+    translator.dispose()
+  }
+)

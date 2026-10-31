@@ -135,7 +135,7 @@ describe('persistent command retention', () => {
         delta: 'AFTER\n'
       })
     }
-    expect(items.streams.flush()).toBe(true)
+    expect(items.streams.flush().accepted).toBe(true)
     for (const event of events) {
       const key = agentJournalItemKey({
         provider: 'orca',

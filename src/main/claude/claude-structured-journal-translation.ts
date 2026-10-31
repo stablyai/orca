@@ -6,7 +6,6 @@ import {
   claudeStreamingMessageBody,
   type ClaudeToolUse
 } from './claude-structured-item-translation'
-import { claudeProviderFrameActivity } from '../native-chat/agent-session-wire/provider-frame-activity'
 import {
   claudeProviderFrameKind,
   createClaudeProviderFrameFallback,
@@ -108,12 +107,18 @@ export function createClaudeJournalTranslator(
     producer: subagents.linkage,
     persist: (identity, text, options, ended) => {
       const body = claudeStreamingMessageBody(text)
-      deps.sink.appendItem(identity, body, {
+      const appendOptions = {
         ...options,
         turnScope: turnScope(),
         ...(ended ? { lifecycle: true } : {})
-      })
-      deps.sink.publish()
+      }
+      const append = deps.sink.tryAppendItem
+        ? deps.sink.tryAppendItem(identity, body, appendOptions).accepted
+        : (deps.sink.appendItem(identity, body, appendOptions), true)
+      const publish = deps.sink.tryPublish
+        ? deps.sink.tryPublish().accepted
+        : (deps.sink.publish(), true)
+      return append && publish
     }
   })
   const streamedThinking = createClaudeStreamedThinking({
@@ -124,17 +129,6 @@ export function createClaudeJournalTranslator(
   const flush = (): void => {
     streamedText.flush()
     streamedThinking.flush()
-  }
-
-  const publishActivity = (kind: string, payload: unknown): void => {
-    const turnId = turn.id
-    if (turnId === null) {
-      return
-    }
-    const text = claudeProviderFrameActivity(kind, payload)
-    if (text !== undefined) {
-      deps.sink.setActivity?.(text ? { turnId, text } : null)
-    }
   }
 
   const handleStream = (message: Record<string, unknown>, observedAt: number): boolean => {
@@ -254,7 +248,7 @@ export function createClaudeJournalTranslator(
           )
         }
         context.observeResponse(event.message, event.observedAt ?? Date.now())
-        publishActivity(kind, event.message)
+        context.publishActivity(kind, event.message)
         // Idle also closes faults without a result; the live cause decides failed reopening.
         if (claudeSessionStateEndsTurn(event.message)) {
           corrections.abandon()
@@ -263,7 +257,7 @@ export function createClaudeJournalTranslator(
         }
       } else if (event.type === 'provider-frame') {
         providerFallback.append(event.kind, event.payload)
-        publishActivity(event.kind, event.payload)
+        context.publishActivity(event.kind, event.payload)
       }
     },
     journalPrompts: prompts,

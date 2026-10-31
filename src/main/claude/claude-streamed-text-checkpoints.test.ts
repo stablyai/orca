@@ -1,208 +1,210 @@
-import { describe, expect, it } from 'vitest'
-import type {
-  AgentJournalItemIdentity,
-  AgentJournalProducerLinkage
-} from '../../shared/agent-session-journal-types'
-import type { StructuredAgentSessionAppendOptions } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { createClaudeStreamedTextCheckpoints } from './claude-streamed-text-checkpoints'
-import type {
-  ClaudeSubagentLinkageSource,
-  ClaudeSubagentLinkageVerdict
-} from './claude-subagent-linkage'
+import { afterEach, expect, it, vi } from 'vitest'
+import { checkpointJournalRig, closeCheckpointTestJournals } from './claude-checkpoint-test-support'
+afterEach(closeCheckpointTestJournals)
 
-function identityOf(uuid: string): AgentJournalItemIdentity {
-  return { provider: 'claude', sessionId: 'claude-session', uuid }
-}
-
-/** Scopeless blocks are root-owned and must never consult the child resolver. */
-const unconsultedProducer: ClaudeSubagentLinkageSource = {
-  linkageFor: () => {
-    throw new Error('resolver consulted for a block with no scope')
-  },
-  settledLinkageFor: () => {
-    throw new Error('resolver consulted for a block with no scope')
-  }
-}
-
-const CHILD_LINKAGE: AgentJournalProducerLinkage = {
-  agentId: 'task-1',
-  providerParentRef: 'toolu_1',
-  producerKind: 'agent'
-}
-
-/** Resolve announcements mid-stream; use the raw reference if no announcement arrives. */
-function scriptedProducer() {
-  let verdict: ClaudeSubagentLinkageVerdict = { kind: 'pending' }
-  const settledFallback: Extract<ClaudeSubagentLinkageVerdict, { kind: 'linked' }> = {
-    kind: 'linked',
-    linkage: { agentId: 'toolu_1', providerParentRef: 'toolu_1', producerKind: 'agent' }
-  }
-  return {
-    source: {
-      linkageFor: () => verdict,
-      settledLinkageFor: () => (verdict.kind === 'pending' ? settledFallback : verdict)
-    } satisfies ClaudeSubagentLinkageSource,
-    resolve: (linkage: AgentJournalProducerLinkage) => {
-      verdict = { kind: 'linked', linkage }
-    }
-  }
-}
-
-function checkpoints(producer: ClaudeSubagentLinkageSource = unconsultedProducer) {
-  const rows: { uuid: string; text: string }[] = []
-  const stamps: StructuredAgentSessionAppendOptions[] = []
-  let scheduled: (() => void) | null = null
-  const store = createClaudeStreamedTextCheckpoints({
-    producer,
-    persist: (identity, text, options) => {
-      rows.push({ uuid: 'uuid' in identity ? identity.uuid : '', text })
-      stamps.push(options)
-    },
-    schedule: (run) => {
-      scheduled = run
-      return () => {
-        scheduled = null
+it.each([
+  { count: 257, textless: false },
+  { count: 257, textless: true },
+  { count: 629, textless: false }
+])(
+  'completes $count published reasoning blocks, textless final=$textless, through idle and reopen',
+  async ({ count, textless }) => {
+    const r = await checkpointJournalRig()
+    vi.useFakeTimers()
+    r.stream({ type: 'message_start', message: { id: 'many', role: 'assistant', content: [] } })
+    for (let index = 0; index < count; index++) {
+      if (index % 2) {
+        r.stream({
+          type: 'content_block_start',
+          index,
+          content_block: { type: 'thinking', thinking: '' }
+        })
       }
+      r.stream({
+        type: 'content_block_delta',
+        index,
+        delta: { type: 'thinking_delta', thinking: `thought-${index}` }
+      })
     }
-  })
-  return {
-    store,
-    rows,
-    stamps,
-    runWindow: () => {
-      const run = scheduled as (() => void) | null
-      run?.()
+    vi.advanceTimersByTime(60)
+    await r.deferred.drained()
+    if (textless) {
+      r.message({
+        type: 'assistant',
+        message: { id: 'many', role: 'assistant', content: [{ type: 'thinking', thinking: '' }] }
+      })
     }
+    r.message({ type: 'system', subtype: 'session_state_changed', state: 'idle' })
+    await r.deferred.drained()
+    const rows = r.journal
+      .snapshot()
+      .items.filter((item) => item.body.kind === 'message' && item.body.role === 'reasoning')
+    expect(rows).toHaveLength(count)
+    for (const [index, row] of rows.entries()) {
+      expect(row.body).toMatchObject({
+        state: 'completed',
+        blocks: [{ type: 'text', text: `thought-${index}` }]
+      })
+    }
+    expect(r.translator.pendingStreamedBlocks).toBe(0)
+    r.translator.dispose()
+    await r.journal.close()
+    const reopened = await r.reopen()
+    expect(
+      reopened
+        .snapshot()
+        .items.filter((item) => item.body.kind === 'message' && item.body.role === 'reasoning')
+    ).toEqual(rows)
   }
-}
+)
 
-describe('claude streamed text checkpoints', () => {
-  it('rewrites a block row with the full text accumulated so far', () => {
-    const { store, rows, runWindow } = checkpoints()
-
-    store.append(identityOf('block-1'), 'hel')
-    store.append(identityOf('block-1'), 'lo')
-    runWindow()
-
-    expect(rows).toEqual([{ uuid: 'block-1', text: 'hello' }])
-    expect(store.pending).toBe(1)
+it('keeps an assistant full snapshot through idle, a later delta, barrier and reopen', async () => {
+  const r = await checkpointJournalRig()
+  vi.useFakeTimers()
+  vi.setSystemTime(1000)
+  r.message({ type: 'user', uuid: 'u', message: { role: 'user', content: 'question' } })
+  r.stream({ type: 'message_start', message: { id: 'reply' } })
+  const delta = (text: string) =>
+    r.stream({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text } })
+  delta('P')
+  vi.advanceTimersByTime(60)
+  await r.deferred.drained()
+  const key = 'claude:claude-session:block%3Areply%3A0'
+  const before = r.journal.item(key)
+  expect(before).not.toBeNull()
+  r.message({ type: 'system', subtype: 'session_state_changed', state: 'idle' })
+  delta('T')
+  vi.advanceTimersByTime(60)
+  await r.deferred.drained()
+  expect(r.journal.itemBody(key)).toMatchObject({ blocks: [{ type: 'text', text: 'P' }] })
+  r.translator.flush()
+  await r.deferred.drained()
+  expect(r.journal.item(key)).toMatchObject({
+    sequence: before?.sequence,
+    observedAt: before?.observedAt,
+    turnScope: before?.turnScope,
+    body: { blocks: [{ type: 'text', text: 'PT' }] }
   })
+  r.translator.dispose()
+  const saved = r.journal.snapshot().items
+  await r.journal.close()
+  expect((await r.reopen()).snapshot().items).toEqual(saved)
+})
 
-  it('drops every block still awaiting its final frame at settlement', () => {
-    const { store, rows, runWindow } = checkpoints()
-
-    store.append(identityOf('block-1'), 'partial answer')
-    runWindow()
-    store.settle()
-
-    expect(store.pending).toBe(0)
-    store.flush()
-    expect(rows).toEqual([{ uuid: 'block-1', text: 'partial answer' }])
+it('does not autonomously retry a refused Claude snapshot across idle and next-send dispatch settlement', async () => {
+  const r = await checkpointJournalRig({
+    watermarks: {
+      maxQueuedOperations: 1,
+      maxLifecycleQueuedOperations: 1,
+      lowQueuedOperations: 0,
+      lowQueuedBytes: 0
+    }
   })
-
-  it('keeps a block whose final frame arrived out of the settlement sweep', () => {
-    const { store } = checkpoints()
-
-    store.append(identityOf('block-1'), 'one')
-    store.append(identityOf('block-2'), 'two')
-    store.forget('claude:claude-session:block-1')
-
-    expect(store.pending).toBe(1)
-    store.settle()
-    expect(store.pending).toBe(0)
+  const { sessionFor, userMessage } = await import('./claude-structured-dispatch-test-support')
+  const { dispatchClaudeTurn } = await import('./claude-structured-dispatch')
+  const { resolveClaudeReplayTurn } = await import('./claude-replay-turn-resolution')
+  const { bindClaudeJournalReadingControl } =
+    await import('./claude-structured-session-journal-control')
+  vi.useFakeTimers()
+  vi.setSystemTime(0)
+  r.stream({ type: 'message_start', message: { id: 'reply', role: 'assistant', content: [] } })
+  await r.deferred.drained()
+  const gate = Promise.withResolvers<void>()
+  await r.journal.readInOrder(() => {
+    void r.journal.readInOrder(() => gate.promise)
   })
-
-  it('flushes text the widening checkpoint interval has not written yet', () => {
-    const { store, rows } = checkpoints()
-
-    store.append(identityOf('block-1'), 'x')
-    store.flush()
-
-    expect(rows).toEqual([{ uuid: 'block-1', text: 'x' }])
-    store.flush()
-    expect(rows).toHaveLength(1)
+  const id = (uuid: string) => ({ provider: 'claude' as const, sessionId: 'claude-session', uuid })
+  r.deferred.sink.tryAppendItem?.(
+    id('block-ordinary'),
+    { kind: 'status', tone: 'info', text: 'ordinary' },
+    { turnScope: { kind: 'thread' } }
+  )
+  r.deferred.sink.tryAppendItem?.(
+    id('block-lifecycle'),
+    { kind: 'status', tone: 'info', text: 'lifecycle' },
+    { turnScope: { kind: 'thread' }, lifecycle: true }
+  )
+  const resume = vi.fn()
+  const unbind = bindClaudeJournalReadingControl(
+    r.deferred.sink,
+    { pauseReading: vi.fn(), resumeReading: resume },
+    r.translator
+  )
+  for (const [index, type, field] of [
+    [0, 'text_delta', 'text'],
+    [1, 'thinking_delta', 'thinking']
+  ] as const) {
+    r.stream({ type: 'content_block_delta', index, delta: { type, [field]: 'original answer' } })
+  }
+  vi.advanceTimersByTime(60)
+  r.message({ type: 'system', subtype: 'session_state_changed', state: 'idle' })
+  expect(r.translator.pendingStreamedBlocks).toBe(1)
+  const session = sessionFor()
+  session.translator = r.translator
+  session.events = r.deferred.sink
+  session.providerSessionId = 'claude-session'
+  const next = dispatchClaudeTurn(session, {
+    clientMessageId: 'send-2',
+    body: userMessage([{ type: 'text', text: 'next question' }])
   })
+  await vi.advanceTimersByTimeAsync(0)
+  await expect(next).resolves.toEqual({ state: 'admitted' })
+  const uuid = session.dispatchWaiters[0]?.sentUuid
+  expect(uuid).toBeTruthy()
+  const echo = {
+    type: 'user',
+    uuid,
+    session_id: 'claude-session',
+    parent_tool_use_id: null,
+    message: { role: 'user', content: [{ type: 'text', text: 'next question' }] }
+  }
+  expect(resolveClaudeReplayTurn(session, echo)).not.toBeNull()
+  expect(session.dispatchWaiters).toHaveLength(0)
+  r.translator.handle({ type: 'message', sessionId: 'recovery', startsTurn: true, message: echo })
+  gate.resolve()
+  await r.deferred.drained()
+  await Promise.resolve()
+  await r.deferred.drained()
+  const answers = r.journal
+    .snapshot()
+    .items.filter((item) => item.body.kind === 'message' && item.body.role !== 'user')
+  // Main consumes attempted checkpoints; admission observation adds no new retry owner.
+  expect(answers).toHaveLength(0)
+  expect(r.translator.finalOutputAdmitted).toBe(false)
+  await vi.advanceTimersByTimeAsync(1000)
+  await r.deferred.drained()
+  expect(
+    r.journal
+      .snapshot()
+      .items.filter((item) => item.body.kind === 'message' && item.body.role !== 'user')
+  ).toHaveLength(0)
+  expect(resume).toHaveBeenCalled()
+  expect(vi.getTimerCount()).toBe(0)
+  unbind?.()
+  r.translator.dispose()
+})
 
-  it("stamps a block streamed inside a child with that child's linkage", () => {
-    const producer = scriptedProducer()
-    producer.resolve(CHILD_LINKAGE)
-    const { store, rows, stamps, runWindow } = checkpoints(producer.source)
-
-    store.append(identityOf('block-1'), 'hello', 'toolu_1')
-    runWindow()
-
-    expect(rows).toEqual([{ uuid: 'block-1', text: 'hello' }])
-    expect(stamps).toEqual([CHILD_LINKAGE])
-  })
-
-  it("writes no linkage keys for a block the session's own agent streamed", () => {
-    const { store, stamps, runWindow } = checkpoints()
-
-    store.append(identityOf('block-1'), 'hello')
-    runWindow()
-
-    expect(stamps).toEqual([{}])
-  })
-
-  it('writes a checkpoint at once while the producing agent is provisional', () => {
-    const producer = scriptedProducer()
-    const { store, rows, stamps, runWindow } = checkpoints(producer.source)
-
-    store.append(identityOf('block-1'), 'partial', 'toolu_1')
-    runWindow()
-    expect(rows).toEqual([{ uuid: 'block-1', text: 'partial' }])
-    expect(stamps.at(-1)).toMatchObject({ agentId: 'toolu_1' })
-
-    // Flush advances text; reattribute corrects linkage even when text is unchanged.
-    producer.resolve(CHILD_LINKAGE)
-    store.flush()
-    expect(stamps.at(-1)).toMatchObject({ agentId: 'toolu_1' })
-
-    store.reattribute()
-
-    expect(rows.at(-1)).toEqual({ uuid: 'block-1', text: 'partial' })
-    expect(stamps.at(-1)).toEqual(CHILD_LINKAGE)
-  })
-
-  it('writes a held block under the raw reference when no announcement comes', () => {
-    const producer = scriptedProducer()
-    const { store, rows, stamps, runWindow } = checkpoints(producer.source)
-
-    store.append(identityOf('block-1'), 'never announced', 'toolu_1')
-    runWindow()
-
-    expect(rows).toEqual([{ uuid: 'block-1', text: 'never announced' }])
-    expect(stamps).toEqual([
-      { agentId: 'toolu_1', providerParentRef: 'toolu_1', producerKind: 'agent' }
-    ])
-
-    store.reattribute()
-    expect(rows).toHaveLength(1)
-  })
-
-  it('re-resolves a block’s producer on every checkpoint', () => {
-    const producer = scriptedProducer()
-    producer.resolve(CHILD_LINKAGE)
-    const { store, stamps, runWindow } = checkpoints(producer.source)
-
-    store.append(identityOf('block-1'), 'first', 'toolu_1')
-    runWindow()
-    producer.resolve({ ...CHILD_LINKAGE, agentId: 'task-2' })
-    store.append(identityOf('block-1'), 'first and more', 'toolu_1')
-    store.flush()
-
-    expect(stamps).toEqual([CHILD_LINKAGE, { ...CHILD_LINKAGE, agentId: 'task-2' }])
-  })
-
-  it('stops persisting once disposed', () => {
-    const { store, rows, runWindow } = checkpoints()
-
-    store.append(identityOf('block-1'), 'text')
-    store.dispose()
-    runWindow()
-    store.flush()
-
-    expect(rows).toEqual([])
-    expect(store.pending).toBe(0)
-  })
+it('counts admitted unbound content for cadence without calling it written', async () => {
+  const r = await checkpointJournalRig({ unbound: true })
+  vi.useFakeTimers({ toFake: ['Date', 'performance', 'setTimeout', 'clearTimeout'] })
+  r.stream({ type: 'message_start', message: { id: 'unbound' } })
+  const delta = (text: string) =>
+    r.stream({
+      type: 'content_block_delta',
+      index: 0,
+      delta: { type: 'thinking_delta', thinking: text }
+    })
+  delta('P')
+  vi.advanceTimersByTime(60)
+  delta('T')
+  vi.advanceTimersByTime(60)
+  expect(r.journal.snapshot().items).toEqual([])
+  r.bind()
+  await r.deferred.drained()
+  const key = 'claude:claude-session:block%3Aunbound%3A0'
+  expect(r.journal.itemBody(key)).toMatchObject({ blocks: [{ type: 'text', text: 'P' }] })
+  r.translator.flush()
+  await expect(r.deferred.sink.written?.()).resolves.toEqual({ ok: true })
+  expect(r.journal.itemBody(key)).toMatchObject({ blocks: [{ type: 'text', text: 'PT' }] })
+  r.translator.dispose()
 })

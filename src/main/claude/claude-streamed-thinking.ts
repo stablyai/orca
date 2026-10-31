@@ -62,16 +62,23 @@ export function createClaudeStreamedThinking(deps: {
       )
       if (body) {
         const startedAt = open.get(agentJournalItemKey(identity))?.startedAt
-        deps.sink.appendItem(identity, body, {
+        const appendOptions = {
           ...options,
           turnScope: deps.turnScope(),
           // Preserve block start time despite delayed text or writes.
           ...(startedAt === undefined ? {} : { observedAt: startedAt }),
           // Preserve terminal writes under pressure so reasoning cannot remain open.
           ...(ended ? { lifecycle: true } : {})
-        })
-        deps.sink.publish()
+        }
+        const append = deps.sink.tryAppendItem
+          ? deps.sink.tryAppendItem(identity, body, appendOptions).accepted
+          : (deps.sink.appendItem(identity, body, appendOptions), true)
+        const publish = deps.sink.tryPublish
+          ? deps.sink.tryPublish().accepted
+          : (deps.sink.publish(), true)
+        return append && publish
       }
+      return false
     }
   })
   const finish = (ended: ClaudeStreamedBlockEnd, scope?: string): void => {

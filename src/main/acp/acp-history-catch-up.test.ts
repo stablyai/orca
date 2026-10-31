@@ -277,15 +277,35 @@ describe('ACP history catch-up', () => {
       answerReplay('native answer', 'native-answer'),
       userReplay('outside'),
       answerReplay('outside answer'),
+      replayUpdate('usage_update', { used: 5, size: 1000 }),
       userReplay('outside-thought'),
-      reasoning
+      reasoning,
+      replayUpdate('agent_thought_chunk', {
+        content: { type: 'text', text: 'anonymous reasoning' }
+      })
     ])
     const rows = await rig.rows()
     expect(rows.slice(0, native.length)).toEqual(native)
     expect(userTexts(rows)).toEqual(['repeat', 'repeat', 'repeat'])
     expect(
       rows.filter((row) => row.body.kind === 'message' && row.body.role === 'reasoning')
-    ).toHaveLength(1)
+    ).toHaveLength(2)
+    expect(
+      rows.flatMap((row) => {
+        if (row.body.kind === 'message' && row.body.role !== 'user') {
+          const body = row.body
+          return body.blocks.flatMap((block) =>
+            block.type === 'text' ? [[body.role, block.text]] : []
+          )
+        }
+        return []
+      })
+    ).toEqual([
+      ['assistant', 'native answer'],
+      ['assistant', 'outside answer'],
+      ['reasoning', 'outside reasoning'],
+      ['reasoning', 'anonymous reasoning']
+    ])
     expect(dividers(rows)).toHaveLength(0)
     expect(
       rows.filter(
@@ -320,6 +340,9 @@ describe('ACP history catch-up', () => {
       answerReplay('other answer', 'other-answer')
     ])
     expect(await rig.rows()).toEqual(beforeConflict)
+    const reopened = await rig.reopenJournal()
+    expect(reopened.snapshot().items).toEqual(beforeConflict)
+    expect(reopened.publicRead().snapshot.items).toEqual(beforeConflict)
   })
 
   it('uses Grok handover proof without claiming a never-handed-over queued send', async () => {

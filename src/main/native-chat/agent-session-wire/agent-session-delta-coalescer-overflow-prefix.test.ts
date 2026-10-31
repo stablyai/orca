@@ -37,7 +37,7 @@ describe('streamed output overflow prefix', () => {
       observedBytes: 257 * delta.length,
       truncated: true
     })
-    expect(instance.flushAll()).toBe(true)
+    expect(instance.flushAll().accepted).toBe(true)
     expect(emitted).toEqual([text])
     instance.dispose()
   })

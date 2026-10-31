@@ -53,7 +53,14 @@ export class CodexJournalItems {
   constructor(
     private readonly deps: Pick<
       CodexJournalTranslatorDeps,
-      'sink' | 'coalesceMs' | 'maxRetainedBytes' | 'schedule' | 'now' | 'historyImport'
+      | 'sink'
+      | 'coalesceMs'
+      | 'maxRetainedBytes'
+      | 'schedule'
+      | 'now'
+      | 'historyImport'
+      | 'isCurrent'
+      | 'onScheduledFailure'
     > & { attributionFor: CodexRowAttribution },
     private readonly activeTurn: (threadId: string) => string | null,
     private readonly suppress: (threadId: string, turnId: string) => void,
@@ -64,6 +71,8 @@ export class CodexJournalItems {
       coalesceMs: deps.coalesceMs,
       maxRetainedBytes: deps.maxRetainedBytes,
       schedule: deps.schedule,
+      isCurrent: deps.isCurrent,
+      onScheduledFailure: deps.onScheduledFailure,
       turnIdFor: (threadId, params) => readCodexTurnId(params) ?? this.activeTurn(threadId),
       identityFor: (threadId, turnId, item) => this.identityFor(threadId, turnId, item),
       attributionFor: deps.attributionFor
