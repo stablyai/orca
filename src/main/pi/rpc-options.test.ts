@@ -175,3 +175,49 @@ describe('Pi RPC session options', () => {
     ).toEqual(['off', 'minimal', 'low', 'medium', 'high', 'xhigh'])
   })
 })
+
+describe('Pi launch intent adoption', () => {
+  it('keeps the selector the opening dispatch compares against, and reports what Pi runs', () => {
+    const proof: PiRpcOptionProof = { current: new Map(), writes: new Map() }
+    const observed = new PiRpcOptionObservations(proof, () => true)
+    // Pi matches `--model` by pattern, so a bare selector can start a canonical model.
+    observed.adoptLaunchIntent({ model: 'sonnet', effort: 'low' })
+    observed.seed({
+      model: { provider: 'anthropic', id: 'claude-sonnet-4-5' },
+      thinkingLevel: 'low'
+    })
+    // Unchanged, so the opening submission (which carries `sonnet`) sends no set_model; that call
+    // would reject the bare selector and lose the prompt.
+    expect(Object.fromEntries(proof.current)).toEqual({ model: 'sonnet', effort: 'low' })
+    expect(observed.read().current).toMatchObject({
+      model: 'anthropic/claude-sonnet-4-5',
+      effort: 'low'
+    })
+  })
+
+  it('adopts nothing when the chat saved no model or effort', () => {
+    const proof: PiRpcOptionProof = { current: new Map(), writes: new Map() }
+    const observed = new PiRpcOptionObservations(proof, () => true)
+    observed.adoptLaunchIntent(undefined)
+    observed.seed({ model: { provider: 'openai-codex', id: 'gpt-5.5' } })
+    expect(proof.current.size).toBe(0)
+  })
+
+  it('keeps a picker write after the launch, and reports it as current', async () => {
+    const proof: PiRpcOptionProof = { current: new Map(), writes: new Map() }
+    const observed = new PiRpcOptionObservations(proof, () => true)
+    observed.adoptLaunchIntent({ model: 'openai-codex/gpt-5.5' })
+    observed.seed({ model: { provider: 'openai-codex', id: 'gpt-5.5' } })
+    await applyPiRpcSessionOption(
+      requester({ set_model: {} }),
+      new Map(),
+      'model',
+      'anthropic/claude-sonnet-4-5',
+      {},
+      proof
+    )
+    observed.seed({ model: { provider: 'anthropic', id: 'claude-sonnet-4-5' } })
+    expect(proof.current.get('model')).toBe('anthropic/claude-sonnet-4-5')
+    expect(observed.read().current.model).toBe('anthropic/claude-sonnet-4-5')
+  })
+})
