@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
 import { OrcaRuntimeService } from './orca-runtime'
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
 
@@ -25,25 +26,44 @@ const C = '\x1b]133;C\x07'
 const D0 = '\x1b]133;D;0\x07'
 const IDLE_PROMPT = `${A}$ ${B}ls\r\n${C}file\r\n${D0}${A}$ ${B}`
 
-type PaneSetup = { output?: string; launchAgent?: 'claude'; foregroundAgent?: 'claude' }
+type PaneSetup = {
+  output?: string
+  launchAgent?: 'claude'
+  foregroundAgent?: 'claude'
+  /** The host's shell-foreground proof; null omits the capability. */
+  shellForeground?: boolean | 'hang' | null
+  hookRows?: AgentStatusIpcPayload[]
+  sends?: number
+}
 
-/** Milliseconds from send to the Enter write, after the pane painted `output`. */
-async function enterDelayAfter({ output, launchAgent, foregroundAgent }: PaneSetup) {
+/** Milliseconds from each send to its Enter write, after the pane painted `output`. */
+async function enterDelays(setup: PaneSetup): Promise<number[]> {
+  const { output, launchAgent, foregroundAgent, shellForeground = true, hookRows = [] } = setup
   vi.useFakeTimers()
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime reads only the repo/worktree members this fixture provides.
-  const runtime = new OrcaRuntimeService(makeStore() as never)
+  const runtime = new OrcaRuntimeService(makeStore() as never, undefined, {
+    getAgentStatusSnapshotForPane: () => hookRows
+  })
   let sentAt = 0
-  let enterAt: number | null = null
+  const delays: number[] = []
   runtime.setPtyController({
     spawn: vi.fn().mockResolvedValue({ id: PTY_ID }),
     write: (_ptyId, data) => {
       if (data === '\r') {
-        enterAt = Date.now() - sentAt
+        delays.push(Date.now() - sentAt)
       }
       return true
     },
     kill: () => true,
-    getForegroundProcess: async () => null
+    getForegroundProcess: async () => null,
+    ...(shellForeground === null
+      ? {}
+      : {
+          confirmShellForeground: () =>
+            shellForeground === 'hang'
+              ? new Promise<boolean>(() => {})
+              : Promise.resolve(shellForeground)
+        })
   })
   const { handle } = await runtime.createTerminal('path:/tmp/worktree-a')
   if (output !== undefined) {
@@ -57,18 +77,26 @@ async function enterDelayAfter({ output, launchAgent, foregroundAgent }: PaneSet
     ...(launchAgent ? { launchAgent } : {}),
     ...(foregroundAgent ? { foregroundAgent } : {})
   })
-  sentAt = Date.now()
-  const sent = runtime.sendTerminal(handle, { text: 'ls', enter: true }, { inputKind: 'driving' })
-  await vi.advanceTimersByTimeAsync(5000)
-  await sent
-  return enterAt
+  for (let send = 0; send < (setup.sends ?? 1); send += 1) {
+    sentAt = Date.now()
+    const sent = runtime.sendTerminal(
+      handle,
+      { text: 'claude', enter: true },
+      { inputKind: 'driving' }
+    )
+    await vi.advanceTimersByTimeAsync(5000)
+    await sent
+  }
+  return delays
 }
+
+const settled = (delays: number[]): boolean => delays.every((delay) => delay >= 500)
 
 describe('terminal.send Enter settle on a plain shell', () => {
   afterEach(() => vi.useRealTimers())
 
-  it('submits at once when the shell is idle at its prompt', async () => {
-    expect(await enterDelayAfter({ output: IDLE_PROMPT })).toBe(0)
+  it('submits at once when markers and the host both show an idle shell', async () => {
+    expect(await enterDelays({ output: IDLE_PROMPT })).toEqual([0])
   })
 
   it.each<[string, PaneSetup]>([
@@ -76,8 +104,27 @@ describe('terminal.send Enter settle on a plain shell', () => {
     ['an agent was launched in the pane', { output: IDLE_PROMPT, launchAgent: 'claude' }],
     ['an agent holds the foreground', { output: IDLE_PROMPT, foregroundAgent: 'claude' }],
     ['the shell has no integration', { output: 'user@host:~$ ' }],
-    ['nothing has been painted yet', {}]
+    ['nothing has been painted yet', {}],
+    // Markers can be forged by any program; the execution host's foreground proof decides.
+    [
+      'the host says the shell is not in the foreground',
+      { output: IDLE_PROMPT, shellForeground: false }
+    ],
+    ['the host cannot prove the foreground', { output: IDLE_PROMPT, shellForeground: null }],
+    ['the host proof hangs', { output: IDLE_PROMPT, shellForeground: 'hang' }],
+    [
+      'the agent-status store has a row for the pane',
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the settle check reads only the row count.
+      { output: IDLE_PROMPT, hookRows: [{ paneKey: 'tab-1:leaf-1' } as AgentStatusIpcPayload] }
+    ]
   ])('keeps the settle when %s', async (_name, setup) => {
-    expect(await enterDelayAfter(setup)).toBeGreaterThanOrEqual(500)
+    expect(settled(await enterDelays(setup))).toBe(true)
+  })
+
+  // Review case 4: the first Enter starts a program, so the next send must not reuse that prompt.
+  it('settles a back-to-back send that follows a fast submit', async () => {
+    const [first, second] = await enterDelays({ output: IDLE_PROMPT, sends: 2 })
+    expect(first).toBe(0)
+    expect(second).toBeGreaterThanOrEqual(500)
   })
 })

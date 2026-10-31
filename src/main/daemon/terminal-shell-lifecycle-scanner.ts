@@ -2,6 +2,7 @@ import { buildProcessBoundaryGround } from '../../shared/terminal-mode-reset-pro
 import { closesAppOsc133Zone } from '../../shared/terminal-osc133-command-finished'
 import type { TerminalOwner } from '../../shared/terminal-owner'
 import { TerminalArmedInputModes } from './terminal-armed-input-modes'
+import { TerminalShellPromptPhase } from './terminal-shell-prompt-phase'
 
 // Retain split DECSET/OSC payloads across PTY or SSH chunks without unbounded memory.
 const SCAN_TAIL_LIMIT = 4096
@@ -46,9 +47,7 @@ export class TerminalShellLifecycleScanner {
   private altActive = false
   private commandEnteredAlternateScreen = false
   private adjacentMarkers = ''
-  // A running app may paint its own A (#10923); only an A outside a shell command is a prompt.
-  private shellCommandOpen = false
-  private promptShown = false
+  private readonly promptPhase = new TerminalShellPromptPhase()
   private readonly inputModes = new TerminalArmedInputModes()
 
   get owner(): TerminalOwner | undefined {
@@ -63,9 +62,14 @@ export class TerminalShellLifecycleScanner {
     return this.altActive
   }
 
-  /** The shell drew a prompt (OSC 133 A) after its last command ended, and nothing started since. */
+  /** Markers suggest an idle shell prompt; a hint only, since any program can print them. */
   get isIdleAtPrompt(): boolean {
-    return this.promptShown && !this.altActive
+    return this.promptPhase.atPrompt && !this.altActive
+  }
+
+  /** Input was just submitted: no prompt is idle until the next clean cycle. */
+  forgetIdlePrompt(): void {
+    this.promptPhase.reset()
   }
 
   trySetOwner(generation: number): boolean {
@@ -87,7 +91,7 @@ export class TerminalShellLifecycleScanner {
   seedOwner(owner: TerminalOwner | undefined, opts: { alternateScreen?: boolean } = {}): void {
     this.generationState += 1
     this.ownerState = owner
-    this.promptShown = false
+    this.promptPhase.reset()
     if (opts.alternateScreen !== undefined) {
       // Restored bytes bypass scan(), so seed alternate-screen state to retain death detection.
       this.altActive = opts.alternateScreen
@@ -120,16 +124,15 @@ export class TerminalShellLifecycleScanner {
       if (match[0] === '\x1bc') {
         this.revoke()
         this.inputModes.reset()
-        this.promptShown = false
+        this.promptPhase.reset()
         this.altActive = false
         this.commandEnteredAlternateScreen = false
         continue
       }
       if (oscPayload !== undefined) {
         const marker = oscPayload[0]
+        this.promptPhase.observe(oscPayload, markersBefore)
         if (marker === 'C') {
-          this.shellCommandOpen = true
-          this.promptShown = false
           this.revoke()
           this.inputModes.markCommandStart()
           this.commandEnteredAlternateScreen = false
@@ -137,15 +140,12 @@ export class TerminalShellLifecycleScanner {
         }
         if (marker === 'A') {
           this.inputModes.markPrompt()
-          this.promptShown = !this.shellCommandOpen
         }
         // An app closing its own OSC zone is still running; its D does not prove exit (#10923).
         if (marker !== 'D' || closesAppOsc133Zone(markersBefore, oscPayload)) {
           continue
         }
         // Armed modes suggest unclean death, but each D needs proof because nested shells also emit it.
-        this.shellCommandOpen = false
-        this.promptShown = false
         const uncleanDeath = this.inputModes.markCommandEnd() || this.altActive
         const cleanExit = !uncleanDeath && this.commandEnteredAlternateScreen && !this.altActive
         this.revoke()

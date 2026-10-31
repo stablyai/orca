@@ -200,7 +200,7 @@ describe('submit settle before Enter', () => {
       () => 'linux',
       () => null,
       undefined,
-      () => idleShell
+      async () => idleShell
     )
     const pending = writer.writeAction('pty', { text, enter: true }, `${text}\r`, {
       inputKind: 'driving'

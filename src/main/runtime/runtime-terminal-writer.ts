@@ -34,7 +34,7 @@ export class RuntimeTerminalWriter {
       data: string,
       inputKind: TerminalInputKind
     ) => WriteSettlement | Promise<WriteSettlement>,
-    private readonly isIdleShellPrompt: (ptyId: string) => boolean = () => false
+    private readonly claimIdleShellPrompt: (ptyId: string) => Promise<boolean> = async () => false
   ) {}
 
   async writeAction(
@@ -84,7 +84,7 @@ export class RuntimeTerminalWriter {
     if (hasSuffix) {
       const suffix = (action.enter ? '\r' : '') + (action.interrupt ? '\x03' : '')
       // A shell at its prompt reads one line as typed; agent TUIs need the paste to settle.
-      if (text && !(isSingleLine(text) && this.isIdleShellPrompt(ptyId))) {
+      if (text && !(isSingleLine(text) && (await this.claimIdleShellPrompt(ptyId)))) {
         // Enter must wait for host ingestion; a flat 500ms cannot cover 16MB.
         await waitForTerminalWriteDelay(
           resolveAgentPromptSubmitDelayForAgent(
