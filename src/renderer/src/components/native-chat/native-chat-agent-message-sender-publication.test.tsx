@@ -438,7 +438,7 @@ it.each([100, 1000])(
         const label = useAgentMessageSenderLabel(named, 'workspace', LOCAL)
         const opens = useAppStore((state) =>
           agentMessageSenderOpens(
-            resolveAgentMessageSenderTarget(state, named, 'workspace', LOCAL),
+            resolveAgentMessageSenderTarget(state, named, 'workspace', LOCAL, undefined),
             named
           )
         )

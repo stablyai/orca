@@ -209,7 +209,7 @@ it.each([100, 1000])(
       h.deliverAll()
       act(() =>
         useAppStore.setState((state) => ({
-          sidebarBody: k % 2 ? 'agents' : 'files',
+          sidebarBody: k % 2 ? 'agents' : 'workspaces',
           activeWorktreeId: `elsewhere-${k}`,
           settings: state.settings ? { ...state.settings } : state.settings
         }))
