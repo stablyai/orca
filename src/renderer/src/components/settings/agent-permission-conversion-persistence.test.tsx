@@ -428,7 +428,9 @@ it.each(['blur', 'reset'])('retains ordered Environment work when %s rejects', a
   } else {
     await act(async () => reset.resolve())
   }
-  await waitFor(() => expect(input.isConnected).toBe(false))
+  await waitFor(() => expect(input.readOnly).toBe(false))
+  expect(input.isConnected).toBe(true)
+  expect(input.value).toBe('')
   expect(useAppStore.getState().settings?.agentDefaultEnv?.claude).toEqual({})
   expect(persist).toHaveBeenCalledTimes(2)
   expect(toast.error).toHaveBeenCalledTimes(1)

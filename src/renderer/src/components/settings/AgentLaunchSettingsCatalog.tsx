@@ -231,7 +231,6 @@ export function AgentLaunchSettingsCatalog({
     defaultCmd: agent.cmd,
     defaultArgs: typed ? '' : getTuiAgentDefaultArgs(agent.id),
     defaultEnv: typed ? {} : getTuiAgentDefaultEnv(agent.id),
-    hasDefaultEnv: Object.keys(getTuiAgentDefaultEnv(agent.id)).length > 0,
     isDetected,
     isEnabled: isTuiAgentEnabled(agent.id, settings.disabledTuiAgents),
     isDefault: isDetected && settings.defaultTuiAgent === agent.id,
