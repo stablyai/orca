@@ -138,12 +138,10 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       structuredWorktreeId: structuredTransport?.worktreeId
     })
 
-    const resolveTarget = useCallback(() => {
-      if (!targetPtyId) {
-        return null
-      }
-      return { ptyId: targetPtyId }
-    }, [targetPtyId])
+    const resolveTarget = useCallback(
+      () => (targetPtyId ? { ptyId: targetPtyId } : null),
+      [targetPtyId]
+    )
 
     const attachments = useNativeChatComposerAttachments({
       attachmentScopeKey: draftScopeKey,
@@ -161,17 +159,6 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
     })
     const { imageAttachments, attachResolvedPaths, clearImageAttachments, removeImageAttachment } =
       attachments
-    const { sendBlockedReason, sendHeld, hasDraft, sendButtonDisabled, alternateSend } =
-      nativeChatComposerSendState({
-        draft,
-        imageAttachments,
-        pastedTextSaving: attachments.pastedTextSaving,
-        disabled,
-        structuredTransport,
-        editSession,
-        isWorking,
-        canStop: hasPty && onStop !== undefined
-      })
 
     const {
       pickAttachments,
@@ -292,7 +279,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       optimisticSendOutcome,
       terminalTabId
     })
-    const { send: sendMessage, goalMode } = useNativeChatComposerSubmit({
+    const submission = useNativeChatComposerSubmit({
       structuredTransport,
       draftScopeKey,
       draft,
@@ -302,8 +289,22 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       sendPty,
       sendStructured,
       consumeOrcaCommand: pending ? undefined : resume.consume,
+      matchesOrcaCommand: pending ? undefined : resume.matchesDraft,
       setDraft,
       setCaret
+    })
+
+    const { goalMode } = submission
+    const sendState = nativeChatComposerSendState({
+      draft,
+      messageDelivery: submission.messageDelivery,
+      imageAttachments,
+      pastedTextSaving: attachments.pastedTextSaving,
+      disabled,
+      structuredTransport,
+      editSession,
+      isWorking,
+      canStop: hasPty && onStop !== undefined
     })
 
     const { send, chooseEditItem, fieldOverrides, dispatchPickerCommand } =
@@ -314,13 +315,13 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
         draftScopeKey,
         agent,
         disabled,
-        sendHeld,
+        sendHeld: sendState.sendHeld,
         ...picker,
         structuredTransport,
         sendStructured,
         ptyCommandRouting: { ...ptyCommandRouting, setActiveSuggestion },
         setNotice,
-        sendMessage
+        sendMessage: submission.send
       })
 
     const interrupt = useNativeChatComposerInterrupt({
@@ -381,11 +382,11 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
           imageAttachments={imageAttachments}
           numberImages={Boolean(structuredTransport)}
           attachmentEnvironmentId={structuredTransport?.runtimeEnvironmentId ?? undefined}
-          sendButtonDisabled={sendButtonDisabled}
-          sendBlockedReason={sendBlockedReason}
+          sendButtonDisabled={sendState.sendButtonDisabled}
+          sendBlockedReason={sendState.sendBlockedReason}
           isWorking={isWorking}
-          hasDraft={hasDraft}
-          alternateSend={alternateSend}
+          hasDraft={sendState.hasDraft}
+          alternateSend={sendState.alternateSend}
           isStopping={isStopping}
           afterStop={afterStop}
           attachDisabled={attachDisabled}

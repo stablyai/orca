@@ -18,6 +18,7 @@ export type NativeChatComposerSendState = {
 /** What the composer's Send/Stop button offers now, and whether it can be pressed. */
 export function nativeChatComposerSendState(input: {
   draft: string
+  messageDelivery: boolean
   imageAttachments: readonly NativeChatComposerImageAttachment[]
   pastedTextSaving: boolean
   disabled: boolean
@@ -48,10 +49,11 @@ export function nativeChatComposerSendState(input: {
     sendHeld,
     hasDraft,
     sendButtonDisabled,
-    alternateSend: followUp?.offersChoice
-      ? followUp.action === 'queue'
-        ? 'steer'
-        : 'queue'
-      : undefined
+    alternateSend:
+      input.messageDelivery && !input.editSession && followUp?.offersChoice
+        ? followUp.action === 'queue'
+          ? 'steer'
+          : 'queue'
+        : undefined
   }
 }
