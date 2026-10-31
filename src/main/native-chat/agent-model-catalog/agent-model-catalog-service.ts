@@ -193,7 +193,7 @@ export function createAgentModelCatalogService(
         !params.legacy &&
         !savedOnly
       ) {
-        bindAgentModelCatalogScope(bindings, bindingKey, bound, requestKey)
+        bindAgentModelCatalogScope(bindings, bindingKey, bound, requestKey, true)
       }
       const scope = await resolveAgentModelCatalogScope(
         deps,

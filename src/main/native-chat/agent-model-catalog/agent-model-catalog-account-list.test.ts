@@ -19,7 +19,10 @@ import {
 import { cloneStructuredAgentSessionOptionRecord } from '../../../shared/structured-agent-session-option-state'
 import type { AgentModelCatalogEntry } from './agent-model-catalog-entry'
 import { structuredAgentSessionShownSnapshot } from '../../../shared/structured-agent-session-option-view'
-import { agentModelCatalogFingerprint } from './agent-model-catalog-fingerprint'
+import {
+  agentModelCatalogFingerprint,
+  agentModelCatalogScopeFingerprint
+} from './agent-model-catalog-fingerprint'
 import { createAgentModelCatalogFilePersistence } from './agent-model-catalog-persistence'
 import type { AgentModelCatalogServiceDeps } from './agent-model-catalog-service-contract'
 import * as catalogBindings from './agent-model-catalog-snapshot'
@@ -28,6 +31,7 @@ import { createAgentModelCatalogService } from './agent-model-catalog-service'
 import {
   AgentModelCatalogStore,
   AGENT_MODEL_CATALOG_FRESH_MS,
+  AGENT_MODEL_CATALOG_MAX_ENTRIES,
   type AgentModelCatalogProbe,
   type AgentModelCatalogSuccess
 } from './agent-model-catalog-store'
@@ -71,7 +75,7 @@ function harness(
   const runs: string[] = []
   const scopeGate = Promise.withResolvers<void>()
   let holdScope = false
-  const resolve = vi.fn(async (_home: unknown, cwd: string) => {
+  const resolveScope: NonNullable<AgentModelCatalogProbe['resolve']> = async (_home, cwd) => {
     if (holdScope) {
       await scopeGate.promise
     }
@@ -83,7 +87,8 @@ function harness(
         return byFolder[cwd]
       }
     }
-  })
+  }
+  const resolve = vi.fn(resolveScope)
   const probe: AgentModelCatalogProbe = Object.assign(async () => byFolder[homedir()], { resolve })
   const store = overrides.store ?? new AgentModelCatalogStore({ now: () => 1000 })
   const resolveAccountHome = vi.fn<AgentModelCatalogServiceDeps['resolveAccountHome']>(
@@ -117,8 +122,15 @@ function harness(
     read,
     full,
     byFolder,
+    canonicalFingerprint: agentModelCatalogScopeFingerprint(
+      agentModelCatalogFingerprint({ agent, accountHome: HOME, wslDistro: null }),
+      homedir(),
+      { command: agent, cwd: homedir() }
+    ),
     resolve,
+    resolveScope,
     resolveAccountHome,
+    activity: () => [resolveAccountHome.mock.calls.length, resolve.mock.calls.length, runs.length],
     holdScope: () => {
       holdScope = true
       return () => scopeGate.resolve()
@@ -222,16 +234,127 @@ for (const agent of ['claude', 'codex'] as const) {
       expect(h.runs).toEqual([])
     })
 
-    it.each(['retire', 'stop'] as const)(
-      'rejects late account resolution on %s and preserves valid pinned accounts',
-      async (action) => {
+    it.each(['null', 'rejected', 'deadline'] as const)(
+      'retains accepted canonical defaults through %s scope refresh and a later successful owner',
+      async (outcome) => {
+        vi.useFakeTimers({ now: 1000 })
+        onTestFinished(() => {
+          vi.useRealTimers()
+        })
+        const h = harness(agent, {
+          getConversation: () => undefined,
+          getRecord: () => undefined,
+          listingNamesConfiguredModel: new Set([agent])
+        })
+        const save = vi.fn()
+        await h.store.attachPersistence({ load: async () => [], save, flush: async () => {} })
+        h.byFolder[homedir()] = listing(h.full, h.full[1])
+        await h.service.demand({ agent })
+        const accepted = await h.service.read({ agent })
+        const seed = getAgentSessionOptionCatalog(agent)
+        if (!seed) {
+          throw new Error(`missing option catalog for ${agent}`)
+        }
+        const check = async () => {
+          const calls = h.activity()
+          const missingRecord = await h.service.read({ agent, sessionId: 'not-created-yet' })
+          const answers = [
+            h.service.snapshot({ agent }),
+            h.service.snapshot({ agent, savedOnly: true }),
+            h.service.snapshot({ agent, verifiedOnly: true }),
+            await h.service.read({ agent }),
+            await h.service.read({ agent, savedOnly: true }),
+            missingRecord
+          ]
+          for (const answer of answers) {
+            expect(answer).toEqual(accepted)
+          }
+          const state = applyStructuredAgentSessionModelCatalog(
+            createStructuredAgentSessionOptionState(agent, seed),
+            seed,
+            missingRecord,
+            { newLaunch: true, coherentCatalog: true }
+          )
+          expect(
+            structuredAgentSessionShownSnapshot(state).find((row) => row.id === 'model')
+          ).toMatchObject({ kind: { currentValue: h.full[1] }, valueSource: 'default' })
+          expect(h.activity()).toEqual(calls)
+          expect(h.runs).toEqual([homedir()])
+          expect(save).not.toHaveBeenCalled()
+        }
+        const entered = Promise.withResolvers<void>()
+        const release = Promise.withResolvers<void>()
+        if (outcome === 'deadline') {
+          h.resolve.mockImplementation(async (...args) => {
+            entered.resolve()
+            await release.promise
+            return h.resolveScope(...args)
+          })
+        } else if (outcome === 'null') {
+          // Failed snapshot and recovery lookups produce a null scope.
+          h.resolve.mockRejectedValue(null)
+        } else {
+          h.resolve.mockImplementation(() => {
+            throw new Error('lookup rejected')
+          })
+        }
+        save.mockClear()
+        const publish = vi.spyOn(h.store, 'recordSuccess')
+        const lookups = h.resolve.mock.calls.length
+        const demand = h.service.demand({ agent, deadline: Date.now() + 50 })
+        if (outcome === 'deadline') {
+          await entered.promise
+          await check()
+          await vi.advanceTimersByTimeAsync(50)
+        }
+        await demand
+        expect(h.resolve).toHaveBeenCalledTimes(lookups + (outcome === 'null' ? 2 : 1))
+        await check()
+        expect(publish).not.toHaveBeenCalled()
+        // A later legitimate owner progresses before the obsolete resolver is released.
+        h.resolve.mockImplementation(async (...args) => ({
+          ...(await h.resolveScope(...args)),
+          identity: { revision: 2, command: agent, cwd: homedir() }
+        }))
+        h.byFolder[homedir()] = listing(['next-model'], 'next-model')
+        await h.service.demand({ agent })
+        const next = await h.service.read({ agent })
+        expect(next).toMatchObject({ models: [{ id: 'next-model', isDefault: true }] })
+        const writes = [publish.mock.calls.length, save.mock.calls.length, h.runs.length]
+        release.resolve()
+        await vi.advanceTimersByTimeAsync(0)
+        expect(await h.service.read({ agent })).toEqual(next)
+        expect([publish.mock.calls.length, save.mock.calls.length, h.runs.length]).toEqual(writes)
+      }
+    )
+
+    it.each([
+      ['retire', 'account'],
+      ['stop', 'account'],
+      ['retire', 'scope'],
+      ['stop', 'scope']
+    ] as const)(
+      '%s rejects late %s resolution and preserves valid pinned accounts',
+      async (action, phase) => {
         const h = harness(agent)
         await h.service.read({ agent, waitForListing: true })
         expect(ids(await h.service.read({ agent, workspacePath: '/cold' }))).toEqual(h.full)
         const home = Promise.withResolvers<AgentSessionAccountHome>()
-        h.resolveAccountHome.mockImplementationOnce(() => home.promise)
-        const late = h.service.demand({ agent, workspacePath: '/late' })
-        await vi.waitFor(() => expect(h.resolveAccountHome).toHaveBeenCalledTimes(2))
+        const entered = Promise.withResolvers<void>()
+        if (phase === 'account') {
+          h.resolveAccountHome.mockImplementationOnce(() => {
+            entered.resolve()
+            return home.promise
+          })
+        } else {
+          h.resolve.mockImplementationOnce(async (...args) => {
+            entered.resolve()
+            await home.promise
+            return h.resolveScope(...args)
+          })
+        }
+        const late = h.service.demand({ agent })
+        await entered.promise
         if (action === 'stop') {
           h.service.stop()
         } else {
@@ -240,6 +363,7 @@ for (const agent of ['claude', 'codex'] as const) {
         }
         home.resolve(HOME)
         await late
+        expect(await h.service.read({ agent })).toEqual({ origin: 'unknown' })
         expect(ids(await h.service.read({ agent, workspacePath: '/late' }))).toBeNull()
         expect(ids(await h.read('a'))).toEqual(action === 'stop' ? null : h.full)
         expect(h.runs).toEqual([homedir()])
@@ -248,6 +372,109 @@ for (const agent of ['claude', 'codex'] as const) {
         expect(await h.service.read({ agent, workspacePath: '/late' })).toEqual({
           origin: 'unknown'
         })
+      }
+    )
+
+    it('uses the newly resolved account base even without a settings invalidation', async () => {
+      const h = harness(agent)
+      await h.service.demand({ agent })
+      const revision = h.store.retirementRevision(agent)
+      const otherHome = { variable: HOME.variable, path: '/other-account' }
+      h.resolveAccountHome.mockResolvedValue(otherHome)
+      h.store.recordSuccess(
+        agentModelCatalogFingerprint({ agent, accountHome: otherHome, wslDistro: null }),
+        agent,
+        listing(['other-account'], 'other-account'),
+        'discovery'
+      )
+      h.resolve.mockRejectedValue(new Error('scope not available'))
+      await h.service.demand({ agent })
+      const calls = h.activity()
+      const publish = vi.spyOn(h.store, 'recordSuccess')
+      expect(await h.service.read({ agent })).toMatchObject({
+        models: [{ id: 'other-account', isDefault: false }],
+        listingNamesConfiguredModel: false
+      })
+      expect(h.service.snapshot({ agent, verifiedOnly: true })).toEqual({ origin: 'unknown' })
+      expect(ids(await h.read('a'))).toEqual(h.full)
+      expect(h.store.retirementRevision(agent)).toBe(revision)
+      expect(h.activity()).toEqual(calls)
+      expect(publish).not.toHaveBeenCalled()
+      h.resolve.mockImplementation(h.resolveScope)
+      h.byFolder[homedir()] = listing(['other-account'], 'other-account')
+      await h.service.demand({ agent })
+      expect(await h.service.read({ agent })).toMatchObject({
+        models: [{ id: 'other-account', isDefault: true }]
+      })
+    })
+
+    it('keeps newer saved publication after an older ordinary resolution is retired', async () => {
+      const h = harness(agent)
+      const publish = vi.spyOn(h.store, 'recordSuccess')
+      await h.service.demand({ agent })
+      const exact = h.canonicalFingerprint
+      expect(h.store.observation(exact)).not.toBeNull()
+      const entered = Promise.withResolvers<void>()
+      const release = Promise.withResolvers<void>()
+      h.resolve.mockImplementationOnce(async (...args) => {
+        entered.resolve()
+        await release.promise
+        return h.resolveScope(...args)
+      })
+      const old = h.service.demand({ agent })
+      await entered.promise
+      h.store.expireFailures(agent)
+      h.service.retireContext()
+      h.store.recordSuccess(exact, agent, listing(h.full, h.full[2]), 'discovery')
+      const saved = await h.service.prepareSaved({ agent })
+      expect(saved).toMatchObject({
+        models: [
+          { id: h.full[0], isDefault: false },
+          { id: h.full[1], isDefault: false },
+          { id: h.full[2], isDefault: true }
+        ]
+      })
+      publish.mockClear()
+      release.resolve()
+      await old
+      expect(await h.service.read({ agent })).toEqual(saved)
+      expect(publish).not.toHaveBeenCalled()
+      expect(h.runs).toEqual([homedir()])
+    })
+
+    it.each(['stale', 'missing', 'retired'] as const)(
+      'retaining canonical identity cannot certify a %s exact observation',
+      async (state) => {
+        let now = 1000
+        const h = harness(agent, { store: new AgentModelCatalogStore({ now: () => now }) })
+        h.byFolder[homedir()] = listing(h.full, h.full[1])
+        const publish = vi.spyOn(h.store, 'recordSuccess')
+        await h.service.demand({ agent })
+        const exact = h.canonicalFingerprint
+        expect(h.store.observation(exact)).not.toBeNull()
+        h.resolve.mockRejectedValue(new Error('scope not available'))
+        await h.service.demand({ agent })
+        if (state === 'stale') {
+          now += AGENT_MODEL_CATALOG_FRESH_MS + 1
+        } else if (state === 'missing') {
+          for (let index = 0; index < AGENT_MODEL_CATALOG_MAX_ENTRIES; index++) {
+            h.store.recordSuccess(`unrelated-${index}`, 'grok', listing(['other']), 'discovery')
+          }
+          expect(h.store.get(exact)).toBeNull()
+        } else {
+          h.store.expireAgent(agent)
+          expect(h.store.observation(exact)).toBeNull()
+        }
+        const calls = h.activity()
+        publish.mockClear()
+        expect(h.service.snapshot({ agent, verifiedOnly: true })).toEqual({ origin: 'unknown' })
+        const answer = await h.service.read({ agent })
+        if (answer.origin !== 'unknown') {
+          expect(answer.models.every((row) => !row.isDefault)).toBe(true)
+          expect(answer.listingNamesConfiguredModel).toBe(false)
+        }
+        expect(h.activity()).toEqual(calls)
+        expect(publish).not.toHaveBeenCalled()
       }
     )
 

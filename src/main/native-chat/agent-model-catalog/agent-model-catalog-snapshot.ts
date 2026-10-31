@@ -26,13 +26,18 @@ export type AgentModelCatalogBinding = {
   projecting?: Promise<void>
 }
 
-/** Canonical account proof survives folder churn; only the transient requests share the cap. */
+/** Canonical authority survives folder churn and preliminary same-account refreshes until replacement. */
 export function bindAgentModelCatalogScope(
   bindings: Map<string, AgentModelCatalogBinding>,
   key: string,
   bound: AgentModelCatalogBinding,
-  requestKey: (params: AgentModelCatalogReadParams) => string
+  requestKey: (params: AgentModelCatalogReadParams) => string,
+  preliminary = false
 ): void {
+  const held = preliminary ? bindings.get(key) : undefined
+  if (held?.current() && held.identity === bound.identity && held.base === bound.base) {
+    return
+  }
   bindings.set(key, bound)
   const canonical = ['claude', 'codex'].map((agent) => requestKey({ agent }))
   const limit = 256 + canonical.filter((key) => bindings.has(key)).length
