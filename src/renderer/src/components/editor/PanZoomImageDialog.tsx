@@ -1,11 +1,13 @@
 import React, { useRef, useState } from 'react'
-import { Maximize, X, ZoomIn, ZoomOut } from 'lucide-react'
+import { Copy, Maximize, X, ZoomIn, ZoomOut } from 'lucide-react'
+import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { IMAGE_VIEWER_ZOOM_STEP } from './image-viewer-zoom'
+import { renderImagePngDataUrl } from './image-png-export'
 import type { PanZoomSize } from './pan-zoom-view'
 import { PanZoomImageSurface } from './PanZoomImageSurface'
 import { usePanZoomViewport } from './use-pan-zoom-viewport'
@@ -27,6 +29,23 @@ type PanZoomImageDialogProps = Omit<
   /** Shown instead of the image while it has no source or after it fails to load. */
   fallback?: React.ReactNode
   toolbarActions?: React.ReactNode
+}
+
+async function copyImageAsPng(
+  src: string,
+  size: PanZoomSize,
+  background: string | undefined
+): Promise<void> {
+  try {
+    await window.api.ui.writeClipboardImage(
+      await renderImagePngDataUrl(src, size, background ?? null)
+    )
+    toast.success(translate('auto.components.editor.PanZoomImageDialog.copiedPng', 'Copied as PNG'))
+  } catch {
+    toast.error(
+      translate('auto.components.editor.PanZoomImageDialog.copyPngFailed', 'Could not copy image')
+    )
+  }
 }
 
 function ToolbarButton({
@@ -183,6 +202,15 @@ function PanZoomImageCanvas({
               onClick={panZoom.fit}
             >
               <Maximize />
+            </ToolbarButton>
+            <ToolbarButton
+              label={translate('auto.components.editor.PanZoomImageDialog.copyPng', 'Copy as PNG')}
+              disabled={!imageSrc || !content}
+              onClick={() =>
+                imageSrc && content && void copyImageAsPng(imageSrc, content, background)
+              }
+            >
+              <Copy />
             </ToolbarButton>
             {toolbarActions}
             <ToolbarButton

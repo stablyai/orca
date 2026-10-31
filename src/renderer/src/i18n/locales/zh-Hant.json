@@ -16068,7 +16068,10 @@
           "zoomOut": "縮小",
           "zoomIn": "放大",
           "fit": "符合螢幕大小",
-          "close": "關閉"
+          "close": "關閉",
+          "copyPng": "複製為 PNG",
+          "copiedPng": "已複製為 PNG",
+          "copyPngFailed": "無法複製圖片"
         },
         "MermaidBlock": {
           "dcc132e691": "圖表錯誤：",

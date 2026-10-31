@@ -15623,7 +15623,10 @@
           "zoomOut": "ズームアウト",
           "zoomIn": "ズームイン",
           "fit": "画面に合わせる",
-          "close": "閉じる"
+          "close": "閉じる",
+          "copyPng": "PNG としてコピー",
+          "copiedPng": "PNG としてコピーしました",
+          "copyPngFailed": "画像をコピーできませんでした"
         },
         "MermaidBlock": {
           "dcc132e691": "図のエラー:",
