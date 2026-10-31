@@ -217,6 +217,8 @@ async function openRunChat(
             ) {
               revealWorkspace(workspace)
             }
+          } else if (result.kind === 'failed' && result.failure.reason === 'workspace-missing') {
+            toast.error(workspaceUnavailableMessage())
           } else if (outcome !== 'activated') {
             runChatUnavailable()
           }

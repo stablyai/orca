@@ -22,6 +22,12 @@ export type StructuredSessionTabPublicationInput = {
   activate: boolean
   navigation?: 'caller'
   capture?: (surface: StructuredSessionSurface) => void
+  workspaceAuthority?: {
+    check(): void
+    current(): boolean
+    committed(): void
+    saving(work: Promise<void>): void
+  }
   notify?: boolean
   /** The host tab id a create reserved; a session that already has a tab keeps its own. */
   tabId?: string
@@ -33,7 +39,10 @@ export type StructuredSessionTabPublicationInput = {
 
 /** Caller opens require a committed lifetime; legacy opens retain their best-effort Retry surface. */
 export async function admitStructuredSessionTabPublication(
-  input: { sessionId: string; tabId?: string; navigation?: 'caller' },
+  input: Pick<
+    StructuredSessionTabPublicationInput,
+    'sessionId' | 'tabId' | 'navigation' | 'workspaceAuthority'
+  >,
   restore: () => Promise<void>
 ): Promise<{ tabId: string; current: string | null; eligible: () => boolean }> {
   let host = getStructuredAgentSessionHost()
@@ -46,6 +55,7 @@ export async function admitStructuredSessionTabPublication(
       throw new Error('Chat tab inventory is unavailable')
     }
     await host.setSessionTabVisibility(input.sessionId, true, newReopenedChatTabId(), {
+      check: () => input.workspaceAuthority?.check(),
       capture: (winner) => {
         if (winner) {
           tabId = winner
@@ -53,6 +63,7 @@ export async function admitStructuredSessionTabPublication(
       }
     })
     committed = true
+    input.workspaceAuthority?.committed()
     if (!tabId || host.getSessionTabId(input.sessionId) !== tabId) {
       throw new Error('Chat tab publication was superseded')
     }
@@ -61,6 +72,7 @@ export async function admitStructuredSessionTabPublication(
     const openingHost = host
     await openingHost
       .setSessionTabVisibility(input.sessionId, true, input.tabId, {
+        check: () => input.workspaceAuthority?.check(),
         capture: (winner) => {
           if (winner) {
             tabId = winner
@@ -69,8 +81,10 @@ export async function admitStructuredSessionTabPublication(
       })
       .then(() => {
         committed = true
+        input.workspaceAuthority?.committed()
       })
       .catch((error: unknown) => {
+        input.workspaceAuthority?.check()
         openingHost.deps.logger.warn('recording an opened chat tab failed', {
           scope: 'tab-visibility-open',
           sessionId: input.sessionId,
@@ -84,7 +98,10 @@ export async function admitStructuredSessionTabPublication(
   }
   const authority = host
   const eligible = () => {
-    if (getStructuredAgentSessionHost() !== authority) {
+    if (
+      input.workspaceAuthority?.current() === false ||
+      getStructuredAgentSessionHost() !== authority
+    ) {
       return false
     }
     const winner = authority?.getSessionTabId(input.sessionId)

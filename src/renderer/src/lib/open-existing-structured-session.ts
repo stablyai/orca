@@ -29,6 +29,7 @@ const STRUCTURED_SESSION_RESTORE_TIMEOUT_MS = 5_000
 export type StructuredSessionRevealOutcome =
   | StructuredSessionOpenTarget
   | 'gone'
+  | 'workspace-missing'
   | 'host-cannot-open'
   | 'unreachable'
 
@@ -257,7 +258,14 @@ export async function revealStructuredSession(target: {
     return { sessionId: result.sessionId, worktreeId: result.workspaceId, agent: result.agent }
   }
   // Distinguish a missing record from an existing record the host cannot open; only the first means gone.
-  return result?.refusal?.code === 'agent_session_identity_required' ? 'gone' : 'host-cannot-open'
+  if (result?.refusal?.code === 'agent_session_workspace_removed') {
+    return 'workspace-missing'
+  }
+  return result?.refusal?.code === 'agent_session_identity_required'
+    ? 'gone'
+    : result?.refusal?.code === 'agent_session_operation_unknown'
+      ? 'unreachable'
+      : 'host-cannot-open'
 }
 
 type AgentSessionRevealReply =

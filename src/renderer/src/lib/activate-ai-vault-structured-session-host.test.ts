@@ -1,3 +1,4 @@
+import { toast } from 'sonner'
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { Tab } from '../../../shared/tab-types'
 
@@ -506,4 +507,29 @@ it('keeps indirect continuation discovery independent from direct exact selectio
   expect(
     mocks.call.mock.calls.filter(([, method]) => method === 'agentSession.reveal')
   ).toHaveLength(0)
+})
+
+it('consumes removed-workspace reveal once with existing workspace feedback and no presentation', async () => {
+  mocks.call.mockImplementation(async (_host, method) =>
+    method === 'orchestration.partyLocation'
+      ? { location: { kind: 'chat', sessionId: 'sender', worktreeId: 'workspace' } }
+      : method === 'agentSession.reveal'
+        ? { ok: false, refusal: { code: 'agent_session_workspace_removed' } }
+        : { ok: true }
+  )
+  expect(
+    await activateAiVaultStructuredSession(
+      { structuredSession: { sessionId: 'sender', workspaceId: 'workspace' } },
+      undefined,
+      TARGET
+    )
+  ).toBe(true)
+  expect(toast.error).toHaveBeenCalledExactlyOnceWith('This workspace is no longer available.')
+  expect(mocks.navigate).not.toHaveBeenCalled()
+  expect(mocks.activateTab).not.toHaveBeenCalled()
+  expect(mocks.call.mock.calls.map((call) => call[1])).toEqual([
+    'session.tabs.list',
+    'orchestration.partyLocation',
+    'agentSession.reveal'
+  ])
 })

@@ -245,9 +245,9 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
     chat: Pick<ChatPublication, 'sessionId' | 'agent' | 'placement' | 'tabId'> & {
       eligible?: () => boolean
     }
-  ): void {
+  ): Promise<void> {
     const tabId = chat.tabId ?? chatTabId(chat.sessionId)
-    this.changeWindowlessChatTabs(
+    return this.changeWindowlessChatTabs(
       worktreeId,
       [{ open: { ...chat, tabId } }],
       () =>
@@ -292,17 +292,16 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
     worktreeId: string,
     changes: readonly ChatTabChange[],
     eligible?: (change: ChatTabChange) => boolean
-  ): void {
+  ): Promise<void> {
     // Main-owned layouts place chat tabs with or without a window.
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      this.queueChatTabChanges(
+      return this.queueChatTabChanges(
         changes.map((change) => ({
           worktreeId,
           change,
           ...(eligible ? { eligible: () => eligible(change) } : {})
         }))
       )
-      return
     }
     const session = this.getAvailableAuthoritativeWindow()
       ? null
@@ -318,6 +317,7 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
     if (next) {
       this.setWorkspaceSessionForWorktree(worktreeId, next)
     }
+    return Promise.resolve()
   }
 
   private readonly queueChatTabChanges = createChatTabLayoutQueue({

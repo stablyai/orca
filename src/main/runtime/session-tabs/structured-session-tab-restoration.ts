@@ -95,21 +95,26 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
   async publishStructuredAgentSessionTab(
     input: StructuredSessionTabPublicationInput
   ): Promise<void> {
+    input.workspaceAuthority?.check()
     const { tabId, current, eligible } = await admitStructuredSessionTabPublication(input, () =>
-      this.restoreStructuredAgentSessionTabs()
+      input.workspaceAuthority
+        ? this.prepareStructuredAgentSessionStartupRestoration()
+        : this.restoreStructuredAgentSessionTabs()
     )
     if (!eligible()) {
       throw new Error('Chat tab publication was superseded')
     }
     // Window creates retain the window's own placement decision.
     if (!(ORCA_LAYOUT_OWNER_IS_MAIN && input.placedByWindow)) {
-      this.saveWindowlessAgentSessionTab(input.workspaceId, {
+      const saving = this.saveWindowlessAgentSessionTab(input.workspaceId, {
         ...input,
         eligible,
         ...(tabId ? { tabId } : {})
       })
+      input.workspaceAuthority?.saving(saving)
     }
     this.projectStructuredAgentSessionTab({ ...input, tabId, eligible })
+    input.workspaceAuthority?.committed()
     if (!eligible()) {
       throw new Error('Chat tab publication was superseded')
     }

@@ -14,12 +14,17 @@ import {
   setMobilePseudoLocalization
 } from '../i18n/mobile-i18n'
 import { pseudoLocalizeString } from '../../../src/shared/pseudo-localization'
-const mocks = vi.hoisted(() => ({ executionHost: 'local', open: vi.fn(), push: vi.fn() }))
+const mocks = vi.hoisted(() => ({
+  executionHost: 'local',
+  open: vi.fn(),
+  push: vi.fn(),
+  replace: vi.fn()
+}))
 vi.mock('../navigation/workspace-execution-host', () => ({
   useWorkspaceExecutionHost: () => mocks.executionHost
 }))
 vi.mock('../navigation/workspace-route-handoff', () => ({
-  useWorkspaceRouteHandoff: () => ({ push: mocks.push })
+  useWorkspaceRouteHandoff: () => ({ push: mocks.push, replace: mocks.replace })
 }))
 vi.mock('./open-mobile-structured-session', async (original) => ({
   ...(await original<typeof OpenMobileStructuredSessionModule>()),
@@ -149,6 +154,46 @@ it.each(
         { activate: false }
       )
     }
+  } finally {
+    await act(async () => tree?.unmount())
+  }
+})
+
+it('routes a removed workspace notification to the existing host notice without a tab or duplicate toast', async () => {
+  mocks.executionHost = 'local'
+  mocks.open.mockResolvedValue({
+    kind: 'failed',
+    failure: { reason: 'workspace-missing', beforeEffects: true }
+  })
+  const scope: Parameters<typeof useMobileStructuredSessionOpening>[0] = {
+    hostId: 'host',
+    worktreeId: 'workspace',
+    client: createFakeRpcClient(),
+    connState: 'connected',
+    showToast: vi.fn(),
+    switchSessionTab: vi.fn(),
+    activeSessionTabIdRef: { current: null },
+    selectedSessionTabIdRef: { current: null },
+    pendingSelectionRef: { current: null },
+    sessionTabsRef: { current: [] }
+  }
+  let open: ((value: StructuredSessionOpenSource) => Promise<void>) | undefined
+  function Probe() {
+    open = useMobileStructuredSessionOpening(scope)
+    return null
+  }
+  let tree: ReactTestRenderer | undefined
+  try {
+    await act(async () => {
+      tree = create(createElement(Probe))
+    })
+    await act(async () => {
+      await open?.(source)
+    })
+    expect(mocks.replace).toHaveBeenCalledExactlyOnceWith('/h/host?notice=worktree-missing')
+    expect(mocks.push).not.toHaveBeenCalled()
+    expect(scope.switchSessionTab).not.toHaveBeenCalled()
+    expect(scope.showToast).not.toHaveBeenCalled()
   } finally {
     await act(async () => tree?.unmount())
   }

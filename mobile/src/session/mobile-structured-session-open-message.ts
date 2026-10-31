@@ -1,3 +1,4 @@
+import { HOST_ROUTE_NOTICES } from '../host-route-notice'
 import { formatAgentTypeLabel } from '../../../src/shared/agent-type-label'
 import type { StructuredSessionOpenFailure } from '../../../src/shared/open-structured-agent-session'
 import { translate } from '../i18n/mobile-i18n'
@@ -6,6 +7,9 @@ export function mobileStructuredSessionOpenMessage(
   reason: StructuredSessionOpenFailure['reason'],
   displayLabel?: string
 ): string {
+  if (reason === 'workspace-missing') {
+    return HOST_ROUTE_NOTICES['worktree-missing']
+  }
   if (!displayLabel || displayLabel === 'unknown') {
     switch (reason) {
       case 'gone':

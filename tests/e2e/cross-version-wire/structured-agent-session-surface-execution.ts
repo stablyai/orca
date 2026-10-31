@@ -1,3 +1,4 @@
+import { availableRevealWorkspace } from '../../../src/main/runtime/session-tabs/structured-workspace-authority.test-fixture'
 import { expect, vi } from 'vitest'
 import type { structuredHostStub } from './structured-agent-session-host-fixture'
 import { AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
@@ -65,6 +66,7 @@ export function runtimeStub(overrides: Record<string, unknown> = {}) {
     getRuntimeId: () => 'runtime-1',
     getClientSettings: () => ({ experimentalStructuredNativeChat: true }),
     ensureStructuredAgentSessionHost: async () => undefined,
+    prepareStructuredAgentSessionRevealWorkspace: vi.fn(availableRevealWorkspace),
     getStructuredAgentSessionCreateSupport: async () => ({ supported: true }),
     structuredAgentSessionLaunchSeedOptions: () => undefined,
     resolveStructuredAgentSessionCreateIntent: async () => {
@@ -131,6 +133,9 @@ export async function expectDeclaredSurfaceExecutes(
     // Shared host methods need per-call deltas; an earlier call must not satisfy this assertion.
     const before = expectedHostMethod ? hostCalls[expectedHostMethod].mock.calls.length : 0
     const otherBefore = otherCreateMethod ? hostCalls[otherCreateMethod].mock.calls.length : 0
+    if (method === 'agentSession.readVisual') {
+      hostCalls.getConversation.mockReturnValueOnce(null)
+    }
     const replies = await callBuild(
       build,
       method,

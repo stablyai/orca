@@ -17,7 +17,7 @@ export type StructuredSessionOpenSource =
       displayName?: string
     }
 export type StructuredSessionOpenFailure = {
-  reason: 'gone' | 'unknown' | 'unsupported' | 'unreachable'
+  reason: 'gone' | 'workspace-missing' | 'unknown' | 'unsupported' | 'unreachable'
   beforeEffects: boolean
   code?: string
   surface?: 'terminal'
@@ -55,6 +55,9 @@ export function structuredSessionOpenFailure(error: unknown): StructuredSessionO
     code === 'runtime_compat_block'
   ) {
     return { reason: 'unsupported', beforeEffects: true, code }
+  }
+  if (code === 'agent_session_workspace_removed') {
+    return { reason: 'workspace-missing', beforeEffects: true }
   }
   if (code === 'agent_session_identity_required') {
     return { reason: 'gone', beforeEffects: true }

@@ -1,3 +1,4 @@
+import { availableRevealWorkspace } from '../../session-tabs/structured-workspace-authority.test-fixture'
 import '../unused-default-rpc-methods.test-fixture'
 /** Drive chat tab pointers through real disk records, structured host, runtime and RPC; fake only the provider. */
 
@@ -191,6 +192,9 @@ beforeEach(async () => {
   closeSession = vi.fn(async () => true)
   directory = await mkdtemp(join(tmpdir(), 'orca-chat-tab-table-'))
   runtime = new OrcaRuntimeService()
+  vi.spyOn(runtime, 'prepareStructuredAgentSessionRevealWorkspace').mockImplementation(
+    availableRevealWorkspace
+  )
   vi.spyOn(runtime['workspaceSessions'], 'tryGetHostId').mockReturnValue('local')
   dispatcher = new RpcDispatcher({
     runtime,

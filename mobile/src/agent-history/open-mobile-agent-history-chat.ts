@@ -1,3 +1,4 @@
+import { hostRouteWithNotice } from '../host-route-notice'
 import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
 import type { StructuredSessionOpenFailure } from '../../../src/shared/open-structured-agent-session'
 import type { RpcClient } from '../transport/rpc-client'
@@ -34,6 +35,8 @@ export async function openMobileAgentHistoryChat(args: {
   assertCurrentOwner()
   if (result.kind === 'opened') {
     args.opened(mobileStructuredSessionHref(args.hostId, result.target, result.tab))
+  } else if (result.kind === 'failed' && result.failure.reason === 'workspace-missing') {
+    args.opened(hostRouteWithNotice(args.hostId, 'worktree-missing'))
   } else if (
     result.kind === 'failed' &&
     result.failure.reason === 'unsupported' &&

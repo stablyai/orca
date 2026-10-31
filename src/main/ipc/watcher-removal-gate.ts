@@ -46,7 +46,12 @@ export class TerminalRemovalInProgressError extends Error {
 
 const states = new Map<string, WatcherRemovalGateState>()
 
-export function beginWatcherInstall(rootPath: string, connectionId?: string): () => void {
+export type RemovalSensitiveInstall = (() => void) & { isCurrent(): boolean }
+
+export function beginWatcherInstall(
+  rootPath: string,
+  connectionId?: string
+): RemovalSensitiveInstall {
   return beginRemovalSensitiveInstall(
     rootPath,
     connectionId,
@@ -66,7 +71,7 @@ function beginRemovalSensitiveInstall(
   rootPath: string,
   connectionId: string | undefined,
   createRemovalError: () => Error
-): () => void {
+): RemovalSensitiveInstall {
   const normalizedRoot = normalizeRuntimePathForComparison(rootPath)
   // PTY worktree and cwd roots may overlap; both must respect active removal fences.
   if (
@@ -83,11 +88,14 @@ function beginRemovalSensitiveInstall(
   const state = states.get(key) ?? createState(key, normalizedRoot, connectionId)
   const token: WatcherInstallToken = Symbol(normalizedRoot)
   state.installs.add(token)
-  return () => {
-    if (state.installs.delete(token) && state.installs.size === 0) {
-      resolveInstallDrain(state)
-    }
-  }
+  return Object.assign(
+    () => {
+      if (state.installs.delete(token) && state.installs.size === 0) {
+        resolveInstallDrain(state)
+      }
+    },
+    { isCurrent: () => state.installs.has(token) }
+  )
 }
 
 export function acquireWatcherRemovalGate(

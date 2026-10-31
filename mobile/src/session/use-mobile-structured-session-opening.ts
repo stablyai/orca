@@ -1,3 +1,4 @@
+import { hostRouteWithNotice } from '../host-route-notice'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
@@ -92,6 +93,8 @@ export function useMobileStructuredSessionOpening(
           }
           switchSessionTab(tab, { activate: false })
         }
+      } else if (result.kind === 'failed' && result.failure.reason === 'workspace-missing') {
+        router.replace(hostRouteWithNotice(hostId, 'worktree-missing'))
       } else if (result.kind === 'failed') {
         showToast(
           mobileStructuredSessionOpenMessage(

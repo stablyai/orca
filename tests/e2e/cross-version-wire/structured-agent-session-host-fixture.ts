@@ -1,3 +1,5 @@
+import { agentSessionRecordFixture } from '../../../src/shared/agent-session-record.test-fixture'
+import { agentSessionConversationView } from '../../../src/shared/agent-session-conversation-view'
 import { vi, type Mock } from 'vitest'
 import type { StructuredAgentSessionAdapter } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-adapter'
 import { startsWhenPublished } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-instant-start.test-support'
@@ -41,6 +43,16 @@ export function structuredHostStub(
   >
   return {
     ...tabs,
+    getConversation: vi.fn(() => {
+      const record = agentSessionRecordFixture()
+      return agentSessionConversationView({
+        ...record,
+        sessionId,
+        provider: 'codex',
+        providerHandleChain: [],
+        location: { ...record.location, workspaceId }
+      })
+    }),
     // Keep restart-resume spies flat for manifest/delta assertions; installableHost rebuilds the nested member.
     restartResumableList: vi.fn(async () => []),
     restartResumableFailures: vi.fn(async () => []),
@@ -153,7 +165,11 @@ export function installableHost(
     deps: {
       logger,
       modelCatalog: { read: hostCalls.modelCatalog, demand: vi.fn(async () => {}) },
-      store: { getRecord: () => null, getConversation: () => null, getOperationRow: () => null }
+      store: {
+        getRecord: () => null,
+        getConversation: hostCalls.getConversation,
+        getOperationRow: () => null
+      }
     },
     restartResume: {
       list: hostCalls.restartResumableList,
