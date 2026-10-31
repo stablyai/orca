@@ -75,6 +75,7 @@ vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
 }))
 
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
+import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
 import {
   findAllByHostType,
   findByHostType
@@ -135,21 +136,81 @@ describe('MobileNativeChatMessage', () => {
   const textIn = (node: ReactTestInstance): string[] =>
     findAllByHostType(node, 'Text').map((text) => String(text.children.join('')))
 
-  it('hides automation instructions until expanded and copies only the task', () => {
+  it('keeps automation instructions open across row recycling, independently of the task fold', () => {
     const preamble = buildAutomationRunPreamble('orca-ide')
-    const tree = render(userMessage([{ type: 'text', text: `${preamble}Write the brief` }]))
-    expect(markdownIn(tree.root)).toEqual(['Write the brief'])
-    const toggle = findAllByHostType(tree.root, 'Pressable').find(
-      (node) => node.props.accessibilityState?.expanded === false
-    )
-    expect(toggle).toBeDefined()
-    act(() => toggle!.props.onPress())
-    expect(markdownIn(tree.root)).toEqual([
+    const task = Array.from({ length: 12 }, (_, index) => `Write section ${index + 1}`).join('\n')
+    const message = userMessage([{ type: 'text', text: `${preamble}${task}` }])
+    const messages = [message]
+    function Transcript({ visible, scopeKey }: { visible: boolean; scopeKey: string }): ReactNode {
+      const disclosure = useMobileNativeChatTurnDisclosure({
+        messages,
+        enabled: false,
+        isWorking: false,
+        scopeKey
+      })
+      return visible
+        ? createElement(MobileNativeChatMessage, {
+            message,
+            ...disclosure.resolveRow(0, message)
+          })
+        : null
+    }
+    function show(visible: boolean, scopeKey = 'host\0workspace\0tab'): void {
+      act(() => {
+        const element = createElement(Transcript, { visible, scopeKey })
+        if (renderer) {
+          renderer.update(element)
+        } else {
+          renderer = create(element)
+        }
+      })
+    }
+    const instructionToggle = () =>
+      findAllByHostType(renderer!.root, 'Pressable').find((node) =>
+        textIn(node).includes('Automation instructions')
+      )!
+    const clips = () =>
+      findAllByHostType(renderer!.root, 'View').filter(
+        (node) => node.props.style?.overflow === 'hidden'
+      )
+
+    show(true)
+    expect(markdownIn(renderer!.root)).toEqual([task])
+    act(() => instructionToggle().props.onPress())
+    expect(markdownIn(renderer!.root)).toEqual([
       preamble.slice(0, -'=== TASK ===\n'.length).trimEnd(),
-      'Write the brief'
+      task
     ])
-    const copy = tree.root.findByType(MobileSourceCopyButton)
-    expect(copy.props.text).toBe('Write the brief')
+    expect(clips()).toHaveLength(1)
+    const copy = renderer!.root.findByType(MobileSourceCopyButton)
+    expect(copy.props.text).toBe(task)
+
+    show(false)
+    expect(renderer!.root.findAllByType(MobileNativeChatMessage)).toHaveLength(0)
+    show(true)
+    expect(instructionToggle().props.accessibilityState.expanded).toBe(true)
+    expect(markdownIn(renderer!.root)).toHaveLength(2)
+    expect(clips()).toHaveLength(1)
+
+    act(() =>
+      clips()[0]!
+        .find((node) => node.props.onLayout !== undefined)
+        .props.onLayout({ nativeEvent: { layout: { height: 190 } } })
+    )
+    act(() =>
+      findAllByHostType(renderer!.root, 'Pressable')
+        .find((node) => textIn(node).includes('Show full message'))!
+        .props.onPress()
+    )
+    act(() => instructionToggle().props.onPress())
+    expect(markdownIn(renderer!.root)).toEqual([task])
+    expect(clips()).toHaveLength(0)
+
+    act(() => instructionToggle().props.onPress())
+    show(true, 'host\0workspace\0other-tab')
+    expect(instructionToggle().props.accessibilityState.expanded).toBe(false)
+    expect(markdownIn(renderer!.root)).toEqual([task])
+    expect(clips()).toHaveLength(1)
   })
 
   it('renders the shared clear boundary as one muted divider with prior history retained', () => {

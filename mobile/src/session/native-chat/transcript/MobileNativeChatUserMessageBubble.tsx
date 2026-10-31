@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { ChevronRight } from 'lucide-react-native'
 import { splitAutomationRunMessage } from '../../../../../src/shared/automation-run-preamble'
@@ -19,6 +18,8 @@ export function MobileNativeChatUserMessageBubble({
   fontScale,
   open,
   onToggle,
+  instructionsOpen,
+  onToggleInstructions,
   recovery,
   status,
   onOpenFile,
@@ -32,6 +33,8 @@ export function MobileNativeChatUserMessageBubble({
   fontScale: number
   open: boolean
   onToggle: () => void
+  instructionsOpen: boolean
+  onToggleInstructions: () => void
   recovery?: ReturnType<typeof useMobileNativeChatFullMessage>['recovery']
   status?: React.ReactNode
   onOpenFile?: (path: string) => void
@@ -39,7 +42,6 @@ export function MobileNativeChatUserMessageBubble({
 }): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const [instructionsOpen, setInstructionsOpen] = useState(false)
   const markdown = deriveNativeChatRowContent(blocks).markdown
   const automation = splitAutomationRunMessage(markdown)
   const task = automation?.task ?? markdown
@@ -51,7 +53,7 @@ export function MobileNativeChatUserMessageBubble({
           hitSlop={6}
           accessibilityRole="button"
           accessibilityState={{ expanded: instructionsOpen }}
-          onPress={() => setInstructionsOpen(!instructionsOpen)}
+          onPress={onToggleInstructions}
         >
           <View style={instructionsOpen ? messageStyles.reasoningCaretOpen : undefined}>
             <ChevronRight size={12} color={colors.textMuted} />
@@ -91,17 +93,10 @@ export function MobileNativeChatUserMessageBubble({
           recovery={recovery}
           status={status}
         >
-          {automation ? (
-            <MobileMarkdown
-              content={task}
-              tone="userMessage"
-              rangeSelectable
-              textScale={CHAT_PROSE_SCALE * fontScale}
-              onOpenFile={onOpenFile}
-              onLongPress={onLongPress}
-            />
-          ) : (
-            renderProse(blocks.filter((block) => !isImageRefBlock(block)))
+          {renderProse(
+            automation
+              ? [{ type: 'text', text: task }]
+              : blocks.filter((block) => !isImageRefBlock(block))
           )}
         </MobileNativeChatUserMessageFold>
         {children}
