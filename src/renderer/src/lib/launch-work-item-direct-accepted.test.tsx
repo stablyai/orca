@@ -1,9 +1,7 @@
 // @vitest-environment happy-dom
 import { mocks, hostMocks } from './launch-work-item-direct-test-fixture'
-import { act, cleanup, renderHook } from '@testing-library/react'
-import { afterEach, expect, it, vi } from 'vitest'
-import { useSourceControlAgentActionStart } from '@/components/right-sidebar/useSourceControlAgentActionStart'
-import { startFixChecksFromDialog } from '@/components/pull-request-page/checks/fix-launch'
+import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { sourceControlActionRecipeEntry } from '../../../shared/source-control-action-selection'
 import { useAppStore } from '@/store'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
@@ -12,6 +10,16 @@ import * as preflight from './launch-work-item-direct-preflight'
 import { adoptAgentSessionLaunchVerdict } from './agent-session-launch-plan'
 import { newAgentLaunchRequestId } from './agent-launch-request-id'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { createUIStore } from '@/store/slices/ui-slice-test-harness'
+import { readDirectSetupRequest } from './direct-work-item-setup-test-fixture'
+import { DirectWorkItemSetupDialog } from '@/components/new-workspace/DirectWorkItemSetupDialog'
+
+vi.doUnmock('@/lib/ensure-hooks-confirmed')
+const { useSourceControlAgentActionStart } =
+  await import('@/components/right-sidebar/useSourceControlAgentActionStart')
+const { startFixChecksFromDialog } =
+  await import('@/components/pull-request-page/checks/fix-launch')
+const { __resetTrustPromptChainForTests } = await import('./ensure-hooks-confirmed')
 
 const structured = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/agent-session/structured-agent-session-provisional-tab', () => ({
@@ -19,6 +27,10 @@ vi.mock('@/lib/agent-session/structured-agent-session-provisional-tab', () => ({
 }))
 
 afterEach(cleanup)
+beforeEach(() => {
+  __resetTrustPromptChainForTests()
+  useAppStore.setState({ trustedOrcaHooks: {} })
+})
 const item = {
   id: 'pr-42',
   state: 'open',
@@ -86,6 +98,68 @@ function mountStart() {
   )
   return { ...view, onClose, onLaunched }
 }
+
+it.each([false, true])(
+  'settles a real Ask Run trust digest rejection with precreate cancellation=%s',
+  async (cancel) => {
+    const ui = createUIStore()
+    useAppStore.setState({
+      openModal: ui.getState().openModal,
+      closeModal: ui.getState().closeModal,
+      modalData: {},
+      repos: [
+        {
+          ...useAppStore.getState().repos[0],
+          hookSettings: {
+            mode: 'auto',
+            scripts: { setup: '', archive: '' },
+            setupRunPolicy: 'ask'
+          }
+        }
+      ]
+    })
+    const unsubscribe = ui.subscribe(({ activeModal, modalData }) =>
+      useAppStore.setState({ activeModal, modalData })
+    )
+    const digest = Promise.withResolvers<ArrayBuffer>()
+    const hash = vi.spyOn(crypto.subtle, 'digest').mockReturnValueOnce(digest.promise)
+    hostMocks.checkRuntimeHooks.mockResolvedValue({
+      hasHooks: true,
+      hooks: { scripts: { setup: 'echo setup' } }
+    })
+    const view = mountStart()
+    let start: Promise<boolean>
+    try {
+      act(() => {
+        start = view.result.current.startWithDetectedAgents({ detectedAgents: ['codex'] })
+      })
+      await vi.waitFor(() =>
+        expect(useAppStore.getState().activeModal).toBe('new-workspace-composer')
+      )
+      render(
+        <DirectWorkItemSetupDialog
+          request={readDirectSetupRequest(useAppStore.getState().modalData.directSetup)}
+        />
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'Run setup' }))
+      await vi.waitFor(() => expect(hash).toHaveBeenCalledOnce())
+      if (cancel) {
+        act(() => view.result.current.cancelStart())
+      }
+      await act(async () => {
+        digest.reject(new DOMException('Setup trust hash failed', 'OperationError'))
+        expect(await start!).toBe(false)
+      })
+      expect(mocks.toastError.mock.calls).toEqual(cancel ? [] : [['Setup trust hash failed']])
+      expect(mocks.createWorktree).not.toHaveBeenCalled()
+      expect(view.onLaunched).not.toHaveBeenCalled()
+      expect(view.onClose).not.toHaveBeenCalled()
+      expect(view.result.current.isStarting).toBe(false)
+    } finally {
+      unsubscribe()
+    }
+  }
+)
 
 it.each(['terminal', 'structured'] as const)(
   'retains an issued %s create through hide/cleanup and matching settlement',

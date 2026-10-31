@@ -280,12 +280,9 @@ export async function launchWorkItemDirect(
     }
     return completed
   } catch (error) {
-    if (creationAccepted) {
-      return reportFailure(error instanceof Error ? error.message : 'Failed to create workspace.')
-    }
-    if (args.signal?.aborted) {
+    if (!creationAccepted && args.signal?.aborted) {
       return 'cancelled'
     }
-    throw error
+    return reportFailure(error instanceof Error ? error.message : 'Failed to create workspace.')
   }
 }
