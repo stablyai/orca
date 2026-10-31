@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
 import {
   STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
@@ -7,14 +6,16 @@ import {
 import type { RuntimeEnvironmentStatus } from '../../../shared/runtime-host-status'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 
+import type { NativeChatDefaultSettings } from '../../../shared/structured-native-chat-launch-route'
+
 type Statuses = Map<string, RuntimeEnvironmentStatus>
 type StoreState = {
   runtimeStatusByEnvironmentId: Statuses
-  settings: { experimentalNativeChat: boolean } | null
+  settings: NativeChatDefaultSettings | null
   ensureNativeDetectedAgents: () => Promise<string[]>
 }
 
-const ON = { experimentalNativeChat: true }
+const ON = { nativeChatProviders: { claude: true } }
 
 const mocks = vi.hoisted(() => {
   const state: StoreState = {
@@ -38,10 +39,6 @@ vi.mock('./local-runtime-capabilities', () => ({
     mocks.capabilitiesKnown.add(listener)
     return () => mocks.capabilitiesKnown.delete(listener)
   }
-}))
-vi.mock('./local-structured-chats', () => ({
-  localStructuredChatsInUse: async (settings: StoreState['settings']) =>
-    settings?.experimentalNativeChat === true
 }))
 vi.mock('@/store', () => ({
   useAppStore: {
@@ -122,12 +119,24 @@ afterEach(() => {
 })
 
 describe('host structured agents', () => {
-  // The capability promises a renderer that reads the list; it ships only with that reader.
-  it('is advertised to paired hosts, whose lists this reader serves', () => {
-    expect(ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES).toContain(
-      STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
-    )
-  })
+  it.each(['chat', 'terminal', undefined] as const)(
+    'uses the production aggregate for default-only %s startup',
+    async (surface) => {
+      mocks.state = {
+        ...mocks.state,
+        settings: { agentDefaultSurface: surface, nativeChatProviders: {} },
+        runtimeStatusByEnvironmentId: new Map([['env-1', pairedStatus('rt-1', REGISTERED)]])
+      }
+      uninstall = installHostStructuredAgentsSync()
+      await new Promise((resolve) => setImmediate(resolve))
+      if (surface === 'chat') {
+        await vi.waitFor(() => expect(agentIds('local')).toEqual(['claude', 'grok']))
+        expect(agentIds('runtime:env-1')).toEqual(['claude', 'grok'])
+      } else {
+        expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
+      }
+    }
+  )
 
   it("reads the local host's agents once it advertises them", async () => {
     uninstall = installHostStructuredAgentsSync()
@@ -179,7 +188,7 @@ describe('host structured agents', () => {
 
   // Asking installs a host's structured store; a profile with structured chat off never pays it.
   it('asks no host until structured chat is turned on', async () => {
-    mocks.state = { ...mocks.state, settings: { experimentalNativeChat: false } }
+    mocks.state = { ...mocks.state, settings: { nativeChatProviders: { claude: false } } }
     uninstall = installHostStructuredAgentsSync()
     setStatuses(new Map([['env-1', pairedStatus('rt-1', REGISTERED)]]))
     await Promise.resolve()

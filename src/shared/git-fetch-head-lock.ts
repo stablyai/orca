@@ -3,6 +3,7 @@ import { readFile, realpath, stat } from 'node:fs/promises'
 import { waitForPromiseWithSignal } from './abort-signal-reason'
 import { parseGitdirMarkerPayload } from './gitdir-marker-payload'
 import { runWithGitOperationLock } from './git-operation-lock'
+import { findGitSubcommandIndex, GIT_GLOBAL_OPTIONS_WITH_VALUE } from './git-command-classification'
 import {
   foldWslUncPathCaseInsensitiveParts,
   isWslUncPath,
@@ -14,17 +15,6 @@ function abortError(): Error {
   error.name = 'AbortError'
   return error
 }
-const GLOBAL_OPTIONS_WITH_VALUE = new Set([
-  '-c',
-  '-C',
-  '--git-dir',
-  '--work-tree',
-  '--namespace',
-  '--super-prefix',
-  '--config-env',
-  '--exec-path'
-])
-
 type GitFetchHeadCommand = { needsLock: boolean; cwd: string; gitDir?: string }
 
 export function resolveGitFetchHeadCommand(
@@ -33,8 +23,8 @@ export function resolveGitFetchHeadCommand(
 ): GitFetchHeadCommand {
   let cwd = initialCwd
   let gitDir: string | undefined
-  let subcommandIndex = -1
-  for (let index = 0; index < args.length; index += 1) {
+  const subcommandIndex = findGitSubcommandIndex(args)
+  for (let index = 0; index < args.length && index !== subcommandIndex; index += 1) {
     const arg = args[index]
     if (arg === '-C' && args[index + 1]) {
       cwd = path.resolve(cwd, args[index + 1])
@@ -54,15 +44,9 @@ export function resolveGitFetchHeadCommand(
       gitDir = path.resolve(cwd, arg.slice('--git-dir='.length))
       continue
     }
-    if (GLOBAL_OPTIONS_WITH_VALUE.has(arg)) {
+    if (GIT_GLOBAL_OPTIONS_WITH_VALUE.has(arg)) {
       index += 1
-      continue
     }
-    if (arg.startsWith('-')) {
-      continue
-    }
-    subcommandIndex = index
-    break
   }
   const subcommand = args[subcommandIndex]
   if (subcommand === 'pull') {
@@ -86,27 +70,14 @@ export function resolveGitFetchHeadCommand(
   return { needsLock: writesFetchHead || updatesRemoteTrackingRef, cwd, gitDir }
 }
 
-/**
- * `node:path` itself, spelled so a test can drive the Win32 rules on a POSIX runner. Node picks the
- * same submodule for the default export, so this is the host's own behaviour, not an emulation.
- */
+/** Choose the host’s path rules explicitly so tests can exercise Win32 behavior on POSIX. */
 function hostPath(): typeof path.posix {
   return process.platform === 'win32' ? path.win32 : path.posix
 }
 
-/**
- * Where a Git metadata pointer (a `.git` gitfile payload or a `commondir`) lands in the reading
- * host's namespace.
- *
- * Why: git running inside WSL writes these in the guest namespace, and under a drive-spelled base
- * `path.resolve` reads `/mnt/c/repo/.git` as the non-existent `C:\mnt\c\repo\.git`, so the commondir
- * walk dead-ends and every linked worktree of one repo gets its own fetch lane.
- *
- * Why the UNC base is excluded rather than handed to `resolveGitMetadataPath`: win32 `path.resolve`
- * already carries a WSL UNC base's distro onto a guest-rooted pointer, and a main worktree's `.git`
- * is a directory with no pointer to translate, so its key stays on that UNC spelling. Rewriting only
- * the linked worktrees to `C:\...` would split one repo across two lanes.
- */
+/** Translate WSL-written metadata pointers under native drive bases: path.resolve would turn /mnt/c into nonexistent C:\mnt\c, splitting worktree fetch lanes.
+ * Keep UNC bases unchanged: win32 resolve preserves their distro, and main .git directories retain UNC keys without pointers.
+ * Translating only linked-worktree pointers to drive paths would split the same repo across lanes. */
 function resolveMetadataPointer(basePath: string, rawPointer: string): string {
   if (process.platform === 'win32' && !isWslUncPath(basePath)) {
     const drivePath = toWindowsWslDrivePath(rawPointer)
@@ -117,10 +88,7 @@ function resolveMetadataPointer(basePath: string, rawPointer: string): string {
   return hostPath().resolve(basePath, rawPointer)
 }
 
-/**
- * Windows aliases `\\wsl$` to `\\wsl.localhost` and folds the distro name and any drvfs tail
- * case-insensitively, so two spellings of one WSL repo must not open two fetch lanes.
- */
+/** Fold WSL UNC aliases, distro names and drvfs tails as Windows does so one repo cannot open two fetch lanes. */
 function canonicalizeFetchHeadLockKey(key: string): string {
   if (process.platform !== 'win32') {
     return key

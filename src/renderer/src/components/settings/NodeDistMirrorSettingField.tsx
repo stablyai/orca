@@ -20,7 +20,7 @@ export function NodeDistMirrorSettingField({
 }: NodeDistMirrorSettingFieldProps): React.JSX.Element {
   const source = value ?? ''
   const [draft, setDraft] = useState<MirrorDraft>({ source, text: source, error: null })
-  // Why stored, not derived: a draft left keyed to an old value would match again if it returned.
+  // Store reconciliation so returning source values cannot revive an obsolete draft.
   const current: MirrorDraft =
     draft.source === source ? draft : { source, text: source, error: null }
   if (current !== draft) {

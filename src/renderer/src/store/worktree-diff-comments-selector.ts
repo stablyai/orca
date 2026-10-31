@@ -8,6 +8,7 @@ import { namedHostForOwnerRef } from '@/lib/resolve-owner'
 import { findIndexedWorktreeOwnerForHost } from '@/lib/worktree-runtime-owner-index'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { selectWorktreesByRepo } from './workspace-record-selectors'
 
 const EMPTY_DIFF_COMMENTS = Object.freeze([]) as unknown as DiffComment[]
 
@@ -67,12 +68,7 @@ export function diffCommentFloorKey(worktreeId: string, twin: DiffCommentTwin | 
     : worktreeId
 }
 
-/**
- * The rows whose review notes a change reads or writes. With one host publishing the id, every
- * row of it is the one worktree, exactly as before twins existed. With two, a twin is picked by, in order: the twin a queued write captured; the one twin holding the notes the
- * change names (UUIDs, so an async delivery still finds its copy after navigation); the open
- * workspace's host. Nothing else guesses.
- */
+/** With host twins, pick captured write identity, then uniquely held note UUIDs, then selected host; never guess. Single-host duplicate rows still represent one workspace. */
 export function findDiffCommentRows(
   state: Pick<
     DiffCommentSelectorState,
@@ -81,14 +77,13 @@ export function findDiffCommentRows(
   worktreeId: string,
   hint: { twin?: DiffCommentTwin; hostId?: ExecutionHostId; commentIds?: ReadonlySet<string> } = {}
 ): DiffCommentRows | null {
-  const rows = (state.worktreesByRepo[getRepoIdFromWorktreeId(worktreeId)] ?? []).filter(
+  const rows = (selectWorktreesByRepo(state)[getRepoIdFromWorktreeId(worktreeId)] ?? []).filter(
     (row) => row.id === worktreeId
   )
   const { twin: captured, commentIds } = hint
   if (captured) {
     const exact = rows.filter((row) => isTwin(row, captured))
-    // Why: a listing may since have stamped an unstamped row with the very host its write names.
-    // With no host named, only a lone copy can be the one that gained a stamp.
+    // Listings may add the write’s host stamp; hostless writes can follow a newly stamped row only if all copies agree.
     const sole = rows.length > 0 && rows.every((row) => isTwin(row, twinOf(rows[0])))
     const stamped =
       exact.length > 0 || captured.hostId
@@ -109,25 +104,21 @@ export function findDiffCommentRows(
       return null
     }
     const twin = twinOf(row)
-    // Why: an unstamped row the selection names is on that host; one only its notes name has no
-    // host to say, and a host-less write would be routed by whatever workspace is open.
+    // Selection attributes unstamped rows; notes alone cannot. Hostless writes would follow the currently open workspace.
     const hostId = diffCommentTwinHostId(twin) ?? named
     return hostId
       ? { twin, hostId, worktrees: rows.filter((candidate) => isTwin(candidate, twin)) }
       : null
   }
   if (rows.every((row) => isTwin(row, twinOf(rows[0])))) {
-    // Why the stamp even without a twin: main refuses a host-less write while the repo has twins.
-    // The identity too, so a queued save never reads a copy listed after it.
+    // Main refuses hostless writes amid twins; capture identity too so queued saves cannot switch to newly listed copies.
     const twin = twinOf(rows[0])
     const hostId = diffCommentTwinHostId(twin)
-    // Why: the open workspace naming another host means its copy isn't listed yet (e.g. a restore
-    // ahead of its host's listing); this copy's stamp says it is not that one. Notes it holds still
-    // name it, and an unstamped row has unknown provenance, not another host's.
+    // A differently stamped row is not the selected host’s unlisted copy; named notes still identify it, while unstamped provenance remains unknown.
     const named = namedHostForOwnerRef(state, { workspaceId: worktreeId })
     const holdsNamedNotes = rows.some((row) => row.diffComments?.some((c) => commentIds?.has(c.id)))
     const owner = named
-      ? findIndexedWorktreeOwnerForHost(state.worktreesByRepo, worktreeId, named)
+      ? findIndexedWorktreeOwnerForHost(selectWorktreesByRepo(state), worktreeId, named)
       : null
     if (named && twin.hostId && !holdsNamedNotes && !rows.some((row) => row === owner)) {
       return null
@@ -142,7 +133,7 @@ export function findDiffCommentRows(
   }
   const named = namedHostForOwnerRef(state, { workspaceId: worktreeId })
   const owner = named
-    ? findIndexedWorktreeOwnerForHost(state.worktreesByRepo, worktreeId, named)
+    ? findIndexedWorktreeOwnerForHost(selectWorktreesByRepo(state), worktreeId, named)
     : null
   return pickTwin(
     rows.find((row) => row === owner),
@@ -157,11 +148,7 @@ export function diffCommentRowNotes(found: {
   return found.worktrees.at(-1)?.diffComments
 }
 
-/**
- * What a queued write sends. The rows still holding the list its chain last produced are its copy
- * whatever stamps or twins a listing added since; after an out-of-band replacement, its twin's rows
- * (or the id's, if it was never a twin) as the owner lookup now finds them.
- */
+/** Queued saves follow rows holding the chain’s last list despite new host stamps; after external replacement, resolve the captured twin (or bare ID when never twinned) again. */
 export function readQueuedDiffComments(
   state: Pick<
     DiffCommentSelectorState,
@@ -170,7 +157,7 @@ export function readQueuedDiffComments(
   worktreeId: string,
   chain: { twin?: DiffCommentTwin; hostId?: ExecutionHostId; latest: DiffComment[] | undefined }
 ): { list: DiffComment[] | undefined } | null {
-  const rows = state.worktreesByRepo[getRepoIdFromWorktreeId(worktreeId)] ?? []
+  const rows = selectWorktreesByRepo(state)[getRepoIdFromWorktreeId(worktreeId)] ?? []
   if (
     chain.latest &&
     rows.some((row) => row.id === worktreeId && row.diffComments === chain.latest)
@@ -210,15 +197,13 @@ export function selectWorktreeDiffComments(
   if (scope?.type === 'folder') {
     return findFolderWorkspaceOwner(state, scope.folderWorkspaceId)?.diffComments
   }
-  // Why: the open twin's own notes; an unnamed twin still reads its first copy, as writes refuse it.
-  // Mounted surfaces rerun this on every store write, so only the open workspace scans its bucket;
-  // the rest share the immutable-snapshot id index.
+  // Open twins need their own notes (unnamed writes refuse); scan only the open bucket per store write, using the cached ID index elsewhere.
   const open = namedHostForOwnerRef(state, { workspaceId: worktreeId })
     ? findDiffCommentRows(state, worktreeId)
     : null
   return open
     ? diffCommentRowNotes(open)
-    : getIndexedWorktreeById(state.worktreesByRepo, worktreeId)?.diffComments
+    : getIndexedWorktreeById(selectWorktreesByRepo(state), worktreeId)?.diffComments
 }
 
 export function selectWorktreeDiffCommentsOrEmpty(

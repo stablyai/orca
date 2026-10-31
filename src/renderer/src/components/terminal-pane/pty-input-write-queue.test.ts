@@ -78,8 +78,7 @@ describe('pty input write queue', () => {
   it('coalesces a dense burst of wheel reports instead of one write per macrotask turn', async () => {
     const { writes, queue } = createRecordingQueue()
 
-    // Simulates a 2s aggressive trackpad gesture at 120Hz: 240 SGR reports
-    // enqueued while the drain cannot run between events.
+    // Queue a 120Hz two-second gesture; the first report is immediate and the rest must coalesce without hundreds of timer turns.
     for (let i = 0; i < 240; i += 1) {
       expect(queue.enqueue('pty-1', WHEEL_UP_REPORT, 'driving')).toBe(true)
     }
@@ -628,14 +627,10 @@ describe('pty input write queue', () => {
   })
 
   it('dual mode-2031 enqueues through the real queue never paint 997 under host echo-safe write', async () => {
-    // Two 997s can still coalesce in one write: a fast theme flip, or an old client that
-    // still answers 2031 subscribes (#9993 made this host silent, mixed versions have not).
-    // Drive the real write queue → host intercept (extract + answerLiveQueryReply)
-    // → ingress echo strip, and assert no `997;1n` emission at the confirm prompt.
+    // Mixed versions can coalesce late 997 replies; drive queue→host intercept→echo strip and require no literal leakage at confirmation prompts (#9993).
     vi.useFakeTimers()
     const reply = mode2031SequenceFor('dark')
-    // ECHOCTL carets every control, not just ESC. Identical for this reply (it carries no
-    // other control), but modelled correctly so this does not drift from the encoder.
+    // Model ECHOCTL for every control byte so this fixture stays aligned with the encoder.
     const caretEcho = (data: string): string =>
       [...data]
         .map((ch) =>
@@ -748,8 +743,7 @@ describe('pty input write queue', () => {
   })
 
   it('does not retain a reaction record per acknowledged write', async () => {
-    // Regression: racing every accepted write against one queue-lifetime promise
-    // retained a reaction until that promise settled — ~440 bytes per write.
+    // Queue-lifetime promise races retained a reaction per accepted write until teardown, leaking roughly 440 bytes each.
     const queue = createPtyInputWriteQueue({
       isWritable: () => true,
       write: () => undefined,

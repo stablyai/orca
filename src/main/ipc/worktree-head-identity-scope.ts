@@ -1,15 +1,12 @@
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 
-// Which slice of a Git common dir's head identities a watcher burst can have
-// moved. Absence of a scope always means "unknown" and must resolve to the full
-// scope — only an explicit, provable narrowing may skip a metadata read.
+// Missing scope means unknown and requires a full read; only proven narrowing may skip metadata.
 
 export type WorktreeHeadIdentityScope = {
   /** Re-enumerate `worktrees/`: an admin entry may have appeared or vanished. */
   listing: boolean
-  /** Re-read the primary checkout's HEAD. */
   primary: boolean
-  /** Re-read every entry: a global signal (packed-refs rewrite, lost events). */
+  /** Global signals, including packed-refs writes or event loss, require every entry. */
   all: boolean
   /** Admin entry dir keys (see `headIdentityEntryKey`) whose head may have moved. */
   entryNames: ReadonlySet<string>
@@ -45,9 +42,7 @@ export const LISTING_HEAD_IDENTITY_SCOPE: WorktreeHeadIdentityScope = Object.fre
   entryNames: NO_ENTRY_NAMES
 })
 
-// Why: the watcher reports the admin dir name the OS gave it while the reader
-// uses its own `readdir` name. Fold NFC/NFD and case so the two always agree —
-// over-matching only costs one redundant read, under-matching loses an update.
+// Fold case and Unicode to match watcher/readdir names; overmatching costs a read, undermatching loses updates.
 export function headIdentityEntryKey(name: string): string {
   return normalizeRuntimePathForComparison(name).toLowerCase()
 }

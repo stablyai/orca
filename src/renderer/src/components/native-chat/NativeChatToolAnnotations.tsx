@@ -7,7 +7,7 @@ import {
   formatToolDuration,
   mcpToolIdentity,
   toolWebSearchResults
-} from '../../../../shared/native-chat-tool-identity'
+} from '../../../../shared/native-chat/tools/native-chat-tool-identity'
 
 export function NativeChatToolName({
   name,

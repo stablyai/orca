@@ -18,6 +18,7 @@ import {
   getHostScopedWorktreeLineageInputs,
   getWorktreeLineageAncestors
 } from '../../../../shared/sidebar-list/worktree-lineage-projection'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 type ChildWorkspacesToggleState = Pick<
   AppState,
@@ -31,7 +32,7 @@ function resolveTargetWorktree(
 ): Worktree | undefined {
   const hovered = getHoveredWorkspaceIdentity(doc)
   if (hovered) {
-    // Why: the card under the pointer wins over the active one, like the delete shortcut.
+    // Hovered cards outrank active ones, matching workspace deletion shortcuts.
     return getAllWorktreesFromState(state).find(
       (worktree) =>
         worktree.id === hovered.workspaceId &&
@@ -51,7 +52,7 @@ function getParentWorktree(
   state: ChildWorkspacesToggleState,
   target: Worktree
 ): Worktree | undefined {
-  // Why: the sidebar nests a child only under a parent on the same host, and archived rows never render.
+  // Only non-archived rows on the same host can be rendered lineage children.
   const worktrees = getAllWorktreesFromState(state).filter(
     (worktree) => worktree.hostId === target.hostId && !worktree.isArchived
   )
@@ -63,7 +64,6 @@ function getParentWorktree(
   return getWorktreeLineageAncestors(target, lineageById, worktreeMap)[0]
 }
 
-/** Resolves the target's rendered chip, falling back to its same-host parent's chip. */
 export function resolveChildWorkspacesToggleGroupKey(
   state: ChildWorkspacesToggleState,
   renderedChipKeys: ReadonlySet<string>,
@@ -91,7 +91,7 @@ export function getRenderedLineageChipKeys(state: AppState): Set<string> {
     )
   }
   const visibleWorktrees = computeVisibleWorktrees(
-    state.worktreesByRepo,
+    selectWorktreesByRepo(state),
     [],
     buildVisibleWorktreeOptionsFromState(state, getRepoMapFromState(state))
   )

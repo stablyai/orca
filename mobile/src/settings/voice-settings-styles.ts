@@ -1,7 +1,8 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const voiceSettingsStyles = StyleSheet.create({
+export const voiceSettingsStyles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase,
@@ -16,7 +17,7 @@ export const voiceSettingsStyles = StyleSheet.create({
   backButton: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.sm
@@ -40,7 +41,7 @@ export const voiceSettingsStyles = StyleSheet.create({
   },
   section: {
     backgroundColor: colors.bgPanel,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     overflow: 'hidden'
   },
   sectionTopGap: { marginTop: spacing.sm },
@@ -89,4 +90,4 @@ export const voiceSettingsStyles = StyleSheet.create({
     marginHorizontal: spacing.md
   },
   error: { color: colors.statusRed, fontSize: typography.metaSize, marginTop: spacing.md }
-})
+}))

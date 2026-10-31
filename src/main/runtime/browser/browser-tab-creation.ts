@@ -1,6 +1,7 @@
 import { createBrowserTabInRenderer } from './browser-tab-renderer-create'
 import type { RuntimeNavigationTarget } from '../../../shared/runtime-navigation'
 import type { BrowserPageCreationPlacement } from '../../../shared/browser-client-host-placement'
+import type { BrowserTabSplitDirection } from '../../../shared/browser-tab-split-direction'
 import {
   publishCreatedBrowserSessionTab,
   resolveBrowserTabCreateFocus
@@ -45,6 +46,8 @@ export class RuntimeBrowserTabCreation {
       navigation?: RuntimeNavigationTarget
       targetGroupId?: string
       placement?: BrowserPageCreationPlacement
+      split?: BrowserTabSplitDirection
+      splitFromTabId?: string
     },
     caller?: { pairedDeviceId?: string; clientKind?: 'mobile' | 'runtime' }
   ): Promise<{ browserPageId: string }> {
@@ -54,7 +57,7 @@ export class RuntimeBrowserTabCreation {
       navigation: params.navigation,
       clientKind: caller?.clientKind
     })
-    // Why: every placement must accept folder workspaces, not only client-hosted pages (#21353).
+    // #21353: every placement must accept folder workspaces.
     const worktree = params.worktree
       ? await this.host.resolveBrowserWorkspace(params.worktree)
       : undefined
@@ -64,6 +67,16 @@ export class RuntimeBrowserTabCreation {
       throw new BrowserError(
         'invalid_argument',
         `Browser profile ${params.profileId} was not found`
+      )
+    }
+    // Why reject rather than ignore: a caller asking for a split pane should learn it got none.
+    if (
+      params.split &&
+      (params.placement?.kind === 'client' || !this.host.getAvailableAuthoritativeWindow())
+    ) {
+      throw new BrowserError(
+        'invalid_argument',
+        'Opening a browser tab in a split pane needs an Orca desktop window on this host.'
       )
     }
     if (params.placement?.kind === 'client') {
@@ -77,13 +90,12 @@ export class RuntimeBrowserTabCreation {
         }
       )
     }
-    // Why: headless serve has no renderer <webview>, so back the page with a main-process offscreen WebContents instead.
+    // Headless hosts use offscreen WebContents because no renderer webview exists.
     if (!this.host.getAvailableAuthoritativeWindow()) {
       const offscreen = this.host.getOffscreenBrowserBackend()
       if (!offscreen) {
         throw new BrowserError('browser_error', 'This host does not support browser panes.')
       }
-      // Why: the offscreen backend registers synchronously, so there is no webview-mount wait.
       const created = await offscreen.createTab({
         url,
         worktreeId,
@@ -117,15 +129,17 @@ export class RuntimeBrowserTabCreation {
       params.profileId,
       params.profileId ? sessionPartition : undefined,
       focus.focusesHost,
-      params.page
+      params.page,
+      undefined,
+      params.split ? { direction: params.split, fromTabId: params.splitFromTabId } : undefined
     )
 
-    // Why: the webview must mount and register before the tab is operable, so wait here (returning the ID anyway on timeout).
+    // Wait for operability, but retain the created id if mounting times out.
     if (params.waitForRegistration !== false) {
       try {
         await waitForTabRegistration(browserPageId)
       } catch {
-        // Tab exists in the renderer even if the webview hasn't mounted; subsequent commands surface a clear error if it never loads.
+        // Later commands report a clear error if the created tab never mounts.
       }
     }
 
@@ -139,10 +153,11 @@ export class RuntimeBrowserTabCreation {
       targetGroupId: params.targetGroupId
     })
 
-    // Why: the webview loads about:blank first; route navigation through the bridge so its registered owner remains authoritative.
+    // The webview starts at about:blank; bridge navigation preserves registered ownership.
     if (url && url !== 'about:blank') {
       const navigate = async (): Promise<void> => {
-        const result = await bridge.goto(url, worktreeId, browserPageId)
+        // Nobody reads a new tab's effects, so its first load skips the settle.
+        const result = await bridge.goto(url, worktreeId, browserPageId, { reportEffects: false })
         this.targets.notifyRendererNavigation(browserPageId, result.url, result.title)
         if (!this.host.getAvailableAuthoritativeWindow() && worktreeId) {
           this.host.notifyHeadlessBrowserSessionTabsChanged?.(worktreeId)
@@ -155,7 +170,7 @@ export class RuntimeBrowserTabCreation {
       try {
         await navigate()
       } catch {
-        // Tab exists but navigation failed — caller can retry with explicit goto
+        // Preserve the tab so callers can retry navigation with goto.
       }
     }
 

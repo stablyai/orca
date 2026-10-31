@@ -1,6 +1,6 @@
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
-import { OrcaRuntimeWithAutomationOperations } from './automation-operations'
+import { OrcaRuntimeWithRestoredTerminalPlacement } from './restored-terminal-placement'
 import type {
   RuntimeTerminalOrphanAdoptionRequest,
   RuntimeTerminalOrphanAdoptionResult
@@ -32,8 +32,9 @@ import type {
   ArtifactWriteRequest
 } from '../../../../shared/artifacts'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
+import { forgetPtySurface } from '../../pty-recorded-surface-topology'
 
-export abstract class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity extends OrcaRuntimeWithAutomationOperations {
+export abstract class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity extends OrcaRuntimeWithRestoredTerminalPlacement {
   protected abstract getOwnWorkspaceSessionForWorktree(
     worktreeId: string
   ): WorkspaceSessionState | null
@@ -69,8 +70,7 @@ export abstract class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity ex
     tabId: string,
     leafId: string
   ): boolean {
-    // Why own partition: emptying a rotated runtime partition re-routes reads to an older copy
-    // that can still list a surface retirement just removed.
+    // Emptying a rotated partition reroutes reads to an older copy that may still list the retired surface.
     const layout = this.getPersistedSessionListingTerminalTab(
       worktreeId,
       tabId,
@@ -137,9 +137,8 @@ export abstract class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity ex
         this.tabs.delete(candidate.tabId)
       }
     }
-    if (pty?.tabId === candidate.tabId) {
-      pty.tabId = null
-      pty.paneKey = null
+    if (pty && this.paneOfPty(pty).tabId === candidate.tabId) {
+      forgetPtySurface(pty)
     }
     this.notifier?.resolveLegacyWorkerTerminalRecovery?.(
       candidate.paneKey,

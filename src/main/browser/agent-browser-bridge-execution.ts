@@ -2,14 +2,15 @@ import { execFile } from 'node:child_process'
 import type { WebContents } from 'electron'
 import { BrowserError } from './cdp-bridge'
 import {
-  focusedRichTextEditExpression,
-  isExplicitContentEditableResult
-} from './agent-browser-bridge-input'
-import {
   isTabClosedTransportError,
   pageUnavailableMessageForSession
 } from './agent-browser-bridge-process'
 import { translateResult } from './agent-browser-bridge-result'
+import {
+  AGENT_BROWSER_BATCH_ARGS,
+  agentBrowserBatchInput,
+  agentBrowserResultMintsRefs
+} from './agent-browser-batch-command'
 import { AgentBrowserBridgeTabs } from './agent-browser-bridge-tabs'
 import { assertRemoteCliBrowserAccess } from '../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 import { ORCA_TAB_SESSION_PREFIX } from './agent-browser-orphan-sweep'
@@ -20,6 +21,9 @@ import {
   type SessionState,
   type ResolvedBrowserCommandTarget
 } from './agent-browser-bridge-types'
+
+// These act on an element with no pointer input, so the agent cursor is shown on it first.
+const ELEMENT_COMMANDS_WITHOUT_POINTER = new Set(['check', 'uncheck', 'select', 'focus'])
 
 export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs {
   protected abstract destroySession(
@@ -41,21 +45,13 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
     return wc
   }
 
-  /**
-   * Notice that the daemon retired itself between two commands.
-   *
-   * A replacement daemon still serves the page (every call reasserts `--cdp`)
-   * but carries none of the session's network routes, so without this the
-   * interception the caller configured is silently gone (#16367).
-   */
+  /** Idle retirement loses daemon routes and the delta baseline; restore routes when its replacement connects. */
   protected reinitializeIfDaemonIdledOut(sessionName: string, session: SessionState): void {
-    if (
-      this.agentBrowserIdleTimeoutMs === null ||
-      Date.now() - session.lastCommandAt < this.agentBrowserIdleTimeoutMs
-    ) {
+    if (!this.isDaemonIdledOut(session)) {
       return
     }
     session.initialized = false
+    session.hasDeltaBaseline = false
     if (session.activeInterceptPatterns.length > 0) {
       this.pendingInterceptRestore.set(sessionName, [...session.activeInterceptPatterns])
     }
@@ -74,37 +70,38 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
   ): Promise<unknown> {
     const session = this.sessions.get(sessionName)
     if (!session) {
-      // Why: a queued command can run after a concurrent close deleted the session — surface a tab-lifecycle error, not an opaque failure.
       throw this.createPageUnavailableError(sessionName)
     }
 
-    // Why: the webContents can be destroyed during queue delay — check here to avoid cryptic Electron debugger errors.
+    // The target may disappear while the command waits in the queue.
     if (!this.getWebContents(session.webContentsId)) {
       await this.destroySession(sessionName)
       throw this.createPageUnavailableError(sessionName)
     }
 
-    // Why: a command can spawn several helpers in turn; none may start after a host's revocation.
+    // Recheck revocation before each helper spawn within a command.
     assertRemoteCliBrowserAccess(session.webContentsId)
     this.reinitializeIfDaemonIdledOut(sessionName, session)
     session.lastCommandAt = Date.now()
 
-    const args = ['--session', sessionName]
     const managesInterceptRoutes =
       commandArgs[0] === 'network' && (commandArgs[1] === 'route' || commandArgs[1] === 'unroute')
 
     const needsInit = !session.initialized
-    // Why: a restarted named daemon auto-launches Chrome unless every invocation reasserts Orca's CDP owner.
-    args.push('--cdp', String(session.proxy.getPort()))
 
-    // Why: exec passthrough can produce a large argv; spreading into push risks V8 argument limits.
-    for (const commandArg of commandArgs) {
-      args.push(commandArg)
+    const pointAtTarget = ELEMENT_COMMANDS_WITHOUT_POINTER.has(commandArgs[0] ?? '')
+    if (pointAtTarget) {
+      session.proxy.pointAtNextNode(true)
     }
-    args.push('--json')
-
-    const stdout = await this.runAgentBrowserRaw(sessionName, args, execOptions)
-    const translated = translateResult(stdout)
+    let stdout: string
+    try {
+      stdout = await this.runAgentBrowserCommand(sessionName, session, commandArgs, execOptions)
+    } finally {
+      if (pointAtTarget) {
+        session.proxy.pointAtNextNode(false)
+      }
+    }
+    const translated = translateResult(stdout, execOptions)
 
     if (!translated.ok) {
       throw this.createCommandError(
@@ -115,11 +112,17 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
       )
     }
 
-    // Why: mark initialized only after success, so a failed first --cdp connection retries with --cdp.
+    if (agentBrowserResultMintsRefs(translated.result)) {
+      const browserPageId = this.resolveTabIdSafe(session.webContentsId)
+      if (browserPageId) {
+        this.recordRefPage(browserPageId)
+      }
+    }
+
     if (needsInit) {
       session.initialized = true
 
-      // Why: a process swap loses intercept patterns — restore them now unless the caller's first command reconfigured routing.
+      // Restore routes lost on process swap unless this command reconfigures them.
       const pendingPatterns = managesInterceptRoutes
         ? undefined
         : this.pendingInterceptRestore.get(sessionName)
@@ -127,19 +130,10 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
         this.pendingInterceptRestore.delete(sessionName)
         try {
           const urlPattern = pendingPatterns[0] ?? '**/*'
-          await this.runAgentBrowserRaw(sessionName, [
-            '--session',
-            sessionName,
-            '--cdp',
-            String(session.proxy.getPort()),
-            'network',
-            'route',
-            urlPattern,
-            '--json'
-          ])
+          await this.runAgentBrowserCommand(sessionName, session, ['network', 'route', urlPattern])
           session.activeInterceptPatterns = pendingPatterns
         } catch {
-          // Why: intercept restore is best-effort — don't fail the user's command if the new page can't support it.
+          // Route restoration must not fail an otherwise successful command.
         }
       }
     }
@@ -147,29 +141,27 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
     return translated.result
   }
 
-  protected async isExplicitContentEditableTarget(
+  private runAgentBrowserCommand(
     sessionName: string,
-    element: string
-  ): Promise<boolean> {
-    const result = await this.execAgentBrowser(sessionName, [
-      'get',
-      'attr',
-      element,
-      'contenteditable'
-    ])
-    return isExplicitContentEditableResult(result)
-  }
-
-  protected async fillExplicitContentEditable(
-    sessionName: string,
-    element: string,
-    value: string
-  ): Promise<void> {
-    await this.execAgentBrowser(sessionName, ['focus', element])
-    // Why: stdin avoids argv limits and keeps replacement atomic; chunked edits can move focus and split a fill across controls.
-    await this.execAgentBrowser(sessionName, ['eval', '--stdin'], {
-      stdinText: focusedRichTextEditExpression(JSON.stringify(value), { selectAll: true })
-    })
+    session: SessionState,
+    commandArgs: string[],
+    execOptions?: AgentBrowserExecOptions
+  ): Promise<string> {
+    // Every invocation must pin CDP ownership or a restarted daemon may launch Chrome.
+    const args = ['--session', sessionName, '--cdp', String(session.proxy.getPort())]
+    // A caller's own stdin (eval --stdin) cannot share the pipe with batch input.
+    if (!execOptions?.cliArgv && execOptions?.stdinText === undefined) {
+      return this.runAgentBrowserRaw(sessionName, [...args, ...AGENT_BROWSER_BATCH_ARGS], {
+        ...execOptions,
+        stdinText: agentBrowserBatchInput(commandArgs)
+      })
+    }
+    // Spreading large passthrough argv can exceed V8's argument limit.
+    for (const commandArg of commandArgs) {
+      args.push(commandArg)
+    }
+    args.push('--json')
+    return this.runAgentBrowserRaw(sessionName, args, execOptions)
   }
 
   protected createPageUnavailableError(sessionName: string): BrowserError {
@@ -203,7 +195,7 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
         }
       }
 
-      // Why: proceeding after an unverified close can reuse a daemon that owns an unrelated browser.
+      // Reusing an unverified stale daemon could target an unrelated browser.
       const timeout = setTimeout(() => {
         child?.kill()
         finish(
@@ -218,10 +210,7 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
         child = execFile(
           this.agentBrowserBin,
           ['--session', sessionName, 'close'],
-          // Why windowsHide: agent-browser is console-subsystem and Orca's main
-          // process owns no console, so each spawn gets a fresh visible conhost
-          // that takes foreground -- keystrokes typed into a terminal at that
-          // moment land in the black box (#14543).
+          // Hide Windows helper consoles so they cannot take keyboard focus.
           {
             env: this.agentBrowserEnv,
             timeout: STALE_SESSION_CLOSE_TIMEOUT_MS,
@@ -254,7 +243,7 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
     fallbackCode: string,
     webContentsId?: number
   ): BrowserError {
-    // Why: CDP "connection refused" can also mean a real proxy failure — only map to closed-page when the target is confirmed gone.
+    // Connection refusal proves page loss only when the target is also gone.
     if (
       fallbackCode === 'browser_error' &&
       isTabClosedTransportError(message) &&

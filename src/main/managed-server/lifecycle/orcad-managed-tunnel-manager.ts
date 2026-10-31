@@ -1,7 +1,3 @@
-/**
- * One SSH forward per managed environment, owned across reconnects and host resume, and the
- * serving check that starts a stopped server behind it.
- */
 import {
   getRuntimeSshAccess,
   type KnownRuntimeEnvironment
@@ -38,13 +34,13 @@ import {
   type OrcadTunnelStartChecks
 } from './orcad-managed-tunnel-target'
 
-export type OrcadManagedTunnelDependencies = {
+type OrcadManagedTunnelDependencies = {
   getConnectionManager: () => SshConnectionManager | null
   getTargetStore: () => ReturnType<typeof getSshTargetRegistryStore>
   forwardManager?: SshPortForwardManager
   probeTunnel?: OrcadManagedTunnelProbe
   targeting?: OrcadManagedTunnelTargeting
-  /** Runs after a fresh forward is up; starts a server that stopped (e.g. after idling). */
+  /** Start proven-stopped servers after a fresh forward opens. */
   ensureServing?: OrcadManagedServingCheck
 }
 
@@ -52,7 +48,7 @@ export class OrcadManagedTunnelManager {
   private readonly active = new Map<string, ActiveOrcadTunnel>()
   private readonly inFlight = new Map<string, Promise<void>>()
   private readonly ownershipGenerations = new Map<string, number>()
-  // The SSH target each environment's latest build dialled, so its Disconnect can supersede it.
+  // Track in-flight build targets so Disconnect can supersede unrecorded forwards.
   private readonly buildTargets = new Map<string, string>()
   private readonly forwards: SshPortForwardManager
   private readonly resumeRecovery: OrcadManagedTunnelResumeRecovery
@@ -97,8 +93,7 @@ export class OrcadManagedTunnelManager {
     }
     const pending = this.inFlight.get(environment.id)
     if (pending) {
-      // A joiner did not start that run, so its end (a close(), a disconnect that cancelled its
-      // connect, a lost exec) is not this caller's answer: build once anew. An auth failure is.
+      // Retry joined runs cancelled by another caller; authentication failures remain authoritative.
       return pending.catch((error: unknown) =>
         retryJoined && !(error instanceof Error && isAuthError(error))
           ? this.ensure(environment, resolveCurrent, false)
@@ -114,7 +109,6 @@ export class OrcadManagedTunnelManager {
     return operation
   }
 
-  /** Forwards anew to the port the server bound now; a redeploy can bind another port. */
   async rebuild(
     environment: KnownRuntimeEnvironment,
     resolveCurrent: () => KnownRuntimeEnvironment | null = () => environment
@@ -154,13 +148,13 @@ export class OrcadManagedTunnelManager {
       connection,
       forwards: this.forwards,
       localPort: 0,
-      label: 'Managed Orca server',
+      label: 'Orca on this host',
       remotePort,
       rereadRemotePort: checks.rereadRemotePort,
       verify: checks.verify,
       stillCurrent
     })
-    // Why re-check: a teardown can land between the build's last check and this record.
+    // Teardown may occur between the build's last check and recording its forward.
     if (!forward || !stillCurrent()) {
       await (forward && this.forwards.removeForwardAndWait(forward.id))
       throw supersededTunnelError()
@@ -188,20 +182,18 @@ export class OrcadManagedTunnelManager {
     await this.forwards.removeForwardAndWait(active.forwardId)
   }
 
-  /** The host's SSH session ends: every managed tunnel it carried, built or building, goes. */
   async closeTarget(targetId: string): Promise<void> {
     const environmentIds = new Set([...this.buildTargets.keys(), ...this.active.keys()])
     const carried = [...environmentIds].filter(
       (id) => this.buildTargets.get(id) === targetId || this.active.get(id)?.targetId === targetId
     )
-    // Why both: a build's forward is unrecorded while its identity check runs, or still starting.
+    // Include unrecorded forwards still starting or checking identity.
     await Promise.all([
       ...carried.map((environmentId) => this.close(environmentId)),
       this.forwards.removeAllForwards(targetId)
     ])
   }
 
-  /** Quit: supersedes every build in flight and waits for each forward process to exit. */
   async shutdown(): Promise<void> {
     this.managerGeneration += 1
     this.active.clear()
@@ -218,7 +210,6 @@ export class OrcadManagedTunnelManager {
     this.forwards.dispose()
   }
 
-  /** The server behind the tunnel answers, or is started; a moved port rebuilds the forward. */
   async verifyServing(environment: KnownRuntimeEnvironment): Promise<OrcadManagedServing> {
     if (!this.active.has(environment.id)) {
       await this.ensure(environment)
@@ -227,11 +218,11 @@ export class OrcadManagedTunnelManager {
     if (serving.rebind) {
       await this.ensure(environment)
     }
-    // Why re-check: an unanswered old port says nothing about the server the new tunnel reaches.
+    // The new tunnel may reach a different port; its server needs a fresh serving check.
     return serving.rebind && serving.state !== 'started' ? this.checkServing(environment) : serving
   }
 
-  /** Never rebuilds, so it is safe inside a build: a moved port only drops the forward. */
+  /** Safe during builds: drop moved-port forwards without recursively rebuilding. */
   checkServing(environment: KnownRuntimeEnvironment): Promise<OrcadTunnelServing> {
     return checkManagedTunnelServing({
       environment,
@@ -294,7 +285,7 @@ export class OrcadManagedTunnelManager {
       connection,
       forwards: this.forwards,
       localPort: deployment.localPort,
-      label: `Managed Orca server: ${environment.name}`,
+      label: `Orca on ${environment.name}`,
       ...checks,
       stillCurrent: () => stillOwned() && connection.getConnectGeneration() === transportGeneration
     })

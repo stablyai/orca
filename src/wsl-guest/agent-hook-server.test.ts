@@ -374,8 +374,7 @@ describe('RelayAgentHookServer', () => {
       expect(replayed).toBe(1)
       expect(forward).toHaveBeenCalledTimes(1)
       expect(forward.mock.calls[0][0].payload.prompt).toBe('cache me')
-      // Why: replay must preserve the wire envelope's env/version (and source)
-      // so protocol diagnostics and the remote-location marker survive replay.
+      // Replay must retain env/version/source for protocol diagnostics and remote location.
       expect(forward.mock.calls[0][0].source).toBe('claude')
       expect(forward.mock.calls[0][0].env).toBe('remote')
       expect(forward.mock.calls[0][0].version).toBe('1')
@@ -468,8 +467,7 @@ describe('RelayAgentHookServer', () => {
     }
   })
 
-  // Why: the relay should still drop malformed HTTP events before they reach
-  // the wire, even though Orca main re-validates at the SSH trust boundary.
+  // Reject malformed HTTP events before the wire even though main revalidates at SSH ingress.
   it('does not forward when normalizeHookPayload rejects the event', async () => {
     const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
     const server = new RelayAgentHookServer({ endpointDir: dir, forward })
@@ -486,14 +484,10 @@ describe('RelayAgentHookServer', () => {
           paneKey: 'tab-1:0',
           tabId: 'tab-1',
           worktreeId: 'wt-1',
-          // Why: bogus hook_event_name — normalizeClaudeEvent returns null for
-          // any value outside its known set, which propagates up so
-          // normalizeHookPayload returns null.
           payload: { hook_event_name: 'BogusEvent', prompt: 'ignored' }
         })
       })
-      // Why: hook server fails open with 204 even on rejected input — the
-      // contract is "never block the agent", not "tell the agent it lost".
+      // Rejected hooks still return 204 so agents never block.
       expect(res.status).toBe(204)
       expect(forward).not.toHaveBeenCalled()
     } finally {
@@ -583,6 +577,50 @@ describe('RelayAgentHookServer', () => {
       expect(forward.mock.calls.at(-1)?.[0].payload.lastAssistantMessage).toBe(
         'Relay transcript completed.'
       )
+      // A Stop whose opening the relay never saw is ambiguous; SessionEnd and the retry keep that.
+      const ends = forward.mock.calls.map(([env]) => `${env.turnEndedAt}:${env.turnEndDisposition}`)
+      expect(new Set(ends)).toEqual(new Set(['undefined:ambiguous']))
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('marks a verified re-entered Stop as a later end, an unproven repeat ambiguous, and replays both unchanged', async () => {
+    const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
+    const server = new RelayAgentHookServer({ endpointDir: dir, forward })
+    await server.start()
+    try {
+      const { port, token } = server.getCoordinates()
+      const post = (payload: Record<string, unknown>) =>
+        fetch(`http://127.0.0.1:${port}/hook/claude`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Orca-Agent-Hook-Token': token },
+          body: JSON.stringify({
+            paneKey: PANE_KEY,
+            tabId: 'tab-1',
+            env: 'remote',
+            version: '1',
+            payload
+          })
+        })
+      await post({ hook_event_name: 'UserPromptSubmit', prompt: 'Lint it' })
+      await post({ hook_event_name: 'Stop', last_assistant_message: 'Draft.' })
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      // Claude re-fires Stop with the flag when a blocking Stop hook continues the same turn.
+      await post({
+        hook_event_name: 'Stop',
+        stop_hook_active: true,
+        last_assistant_message: 'Final.'
+      })
+      const [draft, final] = forward.mock.calls.slice(-2).map(([env]) => env.turnEndedAt)
+      expect(final).toBeGreaterThan(draft!)
+      await post({ hook_event_name: 'Stop', last_assistant_message: 'Final.' })
+      const repeat = { turnEndedAt: final, turnEndDisposition: 'ambiguous' }
+      expect(forward.mock.calls.at(-1)?.[0]).toMatchObject(repeat)
+
+      expect(server.replayCachedPayloadsForPanes()).toBe(1)
+      expect(forward.mock.calls.at(-1)?.[0]).toMatchObject({ isReplay: true, ...repeat })
+      expect(forward.mock.calls.at(-1)?.[0]).not.toHaveProperty('hostTurn')
     } finally {
       server.stop()
     }
@@ -647,8 +685,7 @@ describe('RelayAgentHookServer', () => {
   })
 
   it('caps the replay cache at 256 panes, evicting the least-recently-updated', async () => {
-    // Mirrors the server's private MAX_CACHED_PANES. The WSL relay never gets a
-    // per-pane teardown signal, so the cache is recency-capped instead.
+    // Match private MAX_CACHED_PANES; WSL receives no pane teardown signal and relies on recency eviction.
     const CAP = 256
     const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
     const server = new RelayAgentHookServer({ endpointDir: dir, forward })
@@ -669,13 +706,11 @@ describe('RelayAgentHookServer', () => {
           })
         })
 
-      // Fill the cache to exactly the cap in insertion order 0..CAP-1. Sequential
-      // awaits pin Map order = update recency, which the eviction relies on.
+      // Await posts sequentially so insertion order tracks update recency.
       for (let i = 0; i < CAP; i++) {
         await postPane(paneKeyFor(i))
       }
-      // Refresh the OLDEST pane just before overflow, then push one more pane.
-      // Recency (not insertion) order must now evict pane 1, sparing pane 0.
+      // Refresh the oldest before overflow to distinguish recency eviction from insertion order.
       await postPane(paneKeyFor(0))
       await postPane(paneKeyFor(CAP))
 

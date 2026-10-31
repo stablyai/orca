@@ -58,6 +58,7 @@ function setProjectGroupWithoutWorktreeRowsState(
 
   mockStore.state = {
     ...makeFolderWorkspacePathStatusMockState(),
+    startupWorktreeRefreshCompleted: true,
     activeModal: '',
     activeView: 'terminal',
     activeWorktreeId: null,
@@ -112,7 +113,6 @@ function setProjectGroupWithoutWorktreeRowsState(
   }
 }
 
-// Why: describe title is shared across the split files so test full names stay stable.
 describe('WorktreeList lineage child card renderer', () => {
   beforeAll(async () => {
     await loadWorktreeList()

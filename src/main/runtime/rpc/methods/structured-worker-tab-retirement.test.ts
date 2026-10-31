@@ -1,14 +1,15 @@
-/**
- * Every structured-worker settlement has to retire the chat tab the worker start published.
- *
- * `setSessionTabVisibility(false)` only clears the DURABLE restore index. Without the snapshot
- * prune, a coordinator that dispatches and releases five structured workers leaves five dead
- * "Claude Chat" tabs in the worktree's tab bar, and opening one re-attaches the released session
- * outside orchestration's hold and eviction accounting.
- */
+import { hostTestState } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../../shared/agent-session-record.test-fixture'
+import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
+import type { AgentSessionLease } from '../../../../shared/agent-session-record'
+/** Every settlement must clear durable restore and prune live worker chat tabs; leftover tabs can reattach released sessions outside orchestration accounting. */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { partialRuntimeStore } from '../../runtime-store-partial-fixture'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { OrchestrationDb } from '../../orchestration/db'
 import type { WorkerTerminalResourceRow } from '../../orchestration/worker-terminal-ownership'
@@ -34,7 +35,7 @@ const SESSION = 'session-1'
 const HANDLE = 'structworker_11111111-1111-4111-a111-111111111111'
 const HOST_SCOPE = { kind: 'local', hostId: 'local' } as const
 
-function installHost(options: { closeThrows?: boolean; lease?: Record<string, unknown> } = {}) {
+function installHost(options: { closeThrows?: boolean; lease?: Partial<AgentSessionLease> } = {}) {
   let attached = true
   const setSessionTabVisibility = vi.fn(async () => {})
   const close = vi.fn(async () => {
@@ -43,29 +44,27 @@ function installHost(options: { closeThrows?: boolean; lease?: Record<string, un
     }
     attached = false
   })
-  setStructuredAgentSessionHost({
-    setSessionTabVisibility,
-    close,
-    hasSession: () => attached,
-    hold: async () => {},
-    release: () => {},
-    subscribe: () => () => {},
-    deps: {
-      store: {
-        getRecord: () => ({
-          location: { executionHostId: 'local', wslDistro: null },
-          lease: options.lease ?? {
-            runtimeKind: 'native',
-            claimStatus: attached ? 'live' : 'released',
-            deathEvidence: attached
-              ? null
-              : { kind: 'exit-observed', detail: 'closed', observedAt: 1 },
-            runtimeFence: 2
-          }
+  const { host, store } = hostTestState()
+  vi.spyOn(host, 'setSessionTabVisibility').mockImplementation(setSessionTabVisibility)
+  vi.spyOn(host, 'close').mockImplementation(close)
+  vi.spyOn(host, 'hasSession').mockImplementation(() => attached)
+  vi.spyOn(host, 'subscribe').mockResolvedValue(() => {})
+  vi.spyOn(store, 'getConversation').mockImplementation(() =>
+    agentSessionConversationView(
+      agentSessionRecordFixture(
+        agentSessionLeaseFixture({
+          sessionId: SESSION,
+          claimStatus: attached ? 'live' : 'released',
+          deathEvidence: attached
+            ? null
+            : { kind: 'exit-observed', detail: 'closed', observedAt: 1 },
+          runtimeFence: 2,
+          ...options.lease
         })
-      }
-    }
-  } as never)
+      )
+    )
+  )
+  setStructuredAgentSessionHost(host)
   return { close, setSessionTabVisibility }
 }
 
@@ -79,7 +78,7 @@ async function runtimeShowingStructuredTab(): Promise<{
   runtime: OrcaRuntimeService
   emit: ReturnType<typeof vi.fn>
 }> {
-  const runtime = new OrcaRuntimeService()
+  const runtime = new OrcaRuntimeService(partialRuntimeStore())
   const internal = runtime as unknown as RuntimeInternals
   internal.ensureStructuredAgentSessionHost = async () => undefined
   internal.notifyMessageArrived = vi.fn()
@@ -133,7 +132,7 @@ describe('structured worker stop retires the chat tab', () => {
     const { runtime, emit } = await runtimeShowingStructuredTab()
     expect(await structuredTabIds(runtime)).toEqual([`agent-session:${SESSION}`])
 
-    await expect(stopStructuredWorker(identity, 'd1', runtime)).resolves.toEqual({
+    await expect(stopStructuredWorker(identity, runtime)).resolves.toEqual({
       stopped: true,
       closeAttempted: true
     })
@@ -151,7 +150,7 @@ describe('structured worker stop retires the chat tab', () => {
     const identity = registerIdentity()
     const { runtime } = await runtimeShowingStructuredTab()
 
-    const stop = await stopStructuredWorker(identity, 'd1', runtime)
+    const stop = await stopStructuredWorker(identity, runtime)
 
     expect(stop.stopped).toBe(false)
     expect(await structuredTabIds(runtime)).toEqual([`agent-session:${SESSION}`])
@@ -167,7 +166,7 @@ describe('structured worker stop retires the chat tab', () => {
       })
     } as unknown as OrcaRuntimeService
 
-    await expect(stopStructuredWorker(identity, 'd1', runtime)).resolves.toEqual({
+    await expect(stopStructuredWorker(identity, runtime)).resolves.toEqual({
       stopped: true,
       closeAttempted: true
     })
@@ -177,7 +176,7 @@ describe('structured worker stop retires the chat tab', () => {
   it('settles a runtime that has no tab surface at all', async () => {
     installHost()
     const identity = registerIdentity()
-    await expect(stopStructuredWorker(identity, 'd1')).resolves.toEqual({
+    await expect(stopStructuredWorker(identity)).resolves.toEqual({
       stopped: true,
       closeAttempted: true
     })
@@ -229,9 +228,7 @@ describe('structured worker release retires the chat tab', () => {
   })
 
   it('settles rather than wedging when the user already closed the worker chat tab', async () => {
-    // Closing the tab evicts the child and detaches the journal for good. Throwing archive_failed
-    // there retained the worker forever on evidence that could never arrive, and `worker-abandon`
-    // was the only way out of a release the coordinator had every right to complete.
+    // User-closed chats cannot provide more journal evidence; archive_failed must not wedge their release forever.
     installHost({
       lease: {
         runtimeKind: 'native',
@@ -240,6 +237,9 @@ describe('structured worker release retires the chat tab', () => {
         runtimeFence: 2
       }
     })
+    vi.spyOn(hostTestState().host, 'history').mockRejectedValue(
+      new Error('The closed chat journal is unavailable')
+    )
     const identity = registerIdentity()
     const resource = {
       id: 'resource-2',
@@ -261,7 +261,6 @@ describe('structured worker release retires the chat tab', () => {
         args.paneKey === identity.paneKey &&
         args.processIncarnation === identity.processIncarnation,
       workerTerminalResourceHasIdentityConflict: () => false,
-      // No archive yet: the capture is what release has to get past.
       getWorkerTerminalArchive: () => undefined,
       commitWorkerTerminalArchiveForRelease: (args: { kind?: string; content?: string }) => {
         stored = args
@@ -296,13 +295,12 @@ describe('structured worker release retires the chat tab', () => {
 describe('structured worker discard retires the chat tab', () => {
   it('prunes the tab a half-started worker published', async () => {
     const { close } = installHost()
-    const runtime = new OrcaRuntimeService()
+    const runtime = new OrcaRuntimeService(partialRuntimeStore())
     const internal = runtime as unknown as RuntimeInternals
     internal.ensureStructuredAgentSessionHost = async () => undefined
     let createdSessionId = ''
     createSpy.mockImplementation(async (args: { envelope: { sessionId: string } }) => {
-      // The create is what publishes the background tab, and it publishes BEFORE the start can
-      // fail — which is exactly the tab the discard has to take back.
+      // Create publishes before start can fail; failed-start discard must withdraw that existing background tab.
       createdSessionId = args.envelope.sessionId
       await runtime.publishStructuredAgentSessionTab({
         workspaceId: WORKTREE,
@@ -323,7 +321,7 @@ describe('structured worker discard retires the chat tab', () => {
       })
     ).rejects.toThrow(/was refused/)
 
-    expect(close).toHaveBeenCalledWith(createdSessionId, 'evict')
+    expect(close).toHaveBeenCalledWith(createdSessionId, 'evict', undefined)
     expect(await structuredTabIds(runtime)).toEqual([])
   })
 })

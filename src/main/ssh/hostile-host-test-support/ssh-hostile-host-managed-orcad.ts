@@ -1,8 +1,4 @@
-/**
- * One hostile-host cell: on a fresh host, resolve the context, deploy orcad, and prove it picked
- * the cell's runtime, uploaded no other and ran no toolchain. An activated server must be live; an
- * unavailable host must fail with the classified reason the connect reports.
- */
+/** Prove each host gets only its required runtime without toolchain use, then either a live server or its expected classified refusal. */
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, posix } from 'node:path'
@@ -23,6 +19,10 @@ import {
   parseOrcadLiveness
 } from '../../managed-server/install/orcad-remote-launch'
 import { execOrcadRemote } from '../../managed-server/install/orcad-remote-runtime-control'
+import {
+  ORCAD_PID_FILENAME,
+  ORCAD_READINESS_FILENAME
+} from '../../managed-server/install/orcad-remote-host-support'
 import { decommissionRemoteOrcad } from '../../managed-server/install/orcad-remote-decommission'
 import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import {
@@ -52,6 +52,7 @@ export async function proveManagedOrcadCell(
       target: context.serverTarget,
       census: EMPTY_CENSUS,
       recountCensus: async () => EMPTY_CENSUS,
+      releaseIncumbentAdmission: async () => {},
       ...(desktop ? { runtimeCacheRoot: desktop.cacheRoot } : {})
     }).finally(() => desktop?.restore())
     if (expected.outcome === 'unavailable') {
@@ -111,6 +112,7 @@ async function assertLiveThenDecommissioned(
   const liveness = async (): Promise<string> =>
     parseOrcadLiveness(await execOrcadRemote(slot, orcadLivenessProbeCommand(slot.host, slotDir)))
   expect(await liveness()).toBe('LIVE')
+  await assertOrcadRunsAtLoginUmask(slot, slotDir)
   const decommission = await decommissionRemoteOrcad({
     ...slot,
     record: await readOrcadActivationRecord(slot),
@@ -123,7 +125,28 @@ async function assertLiveThenDecommissioned(
   expect(await liveness()).toBe('DEAD')
 }
 
-/** An empty runtime cache and a refusing network on this computer, until `restore`. */
+/** #31125: inherit SSH login umask for user files while pairing-token readiness stays owner-only. Linux /proc exposes the daemon umask; macOS does not. */
+async function assertOrcadRunsAtLoginUmask(slot: OrcadSlotOptions, slotDir: string): Promise<void> {
+  if (slot.host.os !== 'linux') {
+    return
+  }
+  const pidFile = quotePosixShell(posix.join(slotDir, ORCAD_PID_FILENAME))
+  const readiness = quotePosixShell(posix.join(slotDir, ORCAD_READINESS_FILENAME))
+  const [login, daemon, readinessMode] = (
+    await execOrcadRemote(
+      slot,
+      `umask; sed -n 's/^Umask:[[:space:]]*//p' "/proc/$(cat ${pidFile})/status"; stat -c %a ${readiness}`
+    )
+  )
+    .trim()
+    .split('\n')
+    .map((line) => line.trim())
+  expect(Number.parseInt(daemon ?? '', 8), `login ${login}, orcad ${daemon}`).toBe(
+    Number.parseInt(login ?? '', 8)
+  )
+  expect(readinessMode).toBe('600')
+}
+
 function refuseDesktopDownloads(): {
   cacheRoot: string
   refusedUrls: () => string[]

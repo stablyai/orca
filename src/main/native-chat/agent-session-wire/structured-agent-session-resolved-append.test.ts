@@ -55,11 +55,10 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await journal.close()
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 
-/** The real journal: each resolved write reads the fold at its own place in the write queue. */
 function journalTarget(): StructuredAgentSessionEventTarget {
   return { journal, fence: 1, publish: vi.fn() }
 }
@@ -91,10 +90,8 @@ describe('resolved revisions', () => {
         accepted: true
       })
     }
-    // Three revisions of one row stay three operations; none replaces another.
     expect(deferred.state().queuedOperations).toBe(3)
-    // Bound from inside a running read, so every revision waits in line: one resolved at
-    // handover would read the row before the revisions ahead of it had landed.
+    // Bind within a queued read; early resolution would miss the preceding revisions.
     await journal.readInOrder(() => deferred.bind(journalTarget()))
     await expect(deferred.drained()).resolves.toEqual({ ok: true })
     expect(rowText()).toBe('abc')
@@ -125,7 +122,6 @@ describe('resolved revisions', () => {
     vi.mocked(target.publish).mockImplementation(() => published.push(rowText()))
     deferred.bind(target)
     await expect(deferred.drained()).resolves.toEqual({ ok: true })
-    // Published once, after the append: the revision that resolves to nothing publishes nothing.
     expect(published).toEqual(['a'])
   })
 

@@ -26,7 +26,6 @@ const PLACEMENT = {
   pageHostGeneration: 5
 }
 
-/** orcad as `orca serve` runs it with no browser engine: discovery declines, unconfigured. */
 async function startWithoutEngine() {
   vi.mocked(resolveOrcadBrowserProvider).mockImplementationOnce(async () => {
     setRuntimeBrowserUnavailableCause({ reason: 'unconfigured' })
@@ -65,7 +64,6 @@ function pairedHost(options: { desktopAttached: boolean }) {
       select,
       createClientPage,
       issueClientPageCommand,
-      // The desktop already let go of the page, so retiring it is only the runtime's record.
       getPlacement: () => undefined
     }),
     markHeadlessBrowserSessionTabActive: vi.fn(),
@@ -154,7 +152,6 @@ it('sends the CLI’s unplaced tab to the paired desktop, and refuses as before 
     url: 'https://example.org/'
   })
   expect(paired.pages.getPage(created.browserPageId)?.placement).toEqual(PLACEMENT)
-  // A paired client that left placement out asked for a server page, which this host cannot make.
   expect(() =>
     commands.browserTabCreate({ worktree: 'id:wt-1' }, { pairedDeviceId: 'device-a' })
   ).toThrow(/unavailable/)
@@ -189,12 +186,10 @@ it('lists, shows and switches desktop-hosted tabs with no engine', async () => {
   await expect(commands.browserTabCurrent({ worktree: 'id:wt-1' })).resolves.toMatchObject({
     tab: { browserPageId: first.browserPageId }
   })
-  // Unscoped automation never routes to a client page, so neither does an unscoped current.
   await expect(commands.browserTabCurrent({})).rejects.toMatchObject({ code: 'browser_no_tab' })
   await expect(commands.browserTabShow({ page: second.browserPageId })).resolves.toMatchObject({
     tab: { url: 'https://example.org/b' }
   })
-  // With the current page closed none is selected, exactly as workspace automation sees it.
   await commands.browserTabClose({ worktree: 'id:wt-1' })
   expect(paired.pages.getPage(first.browserPageId)).toBeUndefined()
   await expect(commands.browserTabCurrent({ worktree: 'id:wt-1' })).rejects.toMatchObject({
@@ -219,7 +214,6 @@ it('advertises client hosting with no engine and keeps the engine’s own cause'
   await startup.stop()
 })
 
-/** orcad with a working engine that holds one tab of its own. */
 async function startWithEngine() {
   const engineTab = { browserPageId: 'engine-page', index: 0, url: '', title: '', active: true }
   const engine = {
@@ -252,7 +246,6 @@ it('closes the current desktop-hosted page itself instead of the engine’s curr
   await expect(commands.browserTabClose({ worktree: 'id:wt-1' })).resolves.toEqual({ closed: true })
   expect(paired.pages.getPage(opened.browserPageId)).toBeUndefined()
   expect(engine.browserTabClose).not.toHaveBeenCalled()
-  // With the page gone, the engine's own current tab is the target again.
   await commands.browserTabClose({ worktree: 'id:wt-1' })
   expect(engine.browserTabClose).toHaveBeenCalledWith({ worktree: 'id:wt-1' })
   await startup.stop()
@@ -308,7 +301,6 @@ it('hands workspace commands back to the engine once it creates or selects a tab
 
   await commands.browserTabSwitch({ page: opened.browserPageId, worktree: 'id:wt-1' })
   expect(isActive(opened.browserPageId)).toBe(true)
-  // A switch by page alone: the engine names no workspace, so every client page steps back.
   await expect(commands.browserTabSwitch({ page: 'engine-page' })).resolves.toMatchObject({
     browserPageId: 'engine-page'
   })

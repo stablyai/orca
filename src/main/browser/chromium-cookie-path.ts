@@ -1,8 +1,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
-// Why: Chromium 96+ moved the cookie DB under Network, while older profiles
-// still use the profile root. Every reader and replay writer must agree.
+// Chromium 96+ uses Network/Cookies; older profiles keep Cookies at the profile root.
 export function resolveChromiumCookiesPath(profileDir: string): string | null {
   const networkPath = join(profileDir, 'Network', 'Cookies')
   if (existsSync(networkPath)) {

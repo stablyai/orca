@@ -41,10 +41,13 @@ export function AgentDefaultSetting({
   enabledDetectedAgents,
   catalog,
   description,
-  onSetDefault
+  onSetDefault,
+  defaultOpensAsChat = false
 }: {
   defaultAgent: TuiAgent | 'blank' | null
   detectedIds: Set<string> | null
+  /** The saved default opens as a chat on this host without its CLI. */
+  defaultOpensAsChat?: boolean
   enabledDetectedAgents: AgentCatalogEntry[]
   catalog: AgentCatalogEntry[]
   description: string
@@ -75,7 +78,8 @@ export function AgentDefaultSetting({
         </DefaultAgentPill>
         {defaultAgentPills.map((agent) => {
           const isActive = defaultAgent === agent.id
-          const isUndetected = detectedIds !== null && !detectedIds.has(agent.id)
+          const isUndetected =
+            detectedIds !== null && !detectedIds.has(agent.id) && !(isActive && defaultOpensAsChat)
           return (
             <DefaultAgentPill
               key={agent.id}

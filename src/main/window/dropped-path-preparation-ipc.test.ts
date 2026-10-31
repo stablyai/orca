@@ -7,9 +7,8 @@ import type { DragTempCopyItemResult } from './dragged-temp-file-copy'
 type IpcListener = (event: { sender: unknown }, payload: unknown) => void
 type InvokeHandler = (event: { sender: unknown }, payload: unknown) => Promise<unknown>
 
-const { materializeMock, sweepMock, ipcListeners, ipcHandlers } = vi.hoisted(() => ({
+const { materializeMock, ipcListeners, ipcHandlers } = vi.hoisted(() => ({
   materializeMock: vi.fn(),
-  sweepMock: vi.fn(),
   ipcListeners: new Map<string, IpcListener>(),
   ipcHandlers: new Map<string, InvokeHandler>()
 }))
@@ -31,8 +30,7 @@ vi.mock('electron', () => ({
 
 vi.mock('./dragged-temp-file-copy', async (importOriginal) => ({
   ...(await importOriginal<typeof DragTempFileCopy>()),
-  materializeDragTempPaths: materializeMock,
-  scheduleDragTempCopySweep: sweepMock
+  materializeDragTempPaths: materializeMock
 }))
 
 vi.mock('./darwin-user-temp-dir', () => ({
@@ -71,7 +69,7 @@ function createWindow() {
   const webContents = {
     isDestroyed: () => destroyed,
     send: vi.fn(),
-    once: vi.fn<(event: string, listener: () => void) => void>(),
+    on: vi.fn<(event: string, listener: () => void) => void>(),
     removeListener: vi.fn()
   }
   const fake = {
@@ -90,7 +88,7 @@ function createWindow() {
     },
     destroy: () => {
       destroyed = true
-      webContents.once.mock.calls.find(([event]) => event === 'destroyed')?.[1]()
+      webContents.on.mock.calls.find(([event]) => event === 'destroyed')?.[1]()
     }
   }
 }
@@ -99,15 +97,13 @@ describe('registerDroppedPathPreparation', () => {
   beforeEach(() => {
     ipcListeners.clear()
     ipcHandlers.clear()
-    sweepMock.mockReset()
   })
 
-  it('registers only the preparation request and starts copy expiry', () => {
+  it('registers only the preparation request', () => {
     const { window } = createWindow()
     registerDroppedPathPreparation(window)
     expect([...ipcHandlers.keys()]).toEqual(['fs:prepareDroppedPaths'])
     expect(ipcListeners.size).toBe(0)
-    expect(sweepMock).toHaveBeenCalledOnce()
   })
 
   it('prepares ordinary paths only for its own live renderer and validates the request', async () => {
@@ -123,7 +119,9 @@ describe('registerDroppedPathPreparation', () => {
     ]) {
       expect(() => handler({ sender: webContents }, invalid)).toThrow('Invalid')
     }
-    await expect(handler({ sender: webContents }, request)).resolves.toEqual({
+    await expect(
+      handler({ sender: webContents }, { ...request, consumer: 'local-chat' })
+    ).resolves.toEqual({
       paths: [FINDER],
       failures: []
     })

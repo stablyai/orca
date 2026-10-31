@@ -1,21 +1,5 @@
-/**
- * Deterministic reproduction for issue3-error-flood-stuck-terminal
- * (remote-runtime outage floods the UI with repeated raw error toasts;
- * terminal panes stay stuck after connectivity is restored).
- *
- * Three tests assert the adjudicated fix; the STA-3002 case covers reconnect
- * activation, which PR #11542 landed separately.
- *
- * Fault-injection point: window.api.runtimeEnvironments.call — the exact
- * Electron IPC boundary the remote PTY transport uses. Rejections are shaped
- * like real Electron IPC rejections: a plain Error whose message carries the
- * "Error invoking remote method 'runtimeEnvironments:call': <Name>: <msg>"
- * prefix and NO `code` property (Electron structured-clone keeps only
- * name/message/stack), which forces the renderer's message-fragment
- * classification path.
- */
+/** Inject Electron-shaped RPC rejections with codes stripped to verify message classification, bounded outage surfaces and revivable reconnect, including host-side activation of pending panes (STA-3002). */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-// These transport fixtures never read abandoned-launch ownership from the app store.
 const appStore = vi.hoisted(() => ({
   getState: vi.fn(() => {
     throw new Error('These transport fixtures must not read app-store ownership')
@@ -37,7 +21,7 @@ import {
   encodeTerminalStreamText
 } from '../../../../shared/terminal-stream-protocol'
 import { RuntimeRpcCallQueueOverloadError } from '../../../../shared/runtime-rpc-call-queue'
-import { withRemoteRuntimeTailscaleHint } from '../../../../shared/remote-runtime-tailscale-hint'
+import { withRemoteRuntimeTailscaleHint } from '../../../../shared/remote-runtime/remote-runtime-tailscale-hint'
 import type { PtyTransportRecoveryState } from './pty-transport-types'
 import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './remote-runtime-pty-recovery-state'
 import { stubRuntimeEnvironmentBridge } from '../../runtime/runtime-environment-bridge-fixture'
@@ -195,31 +179,25 @@ describe('remote runtime outage: toast flood and stuck reconnect (issue3)', () =
     stubRuntimeEnvironmentBridge({ call: runtimeCall, subscribe: runtimeSubscribe })
   })
 
-  it('sanity: the exact reported timeout+funnel toast text classifies as recoverable, so flood text must come from unclassified surfaces', async () => {
+  it('classifies the reported timeout with its Tailscale hint as recoverable', async () => {
     const { isRecoverableRemoteRuntimeConnectionError, toRemoteRuntimeClientErrorLike } =
-      await import('../../../../shared/remote-runtime-client-error-classification')
+      await import('../../../../shared/remote-runtime/remote-runtime-client-error-classification')
     const rendererSide = toRemoteRuntimeClientErrorLike(
       electronIpcRejection('RemoteRuntimeClientError', TIMEOUT_WITH_TAILSCALE_HINT)
     )
     // Electron IPC stripped the code; the fragment list still catches this one.
     expect(rendererSide.code).toBeUndefined()
     expect(isRecoverableRemoteRuntimeConnectionError(rendererSide)).toBe(true)
-    // …but the queue-overload rejection produced by the same outage (main's
-    // per-selector RPC queue saturated by 15s-timeout calls) is classified
-    // fatal even though its own code says "retry later".
+    // Queue saturation is transient outage pressure even after IPC strips its retry-later code.
     const overload = toRemoteRuntimeClientErrorLike(
       electronIpcRejection('RuntimeRpcCallQueueOverloadError', QUEUE_OVERLOAD_RAW)
     )
     expect(overload.code).toBeUndefined()
-    // DESIRED: transient capacity pressure during an outage is recoverable,
-    // not a fatal red-toast error. RED on main: not in codes or fragments.
     expect(isRecoverableRemoteRuntimeConnectionError(overload)).toBe(true)
   })
 
-  it('FLOOD: repeated identical outage-shaped send failures surface at most one red toast per pane', async () => {
-    // Outage onset: the multiplexed stream subscription round-trip hangs
-    // (socket black-holed), so keystrokes fall back to one-shot terminal.send
-    // RPCs; main's saturated per-selector queue rejects each one instantly.
+  it('suppresses repeated queue-overload send errors and backs off recovery', async () => {
+    // Black-hole stream subscribe so typing falls back to one-shot RPCs rejected by main’s saturated queue.
     runtimeSubscribe.mockImplementation(async () => new Promise(() => {}))
     let sendRejections = 0
     installHealthyRuntimeCallMock()
@@ -252,7 +230,6 @@ describe('remote runtime outage: toast flood and stuck reconnect (issue3)', () =
     })
     await vi.waitFor(() => expect(transport.getPtyId()).toBe('remote:env-1@@terminal-1'))
 
-    // Three keystroke bursts during the same outage.
     expect(transport.sendInputImmediate?.('k1')).toBe(true)
     await vi.waitFor(() => expect(sendRejections).toBe(1))
     expect(transport.sendInputImmediate?.('k2')).toBe(true)
@@ -266,7 +243,7 @@ describe('remote runtime outage: toast flood and stuck reconnect (issue3)', () =
     transport.destroy?.()
   })
 
-  it('STUCK (cancel dead-end): a fatal resubscribe error leaves no recovery path after connectivity returns', async () => {
+  it('keeps manual recovery available after a fatal resubscribe error', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const { retryAllRemoteRuntimePtyRecoveriesNow } =
       await import('./remote-runtime-pty-recovery-state')
@@ -294,8 +271,7 @@ describe('remote runtime outage: toast flood and stuck reconnect (issue3)', () =
     emitSnapshot(latestSubscribePayload().streamId, 'live before outage')
     expect(transport.isConnected()).toBe(true)
 
-    // The dedicated stream dies, then a fatal retry response must leave the
-    // terminal disconnected but manually revivable.
+    // A fatal recovery response may latch offline but must preserve manual revival.
     const fatalMessage = 'Remote runtime pairing credentials expired.'
     runtimeCall.mockImplementation(async (request: { method: string }) => {
       if (request.method === 'terminal.resolvePane') {
@@ -308,7 +284,6 @@ describe('remote runtime outage: toast flood and stuck reconnect (issue3)', () =
     expect(onError).toHaveBeenCalledTimes(1)
     expect(onError).toHaveBeenCalledWith(fatalMessage)
 
-    // Connectivity fully restored.
     installHealthyRuntimeCallMock()
     const subscribeCallsBeforeTriggers = runtimeSubscribe.mock.calls.length
     // Fire every built-in revival trigger the app has:
@@ -316,12 +291,7 @@ describe('remote runtime outage: toast flood and stuck reconnect (issue3)', () =
     const manualRetryAccepted = transport.retryRecovery?.() ?? false
     const reconnectBannerVisible = 1 in bannerUiState
 
-    // DESIRED INVARIANT (RED on main): after the fault clears, at least one
-    // recovery affordance must exist — the online/resume trigger revives a
-    // parked retry, or the Reconnect banner is visible and its retry is
-    // accepted. On main: cancel() latched phase 'idle', pendingRetry is gone,
-    // the banner is unmounted, and retryRecovery() returns false — keystrokes
-    // silently vanish and no output ever renders again.
+    // After connectivity returns, require automatic revival or an actionable Reconnect surface; no silent unbound pane.
     expect(
       {
         revivedByOnlineOrResume,
@@ -335,15 +305,13 @@ describe('remote runtime outage: toast flood and stuck reconnect (issue3)', () =
       reconnectBannerVisible: false
     })
 
-    // Full recovery: a fresh subscribe attempt must reach the runtime.
     await vi.waitFor(() =>
       expect(runtimeSubscribe.mock.calls.length).toBeGreaterThan(subscribeCallsBeforeTriggers)
     )
     transport.destroy?.()
   })
 
-  // PR #11542 owns reconnect activation for STA-3002; it has landed, so this must stay green.
-  it('STUCK (STA-3002 shape): reconnect never re-materializes a host surface demoted to pending-handle, even via online trigger and Reconnect', async () => {
+  it('re-materializes a pending host surface on online and manual recovery', async () => {
     vi.useFakeTimers()
     try {
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
@@ -364,9 +332,7 @@ describe('remote runtime outage: toast flood and stuck reconnect (issue3)', () =
       emitSnapshot(latestSubscribePayload().streamId, 'live before host restart')
       expect(transport.isConnected()).toBe(true)
 
-      // Host restarted during the outage: it republishes this pane as
-      // status 'pending-handle' with no terminal. A real host only mints the
-      // PTY handle when someone calls session.tabs.activate.
+      // Restarted host republishes a pending surface; only session.tabs.activate can mint its new handle.
       let hostActivated = false
       let activateCallsAfterOutage = 0
       let listCallsAfterOutage = 0
@@ -416,30 +382,22 @@ describe('remote runtime outage: toast flood and stuck reconnect (issue3)', () =
       subscriptionCallbacks?.onClose?.()
       await vi.advanceTimersByTimeAsync(16_000)
 
-      // Auto-recovery deadline latches the pane 'disconnected'.
       await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
       expect(transport.getRecoveryState?.().phase).toBe('disconnected')
 
-      // Connectivity restored; 'online'/system-resume trigger fires.
       retryAllRemoteRuntimePtyRecoveriesNow()
       await vi.advanceTimersByTimeAsync(16_000)
 
-      // Latch again, then the user clicks the Reconnect banner.
       await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
       transport.retryRecovery?.()
       await vi.advanceTimersByTimeAsync(16_000)
 
-      // A reconnect against a host that publishes this pane as pending-handle
-      // must call session.tabs.activate (the only RPC that materializes the PTY)
-      // and attach to the minted handle. Before #11542 only the initial-connect
-      // path activated, so every reconnect polled session.tabs.list forever and
-      // the pane stayed stuck until the user resumed the session in a new one.
+      // Reconnect must activate pending surfaces; list-only polling cannot materialize their PTYs (#11542).
       expect(
         activateCallsAfterOutage,
         `reconnect ran ${listCallsAfterOutage} list-only inventory polls across online trigger + Reconnect click without ever activating the pending surface`
       ).toBeGreaterThan(0)
-      // Why: reconnect is machinery, not a user gesture, so the host must be able
-      // to tell it apart and leave a deliberately slept pane slept (STA-3465).
+      // Label recovery as machinery rather than user wake so deliberately slept panes remain asleep (STA-3465).
       expect(activateIntentsAfterOutage.every((intent) => intent === 'automatic')).toBe(true)
       await vi.waitFor(() => expect(subscribedTerminalHandles()).toContain('terminal-2'))
       emitSnapshot(latestSubscribePayload().streamId, 'rematerialized')

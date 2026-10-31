@@ -1,6 +1,6 @@
 import type { MessagePriority, MessageRow, MessageType } from './orca-runtime-test-mocks.spec'
 
-// Why: these tests only need message-queue semantics; real SQLite would make them fail on unrelated native runtime ABI drift.
+// Test message semantics in memory to avoid unrelated SQLite native ABI failures.
 export class InMemoryOrchestrationMessages {
   private sequence = 0
 
@@ -224,7 +224,17 @@ export class InMemoryOrchestrationMessages {
   ):
     | { id: string; coordinator_handle: string | null; coordinator_pane_key: string | null }
     | undefined {
-    return [...this.runs.values()].find((run) => run.coordinator_pane_key === paneKey)
+    return this.runsBoundToPane(paneKey)[0]
+  }
+
+  runsBoundToPane(
+    paneKey: string
+  ): { id: string; coordinator_handle: string | null; coordinator_pane_key: string | null }[] {
+    return [...this.runs.values()].filter((run) => run.coordinator_pane_key === paneKey)
+  }
+
+  listSessionDispatchesForPresentation(): never[] {
+    return []
   }
 
   listWorkerTerminalReleaseBacklog(): never[] {
@@ -267,11 +277,13 @@ export class InMemoryOrchestrationMessages {
     )
   }
 
-  markAsDelivered(ids: string[]): void {
-    const deliveredIds = new Set(ids)
+  markAsDelivered(ids: string[], mailboxHandle: string): void {
+    const requested = new Set(ids)
+    const deliveredIds = new Set<string>()
     for (const message of this.messages) {
-      if (deliveredIds.has(message.id)) {
+      if (requested.has(message.id) && message.to_handle === mailboxHandle) {
         message.delivered_at = '1970-01-01 00:00:00'
+        deliveredIds.add(message.id)
       }
     }
     this.clearMailboxPointerEnter(deliveredIds)

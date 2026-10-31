@@ -3,7 +3,11 @@ import type { AgentSessionExecutionOptions } from '../../shared/agent-session-ex
 import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
 import { AcpAgentError } from './acp-errors'
 import type { AcpStructuredSession } from './acp-structured-session'
-import { acpPromptErrorDetail } from './acp-turn-failures'
+import {
+  acpAuthenticationRequired,
+  acpPromptErrorDetail,
+  acpSignInRequiredFailure
+} from './acp-turn-failures'
 
 export async function applyAcpMessageOptions(
   session: AcpStructuredSession,
@@ -15,23 +19,9 @@ export async function applyAcpMessageOptions(
   if (!options) {
     return true
   }
-  const initial = session.options.messageDefault()
-  const model = options?.model ?? initial.model
-  const defaultEffort =
-    model === initial.model
-      ? initial.effort
-      : session.options.read().models.find((entry) => entry.id === model)?.defaultEffort
   for (const key of ['model', 'effort'] as const) {
-    const value = options?.[key] ?? (key === 'model' ? initial.model : defaultEffort)
-    if (value === undefined) {
-      if (session.options.picked.has(key) || session.options.reported()[key] !== undefined) {
-        throw new AgentSessionOptionRejectedError(
-          new Error(`The default ${key} for this model is unknown`)
-        )
-      }
-      continue
-    }
-    if (session.options.currentProof.has(key) && session.options.reported()[key] === value) {
+    const value = options[key]
+    if (value === undefined || session.options.appliedInput.get(key) === value) {
       continue
     }
     try {
@@ -42,9 +32,13 @@ export async function applyAcpMessageOptions(
         return false
       }
       if (error instanceof AcpAgentError) {
+        const detail = acpPromptErrorDetail(session.spec.dialect, error)
+        const rejection = acpAuthenticationRequired(session.spec.dialect, error)
+          ? acpSignInRequiredFailure(session.spec.dialect, error)
+          : undefined
         throw withProviderDiagnostic(
-          new AgentSessionOptionRejectedError(error),
-          providerDiagnostic(acpPromptErrorDetail(session.spec.dialect, error), 'person')
+          new AgentSessionOptionRejectedError(error, 'optionRejected', rejection),
+          providerDiagnostic(detail, 'person')
         )
       }
       throw new AgentSessionOptionRejectedError(error)

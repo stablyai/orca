@@ -1,3 +1,9 @@
+import { getAgentLabel } from '@/lib/agent-catalog'
+import { formatAgentTypeLabel } from '../../../../shared/agent-type-label'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { MAX_SKILL_REFS } from '../../../../shared/rpc-contract/structured-agent-session-message-params'
+import { SkillRefLimitError } from '../../../../shared/structured-agent-session-send-mutation'
+import { promptSkillRefs } from './native-chat-prompt-document'
 import { useCallback } from 'react'
 import { completeNativeChatStructuredUserAction } from './native-chat-structured-user-action'
 import {
@@ -15,9 +21,14 @@ import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 import { translate } from '@/i18n/i18n'
 import {
   readNativeChatComposerDraft,
+  subscribeToNativeChatComposerDraftAppend,
   updateNativeChatComposerDraft
 } from './native-chat-composer-draft-store'
 import { nativeChatComposerDraftLeftAfterSend } from './native-chat-composer-draft-comparison'
+import {
+  admitNativeChatPastedText,
+  resolveNativeChatPastedText
+} from './native-chat-composer-pasted-text-references'
 
 export type UseNativeChatStructuredComposerSendArgs = {
   agent: AgentType
@@ -37,7 +48,7 @@ function isNativeChatStructuredHostCommand(
   transport: NativeChatStructuredComposerTransport
 ): boolean {
   return (
-    isStructuredAgentSessionComposerCommand(text, agent) ||
+    isStructuredAgentSessionComposerCommand(text, agent, transport.sessionCommands) ||
     (transport.threadGoal !== undefined && isStructuredAgentSessionGoalCommand(text))
   )
 }
@@ -47,8 +58,7 @@ export type NativeChatStructuredComposerSend = (
   attachments?: readonly NativeChatComposerImageAttachment[]
 ) => Promise<void>
 
-/** Send through the structured journal transport, clearing the composer only
- *  once the transport accepts (the PTY path has its own sibling hook). */
+/** Clear submitted composer content only after structured transport acceptance. */
 export function useNativeChatStructuredComposerSend({
   agent,
   draftScopeKey,
@@ -61,13 +71,16 @@ export function useNativeChatStructuredComposerSend({
 }: UseNativeChatStructuredComposerSendArgs): NativeChatStructuredComposerSend {
   return useCallback<NativeChatStructuredComposerSend>(
     async (text, attachments = imageAttachments): Promise<void> => {
-      // A picked command is held like Send: it would carry attachments still uploading, pathless.
+      // Picked commands must also wait for pending attachments to acquire paths.
       if (!structuredTransport || attachments.some((attachment) => attachment.pending)) {
         return
       }
+      if (!admitNativeChatPastedText(draftScopeKey, text, structuredTransport.onError)) {
+        return
+      }
+      text = resolveNativeChatPastedText(draftScopeKey, text)
       const hostCommand = isNativeChatStructuredHostCommand(text, agent, structuredTransport)
-      // A held host takes no turn, and its notice says why; an option command only changes what
-      // the next turn runs with.
+      // Blocked hosts cannot take turns/conversation commands; option commands only configure later turns.
       if (
         structuredTransport.sendBlockedReason !== undefined &&
         (!hostCommand || structuredAgentSessionCommandChangesConversation(text))
@@ -93,21 +106,58 @@ export function useNativeChatStructuredComposerSend({
       if (hostCommand && structuredAgentSessionCommandChangesConversation(text)) {
         structuredTransport.onSubmitted?.()
       }
+      const isCurrent = structuredTransport.capturePresentation()
       const submitted = readNativeChatComposerDraft(draftScopeKey)
-      await dispatchNativeChatStructuredComposerText(structuredTransport, text, attachments)
+      let completeAddition = false
+      const stopObservingAppend = subscribeToNativeChatComposerDraftAppend(
+        draftScopeKey,
+        (addition) => {
+          if (typeof addition !== 'function' && addition.document !== undefined) {
+            completeAddition = true
+          }
+        }
+      )
+      await dispatchNativeChatStructuredComposerText(
+        structuredTransport,
+        text,
+        attachments,
+        promptSkillRefs(submitted.document)
+      )
         .then(({ accepted, error, refusedWhile, revealsTranscript }) => {
-          structuredTransport.onError(error, refusedWhile ? { refusedWhile } : undefined)
+          if (!hostCommand || isCurrent()) {
+            structuredTransport.onError(error, refusedWhile ? { refusedWhile } : undefined)
+          }
           if (!accepted) {
             return
           }
-          completeNativeChatStructuredUserAction(agent, structuredTransport, revealsTranscript)
-          // Why: the send settles after a round trip, while this or another composer of the same
-          // conversation may have changed the draft; only what was sent leaves it.
+          completeNativeChatStructuredUserAction(
+            agent,
+            structuredTransport,
+            revealsTranscript && (!hostCommand || isCurrent())
+          )
+          // A round trip may outlast edits in any composer for this conversation; remove only the submitted content.
           const left = nativeChatComposerDraftLeftAfterSend(
             readNativeChatComposerDraft(draftScopeKey),
             submitted
           )
           if (!left) {
+            return
+          }
+          if (completeAddition) {
+            updateNativeChatComposerDraft(
+              draftScopeKey,
+              { ...left, document: left.document },
+              'immediate'
+            )
+          }
+          if (hostCommand && !isCurrent()) {
+            if (!completeAddition) {
+              updateNativeChatComposerDraft(
+                draftScopeKey,
+                { text: left.text, document: undefined, images: left.images },
+                'immediate'
+              )
+            }
             return
           }
           updateNativeChatComposerDraft(draftScopeKey, { images: left.images }, 'immediate')
@@ -118,12 +168,25 @@ export function useNativeChatStructuredComposerSend({
           clearSkillOrigin()
         })
         .catch((error) => {
+          if (hostCommand && !isCurrent()) {
+            return
+          }
           const notice = nativeChatNoticeFromError(
             error,
-            agentSessionWriteNoticeText([hostCommand ? 'notDoneCommand' : 'notDoneSend'])
+            error instanceof SkillRefLimitError
+              ? translate(
+                  'components.native-chat.composer.tooManySkills',
+                  'Your message was not sent to {{agent}}. Keep at most {{limit}} selected skill files and try again.',
+                  {
+                    agent: isTuiAgent(agent) ? getAgentLabel(agent) : formatAgentTypeLabel(agent),
+                    limit: MAX_SKILL_REFS
+                  }
+                )
+              : agentSessionWriteNoticeText([hostCommand ? 'notDoneCommand' : 'notDoneSend'])
           )
           structuredTransport.onError(notice.text, { errorText: notice.errorText })
         })
+        .finally(stopObservingAppend)
     },
     [
       agent,

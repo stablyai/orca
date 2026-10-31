@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { LOCAL_LAYOUT_APPLY_ORIGIN } from './server-layout-apply-routes'
 import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
 
 const mocks = vi.hoisted(() => {
@@ -26,7 +27,8 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
 }))
 vi.mock('@/runtime/layout-frame-position', () => ({
   afterLayoutFrame: (_seq: number | undefined, run: () => void) =>
-    mocks.frame.arrives ? run() : mocks.frame.waiting.push(run)
+    mocks.frame.arrives ? run() : mocks.frame.waiting.push(run),
+  layoutFramePositionKey: () => 'local'
 }))
 vi.mock('@/runtime/layout-owner-pane-intents', () => ({
   holdTabPaneTree: () => mocks.paneRelease
@@ -106,23 +108,23 @@ describe('sendLayoutApply', () => {
     expect(refused.refused).toHaveBeenCalledWith('last_pane')
 
     const applied = await send({ ok: true, result: { tabId: 'tab-1' } })
-    expect(applied.apply).toHaveBeenCalledWith({ tabId: 'tab-1' })
+    expect(applied.apply).toHaveBeenCalledWith({ tabId: 'tab-1' }, LOCAL_LAYOUT_APPLY_ORIGIN)
   })
 
-  it('holds the tabs a drawn change names, in each workspace, until its answer is in', async () => {
+  it('holds the tabs a drawn change names until its answer is in, but no move main draws first', async () => {
     mocks.sent.reply = { ok: true, result: {} }
+    recordLayoutApply(NO_STATE, 'wt-1', { type: 'closeTabs', tabIds: ['tab-1'] })
+    // A restored tab's move is sent before the window draws it: its frame draws it.
     recordLayoutApply(NO_STATE, 'wt-1', {
       type: 'moveTabToWorkspace',
       toWorkspace: 'wt-2',
-      tabs: [{ tabId: 'tab-1', newTabId: 'tab-1b', newEntityId: 'file-1b' }],
+      tabs: [{ tabId: 'tab-2', newTabId: 'tab-2b', newEntityId: 'file-2b' }],
       groupId: 'group-2'
     })
     expect(isDrawnTabHeld('wt-1', 'tab-1')).toBe(true)
-    expect(isDrawnTabHeld('wt-2', 'tab-1b')).toBe(true)
-    expect(isDrawnTabHeld('wt-2', 'file-1b')).toBe(true)
-    expect(isDrawnTabHeld('wt-2', 'tab-1')).toBe(false)
+    expect(isDrawnTabHeld('wt-1', 'tab-2')).toBe(false)
+    expect(isDrawnTabHeld('wt-2', 'tab-2b')).toBe(false)
     await vi.waitFor(() => expect(isDrawnTabHeld('wt-1', 'tab-1')).toBe(false))
-    expect(isDrawnTabHeld('wt-2', 'tab-1b')).toBe(false)
   })
 
   it('holds group sizes the window set, and nothing for a change main draws first', async () => {
@@ -131,7 +133,7 @@ describe('sendLayoutApply', () => {
     sendLayoutApply(
       NO_STATE,
       'wt-1',
-      { type: 'setGroupRatios', groupLayout: { type: 'leaf', groupId: 'g' } },
+      { type: 'setGroupRatios', ratios: [{ path: '', ratio: 0.3 }] },
       {
         apply: keep,
         asToday: keep,
@@ -154,7 +156,10 @@ describe('sendLayoutApply', () => {
 })
 
 describe('sendLayoutApply holds with no answer', () => {
-  const RATIOS = { type: 'setGroupRatios', groupLayout: { type: 'leaf', groupId: 'g' } } as const
+  const RATIOS: Parameters<typeof sendLayoutApply>[2] = {
+    type: 'setGroupRatios',
+    ratios: [{ path: '', ratio: 0.3 }]
+  }
   const NO_ANSWER = 'setGroupRatios hold released: no answer in 15s'
 
   beforeEach(() => {
@@ -219,7 +224,7 @@ describe('sendLayoutApply holds with no answer', () => {
 
     mocks.frame.waiting.forEach((run) => run())
     await vi.advanceTimersByTimeAsync(1)
-    expect(handlers.apply).toHaveBeenCalledWith({ tabId: 'tab-1' })
+    expect(handlers.apply).toHaveBeenCalledWith({ tabId: 'tab-1' }, LOCAL_LAYOUT_APPLY_ORIGIN)
     expect(mocks.paneRelease).toHaveBeenCalledOnce()
     expect(console.warn).toHaveBeenCalledOnce()
   })

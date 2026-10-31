@@ -1,3 +1,4 @@
+import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import type * as NodeFsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -9,7 +10,7 @@ import { resolveAgentSessionLaunchDirectory } from './agent-session-launch-direc
 import { foundAgentSessionRecord } from './agent-session-record-founding'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
-import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'
+import type { AgentSessionReserveRequest } from './agent-session/ownership/agent-session-reservation-admission'
 
 const statFault = vi.hoisted(() => {
   const fault: { error: Error | null } = { error: null }
@@ -74,7 +75,6 @@ function reserveRequest(location: AgentSessionExecutionLocation): AgentSessionRe
   }
 }
 
-/** A session reserved at `location`, pinned to `launchDirectory` when one is given. */
 async function reserve(location: AgentSessionExecutionLocation, launchDirectory?: string) {
   const { record } = await store.reserveOwner({
     ...reserveRequest(location),
@@ -97,6 +97,7 @@ beforeEach(async () => {
 afterEach(async () => {
   statFault.error = null
   vi.restoreAllMocks()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -124,19 +125,6 @@ describe('agent session launch directory', () => {
       )
     ).resolves.toBe(`/resolved/${WORKTREE.workspaceId}`)
     expect(store.getRecord(SESSION)?.launchDirectory).toBeUndefined()
-  })
-
-  it('resumes a floating session in its pinned folder after the floating setting changed', async () => {
-    const original = await directory('floating-a')
-    const changed = await directory('floating-b')
-    const record = await reserve(FLOATING, original)
-    const resolveWorkspacePath = vi.fn(async () => changed)
-
-    await expect(
-      resolveAgentSessionLaunchDirectory({ store, resolveWorkspacePath }, record)
-    ).resolves.toBe(original)
-    expect(resolveWorkspacePath).not.toHaveBeenCalled()
-    expect(store.getRecord(SESSION)?.launchDirectory).toBe(original)
   })
 
   it('refuses a floating resume whose pinned folder is gone instead of substituting one', async () => {

@@ -422,7 +422,7 @@ describe('the main agent fact on an inferred interrupt', () => {
       )
       const baseline = server.getStatusSnapshot()[0]
       vi.setSystemTime(1_500)
-      // Why: the synthesized Codex row is a plain done; it would retire the child its combine keeps working.
+      // A plain done inference would incorrectly retire live child work.
       expect(
         server.inferInterrupt({
           paneKey: PANE,
@@ -454,7 +454,7 @@ describe('the main agent fact on an inferred interrupt', () => {
             state: 'working',
             workingMode: 'monitoring',
             prompt: 'watch it',
-            agentType: 'grok',
+            agentType: 'gemini',
             mainAgent: settled
           }
         },
@@ -468,11 +468,10 @@ describe('the main agent fact on an inferred interrupt', () => {
           baselineUpdatedAt: baseline.receivedAt,
           baselineStateStartedAt: baseline.stateStartedAt,
           baselinePrompt: 'watch it',
-          baselineAgentType: 'grok',
+          baselineAgentType: 'gemini',
           intent: 'ctrl-c'
         })
       ).toBe(false)
-      // Why: the main agent already settled; Ctrl+C at its prompt stops nothing the row shows.
       expect(server.getStatusSnapshot()[0]).toEqual(baseline)
     } finally {
       vi.useRealTimers()

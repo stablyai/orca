@@ -1,8 +1,4 @@
-/**
- * The activation fence tokens this desktop's processes hold, kept beside the profile so a later
- * launch can tell a fence its own quit or crash left from one another desktop holds (BUG-23).
- * Best effort: a lost entry only costs the early reclaim, never a fence operation.
- */
+/** Keep local fence tokens beside the profile to recognize this desktop's exited holders after restart (BUG-23). Lost entries only forfeit early reclaim; they never grant fence authority. */
 import { readFileSync } from 'node:fs'
 import { hostname, uptime } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -70,7 +66,7 @@ function updateHeld(change: (held: HeldFence[]) => HeldFence[] | null): void {
   }
 }
 
-/** Before the lock command: a reply lost after the lock landed still leaves a provable token. */
+/** Remember before sending the lock command so a lost success reply still leaves a provable token. */
 export function rememberHeldOrcadFence(token: string): void {
   updateHeld((held) => [
     ...held,
@@ -86,7 +82,7 @@ export function forgetHeldOrcadFence(token: string): void {
   )
 }
 
-/** Tokens only positively exited earlier processes of this machine and boot held; any other may live. */
+/** Only positively exited holders from this machine/boot qualify; all others may live. */
 export function orcadFenceTokensHeldByExitedProcesses(): string[] {
   return file
     ? readHeld()

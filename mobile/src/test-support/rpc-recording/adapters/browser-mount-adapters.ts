@@ -8,11 +8,7 @@ const PAGE_ID = 'page-1'
 const LAYOUT = { width: 390, height: 700, pageX: 0, pageY: 0 }
 const FRAME_METADATA = { deviceWidth: 390, deviceHeight: 700, pageScaleFactor: 1 }
 
-/**
- * The hosted browser's pointer, keyboard and dialog commands, mounted over the real page-request
- * hook rather than a stand-in: the commands hook takes its sender as an argument, so supplying one
- * here would leave the send the migration moves outside the recording.
- */
+// Mount the real request hook too; injecting a sender would leave the migrated send outside recording coverage.
 export function browserMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -30,7 +26,6 @@ export function browserMountAdapters(
       let dialog: { dialogType: string; message: string } | null = null
       let keyboardValue = 'hello'
       let pointerModifiers: string[] = []
-      // React's own setter shape, so the recorder reads an updater the way the hook writes one.
       const setter =
         <T>(read: () => T, write: (value: T) => void): Dispatch<SetStateAction<T>> =>
         (next) =>

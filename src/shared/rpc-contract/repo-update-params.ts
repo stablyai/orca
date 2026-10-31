@@ -3,7 +3,7 @@ import { normalizeRepoSourceControlAiOverrides } from '../source-control-ai'
 import { normalizeRepoBadgeColor } from '../repo-badge-color'
 import { sanitizeRepoIcon } from '../repo-icon'
 import { normalizeGhAccountBinding } from '../github/account-binding'
-import { normalizeJiraProjectReference } from '../jira-project-reference'
+import { normalizeJiraProjectReference } from '../jira/jira-project-reference'
 import {
   normalizeCustomWorktreeVisibilitySources,
   normalizeWorktreeVisibilitySourcePreferences
@@ -36,9 +36,7 @@ export const RepoUpstream = z
   .nullable()
   .optional()
 
-// The return type is inferred on purpose: an explicit z.ZodObject<...> annotation
-// widened `updates` to an open record, which erased all 24 named fields from
-// RpcParams<'repo.update'> for every typed caller.
+// Infer the return type: an explicit ZodObject annotation erases named update fields into an open record.
 export function createRepoUpdateSchema<T extends Readonly<Record<string, z.ZodType>>>(
   selectorFields: T
 ) {

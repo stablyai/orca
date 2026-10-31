@@ -5,15 +5,21 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
 import { acpLaunchSpecFor } from '../acp/acp-launch-specs'
-import { structuredAgentSupportsLaunch } from './structured-agent-launch-support'
+import {
+  resolveHostStructuredAgentCreateSupport,
+  structuredAgentSupportsLaunch,
+  structuredAgentHostLaunchSources,
+  resolveHostStructuredAgentLaunchEnvironment
+} from './structured-agent-launch-support'
 import { createStructuredAgentEnvironmentResolvers } from './structured-agent-shell-environment'
 import type * as LoginShellModule from '../startup/login-shell-environment'
+import type * as VersionProbeModule from '../agent-cli-version-probe'
 import {
   resetLoginShellEnvironmentCacheForTests,
   type ResolveLoginShellEnvironmentOptions as LoginShellOptions
 } from '../startup/login-shell-environment'
 
-const { observeAgentCliVersion, probeAgentCliVersion, loginShell } = vi.hoisted(() => {
+const { readVersion, loginShell } = vi.hoisted(() => {
   const loginShell: {
     env: NodeJS.ProcessEnv
     spawn: ReturnType<typeof vi.fn<() => Promise<NodeJS.ProcessEnv | null>>>
@@ -22,13 +28,16 @@ const { observeAgentCliVersion, probeAgentCliVersion, loginShell } = vi.hoisted(
     // Each call is one shell run through the real cache; a test can hold one open.
     spawn: vi.fn(async (): Promise<NodeJS.ProcessEnv | null> => loginShell.env)
   }
-  return { observeAgentCliVersion: vi.fn(), probeAgentCliVersion: vi.fn(), loginShell }
+  return { readVersion: vi.fn<VersionProbeModule.AgentCliVersionReader>(), loginShell }
 })
-vi.mock('../agent-cli-version-probe', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  observeAgentCliVersion,
-  probeAgentCliVersion
-}))
+vi.mock('../agent-cli-version-probe', async (importOriginal) => {
+  const real = await importOriginal<typeof VersionProbeModule>()
+  return {
+    ...real,
+    checkAgentCliVersion: (...[input, minimums]: Parameters<typeof real.checkAgentCliVersion>) =>
+      real.checkAgentCliVersion(input, minimums, readVersion)
+  }
+})
 vi.mock('../startup/login-shell-environment', async (importOriginal) => {
   const real = await importOriginal<typeof LoginShellModule>()
   return {
@@ -43,16 +52,11 @@ vi.mock('../startup/login-shell-environment', async (importOriginal) => {
 })
 
 let bin: string
-const asked: { program: string; cwd: string; env: Record<string, string> }[] = []
+const asked: Parameters<VersionProbeModule.AgentCliVersionReader>[0][] = []
 function installedVersion(version: string): void {
-  // The create check observes, the launch projects; both ask the same binary.
-  observeAgentCliVersion.mockImplementation(async (input, supports) => {
+  readVersion.mockImplementation(async (input) => {
     asked.push(input)
-    return supports(version) ? 'supported' : 'unsupported'
-  })
-  probeAgentCliVersion.mockImplementation(async (input, supports) => {
-    asked.push(input)
-    return supports(version)
+    return { version }
   })
 }
 
@@ -75,8 +79,7 @@ beforeEach(async () => {
   resetLoginShellEnvironmentCacheForTests()
 })
 afterEach(async () => {
-  observeAgentCliVersion.mockReset()
-  probeAgentCliVersion.mockReset()
+  readVersion.mockReset()
   workspace.mockClear()
   await rm(bin, { recursive: true, force: true })
 })
@@ -84,19 +87,18 @@ afterEach(async () => {
 describe('structuredAgentSupportsLaunch', () => {
   it('asks nothing for an agent whose location alone decides', async () => {
     expect(await structuredAgentSupportsLaunch('grok', workspace, runtime)).toBe(true)
-    expect(observeAgentCliVersion).not.toHaveBeenCalled()
+    expect(readVersion).not.toHaveBeenCalled()
     expect(workspace).not.toHaveBeenCalled()
   })
 
-  it('allows stable OpenCode 1.x and 2.x, asking in the workspace with the launch env', async () => {
+  it('allows OpenCode from its minimums, asking in the workspace with the launch env', async () => {
     for (const [version, supported] of [
       ['1.18.31', true],
       ['2.0.14', true],
-      ['2.0.21', true],
+      ['2.1.0-beta.1', true],
+      ['3.0.0', true],
       ['1.18.30', false],
-      ['2.0.13', false],
-      ['2.1.0-beta.1', false],
-      ['3.0.0', false]
+      ['2.0.13', false]
     ] as const) {
       installedVersion(version)
       expect(await structuredAgentSupportsLaunch('opencode', workspace, runtime)).toBe(supported)
@@ -151,8 +153,10 @@ describe('structuredAgentSupportsLaunch', () => {
     expect(asked).toHaveLength(2)
   })
 
-  it('refuses when the version cannot be read', async () => {
-    observeAgentCliVersion.mockResolvedValue('inconclusive')
+  it('allows a version it cannot read, and refuses a binary that does not start', async () => {
+    readVersion.mockResolvedValue({ version: null })
+    expect(await structuredAgentSupportsLaunch('opencode', workspace, runtime)).toBe(true)
+    readVersion.mockResolvedValue({ version: null, started: false })
     expect(await structuredAgentSupportsLaunch('opencode', workspace, runtime)).toBe(false)
   })
 
@@ -190,3 +194,81 @@ describe('structuredAgentSupportsLaunch', () => {
     }
   )
 })
+
+it('uses the same configured launch profile for a checking session as the ordinary host launch', async () => {
+  const configured = {
+    ...settings,
+    agentPermissionDefault: 'own' as const,
+    agentDefaultEnv: { goose: { GOOSE_MODE: 'manual', CATALOG_OWNER: 'configured' } }
+  }
+  const controller = new AbortController()
+  try {
+    const ordinary = await resolveHostStructuredAgentLaunchEnvironment('goose', configured)
+    const checking = await structuredAgentHostLaunchSources(
+      'goose',
+      {
+        requireStore: () => ({ getSettings: () => configured }),
+        resolveStructuredAgentAccountHome: async () => ({ variable: 'HOME', path: '/fixture-home' })
+      },
+      controller.signal
+    )
+    expect(checking.env).toEqual(ordinary)
+    expect(checking.env).toMatchObject({ GOOSE_MODE: 'manual', CATALOG_OWNER: 'configured' })
+    expect(checking.commandSettings).toBe(configured)
+  } finally {
+    controller.abort()
+  }
+})
+
+it.each([20, 200])(
+  'completes %i real create-support setup/version owners while a successor finishes independently',
+  async (count) => {
+    const targetReady = Promise.withResolvers<void>()
+    const versionReady = Promise.withResolvers<void>()
+    const targets = vi.fn(async (selector: string) => {
+      if (selector !== 'live-successor') {
+        await targetReady.promise
+      }
+      return { worktree: { path: `/repo/${selector}` } }
+    })
+    const completions: string[] = []
+    readVersion.mockImplementation(async (input) => {
+      asked.push(input)
+      if (input.cwd !== '/repo/live-successor') {
+        await versionReady.promise
+      }
+      return { version: '1.18.31' }
+    })
+    const checking = { ...runtime, resolveRuntimeFileTarget: targets }
+    const location = {
+      executionHostId: 'local',
+      wslDistro: null,
+      workspaceId: 'workspace',
+      workspaceKind: 'git-worktree'
+    } as const
+    const check = (id: string) =>
+      resolveHostStructuredAgentCreateSupport({
+        agent: 'opencode',
+        worktreeSelector: id,
+        location,
+        runtime: checking
+      }).then((result) => {
+        completions.push(id)
+        return result
+      })
+    const predecessors = Array.from({ length: count }, (_, i) => check(`predecessor-${i}`))
+    await vi.waitFor(() => expect(targets).toHaveBeenCalledTimes(count))
+    expect(asked).toHaveLength(0)
+    const successor = await check('live-successor')
+    expect(successor).toMatchObject({ supported: true })
+    expect(completions).toEqual(['live-successor'])
+    targetReady.resolve()
+    await vi.waitFor(() => expect(asked).toHaveLength(count + 1))
+    expect(completions).toEqual(['live-successor'])
+    versionReady.resolve()
+    expect((await Promise.all(predecessors)).every((result) => result.supported)).toBe(true)
+    expect(completions).toHaveLength(count + 1)
+    expect(loginShell.spawn).toHaveBeenCalledOnce()
+    expect(targets).toHaveBeenCalledTimes(count + 1)
+  }
+)

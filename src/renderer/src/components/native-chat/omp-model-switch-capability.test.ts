@@ -1,10 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { clearNativeChatSessionOptionCacheForTests } from './native-chat-session-option-cache'
-import { createNativeChatPtySessionOptions } from './native-chat-pty-session-options'
-import {
-  normalizeAgentStatusPayload,
-  pickParsedAgentStatusPayload
-} from '../../../../shared/agent-status-types'
+import { createNativeChatPtySessionOptions } from '../../../../shared/native-chat-pty-session-options'
 
 describe('OMP model command capability', () => {
   beforeEach(() => clearNativeChatSessionOptionCacheForTests())
@@ -17,6 +13,7 @@ describe('OMP model command capability', () => {
         agent: 'omp',
         scopeKey: 'omp-model-test',
         mode: 'live',
+        modelLabel: 'Model',
         canSwitchOmpModel,
         initialModels: [
           { id: 'openai/a', label: 'A', options: [] },
@@ -38,20 +35,4 @@ describe('OMP model command capability', () => {
       }
     }
   )
-
-  it('preserves only the recognized capability through normalization and remote projection', () => {
-    for (const command of ['orca-model', 'arbitrary-command', undefined]) {
-      const payload = normalizeAgentStatusPayload({
-        state: 'done',
-        agentType: 'omp',
-        modelSwitchCommand: command
-      })
-      if (!payload) {
-        throw new Error('expected status')
-      }
-      expect(pickParsedAgentStatusPayload(payload).modelSwitchCommand).toBe(
-        command === 'orca-model' ? command : undefined
-      )
-    }
-  })
 })

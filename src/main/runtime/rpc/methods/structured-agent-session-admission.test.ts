@@ -1,6 +1,5 @@
 import '../unused-default-rpc-methods.test-fixture'
-// The host's own structured-chat setting is its user's launch preference, not admission control:
-// a paired client that can read structured sessions reaches every method whatever that setting says.
+// Host structured-chat preference controls launch defaults, not admission for capable paired clients.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -33,10 +32,10 @@ afterEach(() => {
 })
 
 const SETTING_OFF = {
-  requireStore: () => ({ getSettings: () => ({ experimentalNativeChat: false }) })
+  requireStore: () => ({ getSettings: () => ({}) })
 }
 const SETTING_ON = {
-  requireStore: () => ({ getSettings: () => ({ experimentalNativeChat: true }) })
+  requireStore: () => ({ getSettings: () => ({ nativeChatProviders: { codex: true } }) })
 }
 // A client that picks each launch's mode itself, as the desktop does.
 const MODE_CHOOSING_CLIENT = {
@@ -58,7 +57,7 @@ const RELEASED_PHONE = {
 const CREATE_SUPPORT = WORK_METHODS.find((entry) => entry.method === 'agentSession.createSupport')!
 const UNSUPPORTED = { message: expect.stringContaining('structured_agent_session_unsupported') }
 
-describe('a host with structured chat turned off', () => {
+describe('a host whose agents are set to CLI', () => {
   it.each(WORK_METHODS)('still serves $method to a capable client', async ({ method, params }) => {
     const response = await call(method, params, MODE_CHOOSING_CLIENT, SETTING_OFF).catch(
       (error: Error) => {
@@ -76,8 +75,7 @@ describe('a host with structured chat turned off', () => {
     const response = await call(entry.method, entry.params, MODE_CHOOSING_CLIENT, SETTING_OFF)
 
     expect(response).toMatchObject({ ok: true })
-    // `unsubscribe` retires runtime-owned subscriptions and `release` is a no-op, so neither
-    // calls the host: the result payload is the observable effect.
+    // unsubscribe/release may avoid host calls; verify their observable result payload.
     if (entry.hostCall === null) {
       expect(response).toMatchObject({ result: entry.result })
     } else {
@@ -128,8 +126,7 @@ describe('a host with structured chat turned off', () => {
         SETTING_ON
       )
 
-      // Asserting the gate's own code, not merely `ok: false`: a params-validation failure would
-      // pass a bare falsy check and hide a gate that had stopped refusing.
+      // Assert the gate's exact code so unrelated parameter refusal cannot mask a missing gate.
       expect(response).toMatchObject({ ok: false, error: UNSUPPORTED })
     }
   )
@@ -151,7 +148,7 @@ describe('a host with structured chat turned off', () => {
 })
 
 describe('a client that leaves the launch mode to the host', () => {
-  it('is told a chat is unsupported while the host setting is off, so it opens a terminal', async () => {
+  it("is told a chat is unsupported while the host's choice for the agent is CLI, so it opens a terminal", async () => {
     const response = await call(
       CREATE_SUPPORT.method,
       CREATE_SUPPORT.params,
@@ -163,13 +160,12 @@ describe('a client that leaves the launch mode to the host', () => {
     expect(runtimeCalls.getStructuredAgentSessionCreateSupport).not.toHaveBeenCalled()
   })
 
-  it('is answered by the workspace once the host setting is on', async () => {
-    const response = await call(
-      CREATE_SUPPORT.method,
-      CREATE_SUPPORT.params,
-      RELEASED_PHONE,
-      SETTING_ON
-    )
+  it("is answered by the workspace when the host's choice for that agent is chat", async () => {
+    const response = await call(CREATE_SUPPORT.method, CREATE_SUPPORT.params, RELEASED_PHONE, {
+      requireStore: () => ({
+        getSettings: () => ({ nativeChatProviders: { claude: false, codex: true } })
+      })
+    })
 
     expect(response).toMatchObject({ ok: true })
   })

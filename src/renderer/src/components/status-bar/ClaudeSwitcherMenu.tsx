@@ -50,7 +50,7 @@ import { ProviderDetailsMenu } from './ProviderDetailsMenu'
 import { getClaudeAccountSyncKey } from './provider-account-sync-key'
 import { signInToClaudeAccount } from '@/lib/claude-account-sign-in'
 
-// Exported for account switching from chat rows; the footer opens UsageRosterPanel.
+// Retain account switch/reset drill-in even though the footer now opens UsageRosterPanel.
 export function ClaudeSwitcherMenu({
   claude,
   compact,

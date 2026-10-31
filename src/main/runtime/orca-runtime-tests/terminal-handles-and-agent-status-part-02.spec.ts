@@ -304,7 +304,7 @@ describe('OrcaRuntimeService', () => {
     expect(getForegroundProcess).toHaveBeenCalledTimes(1)
   })
 
-  it.each(['claude', 'codex'] as const)(
+  it.each(['claude', 'codex', 'pi', 'grok', 'gemini'] as const)(
     'authorizes settled CLI prompts only after positive %s foreground identity',
     async (agent) => {
       const runtime = new OrcaRuntimeService(store)
@@ -320,19 +320,23 @@ describe('OrcaRuntimeService', () => {
     }
   )
 
-  it('keeps a recognized non-target agent on legacy CLI prompt delivery', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => 'gemini'
-    })
-    syncSinglePty(runtime, 'pty-1', { paneTitle: 'bash' })
-    const [terminal] = (await runtime.listTerminals()).terminals
+  it.each(['orca', 'acli', 'cn', 'vibe'])(
+    'keeps direct input for a bare %s foreground that may be an ordinary tool',
+    async (processName) => {
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => processName
+      })
+      syncSinglePty(runtime, 'pty-1', { paneTitle: 'bash' })
+      const [terminal] = (await runtime.listTerminals()).terminals
 
-    await expect(runtime.isTerminalRunningAgent(terminal.handle)).resolves.toBe(true)
-    await expect(runtime.isTerminalRunningSettledPromptAgent(terminal.handle)).resolves.toBe(false)
-  })
+      await expect(runtime.isTerminalRunningSettledPromptAgent(terminal.handle)).resolves.toBe(
+        false
+      )
+    }
+  )
 
   it('keeps stale Codex launch identity on legacy delivery after the shell returns', async () => {
     const runtime = new OrcaRuntimeService(store)

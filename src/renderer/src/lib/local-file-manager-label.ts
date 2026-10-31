@@ -12,7 +12,6 @@ export function getLocalFileManager(userAgent?: string): LocalFileManager {
   return 'file-manager'
 }
 
-/** The file manager's name, for lists of apps a path can be opened in. */
 export function getLocalFileManagerLabel(userAgent?: string): string {
   switch (getLocalFileManager(userAgent)) {
     case 'finder':

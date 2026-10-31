@@ -7,6 +7,7 @@ import type { SidebarHostOption } from '../../sidebar-host-options'
 import { planSidebarRows } from '../../../../../../shared/sidebar-list/sidebar-row-plan'
 import { addHostSectionRows } from '../../../../../../shared/sidebar-list/host-section-rows'
 import {
+  collapsedSameNameProjectHeaders,
   project,
   projectHostSetups,
   repo,
@@ -16,38 +17,7 @@ import {
 } from '../../worktree-list-groups-test-fixtures'
 import { getProjectHeaderHostContexts } from './project-header-host-context'
 
-const local = { ...repo, displayName: 'app' }
-const paired: Repo = { ...local, id: 'home-app', executionHostId: 'runtime:home' }
-const hosts: SidebarHostOption[] = [
-  {
-    id: 'local',
-    label: 'Local Mac',
-    detail: 'This computer',
-    kind: 'local',
-    health: 'local',
-    presence: 'local'
-  },
-  {
-    id: 'runtime:home',
-    label: 'Home',
-    detail: 'home.example',
-    kind: 'runtime',
-    health: 'disconnected',
-    presence: 'configured'
-  }
-]
-function header(value: Repo): GroupHeaderRow {
-  return {
-    type: 'header',
-    key: `repo:${value.id}`,
-    label: value.displayName,
-    count: 1,
-    icon: { kind: 'project' },
-    repo: value
-  }
-}
-const repoMap = new Map([local, paired].map((value) => [value.id, value]))
-const rows = [header(local), header(paired)]
+const { local, paired, hosts, header, repoMap, rows } = collapsedSameNameProjectHeaders()
 const folder: ProjectGroup = {
   id: 'folder',
   name: 'app',
@@ -94,6 +64,45 @@ describe('project header host context', () => {
 
   it('keeps single-host sidebars quiet even when another host is configured', () => {
     expect(getProjectHeaderHostContexts({ rows: [rows[0]!], hosts, repoMap }).size).toBe(0)
+  })
+
+  it('leaves distinct project names unlabelled across machines', () => {
+    const unique = { ...paired, displayName: 'website' }
+    expect(
+      getProjectHeaderHostContexts({ rows: [header(local), header(unique)], hosts, repoMap }).size
+    ).toBe(0)
+  })
+
+  it('labels only the colliding names in a mixed sidebar', () => {
+    const unique = { ...local, id: 'website', displayName: 'website' }
+    const contexts = getProjectHeaderHostContexts({
+      rows: [...rows, header(unique)],
+      hosts,
+      repoMap: new Map([...repoMap, [unique.id, unique]])
+    })
+    expect([...contexts.keys()]).toEqual(rows.map((row) => row.key))
+  })
+
+  it('keeps same-name projects quiet when they share a machine', () => {
+    const sibling = { ...local, id: 'sibling' }
+    const unique = { ...paired, displayName: 'website' }
+    expect(
+      getProjectHeaderHostContexts({
+        rows: [header(local), header(sibling), header(unique)],
+        hosts,
+        repoMap: new Map([local, sibling, unique].map((value) => [value.id, value]))
+      }).size
+    ).toBe(0)
+  })
+
+  it('leaves unique folder-backed groups unlabelled across machines', () => {
+    expect(
+      getProjectHeaderHostContexts({
+        rows: [header(local), { ...folderHeader, label: 'documents' }],
+        hosts,
+        repoMap
+      }).size
+    ).toBe(0)
   })
 
   it('omits redundant labels under actual enclosing host sections', () => {
@@ -214,7 +223,11 @@ describe('project header host context', () => {
 
   it('never labels a multi-host logical project with its representative repo owner', () => {
     const other = { ...paired, id: 'independent' }
-    const logical: GroupHeaderRow = { ...header(repo), key: `project:${project.id}` }
+    const logical: GroupHeaderRow = {
+      ...header(repo),
+      key: `project:${project.id}`,
+      label: project.displayName
+    }
     const contexts = getProjectHeaderHostContexts({
       rows: [logical, header(other)],
       hosts,
@@ -222,7 +235,7 @@ describe('project header host context', () => {
       projectGrouping: { projects: [project], projectHostSetups }
     })
     expect(contexts.has(logical.key)).toBe(false)
-    expect(contexts.get(`repo:${other.id}`)?.hostId).toBe('runtime:home')
+    expect(contexts.size).toBe(0)
   })
 
   describe.each([
@@ -249,7 +262,7 @@ describe('project header host context', () => {
     { name: 'empty local host scope', includeRemote: false, empty: true, hostFiltered: true }
   ])('$name', ({ includeRemote, empty, hostFiltered }) => {
     it.each([false, true])('counts only listed owners (collapsed: %s)', (collapsed) => {
-      const other = { ...local, id: 'independent-local' }
+      const other = { ...local, id: 'independent-local', displayName: project.displayName }
       const map = new Map([repo, remoteRepo, other].map((value) => [value.id, value]))
       const listedRepoIds = [repo.id, ...(includeRemote ? [remoteRepo.id] : []), other.id]
       const items = [

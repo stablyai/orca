@@ -2,10 +2,7 @@ import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-// Why synthetic and in-repo: the cost model has to be reproducible on any host
-// and must never read a real transcript. The shapes here mirror what a Claude
-// JSONL transcript actually holds — prose turns, a pasted diff, tool calls and
-// their output — because the index's disk cost tracks the mix, not the size.
+// Synthetic inputs keep disk-cost benchmarks reproducible without reading private transcripts.
 
 const WORDS = [
   'terminal',
@@ -28,7 +25,6 @@ const WORDS = [
   'because'
 ]
 
-/** Deterministic: the same seed gives the same corpus on every host and run. */
 function mulberry32(seed: number): () => number {
   let state = seed >>> 0
   return () => {
@@ -50,7 +46,6 @@ function words(random: () => number, count: number): string {
 export type SyntheticCorpus = {
   root: string
   files: string[]
-  /** Total bytes of transcript written, the denominator of write amplification. */
   transcriptBytes: number
   messageCount: number
 }
@@ -59,15 +54,10 @@ export type SyntheticCorpusOptions = {
   sessions?: number
   turnsPerSession?: number
   seed?: number
-  /**
-   * Words per tool result. The default keeps tool output at about half the
-   * message text; the real distribution is 80-97 %, which is what prices the
-   * tool-row cap, so the benchmark runs a second arm well above the default.
-   */
+  /** Vary tool output’s share of message text when measuring index size. */
   toolResultWords?: number
 }
 
-/** Writes a corpus of Claude JSONL transcripts and reports what it cost on disk. */
 export async function writeSyntheticTranscriptCorpus(
   options: SyntheticCorpusOptions = {}
 ): Promise<SyntheticCorpus> {

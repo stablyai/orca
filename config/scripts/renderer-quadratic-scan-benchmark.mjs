@@ -1,11 +1,6 @@
 #!/usr/bin/env node
-// Benchmarks four renderer projections that scaled worse than linearly with user data, each on a
-// path that reruns per keystroke or per store write.
-//
-// Scenarios 1, 3 and 4 time the production export against a hand-written reproduction of the
-// pre-change shape and assert both agree first. Scenario 2 is MODELLED on both sides: the
-// projection lives inside the `useTabGroupItemProjections` React hook and cannot be imported
-// without a renderer, so it reproduces the before/after loops rather than driving production.
+// Benchmark four projection workloads. Scenarios 1/3/4 compare current production with local baselines after checking equivalence.
+// Scenario 2 models both loops because its React hook cannot load without a renderer; it does not time production.
 import { spawnSync } from 'node:child_process'
 import { transformSync } from 'esbuild'
 import { performance } from 'node:perf_hooks'
@@ -113,8 +108,6 @@ function compare({ label, scale, drives, before, after }) {
   results.push({ label, scale, drives, beforeMs: timeRounds(before), afterMs: timeRounds(after) })
 }
 
-// ------------------------------------------------- 1. workspace board search index
-
 const { buildWorkspaceBoardPaletteDocuments, matchWorkspaceBoardWorktrees } = await importRenderer(
   'components/sidebar/workspace-kanban-search.ts'
 )
@@ -140,13 +133,11 @@ compare({
   label: 'workspace board filter (per keystroke burst)',
   scale: `${WORKTREES} worktrees x ${KEYSTROKES} keystrokes`,
   drives: 'production',
-  // Omitting `documents` is the pre-change shape: the index is rebuilt inside every match.
+  // Omitting `documents` rebuilds the index inside every match.
   before: () => matchAll(undefined),
   // The hook memoizes the index on [worktrees, repoMap]; only the match reruns per keystroke.
   after: () => matchAll(buildWorkspaceBoardPaletteDocuments({ worktrees: boardWorktrees, repoMap }))
 })
-
-// ------------------------------------------------- 2. tab-group projections (modelled)
 
 const groupTabs = Array.from({ length: TABS }, (_, index) => ({
   id: `tab-${index}`,
@@ -165,9 +156,17 @@ const groupTabById = new Map(groupTabs.map((item) => [item.id, item]))
 function tabProjections(findOpenFile, findGroupTab) {
   const editorItems = groupTabs
     .filter((item) => item.contentType === 'editor')
-    .map((item) => findOpenFile(item.entityId))
-    .filter((file) => file !== undefined)
-  const order = tabOrder.map((itemId) => findGroupTab(itemId)?.entityId ?? itemId)
+    .map((item) => {
+      const file = findOpenFile(item.entityId)
+      return file ? { ...file, tabId: item.id } : null
+    })
+    .filter((file) => file !== null)
+  const order = tabOrder.map((itemId) => {
+    const item = findGroupTab(itemId)
+    return item && (item.contentType === 'terminal' || item.contentType === 'browser')
+      ? item.entityId
+      : itemId
+  })
   return [editorItems, order]
 }
 
@@ -189,22 +188,17 @@ compare({
   )
 })
 
-// ------------------------------------------------- 3. source-control tree build
-
-const { buildSourceControlTree } = await importRenderer(
-  'components/right-sidebar/source-control-tree.ts'
-)
-const { normalizeRelativePath } = await importRenderer('lib/path.ts')
-const { splitPathSegments } = await importRenderer('components/right-sidebar/path-tree.ts')
-const { compareFileNames } = await import(
-  pathToFileURL(path.join(ROOT, 'src/shared/file-name-sort.ts')).href
-)
+const importShared = (relativePath) =>
+  import(pathToFileURL(path.join(ROOT, 'src/shared', relativePath)).href)
+const { buildSourceControlTree } = await importShared('source-control-tree.ts')
+const { normalizeRelativePath, splitPathSegments } = await importShared('cross-platform-path.ts')
+const { compareFileNames } = await importShared('file-name-sort.ts')
 
 const changedEntries = Array.from({ length: CHANGED_FILES }, (_, index) => ({
   path: `src/area-${index % 20}/module-${index % 60}/nested/deep/part-${index % 7}/file-${index}.ts`
 }))
 
-// Pre-change `buildSourceControlTree`: identical except each ancestor path is re-joined.
+// Local tree comparator re-joins ancestor paths; shares current normalization and sorting.
 function buildSourceControlTreeBefore(area, entries) {
   const makeDirectory = (dirPath, name, depth) => ({
     type: 'directory',
@@ -269,8 +263,6 @@ compare({
   after: () => buildSourceControlTree('unstaged', changedEntries)
 })
 
-// ------------------------------------------------- 4. sidebar header boundaries
-
 const { getRepoHeaderSectionEndByRepoId } = await importRenderer(
   'components/sidebar/worktree-header-section-boundaries.ts'
 )
@@ -304,7 +296,7 @@ const boundaryArgs = {
   repoHeaderBucketByRepoId: new Map(headerRepoIds.map((id) => [id, 'ungrouped']))
 }
 
-// Pre-change `getRepoHeaderSectionEndByRepoId`: a findIndex and an indexOf per header row.
+// Local boundary comparator uses findIndex and indexOf per header row.
 function getRepoHeaderSectionEndByRepoIdBefore(args) {
   const rowStarts = []
   let offset = 0
@@ -351,8 +343,6 @@ compare({
   before: repeat(50, () => [...getRepoHeaderSectionEndByRepoIdBefore(boundaryArgs)]),
   after: repeat(50, () => [...getRepoHeaderSectionEndByRepoId(boundaryArgs)])
 })
-
-// -------------------------------------------------
 
 console.log('Renderer quadratic-scan removals\n')
 console.log('| projection | drives | scale | before | after | |')

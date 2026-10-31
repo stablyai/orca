@@ -3,14 +3,13 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
 import { ensureRemoteOrcadNodeRuntime } from './orcad-remote-node-runtime'
 import {
   REMOTE_NODE_RUNTIME_MISSING,
   REMOTE_NODE_RUNTIME_READY
 } from '../../ssh/orcad-remote-node-runtime-report'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
-import { uploadRelayDirectory } from './remote-install-transfers'
+import { uploadRemoteInstallDirectory } from './remote-install-transfers'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 import { pinnedNodeRuntimeAsset } from '../../../shared/node-runtime-pin'
 import { DesktopDownloadUnreachableError } from '../../node-runtime/pinned-runtime-materializer'
@@ -20,15 +19,17 @@ import {
   HOST_NODE_DOWNLOAD_OK,
   NodeRuntimeUnreachableError
 } from './remote-node-runtime-host-download'
+import { unusedOrcadHostTransport } from '../../ssh/unused-host-transport.test-fixture'
 
 vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => ({
   ...(await importOriginal<typeof ExecCommandModule>()),
   execCommand: vi.fn()
 }))
-vi.mock('./remote-install-transfers', () => ({ uploadRelayDirectory: vi.fn(async () => {}) }))
+vi.mock('./remote-install-transfers', () => ({
+  uploadRemoteInstallDirectory: vi.fn(async () => {})
+}))
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every remote call goes through the mocked execCommand.
-const conn = {} as OrcadHostTransport
+const conn = unusedOrcadHostTransport()
 const host = getRemoteHostPlatform('linux-x64')
 const TARGET = 'linux-x64-glibc'
 const OFFLINE_PATH = '/Users/me/Library/Application Support/Orca/orcad-artifacts/node/archives/x'
@@ -36,10 +37,10 @@ const refused = (): Promise<string> => Promise.reject(new Error('net::ERR_CONNEC
 
 afterEach(() => {
   vi.mocked(execCommand).mockReset()
-  vi.mocked(uploadRelayDirectory).mockClear()
+  vi.mocked(uploadRemoteInstallDirectory).mockClear()
 })
 
-/** A fresh POSIX host; `download` is what its curl/wget step prints. */
+/** Model a fresh host with a configurable curl/wget download verdict. */
 function freshHost(download: string): string[] {
   const commands: string[] = []
   vi.mocked(execCommand).mockImplementation(async (_conn, command) => {
@@ -77,7 +78,7 @@ describe('pinned Node when this computer cannot download it', () => {
     const result = await ensure(refused)
 
     expect(result.transfer).toBe('host-downloaded')
-    expect(uploadRelayDirectory).not.toHaveBeenCalled()
+    expect(uploadRemoteInstallDirectory).not.toHaveBeenCalled()
     const promote = commands.find((command) => command.includes('tar -xzf'))
     expect(promote).toContain(pinnedNodeRuntimeAsset(TARGET).archive)
     expect(promote).toContain(pinnedNodeRuntimeAsset(TARGET).executableSha256)
@@ -105,7 +106,7 @@ describe('pinned Node when this computer cannot download it', () => {
     expect(message).toContain('Settings > Advanced > Network > Node.js download mirror')
     expect(message).toContain("NODEJS_ORG_MIRROR in this computer's environment")
     expect(failure).toMatchObject({ mirror: 'unset' })
-    expect(uploadRelayDirectory).not.toHaveBeenCalled()
+    expect(uploadRemoteInstallDirectory).not.toHaveBeenCalled()
   })
 
   it('records that both attempts went through the configured mirror', async () => {
@@ -171,7 +172,7 @@ describe('pinned Node when this computer cannot download it', () => {
     writeFileSync(archive, 'archive')
     try {
       await expect(ensure(async () => archive)).resolves.toMatchObject({ transfer: 'uploaded' })
-      expect(uploadRelayDirectory).toHaveBeenCalledTimes(1)
+      expect(uploadRemoteInstallDirectory).toHaveBeenCalledTimes(1)
       expect(commands.some((command) => command.includes('command -v curl'))).toBe(false)
     } finally {
       rmSync(cache, { recursive: true, force: true })

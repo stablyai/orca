@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { PluginLockfile } from '../../shared/plugins/plugin-install-lockfile'
+import type { PluginLockfile } from '../../shared/plugins/installation/plugin-install-lockfile'
 import type { PluginService } from '../plugins/plugin-service'
 import type { Store } from '../persistence'
 
@@ -23,19 +23,19 @@ beforeEach(() => {
 describe('plugin consent IPC schema', () => {
   it('requires the fingerprint reviewed by the caller', () => {
     expect(() =>
-      parsePluginConsentArgs({ pluginKey: 'orca-samples.demo', decision: 'approve' })
+      parsePluginConsentArgs({ pluginKey: 'samples.demo', decision: 'approve' })
     ).toThrow()
   })
 
   it('accepts an explicit reviewed fingerprint', () => {
     expect(
       parsePluginConsentArgs({
-        pluginKey: 'orca-samples.demo',
+        pluginKey: 'samples.demo',
         reviewedFingerprint: 'sha256-reviewed',
         decision: 'approve'
       })
     ).toEqual({
-      pluginKey: 'orca-samples.demo',
+      pluginKey: 'samples.demo',
       reviewedFingerprint: 'sha256-reviewed',
       decision: 'approve'
     })
@@ -60,6 +60,15 @@ describe('plugin install IPC schema', () => {
         ref: ' v1.2.3 '
       })
     ).toEqual({ kind: 'git', url: 'https://example.com/plugin.git', ref: 'v1.2.3' })
+  })
+
+  it('carries only a full commit as the commit the dialog showed', () => {
+    const source = { kind: 'git', url: 'https://example.com/plugin.git', ref: 'v1.2.3' }
+    expect(parsePluginInstallArgs({ ...source, expectedCommit: 'a'.repeat(40) })).toEqual({
+      ...source,
+      expectedCommit: 'a'.repeat(40)
+    })
+    expect(() => parsePluginInstallArgs({ ...source, expectedCommit: 'abc1234' })).toThrow()
   })
 
   it('accepts HTTPS and SSH git transports', () => {

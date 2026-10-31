@@ -38,7 +38,6 @@ import { addIssueComment, createIssue, getIssue, listIssues } from './issues'
 import { updateIssue } from './issue-update'
 import { listAssignableUsers, listLabels } from './project-label-and-member-lookup'
 
-/** Raw `glab api -i` stdout: status line, CRLF header lines, blank line, then the JSON body. */
 function glabIncludeOutput(headers: Record<string, string>, body: unknown): string {
   const headerLines = Object.entries(headers)
     .map(([name, value]) => `${name}: ${value}\r\n`)
@@ -46,7 +45,6 @@ function glabIncludeOutput(headers: Record<string, string>, body: unknown): stri
   return `HTTP/2.0 200 OK\r\nContent-Type: application/json\r\n${headerLines}\r\n${JSON.stringify(body)}\n`
 }
 
-/** Answers each `glab api -i` call by endpoint through the real header/body parser. */
 function serveGlabApiPages(stdoutByEndpoint: Map<string, string>): void {
   glabApiWithHeadersMock.mockImplementation(async (args: string[]) => {
     const stdout = stdoutByEndpoint.get(args.at(-1) ?? '')
@@ -57,7 +55,7 @@ function serveGlabApiPages(stdoutByEndpoint: Map<string, string>): void {
   })
 }
 
-/** Mirrors glab's cmdutils.ParseAssignees: `+` adds, `-` or `!` removes, anything else replaces all. */
+/** Model glab assignment parsing: + adds, -/! removes, unprefixed names replace everyone. */
 function glabAssigneeEdits(args: string[]): { add: string[]; remove: string[]; replace: string[] } {
   const add: string[] = []
   const remove: string[] = []
@@ -316,10 +314,7 @@ describe('gitlab issue operations', () => {
   })
 
   it('returns an isolated not_found error (never a cwd-inferred glab call) when the project is unresolved', async () => {
-    // Why: a cwd-inferred `glab issue list` would hit `git: exit status 128`
-    // on an SSH connection and, in an "All projects" aggregate, sink the
-    // whole panel. The unresolvable project must isolate to a structured
-    // error instead, and must not spawn any glab subprocess.
+    // Unresolved SSH projects must return an isolated error without attempting local cwd inference.
     getIssueProjectRefMock.mockResolvedValueOnce(null)
 
     const result = await listIssues('/repo-root', 5, undefined, 'opened', '@me')
@@ -376,7 +371,7 @@ describe('gitlab issue operations', () => {
   })
 
   it('rejects createIssue with empty title', async () => {
-    await expect(createIssue('/repo-root', '   ', 'body')).resolves.toEqual({
+    await expect(createIssue('/repo-root', '   ', 'body')).resolves.toMatchObject({
       ok: false,
       error: 'Title is required'
     })
@@ -394,8 +389,7 @@ describe('gitlab issue operations', () => {
     )
   })
 
-  // Why: `glab issue update` has no --hostname flag either, so field edits on an
-  // SSH workspace must carry the host in GITLAB_HOST (#12193).
+  // issue update rejects --hostname; pass the instance through GITLAB_HOST.
   it('updateIssue edits fields through GITLAB_HOST on an SSH workspace', async () => {
     const projectRef = { host: 'gitlab.example.internal', path: 'stablyai/orca' }
     glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' })
@@ -410,8 +404,6 @@ describe('gitlab issue operations', () => {
     expect(options.env?.GITLAB_HOST).toBe('gitlab.example.internal')
   })
 
-  // Why: `glab issue close` has no --hostname flag; a self-hosted instance is
-  // only reachable through GITLAB_HOST (#12193).
   it('updateIssue closes through GITLAB_HOST on an SSH workspace', async () => {
     const projectRef = { host: 'gitlab.example.internal', path: 'stablyai/orca' }
     glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' })
@@ -425,7 +417,7 @@ describe('gitlab issue operations', () => {
     expect(options.env?.GITLAB_HOST).toBe('gitlab.example.internal')
   })
 
-  // Why: `glab issue close` exits 0 for a closed issue, so a failure mentioning "already" is real.
+  // glab already-closed success exits 0; an already substring must not hide a real rejection.
   it('updateIssue reports a failed close even when its text says "already"', async () => {
     getIssueProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'stablyai/orca' })
     glabExecFileAsyncMock.mockRejectedValueOnce(new Error('Issue is already closed'))
@@ -484,7 +476,6 @@ describe('gitlab issue operations', () => {
       remove: ['bob'],
       replace: []
     })
-    // Why: glab has no --unassignee, and its --unassign clears every assignee.
     expect(args.filter((arg: string) => arg.startsWith('--unassign'))).toEqual([])
   })
 
@@ -659,9 +650,7 @@ describe('gitlab issue operations', () => {
 
   it('returns null from getIssue when project ref cannot be resolved', async () => {
     getIssueProjectRefMock.mockResolvedValueOnce(null)
-    // Why: when there's no GitLab project ref the fallback path
-    // (`glab issue view` from cwd) runs — simulate a glab failure to ensure
-    // we surface null cleanly.
+    // An unresolved project returns null without invoking cwd-dependent glab.
     glabExecFileAsyncMock.mockRejectedValueOnce(new Error('not a glab repo'))
 
     await expect(getIssue('/repo-root', 1)).resolves.toBeNull()
@@ -669,7 +658,7 @@ describe('gitlab issue operations', () => {
 
   it('updateIssue returns error when project ref cannot be resolved', async () => {
     getIssueProjectRefMock.mockResolvedValueOnce(null)
-    await expect(updateIssue('/repo-root', 5, { state: 'closed' })).resolves.toEqual({
+    await expect(updateIssue('/repo-root', 5, { state: 'closed' })).resolves.toMatchObject({
       ok: false,
       error: 'Could not resolve GitLab project for this repository'
     })

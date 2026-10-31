@@ -8,12 +8,12 @@ import { DEFAULT_MAX_HOST_TERMINALS } from './host-terminal-ledger'
 
 export type LegacyRestoreDetails = Omit<LegacyRestoreRecord, 'reason' | 'refusedAt'>
 
-// Why the host terminal cap: a storm refusing every restore the host could run keeps each handle.
+// Retain enough handles for a refused full-host restore storm.
 const MAX_RECORDS = DEFAULT_MAX_HOST_TERMINALS
 const MAX_AGE_MS = 14 * 24 * 60 * 60_000
 const PRIVATE_FILE_MODE = 0o600
 
-// Why beside the run marker: per protocol version, so an old daemon beside a new one keeps its own.
+// Scope records by protocol so coexisting daemon versions cannot overwrite each other.
 export function legacyRestoreRecordsPathFor(automaticWorkMarkerPath: string): string {
   return `${automaticWorkMarkerPath.replace(/\.automatic-work-run\.json$/, '')}.legacy-restores.json`
 }
@@ -47,7 +47,6 @@ function parseRecord(value: unknown): LegacyRestoreRecord | null {
   }
 }
 
-/** The agent session a restore resumes: its claim when the client sent one, else its command. */
 function restoreKey(details: LegacyRestoreDetails): string {
   return details.identityDigest
     ? `claim:${details.identityDigest}`
@@ -56,11 +55,7 @@ function restoreKey(details: LegacyRestoreDetails): string {
       : `session:${details.sessionId}`
 }
 
-/**
- * The host's own copy of every old-client restore it refused (owner decision Q9), so the user
- * can resume it later from any client. Never holds `env`, which can carry credentials.
- * Fail-open: a file that cannot be read or written never turns into a failed spawn.
- */
+/** Persist refused legacy restores across clients; exclude credential-bearing env and tolerate storage failures. */
 export class LegacyRestoreRecords {
   private records: LegacyRestoreRecord[] | null = null
 
@@ -82,7 +77,6 @@ export class LegacyRestoreRecords {
     this.save()
   }
 
-  /** A restore of the same agent session started, from this client or any other. */
   clearStarted(details: LegacyRestoreDetails): void {
     const records = this.load()
     const kept = records.filter(

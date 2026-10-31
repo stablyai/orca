@@ -10,7 +10,6 @@ vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => (
   execCommand: vi.fn()
 }))
 
-import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import { gcRemoteNodeRuntimeStore, parseSweptRuntimeStages } from './remote-node-runtime-store-gc'
 import { RUNTIME_STORE_LOCK_NAME } from './remote-node-runtime-store-lock'
 import { parseRuntimeStoreInventory } from './remote-node-runtime-store-inventory'
@@ -22,9 +21,9 @@ import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 import { decodeRemotePowerShellScript } from '../../ssh/ssh-remote-powershell'
 import { removeTreeSync } from '../../../shared/windows-transient-lock-removal'
+import { unusedSshConnection } from '../../ssh/unused-host-transport.test-fixture'
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: all connection access is replaced by execCommand's mock.
-const conn = {} as SshConnection
+const conn = unusedSshConnection()
 const host = getRemoteHostPlatform('win32-x64')
 const mockExec = vi.mocked(execCommand)
 const sha = (c: string): string => c.repeat(64)
@@ -61,7 +60,6 @@ describe('Windows runtime store commands', () => {
       `Get-CimInstance -ClassName Win32_Process -Filter "ExecutablePath LIKE '%\\\\runtimes\\\\%'" -Property ExecutablePath -ErrorAction Stop`
     )
     expect(script).not.toMatch(/Name\s*=|node\.exe|ProcessName/)
-    // A failed query must not report that the check ran.
     expect(script.indexOf("Write-Output 'PROCESS_CHECK cim'")).toBeGreaterThan(
       script.indexOf('Get-CimInstance')
     )
@@ -148,7 +146,6 @@ describe('gcRemoteNodeRuntimeStore on a Windows host', () => {
       currentPins: [sha('a')]
     })
 
-    // `a` is pinned and referenced, `b` is the newest other verified runtime (keep two).
     expect(result).toMatchObject({ state: 'collected', removed: [`node-${sha('c')}`] })
     const lockTaken = scripts.findIndex((s) => s.includes('CreateNew'))
     const inventoried = scripts.findIndex((s) => s.includes('Win32_Process'))
@@ -227,7 +224,6 @@ describe.runIf(powerShell)('Windows runtime store commands (real PowerShell)', (
     expect(inventory?.verifiedNewestFirst).toEqual([`node-${sha('b')}`, `node-${sha('a')}`])
   })
 
-  // Why Windows only: the hold comes from Win32_Process, which only Windows answers.
   it.runIf(process.platform === 'win32')(
     'holds a runtime whose node.exe is running, found by its image path',
     { timeout: 120_000 },
@@ -249,7 +245,7 @@ describe.runIf(powerShell)('Windows runtime store commands (real PowerShell)', (
         expect(inventory?.processCheckRan).toBe(true)
         expect([...(inventory?.held ?? [])]).toEqual([sha('d')])
       } finally {
-        // Why wait: Windows will not delete the temp store while its image is still running.
+        // Windows cannot delete a runtime while its image is running.
         if (child.pid !== undefined && child.exitCode === null) {
           const exited = new Promise((resolve) => child.once('exit', resolve))
           child.kill()

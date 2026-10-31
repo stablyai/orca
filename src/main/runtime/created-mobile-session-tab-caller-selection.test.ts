@@ -1,12 +1,9 @@
-/**
- * A tab a create just published becomes one paired client's selection: the shared snapshot the host
- * and unselected clients follow stays put, and no PTY work runs — unlike a tap, which may respawn.
- */
+/** Create selects only its caller; shared selection stays put and no tap-style PTY respawn runs. */
 import { expect, it, vi } from 'vitest'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
 
-// Fragments stay side-effect ordered: mocks, then lifecycle, then fixtures.
+// Preserve side-effect order: mocks, lifecycle, fixtures.
 const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
 await import('./orca-runtime-test-lifecycle.spec')
 const { store, TEST_WORKTREE_ID, HEADLESS_LEAF_ID } =
@@ -28,7 +25,6 @@ function pairedRuntime() {
   })
   const caller: RuntimeMobileSessionTabsResult[] = []
   runtime.onMobileSessionTabsChanged((snapshot) => caller.push(snapshot), 'device-caller')
-  // A subscribed second device: selection that fans out to live clients would move it too.
   runtime.onMobileSessionTabsChanged(() => {}, 'device-bystander')
   return { runtime, spawn, caller }
 }
@@ -108,7 +104,7 @@ it('never materializes a pane that is not ready, as a tap would', async () => {
 
   const selected = await runtime.listMobileSessionTabs(`id:${WT}`, 'device-caller')
   expect(selected.activeTabId).toBe(`host-tab::${HEADLESS_LEAF_ID}`)
-  // Why wait: a tap's respawn lands several awaits later, so an immediate check cannot see one.
+  // Respawn crosses several awaits; an immediate absence assertion would be premature.
   await new Promise((resolve) => setTimeout(resolve, 200))
   expect(spawn).not.toHaveBeenCalled()
 })

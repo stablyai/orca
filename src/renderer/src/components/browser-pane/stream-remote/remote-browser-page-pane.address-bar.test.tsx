@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
@@ -7,8 +7,7 @@ import type { BrowserPage } from '../../../../../shared/browser-workspace-types'
 import { requestBrowserFocus } from '../host-guest/browser-focus'
 import { REMOTE_BROWSER_STREAM_LIVE } from './remote-browser-stream-status'
 
-// The streamed pane's runtime machinery — stream, input, wheel, context menu, markup — is inert
-// here: this suite is about the chrome the pane wraps around it, which owns focus and the URL field.
+// Keep runtime effects inert to isolate chrome focus and URL editing.
 const mocks = vi.hoisted(() => ({
   frameUrl: { current: null as string | null },
   addressBarValue: { current: 'about:blank' }
@@ -110,8 +109,7 @@ vi.mock('./use-remote-browser-page-navigation', () => ({
   })
 }))
 
-// Why: mirrors the real viewport's focus surfaces — the screencast <img> once a frame lands,
-// and the viewport div that is all there is before the first one.
+// Mirror both real focus surfaces: viewport before the first frame, image afterward.
 vi.mock('./remote-browser-page-viewport', () => ({
   RemoteBrowserPageViewport: ({
     remoteViewportRef,
@@ -199,7 +197,9 @@ describe('RemoteBrowserPagePane address bar parity', () => {
     vi.stubGlobal('cancelAnimationFrame', () => {})
     Object.defineProperty(window, 'api', {
       configurable: true,
-      value: { ui: { onFocusBrowserAddressBar: () => () => {} } }
+      value: {
+        ui: { onFocusBrowserAddressBar: () => () => {}, onShowBrowserHistory: () => () => {} }
+      }
     })
     useAppStore.setState({
       browserUrlHistory: [],
@@ -213,7 +213,7 @@ describe('RemoteBrowserPagePane address bar parity', () => {
     vi.unstubAllGlobals()
   })
 
-  it('opens a new blank tab in the address bar with its text selected', () => {
+  it('opens a new blank tab in an empty, focused address bar', () => {
     useAppStore.setState({
       pendingAddressBarFocusByPageId: { [PAGE_ID]: true },
       pendingAddressBarFocusByTabId: { [PAGE_ID]: true }
@@ -223,11 +223,10 @@ describe('RemoteBrowserPagePane address bar parity', () => {
 
     const input = addressBar()
     expect(document.activeElement).toBe(input)
-    expect(input.selectionStart).toBe(0)
-    expect(input.selectionEnd).toBe('about:blank'.length)
+    expect(input.value).toBe('')
   })
 
-  it('offers the shared URL history as suggestions once the bar has focus', () => {
+  it('offers the shared URL history once the user types, not on a blank tab’s focus', () => {
     useAppStore.setState({
       browserUrlHistory: [
         {
@@ -244,6 +243,9 @@ describe('RemoteBrowserPagePane address bar parity', () => {
 
     renderPane()
 
+    // The New Tab page under the bar already lists history, so focus alone opens nothing.
+    expect(screen.queryByText('Google Maps')).toBeNull()
+    fireEvent.change(addressBar(), { target: { value: 'maps' } })
     expect(screen.getByText('Google Maps')).toBeTruthy()
   })
 
@@ -271,8 +273,7 @@ describe('RemoteBrowserPagePane address bar parity', () => {
     mocks.frameUrl.current = 'blob:frame-1'
     act(() => view.rerender(paneElement()))
 
-    // Why: the <img> is what carries remote key input, so focus parked on the viewport leaves
-    // the keyboard dead until the user clicks.
+    // Only the image carries remote key input; viewport focus leaves the keyboard inactive.
     expect(document.activeElement).toBe(screen.getByTestId('frame'))
   })
 
@@ -287,8 +288,7 @@ describe('RemoteBrowserPagePane address bar parity', () => {
     mocks.frameUrl.current = 'blob:frame-1'
     act(() => view.rerender(paneElement()))
 
-    // Why: a blank tab paints its first frame while the user is still typing the URL, so the
-    // handover only applies to focus that is sitting on the viewport with nowhere better to go.
+    // First-frame handoff must not steal a URL the user is still typing.
     expect(document.activeElement).toBe(addressBar())
   })
 

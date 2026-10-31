@@ -9,7 +9,6 @@ export type SshPtyBindingCleanupOperations = {
   scheduleSave: () => void
 }
 
-/** `binding.ptyId` must already be in lease-comparable (relay) form; callers normalize it. */
 function sshRemotePtyLeaseMayReferenceBinding(
   lease: SshRemotePtyLease,
   binding: {
@@ -23,7 +22,6 @@ function sshRemotePtyLeaseMayReferenceBinding(
   if (lease.targetId !== binding.targetId || lease.ptyId !== binding.ptyId) {
     return false
   }
-  // Why: target removal is destructive; scrub matching bindings before deleting the lease, else removing the tombstone can revive stale PTY ids.
   return (
     (binding.worktreeId === undefined ||
       lease.worktreeId === undefined ||
@@ -49,10 +47,7 @@ export function clearSshRemotePtyBindingsForLeases(
   if (!leases?.length) {
     return false
   }
-  // Keyed by the stored (relay) pty id, which is the only form a lease holds; every lookup below
-  // normalizes the binding id to that form first, so a bucket miss means "no lease names this pty"
-  // and the binding is KEPT. Failing closed here leaves a stale id to be retired on reattach,
-  // where clearing on a bad match would strand a live remote shell behind a respawned pane.
+  // Normalize binding IDs before lookup; preserve unmatched bindings to avoid stranding live shells.
   let leasesByPtyId: Map<string, SshRemotePtyLease[]> | undefined
   const referencesBinding = (
     binding: Parameters<typeof sshRemotePtyLeaseMayReferenceBinding>[1]

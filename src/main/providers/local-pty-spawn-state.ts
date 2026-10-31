@@ -77,7 +77,7 @@ export function reattachLocalPty(id: string, cols: number, rows: number): PtySpa
     pid: existing.pid,
     ...(ptyWslDistroById.has(id) ? { wslDistro: ptyWslDistroById.get(id) ?? null } : {}),
     isReattach: true,
-    // Why: unlike daemon/relay attach, this one really moved the live PTY to the caller's grid.
+    // This reattach actually resized the live PTY; daemon/relay attachment does not.
     ...(resized ? { attachedGrid: { cols, rows } } : {})
   }
 }

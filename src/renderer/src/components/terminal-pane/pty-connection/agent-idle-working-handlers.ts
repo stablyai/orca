@@ -1,13 +1,10 @@
+import { resolveTerminalPaneOwnerContext } from '../terminal-pane-owner-context'
 import { useAppStore } from '@/store'
-import { getWorktreeMapFromState } from '@/store/selectors'
+import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
 import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import { isEphemeralSetupTerminalWorktreeId } from '../../../../../shared/ephemeral-setup-terminal-worktree-id'
 import { isLocalExecutionHost } from '../../../../../shared/execution-host'
-import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
-import { getConnectionId } from '@/lib/connection-context'
-import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
-import { isWebTerminalSurfaceTabId } from '../../../../../shared/terminal-surface-id'
 
 import { settleTerminalPaneRecovery } from '../terminal-pane-recovery'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
@@ -20,8 +17,7 @@ export function installAgentIdleWorkingHandlers(session: ConnectPanePtySession):
       session.requiresFreshWorkingForAgentTaskCompleteNotification = false
       session.agentCompletionCoordinator.observeTitleWorking()
     }
-    // Why: a new API call refreshes the prompt-cache TTL, so clear any running
-    // countdown. The timer will restart when the agent becomes idle again.
+    // New API calls refresh cache TTL; restart the countdown only at the next idle transition.
     session.deps.setCacheTimerStartedAt(session.cacheKey, null)
     session.clearPendingAgentTaskCompleteNotification()
     if (session.pendingTerminalBellNotification) {
@@ -29,32 +25,36 @@ export function installAgentIdleWorkingHandlers(session: ConnectPanePtySession):
     }
   }
   session.onAgentExited = (): void => {
-    // Why: eligibility can disappear transiently during reconnect, but a
-    // confirmed shell-title transition is authoritative for native-chat exit.
+    // Transient reconnect ineligibility cannot prevent authoritative shell-title exit from native chat.
     session.deps.onAgentExitedRef.current(session.pane.leafId)
     session.clearSuppressedTitleSideEffects()
     session.clearCommandInferredPaneAgent()
     session.requestKnownWindowsShiftEnterReconfirmation()
-    // Why: when the terminal title reverts to a plain shell (e.g., "bash", "zsh"),
-    // the agent has exited. Clear any running cache timer so the sidebar doesn't
-    // show a stale countdown for a tab that no longer has an active Claude session.
+    // Clear cache countdown when title returns to shell; process/PTY lifecycle owns actual agent-row removal.
     session.deps.setCacheTimerStartedAt(session.cacheKey, null)
     session.clearTitleOnlyInterruptTimer()
     // Why: title reversion alone is not process death. The process/PTY tracker
     // owns removing agent rows when the TUI actually exits.
   }
-  // Why: inject ORCA_PANE_KEY so global Claude/Codex hooks can attribute their
-  // callbacks to the correct Orca pane without resolving worktrees from cwd.
-  // The key matches the `${tabId}:${leafId}` composite used for cacheTimerByKey
-  // and agentStatusByPaneKey. Treat it as opaque outside Orca.
+  // Inject opaque ORCA_PANE_KEY matching tabId:leafId so global hooks can attribute callbacks without cwd lookup.
   session.state = useAppStore.getState()
   session.parsedWorkspaceKey = parseWorkspaceKey(session.deps.worktreeId)
-  session.folderWorkspace =
-    session.parsedWorkspaceKey?.type === 'folder'
-      ? session.state.folderWorkspaces.find(
-          (workspace) => workspace.id === session.parsedWorkspaceKey.folderWorkspaceId
-        )
+  session.restoredPtyIdForTransport =
+    session.deps.restoredLeafId && session.deps.restoredPtyIdByLeafId
+      ? (session.deps.restoredPtyIdByLeafId[session.deps.restoredLeafId] ?? null)
       : null
+  session.terminalWorktreeRoute = resolveTerminalWorktreeRoute(
+    session.state,
+    session.deps.worktreeId
+  )
+  session.ownerContext = resolveTerminalPaneOwnerContext(
+    session.state,
+    session.deps.worktreeId,
+    session.deps.tabId,
+    session.terminalWorktreeRoute,
+    session.restoredPtyIdForTransport
+  )
+  session.folderWorkspace = session.ownerContext.folderWorkspace
   session.workspaceEnv = { ORCA_WORKSPACE_ID: session.deps.worktreeId }
   if (session.folderWorkspace) {
     session.workspaceEnv.ORCA_PROJECT_GROUP_ID = session.folderWorkspace.projectGroupId
@@ -72,44 +72,15 @@ export function installAgentIdleWorkingHandlers(session: ConnectPanePtySession):
     ...session.paneIdentityEnv
   }
 
-  // Why: folder workspaces can inherit their SSH target from child repos, so
-  // use the shared resolver instead of only looking up repo-backed worktrees.
-  session.worktree = getWorktreeMapFromState(session.state).get(session.deps.worktreeId)
-  session.worktreeConnectionId = getConnectionId(session.deps.worktreeId)
-  session.tab = (session.state.tabsByWorktree[session.deps.worktreeId] ?? []).find(
-    (t) => t.id === session.deps.tabId
-  )
-  session.restoredPtyIdForTransport =
-    session.deps.restoredLeafId && session.deps.restoredPtyIdByLeafId
-      ? (session.deps.restoredPtyIdByLeafId[session.deps.restoredLeafId] ?? null)
-      : null
-  // Why: the floating terminal and inline setup/onboarding terminals are host-agnostic synthetic
-  // ids with no worktree/repo row, so the strict owner resolver reports them as unresolved. The
-  // shared terminal router scopes them to their floating owner (local for the floating terminal,
-  // the active runtime for setup terminals so remote skill installs land there) and returns null
-  // only for a genuinely unknown/stale worktree that must fail closed (#9994).
-  session.terminalWorktreeRoute = resolveTerminalWorktreeRoute(
-    session.state,
-    session.deps.worktreeId
-  )
+  session.worktree = session.ownerContext.worktree
+  session.worktreeConnectionId = session.ownerContext.connectionId
+  session.tab = session.ownerContext.tab
+  session.terminalWorktreeRoute = session.ownerContext.route
   session.explicitRuntimeEnvironmentId = session.terminalWorktreeRoute?.runtimeEnvironmentId ?? null
-  // Why: paired-web worktrees retain HUB execution identity; their runtime-scoped mirrored pane is the session-level transport owner.
-  session.mirroredRuntimeOwners = new Set(
-    isWebTerminalSurfaceTabId(session.deps.tabId)
-      ? [session.restoredPtyIdForTransport, session.tab?.ptyId]
-          .map((ptyId) => (ptyId ? getRemoteRuntimePtyEnvironmentId(ptyId) : null))
-          .filter((environmentId): environmentId is string => Boolean(environmentId))
-      : []
-  )
-  session.mirroredRuntimeEnvironmentId = session.mirroredRuntimeOwners.values().next().value ?? null
-  session.terminalOwnerUnresolved =
-    session.mirroredRuntimeOwners.size > 1 ||
-    (session.terminalWorktreeRoute === null && !session.mirroredRuntimeEnvironmentId)
-  session.runtimeEnvironmentId = session.explicitRuntimeEnvironmentId
-    ? session.explicitRuntimeEnvironmentId
-    : session.mirroredRuntimeEnvironmentId
-      ? session.mirroredRuntimeEnvironmentId
-      : null
+  session.mirroredRuntimeOwners = session.ownerContext.runtimeOwners
+  session.mirroredRuntimeEnvironmentId = session.ownerContext.mirroredRuntimeEnvironmentId
+  session.terminalOwnerUnresolved = session.ownerContext.unresolved
+  session.runtimeEnvironmentId = session.ownerContext.runtimeEnvironmentId
   // Why: host-agnostic synthetic ids (floating terminal, inline setup panels) have no repo
   // row by design, and a worktree row stamped 'local' proves its host on its own — both are
   // resolved-local, not pending hydration (#10151). Only when nothing names the host does
@@ -118,25 +89,23 @@ export function installAgentIdleWorkingHandlers(session: ConnectPanePtySession):
   session.hostAgnosticTerminalWorktree =
     session.deps.worktreeId === FLOATING_TERMINAL_WORKTREE_ID ||
     isEphemeralSetupTerminalWorktreeId(session.deps.worktreeId)
-  session.worktreeProvesLocalHost = isLocalExecutionHost(session.worktree?.hostId)
+  session.worktreeProvesLocalHost =
+    isLocalExecutionHost(session.worktree?.hostId) ||
+    (session.ownerContext.selectedHost?.kind === 'local' && !!session.worktree)
   session.connectionOwnerHydrating =
     !session.terminalOwnerUnresolved &&
     !session.hostAgnosticTerminalWorktree &&
     !session.worktreeProvesLocalHost &&
     session.runtimeEnvironmentId === null &&
     session.worktreeConnectionId === undefined
-  // Why: an SSH host nested under a HUB is execution identity, not permission for the paired client to dial that host.
-  // A set id is a relay-era `ssh:` row not yet converted to its managed runtime: the pane never
-  // spawns there, the reconnect overlay owns it, and the converted row remounts the pane.
+  // HUB-nested SSH identity grants no direct dial authority; unconverted relay rows wait for the overlay to convert and remount.
   session.unservedSshTargetId =
     !session.terminalOwnerUnresolved &&
     !session.connectionOwnerHydrating &&
     session.runtimeEnvironmentId === null
       ? (session.worktreeConnectionId ?? null)
       : null
-  // Generation is part of ownership: a recovery remount must not join a spawn
-  // started by the pane instance it replaced, while StrictMode remounts keep
-  // the same generation and may still share their in-flight spawn.
+  // Recovery generations cannot join replaced spawns; StrictMode preserves generation and may share in-flight work.
   session.pendingSpawnKey = JSON.stringify([session.cacheKey, session.tabGeneration])
   session.settlePaneAttachAttempt = (status: 'success' | 'failed' | 'timed-out'): void => {
     settleTerminalPaneRecovery(session.deps.tabId, session.terminalRecoveryGeneration, status)

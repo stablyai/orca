@@ -274,8 +274,6 @@ describe('profile project transfer', () => {
     expect(target.sparsePresetsByRepo[targetRepoId]).toEqual([
       expect.objectContaining({ id: 'preset-1', repoId: targetRepoId })
     ])
-    // Why: without the re-key the destination profile reissues a name whose old directory may
-    // still hold the previous occupant's agent conversation.
     expect(target.retiredWorktreeNamesByRepo?.[targetRepoId]).toEqual({
       exhaustedTiers: 0,
       names: ['nautilus']
@@ -367,7 +365,6 @@ describe('profile project transfer', () => {
       executionHostId: 'ssh:ssh-1'
     })
     expect(target.sshTargets).toEqual([sshTarget])
-    // The source key predates endpoint identity; the transfer folds it onto the canonical one.
     expect(target.retiredWorktreeNamesByNamespace).toEqual({
       'ssh:builder.example.com|22|dev:posix:/srv/orca-orca-retirement-probe': {
         exhaustedTiers: 0,

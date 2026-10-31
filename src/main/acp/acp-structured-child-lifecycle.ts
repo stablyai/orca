@@ -1,23 +1,84 @@
+import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { AgentSessionAcquisitionRootExitObservedError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { ProviderAcquisitionStarts } from '../provider-process/provider-acquisition-starts'
 import { isAcpReadySession, type AcpStructuredChild } from './acp-structured-child'
 import type { AcpStructuredConnection } from './acp-structured-connection'
 import { closeAcpSessionJournal, endAcpStructuredSession } from './acp-structured-session'
-import { agentSessionFailureFact, providerDiagnostic } from '../../shared/agent-session-failure'
+import {
+  agentSessionFailureFact,
+  providerDiagnostic,
+  type SubmissionRejectionFact
+} from '../../shared/agent-session-failure'
+import { withProviderSpawnAbsence } from '../provider-process/provider-executable-missing'
+import { providerStartupFailureFact } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
 import {
   ACP_STOP_GRACE_MS,
   type AcpStructuredSessionAdapterDeps
 } from './acp-structured-session-adapter-deps'
+import {
+  createStructuredAgentSessionLogger,
+  neverThrowingStructuredAgentSessionLogger
+} from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import { windDownAcpTurn } from './acp-structured-stop'
+
+/** An agent that never ran names its missing CLI or folder; any other end while starting is its exit. */
+function acpStartupEndFailure(session: AcpStructuredChild): SubmissionRejectionFact {
+  const stderr = session.connection.stderrTail()
+  if (session.closeRequested) {
+    return agentSessionFailureFact('hostStopped', { detail: providerDiagnostic(stderr, 'person') })
+  }
+  const absence = session.connection.spawnAbsence
+  return absence
+    ? providerStartupFailureFact(withProviderSpawnAbsence(new Error(stderr), absence))
+    : agentSessionFailureFact('providerExited', { detail: providerDiagnostic(stderr, 'person') })
+}
 
 export class AcpStructuredChildren {
   readonly sessions = new Map<string, AcpStructuredChild>()
   readonly starts = new ProviderAcquisitionStarts<AcpStructuredConnection>()
   constructor(private readonly deps: AcpStructuredSessionAdapterDeps) {}
-  /** A requested close: proven by the root's exit; a tree not proven gone is the caller's to report. */
-  async close(sessionId: string): Promise<boolean> {
+  capturePendingOutput: StructuredAgentSessionAdapter['capturePendingOutput'] = (input) => {
+    const session = this.sessions.get(input.sessionId)
+    if (
+      !session ||
+      !isAcpReadySession(session) ||
+      session.fence !== input.fence ||
+      session.acquisitionGeneration !== input.generation
+    ) {
+      return undefined
+    }
+    const { turns, lane } = session
+    const pending = turns.capturePendingSend(input.clientMessageId)
+    return () =>
+      session.journalClosed === null &&
+      (pending() || lane.hasPendingDiagnostic(input.clientMessageId))
+  }
+
+  stopAfterFailure(sessionId: string): void {
+    void this.stop(sessionId, false).catch((error: unknown) => {
+      const logger = neverThrowingStructuredAgentSessionLogger(
+        this.deps.logger ?? createStructuredAgentSessionLogger()
+      )
+      logger.warn('ACP failed-child cleanup failed', {
+        scope: 'acp-child-cleanup',
+        sessionId,
+        error
+      })
+    })
+  }
+
+  /** Requires root exit; reports unproven descendant cleanup separately. */
+  async close(sessionId: string, requested = true): Promise<boolean> {
     const connection = this.sessions.get(sessionId)?.connection
-    const closed = await this.stop(sessionId, true)
+    const failed = this.starts.failedConnection(sessionId)
+    const closed = await this.stop(sessionId, requested)
+    const result = connection?.lastCloseResult ?? failed?.lastCloseResult
+    if (closed && result?.killDelivered && result.root !== 'exited') {
+      throw new AgentSessionAcquisitionRootExitObservedError(
+        new Error('ACP writer killed'),
+        'kill-delivered'
+      )
+    }
     if (closed && connection?.processTreeUnproven) {
       throw new AgentSessionAcquisitionRootExitObservedError(
         new Error(
@@ -28,14 +89,29 @@ export class AcpStructuredChildren {
     return closed
   }
 
-  /** True only once every child is proven gone, or when this adapter runs none for the session:
-   *  a failed start's child, and the session's own. */
+  /** Requires exit of both the failed-start child and the session child, if present. */
   async stop(sessionId: string, requested = true): Promise<boolean> {
     const [failedStart, session] = await Promise.all([
       this.starts.stopFailed(sessionId),
       this.stopSession(sessionId, requested)
     ])
     return failedStart && session
+  }
+
+  async closeAll(tasks: (Promise<boolean | void> | undefined)[]): Promise<void> {
+    const ids = new Set([...this.sessions.keys(), ...this.starts.failedSessionIds()])
+    // The host aborts in-progress starts before this teardown.
+    const results = await Promise.allSettled([
+      ...[...ids].map((sessionId) => this.stop(sessionId, true)),
+      ...tasks
+    ])
+    const failure = results.find((result) => result.status === 'rejected')
+    if (failure?.status === 'rejected') {
+      throw failure.reason
+    }
+    if (results.some((result) => result.status === 'fulfilled' && result.value === false)) {
+      throw new Error('an ACP agent child could not be proven stopped')
+    }
   }
 
   private async stopSession(sessionId: string, requested: boolean): Promise<boolean> {
@@ -60,14 +136,14 @@ export class AcpStructuredChildren {
       return session.closing
     }
     if (requested && session.journalClosed === null) {
-      // A close, dispose or quit ends a running turn as a Stop does before the child goes.
+      // Allow the running turn to settle before closing the process.
       session.closeRequested = true
       await windDownAcpTurn(session, this.stopGraceMs())
       if (session.ended) {
         return true
       }
     }
-    // A connection loss already decided why the child ends; a later stop does not relabel it.
+    // Preserve a connection loss's cause across later Stop calls.
     if (session.journalClosed === null) {
       session.closeRequested ||= requested
       session.lane.flush()
@@ -79,7 +155,6 @@ export class AcpStructuredChildren {
     return proven
   }
 
-  /** The child's exit is proven: the host hears it, and nothing of the child stays here. */
   finish(session: AcpStructuredChild, observedAt: number): void {
     if (isAcpReadySession(session)) {
       endAcpStructuredSession(session, observedAt, this.deps.onEvent)
@@ -89,6 +164,9 @@ export class AcpStructuredChildren {
       session.dispose()
       this.deps.onEvent?.({
         type: 'ended',
+        ...(session.connection.lastCloseResult?.killDelivered && !session.connection.exited
+          ? { deathEvidenceKind: 'kill-delivered' as const }
+          : {}),
         sessionId: session.sessionId,
         fence: session.fence,
         acquisitionGeneration: session.acquisitionGeneration,
@@ -96,12 +174,7 @@ export class AcpStructuredChildren {
         cause: session.closeRequested ? 'requested-close' : 'unexpected-exit',
         reason:
           session.connection.stderrTail() || `${session.spec.agent} ACP agent ended while starting`,
-        failure: agentSessionFailureFact(
-          session.closeRequested ? 'hostStopped' : 'providerExited',
-          {
-            detail: providerDiagnostic(session.connection.stderrTail(), 'person')
-          }
-        )
+        failure: acpStartupEndFailure(session)
       })
     }
     if (this.sessions.get(session.sessionId) === session) {
@@ -109,8 +182,7 @@ export class AcpStructuredChildren {
     }
   }
 
-  /** The connection broke while the child may still run: nothing more it says can be journaled, so
-   *  the journal closes now and the child is stopped; the host hears `ended` once that is proven. */
+  /** Close the journal on protocol loss; notify the host after process exit is proven. */
   connectionLost(session: AcpStructuredChild | null, error: Error): void {
     if (
       !session ||
@@ -128,7 +200,7 @@ export class AcpStructuredChildren {
       `${session.spec.agent} ACP connection closed: ${error.message || error.name}`,
       error
     )
-    void this.stop(session.sessionId, false)
+    this.stopAfterFailure(session.sessionId)
   }
 
   private stopGraceMs(): number {

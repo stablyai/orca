@@ -49,7 +49,7 @@ import {
 } from './mobile-tasks-legacy-foundation'
 import { useMobileTasksItemState } from './use-mobile-tasks-item-state'
 import { useMobileJiraConnectionState } from './use-mobile-jira-connection-state'
-import type { JiraIssueFilter } from '../../../src/shared/jira-types'
+import type { JiraIssueFilter } from '../../../src/shared/jira/jira-types'
 
 export function useMobileTasksRouteAndItemState() {
   const { hostId, taskSource } = useLocalSearchParams<{ hostId: string; taskSource?: string }>()
@@ -73,7 +73,7 @@ export function useMobileTasksRouteAndItemState() {
         }
       : null
   )
-  // Why one client: every call naming a server's repo then runs on that server.
+  // One routed client sends each server repo’s calls to its owner.
   const { client, repos, serverRepoList, repoListEnsureLoaded, repoListReload, repoHostLabels } =
     useTaskHostRepos({
       hostId,
@@ -114,9 +114,6 @@ export function useMobileTasksRouteAndItemState() {
   const defaultLinearTeamSelectionRef = useRef<string[] | null>(null)
   const [showLinearWorkspacePicker, setShowLinearWorkspacePicker] = useState(false)
   const [showLinearTeamPicker, setShowLinearTeamPicker] = useState(false)
-  const [showLinearViewPicker, setShowLinearViewPicker] = useState(false)
-  const [showLinearGroupPicker, setShowLinearGroupPicker] = useState(false)
-  const [showLinearOrderPicker, setShowLinearOrderPicker] = useState(false)
   const [showLinearDisplayPicker, setShowLinearDisplayPicker] = useState(false)
   const [showLinearConnect, setShowLinearConnect] = useState(false)
   const [linearApiKeyDraft, setLinearApiKeyDraft] = useState('')
@@ -126,8 +123,7 @@ export function useMobileTasksRouteAndItemState() {
   const [linearConnectError, setLinearConnectError] = useState('')
   const [taskSort, setTaskSort] = useState<TaskSort>('updated')
   const [selectedRepoIds, setSelectedRepoIds] = useState<Set<string>>(new Set())
-  // The saved choice narrowed to what is listed now (empty = all). Listing changes never prune the
-  // choice; a user edit rewrites it from what's shown, so it can drop a briefly gone server's ids.
+  // Readers narrow saved ids without pruning; only user edits may drop temporarily absent server repos.
   const effectiveRepoKey = [...reconcileRepoSelection(repos, [...selectedRepoIds])]
     .sort()
     .join('\n')
@@ -156,13 +152,12 @@ export function useMobileTasksRouteAndItemState() {
   >({})
   const [query, setQuery] = useState(getTaskPresetQuery('issues'))
   const [appliedQuery, setAppliedQuery] = useState(getTaskPresetQuery('issues'))
-  const [showProviderPicker, setShowProviderPicker] = useState(false)
   const [showGitHubKindPicker, setShowGitHubKindPicker] = useState(false)
   const [showGitHubPresetPicker, setShowGitHubPresetPicker] = useState(false)
   const [showGitLabViewPicker, setShowGitLabViewPicker] = useState(false)
   const [showGitLabFilterPicker, setShowGitLabFilterPicker] = useState(false)
   const [showLinearFilterPicker, setShowLinearFilterPicker] = useState(false)
-  const [showSortPicker, setShowSortPicker] = useState(false)
+  const [showFilterSheet, setShowFilterSheet] = useState(false)
   const [showRepoPicker, setShowRepoPicker] = useState(false)
   const [showGitHubIssueSourcePicker, setShowGitHubIssueSourcePicker] = useState(false)
   const [showGitHubPagePicker, setShowGitHubPagePicker] = useState(false)
@@ -261,12 +256,6 @@ export function useMobileTasksRouteAndItemState() {
     setShowLinearWorkspacePicker,
     showLinearTeamPicker,
     setShowLinearTeamPicker,
-    showLinearViewPicker,
-    setShowLinearViewPicker,
-    showLinearGroupPicker,
-    setShowLinearGroupPicker,
-    showLinearOrderPicker,
-    setShowLinearOrderPicker,
     showLinearDisplayPicker,
     setShowLinearDisplayPicker,
     showLinearConnect,
@@ -308,8 +297,6 @@ export function useMobileTasksRouteAndItemState() {
     setQuery,
     appliedQuery,
     setAppliedQuery,
-    showProviderPicker,
-    setShowProviderPicker,
     showGitHubKindPicker,
     setShowGitHubKindPicker,
     showGitHubPresetPicker,
@@ -320,8 +307,8 @@ export function useMobileTasksRouteAndItemState() {
     setShowGitLabFilterPicker,
     showLinearFilterPicker,
     setShowLinearFilterPicker,
-    showSortPicker,
-    setShowSortPicker,
+    showFilterSheet,
+    setShowFilterSheet,
     showRepoPicker,
     setShowRepoPicker,
     showGitHubIssueSourcePicker,

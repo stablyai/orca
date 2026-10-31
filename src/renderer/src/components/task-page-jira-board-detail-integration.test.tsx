@@ -9,7 +9,7 @@ import type {
   JiraMutationResult,
   JiraProjectStatusOrder,
   JiraTransition
-} from '../../../shared/jira-types'
+} from '../../../shared/jira/jira-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { AppState } from '@/store/types'

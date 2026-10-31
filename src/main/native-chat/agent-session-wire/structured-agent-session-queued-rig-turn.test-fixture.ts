@@ -1,7 +1,3 @@
-// What a provider does with a rig's send that the rig's adapter never models: the turn it opened,
-// as the provider's turn record writes it, or its withdrawal by a Stop. A message sent while that
-// send's turn is still opening waits for one of them.
-
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
@@ -12,7 +8,7 @@ import {
 } from './structured-agent-session-host-test-data'
 import type { QueuedMessageTestRig } from './structured-agent-session-queued-message-rig.test-fixture'
 
-/** Opens the turn `id` started; called again with `interrupted` to end it. */
+/** Open the send’s turn; repeat with interrupted to end it. */
 export async function openRigTurnFor(
   rig: QueuedMessageTestRig,
   id: string,
@@ -38,7 +34,6 @@ export async function openRigTurnFor(
   )
 }
 
-/** A Stop took back `id`, whose turn never opened, as the provider's Stop settles it. */
 export async function withdrawnByStop(rig: QueuedMessageTestRig, id: string): Promise<void> {
   await rig.host.settleLateDispatch({
     sessionId: SESSION,

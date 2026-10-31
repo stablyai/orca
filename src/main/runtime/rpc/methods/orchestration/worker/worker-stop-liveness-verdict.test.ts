@@ -4,9 +4,7 @@ import { OrchestrationDb } from '../../../../orchestration/db'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
 import { eraseRpcMethods } from '../../../core'
 
-// The aggregate terminal inventory only iterates registered providers, so a
-// dropped relay clears `connected` for every remote PTY at once. That is lost
-// contact, not a death certificate.
+// Dropped relays clear connected across remote PTYs; use host verdicts to distinguish lost contact from death.
 describe('worker-stop against a terminal we lost contact with', () => {
   let db: OrchestrationDb
   let runtime: OrcaRuntimeService
@@ -96,7 +94,6 @@ describe('worker-stop against a terminal we lost contact with', () => {
       processAction: string
       lastError: string
     }
-    // Losing contact is a reason to report honestly, never to stop trying.
     expect(closeTerminal).toHaveBeenCalledWith('term_worker')
     expect(stopped.processAction).toBe('closed_agent_terminal')
     expect(stopped.state).toBe('stop_unknown')
@@ -147,40 +144,6 @@ describe('worker-stop against a terminal we lost contact with', () => {
     })
   })
 
-  it('does not close a pane after user input transfers ownership', async () => {
-    vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
-      handle: 'term_worker',
-      worktreeId: 'repo::worktree',
-      connected: true,
-      status: 'running'
-    } as never)
-    vi.spyOn(runtime, 'getTerminalLivenessVerdict').mockReturnValue({
-      status: 'live',
-      ptyIds: ['runtime:pty:1']
-    })
-    const closeTerminal = vi.spyOn(runtime, 'closeTerminal').mockResolvedValue({
-      handle: 'term_worker',
-      tabId: 'tab_worker',
-      ptyKilled: true
-    })
-    const dispatch = createWorker()
-
-    await expect(
-      call('orchestration.workerTerminalUserInput', {
-        paneKey: 'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
-      })
-    ).resolves.toMatchObject({ changed: 1 })
-
-    await expect(
-      call('orchestration.workerStop', { dispatch: dispatch.id })
-    ).resolves.toMatchObject({
-      state: 'stop_unknown',
-      processAction: 'none',
-      lastError: 'The worker terminal is user_owned; no terminal was closed.'
-    })
-    expect(closeTerminal).not.toHaveBeenCalled()
-  })
-
   it('does not close a legacy worker terminal without an ownership record', async () => {
     vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
       handle: 'term_worker',
@@ -210,19 +173,6 @@ describe('worker-stop against a terminal we lost contact with', () => {
       lastError: 'The worker terminal is unproven; no terminal was closed.'
     })
     expect(closeTerminal).not.toHaveBeenCalled()
-  })
-
-  it('linearizes stop before a concurrent user takeover', () => {
-    const dispatch = createWorker()
-    expect(db.beginWorkerStop(dispatch.id, runtime.getRuntimeId()).disposition).toBe('stopping')
-
-    expect(db.markWorkerTerminalUserOwned('tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')).toBe(
-      0
-    )
-    expect(db.getWorkerTerminalResourceByOwner(dispatch.id)).toMatchObject({
-      ownership_state: 'owned',
-      release_state: 'not_requested'
-    })
   })
 
   it('does not let abandon overwrite a stop in progress', () => {

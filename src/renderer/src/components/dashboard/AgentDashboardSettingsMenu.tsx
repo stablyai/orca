@@ -14,17 +14,13 @@ import { translate } from '@/i18n/i18n'
 import { canOpenAgentDashboardPopout } from './agent-dashboard-open-mode'
 
 type AgentDashboardSettingsMenuProps = {
-  /** Called after the mode switches to pop-out so the host can hand the board
-   *  over to the pop-out window instead of leaving a stale in-window board. */
+  /** Hand off to the pop-out after switching modes so the old drawer does not remain. */
   onSwitchToPopout: () => void
-  /** Lets the host keep the companion board open while this menu owns the
-   *  next outside click, matching the workspace board's menu handling. */
+  /** Let the host reserve the next outside click for menu dismissal, matching the workspace board. */
   onOpenChange: (open: boolean) => void
 }
 
-/** Board-header settings for the in-window Agent Dashboard, mirroring the
- *  workspace board's settings menu. In-window only — the pop-out renderer has
- *  no store access, so it never mounts this. */
+/** In-window settings only; pop-out renderers have no store access. */
 export function AgentDashboardSettingsMenu({
   onSwitchToPopout,
   onOpenChange

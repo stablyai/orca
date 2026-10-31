@@ -1,17 +1,6 @@
-/**
- * What a method lets its caller do to this Orca, declared on every method definition.
- *
- * The dispatcher grants each caller kind a set of these (rpc-caller-scope.ts), so a new method
- * cannot ship without someone deciding which callers may reach it.
- *
- * `workspace` means the caller can run code as this host's user: it opens terminals and starts
- * agents here. Anything a terminal command could do anyway (browsing directories, installing
- * skills, changing launch env or SSH targets) is therefore not a boundary for a `workspace`
- * caller. Those stay separate tiers so a narrower row (an SSH host's CLI) can refuse them; mobile
- * is gated by its own method-name allowlist instead. For a paired runtime client the real
- * boundaries are `desktop-control` (granted per device at pairing) and `pairing-admin` (never
- * granted to it).
- */
+/** Declare permissions for every method; rpc-caller-scope.ts grants them per caller.
+ * Workspace already runs host-user code; separate tiers allow narrower callers to refuse terminal-equivalent operations. Mobile has a method allowlist.
+ * Paired runtime clients need a pairing-time desktop-control grant and never receive pairing-admin. */
 export type RpcMethodPermission =
   /** Projects, worktrees, terminals, files, git, browser, orchestration and integrations; equals
    *  running commands as this host's user. */

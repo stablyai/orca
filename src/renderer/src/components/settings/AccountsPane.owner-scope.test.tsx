@@ -3,6 +3,8 @@ import '@testing-library/jest-dom/vitest'
 import { useEffect, useLayoutEffect, useState } from 'react'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { callAntigravityAccounts } from '@/runtime/runtime-antigravity-accounts-client'
+import type { AntigravityAccountState } from '../../../../shared/antigravity-account-types'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type {
@@ -34,19 +36,19 @@ const renderPane = (scope: SettingsHostScope): React.JSX.Element => (
 
 const fake = vi.hoisted(() => {
   const state: {
+    query: string
     pendingSelect: ((roster: unknown) => void) | null
     write: ReturnType<typeof vi.fn>
     add: ReturnType<typeof vi.fn>
-    query: string
     navigate: (target: SettingsNavigationTarget) => void
     rosters: Map<string, unknown>
     watchedTargets: unknown[]
     selects: unknown[][]
   } = {
+    query: 'claude',
     pendingSelect: null,
     write: vi.fn(),
     add: vi.fn(),
-    query: 'claude',
     navigate: () => {},
     rosters: new Map(),
     watchedTargets: [],
@@ -55,6 +57,7 @@ const fake = vi.hoisted(() => {
   return state
 })
 vi.mock('@/i18n/i18n', () => ({
+  getIntlLocale: () => 'en',
   i18n: { language: 'en' },
   translate: (_key: string, fallback: string, values?: Record<string, string | number>) =>
     Object.entries(values ?? {}).reduce(
@@ -79,9 +82,15 @@ vi.mock('@/store', () => ({
         claudeTarget: { runtime: 'host', wslDistro: null }
       },
       runtimeEnvironments: [],
+      runtimeStatusByEnvironmentId: new Map(),
       recordFeatureInteraction: fake.write,
       fetchSettings: fake.write
     })
+}))
+vi.mock('@/runtime/runtime-antigravity-accounts-client', () => ({
+  callAntigravityAccounts: vi.fn(),
+  callAntigravityChatSignIn: vi.fn(),
+  subscribeAntigravityChatSignIn: vi.fn()
 }))
 vi.mock('@/runtime/runtime-provider-accounts-client', () => {
   const empty = () => ({
@@ -185,6 +194,38 @@ it('lists the accounts of the host chosen in the page, not the focused server', 
   expect(fake.watchedTargets).toEqual([{ kind: 'local' }])
 })
 
+it('shows Windows account guidance for the page owner rather than the focused server', async () => {
+  fake.query = 'antigravity'
+  const empty: AntigravityAccountState = {
+    accounts: [],
+    activeAccountId: null,
+    selectedAccountId: null,
+    currentAccount: null
+  }
+  vi.mocked(callAntigravityAccounts).mockResolvedValue(empty)
+  render(
+    <AccountsPane
+      settings={focusedElsewhere}
+      updateSettings={vi.fn()}
+      hostScope={scopeFor('server-a')}
+      accountOwnerPlatform="win32"
+    />
+  )
+
+  expect(await screen.findByText('No native agy account is signed in.')).toBeTruthy()
+  expect(callAntigravityAccounts).toHaveBeenCalledWith(
+    { kind: 'environment', environmentId: 'server-a' },
+    { runtime: 'host', wslDistro: null },
+    'List'
+  )
+  expect(
+    screen.getByText(
+      'Select applies and verifies the host default agy credential. Command choices and later account changes are handled by agy. Existing sessions may keep their previous account.'
+    )
+  ).toBeTruthy()
+  expect(screen.queryByText(/Selection applies to new agy sessions on this host/)).toBeNull()
+})
+
 it("drops a server's late account result after the page moves to another server", async () => {
   const view = render(renderPane(scopeFor('server-a')))
   await act(async () => {})
@@ -196,7 +237,6 @@ it("drops a server's late account result after the page moves to another server"
 
   await act(async () => fake.pendingSelect?.(claudeRoster('acct-a', 'alpha@server-a.test', true)))
 
-  // Server A's roster must not replace server B's in the pane now scoped to B.
   expect(screen.queryByText('alpha@server-a.test')).toBeNull()
   expect(screen.getByText('beta@server-b.test')).toBeTruthy()
 })

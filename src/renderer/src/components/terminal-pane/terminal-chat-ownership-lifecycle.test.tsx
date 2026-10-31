@@ -14,12 +14,13 @@ const LEFT = '11111111-1111-4111-8111-111111111111'
 const RIGHT = '22222222-2222-4222-8222-222222222222'
 const mocks = vi.hoisted(() => {
   const layouts: Record<string, TerminalLayoutSnapshot> = {}
+  const settings: { nativeChatProviders?: Record<string, boolean> } = {}
   const tab = { id: 'tab', entityId: 'tab', contentType: 'terminal', viewMode: 'chat' }
   const state = {
     terminalLayoutsByTabId: layouts,
     unifiedTabsByWorktree: { wt: [tab] },
     tabsByWorktree: {},
-    settings: { experimentalNativeChat: true },
+    settings,
     pendingPaneAccountRestarts: [],
     runtimePaneTitlesByTabId: { tab: { 1: 'codex', 2: 'codex' } },
     agentStatusByPaneKey: {},
@@ -137,7 +138,7 @@ function useFixture(fixture: ReturnType<typeof makeFixture>, initialOwner: strin
 }
 
 beforeEach(() => {
-  mocks.state.settings.experimentalNativeChat = true
+  mocks.state.settings.nativeChatProviders = { claude: true, codex: true }
   mocks.state.runtimePaneTitlesByTabId.tab = { 1: 'codex', 2: 'codex' }
   mocks.state.setTabViewMode('tab', 'chat')
   mocks.state.setTabLayout('tab', {
@@ -169,7 +170,7 @@ describe('terminal chat ownership lifecycle', () => {
     expect(mocks.state.terminalLayoutsByTabId.tab.chatLeafId).toBeUndefined()
   })
 
-  it('keeps a saved legacy chat and its explicit toggle available with Chat UI off', () => {
+  it('keeps a saved legacy chat and its explicit toggle available with its agents set to CLI', () => {
     const push = vi.fn()
     const fixture = makeFixture(undefined, { push })
     mocks.state.runtimePaneTitlesByTabId.tab = { 1: 'bash', 2: 'codex' }
@@ -178,7 +179,7 @@ describe('terminal chat ownership lifecycle', () => {
       [RIGHT]: 'remote:host:chat'
     }
     const hook = renderHook(() => useFixture(fixture, RIGHT))
-    mocks.state.settings.experimentalNativeChat = false
+    mocks.state.settings.nativeChatProviders = { claude: false, codex: false }
     hook.rerender()
     hook.result.current.persistLayoutSnapshot()
     expect(hook.result.current.effectiveChatViewMode).toBe(true)
@@ -270,7 +271,6 @@ describe('terminal chat ownership lifecycle', () => {
       .getPanes()
       .find((pane) => pane.leafId === hook.result.current.chatLeafId)
     expect(chatPane?.id).toBe(10)
-    // Closing the restored chat leaf must leave the left terminal untouched.
     restored.managerRef.current.getPanes().pop()?.container.remove()
     hook.rerender()
     expect(restored.managerRef.current.getPanes().map((pane) => pane.leafId)).toEqual([LEFT])

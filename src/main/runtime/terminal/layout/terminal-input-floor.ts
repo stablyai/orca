@@ -1,7 +1,7 @@
 import { OrcaRuntimeWithOnPtyExit } from '../lifecycle/pty-exit-lifecycle'
 import type { PtyLivenessVerdict } from '../../../../shared/pty-liveness-verdict'
 import type { DriverState } from '../../orca-runtime-core'
-import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
+import { isDrivingInputKind, type TerminalInputKind } from '../../../../shared/terminal-input-kind'
 import { isUntypedTerminalInput } from '../../../../shared/terminal-untyped-input'
 import { clampTerminalViewport } from '../../../../shared/terminal-viewport'
 import { getPtyTerminalState, getTerminalState } from '../../terminal-wait-results'
@@ -15,20 +15,12 @@ export abstract class OrcaRuntimeWithMarkPtyLivenessUnverifiable extends OrcaRun
   abstract isResizeSuppressed(): boolean
   protected abstract refreshRendererGeometry(ptyId: string, cols: number, rows: number): void
 
-  /**
-   * Records that we lost contact with a PTY's owning host. Callers must never
-   * read this as an exit: a detached relay PTY is designed to outlive the
-   * provider that addressed it.
-   */
+  /** Lost host contact never proves exit; detached relay PTYs outlive their provider. */
   markPtyLivenessUnverifiable(ptyId: string, reason: string): void {
     this.rememberPtyLivenessVerdict(ptyId, { status: 'unverifiable', reason })
   }
 
-  /**
-   * A host positively observed this PTY. `observedNoLaterThan` fences the write against the
-   * observation sequence the caller read at, so a slow in-flight listing cannot overwrite a
-   * newer lost-contact verdict recorded while it was outstanding.
-   */
+  /** Fence positive host observations by sequence so slow inventory cannot overwrite newer lost-contact evidence. */
   markPtyLivenessLive(ptyId: string, observedNoLaterThan?: number): void {
     const tracked = this.ptyLivenessVerdictByPtyId.get(ptyId)
     if (observedNoLaterThan !== undefined && tracked && tracked.observedAt > observedNoLaterThan) {
@@ -40,30 +32,21 @@ export abstract class OrcaRuntimeWithMarkPtyLivenessUnverifiable extends OrcaRun
     this.rememberPtyLivenessVerdict(ptyId, { status: 'live', ptyIds: [ptyId] })
   }
 
-  /**
-   * Records that Orca asked this PTY to stop — a close, a stop, a teardown.
-   *
-   * Why before the kill and not at the exit: a requested stop can still be
-   * delivered by the provider's own exit event, which carries a process status
-   * indistinguishable from a natural finish. The intent is the only thing that
-   * separates "the operator closed it" from "the agent died", so it is recorded
-   * where it is known rather than reconstructed afterwards (STA-4603).
-   */
+  /** Record stop intent before killing: provider exit codes cannot distinguish operator closes from agent death (STA-4603). */
   markPtyStopRequested(ptyId: string): void {
     this.stopRequestedPtyIds.add(ptyId)
+  }
+
+  /** A stop that failed or was refused: the PTY runs on, so nothing may read it as closing. */
+  clearPtyStopRequest(ptyId: string): void {
+    this.stopRequestedPtyIds.delete(ptyId)
   }
 
   isPtyStopRequested(ptyId: string): boolean {
     return this.stopRequestedPtyIds.has(ptyId)
   }
 
-  /**
-   * Null when this register holds no defensible claim — a never-asked host, a fresh app start, or
-   * an absence observation too weak to name (a relay that answered but does not know the id: see
-   * the inventory sweep and handlePtyReattachFailure). It is NOT a death certificate, so a caller
-   * authorizing a kill must fail closed on it; a caller that only has this evidence to work with,
-   * like terminal.recoverPane, refuses on the positive verdicts instead.
-   */
+  /** Null means no defensible claim, never proof of death. Kill authorization fails closed; recovery instead refuses positive live/unverifiable verdicts. */
   getPtyLivenessVerdict(ptyId: string): PtyLivenessVerdict | null {
     return this.ptyLivenessVerdictByPtyId.get(ptyId)?.verdict ?? null
   }
@@ -71,14 +54,10 @@ export abstract class OrcaRuntimeWithMarkPtyLivenessUnverifiable extends OrcaRun
   protected isPtyKnownExited(ptyId: string): boolean {
     const pty = this.ptysById.get(ptyId)
     if (pty) {
-      // Why: `!connected` is an inference, not proof. The liveness sweep clears it with no
-      // exit code for every PTY of a dropped relay, so reading that as an exit retires the
-      // lease of a process still running on the host — 'unknown' must keep watching.
+      // Disconnected can mean dropped relay contact; only exited state ends watching.
       return getPtyTerminalState(pty) === 'exited'
     }
-    // Why: leavesByPtyId is rebuilt from the renderer graph independently of ptysById, so a
-    // leaf can outlive (or precede) its pty record; without this an already-dead pty never
-    // fires and the caller's release waits forever.
+    // Graph leaves can outlive or precede PTY records; consult both so dead-terminal waits cannot hang.
     return this.getLeavesForPty(ptyId).some((leaf) => getTerminalState(leaf) === 'exited')
   }
 
@@ -138,9 +117,7 @@ export abstract class OrcaRuntimeWithMarkPtyLivenessUnverifiable extends OrcaRun
   }
 
   protected rememberPtyLivenessVerdict(ptyId: string, verdict: PtyLivenessVerdict): void {
-    // An earned death certificate is KEPT, not dropped, so the register is three-valued on disk as
-    // well as in the type. Its only writer is a host-delivered exit frame; nothing weaker may
-    // reach it (docs/reference/ssh-execution-boundary.md).
+    // Retain certified exits against weak observations; only host-delivered exit evidence may establish exited (docs/reference/ssh-execution-boundary.md).
     this.ptyLivenessVerdictByPtyId.delete(ptyId)
     this.ptyLivenessObservationSequence += 1
     this.ptyLivenessVerdictByPtyId.set(ptyId, {
@@ -178,10 +155,6 @@ export abstract class OrcaRuntimeWithMarkPtyLivenessUnverifiable extends OrcaRun
     this.ptyLivenessVerdictByPtyId.delete(ptyId)
   }
 
-  // ─── Driver state (mobile-presence lock) ──────────────────────────
-  //
-  // See docs/mobile-presence-lock.md.
-
   getDriver(ptyId: string): DriverState {
     return this.terminalDrivers.get(ptyId)
   }
@@ -190,18 +163,7 @@ export abstract class OrcaRuntimeWithMarkPtyLivenessUnverifiable extends OrcaRun
     this.terminalDrivers.set(ptyId, next)
   }
 
-  // Why: the host's own fit cascade (window resize, split drag, tab reveal,
-  // "+"-new-tab re-render) must not resize a PTY whose width a remote client
-  // owns — that is the remote "porridge" bug. True while a phone (mobile driver)
-  // OR an active remote desktop viewer owns the PTY. Input is deliberately NOT gated
-  // here (see the `writePtyInput` mobile-only checks): shared-control desktop
-  // viewers may still type alongside the host.
-  // Note: this is intentionally NOT a driver kind. An active remote viewer needs
-  // only resize suppression, not the mobile driver machinery (input lock,
-  // phone-fit, driver-change banners), so it lives in its own registry and does
-  // not perturb the presence-lock state machine. It also coexists with mobile:
-  // while a phone drives, the registry still suppresses host resize, and when
-  // the phone leaves the surviving viewer keeps the PTY suppressed.
+  // Phones and remote desktop viewers suppress host resize. Desktop viewers still share input and use a separate registry from mobile locks.
   isPtyResizeDrivenRemotely(ptyId: string): boolean {
     if (this.getDriver(ptyId).kind === 'mobile') {
       return true
@@ -254,7 +216,7 @@ export abstract class OrcaRuntimeWithMarkPtyLivenessUnverifiable extends OrcaRun
   }
 
   noteRemoteDesktopHostInput(ptyId: string, inputKind: TerminalInputKind, data: string): void {
-    if (inputKind === 'driving' && !isUntypedTerminalInput(data)) {
+    if (isDrivingInputKind(inputKind) && !isUntypedTerminalInput(data)) {
       this.remoteDesktopFloor.noteHostInput(ptyId)
     }
   }
@@ -270,14 +232,7 @@ export abstract class OrcaRuntimeWithMarkPtyLivenessUnverifiable extends OrcaRun
     return this.remoteDesktopFloor.unregisterViewers(ptyId, subscriptionKeys)
   }
 
-  // Why: the one-shot `terminal.updateViewport` RPC has no disconnect hook, so
-  // it must never *create* a width floor (that floor would leak — nothing
-  // releases it, pinning the host at a stale width after the viewer is gone).
-  // It only refreshes the floor(s) this client already owns via its stream
-  // subscription, keyed by clientId. Mirrors the mobile `updateMobileViewport`
-  // no-op-without-subscription invariant. Returns false when the client owns no
-  // floor (passive/stream-less viewer) — a stream-less viewer must not lock host
-  // resize.
+  // One-shot viewport RPCs have no disconnect cleanup; refresh only stream-owned floors or host width would remain pinned after departure.
   refreshRemoteDesktopViewer(
     ptyId: string,
     clientId: string,

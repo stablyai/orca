@@ -1,7 +1,4 @@
-// A conversation command Claude runs as the session's open turn. The turn is the host's record, and
-// the command's own result ends it. Everything Claude writes for the command meanwhile — the
-// summary it continues from, the command's echo, a "Compaction canceled." — is the command's
-// output, never a reply, so none of it draws.
+// Command output stays off the reply timeline; only the command's result ends its turn.
 
 import type {
   AgentJournalItemBody,
@@ -23,12 +20,9 @@ import type { StructuredAgentSessionEventSink } from '../native-chat/agent-sessi
 export type ClaudeCommandTurn = {
   identity: AgentJournalItemIdentity
   resultIdentity: AgentJournalItemIdentity
-  /** The command input's uuid, which the result answering it names. */
   sentUuid: string
   compacted: boolean
-  /** Orca asked Claude to stop the command. */
   interruptRequested: boolean
-  /** Claude reported the compaction failed, with its words for a person when it gave any. */
   failed: { detail?: ProviderDiagnostic } | null
 }
 
@@ -56,8 +50,7 @@ export function claudeCommandCurrentTurn(start: ClaudeCommandStart): ClaudeCurre
   }
 }
 
-/** Reads a running command's evidence off a frame. True for the command's own output, which
- *  draws nothing. */
+/** Return true for command output that must stay off the reply timeline. */
 export function observeClaudeCommandFrame(
   command: ClaudeCommandTurn | null,
   message: Record<string, unknown>
@@ -66,7 +59,7 @@ export function observeClaudeCommandFrame(
     return false
   }
   if (message.type === 'system') {
-    // Only the boundary says the history was replaced; `compact_result: 'success'` precedes it.
+    // A success status precedes compaction; only the boundary confirms history replacement.
     if (message.subtype === 'compact_boundary') {
       command.compacted = true
     } else if (message.compact_result === 'failed') {
@@ -82,8 +75,6 @@ export function observeClaudeCommandFrame(
   )
 }
 
-/** The command's end from a root result, and the one row that reports it; null when the result
- *  names another input. */
 export function claudeCommandEnd(
   command: ClaudeCommandTurn,
   message: Record<string, unknown>,
@@ -93,8 +84,7 @@ export function claudeCommandEnd(
   if (answers !== null && answers !== command.sentUuid) {
     return null
   }
-  // A stopped `/compact` ends in the same success result as a finished one: only the provider's
-  // report of the compaction tells them apart.
+  // Stopped and finished compactions can both return success; use compaction evidence.
   const shown = claudeResultFailure(message)
   const verdict = structuredCompactionOutcome({
     compacted: command.compacted,
@@ -113,7 +103,7 @@ export function claudeCommandEnd(
   if (verdict.outcome === 'success') {
     return { end, row: { kind: 'status', text: 'Context compacted', presentation: 'compaction' } }
   }
-  // An error result already draws its own row through the provider fallback.
+  // Provider fallback already renders error results.
   return verdict.failure && !shown
     ? {
         end,
@@ -129,9 +119,7 @@ export function claudeCommandEnd(
     : { end, row: null }
 }
 
-/** A root result, when a command is the open turn: the command's end, with its one result row
- *  already written; `another-input` for a result that answers something else; null when no
- *  command is open. */
+/** Write the command result row before returning its turn end. */
 export function claudeCommandResultEnd(
   turn: Pick<ClaudeOpenTurn, 'command' | 'turnScope'>,
   sink: Pick<StructuredAgentSessionEventSink, 'appendItem'>,

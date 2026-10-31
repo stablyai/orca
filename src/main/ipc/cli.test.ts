@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as BackgroundDistroGate from '../wsl-background-distro-gate'
 
 const {
   handlers,
@@ -6,13 +7,17 @@ const {
   wslInstallerMock,
   recordInstalledMock,
   recordRemovedMock,
-  getDefaultWslDistroMock
+  forgetMock,
+  getDefaultWslDistroMock,
+  readWslDistroRunningStateMock
 } = vi.hoisted(() => ({
+  readWslDistroRunningStateMock: vi.fn(),
   handlers: new Map<string, (...args: unknown[]) => unknown>(),
   ipcHandleMock: vi.fn(),
   wslInstallerMock: vi.fn(),
   recordInstalledMock: vi.fn(),
   recordRemovedMock: vi.fn(),
+  forgetMock: vi.fn(),
   getDefaultWslDistroMock: vi.fn()
 }))
 
@@ -21,7 +26,8 @@ vi.mock('../cli/cli-installer', () => ({ CliInstaller: vi.fn() }))
 vi.mock('../cli/wsl-cli-installer', () => ({ WslCliInstaller: wslInstallerMock }))
 vi.mock('../cli/wsl-cli-registration-registry', () => ({
   recordWslCliRegistrationInstalled: recordInstalledMock,
-  recordWslCliRegistrationRemoved: recordRemovedMock
+  recordWslCliRegistrationRemoved: recordRemovedMock,
+  forgetWslCliRegistration: forgetMock
 }))
 vi.mock('../persistence', () => ({ getCanonicalUserDataPath: () => '/canonical-user-data' }))
 vi.mock('../startup/hydrate-shell-path', () => ({
@@ -29,11 +35,18 @@ vi.mock('../startup/hydrate-shell-path', () => ({
   mergePathSegments: vi.fn()
 }))
 vi.mock('../wsl', () => ({ getDefaultWslDistro: getDefaultWslDistroMock }))
+vi.mock('../wsl-background-distro-gate', async (importOriginal) => ({
+  ...(await importOriginal<typeof BackgroundDistroGate>()),
+  readWslDistroRunningState: readWslDistroRunningStateMock
+}))
 
 import { registerCliHandlers } from './cli'
 import { WslCliUnreachableError } from '../cli/wsl-cli-status'
 
-type WslHandler = (event: unknown, args?: { distro?: string | null }) => Promise<{ state: string }>
+type WslHandler = (
+  event: unknown,
+  args?: { distro?: string | null; wakeWslDistro?: boolean }
+) => Promise<{ state: string }>
 
 function getWslHandler(channel: string): WslHandler {
   const handler = handlers.get(channel)
@@ -55,6 +68,7 @@ describe('WSL CLI registration IPC', () => {
     wslInstallerMock.mockReset()
     recordInstalledMock.mockReset().mockResolvedValue(undefined)
     recordRemovedMock.mockReset().mockResolvedValue(undefined)
+    forgetMock.mockReset().mockResolvedValue(undefined)
     getDefaultWslDistroMock.mockReset().mockReturnValue('Ubuntu')
     registerCliHandlers()
   })
@@ -108,6 +122,35 @@ describe('WSL CLI registration IPC', () => {
     await expect(getWslHandler('cli:removeWsl')({})).resolves.toEqual({ state: 'not_installed' })
     expect(wslInstallerMock).toHaveBeenCalledWith({ distro: 'Ubuntu' })
     expect(recordRemovedMock).toHaveBeenCalledWith('/canonical-user-data', 'Ubuntu')
+  })
+
+  it('forgets the registration of a deleted distro instead of failing the removal', async () => {
+    const remove = vi.fn(async () => {
+      throw new Error('wsl.exe: There is no distribution with the supplied name.')
+    })
+    wslInstallerMock.mockImplementation(function MockWslCliInstaller() {
+      return { remove }
+    })
+
+    await expect(
+      getWslHandler('cli:removeWsl')({}, { distro: 'orca-uqa-1029' })
+    ).resolves.toMatchObject({ state: 'not_installed', supported: false })
+    expect(forgetMock).toHaveBeenCalledWith('/canonical-user-data', 'orca-uqa-1029')
+    expect(recordRemovedMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps the registration when removal fails for another reason', async () => {
+    const remove = vi.fn(async () => {
+      throw new Error('permission denied')
+    })
+    wslInstallerMock.mockImplementation(function MockWslCliInstaller() {
+      return { remove }
+    })
+
+    await expect(getWslHandler('cli:removeWsl')({}, { distro: 'Ubuntu' })).rejects.toThrow(
+      'permission denied'
+    )
+    expect(forgetMock).not.toHaveBeenCalled()
   })
 
   it('does not claim ownership when installation is not confirmed', async () => {
@@ -172,5 +215,46 @@ describe('WSL CLI registration IPC', () => {
     expect(remove.mock.invocationCallOrder[0]).toBeLessThan(
       recordRemovedMock.mock.invocationCallOrder[0]
     )
+  })
+
+  describe('on Windows (E9)', () => {
+    const originalPlatform = process.platform
+    const getStatus = vi.fn(async () => ({ state: 'installed' }))
+
+    beforeEach(() => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      readWslDistroRunningStateMock.mockReset().mockResolvedValue('stopped')
+      getStatus.mockClear()
+      wslInstallerMock.mockImplementation(function MockWslCliInstaller() {
+        return { getStatus }
+      })
+    })
+
+    afterEach(() => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    })
+
+    it('shows a refreshable state instead of starting a stopped distro when Settings opens', async () => {
+      await expect(getWslHandler('cli:getWslInstallStatus')({})).resolves.toMatchObject({
+        state: 'unsupported',
+        unsupportedReason: 'wsl_unreachable',
+        detail: expect.stringContaining('Ubuntu) is not running')
+      })
+      expect(wslInstallerMock).not.toHaveBeenCalled()
+    })
+
+    it('lets the refresh button start the distro to read its status', async () => {
+      await expect(
+        getWslHandler('cli:getWslInstallStatus')({}, { wakeWslDistro: true })
+      ).resolves.toEqual({ state: 'installed' })
+      expect(getStatus).toHaveBeenCalledTimes(1)
+    })
+
+    it('reads a running distro exactly as before', async () => {
+      readWslDistroRunningStateMock.mockResolvedValue('running')
+      await expect(getWslHandler('cli:getWslInstallStatus')({})).resolves.toEqual({
+        state: 'installed'
+      })
+    })
   })
 })

@@ -9,10 +9,6 @@ export abstract class OrcaRuntimeWithResolveWaiter extends OrcaRuntimeWithResolv
     this.terminalWaiters.resolve(waiter, result)
   }
 
-  protected rejectWaitersForHandle(handle: string, code: string): void {
-    this.terminalWaiters.rejectHandle(handle, code)
-  }
-
   protected rejectAllWaiters(code: string): void {
     this.terminalWaiters.rejectAll(code)
   }
@@ -25,10 +21,10 @@ export abstract class OrcaRuntimeWithResolveWaiter extends OrcaRuntimeWithResolv
     return `${tabId}::${leafId}`
   }
 
-  getAuthoritativeWindow(): BrowserWindow {
+  getAuthoritativeWindow(missingWindowMessage = 'No renderer window available'): BrowserWindow {
     const win = this.getAvailableAuthoritativeWindow()
     if (!win || win.isDestroyed()) {
-      throw new Error('No renderer window available')
+      throw new Error(missingWindowMessage)
     }
     return win
   }

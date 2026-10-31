@@ -1,11 +1,13 @@
 // @vitest-environment happy-dom
 
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as LaunchErrors from '@/lib/structured-agent-session-launch-errors'
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../shared/tab-types'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
 import type { StructuredAgentSessionLaunchIntent } from '@/lib/launch-structured-agent-session'
 import type * as LaunchAdmissionModule from './structured-agent-session-launch-admission'
+import type * as RpcClientModule from '@/runtime/runtime-rpc-client'
 
 const mocks = vi.hoisted(() => ({
   createIntent: vi.fn(),
@@ -48,7 +50,9 @@ function emptyStoreState(): StoreState {
     nativeChatLaunchDraftByTabId: {}
   }
 }
-const store = vi.hoisted((): { state: StoreState } => ({ state: emptyStoreState() }))
+const owner = vi.hoisted((): { store: ReturnType<typeof createTestStore> | null } => ({
+  store: null
+}))
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), info: vi.fn(), message: vi.fn() } }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
@@ -56,16 +60,31 @@ vi.mock('@/lib/agent-catalog', () => ({
   getAgentLabel: () => 'Codex',
   getAgentCatalog: () => [{ id: 'codex', label: 'Codex' }]
 }))
-vi.mock('@/lib/launch-structured-agent-session', () => {
+const launchErrorMocks = vi.hoisted(() => {
   class StructuredAgentSessionCreateRefusalError extends Error {}
   class StructuredAgentSessionOwnerUnresolvedError extends Error {}
+  return { StructuredAgentSessionCreateRefusalError, StructuredAgentSessionOwnerUnresolvedError }
+})
+
+vi.mock('@/lib/structured-agent-session-launch-errors', async () => ({
+  ...(await vi.importActual<typeof LaunchErrors>('@/lib/structured-agent-session-launch-errors')),
+  ...launchErrorMocks
+}))
+
+vi.mock('@/lib/structured-agent-session-launch-create-call', () => ({
+  launchStructuredAgentSession: mocks.launch
+}))
+
+vi.mock('@/lib/launch-structured-agent-session', () => {
   return {
     createStructuredAgentSessionLaunchIntent: mocks.createIntent,
     retryStructuredAgentSessionLaunchIntent: vi.fn(),
     abandonStructuredAgentSessionLaunchIntent: vi.fn(),
     launchStructuredAgentSession: mocks.launch,
-    StructuredAgentSessionCreateRefusalError,
-    StructuredAgentSessionOwnerUnresolvedError
+    StructuredAgentSessionCreateRefusalError:
+      launchErrorMocks.StructuredAgentSessionCreateRefusalError,
+    StructuredAgentSessionOwnerUnresolvedError:
+      launchErrorMocks.StructuredAgentSessionOwnerUnresolvedError
   }
 })
 // Each pick opens its chat once its host admits it; here this machine admits at once.
@@ -81,10 +100,21 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: (target: unknown, method: string, params?: unknown) =>
     mocks.callRuntimeRpc(target, method, params)
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: mocks.callRuntimeRpc,
-  ensureRuntimeEnvironmentCompatible: vi.fn(async () => undefined)
-}))
+// Switch-on, main answers the window's chat opens and its frames draw them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply({
+    ...(await importOriginal<typeof RpcClientModule>()),
+    callRuntimeRpc: mocks.callRuntimeRpc,
+    ensureRuntimeEnvironmentCompatible: vi.fn(async () => undefined)
+  })
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
 vi.mock('@/runtime/structured-agent-session-status-feed', () => ({
   getStructuredAgentSessionStatusFeed: () => ({
     getSessionObservation: (sessionId: string) =>
@@ -95,34 +125,9 @@ vi.mock('@/runtime/structured-agent-session-status-feed', () => ({
       )
   })
 }))
-vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: () => ({
-      ...store.state,
-      createUnifiedTab: (
-        worktreeId: string,
-        contentType: Tab['contentType'],
-        init: { targetGroupId?: string }
-      ) => {
-        const groupId =
-          init.targetGroupId ?? store.state.activeGroupIdByWorktree[worktreeId] ?? 'group-left'
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch passes the agent-session fields a structured tab carries.
-        const tab = { ...init, contentType, worktreeId, groupId, createdAt: 1 } as Tab
-        store.state.unifiedTabsByWorktree[worktreeId] = [
-          ...(store.state.unifiedTabsByWorktree[worktreeId] ?? []),
-          tab
-        ]
-        return tab
-      },
-      activateTab: mocks.activateTab,
-      focusGroup: mocks.focusGroup,
-      setActiveTabType: vi.fn(),
-      seedNativeChatLaunchDraft: vi.fn(),
-      clearNativeChatLaunchDraft: vi.fn()
-    }),
-    subscribe: () => () => undefined
-  }
-}))
+vi.mock('@/store', async () =>
+  (await import('./launch-parity-renderer.test-fixture')).launchStoreModuleMock(owner)
+)
 
 import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/structured-agent-session-message-sender'
 import { clearNativeChatDraftCacheForTests } from '@/components/native-chat/native-chat-draft-cache'
@@ -130,14 +135,22 @@ import { adoptAgentSessionLaunchVerdict } from './agent-session-launch-plan'
 import {
   beginStructuredAgentSessionProvisionalLaunch,
   type StructuredAgentSessionProvisionalLaunch
-} from './structured-agent-session-provisional-tab'
+} from './agent-session/structured-agent-session-provisional-tab'
 import { getStructuredAgentSessionLaunchLifecycle } from './structured-agent-session-launch'
 import {
   discardStructuredLaunchPrompts,
   hasStagedStructuredLaunchPrompt
 } from './structured-agent-session-launch-prompt'
-import { resetStructuredAgentLaunchPersistenceForTests } from './structured-agent-session-launch-persistence'
-import { resetStructuredAgentLaunchRegistryForTests } from './structured-agent-session-launch-registry'
+import { resetStructuredAgentLaunchPersistenceForTests } from './agent-session/launch/structured-agent-session-launch-persistence'
+import { resetStructuredAgentLaunchRegistryForTests } from './agent-session/launch/structured-agent-session-launch-registry'
+import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { isPendingTab } from '@/runtime/layout-owner-pending-tabs'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { createTestStore, makeWorktree, seedStore } from '@/store/slices/store-test-helpers'
+import {
+  drawTabsFromMain,
+  type TabsDrawnFromMain
+} from '@/store/slices/tabs-drawn-from-main.test-fixture'
 
 const WORKTREE_ID = 'wt-new-chat'
 
@@ -183,10 +196,95 @@ function published(...sessionIds: string[]): RuntimeMobileSessionTabsResult[] {
   }))
 }
 
+let main: TabsDrawnFromMain | null = null
+let warnings: MockInstance<typeof console.warn>
+
+// Frame-drawn split workspace: each side needs a terminal because main drops empty groups.
+async function seedSplit(): Promise<void> {
+  const real = createTestStore()
+  const side = (groupId: string): Tab => ({
+    id: `terminal-${groupId}`,
+    entityId: `terminal-${groupId}`,
+    groupId,
+    worktreeId: WORKTREE_ID,
+    contentType: 'terminal',
+    label: 'Terminal',
+    customLabel: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 1
+  })
+  const seeded = emptyStoreState()
+  seedStore(real, {
+    worktreesByRepo: { repo: [makeWorktree({ id: WORKTREE_ID, repoId: 'repo' })] },
+    activeWorktreeId: WORKTREE_ID,
+    tabsByWorktree: {
+      [WORKTREE_ID]: (ORCA_LAYOUT_OWNER_IS_MAIN ? ['group-left', 'group-right'] : []).map(
+        (groupId, index) => ({
+          id: `terminal-${groupId}`,
+          ptyId: null,
+          worktreeId: WORKTREE_ID,
+          title: 'Terminal',
+          customTitle: null,
+          color: null,
+          sortOrder: index,
+          createdAt: 1
+        })
+      )
+    },
+    unifiedTabsByWorktree: {
+      [WORKTREE_ID]: ORCA_LAYOUT_OWNER_IS_MAIN ? [side('group-left'), side('group-right')] : []
+    },
+    groupsByWorktree: {
+      [WORKTREE_ID]: seeded.groupsByWorktree[WORKTREE_ID]!.map((group) => ({
+        ...group,
+        activeTabId: ORCA_LAYOUT_OWNER_IS_MAIN ? `terminal-${group.id}` : null,
+        tabOrder: ORCA_LAYOUT_OWNER_IS_MAIN ? [`terminal-${group.id}`] : []
+      }))
+    },
+    layoutByWorktree: seeded.layoutByWorktree,
+    activeGroupIdByWorktree: seeded.activeGroupIdByWorktree
+  })
+  owner.store = real
+  const { activateTab, focusGroup } = real.getState()
+  real.setState({
+    activateTab: mocks.activateTab.mockImplementation(activateTab),
+    focusGroup: mocks.focusGroup.mockImplementation(focusGroup)
+  })
+  main = await drawTabsFromMain(real)
+}
+
+/** The chat tabs the workspace shows: switch-on, as main's frames drew them. */
+async function openedChats(): Promise<Tab[]> {
+  await main?.settle()
+  const tabs = owner.store!.getState().unifiedTabsByWorktree[WORKTREE_ID] ?? []
+  const chats = tabs.filter((tab) => tab.contentType === 'agent-session')
+  for (const tab of chats) {
+    expect(owner.store!.getState().getTab(tab.id)).toBe(tab)
+  }
+  return chats
+}
+
+const owned: {
+  handle: Exclude<StructuredAgentSessionProvisionalLaunch, { sessionId: null }>
+  done: boolean
+}[] = []
+const heldCreates: {
+  intent: StructuredAgentSessionLaunchIntent
+  resolve: (receipt: { sessionId: string; fence: number }) => void
+}[] = []
+function holdCreates(): void {
+  mocks.launch.mockImplementation(
+    (intent: StructuredAgentSessionLaunchIntent) =>
+      new Promise<{ sessionId: string; fence: number }>((resolve) =>
+        heldCreates.push({ intent, resolve })
+      )
+  )
+}
+
 const first = launchIntent('session-first')
 const second = launchIntent('session-second')
 
-/** A pick from the + menu, new-tab search or the new-agent shortcut: its own action, no text. */
 function pick(
   requestId: string,
   overrides: {
@@ -214,6 +312,11 @@ function pick(
   if (!launch || launch.sessionId === null) {
     throw new Error('expected a local chat')
   }
+  const pending = { handle: launch, done: false }
+  owned.push(pending)
+  void launch.settlement.then(() => {
+    pending.done = true
+  })
   return launch
 }
 
@@ -243,7 +346,6 @@ beforeEach(() => {
   }
   mocks.statusBySession.clear()
   mocks.liveSessions.clear()
-  store.state = emptyStoreState()
   mocks.createIntent
     .mockReturnValueOnce(first)
     .mockReturnValueOnce(second)
@@ -258,15 +360,48 @@ beforeEach(() => {
   })
 })
 
+beforeEach(async () => {
+  await seedSplit()
+  warnings = vi.spyOn(console, 'warn')
+  expect(owner.store!.getState().getTab('structured-agent-session-session-first')).toBeNull()
+})
+
+afterEach(async () => {
+  for (const pending of owned) {
+    if (!pending.done) {
+      pending.handle.cancel()
+    }
+  }
+  for (const { intent, resolve } of heldCreates.splice(0)) {
+    resolve({ sessionId: intent.sessionId, fence: 1 })
+  }
+  await Promise.all(owned.splice(0).map(({ handle }) => handle.settlement))
+  await main?.settle()
+  expect(heldCreates).toEqual([])
+  expect(layoutApplyTestTransport.pendingCount).toBe(0)
+  for (const tab of owner.store!.getState().unifiedTabsByWorktree[WORKTREE_ID] ?? []) {
+    expect(isPendingTab(tab.id)).toBe(false)
+  }
+  expect(
+    warnings.mock.calls.filter(
+      ([message]) => message === '[layout-owner] pending tab waiter threw:'
+    )
+  ).toEqual([])
+  main?.close()
+  vi.restoreAllMocks()
+  main = null
+  owner.store = null
+})
+
 describe('a second "new chat" with no text', () => {
-  it('opens a second chat while the first empty one is still starting', () => {
-    mocks.launch.mockImplementation(() => new Promise(() => undefined))
+  it('opens a second chat while the first empty one is still starting', async () => {
+    holdCreates()
     const firstPick = pick('plus-pick-1')
     const secondPick = pick('plus-pick-2')
 
     expect(firstPick.sessionId).toBe(first.sessionId)
     expect(secondPick.sessionId).toBe(second.sessionId)
-    expect(store.state.unifiedTabsByWorktree[WORKTREE_ID]).toHaveLength(2)
+    expect(await openedChats()).toHaveLength(2)
   })
 
   it('opens a second chat beside an empty one that published and sits idle', async () => {
@@ -276,7 +411,7 @@ describe('a second "new chat" with no text', () => {
     const secondPick = pick('plus-pick-2')
 
     expect(secondPick.sessionId).toBe(second.sessionId)
-    expect(store.state.unifiedTabsByWorktree[WORKTREE_ID]).toHaveLength(2)
+    expect(await openedChats()).toHaveLength(2)
     await expect(secondPick.settlement).resolves.toEqual({
       kind: 'structured',
       sessionId: second.sessionId
@@ -284,7 +419,7 @@ describe('a second "new chat" with no text', () => {
   })
 
   it('opens one chat when the same pick is delivered twice', () => {
-    mocks.launch.mockImplementation(() => new Promise(() => undefined))
+    holdCreates()
     const firstPick = pick('plus-pick-1')
 
     expect(pick('plus-pick-1').sessionId).toBe(firstPick.sessionId)
@@ -306,30 +441,28 @@ describe('a "new chat" with text', () => {
     })
   })
 
-  it('opens its own chat beside an empty one still starting', () => {
-    mocks.launch.mockImplementation(() => new Promise(() => undefined))
+  it('opens its own chat beside an empty one still starting', async () => {
+    holdCreates()
     const blank = pick('plus-pick-1')
 
     const notes = pick('notes-send', { prompt: 'review notes' })
 
     expect(notes.sessionId).toBe(second.sessionId)
-    expect(store.state.unifiedTabsByWorktree[WORKTREE_ID]).toHaveLength(2)
+    expect(await openedChats()).toHaveLength(2)
     expect(hasStagedStructuredLaunchPrompt(blank.sessionId)).toBe(false)
     expect(hasStagedStructuredLaunchPrompt(second.sessionId)).toBe(true)
   })
 
-  it('opens its own chat in the split it was sent from', () => {
-    mocks.launch.mockImplementation(() => new Promise(() => undefined))
+  it('opens its own chat in the split it was sent from', async () => {
+    holdCreates()
     pick('plus-pick-1', { group: 'group-left' })
 
     const notes = pick('notes-send', { prompt: 'review notes', group: 'group-right' })
 
     expect(notes.sessionId).toBe(second.sessionId)
-    expect(
-      store.state.unifiedTabsByWorktree[WORKTREE_ID]?.find(
-        (tab) => tab.entityId === second.sessionId
-      )?.groupId
-    ).toBe('group-right')
+    expect((await openedChats()).find((tab) => tab.entityId === second.sessionId)?.groupId).toBe(
+      'group-right'
+    )
     expect(mocks.focusGroup).not.toHaveBeenCalled()
   })
 })

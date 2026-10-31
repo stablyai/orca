@@ -19,7 +19,7 @@ function entry(command: string, groupIndex: number): CodexTrustEntry {
 }
 
 beforeEach(() => {
-  // Why realpath: runtime keys are resolved, and the temp dir may sit under a symlink.
+  // Resolve temp symlinks to match runtime trust keys.
   dir = realpathSync.native(mkdtempSync(join(tmpdir(), 'orca-codex-trust-cleanup-')))
   tomlPath = join(dir, 'config.toml')
   hooksPath = join(dir, 'hooks.json')

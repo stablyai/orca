@@ -1,116 +1,366 @@
 import {
   Fragment,
   useCallback,
+  useEffect,
   useImperativeHandle,
   useLayoutEffect,
+  useMemo,
   useRef,
+  useState,
   type ReactElement,
   type Ref
 } from 'react'
-import {
-  View,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
-  type ScrollView,
-  type StyleProp,
-  type ViewStyle
+import type {
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  ScrollView,
+  StyleProp,
+  ViewStyle
 } from 'react-native'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import type { MobileNativeChatRowKeys } from './mobile-native-chat-row-keys'
-import { MobileNativeChatPageScroll, outOfAnchoring } from './MobileNativeChatPageScroll'
+import type { MobileNativeChatRowKeys } from './native-chat/transcript/mobile-native-chat-row-keys'
+import { MobileNativeChatPageScroll } from './MobileNativeChatPageScroll'
+import {
+  mobileNativeChatReadingDrift,
+  mobileNativeChatReadingPlace,
+  mobileNativeChatRowAbove,
+  mobileNativeChatRowBoxProps,
+  type MobileNativeChatReadingUnit,
+  type MobileNativeChatScrollNode
+} from './mobile-native-chat-reading-place'
 import type { MobileNativeChatListHandle } from './use-mobile-native-chat-tail-follow'
-import type { MobileNativeChatTurnRow } from './use-mobile-native-chat-turn-disclosure'
-import type { MobileNativeChatWindowScroller } from './mobile-native-chat-page-window-state'
-import { useMobileNativeChatPageWindow } from './use-mobile-native-chat-page-window'
 import type { MobileNativeChatScrollRoots } from './mobile-native-chat-scroll-roots'
+import {
+  createMobileNativeChatGrowthHold,
+  MobileNativeChatGrowthHoldContext
+} from './mobile-native-chat-growth-hold'
+
+const FIRST_ROWS = 24
+const DRAW_BATCH = 12
+const DRAW_AHEAD_SCREENS = 3
+// While following, rows drawn past this many screens above the tail are dropped.
+const TRIM_SCREENS = 6
+// Fetch ahead far enough for multi-screen phone flicks.
+const FETCH_AHEAD_ROWS = 40
+const FETCH_REACH_SCREENS = 10
+// Wait for scroll and touch rest before corrections so iOS momentum is not interrupted.
+const REST_MS = 300
 
 type Row = { item: NativeChatMessage; index: number }
+type Listen = (type: string, listener: () => void, options: AddEventListenerOptions) => void
+type Scroller = MobileNativeChatScrollNode & {
+  addEventListener: Listen
+  removeEventListener: Listen
+}
+type Held = {
+  rows: readonly NativeChatMessage[]
+  footer: ReactElement | null
+  // Freeze renderItem too: grouping/turn context changes a row even if its message is unchanged.
+  renderItem: (row: Row) => ReactElement
+}
 
 type Props = {
   roots?: MobileNativeChatScrollRoots
   ref: Ref<MobileNativeChatListHandle>
-  endAnchored: boolean
   isFollowing: () => boolean
-  pin: () => void
+  onEndDistance: (fromEnd: number, byReader: boolean) => void
   rows: readonly NativeChatMessage[]
-  rowKeys: Pick<MobileNativeChatRowKeys, 'scope' | 'sourceHead' | 'keyOf' | 'current'>
+  rowKeys: Pick<MobileNativeChatRowKeys, 'scope' | 'keyOf' | 'current' | 'placement'>
   renderItem: (row: Row) => ReactElement
-  /** What a row draws besides itself; a height measured for other state no longer holds. */
-  rowState: (index: number, row: NativeChatMessage) => MobileNativeChatTurnRow
+  runs?: ReadonlyMap<number, readonly NativeChatMessage[]>
+  // Regrouping changes layout, so preserve the reading place through the update.
   layoutKey: string
   contentContainerStyle: StyleProp<ViewStyle>
-  /** `measuring`: rows above are not measured yet, so the Load earlier slot shows loading. */
-  header: (measuring: boolean) => ReactElement | null
+  header: ReactElement | null
   footer: ReactElement | null
   emptyStateView: ReactElement | null
   onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void
+  onNearTop?: () => void
 }
 
-/** The page's transcript in one keyed flow: RN Web's list draws by index after paint, so opens climbed
- *  and older pages went in its header, where iOS stopped scrolling at the seam. */
+// Anchor by key so streaming rows below cannot move the drawn range.
+type Drawn = { scope: string; firstKey: string | null; count: number }
+
+// End anchoring preserves position when history prepends; restore after below-reader changes only at rest or on regroup.
 export function MobileNativeChatPageList({
   ref,
   roots,
-  endAnchored,
   isFollowing,
-  pin,
-  rows,
+  onEndDistance,
+  rows: liveRows,
   rowKeys,
   renderItem,
-  rowState,
+  runs,
   layoutKey,
   contentContainerStyle,
   header,
-  footer,
+  footer: liveFooter,
   emptyStateView,
-  onScroll
+  onScroll,
+  onNearTop
 }: Props): ReactElement {
   const scroll = useRef<ScrollView>(null)
-  const scroller = useCallback(
-    (): MobileNativeChatWindowScroller | null | undefined => scroll.current?.getScrollableNode(),
+  const scroller = useCallback((): Scroller | null => {
+    const node: Scroller | null | undefined = scroll.current?.getScrollableNode()
+    return node ?? null
+  }, [])
+
+  // Hold below-reader growth during a fling: correcting scroll mid-fling stops iOS momentum. Keep the hold in a ref to avoid a render until release.
+  const heldRef = useRef<Held | null>(null)
+  const [, release] = useState(0)
+  const held = heldRef.current
+  const { rows, heldFrom, heldAt } = useMemo(() => {
+    const unheld = { rows: liveRows, heldFrom: Infinity, heldAt: 0 }
+    const head = held?.rows[0]
+    const at = head ? liveRows.findIndex((row) => rowKeys.keyOf(row) === rowKeys.keyOf(head)) : -1
+    if (!held || at === -1) {
+      return unheld
+    }
+    // A newly prepended run head owns its held members; draw those members live.
+    let last: NativeChatMessage | undefined
+    for (const [index, members] of runs ?? []) {
+      if (index >= at) {
+        break
+      }
+      last = members.at(-1)
+    }
+    const from = Math.max(at, last ? liveRows.indexOf(last, at) + 1 : 0)
+    const kept = liveRows.slice(at, from).every((row, i) => {
+      const was = held.rows[i]
+      return was !== undefined && rowKeys.keyOf(was) === rowKeys.keyOf(row)
+    })
+    return kept
+      ? {
+          rows: [...liveRows.slice(0, from), ...held.rows.slice(from - at)],
+          heldFrom: from,
+          heldAt: at
+        }
+      : unheld
+  }, [held, liveRows, rowKeys, runs])
+  const footer = held ? held.footer : liveFooter
+  const keys = useMemo(() => rows.map(rowKeys.keyOf), [rows, rowKeys.keyOf])
+  const indexOf = useMemo(() => new Map(keys.map((key, at) => [key, at])), [keys])
+  const n = keys.length
+  const [drawn, setDrawn] = useState<Drawn>({ scope: rowKeys.scope, firstKey: null, count: 0 })
+  const kept = drawn.scope === rowKeys.scope ? drawn : null
+  const opening = Math.max(0, n - FIRST_ROWS)
+  const firstKey = kept?.firstKey ?? null
+  const first =
+    firstKey === null
+      ? opening
+      : (indexOf.get(firstKey) ??
+        indexOf.get(rowKeys.current(firstKey) ?? '') ??
+        Math.max(0, n - (kept?.count ?? FIRST_ROWS)))
+
+  const own = useRef<number | null>(null)
+  const touching = useRef(false)
+  const readerScrolledAt = useRef(0)
+  const place = useRef<MobileNativeChatReadingUnit[] | null>(null)
+  const placedLayout = useRef(layoutKey)
+  const settleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const live = useRef<Held>({ rows: liveRows, footer: liveFooter, renderItem })
+  const ask = useRef(onNearTop)
+  // Read latest committed geometry from event handlers between renders.
+  const latest = useRef({ first, opening, n, keys, indexOf, layoutKey, rowKeys })
+  useLayoutEffect(() => {
+    latest.current = { first, opening, n, keys, indexOf, layoutKey, rowKeys }
+    ask.current = onNearTop
+    live.current = { rows: liveRows, footer: liveFooter, renderItem }
+  })
+
+  const write = useCallback((s: Scroller, to: number) => {
+    const top = Math.min(0, Math.max(to, s.clientHeight - s.scrollHeight))
+    if (Math.abs(top - s.scrollTop) >= 0.5) {
+      s.scrollTop = top
+      own.current = s.scrollTop
+    }
+  }, [])
+
+  const resting = useCallback(
+    () => !touching.current && Date.now() - readerScrolledAt.current >= REST_MS,
     []
   )
-  const { view, rowRef, list } = useMobileNativeChatPageWindow({
-    roots,
-    rows,
-    rowKeys,
-    rowState,
-    following: endAnchored,
-    isFollowing,
-    layoutKey,
-    scroller
+
+  // Keep one reading anchor so whole-pixel corrections cannot accumulate rounding drift.
+  const notePlace = useCallback(
+    (s: Scroller) => {
+      place.current = isFollowing() ? null : mobileNativeChatReadingPlace(s, latest.current.rowKeys)
+      placedLayout.current = latest.current.layoutKey
+    },
+    [isFollowing]
+  )
+
+  const keepPlace = useCallback(
+    (s: Scroller) => {
+      const held = place.current
+      const regrouped = placedLayout.current !== latest.current.layoutKey
+      if (!held || isFollowing() || !(regrouped || resting())) {
+        notePlace(s)
+        return
+      }
+      const drift = mobileNativeChatReadingDrift(held, s, latest.current.rowKeys, roots)
+      if (Math.abs(drift) >= 0.5) {
+        write(s, s.scrollTop + drift)
+      }
+      // A regroup draws other parts: the line is re-read from them.
+      if (regrouped) {
+        notePlace(s)
+      }
+    },
+    [isFollowing, notePlace, resting, roots, write]
+  )
+
+  const settle = useRef(() => {})
+  const [growth] = useState(createMobileNativeChatGrowthHold)
+  const unhold = useCallback(() => {
+    if (heldRef.current) {
+      heldRef.current = null
+      growth.set(false)
+      release((n) => n + 1)
+    }
+  }, [])
+  const hold = useCallback(() => {
+    if (!isFollowing()) {
+      heldRef.current ??= live.current
+      growth.set(true)
+      clearTimeout(settleTimer.current)
+      settleTimer.current = setTimeout(() => settle.current(), REST_MS)
+    }
+  }, [isFollowing])
+  useLayoutEffect(() => {
+    settle.current = () => {
+      if (resting() || isFollowing()) {
+        unhold()
+      } else {
+        settleTimer.current = setTimeout(() => settle.current(), REST_MS)
+      }
+    }
   })
+  useEffect(() => () => clearTimeout(settleTimer.current), [])
+
+  const drawAndFetch = useCallback(
+    (s: Scroller) => {
+      const { first: at, opening, keys: drawnKeys, indexOf: rowAt, n: total } = latest.current
+      const screens = (s.scrollHeight - s.clientHeight + s.scrollTop) / s.clientHeight
+      let next = at
+      if (at > 0 && screens < DRAW_AHEAD_SCREENS) {
+        next = Math.max(0, at - DRAW_BATCH)
+      } else if (at < opening && screens > TRIM_SCREENS && isFollowing()) {
+        // Cut at a row wholly above the draw-ahead line so drawing never wants it back.
+        const cut = mobileNativeChatRowAbove(s, DRAW_AHEAD_SCREENS * s.clientHeight)
+        next = Math.min(rowAt.get(cut ?? '') ?? at, opening)
+      }
+      if (next !== at) {
+        const { scope } = latest.current.rowKeys
+        setDrawn({ scope, firstKey: drawnKeys[next]!, count: total - next })
+      }
+      if (at < FETCH_AHEAD_ROWS && screens < FETCH_REACH_SCREENS) {
+        ask.current?.()
+      }
+    },
+    [isFollowing]
+  )
+
   useImperativeHandle(
     ref,
     () => ({
-      getScrollableNode: () => scroll.current?.getScrollableNode(),
-      scrollToOffset: ({ offset, animated }) => {
-        list.wrote(offset)
-        scroll.current?.scrollTo({ y: offset, animated })
+      scrollToEnd: () => {
+        const s = scroller()
+        if (s) {
+          write(s, 0)
+        }
       },
-      scrollToEnd: (params) => scroll.current?.scrollToEnd(params),
-      ...list
+      scrollToOffset: ({ offset }) => {
+        const s = scroller()
+        if (s) {
+          write(s, offset - (s.scrollHeight - s.clientHeight))
+        }
+      }
     }),
-    [list]
+    [scroller, write]
   )
-  // After the handle attaches, so a chat's first paint is at its end; later growth the observer pins.
-  const opened = useRef('')
-  const shown = `${rowKeys.scope}:${rows.length > 0}`
-  useLayoutEffect(() => {
-    if (opened.current !== shown) {
-      opened.current = shown
-      pin()
-    }
-  }, [shown, pin])
 
-  const drawRow = (item: NativeChatMessage, index: number) => {
-    const key = rowKeys.keyOf(item)
-    return (
-      <View key={key} ref={rowRef(key)}>
-        {renderItem({ item, index })}
-      </View>
-    )
-  }
+  useLayoutEffect(() => {
+    const s = scroller()
+    if (s) {
+      keepPlace(s)
+      drawAndFetch(s)
+    }
+  })
+
+  // Content and viewport resizes (e.g. the composer growing) bypass commits; restore nested scroll boxes first.
+  useEffect(() => {
+    const s = scroller()
+    const viewport: Element | null | undefined = scroll.current?.getScrollableNode()
+    const content: Element | null | undefined = scroll.current?.getInnerViewNode()
+    if (!s || !viewport || !content || typeof ResizeObserver === 'undefined') {
+      return
+    }
+    const observer = new ResizeObserver(() => {
+      roots?.restoreAll()
+      keepPlace(s)
+      drawAndFetch(s)
+    })
+    observer.observe(viewport)
+    observer.observe(content)
+    roots?.observeWith(observer)
+    return () => {
+      roots?.observeWith(null)
+      observer.disconnect()
+    }
+  }, [scroller, roots, keepPlace, drawAndFetch])
+
+  useEffect(() => {
+    const s = scroller()
+    if (!s) {
+      return
+    }
+    // A release that hands over to a fling comes right after a scroll, which still counts.
+    const down = () => {
+      touching.current = true
+      hold()
+    }
+    const up = () => {
+      touching.current = false
+    }
+    const options = { capture: true, passive: true }
+    // Listen to both touch and pointer events because either can arrive first or be missing.
+    const downs = ['touchstart', 'pointerdown']
+    const ups = ['touchend', 'touchcancel', 'pointerup', 'pointercancel']
+    downs.forEach((type) => s.addEventListener(type, down, options))
+    ups.forEach((type) => s.addEventListener(type, up, options))
+    return () => {
+      downs.forEach((type) => s.removeEventListener(type, down, options))
+      ups.forEach((type) => s.removeEventListener(type, up, options))
+    }
+  }, [scroller, hold])
+
+  const scrolled = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      onScroll(event)
+      const s = scroller()
+      if (!s) {
+        return
+      }
+      const byReader = own.current === null || Math.abs(s.scrollTop - own.current) >= 1
+      own.current = null
+      if (byReader) {
+        readerScrolledAt.current = Date.now()
+      }
+      onEndDistance(Math.max(0, -s.scrollTop), byReader)
+      if (isFollowing()) {
+        unhold()
+      } else if (byReader) {
+        hold()
+      }
+      if (byReader) {
+        notePlace(s)
+      }
+      drawAndFetch(s)
+    },
+    [onScroll, scroller, onEndDistance, isFollowing, hold, unhold, notePlace, drawAndFetch]
+  )
+
   return (
     <MobileNativeChatPageScroll
       ref={scroll}
@@ -118,25 +368,30 @@ export function MobileNativeChatPageList({
       // Let link/file taps land while the composer keyboard is up
       // instead of being swallowed by the dismiss gesture.
       keyboardShouldPersistTaps="handled"
-      onScroll={onScroll}
-      scrollEventThrottle={32}
+      onScroll={scrolled}
+      scrollEventThrottle={16}
     >
-      {/* Never what the browser's anchoring holds: rows land below it, and spacers stand in for rows. */}
-      <View style={outOfAnchoring}>{header(view.measuring)}</View>
-      {rows.length === 0 ? (
-        emptyStateView
-      ) : (
-        // Keyed by the chat, so no row carries into another. Rows unmount once scrolled past; what
-        // the reader opened in them is kept in the chat's disclosure store, above the list.
-        <Fragment key={rowKeys.scope}>
-          <View style={[outOfAnchoring, { height: view.above }]} />
-          {rows.slice(view.m0, view.m1).map((item, at) => drawRow(item, view.m0 + at))}
-          <View style={[outOfAnchoring, { height: view.mid }]} />
-          {rows.slice(view.start, view.end).map((item, at) => drawRow(item, view.start + at))}
-          <View style={[outOfAnchoring, { height: view.bottom }]} />
-        </Fragment>
-      )}
-      {footer}
+      <MobileNativeChatGrowthHoldContext.Provider value={growth}>
+        {header}
+        {rows.length === 0 ? (
+          emptyStateView
+        ) : (
+          // Key by chat to reset rows; persist disclosures above windowed rows. Block flow avoids relaying out every row for each streamed token.
+          <div key={rowKeys.scope} {...mobileNativeChatRowBoxProps}>
+            {rows.slice(first).map((item, at) => {
+              const index = first + at
+              return (
+                <Fragment key={keys[index]}>
+                  {held && index >= heldFrom
+                    ? held.renderItem({ item, index: index - heldAt })
+                    : renderItem({ item, index })}
+                </Fragment>
+              )
+            })}
+          </div>
+        )}
+        {footer}
+      </MobileNativeChatGrowthHoldContext.Provider>
     </MobileNativeChatPageScroll>
   )
 }

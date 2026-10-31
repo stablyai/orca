@@ -51,8 +51,7 @@ function makeTerminalTab(id: string, worktreeId: string): Record<string, unknown
 
 describe('resumeSleepingAgentSessionsForWorktree navigation suppression', () => {
   it('resumes without navigating the desktop when navigation is suppressed', () => {
-    // Mobile-scoped wake: the desktop sits on a different worktree/view. The
-    // resume must spawn the recovery tab without changing the active surface.
+    // Mobile wake must spawn recovery without changing the desktop’s current worktree/view.
     const record = makeRecord({ origin: 'quit' })
     useAppStore.setState({
       activeWorktreeId: 'wt-other',
@@ -68,19 +67,14 @@ describe('resumeSleepingAgentSessionsForWorktree navigation suppression', () => 
     expect(launched).toBe(1)
     const state = useAppStore.getState()
     const resumedTab = state.tabsByWorktree['wt-1']?.find((tab) => tab.id !== 'tab-1')
-    // A resume tab is created for the slept worktree...
     expect(resumedTab?.launchAgent).toBe('claude')
-    // ...but the desktop's active worktree/tab/view are untouched (INV-2).
     expect(state.activeWorktreeId).toBe('wt-other')
     expect(state.activeTabId).toBe('other-tab')
     expect(state.activeTabType).toBe('browser')
   })
 
   it('skips and preserves a record whose claim an in-place wake already consumed', () => {
-    // Regression (#7906): a mounted hibernated pane that consumed the mobile
-    // wake starts its own in-place --resume; the generic resume must neither
-    // launch a second tab for that provider session nor clear the record (the
-    // in-place spawn clears it on success).
+    // Mounted hibernated panes own their in-place wake; generic resume must neither duplicate it nor clear its record before spawn succeeds (#7906).
     const record = makeRecord({ origin: 'quit' })
     useAppStore.setState({
       activeWorktreeId: 'wt-other',
@@ -122,15 +116,13 @@ describe('resumeSleepingAgentSessionsForWorktree navigation suppression', () => 
     const resumedTab = useAppStore
       .getState()
       .tabsByWorktree['wt-1']?.find((tab) => tab.id !== 'tab-1')
-    // Why: the dispatcher background-mounts exactly these tabs — an
-    // activate:false tab otherwise never mounts and its startup never runs.
+    // Background-mount exactly these tabs; activate:false alone never runs startup.
     expect(resumedTab).toBeDefined()
     expect(launchedTabIds).toEqual([resumedTab?.id])
   })
 
   it('still navigates to the resumed tab for default (desktop) callers', () => {
-    // Regression guard: the suppress-navigation flag must be opt-in — desktop
-    // resume keeps flipping the active view to the recovered terminal.
+    // Suppression is opt-in; desktop resume must still select its recovery terminal.
     const record = makeRecord({ origin: 'quit' })
     useAppStore.setState({
       activeWorktreeId: 'wt-1',
@@ -147,8 +139,7 @@ describe('resumeSleepingAgentSessionsForWorktree navigation suppression', () => 
   })
 
   it('leaves the current view alone when the user has left the resumed worktree', () => {
-    // Why: the activation gate resumes after async readiness checks, by which time the user may
-    // be viewing another worktree; the resume still lands selected when they return.
+    // Readiness can settle after navigation elsewhere; preserve recovered-tab selection when the user returns.
     const record = makeRecord({ origin: 'quit' })
     const sleptTab: TerminalTab = {
       id: 'tab-1',

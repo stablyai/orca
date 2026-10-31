@@ -9,7 +9,7 @@ type ExactWorkerProviderSessionHost = {
   getExactWorkerProviderSession: (handle: string, observedAfter: number) => unknown
 }
 
-/** Drives the shipping method, not the selector helper: the wiring is what regressed. */
+// Exercise shipping-method wiring: that was the regression, not selector logic.
 function selectThroughRuntime(statusConnectionId: string | null): unknown {
   const runtime = {
     getTerminalPaneKey: () => PANE_KEY,

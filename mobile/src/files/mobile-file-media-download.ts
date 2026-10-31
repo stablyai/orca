@@ -52,6 +52,14 @@ export type MobileMediaSink = {
   dispose(): void
 }
 
+// Typed so the shell can tell the page an update is needed; retrying cannot help.
+export class MobileMediaHostOutdatedError extends Error {
+  constructor() {
+    super('Update Orca on your desktop to preview media files on mobile')
+    this.name = 'MobileMediaHostOutdatedError'
+  }
+}
+
 export async function downloadMobileFileMedia(
   client: MobileFilePreviewRpcSender,
   media: MobileFileMedia,
@@ -68,7 +76,7 @@ export async function downloadMobileFileMedia(
       !statReply.ok &&
       isMobileMethodUnavailableError(statReply.error.code, statReply.error.message)
     ) {
-      throw new Error('Update Orca on your desktop to preview media files on mobile')
+      throw new MobileMediaHostOutdatedError()
     }
     const stat = statRead.interpret(statReply)
     checkDownloadActive(signal)
@@ -86,7 +94,9 @@ export async function downloadMobileFileMedia(
         await chunkRead.request(client, { ...params, offset, length }, options)
       )
       checkDownloadActive(signal)
-      const bytes = Buffer.from(chunk.contentBase64, 'base64')
+      const decoded = Buffer.from(chunk.contentBase64, 'base64')
+      // Hand sinks a plain Uint8Array: Expo's JSI rejects the polyfill's Buffer subclass.
+      const bytes = new Uint8Array(decoded.buffer, decoded.byteOffset, decoded.byteLength)
       if (
         bytes.byteLength !== chunk.bytesRead ||
         chunk.bytesRead === 0 ||

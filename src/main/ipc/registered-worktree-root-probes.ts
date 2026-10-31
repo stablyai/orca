@@ -7,18 +7,23 @@ import { resolveLocalProjectRuntimesForRepos } from '../local-project-runtime-re
 import type { RegisteredWorktreeRootStore as RootStore } from './registered-worktree-root-store'
 import { getWorktreeMirrorDistroForRuntime } from '../project-runtime-git-options'
 import { listRepoWorktreeGraph } from '../repo-worktrees'
+import { blockedWslDistroForPath, wslDistroForPath } from '../wsl/wsl-unc-access-gate'
 
 const CREATED_WORKTREE_ROOT_PROBE_TIMEOUT_MS = 1_000
 const AUTHORIZED_ROOTS_REBUILD_CONCURRENCY = 8
 
-/** `wslDistro` names the Git that listed the roots; undefined is host Git. */
-type ListedRoots = { roots: Set<string>; listingFailed: boolean; wslDistro: string | undefined }
-
 /**
- * Why the project runtime's distro: the catalog and removal list through it, and WSL Git records a
- * `C:\` worktree as `/mnt/c/...`, which host Git reading that metadata names as another path. A
- * runtime awaiting repair has no distro, so it keeps the host Git this listing always used.
+ * `wslDistro` names the Git that listed the roots; undefined is host Git. `deferred`: the repo's
+ * distro is stopped, so it was not listed; its owner stays dirty for a later rebuild.
  */
+type ListedRoots = {
+  roots: Set<string>
+  listingFailed: boolean
+  wslDistro: string | undefined
+  deferred?: true
+}
+
+/** List through project-runtime Git so WSL/host path spellings match catalog/removal; repair-pending runtimes retain host listing. */
 export async function listWorktreeRootsWithConcurrency(
   store: RootStore,
   repos: readonly Repo[]
@@ -34,7 +39,16 @@ export async function listWorktreeRootsWithConcurrency(
           const index = nextIndex++
           const repo = repos[index]
           const wslDistro = getWorktreeMirrorDistroForRuntime(runtimes.get(repo.id))
-          const roots = new Set([resolve(repo.path)])
+          const repoPath = repo.path
+          const roots = new Set([resolve(repoPath)])
+          // Any authorization miss rebuilds; listing a stopped distro's repo would boot it (E9).
+          if (
+            wslDistroForPath(repoPath, wslDistro) &&
+            (await blockedWslDistroForPath(repoPath, wslDistro))
+          ) {
+            results[index] = { roots, listingFailed: true, wslDistro, deferred: true }
+            continue
+          }
           let listingFailed = false
           try {
             for (const worktree of await listRepoWorktreeGraph(

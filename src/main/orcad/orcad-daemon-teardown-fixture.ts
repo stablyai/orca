@@ -1,19 +1,12 @@
-/**
- * Teardown for integration tests whose orcad started a real terminal daemon in a temp profile.
- *
- * The daemon outlives orcad by design and only its pid record names it. Killing it is not
- * enough: until it has exited it can still remove its socket, pid and token files and append
- * to its log, so a recursive delete racing it fails with ENOTEMPTY (seen on macOS).
- * An idle-retiring daemon deletes its pid record before it exits, so callers record the pid
- * before stopping orcad (the daemon's last client) and teardown still waits on it.
- * On Windows the daemon's cwd is the profile and its children inherit it, so a child that
- * outlives the daemon keeps the profile directory busy; teardown waits for those too.
- */
+// Await daemon exit before deleting temp profiles; late file writes otherwise race recursive cleanup.
+// Record PIDs before idle retirement removes their records. Windows descendants can retain profile cwd;
+// reject reused-parent PID links by creation time, then await the remaining tree too.
 import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   buildProcessTableIndex,
-  collectDescendantsFromIndex
+  collectDescendantsFromIndex,
+  type ProcessTableIndexOf
 } from '../../shared/process-table-index'
 import { removeTree } from '../../shared/windows-transient-lock-removal'
 import { parseLinuxStartTicks } from '../agent-hooks/managed-hook-owner-identity'
@@ -68,7 +61,6 @@ async function hasExited(pid: number, dependencies: ProcessExitDependencies): Pr
   )
 }
 
-/** Requires process exit; Linux zombies have exited but still await their parent's reaper. */
 export async function waitForProcessExit(
   pids: Iterable<number>,
   dependencies: ProcessExitDependencies = {}
@@ -102,7 +94,6 @@ export async function waitForProcessExit(
   }
 }
 
-/** SIGKILLs each pid and requires the OS to confirm its exit. */
 export async function killAndAwaitExit(pids: Iterable<number>): Promise<void> {
   const pending = [...pids]
   for (const pid of pending) {
@@ -113,7 +104,6 @@ export async function killAndAwaitExit(pids: Iterable<number>): Promise<void> {
   await waitForProcessExit(pending)
 }
 
-/** Kills a spawned child and waits for its exit event. */
 export async function killChildAndWait(child: ReturnType<typeof spawnProcess>): Promise<void> {
   if (child.exitCode !== null || child.signalCode !== null) {
     return
@@ -124,7 +114,8 @@ export async function killChildAndWait(child: ReturnType<typeof spawnProcess>): 
 }
 
 type ProfileDaemonRecord = {
-  pids: Set<number>
+  /** First observed creation time for each daemon PID. */
+  pids: Map<number, number | undefined>
   descendants: Map<string, WindowsProcessIdentityRow>
 }
 
@@ -146,7 +137,6 @@ async function readWindowsProcessTable(): Promise<WindowsProcessIdentityRow[] | 
 
 let readProcessTable = readWindowsProcessTable
 
-/** Test-only: substitute the process table the daemon tree is read from. */
 export function __setDaemonProcessTableReaderForTests(
   reader?: () => Promise<WindowsProcessIdentityRow[] | null>
 ): void {
@@ -155,6 +145,34 @@ export function __setDaemonProcessTableReaderForTests(
 
 const identityKey = (row: WindowsProcessIdentityRow): string =>
   `${row.pid}:${row.creationTimeMs ?? ''}`
+
+function collectDaemonDescendants(
+  index: ProcessTableIndexOf<WindowsProcessIdentityRow>,
+  daemonPid: number,
+  daemonCreationTimeMs: number | undefined
+): WindowsProcessIdentityRow[] {
+  const holderCreated = index.byPid.get(daemonPid)?.creationTimeMs
+  // A new PID holder postdates the old daemon’s children; exclude its own descendants.
+  const reusedAt =
+    daemonCreationTimeMs !== undefined && holderCreated !== daemonCreationTimeMs
+      ? holderCreated
+      : undefined
+  return collectDescendantsFromIndex(index, daemonPid, (row) => {
+    const created = row.creationTimeMs
+    if (created === undefined) {
+      // Unknown ages stay included so real leaks still fail teardown.
+      return false
+    }
+    if (row.ppid !== daemonPid) {
+      const parentCreated = index.byPid.get(row.ppid)?.creationTimeMs
+      return parentCreated !== undefined && created < parentCreated
+    }
+    return (
+      (daemonCreationTimeMs !== undefined && created < daemonCreationTimeMs) ||
+      (reusedAt !== undefined && created >= reusedAt)
+    )
+  })
+}
 
 function readProfileDaemons(daemonDir: string): { pid: number; protocolVersion: number }[] {
   return (existsSync(daemonDir) ? readdirSync(daemonDir) : []).flatMap((name) => {
@@ -165,16 +183,20 @@ function readProfileDaemons(daemonDir: string): { pid: number; protocolVersion: 
 }
 
 async function recordDaemonTree(daemonDir: string): Promise<ProfileDaemonRecord> {
-  const record = recordedProfiles.get(daemonDir) ?? { pids: new Set(), descendants: new Map() }
+  const record = recordedProfiles.get(daemonDir) ?? { pids: new Map(), descendants: new Map() }
   recordedProfiles.set(daemonDir, record)
   for (const { pid } of readProfileDaemons(daemonDir)) {
-    record.pids.add(pid)
+    if (!record.pids.has(pid)) {
+      record.pids.set(pid, undefined)
+    }
   }
   const rows = await readProcessTable()
   if (rows) {
     const index = buildProcessTableIndex(rows)
-    for (const pid of record.pids) {
-      for (const row of collectDescendantsFromIndex(index, pid)) {
+    for (const [pid, recordedCreationTimeMs] of record.pids) {
+      const creationTimeMs = recordedCreationTimeMs ?? index.byPid.get(pid)?.creationTimeMs
+      record.pids.set(pid, creationTimeMs)
+      for (const row of collectDaemonDescendants(index, pid, creationTimeMs)) {
         record.descendants.set(identityKey(row), row)
       }
     }
@@ -182,7 +204,7 @@ async function recordDaemonTree(daemonDir: string): Promise<ProfileDaemonRecord>
   return record
 }
 
-/** Requires each recorded descendant's exit; a reused pid has a different creation time. */
+/** Reused PIDs with different creation times do not identify the recorded descendants. */
 async function waitForDescendantExit(rows: WindowsProcessIdentityRow[]): Promise<void> {
   const deadline = Date.now() + EXIT_WAIT_MS
   let remaining = rows
@@ -197,33 +219,36 @@ async function waitForDescendantExit(rows: WindowsProcessIdentityRow[]): Promise
       return
     }
     if (Date.now() >= deadline) {
-      const names = remaining.map((row) => `${row.name} ${row.pid}`).join(', ')
+      const names = remaining
+        .map((row) => `${row.name} ${row.pid} (ppid ${row.ppid}, created ${row.creationTimeMs})`)
+        .join(', ')
       throw new Error(`Daemon descendants did not exit: ${names}`)
     }
     await sleep(POLL_MS)
   }
 }
 
-/** Call before stopping orcad: losing its last client lets the daemon delete its pid record. */
+/** Record before stop: idle retirement may remove PID records after the last client disconnects. */
 export async function recordProfileDaemons(userData: string): Promise<void> {
   await recordDaemonTree(join(userData, 'daemon'))
 }
 
-/** Authenticates each profile daemon, shuts down its PTYs, and requires its whole tree's exit. */
+/** Authenticate, stop PTYs and require the entire daemon tree to exit. */
 export async function killProfileDaemons(userData: string): Promise<void> {
   const daemonDir = join(userData, 'daemon')
   const record = await recordDaemonTree(daemonDir)
   recordedProfiles.delete(daemonDir)
   const daemons = readProfileDaemons(daemonDir)
-  const retiring = [...record.pids].filter((pid) => !daemons.some((daemon) => daemon.pid === pid))
+  const retiring = [...record.pids.keys()].filter(
+    (pid) => !daemons.some((daemon) => daemon.pid === pid)
+  )
   const results = await Promise.allSettled([
-    // Already past its pid record, so only its exit is left to prove.
     waitForProcessExit(retiring),
     ...daemons.map(async ({ pid, protocolVersion }) => {
       try {
         await cleanupDaemonForProtocol(daemonDir, protocolVersion, pid)
       } catch (error) {
-        // Natural retirement can close authentication; only OS exit proof can finish teardown.
+        // Retirement may close authentication; only OS exit proof can complete cleanup.
         if (
           !(error instanceof DaemonEndpointOwnershipError) ||
           error.message !== 'Daemon cleanup aborted: the expected daemon could not be verified'
@@ -249,7 +274,6 @@ export async function killProfileDaemons(userData: string): Promise<void> {
   }
 }
 
-/** Removes a test root, retrying a late writer's ENOTEMPTY/EBUSY on every platform. */
 export async function removeTestRoot(root: string): Promise<void> {
   for (let attempt = 1; ; attempt += 1) {
     try {

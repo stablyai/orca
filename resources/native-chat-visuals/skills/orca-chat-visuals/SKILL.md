@@ -23,8 +23,9 @@ clearer.
   unpkg.com, cdnjs.cloudflare.com, esm.sh, fonts.googleapis.com and fonts.gstatic.com. The page
   can't make network requests; use inline SVG or `data:` URLs for images.
 - Don't size anything to the viewport height (`100vh`); Orca fits the frame to your content.
-- Optional: Orca's theme colors are available as CSS variables (`--background`, `--foreground`,
-  `--muted-foreground`, `--border`, `--primary`, `--chart-1` to `--chart-5`).
+- Use Orca's theme variables for surfaces, text, and controls; pair hover `--accent` with
+  `--accent-foreground`. Scope fixed-palette CSS to its mockup. Orca updates tokens and
+  `color-scheme` live. Charts use `--chart-1` to `--chart-5`.
 
 ## Showing it
 

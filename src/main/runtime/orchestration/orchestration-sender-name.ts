@@ -1,8 +1,5 @@
-// What a chat shows a message's sender as: the name Orca shows for that agent (its chat tab, or its
-// sidebar agent row), else the task it was dispatched, else its agent's generic label.
-
-import type { AgentMessageSender } from '../../../shared/agent-session-message-source'
-import { defaultAgentChatLabel } from '../../../shared/agent-session-chat-label'
+import type { AgentMessageSender } from '../../../shared/agent-session/agent-session-message-source'
+import { defaultAgentChatLabel } from '../../../shared/agent-session/agent-session-chat-label'
 import {
   getAgentRowConversationName,
   type ConversationNameTab
@@ -46,7 +43,7 @@ export function orchestrationSenderName(
   const federated = party.address.startsWith('dispatch:')
   const terminal =
     !federated && party.terminalHandle ? sources.terminal(party.terminalHandle) : null
-  const chat = party.orcaSessionId ? chatNaming(party.orcaSessionId, sources) : null
+  const chat = party.orcaSessionId ? structuredChatNaming(party.orcaSessionId, sources) : null
   const terminalName = terminal?.tab
     ? getAgentRowConversationName(
         terminal.tab,
@@ -66,9 +63,9 @@ export function orchestrationSenderName(
 }
 
 /** A chat's own name (the person's rename, else its saved name) and the label its tab falls back to. */
-function chatNaming(
+export function structuredChatNaming(
   sessionId: string,
-  sources: SenderNamingSources
+  sources: Pick<SenderNamingSources, 'records' | 'chatTab'>
 ): { ownName: string | null; fallback: string } | null {
   const record = sources.records ? lineageLiveSession(sources.records, sessionId) : null
   if (!record) {
@@ -80,10 +77,7 @@ function chatNaming(
   return { ownName, fallback }
 }
 
-/** The task its dispatch was given: the federated `dispatch:<id>` address, or the dispatch a local
- *  worker holds, else the one its own `worker_done` reports, since that report settles its dispatch
- *  before it is delivered. Never a dispatch the worker merely held once: one may have failed
- *  before it ran, and an old one names work long done. */
+/** Use the live Dispatch or the sender's own just-settled worker_done; historical assignments may never have run. */
 function dispatchTaskName(
   party: Party,
   federated: boolean,

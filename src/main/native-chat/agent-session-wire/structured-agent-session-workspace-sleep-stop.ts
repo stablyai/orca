@@ -14,7 +14,6 @@ import { sameProviderChild } from './structured-agent-session-provider-child'
 import type { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
 import { stopAgentSessionProviderRoot } from './structured-agent-session-provider-exit-proof'
 
-/** Stops one chat captured by a workspace Sleep and reports whether the stop is proven. */
 export async function stopWorkspaceSleepChat(input: {
   deps: Pick<StructuredAgentSessionHostDeps, 'store' | 'adapter' | 'logger'>
   sessions: StructuredAgentSessionConversations
@@ -28,12 +27,14 @@ export async function stopWorkspaceSleepChat(input: {
   const { deps, sessions, sessionId, child } = input
   let ownedStopped = false
   try {
+    deps.store.requireWritableRecord(sessionId)
     if (child) {
       await input.stopAgent(sessionId, { cause: 'user-close' })
     } else if (input.owned) {
-      ownedStopped = await stopAgentSessionProviderRoot(
+      const stopped = await stopAgentSessionProviderRoot(
         () => deps.adapter.releaseAcquisition?.({ sessionId }) ?? Promise.resolve(false)
       )
+      ownedStopped = !!stopped
       const receipt = deps.adapter.stoppedAcquisition?.(sessionId)
       if (ownedStopped && receipt) {
         try {
@@ -44,7 +45,13 @@ export async function stopWorkspaceSleepChat(input: {
             ) {
               throw new Error('agent_session_ownership_unknown')
             }
-            return recordAgentSessionAcquisitionExit(record, receipt, input.fence, input.now())
+            return recordAgentSessionAcquisitionExit(
+              record,
+              receipt,
+              input.fence,
+              input.now(),
+              stopped === 'kill-delivered' ? stopped : undefined
+            )
           })
           deps.adapter.acknowledgeSessionRelease?.(sessionId, receipt)
         } catch (error) {
@@ -75,8 +82,7 @@ export async function stopWorkspaceSleepChat(input: {
   return childStopped || ownedStopped || alreadyStopped
 }
 
-/** A released reservation may still have an unproven root after restart; only exit evidence or a
- *  never-started record proves an unheld chat is stopped. */
+/** Release alone cannot prove a restarted root stopped; require exit evidence or a never-started record. */
 function workspaceSleepChatAtRest(
   deps: Pick<StructuredAgentSessionHostDeps, 'store' | 'adapter'>,
   sessions: StructuredAgentSessionConversations,
@@ -93,8 +99,13 @@ function workspaceSleepChatAtRest(
   )
 }
 
-/** The same abort a close gives a registered start, remembering which starts it aborted so the
- *  result is read once they settle, outside the lane their last commits need. */
+export type WorkspaceSleepCloseResult = {
+  fence: number
+  stopped: boolean
+  admittedSends: number
+}
+
+/** Abort registered starts, then await them outside the lane their final commits need. */
 export function workspaceSleepStartAborts(
   runtimeState: () => Pick<
     StructuredAgentSessionHostRuntimeState,
@@ -113,7 +124,7 @@ export function workspaceSleepStartAborts(
     },
     settle: (
       input: Pick<Parameters<typeof stopWorkspaceSleepChat>[0], 'deps' | 'sessions' | 'sessionId'>,
-      result: { fence: number; stopped: boolean } | null
+      result: WorkspaceSleepCloseResult | null
     ) =>
       settleWorkspaceSleepAbortedStarts(input, result, aborted, () =>
         runtimeState().startFlights.has(sessionId)
@@ -121,20 +132,23 @@ export function workspaceSleepStartAborts(
   }
 }
 
-/** A start the stop aborted settles after the stop's step; once it has, and no newer start runs,
- *  the chat it left at rest counts as stopped. */
+/** Count an aborted start only after it settles with no newer start or remaining work. */
 async function settleWorkspaceSleepAbortedStarts(
   input: Pick<Parameters<typeof stopWorkspaceSleepChat>[0], 'deps' | 'sessions' | 'sessionId'>,
-  result: { fence: number; stopped: boolean } | null,
+  result: WorkspaceSleepCloseResult | null,
   abortedStarts: readonly Promise<unknown>[],
   startRunning: () => boolean
-): Promise<{ fence: number; stopped: boolean } | null> {
+): Promise<WorkspaceSleepCloseResult | null> {
   await Promise.allSettled(abortedStarts)
   if (!result || result.stopped || abortedStarts.length === 0 || startRunning()) {
     return result
   }
   const { deps, sessions, sessionId } = input
   return workspaceSleepChatAtRest(deps, sessions, sessionId)
-    ? { fence: deps.store.getRecord(sessionId)?.lease.runtimeFence ?? result.fence, stopped: true }
+    ? {
+        ...result,
+        fence: deps.store.getRecord(sessionId)?.lease.runtimeFence ?? result.fence,
+        stopped: true
+      }
     : result
 }

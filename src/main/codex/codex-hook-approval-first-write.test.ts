@@ -76,7 +76,7 @@ describe('writeCodexHookApprovalsBeforeEntries', () => {
   })
 
   it("takes its approval back when the entry write fails, restoring a switched-off key verbatim, never another writer's", () => {
-    // Why escaped: a Windows key's backslashes are escapes in a TOML basic string.
+    // Windows key backslashes need escaping in TOML basic strings.
     const disabledOnly = `[hooks.state."${escapeTomlString(computeTrustKey(approval('stop', '')))}"]\nenabled = false\n`
     writeFileSync(tomlPath(), disabledOnly)
 
@@ -85,7 +85,7 @@ describe('writeCodexHookApprovalsBeforeEntries', () => {
         tomlPath(),
         [approval('stop', 'sha256:codex-stop'), approval('session_start', 'sha256:codex-start')],
         () => {
-          // Why: another writer approves the same key while Orca's entry write is failing.
+          // Simulate a competing approval before our write fails.
           upsertHookTrustEntries(tomlPath(), [approval('session_start', 'sha256:other-writer')])
           throw new Error('disk full')
         },

@@ -7,10 +7,9 @@ import {
 
 export const PI_SESSION_HISTORY: StructuredAgentSessionHistory = {
   rowAgents: ['pi'],
-  // A chat's handle is its session file's path; Session History lists the file by its name's id.
+  // Chat handles name the file path; Session History rows use its filename ID.
   rowSessionId: (link) => sessionIdFromFileName(link.handle.nativeId),
-  // `-r/--resume` opens a picker; `--session-id` reopens that id when it exists; `--fork <file>`
-  // writes a new session and resumes none.
+  // --resume opens a picker; --session-id reopens an ID; --fork creates a new session.
   parseResumeArgs: (args) =>
     resumeInvocationFromOptions(args, {
       targetless: ['-c', '--continue', '-r', '--resume'],

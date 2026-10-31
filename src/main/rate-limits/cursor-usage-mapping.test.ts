@@ -103,8 +103,7 @@ describe('mapCursorUsageSummary', () => {
   })
 
   it('publishes no pools for a plan the account does not own', () => {
-    // Why: a team-billed account still reports 0% pools. Publishing them would
-    // paint a healthy 0% meter and skip the request-quota fallback.
+    // Team-owned zero pools must not suppress the legacy request-quota fallback.
     const mapped = mapCursorUsageSummary({
       ...CYCLE,
       individualUsage: {
@@ -113,6 +112,42 @@ describe('mapCursorUsageSummary', () => {
     })
     expect(mapped.buckets).toHaveLength(0)
     expect(mapped.monthly).toBeNull()
+  })
+
+  it('maps a team-limited member allowance without publishing team-wide on-demand', () => {
+    const mapped = mapCursorUsageSummary(
+      parseCursorUsageSummary({
+        ...CYCLE,
+        membershipType: 'enterprise',
+        limitType: 'team',
+        isUnlimited: false,
+        individualUsage: {
+          overall: { enabled: true, used: 75_000, limit: 500_000, remaining: 425_000 }
+        },
+        teamUsage: {
+          onDemand: { enabled: true, used: 500_000, limit: 2_500_000, remaining: 2_000_000 }
+        }
+      })
+    )
+    expect(mapped.planType).toBe('enterprise')
+    expect(mapped.monthly?.usedPercent).toBe(15)
+    expect(mapped.buckets).toEqual([])
+  })
+
+  it('uses the overall allowance only when the plan pool is absent or disabled', () => {
+    const overall = { enabled: true, used: 90, limit: 100 }
+    expect(
+      mapCursorUsageSummary({
+        ...CYCLE,
+        individualUsage: { plan: { enabled: true, totalPercentUsed: 30 }, overall }
+      }).monthly?.usedPercent
+    ).toBe(30)
+    expect(
+      mapCursorUsageSummary({
+        ...CYCLE,
+        individualUsage: { plan: { enabled: false, totalPercentUsed: 0 }, overall }
+      }).monthly?.usedPercent
+    ).toBe(90)
   })
 
   it('reports an unlimited plan without inventing a percentage', () => {
@@ -136,8 +171,7 @@ describe('mapCursorUsageSummary', () => {
   })
 
   it('keeps the plan when a sibling pool arrives as null', () => {
-    // Why: the route sends `null` for an absent sub-object, and a stricter schema
-    // would drop the whole body — plan pools and billing cycle included.
+    // Null subobjects must not discard valid pools and billing-cycle data.
     const mapped = mapCursorUsageSummary(
       parseCursorUsageSummary({
         ...CYCLE,

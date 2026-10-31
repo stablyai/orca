@@ -16,12 +16,10 @@ import { gitExecFileAsync, translateWslOutputPaths } from './runner'
 import { runWithGitReadCacheInvalidation } from './status'
 import type { AddWorktreeOptions, GitWorktreeExecOptions } from './worktree-operation-options'
 
-// Why: the create reports the refresh result, and a mutating git process has no timeout; past this
-// a create stops waiting and reports nothing, while the one in-flight refresh keeps its checkout.
+// Bound the create's wait without cancelling the mutating refresh that still owns its checkout.
 export const LOCAL_BASE_REF_REFRESH_WAIT_MS = 30_000
 
-// Why: two runs moving one checkout at once collide on index.lock and misread each other's half-done
-// merge; one run per branch at a time, shared only by creates toward the same target, leaves nothing to race.
+// Serialize per branch to avoid index.lock races; coalesce only matching targets.
 const runPerLocalBaseBranch = createCoalescingKeyedRunner<LocalBaseBranchFastForwardOutcome>()
 
 export function parseRemoteTrackingLocalBaseRef(
@@ -42,7 +40,7 @@ export function parseRemoteTrackingLocalBaseRef(
     return undefined
   }
 
-  // Why: only proven remote-tracking refs get refresh status; slash-containing local branches (release/2026) must not fake a "not refreshed" warning.
+  // Only proven remote-tracking refs warrant refresh warnings, not slash-named local branches.
   const shortRemoteRef = remoteTrackingRef.slice(remoteRefPrefix.length)
   const slashIndex = shortRemoteRef.indexOf('/')
   if (slashIndex <= 0) {
@@ -71,7 +69,7 @@ export async function refreshLocalBaseRefForWorktreeCreate(
   const key = `${options.wslDistro ?? ''}\0${normalizeRuntimePathForComparison(repoPath)}\0${parsed.fullRef}`
   const git = localBaseBranchGit(options)
   const outcome = await waitAtMost(
-    // Why: the run can outlive this create's wait, so it clears git read caches itself when it moves main.
+    // The shared run may outlive its create, so it owns cache invalidation.
     runPerLocalBaseBranch(key, remoteTrackingRef, () =>
       runWithGitReadCacheInvalidation(() =>
         fastForwardLocalBaseBranch(git, { repoPath, fullRef: parsed.fullRef, remoteTrackingRef })
@@ -109,7 +107,7 @@ export async function getLocalBaseRefUpdateSuggestionForWorktreeCreate(
 }
 
 function localBaseBranchGit(options: GitWorktreeExecOptions): LocalBaseBranchGit {
-  // Why: the run is shared by every create that joins it, so no one create's abort signal or timeout may cut it short.
+  // Shared refreshes cannot use any individual create's cancellation signal or timeout.
   const execOptions = (cwd: string) => ({
     cwd,
     ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),

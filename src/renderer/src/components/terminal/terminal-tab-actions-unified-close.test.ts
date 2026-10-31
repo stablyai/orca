@@ -1,10 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
 
-// Why: drives the real closeTerminalTab orchestrator against the real store so the
-// unified close contract (MRU/neighbor successor, renderable-count deactivation gate)
-// is exercised end to end. Slice-level tests pass without the orchestrator fix and
-// would be vacuous for these regressions.
+// Drive the real orchestrator: slice-only tests miss successor selection and empty-workspace deactivation regressions.
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 
@@ -55,7 +52,6 @@ function seedWorktreeWithTabs(
     terminalIds: string[]
     /** Unified group order; entries are unified tab ids ("u-" + terminal id, or the chat id). */
     groupOrder: string[]
-    /** MRU stack, most recent last. */
     recentTabIds: string[]
     activeUnifiedTabId: string
     activeTerminalId: string
@@ -85,7 +81,6 @@ function seedWorktreeWithTabs(
   if (args.includeChatTab !== false) {
     unifiedByTabId.set(chatTab.id, chatTab)
   }
-  // Why: keep the unified array in group order so insertion-order assertions are real.
   const unifiedTabs = args.groupOrder.flatMap((tabId) => {
     const tab = unifiedByTabId.get(tabId)
     return tab ? [tab] : []
@@ -193,7 +188,6 @@ describe('closeTerminalTab unified close contract', () => {
     expect(state.activeWorktreeId).toBe(GIT_WT)
     expect(group(GIT_WT)?.activeTabId).toBe('chat-1')
     expect(state.activeTabType).toBe('agent-session')
-    // Why: insertion order must survive the close — only the closed tab drops out.
     expect(state.unifiedTabsByWorktree[GIT_WT]?.map((tab) => tab.id)).toEqual([
       'chat-1',
       'u-term-2'

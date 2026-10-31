@@ -4,11 +4,6 @@
   "family": "session.native-chat-page",
   "namedDeltas": [],
   "values": {
-    "08ef53d83e8c": {
-      "name": "nativeChat.readSession#1",
-      "ordinal": 3,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"nativeChat.readSession\",\"params\":{\"agent\":\"claude\",\"sessionId\":\"session-1\",\"limit\":60,\"beforeOffset\":1200,\"transcriptPath\":\"/work/feature/.claude/session-1.jsonl\"}}"
-    },
     "0943a7b4b434": {
       "crash": {
         "$rpc": "null"
@@ -21,6 +16,11 @@
       "messageIds": ["m-1", "m-2", "m-3", "m-4"],
       "status": "ready",
       "transcriptLoading": false
+    },
+    "18a95418eb6d": {
+      "name": "nativeChat.readSession#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"nativeChat.readSession\",\"params\":{\"agent\":\"claude\",\"sessionId\":\"session-1\",\"limit\":60,\"capabilities\":{\"transcriptSourceOrder\":1},\"beforeOffset\":1200,\"transcriptPath\":\"/work/feature/.claude/session-1.jsonl\"}}"
     },
     "2614fb8bb258": {
       "name": "stream-listener-crash",
@@ -39,73 +39,7 @@
       "ordinal": 6,
       "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"nativeChat.unsubscribe\",\"params\":{\"subscriptionId\":\"claude:session-1:00000000-0000-4000-8000-000000000001\"}}"
     },
-    "456781b97acc": {
-      "name": "nativeChat.subscribe#1",
-      "ordinal": 1,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"nativeChat.subscribe\",\"params\":{\"agent\":\"claude\",\"sessionId\":\"session-1\",\"limit\":40,\"subscriptionId\":\"claude:session-1:00000000-0000-4000-8000-000000000001\",\"capabilities\":{\"transcriptPending\":1},\"transcriptPath\":\"/work/feature/.claude/session-1.jsonl\"}}"
-    },
-    "6252ebf3de79": {
-      "name": "stream-listener-crash",
-      "ordinal": 6,
-      "value": {
-        "error": {
-          "category": "TypeError",
-          "isRpcDeliveryUnknown": false,
-          "message": "Cannot read properties of undefined (reading 'type')"
-        },
-        "frame": "nativeChat.subscribe#2"
-      }
-    },
-    "663babae1f1d": {
-      "name": "nativeChat.subscribe#2",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"nativeChat.subscribe\",\"params\":{\"agent\":\"claude\",\"sessionId\":\"session-1\",\"limit\":40,\"subscriptionId\":\"claude:session-1:00000000-0000-4000-8000-000000000001\",\"capabilities\":{\"transcriptPending\":1},\"transcriptPath\":\"/work/feature/.claude/session-1.jsonl\"}}"
-    },
-    "7b237e9824c8": {
-      "crash": {
-        "$rpc": "null"
-      },
-      "error": {
-        "$rpc": "null"
-      },
-      "hasMore": true,
-      "loadingEarlier": false,
-      "messageIds": ["m-3", "m-4"],
-      "status": "ready",
-      "transcriptLoading": false
-    },
-    "7e8788afab15": {
-      "crash": {
-        "$rpc": "null"
-      },
-      "error": {
-        "$rpc": "null"
-      },
-      "hasMore": true,
-      "loadingEarlier": true,
-      "messageIds": ["m-3", "m-4"],
-      "status": "ready",
-      "transcriptLoading": false
-    },
-    "7eedfcf76fd3": {
-      "name": "nativeChat.unsubscribe#1",
-      "ordinal": 5,
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"nativeChat.unsubscribe\",\"params\":{\"subscriptionId\":\"claude:session-1:00000000-0000-4000-8000-000000000001\"}}"
-    },
-    "8f91342d7840": {
-      "crash": {
-        "$rpc": "null"
-      },
-      "error": {
-        "$rpc": "null"
-      },
-      "hasMore": false,
-      "loadingEarlier": false,
-      "messageIds": ["m-1", "m-2", "m-3", "m-4", "m-5"],
-      "status": "ready",
-      "transcriptLoading": false
-    },
-    "911b3f485409": {
+    "512a0c61c2d8": {
       "name": "nativeChat.readSession#1",
       "ordinal": 2,
       "args": [
@@ -118,6 +52,9 @@
           "value": {
             "agent": "claude",
             "beforeOffset": 1200,
+            "capabilities": {
+              "transcriptSourceOrder": 1
+            },
             "limit": 60,
             "sessionId": "session-1",
             "transcriptPath": "/work/feature/.claude/session-1.jsonl"
@@ -171,6 +108,72 @@
         }
       }
     },
+    "6138b52f75d7": {
+      "name": "nativeChat.subscribe#2",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"nativeChat.subscribe\",\"params\":{\"agent\":\"claude\",\"sessionId\":\"session-1\",\"limit\":40,\"subscriptionId\":\"claude:session-1:00000000-0000-4000-8000-000000000001\",\"capabilities\":{\"transcriptPending\":1,\"transcriptSourceOrder\":1},\"transcriptPath\":\"/work/feature/.claude/session-1.jsonl\"}}"
+    },
+    "6252ebf3de79": {
+      "name": "stream-listener-crash",
+      "ordinal": 6,
+      "value": {
+        "error": {
+          "category": "TypeError",
+          "isRpcDeliveryUnknown": false,
+          "message": "Cannot read properties of undefined (reading 'type')"
+        },
+        "frame": "nativeChat.subscribe#2"
+      }
+    },
+    "7b237e9824c8": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "error": {
+        "$rpc": "null"
+      },
+      "hasMore": true,
+      "loadingEarlier": false,
+      "messageIds": ["m-3", "m-4"],
+      "status": "ready",
+      "transcriptLoading": false
+    },
+    "7cbe5e7d1f66": {
+      "name": "nativeChat.subscribe#1",
+      "ordinal": 1,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"nativeChat.subscribe\",\"params\":{\"agent\":\"claude\",\"sessionId\":\"session-1\",\"limit\":40,\"subscriptionId\":\"claude:session-1:00000000-0000-4000-8000-000000000001\",\"capabilities\":{\"transcriptPending\":1,\"transcriptSourceOrder\":1},\"transcriptPath\":\"/work/feature/.claude/session-1.jsonl\"}}"
+    },
+    "7e8788afab15": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "error": {
+        "$rpc": "null"
+      },
+      "hasMore": true,
+      "loadingEarlier": true,
+      "messageIds": ["m-3", "m-4"],
+      "status": "ready",
+      "transcriptLoading": false
+    },
+    "7eedfcf76fd3": {
+      "name": "nativeChat.unsubscribe#1",
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"nativeChat.unsubscribe\",\"params\":{\"subscriptionId\":\"claude:session-1:00000000-0000-4000-8000-000000000001\"}}"
+    },
+    "8f91342d7840": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "error": {
+        "$rpc": "null"
+      },
+      "hasMore": false,
+      "loadingEarlier": false,
+      "messageIds": ["m-1", "m-2", "m-3", "m-4", "m-5"],
+      "status": "ready",
+      "transcriptLoading": false
+    },
     "a5609c6d15fc": {
       "crash": {
         "$rpc": "null"
@@ -209,37 +212,6 @@
       "ordinal": 7,
       "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"nativeChat.unsubscribe\",\"params\":{\"subscriptionId\":\"claude:session-1:00000000-0000-4000-8000-000000000001\"}}"
     },
-    "e88c218171fa": {
-      "name": "nativeChat.readSession#1",
-      "ordinal": 2,
-      "args": [
-        {
-          "name": "method",
-          "value": "nativeChat.readSession"
-        },
-        {
-          "name": "params",
-          "value": {
-            "agent": "claude",
-            "beforeOffset": 1200,
-            "limit": 60,
-            "sessionId": "session-1",
-            "transcriptPath": "/work/feature/.claude/session-1.jsonl"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "budgetSpansConnect": true,
-            "timeoutMs": 15000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -260,6 +232,40 @@
       "messageIds": [],
       "status": "loading",
       "transcriptLoading": true
+    },
+    "f1dfb69b0f6f": {
+      "name": "nativeChat.readSession#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "nativeChat.readSession"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "claude",
+            "beforeOffset": 1200,
+            "capabilities": {
+              "transcriptSourceOrder": 1
+            },
+            "limit": 60,
+            "sessionId": "session-1",
+            "transcriptPath": "/work/feature/.claude/session-1.jsonl"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "budgetSpansConnect": true,
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
     }
   },
   "recording": {
@@ -269,7 +275,7 @@
         "id": "native-chat-page-earlier.prelude:subscribed",
         "observation": {
           "sender": [],
-          "payloads": ["456781b97acc"],
+          "payloads": ["7cbe5e7d1f66"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -281,7 +287,7 @@
         "id": "native-chat-page-earlier.prelude:snapshot",
         "observation": {
           "sender": [],
-          "payloads": ["456781b97acc"],
+          "payloads": ["7cbe5e7d1f66"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -292,8 +298,8 @@
       {
         "id": "native-chat-page-earlier.prelude:paging",
         "observation": {
-          "sender": ["e88c218171fa"],
-          "payloads": ["456781b97acc", "08ef53d83e8c"],
+          "sender": ["f1dfb69b0f6f"],
+          "payloads": ["7cbe5e7d1f66", "18a95418eb6d"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "page": "eb79a9b3682a"
@@ -305,8 +311,8 @@
       {
         "id": "native-chat-page-earlier.prelude:paged",
         "observation": {
-          "sender": ["911b3f485409"],
-          "payloads": ["456781b97acc", "08ef53d83e8c"],
+          "sender": ["512a0c61c2d8"],
+          "payloads": ["7cbe5e7d1f66", "18a95418eb6d"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "page": "eb79a9b3682a"
@@ -318,8 +324,8 @@
       {
         "id": "native-chat-page-earlier.prelude:re-subscribed",
         "observation": {
-          "sender": ["911b3f485409"],
-          "payloads": ["456781b97acc", "08ef53d83e8c", "663babae1f1d", "7eedfcf76fd3"],
+          "sender": ["512a0c61c2d8"],
+          "payloads": ["7cbe5e7d1f66", "18a95418eb6d", "6138b52f75d7", "7eedfcf76fd3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "page": "eb79a9b3682a",
@@ -332,8 +338,8 @@
       {
         "id": "native-chat-page-earlier.normal:replayed",
         "observation": {
-          "sender": ["911b3f485409"],
-          "payloads": ["456781b97acc", "08ef53d83e8c", "663babae1f1d", "7eedfcf76fd3"],
+          "sender": ["512a0c61c2d8"],
+          "payloads": ["7cbe5e7d1f66", "18a95418eb6d", "6138b52f75d7", "7eedfcf76fd3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "page": "eb79a9b3682a",
@@ -346,11 +352,11 @@
       {
         "id": "native-chat-page-earlier.normal:unmounted",
         "observation": {
-          "sender": ["911b3f485409"],
+          "sender": ["512a0c61c2d8"],
           "payloads": [
-            "456781b97acc",
-            "08ef53d83e8c",
-            "663babae1f1d",
+            "7cbe5e7d1f66",
+            "18a95418eb6d",
+            "6138b52f75d7",
             "7eedfcf76fd3",
             "3e14b1ec5bde"
           ],
@@ -367,8 +373,8 @@
       {
         "id": "native-chat-page-earlier.result-absent:replayed",
         "observation": {
-          "sender": ["911b3f485409"],
-          "payloads": ["456781b97acc", "08ef53d83e8c", "663babae1f1d", "7eedfcf76fd3"],
+          "sender": ["512a0c61c2d8"],
+          "payloads": ["7cbe5e7d1f66", "18a95418eb6d", "6138b52f75d7", "7eedfcf76fd3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "page": "eb79a9b3682a",
@@ -381,11 +387,11 @@
       {
         "id": "native-chat-page-earlier.result-absent:unmounted",
         "observation": {
-          "sender": ["911b3f485409"],
+          "sender": ["512a0c61c2d8"],
           "payloads": [
-            "456781b97acc",
-            "08ef53d83e8c",
-            "663babae1f1d",
+            "7cbe5e7d1f66",
+            "18a95418eb6d",
+            "6138b52f75d7",
             "7eedfcf76fd3",
             "e4483b4ab66e"
           ],
@@ -402,8 +408,8 @@
       {
         "id": "native-chat-page-earlier.result-null:replayed",
         "observation": {
-          "sender": ["911b3f485409"],
-          "payloads": ["456781b97acc", "08ef53d83e8c", "663babae1f1d", "7eedfcf76fd3"],
+          "sender": ["512a0c61c2d8"],
+          "payloads": ["7cbe5e7d1f66", "18a95418eb6d", "6138b52f75d7", "7eedfcf76fd3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "page": "eb79a9b3682a",
@@ -416,11 +422,11 @@
       {
         "id": "native-chat-page-earlier.result-null:unmounted",
         "observation": {
-          "sender": ["911b3f485409"],
+          "sender": ["512a0c61c2d8"],
           "payloads": [
-            "456781b97acc",
-            "08ef53d83e8c",
-            "663babae1f1d",
+            "7cbe5e7d1f66",
+            "18a95418eb6d",
+            "6138b52f75d7",
             "7eedfcf76fd3",
             "e4483b4ab66e"
           ],
@@ -437,8 +443,8 @@
       {
         "id": "native-chat-page-earlier.inner-ok-missing:replayed",
         "observation": {
-          "sender": ["911b3f485409"],
-          "payloads": ["456781b97acc", "08ef53d83e8c", "663babae1f1d", "7eedfcf76fd3"],
+          "sender": ["512a0c61c2d8"],
+          "payloads": ["7cbe5e7d1f66", "18a95418eb6d", "6138b52f75d7", "7eedfcf76fd3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "page": "eb79a9b3682a",
@@ -451,11 +457,11 @@
       {
         "id": "native-chat-page-earlier.inner-ok-missing:unmounted",
         "observation": {
-          "sender": ["911b3f485409"],
+          "sender": ["512a0c61c2d8"],
           "payloads": [
-            "456781b97acc",
-            "08ef53d83e8c",
-            "663babae1f1d",
+            "7cbe5e7d1f66",
+            "18a95418eb6d",
+            "6138b52f75d7",
             "7eedfcf76fd3",
             "3e14b1ec5bde"
           ],
@@ -472,8 +478,8 @@
       {
         "id": "native-chat-page-earlier.inner-false-string-error:replayed",
         "observation": {
-          "sender": ["911b3f485409"],
-          "payloads": ["456781b97acc", "08ef53d83e8c", "663babae1f1d", "7eedfcf76fd3"],
+          "sender": ["512a0c61c2d8"],
+          "payloads": ["7cbe5e7d1f66", "18a95418eb6d", "6138b52f75d7", "7eedfcf76fd3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "page": "eb79a9b3682a",
@@ -486,11 +492,11 @@
       {
         "id": "native-chat-page-earlier.inner-false-string-error:unmounted",
         "observation": {
-          "sender": ["911b3f485409"],
+          "sender": ["512a0c61c2d8"],
           "payloads": [
-            "456781b97acc",
-            "08ef53d83e8c",
-            "663babae1f1d",
+            "7cbe5e7d1f66",
+            "18a95418eb6d",
+            "6138b52f75d7",
             "7eedfcf76fd3",
             "3e14b1ec5bde"
           ],
@@ -507,8 +513,8 @@
       {
         "id": "native-chat-page-earlier.inner-false-object-error:replayed",
         "observation": {
-          "sender": ["911b3f485409"],
-          "payloads": ["456781b97acc", "08ef53d83e8c", "663babae1f1d", "7eedfcf76fd3"],
+          "sender": ["512a0c61c2d8"],
+          "payloads": ["7cbe5e7d1f66", "18a95418eb6d", "6138b52f75d7", "7eedfcf76fd3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "page": "eb79a9b3682a",
@@ -521,11 +527,11 @@
       {
         "id": "native-chat-page-earlier.inner-false-object-error:unmounted",
         "observation": {
-          "sender": ["911b3f485409"],
+          "sender": ["512a0c61c2d8"],
           "payloads": [
-            "456781b97acc",
-            "08ef53d83e8c",
-            "663babae1f1d",
+            "7cbe5e7d1f66",
+            "18a95418eb6d",
+            "6138b52f75d7",
             "7eedfcf76fd3",
             "3e14b1ec5bde"
           ],
@@ -542,8 +548,8 @@
       {
         "id": "native-chat-page-earlier.outer-refused:replayed",
         "observation": {
-          "sender": ["911b3f485409"],
-          "payloads": ["456781b97acc", "08ef53d83e8c", "663babae1f1d", "7eedfcf76fd3"],
+          "sender": ["512a0c61c2d8"],
+          "payloads": ["7cbe5e7d1f66", "18a95418eb6d", "6138b52f75d7", "7eedfcf76fd3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "page": "eb79a9b3682a",
@@ -556,8 +562,8 @@
       {
         "id": "native-chat-page-earlier.outer-refused:unmounted",
         "observation": {
-          "sender": ["911b3f485409"],
-          "payloads": ["456781b97acc", "08ef53d83e8c", "663babae1f1d", "7eedfcf76fd3"],
+          "sender": ["512a0c61c2d8"],
+          "payloads": ["7cbe5e7d1f66", "18a95418eb6d", "6138b52f75d7", "7eedfcf76fd3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "page": "eb79a9b3682a",
@@ -571,8 +577,8 @@
       {
         "id": "native-chat-page-earlier.outer-refused-no-message:replayed",
         "observation": {
-          "sender": ["911b3f485409"],
-          "payloads": ["456781b97acc", "08ef53d83e8c", "663babae1f1d", "7eedfcf76fd3"],
+          "sender": ["512a0c61c2d8"],
+          "payloads": ["7cbe5e7d1f66", "18a95418eb6d", "6138b52f75d7", "7eedfcf76fd3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "page": "eb79a9b3682a",
@@ -585,8 +591,8 @@
       {
         "id": "native-chat-page-earlier.outer-refused-no-message:unmounted",
         "observation": {
-          "sender": ["911b3f485409"],
-          "payloads": ["456781b97acc", "08ef53d83e8c", "663babae1f1d", "7eedfcf76fd3"],
+          "sender": ["512a0c61c2d8"],
+          "payloads": ["7cbe5e7d1f66", "18a95418eb6d", "6138b52f75d7", "7eedfcf76fd3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "page": "eb79a9b3682a",
@@ -600,8 +606,8 @@
       {
         "id": "native-chat-page-earlier.method-not-found:replayed",
         "observation": {
-          "sender": ["911b3f485409"],
-          "payloads": ["456781b97acc", "08ef53d83e8c", "663babae1f1d", "7eedfcf76fd3"],
+          "sender": ["512a0c61c2d8"],
+          "payloads": ["7cbe5e7d1f66", "18a95418eb6d", "6138b52f75d7", "7eedfcf76fd3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "page": "eb79a9b3682a",
@@ -614,8 +620,8 @@
       {
         "id": "native-chat-page-earlier.method-not-found:unmounted",
         "observation": {
-          "sender": ["911b3f485409"],
-          "payloads": ["456781b97acc", "08ef53d83e8c", "663babae1f1d", "7eedfcf76fd3"],
+          "sender": ["512a0c61c2d8"],
+          "payloads": ["7cbe5e7d1f66", "18a95418eb6d", "6138b52f75d7", "7eedfcf76fd3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "page": "eb79a9b3682a",

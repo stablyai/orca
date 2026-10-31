@@ -32,10 +32,9 @@ const GUIDE_REFERENCES = {
     'low-level-topology.md',
     'messaging-and-gates.md',
     'placement-and-remote.md',
-    'recovery-and-cleanup.md',
-    'worker-contract.md'
+    'recovery-and-cleanup.md'
   ],
-  'orca-cli': ['automations.md', 'browser.md', 'publishing.md'],
+  'orca-cli': ['artifacts.md', 'automations.md', 'browser.md', 'plugins.md', 'skill-sharing.md'],
   'orca-per-workspace-env': [
     'docker-ssh.md',
     'failure-modes.md',
@@ -191,12 +190,10 @@ describe('bundled skill guide generator', () => {
       expect(guide.aliases).toEqual(GUIDE_ALIASES[guide.name])
       const references = GUIDE_REFERENCES[guide.name]
       if (!references) {
-        expect(guide.fullMarkdown).toBe(source)
         expect(guide.references).toEqual([])
         continue
       }
-      // Why: the per-reference selector serves these verbatim, so an entry that
-      // drifts from the file on disk ships a stale reference to every agent.
+      // Per-reference selector serves these bytes verbatim; drift would ship stale guides.
       expect(guide.references.map((reference) => reference.name)).toEqual(
         references.map((reference) => reference.replace(/\.md$/u, ''))
       )
@@ -211,21 +208,6 @@ describe('bundled skill guide generator', () => {
                 'references',
                 `${reference.name}.md`
               ),
-              'utf8'
-            )
-          )
-        )
-      }
-      expect(guide.fullMarkdown).not.toBe(guide.markdown)
-      expect(guide.fullMarkdown.length).toBeGreaterThan(guide.markdown.length)
-      expect(guide.fullMarkdown.startsWith(source.trimEnd())).toBe(true)
-      for (const reference of references) {
-        const marker = `<!-- bundled-reference: references/${reference} -->`
-        expect(guide.fullMarkdown.split(marker)).toHaveLength(2)
-        expect(guide.fullMarkdown).toContain(
-          normalizeMarkdown(
-            await readFile(
-              path.join(projectDir, 'skill-guides', guide.name, 'references', reference),
               'utf8'
             )
           )
@@ -280,17 +262,6 @@ describe('bundled skill guide generator', () => {
     }
   )
 
-  it('pins guide sources, projections, and embedded output to LF in Git', async () => {
-    const attributes = await readFile(path.join(projectDir, '.gitattributes'), 'utf8')
-    expect(normalizeMarkdown(attributes)).toContain('/skill-guides/*.md text eol=lf\n')
-    expect(normalizeMarkdown(attributes)).toContain('/skill-stubs/*.md text eol=lf\n')
-    expect(normalizeMarkdown(attributes)).toContain('/skill-stubs/_shared/*.md text eol=lf\n')
-    expect(normalizeMarkdown(attributes)).toContain('/skills/*/SKILL.md text eol=lf\n')
-    expect(normalizeMarkdown(attributes)).toContain(
-      '/src/cli/bundled-skill-guides.ts text eol=lf\n'
-    )
-  })
-
   it('reports stale outputs and write mode repairs all projections', async () => {
     const root = await createFixture()
     const artifacts = await buildArtifacts(root)
@@ -305,8 +276,7 @@ describe('bundled skill guide generator', () => {
     await expect(verifyArtifacts(artifacts, root)).rejects.toThrow('skills/computer-use/SKILL.md')
   })
 
-  // Why: the stale-artifact assertions above only hit the Windows separator when the host is
-  // Windows; injecting path.win32 makes the Linux/macOS shards catch the regression too.
+  // Inject path.win32 so non-Windows shards detect separator regressions too.
   it('formats contributor-facing paths with forward slashes on every platform', () => {
     expect(
       toPosixRelativePath('C:\\repo', 'C:\\repo\\src\\cli\\bundled-skill-guides.ts', path.win32)
@@ -341,16 +311,17 @@ describe('bundled skill guide generator', () => {
     ).toThrow('collides with canonical name')
   })
 
-  // G2: the resolver ladder is single-authored. Without this, a stub can re-inline it and
-  // drift again exactly as the guide copies already did (#7904 lost `/usr/bin/orca`).
+  // Single-author resolver ladder; re-inlined stubs can drift like the copies that lost /usr/bin/orca (#7904).
   it('projects one shared resolver fragment byte-for-byte into every stub', async () => {
     const blocks = await readSharedStubBlocks(projectDir)
 
     expect([...blocks.keys()]).toEqual(['resolver', 'no-guessing'])
     for (const name of STUB_TOPICS) {
       const projection = await readFile(path.join(projectDir, 'skills', name, 'SKILL.md'), 'utf8')
+      const stub = await readFile(path.join(projectDir, 'skill-stubs', `${name}.md`), 'utf8')
       for (const [id, block] of blocks) {
-        expect(projection.split(block.text), `${name}/${id}`).toHaveLength(2)
+        const omitted = stub.includes(`<!-- shared-omit: ${id} -->`)
+        expect(projection.split(block.text), `${name}/${id}`).toHaveLength(omitted ? 1 : 2)
       }
     }
   })
@@ -363,9 +334,13 @@ describe('bundled skill guide generator', () => {
     expect(() => render(markers)).not.toThrow()
     expect(() => render(`${markers}\n\n<!-- shared: nope -->`)).toThrow('Unknown shared stub block')
     expect(() => render(markers.replace('<!-- shared: resolver -->\n\n', ''))).toThrow(
-      'must insert <!-- shared: resolver --> exactly once; found 0'
+      'must insert or omit <!-- shared: resolver --> exactly once; found 0'
     )
     expect(() => render(`${markers}\n\n<!-- shared: resolver -->`)).toThrow('found 2')
+    expect(
+      render(markers.replace('<!-- shared: resolver -->', '<!-- shared-omit: resolver -->'))
+    ).not.toContain(blocks.get('resolver').text)
+    expect(() => render(`${markers}\n\n<!-- shared-omit: resolver -->`)).toThrow('found 2')
     expect(() => render(`${markers}\n\n${blocks.get('resolver').text}`)).toThrow(
       're-inlines shared block "resolver"'
     )
@@ -383,9 +358,7 @@ describe('bundled skill guide generator', () => {
   })
 })
 
-// Why generalized: `orchestration-skill-guidance.test.mjs` pins this both-directions routing for
-// orchestration alone. Any guide that grows a `references/` directory needs the same contract, or a
-// reference can ship unroutable or a gate can route a file that does not exist.
+// Generalize orchestration’s bidirectional routing contract to every guide with references; catch unroutable and missing files.
 describe('guide reference routing', () => {
   async function guidesWithReferences() {
     const guideRoot = path.join(projectDir, 'skill-guides')

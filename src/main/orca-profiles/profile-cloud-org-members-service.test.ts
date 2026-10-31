@@ -55,9 +55,7 @@ const fakeSession = {
   capabilities: { flags: {}, refreshedAt: 1 }
 }
 
-// Why: mirror the real contract — invoke the operation with a live session and
-// surface its resolved value; business 4xx are returned by the operation as
-// values, never thrown, so the session layer never sees them.
+// Business 4xx return as values, so the session layer sees only thrown auth failures.
 function runOperationDirectly(): void {
   runWithFreshOrcaCloudSessionMock.mockImplementation(
     async (

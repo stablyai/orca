@@ -1,42 +1,66 @@
 import { useEffect, useRef, type ReactNode } from 'react'
-import { I18nextProvider } from 'react-i18next'
-
 import { useAppStore } from '../store'
-import { i18n, setRendererPluginLanguagePacks } from './i18n'
-import { resolveUiLocale } from './supported-languages'
-import { isPluginUiLanguage } from '../../../shared/ui-language'
+import { i18n, setRendererPluginLanguagePacks, loadRendererUiLanguage } from './i18n'
 import { usePluginLanguagePacks } from '../store/plugin-language-packs'
+import { isPluginUiLanguage } from '../../../shared/ui-language'
+import { initializeLanguageDetection, useLanguageReadiness } from './language-readiness'
 
 export function I18nProvider({ children }: { children: ReactNode }): React.JSX.Element {
-  // Why: settings arrive async over IPC; until they load we must not apply any
-  // language. Falling back to 'system' here used to kick off an OS-locale
-  // changeLanguage that raced with (and could permanently override) the
-  // persisted preference applied moments later.
   const uiLanguage = useAppStore((state) => state.settings?.uiLanguage ?? null)
-  const pluginLanguagePacks = usePluginLanguagePacks()
-  const selectedPluginLanguage = pluginLanguagePacks.find((pack) => pack.id === uiLanguage)
-  const locale =
-    uiLanguage === null
-      ? null
-      : (selectedPluginLanguage?.resourceLanguage ??
-        (isPluginUiLanguage(uiLanguage) ? 'en' : resolveUiLocale(uiLanguage)))
-  const requestedLocale = useRef<string | null>(null)
+  const packs = usePluginLanguagePacks()
+  const retryCount = useLanguageReadiness((state) => state.retryCount)
+  const systemLocale = useLanguageReadiness((state) =>
+    uiLanguage === 'system' ? state.detection?.locale : null
+  )
+  const generation = useRef(0)
+  // The store keeps unchanged packs by reference, so this changes only when the selected pack's content does.
+  const activePack = isPluginUiLanguage(uiLanguage)
+    ? packs.find((pack) => pack.id === uiLanguage)
+    : undefined
 
   useEffect(() => {
-    setRendererPluginLanguagePacks(pluginLanguagePacks)
-    requestedLocale.current = null
-  }, [pluginLanguagePacks])
+    setRendererPluginLanguagePacks(packs)
+  }, [packs])
 
   useEffect(() => {
-    // Why: track the last *requested* locale instead of checking i18n.language —
-    // an in-flight lazy catalog load leaves i18n.language stale, which made the
-    // guard skip corrections back to the persisted language.
-    if (locale === null || requestedLocale.current === locale) {
+    if (uiLanguage === null) {
       return
     }
-    requestedLocale.current = locale
-    void i18n.changeLanguage(locale)
-  }, [locale, pluginLanguagePacks])
+    const request = ++generation.current
+    let cancelled = false
+    useLanguageReadiness.setState({ loading: true })
+    void (async () => {
+      const detection = initializeLanguageDetection()
+      try {
+        if (uiLanguage === 'system') {
+          await detection
+          if (cancelled || request !== generation.current) {
+            return
+          }
+        }
+        const [, locale] = await Promise.all([detection, loadRendererUiLanguage(uiLanguage)])
+        if (cancelled || request !== generation.current) {
+          return
+        }
+        await i18n.changeLanguage(locale)
+        if (!cancelled && request === generation.current) {
+          useLanguageReadiness.setState({ ready: true, error: false, loading: false })
+        }
+      } catch {
+        await detection
+        if (!cancelled && request === generation.current) {
+          await i18n.changeLanguage('en')
+          if (!cancelled && request === generation.current) {
+            useLanguageReadiness.setState({ ready: true, error: true, loading: false })
+          }
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [uiLanguage, activePack, retryCount, systemLocale])
 
-  return <I18nextProvider i18n={i18n}>{children}</I18nextProvider>
+  // initReactI18next already binds useTranslation to this instance.
+  return <>{children}</>
 }

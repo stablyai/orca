@@ -1,6 +1,4 @@
-// Editor tabs follow a file the window renamed or moved on disk. The window picks each file's new
-// id (a bare path, an owner-qualified id, a diff id…), so main renames by the window's ids rather
-// than re-deriving them from paths; two open files are never merged into one tab.
+// Use window-chosen IDs when files move/rename; deriving from paths would lose owned/diff identities or merge distinct open files.
 
 import { applied, refuse, type Applied } from './workspace-layout-command-steps'
 import type { CommandOf } from './workspace-layout-command-types'
@@ -8,20 +6,49 @@ import type { LayoutEditorFile, WorkspaceLayoutModel } from './workspace-layout-
 import { withWorkspace } from './workspace-layout-removal'
 import { EDITOR_KINDS } from './workspace-layout-workspace-move'
 
-/**
- * Every editor tab showing a renamed file takes its new id, and a tab-bar id that is the file's
- * id follows it too, as the window rekeys them. Refused as a whole when two files would get one
- * id, or a file would take the id of an open one that is not itself renamed. Files no tab shows
- * change nothing but their record.
- */
+type Renames = CommandOf<'renameEditorFiles'>['renames']
+
+/** Apply all workspace renames atomically so main/window cannot retain half a disk move. */
 export function renameEditorFiles(
   model: WorkspaceLayoutModel,
   command: CommandOf<'renameEditorFiles'>
 ): Applied {
-  const workspace = model.workspaces[command.workspace]!
-  const ids = new Map(command.renames.map((rename) => [rename.fileId, rename.newFileId]))
+  const parts = [
+    { workspace: command.workspace, renames: command.renames },
+    ...(command.alsoIn ?? [])
+  ]
+  if (new Set(parts.map((part) => part.workspace)).size !== parts.length) {
+    return refuse('invalid_params')
+  }
+  let next = model
+  const renamedTabIds: Record<string, string> = {}
+  for (const part of parts) {
+    if (!next.workspaces[part.workspace]) {
+      return refuse('workspace_not_found')
+    }
+    const step = renameInWorkspace(next, part.workspace, part.renames)
+    if (!step.ok) {
+      return step
+    }
+    next = step.model
+    Object.assign(renamedTabIds, step.result.renamedTabIds)
+  }
+  return applied(next, { renamedTabIds })
+}
+
+/** Rekey every affected tab and file-named tab-bar ID. Reject conflicting destinations atomically; unshown files only change their records. */
+function renameInWorkspace(
+  model: WorkspaceLayoutModel,
+  workspaceKey: string,
+  renames: Renames
+): Applied {
+  const workspace = model.workspaces[workspaceKey]
+  if (!workspace) {
+    return refuse('workspace_not_found')
+  }
+  const ids = new Map(renames.map((rename) => [rename.fileId, rename.newFileId]))
   const targets = new Set(ids.values())
-  if (ids.size !== command.renames.length || targets.size !== ids.size) {
+  if (ids.size !== renames.length || targets.size !== ids.size) {
     return refuse('invalid_params')
   }
   const renamed = (id: string) => ids.get(id) ?? id
@@ -53,16 +80,26 @@ export function renameEditorFiles(
       ? { ...group, tabOrder: group.tabOrder.map(tabId) }
       : group
   )
+  // A renamed tab's view follows its file to the new path.
+  const views = new Map(
+    renames.flatMap((rename) => (rename.view ? [[rename.newFileId, rename.view] as const] : []))
+  )
+  const entityOf = new Map(tabs.map((tab) => [tab.id, tab.entityId]))
   const editorViews =
     workspace.editorViews &&
-    Object.fromEntries(Object.entries(workspace.editorViews).map(([id, view]) => [tabId(id), view]))
+    Object.fromEntries(
+      Object.entries(workspace.editorViews).map(([id, view]) => [
+        tabId(id),
+        views.get(entityOf.get(tabId(id)) ?? '') ?? view
+      ])
+    )
   const editorFiles = renamedEditorFiles(
     workspace.editorFiles,
-    command.renames,
+    renames,
     new Set(tabs.map((tab) => tab.entityId))
   )
   return applied(
-    withWorkspace(model, command.workspace, {
+    withWorkspace(model, workspaceKey, {
       ...workspace,
       tabs,
       groups,
@@ -76,7 +113,7 @@ export function renameEditorFiles(
 /** Each renamed edit-mode file's record, in its old record's place; a new one only for a tab main holds. */
 function renamedEditorFiles(
   files: LayoutEditorFile[] | undefined,
-  renames: CommandOf<'renameEditorFiles'>['renames'],
+  renames: Renames,
   heldEntityIds: ReadonlySet<string>
 ): LayoutEditorFile[] | undefined {
   const moves = renames.flatMap((rename) =>

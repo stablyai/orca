@@ -49,11 +49,7 @@ export function getReachableRuntimeSessionMirrorTargets(
   const targets: RuntimeSessionMirrorTarget[] = []
   for (const environmentId of getRuntimeSessionMirrorEnvironmentIds(state)) {
     const entry = state.runtimeStatusByEnvironmentId?.get(environmentId)
-    // Why the shared verdict and not `entry.status`: a still-ready transport whose probe
-    // came back unverifiable nulls `entry.status` while the host keeps delivering. Reading
-    // that as "gone" tore the mirror down mid-flow, disagreeing with every host surface.
-    // Dropping the mirror is destructive, so only the one exit verdict earns it —
-    // 'checking' and 'reconnecting' are unverifiable (docs/reference/ssh-execution-boundary.md).
+    // Use the shared exit verdict: ready transports can have unverifiable probes with null status while flows still deliver. Only confirmed exit permits destructive mirror teardown; checking/reconnecting do not (ssh-execution-boundary.md).
     if (isDisconnectedRuntimeHostState(runtimeHostConnectionStateForEntry(entry))) {
       continue
     }

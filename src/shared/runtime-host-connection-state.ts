@@ -9,7 +9,6 @@ export type RuntimeHostConnectionState =
   | 'reconnecting'
   | 'disconnected'
 
-/** Derives the runtime transport verdict shared by the renderer and agents. */
 export type RuntimeHostTransportState = 'connected' | 'checking' | 'disconnected'
 
 export function runtimeHostConnectionState({

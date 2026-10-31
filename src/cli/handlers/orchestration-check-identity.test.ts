@@ -59,6 +59,15 @@ describe('orchestration check identity', () => {
     )
   })
 
+  it('rejects an empty --terminal instead of consuming the ambient mailbox', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_coord'
+
+    await expect(
+      invokeCheck(new Map<string, string | boolean>([['terminal', '']]))
+    ).rejects.toMatchObject({ code: 'invalid_argument' })
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
   it('keeps an explicit legacy terminal handle scoped to that handle', async () => {
     process.env.ORCA_TERMINAL_HANDLE = 'term_stale_env'
 

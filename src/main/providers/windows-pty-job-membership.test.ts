@@ -2,9 +2,7 @@ import type * as ChildProcess from 'node:child_process'
 import { describe, expect, it, vi } from 'vitest'
 import type { IPty } from 'node-pty'
 
-// Module-level, so it intercepts the module's own import binding. A spyOn of a
-// require()'d child_process does not: the first version of this test passed
-// even with a fork() reintroduced, which is the failure it exists to catch.
+// Intercept the ESM import binding; spying on require(child_process) could miss a reintroduced fork.
 const forkMock = vi.hoisted(() => vi.fn())
 vi.mock('node:child_process', async (importOriginal) => ({
   ...(await importOriginal<typeof ChildProcess>()),
@@ -17,12 +15,7 @@ const pty = (pid = 100): IPty => ({ pid }) as unknown as IPty
 
 describe('readWindowsPtyJobProcessIds', () => {
   it('never spawns a child process to answer', () => {
-    // The whole point. node-pty answers console membership by FORKING a helper,
-    // and Orca asked on a foreground poll, per pane -- hundreds of hidden
-    // conpty_console_list_agent processes until the machine ran out of memory
-    // (#10857). Killing them changed nothing; the next poll spawned more.
-    // QueryInformationJobObject needs no console attachment, so this is one
-    // syscall and zero children.
+    // Foreground polling must use QueryInformationJobObject, never spawn console-list helpers (#10857).
     const listJobProcessIds = vi.fn(() => [100, 200])
     forkMock.mockClear()
 
@@ -51,9 +44,7 @@ describe('readWindowsPtyJobProcessIds', () => {
     ['no job support or an untracked tree', null],
     ['an empty job, which is not the shell-alone case', []]
   ])('reports unverifiable for %s', (_case, pids) => {
-    // null is never evidence that processes died
-    // (docs/reference/ssh-execution-boundary.md). An empty list means the tree
-    // is gone, which this function has never been the one to report.
+    // Null is unverifiable, never process-exit proof; this reader cannot report an empty tree.
     expect(readWindowsPtyJobProcessIds(pty(), () => pids)).toBeNull()
   })
 
@@ -66,19 +57,14 @@ describe('readWindowsPtyJobProcessIds', () => {
 
 describe('why the filter does NOT use this', () => {
   it('refuses an answer that does not contain the shell', () => {
-    // Shell exited, a descendant is still up. Size 1 -- but reading that as
-    // "the shell is alone, retire the agent" inverts the truth. The forked
-    // probe this replaced required the root in the raw list; so does this.
+    // A size-one set without the shell means a child survived, never shell-alone proof.
     const membership = readWindowsPtyJobProcessIds(pty(100), () => [200])
 
     expect(membership).toBeNull()
   })
 
   it('is asked with the pty handle, because a bare pid cannot find the job', () => {
-    // ptyJobTarget reads node-pty's private `_pty` id off the object and pairs
-    // it with proc.pid; the native side refuses on a mismatch. Passing proc.pid
-    // instead of proc types fine at some call sites but makes every pane report
-    // unverifiable, so pin the argument.
+    // Native lookup needs node-pty private handle id plus PID; a bare PID cannot identify the job.
     const listJobProcessIds = vi.fn(() => [100])
     const proc = pty(100)
 
@@ -89,16 +75,8 @@ describe('why the filter does NOT use this', () => {
   })
 
   it('documents that job membership keeps console-detached descendants', () => {
-    // The candidate filter in windows-agent-foreground-process.ts exists to DROP
-    // a descendant that left the console (`Start-Process droid`, a GUI child).
-    // The job still contains those by design, so answering that filter from the
-    // job would re-admit exactly what it is for -- granting byte authority to a
-    // pane no agent owns, or making an attached agent look ambiguous.
-    // docs/windows-wsl-root-cause-plan.html calls this out as "Use B".
-    //
-    // Measured on Windows 11 against a real WSL pane: job [40980,104068,4888,69908]
-    // vs console [69908,40980] -- the job is a superset. Harmless for the
-    // `size > 1` callers, wrong for the filter.
+    // Job membership deliberately retains detached children; console candidate filtering must not use it.
+    // Measured WSL job [40980,104068,4888,69908] vs console [69908,40980] (windows-wsl-root-cause-plan.html, Use B).
     const detachedChild = 104068
     const membership = readWindowsPtyJobProcessIds(pty(40980), () => [40980, detachedChild])
 

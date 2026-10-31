@@ -1,15 +1,7 @@
 #!/usr/bin/env node
-// Materializes the patched @xterm/addon-serialize dist of any git ref, for the
-// differential serialize fuzz (src/main/daemon/serialize-grid.differential.fuzz.test.ts):
-//
-//   node config/scripts/build-serialize-addon-at-ref.mjs --ref origin/main --out-dir /tmp/serialize-old
-//   ORCA_OLD_SERIALIZE_ADDON=<printed path> pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/serialize-grid.differential.fuzz.test.ts
-//
-// It resolves the ref's serialize version and patch from the ref's own
-// pnpm-workspace.yaml. The pristine dist comes from reverse-applying whichever patch
-// produced the installed node_modules copy, or, when that is not the pristine the ref
-// patches (e.g. the ref pins another version), from `npm pack` of the ref's version.
-// Every step is checked against the blob hashes in the patches' index lines.
+// Materialize a ref’s patched serialize dist for serialize-grid.differential.fuzz.test.ts.
+// Read version/patch from that ref; reverse installed patch or fetch matching pristine npm tarball, checking patch blob hashes.
+// Usage: --ref <ref> --out-dir <dir>; pass printed path as ORCA_OLD_SERIALIZE_ADDON to the fuzz test.
 
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'

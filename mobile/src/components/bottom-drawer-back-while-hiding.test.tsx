@@ -3,8 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 type Timing = { to: number; callback?: (finished: boolean) => void }
 
-// Models Reanimated's contract: assigning a new animation cancels the running one,
-// whose callback then gets finished=false.
+// Model Reanimated cancellation: assigning new animation settles prior callback with finished=false.
 const animations = vi.hoisted((): { running: Timing[] } => ({ running: [] }))
 
 vi.mock('../navigation/use-back-claim', () => ({ useBackClaim: () => {} }))
@@ -42,11 +41,13 @@ vi.mock('react-native-gesture-handler', () => {
     GestureHandlerRootView: 'GestureHandlerRootView'
   }
 })
+vi.mock('./AutoHeight', () => ({ AutoHeight: ({ children }: { children: unknown }) => children }))
 vi.mock('react-native-reanimated', () => {
   function isTiming(value: unknown): value is Timing {
     return typeof value === 'object' && value !== null && 'to' in value
   }
   return {
+    Easing: { bezier: () => (t: number) => t },
     default: { View: 'AnimatedView', ScrollView: 'AnimatedScrollView' },
     useSharedValue: (initial: number) => {
       let value = initial
@@ -129,8 +130,7 @@ describe('bottom drawer close request while hiding', () => {
     act(() => renderer.unmount())
   })
 
-  // A Back press inside the hide animation used to restart it, so onHidden never fired
-  // and the drawer's invisible Modal stayed up, swallowing every tap on the screen.
+  // Back during hide must not restart/cancel it or onHidden never fires and invisible Modal swallows taps.
   it('lets the hide finish when Back is pressed mid-close', () => {
     const onClose = vi.fn()
     const onHidden = vi.fn()

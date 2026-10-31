@@ -11,15 +11,12 @@ export const ATTENTION_READ = {
 } as const
 export const REWIND_METHOD = 'agentSession.rewind'
 export const CONVERSATION_OUTLINE_METHOD = 'agentSession.conversationOutline'
+export const ITEM_DETAIL_METHOD = 'agentSession.item'
 export const STATUS_FEED_METHOD = 'agentSession.subscribeStatus'
 export const TURN_COMPLETION_FEED_METHOD = 'agentSession.subscribeTurnCompletions'
 
-/** Every method the structured surface publishes: the host method it must reach,
- *  and the result it must hand back. A gate that hides one method and leaks
- *  another is the bug; so is a method that is registered and answers with an
- *  error, which is why `result` is declared per method rather than inferred from
- *  "did not say method_not_found". `result` is omitted only where the method
- *  legitimately answers with no reply at all. */
+// Declare each method’s expected host call and result; registration or a non-method_not_found error cannot prove execution.
+// Omit result only for streams that legitimately open without a reply.
 export const STRUCTURED_CALLS: {
   method: string
   hostMethod: string | null
@@ -44,8 +41,7 @@ export const STRUCTURED_CALLS: {
   },
   { method: 'agentSession.send', hostMethod: 'send', result: { ok: true, replayed: false } },
   { method: 'agentSession.cancel', hostMethod: 'cancel', result: { ok: true, replayed: false } },
-  // Draft mutations for mid-turn queueing. Methods exist ahead of the
-  // capability's advertisement; only capability-gated clients ever call them.
+  // Only capability-gated clients call these methods, even before advertisement.
   {
     method: 'agentSession.queuedMessageSend',
     hostMethod: 'queuedMessageSend',
@@ -55,6 +51,11 @@ export const STRUCTURED_CALLS: {
     method: 'agentSession.queuedMessageDelete',
     hostMethod: 'queuedMessageDelete',
     result: { ok: true, replayed: false }
+  },
+  {
+    method: 'agentSession.queuedMessageMove',
+    hostMethod: 'queuedMessageMove',
+    result: { ok: true, value: { messageId: 'queued-1', status: 'moved' } }
   },
   {
     method: 'agentSession.queuedMessagesResume',
@@ -115,6 +116,15 @@ export const STRUCTURED_CALLS: {
     result: { current: { model: 'gpt-live' } }
   },
   {
+    method: 'agentSession.continuationContext',
+    hostMethod: 'continuationContext',
+    result: {
+      status: 'current',
+      capturedText: 'Saved context',
+      transcriptPath: '/handoff/chat.txt'
+    }
+  },
+  {
     method: 'agentSession.modelCatalog',
     hostMethod: 'modelCatalog',
     result: { origin: 'unknown' }
@@ -129,9 +139,7 @@ export const STRUCTURED_CALLS: {
     hostMethod: 'revealSession',
     result: { ok: true, sessionId: SESSION, workspaceId: WORKSPACE, agent: 'codex', readable: true }
   },
-  // A chat's visual, read from the host's own record and state directory. A bare addition: an older
-  // host answers `method_not_found` and the client shows the visual as unavailable. The stub host
-  // holds no record, so the typed refusal is the declared answer.
+  // The stub has no record, so readVisual must return its typed refusal; older hosts return method_not_found.
   {
     method: 'agentSession.readVisual',
     hostMethod: null,
@@ -139,9 +147,7 @@ export const STRUCTURED_CALLS: {
   },
   // A no-op on a host that starts an agent only for work; it still builds the host.
   { method: 'agentSession.hold', hostMethod: null, result: { held: true } },
-  // The restart-resume surface. Bare additions, not capability-negotiated: an RPC method's
-  // absence is explicit (`method_not_found`), which the old-dispatcher case below asserts, so a
-  // newer client learns it during negotiation instead of by being met with silence.
+  // Restart-resume methods negotiate absence through explicit method_not_found, never silence.
   {
     method: 'agentSession.restartResumable',
     hostMethod: 'restartResumableList',
@@ -165,6 +171,20 @@ export const STRUCTURED_CALLS: {
     hostMethod: 'continueInterrupted',
     result: { sessionId: SESSION, outcome: 'superseded' }
   },
+  // Name a chat again after naming failed. Clients call it only on a host advertising
+  // `agent-session.structured.regenerate-name.v1`; an older host answers `method_not_found`.
+  {
+    method: 'agentSession.regenerateName',
+    hostMethod: 'regenerateConversationName',
+    result: { accepted: true }
+  },
+  // Save the user's chat name. Clients call it only on a host advertising
+  // `agent-session.structured.rename.v1`; an older host answers `method_not_found`.
+  {
+    method: 'agentSession.rename',
+    hostMethod: 'setUserConversationName',
+    result: { name: 'Release notes', applied: true }
+  },
   { method: 'agentSession.release', hostMethod: null, result: { released: true } },
   {
     method: 'agentSession.history',
@@ -182,6 +202,11 @@ export const STRUCTURED_CALLS: {
     hostMethod: 'journalSnapshot',
     result: { sessionId: SESSION, entries: [], omittedEntries: 0 }
   },
+  {
+    method: ITEM_DETAIL_METHOD,
+    hostMethod: 'journalSnapshot',
+    result: { item: null }
+  },
   // A subscription that opens with nothing to say answers with no reply at all,
   // so reaching the host is the only signal that the gate opened.
   { method: 'agentSession.subscribe', hostMethod: 'subscribe' },
@@ -191,15 +216,12 @@ export const STRUCTURED_CALLS: {
     hostMethod: 'subscribeStatus',
     result: { type: 'snapshot', sessions: [] }
   },
-  // Opens with nothing for the same reason `agentSession.subscribe` does, and unlike the status
-  // feed above: a completion is an edge that has already passed, not state a late subscriber
-  // needs. Reaching the host is the only signal that the gate opened.
+  // Completion is an edge, so an empty opening stream is valid; the host-call delta proves admission.
   {
     method: TURN_COMPLETION_FEED_METHOD,
     hostMethod: 'subscribeTurnCompletions'
   },
-  // Reading a chat retires the phone alerts its host pushed, through the runtime's own store, so
-  // its reply is the only signal that the gate opened.
+  // Attention acknowledgement uses the runtime store; only its reply proves admission.
   {
     method: 'agentSession.acknowledgeAttention',
     hostMethod: null,
@@ -208,16 +230,13 @@ export const STRUCTURED_CALLS: {
   // Teardown runs through the runtime's subscription registry rather than the
   // host, so its reply is the only signal that the gate opened.
   { method: 'agentSession.unsubscribe', hostMethod: null, result: { unsubscribed: true } },
-  // The host's registered agents, each with its declared capability record. Builds before
-  // #25845 read them from the installed host; later ones from the registrations that host is
-  // built from, so they answer without installing it. Either way Codex is listed.
+  // Before #25845 agents came from the installed host; later builds read registrations directly. Both must list Codex.
   {
     method: 'agentSession.agents',
     hostMethod: null,
     result: { agents: expect.arrayContaining([expect.objectContaining({ agent: 'codex' })]) }
   },
-  // Answered from the runtime's shared availability resource, not the host, so the stub's first
-  // generation is the only signal that the gate opened.
+  // Availability uses a runtime resource; its first generation proves admission.
   {
     method: 'agentSession.subscribeAvailability',
     hostMethod: null,

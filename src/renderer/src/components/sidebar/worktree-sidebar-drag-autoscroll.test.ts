@@ -21,7 +21,8 @@ const SESSION: WorktreeSidebarDragSession = {
   draggedIds: ['b'],
   draggedCopies: [],
   reorderDraggedIds: ['b'],
-  reorderUnitDraggedIds: ['b'],
+  reorderDraggedKeys: ['b'],
+  reorderUnitDraggedKeys: ['b'],
   rects: [{ worktreeId: 'b', groupIndex: 1, top: 48, bottom: 88 }],
   grab: null,
   anchor: null
@@ -161,7 +162,6 @@ describe('refreshWorktreeSidebarDragSession', () => {
         ],
         rects
       })
-      // Why: the row set changed ('a' mounted), so the fresh measurement is adopted.
     ).toEqual({ ...SESSION, rects })
   })
 
@@ -187,7 +187,7 @@ describe('refreshWorktreeSidebarDragSession', () => {
     ).toBeNull()
     expect(
       refreshWorktreeSidebarDragSession({
-        session: { ...SESSION, reorderUnitDraggedIds: ['missing'] },
+        session: { ...SESSION, reorderUnitDraggedKeys: ['missing'] },
         groups: [{ key: 'repo:one', worktreeIds: ['a', 'b'] }],
         unitGroups: [{ key: 'repo:one', worktreeIds: ['a'], units: [] }],
         rects: []
@@ -212,7 +212,8 @@ describe('refreshWorktreeSidebarDragSession', () => {
       draggingWorktreeId: 'child',
       draggedIds: ['child'],
       reorderDraggedIds: ['child'],
-      reorderUnitDraggedIds: ['child']
+      reorderDraggedKeys: ['child'],
+      reorderUnitDraggedKeys: ['child']
     }
     const rects: WorktreeSidebarDragRect[] = [
       { worktreeId: 'parent', groupIndex: 0, top: 0, bottom: 80 },
@@ -273,6 +274,8 @@ function makeDragElement(
 ): HTMLElement {
   const attributes = new Map([
     ['data-worktree-drag-id', worktreeId],
+    // Rects key slots by host identity; these fixtures reuse the id string as that key.
+    ['data-worktree-host-identity', worktreeId],
     ['data-worktree-drag-group-key', groupKey],
     ['data-worktree-drag-group-index', groupIndex]
   ])

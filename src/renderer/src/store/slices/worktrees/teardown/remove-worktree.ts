@@ -50,11 +50,7 @@ export function createRemoveWorktree(
   return async (removalTarget, force, options) => {
     const worktreeId = removalTarget.id
     const policy = resolveWorktreeRemovalPreference(get().settings, force, options)
-    // Why (STA-4343): this is the ONE chokepoint every delete entry point shares,
-    // so host qualification is enforced here rather than at any single caller — a
-    // guard bolted onto the sidebar would drift from the cleanup dialog's. The
-    // caller confirmed ONE host's row; route at that host instead of the active
-    // workspace's, which owns the same id elsewhere.
+    // Enforce confirmed-host routing at this shared delete boundary so sidebar and cleanup cannot diverge onto same-ID twins (STA-4343).
     const requiredExecutionHostId = removalTarget.executionHostId
     const start = beginHostQualifiedRemoval(
       get,
@@ -90,8 +86,7 @@ export function createRemoveWorktree(
     }))
 
     try {
-      // Why: forget-local touches no remote, so there's no archive hook to run or trust prompt needed.
-      // Why `get`: same-repo local deletes start together, and one approval must cover the rest.
+      // forget-local touches no remote/archive hooks; read current trust so concurrent same-repo deletes share one approval.
       const skipArchive = policy.forgetLocalOnly
         ? true
         : (await ensureHooksConfirmed(
@@ -177,11 +172,7 @@ export function createRemoveWorktree(
         })
       }
 
-      // Why (STA-4343): another host still owns this id, so the shared renderer
-      // state (tabs, terminals, browsers) belongs to that live workspace — drop
-      // only the confirmed host's row instead of tearing all of it down.
-      //
-      // The ephemeral VM is the exception — see completeSameIdHostScopedRemoval.
+      // Same-ID survivor keeps shared surfaces; remove only confirmed host row, but still clean its unshared VM (completeSameIdHostScopedRemoval).
       if (requiredExecutionHostId) {
         const currentSameIdSurvivingHostId = resolveSameIdSurvivingHostId(
           get(),
@@ -218,8 +209,7 @@ export function createRemoveWorktree(
       // Why: invalidate stale probes once deletion is authoritative, so an old toast can't mutate a same-path replacement.
       forgetHugeRepoWarningDismissalsForWorktrees([worktreeId])
       forgetWorktreeSleepIntent(worktreeId)
-      // Why: forget-local is legal while the host is unreachable, so record the removal here too — otherwise an
-      // in-flight metadata read that snapshotted this row re-appends it, and disconnected polls never drop it.
+      // Record unreachable forget-local removal to fence in-flight metadata reads; disconnected polls cannot correct resurrection.
       if (hostId && parseExecutionHostId(hostId)?.kind === 'ssh') {
         rememberAuthoritativelyRemovedWorktrees(hostId, [worktreeId])
       }
@@ -245,7 +235,8 @@ export function createRemoveWorktree(
         hostId,
         requiredExecutionHostId,
         beforeRemoval,
-        catalogVersion: removalResult?.catalogVersion
+        catalogVersion: removalResult?.catalogVersion,
+        confirmedDiscards: options?.confirmedDiscards
       })
       // Why: Source Control may be unmounted during deletion, so it can't be the only stale-draft cleanup path.
       clearSessionCommitDraftForWorktree(worktreeId)
@@ -297,8 +288,7 @@ export function createRemoveWorktree(
     } catch (err) {
       // Why: git refusing a non-force delete for dirty/untracked files is a handled user decision, not an app error.
       console.warn('Failed to remove worktree:', err)
-      // The raw message arrives wrapped in Electron's IPC channel and class names; this string is
-      // read by a user in a toast, and the refusal sentence has to lead it.
+      // Strip IPC/channel wrappers so the user-facing refusal leads the toast.
       const error = readIpcErrorDetail(err) ?? (err instanceof Error ? err.message : String(err))
       const forceDeleteReason = classifyWorktreeForceDeleteReason(
         error,
@@ -306,8 +296,7 @@ export function createRemoveWorktree(
         policy.options?.allowUnverifiedPtyStop === true
       )
       const locked = isLockedWorktreeRemovalError(error)
-      // Why (#19334): the refusal is the only failure a retry can clear by waiving rather than by
-      // fixing state, so the toast needs to know it may offer that choice.
+      // Only archive-hook refusal can be retried via waiver rather than state repair; expose that toast choice (#19334).
       const canWaiveArchiveHook = isArchiveHookRemovalError(error)
       set((s) => ({
         deleteStateByWorktreeId: {

@@ -57,9 +57,7 @@ async function createConflictRepo(): Promise<string> {
   git(repo, ['commit', '-q', '-am', 'main'])
   try {
     git(repo, ['merge', '-q', 'side'])
-  } catch {
-    // Expected: the merge stops on conflict.txt.
-  }
+  } catch {}
   await writeFile(path.join(repo, 'tracked.txt'), 'changed\n')
   await writeFile(path.join(repo, 'untracked.txt'), 'new\n')
   return repo
@@ -76,7 +74,7 @@ describe('stageWorktreeChanges', () => {
     expect(status.didHitLimit).toBe(true)
     const listed = status.entries.map((entry) => entry.path)
 
-    // The old Stage All: only the capped listing reaches git.
+    // Simulate staging only the capped UI listing.
     await bulkStageFiles(repo, listed)
     expect(names(repo, ['diff', '--name-only']).length).toBeGreaterThan(0)
 
@@ -148,7 +146,7 @@ describe('stageWorktreeChanges', () => {
       const owner = await mkdtemp(path.join(tmpdir(), 'orca-stage-owner-'))
       tempRoots.push(owner)
       await mkdir(path.join(owner, 'node_modules'))
-      // Why directory-only: it matches the owner's real directory but never the worktree's link.
+      // Directory-only ignore rules do not match the worktree's symlink.
       await writeFile(path.join(repo, '.gitignore'), 'node_modules/\n')
       git(repo, ['add', '.'])
       git(repo, ['commit', '-q', '-m', 'initial'])
@@ -180,7 +178,7 @@ describe('stageWorktreeChanges', () => {
       ])
     })
 
-    // Why these spellings: the Shared Paths setting saves them as typed, and git prints neither.
+    // Shared Paths preserves typed spellings; Git reports canonical relative names.
     describe.each(['./node_modules', 'node_modules/'])('saved as %s', (sharedPath) => {
       it('never stages the shared link', async () => {
         const { repo } = await createSharedLinkWorktree()

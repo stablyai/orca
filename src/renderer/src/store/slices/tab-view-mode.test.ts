@@ -1,16 +1,22 @@
+// Paired-server view-mode toggles stay window-owned; local frame-owned coverage: workspace-layout-frame-held-tabs.test.ts.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { AppState } from '../types'
-import { createTestStore, makeUnifiedTab, makeTabGroup } from './store-test-helpers'
+import {
+  createTestStore,
+  makeRuntimeOwnedWorktree,
+  makeUnifiedTab,
+  makeTabGroup
+} from './store-test-helpers'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 
-// Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
 
-// Mock sonner (imported transitively by repos.ts via the full store).
+vi.mock('@/runtime/web-runtime-terminal-actions', () => ({ setWebRuntimeTabProps: vi.fn() }))
+
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 
 const mockApi = {
@@ -26,6 +32,9 @@ const WT = 'repo1::/tmp/feature'
 function seedTwoLeafTabs(store: ReturnType<typeof createTestStore>): void {
   const left = makeUnifiedTab({ id: 'left-tab', worktreeId: WT, groupId: 'g-left' })
   const right = makeUnifiedTab({ id: 'right-tab', worktreeId: WT, groupId: 'g-right' })
+  store.setState({
+    worktreesByRepo: { repo1: [makeRuntimeOwnedWorktree({ id: WT, repoId: 'repo1' })] }
+  })
   store.setState({
     unifiedTabsByWorktree: { [WT]: [left, right] },
     groupsByWorktree: {
@@ -85,7 +94,6 @@ describe('tab view mode', () => {
     await layoutApplyTestTransport.settle()
 
     expect(findTab(store, 'left-tab')?.viewMode).toBe('chat')
-    // The sibling leaf's tab keeps its (default) view mode.
     expect(findTab(store, 'right-tab')?.viewMode).toBeUndefined()
   })
 
@@ -95,9 +103,7 @@ describe('tab view mode', () => {
     expect(store.getState().unifiedTabsByWorktree[WT]).toBe(before)
   })
 
-  // Why: terminal-pane recovery asks the terminal row who owns the surface.
-  // Host sync already writes viewMode there; only these local toggles skipped
-  // it, which is why the guard had to OR two indices to get a safe answer.
+  // Local toggles must mirror viewMode onto terminal rows used by recovery, matching host sync.
   describe('mirrors onto the terminal row', () => {
     function terminalRow(tabId: string) {
       return store.getState().tabsByWorktree[WT]?.find((tab) => tab.id === tabId)

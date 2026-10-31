@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AiVaultListResult, AiVaultSession } from './ai-vault-types'
-import { isPathInsideOrEqual } from './cross-platform-path'
 import {
   aiVaultScanLimit,
   aiVaultSessionDepthCovers,
@@ -120,25 +119,36 @@ describe('Agent Session History scope truncation', () => {
     expect(selected.sessions).toEqual(loaded.sessions.slice(0, 10))
   })
 
-  it('selects scoped sessions identically to the pre-hoist path predicate', () => {
-    const cases = [
-      ['C:\\Users\\Ada\\repo', 'c:/users/ada/repo/app'],
-      ['C:/Users/Ada/repo/', 'C:\\Users\\Ada\\repo'],
-      ['C:\\Users\\Ada\\repo', 'C:\\Users\\Ada\\repo-other'],
-      ['//wsl.localhost/Ubuntu/home/Ada/Repo', '//wsl$/Ubuntu/home/Ada/Repo/App'],
-      ['//wsl.localhost/Ubuntu/home/ada/repo', '//wsl.localhost/Debian/home/ada/repo'],
-      ['/Users/ada/repo', '/Users/ada/repo//app/'],
-      ['/Users/ada/repo', '/Users/ada/repository'],
-      ['/', '/anywhere']
+  it('selects scoped sessions across host path spellings', () => {
+    const cases: [scope: string, cwd: string, kept: boolean][] = [
+      ['C:\\Users\\Ada\\repo', 'c:/users/ada/repo/app', true],
+      ['C:/Users/Ada/repo/', 'C:\\Users\\Ada\\repo', true],
+      ['C:\\Users\\Ada\\repo', 'C:\\Users\\Ada\\repo-other', false],
+      ['//wsl.localhost/Ubuntu/home/Ada/Repo', '//wsl$/Ubuntu/home/Ada/Repo/App', true],
+      ['//wsl.localhost/Ubuntu/home/ada/repo', '//wsl.localhost/Debian/home/ada/repo', false],
+      ['/Users/ada/repo', '/Users/ada/repo//app/', true],
+      ['/Users/ada/repo', '/Users/ada/repository', false],
+      ['/', '/anywhere', true]
     ]
-    for (const [scope, cwd] of cases) {
+    for (const [scope, cwd, expected] of cases) {
       const loaded = result([session('scoped', cwd!, 0)])
       const selected = truncateAiVaultListResult(loaded, 0, [scope!])
       expect({ scope, cwd, kept: selected.sessions.length === 1 }).toEqual({
         scope,
         cwd,
-        kept: isPathInsideOrEqual(scope!, cwd!)
+        kept: expected
       })
     }
+  })
+})
+
+describe('truncateAiVaultListResult symlinked scope', () => {
+  it('keeps a session whose host alias is in scope when depth drops out-of-scope rows', () => {
+    const linked = { ...session('linked', '/data/src/api', 1), cwdAliases: ['/home/me/work/api'] }
+    const other = session('other', '/elsewhere', 2)
+
+    const truncated = truncateAiVaultListResult(result([other, linked]), 0, ['/home/me/work/api'])
+
+    expect(truncated.sessions.map((entry) => entry.id)).toEqual(['linked'])
   })
 })

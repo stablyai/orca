@@ -19,11 +19,8 @@ export class DeviceKeyForkError extends Error {
 
 export type DeviceKeyFork = { nextDevices: DeviceEntry[]; entry: DeviceEntry; created: boolean }
 
-/**
- * Forks a token row into a keyed row for one installation. The token row stays, so every other
- * holder of the same token (other tabs, machines, env-var users) and its live sockets keep working.
- * Idempotent per (token row, key): a lost reply retried with the same key returns the same row.
- */
+/** Fork one installation to a keyed row while retaining other token holders/sockets.
+ * Idempotent per token-row/key so lost-reply retries return the same identity. */
 export function planDeviceKeyFork(
   devices: readonly DeviceEntry[],
   legacyDeviceId: string,
@@ -39,7 +36,7 @@ export function planDeviceKeyFork(
   if (legacy.credentialKind === 'device-key' || legacy.token === undefined) {
     throw new DeviceKeyForkError('device_already_keyed')
   }
-  // Why: a relayed child authenticates through its parent desktop, which owns its credential.
+  // Parent desktops own relayed children's credentials.
   if (legacy.parentDeviceId !== undefined) {
     throw new DeviceKeyForkError('delegated_device')
   }
@@ -48,11 +45,11 @@ export function planDeviceKeyFork(
   if (existing) {
     return { nextDevices: [...devices], entry: existing, created: false }
   }
-  // Why: one key is one installation; reusing it under another row would merge two identities.
+  // Reusing a key across rows would merge installation identities.
   if (sameKey.length > 0) {
     throw new DeviceKeyForkError('device_key_in_use')
   }
-  // Why: bounds registry growth from one shared code; real installations are a handful.
+  // Bound registry growth from a shared pairing code.
   if (
     devices.filter((device) => device.forkedFrom === legacyDeviceId).length >=
     MAX_FORKS_PER_TOKEN_ROW
@@ -72,10 +69,10 @@ export function planDeviceKeyFork(
     devicePublicKeyB64,
     forkedFrom: legacy.deviceId,
     ...(options.ephemeral ? { ephemeral: true as const } : {}),
-    // Why: orchestration work owned under the token keeps its owner after migration.
+    // Preserve orchestration ownership through migration.
     callerFingerprint: devicePrincipalOf(legacy).callerFingerprint,
     pairedAt: now,
-    // Why: lastSeenAt 0 marks a never-scanned pending row, which rotation deletes.
+    // Zero means pending; rotation would delete the migrated installation.
     lastSeenAt: now
   }
   return { nextDevices: [...devices, entry], entry, created: true }

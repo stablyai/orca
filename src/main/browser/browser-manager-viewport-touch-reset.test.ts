@@ -75,8 +75,7 @@ function startNavigation(url: string): void {
   didStartNavigation(null, url, false, true)
 }
 
-// Regression for #22749: leaving a mobile preset must actually turn touch emulation off, or the
-// guest keeps (hover: none) / coarse pointer and loses every hover style.
+// Leaving mobile mode must restore hover and fine-pointer media features (#22749).
 describe('browserManager viewport touch reset', () => {
   beforeEach(() => {
     resetBrowserManagerMocks(mocks)
@@ -100,7 +99,6 @@ describe('browserManager viewport touch reset', () => {
     expect(writes.length).toBeGreaterThan(0)
     expect(writes.at(-1)).not.toContain('iPhone')
 
-    // A later navigation must not re-install the mobile UA behind the switch.
     debuggerSendCommand.mockClear()
     startNavigation('https://example.com/next')
     await flushViewportOps()

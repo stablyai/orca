@@ -3,16 +3,8 @@ import { TUI_AGENT_CONFIG } from './tui-agent-config'
 import { getCommandTokenPathBasename, getFirstCommandToken } from './command-token-scanner'
 import { extractAgentLaunchCommand } from './agent-command-line-intent'
 
-/**
- * Pi-compatible agent kinds. Both Pi and OMP (omp.sh) consume the same
- * `PI_CODING_AGENT_DIR` env contract and the same extension API, but each
- * defaults its on-disk config dir to a different `~/.<kind>/agent` path.
- * Orca's managed extension installer needs to know which agent is being
- * launched so it targets the user's actual source dir for THAT agent, with no
- * cross-agent fallback
- * (otherwise switching agents in the same workspace silently shadows the
- * other agent's user extensions).
- */
+/** Pi-compatible agents share PI_CODING_AGENT_DIR and extension APIs but have separate user directories.
+ * Never cross-fallback: switching agents must not shadow the other agent’s extensions. */
 export type PiAgentKind = 'pi' | 'omp' | 'prime-agent'
 
 export const PRIMARY_AGENT_DIR_ENV_BY_KIND: Readonly<Record<PiAgentKind, string>> = {
@@ -27,11 +19,7 @@ export const SOURCE_AGENT_DIR_ENV_BY_KIND: Readonly<Record<PiAgentKind, string>>
   'prime-agent': 'ORCA_PRIME_AGENT_SOURCE_AGENT_DIR'
 }
 
-/**
- * True when `agentType` names a Pi-compatible (goal/mission) kind. These agents
- * emit milestone `agent_end` events between steps while still working, so they
- * are treated differently from agents that only signal completion at turn end.
- */
+/** Pi-compatible agents emit agent_end milestones while still working; do not treat every event as turn completion. */
 export function isPiCompatibleAgentType(
   agentType: string | null | undefined
 ): agentType is PiAgentKind {
@@ -65,18 +53,8 @@ export function detectExplicitPiAgentKindFromCommand(
   return binary === PI_LAUNCH_BINARY ? 'pi' : null
 }
 
-/**
- * Identify the Pi-compatible agent kind a launch command targets.
- *
- * Returns 'omp' when the command launches OMP (`omp` / `omp.sh`), otherwise
- * defaults to 'pi'. Defaulting to 'pi' preserves prior behavior for the
- * non-launch case (e.g. bare shells that may later invoke `pi`) where Orca
- * prepared Pi integration by default.
- *
- * NEVER cross-fall-back: a missing source dir for the resolved kind means
- * "create that kind's extension dir only" - the other agent's dir MUST NOT
- * be substituted.
- */
+/** Detect the launched Pi-compatible kind; retain pi as the bare-shell integration default.
+ * Missing directories must create only the resolved kind’s extension directory, never substitute another agent’s. */
 export function detectPiAgentKindFromCommand(command: string | undefined): PiAgentKind {
   const explicitKind = detectExplicitPiAgentKindFromCommand(command)
   if (explicitKind) {

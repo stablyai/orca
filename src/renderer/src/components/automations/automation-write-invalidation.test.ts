@@ -1,7 +1,4 @@
-/**
- * A write knows the host it addressed; these pin that it never widens that into
- * another host's rows, and never narrows an unknown host into a guessed one.
- */
+/** Invalidate exactly the written host, or its authority when unknown; never widen across authorities or guess a selector. */
 
 import { describe, expect, it } from 'vitest'
 import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
@@ -57,6 +54,18 @@ describe('automation write invalidation', () => {
 
   it('names no host for a row that carried no metadata', () => {
     expect(automationRowCatalogRef({ owner: null, selector: null }, DESKTOP)).toBeNull()
+  })
+
+  it('invalidates the storing runtime orphan under All hosts without carrying its pairing revision into the cache key', () => {
+    const captured: AutomationCapturedOwner = {
+      owner: null,
+      authority: RUNTIME,
+      selector: { kind: 'orphan', issue: 'host-reselection-required' }
+    }
+    expect(automationRowCatalogRef(captured, DESKTOP)).toEqual({
+      authority: { kind: 'runtime', environmentId: 'env-1' },
+      selector: { kind: 'orphan' }
+    })
   })
 
   it('widens to the whole authority rather than guessing a selector', () => {

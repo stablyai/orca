@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeClient } from '../runtime-client'
+import { RuntimeClient } from '../runtime-client'
 
 const mocks = vi.hoisted(() => ({ revealPairedTerminalOnLocalDesktop: vi.fn() }))
 
@@ -18,12 +18,14 @@ function focusResponse(navigated: boolean) {
   }
 }
 
-async function runSwitch(client: { call: ReturnType<typeof vi.fn>; isRemote: boolean }) {
+async function runSwitch(options: { call: RuntimeClient['call']; isRemote: boolean }) {
   const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+  const client = new RuntimeClient('/tmp/orca-switch-test', 60_000, null, null)
+  vi.spyOn(client, 'call').mockImplementation(options.call)
+  vi.spyOn(client, 'isRemote', 'get').mockReturnValue(options.isRemote)
   await TERMINAL_HANDLERS['terminal switch']({
     flags: new Map([['terminal', 'term-1']]),
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the switch handler reads only call and isRemote.
-    client: client as unknown as RuntimeClient,
+    client,
     cwd: '/tmp/worktree',
     json: true
   })
@@ -56,6 +58,10 @@ describe('terminal switch on a paired environment', () => {
 
     const printed = await runSwitch({ call, isRemote: true })
 
+    expect(mocks.revealPairedTerminalOnLocalDesktop).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ isRemote: true }),
+      'term-1'
+    )
     expect(printed).toMatchObject({ result: { focus: { navigated: false } } })
   })
 

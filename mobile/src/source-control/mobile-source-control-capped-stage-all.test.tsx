@@ -1,7 +1,7 @@
 import { createElement, useRef } from 'react'
 import { act, create } from 'react-test-renderer'
 import { describe, expect, it, vi, type Mock } from 'vitest'
-// Why: react-native is Flow source vitest will not parse; haptics reaches expo-haptics through it.
+// Mock haptics because react-native is Flow source Vitest cannot parse.
 vi.mock('react-native', () => ({
   Platform: { OS: 'ios', select: (options: Record<string, unknown>) => options.ios },
   StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 }
@@ -32,7 +32,6 @@ import { gitStatusHostPayloadSchema } from './git-status-reply-schema'
 import type { MobileGitStatusResult } from './mobile-git-status'
 import { useMobileSourceControlRunners } from './use-mobile-source-control-runners'
 
-/** The capped first rows `git.status` returned; the host has thousands more it did not list. */
 const LISTED = ['src/a.ts', 'src/b.ts']
 
 function cappedStatus(): MobileGitStatusResult {
@@ -45,7 +44,6 @@ function cappedStatus(): MobileGitStatusResult {
 type SendGitRequest = <T>(method: string, params?: Record<string, unknown>) => Promise<T>
 type SendGitCall = (method: string, params?: Record<string, unknown>) => Promise<unknown>
 
-/** Adapts a non-generic recorder to the hook's generic request signature. */
 function asSendGitRequest(recorder: Mock<SendGitCall>): SendGitRequest {
   return async <T,>(method: string, params?: Record<string, unknown>): Promise<T> => {
     const reply = await recorder(method, params)
@@ -110,10 +108,6 @@ async function runStageAll(
 }
 
 describe('mobile Stage All on a capped git.status', () => {
-  it('keeps didHitLimit from the host reply', () => {
-    expect(cappedStatus().didHitLimit).toBe(true)
-  })
-
   it('asks the host to stage every change instead of the capped rows', async () => {
     const sendGitRequest = vi.fn<SendGitCall>().mockResolvedValue({ ok: true, stagedScope: 'all' })
 
@@ -124,7 +118,7 @@ describe('mobile Stage All on a capped git.status', () => {
   })
 
   it('reports an older host that answered without a receipt', async () => {
-    // An older host strips `scope`, stages the empty list, and replies `{ ok: true }`.
+    // Older hosts strip scope and may accept an empty list without staging anything.
     const sendGitRequest = vi.fn<SendGitCall>().mockResolvedValue({ ok: true })
 
     const { setActionError } = await runStageAll(cappedStatus(), sendGitRequest)

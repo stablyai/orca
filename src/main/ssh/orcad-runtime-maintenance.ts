@@ -1,10 +1,5 @@
-/**
- * Updating, rolling back and recovering a managed orcad, on T6-2's deploy, rollback and recovery.
- * Every step reads the terminal census through the server's tunnel first; an unanswered census
- * is unverifiable, never zero, so an update over live or uncounted terminals defers (D7).
- */
+/** Census through the managed tunnel before lifecycle changes. Unknown counts never mean zero, so live/uncounted hosts defer update (D7). */
 import { getAppEnvironment } from '../../shared/app-environment'
-import { refreshManagedOrcadPairing } from '../../shared/runtime-environment-managed-orcad-store'
 import { assertRuntimeEnvironmentNotReconciling } from '../../shared/runtime-environment-reconciliation-record'
 import {
   redactRuntimeEnvironment,
@@ -12,11 +7,11 @@ import {
 } from '../../shared/runtime-environments'
 import type {
   OrcadManagedDeployResult,
+  OrcadManagedPastLiveTerminals,
   OrcadManagedRecoveryResult,
   OrcadManagedRollbackResult
 } from '../../shared/orcad-managed-runtime'
 import { runTargetLifecycle } from '../ipc/ssh/ssh-target-lifecycle-queue'
-import type { ServeReadiness } from '../server/serve-readiness'
 import { recoverInterruptedOrcadActivation } from '../managed-server/activation/orcad-activation-recovery'
 import { probeActiveOrcadReadiness } from './orcad-active-readiness'
 import { materializeOrcadArtifact } from '../orcad/orcad-artifact-materializer'
@@ -38,14 +33,17 @@ import {
 import type { OrcadRemoteContext } from '../managed-server/install/orcad-remote-context'
 import { readRemoteOrcadBuildHash } from '../managed-server/install/orcad-remote-build-hash'
 import { deployOrcad, type OrcadDeployOptions } from './orcad-remote-deploy'
+import type { OrcadUpdateForce } from './orcad-update-plan'
 import { ORCAD_ACTIVATION_POLICY_REFUSED_CODE } from './orcad-installed-activation'
 import { pruneManagedOrcadVersions } from '../managed-server/lifecycle/orcad-managed-version-gc'
+import { clearOrcadUpdateFailedThisLaunch } from '../managed-server/lifecycle/orcad-managed-update-failure-memory'
+import { admitOrcadRecordForIntent } from '../managed-server/lifecycle/orcad-managed-update-decision'
 import { rollbackOrcad } from '../managed-server/install/orcad-remote-rollback'
 import { collectManagedTerminalCensus } from './orcad-terminal-census-client'
-import type { OrcadTerminalCensus } from '../../shared/orcad-terminal-census'
+import { updateTerminalCounts } from './orcad-fenced-stop'
 import { findIncompleteManagedOrcadMigration } from '../managed-server/lifecycle/orcad-managed-migration-status'
 import { latestOrcadMigrationInto } from './orcad-migration-rollback-mark'
-import { tunneledOrcadPairingCode } from './orcad-tunneled-pairing'
+import { refreshMaintainedOrcadPairing } from './orcad-maintenance-pairing-refresh'
 
 type LifecycleArgs = { selector: string; signal?: AbortSignal }
 
@@ -56,73 +54,78 @@ export function withManagedOrcadLifecycle<T>(
 ): Promise<T> {
   const { environment, deployment } = requireManagedOrcadEnvironment(userDataPath, selector)
   return runTargetLifecycle(deployment.sshTargetId, async () => {
-    // Re-read under the queue: a reconciliation or stop may have won the race for it.
+    // Re-read in the lifecycle queue because reconciliation/stop may have won first.
     const current = requireManagedOrcadEnvironment(userDataPath, environment.id)
     assertRuntimeEnvironmentNotReconciling(current.environment)
     return run(current)
   })
 }
 
-function refreshPairing(
-  userDataPath: string,
-  environment: KnownRuntimeEnvironment,
-  readiness: ServeReadiness,
-  localPort: number
-): KnownRuntimeEnvironment {
-  return refreshManagedOrcadPairing(
-    userDataPath,
-    environment.id,
-    tunneledOrcadPairingCode(readiness, localPort)
-  )
-}
-
-/** A launched slot may bind another port than the forward in use, so forward anew. */
-async function followLaunchedServerPort(
+/** Rebuild forwarding when a launched slot binds a different port. */
+export async function followLaunchedServerPort(
   userDataPath: string,
   environmentId: string
 ): Promise<void> {
   try {
     await rebuildOrcadManagedTunnel(userDataPath, environmentId)
   } catch (error) {
-    // Why not fail: the server already launched; a rebuild that got past its drop leaves no
-    // forward, so the next connect forwards to the bound port.
+    // Server already launched; if tunnel rebuild fails, the next connect can forward its bound port.
     console.warn('[ssh] Could not forward to the relaunched managed Orca server:', error)
   }
 }
 
 export function updateManagedOrcadEnvironment(
   userDataPath: string,
-  args: LifecycleArgs & { force?: boolean }
+  args: LifecycleArgs & { force?: boolean; pastLiveTerminals?: OrcadManagedPastLiveTerminals }
 ): Promise<OrcadManagedDeployResult> {
-  return withManagedOrcadLifecycle(userDataPath, args.selector, async (managed) =>
-    runManagedOrcadUpdate(
+  const { pastLiveTerminals } = args
+  // Update anyway keeps Update's version admission even if a caller also passed force.
+  const intent = args.force && !pastLiveTerminals ? 'force' : 'update'
+  return withManagedOrcadLifecycle(userDataPath, args.selector, async (managed) => {
+    const admitIntent = admitOrcadRecordForIntent(intent, getAppEnvironment().getVersion())
+    // Checked under the host fence: another desktop may have activated a build since the confirm.
+    const admitRecord: NonNullable<OrcadDeployOptions['admitRecord']> = pastLiveTerminals
+      ? (record, candidateVersion) =>
+          record.active !== pastLiveTerminals.incumbentVersion
+            ? "This host's server changed since the update was confirmed. Review it and update again."
+            : admitIntent(record, candidateVersion)
+      : admitIntent
+    const force: OrcadUpdateForce | undefined = pastLiveTerminals ? 'live-terminals' : args.force
+    const result = await runManagedOrcadUpdate(
       userDataPath,
       managed,
       await resolveLinkedOrcadContext(managed.environment, managed.deployment, args.signal),
-      args
+      { signal: args.signal, force, admitRecord }
     )
-  )
+    // A completed manual update clears automatic failure suppression; deferred attempts do not.
+    if (result.outcome !== 'deferred') {
+      clearOrcadUpdateFailedThisLaunch({ kind: 'ssh', id: managed.deployment.sshTargetId })
+    }
+    return result
+  })
 }
 
-/** The Managed servers update, run inside the target's lifecycle queue with a resolved context. */
 export async function runManagedOrcadUpdate(
   userDataPath: string,
   { environment, deployment }: ReturnType<typeof requireManagedOrcadEnvironment>,
   context: OrcadRemoteContext,
   args: {
-    force?: boolean
+    force?: OrcadUpdateForce
     signal?: AbortSignal
     localOrcadDir?: string
     admitRecord?: OrcadDeployOptions['admitRecord']
   }
 ): Promise<OrcadManagedDeployResult> {
-  // Why release: finished automation shells would otherwise defer every update on a host with
-  // schedules; the update restarts the server anyway.
-  const countTerminals = (): Promise<OrcadTerminalCensus> =>
-    collectManagedTerminalCensus(userDataPath, environment, context.activationRecord, undefined, {
-      releaseFinishedAutomationTerminals: true
-    })
-  const census = await countTerminals()
+  const { countFirst, ...recount } = updateTerminalCounts((options) =>
+    collectManagedTerminalCensus(
+      userDataPath,
+      environment,
+      context.activationRecord,
+      undefined,
+      options
+    )
+  )
+  const census = await countFirst()
   const localOrcadDir =
     args.localOrcadDir ??
     (await materializeOrcadArtifact(context.serverTarget, { signal: args.signal }))
@@ -132,7 +135,7 @@ export async function runManagedOrcadUpdate(
     localOrcadDir,
     target: context.serverTarget,
     census,
-    recountCensus: countTerminals,
+    ...recount,
     censusRecord: context.activationRecord,
     force: args.force,
     appVersion: getAppEnvironment().getVersion(),
@@ -144,9 +147,12 @@ export async function runManagedOrcadUpdate(
       candidateVersion: result.fullVersion,
       code: result.code,
       reason: result.reason,
-      forceable: isForceableOrcadDeferral(result.code)
+      // Force may override policy deferrals, including a newer host build.
+      forceable:
+        isForceableOrcadDeferral(result.code) ||
+        result.code === ORCAD_ACTIVATION_POLICY_REFUSED_CODE
     }
-    // A policy refusal is a decision about this host, not an update waiting to be retried.
+    // Policy refusal is final for this host, not a transient update to retry.
     if (result.code !== ORCAD_ACTIVATION_POLICY_REFUSED_CODE) {
       recordManagedOrcadUpdateDeferral(environment.id, deferral)
     }
@@ -166,7 +172,7 @@ export async function runManagedOrcadUpdate(
     activeVersion: result.fullVersion,
     readiness
   })
-  const updated = refreshPairing(userDataPath, environment, readiness, deployment.localPort)
+  const updated = refreshMaintainedOrcadPairing(userDataPath, environment.id, readiness)
   if (started || result.outcome !== 'already-active') {
     await followLaunchedServerPort(userDataPath, environment.id)
   }
@@ -199,17 +205,15 @@ export function rollbackManagedOrcadEnvironment(
       if (crossing) {
         return crossing
       }
-      const census = await collectManagedTerminalCensus(
-        userDataPath,
-        environment,
-        record,
-        undefined,
-        {
-          releaseFinishedAutomationTerminals: true
-        }
+      const slot = managedOrcadSlot(context, deployment.remotePort, args.signal)
+      const targetDir = managedOrcadInstallDir(context, target)
+      const targetBuildHash = await readRemoteOrcadBuildHash(slot, targetDir)
+      const { countFirst, ...recount } = updateTerminalCounts((options) =>
+        collectManagedTerminalCensus(userDataPath, environment, record, undefined, options)
       )
-      // Why idle only: this client cannot read the older build's daemon protocol, so it cannot show
-      // that build would reach terminals that are still running.
+      // Recount under lock before rollback stop; this initial census closes no admission.
+      const census = await countFirst()
+      // Require idle because this client cannot prove the older build's daemon protocol attaches to live terminals.
       if (census.liveSessions !== 0) {
         return {
           outcome: 'refused',
@@ -223,13 +227,11 @@ export function rollbackManagedOrcadEnvironment(
               : 'Close the terminals running on this server before rolling it back.'
         }
       }
-      const slot = managedOrcadSlot(context, deployment.remotePort, args.signal)
-      const targetDir = managedOrcadInstallDir(context, target)
-      const targetBuildHash = await readRemoteOrcadBuildHash(slot, targetDir)
       const result = await rollbackOrcad({
         ...slot,
         record,
         census,
+        ...recount,
         targetBuildHash,
         targetDaemonProtocol: CURRENT_ORCAD_DAEMON_PROTOCOL
       })
@@ -240,7 +242,7 @@ export function rollbackManagedOrcadEnvironment(
         { ...slot, remoteInstallDir: targetDir },
         { buildHash: targetBuildHash, fullVersion: result.target }
       )
-      const updated = refreshPairing(userDataPath, environment, readiness, deployment.localPort)
+      const updated = refreshMaintainedOrcadPairing(userDataPath, environment.id, readiness)
       await followLaunchedServerPort(userDataPath, environment.id)
       return {
         outcome: 'rolled-back',
@@ -252,7 +254,6 @@ export function rollbackManagedOrcadEnvironment(
   )
 }
 
-/** Finishes or undoes an interrupted activation, rollback or decommission on the host. */
 export function recoverManagedOrcadEnvironment(
   userDataPath: string,
   args: LifecycleArgs & { acceptChangedState?: boolean }
@@ -270,7 +271,7 @@ export function recoverManagedOrcadEnvironment(
         return result
       }
       const updated = result.readiness
-        ? refreshPairing(userDataPath, environment, result.readiness, deployment.localPort)
+        ? refreshMaintainedOrcadPairing(userDataPath, environment.id, result.readiness)
         : environment
       if (result.activeVersion) {
         await followLaunchedServerPort(userDataPath, environment.id)
@@ -285,10 +286,7 @@ export function recoverManagedOrcadEnvironment(
   )
 }
 
-/**
- * A rollback restores the snapshot taken when the current version activated. If a migration
- * began after that, the snapshot predates the imported catalog and restoring it would drop it.
- */
+/** A post-activation migration is absent from the rollback snapshot; restoring it would discard imported state. */
 function migrationRollbackRefusal(
   userDataPath: string,
   environment: KnownRuntimeEnvironment,

@@ -48,6 +48,7 @@ import {
   runUnderRemoteCliPageAdmission
 } from './remote-cli-page-admission'
 import {
+  answerAgentBrowserCommands,
   createFakeAgentBrowserChild,
   mockBrowserManager,
   mockWebContents,
@@ -60,7 +61,7 @@ overrideBridgeWebContentsLookup(AgentBrowserBridge.prototype, webContentsFromIdM
 
 const WORKSPACE = 'repo-host::/srv/app'
 
-/** A helper step reaching the page's CDP proxy now. */
+/** Simulate a helper CDP step at the page proxy. */
 function assertHelperStepAdmitted(): void {
   runUnderRemoteCliPageAdmission(100, () => assertRemoteCliPageAccess(100))
 }
@@ -82,6 +83,42 @@ describe('AgentBrowserBridge under a host revocation', () => {
     })
     bridge = new AgentBrowserBridge(mockBrowserManager())
     bridge.setActiveTab(100)
+  })
+
+  it('stops a long type at the next run once the host is revoked', async () => {
+    const wc = mockWebContents(100)
+    wc.getType.mockReturnValue('webview')
+    let resumeTyping = (): void => {}
+    const paused = new Promise<void>((resolve) => {
+      resumeTyping = resolve
+    })
+    let evaluations = 0
+    wc.debugger.sendCommand.mockImplementation(async (method: string) => {
+      if (method === 'Runtime.evaluate') {
+        evaluations += 1
+        // The first run's settle wait: hold it while the host is revoked.
+        if (evaluations === 2) {
+          await paused
+        }
+        return { result: { type: 'object', subtype: 'null' } }
+      }
+      return {}
+    })
+    webContentsFromIdMock.mockReturnValue(wc)
+    const revoked = new AbortController()
+
+    const typing = runInRemoteCliBrowserScope(
+      WORKSPACE,
+      () => bridge.type('x'.repeat(2000), undefined, 'tab-1'),
+      revoked.signal
+    )
+    await vi.waitFor(() => expect(evaluations).toBe(2))
+    const sentBeforeRevocation = wc.sendInputEvent.mock.calls.length
+    revoked.abort()
+    resumeTyping()
+
+    await expect(typing).rejects.toMatchObject({ code: 'desktop_browser_bridge_unavailable' })
+    expect(wc.sendInputEvent.mock.calls.length).toBe(sentBeforeRevocation)
   })
 
   it('never presses the mouse once the host is revoked during a running click', async () => {
@@ -116,16 +153,13 @@ describe('AgentBrowserBridge under a host revocation', () => {
 
   it('holds the page against a running helper click once the host is revoked', async () => {
     const helperCallbacks: ExecFileCallback[] = []
-    execFileMock.mockImplementation(
-      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
-        if (args.includes('click')) {
-          helperCallbacks.push(cb)
-        } else {
-          cb(null, JSON.stringify({ success: true, data: null }), '')
-        }
-        return createFakeAgentBrowserChild({ stdin: { on: vi.fn(), end: vi.fn() } })
+    answerAgentBrowserCommands(execFileMock, stdinWrites, (command, cb) => {
+      if (command[0] === 'click') {
+        helperCallbacks.push(cb)
+      } else {
+        cb(null, JSON.stringify({ success: true, data: null }), '')
       }
-    )
+    })
     const revoked = new AbortController()
 
     const click = runInRemoteCliBrowserScope(
@@ -147,9 +181,7 @@ describe('AgentBrowserBridge under a host revocation', () => {
       }
     })
     revoked.abort()
-    // The helper's next CDP step reaches the page's proxy and is refused there.
     expect(() => assertHelperStepAdmitted()).toThrow('stopped sharing')
-    // Retired on the revocation itself, not when the helper's client times out.
     await vi.waitFor(() => expect(proxy.stop).toHaveBeenCalled())
     helperCallbacks[0]!(
       null,
@@ -159,7 +191,7 @@ describe('AgentBrowserBridge under a host revocation', () => {
 
     await expect(click).rejects.toMatchObject({ code: 'desktop_browser_bridge_unavailable' })
     expect(() => assertHelperStepAdmitted()).not.toThrow()
-    // The helper's daemon outlives its client, so it is retired before the page is let go.
+    // Daemon retirement must precede releasing the page's admission hold.
     expect(heldWhenRetired).toBe(true)
     expect(execFileMock).toHaveBeenCalledWith(
       expect.anything(),
@@ -233,7 +265,13 @@ describe('AgentBrowserBridge under a host revocation', () => {
     grantFocus()
 
     await expect(click).rejects.toMatchObject({ code: 'desktop_browser_bridge_unavailable' })
-    expect(wc.debugger.sendCommand).not.toHaveBeenCalledWith('Runtime.evaluate', expect.anything())
+    // Only the read-only first-paint probe, sent before the focus wait, may reach the page.
+    expect(wc.debugger.sendCommand).not.toHaveBeenCalledWith(
+      'Runtime.evaluate',
+      expect.not.objectContaining({
+        expression: expect.stringContaining("getEntriesByType('paint')")
+      })
+    )
     expect(dispatchedMouseEvents(wc)).toHaveLength(0)
     expect(release).toHaveBeenCalled()
   })
@@ -293,8 +331,6 @@ describe('AgentBrowserBridge under a host revocation', () => {
         .filter((type) => type !== 'mouseMoved')
     }
 
-    // Why: `mouse down` and `mouse up` are separate host commands, so a host that lost its
-    // attachment between them left the desktop's page with a stuck button.
     it('is let go of off the page when the host is revoked between commands', async () => {
       const wc = mockWebContents(100)
       wc.debugger.sendCommand.mockResolvedValue({})
@@ -357,7 +393,6 @@ describe('AgentBrowserBridge under a host revocation', () => {
       host.abort()
       await Promise.resolve()
 
-      // The desktop's own drag keeps its button.
       expect(mouseTypes(wc)).toEqual(['mousePressed', 'mouseReleased', 'mousePressed'])
     })
 
@@ -408,7 +443,7 @@ describe('AgentBrowserBridge under a host revocation', () => {
       })
       webContentsFromIdMock.mockReturnValue(wc)
 
-      // The press landed before the revocation, so the command itself succeeds.
+      // The press landed before revocation, so the command succeeds.
       await hostCommand(host, () => bridge.mouseDown('left', undefined, 'tab-1'))
       await bridge.mouseMove(1, 2, undefined, 'tab-1')
 
@@ -491,5 +526,28 @@ describe('AgentBrowserBridge under a host revocation', () => {
     await runInRemoteCliBrowserScope(WORKSPACE, () => bridge.click('@e1', undefined, 'tab-1'))
 
     expect(startedInHostScope).toBe(false)
+  })
+
+  it('never reports the URL or title of a desktop page a snapshot ended up on', async () => {
+    let admitted = true
+    answerAgentBrowserCommands(execFileMock, stdinWrites, (command, cb) => {
+      if (command[0] === 'snapshot') {
+        // The page navigates to a desktop-local document while agent-browser answers.
+        admitted = false
+      }
+      cb(null, JSON.stringify({ success: true, data: { snapshot: 'tree' } }), '')
+    })
+    webContentsFromIdMock.mockReturnValue(
+      mockWebContents(100, 'file:///Users/me/notes.txt', 'notes')
+    )
+
+    await expect(
+      runInRemoteCliBrowserScope(
+        WORKSPACE,
+        () => bridge.snapshot(undefined, 'tab-1'),
+        undefined,
+        () => admitted
+      )
+    ).rejects.toMatchObject({ code: 'desktop_browser_bridge_unrouted' })
   })
 })

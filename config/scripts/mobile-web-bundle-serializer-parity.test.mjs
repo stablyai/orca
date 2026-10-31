@@ -1,10 +1,5 @@
-/**
- * The canonical serialization that buildId hashes exists three times, because the two packaging
- * scripts run on bare node before any build output exists and so cannot import the TypeScript
- * contract. Three copies drift; this is what stops them. A divergence in any one of them would
- * reject every honest bundle at packaging, or ship a bundle whose id the phone recomputes
- * differently and re-downloads forever.
- */
+// Bare-Node packaging cannot import prebuild TS contract, leaving three serializers that must remain byte-identical.
+// Drift rejects valid bundle or makes phone recompute different ID and download indefinitely.
 import { createHash } from 'node:crypto'
 import { createRequire } from 'node:module'
 import { describe, expect, it } from 'vitest'
@@ -23,11 +18,7 @@ const { serializeAssets: serializeInGuard } = require('./verify-packaged-mobile-
 
 const digest = (hex) => `${hex}`.padStart(64, '0')
 
-/**
- * Mixed content types, a nested path, and an uppercase segment that sorts before a lowercase one
- * only under code-unit order: `localeCompare` would put `assets/aQ.js` first, so any serializer
- * that reached for it produces a different string here.
- */
+// Mixed types/nested paths and uppercase ordering expose localeCompare drift from canonical code-unit sort.
 const ASSETS = [
   {
     path: 'assets/Za.js',
@@ -86,15 +77,14 @@ describe('the three mobile web bundle serializers', () => {
   it('emit exactly path, sha256, byteLength, contentType, in that order, and nothing else', () => {
     const decorated = ASSETS.map((asset) => ({ ...asset, sourcePath: '/tmp/ignored', extra: 1 }))
 
-    expect(serializeInContract(decorated)).toBe(serializeInContract(ASSETS))
-    expect(serializeInBuilder(decorated)).toBe(serializeInContract(ASSETS))
-    expect(serializeInGuard(decorated)).toBe(serializeInContract(ASSETS))
-    expect(JSON.parse(serializeInContract(ASSETS))[0]).toEqual({
-      path: 'assets/Za.js',
-      sha256: digest('a1'),
-      byteLength: 2048,
-      contentType: 'text/javascript; charset=utf-8'
-    })
+    const expected =
+      '[{"path":"assets/Za.js","sha256":"00000000000000000000000000000000000000000000000000000000000000a1","byteLength":2048,"contentType":"text/javascript; charset=utf-8"},' +
+      '{"path":"assets/aQ.css","sha256":"00000000000000000000000000000000000000000000000000000000000000b2","byteLength":512,"contentType":"text/css"},' +
+      '{"path":"assets/nested/mark.png","sha256":"00000000000000000000000000000000000000000000000000000000000000c3","byteLength":40960,"contentType":"image/png"},' +
+      '{"path":"index.html","sha256":"00000000000000000000000000000000000000000000000000000000000000d4","byteLength":640,"contentType":"text/html; charset=utf-8"}]'
+    for (const serialize of [serializeInContract, serializeInBuilder, serializeInGuard]) {
+      expect(serialize(decorated)).toBe(expected)
+    }
   })
 
   it('hash to one buildId, which the manifest schema then accepts', () => {
@@ -112,7 +102,6 @@ describe('the three mobile web bundle serializers', () => {
       entrypoint: 'index.html',
       totalBytes: ASSETS.reduce((total, asset) => total + asset.byteLength, 0),
       assets: [...ASSETS],
-      // Outside the hash on purpose, which the assertion below is what says.
       routes: [{ pathname: '/h/[hostId]', grants: ['navigate'] }]
     }
 

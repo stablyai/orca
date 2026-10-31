@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { acpNotificationEnvelopeSchema } from '../acp-context-usage'
-import type { AcpDialect, AcpDialectNotification } from './acp-dialect'
+import type { AcpDialect, AcpDialectNotification, AcpHookBlock } from './acp-dialect'
 import { grokRequest, grokSettleRequest } from './grok-requests'
 import { grokBackgroundTaskNotification, grokToolBackgroundTasks } from './grok-background-tasks'
 import { grokModelEfforts } from './grok-model-catalog'
@@ -32,8 +32,11 @@ const promptCompleteSchema = z.looseObject({
   stopReason: z.string(),
   agentResult: z.string().nullish()
 })
+const hookDeniedSchema = z.looseObject({
+  cancellationCategory: z.literal('HookDenied'),
+  cancellationContext: z.looseObject({ reason: z.string().optional() }).nullish()
+})
 const promptErrorDataSchema = z.looseObject({ message: z.string() })
-/** Grok writes its result text as the failure's reason only for these ends. */
 const FAILED_STOP_REASONS = ['error', 'rate_limit']
 const SESSION_NOTIFICATIONS = ['x.ai/session_notification', 'x.ai/session/update']
 
@@ -74,14 +77,24 @@ function contextWindow(models: unknown): number | undefined {
   )
 }
 
+// Grok reports hook denial as cancellation with a verdict in _meta.
+function hookBlock(meta: unknown): AcpHookBlock | undefined {
+  const parsed = hookDeniedSchema.safeParse(meta)
+  const reason = parsed.data?.cancellationContext?.reason?.trim()
+  return parsed.success ? (reason ? { reason } : {}) : undefined
+}
+
 function completionEnd(
-  completion: z.infer<typeof completionSchema>
+  completion: z.infer<typeof completionSchema>,
+  meta: unknown
 ): NonNullable<Extract<AcpDialectNotification, { disposition: 'map' }>['end']> {
   const detail = failureDetail(completion.stop_reason, completion.agent_result)
+  const blocked = hookBlock(meta)
   return {
     stopReason: completion.stop_reason,
     durationMs: completion.elapsed_ms,
-    ...(detail ? { failureDetail: detail } : {})
+    ...(detail ? { failureDetail: detail } : {}),
+    ...(blocked ? { hookBlock: blocked } : {})
   }
 }
 
@@ -119,7 +132,7 @@ function notification(
       : { disposition: 'map', usage: { window: { tokens, capturedAt: at } } }
   }
   if (canonical === 'x.ai/session/prompt_complete') {
-    // A copy of the turn's end; only its failure reason is read, in case the end carried none.
+    // Duplicate turn endings may supply a missing failure reason.
     const parsed = promptCompleteSchema.safeParse(params)
     const detail = parsed.success
       ? failureDetail(parsed.data.stopReason, parsed.data.agentResult)
@@ -153,7 +166,7 @@ function notification(
   const meta = turnMetaSchema.safeParse(envelope._meta)
   const completion = completionSchema.safeParse(envelope.update)
   const response = responseSchema.safeParse(envelope.update)
-  // Only a retry Grok gave up on is read; it names no turn, so it joins the one running.
+  // Exhausted retries have no turn ID; attach their failure to the running turn.
   const retry = retrySchema.safeParse(envelope.update)
   const retryFailure =
     retry.success && retry.data.type === 'failed' && retry.data.message?.trim()
@@ -172,7 +185,7 @@ function notification(
     ...(turn === undefined ? {} : { turn }),
     ...(meta.success && meta.data.turnStartMs !== undefined ? { at: meta.data.turnStartMs } : {}),
     replay: envelope._meta?.isReplay === true,
-    ...(completion.success ? { end: completionEnd(completion.data) } : {}),
+    ...(completion.success ? { end: completionEnd(completion.data, envelope._meta) } : {}),
     ...(retryFailure ? { failureDetail: retryFailure } : {}),
     ...(response.success
       ? {
@@ -207,8 +220,13 @@ export const GROK_ACP_DIALECT: AcpDialect = {
   toolSubagents: grokToolSubagents,
   subagentSessionEnd,
   notification,
+  textTaskCompletion: (method, params) =>
+    method.replace(/^_/, '') === 'x.ai/session/prompt_complete'
+      ? promptCompleteSchema.safeParse(params).data
+      : undefined,
   contextWindow,
   modelEfforts: grokModelEfforts,
+  hookBlock,
   promptErrorDetail: (error) => promptErrorDataSchema.safeParse(error.data).data?.message,
   failedTurnText: () => 'Grok ended this turn with an error.'
 }

@@ -9,9 +9,11 @@ import { formatTabList, formatTabListWithProfiles, formatTabShow, printResult } 
 import {
   getOptionalNonNegativeIntegerFlag,
   getOptionalStringFlag,
+  getPresentStringFlag,
   getRequiredStringFlag
 } from '../flags'
 import { RuntimeClientError } from '../runtime-client'
+import { isBrowserTabSplitDirection } from '../../shared/browser-tab-split-direction'
 import { getBrowserCommandTarget, getBrowserWorktreeSelector } from '../selectors'
 
 export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
@@ -49,15 +51,9 @@ export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
     if (index === undefined && !page) {
       throw new RuntimeClientError('invalid_argument', 'Missing required --index or --page')
     }
-    // Why: a stable browser page id is globally unique across Orca, so page-
-    // targeted tab switches should match the rest of the --page command model:
-    // global by default, with --worktree only acting as explicit validation.
+    // Page ids are globally unique; worktree is optional validation rather than an implicit filter.
     const target = await getBrowserCommandTarget(flags, cwd, client)
-    // Why: --focus is an opt-in side effect. The renderer's handler is
-    // worktree-scoped: it surfaces the browser pane only when the user is
-    // already on the targeted worktree, otherwise it pre-stages silently.
-    // Spread conditionally so the RPC payload stays shape-identical to the
-    // pre-flag form when --focus is absent.
+    // Focus surfaces the pane only in the current worktree; otherwise the renderer pre-stages it.
     const result = await client.call<BrowserTabSwitchResult>('browser.tabSwitch', {
       index,
       page,
@@ -69,10 +65,22 @@ export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
   'tab create': async ({ flags, client, cwd, json }) => {
     const url = getOptionalStringFlag(flags, 'url')
     const profileId = getOptionalStringFlag(flags, 'profile')
+    const split = getPresentStringFlag(flags, 'split')
+    if (split !== undefined && !isBrowserTabSplitDirection(split)) {
+      throw new RuntimeClientError('invalid_argument', '--split must be right, left, down, or up')
+    }
     const worktree = await getBrowserWorktreeSelector(flags, cwd, client)
+    // Why the caller's tab: the split should sit beside the terminal that ran the command, not
+    // wherever the user last clicked. Spread conditionally so a plain create keeps its old payload.
+    const callerTabId = process.env.ORCA_TAB_ID
     const result = await client.call<{ browserPageId: string }>(
       'browser.tabCreate',
-      { url, worktree, profileId },
+      {
+        url,
+        worktree,
+        profileId,
+        ...(split ? { split, ...(callerTabId ? { splitFromTabId: callerTabId } : {}) } : {})
+      },
       { timeoutMs: 60_000 }
     )
     printResult(result, json, (v) => `Created tab ${v.browserPageId}`)

@@ -127,7 +127,6 @@ describe('reserve placer', () => {
     placer.pick(cells, 'us-central1', new Set())
     now.value = 1_000
     cells[0]!.polledAt = 1_000
-    // Two of this director's own bookings fill the estimated ceiling.
     void placer.place({ cells, region: 'us-central1', epoch: 1, reserve: async () => ({ outcome: 'ok' }) })
     void placer.place({ cells, region: 'us-central1', epoch: 1, reserve: async () => ({ outcome: 'ok' }) })
     expect(placer.pick(cells, 'us-central1', new Set())).toBeNull()

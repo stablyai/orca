@@ -1,31 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   _resetLayoutOwnerPaneIntentsForTests,
-  expectPaneToAppear,
   expectPaneToClose,
-  expectTabRowFields,
   holdTabPaneTree,
   isTabPaneTreeHeld,
   onTabPaneTreeRedraw,
-  panesLeftAfterPendingCloses,
   requestTabPaneTreeRedraw,
-  takePaneAppearIntent,
-  takePaneCloseIntent,
-  takeTabRowFields
+  takePaneCloseIntent
 } from './layout-owner-pane-intents'
-
-const telemetry = { source: 'keyboard', direction: 'vertical' } as const
 
 describe('layout-owner pane intents', () => {
   beforeEach(() => _resetLayoutOwnerPaneIntentsForTests())
 
   it('hands an intent out once, and only for its own tab', () => {
-    expectPaneToAppear('leaf-new', { tabId: 'tab-1', cwd: '/repo', telemetry })
     expectPaneToClose('tab-1', 'leaf-old', 'user')
 
-    expect(takePaneAppearIntent('tab-2', 'leaf-new')).toBeNull()
-    expect(takePaneAppearIntent('tab-1', 'leaf-new')).toMatchObject({ cwd: '/repo' })
-    expect(takePaneAppearIntent('tab-1', 'leaf-new')).toBeNull()
     expect(takePaneCloseIntent('tab-2', 'leaf-old')).toBeNull()
     expect(takePaneCloseIntent('tab-1', 'leaf-old')).toBe('user')
     expect(takePaneCloseIntent('tab-1', 'leaf-old')).toBeNull()
@@ -42,21 +31,11 @@ describe('layout-owner pane intents', () => {
 
   it('keeps only the newest intents', () => {
     for (let index = 0; index < 65; index += 1) {
-      expectPaneToAppear(`leaf-${index}`, { tabId: 'tab-1', telemetry })
+      expectPaneToClose('tab-1', `leaf-${index}`, 'exit')
     }
 
-    expect(takePaneAppearIntent('tab-1', 'leaf-0')).toBeNull()
-    expect(takePaneAppearIntent('tab-1', 'leaf-64')).not.toBeNull()
-  })
-
-  it('hands out a new row’s fields once, until released', () => {
-    const release = expectTabRowFields('tab-1', { pendingActivationSpawn: true })
-    expect(takeTabRowFields('tab-1')).toEqual({ pendingActivationSpawn: true })
-    expect(takeTabRowFields('tab-1')).toBeNull()
-
-    expectTabRowFields('tab-2', { pendingActivationSpawn: true })
-    release()
-    expect(takeTabRowFields('tab-2')).toEqual({ pendingActivationSpawn: true })
+    expect(takePaneCloseIntent('tab-1', 'leaf-0')).toBeNull()
+    expect(takePaneCloseIntent('tab-1', 'leaf-64')).toBe('exit')
   })
 
   it('holds a tab until its last hold is released, then tells the listener once', () => {
@@ -76,12 +55,5 @@ describe('layout-owner pane intents', () => {
 
     requestTabPaneTreeRedraw('tab-2')
     expect(listener).toHaveBeenLastCalledWith('tab-2')
-  })
-
-  it('counts the panes no pending close of this tab takes', () => {
-    expectPaneToClose('tab-1', 'a', 'exit')
-    expectPaneToClose('tab-2', 'b', 'user')
-
-    expect(panesLeftAfterPendingCloses('tab-1', ['a', 'b', 'c'])).toBe(2)
   })
 })

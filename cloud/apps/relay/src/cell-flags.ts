@@ -21,6 +21,8 @@ export type CellFlags = {
   reregisterInFlight?: number
   // Step 6: `memory` resumes paired phones from one device read; it acts only in reserve mode.
   phonePath: 'db' | 'memory'
+  // Reserve cells the dead-man may hold in db at once, fleet-wide; absent trips with no limit.
+  deadManTripSlots?: number
 }
 
 export const CELL_FLAG_DEFAULTS: CellFlags = {
@@ -56,7 +58,8 @@ const CellFlagsSchema = z.object({
   intakePerSec: z.number().positive().max(1_000).optional(),
   reserveDryRun: z.boolean().default(CELL_FLAG_DEFAULTS.reserveDryRun),
   reregisterInFlight: z.number().int().min(1).max(16).optional(),
-  phonePath: z.enum(['db', 'memory']).default(CELL_FLAG_DEFAULTS.phonePath)
+  phonePath: z.enum(['db', 'memory']).default(CELL_FLAG_DEFAULTS.phonePath),
+  deadManTripSlots: z.number().int().min(0).max(64).optional()
 })
 const KNOWN_FLAG_KEYS = new Set(Object.keys(CellFlagsSchema.shape))
 
@@ -68,19 +71,23 @@ export type SupportedCellFlag =
 // Parsed, never offered: ticketCheck=enforce has no step that turns it on yet.
 const UNOFFERED_FLAG_VALUES: Record<string, string[]> = { ticketCheck: ['enforce'] }
 
-// What this image accepts, read from the schema itself: the flag tool refuses a key or value
-// the cell would drop or void before it writes.
+// Derive supported flags from schema so tooling refuses values the cell would drop or invalidate before writing.
 export function supportedCellFlags(): Record<string, SupportedCellFlag> {
   const supported: Record<string, SupportedCellFlag> = {}
   for (const [key, field] of Object.entries(CellFlagsSchema.shape)) {
-    let inner: z.ZodTypeAny = field
+    let inner: z.core.$ZodType = field
     while (inner instanceof z.ZodDefault || inner instanceof z.ZodOptional) {
       inner = inner instanceof z.ZodDefault ? inner.removeDefault() : inner.unwrap()
     }
     if (inner instanceof z.ZodBoolean) supported[key] = { type: 'boolean' }
     else if (inner instanceof z.ZodEnum) {
       const unoffered = UNOFFERED_FLAG_VALUES[key] ?? []
-      supported[key] = { type: 'enum', values: inner.options.filter((value: string) => !unoffered.includes(value)) }
+      supported[key] = {
+        type: 'enum',
+        values: inner.options.filter(
+          (value): value is string => typeof value === 'string' && !unoffered.includes(value)
+        )
+      }
     }
     else if (inner instanceof z.ZodNumber) {
       supported[key] = {

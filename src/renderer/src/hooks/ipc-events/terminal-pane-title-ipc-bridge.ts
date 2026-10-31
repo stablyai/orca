@@ -34,7 +34,6 @@ function showRuntimePaneTitle(tabId: string, leafId: string, title: string | nul
   window.dispatchEvent(new CustomEvent(SET_TERMINAL_PANE_TITLE_EVENT, { detail }))
 }
 
-/** Applies main's title for one pane; the tab's own name is never touched. */
 export function applyRuntimePaneTitle({ tabId, leafId, title }: SetTerminalPaneTitleDetail): void {
   const store = useAppStore.getState()
   const layout = store.terminalLayoutsByTabId[tabId]
@@ -51,14 +50,13 @@ export function applyRuntimePaneTitle({ tabId, leafId, title }: SetTerminalPaneT
   }
   const show = (): void => showRuntimePaneTitle(tabId, leafId, normalizedTitle)
   const worktreeId = findTerminalTabWorktreeId(store.tabsByWorktree, tabId)
-  // Switch point: a main-owned layout takes the rename first, as the GUI's rename does.
   if (
     ORCA_LAYOUT_OWNER_IS_MAIN &&
     worktreeId &&
     sendLayoutCommandToOwner(
       worktreeId,
       { type: 'renamePane', tabId, leafId, title: normalizedTitle },
-      { apply: show, asToday: show }
+      { apply: () => {}, asToday: show }
     )
   ) {
     return

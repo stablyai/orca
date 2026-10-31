@@ -3,9 +3,9 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   guardSupervisedProviderGroup,
   sweepOrphanedProviderGroup,
-  type ProcessRowRead,
   type ProviderGroupSweepVerdict
 } from './provider-group-orphan-guard'
+import type { ProcessRowRead } from './provider-process-row-read'
 
 const STARTED = 'Mon Oct 19 10:00:00 2026'
 const identity = { pgid: 4242, startedAt: STARTED }
@@ -236,6 +236,27 @@ describe('guardSupervisedProviderGroup', () => {
     child.emit('exit', null, 'SIGKILL')
     await expect(swept).resolves.toBe('unproven')
     expect(signalGroup).not.toHaveBeenCalled()
+  })
+
+  it('stops waiting out the start second as soon as the supervisor exits', async () => {
+    const child = new FakeSupervisor()
+    const readProcessRow = vi.fn(async () => row({ ppid: 777 }))
+    const swept = new Promise((resolve) =>
+      guardSupervisedProviderGroup(child, {
+        site: 'test',
+        supervised: true,
+        readProcessRow,
+        now: () => Date.parse(STARTED) + 100,
+        onSwept: resolve
+      })
+    )
+    child.report({ pgid: 4242 })
+    await vi.waitFor(() => expect(readProcessRow).toHaveBeenCalledTimes(1))
+    const exitedAt = performance.now()
+    child.emit('exit', null, 'SIGKILL')
+    await expect(swept).resolves.toBe('unproven')
+    expect(performance.now() - exitedAt).toBeLessThan(500)
+    expect(readProcessRow).toHaveBeenCalledTimes(1)
   })
 
   it('warns once and watches nothing for a supervised spawn without the report channel', () => {

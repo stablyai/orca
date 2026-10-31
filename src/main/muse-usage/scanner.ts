@@ -52,7 +52,7 @@ async function statSessionLog(ref: MuseSessionLogRef): Promise<MuseSessionLogInf
     const fileStat = await stat(ref.path)
     return fileStat.isFile() ? { ...ref, mtimeMs: fileStat.mtimeMs, size: fileStat.size } : null
   } catch {
-    // Session dirs exist before their first log write, and `--no-session-log` never writes one.
+    // Session directories may precede logs or use --no-session-log.
     return null
   }
 }
@@ -69,11 +69,10 @@ export async function parseMuseUsageFile(
   const ownedEventKeys = new Set<string>()
   const occurrencesByContentKey = new Map<string, number>()
   let hasDeferredClaims = false
-  // A partial tail line fails JSON.parse; the size change makes the next scan reparse it.
+  // A later size change reparses incomplete JSON tail lines.
   for await (const { line } of readJsonlLinesFromOffset(input.info.path, 0)) {
     for (const parsed of parseMuseUsageLine(line, context)) {
-      // Why: distinct records in one log can share content; the ordinal keeps them apart
-      // while a fork's copy of the same sequence still maps onto identical keys.
+      // Ordinals distinguish identical records within one log while preserving fork-copy deduplication.
       const occurrence = occurrencesByContentKey.get(parsed.eventKey) ?? 0
       occurrencesByContentKey.set(parsed.eventKey, occurrence + 1)
       const eventKey = `${parsed.eventKey}#${occurrence}`
@@ -126,7 +125,7 @@ export async function scanMuseUsageFiles(
   }
 
   const currentPaths = new Set(logs.map((log) => log.path))
-  // Why: a deleted owner leaves its events unowned; only files that deferred to it must reclaim.
+  // Deleted owners free claims; reparse only files that previously deferred to them.
   const lostOwnerPath = previousProcessedFiles.some(
     (file) => !currentPaths.has(file.path) && file.ownedEventKeys.length > 0
   )
@@ -152,7 +151,7 @@ export async function scanMuseUsageFiles(
       previous.size === log.size
     )
   }
-  // Retained claims register before any parse so a reparsed file cannot steal them.
+  // Register retained ownership before reparsing so other files cannot steal claims.
   for (const log of logs) {
     if (isStatUnchanged(log)) {
       for (const eventKey of previousByPath.get(log.path)?.ownedEventKeys ?? []) {
@@ -167,14 +166,13 @@ export async function scanMuseUsageFiles(
   const cwdBySession = new Map<string, string | null>()
   let parsedCount = 0
 
-  // Why: subagent logs carry no workspace, so parents resolve first and lend theirs.
+  // Resolve parents first: subagent logs omit workspace context.
   for (const pass of [false, true]) {
     const passLogs = logs.filter((log) => log.isSubagent === pass)
     const toParse: { log: MuseSessionLogInfo; inheritedCwd: string | null }[] = []
     for (const log of passLogs) {
       const inheritedCwd = log.isSubagent ? (cwdBySession.get(log.sessionId) ?? null) : null
       const previous = previousByPath.get(log.path)
-      // Why: only live sessions grow, so a refresh pays one stat per finished log.
       if (previous && isStatUnchanged(log) && previous.inheritedCwd === inheritedCwd) {
         processedByPath.set(log.path, previous)
       } else {
@@ -195,7 +193,7 @@ export async function scanMuseUsageFiles(
           })
         )
       } catch {
-        // Unreadable or vanished mid-scan; the next scan retries it.
+        // Retry vanished or unreadable logs on the next scan.
       }
       onFilesScanned?.(1)
       parsedCount++

@@ -183,14 +183,9 @@ describe('bulk git helpers', () => {
         ':(literal)docs',
         ':(literal)scratch'
       ],
-      {
-        cwd: '/repo',
-        // Why: this read buffers, so it fences the WSL login shell's rc banner off its first NUL record.
-        captureWslLoginShellOutput: true
-      }
+      { cwd: '/repo' }
     )
-    // Why: a pathspec is tracked if git reports either the exact path or a
-    // tracked descendant, which keeps directory pathspecs on the restore path.
+    // A tracked descendant keeps directory pathspecs on the restore path.
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
       2,
       ['restore', '--worktree', '--pathspec-from-file=-', '--pathspec-file-nul'],

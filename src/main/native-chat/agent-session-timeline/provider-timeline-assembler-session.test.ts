@@ -49,7 +49,6 @@ describe('provider timeline session end', () => {
     expect((await rig.row(providerItemId('request', 'perm-1')))?.body).toMatchObject({
       resolution: { state: 'cancelled', selectedOptionId: null }
     })
-    // A stream cut off keeps the text it received.
     const messages = (await rig.rows()).filter((row) => row.body.kind === 'message')
     expect(messages.map((row) => row.body)).toEqual([
       { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Half' }] }
@@ -76,7 +75,7 @@ describe('provider timeline session end', () => {
       type: 'session.ended',
       verdict: { state: 'interrupted', completedAt: 2_000 }
     })
-    // A straggler from the dead child must not open a turn nothing would close.
+    // Dead-child events must not create work no one can settle.
     expect(rig.assembler.apply({ type: 'turn.open', at: 2_500 }).dropped).toBe('session-ended')
     expect(
       rig.assembler.apply({ type: 'item.open', item: 'call-a', body: runningTool('read') }).dropped
@@ -117,7 +116,7 @@ describe('provider timeline requests', () => {
     if (!identity) {
       throw new Error('request key did not parse')
     }
-    // The answer path's compare-and-set wins on another device and writes the row resolved.
+    // Simulate another device winning the answer CAS.
     rig.journal.appendItem(
       identity,
       {
@@ -142,7 +141,6 @@ describe('provider timeline requests', () => {
     rig.assembler.apply({ type: 'turn.open', turn: 'turn-1', at: 1_000 })
     rig.assembler.apply({ type: 'request.open', request: 'perm-1', body: approval })
     rig.assembler.apply({ type: 'request.withdrawn', request: 'perm-1' })
-    // The journal holds the row it withdrew: a repeat is admitted and finds nothing pending.
     expect(rig.assembler.apply({ type: 'request.withdrawn', request: 'perm-1' })).toEqual({
       admission: { accepted: true }
     })

@@ -1,6 +1,6 @@
+import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
 import '../unused-default-rpc-methods.test-fixture'
-// The create route's pre-commit boundary: a failure before `attach` must reach the client as a
-// refusal it can classify, and a failure at or after `attach` must not.
+// Before attach, classify no-effects refusal; at/after attach, failure cannot prove no session exists.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
@@ -81,9 +81,8 @@ async function create(
 ): Promise<RpcResponse> {
   const runtime = {
     getRuntimeId: () => 'runtime-1',
-    // The structured surface is settings-gated for every caller; these fixtures probe the
-    // pre-commit boundary, which only runs once the gate admits the call.
-    getClientSettings: () => ({ experimentalNativeChat: true }),
+    // Fixtures pass capability admission so they exercise the pre-commit refusal boundary.
+    getClientSettings: () => ({ nativeChatProviders: EVERY_AGENT_CHAT }),
     registerSubscriptionCleanup: vi.fn(),
     cleanupSubscription: vi.fn(),
     cleanupSubscriptionsByPrefix: vi.fn(),

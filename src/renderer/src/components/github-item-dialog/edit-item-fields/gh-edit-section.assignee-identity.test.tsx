@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { GitHubItemDialogProjectOrigin } from '../load-item-details/github-item-dialog-types'
 import { GHEditSection } from './gh-edit-section'
-import { resetTaskPageGitHubMutationRegistryForTests } from '@/components/task-page-github-work-item-mutation-registry'
+import { resetTaskPageGitHubMutationRegistryForTests } from '@/components/task-page/github/task-page-github-work-item-mutation-registry'
 
 const mocks = vi.hoisted(() => ({
   update: vi.fn(),

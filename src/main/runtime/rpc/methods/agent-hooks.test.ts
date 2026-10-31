@@ -33,11 +33,14 @@ function prepareMethod() {
 }
 
 function runtimeWithSettings(enabled = true, disabledTuiAgents: string[] = []): OrcaRuntimeService {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook handler reads only requireStore/getSettings from this runtime fixture.
   return {
-    getClientSettings: vi.fn(() => ({
-      agentStatusHooksEnabled: enabled,
-      disabledTuiAgents
-    }))
+    requireStore: () => ({
+      getSettings: () => ({
+        agentStatusHooksEnabled: enabled,
+        disabledTuiAgents
+      })
+    })
   } as unknown as OrcaRuntimeService
 }
 

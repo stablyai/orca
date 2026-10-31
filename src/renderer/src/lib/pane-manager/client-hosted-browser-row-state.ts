@@ -4,15 +4,7 @@ import type {
   ClientHostedBrowserRowsEvent
 } from '../../../../shared/client-hosted-browser-rows'
 
-/**
- * Rows for browser pages that render on a paired CLIENT desktop, held for the HOST's own UI.
- *
- * Module-level and derived on purpose. The host's tab model — `unifiedTabsByWorktree`,
- * `browserTabsByWorktree`, `browserPagesByWorkspace` — is both the persisted workspace session and
- * the source of the runtime window graph, so a row placed there would be written to disk and
- * round-tripped back as a host-owned local tab on the next launch. These rows own no page and must
- * not survive the process, so they never enter the store at all.
- */
+/** Host UI placeholders for pages rendered on paired clients own no page. Keep derived module state outside persisted tab/browser stores or restart/runtime projection would resurrect them as host-local tabs. */
 
 export type ClientHostedBrowserRowSelection = {
   worktreeId: string
@@ -103,8 +95,7 @@ export function selectClientHostedBrowserRow(next: ClientHostedBrowserRowSelecti
   notifyChange()
 }
 
-// Why: called from every other row's activation. Cheap no-op guard so a plain tab click does not
-// version-bump this store and re-render every strip that reads it.
+// Plain tab activation is a no-op here; avoid version bumps/rerenders across every strip.
 export function clearClientHostedBrowserRowSelection(): void {
   if (!selection) {
     return
@@ -122,11 +113,7 @@ export function useClientHostedBrowserRowSelection(): ClientHostedBrowserRowSele
   return selection
 }
 
-/**
- * A selection survives only while its group still shows the tab it was picked over. Activating
- * anything else in that group — by click, keyboard, or command palette — moves `activeTabId` and
- * retires the placeholder without every one of those paths having to know it exists.
- */
+/** Expire selection when the underlying group’s active tab changes, regardless of click/keyboard/palette source. */
 export function isClientHostedBrowserRowSelectionLive(
   candidate: ClientHostedBrowserRowSelection | null,
   groups: readonly { id: string; activeTabId?: string | null }[]
@@ -146,14 +133,7 @@ export type ClientHostedBrowserRowStripScope = {
   groupActiveTabId: string | null
 }
 
-/**
- * Which row — if any — owns a strip's active styling.
- *
- * The strip's two halves are painted by different code (real tabs from the group's `activeTabId`,
- * trailing rows from this store) and neither can see the other's answer, so both ask this instead:
- * a non-null id means every real tab renders inactive, and null means no row does. One value, so
- * the strip cannot show two active tabs at once.
- */
+/** Share active-style ownership across real tabs and trailing placeholder rows so both cannot appear selected. */
 export function resolveActiveClientHostedBrowserRowId(
   candidate: ClientHostedBrowserRowSelection | null,
   scope: ClientHostedBrowserRowStripScope
@@ -172,8 +152,7 @@ export function useActiveClientHostedBrowserRowId(
   scope: ClientHostedBrowserRowStripScope
 ): string | null {
   const { worktreeId, groupId, groupActiveTabId } = scope
-  // Why snapshot the derived id and not the selection: every strip subscribes, so a row title or
-  // loading push must not re-render strips whose active state did not move.
+  // Subscribe to the derived active ID so title/loading pushes do not rerender unrelated strips.
   const getActiveRowId = useCallback(
     () =>
       resolveActiveClientHostedBrowserRowId(selection, { worktreeId, groupId, groupActiveTabId }),

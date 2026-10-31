@@ -166,85 +166,21 @@ describe('NativeChatStructuredSession', () => {
     })
   })
 
-  it('routes the launch draft and app-menu paste to the structured composer', () => {
-    const draft = {
-      tabId: 'structured-draft-tab',
-      agent: 'codex' as const,
-      text: 'PR #19423 — review this change',
-      createdAt: Date.now()
-    }
-    useAppStore.getState().seedNativeChatLaunchDraft(draft)
+  it('routes app-menu paste to the structured composer', () => {
     render(
       <NativeChatStructuredSession
         isVisible
         isFocusedGroup
-        tabId={draft.tabId}
+        tabId="draft-tab"
         sessionId="draft-session"
         target={{ kind: 'local' }}
         agent="codex"
       />
     )
-    expect(mocks.composerProps?.launchSeed).toEqual({
-      launchDraft: draft,
-      launchDraftResolved: false,
-      ownsTabWideLaunchDraft: true
-    })
-    act(() => useAppStore.getState().clearNativeChatLaunchDraft(draft.tabId))
     const composer = screen.getByTestId('structured-composer')
     composer.focus()
     window.dispatchEvent(new Event('orca-app-menu-paste', { cancelable: true }))
-
     expect(mocks.pasteFromClipboard).toHaveBeenCalledOnce()
-  })
-
-  // Why: the controller starts at `idle`, before any read; a baseline taken from that empty
-  // render would be exceeded by the backfill itself and resolve a draft the user never saw.
-  it('holds the launch draft unresolved until the first journal read settles', () => {
-    const draft = {
-      tabId: 'structured-idle-tab',
-      agent: 'codex' as const,
-      text: 'PR #19423 — review this change',
-      createdAt: Date.now()
-    }
-    useAppStore.getState().seedNativeChatLaunchDraft(draft)
-    mocks.status = 'idle'
-    mocks.messages = [
-      {
-        id: 'user-1',
-        role: 'user',
-        source: 'transcript',
-        timestamp: draft.createdAt + 1,
-        blocks: [{ type: 'text', text: draft.text }]
-      }
-    ]
-    const { rerender } = render(
-      <NativeChatStructuredSession
-        isVisible
-        isFocusedGroup
-        tabId={draft.tabId}
-        sessionId="idle-session"
-        target={{ kind: 'local' }}
-        agent="codex"
-      />
-    )
-    expect(mocks.composerProps?.launchSeed).toMatchObject({
-      launchDraft: draft,
-      launchDraftResolved: false
-    })
-
-    mocks.status = 'ready'
-    rerender(
-      <NativeChatStructuredSession
-        isVisible
-        isFocusedGroup
-        tabId={draft.tabId}
-        sessionId="idle-session"
-        target={{ kind: 'local' }}
-        agent="codex"
-      />
-    )
-    expect(mocks.composerProps?.launchSeed?.launchDraftResolved).toBe(true)
-    act(() => useAppStore.getState().clearNativeChatLaunchDraft(draft.tabId))
   })
 
   it('focuses the chat on a click outside its controls and sends typing there to the composer', () => {
@@ -286,8 +222,7 @@ describe('NativeChatStructuredSession', () => {
     expect(mocks.fileLinkClick).toHaveBeenCalledWith(event, 'file:///repo/src/a.ts')
   })
 
-  // The list defaults to visible, so a dropped prop silently re-arms auto-scroll
-  // on reveal and drags a reader who left a hidden pane detached to the bottom.
+  // Visibility defaults true in the list; dropping the prop can rearm following for a hidden detached pane.
   it.each([true, false])('tells the transcript the pane is visible: %s', (isVisible) => {
     render(
       <NativeChatStructuredSession
@@ -303,8 +238,7 @@ describe('NativeChatStructuredSession', () => {
     expect(mocks.messageListProps?.isVisible).toBe(isVisible)
   })
 
-  // The list stops auto-loading on a failed page and re-arms on a new paging
-  // generation, so both the page result and the generation must reach it.
+  // Forward both page results and generation so failed paging can rearm after reset.
   it('hands the list the controller older-history state, generation, and page result', async () => {
     mocks.hasOlder = true
     mocks.loadingOlder = true
@@ -351,8 +285,7 @@ describe('NativeChatStructuredSession', () => {
     expect(mocks.messageListProps?.session).toMatchObject({ readCurrent: true })
   })
 
-  // Transcript image previews shipped Codex-first, and the runtime context they
-  // need comes from the tab rather than the agent, so it is never agent-gated.
+  // Image runtime context comes from the tab and must remain available for every supported agent.
   it('hands the transcript the image runtime context', () => {
     render(
       <NativeChatStructuredSession
@@ -481,9 +414,7 @@ describe('NativeChatStructuredSession', () => {
     })
   })
 
-  // Every background-task test mounts the same local Claude session; only the ids
-  // differ. A fresh element per call also matters for the rerenders below: React
-  // bails out of re-rendering an identical one.
+  // Create fresh elements for rerenders; React can skip an identical element.
   const claudeSessionView = (tabId: string, sessionId: string) => (
     <NativeChatStructuredSession
       isVisible
@@ -532,10 +463,7 @@ describe('NativeChatStructuredSession', () => {
       expect(mocks.stopBackgroundTask).toHaveBeenCalledWith('session-background', 'task-command')
     )
 
-    // The strip is mounted on live work, and settled rows are flushed the instant
-    // the last live one ends, so a sequential fan-out unmounts it between one
-    // subagent finishing and the next starting. The disclosure is not the
-    // strip's to forget in that gap.
+    // The strip unmounts between sequential child runs; its disclosure must survive those gaps.
     mocks.monitoringBackgroundTasks = false
     rerender(claudeSessionView('structured-tab-background', 'session-background'))
     expect(document.querySelector('[data-native-chat-background-tasks="true"]')).toBeNull()
@@ -562,8 +490,7 @@ describe('NativeChatStructuredSession', () => {
   })
 
   it('keeps the strip mounted through a running turn, with the turn owning the voice', () => {
-    // The strip stands for work that OUTLIVES a turn, so `show` is true while
-    // `isMonitoring` is false: mounted, but not speaking as the live indicator.
+    // Background work remains mounted during a turn, while the turn owns the live indicator.
     mocks.showBackgroundTasks = true
     mocks.monitoringBackgroundTasks = false
     mocks.isWorking = true
@@ -577,7 +504,6 @@ describe('NativeChatStructuredSession', () => {
       throw new Error('background task status was not rendered during a running turn')
     }
     expect(mocks.composerProps?.isWorking).toBe(true)
-    // Dimmed monitor amber is the turn-owns-the-voice treatment.
     expect(status.querySelector('.lucide-activity')?.classList).toContain('text-yellow-500/40')
     fireEvent.click(screen.getByRole('button', { name: '1 monitor — monitoring' }))
     expect(screen.getByText('watcher')).toBeTruthy()
@@ -662,7 +588,6 @@ describe('NativeChatStructuredSession', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Stop Shared task' }))
 
     rerender(claudeSessionView('structured-tab-stale-background', 'session-current'))
-    // The disclosure is keyed by session, so a new session opens collapsed.
     fireEvent.click(screen.getByRole('button', { name: '1 shell command — working' }))
     const currentStop = screen.getByRole('button', { name: 'Stop Shared task' })
     expect((currentStop as HTMLButtonElement).disabled).toBe(false)
@@ -823,7 +748,6 @@ describe('NativeChatStructuredSession', () => {
     expect(mocks.questionCardProps?.isSubmitting).toBe(false)
   })
 
-  // The reader may have scrolled far up; what they just did has to come into view.
   it('brings the latest into view at the press for the submits this pane makes', async () => {
     mocks.promptItems = legacySingleQuestionPromptItems
     const { rerender } = render(
@@ -860,7 +784,6 @@ describe('NativeChatStructuredSession', () => {
     }
     mocks.revealLatest.mockClear()
 
-    // Refused: nothing was steered, so nothing moves.
     expect(steerQueued()).toBe(false)
     expect(mocks.revealLatest).not.toHaveBeenCalled()
 

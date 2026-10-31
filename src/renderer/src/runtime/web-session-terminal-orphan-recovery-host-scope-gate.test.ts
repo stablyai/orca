@@ -10,18 +10,10 @@ import {
   recoverWebSessionTerminalOrphansBeforeApply
 } from './web-session-terminal-orphan-recovery'
 
-/**
- * The second consumer of `hostScopeCensusIsComplete`. Pruning here needs two consecutive
- * authoritative inventories that omit the surface, so an incomplete census must hold the binding
- * open indefinitely — and a peer runtime named in `omittedHostIds` must not be read as one, or
- * the ghost binding is retained forever (#18595).
- */
+/** Prune only after two authoritative absences; incomplete scope holds bindings. omittedHostIds peers are disclosure, not incomplete host coverage (#18595). */
 const LEAVES = [{ leafId: 'leaf-1', handle: 'term-ghost' }]
 
-/**
- * `listResult` substitutes a default scope when handed `undefined`, so the absent-scope case has
- * to drop the key itself — passing `undefined` through the fixture silently tests the default.
- */
+// Fixture defaults undefined scope; delete the key to actually test absence.
 async function recoverTwice(worktree: string, hostScope: Record<string, unknown> | null) {
   const state = makeState(worktree, LEAVES)
   const call = vi.fn(async ({ method }: { method: string }) => {
@@ -86,8 +78,7 @@ describe('orphan recovery reads the host scope as coverage owed, not as disclosu
     ])
   })
 
-  // Why: a host predating `hostScope` (v1.4.187) cannot say what it covered, and absence of the
-  // claim is never the claim.
+  // Pre-v1.4.187 hosts omit hostScope; no claim cannot prove complete coverage.
   it('retains the binding when the host is too old to publish a scope', async () => {
     const settled = await recoverTwice('repo::no-scope', null)
 

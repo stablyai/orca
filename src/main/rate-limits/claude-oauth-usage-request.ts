@@ -11,6 +11,7 @@ import { mapClaudeUsageWindow, type ClaudeUsageWindowInput } from './claude-usag
 import { abortedClaudeRateLimitResult } from './claude-usage-result'
 import {
   mapClaudeExtraUsage,
+  mapClaudeSpendLimitWindow,
   type ClaudeOAuthExtraUsage,
   type ClaudeOAuthSpend
 } from './claude-usage-credits'
@@ -101,11 +102,15 @@ export async function fetchClaudeOAuthUsage(
   if (signal?.aborted) {
     return abortedClaudeRateLimitResult()
   }
+  const session = mapClaudeUsageWindow(data.five_hour, 300)
+  const weekly = mapClaudeUsageWindow(data.seven_day, 10080)
   return {
     provider: 'claude',
-    session: mapClaudeUsageWindow(data.five_hour, 300),
-    weekly: mapClaudeUsageWindow(data.seven_day, 10080),
+    session,
+    weekly,
     fableWeekly: mapFableWeeklyWindow(data),
+    // Why only without plan windows: there, spend is overage after a cap, not the account's limit.
+    monthly: session || weekly ? null : mapClaudeSpendLimitWindow(data),
     extraUsage: mapClaudeExtraUsage(data),
     updatedAt: Date.now(),
     error: null,

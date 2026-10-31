@@ -5,6 +5,7 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { useAppStore } from '@/store'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { makeRepo, makeWorktree } from '../../../worktree-jump-palette-test-fixtures'
+import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { useSidebarWorktreeSortOrder } from './use-sort-order'
 
 vi.mock('../../../../../../shared/sidebar-inputs-switch', () => ({
@@ -19,6 +20,8 @@ vi.mock('@/lib/worktree-sort-order-persistence', () => ({
 const initialState = useAppStore.getInitialState()
 const repo = makeRepo()
 const repoMap = new Map([[repo.id, repo]])
+
+const identities = (...worktrees: Worktree[]): string[] => worktrees.map(getWorktreeHostIdentity)
 
 function setRows(worktrees: Worktree[]): void {
   act(() => {
@@ -38,11 +41,11 @@ describe('useSidebarWorktreeSortOrder with the switch on', () => {
     const b = makeWorktree(`${repo.id}::/b`, 'b', { repoId: repo.id, lastActivityAt: 1 })
     useAppStore.setState({ sortBy: 'smart', worktreesByRepo: { [repo.id]: [a, b] } })
     const { result } = renderHook(() => useSidebarWorktreeSortOrder({ repoMap, sortBy: 'smart' }))
-    expect(result.current).toEqual([a.id, b.id])
+    expect(result.current).toEqual(identities(a, b))
 
     const askingB: Worktree = { ...b, smartTier: 'needs-you', smartAt: 3 }
     setRows([a, askingB])
-    expect(result.current).toEqual([b.id, a.id])
+    expect(result.current).toEqual(identities(b, a))
     // The store keeps no settled epoch: a bump with a new row would settle it at once otherwise.
     const c = makeWorktree(`${repo.id}::/c`, 'c', { repoId: repo.id, lastActivityAt: 9 })
     act(() => {
@@ -52,7 +55,7 @@ describe('useSidebarWorktreeSortOrder with the switch on', () => {
       }))
     })
     expect(useAppStore.getState().settledSortEpoch).toBe(initialState.settledSortEpoch)
-    expect(result.current).toEqual([b.id, c.id, a.id])
+    expect(result.current).toEqual(identities(b, c, a))
     expect(persistOrder).not.toHaveBeenCalled()
   })
 
@@ -76,7 +79,7 @@ describe('useSidebarWorktreeSortOrder with the switch on', () => {
       { initialProps: { map: maps.before } }
     )
     const first = result.current
-    expect(first).toEqual([a.id, z.id])
+    expect(first).toEqual(identities(a, z))
     act(() => {
       useAppStore.setState({
         worktreesByRepo: { [repo.id]: [{ ...a, isUnread: true }], [other.id]: [z] }
@@ -84,7 +87,7 @@ describe('useSidebarWorktreeSortOrder with the switch on', () => {
     })
     expect(result.current).toBe(first)
     rerender({ map: maps.after })
-    expect(result.current).toEqual([z.id, a.id])
+    expect(result.current).toEqual(identities(z, a))
   })
 
   it('a Done row drops to the rest once its workspace is read', () => {
@@ -103,8 +106,8 @@ describe('useSidebarWorktreeSortOrder with the switch on', () => {
     })
     useAppStore.setState({ worktreesByRepo: { [repo.id]: [done, working] } })
     const { result } = renderHook(() => useSidebarWorktreeSortOrder({ repoMap, sortBy: 'smart' }))
-    expect(result.current).toEqual([done.id, working.id])
+    expect(result.current).toEqual(identities(done, working))
     setRows([{ ...done, isUnread: false }, working])
-    expect(result.current).toEqual([working.id, done.id])
+    expect(result.current).toEqual(identities(working, done))
   })
 })

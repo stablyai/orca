@@ -24,10 +24,7 @@ import type {
 } from './remote-runtime-terminal-multiplexer-types'
 
 export abstract class RemoteRuntimeTerminalSnapshotController extends RemoteRuntimeTerminalMultiplexerBase {
-  // Why: Output `seq` is the UTF-16 high-water at the end of a chunk, so a chunk
-  // that begins after the last high-water (startSeq > expectedSeq) means the
-  // server dropped intervening frames under backpressure. Only flag a gap when
-  // both offsets are known, and never on the first seq (nothing to compare to).
+  // Compare known UTF-16 high-waters: startSeq beyond expectedSeq proves dropped output. First/unknown seq cannot prove a gap.
   protected detectOutputGap(
     stream: RemoteRuntimeMultiplexedTerminalState,
     seq: number | undefined,
@@ -40,19 +37,14 @@ export abstract class RemoteRuntimeTerminalSnapshotController extends RemoteRunt
     return startSeq > stream.expectedSeq
   }
 
-  // Why: on a detected gap, pull a fresh authoritative snapshot. The request
-  // carries no requestId so the server reply uses the recovery path (full
-  // reset), self-healing without surfacing an error to the user.
+  // Untagged requests select full-reset recovery, healing gaps without a user-facing error.
   protected requestResyncSnapshot(stream: RemoteRuntimeMultiplexedTerminalState): void {
     if (stream.resyncInFlight) {
       return
     }
     stream.resyncInFlight = true
     if (stream.pendingSnapshotRequest) {
-      // Why: snapshot frame groups are not multiplexed; wait for the manual
-      // snapshot to finish so its response cannot be mistaken for recovery.
-      // Arm the watchdog now so a dispatch path that consumes the pending
-      // request without re-dispatching cannot leave recovery pending forever.
+      // Snapshot groups share one lane; wait for manual response before recovery. Arm watchdog now so consumed-but-undispatched requests cannot wedge it.
       stream.resyncPendingSend = true
       this.startResyncTimer(stream)
       return
@@ -83,8 +75,7 @@ export abstract class RemoteRuntimeTerminalSnapshotController extends RemoteRunt
     }
   }
 
-  // Why: keep recovery pending across the backoff and heal even if the flood
-  // ends with no further output.
+  // Keep recovery pending through backoff so it heals even after output stops.
   protected scheduleResyncRetry(stream: RemoteRuntimeMultiplexedTerminalState): void {
     stream.resyncAttempts += 1
     const delay = Math.min(
@@ -114,8 +105,7 @@ export abstract class RemoteRuntimeTerminalSnapshotController extends RemoteRunt
     stream.resyncTimer = timer
   }
 
-  // Why: a large recovery on a slow link can take longer than the timeout to
-  // stream; expiring mid-transfer would request a second one and repaint twice.
+  // Do not expire a recovery while it streams; slow large images would trigger duplicate requests/repaints.
   protected noteResyncSnapshotProgress(stream: RemoteRuntimeMultiplexedTerminalState): void {
     stream.resyncUnansweredTimeouts = 0
     if (stream.resyncInFlight && !stream.resyncPendingSend) {
@@ -140,8 +130,7 @@ export abstract class RemoteRuntimeTerminalSnapshotController extends RemoteRunt
         this.recoverStalledStream(stream)
         return
       }
-      // Why retry, not reopen: reopening left expectedSeq before the gap, so the
-      // next frame re-tripped it and recovery ran on the timeout's cadence (#18488).
+      // Retry without reopening: reopening retains the old expectedSeq and makes each next frame retrip the gap (#18488).
       this.scheduleResyncRetry(stream)
     }, REMOTE_TERMINAL_RESYNC_TIMEOUT_MS)
     if (typeof timer.unref === 'function') {
@@ -175,8 +164,7 @@ export abstract class RemoteRuntimeTerminalSnapshotController extends RemoteRunt
     if (!this.ready || !this.subscription) {
       return Promise.resolve(retryWorthySnapshotOutcome('connection-not-ready'))
     }
-    // Recovery uses an untagged snapshot frame group; callers can retry after
-    // it completes instead of racing another request onto the same frame lane.
+    // Recovery occupies the untagged snapshot lane; callers retry after completion instead of racing it.
     if (stream.resyncInFlight) {
       return Promise.resolve(retryWorthySnapshotOutcome('resync-in-flight'))
     }
@@ -279,7 +267,7 @@ export abstract class RemoteRuntimeTerminalSnapshotController extends RemoteRunt
     this.streams.delete(stream.streamId)
     this.sendFrame(stream.streamId, TerminalStreamOpcode.Unsubscribe)
     if (stream.callbacks.onTransportClose) {
-      stream.callbacks.onTransportClose({ recoverable: true })
+      stream.callbacks.onTransportClose({ recoverable: true, stalled: true })
     } else {
       stream.callbacks.onError?.('Remote terminal stream stopped responding.')
     }

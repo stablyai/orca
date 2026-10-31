@@ -9,6 +9,8 @@ export const ANTIGRAVITY_CHAT_SIGN_IN_RUNTIME_CAPABILITY =
 export const DATA_ACCOUNT_RUNTIME_CAPABILITY = 'accounts.managed-data-profiles.v1' as const
 // Why: MiniMax and GLM Coding Plan keys saved on the host its usage poller reads.
 export const USAGE_CREDENTIALS_RUNTIME_CAPABILITY = 'accounts.usage-credentials.v1' as const
+// Why: a paired client adds a Claude/Codex account whose login runs on this host (#20009).
+export const HOST_ACCOUNT_SIGN_IN_RUNTIME_CAPABILITY = 'accounts.host-sign-in.v1' as const
 
 export const ACCOUNT_RUNTIME_CAPABILITIES = [
   ACCOUNT_IMPORT_RUNTIME_CAPABILITY,
@@ -17,5 +19,6 @@ export const ACCOUNT_RUNTIME_CAPABILITIES = [
   ANTIGRAVITY_CHAT_SIGN_IN_RUNTIME_CAPABILITY,
   DATA_ACCOUNT_RUNTIME_CAPABILITY,
   CODEX_RESET_CREDIT_RUNTIME_CAPABILITY,
-  USAGE_CREDENTIALS_RUNTIME_CAPABILITY
+  USAGE_CREDENTIALS_RUNTIME_CAPABILITY,
+  HOST_ACCOUNT_SIGN_IN_RUNTIME_CAPABILITY
 ] as const

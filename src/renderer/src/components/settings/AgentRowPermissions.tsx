@@ -2,7 +2,8 @@ import type { AgentPermissionMode } from '../../../../shared/tui-agent-permissio
 import { translate } from '@/i18n/i18n'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
-import { SettingsBadge, SettingsSegmentedControl } from './SettingsFormControls'
+import { SettingsBadge } from './SettingsFormControls'
+import { AgentPermissionModeMenu } from './AgentPermissionModeMenu'
 import { agentPermissionModeLabel } from './agent-permission-mode-label'
 
 export type AgentRowPermission = {
@@ -86,24 +87,13 @@ export function AgentRowPermissionControl({
           ) : null}
         </span>
       ) : (
-        <SettingsSegmentedControl<AgentPermissionMode>
-          value={permission.mode}
-          onChange={(next) => {
-            if (next !== 'mixed') {
-              permission.onChange(next)
-            }
-          }}
-          ariaLabel={translate('settings.agents.rowPermissionsLabel', '{{agent}} permissions', {
+        <AgentPermissionModeMenu
+          mode={permission.mode}
+          onChange={permission.onChange}
+          label={translate('settings.agents.rowPermissionsLabel', '{{agent}} permissions', {
             agent: label
           })}
-          size="sm"
-          options={[
-            { value: 'manual', label: agentPermissionModeLabel('manual') },
-            ...(permission.autoAvailable
-              ? [{ value: 'auto' as const, label: agentPermissionModeLabel('auto') }]
-              : []),
-            { value: 'yolo', label: agentPermissionModeLabel('yolo') }
-          ]}
+          autoAvailable={permission.autoAvailable}
         />
       )}
     </div>

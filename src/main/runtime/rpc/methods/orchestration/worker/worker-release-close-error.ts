@@ -2,15 +2,12 @@ function isTransientWorkerTerminalCloseError(reason: string): boolean {
   return /not connected|unavailable/i.test(reason)
 }
 
-/** The close found nothing to close. Against a host-certified exit that is the goal state, not new
- *  doubt: a retry only aims the same dead handle at the same absent terminal, forever. */
+/** After host-certified exit, nothing-left-to-close is success; retrying the same absent target adds no evidence. */
 function isMissingWorkerTerminalCloseError(reason: string): boolean {
   return /handle_stale|stale handle|not found|no such terminal/i.test(reason)
 }
 
-/** A disposed endpoint is genuinely both: nothing is left to close, and it may return on
- *  reconnect. Only the host observation can say which, so it is named once here instead of
- *  being spelled into two predicates that then read as if they were disjoint. */
+/** Disposed endpoints are both absent and reconnectable; host observation decides, so do not model these as disjoint predicates. */
 function isDisposedWorkerTerminalCloseError(reason: string): boolean {
   return /disposed/i.test(reason)
 }

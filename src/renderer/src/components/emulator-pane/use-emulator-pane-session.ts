@@ -22,7 +22,12 @@ import { buildEmulatorPaneSessionView } from './emulator-pane-session-view'
 import { resolveEmulatorAttachTarget } from './emulator-attach-target'
 import { useEmulatorPaneLifecycle } from './use-emulator-pane-lifecycle'
 import { useEmulatorPaneShutdown } from './use-emulator-pane-shutdown'
-import { emulatorPaneErrorMessage } from './emulator-pane-error-message'
+import {
+  emulatorListDevicesErrorText,
+  emulatorStartErrorText,
+  noEmulatorDevicesError
+} from './emulator-pane-error-copy'
+import { SIMULATOR_DEFAULT_TAB_LABEL, formatSimulatorTabLabel } from '@/lib/simulator-tab-label'
 
 type UseEmulatorPaneSessionArgs = {
   worktreeId: string
@@ -39,8 +44,7 @@ export function useEmulatorPaneSession({
   const configuredDefaultUdid = useAppStore(
     (state) => state.settings?.mobileEmulatorDefaultDeviceUdid ?? null
   )
-  // Why the lazy initializer: the consume deletes the handoff entry, and a `useRef(expr)` argument
-  // re-runs every render — so a prelaunch registered after mount was consumed and then discarded.
+  // Consume the handoff only at mount; useRef(expr) would consume and discard later prelaunches on rerender.
   const [prelaunchedSession] = useState<EmulatorPaneSession['info'] | null>(() =>
     consumePrelaunchedSimulatorSession(worktreeId)
   )
@@ -71,7 +75,6 @@ export function useEmulatorPaneSession({
 
   const refreshDevices = useCallback(async (bootedTarget?: string | null) => {
     try {
-      // Unified list so Android devices/AVDs appear alongside iOS simulators.
       const raw = (await callRuntimeRpc(
         { kind: 'local' },
         'emulator.listDevices',
@@ -93,7 +96,7 @@ export function useEmulatorPaneSession({
       deviceRefreshErrorRef.current = error
       if (mountedRef.current) {
         setDevices([])
-        setError(emulatorPaneErrorMessage(error, 'Could not list emulator devices.'))
+        setError(emulatorListDevicesErrorText(error))
       }
       return []
     }
@@ -151,7 +154,7 @@ export function useEmulatorPaneSession({
       setError(null)
       if (tabId) {
         const row = devices.find((device) => device.udid === target || device.name === target)
-        useAppStore.getState().setTabLabel(tabId, row?.name || 'Mobile Emulator')
+        useAppStore.getState().setTabLabel(tabId, row?.name || SIMULATOR_DEFAULT_TAB_LABEL)
       }
     },
     [devices, resetVisualOrientation, selectedUdid, session, tabId]
@@ -184,15 +187,12 @@ export function useEmulatorPaneSession({
           selectedUdid
         })
         if (!target) {
-          throw new Error(
-            'No emulator devices found. Add an iOS Simulator in Xcode, or an Android Virtual Device in Android Studio.'
-          )
+          throw noEmulatorDevicesError()
         }
         requestedTarget = target
         setSelectedUdid(target)
         if (target !== liveTargetRef.current) {
-          // Why: switching devices should show an explicit connecting state,
-          // not a frozen frame from the previously attached emulator.
+          // Clear the old device’s frame so switching shows a connecting state.
           setSession(null)
           setStreamKey(null)
           liveTargetRef.current = null
@@ -204,8 +204,7 @@ export function useEmulatorPaneSession({
           focus: false
         })) as { attached?: boolean; info?: EmulatorPaneSession['info'] }
         if (!mountedRef.current) {
-          // Why: attach can finish after the tab closes, after the earlier
-          // unmount shutdown already no-op'd because the session was not registered yet.
+          // Attach may finish after unmount cleanup ran before the session was registered.
           await shutdownManagedSimulatorIfNoPane(worktreeId, tabId)
           return
         }
@@ -223,16 +222,11 @@ export function useEmulatorPaneSession({
         if (requestedTarget && liveTargetRef.current === requestedTarget) {
           return
         }
-        // Why: setup failures otherwise trigger the mount auto-attach loop again
-        // and erase the actionable error before the user can read it.
+        // Prevent mount auto-attach from erasing actionable setup errors.
         suppressAutoAttachRef.current = true
-        const msg = emulatorPaneErrorMessage(
-          e,
-          'Could not start the emulator. Make sure Xcode (iOS) or Android Studio (Android) is set up, then try another device.'
-        )
-        setError(msg)
+        setError(emulatorStartErrorText(e))
         if (tabId) {
-          useAppStore.getState().setTabLabel(tabId, 'Mobile Emulator')
+          useAppStore.getState().setTabLabel(tabId, SIMULATOR_DEFAULT_TAB_LABEL)
         }
       } finally {
         if (mountedRef.current) {
@@ -311,7 +305,7 @@ export function useEmulatorPaneSession({
     sendGesture,
     sendRotate,
     visualOrientation,
-    displayName: view.displayName,
+    displayName: formatSimulatorTabLabel(view.displayName),
     previewUrl: view.previewUrl,
     wsUrl: view.wsUrl,
     streamKey: streamKey ?? undefined,

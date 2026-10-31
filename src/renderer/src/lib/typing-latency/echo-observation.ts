@@ -2,9 +2,12 @@ import type { TypingInputSource } from './input-events'
 
 export type EchoCandidate = {
   t0: number
+  /** Trusted DOM event timestamp; the gap to t0 is time the input waited behind other renderer work. */
+  eventAt: number | null
   source: TypingInputSource
-  text: string
   dispatchedAt: number | null
+  /** First PTY output handed to the renderer's output scheduler after dispatch. */
+  arrivedAt: number | null
   status:
     | 'undispatched'
     | 'dispatched'
@@ -21,9 +24,16 @@ export type RecordedKeystroke = {
 export function createEchoCandidate(
   t0: number,
   source: TypingInputSource,
-  text: string
+  eventAt: number | null = null
 ): EchoCandidate {
-  return { t0, source, text, dispatchedAt: null, status: 'undispatched' }
+  return {
+    t0,
+    eventAt,
+    source,
+    dispatchedAt: null,
+    arrivedAt: null,
+    status: 'undispatched'
+  }
 }
 
 export type EchoBatch = {
@@ -31,6 +41,7 @@ export type EchoBatch = {
   hasAttributionGap: boolean
   outputBytes: number
   outputWrites: number
+  firstWriteAt: number | null
   parsedAt: number | null
 }
 
@@ -39,11 +50,20 @@ export type EchoSourceCounts = Record<TypingInputSource, number>
 export type ExactEchoSample = {
   attribution: 'single-input'
   source: TypingInputSource
-  text: string
   inputToDispatchMs: number
   dispatchToParseMs: number
   parseToPaintMs: number
   inputToPaintMs: number
+  /** Null when the event was untrusted or had no usable timestamp. */
+  eventToHandlerMs: number | null
+  eventToPaintMs: number | null
+  /** Null when no output reached the renderer scheduler before the first xterm write was observed. */
+  dispatchToArrivalMs: number | null
+  arrivalToWriteMs: number | null
+  writeToParseMs: number | null
+  /** Interval bounds on performance.now(), for overlap with renderer long tasks. */
+  startedAt: number
+  paintedAt: number
   outputBytes: number
   outputWrites: number
 }
@@ -82,14 +102,23 @@ export function createEchoObservation(batch: EchoBatch, paintedAt: number): Echo
       return null
     }
     const dispatchedAt = candidate.dispatchedAt ?? candidate.t0
+    const { eventAt, arrivedAt } = candidate
+    const firstWriteAt = batch.firstWriteAt
     return {
       attribution: 'single-input',
       source: candidate.source,
-      text: candidate.text,
       inputToDispatchMs: Math.max(0, dispatchedAt - candidate.t0),
       dispatchToParseMs: Math.max(0, parsedAt - dispatchedAt),
       parseToPaintMs: Math.max(0, paintedAt - parsedAt),
       inputToPaintMs: Math.max(0, paintedAt - candidate.t0),
+      eventToHandlerMs: eventAt === null ? null : Math.max(0, candidate.t0 - eventAt),
+      eventToPaintMs: eventAt === null ? null : Math.max(0, paintedAt - eventAt),
+      dispatchToArrivalMs: arrivedAt === null ? null : Math.max(0, arrivedAt - dispatchedAt),
+      arrivalToWriteMs:
+        arrivedAt === null || firstWriteAt === null ? null : Math.max(0, firstWriteAt - arrivedAt),
+      writeToParseMs: firstWriteAt === null ? null : Math.max(0, parsedAt - firstWriteAt),
+      startedAt: eventAt ?? candidate.t0,
+      paintedAt,
       outputBytes: batch.outputBytes,
       outputWrites: batch.outputWrites
     }
