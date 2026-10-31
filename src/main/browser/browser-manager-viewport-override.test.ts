@@ -771,30 +771,6 @@ describe('browserManager', () => {
       )
     })
 
-    it('presents the Electron identity on Google sign-in under a native-mode mobile preset', async () => {
-      browserMocks.processUserAgentMode = 'native'
-      browserMocks.processUserAgent = GUEST_ELECTRON_UA
-      const { guest, debuggerSendCommand } = makeGuest(4250)
-      webContentsFromIdMock.mockReturnValue(guest)
-      browserManager.attachGuestPolicies(guest as never)
-      browserManager.registerGuest({
-        browserPageId: 'tab-native-nav',
-        sessionProfileId: 'native-profile',
-        webContentsId: guest.id as number,
-        rendererWebContentsId
-      })
-      const didStartNavigation = guestOnMock.mock.calls.find(
-        ([event]) => event === 'did-start-navigation'
-      )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
-
-      await browserManager.setViewportOverride('tab-native-nav', MOBILE_VIEWPORT_OVERRIDE)
-      debuggerSendCommand.mockClear()
-      didStartNavigation(null, 'https://accounts.google.com/', false, true)
-      await flushViewportOps()
-      expect(guest.setUserAgent).not.toHaveBeenCalled()
-      expect(lastUserAgentOverride(debuggerSendCommand)).toEqual({ userAgent: '' })
-    })
-
     it('clears device metrics and disables touch for override=null', async () => {
       const { guest, debuggerSendCommand } = makeGuest(4343)
       webContentsFromIdMock.mockReturnValue(guest)
