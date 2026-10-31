@@ -106,8 +106,7 @@ function picksNewLaunchModel(
   )
 }
 
-/** Loop-free while a start launches under the account `current` reads; a read that throws is no
- *  answer, so unreadable account evidence replaces nothing. */
+/** Unreadable selection evidence must refuse delivery rather than authorize the existing account. */
 async function launchedUnderOtherAccount(
   child: OutgrownChildReading['child'],
   current: (() => Promise<AgentSessionAccountHome | null>) | undefined
@@ -115,7 +114,7 @@ async function launchedUnderOtherAccount(
   if (!child || child.phase === 'starting' || child.close || !child.accountHome || !current) {
     return false
   }
-  const home = await current().catch(() => null)
+  const home = await current()
   return home !== null && !agentSessionAccountHomesEqual(home, child.accountHome)
 }
 

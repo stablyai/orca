@@ -155,11 +155,12 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       })
     })
 
-    await acquireReadyCodexForTest(adapter, {
+    const acquired = await acquireReadyCodexForTest(adapter, {
       identity: identityFor('session-1'),
       fence: 7,
       spawnToken: 'spawn-9'
     })
+    expect(acquired.accountHome).toEqual({ variable: 'CODEX_HOME', path: '/codex/home' })
 
     expect(codex.connections[0].calls[1]).toEqual({
       method: 'thread/start',

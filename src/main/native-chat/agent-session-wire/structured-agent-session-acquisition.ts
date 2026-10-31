@@ -99,11 +99,12 @@ export async function acquireOwner(
       sessionId: record.sessionId,
       fence,
       ...(acquired.link ? { link: acquired.link } : {}),
-      ...(acquired.accountRecipe
+      ...(acquired.accountRecipe || acquired.accountHome
         ? {
             accountAcquisition: {
               generation: acquired.acquisitionGeneration,
-              recipe: acquired.accountRecipe
+              ...(acquired.accountRecipe ? { recipe: acquired.accountRecipe } : {}),
+              ...(acquired.accountHome ? { home: acquired.accountHome } : {})
             }
           }
         : {}),

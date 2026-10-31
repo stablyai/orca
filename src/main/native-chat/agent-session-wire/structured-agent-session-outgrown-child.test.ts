@@ -54,10 +54,19 @@ const accountHome = (path: string): LegacyAgentSessionAccountHome => ({
 describe('a send after the account was switched', () => {
   let rig: RestTestRig
   let selected = accountHome('/accounts/a')
+  let unavailable = false
 
   beforeEach(async () => {
     selected = accountHome('/accounts/a')
-    rig = await createRestTestRig({ launchAccountHome: async () => selected })
+    unavailable = false
+    rig = await createRestTestRig({
+      launchAccountHome: async () => {
+        if (unavailable) {
+          throw new Error('selected Codex home is temporarily unavailable')
+        }
+        return selected
+      }
+    })
     const acquire = rig.adapter.acquire.getMockImplementation()
     if (!acquire) {
       throw new Error('the rig acquires through a mock implementation')
@@ -89,6 +98,34 @@ describe('a send after the account was switched', () => {
     expect((await rig.host.send(CALLER, restTestSend('still b', fence()))).ok).toBe(true)
     await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledTimes(4))
     expect(rig.adapter.acquire).toHaveBeenCalledTimes(2)
+  })
+
+  it('refuses a queued send when the selected account cannot be read, then recovers on that account', async () => {
+    await foundRestTestChat(rig)
+    const dispatched = rig.adapter.dispatch.mock.calls.length
+    const acquired = rig.adapter.acquire.mock.calls.length
+    selected = accountHome('/accounts/b')
+    unavailable = true
+    const sent = await rig.host.send(CALLER, restTestSend('unavailable b', fence()))
+    expect(sent.ok).toBe(true)
+    if (!sent.ok) {
+      throw new Error('the host accepts the input before delivery checks its account')
+    }
+    await vi.waitFor(async () => {
+      const snapshot = await rig.host.journalSnapshot(SESSION)
+      expect(
+        snapshot.submissions.find((row) => row.clientMessageId === sent.value.clientMessageId)
+      ).toMatchObject({ dispatchState: 'rejected' })
+    })
+    expect(rig.adapter.dispatch).toHaveBeenCalledTimes(dispatched)
+    expect(rig.adapter.acquire).toHaveBeenCalledTimes(acquired)
+    expect(rig.adapter.closeSession).not.toHaveBeenCalled()
+
+    unavailable = false
+    expect((await rig.host.send(CALLER, restTestSend('recovered b', fence()))).ok).toBe(true)
+    await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledTimes(dispatched + 1))
+    expect(rig.adapter.acquire).toHaveBeenCalledTimes(acquired + 1)
+    expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION, undefined)
   })
 })
 
@@ -558,12 +595,15 @@ describe('retireOutgrownStructuredAgentSessionChild', () => {
       }
     })
 
-    it('is kept when the account cannot be read, or the agent keeps its own', async () => {
-      expect(
-        await stops(onA, async () => {
+    it('refuses unreadable selection evidence without replacing the current child', async () => {
+      await expect(
+        stops(onA, async () => {
           throw new Error('native evidence is unreadable')
         })
-      ).toBe(false)
+      ).rejects.toThrow('native evidence is unreadable')
+    })
+
+    it('is kept when the agent keeps its own account or has no account observation', async () => {
       expect(await stops(onA, async () => null)).toBe(false)
       expect(await stops({ child: childAt() }, async () => accountHome('/accounts/b'))).toBe(false)
     })

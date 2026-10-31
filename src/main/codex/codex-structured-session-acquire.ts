@@ -254,7 +254,13 @@ export async function acquireCodexStructuredSession(input: {
         },
         openInput
       )
-    return { process, acquisitionGeneration }
+    return {
+      process,
+      acquisitionGeneration,
+      ...(launch.codexHome
+        ? { accountHome: { variable: 'CODEX_HOME' as const, path: launch.codexHome } }
+        : {})
+    }
   } catch (error) {
     if (sessions.get(sessionId)?.connection !== acquisition.connection) {
       return closeFailedCodexAcquisition({
