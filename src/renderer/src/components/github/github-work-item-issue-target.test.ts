@@ -148,7 +148,7 @@ describe('issue edits retain the displayed repository', () => {
     async ({ localLabels, updates }) => {
       let mutation: Promise<unknown> = Promise.resolve()
       runGHEditLabelToggle({
-        itemId: item.id,
+        item,
         itemNumber: item.number,
         itemRepoId: item.repoId,
         repoPath: 'C:\\workspace\\widgets',
@@ -161,7 +161,6 @@ describe('issue edits retain the displayed repository', () => {
           await mutation
         },
         onLabelsChange: vi.fn(),
-        patchWorkItem: vi.fn(),
         patchProjectRowIfNeeded: vi.fn(),
         onMutated: vi.fn()
       })

@@ -5,7 +5,10 @@ import type {
   GitHubPRFileViewedState
 } from '../../../../../shared/github/pull-request-types'
 import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
-import type { GitHubWorkItemDetails } from '../../../../../shared/github/work-item-types'
+import type {
+  GitHubWorkItem,
+  GitHubWorkItemDetails
+} from '../../../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import { getGitHubSourceRuntimeHost } from '@/lib/github-source-runtime-context'
 import { onGitHubWorkItemDetailsCacheMutation } from '@/lib/github-work-item-details-cache-events'
@@ -21,6 +24,17 @@ export type WorkItemDetailsCacheEntry = {
   error?: string
 }
 export const workItemDetailsCache = new Map<string, WorkItemDetailsCacheEntry>()
+
+export function withWorkItemDetailsItem(
+  details: GitHubWorkItemDetails,
+  item: GitHubWorkItem
+): GitHubWorkItemDetails {
+  return {
+    ...details,
+    item,
+    ...(item.assignees === undefined ? {} : { assignees: item.assignees.map((user) => user.login) })
+  }
+}
 
 // Replace entry identity on every write so useSyncExternalStore snapshots stay stable between notifications.
 const workItemDetailsCacheListeners = new Set<() => void>()
@@ -45,6 +59,7 @@ export function getWorkItemDetailsCacheKey(args: {
   type: 'issue' | 'pr'
   number: number
   ownerRepo?: GitHubOwnerRepo | null
+  bindingKey?: string
 }): string {
   // NUL-separate routing axes to prevent key collisions; keep repoPath second for path-only invalidation events.
   const sourceKey =
@@ -54,6 +69,7 @@ export function getWorkItemDetailsCacheKey(args: {
   const keyParts = args.sourceCacheScope
     ? [args.repoId, args.repoPath, args.sourceCacheScope, sourceKey, args.type]
     : [args.repoId, args.repoPath, sourceKey, args.type]
+  keyParts.splice(2, 0, ...(args.bindingKey ? [args.bindingKey] : []))
   return [...keyParts, args.number].join('\0')
 }
 
@@ -72,15 +88,11 @@ export function touchWorkItemDetailsCache(key: string, entry: WorkItemDetailsCac
 }
 
 export function invalidateWorkItemDetailsCacheForKey(key: string): void {
-  workItemDetailsCacheGeneration += 1
   const existed = workItemDetailsCache.delete(key)
   if (existed) {
     notifyWorkItemDetailsCache()
   }
 }
-
-// Fence pending fetches on every invalidation so pre-mutation results cannot restore stale entries.
-export let workItemDetailsCacheGeneration = 0
 
 // Without an exact key, invalidate matching repo/type/number entries across source preferences.
 export function invalidateWorkItemDetailsCacheByMatch(args: {
@@ -108,7 +120,6 @@ export function invalidateWorkItemDetailsCacheByMatch(args: {
     }
   }
   if (removed) {
-    workItemDetailsCacheGeneration += 1
     notifyWorkItemDetailsCache()
   }
 }
@@ -174,6 +185,7 @@ export function patchCachedPRReviewRequests(
   })
 }
 
+// An issue's saved body drops `pending` so a read (Refresh included) started before it settles superseded.
 export function patchCachedWorkItemBody(cacheKey: string, body: string): void {
   const prev = workItemDetailsCache.get(cacheKey)
   if (!prev?.details) {
@@ -183,6 +195,7 @@ export function patchCachedWorkItemBody(cacheKey: string, body: string): void {
     ...prev,
     details: { ...prev.details, body },
     fetchedAt: Date.now(),
+    pending: prev.details.item.type === 'issue' ? undefined : prev.pending,
     error: undefined
   })
 }

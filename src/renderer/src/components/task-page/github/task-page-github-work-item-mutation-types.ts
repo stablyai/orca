@@ -13,6 +13,7 @@ export type TaskPageGitHubPatchWorkItem = (
 ) => void
 
 export type BeginTaskPageGitHubWorkItemMutationArgs = {
+  settleAccepted?: (success: boolean) => GitHubWorkItem
   item: GitHubWorkItem
   intent: TaskPageGitHubMutationIntent
   sourceContext?: TaskSourceContext | null

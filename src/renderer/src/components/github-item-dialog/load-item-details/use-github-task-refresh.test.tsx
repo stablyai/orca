@@ -1,0 +1,418 @@
+// @vitest-environment happy-dom
+import { parseTaskQuery } from '../../../../../shared/task-query'
+import { useTaskPageGitHubWorkItemMutation } from '@/hooks/useTaskPageGitHubWorkItemMutation'
+import { act, useMemo } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+import { useStore } from 'zustand'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+import {
+  createTestStore,
+  mockApi,
+  resetRemoteRuntimeMocks
+} from '@/store/slices/github-slice-test-harness'
+import type { AppState } from '@/store/types'
+import type { Repo } from '../../../../../shared/repo-types'
+import type {
+  GitHubWorkItemDetails,
+  GitHubWorkItem
+} from '../../../../../shared/github/work-item-types'
+import { buildTaskSourceContextFromRepo } from '../../../../../shared/task-source-context'
+import { useGitHubTaskRefresh } from './use-github-task-refresh'
+import { useGitHubItemDialogDetails } from './use-github-item-dialog-details'
+import { setRuntimeEnvironmentConnectionGenerationForTests } from '@/store/slices/runtime-status-connection-generation'
+import { patchCachedWorkItemBody, workItemDetailsCache } from './work-item-details-cache'
+import { useGitHubTaskItems } from '@/hooks/useGitHubTaskItems'
+
+const mocks = vi.hoisted(() => {
+  const hoisted: {
+    store: ReturnType<typeof createTestStore> | null
+    details: Mock
+    item: Mock
+    toastError: Mock
+  } = { store: null, details: vi.fn(), item: vi.fn(), toastError: vi.fn() }
+  return hoisted
+})
+vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
+vi.mock('@/store', () => ({
+  useAppStore: Object.assign(
+    (selector: (s: AppState) => unknown) => useStore(mocks.store!, selector),
+    {
+      getState: () => mocks.store!.getState(),
+      subscribe: (listener: (s: AppState) => void) => mocks.store!.subscribe(listener)
+    }
+  )
+}))
+vi.mock('@/lib/github-work-item-source-lookup', () => ({
+  lookupGitHubWorkItemDetailsForSource: mocks.details,
+  lookupGitHubWorkItemByOwnerRepoForSource: mocks.item
+}))
+vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
+const repo: Repo = {
+  id: 'repo',
+  path: '/repo',
+  displayName: 'Repo',
+  badgeColor: 'blue',
+  addedAt: 1
+}
+const row: GitHubWorkItem = {
+  id: 'issue:42',
+  repoId: 'repo',
+  type: 'issue',
+  number: 42,
+  title: 'Visible',
+  state: 'open',
+  labels: [],
+  assignees: [],
+  url: 'https://github.com/acme/widgets/issues/42',
+  author: null,
+  updatedAt: '2026-10-31T12:00:02Z'
+}
+const source = buildTaskSourceContextFromRepo({ provider: 'github', projectId: repo.id, repo })!
+const details: GitHubWorkItemDetails = { item: row, body: 'Body stays visible', comments: [] }
+function deferred<T>() {
+  let resolve!: (v: T) => void
+  const promise = new Promise<T>((r) => {
+    resolve = r
+  })
+  return { resolve, promise }
+}
+let root: Root, node: HTMLDivElement
+const query = parseTaskQuery('is:open assignee:alice')
+let mutationModel: ReturnType<typeof useTaskPageGitHubWorkItemMutation>
+let model: ReturnType<typeof useGitHubTaskRefresh>
+function Harness() {
+  mutationModel = useTaskPageGitHubWorkItemMutation({
+    queryKey: 'record-test',
+    query,
+    viewerLogin: 'alice',
+    patchWorkItem: mocks.store!.getState().patchWorkItem
+  })
+  model = useGitHubTaskRefresh({
+    workItem: row,
+    repoPath: repo.path,
+    effectiveRepoId: repo.id,
+    sourceContext: source,
+    issueRepository: { owner: 'acme', repo: 'widgets' }
+  })
+  const rows = useMemo(
+    () =>
+      mocks
+        .store!.getState()
+        .githubTaskCache.acceptSearch(
+          [row],
+          mocks.store!.getState().githubTaskCache.capture(repo, source)
+        ),
+    []
+  )
+  const projected = useGitHubTaskItems(rows)
+  return (
+    <output>
+      {projected[0]?.title}|{model.refreshing ? 'loading' : 'idle'}
+    </output>
+  )
+}
+async function render() {
+  await act(async () => {
+    root.render(<Harness />)
+  })
+}
+async function flush() {
+  await act(async () => {
+    await Promise.resolve()
+    await Promise.resolve()
+  })
+}
+
+describe('Refresh task with real shared record and mounted copy', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetRemoteRuntimeMocks()
+    workItemDetailsCache.clear()
+    Object.assign(mockApi.gh, { workItemByOwnerRepo: vi.fn() })
+    mocks.store = createTestStore()
+    mocks.store.setState({ repos: [repo], recordFeatureInteraction: vi.fn() })
+    mocks.details.mockReset()
+    mocks.item.mockReset()
+    mocks.item.mockResolvedValue(row)
+    node = document.createElement('div')
+    document.body.append(node)
+    root = createRoot(node)
+  })
+  afterEach(async () => {
+    await act(async () => root.unmount())
+    node.remove()
+  })
+
+  it('retains visible data while loading, publishes all metadata and keeps data on retryable failure', async () => {
+    await render()
+    // A failed click reports once in its toast, even with nothing loaded, and installs no inline error.
+    mocks.details.mockRejectedValueOnce(new Error('raw provider detail'))
+    await act(async () => {
+      await model.refreshTask()
+    })
+    expect(workItemDetailsCache.get(model.detailsCacheKey!)?.error).toBeUndefined()
+    expect(mocks.toastError).toHaveBeenCalledExactlyOnceWith(
+      'Unable to refresh this task. Try again.'
+    )
+    mocks.toastError.mockClear()
+    const response = deferred<GitHubWorkItemDetails>()
+    mocks.details.mockReturnValueOnce(response.promise)
+    let refresh!: Promise<void>
+    await act(async () => {
+      refresh = model.refreshTask()
+      await Promise.resolve()
+    })
+    expect(node.textContent).toContain('Visible|loading')
+    await act(async () => {
+      response.resolve({ ...details, item: { ...row, title: 'Fresh', labels: ['new'] } })
+      await refresh
+    })
+    expect(node.textContent).toContain('Fresh|idle')
+    mocks.details.mockRejectedValueOnce(new Error('raw provider detail'))
+    await act(async () => {
+      await model.refreshTask()
+    })
+    expect(node.textContent).toBe('Fresh|idle')
+    expect(mocks.toastError).toHaveBeenCalledExactlyOnceWith(
+      'Unable to refresh this task. Try again.'
+    )
+    mocks.details.mockResolvedValueOnce({ ...details, item: { ...row, title: 'Recovered' } })
+    await act(async () => {
+      await model.refreshTask()
+    })
+    expect(node.textContent).toBe('Recovered|idle')
+    expect(mocks.toastError).toHaveBeenCalledTimes(1)
+  })
+
+  it('waits for a pending write, cancels a read crossed by an edit and reloads after settlement', async () => {
+    await render()
+    const first = deferred<GitHubWorkItemDetails>()
+    mocks.details
+      .mockReturnValueOnce(first.promise)
+      .mockResolvedValueOnce({ ...details, item: { ...row, title: 'After edit' } })
+    let refresh!: Promise<void>
+    await act(async () => {
+      refresh = model.refreshTask()
+      await Promise.resolve()
+    })
+    const cache = mocks.store!.getState().githubTaskCache
+    let settle!: (success: boolean) => GitHubWorkItem
+    await act(async () => {
+      settle = cache.operation(row, cache.capture(repo, source)!, { labels: { edited: true } })
+      await Promise.resolve()
+    })
+    first.resolve({ ...details, item: { ...row, title: 'Pre-edit' } })
+    await flush()
+    expect(node.textContent).not.toContain('Pre-edit')
+    await act(async () => {
+      settle(true)
+      await refresh
+    })
+    expect(mocks.details).toHaveBeenCalledTimes(2)
+    expect(node.textContent).toBe('After edit|idle')
+    expect(mocks.toastError).not.toHaveBeenCalled()
+  })
+
+  it('lets a description saved during a Refresh read win and rereads after it', async () => {
+    await render()
+    const first = deferred<GitHubWorkItemDetails>()
+    mocks.details
+      .mockResolvedValueOnce(details)
+      .mockReturnValueOnce(first.promise)
+      .mockResolvedValueOnce({ ...details, body: 'Saved body' })
+    await act(async () => {
+      await model.refreshTask()
+    })
+    let refresh!: Promise<void>
+    await act(async () => {
+      refresh = model.refreshTask()
+      await Promise.resolve()
+    })
+    patchCachedWorkItemBody(model.detailsCacheKey!, 'Saved body')
+    await act(async () => {
+      first.resolve({ ...details, body: 'Body stays visible' })
+      await refresh
+    })
+    expect(mocks.details).toHaveBeenCalledTimes(3)
+    expect(workItemDetailsCache.get(model.detailsCacheKey!)?.details?.body).toBe('Saved body')
+  })
+
+  it('reads for a Refresh clicked after the dialog closed mid-Refresh and reopened', async () => {
+    await render()
+    const first = deferred<GitHubWorkItemDetails>()
+    mocks.details
+      .mockReturnValueOnce(first.promise)
+      .mockResolvedValueOnce({ ...details, item: { ...row, title: 'Fresh' } })
+    await act(async () => {
+      void model.refreshTask()
+      await Promise.resolve()
+    })
+    await act(async () => root.unmount())
+    root = createRoot(node)
+    await render()
+    let second!: Promise<void>
+    await act(async () => {
+      second = model.refreshTask()
+      await Promise.resolve()
+    })
+    await act(async () => {
+      first.resolve({ ...details, item: { ...row, title: 'Closed dialog' } })
+      await second
+    })
+    expect(mocks.details).toHaveBeenCalledTimes(2)
+    expect(node.textContent).toBe('Fresh|idle')
+    expect(mocks.toastError).not.toHaveBeenCalled()
+  })
+  it('discards old-account deferred mounted copies on A to B to A', async () => {
+    await render()
+    const response = deferred<GitHubWorkItemDetails>()
+    mocks.details.mockReturnValueOnce(response.promise)
+    let refresh!: Promise<void>
+    await act(async () => {
+      refresh = model.refreshTask()
+      await Promise.resolve()
+    })
+    await act(async () => {
+      mocks.store!.setState({
+        repos: [{ ...repo, ghAccount: { host: 'github.com', user: 'bob' } }]
+      })
+      mocks.store!.setState({ repos: [repo] })
+    })
+    await act(async () => {
+      response.resolve({ ...details, item: { ...row, title: 'Old binding' } })
+      await refresh
+    })
+    expect(node.textContent).not.toContain('Old binding')
+    // Rows are never hidden for a binding change; only the old record is dropped.
+    expect(node.textContent).toBe('Visible|idle')
+  })
+  it('confirms a Tasks-row remove against the accepted base and lets external state replace it', async () => {
+    const cache = mocks.store!.getState().githubTaskCache,
+      binding = cache.capture(repo, source)!
+    const alice = { login: 'alice', name: null, avatarUrl: '' }
+    await cache.readCanonical(row, binding, async () => ({ ...row, assignees: [alice] }))
+    mocks.item.mockResolvedValue({ ...row, assignees: [alice] })
+    await render()
+    const pending = deferred<void>()
+    const canonical = deferred<GitHubWorkItem>()
+    mocks.item.mockReturnValue(canonical.promise)
+    let result!: Promise<'confirmed' | 'rolled_back' | 'stale'>
+    await act(async () => {
+      result = mutationModel.run({
+        item: cache.projectItem(row),
+        intent: { type: 'toggleAssignee', user: alice },
+        sourceContext: source,
+        mutate: () => pending.promise,
+        errorToast: 'Unable to update'
+      })
+      await Promise.resolve()
+    })
+    expect(cache.projectItem(row).assignees).toEqual([])
+    await act(async () => {
+      pending.resolve()
+      expect(await result).toBe('confirmed')
+    })
+    expect(cache.projectItem(row).assignees).toEqual([])
+    await act(async () => {
+      canonical.resolve({ ...row, assignees: [alice], updatedAt: '2026-10-31T12:00:03Z' })
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(cache.projectItem(row).assignees).toEqual([alice])
+  })
+
+  it('rolls a failed Tasks-row assign back through the record without a canonical read', async () => {
+    const cache = mocks.store!.getState().githubTaskCache
+    await render()
+    const alice = { login: 'alice', name: null, avatarUrl: '' }
+    const failure = deferred<{ ok: false; error: string }>()
+    let result!: Promise<'confirmed' | 'rolled_back' | 'stale'>
+    await act(async () => {
+      result = mutationModel.run({
+        item: row,
+        intent: { type: 'toggleAssignee', user: alice },
+        sourceContext: source,
+        mutate: () => failure.promise,
+        errorToast: 'Unable to update'
+      })
+      await Promise.resolve()
+    })
+    expect(cache.projectItem(row).assignees).toEqual([alice])
+    await act(async () => {
+      failure.resolve({ ok: false, error: 'denied' })
+      expect(await result).toBe('rolled_back')
+    })
+    expect(cache.projectItem(row).assignees).toEqual([])
+    expect(mocks.item).not.toHaveBeenCalled()
+  })
+
+  it('waits when Refresh begins during a pending edit without disabling the edit', async () => {
+    await render()
+    const cache = mocks.store!.getState().githubTaskCache
+    const settle = cache.operation(row, cache.capture(repo, source)!, { labels: { pending: true } })
+    mocks.details.mockResolvedValueOnce({ ...details, item: { ...row, title: 'After pending' } })
+    let refresh!: Promise<void>
+    await act(async () => {
+      refresh = model.refreshTask()
+      await Promise.resolve()
+    })
+    expect(mocks.details).not.toHaveBeenCalled()
+    expect(node.textContent).toContain('Visible|loading')
+    await act(async () => {
+      settle(true)
+      await refresh
+    })
+    expect(node.textContent).toBe('After pending|idle')
+  })
+
+  it('keeps the dialog body and a just-posted comment through a reconnect, reading on the new connection', async () => {
+    setRuntimeEnvironmentConnectionGenerationForTests('p34245-dialog', 1)
+    const remote: Repo = { ...repo, executionHostId: 'runtime:p34245-dialog' }
+    const remoteSource = buildTaskSourceContextFromRepo({
+      provider: 'github',
+      projectId: repo.id,
+      repo: remote
+    })!
+    mocks.store!.setState({ repos: [remote], runtimeStatusByEnvironmentId: new Map() })
+    const reconnect = (generation: number) =>
+      act(async () => {
+        setRuntimeEnvironmentConnectionGenerationForTests('p34245-dialog', generation)
+        mocks.store!.setState({ runtimeStatusByEnvironmentId: new Map() })
+      })
+    let dialog!: ReturnType<typeof useGitHubItemDialogDetails>
+    function Dialog() {
+      dialog = useGitHubItemDialogDetails({
+        workItem: row,
+        repoPath: repo.path,
+        effectiveRepoId: repo.id,
+        sourceContext: remoteSource
+      })
+      const comments = dialog.details?.comments.map((comment) => comment.body).join()
+      return <output>{`${dialog.details?.body}|${comments}|${dialog.error}`}</output>
+    }
+    const old = deferred<GitHubWorkItemDetails>()
+    mocks.details
+      .mockReturnValueOnce(old.promise)
+      .mockResolvedValueOnce({ ...details, body: 'Loaded body' })
+    await act(async () => root.render(<Dialog />))
+    await flush()
+    const key = dialog.detailsCacheKey
+    // A load started before the reconnect is re-run on the new connection; its late answer is refused.
+    await reconnect(2)
+    await act(async () => old.resolve({ ...details, body: 'Old connection' }))
+    expect(node.textContent).toBe('Loaded body||null')
+    const comment = { id: 7, author: 'alice', authorAvatarUrl: '', createdAt: '', url: '' }
+    await act(async () => dialog.appendOptimisticComment({ ...comment, body: 'Just posted' }))
+    // The reconnect reloads the entry; the server's answer may not include the new comment yet.
+    mocks.details.mockResolvedValue({ ...details, body: 'Loaded body' })
+    await reconnect(3)
+    expect(node.textContent).toBe('Loaded body|Just posted|null')
+    await reconnect(4)
+    await flush()
+    expect(dialog.detailsCacheKey).toBe(key)
+    expect(node.textContent).toBe('Loaded body|Just posted|null')
+    mocks.details.mockResolvedValueOnce({ ...details, body: 'Refreshed body' })
+    await act(async () => dialog.refreshTask())
+    expect(node.textContent).toBe('Refreshed body|Just posted|null')
+  })
+})

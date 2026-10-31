@@ -128,7 +128,7 @@ describe('github RPC methods', () => {
       makeRequest('github.workItemDetails', { repo: 'repo-1', number: 12, type: 'issue' })
     )
 
-    expect(runtime.getRepoWorkItemDetails).toHaveBeenCalledWith('repo-1', 12, 'issue')
+    expect(runtime.getRepoWorkItemDetails).toHaveBeenCalledWith('repo-1', 12, 'issue', undefined)
     expect(response).toMatchObject({ ok: true, result: { body: 'Details' } })
   })
 

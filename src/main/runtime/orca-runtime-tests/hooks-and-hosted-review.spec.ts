@@ -326,7 +326,9 @@ describe('OrcaRuntimeService', () => {
       'pr',
       null,
       {},
-      'origin'
+      'origin',
+      undefined,
+      false
     )
     expect(getGitHubWorkItemByOwnerRepoMock).toHaveBeenCalledWith(
       TEST_REPO_PATH,

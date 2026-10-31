@@ -95,6 +95,6 @@ export const GITHUB_REPO_WORK_ITEM_METHODS = [
     permission: 'workspace',
     params: WorkItemDetails,
     handler: async (params, { runtime }) =>
-      runtime.getRepoWorkItemDetails(params.repo, params.number, params.type)
+      runtime.getRepoWorkItemDetails(params.repo, params.number, params.type, params.ownerRepo)
   })
 ]

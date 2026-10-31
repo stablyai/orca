@@ -1,3 +1,4 @@
+import { useGitHubTaskItems } from '@/hooks/useGitHubTaskItems'
 import { useEffect, useEffectEvent, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
@@ -5,6 +6,7 @@ import { forEachWithConcurrency } from '../../../shared/map-with-concurrency'
 import { createCmdJTaskSearchRequests } from './cmd-j/task-search-requests'
 import {
   isCmdJTaskSearchQuery,
+  makeCmdJTaskSearchResult,
   mergeCmdJTaskSearchResults,
   type CmdJTaskSearchResult
 } from './cmd-j/task-search-results'
@@ -151,15 +153,33 @@ export function useWorktreeJumpPaletteTaskSearch({
   }, [searchEnabled, session, requestKey])
   const current =
     searchEnabled && snapshot?.key === requestKey && snapshot.session === session ? snapshot : null
-  const taskItems = useMemo(
+  const githubItems = useMemo(
     () =>
-      (current?.results ?? EMPTY_RESULTS).map((result) => ({
-        id: result.id,
-        type: 'task' as const,
-        result
-      })),
+      (current?.results ?? EMPTY_RESULTS).flatMap((r) =>
+        r.task.provider === 'github' ? [r.task.issue] : []
+      ),
     [current?.results]
   )
+  const projected = useGitHubTaskItems(githubItems)
+  const taskItems = useMemo(() => {
+    let index = 0
+    return (current?.results ?? EMPTY_RESULTS).flatMap((raw) => {
+      const issue = raw.task.provider === 'github' ? projected[index++] : undefined
+      if (issue && issue.state !== 'open') {
+        return []
+      }
+      const result =
+        raw.task.provider === 'github' && issue && issue !== raw.task.issue
+          ? makeCmdJTaskSearchResult(
+              { provider: 'github', issue },
+              raw.sourceContext,
+              raw.initialRepoId,
+              raw.hostLabel
+            )
+          : raw
+      return [{ id: result.id, type: 'task' as const, result }]
+    })
+  }, [current?.results, projected])
   const retryTaskSearch = (): void => setRetryNonce((value) => value + 1)
   return {
     taskItems,

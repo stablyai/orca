@@ -1,3 +1,4 @@
+import { createGitHubTaskRecordCache } from '../github/task-record-cache'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GitHubSlice as GitHubSliceContract } from '../github/slice-types'
@@ -31,6 +32,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (
   get,
   store
 ) => ({
+  githubTaskCache: createGitHubTaskRecordCache(store),
   prCache: {},
   issueCache: {},
   checksCache: {},

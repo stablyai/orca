@@ -2098,6 +2098,9 @@
         "fcbee32f08": "Telemetry notice"
       },
       "GitHubItemDialog": {
+        "refreshTask": "Refresh task",
+        "refreshTaskFailed": "Unable to refresh this task. Try again.",
+        "refreshTaskUnsupported": "Update Orca on this server to refresh tasks here.",
         "3cd5ae5b7b": "No files changed.",
         "filesUnavailable": "Couldn't load changed files.",
         "filesRetry": "Retry",

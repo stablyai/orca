@@ -29,7 +29,11 @@ export const WorkItemByOwnerRepo = RepoSelector.extend({
   preview: z.boolean().optional()
 })
 
-export const WorkItemDetails = WorkItem
+export const WorkItemDetails = WorkItem.extend({
+  ownerRepo: z
+    .object({ owner: z.string().min(1), repo: z.string().min(1), host: OptionalString })
+    .optional()
+})
 
 export const WorkItemsCount = RepoSelector.extend({
   query: OptionalString

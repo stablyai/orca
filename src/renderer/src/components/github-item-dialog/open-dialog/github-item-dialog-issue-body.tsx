@@ -17,6 +17,7 @@ import {
 
 export function GitHubItemDialogIssueBody({
   workItem,
+  acceptedRefresh,
   displayWorkItem,
   repoPath,
   effectiveRepoId,
@@ -38,6 +39,7 @@ export function GitHubItemDialogIssueBody({
   onReviewRequestsChange,
   canUseDetailsRepoContext
 }: {
+  acceptedRefresh?: number
   workItem: GitHubWorkItem
   displayWorkItem: GitHubWorkItem | null
   repoPath: string | null
@@ -76,7 +78,8 @@ export function GitHubItemDialogIssueBody({
         {(canUseDetailsRepoContext || projectOrigin) && (
           <div className="mb-5 border-b border-border/60 px-4 pb-5">
             <GHEditSection
-              item={workItem}
+              item={displayWorkItem ?? workItem}
+              acceptedRefresh={acceptedRefresh}
               repoPath={repoPath}
               repoId={effectiveRepoId}
               sourceContext={sourceContext}
@@ -86,7 +89,11 @@ export function GitHubItemDialogIssueBody({
               onStateChange={onStateChange}
               onLabelsChange={onLabelsChange}
               onMutated={onMutated}
-              assignees={details?.assignees ?? []}
+              assignees={
+                details
+                  ? (details.item.assignees?.map((user) => user.login) ?? details.assignees ?? [])
+                  : displayWorkItem?.assignees?.map((user) => user.login)
+              }
               onUse={onUse}
               onOpenOrUse={onOpenOrUse}
               attachedWorkspaceLabel={attachedWorkspaceLabel}
