@@ -3,7 +3,6 @@
  * After restart the pane behaves as an ordinary pane. */
 
 import { randomUUID } from 'node:crypto'
-import { agentLaunchPromptText } from '../../../../shared/agent-launch-intent'
 import type {
   AgentLaunchPlacementReceipt,
   AgentLaunchResult
@@ -173,7 +172,7 @@ export async function publishAgentLaunchTabEarly(
       viewMode: 'terminal' as const,
       ...(params.placement ? { placement: params.placement } : {}),
       viewer: agentLaunchTabViewerRule(context, params.presentation),
-      ...(params.prompt?.text ? { prompt: agentLaunchPromptText(params.prompt) } : {}),
+      ...(params.prompt?.text ? { prompt: params.prompt.text } : {}),
       ...(params.operationId ? { operationId: params.operationId } : {})
     }
     // Switch point: a workspace main owns gets its tab in main's layout; any other, the window's.

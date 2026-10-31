@@ -1,7 +1,3 @@
-import {
-  automationRunMessageBody,
-  buildAutomationRunPreamble
-} from '../../shared/automation-run-preamble'
 import { CODEX_SESSION_OPTION_CATALOG } from '../../shared/agent-session-option-catalog-claude-codex'
 import {
   applyStructuredAgentSessionOptions,
@@ -13,7 +9,7 @@ import { claudeAndCodexAgents } from '../native-chat/agent-session-wire/structur
 import { describe, expect, it, vi } from 'vitest'
 import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { optionSession } from './codex-structured-option-session.test-fixture'
-import { resolvedCodexMessageOptions, turnInputFor } from './codex-structured-message-options'
+import { resolvedCodexMessageOptions } from './codex-structured-message-options'
 import { dispatchCodexTurn, startCodexTurn } from './codex-structured-turn-start'
 import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import type { CodexSession } from './codex-structured-session-state'
@@ -418,26 +414,3 @@ it.each([true, false])(
     }
   }
 )
-
-describe('Codex text block dispatch', () => {
-  it('joins adjacent text blocks in order without changing image placement', () => {
-    const preamble = buildAutomationRunPreamble('orca')
-    const body = automationRunMessageBody('  Write the brief', preamble.trimEnd())
-    expect(
-      turnInputFor(optionSession(vi.fn()), {
-        ...body,
-        blocks: [
-          { type: 'image-ref', path: '/before.png' },
-          ...body.blocks,
-          { type: 'image-ref', path: '/after.png' },
-          { type: 'text', text: 'One more thing' }
-        ]
-      })
-    ).toEqual([
-      { type: 'localImage', path: '/before.png' },
-      { type: 'text', text: `${preamble}  Write the brief` },
-      { type: 'localImage', path: '/after.png' },
-      { type: 'text', text: 'One more thing' }
-    ])
-  })
-})

@@ -1,4 +1,3 @@
-import { joinAdjacentAgentTextBlocks } from '../../shared/agent-session-dispatch-text-blocks'
 import { extname, isAbsolute } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
@@ -122,9 +121,8 @@ export async function acpPromptBlocks(
   body: AgentJournalMessageItem,
   acceptsImages: boolean
 ): Promise<ContentBlock[]> {
-  const sourceBlocks = joinAdjacentAgentTextBlocks(body.blocks)
   // Reserve later text and file references before allocating image capacity.
-  const blocks: ContentBlock[] = sourceBlocks.map((block) => {
+  const blocks: ContentBlock[] = body.blocks.map((block) => {
     if (block.type === 'text') {
       return { type: 'text', text: block.text }
     }
@@ -137,7 +135,7 @@ export async function acpPromptBlocks(
   const signal = AbortSignal.timeout(READ_TIMEOUT_MS)
   let imageCount = 0
   let imageBytes = 0
-  for (const [index, block] of sourceBlocks.entries()) {
+  for (const [index, block] of body.blocks.entries()) {
     if (block.type === 'text') {
       continue
     }

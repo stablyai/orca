@@ -1,39 +1,37 @@
 import { describe, expect, it } from 'vitest'
-import { automationRunMessageBody, buildAutomationRunPreamble } from './automation-run-preamble'
+import { buildAutomationRunPreamble, splitAutomationRunMessage } from './automation-run-preamble'
 import { nativeChatMessageCopyText } from './native-chat-message-copy-text'
-import { AgentJournalItemBodySchema } from './agent-session-journal-schemas'
 
-describe('automation instruction blocks', () => {
-  it('tags the instructions and preserves the previous prompt when joined for dispatch', () => {
-    const preamble = buildAutomationRunPreamble('orca-dev')
-    const task = '  Write the brief\n=== TASK ==='
-    const body = automationRunMessageBody(task, preamble.trimEnd())
-    expect(AgentJournalItemBodySchema.parse(body)).toEqual(body)
-    expect(body.blocks).toEqual([
-      { type: 'text', text: preamble.trimEnd(), presentation: 'automation-instructions' },
-      { type: 'text', text: task }
-    ])
-    expect(body.blocks.map((block) => (block.type === 'text' ? block.text : '')).join('\n')).toBe(
-      preamble + task
-    )
-    expect(nativeChatMessageCopyText(body)).toBe(task)
-  })
-
-  it('copies all non-instruction text and ignores the wording of tagged instructions', () => {
-    expect(
-      nativeChatMessageCopyText({
-        role: 'user',
-        blocks: [
-          { type: 'text', text: 'Before' },
-          { type: 'text', text: 'Future instructions', presentation: 'automation-instructions' },
-          { type: 'text', text: 'After', presentation: 'other-presentation' }
-        ]
+describe('splitAutomationRunMessage', () => {
+  it.each(['orca', 'orca-dev', 'orca-ide', '/opt/bin/custom-orca', '"/opt/Orca Dev/orca"'])(
+    'recognizes the exact %s preamble',
+    (cli) => {
+      const task = '  Keep task whitespace\n=== TASK ===\n'
+      const preamble = buildAutomationRunPreamble(cli)
+      expect(splitAutomationRunMessage(preamble + task)).toEqual({
+        instructions: preamble.slice(0, -'=== TASK ===\n'.length).trimEnd(),
+        task
       })
-    ).toBe('Before\n\nAfter')
-  })
+      expect(
+        nativeChatMessageCopyText({
+          role: 'user',
+          blocks: [{ type: 'text', text: preamble + task }]
+        })
+      ).toBe(task)
+    }
+  )
 
-  it('leaves legacy combined messages intact', () => {
-    const text = `${buildAutomationRunPreamble('orca')}Write the brief`
-    expect(nativeChatMessageCopyText({ role: 'user', blocks: [{ type: 'text', text }] })).toBe(text)
+  it('leaves plain messages and near misses intact', () => {
+    const preamble = buildAutomationRunPreamble('orca')
+    for (const text of [
+      'Do the task\n=== TASK ===\n',
+      `prefix\n${preamble}task`,
+      `${preamble.replace('current run', 'another run')}task`,
+      `${preamble.replace('orca automations fail', 'orca-dev automations fail')}task`,
+      `${preamble.replace('=== TASK ===\n', '=== TASK ===')}task`,
+      `${preamble.replaceAll('\n', '\r\n')}task`
+    ]) {
+      expect(splitAutomationRunMessage(text)).toBeNull()
+    }
   })
 })

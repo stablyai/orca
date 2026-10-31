@@ -30,7 +30,6 @@ export type HeadlessAutomationDispatcher = (request: {
   run: AutomationRun
   target: Extract<AutomationRunTargetResult, { ok: true }>
   agentPrompt: string
-  agentInstructions?: string
 }) => Promise<HeadlessAutomationDispatchLaunch>
 
 export function automationLaunchRunTarget(launch: HeadlessAutomationDispatchLaunch) {

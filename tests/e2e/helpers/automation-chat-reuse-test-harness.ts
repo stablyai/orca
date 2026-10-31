@@ -128,15 +128,6 @@ export async function exerciseBusyChatReuse(
     expect(await rig.drafts()).toEqual([{ messageId: q, state: 'waiting' }])
     expect(await rig.handoff(q)).toBeUndefined()
     expect(send).toHaveBeenCalledOnce()
-    const queuedBody = send.mock.calls[0]?.[1].body
-    expect(queuedBody?.blocks).toEqual([
-      {
-        type: 'text',
-        text: expect.stringContaining('=== TASK ==='),
-        presentation: 'automation-instructions'
-      },
-      { type: 'text', text: saved.prompt }
-    ])
     service.start()
     await eventually(() =>
       expect(rig.host.collaboratorsForTests().sessions['observers'].size).toBe(1)
@@ -164,10 +155,6 @@ export async function exerciseBusyChatReuse(
       expect(await rig.drafts()).toEqual([{ messageId: q, state: 'waiting' }])
       expect(await rig.handoff(q)).toBeUndefined()
       expect(await rig.queuePause()).toBeNull()
-      const history = await rig.host.history({ sessionId, direction: 'tail' })
-      expect(
-        history.ok && history.page.queuedMessages?.find((message) => message.messageId === q)?.body
-      ).toEqual(queuedBody)
       expect(await rig.sendNow(q)).toMatchObject({
         ok: true,
         value: { submission: expect.anything() }
@@ -194,12 +181,6 @@ export async function exerciseBusyChatReuse(
     )
     await rig.settleAccepted(submission, 'automation')
     const accepted = await rig.submission(submission)
-    expect((await rig.host.journalSnapshot(sessionId)).items).toContainEqual(
-      expect.objectContaining({ body: queuedBody })
-    )
-    expect(
-      rig.dispatch.mock.calls.find(([input]) => input.clientMessageId === submission)?.[0].body
-    ).toEqual(queuedBody)
     const sink = rig.providerEvents()
     const ownId = {
       provider: 'codex' as const,

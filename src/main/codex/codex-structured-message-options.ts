@@ -1,6 +1,6 @@
-import { joinAdjacentAgentTextBlocks } from '../../shared/agent-session-dispatch-text-blocks'
 import { pickedSkillsInText } from '../../shared/structured-agent-session-send-mutation'
 import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
+import type { NativeChatBlock } from '../../shared/native-chat-types'
 import type { CodexTurnHost } from './codex-structured-turn-start'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { StructuredAgentSessionInputNotAdmitted } from '../native-chat/agent-session-wire/structured-agent-session-input-admission'
@@ -118,7 +118,7 @@ export function turnInputFor(
 ): Record<string, unknown>[] {
   const input: Record<string, unknown>[] = []
   let text = ''
-  for (const block of joinAdjacentAgentTextBlocks(body.blocks)) {
+  for (const block of body.blocks as NativeChatBlock[]) {
     if (block.type === 'text' && block.text.length > 0) {
       input.push({ type: 'text', text: block.text })
       text += `${block.text}\n`

@@ -199,25 +199,6 @@ describe('automations through agent.launch', () => {
       })
     }
   )
-  it('carries automation instructions separately through the common fresh launch input', async () => {
-    const { runtime } = fixture()
-    mocks.launch.mockResolvedValue(chat)
-    await launchChat(runtime, {
-      automation,
-      run,
-      target,
-      runs: [],
-      agentInstructions: 'Run instructions'
-    })
-    expect(mocks.launch).toHaveBeenCalledWith(
-      expect.objectContaining({
-        prompt: { text: 'Audit', automationInstructions: 'Run instructions', delivery: 'submit' }
-      }),
-      expect.anything(),
-      expect.anything()
-    )
-  })
-
   it('does not apply stored Terminal extras to Chat', async () => {
     const { runtime } = fixture()
     mocks.launch.mockResolvedValue(chat)

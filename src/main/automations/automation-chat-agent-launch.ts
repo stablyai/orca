@@ -27,7 +27,6 @@ export type AutomationChatLaunchRequest = {
   target: Extract<AutomationRunTargetResult, { ok: true }>
   runs: readonly AutomationRun[]
   agentPrompt: string
-  agentInstructions?: string
   bindSession: (target: HeadlessAutomationDispatchLaunch) => void
 }
 
@@ -68,13 +67,7 @@ async function launchChat(
         operationId,
         surface: 'chat',
         presentation: 'background',
-        prompt: {
-          text: request.agentPrompt,
-          ...(request.agentInstructions
-            ? { automationInstructions: request.agentInstructions }
-            : {}),
-          delivery: 'submit'
-        },
+        prompt: { text: request.agentPrompt, delivery: 'submit' },
         target:
           automation.workspaceMode === 'existing'
             ? { kind: 'existing', worktree: `id:${automation.workspaceId}` }
