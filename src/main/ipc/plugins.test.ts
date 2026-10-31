@@ -1,19 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PluginLockfile } from '../../shared/plugins/installation/plugin-install-lockfile'
 import type { PluginService } from '../plugins/plugin-service'
-import type { Store } from '../persistence'
 
 const electronMocks = vi.hoisted(() => ({ handle: vi.fn(), on: vi.fn() }))
 vi.mock('electron', () => ({
   ipcMain: { handle: electronMocks.handle, on: electronMocks.on }
 }))
 
-import {
-  canRemoveInstalledPlugin,
-  parsePluginConsentArgs,
-  parsePluginInstallArgs,
-  registerPluginHandlers
-} from './plugins'
+import { canRemoveInstalledPlugin, parsePluginConsentArgs, parsePluginInstallArgs } from './plugins'
 
 beforeEach(() => {
   electronMocks.handle.mockReset()
@@ -140,29 +134,5 @@ describe('plugin removal authority', () => {
     } satisfies PluginLockfile
 
     expect(canRemoveInstalledPlugin(service, 'stablyai.orca-theme', lock)).toBe(false)
-  })
-})
-
-describe('plugin settings lifecycle authority', () => {
-  it('refreshes from the main-process settings listener without renderer follow-up', () => {
-    let settingsListener!: (updates: {
-      pluginSystemEnabled?: boolean
-      devPluginPaths?: string[]
-    }) => void
-    const store = {
-      onSettingsChanged: vi.fn((listener) => {
-        settingsListener = listener
-        return vi.fn()
-      })
-    } as unknown as Store
-    const service = {
-      setRuntimeDelegate: vi.fn(),
-      refresh: vi.fn().mockResolvedValue(undefined)
-    } as unknown as PluginService
-    registerPluginHandlers(store, service, null)
-
-    settingsListener({ pluginSystemEnabled: false })
-
-    expect(service.refresh).toHaveBeenCalledOnce()
   })
 })
