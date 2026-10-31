@@ -1000,6 +1000,12 @@
       "title": "Etwas ist schiefgelaufen",
       "tryAgain": "Erneut versuchen",
       "home": "Startseite"
+    },
+    "svgPreview": {
+      "drawFailed": "Dieses SVG kann nicht dargestellt werden",
+      "label": "Zeichnung {{title}}",
+      "previewDrawing": "Zeichnung anzeigen",
+      "viewSource": "SVG-Quelltext anzeigen"
     }
   },
   "connection": {

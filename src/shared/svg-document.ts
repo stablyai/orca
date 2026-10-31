@@ -74,3 +74,8 @@ export function decodeSvgBase64(base64: string): string | null {
     return null
   }
 }
+
+/** An `<img>` source for SVG markup; images never run the document's scripts or fetch its references. */
+export function svgMarkupDataUri(markup: string): string {
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(markup)}`
+}

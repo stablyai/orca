@@ -1,8 +1,6 @@
-import {
-  IMAGE_VIEWER_SURFACE_PADDING,
-  MAX_IMAGE_VIEWER_ZOOM,
-  MIN_IMAGE_VIEWER_ZOOM
-} from './image-viewer-zoom'
+export const MIN_PAN_ZOOM = 0.25
+export const MAX_PAN_ZOOM = 8
+export const PAN_ZOOM_SURFACE_PADDING = 16
 
 export type PanZoomSize = { width: number; height: number }
 export type PanZoomPoint = { x: number; y: number }
@@ -13,7 +11,7 @@ export type PanZoomView = { zoom: number; center: PanZoomPoint }
 export function getPanZoomFitScale(
   content: PanZoomSize,
   viewport: PanZoomSize,
-  padding = IMAGE_VIEWER_SURFACE_PADDING,
+  padding = PAN_ZOOM_SURFACE_PADDING,
   upscale = false
 ): number {
   const availableWidth = viewport.width - padding * 2
@@ -31,12 +29,12 @@ export function getFittedPanZoomView(content: PanZoomSize): PanZoomView {
 
 export function getMaxPanZoom(fitScale: number): number {
   // Why: zoom is relative to the fit, so content fitted far below 1 needs more headroom to reach natural size.
-  return Math.max(MAX_IMAGE_VIEWER_ZOOM, 1 / fitScale)
+  return Math.max(MAX_PAN_ZOOM, 1 / fitScale)
 }
 
 export function getMinPanZoom(fitScale: number): number {
   // Why: a vector fitted far above its natural size must still be able to reach actual size.
-  return Math.min(MIN_IMAGE_VIEWER_ZOOM, 1 / fitScale)
+  return Math.min(MIN_PAN_ZOOM, 1 / fitScale)
 }
 
 export function clampPanZoom(zoom: number, fitScale: number): number {

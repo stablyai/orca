@@ -1,6 +1,6 @@
 import type React from 'react'
 import { cn } from '@/lib/utils'
-import type { PanZoomSize } from './pan-zoom-view'
+import type { PanZoomSize } from '../../../../shared/pan-zoom-view'
 import type { PanZoomViewport } from './use-pan-zoom-viewport'
 
 /** The drag-to-pan canvas and its positioned image; callers own the controls around it. */
