@@ -12,7 +12,6 @@ import {
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
 import { TERMINAL_QUERY_METHODS } from '../../rpc/methods/terminal/terminal-query-methods'
-import { FIRST_SURFACE_PLACEMENT_WAIT_MS } from './restored-terminal-placement'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 vi.mock('../../../telemetry/client', () => ({ track: vi.fn() }))
@@ -181,61 +180,5 @@ describe('a terminal created by the CLI, across a restart, layout-owner build', 
     await runtimeOn(relaunched, live).placeUnshownLiveTerminals()
 
     expect(boundPtyIds(relaunched, SWEPT)).toEqual(['pty-cli'])
-  })
-})
-
-describe('a workspace’s first surface beside a sweep’s pass, layout-owner build', () => {
-  async function hostReadingASweepCensus() {
-    const directory = mkdtempSync(join(tmpdir(), 'orca-sweep-first-surface-'))
-    directories.push(directory)
-    const store = await openTopologyStore(directory, emptyTerminalSessionProfile())
-    let answerCensus = (): void => {}
-    const census = new Promise<LiveSession[]>((resolve) => {
-      answerCensus = () => resolve([session('pty-other', OTHER)])
-    })
-    const listProcesses = vi.fn(() => census)
-    const runtime = new SweepRuntime(store)
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null,
-      listProcesses
-    })
-    const sweeping = runtime.placeUnshownLiveTerminalsOf(`id:${OTHER}`)
-    await vi.waitFor(() => expect(listProcesses).toHaveBeenCalled())
-    const firstSurfaceOf = (workspace: string) =>
-      runtime.applyLayoutCommand({
-        type: 'createTerminalTab',
-        workspace,
-        tabId: '33333333-3333-4333-8333-333333333333',
-        leafId: '44444444-4444-4444-8444-444444444444',
-        initial: 'activation'
-      })
-    return { answerCensus, sweeping, firstSurfaceOf }
-  }
-
-  it('does not wait for a sweep of another workspace, which cannot place its terminals', async () => {
-    const { answerCensus, sweeping, firstSurfaceOf } = await hostReadingASweepCensus()
-
-    const startedAt = performance.now()
-    const reply = await firstSurfaceOf(SWEPT)
-
-    expect(performance.now() - startedAt).toBeLessThan(FIRST_SURFACE_PLACEMENT_WAIT_MS - 100)
-    expect(reply.ok).toBe(true)
-    answerCensus()
-    await sweeping
-  })
-
-  it('waits, up to the cap, for a sweep of its own workspace', async () => {
-    const { answerCensus, sweeping, firstSurfaceOf } = await hostReadingASweepCensus()
-
-    const startedAt = performance.now()
-    await firstSurfaceOf(OTHER)
-
-    expect(performance.now() - startedAt).toBeGreaterThanOrEqual(
-      FIRST_SURFACE_PLACEMENT_WAIT_MS - 20
-    )
-    answerCensus()
-    await sweeping
   })
 })

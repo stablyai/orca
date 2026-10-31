@@ -40,7 +40,8 @@ export function agentModelCatalogFingerprint(identity: AgentModelCatalogIdentity
     .digest('hex')
 }
 
-/** Use the account pinned at launch, regardless of later account selection. */
+/** The catalog of the account in `record.accountHome`; a session's reads and saves pass the account
+ *  it runs on there, which differs from the one it was created under once the selection moved. */
 export function agentModelCatalogIdentityForRecord(
   record: Pick<AgentSessionRecord, 'provider' | 'accountHome' | 'location'>
 ): AgentModelCatalogIdentity {

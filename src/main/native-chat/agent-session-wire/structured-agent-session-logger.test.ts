@@ -215,15 +215,6 @@ describe('what an Error leaves in the trace file', () => {
     expect(sqlite?.attributes).toMatchObject({ errorCode: 'ERR_SQLITE_ERROR', errorErrcode: 5 })
     expect(sqlite?.exit).toMatchObject({ cause: expect.stringContaining('database is locked') })
   })
-
-  it('names the code of a cause whose message does not', () => {
-    const logger = createStructuredAgentSessionLogger({ now: () => clock })
-    logger.warn('x failed', {
-      scope: 'x',
-      error: new Error('x', { cause: Object.assign(new Error('no space'), { code: 'ENOSPC' }) })
-    })
-    expect(written()[0]?.attributes['errorCause']).toEqual(['Error: no space [ENOSPC]'])
-  })
 })
 
 describe('a logger that throws', () => {

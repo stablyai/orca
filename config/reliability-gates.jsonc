@@ -10811,7 +10811,7 @@
       "providers": ["local", "remote-runtime", "ssh", "wsl"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "remote-runtime", "ssh", "wsl"],
-      "coverageNotes": "Platform-neutral deterministic tests separate the durable Active Server preference from per-client connection, selected-workspace, browser-session, Add Project, and execution-host routing. The composed regression models Local desktop -> connect/navigate Windows 2 -> reveal a local terminal -> restart. Multi-client browser host overrides, multi-server profile caches, generic settings IPC rejection, local and remote workspace ownership, Add Project eligibility/owner capture/stale-result fencing, host-qualified group/folder/worktree identity, and restart reset of transient routing are covered. A visible macOS Orca desktop server plus separate paired Electron and web clients prove selected-runtime Add Project operations and disabled creation when the only listed host is blocked or unavailable; headless-server parity also passed. Live Linux, Windows, WSL, and SSH Add Project journeys remain uncollected.",
+      "coverageNotes": "Platform-neutral deterministic tests separate the durable Active Server preference from per-client connection, selected-workspace, browser-session, Add Project, and execution-host routing. The composed regression models Local desktop -> connect/navigate Windows 2 -> reveal a local terminal -> restart. Multi-client browser host overrides, multi-server profile caches, generic settings IPC rejection, local and remote workspace ownership, Add Project eligibility/owner capture/stale-result fencing, host-qualified group/folder/worktree identity, and restart reset of transient routing are covered. A visible macOS Orca desktop server plus separate paired Electron and web clients prove selected-runtime Add Project operations and disabled creation when the only listed host is blocked or unavailable; headless-server parity also passed. Live Linux, Windows, WSL, and SSH Add Project journeys remain uncollected. The static wrapper-rendering suite was removed during the low-value-test audit; its supplied-prop host-browser and control-visibility output assertions are no longer checked by that suite. This removal supplies no new runtime-routing evidence.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/9687",
         "https://linear.app/stably/issue/STA-4024/p1-paired-web-add-project-enables-unavailable-host-fallback-after-pr"
@@ -10821,7 +10821,7 @@
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/settings.test.ts src/main/ipc/runtime-environments/runtime-environments-pairing.test.ts src/renderer/src/store/slices/settings.test.ts src/renderer/src/store/slices/browser.test.ts src/renderer/src/components/settings/browser-session-host-selection.test.ts src/renderer/src/components/settings/RuntimeEnvironmentsPane.test.ts src/renderer/src/components/sidebar/use-add-repo-host-selection.test.ts src/renderer/src/hooks/useIpcEvents-terminal-create-surfacing.test.ts src/renderer/src/web/web-preload-api-runtime-environment.test.ts --maxWorkers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/AddProjectFromFolderDialog.test.tsx src/renderer/src/components/sidebar/NonGitFolderDialog.test.tsx src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts src/renderer/src/components/sidebar/AddRepoSteps.default-checkout.test.ts src/renderer/src/components/sidebar/project-added-default-checkout.test.ts src/renderer/src/components/sidebar/useAddRepoLocalFolderFlow.test.ts src/renderer/src/components/sidebar/useAddRepoNestedImportFlow.test.ts src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/components/sidebar/useAddRepoCloneFlow.test.ts src/renderer/src/components/sidebar/useCreateRepo.default-checkout.test.ts src/renderer/src/components/sidebar/worktree-list/listing/host-filtering.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/lib/worktree-runtime-owner.test.ts src/renderer/src/store/selectors.test.ts src/renderer/src/store/slices/repos-catalog-reconciliation.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/selected-host-active-workspace-identity.test.ts src/renderer/src/store/slices/worktrees-fetch-owner-routing.test.ts --maxWorkers=1",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/use-add-repo-host-selection.test.ts src/renderer/src/components/sidebar/add-repo-browse-authority.test.ts src/renderer/src/components/sidebar/AddRepoDialogStepContent.test.tsx src/renderer/src/components/sidebar/AddRepoStartSteps.test.tsx src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/store/slices/repos-paired-runtime-add.test.ts --maxWorkers=1",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/use-add-repo-host-selection.test.ts src/renderer/src/components/sidebar/add-repo-browse-authority.test.ts src/renderer/src/components/sidebar/AddRepoStartSteps.test.tsx src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/store/slices/repos-paired-runtime-add.test.ts --maxWorkers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/AddProjectFromFolderDialog.test.tsx src/renderer/src/components/sidebar/NonGitFolderDialog.test.tsx src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts src/renderer/src/components/sidebar/AddRepoSteps.default-checkout.test.ts src/renderer/src/components/sidebar/project-added-default-checkout.test.ts src/renderer/src/components/sidebar/useAddRepoLocalFolderFlow.test.ts src/renderer/src/components/sidebar/useAddRepoNestedImportFlow.test.ts src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/components/sidebar/useAddRepoCloneFlow.test.ts src/renderer/src/components/sidebar/useCreateRepo.default-checkout.test.ts src/renderer/src/components/sidebar/worktree-list/listing/host-filtering.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/lib/worktree-runtime-owner.test.ts src/renderer/src/store/selectors.test.ts src/renderer/src/store/slices/repos-catalog-reconciliation.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/selected-host-active-workspace-identity.test.ts src/renderer/src/store/slices/worktrees-fetch-owner-routing.test.ts src/renderer/src/runtime/web-runtime-session.test.ts --maxWorkers=1",
         "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/pr11346-selected-runtime-add.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 --reporter=line",
         "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/pr11346-selected-runtime-add.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line",
@@ -10842,7 +10842,6 @@
         "src/renderer/src/components/sidebar/AddProjectFromFolderDialog.test.tsx",
         "src/renderer/src/components/sidebar/NonGitFolderDialog.test.tsx",
         "src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts",
-        "src/renderer/src/components/sidebar/AddRepoDialogStepContent.test.tsx",
         "src/renderer/src/components/sidebar/AddRepoStartSteps.test.tsx",
         "src/renderer/src/components/sidebar/AddRepoSteps.default-checkout.test.ts",
         "src/renderer/src/components/sidebar/project-added-default-checkout.test.ts",
@@ -10878,10 +10877,6 @@
           "assertions": [
             "paired runtime browsing opens the host browser without invoking native pickFolders while desktop local and SSH routes remain intact"
           ]
-        },
-        {
-          "file": "src/renderer/src/components/sidebar/AddRepoDialogStepContent.test.tsx",
-          "assertions": ["paired runtime browsing renders the in-app host filesystem browser"]
         },
         {
           "file": "src/renderer/src/components/sidebar/AddRepoStartSteps.test.tsx",
@@ -20737,20 +20732,20 @@
       "invariant": "A single-cell capacity check reads only that cell while retaining snapshot freshness, incarnation, outstanding reservation and missing-limit policy; new placement retains the full fleet inventory.",
       "oracle": "With 32 capped cells, an existing active host stays on its pinned cell and reads one headroom row; new placement reads all 32. Missing, expired or prior-incarnation snapshots, capacity exhaustion and outstanding debt still refuse the active pinned host; an uncapped cell remains admissible.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir cloud/apps/relay exec vitest run ../../../cloud/apps/relay/src/assignment-headroom-scope.test.ts ../../../cloud/apps/relay/src/assignment-connection-headroom.test.ts ../../../cloud/apps/relay/src/assignment-store.test.ts ../../../cloud/apps/relay/src/assignment-store-lock-order.test.ts ../../../cloud/apps/relay/src/cell-inventory-lock-contention.test.ts ../../../cloud/apps/relay/src/assignment-isolated-cell-replacement.test.ts ../../../cloud/apps/relay/src/regional-rehome-target-selection.test.ts --silent=false"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir cloud/apps/relay exec vitest run ../../../cloud/apps/relay/src/assignment/assignment-headroom-scope.test.ts ../../../cloud/apps/relay/src/assignment/assignment-connection-headroom.test.ts ../../../cloud/apps/relay/src/assignment-store.test.ts ../../../cloud/apps/relay/src/assignment/assignment-store-lock-order.test.ts ../../../cloud/apps/relay/src/cell-inventory-lock-contention.test.ts ../../../cloud/apps/relay/src/assignment-isolated-cell-replacement.test.ts ../../../cloud/apps/relay/src/regional-rehome-target-selection.test.ts --silent=false"
       ],
       "testFiles": [
-        "cloud/apps/relay/src/assignment-headroom-scope.test.ts",
-        "cloud/apps/relay/src/assignment-connection-headroom.test.ts",
+        "cloud/apps/relay/src/assignment/assignment-headroom-scope.test.ts",
+        "cloud/apps/relay/src/assignment/assignment-connection-headroom.test.ts",
         "cloud/apps/relay/src/assignment-store.test.ts",
-        "cloud/apps/relay/src/assignment-store-lock-order.test.ts",
+        "cloud/apps/relay/src/assignment/assignment-store-lock-order.test.ts",
         "cloud/apps/relay/src/cell-inventory-lock-contention.test.ts",
         "cloud/apps/relay/src/assignment-isolated-cell-replacement.test.ts",
         "cloud/apps/relay/src/regional-rehome-target-selection.test.ts"
       ],
       "assertionRefs": [
         {
-          "file": "cloud/apps/relay/src/assignment-headroom-scope.test.ts",
+          "file": "cloud/apps/relay/src/assignment/assignment-headroom-scope.test.ts",
           "assertions": [
             "reads one cell for a sticky assignment even when the capped fleet grows",
             "still considers the full fleet for a new placement",
@@ -20765,7 +20760,7 @@
           "date": "2026-09-25",
           "runner": "local",
           "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir cloud/apps/relay exec vitest run ../../../cloud/apps/relay/src/assignment-headroom-scope.test.ts ../../../cloud/apps/relay/src/assignment-connection-headroom.test.ts ../../../cloud/apps/relay/src/assignment-store.test.ts ../../../cloud/apps/relay/src/assignment-store-lock-order.test.ts ../../../cloud/apps/relay/src/cell-inventory-lock-contention.test.ts ../../../cloud/apps/relay/src/assignment-isolated-cell-replacement.test.ts ../../../cloud/apps/relay/src/regional-rehome-target-selection.test.ts --silent=false",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir cloud/apps/relay exec vitest run ../../../cloud/apps/relay/src/assignment/assignment-headroom-scope.test.ts ../../../cloud/apps/relay/src/assignment/assignment-connection-headroom.test.ts ../../../cloud/apps/relay/src/assignment-store.test.ts ../../../cloud/apps/relay/src/assignment/assignment-store-lock-order.test.ts ../../../cloud/apps/relay/src/cell-inventory-lock-contention.test.ts ../../../cloud/apps/relay/src/assignment-isolated-cell-replacement.test.ts ../../../cloud/apps/relay/src/regional-rehome-target-selection.test.ts --silent=false",
           "result": "passed",
           "durationSeconds": 0.513,
           "summary": "189 tests across seven files passed; independent root rerun also passed189 tests. Relay typecheck passed separately."
