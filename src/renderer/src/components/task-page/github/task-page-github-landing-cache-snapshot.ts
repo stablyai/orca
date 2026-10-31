@@ -41,7 +41,10 @@ export function readTaskPageGitHubLandingCache(
 }
 
 export function countTaskPageGitHubLandingPages(
-  model: TaskPageGitHubSearchPaginationModel,
+  model: Pick<
+    TaskPageGitHubSearchPaginationModel,
+    'countWorkItemsAcrossRepos' | 'selectedRepos' | 'githubPerRepoPageLimit'
+  >,
   q: string,
   onCounted: (result: { totalPages: number }) => void,
   options?: { wakeWslDistro?: boolean }

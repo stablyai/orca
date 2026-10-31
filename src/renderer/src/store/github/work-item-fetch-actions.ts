@@ -157,7 +157,7 @@ export const createWorkItemFetchActions = (
         (options?.wakeWslDistro && !existing.wakeWslDistro)
       if (!weakerThanRequested) {
         return existing.promise
-          .then((items) => read.apply(items, get().workItemsCache[key]?.data))
+          .then((items) => read.apply(items, get().workItemsCache[key]?.data ?? undefined))
           .finally(() => {
             if (!options?.taskRead) {
               read.dispose()
@@ -216,7 +216,7 @@ export const createWorkItemFetchActions = (
           issuesError && envelope.sources.issues
             ? { ...issuesError, source: envelope.sources.issues }
             : undefined
-        items = read.apply(items, get().workItemsCache[key]?.data)
+        items = read.apply(items, get().workItemsCache[key]?.data ?? undefined)
         const currentRepo = findRepoForGitHubOwner(get(), repoId, repoPath)
         const currentHostId = getGitHubWorkItemSourceHostId(currentRepo, options?.sourceContext)
         // Why: repo ownership changed, so this response belongs to an older execution-host bucket (host focus changes alone are fine).

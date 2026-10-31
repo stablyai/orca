@@ -45,7 +45,14 @@ import { reconcileTaskPagePagesWithWorkItemsCache } from '@/components/task-page
 import { VisibleReaders } from './github-task-refresh-visible-readers.test-fixture'
 
 it.each(
-  (['assignees', 'reviewRequests'] as const).flatMap((family) => [
+  (['assignees', 'reviewRequests'] as const).flatMap<{
+    family: 'assignees' | 'reviewRequests'
+    login: string
+    succeeds: boolean
+    remove: boolean
+    fullBeforeFailure?: string
+    resetBeforeFull?: boolean
+  }>((family) => [
     { family, login: 'cora', succeeds: true, remove: false },
     { family, login: 'cora', succeeds: false, remove: false },
     { family, login: 'bob', succeeds: true, remove: false },
@@ -123,7 +130,7 @@ it.each(
     let queryKey = '',
       viewer: string | null = null
     const outputs = (
-      pages: (GitHubWorkItem[] | null)[],
+      pages: (readonly GitHubWorkItem[] | null)[],
       mutation: ReturnType<typeof useTaskPageGitHubWorkItemMutation>,
       key: string,
       viewerLogin: string | null
@@ -531,7 +538,7 @@ it.each([false, true])(
     const foreignData = JSON.stringify(foreign)
     context.pages = [null, null, rows]
     const outputs = (
-      pages: (GitHubWorkItem[] | null)[],
+      pages: (readonly GitHubWorkItem[] | null)[],
       mutation: ReturnType<typeof useTaskPageGitHubWorkItemMutation>,
       queryKey: string,
       viewerLogin: string | null

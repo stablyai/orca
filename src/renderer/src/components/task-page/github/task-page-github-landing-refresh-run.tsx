@@ -156,7 +156,7 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubLandingRefr
   admitTaskPageGitHubListInputs([...page0Raw, ...(cachedTargetPage?.items ?? [])], context, true)
   landingRead.borrow([...page0Raw, ...(cachedTargetPage?.items ?? [])])
   // Why: pre-paint must still overlay in-flight mutations (K4/K18).
-  const landingPages: (GitHubWorkItem[] | null)[] = Array.from(
+  const landingPages: (readonly GitHubWorkItem[] | null)[] = Array.from(
     {
       length: targetPage + 1
     },

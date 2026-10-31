@@ -113,7 +113,9 @@ describe('post-confirm authority with non-null sourceScope', () => {
     const store = new Map<string, GitHubWorkItem>()
     const base = item({ state: 'open' })
     store.set(base.id, base)
-    const patchWorkItem = (id: string, patch: Partial<GitHubWorkItem>): void => {
+    const patchWorkItem: Parameters<
+      typeof beginTaskPageGitHubWorkItemMutation
+    >[0]['patchWorkItem'] = (id, patch): void => {
       const current = store.get(id) ?? base
       store.set(id, { ...current, ...patch })
     }

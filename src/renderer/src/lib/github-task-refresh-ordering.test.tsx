@@ -458,21 +458,20 @@ it('keeps page-N navigation and a shared workspace raw callback through acceptan
   list.mockReturnValue(gate.promise)
   let destination = -1,
     loading = true,
-    sharedItems: GitHubWorkItem[] = []
+    sharedItems: readonly GitHubWorkItem[] = []
   const pagesRef = { current: context.pages },
     noop = () => {}
   const foundation: Parameters<typeof useSmartWorkspaceGithubSearch>[0]['foundation'] = {
     debouncedQuery: '',
-    selectedRepo: undefined,
+    selectedRepo: null,
     githubSourceContext: null,
-    crossRepoSwitchTarget: null,
+    crossRepoSwitchTarget: 'project',
     disabled: false,
     handledCrossRepoUrlRef: { current: '' },
     repoSlugCacheRef: { current: new Map() },
-    repoBackedSearchTargets: [{ repo, githubSourceContext: source }],
-    repos: [repo],
+    repoBackedSearchTargets: [{ repo, githubSourceContext: source, gitlabSourceContext: null }],
     ...store.getState(),
-    setGithubItems: (change: GitHubWorkItem[] | ((rows: GitHubWorkItem[]) => GitHubWorkItem[])) => {
+    setGithubItems: (change: React.SetStateAction<readonly GitHubWorkItem[]>) => {
       sharedItems = typeof change === 'function' ? change(sharedItems) : change
     },
     setGithubLoading: noop,
@@ -499,12 +498,12 @@ it('keeps page-N navigation and a shared workspace raw callback through acceptan
       currentPageRef: { current: 0 },
       paginationGenerationRef: { current: 1 },
       countedTotalPagesRef: { current: null },
-      setPaginationLoading: (v: boolean) => {
-        loading = v
+      setPaginationLoading: (v) => {
+        loading = typeof v === 'function' ? v(loading) : v
       },
       setLoadingTargetPage: noop,
-      setCurrentPage: (v: number) => {
-        destination = v
+      setCurrentPage: (v) => {
+        destination = typeof v === 'function' ? v(destination) : v
       },
       setPages: (change: React.SetStateAction<typeof context.pages>) => {
         context.pages = typeof change === 'function' ? change(context.pages) : change
@@ -643,8 +642,8 @@ it('reconciles displaced weak/force/stronger raw returns and store commits with 
       }
     }
   }))
-  let oldRows: GitHubWorkItem[] = [],
-    strictRows: GitHubWorkItem[] = []
+  let oldRows: readonly GitHubWorkItem[] = [],
+    strictRows: readonly GitHubWorkItem[] = []
   await act(async () => {
     forced.resolve({ items: [seed], sources: { issues: null, prs: null } })
     oldRows = await r1

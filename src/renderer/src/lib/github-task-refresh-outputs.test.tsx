@@ -1,3 +1,4 @@
+import { NumberedPageReaders } from './github-task-refresh-numbered-page.test-fixture'
 import type * as ListModule from '@/components/task-page/github/List'
 
 import {
@@ -118,7 +119,7 @@ it('shows accepted ordinary pages and Project assignees through real row/chip/ca
   })
   context.pages = [null, null, [local, upstream, host, ghes, independentlyHidden, unassociated]]
   const outputs = (
-    pages: (GitHubWorkItem[] | null)[],
+    pages: (readonly GitHubWorkItem[] | null)[],
     mutation: ReturnType<typeof useTaskPageGitHubWorkItemMutation>,
     queryKey: string,
     viewerLogin: string | null
@@ -288,7 +289,7 @@ it('keeps independently exited page-N rows through real partial/quiet admission,
   store.setState({ repos: [repo, remote] })
   context.pages = [[local], null, [foreign]]
   const outputs = (
-    pages: (GitHubWorkItem[] | null)[],
+    pages: (readonly GitHubWorkItem[] | null)[],
     mutation: ReturnType<typeof useTaskPageGitHubWorkItemMutation>,
     key: string,
     viewerLogin: string | null
@@ -415,8 +416,8 @@ it('keeps independently exited page-N rows through real partial/quiet admission,
       countedTotalPagesRef: { current: null },
       retryingSourceKeys: new Set(),
       setRetryingSourceKeys: noop,
-      setTasksLoading: (value: boolean) => {
-        loading = value
+      setTasksLoading: (value) => {
+        loading = typeof value === 'function' ? value(loading) : value
       },
       setTasksRefreshing: noop,
       setTasksFiltering: noop,
@@ -470,7 +471,7 @@ it('renders actual single-page empty and multipage exits, and navigates cached a
     queryKey,
     viewerLogin
   }: {
-    pages: (GitHubWorkItem[] | null)[]
+    pages: (readonly GitHubWorkItem[] | null)[]
     mutation: ReturnType<typeof useTaskPageGitHubWorkItemMutation>
     queryKey: string
     viewerLogin: string | null
@@ -565,7 +566,7 @@ it('renders actual single-page empty and multipage exits, and navigates cached a
     )
   }
   const outputs = (
-    pages: (GitHubWorkItem[] | null)[],
+    pages: (readonly GitHubWorkItem[] | null)[],
     mutation: ReturnType<typeof useTaskPageGitHubWorkItemMutation>,
     queryKey: string,
     viewerLogin: string | null
@@ -620,7 +621,7 @@ it.each([false, true])(
     const { createRoot } = await import('react-dom/client')
     const sources = { issues: { owner: 'o', repo: 'r' }, prs: null }
     const initial = { ...seed, assignees: [user('bob')] }
-    let rows = [initial]
+    let rows: readonly GitHubWorkItem[] = [initial]
     if (fullKnown) {
       list.mockResolvedValueOnce({ items: rows, sources })
       rows = await store
@@ -629,7 +630,7 @@ it.each([false, true])(
     }
     context.pages = [null, null, rows]
     const outputs = (
-      pages: (GitHubWorkItem[] | null)[],
+      pages: (readonly GitHubWorkItem[] | null)[],
       mutation: ReturnType<typeof useTaskPageGitHubWorkItemMutation>,
       queryKey: string,
       viewerLogin: string | null
@@ -661,12 +662,14 @@ it.each([false, true])(
     const mounted = { current: true },
       owner = { current: {} }
     const wakes: (() => void)[] = []
-    const timer = vi.spyOn(window, 'setTimeout').mockImplementation((handler) => {
-      if (typeof handler === 'function') {
-        wakes.push(() => handler())
-      }
-      return 0
-    })
+    const timer = vi
+      .spyOn<Window, 'setTimeout'>(window, 'setTimeout')
+      .mockImplementation((handler) => {
+        if (typeof handler === 'function') {
+          wakes.push(() => handler())
+        }
+        return 0
+      })
     const before = list.mock.calls.length
     list.mockImplementation(async () => ({
       items: [
@@ -750,3 +753,64 @@ it.each([false, true])(
     timer.mockRestore()
   }
 )
+
+it('keeps numbered-page Full Cora with a pending Bob edit without a registry notification', async () => {
+  const { captureGitHubTaskObservation, observeGitHubWorkItem } =
+    await import('./github-task-observation')
+  const { subscribeTaskPageGitHubMutationRegistry } =
+    await import('@/components/task-page/github/task-page-github-work-item-mutation-registry')
+  const partial = observeGitHubWorkItem(
+    { ...seed, assignees: undefined },
+    captureGitHubTaskObservation(repo, source)!
+  )
+  store.setState({ workItemsCache: {}, projectViewCache: {}, githubTaskDrawerWorkItem: null })
+  context.pages = [[partial]]
+  await mount(
+    false,
+    (pages, mutation, queryKey, viewerLogin) => (
+      <NumberedPageReaders {...{ pages, mutation, queryKey, viewerLogin }} />
+    ),
+    'is:open',
+    true
+  )
+  const held = Promise.withResolvers<{ ok: boolean }>()
+  let writing!: Promise<unknown>
+  await act(async () => {
+    writing = taskMutation.run({
+      item: partial,
+      sourceContext: source,
+      intent: { type: 'toggleAssignee', user: user('bob') },
+      mutate: () => held.promise,
+      errorToast: 'Rejected'
+    })
+  })
+  const notifications = vi.fn(),
+    stop = subscribeTaskPageGitHubMutationRegistry(notifications)
+  try {
+    list.mockResolvedValue({
+      items: [{ ...seed, assignees: [user('cora')] }],
+      sources: { issues: { owner: 'o', repo: 'r' }, prs: null }
+    })
+    await click('Load Cora page')
+    expect(context.pages[2]?.[0].assignees?.map((u) => u.login)).toEqual(['cora', 'bob'])
+    expect(notifications).not.toHaveBeenCalled()
+    expect(
+      taskMutation.isIntentPending({
+        item: partial,
+        sourceContext: source,
+        intent: { type: 'toggleAssignee', user: user('bob') }
+      })
+    ).toBe(true)
+    const avatars = [...container.querySelectorAll('[data-tasks] img')].map((img) =>
+      img.getAttribute('title')
+    )
+    expect(avatars).toContain('cora (cora)')
+    expect(avatars).toContain('bob (bob)')
+  } finally {
+    stop()
+    await act(async () => {
+      held.resolve({ ok: true })
+      await writing
+    })
+  }
+})

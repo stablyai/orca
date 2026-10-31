@@ -48,8 +48,25 @@ export const rowKey = (row: GitHubWorkItem, host = row.repoHostId ?? '') =>
 export const dependency = (row: ObservedGitHubWorkItem, family: string) =>
   `${rowKey(row)}\0${getGitHubTaskObservation(row)?.key ?? ''}\0${family}`
 
+type ReadProgramContext = [
+  current: readonly GitHubWorkItem[],
+  program: readonly ReadBatch[],
+  domains: ReadonlyMap<string, number>,
+  pending: readonly GitHubWorkItem[] | undefined,
+  ownedFields: ReadonlyMap<string, ReadonlySet<keyof GitHubWorkItem>>,
+  borrowed: ReadonlySet<string>,
+  borrowedRows: ReadonlyMap<string, GitHubWorkItem>
+]
 export function applyGitHubTaskReadProgram(
   items: GitHubWorkItem[],
+  ...context: ReadProgramContext
+): { items: GitHubWorkItem[]; adopted: Map<string, Set<keyof GitHubWorkItem>> }
+export function applyGitHubTaskReadProgram(
+  items: readonly GitHubWorkItem[],
+  ...context: ReadProgramContext
+): { items: readonly GitHubWorkItem[]; adopted: Map<string, Set<keyof GitHubWorkItem>> }
+export function applyGitHubTaskReadProgram(
+  items: readonly GitHubWorkItem[],
   current: readonly GitHubWorkItem[],
   program: readonly ReadBatch[],
   domains: ReadonlyMap<string, number>,

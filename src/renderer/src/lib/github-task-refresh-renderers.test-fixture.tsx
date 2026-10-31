@@ -1,4 +1,3 @@
-import React from 'react'
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 export let fieldsRenders = 0
 export const GHEditSectionTopColumns = (p: {

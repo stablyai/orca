@@ -32,8 +32,10 @@ import type { GitHubWorkItemPatch } from '@/store/github/cache-model'
 export function transitionTaskPageGitHubMutationQuery(
   queryKey: string,
   state: Pick<AppState, 'repos' | 'workItemsCache' | 'patchWorkItems'>,
-  pages: readonly (GitHubWorkItem[] | null)[] = [],
-  setPages?: (change: (current: (GitHubWorkItem[] | null)[]) => (GitHubWorkItem[] | null)[]) => void
+  pages: readonly (readonly GitHubWorkItem[] | null)[] = [],
+  setPages?: (
+    change: (current: (readonly GitHubWorkItem[] | null)[]) => (readonly GitHubWorkItem[] | null)[]
+  ) => void
 ): void {
   if (getTaskPageGitHubMutationQueryKey() === queryKey) {
     return

@@ -30,14 +30,14 @@ export {
 } from './task-page-github-work-item-materialization'
 
 export function patchTaskPageGitHubWorkItemPages(
-  pages: readonly (GitHubWorkItem[] | null)[],
+  pages: readonly (readonly GitHubWorkItem[] | null)[],
   itemKey: { id: string; repoId: string },
   patch: Partial<ObservedGitHubWorkItem>,
   shouldPatch?: (item: GitHubWorkItem) => boolean,
   listComposition: readonly ListComposition[] = []
-): (GitHubWorkItem[] | null)[] {
+): (readonly GitHubWorkItem[] | null)[] {
   const projection = createTaskPageGitHubAuthorityProjection()
-  let nextPages: (GitHubWorkItem[] | null)[] | undefined
+  let nextPages: (readonly GitHubWorkItem[] | null)[] | undefined
   pages.forEach((page, pageIndex) => {
     if (!page) {
       return
@@ -67,11 +67,11 @@ export function patchTaskPageGitHubWorkItemPages(
       nextPages[pageIndex] = nextPage
     }
   })
-  return nextPages ?? (pages as (GitHubWorkItem[] | null)[])
+  return nextPages ?? (pages as (readonly GitHubWorkItem[] | null)[])
 }
 
 export function applyPendingTaskPageGitHubMutationsToItems(
-  items: GitHubWorkItem[],
+  items: readonly GitHubWorkItem[],
   context?: TaskPageGitHubProjectionContext
 ): GitHubWorkItem[] {
   const compose = createTaskPageGitHubAuthorityProjection()
@@ -125,7 +125,7 @@ export function reapplyPendingTaskPageGitHubMutationsToCache(args: {
   args.patchWorkItems(patches)
 }
 export function reconcileTaskPagePagesAfterQuietRefresh(args: {
-  pages: readonly (GitHubWorkItem[] | null)[]
+  pages: readonly (readonly GitHubWorkItem[] | null)[]
   queryKey: string
   authorityPage: number
   authorityItems: readonly GitHubWorkItem[]
@@ -133,7 +133,7 @@ export function reconcileTaskPagePagesAfterQuietRefresh(args: {
   visiblePage?: number
   visibleItems?: readonly GitHubWorkItem[]
   context?: TaskPageGitHubProjectionContext
-}): (GitHubWorkItem[] | null)[] {
+}): (readonly GitHubWorkItem[] | null)[] {
   const next = [...args.pages]
   const lastPage = args.visiblePage ?? args.authorityPage
   while (next.length <= lastPage) {
@@ -166,7 +166,7 @@ export function reconcileTaskPagePagesAfterQuietRefresh(args: {
 
 /** In-place overlay per page; preserves multi-page structure; no retain. */
 export function overlayPendingOnTaskPagePages(
-  pages: readonly GitHubWorkItem[][],
+  pages: readonly (readonly GitHubWorkItem[])[],
   context?: TaskPageGitHubProjectionContext
 ): GitHubWorkItem[][] {
   return pages.map((page) => applyPendingTaskPageGitHubMutationsToItems(page, context))
@@ -174,8 +174,8 @@ export function overlayPendingOnTaskPagePages(
 
 export function materializeTaskPageGitHubRead(
   read: GitHubTaskRead,
-  pages: readonly (GitHubWorkItem[] | null)[],
-  items: GitHubWorkItem[],
+  pages: readonly (readonly GitHubWorkItem[] | null)[],
+  items: readonly GitHubWorkItem[],
   queryKey: string,
   context?: TaskPageGitHubProjectionContext
 ): GitHubWorkItem[] {
@@ -189,11 +189,11 @@ export function materializeTaskPageGitHubRead(
 }
 export function restoreTaskPageGitHubReadPage(
   read: GitHubTaskRead,
-  pages: readonly (GitHubWorkItem[] | null)[],
-  items: GitHubWorkItem[],
+  pages: readonly (readonly GitHubWorkItem[] | null)[],
+  items: readonly GitHubWorkItem[],
   page: number,
   context?: TaskPageGitHubProjectionContext
-): (GitHubWorkItem[] | null)[] {
+): (readonly GitHubWorkItem[] | null)[] {
   const next = [...pages]
   while (next.length <= page) {
     next.push(null)
@@ -215,15 +215,15 @@ export { transitionTaskPageGitHubMutationQuery } from './task-page-github-work-i
 
 export function deliverTaskPageGitHubRead(
   read: GitHubTaskRead,
-  items: GitHubWorkItem[],
-  setPages: Dispatch<SetStateAction<(GitHubWorkItem[] | null)[]>>,
-  pagesRef: MutableRefObject<(GitHubWorkItem[] | null)[]>,
+  items: readonly GitHubWorkItem[],
+  setPages: Dispatch<SetStateAction<(readonly GitHubWorkItem[] | null)[]>>,
+  pagesRef: MutableRefObject<(readonly GitHubWorkItem[] | null)[]>,
   context: TaskPageGitHubProjectionContext,
   assign: (
-    pages: (GitHubWorkItem[] | null)[],
-    rows: GitHubWorkItem[],
+    pages: (readonly GitHubWorkItem[] | null)[],
+    rows: readonly GitHubWorkItem[],
     materialize: ReturnType<typeof createTaskPageGitHubMaterializer>
-  ) => (GitHubWorkItem[] | null)[]
+  ) => (readonly GitHubWorkItem[] | null)[]
 ): void {
   read.deliver(items, (update) => {
     for (const item of items) {
@@ -237,7 +237,7 @@ export function deliverTaskPageGitHubRead(
     }
     const materialize = createTaskPageGitHubMaterializer(context)
     const transition = Object.assign(
-      (current: (GitHubWorkItem[] | null)[]) => {
+      (current: (readonly GitHubWorkItem[] | null)[]) => {
         const previous = current.flatMap((page) => page ?? [])
         return assign(current, update(previous), materialize)
       },

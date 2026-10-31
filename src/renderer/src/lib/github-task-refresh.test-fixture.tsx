@@ -49,7 +49,6 @@ import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-cl
 
 import { useTaskPageGitHubWorkItemMutation } from '@/hooks/useTaskPageGitHubWorkItemMutation'
 import { useTaskPageGitHubMutationState } from '@/components/task-page/github/use-task-page-github-mutation-state'
-import type { ListComposition } from '@/components/task-page/github/task-page-github-work-item-mutation-registry'
 
 import { clearRuntimeEnvironmentConnectionGenerationsForTests } from '@/store/slices/runtime-status'
 
@@ -149,14 +148,14 @@ vi.mock('@/components/github/GitHubMarkdownComposer', async () => ({
     .GitHubMarkdownComposer
 }))
 
-let harnessSetPages: React.Dispatch<React.SetStateAction<(GitHubWorkItem[] | null)[]>>
+let harnessSetPages: React.Dispatch<React.SetStateAction<(readonly GitHubWorkItem[] | null)[]>>
 let taskMutation: ReturnType<typeof useTaskPageGitHubWorkItemMutation>
 
 let openedItem = seed,
   openedSource = source
 let root: Root,
   container: HTMLDivElement,
-  pages: (GitHubWorkItem[] | null)[],
+  pages: (readonly GitHubWorkItem[] | null)[],
   useItem = vi.fn()
 const direct = vi.fn(),
   update = vi.fn(),
@@ -171,7 +170,7 @@ function fixture(n = 1) {
   return { others: prepared.others, twin: prepared.twin }
 }
 export type OutputRenderer = (
-  pages: (GitHubWorkItem[] | null)[],
+  pages: (readonly GitHubWorkItem[] | null)[],
   mutation: ReturnType<typeof useTaskPageGitHubWorkItemMutation>,
   queryKey: string,
   viewerLogin: string | null
@@ -191,8 +190,8 @@ export function HarnessView({
   query?: string
   queryKey?: string
   viewerLogin?: string | null
-  localPages: (GitHubWorkItem[] | null)[]
-  setPages: React.Dispatch<React.SetStateAction<(GitHubWorkItem[] | null)[]>>
+  localPages: (readonly GitHubWorkItem[] | null)[]
+  setPages: React.Dispatch<React.SetStateAction<(readonly GitHubWorkItem[] | null)[]>>
   mutation: ReturnType<typeof useTaskPageGitHubWorkItemMutation>
 }) {
   useLayoutEffect(() => {
@@ -213,11 +212,8 @@ export function HarnessView({
     setDialogWorkItem: vi.fn(),
     handleUseWorkItem: useItem,
     closeTaskDetailPage: vi.fn(),
-    patchTaskPageWorkItemRows: (
-      item: GitHubWorkItem,
-      patch: Partial<GitHubWorkItem>,
-      matches: (row: GitHubWorkItem) => boolean
-    ) => setPages((current) => patchTaskPageGitHubWorkItemPages(current, item, patch, matches))
+    patchTaskPageWorkItemRows: (...args) =>
+      setPages((current) => patchTaskPageGitHubWorkItemPages(current, ...args))
   }
   return (
     <TooltipProvider>
@@ -249,8 +245,8 @@ export function Harness(props: HarnessProps) {
   return <HarnessView {...props} localPages={localPages} setPages={setPages} mutation={mutation} />
 }
 let deferPageUpdates = false
-let deferredPageUpdates: React.SetStateAction<(GitHubWorkItem[] | null)[]>[] = []
-let commitPages: React.Dispatch<React.SetStateAction<(GitHubWorkItem[] | null)[]>>
+let deferredPageUpdates: React.SetStateAction<(readonly GitHubWorkItem[] | null)[]>[] = []
+let commitPages: React.Dispatch<React.SetStateAction<(readonly GitHubWorkItem[] | null)[]>>
 export function ProductionHarness(props: HarnessProps) {
   const selectedRepos = useStore(store, (state) => state.repos)
   const [localPages, setLocalPages] = useState(context.pages)
@@ -285,10 +281,10 @@ export function ProductionHarness(props: HarnessProps) {
     setPages,
     perRepoSourceState: [],
     patchTaskPageWorkItemRows: (
-      item: GitHubWorkItem,
-      patch: Partial<GitHubWorkItem>,
-      matches?: (row: GitHubWorkItem) => boolean,
-      listComposition?: readonly ListComposition[]
+      item: Parameters<typeof patchTaskPageGitHubWorkItemPages>[1],
+      patch: Parameters<typeof patchTaskPageGitHubWorkItemPages>[2],
+      matches?: Parameters<typeof patchTaskPageGitHubWorkItemPages>[3],
+      listComposition?: Parameters<typeof patchTaskPageGitHubWorkItemPages>[4]
     ) =>
       setPages((current) =>
         patchTaskPageGitHubWorkItemPages(current, item, patch, matches, listComposition)
@@ -314,7 +310,10 @@ export function flushPageUpdates() {
   const queued = deferredPageUpdates
   deferredPageUpdates = []
   commitPages((current) =>
-    queued.reduce((rows, update) => (typeof update === 'function' ? update(rows) : update), current)
+    queued.reduce<(readonly GitHubWorkItem[] | null)[]>(
+      (rows, update) => (typeof update === 'function' ? update(rows) : update),
+      current
+    )
   )
 }
 

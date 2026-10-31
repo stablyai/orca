@@ -44,7 +44,7 @@ export type TaskPageWorkItemsFetchOptions = {
 }
 
 type WorkItemsCache = Record<string, CacheEntry<readonly GitHubWorkItem[]>>
-export type TaskPageWorkItemPages = readonly (GitHubWorkItem[] | null)[]
+export type TaskPageWorkItemPages = readonly (readonly GitHubWorkItem[] | null)[]
 
 export function deriveTaskPageGitHubWorkItemsFetchOptions(
   forcedFetch: boolean,
@@ -124,7 +124,7 @@ export function selectTaskPageUnresolvedSourceRepos(
 export function reconcileTaskPagePagesWithWorkItemsCache(
   pages: TaskPageWorkItemPages,
   entries: readonly (CacheEntry<readonly GitHubWorkItem[]> | undefined)[]
-): (GitHubWorkItem[] | null)[] {
+): (readonly GitHubWorkItem[] | null)[] {
   const cachedItems = new Map<string, GitHubWorkItem>()
   for (const entry of entries) {
     for (const item of entry?.data ?? []) {
@@ -150,7 +150,7 @@ export function reconcileTaskPagePagesWithWorkItemsCache(
     return pageChanged ? nextPage : page
   })
 
-  return changed ? nextPages : (pages as (GitHubWorkItem[] | null)[])
+  return changed ? nextPages : (pages as (readonly GitHubWorkItem[] | null)[])
 }
 
 export function shouldReplaceTaskPageItemsAfterRefresh(
@@ -215,14 +215,14 @@ export function shouldResetTaskPagePaginationAfterLandingRefresh(
 export function reconcileTaskPagePagesAfterLandingRefresh(
   pages: TaskPageWorkItemPages,
   refreshedItems: readonly GitHubWorkItem[]
-): (GitHubWorkItem[] | null)[] {
+): (readonly GitHubWorkItem[] | null)[] {
   const firstPage = pages[0] ?? []
   if (shouldResetTaskPagePaginationAfterLandingRefresh(firstPage, refreshedItems)) {
     return [[...refreshedItems]]
   }
   const nextFirstPage = reconcileTaskPageItemsAfterLandingRefresh(firstPage, refreshedItems)
   if (nextFirstPage === firstPage) {
-    return pages as (GitHubWorkItem[] | null)[]
+    return pages as (readonly GitHubWorkItem[] | null)[]
   }
   return [nextFirstPage, ...pages.slice(1)]
 }

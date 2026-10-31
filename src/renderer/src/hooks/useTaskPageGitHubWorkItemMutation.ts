@@ -155,7 +155,7 @@ export function useTaskPageGitHubWorkItemMutation(args: UseTaskPageGitHubWorkIte
       projection,
       membershipProjection: (
         input: Parameters<typeof createTaskPageGitHubMembershipProjection>[0]
-      ) => createTaskPageGitHubMembershipProjection(input, projection)
+      ) => createTaskPageGitHubMembershipProjection(input)
     }
   }, [registryVersion])
   const projection = snapshot.projection

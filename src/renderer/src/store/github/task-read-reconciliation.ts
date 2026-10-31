@@ -40,7 +40,7 @@ export function beginGitHubTaskRead(
   sources: readonly { repoId: string; path?: string; sourceContext?: TaskSourceContext | null }[],
   projectTarget?: RuntimeClientTarget,
   state?: Pick<AppState, 'repos'>,
-  destinationItems?: GitHubWorkItem[]
+  destinationItems?: readonly GitHubWorkItem[]
 ) {
   const { scopes, legacy, listDomains } = captureGitHubTaskReadDomains(sources, state)
   let program: ReadBatch[] = []
@@ -48,8 +48,10 @@ export function beginGitHubTaskRead(
   domains.set('*', -1)
   const borrowed = new Set<string>()
   const borrowedRows = new Map<string, GitHubWorkItem>()
-  let pending: GitHubWorkItem[] | undefined
-  let publish: ((update: (current: GitHubWorkItem[]) => GitHubWorkItem[]) => void) | undefined
+  let pending: readonly GitHubWorkItem[] | undefined
+  let publish:
+    | ((update: (current: readonly GitHubWorkItem[]) => readonly GitHubWorkItem[]) => void)
+    | undefined
   let previous = destinationItems
   const ownedFields = new Map<string, Set<keyof GitHubWorkItem>>()
   let release: (() => void) | undefined
@@ -83,6 +85,23 @@ export function beginGitHubTaskRead(
       }
       read.deliver(pending, publish, evaluated)
     }
+  }
+  function apply(items: GitHubWorkItem[], current?: readonly GitHubWorkItem[]): GitHubWorkItem[]
+  function apply(
+    items: readonly GitHubWorkItem[],
+    current?: readonly GitHubWorkItem[]
+  ): readonly GitHubWorkItem[]
+  function apply(items: readonly GitHubWorkItem[], current: readonly GitHubWorkItem[] = []) {
+    return applyGitHubTaskReadProgram(
+      items,
+      current,
+      program,
+      domains,
+      pending,
+      ownedFields,
+      borrowed,
+      borrowedRows
+    ).items
   }
   const read = {
     mark(
@@ -136,7 +155,7 @@ export function beginGitHubTaskRead(
       )
     },
     deliver(
-      items: GitHubWorkItem[],
+      items: readonly GitHubWorkItem[],
       destination: NonNullable<typeof publish>,
       evaluated = applyGitHubTaskReadProgram(
         items,
@@ -170,7 +189,7 @@ export function beginGitHubTaskRead(
       const fields = new Map([...ownedFields].map(([key, fields]) => [key, new Set(fields)]))
       destination(
         Object.assign(
-          (current: GitHubWorkItem[]) =>
+          (current: readonly GitHubWorkItem[]) =>
             materializeGitHubTaskDelivery(current, next, prior, previousRows, fields, dependencies),
           {
             commit: () => {
@@ -195,18 +214,7 @@ export function beginGitHubTaskRead(
         .flatMap((batch) => batch.patches)
         .filter((p): p is ReadPatch => p.target.current())
     },
-    apply(items: GitHubWorkItem[], current: readonly GitHubWorkItem[] = []): GitHubWorkItem[] {
-      return applyGitHubTaskReadProgram(
-        items,
-        current,
-        program,
-        domains,
-        pending,
-        ownedFields,
-        borrowed,
-        borrowedRows
-      ).items
-    },
+    apply,
     dispose() {
       liveTaskReads.delete(read)
       pending = undefined

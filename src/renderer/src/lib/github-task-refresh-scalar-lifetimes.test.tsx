@@ -14,7 +14,7 @@ import { parseTaskQuery } from '../../../shared/task-query'
 
 import { repo, source, seed, returned, user } from './github-task-refresh-data.test-fixture'
 
-import React, { act } from 'react'
+import { act } from 'react'
 
 import { expect, it, vi } from 'vitest'
 
@@ -68,7 +68,7 @@ it('preserves the single raw scalar source/replacement/revert and ownerless PR l
     kind: 'issues' | 'prs' = 'issues'
   let queryKey = ''
   const outputs = (
-    pages: (GitHubWorkItem[] | null)[],
+    pages: (readonly GitHubWorkItem[] | null)[],
     mutation: ReturnType<typeof useTaskPageGitHubWorkItemMutation>,
     key: string,
     viewerLogin: string | null
@@ -194,7 +194,7 @@ it('preserves the single raw scalar source/replacement/revert and ownerless PR l
       type: 'pr',
       url: 'https://github.com/o/r/pull/5',
       title: 'Pull request',
-      checksSummary: { state: 'success', total: 1, failed: 0, pending: 0, neutral: 0 }
+      checksSummary: { state: 'success', total: 1, passed: 1, failed: 0, pending: 0, neutral: 0 }
     },
     captureGitHubTaskObservation(repo, source)
   )
@@ -252,7 +252,7 @@ it.each([true, false])(
     )!
     context.pages = [null, null, [...aRows]]
     const outputs = (
-      pages: (GitHubWorkItem[] | null)[],
+      pages: (readonly GitHubWorkItem[] | null)[],
       mutation: ReturnType<typeof useTaskPageGitHubWorkItemMutation>,
       key: string,
       viewerLogin: string | null
@@ -416,7 +416,7 @@ it('seals the actual outer page updater across raw deletion and canonical siblin
     undefined,
     store.getState()
   )
-  type Pages = (GitHubWorkItem[] | null)[]
+  type Pages = (readonly GitHubWorkItem[] | null)[]
   let queued: ((current: Pages) => Pages) | undefined
   const current: Pages = [null, null, [row]]
   const foreignRepo = { ...repo, id: 'foreign', executionHostId: 'ssh:foreign' as const }
@@ -530,7 +530,7 @@ it('seals omitted-row membership and pending eligibility while retaining explici
     skipMeQualifiers: false,
     startedAt: 1
   })
-  type Pages = (GitHubWorkItem[] | null)[]
+  type Pages = (readonly GitHubWorkItem[] | null)[]
   const current: Pages = [[row, pendingRow]]
   const read = beginGitHubTaskRead(
     [{ repoId: repo.id, sourceContext: source }],

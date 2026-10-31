@@ -35,7 +35,7 @@ export function buildSelectedReposKey<
 export type WorkItemPageFetchResult = { items: GitHubWorkItem[] }
 
 export type AccumulateWorkItemPagesArgs = {
-  existingPages: readonly GitHubWorkItem[][]
+  existingPages: readonly (readonly GitHubWorkItem[])[]
   /** updatedAt of the oldest currently-loaded row — the first fetch cursor. */
   initialCursor: string
   /** 0-indexed page the user is trying to reach. */

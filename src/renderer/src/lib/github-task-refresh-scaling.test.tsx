@@ -30,7 +30,7 @@ import { captureGitHubTaskObservation } from './github-task-observation'
 
 import { repo, source, key, user, returned } from './github-task-refresh-data.test-fixture'
 
-import React, { act } from 'react'
+import { act } from 'react'
 
 import { createRoot } from 'react-dom/client'
 
@@ -98,7 +98,7 @@ it('bounds actual acceptance, owned row projection/admission and final completio
     rows.forEach((row, i) => {
       if (i > 1) {
         row.repoId = repos[i % s].id
-        row.repoHostId = repos[i % s].executionHostId
+        row.repoHostId = repos[i % s].executionHostId ?? undefined
       }
     })
     context.pages = [null, null, rows]
@@ -167,19 +167,21 @@ it('bounds actual acceptance, owned row projection/admission and final completio
         }
       })
     }
-    const spies = [
-      getTaskPageGitHubPendingEntries(),
-      getTaskPageGitHubListEntries(),
-      getLastConfirmedClientEntries()
-    ].map((entries) => {
+    const countValues = <T,>(entries: ReadonlyMap<string, T>) => {
       const original = entries.values.bind(entries)
       return vi.spyOn(entries, 'values').mockImplementation(function* () {
         for (const entry of original()) {
           authorityVisits++
           yield entry
         }
+        return undefined
       })
-    })
+    }
+    const spies = [
+      countValues(getTaskPageGitHubPendingEntries()),
+      countValues(getTaskPageGitHubListEntries()),
+      countValues(getLastConfirmedClientEntries())
+    ]
     const reads = Array.from({ length: r }, () =>
       beginGitHubTaskRead([{ repoId: repo.id, sourceContext: source }], undefined, { repos })
     )
@@ -367,6 +369,7 @@ it('bounds real ordinary cache reapplication after accepted publication when app
         pendingVisits++
         yield entry
       }
+      return undefined
     })
     const reads = Array.from({ length: r }, () =>
       beginGitHubTaskRead([{ repoId: repo.id, sourceContext: source }], undefined, { repos })
@@ -445,7 +448,9 @@ it('bounds real ordinary cache reapplication after accepted publication when app
       items: networkItems,
       sources: { issues: { owner: 'o', repo: 'r' }, prs: null }
     })
-    const pagesRef: { current: (GitHubWorkItem[] | null)[] } = { current: [null, null, rows] }
+    const pagesRef: { current: (readonly GitHubWorkItem[] | null)[] } = {
+      current: [null, null, rows]
+    }
     const mounted = { current: true }
     const phase: { scans: number; writes: number }[] = []
     const originalBatch = store.getState().patchWorkItems
@@ -670,6 +675,7 @@ it('bounds the actual query-transition collector and unchanged sink independentl
         entryVisits++
         yield entry
       }
+      return undefined
     })
     const iterator = rows[Symbol.iterator].bind(rows)
     const traversal = vi.spyOn(rows, Symbol.iterator).mockImplementation(function* () {
@@ -682,6 +688,7 @@ it('bounds the actual query-transition collector and unchanged sink independentl
         }
         yield row
       }
+      return undefined
     })
     const forEach = rows.forEach.bind(rows)
     const callbacks = vi.spyOn(rows, 'forEach').mockImplementation((callback, thisArg) =>

@@ -13,7 +13,6 @@ import { settleWorkItemDetailsFetch } from './work-item-details-fetch-settle'
 const details: GitHubWorkItemDetails = {
   item: {
     id: 'issue:5',
-    repoId: 'repo',
     type: 'issue',
     number: 5,
     url: 'https://github.com/o/r/issues/5',

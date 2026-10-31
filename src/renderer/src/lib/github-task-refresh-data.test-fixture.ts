@@ -109,6 +109,7 @@ export const table: GitHubProjectTable = {
   },
   selectedView: {
     id: 'view',
+    number: 1,
     name: 'Table',
     layout: 'TABLE_LAYOUT',
     filter: '',

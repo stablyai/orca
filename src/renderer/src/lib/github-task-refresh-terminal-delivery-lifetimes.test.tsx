@@ -24,6 +24,7 @@ import React, { act } from 'react'
 
 import { expect, it, vi } from 'vitest'
 
+import type { RepoSlug } from './github-links'
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 
 import type { useTaskPageGitHubWorkItemMutation } from '@/hooks/useTaskPageGitHubWorkItemMutation'
@@ -110,16 +111,19 @@ it.each([
     const smartRepos = store.getState().repos
     const targets = smartRepos.map((registered) => ({
       repo: registered,
-      githubSourceContext: getTaskPageRepoSourceContext(registered, 'github')
+      githubSourceContext: getTaskPageRepoSourceContext(registered, 'github'),
+      gitlabSourceContext: null
     }))
     const handled = { current: '' },
-      slugs = { current: new Map<string, string>() }
+      slugs = { current: new Map<string, RepoSlug>() }
     const noop = () => {}
-    let smartItems: GitHubWorkItem[] = [],
+    let smartItems: readonly GitHubWorkItem[] = [],
       smartCommits = 0
     let aggregateReturn: GitHubWorkItem[] | undefined
-    let queuedUpdater: ((current: GitHubWorkItem[]) => GitHubWorkItem[]) | undefined
-    let commitSmart!: React.Dispatch<React.SetStateAction<GitHubWorkItem[]>>
+    let queuedUpdater:
+      | ((current: readonly GitHubWorkItem[]) => readonly GitHubWorkItem[])
+      | undefined
+    let commitSmart!: React.Dispatch<React.SetStateAction<readonly GitHubWorkItem[]>>
     let finalPhase = 'waiting'
     const fetchSmart: ReturnType<typeof store.getState>['fetchWorkItemsAcrossRepos'] = async (
       ...args
@@ -136,7 +140,7 @@ it.each([
       )
       return result
     }
-    const setSmart: React.Dispatch<React.SetStateAction<GitHubWorkItem[]>> = (action) => {
+    const setSmart: React.Dispatch<React.SetStateAction<readonly GitHubWorkItem[]>> = (action) => {
       // Hold the real updater at its injected setter; this models deferral, not React scheduling.
       if (typeof action === 'function' && queued) {
         queuedUpdater = action
@@ -157,7 +161,7 @@ it.each([
     }: {
       mutation: ReturnType<typeof useTaskPageGitHubWorkItemMutation>
     }) {
-      const [items, setItems] = useGitHubTaskDeliveryState<GitHubWorkItem>([])
+      const [items, setItems] = useGitHubTaskDeliveryState<readonly GitHubWorkItem[]>([])
       React.useLayoutEffect(() => {
         smartItems = items
         smartCommits += 1
@@ -169,7 +173,7 @@ it.each([
           disabled: false,
           handledCrossRepoUrlRef: handled,
           repoSlugCacheRef: slugs,
-          crossRepoSwitchTarget: null,
+          crossRepoSwitchTarget: 'project',
           repoBackedSearchTargets: targets,
           selectedRepo: repo,
           githubSourceContext: source,
@@ -199,7 +203,7 @@ it.each([
       )
     }
     const outputs = (
-      pages: (GitHubWorkItem[] | null)[],
+      pages: (readonly GitHubWorkItem[] | null)[],
       mutation: ReturnType<typeof useTaskPageGitHubWorkItemMutation>,
       key: string,
       viewerLogin: string | null
@@ -658,6 +662,7 @@ it.each([
           if (!queuedUpdater) {
             throw new Error('Actual smart updater was not captured')
           }
+          const updater = queuedUpdater
           const snapshotInput: GitHubWorkItem[] = []
           const stateBefore = store.getState(),
             cacheBefore = stateBefore.workItemsCache
@@ -679,12 +684,12 @@ it.each([
           })
           try {
             finalPhase = 'deferred production updater through actual React setter'
-            await act(async () => commitSmart(queuedUpdater))
+            await act(async () => commitSmart(updater))
             expect(readRecords.find((record) => record.sourceCount === 2)?.disposed).toBe(true)
             recordsBefore = JSON.stringify(readRecords)
             finalPhase = 'same actual updater replay, same explicit empty input'
-            const first = queuedUpdater(snapshotInput),
-              second = queuedUpdater(snapshotInput)
+            const first = updater(snapshotInput),
+              second = updater(snapshotInput)
             expect(first).toEqual(second)
             expect(snapshotInput).toEqual([])
             const siblingRow = aggregateReturn?.find((row) => row.repoId === otherRepo.id)
@@ -751,6 +756,7 @@ it.each([
           if (!queuedUpdater) {
             throw new Error('Actual smart updater was not captured')
           }
+          const updater = queuedUpdater
           list.mockResolvedValueOnce({
             items: [{ ...ordinary, assignees: [] }, neighbor],
             sources: { issues: { owner: 'o', repo: 'r' }, prs: null }
@@ -765,7 +771,7 @@ it.each([
           finalPhase = 'same queued function with genuine current Full empty'
           await act(async () => {
             commitSmart(currentFull)
-            commitSmart(queuedUpdater)
+            commitSmart(updater)
           })
           const finalTarget = smartItems.find((row) => row.repoId === repo.id && row.number === 5)!
           console.info(

@@ -409,7 +409,7 @@ it('reconciles a real aggregate held leaf at landing final commit against a newe
   )
   let landingPages = context.pages
   function LandingOwner({ search, mutationKey }: { search: string; mutationKey: string }) {
-    const [pages, setPages] = React.useState<(GitHubWorkItem[] | null)[]>([])
+    const [pages, setPages] = React.useState<(readonly GitHubWorkItem[] | null)[]>([])
     const live = React.useRef(pages)
     React.useLayoutEffect(() => {
       landingPages = pages

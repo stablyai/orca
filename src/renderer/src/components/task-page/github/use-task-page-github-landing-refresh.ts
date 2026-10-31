@@ -1,7 +1,9 @@
-import type { TaskPageGitHubSearchPaginationModel } from './use-task-page-github-search-pagination'
+import type { TaskPageGitHubLandingRefreshInput } from './task-page-github-delivery-inputs'
 import { useEffect } from 'react'
 import { runTaskPageGitHubLandingRefresh } from './task-page-github-landing-refresh-run'
-export function useTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPaginationModel) {
+export function useTaskPageGitHubLandingRefresh<T extends TaskPageGitHubLandingRefreshInput>(
+  model: T
+) {
   const {
     workItemsInvalidationNonce,
     selectedReposKey,

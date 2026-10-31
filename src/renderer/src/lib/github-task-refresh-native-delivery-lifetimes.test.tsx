@@ -411,10 +411,10 @@ it('keeps two useful no-install returns in their own committed destinations afte
     )
   )
   const disposed = reads.map((read) => vi.spyOn(read, 'dispose'))
-  const destinations: React.Dispatch<React.SetStateAction<GitHubWorkItem[]>>[] = []
-  const rows: GitHubWorkItem[][] = []
+  const destinations: React.Dispatch<React.SetStateAction<readonly GitHubWorkItem[]>>[] = []
+  const rows: (readonly GitHubWorkItem[])[] = []
   function Owner({ index }: { index: number }) {
-    const [items, setItems] = useGitHubTaskDeliveryState<GitHubWorkItem>([])
+    const [items, setItems] = useGitHubTaskDeliveryState<readonly GitHubWorkItem[]>([])
     React.useLayoutEffect(() => {
       destinations[index] = setItems
       rows[index] = items
@@ -548,7 +548,7 @@ it('keeps accepted New through a mounted nonempty query transition to a cold des
       vi.spyOn(read, 'deliver').mockImplementation((items, destination) =>
         deliver(items, (update) =>
           destination(
-            Object.assign((current: GitHubWorkItem[]) => {
+            Object.assign((current: readonly GitHubWorkItem[]) => {
               const result = update(current)
               console.info('RESIDUAL-TRANSITION', JSON.stringify({ input: items, current, result }))
               return result

@@ -55,8 +55,9 @@ export function captureGitHubTaskObservation(
       ? { kind: 'environment' as const, environmentId: target.environmentId }
       : target
   const fence = captureHostIdentityFence(dispatch ? { ...route, target: dispatch } : route)
+  // SAFETY: registered repo IDs produce a context; preserve the existing failure for an invalid ID.
   const context =
-    source ?? buildTaskSourceContextFromRepo({ provider: 'github', projectId: repo.id, repo })
+    source ?? buildTaskSourceContextFromRepo({ provider: 'github', projectId: repo.id, repo })!
   const binding = githubTaskBinding(repo)
   const legacy = buildTaskSourceContextFromRepo({ provider: 'github', projectId: repo.id, repo })
   const ordinary = getTaskPageRepoSourceContext(repo, 'github')
@@ -142,10 +143,10 @@ export function observeGitHubWorkItem(
   return full ? qualifyGitHubTaskLists(observed, owner) : observed
 }
 
-export function qualifyGitHubTaskLists(
-  item: ObservedGitHubWorkItem,
+export function qualifyGitHubTaskLists<T extends Omit<ObservedGitHubWorkItem, 'repoId'>>(
+  item: T,
   owner: GitHubTaskObservation | undefined
-): ObservedGitHubWorkItem {
+): T {
   if (!owner) {
     return item
   }
@@ -170,7 +171,7 @@ export function gitHubTaskFamilyOrigin(
 
 export function patchObservedGitHubWorkItem(
   item: ObservedGitHubWorkItem,
-  patch: Partial<GitHubWorkItem>,
+  patch: Partial<ObservedGitHubWorkItem>,
   origins: Partial<Record<GitHubTaskFamily, GitHubTaskValueOrigin | undefined>>
 ): ObservedGitHubWorkItem {
   const nextOrigins = { ...item.githubValueOrigins, ...origins }
@@ -211,7 +212,8 @@ export function createGitHubTaskObservationIndex(
     if (!source && !defaults.has(repo)) {
       defaults.set(repo, sourceForRepo(repo))
     }
-    const context = source ?? defaults.get(repo) ?? null
+    // SAFETY: the selected registered repo supplies its source; null retains the existing encoder failure.
+    const context = (source ?? defaults.get(repo) ?? null)!
     const key = JSON.stringify([
       getRepoExecutionHostId(repo),
       repo.id,

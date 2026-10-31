@@ -15,7 +15,7 @@ import { getTaskPageGitHubMutationQueryKey } from '@/components/task-page/github
 import { parseTaskQuery } from '../../../shared/task-query'
 
 import { repo, source, seed, returned, user } from './github-task-refresh-data.test-fixture'
-import React, { act } from 'react'
+import { act } from 'react'
 import { expect, it, vi } from 'vitest'
 
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
@@ -42,7 +42,7 @@ it('uses the captured registered query actor through direct Refresh, final avata
     .fetchWorkItems(repo.id, repo.path, 30, query, { sourceContext: source })
   context.pages = [null, null, admitted]
   const outputs = (
-    pages: (GitHubWorkItem[] | null)[],
+    pages: (readonly GitHubWorkItem[] | null)[],
     mutation: ReturnType<typeof useTaskPageGitHubWorkItemMutation>,
     key: string,
     viewerLogin: string | null
@@ -128,7 +128,7 @@ it('uses the captured registered query actor through direct Refresh, final avata
   context.pages = [null, null, [pr]]
   await act(async () => harnessSetPages(context.pages))
   const reviewOutputs = (
-    pages: (GitHubWorkItem[] | null)[],
+    pages: (readonly GitHubWorkItem[] | null)[],
     mutation: ReturnType<typeof useTaskPageGitHubWorkItemMutation>,
     key: string,
     viewerLogin: string | null

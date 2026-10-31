@@ -2,19 +2,20 @@ import {
   sameGitHubTaskObservation,
   patchObservedGitHubWorkItem,
   getGitHubTaskObservation,
+  type ObservedGitHubWorkItem,
   gitHubTaskFamilyOrigin
 } from '@/lib/github-task-observation'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import { rowKey, dependency } from './task-read-program'
 
 export function materializeGitHubTaskDelivery(
-  current: GitHubWorkItem[],
-  next: GitHubWorkItem[],
-  prior: GitHubWorkItem[] | undefined,
+  current: readonly ObservedGitHubWorkItem[],
+  next: readonly GitHubWorkItem[],
+  prior: readonly GitHubWorkItem[] | undefined,
   previousRows: ReadonlyMap<string, GitHubWorkItem>,
   fields: ReadonlyMap<string, ReadonlySet<keyof GitHubWorkItem>>,
   dependencies: ReadonlySet<string>
-): GitHubWorkItem[] {
+): readonly GitHubWorkItem[] {
   if (!current.length || current === prior) {
     return next
   }

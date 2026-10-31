@@ -75,6 +75,7 @@ it('bounds population delivery preparation across cold and published multi-domai
     const unrelated = observeGitHubWorkItem(
       {
         ...returned.item,
+        repoId: repo.id,
         id: 'issue:9000',
         number: 9000,
         url: 'https://github.com/o/r/issues/9000',
@@ -131,10 +132,13 @@ it('bounds population delivery preparation across cold and published multi-domai
     const controls = [rows[0], rows[1], unrelated, foreignRow]
     const initial = [controls.slice(0, 2), controls.slice(2)]
     const pagesRef = { current: initial }
-    let pages: (GitHubWorkItem[] | null)[] = initial
-    let setter: React.Dispatch<React.SetStateAction<(GitHubWorkItem[] | null)[]>> | undefined
+    let pages: (readonly GitHubWorkItem[] | null)[] = initial
+    let setter:
+      | React.Dispatch<React.SetStateAction<(readonly GitHubWorkItem[] | null)[]>>
+      | undefined
     function Owner() {
-      const [value, setValue] = useGitHubTaskDeliveryState<GitHubWorkItem[] | null>(initial)
+      const [value, setValue] =
+        useGitHubTaskDeliveryState<(readonly GitHubWorkItem[] | null)[]>(initial)
       React.useLayoutEffect(() => {
         pages = value
         setter = setValue
@@ -174,7 +178,10 @@ it('bounds population delivery preparation across cold and published multi-domai
       indexes = 0,
       indexed = 0
     const knownPages = new WeakSet<object>([pagesRef.current])
-    const assign = (current: (GitHubWorkItem[] | null)[], next: GitHubWorkItem[]) => {
+    const assign = (
+      current: (readonly GitHubWorkItem[] | null)[],
+      next: readonly GitHubWorkItem[]
+    ) => {
       const result = [next.slice(0, 2), next.slice(2)]
       knownPages.add(current)
       knownPages.add(result)
@@ -239,6 +246,7 @@ it('bounds population delivery preparation across cold and published multi-domai
         }
         yield value
       }
+      return undefined
     }
     const flatMap = Array.prototype.flatMap
     const flatten = vi.spyOn(Array.prototype, 'flatMap').mockImplementation(function (
@@ -321,7 +329,8 @@ it('bounds population delivery preparation across cold and published multi-domai
         const a = update(controls)
         expect(update(controls)).toEqual(a)
         if ('commit' in update && typeof update.commit === 'function') {
-          queue.push(update.commit)
+          const commit = update.commit
+          queue.push(() => commit())
         }
       })
       cold.finish()
@@ -362,7 +371,7 @@ it('retains the eligible intermediate write footprint after restore and useful R
   const owner = captureGitHubTaskObservation(repo, source)!
   const originalLabels = ['original']
   const original = observeGitHubWorkItem(
-    { ...returned.item, title: 'Old', labels: originalLabels },
+    { ...returned.item, repoId: repo.id, title: 'Old', labels: originalLabels },
     owner,
     true
   )
@@ -376,9 +385,9 @@ it('retains the eligible intermediate write footprint after restore and useful R
       [original]
     )
     read.borrow([original])
-    let shown = [original]
-    let queued: ((current: GitHubWorkItem[]) => GitHubWorkItem[]) | undefined
-    const publish = (update: (current: GitHubWorkItem[]) => GitHubWorkItem[]) => {
+    let shown: readonly GitHubWorkItem[] = [original]
+    let queued: ((current: readonly GitHubWorkItem[]) => readonly GitHubWorkItem[]) | undefined
+    const publish = (update: (current: readonly GitHubWorkItem[]) => readonly GitHubWorkItem[]) => {
       queued = update
       shown = update(shown)
     }

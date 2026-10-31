@@ -143,7 +143,7 @@ export function useTaskPageGitHubMutationState<T extends TaskPageGitHubMutationS
               item.id === id &&
               (!options?.observation ||
                 currentOwner?.key === options.observation.key ||
-                options.listComposition?.some(
+                !!options.listComposition?.some(
                   (plan) =>
                     plan.retirement && dependsOnTaskPageGitHubListRetirement(item, plan.retirement)
                 )) &&

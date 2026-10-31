@@ -2,8 +2,6 @@ import { store } from './github-task-refresh.test-fixture'
 
 import { parseTaskQuery } from '../../../shared/task-query'
 
-import React from 'react'
-
 import { useStore } from 'zustand'
 
 import { TaskPageGitHubRows } from '@/components/task-page/github/Rows'
@@ -26,7 +24,7 @@ export function VisibleReaders({
   viewerLogin?: string | null
   query?: string
   kind?: 'issues' | 'prs'
-  pages: (GitHubWorkItem[] | null)[]
+  pages: (readonly GitHubWorkItem[] | null)[]
   mutation: ReturnType<typeof useTaskPageGitHubWorkItemMutation>
 }) {
   const projects = useStore(store, (state) => state.projectViewCache)

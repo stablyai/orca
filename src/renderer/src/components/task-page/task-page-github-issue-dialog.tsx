@@ -1,3 +1,5 @@
+import type { Repo } from '../../../../shared/repo-types'
+import type { GitHubItemDialogProps } from '../github-item-dialog/load-item-details/github-item-dialog-types'
 import { captureGitHubTaskObservation, observeGitHubWorkItem } from '@/lib/github-task-observation'
 
 import { getTaskPageRepoSourceContext } from './task-page-source-context'
@@ -23,12 +25,11 @@ import { translate } from '@/i18n/i18n'
 
 export type TaskPageGitHubRefreshModel = Pick<
   TaskPageComposerActionsModel,
-  | 'selectedRepos'
   | 'patchTaskPageWorkItemRows'
   | 'githubWorkItemMutationQueryKey'
   | 'appliedTaskQuery'
   | 'githubViewerLogin'
->
+> & { selectedRepos: readonly Repo[] }
 
 export function createTaskPageGitHubRefreshHandler(
   model: TaskPageGitHubRefreshModel
@@ -73,14 +74,15 @@ export function TaskPageGitHubIssueDialog({
     Pick<
       TaskPageComposerActionsModel,
       | 'dialogWorkItem'
-      | 'dialogInitialTab'
       | 'dialogRepoPath'
       | 'dialogSourceContext'
       | 'setDialogWorkItem'
       | 'handleUseWorkItem'
-      | 'handleDialogReviewRequestsChange'
       | 'closeTaskDetailPage'
-    >
+    > & {
+      dialogInitialTab?: GitHubItemDialogProps['initialTab']
+      handleDialogReviewRequestsChange?: GitHubItemDialogProps['onReviewRequestsChange']
+    }
 }) {
   const {
     dialogWorkItem,

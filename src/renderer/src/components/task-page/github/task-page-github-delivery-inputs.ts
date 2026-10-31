@@ -1,3 +1,4 @@
+import type { Repo } from '../../../../../shared/repo-types'
 import type { TaskPageGitHubSearchPaginationModel } from './use-task-page-github-search-pagination'
 import type { TaskPageGitHubQuietRefreshPreludeModel } from './use-task-page-github-quiet-refresh'
 import type { TaskPageLinearCreationStateModel } from '../linear/use-task-page-linear-creation-state'
@@ -10,6 +11,7 @@ export type TaskPageGitHubLandingRefreshInput = Pick<
   | 'appliedTaskQuery'
   | 'appliedTaskSearch'
   | 'countedTotalPagesRef'
+  | 'countWorkItemsAcrossRepos'
   | 'currentPageRef'
   | 'fetchWorkItemsAcrossRepos'
   | 'fetchWorkItemsNextPage'
@@ -31,6 +33,7 @@ export type TaskPageGitHubLandingRefreshInput = Pick<
   | 'pendingGithubScrollRestoreRef'
   | 'retryingSourceKeys'
   | 'selectedRepos'
+  | 'selectedReposKey'
   | 'setCountedTotalPages'
   | 'setCurrentPage'
   | 'setFailedCount'
@@ -86,12 +89,11 @@ export type TaskPageGitHubMutationStateInput = Pick<
   | 'pagesRef'
   | 'patchTaskPageWorkItemRows'
   | 'perRepoSourceState'
-  | 'selectedRepos'
   | 'setGitHubViewerLogin'
   | 'setPages'
   | 'setQuietRefreshNonce'
   | 'taskSource'
->
+> & { selectedRepos: readonly Repo[] }
 
 export type TaskPageGitHubListProjectionInput = Pick<
   TaskPageJiraCreationMetadataModel,
@@ -158,7 +160,6 @@ export type TaskPageGitHubRowsInput = Pick<
   | 'handleUseWorkItem'
   | 'openGitHubDetailPage'
   | 'repos'
-  | 'selectedRepos'
   | 'showGitHubTaskSkeletons'
   | 'showPRManagementColumns'
->
+> & { selectedRepos: readonly Repo[] }

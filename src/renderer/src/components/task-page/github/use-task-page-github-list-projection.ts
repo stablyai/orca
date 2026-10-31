@@ -39,7 +39,7 @@ export function useTaskPageGitHubListProjection<T extends TaskPageGitHubListProj
   const { membershipProjection } = githubWorkItemMutation
   // Why: defense-in-depth — keep stale cache rows from leaking across the issue/PR split tabs.
   const applyTypeFilter = useCallback(
-    (items: GitHubWorkItem[]) => {
+    (items: readonly GitHubWorkItem[]) => {
       return items.filter((item) => {
         return activeGithubTaskKind === 'prs' ? item.type === 'pr' : item.type === 'issue'
       })

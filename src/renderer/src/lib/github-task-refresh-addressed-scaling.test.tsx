@@ -38,7 +38,7 @@ it('bounds cloned-user login work for confirmed Addressed composition and comple
     const owner = captureGitHubTaskObservation(repo, source)!,
       scope = getTaskSourceCacheScope(source)
     const row = observeGitHubWorkItem(
-      { ...returned.item, assignees: [], reviewRequests: [] },
+      { ...returned.item, repoId: repo.id, assignees: [], reviewRequests: [] },
       owner,
       true
     )
@@ -181,7 +181,11 @@ it('composes distinct confirmed positives once and lets genuine current Full emp
     fixture()
     const owner = captureGitHubTaskObservation(repo, source)!,
       scope = getTaskSourceCacheScope(source)
-    const fullEmpty = observeGitHubWorkItem({ ...returned.item, assignees: [] }, owner, true)
+    const fullEmpty = observeGitHubWorkItem(
+      { ...returned.item, repoId: repo.id, assignees: [] },
+      owner,
+      true
+    )
     const address = {
       repoId: repo.id,
       itemId: taskPageGitHubMutationItemId(fullEmpty),

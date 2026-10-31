@@ -19,8 +19,6 @@ export function createTaskRefreshStore(n = 1) {
   store.setState({
     repos: [repo],
     settings: null,
-    endpointProjects: [],
-    endpointProjectHostSetups: [],
     projects: [],
     projectHostSetups: [],
     runtimeStatusByEnvironmentId: new Map(),

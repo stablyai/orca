@@ -59,7 +59,7 @@ it.each(
     const foreignData = JSON.stringify(foreign)
     context.pages = [null, null, rows]
     const outputs = (
-      pages: (GitHubWorkItem[] | null)[],
+      pages: (readonly GitHubWorkItem[] | null)[],
       mutation: ReturnType<typeof useTaskPageGitHubWorkItemMutation>,
       queryKey: string,
       viewerLogin: string | null
@@ -192,7 +192,7 @@ it.each([false, true])(
     context.pages = [null, null, forkRows]
     let activeQuery = forkQuery
     const outputs = (
-      pages: (GitHubWorkItem[] | null)[],
+      pages: (readonly GitHubWorkItem[] | null)[],
       mutation: ReturnType<typeof useTaskPageGitHubWorkItemMutation>,
       queryKey: string,
       viewerLogin: string | null
@@ -541,7 +541,7 @@ it.each([false, true])(
       .fetchWorkItems(repo.id, repo.path, 30, query, { sourceContext: writeSource })
     context.pages = [null, null, [...rows]]
     const outputs = (
-      pages: (GitHubWorkItem[] | null)[],
+      pages: (readonly GitHubWorkItem[] | null)[],
       mutation: ReturnType<typeof useTaskPageGitHubWorkItemMutation>,
       key: string,
       viewer: string | null

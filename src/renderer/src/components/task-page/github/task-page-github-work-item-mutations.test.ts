@@ -63,7 +63,9 @@ const assigneeSnapshot = () => getConfirmedListSnapshot(null, 'repo-1', issueLis
 
 function createPatchRecorder() {
   const patches: { id: string; patch: Partial<GitHubWorkItem>; repoId?: string }[] = []
-  const patchWorkItem = (id: string, patch: Partial<GitHubWorkItem>, repoId?: string): void => {
+  const patchWorkItem: Parameters<
+    typeof beginTaskPageGitHubWorkItemMutation
+  >[0]['patchWorkItem'] = (id, patch, repoId): void => {
     patches.push({ id, patch, repoId })
   }
   return { patches, patchWorkItem }
