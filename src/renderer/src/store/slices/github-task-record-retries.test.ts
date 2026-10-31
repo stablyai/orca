@@ -3,6 +3,7 @@ import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { GitHubProjectTable } from '../../../../shared/github/project-types'
 import { createTestStore, mockApi, resetRemoteRuntimeMocks } from './github-slice-test-harness'
 import { getTaskPageRepoSourceContext } from '@/lib/task-repo-source-context'
 
@@ -57,6 +58,51 @@ function deferred<T>() {
 async function flush() {
   for (let i = 0; i < 6; i++) {
     await Promise.resolve()
+  }
+}
+/** Runs every settled read's continuation, so a read that schedules another one shows up. */
+async function drain() {
+  for (let i = 0; i < 40; i++) {
+    await Promise.resolve()
+  }
+}
+/** A local Project board listing these issues, as one board fetch delivers it. */
+function boardOf(items: GitHubWorkItem[]): GitHubProjectTable {
+  return {
+    project: { id: 'p', owner: 'acme', ownerType: 'organization', number: 1, title: 'B', url: '' },
+    selectedView: {
+      id: 'v',
+      number: 1,
+      name: 'Table',
+      layout: 'TABLE_LAYOUT',
+      filter: '',
+      fields: [],
+      groupByFields: [],
+      sortByFields: []
+    },
+    rows: items.map((item) => ({
+      id: item.id,
+      position: item.number,
+      itemType: 'ISSUE',
+      updatedAt: item.updatedAt,
+      fieldValuesByFieldId: {},
+      content: {
+        title: item.title,
+        body: null,
+        url: item.url,
+        repository: 'acme/widgets',
+        number: item.number,
+        state: 'OPEN',
+        stateReason: null,
+        isDraft: null,
+        parentIssue: null,
+        issueType: null,
+        labels: [],
+        assignees: []
+      }
+    })),
+    totalCount: items.length,
+    parentFieldDropped: false
   }
 }
 /** A paired server on its own connection; `reconnect` advances it the way a dropped transport does. */
@@ -228,4 +274,78 @@ describe('task record reads across failures and reconnects', () => {
     }))
     expect(accepted).toBe(true)
   })
+
+  // Perf contract: the read budget per delivery is per binding, so it must not grow with the record count.
+  it.each([10, 100])(
+    'retries one parked read per delivery at %i records, none from cache hits or renders, none on its own',
+    async (n) => {
+      const store = createTestStore()
+      store.setState({ repos: [repo] })
+      const items = Array.from({ length: n }, (_, i) => issue(100 + i))
+      const sourceContext = getTaskPageRepoSourceContext(repo, 'github')
+      mockApi.gh.listWorkItems.mockResolvedValue({ items, sources })
+      const fetch = async (force: boolean) => {
+        lookup.mockClear()
+        await store.getState().fetchWorkItems(repo.id, repo.path, n, '', { sourceContext, force })
+        await drain()
+        return lookup.mock.calls.map(([args]) => args.number)
+      }
+      expect(await fetch(true)).toEqual([])
+      const cache = store.getState().githubTaskCache
+      const binding = cache.capture(repo, sourceContext)!
+      lookup.mockResolvedValue(null)
+      for (const item of items) {
+        cache.operation(item, binding, { assignees: { alice: user } })(true)
+      }
+      await drain()
+      // Each settled write got its own first read; every one answered nothing usable and parked.
+      expect(lookup).toHaveBeenCalledTimes(n)
+      expect([await fetch(true), await fetch(true), await fetch(true)]).toEqual([
+        [100],
+        [101],
+        [102]
+      ])
+      // Settled reads schedule nothing further; a fresh cache hit and rendering every row read nothing.
+      lookup.mockClear()
+      await drain()
+      expect(lookup).not.toHaveBeenCalled()
+      expect(await fetch(false)).toEqual([])
+      expect(items.map((item) => cache.projectItem(item).assignees)).toEqual(
+        items.map(() => [user])
+      )
+      await drain()
+      expect(lookup).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each([10, 100])(
+    'reads each of %i conflicting board records at most once per board fetch, joining reads in flight',
+    async (n) => {
+      const store = createTestStore()
+      store.setState({ repos: [repo] })
+      const cache = store.getState().githubTaskCache
+      const binding = cache.capture(repo, getTaskPageRepoSourceContext(repo, 'github'))!
+      const items = Array.from({ length: n }, (_, i) => issue(100 + i))
+      for (const item of items) {
+        await cache.readCanonical(item, binding, async () => item)
+      }
+      const answer = deferred<GitHubWorkItem | null>()
+      lookup.mockReturnValue(answer.promise)
+      const renamed = boardOf(items.map((item) => ({ ...item, title: 'Renamed' })))
+      // A second board fetch while every read is still in flight joins them.
+      cache.observeProject(renamed, { kind: 'local' })
+      cache.observeProject(renamed, { kind: 'local' })
+      await drain()
+      expect(lookup).toHaveBeenCalledTimes(n)
+      answer.resolve(null)
+      await drain()
+      expect(lookup).toHaveBeenCalledTimes(n)
+      // All parked now: the next board fetch retries only the longest-waiting one.
+      lookup.mockClear()
+      lookup.mockResolvedValue(null)
+      cache.observeProject(renamed, { kind: 'local' })
+      await drain()
+      expect(lookup.mock.calls.map(([args]) => args.number)).toEqual([100])
+    }
+  )
 })
