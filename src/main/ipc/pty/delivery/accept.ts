@@ -3,10 +3,12 @@ import {
   shouldDropHiddenRendererPtyData
 } from './pty-hidden-delivery-gate'
 import {
+  presentationHeldPtys,
   rendererVisibilityKnownPtys,
   visibleRendererPtys,
   activeRendererPtys
 } from './visibility-state'
+import { ptyIncarnationById } from '../provider/ownership-state'
 import { PTY_BATCH_INTERVAL_MS } from './constants'
 import {
   appendPendingPtyData,
@@ -60,6 +62,23 @@ export function acceptPtyDataForRenderer(
     return
   }
   const escapeStateBefore = advancePtyEscapeBoundary(payload.id, payload.data)
+  if (
+    session.runtime?.intentionalPtyStops?.holdsPresentation(
+      payload.id,
+      ptyIncarnationById.get(payload.id)
+    )
+  ) {
+    // A whole-tab close owns this process: its teardown output never reaches the pane it removes,
+    // and is never queued or charged to delivery.
+    presentationHeldPtys.add(payload.id)
+    return
+  }
+  if (presentationHeldPtys.delete(payload.id)) {
+    // The stop wasn't proven and the process lives on: the pane restores what was held back
+    // instead of continuing across a silent gap.
+    markPtyRendererStreamGap(payload.id)
+    sendModelRestoreNeededMarker(session, payload.id, 'pending-cap', startSeq)
+  }
   if (shouldDropHiddenRendererPtyData(payload.id, session.getSettings?.())) {
     const droppedChars = payload.data.length
     const drop = recordHiddenRendererPtyDataDrop(payload.id, droppedChars)

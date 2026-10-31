@@ -80,6 +80,20 @@ export class TerminalIntentionalStops {
     return [...stop.ownersByKind.keys()]
   }
 
+  /**
+   * Whether a whole-tab close owns this exact process, so its teardown output is held from the pane
+   * the close removes. Reads only: never pins the stop to a process the way an exit claim does.
+   * Released when an unproven stop settles; a later process on the same id is never held.
+   */
+  holdsPresentation(ptyId: string, incarnationId: string | null | undefined): boolean {
+    const stop = this.stopsByPtyId.get(ptyId)
+    return (
+      stop?.ownersByKind.has('closing') === true &&
+      incarnationId != null &&
+      stop.incarnationId === incarnationId
+    )
+  }
+
   /** Whether a stop of this PTY that may still be undone is in flight. */
   isReversibleStopInFlight(ptyId: string): boolean {
     return (this.stopsByPtyId.get(ptyId)?.ownersByKind.get('reversible')?.inFlight ?? 0) > 0

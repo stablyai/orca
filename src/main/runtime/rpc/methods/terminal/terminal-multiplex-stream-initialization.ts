@@ -94,6 +94,17 @@ export async function initializeMultiplexStream(
     if (!isMultiplexStreamAttached(state, stream)) {
       return
     }
+    // Only a client that restores after a drop can be held: one without that notice would carry on
+    // across a silent gap if the stop isn't proven, so it keeps receiving the output.
+    if (meta?.presentationHeld && stream.supportsOutputPauseDropNotice) {
+      stream.presentationHeld = true
+      return
+    }
+    if (stream.presentationHeld) {
+      stream.presentationHeld = false
+      stream.outputBatcher.flush()
+      state.sendFrame(stream.streamId, TerminalStreamOpcode.PausedOutputDropped)
+    }
     if (stream.outputPaused) {
       notePausedOutputDropped(state, stream)
       return

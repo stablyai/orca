@@ -309,7 +309,10 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
       seq: outputSequence,
       rawLength: sequenceChars,
       ...(transformed ? { transformed: true } : {}),
-      ...(cwdChanged && cwd !== null ? { cwd } : {})
+      ...(cwdChanged && cwd !== null ? { cwd } : {}),
+      ...(this.intentionalPtyStops.holdsPresentation(ptyId, this.ptysById.get(ptyId)?.incarnationId)
+        ? { presentationHeld: true }
+        : {})
     }))
     return outputSequence
   }
