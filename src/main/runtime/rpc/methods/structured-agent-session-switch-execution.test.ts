@@ -445,6 +445,28 @@ it('puts the switched terminal in the chat tab’s slot and closes the chat tab,
   ).toBe(false)
 })
 
+it('refuses a chat whose saved history it cannot read before stopping the chat', async () => {
+  const { runtime } = setupMainOwnedWorkspace()
+  await savedTranscript(rig)
+  vi.spyOn(cliTranscript, 'nativeConversationContent').mockReturnValue('saved')
+  vi.mocked(cliTranscript.prepareStructuredChatCliTranscript)
+    .mockReset()
+    .mockResolvedValue({ useRealCodexHome: false })
+  const stop = vi.spyOn(rig.host, 'stopForSwitch')
+  const spawn = vi.spyOn(runtime, 'spawnSwitchTerminal')
+  const result = await executeStructuredSessionSwitch(
+    { sessionId: id, execution: { invocationId: 'to-terminal-unreadable' } },
+    { runtime },
+    'terminal'
+  )
+  expect(result).toMatchObject({
+    status: 'refused',
+    refusal: { details: { reason: 'transcriptUnreadable' } }
+  })
+  expect(stop).not.toHaveBeenCalled()
+  expect(spawn).not.toHaveBeenCalled()
+})
+
 it.each([
   ['connected', 1],
   // The window may have placed it before the answer was lost: kept for the retry to adopt.

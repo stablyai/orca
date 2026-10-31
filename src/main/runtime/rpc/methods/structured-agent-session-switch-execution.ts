@@ -143,8 +143,17 @@ async function switchToChat(
   const paneKey = close ? `${close.source.tabId}:${close.source.leafId}` : undefined
   const row = paneKey ? ctx.runtime.agentTransitions.latestRow(paneKey) : null
   const adopt = createIdentity?.adopt
-  // Admission before anything stops: only a live agent the status store shows holding this
-  // conversation outside the pane being closed refuses, so a refusal leaves the source running.
+  // Every refusal that can be known runs before anything stops, so a refused switch leaves the
+  // source running: a chat that holds the conversation must switch here and open.
+  if (host.deps.store.getRecord(sessionId)) {
+    requireStructuredSwitchRecord(host, sessionId)
+    const opened = await host.revealSession(sessionId)
+    if (!opened.readable && opened.openRefusal) {
+      throw new AgentSessionRefusalError(opened.openRefusal)
+    }
+  }
+  // Admission: only a live agent the status store shows holding this conversation outside the
+  // pane being closed refuses.
   const agent = create?.agent ?? host.deps.store.getRecord(sessionId)?.provider
   if (agent && providerSessionId) {
     await ctx.runtime.assertNoCliWriterOutsideSwitchSource(agent, providerSessionId, paneKey)

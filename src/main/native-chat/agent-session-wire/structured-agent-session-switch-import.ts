@@ -99,12 +99,15 @@ export async function captureSwitchStoppedCliTurn(
   deadline: AgentSessionSwitchDeadline,
   retained?: { journal: AgentSessionJournal; resumeCursor?: string }
 ): Promise<SwitchStoppedCliTurn | undefined> {
+  // Known before the stop: a Pi chat with its own work since the claim can't take the CLI's.
+  const cut = retained && piHistoryCut(retained.journal, source, retained.resumeCursor)
+  if (cut && !cut.mergeable) {
+    throw transcriptUnreadable()
+  }
   if (!working) {
     return undefined
   }
-  const piAfterEntry =
-    retained && piHistoryCut(retained.journal, source, retained.resumeCursor).entry
-  const prepared = await prepare(source, deadline, piAfterEntry)
+  const prepared = await prepare(source, deadline, cut?.entry)
   const user = latestTurnUserItem(prepared)
   if (!user || (prepared.latestTurn && prepared.latestTurn.state !== 'working')) {
     return undefined

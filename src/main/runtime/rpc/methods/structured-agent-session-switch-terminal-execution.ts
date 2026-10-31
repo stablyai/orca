@@ -30,6 +30,12 @@ export async function executeStructuredSessionTerminalSwitch(
     })
   }
   const execution = SwitchToTerminalParams.parse(params).execution
+  // Saved turns are history the terminal must read: an unreadable transcript refuses before the
+  // chat is stopped. A chat whose first reply is still landing is read after the stop.
+  if (nativeConversationContent(await host.journalSnapshot(sessionId)) === 'saved') {
+    await prepareSwitchCliTranscript(ctx.runtime, sessionId, record.location.workspaceId, true)
+  }
+  deadline.check()
   const workCurrent = await host.stopForSwitch(
     sessionId,
     { callerKey: 'trusted-local:session-switch' },
