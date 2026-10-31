@@ -8,6 +8,7 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileDefaultSessionViewPreference } from '../session/use-mobile-default-session-view-preference'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { MobileSwitch } from '../components/MobileSwitch'
+import { ComposerUsageWindowPicker } from '../composer-usage/ComposerUsageWindowPicker'
 
 export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => void }) {
   useMobileColorScheme()
@@ -69,6 +70,19 @@ export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => vo
             />
           </View>
         </View>
+
+        <Text style={[styles.groupHeading, styles.groupGap]}>
+          {t('settings.nativeChatSettingsScreen.composerUsageHeading', 'COMPOSER USAGE')}
+        </Text>
+        <Text style={styles.groupDescription}>
+          {t(
+            'settings.nativeChatSettingsScreen.composerUsageDescription',
+            'Chat and agent terminal composers show how much of your agent plan is used. Tap the meter for every window, reset times and pace.'
+          )}
+        </Text>
+        <View style={[styles.section, styles.sectionTopGap]}>
+          <ComposerUsageWindowPicker inSettings />
+        </View>
       </ScrollView>
     </View>
   )
@@ -120,6 +134,9 @@ const styles = themedStyleSheet(() => ({
   },
   sectionTopGap: {
     marginTop: spacing.sm
+  },
+  groupGap: {
+    marginTop: spacing.xl
   },
   row: {
     flexDirection: 'row',

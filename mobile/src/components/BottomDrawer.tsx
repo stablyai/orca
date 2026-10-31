@@ -14,6 +14,7 @@ type Props = {
   interactive?: boolean
   zIndex?: number
   scrollResetKey?: string | null
+  spanReleasedSide?: boolean
 }
 
 const SHOWN = 'shown'

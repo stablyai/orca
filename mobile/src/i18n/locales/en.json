@@ -69,7 +69,9 @@
       "defaultViewDescription": "Choose how supported agent sessions (Claude, Codex, and other chat-capable agents) open on this device. Terminal shows the raw CLI; Chat UI shows a chat interface like the desktop app. You can still switch any individual session from its long-press menu.",
       "openInChatUi": "Open sessions in Chat UI",
       "on": "On",
-      "off": "Off"
+      "off": "Off",
+      "composerUsageHeading": "COMPOSER USAGE",
+      "composerUsageDescription": "Chat and agent terminal composers show how much of your agent plan is used. Tap the meter for every window, reset times and pace."
     },
     "nativeNotificationDeliverySettings": {
       "loadFailed": "Could not load delivery settings. Reopen this screen to retry.",
@@ -2549,6 +2551,8 @@
       "attachImage": "Attach image",
       "placeholder": "Ask anything, @ to mention files, / for commands",
       "cancelEditing": "Cancel editing",
+      "keepChatClear": "Keep chat clear of the side column",
+      "expandChat": "Expand chat into the side column",
       "saveEditedMessage": "Save edited message",
       "sendMessage": "Send message",
       "sendQueue": "Queue",
@@ -4248,6 +4252,34 @@
           }
         }
       }
+    }
+  },
+  "composerUsage": {
+    "meter": {
+      "label": "{{provider}} {{window}} usage: {{percent}}% used. Show details"
+    },
+    "sheet": {
+      "title": "{{provider}} usage",
+      "description": "Pace compares what you have used with an even burn across each window."
+    },
+    "window": {
+      "sessionTitle": "{{length}} session",
+      "weeklyTitle": "Weekly",
+      "fableWeeklyTitle": "Weekly (Fable)",
+      "monthlyTitle": "Monthly",
+      "resets": "Resets {{when}} · in {{duration}}",
+      "usedLeft": "{{used}}% used · {{left}}% left"
+    },
+    "pace": {
+      "onPace": "On pace",
+      "under": "{{percent}}% under pace",
+      "ahead": "{{percent}}% ahead of pace",
+      "aheadRunOut": "{{percent}}% ahead of pace — at this rate you'd run out ~{{duration}} before reset"
+    },
+    "picker": {
+      "label": "Show in composer",
+      "session": "5-hour",
+      "weekly": "Weekly"
     }
   }
 }

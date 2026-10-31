@@ -27,6 +27,8 @@ type MessageBoxProps = Omit<
   leading?: ReactNode
   /** Controls at the end of the action row, before Send. */
   trailing?: ReactNode
+  /** Centered in the gap between leading and trailing. */
+  middle?: ReactNode
   /** A bar floating at the bottom of the screen; casts the composer's shadow. */
   docked?: boolean
   /** Drawn over the text, which hides while it is set, e.g. dictation's live preview. */
@@ -46,6 +48,7 @@ export function MessageBox({
   sendAccessibilityLabel,
   leading,
   trailing,
+  middle,
   docked = false,
   inputOverlay,
   monospace = false,
@@ -90,7 +93,7 @@ export function MessageBox({
       {hasActions ? (
         <View style={styles.actionRow}>
           {leading}
-          <View style={styles.actionSpacer} />
+          {middle ?? <View style={styles.actionSpacer} />}
           {trailing}
           {onSend ? (
             <ComposerSendButton

@@ -75,6 +75,7 @@ vi.mock('./MobileTerminalCommandDictationPreview', () => ({
 }))
 vi.mock('./MobileSessionAccessoryKeys', () => ({ MobileSessionAccessoryKeys: () => null }))
 vi.mock('../platform/host-os', () => ({ hostOs: () => 'ios' }))
+vi.mock('../composer-usage/ComposerUsageMeter', () => ({ ComposerUsageSlot: () => null }))
 
 type Selection = { handle: string; liveInputEnabled: boolean }
 let root: Root | undefined
