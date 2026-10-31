@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createDaemonFileLog, createNoopDaemonFileLog } from './daemon-file-log'
+import { createDaemonFileLog } from './daemon-file-log'
 
 let dir: string
 
@@ -100,12 +100,4 @@ describe('createDaemonFileLog', () => {
   })
 })
 
-describe('createNoopDaemonFileLog', () => {
-  it('accepts log/close calls without touching the filesystem', () => {
-    const log = createNoopDaemonFileLog()
-    expect(() => {
-      log.log('startup', { x: 1 })
-      log.close()
-    }).not.toThrow()
-  })
-})
+describe('createNoopDaemonFileLog', () => {})

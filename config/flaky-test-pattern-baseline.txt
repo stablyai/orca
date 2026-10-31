@@ -1108,7 +1108,6 @@
 1 test-no-wall-clock:src/renderer/src/components/sidebar/WorktreeList.lineage-agent-expansion-coupling.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/sidebar/WorktreeList.lineage-child-real-card.test.tsx
 5 test-no-wall-clock:src/renderer/src/components/sidebar/use-workspace-reference-details.test.tsx
-3 test-no-wall-clock:src/renderer/src/components/sidebar/worktree-agent-rows-subscriptions.bench.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/status-bar/RuntimeHostStatusRow.test.tsx
 5 test-no-wall-clock:src/renderer/src/components/status-bar/inline-usage-bars.test.tsx
 4 test-no-wall-clock:src/renderer/src/components/status-bar/provider-segment-balance.test.tsx
