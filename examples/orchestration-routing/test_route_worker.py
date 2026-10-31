@@ -370,6 +370,28 @@ class SpecAndLivenessTests(unittest.TestCase):
             self.assertEqual(argv[argv.index("--run") + 1], RUN_ID)
         self.assertEqual(cli.calls[1][cli.calls[1].index("--cursor") + 1], "cursor-2")
 
+    def test_liveness_rejects_repeated_pagination_cursors_before_launch(self) -> None:
+        cases = (
+            ("immediate-repeat", ("cursor-1", "cursor-1")),
+            ("long-cycle", ("cursor-1", "cursor-2", "cursor-1")),
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            spec_path = Path(temp_dir) / "task.md"
+            spec_path.write_text(SPEC_TEXT, encoding="utf-8")
+            for label, cursors in cases:
+                with self.subTest(case=label):
+                    state_dir = Path(temp_dir) / f"state-{label}"
+                    cli = FakeOrcaCli([worker_page([], next_cursor=cursor) for cursor in cursors])
+                    exit_code, response = run_main(cli, state_dir, spec_path, "--provider", "codex")
+
+                    self.assertEqual(exit_code, 2)
+                    self.assertFalse(response["ok"])
+                    self.assertEqual(response["error"]["code"], "worker_list_unverifiable")
+                    self.assertEqual(len(cli.calls), len(cursors))
+                    self.assertTrue(all("worker-list" in argv for argv in cli.calls))
+                    self.assertFalse(any("worker-start" in argv for argv in cli.calls))
+                    self.assertFalse(state_dir.exists())
+
     def test_liveness_enforces_configured_limit_and_unknown_is_not_dead(self) -> None:
         at_limit = worker_page([worker_row(f"d{i}", "live") for i in range(3)])
         with mock.patch.object(router.subprocess, "run", FakeOrcaCli([at_limit])):

@@ -648,6 +648,7 @@ def list_worker_liveness(
 ) -> dict[str, Any]:
     cursor: str | None = None
     seen: set[str] = set()
+    used_cursors: set[str] = set()
     live = rows = pages = 0
     while True:
         argv = [*orca_prefix, "orchestration", "worker-list", "--include-remote"]
@@ -700,6 +701,11 @@ def list_worker_liveness(
         if has_more is not True or not isinstance(next_cursor, str) or not next_cursor:
             raise GuardError("worker_list_unverifiable",
                              "worker-list pagination state is unknown; refusing to launch", {"page": page})
+        if next_cursor in used_cursors:
+            raise GuardError("worker_list_unverifiable",
+                             "worker-list pagination cursor repeated; refusing to launch",
+                             {"cursor": next_cursor})
+        used_cursors.add(next_cursor)
         cursor = next_cursor
     if live >= max_live_workers:
         raise GuardError("worker_limit_reached", f"At least {max_live_workers} live workers are already active in this Run",
