@@ -83,12 +83,16 @@ vi.mock('@/components/tab-bar/cli-chat-resume-terminal-capture', async (original
     ...actual,
     captureSourceTerminal: (...args: Parameters<typeof actual.captureSourceTerminal>) =>
       mocks.source.current
-        ? Promise.resolve({
-            target: { kind: 'local' },
-            handle: 'source-handle',
-            incarnationId: 'source-incarnation',
-            presentation: { identity: { ptyId: 'source-pty' } }
-          })
+        ? Promise.resolve(
+            mocks.captured.current
+              ? {
+                  target: { kind: 'local' },
+                  handle: 'source-handle',
+                  incarnationId: 'source-incarnation',
+                  presentation: { identity: { ptyId: 'source-pty' } }
+                }
+              : null
+          )
         : actual.captureSourceTerminal(...args)
   }
 })
@@ -102,7 +106,13 @@ const mocks = vi.hoisted(() => {
   function makeSource(): { current: CliChatResumeSource | null } {
     return { current: null }
   }
-  return { create: vi.fn(), support: vi.fn(), stopped: vi.fn(), source: makeSource() }
+  return {
+    create: vi.fn(),
+    support: vi.fn(),
+    stopped: vi.fn(),
+    source: makeSource(),
+    captured: { current: true }
+  }
 })
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), error: vi.fn() } }))
 vi.mock('../focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi.fn() }))
@@ -125,6 +135,7 @@ let main: TabsDrawnFromMain
 beforeEach(async () => {
   vi.clearAllMocks()
   mocks.source.current = null
+  mocks.captured.current = true
   setLocalRuntimeCapabilitiesForTests([])
   clearNativeChatComposerDraftsForTests()
   setNativeChatComposerDraftStorageForTests(createMemoryNativeChatComposerDraftStorage())
@@ -149,9 +160,15 @@ async function mainLoadsStoreLayout(): Promise<void> {
   main = await drawTabsFromMain(useAppStore)
 }
 
-it.each([false, true])(
-  'strict legacy Stop through real host admission and provisional/layout writers, newer navigation=%s',
-  async (navigate) => {
+it.each([
+  [false, true],
+  [true, true],
+  [false, false]
+])(
+  'strict legacy Stop through real host admission and provisional/layout writers, newer navigation=%s, captured=%s',
+  async (navigate, captured) => {
+    // A pane with no terminal to capture (its shell exited) stops nothing and opens the chat.
+    mocks.captured.current = captured
     const source = useAppStore
       .getState()
       .createUnifiedTab('wt-1', 'terminal', { id: 'source-terminal', entityId: 'source-terminal' })
@@ -226,12 +243,16 @@ it.each([false, true])(
       source: mocks.source.current
     })
     await vi.waitFor(() => expect(mocks.support).toHaveBeenCalledOnce())
-    expect(mocks.stopped).toHaveBeenCalledExactlyOnceWith({
-      worktree: 'id:wt-1',
-      expectedPtyIds: ['source-pty'],
-      targetOnly: true,
-      keepHistory: true
-    })
+    if (captured) {
+      expect(mocks.stopped).toHaveBeenCalledExactlyOnceWith({
+        worktree: 'id:wt-1',
+        expectedPtyIds: ['source-pty'],
+        targetOnly: true,
+        keepHistory: true
+      })
+    } else {
+      expect(mocks.stopped).not.toHaveBeenCalled()
+    }
     expect(mocks.create).not.toHaveBeenCalled()
     await main.settle()
     if (navigate) {

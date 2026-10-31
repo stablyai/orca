@@ -65,8 +65,14 @@ export async function runLegacyCliChatResume(
   conversationSwitchChanged()
   try {
     const captured = await captureSourceTerminal(source)
-    const ptyId = captured?.presentation?.identity.ptyId
-    if (!captured || !ptyId || !isCurrent()) {
+    // A pane with no terminal to capture has no process to stop: the earlier resume opens the
+    // conversation as a chat beside it.
+    if (!captured) {
+      await runOrdinaryCliChatResume(source, true)
+      return
+    }
+    const ptyId = captured.presentation?.identity.ptyId
+    if (!ptyId || !isCurrent()) {
       throw stopUnknown()
     }
     if (!stillCaptured()) {

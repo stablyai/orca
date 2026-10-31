@@ -482,7 +482,7 @@ describe('one pane of a terminal tab', () => {
   })
 
   it.each(['local', 'runtime:server-1'])(
-    "still offers an exited agent's conversation on a %s pane, while it is bound to its terminal",
+    "still offers an exited agent's conversation on a %s pane, bound to its terminal or not",
     (host) => {
       makeState({}, host === 'local' ? {} : { executionHostId: host })
       useAppStore.setState({ runtimeStatusByEnvironmentId: serverWithChat(true) })
@@ -507,9 +507,10 @@ describe('one pane of a terminal tab', () => {
       store().removeAgentStatus(pane)
       expect(store().agentStatusByPaneKey).toEqual({})
       expect(paneGate(store(), pane)).toBe(true)
-      // A failed switch unbinds a host's pane; only Session History can switch that one now.
+      // The shell's exit (or a failed switch) unbinds the pane; its controls still offer the
+      // switch, which opens the chat beside it.
       bind(undefined)
-      expect(paneGate(store(), pane)).toBe(host === 'local')
+      expect(paneGate(store(), pane)).toBe(true)
     }
   )
 

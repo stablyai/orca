@@ -233,12 +233,10 @@ async function switchRequest(
     args.direction === 'chat' && args.source
       ? await deadline.wait(captureSourceTerminal(args.source))
       : null
-  // A pane that can't be captured (a paired host's pane a failed switch stopped has lost its
-  // binding) still lets History open the conversation as a chat beside it, as before the switch.
-  if (args.direction === 'chat' && args.source && !captured && !args.history) {
-    throw new Error('source unavailable')
-  }
-  if (args.direction === 'chat' && args.source && captured) {
+  // A pane that can't be captured (a paired host's pane whose shell exited, or that a failed
+  // switch stopped, has lost its binding) opens the conversation as a chat beside it, with no
+  // terminal to stop; History takes its own row's route.
+  if (args.direction === 'chat' && args.source && (captured || !args.history)) {
     const intent = createStructuredAgentSessionLaunchIntent(
       args.workspaceId,
       await deadline.wait(
@@ -255,6 +253,9 @@ async function switchRequest(
       undefined,
       false
     )
+    if (!captured) {
+      return { sessionId: intent.sessionId, execution: { invocationId, create: intent.params } }
+    }
     return {
       sessionId: intent.sessionId,
       abandonFocus: recordConversationSwitchFocus({
