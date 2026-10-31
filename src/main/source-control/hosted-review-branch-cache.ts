@@ -19,6 +19,7 @@ import {
   getInflightLookup,
   releaseInflight,
   retireInflightWithPrefix,
+  retireInflightLookup,
   trackInflight,
   type InflightToken
 } from './hosted-review-inflight-lookups'
@@ -79,6 +80,7 @@ export type HostedReviewBranchCacheOptions = {
   /** Set by surfaces that only ever render the selected worktree. */
   active?: boolean
   force?: boolean
+  userRefresh?: boolean
 }
 
 export function hostedReviewBranchCacheKey(identity: HostedReviewBranchCacheIdentity): string {
@@ -180,10 +182,12 @@ function startLookup(
   key: string,
   scope: string,
   headOid: string | null,
+  revisionScope: string,
   lookup: () => Promise<HostedReviewInfo | null>
 ): Promise<HostedReviewInfo | null> {
   const startedAt = Date.now()
   const generation = scopeGeneration(scope)
+  const revision = scopeGeneration(revisionScope)
   const token: InflightToken = {}
   let timedOut = false
   let completed = false
@@ -209,11 +213,6 @@ function startLookup(
     }
     // Detached work remains uninterruptible; count it process-wide until completion.
     noteDetachedLookup()
-    const stale = entries.get(key)
-    if (stale) {
-      release(stale.review)
-      return
-    }
     fail(
       new Error(
         `Hosted review lookup timed out after ${Math.round(
@@ -230,7 +229,7 @@ function startLookup(
     timer.unref()
   }
   // Register before invoking so synchronous throws cannot leave a pinned record.
-  trackInflight(key, { token, startedAt, promise, expire })
+  trackInflight(key, { token, startedAt, revision, promise, expire })
 
   void (async () => {
     try {
@@ -238,6 +237,7 @@ function startLookup(
       // Generation invalidates pre-creation answers; without key ownership, stragglers must prove their result still outranks the cache.
       const stored =
         generation === scopeGeneration(scope) &&
+        revision === scopeGeneration(revisionScope) &&
         (getInflightLookup(key)?.token === token || canAdoptDetachedAnswer(key, startedAt))
       if (stored) {
         storeEntry(key, { review, fetchedAt: Date.now(), headOid, startedAt })
@@ -255,12 +255,6 @@ function startLookup(
       // Size-evicted stragglers must not back off their successor's branch.
       if (getInflightLookup(key)?.token === token) {
         noteFailure(key)
-      }
-      // Keep last-good data on failure to avoid blinking cards; invalidation still removes obsolete answers.
-      const stale = entries.get(key)
-      if (stale) {
-        release(stale.review)
-        return
       }
       fail(error)
     } finally {
@@ -296,28 +290,52 @@ export async function withHostedReviewBranchCache(
   const active = isActiveBranch(key)
 
   const cached = entries.get(key)
-  if (!options.force && cached && isFresh(cached, headOid, active)) {
+  if (!options.userRefresh && !options.force && cached && isFresh(cached, headOid, active)) {
     return cached.review
   }
 
-  const pending = getInflightLookup(key)
-  if (pending) {
-    return pending.promise
+  // Admission is keyed independently of revision; a refused click cannot retire an admitted owner.
+  const unavailable = options.userRefresh ? lookupCapacityRefusal(key) : null
+  if (unavailable !== null) {
+    throw new Error(unavailable)
+  }
+  const revisionScope = `branch-refresh${KEY_SEPARATOR}${key}`
+  if (options.userRefresh) {
+    bumpScopeGeneration(revisionScope)
+    retireInflightLookup(key)
   }
 
-  const unavailable = lookupUnavailableReason(key)
-  if (unavailable !== null) {
-    // Serve stale answers on backoff, but without cached evidence report error rather than no review.
+  const settleForCaller = async (promise: Promise<HostedReviewInfo | null>) => {
+    try {
+      return await promise
+    } catch (error) {
+      const stale = entries.get(key)
+      if (!options.userRefresh && stale) {
+        return stale.review
+      }
+      throw error
+    }
+  }
+  const pending = getInflightLookup(key)
+  if (pending) {
+    return settleForCaller(pending.promise)
+  }
+
+  const refusal = options.userRefresh ? null : lookupUnavailableReason(key)
+  if (refusal !== null) {
     if (cached) {
       return cached.review
     }
-    throw new Error(unavailable)
+    throw new Error(refusal)
   }
 
-  return startLookup(
-    key,
-    hostedReviewRepoScope(identity.repoPath, identity.executionHostId),
-    headOid,
-    lookup
+  return settleForCaller(
+    startLookup(
+      key,
+      hostedReviewRepoScope(identity.repoPath, identity.executionHostId),
+      headOid,
+      revisionScope,
+      lookup
+    )
   )
 }

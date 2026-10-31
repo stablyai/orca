@@ -106,6 +106,7 @@ export class RuntimeHostedReviewCommands {
     currentHeadOid?: string | null
     active?: boolean
     force?: boolean
+    userRefresh?: boolean
     linkedGitHubPR?: number | null
     fallbackGitHubPR?: number | null
     linkedGitLabMR?: number | null
@@ -122,6 +123,7 @@ export class RuntimeHostedReviewCommands {
       currentHeadOid: args.currentHeadOid ?? null,
       ...(args.active === true ? { active: true } : {}),
       ...(args.force === true ? { force: true } : {}),
+      ...(args.userRefresh === true ? { userRefresh: true } : {}),
       linkedGitHubPR: args.linkedGitHubPR ?? null,
       fallbackGitHubPR: args.linkedGitHubPR == null ? (args.fallbackGitHubPR ?? null) : null,
       linkedGitLabMR: args.linkedGitLabMR ?? null,

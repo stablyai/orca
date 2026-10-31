@@ -18,6 +18,7 @@ it.each(['completion', 'deadline'])(
     const oldExpire = vi.fn(() => releaseInflight('repo\0branch', oldToken))
     trackInflight('repo\0branch', {
       token: oldToken,
+      revision: 0,
       startedAt: 0,
       promise: Promise.resolve(null),
       expire: oldExpire
@@ -25,6 +26,7 @@ it.each(['completion', 'deadline'])(
     retireInflightWithPrefix('repo\0')
     const replacement = {
       token: {},
+      revision: 1,
       startedAt: HOSTED_REVIEW_LOOKUP_DEADLINE_MS,
       promise: Promise.resolve(null),
       expire: vi.fn()

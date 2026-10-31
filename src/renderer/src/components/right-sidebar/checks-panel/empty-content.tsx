@@ -64,6 +64,7 @@ export function ChecksPanelEmptyContent({
     linkedGitLabMR,
     linkedPR,
     linkedReviewNumber,
+    manualRefreshError,
     panelContextKey,
     prAiGenerationEnabled,
     prBase,
@@ -215,7 +216,12 @@ export function ChecksPanelEmptyContent({
       hasUpstream: publishActionRemoteStatus?.hasUpstream,
       hasCurrentBranch: Boolean(branch)
     })
-    const emptyStateCopy = { title: reviewState.title, description: reviewState.description }
+    const emptyStateCopy = manualRefreshError
+      ? {
+          title: translate('auto.components.status.bar.tooltip.e740f92596', 'Refresh failed'),
+          description: manualRefreshError
+        }
+      : { title: reviewState.title, description: reviewState.description }
     const reviewStateAutoRetryText =
       reviewState.autoRetryAt !== undefined && reviewState.autoRetryAt > now
         ? translate(
@@ -228,7 +234,9 @@ export function ChecksPanelEmptyContent({
       reviewState.retryDisabledUntil !== undefined && now < reviewState.retryDisabledUntil
     const reviewRecoveryLabelIsRefresh = reviewState.recovery.includes('refresh')
     const reviewShowRetryOrRefresh =
-      reviewState.recovery.includes('retry') || reviewRecoveryLabelIsRefresh
+      Boolean(manualRefreshError) ||
+      reviewState.recovery.includes('retry') ||
+      reviewRecoveryLabelIsRefresh
     const reviewShowOpenReview =
       reviewState.recovery.includes('open_review') && Boolean(reviewState.openReviewUrl)
     const reviewShowSyncBranch = reviewState.workflowAction === 'sync_branch'
@@ -247,10 +255,10 @@ export function ChecksPanelEmptyContent({
         )}
         <div className="text-sm font-medium text-foreground">{emptyStateCopy.title}</div>
         <div className="mt-1 text-xs text-muted-foreground">{emptyStateCopy.description}</div>
-        {reviewState.detail ? (
+        {!manualRefreshError && reviewState.detail ? (
           <div className="mt-1 text-xs text-muted-foreground">{reviewState.detail}</div>
         ) : null}
-        {reviewStateAutoRetryText ? (
+        {!manualRefreshError && reviewStateAutoRetryText ? (
           <div className="mt-1 text-xs text-muted-foreground">{reviewStateAutoRetryText}</div>
         ) : null}
         {!operationInProgress && createComposerOpen ? (

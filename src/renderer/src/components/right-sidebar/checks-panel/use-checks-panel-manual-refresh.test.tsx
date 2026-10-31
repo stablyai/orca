@@ -1,27 +1,96 @@
 // @vitest-environment happy-dom
 
-import { act, cleanup, renderHook } from '@testing-library/react'
+import { act, cleanup, renderHook, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type * as HostedReviewCardRefresh from '@/store/slices/hosted-review-card-refresh'
+import { useAppStore } from '@/store'
+import { i18n } from '@/i18n/i18n'
+import type { HostedReviewInfo } from '../../../../../shared/hosted-review'
+import type { Worktree } from '../../../../../shared/worktree/types'
+import HostedReviewActions from '../HostedReviewActions'
+import { _clearHostedReviewRequestGenerationsForTest } from '@/store/slices/hosted-review-request-state'
 
-const refresh = vi.hoisted(() => ({ calls: [] as string[] }))
+vi.mock('@/components/confirmation-dialog-context', () => ({
+  useConfirmationDialog: () => vi.fn()
+}))
 
-vi.mock('@/store/slices/hosted-review-card-refresh', async (importOriginal) => {
-  const original = await importOriginal<typeof HostedReviewCardRefresh>()
-  return {
-    ...original,
-    refreshHostedReviewCard: vi.fn(async () => {
-      refresh.calls.push('hosted-review')
-      return null
-    })
-  }
-})
+const refresh = { calls: [] as string[] }
 
 import { useChecksPanelManualRefresh } from './use-checks-panel-manual-refresh'
 
 type RefreshInput = Parameters<typeof useChecksPanelManualRefresh>[0]
 
-afterEach(() => {
+function makeInput(): RefreshInput {
+  return {
+    activeConnectionId: null,
+    activeGitLabReview: null,
+    activeReview: null,
+    activeWorktreeId: null,
+    activeWorktreePath: null,
+    activeWorktreePushTarget: null,
+    asyncResultKeyRef: { current: 'cache::main::42' },
+    branch: 'main',
+    expireGitHubPRRefreshState: vi.fn(),
+    fallbackGitHubPRNumber: null,
+    fetchGitLabDetails: vi.fn(),
+    fetchHostedReviewForBranch: vi.fn(async () => {
+      refresh.calls.push('hosted-review')
+      return null
+    }),
+    fetchPRChecks: vi.fn(async () => {
+      refresh.calls.push('checks')
+      return []
+    }),
+    fetchPRComments: vi.fn(async () => {
+      refresh.calls.push('comments')
+      return []
+    }),
+    fetchPRForBranch: vi.fn(async () => {
+      refresh.calls.push('review')
+      return null
+    }),
+    gitStatusSnapshot: null,
+    isCurrentAsyncResult: () => true,
+    isFolder: false,
+    isGitLabReviewContext: false,
+    linkedAzureDevOpsPR: null,
+    linkedBitbucketPR: null,
+    linkedGiteaPR: null,
+    linkedGitLabMR: null,
+    linkedPR: null,
+    ownerCopyHostId: null,
+    ownerTarget: { kind: 'local' },
+    panelContextKey: 'repo-1::worktree-1::main',
+    panelContextKeyRef: { current: 'repo-1::worktree-1::main' },
+    pollIntervalRef: { current: 30_000 },
+    pr: null,
+    prCacheKey: 'cache',
+    prNumber: 42,
+    prevChecksRef: { current: '' },
+    refreshInFlightRef: { current: false },
+    refreshRequestKeyRef: { current: '' },
+    repo: {
+      id: 'repo-1',
+      path: '/workspace/repo',
+      displayName: 'repo',
+      badgeColor: '#000',
+      addedAt: 0
+    },
+    setChecks: vi.fn(),
+    setChecksLoading: vi.fn(),
+    setComments: vi.fn(),
+    setCommentsLoading: vi.fn(),
+    setEligibilityRefreshNonce: vi.fn(),
+    setGitStatusSnapshot: vi.fn(),
+    setIsRefreshing: vi.fn((loading) => {
+      refresh.calls.push(`refreshing:${String(loading)}`)
+    }),
+    updateWorktreeGitIdentity: vi.fn()
+  }
+}
+
+afterEach(async () => {
+  await i18n.changeLanguage('en')
+  _clearHostedReviewRequestGenerationsForTest()
   cleanup()
   refresh.calls.length = 0
 })
@@ -41,62 +110,15 @@ describe('useChecksPanelManualRefresh ordering', () => {
     const setCommentsLoading: RefreshInput['setCommentsLoading'] = vi.fn((loading) => {
       refresh.calls.push(`comments-loading:${String(loading)}`)
     })
-    const input: RefreshInput = {
-      activeConnectionId: null,
-      activeGitLabReview: null,
-      activeWorktreeId: null,
-      activeWorktreePath: null,
-      activeWorktreePushTarget: null,
-      asyncResultKeyRef: { current: 'cache::main::42' },
-      branch: 'main',
-      expireGitHubPRRefreshState: vi.fn(),
-      fallbackGitHubPRNumber: null,
-      fetchGitLabDetails: vi.fn(),
-      fetchHostedReviewForBranch: vi.fn(),
-      fetchPRChecks: vi.fn(async () => {
-        refresh.calls.push('checks')
-        return []
-      }),
-      fetchPRComments: vi.fn(async () => {
-        refresh.calls.push('comments')
-        return []
-      }),
-      fetchPRForBranch: vi.fn(async () => {
-        refresh.calls.push('review')
-        return refreshedPR
-      }),
-      gitStatusSnapshot: null,
-      isCurrentAsyncResult: () => true,
-      isFolder: false,
-      isGitLabReviewContext: false,
-      linkedAzureDevOpsPR: null,
-      linkedBitbucketPR: null,
-      linkedGiteaPR: null,
-      linkedGitLabMR: null,
-      linkedPR: null,
-      ownerCopyHostId: null,
-      ownerTarget: { kind: 'local' },
-      panelContextKey: 'repo-1::worktree-1::main',
-      panelContextKeyRef: { current: 'repo-1::worktree-1::main' },
-      pollIntervalRef: { current: 30_000 },
-      pr: refreshedPR,
-      prCacheKey: 'cache',
-      prNumber: 42,
-      prevChecksRef: { current: '' },
-      refreshInFlightRef: { current: false },
-      refreshRequestKeyRef: { current: '' },
-      repo: { id: 'repo-1', path: '/workspace/repo' } as NonNullable<RefreshInput['repo']>,
-      setChecks: vi.fn(),
-      setChecksLoading,
-      setComments: vi.fn(),
-      setCommentsLoading,
-      setEligibilityRefreshNonce: vi.fn(),
-      setGitStatusSnapshot: vi.fn(),
-      setIsRefreshing: vi.fn((loading) => {
-        refresh.calls.push(`refreshing:${String(loading)}`)
-      }),
-      updateWorktreeGitIdentity: vi.fn()
-    }
+    const input = makeInput()
+    input.pr = refreshedPR
+    input.fetchPRForBranch = vi.fn(async () => {
+      refresh.calls.push('review')
+      return refreshedPR
+    })
+    input.setChecksLoading = setChecksLoading
+    input.setCommentsLoading = setCommentsLoading
+
     const { result } = renderHook(() => useChecksPanelManualRefresh(input))
 
     await act(async () => result.current.handleRefresh())
@@ -122,4 +144,166 @@ describe('useChecksPanelManualRefresh ordering', () => {
       reason: 'manual'
     })
   })
+  it('consumes metadata failure once, retains content while retrying, and clears only on current success', async () => {
+    const input = makeInput()
+    input.isGitLabReviewContext = true
+    input.linkedGitLabMR = 7
+    input.fetchHostedReviewForBranch = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('raw secret provider text'))
+      .mockResolvedValueOnce(null)
+    const { result, rerender } = renderHook(() => useChecksPanelManualRefresh(input))
+    await act(async () => {
+      await expect(result.current.handleRefresh()).resolves.toBeUndefined()
+    })
+    expect(input.fetchHostedReviewForBranch).toHaveBeenCalledWith(
+      '/workspace/repo',
+      'main',
+      expect.objectContaining({ userRefresh: true, force: true })
+    )
+    expect(input.fetchGitLabDetails).not.toHaveBeenCalled()
+    expect(input.setChecks).not.toHaveBeenCalled()
+    expect(input.setComments).not.toHaveBeenCalled()
+    expect(input.refreshInFlightRef.current).toBe(false)
+    expect(result.current).toMatchObject({
+      manualRefreshError: expect.stringMatching(/GitLab.*try.*again/i)
+    })
+    expect(JSON.stringify(result.current)).not.toContain('raw secret')
+    await act(async () => result.current.handleRefresh())
+    expect(result.current).toMatchObject({ manualRefreshError: null })
+    input.fetchHostedReviewForBranch = vi.fn().mockRejectedValueOnce(new Error('failure'))
+    rerender()
+    await act(async () => result.current.handleRefresh())
+    input.panelContextKey = 'another-branch'
+    input.panelContextKeyRef.current = 'another-branch'
+    rerender()
+    expect(result.current).toMatchObject({ manualRefreshError: null })
+  })
+
+  it('keeps a retry failure visible until success and ignores a late rejected request from the previous context', async () => {
+    const input = makeInput()
+    input.isGitLabReviewContext = true
+    i18n.addResource(
+      'es',
+      'translation',
+      'auto.components.right.sidebar.SourceControl.97e7124eac',
+      'No se pudo actualizar el control de versiones. Inténtalo de nuevo.'
+    )
+    await i18n.changeLanguage('es')
+    input.fetchHostedReviewForBranch = vi.fn().mockRejectedValueOnce(new Error('offline'))
+    const { result, rerender } = renderHook(() => useChecksPanelManualRefresh(input))
+    await act(async () => result.current.handleRefresh())
+    expect(result.current.manualRefreshError).toContain('GitLab: No se pudo')
+    let rejectOld: (error: Error) => void = () => {}
+    input.fetchHostedReviewForBranch = vi.fn(
+      () =>
+        new Promise((_, reject) => {
+          rejectOld = reject
+        })
+    )
+    rerender()
+    let old: Promise<void> = Promise.resolve()
+    act(() => {
+      old = result.current.handleRefresh()
+    })
+    expect(result.current.manualRefreshError).toContain('GitLab: No se pudo')
+    input.panelContextKey = 'new-context'
+    input.panelContextKeyRef.current = 'new-context'
+    input.refreshInFlightRef.current = false
+    input.refreshRequestKeyRef.current = null
+    input.fetchHostedReviewForBranch = vi.fn().mockResolvedValue(null)
+    rerender()
+    await act(async () => result.current.handleRefresh())
+    await act(async () => {
+      rejectOld(new Error('late failure'))
+      await old
+    })
+    expect(result.current.manualRefreshError).toBeNull()
+  })
+
+  it.each([false, true])(
+    'publishes refreshed merged GitLab state to the existing workspace action (main=%s)',
+    async (isMainWorktree) => {
+      const input = makeInput()
+      const review: HostedReviewInfo = {
+        provider: 'gitlab',
+        number: 7,
+        title: 'MR',
+        url: 'https://gitlab.example.test/g/p/-/merge_requests/7',
+        state: 'open',
+        status: 'success',
+        mergeable: 'MERGEABLE',
+        updatedAt: '2026-10-30'
+      }
+      const original = useAppStore.getState()
+      const api = window.api
+      const lookup = vi
+        .fn()
+        .mockResolvedValueOnce(review)
+        .mockResolvedValueOnce({ ...review, state: 'merged' })
+      Object.defineProperty(window, 'api', {
+        configurable: true,
+        writable: true,
+        value: { hostedReview: { forBranch: lookup } }
+      })
+      useAppStore.setState({ repos: [input.repo!], hostedReviewCache: {} })
+      input.fetchHostedReviewForBranch = useAppStore.getState().fetchHostedReviewForBranch
+      input.activeGitLabReview = review
+      input.activeReview = review
+      input.isGitLabReviewContext = true
+      input.isFolder = isMainWorktree
+      const worktree: Worktree = {
+        id: 'worktree-1',
+        repoId: input.repo!.id,
+        path: '/workspace/worktree',
+        branch: 'main',
+        isMainWorktree,
+        head: 'head',
+        isBare: false,
+        displayName: 'workspace',
+        comment: '',
+        linkedIssue: null,
+        linkedPR: null,
+        linkedLinearIssue: null,
+        isArchived: false,
+        isUnread: false,
+        isPinned: false,
+        sortOrder: 0,
+        lastActivityAt: 0
+      }
+      try {
+        await input.fetchHostedReviewForBranch(input.repo!.path, 'main', { repoId: input.repo!.id })
+        function Probe() {
+          const data = useAppStore((state) => Object.values(state.hostedReviewCache)[0]?.data)
+          const { handleRefresh } = useChecksPanelManualRefresh(input)
+          return (
+            <>
+              <button onClick={() => void handleRefresh()}>Refresh metadata</button>
+              {data && (
+                <HostedReviewActions
+                  review={data}
+                  repo={input.repo!}
+                  worktree={worktree}
+                  onRefreshReview={handleRefresh}
+                />
+              )}
+            </>
+          )
+        }
+        render(<Probe />)
+        const label = isMainWorktree ? 'Remove Project' : 'Delete Workspace'
+        expect(screen.queryByRole('button', { name: label })).toBeNull()
+        await act(async () => screen.getByRole('button', { name: 'Refresh metadata' }).click())
+        expect(screen.getByRole('button', { name: label })).toBeTruthy()
+        expect(input.fetchGitLabDetails).toHaveBeenCalledWith(
+          expect.objectContaining({ mrNumberOverride: 7 })
+        )
+        expect(lookup).toHaveBeenLastCalledWith(expect.objectContaining({ userRefresh: true }))
+      } finally {
+        cleanup()
+        Object.defineProperty(window, 'api', { configurable: true, writable: true, value: api })
+        useAppStore.setState(original)
+      }
+    }
+  )
 })

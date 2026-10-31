@@ -46,6 +46,7 @@ export async function getHostedReviewForBranch(
     /** Selected-worktree surfaces earn per-minute pacing (#11532). */
     active?: boolean
     force?: boolean
+    userRefresh?: boolean
   } & HostedReviewExecutionOptions
 ): Promise<HostedReviewInfo | null> {
   const branchName = input.branch.replace(/^refs\/heads\//, '')
@@ -91,7 +92,8 @@ export async function getHostedReviewForBranch(
       {
         headOid,
         ...(input.active === true ? { active: true } : {}),
-        ...(input.force === true ? { force: true } : {})
+        ...(input.force === true ? { force: true } : {}),
+        ...(input.userRefresh === true ? { userRefresh: true } : {})
       },
       async () => {
         const provider = await getForgeProviderForRepository({

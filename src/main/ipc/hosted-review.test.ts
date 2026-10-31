@@ -440,12 +440,18 @@ describe('registerHostedReviewHandlers', () => {
       repoId: repo.id,
       branch: 'feature/selected',
       active: true,
-      force: true
+      force: true,
+      userRefresh: true
     })
 
     // Selected-worktree lookups use the faster active tier, unlike O(N) card polling (#11532).
     expect(getHostedReviewForBranchMock).toHaveBeenCalledWith(
-      expect.objectContaining({ branch: 'feature/selected', active: true, force: true })
+      expect.objectContaining({
+        branch: 'feature/selected',
+        active: true,
+        force: true,
+        userRefresh: true
+      })
     )
   })
 

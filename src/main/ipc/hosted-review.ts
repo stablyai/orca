@@ -131,6 +131,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
           currentHeadOid: args.currentHeadOid ?? null,
           ...(args.active === true ? { active: true } : {}),
           ...(args.force === true ? { force: true } : {}),
+          ...(args.userRefresh === true ? { userRefresh: true } : {}),
           localGitExecOptions: localGitOptions
         }),
       { wake: args.wakeWslDistro === true, wslDistro: localGitOptions.wslDistro }

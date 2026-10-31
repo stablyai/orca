@@ -53,6 +53,8 @@ export type HostedReviewInfo = {
 
 export type HostedReviewForBranchArgs = {
   force?: boolean
+  /** Only a manual click invalidates pre-click work; force also serves automatic polling. */
+  userRefresh?: boolean
   repoPath: string
   repoId?: string
   admissionTier?: 'interactive' | 'status' | 'background'

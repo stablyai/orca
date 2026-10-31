@@ -19,6 +19,7 @@ import {
   findHostedReviewRepoForFetch,
   hasNewerHostedReviewCacheEntry,
   hostedReviewOwnerIpcArgs,
+  hostedReviewCallerSettlement,
   hostedReviewBranchLookupArgs,
   isFreshHostedReview,
   isStaleMergedGitHubReviewForHead,
@@ -173,6 +174,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
     const scopedResultRefetch = shouldRefetchGitHubScopedResultForNoHint(cached, hintKey)
     const staleMergedHeadRefetch = isStaleMergedGitHubReviewForHead(cached, options?.currentHeadOid)
     if (
+      !options?.userRefresh &&
       !options?.force &&
       !linkedRefetch &&
       !scopedResultRefetch &&
@@ -184,13 +186,10 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
 
     const currentHeadOid = options?.currentHeadOid ?? null
     const inflightRequest = inflightHostedReviewRequests.get(requestKey)
-    // A lookup started at another HEAD may return a merged PR this worktree has moved past.
-    const joinableInflightRequest =
-      currentHeadOid !== null &&
-      inflightRequest?.currentHeadOid != null &&
-      inflightRequest.currentHeadOid !== currentHeadOid
-        ? undefined
-        : inflightRequest
+    const settleForCaller = hostedReviewCallerSettlement(
+      () => get().hostedReviewCache[cacheKey],
+      options
+    )
     const startRequest = (): Promise<HostedReviewInfo | null> => {
       const generation = nextLookupGeneration()
       const requestStartedAt = Date.now()
@@ -269,12 +268,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
           // Transient timeout/rate-limit/git failures are not definitive misses: preserve last review and retry next visible poll instead of hiding for TTL.
           // A stopped WSL distro's refusal (E9) also lands here; it is logged too, and the review kept.
           console.error('Failed to fetch hosted review:', error)
-          const preserved = get().hostedReviewCache[cacheKey]
-          // Never preserve merged review after worktree leaves its valid head/contained line.
-          if (isStaleMergedGitHubReviewForHead(preserved, options?.currentHeadOid)) {
-            return null
-          }
-          return preserved?.data ?? null
+          throw error
         } finally {
           const activeRequest = inflightHostedReviewRequests.get(requestKey)
           if (activeRequest?.generation === generation) {
@@ -297,6 +291,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
     }
 
     if (
+      !options?.userRefresh &&
       !options?.force &&
       !linkedRefetch &&
       !scopedResultRefetch &&
@@ -310,10 +305,10 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
       return cached.data
     }
 
-    if (joinableInflightRequest && canJoinHostedReviewFlight(joinableInflightRequest, options)) {
-      return joinableInflightRequest.promise
+    if (inflightRequest && canJoinHostedReviewFlight(inflightRequest, options)) {
+      return settleForCaller(inflightRequest.promise)
     }
 
-    return startRequest()
+    return settleForCaller(startRequest())
   }
 })

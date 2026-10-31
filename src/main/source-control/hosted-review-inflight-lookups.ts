@@ -12,6 +12,7 @@ export type InflightToken = { readonly [inflightTokenBrand]?: never }
 export type InflightRecord = {
   /** Identity, so a detached lookup can only ever clear its own entry. */
   token: InflightToken
+  revision: number
   startedAt: number
   promise: Promise<HostedReviewInfo | null>
   /** Releases the callers and unpins the branch; idempotent. */
@@ -34,6 +35,14 @@ export function releaseInflight(key: string, token: InflightToken): boolean {
   }
   inflight.delete(key)
   return true
+}
+
+export function retireInflightLookup(key: string): void {
+  const record = inflight.get(key)
+  if (record) {
+    retired.set(record.token, record)
+    inflight.delete(key)
+  }
 }
 
 /** Retire matching owners without failing their callers. */

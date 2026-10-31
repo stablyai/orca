@@ -38,6 +38,7 @@ export type ChecksPanelManualRefreshInput = Pick<
   Pick<
     ChecksPanelContextState,
     | 'activeGitLabReview'
+    | 'activeReview'
     | 'fallbackGitHubPRNumber'
     | 'isFolder'
     | 'isGitLabReviewContext'

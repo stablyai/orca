@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ChecksPanelActiveContentModel } from './active-content-props'
 import type { ChecksPanelEmptyContentModel } from './empty-content-props'
@@ -89,13 +89,24 @@ describe('checks panel concrete content', () => {
       suppressedGitHubPR: 42
     } as ChecksPanelEmptyContentModel
 
-    render(<ChecksPanelEmptyContent model={model} />)
+    const { rerender } = render(<ChecksPanelEmptyContent model={model} />)
 
     expect(screen.getByText('No pull request found')).toBeTruthy()
     expect(screen.queryByText('Pull request unlinked')).toBeNull()
+    rerender(
+      <ChecksPanelEmptyContent
+        model={{
+          ...model,
+          manualRefreshError: 'GitLab: Could not refresh Source Control. Try again.'
+        }}
+      />
+    )
+    expect(screen.getByText('Refresh failed')).toBeTruthy()
+    expect(screen.getByText('GitLab: Could not refresh Source Control. Try again.')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Refresh' })).toBeTruthy()
   })
 
-  it('renders the active review header and empty check/comment sections with accessible actions', () => {
+  it('renders the active review header and empty check/comment sections with accessible actions', async () => {
     const model = {
       activeConnectionId: null,
       activeConflictReview: null,
@@ -140,6 +151,7 @@ describe('checks panel concrete content', () => {
       handleLoadCheckDetails: vi.fn(),
       handleOpenPR: vi.fn(),
       handleRefresh: vi.fn(),
+      manualRefreshError: null,
       handleOpenStackPR: vi.fn(),
       handleReplyToComment: vi.fn(),
       handleResolve: vi.fn(),
@@ -172,7 +184,7 @@ describe('checks panel concrete content', () => {
       titleSaving: false
     } satisfies ChecksPanelActiveContentModel
 
-    render(<ChecksPanelActiveContent model={model} />)
+    const { rerender } = render(<ChecksPanelActiveContent model={model} />)
 
     expect(screen.getByText('Preserve mounted panel behavior')).toBeTruthy()
     expect(screen.getByText('No checks configured')).toBeTruthy()
@@ -181,5 +193,53 @@ describe('checks panel concrete content', () => {
     expect(screen.getByRole('button', { name: '#42' }).getAttribute('title')).toContain(
       'Open on GitHub'
     )
+    const failedModel = {
+      ...model,
+      checksError: 'Previous detail error',
+      commentsError: 'Previous detail error',
+      manualRefreshError: "Couldn't refresh from GitLab. Try Refresh again.",
+      activeReview: { ...model.activeReview, provider: 'gitlab' as const },
+      isRefreshing: true
+    }
+    rerender(<ChecksPanelActiveContent model={failedModel} />)
+    expect(screen.getAllByRole('alert')).toHaveLength(1)
+    expect(screen.getByRole('alert').textContent).toContain('GitLab. Try Refresh again.')
+    expect(screen.getByText('Preserve mounted panel behavior')).toBeTruthy()
+    expect(screen.queryByText('Previous detail error')).toBeNull()
+    rerender(
+      <ChecksPanelActiveContent
+        model={{
+          ...failedModel,
+          activeReview: model.activeReview,
+          prRefreshState: { status: 'error', errorType: 'network', reason: 'manual', updatedAt: 1 }
+        }}
+      />
+    )
+    expect(screen.getAllByRole('alert')).toHaveLength(1)
+    expect(screen.getByRole('alert').textContent).toContain('GitLab. Try Refresh again.')
+
+    const check: ChecksPanelActiveContentModel['checks'][number] = {
+      name: 'Build',
+      status: 'completed',
+      conclusion: 'success',
+      url: null
+    }
+    rerender(<ChecksPanelActiveContent model={{ ...failedModel, checks: [check] }} />)
+    await act(async () => screen.getByRole('button', { name: '1 passing' }).click())
+    expect(screen.getByRole('button', { name: '1 passing' }).getAttribute('aria-expanded')).toBe(
+      'false'
+    )
+    expect(screen.getAllByRole('alert')).toHaveLength(1)
+    rerender(
+      <ChecksPanelActiveContent
+        model={{
+          ...failedModel,
+          activeConflictReview: { ...failedModel.activeReview, mergeable: 'CONFLICTING' },
+          checks: [check]
+        }}
+      />
+    )
+    expect(screen.getAllByRole('alert')).toHaveLength(1)
+    expect(screen.getByRole('button', { name: 'Refresh' }).hasAttribute('disabled')).toBe(true)
   })
 })

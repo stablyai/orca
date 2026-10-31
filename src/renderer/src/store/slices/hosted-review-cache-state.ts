@@ -24,6 +24,7 @@ export type HostedReviewFetchOptions = {
   /** Source-qualified exact lookup; does not replace the branch’s selected review. */
   exactReviewKey?: string
   force?: boolean
+  userRefresh?: boolean
   repoId?: string
   admissionTier?: 'interactive' | 'status' | 'background'
   staleWhileRevalidate?: boolean
@@ -229,6 +230,7 @@ export function hostedReviewBranchLookupArgs(
   return {
     branch,
     ...(options?.force === true ? { force: true } : {}),
+    ...(options?.userRefresh === true ? { userRefresh: true } : {}),
     ...(options?.admissionTier ? { admissionTier: options.admissionTier } : {}),
     ...(options?.repoId !== undefined ? { repoId: options.repoId } : {}),
     currentHeadOid: options?.currentHeadOid ?? null,
@@ -239,5 +241,24 @@ export function hostedReviewBranchLookupArgs(
     linkedBitbucketPR: options?.linkedBitbucketPR ?? null,
     linkedAzureDevOpsPR: options?.linkedAzureDevOpsPR ?? null,
     linkedGiteaPR: options?.linkedGiteaPR ?? null
+  }
+}
+
+export function hostedReviewCallerSettlement(
+  readPreserved: () => HostedReviewCacheEntry<HostedReviewInfo> | undefined,
+  options?: HostedReviewFetchOptions
+): (request: Promise<HostedReviewInfo | null>) => Promise<HostedReviewInfo | null> {
+  return async (request) => {
+    try {
+      return await request
+    } catch (error) {
+      if (options?.userRefresh) {
+        throw error
+      }
+      const preserved = readPreserved()
+      return isStaleMergedGitHubReviewForHead(preserved, options?.currentHeadOid)
+        ? null
+        : (preserved?.data ?? null)
+    }
   }
 }
