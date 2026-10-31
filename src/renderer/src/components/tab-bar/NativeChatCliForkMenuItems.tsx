@@ -15,7 +15,8 @@ import {
   type NativeChatTabSession
 } from './tab-session-history-switch'
 import { runNativeChatCliFork, useNativeChatCliForkPending } from './native-chat-cli-fork-run'
-import { inPlaceSwitchEnabled } from '../../../../shared/structured-agent-cli-conversation-adoption'
+import { useInPlaceSwitchCapability } from '@/lib/in-place-switch-support'
+import { useNativeChatExecutionHost } from '../native-chat/use-native-chat-execution-host'
 
 type NativeChatCliMenuItemsProps = {
   tab: { id: string; worktreeId: string }
@@ -24,14 +25,22 @@ type NativeChatCliMenuItemsProps = {
   onComplete?: () => void
 }
 
-/** An agent that switches in place moves the conversation; any other agent opens a copy in its CLI. */
+/** Where the chat's host switches its agent in place the conversation moves (disabled until the
+ *  host answers); where the host answered no, or the agent never switches, a copy opens in its CLI. */
 export function NativeChatCliForkMenuItems(
   props: NativeChatCliMenuItemsProps
 ): React.JSX.Element | null {
-  return inPlaceSwitchEnabled(props.nativeChat.agent) ? (
-    <NativeChatCliSwitchMenuItems {...props} />
-  ) : (
+  const { tab, nativeChat } = props
+  const host = useNativeChatExecutionHost(
+    tab.id,
+    tab.worktreeId,
+    nativeChat.sessionId,
+    nativeChat.agent
+  )
+  return useInPlaceSwitchCapability(host, nativeChat.agent) === false ? (
     <NativeChatCliCopyMenuItems {...props} />
+  ) : (
+    <NativeChatCliSwitchMenuItems {...props} />
   )
 }
 
@@ -59,7 +68,7 @@ function NativeChatCliSwitchMenuItems({
         }
       : null
   )
-  if (!chat || !agent || !inPlaceSwitchEnabled(agent)) {
+  if (!chat || !agent) {
     return null
   }
   return (

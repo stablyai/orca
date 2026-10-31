@@ -1,58 +1,20 @@
-import { inPlaceSwitchEnabled } from '../../../../shared/structured-agent-cli-conversation-adoption'
-import { useMemo } from 'react'
 import { SquareTerminal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
-import type { AppState } from '@/store/types'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import { translate } from '@/i18n/i18n'
 import { agentLabel } from '../../../../shared/ai-vault-session-filters'
 import { AI_VAULT_AGENTS } from '../../../../shared/ai-vault-types'
+import { useInPlaceSwitchCapability } from '@/lib/in-place-switch-support'
 import {
   runNativeChatCliFork,
   useNativeChatCliForkPending
 } from '../tab-bar/native-chat-cli-fork-run'
 import {
   resolveTabSessionHistorySubject,
-  resolveNativeChatCliForkIdentity,
-  type NativeChatCliForkIdentity,
   type NativeChatTabSession
 } from '../tab-bar/tab-session-history-switch'
-
-function createExecutionHostSelector(
-  tabId: string,
-  worktreeId: string,
-  sessionId: string,
-  agent: NativeChatTabSession['agent']
-) {
-  let worktrees: AppState['worktreesByRepo'] | undefined
-  let folders: AppState['folderWorkspaces'] | undefined
-  let groups: AppState['projectGroups'] | undefined
-  let repos: AppState['repos'] | undefined
-  let scope: NativeChatCliForkIdentity['executionHostScope'] | null = null
-  return (state: AppState) => {
-    const nextWorktrees = selectWorktreesByRepo(state)
-    const nextFolders = selectFolderWorkspaces(state)
-    if (
-      worktrees !== nextWorktrees ||
-      folders !== nextFolders ||
-      groups !== state.projectGroups ||
-      repos !== state.repos
-    ) {
-      scope =
-        resolveNativeChatCliForkIdentity(state, {
-          tab: { id: tabId, worktreeId },
-          nativeChat: { sessionId, agent }
-        })?.executionHostScope ?? null
-      worktrees = nextWorktrees
-      folders = nextFolders
-      groups = state.projectGroups
-      repos = state.repos
-    }
-    return scope
-  }
-}
+import { useNativeChatExecutionHost } from './use-native-chat-execution-host'
 
 export function NativeChatResumeInCliButton({
   tabId,
@@ -65,22 +27,19 @@ export function NativeChatResumeInCliButton({
 }): React.JSX.Element | null {
   const tab = { id: tabId, worktreeId }
   const { sessionId, agent: nativeAgent } = nativeChat
-  const selectExecutionHost = useMemo(
-    () => createExecutionHostSelector(tabId, worktreeId, sessionId, nativeAgent),
-    [tabId, worktreeId, sessionId, nativeAgent]
-  )
-  const executionHostScope = useAppStore(selectExecutionHost)
+  const executionHostScope = useNativeChatExecutionHost(tabId, worktreeId, sessionId, nativeAgent)
   const pending = useNativeChatCliForkPending(
     executionHostScope ? { executionHostScope, sessionId: nativeChat.sessionId } : null
   )
   const commandOverrides = useAppStore((state) => state.settings?.agentCmdOverrides)
   const agent = AI_VAULT_AGENTS.find((candidate) => candidate === nativeChat.agent)
+  const inPlace = useInPlaceSwitchCapability(executionHostScope, agent)
   const label = translate(
     'components.tab.bar.SortableTabContextMenu.switchToTerminalView',
     'Continue with Terminal Agent'
   )
-  // The top-right switch control continues this agent's conversation in place; this keeps the copy for the rest.
-  if (!executionHostScope || !agent || inPlaceSwitchEnabled(agent)) {
+  // Where the host switches this agent in place (or hasn't answered yet) the top-right switch shows instead.
+  if (!executionHostScope || !agent || inPlace !== false) {
     return null
   }
   return (

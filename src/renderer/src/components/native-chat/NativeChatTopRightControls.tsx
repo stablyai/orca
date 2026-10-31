@@ -1,4 +1,4 @@
-import { inPlaceSwitchEnabled } from '../../../../shared/structured-agent-cli-conversation-adoption'
+import { useInPlaceSwitchCapability } from '@/lib/in-place-switch-support'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import {
   useConversationSwitchBusy,
@@ -9,14 +9,13 @@ import { Loader2, SquareTerminal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
-import { useAppStore } from '@/store'
 import { AI_VAULT_AGENTS } from '../../../../shared/ai-vault-types'
 import { SwitchToCliTooltipText } from '../right-sidebar/ai-vault-session-cli-fork-copy'
-import { resolveTabSessionHistorySubject } from '../tab-bar/tab-session-history-switch'
 import { NativeChatFindBar } from './NativeChatFindBar'
 import type { NativeChatFind } from './use-native-chat-find'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import { useNativeChatTabOwnerWorktreeId } from './use-native-chat-tab-owner'
+import { useNativeChatExecutionHost } from './use-native-chat-execution-host'
 
 /** The chat's top-right corner: its find bar while open, else its icon-only "Switch to CLI". */
 export function NativeChatTopRightControls({
@@ -30,17 +29,15 @@ export function NativeChatTopRightControls({
   inline?: boolean
 }): React.JSX.Element | null {
   const worktreeId = useNativeChatTabOwnerWorktreeId(session.tabId)
-  // A primitive, so the selector is stable; the chat's host is where its History row lives.
-  const hostId = useAppStore((state) => {
-    const subject = worktreeId
-      ? resolveTabSessionHistorySubject(state, {
-          tab: { id: session.tabId, worktreeId },
-          nativeChat: { sessionId: session.sessionId, agent: session.agent }
-        })
-      : null
-    return subject?.kind === 'chat' ? subject.request.executionHostScope : null
-  })
+  // The chat's host is where its History row lives.
+  const hostId = useNativeChatExecutionHost(
+    session.tabId,
+    worktreeId,
+    session.sessionId,
+    session.agent
+  )
   const agent = AI_VAULT_AGENTS.find((candidate) => candidate === session.agent)
+  const inPlace = useInPlaceSwitchCapability(hostId, agent)
   const confirm = useConfirmationDialog()
   const readiness = useConversationSwitchReadiness(
     worktreeId && hostId && agent
@@ -59,7 +56,8 @@ export function NativeChatTopRightControls({
   if (find.isOpen) {
     return <NativeChatFindBar find={find} isVisible={session.isVisible} />
   }
-  if (!worktreeId || !hostId || !agent || !inPlaceSwitchEnabled(agent)) {
+  // A host that answered no gets the header's copy entry instead; unknown shows this disabled.
+  if (!worktreeId || !hostId || !agent || inPlace === false) {
     return null
   }
   const label = translate('components.tab.bar.switch.toCli', 'Switch to CLI')

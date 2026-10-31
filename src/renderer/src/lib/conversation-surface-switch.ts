@@ -2,17 +2,15 @@ import { adoptingAgentOnHost } from '@/components/right-sidebar/ai-vault-session
 import { translate } from '@/i18n/i18n'
 import { agentLabel } from '../../../shared/ai-vault-session-filters'
 import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
-import {
-  inPlaceSwitchEnabled,
-  adoptsCliConversations
-} from '../../../shared/structured-agent-cli-conversation-adoption'
+import { adoptsCliConversations } from '../../../shared/structured-agent-cli-conversation-adoption'
 import { toHostSessionPaneKey } from '../../../shared/terminal-surface-id'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import {
   conversationSwitchFailureText,
-  conversationSwitchSourceKept
+  conversationSwitchSourceKept,
+  conversationSwitchUnsupportedText
 } from './conversation-switch-feedback'
 import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
 import {
@@ -68,7 +66,7 @@ export function runNativeChatCliSwitch(
  * exit is visible: the tab is replaced, or it stays as it was with one message.
  */
 export async function runConversationSwitch(args: ConversationSwitch): Promise<boolean> {
-  if (!inPlaceSwitchEnabled(args.agent) || pendingNow(args)) {
+  if (pendingNow(args)) {
     return false
   }
   args = withConversationSwitchPlatform(args)
@@ -80,7 +78,6 @@ export async function runConversationSwitch(args: ConversationSwitch): Promise<b
     feedback(conversationSwitchFailureText(new Error('host unavailable'), args), 'error')
     return false
   }
-  const deadline = agentSessionSwitchDeadline(Date.now, AGENT_SESSION_SWITCH_CLIENT_MS)
   const key = keyFor(args)
   pending.set(key, {
     chatTabId: args.source?.tabId ?? args.chatTabId ?? null,
@@ -89,11 +86,13 @@ export async function runConversationSwitch(args: ConversationSwitch): Promise<b
   })
   conversationSwitchChanged()
   let consented = false
+  let disposeDeadline: (() => void) | undefined
   try {
-    const supported = await deadline.wait(supportsInPlaceSwitch(target, args.agent, true))
-    if (!supported && args.legacyContinue) {
-      consented = true
-      await args.legacyContinue()
+    const supported = await withinSwitchBudget(supportsInPlaceSwitch(target, args.agent, true))
+    // The chat's surfaces offer the copy where the host can't switch; a click that raced the
+    // host's answer stops nothing and says so.
+    if (!supported && args.direction === 'terminal') {
+      feedback(conversationSwitchUnsupportedText(args.agent), 'error')
       return false
     }
     if (conversationSwitchReplying(args)) {
@@ -113,10 +112,14 @@ export async function runConversationSwitch(args: ConversationSwitch): Promise<b
       }
     }
     consented = true
+    // An agent or host without the in-place switch keeps the earlier chat resume.
     if (!supported) {
       await runLegacyConversationSwitch(args, target)
       return false
     }
+    // Time spent answering the consent dialog is not the switch's budget.
+    const deadline = agentSessionSwitchDeadline(Date.now, AGENT_SESSION_SWITCH_CLIENT_MS)
+    disposeDeadline = deadline.dispose
     const { sessionId, execution } = await switchRequest(args, hostId, deadline)
     const answer = await deadline.wait(
       callStructuredAgentSession<AgentSessionSwitchResult>(
@@ -145,12 +148,22 @@ export async function runConversationSwitch(args: ConversationSwitch): Promise<b
     feedback(conversationSwitchFailureText(error, args), 'error')
     return false
   } finally {
-    deadline.dispose()
+    disposeDeadline?.()
     pending.delete(key)
     conversationSwitchChanged()
     if (consented) {
       rederiveConversationSwitch(args)
     }
+  }
+}
+
+/** The capability read before consent gets the same budget as the switch, but its own clock. */
+async function withinSwitchBudget<T>(work: Promise<T>): Promise<T> {
+  const budget = agentSessionSwitchDeadline(Date.now, AGENT_SESSION_SWITCH_CLIENT_MS)
+  try {
+    return await budget.wait(work)
+  } finally {
+    budget.dispose()
   }
 }
 

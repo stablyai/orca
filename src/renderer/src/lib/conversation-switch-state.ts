@@ -18,7 +18,6 @@ import type { AiVaultSession, AiVaultAgent } from '../../../shared/ai-vault-type
 import type { CliChatResumeSource } from '@/components/tab-bar/cli-chat-resume-source'
 
 export type ConversationSwitch = {
-  legacyContinue?: () => Promise<void>
   confirm?: ConfirmationDialogContextValue
   direction: 'chat' | 'terminal'
   executionHostId: string

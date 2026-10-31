@@ -1,4 +1,3 @@
-vi.mock('@/lib/in-place-switch-support', () => ({ useInPlaceSwitchCapability: () => false }))
 // @vitest-environment happy-dom
 import { useAppStore } from '@/store'
 import { makeRepo, makeWorktree } from '../worktree-jump-palette-test-fixtures'
@@ -22,9 +21,16 @@ const mocks = vi.hoisted(() => {
     runNativeChatCliFork: vi.fn(),
     runNativeChatCliSwitch: vi.fn(),
     runCliChatResume: vi.fn(async () => {}),
-    listSessions: vi.fn()
+    listSessions: vi.fn(),
+    capability: true as boolean | undefined
   }
 })
+
+// The host's answer for agents that can switch in place; any other agent reads as no.
+vi.mock('@/lib/in-place-switch-support', () => ({
+  useInPlaceSwitchCapability: (_host: unknown, agent: string | undefined) =>
+    agent === 'omp' ? false : mocks.capability
+}))
 
 vi.mock('./native-chat-cli-fork-run', () => ({
   runNativeChatCliFork: mocks.runNativeChatCliFork,
@@ -58,7 +64,7 @@ vi.mock('@/lib/conversation-surface-switch', () => ({
       },
       () => mocks.pending
     )
-    return { ready: !pending, pending }
+    return { ready: !pending && mocks.capability !== undefined, pending }
   }
 }))
 
@@ -79,6 +85,7 @@ beforeEach(() => {
   mocks.subject = null
   mocks.cliSource = null
   mocks.pending = false
+  mocks.capability = true
   mocks.runNativeChatCliFork.mockReset()
   mocks.runNativeChatCliSwitch.mockReset()
   mocks.runCliChatResume.mockClear()
@@ -148,6 +155,25 @@ describe('TabSessionSurfaceSwitchMenuItems', () => {
       expect.objectContaining({ subject: CHAT_SUBJECT, agent: 'omp' })
     )
     expect(mocks.runNativeChatCliSwitch).not.toHaveBeenCalled()
+  })
+
+  it("keeps the copy item where the chat's host answered that it cannot switch in place", async () => {
+    mocks.subject = CHAT_SUBJECT
+    mocks.capability = false
+    renderItemsNow('orca-chat-1')
+    expect(screen.queryByRole('menuitem', { name: 'Switch to CLI' })).toBeNull()
+    fireEvent.click(screen.getByRole('menuitem'))
+    expect(mocks.runNativeChatCliFork).toHaveBeenCalledOnce()
+    expect(mocks.runNativeChatCliSwitch).not.toHaveBeenCalled()
+  })
+
+  it('shows the switch disabled while the host has not answered', async () => {
+    mocks.subject = CHAT_SUBJECT
+    mocks.capability = undefined
+    renderItemsNow('orca-chat-1')
+    const item = screen.getByRole('menuitem', { name: 'Switch to CLI' })
+    expect(item.getAttribute('data-disabled')).not.toBeNull()
+    expect(mocks.runNativeChatCliFork).not.toHaveBeenCalled()
   })
 
   it('offers and dispatches a CLI identity while History never answers', async () => {

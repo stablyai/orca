@@ -10,7 +10,7 @@ import { Loader2, MessagesSquare, SquareTerminal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { inPlaceSwitchEnabled } from '../../../../shared/structured-agent-cli-conversation-adoption'
+import { useInPlaceSwitchCapability } from '@/lib/in-place-switch-support'
 import { AI_VAULT_AGENTS } from '../../../../shared/ai-vault-types'
 import { resolveCliChatResumeSource } from './cli-chat-resume-source'
 import {
@@ -44,6 +44,7 @@ function ChatSwitchAction({
     useShallow((state) => resolveNativeChatCliForkIdentity(state, { tab, nativeChat }))
   )
   const agent = AI_VAULT_AGENTS.find((candidate) => candidate === nativeChat.agent)
+  const inPlace = useInPlaceSwitchCapability(chat?.executionHostScope, agent)
   const confirm = useConfirmationDialog()
   const readiness = useConversationSwitchReadiness(
     chat && agent
@@ -59,7 +60,7 @@ function ChatSwitchAction({
   )
   const busy = useConversationSwitchBusy(readiness.pending)
 
-  if (!chat || !agent || !inPlaceSwitchEnabled(agent)) {
+  if (!chat || !agent || inPlace === false) {
     return null
   }
   return (
@@ -91,13 +92,14 @@ function TerminalSwitchAction({
   tab: { id: string; worktreeId: string }
 }): React.JSX.Element | null {
   const source = useAppStore(useShallow((state) => resolveCliChatResumeSource(state, { tab })))
+  const inPlace = useInPlaceSwitchCapability(source?.executionHostId, source?.agent)
   const confirm = useConfirmationDialog()
   const readiness = useConversationSwitchReadiness(
     source ? { direction: 'chat', ...source, source } : null
   )
   const busy = useConversationSwitchBusy(readiness.pending)
 
-  if (!source || !inPlaceSwitchEnabled(source.agent)) {
+  if (!source || inPlace === false) {
     return null
   }
   return (

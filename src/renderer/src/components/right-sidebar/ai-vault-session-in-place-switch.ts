@@ -3,9 +3,9 @@ import type { ConfirmationDialogContextValue } from '@/components/confirmation-d
 import type { AiVaultOriginalPaneTarget } from './ai-vault-original-pane'
 import {
   cliConversationRowsShareAgent,
-  adoptsCliConversations,
-  inPlaceSwitchEnabled
+  adoptsCliConversations
 } from '../../../../shared/structured-agent-cli-conversation-adoption'
+import { inPlaceSwitchSupportedNow } from '@/lib/in-place-switch-support'
 import { useAppStore } from '@/store'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { resolveCliChatResumeSource } from '../tab-bar/cli-chat-resume-source'
@@ -22,7 +22,7 @@ export function switchAiVaultSessionToCli(
   confirm?: ConfirmationDialogContextValue
 ): boolean {
   const chat = session.structuredSession
-  if (!chat || !inPlaceSwitchEnabled(session.agent)) {
+  if (!chat || !inPlaceSwitchSupportedNow(session.executionHostId, session.agent)) {
     return false
   }
   const chatTab = useAppStore
@@ -50,7 +50,7 @@ export function switchAiVaultSessionToNativeChat(
   originalPaneTarget?: AiVaultOriginalPaneTarget | null,
   confirm?: ConfirmationDialogContextValue
 ): boolean {
-  if (!adoptsCliConversations(session.agent) || !inPlaceSwitchEnabled(session.agent)) {
+  if (!inPlaceSwitchSupportedNow(session.executionHostId, session.agent)) {
     return false
   }
   const source = historyPaneSource(session, originalPaneTarget)

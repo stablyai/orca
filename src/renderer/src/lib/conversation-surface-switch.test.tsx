@@ -68,9 +68,6 @@ vi.mock('@/components/native-chat/structured-agent-session-read-owner-registry',
 vi.mock('@/components/tab-bar/cli-chat-resume-run', () => ({
   runLegacyCliChatResume: mocks.legacy
 }))
-vi.mock('@/components/tab-bar/native-chat-cli-switch-run', () => ({
-  runLegacyNativeChatCliSwitch: mocks.legacy
-}))
 vi.mock('@/components/tab-bar/cli-chat-resume-feedback', () => ({
   switchIntoOwnerLegacy: mocks.legacy
 }))
@@ -147,9 +144,28 @@ it('reports a refused switch once and leaves nothing pending', async () => {
   await expect(runConversationSwitch(subject)).resolves.toBe(true)
 })
 
-it('falls back to the legacy path when the host cannot switch in place', async () => {
+it('keeps the earlier chat resume where the agent or host has no in-place switch', async () => {
+  mocks.support.mockResolvedValue(false)
+  const source = {
+    tabId: 'terminal',
+    workspaceId: 'workspace',
+    paneKey: 'terminal:leaf',
+    agent: 'omp' as const,
+    providerSessionId: 'omp-session',
+    executionHostId: 'local' as const,
+    ptyId: 'pty'
+  }
+  await expect(
+    runConversationSwitch({ direction: 'chat', ...source, source, agent: 'omp' })
+  ).resolves.toBe(false)
+  expect(mocks.legacy).toHaveBeenCalledWith(source, expect.any(Function))
+  expect(mocks.call).not.toHaveBeenCalled()
+})
+
+it('stops nothing when a chat switch races a host that cannot switch in place', async () => {
   mocks.support.mockResolvedValue(false)
   await expect(runConversationSwitch(subject)).resolves.toBe(false)
-  expect(mocks.legacy).toHaveBeenCalledOnce()
+  expect(mocks.legacy).not.toHaveBeenCalled()
   expect(mocks.call).not.toHaveBeenCalled()
+  expect(mocks.error).toHaveBeenCalledOnce()
 })

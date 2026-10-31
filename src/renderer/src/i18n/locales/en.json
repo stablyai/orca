@@ -20104,7 +20104,8 @@
           "sourceExitUnconfirmed": "Orca could not confirm {{agent}} stopped in this terminal. Quit {{agent}} here, then try this action again.",
           "sourceKept": "{{agent}} opened successfully. The original tab was kept; continue in the new tab.",
           "changeInProgress": "{{agent}} is still finishing another change to this conversation. Try again in a moment.",
-          "conversationMissing": "Orca could not find this {{agent}} conversation. Open it from Session History, then try again."
+          "conversationMissing": "Orca could not find this {{agent}} conversation. Open it from Session History, then try again.",
+          "hostCannotSwitch": "Orca on this host cannot switch {{agent}} in place. Update Orca there, or open a copy with Continue with Terminal Agent."
         },
         "BrowserTab": {
           "closeOthers": "Close Others",

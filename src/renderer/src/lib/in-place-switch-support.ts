@@ -89,7 +89,8 @@ export function inPlaceSwitchSupportedNow(host: string | null | undefined, agent
   return inPlaceSwitchCapabilityNow(host, agent) === true
 }
 
-/** Whether the host running this conversation switches it in place; false until it answered yes. */
+/** Whether the host running this conversation switches it in place: undefined until it answers.
+ *  Every surface reads it the same way: false offers the copy, undefined shows the switch disabled. */
 export function useInPlaceSwitchCapability(
   executionHostId: string | null | undefined,
   agent: string | null | undefined
@@ -108,11 +109,13 @@ export function useInPlaceSwitchSupported(
   return useInPlaceSwitchCapability(host, agent) === true
 }
 
-/** A History row's agent when its host switches it in place: the row offers the switch, not a copy. */
+/** A History row's agent unless its host answered that it doesn't switch this agent in place: the
+ *  row then offers the copy, and until the host answers it shows the switch disabled. */
 export function useAiVaultInPlaceAgent(session: {
   agent: AiVaultAgent
   executionHostId?: string | null
 }): AiVaultAgent | undefined {
-  useInPlaceSwitchCapability(session.executionHostId, session.agent)
-  return inPlaceSwitchEnabled(session.agent) ? session.agent : undefined
+  return useInPlaceSwitchCapability(session.executionHostId, session.agent) === false
+    ? undefined
+    : session.agent
 }
