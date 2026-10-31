@@ -1,3 +1,4 @@
+import { RuntimeMobileNotificationController } from '../runtime/runtime-mobile-notification-controller'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -14,8 +15,10 @@ import { orcadAutomationsKeepHostBusy, startOrcadAutomations } from './orcad-aut
 vi.mock('electron', () => ({ app: { getPath: () => testState.dir } }))
 
 function headlessRuntime() {
+  const notifications = new RuntimeMobileNotificationController()
   let bound: AutomationService | null = null
   const runtime = {
+    createAutomationAttentionOwner: notifications.createAutomationAttentionOwner,
     setAutomationService: vi.fn((service: AutomationService) => {
       bound = service
     }),

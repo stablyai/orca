@@ -1,4 +1,8 @@
-import type { StructuredAgentSessionHostDeps } from '../native-chat/agent-session-wire/structured-agent-session-host'
+import type {
+  StructuredAgentSessionHost,
+  StructuredAgentSessionHostDeps
+} from '../native-chat/agent-session-wire/structured-agent-session-host'
+import type { AgentSessionRecordStore } from './agent-session-record-store'
 import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
 import type { StructuredAgentSessionTransportOverrides } from './structured-agent-session-transport-overrides'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
@@ -73,6 +77,10 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   onSessionTabHidden?: StructuredAgentSessionHostDeps['onSessionTabHidden']
   assertNoTerminalWriter?: StructuredAgentSessionHostDeps['assertNoTerminalWriter']
   /** Host-owned phone delivery and reconciliation from the current journal projection. */
+  configureAutomationOwnership?: (
+    host: StructuredAgentSessionHost,
+    records: AgentSessionRecordStore
+  ) => void
   attentionDelivery?: StructuredAttentionMobileDelivery
   /** Every live turn completion and pending prompt, with the host's status at that edge. */
   onTurnAttention?: (

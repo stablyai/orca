@@ -307,3 +307,28 @@ describe('automation host query controller', () => {
     controller.dispose()
   })
 })
+
+it('refreshes unseen failure summaries after replay even with an unchanged catalog and coalesces in-flight bursts', async () => {
+  const blocked = Promise.withResolvers<ScopedAutomationList>()
+  let reads = 0
+  const listScoped = vi.fn(() => {
+    reads++
+    const result = listOf(['a'])
+    result.items[0].unseenFailureCount = reads === 1 ? 0 : 1
+    return reads === 2 ? blocked.promise : Promise.resolve(result)
+  })
+  const { cache, controller } = createFencedController(listScoped)
+  await controller.applyCatalog(catalogOf([entry(RUNTIME_SELF)]))
+  expect(cache.get(RUNTIME_SELF)?.data[0].unseenFailureCount).toBe(0)
+  controller.handleAuthorityEvent({ authority: RUNTIME })
+  await Promise.resolve()
+  expect(reads).toBe(2)
+  for (let i = 0; i < 20; i++) {
+    controller.handleAuthorityEvent({ authority: RUNTIME })
+  }
+  expect(reads).toBe(2)
+  blocked.resolve(listOf(['a']))
+  await vi.waitFor(() => expect(cache.get(RUNTIME_SELF)?.data[0].unseenFailureCount).toBe(1))
+  expect(reads).toBe(3)
+  controller.dispose()
+})

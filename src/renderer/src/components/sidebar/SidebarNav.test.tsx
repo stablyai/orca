@@ -13,6 +13,7 @@ import { PSEUDO_LOCALIZATION_LOCALE } from '../../i18n/pseudo-localization'
 
 const mocks = vi.hoisted(() => ({
   state: {} as Record<string, unknown>,
+  unseenFailures: 0,
   openTaskPage: vi.fn(),
   openAutomationsPage: vi.fn(),
   openActivityPage: vi.fn(),
@@ -27,6 +28,10 @@ const mocks = vi.hoisted(() => ({
   getAgentBucketCounts: vi.fn(),
   dismissMobileOnboardingBadge: vi.fn(),
   setSetupGuideSidebarDismissed: vi.fn()
+}))
+
+vi.mock('../automations/use-automation-host-catalog', () => ({
+  useAutomationHostCatalog: () => ({ unseenFailureCount: mocks.unseenFailures })
 }))
 
 vi.mock('@/store', () => ({
@@ -209,11 +214,18 @@ describe('SidebarNav', () => {
   })
 
   beforeEach(async () => {
+    mocks.unseenFailures = 0
     vi.clearAllMocks()
     await i18n.changeLanguage('en')
     mocks.hasPairedMobileDevice = false
     mocks.agentBucketCounts = { attention: 0, working: 0, done: 0, idle: 0 }
     setSidebarState()
+  })
+
+  it('shows the authoritative failed-run count beside Automations', async () => {
+    mocks.unseenFailures = 2
+    const container = await renderSidebarNav()
+    expect(container.querySelector('[aria-label="2 unseen failed runs"]')?.textContent).toBe('2')
   })
 
   it('keeps the Agent Dashboard row unmounted while its experiment is off', async () => {

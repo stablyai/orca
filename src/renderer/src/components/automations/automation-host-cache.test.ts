@@ -256,3 +256,29 @@ describe('offline authority generation churn', () => {
     expect(cache.commit(fence, { rows: [row('a')] })).toBe(false)
   })
 })
+
+it('derives latest authority orphan counts with null, zero, insertion ties and canonical retirement', () => {
+  let now = 100
+  const cache = createCache({ now: () => now })
+  const count = () => cache.orphanCountsByAuthority().get('authority:runtime:env-1') ?? null
+  cache.beginRequest(RUNTIME_SELF)
+  expect(count()).toBeNull()
+  cache.commit(cache.beginRequest(RUNTIME_SELF), { rows: [], orphanCount: 3 })
+  expect(count()).toBe(3)
+  cache.commit(cache.beginRequest(RUNTIME_SSH), { rows: [], orphanCount: 0 })
+  expect(count()).toBe(0)
+  cache.commit(cache.beginRequest(RUNTIME_SELF), { rows: [], orphanCount: 4 })
+  expect(count()).toBe(0) // Equal timestamps preserve cache insertion-order ties.
+  now = 101
+  cache.commit(cache.beginRequest(RUNTIME_SELF), { rows: [], orphanCount: 5 })
+  expect(count()).toBe(5)
+  now = 100
+  cache.commit(cache.beginRequest(RUNTIME_SSH), { rows: [], orphanCount: 6 })
+  expect(count()).toBe(5)
+  cache.discardIncarnation(hostStableKey(RUNTIME_SSH))
+  expect(count()).toBe(5)
+  cache.evict(hostStableKey(RUNTIME_SELF))
+  expect(count()).toBeNull()
+  cache.reset()
+  expect(cache.orphanCountsByAuthority().size).toBe(0)
+})

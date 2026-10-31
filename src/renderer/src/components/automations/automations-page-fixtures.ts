@@ -294,3 +294,9 @@ export type DetailPaneProps = {
   openAutomationRunPage: (run: AutomationRun) => void
   recoverSelectedRuns: (action: 'retry') => void
 }
+
+export function rows(container: HTMLElement, testId: string): string[] {
+  return [...container.querySelectorAll(`[data-testid="${testId}"]`)].map(
+    (node) => node.textContent ?? ''
+  )
+}

@@ -1,3 +1,4 @@
+import { unseenAutomationFailures } from '../../../shared/automation-run-attention'
 import { getRepoSshConnectionId } from '../../../shared/execution-host'
 import {
   automationRequiresHostReselection,
@@ -109,15 +110,19 @@ export function automationWorkspaceSshPin(
 export function automationProjectionContext(
   state: PersistedState,
   storageAuthority: AutomationStorageAuthority,
-  withUsage: boolean
+  withRunSummaries: boolean
 ): AutomationProjectionContext {
+  const usage = withRunSummaries ? automationUsageSummaries(state) : null
+  const failures =
+    withRunSummaries && state.automationFailureSeenVersion === 1
+      ? unseenAutomationFailures(state.automationRuns ?? [])
+      : null
   const reposById = new Map<string, Repo[]>()
   for (const repo of state.repos) {
     const rows = reposById.get(repo.id) ?? []
     rows.push(repo)
     reposById.set(repo.id, rows)
   }
-  const usage = withUsage ? automationUsageSummaries(state) : null
   const targetIdByGeneration = new Map(
     (state.sshTargets ?? []).flatMap((target) =>
       target.generation === undefined ? [] : [[target.generation, target.id] as const]
@@ -125,6 +130,7 @@ export function automationProjectionContext(
   )
   return {
     storageAuthority,
+    ...(failures ? { unseenFailureCount: (id: string) => failures.get(id) ?? 0 } : {}),
     requiresHostReselection: (automation) =>
       resolveAutomationWorkspaceHost(folderWorkspaceHostState(state), automation.workspaceId)
         .kind === 'unpinned' &&

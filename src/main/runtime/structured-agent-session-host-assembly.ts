@@ -97,6 +97,7 @@ export async function installOnJournal(
       environment: envResolvers
     }))
   })
+  deps.configureAutomationOwnership?.(host, store)
   if (deps.attentionDelivery) {
     const installed = host
     const delivery = deps.attentionDelivery

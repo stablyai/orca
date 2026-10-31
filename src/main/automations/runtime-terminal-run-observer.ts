@@ -1,3 +1,8 @@
+import {
+  getTuiAgentDetectCommands,
+  isTuiAgent,
+  TUI_AGENT_CONFIG
+} from '../../shared/tui-agent-config'
 import { createHeadlessAutomationOutputSnapshotBuffer } from './headless-dispatch'
 import type {
   AutomationRunCompletionObservation,
@@ -281,4 +286,12 @@ export function createRuntimeAutomationRunTerminalObserver(
       )
     }
   }
+}
+
+export function automationAgentCommands(agentId: string | undefined): string[] {
+  if (!isTuiAgent(agentId)) {
+    return []
+  }
+  const config = TUI_AGENT_CONFIG[agentId]
+  return [...getTuiAgentDetectCommands(config), config.launchCmd]
 }

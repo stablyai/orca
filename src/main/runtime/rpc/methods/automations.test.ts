@@ -3,7 +3,11 @@ import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
+import { fixture } from '../../../persistence/loading-store/profile-state-delayed-authority-fixture'
+import { RuntimeAutomationController } from '../../runtime-automation-controller'
+import { OrcaRuntimeWithAutomationOperations } from '../../workspaces/persisted-surfaces/automation-operations'
 import { AUTOMATION_METHODS } from './automations'
+import { stubRuntime } from '../terminal-multiplex-test-harness'
 
 function makeRequest(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }
@@ -180,3 +184,72 @@ describe('automation RPC methods', () => {
     )
   })
 })
+
+it('runs runSeen through the actual owner fence and primary save before replying', async () => {
+  const { store, authority, readState } = await fixture()
+  const automation = store.listAutomations()[0]
+  const run = store.createAutomationRun(automation, 1_800_000_000_000, 'manual')
+  store.updateAutomationRun({ runId: run.id, status: 'dispatch_failed' })
+  await store.flushPendingOrThrowAsync()
+  const controller = new RuntimeAutomationController(store, {
+    showRepo: async () => {
+      throw new Error('unused')
+    },
+    showManagedWorktree: async () => {
+      throw new Error('unused')
+    }
+  })
+  const changed = vi.fn()
+  const runtime = stubRuntime({
+    getRuntimeId: () => 'seen-contract',
+    notifyAutomationsChanged: changed
+  })
+  Object.assign(runtime, {
+    store,
+    automation: controller,
+    automationChangeSelector: store.automationChangeSelector.bind(store)
+  })
+  runtime.markAutomationRunSeen =
+    OrcaRuntimeWithAutomationOperations.prototype.markAutomationRunSeen.bind(runtime)
+  const dispatcher = new RpcDispatcher({ runtime, methods: AUTOMATION_METHODS })
+  const request = (expectedOwner: unknown, runId = run.id) =>
+    makeRequest('automation.runSeen', { id: automation.id, runId, expectedOwner })
+  expect(
+    await dispatcher.dispatch(
+      request({ selector: { kind: 'ssh', targetId: 'other', targetGeneration: 1 } })
+    )
+  ).toMatchObject({ ok: false })
+  expect(store.listAutomationRuns().find((row) => row.id === run.id)?.failureSeenAt).toBeUndefined()
+  expect(changed).not.toHaveBeenCalled()
+  const owner = store.automationOwnerPrecondition(automation.id)!
+  expect(await dispatcher.dispatch(request(owner, 'missing'))).toMatchObject({
+    ok: true,
+    result: { seen: false }
+  })
+  const gate = authority.pause()
+  let replied = false
+  const pending = dispatcher.dispatch(request(owner)).then((result) => {
+    replied = true
+    return result
+  })
+  await gate.started.promise
+  expect(replied).toBe(false)
+  expect(
+    readState().automationRuns.find((row: { id: string }) => row.id === run.id).failureSeenAt
+  ).toBeUndefined()
+  gate.finish.resolve()
+  expect(await pending).toMatchObject({ ok: true, result: { seen: true } })
+  expect(
+    readState().automationRuns.find((row: { id: string }) => row.id === run.id).failureSeenAt
+  ).toEqual(expect.any(Number))
+  expect(changed).toHaveBeenCalledOnce()
+})
+
+vi.mock('../../../telemetry/client', () => ({ track: vi.fn() }))
+vi.mock('../../../telemetry/cohort-classifier', () => ({
+  getCohortAtEmit: () => ({ nth_repo_added: 2 })
+}))
+vi.mock('../../../ssh/config/ssh-config-parser', () => ({
+  loadUserSshConfig: () => ({ hosts: [] }),
+  sshConfigHostsToTargets: () => []
+}))

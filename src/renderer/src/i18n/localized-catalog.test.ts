@@ -1,3 +1,4 @@
+import { automationRunErrorText } from '../components/automations/automation-run-error-copy'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { pluginLanguageResourceId } from '../../../shared/plugins/artifacts/plugin-language-pack-artifact'
 import {
@@ -112,4 +113,29 @@ describe('localized catalog caching', () => {
     expect(getExperimentalPaneSearchEntries()).not.toBe(original)
     expect(getExperimentalPaneSearchEntries()).toBe(getExperimentalPaneSearchEntries())
   })
+})
+
+it('reuses translated coded automation reasons while preserving legacy details fallback', async () => {
+  await i18n.changeLanguage('es')
+  expect(
+    automationRunErrorText({
+      error: 'stored fallback',
+      errorCode: 'projectSetupNotReady',
+      errorParams: { setupState: 'setting-up' }
+    })
+  ).toBe(translate('automations.runFailures.projectSetupState.settingUp', 'missing translation'))
+  const distro = 'D'.repeat(121)
+  expect(
+    automationRunErrorText({
+      error: 'stored fallback',
+      errorCode: 'wslDistroStopped',
+      errorParams: { distro }
+    })
+  ).toContain(distro)
+  expect(
+    automationRunErrorText({
+      error: 'stored fallback',
+      errorCode: 'future code'
+    })
+  ).toBe('stored fallback')
 })

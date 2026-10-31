@@ -1,3 +1,5 @@
+import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
+import { AutomationChatInterests } from '../../automations/automation-chat-notification-owner'
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
 import type { JournalRow } from '../agent-session-journal/journal-row-schema'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -10,6 +12,7 @@ export type JournalPublication = {
   journal: AgentSessionJournal | null
   cursor?: AgentJournalCursor
   rows?: readonly JournalRow[]
+  scope?: AgentSessionExecutionLocation
 }
 type PublicationObserver = {
   next: (hint: JournalPublication) => void
@@ -22,6 +25,7 @@ export class StructuredAgentSessionConversations extends Map<
   string,
   StructuredAgentSessionHostSession
 > {
+  readonly automationChatInterests = new AutomationChatInterests()
   private readonly observers = new Map<string, Set<{ observer: PublicationObserver }>>()
   private readonly attachments = new Map<
     string,
@@ -48,6 +52,21 @@ export class StructuredAgentSessionConversations extends Map<
     }
   ) {
     super()
+  }
+
+  registerAutomationChatRun = (runId: string, sessionId: string, messageId: string): void => {
+    this.automationChatInterests.register(runId, sessionId, messageId)
+    this.automationChatInterests.adopt(runId, this.get(sessionId)?.journal)
+  }
+
+  settleAutomationChatRun = (runId: string): void => {
+    this.automationChatInterests.settle(runId, (id) => this.get(id)?.journal)
+  }
+
+  reconcileAutomationChatOwnership = (): void => {
+    for (const id of this.keys()) {
+      this.publish(id, 'reset')
+    }
   }
 
   loadedSessionIds = (): string[] =>
@@ -162,11 +181,13 @@ export class StructuredAgentSessionConversations extends Map<
       source: source ?? null,
       journal: source?.journal ?? null,
       cursor: source?.journal.cursor(),
+      scope: this.get(sessionId)?.params.location,
       rows
     }
   }
 
   publish(sessionId: string, kind: JournalPublication['kind'], rows?: readonly JournalRow[]): void {
+    this.automationChatInterests.observe(sessionId, this.hint(sessionId, kind, rows))
     const observers = this.observers.get(sessionId)
     if (!observers?.size) {
       return
@@ -209,6 +230,7 @@ export class StructuredAgentSessionConversations extends Map<
       return
     }
     this.ended = true
+    this.automationChatInterests.clear()
     for (const id of this.observers.keys()) {
       this.publish(id, 'end')
     }

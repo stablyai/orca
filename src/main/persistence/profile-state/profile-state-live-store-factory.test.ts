@@ -1,3 +1,4 @@
+import { ProfileStateWorkerAuthority } from './profile-state-worker-authority'
 import { build } from 'esbuild'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -212,4 +213,82 @@ describe('live profile authority admission', () => {
     const reopened = await open(input)
     expect(reopened.store.getSettings().theme).toBe('light')
   })
+})
+
+it.each(['pending', 'rejected'] as const)(
+  'publishes the admitted Store before a %s primary normalization save, preserving ordinary execution',
+  async (mode) => {
+    const input = options()
+    const source = buildProfileStateCutoverFixture(join(input.dataFile, '..'))
+    source.automationFailureSeenVersion = 1
+    writeFileSync(input.dataFile, JSON.stringify(source))
+    const gate = Promise.withResolvers<void>()
+    const started = Promise.withResolvers<void>()
+    const original = ProfileStateWorkerAuthority.prototype.writeCompleteSerializedDomains
+    vi.spyOn(
+      ProfileStateWorkerAuthority.prototype,
+      'writeCompleteSerializedDomains'
+    ).mockImplementationOnce(async function (this: ProfileStateWorkerAuthority, ...args) {
+      started.resolve()
+      await gate.promise
+      if (mode === 'rejected') {
+        throw new Error('recoverable primary failure')
+      }
+      return original.apply(this, args)
+    })
+    let published = false
+    const opening = open(input).then((value) => {
+      published = true
+      return value
+    })
+    const first = await Promise.race([
+      opening.then(() => 'published' as const),
+      started.promise.then(() => 'write' as const)
+    ])
+    try {
+      expect(first).toBe('published')
+      expect(published).toBe(true)
+      const { store } = await opening
+      const saving = store.flushPendingOrThrowAsync()
+      const result = saving.then(
+        () => null,
+        (error: unknown) => error
+      )
+      await started.promise
+      store.updateSettings({ theme: 'dark' })
+      expect(store.getSettings().theme).toBe('dark')
+      gate.resolve()
+      if (mode === 'rejected') {
+        expect(await result).toMatchObject({ message: 'recoverable primary failure' })
+      } else {
+        expect(await result).toBeNull()
+      }
+      await store.flushPendingOrThrowAsync()
+      expect(readState(input).automationFailureSeenVersion).toBe(1)
+    } finally {
+      gate.resolve()
+      await opening.catch(() => {})
+    }
+  }
+)
+
+it('keeps a cache-sidecar failure nonfatal after a successful primary commit', async () => {
+  const input = options()
+  const { store } = await open(input)
+  mkdirSync(join(input.dataFile, '..', 'orca-github-cache.json'))
+  const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  try {
+    store.setGitHubCache({ pr: {}, issue: {} })
+    store.updateSettings({ theme: 'dark' })
+    await expect(store.flushPendingOrThrowAsync()).resolves.toBeUndefined()
+    expect(warning).toHaveBeenCalledWith(
+      '[persistence] Failed to write github cache snapshot:',
+      expect.anything()
+    )
+    expect(store.automationDurableWriteGeneration()).toBeGreaterThanOrEqual(
+      store.automationWriteGeneration()
+    )
+  } finally {
+    warning.mockRestore()
+  }
 })

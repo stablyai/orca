@@ -93,7 +93,7 @@ function dispatchStructuredAttention(
     unread: state.markAgentAttentionUnread,
     requestDelivery: (request) => {
       // Unread writes can synchronously cause a genuine read before delivery.
-      if (promptWasRead()) {
+      if (promptWasRead() || (edge.type === 'completion' && edge.completion.automationOwned)) {
         return
       }
       // The receiving subscription identifies the paired source even when tab ownership is ambiguous.

@@ -20763,6 +20763,8 @@
     "scanTooLarge": "L'analyse de l'ouverture rapide est trop volumineuse ({{reason}})."
   },
   "notifications": {
+    "automationFailedReason": "{{agent}} : {{reason}} Vérifiez cette exécution et réessayez.",
+    "automationFailedAction": "{{agent}} n’a pas pu terminer cette automatisation. Vérifiez cette exécution et réessayez.",
     "agentStatus": {
       "needsInput": "attend une réponse",
       "working": "en cours",
@@ -23062,6 +23064,10 @@
     }
   },
   "automations": {
+    "unseenFailures": "{{count}} exécutions échouées non consultées",
+    "unseenFailures_one": "{{count}} exécution échouée non consultée",
+    "unseenFailures_many": "{{count}} exécutions échouées non consultées",
+    "unseenFailures_other": "{{count}} exécutions échouées non consultées",
     "runFailures": {
       "noDispatchHost": "Aucune fenêtre Orca n’était disponible pour lancer l’automatisation.",
       "unevaluableSchedule": "Orca n’a pas pu évaluer cette automatisation et a ignoré cette occurrence.",

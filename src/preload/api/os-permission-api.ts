@@ -38,7 +38,11 @@ export type NotificationsApi = {
   openSystemSettings: () => Promise<void>
   getPermissionStatus: () => Promise<NotificationPermissionStatusResult>
   probeDelivery: (args?: { force?: boolean }) => Promise<NotificationDeliveryProbeResult>
-  playSound: (options?: { force?: boolean; volume?: number }) => Promise<NotificationSoundResult>
+  playSound: (options?: {
+    force?: boolean
+    volume?: number
+    waitUntilEnded?: boolean
+  }) => Promise<NotificationSoundResult>
 }
 
 export type MacosTccPromptsApi = {

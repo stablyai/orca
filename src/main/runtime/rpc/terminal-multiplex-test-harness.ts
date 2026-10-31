@@ -1,3 +1,4 @@
+import { RuntimeMobileNotificationController } from '../runtime-mobile-notification-controller'
 import { vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import type { RpcRequest } from './core'
@@ -25,6 +26,8 @@ export function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRu
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This partial runtime supplies the terminal RPC methods these tests invoke.
   return {
     getRuntimeId: () => 'test-runtime',
+    createAutomationAttentionOwner: new RuntimeMobileNotificationController()
+      .createAutomationAttentionOwner,
     getPtyExecutionHostMetadata: () => ({}),
     getTerminalLaunchResult: () => undefined,
     subscribeToPtyExit: vi.fn(() => vi.fn()),

@@ -1,3 +1,11 @@
+import { openAgentSessionRecordStoreOnce } from '../agent-session-record-store-slot'
+import type { AgentSessionRecordStore } from '../agent-session-record-store'
+import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import {
+  createStructuredAgentSessionLogger,
+  neverThrowingStructuredAgentSessionLogger
+} from '../../native-chat/agent-session-wire/structured-agent-session-logger'
 import { resolveTuiAgentLaunchEnv } from '../../../shared/tui-agent-launch-defaults'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
@@ -13,6 +21,17 @@ import { escalateChatWorkerError } from '../orchestration/chat-worker-error-esca
 import type { StructuredAgentSessionRequestFailure } from '../../native-chat/agent-session-wire/structured-agent-session-request-failures'
 
 export abstract class OrcaRuntimeWithWorktreePsDependencies extends OrcaRuntimeWithStartTuiIdleVisibleReadProbe {
+  /** Admission needs only the ledger; a later chat host must reuse this store. */
+  async openAgentSessionRecordStore(): Promise<AgentSessionRecordStore> {
+    const { store } = await openAgentSessionRecordStoreOnce({
+      stateDirectory: getProfileUserDataPath(),
+      legacySessionTabIds: this.legacyStructuredSessionTabIds,
+      hostId: LOCAL_EXECUTION_HOST_ID,
+      logger: neverThrowingStructuredAgentSessionLogger(createStructuredAgentSessionLogger())
+    })
+    return store
+  }
+
   /** Apply the host-owning desktop's account overlay to configured agent environment. */
   protected structuredAgentLaunchEnv(
     agent: StructuredAgentId,

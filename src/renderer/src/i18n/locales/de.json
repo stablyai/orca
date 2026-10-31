@@ -20828,6 +20828,8 @@
     "launchFailedGenericDetail": "Das System hat den Start verweigert. Arbeitsspeicher freigeben oder andere Apps schließen und dann auf „Erneut versuchen“ klicken. Falls das Problem weiterhin auftritt, Orca neu installieren."
   },
   "notifications": {
+    "automationFailedReason": "{{agent}}: {{reason}} Prüfe den Lauf und versuche es erneut.",
+    "automationFailedAction": "{{agent}} konnte diese Automatisierung nicht abschließen. Prüfe den Lauf und versuche es erneut.",
     "agentStatus": {
       "needsInput": "Eingabe erforderlich",
       "working": "Arbeitet",
@@ -22515,6 +22517,9 @@
     }
   },
   "automations": {
+    "unseenFailures": "{{count}} ungesehene fehlgeschlagene Läufe",
+    "unseenFailures_one": "{{count}} ungesehener fehlgeschlagener Lauf",
+    "unseenFailures_other": "{{count}} ungesehene fehlgeschlagene Läufe",
     "runFailures": {
       "noDispatchHost": "Zum Starten der Automatisierung war kein Orca-Fenster verfügbar.",
       "unevaluableSchedule": "Orca konnte diese Automatisierung nicht auswerten und hat diese Ausführung übersprungen.",

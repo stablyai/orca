@@ -19,6 +19,7 @@ function fixture(launch: HeadlessAutomationDispatchLaunch) {
     target: { ok: true as const, cwd: state.repos[0].path, repo: state.repos[0] },
     dispatcher: vi.fn(async () => launch),
     runs: {
+      dispose: vi.fn(),
       createRun: vi.fn(async () => run),
       updateRun: vi.fn(async () => dispatched),
       repeatSkip: vi.fn(async () => null),

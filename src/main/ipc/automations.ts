@@ -1,3 +1,4 @@
+import { registerAutomationRunNavigation } from '../startup/automation-run-navigation'
 import { parseExecutionHostId } from '../../shared/execution-host'
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import { ipcMain } from 'electron'
@@ -51,6 +52,7 @@ function underOrcaPriority<T>(scheduler: ExternalAutomationProbeScheduler, run: 
 }
 
 export function registerAutomationHandlers(store: Store, service: AutomationService): void {
+  registerAutomationRunNavigation()
   // Cache TTL and probe concurrency need registration-long state, not per-request instances.
   const probeScheduler = new ExternalAutomationProbeScheduler()
   const managerCache = new ExternalAutomationManagerCache()

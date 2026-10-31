@@ -1,3 +1,4 @@
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { StructuredAgentSessionBackgroundTaskChannel } from './structured-agent-session-background-task-channel'
@@ -49,9 +50,16 @@ function channelOver(
     children,
     incomplete
   )
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the map reads only the journal's commit observer and the session's provider.
+  const journal = {
+    observeCommits: () => () => {},
+    stopMarks: { observeSettleEdges: () => () => {} },
+    cursor: () => ({ epoch: 'background-task-fixture', sequence: 0 })
+  } satisfies Pick<AgentSessionJournal, 'observeCommits' | 'cursor'> & {
+    stopMarks: Pick<AgentSessionJournal['stopMarks'], 'observeSettleEdges'>
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the map reads the checked journal publication facade and provider only.
   const session = {
-    journal: { observeCommits: () => {}, stopMarks: { observeSettleEdges: () => {} } },
+    journal,
     params: { provider: 'claude' }
   } as unknown as StructuredAgentSessionHostSession
   return { sessions, republished, channel, session }

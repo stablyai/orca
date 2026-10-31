@@ -1,3 +1,5 @@
+import type { NotificationDispatchResult } from './notification-settings-types'
+import type { AutomationRunOutcome } from './automation-run-outcome'
 import type { CreateWorktreeResult } from './worktree/create-types'
 import type {
   WorktreeDefaultTabsLaunch,
@@ -39,6 +41,8 @@ export type RuntimeClientEvent =
   // Only the owning automation authority can announce definition/run/usage writes.
   | {
       type: 'automationsChanged'
+      settledRun?: AutomationRunOutcome
+      notificationResult?: NotificationDispatchResult
       selector?: { kind: 'self' } | { kind: 'ssh'; targetId: string } | { kind: 'orphan' }
       reason?: 'definition' | 'run' | 'usage'
     }

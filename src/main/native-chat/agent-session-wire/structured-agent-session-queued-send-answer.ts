@@ -6,7 +6,8 @@ export function queuedSendAnswer(
   journal: Pick<AgentSessionJournal, 'submission' | 'submissions'> & {
     queuedMessages: Pick<AgentSessionJournal['queuedMessages'], 'get'>
   },
-  clientMessageId: string
+  clientMessageId: string,
+  handoffId?: string
 ): AgentSessionSendResult | null {
   const draft = journal.queuedMessages.get(clientMessageId)
   if (draft) {
@@ -22,9 +23,9 @@ export function queuedSendAnswer(
         }
   }
   // Missing cards with rejected handoffs were deleted; replay withdrawn rather than a refused send.
-  const handoff = journal
-    .submissions()
-    .findLast((entry) => entry.queuedMessageId === clientMessageId)
+  const handoff = handoffId
+    ? journal.submission(handoffId)
+    : journal.submissions().findLast((entry) => entry.queuedMessageId === clientMessageId)
   if (handoff?.dispatchState === 'rejected') {
     return {
       clientMessageId,

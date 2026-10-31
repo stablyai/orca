@@ -1,6 +1,6 @@
 import { vi } from 'vitest'
 import type * as ReactModule from 'react'
-import type { HarnessStoreState } from './ipc-events-harness-store-state'
+import { createApiNamespaceStub, type HarnessStoreState } from './ipc-events-harness-store-state'
 import type { ClientHostedBrowserRowsEvent } from '../../../shared/client-hosted-browser-rows'
 
 export {
@@ -40,13 +40,6 @@ export type FocusEditorTabRequest = {
   userInitiated?: boolean
 }
 
-/** Subscription no-ops for every listener useIpcEvents attaches beyond the ones under test. */
-function createApiNamespaceStub(overrides: Record<string, unknown> = {}): Record<string, unknown> {
-  return new Proxy(overrides, {
-    get: (target, prop: string) => (prop in target ? target[prop] : () => () => {})
-  })
-}
-
 export type IpcEventsHarness = {
   /** Call inside the test body: useIpcEvents runs its effects eagerly here. */
   useIpcEvents: () => void
@@ -70,6 +63,7 @@ export type IpcEventsHarnessOptions = {
   clientHostedBrowserRowsSnapshotError?: Error
   /** Extra `window.api.browser` members, e.g. a listener capture for a channel under test. */
   browserApi?: Record<string, unknown>
+  automationsApi?: Record<string, unknown>
 }
 
 export async function loadIpcEventsHarness(
@@ -142,6 +136,10 @@ export async function loadIpcEventsHarness(
     dispatchEvent: vi.fn(),
     api: new Proxy<Record<string, unknown>>(
       {
+        automations: createApiNamespaceStub({
+          consumePendingOpenRun: () => Promise.resolve(null),
+          ...options.automationsApi
+        }),
         runtimeEnvironments: createApiNamespaceStub({
           getStatusSnapshots: () => Promise.resolve([]),
           subscribe: async () => ({ unsubscribe: () => {} })

@@ -78,54 +78,59 @@ function readLabels(
 export function createStructuredAttentionMobileDelivery(
   deps: StructuredAttentionMobileDeliveryDeps
 ): StructuredAttentionMobileDelivery {
+  const deliver: StructuredAttentionMobileDelivery['deliver'] = (edge, summary) => {
+    const news = agentSessionAttentionNews(edge)
+    if (!news) {
+      return
+    }
+    const { scope, sessionId } = edge.type === 'prompt' ? edge.prompt : edge.completion
+    if (deps.isWorkspaceMuted(scope)) {
+      return
+    }
+    const settings = deps.readNotificationSettings()!
+    const attentionKey = agentSessionAttentionKey(edge)
+    const request: NotificationDispatchRequest = {
+      source: 'agent-task-complete',
+      surface: 'agent-session',
+      worktreeId: scope.workspaceId,
+      ...readLabels(deps, scope),
+      agentState: news.agentState,
+      ...(news.outcome ? { agentTurnOutcome: news.outcome } : {}),
+      ...(summary ? { agentType: summary.agent } : {}),
+      ...(summary?.latestPrompt ? { agentPrompt: summary.latestPrompt } : {}),
+      ...(summary?.lastAssistantMessage
+        ? { agentLastAssistantMessage: summary.lastAssistantMessage }
+        : {})
+    }
+    const { title, body } = buildNotificationOptions(
+      request,
+      getRuntimeDesktopSurface().translateNotification
+    )
+    // Apply the desktop fan-out preferences to phone delivery too.
+    const desktopAllowed = settings.enabled && settings.agentTaskComplete
+    deps.dispatch({
+      type: 'notification',
+      emittedAt: deps.now(),
+      source: 'agent-task-complete',
+      ...(!desktopAllowed ? { desktopAllowed: false } : {}),
+      title,
+      body,
+      worktreeId: scope.workspaceId,
+      // The host has no window tab id; the phone matches this session-derived key to the chat.
+      paneKey: structuredAgentSessionPaneKey(structuredAgentSessionTabId(sessionId), sessionId),
+      notificationId: attentionKey,
+      attentionKey,
+      ...(structuredAttentionOrigin(edge)
+        ? { structuredOrigin: structuredAttentionOrigin(edge) }
+        : {}),
+      agentState: news.agentState
+    })
+  }
   return {
     deliver: (edge, summary) => {
-      const news = agentSessionAttentionNews(edge)
-      if (!news) {
-        return
+      if (edge.type !== 'completion' || edge.completion.automationOwned !== true) {
+        deliver(edge, summary)
       }
-      const { scope, sessionId } = edge.type === 'prompt' ? edge.prompt : edge.completion
-      if (deps.isWorkspaceMuted(scope)) {
-        return
-      }
-      const settings = deps.readNotificationSettings()!
-      const attentionKey = agentSessionAttentionKey(edge)
-      const request: NotificationDispatchRequest = {
-        source: 'agent-task-complete',
-        surface: 'agent-session',
-        worktreeId: scope.workspaceId,
-        ...readLabels(deps, scope),
-        agentState: news.agentState,
-        ...(news.outcome ? { agentTurnOutcome: news.outcome } : {}),
-        ...(summary ? { agentType: summary.agent } : {}),
-        ...(summary?.latestPrompt ? { agentPrompt: summary.latestPrompt } : {}),
-        ...(summary?.lastAssistantMessage
-          ? { agentLastAssistantMessage: summary.lastAssistantMessage }
-          : {})
-      }
-      const { title, body } = buildNotificationOptions(
-        request,
-        getRuntimeDesktopSurface().translateNotification
-      )
-      // Apply the desktop fan-out preferences to phone delivery too.
-      const desktopAllowed = settings.enabled && settings.agentTaskComplete
-      deps.dispatch({
-        type: 'notification',
-        emittedAt: deps.now(),
-        source: 'agent-task-complete',
-        ...(!desktopAllowed ? { desktopAllowed: false } : {}),
-        title,
-        body,
-        worktreeId: scope.workspaceId,
-        // The host has no window tab id; the phone matches this session-derived key to the chat.
-        paneKey: structuredAgentSessionPaneKey(structuredAgentSessionTabId(sessionId), sessionId),
-        notificationId: attentionKey,
-        attentionKey,
-        ...(structuredAttentionOrigin(edge)
-          ? { structuredOrigin: structuredAttentionOrigin(edge) }
-          : {}),
-        agentState: news.agentState
-      })
     },
     reconcile: deps.reconcile
   }

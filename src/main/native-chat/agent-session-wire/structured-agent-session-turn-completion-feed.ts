@@ -33,6 +33,7 @@ type CompletionFeedSession = {
 export type StructuredAgentSessionTurnCompletionFeedDeps = {
   sessions: ReadonlyMap<string, CompletionFeedSession>
   now: () => number
+  ownsRequest?: (sessionId: string, request: StructuredAgentSessionLatestRequest) => boolean
   /** Reuse this commit’s status projection so events identify the request shown in the row. */
   readStatusState: (
     sessionId: string,
@@ -188,6 +189,7 @@ export class StructuredAgentSessionTurnCompletionFeed {
       turnId: request.id,
       outcome: request.outcome,
       completedAt: this.deps.now(),
+      ...(this.deps.ownsRequest?.(sessionId, request) ? { automationOwned: true as const } : {}),
       // Include attention here: remote clients receive status and completion streams unordered.
       ...(state.summary.status === 'attention' ? { awaitingUser: true as const } : {})
     }

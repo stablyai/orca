@@ -1,3 +1,5 @@
+import type { AgentSessionRecordStore } from '../../agent-session-record-store'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
 import { OrcaRuntimeWithRestoredTerminalPlacement } from './restored-terminal-placement'
@@ -42,6 +44,8 @@ export abstract class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity ex
   protected abstract getWorkspaceSessionHostIdForWorktree(worktreeId: string): ExecutionHostId
   protected abstract getTerminalTopologyRevision(worktreeId: string): number
   protected abstract getPtyDisplayRecord(pty: RuntimePtyWorktreeRecord): RuntimePtyWorktreeRecord
+
+  abstract openedAgentSessionRecordStore(): AgentSessionRecordStore | null
 
   abstract notifyMobileSessionTabsChanged(worktreeId?: string): void
 
@@ -223,6 +227,11 @@ export abstract class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity ex
 
   setAutomationService(service: AutomationService): void {
     this.automation.setService(service)
+    const host = getStructuredAgentSessionHost()
+    const records = this.openedAgentSessionRecordStore()
+    if (host && records) {
+      service.attachChatOwnership?.(host, records)
+    }
   }
 
   releaseFinishedAutomationRunTerminals(): Promise<number> {

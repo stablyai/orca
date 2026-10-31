@@ -1,3 +1,5 @@
+import { readContextFixture } from '../automations/automation-read-context.test-fixture'
+import { automationOutcomeNotification } from '../automations/automation-outcome-notification'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -20,6 +22,7 @@ import {
   getDispatchHandler,
   getSettleStructuredPromptsHandler,
   notificationCloseMock,
+  notificationRemoveMock,
   resetNotificationDispatchMocks
 } from './notifications-test-harness'
 
@@ -345,4 +348,60 @@ describe('notifications:dismiss by acknowledged subject', () => {
       rmSync(directory, { recursive: true, force: true })
     }
   })
+})
+
+it('retires a produced automation desktop banner by its real terminal origin, preserving a newer run', async () => {
+  vi.useRealTimers()
+  const f = await readContextFixture()
+  register({ suppressWhenFocused: false }, f.controller)
+  try {
+    const first = await f.start()
+    await f.commit(first.run, await f.finish(first))
+    const second = await f.start()
+    await f.commit(second.run, await f.finish(second))
+    const outcomes = f.changes.flatMap((change) => (change.settledRun ? [change.settledRun] : []))
+    expect(outcomes).toHaveLength(2)
+    const requests = outcomes.map((outcome) => automationOutcomeNotification(outcome))
+    for (const request of requests) {
+      if (!request || !request.structuredOrigin || !request.paneKey) {
+        throw new Error('Missing real positioned request')
+      }
+      expect(await getDispatchHandler()({}, { ...request, mobileDeliveredByHost: true })).toEqual({
+        delivered: true
+      })
+    }
+    const firstRequest = requests[0]
+    if (!firstRequest?.structuredOrigin || !firstRequest.paneKey) {
+      throw new Error('Missing exact first request')
+    }
+    const read = {
+      paneKey: firstRequest.paneKey,
+      sessionId: firstRequest.structuredOrigin.sessionId,
+      observedCursor: firstRequest.structuredOrigin.journalCursor
+    }
+    const before = notificationCloseMock.mock.calls.length
+    getDismissHandler()({}, [], [firstRequest.paneKey], [read])
+    expect(notificationCloseMock.mock.calls.length - before).toBe(1)
+    if (process.platform === 'darwin') {
+      expect(notificationRemoveMock).toHaveBeenCalledWith([firstRequest.notificationId])
+    }
+    getDismissHandler()({}, [], [firstRequest.paneKey], [read])
+    expect(notificationCloseMock.mock.calls.length - before).toBe(1)
+    const secondOrigin = requests[1]?.structuredOrigin
+    if (!secondOrigin) {
+      throw new Error('Missing newer actual origin')
+    }
+    getDismissHandler()(
+      {},
+      [],
+      [firstRequest.paneKey],
+      [{ ...read, observedCursor: secondOrigin.journalCursor }]
+    )
+    expect(notificationCloseMock.mock.calls.length - before).toBe(2)
+    expect(
+      f.store.listAutomationRuns(f.definition.id).every((run) => run.failureSeenAt === undefined)
+    ).toBe(true)
+  } finally {
+    f.dispose()
+  }
 })

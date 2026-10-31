@@ -20811,6 +20811,8 @@
     "launchFailedGenericDetail": "Sistem süreci başlatmayı reddetti. Bellek boşaltın veya diğer uygulamaları kapatın, ardından Tekrar Dene'ye tıklayın. Bu durum sürerse Orca'yı yeniden yükleyin."
   },
   "notifications": {
+    "automationFailedReason": "{{agent}}: {{reason}} Çalıştırmayı inceleyip yeniden deneyin.",
+    "automationFailedAction": "{{agent}} bu otomasyonu tamamlayamadı. Çalıştırmayı inceleyip yeniden deneyin.",
     "agentStatus": {
       "needsInput": "girdi gerekiyor",
       "working": "çalışıyor",
@@ -22498,6 +22500,9 @@
     }
   },
   "automations": {
+    "unseenFailures": "{{count}} görülmemiş başarısız çalıştırma",
+    "unseenFailures_one": "{{count}} görülmemiş başarısız çalıştırma",
+    "unseenFailures_other": "{{count}} görülmemiş başarısız çalıştırma",
     "runFailures": {
       "noDispatchHost": "Otomasyonu başlatmak için kullanılabilir bir Orca penceresi yoktu.",
       "unevaluableSchedule": "Orca bu otomasyonu değerlendiremedi ve bu çalıştırmayı atladı.",

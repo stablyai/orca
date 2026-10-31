@@ -5,6 +5,7 @@ import {
   AutomationCreate,
   AutomationId,
   AutomationList,
+  AutomationRunSeen,
   AutomationRuns,
   AutomationUpdate
 } from '../../../../shared/rpc-contract/automation-params'
@@ -26,6 +27,14 @@ function mutationOwner(
 }
 
 export const AUTOMATION_METHODS = [
+  defineMethod({
+    name: 'automation.runSeen',
+    permission: 'workspace',
+    params: AutomationRunSeen,
+    handler: async (params, { runtime }) => ({
+      seen: await runtime.markAutomationRunSeen(params.id, params.runId, params.expectedOwner)
+    })
+  }),
   defineMethod({
     name: 'automation.list',
     permission: 'workspace',

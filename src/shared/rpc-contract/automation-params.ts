@@ -174,6 +174,8 @@ export const AutomationId = z.object({
   expectedOwner: ExpectedOwner
 })
 
+export const AutomationRunSeen = AutomationId.extend({ runId: requiredString('Missing run id') })
+
 export const AutomationRuns = z.object({
   automationId: OptionalString,
   expectedOwner: ExpectedOwner,

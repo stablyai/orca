@@ -1,3 +1,4 @@
+import type { AgentLaunchResult } from '../../../../shared/agent-launch-intent'
 import { terminalImageViewerSupported } from '../../terminal-image-viewer-env'
 /** Use ordinary user-facing terminal/chat creation; worker factories add redrive, mailbox and background-tab behavior.
  * The executor selects surface and prompt delivery; this factory supplies the wire-shaped runtime calls. */
@@ -34,6 +35,13 @@ import {
   type AgentLaunchView
 } from './agent-launch-tab-publication'
 
+export type HostLaunchContext = RpcContext & {
+  agentLaunchPolicy?: {
+    onSurfacePublished?: (surface: AgentLaunchResult) => void
+    beforeChatSubmit?: (sessionId: string, messageId: string) => void
+  }
+}
+
 /** Replay-safe launches keep the nested attach in the same stable caller namespace as the launch. */
 export function agentLaunchSurfaceFactory(
   context: RpcContext,
@@ -43,7 +51,8 @@ export function agentLaunchSurfaceFactory(
   callerPresentsSurface = false,
   terminalSpawn: TerminalSpawnDispatch = trackTerminalSpawnDispatch(),
   // Read the early pane at spawn: publication and user close can finish after admission.
-  view: AgentLaunchView = { early: null, presentation: undefined }
+  view: AgentLaunchView = { early: null, presentation: undefined },
+  beforeChatSubmit?: (sessionId: string, messageId: string) => void
 ): AgentLaunchSurfaceFactory {
   const movesHostWindow = agentLaunchMovesHostWindow(context)
   const { early: earlyTab, presentation } = view
@@ -77,7 +86,11 @@ export function agentLaunchSurfaceFactory(
         runtime: context.runtime,
         ensureHost: async () => {
           await context.runtime.ensureStructuredAgentSessionHost()
-          return requireInstalledHost()
+          const host = requireInstalledHost()
+          if (firstMessage) {
+            beforeChatSubmit?.(sessionId, firstMessage.clientMessageId)
+          }
+          return host
         },
         caller: operationCallerKey
           ? { callerKey: operationCallerKey }

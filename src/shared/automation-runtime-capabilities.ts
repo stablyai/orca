@@ -16,7 +16,10 @@ export const AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY =
 // Surface-only hosts retain this capability when the complete picker setup contract ships.
 export const AUTOMATION_SURFACE_RUNTIME_CAPABILITY = 'automations.surface.v1' as const
 
+export const AUTOMATION_RUN_SEEN_CAPABILITY = 'automation.run-seen.v1' as const
+
 export const AUTOMATION_RUNTIME_CAPABILITIES = [
+  AUTOMATION_RUN_SEEN_CAPABILITY,
   AUTOMATION_SURFACE_RUNTIME_CAPABILITY,
   AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,
   AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,

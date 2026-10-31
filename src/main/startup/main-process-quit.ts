@@ -1,3 +1,5 @@
+import { clearAutomationRunNavigation } from './automation-run-navigation'
+import { clearRegisteredNotificationDelivery } from '../ipc/notifications'
 import { killWslChannelsInCloseGrace } from '../wsl/wsl-command-channel'
 import { markHostShuttingDown } from '../host-shutdown-state'
 import { app, type Event } from 'electron'
@@ -259,7 +261,12 @@ function installWillQuitHandler(): void {
     const notificationDismissalClose = Promise.allSettled([
       structuredAgentSessionShutdown,
       rpcStopAndClear
-    ]).then(() => state.runtime?.closeNotificationDismissals())
+    ])
+      .then(() => state.runtime?.closeNotificationDismissals())
+      .finally(() => {
+        clearRegisteredNotificationDelivery()
+        clearAutomationRunNavigation()
+      })
     // Normal quits preserve the detached daemon for warm reattach; dev-parent death leaves its temporary profile ownerless.
     const daemonTeardown = isDevParentShutdownRequested() ? shutdownDaemon() : disconnectDaemon()
     // Bound unsettled transports and final writes so quit cannot hang (#9447). Failures still exit; atomic swaps preserve old files if the final debounce is lost.

@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
-import { act } from 'react'
+import { act, Profiler } from 'react'
+import { createRoot } from 'react-dom/client'
 import { within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { AutomationRun } from '../../../../shared/automations-types'
@@ -10,10 +11,17 @@ import {
   mocks,
   renderPage,
   runtimeHost,
+  addRuntimeProject,
   scopedList,
   settleHostQueries
 } from './automations-page-test-harness'
 import { makeAutomation, makeRun } from './automations-page-fixtures'
+import { AutomationFailureBadge } from '../sidebar/AutomationFailureBadge'
+import { useAutomationRunAcknowledgement } from './use-automation-run-acknowledgement'
+import {
+  AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,
+  AUTOMATION_RUN_SEEN_CAPABILITY
+} from '../../../../shared/automation-runtime-capabilities'
 
 vi.mock('@tanstack/react-virtual', async () => {
   const { createVirtualizerStub } = await import('./virtualizer-test-stub')
@@ -273,3 +281,273 @@ describe('AutomationsPage run navigation', () => {
     }
   )
 })
+
+it('acknowledges only a failed run actually opened in the visible Automations view', async () => {
+  const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible')
+  try {
+    mocks.state.activeView = 'automations'
+    const { rerender, automation } = await loadCachedHistory()
+    visibility.mockReturnValue('hidden')
+    const failed = makeRun({ id: 'failed', status: 'dispatch_failed', failureSeenAt: undefined })
+    api.automations.listRuns.mockResolvedValue([failed])
+    const originalRpc = mocks.callRuntimeRpc.getMockImplementation()
+    mocks.callRuntimeRpc.mockImplementation(
+      (target: unknown, method: unknown, ...args: unknown[]) => {
+        if (method === 'automation.runSeen') {
+          api.automations.listRuns.mockResolvedValue([{ ...failed, failureSeenAt: 100 }])
+          return Promise.resolve({ seen: true })
+        }
+        return originalRpc?.(target, method, ...args)
+      }
+    )
+    await rerender()
+    expect(
+      mocks.callRuntimeRpc.mock.calls.filter(([, method]) => method === 'automation.runSeen')
+    ).toHaveLength(0)
+    mocks.state.pendingAutomationRunNavigation = { automationId: automation.id, runId: failed.id }
+    await rerender()
+    await rerender()
+    expect(
+      mocks.callRuntimeRpc.mock.calls.filter(([, method]) => method === 'automation.runSeen')
+    ).toHaveLength(0)
+    visibility.mockReturnValue('visible')
+    await act(async () => document.dispatchEvent(new Event('visibilitychange')))
+    expect(
+      mocks.callRuntimeRpc.mock.calls.filter(([, method]) => method === 'automation.runSeen')
+    ).toEqual([
+      [
+        { kind: 'local' },
+        'automation.runSeen',
+        { id: automation.id, runId: failed.id, expectedOwner: { selector: { kind: 'self' } } },
+        expect.anything()
+      ]
+    ])
+  } finally {
+    visibility.mockRestore()
+  }
+})
+
+it('does not open a retained notification on a replacement pairing with colliding run ids', async () => {
+  runtimeHost([makeAutomation({ name: 'Replacement host' })], [makeRun()])
+  const { rerender, automation } = await loadCachedHistory()
+  mocks.state.pendingAutomationRunNavigation = {
+    automationId: automation.id,
+    runId: 'run-26',
+    hostId: 'runtime:gpu',
+    pairingRevision: 3
+  }
+  await rerender()
+  expect(mocks.state.pendingAutomationRunNavigation).toBeNull()
+  expect(mocks.toastMessage).toHaveBeenCalledWith('Automation no longer available.')
+  expect(
+    mocks.callRuntimeRpc.mock.calls.filter(([, method]) => method === 'automation.runSeen')
+  ).toHaveLength(0)
+})
+
+it('retries the production details acknowledgement on revisit after a running-to-failed transition', async () => {
+  const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible')
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const root = createRoot(document.createElement('div'))
+  const owner = {
+    owner: { authority: { kind: 'desktop' as const }, selector: { kind: 'self' as const } },
+    selector: { kind: 'self' as const }
+  }
+  const running = makeRun({
+    id: 'visible-live-run',
+    status: 'dispatched',
+    failureSeenAt: undefined
+  })
+  function Details({ run, visible }: { run: AutomationRun; visible: boolean }) {
+    useAutomationRunAcknowledgement(run, owner, visible)
+    return null
+  }
+  const render = async (run: AutomationRun, visible = true) => {
+    await act(async () => root.render(<Details run={run} visible={visible} />))
+  }
+  try {
+    mocks.state.activeView = 'automations'
+    let attempts = 0
+    mocks.callRuntimeRpc.mockImplementation((_target, method) => {
+      if (method === 'automation.runSeen') {
+        attempts++
+        return attempts === 1
+          ? Promise.reject(new Error('primary write failed'))
+          : Promise.resolve({ seen: true })
+      }
+      return Promise.resolve({})
+    })
+    await render(running)
+    expect(attempts).toBe(0)
+    const failed = { ...running, status: 'dispatch_failed' as const }
+    await render(failed)
+    expect(attempts).toBe(1)
+    expect(warn).toHaveBeenCalled()
+    await render(failed, false)
+    await render(failed)
+    expect(attempts).toBe(2)
+    await render({ ...failed })
+    expect(attempts).toBe(2)
+  } finally {
+    await act(async () => root.unmount())
+    visibility.mockRestore()
+    warn.mockRestore()
+  }
+})
+
+it.each([100, 1_000])(
+  'bounds actual badge/page RPC and row work with %i rows, equal refresh, replay burst and teardown',
+  async (size) => {
+    let rowReads = 0
+    let count = 0
+    let badgeRenders = 0
+    let remoteCount = 0
+    const remote = makeAutomation({ id: 'remote-count' })
+    runtimeHost([remote], [])
+    addRuntimeProject()
+    const capabilities = [
+      AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,
+      AUTOMATION_RUN_SEEN_CAPABILITY
+    ]
+    mocks.state.runtimeStatusByEnvironmentId = new Map([['gpu', { status: { capabilities } }]])
+    mocks.getRuntimeEnvironmentStatus.mockResolvedValue({ capabilities })
+    const original = mocks.callRuntimeRpc.getMockImplementation()!
+    mocks.callRuntimeRpc.mockImplementation((target, method, ...args) => {
+      if (target?.kind === 'environment' && method === 'automation.list') {
+        return Promise.resolve({
+          automations: [remote],
+          items: [
+            { automationId: remote.id, selector: { kind: 'self' }, unseenFailureCount: remoteCount }
+          ],
+          orphanCount: 0
+        })
+      }
+      return original(target, method, ...args)
+    })
+    const automations = Array.from({ length: size }, (_, index) => {
+      const automation = makeAutomation({ id: `measured-${index}`, name: `Measured ${index}` })
+      const id = automation.id
+      Object.defineProperty(automation, 'id', {
+        get: () => {
+          rowReads++
+          return id
+        },
+        enumerable: true
+      })
+      return automation
+    })
+    api.automations.list.mockResolvedValue(automations)
+    api.automations.listScoped.mockImplementation(async () => ({
+      automations,
+      items: automations.map((automation) => ({
+        automationId: automation.id,
+        selector: { kind: 'self' },
+        unseenFailureCount: automation.id === 'measured-0' ? count : 0
+      })),
+      orphanCount: 0
+    }))
+    const { unmount } = await renderPage({
+      peer: (
+        <Profiler
+          id="failure-badge"
+          onRender={() => {
+            badgeRenders++
+          }}
+        >
+          <AutomationFailureBadge />
+        </Profiler>
+      )
+    })
+    await settleHostQueries()
+    const calls = () =>
+      mocks.callRuntimeRpc.mock.calls.filter(([, method]) => method === 'automation.list').length
+    const initial = { calls: calls(), rows: rowReads, renders: badgeRenders }
+    rowReads = 0
+    await act(async () =>
+      window.dispatchEvent(
+        new CustomEvent('orca:automations-changed', {
+          detail: { reason: 'usage', selector: { kind: 'self' } }
+        })
+      )
+    )
+    await settleHostQueries()
+    const equal = {
+      calls: calls() - initial.calls,
+      rows: rowReads,
+      renders: badgeRenders - initial.renders
+    }
+    expect(equal.renders).toBe(0)
+    expect(equal.calls).toBeLessThanOrEqual(3)
+    expect(equal.rows).toBeLessThanOrEqual(size * 40)
+    const beforeBurst = calls()
+    rowReads = 0
+    await act(async () => {
+      count = 1
+      for (let index = 0; index < 10; index++) {
+        window.dispatchEvent(
+          new CustomEvent('orca:automations-changed', {
+            detail: { reason: 'run', selector: { kind: 'self' } }
+          })
+        )
+      }
+    })
+    await settleHostQueries()
+    const burst = {
+      calls: calls() - beforeBurst,
+      rows: rowReads,
+      renders: badgeRenders - initial.renders
+    }
+    expect(burst.calls).toBeLessThanOrEqual(12)
+    expect(burst.rows).toBeLessThanOrEqual(size * 100)
+    expect(document.querySelector('[aria-label="1 unseen failed runs"]')?.textContent).toBe('1')
+    expect(badgeRenders).toBeGreaterThan(initial.renders)
+    const localScoped = api.automations.listScoped.mock.calls.length
+    const settledRenders = badgeRenders
+    const crossCalls = calls()
+    rowReads = 0
+    await act(async () =>
+      window.dispatchEvent(
+        new CustomEvent('orca:automations-changed', {
+          detail: { environmentId: 'gpu', reason: 'usage', selector: { kind: 'self' } }
+        })
+      )
+    )
+    await settleHostQueries()
+    expect(badgeRenders).toBe(settledRenders)
+    expect(api.automations.listScoped).toHaveBeenCalledTimes(localScoped)
+    const remoteEqual = {
+      calls: calls() - crossCalls,
+      rows: rowReads,
+      renders: badgeRenders - settledRenders
+    }
+    const changeCalls = calls()
+    rowReads = 0
+    await act(async () => {
+      remoteCount = 1
+      window.dispatchEvent(
+        new CustomEvent('orca:automations-changed', {
+          detail: { environmentId: 'gpu', reason: 'run', selector: { kind: 'self' } }
+        })
+      )
+    })
+    await settleHostQueries()
+    expect(document.querySelector('[aria-label="2 unseen failed runs"]')?.textContent).toBe('2')
+    expect(api.automations.listScoped).toHaveBeenCalledTimes(localScoped)
+    const remoteUpdate = {
+      calls: calls() - changeCalls,
+      rows: rowReads,
+      renders: badgeRenders - settledRenders
+    }
+    process.stdout.write(
+      `${JSON.stringify({ size, initial, equal, burst, remoteEqual, remoteUpdate })}\n`
+    )
+    await unmount()
+    const ended = calls()
+    await act(async () =>
+      window.dispatchEvent(
+        new CustomEvent('orca:automations-changed', { detail: { reason: 'run' } })
+      )
+    )
+    await settleHostQueries()
+    expect(calls()).toBe(ended)
+  }
+)

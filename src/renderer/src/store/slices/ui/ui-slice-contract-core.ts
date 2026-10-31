@@ -185,9 +185,15 @@ export type UISliceCore = {
     automationId: string
     runId: string | null
     hostId?: ExecutionHostId
+    pairingRevision?: number
   } | null
   setPendingAutomationRunNavigation: (
-    navigation: { automationId: string; runId: string | null; hostId?: ExecutionHostId } | null
+    navigation: {
+      automationId: string
+      runId: string | null
+      hostId?: ExecutionHostId
+      pairingRevision?: number
+    } | null
   ) => void
   openAutomationsPage: () => void
   closeAutomationsPage: () => void

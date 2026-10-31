@@ -27,6 +27,7 @@ export type AutomationListItem = {
   automationId: string
   selector: AutomationListItemSelector
   usageSummary?: AutomationUsageSummary | null
+  unseenFailureCount?: number
 }
 
 export type AutomationListResult = {
@@ -68,6 +69,7 @@ export type AutomationProjectionContext = {
   /** Registration a generation was allocated to; omitted leaves a re-pin unproven. */
   sshTargetIdForGeneration?: (generation: number) => string | undefined
   usageSummary?: (automationId: string) => AutomationUsageSummary | null
+  unseenFailureCount?: (automationId: string) => number
 }
 
 function orphan(issue: string): AutomationListItemSelector {
@@ -236,7 +238,10 @@ export function projectAutomationList(
     scopedAutomations.push(automation)
     items.push({
       automationId: automation.id,
-      selector
+      selector,
+      ...(context.unseenFailureCount
+        ? { unseenFailureCount: context.unseenFailureCount(automation.id) }
+        : {})
     })
   }
   // Keep usage lookups after projection, matching the previous staged pipeline's ordering.

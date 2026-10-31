@@ -21523,6 +21523,8 @@
     "launchFailedGenericDetail": "Система отказалась запустить процесс. Освободите память или закройте другие приложения и нажмите «Повторить попытку». Если проблема сохраняется, переустановите Orca."
   },
   "notifications": {
+    "automationFailedReason": "{{agent}}: {{reason}} Проверьте запуск и повторите попытку.",
+    "automationFailedAction": "{{agent}} не удалось завершить эту автоматизацию. Проверьте запуск и повторите попытку.",
     "agentStatus": {
       "needsInput": "нужен ответ",
       "working": "работает",
@@ -23268,6 +23270,11 @@
     }
   },
   "automations": {
+    "unseenFailures": "{{count}} непросмотренного неудачного запуска",
+    "unseenFailures_one": "{{count}} непросмотренный неудачный запуск",
+    "unseenFailures_few": "{{count}} непросмотренных неудачных запуска",
+    "unseenFailures_many": "{{count}} непросмотренных неудачных запусков",
+    "unseenFailures_other": "{{count}} непросмотренного неудачного запуска",
     "runFailures": {
       "noDispatchHost": "Для запуска автоматизации не было доступного окна Orca.",
       "unevaluableSchedule": "Orca не удалось оценить эту автоматизацию, поэтому этот запуск был пропущен.",

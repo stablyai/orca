@@ -1,6 +1,9 @@
+import type {
+  AutomationResultPresentation,
+  AutomationRunResult
+} from './automation-run-presentation'
 import {
   isFinalAutomationRunStatus,
-  type AutomationDispatchResult,
   type AutomationRun,
   type AutomationRunOutputSnapshot
 } from '../../shared/automations-types'
@@ -9,6 +12,7 @@ import { RetainedRunReconciler } from './retained-run-reconciliation'
 
 export type AutomationRunCompletionObservation = {
   status: 'completed' | 'dispatch_failed'
+  presentation?: AutomationResultPresentation
   outputSnapshot?: AutomationRunOutputSnapshot | null
   error?: string | null
 } & AutomationRunFailureCodeFields
@@ -41,7 +45,7 @@ function describeObservationError(error: unknown): string {
 export class AutomationRunCompletionWatcher {
   private readonly observer: AutomationRunTerminalObserver
   private readonly readRun: (automationId: string, runId: string) => AutomationRun | null
-  private readonly markDispatchResult: (result: AutomationDispatchResult) => Promise<unknown>
+  private readonly markDispatchResult: (result: AutomationRunResult) => Promise<unknown>
   private readonly watching = new Map<string, AbortController>()
   private readonly reconciler: RetainedRunReconciler
   private disposed = false
@@ -49,7 +53,7 @@ export class AutomationRunCompletionWatcher {
   constructor(opts: {
     observer: AutomationRunTerminalObserver
     readRun: (automationId: string, runId: string) => AutomationRun | null
-    markDispatchResult: (result: AutomationDispatchResult) => Promise<unknown>
+    markDispatchResult: (result: AutomationRunResult) => Promise<unknown>
   }) {
     this.observer = opts.observer
     this.readRun = opts.readRun
@@ -169,6 +173,7 @@ export class AutomationRunCompletionWatcher {
     // Preserve a final result already reported by the renderer.
     const current = this.readRun(run.automationId, run.id)
     if (!current || isFinalAutomationRunStatus(current.status)) {
+      observation.presentation?.attention?.release()
       return
     }
     await this.markDispatchResult({
@@ -180,6 +185,7 @@ export class AutomationRunCompletionWatcher {
       terminalSessionId: current.terminalSessionId,
       terminalPaneKey: current.terminalPaneKey,
       terminalPtyId: current.terminalPtyId,
+      presentation: observation.presentation,
       outputSnapshot: observation.outputSnapshot ?? null,
       error: observation.error ?? null,
       errorCode: observation.errorCode ?? null,

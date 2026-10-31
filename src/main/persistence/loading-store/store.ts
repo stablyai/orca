@@ -272,6 +272,20 @@ export class Store {
     return authority.quarantineDatabase(quarantineRoot, reason)
   }
 
+  automationWriteGeneration(): number {
+    return this.runtime.writeGeneration
+  }
+  automationDurableWriteGeneration(): number {
+    return this.runtime.lastDurableWriteGeneration
+  }
+
+  onDurableWrite(listener: (generation: number) => void): () => void {
+    this.runtime.durableWriteListeners.add(listener)
+    return () => {
+      this.runtime.durableWriteListeners.delete(listener)
+    }
+  }
+
   freezeWrites(): void {
     freezeProfileStateWrites(this.runtime)
   }

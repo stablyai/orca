@@ -183,6 +183,17 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
     vi.unstubAllGlobals()
   })
 
+  it('keeps ordinary unread state while the automation writer owns the outcome alert', () => {
+    dispatchStructuredTurnCompletionAttention(
+      structuredTab(),
+      completion({ automationOwned: true })
+    )
+    expect(dispatched).toHaveLength(0)
+    expect(store.getState().unreadAgentCompletionPanes).not.toEqual({})
+    dispatchStructuredTurnCompletionAttention(structuredTab(), completion({ turnId: 'human-turn' }))
+    expect(dispatched).toHaveLength(1)
+  })
+
   it('leaves the phone to a local host, which pushed it already, and relays for a remote one', () => {
     dispatchStructuredTurnCompletionAttention(structuredTab(), completion(), { kind: 'local' })
     dispatchStructuredTurnCompletionAttention(structuredTab(), completion({ turnId: 'turn-2' }), {

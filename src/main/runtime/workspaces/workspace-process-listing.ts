@@ -29,12 +29,7 @@ import {
   createStructuredAttentionMobileDelivery,
   readStructuredAttentionWorkspaceLabels
 } from '../structured-agent-session-mobile-attention'
-import {
-  createStructuredAgentSessionLogger,
-  neverThrowingStructuredAgentSessionLogger
-} from '../../native-chat/agent-session-wire/structured-agent-session-logger'
-import { openAgentSessionRecordStoreOnce } from '../agent-session-record-store-slot'
-import type { AgentSessionRecordStore } from '../agent-session-record-store'
+import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
 import { maybeAutoRenameWorkspaceOnFirstStructuredTurn } from '../../agent-hooks/first-work-structured-session-rename'
 import { firstWorkRenameDeps } from '../../agent-hooks/first-work-rename-runtime'
 import { createStructuredChatNamingHandler } from '../../native-chat/structured-chat-naming'
@@ -214,17 +209,6 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
     )
   }
 
-  /** Admission needs only the ledger; a later chat host must reuse this store. */
-  async openAgentSessionRecordStore(): Promise<AgentSessionRecordStore> {
-    const { store } = await openAgentSessionRecordStoreOnce({
-      stateDirectory: getProfileUserDataPath(),
-      legacySessionTabIds: this.legacyStructuredSessionTabIds,
-      hostId: LOCAL_EXECUTION_HOST_ID,
-      logger: neverThrowingStructuredAgentSessionLogger(createStructuredAgentSessionLogger())
-    })
-    return store
-  }
-
   /** Defer host creation until profile paths are final and chat is used; reuse an admission-opened record store. */
   async ensureStructuredAgentSessionHost(): Promise<void> {
     const logger = createStructuredAgentSessionLogger()
@@ -301,6 +285,8 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
       conversationNaming: nameChat,
       onSessionTabHidden: (sessionId) => this.onStructuredSessionTabHidden(sessionId),
       assertNoTerminalWriter: (record) => this.assertStructuredChatAcquireAdmissible(record),
+      configureAutomationOwnership: (host, records) =>
+        this.automation.attachChatOwnership(host, records),
       attentionDelivery: createStructuredAttentionMobileDelivery({
         readNotificationSettings: () => this.requireStore().getSettings().notifications,
         readWorkspaceLabels: (scope) =>

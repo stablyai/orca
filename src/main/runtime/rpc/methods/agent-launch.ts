@@ -33,7 +33,7 @@ import {
   AgentLaunchReplay,
   type AgentLaunchParams
 } from '../../../../shared/rpc-contract/agent-launch-params'
-import { agentLaunchSurfaceFactory } from './agent-launch-surfaces'
+import { agentLaunchSurfaceFactory, type HostLaunchContext } from './agent-launch-surfaces'
 import {
   agentLaunchFailureCode,
   launchFailureWithoutEffectsCode
@@ -57,10 +57,6 @@ import {
 
 export { supportsAgentLaunch } from './agent-launch-target-authorization'
 
-type HostLaunchContext = RpcContext & {
-  agentLaunchPolicy?: { onSurfacePublished?: (surface: AgentLaunchResult) => void }
-}
-
 async function runAgentLaunch(
   { intent, decidedMode }: Awaited<ReturnType<typeof resolveUnlaunchedIntent>>,
   context: HostLaunchContext,
@@ -78,7 +74,8 @@ async function runAgentLaunch(
       replaySafe?.callerKey,
       callerNavigationId !== null,
       replaySafe?.terminalSpawn,
-      view
+      view,
+      context.agentLaunchPolicy?.beforeChatSubmit
     ),
     workspaces: agentLaunchWorkspaceFactory(context, intent.agent),
     // The tab is shown as it is published, not after a prompt that can take a minute to land.

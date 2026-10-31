@@ -1,10 +1,18 @@
-import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
+import { AUTOMATION_RUN_SEEN_CAPABILITY } from '../../../../shared/automation-runtime-capabilities'
+import {
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react'
 import { useAppStore } from '@/store'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
+import { getHostSettingOverride } from '../../../../shared/host-setting-overrides'
 import { getLocalExecutionHostLabel } from '../../../../shared/execution-host'
 import type { AutomationHostFilter } from '../../../../shared/automation-host-filter'
-import type { StableAutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
 import { buildAutomationHostCatalog } from './automation-host-catalog'
 import { subscribeAutomationHostInvalidation } from './automation-host-invalidation-window-events'
 import { buildAutomationHostCatalogSource } from './automation-host-catalog-source'
@@ -17,11 +25,13 @@ import {
   createAutomationHostQueryController,
   type AutomationHostQueryController
 } from './automation-host-cache-controller'
+import { automationHostFailureSummary } from './automation-host-cache-rows'
 import { automationHostCatalogEntryFingerprint } from './automation-host-catalog-generation'
 import type { AutomationAuthorityChangeEvent } from './automation-host-invalidation'
-import type {
-  AutomationHostCatalog,
-  AutomationHostCatalogEntry
+import {
+  automationAuthorityCatalogKey,
+  type AutomationHostCatalog,
+  type AutomationHostCatalogEntry
 } from './automation-host-catalog-types'
 import { automationHostFilterStableKey } from '../../../../shared/automation-host-filter'
 import {
@@ -50,6 +60,7 @@ import { useAutomationHostCatalogSourceState } from './use-automation-host-catal
 /** Keep query and display catalogs separate: apply mirrored membership to the controller, then fold query health into display without cancelling work on every cache commit. */
 
 export type AutomationHostCatalogView = {
+  unseenFailureCount: number
   catalog: AutomationHostCatalog
   entries: readonly AutomationHostCatalogEntry[]
   resolution: AutomationHostFilterResolution
@@ -65,6 +76,7 @@ export type AutomationHostCatalogView = {
 }
 
 export type AutomationHostCatalogOptions = {
+  failureCountOnly?: boolean
   /** Stable keys a stored automation or persisted filter still points at. */
   referencedStableKeys?: Iterable<string>
   /** Authorities whose most recent unscoped list attempt failed. */
@@ -74,7 +86,10 @@ export type AutomationHostCatalogOptions = {
 export function useAutomationHostCatalog(
   options: AutomationHostCatalogOptions = {}
 ): AutomationHostCatalogView {
-  const settings = useAppStore((s) => s.settings)
+  const desktopLabel = useAppStore(
+    (s) =>
+      getHostSettingOverride(s.settings, 'local', 'displayLabel') ?? getLocalExecutionHostLabel()
+  )
   const repos = useAppStore((s) => s.repos)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const automationHostFilter = useAppStore((s) => s.automationHostFilter)
@@ -83,10 +98,6 @@ export function useAutomationHostCatalog(
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const desktopSshGenerations = useAutomationDesktopSshRegistrations()
 
-  const desktopLabel = useMemo(
-    () => getHostDisplayLabelOverrides(settings).get('local') ?? getLocalExecutionHostLabel(),
-    [settings]
-  )
   // The controller outlives renders; its partition callback needs current authority repo tables.
   const repoTables = useMemo(() => groupReposByAutomationAuthority(repos), [repos])
   const repoTablesRef = useRef(repoTables)
@@ -117,18 +128,25 @@ export function useAutomationHostCatalog(
   }, [controller, makeController])
 
   const [cacheVersion, setCacheVersion] = useState(0)
-  useEffect(() => {
-    return controller.cache.subscribe(() => setCacheVersion((version) => version + 1))
-  }, [controller])
 
-  const orphanCount = useCallback(
-    (authority: StableAutomationAuthorityRef) => controller.authorityOrphanCount(authority),
-    [controller]
-  )
   const sourceState = useAutomationHostCatalogSourceState({
     desktopSshGenerations,
     runtimeEnvironments
   })
+  const unsupportedFailureAuthorities = useMemo(
+    () =>
+      new Set(
+        sourceState.runtimes
+          .filter(({ status }) => {
+            const capabilities = status?.status?.capabilities
+            return (
+              capabilities !== undefined && !capabilities.includes(AUTOMATION_RUN_SEEN_CAPABILITY)
+            )
+          })
+          .map((runtime) => runtime.environmentId)
+      ),
+    [sourceState.runtimes]
+  )
   const hostFilter = useMemo(
     () => foldDesktopHostFilter(automationHostFilter, sourceState.desktopAliasEnvironmentId),
     [automationHostFilter, sourceState.desktopAliasEnvironmentId]
@@ -145,17 +163,19 @@ export function useAutomationHostCatalog(
   )
   const languageRevision = useUiLanguageRevision()
   const queryCatalog = useMemo(
-    () =>
-      buildAutomationHostCatalog(
+    () => {
+      const orphans = controller.cache.orphanCountsByAuthority()
+      return buildAutomationHostCatalog(
         buildAutomationHostCatalogSource({
           ...sourceState,
           desktopLabel,
-          orphanCount,
+          orphanCount: (authority) => orphans.get(automationAuthorityCatalogKey(authority)) ?? null,
           referencedStableKeys
         })
-      ),
+      )
+    },
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- cacheVersion is the cache's change signal: orphan counts only exist in committed answers, so the catalog re-reads them when the cache moves. Ordering collates in the UI language.
-    [cacheVersion, desktopLabel, orphanCount, referencedStableKeys, sourceState, languageRevision]
+    [cacheVersion, controller, desktopLabel, referencedStableKeys, sourceState, languageRevision]
   )
 
   // Apply by complete generation/scheduler signature, not catalog identity; label/health changes must not cancel work.
@@ -249,7 +269,33 @@ export function useAutomationHostCatalog(
     void controller.applyCatalog(queryCatalog, { selectedStableKey, force: true })
   }, [controller, queryCatalog, selectedStableKey])
 
+  const summary = automationHostFailureSummary(controller, catalog, unsupportedFailureAuthorities)
+  useLayoutEffect(() => {
+    let key = summary.key
+    const changed = () => {
+      if (options.failureCountOnly) {
+        const next = automationHostFailureSummary(
+          controller,
+          catalog,
+          unsupportedFailureAuthorities
+        )
+        if (next.key === key) {
+          return
+        }
+        key = next.key
+      }
+      setCacheVersion((version) => version + 1)
+    }
+    const release = controller.cache.subscribe(changed)
+    // A cache commit between render and attachment must reach the committed selection.
+    if (options.failureCountOnly) {
+      changed()
+    }
+    return release
+  }, [controller, catalog, summary.key, unsupportedFailureAuthorities, options.failureCountOnly])
+
   return {
+    unseenFailureCount: summary.count,
     catalog,
     entries: catalog.entries,
     resolution,

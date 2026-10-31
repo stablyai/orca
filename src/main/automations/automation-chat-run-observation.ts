@@ -1,3 +1,10 @@
+import { isRootAgentJournalItem } from '../../shared/agent-session-journal-producer'
+import { isStructuredAgentSessionCommandEntry } from '../../shared/structured-agent-session-command-entry'
+import { structuredAgentSessionAssistantProse } from '../../shared/structured-agent-session-latest-request'
+import {
+  normalizeOptionalField,
+  AGENT_STATUS_MAX_FIELD_LENGTH
+} from '../../shared/agent-status-field-normalization'
 import type { AgentJournalSnapshot } from '../../shared/agent-session-journal-types'
 import type { AgentSessionSendResult } from '../../shared/agent-session-wire'
 import { agentJournalSubmissionKey } from '../../shared/agent-session-journal-item-key'
@@ -12,13 +19,20 @@ export function resolveChatAutomationRun(
   snapshot: AgentJournalSnapshot,
   messageId: string,
   agent: string,
-  queued: AgentSessionSendResult | null = null
+  queued: AgentSessionSendResult | null = null,
+  identity?: { submissionId: string; turnItemId: string | null }
 ) {
   const submission =
     queued && 'submission' in queued
       ? queued.submission
-      : snapshot.submissions.find((entry) => entry.clientMessageId === messageId)
-  const turnItem = submission ? submissionTurn(snapshot, submission) : undefined
+      : snapshot.submissions.find(
+          (entry) => entry.clientMessageId === (identity?.submissionId ?? messageId)
+        )
+  const turnItem = identity
+    ? snapshot.items.find((item) => item.itemId === identity.turnItemId)
+    : submission
+      ? submissionTurn(snapshot, submission)
+      : undefined
   return {
     submission,
     turnItem,
@@ -66,15 +80,23 @@ function observationForResolvedRun(
     return null
   }
   const buffer = createHeadlessAutomationOutputSnapshotBuffer()
+  let assistantMessage: string | undefined
   for (const item of snapshot.items) {
     if (
-      item.agentId ||
+      !isRootAgentJournalItem(item) ||
       item.turnScope?.kind !== 'turn' ||
       item.turnScope.turnItemId !== turnItem.itemId ||
       item.body.kind !== 'message' ||
       item.body.role !== 'assistant'
     ) {
       continue
+    }
+    const prose = normalizeOptionalField(
+      structuredAgentSessionAssistantProse(item.body.blocks),
+      AGENT_STATUS_MAX_FIELD_LENGTH
+    )
+    if (prose && !isStructuredAgentSessionCommandEntry(item.body)) {
+      assistantMessage = prose
     }
     for (const block of item.body.blocks) {
       if (block.type === 'text') {
@@ -86,6 +108,7 @@ function observationForResolvedRun(
   return {
     status: outcome === 'success' ? 'completed' : 'dispatch_failed',
     outputSnapshot: buffer.snapshot(),
+    ...(assistantMessage ? { presentation: { assistantMessage } } : {}),
     error:
       outcome === 'success'
         ? null

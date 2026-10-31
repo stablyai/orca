@@ -1,11 +1,11 @@
-/** Carry the listed owner into actions so a host move fences against the incarnation the user saw. Owned rows act normally, orphans allow pause/delete/history but cannot execute, and unfenced legacy rows stay view-only. */
-
-import { AUTOMATION_CAPTURED_HOST_REFUSALS } from '../../../../shared/automation-owner-conflict'
-import { AUTOMATION_ORPHAN_ISSUES } from '../../../../shared/automation-list-scope'
 import type {
   AutomationAuthorityRef,
   AutomationOwnerRef
 } from '../../../../shared/automation-owner-ref'
+/** Carry the listed owner into actions so a host move fences against the incarnation the user saw. Owned rows act normally, orphans allow pause/delete/history but cannot execute, and unfenced legacy rows stay view-only. */
+
+import { AUTOMATION_CAPTURED_HOST_REFUSALS } from '../../../../shared/automation-owner-conflict'
+import { AUTOMATION_ORPHAN_ISSUES } from '../../../../shared/automation-list-scope'
 import { ownerKey } from '../../../../shared/automation-owner-key'
 import type { AutomationOwnerPrecondition } from '../../../../shared/automation-owner-precondition'
 import { translate } from '@/i18n/i18n'
@@ -26,8 +26,8 @@ export type AutomationActionBlock = {
 }
 
 export type AutomationCapturedOwner = {
-  owner: AutomationOwnerRef | null
   authority?: AutomationAuthorityRef
+  owner: AutomationOwnerRef | null
   /** How the authority qualified the row; null when no list metadata was captured at all. */
   selector: AutomationHostRowSelector | null
 }
@@ -128,7 +128,11 @@ export function captureAutomationOwners(
 ): Map<string, AutomationCapturedOwner> {
   const captured = new Map<string, AutomationCapturedOwner>()
   for (const { rowKey, row } of rows) {
-    captured.set(rowKey, { owner: row.owner, selector: row.selector, authority: row.authority })
+    captured.set(rowKey, {
+      owner: row.owner,
+      selector: row.selector,
+      ...(row.authority ? { authority: row.authority } : {})
+    })
   }
   return captured
 }

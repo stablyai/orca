@@ -20079,6 +20079,8 @@
     }
   },
   "notifications": {
+    "automationFailedReason": "{{agent}}：{{reason}} 请检查本次运行后重试。",
+    "automationFailedAction": "{{agent}} 未能完成此自动化。请检查本次运行后重试。",
     "agentStatus": {
       "needsInput": "需要输入",
       "working": "处理中",
@@ -22373,6 +22375,8 @@
     }
   },
   "automations": {
+    "unseenFailures": "{{count}} 次未查看的失败运行",
+    "unseenFailures_other": "{{count}} 次未查看的失败运行",
     "runFailures": {
       "noDispatchHost": "没有可用于启动自动化的 Orca 窗口。",
       "unevaluableSchedule": "Orca 无法评估此自动化，已跳过此次执行。",

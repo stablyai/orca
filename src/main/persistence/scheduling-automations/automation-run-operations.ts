@@ -35,13 +35,19 @@ export type AutomationRunOperations = {
   getWorkspaceDisplayName: (workspaceId: string | null | undefined) => string | null
 }
 
-function touchAutomation(state: PersistedState, automationId: string, now: number): void {
-  if (!state.automations.some((entry) => entry.id === automationId)) {
-    return
+function touchAutomation(
+  state: PersistedState,
+  automationId: string,
+  now: number
+): Automation | undefined {
+  const automation = state.automations.find((entry) => entry.id === automationId)
+  if (!automation) {
+    return undefined
   }
   state.automations = state.automations.map((entry) =>
     entry.id === automationId ? { ...entry, lastRunAt: now, updatedAt: now } : entry
   )
+  return automation
 }
 
 function sortedAutomationRuns(state: PersistedState, automationId?: string): AutomationRun[] {
@@ -56,6 +62,28 @@ function sortedAutomationRuns(state: PersistedState, automationId?: string): Aut
 
 export function listAutomationRuns(state: PersistedState, automationId?: string): AutomationRun[] {
   return sortedAutomationRuns(state, automationId)
+}
+
+export function markAutomationRunSeen(
+  state: PersistedState,
+  automationId: string,
+  runId: string,
+  recordMutation: (runs: AutomationRun[]) => void
+): boolean {
+  const run = state.automationRuns.find(
+    (row) => row.automationId === automationId && row.id === runId
+  )
+  if (!run || run.status !== 'dispatch_failed') {
+    return false
+  }
+  if (run.failureSeenAt !== undefined) {
+    return true
+  }
+  state.automationRuns = state.automationRuns.map((row) =>
+    row === run ? { ...run, failureSeenAt: Date.now() } : row
+  )
+  recordMutation(state.automationRuns)
+  return true
 }
 
 export function listAutomationRunsPage(
@@ -178,9 +206,23 @@ function resultErrorCodeFields(
   }
 }
 
-export function updateAutomationRun(
+export function updateAutomationRunWithTransition(
   operations: AutomationRunOperations,
   result: AutomationDispatchResult
+) {
+  let previousStatus: AutomationRun['status'] = result.status
+  let automation: Automation | undefined
+  const run = updateAutomationRun(operations, result, (status, definition) => {
+    previousStatus = status
+    automation = definition
+  })
+  return { run, previousStatus, automation }
+}
+
+export function updateAutomationRun(
+  operations: AutomationRunOperations,
+  result: AutomationDispatchResult,
+  capturePrevious?: (status: AutomationRun['status'], automation: Automation | undefined) => void
 ): AutomationRun {
   const index = (operations.state.automationRuns ?? []).findIndex(
     (entry) => entry.id === result.runId
@@ -238,7 +280,8 @@ export function updateAutomationRun(
     // Final runs stop pinning workspace metadata (#17775).
     invalidateLocalWorktreeMetadataPruneInputs()
   }
-  touchAutomation(operations.state, updated.automationId, now)
+  const automation = touchAutomation(operations.state, updated.automationId, now)
+  capturePrevious?.(previous.status, automation)
   operations.flush()
   return updated
 }

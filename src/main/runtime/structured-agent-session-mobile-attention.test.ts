@@ -206,3 +206,19 @@ it('preserves the missing notification settings failure before dispatch', () => 
   expect(reads).toBe(1)
   expect(h.sent).toEqual([])
 })
+
+it('uses the captured host ownership immediately while preserving later user completions and prompts', () => {
+  const h = harness()
+  const edge = completion('success')
+  if (edge.type !== 'completion') {
+    throw new Error('Expected completion')
+  }
+  h.delivery.deliver(
+    { ...edge, completion: { ...edge.completion, automationOwned: true } },
+    SUMMARY
+  )
+  h.delivery.deliver(PROMPT, SUMMARY)
+  expect(h.sent).toHaveLength(1)
+  h.delivery.deliver(edge, SUMMARY)
+  expect(h.sent).toHaveLength(2)
+})

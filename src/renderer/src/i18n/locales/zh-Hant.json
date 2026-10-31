@@ -20511,6 +20511,8 @@
     "launchFailedGenericDetail": "系統拒絕啟動它。請釋放記憶體或關閉其他應用程式，然後點選「重試」。如果問題持續出現，請重新安裝 Orca。"
   },
   "notifications": {
+    "automationFailedReason": "{{agent}}：{{reason}} 請檢查此次執行後重試。",
+    "automationFailedAction": "{{agent}} 未能完成此自動化。請檢查此次執行後重試。",
     "agentStatus": {
       "needsInput": "需要輸入",
       "working": "工作中",
@@ -22183,6 +22185,8 @@
     }
   },
   "automations": {
+    "unseenFailures": "{{count}} 次未查看的失敗執行",
+    "unseenFailures_other": "{{count}} 次未查看的失敗執行",
     "runFailures": {
       "noDispatchHost": "沒有可用來啟動自動化的 Orca 視窗。",
       "unevaluableSchedule": "Orca 無法評估此自動化，已略過此次執行。",

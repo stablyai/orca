@@ -1,6 +1,6 @@
+import type { AutomationRunResult } from './automation-run-presentation'
 import type {
   Automation,
-  AutomationDispatchResult,
   AutomationPrecheckResult,
   AutomationRun
 } from '../../shared/automations-types'
@@ -28,7 +28,7 @@ export type HeadlessAutomationDispatchContext = {
   dispatcher: HeadlessAutomationDispatcher
   runs: AutomationRunWriter
   runPrecheck: () => Promise<AutomationPrecheckResult | null>
-  markDispatchResult: (result: AutomationDispatchResult) => Promise<AutomationRun>
+  markDispatchResult: (result: AutomationRunResult) => Promise<AutomationRun>
   watchRun: (run: AutomationRun) => void
 }
 
@@ -119,6 +119,7 @@ export async function runHeadlessAutomationDispatch(
             status: completion.status,
             ...launchRunTarget,
             precheckResult,
+            presentation: completion.presentation,
             outputSnapshot: completion.outputSnapshot ?? null,
             error: completion.error ?? null,
             errorCode: completion.errorCode ?? null,

@@ -1,3 +1,7 @@
+import type { AutomationService } from './service'
+import type { Store } from '../persistence'
+import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { runOwnHandle } from './headless-automation-agent-launch'
 import {
   isFinalAutomationRunStatus,
   type AutomationRun,
@@ -164,3 +168,89 @@ export function createHeadlessRunTerminalRetention(deps: HeadlessRunTerminalRete
 }
 
 type PanedRun = AutomationRun & { terminalPaneKey: string }
+
+export function bindHeadlessRunTerminalRetention(
+  service: AutomationService,
+  store: Store,
+  runtime: OrcaRuntimeService
+): void {
+  const retention = createHeadlessRunTerminalRetention({
+    listRuns: () => store.listAutomationRuns(),
+    terminalClientUse: (run) =>
+      run.terminalPtyId ? runtime.readTerminalClientUse(run.terminalPtyId) : 'unknown',
+    runTerminalAlive: (run) => runOwnHandle(runtime, run) !== null,
+    shellAloneAtPrompt: (run) =>
+      run.terminalPtyId
+        ? runtime.confirmTerminalShellAlone(run.terminalPtyId)
+        : Promise.resolve(false),
+    closeRunTerminal: async (run) => {
+      const handle = runOwnHandle(runtime, run)
+      if (!handle) {
+        return false
+      }
+      // Preserve user-created splits in the same tab.
+      await runtime.closeTerminal(handle)
+      return true
+    },
+    // Shared workspaces must close run panes rather than accumulate sleeping tabs.
+    runOwnsWorkspace: (run) => {
+      const provenance = run.workspaceId
+        ? store.getWorktreeMeta(run.workspaceId)?.automationProvenance
+        : undefined
+      // Why: a client-origin label names another owner's run, never one of this host's.
+      return provenance?.origin !== 'client' && provenance?.automationRunId === run.id
+    },
+    sleepRunWorkspace: async (run) => {
+      const ptyId = run.terminalPtyId
+      if (!run.workspaceId || !ptyId) {
+        return false
+      }
+      try {
+        // Sleep only this PTY, preserving other live terminals and the agent resume state.
+        const sleep = await runtime.sleepTerminalsForWorktree(`id:${run.workspaceId}`, {
+          soleLivePtyId: ptyId
+        })
+        // A retry may find no live PTYs if an earlier sleep stopped the process before failing.
+        const slept =
+          sleep.livePtyIds.length === 0 ||
+          (sleep.stoppedPtyIds.includes(ptyId) && !sleep.remainingLivePtyIds?.includes(ptyId))
+        if (!slept) {
+          return false
+        }
+      } catch (error) {
+        console.error('[automations] could not sleep a run workspace:', error)
+        return false
+      }
+      // Preserve tab and pane keys for resuming the slept agent.
+      await service.markDispatchResult({ runId: run.id, status: run.status, terminalPtyId: null })
+      return true
+    },
+    inAutomationLane: (automationId, operation) =>
+      service.runInAutomationLane(automationId, operation),
+    forgetRunTerminal: async (run) => {
+      // An idle shell proves a dispatched run exited without a completion result.
+      const unfinished = run.status === 'dispatched'
+      await service.markDispatchResult({
+        runId: run.id,
+        status: unfinished ? 'dispatch_failed' : run.status,
+        error: unfinished
+          ? (run.error ?? 'The agent exited without reporting completion.')
+          : run.error,
+        terminalSessionId: null,
+        terminalPaneKey: null,
+        terminalPtyId: null
+      })
+    }
+  })
+  service.releaseFinishedRunTerminals = () => retention.drain()
+  const start = service.start.bind(service)
+  const stop = service.stop.bind(service)
+  service.start = () => {
+    start()
+    retention.start()
+  }
+  service.stop = () => {
+    retention.stop()
+    stop()
+  }
+}

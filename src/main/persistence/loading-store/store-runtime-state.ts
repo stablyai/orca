@@ -76,6 +76,7 @@ export class StoreRuntimeState {
   quitFlushPromise: Promise<void> | null = null
   lastWrittenStateHash: string | null = null
   lastDurableWriteGeneration = -1
+  readonly durableWriteListeners = new Set<(generation: number) => void>()
   /** Required durable generation for locally committed migrations; disk-loaded receipts have no entry. */
   readonly orcadMigrationCommitWriteGenerations = new Map<string, number>()
   firstPendingSaveAt: number | null = null

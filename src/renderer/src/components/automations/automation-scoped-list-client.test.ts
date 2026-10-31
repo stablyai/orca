@@ -9,6 +9,10 @@ import {
 const callRuntimeRpc = vi.fn()
 const getRuntimeEnvironmentStatus = vi.fn()
 
+vi.mock('@/lib/automations-changed-window-event', () => ({
+  emitAutomationsChangedWindowEvent: vi.fn()
+}))
+
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   callRuntimeRpc: (...args: unknown[]) => callRuntimeRpc(...args),
   getRuntimeEnvironmentStatus: (...args: unknown[]) => getRuntimeEnvironmentStatus(...args)
@@ -415,4 +419,41 @@ describe('matchAutomationOwnerConflict', () => {
     ).toBe(AUTOMATION_OWNER_CONFLICT_CODES.targetRemoved)
     expect(matchAutomationOwnerConflict(new Error('timeout'))).toBeNull()
   })
+})
+
+describe('automation run attention capabilities', () => {
+  it.each([false, true])(
+    'shows a badge and sends seen only when the answering authority supports it (%s)',
+    async (capable) => {
+      const { listScopedAutomations, markAutomationRunSeen } = await client()
+      getRuntimeEnvironmentStatus.mockResolvedValue({
+        capabilities: [
+          ...ALL_CAPABILITIES.capabilities,
+          ...(capable ? ['automation.run-seen.v1'] : [])
+        ]
+      })
+      callRuntimeRpc.mockResolvedValue({
+        automations: [{ id: 'a1' }],
+        items: [{ automationId: 'a1', selector: { kind: 'self' }, unseenFailureCount: 3 }],
+        orphanCount: 0
+      })
+      const result = await listScopedAutomations(RUNTIME, { kind: 'self' })
+      expect(result.items[0].unseenFailureCount).toBe(capable ? 3 : undefined)
+      callRuntimeRpc.mockClear()
+      await (capable
+        ? markAutomationRunSeen(RUNTIME, 'a1', 'r1', { selector: { kind: 'self' } })
+        : expect(
+            markAutomationRunSeen(RUNTIME, 'a1', 'r1', { selector: { kind: 'self' } })
+          ).rejects.toThrow('unavailable'))
+      expect(callRuntimeRpc).toHaveBeenCalledTimes(capable ? 1 : 0)
+      if (capable) {
+        expect(callRuntimeRpc).toHaveBeenCalledWith(
+          { kind: 'environment', environmentId: 'env-1' },
+          'automation.runSeen',
+          expect.objectContaining({ runId: 'r1' }),
+          expect.objectContaining({ expectedEnvironmentPairingRevision: 4 })
+        )
+      }
+    }
+  )
 })

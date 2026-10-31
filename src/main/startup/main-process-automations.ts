@@ -1,3 +1,5 @@
+import { app } from 'electron'
+import { startAutomationOutcomeNotifications } from './automation-outcome-notifications'
 import type { AutomationService } from '../automations/service'
 import { createRuntimeAutomationService } from '../automations/runtime-automation-service'
 import { mainProcessState as state } from './main-process-state'
@@ -19,5 +21,7 @@ export function initializeMainProcessAutomations(): AutomationService {
     headless: state.isServeMode
   })
   state.automations = service
+  const stopNotifications = startAutomationOutcomeNotifications(runtime, store)
+  app.once('will-quit', stopNotifications)
   return service
 }

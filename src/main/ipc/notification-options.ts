@@ -1,3 +1,4 @@
+import { localizedAutomationRunFailure } from '../../shared/automation-run-failure-localization'
 import { formatAgentTypeLabel } from '../../shared/agent-type-label'
 import type { NotificationDispatchRequest } from '../../shared/notification-settings-types'
 
@@ -68,8 +69,48 @@ function buildAgentTaskCompleteNotificationOptions(
 
   return {
     title: `${worktreeContext} - ${agentLabel} ${statusText}`,
-    body: buildAgentTaskCompleteRichBody(args, translate) ?? `${agentLabel} ${statusText}.`
+    body:
+      automationFailureBody(args, translate, agentLabel) ??
+      buildAgentTaskCompleteRichBody(args, translate) ??
+      `${agentLabel} ${statusText}.`
   }
+}
+
+function automationFailureBody(
+  args: NotificationDispatchRequest,
+  translate: NotificationTranslator,
+  agent: string
+): string | null {
+  if (!args.automationPresentation || args.agentTurnOutcome !== 'failure') {
+    return null
+  }
+  const failure = args.automationPresentation.failure
+  const reason = failure
+    ? localizedAutomationRunFailure(
+        failure.errorCode,
+        failure.errorParams,
+        (key, fallback, params) =>
+          fillNotificationPlaceholders(translate(key, fallback), params ?? {})
+      )
+    : null
+  return reason
+    ? fillNotificationPlaceholders(
+        translate(
+          'notifications.automationFailedReason',
+          '{{agent}}: {{reason}} Review the run and try again.'
+        ),
+        {
+          agent,
+          reason: normalizeNotificationText(reason, NOTIFICATION_BODY_PREVIEW_MAX_LENGTH) ?? ''
+        }
+      )
+    : fillNotificationPlaceholders(
+        translate(
+          'notifications.automationFailedAction',
+          '{{agent}} could not complete this automation. Review the run and try again.'
+        ),
+        { agent }
+      )
 }
 
 // Announce finished only for proved terminal state or an expired snapshot's completion signal (#4375).

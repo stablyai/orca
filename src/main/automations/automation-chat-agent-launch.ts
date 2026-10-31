@@ -1,3 +1,4 @@
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { Automation, AutomationRun } from '../../shared/automations-types'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { launchAgentOnHost } from '../runtime/rpc/methods/agent-launch'
@@ -88,6 +89,9 @@ async function launchChat(
       },
       { runtime, caller: AUTOMATION_AGENT_CALLER },
       {
+        beforeChatSubmit: (sessionId, messageId) => {
+          getStructuredAgentSessionHost()?.registerAutomationChatRun(run.id, sessionId, messageId)
+        },
         onSurfacePublished: (surface) => {
           published = publishedLaunchTarget(runtime, surface)
         }

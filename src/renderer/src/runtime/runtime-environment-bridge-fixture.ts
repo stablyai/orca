@@ -16,7 +16,7 @@ export type RecordedRuntimeSubscriptionCallbacks = {
 
 /** Replaces `window` with one that exposes only the given runtime-environment bridge methods. */
 export function stubRuntimeEnvironmentBridge(bridge: RuntimeEnvironmentBridgeStub): void {
-  vi.stubGlobal('window', { api: { runtimeEnvironments: bridge } })
+  vi.stubGlobal('window', { dispatchEvent: vi.fn(), api: { runtimeEnvironments: bridge } })
 }
 
 /** Every web browser create asks main for its placement, so a `call`-only bridge fails the create. */

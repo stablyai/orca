@@ -59,7 +59,7 @@ export class StructuredAgentSessionClientDelivery {
     starting?: (sessionId: string) => boolean,
     private readonly publications?: Pick<
       StructuredAgentSessionConversations,
-      'publish' | 'endPublications'
+      'publish' | 'endPublications' | 'automationChatInterests'
     >
   ) {
     this.requestFailures = createStructuredAgentSessionHostRequestFailures(sessions, deps)
@@ -77,6 +77,8 @@ export class StructuredAgentSessionClientDelivery {
     this.turnCompletionFeed = new StructuredAgentSessionTurnCompletionFeed({
       sessions,
       now,
+      ownsRequest: (id, request) =>
+        this.publications?.automationChatInterests.owns(id, request) === true,
       readStatusState: (sessionId, journal) =>
         this.statusFeed.journalProjection(sessionId, journal)?.state ?? null
     })

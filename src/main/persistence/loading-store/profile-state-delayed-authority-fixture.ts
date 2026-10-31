@@ -3,7 +3,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, vi } from 'vitest'
 import type { AutomationRun } from '../../../shared/automations-types'
-import { buildProfileStateCutoverFixture } from '../profile-state-cutover-fixture'
+import {
+  buildProfileStateCutoverFixture,
+  type ProfileStateCutoverFixture
+} from '../profile-state-cutover-fixture'
 import { ProfileStateSqliteAuthority } from '../profile-state/profile-state-sqlite-authority'
 import { writeVersionedProfileStateExport } from '../profile-state/legacy-json/profile-state-versioned-export'
 import type {
@@ -26,7 +29,11 @@ export function deferred<T>() {
 export class DelayedAuthority implements AsyncProfileStateAuthority {
   readonly asynchronous = true
   private next:
-    | { started: ReturnType<typeof deferred<void>>; finish: ReturnType<typeof deferred<void>> }
+    | {
+        started: ReturnType<typeof deferred<void>>
+        finish: ReturnType<typeof deferred<void>>
+        afterCommit: boolean
+      }
     | undefined
   readonly captures: ProfileStateDomainReplacement[][] = []
   private failNext = false
@@ -40,8 +47,8 @@ export class DelayedAuthority implements AsyncProfileStateAuthority {
     this.failNext = true
   }
 
-  pause() {
-    const gate = { started: deferred<void>(), finish: deferred<void>() }
+  pause(afterCommit = false) {
+    const gate = { started: deferred<void>(), finish: deferred<void>(), afterCommit }
     this.next = gate
     return gate
   }
@@ -91,6 +98,12 @@ export class DelayedAuthority implements AsyncProfileStateAuthority {
   private async dispatch(operation: () => void, write = false) {
     const gate = this.next
     this.next = undefined
+    if (gate?.afterCommit) {
+      operation()
+      gate.started.resolve()
+      await gate.finish.promise
+      return
+    }
     gate?.started.resolve()
     await gate?.finish.promise
     if (write && this.failNext) {
@@ -111,12 +124,15 @@ afterEach(async () => {
 
 export async function fixture(
   legacyOpenCodeGoApiKey?: string,
-  retainedChatSetting: Record<string, unknown> = {}
+  retainedChatSetting: Record<string, unknown> = {},
+  prepareInitial?: (initial: ProfileStateCutoverFixture) => void,
+  flushInitial = true
 ) {
   const directory = mkdtempSync(join(tmpdir(), 'orca-worker-coordination-'))
   const path = join(directory, 'profile-state.db')
   const inner = new ProfileStateSqliteAuthority(path, 'coordination-test')
   const initial = buildProfileStateCutoverFixture(directory)
+  prepareInitial?.(initial)
   inner.writeSerializedState(
     Buffer.from(
       JSON.stringify({
@@ -138,7 +154,9 @@ export async function fixture(
     await store.freezeWritesAsync()
     rmSync(directory, { recursive: true, force: true })
   })
-  await store.flushPendingOrThrowAsync()
+  if (flushInitial) {
+    await store.flushPendingOrThrowAsync()
+  }
   authority.captures.length = 0
   const readState = () => {
     const reader = new ProfileStateSqliteAuthority(path, 'coordination-test')
@@ -148,7 +166,28 @@ export async function fixture(
       reader.close()
     }
   }
-  return { store, authority, readState }
+  const reopen = async () => {
+    await store.freezeWritesAsync()
+    const next = new Store({
+      dataFile: join(directory, 'orca-data.json'),
+      profileStateAuthority: new ProfileStateSqliteAuthority(path, 'coordination-test')
+    })
+    cleanups.unshift(async () => {
+      await next.freezeWritesAsync()
+    })
+    return next
+  }
+  const loadBeforeAck = () => {
+    const loaded = new Store({
+      dataFile: join(directory, 'reopened.json'),
+      profileStateAuthority: new ProfileStateSqliteAuthority(path, 'coordination-test')
+    })
+    cleanups.unshift(async () => {
+      await loaded.freezeWritesAsync()
+    })
+    return loaded
+  }
+  return { store, authority, readState, reopen, loadBeforeAck }
 }
 
 export async function withReopenedProfileStore(

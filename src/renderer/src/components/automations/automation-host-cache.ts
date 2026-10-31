@@ -57,6 +57,7 @@ export type AutomationHostCache = {
   invalidateAuthority: (authority: StableAutomationAuthorityRef) => readonly string[]
   keysForAuthority: (authority: StableAutomationAuthorityRef) => readonly string[]
   evict: (stableKey: string) => void
+  orphanCountsByAuthority: () => ReadonlyMap<string, number>
   keys: () => readonly string[]
   subscribe: (listener: () => void) => () => void
   reset: () => void
@@ -274,6 +275,19 @@ export function createAutomationHostCache(
         retired.delete(oldest.value)
       }
       notify()
+    },
+    orphanCountsByAuthority: () => {
+      const newest = new Map<string, { fetchedAt: number; count: number }>()
+      for (const { authorityKey, fetchedAt, orphanCount } of records.values()) {
+        if (fetchedAt === null || orphanCount === null) {
+          continue
+        }
+        const previous = newest.get(authorityKey)
+        if (!previous || fetchedAt >= previous.fetchedAt) {
+          newest.set(authorityKey, { fetchedAt, count: orphanCount })
+        }
+      }
+      return new Map([...newest].map(([key, value]) => [key, value.count]))
     },
     keys: () => [...records.keys()],
     subscribe: (listener) => {

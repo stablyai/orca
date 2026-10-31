@@ -356,7 +356,20 @@ describe('automationsChanged publication', () => {
       ...LAUNCH_TARGET,
       error: null
     })
-    expect(seen.map((entry) => entry.payload.reason)).toEqual(['run', 'run', 'run', 'run', 'usage'])
+    expect(seen.map((entry) => entry.payload.reason)).toEqual([
+      'run',
+      'run',
+      'run',
+      'run',
+      'run',
+      'usage'
+    ])
+    const outcomes = seen.filter((entry) => entry.payload.settledRun)
+    expect(outcomes).toHaveLength(1)
+    expect(outcomes[0]).toMatchObject({
+      status: 'completed',
+      payload: { settledRun: { run: { id: run.id, status: 'completed' } } }
+    })
     expect(seen.at(-1)?.status).toBe('completed')
     expect(seen.every((entry) => entry.payload.selector?.kind === 'self')).toBe(true)
     service.stop()

@@ -1,3 +1,4 @@
+import { automationOutcomeNotification } from '../automations/automation-outcome-notification'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NotificationDispatchRequest } from '../../shared/notification-settings-types'
 import { UI_LANGUAGE_ENGLISH, UI_LANGUAGE_SPANISH } from '../../shared/ui-language'
@@ -44,3 +45,50 @@ describe('buildNotificationOptions localization', () => {
     })
   })
 })
+
+it.each(['projectSetupNotReady', 'wslDistroStopped'] as const)(
+  'uses the actual translated safe parameterized automation reason %s',
+  async (errorCode) => {
+    await setMainUiLanguage(UI_LANGUAGE_SPANISH)
+    const request = automationOutcomeNotification({
+      name: 'A'.repeat(200),
+      agentId: 'codex',
+      run: {
+        id: 'r',
+        automationId: 'a',
+        status: 'dispatch_failed',
+        sessionKind: 'chat',
+        createdAt: 1,
+        dispatchedAt: null,
+        workspaceId: null,
+        chatSessionId: null,
+        terminalPaneKey: null,
+        terminalPtyId: null
+      },
+      presentation: {
+        failure:
+          errorCode === 'projectSetupNotReady'
+            ? { errorCode, errorParams: { setupState: 'setting-up' } }
+            : { errorCode, errorParams: { distro: 'Ubuntu' } }
+      }
+    })
+    if (!request) {
+      throw new Error('Expected actual pane-less request')
+    }
+    const options = buildNotificationOptions(request, translateMain)
+    expect(options.title).toContain('Codex')
+    expect(options.title.length).toBeLessThan(110)
+    expect(options.body).toContain('Codex: ')
+    expect(options.body).toContain(
+      errorCode === 'projectSetupNotReady'
+        ? translateMain(
+            'automations.runFailures.projectSetupState.settingUp',
+            'missing translation'
+          )
+        : 'Ubuntu'
+    )
+    expect(options.body).toContain('Revisa la ejecución e inténtalo de nuevo.')
+    expect(options.body).not.toContain('{{')
+    expect(options.body).not.toContain(errorCode)
+  }
+)

@@ -20078,6 +20078,8 @@
     }
   },
   "notifications": {
+    "automationFailedReason": "{{agent}}: {{reason}} 실행 내용을 확인하고 다시 시도하세요.",
+    "automationFailedAction": "{{agent}} 에이전트가 이 자동화를 완료하지 못했습니다. 실행 내용을 확인하고 다시 시도하세요.",
     "agentStatus": {
       "needsInput": "입력 필요",
       "working": "작업 중",
@@ -22372,6 +22374,8 @@
     }
   },
   "automations": {
+    "unseenFailures": "확인하지 않은 실패한 실행 {{count}}개",
+    "unseenFailures_other": "확인하지 않은 실패한 실행 {{count}}개",
     "runFailures": {
       "noDispatchHost": "자동화를 시작할 수 있는 Orca 창이 없었습니다.",
       "unevaluableSchedule": "Orca가 이 자동화를 평가할 수 없어 이번 실행을 건너뛰었습니다.",

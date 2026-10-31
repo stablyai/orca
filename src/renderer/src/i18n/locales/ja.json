@@ -20078,6 +20078,8 @@
     }
   },
   "notifications": {
+    "automationFailedReason": "{{agent}}: {{reason}} 実行内容を確認して、もう一度お試しください。",
+    "automationFailedAction": "{{agent}} はこの自動化を完了できませんでした。実行内容を確認して、もう一度お試しください。",
     "agentStatus": {
       "needsInput": "入力待ち",
       "working": "処理中",
@@ -22372,6 +22374,8 @@
     }
   },
   "automations": {
+    "unseenFailures": "未確認の失敗した実行 {{count}} 件",
+    "unseenFailures_other": "未確認の失敗した実行 {{count}} 件",
     "runFailures": {
       "noDispatchHost": "オートメーションを起動できる Orca ウィンドウがありませんでした。",
       "unevaluableSchedule": "Orca はこのオートメーションを評価できず、今回の実行をスキップしました。",

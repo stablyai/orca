@@ -57,6 +57,7 @@ export type PersistedMobileClientTabSelections = Record<
 
 export type PersistedState = {
   schemaVersion: number
+  automationFailureSeenVersion?: 1
   repos: Repo[]
   projects: Project[]
   projectHostSetups: ProjectHostSetup[]

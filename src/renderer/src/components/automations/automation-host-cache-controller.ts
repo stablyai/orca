@@ -7,9 +7,10 @@ import type {
   StableAutomationAuthorityRef
 } from '../../../../shared/automation-owner-ref'
 import { syncAutomationHostCatalogGenerations } from './automation-host-catalog-generation'
-import type {
-  AutomationHostCatalog,
-  AutomationHostCatalogEntry
+import {
+  automationAuthorityCatalogKey,
+  type AutomationHostCatalog,
+  type AutomationHostCatalogEntry
 } from './automation-host-catalog-types'
 import { createAutomationHostCache, type AutomationHostCache } from './automation-host-cache'
 import {
@@ -131,17 +132,28 @@ export function createAutomationHostQueryController(
       .filter((entry) => isFetchable(entry, selected) && (include?.(entry) ?? true))
       .map((entry) => toFetchTarget(entry, selected))
 
+  const pendingRefreshKeys = new Set<string>()
+  let refreshing = false
   const refreshKeys = async (stableKeys: readonly string[]): Promise<void> => {
-    const catalog = latest
-    if (!catalog) {
+    for (const key of stableKeys) {
+      pendingRefreshKeys.add(key)
+    }
+    if (refreshing) {
       return
     }
-    const wanted = new Set(stableKeys)
-    const targets = targetsFor(catalog, (entry) => wanted.has(entry.stableKey))
-    if (targets.length > 0) {
-      // Forced: the event already proved these entries stale, so TTL must not swallow them.
-      await scheduler.refresh(targets, { force: true })
-      options.onSettled?.()
+    refreshing = true
+    try {
+      while (!disposed && latest && pendingRefreshKeys.size > 0) {
+        const wanted = new Set(pendingRefreshKeys)
+        pendingRefreshKeys.clear()
+        const targets = targetsFor(latest, (entry) => wanted.has(entry.stableKey))
+        if (targets.length > 0) {
+          await scheduler.refresh(targets, { force: true })
+        }
+        options.onSettled?.()
+      }
+    } finally {
+      refreshing = false
     }
   }
 
@@ -187,22 +199,12 @@ export function createAutomationHostQueryController(
       options.onSettled?.()
     },
     handleAuthorityEvent: invalidation.handle,
-    authorityOrphanCount: (authority) => {
-      let newest: { fetchedAt: number; orphanCount: number } | null = null
-      for (const key of cache.keysForAuthority(authority)) {
-        const entry = cache.getByKey(key)
-        if (!entry || entry.orphanCount === null || entry.fetchedAt === null) {
-          continue
-        }
-        if (!newest || entry.fetchedAt >= newest.fetchedAt) {
-          newest = { fetchedAt: entry.fetchedAt, orphanCount: entry.orphanCount }
-        }
-      }
-      return newest?.orphanCount ?? null
-    },
+    authorityOrphanCount: (authority) =>
+      cache.orphanCountsByAuthority().get(automationAuthorityCatalogKey(authority)) ?? null,
     isDisposed: () => disposed,
     dispose: () => {
       disposed = true
+      pendingRefreshKeys.clear()
       unsubscribe?.()
       invalidation.dispose()
       scheduler.dispose()

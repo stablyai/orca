@@ -1,3 +1,4 @@
+import { RuntimeMobileNotificationController } from '../runtime/runtime-mobile-notification-controller'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentLauncher from './automation-chat-agent-launch'
 import type { HeadlessAutomationDispatcher } from './headless-dispatch'
@@ -62,6 +63,8 @@ function fixture(headless: boolean, definitionSurface: 'chat' | 'terminal' = 'ch
     })
   }
   const runtime = {
+    createAutomationAttentionOwner: new RuntimeMobileNotificationController()
+      .createAutomationAttentionOwner,
     setAutomationService: vi.fn(),
     notifyAutomationsChanged: vi.fn(),
     openAgentSessionRecordStore: async () => records,
@@ -77,6 +80,7 @@ function fixture(headless: boolean, definitionSurface: 'chat' | 'terminal' = 'ch
   createRuntimeAutomationService({
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: construction and recovery use only these store boundaries.
     store: {
+      observeAutomationRunRemovals: () => () => {},
       listAutomationRuns: () => [],
       listAutomations: () => [
         { id: run.automationId, agentId: 'claude', surface: definitionSurface }
@@ -293,6 +297,8 @@ describe('headless automation dispatch', () => {
     }
     const managedWorktree = { id: 'wt-1', displayName: 'repo', hostId: 'local' as const }
     const runtime = {
+      createAutomationAttentionOwner: new RuntimeMobileNotificationController()
+        .createAutomationAttentionOwner,
       setAutomationService: vi.fn(),
       notifyAutomationsChanged: vi.fn(),
       launchAgentTerminal: vi.fn(async () => ({
@@ -312,7 +318,10 @@ describe('headless automation dispatch', () => {
     }
     createRuntimeAutomationService({
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked service never reads the store; the dispatcher reads only past runs.
-      store: { listAutomationRuns: () => [] } as never,
+      store: {
+        listAutomationRuns: () => [],
+        observeAutomationRunRemovals: () => () => {}
+      } as never,
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the dispatcher reads only the members faked above.
       runtime: runtime as never,
       headless: true

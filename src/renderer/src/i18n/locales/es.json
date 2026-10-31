@@ -20671,6 +20671,8 @@
     }
   },
   "notifications": {
+    "automationFailedReason": "{{agent}}: {{reason}} Revisa la ejecución e inténtalo de nuevo.",
+    "automationFailedAction": "{{agent}} no pudo completar esta automatización. Revisa la ejecución e inténtalo de nuevo.",
     "agentStatus": {
       "needsInput": "necesita información",
       "working": "trabajando",
@@ -23062,6 +23064,10 @@
     }
   },
   "automations": {
+    "unseenFailures": "{{count}} ejecuciones fallidas sin ver",
+    "unseenFailures_one": "{{count}} ejecución fallida sin ver",
+    "unseenFailures_many": "{{count}} ejecuciones fallidas sin ver",
+    "unseenFailures_other": "{{count}} ejecuciones fallidas sin ver",
     "runFailures": {
       "noDispatchHost": "No había ninguna ventana de Orca disponible para iniciar la automatización.",
       "unevaluableSchedule": "Orca no pudo evaluar esta automatización y omitió esta ejecución.",

@@ -87,3 +87,12 @@ export function createHarnessStoreState(
   }
   return state
 }
+
+/** Subscription no-ops for every listener useIpcEvents attaches beyond the ones under test. */
+export function createApiNamespaceStub(
+  overrides: Record<string, unknown> = {}
+): Record<string, unknown> {
+  return new Proxy(overrides, {
+    get: (target, prop: string) => (prop in target ? target[prop] : () => () => {})
+  })
+}

@@ -113,3 +113,54 @@ describe('notificationsApi.playSound', () => {
     expect(play).toHaveBeenCalledTimes(2)
   })
 })
+
+describe('hidden notification playback', () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      'Audio',
+      class extends EventTarget {
+        currentTime = 0
+        volume = 1
+        pause = vi.fn()
+        play = play
+        constructor() {
+          super()
+          construct(this)
+        }
+      }
+    )
+    construct.mockClear()
+    invoke.mockImplementation((channel: string) =>
+      Promise.resolve(
+        channel === 'notifications:resolveSoundPath'
+          ? { ok: true, path: SOUND_PATH }
+          : { ok: true, data: new Uint8Array([1]), mimeType: 'audio/mpeg', path: SOUND_PATH }
+      )
+    )
+  })
+  afterEach(() => vi.unstubAllGlobals())
+  it('waits for hidden-window audio completion and releases listeners after failed playback', async () => {
+    vi.useFakeTimers()
+    try {
+      const api = await loadNotificationsApi()
+      play.mockResolvedValue(undefined)
+      const pending = api.playSound({ waitUntilEnded: true })
+      await vi.advanceTimersByTimeAsync(0)
+      const audio = construct.mock.calls[0]?.[0]
+      if (!(audio instanceof EventTarget)) {
+        throw new Error('Audio missing')
+      }
+      const ended = vi.fn()
+      void pending.then(ended)
+      expect(ended).not.toHaveBeenCalled()
+      audio.dispatchEvent(new Event('ended'))
+      expect(await pending).toEqual({ played: true })
+      expect(vi.getTimerCount()).toBe(0)
+      play.mockRejectedValueOnce(new Error('unavailable'))
+      expect(await api.playSound({ waitUntilEnded: true })).toMatchObject({ played: false })
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
