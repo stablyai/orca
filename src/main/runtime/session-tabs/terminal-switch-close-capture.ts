@@ -7,6 +7,13 @@ import {
 } from '../../../shared/terminal-tab-close'
 import { OrcaRuntimeWithExplicitTerminalTabClose } from './explicit-terminal-tab-close'
 import type { AiVaultAgent } from '../../../shared/ai-vault-types'
+import type { StoppedSwitchSourceScreen } from '../../../shared/stopped-switch-source'
+import { withTimeout } from '../runtime-async-boundaries'
+
+// Every frame naming the stopped pane carries its screen, so one is bounded in time and size.
+const HELD_SCREEN_TIMEOUT_MS = 1_000
+const HELD_SCREEN_MAX_CHARS = 256 * 1024
+
 export abstract class OrcaRuntimeWithTerminalSwitchCloseCapture extends OrcaRuntimeWithExplicitTerminalTabClose {
   /** Whether a handle names a process a switch stopped and left: an attach is answered exited. */
   isStoppedSwitchSourceHandle(handle: string): boolean {
@@ -15,6 +22,35 @@ export abstract class OrcaRuntimeWithTerminalSwitchCloseCapture extends OrcaRunt
       ptyId &&
       this.stoppedSwitchSources.stoppedProcess(ptyId, this.ptysById.get(ptyId)?.incarnationId)
     )
+  }
+
+  /** The exact process's screen before its stop: none if it changed hands or can't be read in time. */
+  private async heldSwitchSourceScreen(
+    ptyId: string,
+    incarnation: string
+  ): Promise<StoppedSwitchSourceScreen | undefined> {
+    const same = () => this.ptysById.get(ptyId)?.incarnationId === incarnation
+    const image = same()
+      ? await withTimeout(
+          this.serializeHeadlessTerminalBuffer(ptyId, { scrollbackRows: 0 }).catch(() => null),
+          HELD_SCREEN_TIMEOUT_MS,
+          null
+        )
+      : null
+    const { data, cols, rows, alternateScreen, scrollbackAnsi } = image ?? {}
+    if (!data || !cols || !rows || !same()) {
+      return undefined
+    }
+    if (data.length + (scrollbackAnsi?.length ?? 0) > HELD_SCREEN_MAX_CHARS) {
+      return undefined
+    }
+    return {
+      data,
+      cols,
+      rows,
+      ...(alternateScreen ? { alternateScreen } : {}),
+      ...(scrollbackAnsi ? { scrollbackAnsi } : {})
+    }
   }
 
   captureTerminalSwitchClose(
@@ -74,6 +110,7 @@ export abstract class OrcaRuntimeWithTerminalSwitchCloseCapture extends OrcaRunt
     // A `closing` stop keeps the pane's screen for a replace; it is owed one settlement.
     let keptStopped = false
     let stoppedSourceSettled = false
+    let heldScreen: StoppedSwitchSourceScreen | undefined
     const proof = {
       parentTabId: source.tabId,
       leafId: source.leafId,
@@ -104,6 +141,10 @@ export abstract class OrcaRuntimeWithTerminalSwitchCloseCapture extends OrcaRunt
       /** `closing` keeps the exited pane shown for the write that removes its tab; without one
        *  coming (a split sibling keeps the tab), the pane retires on exit as any pane does. */
       stop: async (closing = wholeTab()) => {
+        // Read before the stop holds the pane's presentation: what follows is the CLI's exit text.
+        const screen = closing
+          ? await this.heldSwitchSourceScreen(addressedPty, incarnation)
+          : undefined
         const stop = await this.stopExplicitlyClosedTabPtys(
           [addressedPty],
           addressedPty,
@@ -116,6 +157,7 @@ export abstract class OrcaRuntimeWithTerminalSwitchCloseCapture extends OrcaRunt
           throw new Error('terminal_close_unverifiable')
         }
         keptStopped = closing
+        heldScreen = screen
       },
       /**
        * Settles a `closing` stop: the window shows that exact pane exited unless it is gone. Sent
@@ -131,13 +173,19 @@ export abstract class OrcaRuntimeWithTerminalSwitchCloseCapture extends OrcaRunt
           return
         }
         stoppedSourceSettled = true
-        // Nothing replaced the stopped pane: main's fact, which every viewer's frame carries.
-        if (switched?.agent && switched.providerSessionId && !switched.replacedBySessionId) {
+        // Nothing replaced the stopped pane: main's fact, which every viewer's frame carries. Its
+        // screen lives and dies with it; a replace or an unproven stop never publishes one.
+        const agent = switched?.replacedBySessionId ? undefined : switched?.agent
+        const providerSessionId = switched?.providerSessionId
+        const screen = agent && providerSessionId && heldScreen ? { screen: heldScreen } : {}
+        heldScreen = undefined
+        if (agent && providerSessionId) {
           this.stoppedSwitchSources.record(source, {
             ptyId: addressedPty,
             incarnationId: incarnation,
-            agent: switched.agent,
-            providerSessionId: switched.providerSessionId
+            agent,
+            providerSessionId,
+            ...screen
           })
           this.touchMobileSessionTabsForWorktree(source.worktreeId, { immediate: true })
         }
@@ -150,7 +198,9 @@ export abstract class OrcaRuntimeWithTerminalSwitchCloseCapture extends OrcaRunt
           ...(switched?.replacedBySessionId
             ? { replacedBySessionId: switched.replacedBySessionId }
             : {}),
-          ...(switched ? { switched: switched.agent ? { agent: switched.agent } : {} } : {})
+          ...(switched
+            ? { switched: switched.agent ? { agent: switched.agent, ...screen } : {} }
+            : {})
         })
       },
       /** Retires the pane's bookkeeping; its presentation too, unless a replace or its exit already did. */

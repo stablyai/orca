@@ -167,7 +167,7 @@ export function noteFrameStoppedSwitchSource(
     leafId: row.leafId,
     ptyId: fact.ptyId,
     incarnationId: fact.incarnationId,
-    switched: { agent: fact.agent }
+    switched: { agent: fact.agent, ...(fact.screen ? { screen: fact.screen } : {}) }
   })
 }
 

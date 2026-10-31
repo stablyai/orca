@@ -14,6 +14,10 @@ import {
 import { getDefaultSettings } from '../../../../shared/constants'
 import { launchWorkspaceId } from '../../../../shared/launch-parity-window-request.test-fixture'
 import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
+import type {
+  StoppedSwitchSourceFact,
+  StoppedSwitchSourceScreen
+} from '../../../../shared/stopped-switch-source'
 
 // A real pane and store: a switch kept this pane's stopped screen for a replace that never came,
 // and main's settlement turns it into the ordinary exited state.
@@ -155,6 +159,16 @@ async function keptStoppedPane() {
   }
 }
 
+/** The frame main held before the stop: never the CLI's exit text. */
+const HELD_SCREEN: StoppedSwitchSourceScreen = {
+  data: '\x1b[1mHELD-FRAME\x1b[0m the reply so far',
+  cols: 100,
+  rows: 30
+}
+
+const written = (kept: KeptPane): string =>
+  kept.pane.terminal.write.mock.calls.map(([data]) => String(data)).join('')
+
 it('shows the kept pane exited at its own code once main settles it, with no close', async () => {
   const kept = await keptStoppedPane()
   try {
@@ -185,6 +199,29 @@ it('shows the kept pane exited at its own code once main settles it, with no clo
   }
 })
 
+it('paints main\u2019s held screen on the mounted pane when main settles it', async () => {
+  const kept = await keptStoppedPane()
+  try {
+    kept.stoppedForReplace()
+    await flushAsyncTicks(5)
+    kept.pane.terminal.write.mockClear()
+    vi.mocked(window.api.pty.resize).mockClear()
+    kept.modules.sources.noteStoppedSwitchSource({
+      ...kept.source,
+      switched: { agent: 'codex', screen: HELD_SCREEN }
+    })
+    await flushAsyncTicks(5)
+    expect(written(kept)).toContain('HELD-FRAME')
+    expect(kept.pane.terminal.resize).toHaveBeenCalledWith(100, 30)
+    expect(window.api.pty.resize).not.toHaveBeenCalled()
+    expect(kept.died).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ reason: 'switch-stopped', agent: 'codex' })
+    )
+  } finally {
+    kept.dispose()
+  }
+})
+
 it.each([
   ['another process', { ptyId: 'successor-pty' }],
   ['another incarnation', { incarnationId: 'successor-incarnation' }]
@@ -192,9 +229,16 @@ it.each([
   const kept = await keptStoppedPane()
   try {
     kept.stoppedForReplace()
-    kept.modules.sources.noteStoppedSwitchSource({ ...kept.source, ...other })
+    kept.pane.terminal.write.mockClear()
+    kept.modules.sources.noteStoppedSwitchSource({
+      ...kept.source,
+      ...other,
+      switched: { agent: 'codex', screen: HELD_SCREEN }
+    })
     await flushAsyncTicks(5)
     expect(kept.died).not.toHaveBeenCalled()
+    // A late settlement for a successor paints nothing over this pane.
+    expect(written(kept)).not.toContain('HELD-FRAME')
   } finally {
     kept.dispose()
   }
@@ -358,7 +402,8 @@ function windowFrame(
   epoch: string,
   version: number,
   others: number,
-  fact: boolean
+  fact: boolean,
+  factFields: Partial<StoppedSwitchSourceFact> = {}
 ) {
   const row = {
     type: 'terminal' as const,
@@ -374,7 +419,8 @@ function windowFrame(
     ptyId: kept.source.ptyId,
     incarnationId,
     agent: 'claude' as const,
-    providerSessionId: 'claude-conversation'
+    providerSessionId: 'claude-conversation',
+    ...factFields
   }
   return {
     worktree: kept.source.worktreeId,
@@ -442,6 +488,55 @@ it('shows a pane that never saw its exit stopped from main’s frame, without re
       expect.objectContaining({ reason: 'switch-stopped', agent: 'claude' })
     )
     expect(kept.automaticClose).not.toHaveBeenCalled()
+  } finally {
+    kept.dispose()
+  }
+})
+
+it.each(['claude', 'codex'] as const)(
+  'replays main\u2019s held %s screen over a parked pane\u2019s older frame, without reattaching',
+  async (agent) => {
+    const kept = await keptStoppedPane()
+    try {
+      // Parked before the stop: its saved frame is older than the stop. Main's frame names it.
+      kept.park()
+      kept.modules.frames.applyStructuredSessionTabSnapshots([
+        windowFrame(kept, `held-${agent}`, 2, 0, true, { agent, screen: HELD_SCREEN })
+      ])
+      kept.spawn.mockClear()
+      kept.pane.terminal.write.mockClear()
+      vi.mocked(window.api.pty.resize).mockClear()
+      await kept.reveal()
+      expect(kept.spawn).not.toHaveBeenCalled()
+      const painted = written(kept)
+      // Cleared first, so nothing of the older frame survives under the held one.
+      expect(painted.indexOf('\x1b[3J')).toBeLessThan(painted.indexOf('HELD-FRAME'))
+      expect(kept.pane.terminal.resize).toHaveBeenCalledWith(100, 30)
+      expect(window.api.pty.resize).not.toHaveBeenCalled()
+      expect(kept.died).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ reason: 'switch-stopped', agent })
+      )
+    } finally {
+      kept.dispose()
+    }
+  }
+)
+
+it('paints nothing of its own when main\u2019s fact carries no screen (an older host)', async () => {
+  const kept = await keptStoppedPane()
+  try {
+    kept.park()
+    kept.modules.frames.applyStructuredSessionTabSnapshots([
+      windowFrame(kept, 'old-host', 2, 0, true)
+    ])
+    kept.pane.terminal.write.mockClear()
+    kept.pane.terminal.resize.mockClear()
+    await kept.reveal()
+    expect(written(kept)).not.toContain('HELD-FRAME')
+    expect(kept.pane.terminal.resize).not.toHaveBeenCalled()
+    expect(kept.died).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ reason: 'switch-stopped', agent: 'claude' })
+    )
   } finally {
     kept.dispose()
   }

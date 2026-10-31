@@ -192,6 +192,35 @@ describe.each(['claude', 'codex'] as const)('a paired %s pane a switch stopped',
     expect(session.handledExitPtyId).toBe(BOUND)
   })
 
+  it('repaints a reloaded viewer\u2019s pane with main\u2019s held screen, at its grid, before the overlay', () => {
+    // An alternate-screen agent: the normal buffer under it is rebuilt first, then its frame.
+    const screen = {
+      data: '\x1b[?1049hHELD-FRAME',
+      cols: 100,
+      rows: 30,
+      alternateScreen: true,
+      scrollbackAnsi: 'before the agent'
+    }
+    applyFrame(surface({ ...fact, screen }))
+    const order: string[] = []
+    const write = vi.fn((data: string) => void order.push(data))
+    const resize = vi.fn()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the remount reads only these session members.
+    const session = {
+      deps: { tabId: TAB, onPaneProcessDied: () => void order.push('overlay') },
+      pane: { id: 1, leafId: LEAF, terminal: { cols: 80, rows: 24, resize } },
+      handledExitPtyId: null,
+      writeReplayData: write,
+      isPaneOnAlternateScreen: () => false
+    } as unknown as ConnectPanePtySession
+    expect(remountStoppedSwitchSource(session, BOUND)).toBe(true)
+    expect(resize).toHaveBeenCalledExactlyOnceWith(100, 30)
+    expect(session.suppressStructuralReplayPtyResize).toBe(false)
+    const painted = order.join('')
+    expect(painted.indexOf('before the agent')).toBeLessThan(painted.indexOf('HELD-FRAME'))
+    expect(order.at(-1)).toBe('overlay')
+  })
+
   it('drops the fact when the pane runs another process', () => {
     applyFrame(surface(fact))
     applyFrame(surface(undefined, 'handle-2'))

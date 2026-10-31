@@ -16,7 +16,9 @@ const fact = (agent: 'claude' | 'codex'): StoppedSwitchSourceFact => ({
   ptyId: 'pty-stopped',
   incarnationId: 'inc-1',
   agent,
-  providerSessionId: `${agent}-conversation`
+  providerSessionId: `${agent}-conversation`,
+  // The held screen is part of the fact: it is published and dies with it.
+  screen: { data: `${agent} held frame`, cols: 80, rows: 24 }
 })
 const row = (extra: Partial<RuntimeMobileSessionTerminalTab> = {}) =>
   ({
@@ -74,6 +76,13 @@ it.each([
   facts.reconcile(next, current)
   expect(published(facts, frame(row()), exited)).toBeUndefined()
   expect(facts.stoppedProcess('pty-stopped', 'inc-1')).toBe(false)
+})
+
+it('keeps one image per pane however often a switch from it fails', () => {
+  const facts = new StoppedSwitchSourceFacts()
+  facts.record(pane, fact('claude'))
+  facts.record(pane, { ...fact('codex'), incarnationId: 'inc-1' })
+  expect(published(facts, frame(row()), exited)?.screen?.data).toBe('codex held frame')
 })
 
 it.each([50, 500])(

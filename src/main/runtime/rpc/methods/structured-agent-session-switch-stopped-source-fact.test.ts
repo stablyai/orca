@@ -69,11 +69,18 @@ async function failingAfterStop() {
   return readable
 }
 
+const EXIT_TEXT = 'To continue this session, run codex resume'
+
 it('publishes the stopped source to every viewer when a switch fails after its proven stop', async () => {
   const readable = await failingAfterStop()
-  const kept = keptSourceTerminal()
+  // The CLI prints its exit text once told to stop, after its presentation is held.
+  const kept = keptSourceTerminal({
+    beforeStop: async () => void kept.runtime.onPtyData(PTY_A, `\r\n${EXIT_TEXT}\r\n`, 2)
+  })
+  kept.runtime.onPtyData(PTY_A, '\x1b[1mWorking\x1b[0m on the reply', 1)
   expect(await switchFrom(kept, 'from-b')).toMatchObject({ status: 'refused' })
-  // Any viewer (the client that asked, another one, a reconnect) reads it from the frame.
+  // Any viewer (the client that asked, another one, a reconnect) reads it from the frame, with
+  // the screen held before the stop: a reloaded or new viewer paints that, not its exit text.
   const row = await sourceRow(kept)
   expect(row).toMatchObject({
     status: 'ready',
@@ -81,9 +88,16 @@ it('publishes the stopped source to every viewer when a switch fails after its p
       ptyId: PTY_A,
       incarnationId: kept.incarnationId,
       agent: 'codex',
-      providerSessionId: readable.cliForkSource!.sessionId
+      providerSessionId: readable.cliForkSource!.sessionId,
+      screen: { data: expect.stringContaining('on the reply'), cols: 80, rows: 24 }
     }
   })
+  const screen = row?.type === 'terminal' ? row.stoppedSwitchSource?.screen : undefined
+  expect(screen?.data).not.toContain(EXIT_TEXT)
+  // The window's own notice carries the same image.
+  expect(kept.settled).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({ switched: { agent: 'codex', screen } })
+  )
   // An older client reattaching to that exact process is answered exited, not left waiting.
   expect(
     row?.type === 'terminal' &&
@@ -116,6 +130,11 @@ it('publishes nothing for a stop it could not prove', async () => {
 it('publishes nothing when the switch replaced the stopped pane', async () => {
   await savedTranscript(rig)
   const kept = keptSourceTerminal()
+  kept.runtime.onPtyData(PTY_A, 'the screen a replace removes', 1)
   expect(await switchFrom(kept, 'replaced')).toEqual({ status: 'completed', sessionId: id })
   expect(await sourceRow(kept)).toBeUndefined()
+  // The held screen dies with the replace: no viewer is told to paint it.
+  for (const [notice] of kept.settled.mock.calls) {
+    expect(notice.switched).not.toHaveProperty('screen')
+  }
 })

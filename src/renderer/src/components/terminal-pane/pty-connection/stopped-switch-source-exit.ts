@@ -4,15 +4,54 @@ import {
   watchStoppedSwitchSource
 } from '../stopped-switch-sources'
 import type { AiVaultAgent } from '../../../../../shared/ai-vault-types'
+import type { StoppedSwitchSourceScreen } from '../../../../../shared/stopped-switch-source'
+import {
+  RELEASE_SYNCHRONIZED_OUTPUT,
+  RESET_GRAPHIC_RENDITION
+} from '../../../../../shared/terminal-mode-reset-profiles'
+import {
+  buildMainModelSnapshotReplayWrites,
+  hasPositiveTerminalDimensions
+} from '../terminal-snapshot-replay-paint'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
-/** The pane takes the stopped state: the overlay naming the agent, with Restart and Close. */
+/**
+ * Main's held screen replaces whatever this xterm shows (nothing after a reload, an older frame
+ * after a park), at the grid it was captured on. Nothing attaches and no process is resized.
+ */
+function paintStoppedScreen(session: ConnectPanePtySession, screen: StoppedSwitchSourceScreen) {
+  const { terminal } = session.pane
+  if (
+    hasPositiveTerminalDimensions(screen.cols, screen.rows) &&
+    (terminal.cols !== screen.cols || terminal.rows !== screen.rows)
+  ) {
+    session.suppressStructuralReplayPtyResize = true
+    try {
+      terminal.resize(screen.cols, screen.rows)
+    } finally {
+      session.suppressStructuralReplayPtyResize = false
+    }
+  }
+  session.writeReplayData(
+    `${RELEASE_SYNCHRONIZED_OUTPUT}${RESET_GRAPHIC_RENDITION}\x1b[2J\x1b[3J\x1b[H`
+  )
+  const paneOnAlternateScreen = session.isPaneOnAlternateScreen()
+  for (const chunk of buildMainModelSnapshotReplayWrites(screen, { paneOnAlternateScreen })) {
+    session.writeReplayData(chunk)
+  }
+}
+
+/** The pane takes the stopped state: main's held screen, the overlay naming the agent, with Restart and Close. */
 export function showSwitchStoppedPane(
   session: ConnectPanePtySession,
   ptyId: string,
   exitCode: number,
-  agent: AiVaultAgent | undefined
+  stopped: { agent?: AiVaultAgent; screen?: StoppedSwitchSourceScreen } | undefined
 ): void {
+  const agent = stopped?.agent
+  if (stopped?.screen) {
+    paintStoppedScreen(session, stopped.screen)
+  }
   session.deps.onPaneProcessDied?.({
     paneId: session.pane.id,
     exitCode,
@@ -48,7 +87,7 @@ export function holdClosingExit(
       // one it replaces; otherwise main reattaches to it and finds its session killed.
       // Only a switch's stop is named as one; a close that stopped it exits as any pane does.
       if (notice.switched) {
-        showSwitchStoppedPane(session, ptyId, exitCode, notice.switched.agent)
+        showSwitchStoppedPane(session, ptyId, exitCode, notice.switched)
       } else {
         session.deps.onPaneProcessDied?.({
           paneId: session.pane.id,
@@ -80,7 +119,7 @@ export function remountStoppedSwitchSource(
   const stopped = mirrored ? null : readStoppedSwitchSource(tabId, leafId, ptyId)
   if (mirrored) {
     session.handledExitPtyId = ptyId
-    showSwitchStoppedPane(session, ptyId, 0, mirrored.agent)
+    showSwitchStoppedPane(session, ptyId, 0, mirrored)
   } else if (stopped) {
     session.handledExitPtyId = ptyId
     holdClosingExit(session, ptyId, stopped.exitCode, stopped.incarnationId)

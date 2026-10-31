@@ -216,7 +216,7 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
         return
       }
       if (switchStopped && !reversibleExit) {
-        showSwitchStoppedPane(session, ptyId, exitCode, switchStopped.agent)
+        showSwitchStoppedPane(session, ptyId, exitCode, switchStopped)
       } else if (preserveRendererBinding && !reversibleExit) {
         holdClosingExit(session, ptyId, exitCode)
       }
