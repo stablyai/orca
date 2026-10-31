@@ -204,9 +204,11 @@ export function prepareWebSessionTabsSnapshotGroups(
   // A row published in a replaced tab's slot lands where this client showed that tab, not at the end.
   let placedGroups = nextGroups
   for (const row of snapshot.tabs) {
+    // Only terminal and chat rows can name the tab they replaced.
+    const replaces = 'replaces' in row ? row.replaces : undefined
     const tabId =
-      row.replaces && hostToLocalTabId.get(row.type === 'terminal' ? row.parentTabId : row.id)
-    const replaced = row.replaces ? replacedLocalTabIds(row.replaces.tabId) : []
+      replaces && hostToLocalTabId.get(row.type === 'terminal' ? row.parentTabId : row.id)
+    const replaced = replaces ? replacedLocalTabIds(replaces.tabId) : []
     const slot = currentGroups.find((group) => group.tabOrder.some((id) => replaced.includes(id)))
     if (
       !tabId ||

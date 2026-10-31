@@ -206,6 +206,8 @@ export type UiCommandEventApi = {
       splitFromLeafId?: string
       splitDirection?: 'horizontal' | 'vertical'
       splitTelemetrySource?: TerminalPaneSplitSource
+      /** The tab this terminal takes the slot of, closed in the same store write. */
+      replaces?: { tabId: string }
     }) => void
   ) => () => void
   onRequestTerminalCreate: (

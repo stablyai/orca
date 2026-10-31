@@ -6,7 +6,6 @@ import type { LayoutCommandRunOptions, WindowLayoutCommand } from '../runtime-la
 import { OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal } from './pty-backed-session-publication'
 
 export abstract class OrcaRuntimeWithSwitchTerminalPlacement extends OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal {
-  protected abstract getAvailableAuthoritativeWindow(): unknown
   abstract applyLayoutCommand(
     command: WindowLayoutCommand,
     options?: LayoutCommandRunOptions

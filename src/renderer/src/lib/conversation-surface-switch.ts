@@ -7,7 +7,7 @@ import {
   adoptsCliConversations
 } from '../../../shared/structured-agent-cli-conversation-adoption'
 import { toHostSessionPaneKey } from '../../../shared/terminal-surface-id'
-import { parseExecutionHostId } from '../../../shared/execution-host'
+import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import {
@@ -157,7 +157,7 @@ export async function runConversationSwitch(args: ConversationSwitch): Promise<b
 /** The host call's identity and execution facts, captured after consent. */
 async function switchRequest(
   args: ConversationSwitch,
-  hostId: string,
+  hostId: ExecutionHostId,
   deadline: ReturnType<typeof agentSessionSwitchDeadline>
 ): Promise<{ sessionId: string | undefined; execution: Record<string, unknown> }> {
   const invocationId = createBrowserUuid()
