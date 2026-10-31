@@ -1,3 +1,4 @@
+import '../../../src/main/persistence/applying-settings/mobile-project-controls-host.test-fixture'
 import { doubles } from './mobile-web-shell-protocol-test-fixtures'
 import {
   type Mounted,

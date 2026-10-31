@@ -49,7 +49,7 @@ export function useHostViewSettings(args: {
   const support =
     gates?.projectRepoFilterSupport ??
     (gates?.statusReadable ? (gates.exactProjectRepoFilters ? 'exact' : 'legacy') : 'unknown')
-  const projectRepoFilterMeaning =
+  const projectRepoFilterMeaning: 'exact' | 'legacy' =
     support === 'exact' || gates?.exactProjectRepoFilters === true ? 'exact' : 'legacy'
   const pendingViewChanges = useHostPendingViewChanges(client, support, gates?.statusGeneration)
   const pendingChanges =

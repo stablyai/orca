@@ -1,3 +1,4 @@
+import '../../../src/main/persistence/applying-settings/mobile-project-controls-host.test-fixture'
 import { HOST_ID } from './mobile-web-shell-route-test-fixtures'
 import {
   adoptEndpointRepo,

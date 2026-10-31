@@ -5,9 +5,7 @@ import type * as RpcOperationModule from '../transport/rpc-operation'
 
 import { vi } from 'vitest'
 
-import { testState } from '../../../src/main/persistence/persistence-test-harness'
-
-// Exercise the real hook/store over in-memory disk; stub network and native modules.
+// Mobile protocol doubles; host-backed joins own their disk and Electron seams.
 export type Doubles = {
   connection: { client: object | null; state: string }
   gates: {
@@ -90,10 +88,7 @@ vi.mock('../transport/host-app-version-store', () => ({ recordHostAppVersion: as
 vi.mock('../transport/host-descriptor-recorder', () => ({
   recordHostDescriptorFromStatus: () => {}
 }))
-vi.mock('electron', () => ({
-  app: { getPath: () => testState.dir },
-  safeStorage: { isEncryptionAvailable: () => false }
-}))
-vi.mock('../../../src/main/telemetry/client', () => ({ track: vi.fn() }))
+vi.mock('../components/AutoHeight', () => ({ AutoHeight: 'AutoHeight' }))
+vi.mock('../components/MobileSwitch', () => ({ MobileSwitch: 'MobileSwitch' }))
 
 export { doubles }

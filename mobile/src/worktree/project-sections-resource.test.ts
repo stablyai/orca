@@ -1,6 +1,5 @@
-// @vitest-environment happy-dom
-import { useSyncExternalStore } from 'react'
-import { act, cleanup, renderHook } from '@testing-library/react'
+import { createElement, useSyncExternalStore } from 'react'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
 import { getProjectSectionsResource } from './project-sections-resource'
 import { stubRpcClient } from '../transport/rpc-client-test-stub'
@@ -93,7 +92,6 @@ const flush = async () => {
 }
 const catalog = { repos: [], projects: [], setups: [], projectOrderBy: 'manual' }
 afterEach(() => {
-  cleanup()
   vi.useRealTimers()
 })
 
@@ -200,49 +198,71 @@ it('shares the production subscription across consumers and skips renders for eq
   const o = owner()
   let renders = 0
   const subscribe = (listener: () => void) => o.resource.subscribe(listener, o.appState)
-  const hook = renderHook(() => {
-    renders++
-    return useSyncExternalStore(subscribe, o.resource.getSnapshot)
-  })
-  const otherHook = renderHook(() => useSyncExternalStore(subscribe, o.resource.getSnapshot))
-  await act(flush)
-  expect(o.sent).toHaveLength(1)
-  await act(async () => {
-    o.answer({ catalog })
-    await flush()
-  })
-  const settled = renders
-  await act(async () => {
-    o.wake('unrelatedSettings')
-    await flush()
-  })
-  expect(renders).toBe(settled)
-  const other = owner()
-  const stop = other.resource.subscribe(vi.fn(), other.appState)
-  await act(async () => {
-    await flush()
-    other.answer({ catalog: null })
-    await flush()
-  })
-  expect(renders).toBe(settled)
-  await act(async () => {
-    o.wake('ready')
-    await flush()
-    o.answer({ catalog: structuredClone(catalog) })
-    await flush()
-  })
-  expect(renders).toBe(settled)
-  await act(async () => {
-    o.wake('reposChanged')
-    await flush()
-    o.answer({ catalog: { ...catalog, projectOrderBy: 'recent' } })
-    await flush()
-  })
-  expect(renders).toBe(settled + 1)
-  expect(hook.result.current).toEqual(otherHook.result.current)
-  hook.unmount()
-  otherHook.unmount()
-  stop()
+  const observed: {
+    current?: ReturnType<typeof o.resource.getSnapshot>
+    other?: ReturnType<typeof o.resource.getSnapshot>
+  } = {}
+  function Probe({ primary }: { primary: boolean }): null {
+    const snapshot = useSyncExternalStore(subscribe, o.resource.getSnapshot)
+    if (primary) {
+      renders++
+      observed.current = snapshot
+    } else {
+      observed.other = snapshot
+    }
+    return null
+  }
+  let hook: ReactTestRenderer | undefined
+  let otherHook: ReactTestRenderer | undefined
+  let stop: (() => void) | undefined
+  try {
+    await act(async () => {
+      hook = create(createElement(Probe, { primary: true }))
+      otherHook = create(createElement(Probe, { primary: false }))
+      await flush()
+    })
+    expect(o.sent).toHaveLength(1)
+    await act(async () => {
+      o.answer({ catalog })
+      await flush()
+    })
+    expect(observed.current).toEqual({ kind: 'answered', value: catalog })
+    const settled = renders
+    await act(async () => {
+      o.wake('unrelatedSettings')
+      await flush()
+    })
+    expect(renders).toBe(settled)
+    const other = owner()
+    stop = other.resource.subscribe(vi.fn(), other.appState)
+    await act(async () => {
+      await flush()
+      other.answer({ catalog: null })
+      await flush()
+    })
+    expect(renders).toBe(settled)
+    await act(async () => {
+      o.wake('ready')
+      await flush()
+      o.answer({ catalog: structuredClone(catalog) })
+      await flush()
+    })
+    expect(renders).toBe(settled)
+    await act(async () => {
+      o.wake('reposChanged')
+      await flush()
+      o.answer({ catalog: { ...catalog, projectOrderBy: 'recent' } })
+      await flush()
+    })
+    expect(renders).toBe(settled + 1)
+    expect(observed.current).toEqual(observed.other)
+  } finally {
+    await act(async () => {
+      hook?.unmount()
+      otherHook?.unmount()
+    })
+    stop?.()
+  }
 })
 
 it('settles the initial subscription-ready race and a rejected read through a legitimate wake', async () => {

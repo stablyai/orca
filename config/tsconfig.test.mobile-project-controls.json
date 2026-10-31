@@ -1,0 +1,19 @@
+{
+  "extends": ["../mobile/tsconfig.json", "./tsconfig.test.pane-launch.json"],
+  "include": [
+    "../mobile/src/mobile-web-shell/mobile-web-shell-project-controls.test.ts",
+    "../mobile/src/mobile-web-shell/mobile-web-shell-nested-project-filter.test.ts",
+    "../src/renderer/src/env.d.ts",
+    "../src/types/**/*"
+  ],
+  "compilerOptions": {
+    "paths": {
+      "@renderer/*": ["../src/renderer/src/*"],
+      "@/*": ["../src/renderer/src/*"],
+      "@noble/hashes/*": ["../mobile/node_modules/@noble/hashes/*"],
+      "tweetnacl": ["../mobile/node_modules/tweetnacl"],
+      "ws": ["../mobile/node_modules/@types/ws"],
+      "zod": ["../mobile/node_modules/zod"]
+    }
+  }
+}

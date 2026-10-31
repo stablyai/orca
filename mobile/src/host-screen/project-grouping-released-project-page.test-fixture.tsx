@@ -1,10 +1,11 @@
-// Released raw Project page; unchanged source slice for mixed-page contract tests.
+// Released raw Project selection logic with current list presentation for mixed-page contracts.
 import { useState } from 'react'
 import { View } from 'react-native'
 import { MobileSearchField } from '../components/MobileSearchField'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { hostScreenStyles as styles } from './host-screen-styles'
-import { CheckRow, OptionRowList } from './workspace-option-rows'
+import { CheckRow } from './workspace-option-rows'
+import { ListGroup } from '../components/list/ListGroup'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { WorkspaceOptionProps } from './workspace-option-controls'
 export function ProjectsPage({ controller }: WorkspaceOptionProps) {
@@ -18,7 +19,7 @@ export function ProjectsPage({ controller }: WorkspaceOptionProps) {
     (repo) => !needle || repo.name.toLowerCase().includes(needle)
   )
   return (
-    <View style={styles.filterGroup}>
+    <View style={styles.optionGroup}>
       <View style={styles.optionSearch}>
         <MobileSearchField
           value={query}
@@ -33,7 +34,7 @@ export function ProjectsPage({ controller }: WorkspaceOptionProps) {
           )}
         />
       </View>
-      <OptionRowList>
+      <ListGroup>
         {[
           <CheckRow
             key="all"
@@ -51,7 +52,7 @@ export function ProjectsPage({ controller }: WorkspaceOptionProps) {
             />
           ))
         ]}
-      </OptionRowList>
+      </ListGroup>
     </View>
   )
 }

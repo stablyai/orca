@@ -93,6 +93,8 @@ vi.mock('./BottomDrawer', () => ({
 vi.mock('./bottom-drawer-modal-host', () => ({
   BottomDrawerModalHost: ({ children }: { children: ReactNode }) => children
 }))
+vi.mock('./AutoHeight', () => ({ AutoHeight: 'AutoHeight' }))
+vi.mock('./MobileSwitch', () => ({ MobileSwitch: 'MobileSwitch' }))
 vi.mock('./MobileAgentIcon', () => ({ MobileAgentIcon: 'MobileAgentIcon' }))
 vi.mock('./TaskProviderLogo', () => ({ TaskProviderLogo: 'TaskProviderLogo' }))
 vi.mock('expo-router', () => ({

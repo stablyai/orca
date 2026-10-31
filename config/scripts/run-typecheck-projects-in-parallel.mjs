@@ -23,7 +23,8 @@ export const TYPECHECK_PROJECTS = [
 // Selected only by --project: mobile is a separate install that root checks cannot assume.
 export const MOBILE_TYPECHECK_PROJECTS = [
   { config: 'mobile/tsconfig.json', heapGib: 2 },
-  { config: 'mobile/tsconfig.test.json', heapGib: 3 }
+  { config: 'mobile/tsconfig.test.json', heapGib: 3 },
+  { config: 'config/tsconfig.test.mobile-project-controls.json', heapGib: 7 }
 ]
 
 // The OS, node itself, and the runner agent need their share; the rest is what tsc may hold.

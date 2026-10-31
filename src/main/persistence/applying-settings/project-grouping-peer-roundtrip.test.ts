@@ -14,19 +14,19 @@ import { ProjectSectionCatalogSchema } from '../../../shared/project-section-cat
 import { publishMobileProjectSections } from '../../runtime/mobile-project-sections-snapshot'
 import { MOBILE_PROJECT_SECTIONS_METHODS } from '../../runtime/rpc/methods/mobile-project-sections'
 import { getDefaultPersistedState } from '../../../shared/constants'
-import { writeDataFile } from '../persistence-test-harness'
-import '../../runtime/rpc/unused-default-rpc-methods.test-fixture'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import {
+  writeDataFile,
   closeTestStores,
   createStore,
   readDataFile,
   readPersistedState,
   testState
 } from '../persistence-test-harness'
+import '../../runtime/rpc/unused-default-rpc-methods.test-fixture'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { RpcDispatcher } from '../../runtime/rpc/dispatcher'
 import { CLIENT_UI_METHODS } from '../../runtime/rpc/methods/client-ui'
 import { RUNTIME_CLIENT_CAPABILITY_METHODS } from '../../runtime/rpc/methods/runtime-client-capabilities'

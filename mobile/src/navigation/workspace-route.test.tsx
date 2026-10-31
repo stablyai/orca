@@ -29,8 +29,20 @@ vi.mock('expo-router', () => ({
     return null
   }
 }))
+const appStateListeners = vi.hoisted(() => new Set<(state: string) => void>())
+
 vi.mock('react-native', () => ({
-  AppState: { currentState: 'active' },
+  AppState: {
+    currentState: 'active',
+    addEventListener: (_type: string, listener: (state: string) => void) => {
+      appStateListeners.add(listener)
+      return {
+        remove: () => {
+          appStateListeners.delete(listener)
+        }
+      }
+    }
+  },
   StyleSheet: { create: (styles: unknown) => styles },
   View: 'View',
   Text: 'Text',
@@ -165,6 +177,7 @@ afterEach(async () => {
     await pair.flush()
     pair.host.dispose()
   }
+  expect(appStateListeners.size).toBe(0)
 })
 
 async function render(element: ReactElement, gates: HostStatusGates): Promise<ReactTestRenderer> {

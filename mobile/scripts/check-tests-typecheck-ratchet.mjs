@@ -14,6 +14,14 @@ const ERROR_LINE = /^(\S.*?)\(\d+,\d+\): error TS\d+:/
 // Require every on-disk test in program except these explicit exclusions: error-only diff cannot see excluded/shadowed tests.
 export const TESTS_OUTSIDE_PROGRAM = new Map([
   [
+    'src/mobile-web-shell/mobile-web-shell-project-controls.test.ts',
+    'Node-side: real persistence/socket/bridge joins; checked by config/tsconfig.test.mobile-project-controls.json after both installs and executed by the Mobile CI Node role'
+  ],
+  [
+    'src/mobile-web-shell/mobile-web-shell-nested-project-filter.test.ts',
+    'Node-side: normal publisher/persistence/socket join; checked by config/tsconfig.test.mobile-project-controls.json after both installs and executed by the Mobile CI Node role'
+  ],
+  [
     'src/worktree/project-sections-owner-recovery.test.ts',
     'Node-side: imports the desktop runtime and RPC handlers; checked by config/tsconfig.node.json against Node libraries'
   ],

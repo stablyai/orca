@@ -92,12 +92,22 @@ it.each(['web', 'mobile', 'old'] as const)(
         >()
       close = vi.fn<WebSocket['close']>()
     }
+    type DispatchSocketEvents = { close: [code: number, reason: Buffer]; error: [error: Error] }
+    // Dispatch ignores fluent returns; keep its WebSocket event arguments and the fixture's return.
+    type DispatchSocketListeners = Record<
+      'on' | 'once' | 'off',
+      <Event extends keyof DispatchSocketEvents>(
+        event: Event,
+        listener: (this: WebSocket, ...args: DispatchSocketEvents[Event]) => void
+      ) => Socket
+    >
     const Q = 'runtime:server\0same'
     try {
       const socket = new Socket() satisfies Pick<
         WebSocket,
-        'OPEN' | 'readyState' | 'bufferedAmount' | 'send' | 'close' | 'on' | 'once' | 'off'
-      >
+        'OPEN' | 'readyState' | 'bufferedAmount' | 'send' | 'close'
+      > &
+        DispatchSocketListeners
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: checked consumed EventEmitter/readiness/send/close port crosses the transport library's full WebSocket handle; unused WebSocket members are not implemented.
       const ws = socket as unknown as WebSocket
       const phone = generateKeyPair()
