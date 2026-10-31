@@ -35,13 +35,15 @@ afterEach(() => {
 })
 
 it.each([
-  ['still held the selection', 'switched', GROUP],
-  ['lost the selection to another tab', 'after', GROUP],
+  ['still held the selection', 'switched', GROUP, false],
+  ['lost the selection to another tab', 'after', GROUP, false],
   // The user works in another split group: the group shows the chat, focus stays with the user.
-  ['held the selection of a group the user left', 'switched', 'group-2']
+  ['held the selection of a group the user left', 'switched', 'group-2', false],
+  // [P1, S, P2 | U]: pinning must not move the chat to the end of the pinned group.
+  ['sat in the middle of the pinned group', 'switched', GROUP, true]
 ])(
   'puts the chat in the replaced terminal’s pinned slot, closing it as a replace, when it %s',
-  (_name, active, activeGroup) => {
+  (_name, active, activeGroup, pinnedAfter) => {
     const terminal = (id: string, isPinned = false) =>
       makeUnifiedTab({
         id,
@@ -57,12 +59,17 @@ it.each([
         'repo-1': [makeWorktree({ id: WORKTREE, repoId: 'repo-1', path: '/tmp/wt-switch' })]
       },
       tabsByWorktree: {
-        [WORKTREE]: ['before', 'switched', 'after'].map((id) =>
+        [WORKTREE]: ['before', 'switched', 'pinned-after', 'after'].map((id) =>
           makeTab({ id, worktreeId: WORKTREE })
         )
       },
       unifiedTabsByWorktree: {
-        [WORKTREE]: [terminal('before', true), terminal('switched', true), terminal('after')]
+        [WORKTREE]: [
+          terminal('before', true),
+          terminal('switched', true),
+          terminal('pinned-after', pinnedAfter),
+          terminal('after')
+        ]
       },
       groupsByWorktree: {
         [WORKTREE]: [
@@ -70,7 +77,7 @@ it.each([
             id: GROUP,
             worktreeId: WORKTREE,
             activeTabId: active,
-            tabOrder: ['before', 'switched', 'after'],
+            tabOrder: ['before', 'switched', 'pinned-after', 'after'],
             recentTabIds: ['before', active]
           }),
           makeTabGroup({ id: 'group-2', worktreeId: WORKTREE, activeTabId: null, tabOrder: [] })
@@ -116,7 +123,12 @@ it.each([
     const chat = state.unifiedTabsByWorktree[WORKTREE]?.find(
       (tab) => tab.contentType === 'agent-session'
     )
-    expect(state.groupsByWorktree[WORKTREE]?.[0]?.tabOrder).toEqual(['before', chat?.id, 'after'])
+    expect(state.groupsByWorktree[WORKTREE]?.[0]?.tabOrder).toEqual([
+      'before',
+      chat?.id,
+      'pinned-after',
+      'after'
+    ])
     expect(chat?.isPinned).toBe(true)
     expect(state.tabsByWorktree[WORKTREE]?.some((tab) => tab.id === 'switched')).toBe(false)
     expect(state.recentlyClosedTerminalTabsByWorktree).toEqual(reopenStack)

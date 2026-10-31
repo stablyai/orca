@@ -28,19 +28,38 @@ export function replaceUnifiedTab(
   if (!tab || !replaced || !group || tab.id === replaced.id) {
     return false
   }
-  const order = group.tabOrder.filter((id) => id !== tab.id)
-  order.splice(order.indexOf(replaced.id), 0, tab.id)
-  if (group.tabOrder.includes(tab.id)) {
-    state.reorderUnifiedTabs(group.id, order, { recordInteraction: false })
-  }
-  if (replaced.isPinned && !tab.isPinned) {
-    state.pinTab(tab.id, { recordInteraction: false })
-  }
+  takeReplacedTabSlot(worktreeId, tab, replaced)
   return (
     useAppStore
       .getState()
       .closeUnifiedTab(replaced.id, { replaced: true, recordInteraction: false }) !== null
   )
+}
+
+/**
+ * The new tab takes the replaced tab's pin, then its index. Pinning moves a tab to the end of the
+ * pinned group, so it comes first, or a slot in the middle of that group would be lost.
+ */
+export function takeReplacedTabSlot(
+  worktreeId: string,
+  tab: { id: string; isPinned?: boolean },
+  replaced: { id: string; isPinned?: boolean }
+): void {
+  if (replaced.isPinned && !tab.isPinned) {
+    useAppStore.getState().pinTab(tab.id, { recordInteraction: false })
+  }
+  const state = useAppStore.getState()
+  const group = (state.groupsByWorktree[worktreeId] ?? []).find((candidate) =>
+    candidate.tabOrder.includes(replaced.id)
+  )
+  if (!group?.tabOrder.includes(tab.id)) {
+    return
+  }
+  const order = group.tabOrder.filter((id) => id !== tab.id)
+  order.splice(order.indexOf(replaced.id), 0, tab.id)
+  if (order.some((id, index) => id !== group.tabOrder[index])) {
+    state.reorderUnifiedTabs(group.id, order, { recordInteraction: false })
+  }
 }
 
 export function insertUnifiedTabAfterAnchor(

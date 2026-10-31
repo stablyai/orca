@@ -27,7 +27,7 @@ const { replaceUnifiedTab } = await import('./unified-tab-anchor-insertion')
 const WT = 'repo1::/tmp/wt1'
 const GROUP = 'group-1'
 
-function seed(pinnedChat: boolean): void {
+function seed(pinnedChat: boolean, pinnedAfter = false): void {
   const pinned = makeUnifiedTab({
     id: 'u-pinned',
     entityId: 'pinned',
@@ -50,7 +50,8 @@ function seed(pinnedChat: boolean): void {
     entityId: 'other',
     groupId: GROUP,
     worktreeId: WT,
-    contentType: 'terminal'
+    contentType: 'terminal',
+    isPinned: pinnedAfter
   })
   const terminal = makeUnifiedTab({
     id: 'u-switched',
@@ -104,3 +105,13 @@ it.each([false, true])(
     expect(rpc.call).not.toHaveBeenCalled()
   }
 )
+
+it('keeps a pinned slot in the middle of the pinned group', () => {
+  seed(true, true)
+  expect(replaceUnifiedTab(WT, 'u-switched', 'chat-tab')).toBe(true)
+  const state = store.getState()
+  expect(state.groupsByWorktree[WT]?.[0]?.tabOrder).toEqual(['u-pinned', 'u-switched', 'u-other'])
+  expect(state.unifiedTabsByWorktree[WT]?.find((tab) => tab.id === 'u-switched')?.isPinned).toBe(
+    true
+  )
+})

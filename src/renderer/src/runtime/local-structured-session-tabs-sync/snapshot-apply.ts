@@ -37,6 +37,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switc
 import { useAppStore } from '../../store'
 import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
 import { replacementSelection, selectReplacementInGroup } from '@/lib/replaced-tab-selection'
+import { takeReplacedTabSlot } from '@/lib/unified-tab-anchor-insertion'
 import { framesDrawWorkspace } from '../workspace-layout-frame-drawn-workspaces'
 import { drawnChatLabelChanges, type DrawnChatLabel } from './frame-drawn-chat-tabs'
 
@@ -261,9 +262,7 @@ function closeReplacedTerminalTabs(replacements: readonly ReplacedSessionTab[]):
     if (!replaced || !chat) {
       continue
     }
-    if (replaced.isPinned && !chat.isPinned) {
-      useAppStore.getState().pinTab(chat.id, { recordInteraction: false })
-    }
+    takeReplacedTabSlot(worktreeId, chat, replaced)
     const selection = replacementSelection(useAppStore.getState(), worktreeId, replaced)
     // Not a user close: a replace never feeds Reopen Closed Tab or drops the tab's drafts.
     closeTerminalTab(replaced.entityId, {
