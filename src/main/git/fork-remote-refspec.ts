@@ -1,153 +1,111 @@
-// Narrow fork fetches to known branch prefixes instead of importing every branch.
-// A trailing * permits zero-match fetches after deletion; prefix-sharing sibling branches may also match.
-export type GitExecFn = (
-  args: string[],
-  cwd: string
-) => Promise<{ stdout: string; stderr?: string }>
+import type { GitPushTarget } from '../../shared/worktree/types'
+import {
+  withForkRemoteLock,
+  acquireForkView,
+  forkDestination,
+  type GitExecFn
+} from './fork-remote-policy'
+import { planForkMaintenance, type MaintenanceOptions } from './fork-remote-maintenance-plan'
+export {
+  buildNarrowForkFetchRefspec,
+  wildcardForkFetchRefspec,
+  sameForkRepository,
+  withForkRemoteLock,
+  remoteHasOrcaProvenance,
+  getRemoteFetchRefspecs,
+  type GitExecFn
+} from './fork-remote-policy'
+export { selectForkBranchUnderLock } from './fork-remote-branch-selection'
+export {
+  acquireForkBranchUnderLock,
+  configureForkCallerUnderLock,
+  fetchForkBranch
+} from './fork-remote-branch-acquisition'
 
-export function buildNarrowForkFetchRefspec(remoteName: string, branchName: string): string {
-  return `+refs/heads/${branchName}*:refs/remotes/${remoteName}/${branchName}*`
-}
-
-export function wildcardForkFetchRefspec(remoteName: string): string {
-  return `+refs/heads/*:refs/remotes/${remoteName}/*`
-}
-
-/** `[]` when the remote has no configured fetch refspec (or doesn't exist). */
-export async function getRemoteFetchRefspecs(
-  execGit: GitExecFn,
-  repoPath: string,
-  remoteName: string
-): Promise<string[]> {
-  try {
-    const { stdout } = await execGit(
-      ['config', '--get-all', `remote.${remoteName}.fetch`],
-      repoPath
-    )
-    return stdout
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean)
-  } catch {
-    return []
-  }
-}
-
-function refspecSource(refspec: string): string {
-  return refspec.replace(/^\+/, '').split(':')[0]!
-}
-
-/** Configuring a refspec does not fetch it; skip fetching only when its tracking ref already exists. */
-export async function forkRemoteTrackingRefExists(
-  execGit: GitExecFn,
-  repoPath: string,
-  remoteName: string,
-  branchName: string
-): Promise<boolean> {
-  try {
-    await execGit(
-      ['rev-parse', '--verify', '--quiet', `refs/remotes/${remoteName}/${branchName}`],
-      repoPath
-    )
-    return true
-  } catch {
-    return false
-  }
-}
-
-/** config --get detects URL-less remotes; remote get-url can return the remote name as a bogus URL. */
-export async function remoteHasUrl(
-  execGit: GitExecFn,
-  repoPath: string,
-  remoteName: string
-): Promise<boolean> {
-  try {
-    await execGit(['config', '--get', `remote.${remoteName}.url`], repoPath)
-    return true
-  } catch {
-    return false
-  }
-}
-
-/** Preserve sibling worktrees' branch refspecs, replace the broad default, and disable tag auto-follow. */
-export async function ensureRemoteTracksBranchNarrowly(
-  execGit: GitExecFn,
-  repoPath: string,
-  remoteName: string,
-  branchName: string
-): Promise<void> {
-  const desired = buildNarrowForkFetchRefspec(remoteName, branchName)
-  const existing = await getRemoteFetchRefspecs(execGit, repoPath, remoteName)
-  if (!existing.includes(desired)) {
-    // Drop broad defaults and exact entries that would defeat wildcard zero-match tolerance.
-    const literalForBranch = `refs/heads/${branchName}`
-    const toDrop = existing.includes(wildcardForkFetchRefspec(remoteName))
-      ? existing
-      : existing.filter((refspec) => refspecSource(refspec) === literalForBranch)
-    if (toDrop.length > 0) {
-      const surviving = existing.filter((refspec) => !toDrop.includes(refspec))
-      await execGit(['config', '--unset-all', `remote.${remoteName}.fetch`], repoPath)
-      for (const refspec of surviving) {
-        await execGit(['config', '--add', `remote.${remoteName}.fetch`, refspec], repoPath)
+export async function runForkNativeAction<T>(
+  exec: GitExecFn,
+  path: string,
+  target: GitPushTarget,
+  kind: 'push' | 'pull',
+  run: () => Promise<T>,
+  scope = ''
+): Promise<T> {
+  return withForkRemoteLock(
+    exec,
+    path,
+    async () => {
+      const view = await acquireForkView(exec, path, scope, target.remoteUrl)
+      forkDestination(view, target)
+      const specs = view.policy.get(target.remoteName)?.get('fetch') ?? []
+      if (
+        !view.proof.operation(
+          view.urls.get(target.remoteName)!,
+          specs,
+          `refs/heads/${target.branchName}`,
+          kind,
+          kind === 'push'
+            ? view.booleans.get('push.followtags')
+            : view.config.get(`remote.${target.remoteName}.tagopt`)?.at(-1) !== '--no-tags'
+        )
+      ) {
+        throw new Error('Fork tracking conflicts with another Git reference.')
       }
-    }
-    await execGit(['config', '--add', `remote.${remoteName}.fetch`, desired], repoPath)
-  }
-  await execGit(['config', `remote.${remoteName}.tagOpt`, '--no-tags'], repoPath)
-}
-
-/** Clear fetch refspecs for an unpinned fork remote without disabling pushes; callers must verify provenance. */
-export async function clearForkRemoteFetchRefspec(
-  execGit: GitExecFn,
-  repoPath: string,
-  remoteName: string
-): Promise<void> {
-  await execGit(['config', '--unset-all', `remote.${remoteName}.fetch`], repoPath).catch(() => {})
-}
-
-/** Prune refs outside kept branch prefixes, preserving HEAD and anything the narrow refspec would fetch again. */
-export async function pruneUntrackedForkRemoteRefs(
-  execGit: GitExecFn,
-  repoPath: string,
-  remoteName: string,
-  keepBranches: ReadonlySet<string>
-): Promise<string[]> {
-  const prefix = `refs/remotes/${remoteName}/`
-  const { stdout } = await execGit(['for-each-ref', '--format=%(refname)', prefix], repoPath).catch(
-    () => ({ stdout: '' })
+      return run()
+    },
+    scope
   )
-  const deleted: string[] = []
-  for (const refname of stdout
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)) {
-    const branch = refname.slice(prefix.length)
-    const kept = branch === 'HEAD' || [...keepBranches].some((keep) => branch.startsWith(keep))
-    if (kept) {
-      continue
-    }
-    await execGit(['update-ref', '-d', refname], repoPath)
-    deleted.push(refname)
-  }
-  return deleted
 }
 
-/** Drops the one refspec whose source is `refs/heads/<staleBranchName>`, keeping the rest. */
-export async function removeStaleForkFetchRefspec(
-  execGit: GitExecFn,
-  repoPath: string,
-  remoteName: string,
-  staleBranchName: string
-): Promise<boolean> {
-  const existing = await getRemoteFetchRefspecs(execGit, repoPath, remoteName)
-  const staleSource = `refs/heads/${staleBranchName}`
-  const surviving = existing.filter((refspec) => refspecSource(refspec) !== staleSource)
-  if (surviving.length === existing.length) {
-    return false
-  }
-  await execGit(['config', '--unset-all', `remote.${remoteName}.fetch`], repoPath)
-  for (const refspec of surviving) {
-    await execGit(['config', '--add', `remote.${remoteName}.fetch`, refspec], repoPath)
-  }
-  return true
+export async function maintainForkRemotes(
+  exec: GitExecFn,
+  path: string,
+  options: MaintenanceOptions
+): Promise<string[]> {
+  return withForkRemoteLock(
+    exec,
+    path,
+    async () => {
+      const plan = () => planForkMaintenance(exec, path, options)
+      const initial = await plan()
+      if (!initial.actions.length) {
+        return []
+      }
+      const fresh = await plan()
+      if (
+        initial.view.fingerprint !== fresh.view.fingerprint ||
+        JSON.stringify(initial.consumers) !== JSON.stringify(fresh.consumers) ||
+        JSON.stringify(initial.actions) !== JSON.stringify(fresh.actions)
+      ) {
+        return []
+      }
+      const affected: string[] = []
+      for (const action of fresh.actions) {
+        if (!action.desired) {
+          await exec(['remote', 'remove', action.name], path)
+        } else {
+          const key = `remote.${action.name}.fetch`
+          const installed = new Set(fresh.view.config.get(key) ?? [])
+          const desired = new Set(action.desired)
+          for (const spec of desired) {
+            if (!installed.has(spec)) {
+              await exec(['config', '--add', key, spec], path)
+            }
+          }
+          for (const row of action.prune) {
+            await exec(['update-ref', '--no-deref', '-d', row.ref, row.oid], path).catch(() => {})
+          }
+          for (const spec of installed) {
+            if (!desired.has(spec)) {
+              const pattern = `^${spec.replace(/[\\.[\](){}*+?^$|]/g, '\\$&')}$`
+              await exec(['config', '--unset-all', key, pattern], path)
+            }
+          }
+          await exec(['config', `remote.${action.name}.tagOpt`, '--no-tags'], path)
+        }
+        affected.push(action.name)
+      }
+      return affected
+    },
+    options.scope
+  ).catch(() => [])
 }

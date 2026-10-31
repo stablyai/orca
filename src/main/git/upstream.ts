@@ -1,3 +1,4 @@
+import { readGitRemotePolicy } from '../../shared/git-worktree-admin'
 import type { GitUpstreamStatus } from '../../shared/git-status-types'
 import type { GitPushTarget } from '../../shared/worktree/types'
 import { upstreamOnlyCommitsArePatchEquivalent } from '../../shared/git-upstream-status'
@@ -66,6 +67,15 @@ async function readUpstreamStatus(
       return await getPublishTargetStatus(
         (args) => gitExecFileAsync(args, gitExecOptions(worktreePath, options)),
         target,
+        async (name) =>
+          (
+            await readGitRemotePolicy(
+              (args, cwd) => gitExecFileAsync(args, gitExecOptions(cwd, options)),
+              worktreePath,
+              name,
+              options
+            )
+          ).fields,
         (upstreamName) => getBehindCommitsArePatchEquivalent(worktreePath, upstreamName, options)
       )
     }

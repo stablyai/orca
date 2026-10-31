@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   createGitConfigSnapshotRunner,
+  constructGitRemotePolicies,
+  parseGitConfigOriginSnapshot,
   GitConfigSnapshotKeyNotFoundError
 } from './git-config-snapshot-runner'
 
@@ -226,3 +228,57 @@ describe('createGitConfigSnapshotRunner', () => {
     expect(countCalls(runGit, ['symbolic-ref', '--quiet', '--short', 'HEAD'])).toBe(1)
   })
 })
+
+it('retains native origin framing, case-sensitive subsections, valueless and empty multivars', () => {
+  const output =
+    'file:/repo/config\0remote.Mixed.Name.fetch\nrefs/heads/main\0file:/repo/private\0remote.Mixed.Name.fetch\nrefs/heads/main:refs/private/main\0command line:\0remote.Mixed.Name.orca-created\0file:/repo/private\0branch.Work.base\n\0'
+  const parsed = parseGitConfigOriginSnapshot(output)
+  expect(parsed.config.get('remote.Mixed.Name.fetch')).toEqual([
+    'refs/heads/main',
+    'refs/heads/main:refs/private/main'
+  ])
+  expect(parsed.origins[2].value).toBeNull()
+  expect(parsed.origins[3].value).toBe('')
+  expect(parsed.booleans.get('remote.Mixed.Name.orca-created')).toBe(true)
+  expect(parsed.booleans.get('branch.Work.base')).toBe(false)
+  expect(() => parseGitConfigOriginSnapshot('file:/bad\0')).toThrow('Incomplete')
+})
+
+it.each([58, 580])(
+  'constructs native policy from %i legacy rows without changing authority vectors',
+  (size) => {
+    const original = Object.freeze(['refs/heads/config:refs/private/config'])
+    const config = new Map([['remote.manual.fetch', original]])
+    const before = JSON.stringify([...config])
+    const lines = Array.from(
+      { length: size },
+      (_, i) => `Pull: +refs/heads/topic${i}:refs/private/topic${i}\r`
+    )
+    const stores = [
+      [
+        {
+          name: 'manual',
+          file: '/git/remotes/manual',
+          kind: 'file' as const,
+          contents: `URL: /fork\r\n${lines.join('\n')}\nPull: refs/heads/config:refs/private/config\n`
+        }
+      ],
+      []
+    ]
+    const built = constructGitRemotePolicies(config, stores, 'manual')
+    expect(built.policy.get('manual')?.get('fetch')).toEqual([
+      ...original,
+      ...lines.map((line) => line.slice(6).trimEnd()),
+      ...original
+    ])
+    expect(built.policy.get('manual')?.get('fetch')).not.toBe(original)
+    expect(JSON.stringify([...config])).toBe(before)
+    const suppressed = constructGitRemotePolicies(
+      new Map([...config, ['remote.manual.url', ['/configured']]]),
+      stores
+    )
+    expect(suppressed.policy.get('manual')?.get('fetch')).toEqual(original)
+    expect(suppressed.legacy.has('manual')).toBe(false)
+    expect(constructGitRemotePolicies(config, stores, 'other').policy.has('manual')).toBe(false)
+  }
+)

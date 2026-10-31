@@ -9,6 +9,7 @@ import { RuntimeGitSyncCommands } from './runtime-git-sync-commands'
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 
 const mocks = vi.hoisted(() => ({
+  materialize: vi.fn(),
   abortMerge: vi.fn(),
   abortRebase: vi.fn(),
   commitChanges: vi.fn(),
@@ -16,6 +17,10 @@ const mocks = vi.hoisted(() => ({
   gitFastForward: vi.fn(),
   gitFetch: vi.fn(),
   gitPull: vi.fn()
+}))
+
+vi.mock('../ipc/worktree-remote', () => ({
+  materializeWorktreePushTargetRemote: mocks.materialize
 }))
 
 vi.mock('../git/fork-sync', async () => ({
@@ -50,6 +55,7 @@ const expectedUpstream = { owner: 'stablyai', repo: 'orca' }
 describe('RuntimeGitSyncCommands admission', () => {
   beforeEach(() => {
     vi.resetAllMocks()
+    mocks.materialize.mockImplementation(async (_path, target) => target)
   })
 
   it('prioritizes local runtime git actions and preserves host routing', async () => {
@@ -115,3 +121,32 @@ describe('RuntimeGitSyncCommands admission', () => {
     expect(mocks.commitChanges).not.toHaveBeenCalled()
   })
 })
+
+it.each([false, true])(
+  'persists borrowed aliases on the resolved host; bookkeeping failure=%s cannot block sync',
+  async (failWrite) => {
+    const served = { ...worktree, hostId: 'runtime:env-1' as const }
+    const selected = { ...pushTarget, remoteName: 'borrowed', remoteCreated: false }
+    mocks.materialize.mockResolvedValue(selected)
+    const persist = vi.fn(() => {
+      if (failWrite) {
+        throw new Error('store unavailable')
+      }
+    })
+    const commands = new RuntimeGitSyncCommands({
+      resolveRuntimeGitTarget: async () => ({
+        executionHostId: 'local',
+        worktree: served,
+        localGitOptions: { wslDistro: 'Ubuntu' }
+      }),
+      getRuntimeSettings: () => ({}),
+      persistMaterializedPushTarget: persist
+    })
+    await expect(commands.fetchRuntimeGit('id:wt-1', pushTarget)).resolves.toEqual({ ok: true })
+    expect(persist).toHaveBeenCalledWith(served, selected)
+    expect(mocks.gitFetch).toHaveBeenLastCalledWith(worktree.path, selected, {
+      admissionTier: 'interactive',
+      wslDistro: 'Ubuntu'
+    })
+  }
+)

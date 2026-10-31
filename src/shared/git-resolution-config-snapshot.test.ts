@@ -19,7 +19,7 @@ function createRunner(config = new Map<string, string>(), snapshotFails = false)
     if (args[0] === 'config' && args[1] === '--get') {
       const value = config.get((args[2] ?? '').toLowerCase())
       if (value === undefined) {
-        throw new Error('missing config key')
+        throw Object.assign(new Error('missing config key'), { code: 1 })
       }
       return { stdout: `${value}\n` }
     }
@@ -95,6 +95,16 @@ describe('resolution config snapshots', () => {
 
     expect(runGit.mock.calls.filter(([args]) => args[1] === '--list')).toHaveLength(1)
     expect(runGit.mock.calls.filter(([args]) => args[1] === '--get')).toHaveLength(5)
+  })
+
+  it('propagates basic operand read failures instead of inventing first publication', async () => {
+    const runGit = vi.fn(async (args: string[]) => {
+      if (args[0] === 'symbolic-ref') {
+        return { stdout: 'refs/heads/feature\n' }
+      }
+      throw Object.assign(new Error('config permission denied'), { code: 128 })
+    })
+    await expect(resolveConfiguredGitPushTarget(runGit)).rejects.toThrow('permission denied')
   })
 
   it('skips config reads when the configured upstream resolves directly', async () => {

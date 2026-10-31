@@ -79,32 +79,22 @@ import { mergeWorktree } from './worktree-metadata-merge'
 import { resolveCreatedWorktree } from './created-worktree-reconciliation'
 import { notifyLineageRepos } from '../worktree-lineage-change-notification'
 import { composeWorktreeId, getRepoIdFromWorktreeId } from '../../shared/worktree/id'
-import {
-  getConnectionExecutionHostId,
-  getRepoExecutionHostId,
-  type ExecutionHostId
-} from '../../shared/execution-host'
+import { getConnectionExecutionHostId, getRepoExecutionHostId } from '../../shared/execution-host'
 import type { BranchPrefixSettings } from '../../shared/branch-prefix'
 import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import { sharesWorktreeLineageBoundary } from '../../shared/resolved-worktree-lineage'
 import {
   cleanupUnusedWorktreePushTargetRemoteWithExec,
-  sameGitHubRemoteUrl,
   type GitRemoteExec,
   type WorktreePushTargetStore
 } from './worktree-push-target-cleanup'
 import { reconcileOrphanedPrRemotes } from './worktree-push-target-reconciliation'
 import {
   configureCreatedWorktreePushTargetWithExec,
-  prepareWorktreePushTargetWithExec,
-  remoteAlreadyMatchesUrl,
-  restoreUpstreamAfterMaterialize
+  prepareWorktreePushTargetWithExec
 } from './worktree-push-target-setup'
-import {
-  buildNarrowForkFetchRefspec,
-  ensureRemoteTracksBranchNarrowly,
-  forkRemoteTrackingRefExists
-} from '../git/fork-remote-refspec'
+import { getCanonicalRepoKey } from '../git/canonical-repo-key'
+import { normalizeGitRemoteUrl } from '../../shared/git-remote-identity'
 import { migrateForkRemoteRefspecs } from './worktree-push-target-refspec-migration'
 import {
   registerCreatedWorktreeRoot,
@@ -160,7 +150,6 @@ import {
 } from '../../shared/worktree/host-qualified-identity'
 import {
   hostWorktreeTargetForRepo,
-  readAllWorktreeMetaForHost,
   readWorktreeMetaForHost,
   worktreeRowTarget
 } from '../persistence/host-qualified-worktree-meta'
@@ -170,10 +159,6 @@ const CREATE_BASE_FALLBACK_FETCH_TIMEOUT_MS = 60_000
 const DEFERRED_PUSH_TARGET_FETCH_TIMEOUT_MS = 60_000
 // Coalesce spawn/sync materialization so competing remote adds cannot strand duplicates.
 const worktreePushTargetMaterializeInflight = new Map<string, Promise<GitPushTarget>>()
-
-function worktreePushTargetMaterializeKey(repoPath: string, remoteName: string): string {
-  return `${repoPath}::${remoteName}`
-}
 
 type StagedStartupResult = {
   startupTerminal?: CreateWorktreeResult['startupTerminal']
@@ -597,13 +582,10 @@ export async function prepareWorktreePushTarget(
   target: GitPushTarget,
   store?: WorktreePushTargetStore | null,
   repoId?: string,
-  gitOptions: { wslDistro?: string } = {},
-  // Ownership evidence comes only from the host this git runs on.
-  hostId?: ExecutionHostId
+  gitOptions: { wslDistro?: string } = {}
 ): Promise<GitPushTarget> {
   await validateGitPushTarget(repoPath, target, gitOptions)
   const prepared = await prepareWorktreePushTargetWithExec(
-    // Bound only network fetch; local remote/config probes retain normal untimed behavior.
     (args, cwd) =>
       gitExecFileAsync(args, {
         cwd,
@@ -612,15 +594,7 @@ export async function prepareWorktreePushTarget(
       }),
     repoPath,
     target,
-    (existingRemote) =>
-      store
-        ? isPushTargetRemoteCreatedByKnownWorktree(
-            store,
-            { ...target, remoteName: existingRemote },
-            repoId,
-            hostId
-          )
-        : false
+    gitOptions.wslDistro
   )
   // Narrow legacy fork remotes opportunistically without adding migration latency to creation.
   if (store && repoId) {
@@ -650,51 +624,41 @@ export async function materializeWorktreePushTargetRemote(
   gitOptions: { wslDistro?: string } = {},
   worktree?: HostWorktreeTarget
 ): Promise<GitPushTarget> {
-  if (!target.remoteUrl || target.remoteCreated) {
+  if (!target.remoteUrl) {
     return target
   }
-  const execGit: GitRemoteExec = (args, cwd) => gitExecFileAsync(args, { cwd, ...gitOptions })
-  if (await remoteAlreadyMatchesUrl(execGit, repoPath, target.remoteName, target.remoteUrl)) {
-    return runForkRemoteAdoption(repoPath, target, () =>
-      adoptExistingForkRemoteForBranch(
-        execGit,
-        repoPath,
-        target,
-        gitOptions,
-        store,
-        repoId,
-        worktree
-      )
-    )
-  }
-  const key = worktreePushTargetMaterializeKey(repoPath, target.remoteName)
+  await validateGitPushTarget(repoPath, target, gitOptions)
+  const canonical = await getCanonicalRepoKey(repoPath, gitOptions)
+  const key = `${canonical}::${normalizeGitRemoteUrl(target.remoteUrl) ?? target.remoteUrl}`
+  const execGit: GitRemoteExec = (args, cwd) =>
+    gitExecFileAsync(args, {
+      cwd,
+      ...gitOptions,
+      ...(args[0] === 'fetch' ? { timeout: DEFERRED_PUSH_TARGET_FETCH_TIMEOUT_MS } : {})
+    })
   const existing = worktreePushTargetMaterializeInflight.get(key)
   if (existing) {
-    // Join the remote mint, then adopt this caller's branch; failed mints roll back, so propagate rather than writing ghost config.
-    await existing
-    return runForkRemoteAdoption(repoPath, target, () =>
-      adoptExistingForkRemoteForBranch(
-        execGit,
-        repoPath,
-        target,
-        gitOptions,
-        store,
-        repoId,
-        worktree
-      )
+    const selected = await existing
+    const adopted = await prepareWorktreePushTargetWithExec(
+      execGit,
+      repoPath,
+      target,
+      gitOptions.wslDistro,
+      true,
+      selected.remoteName
     )
+    persistMaterializedPushTarget(store, worktree, adopted)
+    return adopted
   }
-  const promise = prepareWorktreePushTarget(
+  const promise = prepareWorktreePushTargetWithExec(
+    execGit,
     repoPath,
     target,
-    store,
-    repoId,
-    gitOptions,
-    worktree?.hostId
+    gitOptions.wslDistro,
+    true
   )
-    .then((prepared) => restoreUpstreamAfterMaterialize(execGit, repoPath, prepared))
     .then((prepared) => {
-      persistMaterializedPushTargetIfCreated(store, worktree, prepared)
+      persistMaterializedPushTarget(store, worktree, prepared)
       return prepared
     })
     .finally(() => {
@@ -706,117 +670,33 @@ export async function materializeWorktreePushTargetRemote(
   return promise
 }
 
-// Remote reuse still needs this branch's refspec, tracking ref and upstream, including after the initial materialization.
-async function adoptExistingForkRemoteForBranch(
-  execGit: GitRemoteExec,
-  repoPath: string,
-  target: GitPushTarget,
-  gitOptions: { wslDistro?: string },
-  store: WorktreePushTargetStore | null | undefined,
-  repoId: string | undefined,
-  worktree: HostWorktreeTarget | undefined
-): Promise<GitPushTarget> {
-  await ensureRemoteTracksBranchNarrowly(execGit, repoPath, target.remoteName, target.branchName)
-  // Config widening imports no refs; fetch missing tracking refs before upstream assignment while repeat calls stay local.
-  if (
-    !(await forkRemoteTrackingRefExists(execGit, repoPath, target.remoteName, target.branchName))
-  ) {
-    // Bound this network fetch like the full-mint path.
-    await gitExecFileAsync(
-      [
-        'fetch',
-        target.remoteName,
-        buildNarrowForkFetchRefspec(target.remoteName, target.branchName)
-      ],
-      { cwd: repoPath, ...gitOptions, timeout: DEFERRED_PUSH_TARGET_FETCH_TIMEOUT_MS }
-    )
-  }
-  const restored = await restoreUpstreamAfterMaterialize(execGit, repoPath, target)
-  // Persist inherited Orca ownership for orphan cleanup; derive repo ID because IPC and runtime callers supply different context.
-  const ownerRepoId = repoId ?? (worktree ? getRepoIdFromWorktreeId(worktree.id) : undefined)
-  const owned =
-    store !== undefined &&
-    ownerRepoId !== undefined &&
-    // SAFETY: Legacy null keeps this branch's original failure rather than introducing a fallback.
-    isPushTargetRemoteCreatedByKnownWorktree(store!, restored, ownerRepoId, worktree?.hostId)
-  const adopted = owned ? { ...restored, remoteCreated: true } : restored
-  persistMaterializedPushTargetIfCreated(store, worktree, adopted)
-  return adopted
-}
-
-// Serialize per-remote adoption: concurrent git config writes can fail locks or duplicate refspecs.
-const forkRemoteAdoptionQueue = new Map<string, Promise<unknown>>()
-
-function runForkRemoteAdoption<T>(
-  repoPath: string,
-  target: GitPushTarget,
-  run: () => Promise<T>
-): Promise<T> {
-  const key = worktreePushTargetMaterializeKey(repoPath, target.remoteName)
-  const previous = forkRemoteAdoptionQueue.get(key)
-  const next = previous ? previous.then(run, run) : run()
-  const settled = next.then(
-    () => undefined,
-    () => undefined
-  )
-  forkRemoteAdoptionQueue.set(key, settled)
-  void settled.finally(() => {
-    if (forkRemoteAdoptionQueue.get(key) === settled) {
-      forkRemoteAdoptionQueue.delete(key)
-    }
-  })
-  return next
-}
-
-// Deferred creation bypasses create-time metadata writes; persist ownership for orphan cleanup and older SSH hosts.
-function persistMaterializedPushTargetIfCreated(
+// Persist the actual alias best-effort, including borrowed aliases and older hosts.
+function persistMaterializedPushTarget(
   store: WorktreePushTargetStore | null | undefined,
   worktree: HostWorktreeTarget | undefined,
   target: GitPushTarget
 ): void {
-  if (!target.remoteCreated || !worktree || !store?.setWorktreeMeta) {
+  if (!worktree || !store?.setWorktreeMeta) {
     return
   }
-  const repoId = getRepoIdFromWorktreeId(worktree.id)
-  const repos = store.getRepos?.()
-  // A copy whose repo this host no longer has gets no new row.
-  if (
-    repos &&
-    !repos.some((repo) => repo.id === repoId && getRepoExecutionHostId(repo) === worktree.hostId)
-  ) {
-    return
-  }
-  // Bookkeeping incidental to the push: a project a WSL move is taking skips it, not the push.
-  if (isWslMoveWorktreeBlocked(worktree.id, worktree.hostId)) {
-    return
-  }
-  store.setWorktreeMeta(worktree, { pushTarget: target })
-}
-
-function isPushTargetRemoteCreatedByKnownWorktree(
-  store: WorktreePushTargetStore,
-  target: GitPushTarget,
-  repoId?: string,
-  // A same-id twin's remote on another host proves nothing about this host's remote.
-  hostId?: ExecutionHostId
-): boolean {
-  const rows = hostId ? readAllWorktreeMetaForHost(store, hostId) : store.getAllWorktreeMeta()
-  return Object.entries(rows).some(([worktreeId, meta]) => {
-    if (repoId && getRepoIdFromWorktreeId(worktreeId) !== repoId) {
-      return false
+  try {
+    const repoId = getRepoIdFromWorktreeId(worktree.id)
+    const repos = store.getRepos?.()
+    // A copy whose repo this host no longer has gets no new row.
+    if (
+      repos &&
+      !repos.some((repo) => repo.id === repoId && getRepoExecutionHostId(repo) === worktree.hostId)
+    ) {
+      return
     }
-    if (!meta.pushTarget?.remoteCreated) {
-      return false
+    // Bookkeeping incidental to the push: a project a WSL move is taking skips it, not the push.
+    if (isWslMoveWorktreeBlocked(worktree.id, worktree.hostId)) {
+      return
     }
-    const otherRemoteUrl = meta.pushTarget.remoteUrl
-    const targetRemoteUrl = target.remoteUrl
-    return (
-      meta.pushTarget.remoteName === target.remoteName ||
-      (typeof otherRemoteUrl === 'string' &&
-        typeof targetRemoteUrl === 'string' &&
-        sameGitHubRemoteUrl(otherRemoteUrl, targetRemoteUrl))
-    )
-  })
+    store.setWorktreeMeta(worktree, { pushTarget: target })
+  } catch (error) {
+    console.warn('[worktrees] Could not persist materialized push target', error)
+  }
 }
 
 export async function cleanupUnusedWorktreePushTargetRemote(
@@ -832,7 +712,8 @@ export async function cleanupUnusedWorktreePushTargetRemote(
       removedWorktreeId,
       target,
       store,
-      (args, cwd) => gitExecFileAsync(args, { cwd, ...gitOptions })
+      (args, cwd) => gitExecFileAsync(args, { cwd, ...gitOptions }),
+      gitOptions.wslDistro
     )
   } catch (error) {
     console.warn(`[worktrees] Failed to clean up fork PR remote for ${removedWorktreeId}`, error)
@@ -856,7 +737,8 @@ export async function configureCreatedWorktreePushTarget(
     (args, cwd) => gitExecFileAsync(args, { cwd, ...gitOptions }),
     worktreePath,
     branchName,
-    target
+    target,
+    gitOptions.wslDistro
   )
 }
 

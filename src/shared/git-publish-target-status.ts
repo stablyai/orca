@@ -1,3 +1,4 @@
+import { queryFetchTrackingRef } from './git-branch-cleanup-fetch'
 import type { GitUpstreamStatus } from './git-status-types'
 import type { GitPushTarget } from './worktree/types'
 import { parseGitRevListAheadBehindCounts } from './git-rev-list-output'
@@ -27,10 +28,29 @@ function isMissingRemoteTrackingRefError(error: unknown): boolean {
 export async function getPublishTargetStatus(
   runGit: GitCommandRunner,
   target: GitPushTarget,
+  readPolicy: (name: string) => Promise<ReadonlyMap<string, readonly string[]>>,
   getBehindCommitsArePatchEquivalent?: (upstreamName: string) => Promise<boolean>
 ): Promise<GitUpstreamStatus> {
   const upstreamName = getPublishTargetDisplayName(target)
-  const remoteRef = getPublishTargetRemoteRef(target)
+  const fields = await readPolicy(target.remoteName)
+  const relation = queryFetchTrackingRef(
+    fields.get('fetch') ?? [],
+    `refs/heads/${target.branchName}`
+  )
+  if (relation.kind === 'invalid') {
+    throw new Error('Invalid native Git fetch policy.')
+  }
+  const absent = () => ({
+    hasUpstream: false,
+    upstreamName,
+    ahead: 0,
+    behind: 0,
+    hasConfiguredPushTarget: true
+  })
+  if (relation.kind !== 'mapped') {
+    return absent()
+  }
+  const remoteRef = relation.destination
 
   try {
     await runGit(['rev-parse', '--verify', '--quiet', remoteRef])

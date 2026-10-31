@@ -2,91 +2,58 @@
 
 import { gitExecFileAsync } from '../git/runner'
 import { listWorktrees } from '../git/worktree'
-import type { GitPushTarget } from '../../shared/worktree/types'
+import { getRepoExecutionHostId } from '../../shared/execution-host'
 import { WORKTREE_ID_SEPARATOR, worktreeIdentityKey } from '../../shared/worktree/id'
-import { parseGitRemoteFetchUrls } from '../../shared/git-remote-url-index'
+import { maintainForkRemotes } from '../git/fork-remote-refspec'
 import {
-  findWorktreeMetaReferencingRemote,
-  hasBranchConfigUsingRemote,
+  forkRemoteMetadata,
   type GitRemoteExec,
   type WorktreePushTargetStore
 } from './worktree-push-target-cleanup'
 
-// Orca-shaped names only narrow candidates; provenance must independently prove ownership.
 const ORCA_PR_REMOTE_NAME_PATTERN =
   /^pr-(?:head|[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?)(?:-[0-9]{1,2})?$/
-
 export function isOrcaGeneratedPrRemoteName(name: string): boolean {
   return ORCA_PR_REMOTE_NAME_PATTERN.test(name)
 }
-
-type PrRemoteCandidate = { name: string; url: string }
-
-async function listPrRemoteCandidates(
-  execGit: GitRemoteExec,
-  repoPath: string
-): Promise<PrRemoteCandidate[]> {
-  let stdout: string
-  try {
-    ;({ stdout } = await execGit(['remote', '-v'], repoPath))
-  } catch {
-    return []
-  }
-  return [...parseGitRemoteFetchUrls(stdout)]
-    .filter(([name]) => isOrcaGeneratedPrRemoteName(name))
-    .map(([name, url]) => ({ name, url }))
-}
-
-async function shouldReclaimPrRemote(
-  execGit: GitRemoteExec,
-  repoPath: string,
-  repoId: string,
-  store: WorktreePushTargetStore,
-  remote: PrRemoteCandidate,
-  liveWorktreeKeys: ReadonlySet<string>
-): Promise<boolean> {
-  const target: Pick<GitPushTarget, 'remoteName' | 'remoteUrl'> = {
-    remoteName: remote.name,
-    remoteUrl: remote.url
-  }
-  const referencingEntries = findWorktreeMetaReferencingRemote(store, repoId, target)
-  // Require persisted creation provenance; names and URLs cannot prove ownership.
-  if (!referencingEntries.some(({ meta }) => meta.pushTarget?.remoteCreated === true)) {
-    return false
-  }
-  const stillClaimedByLiveWorktree = referencingEntries.some(({ worktreeId }) =>
-    liveWorktreeKeys.has(worktreeIdentityKey(worktreeId))
-  )
-  if (stillClaimedByLiveWorktree) {
-    return false
-  }
-  // Preserved branches still need their fork even after the worktree is gone.
-  if (
-    await hasBranchConfigUsingRemote(execGit, repoPath, target, { requireExistingBranch: true })
-  ) {
-    return false
-  }
-  return true
-}
-
 export async function reconcileOrphanedPrRemotesWithExec(
   repoPath: string,
   repoId: string,
   store: WorktreePushTargetStore,
   execGit: GitRemoteExec,
-  liveWorktreePaths: readonly string[]
+  readLiveWorktreePaths: () => Promise<readonly string[]>,
+  scope = ''
 ): Promise<string[]> {
-  const liveWorktreeKeys = new Set(
-    liveWorktreePaths.map((path) => worktreeIdentityKey(`${repoId}${WORKTREE_ID_SEPARATOR}${path}`))
-  )
-  const reclaimed: string[] = []
-  for (const remote of await listPrRemoteCandidates(execGit, repoPath)) {
-    if (await shouldReclaimPrRemote(execGit, repoPath, repoId, store, remote, liveWorktreeKeys)) {
-      await execGit(['remote', 'remove', remote.name], repoPath)
-      reclaimed.push(remote.name)
+  return maintainForkRemotes(execGit, repoPath, {
+    mode: 'remove',
+    scope,
+    existingBranchesOnly: true,
+    read: async () => {
+      const paths = await readLiveWorktreePaths()
+      const live = new Set(
+        paths.map((path) => worktreeIdentityKey(`${repoId}${WORKTREE_ID_SEPARATOR}${path}`))
+      )
+      const hosts = new Set(
+        store
+          .getRepos?.()
+          .filter((repo) => repo.id === repoId)
+          .map(getRepoExecutionHostId)
+      )
+      const owner = hosts.size === 1 ? [...hosts][0] : undefined
+      const metadata = forkRemoteMetadata(store, repoId).map(({ worktreeId, meta }) => {
+        if (
+          live.has(worktreeIdentityKey(worktreeId)) ||
+          meta.preserveBranchOnDelete ||
+          (meta.hostId && meta.hostId !== owner)
+        ) {
+          return meta
+        }
+        const { pushTarget: _ignored, ...bases } = meta
+        return bases
+      })
+      return { metadata, liveness: paths, select: isOrcaGeneratedPrRemoteName }
     }
-  }
-  return reclaimed
+  })
 }
 
 // Rate-limit subprocess-heavy sweeps so removal bursts cannot repeat the same repo scan.
@@ -122,7 +89,6 @@ export async function reconcileOrphanedPrRemotes(
   }
   lastReconciledAtByRepoId.set(repoId, Date.now())
   try {
-    const liveWorktrees = await listWorktrees(repoPath, gitOptions)
     logReclaimed(
       repoPath,
       await reconcileOrphanedPrRemotesWithExec(
@@ -130,7 +96,8 @@ export async function reconcileOrphanedPrRemotes(
         repoId,
         store,
         (args, cwd) => gitExecFileAsync(args, { cwd, ...gitOptions }),
-        liveWorktrees.map((worktree) => worktree.path)
+        async () => (await listWorktrees(repoPath, gitOptions)).map((worktree) => worktree.path),
+        gitOptions.wslDistro
       )
     )
   } catch (error) {

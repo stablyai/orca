@@ -25,11 +25,7 @@ export function triggerTerminalSpawnPushTargetMaterialization(
 ): void {
   // A server's own `runtime:` stamp runs here too; only an `ssh:` row's git runs elsewhere.
   const hostId = repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID
-  if (
-    !pushTarget?.remoteUrl ||
-    pushTarget.remoteCreated ||
-    (repo && getRepoRoutingConnectionId(repo))
-  ) {
+  if (!pushTarget?.remoteUrl || (repo && getRepoRoutingConnectionId(repo))) {
     return
   }
   materializeWorktreePushTargetRemote(

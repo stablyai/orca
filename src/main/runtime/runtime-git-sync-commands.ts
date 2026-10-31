@@ -29,8 +29,12 @@ export class RuntimeGitSyncCommands {
           localGitOptionsForTarget(target)
         )
       : undefined
-    if (materialized?.remoteCreated) {
-      this.host.persistMaterializedPushTarget?.(target.worktree, materialized)
+    if (materialized) {
+      try {
+        this.host.persistMaterializedPushTarget?.(target.worktree, materialized)
+      } catch (error) {
+        console.warn('[runtime] Could not persist materialized push target', error)
+      }
     }
     return { provider, pushTarget: materialized }
   }

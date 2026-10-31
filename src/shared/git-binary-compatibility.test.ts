@@ -1,3 +1,5 @@
+import { registerGitForkBinaryCompatibilityCase } from './git-fork-binary-compatibility.test-cases'
+
 import {
   mkdir,
   mkdtemp,
@@ -114,6 +116,11 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
       }
     }
   })
+
+  registerGitForkBinaryCompatibilityCase(
+    () => fixture,
+    () => repoPath
+  )
 
   // Each Git call is a docker exec: image runs take 22-25 s of a 30 s default, so loaded runners tripped it.
   it(PAIRS_REFS_TEST, { timeout: image ? 90_000 : undefined }, async () => {

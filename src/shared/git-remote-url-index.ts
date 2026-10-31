@@ -9,18 +9,49 @@ export type GitRemoteVerboseEntry = {
   direction: 'fetch' | 'push'
 }
 
-// Greedy prefix so a URL containing spaces or parentheses keeps them.
-const REMOTE_VERBOSE_URL_PATTERN = /^(.*) \((fetch|push)\)$/
-
-/** Parse one `<name>\t<url> (fetch|push)` row. */
-export function parseGitRemoteVerboseLine(line: string): GitRemoteVerboseEntry | null {
-  const tabIndex = line.indexOf('\t')
-  if (tabIndex === -1) {
+/** Identity historically accepts whitespace delimiters and the first direction marker. */
+export function parseGitRemoteVerboseLine(
+  line: string,
+  identity = false
+): GitRemoteVerboseEntry | null {
+  const match = /^(\S+)[\t ]+(.+)$/.exec(line.trim())
+  if (!match) {
     return null
   }
-  const name = line.slice(0, tabIndex)
-  const match = REMOTE_VERBOSE_URL_PATTERN.exec(line.slice(tabIndex + 1).trim())
-  return match ? { name, url: match[1], direction: match[2] as 'fetch' | 'push' } : null
+  const pattern = identity
+    ? /^(.*?)\s+\((fetch)\)(?:\s+\[.*\])?$/
+    : /^(.*)\s+\((fetch|push)\)(?:\s+\[[^\]\r\n]*\])?$/
+  // Sparse object names can contain ] and direction-looking path text.
+  const sparse = /^(.*?)\s+\((fetch|push)\)\s+\[sparse:.*\]$/
+  const value = identity
+    ? pattern.exec(match[2])
+    : (sparse.exec(match[2]) ?? pattern.exec(match[2]))
+  return value
+    ? { name: match[1], url: value[1], direction: value[2] === 'fetch' ? 'fetch' : 'push' }
+    : null
+}
+
+export function parseGitRemoteNames(stdout: string): Set<string> {
+  return new Set(
+    [...iterateProcessOutputLines(stdout)].flatMap((line) => {
+      const row = parseGitRemoteVerboseLine(line)
+      const bare = /^(\S+)[\t ]*$/.exec(line)
+      return row ? [row.name] : bare ? [bare[1]] : []
+    })
+  )
+}
+
+export function parseGitRemotePushUrls(stdout: string): Map<string, string[]> {
+  const urls = new Map<string, string[]>()
+  for (const line of iterateProcessOutputLines(stdout)) {
+    const row = parseGitRemoteVerboseLine(line)
+    if (row?.direction === 'push') {
+      const values = urls.get(row.name) ?? []
+      values.push(row.url)
+      urls.set(row.name, values)
+    }
+  }
+  return urls
 }
 
 /** First fetch URL per remote, in git remote order, matching get-url. Pushurl-only remotes have no matchable fetch URL and are omitted. */

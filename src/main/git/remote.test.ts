@@ -5,7 +5,25 @@ const { gitExecFileAsyncMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('./runner', () => ({
-  gitExecFileAsync: gitExecFileAsyncMock
+  gitExecFileAsync: async (args: string[], options: unknown) => {
+    if (args.includes('--git-common-dir')) {
+      return { stdout: '/repo/.git', stderr: '' }
+    }
+    if (
+      args[0] === 'for-each-ref' &&
+      args[1] === '--format=%(upstream:remotename)%00%(upstream:remoteref)'
+    ) {
+      const row = await gitExecFileAsyncMock.mock.results.at(-1)?.value
+      const nativeRows: Record<string, string> = {
+        'origin/main': 'origin\0refs/heads/main',
+        'origin/feature': 'origin\0refs/heads/feature',
+        'origin/team/feature': 'origin/team\0refs/heads/feature',
+        main: '.\0refs/heads/main'
+      }
+      return { stdout: nativeRows[row?.stdout?.trim() ?? ''] ?? '' }
+    }
+    return gitExecFileAsyncMock(args, options)
+  }
 }))
 
 import { REBASE_SOURCE_FETCH_TIMEOUT_MS } from '../../shared/git-rebase-source'
@@ -33,6 +51,17 @@ describe('git remote operations', () => {
       ['push', '--set-upstream', 'origin', 'HEAD'],
       { cwd: '/repo' }
     )
+  })
+
+  it('does not dispatch first publication when the basic configured operand cannot be read', async () => {
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'symbolic-ref') {
+        return { stdout: 'refs/heads/feature\n', stderr: '' }
+      }
+      throw Object.assign(new Error('config permission denied'), { code: 128 })
+    })
+    await expect(gitPush('/repo')).rejects.toThrow('config permission denied')
+    expect(gitExecFileAsyncMock.mock.calls.some(([args]) => args[0] === 'push')).toBe(false)
   })
 
   it('pushes to the configured upstream remote and branch', async () => {
@@ -127,7 +156,8 @@ describe('git remote operations', () => {
           stdout:
             'branch.imp/chinese-translation.remote\nhttps://github.com/pynickle/orca.git\0' +
             'branch.imp/chinese-translation.pushremote\nhttps://github.com/pynickle/orca.git\0' +
-            'branch.imp/chinese-translation.merge\nrefs/heads/imp/chinese-translation\0',
+            'branch.imp/chinese-translation.merge\nrefs/heads/imp/chinese-translation\0' +
+            'remote.pr-pynickle-orca.fetch\n+refs/heads/*:refs/remotes/pr-pynickle-orca/*\0',
           stderr: ''
         }
       }
@@ -149,95 +179,6 @@ describe('git remote operations', () => {
         'https://github.com/pynickle/orca.git',
         'HEAD:imp/chinese-translation'
       ],
-      { cwd: '/repo' }
-    )
-  })
-
-  it('normalizes a URL-valued branch remote to a matching named remote before pushing', async () => {
-    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-      if (args[0] === 'symbolic-ref') {
-        return { stdout: 'refs/heads/imp/chinese-translation\n', stderr: '' }
-      }
-      if (args[0] === 'config' && args[1] === '--list') {
-        return {
-          stdout:
-            'branch.imp/chinese-translation.remote\nhttps://github.com/pynickle/orca.git\0' +
-            'branch.imp/chinese-translation.merge\nrefs/heads/imp/chinese-translation\0',
-          stderr: ''
-        }
-      }
-      if (args[0] === 'remote' && args[1] === 'get-url' && args[2] === 'origin') {
-        return { stdout: 'https://github.com/stablyai/orca.git\n', stderr: '' }
-      }
-      if (args[0] === 'remote' && args[1] === 'get-url' && args[2] === 'pr-pynickle-orca') {
-        return { stdout: 'https://github.com/pynickle/orca.git\n', stderr: '' }
-      }
-      if (args[0] === 'remote' && args[1] === '-v') {
-        return {
-          stdout: [
-            'origin\thttps://github.com/stablyai/orca.git (fetch)',
-            'origin\thttps://github.com/stablyai/orca.git (push)',
-            'pr-pynickle-orca\thttps://github.com/pynickle/orca.git (fetch)',
-            'pr-pynickle-orca\thttps://github.com/pynickle/orca.git (push)'
-          ].join('\n'),
-          stderr: ''
-        }
-      }
-      if (args[0] === 'remote') {
-        return { stdout: 'origin\npr-pynickle-orca\n', stderr: '' }
-      }
-      return { stdout: '', stderr: '' }
-    })
-
-    await gitPush('/repo', false)
-
-    expect(gitExecFileAsyncMock).toHaveBeenLastCalledWith(
-      ['push', '--set-upstream', 'pr-pynickle-orca', 'HEAD:imp/chinese-translation'],
-      { cwd: '/repo' }
-    )
-  })
-
-  it('normalizes a URL-valued push remote from one remote table read at 58 remotes', async () => {
-    const remotes = [
-      { name: 'origin', url: 'https://github.com/stablyai/orca.git' },
-      ...Array.from({ length: 56 }, (_, index) => ({
-        name: `pr-user${index}-orca`,
-        url: `https://github.com/user${index}/orca.git`
-      })),
-      { name: 'pr-pynickle-orca', url: 'https://github.com/pynickle/orca.git' }
-    ]
-    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-      if (args[0] === 'symbolic-ref') {
-        return { stdout: 'refs/heads/imp/chinese-translation\n', stderr: '' }
-      }
-      if (args[0] === 'config' && args[1] === '--list') {
-        return {
-          stdout:
-            'branch.imp/chinese-translation.remote\nhttps://github.com/pynickle/orca.git\0' +
-            'branch.imp/chinese-translation.merge\nrefs/heads/imp/chinese-translation\0',
-          stderr: ''
-        }
-      }
-      if (args[0] === 'remote' && args[1] === '-v') {
-        return {
-          stdout: remotes
-            .flatMap(({ name, url }) => [`${name}\t${url} (fetch)`, `${name}\t${url} (push)`])
-            .join('\n'),
-          stderr: ''
-        }
-      }
-      if (args[0] === 'remote') {
-        throw new Error(`unexpected remote scan: ${args.join(' ')}`)
-      }
-      return { stdout: '', stderr: '' }
-    })
-
-    await gitPush('/repo', false)
-
-    const remoteReads = gitExecFileAsyncMock.mock.calls.filter(([args]) => args[0] === 'remote')
-    expect(remoteReads.map(([args]) => args)).toEqual([['remote', '-v']])
-    expect(gitExecFileAsyncMock).toHaveBeenLastCalledWith(
-      ['push', '--set-upstream', 'pr-pynickle-orca', 'HEAD:imp/chinese-translation'],
       { cwd: '/repo' }
     )
   })
@@ -281,7 +222,7 @@ describe('git remote operations', () => {
 
   it('maps non-fast-forward push failures to an actionable message', async () => {
     gitExecFileAsyncMock
-      .mockRejectedValueOnce(new Error('no branch'))
+      .mockRejectedValueOnce(Object.assign(new Error('no branch'), { code: 1 }))
       .mockRejectedValueOnce(new Error('remote rejected: non-fast-forward'))
 
     await expect(gitPush('/repo', false)).rejects.toThrow(
@@ -291,7 +232,7 @@ describe('git remote operations', () => {
 
   it('maps recursive submodule push failures to submodule-specific guidance', async () => {
     gitExecFileAsyncMock
-      .mockRejectedValueOnce(new Error('no branch'))
+      .mockRejectedValueOnce(Object.assign(new Error('no branch'), { code: 1 }))
       .mockRejectedValueOnce(
         new Error(
           "Command failed: git push\nPushing submodule 'find-cmux-followers'\n" +
@@ -308,7 +249,7 @@ describe('git remote operations', () => {
 
   it('passes through clean tail line when push error does not match known patterns', async () => {
     gitExecFileAsyncMock
-      .mockRejectedValueOnce(new Error('no branch'))
+      .mockRejectedValueOnce(Object.assign(new Error('no branch'), { code: 1 }))
       .mockRejectedValueOnce(
         new Error('Command failed: git push\nfatal: something obscure happened')
       )
@@ -318,7 +259,7 @@ describe('git remote operations', () => {
 
   it('preserves redacted pre-push hook output from failed pushes', async () => {
     gitExecFileAsyncMock
-      .mockRejectedValueOnce(new Error('no branch'))
+      .mockRejectedValueOnce(Object.assign(new Error('no branch'), { code: 1 }))
       .mockRejectedValueOnce(
         new Error(
           [
@@ -347,7 +288,7 @@ describe('git remote operations', () => {
 
   it('strips embedded credentials from push error messages', async () => {
     gitExecFileAsyncMock
-      .mockRejectedValueOnce(new Error('no branch'))
+      .mockRejectedValueOnce(Object.assign(new Error('no branch'), { code: 1 }))
       .mockRejectedValueOnce(
         new Error(
           'Command failed: git push\nhttps://x-access-token:ghp_abc@github.com/foo/bar.git\nfatal: remote error'
@@ -368,7 +309,7 @@ describe('git remote operations', () => {
 
   it('strips token-only credentials (https://TOKEN@host) from push error messages', async () => {
     gitExecFileAsyncMock
-      .mockRejectedValueOnce(new Error('no branch'))
+      .mockRejectedValueOnce(Object.assign(new Error('no branch'), { code: 1 }))
       .mockRejectedValueOnce(
         new Error(
           'Command failed: git push\nhttps://ghp_onlyToken@github.com/foo/bar.git\nfatal: remote error'
@@ -388,7 +329,7 @@ describe('git remote operations', () => {
 
   it('falls back to a generic message for non-Error rejections', async () => {
     gitExecFileAsyncMock
-      .mockRejectedValueOnce(new Error('no branch'))
+      .mockRejectedValueOnce(Object.assign(new Error('no branch'), { code: 1 }))
       .mockRejectedValueOnce('string')
 
     await expect(gitPush('/repo', false)).rejects.toThrow('Git remote operation failed.')
@@ -806,44 +747,6 @@ describe('git remote operations', () => {
       [['check-ref-format', '--branch', 'feature/fix'], { cwd: '/repo' }],
       [['fetch', '--prune', 'foo/bar'], { cwd: '/repo' }]
     ])
-  })
-
-  it('drops a stale branch-specific refspec and retries when the fork branch was deleted upstream (#17828)', async () => {
-    let fetchAttempts = 0
-    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-      if (args[0] === 'check-ref-format') {
-        return { stdout: '', stderr: '' }
-      }
-      if (args[0] === 'fetch') {
-        fetchAttempts += 1
-        if (fetchAttempts === 1) {
-          throw Object.assign(new Error("fatal: couldn't find remote ref refs/heads/gone"), {
-            stderr: "fatal: couldn't find remote ref refs/heads/gone\n"
-          })
-        }
-        return { stdout: '', stderr: '' }
-      }
-      if (args[0] === 'config' && args[1] === '--get-all') {
-        return {
-          stdout:
-            '+refs/heads/gone:refs/remotes/fork/gone\n+refs/heads/keep:refs/remotes/fork/keep\n',
-          stderr: ''
-        }
-      }
-      return { stdout: '', stderr: '' }
-    })
-
-    await gitFetch('/repo', { remoteName: 'fork', branchName: 'keep' })
-
-    expect(fetchAttempts).toBe(2)
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      ['config', '--unset-all', 'remote.fork.fetch'],
-      { cwd: '/repo' }
-    )
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      ['config', '--add', 'remote.fork.fetch', '+refs/heads/keep:refs/remotes/fork/keep'],
-      { cwd: '/repo' }
-    )
   })
 
   it('surfaces the original fetch error when it is not a stale-refspec failure', async () => {

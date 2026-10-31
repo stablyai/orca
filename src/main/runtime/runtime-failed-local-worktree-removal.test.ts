@@ -26,7 +26,10 @@ import {
   startBackgroundWorktreeRemoval,
   waitForPendingWorktreeRemoval
 } from '../worktree-background-removal'
-import { withUnregisteredRemovalCheckouts } from '../worktree-removal-listing'
+import {
+  snapshotPendingWorktreeRemovals,
+  withUnregisteredRemovalCheckouts
+} from '../worktree-removal-listing'
 import { retryFailedRemovalUnlessRegistered } from '../worktree-removal-leftover'
 import {
   readWorktreeRemovalRecords,
@@ -201,12 +204,20 @@ async function failInSession(): Promise<unknown> {
 
 describe.skipIf(process.platform !== 'darwin')('a worktree delete Git fails partway', () => {
   beforeEach(async () => {
-    // A git hook's GIT_DIR/GIT_INDEX_FILE would point the scratch repo's git, and Orca's, at the outer repo.
-    for (const key of Object.keys(process.env).filter((name) => name.startsWith('GIT_'))) {
-      vi.stubEnv(key, undefined)
-    }
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     scratchDir = await realpath(await mkdtemp(join(tmpdir(), 'orca-failed-removal-')))
+    const home = join(scratchDir, 'home')
+    await mkdir(home)
+    for (const key of Object.keys(process.env)) {
+      if (key.toUpperCase().startsWith('GIT_')) {
+        vi.stubEnv(key, undefined)
+      }
+    }
+    for (const key of ['HOME', 'USERPROFILE', 'XDG_CONFIG_HOME']) {
+      vi.stubEnv(key, home)
+    }
+    vi.stubEnv('GIT_CONFIG_NOSYSTEM', '1')
+    vi.stubEnv('GIT_CONFIG_GLOBAL', join(home, 'empty'))
     recordsDir = join(scratchDir, 'profile')
     repoPath = join(scratchDir, 'repo')
     worktreePath = join(scratchDir, 'workspaces', 'feature')
@@ -216,6 +227,8 @@ describe.skipIf(process.platform !== 'darwin')('a worktree delete Git fails part
     await git(['init', '-q'])
     await git(['config', 'user.email', 'removal@example.invalid'])
     await git(['config', 'user.name', 'Worktree Removal'])
+    await git(['config', 'commit.gpgSign', 'false'])
+    await git(['config', 'core.hooksPath', join(scratchDir, 'no-hooks')])
     await writeFile(join(repoPath, 'seed.txt'), 'seed\n')
     await git(['add', '-A'])
     await git(['commit', '-qm', 'seed'])
@@ -232,10 +245,10 @@ describe.skipIf(process.platform !== 'darwin')('a worktree delete Git fails part
     _resetPendingWorktreeRemovalsForTests()
     vi.mocked(removeHostTree).mockClear()
     vi.restoreAllMocks()
-    vi.unstubAllEnvs()
     await setImmutable(false, scratchDir)
     expect((await execFileAsync('find', [scratchDir, '-flags', '+uchg'])).stdout).toBe('')
     await removeTree(scratchDir)
+    vi.unstubAllEnvs()
   })
 
   it('keeps the leftover listed with the locked file’s error after the startup finish fails', async () => {
@@ -359,55 +372,71 @@ describe.skipIf(process.platform !== 'darwin')('a worktree delete Git fails part
     expect(await git(['status', '--porcelain'], other)).toBe('?? wip.txt\n')
   })
 
-  it('removes the push-target remote Orca added when a runtime delete fails', async () => {
-    const pushTarget = await addOrcaPushTargetRemote()
-    const worktree = (await listWorktreesStrict(repoPath)).find((row) =>
-      areWorktreePathsEqual(row.path, worktreePath)
-    )!
-    const accepted = await removeRuntimeRegisteredLocalWorktree({
-      repo,
-      target: { id: worktreeId, repoId: repo.id, path: worktreePath, pushTarget },
-      registeredWorktree: worktree,
-      removedPushTarget: pushTarget,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the delete reads only repos and worktree metadata from the store here.
-      store: storeStub(pushTarget) as unknown as RuntimeStore,
-      localOptions: {},
-      hasLocalOptions: false,
-      force: true,
-      runHooks: false,
-      allowFailedArchiveHook: false,
-      allowUnverifiedPtyStop: false,
-      deleteBranch: true,
-      acquireWatcherRemoval: async (path) => {
-        const gate = acquireWatcherRemovalGate(path)
-        return { finish: async () => gate.release() }
-      },
-      stopPtys: async () => {},
-      closeWatchers: async () => {},
-      preserveBranchHead: (result) => result ?? {},
-      finishRemoval: () => {},
-      onRemoved: () => {},
-      publish: () => {}
-    })
-    expect(accepted).toMatchObject({ removing: true })
-    const error = await waitForPendingWorktreeRemoval(worktreeId)?.catch(
-      (reason: unknown) => reason
-    )
-    await _settlePendingWorktreeRemovalsForTests()
+  it.each([false, true])(
+    'settles failed runtime deletion with protected=%s remote outcome',
+    async (protectedRemote) => {
+      const pushTarget = await addOrcaPushTargetRemote()
+      if (protectedRemote) {
+        await git(['config', 'remote.pushDefault', pushTarget.remoteName])
+      }
+      const worktree = (await listWorktreesStrict(repoPath)).find((row) =>
+        areWorktreePathsEqual(row.path, worktreePath)
+      )!
+      const accepted = await removeRuntimeRegisteredLocalWorktree({
+        repo,
+        target: { id: worktreeId, repoId: repo.id, path: worktreePath, pushTarget },
+        registeredWorktree: worktree,
+        removedPushTarget: pushTarget,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the delete reads only repos and worktree metadata from the store here.
+        store: storeStub(pushTarget) as unknown as RuntimeStore,
+        localOptions: {},
+        hasLocalOptions: false,
+        force: true,
+        runHooks: false,
+        allowFailedArchiveHook: false,
+        allowUnverifiedPtyStop: false,
+        deleteBranch: true,
+        acquireWatcherRemoval: async (path) => {
+          const gate = acquireWatcherRemovalGate(path)
+          return { finish: async () => gate.release() }
+        },
+        stopPtys: async () => {},
+        closeWatchers: async () => {},
+        preserveBranchHead: (result) => result ?? {},
+        finishRemoval: () => {},
+        onRemoved: () => {},
+        publish: () => {}
+      })
+      expect(accepted).toMatchObject({ removing: true })
+      const error = await waitForPendingWorktreeRemoval(worktreeId)?.catch(
+        (reason: unknown) => reason
+      )
+      await _settlePendingWorktreeRemovalsForTests()
 
-    expect(String(error)).toMatch(LOCKED_FILE_ERROR)
-    expect(await git(['remote'])).not.toContain(pushTarget.remoteName)
-    expect(existsSync(lockedFile)).toBe(true)
-  })
+      expect(String(error)).toMatch(LOCKED_FILE_ERROR)
+      expect((await git(['remote'])).split(/\r?\n/).includes(pushTarget.remoteName)).toBe(
+        protectedRemote
+      )
+      expect(existsSync(lockedFile)).toBe(true)
+    }
+  )
 
-  it('removes the push-target remote Orca added when the startup finish fails', async () => {
-    const pushTarget = await addOrcaPushTargetRemote()
+  it.each([false, true])(
+    'settles failed startup finish with protected=%s remote outcome',
+    async (protectedRemote) => {
+      const pushTarget = await addOrcaPushTargetRemote()
+      if (protectedRemote) {
+        await git(['config', 'remote.pushDefault', pushTarget.remoteName])
+      }
 
-    expect(String(await finishAtStartup([], pushTarget))).toMatch(LOCKED_FILE_ERROR)
+      expect(String(await finishAtStartup([], pushTarget))).toMatch(LOCKED_FILE_ERROR)
 
-    expect(await git(['remote'])).not.toContain(pushTarget.remoteName)
-    expect(existsSync(lockedFile)).toBe(true)
-  })
+      expect((await git(['remote'])).split(/\r?\n/).includes(pushTarget.remoteName)).toBe(
+        protectedRemote
+      )
+      expect(existsSync(lockedFile)).toBe(true)
+    }
+  )
 
   it('keeps an unmerged branch when the delete fails, as a normal delete does', async () => {
     await writeFile(join(worktreePath, 'work.txt'), 'work\n')
@@ -449,31 +478,57 @@ describe.skipIf(process.platform !== 'darwin')('a worktree delete Git fails part
 
   it('never deletes a worktree Git registers at the path since, even on the same branch', async () => {
     await failStartupFinish()
+    const originalRecords = await readWorktreeRemovalRecords(recordsDir)
+    expect(originalRecords).toHaveLength(1)
+    const originalRecord = originalRecords[0]
+    if (!originalRecord) {
+      throw new Error('Expected the original failed removal record')
+    }
+    expect(originalRecord.branch).toBe('feature')
+    expect(originalRecord.head).toBeTruthy()
+    expect(originalRecord.failure).toBeDefined()
+    expect(waitForPendingWorktreeRemoval(worktreeId)).toBeUndefined()
+    expect(snapshotPendingWorktreeRemovals().has(worktreeId)).toBe(false)
     await setImmutable(false)
     await rm(worktreePath, { recursive: true })
     // The failed delete already deleted the merged branch; the user makes it again.
     await git(['worktree', 'add', '-q', worktreePath, '-b', 'feature'])
+    expect((await git(['rev-parse', 'feature'])).trim()).toBe(originalRecord.head)
+    expect((await git(['rev-parse', 'HEAD'], worktreePath)).trim()).toBe(originalRecord.head)
     await writeFile(join(worktreePath, 'unsaved.txt'), 'work\n')
     const purged: string[] = []
+    const treeRemovalCalls = vi.mocked(removeHostTree).mock.calls.length
+    const message = `A different checkout is now at ${worktreePath}; Orca left it in place. Delete it again to remove it.`
 
     const retried = retryFailedWorktreeRemoval(worktreeId, 'local', (record) =>
       interruptedLocalWorktreeRemovalJob(record, jobHost(purged))
     )
-    await expect(retried).rejects.toThrow(/A different checkout is now at/)
+    await expect(retried).rejects.toThrow(message)
     await _settlePendingWorktreeRemovalsForTests()
 
     expect(existsSync(join(worktreePath, 'unsaved.txt'))).toBe(true)
+    expect(await readFile(join(worktreePath, 'unsaved.txt'), 'utf8')).toBe('work\n')
     expect(await isRegistered(worktreePath)).toBe(true)
     expect(await git(['branch', '--list', 'feature'])).not.toBe('')
+    expect(vi.mocked(removeHostTree).mock.calls).toHaveLength(treeRemovalCalls)
     expect(purged).toEqual([])
     expect(await readWorktreeRemovalRecords(recordsDir)).toEqual([
-      expect.objectContaining({
-        worktreeId,
-        failure: expect.objectContaining({
-          message: expect.stringMatching(/A different checkout is now at/)
-        })
-      })
+      { ...originalRecord, failure: { message, failedAt: expect.any(Number) } }
     ])
+    expect(waitForPendingWorktreeRemoval(worktreeId)).toBeUndefined()
+    expect(snapshotPendingWorktreeRemovals().has(worktreeId)).toBe(false)
+    expect(await listedRows()).toEqual([{ path: worktreePath, removalError: message }])
+    const recordedRetry = vi.fn(async () => ({}))
+    expect(
+      await retryFailedRemovalUnlessRegistered(
+        worktreeId,
+        worktreePath,
+        await listWorktreesStrict(repoPath),
+        {},
+        recordedRetry
+      )
+    ).toBe(false)
+    expect(recordedRetry).not.toHaveBeenCalled()
   })
 
   it('never deletes a worktree Git registers inside the leftover', async () => {

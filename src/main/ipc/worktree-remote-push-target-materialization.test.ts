@@ -1,491 +1,653 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GitPushTarget } from '../../shared/worktree/types'
-import type { WorktreePushTargetStore } from './worktree-push-target-cleanup'
+import {
+  runner,
+  url,
+  repo,
+  fork,
+  a,
+  b,
+  interception,
+  target,
+  git,
+  deferred,
+  runtimeCommands,
+  exec,
+  env
+} from './worktree-push-target-materialization.test-fixture'
+import { resolveCheckedOutBranchName } from './worktree-push-target-setup'
+import { readGitRemotePolicy } from '../../shared/git-worktree-admin'
 
-const { gitExecFileAsyncMock } = vi.hoisted(() => ({ gitExecFileAsyncMock: vi.fn() }))
-vi.mock('../git/runner', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))
+import { readFile } from 'node:fs/promises'
 
-import { ipcGitWorktreeTarget, materializeWorktreePushTargetRemote } from './worktree-remote'
+import { expect, it, vi } from 'vitest'
+
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
-import { mergeWorktreeMetaForWrite } from '../persistence/loading-store/worktree-meta-write-normalization'
+import {
+  configureCreatedWorktreePushTarget,
+  prepareWorktreePushTarget,
+  materializeWorktreePushTargetRemote
+} from './worktree-remote'
 
-const REPO_PATH = '/repo-root'
-const FORK_URL = 'git@github.com:contributor/orca.git'
-const FORK_REMOTE = 'pr-contributor-orca'
+import { gitFetch, gitPull, gitPush, gitFastForward } from '../git/remote'
+import { getPublishTargetStatus } from '../../shared/git-publish-target-status'
 
-function forkTarget(overrides: Partial<GitPushTarget> = {}): GitPushTarget {
-  return {
-    remoteName: FORK_REMOTE,
-    branchName: 'contributor/fix',
-    remoteUrl: FORK_URL,
-    ...overrides
-  }
-}
+import { getRemoteFileTarget } from '../git/repo-remote-file-target'
 
-describe('materializeWorktreePushTargetRemote', () => {
-  beforeEach(() => {
-    gitExecFileAsyncMock.mockReset()
-  })
+import { resolveConfiguredGitPushTarget } from '../../shared/git-push-target-resolution'
 
-  it('is a no-op when the target already reports remoteCreated', async () => {
-    const target = forkTarget({ remoteCreated: true })
+import { triggerTerminalSpawnPushTargetMaterialization } from '../runtime/runtime-terminal-spawn-push-target-materialization'
+import { resolveEffectiveGitUpstream } from '../../shared/git-effective-upstream'
+import { probeBranchUpstream } from '../git/branch-rename'
+import { getConfiguredBranchRemoteUpstream } from '../../shared/git-configured-branch-target'
+import { storeWorktreeMeta } from '../runtime/runtime-store-partial-fixture'
 
-    const result = await materializeWorktreePushTargetRemote(REPO_PATH, target)
+import '../runtime/rpc/unused-default-rpc-methods.test-fixture'
 
-    expect(result).toBe(target)
-    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
-  })
+import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 
-  it('is a no-op for a same-repo target with no remoteUrl', async () => {
-    const target = forkTarget({ remoteUrl: undefined })
-
-    const result = await materializeWorktreePushTargetRemote(REPO_PATH, target)
-
-    expect(result).toBe(target)
-    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
-  })
-
-  it('short-circuits the remote probe but still restores upstream and widens the refspec', async () => {
-    // Existing-remote reuse still needs per-branch refspec and upstream restoration.
-    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-      if (args[0] === 'remote' && args[1] === 'get-url') {
-        return { stdout: `${FORK_URL}\n`, stderr: '' }
-      }
-      if (args[0] === 'config' && args[1] === '--get-all') {
-        throw new Error('no such section')
-      }
-      if (args[0] === 'symbolic-ref') {
-        return { stdout: 'refs/heads/contributor/fix\n', stderr: '' }
-      }
-      return { stdout: '', stderr: '' }
-    })
-    const target = forkTarget()
-
-    const result = await materializeWorktreePushTargetRemote(REPO_PATH, target)
-
-    expect(result).toBe(target)
-    const calls = gitExecFileAsyncMock.mock.calls.map((call) => call[0] as string[])
-    expect(calls).toContainEqual(['remote', 'get-url', FORK_REMOTE])
-    expect(calls).toContainEqual([
-      'config',
-      '--add',
-      `remote.${FORK_REMOTE}.fetch`,
-      `+refs/heads/${target.branchName}*:refs/remotes/${FORK_REMOTE}/${target.branchName}*`
-    ])
-    expect(calls).toContainEqual(['config', `remote.${FORK_REMOTE}.tagOpt`, '--no-tags'])
-    expect(calls).toContainEqual(['symbolic-ref', '--quiet', 'HEAD'])
-    expect(calls).toContainEqual([
-      'branch',
-      '--set-upstream-to',
-      `${FORK_REMOTE}/${target.branchName}`,
-      'contributor/fix'
-    ])
-  })
-
-  it('preserves the legacy null-store failure after existing-remote adoption work', async () => {
-    const commands: string[][] = []
-    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-      commands.push(args)
-      if (args[0] === 'remote' && args[1] === 'get-url') {
-        return { stdout: `${FORK_URL}\n`, stderr: '' }
-      }
-      if (args[0] === 'config' && args[1] === '--get-all') {
-        throw new Error('no such section')
-      }
-      if (args[0] === 'symbolic-ref') {
-        return { stdout: 'refs/heads/contributor/fix\n', stderr: '' }
-      }
-      return { stdout: '', stderr: '' }
-    })
-    await expect(
-      materializeWorktreePushTargetRemote(REPO_PATH, forkTarget(), null, 'repo-1')
-    ).rejects.toBeInstanceOf(TypeError)
-    expect(commands).toEqual([
-      ['remote', 'get-url', FORK_REMOTE],
-      ['config', '--get-all', `remote.${FORK_REMOTE}.fetch`],
-      [
-        'config',
-        '--add',
-        `remote.${FORK_REMOTE}.fetch`,
-        `+refs/heads/contributor/fix*:refs/remotes/${FORK_REMOTE}/contributor/fix*`
-      ],
-      ['config', `remote.${FORK_REMOTE}.tagOpt`, '--no-tags'],
-      ['rev-parse', '--verify', '--quiet', `refs/remotes/${FORK_REMOTE}/contributor/fix`],
-      ['symbolic-ref', '--quiet', 'HEAD'],
-      ['branch', '--set-upstream-to', `${FORK_REMOTE}/contributor/fix`, 'contributor/fix']
-    ])
-  })
-
-  it('accepts a null store when both persistence identifiers are omitted', async () => {
-    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-      if (args[0] === 'remote' && args[1] === 'get-url') {
-        return { stdout: `${FORK_URL}\n`, stderr: '' }
-      }
-      if (args[0] === 'config' && args[1] === '--get-all') {
-        throw new Error('no such section')
-      }
-      if (args[0] === 'symbolic-ref') {
-        return { stdout: 'refs/heads/contributor/fix\n', stderr: '' }
-      }
-      return { stdout: '', stderr: '' }
-    })
-    const target = forkTarget()
-
-    await expect(materializeWorktreePushTargetRemote(REPO_PATH, target, null)).resolves.toBe(target)
-    expect(gitExecFileAsyncMock).toHaveBeenLastCalledWith(
-      ['branch', '--set-upstream-to', `${FORK_REMOTE}/${target.branchName}`, 'contributor/fix'],
-      { cwd: REPO_PATH }
+import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
+it('settles safe allocation and distinct joiner branches without annexing occupied state', async () => {
+  const old = (await git(['rev-parse', 'HEAD'])).trim()
+  const parent = (await git(['symbolic-ref', '--short', 'HEAD'])).trim()
+  await git(['tag', 'local-a'], a)
+  await git(['tag', 'local-b'], b)
+  for (const [path, branch] of [
+    [a, 'local-a'],
+    [b, 'local-b']
+  ]) {
+    expect(await resolveCheckedOutBranchName((args, cwd) => runner(args, { cwd }), path)).toBe(
+      branch
     )
-  })
+  }
+  for (const [key, value] of [
+    ['remote', 'pr-contributor'],
+    ['merge', 'refs/heads/main'],
+    ['pushRemote', 'pr-contributor'],
+    ['base', 'refs/remotes/pr-contributor/base']
+  ]) {
+    await git(['config', `branch.${parent}.${key}`, value])
+  }
+  await git(['config', 'remote.pushDefault', 'pr-contributor'])
+  const parentBefore = await git([
+    'config',
+    '--get-regexp',
+    `^(branch\\.${parent}\\.|remote\\.pushdefault$)`
+  ])
+  await git([
+    'config',
+    'remote.pr-contributor-2.fetch',
+    '+refs/heads/*:refs/remotes/pr-contributor-2/*'
+  ])
+  await git(['remote', 'add', 'foreign', 'git@github.com:other/orca.git'])
+  await git([
+    'config',
+    '--replace-all',
+    'remote.foreign.fetch',
+    '+refs/heads/secret:refs/remotes/pr-contributor-3/topic'
+  ])
+  await git(['update-ref', 'refs/remotes/pr-contributor-3/topic', old])
+  await git(['update-ref', 'refs/remotes/pr-contributor-4/base', old])
+  await git(['config', 'branch.local-a.base', 'refs/remotes/pr-contributor-4/base'])
+  const before = await git(['config', '--get-regexp', '^remote\\.(foreign|pr-contributor-2)\\.'])
+  const entered = deferred(),
+    release = deferred(),
+    joined = deferred()
+  interception.intercept = async (args, cwd) => {
+    if (args[0] === 'fetch' && cwd === a) {
+      entered.resolve()
+      await release.promise
+    }
+    if (args.includes('--git-common-dir') && cwd === b) {
+      joined.resolve()
+    }
+  }
+  const first = materializeWorktreePushTargetRemote(a, target())
+  await entered.promise
+  const second = materializeWorktreePushTargetRemote(b, target('other'))
+  await joined.promise
+  release.resolve()
+  const selected = await Promise.all([first, second])
+  expect(selected.map((item) => item.remoteName)).toEqual(['pr-contributor-5', 'pr-contributor-5'])
+  expect(
+    await git(['config', '--get-regexp', `^(branch\\.${parent}\\.|remote\\.pushdefault$)`])
+  ).toBe(parentBefore)
+  expect(await git(['rev-parse', '--symbolic-full-name', 'HEAD@{u}'], a)).toBe(
+    'refs/remotes/pr-contributor-5/topic\n'
+  )
+  expect(await git(['rev-parse', '--symbolic-full-name', 'HEAD@{u}'], b)).toBe(
+    'refs/remotes/pr-contributor-5/other\n'
+  )
+  expect(
+    runner.mock.calls.filter(([args]) => args[0] === 'remote' && args[1] === 'add')
+  ).toHaveLength(1)
+  expect(await git(['config', '--get-regexp', '^remote\\.(foreign|pr-contributor-2)\\.'])).toBe(
+    before
+  )
+  for (const ref of ['refs/remotes/pr-contributor-3/topic', 'refs/remotes/pr-contributor-4/base']) {
+    expect((await git(['rev-parse', ref])).trim()).toBe(old)
+  }
+})
 
-  it('materializes the remote (add + provenance + fetch) when the probe misses', async () => {
-    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-      if (args[0] === 'remote' && args[1] === 'get-url') {
-        throw new Error('No such remote')
+it.each(['add', 'marker', 'fetch', 'branch'])(
+  'settles both failed %s callers, leaves bounded state and reuses it on retry',
+  async (phase) => {
+    const entered = deferred(),
+      release = deferred()
+    const fail = async (args: string[], cwd: string) => {
+      if (cwd !== a) {
+        return
       }
-      return { stdout: '', stderr: '' }
+      const hit =
+        phase === 'add'
+          ? args[0] === 'remote' && args[1] === 'add'
+          : phase === 'marker'
+            ? args[0] === 'config' && args.includes('--local')
+            : phase === 'fetch'
+              ? args[0] === 'fetch'
+              : args[0] === 'branch'
+      if (hit) {
+        entered.resolve()
+        await release.promise
+        throw new Error(`denied ${phase}`)
+      }
+    }
+    if (phase === 'add') {
+      interception.afterIntercept = fail
+    } else {
+      interception.intercept = fail
+    }
+    const requested = { ...target(), remoteName: 'pr-retry' }
+    const owner = materializeWorktreePushTargetRemote(a, requested)
+    await entered.promise
+    const joiner = materializeWorktreePushTargetRemote(b, { ...requested, branchName: 'other' })
+    const settled = Promise.allSettled([owner, joiner])
+    await vi.waitFor(() =>
+      expect(
+        runner.mock.calls.some(
+          ([args, options]) => args.includes('--git-common-dir') && options.cwd === b
+        )
+      ).toBe(true)
+    )
+    const index = runner.mock.calls.findIndex(
+      ([args, options]) => args.includes('--git-common-dir') && options.cwd === b
+    )
+    await runner.mock.results[index].value
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    release.resolve()
+    expect((await settled).map((result) => result.status)).toEqual(['rejected', 'rejected'])
+    expect(await git(['config', '--get-all', 'remote.pr-retry.fetch'])).toBe(
+      '+refs/heads/topic*:refs/remotes/pr-retry/topic*\n'
+    )
+    expect(await git(['config', 'remote.pr-retry.tagOpt'])).toBe('--no-tags\n')
+    expect(
+      runner.mock.calls.filter(([args]) => args[0] === 'remote' && args[1] === 'remove')
+    ).toEqual([])
+    interception.intercept = undefined
+    interception.afterIntercept = undefined
+    await git(['config', 'branch.local-a.base', 'refs/remotes/pr-retry/topic'])
+    const result = await materializeWorktreePushTargetRemote(a, requested)
+    expect(result).toMatchObject({
+      remoteName: 'pr-retry',
+      remoteCreated: !['add', 'marker'].includes(phase)
     })
-    const target = forkTarget()
+    expect(await git(['rev-parse', 'HEAD@{u}'], a)).toBe(await git(['rev-parse', 'topic'], fork))
+    expect(
+      runner.mock.calls.filter(([args]) => args[0] === 'remote' && args[1] === 'add')
+    ).toHaveLength(1)
+  }
+)
 
-    const result = await materializeWorktreePushTargetRemote(REPO_PATH, target)
+it('re-derives savedtrue borrowing, native/app tracking, named push/pull, absence and reappearance', async () => {
+  await git(['remote', 'add', 'borrowed', url])
+  await git([
+    'config',
+    '--replace-all',
+    'remote.borrowed.fetch',
+    '+refs/heads/*:refs/private/*-cache'
+  ])
+  await git(['config', 'remote.borrowed.partialclonefilter', 'blob:none'])
+  const before = await git(['config', '--get-regexp', '^remote\\.borrowed\\.'])
+  const rows = new Map([
+    ['local', storeWorktreeMeta()],
+    ['ssh:twin', storeWorktreeMeta({ pushTarget: target('other') })]
+  ])
+  const persist = vi.fn((identity: HostWorktreeTarget, patch: Partial<WorktreeMeta>) => {
+    const row = { ...rows.get(identity.hostId)!, ...patch }
+    rows.set(identity.hostId, row)
+    return row
+  })
+  const selected = await materializeWorktreePushTargetRemote(
+    a,
+    { ...target(), remoteName: 'borrowed' },
+    { getAllWorktreeMeta: () => ({}), setWorktreeMeta: persist },
+    'repo',
+    {},
+    hostWorktreeTarget({ id: `repo::${a}`, hostId: 'local' })
+  )
+  expect(selected.remoteCreated).toBe(false)
+  expect(persist).toHaveBeenCalledWith(hostWorktreeTarget({ id: `repo::${a}`, hostId: 'local' }), {
+    pushTarget: selected
+  })
+  expect(rows.get('local')?.pushTarget).toEqual(selected)
+  expect(rows.get('ssh:twin')?.pushTarget).toEqual(target('other'))
+  const unavailableStore = {
+    getAllWorktreeMeta: () => ({}),
+    getRepos: () => {
+      throw new Error('store unavailable')
+    },
+    setWorktreeMeta: vi.fn()
+  }
+  await expect(
+    materializeWorktreePushTargetRemote(
+      a,
+      selected,
+      unavailableStore,
+      'repo',
+      {},
+      hostWorktreeTarget({ id: `repo::${a}`, hostId: 'local' })
+    )
+  ).resolves.toEqual(selected)
+  expect(await git(['config', '--get-regexp', '^remote\\.borrowed\\.'])).toBe(before)
+  expect((await resolveEffectiveGitUpstream((args) => runner(args, { cwd: a })))?.remoteName).toBe(
+    'borrowed'
+  )
+  expect(await getRemoteFileTarget(a, {})).toEqual({
+    remoteUrl: url,
+    ref: (await git(['rev-parse', 'HEAD'], a)).trim()
+  })
+  await git(['commit', '--allow-empty', '-qm', 'local'], a)
+  expect(
+    (
+      await getPublishTargetStatus(
+        (args) => runner(args, { cwd: a }),
+        selected,
+        async (name) =>
+          (await readGitRemotePolicy((argv, cwd) => runner(argv, { cwd }), a, name)).fields
+      )
+    ).ahead
+  ).toBe(1)
+  await gitPush(a, false, selected)
+  await gitPull(a, selected)
+  expect(
+    (
+      await getPublishTargetStatus(
+        (args) => runner(args, { cwd: a }),
+        selected,
+        async (name) =>
+          (await readGitRemotePolicy((argv, cwd) => runner(argv, { cwd }), a, name)).fields
+      )
+    ).ahead
+  ).toBe(0)
+  const oid = (await git(['rev-parse', 'refs/heads/topic'], fork)).trim()
+  await git(['update-ref', '-d', 'refs/heads/topic'], fork)
+  await git(['config', 'branch.local-a.base', 'refs/private/topic-cache'], a)
+  const commands = runtimeCommands()
+  runner.mockClear()
+  await expect(commands.fetchRuntimeGit('id:test', selected)).resolves.toEqual({ ok: true })
+  expect(runner.mock.calls.filter(([args]) => args[0] === 'fetch')).toHaveLength(1)
+  expect((await git(['rev-parse', 'refs/private/topic-cache'], a)).trim()).toBe(oid)
+  await git(['update-ref', '-d', 'refs/private/topic-cache'], a)
+  runner.mockClear()
+  await commands.fetchRuntimeGit('id:test', selected)
+  expect(runner.mock.calls.filter(([args]) => args[0] === 'fetch')).toHaveLength(2)
+  expect(await git(['config', 'branch.local-a.remote'], a)).toBe('borrowed\n')
+  await git(['update-ref', 'refs/heads/topic', oid], fork)
+  await commands.fetchRuntimeGit('id:test', selected)
+  expect((await git(['rev-parse', 'HEAD@{u}'], a)).trim()).toBe(oid)
+  expect(await git(['config', '--get-regexp', '^remote\\.borrowed\\.'])).toBe(before)
+})
 
-    expect(result).toEqual({ ...target, remoteCreated: true })
-    const calls = gitExecFileAsyncMock.mock.calls.map((call) => call[0] as string[])
-    expect(calls).toContainEqual([
+it.each([
+  'ordinary',
+  'rewrite',
+  'suppressed-rewrite',
+  'split',
+  'receiver',
+  'mirror',
+  'misleading',
+  'foreign-tracking',
+  'negative',
+  'follow-tags',
+  'follow-tags-safe',
+  'user-named',
+  'inference-read-failure',
+  'native-inference-read-failure'
+])(
+  'executes generic %s endpoints with one table per native context and preserves native tracking when named',
+  async (row) => {
+    const nativeControl = row === 'native-inference-read-failure'
+    const mode = nativeControl ? 'inference-read-failure' : row
+    const literal = mode.includes('rewrite') ? 'git@literal.test:contributor/orca.git' : url
+    const named = ![
+      'suppressed-rewrite',
+      'split',
+      'mirror',
+      'misleading',
+      'foreign-tracking',
+      'negative',
+      'follow-tags',
+      'inference-read-failure'
+    ].includes(mode)
+    await git(['clone', '--bare', '-q', repo, `${fork}-other`])
+    const other = (await git(['rev-parse', 'topic'], `${fork}-other`)).trim()
+    await git([
       'remote',
       'add',
-      '-t',
-      target.branchName,
-      '--no-tags',
-      FORK_REMOTE,
-      FORK_URL
+      'borrowed',
+      mode === 'suppressed-rewrite'
+        ? literal
+        : mode === 'misleading'
+          ? 'git@github.com:other/orca.git'
+          : url
     ])
-    expect(calls).toContainEqual(['config', `remote.${FORK_REMOTE}.orca-created`, 'true'])
-    expect(calls).toContainEqual([
-      'fetch',
-      FORK_REMOTE,
-      `+refs/heads/${target.branchName}*:refs/remotes/${FORK_REMOTE}/${target.branchName}*`
-    ])
-  })
-
-  it('fetches the missing tracking ref before restoring upstream on the short-circuit path (#17828 sibling worktree)', async () => {
-    // Config widening imports no refs; a new sibling branch needs fetch before --set-upstream-to can succeed.
-    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-      if (args[0] === 'remote' && args[1] === 'get-url') {
-        return { stdout: `${FORK_URL}\n`, stderr: '' }
-      }
-      if (args[0] === 'config' && args[1] === '--get-all') {
-        throw new Error('no such section')
-      }
-      if (args[0] === 'rev-parse') {
-        throw new Error('unknown revision')
-      }
-      if (args[0] === 'symbolic-ref') {
-        return { stdout: 'refs/heads/contributor/fix\n', stderr: '' }
-      }
-      return { stdout: '', stderr: '' }
-    })
-    const target = forkTarget()
-
-    const result = await materializeWorktreePushTargetRemote(REPO_PATH, target)
-
-    expect(result).toBe(target)
-    const fetchCalls = gitExecFileAsyncMock.mock.calls.filter(
-      (call) => (call[0] as string[])[0] === 'fetch'
-    )
-    expect(fetchCalls).toEqual([
+    await git(['remote', 'add', 'orca-fork-url-probe', 'git@github.com:other/orca.git'])
+    if (mode.includes('rewrite')) {
+      await git(['config', `url.${url}.pushInsteadOf`, literal])
+    }
+    if (mode === 'suppressed-rewrite' || mode === 'split') {
+      await git([
+        'config',
+        'remote.borrowed.pushurl',
+        mode === 'split' ? 'git@github.com:other/orca.git' : literal
+      ])
+    }
+    if (mode === 'mirror') {
+      await git(['config', 'remote.borrowed.mirror', '2'])
+    }
+    if (mode === 'receiver' || mode === 'user-named') {
+      await git(['config', 'remote.borrowed.receivepack', 'orca-test-receiver'])
+    }
+    const protectedRef =
+      mode === 'follow-tags' ? 'refs/tag-cache/tags/annotated' : 'refs/remotes/borrowed/topic'
+    if (mode === 'misleading') {
+      await git(['config', 'remote.borrowed.pushurl', url])
+    }
+    if (
       [
-        [
-          'fetch',
-          FORK_REMOTE,
-          `+refs/heads/${target.branchName}*:refs/remotes/${FORK_REMOTE}/${target.branchName}*`
-        ],
-        expect.objectContaining({ timeout: expect.any(Number) })
-      ]
-    ])
-    const calls = gitExecFileAsyncMock.mock.calls.map((call) => call[0] as string[])
-    expect(calls).toContainEqual([
-      'rev-parse',
-      '--verify',
-      '--quiet',
-      `refs/remotes/${FORK_REMOTE}/${target.branchName}`
-    ])
-    expect(calls).toContainEqual([
-      'branch',
-      '--set-upstream-to',
-      `${FORK_REMOTE}/${target.branchName}`,
-      'contributor/fix'
-    ])
-  })
-
-  it('skips the fetch when the tracking ref already exists on the short-circuit path', async () => {
-    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-      if (args[0] === 'remote' && args[1] === 'get-url') {
-        return { stdout: `${FORK_URL}\n`, stderr: '' }
+        'foreign-tracking',
+        'follow-tags',
+        'negative',
+        'misleading',
+        'inference-read-failure'
+      ].includes(mode)
+    ) {
+      await git(['update-ref', protectedRef, other])
+      if (mode !== 'misleading' && mode !== 'inference-read-failure') {
+        await git(['remote', 'add', 'foreign', 'git@github.com:other/orca.git'])
+        await git([
+          'config',
+          '--replace-all',
+          'remote.foreign.fetch',
+          `+refs/heads/secret:${protectedRef}`
+        ])
       }
-      if (args[0] === 'config' && args[1] === '--get-all') {
-        throw new Error('no such section')
-      }
-      if (args[0] === 'symbolic-ref') {
-        return { stdout: 'refs/heads/contributor/fix\n', stderr: '' }
-      }
-      return { stdout: '', stderr: '' }
-    })
-    const target = forkTarget()
-
-    await materializeWorktreePushTargetRemote(REPO_PATH, target)
-
-    const fetchCalls = gitExecFileAsyncMock.mock.calls.filter(
-      (call) => (call[0] as string[])[0] === 'fetch'
-    )
-    expect(fetchCalls).toEqual([])
-  })
-
-  it("gives a joiner its own branch wiring instead of the minting sibling's target", async () => {
-    // Remote minting coalesces, but each joiner needs its own branch's refspec, fetch and upstream.
-    let remoteExists = false
-    let releaseAdd!: () => void
-    const addGate = new Promise<void>((resolve) => {
-      releaseAdd = resolve
-    })
-    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-      if (args[0] === 'remote' && args[1] === 'get-url') {
-        if (!remoteExists) {
-          throw new Error('No such remote')
+    }
+    if (mode === 'negative') {
+      await git(['config', '--add', 'remote.borrowed.fetch', '^refs/heads/topic'])
+    }
+    if (mode.startsWith('follow-tags')) {
+      await git([
+        'config',
+        '--add',
+        'remote.borrowed.fetch',
+        mode === 'follow-tags' ? '+refs/*:refs/tag-cache/*' : '+refs/tags/*:refs/tags/*'
+      ])
+      await git(['config', 'push.followTags', 'true'])
+      await git(['tag', '-a', '-m', 'test', 'annotated'], a)
+    }
+    await git(['config', 'branch.local-a.remote', mode === 'user-named' ? 'borrowed' : literal], a)
+    await git(['config', 'branch.local-a.merge', 'refs/heads/topic'], a)
+    await git(['commit', '--allow-empty', '-qm', mode], a)
+    if (mode === 'inference-read-failure') {
+      interception.intercept = async (args) => {
+        if (args.includes('--show-origin')) {
+          throw new Error('optional inference denied')
         }
-        return { stdout: `${FORK_URL}\n`, stderr: '' }
       }
-      if (args[0] === 'remote' && args[1] === 'add') {
-        await addGate
-        remoteExists = true
-        return { stdout: '', stderr: '' }
+    }
+    if (nativeControl) {
+      const binary = (await exec('sh', ['-c', 'command -v git'], { cwd: a, env })).stdout.trim()
+      const args = ['push', '--set-upstream', literal, 'HEAD:topic']
+      console.info('native literal inference-read-failure control', {
+        binary,
+        version: (await git(['--version'], a)).trim(),
+        cwd: a,
+        args,
+        branchRemote: (await git(['config', 'branch.local-a.remote'], a)).trim(),
+        branchMerge: (await git(['config', 'branch.local-a.merge'], a)).trim(),
+        borrowedUrl: (await git(['config', 'remote.borrowed.url'], a)).trim(),
+        borrowedFetch: (await git(['config', '--get-all', 'remote.borrowed.fetch'], a)).trim(),
+        protectedRef,
+        protectedOid: (await git(['rev-parse', protectedRef], a)).trim(),
+        headOid: (await git(['rev-parse', 'HEAD'], a)).trim()
+      })
+      await git(args, a)
+    } else {
+      runner.mockClear()
+      expect(
+        (await resolveConfiguredGitPushTarget((args) => runner(args, { cwd: a })))?.remote
+      ).toBe(named ? 'borrowed' : literal)
+      expect(runner.mock.calls.filter(([args]) => args.includes('-v'))).toHaveLength(
+        ['user-named', 'inference-read-failure'].includes(mode) ? 0 : 3
+      )
+      expect(runner.mock.calls.some(([args]) => args.includes('get-url'))).toBe(false)
+      await gitPush(a)
+      if (mode === 'inference-read-failure') {
+        expect(runner.mock.calls.findLast(([args]) => args[0] === 'push')?.[0]).toEqual([
+          'push',
+          '--set-upstream',
+          literal,
+          'HEAD:topic'
+        ])
       }
-      if (args[0] === 'config' && args[1] === '--get-all') {
-        throw new Error('no such section')
-      }
-      if (args[0] === 'symbolic-ref') {
-        return { stdout: 'refs/heads/joiner/branch\n', stderr: '' }
-      }
-      return { stdout: '', stderr: '' }
-    })
+    }
+    const head = (await git(['rev-parse', 'HEAD'], a)).trim()
+    expect((await git(['rev-parse', 'topic'], fork)).trim()).toBe(head)
+    expect((await git(['rev-parse', 'topic'], `${fork}-other`)).trim()).toBe(other)
+    if (named) {
+      expect((await git(['rev-parse', 'HEAD@{u}'], a)).trim()).toBe(head)
+      expect(
+        (await resolveEffectiveGitUpstream((args) => runner(args, { cwd: a })))?.remoteName
+      ).toBe('borrowed')
+    }
+    if (
+      [
+        'misleading',
+        'foreign-tracking',
+        'negative',
+        'follow-tags',
+        'inference-read-failure'
+      ].includes(mode)
+    ) {
+      expect((await git(['rev-parse', protectedRef])).trim()).toBe(other)
+      expect(await git(['config', 'branch.local-a.remote'], a)).toBe(`${literal}\n`)
+    }
+    if (mode.startsWith('follow-tags')) {
+      expect(await git(['rev-parse', 'refs/tags/annotated'], fork)).toBe(
+        await git(['rev-parse', 'refs/tags/annotated'], a)
+      )
+    }
+    if (mode === 'receiver' || mode === 'user-named') {
+      expect(await readFile(`${fork}-receiver`, 'utf8')).toBe('used\n')
+    }
+  }
+)
 
-    const minter = materializeWorktreePushTargetRemote(REPO_PATH, forkTarget())
-    await Promise.resolve()
-    const joiner = materializeWorktreePushTargetRemote(
-      REPO_PATH,
-      forkTarget({ branchName: 'joiner/branch' })
-    )
-    releaseAdd()
-    const [, joined] = await Promise.all([minter, joiner])
-
-    expect(joined.branchName).toBe('joiner/branch')
-    const calls = gitExecFileAsyncMock.mock.calls.map((call) => call[0] as string[])
-    expect(calls).toContainEqual([
-      'branch',
-      '--set-upstream-to',
-      `${FORK_REMOTE}/joiner/branch`,
-      'joiner/branch'
-    ])
-    expect(calls.filter((call) => call[0] === 'remote' && call[1] === 'add')).toHaveLength(1)
+it('leaves split push policy unchanged and mints the requested explicit fork transport', async () => {
+  await git(['remote', 'add', 'borrowed', url])
+  await git(['config', 'remote.borrowed.pushurl', 'git@github.com:other/orca.git'])
+  const before = await git(['config', '--get-regexp', '^remote\\.borrowed\\.'])
+  const selected = await materializeWorktreePushTargetRemote(a, {
+    ...target(),
+    remoteName: 'borrowed'
   })
+  expect(selected.remoteName).toBe('borrowed-2')
+  await git(['commit', '--allow-empty', '-qm', 'explicit'], a)
+  await gitPush(a, false, selected)
+  expect((await git(['rev-parse', 'topic'], fork)).trim()).toBe(
+    (await git(['rev-parse', 'HEAD'], a)).trim()
+  )
+  expect(await git(['config', '--get-regexp', '^remote\\.borrowed\\.'])).toBe(before)
+})
 
-  it('propagates a failed mint instead of adopting a remote the rollback removed', async () => {
-    // Failed mint removes the remote; adopting afterward would create a URL-less config ghost.
-    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-      if (args[0] === 'remote' && args[1] === 'get-url') {
-        throw new Error('No such remote')
-      }
-      if (args[0] === 'remote' && args[1] === 'add') {
-        throw new Error('mint failed')
-      }
-      return { stdout: '', stderr: '' }
-    })
+it('checks fresh strict Fetch and all Pull effects while native Push keeps first-positive bookkeeping', async () => {
+  await git(['remote', 'add', 'borrowed', url])
+  await git(['config', '--add', 'remote.borrowed.fetch', '+refs/heads/*:refs/secondary/*'])
+  const selected = await materializeWorktreePushTargetRemote(a, {
+    ...target(),
+    remoteName: 'borrowed'
+  })
+  const old = (await git(['rev-parse', 'HEAD'], a)).trim()
+  await git(['update-ref', 'refs/secondary/topic', old])
+  await git(['remote', 'add', 'foreign', 'git@github.com:other/orca.git'])
+  await git([
+    'config',
+    '--replace-all',
+    'remote.foreign.fetch',
+    '+refs/heads/secret:refs/secondary/topic'
+  ])
+  await git(['commit', '--allow-empty', '-qm', 'push'], a)
+  await gitPush(a, false, selected)
+  expect((await git(['rev-parse', 'refs/secondary/topic'])).trim()).toBe(old)
+  const before = await git(['config', '--list', '-z'])
+  await expect(gitPull(a, selected)).rejects.toThrow()
+  await expect(gitFastForward(a, selected)).rejects.toThrow()
+  expect(await git(['config', '--list', '-z'])).toBe(before)
+  await git([
+    'config',
+    '--replace-all',
+    'remote.foreign.fetch',
+    '+refs/heads/secret:refs/remotes/borrowed/topic'
+  ])
+  const foreign = await git(['rev-parse', 'refs/remotes/borrowed/topic'])
+  await expect(gitFetch(a, selected)).rejects.toThrow()
+  expect(await git(['rev-parse', 'refs/remotes/borrowed/topic'])).toBe(foreign)
+  await git(['remote', 'remove', 'foreign'])
+  const head = (await git(['rev-parse', 'HEAD'], a)).trim()
+  const next = (await git(['commit-tree', `${head}^{tree}`, '-p', head, '-m', 'remote'], a)).trim()
+  await git(['push', url, `${next}:refs/heads/topic`], a)
+  await gitFastForward(a, selected)
+  for (const ref of ['HEAD', 'refs/secondary/topic', 'refs/remotes/borrowed/topic']) {
+    expect((await git(['rev-parse', ref], a)).trim()).toBe(next)
+  }
+})
 
-    const minter = materializeWorktreePushTargetRemote(REPO_PATH, forkTarget())
-    await Promise.resolve()
-    const joiner = materializeWorktreePushTargetRemote(
-      REPO_PATH,
-      forkTarget({ branchName: 'joiner/branch' })
+it('rechecks strict Fetch after runtime preparation and settles savedtrue terminal failure then retry', async () => {
+  const requested = { ...target(), remoteName: 'pr-terminal' }
+  const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  try {
+    interception.intercept = async (args) => {
+      if (args[0] === 'fetch') {
+        throw new Error('transport denied')
+      }
+    }
+    triggerTerminalSpawnPushTargetMaterialization(a, requested, undefined, undefined)
+    await vi.waitFor(() =>
+      expect(warning).toHaveBeenCalledWith(
+        expect.stringContaining('failed to materialize'),
+        expect.any(Error)
+      )
     )
-
-    await expect(minter).rejects.toThrow()
-    await expect(joiner).rejects.toThrow()
-    const calls = gitExecFileAsyncMock.mock.calls.map((call) => call[0] as string[])
+    interception.intercept = undefined
+    const done = deferred()
+    interception.afterIntercept = async (args) => {
+      if (args[0] === 'branch') {
+        done.resolve()
+      }
+    }
+    triggerTerminalSpawnPushTargetMaterialization(a, requested, undefined, undefined)
+    await done.promise
+    await expect(materializeWorktreePushTargetRemote(a, requested)).resolves.toMatchObject({
+      remoteName: 'pr-terminal'
+    })
     expect(
-      calls.filter((call) => call[0] === 'config' && String(call[2] ?? '').includes(FORK_REMOTE))
-    ).toHaveLength(0)
-  })
-
-  it('persists remoteCreated to the store when a worktreeId is provided and the mint succeeds', async () => {
-    // Deferred materialization must persist ownership so orphan reconciliation can reclaim its remote.
-    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-      if (args[0] === 'remote' && args[1] === 'get-url') {
-        throw new Error('No such remote')
+      runner.mock.calls.filter(([args]) => args[0] === 'remote' && args[1] === 'add')
+    ).toHaveLength(1)
+    let preparation = true
+    interception.intercept = async (args) => {
+      if (preparation && args[0] === 'config' && args.includes('--bool')) {
+        preparation = false
+        await git(['remote', 'add', 'foreign', 'git@github.com:other/orca.git'])
+        await git([
+          'config',
+          '--replace-all',
+          'remote.foreign.fetch',
+          '+refs/heads/secret:refs/remotes/pr-terminal/topic'
+        ])
       }
-      return { stdout: '', stderr: '' }
-    })
-    const target = forkTarget()
-    const setWorktreeMeta = vi.fn()
-    const store: WorktreePushTargetStore = {
-      getAllWorktreeMeta: () => ({}),
-      getRepos: () => [
-        { id: 'worktree-1', path: REPO_PATH, displayName: 'r', badgeColor: '#000', addedAt: 1 }
-      ],
-      setWorktreeMeta
     }
+    const before = await git(['rev-parse', 'refs/remotes/pr-terminal/topic'])
+    await expect(runtimeCommands().fetchRuntimeGit('id:test', requested)).rejects.toThrow()
+    expect(await git(['rev-parse', 'refs/remotes/pr-terminal/topic'])).toBe(before)
+  } finally {
+    warning.mockRestore()
+  }
+})
 
-    const result = await materializeWorktreePushTargetRemote(
-      REPO_PATH,
-      target,
-      store,
-      undefined,
-      {},
-      ipcGitWorktreeTarget({ worktreeId: 'worktree-1' })
+it('exhausts all99 unsafe namespaces without writing', async () => {
+  await git(['remote', 'add', 'foreign', 'git@github.com:other/orca.git'])
+  await git([
+    'config',
+    '--replace-all',
+    'remote.foreign.fetch',
+    '+refs/heads/foreign*:refs/remotes/pr-exhausted*/topic'
+  ])
+  runner.mockClear()
+  await expect(
+    materializeWorktreePushTargetRemote(a, { ...target(), remoteName: 'pr-exhausted' })
+  ).rejects.toThrow('available remote name')
+  expect(
+    runner.mock.calls.some(
+      ([args]) =>
+        args[0] === 'fetch' ||
+        (args[0] === 'config' && !args.includes('--list')) ||
+        (args[0] === 'remote' && args[1] === 'add')
     )
+  ).toBe(false)
+})
 
-    expect(result).toEqual({ ...target, remoteCreated: true })
-    expect(setWorktreeMeta).toHaveBeenCalledWith(
-      hostWorktreeTarget({ id: 'worktree-1', hostId: 'local' }),
-      {
-        pushTarget: { ...target, remoteCreated: true }
-      }
-    )
+it('uses annotated configured fallback through effective upstream, Pull and rename decisions', async () => {
+  await git(['tag', 'local-a'], a)
+  await git(['remote', 'add', 'borrowed', url])
+  await git(['fetch', '--no-tags', 'borrowed'])
+  await git(['config', 'branch.local-a.remote', url], a)
+  await git(['config', 'branch.local-a.merge', 'refs/heads/topic'], a)
+  const run = (args: string[]) => runner(args, { cwd: a })
+  const fallback = await getConfiguredBranchRemoteUpstream(run, 'local-a', async (name, branch) => {
+    await git(['rev-parse', '--verify', `refs/remotes/${name}/${branch}`], a)
+    return true
   })
-
-  it('records the mint on the copy whose git ran, even when the repo has a twin on another host', async () => {
-    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-      if (args[0] === 'remote' && args[1] === 'get-url') {
-        throw new Error('No such remote')
-      }
-      return { stdout: '', stderr: '' }
-    })
-    const target = forkTarget()
-    const setWorktreeMeta = vi.fn()
-    const repo = {
-      id: 'worktree-1',
-      path: REPO_PATH,
-      displayName: 'r',
-      badgeColor: '#000',
-      addedAt: 1
-    }
-    const store: WorktreePushTargetStore = {
-      getAllWorktreeMeta: () => ({}),
-      getRepos: () => [
-        { ...repo, executionHostId: 'local' },
-        { ...repo, connectionId: 'box', executionHostId: 'ssh:box' }
-      ],
-      setWorktreeMeta
-    }
-
-    await materializeWorktreePushTargetRemote(
-      REPO_PATH,
-      target,
-      store,
-      undefined,
-      {},
-      ipcGitWorktreeTarget({ worktreeId: 'worktree-1' })
-    )
-
-    expect(setWorktreeMeta).toHaveBeenCalledWith(
-      hostWorktreeTarget({ id: 'worktree-1', hostId: 'local' }),
-      { pushTarget: { ...target, remoteCreated: true } }
-    )
+  expect(fallback).toMatchObject({
+    remoteName: 'borrowed',
+    branchName: 'topic',
+    isConfiguredUpstream: false
   })
+  expect(await resolveEffectiveGitUpstream(run)).toEqual(fallback)
+  expect(await probeBranchUpstream(run)).toEqual({ outcome: 'has-upstream' })
+  const oid = (await git(['rev-parse', 'HEAD'], a)).trim()
+  const next = (await git(['commit-tree', `${oid}^{tree}`, '-p', oid, '-m', 'remote'], fork)).trim()
+  await git(['update-ref', 'refs/heads/topic', next], fork)
+  await gitPull(a)
+  expect((await git(['rev-parse', 'HEAD'], a)).trim()).toBe(next)
+})
 
-  it("never adopts a remote as Orca's because a twin on another host created one", async () => {
-    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-      if (args[0] === 'remote' && args[1] === 'get-url') {
-        return { stdout: `${FORK_URL}\n`, stderr: '' }
-      }
-      if (args[0] === 'symbolic-ref') {
-        return { stdout: 'refs/heads/contributor/fix\n', stderr: '' }
-      }
-      return { stdout: '', stderr: '' }
-    })
-    const target = forkTarget()
-    const setWorktreeMeta = vi.fn()
-    const repo = { id: 'repo', path: REPO_PATH, displayName: 'r', badgeColor: '#000', addedAt: 1 }
-    const store: WorktreePushTargetStore = {
-      // The SSH twin's Orca-created remote shares this remote's name and URL.
-      getAllWorktreeMeta: () => ({
-        'repo::/ssh-wt': mergeWorktreeMetaForWrite(undefined, {
-          hostId: 'ssh:box',
-          pushTarget: { ...target, remoteCreated: true }
-        })
-      }),
-      getRepos: () => [repo, { ...repo, connectionId: 'box', executionHostId: 'ssh:box' }],
-      setWorktreeMeta
-    }
-
-    const result = await materializeWorktreePushTargetRemote(
-      REPO_PATH,
-      target,
-      store,
-      'repo',
-      {},
-      ipcGitWorktreeTarget({ worktreeId: 'repo::/local-wt' })
-    )
-
-    expect(result.remoteCreated).not.toBe(true)
-    expect(setWorktreeMeta).not.toHaveBeenCalled()
+it('keeps no-URL preparation child-only and strips creation compatibility', async () => {
+  await git(['remote', 'add', 'same-repo', fork])
+  const before = await git(['config', '--list', '-z'])
+  const selected = await prepareWorktreePushTarget(repo, {
+    remoteName: 'same-repo',
+    branchName: 'topic',
+    remoteCreated: true
   })
-
-  it("never reuses a remote as Orca's because a twin on another host minted it", async () => {
-    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-      if (args[0] === 'remote' && args[1] === 'get-url') {
-        throw new Error('No such remote')
-      }
-      if (args[0] === 'remote' && args[1] === '-v') {
-        return { stdout: `fork-x\t${FORK_URL} (fetch)\nfork-x\t${FORK_URL} (push)`, stderr: '' }
-      }
-      if (args[0] === 'remote' && args.length === 1) {
-        return { stdout: 'fork-x', stderr: '' }
-      }
-      return { stdout: '', stderr: '' }
-    })
-    const target = forkTarget()
-    const setWorktreeMeta = vi.fn()
-    const repo = { id: 'repo', path: REPO_PATH, displayName: 'r', badgeColor: '#000', addedAt: 1 }
-    const store: WorktreePushTargetStore = {
-      getAllWorktreeMeta: () => ({
-        'repo::/ssh-wt': mergeWorktreeMetaForWrite(undefined, {
-          hostId: 'ssh:box',
-          pushTarget: { ...target, remoteName: 'fork-x', remoteCreated: true }
-        })
-      }),
-      getRepos: () => [repo, { ...repo, connectionId: 'box', executionHostId: 'ssh:box' }],
-      setWorktreeMeta
-    }
-
-    const result = await materializeWorktreePushTargetRemote(
-      REPO_PATH,
-      target,
-      store,
-      'repo',
-      {},
-      ipcGitWorktreeTarget({ worktreeId: 'repo::/local-wt' })
-    )
-
-    expect(result.remoteName).toBe('fork-x')
-    expect(result.remoteCreated).not.toBe(true)
-  })
-
-  it('does not touch the store when no worktreeId is provided', async () => {
-    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-      if (args[0] === 'remote' && args[1] === 'get-url') {
-        throw new Error('No such remote')
-      }
-      return { stdout: '', stderr: '' }
-    })
-    const target = forkTarget()
-    const setWorktreeMeta = vi.fn()
-    const store: WorktreePushTargetStore = {
-      getAllWorktreeMeta: () => ({}),
-      setWorktreeMeta
-    } as unknown as WorktreePushTargetStore
-
-    await materializeWorktreePushTargetRemote(REPO_PATH, target, store)
-
-    expect(setWorktreeMeta).not.toHaveBeenCalled()
-  })
+  expect(selected).toEqual({ remoteName: 'same-repo', branchName: 'topic' })
+  expect(await git(['config', '--list', '-z'])).toBe(before)
+  const child = await configureCreatedWorktreePushTarget(a, 'local-a', selected)
+  expect(child).toEqual(selected)
+  expect(await git(['rev-parse', '--symbolic-full-name', 'HEAD@{u}'], a)).toBe(
+    'refs/remotes/same-repo/topic\n'
+  )
+  const after = (await git(['config', '--list', '-z']))
+    .split('\0')
+    .filter((row) => !row.startsWith('branch.local-a.'))
+    .join('\0')
+  expect(after).toBe(before)
 })

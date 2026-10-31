@@ -1,3 +1,4 @@
+import type * as NodeFs from 'node:fs/promises'
 import { REVIEW_HEAD_FETCH_TIMEOUT_MS } from '../../shared/review-head-tracking-ref'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -26,6 +27,155 @@ import {
   mockSelectedWslProjectRuntime
 } from './worktrees-test-fixtures'
 import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
+
+// Only these routing rows own this virtual host filesystem; other fixtures use the real reader.
+const owningLayout = vi.hoisted(() => ({ enabled: false }))
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeFs>()
+  const normalize = (value: unknown) =>
+    String(value)
+      .replaceAll('\\', '/')
+      .replace(/^\/\/wsl\.(?:localhost|\$)\/Ubuntu/i, '')
+      .replaceAll('//', '/')
+  const missing = () => Object.assign(new Error('Fixture entry is absent'), { code: 'ENOENT' })
+  const files = new Map([
+    ['/workspace/repo/.git/HEAD', 'ref: refs/heads/main\n'],
+    ['/workspace/fix-title/.git', 'gitdir: /workspace/repo/.git/worktrees/fix-title\n'],
+    ['/workspace/repo/.git/worktrees/fix-title/HEAD', 'ref: refs/heads/feature/fix\n'],
+    ['/workspace/repo/.git/worktrees/fix-title/gitdir', '/workspace/fix-title/.git\n'],
+    ['/workspace/repo/.git/worktrees/fix-title/commondir', '../..\n']
+  ])
+  const directories = new Set([
+    '/workspace/repo',
+    '/workspace/repo/.git',
+    '/workspace/fix-title',
+    '/workspace/repo/.git/worktrees',
+    '/workspace/repo/.git/worktrees/fix-title'
+  ])
+  const layoutStat = (method: typeof actual.stat | typeof actual.lstat) =>
+    new Proxy(method, {
+      apply(fn: (...args: any[]) => ReturnType<typeof method>, receiver, args) {
+        const file = normalize(args[0])
+        if (!owningLayout.enabled || !file.startsWith('/workspace/')) {
+          return fn.apply(receiver, args)
+        }
+        if (!directories.has(file) && !files.has(file)) {
+          return Promise.reject(missing())
+        }
+        return Promise.resolve({
+          isDirectory: () => directories.has(file),
+          isFile: () => files.has(file),
+          isSymbolicLink: () => false
+        })
+      }
+    })
+  return {
+    ...actual,
+    stat: layoutStat(actual.stat),
+    lstat: layoutStat(actual.lstat),
+    readFile: new Proxy(actual.readFile, {
+      apply(fn: (...args: any[]) => ReturnType<typeof actual.readFile>, receiver, args) {
+        const file = normalize(args[0])
+        if (!owningLayout.enabled || !file.startsWith('/workspace/')) {
+          return fn.apply(receiver, args)
+        }
+        return files.has(file) ? Promise.resolve(files.get(file)) : Promise.reject(missing())
+      }
+    }),
+    realpath: new Proxy(actual.realpath, {
+      apply(fn: (...args: any[]) => ReturnType<typeof actual.realpath>, receiver, args) {
+        const file = normalize(args[0])
+        if (!owningLayout.enabled || !file.startsWith('/workspace/')) {
+          return fn.apply(receiver, args)
+        }
+        return directories.has(file) || files.has(file)
+          ? Promise.resolve(file)
+          : Promise.reject(missing())
+      }
+    }),
+    readdir: new Proxy(actual.readdir, {
+      apply(fn: (...args: any[]) => ReturnType<typeof actual.readdir>, receiver, args) {
+        const file = normalize(args[0])
+        if (!owningLayout.enabled || !file.startsWith('/workspace/')) {
+          return fn.apply(receiver, args)
+        }
+        return file === '/workspace/repo/.git/worktrees'
+          ? Promise.resolve([
+              { name: 'fix-title', isDirectory: () => true, isSymbolicLink: () => false }
+            ])
+          : Promise.reject(missing())
+      }
+    })
+  }
+})
+
+function installOwningGitRoutingFixture(existing = false): void {
+  owningLayout.enabled = true
+  const oid = 'a'.repeat(40),
+    name = existing ? 'origin' : 'pr-contributor-orca'
+  const branch = existing ? 'feature/fix' : 'contributor/wsl-fork'
+  const destination = `refs/remotes/${name}/${branch}`
+  const url = 'git@github.com:contributor/orca.git'
+  let added = existing,
+    fetched = existing,
+    related = false
+  gitExecFileAsyncMock.mockImplementation(async (args: string[], options?: { cwd?: string }) => {
+    let stdout = ''
+    if (args.includes('--git-common-dir')) {
+      stdout = '/workspace/repo/.git\n'
+    } else if (args[0] === 'rev-parse' && args.includes('--git-path')) {
+      stdout = '.git/remotes\n.git/branches\n'
+    } else if (args.includes('config') && args.includes('--list')) {
+      const values = added
+        ? [
+            [`remote.${name}.url`, url],
+            [`remote.${name}.fetch`, `+refs/heads/${branch}*:refs/remotes/${name}/${branch}*`],
+            ...(existing
+              ? []
+              : [
+                  [`remote.${name}.tagopt`, '--no-tags'],
+                  [`remote.${name}.orca-created`, 'true']
+                ])
+          ]
+        : []
+      stdout = values
+        .map(
+          ([key, value]) =>
+            `${args.includes('--show-origin') ? 'file:/workspace/repo/.git/config\0' : ''}${key}\n${value}\0`
+        )
+        .join('')
+    } else if (args[0] === 'remote' && args[1] === 'add') {
+      added = true
+    } else if (args.includes('-v')) {
+      stdout = ['orca-fork-url-probe', ...(added ? [name] : [])]
+        .flatMap((remote) => [`${remote}\t${url} (fetch)`, `${remote}\t${url} (push)`])
+        .join('\n')
+    } else if (args[0] === 'fetch') {
+      fetched = true
+    } else if (args[0] === 'branch' && args[1] === '--set-upstream-to') {
+      related = true
+    } else if (args[0] === 'config' && args.includes('--get')) {
+      stdout = 'true\n'
+    } else if (args[0] === 'for-each-ref') {
+      if (args[1].includes('%(upstream)') && !args[1].includes('%(objectname)')) {
+        stdout = `${args.at(-1)}\t${destination}\t${name}\trefs/heads/${branch}\n`
+      } else {
+        const native = args[1].includes('%(upstream)')
+        const refs =
+          args.length > 2
+            ? args.slice(2)
+            : ['refs/heads/main', 'refs/heads/feature/fix', ...(fetched ? [destination] : [])]
+        stdout = refs
+          .map(
+            (ref) =>
+              `${ref}\t${oid}\t${native ? `\t${related ? destination : ''}\t${related ? name : ''}\t${related ? `refs/heads/${branch}` : ''}\t${ref === (options?.cwd === '/workspace/fix-title' ? 'refs/heads/feature/fix' : 'refs/heads/main') ? '*' : ''}` : ''}\n`
+          )
+          .join('')
+      }
+    }
+    return { stdout, stderr: '' }
+  })
+}
 
 // The WSL distros these fixtures route through count as running, so the boot gate lets Git run.
 const runningStateMock = vi.hoisted(() =>
@@ -126,6 +276,7 @@ describe('registerWorktreeHandlers', () => {
   let runtimeStub: WorktreeRuntimeStub
 
   beforeEach(() => {
+    owningLayout.enabled = false
     runtimeStub = setupWorktreeHandlers()
     runningStateMock.mockReset().mockResolvedValue('running')
   })
@@ -306,7 +457,7 @@ describe('registerWorktreeHandlers', () => {
 
   // Call the same materializer as push/pull to test first-sync routing without registering those handlers.
   it('routes fork push target materialization through the selected WSL project runtime', async () => {
-    gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
+    installOwningGitRoutingFixture()
     const target = {
       remoteName: 'pr-contributor-orca',
       branchName: 'contributor/wsl-fork',
@@ -327,46 +478,33 @@ describe('registerWorktreeHandlers', () => {
       ['check-ref-format', '--branch', 'contributor/wsl-fork'],
       wslRoutingOptions
     )
-    // Creation and trailing-* refspec rewriting must both use the selected distro.
+    // Bounded creation and exact sync use the selected distro.
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       [
         'remote',
         'add',
         '-t',
-        'contributor/wsl-fork',
+        'contributor/wsl-fork*',
         '--no-tags',
         'pr-contributor-orca',
         'git@github.com:contributor/orca.git'
       ],
       wslRoutingOptions
     )
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      ['config', '--get-all', 'remote.pr-contributor-orca.fetch'],
-      wslRoutingOptions
+    expect(gitExecFileAsyncMock.mock.calls.some(([args]) => args.includes('--replace-all'))).toBe(
+      false
     )
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      [
-        'config',
-        '--add',
-        'remote.pr-contributor-orca.fetch',
-        '+refs/heads/contributor/wsl-fork*:refs/remotes/pr-contributor-orca/contributor/wsl-fork*'
-      ],
+      ['config', '--local', 'remote.pr-contributor-orca.orca-created', 'true'],
       wslRoutingOptions
     )
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      ['config', 'remote.pr-contributor-orca.tagOpt', '--no-tags'],
-      wslRoutingOptions
-    )
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      ['config', 'remote.pr-contributor-orca.orca-created', 'true'],
-      wslRoutingOptions
-    )
-    // Only fetch talks to the network; bound credential hangs while leaving local calls untimed.
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       [
         'fetch',
+        '--no-tags',
+        '--refmap=+refs/heads/contributor/wsl-fork:refs/remotes/pr-contributor-orca/contributor/wsl-fork',
         'pr-contributor-orca',
-        '+refs/heads/contributor/wsl-fork*:refs/remotes/pr-contributor-orca/contributor/wsl-fork*'
+        '+refs/heads/contributor/wsl-fork:refs/remotes/pr-contributor-orca/contributor/wsl-fork'
       ],
       { ...wslRoutingOptions, timeout: expect.any(Number) }
     )
@@ -380,6 +518,7 @@ describe('registerWorktreeHandlers', () => {
 
   it('routes selected PR branch conflict lookup through the selected WSL project runtime', async () => {
     mockSelectedWslProjectRuntime()
+    installOwningGitRoutingFixture(true)
     getBranchConflictKindMock.mockResolvedValueOnce('remote')
     getPRForBranchMock.mockResolvedValueOnce({
       number: 42,

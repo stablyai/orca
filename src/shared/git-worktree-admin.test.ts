@@ -1,10 +1,14 @@
-import { mkdir, mkdtemp, rename, rm, symlink, writeFile } from 'node:fs/promises'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+import { mkdir, mkdtemp, realpath, rename, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { resolveGitCommonDirectory } from './git-common-directory'
 import {
   annotateWorktreeLocksFromAdmin,
+  readGitNativeContexts,
+  readGitLegacyDirectory,
   findLinkedWorktreeGitDirectory,
   isBranchReservedByWorktreeOperation
 } from './git-worktree-admin'
@@ -26,7 +30,7 @@ function rows(): GitWorktreeInfo[] {
 }
 
 beforeEach(async () => {
-  root = await mkdtemp(path.join(tmpdir(), 'orca-admin-safety-'))
+  root = await realpath(await mkdtemp(path.join(tmpdir(), 'orca-admin-safety-')))
   repo = path.join(root, 'repo')
   common = path.join(repo, '.git')
   linked = path.join(root, '.orca-preparing', 'checkout')
@@ -239,3 +243,77 @@ describe('owning-host worktree administrative reads', () => {
     )
   })
 })
+
+it.each(['live', 'missing', 'bad-common', 'bad-backlink', 'bad-head'])(
+  'validates complete %s native administration before granting context facts',
+  async (mode) => {
+    await writeFile(path.join(admin, 'HEAD'), 'ref: refs/heads/keeper\n')
+    if (mode === 'missing') {
+      await rm(linked, { recursive: true })
+    }
+    if (mode === 'bad-common') {
+      await writeFile(path.join(admin, 'commondir'), '../../..\n')
+    }
+    if (mode === 'bad-backlink') {
+      await writeFile(path.join(linked, '.git'), 'gitdir: /unregistered\n')
+    }
+    if (mode === 'bad-head') {
+      await writeFile(path.join(admin, 'HEAD'), 'unknown\n')
+    }
+    if (mode.startsWith('bad-')) {
+      await expect(readGitNativeContexts(repo)).rejects.toThrow()
+      return
+    }
+    const result = await readGitNativeContexts(repo)
+    expect(result.contexts).toHaveLength(2)
+    expect(result.contexts[1].head).toBe('ref: refs/heads/keeper\n')
+    expect(result.contexts[1].args).toEqual(mode === 'missing' ? ['--git-dir=.'] : [])
+  }
+)
+
+it('keeps hidden direct legacy files', async () => {
+  const directory = path.join(common, 'remotes')
+  await mkdir(directory)
+  await writeFile(path.join(directory, '.hidden'), 'URL: /fork\n')
+  const result = await readGitLegacyDirectory(directory)
+  expect(result.map((row) => [row.name, row.contents])).toEqual([['.hidden', 'URL: /fork\n']])
+  if (process.platform !== 'win32') {
+    await symlink(path.join(directory, '.hidden'), path.join(directory, 'alias'))
+    const alias = (await readGitLegacyDirectory(directory)).find((row) => row.name === 'alias')
+    expect(alias).toMatchObject({
+      contents: 'URL: /fork\n',
+      target: path.join(directory, '.hidden')
+    })
+  }
+})
+
+it.each(['remotes', 'branches'])(
+  'classifies %s file, directory and dangling observations without manufacturing policy',
+  async (store) => {
+    const directory = path.join(common, store)
+    await mkdir(directory)
+    await writeFile(path.join(directory, 'regular'), 'URL: /fork\n')
+    await writeFile(path.join(directory, 'empty'), ' \r\n')
+    await mkdir(path.join(directory, 'directory'))
+    if (process.platform !== 'win32') {
+      await symlink(path.join(directory, 'regular'), path.join(directory, 'link-file'))
+      await symlink(path.join(directory, 'directory'), path.join(directory, 'link-directory'))
+      await symlink(path.join(root, 'missing'), path.join(directory, 'dangling'))
+      await promisify(execFile)('mkfifo', [path.join(directory, 'fifo')], { timeout: 5000 })
+      await symlink(path.join(directory, 'fifo'), path.join(directory, 'link-fifo'))
+    }
+    const rows = new Map((await readGitLegacyDirectory(directory)).map((row) => [row.name, row]))
+    expect(rows.get('regular')).toMatchObject({ kind: 'file', contents: 'URL: /fork\n' })
+    expect(rows.get('empty')).toMatchObject({ kind: 'file', contents: ' \r\n' })
+    expect(rows.get('directory')?.kind).toBe('directory')
+    if (process.platform !== 'win32') {
+      expect(rows.get('link-file')).toMatchObject({ kind: 'file', contents: 'URL: /fork\n' })
+      expect(rows.get('link-directory')?.kind).toBe('directory')
+      expect(rows.get('dangling')).toMatchObject({ kind: 'missing', error: 'ENOENT' })
+      for (const name of ['fifo', 'link-fifo']) {
+        expect(rows.get(name)?.kind).toBe('special')
+        expect(rows.get(name)?.contents).toBeUndefined()
+      }
+    }
+  }
+)

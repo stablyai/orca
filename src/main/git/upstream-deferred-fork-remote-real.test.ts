@@ -1,9 +1,11 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { GitPushTarget } from '../../shared/worktree/types'
+const { runner } = vi.hoisted(() => ({ runner: vi.fn() }))
+vi.mock('./runner', () => ({ gitExecFileAsync: runner }))
 import { getUpstreamStatus } from './upstream'
 
 // Real Git verifies missing-ref exit/stderr handling before a fork remote is materialized.
@@ -19,8 +21,23 @@ describe('getUpstreamStatus with a deferred (not-yet-materialized) fork remote',
   it('reports the graceful "publish" state instead of 0 ahead/0 behind', async () => {
     const repoPath = mkdtempSync(join(tmpdir(), 'orca-deferred-fork-remote-'))
     tempPaths.push(repoPath)
+    const home = join(repoPath, 'home')
+    mkdirSync(home)
+    const env = {
+      ...Object.fromEntries(
+        Object.entries(process.env).filter(([key]) => !key.toUpperCase().startsWith('GIT_'))
+      ),
+      HOME: home,
+      USERPROFILE: home,
+      XDG_CONFIG_HOME: home,
+      GIT_CONFIG_GLOBAL: join(home, 'empty'),
+      GIT_CONFIG_NOSYSTEM: '1'
+    }
     const git = (...args: string[]): string =>
-      execFileSync('git', args, { cwd: repoPath, encoding: 'utf8' })
+      execFileSync('git', args, { cwd: repoPath, env, encoding: 'utf8' })
+    runner.mockImplementation(async (args: string[], options: { cwd: string }) => ({
+      stdout: execFileSync('git', args, { cwd: options.cwd, env, encoding: 'utf8' })
+    }))
 
     git('init', '--quiet')
     git('config', 'user.name', 'Orca Test')

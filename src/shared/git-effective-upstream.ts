@@ -1,14 +1,12 @@
+import { getGitCurrentBranchName } from './git-current-branch'
 import { isNoUpstreamError } from './git-remote-error'
 import type { GitUpstreamStatus } from './git-status-types'
 import {
   getConfiguredBranchRemoteUpstream,
   hasConfiguredBranchPushTarget
 } from './git-configured-branch-target'
-import { splitRemoteBranchName } from './git-remote-branch-name'
 import { parseGitRevListAheadBehindCounts } from './git-rev-list-output'
-import { iterateProcessOutputLines } from './process-output-field-scanner'
 import { createGitConfigSnapshotRunner } from './git-config-snapshot-runner'
-import { getGitCurrentBranchName } from './git-current-branch'
 
 export { gitRefTargetsBranchName, splitRemoteBranchName } from './git-remote-branch-name'
 
@@ -28,42 +26,9 @@ export type EffectiveGitUpstream =
       isConfiguredUpstream: false
     }
 
-function hasMultipleSlashSegments(refName: string): boolean {
-  return refName.includes('/') && refName.indexOf('/') !== refName.lastIndexOf('/')
-}
-
-async function splitRemoteBranchNameByKnownRemote(
-  runGit: GitCommandRunner,
-  refName: string
-): Promise<{ remoteName: string; branchName: string } | null> {
-  try {
-    const { stdout } = await runGit(['remote'])
-    let bestRemoteName: string | null = null
-    for (const rawLine of iterateProcessOutputLines(stdout)) {
-      const remoteName = rawLine.trim()
-      // Why: preserve longest-remote matching for remote names that contain slashes.
-      if (
-        !remoteName ||
-        refName === remoteName ||
-        !refName.startsWith(`${remoteName}/`) ||
-        (bestRemoteName && bestRemoteName.length >= remoteName.length)
-      ) {
-        continue
-      }
-      bestRemoteName = remoteName
-    }
-    if (!bestRemoteName) {
-      return null
-    }
-    const branchName = refName.slice(bestRemoteName.length + 1)
-    return branchName ? { remoteName: bestRemoteName, branchName } : null
-  } catch {
-    return null
-  }
-}
-
 async function getConfiguredUpstream(
-  runGit: GitCommandRunner
+  runGit: GitCommandRunner,
+  branch: string | null
 ): Promise<EffectiveGitUpstream | null> {
   try {
     const { stdout } = await runGit(['rev-parse', '--abbrev-ref', 'HEAD@{u}'])
@@ -71,19 +36,21 @@ async function getConfiguredUpstream(
     if (!upstreamName) {
       return null
     }
-    const parsed = splitRemoteBranchName(upstreamName)
-    if (!parsed) {
-      return {
-        upstreamName,
-        remoteName: null,
-        branchName: upstreamName,
-        isConfiguredUpstream: true
-      }
-    }
+    const atoms = branch
+      ? (
+          await runGit([
+            'for-each-ref',
+            '--format=%(upstream:remotename)%00%(upstream:remoteref)',
+            `refs/heads/${branch}`
+          ])
+        ).stdout
+          .trim()
+          .split('\0')
+      : []
     return {
       upstreamName,
-      remoteName: parsed.remoteName,
-      branchName: parsed.branchName,
+      remoteName: atoms[0] || null,
+      branchName: atoms[1]?.replace(/^refs\/heads\//, '') || upstreamName,
       isConfiguredUpstream: true
     }
   } catch (error) {
@@ -111,21 +78,9 @@ async function resolveEffectiveGitUpstreamForBranch(
   runGit: GitCommandRunner,
   currentBranchName: string | null
 ): Promise<EffectiveGitUpstream | null> {
-  let configured = await getConfiguredUpstream(runGit)
+  let configured = await getConfiguredUpstream(runGit, currentBranchName)
 
   if (configured) {
-    if (
-      currentBranchName &&
-      configured.remoteName === 'origin' &&
-      configured.branchName !== currentBranchName &&
-      hasMultipleSlashSegments(configured.upstreamName)
-    ) {
-      const parsed = await splitRemoteBranchNameByKnownRemote(runGit, configured.upstreamName)
-      if (parsed) {
-        configured = { ...configured, ...parsed }
-      }
-    }
-
     if (!currentBranchName || configured.branchName === currentBranchName) {
       return configured
     }

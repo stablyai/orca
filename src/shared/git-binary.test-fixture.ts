@@ -32,6 +32,7 @@ export class GitBinaryTestFixture {
       ...dockerUser,
       '-v',
       `${this.root}:${this.executionRoot}`,
+      ...(this.root === this.executionRoot ? [] : ['-v', `${this.root}:${this.root}`]),
       '--entrypoint',
       '/bin/sleep',
       this.image,
@@ -48,12 +49,26 @@ export class GitBinaryTestFixture {
   ): Promise<GitResult> {
     const isolatedEnv = {
       HOME: this.executionRoot,
+      USERPROFILE: this.executionRoot,
       XDG_CONFIG_HOME: this.executionRoot,
+      GIT_CONFIG_GLOBAL: `${this.executionRoot}/empty-global-config`,
       GIT_CONFIG_NOSYSTEM: '1',
       ...env
     }
     if (!this.image) {
-      return this.run(this.binary, args, cwd, { ...process.env, ...isolatedEnv }, stdin)
+      return this.run(
+        this.binary,
+        args,
+        cwd,
+        {
+          ...Object.fromEntries(
+            Object.entries(process.env).filter(([key]) => !key.toUpperCase().startsWith('GIT_'))
+          ),
+          ...(process.env.GIT_EXEC_PATH ? { GIT_EXEC_PATH: process.env.GIT_EXEC_PATH } : {}),
+          ...isolatedEnv
+        },
+        stdin
+      )
     }
     if (!this.container) {
       throw new Error('Git compatibility container has not started')

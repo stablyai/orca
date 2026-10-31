@@ -1,3 +1,4 @@
+import { parseGitRemoteVerboseLine } from './git-remote-url-index'
 import { isUnresolvedSshHostAlias } from './git-remote-host-alias'
 
 export type GitRemoteIdentity = {
@@ -91,16 +92,9 @@ export function normalizeGitRemoteUrl(remoteUrl: string): string | null {
 export function parseGitRemoteVerboseOutput(stdout: string): GitRemoteEntry[] {
   const entries: GitRemoteEntry[] = []
   for (const rawLine of stdout.split(/\r?\n/)) {
-    const line = rawLine.trim()
-    // Partial clones append their object filter after the fetch marker.
-    const match = /^(\S+)\s+(.+?)\s+\(fetch\)(?:\s+\[[^\]\r\n]*\])?$/.exec(line)
-    if (!match) {
-      continue
-    }
-    const name = match[1]?.trim()
-    const url = match[2]?.trim()
-    if (name && url) {
-      entries.push({ name, url })
+    const row = parseGitRemoteVerboseLine(rawLine, true)
+    if (row?.direction === 'fetch') {
+      entries.push({ name: row.name, url: row.url })
     }
   }
   return entries

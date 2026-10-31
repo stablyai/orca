@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   findGitRemoteNameByFetchUrl,
+  parseGitRemotePushUrls,
   parseGitRemoteFetchUrls,
   parseGitRemoteVerboseLine
 } from './git-remote-url-index'
@@ -29,6 +30,38 @@ describe('parseGitRemoteVerboseLine', () => {
       direction: 'push'
     })
   })
+
+  it('reads a partial-clone row whose object filter follows the marker (#32864)', () => {
+    expect(parseGitRemoteVerboseLine(`origin\t${HTTPS_URL} (fetch) [blob:none]`)).toEqual({
+      name: 'origin',
+      url: HTTPS_URL,
+      direction: 'fetch'
+    })
+    expect(parseGitRemoteVerboseLine(`local\t/tmp/repo (push) [blob:limit=1m]`)).toEqual({
+      name: 'local',
+      url: '/tmp/repo',
+      direction: 'push'
+    })
+  })
+
+  it('keeps a filter-annotated URL that itself contains spaces and parentheses', () => {
+    const url = '/tmp/my repo (mirror)'
+    expect(parseGitRemoteVerboseLine(`local\t${url} (fetch) [blob:none]`)).toEqual({
+      name: 'local',
+      url,
+      direction: 'fetch'
+    })
+  })
+
+  it.each(['blob:none', 'sparse:oid=HEAD:path/with]bracket (push) [nested'])(
+    'keeps annotation %s out of both consumers',
+    (filter) => {
+      const table = `origin\t${HTTPS_URL} (fetch) [${filter}]\r\norigin\t${HTTPS_URL} (push)\r\n`
+      expect([...parseGitRemoteFetchUrls(table)]).toEqual([['origin', HTTPS_URL]])
+      expect(parseGitRemoteVerboseLine(table.split('\r')[0], true)?.url).toBe(HTTPS_URL)
+      expect([...parseGitRemotePushUrls(table)]).toEqual([['origin', [HTTPS_URL]]])
+    }
+  )
 
   it('rejects the URL-less row git prints for a pushurl-only remote', () => {
     expect(parseGitRemoteVerboseLine('pushonly\t')).toBeNull()
@@ -66,6 +99,19 @@ describe('parseGitRemoteFetchUrls', () => {
       ['multi', `${HTTPS_URL} (push)`]
     ])
     expect(parseGitRemoteFetchUrls(stdout).get('multi')).toBe(SSH_URL)
+  })
+
+  it('keeps partial-clone remotes, whose fetch row carries the object filter (#32864)', () => {
+    const stdout = verbose([
+      ['a', `${SSH_URL} (fetch) [blob:none]`],
+      ['a', `${SSH_URL} (push)`],
+      ['b', `${HTTPS_URL} (fetch) [blob:limit=1m]`],
+      ['b', `${HTTPS_URL} (push)`]
+    ])
+    expect([...parseGitRemoteFetchUrls(stdout)]).toEqual([
+      ['a', SSH_URL],
+      ['b', HTTPS_URL]
+    ])
   })
 
   it('scales to 58 remotes without losing order', () => {
@@ -108,5 +154,15 @@ describe('findGitRemoteNameByFetchUrl', () => {
     ])
     expect(findGitRemoteNameByFetchUrl(split, (url) => url === SSH_URL)).toBe('split')
     expect(findGitRemoteNameByFetchUrl(split, (url) => url === HTTPS_URL)).toBeNull()
+  })
+
+  it('finds a partial-clone remote whose fetch row carries the filter annotation (#32864)', () => {
+    const annotated = verbose([
+      ['origin', 'https://github.com/stablyai/orca.git (fetch)'],
+      ['origin', 'https://github.com/stablyai/orca.git (push)'],
+      ['fork', `${SSH_URL} (fetch) [blob:none]`],
+      ['fork', `${SSH_URL} (push)`]
+    ])
+    expect(findGitRemoteNameByFetchUrl(annotated, (url) => url === SSH_URL)).toBe('fork')
   })
 })

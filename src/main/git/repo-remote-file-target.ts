@@ -1,3 +1,4 @@
+import { readGitRemotePolicy } from '../../shared/git-worktree-admin'
 import { parseHostedRemote } from './hosted-remote-url'
 import { parseGitRemoteFetchUrls } from '../../shared/git-remote-url-index'
 import { sourceRefsForTarget } from '../../shared/git-branch-cleanup-fetch'
@@ -113,6 +114,30 @@ export async function getRemoteFileTarget(
     }
     await readExact([branch, ...defaults, ...DEFAULT_BASE_REF_PROBES.map(({ ref }) => ref)])
     const [, upstreamRemote = '', upstreamSource = '', upstreamRef = ''] = refs.get(branch) ?? []
+    if (upstreamRemote && upstreamRemote !== '.') {
+      checkpoint()
+      const selected = await readGitRemotePolicy(
+        async (argv, cwd) => {
+          checkpoint()
+          return waitForPromiseWithSignal(
+            gitExecFileAsync(argv, {
+              ...gitExecOptions(cwd, options),
+              signal: controller.signal,
+              timeout: Math.max(1, deadline - Date.now()),
+              maxBuffer: 1024 * 1024
+            }),
+            controller.signal
+          )
+        },
+        repoPath,
+        upstreamRemote,
+        { ...options, signal: controller.signal }
+      )
+      if (selected.url) {
+        urls.set(upstreamRemote, selected.url)
+      }
+      mappings.set(upstreamRemote, selected.fields.get('fetch') ?? [])
+    }
     const preference = [...new Set([upstreamRemote, 'origin', ...urls.keys()])]
     const prepareFallback = () => {
       let selected =

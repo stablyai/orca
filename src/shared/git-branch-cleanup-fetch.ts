@@ -1,62 +1,21 @@
 import type { GitBranchCleanupExec } from './git-branch-cleanup'
 import { GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS } from './git-fetch-auto-maintenance'
 import { isMissingRemoteRefGitError } from './git-missing-remote-ref'
-
-function matchRefPattern(pattern: string, ref: string): string | null {
-  const star = pattern.indexOf('*')
-  if (star === -1) {
-    return pattern === ref ? '' : null
-  }
-  if (star !== pattern.lastIndexOf('*')) {
-    return null
-  }
-  const prefix = pattern.slice(0, star)
-  const suffix = pattern.slice(star + 1)
-  return ref.startsWith(prefix) &&
-    ref.endsWith(suffix) &&
-    ref.length >= prefix.length + suffix.length
-    ? ref.slice(prefix.length, ref.length - suffix.length)
-    : null
-}
-
-export function sourceRefsForTarget(
-  refspecs: readonly string[],
-  target: string,
-  checkpoint?: () => void
-): string[] {
-  if (target.includes('*')) {
-    return []
-  }
-  const sources = new Set<string>()
-  for (const refspec of refspecs) {
-    checkpoint?.()
-    const parts = refspec.replace(/^\+/, '').split(':')
-    const [source, destination] = parts
-    if (
-      parts.length !== 2 ||
-      !source?.startsWith('refs/') ||
-      !destination ||
-      source.includes('*') !== destination.includes('*')
-    ) {
-      continue
-    }
-    const capture = matchRefPattern(destination, target)
-    if (capture !== null) {
-      const resolved = source.replace('*', capture)
-      if (!resolved.includes('*')) {
-        sources.add(resolved)
-      }
-    }
-  }
-  // Explicit refspecs bypass negative fetch mappings, so preserve their exclusions here.
-  return [...sources].filter(
-    (source) =>
-      !refspecs.some((refspec) => {
-        checkpoint?.()
-        return refspec.startsWith('^') && matchRefPattern(refspec.slice(1), source) !== null
-      })
-  )
-}
+import { sourceRefsForTarget } from './git-fetch-refspec'
+export {
+  sourceRefsForTarget,
+  targetRefsForSource,
+  classifyFetchRefspec,
+  parseFetchMapping,
+  fetchMappingDomainsOverlap,
+  compatibleFetchMapping,
+  queryFetchTrackingRef,
+  resolveFetchTrackingRef,
+  type GitFetchSpec
+} from './git-fetch-refspec'
+export { stockFetchCoverage, indexFetchMappings } from './git-fetch-coverage'
+export { indexGitRefs, type GitFetchEffectRow, type GitRefFact } from './git-fetch-ref-index'
+export { createFetchEffectProof } from './git-fetch-effect-proof'
 
 function sourceRefForTarget(refspecs: string[], target: string): string | undefined {
   const sources = sourceRefsForTarget(

@@ -1,25 +1,63 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { gitExecFileAsyncMock } = vi.hoisted(() => ({
+const { gitExecFileAsyncMock, publishPaths } = vi.hoisted(() => ({
+  publishPaths: new Set<unknown>(),
   gitExecFileAsyncMock: vi.fn()
 }))
 
 vi.mock('./runner', () => ({
-  gitExecFileAsync: gitExecFileAsyncMock
+  gitExecFileAsync: async (args: string[], options: unknown) => {
+    if (
+      args[0] === 'for-each-ref' &&
+      args[1] === '--format=%(upstream:remotename)%00%(upstream:remoteref)'
+    ) {
+      const row = await gitExecFileAsyncMock.mock.results.at(-1)?.value
+      const nativeRows: Record<string, string> = {
+        'origin/main': 'origin\0refs/heads/main',
+        'origin/feature': 'origin\0refs/heads/feature',
+        'origin/team/feature': 'origin/team\0refs/heads/feature',
+        main: '.\0refs/heads/main'
+      }
+      return { stdout: nativeRows[row?.stdout?.trim() ?? ''] ?? '' }
+    }
+    const cwd = options && typeof options === 'object' && 'cwd' in options ? options.cwd : undefined
+    if (args[0] === 'check-ref-format') {
+      publishPaths.add(cwd)
+    }
+    if (args[0] === 'config' && args.includes('--list') && publishPaths.has(cwd)) {
+      return {
+        stdout: `${['fork', 'origin']
+          .flatMap((name) => [
+            `file:/fixture/config\0remote.${name}.url\n/fork`,
+            `file:/fixture/config\0remote.${name}.fetch\n+refs/heads/*:refs/remotes/${name}/*`
+          ])
+          .join('\0')}\0`
+      }
+    }
+    if (publishPaths.has(cwd) && args[0] === 'rev-parse' && args.includes('--git-path')) {
+      return { stdout: '/fixture-absent/remotes/fork\n/fixture-absent/branches/fork\n' }
+    }
+    if (publishPaths.has(cwd) && args[0] === 'remote' && args[1] === 'get-url') {
+      return { stdout: '/fork\n' }
+    }
+    const result = await gitExecFileAsyncMock(args, options)
+    return result
+  }
 }))
 
 import { getUpstreamStatus, invalidateGitUpstreamStatusReads } from './upstream'
 import { runWithGitReadCacheInvalidation } from './status'
 
 const missingTrackingRefError = new Error(
-  "fatal: ambiguous argument 'HEAD@{u}': unknown revision or path not in the working tree.\n" +
-    "Use '--' to separate paths from revisions, like this:\n" +
-    "'git <command> [<revision>...] -- [<file>...]'"
+  `${`fatal: ambiguous argument 'HEAD@{u}': unknown revision or path not in the working tree.
+Use '--' to separate paths from revisions, like this:
+`}'git <command> [<revision>...] -- [<file>...]'`
 )
 
 describe('getUpstreamStatus', () => {
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
+    publishPaths.clear()
     invalidateGitUpstreamStatusReads()
   })
 
@@ -184,9 +222,9 @@ describe('getUpstreamStatus', () => {
       .mockResolvedValueOnce({ stdout: 'origin/feature\n' })
       .mockResolvedValueOnce({ stdout: '14\t3\n' })
       .mockResolvedValueOnce({
-        stdout:
-          '= ac503deae Stabilize pull request creation flow\n' +
-          '= 7dc0fc1a6 Clean up fork PR remotes after worktree deletion\n'
+        stdout: `= ac503deae Stabilize pull request creation flow
+= 7dc0fc1a6 Clean up fork PR remotes after worktree deletion
+`
       })
 
     const result = await getUpstreamStatus('/repo')

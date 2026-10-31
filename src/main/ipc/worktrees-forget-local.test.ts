@@ -1,10 +1,19 @@
+import type * as WorktreeGit from '../git/worktree'
+import { execFile } from 'node:child_process'
+import { mkdtemp, mkdir, realpath, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
+import { promisify } from 'node:util'
+import { preservedBranchCleanupByScope } from './worktrees/removal/preserved-branch-cleanup'
+import { preservedBranchCleanupScopeKey } from '../../shared/preserved-branch-cleanup'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { resolve } from 'node:path'
 import {
   registerWorktreeRootsForRepo,
   resolveRegisteredWorktreePath
 } from './registered-worktree-roots-cache'
 import {
+  gitExecFileAsyncMock,
+  forceDeleteLocalBranchMock,
   listWorktreesMock,
   removeWorktreeMock,
   deleteWorktreeHistoryDirMock,
@@ -95,6 +104,8 @@ vi.mock('./pty/provider/registry', async () =>
 vi.mock('./pty/provider/state-cleanup', async () =>
   (await import('./worktrees-test-module-mocks')).ptyStateCleanupModuleMock()
 )
+
+const actual = await vi.importActual<typeof WorktreeGit>('../git/worktree')
 
 describe('registerWorktreeHandlers', () => {
   let runtimeStub: WorktreeRuntimeStub
@@ -628,3 +639,113 @@ describe('worktree execution-host disambiguation', () => {
     )
   })
 })
+
+it.each(
+  (['forget', 'preserved'] as const).flatMap((entry) =>
+    [false, true].map((protectedRemote) => ({ entry, protectedRemote }))
+  )
+)(
+  'returns $entry result with protected=$protectedRemote native remote outcome',
+  async ({ entry, protectedRemote }) => {
+    setupWorktreeHandlers()
+    const scratch = await realpath(await mkdtemp(join(tmpdir(), 'orca-sta-11914-forget-')))
+    const home = join(scratch, 'home')
+    await mkdir(home)
+    const env = {
+      ...Object.fromEntries(
+        Object.entries(process.env).filter(([key]) => !key.toUpperCase().startsWith('GIT_'))
+      ),
+      HOME: home,
+      USERPROFILE: home,
+      XDG_CONFIG_HOME: home,
+      GIT_CONFIG_NOSYSTEM: '1',
+      GIT_CONFIG_GLOBAL: join(home, 'empty')
+    }
+    const execute = promisify(execFile)
+    const git = async (args: string[]) => (await execute('git', args, { cwd: scratch, env })).stdout
+    const id = `repo-1::${join(scratch, 'missing')}`
+    const target = {
+      remoteName: 'pr-contributor',
+      remoteUrl: 'https://github.com/contributor/repo.git',
+      branchName: 'topic'
+    }
+    try {
+      await git(['init', '-q'])
+      await git([
+        '-c',
+        'user.name=Test',
+        '-c',
+        'user.email=test@example.test',
+        '-c',
+        'commit.gpgSign=false',
+        'commit',
+        '--allow-empty',
+        '-qm',
+        'seed'
+      ])
+      await git(['branch', 'topic'])
+      const oid = (await git(['rev-parse', 'topic'])).trim()
+      await git(['remote', 'add', target.remoteName, target.remoteUrl])
+      await git(['config', `remote.${target.remoteName}.orca-created`, 'true'])
+      await git(['update-ref', 'refs/remotes/pr-contributor/topic', oid])
+      if (protectedRemote) {
+        await git(['config', 'remote.pushDefault', target.remoteName])
+      }
+      const repo = { id: 'repo-1', path: scratch, displayName: 'test', badgeColor: '', addedAt: 0 }
+      store.getRepos.mockReturnValue([repo])
+      store.getRepo.mockReturnValue(repo)
+      const run = (args: string[], options: unknown) => {
+        if (
+          !options ||
+          typeof options !== 'object' ||
+          !('cwd' in options) ||
+          typeof options.cwd !== 'string'
+        ) {
+          throw new Error('Expected fixture Git cwd')
+        }
+        return execute('git', args, { cwd: options.cwd, env })
+      }
+      gitExecFileAsyncMock.mockImplementation(run)
+      if (entry === 'forget') {
+        await expect(handlers['worktrees:forgetLocal'](null, { worktreeId: id })).resolves.toEqual(
+          {}
+        )
+        expect(store.removeWorktreeMeta).toHaveBeenCalledWith(
+          hostWorktreeTarget({ id, hostId: 'local' })
+        )
+      } else {
+        forceDeleteLocalBranchMock.mockImplementation((path, branch, head) => {
+          if (typeof path !== 'string' || typeof branch !== 'string' || typeof head !== 'string') {
+            throw new Error('Expected fixture branch removal identity')
+          }
+          return actual.forceDeleteLocalBranch(path, branch, head)
+        })
+        const key = preservedBranchCleanupScopeKey({ worktreeId: id, hostId: 'local' })
+        preservedBranchCleanupByScope.set(key, {
+          worktreeId: id,
+          hostId: 'local',
+          branchName: 'topic',
+          head: oid,
+          pushTarget: target
+        })
+        await expect(
+          handlers['worktrees:forceDeletePreservedBranch'](null, {
+            worktreeId: id,
+            hostId: 'local',
+            branchName: 'topic',
+            expectedHead: oid
+          })
+        ).resolves.toEqual({ deleted: true })
+        expect(await git(['branch', '--list', 'topic'])).toBe('')
+        expect(preservedBranchCleanupByScope.has(key)).toBe(false)
+      }
+      const retained = entry === 'forget' || protectedRemote
+      expect((await git(['remote'])).split(/\r?\n/).includes(target.remoteName)).toBe(retained)
+      if (retained) {
+        expect((await git(['rev-parse', 'refs/remotes/pr-contributor/topic'])).trim()).toBe(oid)
+      }
+    } finally {
+      await rm(scratch, { recursive: true, force: true })
+    }
+  }
+)

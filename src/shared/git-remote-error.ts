@@ -247,7 +247,7 @@ export function normalizeGitErrorMessage(error: unknown, operation?: GitRemoteOp
 
 // Why: require a `fatal:` prefix so wrapped command text or hook/progress output can't spuriously match and mask real failures.
 const NO_UPSTREAM_PHRASE_PATTERN =
-  /no upstream configured|no tracking information|HEAD does not point|Needed a single revision|ambiguous argument 'HEAD@\{u\}'/i
+  /no upstream configured|no tracking information|upstream branch '[^\r\n]+' not stored as a remote-tracking branch|HEAD does not point|Needed a single revision|ambiguous argument 'HEAD@\{u\}'/i
 const FATAL_PREFIX_PATTERN = /(^|\n)fatal:/i
 
 export function isNoUpstreamError(error: unknown): boolean {

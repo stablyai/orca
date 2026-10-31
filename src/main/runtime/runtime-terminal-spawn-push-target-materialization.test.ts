@@ -64,16 +64,6 @@ describe('triggerTerminalSpawnPushTargetMaterialization', () => {
     expect(materializeLocalMock).not.toHaveBeenCalled()
   })
 
-  it('is a no-op when the target already reports remoteCreated', () => {
-    triggerTerminalSpawnPushTargetMaterialization(
-      WORKTREE_PATH,
-      forkTarget({ remoteCreated: true }),
-      LOCAL_REPO,
-      STORE
-    )
-    expect(materializeLocalMock).not.toHaveBeenCalled()
-  })
-
   it('materializes over the local transport with resolved WSL git options, repoId and worktreeId, fire-and-forget', () => {
     getLocalProjectWorktreeGitOptionsMock.mockReturnValue({ wslDistro: 'Ubuntu' })
     const target = forkTarget()

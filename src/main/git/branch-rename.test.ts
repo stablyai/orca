@@ -21,6 +21,12 @@ describe('probeBranchUpstream', () => {
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         return { stdout: 'origin/feature\n', stderr: '' }
       }
+      if (
+        args.join(' ') ===
+        'for-each-ref --format=%(upstream:remotename)%00%(upstream:remoteref) refs/heads/feature'
+      ) {
+        return { stdout: 'origin\0refs/heads/feature\n', stderr: '' }
+      }
       throw new Error(`unexpected git args: ${args.join(' ')}`)
     })
     expect(await probeBranchUpstream(exec)).toEqual({ outcome: 'has-upstream' })

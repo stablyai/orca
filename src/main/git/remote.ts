@@ -13,7 +13,7 @@ import {
 } from './local-repo-ref-maintenance'
 import { validateGitPushTarget } from './push-target-validation'
 import { gitExecFileAsync } from './runner'
-import { fetchForkRemoteWithStaleRefspecRepair } from './fork-remote-stale-branch-refspec'
+import { fetchForkBranch, runForkNativeAction, withForkRemoteLock } from './fork-remote-refspec'
 import { runWithGitReadCacheInvalidation } from './status'
 import { runWithGitWorktreeOperationLock } from '../../shared/git-worktree-operation-lock'
 
@@ -33,19 +33,45 @@ export async function gitPush(
     if (pushTarget) {
       await validateGitPushTarget(worktreePath, pushTarget, options)
     }
-    // Honor configured fork push targets; use origin/HEAD only for first publication.
-    const target = pushTarget
-      ? explicitPushTarget(pushTarget)
-      : await resolveConfiguredGitPushTarget((args) =>
-          gitExecFileAsync(args, gitOptionsForWorktree(worktreePath, options))
-        )
-    const args = [
-      'push',
-      ...(options.forceWithLease ? ['--force-with-lease'] : []),
-      '--set-upstream',
-      ...(target ? [target.remote, target.refspec] : ['origin', 'HEAD'])
-    ]
-    await gitExecFileAsync(args, gitOptionsForWorktree(worktreePath, options))
+    const runtime = gitOptionsForWorktree(worktreePath, options)
+    const executePush = async () => {
+      // Honor configured fork push targets; use origin/HEAD only for first publication.
+      const target = pushTarget
+        ? explicitPushTarget(pushTarget)
+        : await resolveConfiguredGitPushTarget(
+            (args) => gitExecFileAsync(args, gitOptionsForWorktree(worktreePath, options)),
+            {
+              cwd: worktreePath,
+              scope: options.wslDistro,
+              exec: (args, cwd) => gitExecFileAsync(args, { ...runtime, cwd })
+            }
+          )
+      const args = [
+        'push',
+        ...(options.forceWithLease ? ['--force-with-lease'] : []),
+        '--set-upstream',
+        ...(target ? [target.remote, target.refspec] : ['origin', 'HEAD'])
+      ]
+      const push = () => gitExecFileAsync(args, runtime)
+      await (pushTarget?.remoteUrl
+        ? runForkNativeAction(
+            (argv, cwd) => gitExecFileAsync(argv, { ...runtime, cwd }),
+            worktreePath,
+            pushTarget,
+            'push',
+            push,
+            options.wslDistro
+          )
+        : push())
+    }
+    await (pushTarget
+      ? executePush()
+      : withForkRemoteLock(
+          (args, cwd) => gitExecFileAsync(args, { ...runtime, cwd }),
+          worktreePath,
+          executePush,
+          options.wslDistro
+        ))
   } catch (error) {
     throw new Error(normalizeGitErrorMessage(error, 'push'))
   }
@@ -60,10 +86,19 @@ async function gitPullWithArgs(
   const runPull = async (effectiveArgs: string[]): Promise<void> => {
     if (pushTarget) {
       const target = await validateGitPushTarget(worktreePath, pushTarget, options)
-      await gitExecFileAsync(
-        ['pull', ...effectiveArgs, target.remoteName, target.branchName],
-        gitOptionsForWorktree(worktreePath, options)
-      )
+      const runtime = gitOptionsForWorktree(worktreePath, options)
+      const pull = () =>
+        gitExecFileAsync(['pull', ...effectiveArgs, target.remoteName, target.branchName], runtime)
+      await (target.remoteUrl
+        ? runForkNativeAction(
+            (args, cwd) => gitExecFileAsync(args, { ...runtime, cwd }),
+            worktreePath,
+            target,
+            'pull',
+            pull,
+            options.wslDistro
+          )
+        : pull())
       return
     }
     const upstream = await resolveEffectiveGitUpstream((args) =>
@@ -129,15 +164,16 @@ export async function gitFetch(
       if (pushTarget) {
         const target = await validateGitPushTarget(worktreePath, pushTarget, options)
         const runtimeOptions = gitOptionsForWorktree(worktreePath, options)
-        await fetchForkRemoteWithStaleRefspecRepair(
-          (args, cwd) => gitExecFileAsync(args, { ...runtimeOptions, cwd }),
-          worktreePath,
-          target.remoteName,
-          () =>
-            gitExecFileAsync(['fetch', '--prune', target.remoteName], runtimeOptions).then(
-              () => undefined
+        await (target.remoteUrl
+          ? fetchForkBranch(
+              (args, cwd) => gitExecFileAsync(args, { ...runtimeOptions, cwd }),
+              worktreePath,
+              target.remoteName,
+              target.branchName,
+              options.wslDistro,
+              target.remoteUrl
             )
-        )
+          : gitExecFileAsync(['fetch', '--prune', target.remoteName], runtimeOptions))
         return
       }
       await gitExecFileAsync(['fetch', '--prune'], gitOptionsForWorktree(worktreePath, options))
