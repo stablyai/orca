@@ -10,7 +10,7 @@ import { getSidebarRowRevealAncestorKeys } from './reveal-ancestors'
 import {
   expandGroupsForWorktreeReveal,
   MAX_REVEAL_RETRIES,
-  resolvePendingWorktreeRevealTarget,
+  resolveVisibleWorktreeRevealTarget,
   type PendingSidebarRevealArgs
 } from './pending-reveal-inputs'
 
@@ -82,7 +82,7 @@ export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
       }
       const currentRows = argsRef.current.renderRows
       const rowKey = pendingRevealWorktree.rowKey
-      const { targetIndex, outcome } = resolvePendingWorktreeRevealTarget(
+      const { targetIndex, outcome } = resolveVisibleWorktreeRevealTarget(
         argsRef.current,
         pendingRevealWorktree
       )

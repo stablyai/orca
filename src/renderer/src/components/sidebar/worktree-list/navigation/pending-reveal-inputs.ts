@@ -17,6 +17,7 @@ import type {
   WorktreeGroupBy
 } from '../../../../../../shared/sidebar-list/row-types'
 import { getFolderWorkspaceRevealGroupKeys, sidebarWorkspaceStillExists } from './folder-reveal'
+import { createVisibleRevealRowPredicate } from './mounted-row-reveal'
 import {
   findPreferredRenderRowIndexForWorktree,
   findPreferredRenderRowIndexForWorktreeIdentity,
@@ -117,7 +118,10 @@ export function resolvePendingWorktreeRevealTarget(
     PendingSidebarRevealArgs,
     'renderRows' | 'worktrees' | 'folderWorkspaces' | 'pinnedDisplayPolicy'
   >,
-  request: PendingSidebarWorktreeReveal
+  request: PendingSidebarWorktreeReveal,
+  // Why: duplicate-in-groups renders one pinned workspace as two rows; when given, an
+  // already-visible copy wins over the natural-group preference (#24852).
+  isVisibleRow?: (row: RenderRow) => boolean
 ) {
   const rowKey = request.rowKey
   const targetIndex = rowKey
@@ -126,12 +130,14 @@ export function resolvePendingWorktreeRevealTarget(
       ? findPreferredRenderRowIndexForWorktreeIdentity(
           args.renderRows,
           { id: request.worktreeId, hostId: request.executionHostId },
-          args.pinnedDisplayPolicy
+          args.pinnedDisplayPolicy,
+          isVisibleRow
         )
       : findPreferredRenderRowIndexForWorktree(
           args.renderRows,
           request.worktreeId,
-          args.pinnedDisplayPolicy
+          args.pinnedDisplayPolicy,
+          isVisibleRow
         )
   const outcome = rowKey
     ? targetIndex === -1
@@ -147,4 +153,17 @@ export function resolvePendingWorktreeRevealTarget(
         )
       })
   return { targetIndex, outcome }
+}
+
+// Why: duplicate-in-groups renders one pinned workspace as two rows and the lookup's
+// natural-group preference would yank the viewport off the visible pinned copy (#24852).
+export function resolveVisibleWorktreeRevealTarget(
+  args: PendingSidebarRevealArgs,
+  request: PendingSidebarWorktreeReveal
+) {
+  return resolvePendingWorktreeRevealTarget(
+    args,
+    request,
+    createVisibleRevealRowPredicate(args.scrollRef.current, request)
+  )
 }
