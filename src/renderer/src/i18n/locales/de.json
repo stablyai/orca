@@ -19294,7 +19294,7 @@
         "historyItemTooLarge": "Dieser Teil des Chats war zu groß für die Anzeige.",
         "continuedOutside": "Außerhalb dieses Chats fortgesetzt.",
         "continuedOutsideRewound": "Außerhalb dieses Chats fortgesetzt. Die obigen früheren Antworten sind nicht mehr im Verlauf dieser Unterhaltung enthalten.",
-        "stoppedBeforeStart": "Manuell gestoppt",
+        "stoppedBeforeStart": "Unterbrochen",
         "dismiss": "Ausblenden",
         "copyError": "Fehler kopieren",
         "orcaStopUpdate": "Orca auf {{machine}} wurde während dieser Antwort für ein Update neu gestartet.",

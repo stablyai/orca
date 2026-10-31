@@ -19035,7 +19035,7 @@
         "historyItemTooLarge": "聊天的這一部分過大，無法顯示。",
         "continuedOutside": "已在此聊天外繼續對話。",
         "continuedOutsideRewound": "已在此聊天外繼續對話。上方較早的回覆已不在此對話的歷史記錄中。",
-        "stoppedBeforeStart": "已手動停止",
+        "stoppedBeforeStart": "已中斷",
         "dismiss": "關閉",
         "copyError": "複製錯誤",
         "orcaStopUpdate": "此回覆進行期間，{{machine}} 上的 Orca 為更新而重新啟動。",
