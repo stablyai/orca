@@ -362,6 +362,23 @@ describe('chat worker turn stops', () => {
     expect(ctx.mail()).toHaveLength(0)
   })
 
+  it('drops a pending stop once a later turn of the follow-up fails', () => {
+    const ctx = setup()
+    const followUp = startingFollowUp(ctx)
+    ctx.db.markWorkerDispatchReady(followUp)
+    const timers: (() => void)[] = []
+    const report = chatWorkerTurnStopReporter(ctx.deps, (run) => timers.push(run))
+    const idle = () => ({ status: 'idle' as const, lastAssistantMessage: 'It failed.' })
+
+    report(completion('success', 'turn-reported'), idle)
+    report(completion('failure', 'turn-follow-up'), idle)
+    for (const run of timers.splice(0)) {
+      run()
+    }
+
+    expect(ctx.mail()).toHaveLength(0)
+  })
+
   it('still reports a follow-up whose own turn ended before its start settled', () => {
     const ctx = setup()
     const followUp = startingFollowUp(ctx)

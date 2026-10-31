@@ -50,13 +50,23 @@ export function chatWorkerTurnStopReporter(
     ) => Pick<AgentSessionStatusSummary, 'status' | 'lastAssistantMessage'> | undefined
   ): void => {
     try {
+      const sessionId =
+        event.type === 'completion'
+          ? event.completion.sessionId
+          : event.type === 'prompt'
+            ? event.prompt.sessionId
+            : undefined
+      if (!sessionId) {
+        return
+      }
+      // Any later edge, even one not reported (a failed or cancelled turn), supersedes a pending stop.
+      const generation = (generations.get(sessionId) ?? 0) + 1
+      generations.set(sessionId, generation)
       const stop = chatStop(event)
       const db = stop ? deps.getDb() : null
       if (!stop || !db) {
         return
       }
-      const generation = (generations.get(stop.sessionId) ?? 0) + 1
-      generations.set(stop.sessionId, generation)
       // The Dispatch a stop belongs to is one open when it was seen.
       const seen = new Set(
         chatWorkerDispatches(stop.sessionId, db).map(({ dispatch }) => dispatch.id)
