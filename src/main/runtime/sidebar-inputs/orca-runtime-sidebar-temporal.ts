@@ -213,16 +213,6 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithDete
       : null
   }
 
-  // Metadata only: clients re-list the record, and the cached git scans stay.
-  private notifySortStampsChanged(worktreeId: string): void {
-    if (parseWorkspaceKey(worktreeId)?.type === 'folder') {
-      this.notifyFolderWorkspaceChanged()
-      return
-    }
-    this.invalidateResolvedWorktreeCache()
-    this.notifyWorktreesChanged(getRepoIdFromWorktreeId(worktreeId), { invalidateGitScans: false })
-  }
-
   override attachAgentStatusStore(store: AgentStatusStoreView): () => void {
     // The sidebar subscribes first, so the statuses present at attach reach it as seeds.
     const detachActivity = this.workspaceActivityFacts.attachAgentStatusStore(store)
