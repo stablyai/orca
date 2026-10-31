@@ -36,10 +36,25 @@ export function useRichMarkdownViewport(
     [containerRef, retire]
   )
   useLayoutEffect(() => {
-    if (editor && !editor.isDestroyed && root && container) {
-      cleanup.current = attachRichMarkdownViewport(editor, root, container)
+    if (!editor || editor.isDestroyed || !root || !container) {
+      return retire
     }
-    return retire
-  }, [editor, key, root, container, retire])
+    const bind = (): void => {
+      retire()
+      if (rootRef.current === root && containerRef.current === container && !editor.isDestroyed) {
+        cleanup.current = attachRichMarkdownViewport(editor, root, container)
+      }
+    }
+    bind()
+    editor.on('mount', bind)
+    editor.on('unmount', retire)
+    editor.on('destroy', retire)
+    return () => {
+      editor.off('mount', bind)
+      editor.off('unmount', retire)
+      editor.off('destroy', retire)
+      retire()
+    }
+  }, [editor, key, root, container, retire, rootRef, containerRef])
   return { bindRoot, bindContainer }
 }
