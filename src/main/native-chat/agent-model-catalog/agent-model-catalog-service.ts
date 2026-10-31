@@ -1,8 +1,8 @@
-import { agentModelCatalogFingerprintForRecord } from './agent-model-catalog-fingerprint'
 import { createAgentModelCatalogLiveListings } from './agent-model-catalog-live-listings'
 import { scopedAgentModelCatalogLister } from './agent-model-catalog-lister'
+import { readAccountList, seedAccountList } from './agent-model-catalog-account-list'
 import { prewarmAgentModelCatalog, newChatCatalogKey } from './agent-model-catalog-prewarm'
-import type { AgentSessionAccountHome } from '../../../shared/agent-session-record'
+import { recordCatalogKey } from './agent-model-catalog-fingerprint'
 import {
   catalogFolder,
   sessionWorkspacePath,
@@ -155,23 +155,14 @@ export function createAgentModelCatalogService(
       if (!current()) {
         return
       }
-      let fingerprint: string
-      let probeHome: AgentSessionAccountHome | null
-      if (scoped) {
-        fingerprint = agentModelCatalogFingerprintForRecord(scoped, folder)
-        // Native probes cannot list a WSL-pinned account.
-        probeHome =
-          scoped.location.executionHostId === 'local' && scoped.location.wslDistro === null
-            ? scoped.accountHome
-            : null
-      } else {
-        const key = await newChatCatalogKey(deps, params.agent, folder)
-        if (!current() || !key) {
-          return
-        }
-        fingerprint = key.fingerprint
-        probeHome = key.accountHome
+      const account = scoped
+        ? recordCatalogKey(scoped, folder)
+        : await newChatCatalogKey(deps, params.agent, folder)
+      if (!current() || !account) {
+        return
       }
+      let { fingerprint } = account
+      const probeHome = account.accountHome
       const scope = await resolveAgentModelCatalogScope(
         deps,
         { ...params, workspacePath, savedOnly },
@@ -232,17 +223,24 @@ export function createAgentModelCatalogService(
       }
       const probe = deps.probes?.[params.agent]
       const signal = AbortSignal.any([lifetime.signal, controller.signal])
-      const list = scopedAgentModelCatalogLister({
-        legacy: params.legacy,
-        operation: { deadline, current, signal },
-        canList: () => !record || !!deps.getRecord(record.sessionId),
-        admission,
-        signal,
-        resolved,
-        probe,
-        probeHome,
-        workspacePath: cwd ?? folder
-      })
+      const list = seedAccountList(
+        deps,
+        scope,
+        params.agent,
+        current
+      )(
+        scopedAgentModelCatalogLister({
+          legacy: params.legacy,
+          operation: { deadline, current, signal },
+          canList: () => !record || !!deps.getRecord(record.sessionId),
+          admission,
+          signal,
+          resolved,
+          probe,
+          probeHome,
+          workspacePath: cwd ?? folder
+        })
+      )
       if (probe && probeHome && deps.store.probeDue(fingerprint)) {
         void deps.store.refresh(fingerprint, params.agent, list, current, signal)
       }
@@ -289,7 +287,7 @@ export function createAgentModelCatalogService(
           binding: () => bindings.get(requestKey(params))
         })
       }
-      return snapshot(params)
+      return readAccountList(deps, params, snapshot)
     },
     recordLiveListing: live.recordLiveListing,
     async prewarm() {

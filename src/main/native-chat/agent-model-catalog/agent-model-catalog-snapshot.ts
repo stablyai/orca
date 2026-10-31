@@ -180,7 +180,8 @@ export function projectAgentModelCatalogSnapshot(
         display,
         independent &&
           !params.legacyOptionsDisplay &&
-          (!deps.store.verified(display) || (!bound.exact && !params.legacy))
+          // The account's list stands in for this folder's; it names no default here.
+          (display !== listed || !deps.store.verified(display) || (!bound.exact && !params.legacy))
           ? false
           : verified || bound.keepDefault,
         deps.listingNamesConfiguredModel?.has(params.agent) === true,
