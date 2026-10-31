@@ -10,15 +10,18 @@ import {
   type AgentJournalTurnScope
 } from '../../../shared/agent-session-journal-types'
 import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import { revisedAgentJournalTurnAnchor } from '../../../shared/agent-session-turn-record'
+import {
+  liveAgentJournalTurnAnchor,
+  revisedAgentJournalTurnAnchor
+} from '../../../shared/agent-session-turn-record'
 import { structuredAgentTurnAnchors } from '../../../shared/native-chat-turn-membership'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import { resolveAgentJournalTurnRowWrite } from '../agent-session-timeline/agent-journal-turn-row-revision'
 import { switchTranscriptMutations } from './structured-agent-session-switch-import-plan'
 
-// Which prompt opened a turn is the record's identity: no writer erases or moves it, and a reader
-// never takes it from where the record happens to sit.
+// Which prompt opened a turn is the record's identity: no writer erases it, only the live owner's
+// own attribution corrects it, and a reader never takes it from where the record happens to sit.
 
 const journals = createTrackedJournalOpener()
 let root: string
@@ -90,7 +93,33 @@ async function batch(journal: AgentSessionJournal, id: string, rows: Row[]) {
 
 const turnBody = (journal: AgentSessionJournal) => journal.item(RECORD)?.body
 
-describe('the opener policy', () => {
+describe('the live opener policy', () => {
+  const saved = new Set(['orca:opening', 'orca:steer', 'record'])
+  it.each([
+    ['nothing saved: the write names it', undefined, 'orca:opening', 'orca:opening'],
+    ['a write naming none never erases it', 'orca:opening', undefined, 'orca:opening'],
+    [
+      'the owner corrects a saved steer to the opener',
+      'orca:steer',
+      'orca:opening',
+      'orca:opening'
+    ],
+    ['the record itself never displaces a prompt', 'orca:opening', 'record', 'orca:opening'],
+    [
+      'a name no row backs never displaces a saved prompt',
+      'orca:opening',
+      'codex:t:0',
+      'orca:opening'
+    ],
+    ['a record naming itself is refined', 'record', 'orca:opening', 'orca:opening']
+  ])('%s', (_name, current, next, expected) => {
+    expect(liveAgentJournalTurnAnchor('record', current, next, (key) => saved.has(key))).toBe(
+      expected
+    )
+  })
+})
+
+describe('the direct-batch opener policy', () => {
   const rows = new Map([
     ['codex:t:0', 'orca:send'],
     ['orca:send', 'orca:send']
@@ -99,7 +128,7 @@ describe('the opener policy', () => {
   it.each([
     ['nothing saved: the write names it', undefined, 'orca:send', 'orca:send'],
     ['a write naming none never erases it', 'orca:send', undefined, 'orca:send'],
-    ['a saved row stands against another', 'orca:send', 'orca:other', 'orca:send'],
+    ['a saved opener stands against another row', 'orca:send', 'orca:other', 'orca:send'],
     ['a saved alias resolves to its row', 'codex:t:0', 'orca:send', 'orca:send'],
     ['a record naming itself refines to its opener', 'record', 'orca:send', 'orca:send'],
     ['a prompt not saved yet refines to the opener', 'codex:late:0', 'orca:send', 'orca:send'],
@@ -153,7 +182,7 @@ describe('every writer keeps the opener a turn record names', () => {
     expect(turnBody(journal)).toEqual({ ...settled, userItemId: P1 })
   })
 
-  it('the revision helper: a lifecycle naming none keeps it; one naming itself is refined', async () => {
+  it('the revision helper: none keeps it, itself is refined, the owner corrects it', async () => {
     const journal = await open('revise')
     await batch(journal, 'rows', [
       user(prompt('p1')),
@@ -177,6 +206,11 @@ describe('every writer keeps the opener a turn record names', () => {
       state: 'completed',
       userItemId: P1
     })
+    // The live owner attributes another saved prompt to this turn: that corrects the opener.
+    await batch(journal, 'p2', [user(prompt('p2'))])
+    expect(
+      revise({ kind: 'turn', turnId: 't1', userItemId: P2, state: 'completed' })
+    ).toMatchObject({ userItemId: P2 })
   })
 })
 
