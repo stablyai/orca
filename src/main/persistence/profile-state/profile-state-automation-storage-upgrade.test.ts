@@ -3,7 +3,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import Database from '../../sqlite/sync-database'
-import { openProfileStateDatabase, profileStatePragmaNumber } from './profile-state-database'
+import {
+  openProfileStateDatabase,
+  openProfileStateDatabaseReadOnly,
+  profileStatePragmaNumber
+} from './profile-state-database'
 import { PROFILE_STATE_DATABASE_SCHEMA_VERSION } from './profile-state-database-schema'
 import { hashProfileStatePayload } from './profile-state-document-validation'
 import { exportProfileStateJson, importProfileStateJson } from './profile-state-documents'
@@ -374,14 +378,20 @@ describe('required automation storage metadata', () => {
     }
   })
 
-  it('rejects reopening a current database with lost metadata before changing its bytes', () => {
+  it('opens current storage with lost metadata but refuses its values without rewriting them', () => {
     const path = databasePath()
     const { db } = openProfileStateDatabase(path, 'profile-a')
     db.exec('DELETE FROM profile_state_automation_runs_meta')
     db.close()
     const before = readFileSync(path)
 
-    expect(() => openDatabase(path)).toThrow()
+    const readOnly = openProfileStateDatabaseReadOnly(path, 'profile-a')
+    try {
+      expect(() => exportProfileStateJson(readOnly.db)).toThrow('metadata is malformed')
+    } finally {
+      readOnly.db.close()
+    }
+    expect(() => exportProfileStateJson(openDatabase(path))).toThrow('metadata is malformed')
     expect(readFileSync(path)).toEqual(before)
   })
 })

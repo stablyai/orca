@@ -1,7 +1,5 @@
 import { withProfileStateReadSnapshot } from './profile-state-read-snapshot'
 import type Database from '../../sqlite/sync-database'
-import { readCurrentAutomationRunsState } from './profile-state-automation-runs-storage'
-import { readProfileStateRevision } from './profile-state-revision'
 import {
   PROFILE_STATE_META_PROFILE_ID,
   PROFILE_STATE_DATABASE_SCHEMA_VERSION
@@ -61,9 +59,6 @@ export function verifyProfileStateSchema(
     }
 
     verifyProfileStateIdentity(db, profileId)
-    if (schemaVersion >= 3) {
-      readCurrentAutomationRunsState(db, readProfileStateRevision(db))
-    }
   })
 }
 

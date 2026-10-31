@@ -129,6 +129,49 @@ describe('profile state document adapter', () => {
     }
   })
 
+  it('replaces corrupt history metadata using only revision-fenced incoming values', () => {
+    const { directory, db } = openTestDatabase()
+    try {
+      importProfileStateJson(db, JSON.stringify({ automationRuns: [{ id: 'old' }], ui: 1 }))
+      db.exec("UPDATE profile_state_automation_runs_meta SET content_hash = 'broken'")
+      const snapshotRows = () => ({
+        meta: db.prepare('SELECT * FROM profile_state_automation_runs_meta').all(),
+        runs: db.prepare('SELECT * FROM profile_state_automation_runs').all(),
+        documents: db.prepare('SELECT * FROM profile_state_documents').all(),
+        revision: readProfileStateRevision(db)
+      })
+      const damaged = snapshotRows()
+      expect(() => readProfileStateSnapshot(db)).toThrow('metadata is invalid')
+      expect(() => readProfileStateParsedSnapshot(db)).toThrow('metadata is invalid')
+      expect(
+        readProfileStateDomains(profileStateDatabaseFile(directory), 'profile-a', [
+          'automationRuns'
+        ])
+      ).toMatchObject({ kind: 'unreadable' })
+      expect(() => importProfileStateJson(db, '{invalid')).toThrow('JSON is invalid')
+      expect(() => importProfileStateJson(db, '{}', { expectedRevision: 0 })).toThrowError(
+        expect.objectContaining({ code: 'profile-state-revision-conflict' })
+      )
+      expect(snapshotRows()).toEqual(damaged)
+
+      db.exec(`CREATE TRIGGER fail_replacement BEFORE INSERT ON profile_state_documents
+        BEGIN SELECT RAISE(ABORT, 'injected replacement failure'); END`)
+      const incoming = { automationRuns: [{ id: 'replacement' }], ui: 2 }
+      expect(() =>
+        importProfileStateJson(db, JSON.stringify(incoming), {
+          expectedRevision: 1
+        })
+      ).toThrow('injected replacement failure')
+      expect(snapshotRows()).toEqual(damaged)
+      db.exec('DROP TRIGGER fail_replacement')
+
+      expect(importProfileStateJson(db, JSON.stringify(incoming), { expectedRevision: 1 })).toBe(2)
+      expect(JSON.parse(exportProfileStateJson(db))).toEqual(incoming)
+    } finally {
+      db.close()
+    }
+  })
+
   it('commits the legacy JSON acceptance marker with the imported revision', () => {
     const { db } = openTestDatabase()
     try {
@@ -342,9 +385,11 @@ describe('profile state document adapter', () => {
         expect(() => readProfileStateParsedSnapshot(db)).toThrow(expectedError)
         const databasePath = profileStateDatabaseFile(directory)
         const authority = new ProfileStateSqliteAuthority(databasePath, 'profile-a')
-        expect(() => authority.readSerializedState()).toThrow(
-          presence === 'missing' ? /Unable to read profile state database/ : expectedError
-        )
+        try {
+          expect(() => authority.readSerializedState()).toThrow(expectedError)
+        } finally {
+          authority.close()
+        }
         expect(
           readProfileStateDomains(databasePath, 'profile-a', ['automationRuns'])
         ).toMatchObject({
