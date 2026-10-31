@@ -137,18 +137,16 @@ export class JournalOutcomeFold {
   /** Applies the latest values over `baseline` (the folded input prefix) or over the scalars alone:
    * a deletion removes, a prefix-ordinal value replaces in place, and every other value takes its
    * canonical place after the prefix. Each record was admitted as format 1 on read. */
-  *finishPages(
+  finish(
     sessionId: string,
     epoch: string,
     through: number,
     baseline?: JournalReducerState
-  ): Generator<void, JournalReducerState> {
+  ): JournalReducerState {
     const scalarJson = [...(this.values.get('$')?.values() ?? [])].map(
       (value): [string, string] => [String(JSON.parse(value.key)), value.json]
     )
     const decode = decodingOutcome(() => decodeOutcomeFormat1Onto(scalarJson, baseline))
-    let bytes = 0
-    let count = 0
     for (const [field, entries] of this.values) {
       if (field === '$') {
         continue
@@ -167,13 +165,6 @@ export class JournalOutcomeFold {
             decode.entry(field, value.json)
           }
         })
-        bytes += Buffer.byteLength(value.json)
-        count += 1
-        if (count >= 32 || bytes >= 1 << 20) {
-          bytes = 0
-          count = 0
-          yield
-        }
       }
     }
     const state = decode.finish()
@@ -181,19 +172,5 @@ export class JournalOutcomeFold {
       throw new JournalOutcomeDecodeError('invalid journal outcome coverage')
     }
     return state
-  }
-
-  finish(
-    sessionId: string,
-    epoch: string,
-    through: number,
-    baseline?: JournalReducerState
-  ): JournalReducerState {
-    const pages = this.finishPages(sessionId, epoch, through, baseline)
-    let step = pages.next()
-    while (!step.done) {
-      step = pages.next()
-    }
-    return step.value
   }
 }

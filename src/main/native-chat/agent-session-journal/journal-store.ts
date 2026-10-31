@@ -109,7 +109,6 @@ export class AgentSessionJournal {
       cursor: this.cursor,
       adopt: (loaded) => {
         this.state = loaded.state
-        this.projection.opened(loaded.projectionThrough !== 0)
         this.onCommitted?.()
       },
       prepare: (db, rows, savedAt) => this.projection.prepare(db, rows, savedAt),
@@ -153,15 +152,13 @@ export class AgentSessionJournal {
     return this.reopenUnmarked
   }
 
-  /** A legacy or lagging chat catches its saved state up page by page after it opens. */
   async open(): Promise<void> {
     await this.restore()
     this.openedThrough = this.cursor()
   }
 
   /** Refuse future writes and drain admitted ones; the host retains database ownership. */
-  close = (): Promise<void> => {
-    this.projection.close()
+  close(): Promise<void> {
     this.queuedMessages.editLeases.dispose()
     this.queue.markClosed()
     return this.queue.drain()

@@ -19,17 +19,12 @@ import {
   createTrackedJournalOpener,
   openTestJournalHostDatabase
 } from './journal-host-database-test-support'
-import { clearJournalSavedState } from './journal-saved-state'
-import { readJournalSavedState } from './journal-state-cache-test-support'
 import { restoreJournal } from './journal-open'
 import { applyJournalRow, renderJournalState } from './journal-reducer'
-import { JournalProjectionCatchUp } from './journal-projection-catch-up'
 import {
   expectProjectionMatches,
-  finishCatchUp,
   projectionBase,
   projectionEpochRow,
-  projectionSessionId,
   projectionWriter,
   seedOutcomeRows,
   seedProjectionRows
@@ -102,10 +97,10 @@ it.each(['claude', 'codex'] as const)(
           row.body.kind === 'status' &&
           row.body.providerFrame?.kind === 'notification:turn/plan/updated'
       ).length
-      const saved = readJournalSavedState(database.db, sessionId, journal.epoch)
+      const saved = restoreJournal(database.db, sessionId)?.state
       expect(saved?.lastSequence).toBe(journal.cursor().sequence)
       if (!saved) {
-        throw new Error('missing write-time projection')
+        throw new Error('missing saved chat')
       }
       expectProjectionMatches(database, expected)
       expect(renderJournalState(saved)).toStrictEqual(journal.snapshot())
@@ -218,22 +213,8 @@ it.each(['claude', 'codex'] as const)(
     expect(journal.stopMarks.latest()?.settle).toBe(settle)
     journal.stopMarks.settled(settle)
     expect(
-      readJournalSavedState(database.db, sessionId, journal.epoch)?.appliedSettlementIds.has(
-        'stop-settlement'
-      )
+      restoreJournal(database.db, sessionId)?.state.appliedSettlementIds.has('stop-settlement')
     ).toBe(true)
-
-    // Losing the disposable cache preserves all historical outcomes and order.
-    database.transaction((db) => clearJournalSavedState(db, sessionId))
-    const source = restoreJournal(database.db, sessionId)
-    if (!source || source.damage || source.newer) {
-      throw new Error('cacheless restore failed')
-    }
-    expectProjectionMatches(database, source.state)
-    await finishCatchUp(new JournalProjectionCatchUp(database, sessionId, journal.epoch))
-    expect(readJournalSavedState(database.db, sessionId, journal.epoch)?.lastSequence).toBe(
-      journal.cursor().sequence
-    )
   }
 )
 
@@ -262,10 +243,8 @@ it.each(['written', 'over a prefix'] as const)(
         ? seedOutcomeRows(database, [projectionEpochRow, first])
         : seedProjectionRows(database, [projectionEpochRow, first])
     )
-    disposals.push(() => rig.projection.close())
     await rig.writer.enqueue((seq, ts) => ({ ...batch, seq, ts }))
     expect([...rig.state().items.keys()]).toEqual(['y', 'x'])
-    database.transaction((db) => clearJournalSavedState(db, projectionSessionId))
     expectProjectionMatches(database, rig.state())
   }
 )

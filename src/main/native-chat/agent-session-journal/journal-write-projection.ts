@@ -6,20 +6,16 @@ import type { JournalRow } from './journal-row-schema'
 import { prepareJournalOutcomeWrite } from './journal-outcome-write'
 import { encodeJournalState } from './journal-state-codec'
 import { restoreJournal } from './journal-open'
-import { requestJournalMaintenance } from './journal-maintenance'
-import { logJournalProjectionFailure } from './journal-saved-state'
 
 // A full restore per check: development samples each chat so long streams stay responsive.
 const DEVELOPMENT_VERIFY_INTERVAL_MS = 60_000
 
-/** Writes outcomes with each append; a chat whose cache lags (behind, or its savepoint failed) asks
- * the database's maintenance runner, which owns all repair and its backoff. */
+/** Writes outcome records with each append and adopts their transition once the write commits. */
 export class JournalWriteProjection {
   /** Projection tests check the equality invariant after every commit and throw on divergence. */
   static verifyEachCommit = false
 
   private verifiedAt = Number.NEGATIVE_INFINITY
-  private closed = false
 
   constructor(
     private readonly deps: {
@@ -29,21 +25,10 @@ export class JournalWriteProjection {
     }
   ) {}
 
-  opened(current: boolean): void {
-    if (!current) {
-      this.request()
-    }
-  }
-
   /** The callback is invoked only after the outer transaction has committed. */
   prepare(db: Database.Database, rows: readonly JournalRow[], savedAt: number): () => void {
     const transition = prepareJournalOutcomeWrite(db, this.deps.state(), rows, savedAt)
-    return () => {
-      this.deps.adopt(transition.adopt())
-      if (!transition.current) {
-        this.request()
-      }
-    }
+    return () => this.deps.adopt(transition.adopt())
   }
 
   /** Runs after commit notification, never in the adopt path. */
@@ -63,16 +48,12 @@ export class JournalWriteProjection {
     try {
       this.checkEquivalent()
     } catch (error) {
-      logJournalProjectionFailure(this.deps.state().sessionId, error)
+      logJournalVerifyFailure(this.deps.state().sessionId, error)
     }
   }
 
-  close(): void {
-    this.closed = true
-  }
-
-  /** Every saved form (input fold, prefix plus records, cache, or records alone) must restore the
-   * live state. */
+  /** Every saved form (input fold, prefix plus records, or records alone) must restore the live
+   * state. */
   private checkEquivalent(): void {
     const live = this.deps.state()
     const loaded = restoreJournal(this.deps.database.db, live.sessionId)
@@ -85,10 +66,12 @@ export class JournalWriteProjection {
       throw new Error('journal saved state differs from live state')
     }
   }
+}
 
-  private request(): void {
-    if (!this.closed && !this.deps.database.isClosed) {
-      requestJournalMaintenance(this.deps.database.db, this.deps.state().sessionId)
-    }
+function logJournalVerifyFailure(sessionId: string, error: unknown): void {
+  try {
+    console.warn('[agent-session-journal] saved chat differs from live chat', { sessionId, error })
+  } catch {
+    // Diagnostics never turn a development check into a rejected send.
   }
 }

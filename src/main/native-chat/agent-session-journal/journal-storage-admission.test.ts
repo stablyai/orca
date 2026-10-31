@@ -24,8 +24,6 @@ import type { AgentSessionFailureFact } from '../../../shared/agent-session-fail
 import type { storedFailureFact } from './journal-storage-schema'
 import type { UndeclaredStorageKeys } from './journal-storage-strict'
 import { restoreJournal } from './journal-open'
-import { JournalProjectionCatchUp } from './journal-projection-catch-up'
-import { finishCatchUp } from './journal-projection-test-support'
 import type { JournalReducerState } from './journal-reducer'
 import {
   journalEntryJson,
@@ -102,16 +100,15 @@ function withLaterKey(json: string): string {
   return json.replace('"type":"text",', '"type":"text","emphasis":"strong",')
 }
 
-it("refuses a newer build's record with an undeclared nested key before adopting the cache, writes nothing, and starts no epoch", async () => {
-  const epoch = await writeItems(journals, [0, 1, 2])
+it("refuses a newer build's record with an undeclared nested key before adopting it, writes nothing, and starts no epoch", async () => {
+  await writeItems(journals, [0, 1, 2])
   const database = openTestJournalHostDatabase(root)
-  await finishCatchUp(new JournalProjectionCatchUp(database, IDENTITY.sessionId, epoch))
   const source = db().prepare('SELECT generation, through_seq FROM journal_outcome_epochs').get()
   const generation = Number(source?.generation)
   const through = Number(source?.through_seq)
-  expect(restoreJournal(db(), IDENTITY.sessionId)?.projectionThrough).toBe(through)
+  expect(restoreJournal(db(), IDENTITY.sessionId)).toMatchObject({ newer: null, damage: null })
 
-  // The newer build revises item 2 with a key this build does not declare and keeps its cache.
+  // The newer build revises item 2 with a key this build does not declare.
   const itemId = 'codex:thread-1:turn-1:2'
   const latest = db()
     .prepare(`SELECT value_json FROM journal_outcomes WHERE field = 'items' AND entry_key = ?
@@ -128,12 +125,6 @@ it("refuses a newer build's record with an undeclared nested key before adopting
     insert.run(generation, next, 'items', JSON.stringify(itemId), ordinal(0), revised)
     insert.run(generation, next, '$', '"lastSequence"', ordinal(1), String(next))
     write.prepare('UPDATE journal_outcome_epochs SET through_seq = ?').run(next)
-    write.prepare('UPDATE journal_items SET item_json = ? WHERE item_id = ?').run(revised, itemId)
-    const state = db().prepare('SELECT state_json FROM journal_state').get()
-    const scalars = { ...JSON.parse(String(state?.state_json)), lastSequence: next }
-    write
-      .prepare('UPDATE journal_state SET through_seq = ?, state_json = ?')
-      .run(next, JSON.stringify(scalars))
   })
   const before = savedBytes()
 

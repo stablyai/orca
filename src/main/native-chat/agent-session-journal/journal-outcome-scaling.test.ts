@@ -14,14 +14,12 @@ import type { JournalHostDatabase } from './journal-host-database'
 import { restoreJournal } from './journal-open'
 import type { JournalRow } from './journal-row-schema'
 import { journalOutcomeSource } from './journal-outcome-format'
-import { JournalOutcomeRebuild } from './journal-outcome-rebuild'
-import { sweepJournalOutcomePage } from './journal-outcome-cleanup'
-import { JOURNAL_OUTCOME_PAGE_BYTES, JOURNAL_OUTCOME_PAGE_ROWS } from './journal-outcome-table'
+import { JournalOutcomeSweeper, sweepJournalOutcomePage } from './journal-outcome-cleanup'
+import { JOURNAL_NEWEST_OUTCOME_SQL } from './journal-outcome-table'
 import { readJournalOutcomeGroups } from './journal-read-row'
 import { applyJournalRow, type JournalReducerState } from './journal-reducer'
 import { isolateJournalTransition } from './journal-reducer-transition'
-import { clearJournalSavedState, sweepJournalSavedState } from './journal-saved-state'
-import { JournalMaintenanceRunner } from './journal-state-backfill'
+import { encodeJournalState } from './journal-state-codec'
 import {
   projectionBase as base,
   projectionEpoch as epoch,
@@ -44,10 +42,7 @@ const providerItemId = agentJournalItemKey({
 })
 const WRITTEN = {
   journal_rows: 'row_json',
-  journal_outcomes: 'value_json',
-  journal_items: 'item_json',
-  journal_entries: 'entry_json',
-  journal_state: 'state_json'
+  journal_outcomes: 'value_json'
 } as const
 const TRANSACTION = /^(BEGIN|COMMIT|ROLLBACK|SAVEPOINT|RELEASE)\b/
 
@@ -58,7 +53,6 @@ beforeEach(async () => {
 })
 afterEach(async () => {
   for (const rig of rigs.splice(0)) {
-    rig.projection.close()
     rig.queue.markClosed()
     await rig.queue.drain()
   }
@@ -275,24 +269,55 @@ it('appends a streamed revision, a Codex plan update and an acceptance with the 
   for (const key of ['streamed', 'planned', 'accepted'] as const) {
     expectSameWork(small[key], large[key])
   }
-  // The item's outcome and the sequence scalar, the cache row and its stamp.
-  expect(small.streamed.writes).toStrictEqual([
-    ['journal_items UPDATE', 1],
-    ['journal_outcomes INSERT', 2],
-    ['journal_state UPDATE', 1]
-  ])
+  // The item's record and the sequence scalar.
+  expect(small.streamed.writes).toStrictEqual([['journal_outcomes INSERT', 2]])
 })
 
-it('opens a new chat from its cache without reading an outcome or input row at N and 10N', () => {
-  for (const size of [N, 10 * N]) {
-    const { database, rig } = outcomeChat(size, `open-${size}`)
+/** Distinct keys the chat's records hold, live, deleted and scalar alike. */
+function outcomeKeys(database: JournalHostDatabase): number {
+  return Number(
+    database.db
+      .prepare('SELECT COUNT(*) AS n FROM (SELECT DISTINCT field, entry_key FROM journal_outcomes)')
+      .get()?.n
+  )
+}
+
+it("opens a new chat reading each key's newest record once, the same with N and 10N superseded revisions", async () => {
+  const measure = async (revisions: number) => {
+    const { database, rig } = outcomeChat(N, `open-${revisions}`)
+    for (let index = 1; index <= revisions; index++) {
+      await rig.writer.enqueue(revision('answer', message(`answer ${index}`, 'assistant'), index))
+    }
+    const records = database.db.prepare('SELECT COUNT(*) AS n FROM journal_outcomes').get()?.n
     const watched = watch(database)
-    expect(restoreJournal(database.db, sessionId)?.projectionThrough).toBe(rig.state().lastSequence)
-    expect(watched.rowsRead('journal_outcomes')).toBe(0)
-    // Only the marker row, which the epoch's outcome summary must agree with.
-    expect(watched.rowsRead('journal_rows')).toBe(1)
+    const loaded = restoreJournal(database.db, sessionId)
+    const work = watched.take()
     watched.stop()
+    expect(loaded && encodeJournalState(loaded.state)).toEqual(encodeJournalState(rig.state()))
+    return { database, work, records: Number(records), keys: outcomeKeys(database) }
   }
+  const small = await measure(N)
+  const large = await measure(10 * N)
+  // Anti-vacuous: the larger chat holds 9N more superseded revisions of one item and of the
+  // sequence scalar.
+  expect(large.records - small.records).toBe(2 * 9 * N)
+  expect(large.keys).toBe(small.keys)
+  expectSameWork(small.work, large.work)
+  // One record per key; of the chat's rows only the marker, which its outcome summary must agree with.
+  expect(small.work.read).toStrictEqual({
+    journal_outcome_epochs: 1,
+    journal_outcomes: small.keys,
+    journal_rows: 1,
+    journal_sessions: 2
+  })
+  // Each read is one seek down the key index from the last key: no scan, no sort, no revision walk.
+  const plan = small.database.db
+    .prepare(`EXPLAIN QUERY PLAN ${JOURNAL_NEWEST_OUTCOME_SQL}`)
+    .all(1, '', '', 1)
+    .map((row) => String(row.detail))
+  expect(plan).toEqual([
+    'SEARCH journal_outcomes USING INDEX journal_outcome_keys (generation=? AND (field,entry_key)>(?,?))'
+  ])
 })
 
 /** An existing chat of `size` sends in its input rows, then three writes as outcome records. */
@@ -311,7 +336,7 @@ async function prefixChat(size: number, label: string) {
   return { database, rig, first, streamed, accepted }
 }
 
-it('writes to an existing chat without reading its prefix or keeping a cache, the same at N and 10N', async () => {
+it('writes to an existing chat without reading its prefix, the same at N and 10N', async () => {
   const small = await prefixChat(N, 'prefix-append-small')
   const large = await prefixChat(10 * N, 'prefix-append-large')
   for (const key of ['first', 'streamed', 'accepted'] as const) {
@@ -326,65 +351,44 @@ it('writes to an existing chat without reading its prefix or keeping a cache, th
   expect(large.rig.state().submissions.get('send')?.dispatchState).toBe('accepted')
 })
 
-it("opens an existing chat reading main's prefix rows and only its records, at N and 10N", async () => {
+it("opens an existing chat reading main's prefix rows and each tail key's newest record, at N and 10N", async () => {
   const measure = async (size: number) => {
     const { database, rig } = await prefixChat(size, `prefix-open-${size}`)
+    // The tail's one streamed item takes `size` more revisions: superseded, never read.
+    for (let index = 3; index < size + 3; index++) {
+      await rig.writer.enqueue(revision('answer', message(`answer ${index}`, 'assistant'), index))
+    }
     const watched = watch(database)
     const loaded = restoreJournal(database.db, sessionId)
     const work = watched.take()
     watched.stop()
-    expect(loaded?.state.lastSequence).toBe(rig.state().lastSequence)
-    return { work, prefix: historyOf(size).length }
+    expect(loaded && encodeJournalState(loaded.state)).toEqual(encodeJournalState(rig.state()))
+    return { work, prefix: historyOf(size).length, keys: outcomeKeys(database) }
   }
   const small = await measure(N)
   const large = await measure(10 * N)
-  for (const { work, prefix } of [small, large]) {
+  for (const { work, prefix, keys } of [small, large]) {
     // The prefix rows main folds, plus the marker: checked against the outcome summary, and met
     // again on the prefix's last page.
     expect(work.read.journal_rows).toBe(prefix + 2)
+    expect(work.read.journal_outcomes).toBe(keys)
   }
-  expect(large.work.read.journal_outcomes).toBe(small.work.read.journal_outcomes)
+  expect(large.keys).toBe(small.keys)
 })
 
-it('rebuilds a cache one bounded page at a time with the same work at N and 10N', () => {
-  const measure = (size: number) => {
-    const { database } = outcomeChat(size, `rebuild-${size}`)
-    database.transaction((db) => clearJournalSavedState(db, sessionId))
-    const source = journalOutcomeSource(database.db, sessionId, epoch)
-    if (!source) {
-      throw new Error('missing outcomes')
-    }
-    const rebuild = new JournalOutcomeRebuild(database, sessionId, epoch, source)
-    expect(rebuild.page()).toBe('advanced')
-    const watched = watch(database)
-    expect(rebuild.page()).toBe('advanced')
-    const work = watched.take()
-    watched.stop()
-    rebuild.close()
-    return work
-  }
-  const small = measure(N)
-  expect(small.read.journal_outcomes).toBe(JOURNAL_OUTCOME_PAGE_ROWS)
-  expect(small.bytes).toBeLessThan(JOURNAL_OUTCOME_PAGE_BYTES)
-  expectSameWork(small, measure(10 * N))
-})
-
-it('runs a background pass with nothing to do without reading history at N and 10N', async () => {
+it('runs a sweep pass with nothing to retire without reading history at N and 10N', async () => {
   const measure = async (size: number) => {
     const { database } = outcomeChat(size, `idle-${size}`)
-    const runner = new JournalMaintenanceRunner({
-      database: () => database,
-      delay: async () => {}
-    })
+    const sweeper = new JournalOutcomeSweeper({ database: () => database, delay: async () => {} })
     const watched = watch(database)
-    await runner.pass()
-    runner.stop()
+    await sweeper.pass()
+    sweeper.stop()
     const work = watched.take()
     watched.stop()
     return work
   }
   const small = await measure(N)
-  for (const table of ['journal_rows', 'journal_outcomes', 'journal_items', 'journal_entries']) {
+  for (const table of ['journal_rows', 'journal_outcomes']) {
     expect(small.read[table] ?? 0).toBe(0)
   }
   expectSameWork(small, await measure(10 * N))
@@ -429,30 +433,6 @@ it('catches a wire client up from outcomes reading only the groups it asks for a
     return work
   }
   expectSameWork(await measure(N), await measure(10 * N))
-})
-
-it('sweeps an orphaned cache from its per-chat row with indexed deletes at N and 10N', () => {
-  const measure = (size: number) => {
-    const { database } = outcomeChat(size, `orphan-${size}`)
-    database.db.exec('DELETE FROM journal_sessions')
-    const watched = watch(database)
-    expect(sweepJournalSavedState(database)).toBe(true)
-    const work = watched.take()
-    watched.stop()
-    const plans = work.statements.flatMap((sql) =>
-      database.db
-        .prepare(`EXPLAIN QUERY PLAN ${sql}`)
-        .all()
-        .map((row) => String(row.detail))
-    )
-    expect(plans.filter((detail) => /SCAN (journal_items|journal_entries)\b/.test(detail))).toEqual(
-      []
-    )
-    return work
-  }
-  const small = measure(N)
-  expect(small.writes).toStrictEqual([['journal_items DELETE', 32]])
-  expectSameWork(small, measure(10 * N))
 })
 
 /** Reducer nodes the draft reaches to fold `row` onto `state`, without adopting it. */

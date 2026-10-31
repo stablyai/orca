@@ -220,9 +220,6 @@ it('refuses a damaged journal as unloadable at subscribe and send, and keeps its
       "UPDATE journal_outcomes SET value_json = '}{' WHERE generation = (SELECT generation FROM journal_outcome_epochs WHERE session_id = ?) AND seq = 2"
     )
     .run(SESSION)
-  openTestJournalHostDatabase(fixture.rig.root)
-    .db.prepare('UPDATE journal_state SET generation = 0 WHERE session_id = ?')
-    .run(SESSION)
   await fixture.rig.restart()
   setStructuredAgentSessionHost(fixture.rig.host)
 

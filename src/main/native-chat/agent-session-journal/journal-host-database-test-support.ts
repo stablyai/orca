@@ -5,12 +5,10 @@ import { randomUUID } from 'node:crypto'
 import { journalRowSchemaVersion } from '../../../shared/agent-session-journal-types'
 import { agentSessionJournalProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { JournalHostDatabase } from './journal-host-database'
-import { clearJournalSavedState } from './journal-saved-state'
 import { fields } from './journal-state-schema'
 import { journalOutcomeSource } from './journal-outcome-format'
 import { decodeJournalOutcome, type JournalOutcome } from './journal-outcome-codec'
-import { publishJournalProjection } from './journal-state-cache-test-support'
-import { applyJournalRow, type JournalReducerState } from './journal-reducer'
+import { applyJournalRow } from './journal-reducer'
 import { restoreJournal, type JournalLoad } from './journal-open'
 import { serializeJournalRow, type JournalRow } from './journal-row-schema'
 import {
@@ -145,14 +143,6 @@ export function publishTestJournalEpoch(
   publishJournalSessionEpoch(db, { sessionId, workspaceId: 'ws-1' }, epoch)
 }
 
-/** Seeds a saved view of `state` as one whole publication. */
-export function saveTestJournalState(
-  database: JournalHostDatabase,
-  state: JournalReducerState
-): void {
-  database.transaction((db) => publishJournalProjection(db, state))
-}
-
 export function readTestJournalRows(
   db: Database.Database,
   sessionId: string,
@@ -194,33 +184,17 @@ export function updateTestJournalRowJson(
   seq: number,
   rowJson: string
 ): void {
-  invalidateEditedJournalPrefix(db, sessionId, seq)
   db.prepare(
     'UPDATE journal_rows SET row_json = ? WHERE session_id = ? AND epoch = ? AND seq = ?'
   ).run(rowJson, sessionId, liveEpoch(db, sessionId), seq)
 }
 
 export function deleteTestJournalRow(db: Database.Database, sessionId: string, seq: number): void {
-  invalidateEditedJournalPrefix(db, sessionId, seq)
   db.prepare('DELETE FROM journal_rows WHERE session_id = ? AND epoch = ? AND seq = ?').run(
     sessionId,
     liveEpoch(db, sessionId),
     seq
   )
-}
-
-/** Fixture history edits need a fresh replay of their edited prefix, not the saved state covering it. */
-function invalidateEditedJournalPrefix(
-  db: Database.Database,
-  sessionId: string,
-  seq: number
-): void {
-  const saved = db
-    .prepare('SELECT through_seq FROM journal_state WHERE session_id = ?')
-    .get(sessionId)
-  if (typeof saved?.through_seq === 'number' && seq <= saved.through_seq) {
-    clearJournalSavedState(db, sessionId)
-  }
 }
 
 /** Read current canonical contributions in commit order for persisted-outcome assertions. */
@@ -271,7 +245,6 @@ export function readTestQueueChanges(
 export function pinTestJournalInputMode(journal: AgentSessionJournal): void {
   const projection = journal['projection']
   const prepare = projection.prepare.bind(projection)
-  projection.close()
   projection.prepare = (db, rows, savedAt) => {
     const state = journal['state']
     if (journalOutcomeSource(db, state.sessionId, state.epoch)) {

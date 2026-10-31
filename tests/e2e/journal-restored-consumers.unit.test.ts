@@ -40,7 +40,6 @@ import { restoreJournal } from '../../src/main/native-chat/agent-session-journal
 import { journalOutcomeSource } from '../../src/main/native-chat/agent-session-journal/journal-outcome-format'
 import { prepareJournalOutcomeWrite } from '../../src/main/native-chat/agent-session-journal/journal-outcome-write'
 import type { JournalRow } from '../../src/main/native-chat/agent-session-journal/journal-row-schema'
-import { readJournalSavedState } from '../../src/main/native-chat/agent-session-journal/journal-state-cache-test-support'
 import { hostTestAttachParams } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { seedQueuedRigLegacyJournal } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-queued-legacy-journal.test-fixture'
 import {
@@ -297,10 +296,7 @@ it.each(cases)(
     await active.host.close(SESSION, 'evict')
     expect(active.host.hasSession(SESSION)).toBe(false)
     const database = openTestJournalHostDatabase(active.root)
-    const saved =
-      kind === 'new'
-        ? readJournalSavedState(database.db, SESSION, resumeCursor.epoch)
-        : restoreJournal(database.db, SESSION)?.state
+    const saved = restoreJournal(database.db, SESSION)?.state
     if (!saved) {
       throw new Error('Missing usable projection before tail append')
     }

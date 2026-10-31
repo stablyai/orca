@@ -10,9 +10,10 @@ import {
 
 // Part of frozen outcome format 1: builds reducer state from its stored scalars and keyed entries.
 
-export type JournalStateDecode = {
-  item: (itemJson: string) => void
+type JournalStateDecode = {
   entry: (path: string, entryJson: string) => void
+  has: (path: string, key: unknown) => boolean
+  remove: (path: string, key: unknown) => void
   finish: () => JournalReducerState
 }
 
@@ -22,24 +23,12 @@ type Target = {
   remove: (key: unknown) => void
 }
 
-/** Decodes format 1's scalars, then its keyed entries in their stored order. */
-export function startOutcomeFormat1Decode(scalars: unknown): JournalStateDecode {
-  outcomeFormat1StrictScalars.parse(scalars)
-  const stored = outcomeFormat1Scalars.parse(scalars)
-  return decodeOutcomeFormat1Onto(
-    Object.entries(stored).map(([key, value]): [string, string] => [key, JSON.stringify(value)])
-  )
-}
-
 /** Applies stored scalars and entries onto `baseline`, or onto a new chat state when the scalars
  * are complete. A map or set entry for an existing key replaces it in place. */
 export function decodeOutcomeFormat1Onto(
   scalarJson: readonly [string, string][],
   baseline?: JournalReducerState
-): JournalStateDecode & {
-  has: (path: string, key: unknown) => boolean
-  remove: (path: string, key: unknown) => void
-} {
+): JournalStateDecode {
   const state = baseline ?? createJournalReducerState('', '')
   if (!baseline) {
     outcomeFormat1StrictScalars.parse(
@@ -58,7 +47,6 @@ export function decodeOutcomeFormat1Onto(
     return found
   }
   return {
-    item: (itemJson) => target('items').set(JSON.parse(itemJson)),
     entry: (path, entryJson) => target(path).set(JSON.parse(entryJson)),
     has: (path, key) => target(path).has(key),
     remove: (path, key) => target(path).remove(key),

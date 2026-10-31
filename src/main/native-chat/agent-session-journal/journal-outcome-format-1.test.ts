@@ -20,9 +20,6 @@ import {
   outcomeFormat1Fields,
   outcomeFormat1Scalars
 } from './journal-outcome-format-1'
-import { JournalProjectionCatchUp } from './journal-projection-catch-up'
-import { finishCatchUp } from './journal-projection-test-support'
-import { JOURNAL_STATE_CODEC_VERSION } from './journal-state-codec'
 
 // Rows a format-1 build wrote, checked in as data: this build must read them, and every later one.
 const fixture = z
@@ -149,23 +146,6 @@ it('reads the checked-in format-1 outcomes into the same chat, every field and s
   expect(echoes[0]?.[1]).toBeUndefined()
 })
 
-it('rebuilds only the disposable cache when its codec changes, leaving the outcomes as stored', async () => {
-  await finishCatchUp(new JournalProjectionCatchUp(database, sessionId, epoch))
-  const outcomes = () =>
-    database.db.prepare('SELECT * FROM journal_outcomes ORDER BY seq, field, entry_key').all()
-  const before = outcomes()
-  database.db
-    .prepare('UPDATE journal_state SET version = ? WHERE session_id = ?')
-    .run(JOURNAL_STATE_CODEC_VERSION + 1, sessionId)
-
-  expect(restoreJournal(database.db, sessionId)?.projectionThrough).toBe(0)
-  expect(plain(restored())).toEqual(fixture.expected)
-  await finishCatchUp(new JournalProjectionCatchUp(database, sessionId, epoch))
-  expect(restoreJournal(database.db, sessionId)?.projectionThrough).toBe(fixture.through)
-  expect(plain(restored())).toEqual(fixture.expected)
-  expect(outcomes()).toEqual(before)
-})
-
 function insertOutcome(field: string, key: string, json: string, format = 1): void {
   database.db
     .prepare(`INSERT INTO journal_outcomes
@@ -178,15 +158,6 @@ const newer = { newer: { sequence: 1 }, damage: null }
 
 it('refuses a field format 1 does not define as written by a newer Orca', () => {
   insertOutcome('futureField', '"k"', '["k",1]')
-  expect(restoreJournal(database.db, sessionId)).toMatchObject(newer)
-})
-
-it('refuses a newer chat before using a cache that would otherwise match', async () => {
-  await finishCatchUp(new JournalProjectionCatchUp(database, sessionId, epoch))
-  expect(restoreJournal(database.db, sessionId)?.projectionThrough).toBe(fixture.through)
-  insertOutcome('receipts', '"client-9"', '["client-9",{}]', 2)
-  database.db.prepare('UPDATE journal_outcome_epochs SET format = 2').run()
-
   expect(restoreJournal(database.db, sessionId)).toMatchObject(newer)
 })
 

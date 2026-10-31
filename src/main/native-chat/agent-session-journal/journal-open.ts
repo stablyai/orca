@@ -1,9 +1,7 @@
 // Replay live epochs without rewriting history; damage/newer rows fail load and remain on disk.
 
-import { readJournalSavedView } from './journal-saved-state'
 import { journalOutcomeSource } from './journal-outcome-format'
-import { journalCacheMatches } from './journal-outcome-cache'
-import { rebuildJournalOutcomes } from './journal-outcome-table'
+import { readJournalOutcomes } from './journal-outcome-table'
 import { JournalOutcomeDecodeError } from './journal-outcome-codec'
 import { readJournalOutcomeGroups, type JournalReadRow } from './journal-read-row'
 import { AgentSessionJournalError } from './journal-write-guards'
@@ -28,8 +26,6 @@ export type JournalDamage = {
 }
 
 export type JournalLoad = {
-  /** Zero when the chat's cache lags its outcome records; maintenance rebuilds it. */
-  projectionThrough?: number
   state: JournalReducerState
   /** Future row versions/kinds require an updated reader. */
   newer: { sequence: number } | null
@@ -45,10 +41,9 @@ export function replayJournal(db: Database.Database, sessionId: string): Journal
   return foldJournalFromState(db, createJournalReducerState(sessionId, epoch))
 }
 
-/** The view is disposable; only admitted outcomes can replace an unreadable cache. The read is
- * synchronous, like main's replay: it blocks once for one chat's saved records (its cache, or else
- * its frozen input prefix and outcome log), never sleeps behind maintenance, and nothing can
- * interleave with it. Admission comes first, so a newer chat's cache is never used. */
+/** The read is synchronous, like main's replay: it blocks once for one chat's saved records (its
+ * frozen input prefix, then each outcome key's newest record), and nothing can interleave with it.
+ * Admission comes first, so a newer chat is never folded. */
 export function restoreJournal(db: Database.Database, sessionId: string): JournalLoad | null {
   const epoch = readJournalSessionEpoch(db, sessionId)
   if (epoch === null) {
@@ -60,23 +55,17 @@ export function restoreJournal(db: Database.Database, sessionId: string): Journa
     if (!source) {
       return foldJournalFromState(db, empty)
     }
+    let baseline: JournalReducerState | undefined
     if (source.prefix > 0) {
       const prefix = foldJournalFromState(db, empty, source.prefix)
       if (prefix.newer || prefix.damage || prefix.state.lastSequence !== source.prefix) {
         const gap = { sequence: prefix.state.lastSequence + 1, cause: 'sequence-gap' as const }
         return { ...prefix, damage: prefix.newer ? null : (prefix.damage ?? gap) }
       }
-      const state = rebuildJournalOutcomes(db, sessionId, epoch, source, prefix.state)
-      return { state, newer: null, damage: null }
+      baseline = prefix.state
     }
-    if (journalCacheMatches(db, sessionId, epoch, source)) {
-      const saved = readJournalSavedView(db, sessionId, epoch)
-      if (typeof saved !== 'string') {
-        return { state: saved, newer: null, damage: null, projectionThrough: source.through }
-      }
-    }
-    const state = rebuildJournalOutcomes(db, sessionId, epoch, source)
-    return { state, newer: null, damage: null, projectionThrough: 0 }
+    const state = readJournalOutcomes(db, sessionId, epoch, source, baseline)
+    return { state, newer: null, damage: null }
   } catch (error) {
     if (error instanceof AgentSessionJournalError && error.code === 'journal_read_only') {
       return { state: empty, newer: { sequence: 1 }, damage: null }

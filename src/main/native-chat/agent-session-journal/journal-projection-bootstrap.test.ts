@@ -9,13 +9,10 @@ import {
   liveTestJournalRows
 } from './journal-host-database-test-support'
 import type { JournalHostDatabase } from './journal-host-database'
-import { JournalProjectionCatchUp } from './journal-projection-catch-up'
 import { readJournalRowsAfterCursor, restoreJournal } from './journal-open'
 import { parseJournalRow } from './journal-row-schema'
 import type { JournalRow } from './journal-row-schema'
 import { publishNewEpoch } from './journal-epoch-rollover'
-import { encodeJournalState } from './journal-state-codec'
-import { clearJournalSavedState } from './journal-saved-state'
 import {
   projectionBase as base,
   projectionEpoch as epoch,
@@ -24,8 +21,6 @@ import {
   seedProjectionRows,
   seedOutcomeRows,
   projectionWriter,
-  finishCatchUp,
-  unpacedCatchUp,
   expectProjectionMatches
 } from './journal-projection-test-support'
 
@@ -39,7 +34,6 @@ beforeEach(async () => {
 })
 afterEach(async () => {
   for (const rig of rigs.splice(0)) {
-    rig.projection.close()
     rig.queue.markClosed()
     await rig.queue.drain()
   }
@@ -97,7 +91,6 @@ it("keeps an existing chat's rows byte for byte, starts its records after one ap
   expect(parseJournalRow(rows.at(-1)!.rowJson)).toEqual({ ok: false, unreadable: true })
   expect([...rig.state().items.keys()]).toEqual(['b', 'd', 'c', 'e'])
   expectProjectionMatches(database, rig.state())
-  expect(database.db.prepare('SELECT COUNT(*) AS n FROM journal_state').get()?.n).toBe(0)
 
   // Catch-up pages the prefix rows, then the record groups, each sequence once.
   const read = (after: number, limit?: number) =>
@@ -108,7 +101,7 @@ it("keeps an existing chat's rows byte for byte, starts its records after one ap
   expect(read(7)).toEqual([8, 9, 10])
 })
 
-it('fences cached opens and every writer before mutation, while the old parser refuses the founding row', async () => {
+it('fences opens and every writer before mutation, while the old parser refuses the founding row', async () => {
   const state = seedOutcomeRows(database, [projectionEpochRow, item(2)])
   const anchor = liveTestJournalRows(database.db, sessionId)[0]
   expect(anchor && parseJournalRow(anchor.rowJson)).toEqual({ ok: false, unreadable: true })
@@ -131,34 +124,6 @@ it('fences cached opens and every writer before mutation, while the old parser r
   expect(rig.state()).toBe(state)
   // Missing remains distinct from unsupported for ACP's resume and loss-warning decisions.
   expect(restoreJournal(database.db, 'missing-session')).toBeNull()
-})
-
-// An open is one synchronous read, so a rebuild can run only between opens: one landing between two
-// rebuild pages reads the outcome log, never the half-copied cache, and adopts the whole chat.
-it('opens a chat whole while its cache rebuild is between pages, then from the finished cache', async () => {
-  const rows = [projectionEpochRow]
-  for (let seq = 2; seq < 80; seq++) {
-    rows.push(item(seq, `item-${seq}`))
-  }
-  const rig = projectionWriter(database, seedOutcomeRows(database, rows))
-  rigs.push(rig)
-  database.transaction((db) => clearJournalSavedState(db, sessionId))
-  const rebuild = new JournalProjectionCatchUp(database, sessionId, epoch)
-  expect(rebuild.load(unpacedCatchUp)).toBe('ready')
-  expect(rebuild.page()).toBe('advanced')
-  expect(rebuild.page()).toBe('advanced')
-  const copied = database.db.prepare('SELECT COUNT(*) AS n FROM journal_items').get()?.n
-  expect(copied).toBeGreaterThan(0)
-  expect(copied).toBeLessThan(rows.length - 1)
-  const between = restoreJournal(database.db, sessionId)
-  expect(between?.projectionThrough).toBe(0)
-  expect(between && encodeJournalState(between.state)).toEqual(encodeJournalState(rig.state()))
-  // A write between pages lands in the outcome log; the rebuild copies it from the moving tip.
-  await rig.writer.enqueue((seq) => item(seq, 'late'))
-  await finishCatchUp(rebuild)
-  const cached = restoreJournal(database.db, sessionId)
-  expect(cached?.projectionThrough).toBe(rig.state().lastSequence)
-  expect(cached && encodeJournalState(cached.state)).toEqual(encodeJournalState(rig.state()))
 })
 
 // The check runs inside the publishing transaction, against the epoch the caller last saw.

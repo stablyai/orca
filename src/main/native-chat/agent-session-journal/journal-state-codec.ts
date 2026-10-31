@@ -1,12 +1,7 @@
 import type { JournalReducerState } from './journal-reducer'
-import {
-  durableQueuePauseMarks,
-  startOutcomeFormat1Decode,
-  type JournalStateDecode
-} from './journal-outcome-format-1-decode'
+import { durableQueuePauseMarks } from './journal-outcome-format-1-decode'
 
-export const JOURNAL_STATE_CODEC_VERSION = 3
-
+/** The whole chat in a comparable form, insertion order included: a restore must equal live. */
 export function encodeJournalState(state: JournalReducerState): {
   stateJson: string
   items: { itemId: string; itemJson: string; ordinal: number }[]
@@ -47,14 +42,4 @@ export function encodeJournalState(state: JournalReducerState): {
       ordinal
     }))
   }
-}
-
-/** Cache codec mismatch triggers a rebuild from outcomes; codec 3 decodes as outcome format 1. */
-export function startJournalStateDecode(
-  version: number,
-  stateJson: string
-): JournalStateDecode | null {
-  return version === JOURNAL_STATE_CODEC_VERSION
-    ? startOutcomeFormat1Decode(JSON.parse(stateJson))
-    : null
 }

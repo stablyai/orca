@@ -9,76 +9,36 @@ import {
   encodeJournalOutcomes,
   journalOutcomeScalars,
   JournalOutcomeFold,
-  JOURNAL_PREFIX_ORDINAL,
-  type JournalOutcome
+  JOURNAL_PREFIX_ORDINAL
 } from './journal-outcome-codec'
 import type { JournalOutcomeSource } from './journal-outcome-format'
 
-export const JOURNAL_OUTCOME_PAGE_ROWS = 32
-export const JOURNAL_OUTCOME_PAGE_BYTES = 1 << 20
-export type JournalOutcomePosition = { seq: number; field: string; key: string }
-export const JOURNAL_OUTCOME_START: JournalOutcomePosition = { seq: 0, field: '', key: '' }
+// The key index orders each key's records newest first, so a range seek past the last key read lands
+// on the next key's newest record: one indexed seek per key, whatever its revisions number.
+export const JOURNAL_NEWEST_OUTCOME_SQL = `SELECT seq, field, entry_key, format, ordinal, value_json,
+  deleted FROM journal_outcomes WHERE generation = ? AND (field, entry_key) > (?, ?) AND seq <= ?
+  ORDER BY field, entry_key, seq DESC LIMIT 1`
 
-export function readJournalOutcomePage(
-  db: Database.Database,
-  generation: number,
-  after: JournalOutcomePosition,
-  through: number,
-  limit = JOURNAL_OUTCOME_PAGE_ROWS
-): JournalOutcome[] {
-  const values: JournalOutcome[] = []
-  let bytes = 0
-  for (const row of db
-    .prepare(`SELECT seq, field, entry_key, format, ordinal, value_json, deleted
-    FROM journal_outcomes WHERE generation = ?
-    AND (seq, field, entry_key) > (?, ?, ?) AND seq <= ?
-    ORDER BY seq, field, entry_key LIMIT ?`)
-    .iterate(generation, after.seq, after.field, after.key, through, limit)) {
-    values.push(decodeJournalOutcome(row))
-    bytes += typeof row.value_json === 'string' ? Buffer.byteLength(row.value_json) : 0
-    if (bytes >= JOURNAL_OUTCOME_PAGE_BYTES) {
-      break
-    }
-  }
-  return values
-}
-
-/** Folds the records over `baseline`, the chat's folded input prefix when it has one. */
-export function rebuildJournalOutcomes(
+/** Folds each key's newest record, deletions included, over `baseline`, the chat's folded input
+ * prefix when it has one. Superseded revisions are never read: they no longer shape the chat. */
+export function readJournalOutcomes(
   db: Database.Database,
   sessionId: string,
   epoch: string,
   source: JournalOutcomeSource,
   baseline?: JournalReducerState
 ): JournalReducerState {
-  const pages = rebuildJournalOutcomePages(() => db, sessionId, epoch, source, baseline)
-  let step = pages.next()
-  while (!step.done) {
-    step = pages.next()
-  }
-  return step.value
-}
-
-export function* rebuildJournalOutcomePages(
-  database: () => Database.Database,
-  sessionId: string,
-  epoch: string,
-  source: JournalOutcomeSource,
-  baseline?: JournalReducerState
-): Generator<void, JournalReducerState> {
+  const newest = db.prepare(JOURNAL_NEWEST_OUTCOME_SQL)
   const fold = new JournalOutcomeFold()
-  let after = JOURNAL_OUTCOME_START
+  let after = { field: '', key: '' }
   for (;;) {
-    const values = readJournalOutcomePage(database(), source.generation, after, source.through)
-    const last = values.at(-1)
-    if (!last) {
-      return yield* fold.finishPages(sessionId, epoch, source.through, baseline)
+    const row = newest.get(source.generation, after.field, after.key, source.through)
+    if (!row) {
+      return fold.finish(sessionId, epoch, source.through, baseline)
     }
-    for (const value of values) {
-      fold.add(value)
-    }
-    after = { seq: last.seq, field: last.field, key: last.key }
-    yield
+    const value = decodeJournalOutcome(row)
+    fold.add(value)
+    after = { field: value.field, key: value.key }
   }
 }
 
@@ -90,8 +50,7 @@ export function persistJournalOutcomeRows(
   source: Pick<JournalOutcomeSource, 'generation' | 'prefix'>,
   rows: readonly JournalRow[],
   savedAt?: number
-): { state: JournalReducerState; values: JournalOutcome[]; adopt: () => JournalReducerState } {
-  const values: JournalOutcome[] = []
+): { state: JournalReducerState; adopt: () => JournalReducerState } {
   let scalar = state.lastSequence === 0 ? {} : journalOutcomeScalars(state)
   const transition = isolateJournalTransition(state, () => undefined)
   const previous = db.prepare(`SELECT ordinal, deleted FROM journal_outcomes
@@ -133,10 +92,9 @@ export function persistJournalOutcomeRows(
         value.json,
         Number(value.deleted)
       )
-      values.push({ ...value, ordinal })
     }
   }
-  return { state: transition.state, values, adopt: transition.adopt }
+  return { state: transition.state, adopt: transition.adopt }
 }
 
 function appended(seq: number, index: number): string {

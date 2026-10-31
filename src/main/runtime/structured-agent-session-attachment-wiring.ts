@@ -1,6 +1,6 @@
 // Keep chat attachment storage/sweeps beside the journal; its database owns upload claims the sweeps honor.
 
-import { startJournalStateBackfill } from '../native-chat/agent-session-journal/journal-state-backfill'
+import { JournalOutcomeSweeper } from '../native-chat/agent-session-journal/journal-outcome-cleanup'
 import { mkdirSync } from 'node:fs'
 import { AgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store'
 import {
@@ -20,21 +20,26 @@ const FIRST_SWEEP_DELAY_MS = 60 * 1000
 const SWEEP_INTERVAL_MS = 6 * 60 * 60 * 1000
 
 let sweeper: AgentSessionAttachmentSweeper | null = null
-let journalBackfill: { stop: () => void } | null = null
+let journalSweeper: JournalOutcomeSweeper | null = null
 
 export function installAgentSessionAttachments(deps: {
   stateDirectory: string
   store: Pick<AgentSessionRecordStore, 'getRecord' | 'isSessionUnreadable'>
   journalDatabase: Pick<JournalHostDatabase, 'readOnly' | 'isClosed' | 'db' | 'writeAutocommit'>
-  journalBackfill?: { database: JournalHostDatabase }
+  journalSweep?: { database: JournalHostDatabase }
   logger: StructuredAgentSessionLogger
 }): void {
   stopAgentSessionAttachments()
-  if (deps.journalBackfill) {
-    const { database } = deps.journalBackfill
-    journalBackfill = startJournalStateBackfill({ database: () => database }, (error) =>
-      deps.logger.warn('chat state backfill failed', { scope: 'journal-state-backfill', error })
-    )
+  if (deps.journalSweep) {
+    const { database } = deps.journalSweep
+    journalSweeper = new JournalOutcomeSweeper({
+      database: () => database,
+      onError: (error) =>
+        deps.logger.warn('retired chat records could not be deleted', {
+          scope: 'journal-outcome-sweep',
+          error
+        })
+    }).start()
   }
   const root = agentSessionAttachmentStoreRoot(deps.stateDirectory)
   // Before any Claude starts: Claude drops an added directory that does not exist yet, for good.
@@ -78,8 +83,8 @@ export function installAgentSessionAttachments(deps: {
 }
 
 export function stopAgentSessionAttachments(): void {
-  journalBackfill?.stop()
-  journalBackfill = null
+  journalSweeper?.stop()
+  journalSweeper = null
   sweeper?.stop()
   sweeper = null
   setAgentSessionAttachmentStore(null)

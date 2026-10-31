@@ -16,13 +16,11 @@ import {
   closeTestJournalHostDatabase,
   publishTestJournalEpoch,
   insertTestJournalRow,
-  insertTestJournalRowJson,
-  saveTestJournalState
+  insertTestJournalRowJson
 } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import type { JournalLoad } from '../native-chat/agent-session-journal/journal-open'
 import { publishJournalOutcomeEpoch } from '../native-chat/agent-session-journal/journal-outcome-write'
 import type { JournalRow } from '../native-chat/agent-session-journal/journal-row-schema'
-import { clearJournalSavedState } from '../native-chat/agent-session-journal/journal-saved-state'
 import { createJournalReducerState } from '../native-chat/agent-session-journal/journal-reducer'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import {
@@ -90,7 +88,7 @@ function resolver(record: AgentSessionRecord, readJournal: () => JournalLoad | n
 }
 
 describe('ACP launch resolution', () => {
-  it('preserves resume and loss-warning decisions through saved state and an unreadable tail', async () => {
+  it('preserves resume and loss-warning decisions through a restore and an unreadable tail', async () => {
     const root = mkdtempSync(join(tmpdir(), 'orca-acp-saved-read-'))
     const database = openTestJournalHostDatabase(root)
     try {
@@ -144,11 +142,6 @@ describe('ACP launch resolution', () => {
         revision: 1,
         body: turn.body
       })
-      const load = replayJournal(database.db, identity.sessionId)
-      if (!load) {
-        throw new Error('missing replay')
-      }
-      saveTestJournalState(database, load.state)
       const readDecisions = async (readJournal: () => JournalLoad | null) => {
         const launch = await resolver(record, readJournal).resolve({ identity })
         return {
@@ -169,7 +162,7 @@ describe('ACP launch resolution', () => {
     }
   })
 
-  it('reads an outcome chat from its cache or its records alone, and a newer one as unreadable', async () => {
+  it('reads an outcome chat from its records, and a newer one as unreadable', async () => {
     const root = mkdtempSync(join(tmpdir(), 'orca-acp-outcome-read-'))
     const database = openTestJournalHostDatabase(root)
     try {
@@ -215,7 +208,7 @@ describe('ACP launch resolution', () => {
           body: turn.body
         }
       ]
-      // A chat this build created holds only records (and its disposable cache).
+      // A chat this build created holds only records.
       database.transaction((db) => {
         publishTestJournalEpoch(db, identity.sessionId, 'epoch-1')
         publishJournalOutcomeEpoch(db, identity.sessionId, 'epoch-1', rows)
@@ -229,11 +222,8 @@ describe('ACP launch resolution', () => {
           losses: launch.resume?.unannouncedLosses()
         }
       }
-      expect(restoreJournal(database.db, identity.sessionId)?.projectionThrough).toBe(2)
+      expect(restoreJournal(database.db, identity.sessionId)?.state.items.has('turn')).toBe(true)
       // The turn on acp-1 is found, so the exchange is saved; the loss has no warning yet.
-      expect(await readDecisions()).toEqual({ unsaved: false, losses: [lostKey] })
-      database.transaction((db) => clearJournalSavedState(db, identity.sessionId))
-      expect(restoreJournal(database.db, identity.sessionId)?.projectionThrough).toBe(0)
       expect(await readDecisions()).toEqual({ unsaved: false, losses: [lostKey] })
       // A newer build's records are unreadable here, never a missing chat.
       database.db.prepare('UPDATE journal_outcome_epochs SET format = 2').run()

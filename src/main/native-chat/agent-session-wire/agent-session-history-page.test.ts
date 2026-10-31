@@ -3,7 +3,6 @@ import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { AGENT_SESSION_HISTORY_MAX_LIMIT } from '../../../shared/agent-session-wire'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
-import { clearJournalSavedState } from '../agent-session-journal/journal-saved-state'
 import { hostTestMessage } from './structured-agent-session-host-test-data'
 import {
   createAgentSessionCatchUpReader,
@@ -58,8 +57,6 @@ describe('readAgentSessionHistory', () => {
     db.prepare(
       "UPDATE journal_rows SET row_json = json_set(row_json, '$.body.state', 'completed') WHERE session_id = ? AND epoch = ? AND seq = ?"
     ).run(IDENTITY.sessionId, cursor.epoch, cursor.sequence)
-    // The saved state covers the edited row; without it the reload replays the edit.
-    clearJournalSavedState(db, IDENTITY.sessionId)
     await fixture.journal.open()
     expect(fixture.journal.cursor()).toEqual(cursor)
     expect(read(request)).toMatchObject({

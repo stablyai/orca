@@ -11,9 +11,7 @@ import {
 import { restoreJournal } from './journal-open'
 import { encodeJournalState } from './journal-state-codec'
 import { journalOutcomeSource } from './journal-outcome-format'
-import { rebuildJournalOutcomes } from './journal-outcome-table'
 import { publishJournalOutcomeEpoch } from './journal-outcome-write'
-import type { JournalProjectionCatchUp, JournalCatchUpPacing } from './journal-projection-catch-up'
 import { insertTestJournalRow, publishTestJournalEpoch } from './journal-host-database-test-support'
 import type { JournalRow } from './journal-row-schema'
 
@@ -91,35 +89,8 @@ export function expectProjectionMatches(
   if (!source) {
     throw new Error('expected canonical outcomes')
   }
-  if (source.prefix === 0) {
-    const rebuilt = rebuildJournalOutcomes(database.db, state.sessionId, state.epoch, source)
-    expect(encodeJournalState(rebuilt)).toStrictEqual(encodeJournalState(state))
-  }
   const restored = restoreJournal(database.db, state.sessionId)
   expect(restored?.damage).toBeNull()
   expect(restored?.newer).toBeNull()
   expect(restored && encodeJournalState(restored.state)).toStrictEqual(encodeJournalState(state))
-}
-
-export const unpacedCatchUp: JournalCatchUpPacing = {
-  work<T>(unit: () => T): T {
-    return unit()
-  },
-  rest: async () => true
-}
-
-export async function finishCatchUp(runner: JournalProjectionCatchUp): Promise<void> {
-  try {
-    for (let pages = 0; pages < 20_000; pages++) {
-      expect(runner.load(unpacedCatchUp)).toBe('ready')
-      const step = runner.page()
-      if (step === 'current') {
-        return
-      }
-      expect(['advanced', 'stale']).toContain(step)
-    }
-    throw new Error('journal catch-up did not converge')
-  } finally {
-    runner.close()
-  }
 }

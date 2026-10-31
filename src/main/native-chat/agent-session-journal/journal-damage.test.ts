@@ -179,8 +179,6 @@ describe('a chat whose saved state cannot be read right now', () => {
       turnScope: AGENT_JOURNAL_THREAD_SCOPE
     })
     await journal.close()
-    // Without the disposable cache, the open reads the outcome log.
-    await withJournalDatabase((db) => db.prepare('DELETE FROM journal_state').run())
     let failures = 1
     const prepare = Database.prototype.prepare
     vi.spyOn(Database.prototype, 'prepare').mockImplementation(function (

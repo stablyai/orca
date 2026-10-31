@@ -10,7 +10,6 @@ import {
 } from './journal-host-database-test-support'
 import { encodeJournalState } from './journal-state-codec'
 import { JournalStopMarks } from './journal-stop-marks'
-import { JournalProjectionCatchUp } from './journal-projection-catch-up'
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalRow } from './journal-row-schema'
 import {
@@ -20,7 +19,6 @@ import {
   projectionSessionId as sessionId,
   projectionWriter,
   seedOutcomeRows,
-  finishCatchUp,
   expectProjectionMatches
 } from './journal-projection-test-support'
 
@@ -33,7 +31,6 @@ beforeEach(async () => {
   vi.spyOn(console, 'warn').mockImplementation(() => {})
 })
 afterEach(async () => {
-  rig?.projection.close()
   rig?.queue.markClosed()
   await rig?.queue.drain()
   vi.restoreAllMocks()
@@ -41,7 +38,9 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-it('keeps sends on cache-local failure, but adopts nothing on outcome, receipt, recovery, outer-abort or COMMIT failure', async () => {
+// The records, the epoch's coverage and the receipt are one write: any failure among them, or at
+// COMMIT, refuses the send as main's row insert does, and the live chat adopts nothing.
+it('adopts nothing on an outcome, coverage, receipt, outer-abort or COMMIT failure', async () => {
   const user: AgentJournalMessageItem = {
     kind: 'message',
     role: 'user',
@@ -79,16 +78,11 @@ it('keeps sends on cache-local failure, but adopts nothing on outcome, receipt, 
     },
     committed: vi.fn()
   }
-  database.db.exec(`CREATE TRIGGER cache_failure BEFORE INSERT ON journal_state
-    BEGIN SELECT RAISE(ABORT, 'cache failure'); END`)
   await expect(writer.enqueue(send('preserved'), receipt)).resolves.toMatchObject({ seq: 3 })
   expect(receipt.committed).toHaveBeenCalledOnce()
   expect(rig.state().submissions.has('preserved')).toBe(true)
   expect(stops.latest()?.settle).toBe(settle)
   expectProjectionMatches(database, rig.state())
-  database.db.exec('DROP TRIGGER cache_failure')
-  await finishCatchUp(new JournalProjectionCatchUp(database, sessionId, epoch))
-  rig.projection.opened(true)
   const saved = encodeJournalState(rig.state())
   const live = rig.state()
   const scenarios = [
@@ -97,12 +91,16 @@ it('keeps sends on cache-local failure, but adopts nothing on outcome, receipt, 
       `CREATE TRIGGER failure BEFORE INSERT ON journal_outcomes BEGIN SELECT RAISE(ABORT, 'failure'); END`
     ],
     [
+      'coverage',
+      `CREATE TRIGGER failure BEFORE UPDATE ON journal_outcome_epochs BEGIN SELECT RAISE(ABORT, 'failure'); END`
+    ],
+    [
       'receipt',
       `CREATE TRIGGER failure BEFORE INSERT ON test_receipts BEGIN SELECT RAISE(ABORT, 'failure'); END`
     ],
     [
       'outer',
-      `CREATE TRIGGER failure BEFORE INSERT ON journal_state BEGIN SELECT RAISE(ROLLBACK, 'failure'); END`
+      `CREATE TRIGGER failure BEFORE INSERT ON test_receipts BEGIN SELECT RAISE(ROLLBACK, 'failure'); END`
     ]
   ] as const
   for (const [name, sql] of scenarios) {
@@ -116,29 +114,20 @@ it('keeps sends on cache-local failure, but adopts nothing on outcome, receipt, 
     expectProjectionMatches(database, live)
   }
   const exec = database.db.exec.bind(database.db)
-  for (const broken of ['COMMIT', 'ROLLBACK TO journal_projection', 'RELEASE journal_projection']) {
-    if (broken !== 'COMMIT') {
-      database.db.exec(`CREATE TRIGGER failure BEFORE INSERT ON journal_state
-        BEGIN SELECT RAISE(ABORT, 'cache failure'); END`)
+  const spy = vi.spyOn(database.db, 'exec').mockImplementation((sql) => {
+    if (sql === 'COMMIT') {
+      throw new Error('injected boundary failure')
     }
-    const spy = vi.spyOn(database.db, 'exec').mockImplementation((sql) => {
-      if (sql === broken) {
-        throw new Error('injected boundary failure')
-      }
-      exec(sql)
-    })
-    await expect(writer.enqueue(send(broken), receipt)).rejects.toThrow('injected boundary failure')
-    spy.mockRestore()
-    if (broken !== 'COMMIT') {
-      database.db.exec('DROP TRIGGER failure')
-    }
-    expect(rig.state()).toBe(live)
-    expect(encodeJournalState(live)).toEqual(saved)
-    expect(stops.latest()?.settle).toBe(settle)
-    expect(receipt.committed).toHaveBeenCalledOnce()
-    expect(database.db.prepare('SELECT COUNT(*) AS n FROM test_receipts').get()?.n).toBe(1)
-    expectProjectionMatches(database, live)
-  }
+    exec(sql)
+  })
+  await expect(writer.enqueue(send('commit'), receipt)).rejects.toThrow('injected boundary failure')
+  spy.mockRestore()
+  expect(rig.state()).toBe(live)
+  expect(encodeJournalState(live)).toEqual(saved)
+  expect(stops.latest()?.settle).toBe(settle)
+  expect(receipt.committed).toHaveBeenCalledOnce()
+  expect(database.db.prepare('SELECT COUNT(*) AS n FROM test_receipts').get()?.n).toBe(1)
+  expectProjectionMatches(database, live)
   const first = rig.state().lastSequence + 1
   await writer.enqueueRows(() => [
     (seq, ts) => ({

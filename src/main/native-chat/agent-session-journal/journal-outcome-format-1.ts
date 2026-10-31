@@ -19,10 +19,11 @@ import {
   type UndeclaredStorageKeys
 } from './journal-storage-strict'
 
-// Outcome format 1. A record keeps this meaning whatever the reducer or the cache codec become,
-// and a build refuses a record holding a key it does not declare. So an added optional key needs
-// no new format; a changed meaning, a removed or renamed key, a loosened type or a changed record
-// key does, with its own records and decoder beside these. The golden fixture must keep decoding.
+// Outcome format 1. A record keeps this meaning whatever the reducer becomes, and a build refuses a
+// record holding a key it does not declare. So an added optional key needs no new format; a changed
+// meaning, a removed or renamed key, a loosened type or a changed record key does, with its own
+// records and decoder beside these. Its fields copy reducer bookkeeping, so changing what one of
+// those means is a format change too. The golden fixture must keep decoding.
 export const JOURNAL_OUTCOME_FORMAT_1 = 1
 
 const number = z.number().finite()
@@ -186,7 +187,7 @@ export const outcomeFormat1Scalars = outcomeFormat1StoredScalars.extend({
   historyOrigin: outcomeFormat1Fields.historyOrigin
 })
 
-/** The scalars as a whole, strict, for a cache that stores them together. */
+/** The scalars as a whole, strict: a chat with no input prefix holds every one. */
 export const outcomeFormat1StrictScalars = strictStorage(outcomeFormat1StoredScalars)
 const strictly = (schemas: Record<string, z.ZodType>) =>
   new Map(Object.entries(schemas).map(([field, schema]) => [field, strictStorage(schema)]))

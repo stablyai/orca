@@ -24,11 +24,7 @@ import {
   publishTestJournalEpoch
 } from './journal-host-database-test-support'
 import { publishJournalOutcomeEpoch } from './journal-outcome-write'
-import { journalOutcomeSource } from './journal-outcome-format'
-import { rebuildJournalOutcomes } from './journal-outcome-table'
 import { restoreJournal } from './journal-open'
-import { clearJournalSavedState } from './journal-saved-state'
-import { readJournalSavedState } from './journal-state-cache-test-support'
 import type { JournalRow } from './journal-row-schema'
 import type { JournalHostDatabase } from './journal-host-database'
 
@@ -106,9 +102,6 @@ function expectSameState(actual: JournalReducerState, expected: JournalReducerSt
 
 it('round trips the complete replayed reducer, including insertion order and valueless echoes', () => {
   for (const table of [
-    'journal_state',
-    'journal_items',
-    'journal_entries',
     'journal_rows',
     'journal_sessions',
     'journal_outcomes',
@@ -244,17 +237,10 @@ it('round trips the complete replayed reducer, including insertion order and val
   expect(state.itemEchoes.get(itemId(2))).toBeNull()
   expect([...state.appliedSettlementIds][0]).toBe('settlement-2')
   expect(state.derivedTurnScope.snapshot()).toBe(itemId(5))
-  const source = journalOutcomeSource(database.db, identity.sessionId, epoch)
-  if (!source) {
-    throw new Error('missing outcomes')
-  }
-  expectSameState(rebuildJournalOutcomes(database.db, identity.sessionId, epoch, source), state)
-  const restored = requireState(readJournalSavedState(database.db, identity.sessionId, epoch))
+  const restored = requireState(restoreJournal(database.db, identity.sessionId)?.state)
   expectSameState(restored, state)
   expect(restored.derivedTurnScope.scopeFor(text('next'))).toEqual({
     kind: 'turn',
     turnItemId: itemId(5)
   })
-  database.transaction((db) => clearJournalSavedState(db, identity.sessionId))
-  expectSameState(requireState(restoreJournal(database.db, identity.sessionId)?.state), state)
 })

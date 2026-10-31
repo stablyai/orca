@@ -1,6 +1,5 @@
 // Delete and replace epochs atomically; retaining superseded rows would grow history without bound.
 
-import { clearJournalSavedState } from './journal-saved-state'
 import { journalOutcomeSource } from './journal-outcome-format'
 import { publishJournalOutcomeEpoch } from './journal-outcome-write'
 import { journalRowSchemaVersion } from '../../../shared/agent-session-journal-types'
@@ -65,7 +64,6 @@ export function publishNewEpoch(input: {
       if (retired !== null) {
         journalOutcomeSource(db, sessionId, retired)
       }
-      clearJournalSavedState(db, sessionId)
       if (retired !== null) {
         deleteJournalEpochRows(db, sessionId, retired)
       }
@@ -78,12 +76,7 @@ export function publishNewEpoch(input: {
       // Adopt, then finish the nonthrowing queue bookkeeping, before the fallible publication.
       const state = publication.adopt()
       input.queue.receipt.committed()
-      input.onPublished({
-        state,
-        newer: null,
-        damage: null,
-        projectionThrough: publication.through
-      })
+      input.onPublished({ state, newer: null, damage: null })
     }
   )
 }
