@@ -208,6 +208,7 @@ async function heldLaunch({
           linkPointerGesturesRef: { current: new Map() },
           fileLinkClickFallbackDisposablesRef: { current: new Map() },
           httpLinkClickFallbackDisposablesRef: { current: new Map() },
+          commandLinkDisposablesRef: { current: new Map() },
           selectionDisposablesRef: { current: new Map() },
           nativeCopyDisposablesRef: { current: new Map() },
           selectionCaptureTimersRef: { current: new Map() },
