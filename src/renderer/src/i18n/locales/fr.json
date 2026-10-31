@@ -6991,13 +6991,15 @@
           "distro": "Distro",
           "loading": "Recherche des distros WSL…",
           "placeholder": "Choisissez une distro",
-          "none": "Aucune distro WSL trouvée. Installez-en une avec : wsl --install",
           "stoppedHint": "{{value0}} est arrêtée. L'ajouter la démarre.",
           "addingHint": "Installation et démarrage du serveur Orca dans la distro. La première fois peut prendre une minute.",
           "adding": "Configuration…",
           "startAndAdd": "Démarrer et ajouter",
           "add": "Ajouter un hôte",
-          "refresh": "Actualiser"
+          "refresh": "Actualiser",
+          "wsl1Reason": "WSL 1 ne peut pas exécuter d’hôte Orca ; convertissez-la avec {{command}}",
+          "noWsl2Title": "Aucune distribution WSL 2 trouvée",
+          "noWsl2Install": "Installez-en une depuis un terminal Windows avec {{command}}, puis choisissez Actualiser."
         },
         "wslHostRowStatus": {
           "connecting": "Démarrage",
@@ -20940,6 +20942,11 @@
     },
     "cardProperties": {
       "agentModel": "Modèle de l’agent"
+    },
+    "wslHostOffer": {
+      "title": "Exécuter {{distro}} comme hôte (recommandé)",
+      "why": "Git, les fichiers et les terminaux s’exécutent alors nativement sous Linux plutôt qu’à travers le partage de fichiers Windows.",
+      "accept": "Exécuter comme hôte"
     }
   },
   "editor": {

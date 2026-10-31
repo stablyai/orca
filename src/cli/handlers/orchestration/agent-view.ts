@@ -5,6 +5,7 @@ import { renderCommand } from '../../orchestration-mutation-recovery'
 import { resolveOrchestrationCliExecutable } from '../../runtime/orchestration-recovery-command'
 import type { RuntimeRpcSuccess } from '../../runtime-client'
 import { withReceiptNext } from './receipt-next-text'
+import { escapeTerminalControlCharacters } from '../../../shared/terminal-control-character-escape'
 
 type AgentViewFields = Record<string, unknown>
 
@@ -115,8 +116,8 @@ function formatFieldValue(value: unknown): string {
     return value.length ? value.map(formatFieldValue).join(',') : 'none'
   }
   const text = typeof value === 'string' ? value : JSON.stringify(value)
-  // Quote anything that would split a name=value pair.
-  return /^[^\s"',=]+$/.test(text) ? text : JSON.stringify(text)
+  // Quote anything that would split a name=value pair; never pass raw control bytes to the terminal.
+  return escapeTerminalControlCharacters(/^[^\s"',=]+$/.test(text) ? text : JSON.stringify(text))
 }
 
 function isFieldRecord(value: unknown): value is AgentViewFields {
