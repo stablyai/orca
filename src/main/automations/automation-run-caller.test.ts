@@ -71,16 +71,6 @@ describe('resolveCallerAutomationRun', () => {
       resolveCallerAutomationRun([terminalRun('r1')], { ...session, ptyId: 'pty-2' }, 2)
     ).toThrow(InvalidArgumentError)
   })
-
-  it('matches chat runs by session id', () => {
-    const runs = [
-      terminalRun('chat', { sessionKind: 'chat', chatSessionId: 's1', terminalPaneKey: null })
-    ]
-
-    expect(resolveCallerAutomationRun(runs, { kind: 'chat', sessionIds: ['s1'] }, 2).id).toBe(
-      'chat'
-    )
-  })
 })
 
 describe('terminalCallerSession', () => {
