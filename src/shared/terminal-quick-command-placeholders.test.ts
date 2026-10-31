@@ -91,6 +91,41 @@ describe('substituteTerminalQuickCommandPlaceholders', () => {
     ).toEqual({ status: 'missing-workspace' })
   })
 
+  it.each([
+    '/repo/$(touch pwned).py',
+    '/repo/`touch pwned`.py',
+    '/repo/a";touch pwned;".py',
+    '/repo/a\nb.py'
+  ])('refuses a path a shell could execute: %j', (filePath) => {
+    expect(
+      substituteTerminalQuickCommandPlaceholders('python "${file}"', {
+        filePath,
+        relativePath: 'a.py',
+        workspaceFolder: '/repo'
+      })
+    ).toEqual({ status: 'unsafe-path' })
+  })
+
+  it('refuses an unsafe ${workspaceFolder}', () => {
+    expect(
+      substituteTerminalQuickCommandPlaceholders('cd "${workspaceFolder}"', {
+        filePath: null,
+        relativePath: null,
+        workspaceFolder: '/repo/$(id)'
+      })
+    ).toEqual({ status: 'unsafe-path' })
+  })
+
+  it('keeps paths with spaces and apostrophes', () => {
+    expect(
+      substituteTerminalQuickCommandPlaceholders('python "${file}"', {
+        filePath: "/repo/Matt's notes.py",
+        relativePath: "Matt's notes.py",
+        workspaceFolder: '/repo'
+      })
+    ).toEqual({ status: 'ok', command: 'python "/repo/Matt\'s notes.py"' })
+  })
+
   it('passes commands without placeholders through', () => {
     expect(substituteTerminalQuickCommandPlaceholders('git status', posixFile)).toEqual({
       status: 'ok',

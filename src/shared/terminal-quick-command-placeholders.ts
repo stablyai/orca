@@ -19,6 +19,11 @@ export type TerminalQuickCommandPlaceholderResult =
   | { status: 'ok'; command: string }
   | { status: 'missing-file' }
   | { status: 'missing-workspace' }
+  | { status: 'unsafe-path' }
+
+// Why: values are pasted into a shell line, so a file named `$(touch x).py` would run even inside
+// the documented `"${file}"` quoting. Apostrophes stay allowed: they are common and inert there.
+const UNSAFE_PATH_VALUE = /[\p{Cc}$`"]/u
 
 const PLACEHOLDER_NAME_SET = new Set<string>(TERMINAL_QUICK_COMMAND_PLACEHOLDER_NAMES)
 
@@ -34,6 +39,11 @@ export function substituteTerminalQuickCommandPlaceholders(
 ): TerminalQuickCommandPlaceholderResult {
   let missingFile = false
   let missingWorkspace = false
+  let unsafePath = false
+  const usable = (value: string): string => {
+    unsafePath ||= UNSAFE_PATH_VALUE.test(value)
+    return value
+  }
   const next = command.replace(PLACEHOLDER_PATTERN, (match, name: string) => {
     if (!isPlaceholderName(name)) {
       return match
@@ -44,19 +54,22 @@ export function substituteTerminalQuickCommandPlaceholders(
         missingFile = true
         return match
       }
-      return value
+      return usable(value)
     }
     if (!context.workspaceFolder) {
       missingWorkspace = true
       return match
     }
-    return context.workspaceFolder
+    return usable(context.workspaceFolder)
   })
   if (missingFile) {
     return { status: 'missing-file' }
   }
   if (missingWorkspace) {
     return { status: 'missing-workspace' }
+  }
+  if (unsafePath) {
+    return { status: 'unsafe-path' }
   }
   return { status: 'ok', command: next }
 }

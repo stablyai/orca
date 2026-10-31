@@ -7,7 +7,8 @@ import { resolveWorkspaceDirectory, type WorkspaceDirectoryState } from '@/lib/w
 import {
   substituteTerminalQuickCommandPlaceholders,
   terminalQuickCommandUsesPlaceholders,
-  type TerminalQuickCommandPlaceholderContext
+  type TerminalQuickCommandPlaceholderContext,
+  type TerminalQuickCommandPlaceholderResult
 } from '../../../shared/terminal-quick-command-placeholders'
 
 type PlaceholderEditorFile = Pick<
@@ -58,18 +59,30 @@ export function prepareTerminalQuickCommandForRun(
   if (result.status === 'ok') {
     return { ...command, command: result.command }
   }
-  toast.message(
-    result.status === 'missing-file'
-      ? translate(
-          'components.terminal.quickCommands.missingEditorFile',
-          'This command needs an editor file. Open a file in this workspace and try again.'
-        )
-      : translate(
-          'components.terminal.quickCommands.missingWorkspaceFolder',
-          'This command needs the workspace folder, which is not available here.'
-        )
-  )
+  toast.message(placeholderFailureMessage(result.status))
   return null
+}
+
+function placeholderFailureMessage(
+  status: Exclude<TerminalQuickCommandPlaceholderResult['status'], 'ok'>
+): string {
+  switch (status) {
+    case 'missing-file':
+      return translate(
+        'components.terminal.quickCommands.missingEditorFile',
+        'This command needs an editor file. Open a file in this workspace and try again.'
+      )
+    case 'missing-workspace':
+      return translate(
+        'components.terminal.quickCommands.missingWorkspaceFolder',
+        'This command needs the workspace folder, which is not available here.'
+      )
+    case 'unsafe-path':
+      return translate(
+        'components.terminal.quickCommands.unsafePath',
+        'This command was not run because the file path contains characters a shell could execute.'
+      )
+  }
 }
 
 function isRunnableEditorFile(file: PlaceholderEditorFile): boolean {
