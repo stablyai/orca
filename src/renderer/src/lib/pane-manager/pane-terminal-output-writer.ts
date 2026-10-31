@@ -37,6 +37,7 @@ import {
   BACKGROUND_FLUSH_DELAY_MS,
   FOREGROUND_BACKLOG_WARNING,
   LARGE_BACKLOG_CHARS,
+  backgroundDrainDelayMs,
   discardTerminalOutput,
   queuedByTerminal,
   scheduleDrain,
@@ -245,6 +246,8 @@ export function writeTerminalOutputImpl(
   }
   // Why: letting every non-focused pane call xterm.write immediately spawns a WriteBuffer timer per pane, starving the focused terminal on the shared renderer thread.
   scheduleDrain(
-    entry.highPriority || entry.queuedChars > LARGE_BACKLOG_CHARS ? 0 : BACKGROUND_FLUSH_DELAY_MS
+    entry.highPriority || entry.queuedChars > LARGE_BACKLOG_CHARS
+      ? 0
+      : backgroundDrainDelayMs(BACKGROUND_FLUSH_DELAY_MS)
   )
 }
