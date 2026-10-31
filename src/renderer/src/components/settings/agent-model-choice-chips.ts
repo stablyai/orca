@@ -91,7 +91,13 @@ export function agentModelChoiceChips(
               ? { permissionMode: 'own' }
               : {
                   options: {
-                    [key]: key === 'fastMode' ? 'false' : key === 'serviceTier' ? 'default' : null
+                    [key]: !context
+                      ? null
+                      : key === 'fastMode'
+                        ? 'false'
+                        : key === 'serviceTier'
+                          ? 'default'
+                          : null
                   }
                 },
           text

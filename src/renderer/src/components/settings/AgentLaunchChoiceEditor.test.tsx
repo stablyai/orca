@@ -28,18 +28,26 @@ const initial: AgentLaunchSettingsSource = {
   agentDefaultArgs: { claude: '--verbose' },
   agentLaunchChoices: { claude: { model: 'opus', options: { effort: 'high' } } }
 }
-function Fixture({ save }: { save: (mutation: unknown) => Promise<void> }) {
-  const [settings, setSettings] = useState(initial)
+function Fixture({
+  save,
+  saved,
+  agent = 'claude'
+}: {
+  save: (mutation: unknown) => Promise<void>
+  saved?: { value: AgentLaunchSettingsSource }
+  agent?: 'claude' | 'codex'
+}) {
+  const [settings, setSettings] = useState(saved?.value ?? initial)
   const projected = projectAgentLaunchSettings(settings)
   return (
     <TooltipProvider>
       <AgentLaunchChoiceEditor
-        agent="claude"
-        label="Claude Code"
-        choices={settings.agentLaunchChoices?.claude}
-        userArgs={projected.agentChoices?.userArgs.claude ?? ''}
+        agent={agent}
+        label={agent === 'claude' ? 'Claude Code' : 'Codex'}
+        choices={settings.agentLaunchChoices?.[agent]}
+        userArgs={projected.agentChoices?.userArgs[agent] ?? ''}
         permission={{
-          ...resolveAgentPermission('claude', settings),
+          ...resolveAgentPermission(agent, settings),
           choices: ['own', 'ask'],
           defaultChoice: 'ask',
           onSelect: () => {},
@@ -47,20 +55,72 @@ function Fixture({ save }: { save: (mutation: unknown) => Promise<void> }) {
           argsSetPermission: false
         }}
         save={async (patch, userArgs) => {
-          await save({ type: 'launch-choices', agent: 'claude', patch, userArgs })
-          setSettings((latest) => ({
-            ...latest,
-            ...agentLaunchSettingsMutationUpdates(
-              latest,
-              { type: 'launch-choices', agent: 'claude', patch, userArgs },
-              'darwin'
-            )
-          }))
+          await save({ type: 'launch-choices', agent, patch, userArgs })
+          setSettings((latest) => {
+            const next = {
+              ...latest,
+              ...agentLaunchSettingsMutationUpdates(
+                latest,
+                { type: 'launch-choices', agent, patch, userArgs },
+                'darwin'
+              )
+            }
+            if (saved) {
+              saved.value = next
+            }
+            return next
+          })
         }}
       />
     </TooltipProvider>
   )
 }
+
+it.each([
+  { agent: 'claude', model: 'sonnet', key: 'fastMode', value: 'true' },
+  { agent: 'claude', model: 'sonnet', key: 'fastMode', value: 'false' },
+  { agent: 'codex', model: 'gpt-5.6-sol', key: 'serviceTier', value: 'fast' },
+  { agent: 'codex', model: 'gpt-5.6-sol', key: 'serviceTier', value: 'default' }
+] as const)(
+  'removes the saved $agent $key=$value override through the Settings writer and reopen',
+  async ({ agent, model, key, value }) => {
+    const raw =
+      agent === 'claude'
+        ? `--settings '{"theme":"light"}' --add-dir docs`
+        : '-c theme=light --add-dir docs'
+    const before: AgentLaunchSettingsSource = {
+      agentPermissionDefault: 'own',
+      agentDefaultArgs: { [agent]: raw },
+      agentLaunchChoices: { [agent]: { model, options: { [key]: value } } }
+    }
+    const saved = { value: before }
+    const save = vi.fn(async () => {})
+    const flag =
+      key === 'fastMode' ? `--settings '{"fastMode":${value}}'` : `-c service_tier=${value}`
+    const view = render(<Fixture save={save} saved={saved} agent={agent} />)
+    fireEvent.click(screen.getByRole('button', { name: `Remove ${flag}` }))
+    await waitFor(() => expect(save).toHaveBeenCalledOnce())
+    expect(save).toHaveBeenCalledWith({
+      type: 'launch-choices',
+      agent,
+      patch: { options: { [key]: null } },
+      userArgs: raw
+    })
+    await waitFor(() => expect(screen.queryByRole('button', { name: `Remove ${flag}` })).toBeNull())
+    expect(saved.value).toEqual({
+      ...before,
+      agentLaunchChoices: { [agent]: { model } }
+    })
+    view.unmount()
+    render(<Fixture save={save} saved={saved} agent={agent} />)
+    expect(
+      screen.queryByRole('button', { name: /Remove .*fastMode|Remove .*service_tier/ })
+    ).toBeNull()
+    expect(screen.getByRole('textbox', { name: 'Arguments' })).toHaveProperty('value', raw)
+    expect(saved.value.agentLaunchChoices?.[agent]).toEqual({ model })
+    expect(save).toHaveBeenCalledOnce()
+  }
+)
 
 it('removes a choice with dirty conflicting text in one mutation and shares two-Backspace removal', async () => {
   const save = vi.fn(async () => {})
