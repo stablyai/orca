@@ -645,6 +645,11 @@ describe('a failed Stop', () => {
     try {
       // Post-interrupt failure cannot undo the committed Stop receipt.
       expect(await rig.stop()).toMatchObject({ ok: true })
+      expect(failing).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ kind: 'status' }),
+        expect.anything()
+      )
     } finally {
       failing.mockRestore()
       warned.mockRestore()

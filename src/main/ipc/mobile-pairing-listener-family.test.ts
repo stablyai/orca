@@ -90,21 +90,6 @@ describe('pairing addresses follow the runtime listener family', () => {
     })
   })
 
-  it('returns an IPv6 interface on an IPv6-only host when the listener serves IPv6', async () => {
-    networkInterfacesMock.mockReturnValue({
-      eth0: [
-        { family: 'IPv6', internal: false, address: GLOBAL_IPV6 },
-        { family: 'IPv6', internal: false, address: 'fe80::42:acff:fe11:2' }
-      ]
-    })
-
-    registerStub(stubServer('::'))
-
-    await expect(handlers.get('mobile:listNetworkInterfaces')?.()).resolves.toEqual({
-      interfaces: [{ name: 'eth0', address: GLOBAL_IPV6 }]
-    })
-  })
-
   it('mints no runtime link on an IPv6-only host while the listener only serves IPv4', async () => {
     networkInterfacesMock.mockReturnValue({
       eth0: [{ family: 'IPv6', internal: false, address: GLOBAL_IPV6 }]

@@ -186,7 +186,11 @@
       "cancelEditing": "편집 취소",
       "placeholder": "무엇이든 물어보세요. @로 파일 참조, /로 명령어 실행",
       "saveEditedMessage": "수정한 메시지 저장",
-      "sendMessage": "메시지 보내기"
+      "sendMessage": "메시지 보내기",
+      "sendQueue": "대기열에 추가",
+      "sendSteer": "지금 보내기",
+      "sendQueueHint": "현재 턴이 끝난 뒤 실행됩니다",
+      "sendSteerHint": "Agent가 지금 하고 있는 작업에 들어갑니다"
     },
     "composerAttachments": {
       "attachedImage": "첨부된 이미지",
