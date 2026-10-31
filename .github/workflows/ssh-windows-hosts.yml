@@ -133,8 +133,10 @@ jobs:
           # Keep complete server/test trees; missing future imports fail the unchanged builds.
           # All of src: the orcad-convert cell builds the full e2e app and the bundled CLI.
           # mobile: the template ships the mobile web page, which builds from mobile/.
+          # cloud: config/tsconfig.vitest-transform.json references the cloud projects, so vitest needs them.
           sparse-checkout: |
             .github
+            cloud
             config
             mobile
             native
