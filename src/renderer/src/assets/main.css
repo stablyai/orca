@@ -598,6 +598,7 @@ body[data-modal-overlay-open]
 :root,
 .dark,
 .native-chat-appearance {
+  --chat-font-weight: var(--font-weight-normal);
   --chat-source-background: var(--background);
   --chat-source-foreground: var(--foreground);
   --chat-source-muted-foreground: var(--muted-foreground);

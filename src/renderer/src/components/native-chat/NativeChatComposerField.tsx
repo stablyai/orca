@@ -352,7 +352,7 @@ export function NativeChatComposerField({
               }
               // Let layout handle wrapping and touch targets; scroll after eight lines without JavaScript measurement.
               className={cn(
-                'min-h-12 w-full bg-transparent px-2 py-1 text-sm text-chat-foreground-strong outline-none pointer-coarse:min-h-14',
+                'native-chat-prompt-editor min-h-12 w-full bg-transparent px-2 py-1 text-sm text-chat-foreground-strong outline-none pointer-coarse:min-h-14',
                 'max-h-[calc(8lh+0.5rem)] overflow-y-auto scrollbar-sleek',
                 // Why: the editor is a contenteditable, which `:disabled` never matches.
                 'placeholder:text-chat-foreground-faint [&[contenteditable=false]]:cursor-not-allowed [&[contenteditable=false]]:opacity-50'
