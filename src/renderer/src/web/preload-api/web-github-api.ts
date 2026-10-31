@@ -204,6 +204,11 @@ export function createGitHubApi(): WebGitHubApi {
         GITHUB_WEB_RPC_METHODS.listAssignableUsersBySlug,
         args
       ),
+    listReviewTeamsBySlug: (args) =>
+      route<WebGitHubResult<'listReviewTeamsBySlug'>>(
+        GITHUB_WEB_RPC_METHODS.listReviewTeamsBySlug,
+        args
+      ),
     listIssueTypesBySlug: (args) =>
       route<WebGitHubResult<'listIssueTypesBySlug'>>(
         GITHUB_WEB_RPC_METHODS.listIssueTypesBySlug,

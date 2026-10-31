@@ -7,6 +7,7 @@ import type {
   ListIssueTypesBySlugResult,
   ListLabelsBySlugResult,
   ListProjectViewsResult,
+  ListReviewTeamsBySlugResult,
   ProjectWorkItemDetailsBySlugResult,
   ResolveProjectRefResult
 } from '../../shared/github/project-result-types'
@@ -20,6 +21,7 @@ import type {
   ListIssueTypesBySlugArgs,
   ListLabelsBySlugArgs,
   ListProjectViewsArgs,
+  ListReviewTeamsBySlugArgs,
   ProjectWorkItemDetailsBySlugArgs,
   ResolveProjectRefArgs,
   UpdateIssueBySlugArgs,
@@ -175,6 +177,7 @@ export type GithubWorkItemApi = {
   listAssignableUsersBySlug: (
     args: ListAssignableUsersBySlugArgs
   ) => Promise<ListAssignableUsersBySlugResult>
+  listReviewTeamsBySlug: (args: ListReviewTeamsBySlugArgs) => Promise<ListReviewTeamsBySlugResult>
   listIssueTypesBySlug: (args: ListIssueTypesBySlugArgs) => Promise<ListIssueTypesBySlugResult>
   updateIssueTypeBySlug: (args: UpdateIssueTypeBySlugArgs) => Promise<GitHubProjectMutationResult>
 }

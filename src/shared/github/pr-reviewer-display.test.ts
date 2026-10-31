@@ -4,6 +4,7 @@ import type { GitHubWorkItem } from './work-item-types'
 import {
   GITHUB_PR_REVIEWER_INPUT_MAX_BYTES,
   getGitHubPRReviewerRows,
+  isGitHubTeamReviewerLogin,
   parseGitHubReviewerInputLogins
 } from './pr-reviewer-display'
 
@@ -41,6 +42,16 @@ describe('GitHub PR reviewer display', () => {
         stateLabel: 'Approved'
       }
     ])
+  })
+
+  it.each([
+    ['acme/core-reviewers', true],
+    ['octocat', false],
+    ['app/dependabot', false],
+    ['acme/', false],
+    ['acme/team/extra', false]
+  ])('classifies %s as a team reviewer: %s', (login, expected) => {
+    expect(isGitHubTeamReviewerLogin(login)).toBe(expected)
   })
 
   it('parses pasted reviewer input without regex splitting', () => {

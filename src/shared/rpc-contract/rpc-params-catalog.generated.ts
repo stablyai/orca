@@ -1075,6 +1075,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'github.project.listAssignableUsersBySlug': SlugAssignableUsers,
   'github.project.listIssueTypesBySlug': SlugRepo,
   'github.project.listLabelsBySlug': SlugRepo,
+  'github.project.listReviewTeamsBySlug': SlugRepo,
   'github.project.listViews': ProjectViews,
   'github.project.resolveRef': ProjectRef,
   'github.project.updateIssueBySlug': SlugIssueUpdate,

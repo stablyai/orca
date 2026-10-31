@@ -3,6 +3,7 @@ import {
   authorFieldsFromUnknown,
   extractHeadOwnerLogin,
   usersFromUnknown,
+  reviewRequestsFromUnknown,
   latestReviewsFromUnknown,
   numberFromUnknown,
   normalizePRMergeable,
@@ -112,7 +113,15 @@ export function mapPullRequestWorkItem(
       ? { reviewDecision: normalizeReviewDecision(item.reviewDecision) }
       : {}),
     ...(item.reviewRequests !== undefined || item.requested_reviewers !== undefined
-      ? { reviewRequests: usersFromUnknown(item.reviewRequests ?? item.requested_reviewers) }
+      ? {
+          reviewRequests:
+            item.reviewRequests !== undefined
+              ? reviewRequestsFromUnknown(item.reviewRequests, baseOwnerRepo?.owner ?? null)
+              : [
+                  ...usersFromUnknown(item.requested_reviewers),
+                  ...reviewRequestsFromUnknown(item.requested_teams, baseOwnerRepo?.owner ?? null)
+                ]
+        }
       : {}),
     ...(item.latestReviews !== undefined
       ? { latestReviews: latestReviewsFromUnknown(item.latestReviews) }

@@ -4,6 +4,7 @@ import type {
 } from '../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import { summarizeProviderChecks } from '../../../../shared/provider-check-summary'
+import { isGitHubTeamReviewerLogin } from '../../../../shared/github/pr-reviewer-display'
 // The renderer supplies repoId after IPC; main knows only the repository path.
 export type MainWorkItem = Omit<GitHubWorkItem, 'repoId'>
 
@@ -119,6 +120,58 @@ export function usersFromUnknown(
     }
   }
   return users
+}
+
+// Teams carry `slug` instead of `login`; gh prefixes the org, GraphQL/REST need `organization`/the repo owner.
+function teamReviewerFromUnknown(
+  value: unknown,
+  fallbackOrg: string | null
+): { login: string; name: string | null; avatarUrl: string } | null {
+  if (typeof value !== 'object' || value === null || !('slug' in value)) {
+    return null
+  }
+  if ('login' in value || ('__typename' in value && value.__typename !== 'Team')) {
+    return null
+  }
+  const slug = typeof value.slug === 'string' ? value.slug.trim() : ''
+  const org =
+    'organization' in value &&
+    typeof value.organization === 'object' &&
+    value.organization !== null &&
+    'login' in value.organization &&
+    typeof value.organization.login === 'string'
+      ? value.organization.login
+      : fallbackOrg
+  const login = slug.includes('/') || !org ? slug : `${org}/${slug}`
+  if (!isGitHubTeamReviewerLogin(login)) {
+    return null
+  }
+  return {
+    login,
+    name: 'name' in value && typeof value.name === 'string' ? value.name : null,
+    avatarUrl: ''
+  }
+}
+
+export function reviewRequestsFromUnknown(
+  value: unknown,
+  teamOrg: string | null = null
+): { login: string; name: string | null; avatarUrl: string }[] {
+  const requests = usersFromUnknown(value)
+  if (!Array.isArray(value)) {
+    return requests
+  }
+  for (const entry of value) {
+    const nested =
+      typeof entry === 'object' && entry !== null && 'requestedReviewer' in entry
+        ? entry.requestedReviewer
+        : entry
+    const team = teamReviewerFromUnknown(nested, teamOrg)
+    if (team) {
+      requests.push(team)
+    }
+  }
+  return requests
 }
 
 export function latestReviewsFromUnknown(

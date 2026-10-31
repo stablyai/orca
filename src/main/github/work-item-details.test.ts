@@ -715,7 +715,10 @@ describe('getWorkItemDetails', () => {
       labels: [],
       updatedAt: '2026-07-11T00:00:00Z',
       author: 'seah',
-      reviewRequests: [{ login: 'ludi', name: null, avatarUrl: '' }],
+      reviewRequests: [
+        { login: 'ludi', name: null, avatarUrl: '' },
+        { login: 'acme/core-reviewers', name: 'Core Reviewers', avatarUrl: '' }
+      ],
       latestReviews: [{ login: 'inho', state: 'APPROVED', avatarUrl: '' }],
       assignees: [{ login: 'seah', name: 'Seah', avatarUrl: 'https://avatars.example.com/u/0?v=4' }]
     })
@@ -782,6 +785,7 @@ describe('getWorkItemDetails', () => {
     expect(userQuery).not.toContain('user(login: "seah")')
     expect(userQuery).toContain('user(login: "ludi")')
     expect(userQuery).toContain('user(login: "inho")')
+    expect(userQuery).not.toContain('acme/core-reviewers')
     expect(details?.participants).toContainEqual({
       login: 'ludi',
       name: 'Ludi',

@@ -118,6 +118,10 @@ export type ListAssignableUsersBySlugResult =
   | { ok: true; users: GitHubAssignableUser[] }
   | { ok: false; error: GitHubProjectViewError }
 
+export type ListReviewTeamsBySlugResult =
+  | { ok: true; teams: GitHubAssignableUser[] }
+  | { ok: false; error: GitHubProjectViewError }
+
 export type ListIssueTypesBySlugResult =
   | { ok: true; types: GitHubIssueType[] }
   | { ok: false; error: GitHubProjectViewError }

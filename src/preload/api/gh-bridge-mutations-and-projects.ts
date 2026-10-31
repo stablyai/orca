@@ -17,6 +17,7 @@ import type {
   ListIssueTypesBySlugResult,
   ListLabelsBySlugResult,
   ListProjectViewsResult,
+  ListReviewTeamsBySlugResult,
   ProjectWorkItemDetailsBySlugResult,
   ResolveProjectRefResult
 } from '../../shared/github/project-result-types'
@@ -30,6 +31,7 @@ import type {
   ListIssueTypesBySlugArgs,
   ListLabelsBySlugArgs,
   ListProjectViewsArgs,
+  ListReviewTeamsBySlugArgs,
   ProjectWorkItemDetailsBySlugArgs,
   ResolveProjectRefArgs,
   UpdateIssueBySlugArgs,
@@ -212,6 +214,8 @@ export const ghMutationsAndProjectsApi = {
     args: ListAssignableUsersBySlugArgs
   ): Promise<ListAssignableUsersBySlugResult> =>
     ipcRenderer.invoke('gh:listAssignableUsersBySlug', args),
+  listReviewTeamsBySlug: (args: ListReviewTeamsBySlugArgs): Promise<ListReviewTeamsBySlugResult> =>
+    ipcRenderer.invoke('gh:listReviewTeamsBySlug', args),
   listIssueTypesBySlug: (args: ListIssueTypesBySlugArgs): Promise<ListIssueTypesBySlugResult> =>
     ipcRenderer.invoke('gh:listIssueTypesBySlug', args),
   updateIssueTypeBySlug: (args: UpdateIssueTypeBySlugArgs): Promise<GitHubProjectMutationResult> =>

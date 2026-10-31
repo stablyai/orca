@@ -6,7 +6,7 @@ import React, { useState, useMemo, useRef, useCallback } from 'react'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
 import { getGitHubRepoRoutingTarget } from '@/lib/github-source-runtime-context'
-import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
+import { useRepoAssigneesBySlug, useRepoReviewTeamsBySlug } from '@/hooks/useGitHubSlugMetadata'
 import {
   getGitHubPRReviewerQueryState,
   filterGitHubPRReviewerCandidates
@@ -128,13 +128,21 @@ export function PRReviewCell({
     ownerTarget,
     reviewRepo?.host
   )
+  // Why: team loading is best-effort; its errors would hide a working user list.
+  const reviewTeamMetadata = useRepoReviewTeamsBySlug(
+    open && reviewRepo ? reviewRepo.owner : null,
+    open && reviewRepo ? reviewRepo.repo : null,
+    ownerTarget,
+    reviewRepo?.host
+  )
   const authorLogin = item.author?.toLowerCase() ?? null
   const reviewerCandidates = useMemo(
     () =>
-      mergeReviewerSuggestions(reviewerMetadata.data, reviewerSeedUsers).filter(
-        (user) => user.login.toLowerCase() !== authorLogin
-      ),
-    [authorLogin, reviewerMetadata.data, reviewerSeedUsers]
+      mergeReviewerSuggestions(
+        [...reviewerMetadata.data, ...reviewTeamMetadata.data],
+        reviewerSeedUsers
+      ).filter((user) => user.login.toLowerCase() !== authorLogin),
+    [authorLogin, reviewerMetadata.data, reviewTeamMetadata.data, reviewerSeedUsers]
   )
   const reviewerCandidatesByLogin = useMemo(
     () => new Map(reviewerCandidates.map((user) => [user.login.toLowerCase(), user])),

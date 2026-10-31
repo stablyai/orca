@@ -108,6 +108,7 @@ export function installRuntimeReviewCommandSurface(
     listGitHubProjects: projects.listGitHubProjects.bind(projects),
     listGitHubLabelsBySlug: projects.listGitHubLabelsBySlug.bind(projects),
     listGitHubAssignableUsersBySlug: projects.listGitHubAssignableUsersBySlug.bind(projects),
+    listGitHubReviewTeamsBySlug: projects.listGitHubReviewTeamsBySlug.bind(projects),
     listGitHubIssueTypesBySlug: projects.listGitHubIssueTypesBySlug.bind(projects),
     resolveGitHubProjectRef: projects.resolveGitHubProjectRef.bind(projects),
     listGitHubProjectViews: projects.listGitHubProjectViews.bind(projects),

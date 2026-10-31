@@ -1,6 +1,7 @@
 import type { PRComment } from '../../shared/github/comment-types'
 import type { GitHubAssignableUser } from '../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../shared/github/work-item-types'
+import { isGitHubTeamReviewerLogin } from '../../shared/github/pr-reviewer-display'
 import { ghExecFileAsync, ghRepoExecOptions, githubRepoContext } from './gh-utils'
 import type { LocalGitExecOptions } from './gh-utils'
 import { githubHostExecOptions, type GitHubApiRepository } from './github-api-repository'
@@ -117,7 +118,12 @@ async function getGitHubUsersByLogin(
     return []
   }
   const uniqueLogins = Array.from(
-    new Set(logins.filter((login) => login && login !== 'ghost').map((login) => login.trim()))
+    new Set(
+      logins
+        // Why: one unresolvable alias (e.g. a team) fails the whole batched query.
+        .filter((login) => login && login !== 'ghost' && !isGitHubTeamReviewerLogin(login))
+        .map((login) => login.trim())
+    )
   ).slice(0, 40)
   if (uniqueLogins.length === 0) {
     return []

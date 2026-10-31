@@ -15,7 +15,8 @@ export {
 export {
   listLabelsBySlug,
   listAssignableUsersBySlug,
-  listIssueTypesBySlug
+  listIssueTypesBySlug,
+  listReviewTeamsBySlug
 } from './project-view/repository-field-options'
 export { updateIssueTypeBySlug } from './project-view/issue-type-mutation'
 export { getWorkItemDetailsBySlug } from './project-view/work-item-details'

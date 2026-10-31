@@ -15,12 +15,14 @@ import type { GitHubAssignableUser } from '../../../shared/github/pull-request-t
 import type {
   ListAssignableUsersBySlugResult,
   ListIssueTypesBySlugResult,
-  ListLabelsBySlugResult
+  ListLabelsBySlugResult,
+  ListReviewTeamsBySlugResult
 } from '../../../shared/github/project-result-types'
 import type {
   ListAssignableUsersBySlugArgs,
   ListIssueTypesBySlugArgs,
-  ListLabelsBySlugArgs
+  ListLabelsBySlugArgs,
+  ListReviewTeamsBySlugArgs
 } from '../../../shared/github/project-request-types'
 
 export async function listLabelsBySlug(
@@ -115,6 +117,69 @@ export async function listAssignableUsersBySlug(
     }
   }
   return { ok: true, users }
+}
+
+// Team reviewers use gh's `org/team-slug` form so request/remove share the user reviewer path.
+export async function listReviewTeamsBySlug(
+  args: ListReviewTeamsBySlugArgs
+): Promise<ListReviewTeamsBySlugResult> {
+  const validation = validateSlugArgs(args.owner, args.repo)
+  if (!validation.ok) {
+    return validation
+  }
+  const authError = await projectHostAuthenticationError(args.host)
+  if (authError) {
+    return { ok: false, error: authError }
+  }
+  const guard = repositoryRateLimitGuard(args, 'core')
+  if (guard.blocked) {
+    return { ok: false, error: rateLimitedError(guard) }
+  }
+  const teams: GitHubAssignableUser[] = []
+  await acquire()
+  noteRepositoryRateLimitSpend(args, 'core')
+  try {
+    const { stdout } = await ghExecFileAsync(
+      [
+        'api',
+        '--paginate',
+        `repos/${args.owner}/${args.repo}/teams`,
+        '--jq',
+        '.[] | {slug: .slug, name: .name}'
+      ],
+      { encoding: 'utf-8', ...projectGhExecOptions(args.host) }
+    )
+    for (const line of stdout.trim().split('\n').filter(Boolean)) {
+      try {
+        const team: unknown = JSON.parse(line)
+        if (
+          team &&
+          typeof team === 'object' &&
+          'slug' in team &&
+          typeof team.slug === 'string' &&
+          team.slug
+        ) {
+          teams.push({
+            login: `${args.owner}/${team.slug}`,
+            name: 'name' in team && typeof team.name === 'string' ? team.name : null,
+            avatarUrl: ''
+          })
+        }
+      } catch {
+        // Skip malformed jq output.
+      }
+    }
+  } catch (error) {
+    const { stderr } = extractExecError(error)
+    const classified = classifyProjectError(stderr, '', args.host)
+    // Why: user-owned repos and orgs the viewer can't see 404; that just means no pickable teams.
+    return classified.type === 'not_found'
+      ? { ok: true, teams: [] }
+      : { ok: false, error: classified }
+  } finally {
+    release()
+  }
+  return { ok: true, teams }
 }
 
 export async function listIssueTypesBySlug(

@@ -37,6 +37,12 @@ export const GITHUB_PROJECT_METHODS = [
     handler: async (params, { runtime }) => runtime.listGitHubAssignableUsersBySlug(params)
   }),
   defineMethod({
+    name: 'github.project.listReviewTeamsBySlug',
+    permission: 'workspace',
+    params: SlugRepo,
+    handler: async (params, { runtime }) => runtime.listGitHubReviewTeamsBySlug(params)
+  }),
+  defineMethod({
     name: 'github.project.listIssueTypesBySlug',
     permission: 'workspace',
     params: SlugRepo,

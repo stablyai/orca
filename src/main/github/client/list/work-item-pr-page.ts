@@ -17,7 +17,7 @@ const PR_NODE_SELECTION = `__typename ... on PullRequest {
       __typename
       ... on User { login name avatarUrl }
       ... on Bot { login avatarUrl }
-      ... on Team { slug name }
+      ... on Team { slug name organization { login } }
       ... on Mannequin { login avatarUrl }
     } }
     pageInfo { hasNextPage }
@@ -52,9 +52,12 @@ const prNodeSchema = z.object({
         .object({
           requestedReviewer: z
             .object({
+              __typename: z.string().optional(),
               login: z.string().optional(),
               avatarUrl: z.string().optional(),
-              name: z.string().nullish()
+              name: z.string().nullish(),
+              slug: z.string().optional(),
+              organization: z.object({ login: z.string() }).nullish()
             })
             .nullable()
         })
