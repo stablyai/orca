@@ -8363,7 +8363,9 @@
           "6d1483d4a0": "1 emulator device detected.",
           "0a452d4d3b": "{{value0}} emulator devices detected.",
           "f62a1bb759": "Orca will auto-select an emulator device after devices are detected.",
-          "b2fd62ea75": "Default device for new emulator tabs and agent attach commands. Auto-select prefers an already running device."
+          "b2fd62ea75": "Default device for new emulator tabs and agent attach commands. Auto-select prefers an already running device.",
+          "2a1acbced8": "iOS Simulator Boot Command",
+          "5627dcee3b": "Optional. Orca runs this command with the simulator UDID as the last argument instead of `xcrun simctl boot`. Leave it empty to use the default. Orca runs with a minimal PATH, so use an absolute path or `bash /abs/path/script.sh`."
         },
         "MobileNetworkInterfaceSection": {
           "b2c384cfd6": "No interfaces found"
@@ -10587,7 +10589,12 @@
               "c5eca29310": "ios simulator",
               "25159de808": "mobile emulator",
               "9595354cff": "Configure mobile emulator support for Orca and coding agents.",
-              "cdd3c31918": "Mobile Emulator"
+              "cdd3c31918": "Mobile Emulator",
+              "f42e4659a3": "iOS Simulator Boot Command",
+              "78bea5c801": "Run your own command instead of xcrun simctl boot when Orca boots an iOS simulator.",
+              "ec6f2943cc": "boot command",
+              "687fd7e791": "simctl boot",
+              "ed6379e246": "boot wrapper"
             }
           },
           "pane": {
@@ -23147,6 +23154,7 @@
       "simulatorToolsUnavailable": "Xcode Simulator tools are unavailable. Install full Xcode, open it once, then select it with `sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer`.",
       "requiresMacosXcode": "iOS Simulator requires macOS with Xcode Command Line Tools.",
       "simulatorNotFound": "Simulator {{udid}} not found. Create one via Xcode > Window > Devices and Simulators.",
+      "simulatorBootCommandFailed": "The simulator boot command `{{command}}` failed. Check it in Settings > Mobile Emulator.\n\n{{detail}}",
       "serveSimUnavailable": "serve-sim is unavailable.",
       "serveSimNoEndpoints": "serve-sim did not return stream endpoints.",
       "serveSimEndpointUnreachable": "serve-sim started but its stream endpoint is not reachable.",

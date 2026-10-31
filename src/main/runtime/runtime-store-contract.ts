@@ -170,6 +170,7 @@ export type RuntimeStore = {
     mobileAutoRestoreFitMs?: number | null
     mobileEmulatorEnabled?: boolean
     mobileEmulatorDefaultDeviceUdid?: string | null
+    iosSimulatorBootCommand?: GlobalSettings['iosSimulatorBootCommand']
     machineName?: GlobalSettings['machineName']
     voice?: VoiceSettings
     claudeAgentTeamsMode?: GlobalSettings['claudeAgentTeamsMode']

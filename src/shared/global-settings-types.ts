@@ -430,6 +430,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   mobileEmulatorDefaultDeviceUdid?: string | null
   /** Explicit Android SDK root for when auto-discovery (ANDROID_HOME / default path) fails; null (default) auto-discovers. */
   androidSdkPath?: string | null
+  /** macOS command run with the simulator UDID appended instead of `xcrun simctl boot`; null (default) uses simctl. */
+  iosSimulatorBootCommand?: string | null
   /** Phone-fit PTY restore delay after the last mobile subscriber: null holds indefinitely; finite values clamp to 5s–60min. See docs/mobile-fit-hold.md. */
   mobileAutoRestoreFitMs: number | null
   /** New QR pairing: absent/automatic allows Relay + local; local-only restricts to same network. */

@@ -8,15 +8,21 @@ import {
 } from '../emulator/emulator-availability'
 import { resolveDefaultAttachDevice } from '../emulator/emulator-default-attach-device'
 import { setConfiguredAndroidSdkPath } from '../emulator/android/android-sdk-host-discovery'
+import {
+  setConfiguredSimulatorBootCommand,
+  type SimulatorDevice
+} from '../emulator/simctl-simulator-devices'
 import type { EmulatorGesturePoint } from '../emulator/emulator-gesture-sender'
 import type { EmulatorSessionInfo } from '../emulator/emulator-types'
-import type { SimulatorDevice } from '../emulator/simctl-simulator-devices'
 import type { EmulatorDevice } from '../emulator/backends/emulator-backend'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 
 type EmulatorHostSettings = Pick<
   GlobalSettings,
-  'mobileEmulatorEnabled' | 'mobileEmulatorDefaultDeviceUdid' | 'androidSdkPath'
+  | 'mobileEmulatorEnabled'
+  | 'mobileEmulatorDefaultDeviceUdid'
+  | 'androidSdkPath'
+  | 'iosSimulatorBootCommand'
 >
 
 export type RuntimeEmulatorCommandHost = {
@@ -37,7 +43,9 @@ export class RuntimeEmulatorCommands {
     if (!bridge) {
       throw new EmulatorError('emulator_no_active', emulatorFailureText('noSession'))
     }
-    setConfiguredAndroidSdkPath(this.host.getSettings().androidSdkPath ?? null)
+    const settings = this.host.getSettings()
+    setConfiguredAndroidSdkPath(settings.androidSdkPath ?? null)
+    setConfiguredSimulatorBootCommand(settings.iosSimulatorBootCommand ?? null)
     return bridge
   }
 

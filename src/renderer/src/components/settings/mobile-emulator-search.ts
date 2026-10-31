@@ -1,6 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 
 export const getMobileEmulatorSearchEntries = createLocalizedCatalog(() => [
   {
@@ -162,5 +163,33 @@ export const getMobileEmulatorSearchEntries = createLocalizedCatalog(() => [
         'mobile skill'
       )
     ]
-  }
+  },
+  ...(getRendererAppPlatform() === 'darwin'
+    ? [
+        {
+          title: translate(
+            'auto.components.settings.mobile.emulator.search.f42e4659a3',
+            'iOS Simulator Boot Command'
+          ),
+          description: translate(
+            'auto.components.settings.mobile.emulator.search.78bea5c801',
+            'Run your own command instead of xcrun simctl boot when Orca boots an iOS simulator.'
+          ),
+          keywords: [
+            ...translateSearchKeyword(
+              'auto.components.settings.mobile.emulator.search.ec6f2943cc',
+              'boot command'
+            ),
+            ...translateSearchKeyword(
+              'auto.components.settings.mobile.emulator.search.687fd7e791',
+              'simctl boot'
+            ),
+            ...translateSearchKeyword(
+              'auto.components.settings.mobile.emulator.search.ed6379e246',
+              'boot wrapper'
+            )
+          ]
+        }
+      ]
+    : [])
 ])

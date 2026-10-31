@@ -25,6 +25,16 @@ const COPY: Record<EmulatorFailureCode, (params: (name: string) => Param) => str
       ? null
       : translate('emulator.errors.simulatorNotFound', EN.simulatorNotFound, { udid })
   },
+  simulatorBootCommandFailed: (param) => {
+    const command = param('command')
+    const detail = param('detail')
+    return command === null || detail === null
+      ? null
+      : translate('emulator.errors.simulatorBootCommandFailed', EN.simulatorBootCommandFailed, {
+          command,
+          detail
+        })
+  },
   serveSimUnavailable: () =>
     translate('emulator.errors.serveSimUnavailable', EN.serveSimUnavailable),
   serveSimNoEndpoints: () =>

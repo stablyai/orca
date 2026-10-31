@@ -1977,6 +1977,7 @@
       "serveSimNoEndpoints": "serve-sim did not return stream endpoints.",
       "serveSimUnavailable": "serve-sim is unavailable.",
       "simctlUnavailable": "xcrun simctl is unavailable.",
+      "simulatorBootCommandFailed": "The simulator boot command `{{command}}` failed. Check it in Settings > Mobile Emulator.\n\n{{detail}}",
       "simulatorNotFound": "Simulator {{udid}} not found. Create one via Xcode > Window > Devices and Simulators.",
       "simulatorToolsUnavailable": "Xcode Simulator tools are unavailable. Install full Xcode, open it once, then select it with `sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer`.",
       "unknownDeviceOrAvd": "\"{{device}}\" is not a running device or a known AVD.",

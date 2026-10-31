@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as Os from 'node:os'
 
 const { execFileMock, platformMock } = vi.hoisted(() => ({
@@ -22,9 +22,12 @@ vi.mock('./serve-sim-execution', () => ({
   execServeSimCommand: vi.fn()
 }))
 
+import { matchEmulatorErrorCopy } from '../../shared/emulator-failure-copy'
 import {
+  ensureSimulatorBooted,
   listSimulatorDevices,
   resolveSimulatorUdid,
+  setConfiguredSimulatorBootCommand,
   shutdownSimulatorDevice
 } from './simctl-simulator-devices'
 
@@ -151,5 +154,139 @@ describe('shutdownSimulatorDevice', () => {
     await expect(
       shutdownSimulatorDevice('AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE')
     ).rejects.toMatchObject({ code: 'emulator_error' })
+  })
+})
+
+describe('ensureSimulatorBooted', () => {
+  const udid = 'AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE'
+  type ExecFileCallback = (error: Error | null, stdout: string, stderr: string) => void
+
+  // The device reads Booted once any boot call succeeds, like CoreSimulator after a real boot.
+  function mockSimulatorHost(
+    initialState: string,
+    bootFailure?: { error: Error; stderr: string }
+  ): void {
+    let state = initialState
+    execFileMock.mockImplementation(
+      (command: string, args: string[], _options: unknown, callback: ExecFileCallback) => {
+        if (command === 'xcrun' && args[1] === 'list') {
+          const runtime = 'com.apple.CoreSimulator.SimRuntime.iOS-18-0'
+          callback(
+            null,
+            JSON.stringify({ devices: { [runtime]: [{ name: 'iPhone 17 Pro', udid, state }] } }),
+            ''
+          )
+          return
+        }
+        if (bootFailure) {
+          callback(bootFailure.error, '', bootFailure.stderr)
+          return
+        }
+        state = 'Booted'
+        callback(null, '', '')
+      }
+    )
+  }
+
+  async function bootAndPoll(): Promise<void> {
+    const booted = ensureSimulatorBooted(udid)
+    await vi.advanceTimersByTimeAsync(700)
+    await booted
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    execFileMock.mockReset()
+    platformMock.mockReturnValue('darwin')
+    setConfiguredSimulatorBootCommand(null)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('boots with simctl when the configured command is blank', async () => {
+    setConfiguredSimulatorBootCommand('   ')
+    mockSimulatorHost('Shutdown')
+
+    await bootAndPoll()
+
+    expect(execFileMock).toHaveBeenCalledWith(
+      'xcrun',
+      ['simctl', 'boot', udid],
+      { timeout: 45_000 },
+      expect.any(Function)
+    )
+  })
+
+  it.each([
+    ['/usr/local/bin/simslim boot --quiet', '/usr/local/bin/simslim', ['boot', '--quiet']],
+    ['bash "/Users/me/Sim Tools/boot.sh"', 'bash', ['/Users/me/Sim Tools/boot.sh']]
+  ])('runs %s with the UDID appended instead of simctl', async (command, program, args) => {
+    setConfiguredSimulatorBootCommand(command)
+    mockSimulatorHost('Shutdown')
+
+    await bootAndPoll()
+
+    expect(execFileMock).toHaveBeenCalledWith(
+      program,
+      [...args, udid],
+      { timeout: 180_000 },
+      expect.any(Function)
+    )
+    expect(execFileMock).not.toHaveBeenCalledWith(
+      'xcrun',
+      expect.arrayContaining(['boot']),
+      expect.anything(),
+      expect.any(Function)
+    )
+  })
+
+  it('rejects with the command and its stderr when the configured command fails', async () => {
+    setConfiguredSimulatorBootCommand('/usr/local/bin/simslim boot')
+    mockSimulatorHost('Shutdown', {
+      error: Object.assign(new Error('Command failed: /usr/local/bin/simslim boot'), { code: 1 }),
+      stderr: 'Refusing to boot: another simulator is already running.\n'
+    })
+
+    const error = await ensureSimulatorBooted(udid).catch((caught: unknown) => caught)
+    if (!(error instanceof Error)) {
+      throw new Error('ensureSimulatorBooted should reject when the boot command fails')
+    }
+
+    expect(error).toMatchObject({
+      code: 'emulator_error',
+      message:
+        'The simulator boot command `/usr/local/bin/simslim boot` failed. Check it in Settings > Mobile Emulator.\n\nRefusing to boot: another simulator is already running.'
+    })
+    // The renderer localizes thrown errors by matching this template within the error code.
+    expect(matchEmulatorErrorCopy('emulator_error', error.message)).toEqual({
+      code: 'simulatorBootCommandFailed',
+      params: {
+        command: '/usr/local/bin/simslim boot',
+        detail: 'Refusing to boot: another simulator is already running.'
+      }
+    })
+    expect(execFileMock).not.toHaveBeenCalledWith(
+      'xcrun',
+      expect.arrayContaining(['boot']),
+      expect.anything(),
+      expect.any(Function)
+    )
+  })
+
+  it('skips the configured command for an already booted simulator', async () => {
+    setConfiguredSimulatorBootCommand('/usr/local/bin/simslim boot')
+    mockSimulatorHost('Booted')
+
+    await ensureSimulatorBooted(udid)
+
+    expect(execFileMock).toHaveBeenCalledTimes(1)
+    expect(execFileMock).toHaveBeenCalledWith(
+      'xcrun',
+      ['simctl', 'list', 'devices', '-j'],
+      { timeout: 15_000 },
+      expect.any(Function)
+    )
   })
 })

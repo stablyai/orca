@@ -3,6 +3,7 @@ import type { ExecFileException } from 'node:child_process'
 import { platform } from 'node:os'
 import { EmulatorError } from './emulator-errors'
 import { emulatorFailureText } from '../../shared/emulator-failure-copy'
+import { tokenizeCommandLine } from '../../shared/agent-command-line-entrypoint'
 import { execServeSimCommand, type ServeSimExecutable } from './serve-sim-execution'
 
 export type SimulatorDevice = {
@@ -22,6 +23,19 @@ type SimctlDevice = {
 
 type SimctlDeviceList = {
   devices?: Record<string, SimctlDevice[]>
+}
+
+// Why: a wrapper may reconfigure the host (e.g. stop daemons) before booting, so allow more than simctl's 45 s.
+const CONFIGURED_BOOT_COMMAND_TIMEOUT_MS = 180_000
+
+type ConfiguredBootCommand = { text: string; program: string; args: string[] }
+
+let configuredBootCommand: ConfiguredBootCommand | null = null
+
+export function setConfiguredSimulatorBootCommand(command: string | null): void {
+  const text = command?.trim() ?? ''
+  const [program, ...args] = tokenizeCommandLine(text)
+  configuredBootCommand = program ? { text, program, args } : null
 }
 
 const UDID_RE = /^[0-9A-F]{8}-([0-9A-F]{4}-){3}[0-9A-F]{12}$/i
@@ -124,22 +138,7 @@ export async function resolveSimulatorUdid(
   return deviceOrName
 }
 
-export async function ensureSimulatorBooted(udid: string): Promise<void> {
-  if (platform() !== 'darwin') {
-    throw new EmulatorError('emulator_not_macos', emulatorFailureText('requiresMacosXcode'))
-  }
-  const devices = await listSimulatorDevices()
-  const device = devices.find((candidate) => candidate.udid === udid)
-  if (!device) {
-    throw new EmulatorError(
-      'emulator_device_not_found',
-      emulatorFailureText('simulatorNotFound', { udid })
-    )
-  }
-  if (device.state === 'Booted') {
-    return
-  }
-
+async function bootWithSimctl(udid: string): Promise<void> {
   try {
     await new Promise<void>((resolve, reject) => {
       execFile('xcrun', ['simctl', 'boot', udid], { timeout: 45_000 }, (error, _stdout, stderr) => {
@@ -158,6 +157,53 @@ export async function ensureSimulatorBooted(udid: string): Promise<void> {
   } catch {
     // Boot can already be in progress; the poll below is the source of truth.
   }
+}
+
+// Unlike simctl, a failing user command is reported: the user chose it, and it may refuse to boot on purpose.
+function runConfiguredBootCommand(command: ConfiguredBootCommand, udid: string): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    execFile(
+      command.program,
+      [...command.args, udid],
+      { timeout: CONFIGURED_BOOT_COMMAND_TIMEOUT_MS },
+      (error, _stdout, stderr) => {
+        if (!error) {
+          resolve()
+          return
+        }
+        const detail = error.killed
+          ? `Timed out after ${CONFIGURED_BOOT_COMMAND_TIMEOUT_MS / 1000} s.`
+          : stderr?.toString().trim() || error.message
+        reject(
+          new EmulatorError(
+            'emulator_error',
+            emulatorFailureText('simulatorBootCommandFailed', { command: command.text, detail })
+          )
+        )
+      }
+    )
+  })
+}
+
+export async function ensureSimulatorBooted(udid: string): Promise<void> {
+  if (platform() !== 'darwin') {
+    throw new EmulatorError('emulator_not_macos', emulatorFailureText('requiresMacosXcode'))
+  }
+  const devices = await listSimulatorDevices()
+  const device = devices.find((candidate) => candidate.udid === udid)
+  if (!device) {
+    throw new EmulatorError(
+      'emulator_device_not_found',
+      emulatorFailureText('simulatorNotFound', { udid })
+    )
+  }
+  if (device.state === 'Booted') {
+    return
+  }
+
+  await (configuredBootCommand
+    ? runConfiguredBootCommand(configuredBootCommand, udid)
+    : bootWithSimctl(udid))
 
   const deadline = Date.now() + 22_000
   while (Date.now() < deadline) {

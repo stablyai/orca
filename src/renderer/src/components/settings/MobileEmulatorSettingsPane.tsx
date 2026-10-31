@@ -10,6 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { AndroidLogo, IosBrandIcon } from '../mobile/MobileBrandIcons'
 import { MobileEmulatorAgentControlRow } from './MobileEmulatorAgentControlRow'
 import { MobileEmulatorAvailabilityDetails } from './MobileEmulatorAvailabilityDetails'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
+import { DebouncedSettingsTextInput } from './DebouncedSettingsTextInput'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsRow, SettingsSwitchRow } from './SettingsFormControls'
 import { getMobileEmulatorSearchEntries } from './mobile-emulator-search'
@@ -43,6 +45,7 @@ type MobileEmulatorSettingsPaneProps = {
 
 const AUTOMATIC_DEVICE_VALUE = '__orca_automatic_emulator_device__'
 const AUTOMATIC_DEVICE_LABEL = 'Auto-select device'
+const DEFAULT_BOOT_COMMAND_PLACEHOLDER = 'xcrun simctl boot'
 const SIMULATOR_STATE_SUFFIX_RE =
   /\s+\((Booted|Booting|Creating|Shutdown|Shutting Down|Unavailable|Unknown)\)\s*$/i
 
@@ -130,6 +133,11 @@ export function MobileEmulatorSettingsPane({
   const [availability, setAvailability] = useState<EmulatorAvailability | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const enabled = settings.mobileEmulatorEnabled !== false
+  const isMacHost = getRendererAppPlatform() === 'darwin'
+  const bootCommandLabel = translate(
+    'auto.components.settings.MobileEmulatorSettingsPane.2a1acbced8',
+    'iOS Simulator Boot Command'
+  )
 
   const refreshAvailability = useCallback(async (): Promise<void> => {
     setRefreshing(true)
@@ -302,6 +310,30 @@ export function MobileEmulatorSettingsPane({
             </Select>
           }
         />
+
+        {isMacHost ? (
+          <SettingsRow
+            alignTop
+            label={bootCommandLabel}
+            description={translate(
+              'auto.components.settings.MobileEmulatorSettingsPane.5627dcee3b',
+              'Optional. Orca runs this command with the simulator UDID as the last argument instead of `xcrun simctl boot`. Leave it empty to use the default. Orca runs with a minimal PATH, so use an absolute path or `bash /abs/path/script.sh`.'
+            )}
+            control={
+              <DebouncedSettingsTextInput
+                value={settings.iosSimulatorBootCommand ?? ''}
+                commit={(next) =>
+                  void updateSettings({ iosSimulatorBootCommand: next.trim() || null })
+                }
+                disabled={!enabled}
+                aria-label={bootCommandLabel}
+                placeholder={DEFAULT_BOOT_COMMAND_PLACEHOLDER}
+                spellCheck={false}
+                className="w-72 max-w-full font-mono text-xs"
+              />
+            }
+          />
+        ) : null}
       </SearchableSetting>
 
       {enabled ? (
