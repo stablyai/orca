@@ -74,6 +74,21 @@ describe('terminal path helpers', () => {
   })
 
   describe('extractTerminalFileLinks local path tokens', () => {
+    it('keeps a line-range suffix in the link and opens at its start', () => {
+      const [link] = extractTerminalFileLinks('fakesnow/cursor.py:447-464')
+      expect(link).toMatchObject({
+        pathText: 'fakesnow/cursor.py',
+        line: 447,
+        column: null,
+        displayText: 'fakesnow/cursor.py:447-464'
+      })
+      expect(resolveTerminalFileLink(link, '/repo')).toEqual({
+        absolutePath: '/repo/fakesnow/cursor.py',
+        line: 447,
+        column: null
+      })
+    })
+
     it('keeps Unicode path segments in the detected range', () => {
       expect(extractTerminalFileLinks('/tmp/报告.html').map((link) => link.displayText)).toEqual([
         '/tmp/报告.html'

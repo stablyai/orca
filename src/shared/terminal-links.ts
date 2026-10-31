@@ -30,9 +30,9 @@ export type ResolvedTerminalFileLink = Pick<ParsedTerminalFileLink, 'line' | 'co
 // Two passes match VSCode's split: separator paths, plus conservative bare
 // filename tokens that only become links if they resolve against the cwd.
 
-// Match separator paths with optional :line:col; preserve route punctuation (app/(shop)/[id]), Japanese middle dots and tildes without swallowing prose.
+// Match separator paths with optional :line, :line-end, or :line:col; preserve route punctuation (app/(shop)/[id]), Japanese middle dots and tildes without swallowing prose.
 const LOCAL_PATH_REGEX =
-  /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[\p{L}\p{N}\p{M}._-]+[\\/])[\p{L}\p{N}\p{M}._~\-/%+@\\()[\]\u30FB\uFF65\u301C\uFF5E]*(?::\d+)?(?::\d+)?/gu
+  /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[\p{L}\p{N}\p{M}._-]+[\\/])[\p{L}\p{N}\p{M}._~\-/%+@\\()[\]\u30FB\uFF65\u301C\uFF5E]*(?::\d+(?:-\d+)?)?(?::\d+)?/gu
 
 const URI_PREFIX_CHAR_PATTERN = /^[A-Za-z0-9+./:-]$/
 
