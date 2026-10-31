@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
-import { View, Text, Pressable, ScrollView, ActivityIndicator } from 'react-native'
+import { View, Text, ScrollView, ActivityIndicator } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams } from 'expo-router'
-import { ChevronLeft, Check, RefreshCw, User } from 'lucide-react-native'
+import { ChevronLeft, RefreshCw, User } from 'lucide-react-native'
 import { loadHosts } from '../transport/host-store'
 import { useHostClient } from '../transport/host-client-hooks'
 import { colors, spacing } from '../theme/mobile-theme'
@@ -10,28 +10,25 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { styles } from './mobile-accounts-screen-styles'
 import { useNow } from '../hooks/use-now'
-import { ClaudeIcon, OpenAIIcon } from '../components/AgentIcons'
-import { AccountsSnapshotError, decodeAccountsSnapshot } from '../components/accounts-snapshot'
 import {
-  type AccountsSnapshot,
-  type ProviderKey,
-  getActiveProviderRateLimits,
-  getInactiveProviderUsage,
-  getUsageBarState,
-  getWindowResetLabel,
-  hasActiveProviderUsage,
-  UsageBar
-} from '../components/AccountUsage'
-import {
-  getActiveCodexAccountIdForRateLimitTarget,
-  getCodexResetCreditSummary
-} from '../components/codex-reset-credit'
-import { CodexResetCreditAction } from '../components/CodexResetCreditAction'
+  AccountsSnapshotError,
+  decodeAccountsSnapshot,
+  type AccountsSnapshot
+} from '../components/accounts-snapshot'
+import type { ProviderKey } from '../components/account-usage-state'
 import { useCodexResetCreditAction } from '../components/use-codex-reset-credit-action'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { NavBar } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { useRouteHandoff } from '../navigation/route-handoff'
+import { ClaudeCodexAccountSections } from './claude-codex-account-section'
+import { AntigravityAccountSection } from './antigravity-account-section'
+import {
+  ManagedDataAccountSection,
+  managedDataBusyId,
+  type ManagedDataProvider
+} from './managed-data-account-section'
+import { ProviderUsageSection } from './provider-usage-section'
 
 type AccountsNotice = { title: string; message: string }
 
@@ -52,6 +49,7 @@ export function MobileAccountsScreen() {
   const [busyAccountId, setBusyAccountId] = useState<string | null>(null)
   const [clockEnabled, setClockEnabled] = useState(false)
   const [notice, setNotice] = useState<AccountsNotice | null>(null)
+  const [providerAccountReload, setProviderAccountReload] = useState(0)
 
   const acceptSnapshot = useCallback((nextSnapshot: AccountsSnapshot) => {
     setSnapshot(nextSnapshot)
@@ -136,6 +134,7 @@ export function MobileAccountsScreen() {
       return
     }
     setRefreshing(true)
+    setProviderAccountReload((value) => value + 1)
     try {
       const res = await client.sendRequest('accounts.list')
       if (res.ok) {
@@ -191,141 +190,28 @@ export function MobileAccountsScreen() {
     [client, refresh, snapshot, t]
   )
 
-  const renderProviderSection = (provider: ProviderKey, title: string) => {
-    if (!snapshot) {
-      return null
-    }
-    const state = provider === 'claude' ? snapshot.claude : snapshot.codex
-    const activeAccountId =
-      provider === 'codex' && snapshot.codex.activeAccountIdsByRuntime
-        ? getActiveCodexAccountIdForRateLimitTarget(snapshot)
-        : state.activeAccountId
-    const activeUsage = getActiveProviderRateLimits(snapshot, provider)
-    const activeSessionBar = getUsageBarState(activeUsage, 'session')
-    const activeWeeklyBar = getUsageBarState(activeUsage, 'weekly')
-    const resetCredit = provider === 'codex' ? getCodexResetCreditSummary(activeUsage, now) : null
-    const Icon = provider === 'claude' ? ClaudeIcon : OpenAIIcon
-    return (
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Icon size={14} />
-          <Text style={styles.sectionHeading}>{title}</Text>
-        </View>
-        <View style={styles.card}>
-          {/* System default row */}
-          <Pressable
-            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-            onPress={() => selectAccount(provider, null)}
-            disabled={busyAccountId !== null || resettingCodex || connState !== 'connected'}
-          >
-            <View style={styles.rowMain}>
-              <Text style={styles.rowTitle}>{t('accounts.screen.default', 'System default')}</Text>
-              <Text style={styles.rowSubtitle}>
-                {t('accounts.screen.agentLogin', "Use the agent's own login")}
-              </Text>
-              {/* Show system-default login usage for users without managed accounts. */}
-              {activeAccountId === null && hasActiveProviderUsage(activeUsage) ? (
-                <View style={styles.usageRow}>
-                  <UsageBar
-                    label={t('accounts.screen.sessionWindow', '5h')}
-                    usedPercent={activeSessionBar.usedPercent}
-                    unavailable={activeSessionBar.unavailable}
-                    loading={activeSessionBar.loading}
-                    resetText={getWindowResetLabel(activeUsage, 'session', now)}
-                  />
-                  <UsageBar
-                    label={t('accounts.screen.weeklyWindow', '7d')}
-                    usedPercent={activeWeeklyBar.usedPercent}
-                    unavailable={activeWeeklyBar.unavailable}
-                    loading={activeWeeklyBar.loading}
-                    resetText={getWindowResetLabel(activeUsage, 'weekly', now)}
-                  />
-                </View>
-              ) : null}
-            </View>
-            <View style={styles.rowTrailing}>
-              {activeAccountId === null ? (
-                <Check size={16} color={colors.accentBlue} />
-              ) : busyAccountId === `${provider}:default` ? (
-                <ActivityIndicator size="small" color={colors.textSecondary} />
-              ) : null}
-            </View>
-          </Pressable>
-
-          {state.accounts.map((account) => {
-            const isActive = activeAccountId === account.id
-            const inactiveEntry = !isActive
-              ? getInactiveProviderUsage(snapshot, provider, account.id)
-              : null
-            const usage = isActive ? activeUsage : (inactiveEntry?.rateLimits ?? null)
-            const isFetching =
-              (isActive && usage?.status === 'fetching') ||
-              (!isActive && inactiveEntry?.isFetching === true)
-            const sessionBar = getUsageBarState(usage, 'session', isFetching)
-            const weeklyBar = getUsageBarState(usage, 'weekly', isFetching)
-            return (
-              <View key={account.id}>
-                <View style={styles.separator} />
-                <Pressable
-                  style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-                  onPress={() => selectAccount(provider, account.id)}
-                  disabled={
-                    busyAccountId !== null ||
-                    resettingCodex ||
-                    connState !== 'connected' ||
-                    isActive
-                  }
-                >
-                  <View style={styles.rowMain}>
-                    <Text style={styles.rowTitle} numberOfLines={1}>
-                      {account.email}
-                    </Text>
-                    <View style={styles.usageRow}>
-                      <UsageBar
-                        label={t('accounts.screen.sessionWindow', '5h')}
-                        usedPercent={sessionBar.usedPercent}
-                        unavailable={sessionBar.unavailable}
-                        loading={sessionBar.loading}
-                        resetText={getWindowResetLabel(usage, 'session', now)}
-                      />
-                      <UsageBar
-                        label={t('accounts.screen.weeklyWindow', '7d')}
-                        usedPercent={weeklyBar.usedPercent}
-                        unavailable={weeklyBar.unavailable}
-                        loading={weeklyBar.loading}
-                        resetText={getWindowResetLabel(usage, 'weekly', now)}
-                      />
-                    </View>
-                    {usage?.error ? (
-                      <Text style={styles.errorText} numberOfLines={1}>
-                        {usage.error}
-                      </Text>
-                    ) : null}
-                  </View>
-                  <View style={styles.rowTrailing}>
-                    {isActive ? (
-                      <Check size={16} color={colors.accentBlue} />
-                    ) : busyAccountId === account.id ? (
-                      <ActivityIndicator size="small" color={colors.textSecondary} />
-                    ) : null}
-                  </View>
-                </Pressable>
-              </View>
-            )
-          })}
-          {resetCredit && codexResetSupported && resetScope && connState === 'connected' ? (
-            <CodexResetCreditAction
-              summary={resetCredit}
-              scopeLabel={resetScopeLabel}
-              busy={resettingCodex}
-              disabled={resettingCodex || busyAccountId !== null || connState !== 'connected'}
-              onPress={confirmCodexReset}
-            />
-          ) : null}
-        </View>
-      </View>
-    )
-  }
+  const selectDataAccount = useCallback(
+    async (provider: ManagedDataProvider, accountId: string | null) => {
+      if (!client) {
+        return
+      }
+      setBusyAccountId(managedDataBusyId(provider, accountId))
+      const title = t('accounts.screen.switchFailed', 'Could not switch account')
+      try {
+        const res = await client.sendRequest('accounts.selectData', { provider, accountId })
+        if (!res.ok) {
+          setNotice({ title, message: res.error.message })
+        } else {
+          await refresh()
+        }
+      } catch (e) {
+        setNotice({ title, message: e instanceof Error ? e.message : String(e) })
+      } finally {
+        setBusyAccountId(null)
+      }
+    },
+    [client, refresh, t]
+  )
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -374,8 +260,55 @@ export function MobileAccountsScreen() {
           </View>
         ) : (
           <>
-            {renderProviderSection('claude', 'Claude')}
-            {renderProviderSection('codex', 'Codex')}
+            <ClaudeCodexAccountSections
+              snapshot={snapshot}
+              now={now}
+              busyAccountId={busyAccountId}
+              resettingCodex={resettingCodex}
+              connected={connState === 'connected'}
+              codexResetSupported={codexResetSupported}
+              resetScope={resetScope}
+              resetScopeLabel={resetScopeLabel}
+              onSelect={(provider, accountId) => {
+                void selectAccount(provider, accountId)
+              }}
+              onConfirmReset={confirmCodexReset}
+            />
+            <ManagedDataAccountSection
+              provider="opencode"
+              snapshot={snapshot}
+              busyAccountId={busyAccountId}
+              disabled={busyAccountId !== null || resettingCodex || connState !== 'connected'}
+              onSelect={(provider, accountId) => {
+                void selectDataAccount(provider, accountId)
+              }}
+            />
+            <ManagedDataAccountSection
+              provider="devin"
+              snapshot={snapshot}
+              busyAccountId={busyAccountId}
+              disabled={busyAccountId !== null || resettingCodex || connState !== 'connected'}
+              onSelect={(provider, accountId) => {
+                void selectDataAccount(provider, accountId)
+              }}
+            />
+            <ProviderUsageSection provider="gemini" snapshot={snapshot} now={now} />
+            <AntigravityAccountSection
+              snapshot={snapshot}
+              now={now}
+              client={client}
+              connected={connState === 'connected'}
+              reloadKey={providerAccountReload}
+              busyAccountId={busyAccountId}
+              disabled={busyAccountId !== null || resettingCodex || connState !== 'connected'}
+              onNotice={setNotice}
+              onChanged={refresh}
+            />
+            <ProviderUsageSection provider="opencodeGo" snapshot={snapshot} now={now} />
+            <ProviderUsageSection provider="minimax" snapshot={snapshot} now={now} />
+            <ProviderUsageSection provider="grok" snapshot={snapshot} now={now} />
+            <ProviderUsageSection provider="cursor" snapshot={snapshot} now={now} />
+            <ProviderUsageSection provider="zcode" snapshot={snapshot} now={now} />
             <View style={styles.footerHint}>
               <User size={14} color={colors.textMuted} />
               <Text style={styles.footerHintText}>

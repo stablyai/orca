@@ -30,13 +30,16 @@ export function UsageBar({
   usedPercent,
   unavailable,
   loading,
-  resetText
+  resetText,
+  labelWidth = 22
 }: {
   label: string
   usedPercent: number | null
   unavailable: boolean
   loading?: boolean
   resetText?: string | null
+  // Named pools ("Cursor Models", "1.5 Pro") do not fit the 22px session chip.
+  labelWidth?: number
 }) {
   useMobileColorScheme()
   // Why: round then clamp so bar width, color, and label share one value (desktop parity).
@@ -50,10 +53,11 @@ export function UsageBar({
         : used >= 60
           ? colors.statusAmber
           : colors.statusGreen
+  const showLabel = labelWidth > 0 && label !== ''
   return (
     <View style={styles.usageBarColumn}>
       <View style={styles.usageBar}>
-        <Text style={styles.usageLabel}>{label}</Text>
+        {showLabel ? <Text style={[styles.usageLabel, { width: labelWidth }]}>{label}</Text> : null}
         <View style={styles.usageTrack}>
           <View
             style={[
@@ -76,7 +80,10 @@ export function UsageBar({
         )}
       </View>
       {resetText ? (
-        <Text style={styles.usageResetText} numberOfLines={1}>
+        <Text
+          style={[styles.usageResetText, { marginLeft: showLabel ? labelWidth + spacing.xs : 0 }]}
+          numberOfLines={1}
+        >
           {resetText}
         </Text>
       ) : null}
