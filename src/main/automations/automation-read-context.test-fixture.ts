@@ -16,6 +16,10 @@ import { observeAutomationChatRun } from './runtime-chat-run-observer'
 import { createAutomationRunWriter } from './automation-run-writer'
 import { publishAutomationOutcome } from './automation-outcome-notification'
 import type { AgentJournalCursor } from '../../shared/agent-session-journal-types'
+import { parseAgentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { agentJournalLinkageFields } from '../../shared/agent-session-journal-producer'
+import { providerItemIdOf } from '../native-chat/agent-session-wire/structured-rewind-cut'
+import type { JournalPublication } from '../native-chat/agent-session-wire/structured-agent-session-conversations'
 import type { AgentSessionTurnCompletionEvent } from '../../shared/agent-session-wire'
 import type { AutomationsChangedPayload } from '../../shared/runtime-client-events'
 import type { AutomationRun } from '../../shared/automations-types'
@@ -64,7 +68,7 @@ export async function readContextFixture(
     emit: (event) => edges.push(event)
   })
   let occurrence = 1_800_000_000_000
-  async function start(existing?: AutomationRun) {
+  async function start(existing?: AutomationRun, signal = abort.signal) {
     const pending = existing ?? store.createAutomationRun(definition, occurrence++, 'manual')
     const run = store.updateAutomationRun({
       runId: pending.id,
@@ -86,7 +90,7 @@ export async function readContextFixture(
         }
       )
     ).toMatchObject({ ok: true })
-    const observing = observeAutomationChatRun(runtime, run, abort.signal, attention)
+    const observing = observeAutomationChatRun(runtime, run, signal, attention)
     void observing.catch(() => {})
     await Promise.resolve()
     return { run, message, attention, observing }
@@ -116,6 +120,41 @@ export async function readContextFixture(
     )
     return await running.observing
   }
+  function publications() {
+    const hints: JournalPublication[] = []
+    const release = rig.host.observeConversationPublications(SESSION, {
+      next: (hint) => hints.push(hint),
+      error: (error) => {
+        throw error
+      }
+    })
+    return { hints, release }
+  }
+  async function replaceEpochRetainingMessages() {
+    const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
+    const fence = rig.store.getRecord(SESSION)!.lease.runtimeFence
+    const kept = journal
+      .snapshot()
+      .items.filter((item) => item.body.kind === 'message' && item.body.role === 'user')
+      .map((item) => {
+        const identity = parseAgentJournalItemKey(providerItemIdOf(journal, item.itemId))
+        if (!identity) {
+          throw new Error('Expected canonical provider message identity')
+        }
+        const provenance = journal.itemProvenance(item.itemId)
+        return {
+          identity,
+          body: item.body,
+          observedAt: item.observedAt,
+          turnScope: item.turnScope,
+          ...agentJournalLinkageFields(item),
+          ...provenance,
+          ownerFence: provenance.ownerFence ?? fence
+        }
+      })
+    expect(kept.length).toBeGreaterThan(0)
+    return await journal.replaceEpochItems('handle_forked', fence, kept)
+  }
   async function commit(run: AutomationRun, observation: Awaited<ReturnType<typeof finish>>) {
     return writer.updateRun({ runId: run.id, ...observation })
   }
@@ -133,6 +172,8 @@ export async function readContextFixture(
     read,
     finish,
     commit,
+    replaceEpochRetainingMessages,
+    publications,
     abort: () => abort.abort(),
     publishing: (callback: (delivery?: AutomationAttentionDelivery) => void) => {
       onPublish = callback
