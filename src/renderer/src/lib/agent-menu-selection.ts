@@ -13,6 +13,10 @@ export type AgentLaunchChoice = {
   requestedSurface?: AgentLaunchSurface
 }
 
+export function launchChoiceSurface(choice: AgentLaunchChoice): AgentLaunchSurface {
+  return choice.route === 'structured-native-chat' ? 'chat' : 'terminal'
+}
+
 export function resolveAgentMenuSelection(input: {
   agent: TuiAgent | null
   surface?: AgentLaunchSurface

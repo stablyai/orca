@@ -13,6 +13,8 @@ import { findTerminalTabForPane } from './terminal-tab-id'
 import { isDeferredSplitInputHold } from './pane-transport-options'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
+import type { PtyPaneStartup } from '../pty-connection-types'
+import { readClaudePinnedLaunchErrorCode } from '../../../../../shared/claude/claude-pinned-launch-error'
 import { bindBuildColdRestoreAgentResumeStartup } from './cold-restore-resume-startup'
 
 import { bindForegroundOutputRefresh } from './foreground-output-refresh'
@@ -162,13 +164,18 @@ export function installRunDeferredConnect(session: ConnectPanePtySession): void 
       )
     }
 
-    session.reportError = (message: string): void => {
+    session.reportError = (message: string, startup?: PtyPaneStartup): void => {
       // Drop async connect errors after disposal so teardown cannot race a user-facing toast.
       if (session.disposed) {
         return
       }
       if (isWorktreeRemovalFenceError(message)) {
         // Removal fences, including overlapping parent/child roots, are expected teardown; never flash their raw spawn/reattach errors.
+        return
+      }
+      if (startup && readClaudePinnedLaunchErrorCode(message)) {
+        // Why only refusals: recovery replays the refused spawn; other errors keep their old shape.
+        session.deps.onPtyErrorRef?.current?.(session.pane.id, message, startup)
         return
       }
       session.deps.onPtyErrorRef?.current?.(session.pane.id, message)

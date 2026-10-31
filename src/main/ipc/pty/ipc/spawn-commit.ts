@@ -8,6 +8,7 @@ import type { PtySpawnPaneBinding } from '../spawn-commit-binding'
 import { spawnCommitBindingOrigin } from '../../../persistence/loading-store/pty-binding-span'
 import { parseTerminalPanePlacement } from '../../../../shared/terminal-pane-placement'
 import { commitPtyWithOpenCodePromptIntent } from '../../../opencode/opencode-startup-prompt-owner'
+import { markClaudePtySpawnedForAuth } from '../claude-pinned-spawn'
 import { resumeSpawnRefusal, savedResumeResult } from '../host-env/saved-resume-admission'
 
 export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawnOutcome> {
@@ -21,6 +22,10 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
         ? args.worktreeId
         : null
     const response = ipcSpawnResponse(ctx)
+    // Why the refusal check: a refused resume starts a plain shell, not the pinned Claude.
+    if (ctx.isClaudeLaunch && !ctx.stablePaneOwner && !resumeSpawnRefusal(ctx.resumeAdmission)) {
+      markClaudePtySpawnedForAuth(ctx.result.id, ctx.claudeAuth)
+    }
     const freshSpawn = ctx.result.isReattach !== true && ctx.stablePaneOwner === null
     return commitPtySpawn({
       state: ctx,

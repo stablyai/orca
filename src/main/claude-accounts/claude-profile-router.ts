@@ -56,7 +56,7 @@ export class ClaudeProfileRouter {
   readonly pointerPath: string
   private readonly setups = new Map<string, Promise<ClaudeProfileSetupReport>>()
   private env: NodeJS.ProcessEnv
-  private readonly envReady: Promise<unknown>
+  readonly envReady: Promise<unknown>
   private envResolved: boolean
   constructor(
     private readonly args: {

@@ -54,6 +54,7 @@ export type OwnedMobileTerminalCreateOptions = {
   identity?: { tabId: string; leafId: string; sessionId?: string }
   createMutation?: { clientIdentity: string; id: string }
   launchAgent?: TuiAgent
+  claudeAccountId?: string
   viewMode?: 'terminal' | 'chat'
   targetGroupId?: string
   afterDesktopTabId?: string

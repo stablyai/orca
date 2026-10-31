@@ -188,7 +188,7 @@ export function registerCoreHandlers(
   registerPreflightHandlers(store)
   registerUsageProviderHandlers({ claudeUsage, codexUsage, openCodeUsage, museUsage })
   registerCodexAccountHandlers(codexAccounts, () => store.getSettings())
-  registerAgentHookHandlers(runtime, { getPtyIdForPaneKey })
+  registerAgentHookHandlers(runtime, { getPtyIdForPaneKey, workspaceSession: store })
   registerCodexConfigSyncHandlers(codexAccounts.runtimeHomeService)
   registerClaudeAccountHandlers(claudeAccounts)
   registerOpenCodeGoCredentialsHandlers(rateLimits)

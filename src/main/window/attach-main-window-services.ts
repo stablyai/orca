@@ -16,6 +16,7 @@ import { registerPtyHandlers } from '../ipc/pty/register-handlers'
 import type {
   CodexHomePtySpawnedLifecycleArgs,
   GetSelectedCodexHomePath,
+  PrepareClaudeAuth,
   PrepareCodexSessionResume
 } from '../ipc/pty/host-env/types'
 import { registerDaemonManagementHandlers } from '../ipc/pty/pty-management'
@@ -28,9 +29,7 @@ import { scheduleHistoryGc } from '../terminal-history-gc'
 import { openCodeHookService, openCode2HookService } from '../opencode/hook-service'
 import { listLiveDaemonPtyIds } from '../daemon/daemon-provider-state'
 import { hydrateLocalPtyRegistryAtBoot } from '../memory/hydrate-local-pty-registry'
-import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
 import { getKnownWorktreeIdsForHistoryGc } from './history-gc-worktree-ids'
-import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
 import {
   scheduleWorktreeBaseDirectoryWatcherSync,
   setWorktreeBaseDirectoryWatcherSyncContext
@@ -54,9 +53,7 @@ export function attachMainWindowServices(
   store: Store,
   runtime: OrcaRuntimeService,
   getSelectedCodexHomePath?: GetSelectedCodexHomePath,
-  prepareClaudeAuth?: (
-    target?: ClaudeAccountSelectionTarget
-  ) => Promise<ClaudeRuntimeAuthPreparation>,
+  prepareClaudeAuth?: PrepareClaudeAuth,
   options?: {
     prepareCodexSessionResume?: PrepareCodexSessionResume
     awaitLocalPtyStartup?: () => Promise<void>

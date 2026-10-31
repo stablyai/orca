@@ -8,7 +8,8 @@ export function TabHoverCard({
   icon,
   programName,
   description,
-  alert
+  alert,
+  onOpenChange
 }: {
   children: ReactNode
   title: string
@@ -17,13 +18,21 @@ export function TabHoverCard({
   description?: string
   /** Controls below the program row; the card then stays open under the pointer. */
   alert?: ReactNode | ((dismiss: () => void) => ReactNode)
+  onOpenChange?: (open: boolean) => void
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   // Remove the portal before navigation can start rendering a slower destination.
   const dismiss = () => flushSync(() => setOpen(false))
   const interactive = alert !== undefined && alert !== null
   return (
-    <Tooltip open={open} onOpenChange={setOpen} disableHoverableContent={!interactive}>
+    <Tooltip
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next)
+        onOpenChange?.(next)
+      }}
+      disableHoverableContent={!interactive}
+    >
       <TooltipTrigger
         asChild
         onFocus={(event) => {

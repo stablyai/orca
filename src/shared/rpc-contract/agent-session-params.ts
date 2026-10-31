@@ -12,6 +12,7 @@ import type {
   RuntimeEnsureAgentSessionRequest
 } from '../agent-session-host-authority'
 import { isTuiAgent } from '../tui-agent-config'
+import { launchConfigClaudeAccountIdSchema } from '../workspace-session-sleeping-agents'
 import { RESTORE_SPAWN_INTENTS } from '../host-spawn-admission'
 import { AgentLaunchAccountEnv } from '../agent-launch-account-env'
 
@@ -139,6 +140,7 @@ export const ExplicitEnsure = z
     terminalKittyKeyboardProtocol: z.boolean().optional(),
     agentArgs: AgentArgs.optional(),
     launchPreferences: LaunchPreferences.optional(),
+    claudeAccountId: launchConfigClaudeAccountIdSchema,
     presentation: Presentation.optional(),
     placement: Placement.optional(),
     spawnIntent: SpawnIntentParam.optional(),
@@ -187,6 +189,7 @@ export const CreateAgentSessionParams: z.ZodType<RuntimeCreateAgentSessionReques
     promptDelivery: PromptDelivery.optional(),
     agentArgs: AgentArgs.optional(),
     launchPreferences: LaunchPreferences.optional(),
+    claudeAccountId: launchConfigClaudeAccountIdSchema,
     startupCwd: z.string().min(1).max(MAX_WORKTREE_SELECTOR_LENGTH).optional(),
     presentation: Presentation.optional(),
     placement: Placement.optional(),

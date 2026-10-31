@@ -55,6 +55,12 @@ export async function startWorker(
       '--timeout-ms is too large for worker-start transport grace; the derived timeout must fit within the timer limit.'
     )
   }
+  if (params.on && params.account) {
+    throw new OrchestrationError(
+      'invalid_argument',
+      "--account runs Claude on this host's accounts and cannot combine with --on."
+    )
+  }
   if (params.on && params.terminal?.startsWith(ORCA_SESSION_ADDRESS_PREFIX)) {
     // Refused here, before any remote call: an Orca session ID names a chat only on its own host.
     throw new OrchestrationError(
@@ -148,6 +154,7 @@ export async function startWorker(
       ...(placement.agent ? { agent: placement.agent } : {}),
       ...(placement.model ? { model: placement.model } : {}),
       ...(placement.effort ? { effort: placement.effort } : {}),
+      ...(placement.account ? { account: placement.account } : {}),
       spec
     }
     followUp = { ...followUp, reopen: placement.reopen, earlierWork: placement.earlierWork }

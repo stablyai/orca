@@ -8,7 +8,7 @@ import {
   MAX_TERMINAL_ERROR_LINES,
   terminalErrorForPane
 } from './terminal-error-accumulation'
-import { stripSshReconnectOwnedErrorLines } from './TerminalErrorToast'
+import { stripSshReconnectOwnedErrorLines } from './terminal-ssh-reconnect-error'
 
 const MULTILINE_ERROR = 'Remote terminal write failed.\nThe remote runtime rejected the request.'
 

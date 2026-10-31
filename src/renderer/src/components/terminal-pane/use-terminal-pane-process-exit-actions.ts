@@ -15,6 +15,7 @@ import { resolveTerminalProcessExitRestartStartup } from './terminal-process-exi
 import type { PaneProcessExit, PtyConnectionDeps } from './pty-connection-types'
 import type { TerminalPaneCloseController } from './use-terminal-pane-close-actions'
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
+import { startPaneOnActiveClaudeAccount } from './start-pane-on-active-claude-account'
 
 export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseController) {
   const {
@@ -263,7 +264,23 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
     tabId
   ])
 
-  return { handleRestartExitedPane, handleCloseExitedPane }
+  const startPaneOnActiveAccount = useCallback(
+    (paneId: number) =>
+      startPaneOnActiveClaudeAccount({
+        paneId,
+        paneHost: paneTransportsRef,
+        worktreeId,
+        restartPane: (refusedPaneId, startup) =>
+          handleRestartPane(refusedPaneId, startup, { focus: true })
+      }),
+    [handleRestartPane, paneTransportsRef, worktreeId]
+  )
+
+  return {
+    handleRestartExitedPane,
+    handleCloseExitedPane,
+    startPaneOnActiveAccount
+  }
 }
 
 export type TerminalPaneProcessExitController = ReturnType<typeof useTerminalPaneProcessExitActions>

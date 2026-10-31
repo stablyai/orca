@@ -6,6 +6,8 @@ import { sanitizeRepoIcon } from '../../../shared/repo-icon'
 import { normalizeGhAccountBinding } from '../../../shared/github/account-binding'
 import { normalizeJiraProjectReference } from '../../../shared/jira/jira-project-reference'
 import type { GhAccountBinding } from '../../../shared/github/account-binding'
+import { normalizeRepoAgentAccounts } from '../../../shared/claude/project-claude-account-preference'
+import type { RepoAgentAccounts } from '../../../shared/claude/project-claude-account-preference'
 import {
   normalizeCustomWorktreeVisibilitySources,
   normalizeWorktreeVisibilitySourcePreferences
@@ -81,6 +83,7 @@ export function sanitizeRepoUpdatesForPersistence<
     >
   > & {
     ghAccount?: GhAccountBinding | null
+    agentAccounts?: RepoAgentAccounts | null
   }
 >(updates: T): T {
   const sanitized = { ...updates }
@@ -155,6 +158,14 @@ export function sanitizeRepoUpdatesForPersistence<
       delete sanitized.ghAccount
     } else {
       sanitized.ghAccount = ghAccount
+    }
+  }
+  if ('agentAccounts' in sanitized && sanitized.agentAccounts != null) {
+    const agentAccounts = normalizeRepoAgentAccounts(sanitized.agentAccounts)
+    if (!agentAccounts) {
+      delete sanitized.agentAccounts
+    } else {
+      sanitized.agentAccounts = agentAccounts
     }
   }
   if ('customWorktreeVisibilitySources' in sanitized) {

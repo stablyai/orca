@@ -1571,6 +1571,16 @@
       }
     },
     "components": {
+      "ClaudeAccountPromptDialog": {
+        "accountsUnavailable": "Claude アカウントを読み込めなかったため、Claude を起動しませんでした。もう一度お試しいただくか、[設定] → [リポジトリ] でこのプロジェクトのアカウントを選択してください。",
+        "title": "Claude アカウントを選択",
+        "description": "{{value0}} で開始する Claude アカウントを選択してください。",
+        "accountLabel": "アカウント",
+        "remember": "このプロジェクトで記憶する",
+        "rememberHint": "[設定] → [リポジトリ] で変更できます",
+        "cancel": "キャンセル",
+        "start": "開始"
+      },
       "hostPicker": {
         "searchHosts": "ホストを検索…",
         "noHostsMatch": "一致するホストはありません。",
@@ -3408,6 +3418,7 @@
             "5c8ce20be6": "この状態が続く場合は、",
             "cc6d997c65": "ここからターミナルデーモンを再起動して、古いデーモン状態をクリアします。",
             "remoteTerminalClosed": "リモートターミナルが閉じられました。",
+            "startOnActiveAccount": "アクティブなアカウントで開始",
             "retry": "再試行",
             "retrying": "再試行中…",
             "retryUnavailable": "再試行はまだ再接続できませんでした。しばらくしてからもう一度お試しください。",
@@ -3421,6 +3432,11 @@
             "terminalProcessLimit": "システムはこれ以上ターミナルプロセスを起動できません。使っていないターミナルを閉じるか、不要なプロセスを終了してから、もう一度お試しください。",
             "hostTerminalCap": "ホストではすでに Orca が許可する上限までターミナルが実行されています。不要になったターミナルを閉じてから、もう一度お試しください。",
             "ownerHostMismatch": "このターミナルの保存済みセッションは別のホスト接続に属しているため、Orca はここで再接続できません。続行するには、新規ターミナルを開いてください。"
+          },
+          "ClaudePinnedLaunch": {
+            "accountMissing": "このプロジェクトに保存された Claude アカウントはサインインしていません。[設定] → [リポジトリ] で変更するか、アクティブなアカウントで開始してください。",
+            "provenance": "このセッションの Claude アカウントを確認できなかったため、開始しませんでした。",
+            "unsupportedHost": "保存された Claude アカウントは WSL ではまだ使用できません。アクティブなアカウントで開始するか、[設定] → [リポジトリ] でこのプロジェクトのアカウントを [デフォルト] に設定してください。"
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "Git Bash のコンソール上限に達しました",
@@ -6781,6 +6797,8 @@
           "9fec52de4b": "Cookie のコピー方法",
           "remoteServerFallback": "リモートサーバー",
           "loadAccountsFailed": "プロバイダーアカウントを読み込めませんでした。",
+          "askClaudeAccountPerProjectTitle": "プロジェクトごとに使用する Claude アカウントを確認する",
+          "askClaudeAccountPerProjectDescription": "オンにすると、Claude アカウントが保存されていないプロジェクトでは、Claude を開始する前に確認します。",
           "accountScopePrefix": "アカウントスコープ",
           "accountScopeRemoteServerUnnamed": "リモートサーバー",
           "remoteScopeAuthContext": "各アカウントは {{value0}} 上に独自のサインインコンテキストを保持します。",
@@ -8864,6 +8882,12 @@
             "c1b5f9d7e0": "xai",
             "b0a4e8c6d9": "認証",
             "a9f3d7b5c8": "ログイン",
+            "askPerProjectAccounts": "アカウント",
+            "askPerProjectProject": "プロジェクト",
+            "askPerProjectPerProject": "プロジェクトごと",
+            "askPerProjectAsk": "確認",
+            "askPerProjectAskWhich": "どれか確認",
+            "askPerProjectPrompt": "プロンプト",
             "37020a02c2": "コンソール",
             "25591bf95b": "レート制限を取得するために、__Host-console_session を含む完全な opencode.ai Cookie ヘッダーを貼り付けます。",
             "d16378a88f": "ミニマックス",
@@ -10169,6 +10193,11 @@
             "ghAccount": "gh アカウント",
             "login": "ログイン",
             "token": "token",
+            "claudeAccount": "Claude アカウント",
+            "claudeAccountDescription": "このプロジェクトで開始する Claude アカウントを選択します。",
+            "claudeAccountKeyword": "claude アカウント",
+            "claudeAccountsKeyword": "claude アカウント一覧",
+            "accountsKeyword": "アカウント",
             "externalWorktrees": "外部ワークツリー",
             "externalWorktreesDescription": "このプロジェクトで Orca 外のワークツリーを表示するかどうかを上書きします。",
             "copy": "コピー",
@@ -10653,6 +10682,18 @@
           "capabilityUnknownHint": "このランタイムでの GitHub CLI アカウントバインディングのサポートを確認できませんでした。バインディングをクリアするか、再試行してください。",
           "notEnforced": "保存されましたが、このランタイム (混合バージョンのホスト) では適用されません。",
           "refreshAccounts": "GitHub アカウントを更新する"
+        },
+        "RepositoryClaudeAccountSection": {
+          "title": "Claude アカウント",
+          "description": "このプロジェクトで開始する Claude アカウントを選択します。",
+          "selectLabel": "アカウント",
+          "default": "デフォルト",
+          "ask": "毎回尋ねる",
+          "unsupported": "プロジェクトごとの Claude アカウントは、このプロジェクトのホストではまだサポートされていません。",
+          "saveFailed": "Claude アカウントの設定を保存できませんでした。",
+          "notEnforced": "保存しましたが、このランタイムでは適用されません (バージョンが異なるホスト)。",
+          "loadFailed": "Claude アカウントを読み込めませんでした。",
+          "removedAccountOption": "削除されたアカウント (使用不可)"
         },
         "agent-status-hooks-copy": {
           "7707c15abb": "Agent 状態フック",

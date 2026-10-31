@@ -76,6 +76,9 @@ export type AgentStatusPayload = ParsedAgentStatusPayload & {
   restoredUnconfirmed?: boolean
   /** Optional ingress provenance, currently unread; omission preserves existing output (STA-4293, agent-status-observation.ts). */
   observation?: AgentStatusObservation
+  /** Main's pinned account for the pane: null when main published the row unpinned, undefined
+   *  from renderer-local writers, which keep the row's current value. */
+  claudeAccountId?: string | null
   /** `null` clears the facet; absent keeps it (the writer has no facet channel, e.g. renderer OSC). */
   programStatus?: ProgramStatusFacet | null
 }

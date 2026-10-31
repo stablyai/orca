@@ -1,5 +1,5 @@
 import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
-import { createAgentSessionKeyboardOptions } from './agent-session-keyboard-capability'
+import { createAgentSessionLaunchOptions } from './agent-session-launch-options'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../shared/runtime-types'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
@@ -90,7 +90,7 @@ export async function createWebRuntimeSessionTerminalResult(
     if (agent) {
       // Paired panes retain the default keyboard advertisement, including on Windows clients.
       const keyboardProtocol = buildDefaultTerminalOptions().vtExtensions?.kittyKeyboard
-      const keyboardOptions = createAgentSessionKeyboardOptions(keyboardProtocol)
+      const launchOptions = createAgentSessionLaunchOptions(keyboardProtocol)
       let legacyAlreadyPlacedInGroup = false
       // Keep legacy placement until structured creation supports afterTabId.
       // Focus belongs to this client; headless hosts have no renderer.
@@ -106,7 +106,7 @@ export async function createWebRuntimeSessionTerminalResult(
                     await callEnvironment({
                       method: 'terminal.ensureAgentSession',
                       params: {
-                        ...(await keyboardOptions(environmentId)),
+                        ...(await launchOptions(environmentId, args.launchConfig)),
                         kind: 'explicit',
                         worktree: toRuntimeWorktreeSelector(args.worktreeId),
                         agent,
@@ -138,7 +138,7 @@ export async function createWebRuntimeSessionTerminalResult(
                       method: 'terminal.createAgentSession',
                       params: withAgentSessionCreateOperationId(
                         {
-                          ...(await keyboardOptions(environmentId)),
+                          ...(await launchOptions(environmentId, args.launchConfig)),
                           worktree: toRuntimeWorktreeSelector(args.worktreeId),
                           agent,
                           ...(args.prompt ? { prompt: args.prompt } : {}),

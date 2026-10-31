@@ -11,6 +11,7 @@ import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '@/lib/tui-agent-startup'
 import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-startup-plan-inputs'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
+import { withClaudeLaunchAccount } from '@/lib/claude-launch-account'
 import {
   requireExecutionHostPlatform,
   type ExecutionHostPlatformFact
@@ -26,6 +27,7 @@ export type QuickComposerStartupInput = {
   shell: AgentStartupShell | null | undefined
   isRemote: boolean
   telemetrySource: WorktreeCreationRequest['telemetrySource']
+  claudeAccountId?: string
 }
 
 export type QuickComposerStartup = {
@@ -75,6 +77,13 @@ export function buildQuickComposerStartup(input: QuickComposerStartupInput): Qui
     })
     if (startupPlan && draftPrompt) {
       startupPlan.draftPrompt = draftPrompt
+    }
+  }
+  // Why: stamped before `backendStartup` is derived so the backend and renderer lanes pin alike.
+  if (startupPlan && agent === 'claude') {
+    startupPlan = {
+      ...startupPlan,
+      launchConfig: withClaudeLaunchAccount(startupPlan.launchConfig, input.claudeAccountId)
     }
   }
   const telemetry: AgentStartedTelemetry | null =

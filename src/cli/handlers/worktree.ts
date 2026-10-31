@@ -58,8 +58,8 @@ import {
 function getOptionalStartupAgent(flags: Map<string, string | boolean>): TuiAgent | undefined {
   const agent = getPresentStringFlag(flags, 'agent')
   if (agent === undefined) {
-    const needsAgent = ['prompt', 'model', 'effort', 'surface', 'retry-launch'].find((name) =>
-      flags.has(name)
+    const needsAgent = ['prompt', 'model', 'effort', 'surface', 'retry-launch', 'account'].find(
+      (name) => flags.has(name)
     )
     if (needsAgent) {
       throw new RuntimeClientError('invalid_argument', `--${needsAgent} requires --agent`)

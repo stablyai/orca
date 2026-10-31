@@ -12,7 +12,7 @@ import { translate } from '@/i18n/i18n'
 import { prepareQuickComposerStartup } from './quick-startup-plan'
 import { buildQuickCreationRequest, type QuickSubmitOptions } from './quick-creation-request'
 import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
-import { resolveAgentSessionLaunchRoute } from '@/lib/agent-session-launch-plan'
+import { prepareQuickAgentLaunch } from './quick-creation-agent-launch'
 
 export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
   const {
@@ -89,6 +89,11 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         trimmedNote
       } = prepared
 
+      const agentLaunch = await prepareQuickAgentLaunch(agent, repoId, options?.launchChoice)
+      if (!agentLaunch) {
+        return
+      }
+
       const {
         startupPlan,
         backendStartup,
@@ -105,7 +110,8 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         isRemote: selectedRepoIsRemote,
         telemetrySource,
         repoId,
-        executionHostId: selectedRepoExecutionHostId
+        executionHostId: selectedRepoExecutionHostId,
+        claudeAccountId: agentLaunch.claudeAccountId
       })
       if (isSubmissionCancelled()) {
         return
@@ -147,21 +153,17 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
 
       const promptDelivery = quickDraftPrompt ? 'draft' : 'auto-submit'
       // Why: the verdict is persisted on the request as data and re-entered once the worktree exists.
-      const agentLaunchRoute = !agent
-        ? 'terminal-tui'
-        : (options?.launchChoice?.route ??
-          resolveAgentSessionLaunchRoute(useAppStore.getState(), {
-            agent,
-            workspace: {
-              kind: selectedRepoIsGit ? 'git-worktree' : 'folder',
-              repoId,
-              executionHostId: ephemeralVmRecipe
-                ? 'runtime:pending-ephemeral-vm'
-                : (workspaceRunContext?.hostId ?? selectedRepoExecutionHostId ?? undefined)
-            },
-            prompt: quickDraftPrompt ?? quickPrompt,
-            promptDelivery
-          }))
+      const agentLaunchRoute = agentLaunch.resolveRoute({
+        workspace: {
+          kind: selectedRepoIsGit ? 'git-worktree' : 'folder',
+          repoId,
+          executionHostId: ephemeralVmRecipe
+            ? 'runtime:pending-ephemeral-vm'
+            : (workspaceRunContext?.hostId ?? selectedRepoExecutionHostId ?? undefined)
+        },
+        prompt: quickDraftPrompt ?? quickPrompt,
+        promptDelivery
+      })
       const structuredLaunch = agentLaunchRoute === 'structured-native-chat'
 
       const request = buildQuickCreationRequest({

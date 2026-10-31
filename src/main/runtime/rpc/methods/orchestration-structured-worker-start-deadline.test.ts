@@ -32,6 +32,7 @@ vi.mock('./orchestration/worker/worker-start-agent-placement', async (importOrig
   }
 }))
 vi.mock('./orchestration/worker/worker-start-validation', () => ({
+  assertLocalAccountWorktree: async () => {},
   prepareLocalWorkerStart: () => ({
     agent: 'claude',
     launch: { receipt: { requested: null, effective: null }, preferences: undefined }

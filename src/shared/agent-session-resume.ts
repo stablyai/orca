@@ -1,6 +1,5 @@
 import { readAgentEffortLevel } from './agent-effort-level'
 import type { AgentHookSource } from './agent-hook-relay'
-import type { AgentStatusCacheIdentity, RefusedPaneResume } from './agent-status-ipc-payload'
 import type { AgentStatusState } from './agent-status-types'
 import type { AgentMainAgentStatus } from './main-agent-status'
 import type { TuiAgent } from './tui-agent'
@@ -54,6 +53,8 @@ export type SleepingAgentLaunchConfig = {
   agentArgs: string
   agentEnv: Record<string, string>
   ompResumeFilePath?: string
+  /** Account this launch was pinned to, or ACTIVE_CLAUDE_ACCOUNT; replayed on resume. */
+  claudeAccountId?: string
 }
 
 export type SleepingAgentSessionRecord = {
@@ -74,6 +75,8 @@ export type SleepingAgentSessionRecord = {
   mainAgent?: AgentMainAgentStatus
   connectionId?: string | null
   launchConfig?: SleepingAgentLaunchConfig
+  /** Pinned Claude account when no launch config was recorded; resume must not guess the launch options. */
+  claudeAccountId?: string
   /** Worktree-sleep/legacy records open fresh tabs on activation. quit/live records belong to restored panes; only their cold-restore path consumes them to avoid duplicating warm sessions (#5232). */
   origin?: 'worktree-sleep' | 'quit' | 'live'
   /** Explicit-sleep finished panes resume only when their own tab opens; mobile wake must not mount/respawn every slept tab (#11598). */
@@ -306,44 +309,9 @@ export function extractAgentProviderSession(
 // Preserve the existing import path.
 export { getAgentForkArgv, getAgentResumeArgv } from './agent-resume-argv'
 
-/** A host home check for this exact saved continuation, not a terminal writer claim. */
-export type SavedResumeDecision = {
-  agent: string
-  providerSession: AgentProviderSessionMetadata
-  verdict: 'admitted' | 'chat-home' | 'chat-writing' | 'unverifiable'
-}
-
-/** Effective facts of a terminal launch; a refused shell carries no rejected agent metadata. */
-export type TerminalLaunchResult = {
-  savedResumeDecision?: SavedResumeDecision
-  agentResumeUnavailable?: true
-  agentResumeRefused?: 'chat-home' | 'chat-writing' | 'unverifiable'
-  refusedResume?: RefusedPaneResume
-  launchConfig?: SleepingAgentLaunchConfig
-  launchAgent?: TuiAgent
-  launchToken?: string
-  resumeProviderSession?: AgentProviderSessionMetadata
-}
-
-/** Runtime-only source shared by copies of one saved startup. Never persisted or sent to a host. */
-export type SavedResumeStartupSource = {
-  cancelled: boolean
-  record?: SleepingAgentSessionRecord
-  expectedStatus?: AgentStatusCacheIdentity
-}
-
-/** Forward only effective launch facts through each existing terminal envelope. */
-export function terminalLaunchFacts(result: TerminalLaunchResult): TerminalLaunchResult {
-  return {
-    ...(result.savedResumeDecision ? { savedResumeDecision: result.savedResumeDecision } : {}),
-    ...(result.agentResumeUnavailable
-      ? { agentResumeUnavailable: result.agentResumeUnavailable }
-      : {}),
-    ...(result.agentResumeRefused ? { agentResumeRefused: result.agentResumeRefused } : {}),
-    ...(result.refusedResume ? { refusedResume: result.refusedResume } : {}),
-    ...(result.launchConfig ? { launchConfig: result.launchConfig } : {}),
-    ...(result.launchAgent ? { launchAgent: result.launchAgent } : {}),
-    ...(result.launchToken ? { launchToken: result.launchToken } : {}),
-    ...(result.resumeProviderSession ? { resumeProviderSession: result.resumeProviderSession } : {})
-  }
-}
+export {
+  terminalLaunchFacts,
+  type SavedResumeDecision,
+  type SavedResumeStartupSource,
+  type TerminalLaunchResult
+} from './terminal-launch-result'

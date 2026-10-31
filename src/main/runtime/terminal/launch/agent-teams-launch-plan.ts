@@ -6,12 +6,21 @@ import {
 } from '../../../../shared/claude-agent-teams-tmux-compat'
 import type { TerminalCreateOptions } from '../../runtime-terminal-contracts'
 import { buildClaudeAgentTeamsLaunchPlan } from '../../claude-agent-teams-shim-env'
-import { inferCapturedClaudeAgentTeamsMode } from '../../runtime-agent-launch-resolution'
+import {
+  inferCapturedClaudeAgentTeamsMode,
+  withRecordedClaudeAccount
+} from '../../runtime-agent-launch-resolution'
 
-export async function buildRuntimeAgentTeamsLaunchPlan(args: {
-  launchConfig: TerminalCreateOptions['launchConfig']
-  command?: string
-  claudeAgentTeamsSourceCommand?: string
+export async function buildRuntimeAgentTeamsLaunchPlan(input: {
+  launch: Pick<
+    TerminalCreateOptions,
+    | 'launchConfig'
+    | 'command'
+    | 'claudeAgentTeamsSourceCommand'
+    | 'claudeAccountId'
+    | 'launchClaudeAccountId'
+    | 'launchAgent'
+  >
   claudeAgentTeamsMode?: ClaudeAgentTeamsMode
   baseEnv: Record<string, string | undefined>
   adoptedBeforeLaunch:
@@ -24,13 +33,26 @@ export async function buildRuntimeAgentTeamsLaunchPlan(args: {
   sequencedStartupCommand?: string
   effectiveLaunchConfig: TerminalCreateOptions['launchConfig']
 }> {
+  const { launch } = input
+  // Why named, never spread: a spread reads every launch getter, before the caller has captured its spawn state.
+  const args = {
+    ...input,
+    launchConfig: launch.launchConfig,
+    command: launch.command,
+    claudeAgentTeamsSourceCommand: launch.claudeAgentTeamsSourceCommand,
+    claudeAccountId: launch.claudeAccountId
+  }
   const sourceCommand =
     args.claudeAgentTeamsSourceCommand?.trim() || args.command?.trim() || undefined
-  const mode = inferCapturedClaudeAgentTeamsMode(
+  const capturedMode = inferCapturedClaudeAgentTeamsMode(
     args.launchConfig,
     sourceCommand,
     args.claudeAgentTeamsMode
   )
+  // Why: native-pane teammates are separate terminals launched on the host's active account; an
+  // `--account` leader keeps its teammates in-process, on its own pinned credentials.
+  const mode =
+    args.claudeAccountId && capturedMode === 'native-panes-shim' ? 'in-process' : capturedMode
   const plan = args.adoptedBeforeLaunch
     ? undefined
     : await buildClaudeAgentTeamsLaunchPlan({
@@ -55,5 +77,9 @@ export async function buildRuntimeAgentTeamsLaunchPlan(args: {
           agentEnv: { ...args.launchConfig.agentEnv, ...plan.env }
         }
       : args.launchConfig
-  return { plan, sequencedStartupCommand, effectiveLaunchConfig }
+  return {
+    plan,
+    sequencedStartupCommand,
+    effectiveLaunchConfig: withRecordedClaudeAccount(effectiveLaunchConfig, launch)
+  }
 }

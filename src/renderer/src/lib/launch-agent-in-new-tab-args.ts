@@ -41,6 +41,8 @@ export type LaunchAgentInNewTabArgs = LaunchAgentInNewTabRequest & {
    * terminal route, whose readiness signal the client watches itself.
    */
   onPromptDeliveryUnconfirmed?: () => void
+  /** A one-time Claude account choice; the project's saved account applies when omitted. */
+  claudeAccountId?: string
   /** Keep terminal launches in a floating workspace from taking global selection. */
   activate?: boolean
   /** The launch seeds a workspace being opened, so its PTY spawn must not reshuffle Recent. */

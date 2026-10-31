@@ -5,7 +5,10 @@ import {
 import type { LaunchAgentInNewTabArgs } from '@/lib/launch-agent-in-new-tab-args'
 import { useAppStore } from '@/store'
 import { validateActionTerminalArgs } from './launch-work-item-direct-messages'
-import { planLaunchAgentStartupPrompt } from '@/lib/launch-agent-startup-prompt-plan'
+import {
+  planLaunchAgentStartupPrompt,
+  type LaunchAgentStartupPromptPlan
+} from '@/lib/launch-agent-startup-prompt-plan'
 import { persistAgentLaunchTabOrder } from '@/lib/launch-agent-tab-order'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-launch-prompt-delivery'
@@ -19,6 +22,7 @@ import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { resolveAgentLaunchExecutionContext } from '@/lib/launch-agent-execution-context'
 import { launchStructuredAgentFromNewTab } from '@/lib/launch-agent-in-new-tab-structured-route'
 import { workspaceKindForWorktreeId } from '@/lib/agent-launch-route-input'
+import { relaunchWithClaudeAccount, stampClaudeLaunchAccount } from '@/lib/claude-launch-account'
 import {
   launchOnceHostAnswered,
   routeNewTabLaunch,
@@ -124,8 +128,8 @@ export function launchAgentInNewTabWithOutcome(
   }
   const buildStartup = (
     agentLaunchChoices = readAgentLaunchPreferencesForWorktree(store, worktreeId).agentLaunchChoices
-  ) =>
-    planLaunchAgentStartupPrompt({
+  ): LaunchAgentStartupPromptPlan => {
+    const startup = planLaunchAgentStartupPrompt({
       base: resolveAgentStartupPlanInputs({
         agent,
         settings: { ...store.settings, agentLaunchChoices },
@@ -140,6 +144,17 @@ export function launchAgentInNewTabWithOutcome(
       promptDelivery,
       isFollowupPath
     })
+    const { startupPlan } = startup
+    return startupPlan
+      ? {
+          ...startup,
+          startupPlan: {
+            ...startupPlan,
+            launchConfig: stampClaudeLaunchAccount(store, args, startupPlan.launchConfig)
+          }
+        }
+      : startup
+  }
   args.focusIntent?.cancel()
   const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(store, worktreeId)
   if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
@@ -159,7 +174,8 @@ export function launchAgentInNewTabWithOutcome(
       agentArgs,
       viewMode: 'terminal',
       ...(activate === false ? { activate } : {}),
-      onPromptDelivered
+      onPromptDelivered,
+      relaunch: relaunchWithClaudeAccount(launchAgentInNewTabWithOutcome, args)
     })
     return {
       surface: { kind: 'host-published' },
@@ -180,6 +196,8 @@ export function launchAgentInNewTabWithOutcome(
   }
   if (
     pasteDraftAfterLaunch !== null &&
+    // Why: the host's plan carries only the project's saved account, not a one-time choice.
+    !args.claudeAccountId &&
     newTabPromptLaunchesThroughHost({ promptDelivery, pastesPrompt: true, isRemote })
   ) {
     const launched = launchNewTabPromptThroughHost({

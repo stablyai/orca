@@ -1,3 +1,4 @@
+import { isPinnableClaudeAccountId } from '../../../shared/claude/project-claude-account-preference'
 import type { StructuredLaunchSurfaceAddress } from './agent-session/launch/structured-agent-session-launch-record'
 import type { StructuredAgentSessionResumeSource } from '../../../shared/structured-agent-session-create'
 import type { TuiAgent } from '../../../shared/tui-agent'
@@ -22,6 +23,7 @@ import {
   type AgentLaunchRoute,
   type AgentLaunchRoutingInput
 } from '@/lib/agent-launch-routing'
+import { findLaunchRepo, resolveLaunchClaudeAccountId } from '@/lib/claude-launch-account'
 import type { NativeChatLaunchPromptDelivery } from '@/lib/native-chat-launch-prompt-delivery'
 import {
   beginStructuredAgentLaunchSettlement,
@@ -36,7 +38,12 @@ import { awaitLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilit
 
 export type AgentLaunchSurface = 'chat' | 'terminal'
 
-export type AgentSessionLaunchRequest = AgentLaunchRouteArgs & {
+type ClaudeAccountRouteArgs = AgentLaunchRouteArgs & {
+  /** A one-time account choice; the project's saved account applies when omitted. */
+  claudeAccountId?: string
+}
+
+export type AgentSessionLaunchRequest = ClaudeAccountRouteArgs & {
   requestId: AgentLaunchRequestId
   requestedSurface?: AgentLaunchSurface
   selectedExecutionHostId?: ExecutionHostId
@@ -166,11 +173,39 @@ export function structuredAgentSessionLaunchFeasible(
   return structuredAgentLaunchSupported({ ...buildAgentLaunchRouteInput(store, args), settings })
 }
 
+// Why: a structured session has no account-pinning path, so a pinned Claude launch runs in a terminal.
+function launchPinsClaudeAccount(
+  store: AgentLaunchRouteStore,
+  request: ClaudeAccountRouteArgs
+): boolean {
+  if (request.agent !== 'claude') {
+    return false
+  }
+  const repo = findLaunchRepo(store, request.workspace)
+  return isPinnableClaudeAccountId(resolveLaunchClaudeAccountId(repo, request.claudeAccountId))
+}
+
+function resolvePlannedRoute(
+  store: AgentLaunchRouteStore,
+  request: ClaudeAccountRouteArgs & Pick<AgentSessionLaunchRequest, 'requestedSurface'>,
+  input: ReturnType<typeof buildAgentLaunchRouteInput>
+): AgentLaunchRoute {
+  const route = request.requestedSurface
+    ? request.requestedSurface === 'chat'
+      ? 'structured-native-chat'
+      : 'terminal-tui'
+    : resolveAgentLaunchRoute(input)
+  // Why even over a requested chat: a chat cannot run on the pinned account, and must not run on another.
+  return route === 'structured-native-chat' && launchPinsClaudeAccount(store, request)
+    ? 'terminal-tui'
+    : route
+}
+
 export function resolveAgentSessionLaunchRoute(
   store: AgentLaunchRouteStore,
-  request: AgentLaunchRouteArgs
+  request: ClaudeAccountRouteArgs & Pick<AgentSessionLaunchRequest, 'requestedSurface'>
 ): AgentLaunchRoute {
-  return resolveAgentLaunchRoute(buildAgentLaunchRouteInput(store, request))
+  return resolvePlannedRoute(store, request, buildAgentLaunchRouteInput(store, request))
 }
 
 /** Log chat-to-terminal fallback and re-ask missing host agent lists for future launches. */
@@ -222,9 +257,13 @@ function structuredRouteAwaits(
 /** Await missing host-agent inventory or local startup capabilities up to waitMs, then let the caller resolve again; null when neither is pending. */
 export function awaitStructuredRouteHostAnswer(
   store: AgentLaunchRouteStore,
-  request: AgentLaunchRouteArgs,
+  request: ClaudeAccountRouteArgs,
   waitMs: number
 ): Promise<void> | null {
+  // Why: a pinned Claude launch is a terminal whatever the host answers, so it never waits.
+  if (launchPinsClaudeAccount(store, request)) {
+    return null
+  }
   const input = buildAgentLaunchRouteInput(store, request)
   if (!structuredRouteAwaits(input)) {
     return null
@@ -269,11 +308,7 @@ export function planAgentSessionLaunch(
   request: AgentSessionLaunchRequest
 ): AgentSessionLaunchPlan {
   const input = buildAgentLaunchRouteInput(store, request)
-  const route = request.requestedSurface
-    ? request.requestedSurface === 'chat'
-      ? 'structured-native-chat'
-      : 'terminal-tui'
-    : resolveAgentLaunchRoute(input)
+  const route = resolvePlannedRoute(store, request, input)
   if (!request.requestedSurface) {
     reportStructuredLaunchDowngrade(store, input, route)
   }

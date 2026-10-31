@@ -6,6 +6,7 @@ import type { ForkSyncMode } from './git-fork-sync'
 import type { GitRemoteIdentity } from './git-remote-identity'
 import type { RepoSourceControlAiOverrides } from './source-control-ai-types'
 import type { RepoProjectHostSetupMethod } from './project-types'
+import type { RepoAgentAccounts } from './claude/project-claude-account-preference'
 import type { JiraProjectReference } from './jira/jira-project-reference'
 import type { OrcadRetainedMarker } from './orcad-retained-marker'
 
@@ -64,6 +65,8 @@ export type Repo = {
   defaultJiraProject?: JiraProjectReference | null
   /** Bind host/login only; resolve a short-lived gh token at spawn and inject into that child’s environment. */
   ghAccount?: GhAccountBinding
+  /** Per-agent account preference for this project; ids only, never credentials. */
+  agentAccounts?: RepoAgentAccounts
   /** Controls Orca's fork-default-branch sync offer for repos with upstream metadata. */
   forkSyncMode?: ForkSyncMode
   /** Canonical identity for the repo remote Orca should use for provider-level grouping. */

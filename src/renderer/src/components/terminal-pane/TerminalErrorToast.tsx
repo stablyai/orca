@@ -12,6 +12,8 @@ import {
   hasClientEnvironmentFooter,
   stripClientEnvironmentFooter
 } from '../../../../shared/client-environment-info'
+import { describeClaudePinnedLaunchError } from './claude-pinned-launch-error-copy'
+import { StartOnActiveAccountButton } from './StartOnActiveAccountButton'
 import {
   localizeTerminalSpawnHints,
   withoutTerminalSpawnIssueRequest
@@ -20,12 +22,8 @@ import {
   describeSshSignInRequiredTerminalError,
   isSshSignInRequiredTerminalError
 } from './terminal-ssh-sign-in-error'
+import { isSshReconnectOwnedTerminalError } from './terminal-ssh-reconnect-error'
 
-const SSH_PREFIX = 'SSH connection is not active'
-// Produced by pty-connection.ts reportError() when a PTY reattach can't reach its SSH host.
-const SSH_CONNECT_FAILURE_PREFIX = 'SSH connection failed'
-// Matched with includes(): this arrives IPC-wrapped ("Error invoking remote method 'pty:…': Error: …").
-const SSH_RELAY_LOST_MARKER = 'SSH connection lost, reconnecting'
 const STALE_NODE_PTY_DAEMON_MARKERS = [
   "Daemon's node-pty install is gone",
   'node-pty: posix_spawn failed: ENOENT'
@@ -61,24 +59,6 @@ const SOURCE_RESTORE_REQUIRED = tokenPattern(
 // The pane's saved session is owned by another host connection, e.g. an older build's relay tab.
 const OWNER_HOST_MISMATCH = tokenPattern('terminal_pane_owner_host_mismatch')
 
-/** A single error line the SSH reconnect banner already covers — hide instead of stacking under/over it. */
-export function isSshReconnectOwnedTerminalError(error: string): boolean {
-  return (
-    error.startsWith(SSH_CONNECT_FAILURE_PREFIX) ||
-    error.startsWith(SSH_PREFIX) ||
-    error.includes(SSH_RELAY_LOST_MARKER)
-  )
-}
-
-// Error messages are newline-joined for display, so keep unrelated lines regardless of order.
-export function stripSshReconnectOwnedErrorLines(error: string): string | null {
-  const kept = error
-    .split('\n')
-    .filter((line) => !isSshReconnectOwnedTerminalError(line))
-    .join('\n')
-  return kept.length > 0 ? kept : null
-}
-
 export function shouldOfferDaemonRestart(error: string): boolean {
   return [STALE_NODE_PTY_DAEMON_MARKERS, STALE_DAEMON_CWD_MARKERS].some((markers) =>
     markers.every((marker) => error.includes(marker))
@@ -86,6 +66,9 @@ export function shouldOfferDaemonRestart(error: string): boolean {
 }
 
 export function isExplainedTerminalError(error: string): boolean {
+  if (describeClaudePinnedLaunchError(error)) {
+    return true
+  }
   return error
     .split('\n')
     .some(
@@ -154,6 +137,10 @@ function isSshHostStateTerminalError(error: string): boolean {
 
 /** Swaps raw daemon-boundary codes for copy a user can act on. */
 export function humanizeTerminalError(error: string, agentId?: string | null): string {
+  const pinnedLaunch = describeClaudePinnedLaunchError(error)
+  if (pinnedLaunch) {
+    return pinnedLaunch.message
+  }
   if (isSshSignInRequiredTerminalError(error)) {
     return describeSshSignInRequiredTerminalError(error)
   }
@@ -228,6 +215,7 @@ export function TerminalErrorToast({
   onDismiss,
   onRestartDaemon,
   onRetry,
+  onStartOnActiveAccount,
   onOpenNewTerminal,
   onClosePane
 }: {
@@ -238,6 +226,7 @@ export function TerminalErrorToast({
   onDismiss: () => void
   onRestartDaemon?: () => void
   onRetry?: () => Promise<boolean>
+  onStartOnActiveAccount?: () => void
   /** Leaves this pane and its saved session untouched. */
   onOpenNewTerminal?: () => void
   /** Dismissing only hides the toast; the dead pane needs a way out from where the user is looking (#21342). */
@@ -405,6 +394,7 @@ export function TerminalErrorToast({
               : translate('auto.components.terminal.pane.TerminalErrorToast.retry', 'Retry')}
           </Button>
         ) : null}
+        <StartOnActiveAccountButton error={error} onClick={onStartOnActiveAccount} />
         {/* Why: an owner can stay unverifiable, so Retry alone can loop forever. */}
         {paneOwnerUnverified && onOpenNewTerminal ? (
           <Button variant="outline" size="xs" onClick={onOpenNewTerminal} className="ml-2">

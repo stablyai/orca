@@ -594,7 +594,8 @@ describe('registerCoreHandlers', () => {
       expect.any(Function)
     )
     expect(registerAgentHookHandlersMock).toHaveBeenCalledWith(runtime, {
-      getPtyIdForPaneKey: expect.any(Function)
+      getPtyIdForPaneKey: expect.any(Function),
+      workspaceSession: expect.anything()
     })
     expect(registerCodexConfigSyncHandlersMock).toHaveBeenCalledWith(
       codexAccounts.runtimeHomeService

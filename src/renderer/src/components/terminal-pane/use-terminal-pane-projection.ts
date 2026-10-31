@@ -7,7 +7,7 @@ import {
   resolveEffectiveTerminalAppearance,
   resolveOpaqueTerminalBackground
 } from '@/lib/terminal-theme'
-import { stripSshReconnectOwnedErrorLines } from './TerminalErrorToast'
+import { stripSshReconnectOwnedErrorLines } from './terminal-ssh-reconnect-error'
 import { agentLaunchPaneOutcomeForLeaf } from './agent-launch-pane-notice-text'
 import { mapPaneTerminalErrors, terminalErrorForPane } from './terminal-error-accumulation'
 import {

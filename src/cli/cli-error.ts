@@ -4,6 +4,7 @@ import {
   stripAutomationOwnerConflictCode
 } from '../shared/automation-owner-conflict'
 import { automationOwnerConflictRecovery } from './automation-owner-conflict-recovery'
+import { stripClaudePinnedLaunchMarker } from '../shared/claude/claude-pinned-launch-error'
 import { worktreeSelectorRecovery } from './worktree-selector-recovery'
 import { selectorAmbiguityRecovery } from './selector-ambiguity-recovery'
 import type { RuntimeRpcFailure } from './runtime-client'
@@ -66,7 +67,9 @@ export function cliErrorCode(error: unknown): string | undefined {
 }
 
 export function formatCliError(error: unknown, context: CliErrorContext = {}): string {
-  const message = error instanceof Error ? error.message : String(error)
+  const message = stripClaudePinnedLaunchMarker(
+    error instanceof Error ? error.message : String(error)
+  )
   const selector = contextRecovery(cliErrorCode(error), context)
   if (selector) {
     return formatMessageWithNextSteps(

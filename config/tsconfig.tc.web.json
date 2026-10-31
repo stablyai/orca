@@ -25,6 +25,7 @@
     "../src/preload/runtime-environment-subscriptions.ts",
     "../src/preload/usage-provider-api.ts",
     "../src/shared/**/*",
+    "../src/main/claude-accounts/project-claude-account-resolution.ts",
     "../mobile/src/worktree/worktree-agent-child-rows.ts",
     "../src/packages/process-host/src/__fixtures__/**/*",
     "../src/main/gitlab/mappers.ts",

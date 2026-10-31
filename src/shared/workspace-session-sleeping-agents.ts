@@ -8,6 +8,7 @@ import { AGENT_EFFORT_LEVEL } from './agent-effort-level'
 import { isValidTerminalTabId } from './terminal-tab-id'
 import { normalizeMainAgentStatusField } from './agent-status-types'
 import { salvagingRecord } from './zod-salvage'
+import { isLaunchConfigClaudeAccountId } from './claude/project-claude-account-preference'
 
 const terminalTabIdSchema = z
   .string()
@@ -65,6 +66,13 @@ const sleepingAgentLaunchEnvSchema = z.preprocess(
   z.record(z.string(), z.string())
 )
 
+// Why drop, not reject: a malformed id must not discard the rest of the resumable launch config.
+export const launchConfigClaudeAccountIdSchema = z
+  .unknown()
+  .transform((value) => (isLaunchConfigClaudeAccountId(value) ? value : undefined))
+  .pipe(z.union([z.string(), z.undefined()]))
+  .optional()
+
 export const sleepingAgentLaunchConfigBaseSchema = z.object({
   agentCommand: z.string().optional(),
   agentArgs: z.string(),
@@ -76,7 +84,8 @@ export const sleepingAgentLaunchConfigBaseSchema = z.object({
     .min(1)
     .max(32 * 1024)
     .refine((value) => !hasUnsafeLaunchEnvChars(value))
-    .optional()
+    .optional(),
+  claudeAccountId: launchConfigClaudeAccountIdSchema
 })
 
 export const sleepingAgentLaunchConfigSchema = z.preprocess((raw) => {
@@ -102,6 +111,7 @@ export const sleepingAgentSessionRecordSchema = z
     mainAgent: z.unknown().transform(normalizeMainAgentStatusField).optional(),
     connectionId: z.string().nullable().optional(),
     launchConfig: sleepingAgentLaunchConfigSchema.optional(),
+    claudeAccountId: launchConfigClaudeAccountIdSchema,
     origin: z.enum(['worktree-sleep', 'quit', 'live']).optional(),
     restoreOnTabOpenOnly: z.boolean().optional()
   })

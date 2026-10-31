@@ -97,6 +97,7 @@ export function TerminalPaneSurface({
     renameInputRef,
     renameValue,
     renamingPaneId,
+    startPaneOnActiveAccount,
     saveQuickCommand,
     searchOpen,
     searchStateRef,
@@ -215,6 +216,7 @@ export function TerminalPaneSurface({
               paneOnClient={paneOnClient}
               onDismiss={dismissTerminalError}
               onRestartDaemon={() => daemonActions.setPending('restart')}
+              onStartOnActiveAccount={() => startPaneOnActiveAccount(activePane.id)}
               onRetry={
                 isPaneOwnerRecoveryError(visibleTerminalError)
                   ? () =>

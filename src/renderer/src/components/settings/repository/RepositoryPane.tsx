@@ -1,4 +1,5 @@
 import type { GhAccountBinding } from '../../../../../shared/github/account-binding'
+import type { RepoAgentAccounts } from '../../../../../shared/claude/project-claude-account-preference'
 import { useCallback, useRef, useState } from 'react'
 import type { OrcaHooks, RepoHookSettings } from '../../../../../shared/orca-yaml-hook-types'
 import type { Project, ProjectUpdateArgs } from '../../../../../shared/project-types'
@@ -21,25 +22,23 @@ import { useAppStore } from '@/store/index'
 import { getRepositoryIconSectionId } from './repository-settings-targets'
 import { RepositoryIconPicker } from './identity/RepositoryIconPicker'
 import { getRepositoryPaneSearchEntries } from './repository-search'
-import { RepositoryHostSetupsSection } from './execution/RepositoryHostSetupsSection'
 import { RepoSettingsDraftInput } from './RepositorySettingsDraftInput'
-import { RepositoryForkSyncSection } from './identity/RepositoryForkSyncSection'
-import { RepositoryGitHubAccountSection } from './RepositoryGitHubAccountSection'
+import { RepositoryProjectSettingsSections } from './RepositoryProjectSettingsSections'
+import { RepositoryClaudeAccountSection } from './RepositoryClaudeAccountSection'
 import { translate } from '@/i18n/i18n'
-import { RepositoryWindowsRuntimeSection } from './execution/RepositoryWindowsRuntimeSection'
 import { matchesRepositoryIdentitySearch } from './identity/repository-identity-search'
-import { RepositoryWorktreeDefaultsSection } from './execution/RepositoryWorktreeDefaultsSection'
 import { RepositoryJiraProjectSection } from './RepositoryJiraProjectSection'
 import { getProjectRuntimeSessionSummary } from './execution/repository-runtime-session-summary'
 import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../store/worktree-visibility-defaults-by-host'
 
-type RepositoryPaneRepoUpdate = Omit<
+export type RepositoryPaneRepoUpdate = Omit<
   Partial<Repo>,
-  'sourceControlAi' | 'externalWorktreeVisibility' | 'ghAccount'
+  'sourceControlAi' | 'externalWorktreeVisibility' | 'ghAccount' | 'agentAccounts'
 > & {
   sourceControlAi?: Repo['sourceControlAi'] | null
   externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
   ghAccount?: GhAccountBinding | null
+  agentAccounts?: RepoAgentAccounts | null
 }
 
 const EMPTY_WSL_DISTROS: string[] = []
@@ -305,59 +304,39 @@ export function RepositoryPane({
         />
 
         {!isFolder ? (
-          <>
-            <RepositoryHostSetupsSection
-              repo={repo}
-              selectedProjectSetupId={selectedProjectSetupId}
-              settingsSelectionKey={settingsSelectionKey}
-              settingsEntryRepoIds={settingsEntryRepoIds}
-              forceVisible={forceFullPaneForRepoMatch}
-              searchQuery={searchQuery}
-              searchEntries={hostSetupEntries}
-            />
-
-            <RepositoryWindowsRuntimeSection
-              repo={repo}
-              repoDisplayName={repo.displayName}
-              project={project}
-              settings={settings}
-              isLocalWindowsProject={isLocalWindowsProject}
-              wslAvailable={wslAvailable}
-              wslDistros={wslDistros}
-              wslCapabilitiesLoading={wslCapabilitiesLoading}
-              runtimeSessionSummary={runtimeSessionSummary}
-              updateProject={updateProject}
-              forceVisible={forceFullPaneForRepoMatch}
-              searchQuery={searchQuery}
-              searchEntries={projectRuntimeEntries}
-            />
-
-            <RepositoryForkSyncSection
-              repo={repo}
-              updateRepo={updateSelectedRepo}
-              forceVisible={forceFullPaneForRepoMatch}
-            />
-
-            <RepositoryGitHubAccountSection
-              repo={repo}
-              updateRepo={updateSelectedRepo}
-              forceVisible={forceFullPaneForRepoMatch}
-            />
-
-            <RepositoryWorktreeDefaultsSection
-              repo={repo}
-              settings={repoOwnerSettings}
-              updateRepo={updateSelectedRepo}
-              refreshRepo={(repoId) =>
-                fetchWorktrees(repoId, {
-                  executionHostId: selectedHostId,
-                  requireAuthoritative: true
-                })
-              }
-              forceVisible={forceFullPaneForRepoMatch}
-            />
-          </>
-        ) : null}
+          <RepositoryProjectSettingsSections
+            repo={repo}
+            selectedProjectSetupId={selectedProjectSetupId}
+            settingsSelectionKey={settingsSelectionKey}
+            settingsEntryRepoIds={settingsEntryRepoIds}
+            forceVisible={forceFullPaneForRepoMatch}
+            searchQuery={searchQuery}
+            hostSetupEntries={hostSetupEntries}
+            project={project}
+            settings={settings}
+            repoOwnerSettings={repoOwnerSettings}
+            isLocalWindowsProject={isLocalWindowsProject}
+            wslAvailable={wslAvailable}
+            wslDistros={wslDistros}
+            wslCapabilitiesLoading={wslCapabilitiesLoading}
+            runtimeSessionSummary={runtimeSessionSummary}
+            updateProject={updateProject}
+            projectRuntimeEntries={projectRuntimeEntries}
+            updateSelectedRepo={updateSelectedRepo}
+            refreshWorktrees={(repoId) =>
+              fetchWorktrees(repoId, {
+                executionHostId: selectedHostId,
+                requireAuthoritative: true
+              })
+            }
+          />
+        ) : (
+          <RepositoryClaudeAccountSection
+            repo={repo}
+            updateRepo={updateSelectedRepo}
+            forceVisible={forceFullPaneForRepoMatch}
+          />
+        )}
       </section>
     ) : null,
     hooksSection,

@@ -155,6 +155,9 @@ export type AgentStatusEntry = {
   /** Hydrated nonterminal rows are immediately stale; accepted live events clear this flag.
    * Hosts also use it for pre-process evidence: preserve identity without claiming current status. */
   restoredUnconfirmed?: boolean
+  /** Managed account main pinned this pane's Claude PTY to, stamped from its pinned PTY registry
+   *  so it survives a restart. Absent for unpinned panes and on rows from older hosts. */
+  claudeAccountId?: string
 } & AgentStatusRowFacets
 
 // ─── Agent status payload shape (what hook receivers send via IPC) ──────────

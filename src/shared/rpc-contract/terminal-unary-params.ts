@@ -9,6 +9,7 @@ import {
   listSupportedWindowsShellOverrides
 } from '../windows-terminal-shell'
 import { TERMINAL_PANE_SPLIT_SOURCES } from '../feature-education-telemetry'
+import { launchConfigClaudeAccountIdSchema } from '../workspace-session-sleeping-agents'
 import { OptionalExecutionHostId } from './worktree-params'
 
 // Refuse at the authoritative host boundary instead of returning an opaque relay spawn failure.
@@ -241,7 +242,8 @@ export const TerminalCreateParams = z.object({
         .string()
         .min(1)
         .max(32 * 1024)
-        .optional()
+        .optional(),
+      claudeAccountId: launchConfigClaudeAccountIdSchema
     })
     .optional(),
   resumeProviderSession: ResumeProviderSessionParam.optional(),

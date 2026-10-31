@@ -45,10 +45,12 @@ export async function reopenWorkerTerminal(
   runtime: Pick<OrcaRuntimeService, 'resumeAgentSessionInWorkspace'>,
   worktreeId: string,
   session: WorkerResumeSession,
-  dispatchId: string
+  dispatchId: string,
+  claudeAccountId?: string
 ): Promise<ReopenedWorker | null> {
   const resumed = await runtime.resumeAgentSessionInWorkspace(worktreeId, {
     ...session,
+    ...(claudeAccountId ? { claudeAccountId } : {}),
     // A retry of this follow-up reconciles the pane it may have started.
     mutationId: dispatchId
   })

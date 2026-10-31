@@ -83,9 +83,9 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
     const visibleAtSpawn = session.deps.isVisibleRef.current === true
     let ownerRefused = false
     const outputCallbacks = session.captureTransportOutputCallbacks(
-      (message: string) => {
+      (message, startup) => {
         ownerRefused ||= isPaneOwnerRefusal(message)
-        session.reportError(message)
+        session.reportError(message, startup)
       },
       toProcessExitStartup(coldRestoreOverride ?? effectiveStartup),
       coldRestoreOverride ?? effectiveStartup
