@@ -20,7 +20,9 @@ export type HttpLinkBrowserTabState = Partial<
     string,
     readonly (Pick<Tab, 'id'> & Partial<Pick<Tab, 'contentType' | 'groupId' | 'lastFocusedAt'>>)[]
   >
-  settings?: Partial<Pick<GlobalSettings, 'openLinksInAppInBackground'>> | null
+  settings?: Partial<
+    Pick<GlobalSettings, 'openLinksInAppInBackground' | 'openLinksInAppSplitBeside'>
+  > | null
   createBrowserTab: (
     worktreeId: string,
     url: string,
@@ -49,7 +51,11 @@ export function resolveHttpLinkBrowserPlacement(
     return null
   }
   // Why: an empty pane covers nothing, so the link fills it instead of splitting beside it.
-  if (!groups.find((group) => group.id === sourceGroupId)?.activeTabId) {
+  // Opting out of the split restores the pre-#31844 rule: the link becomes a tab in the clicked pane.
+  if (
+    state.settings?.openLinksInAppSplitBeside === false ||
+    !groups.find((group) => group.id === sourceGroupId)?.activeTabId
+  ) {
     return { targetGroupId: sourceGroupId }
   }
   // Why unactivated: a host snapshot reads an activated empty group as a terminal pane (see file-preview.ts).

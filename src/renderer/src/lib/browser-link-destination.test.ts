@@ -136,6 +136,22 @@ describe('browser destination scope', () => {
     })
   })
 
+  it('opens a tab in the source group instead of splitting when split-beside is off', () => {
+    const destination = browserLinkTestDestination()
+    const intentFor = () => captureLinkOpenIntent(store.getState(), WORKSPACE, 'source')
+    expect(
+      selectBrowserLinkDestination(store.getState(), destination, intentFor())
+    ).toMatchObject({ split: { sourceGroupId: 'a', splitDirection: 'right' } })
+    store.setState((state) => ({
+      settings: { ...state.settings!, openLinksInAppSplitBeside: false }
+    }))
+    expect(selectBrowserLinkDestination(store.getState(), destination, intentFor())).toEqual({
+      status: 'ready',
+      groupId: 'a',
+      match: null
+    })
+  })
+
   it.each(['listed', 'detected'] as const)(
     'refuses hostless ownership for %s twins even when the active workspace names one host',
     (catalog) => {

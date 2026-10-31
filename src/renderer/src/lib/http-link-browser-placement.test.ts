@@ -61,6 +61,18 @@ describe('resolveHttpLinkBrowserPlacement', () => {
     })
   })
 
+  it('opens a tab in the source pane instead of splitting when split-beside is off', () => {
+    expect(
+      resolveHttpLinkBrowserPlacement(
+        {
+          ...state({ rightActiveTabId: 'term', activeGroupId: 'left', tabs: [terminal] }),
+          settings: { openLinksInAppSplitBeside: false }
+        },
+        WT
+      )
+    ).toEqual({ targetGroupId: 'left' })
+  })
+
   it('fills an empty source pane rather than splitting beside it', () => {
     expect(
       resolveHttpLinkBrowserPlacement(
