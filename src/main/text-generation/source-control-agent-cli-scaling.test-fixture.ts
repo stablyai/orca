@@ -1,5 +1,6 @@
 import * as fs from 'node:fs'
 import * as asyncFs from 'node:fs/promises'
+import type { ChildProcess } from '@orca/process-host'
 import type { ProcessSpec } from '@orca/process-host/process-spec'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
@@ -22,6 +23,11 @@ export type AttemptEvent = {
 }
 
 type ScalingFixture = {
+  children: ChildProcess[]
+  advisoryBoundary: {
+    command: string
+    afterOpen?: (file: asyncFs.FileHandle, close: () => Promise<void>) => void | Promise<void>
+  } | null
   preload: string
   specs: ProcessSpec[]
   messages: unknown[]
@@ -191,6 +197,81 @@ process.stdin.on('end', () => console.log('Fix login flow'))
         unlinkSync(newer)
         expect((await request()).events.some((event) => event.started === program)).toBe(true)
       }
+    }
+  )
+  it.each(['codex', 'claude'] as const)(
+    'names with %s when an unused later candidate close rejects',
+    async (agentId) => {
+      const root = rootPath()
+      const [first, later] = ['v20.2.0', 'v20.1.0'].map((version) => {
+        const bin = join(root, '.nvm/versions/node', version, 'bin')
+        mkdirSync(bin, { recursive: true })
+        const command = join(bin, agentId)
+        writeFileSync(command, '#!/bin/sh\necho Working title\n', { mode: 0o755 })
+        symlinkSync(process.execPath, join(bin, 'node'))
+        return command
+      })
+      let realCloses = 0
+      let childCloses = 0
+      fixture.advisoryBoundary = {
+        command: later,
+        afterOpen: (file, close) => {
+          fixture.children[0].once('close', () => childCloses++)
+          vi.mocked(file.close).mockImplementationOnce(async () => {
+            await close()
+            realCloses++
+            throw new Error('advisory close failed after release')
+          })
+        }
+      }
+      await expect(
+        generateConversationNameFromContext(
+          { firstPrompt: 'Fix login' },
+          { agentId, model: agentId === 'codex' ? 'default' : 'sonnet' },
+          { kind: 'local', cwd: root, env: { PATH: join(root, 'absent') } }
+        )
+      ).resolves.toMatchObject({ success: true, name: 'Working title' })
+      const events = readEvents()
+      const plans = events.filter((event) => event.plan)
+      expect(plans).toHaveLength(1)
+      expect(plans[0].plan?.candidates.slice(0, 2)).toEqual([
+        { command: first, runtimeDirectory: join(first, '..') },
+        { command: later, runtimeDirectory: join(later, '..') }
+      ])
+      expect(events.filter((event) => event.attempt).map((event) => event.attempt)).toEqual([
+        agentId,
+        first
+      ])
+      expect(events.filter((event) => event.started)).toEqual([
+        expect.objectContaining({ started: first })
+      ])
+      expect(childCloses).toBe(1)
+      expect(fixture.specs).toHaveLength(1)
+      expect(fixture.children).toHaveLength(1)
+      expect(fixture.messages.filter(lookupMessage)).toHaveLength(1)
+      expect(
+        fixture.messages.filter(
+          (message) => typeof message === 'object' && message !== null && 'pgid' in message
+        )
+      ).toHaveLength(1)
+      const opens = vi.mocked(asyncFs.open)
+      const commandHandles = await Promise.all(
+        opens.mock.results.flatMap((result, index) =>
+          result.type === 'return' && [first, later].includes(String(opens.mock.calls[index][0]))
+            ? [result.value]
+            : []
+        )
+      )
+      expect(commandHandles).toHaveLength(2)
+      for (const file of commandHandles) {
+        expect(file.close).toHaveBeenCalledTimes(1)
+        expect(file.fd).toBe(-1)
+      }
+      expect(realCloses).toBe(1)
+      const child = fixture.children[0]
+      expect(child.exitCode).toBe(0)
+      expect(child.signalCode).toBeNull()
+      expect(child.listenerCount('message')).toBe(0)
     }
   )
 }

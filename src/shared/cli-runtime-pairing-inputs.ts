@@ -78,7 +78,11 @@ export async function installedCliRuntimeDirectory(
   } catch {
     // Match synchronous pairing: an unreadable signature is not recognized as native.
   } finally {
-    await file?.close()
+    try {
+      await file?.close()
+    } catch {
+      // Advisory cleanup cannot override the runtime result or refuse execution.
+    }
   }
   return directory
 }

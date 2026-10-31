@@ -45,7 +45,7 @@ const fixture = vi.hoisted(() => {
   function initialAdvisoryBoundary(): {
     command: string
     beforeOpen?: () => void | Promise<void>
-    afterOpen?: (file: asyncFs.FileHandle) => void | Promise<void>
+    afterOpen?: (file: asyncFs.FileHandle, close: () => Promise<void>) => void | Promise<void>
   } | null {
     return null
   }
@@ -109,12 +109,13 @@ vi.mock('node:fs/promises', async (importOriginal) => {
         await boundary.beforeOpen?.()
       }
       const file = await actual.open(...args)
+      const close = file.close.bind(file)
       vi.spyOn(file, 'stat')
       vi.spyOn(file, 'read')
       vi.spyOn(file, 'close')
       fixture.handles.push(file)
       if (String(args[0]) === boundary?.command) {
-        await boundary.afterOpen?.(file)
+        await boundary.afterOpen?.(file, close)
       }
       return file
     }),
@@ -529,53 +530,64 @@ describe.skipIf(process.platform === 'win32')('exec-authoritative naming and set
       })
     }
   )
-  it('closes a FIFO acquired before cancellation without sending a stale plan', async () => {
-    const first = installed(2)
-    installed(1)
-    unlinkSync(first)
-    await makeFifo(first)
-    symlinkSync(process.execPath, join(first, '..', 'node'))
-    let release!: () => void
-    let acquired!: () => void
-    const ready = new Promise<void>((resolve) => {
-      acquired = resolve
-    })
-    const gate = new Promise<void>((resolve) => {
-      release = resolve
-    })
-    fixture.advisoryBoundary = {
-      command: first,
-      afterOpen: async () => {
-        acquired()
-        await gate
+  it.each([false, true])(
+    'closes a FIFO acquired before cancellation without a stale plan (close rejects: %s)',
+    async (rejectClose) => {
+      const first = installed(2)
+      installed(1)
+      unlinkSync(first)
+      await makeFifo(first)
+      symlinkSync(process.execPath, join(first, '..', 'node'))
+      let release!: () => void
+      let acquired!: () => void
+      const ready = new Promise<void>((resolve) => {
+        acquired = resolve
+      })
+      const gate = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      fixture.advisoryBoundary = {
+        command: first,
+        afterOpen: async (file, close) => {
+          if (rejectClose) {
+            vi.mocked(file.close).mockImplementationOnce(async () => {
+              await close()
+              throw new Error('late advisory close failure')
+            })
+          }
+          acquired()
+          await gate
+        }
       }
+      const execution = runLocalSourceControlPlan({
+        plan: { binary: 'orca-fixture-agent', args: [], stdinPayload: 'prompt', label: 'Fixture' },
+        operation: 'conversation-name',
+        cwd: root,
+        env: { PATH: join(root, 'absent') },
+        spawnAgent: spawnSourceControlAgent
+      })
+      let results = 0
+      void execution.result.then(() => results++)
+      await ready
+      const child = fixture.children[0]
+      const send = vi.spyOn(child, 'send')
+      cancelLocalGeneration('conversation-name', root)
+      await expect(execution.result).resolves.toMatchObject({ canceled: true })
+      await execution.processClosed
+      release()
+      await vi.waitFor(() => expect(fixture.handles[0].close).toHaveBeenCalledTimes(1))
+      await vi.waitFor(() => expect(fixture.handles[0].fd).toBe(-1))
+      await new Promise<void>((resolve) => setImmediate(resolve))
+      expect(fixture.handles[0].read).not.toHaveBeenCalled()
+      expect(results).toBe(1)
+      expect(send).not.toHaveBeenCalled()
+      expect(readEvents().filter((event) => event.attempt)).toEqual([
+        { attempt: 'orca-fixture-agent' }
+      ])
+      expect(child.listenerCount('message')).toBe(0)
+      expect(process.getActiveResourcesInfo()).not.toContain('FSReqPromise')
     }
-    const execution = runLocalSourceControlPlan({
-      plan: { binary: 'orca-fixture-agent', args: [], stdinPayload: 'prompt', label: 'Fixture' },
-      operation: 'conversation-name',
-      cwd: root,
-      env: { PATH: join(root, 'absent') },
-      spawnAgent: spawnSourceControlAgent
-    })
-    let results = 0
-    void execution.result.then(() => results++)
-    await ready
-    const child = fixture.children[0]
-    const send = vi.spyOn(child, 'send')
-    cancelLocalGeneration('conversation-name', root)
-    await expect(execution.result).resolves.toMatchObject({ canceled: true })
-    await execution.processClosed
-    release()
-    await vi.waitFor(() => expect(fixture.handles[0].close).toHaveBeenCalledTimes(1))
-    expect(fixture.handles[0].read).not.toHaveBeenCalled()
-    expect(results).toBe(1)
-    expect(send).not.toHaveBeenCalled()
-    expect(readEvents().filter((event) => event.attempt)).toEqual([
-      { attempt: 'orca-fixture-agent' }
-    ])
-    expect(child.listenerCount('message')).toBe(0)
-    expect(process.getActiveResourcesInfo()).not.toContain('FSReqPromise')
-  })
+  )
   it('captures a relative launch cwd once for raw execution', async () => {
     onPath(root, '#!/bin/sh\necho Working title\n')
     await expect(name(undefined, '', {}, relative(process.cwd(), root))).resolves.toMatchObject({
