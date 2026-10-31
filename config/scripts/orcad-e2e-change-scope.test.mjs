@@ -38,7 +38,6 @@ const cases = {
   windows: {
     excluded: [
       'src/main/daemon/daemon-server.test.ts',
-      'src/main/orcad/orcad-native-preflight.test.ts',
       'src/main/orcad/nested/orcad-launch.test.ts',
       'src/cli/runtime/serve.test.ts',
       'src/cli/runtime/nested/serve.test.ts'

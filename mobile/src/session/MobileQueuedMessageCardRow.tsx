@@ -27,6 +27,8 @@ type QueuedMessageCardRowProps = {
   busy: boolean
   editBlocked: boolean
   steerHeld: boolean
+  /** Steer only into a running turn; an idle agent's card reads Send. */
+  agentWorking: boolean
   onSend: () => void
   onDelete: () => void
   onMore: () => void
@@ -59,6 +61,7 @@ function QueuedMessageCardContents({
   busy,
   editBlocked,
   steerHeld,
+  agentWorking,
   onSend,
   onDelete,
   onMore,
@@ -68,7 +71,7 @@ function QueuedMessageCardContents({
   const t = useMobileTranslation()
   const [expanded, setExpanded] = useState(false)
   const returned = card.state === 'returned'
-  const steers = queuedMessageCardSteers(card)
+  const steers = agentWorking && queuedMessageCardSteers(card)
   const count = card.images?.length ?? 0
   return (
     <View testID="queued-card-row" style={[styles.card, styles.divided]}>
