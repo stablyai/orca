@@ -12,7 +12,7 @@ import {
 } from './journal-host-database-test-support'
 import type { JournalHostDatabase } from './journal-host-database'
 import { readJournalRowsAfterCursor, restoreJournal } from './journal-open'
-import type { JournalRow } from './journal-row-schema'
+import { MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS, type JournalRow } from './journal-row-schema'
 import { journalOutcomeSource } from './journal-outcome-format'
 import { JournalOutcomeSweeper, sweepJournalOutcomePage } from './journal-outcome-cleanup'
 import { JOURNAL_NEWEST_OUTCOME_SQL } from './journal-outcome-table'
@@ -321,6 +321,44 @@ it('appends a streamed revision, a Codex plan update and an acceptance with the 
   }
   // The item's record alone: the sequence is the epoch's coverage, never a record.
   expect(small.streamed.writes).toStrictEqual([['journal_outcomes INSERT', 1]])
+})
+
+/** One settlement row creating `size` status items. */
+const batchOf =
+  (size: number) =>
+  (seq: number, ts: number): JournalRow => ({
+    ...base(seq),
+    ts,
+    kind: 'lifecycle-batch',
+    settlementId: `batch-${size}`,
+    mutations: Array.from({ length: size }, (_, index) => ({
+      kind: 'item' as const,
+      itemId: `batch-${index}`,
+      revision: 1,
+      body: { kind: 'status' as const, text: `Batch ${index}` }
+    }))
+  })
+
+it('encodes a settlement batch with the same work per mutation up to the mutation cap', async () => {
+  const measure = async (size: number) => {
+    const { database, rig } = outcomeChat(N, `batch-${size}`)
+    const watched = watch(database)
+    const stringify = vi.spyOn(JSON, 'stringify')
+    await rig.writer.enqueue(batchOf(size))
+    const calls = stringify.mock.calls.length
+    const work = watched.take()
+    watched.stop()
+    expect(rig.state().items.has(`batch-${size - 1}`)).toBe(true)
+    return { calls, statements: work.statements.length }
+  }
+  // Schemas compile on their first parse; that one-time work is not the batch's.
+  await measure(10)
+  const few = await measure(20)
+  const more = await measure(110)
+  const most = await measure(MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS)
+  // Linear in the batch: each further 90 mutations add the same work.
+  expect(most.calls - more.calls).toBe(more.calls - few.calls)
+  expect(most.statements).toBe(few.statements)
 })
 
 /** Distinct keys the chat's records hold, live, deleted and scalar alike. */

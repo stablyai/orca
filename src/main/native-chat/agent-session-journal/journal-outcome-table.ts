@@ -66,9 +66,8 @@ export function persistJournalOutcomeRows(
     const encoded = encodeJournalOutcomes(transition.state, changes, scalar)
     scalar = encoded.scalars
     for (const [index, value] of encoded.values.entries()) {
-      const change = changes.find(
-        (entry) => entry.path === value.field && JSON.stringify(entry.key) === value.key
-      )
+      // Each change's record is at its own index; the scalar records after them match no change.
+      const change = changes.at(index)
       const kept = previous.get(source.generation, value.field, value.key)
       // A new or re-created key takes its place in the row's touch order, as the live map does; a
       // key that existed before this row keeps its place, which for a key only the frozen prefix
