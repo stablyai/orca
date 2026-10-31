@@ -23,7 +23,7 @@ type HookObserverOptions = {
   establishAgentEvidence: () => void
   recordPaneActivity: () => void
   clearPendingHookDone: () => void
-  dispatchAttention: (payload: AgentCompletionStatusSnapshot) => void
+  dispatchAttention: (payload: AgentCompletionStatusSnapshot, announce?: boolean) => void
   dispatchCompletion: (source: 'hook', title: string, override?: Record<string, unknown>) => boolean
   scheduleHookDoneCompletion: (title: string, payload: AgentCompletionStatusSnapshot) => void
   doneShouldUseQuietWindow: (payload: AgentCompletionStatusSnapshot) => boolean
@@ -72,7 +72,8 @@ export function createAgentCompletionHookObserver({
   recordWorkingBoundary,
   dropPendingTitle
 }: HookObserverOptions) {
-  function observeHookStatus(payload: AgentCompletionStatusSnapshot): void {
+  /** `seeded` adopts cached state (a replay) without announcing it; the lane's turn bookkeeping still runs. */
+  function observeHookStatus(payload: AgentCompletionStatusSnapshot, seeded = false): void {
     recordPaneActivity()
     if (isRecognizedAgentType(payload.agentType)) {
       establishAgentEvidence()
@@ -104,7 +105,8 @@ export function createAgentCompletionHookObserver({
             dispatchCompletion('hook', payload.agentType ?? options.paneKey, {
               notifyWithoutLifecycle: true,
               agentStatus: completionSnapshot,
-              completionIdentity: identity
+              completionIdentity: identity,
+              ...(seeded ? { announce: false } : {})
             })
           ) {
             state.lastCompletionIdentity = identity
@@ -131,7 +133,8 @@ export function createAgentCompletionHookObserver({
     }
     if (isAttentionHookState(payload.state)) {
       clearPendingHookDone()
-      dispatchAttention(payload)
+      // Why: a seeded prompt is cached state; it may take its bookkeeping, but not raise the user.
+      dispatchAttention(payload, !seeded)
       return
     }
     if (payload.state === 'done' && payload.sessionBoundary === true) {
@@ -186,6 +189,19 @@ export function createAgentCompletionHookObserver({
     state.lastCompletionIdentity = identity
       ? { source: 'hook', identity, agentIdentity: hookCompletionAgentIdentity(payload) }
       : null
+    // Why: a seeded done is cached state this lane adopts as already handled — the "finished long
+    // ago" session must not announce again on startup or reconnect, but a later real end in the
+    // same segment still reads as new.
+    if (seeded) {
+      dispatchCompletion('hook', payload.agentType ?? options.paneKey, {
+        agentStatus: payload,
+        announce: false,
+        ...(state.lastCompletionIdentity
+          ? { completionIdentity: state.lastCompletionIdentity }
+          : {})
+      })
+      return
+    }
     if (doneShouldUseQuietWindow(payload)) {
       scheduleHookDoneCompletion(payload.agentType ?? options.paneKey, payload)
       return
@@ -203,7 +219,7 @@ export function createAgentCompletionHookObserver({
       if (isFiniteTurnCompletedAt(turnCompletedAt)) {
         rememberHandledTurnCompletedAt(turnCompletedAt)
       }
-      observeHookStatus(unstampedPayload)
+      observeHookStatus(unstampedPayload, true)
     }
   }
 }
