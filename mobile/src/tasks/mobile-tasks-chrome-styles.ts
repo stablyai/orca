@@ -19,7 +19,9 @@ export const mobileTasksChromeStyles = themedStyleSheet(() => ({
     marginTop: spacing.sm,
     backgroundColor: colors.bgPanel
   },
+  // At least the screen's width, so chips that fit stretch to fill it.
   toolbar: {
+    flexGrow: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,

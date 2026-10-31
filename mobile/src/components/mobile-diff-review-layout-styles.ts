@@ -18,6 +18,7 @@ export const mobileDiffReviewLayoutStyles = themedStyleSheet(() => ({
     backgroundColor: colors.bgRaised
   },
   filterRow: {
+    flexGrow: 1,
     gap: spacing.xs,
     alignItems: 'center',
     paddingHorizontal: spacing.md,

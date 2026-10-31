@@ -20,6 +20,7 @@ type FilterChipProps = {
 }
 
 // A 32 pt pill inside a 44 pt touch box, for filters, scopes and menu triggers in a toolbar row.
+// Chips share a row's spare width when they fit; once the row scrolls they keep their own size.
 export function FilterChip({
   label,
   onPress,
@@ -63,6 +64,7 @@ export function FilterChip({
 
 const styles = themedStyleSheet(() => ({
   touch: {
+    flexGrow: 1,
     minHeight: 44,
     justifyContent: 'center'
   },
@@ -73,6 +75,7 @@ const styles = themedStyleSheet(() => ({
     height: 32,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 5,
     paddingHorizontal: 13,
     borderRadius: radii.pill,
