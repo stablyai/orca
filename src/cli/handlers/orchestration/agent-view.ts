@@ -4,6 +4,7 @@ import { printResult } from '../../format'
 import { renderCommand } from '../../orchestration-mutation-recovery'
 import { resolveOrchestrationCliExecutable } from '../../runtime/orchestration-recovery-command'
 import type { RuntimeRpcSuccess } from '../../runtime-client'
+import { withReceiptNext } from './receipt-next-text'
 
 type AgentViewFields = Record<string, unknown>
 
@@ -20,8 +21,8 @@ export type OrchestrationFailure = {
 /** What one command prints by default: the same small fields as one-line JSON or plain text. */
 export type OrchestrationAgentView<TResult, TFields extends AgentViewFields> = {
   fields: (result: TResult) => TFields
-  /** The raw result is for text that needs routing the fields leave out. */
-  text: (fields: TFields, result: TResult) => string
+  /** Defaults to the shared field text; only prose (messages, answers) needs its own. */
+  text?: (fields: TFields, result: TResult) => string
   /** Today's text, printed by --full. */
   fullText: (result: TResult) => string
   failure?: (result: TResult) => OrchestrationFailure | undefined
@@ -36,7 +37,7 @@ export function printOrchestrationResult<TResult, TFields extends AgentViewField
     printResult(response, ctx.json, view.fullText)
   } else {
     printOrchestrationFields(ctx.json, view.fields(response.result), (fields) =>
-      view.text(fields, response.result)
+      view.text ? view.text(fields, response.result) : formatAgentFieldsText(fields)
     )
   }
   const failure = view.failure?.(response.result)
@@ -57,15 +58,6 @@ export function printOrchestrationFields<TFields extends AgentViewFields>(
   console.log(json ? JSON.stringify({ ok: true, result: withNextLast(fields) }) : text(fields))
 }
 
-/** For commands whose text is already short: only the JSON loses fields. */
-export function sameTextView<TResult, TFields extends AgentViewFields>(
-  fields: (result: TResult) => TFields,
-  text: (result: TResult) => string,
-  failure?: (result: TResult) => OrchestrationFailure | undefined
-): OrchestrationAgentView<TResult, TFields> {
-  return { fields, text: (_, result) => text(result), fullText: text, failure }
-}
-
 /** Small receipts whose result already is the agent's fields; JSON only loses the envelope. */
 export function printOrchestrationReceipt<TResult extends AgentViewFields>(
   response: RuntimeRpcSuccess<TResult>,
@@ -73,16 +65,65 @@ export function printOrchestrationReceipt<TResult extends AgentViewFields>(
   text: (result: TResult) => string,
   failure?: (result: TResult) => OrchestrationFailure | undefined
 ): void {
-  printOrchestrationResult(
-    response,
-    ctx,
-    sameTextView((result) => result, text, failure)
-  )
+  printOrchestrationResult(response, ctx, {
+    fields: (result) => result,
+    text: (_, result) => text(result),
+    fullText: text,
+    failure
+  })
 }
 
 export function reportOrchestrationFailure(failure: OrchestrationFailure): void {
   process.exitCode = failure.exitCode ?? 1
   console.error(formatOrchestrationErrorLine(failure.code, failure.message, failure.level))
+}
+
+/**
+ * The text twin of the JSON fields: scalars as `name=value` on one line, each list row on its
+ * own line, and `Next:` last, so text and --json never carry different facts.
+ */
+export function formatAgentFieldsText(fields: AgentViewFields): string {
+  const head: string[] = []
+  const rows: string[] = []
+  for (const [key, value] of Object.entries(fields)) {
+    if (key === 'next' || value === undefined) {
+      continue
+    }
+    if (Array.isArray(value) && value.some(isFieldRecord)) {
+      rows.push(...value.map((row) => (isFieldRecord(row) ? formatFieldPairs(row) : String(row))))
+      continue
+    }
+    head.push(formatFieldPairs({ [key]: value }))
+  }
+  const next = typeof fields.next === 'string' ? fields.next : undefined
+  return withReceiptNext([head.join(' '), ...rows].filter(Boolean).join('\n') || 'none', { next })
+}
+
+function formatFieldPairs(fields: AgentViewFields, prefix = ''): string {
+  return Object.entries(fields)
+    .filter(([, value]) => value !== undefined)
+    .map(([key, value]) =>
+      isFieldRecord(value)
+        ? formatFieldPairs(value, `${prefix}${key}.`)
+        : `${prefix}${key}=${formatFieldValue(value)}`
+    )
+    .join(' ')
+}
+
+function formatFieldValue(value: unknown): string {
+  if (value === null) {
+    return 'none'
+  }
+  if (Array.isArray(value)) {
+    return value.length ? value.map(formatFieldValue).join(',') : 'none'
+  }
+  const text = typeof value === 'string' ? value : JSON.stringify(value)
+  // Quote anything that would split a name=value pair.
+  return /^[^\s"',=]+$/.test(text) ? text : JSON.stringify(text)
+}
+
+function isFieldRecord(value: unknown): value is AgentViewFields {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 // Agents reading the head get the ids and the tail gets the next step.
@@ -113,9 +154,7 @@ export function renderOrchestrationArgv(argv: readonly string[]): string | undef
   return renderCommand([resolveOrchestrationCliExecutable(), ...subcommand])
 }
 
-/** Only Orca's own `[Reply: ...]` hint lines name a command; message text is left as written. */
-export function resolveOrcaReplyHints(text: string): string {
-  return text.replace(/^\[Reply: orca(?= orchestration )/gm, () =>
-    resolveOrcaCommandsInText('[Reply: orca')
-  )
+/** The executable as an agent should type it, quoted for its shell. */
+export function orchestrationCliName(): string {
+  return renderCommand([resolveOrchestrationCliExecutable()])
 }

@@ -1,5 +1,5 @@
 import type { CommandHandler } from '../../dispatch'
-import { printOrchestrationResult, sameTextView } from './agent-view'
+import { printOrchestrationResult } from './agent-view'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
@@ -35,10 +35,10 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
     printOrchestrationResult(
       result,
       { flags, json },
-      sameTextView(
-        (r) => ({ ...runFields(r.run), next: r.next }),
-        (r) => withReceiptNext(`Run ${r.run.id} created and bound: ${r.run.objective}`, r)
-      )
+      {
+        fields: (r) => ({ ...runFields(r.run), next: r.next }),
+        fullText: (r) => withReceiptNext(`Run ${r.run.id} created and bound: ${r.run.objective}`, r)
+      }
     )
   },
 
@@ -54,10 +54,10 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
     printOrchestrationResult(
       result,
       { flags, json },
-      sameTextView(
-        (r) => runFields(r.run),
-        (r) => `Using Run ${r.run.id}: ${r.run.objective}`
-      )
+      {
+        fields: (r) => runFields(r.run),
+        fullText: (r) => `Using Run ${r.run.id}: ${r.run.objective}`
+      }
     )
   },
 
@@ -69,13 +69,13 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
     printOrchestrationResult(
       result,
       { flags, json },
-      sameTextView(
-        (r) => (r.run ? runFields(r.run) : { runId: null }),
-        (r) =>
+      {
+        fields: (r) => (r.run ? runFields(r.run) : { runId: null }),
+        fullText: (r) =>
           r.run
             ? `${r.run.id} ${r.run.objective}`
             : `No Run is bound to this ${from === undefined ? 'session' : 'terminal'}.`
-      )
+      }
     )
   },
 
@@ -93,16 +93,16 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
     printOrchestrationResult(
       result,
       { flags, json },
-      sameTextView(
-        (r) => ({
+      {
+        fields: (r) => ({
           runs: r.runs.map((run) => {
             const { runId, ...rest } = runFields(run)
             return { id: runId, ...rest }
           }),
           nextCursor: r.nextCursor ?? undefined
         }),
-        formatRunList
-      )
+        fullText: formatRunList
+      }
     )
   },
 

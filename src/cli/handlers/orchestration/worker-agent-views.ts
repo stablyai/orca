@@ -1,6 +1,5 @@
 import { renderOrchestrationArgv, type OrchestrationAgentView } from './agent-view'
-import { withReceiptNext } from './receipt-next-text'
-import { formatWorkerListScope, type WorkerListRunScope } from './worker-list-run-scope'
+import type { WorkerListRunScope } from './worker-list-run-scope'
 
 type WorkerProjection = {
   runId?: string
@@ -89,25 +88,6 @@ export function workerShowView(
           : undefined
       }
     },
-    text: (fields) => {
-      const lines = [
-        `${fields.dispatchId} (${fields.taskId ?? 'unknown task'}): ${fields.state}, ${fields.stage}${fields.liveness ? `; agent liveness ${fields.liveness}` : ''}`,
-        `Terminal ${fields.terminal ?? 'none'}${fields.terminalState ? ` (${fields.terminalState})` : ''} in workspace ${fields.workspace ?? 'unknown'}`
-      ]
-      if (fields.attention) {
-        lines.push(`Attention: ${fields.attention.join(', ')}`)
-      }
-      if (fields.waitingOnHuman) {
-        lines.push(`Waiting on a human: ${fields.waitingOnHuman}`)
-      }
-      if (fields.lastError) {
-        lines.push(`Last error: ${fields.lastError}`)
-      }
-      if (fields.autoReleaseAt) {
-        lines.push(`Auto-release: ${fields.autoReleaseAt}`)
-      }
-      return withReceiptNext(lines.join('\n'), fields)
-    },
     fullText
   }
 }
@@ -193,33 +173,6 @@ export function workerListView(
       nextCursor: (value.page?.hasMore && value.page.nextCursor) || undefined,
       warnings: nonEmpty(workerListWarnings(value))
     }),
-    text: (fields) => {
-      const rows = fields.workers.length
-        ? fields.workers.map((worker) =>
-            [
-              worker.dispatchId,
-              worker.taskId,
-              worker.outcome ? `${worker.state}/${worker.outcome}` : worker.state,
-              worker.liveness && `liveness=${worker.liveness}`,
-              worker.agent && `agent=${worker.agent}`,
-              `terminal=${worker.terminal ?? 'none'}${worker.terminalState ? ` (${worker.terminalState})` : ''}`,
-              worker.workspace && `workspace=${worker.workspace}`,
-              worker.host && worker.host !== 'local' && `host=${worker.host}`,
-              worker.attention && `attention=${worker.attention.join(',')}`,
-              worker.autoReleaseAt && `auto-release=${worker.autoReleaseAt}`,
-              worker.next && `next=${worker.next}`
-            ]
-              .filter(Boolean)
-              .join(' ')
-          )
-        : ['No workers found.']
-      return [
-        ...rows,
-        formatWorkerListScope(fields.scope),
-        ...(fields.nextCursor ? [`More: --cursor ${fields.nextCursor}`] : []),
-        ...(fields.warnings ?? []).map((warning) => `Warning: ${warning}`)
-      ].join('\n')
-    },
     fullText,
     // A host that did not answer leaves the inventory unconfirmed, not empty.
     failure: (value) => {
@@ -227,6 +180,8 @@ export function workerListView(
       return first
         ? {
             code: 'worker_inventory_incomplete',
+            // Newly classified as a failure; --full keeps the exit 0 scripts saw.
+            fullExitCode: 0,
             message: `worker observations from ${[first, ...rest].map((error) => error.name).join(', ')} are incomplete (${first.code})`
           }
         : undefined

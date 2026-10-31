@@ -90,13 +90,8 @@ describe('orchestration agent views', () => {
     })
 
     expect(stdout).toBe(
-      [
-        'Worker ctx_1 failed at agent_ready: Agent did not reach a ready prompt within 60000ms.',
-        'Task task_1 in Run run_1',
-        'Terminal term_agent in workspace wt_1::/repo',
-        'Left behind: terminal term_agent',
+      'dispatchId=ctx_1 taskId=task_1 runId=run_1 state=failed terminal=term_agent workspace=wt_1::/repo failedStage=agent_ready lastError="Agent did not reach a ready prompt within 60000ms." residualResources="terminal term_agent"\n' +
         'Next: Close it with: orca-dev orchestration worker-release --dispatch ctx_1'
-      ].join('\n')
     )
     expect(stderr).toBe(
       'error: start_failed: agent_ready: Agent did not reach a ready prompt within 60000ms.'
@@ -209,10 +204,8 @@ describe('orchestration agent views', () => {
     })
 
     expect(stdout).toBe(
-      [
-        'ctx_1 task_1 running liveness=live terminal=term_agent (active) workspace=wt_1::/repo next=orca-dev orchestration worker-stop --dispatch ctx_1',
-        'Scope: Run run_1 (--run)'
-      ].join('\n')
+      'scope.run=run_1 scope.source=flag\n' +
+        'dispatchId=ctx_1 taskId=task_1 state=running liveness=live terminal=term_agent terminalState=active workspace=wt_1::/repo host=local next="orca-dev orchestration worker-stop --dispatch ctx_1"'
     )
   })
 
@@ -240,6 +233,18 @@ describe('orchestration agent views', () => {
       'error: worker_inventory_incomplete: worker observations from linux are incomplete (unreachable)'
     )
     expect(process.exitCode).toBe(1)
+
+    // These were exit 0 before; --full keeps that for scripts.
+    process.exitCode = undefined
+    await run(
+      'check',
+      [
+        ['run', 'run_1'],
+        ['full', true]
+      ],
+      { messages: [], count: 0, cancelled: true }
+    )
+    expect(process.exitCode).toBe(0)
   })
 
   it('keeps --full stdout as before while a timed-out ask still fails on one stderr line', async () => {
@@ -304,11 +309,8 @@ describe('orchestration agent views', () => {
     })
 
     expect(stdout).toBe(
-      [
-        'Dispatched ctx_1 for task_1 in Run run_1',
-        'Terminal term_agent in workspace wt_1::/repo',
+      'dispatchId=ctx_1 taskId=task_1 runId=run_1 state=outcome_unknown terminal=term_agent workspace=wt_1::/repo\n' +
         "Next: Task typed in but the worker hasn't been seen starting; don't resend or abandon it. End your turn; Orca wakes you when it reports. If nothing arrives, run orca-dev orchestration worker-show --dispatch ctx_1."
-      ].join('\n')
     )
     expect(stderr).toBe(
       "warning: turn_start_unobserved: task typed in; the worker may still be starting. Don't resend."
@@ -330,5 +332,55 @@ describe('orchestration agent views', () => {
       }
     )
     expect(process.exitCode).toBe(1)
+  })
+
+  it('names the resolved executable in a legacy check reply hint', async () => {
+    const { stdout } = await run('check', [['run', 'run_1']], {
+      messages: [
+        {
+          id: 'msg_q',
+          from_handle: 'term_worker',
+          to_handle: 'run:run_1',
+          subject: 'Question',
+          body: 'Proceed?',
+          type: 'question'
+        }
+      ],
+      count: 1,
+      legacyCompatibility: { recovery: false }
+    })
+    expect(stdout).toContain('[Reply: orca-dev orchestration reply --id msg_q --body "..."]')
+  })
+
+  it('keeps payload fields that collide with view keys, and never edits message text', async () => {
+    const body = '[Reply: orca orchestration reply --id x --body "quoted by the worker"]'
+    const { stdout } = await run(
+      'check',
+      [
+        ['run', 'run_1'],
+        ['format', true]
+      ],
+      {
+        messages: [
+          {
+            id: 'msg_1',
+            from_handle: 'dispatch:ctx_1',
+            to_handle: 'run:run_1',
+            type: 'status',
+            body,
+            payload: JSON.stringify({ id: 'payload_id', payload: 'evidence' })
+          }
+        ],
+        count: 1,
+        formatted: `banner\n${body}`
+      },
+      true
+    )
+    const result = JSON.parse(stdout).result
+    expect(result.messages[0]).toMatchObject({
+      body,
+      payload: { id: 'payload_id', payload: 'evidence' }
+    })
+    expect(result.formatted).toBe(`banner\n${body}`)
   })
 })

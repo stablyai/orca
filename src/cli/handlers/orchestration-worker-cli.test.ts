@@ -318,7 +318,7 @@ describe('orchestration worker-start CLI contract', () => {
     })
 
     expect(printedText()).toContain(
-      'Warning: Terminal term_worker is running but could not be revealed.'
+      'warning="Terminal term_worker is running but could not be revealed."'
     )
   })
 
@@ -642,7 +642,10 @@ describe('orchestration worker-start CLI contract', () => {
     mockWorkerListResponse(response)
 
     await ORCHESTRATION_HANDLERS['orchestration worker-list']({
-      flags: new Map<string, string | boolean>([['include-remote', true]]),
+      flags: new Map<string, string | boolean>([
+        ['include-remote', true],
+        ['full', true]
+      ]),
       client,
       cwd: '/tmp/repo',
       json: false
@@ -787,7 +790,7 @@ describe('orchestration worker-start CLI contract', () => {
       false
     )
     expect(callMock).toHaveBeenLastCalledWith('orchestration.workerRetain', { dispatch: 'ctx_1' })
-    expect(printedText()).toContain('Kept open after it finishes')
+    expect(printedText()).toContain('keptOpen=true')
   })
 
   it('does not tell a coordinator that chat workers skip automatic release', () => {

@@ -1,5 +1,5 @@
 import type { CommandHandler } from '../../dispatch'
-import { printOrchestrationReceipt } from './agent-view'
+import { printOrchestrationResult } from './agent-view'
 import { getOptionalJsonFlag, getOptionalStringFlag, getRequiredStringFlag } from '../../flags'
 import { callOrchestrationMutation } from './mutation-request'
 import { resolveCoordinatorTerminalHandle, runScopedSessionCaller } from './terminal-identity'
@@ -14,11 +14,14 @@ export const ORCHESTRATION_GATE_HANDLERS: Record<string, CommandHandler> = {
       options: getOptionalJsonFlag(flags, 'options'),
       from: await resolveCoordinatorTerminalHandle(flags, cwd, client)
     })
-    printOrchestrationReceipt(
+    printOrchestrationResult(
       result,
       { flags, json },
-      (value) =>
-        `Gate ${value.gate.id} created for task ${value.gate.task_id} [${value.gate.status}]`
+      {
+        fields: (value) => value,
+        fullText: (value) =>
+          `Gate ${value.gate.id} created for task ${value.gate.task_id} [${value.gate.status}]`
+      }
     )
   },
 
@@ -30,10 +33,13 @@ export const ORCHESTRATION_GATE_HANDLERS: Record<string, CommandHandler> = {
       resolution: getRequiredStringFlag(flags, 'resolution'),
       from: await resolveCoordinatorTerminalHandle(flags, cwd, client)
     })
-    printOrchestrationReceipt(
+    printOrchestrationResult(
       result,
       { flags, json },
-      (value) => `Gate ${value.gate.id} resolved: ${value.gate.resolution}`
+      {
+        fields: (value) => value,
+        fullText: (value) => `Gate ${value.gate.id} resolved: ${value.gate.resolution}`
+      }
     )
   },
 
@@ -53,13 +59,20 @@ export const ORCHESTRATION_GATE_HANDLERS: Record<string, CommandHandler> = {
       run,
       from
     })
-    printOrchestrationReceipt(result, { flags, json }, (value) => {
-      if (value.gates.length === 0) {
-        return 'No gates found.'
+    printOrchestrationResult(
+      result,
+      { flags, json },
+      {
+        fields: (value) => value,
+        fullText: (value) => {
+          if (value.gates.length === 0) {
+            return 'No gates found.'
+          }
+          return value.gates
+            .map((gate) => `${gate.id} task=${gate.task_id} [${gate.status}] "${gate.question}"`)
+            .join('\n')
+        }
       }
-      return value.gates
-        .map((gate) => `${gate.id} task=${gate.task_id} [${gate.status}] "${gate.question}"`)
-        .join('\n')
-    })
+    )
   }
 }

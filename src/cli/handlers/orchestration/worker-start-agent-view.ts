@@ -93,42 +93,6 @@ export const WORKER_START_VIEW: OrchestrationAgentView<WorkerStartAgentReceipt, 
             : value.next && resolveOrcaCommandsInText(value.next)
       }
     },
-    text: (fields, value) => {
-      const lines: string[] = []
-      const where = fields.runId
-        ? ` in ${fields.runCreated ? 'new ' : ''}Run ${fields.runId}${fields.objective ? `: ${fields.objective}` : ''}`
-        : ''
-      if (fields.state === 'ready' || isUnobservedTurnStart(value)) {
-        const how = [fields.agent, fields.model, fields.effort, fields.mode].filter(Boolean)
-        lines.push(
-          `${fields.state === 'ready' ? 'Started' : 'Dispatched'} ${fields.dispatchId}${how.length ? ` (${how.join(', ')})` : ''} for ${fields.taskId}${where}`
-        )
-      } else {
-        lines.push(
-          `Worker ${fields.dispatchId} ${fields.state}${fields.failedStage ? ` at ${fields.failedStage}` : ''}${fields.lastError ? `: ${fields.lastError}` : ''}`,
-          `Task ${fields.taskId}${where}`
-        )
-      }
-      if (fields.terminal || fields.workspace) {
-        lines.push(
-          `Terminal ${fields.terminal ?? 'none'} in workspace ${fields.workspace ?? 'unknown'}`
-        )
-      }
-      if (fields.keptOpen) {
-        lines.push('Kept open after it finishes')
-      }
-      if (fields.modeDetail) {
-        lines.push(fields.modeDetail)
-      }
-      if (fields.warning) {
-        lines.push(`Warning: ${fields.warning}`)
-      }
-      if (fields.residualResources) {
-        lines.push(`Left behind: ${fields.residualResources.join(', ')}`)
-      }
-      lines.push(...(fields.nextCommands ?? []).map((command) => `Next command: ${command}`))
-      return withReceiptNext(lines.join('\n'), fields)
-    },
     fullText: (value) => withReceiptNext(formatWorkerStart(value), value),
     failure: (value) =>
       value.state === 'ready'

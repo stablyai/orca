@@ -136,7 +136,7 @@ describe('orca cli worktree awareness', () => {
       payload: undefined,
       devMode: false
     })
-    expect(logSpy).toHaveBeenCalledWith('Sent 2 messages to 2 recipients')
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('recipients=2'))
   })
 
   it("refuses an agent session's caller flag naming another caller before any request", async () => {

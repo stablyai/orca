@@ -83,7 +83,6 @@ export const ORCHESTRATION_TASK_HANDLERS: Record<string, CommandHandler> = {
           runId: r.runId,
           legacyReadOnly: r.legacyReadOnly || undefined
         }),
-        text: (_, r) => formatTaskList(r),
         fullText: formatTaskList
       }
     )
@@ -123,7 +122,6 @@ type TaskReceipt = { task: { id: string; status: string } }
 function taskReceiptView(format: (taskId: string, status: string) => string) {
   return {
     fields: (value: TaskReceipt) => ({ taskId: value.task.id, status: value.task.status }),
-    text: (fields: { taskId: string; status: string }) => format(fields.taskId, fields.status),
     fullText: (value: TaskReceipt) => format(value.task.id, value.task.status)
   }
 }
