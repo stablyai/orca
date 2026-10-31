@@ -18,7 +18,7 @@ import { useRetryPanesWhenWslHostReturns } from './use-wsl-host-return-retry'
 import { useCalmStatusReveal } from '@/hooks/use-calm-status-reveal'
 import { useAppStore } from '@/store'
 import { paneShowsWslHostStoppedCard } from '@/lib/wsl-host-stopped-status'
-import { isWslHostStoppedErrorLine } from '../../../../shared/wsl-host-stopped-message'
+import { withoutWslHostStoppedLines } from '../../../../shared/wsl-host-stopped-message'
 import { mapPaneTerminalErrors } from './terminal-error-accumulation'
 import type { TerminalPaneController } from './use-terminal-pane-controller'
 
@@ -57,14 +57,6 @@ export function createPaneRecoveryReconnect(
   }
 }
 
-function withoutWslHostStoppedLines(error: string): string | null {
-  const kept = error
-    .split('\n')
-    .filter((line) => !isWslHostStoppedErrorLine(line))
-    .join('\n')
-  return kept.length > 0 ? kept : null
-}
-
 export function TerminalPaneRecoveryPortals({
   controller
 }: {
@@ -81,12 +73,17 @@ export function TerminalPaneRecoveryPortals({
   )
   const stoppedWslDistro = ownerWslHost?.state === 'distro-stopped' ? ownerWslHost.distro : null
   const { setTerminalError, setTerminalErrorsByPaneId } = controller
+  const ownerWslDistro = ownerWslHost?.distro ?? null
+  // Why scoped to this host's distro: a pane on another, still-stopped host keeps its line.
   const clearStoppedHostErrors = useCallback(() => {
-    setTerminalError((current) => (current === null ? null : withoutWslHostStoppedLines(current)))
-    setTerminalErrorsByPaneId((current) =>
-      mapPaneTerminalErrors(current, withoutWslHostStoppedLines)
-    )
-  }, [setTerminalError, setTerminalErrorsByPaneId])
+    if (!ownerWslDistro) {
+      return
+    }
+    const strip = (error: string): string | null =>
+      withoutWslHostStoppedLines(error, ownerWslDistro)
+    setTerminalError((current) => (current === null ? null : strip(current)))
+    setTerminalErrorsByPaneId((current) => mapPaneTerminalErrors(current, strip))
+  }, [ownerWslDistro, setTerminalError, setTerminalErrorsByPaneId])
   useRetryPanesWhenWslHostReturns(
     ownerEnvironmentId,
     ownerWslHost?.state,
