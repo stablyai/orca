@@ -50,6 +50,8 @@ vi.mock('../navigation/route-handoff', () => ({
 // The dialogs are read off `ConfirmModal`'s props; the drawer under them needs a native runtime.
 vi.mock('../components/bottom-drawer/BottomDrawer', () => ({ BottomDrawer: () => null }))
 
+vi.mock('../components/MobileAgentIcon', () => ({ MobileAgentIcon: 'MobileAgentIcon' }))
+
 vi.mock('../platform/random-v4-uuid', () => ({ randomV4Uuid: dependencies.uuid }))
 
 vi.mock('lucide-react-native', () => ({
@@ -381,6 +383,44 @@ describe('accounts route Codex reset credit', () => {
 
     expect(openDialog(renderer)).toBeNull()
     expect(dependencies.resetRequest).not.toHaveBeenCalled()
+    act(() => renderer.unmount())
+  })
+
+  it('renders Antigravity usage section when snapshot pushes active Antigravity rate limits', async () => {
+    const renderer = await renderAccountsRoute()
+    const snapshotWithAntigravity = {
+      ...AVAILABLE_SNAPSHOT,
+      rateLimits: {
+        ...AVAILABLE_SNAPSHOT.rateLimits,
+        antigravity: {
+          provider: 'antigravity',
+          session: null,
+          weekly: null,
+          buckets: [
+            {
+              id: 'claude-gpt-weekly',
+              name: 'Claude and GPT models',
+              usedPercent: 42,
+              windowMinutes: 10080,
+              resetsAt: null,
+              resetDescription: null
+            }
+          ],
+          updatedAt: 100,
+          error: null,
+          status: 'ok'
+        }
+      }
+    }
+    act(() => {
+      for (const listener of dependencies.subscriptionListeners) {
+        listener({ type: 'snapshot', snapshot: snapshotWithAntigravity })
+      }
+    })
+    const serialized = JSON.stringify(renderer.toJSON())
+    expect(serialized).toContain('Antigravity')
+    expect(serialized).toContain('Claude and GPT models')
+    expect(serialized).toContain('42%')
     act(() => renderer.unmount())
   })
 })

@@ -14,7 +14,8 @@
       "switchFailed": "Não foi possível trocar de conta",
       "title": "Contas",
       "useReset": "Redefinir agora",
-      "weeklyWindow": "7d"
+      "weeklyWindow": "7d",
+      "antigravity": "Antigravity"
     }
   },
   "agentHistory": {

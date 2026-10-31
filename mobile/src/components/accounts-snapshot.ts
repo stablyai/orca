@@ -48,7 +48,13 @@ export const ProviderRateLimitsSchema = z
     fableWeekly: RateLimitWindowSchema.nullable().optional(),
     monthly: RateLimitWindowSchema.nullable().optional(),
     buckets: z
-      .array(RateLimitWindowSchema.extend({ name: z.string().min(1) }).passthrough())
+      .array(
+        RateLimitWindowSchema.extend({
+          name: z.string().min(1),
+          id: z.string().min(1).optional(),
+          windowMinutes: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
+        }).passthrough()
+      )
       .optional(),
     rateLimitResetCredits: RateLimitResetCreditsSchema.nullable().optional(),
     updatedAt: TimestampSchema,
@@ -176,6 +182,7 @@ export const AccountsSnapshotSchema = z
       .object({
         claude: ProviderRateLimitsSchema.nullable(),
         codex: ProviderRateLimitsSchema.nullable(),
+        antigravity: ProviderRateLimitsSchema.nullable().optional(),
         // Older compatible hosts omit runtime target fields and retain host-only selection semantics.
         claudeTarget: RateLimitRuntimeTargetSchema.default(HostRateLimitRuntimeTarget),
         codexTarget: RateLimitRuntimeTargetSchema.default(HostRateLimitRuntimeTarget),
@@ -198,6 +205,16 @@ export const AccountsSnapshotSchema = z
         code: 'custom',
         message: 'Codex limits use the wrong provider identity',
         path: ['rateLimits', 'codex', 'provider']
+      })
+    }
+    if (
+      snapshot.rateLimits.antigravity &&
+      snapshot.rateLimits.antigravity.provider !== 'antigravity'
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Antigravity limits use the wrong provider identity',
+        path: ['rateLimits', 'antigravity', 'provider']
       })
     }
     for (const [index, entry] of snapshot.rateLimits.inactiveClaudeAccounts.entries()) {
