@@ -161,9 +161,8 @@ function item(owner: string): GitHubWorkItem {
     updatedAt: ''
   }
 }
-let _labels: ReturnType<typeof useRepoLabels>
 function Metadata({ enabled }: { enabled: boolean }) {
-  _labels = useRepoLabels(enabled ? '/clone' : null, enabled ? 'clone' : null)
+  useRepoLabels(enabled ? '/clone' : null, enabled ? 'clone' : null)
   return null
 }
 let view: ReturnType<typeof useGitHubWorkItemDetails>

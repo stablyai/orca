@@ -135,14 +135,20 @@ export class RuntimeGitHubRepositoryQueryCommands {
     ownerRepo?: GitHubOwnerRepo
   ): Promise<Awaited<ReturnType<typeof listLabels>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
-    return listLabels(
-      repo.path,
-      repo.issueSourcePreference,
-      getRepoRoutingConnectionId(repo),
-      ...(ownerRepo
-        ? ([this.deps.getLocalGitArgs(repo)[0] ?? {}, ownerRepo] as const)
-        : this.deps.getLocalGitArgs(repo))
-    )
+    return ownerRepo
+      ? listLabels(
+          repo.path,
+          repo.issueSourcePreference,
+          getRepoRoutingConnectionId(repo),
+          this.deps.getLocalGitArgs(repo)[0] ?? {},
+          ownerRepo
+        )
+      : listLabels(
+          repo.path,
+          repo.issueSourcePreference,
+          getRepoRoutingConnectionId(repo),
+          ...this.deps.getLocalGitArgs(repo)
+        )
   }
 
   async listRepoAssignableUsers(
@@ -150,14 +156,20 @@ export class RuntimeGitHubRepositoryQueryCommands {
     ownerRepo?: GitHubOwnerRepo
   ): Promise<Awaited<ReturnType<typeof listAssignableUsers>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
-    return listAssignableUsers(
-      repo.path,
-      repo.issueSourcePreference,
-      getRepoRoutingConnectionId(repo),
-      ...(ownerRepo
-        ? ([this.deps.getLocalGitArgs(repo)[0] ?? {}, ownerRepo] as const)
-        : this.deps.getLocalGitArgs(repo))
-    )
+    return ownerRepo
+      ? listAssignableUsers(
+          repo.path,
+          repo.issueSourcePreference,
+          getRepoRoutingConnectionId(repo),
+          this.deps.getLocalGitArgs(repo)[0] ?? {},
+          ownerRepo
+        )
+      : listAssignableUsers(
+          repo.path,
+          repo.issueSourcePreference,
+          getRepoRoutingConnectionId(repo),
+          ...this.deps.getLocalGitArgs(repo)
+        )
   }
 
   getGitHubRateLimit(options?: {

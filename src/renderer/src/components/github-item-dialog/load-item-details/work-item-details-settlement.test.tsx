@@ -151,6 +151,7 @@ function full(opened: GitHubWorkItem): GitHubWorkItemDetails {
         additions: 1,
         deletions: 0,
         status: 'modified',
+        isBinary: false,
         viewerViewedState: 'UNVIEWED'
       }
     ],
@@ -384,7 +385,14 @@ it.each(['page', 'dialog'] as const)(
     const beforeB = io.renders.get('B')
     const beforeReads = io.details.mock.calls.length
     const bSnapshot = views.get('B')?.details
-    const comment = { id: 9001, body: 'confirmed origin', author: 'me', createdAt: '' }
+    const comment = {
+      id: 9001,
+      body: 'confirmed origin',
+      author: 'me',
+      authorAvatarUrl: '',
+      url: 'https://github.corp/fork/widgets/pull/93#issuecomment-9001',
+      createdAt: ''
+    }
     await act(async () => answer.resolve({ ok: true, comment }))
     expect(workItemDetailsCache.get(originKey)?.pending).toBe(pending)
     expect(container.querySelector('[data-name="observer"] output')?.textContent).toBe(

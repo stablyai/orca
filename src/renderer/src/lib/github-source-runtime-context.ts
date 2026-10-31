@@ -4,7 +4,7 @@ import {
   parseExecutionHostId
 } from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'
-import { findRepoForHost } from '@/store/slices/repo-host-identity'
+import { repoMatchesHostIdentity } from '@/store/slices/repo-host-identity'
 import type { ExecutionHostId, ParsedExecutionHost } from '../../../shared/execution-host'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
@@ -12,6 +12,7 @@ import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { taskSourceRuntimeTarget } from './task-source-runtime-target'
 import {
   getExplicitRuntimeOwnerEnvironmentId,
+  resolveRepoRuntimeOwner,
   getHostlessSourceRepoOwnerEnvironmentId,
   type RepoRuntimeOwnerState
 } from './repo-runtime-owner'
@@ -77,7 +78,7 @@ export function getGitHubRuntimeRepoId(
 }
 
 export function resolveGitHubRepoOperationOwner(
-  state: RepoRuntimeOwnerState & { repos?: readonly Repo[] },
+  state: RepoRuntimeOwnerState<Repo>,
   args: {
     repoId?: string | null
     repoPath?: string | null
@@ -88,28 +89,41 @@ export function resolveGitHubRepoOperationOwner(
   const repoId = getGitHubRuntimeRepoId(args.sourceContext, args.repoId)
   const candidates = state.repos ?? []
   const sourceHost = getGitHubSourceRuntimeHost(args.sourceContext)
+  const rowOwner =
+    !sourceHost &&
+    args.sourceContext?.provider !== 'github' &&
+    repoId &&
+    args.target?.kind !== 'environment'
+      ? resolveRepoRuntimeOwner(
+          {
+            repos:
+              args.target?.kind === 'local'
+                ? candidates.filter(
+                    (row) => parseExecutionHostId(getRepoExecutionHostId(row))?.kind !== 'runtime'
+                  )
+                : candidates,
+            settings: state.settings
+          },
+          repoId
+        )
+      : null
   const target = sourceHost
     ? runtimeTargetForOwnerEnvironment(sourceHost.environmentId)
-    : (args.target ?? getGitHubRepoRoutingTarget(state, repoId, args.sourceContext))
+    : (args.target ??
+      (rowOwner
+        ? runtimeTargetForOwnerEnvironment(rowOwner.environmentId)
+        : getGitHubRepoRoutingTarget(state, repoId, args.sourceContext)))
   const hostId =
     target.kind === 'environment' ? toRuntimeExecutionHostId(target.environmentId) : null
   let repo: Repo | null = null
   if (repoId) {
     if (hostId) {
-      repo = findRepoForHost(candidates, repoId, { hostId, settings: state.settings })
+      repo = candidates.find((row) => repoMatchesHostIdentity(row, repoId, hostId)) ?? null
     } else if (args.sourceContext?.provider === 'github') {
       const matches = candidates.filter((row) => row.id === repoId)
       repo = matches.length === 1 ? matches[0] : null
     } else {
-      repo = findRepoForHost(
-        args.target?.kind === 'local'
-          ? candidates.filter(
-              (row) => parseExecutionHostId(getRepoExecutionHostId(row))?.kind !== 'runtime'
-            )
-          : candidates,
-        repoId,
-        { settings: state.settings }
-      )
+      repo = rowOwner?.repo ?? null
     }
   } else if (args.repoPath) {
     const matches = candidates.filter((row) => row.path === args.repoPath)

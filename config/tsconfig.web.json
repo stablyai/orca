@@ -8,7 +8,12 @@
     "../src/preload/api/**/*",
     "../src/shared/**/*"
   ],
-  "exclude": ["../src/renderer/src/components/terminal-pane/pty-agent-pane-launch.test.ts"],
+  "exclude": [
+    "../src/renderer/src/components/terminal-pane/pty-agent-pane-launch.test.ts",
+    "../src/renderer/src/components/github-item-dialog/load-item-details/work-item-details-target-contract.test.tsx",
+    "../src/renderer/src/components/github-item-dialog/load-item-details/work-item-details-target-isolation.test.tsx",
+    "../src/renderer/src/hooks/useGitHubRepoMetadata.target-sharing.test.tsx"
+  ],
   "compilerOptions": {
     "composite": true,
     "jsx": "react-jsx",

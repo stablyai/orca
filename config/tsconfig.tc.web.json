@@ -2,6 +2,9 @@
   "extends": "./tsconfig.web.json",
   "exclude": [
     "../src/renderer/src/components/terminal-pane/pty-agent-pane-launch.test.ts",
+    "../src/renderer/src/components/github-item-dialog/load-item-details/work-item-details-target-contract.test.tsx",
+    "../src/renderer/src/components/github-item-dialog/load-item-details/work-item-details-target-isolation.test.tsx",
+    "../src/renderer/src/hooks/useGitHubRepoMetadata.target-sharing.test.tsx",
     "../src/shared/**/*.test.ts",
     "../src/shared/**/*.test.tsx",
     "../src/shared/**/*.spec.ts",

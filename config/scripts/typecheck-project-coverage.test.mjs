@@ -37,14 +37,20 @@ describe('typecheck project coverage', () => {
     expect(tests.filter((file) => !project.files.has(resolve(root, file)))).toEqual([])
   })
 
-  it('assigns the combined pane launch integration to its typed cross-process project', () => {
-    const suite = resolve(
-      root,
-      'src/renderer/src/components/terminal-pane/pty-agent-pane-launch.test.ts'
-    )
-    expect(
-      projects.filter((project) => project.files.has(suite)).map((project) => project.config)
-    ).toEqual(['config/tsconfig.test.pane-launch.json'])
+  it('assigns cross-process integrations to the scheduled mixed project', () => {
+    const suites = [
+      'src/renderer/src/components/terminal-pane/pty-agent-pane-launch.test.ts',
+      'src/renderer/src/components/github-item-dialog/load-item-details/work-item-details-target-contract.test.tsx',
+      'src/renderer/src/components/github-item-dialog/load-item-details/work-item-details-target-isolation.test.tsx',
+      'src/renderer/src/hooks/useGitHubRepoMetadata.target-sharing.test.tsx'
+    ]
+    for (const suite of suites) {
+      expect(
+        projects
+          .filter((project) => project.files.has(resolve(root, suite)))
+          .map((project) => project.config)
+      ).toEqual(['config/tsconfig.test.pane-launch.json'])
+    }
     const combined = projects.find(
       (project) => project.config === 'config/tsconfig.test.pane-launch.json'
     )
