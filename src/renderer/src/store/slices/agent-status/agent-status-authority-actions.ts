@@ -16,6 +16,7 @@ import {
   getTabIdFromPaneKey,
   isRecentlyClosedAgentStatusTab
 } from './agent-status-pane-key-tab-binding'
+import { rekeyMigrationUnsupportedEntries } from './agent-status-migration-unsupported-entries'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
 import {
   movePaneAttention,
@@ -255,7 +256,15 @@ export function createAgentStatusAuthorityActions(
             to
           ),
           cacheTimerByKey: movePaneKeyedRecord(s.cacheTimerByKey, from, to),
-          retentionSuppressedPaneKeys: movePaneKeyedRecord(s.retentionSuppressedPaneKeys, from, to)
+          retentionSuppressedPaneKeys: movePaneKeyedRecord(s.retentionSuppressedPaneKeys, from, to),
+          migrationUnsupportedByPtyId: rekeyMigrationUnsupportedEntries(
+            s.migrationUnsupportedByPtyId,
+            (entry) =>
+              entry.paneKey === from || (transfer.ptyId !== null && entry.ptyId === transfer.ptyId),
+            to,
+            targetTabId,
+            targetLeafId
+          )
         }
       })
       if (typeof window !== 'undefined') {

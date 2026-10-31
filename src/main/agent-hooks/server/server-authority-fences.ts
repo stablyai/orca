@@ -1,6 +1,7 @@
 import { clearPaneCacheState } from '../../../shared/agent-hook-listener/listener-state'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import { AgentHookServerAuthorityAliases } from './server-authority-aliases'
+import { resolveLeafAliasFallback, type LiveLeafOwnerResolver } from './server-leaf-alias-fallback'
 import type {
   EnrichedAgentHookEventPayload,
   RetiredPaneAlias,
@@ -8,6 +9,13 @@ import type {
 } from './server-types'
 
 export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuthorityAliases {
+  protected liveLeafOwnerResolver: LiveLeafOwnerResolver | null = null
+
+  // Why: the store owns the layouts; injected so the server needs no persistence dependency.
+  setLiveLeafOwnerResolver(resolver: LiveLeafOwnerResolver | null): void {
+    this.liveLeafOwnerResolver = resolver
+  }
+
   retirePaneAuthority(paneKey: string, retirementId?: string): void {
     const ownerPaneKey = this.resolvePaneKeyAlias(paneKey)
     const previousFence = this.retiredPaneFencesByKey.get(ownerPaneKey)
@@ -79,7 +87,9 @@ export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuth
       if (
         this.retiredPaneFencesByKey.get(physicalPaneKey) !== fence ||
         this.retiredPaneFencesByKey.get(entry.stablePaneKey) !== fence ||
-        this.isClosedAgentStatusTabForPaneKey(physicalPaneKey) ||
+        // Why: a moved pane's stable physical key may sit in a closed tab; only the owner's tab decides there.
+        (parseLegacyNumericPaneKey(physicalPaneKey) !== null &&
+          this.isClosedAgentStatusTabForPaneKey(physicalPaneKey)) ||
         this.isClosedAgentStatusTabForPaneKey(entry.stablePaneKey) ||
         // A newer binding supersedes the retired alias.
         this.legacyPaneKeyAliases.has(physicalPaneKey)
@@ -112,7 +122,7 @@ export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuth
     for (const key of new Set([paneKey, ownerPaneKey, ...(fence?.paneKeys ?? [])])) {
       if (
         (fence && this.retiredPaneFencesByKey.get(key) !== fence) ||
-        this.isClosedAgentStatusTabForPaneKey(key)
+        (this.isClosedAgentStatusTabForPaneKey(key) && !this.isFenceKeyOwnerOpen(fence, key))
       ) {
         continue
       }
@@ -230,13 +240,40 @@ export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuth
     return changed
   }
 
+  // Why: alias eviction (or a crash before its save) must not strand a moved pane's process; the leaf id finds it.
+  protected resolveLeafAliasPaneKey(rawPaneKey: string): string | undefined {
+    const aliased = this.legacyPaneKeyAliases.get(rawPaneKey)?.stablePaneKey
+    if (aliased) {
+      return aliased
+    }
+    // Why: an open tab with a row owns its key; only a closed or never-seen tab can hide a moved pane.
+    if (
+      !this.isClosedAgentStatusTabForPaneKey(rawPaneKey) &&
+      this.state.lastStatusByPaneKey.has(rawPaneKey)
+    ) {
+      return undefined
+    }
+    const stablePaneKey =
+      resolveLeafAliasFallback(rawPaneKey, this.liveLeafOwnerResolver) ?? undefined
+    if (stablePaneKey) {
+      this.legacyPaneKeyAliases.set(rawPaneKey, {
+        stablePaneKey,
+        ptyId: null,
+        updatedAt: Date.now(),
+        authorityVerified: false
+      })
+      this.boundPaneKeyAliases()
+    }
+    return stablePaneKey
+  }
+
   protected normalizeHookBodyPaneKeyAlias(body: unknown): unknown {
     if (typeof body !== 'object' || body === null) {
       return body
     }
     const record = body as Record<string, unknown>
     const rawPaneKey = typeof record.paneKey === 'string' ? record.paneKey.trim() : ''
-    const stablePaneKey = this.legacyPaneKeyAliases.get(rawPaneKey)?.stablePaneKey
+    const stablePaneKey = this.resolveLeafAliasPaneKey(rawPaneKey)
     if (!stablePaneKey) {
       return body
     }
