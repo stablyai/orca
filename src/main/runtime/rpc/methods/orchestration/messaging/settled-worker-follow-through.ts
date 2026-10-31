@@ -4,7 +4,7 @@ import type { OrchestrationDb } from '../../../../orchestration/db'
 import {
   clearFollowUpMail,
   markUnreadFollowUpMail,
-  restoreFollowUpMail,
+  getFollowUpDispatch,
   FOLLOW_UP_MESSAGE_TYPES,
   listDispatchesWithFollowUpMail
 } from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
@@ -47,20 +47,26 @@ export function continueUnreadWorkerMail(
   })
 }
 
+// The Task only points at the mail, which the follow-up's mailbox holds however much there is.
+const FOLLOW_UP_TASK = {
+  subject: 'New messages',
+  body: 'You have new orchestration messages. Read them with `orchestration check`, then continue.'
+}
+
 async function continueUnreadMail(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,
   dispatchId: string
 ): Promise<void> {
-  const unread = db.getUnreadMessages(`dispatch:${dispatchId}`, [...FOLLOW_UP_MESSAGE_TYPES])
-  const first = unread[0]
+  const first = db.getUnreadMessages(`dispatch:${dispatchId}`, [...FOLLOW_UP_MESSAGE_TYPES])[0]
   if (!first) {
     clearFollowUpMail(db, dispatchId)
     return
   }
+  let plan: ReturnType<typeof planWorkerFollowUp> = undefined
   let outcome: WorkerFollowUpOutcome | undefined
   try {
-    const plan = planWorkerFollowUp(db, dispatchId, first.type)
+    plan = planWorkerFollowUp(db, dispatchId, first.type)
     outcome =
       plan?.kind === 'start'
         ? await startWorkerFollowUp({
@@ -68,19 +74,8 @@ async function continueUnreadMail(
             db,
             plan,
             from: first.from_handle,
-            message: {
-              subject:
-                unread.length === 1
-                  ? first.subject
-                  : `${first.subject} (+${unread.length - 1} more)`,
-              body:
-                unread.length === 1
-                  ? first.body || first.subject
-                  : unread
-                      .map((message) => `${message.subject}\n${message.body}`.trim())
-                      .join('\n\n')
-            },
-            consumesMessageIds: unread.map((message) => message.id)
+            message: FOLLOW_UP_TASK,
+            takesMailOf: dispatchId
           })
         : plan
   } catch (error) {
@@ -91,6 +86,10 @@ async function continueUnreadMail(
       dispatchId,
       error instanceof Error ? error.message : String(error)
     )
+    const claimed = plan?.kind === 'start' ? getFollowUpDispatch(db, plan.latest.id) : undefined
+    if (claimed) {
+      markUnreadFollowUpMail(db, claimed.id)
+    }
     return
   }
   const startedId = outcome?.kind === 'started' ? outcome.receipt.dispatchId : undefined
@@ -99,13 +98,14 @@ async function continueUnreadMail(
     return
   }
   if (outcome?.kind === 'started' && custodyOf(db, followUpId) === 'failed') {
-    // What it took goes back with the rest of the worker's held mail.
-    restoreFollowUpMail(
+    // The mail it took stays unread on it, marked below, for the next send.
+    const worker = db.getWorkerDispatch(followUpId)
+    noticeUnreadMailNotContinued(
+      runtime,
       db,
-      unread.map((message) => message.id)
+      dispatchId,
+      worker?.last_error ?? worker?.state ?? 'unknown'
     )
-    // A report replayed while it started may have cleared the marker the restored mail needs.
-    markUnreadFollowUpMail(db, dispatchId)
   }
   passHeldWorkerMail(runtime, db, followUpId)
 }
@@ -155,7 +155,9 @@ export function passHeldWorkerMail(
         page = db.routeUnreadDirectMessagesToDispatchMailbox(
           followUpId,
           first.run_id,
-          `dispatch:${source}`
+          `dispatch:${source}`,
+          undefined,
+          true
         )
         for (const type of custody === 'failed' ? [] : page.types) {
           runtime.notifyMessageArrived(`dispatch:${followUpId}`, type)

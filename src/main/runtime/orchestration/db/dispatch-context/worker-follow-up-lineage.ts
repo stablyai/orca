@@ -153,15 +153,23 @@ export function markUnreadFollowUpMail(db: OrchestrationDb, dispatchId: string):
     .run(dispatchId)
 }
 
-/** A follow-up that did not start gives back the mail it took, unread where it was sent. */
-export function restoreFollowUpMail(db: OrchestrationDb, messageIds: readonly string[]): void {
-  if (messageIds.length > 0) {
-    db.db
-      .prepare(
-        `UPDATE messages SET read = 0, delivered_at = NULL WHERE id IN (${messageIds.map(() => '?').join(',')})`
-      )
-      .run(...messageIds)
-  }
+/** In the follow-up's claim, so its first `check` finds the mail; its start prompt is that mail's wake. A pointer whose Enter is in flight keeps its stamps to settle. */
+export function takeFollowUpMail(
+  db: OrchestrationDb,
+  fromDispatchId: string,
+  toDispatchId: string
+): void {
+  db.db
+    .prepare(
+      `UPDATE messages
+          SET to_handle = ?,
+              delivered_at = CASE WHEN pointer_enter_pending = 0 THEN datetime('now') ELSE delivered_at END,
+              pointer_pty_id = CASE WHEN pointer_enter_pending = 0 THEN NULL ELSE pointer_pty_id END,
+              pointer_process_incarnation =
+                CASE WHEN pointer_enter_pending = 0 THEN NULL ELSE pointer_process_incarnation END
+        WHERE to_handle = ? AND read = 0 AND delivery_contract = 'current_delivery'`
+    )
+    .run(`dispatch:${toDispatchId}`, `dispatch:${fromDispatchId}`)
 }
 
 export function clearFollowUpMail(db: OrchestrationDb, dispatchId: string): void {
