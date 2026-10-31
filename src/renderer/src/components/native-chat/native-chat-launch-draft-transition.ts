@@ -91,7 +91,6 @@ export function transitionLaunchDrafts(
         )
       )
     }
-    target.optionListeners.forEach((listener) => listener())
     notifyScope(to)
   }
 }

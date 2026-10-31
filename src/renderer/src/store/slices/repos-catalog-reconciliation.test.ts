@@ -80,12 +80,12 @@ it.each([10, 100])(
         'immediate'
       )
       drafts.updateNativeChatComposerDraft(to, rich(`/to${i}/SKILL.md`, `to${i}`), 'immediate')
-      sources.writeLaunchSetupOptions(from, {
+      drafts.writeLaunchSetupOptions(from, {
         agent: 'claude',
         surface: 'terminal',
         choices: { model: 'source' }
       })
-      sources.writeLaunchSetupOptions(to, {
+      drafts.writeLaunchSetupOptions(to, {
         agent: 'claude',
         surface: 'chat',
         choices: { model: 'target' }

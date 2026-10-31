@@ -435,11 +435,8 @@ import {
   useRestoredNativeChatComposerDraftImageCheck,
   recheckNativeChatComposerDraftImagesIn
 } from './native-chat-composer-draft-image-check'
-import {
-  readLaunchSetupOptions,
-  writeLaunchSetupOptions,
-  subscribeLaunchSetupOptions
-} from './native-chat-launch-draft-source'
+import { readLaunchSetupOptions } from './native-chat-launch-draft-source'
+import { writeLaunchSetupOptions } from './native-chat-composer-draft-memory'
 it.each([10, 100])(
   'isolates actual setup prompt/options/pending consumers across %s workspaces and another host',
   async (count) => {
@@ -464,7 +461,7 @@ it.each([10, 100])(
       const draft = useNativeChatDraft(scope, () => false)
       const pending = useNativeChatPendingAttachments(scope)
       const subscribe = useCallback(
-        (listener: () => void) => subscribeLaunchSetupOptions(scope, listener),
+        (listener: () => void) => subscribeToNativeChatComposerDraft(scope, listener),
         [scope]
       )
       const options = useSyncExternalStore(subscribe, () => readLaunchSetupOptions(scope))

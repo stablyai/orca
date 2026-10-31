@@ -21,11 +21,11 @@ import {
 } from '../../../../shared/agent-launch-picker'
 
 import { agentLaunchPromptScopeKey } from './AgentLaunchPromptComposer'
+import { readLaunchSetupOptions } from '../native-chat/native-chat-launch-draft-source'
 import {
-  readLaunchSetupOptions,
-  writeLaunchSetupOptions,
-  subscribeLaunchSetupOptions
-} from '../native-chat/native-chat-launch-draft-source'
+  subscribeToNativeChatComposerDraft,
+  writeLaunchSetupOptions
+} from '../native-chat/native-chat-composer-draft-store'
 
 function setupKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
   if (event.key === 'Enter' || event.key === ' ') {
@@ -65,17 +65,19 @@ export function AgentLaunchSetupButton({
   onUse: (draft: AgentPickerDraft) => boolean | void | Promise<boolean>
 }) {
   const draftKey = agentLaunchPromptScopeKey(entry)
+  const [localOpen, setOpen] = useState(false)
+  const open = controlledOpen ?? localOpen
+  // Only the open panel reads options, so a closed row holds no subscription.
   const subscribe = useCallback(
-    (listener: () => void) => subscribeLaunchSetupOptions(draftKey, listener),
-    [draftKey]
+    (listener: () => void) =>
+      open ? subscribeToNativeChatComposerDraft(draftKey, listener) : () => {},
+    [draftKey, open]
   )
   const retained = useSyncExternalStore(subscribe, () => readLaunchSetupOptions(draftKey))
   const authored = retained ?? initial ?? agentPickerDraft(entry)
   const draft =
     authored.arguments === undefined ? authored : { ...authored, argumentsOwner: entry.ownerKey }
 
-  const [localOpen, setOpen] = useState(false)
-  const open = controlledOpen ?? localOpen
   const closeFocus = useRef({ open, restore: true })
   useLayoutEffect(() => {
     if (closeFocus.current.open && !open) {

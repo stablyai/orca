@@ -1,4 +1,8 @@
-import { currentDraftScope, captureLaunchDraftDestination } from './native-chat-launch-draft-source'
+import {
+  currentDraftScope,
+  captureLaunchDraftDestination,
+  retainLaunchDraftSource
+} from './native-chat-launch-draft-source'
 import { insertNativeChatComposerDraftText } from './native-chat-composer-draft-insertion'
 // Pending chips outlive composers in memory; completed images persist immediately in their draft.
 
@@ -90,6 +94,8 @@ export function addNativeChatPendingAttachment(
   scopeKey: string,
   chip: NativeChatComposerImageAttachment
 ): void {
+  // A pending chip is the setup's first input as much as typed text, so it moves with the setup.
+  retainLaunchDraftSource(scopeKey)
   scopeKey = currentDraftScope(scopeKey)
   const { previewUrl: _previewUrl, ...pending } = chip
   const owner = resolveNativeChatComposerDraftOwner(scopeKey) ?? pendingOwners.get(scopeKey)

@@ -2,11 +2,14 @@ import {
   currentDraftScope,
   captureLaunchDraftDestination,
   clearLaunchDraftSourcesForTests,
-  nativeChatLaunchPromptDraftOwner
+  nativeChatLaunchPromptDraftOwner,
+  retainLaunchDraftSource
 } from './native-chat-launch-draft-source'
+import type { AgentPickerDraft } from '../../../../shared/agent-launch-picker'
 export {
   nativeChatLaunchPromptDraftOwner,
-  nativeChatLaunchPromptDraftScopeKey
+  nativeChatLaunchPromptDraftScopeKey,
+  retainLaunchDraftSource
 } from './native-chat-launch-draft-source'
 import { sameNativeChatComposerDraftDocument } from './native-chat-composer-draft-comparison'
 import type { NativeChatComposerDraftAddition } from './native-chat-composer-draft-addition'
@@ -159,6 +162,15 @@ export function nextSavedAt(): number {
 
 export function notifyScope(scopeKey: string): void {
   scopeListeners.get(currentDraftScope(scopeKey))?.forEach((listener) => listener())
+}
+
+/** Setup options are authored input: the first change retains the setup, notifying its draft listeners. */
+export function writeLaunchSetupOptions(scope: string, draft: AgentPickerDraft): void {
+  const setup = retainLaunchDraftSource(scope)
+  if (setup) {
+    setup.options = draft
+    notifyScope(scope)
+  }
 }
 
 /** A local change not yet in storage, which a write from another window must not replace. */

@@ -37,6 +37,7 @@ import {
   type DraftAppend,
   type DraftRecord,
   releaseNativeChatComposerSubmission,
+  retainLaunchDraftSource,
   type DraftSubmission
 } from './native-chat-composer-draft-memory'
 import {
@@ -130,13 +131,13 @@ export function finishNativeChatComposerSubmission(
 
 /** Coalesce typing, persist hand-backs/clears immediately, and remove empty drafts so sent input cannot return. */
 export function updateNativeChatComposerDraft(
-  scopeKey: string,
+  reference: string,
   change: NativeChatComposerDraftChange,
   persist: 'immediate' | 'deferred',
   append?: DraftAppend,
   position?: NativeChatDraftPosition
 ): void {
-  scopeKey = currentDraftScope(scopeKey)
+  const scopeKey = currentDraftScope(reference)
   if (isNativeChatEditDraft(scopeKey) && !ephemeralDrafts.has(scopeKey)) {
     return
   }
@@ -171,6 +172,8 @@ export function updateNativeChatComposerDraft(
     }
     return
   }
+  // A setup's first non-empty input creates its session source; other scopes have none.
+  retainLaunchDraftSource(reference)
   // Why stamped once: a conversation never moves to another workspace, so its owner stays true.
   const owner = current.owner ?? change.owner ?? resolveNativeChatComposerDraftOwner(scopeKey)
   const record: DraftRecord = {
@@ -328,6 +331,7 @@ export {
   redirectNativeChatEditDraft,
   isNativeChatEditDraft,
   nativeChatLaunchPromptDraftScopeKey,
+  writeLaunchSetupOptions,
   closeNativeChatEditDraft,
   type NativeChatEditDraftDestination
 } from './native-chat-composer-draft-memory'

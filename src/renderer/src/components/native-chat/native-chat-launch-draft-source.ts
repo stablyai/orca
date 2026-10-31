@@ -14,7 +14,6 @@ export type LaunchDraftSource = NativeChatComposerDraftOwner & {
   agent: string
   origin: string
   options?: AgentPickerDraft
-  optionListeners: Set<() => void>
   references: Map<string, string>
   handles: Map<string, SetupHandle>
 }
@@ -53,17 +52,10 @@ export function setPendingLaunchReadoptions(events: readonly SshRepoReadoption[]
 }
 let sequence = 0
 const prefix = 'agent-setup:'
+const referencePrefix = 'agent-setup-reference:'
 const scopeOf = (owner: NativeChatComposerDraftOwner, agent: string): string =>
   prefix + JSON.stringify([owner.executionHostId, owner.workspaceId, agent])
-
-/** Session references follow accepted context changes; the qualified session key stays reconstructible. */
-export const launchDraftSource = (scope: string): LaunchDraftSource | undefined =>
-  handles.get(scope) ?? setups.get(scope)
-export const currentDraftScope = (scope: string): string => handles.get(scope)?.scopeKey ?? scope
-export function nativeChatLaunchPromptDraftOwner(
-  scope: string
-): NativeChatComposerDraftOwner | undefined {
-  scope = currentDraftScope(scope)
+function setupOf(scope: string): (NativeChatComposerDraftOwner & { agent: string }) | undefined {
   if (!scope.startsWith(prefix)) {
     return undefined
   }
@@ -72,7 +64,7 @@ export function nativeChatLaunchPromptDraftOwner(
     if (Array.isArray(value) && typeof value[0] === 'string' && typeof value[1] === 'string') {
       const host = parseExecutionHostId(value[0])
       if (host) {
-        return { executionHostId: host.id, workspaceId: value[1] }
+        return { executionHostId: host.id, workspaceId: value[1], agent: String(value[2]) }
       }
     }
   } catch {
@@ -80,6 +72,45 @@ export function nativeChatLaunchPromptDraftOwner(
   }
   return undefined
 }
+/** A row's reference names its session key and pre-routing owner, so reading it needs no record. */
+function referenceOf(scope: string): readonly [key: string, initialScope: string] | undefined {
+  if (!scope.startsWith(`${referencePrefix}[`)) {
+    return undefined
+  }
+  try {
+    const [key, initialScope]: unknown[] = JSON.parse(scope.slice(referencePrefix.length))
+    return typeof key === 'string' && typeof initialScope === 'string'
+      ? [key, initialScope]
+      : undefined
+  } catch {
+    return undefined
+  }
+}
+function referenceFor(key: string, initialScope: string): string {
+  for (let generation = 0; ; generation++) {
+    const reference =
+      referencePrefix +
+      JSON.stringify(generation ? [key, initialScope, generation] : [key, initialScope])
+    const held = handles.get(reference)
+    // A written reference keeps following its source; a row derived here after it moved starts fresh.
+    if (!held || held.scopeKey === key) {
+      return reference
+    }
+  }
+}
+
+/** Session references follow accepted context changes; the qualified session key stays reconstructible. */
+export const launchDraftSource = (scope: string): LaunchDraftSource | undefined =>
+  handles.get(scope) ?? setups.get(referenceOf(scope)?.[0] ?? scope)
+export const currentDraftScope = (scope: string): string =>
+  handles.get(scope)?.scopeKey ?? referenceOf(scope)?.[0] ?? scope
+export function nativeChatLaunchPromptDraftOwner(
+  scope: string
+): NativeChatComposerDraftOwner | undefined {
+  const setup = setupOf(currentDraftScope(scope))
+  return setup && { executionHostId: setup.executionHostId, workspaceId: setup.workspaceId }
+}
+/** Deriving a row's key reads only; rows never opened or written keep no session record. */
 export function nativeChatLaunchPromptDraftScopeKey(
   workspaceId: string,
   agent: string,
@@ -96,33 +127,43 @@ export function nativeChatLaunchPromptDraftScopeKey(
         JSON.stringify([initialOwner.executionHostId, getRepoIdFromWorktreeId(workspaceId)])
       ) ?? initialOwner.executionHostId
   }
-  const key = scopeOf(owner, agent)
+  return referenceFor(scopeOf(owner, agent), scopeOf(initialOwner, agent))
+}
+/** The first authored write creates the session source, as main kept only authored setups. */
+export function retainLaunchDraftSource(scope: string): LaunchDraftSource | undefined {
+  const held = launchDraftSource(scope)
+  const reference = referenceOf(scope)
+  if (held && (handles.has(scope) || !reference)) {
+    return held
+  }
+  const [key, initialScope] = reference ?? [scope, scope]
+  const owner = setupOf(key)
+  const initial = setupOf(initialScope)
+  if (!owner || !initial) {
+    return undefined
+  }
+  if (!reference) {
+    scope = referenceFor(key, key)
+  }
   let setup = setups.get(key)
   if (!setup) {
     setup = {
-      ...owner,
+      executionHostId: owner.executionHostId,
+      workspaceId: owner.workspaceId,
       scopeKey: key,
-      agent,
-      origin: executionHostId.startsWith('runtime:') ? executionHostId : 'local',
+      agent: owner.agent,
+      origin: initial.executionHostId.startsWith('runtime:') ? initial.executionHostId : 'local',
       handles: new Map(),
-      references: new Map(),
-      optionListeners: new Set()
+      references: new Map()
     }
     setups.set(key, setup)
   }
-  const existing = setup.references.get(key)
-  if (existing) {
-    return existing
+  if (!setup.references.has(key)) {
+    setup.references.set(key, scope)
   }
-  const handle = `agent-setup-reference:${++sequence}`
-  setup.references.set(key, handle)
-  handles.set(handle, setup)
-  setup.handles.set(handle, {
-    scopeKey: key,
-    active: true,
-    initialScope: scopeOf(initialOwner, agent)
-  })
-  return handle
+  handles.set(scope, setup)
+  setup.handles.set(scope, { scopeKey: key, active: true, initialScope })
+  return setup
 }
 /** Keep each accepted context as a direct captured reference, never a redirect chain. */
 export function associateLaunchDraftContext(
@@ -155,9 +196,6 @@ export function relocateLaunchDraftSource(
         target.references.set(scope, reference)
       }
     }
-    for (const listener of source.optionListeners) {
-      target.optionListeners.add(listener)
-    }
   }
   Object.assign(target, owner, { scopeKey: key })
   for (const [key, handle] of source.handles) {
@@ -171,23 +209,23 @@ export function relocateLaunchDraftSource(
   setups.set(key, target)
   return target
 }
-export const captureLaunchDraftDestination = (scope: string): SetupHandle | undefined =>
-  launchDraftSource(scope)?.handles.values().next().value
+export function captureLaunchDraftDestination(
+  scope: string
+): { readonly scopeKey: string; readonly active: boolean } | undefined {
+  const held = launchDraftSource(scope)?.handles.values().next().value
+  if (held || !referenceOf(scope)) {
+    return held
+  }
+  // Not yet written: the first write retains this reference, which the destination then follows.
+  return {
+    get scopeKey() {
+      return currentDraftScope(scope)
+    },
+    active: true
+  }
+}
 export function readLaunchSetupOptions(scope: string): AgentPickerDraft | undefined {
   return launchDraftSource(scope)?.options
-}
-export function writeLaunchSetupOptions(scope: string, draft: AgentPickerDraft): void {
-  const setup = launchDraftSource(scope)
-  if (setup) {
-    setup.options = draft
-    setup.optionListeners.forEach((listener) => listener())
-  }
-}
-export function subscribeLaunchSetupOptions(scope: string, listener: () => void): () => void {
-  launchDraftSource(scope)?.optionListeners.add(listener)
-  return () => {
-    launchDraftSource(scope)?.optionListeners.delete(listener)
-  }
 }
 export function clearLaunchDraftSourcesForTests(): void {
   handles.clear()
