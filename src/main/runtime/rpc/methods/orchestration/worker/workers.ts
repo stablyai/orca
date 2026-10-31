@@ -109,13 +109,18 @@ export async function startWorker(
     assertHelperStartScope(db, helperCreator, {
       task: existingTask,
       params,
-      ...(followUp ? { followUpOf: followUp.of } : {})
+      ...(followUp ? { followUp } : {})
     })
   }
   if (existingTask) {
     await assertWorkerStartTaskSpecWithinPromptBudget(existingTask.spec)
   }
   if (followUp) {
+    // Acceptance checks depth again; checking it here keeps an already refused start from closing a shell first.
+    db.resolveChildDispatchDepth(
+      resolveDispatchCreator(runtime, params.from, orchestrationCaller),
+      runtime.getNestedWorkerMaxDepth()
+    )
     const placement = await followUp.place(() => {
       if (
         helperCreator &&

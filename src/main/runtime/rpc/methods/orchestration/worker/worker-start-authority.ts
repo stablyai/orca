@@ -9,6 +9,8 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { resolveDispatchCreator } from '../runs/dispatch-creator'
 import { createBoundRun } from '../runs/runs'
 import { ROOT_DISPATCH_DEPTH } from '../../../../../../shared/nested-worker-depth'
+import { parseWorkerTerminalPriorOwnerIds } from '../../../../orchestration/db/pane-key-match'
+import type { WorkerFollowUp } from './worker-follow-up-placement'
 
 export type WorkerStartRunBinding = { run: RunRow; created: boolean }
 
@@ -87,7 +89,7 @@ export function assertHelperStartScope(
   args: {
     task: TaskRow | undefined
     params: { on?: string; terminal?: string }
-    followUpOf?: string
+    followUp?: Pick<WorkerFollowUp, 'of' | 'addressed' | 'custodian'>
   }
 ): void {
   if (args.params.on || args.params.terminal) {
@@ -104,26 +106,72 @@ export function assertHelperStartScope(
       `Task ${args.task.id} was not last run by a helper of Dispatch ${creator.id}; start new helper work with --spec.`
     )
   }
-  if (args.followUpOf) {
-    const prior = db.getDispatchContextById(args.followUpOf)
-    const owner = prior?.creator_dispatch_id
-    const seen = new Set<string>()
-    let ancestor: DispatchContextRow | undefined = creator
-    while (owner && ancestor && ancestor.run_id === prior?.run_id && !seen.has(ancestor.id)) {
-      if (ancestor.id === owner) {
-        return
-      }
-      seen.add(ancestor.id)
-      ancestor = ancestor.follow_up_of_dispatch_id
-        ? db.getDispatchContextById(ancestor.follow_up_of_dispatch_id)
-        : undefined
+  if (args.followUp) {
+    const { of, addressed, custodian } = args.followUp
+    // An accepted Dispatch proves no agent; with none ever placed there is no worker to own.
+    if (!custodian) {
+      throw new OrchestrationError(
+        'worker_not_restartable',
+        `Dispatch ${addressed} has no worker Orca started that it can continue; start new helper work with worker-start --spec. No effects were applied.`,
+        { effectsApplied: false }
+      )
     }
-    throw new OrchestrationError(
-      'task_not_found',
-      `Dispatch ${args.followUpOf} was not last run by this worker's helper. No effects were applied.`,
-      { effectsApplied: false }
-    )
+    const holder = db.getDispatchContextById(custodian)
+    const owner = holder?.run_id === creator.run_id ? holder.creator_dispatch_id : null
+    if (!owner || !continuesDispatch(db, creator, owner)) {
+      const target =
+        of === addressed
+          ? `Dispatch ${addressed}`
+          : `Dispatch ${addressed}'s latest work, Dispatch ${of},`
+      throw new OrchestrationError(
+        'task_not_found',
+        `${target} is not a helper of Dispatch ${creator.id}, so only the coordinator or the worker that started it can give it more work; to hand this to a helper, start new helper work with worker-start --spec. No effects were applied.`,
+        { effectsApplied: false }
+      )
+    }
   }
+}
+
+/** Whether `ancestorId` is `from` or an earlier Dispatch of the same worker in its Run: one it continued with a
+ *  follow-up, or whose exact pane and process it took over. Each hop is read, so another Run in between ends the walk. */
+function continuesDispatch(
+  db: OrchestrationDb,
+  from: DispatchContextRow,
+  ancestorId: string
+): boolean {
+  const seen = new Set<string>()
+  const pending: (DispatchContextRow | undefined)[] = [from]
+  while (pending.length > 0) {
+    const row = pending.pop()
+    if (!row || row.run_id !== from.run_id || seen.has(row.id)) {
+      continue
+    }
+    if (row.id === ancestorId) {
+      return true
+    }
+    seen.add(row.id)
+    for (const id of new Set([row.follow_up_of_dispatch_id, previousCustodian(db, row.id)])) {
+      if (id && !seen.has(id)) {
+        pending.push(db.getDispatchContextById(id))
+      }
+    }
+  }
+  return false
+}
+
+/** The owner right before this Dispatch in its terminal's ordered custody history: whose exact agent it took over. */
+function previousCustodian(db: OrchestrationDb, dispatchId: string): string | undefined {
+  const resource =
+    db.getWorkerTerminalResourceByOwner(dispatchId) ??
+    db.getWorkerTerminalResourceFormerlyOwnedBy(dispatchId)
+  if (!resource) {
+    return undefined
+  }
+  // Unreadable history proves no takeover.
+  const prior = parseWorkerTerminalPriorOwnerIds(resource.prior_owner_dispatch_ids)
+  const owners = prior ? [...prior, resource.owner_dispatch_id] : []
+  const at = owners.indexOf(dispatchId)
+  return at > 0 ? owners[at - 1] : undefined
 }
 
 function fenced(message: string): OrchestrationError {

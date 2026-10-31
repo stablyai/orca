@@ -21,7 +21,12 @@ const ACTIVE_STATUSES: readonly string[] = ['pending', 'dispatched']
 
 export type WorkerFollowUpPlan =
   | { kind: 'steer'; dispatchId: string }
-  | { kind: 'start'; latest: DispatchContextRow; resource: WorkerTerminalResourceRow | undefined }
+  | {
+      kind: 'start'
+      addressed: string
+      latest: DispatchContextRow
+      resource: WorkerTerminalResourceRow | undefined
+    }
 
 export type WorkerFollowUpOutcome =
   | { kind: 'steer'; dispatchId: string }
@@ -59,7 +64,7 @@ export function planWorkerFollowUp(
   ) {
     return latest.id === dispatchId ? undefined : { kind: 'steer', dispatchId: latest.id }
   }
-  return { kind: 'start', latest, resource }
+  return { kind: 'start', addressed: dispatchId, latest, resource }
 }
 
 export async function startWorkerFollowUp(args: {
@@ -77,6 +82,7 @@ export async function startWorkerFollowUp(args: {
   let delivery: WorkerFollowUpDelivery = 'follow_up'
   let reopening = false
   let freshInstead = false
+  let releasedShellOf: string | undefined
   let receipt: unknown
   try {
     receipt = await startWorker(
@@ -90,14 +96,15 @@ export async function startWorkerFollowUp(args: {
       { ...ctx, orchestrationMutation: undefined },
       {
         of: latest.id,
+        addressed: args.plan.addressed,
+        ...(resource ? { custodian: resource.owner_dispatch_id } : {}),
         place: async (assertCreatorCurrent) => {
-          const placement = await chooseWorkerFollowUpPlacement(
-            ctx.runtime,
-            db,
-            latest,
-            resource,
-            assertCreatorCurrent
-          )
+          const placement = await chooseWorkerFollowUpPlacement(ctx.runtime, db, latest, resource, {
+            admit: assertCreatorCurrent,
+            requested: (dispatchId) => {
+              releasedShellOf = dispatchId
+            }
+          })
           delivery = placement.delivery
           const { reopen } = placement
           reopening = Boolean(reopen)
@@ -123,7 +130,7 @@ export async function startWorkerFollowUp(args: {
     if (error instanceof OrchestrationError && error.code === 'follow_up_claimed') {
       return { kind: 'steer', dispatchId: readClaimedDispatchId(error) ?? latest.id }
     }
-    throw error
+    throw releasedShellOf ? afterShellRelease(error, releasedShellOf) : error
   }
   const started = {
     ...(receipt && typeof receipt === 'object' ? receipt : {}),
@@ -140,6 +147,27 @@ export async function startWorkerFollowUp(args: {
     carryWorkerResumeSession(db, started.dispatchId, resource)
   }
   return { kind: 'started', receipt: started }
+}
+
+/** Closing the leftover shell was requested before this refusal and stays requested, so the refusal keeps its cause but not its claim that nothing happened. */
+function afterShellRelease(error: unknown, dispatchId: string): unknown {
+  if (!(error instanceof OrchestrationError)) {
+    return error
+  }
+  const { data } = error
+  if (
+    typeof data !== 'object' ||
+    data === null ||
+    !('effectsApplied' in data) ||
+    data.effectsApplied !== false
+  ) {
+    return error
+  }
+  return new OrchestrationError(
+    error.code,
+    `${error.message.replace(/\s*No [^.]*effects were applied\.$/, '')} The follow-up did not start, but Orca had already asked to close the shell Dispatch ${dispatchId}'s finished agent left behind.`,
+    { ...data, effectsApplied: true }
+  )
 }
 
 function readClaimedDispatchId(error: OrchestrationError): string | undefined {
