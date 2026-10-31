@@ -154,6 +154,10 @@ function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWai
           isLeafPtyProvenAbsent: args.deps.isLeafPtyProvenAbsent,
           isPtyAwaitingUserInput: args.deps.isPtyAwaitingUserInput,
           writePty: args.deps.writePty,
+          lastUserInputAt: args.deps.lastUserInputAt,
+          isOrcaWindowFocused: args.deps.isOrcaWindowFocused,
+          now: args.deps.now,
+          scheduleTypingQuietRetry: args.deps.scheduleTypingQuietRetry,
           settle: args.settle,
           redrive: args.redrive
         },

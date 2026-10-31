@@ -1,3 +1,4 @@
+import { BrowserWindow } from 'electron'
 import { OrchestrationStructuredMailboxPointerDelivery } from '../orchestration/structured-mailbox-pointer-delivery'
 
 import { createStructuredMailboxPointerHost } from '../orchestration/structured-mailbox-pointer-host'
@@ -275,7 +276,10 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     isLeafPtyProvenAbsent: (ptyId) => this.isLeafPtyProvenAbsent(ptyId),
     redriveMailbox: (mailboxHandle, reservedTypes) =>
       this.deliverPendingMessagesForHandle(mailboxHandle, reservedTypes),
-    writePty: (ptyId, data) => this.writeOrchestrationPointerPty(ptyId, data)
+    writePty: (ptyId, data) => this.writeOrchestrationPointerPty(ptyId, data),
+    lastUserInputAt: (ptyId) => this.ptyController?.lastUserInputAt?.(ptyId),
+    isOrcaWindowFocused: () => BrowserWindow.getFocusedWindow?.() != null,
+    now: () => performance.now()
   })
 
   protected readonly orchestrationStructuredMailboxPointerDelivery =

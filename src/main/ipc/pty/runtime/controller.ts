@@ -7,6 +7,7 @@ import {
   resumeLocalAutomaticWork
 } from '../../../daemon/daemon-automatic-work-resume'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { lastInputAtByPty } from '../delivery/visibility-state'
 import { claimRuntimePaneCreate, makePaneSpawnReservationKey } from '../pane/spawn-reservation'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 import { spawnPtyFromRuntimeController } from './spawn'
@@ -68,6 +69,8 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
     write: (ptyId, data, inputKind) => writePtyFromRuntimeController(deps, ptyId, data, inputKind),
     writeWithSettlement: (ptyId, data, inputKind) =>
       writePtyFromRuntimeController(deps, ptyId, data, inputKind, { waitForSettlement: true }),
+    // Why: renderer keystrokes only; orchestration pointer writes must not stamp this.
+    lastUserInputAt: (ptyId) => lastInputAtByPty.get(ptyId),
     probePtyLiveness: (ptyId) => probePtyLivenessFromRuntimeController(deps, ptyId),
     // Attach-only ingestion serves unmounted daemon sessions without creating/resizing; SSH uses leases and local PTYs already stream.
     attach: (ptyId) => attachPtyFromRuntimeController(deps, ptyId),
