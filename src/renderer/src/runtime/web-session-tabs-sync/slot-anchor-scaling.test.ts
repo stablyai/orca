@@ -72,14 +72,16 @@ it('reads this client’s tabs a linear number of times per frame as the workspa
       ...applyWebSessionTabsSnapshot(makeState(), frame(rows, 1), ENV, NOW)
     }
     let count = 0
-    const tabs = new Proxy(shown.unifiedTabsByWorktree[WT]!, {
-      get(target, key, receiver) {
-        if (typeof key === 'string' && /^\d+$/.test(key)) {
+    // Every tab read goes through its index's getter.
+    const tabs = [...shown.unifiedTabsByWorktree[WT]!]
+    tabs.forEach((tab, index) =>
+      Object.defineProperty(tabs, index, {
+        get: () => {
           count += 1
+          return tab
         }
-        return Reflect.get(target, key, receiver)
-      }
-    })
+      })
+    )
     applyWebSessionTabsSnapshot(
       { ...shown, unifiedTabsByWorktree: { [WT]: tabs } },
       frame(rows, 2),

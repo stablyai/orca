@@ -171,7 +171,9 @@ it('stops a paused queue without asking, since nothing is replying', async () =>
   ])
   // Queued before this host opened the conversation: held paused, not handed over.
   vi.spyOn(journal, 'wroteBeforeOpen').mockReturnValue(true)
-  const cancel = vi.spyOn(rig.host, 'cancel').mockResolvedValue({ ok: true, value: {} })
+  const cancel = vi
+    .spyOn(rig.host, 'cancel')
+    .mockResolvedValue({ ok: true, value: { cancelled: true } })
   await rig.host.stopForSwitch(id, caller, deadline, false)
   expect(cancel).toHaveBeenCalledTimes(1)
 })

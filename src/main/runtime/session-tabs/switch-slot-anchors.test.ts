@@ -57,17 +57,19 @@ it('keeps the anchor a first attempt left when a retry after a lost answer place
 it.each([100, 1_000])('stamps %i rows in one pass, and touches none without an anchor', (n) => {
   const ids = Array.from({ length: n }, (_, index) => `tab-${index}`)
   let reads = 0
-  const counted = (snapshot: RuntimeMobileSessionTabsSnapshot) => ({
-    ...snapshot,
-    tabs: new Proxy(snapshot.tabs, {
-      get(target, key, receiver) {
-        if (typeof key === 'string' && /^\d+$/.test(key)) {
+  // Every row read goes through its index's getter.
+  const counted = (snapshot: RuntimeMobileSessionTabsSnapshot) => {
+    const tabs = [...snapshot.tabs]
+    tabs.forEach((row, index) =>
+      Object.defineProperty(tabs, index, {
+        get: () => {
           reads += 1
+          return row
         }
-        return Reflect.get(target, key, receiver)
-      }
-    })
-  })
+      })
+    )
+    return { ...snapshot, tabs }
+  }
   const anchors = new SwitchSlotAnchors()
   anchors.record('elsewhere', 'switched', { after: { tabId: 'source' } })
   const plain = counted(frame(ids))

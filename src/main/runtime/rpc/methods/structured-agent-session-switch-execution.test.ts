@@ -212,7 +212,19 @@ it.each(['single', 'split', 'other-workspace', 'reselected'] as const)(
         })
       : undefined
     const focusEditorTab = vi.fn()
-    runtime.setNotifier({ focusEditorTab })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn(),
+      focusEditorTab
+    })
     const acquisitions = rig.adapter.acquire.mock.calls.length
     const operation = executeStructuredSessionSwitch(
       {
