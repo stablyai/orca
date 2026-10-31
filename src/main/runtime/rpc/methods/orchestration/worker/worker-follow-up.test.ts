@@ -78,6 +78,17 @@ describe('a follow-up to a finished terminal worker', () => {
     })
   })
 
+  it('starts no second worker while its pane cannot yet read the recorded process', async () => {
+    h.setup()
+    const { dispatchId } = await h.startSettledWorker()
+    vi.mocked(h.runtime.getTerminalProcessIncarnation).mockReturnValue(null)
+
+    await expect(send(dispatchId, 'and the docs')).rejects.toMatchObject({
+      code: 'worker_unverifiable'
+    })
+    expect(h.runtime.createTerminal).toHaveBeenCalledTimes(1)
+  })
+
   it('keeps unread mail it could not continue, tells the coordinator, and delivers it with the next send', async () => {
     userDataDir = mkdtempSync(join(tmpdir(), 'orca-follow-up-refused-'))
     h.setup({ userDataDir })

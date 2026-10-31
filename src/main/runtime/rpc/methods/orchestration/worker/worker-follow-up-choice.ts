@@ -117,7 +117,8 @@ async function openWorkerTerminal(
   if (inspected.status === 'unverifiable') {
     throw unverifiable(resource.owner_dispatch_id, inspected.reason ?? 'unknown')
   }
-  if (inspected.status === 'missing' || inspected.status === 'unattached') {
+  // A changed or unread identity proves nothing about the recorded process either.
+  if (['missing', 'unattached', 'identity_changed'].includes(inspected.status)) {
     // Before a restart restores its terminals, a worker that still runs has no handle yet.
     const process = resource.process_incarnation
       ? await runtime.inspectTerminalProcessIncarnationLiveness(

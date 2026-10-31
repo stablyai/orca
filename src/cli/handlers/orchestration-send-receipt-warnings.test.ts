@@ -91,3 +91,20 @@ it('prints delivery limitations on relayed receipts', async () => {
 it('leaves a canonical receipt unchanged', async () => {
   await expect(formatSend({ message: { id: 'msg_1' } })).resolves.toBe('Sent msg_1')
 })
+
+it('names the launch mode for a follow-up only when it started a fresh worker', async () => {
+  const followUp = (delivery: string) =>
+    formatSend({
+      delivery,
+      followUpOf: 'ctx_old',
+      dispatchId: 'ctx_new',
+      taskId: 'task_1',
+      state: 'ready',
+      mode: { detail: 'Started a terminal agent worker.' }
+    })
+
+  expect(await followUp('reopened')).toBe(
+    'Follow-up of ctx_old (reopened)\nWorker ctx_new [ready] for task_1'
+  )
+  expect(await followUp('started_fresh')).toContain('Started a terminal agent worker.')
+})
