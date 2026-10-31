@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import type React from 'react'
 import type { VirtualItem } from '@tanstack/react-virtual'
 import { useAppStore } from '@/store'
+import { useWorktreeChangeSummaryStore } from '@/store/worktree-change-summary'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import type { RenderRow } from '../listing/render-row'
@@ -36,14 +37,17 @@ export function installVisibleReviewCardScrollListener(
   }
 }
 
-export function visibleReviewCardIds(args: {
+type VisibleCardArgs = {
   enabled: boolean
   renderRows: RenderRow[]
   virtualItems: readonly VirtualItem[]
   viewportTop: number
   viewportHeight: number
   isOnScreen?: (id: string) => boolean
-}): string[] {
+}
+
+/** On-screen git workspace rows; bare, archived, and folder rows have no checkout to inspect. */
+export function visibleGitWorktreeCards(args: VisibleCardArgs): Worktree[] {
   if (!args.enabled) {
     return []
   }
@@ -56,42 +60,43 @@ export function visibleReviewCardIds(args: {
     )
     .filter(
       (row) =>
-        (row.repo?.kind ?? 'git') === 'git' &&
-        !row.worktree.isBare &&
-        !row.worktree.isArchived &&
-        Boolean(row.worktree.branch)
+        (row.repo?.kind ?? 'git') === 'git' && !row.worktree.isBare && !row.worktree.isArchived
     )
-    .map((row) => row.worktree.id)
-    .filter((id) => args.isOnScreen?.(id) ?? true)
+    .map((row) => row.worktree)
+    .filter((worktree) => args.isOnScreen?.(worktree.id) ?? true)
 }
 
-export function useVisiblePrRefreshReporting(args: {
-  currentWorktreeId: string | null
-  worktreeMap: Map<string, Worktree>
-  groupBy: WorktreeGroupBy
-  newCardStyle: boolean
+export function visibleReviewCardIds(args: VisibleCardArgs): string[] {
+  return visibleGitWorktreeCards(args)
+    .filter((worktree) => Boolean(worktree.branch))
+    .map((worktree) => worktree.id)
+}
+
+type VisibleCardReportingArgs = {
   renderRows: RenderRow[]
   virtualItems: readonly VirtualItem[]
   scrollRef: React.RefObject<HTMLDivElement | null>
-}): void {
-  const publish = useAppStore((s) => s.setVisibleReviewCardWorktreeIds)
-  const cardProps = useAppStore((s) => s.worktreeCardProperties)
-  const enabled =
-    args.groupBy === 'pr-status' ||
-    (args.newCardStyle
-      ? cardProps.includes('status')
-      : cardProps.includes('pr') || cardProps.includes('ci'))
+}
 
+function useVisibleCardPublisher<T>(
+  args: VisibleCardReportingArgs & {
+    enabled: boolean
+    /** Keep stable: a new identity re-runs the visibility scan. */
+    select: (cardArgs: VisibleCardArgs) => T[]
+    publish: (items: T[]) => void
+  }
+): void {
+  const { enabled, renderRows, virtualItems, scrollRef, select, publish } = args
   useEffect(() => {
     const update = (): void => {
-      const scroll = args.scrollRef.current
+      const scroll = scrollRef.current
       const viewport = scroll?.getBoundingClientRect()
       publish(
         scroll && document.visibilityState === 'visible'
-          ? visibleReviewCardIds({
+          ? select({
               enabled,
-              renderRows: args.renderRows,
-              virtualItems: args.virtualItems,
+              renderRows,
+              virtualItems,
               viewportTop: scroll.scrollTop,
               viewportHeight: scroll.clientHeight,
               isOnScreen: (id) =>
@@ -111,13 +116,37 @@ export function useVisiblePrRefreshReporting(args: {
     }
     update()
     const stopVisibility = installWorktreeVisibleRefreshVisibilityListener(update)
-    const scroll = args.scrollRef.current
+    const scroll = scrollRef.current
     const stopScroll = scroll ? installVisibleReviewCardScrollListener(scroll, update) : () => {}
     return () => {
       stopVisibility()
       stopScroll()
     }
-  }, [enabled, args.renderRows, args.virtualItems, args.scrollRef, publish])
+  }, [enabled, renderRows, virtualItems, scrollRef, select, publish])
 
   useEffect(() => () => publish([]), [publish])
+}
+
+export function useVisiblePrRefreshReporting(
+  args: VisibleCardReportingArgs & {
+    currentWorktreeId: string | null
+    worktreeMap: Map<string, Worktree>
+    groupBy: WorktreeGroupBy
+    newCardStyle: boolean
+  }
+): void {
+  const publish = useAppStore((s) => s.setVisibleReviewCardWorktreeIds)
+  const cardProps = useAppStore((s) => s.worktreeCardProperties)
+  const enabled =
+    args.groupBy === 'pr-status' ||
+    (args.newCardStyle
+      ? cardProps.includes('status')
+      : cardProps.includes('pr') || cardProps.includes('ci'))
+  useVisibleCardPublisher({ ...args, enabled, select: visibleReviewCardIds, publish })
+}
+
+export function useVisibleChangeCardReporting(args: VisibleCardReportingArgs): void {
+  const publish = useWorktreeChangeSummaryStore((s) => s.setVisibleWorktrees)
+  const enabled = useAppStore((s) => s.settings?.showWorktreeUncommittedChanges !== false)
+  useVisibleCardPublisher({ ...args, enabled, select: visibleGitWorktreeCards, publish })
 }

@@ -14,7 +14,10 @@ import { usePendingSidebarReveal } from '../navigation/use-pending-reveal'
 import { usePrimaryActiveWorktreeRow } from '../navigation/use-active-row'
 import { useSidebarRevealHighlight } from '../navigation/use-reveal-highlight'
 import { useVirtualRowMeasurementSync } from './use-row-measurement'
-import { useVisiblePrRefreshReporting } from './use-visible-review-refresh'
+import {
+  useVisibleChangeCardReporting,
+  useVisiblePrRefreshReporting
+} from './use-visible-review-refresh'
 import { useWorkspaceStatusRowDrag } from '../drag/use-status-row-drag'
 import { useWorktreeDragRuntime } from '../drag/use-runtime'
 import { useWorktreeDragSession } from '../drag/use-session'
@@ -296,6 +299,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     virtualItems,
     scrollRef
   })
+  useVisibleChangeCardReporting({ renderRows, virtualItems, scrollRef })
 
   // Keep the ref callback stable so React cannot invoke null teardown mid-drag on ordinary renders.
   const { cancelPendingRevealFrames, clearRevealHighlightFrame, clearRevealHighlightTimeout } =

@@ -22,9 +22,9 @@ import {
 } from './appearance-search'
 import { USAGE_PERCENTAGE_DISPLAY_SETTING_ID } from './appearance-usage-percentage-search'
 import { LeftSidebarAppearanceSetting } from './LeftSidebarAppearanceSetting'
+import { WorktreeListToggleSettings } from './WorktreeListToggleSettings'
 import {
   getLeftSidebarAppearanceEntry,
-  getShowPinnedWorktreesInGroupsEntry,
   getWorkspaceCardLayoutEntry
 } from './appearance-sidebar-search'
 import { translate } from '@/i18n/i18n'
@@ -311,31 +311,7 @@ export function AppearanceWindowSidebarSection({
                     />
                   </SearchableSetting>
 
-                  <SearchableSetting
-                    title={getShowPinnedWorktreesInGroupsEntry().title}
-                    description={getShowPinnedWorktreesInGroupsEntry().description}
-                    keywords={getShowPinnedWorktreesInGroupsEntry().keywords}
-                  >
-                    <SettingsSwitchRow
-                      label={translate(
-                        'auto.components.settings.AppearancePane.showPinnedWorktreesInGroups.title',
-                        'Also show pinned worktrees in their original lists'
-                      )}
-                      // This opt-in duplicates pinned worktrees into natural groups while preserving Pinned.
-                      description={translate(
-                        'auto.components.settings.AppearancePane.showPinnedWorktreesInGroups.description',
-                        'Pinned worktrees stay in Pinned and also appear in All, Project, Status, and PR.'
-                      )}
-                      checked={settings.showPinnedWorktreesInGroups === true}
-                      onChange={() =>
-                        updateSettings({
-                          showPinnedWorktreesInGroups: !(
-                            settings.showPinnedWorktreesInGroups === true
-                          )
-                        })
-                      }
-                    />
-                  </SearchableSetting>
+                  <WorktreeListToggleSettings settings={settings} updateSettings={updateSettings} />
                 </div>
               </div>
             ) : null}

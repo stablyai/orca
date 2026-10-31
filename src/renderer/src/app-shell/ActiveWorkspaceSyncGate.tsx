@@ -1,6 +1,7 @@
 import { useAppStore } from '../store'
 import { useEditorExternalWatch } from '../hooks/useEditorExternalWatch'
 import { useGitStatusPolling } from '../components/right-sidebar/useGitStatusPolling'
+import { useWorktreeChangeSummaryRefresh } from '../components/sidebar/use-worktree-change-summary-refresh'
 import { useWebSessionTabsSync } from '../runtime/web-session-tabs-sync/use-web-session-tabs-sync'
 import { useVisibleReviewRefreshReporting } from './use-visible-review-refresh-reporting'
 
@@ -11,6 +12,7 @@ export function ActiveWorkspaceSyncGate(): null {
   useVisibleReviewRefreshReporting()
   // Poll above the removable sidebar to keep rebase/merge badges fresh; wait for session readiness to protect first paint.
   useGitStatusPolling({ enabled: workspaceSessionReady })
+  useWorktreeChangeSummaryRefresh({ enabled: workspaceSessionReady })
   // Watch files above Explorer so editor changes still arrive on Source Control/Checks.
   useEditorExternalWatch()
   return null

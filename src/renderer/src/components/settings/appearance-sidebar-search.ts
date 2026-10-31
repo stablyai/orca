@@ -123,6 +123,41 @@ export const getShowPinnedWorktreesInGroupsEntry = createLocalizedCatalog(
   })
 )
 
+export const getShowWorktreeUncommittedChangesEntry = createLocalizedCatalog(
+  (): SettingsSearchEntry => ({
+    title: translate(
+      'auto.components.settings.appearance.search.showWorktreeUncommittedChanges.title',
+      'Mark workspaces with uncommitted changes'
+    ),
+    description: translate(
+      'auto.components.settings.appearance.search.showWorktreeUncommittedChanges.description',
+      'Show a stripe on workspace cards whose checkout has uncommitted or untracked changes.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.showWorktreeUncommittedChanges.uncommitted',
+        'uncommitted'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.showWorktreeUncommittedChanges.changes',
+        'changes'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.showWorktreeUncommittedChanges.dirty',
+        'dirty'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.showWorktreeUncommittedChanges.git',
+        'git'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.showWorktreeUncommittedChanges.workspace',
+        'workspace'
+      )
+    ]
+  })
+)
+
 export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
     title: translate('auto.components.settings.appearance.search.155a1e7438', 'Show Tasks Button'),
@@ -189,5 +224,6 @@ export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[
   },
   getWorkspaceCardLayoutEntry(),
   getLeftSidebarAppearanceEntry(),
-  getShowPinnedWorktreesInGroupsEntry()
+  getShowPinnedWorktreesInGroupsEntry(),
+  getShowWorktreeUncommittedChangesEntry()
 ])

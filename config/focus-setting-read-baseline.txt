@@ -116,7 +116,6 @@
 1 src/renderer/src/components/sidebar/SidebarSettingsHelpMenu.tsx
 1 src/renderer/src/components/sidebar/SidebarTaskNavButton.tsx
 2 src/renderer/src/components/sidebar/use-add-repo-host-selection.ts
-1 src/renderer/src/components/sidebar/use-delete-worktree-status-hydration.ts
 1 src/renderer/src/components/sidebar/use-sidebar-host-scope-options.ts
 1 src/renderer/src/components/sidebar/use-visible-workspace-kanban-worktree-ids.ts
 1 src/renderer/src/components/sidebar/use-workspace-kanban-board-projection.ts

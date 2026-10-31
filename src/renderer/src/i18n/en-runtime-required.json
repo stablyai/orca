@@ -915,6 +915,10 @@
           "optionsFilterCount_one": "Workspace options ({{count}} filter)",
           "optionsFilterCount_other": "Workspace options ({{count}} filters)"
         },
+        "WorktreeCardChangesStripe": {
+          "changeCount_one": "1 uncommitted or untracked change",
+          "changeCount_other": "{{count}} uncommitted or untracked changes"
+        },
         "WorkspaceKanbanDrawerHeader": {
           "selectedCount_one": "{{count}} selected",
           "selectedCount_other": "{{count}} selected"

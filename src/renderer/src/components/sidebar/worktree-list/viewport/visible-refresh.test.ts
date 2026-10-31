@@ -4,6 +4,7 @@ import { makePRRefreshWorktree } from '@/store/slices/github-slice-test-harness'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   installWorktreeVisibleRefreshVisibilityListener,
+  visibleGitWorktreeCards,
   visibleReviewCardIds,
   installVisibleReviewCardScrollListener
 } from './use-visible-review-refresh'
@@ -85,6 +86,24 @@ describe('actual visible review cards', () => {
         isOnScreen: (id) => id === 'child'
       })
     ).toEqual(['child'])
+  })
+  it('keeps branchless checkouts for change reads but not for review refresh', () => {
+    const detached = row('detached')
+    detached.worktree = makePRRefreshWorktree({ id: 'detached', branch: '' })
+    const folder = row('folder')
+    folder.repo = folder.repo && { ...folder.repo, kind: 'folder' }
+    const args = {
+      enabled: true,
+      renderRows: [row('branch'), detached, folder],
+      virtualItems: [0, 1, 2].map(virtualItem),
+      viewportTop: 0,
+      viewportHeight: 300
+    }
+    expect(visibleGitWorktreeCards(args).map((worktree) => worktree.id)).toEqual([
+      'branch',
+      'detached'
+    ])
+    expect(visibleReviewCardIds(args)).toEqual(['branch'])
   })
   it('excludes rows when their review decoration is disabled', () => {
     expect(
