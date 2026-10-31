@@ -28,7 +28,7 @@ import {
 } from './structured-worker-identity'
 import { testOrcaSessionId } from '../../shared/orca-session-address-test-fixture'
 import { projectSessionTabsForClient } from './rpc/methods/session-tabs-inventory'
-import { AGENT_SENDER_PANE_READS } from './runtime-agent-sender-history'
+import { AGENT_SENDER_PANE_READS } from './runtime-agent-sender-worker-history'
 import { structuredMailSource } from './orchestration/structured-mail-source'
 import { scaleStore } from './agent-session-scale.test-fixture'
 

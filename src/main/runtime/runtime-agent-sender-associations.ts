@@ -7,13 +7,16 @@ import { isStructuredWorkerHandle } from '../../shared/structured-worker-handle'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import type { RuntimeAgentOrchestrationDependencies } from './runtime-agent-orchestration-projection'
 import {
-  readAgentSenderGeneration,
   readAgentSenderPrincipals,
   readAgentSenderSessions,
-  readAgentSenderWorkers,
   type AgentSenderPane,
   type AgentSenderPrincipal
 } from './runtime-agent-sender-history'
+import {
+  AgentSenderWorkerHistory,
+  type AgentSenderWorkers
+} from './runtime-agent-sender-worker-history'
+import { readAgentSenderGeneration } from './runtime-agent-sender-history-triggers'
 import type { OrchestrationDb } from './orchestration/db'
 import { AgentSenderPublisher, type AgentSenderScope } from './runtime-agent-sender-publication'
 
@@ -32,17 +35,26 @@ const MAX_HANDLE_INCARNATIONS = 4096
  *  separately, only when the facts they read change; status ticks and leases rebuild nothing. */
 export class RuntimeAgentSenderAssociations {
   private database: OrchestrationDb | null = null
-  private history = ''
+  /** Kept per database connection, whose triggers mark what each write can change. */
+  private workerHistory = new AgentSenderWorkerHistory()
+  private principalsRead = ''
   private pairing = -1
   private principals: AgentSenderPrincipal[] = []
   private historyReads = 0
   private chatReads = 0
-  private readonly work = { lineageReads: 0, chatRecords: 0, leafVisits: 0, ptyVisits: 0 }
+  private readonly work = {
+    lineageReads: 0,
+    paneReads: 0,
+    chatRecords: 0,
+    leafVisits: 0,
+    ptyVisits: 0
+  }
   workForTest() {
     return {
       historyReads: this.historyReads,
       chatReads: this.chatReads,
       lineageReads: this.work.lineageReads,
+      paneReads: this.work.paneReads,
       chatRecords: this.work.chatRecords,
       leafVisits: this.work.leafVisits,
       ptyVisits: this.work.ptyVisits
@@ -169,16 +181,23 @@ export class RuntimeAgentSenderAssociations {
 
   private refresh(): void {
     const db = this.deps.getDb()
-    if (db !== this.database) {
+    const install = db !== this.database
+    if (install) {
       this.database = db
-      this.history = ''
+      this.workerHistory = new AgentSenderWorkerHistory()
+      this.principalsRead = ''
       this.principals = []
     }
-    const history = db ? readAgentSenderGeneration(db, this.history === '') : ''
+    const generation = db ? readAgentSenderGeneration(db, install) : null
     const panes = this.livePanes()
     const peerFingerprint = this.deps.peerFingerprint()
     // Primitives compared in place: a status-only build allocates no key string.
-    const terminalKey: unknown[] = [history, this.deps.pairingGeneration(), peerFingerprint]
+    const terminalKey: unknown[] = [
+      generation?.history,
+      generation?.principals,
+      this.deps.pairingGeneration(),
+      peerFingerprint
+    ]
     for (const p of panes.values()) {
       terminalKey.push(p.paneKey, p.worktreeId, p.handle, p.processIncarnation, p.original)
     }
@@ -202,7 +221,7 @@ export class RuntimeAgentSenderAssociations {
       this.chatKey = chatKey
     }
     if (terminalChanged) {
-      this.readTerminals(db, history, panes, terminalKey)
+      this.readTerminals(db, generation?.principals ?? '', panes, terminalKey)
     }
     if (terminalChanged || chatsChanged) {
       this.publisher.publish({
@@ -216,19 +235,20 @@ export class RuntimeAgentSenderAssociations {
 
   private readTerminals(
     db: OrchestrationDb | null,
-    history: string,
+    principalsGeneration: string,
     panes: Map<string, AgentSenderPane & { original: boolean }>,
     key: unknown[]
   ): void {
-    let read: ReturnType<typeof readAgentSenderWorkers> = { workers: [], remote: [] }
+    let read: AgentSenderWorkers = { workers: [], remote: [] }
     try {
       if (db) {
         this.historyReads++
-        read = readAgentSenderWorkers(db, [...panes.values()], this.work)
+        read = this.workerHistory.read(db, [...panes.values()], this.work)
+        // Federated Dispatches and pairings name principals; worker writes never reread them.
         const pairing = this.deps.pairingGeneration()
-        if (history !== this.history || pairing !== this.pairing) {
+        if (principalsGeneration !== this.principalsRead || pairing !== this.pairing) {
           this.principals = readAgentSenderPrincipals(db, this.deps.principal)
-          this.history = history
+          this.principalsRead = principalsGeneration
           this.pairing = pairing
         }
       }
