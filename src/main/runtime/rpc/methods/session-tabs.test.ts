@@ -2,7 +2,7 @@ import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
-import type { OrcaRuntimeService } from '../../orca-runtime'
+import { OrcaRuntimeService } from '../../orca-runtime'
 import {
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
   SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY
@@ -16,18 +16,18 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 
 describe('session tab RPC methods', () => {
   it('routes mobile-only activation without notifying desktop clients', async () => {
-    const runtime = {
-      getRuntimeId: () => 'test-runtime',
-      activateMobileSessionTab: vi.fn().mockResolvedValue({
-        worktree: 'wt-1',
-        publicationEpoch: 'epoch-1',
-        snapshotVersion: 1,
-        activeGroupId: null,
-        activeTabId: 'tab-1',
-        activeTabType: 'terminal',
-        tabs: []
-      })
-    } as unknown as OrcaRuntimeService
+    const runtime = new OrcaRuntimeService()
+    vi.spyOn(runtime, 'getRuntimeId').mockReturnValue('test-runtime')
+    vi.spyOn(runtime, 'listMobileSessionTabs').mockResolvedValue(visibleSnapshot())
+    vi.spyOn(runtime, 'activateMobileSessionTab').mockResolvedValue({
+      worktree: 'wt-1',
+      publicationEpoch: 'epoch-1',
+      snapshotVersion: 1,
+      activeGroupId: null,
+      activeTabId: 'tab-1',
+      activeTabType: 'terminal',
+      tabs: []
+    })
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -78,6 +78,7 @@ describe('session tab RPC methods', () => {
   it('forwards an automatic activation intent to the runtime', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
+      listMobileSessionTabs: vi.fn().mockResolvedValue(visibleSnapshot()),
       activateMobileSessionTab: vi.fn().mockResolvedValue({ tabs: [] })
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
@@ -104,6 +105,7 @@ describe('session tab RPC methods', () => {
   it('passes no intent for a client that omits the field', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
+      listMobileSessionTabs: vi.fn().mockResolvedValue(visibleSnapshot()),
       activateMobileSessionTab: vi.fn().mockResolvedValue({ tabs: [] })
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
