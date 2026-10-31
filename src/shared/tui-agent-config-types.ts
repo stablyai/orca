@@ -51,6 +51,7 @@ export type TuiAgentConfig = {
     | 'antigravity'
     | 'qoder'
     | 'qoder-cn'
+    | 'codewhale'
     | 'kimi'
   /** Agent-specific signal that the composer is ready for paste, stronger than the default quiet-render window. */
   draftPasteReadySignal?: DraftPasteMarkerSignal

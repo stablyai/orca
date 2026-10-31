@@ -13,6 +13,7 @@ import {
   titleHasAgentName
 } from './agent-title-core'
 import { isDeepSeekBuildTerminalTitle } from './dsb-terminal-title'
+import { isCodewhaleTerminalTitle } from './codewhale-terminal-title'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
 import {
   getPiCompatibleSyntheticAgentLabel,
@@ -74,6 +75,9 @@ function computeAgentLabel(title: string): string | null {
   const piBrand = getPiStateTitleBrand(title) ?? getPiCompatibleTitleBrand(title)
   if (piBrand) {
     return piBrand
+  }
+  if (isCodewhaleTerminalTitle(title)) {
+    return 'Codewhale'
   }
   if (isQoderTerminalTitle(title)) {
     return title.includes('Qoder CLI CN') ? 'Qoder CLI CN' : 'Qoder CLI'

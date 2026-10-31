@@ -34,13 +34,15 @@ const PRESETS: readonly AgentTrustPreset[] = [
   'copilot',
   'qoder',
   'antigravity',
+  'codewhale',
   'kimi'
 ]
 const INHERITING_PRESETS: readonly AgentTrustPreset[] = ['claude', 'copilot', 'qoder']
 const EXACT_OR_SELF_LIMITING_PRESETS: readonly AgentTrustPreset[] = [
   'codex',
   'cursor',
-  'antigravity'
+  'antigravity',
+  'codewhale'
 ]
 
 let root: string
@@ -77,6 +79,23 @@ describe('applyWorkspaceTrustOnThisHost', () => {
     mkdirSync(workspace, { recursive: true })
     await applyWorkspaceTrustOnThisHost(preset, workspace, thisHost())
     expect(trustWritten(preset)).toBe(true)
+    if (preset === 'codewhale') {
+      for (const codewhaleEnv of [
+        { CODEWHALE_HOME: join(root, 'custom-home') },
+        { CODEWHALE_CONFIG_PATH: join(root, 'custom-config.toml') },
+        {
+          CODEWHALE_HOME: join(root, 'ignored-home'),
+          CODEWHALE_CONFIG_PATH: join(root, 'override.toml')
+        },
+        { CODEWHALE_CONFIG_PATH: '~/tilde-config.toml' }
+      ]) {
+        await applyWorkspaceTrustOnThisHost(preset, workspace, thisHost({ codewhaleEnv }))
+        const file =
+          codewhaleEnv.CODEWHALE_CONFIG_PATH?.replace(/^~\//, `${state.home}/`) ??
+          join(codewhaleEnv.CODEWHALE_HOME!, 'config.toml')
+        expect(readFileSync(file, 'utf-8')).toContain(`[projects."${workspace}"]`)
+      }
+    }
   })
 
   const tooBroad: [string, () => { workspace: string; homes?: string[] }][] = [

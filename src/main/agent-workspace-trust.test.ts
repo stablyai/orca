@@ -21,6 +21,9 @@ const mocks = vi.hoisted(() => ({
   antigravity: vi.fn<(path: string, home: string) => void>(),
   qoder: vi.fn<(path: string, home: string) => void>(),
   kimi: vi.fn<(path: string, kimiHome: string) => void>(),
+  codewhale: vi.fn<
+    (path: string, home: string, env: Record<string, string | undefined>) => Promise<void>
+  >(async () => {}),
   codexConfigFiles: vi.fn<(agentHome: string) => string[]>(() => CODEX_CONFIG_FILES),
   claudeGrant: vi.fn<typeof ClaudeFolderTrustFile.grantClaudeWorkspaceTrust>()
 }))
@@ -30,7 +33,8 @@ vi.mock('./agent-trust-presets', () => ({
   markCursorWorkspaceTrusted: mocks.cursor,
   markCopilotFolderTrusted: mocks.copilot,
   markAntigravityWorkspaceTrusted: mocks.antigravity,
-  markKimiWorkspaceTrusted: mocks.kimi
+  markKimiWorkspaceTrusted: mocks.kimi,
+  markCodewhaleProjectTrusted: mocks.codewhale
 }))
 vi.mock('./codex/codex-home-paths', () => ({
   getLocalCodexTrustConfigFiles: mocks.codexConfigFiles
@@ -91,7 +95,12 @@ describe('applyAgentWorkspaceTrust on this machine', () => {
   it('writes per-user trust under the home the launch env names, where the agent reads it', async () => {
     const context = {
       ...local,
-      env: { HOME: '/home/agent', USERPROFILE: '/home/agent' },
+      env: {
+        HOME: '/home/agent',
+        USERPROFILE: '/home/agent',
+        CODEWHALE_HOME: '/custom/codewhale',
+        CODEWHALE_CONFIG_PATH: '/custom/codewhale.toml'
+      },
       codexHome: '/orca/codex-accounts/acct-1/home'
     }
     for (const preset of ['codex', 'cursor', 'copilot', 'qoder', 'antigravity'] as const) {
@@ -104,6 +113,15 @@ describe('applyAgentWorkspaceTrust on this machine', () => {
     for (const writer of [mocks.cursor, mocks.copilot, mocks.qoder, mocks.antigravity]) {
       expect(writer).toHaveBeenCalledWith(WORKSPACE, '/home/agent')
     }
+    await applyAgentWorkspaceTrust('codewhale', WORKSPACE, context)
+    expect(mocks.codewhale).toHaveBeenCalledWith(
+      WORKSPACE,
+      '/home/agent',
+      expect.objectContaining({
+        CODEWHALE_HOME: '/custom/codewhale',
+        CODEWHALE_CONFIG_PATH: '/custom/codewhale.toml'
+      })
+    )
   })
 
   it("writes Kimi trust under the launch env's KIMI_CODE_HOME, else its ~/.kimi-code", async () => {

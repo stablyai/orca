@@ -41,7 +41,9 @@ export const YOLO_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
   devin: '--permission-mode bypass --respect-workspace-trust false',
   ante: '--yolo',
   trae: '--yolo',
-  droid: '--auto high'
+  droid: '--auto high',
+  // Why: full access in Codewhale is the approval policy plus an unsandboxed shell.
+  codewhale: '--approval-policy never --sandbox-mode danger-full-access'
 }
 
 export const YOLO_TUI_AGENT_ENV: Partial<Record<TuiAgent, Record<string, string>>> = {
