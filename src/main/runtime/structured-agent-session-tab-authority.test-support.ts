@@ -77,7 +77,7 @@ export async function authorityProfile(
     folderPath: root,
     name: 'Chat owner'
   })
-  const workspace = folderWorkspaceKey(folder.id)
+  const workspace: string = folderWorkspaceKey(folder.id)
   const records = (options.records ?? ids.filter((id) => id !== G)).map((id) => {
     const record = agentSessionRecordFixture(
       agentSessionLeaseFixture({

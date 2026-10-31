@@ -1,23 +1,26 @@
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
-import { makeWorkspaceLineage } from '../persistence/persistence-test-harness'
-import * as folderTeardown from './folder-workspace-pty-teardown'
-import * as pathPresence from '../local-worktree-path-presence'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../src/shared/constants'
+import { makeWorkspaceLineage } from '../../src/main/persistence/persistence-test-harness'
+import * as folderTeardown from '../../src/main/runtime/folder-workspace-pty-teardown'
+import * as pathPresence from '../../src/main/local-worktree-path-presence'
 import { mkdir } from 'node:fs/promises'
 import { basename } from 'node:path'
-import * as worktreePaths from '../git/worktree-path-comparison'
-import * as gitRemoval from '../git/worktree-removal'
-import * as pushTargetCleanup from '../ipc/worktree-remote'
-import { finishRuntimeLocalWorktreeRemoval } from './runtime-registered-local-worktree-removal'
-import { getRuntimeFolderWorkspaceInstanceId } from './runtime-folder-workspace'
-import './rpc/unused-default-rpc-methods.test-fixture'
+import * as worktreePaths from '../../src/main/git/worktree-path-comparison'
+import * as gitRemoval from '../../src/main/git/worktree-removal'
+import * as pushTargetCleanup from '../../src/main/ipc/worktree-remote'
+import { finishRuntimeLocalWorktreeRemoval } from '../../src/main/runtime/runtime-registered-local-worktree-removal'
+import { getRuntimeFolderWorkspaceInstanceId } from '../../src/main/runtime/runtime-folder-workspace'
+import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { expect, it, vi } from 'vitest'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
-import { openAgentSessionJournal } from '../native-chat/agent-session-journal/journal-store-factory'
-import { RpcDispatcher } from './rpc/dispatcher'
-import { STRUCTURED_AGENT_SESSION_REVEAL_METHODS } from './rpc/methods/structured-agent-session-reveal'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
-import { acquireWatcherRemovalGate, beginWatcherInstall } from '../ipc/watcher-removal-gate'
-import { chatTabCommandsSettled } from './session-layout-apply.test-fixture'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../src/shared/agent-session-journal-types'
+import { openAgentSessionJournal } from '../../src/main/native-chat/agent-session-journal/journal-store-factory'
+import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
+import { STRUCTURED_AGENT_SESSION_REVEAL_METHODS } from '../../src/main/runtime/rpc/methods/structured-agent-session-reveal'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../src/shared/protocol-version'
+import {
+  acquireWatcherRemovalGate,
+  beginWatcherInstall
+} from '../../src/main/ipc/watcher-removal-gate'
+import { chatTabCommandsSettled } from '../../src/main/runtime/session-layout-apply.test-fixture'
 import {
   root,
   B,
@@ -25,26 +28,26 @@ import {
   openAuthorityRuntime,
   savedIds,
   AuthorityRuntime
-} from './structured-agent-session-tab-authority.test-support'
-import { removalPtyProvider } from './rpc/worktree-rm-pty.test-fixture'
-import type { DurableProfileStateMutation } from '../persistence/loading-store/store-runtime-state'
-import * as publication from './session-tabs/structured-session-tab-publication'
+} from '../../src/main/runtime/structured-agent-session-tab-authority.test-support'
+import { removalPtyProvider } from '../../src/main/runtime/rpc/worktree-rm-pty.test-fixture'
+import type { DurableProfileStateMutation } from '../../src/main/persistence/loading-store/store-runtime-state'
+import * as publication from '../../src/main/runtime/session-tabs/structured-session-tab-publication'
 import {
   readPersistedTestAgentSessionStore,
   seedTestAgentSessionRecordStore
-} from './agent-session-record-store-test-harness'
-import { storeRepo } from './runtime-store-partial-fixture'
-import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
-import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
-import { openMobileAgentHistoryChat } from '../../../mobile/src/agent-history/open-mobile-agent-history-chat'
-import { hostRouteWithNotice } from '../../../mobile/src/host-route-notice'
-import type { RpcClient } from '../../../mobile/src/transport/rpc-client'
-import type { AiVaultSession } from '../../shared/ai-vault-types'
+} from '../../src/main/runtime/agent-session-record-store-test-harness'
+import { storeRepo } from '../../src/main/runtime/runtime-store-partial-fixture'
+import { hostWorktreeTarget } from '../../src/shared/worktree/host-qualified-identity'
+import type { RuntimeWorktreeScanResult } from '../../src/main/runtime/repo-worktree-resolution-scan'
+import { openMobileAgentHistoryChat } from '../../mobile/src/agent-history/open-mobile-agent-history-chat'
+import { hostRouteWithNotice } from '../../mobile/src/host-route-notice'
+import type { RpcClient } from '../../mobile/src/transport/rpc-client'
+import type { AiVaultSession } from '../../src/shared/ai-vault-types'
 
-vi.mock('../claude/claude-cli-flag-prewarm', () => ({
+vi.mock('../../src/main/claude/claude-cli-flag-prewarm', () => ({
   prewarmClaudeCliFlags: async () => undefined
 }))
-vi.mock('../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
+vi.mock('../../src/shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
 type Rig = Awaited<ReturnType<typeof openAuthorityRuntime>>
 function phoneClient(rig: Rig): RpcClient {
