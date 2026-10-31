@@ -21,7 +21,8 @@ export async function executeStructuredSessionTerminalSwitch(
   ctx: RpcContext,
   host: StructuredAgentSessionHost,
   sessionId: string,
-  deadline: AgentSessionSwitchDeadline
+  deadline: AgentSessionSwitchDeadline,
+  providerSessionId?: string | null
 ): Promise<AgentSessionSwitchResult> {
   const agent = record.provider
   if (!isTuiAgent(agent)) {
@@ -30,6 +31,12 @@ export async function executeStructuredSessionTerminalSwitch(
     })
   }
   const execution = SwitchToTerminalParams.parse(params).execution
+  // Admission before the chat stops, as in the other direction: a live agent the status store
+  // shows holding this conversation (a CLI resumed by hand) refuses. The chat being stopped has no
+  // pane, so every pane counts.
+  if (providerSessionId) {
+    await ctx.runtime.assertNoCliWriterOutsideSwitchSource(agent, providerSessionId, undefined)
+  }
   // Saved turns are history the terminal must read: an unreadable transcript refuses before the
   // chat is stopped. A chat whose first reply is still landing is read after the stop.
   if (nativeConversationContent(await host.journalSnapshot(sessionId)) === 'saved') {

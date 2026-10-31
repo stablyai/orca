@@ -79,7 +79,8 @@ export async function executeStructuredSessionSwitch(
             ctx,
             host,
             sessionId,
-            deadline
+            deadline,
+            prepared.providerSessionId
           )
         }
         const result = await switchToChat(params, ctx, prepared, sessionId, deadline, keepSource)

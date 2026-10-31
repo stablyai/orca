@@ -445,6 +445,47 @@ it('puts the switched terminal in the chat tab’s slot and closes the chat tab,
   ).toBe(false)
 })
 
+it('refuses before stopping the chat while the status store shows a CLI holding its conversation', async () => {
+  await savedTranscript(rig)
+  const nativeId = rig.store.getRecord(id)!.providerHandleChain.at(-1)!.handle.nativeId
+  const { runtime } = setupMainOwnedWorkspace({
+    runtimeDeps: {
+      readHookCliWriterObservation: () => ({
+        current: () => true,
+        presence: async () => 'live',
+        topology: 'pane-owned'
+      })
+    }
+  })
+  // The user resumed this conversation by hand in another terminal.
+  vi.spyOn(runtime, 'getAgentProviderSessionRows').mockReturnValue([
+    {
+      paneKey: 'other-tab:other-leaf',
+      worktreeId: WORKTREE_ID,
+      connectionId: null,
+      agentType: 'codex',
+      receivedAt: 1,
+      stateStartedAt: 1,
+      state: 'done',
+      prompt: '',
+      providerSession: { key: 'session_id', id: nativeId }
+    }
+  ])
+  const stop = vi.spyOn(rig.host, 'stopForSwitch')
+  const spawn = vi.spyOn(runtime, 'spawnSwitchTerminal')
+  const result = await executeStructuredSessionSwitch(
+    { sessionId: id, execution: { invocationId: 'to-terminal-held' } },
+    { runtime },
+    'terminal'
+  )
+  expect(result).toMatchObject({
+    status: 'refused',
+    refusal: { code: 'agent_session_conflict', details: { reason: 'conversationHeldElsewhere' } }
+  })
+  expect(stop).not.toHaveBeenCalled()
+  expect(spawn).not.toHaveBeenCalled()
+})
+
 it('refuses a chat whose saved history it cannot read before stopping the chat', async () => {
   const { runtime } = setupMainOwnedWorkspace()
   await savedTranscript(rig)
