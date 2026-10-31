@@ -276,8 +276,8 @@ function operationTransport(overrides: Partial<NativeChatStructuredComposerTrans
     optionsSurface: {
       getSnapshot: () => [],
       subscribe: () => () => {},
-      invokeAction,
-      setOption: async () => true
+      invokeAction: async () => ({ snapshot: [] }),
+      setOption: async () => ({ snapshot: [] })
     },
     optionSnapshot: [],
     onError: vi.fn(),
