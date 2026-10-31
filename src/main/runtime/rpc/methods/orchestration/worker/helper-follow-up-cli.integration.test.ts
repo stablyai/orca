@@ -98,7 +98,6 @@ describe('helper follow-ups through CLI argv, RPC and SQLite', () => {
     'creator settled',
     'depth lowered',
     'assembled spec too large',
-    'coordinator spec too large',
     'no agent to start'
   ] as const)(
     'says the leftover shell was closed when a later check refuses: %s',
@@ -133,17 +132,12 @@ describe('helper follow-ups through CLI argv, RPC and SQLite', () => {
           .run(helper.dispatchId)
       }
       const before = effects()
-      const { error } = await follow(
-        refusal === 'coordinator spec too large' ? 'term_coord' : 'term_worker',
-        helper.dispatchId,
-        body
-      )
+      const { error } = await follow('term_worker', helper.dispatchId, body)
       expect(error).toMatchObject({
         code: {
           'creator settled': 'consumer_fenced',
           'depth lowered': 'nested_worker_depth_exceeded',
           'assembled spec too large': 'worker_prompt_too_large',
-          'coordinator spec too large': 'worker_prompt_too_large',
           'no agent to start': 'worker_not_restartable'
         }[refusal],
         message: expect.stringContaining(
@@ -280,9 +274,18 @@ describe('helper follow-ups through CLI argv, RPC and SQLite', () => {
     await start('term_coord', 'term_worker')
     otherRun()
     vi.mocked(h.runtime.isTerminalRunningAgent).mockResolvedValue(false)
-    for (const from of ['term_worker', 'term_other_coord', 'term_unattached']) {
+    const refusals = {
+      // Coordinator work has no worker creator, so it is no worker's helper.
+      term_worker: 'is not a helper of Dispatch',
+      term_other_coord: 'This caller coordinates Run',
+      term_unattached: 'worker-start needs the coordinator bound to the Run'
+    }
+    for (const [from, message] of Object.entries(refusals)) {
       const before = effects()
-      expect((await follow(from, target.dispatchId)).error).toBeDefined()
+      expect((await follow(from, target.dispatchId)).error).toMatchObject({
+        code: from === 'term_worker' ? 'task_not_found' : 'consumer_fenced',
+        message: expect.stringContaining(message)
+      })
       expect(effects()).toEqual(before)
     }
   })
