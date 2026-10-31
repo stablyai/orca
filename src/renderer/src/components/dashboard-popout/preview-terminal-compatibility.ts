@@ -1,4 +1,4 @@
-import type { ILinkHandler, Terminal } from '@xterm/xterm'
+import type { Terminal } from '@xterm/xterm'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { activateOrcaTerminalUnicodeProvider } from '../../../../shared/terminal-unicode-provider'
@@ -7,13 +7,16 @@ import { attachTerminalMouseWheelMultiplier } from '@/lib/pane-manager/pane-term
 import { configureLazyArabicShapingJoiner } from '@/lib/pane-manager/terminal-arabic-shaping-joiner'
 import { installTerminalImeCandidateAnchor } from '@/lib/pane-manager/terminal-ime-candidate-anchor'
 import { normalizeTerminalTuiMouseWheelMultiplier } from '@/lib/pane-manager/pane-terminal-tui-wheel-reports'
-import { installPreviewTerminalLinks } from './preview-terminal-links'
+import {
+  installPreviewTerminalLinks,
+  type PreviewTerminalLinkHandlers
+} from './preview-terminal-links'
 import { syncPreviewTerminalLigatures } from './preview-terminal-ligatures'
 
 /** Match pane compatibility; dispose DOM bindings before replacing or disposing the terminal. */
 export function installPreviewTerminalCompatibility(
   terminal: Terminal,
-  deps: { getSettings: () => GlobalSettings | null; linkHandlers?: ILinkHandler }
+  deps: { getSettings: () => GlobalSettings | null; linkHandlers?: PreviewTerminalLinkHandlers }
 ): () => void {
   // Load Unicode 11 before its width shim and any replay; earlier writes bake wide characters into default v6 widths.
   terminal.loadAddon(new Unicode11Addon())

@@ -1,6 +1,21 @@
 // @vitest-environment happy-dom
-import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render as renderWithoutApp,
+  waitFor
+} from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import type { RemoteRuntimeMultiplexedTerminalCallbacks } from '@/runtime/remote-runtime-terminal-multiplexer-types'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { resetRemoteRuntimeTerminalPreviewSessionsForTests } from './remote-runtime-terminal-preview-api'
+import {
+  installPreviewDomFixture,
+  observePreviewListeners,
+  mountPreviewLinkInteraction
+} from './dashboard-preview-dom-test-fixture'
 import { Terminal } from '@xterm/xterm'
 import { toast } from 'sonner'
 import { runtimeStatuses } from '@/store/slices/browser-slice-test-harness'
@@ -23,11 +38,42 @@ import { terminalPreviewApiFor } from './terminal-preview-api'
 import { AgentKanbanBoard } from './AgentKanbanBoard'
 import { AgentTerminalPanel } from './AgentTerminalDialog'
 import { handleTerminalHttpLink } from '@/components/terminal-pane/terminal-url-link-hit-testing'
-import type { DashboardPreviewLinkSource } from './dashboard-preview-http-actions'
-import { installDashboardPreviewLinkInteraction } from './dashboard-preview-link-interaction'
 import type { DashboardCard } from '../../../../shared/dashboard-snapshot'
 
-const mocks = vi.hoisted(() => ({ getState: vi.fn(), subscribe: vi.fn() }))
+const mocks = vi.hoisted(() => ({
+  getState: vi.fn(),
+  subscribe: vi.fn(),
+  remote: new Map<string, RemoteRuntimeMultiplexedTerminalCallbacks>()
+}))
+vi.mock('@/runtime/remote-runtime-terminal-multiplexer', () => ({
+  getRemoteRuntimeTerminalMultiplexer: (environmentId: string) => ({
+    subscribeTerminal: async ({
+      terminal,
+      callbacks
+    }: {
+      terminal: string
+      callbacks: RemoteRuntimeMultiplexedTerminalCallbacks
+    }) => {
+      const ptyId = `remote:${environmentId}@@${terminal}`
+      mocks.remote.set(ptyId, callbacks)
+      queueMicrotask(() => callbacks.onSnapshot('', { cols: 80, rows: 8, seq: 1 }))
+      return {
+        sendInput: (data: string) => input(ptyId, data),
+        claimViewport: () => true,
+        serializeBufferOutcome: async () => ({
+          availability: { kind: 'snapshot' },
+          snapshot: { data: '', cols: 80, rows: 8, seq: 1 }
+        }),
+        close: () => {
+          mocks.remote.delete(ptyId)
+        }
+      }
+    }
+  })
+}))
+function render(ui: React.ReactElement) {
+  return renderWithoutApp(ui, { wrapper: TooltipProvider })
+}
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(
     (selector: (state: ReturnType<typeof mocks.getState>) => unknown) => selector(mocks.getState()),
@@ -50,6 +96,7 @@ const instances: ReturnType<typeof openStandaloneTerminal>[] = []
 const input = vi.fn(async (_pty: string, _data: string) => true)
 const openUrl = vi.fn(async (_url: string) => {})
 let onData: ((payload: unknown) => void) | undefined
+let disposeDom: () => void
 const source = {
   worktreeId: WORKSPACE,
   executionHostId: 'local',
@@ -82,34 +129,7 @@ beforeEach(() => {
     })
     return outcome.status === 'opened' ? outcome.result.browserPageId : null
   })
-  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(() => {
-    const context: CanvasRenderingContext2D = Object.create(null)
-    context.font = '13px monospace'
-    context.measureText = () => Object.assign(Object.create(null), { width: 10 })
-    return context
-  })
-  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
-    this: HTMLElement
-  ) {
-    return new DOMRect(
-      0,
-      0,
-      this.classList.contains('xterm-char-measure-element') ? 10 : 800,
-      this.classList.contains('xterm-char-measure-element') ? 20 : 160
-    )
-  })
-  vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(800)
-  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(160)
-  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(800)
-  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(160)
-  vi.stubGlobal(
-    'ResizeObserver',
-    class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    }
-  )
+  disposeDom = installPreviewDomFixture()
   Object.assign(window.api, {
     shell: { ...window.api.shell, openUrl },
     terminalPreview: {
@@ -142,6 +162,8 @@ afterEach(() => {
     instance?.dispose()
   }
   registerWorkspaceHttpLinkBrowserOpener(null)
+  resetRemoteRuntimeTerminalPreviewSessionsForTests()
+  disposeDom()
   vi.restoreAllMocks()
   vi.clearAllMocks()
   vi.unstubAllGlobals()
@@ -169,7 +191,17 @@ function pointer(screen: HTMLElement, type: string, options: MouseEventInit = {}
 }
 async function output(data: string, ptyId = 'pty-1') {
   const ack = vi.spyOn(terminalPreviewApiFor(ptyId), 'ack').mockClear()
-  act(() => onData?.({ type: 'data', ptyId, data, bytes: data.length }))
+  act(() => {
+    if (parseRemoteRuntimePtyId(ptyId)) {
+      const callbacks = mocks.remote.get(ptyId)
+      if (!callbacks) {
+        throw new Error('Missing selected remote preview subscription')
+      }
+      callbacks.onData(data)
+    } else {
+      onData?.({ type: 'data', ptyId, data, bytes: data.length })
+    }
+  })
   await waitFor(() => expect(ack).toHaveBeenCalledExactlyOnceWith(ptyId, data.length))
 }
 const osc = `\x1b]8;;${URL_TO_OPEN}\x07hidden label\x1b]8;;\x07`
@@ -284,6 +316,7 @@ it.each([false, true])(
     const foreground = vi.fn()
     seedRemoteWorkspace(hostId, 'hub-a', streaming)
     const props = { ptyId, linkSource, onBrowserForeground: foreground }
+    const connect = vi.spyOn(terminalPreviewApiFor(ptyId), 'connect')
     const view = render(<AgentTerminalPreview {...props} />)
     await waitFor(() => screenFor(view.container))
     await output(osc, ptyId)
@@ -309,7 +342,7 @@ it.each([false, true])(
         linkSource={{ ...linkSource, ptyId: wrongPtyId }}
       />
     )
-    await waitFor(() => expect(window.api.terminalPreview.connect).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(connect).toHaveBeenCalledTimes(2))
     await output(osc, wrongPtyId)
     const wrongScreen = screenFor(view.container)
     pointer(wrongScreen, 'mousedown', { ctrlKey: true })
@@ -414,6 +447,8 @@ it.each([false, true])(
     terminal.input('ordinary')
     expect(send).toHaveBeenLastCalledWith('ordinary')
     const screen = screenFor(container)
+    pointer(screen, 'mousemove', { buttons: 0 })
+    await waitFor(() => expect(terminal.element?.getAttribute('title')).toBe(URL_TO_OPEN))
     pointer(screen, 'mousedown', { ctrlKey: true })
     pointer(screen, 'mouseup', { ctrlKey: true })
     await waitFor(() => expect(openUrl).toHaveBeenCalledWith(URL_TO_OPEN))
@@ -430,55 +465,45 @@ it.each([false, true])(
     pointer(screen, 'mousedown', { clientY: 27 })
     pointer(screen, 'mouseup', { clientY: 27 })
     expect(openUrl).toHaveBeenCalledTimes(2)
+    const injected = mountedInteraction()
+    const injectedInteraction = injected.install()
+    const raw = 'https:example.com'
+    for (const current of [instance, injected.instance]) {
+      const term = current.terminal
+      const target = screenFor(term.element!.parentElement!)
+      pointer(target, 'mouseleave')
+      await new Promise<void>((resolve) =>
+        current.write(`\x1b[2J\x1b[H\x1b]8;;${raw}\x07Link\x1b]8;;\x07`, {
+          live: true,
+          onDone: resolve
+        })
+      )
+      pointer(target, 'mousemove', { buttons: 0 })
+      await waitFor(() => expect(term.element?.getAttribute('title')).toBe(raw))
+      term.select(0, 0, 4)
+      const clear = vi.spyOn(term, 'clearSelection')
+      pointer(target, 'mousedown', { ctrlKey: true })
+      pointer(target, 'mouseup', { ctrlKey: true })
+      await waitFor(() => expect(openUrl).toHaveBeenLastCalledWith(raw))
+      expect(clear).toHaveBeenCalled()
+      expect(term.hasSelection()).toBe(false)
+      clear.mockRestore()
+    }
+    expect(openUrl.mock.calls.map(([url]) => url)).toEqual([URL_TO_OPEN, URL_TO_OPEN, raw, raw])
+    expect(injected.request).not.toHaveBeenCalled()
+    expect(document.querySelector('[data-link-action-popover]')).toBeNull()
+    injectedInteraction.dispose()
     instance.dispose()
     container.remove()
   }
 )
 
 function mountedInteraction() {
-  const container = document.createElement('div')
-  document.body.appendChild(container)
-  let interaction: ReturnType<typeof installDashboardPreviewLinkInteraction> | undefined
-  const sink = vi.fn<(data: string) => boolean | Promise<boolean>>(() => true)
-  const instance = openStandaloneTerminal({
-    container,
-    options: { cols: 80, rows: 8, allowProposedApi: true },
-    kittyKeyboardModes: new TerminalKittyKeyboardModeTracker({ kittyKeyboard: true }),
-    sessionKey: source.ptyId,
-    sendInput: (data) => (interaction ? interaction.sendInput(data) : sink(data)),
-    answersQueries: false,
-    getSettings: () => store.getState().settings,
-    getMacOptionAsAlt: () => 'false',
-    getTerminalInput: () => null,
-    linkHandlers: {
-      activate: (e, uri, range) => interaction?.handlers.activate(e, uri, range),
-      hover: (e, uri, range) => interaction?.handlers.hover?.(e, uri, range),
-      leave: (e, uri, range) => interaction?.handlers.leave?.(e, uri, range)
-    }
-  })
-  if (!instance) {
-    throw new Error('Actual standalone constructor failed')
-  }
-  const request = vi.fn()
-  const getSource = vi.fn<() => DashboardPreviewLinkSource | undefined>(() => source)
-  const getSettings = vi.fn(() => store.getState().settings)
-  const install = () => {
-    interaction = installDashboardPreviewLinkInteraction(instance.terminal, {
-      getSource,
-      getSettings,
-      onForegroundOpen: () => undefined,
-      request,
-      sendInput: sink
-    })
-    return interaction
-  }
-  const dispose = () => {
-    interaction?.dispose()
-    instance.dispose()
-    container.remove()
-  }
-  instances.push({ ...instance, dispose })
-  return { instance, install, sink, getSource, getSettings, request, container }
+  return mountPreviewLinkInteraction(
+    source,
+    () => store.getState().settings,
+    (instance) => instances.push(instance)
+  )
 }
 
 it.each([10, 100])(
@@ -487,66 +512,14 @@ it.each([10, 100])(
     const provider = vi.spyOn(Terminal.prototype, 'registerLinkProvider')
     const previews = Array.from({ length: population }, mountedInteraction)
     expect(provider).toHaveBeenCalledTimes(population)
-    const nativeAdd = EventTarget.prototype.addEventListener
-    const nativeRemove = EventTarget.prototype.removeEventListener
-    type Registration = {
-      target: EventTarget
-      type: string
-      listener: EventListenerOrEventListenerObject
-      capture: boolean
-      wrapped: EventListener
-    }
-    const active = new Set<Registration>()
-    let callbacks = 0
-    const add = vi.spyOn(EventTarget.prototype, 'addEventListener').mockImplementation(function (
-      this: EventTarget,
-      type,
-      listener,
-      options
-    ) {
-      if (!listener) {
-        return
-      }
-      const wrapped: EventListener = function (event) {
-        if (this === document || this === window) {
-          callbacks++
-        }
-        if (typeof listener === 'function') {
-          listener.call(this, event)
-        } else {
-          listener.handleEvent(event)
-        }
-      }
-      active.add({
-        target: this,
-        type,
-        listener,
-        capture: typeof options === 'boolean' ? options : Boolean(options?.capture),
-        wrapped
-      })
-      nativeAdd.call(this, type, wrapped, options)
-    })
-    const remove = vi
-      .spyOn(EventTarget.prototype, 'removeEventListener')
-      .mockImplementation(function (this: EventTarget, type, listener, options) {
-        const capture = typeof options === 'boolean' ? options : Boolean(options?.capture)
-        const registration = [...active].find(
-          (r) =>
-            r.target === this && r.type === type && r.listener === listener && r.capture === capture
-        )
-        if (registration) {
-          nativeRemove.call(this, type, registration.wrapped, options)
-          active.delete(registration)
-        } else {
-          nativeRemove.call(this, type, listener, options)
-        }
-      })
+    const observation = observePreviewListeners(previews.map((p) => p.instance.terminal.element!))
+    const { active } = observation
     const interactions = previews.map((preview) => preview.install())
     expect(provider).toHaveBeenCalledTimes(population)
     expect(active.size).toBe(9 * population)
     document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }))
-    expect(callbacks).toBe(population)
-    callbacks = 0
+    expect(observation.callbacks).toBe(population)
+    observation.resetCallbacks()
     const first = previews[0]!
     await new Promise<void>((resolve) => first.instance.write(osc, { live: true, onDone: resolve }))
     const gettersBefore = previews.map((p) => [
@@ -596,8 +569,7 @@ it.each([10, 100])(
       interaction.dispose()
     }
     expect(active.size).toBe(0)
-    add.mockRestore()
-    remove.mockRestore()
+    observation.restore()
   }
 )
 
@@ -614,7 +586,9 @@ it('retains actual boolean/Promise forwarding results and flushes unclaimed repo
   const reports = Array.from({ length: 65 }, (_, i) => `\x1b[<0;${i + 1};1M`)
   // Protocol fixture feeds qualified input during a real event dispatch; native timing remains QA's separate obligation.
   const emitReports = () => {
-    for (const report of reports) {
+    preview.instance.terminal.input(reports[0]!)
+    expect(preview.sink).toHaveBeenCalledTimes(2)
+    for (const report of reports.slice(1)) {
       preview.instance.terminal.input(report)
     }
   }
@@ -628,7 +602,7 @@ it('retains actual boolean/Promise forwarding results and flushes unclaimed repo
   expect(preview.sink.mock.calls.slice(2).map(([data]) => data)).toEqual(reports)
 })
 
-it('adds no provider or preview connection when the real board grows from 10 to 100 cards without an open preview', () => {
+it('adds no provider or preview connection when the real board grows from 10 to 100 cards without an open preview', async () => {
   const provider = vi.spyOn(Terminal.prototype, 'registerLinkProvider')
   const cards = (count: number): DashboardCard[] =>
     Array.from({ length: count }, (_, i) => ({
@@ -653,6 +627,27 @@ it('adds no provider or preview connection when the real board grows from 10 to 
   view.rerender(<AgentKanbanBoard snapshot={{ generatedAt: 2, cards: cards(100) }} />)
   expect(provider).not.toHaveBeenCalled()
   expect(window.api.terminalPreview.connect).not.toHaveBeenCalled()
+  view.unmount()
+  // This is the production popout-capability ancestor, with no App/test Tooltip wrapper.
+  const popout = renderWithoutApp(
+    <AgentKanbanBoard snapshot={{ generatedAt: 3, cards: [{ ...cards(1)[0]!, ...source }] }} />
+  )
+  fireEvent.click(popout.getByRole('button', { name: /Workspace 0/ }))
+  await waitFor(() => screenFor(document.body))
+  await output(osc)
+  const screen = screenFor(document.body)
+  pointer(screen, 'mousedown')
+  pointer(screen, 'mouseup')
+  const copy = await popout.findByRole('button', { name: 'Copy link' })
+  expect(popout.queryByRole('button', { name: 'Terminal link settings' })).toBeNull()
+  expect(popout.queryByRole('button', { name: /Orca Browser/ })).toBeNull()
+  fireEvent.click(copy)
+  await waitFor(() => expect(window.api.ui.writeClipboardText).toHaveBeenCalledWith(URL_TO_OPEN))
+  fireEvent.click(popout.getByRole('button', { name: /System Browser/ }))
+  await waitFor(() => expect(openUrl).toHaveBeenCalledExactlyOnceWith(URL_TO_OPEN))
+  popout.unmount()
+  expect(document.querySelector('[data-link-action-popover]')).toBeNull()
+  expect(window.api.terminalPreview.unsubscribe).toHaveBeenCalledExactlyOnceWith('pty-1')
 })
 
 it('honors primary/alternate and Open on real literal URLs, keeps background context, and refuses unqualified/mismatched hosts before feedback', async () => {

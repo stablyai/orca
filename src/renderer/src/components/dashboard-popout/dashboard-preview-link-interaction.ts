@@ -23,6 +23,7 @@ import {
 export function installDashboardPreviewLinkInteraction(
   terminal: Terminal,
   deps: {
+    defaultHandlers?: ILinkHandler
     getSettings: () => GlobalSettings | null
     getSource: () => DashboardPreviewLinkSource | undefined
     onForegroundOpen: () => (() => void) | undefined
@@ -36,9 +37,10 @@ export function installDashboardPreviewLinkInteraction(
     uri: string
     range: { start: { x: number; y: number }; end: { x: number; y: number } }
   } | null = null
+  const isActionUri = (uri: string): boolean => /^https?:\/\//i.test(uri)
   const actionsFor = (uri: string) => {
     const source = deps.getSource()
-    return !disposed && source && /^https?:\/\//i.test(uri)
+    return !disposed && source
       ? dashboardPreviewHttpActions(
           source,
           uri,
@@ -86,7 +88,17 @@ export function installDashboardPreviewLinkInteraction(
       enabledTarget(event),
     (event) => gesture.canRequestAction(event)
   )
-  const activate = (event: MouseEvent, uri: string): void => {
+  const activate = (
+    event: MouseEvent,
+    uri: string,
+    range?: Parameters<ILinkHandler['activate']>[2]
+  ): void => {
+    if (!isActionUri(uri)) {
+      if (!disposed && range) {
+        deps.defaultHandlers?.activate(event, uri, range)
+      }
+      return
+    }
     if (event.defaultPrevented || event.button !== 0) {
       return
     }
@@ -128,13 +140,13 @@ export function installDashboardPreviewLinkInteraction(
   }
   const handlers: ILinkHandler = {
     activate,
-    hover: (_event, uri, range) => {
-      hovered = /^https?:\/\//i.test(uri) ? { uri, range } : null
-      element?.setAttribute('title', uri)
+    hover: (event, uri, range) => {
+      hovered = isActionUri(uri) ? { uri, range } : null
+      deps.defaultHandlers?.hover?.(event, uri, range)
     },
-    leave: () => {
+    leave: (event, uri, range) => {
       hovered = null
-      element?.removeAttribute('title')
+      deps.defaultHandlers?.leave?.(event, uri, range)
     }
   }
   const fallback = (event: MouseEvent): void => {

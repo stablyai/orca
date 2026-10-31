@@ -115,6 +115,7 @@ export function AgentTerminalPreview({
     let terminal: Terminal | null = null
     let offData: (() => void) | null = null
     const previewApi = terminalPreviewApiFor(ptyId)
+    let linkDefaults: ILinkHandler | undefined
     let linkInteraction: ReturnType<typeof installDashboardPreviewLinkInteraction> | null = null
     const sendInput = (data: string): boolean | Promise<boolean> => previewApi.input(ptyId, data)
     const installLinks = (): void => {
@@ -126,13 +127,17 @@ export function AgentTerminalPreview({
         getSource: () => linkSourceRef.current,
         onForegroundOpen: () => browserForegroundRef.current,
         request: setLinkRequest,
-        sendInput
+        sendInput,
+        defaultHandlers: linkDefaults
       })
     }
-    const linkHandlers: ILinkHandler = {
-      activate: (event, uri, range) => linkInteraction?.handlers.activate(event, uri, range),
-      hover: (event, uri, range) => linkInteraction?.handlers.hover?.(event, uri, range),
-      leave: (event, uri, range) => linkInteraction?.handlers.leave?.(event, uri, range)
+    const linkHandlers = (defaults: ILinkHandler): ILinkHandler => {
+      linkDefaults = defaults
+      return {
+        activate: (event, uri, range) => linkInteraction?.handlers.activate(event, uri, range),
+        hover: (event, uri, range) => linkInteraction?.handlers.hover?.(event, uri, range),
+        leave: (event, uri, range) => linkInteraction?.handlers.leave?.(event, uri, range)
+      }
     }
     // Why one read: the xterm's advertisement and its mirror must never disagree.
     const mountTerminalInput = terminalInputRef.current

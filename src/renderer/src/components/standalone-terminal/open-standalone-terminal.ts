@@ -1,10 +1,5 @@
 /** Reuse pane Unicode/link/IME/shortcut and kitty policy outside panes; callers own transport and parse-completion backpressure. */
-import {
-  Terminal,
-  type ITerminalInitOnlyOptions,
-  type ITerminalOptions,
-  type ILinkHandler
-} from '@xterm/xterm'
+import { Terminal, type ITerminalInitOnlyOptions, type ITerminalOptions } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
@@ -15,6 +10,7 @@ import type { MacOptionAsAlt } from '@/components/terminal-pane/terminal-shortcu
 import { subscribeToTerminalUserInput } from '@/components/terminal-pane/terminal-user-input-signal'
 import { installTerminalNativeCopyGutterTrim } from '@/components/terminal-pane/terminal-native-copy-gutter'
 import { isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
+import type { PreviewTerminalLinkHandlers } from '../dashboard-popout/preview-terminal-links'
 import { installPreviewTerminalCompatibility } from '../dashboard-popout/preview-terminal-compatibility'
 import { createPreviewClipboardPaster } from '../dashboard-popout/preview-terminal-paste'
 import { installPreviewImeBridge } from '../dashboard-popout/preview-terminal-ime-bridge'
@@ -36,7 +32,7 @@ export type StandaloneTerminalArgs = {
   getSettings: () => GlobalSettings | null
   getMacOptionAsAlt: () => MacOptionAsAlt
   getTerminalInput: () => DashboardCardTerminalInput | null
-  linkHandlers?: ILinkHandler
+  linkHandlers?: PreviewTerminalLinkHandlers
   requestClose?: () => void
 }
 

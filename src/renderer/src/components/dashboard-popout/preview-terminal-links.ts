@@ -4,8 +4,13 @@ import { installGuardedLinkProviderRegistration } from '@/lib/pane-manager/termi
 import { isTerminalHttpLinkActivation } from '@/components/terminal-pane/terminal-http-link-activation'
 import { TERMINAL_HTTP_URL_REGEX } from '../../../../shared/terminal-http-url-extraction'
 
+export type PreviewTerminalLinkHandlers = ILinkHandler | ((defaults: ILinkHandler) => ILinkHandler)
+
 /** Use pane-style Mod+click but open externally because pop-outs have no workspace-scoped browser pane. */
-export function installPreviewTerminalLinks(terminal: Terminal, handlers?: ILinkHandler): void {
+export function installPreviewTerminalLinks(
+  terminal: Terminal,
+  handlers?: PreviewTerminalLinkHandlers
+): void {
   const activate = (event: MouseEvent, uri: string): void => {
     if (!isTerminalHttpLinkActivation(event)) {
       return
@@ -21,6 +26,7 @@ export function installPreviewTerminalLinks(terminal: Terminal, handlers?: ILink
   const leave = (): void => {
     terminal.element?.removeAttribute('title')
   }
+  handlers = typeof handlers === 'function' ? handlers({ activate, hover, leave }) : handlers
   // Guard providers before registration; xterm can throw on pathological wrapped lines and escape to window.onerror.
   installGuardedLinkProviderRegistration(terminal)
   terminal.loadAddon(
