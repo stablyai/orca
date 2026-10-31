@@ -87,6 +87,9 @@ import { findTaskPageDialogWorkItem } from '../../src/renderer/src/components/ta
 import { getTaskPageRepoSourceContext } from '../../src/renderer/src/components/task-page/task-page-source-context'
 import { workItemsCacheKey } from '../../src/renderer/src/store/github/cache-identity'
 import { createTestStore } from '../../src/renderer/src/store/slices/github-slice-test-harness'
+import { materializeTaskPageItemList } from '../../src/renderer/src/components/task-page/github/task-page-github-work-item-mutation-pages'
+import { getLastConfirmedClientValue } from '../../src/renderer/src/components/task-page/github/task-page-github-confirmed-client-values'
+import { RuntimeRpcCallError } from '../../src/renderer/src/runtime/runtime-rpc-result'
 import { getTaskSourceCacheScope } from '../../src/shared/task-source-context'
 import { listLabels, listAssignableUsers } from '../../src/main/github/issue-field-options'
 import { useRepoLabels, useRepoAssignees } from '../../src/renderer/src/hooks/useIssueMetadata'
@@ -139,6 +142,12 @@ const upstream: GitHubWorkItem = {
   url: 'https://github.com/upstream-owner/widgets/issues/5'
 }
 const issueRepo = { owner: 'fork-owner', repo: 'widgets', host: 'github.com' }
+const unsupported = () =>
+  new RuntimeRpcCallError({
+    id: 'old-server',
+    ok: false,
+    error: { code: 'method_not_found', message: 'unsupported' }
+  })
 
 type MetadataArgs = { repoPath: string; ownerRepo?: GitHubOwnerRepo }
 
@@ -275,20 +284,26 @@ it.each([
   }
 )
 
-it.each([
-  { openedItem: fork, listItem: fork },
-  { openedItem: fork, listItem: upstream },
-  { openedItem: upstream, listItem: fork },
-  { openedItem: upstream, listItem: upstream }
-])(
-  'a $openedItem.title close only controls its own row while search lags (list=$listItem.title)',
-  async ({ openedItem, listItem }) => {
+it.each(
+  [true, false].flatMap((tracked) => [
+    { openedItem: fork, listItem: fork, tracked },
+    { openedItem: fork, listItem: upstream, tracked },
+    { openedItem: upstream, listItem: fork, tracked },
+    { openedItem: upstream, listItem: upstream, tracked }
+  ])
+)(
+  'a $openedItem.title close only controls its own row while search lags (list=$listItem.title, tracked=$tracked)',
+  async ({ openedItem, listItem, tracked }) => {
     const target = { ...issueRepo, owner: openedItem === fork ? 'fork-owner' : 'upstream-owner' }
-    // A registered repo has a task record, which holds the confirmed close over a lagging search.
     fixture.store = createTestStore()
     fixture.store.setState({ repos: [registeredRepo], recordFeatureInteraction: vi.fn() })
     const cache = fixture.store.getState().githubTaskCache
-    const binding = cache.capture(registeredRepo, sourceContext)
+    const binding = cache.capture(registeredRepo, sourceContext)!
+    if (!tracked) {
+      // An old server without the item route: no task record can own the edit, so main's hold applies.
+      await cache.readCanonical(openedItem, binding, () => Promise.reject(unsupported()))
+      expect(cache.canTrack(binding)).toBe(false)
+    }
     let pending = Promise.resolve()
     runGHEditStateChange({
       newState: 'closed',
@@ -314,8 +329,21 @@ it.each([
     })
     await pending
     expect(fixture.apiUpdate).toHaveBeenCalledWith(expect.objectContaining({ ownerRepo: target }))
-    const displayed = cache.projectItem(cache.acceptSearch([listItem], binding)[0])
-    expect(displayed.state).toBe(listItem.url === openedItem.url ? 'closed' : 'open')
+    // A record owns a tracked close; only an untracked one keeps main's registry hold.
+    const hold = getLastConfirmedClientValue(
+      getTaskSourceCacheScope(sourceContext),
+      fork.repoId,
+      fork.id,
+      'state'
+    )
+    expect(hold).toBe(tracked ? undefined : 'closed')
+    // The lagging search row goes through the fetch, the Tasks page list and its projection.
+    const [shown] = materializeTaskPageItemList({
+      networkItems: [...cache.acceptSearch([listItem], binding)],
+      previousItems: [listItem],
+      queryKey: 'current-upstream-list'
+    })
+    expect(cache.projectItem(shown).state).toBe(listItem.url === openedItem.url ? 'closed' : 'open')
   }
 )
 

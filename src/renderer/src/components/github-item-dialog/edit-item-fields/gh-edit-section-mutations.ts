@@ -5,7 +5,8 @@ import {
   buildTaskPageGitHubCloseUpdate,
   type TaskPageGitHubCloseAction
 } from '@/components/task-page/github/task-page-github-status-actions'
-import { beginEdit } from './gh-edit-task-record'
+import { beginEdit, isTrackedEdit } from './gh-edit-task-record'
+import { assertTaskPageGitHubDialogStateAuthority } from '@/components/task-page/github/task-page-github-dialog-state-authority'
 import { runIssueUpdate } from '@/components/github/github-work-item-edit-mutations'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
@@ -60,6 +61,7 @@ export function runGHEditStateChange({
   }
   // The record publishes Tasks copies; the dialog patches only its own state and Project origin row.
   let settle: (success: boolean) => GitHubWorkItem = () => item
+  let authority: { revert: () => boolean } | null = null
   void run('state', {
     mutate: () =>
       runIssueUpdate({
@@ -75,12 +77,24 @@ export function runGHEditStateChange({
             : { state: newState }
       }),
     onOptimistic: () => {
+      // Where no task record can own the edit (no binding, or a server without the item route), main's
+      // confirmed-state hold keeps a lagging search from reopening it; a record that takes over retires it.
+      if (!isTrackedEdit(item, sourceContext)) {
+        authority = assertTaskPageGitHubDialogStateAuthority({
+          repoId: itemRepoId,
+          itemId: item.id,
+          state: newState,
+          sourceContext,
+          ownerRepo: projectOrigin ?? issueRepo
+        })
+      }
       // Rollback restores what this dialog showed, as main's prevState did.
       settle = beginEdit({ ...item, state: localState }, sourceContext, { state: newState })
       onStateChange(newState)
       patchProjectRowIfNeeded({ state: newState })
     },
     onRevert: () => {
+      authority?.revert()
       const current = settle(false)
       onStateChange(current.state)
       patchProjectRowIfNeeded({ state: current.state })
