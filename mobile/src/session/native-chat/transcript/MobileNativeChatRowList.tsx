@@ -1,5 +1,7 @@
-import type { ComponentProps, ReactElement } from 'react'
-import { FlatList, Platform } from 'react-native'
+import { forwardRef, type ComponentProps, type ComponentRef, type ReactElement } from 'react'
+import { FlatList, Platform, ScrollView, View, type ScrollViewProps } from 'react-native'
+import { GestureDetector } from 'react-native-gesture-handler'
+import type { ComposedGesture } from 'react-native-gesture-handler'
 import type { MobileNativeChatRowKeys } from './mobile-native-chat-row-keys'
 import { MobileNativeChatPageList } from '../../MobileNativeChatPageList'
 import {
@@ -27,7 +29,23 @@ type Props = Pick<
   rowKeys: MobileNativeChatRowKeys
   /** With a header, the row below it anchors the native list's visible content. */
   hasHeader: boolean
+  pinchGesture: ComposedGesture
+  pinchTarget?: (node: unknown) => void
 }
+
+// The detector has to sit on the scroll view. A parent list drops collapsable, and iOS then lets the scroll pan take the pinch.
+const MobileNativeChatPinchScroll = forwardRef<
+  ComponentRef<typeof ScrollView>,
+  ScrollViewProps & { pinchGesture: ComposedGesture }
+>(function MobileNativeChatPinchScroll({ pinchGesture, ...props }, ref) {
+  return (
+    <GestureDetector gesture={pinchGesture}>
+      <ScrollView {...props} ref={ref} collapsable={false} />
+    </GestureDetector>
+  )
+})
+
+const webPinchFrame = { flex: 1, minHeight: 0 }
 
 export function MobileNativeChatRowList(props: Props): ReactElement {
   const { tail, rowKeys, rows, renderItem, contentContainerStyle, onScroll, footer } = props
@@ -35,16 +53,21 @@ export function MobileNativeChatRowList(props: Props): ReactElement {
   if (Platform.OS === 'web') {
     const { roots, runs, layoutKey, onNearTop } = props
     return (
-      <MobileNativeChatPageList
-        {...tail.pageListProps}
-        {...{ rows, rowKeys, roots, renderItem, runs, contentContainerStyle, layoutKey }}
-        {...{ header, footer, emptyStateView, onScroll, onNearTop }}
-      />
+      <View ref={props.pinchTarget} style={webPinchFrame}>
+        <MobileNativeChatPageList
+          {...tail.pageListProps}
+          {...{ rows, rowKeys, roots, renderItem, runs, contentContainerStyle, layoutKey }}
+          {...{ header, footer, emptyStateView, onScroll, onNearTop }}
+        />
+      </View>
     )
   }
   return (
     <FlatList
       {...tail.listProps}
+      renderScrollComponent={(scrollProps) => (
+        <MobileNativeChatPinchScroll {...scrollProps} pinchGesture={props.pinchGesture} />
+      )}
       data={rows}
       keyExtractor={rowKeys.keyOf}
       renderItem={renderItem}
