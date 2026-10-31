@@ -73,6 +73,10 @@ export function journalStateCollections(state: JournalReducerState): Collection[
 }
 
 /** Entry tuples preserve an undefined echo declaration without turning it into null. */
-export function journalEntryJson(key: unknown, value: unknown): string {
-  return JSON.stringify(value === undefined ? [key] : [key, value])
+export function journalEntryJson(
+  key: unknown,
+  value: unknown,
+  replacer?: (key: string, value: unknown) => unknown
+): string {
+  return JSON.stringify(value === undefined ? [key] : [key, value], replacer)
 }

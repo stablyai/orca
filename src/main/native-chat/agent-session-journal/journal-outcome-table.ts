@@ -63,7 +63,7 @@ export function persistJournalOutcomeRows(
     applyJournalRow(transition.state, stored, savedAt ?? row.ts)
     const changes = transition.changes(true)
     // Only this row's own transition is recorded, never a snapshot of a prefix value it left alone.
-    const encoded = encodeJournalOutcomes(transition.state, changes, scalar)
+    const encoded = encodeJournalOutcomes(transition.state, changes, scalar, transition.untracked)
     scalar = encoded.scalars
     for (const [index, value] of encoded.values.entries()) {
       // Each change's record is at its own index; the scalar records after them match no change.

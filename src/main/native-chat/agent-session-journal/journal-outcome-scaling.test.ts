@@ -361,6 +361,33 @@ it('encodes a settlement batch with the same work per mutation up to the mutatio
   expect(most.statements).toBe(few.statements)
 })
 
+/** A tool call whose structured input holds `size` nested objects, as a large multi-edit does. */
+const toolCall = (size: number) => ({
+  kind: 'tool-call' as const,
+  name: 'edit',
+  input: {
+    edits: Array.from({ length: size }, (_, index) => ({ path: `file-${index}`, at: { index } }))
+  },
+  state: 'running' as const
+})
+
+it("encodes a structured tool call's revisions without reading its input through the draft, at N and 10N nested objects", async () => {
+  const measure = async (size: number) => {
+    const { rig } = outcomeChat(N, `tool-${size}`)
+    // The draft's copy-on-write proxies read through Reflect.get; plain reads never call it.
+    const reads = vi.spyOn(Reflect, 'get')
+    await rig.writer.enqueue(revision('tool', toolCall(size), 1))
+    const first = reads.mock.calls.length
+    reads.mockClear()
+    await rig.writer.enqueue(revision('tool', toolCall(size), 2))
+    const next = reads.mock.calls.length
+    reads.mockRestore()
+    expect(rig.state().items.get('tool')?.body).toEqual(toolCall(size))
+    return { first, next }
+  }
+  expect(await measure(10 * N)).toStrictEqual(await measure(N))
+})
+
 /** Distinct keys the chat's records hold, live, deleted and scalar alike. */
 function outcomeKeys(database: JournalHostDatabase): number {
   return Number(

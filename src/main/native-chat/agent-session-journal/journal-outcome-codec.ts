@@ -33,11 +33,13 @@ export class JournalOutcomeDecodeError extends Error {
 const scalars = (state: JournalReducerState): Record<string, unknown> =>
   z.record(z.string(), z.unknown()).parse(JSON.parse(journalStateScalars(state)))
 
-/** Encoding freezes a sequence's contributions before the next input can mutate the draft. */
+/** Encoding freezes a sequence's contributions before the next input can mutate the draft;
+ * `untracked` reads each changed value as it stands, not through the draft's tracking. */
 export function encodeJournalOutcomes(
   state: JournalReducerState,
   changes: readonly JournalEntryChange[],
-  before: Record<string, unknown>
+  before: Record<string, unknown>,
+  untracked: (key: string, value: unknown) => unknown
 ): { values: Omit<JournalOutcome, 'ordinal'>[]; scalars: Record<string, unknown> } {
   const next = scalars(state)
   const values = changes.map((entry) => ({
@@ -48,8 +50,8 @@ export function encodeJournalOutcomes(
     json: entry.deleted
       ? 'null'
       : entry.path === 'items'
-        ? JSON.stringify(entry.value)
-        : journalEntryJson(entry.key, entry.value),
+        ? JSON.stringify(entry.value, untracked)
+        : journalEntryJson(entry.key, entry.value, untracked),
     deleted: entry.deleted
   }))
   for (const [key, value] of Object.entries(next)) {

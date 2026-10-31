@@ -8,7 +8,13 @@ import {
   type JournalEntryChange
 } from './journal-transition-collections'
 
-type DraftNode = { value: object; finish: () => object; listen: (changed: () => void) => void }
+type DraftNode = {
+  value: object
+  /** What the draft holds now: the copy once written, else the object itself. */
+  current: () => object
+  finish: () => object
+  listen: (changed: () => void) => void
+}
 
 class JournalDraft {
   private readonly originals = new WeakMap<object, DraftNode>()
@@ -75,7 +81,12 @@ class JournalDraft {
           ? new JournalDraftMap(value, this.access, mark, path)
           : new JournalDraftSet(value, this.access, mark, path)
       this.collections.push(collection)
-      node = { value: collection, finish: () => collection.finish(), listen }
+      node = {
+        value: collection,
+        current: () => collection,
+        finish: () => collection.finish(),
+        listen
+      }
     } else {
       let copy: object | undefined
       const current = (): object => copy ?? value
@@ -133,6 +144,7 @@ class JournalDraft {
       })
       node = {
         value: proxy,
+        current,
         finish: () => {
           if (!dirty && !this.assigned.has(value)) {
             return value
@@ -170,6 +182,15 @@ class JournalDraft {
 
   changes(reset = false): JournalEntryChange[] {
     return this.collections.flatMap((collection) => collection.changes(reset))
+  }
+
+  /** Reads a draft value as it stands without tracking it, so serializing a changed value reaches
+   * no proxy trap and adds no node. */
+  untracked(value: unknown): unknown {
+    if (typeof value !== 'object' || value === null) {
+      return value
+    }
+    return (this.proxies.get(value) ?? this.originals.get(value))?.current() ?? value
   }
 
   adopt<T>(value: T): T {
@@ -232,6 +253,8 @@ export function isolateJournalTransition<T>(
   state: JournalReducerState
   result: T
   changes: (reset?: boolean) => JournalEntryChange[]
+  /** A `JSON.stringify` replacer giving each draft value as it stands, untracked. */
+  untracked: (key: string, value: unknown) => unknown
   adopt: () => JournalReducerState
   tracked: () => number
 } {
@@ -242,6 +265,7 @@ export function isolateJournalTransition<T>(
     state: candidate,
     result,
     changes: (reset) => draft.changes(reset),
+    untracked: (_key, value) => draft.untracked(value),
     adopt: () => draft.adopt(candidate),
     tracked: () => draft.nodes
   }
