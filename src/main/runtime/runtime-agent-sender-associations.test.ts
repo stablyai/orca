@@ -330,7 +330,7 @@ it.each([100, 1000])(
       subject: 'beat',
       type: 'heartbeat'
     })
-    h.db.recordHeartbeat(chain[n - 1].id, new Date().toISOString())
+    h.db.recordHeartbeat(chain[n - 1].id, '2026-10-31T12:00:00.000Z')
     h.db.db.prepare('UPDATE messages SET read = 1 WHERE id = ?').run(sent.id)
     h.db.insertMessage({ from: handle(1), to: 'recipient', subject: 'update' })
     h.leaves[0].lastOutputAt = 100
