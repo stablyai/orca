@@ -50,16 +50,16 @@ describe('quantizeFontScale', () => {
     expect(quantizeFontScale(1.024)).toBe(1)
     expect(quantizeFontScale(1.03)).toBe(1.05)
     expect(quantizeFontScale(5)).toBe(1.8)
-    expect(quantizeFontScale(0.1)).toBe(0.8)
+    expect(quantizeFontScale(0.1)).toBe(0.5)
     expect(quantizeFontScale(Number.NaN)).toBe(1)
   })
 
   it('collapses a full-range pinch to at most one commit per step', () => {
     const committed = new Set<number>()
-    for (let i = 0; i <= 600; i++) {
-      committed.add(quantizeFontScale(0.7 + i * 0.002))
+    for (let i = 0; i <= 900; i++) {
+      committed.add(quantizeFontScale(0.2 + i * 0.002))
     }
-    expect(committed.size).toBeLessThanOrEqual(Math.round(1 / FONT_SCALE_STEP) + 1)
+    expect(committed.size).toBeLessThanOrEqual(Math.round(1.3 / FONT_SCALE_STEP) + 1)
   })
 })
 
