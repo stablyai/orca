@@ -192,13 +192,12 @@ describe('tab identity ownership', () => {
         const desktop = await presentWith(url, 'desktop')
         expect(desktop).toEqual(none)
         expectClientHintsKept(desktop)
-        const expected =
-          mode === 'clean' && url === AUTH_URL ? googleAuthUserAgent() : processUserAgent
-        expect(desktop.presented).toBe(expected)
-        expect(desktop.requestIdentity.userAgent).toBe(expected)
-        expect(desktop.requestIdentity.kind).toBe(
-          expected === processUserAgent ? 'process' : 'google-auth'
-        )
+        const auth = url === AUTH_URL
+        expect(desktop.presented).toBe(auth ? googleAuthUserAgent() : processUserAgent)
+        expect(desktop.requestIdentity).toEqual({
+          kind: auth ? 'google-auth' : 'process',
+          userAgent: desktop.presented
+        })
       }
     )
 
@@ -212,16 +211,11 @@ describe('tab identity ownership', () => {
       expect(observed.requestIdentity.userAgent).toBe(observed.presented)
     })
 
-    it('keeps the Google sign-in identity ahead of a mobile preset only in clean mode', async () => {
+    it('keeps the Google sign-in identity ahead of a mobile preset', async () => {
       const observed = await presentWith(AUTH_URL, 'mobile')
       expectClientHintsKept(observed)
-      if (mode === 'clean') {
-        expect(observed.presented).toBe(googleAuthUserAgent())
-        expect(observed.requestIdentity.kind).toBe('google-auth')
-      } else {
-        expect(observed.presented).toContain('iPhone')
-        expect(observed.requestIdentity.kind).toBe('mobile')
-      }
+      expect(observed.presented).toBe(googleAuthUserAgent())
+      expect(observed.requestIdentity.kind).toBe('google-auth')
     })
 
     it.each(['desktop', 'none'] as const)(

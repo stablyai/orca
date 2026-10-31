@@ -25,7 +25,7 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
       request.webContentsId === undefined
         ? undefined
         : this.pendingNavigationByGuestId.get(request.webContentsId)
-    // Native mode already presents the Electron identity everywhere.
+    // Native requests all carry the Electron UA, so it cannot mark an auth request there.
     const googleAuthEnabled = processIdentity.mode === 'clean'
     if (
       googleAuthEnabled &&

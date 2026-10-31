@@ -33,8 +33,8 @@ export function resolveBrowserTabIdentity(args: {
   mobile: boolean
   processIdentity: BrowserProcessUserAgentIdentity
 }): BrowserTabIdentity {
-  // Native mode must preserve its process identity on auth requests.
-  if (args.processIdentity.mode === 'clean' && isGoogleAuthUrl(args.url)) {
+  // Sign-in hosts outrank mobile presets: Google rejects identities claiming another browser.
+  if (isGoogleAuthUrl(args.url)) {
     return googleAuthTabIdentity()
   }
   if (args.mobile) {

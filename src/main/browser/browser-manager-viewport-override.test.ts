@@ -771,7 +771,7 @@ describe('browserManager', () => {
       )
     })
 
-    it('keeps a native-mode mobile preset off the Google exception on navigation', async () => {
+    it('presents the Electron identity on Google sign-in under a native-mode mobile preset', async () => {
       browserMocks.processUserAgentMode = 'native'
       browserMocks.processUserAgent = GUEST_ELECTRON_UA
       const { guest, debuggerSendCommand } = makeGuest(4250)
@@ -792,9 +792,7 @@ describe('browserManager', () => {
       didStartNavigation(null, 'https://accounts.google.com/', false, true)
       await flushViewportOps()
       expect(guest.setUserAgent).not.toHaveBeenCalled()
-      expect(lastUserAgentOverride(debuggerSendCommand)).toMatchObject({
-        userAgent: expect.stringContaining('iPhone')
-      })
+      expect(lastUserAgentOverride(debuggerSendCommand)).toEqual({ userAgent: '' })
     })
 
     it('clears device metrics and disables touch for override=null', async () => {

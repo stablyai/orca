@@ -682,23 +682,14 @@ describe('BrowserSessionRegistry', () => {
       })
     })
 
-    it('keeps native requests untouched on Google auth hosts', () => {
-      processUserAgentMode.value = 'native'
+    it("keeps a request already carrying Electron's UA untouched on Google auth hosts", () => {
+      const headers = { 'User-Agent': googleAuthUserAgent(), 'sec-ch-ua': 'browser-owned' }
       const callback = vi.fn()
       install()(
-        {
-          url: 'https://accounts.google.com/v3/signin/identifier',
-          requestHeaders: {
-            'User-Agent': 'NativeElectron/43.0',
-            'sec-ch-ua': 'browser-owned'
-          }
-        },
+        { url: 'https://accounts.google.com/v3/signin/identifier', requestHeaders: { ...headers } },
         callback
       )
-      expect(callback.mock.calls[0][0].requestHeaders).toEqual({
-        'User-Agent': 'NativeElectron/43.0',
-        'sec-ch-ua': 'browser-owned'
-      })
+      expect(callback.mock.calls[0][0].requestHeaders).toEqual(headers)
     })
 
     it('keeps the session identity on Google app subdomains', () => {
