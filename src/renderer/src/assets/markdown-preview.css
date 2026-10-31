@@ -13,7 +13,15 @@
   min-height: 0;
   height: 100%;
   min-width: 0;
-  container-type: inline-size;
+  container: markdown-preview-shell / inline-size;
+}
+
+.markdown-preview-viewport {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  container: markdown-preview-viewport / inline-size;
 }
 
 .markdown-preview > .markdown-body {
@@ -23,6 +31,7 @@
 
 .markdown-preview.has-markdown-review-notes {
   --markdown-review-space: calc(clamp(220px, 28cqw, 300px) + 32px);
+
   padding-right: calc(32px + var(--markdown-review-space));
 }
 
@@ -239,7 +248,7 @@
   font-size: 12px;
 }
 
-@container (max-width: 560px) {
+@container markdown-preview-shell (max-width: 560px) {
   .markdown-toc-panel {
     position: absolute;
     top: 0;
@@ -462,7 +471,7 @@
   box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 12%, transparent);
 }
 
-@container (max-width: 760px) {
+@container markdown-preview-viewport (max-width: 760px) {
   .markdown-preview.has-markdown-review-notes {
     padding-right: 32px;
   }

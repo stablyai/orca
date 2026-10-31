@@ -13,7 +13,8 @@ import {
 } from './MarkdownPreviewAnnotationComposer'
 import {
   getMarkdownPreviewAnnotationQuote,
-  getMarkdownPreviewBlockRange
+  getMarkdownPreviewBlockRange,
+  hasMarkdownPreviewNestedBlock
 } from './markdown-preview-block-model'
 import type {
   MarkdownPreviewBlockRange,
@@ -219,7 +220,7 @@ export function useMarkdownPreviewAnnotationRenderers({
       rendered: React.ReactNode
     ): React.ReactNode => {
       const range = getMarkdownPreviewBlockRange(node)
-      if (!range) {
+      if (!range || hasMarkdownPreviewNestedBlock(node)) {
         return rendered
       }
       const blockKey = `${tagName}:${range.startLine}-${range.endLine}`
