@@ -27,17 +27,23 @@ export function deferHiddenAgentResume(
       if (!session.disposed) {
         // Why the hold: the visible restore runs async after this bypass, and before it binds a
         // PTY the sweep would see no mark, no live PTY and fork a duplicate. The predicate owns
-        // exactly the attempt's in-flight window and reads false once it settles without binding,
-        // so a refused or failed restore leaves no stale ownership behind.
+        // exactly the attempt's in-flight window, self-releases once it reads false, and is also
+        // tracked for releaseHiddenAgentResumeHold so a disposed pane cannot pin its session graph.
         const paneKey = recordEntry.paneKey
-        holdPaneResumeUntilShown(
-          paneKey,
-          () =>
+        const visibleHold = (): boolean => {
+          const inFlight =
             !session.disposed &&
             session.transport.getPtyId() === null &&
             (session.transportConnectInFlightSince !== null ||
               pendingSpawnByPaneKey.has(session.pendingSpawnKey))
-        )
+          if (!inFlight) {
+            releasePaneResumeHold(paneKey, visibleHold)
+          }
+          return inFlight
+        }
+        session.visibleAgentResumeHold = visibleHold
+        session.visibleAgentResumeHoldPaneKey = paneKey
+        holdPaneResumeUntilShown(paneKey, visibleHold)
       }
     }
     return false
@@ -96,6 +102,12 @@ export function releaseHiddenAgentResumeHold(session: ConnectPanePtySession): vo
   session.hiddenAgentResumeHeldTarget = null
   if (session.hiddenAgentResumeHold && session.hiddenAgentResumeHoldKey) {
     releasePaneResumeHold(session.hiddenAgentResumeHoldKey, session.hiddenAgentResumeHold)
+  }
+  // The visible bypass's attempt hold is anonymous to the hidden flow; drop it here too or the
+  // registry entry pins the pane's session graph until its pane key is reused.
+  if (session.visibleAgentResumeHold && session.visibleAgentResumeHoldPaneKey) {
+    releasePaneResumeHold(session.visibleAgentResumeHoldPaneKey, session.visibleAgentResumeHold)
+    session.visibleAgentResumeHold = null
   }
 }
 

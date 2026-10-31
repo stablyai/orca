@@ -10,7 +10,8 @@ vi.mock('./deferred-session-reattach-connect', () => ({ startDeferredSessionReat
 
 import {
   deferHiddenAgentResume,
-  noteHiddenAgentResumePtyEnded
+  noteHiddenAgentResumePtyEnded,
+  releaseHiddenAgentResumeHold
 } from './hidden-agent-resume-deferral'
 
 function hiddenPaneSession(): ConnectPanePtySession {
@@ -69,7 +70,13 @@ describe('deferHiddenAgentResume', () => {
     expect(wakeRequests.take).toHaveBeenCalledTimes(2)
     // The visible pane keeps attempt-scoped ownership while its restore is in flight…
     expect(isPaneSpawnDeferred('tab-1:leaf-1')).toBe(true)
-    // …and loses it once the attempt settles without binding a PTY.
+    // A pane disposed mid-attempt releases the hold through the shared disposal path, so the
+    // registry entry cannot pin the pane's session graph until its pane key is reused.
+    visible.disposed = true
+    releaseHiddenAgentResumeHold(visible)
+    expect(isPaneSpawnDeferred('tab-1:leaf-1')).toBe(false)
+    // A settled attempt self-releases on its next read and stays released (one attempt, one hold).
+    visible.disposed = false
     visible.transportConnectInFlightSince = null
     expect(isPaneSpawnDeferred('tab-1:leaf-1')).toBe(false)
   })
