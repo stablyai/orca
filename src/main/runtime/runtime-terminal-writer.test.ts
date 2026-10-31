@@ -184,3 +184,43 @@ it.each([
     )
   }
 })
+
+describe('submit settle before Enter', () => {
+  async function submitTimes(text: string, idleShell: boolean): Promise<number[]> {
+    vi.useFakeTimers()
+    const startedAt = Date.now()
+    const enters: number[] = []
+    const writer = new RuntimeTerminalWriter(
+      (_id, data) => {
+        if (data === '\r') {
+          enters.push(Date.now() - startedAt)
+        }
+        return true
+      },
+      () => 'linux',
+      () => null,
+      undefined,
+      () => idleShell
+    )
+    const pending = writer.writeAction('pty', { text, enter: true }, `${text}\r`, {
+      inputKind: 'driving'
+    })
+    await vi.advanceTimersByTimeAsync(5000)
+    await pending
+    return enters
+  }
+
+  it('skips the settle for a single line sent to an idle shell prompt', async () => {
+    expect(await submitTimes('ls -la', true)).toEqual([0])
+  })
+
+  it('keeps the settle when the pane is not provably an idle shell', async () => {
+    const [at] = await submitTimes('ls -la', false)
+    expect(at).toBeGreaterThanOrEqual(500)
+  })
+
+  it('keeps the settle for multi-line text even at an idle prompt', async () => {
+    const [at] = await submitTimes('echo one\necho two', true)
+    expect(at).toBeGreaterThanOrEqual(500)
+  })
+})

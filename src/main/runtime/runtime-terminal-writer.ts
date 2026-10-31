@@ -33,7 +33,8 @@ export class RuntimeTerminalWriter {
       ptyId: string,
       data: string,
       inputKind: TerminalInputKind
-    ) => WriteSettlement | Promise<WriteSettlement>
+    ) => WriteSettlement | Promise<WriteSettlement>,
+    private readonly isIdleShellPrompt: (ptyId: string) => boolean = () => false
   ) {}
 
   async writeAction(
@@ -82,7 +83,8 @@ export class RuntimeTerminalWriter {
     }
     if (hasSuffix) {
       const suffix = (action.enter ? '\r' : '') + (action.interrupt ? '\x03' : '')
-      if (text) {
+      // A shell at its prompt reads one line as typed; agent TUIs need the paste to settle.
+      if (text && !(isSingleLine(text) && this.isIdleShellPrompt(ptyId))) {
         // Enter must wait for host ingestion; a flat 500ms cannot cover 16MB.
         await waitForTerminalWriteDelay(
           resolveAgentPromptSubmitDelayForAgent(
@@ -165,6 +167,10 @@ export class RuntimeTerminalWriter {
       return writeUnverifiable('provider_threw_after_handoff', true)
     }
   }
+}
+
+function isSingleLine(text: string): boolean {
+  return !text.includes('\n') && !text.includes('\r')
 }
 
 function yieldBetweenTerminalInputChunks(): Promise<void> {

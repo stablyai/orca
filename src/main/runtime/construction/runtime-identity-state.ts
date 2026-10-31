@@ -332,7 +332,10 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
     (ptyId) => this.getPtyAgent(ptyId),
     (ptyId, data, inputKind) =>
       this.ptyController?.writeWithSettlement?.(ptyId, data, inputKind) ??
-      writeRefused('provider_cannot_settle')
+      writeRefused('provider_cannot_settle'),
+    (ptyId) =>
+      this.getPaneTerminalAgent(ptyId) === null &&
+      this.headlessTerminals.get(ptyId)?.ownership.isIdleAtPrompt === true
   )
 
   // Every tui-idle site must rank the same pane evidence identically.

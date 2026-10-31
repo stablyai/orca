@@ -46,6 +46,9 @@ export class TerminalShellLifecycleScanner {
   private altActive = false
   private commandEnteredAlternateScreen = false
   private adjacentMarkers = ''
+  // A running app may paint its own A (#10923); only an A outside a shell command is a prompt.
+  private shellCommandOpen = false
+  private promptShown = false
   private readonly inputModes = new TerminalArmedInputModes()
 
   get owner(): TerminalOwner | undefined {
@@ -58,6 +61,11 @@ export class TerminalShellLifecycleScanner {
 
   get isAlternateScreenActive(): boolean {
     return this.altActive
+  }
+
+  /** The shell drew a prompt (OSC 133 A) after its last command ended, and nothing started since. */
+  get isIdleAtPrompt(): boolean {
+    return this.promptShown && !this.altActive
   }
 
   trySetOwner(generation: number): boolean {
@@ -79,6 +87,7 @@ export class TerminalShellLifecycleScanner {
   seedOwner(owner: TerminalOwner | undefined, opts: { alternateScreen?: boolean } = {}): void {
     this.generationState += 1
     this.ownerState = owner
+    this.promptShown = false
     if (opts.alternateScreen !== undefined) {
       // Restored bytes bypass scan(), so seed alternate-screen state to retain death detection.
       this.altActive = opts.alternateScreen
@@ -111,6 +120,7 @@ export class TerminalShellLifecycleScanner {
       if (match[0] === '\x1bc') {
         this.revoke()
         this.inputModes.reset()
+        this.promptShown = false
         this.altActive = false
         this.commandEnteredAlternateScreen = false
         continue
@@ -118,6 +128,8 @@ export class TerminalShellLifecycleScanner {
       if (oscPayload !== undefined) {
         const marker = oscPayload[0]
         if (marker === 'C') {
+          this.shellCommandOpen = true
+          this.promptShown = false
           this.revoke()
           this.inputModes.markCommandStart()
           this.commandEnteredAlternateScreen = false
@@ -125,12 +137,15 @@ export class TerminalShellLifecycleScanner {
         }
         if (marker === 'A') {
           this.inputModes.markPrompt()
+          this.promptShown = !this.shellCommandOpen
         }
         // An app closing its own OSC zone is still running; its D does not prove exit (#10923).
         if (marker !== 'D' || closesAppOsc133Zone(markersBefore, oscPayload)) {
           continue
         }
         // Armed modes suggest unclean death, but each D needs proof because nested shells also emit it.
+        this.shellCommandOpen = false
+        this.promptShown = false
         const uncleanDeath = this.inputModes.markCommandEnd() || this.altActive
         const cleanExit = !uncleanDeath && this.commandEnteredAlternateScreen && !this.altActive
         this.revoke()

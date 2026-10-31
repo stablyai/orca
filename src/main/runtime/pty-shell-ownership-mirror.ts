@@ -43,6 +43,10 @@ export class PtyShellOwnershipMirror {
     return this.scanner.owner
   }
 
+  get isIdleAtPrompt(): boolean {
+    return this.scanner.isIdleAtPrompt
+  }
+
   seedOwner(owner: TerminalOwner | undefined, opts: { alternateScreen?: boolean } = {}): void {
     this.scanner.seedOwner(owner, opts)
   }
