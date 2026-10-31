@@ -75,10 +75,11 @@ export function journalOutcomeSource(
   if (after) {
     throw new AgentSessionJournalError('journal_read_only', 'the chat holds a newer row')
   }
-  if (
-    marker?.seq !== prefix + 1 ||
-    markerVersion(marker.row_json) !== JOURNAL_OUTCOME_MARKER_VERSION
-  ) {
+  const version = marker?.seq === prefix + 1 ? markerVersion(marker.row_json) : null
+  if (typeof version === 'number' && version > JOURNAL_OUTCOME_MARKER_VERSION) {
+    throw new AgentSessionJournalError('journal_read_only', 'the chat uses a newer marker')
+  }
+  if (version !== JOURNAL_OUTCOME_MARKER_VERSION) {
     throw new JournalOutcomeDecodeError('missing journal outcome marker')
   }
   return { generation, format, through, prefix }
