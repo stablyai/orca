@@ -36,7 +36,7 @@ import { makeUnifiedTab, makeWorktree } from '@/store/slices/store-test-helpers'
 import { useAppStore } from '@/store'
 import { StructuredAgentSessionAttentionBridge } from '@/components/native-chat/StructuredAgentSessionAttentionBridge'
 import { ForwardedStructuredReadFeeds } from '@/runtime/ForwardedStructuredReadFeeds'
-import { getStructuredAgentSessionTurnCompletionFeed } from '@/runtime/structured-agent-session-turn-completion-feed'
+import * as completionFeeds from '@/runtime/structured-agent-session-turn-completion-feed'
 
 vi.mock('electron', async () =>
   (await import('../../src/main/ipc/notifications-test-harness')).createElectronModuleMock()
@@ -238,7 +238,7 @@ it.each(['live', 'file reload'] as const)(
     expect(unsubscribe).not.toHaveBeenCalled()
     if (mode === 'file reload') {
       await controller.closeDismissals()
-      screen.unmount()
+      await act(async () => screen.unmount())
       expect(unsubscribe).toHaveBeenCalledTimes(1)
       controller = new RuntimeMobileNotificationController()
       fixture.relayControllers.push(controller)
@@ -271,7 +271,7 @@ it.each(['live', 'file reload'] as const)(
     })
     expect(hostCalls.publishAttentionRead).toHaveBeenCalledTimes(1)
     expect(unsubscribe).toHaveBeenCalledTimes(mode === 'file reload' ? 2 : 1)
-    screen.unmount()
+    await act(async () => screen.unmount())
   }
 )
 
@@ -300,18 +300,23 @@ it.each([10, 100])(
         })
     })
     const ids = Array.from({ length: count }, (_, i) => `environment-${i}`)
-    const owners = ids.map((environmentId) =>
-      getStructuredAgentSessionTurnCompletionFeed({ kind: 'environment', environmentId })
-    )
+    const owners: ReturnType<typeof completionFeeds.getStructuredAgentSessionTurnCompletionFeed>[] =
+      []
     const releases: ReturnType<typeof vi.fn>[] = []
-    const activations = owners.map((owner) => {
-      const activate = owner.activate
-      return vi.spyOn(owner, 'activate').mockImplementation(() => {
-        const release = vi.fn(activate())
-        releases.push(release)
-        return release
-      })
-    })
+    const getFeed = completionFeeds.getStructuredAgentSessionTurnCompletionFeed
+    vi.spyOn(completionFeeds, 'getStructuredAgentSessionTurnCompletionFeed').mockImplementation(
+      (target) => {
+        const owner = getFeed(target)
+        const activate = owner.activate
+        vi.spyOn(owner, 'activate').mockImplementation(() => {
+          const release = vi.fn(activate.call(owner))
+          releases.push(release)
+          return release
+        })
+        owners.push(owner)
+        return owner
+      }
+    )
     let renders = 0
     function Holder() {
       renders++
@@ -326,14 +331,16 @@ it.each([10, 100])(
     expect(idReads).toBe(0)
     await act(async () => notify([...ids]))
     expect(idReads).toBe(count)
-    expect(activations.every((activate) => activate.mock.calls.length === 1)).toBe(true)
+    expect(owners).toHaveLength(count)
+    expect(owners.every((owner) => vi.mocked(owner.activate).mock.calls.length === 1)).toBe(true)
     await act(async () => useAppStore.setState({ runtimeEnvironments: known.slice(1) }))
     expect(releases[0]).toHaveBeenCalledTimes(1)
     expect(releases.slice(1).every((release) => release.mock.calls.length === 0)).toBe(true)
     await act(async () => notify([]))
     expect(renders).toBe(1)
-    screen.unmount()
-    expect(activations.every((activate) => activate.mock.calls.length === 1)).toBe(true)
+    await act(async () => screen.unmount())
+    expect(owners).toHaveLength(count)
+    expect(owners.every((owner) => vi.mocked(owner.activate).mock.calls.length === 1)).toBe(true)
     expect(releases).toHaveLength(count)
     expect(releases.every((release) => release.mock.calls.length === 1)).toBe(true)
   }
