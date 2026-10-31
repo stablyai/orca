@@ -6,8 +6,17 @@ import { NativeChatResolutionReceipt } from '../../renderer/src/components/nativ
 import { NativeChatSettledBodyContext } from '../../renderer/src/components/native-chat/native-chat-settled-body'
 import { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
-import { replaceHostTestState } from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
-import { settledBodySerializationEvidence } from '../native-chat/agent-session-wire/agent-session-settled-body'
+import {
+  replaceHostTestState,
+  attach,
+  CALLER,
+  envelope,
+  hostTestState
+} from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
+import {
+  settledBodySerializationEvidence,
+  settledBodyPresentation
+} from '../native-chat/agent-session-wire/agent-session-settled-body'
 import { createBridgePortPair } from '../../../mobile/src/mobile-web-shell/bridge/bridge-port-pair-test-harness'
 import { createFakeRpcClient } from '../../../mobile/src/mobile-web-shell/bridge-host-test-fakes'
 import { STRUCTURED_AGENT_SESSION_PROMPT_RESPONSE_METHODS } from '../runtime/rpc/methods/structured-agent-session-prompt-response'
@@ -17,7 +26,10 @@ import {
 } from '../../shared/remote-runtime/control/remote-runtime-shared-control-test-server'
 import { RemoteRuntimeRequestConnection } from '../../shared/remote-runtime/requests/remote-runtime-request-connection'
 import { RUNTIME_ORDINARY_MESSAGE_CAPABILITY } from '../../shared/runtime-ordinary-message-capability'
-import type { AgentSessionMutationResult } from '../../shared/agent-session-wire'
+import type {
+  AgentSessionMutationResult,
+  AgentSessionSubscribeEvent
+} from '../../shared/agent-session-wire'
 import { afterEach, expect, it, vi } from 'vitest'
 import {
   acquireReadyCodexForTest,
@@ -26,12 +38,6 @@ import {
   identityFor
 } from './codex-structured-session-adapter-fixture'
 import { CodexPromptRegistry } from './codex-prompt-registry'
-import {
-  attach,
-  CALLER,
-  envelope,
-  hostTestState
-} from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
 import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD
@@ -48,8 +54,6 @@ import {
 } from '../../../mobile/src/mobile-web-shell/bridge/bridge-reply-chunking'
 import { encrypt, decrypt } from '../../shared/e2ee-crypto'
 import { sealMobileE2EEV2Frame, openMobileE2EEV2Frame } from '../../shared/mobile-e2ee-v2-framing'
-import type { AgentSessionSubscribeEvent } from '../../shared/agent-session-wire'
-import { settledBodyPresentation } from '../native-chat/agent-session-wire/agent-session-settled-body'
 import { createAgentSessionSettledBodyReader } from '../../shared/agent-session-settled-body-reader'
 import {
   AgentSessionSettledBodyPieceSchema,

@@ -1,6 +1,9 @@
 import { clientSupportsSnapshotCatchUp } from './structured-agent-session-history-capability'
 import { STRUCTURED_AGENT_SESSION_HISTORY_METHODS } from './structured-agent-session-history'
-import { clientReadsSettledBodies } from './structured-agent-session-item'
+import {
+  clientReadsSettledBodies,
+  STRUCTURED_AGENT_SESSION_ITEM_METHODS
+} from './structured-agent-session-item'
 import { clientRequestsCommands } from './structured-agent-session-policy'
 import {
   clientReadsCurrentRequests,
@@ -43,7 +46,6 @@ import {
 import { STRUCTURED_AGENT_SESSION_TURN_COMPLETION_METHODS } from './structured-agent-session-turn-completion-stream'
 import { STRUCTURED_AGENT_SESSION_THREAD_GOAL_METHODS } from './structured-agent-session-thread-goal'
 import { STRUCTURED_AGENT_SESSION_CONVERSATION_OUTLINE_METHODS } from './structured-agent-session-conversation-outline'
-import { STRUCTURED_AGENT_SESSION_ITEM_METHODS } from './structured-agent-session-item'
 import { STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS } from './structured-agent-session-options-read'
 import {
   AttachParams,
