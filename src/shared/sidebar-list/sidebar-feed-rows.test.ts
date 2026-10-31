@@ -4,6 +4,7 @@ import type { ProjectGroup } from '../project-group-types'
 import type { Repo } from '../repo-types'
 import { NO_WORKSPACE_ROW_FILTERS } from '../workspace-view/workspace-row-filters'
 import type { Worktree } from '../worktree/types'
+import type { FolderWorkspace } from '../folder-workspace-types'
 import { ALL_GROUP_KEY } from './group-keys'
 import type { HostSectionRow } from './host-section-rows'
 import { normalizePairedServerRow } from './paired-server-rows'
@@ -50,6 +51,24 @@ function worktree(id: string, overrides: Partial<Worktree> = {}): Worktree {
 
 function repo(id: string, overrides: Partial<Repo> = {}): Repo {
   return { id, path: `/${id}`, displayName: id, badgeColor: '', addedAt: 0, ...overrides }
+}
+
+function folderWorkspace(id: string, projectGroupId: string): FolderWorkspace {
+  return {
+    id,
+    projectGroupId,
+    name: id,
+    folderPath: `/${id}`,
+    linkedTask: null,
+    comment: '',
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    lastActivityAt: 0,
+    createdAt: 0,
+    updatedAt: 0
+  }
 }
 
 function domains(overrides: Partial<SidebarFeedDomains>): SidebarFeedDomains {
@@ -218,6 +237,48 @@ describe('buildSidebarFeedRows keeps same-id workspaces on two hosts apart', () 
     expect(repoOf('ssh:box')).toMatchObject({ repo: { connectionId: 'box' } })
     expect(repoOf('local')).toMatchObject({ repo: { id: 'r' } })
     expect(repoOf('local')).not.toMatchObject({ repo: { connectionId: 'box' } })
+  })
+})
+
+describe('planSidebarFeedRows project filtering', () => {
+  const selectedRepo = repo('selected-repo', { projectGroupId: 'selected-group' })
+  const otherRepo = repo('other-repo', { projectGroupId: 'other-group' })
+  const repos = [selectedRepo, otherRepo]
+  const folders = [
+    folderWorkspace('selected-folder', 'selected-group'),
+    folderWorkspace('other-folder', 'other-group')
+  ]
+  const groups = [projectGroup('selected-group', null), projectGroup('other-group', null)]
+  const feed = domains({
+    workspaces: buildWorkspaceRows({
+      worktrees: [],
+      folderWorkspaces: folders,
+      repos,
+      lineageById: {}
+    })
+  })
+
+  it('matches folder workspaces to the selected project group and restores them when cleared', () => {
+    const selected = planSidebarFeedRows(
+      feed,
+      indexSidebarFeed(feed, repos),
+      catalog(repos, groups),
+      view({ filters: { ...NO_WORKSPACE_ROW_FILTERS, filterRepoIds: [selectedRepo.id] } }),
+      []
+    )
+    const cleared = planSidebarFeedRows(
+      feed,
+      indexSidebarFeed(feed, repos),
+      catalog(repos, groups),
+      view(),
+      []
+    )
+
+    expect(selected.visibleFolderWorkspaces.map((folder) => folder.id)).toEqual(['selected-folder'])
+    expect(cleared.visibleFolderWorkspaces.map((folder) => folder.id)).toEqual([
+      'selected-folder',
+      'other-folder'
+    ])
   })
 })
 

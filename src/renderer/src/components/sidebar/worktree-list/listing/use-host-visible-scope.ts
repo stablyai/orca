@@ -13,6 +13,7 @@ import {
   filterProjectGroupsForVisibleHosts,
   getVisibleSidebarHostIdSet
 } from '../../../../../../shared/sidebar-list/host-filtering'
+import { filterFolderWorkspacesForSelectedProjects } from '../../../../../../shared/sidebar-list/folder-workspace-project-visibility'
 
 // Apply host/device scope consistently to repos, project groups and folder workspaces.
 export function useSidebarHostVisibleScope(args: {
@@ -51,12 +52,16 @@ export function useSidebarHostVisibleScope(args: {
       visibleHostIdSet,
       defaultHostId
     )
-    if (!hideWorkspacesFromOtherDevices) {
-      return hostVisibleWorkspaces
-    }
-    return filterFolderWorkspacesFromOtherDevices(
-      hostVisibleWorkspaces,
-      args.pairedDeviceIdsByEnvironment
+    const deviceVisibleWorkspaces = hideWorkspacesFromOtherDevices
+      ? filterFolderWorkspacesFromOtherDevices(
+          hostVisibleWorkspaces,
+          args.pairedDeviceIdsByEnvironment
+        )
+      : hostVisibleWorkspaces
+    return filterFolderWorkspacesForSelectedProjects(
+      deviceVisibleWorkspaces,
+      repos,
+      filterState.filterRepoIds
     )
   }, [
     args.pairedDeviceIdsByEnvironment,
@@ -64,6 +69,8 @@ export function useSidebarHostVisibleScope(args: {
     folderWorkspaces,
     hideWorkspacesFromOtherDevices,
     projectGroups,
+    repos,
+    filterState.filterRepoIds,
     visibleHostIdSet
   ])
 

@@ -28,6 +28,7 @@ import type { WorkspaceStatusDefinition, Worktree } from '../worktree/types'
 import type { WorktreeLineage } from '../worktree/lineage-types'
 import type { FolderWorkspace } from '../folder-workspace-types'
 import { getEmptyProjectPlaceholderRepoIds } from './empty-project-placeholder-repos'
+import { filterFolderWorkspacesForSelectedProjects } from './folder-workspace-project-visibility'
 import {
   filterFolderWorkspacesForVisibleHosts,
   filterProjectGroupsForVisibleHosts,
@@ -198,12 +199,17 @@ export function planSidebarFeedRows(
     visibleHostIdSet,
     defaultHostId
   )
-  const visibleFolderWorkspaces = view.filters.hideWorkspacesFromOtherDevices
+  const deviceVisibleFolderWorkspaces = view.filters.hideWorkspacesFromOtherDevices
     ? filterFolderWorkspacesFromOtherDevices(
         hostVisibleFolderWorkspaces,
         pairedDeviceIdsByEnvironment
       )
     : hostVisibleFolderWorkspaces
+  const visibleFolderWorkspaces = filterFolderWorkspacesForSelectedProjects(
+    deviceVisibleFolderWorkspaces,
+    repos,
+    view.filters.filterRepoIds
+  )
   const visibleProjectGroups = filterProjectGroupsForVisibleHosts(
     projectGroups,
     visibleHostIdSet,
