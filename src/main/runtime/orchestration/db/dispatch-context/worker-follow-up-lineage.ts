@@ -108,14 +108,17 @@ export function recordWorkerResumeSession(
   const connectionId = isLocalHookConnectionId(session.connectionId)
     ? null
     : (session.connectionId ?? null)
-  db.db.prepare('UPDATE worker_terminal_resources SET resume_session = ? WHERE id = ?').run(
-    JSON.stringify({
-      agent: session.agent,
-      providerSession: session.providerSession,
-      connectionId
-    }),
-    resourceId
-  )
+  const value = JSON.stringify({
+    agent: session.agent,
+    providerSession: session.providerSession,
+    connectionId
+  })
+  // A repeat of the stored conversation writes nothing.
+  db.db
+    .prepare(
+      'UPDATE worker_terminal_resources SET resume_session = ? WHERE id = ? AND resume_session IS NOT ?'
+    )
+    .run(value, resourceId, value)
 }
 
 /** A reopened worker keeps its conversation until its own pane reports one. */
