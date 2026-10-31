@@ -42,6 +42,7 @@ export function attachWebChatPinch(
   node.addEventListener('touchcancel', onTouchEnd, options)
   node.addEventListener('gesturestart', onGesture, options)
   node.addEventListener('gesturechange', onGesture, options)
+  node.addEventListener('gestureend', onGesture, options)
   return () => {
     node.removeEventListener('touchstart', onTouchStart, options)
     node.removeEventListener('touchmove', onTouchMove, options)
@@ -49,5 +50,6 @@ export function attachWebChatPinch(
     node.removeEventListener('touchcancel', onTouchEnd, options)
     node.removeEventListener('gesturestart', onGesture, options)
     node.removeEventListener('gesturechange', onGesture, options)
+    node.removeEventListener('gestureend', onGesture, options)
   }
 }

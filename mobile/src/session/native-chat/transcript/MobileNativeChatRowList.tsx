@@ -45,7 +45,7 @@ const MobileNativeChatPinchScroll = forwardRef<
   )
 })
 
-const webPinchFrame = { flex: 1, minHeight: 0 }
+const webPinchFrame = { flex: 1, minHeight: 0, touchAction: 'pan-y' as const }
 
 export function MobileNativeChatRowList(props: Props): ReactElement {
   const { tail, rowKeys, rows, renderItem, contentContainerStyle, onScroll, footer } = props

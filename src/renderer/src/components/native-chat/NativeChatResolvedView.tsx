@@ -293,8 +293,8 @@ export function NativeChatResolvedView({
     rootRef,
     { sessionId, isVisible }
   )
-
-  useNativeChatFontSize(isConversation && isVisible && isFocusedGroup, rootRef)
+  const chatShown = isConversation && isVisible
+  useNativeChatFontSize(chatShown && isFocusedGroup, rootRef, chatShown)
   const find = useNativeChatFind(isVisible && isFocusedGroup, rootRef, composerRef, messageListRef)
   const contextMenu = useNativeChatContextMenu({
     rootRef,
