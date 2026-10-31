@@ -193,7 +193,9 @@ for (const agent of ['claude', 'codex'] as const) {
 
     it('never waits for an unresolved account on passive reads, including after the original deadline', async () => {
       vi.useFakeTimers({ now: 1000 })
-      onTestFinished(() => vi.useRealTimers())
+      onTestFinished(() => {
+        vi.useRealTimers()
+      })
       const home = Promise.withResolvers<AgentSessionAccountHome>()
       const homeRequested = Promise.withResolvers<void>()
       const resolveAccountHome = vi.fn(() => {
@@ -284,11 +286,17 @@ for (const agent of ['claude', 'codex'] as const) {
             if (!bindings) {
               bindings = map
               const keys = map.keys.bind(map)
-              vi.spyOn(map, 'keys').mockImplementation(function* () {
-                for (const key of keys()) {
-                  evictionVisits++
-                  yield key
+              vi.spyOn(map, 'keys').mockImplementation(() => {
+                const iterator = keys()
+                const next = iterator.next.bind(iterator)
+                iterator.next = (...args) => {
+                  const result = next(...args)
+                  if (!result.done) {
+                    evictionVisits++
+                  }
+                  return result
                 }
+                return iterator
               })
             }
             return bind(map, ...args)
@@ -418,8 +426,14 @@ for (const agent of ['claude', 'codex'] as const) {
       expect(fallback.models[0]).not.toHaveProperty('defaultEffort')
       expect(fallback.models[0]).not.toHaveProperty('declaredDefaultEffort')
       const seed = getAgentSessionOptionCatalog(agent)
-      const initial = createStructuredAgentSessionOptionState(agent, seed)
-      initial.record.values.model = { value: h.full[0], source: 'saved' }
+      if (!seed) {
+        throw new Error(`missing option catalog for ${agent}`)
+      }
+      const initial = commitStructuredAgentSessionOptionValues(
+        createStructuredAgentSessionOptionState(agent, seed),
+        { model: h.full[0] },
+        'seeded'
+      )
       const apply = (state: typeof initial, catalog: AgentSessionModelCatalogResult) =>
         applyStructuredAgentSessionModelCatalog(state, seed, catalog, {
           newLaunch: true,
