@@ -93,6 +93,11 @@ jobs:
           owner: stablyai
           repositories: orca-daily
 
+      - name: Select Xcode 26
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '26.0'
+
       # Skip unchanged main to avoid duplicate builds/tags and runner cost.
       - name: Check whether main moved since the last daily
         id: freshness

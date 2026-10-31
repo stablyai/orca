@@ -80,6 +80,11 @@ jobs:
           git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
           git checkout "$WORKFLOW_SHA" -- config/scripts/assert-github-release-is-draft.mjs
 
+      - name: Select Xcode 26
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '26.0'
+
       - name: Setup pnpm
         uses: pnpm/setup@v2
         with:
