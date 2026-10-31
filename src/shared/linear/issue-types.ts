@@ -1,4 +1,5 @@
 import type { LinearProjectSummary } from './project-types'
+import type { LinearLabel } from './workspace-types'
 
 export type LinearIssue = {
   id: string
@@ -24,6 +25,8 @@ export type LinearIssue = {
   subIssues?: LinearIssueChildSummary[]
   labels: string[]
   labelIds: string[]
+  // Optional so issues from older runtimes, which send only names and ids, still parse.
+  labelDetails?: LinearLabel[]
   assignee?: {
     id: string
     displayName: string

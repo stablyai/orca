@@ -8,6 +8,7 @@ import type {
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 import type { WorktreeCardDetailsHoverControl } from './worktree-card-details-hover-state'
 import type { WorkspaceReferenceDetailsMap } from './workspace-reference-details'
+import type { LinearIssueDisplayLabel } from './linear-issue-display-labels'
 
 export type WorktreeCardIssueDisplay =
   | IssueInfo
@@ -25,7 +26,7 @@ export type WorktreeCardLinearIssueDisplay = {
   url?: string
   stateName?: string
   stateType?: string
-  labels?: string[]
+  labels?: LinearIssueDisplayLabel[]
 }
 
 export type WorktreeCardJiraIssueDisplay = {

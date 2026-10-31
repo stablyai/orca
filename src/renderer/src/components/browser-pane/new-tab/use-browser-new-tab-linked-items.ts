@@ -61,7 +61,13 @@ export function useBrowserNewTabLinkedItems(
     {
       review: review.prDisplay,
       issue: linked.issueDisplay,
-      linearIssue: linked.linearIssue,
+      linearIssue: linked.linearIssue
+        ? {
+            identifier: linked.linearIssue.identifier,
+            title: linked.linearIssue.title,
+            url: linked.linearIssue.url
+          }
+        : null,
       jiraIssue: linked.jiraIssueDisplay
     },
     // Why no per-item details: their lookup routes by the focused server, which this page must not.

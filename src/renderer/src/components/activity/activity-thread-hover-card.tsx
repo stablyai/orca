@@ -1,7 +1,6 @@
 import React, { useCallback } from 'react'
 import { ExternalLink, MonitorUp, Pencil, StickyNote } from 'lucide-react'
 import { toast } from 'sonner'
-import { Badge } from '@/components/ui/badge'
 import { HoverCard, HoverCardContent } from '@/components/ui/hover-card'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
@@ -13,7 +12,8 @@ import {
   WorktreeCardDetailSection,
   WorktreeCardDetailSectionContent
 } from '../sidebar/WorktreeCardDetailSection'
-import { LinearStateBadge } from '../sidebar/WorktreeCardMetadataStatusBadges'
+import { LinearLabelBadge, LinearStateBadge } from '../sidebar/WorktreeCardMetadataStatusBadges'
+import { getLinearIssueDisplayLabelKey } from '../sidebar/linear-issue-display-labels'
 import { WorktreeCardIssueDetailSection } from '../sidebar/WorktreeCardIssueDetailSection'
 import { WorktreeCardReviewDetailSection } from '../sidebar/WorktreeCardReviewDetailSection'
 import { WorktreeCardAutomationDetailSection } from '../sidebar/WorktreeCardAutomationDetailSection'
@@ -306,10 +306,12 @@ function ActivityThreadHoverCardContent({
                   {secondary.hoverLinearIssue.stateName && (
                     <LinearStateBadge stateName={secondary.hoverLinearIssue.stateName} />
                   )}
-                  {(secondary.hoverLinearIssue.labels ?? []).map((label) => (
-                    <Badge key={label} variant="outline" className="h-4 px-1.5 text-[9px]">
-                      {label}
-                    </Badge>
+                  {(secondary.hoverLinearIssue.labels ?? []).map((label, index) => (
+                    <LinearLabelBadge
+                      key={getLinearIssueDisplayLabelKey(label, index)}
+                      name={label.name}
+                      color={label.color}
+                    />
                   ))}
                 </div>
               )}

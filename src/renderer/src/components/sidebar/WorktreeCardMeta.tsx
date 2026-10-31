@@ -3,7 +3,6 @@ import { useWorkspaceReferenceLinkActions } from './use-workspace-reference-link
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
 import { WorktreeCardLinkedItemsSection } from './WorktreeCardLinkedItemsSection'
-import { Badge } from '@/components/ui/badge'
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card'
 import { ExternalLink, MonitorUp, Pencil, StickyNote } from 'lucide-react'
 import { toast } from 'sonner'
@@ -17,7 +16,8 @@ import {
 } from './WorktreeCardDetailSection'
 import { DetailHeader, MetadataActionIcon } from './WorktreeCardMetadataControls'
 import { hasWorktreeCardDetails, WorktreeCardMetaBadges } from './WorktreeCardMetaBadges'
-import { LinearStateBadge } from './WorktreeCardMetadataStatusBadges'
+import { LinearLabelBadge, LinearStateBadge } from './WorktreeCardMetadataStatusBadges'
+import { getLinearIssueDisplayLabelKey } from './linear-issue-display-labels'
 import { useWorktreeCardDetailsHoverControl } from './worktree-card-details-hover-state'
 import { WorktreeCardLinkedReviewActions } from './WorktreeCardReviewActions'
 import type {
@@ -291,10 +291,12 @@ export function WorktreeCardDetailsHover({
                             stateType={linearIssue.stateType}
                           />
                         )}
-                        {(linearIssue.labels ?? []).map((label) => (
-                          <Badge key={label} variant="outline" className="h-4 px-1.5 text-[9px]">
-                            {label}
-                          </Badge>
+                        {(linearIssue.labels ?? []).map((label, index) => (
+                          <LinearLabelBadge
+                            key={getLinearIssueDisplayLabelKey(label, index)}
+                            name={label.name}
+                            color={label.color}
+                          />
                         ))}
                       </div>
                     )}

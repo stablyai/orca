@@ -8,6 +8,7 @@ import { makeWorktree } from '../../store/slices/worktrees-slice-test-fixtures'
 import { getWorkspaceAttachmentKey } from '../../../../shared/workspace-attachment-normalization'
 import { useWorktreeCardDetailsHoverControl } from './worktree-card-details-hover-state'
 import type { WorkspaceReferenceDetailsMap } from './workspace-reference-details'
+import type { WorktreeCardLinearIssueDisplay } from './worktree-card-meta-types'
 
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -86,11 +87,13 @@ const review = {
 function Fixture({
   onManage,
   referenceDetails,
-  worktree = workspace
+  worktree = workspace,
+  linearIssue = null
 }: {
   onManage: () => void
   referenceDetails?: WorkspaceReferenceDetailsMap
   worktree?: Worktree
+  linearIssue?: WorktreeCardLinearIssueDisplay | null
 }): React.JSX.Element {
   const hoverControl = useWorktreeCardDetailsHoverControl()
   return (
@@ -99,7 +102,7 @@ function Fixture({
       referenceDetails={referenceDetails}
       review={review}
       issue={null}
-      linearIssue={null}
+      linearIssue={linearIssue}
       comment={null}
       onManageLinks={onManage}
       hoverControl={hoverControl}
@@ -148,6 +151,48 @@ describe('workspace linked references in hover details', () => {
     const icon = siblingRow?.querySelector('svg')
     expect(icon?.classList.contains('lucide-git-merge')).toBe(true)
     expect(icon?.classList.contains('dark:text-purple-400/70')).toBe(true)
+  })
+  it('shows the linked Linear task labels with their colors', () => {
+    const task = attachments[2]
+    const { container } = render(
+      <Fixture
+        onManage={vi.fn()}
+        linearIssue={{
+          identifier: 'ENG-215',
+          title: 'Keyboard accessibility',
+          url: task.url,
+          labels: [{ name: 'Bug', color: '#eb5757' }, { name: 'a11y' }]
+        }}
+      />
+    )
+    const taskRow = Array.from(container.querySelectorAll('[data-workspace-hover-reference]')).find(
+      (node) =>
+        node.getAttribute('data-workspace-hover-reference') === getWorkspaceAttachmentKey(task)
+    )
+    expect(taskRow?.textContent).toContain('Bug')
+    expect(taskRow?.textContent).toContain('a11y')
+    expect(taskRow?.innerHTML).toContain('background-color: #eb5757')
+  })
+  it('shows labels for a linked Linear task that is not the card’s own issue', () => {
+    const task = attachments[2]
+    const { container } = render(
+      <Fixture
+        onManage={vi.fn()}
+        referenceDetails={{
+          [getWorkspaceAttachmentKey(task)]: {
+            title: 'Keyboard accessibility',
+            url: task.url ?? '',
+            labels: [{ name: 'Design', color: '#f2c94c' }]
+          }
+        }}
+      />
+    )
+    const taskRow = Array.from(container.querySelectorAll('[data-workspace-hover-reference]')).find(
+      (node) =>
+        node.getAttribute('data-workspace-hover-reference') === getWorkspaceAttachmentKey(task)
+    )
+    expect(taskRow?.textContent).toContain('Design')
+    expect(taskRow?.innerHTML).toContain('background-color: #f2c94c')
   })
   it('shows grouped peers and only each review’s own known checks', () => {
     const { container } = render(<Fixture onManage={vi.fn()} />)

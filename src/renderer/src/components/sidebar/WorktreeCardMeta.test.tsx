@@ -233,7 +233,7 @@ describe('WorktreeCardDetailsHover', () => {
           title: 'Add Linear ticket display feature',
           url: 'https://linear.app/acme/issue/ENG-123',
           stateName: 'In Progress',
-          labels: ['feature', 'ui']
+          labels: [{ name: 'feature', color: '#4cb782' }, { name: 'ui' }]
         }}
         review={null}
         comment={null}
@@ -250,6 +250,7 @@ describe('WorktreeCardDetailsHover', () => {
     expect(markup).toContain('https://linear.app/acme/issue/ENG-123')
     expect(markup).toContain('View on Linear')
     expect(markup).toContain('In Progress')
+    expect(markup).toContain('background-color:#4cb782')
   })
 
   it('shows the Jira icon badge and linked issue details', () => {

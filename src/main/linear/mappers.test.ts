@@ -18,7 +18,7 @@ describe('mapLinearIssue', () => {
       assignee: Promise.reject(new Error('assignee fetch failed')),
       project: Promise.reject(new Error('project fetch failed')),
       labels: async () => ({
-        nodes: [{ id: 'label-1', name: 'Bug' }]
+        nodes: [{ id: 'label-1', name: 'Bug', color: '#eb5757' }]
       }),
       children: async () => ({
         nodes: [
@@ -39,6 +39,7 @@ describe('mapLinearIssue', () => {
       identifier: 'LIN-1',
       title: 'Investigate mobile detail',
       labels: ['Bug'],
+      labelDetails: [{ id: 'label-1', name: 'Bug', color: '#eb5757' }],
       subIssues: [{ id: 'child-1', identifier: 'LIN-2' }],
       branchName: 'team/lin-1-investigate-mobile-detail',
       state: { name: '' },

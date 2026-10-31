@@ -100,6 +100,22 @@ export function LinearStateBadge({
   )
 }
 
+export function LinearLabelBadge({
+  name,
+  color
+}: {
+  name: string
+  color?: string
+}): React.JSX.Element {
+  return (
+    <MetadataStatusBadge label={name}>
+      {color && (
+        <span className="inline-block size-1.5 rounded-full" style={{ backgroundColor: color }} />
+      )}
+    </MetadataStatusBadge>
+  )
+}
+
 export function ReviewStateBadge({
   state,
   label

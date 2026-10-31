@@ -3,7 +3,8 @@ import { getWorkspaceAttachments } from '../../../../shared/workspace-attachment
 import type { IssueInfo } from '../../../../shared/github/pull-request-types'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import { getWorktreeCardJiraIssueDisplay } from './worktree-card-jira-issue-display'
-import type { WorktreeCardIssueDisplay } from './WorktreeCardMeta'
+import { getLinearIssueDisplayLabels } from './linear-issue-display-labels'
+import type { WorktreeCardIssueDisplay, WorktreeCardLinearIssueDisplay } from './WorktreeCardMeta'
 import {
   coerceWorktreeCardVisibleTitle,
   getWorktreeCardTitleDisplay
@@ -65,7 +66,7 @@ export function useWorktreeCardLinkedDetails({
   )
   const linearIssueUrlFallback = linearReferences.length === 1 ? linearReferences[0].url : undefined
 
-  const linearIssueDisplay = worktree.linkedLinearIssue
+  const linearIssueDisplay: WorktreeCardLinearIssueDisplay | null = worktree.linkedLinearIssue
     ? linearIssue
       ? {
           identifier: linearIssue.identifier,
@@ -73,7 +74,7 @@ export function useWorktreeCardLinkedDetails({
           url: linearIssue.url,
           stateName: linearIssue.state?.name,
           stateType: linearIssue.state?.type,
-          labels: linearIssue.labels
+          labels: getLinearIssueDisplayLabels(linearIssue)
         }
       : {
           identifier: worktree.linkedLinearIssue,

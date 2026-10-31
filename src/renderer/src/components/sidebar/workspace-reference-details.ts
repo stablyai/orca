@@ -13,6 +13,7 @@ import {
 import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
 import { getWorkspaceAttachmentSourceContext } from './workspace-attachment-source-result'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
+import type { LinearIssueDisplayLabel } from './linear-issue-display-labels'
 import type { HostedReviewProvider } from '../../../../shared/hosted-review'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
@@ -25,6 +26,7 @@ export type WorkspaceReferenceDetails = {
   stateName?: string
   stateType?: string
   issueState?: 'open' | 'closed'
+  labels?: LinearIssueDisplayLabel[]
 }
 export type WorkspaceReferenceDetailsMap = Readonly<
   Record<string, WorkspaceReferenceDetails | undefined>

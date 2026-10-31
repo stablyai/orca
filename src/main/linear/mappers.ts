@@ -1,5 +1,6 @@
 import type { Issue, IssueSearchResult } from '@linear/sdk'
 import type { LinearIssue, LinearIssueChildSummary } from '../../shared/linear/issue-types'
+import type { LinearLabel } from '../../shared/linear/workspace-types'
 
 type IssueWithChildren = Issue & {
   children: Issue['children']
@@ -41,11 +42,13 @@ export async function mapLinearIssue(
 
   let labelNames: string[] = []
   let labelIds: string[] = []
+  let labelDetails: LinearLabel[] | undefined
   if ('labels' in issue && typeof issue.labels === 'function') {
     try {
       const labelsConnection = await (issue as Issue).labels()
       labelNames = labelsConnection.nodes.map((l) => l.name)
       labelIds = labelsConnection.nodes.map((l) => l.id)
+      labelDetails = labelsConnection.nodes.map((l) => ({ id: l.id, name: l.name, color: l.color }))
     } catch {
       // Missing labels must not hide the issue.
     }
@@ -94,6 +97,7 @@ export async function mapLinearIssue(
     subIssues,
     labels: labelNames,
     labelIds,
+    labelDetails,
     assignee: assignee
       ? {
           id: assignee.id,
