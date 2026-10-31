@@ -289,6 +289,10 @@ export default function TabGroupPanel({
               />
             ) : null}
             <div className="min-w-0 flex-1 h-full">{tabBar}</div>
+            {/* Why: overflowing tabs eat all strip whitespace; keep a window-drag handle while the right sidebar header is closed. */}
+            {reserveClosedExplorerToggleSpace && !rightSidebarOpen ? (
+              <div className="w-[40px] shrink-0" />
+            ) : null}
             <div
               className={actionChromeClassName}
               style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
