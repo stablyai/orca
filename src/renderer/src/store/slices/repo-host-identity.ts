@@ -16,6 +16,10 @@ export { getRepoHostIdentity, getRepoHostIdentityForParts, type HostScopedRepoKe
 
 type RepoIdentityParts = Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>
 
+export function getRepoRowIdentity(repo: RepoIdentityParts): string {
+  return JSON.stringify([getRepoHostIdentity(repo), normalizeHostPart(repo.connectionId)])
+}
+
 /** One exact row: a paired server's twins share its `runtime:` host and differ by nested SSH target. */
 export function isSameRepoRow(left: RepoIdentityParts, right: RepoIdentityParts): boolean {
   return (

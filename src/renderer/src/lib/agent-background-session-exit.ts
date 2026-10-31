@@ -41,3 +41,19 @@ export function forwardAgentBackgroundExit(
     onExit?.(ptyId, code)
   }
 }
+
+/** A background session's exit: settle its tab's binding, drop its launch config, tell the caller. */
+export function settleAgentBackgroundExit(
+  tabId: string | undefined,
+  paneKey: string,
+  onExit: Parameters<typeof forwardAgentBackgroundExit>[0],
+  ptyId: string,
+  code: number,
+  options?: PtyExitOptions
+): void {
+  if (tabId) {
+    settleTabPtyBinding(tabId, ptyId, code, options)
+  }
+  useAppStore.getState().clearAgentLaunchConfig(paneKey)
+  forwardAgentBackgroundExit(onExit, ptyId, code, options)
+}

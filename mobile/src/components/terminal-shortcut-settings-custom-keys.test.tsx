@@ -73,10 +73,10 @@ vi.mock('react-native', () => ({
   View: hosts.View,
   Text: hosts.Text,
   Pressable: hosts.Pressable,
-  Switch: hosts.View,
   StyleSheet: { create: <T,>(styles: T) => styles, absoluteFillObject: {} },
   Platform: { OS: 'ios', select: (options: Record<string, unknown>) => options.ios }
 }))
+vi.mock('./MobileSwitch', () => ({ MobileSwitch: hosts.View }))
 vi.mock('expo-router', () => ({
   useFocusEffect: (effect: () => void) => useEffect(effect, [effect])
 }))

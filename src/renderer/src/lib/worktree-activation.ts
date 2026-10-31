@@ -1,4 +1,5 @@
 import { canInspectAgentActivationInventory } from './worktree-activation-pty-inventory'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from './worktree-runtime-owner'
 import { noteUserWorkspaceOpen } from './workspace-switch-user-act'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
@@ -9,7 +10,6 @@ import { registerWorktreeActivation } from '@/lib/worktree-activation-nav-regist
 import { workspaceHasSleepingAgentSessions } from '@/lib/worktree-agent-activation-gate'
 import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   folderWorkspaceActivationBlocked,
@@ -217,10 +217,10 @@ export function activateAndRevealWorktree(
     })
   )
   const postActivationState = useAppStore.getState()
-  const ownerRuntimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(
-    postActivationState,
-    wt.id
-  )
+  const ownerRuntimeEnvironmentId =
+    opts && 'runtimeEnvironmentId' in opts
+      ? (opts.runtimeEnvironmentId ?? null)
+      : runtimeEnvironmentIdOrLocalUnlessTwin(postActivationState, wt.id)
   if (opts?.notifyHostRuntime !== false && isWebRuntimeSessionActive(ownerRuntimeEnvironmentId)) {
     // Why: paired web clients own only local selection, so the desktop host publishes session surfaces without treating it as a nav command.
     void activateWebRuntimeSessionWorktree({
@@ -249,9 +249,8 @@ export function activateAndRevealWorktree(
     })
   }
 
-  const primaryTabId = shouldGateAgentActivation
-    ? null
-    : providesInitialSurface && !hasActivationWork
+  const primaryTabId =
+    shouldGateAgentActivation || (providesInitialSurface && !hasActivationWork)
       ? null
       : ensureWorktreeHasInitialTerminal(
           useAppStore.getState(),
@@ -297,6 +296,9 @@ export function activateAndRevealWorktree(
     opts?.providesInitialSurface !== true
   ) {
     ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId, {
+      ...(opts && 'runtimeEnvironmentId' in opts
+        ? { runtimeEnvironmentId: ownerRuntimeEnvironmentId }
+        : {}),
       startup: opts?.startup,
       agent: opts?.agent
     })

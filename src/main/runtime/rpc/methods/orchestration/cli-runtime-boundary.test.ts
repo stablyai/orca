@@ -136,7 +136,8 @@ describe('orchestration CLI/runtime boundary', () => {
       'term_worker',
       '--inject',
       '--return-preamble',
-      '--json'
+      '--json',
+      '--full'
     ])
     expect(output).toHaveBeenCalledOnce()
     const result = output.mock.calls[0][0].result

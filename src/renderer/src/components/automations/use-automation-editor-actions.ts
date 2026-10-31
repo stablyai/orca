@@ -35,13 +35,14 @@ export function useAutomationEditorActions({
     setEditingHostStableKey,
     setDraft,
     setDraftAtOpen,
+    setTargetEdited,
     setCreateOpen,
     draftRef,
     editingAutomationId,
     editingHostStableKey
   } = local
   const { getDefaultTarget, automationDispatchContext, rowRecoveryHost } = destination
-  const { destinationForProject, editHostResolution } = destinationForm
+  const { destinationForProject, editHostResolution, editDestinationControl } = destinationForm
 
   const openCreateDialog = (template?: AutomationTemplate): void => {
     editRequestRef.current += 1
@@ -84,6 +85,7 @@ export function useAutomationEditorActions({
       : baseDraft
     setDraft(nextDraft)
     setDraftAtOpen(nextDraft)
+    setTargetEdited(false)
     setCreateOpen(true)
   }
 
@@ -117,11 +119,19 @@ export function useAutomationEditorActions({
     const nextDraft = buildAutomationEditDraft(latest)
     setDraft(nextDraft)
     setDraftAtOpen(nextDraft)
+    setTargetEdited(false)
     setCreateOpen(true)
   }
 
   const handleProjectChange = useCallback(
     (projectId: string): void => {
+      setTargetEdited(true)
+      if (
+        editDestinationControl.recordedProject?.id === projectId &&
+        draftRef.current.projectId === projectId
+      ) {
+        return
+      }
       const currentWorktrees = worktreesByRepo[projectId] ?? []
       const currentDefaultWorktree = getDefaultWorktree(currentWorktrees)
       const selectedEditDestination =
@@ -167,6 +177,8 @@ export function useAutomationEditorActions({
     },
     [
       destinationForProject,
+      editDestinationControl.recordedProject,
+      draftRef,
       editingAutomationId,
       editingHostStableKey,
       editHostResolution,
@@ -174,6 +186,7 @@ export function useAutomationEditorActions({
       setEditingHostStableKey,
       setEditingDestination,
       setDraft,
+      setTargetEdited,
       worktreesByRepo
     ]
   )
@@ -185,8 +198,11 @@ export function useAutomationEditorActions({
       setDraft(next)
       if (
         editingAutomationId !== null &&
-        (next.projectId !== current.projectId || next.workspaceId !== current.workspaceId)
+        (next.projectId !== current.projectId ||
+          next.workspaceId !== current.workspaceId ||
+          next.workspaceMode !== current.workspaceMode)
       ) {
+        setTargetEdited(true)
         const target = destinationForProject(next.projectId, editingHostStableKey)
         setEditingDestination(target ? { projectId: next.projectId, destination: target } : null)
         if (target) {
@@ -200,6 +216,7 @@ export function useAutomationEditorActions({
       editingAutomationId,
       editingHostStableKey,
       setDraft,
+      setTargetEdited,
       setEditingDestination,
       setEditingHostStableKey
     ]
