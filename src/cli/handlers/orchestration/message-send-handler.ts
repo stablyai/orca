@@ -154,7 +154,10 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
       }
       if ('delivery' in value) {
         return withWarnings(
-          `Follow-up of ${value.followUpOf} (${value.delivery})\n${formatWorkerStart(value)}`
+          `Follow-up of ${value.followUpOf} (${value.delivery})\n${formatWorkerStart(
+            // The mode line describes a new launch; only a fresh start is one.
+            value.delivery === 'started_fresh' ? value : { ...value, mode: undefined }
+          )}`
         )
       }
       if ('relay' in value) {
