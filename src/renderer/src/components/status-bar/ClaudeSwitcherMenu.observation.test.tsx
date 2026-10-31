@@ -121,3 +121,73 @@ it.each([10, 100])(
     expect(mocks.renders.mock.calls.some(([owner]) => owner === 'b')).toBe(false)
   }
 )
+
+it.each([10, 100])('isolates %s local menus from serialized settings replies', async (count) => {
+  const host = accountHost()
+  accountTransport({})
+  let comparisons = 0
+  const list = vi.fn(async () => host.controller.getStreamSnapshot().claude)
+  const set = vi.fn(async (updates) => {
+    const next = structuredClone({ ...useAppStore.getState().settings!, ...updates })
+    const first = next.claudeManagedAccounts[0]
+    const email = first.email
+    Object.defineProperty(first, 'email', {
+      enumerable: true,
+      get: () => {
+        comparisons += 1
+        return email
+      }
+    })
+    return next
+  })
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: {
+      ...window.api,
+      claudeAccounts: { ...window.api.claudeAccounts, list },
+      codexAccounts: { ...window.api.codexAccounts, list: async () => host.snapshot.codex },
+      settings: { ...window.api.settings, set }
+    }
+  })
+  useAppStore.setState({
+    settings: {
+      ...getDefaultSettings('/test'),
+      claudeManagedAccounts: host.snapshot.claude.accounts.map((account) => ({
+        ...account,
+        managedAuthPath: '/unused'
+      })),
+      activeClaudeManagedAccountId: 'a',
+      activeClaudeManagedAccountIdsByRuntime: { host: 'a', wsl: {} }
+    }
+  })
+  render(
+    <TooltipProvider>
+      {Array.from({ length: count }, (_, id) => (
+        <ClaudeSwitcherMenu
+          key={id}
+          claude={null}
+          compact
+          iconOnly
+          triggerContent="local"
+          chatAction={{ target: { kind: 'local' }, canSwitch: async () => true }}
+        />
+      ))}
+    </TooltipProvider>
+  )
+  await act(async () => {})
+  mocks.renders.mockClear()
+  await act(async () => useAppStore.getState().updateSettings({ terminalFontSize: 17 }))
+  expect(set).toHaveBeenCalledTimes(1)
+  expect(mocks.renders).not.toHaveBeenCalled()
+  expect(comparisons).toBeGreaterThan(0)
+  expect(comparisons).toBeLessThanOrEqual(4)
+  expect(list).toHaveBeenCalledTimes(1)
+  await act(async () =>
+    useAppStore.getState().updateSettings({
+      activeClaudeManagedAccountId: 'b',
+      activeClaudeManagedAccountIdsByRuntime: { host: 'b', wsl: {} }
+    })
+  )
+  expect(mocks.renders).toHaveBeenCalledTimes(2 * count)
+  expect(list).toHaveBeenCalledTimes(2)
+})

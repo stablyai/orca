@@ -24,13 +24,14 @@ function record(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-function sameAccounts(left: unknown, right: unknown): boolean {
+export function sameProviderAccountData(left: unknown, right: unknown): boolean {
   if (Object.is(left, right)) {
     return true
   }
   if (Array.isArray(left) && Array.isArray(right)) {
     return (
-      left.length === right.length && left.every((item, index) => sameAccounts(item, right[index]))
+      left.length === right.length &&
+      left.every((item, index) => sameProviderAccountData(item, right[index]))
     )
   }
   if (!record(left) || !record(right)) {
@@ -39,7 +40,7 @@ function sameAccounts(left: unknown, right: unknown): boolean {
   const keys = Object.keys(left)
   return (
     keys.length === Object.keys(right).length &&
-    keys.every((key) => Object.hasOwn(right, key) && sameAccounts(left[key], right[key]))
+    keys.every((key) => Object.hasOwn(right, key) && sameProviderAccountData(left[key], right[key]))
   )
 }
 
@@ -50,7 +51,9 @@ function publish<P extends Provider>(
   known: boolean
 ): void {
   const previous = resource.answers[provider]
-  const retained = sameAccounts(previous.accounts, accounts) ? previous.accounts : accounts
+  const retained = sameProviderAccountData(previous.accounts, accounts)
+    ? previous.accounts
+    : accounts
   if (retained !== previous.accounts || known !== previous.known) {
     resource.answers[provider] = { accounts: retained, known }
     resource.listeners[provider].forEach((listener) => listener())

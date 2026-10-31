@@ -1,7 +1,10 @@
-import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
 import type { ChatAccountAction } from './ProviderAccountChatButton'
-import { getClaudeAccountRosterSyncKey, getClaudeAccountSyncKey } from './provider-account-sync-key'
+import {
+  getClaudeAccountSettings,
+  getClaudeAccountRosterSyncKey,
+  getClaudeAccountSyncKey
+} from './provider-account-sync-key'
 
 const EMPTY_INACTIVE: [] = []
 
@@ -20,17 +23,8 @@ export function useClaudeSwitcherState(
       s.runtimeEnvironments.find((environment) => environment.id === activeRuntimeEnvironmentId)
         ?.name
   )
-  const accountSettings = useAppStore(
-    useShallow((s) =>
-      !hasActiveRuntimeEnvironment && s.settings
-        ? {
-            claudeManagedAccounts: s.settings.claudeManagedAccounts,
-            activeClaudeManagedAccountId: s.settings.activeClaudeManagedAccountId,
-            activeClaudeManagedAccountIdsByRuntime:
-              s.settings.activeClaudeManagedAccountIdsByRuntime
-          }
-        : null
-    )
+  const accountSettings = useAppStore((s) =>
+    hasActiveRuntimeEnvironment ? null : getClaudeAccountSettings(s.settings)
   )
   const claudeAccountSyncKey = useAppStore((s) =>
     chatAction
