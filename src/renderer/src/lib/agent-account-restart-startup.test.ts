@@ -277,6 +277,27 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
     expect(buildPaneAccountRestartStartup('claude', pane)?.command).toContain('--model')
   })
 
+  it('resumes a Claude Agent Teams pane through `orca claude-teams` with its recorded flags', () => {
+    seedAgentStatus({
+      agentType: 'claude',
+      state: 'done',
+      providerSession: { key: 'session_id', id: SESSION_ID }
+    })
+    useAppStore.getState().registerAgentLaunchConfig(
+      makePaneKey(TAB_ID, LEAF_ID),
+      {
+        agentCommand: 'orca claude-teams --dangerously-skip-permissions',
+        agentArgs: '--dangerously-skip-permissions',
+        agentEnv: {}
+      },
+      { agentType: 'claude-agent-teams' }
+    )
+
+    const command = buildPaneAccountRestartStartup('claude', pane)?.command
+    expect(command).toMatch(/^orca claude-teams --dangerously-skip-permissions\b/)
+    expect(command).toContain(SESSION_ID)
+  })
+
   // #31545: `cd pkg && claude` must come back in pkg, not the tab's start folder.
   it('resumes a Claude started in another folder from that folder', () => {
     seedAgentStatus({
