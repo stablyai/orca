@@ -16,6 +16,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { runQuickCommandInNewTab } from '@/lib/run-quick-command-in-new-tab'
 import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
+import { useQuickCommandArgumentPrompt } from '@/components/terminal-quick-commands/use-quick-command-argument-prompt'
 import { translate } from '@/i18n/i18n'
 import { TabBarQuickCommandsMenu } from './TabBarQuickCommandsMenu'
 import {
@@ -44,6 +45,7 @@ export function TabBarQuickCommandsButton({
   const { executionHostId, hosts, refreshRemoteHost, remoteHostLoadFailed, remoteHostPending } =
     useTerminalQuickCommandHosts(worktreeId)
   const confirm = useConfirmationDialog()
+  const resolveArguments = useQuickCommandArgumentPrompt()
   // Floating terminals have a synthetic workspace ID without a repo; never treat that sentinel as a run target.
   const repoId = useMemo(() => {
     if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
@@ -142,9 +144,13 @@ export function TabBarQuickCommandsButton({
     void useAppStore.getState().deleteTerminalQuickCommand(entry.hostId, command.id)
   }
 
-  const handleRun = (entry: HostedTerminalQuickCommand): void => {
+  const handleRun = async (entry: HostedTerminalQuickCommand): Promise<void> => {
+    const command = await resolveArguments(entry.command)
+    if (!command) {
+      return
+    }
     runQuickCommandInNewTab({
-      command: entry.command,
+      command,
       worktreeId,
       groupId,
       historyId: entry.key

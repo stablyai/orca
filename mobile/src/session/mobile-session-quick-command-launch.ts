@@ -3,6 +3,7 @@ import type { MobileQuickCommandLaunch } from '../terminal/quick-commands'
 import { triggerError } from '../platform/haptics'
 import { translate } from '../i18n/mobile-i18n'
 import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
+import { getTerminalQuickCommandArguments } from '../../../src/shared/terminal-quick-command-arguments'
 import type { MobileNewTabAgentOption } from './mobile-new-tab-agent-options'
 import type { MobileSessionAttachmentsModel } from './use-mobile-session-attachments'
 
@@ -29,6 +30,18 @@ export function launchMobileSessionQuickCommand(
     scope.creatingBrowser ||
     scope.creatingMarkdown
   ) {
+    return false
+  }
+  // Why: mobile has no argument prompt yet; running would send literal `{{name}}` tokens.
+  if (getTerminalQuickCommandArguments(command).length > 0) {
+    triggerError()
+    scope.showToast(
+      translate(
+        'session.quickCommandLaunch.argumentsNeedDesktop',
+        'Run quick commands with arguments from desktop'
+      ),
+      1800
+    )
     return false
   }
   const launch = buildMobileQuickCommandLaunch(command)

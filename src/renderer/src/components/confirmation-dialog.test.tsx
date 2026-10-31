@@ -256,4 +256,19 @@ describe('ConfirmationDialogProvider', () => {
     await waitFor(() => expect(onSettled).toHaveBeenLastCalledWith(false))
     expect(onConfirmed).toHaveBeenCalledTimes(1)
   })
+
+  it('reads field ids that shadow Object.prototype keys as empty values', async () => {
+    const onConfirmed = vi.fn()
+    renderDialog({
+      title: 'Run',
+      fields: { inputs: [{ id: 'constructor', label: 'constructor', required: true }], onConfirmed }
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
+    expect(await screen.findByLabelText('constructor')).toHaveValue('')
+    expect(screen.getByRole('button', { name: 'Confirm' })).toBeDisabled()
+    await userEvent.type(screen.getByLabelText('constructor'), 'api{Enter}')
+
+    await waitFor(() => expect(onConfirmed).toHaveBeenCalledWith({ constructor: 'api' }))
+  })
 })

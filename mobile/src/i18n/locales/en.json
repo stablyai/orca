@@ -2096,7 +2096,8 @@
     "quickCommandLaunch": {
       "editBeforeRunning": "Edit this quick command before running it",
       "defaultLabel": "Quick command",
-      "runFailed": "Couldn't run {{label}}"
+      "runFailed": "Couldn't run {{label}}",
+      "argumentsNeedDesktop": "Run quick commands with arguments from desktop"
     },
     "routeHelpers": {
       "connecting": "Connecting",

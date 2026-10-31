@@ -3,10 +3,9 @@ import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport-types'
 import type { PaneCwdMap } from './resolve-split-cwd'
 import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
-import { isTerminalAgentQuickCommand } from '../../../../shared/terminal-quick-commands'
-import { sendTerminalQuickCommandToPane } from './terminal-quick-command-dispatch'
+import { runTerminalPaneQuickCommand } from './terminal-quick-command-dispatch'
 import type { TerminalPasteSource } from './terminal-paste-model'
-import { runQuickCommandInNewTab } from '@/lib/run-quick-command-in-new-tab'
+import { useQuickCommandArgumentPrompt } from '@/components/terminal-quick-commands/use-quick-command-argument-prompt'
 import type { PreparedAgentSessionFork } from './terminal-agent-session-fork'
 import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
 import { pasteTerminalPaneMenuClipboard } from './terminal-pane-menu-paste'
@@ -103,6 +102,7 @@ export function useTerminalPaneContextMenu({
   rightClickToPaste
 }: UseTerminalPaneContextMenuDeps): TerminalMenuState {
   const contextPaneIdRef = useRef<number | null>(null)
+  const resolveQuickCommandArguments = useQuickCommandArgumentPrompt()
 
   const resolveMenuPane = useCallback((): ManagedPane | null => {
     const manager = managerRef.current
@@ -240,22 +240,24 @@ export function useTerminalPaneContextMenu({
   const onCopyAgentSessionContext = async (): Promise<void> =>
     copyAgentSessionContextFromMenuPane(resolveMenuPane())
 
-  const onQuickCommand = (command: TerminalQuickCommand, historyId: string): void => {
-    if (isTerminalAgentQuickCommand(command)) {
-      runQuickCommandInNewTab({ command, worktreeId, groupId, historyId })
-      return
-    }
-
+  const onQuickCommand = async (
+    savedCommand: TerminalQuickCommand,
+    historyId: string
+  ): Promise<void> => {
+    // Resolve the pane before awaiting; the prompt closes the menu that pins the clicked pane.
     const pane = resolveMenuPane()
-    if (!pane) {
-      return
+    const command = await resolveQuickCommandArguments(savedCommand)
+    if (command) {
+      runTerminalPaneQuickCommand({
+        command,
+        historyId,
+        pane,
+        tabId,
+        worktreeId,
+        groupId,
+        paneTransportsRef
+      })
     }
-    sendTerminalQuickCommandToPane({
-      command,
-      pane,
-      tabId,
-      transport: paneTransportsRef.current.get(pane.id)
-    })
   }
 
   const onToggleExpand = (): void => {
