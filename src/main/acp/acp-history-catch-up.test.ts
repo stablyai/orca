@@ -291,13 +291,15 @@ describe('ACP history catch-up', () => {
       rows.filter((row) => row.body.kind === 'message' && row.body.role === 'reasoning')
     ).toHaveLength(2)
     expect(
-      rows.flatMap((row) =>
-        row.body.kind === 'message' && row.body.role !== 'user'
-          ? row.body.blocks.flatMap((block) =>
-              block.type === 'text' ? [[row.body.role, block.text]] : []
-            )
-          : []
-      )
+      rows.flatMap((row) => {
+        if (row.body.kind === 'message' && row.body.role !== 'user') {
+          const body = row.body
+          return body.blocks.flatMap((block) =>
+            block.type === 'text' ? [[body.role, block.text]] : []
+          )
+        }
+        return []
+      })
     ).toEqual([
       ['assistant', 'native answer'],
       ['assistant', 'outside answer'],
