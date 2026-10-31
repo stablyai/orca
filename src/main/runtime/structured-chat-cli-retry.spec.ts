@@ -191,7 +191,7 @@ export function registerStructuredChatCliRetry(input: {
   async function cli(sessionId: string, args: string[]): Promise<Record<string, unknown>> {
     const result = await runProcess({
       program: input.program,
-      args: [input.entry, 'orchestration', ...args, '--json'],
+      args: [input.entry, 'orchestration', ...args, '--json', '--full'],
       cwd: home,
       env: {
         HOME: home,

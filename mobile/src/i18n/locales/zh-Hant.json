@@ -657,7 +657,6 @@
       "tryDifferentFilter": "請嘗試其他審查篩選條件。"
     },
     "diffReviewDrawers": {
-      "actionsTitle": "審查操作",
       "addNote": "新增備註",
       "cancelNote": "取消編輯備註",
       "clearSentNotes": "清除已傳送的備註",
@@ -764,11 +763,6 @@
       "moveUp": "上移",
       "reorderHint": "使用「上移」和「下移」動作即可調整順序，無須拖曳"
     },
-    "homeQuickActions": {
-      "newWorkspace": "新工作區",
-      "pairDesktop": "配對電腦",
-      "title": "快速操作"
-    },
     "hostCard": {
       "hostActions": "{{title}} 的操作",
       "openHost": "開啟 {{title}}",
@@ -808,9 +802,6 @@
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "關閉抽屜面板"
-    },
-    "newWorkspaceFab": {
-      "newWorkspace": "新工作區"
     },
     "newWorkspaceSetupScriptField": {
       "hooks": "鉤子",
@@ -1302,17 +1293,10 @@
     }
   },
   "home": {
-    "accountUsageCards": {
-      "sectionHeading": "帳戶用量",
-      "sessionWindow": "5 小時",
-      "systemDefault": "系統預設",
-      "weeklyWindow": "7 天"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "關閉 Orca {{version}} 更新提示",
       "title": "Orca {{version}} 已推出",
-      "updateAccessibilityLabel": "Orca {{version}} 已推出，點一下即可更新",
-      "updateHint": "點一下即可更新"
+      "updateAccessibilityLabel": "Orca {{version}} 已推出，點一下即可更新"
     },
     "emptyState": {
       "connectedDescription": "您的電腦會顯示在這裡。所有資料皆採端對端加密。",
@@ -1320,26 +1304,14 @@
       "description": "與電腦上的 Orca 配對，即可用手機查看代理程式狀態、開啟任何終端機，並推進工作。",
       "openDesktopDescription": "前往「設定」→「行動版」，產生配對用的 QR Code。",
       "openDesktopTitle": "開啟 Orca 桌面版",
-      "pairDesktop": "配對電腦",
-      "scanCodeDescription": "點一下上方按鈕開啟掃描器，對準電腦螢幕上的 QR Code。",
       "scanCodeTitle": "掃描 QR Code",
-      "stepsHeading": "使用方式",
       "title": "連線至您的電腦"
     },
     "listFooter": {
-      "hostPickerTitle": "選擇開啟任務的主機",
-      "resumeHeading": "繼續",
-      "tasksHeading": "任務"
+      "hostPickerTitle": "選擇開啟任務的主機"
     },
     "listHeader": {
-      "agentTime": "代理程式時間",
-      "agentsSpawned": "已啟動代理程式",
-      "daysHours": "{{days}} 天 {{hours}} 小時",
-      "desktopsHeading": "電腦",
-      "hoursMinutes": "{{hours}} 小時 {{minutes}} 分鐘",
-      "minutes": "{{minutes}} 分鐘",
-      "prsCreated": "已建立 PR",
-      "title": "歡迎回來"
+      "desktopsHeading": "電腦"
     },
     "screen": {
       "pairingCheckFailed": "無法檢查配對狀態",
@@ -1347,11 +1319,6 @@
       "removeHostMessage": "要移除「{{name}}」嗎？之後可重新配對。",
       "removeHostTitle": "移除主機",
       "tryAgain": "請再試一次。"
-    },
-    "tasksCard": {
-      "noSources": "尚未連結任務來源",
-      "openProviderTasks": "開啟 {{provider}} 任務",
-      "title": "任務"
     }
   },
   "hooks": {
@@ -1396,17 +1363,11 @@
     },
     "hostScreenHeader": {
       "accounts": "帳戶",
-      "activeFilters_one": "工作區選項（已啟用 {{count}} 個篩選條件）",
-      "activeFilters_other": "工作區選項（已啟用 {{count}} 個篩選條件）",
       "backToHosts": "返回主機清單",
-      "closeSearch": "關閉搜尋",
       "floatingWorkspace": "浮動工作區",
       "hideSidebar": "隱藏側邊欄",
       "reconnect": "重新連線",
-      "searchWorkspaces": "搜尋工作區",
-      "tasks": "任務",
-      "workspaceOptions": "工作區選項",
-      "newWorkspace": "新增工作區"
+      "tasks": "任務"
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "要刪除「{{name}}」（{{branch}}）嗎？",
@@ -1417,10 +1378,6 @@
       "removeHostMessage": "要移除「{{name}}」嗎？之後可重新配對。",
       "sleep": "休眠",
       "unpin": "取消固定"
-    },
-    "hostWorkspaceList": {
-      "searchPlaceholder": "搜尋工作區…",
-      "searchWorkspaces": "搜尋工作區"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "檢查：未通過",
@@ -1479,7 +1436,6 @@
       "backToOptions": "返回工作區選項",
       "cardDisplay": "卡片顯示",
       "cardLayout": "卡片版面配置",
-      "clearFilters": "清除篩選",
       "exceptDefaultBranch": "預設分支除外",
       "filters": "篩選條件",
       "groupBy": "分組依據",
@@ -2135,7 +2091,6 @@
       "workspaceDetailsHint": "顯示工作區的完整名稱及其所在位置",
       "backToWorktrees": "返回工作樹",
       "moreActions": "更多工作階段操作",
-      "openFileExplorer": "開啟檔案總管",
       "openSourceControl": "開啟原始碼控制",
       "reconnectToDesktop": "重新連線至電腦",
       "showSidebar": "顯示側邊欄",
@@ -2302,9 +2257,6 @@
       "title": "快速命令",
       "untitled": "無題"
     },
-    "quickCommandsTabButton": {
-      "quickCommands": "快速命令"
-    },
     "routeHelpers": {
       "connected": "已連線",
       "connecting": "連線中",
@@ -2362,8 +2314,7 @@
       "checkingCapabilities": "正在檢查桌面版支援的功能，請稍後再試",
       "newTab": "新分頁",
       "quickCommandsUpdateRequired": "需更新桌面版才能使用快速命令",
-      "tabStatus": "{{title}}，{{status}}",
-      "terminalLayout": "終端機版面配置"
+      "tabStatus": "{{title}}，{{status}}"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "清除終端機",
@@ -3032,7 +2983,8 @@
       "openNumberedPrWeb": "在瀏覽器中開啟 PR #{{number}}",
       "openPrWeb": "在瀏覽器中開啟 PR",
       "refresh": "重新整理原始碼控制",
-      "title": "原始碼控制"
+      "title": "原始碼控制",
+      "moreActions": "更多原始碼控制操作"
     },
     "hostedReview": {
       "mrCopy": {
@@ -3388,17 +3340,13 @@
       "recent": "最近的",
       "retryHint": "點一下以重試。",
       "searchProjects": "搜尋專案",
-      "sort": "專案排序",
       "subtitle": "選擇要在「任務」頁面使用的專案檢視。",
       "title": "GitHub 專案",
       "unsupportedLayout": "Orca 尚不支援此 GitHub 專案版面配置。",
       "view": "專案檢視"
     },
     "githubViewControls": {
-      "fields": "欄位：{{fields}}",
-      "openView": "在 GitHub 中開啟檢視",
-      "sort": "排序：{{sort}}",
-      "source": "來源：{{source}}"
+      "openView": "在 GitHub 中開啟檢視"
     },
     "itemActions": {
       "changeStatus": "更改狀態",
@@ -3488,17 +3436,8 @@
     "linearList": {
       "changeStatusFrom": "變更狀態（目前為 {{status}}）"
     },
-    "linearViewControls": {
-      "displayButton": "顯示",
-      "groupLabel": "分組：{{group}}",
-      "orderLabel": "排序：{{order}}"
-    },
     "listDisplayPickers": {
-      "displayPropertiesTitle": "顯示屬性",
-      "linearGroupTitle": "Linear 議題分組",
-      "linearOrderTitle": "Linear 議題排序",
-      "linearViewTitle": "Linear 檢視",
-      "sortTasksTitle": "任務排序"
+      "displayPropertiesTitle": "顯示屬性"
     },
     "listSurface": {
       "connectLinearButton": "連線 Linear",
@@ -3567,8 +3506,6 @@
       "allSites": "所有網站",
       "currentlyAscending": "目前遞增 · 點一下改為遞減",
       "currentlyDescending": "目前遞減 · 點一下改為遞增",
-      "fieldAscending": "{{field}} 遞增",
-      "fieldDescending": "{{field}} 遞減",
       "fields": "欄位",
       "repos_one": "{{count}} 個存放庫",
       "repos_other": "{{count}} 個存放庫",
@@ -3677,8 +3614,7 @@
     },
     "providerControls": {
       "myTodos": "我的待辦事項",
-      "projectMergeRequests": "專案 MR",
-      "sort": "排序：{{sortLabel}}"
+      "projectMergeRequests": "專案 MR"
     },
     "providerItemList": {
       "intoBranch": "合併至 {{base}}",
@@ -3706,7 +3642,6 @@
       "queryingSource": "正在查詢 {{source}}",
       "repoDescription": "選擇要查詢的存放庫。",
       "repos": "存放庫",
-      "taskSource": "任務來源",
       "upstream": "上游"
     },
     "providerViewProjection": {
@@ -3718,10 +3653,7 @@
       "default": "預設",
       "defaultSubtitle": "{{subtitle}} · 預設",
       "issues": "議題",
-      "list": "清單",
-      "noGrouping": "沒有分組",
       "openState": "開放",
-      "priority": "優先等級",
       "projects": "專案",
       "pullRequests": "PR",
       "teams_one": "{{count}} 個團隊",
@@ -3733,7 +3665,6 @@
       "unassigned": "未指派"
     },
     "screenChrome": {
-      "connectLinear": "連線 Linear",
       "newGitHubIssue": "新增 GitHub 議題",
       "newLinearIssue": "新增 Linear 議題",
       "refreshGitHub": "重新整理 GitHub 工作",

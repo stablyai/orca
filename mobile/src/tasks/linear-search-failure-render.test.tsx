@@ -133,8 +133,12 @@ vi.mock('./mobile-tasks-legacy-styles', () => ({ styles: {} }))
 vi.mock('./mobile-tasks-legacy-foundation', () => ({ LINEAR_LIMIT: 100 }))
 vi.mock('./mobile-tasks-screen-chrome', () => ({ renderMobileTasksChrome: () => null }))
 vi.mock('./mobile-tasks-list-surface', () => ({ renderMobileTasksListSurface: () => null }))
+vi.mock('./mobile-tasks-search-control', () => ({
+  mobileTasksSearchVisible: () => true,
+  renderMobileTasksSearchControl: () => null
+}))
+vi.mock('./mobile-tasks-filter-sheet', () => ({ renderMobileTasksFilterSheet: () => null }))
 vi.mock('./mobile-tasks-provider-pickers', () => ({
-  renderMobileTasksProviderPicker: () => null,
   renderMobileTasksRepoPicker: () => null,
   renderMobileTasksGitHubIssueSourcePicker: () => null,
   renderMobileTasksGitHubViewPicker: () => null,
@@ -143,8 +147,7 @@ vi.mock('./mobile-tasks-provider-pickers', () => ({
 }))
 vi.mock('./mobile-tasks-github-project-pickers', () => ({
   renderMobileTasksGitHubProjectPicker: () => null,
-  renderMobileTasksGitHubProjectViewPicker: () => null,
-  renderMobileTasksGitHubProjectSortPicker: () => null
+  renderMobileTasksGitHubProjectViewPicker: () => null
 }))
 vi.mock('./mobile-tasks-filter-pickers', () => ({
   renderMobileTasksGitHubProjectFieldsPicker: () => null,
@@ -158,11 +161,7 @@ vi.mock('./mobile-tasks-filter-pickers', () => ({
   renderMobileTasksLinearStatusPicker: () => null
 }))
 vi.mock('./mobile-tasks-list-display-pickers', () => ({
-  renderMobileTasksLinearViewPicker: () => null,
-  renderMobileTasksLinearGroupPicker: () => null,
-  renderMobileTasksLinearOrderPicker: () => null,
-  renderMobileTasksLinearDisplayPicker: () => null,
-  renderMobileTasksSortPicker: () => null
+  renderMobileTasksLinearDisplayPicker: () => null
 }))
 vi.mock('./mobile-tasks-create-drawers', () => ({
   renderMobileTasksCreateDrawer: () => null,

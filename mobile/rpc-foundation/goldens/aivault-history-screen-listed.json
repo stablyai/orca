@@ -253,22 +253,34 @@
         "startedAt": 0
       }
     },
-    "9a4b6a2428eb": {
+    "9ace0f68da61": {
       "crash": {
         "$rpc": "null"
       },
       "elements": {
         "ChevronLeft": 1,
+        "Defs": 1,
+        "LinearGradient": 1,
         "Pressable": 5,
+        "Rect": 1,
         "RefreshCw": 1,
         "SafeAreaView": 1,
         "Search": 1,
         "SectionList": 1,
+        "Stop": 2,
+        "Svg": 1,
         "Text": 5,
         "TextInput": 1,
-        "View": 6
+        "View": 13
       },
-      "labels": ["Back", "Refresh agent sessions", "Search sessions, repo:, path:"],
+      "labels": [
+        "Back",
+        "Refresh agent sessions",
+        "Workspace",
+        "Project",
+        "All",
+        "Search sessions, repo:, path:"
+      ],
       "text": ["Agent Session History", "orca-history", "Workspace", "Project", "All"]
     },
     "a26eb8ffaa7c": {
@@ -310,7 +322,7 @@
         }
       }
     },
-    "d22bb2f62cea": {
+    "d13f6fc48675": {
       "crash": {
         "$rpc": "null"
       },
@@ -321,7 +333,7 @@
         "RefreshCw": 1,
         "SafeAreaView": 1,
         "Text": 2,
-        "View": 4
+        "View": 7
       },
       "labels": ["Back", "Refresh agent sessions"],
       "text": ["Agent Session History", "orca-history"]
@@ -351,7 +363,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "d22bb2f62cea",
+          "state": "d13f6fc48675",
           "effects": []
         }
       },
@@ -369,7 +381,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "d22bb2f62cea",
+          "state": "d13f6fc48675",
           "effects": []
         }
       },
@@ -387,7 +399,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "9a4b6a2428eb",
+          "state": "9ace0f68da61",
           "effects": []
         }
       },
@@ -405,7 +417,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "9a4b6a2428eb",
+          "state": "9ace0f68da61",
           "effects": ["40fa6811eb00"]
         }
       }

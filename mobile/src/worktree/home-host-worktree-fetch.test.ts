@@ -103,6 +103,7 @@ describe('fetchHomeHostWorktreeInfo', () => {
       totalWorktrees: 12,
       activeCount: 2,
       lastActiveWorktree: expect.objectContaining({ worktreeId: 'wt-0' }),
+      attention: expect.any(Array),
       catalogUnavailable: true,
       staleCounts: true,
       countsProvenAt: expect.any(Number)

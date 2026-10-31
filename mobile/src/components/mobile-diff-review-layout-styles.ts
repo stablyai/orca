@@ -7,18 +7,6 @@ export const mobileDiffReviewLayoutStyles = themedStyleSheet(() => ({
     flex: 1,
     backgroundColor: colors.bgBase
   },
-  header: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle
-  },
-  topBar: {
-    minHeight: 50,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm
-  },
   iconButton: {
     width: 44,
     height: 44,
@@ -29,59 +17,12 @@ export const mobileDiffReviewLayoutStyles = themedStyleSheet(() => ({
   iconButtonPressed: {
     backgroundColor: colors.bgRaised
   },
-  titleBlock: {
-    flex: 1,
-    minWidth: 0
-  },
-  title: {
-    color: colors.textPrimary,
-    fontSize: typography.titleSize,
-    fontWeight: '700'
-  },
-  subtitle: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    marginTop: 2
-  },
-  progressRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: spacing.md
-  },
-  progressText: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
-  },
   filterRow: {
-    gap: spacing.sm,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xs
-  },
-  filterChip: {
-    minHeight: 34,
-    borderRadius: radii.pill,
-    paddingHorizontal: spacing.md,
+    flexGrow: 1,
+    gap: spacing.xs,
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgPanel,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle
-  },
-  filterChipActive: {
-    backgroundColor: colors.textPrimary,
-    borderColor: colors.textPrimary
-  },
-  filterChipPressed: {
-    opacity: 0.78
-  },
-  filterText: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontWeight: '700'
-  },
-  filterTextActive: {
-    color: colors.bgBase
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.xs
   },
   fileHeader: {
     paddingHorizontal: spacing.lg,

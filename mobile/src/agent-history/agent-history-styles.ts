@@ -9,68 +9,10 @@ export const styles = themedStyleSheet(() => ({
   header: {
     backgroundColor: colors.bgBase
   },
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle
-  },
-  backButton: {
-    padding: spacing.xs,
-    borderRadius: radii.control
-  },
-  backButtonPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  titleBlock: {
-    flex: 1,
-    marginHorizontal: spacing.sm
-  },
-  title: {
-    color: colors.textPrimary,
-    fontSize: typography.titleSize,
-    fontWeight: '600'
-  },
-  meta: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize
-  },
-  refreshButton: {
-    padding: spacing.xs,
-    borderRadius: radii.control
-  },
-  refreshButtonPressed: {
-    backgroundColor: colors.bgRaised
-  },
   scopeTabs: {
-    flexDirection: 'row',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    gap: spacing.xs
-  },
-  scopeTab: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-    borderRadius: radii.control,
+    marginHorizontal: spacing.md,
+    marginTop: spacing.sm,
     backgroundColor: colors.bgPanel
-  },
-  scopeTabActive: {
-    backgroundColor: colors.bgRaised
-  },
-  scopeTabText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize
-  },
-  scopeTabTextActive: {
-    color: colors.textPrimary,
-    fontWeight: '600'
-  },
-  searchRow: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm
   },
   list: {
     paddingHorizontal: spacing.md,
