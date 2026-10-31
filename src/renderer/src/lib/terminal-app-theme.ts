@@ -136,6 +136,8 @@ const SYNTAX_SCOPES: readonly (readonly [keyof ITheme, string[]])[] = [
   ['red', ['entity.name.tag']]
 ]
 
+let last: { content: string; theme: TerminalAppTheme } | null = null
+
 /**
  * An app theme from the terminal palette, shaped like a plugin theme so it goes through the same
  * derivation, contrast gate, startup cache and Monaco theme. Null when the palette has no
@@ -208,11 +210,19 @@ export function synthesizeTerminalAppTheme(
     const color = ansi(key)
     return color ? [{ scope, settings: { foreground: hex(color) } }] : []
   })
-  return {
-    id: MATCH_TERMINAL_APP_THEME,
-    revision: hashThemeContent(JSON.stringify(tokens)),
-    base,
-    tokens,
-    tokenColors
+  const content = JSON.stringify({ base, tokens, tokenColors })
+  // Why reuse: settings writes hand out fresh arrays, and a fresh theme object would repaint :root.
+  if (!last || last.content !== content) {
+    last = {
+      content,
+      theme: {
+        id: MATCH_TERMINAL_APP_THEME,
+        revision: hashThemeContent(content),
+        base,
+        tokens,
+        tokenColors
+      }
+    }
   }
+  return last.theme
 }
