@@ -171,7 +171,11 @@ it('bounds production source work at N/10N across sessions while admission drain
         active: 0
       })
       expect(interest.metadataBytes).toBeLessThan(count * 2048)
-      expect(reservations.mock.calls.length).toBeLessThanOrEqual(count * 2)
+      const admissionCalls = reservations.mock.calls.length
+      const releaseSignals = releases.mock.calls.length
+      expect(admissionCalls).toBeGreaterThanOrEqual(count)
+      expect(admissionCalls).toBeLessThanOrEqual(count * 2)
+      expect(releaseSignals).toBeGreaterThan(0)
       expect(releases.mock.calls.length).toBeLessThanOrEqual(count * 2)
       stopRelease()
       reservations.mockRestore()
@@ -181,13 +185,9 @@ it('bounds production source work at N/10N across sessions while admission drain
       owned.forEach(({ stop }) => stop())
       // Count actual scheduler scans separately from publications and physical piece calls.
       expect(sourceVisits - visitsBefore).toBeLessThanOrEqual(count * 12 + calls)
-      console.info('settled owner production operations', {
-        count,
-        calls,
-        publications,
-        peak,
-        sourceVisits: sourceVisits - visitsBefore
-      })
+      process.stdout.write(
+        `${JSON.stringify({ ownerPerf: true, count, calls, admissionCalls, releaseSignals, publications, peak, metadataBytes: interest.metadataBytes, sourceVisits: sourceVisits - visitsBefore, leaseVisits })}\n`
+      )
       expect(getRemoteRuntimeRequestAdmissionEvidence()).toEqual({
         pendingRequestCount: 0,
         retainedBytes: 0
@@ -292,7 +292,12 @@ it.each(['bytes', 'count'] as const)(
       await vi.advanceTimersByTimeAsync(30000)
       expect(getAgentSessionSettledBodyDemandEvidence().metadataBytes).toBe(metadata)
       owned[0].stops[0]()
+      const signal = vi.fn()
+      const stopSignal = admission.subscribeRemoteRuntimeAdmissionRelease(signal)
       pressure.forEach((lease) => lease.release())
+      await Promise.resolve()
+      expect(signal).toHaveBeenCalledTimes(1)
+      stopSignal()
       await vi.runAllTimersAsync()
       expect(order).toEqual(['pressure-0', 'pressure-1'])
       expect(owned.map(({ reader, selected }) => reader.getSnapshot(selected).status)).toEqual([

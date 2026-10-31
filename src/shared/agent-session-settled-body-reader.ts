@@ -28,7 +28,6 @@ type Entry = {
   listeners: Set<() => void>
   running: boolean
   retired: boolean
-  eligible: boolean
   transient: boolean
   metadataBytes: number
   lease?: Lease
@@ -82,21 +81,28 @@ export function getAgentSessionSettledBodyDemandEvidence() {
 export function createAgentSessionSettledBodyReader(
   read: (request: AgentSessionSettledBodyRead) => Promise<unknown>
 ) {
-  const owned = new Set<Entry>()
+  const owned = new Map<string, Set<Entry>>()
   let disposed = false
   let ownerRunning = false
   function find(source: AgentSessionSettledBodySource): Entry | undefined {
-    for (const entry of owned) {
+    for (const entry of owned.get(source.itemId) ?? []) {
       if (sameAgentSessionSettledSource(entry.source, source)) {
         return entry
       }
     }
     return undefined
   }
+  function forget(entry: Entry): void {
+    const selected = owned.get(entry.source.itemId)
+    selected?.delete(entry)
+    if (selected?.size === 0) {
+      owned.delete(entry.source.itemId)
+    }
+  }
   function remove(entry: Entry): void {
     entries.delete(entry)
     pending.delete(entry)
-    owned.delete(entry)
+    forget(entry)
     entry.stop()
     entry.lease?.release()
     entry.lease = undefined
@@ -122,7 +128,6 @@ export function createAgentSessionSettledBodyReader(
       state: LOADING,
       running: false,
       retired: false,
-      eligible: true,
       transient: false,
       listeners: new Set(),
       start: () => 'occupied',
@@ -155,12 +160,11 @@ export function createAgentSessionSettledBodyReader(
       if (entry.running || entry.retired || !entry.transient) {
         return
       }
-      entry.eligible = true
       pending.add(entry)
       drain()
     }
     entry.start = () => {
-      if (entry.running || entry.retired || ownerRunning || !entry.eligible) {
+      if (entry.running || entry.retired || ownerRunning) {
         return 'occupied'
       }
       const lease = reserveRemoteRuntimeRetainedBytes(
@@ -171,7 +175,6 @@ export function createAgentSessionSettledBodyReader(
       }
       entry.lease = lease
       entry.running = true
-      entry.eligible = false
       ownerRunning = true
       active++
       void (async () => {
@@ -232,7 +235,9 @@ export function createAgentSessionSettledBodyReader(
       return 'started'
     }
     entries.add(entry)
-    owned.add(entry)
+    const selected = owned.get(source.itemId) ?? new Set<Entry>()
+    selected.add(entry)
+    owned.set(source.itemId, selected)
     pending.add(entry)
     beginDeadline()
     return entry
@@ -241,7 +246,7 @@ export function createAgentSessionSettledBodyReader(
     entry.retired = true
     entry.listeners.clear()
     entry.stop()
-    owned.delete(entry)
+    forget(entry)
     pending.delete(entry)
     if (!entry.running) {
       remove(entry)
@@ -269,21 +274,27 @@ export function createAgentSessionSettledBodyReader(
       }
     },
     clear(): void {
-      for (const entry of owned) {
-        retire(entry)
+      for (const selected of owned.values()) {
+        for (const entry of selected) {
+          retire(entry)
+        }
       }
       drain()
     },
     retry(): void {
-      for (const entry of owned) {
-        entry.retry()
+      for (const selected of owned.values()) {
+        for (const entry of selected) {
+          entry.retry()
+        }
       }
       drain()
     },
     dispose(): void {
       disposed = true
-      for (const entry of owned) {
-        retire(entry)
+      for (const selected of owned.values()) {
+        for (const entry of selected) {
+          retire(entry)
+        }
       }
       drain()
     }
@@ -292,7 +303,4 @@ export function createAgentSessionSettledBodyReader(
 
 export type AgentSessionSettledBodyReader = ReturnType<typeof createAgentSessionSettledBodyReader>
 
-export {
-  receiptSettledBodySource,
-  type AgentSessionSettledBodyOwner
-} from './agent-session-settled-body-source'
+export * from './agent-session-settled-body-source'
