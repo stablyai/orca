@@ -76,9 +76,11 @@ describe('readAgentSessionHistory', () => {
       body: hostTestMessage('Name this'),
       fence: 1
     })
+    // Current writers name the turn's opener; an unnamed scoped record never borrows the prompt before it.
+    const opener = agentJournalSubmissionKey('u')
     const turn = await fixture.journal.appendItem(
       item(0),
-      { kind: 'turn', turnId: 'turn-1', state: 'running' },
+      { kind: 'turn', turnId: 'turn-1', state: 'running', userItemId: opener },
       options
     )
     const replies = { ...options, turnScope: { kind: 'turn' as const, turnItemId: turn.itemId } }
@@ -95,7 +97,7 @@ describe('readAgentSessionHistory', () => {
     await fixture.journal.appendTombstone(item(1), { fence: 1 })
     await fixture.journal.appendItem(
       item(0),
-      { kind: 'turn', turnId: 'turn-1', state: 'completed' },
+      { kind: 'turn', turnId: 'turn-1', state: 'completed', userItemId: opener },
       options
     )
     const current = fixture.journal.snapshot()
