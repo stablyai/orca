@@ -3,6 +3,7 @@
 // Render real drag handles to prove pointer moves write styles directly and store state commits only on release.
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { isWebviewDragPassthroughActive } from '../browser-pane/host-guest/webview-drag-passthrough'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
@@ -47,11 +48,15 @@ vi.mock('./useTabDragSplit', () => ({
 
 import TabGroupSplitLayout from './TabGroupSplitLayout'
 
-function pointerEvent(type: string, init: { pointerId?: number; clientX?: number }): Event {
+function pointerEvent(
+  type: string,
+  init: { pointerId?: number; clientX?: number; buttons?: number }
+): Event {
   const event = new Event(type, { bubbles: true, cancelable: true })
   Object.defineProperty(event, 'pointerId', { value: init.pointerId ?? 1 })
   Object.defineProperty(event, 'clientX', { value: init.clientX ?? 0 })
   Object.defineProperty(event, 'clientY', { value: 0 })
+  Object.defineProperty(event, 'buttons', { value: init.buttons ?? 1 })
   return event
 }
 
@@ -233,6 +238,54 @@ describe('TabGroupSplitLayout divider drag', () => {
     })
     expect(setTabGroupSplitRatioMock).toHaveBeenCalledWith('wt-1', '', 0.4)
     expect(resizeObserverDisconnectMock).toHaveBeenCalledOnce()
+  })
+
+  it('keeps tracking off the divider when the platform does not confirm pointer capture (Linux)', async () => {
+    // Why: Linux Chromium reports hasPointerCapture() false while pointermove still arrives (#34287).
+    handle.hasPointerCapture = () => false
+
+    await act(async () => {
+      handle.dispatchEvent(pointerEvent('pointerdown', { pointerId: 1 }))
+      document.body.dispatchEvent(pointerEvent('pointermove', { pointerId: 1, clientX: 300 }))
+      document.body.dispatchEvent(pointerEvent('pointermove', { pointerId: 1, clientX: 320 }))
+    })
+    expect(firstPane.style.flex).toBe('0.32 1 0%')
+    expect(secondPane.style.flex).toBe('0.68 1 0%')
+
+    await act(async () => {
+      document.body.dispatchEvent(pointerEvent('pointerup', { pointerId: 1 }))
+      document.body.dispatchEvent(pointerEvent('pointermove', { pointerId: 1, clientX: 600 }))
+    })
+    expect(setTabGroupSplitRatioMock).toHaveBeenCalledTimes(1)
+    expect(setTabGroupSplitRatioMock).toHaveBeenCalledWith('wt-1', '', 0.32)
+    expect(firstPane.style.flex).toBe('0.32 1 0%')
+  })
+
+  it('ends a stale drag on a buttonless move after a missed release', async () => {
+    handle.hasPointerCapture = () => false
+    await act(async () => {
+      handle.dispatchEvent(pointerEvent('pointerdown', { pointerId: 1 }))
+      document.body.dispatchEvent(pointerEvent('pointermove', { pointerId: 1, clientX: 300 }))
+      document.body.dispatchEvent(
+        pointerEvent('pointermove', { pointerId: 1, clientX: 700, buttons: 0 })
+      )
+      document.body.dispatchEvent(pointerEvent('pointermove', { pointerId: 1, clientX: 800 }))
+    })
+    expect(firstPane.style.flex).toBe('0.3 1 0%')
+    expect(setTabGroupSplitRatioMock).toHaveBeenCalledTimes(1)
+    expect(setTabGroupSplitRatioMock).toHaveBeenCalledWith('wt-1', '', 0.3)
+  })
+
+  it('holds webview drag passthrough for the duration of the drag', async () => {
+    expect(isWebviewDragPassthroughActive()).toBe(false)
+    await act(async () => {
+      handle.dispatchEvent(pointerEvent('pointerdown', { pointerId: 1 }))
+    })
+    expect(isWebviewDragPassthroughActive()).toBe(true)
+    await act(async () => {
+      handle.dispatchEvent(pointerEvent('pointerup', { pointerId: 1 }))
+    })
+    expect(isWebviewDragPassthroughActive()).toBe(false)
   })
 
   it('commits and releases drag resources on unmount', async () => {
