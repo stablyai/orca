@@ -1,17 +1,18 @@
 #pragma once
 #include <cstdint>
 #include <memory>
-#include <stdexcept>
+#include <utility>
 #include <string>
 #include <vector>
 
 namespace history {
-struct Failure : std::runtime_error {
+// Not a std::runtime_error: its move constructor is a GLIBCXX_3.4.26 symbol, above the Linux slot floor.
+struct Failure {
   std::string operation;
   std::string code;
   int nativeCode;
-  Failure(const char* op, std::string code, int nativeCode)
-      : std::runtime_error(std::string(op) + ": " + code), operation(op), code(code), nativeCode(nativeCode) {}
+  Failure(const char* op, std::string code, int nativeCode) : operation(op), code(std::move(code)), nativeCode(nativeCode) {}
+  std::string message() const { return operation + ": " + code; }
 };
 enum class Kind { Missing, Directory, File, Link, Other };
 enum class Move { Moved, Collision, Missing };
@@ -25,7 +26,7 @@ class Directory {
   std::unique_ptr<Directory> open(const std::string& name);
   std::vector<std::string> entries();
   Kind kind(const std::string& name);
-  void mkdir(const std::string& name);
+  void mkdir(const std::string& name, Directory* like = nullptr);
   Move move(const std::string& name, Directory& destination, const std::string& target, bool directoryOnly = false);
   void link(const std::string& name, const std::string& target);
   std::string readLink(const std::string& name);

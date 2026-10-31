@@ -1,20 +1,24 @@
 #include <napi.h>
 #include "history-filesystem.h"
-#include <unordered_set>
 
 namespace {
 using history::Directory;
+class Capability;
+// Finalizers can outlive the env cleanup hook, so the addon and each capability own this jointly.
+// Plain links and counts: one env is single-threaded, and shared_ptr/unordered_set raise the Linux symbol floor.
 struct Lifetime {
-  std::unordered_set<Directory*> directories;
-  void close() { for (auto* directory : directories) directory->close(); }
+  Capability* head = nullptr;
+  size_t owners = 1;
+  void close();
+  void release() { if (--owners == 0) delete this; }
 };
 struct Addon {
   Napi::FunctionReference constructor;
-  std::shared_ptr<Lifetime> lifetime = std::make_shared<Lifetime>();
+  Lifetime* lifetime = new Lifetime;
 };
-struct Transfer { std::unique_ptr<Directory> directory; std::shared_ptr<Lifetime> lifetime; Addon* addon; };
+struct Transfer { std::unique_ptr<Directory> directory; Addon* addon; };
 static Napi::Value error(Napi::Env env, const history::Failure& failure) {
-  auto result = Napi::Error::New(env, failure.what());
+  auto result = Napi::Error::New(env, failure.message());
   result.Value().Set("code", failure.code); result.Value().Set("operation", failure.operation); result.Value().Set("nativeCode", failure.nativeCode);
   result.ThrowAsJavaScriptException();
   return env.Undefined();
@@ -32,20 +36,32 @@ static std::string text(const Napi::CallbackInfo& info, size_t index, bool name 
 class Capability : public Napi::ObjectWrap<Capability> {
  public:
   static Napi::Object create(Napi::Env env, std::unique_ptr<Directory> directory, Addon* addon) {
-    Transfer transfer{std::move(directory), addon->lifetime, addon};
+    Transfer transfer{std::move(directory), addon};
     return addon->constructor.New({Napi::External<Transfer>::New(env, &transfer)});
   }
   Capability(const Napi::CallbackInfo& info) : Napi::ObjectWrap<Capability>(info) {
     if (info.Length() != 1 || !info[0].IsExternal()) throw Napi::TypeError::New(info.Env(), "Private directory capability");
     auto* transfer = info[0].As<Napi::External<Transfer>>().Data();
-    directory_ = std::move(transfer->directory); lifetime_ = transfer->lifetime; addon_ = transfer->addon;
-    lifetime_->directories.insert(directory_.get());
+    directory_ = std::move(transfer->directory); addon_ = transfer->addon; lifetime_ = addon_->lifetime;
+    lifetime_->owners++;
+    next_ = lifetime_->head;
+    if (next_) next_->previous_ = this;
+    lifetime_->head = this;
   }
-  ~Capability() { if (directory_) lifetime_->directories.erase(directory_.get()); }
+  ~Capability() {
+    if (!lifetime_) return;
+    if (previous_) previous_->next_ = next_;
+    else lifetime_->head = next_;
+    if (next_) next_->previous_ = previous_;
+    lifetime_->release();
+  }
   Directory& other(const Napi::CallbackInfo& info, size_t index) {
     auto* addon = addon_;
     if (info.Length() <= index || !info[index].IsObject() || !info[index].As<Napi::Object>().InstanceOf(addon->constructor.Value())) throw history::Failure("directory-argument", "EINVAL", 0);
-    return *Unwrap(info[index].As<Napi::Object>())->directory_;
+    // An object sharing the prototype passes InstanceOf without wrapping a directory.
+    auto* wrapped = Unwrap(info[index].As<Napi::Object>());
+    if (!wrapped || !wrapped->directory_) throw history::Failure("directory-argument", "EINVAL", 0);
+    return *wrapped->directory_;
   }
   Napi::Value call(const Napi::CallbackInfo& info, const std::string& method) {
     try {
@@ -65,7 +81,7 @@ class Capability : public Napi::ObjectWrap<Capability> {
         return Napi::String::New(env, kind == history::Kind::Directory ? "directory" : kind == history::Kind::Link ? "link" : kind == history::Kind::File ? "file" : "other");
       }
       if (method == "move") { auto moved = d.move(name, other(info, 1), text(info, 2), info.Length() > 3 && info[3].IsBoolean() && info[3].As<Napi::Boolean>().Value()); return Napi::String::New(env, moved == history::Move::Moved ? "moved" : moved == history::Move::Collision ? "collision" : "missing"); }
-      if (method == "mkdir") d.mkdir(name);
+      if (method == "mkdir") d.mkdir(name, info.Length() > 1 && !info[1].IsUndefined() ? &other(info, 1) : nullptr);
       else if (method == "link") d.link(name, text(info, 1, false));
       else if (method == "readLink") return Napi::String::New(env, d.readLink(name));
       else if (method == "removeEmpty") d.removeEmpty(name);
@@ -83,16 +99,21 @@ class Capability : public Napi::ObjectWrap<Capability> {
     }, addon);
   }
  private:
-  Addon* addon_;
+  friend struct Lifetime;
+  Addon* addon_ = nullptr;
   std::unique_ptr<Directory> directory_;
-  std::shared_ptr<Lifetime> lifetime_;
+  Lifetime* lifetime_ = nullptr;
+  Capability* previous_ = nullptr;
+  Capability* next_ = nullptr;
 };
+void Lifetime::close() { for (auto* capability = head; capability; capability = capability->next_) capability->directory_->close(); }
 Napi::Object initialize(Napi::Env env, Napi::Object exports) {
   auto* addon = new Addon;
   addon->constructor = Napi::Persistent(Capability::define(env, addon));
   napi_add_env_cleanup_hook(env, [](void* pointer) {
     std::unique_ptr<Addon> owner(static_cast<Addon*>(pointer));
     owner->lifetime->close();
+    owner->lifetime->release();
     owner->constructor.Reset();
   }, addon);
   exports.Set("openDirectory", Napi::Function::New(env, [addon](const Napi::CallbackInfo& info) -> Napi::Value {

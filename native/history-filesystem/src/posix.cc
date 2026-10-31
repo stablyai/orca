@@ -7,7 +7,19 @@
 #include <unistd.h>
 #ifdef __linux__
 #include <sys/syscall.h>
-#include <linux/fs.h>
+// Raw syscalls keep the slot under its glibc floor (glibc 2.33 versioned fstat/fstatat) and need no kernel headers.
+#ifndef RENAME_NOREPLACE
+#define RENAME_NOREPLACE (1 << 0)
+#endif
+#ifndef SYS_renameat2
+#if defined(__x86_64__)
+#define SYS_renameat2 316
+#elif defined(__aarch64__)
+#define SYS_renameat2 276
+#else
+#error "renameat2 syscall number unknown for this architecture"
+#endif
+#endif
 #endif
 
 namespace history {
@@ -25,17 +37,36 @@ static Failure failure(const char* op, int code = errno) {
     case ENOTEMPTY: name = "ENOTEMPTY"; break;
     case ENOSYS: name = "ENOSYS"; break;
     case EOPNOTSUPP: name = "ENOTSUP"; break;
+#if ENOTSUP != EOPNOTSUPP
+    case ENOTSUP: name = "ENOTSUP"; break;
+#endif
     case EINVAL: name = "EINVAL"; break;
+    case ENOSPC: name = "ENOSPC"; break;
+    case EDQUOT: name = "EDQUOT"; break;
+    case EROFS: name = "EROFS"; break;
+    case ENAMETOOLONG: name = "ENAMETOOLONG"; break;
   }
   return Failure(op, name, code);
 }
 static int fd(Directory& directory) { return static_cast<int>(directory.handle()); }
+// The 64-bit Linux targets share the kernel's struct stat layout with glibc and musl.
+static int statAt(int descriptor, const char* name, struct stat* value, int flags) {
+#ifdef __linux__
+  return static_cast<int>(syscall(SYS_newfstatat, descriptor, name, value, flags));
+#else
+  return fstatat(descriptor, name, value, flags);
+#endif
+}
 static struct stat info(Directory& directory) {
   struct stat value;
-  if (fstat(fd(directory), &value) != 0) throw failure("fstat");
+#ifdef __linux__
+  int result = static_cast<int>(syscall(SYS_fstat, fd(directory), &value));
+#else
+  int result = fstat(fd(directory), &value);
+#endif
+  if (result != 0) throw failure("fstat");
   return value;
 }
-static void syncParent(int descriptor) { (void)fsync(descriptor); }
 std::unique_ptr<Directory> Directory::root(const std::string& path, bool follow) {
   int result = ::open(path.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC | (follow ? 0 : O_NOFOLLOW));
   if (result < 0) throw failure("open-root");
@@ -65,7 +96,7 @@ std::vector<std::string> Directory::entries() {
 }
 Kind Directory::kind(const std::string& name) {
   struct stat value;
-  if (fstatat(fd(*this), name.c_str(), &value, AT_SYMLINK_NOFOLLOW) != 0) {
+  if (statAt(fd(*this), name.c_str(), &value, AT_SYMLINK_NOFOLLOW) != 0) {
     if (errno == ENOENT) return Kind::Missing;
     throw failure("fstatat");
   }
@@ -73,9 +104,9 @@ Kind Directory::kind(const std::string& name) {
   if (S_ISDIR(value.st_mode)) return Kind::Directory;
   return S_ISREG(value.st_mode) ? Kind::File : Kind::Other;
 }
-void Directory::mkdir(const std::string& name) {
-  if (mkdirat(fd(*this), name.c_str(), 0777) != 0) throw failure("mkdirat");
-  syncParent(fd(*this));
+void Directory::mkdir(const std::string& name, Directory* like) {
+  mode_t mode = like ? info(*like).st_mode & 07777 : 0777;
+  if (mkdirat(fd(*this), name.c_str(), mode) != 0) throw failure("mkdirat");
 }
 Move Directory::move(const std::string& name, Directory& destination, const std::string& target, bool /*directoryOnly*/) {
 #ifdef __APPLE__
@@ -83,7 +114,7 @@ Move Directory::move(const std::string& name, Directory& destination, const std:
 #else
   int result = static_cast<int>(syscall(SYS_renameat2, fd(*this), name.c_str(), fd(destination), target.c_str(), RENAME_NOREPLACE));
 #endif
-  if (result == 0) { syncParent(fd(*this)); syncParent(fd(destination)); return Move::Moved; }
+  if (result == 0) return Move::Moved;
   int saved = errno;
   if (saved == EEXIST) return Move::Collision;
   if (saved == ENOENT && kind(name) == Kind::Missing) return Move::Missing;
@@ -91,7 +122,6 @@ Move Directory::move(const std::string& name, Directory& destination, const std:
 }
 void Directory::link(const std::string& name, const std::string& target) {
   if (symlinkat(target.c_str(), fd(*this), name.c_str()) != 0) throw failure("symlinkat");
-  syncParent(fd(*this));
 }
 std::string Directory::readLink(const std::string& name) {
   std::vector<char> buffer(256);
@@ -104,7 +134,6 @@ std::string Directory::readLink(const std::string& name) {
 }
 void Directory::removeEmpty(const std::string& name) {
   if (unlinkat(fd(*this), name.c_str(), AT_REMOVEDIR) != 0) throw failure("unlinkat-directory");
-  syncParent(fd(*this));
 }
 bool Directory::same(Directory& other) { auto a = info(*this), b = info(other); return a.st_dev == b.st_dev && a.st_ino == b.st_ino; }
 bool Directory::sameDevice(Directory& other) { return info(*this).st_dev == info(other).st_dev; }

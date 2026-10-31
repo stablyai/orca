@@ -4,7 +4,9 @@ export type HistoryDirectory = {
   entries(): string[]
   kind(name: string): EntryKind
   open(name: string): HistoryDirectory
-  mkdir(name: string): void
+  /** POSIX gives the new directory `like`'s permission bits. */
+  mkdir(name: string, like?: HistoryDirectory): void
+  /** `directoryOnly` refuses a non-directory source atomically on Windows; POSIX callers reclassify what they staged. */
   move(
     name: string,
     destination: HistoryDirectory,

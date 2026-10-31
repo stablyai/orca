@@ -2,6 +2,7 @@
 #include <windows.h>
 #include <winternl.h>
 #include <winioctl.h>
+#include <algorithm>
 #include <cstddef>
 #include <cstring>
 #include <limits>
@@ -19,6 +20,9 @@ static Failure failure(const char* op, DWORD value = GetLastError()) {
     case ERROR_DIRECTORY: code = "ENOTDIR"; break;
     case ERROR_NOT_SUPPORTED: case ERROR_INVALID_FUNCTION: code = "ENOTSUP"; break;
     case ERROR_INVALID_PARAMETER: code = "EINVAL"; break;
+    case ERROR_DISK_FULL: case ERROR_HANDLE_DISK_FULL: code = "ENOSPC"; break;
+    case ERROR_WRITE_PROTECT: code = "EROFS"; break;
+    case ERROR_FILENAME_EXCED_RANGE: code = "ENAMETOOLONG"; break;
   }
   return Failure(op, code, value);
 }
@@ -36,7 +40,7 @@ static std::string utf8(const std::wstring& text) {
   WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), result.data(), count, nullptr, nullptr);
   return result;
 }
-static HANDLE handle(Directory& directory) { return reinterpret_cast<HANDLE>(directory.handle()); }
+static HANDLE native(Directory& directory) { return reinterpret_cast<HANDLE>(directory.handle()); }
 struct CloseHandleDeleter { void operator()(void* value) const { if (value && value != INVALID_HANDLE_VALUE) CloseHandle(value); } };
 using OwnedHandle = std::unique_ptr<void, CloseHandleDeleter>;
 static OwnedHandle child(Directory& parent, const std::string& name, ACCESS_MASK access, ULONG disposition = 1, ULONG options = 0, ULONG share = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE) {
@@ -45,7 +49,7 @@ static OwnedHandle child(Directory& parent, const std::string& name, ACCESS_MASK
   UNICODE_STRING unicode;
   unicode.Buffer = path.data(); unicode.Length = static_cast<USHORT>(path.size() * sizeof(wchar_t)); unicode.MaximumLength = unicode.Length;
   OBJECT_ATTRIBUTES attributes;
-  InitializeObjectAttributes(&attributes, &unicode, OBJ_CASE_INSENSITIVE, handle(parent), nullptr);
+  InitializeObjectAttributes(&attributes, &unicode, OBJ_CASE_INSENSITIVE, native(parent), nullptr);
   HANDLE result = INVALID_HANDLE_VALUE;
   IO_STATUS_BLOCK status;
   // FILE_OPEN_REPARSE_POINT is type-neutral: inspect the opened entry before traversal.
@@ -65,7 +69,7 @@ static void requireDirectory(HANDLE value) {
 }
 static BY_HANDLE_FILE_INFORMATION info(Directory& directory) {
   BY_HANDLE_FILE_INFORMATION result;
-  if (!GetFileInformationByHandle(handle(directory), &result)) throw failure("GetFileInformationByHandle");
+  if (!GetFileInformationByHandle(native(directory), &result)) throw failure("GetFileInformationByHandle");
   return result;
 }
 std::unique_ptr<Directory> Directory::root(const std::string& path, bool follow) {
@@ -87,7 +91,7 @@ std::vector<std::string> Directory::entries() {
   std::vector<BYTE> bytes(64 * 1024);
   bool restart = true;
   for (;;) {
-    if (!GetFileInformationByHandleEx(handle(*this), restart ? FileIdBothDirectoryRestartInfo : FileIdBothDirectoryInfo, bytes.data(), static_cast<DWORD>(bytes.size()))) {
+    if (!GetFileInformationByHandleEx(native(*this), restart ? FileIdBothDirectoryRestartInfo : FileIdBothDirectoryInfo, bytes.data(), static_cast<DWORD>(bytes.size()))) {
       if (GetLastError() == ERROR_NO_MORE_FILES) break;
       throw failure("enumerate-directory");
     }
@@ -111,7 +115,7 @@ Kind Directory::kind(const std::string& name) {
     return attrs & FILE_ATTRIBUTE_DEVICE ? Kind::Other : Kind::File;
   } catch (const Failure& error) { if (error.code == "ENOENT") return Kind::Missing; throw; }
 }
-void Directory::mkdir(const std::string& name) { auto created = child(*this, name, FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES, 2, 1); }
+void Directory::mkdir(const std::string& name, Directory* /*like*/) { auto created = child(*this, name, FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES, 2, 1); }
 Move Directory::move(const std::string& name, Directory& destination, const std::string& target, bool directoryOnly) {
   OwnedHandle source;
   try {
@@ -120,9 +124,10 @@ Move Directory::move(const std::string& name, Directory& destination, const std:
   } catch (const Failure& error) { if (error.code == "ENOENT") return Move::Missing; throw; }
   if (directoryOnly) requireDirectory(source.get());
   auto text = wide(target);
-  std::vector<BYTE> bytes(offsetof(FILE_RENAME_INFO, FileName) + text.size() * sizeof(wchar_t));
+  // The kernel rejects buffers shorter than the struct, which a one-character name would be.
+  std::vector<BYTE> bytes(std::max(sizeof(FILE_RENAME_INFO), offsetof(FILE_RENAME_INFO, FileName) + text.size() * sizeof(wchar_t)));
   auto* rename = reinterpret_cast<FILE_RENAME_INFO*>(bytes.data());
-  rename->ReplaceIfExists = FALSE; rename->RootDirectory = handle(destination); rename->FileNameLength = static_cast<DWORD>(text.size() * sizeof(wchar_t));
+  rename->ReplaceIfExists = FALSE; rename->RootDirectory = native(destination); rename->FileNameLength = static_cast<DWORD>(text.size() * sizeof(wchar_t));
   std::memcpy(rename->FileName, text.data(), rename->FileNameLength);
   if (SetFileInformationByHandle(source.get(), FileRenameInfo, rename, static_cast<DWORD>(bytes.size()))) return Move::Moved;
   auto error = failure("FileRenameInfo");
@@ -131,11 +136,11 @@ Move Directory::move(const std::string& name, Directory& destination, const std:
 }
 struct MountPoint { ULONG tag; USHORT length, reserved, subOffset, subLength, printOffset, printLength; wchar_t paths[1]; };
 void Directory::link(const std::string& name, const std::string& target) {
+  // Like the common junction writer: the print name is the plain path, the substitute is NT-namespaced.
   auto text = wide(target);
-  std::wstring substitute = text;
-  if (substitute.rfind(L"\\\\?\\", 0) == 0) substitute.replace(0, 4, L"\\??\\");
-  else if (substitute.rfind(L"\\\\", 0) == 0) substitute = L"\\??\\UNC\\" + substitute.substr(2);
-  else substitute = L"\\??\\" + substitute;
+  if (text.rfind(L"\\\\?\\UNC\\", 0) == 0) text = L"\\\\" + text.substr(8);
+  else if (text.rfind(L"\\\\?\\", 0) == 0) text = text.substr(4);
+  std::wstring substitute = text.rfind(L"\\\\", 0) == 0 ? L"\\??\\UNC\\" + text.substr(2) : L"\\??\\" + text;
   auto payloadBytes = (substitute.size() + text.size() + 2) * sizeof(wchar_t);
   if (payloadBytes + offsetof(MountPoint, paths) > MAXIMUM_REPARSE_DATA_BUFFER_SIZE) throw failure("junction-target", ERROR_INVALID_PARAMETER);
   auto created = child(*this, name, GENERIC_WRITE | DELETE | FILE_READ_ATTRIBUTES, 2, 1, FILE_SHARE_READ | FILE_SHARE_WRITE);
@@ -161,16 +166,16 @@ std::string Directory::readLink(const std::string& name) {
   if (!DeviceIoControl(opened.get(), FSCTL_GET_REPARSE_POINT, nullptr, 0, bytes.data(), static_cast<DWORD>(bytes.size()), &returned, nullptr)) throw failure("FSCTL_GET_REPARSE_POINT");
   auto* point = reinterpret_cast<MountPoint*>(bytes.data());
   size_t start = offsetof(MountPoint, paths);
-  USHORT offset, length;
-  if (point->tag == IO_REPARSE_TAG_MOUNT_POINT) {
-    offset = point->printOffset; length = point->printLength;
-  } else if (point->tag == IO_REPARSE_TAG_SYMLINK) {
-    // A symbolic-link payload has an extra Flags field before PathBuffer.
-    start += sizeof(ULONG);
-    offset = point->printOffset; length = point->printLength;
-  } else { throw failure("read-directory-link", ERROR_NOT_SUPPORTED); }
+  // A symbolic-link payload has an extra Flags field before PathBuffer.
+  if (point->tag == IO_REPARSE_TAG_SYMLINK) start += sizeof(ULONG);
+  else if (point->tag != IO_REPARSE_TAG_MOUNT_POINT) throw failure("read-directory-link", ERROR_NOT_SUPPORTED);
+  USHORT offset = point->subOffset, length = point->subLength;
   if (returned < start || offset + length > returned - start || (offset | length) % sizeof(wchar_t)) throw failure("read-directory-link", ERROR_INVALID_DATA);
-  return utf8(std::wstring(reinterpret_cast<wchar_t*>(bytes.data() + start + offset), length / sizeof(wchar_t)));
+  // Like the common readlink: the substitute name without its NT prefix, since print names may be empty.
+  std::wstring path(reinterpret_cast<wchar_t*>(bytes.data() + start + offset), length / sizeof(wchar_t));
+  if (path.rfind(L"\\??\\UNC\\", 0) == 0) path = L"\\\\" + path.substr(8);
+  else if (path.rfind(L"\\??\\", 0) == 0) path = path.substr(4);
+  return utf8(path);
 }
 void Directory::removeEmpty(const std::string& name) {
   auto opened = child(*this, name, DELETE | FILE_READ_ATTRIBUTES, 1, 0, FILE_SHARE_READ | FILE_SHARE_WRITE);
