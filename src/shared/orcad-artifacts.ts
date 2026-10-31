@@ -169,7 +169,8 @@ export const ORCAD_RIPGREP_LICENSE_ARTIFACTS = [
 /** The skill plugin native-chat agents load by path; mirrors resources/native-chat-visuals. */
 export const ORCAD_NATIVE_CHAT_VISUALS_ARTIFACTS = [
   'native-chat-visuals/.claude-plugin/plugin.json',
-  'native-chat-visuals/skills/orca-chat-visuals/SKILL.md'
+  'native-chat-visuals/skills/orca-chat-visuals/SKILL.md',
+  'native-chat-visuals/skills/orca-chat-background-work/SKILL.md'
 ] as const
 
 /** Phones load this page via mobileWeb.bundle.*; its content-addressed assets are listed only in the manifest. */

@@ -174,7 +174,8 @@ describe('the bundled skill', () => {
     )
     expect(shipped).toEqual([
       '.claude-plugin/plugin.json',
-      `skills/${NATIVE_CHAT_VISUALS_SKILL_NAME}/SKILL.md`
+      `skills/${NATIVE_CHAT_VISUALS_SKILL_NAME}/SKILL.md`,
+      'skills/orca-chat-background-work/SKILL.md'
     ])
     const manifest = JSON.parse(readFileSync(join(RESOURCE_DIR, shipped[0]!), 'utf8'))
     expect(manifest.name).toMatch(/^[a-z0-9-]+$/)
