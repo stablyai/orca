@@ -376,24 +376,29 @@ async function readOrcadStartupTiming() {
 }
 
 /** SIGTERM the active orcad, as its idle exit ends it, and wait until it is gone; the distro stays up. */
-/** True when it stopped a live orcad; false when the active slot had none to stop. */
+/**
+ * True once the active slot's orcad is down: stopped here, or already exited. False only when a
+ * live process holds the pid but its command line does not name the slot, which proves nothing.
+ */
 async function stopOrcadKeepingDistro(): Promise<boolean> {
-  const pid = Number(
-    // Only a pid whose command line still names the active slot: a stale pid file must not
-    // signal whatever process reused that pid.
-    (
-      await guest(
-        `v=$(sed -n 's/.*"active": *"\\([^"]*\\)".*/\\1/p' "$HOME/.orca-remote/orcad-active.json") && ` +
-          `p=$(cat "$HOME/.orca-remote/orcad-$v/.orcad-pid") && ` +
-          `tr '\\0' ' ' < "/proc/$p/cmdline" 2>/dev/null | grep -qF "orcad-$v/" && echo "$p" || true`
-      )
-    ).trim()
-  )
-  if (!Number.isSafeInteger(pid) || pid <= 0) {
-    // No live orcad for the active slot: it already exited, which is the state being measured.
+  const answer = (
+    await guest(
+      `v=$(sed -n 's/.*"active": *"\\([^"]*\\)".*/\\1/p' "$HOME/.orca-remote/orcad-active.json"); ` +
+        `p=$(cat "$HOME/.orca-remote/orcad-$v/.orcad-pid" 2>/dev/null); ` +
+        `if [ -z "$p" ] || [ ! -e "/proc/$p" ]; then echo GONE; ` +
+        // Only a pid whose command line still names the active slot: a reused pid is left alone.
+        `elif tr '\\0' ' ' < "/proc/$p/cmdline" 2>/dev/null | grep -qF "orcad-$v/"; then echo "$p"; ` +
+        `else echo MISMATCH; fi`
+    )
+  ).trim()
+  if (answer === 'GONE') {
+    return true
+  }
+  const pid = Number(answer)
+  if (answer === 'MISMATCH' || !Number.isSafeInteger(pid) || pid <= 0) {
     return false
   }
-  // It may already have idle-exited; the wait below is what decides.
+  // It may exit on its own meanwhile; the wait below is what decides.
   await guest(`kill -TERM ${pid} 2>/dev/null || true`)
   await waitFor(
     'orcad to exit',
@@ -462,7 +467,7 @@ async function restartThroughHost(
       120_000,
       25
     )
-    const firstScreenOutputMs = Math.round(performance.now() - started)
+    const timeToFirstOutputMs = Math.round(performance.now() - started)
     const probe = outputProbe()
     const sendStarted = performance.now()
     // Enter inside the text, as typing delivers it: `enter: true` would add the 500 ms settle that
@@ -486,7 +491,7 @@ async function restartThroughHost(
     return {
       ensureMs,
       terminalCreatedMs: createdMs - ensureMs,
-      firstScreenOutputMs,
+      timeToFirstOutputMs,
       sendToFirstOutputMs,
       firstOutputMs,
       phases: summarizeWslOrcadEnsurePhases(trace.events),
@@ -629,21 +634,21 @@ function startupGateFor(runs: Receipt[], targetP50Ms: number) {
     p90EnsureMs: percentile(values('ensureMs'), 0.9),
     p50TerminalCreatedMs: percentile(values('terminalCreatedMs'), 0.5),
     p50SendToFirstOutputMs: percentile(values('sendToFirstOutputMs'), 0.5),
-    p50FirstScreenOutputMs: percentile(values('firstScreenOutputMs'), 0.5),
-    p90FirstScreenOutputMs: percentile(values('firstScreenOutputMs'), 0.9),
+    p50TimeToFirstOutputMs: percentile(values('timeToFirstOutputMs'), 0.5),
+    p90TimeToFirstOutputMs: percentile(values('timeToFirstOutputMs'), 0.9),
     meetsTarget: p50FirstOutputMs <= targetP50Ms,
     runs: runs.map(
       ({
         ensureMs,
         terminalCreatedMs,
-        firstScreenOutputMs,
+        timeToFirstOutputMs,
         sendToFirstOutputMs,
         firstOutputMs,
         phases
       }) => ({
         ensureMs,
         terminalCreatedMs,
-        firstScreenOutputMs,
+        timeToFirstOutputMs,
         sendToFirstOutputMs,
         firstOutputMs,
         phases
@@ -694,9 +699,9 @@ async function distroRestartBaseline(): Promise<void> {
   for (let i = 0; i < RESTART_RUNS; i++) {
     orcadCold.push(await restartThroughHost(repoPath, 'orcad'))
   }
-  // A run that found no live orcad to stop measured a warm reconnect: keep it out of orcad-cold.
+  // A run that could not prove orcad down may have measured a warm reconnect: keep it out.
   const stoppedRuns = orcadCold.filter((run) => run.orcadStopped)
-  expect(stoppedRuns.length, 'orcad-cold runs that stopped a live orcad').toBeGreaterThan(0)
+  expect(stoppedRuns.length, 'orcad-cold runs with orcad proven down').toBeGreaterThan(0)
   receipt.startupGate = {
     warm: startupGateFor(warm, WARM_START_P50_TARGET_MS),
     cold: startupGateFor(host, COLD_START_P50_TARGET_MS),
@@ -704,7 +709,7 @@ async function distroRestartBaseline(): Promise<void> {
     orcadCold: {
       ...startupGateFor(stoppedRuns, WARM_START_P50_TARGET_MS),
       gated: false,
-      attempted: orcadCold.length,
+      excludedNotStopped: orcadCold.length - stoppedRuns.length,
       medianOrcadStartup: medianOrcadStartupTiming(stoppedRuns.map((run) => run.orcadStartup))
     }
   }
