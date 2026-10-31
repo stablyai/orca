@@ -13063,7 +13063,8 @@
           "whatsNew": "Nouveautés",
           "hashCopied": "Empreinte du contenu copiée",
           "hashCopyFailed": "Impossible de copier l’empreinte.",
-          "readme": "Lire le README sur {{value0}}"
+          "readme": "Lire le README sur {{value0}}",
+          "installs": "Installations"
         },
         "PluginListEmptyStates": {
           "noFilterMatches": "Aucun plugin ne correspond à ces filtres",
@@ -15175,27 +15176,10 @@
         },
         "slides": {
           "HomeSlide": {
-            "a7d9e2c44d": "7 j",
-            "a3d5476811": "5 h",
-            "8a350a4784": "Utilisation du compte",
-            "e27fdaee51": "Nouvel espace de travail",
-            "4405f3c440": "Appairer l'ordinateur",
-            "0b00c98506": "Actions rapides",
-            "0bad5b07c8": "GitHub et Linear",
-            "d047197480": "GitHub · Linear",
             "a4c3f7b7aa": "Tâches",
-            "d33d7a9c29": "orca  ·  feat/mobile-page",
-            "25d6e8a491": "feat/mobile-page",
-            "c791677f2f": "Reprendre",
             "cf3f98fa3f": "Déconnecté",
-            "091355da3d": "M1 Mini · accueil",
-            "0bc1881bc4": "Connecté · 40 worktrees · 5 actifs",
             "19c212e25e": "MacBook Pro",
             "2f1a1d10c4": "Ordinateurs",
-            "156db8a68a": "PRs créées",
-            "4a40af029b": "Temps agent",
-            "00a6903322": "Agents lancés",
-            "c0e2e9dcd9": "Bon retour",
             "af761a0c0d": "Paramètres",
             "5d94e8ddcc": "Orca"
           },
@@ -18857,6 +18841,9 @@
           "PluginsSectionDescription": {
             "openWith": "Ouvrir avec (lorsqu’aucun champ modifiable n’a le focus)"
           }
+        },
+        "pluginInstallCount": {
+          "installs": "{{value0}} installations"
         }
       }
     },

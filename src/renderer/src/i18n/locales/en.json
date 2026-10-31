@@ -13230,7 +13230,8 @@
           "whatsNew": "What’s new",
           "hashCopied": "Content hash copied",
           "hashCopyFailed": "Couldn't copy the hash.",
-          "readme": "Read the README on {{value0}}"
+          "readme": "Read the README on {{value0}}",
+          "installs": "Installs"
         },
         "PluginListEmptyStates": {
           "noFilterMatches": "No plugins match these filters",
@@ -15337,29 +15338,25 @@
         },
         "slides": {
           "HomeSlide": {
-            "a7d9e2c44d": "7d",
-            "a3d5476811": "5h",
-            "8a350a4784": "Account usage",
-            "e27fdaee51": "New Workspace",
-            "4405f3c440": "Pair Desktop",
-            "0b00c98506": "Quick Actions",
-            "0bad5b07c8": "GitHub and Linear",
-            "d047197480": "GitHub · Linear",
             "a4c3f7b7aa": "Tasks",
-            "d33d7a9c29": "orca  ·  feat/mobile-page",
-            "25d6e8a491": "feat/mobile-page",
-            "c791677f2f": "Resume",
             "cf3f98fa3f": "Disconnected",
-            "091355da3d": "M1 Mini · home",
-            "0bc1881bc4": "Connected · 40 worktrees · 5 active",
             "19c212e25e": "MacBook Pro",
             "2f1a1d10c4": "Desktops",
-            "156db8a68a": "PRs created",
-            "4a40af029b": "Agent time",
-            "00a6903322": "Agents spawned",
-            "c0e2e9dcd9": "Welcome back",
             "af761a0c0d": "Settings",
-            "5d94e8ddcc": "Orca"
+            "5d94e8ddcc": "Orca",
+            "dc1f3f5535": "Jump back in",
+            "c2a0215163": "Waiting for input",
+            "0c14dac908": "2m",
+            "77c0dae863": "Done",
+            "3166f865af": "14m",
+            "609517273b": "Working",
+            "005afbad3d": "now",
+            "e986b282af": "Last opened",
+            "8a3ebdbdac": "1h",
+            "04a94cadee": "40 worktrees · 5 active",
+            "b5308d5e2c": "M1 Mini",
+            "aefd110ea5": "Pair a desktop",
+            "d08ee9c466": "New workspace"
           },
           "TerminalSlide": {
             "0bb39f8fe6": "Send",
@@ -18953,6 +18950,9 @@
           "PluginsSectionDescription": {
             "openWith": "Open with (when focus is not in an editable field)"
           }
+        },
+        "pluginInstallCount": {
+          "installs": "{{value0}} installs"
         }
       }
     },

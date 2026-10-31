@@ -12584,7 +12584,8 @@
           "whatsNew": "新功能",
           "hashCopied": "已复制内容哈希",
           "hashCopyFailed": "无法复制哈希。",
-          "readme": "在 {{value0}} 上阅读 README"
+          "readme": "在 {{value0}} 上阅读 README",
+          "installs": "安装次数"
         },
         "PluginListEmptyStates": {
           "noFilterMatches": "没有与这些筛选条件匹配的插件",
@@ -14576,27 +14577,10 @@
         },
         "slides": {
           "HomeSlide": {
-            "a7d9e2c44d": "7天",
-            "a3d5476811": "5小时",
-            "8a350a4784": "账户使用情况",
-            "e27fdaee51": "新工作区",
-            "4405f3c440": "配对桌面",
-            "0b00c98506": "快捷操作",
-            "0bad5b07c8": "GitHub 和 Linear",
-            "d047197480": "GitHub · Linear",
             "a4c3f7b7aa": "任务",
-            "d33d7a9c29": "Orca / mobile页面",
-            "25d6e8a491": "mobile页面",
-            "c791677f2f": "恢复",
             "cf3f98fa3f": "已断开连接",
-            "091355da3d": "M1迷你·家",
-            "0bc1881bc4": "已连接 · 40 个工作树 · 5 个活动树",
             "19c212e25e": "MacBook Pro",
             "2f1a1d10c4": "台式机",
-            "156db8a68a": "已创建 PR",
-            "4a40af029b": "智能体时间",
-            "00a6903322": "已启动智能体",
-            "c0e2e9dcd9": "欢迎回来",
             "af761a0c0d": "设置",
             "5d94e8ddcc": "Orca"
           },
@@ -18163,6 +18147,9 @@
           "PluginsSectionDescription": {
             "openWith": "打开方式（焦点不在可编辑字段中时）"
           }
+        },
+        "pluginInstallCount": {
+          "installs": "{{value0}} 次安装"
         }
       }
     },
