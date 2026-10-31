@@ -108,7 +108,7 @@ export async function exerciseRepositoryRecipeAfterColdRejection(
     }
     const capability = ensureLocalRuntimeCapabilities()
     owned.push(capability)
-    view = render<typeof queries>(
+    view = render(
       <TooltipProvider>
         <RepositoryRecipes />
       </TooltipProvider>

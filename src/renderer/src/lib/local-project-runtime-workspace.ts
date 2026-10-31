@@ -10,7 +10,7 @@ import {
 import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 type RuntimeWorkspaceState = Pick<AppState, 'activeWorktreeId' | 'repos' | 'worktreesByRepo'> &
   Partial<Pick<AppState, 'folderWorkspaces' | 'projectGroups' | 'activeWorkspaceExecutionHostId'>>
@@ -23,7 +23,7 @@ const EMPTY_WORKTREES_BY_REPO: AppState['worktreesByRepo'] = {}
 const EMPTY_FOLDERS: NonNullable<RuntimeWorkspaceState['folderWorkspaces']> = []
 const EMPTY_GROUPS: NonNullable<RuntimeWorkspaceState['projectGroups']> = []
 type RuntimeWorkspace = Pick<Worktree, 'id' | 'repoId' | 'projectId' | 'path' | 'hostId'> | null
-const folderIndexes = new WeakMap<typeof EMPTY_FOLDERS, Map<string, typeof EMPTY_FOLDERS>>()
+const folderIndexes = new WeakMap<typeof EMPTY_FOLDERS, Map<string, FolderWorkspace[]>>()
 const folderRuntimeCache = new WeakMap<
   (typeof EMPTY_FOLDERS)[number],
   WeakMap<typeof EMPTY_GROUPS, WeakMap<AppState['repos'], { workspace: RuntimeWorkspace }>>
@@ -56,7 +56,7 @@ export function createLocalProjectRuntimeWorkspaceSelector(): typeof getLocalPro
     }
     const folders = selectedFolder
       ? [selectedFolder]
-      : getIndexedFolders(state.folderWorkspaces ?? EMPTY_FOLDERS, scope.folderWorkspaceId)
+      : getIndexedFolders(selectFolderWorkspaces(state) ?? EMPTY_FOLDERS, scope.folderWorkspaceId)
     const facts = [
       scope.folderWorkspaceId,
       ...folders.flatMap((folder) => [
