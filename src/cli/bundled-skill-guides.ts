@@ -641,6 +641,7 @@ const ORCA_CLI_MARKDOWN = [
   "- Use `terminal read` before `terminal send` unless the next input is obvious.",
   "- `terminal read` returns accumulated output with escape sequences stripped, not the rendered screen, so anything that repaints (shells, progress bars, TUIs) reads as stacked fragments. Use `--screen` whenever the answer depends on what the terminal actually shows.",
   "- `--screen` and `--cursor` are mutually exclusive: a screen read is the current frame and has no history to page.",
+  "- `terminal send --text ... --enter` into a Claude Code or Codex composer is refused while the composer holds unsent input (`accepted: false`, `refusedReason: pending-input`, `pendingInput: <draft>`), so a user's draft is never submitted with your text. Wait for the user to send or clear it.",
   "- Use `terminal send` only for direct terminal input or one-off prompts where no task state, inbox, or reply tracking is needed.",
   "- `accepted: true` proves input acceptance, not a started turn. Use the receipt's `turn_started` stage when submission proof is needed; never resend on silence.",
   "- A text-plus-Enter agent prompt is refused with `agent_prompt_blocked` while the agent shows a permission or trust menu. To answer the menu, send `--text` and `--enter` as separate commands.",
