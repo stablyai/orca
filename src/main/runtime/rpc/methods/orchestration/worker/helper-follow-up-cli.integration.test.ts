@@ -9,6 +9,8 @@ import { receipt, useHelperFollowUpCli } from './helper-follow-up-cli.test-suppo
 
 describe('helper follow-ups through CLI argv, RPC and SQLite', () => {
   const f = useHelperFollowUpCli()
+  const depthOf = (dispatch: { dispatchId: string }) =>
+    f.h.db.getDispatchContextById(dispatch.dispatchId)!.depth
   const {
     h,
     panes,
@@ -18,43 +20,42 @@ describe('helper follow-ups through CLI argv, RPC and SQLite', () => {
     report,
     pair,
     follow,
-    continues,
     placeNextWorkerInChat,
     otherRun,
-    depthOf,
     effects
   } = f
 
-  it('lets a worker continue its finished helper in place twice using the original address', async () => {
-    const { worker, helper } = await pair()
-    const resource = h.db.getWorkerTerminalResourceByOwner(helper.dispatchId)!
-    for (let turn = 0; turn < 2; turn++) {
-      const sent = await follow('term_worker', helper.dispatchId)
-      expect(sent.error).toBeUndefined()
-      expect(sent.result).toMatchObject({ delivery: 'follow_up', state: 'ready' })
-      const continued = receipt.parse(sent.result)
-      expect(h.db.getDispatchContextById(continued.dispatchId)).toMatchObject({
-        creator_dispatch_id: worker.dispatchId
-      })
-      expect(h.db.getTask(continued.taskId)?.parent_id).toBe(worker.taskId)
-      expect(h.db.getWorkerTerminalResourceByOwner(continued.dispatchId)).toMatchObject({
-        id: resource.id,
-        origin_dispatch_id: helper.dispatchId,
-        ownership_state: 'owned',
-        terminal_handle: 'term_helper'
-      })
-      expect(h.runtime.createTerminal).toHaveBeenCalledTimes(2)
-      await report('term_helper', continued, `dispatch:${worker.dispatchId}`)
+  it.each(['term_worker', 'term_coord'] as const)(
+    'lets %s continue a finished helper in place twice using the original address',
+    async (from) => {
+      const { worker, helper } = await pair()
+      const resource = h.db.getWorkerTerminalResourceByOwner(helper.dispatchId)!
+      for (let turn = 0; turn < 2; turn++) {
+        const sent = await follow(from, helper.dispatchId)
+        expect(sent.error).toBeUndefined()
+        expect(sent.result).toMatchObject({ delivery: 'follow_up', state: 'ready' })
+        const continued = receipt.parse(sent.result)
+        if (from === 'term_worker') {
+          expect(h.db.getDispatchContextById(continued.dispatchId)?.creator_dispatch_id).toBe(
+            worker.dispatchId
+          )
+          expect(h.db.getTask(continued.taskId)?.parent_id).toBe(worker.taskId)
+        }
+        expect(h.db.getWorkerTerminalResourceByOwner(continued.dispatchId)).toMatchObject({
+          id: resource.id,
+          origin_dispatch_id: helper.dispatchId,
+          ownership_state: 'owned',
+          terminal_handle: 'term_helper'
+        })
+        expect(h.runtime.createTerminal).toHaveBeenCalledTimes(2)
+        await report(
+          'term_helper',
+          continued,
+          from === 'term_worker' ? `dispatch:${worker.dispatchId}` : 'term_coord'
+        )
+      }
     }
-  })
-
-  it('keeps coordinator sends working in the same pane', async () => {
-    const { helper } = await pair()
-    const sent = await follow('term_coord', helper.dispatchId)
-    expect(sent.error).toBeUndefined()
-    expect(sent.result).toMatchObject({ delivery: 'follow_up', state: 'ready' })
-    expect(h.runtime.createTerminal).toHaveBeenCalledTimes(2)
-  })
+  )
 
   it.each(['creator settled', 'depth already exceeded'] as const)(
     'refuses before closing a leftover shell when the %s',
@@ -300,19 +301,6 @@ describe('helper follow-ups through CLI argv, RPC and SQLite', () => {
     })
     expect(effects()).toEqual(before)
     expect(getFollowUpDispatch(h.db, helper.dispatchId)).toBeUndefined()
-  })
-
-  it('keeps a continued worker’s own helpers and reports their next work to its current Dispatch', async () => {
-    const { worker, helper } = await pair()
-    await success('worker-release', '--dispatch', helper.dispatchId)
-    await report('term_worker', worker, 'term_coord')
-    const continuedWorker = receipt.parse((await follow('term_coord', worker.dispatchId)).result)
-    f.nextTerminal = 'term_helper_again'
-    const continuedHelper = await continues('term_worker', helper, continuedWorker)
-    await report('term_helper_again', continuedHelper, `dispatch:${continuedWorker.dispatchId}`)
-    expect(h.db.getUnreadMessages(`dispatch:${continuedWorker.dispatchId}`)).toEqual(
-      expect.arrayContaining([expect.objectContaining({ type: 'worker_done' })])
-    )
   })
 
   it.each(['own', 'foreign'] as const)(

@@ -25,6 +25,7 @@ describe('which helpers a worker may continue, through CLI argv, RPC and SQLite'
     continues,
     otherRun,
     effects,
+    reopenOn,
     placeNextWorkerInChat
   } = f
 
@@ -67,27 +68,7 @@ describe('which helpers a worker may continue, through CLI argv, RPC and SQLite'
       if (state === 'closed') {
         await success('worker-release', '--dispatch', helper.dispatchId)
       }
-      // The guide's recovery: reopen the worker's Task and start it on the agent that already runs.
-      await success(
-        'task-update',
-        '--from',
-        'term_coord',
-        '--id',
-        worker.taskId,
-        '--status',
-        'ready'
-      )
-      const reopened = receipt.parse(
-        await success(
-          'worker-start',
-          '--from',
-          'term_coord',
-          '--task',
-          worker.taskId,
-          '--terminal',
-          'term_worker'
-        )
-      )
+      const reopened = await reopenOn(worker, 'term_worker')
       const custody = h.db.getWorkerTerminalResourceByOwner(reopened.dispatchId)!
       expect(custody).toMatchObject({
         origin_dispatch_id: worker.dispatchId,
@@ -167,23 +148,20 @@ describe('which helpers a worker may continue, through CLI argv, RPC and SQLite'
   it.each([
     ['placed', 'the original address'],
     ['placed', 'the failed attempt'],
-    ['never placed', 'the original address'],
-    ['never placed', 'the failed attempt']
+    ['terminal create', 'the original address'],
+    ['native setup gate', 'the failed attempt']
   ] as const)(
-    'keeps a %s helper its worker’s after coordinator attempts that never got an agent, through %s',
-    async (helperState, address) => {
+    'keeps a helper (%s) its worker’s after coordinator attempts that never got an agent, through %s',
+    async (helperStart, address) => {
       const worker = await start('term_coord', 'term_worker')
       let helper: Started
-      if (helperState === 'placed') {
+      if (helperStart === 'placed') {
         helper = await start('term_worker', 'term_helper')
-        await report(
-          'term_helper',
-          receipt.parse({ ...helper, state: 'ready' }),
-          `dispatch:${worker.dispatchId}`
-        )
+        await report('term_helper', helper, `dispatch:${worker.dispatchId}`)
         await success('worker-release', '--dispatch', helper.dispatchId)
       } else {
-        helper = await failedStart('term_worker', 'terminal create')
+        // The helper's own start failed before any agent came up, so nothing ever took custody.
+        helper = await failedStart('term_worker', helperStart)
       }
       const failed = await failedAttempts(helper.dispatchId, 2)
       // The worker's own continuation, a different Dispatch, keeps them.
@@ -204,19 +182,6 @@ describe('which helpers a worker may continue, through CLI argv, RPC and SQLite'
       await report('term_helper_again', continued, `dispatch:${continuedWorker.dispatchId}`)
       expect(h.db.getUnreadMessages(`dispatch:${continuedWorker.dispatchId}`)).toEqual(
         expect.arrayContaining([expect.objectContaining({ type: 'worker_done' })])
-      )
-    }
-  )
-
-  it.each(['terminal create', 'native setup gate'] as const)(
-    'lets a worker continue its own helper whose start failed at %s before getting an agent',
-    async (failure) => {
-      const worker = await start('term_coord', 'term_worker')
-      const helper = await failedStart('term_worker', failure)
-      f.nextTerminal = 'term_helper_fresh'
-      const continued = await continues('term_worker', helper, worker)
-      expect(h.db.getWorkerTerminalResourceByOwner(continued.dispatchId)?.terminal_handle).toBe(
-        'term_helper_fresh'
       )
     }
   )
@@ -286,7 +251,7 @@ describe('which helpers a worker may continue, through CLI argv, RPC and SQLite'
     )
   })
 
-  it.each(['succeeded', 'failed', 'failed and a later attempt never got an agent'] as const)(
+  it.each(['succeeded', 'failed and a later attempt never got an agent'] as const)(
     'refuses a helper the coordinator took over, whose continuation %s',
     async (outcome) => {
       const { worker, helper } = await pair()

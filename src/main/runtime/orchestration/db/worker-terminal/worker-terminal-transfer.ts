@@ -1,7 +1,12 @@
 import type { WorkerTerminalResourceRow } from '../../worker-terminal-ownership'
 import { OrchestrationError } from '../../orchestration-error'
-import { isEquivalentPaneKey } from '../pane-key-match'
+import {
+  DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL,
+  isEquivalentPaneKey,
+  paneKeyMatchSuffix
+} from '../pane-key-match'
 import type { OrchestrationDb } from '../orchestration-db'
+import { parsePaneKey } from '../../../../../shared/stable-pane-id'
 
 // Finds an owned, settled, exact-match resource for an explicitly reused terminal.
 export function findTransferableWorkerTerminalResource(
@@ -156,6 +161,85 @@ export function listWorkerTerminalResourcesByIncarnationPrefix(
         WHERE substr(process_incarnation, 1, ?) = ? ORDER BY updated_at DESC`
     )
     .all(prefix.length, prefix) as WorkerTerminalResourceRow[]
+}
+
+type PaneHolder = {
+  id: string
+  pane: string | null
+  incarnation: string | null
+  status: string
+  host: string | null
+  acquired: number | null
+  origin: string | null
+  prior: string | null
+  provenance: string | null
+}
+
+// Custody rows are inserted when a Dispatch acquires its pane and never reminted, so a pane's original-acquisition rows in
+// rowid order are its holders in acquisition order. Backfilled and transferred rows carry no such order. A table rebuild
+// that renumbers rowids must keep this order or retire this proof. Both host cohorts are read: an unknown host is not
+// another host.
+const PANE_HOLDERS_SQL = `WITH holders AS (
+    SELECT * FROM dispatch_contexts WHERE ${DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL} = ? AND host_scope = ?
+    UNION ALL
+    SELECT * FROM dispatch_contexts WHERE ${DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL} = ? AND host_scope IS NULL
+  )
+  SELECT h.id, h.assignee_pane_key AS pane, h.process_incarnation AS incarnation, h.status,
+         h.host_scope AS host, r.rowid AS acquired, r.origin_dispatch_id AS origin,
+         r.prior_owner_dispatch_ids AS prior, r.retained_reason AS provenance
+    FROM holders h LEFT JOIN worker_terminal_resources r ON r.owner_dispatch_id = h.id`
+
+/** For one caller check: the settled Dispatch that held an external pane's same process right before a resource's owner.
+ *  Each pane's history is read and ordered once per lookup; the previous holder is never skipped for an older one. */
+export function externalHolderLookup(
+  db: OrchestrationDb
+): (resource: WorkerTerminalResourceRow) => string | undefined {
+  const histories = new Map<string, Map<string, PaneHolder | undefined> | null>()
+  return (resource) => {
+    const { pane_key: paneKey, process_incarnation: incarnation, host_scope: host } = resource
+    const owner = resource.owner_dispatch_id
+    if (resource.ownership_state !== 'external' || resource.origin_dispatch_id !== owner) {
+      return undefined
+    }
+    // An unknown host or identity proves no adjacency.
+    if (!paneKey || !incarnation || !host) {
+      return undefined
+    }
+    const key = JSON.stringify([parsePaneKey(paneKey)?.leafId ?? paneKey, host])
+    if (!histories.has(key)) {
+      histories.set(key, orderPaneHolders(db, paneKey, host))
+    }
+    const previous = histories.get(key)?.get(owner)
+    return previous?.incarnation === incarnation &&
+      !['pending', 'dispatched'].includes(previous.status)
+      ? previous.id
+      : undefined
+  }
+}
+
+/** Each holder's predecessor on the pane, or null when any holder's place in the order is unproven. */
+function orderPaneHolders(
+  db: OrchestrationDb,
+  paneKey: string,
+  host: string
+): Map<string, PaneHolder | undefined> | null {
+  const suffix = paneKeyMatchSuffix(paneKey)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this projection selects exactly PaneHolder's columns.
+  const holders = (
+    db.db.prepare(PANE_HOLDERS_SQL).all(suffix, host, suffix) as PaneHolder[]
+  ).filter((holder) => holder.pane !== null && isEquivalentPaneKey(holder.pane, paneKey))
+  const ordered = holders.filter(
+    (holder) =>
+      holder.host === host &&
+      holder.origin === holder.id &&
+      holder.prior === '[]' &&
+      holder.provenance !== 'legacy_ambiguous'
+  )
+  if (ordered.length !== holders.length) {
+    return null
+  }
+  ordered.sort((a, b) => (a.acquired ?? 0) - (b.acquired ?? 0))
+  return new Map(ordered.map((holder, index) => [holder.id, ordered[index - 1]]))
 }
 
 export type WorkerTerminalTransferMethods = {

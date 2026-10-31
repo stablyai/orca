@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { afterEach, beforeEach, expect, vi } from 'vitest'
 import { z } from 'zod'
@@ -34,7 +37,7 @@ const failure = z.object({
 })
 
 /** Real CLI argv -> RPC schema and handlers -> SQLite, with terminal IO and native placement supplied by the fixture. */
-export function useHelperFollowUpCli() {
+export function useHelperFollowUpCli(options: { fileBacked?: boolean } = {}) {
   const h = createOrchestrationWorkerReleaseHarness()
   const output = vi.fn<(value: { result: unknown }) => void>()
   const panes = new Map<string, string>()
@@ -43,19 +46,10 @@ export function useHelperFollowUpCli() {
   let nextTerminal = 'term_worker'
   let rig: QueuedMessageTestRig | undefined
   let structuredHandle: string | undefined
+  let userDataDir: string | undefined
 
-  beforeEach(async () => {
-    h.setup()
-    panes.clear()
-    for (const name of [
-      'ORCA_AGENT_SESSION_ID',
-      'ORCA_TERMINAL_HANDLE',
-      'ORCA_PANE_KEY',
-      'ORCA_PAIRING_CODE',
-      'ORCA_ENVIRONMENT'
-    ]) {
-      vi.stubEnv(name, '')
-    }
+  /** The fixture's terminals and CLI output; armed again after a restart drops every mock. */
+  function arm() {
     const pane = (handle: string) => {
       const structured = structuredWorkerIdentities.get(handle)
       if (structured) {
@@ -89,6 +83,18 @@ export function useHelperFollowUpCli() {
       worktreeId: 'repo::worktree',
       title: nextTerminal
     }))
+    logs = vi.spyOn(console, 'log').mockImplementation(() => {})
+  }
+
+  beforeEach(async () => {
+    userDataDir = options.fileBacked ? mkdtempSync(join(tmpdir(), 'helper-follow-up-')) : undefined
+    h.setup({ userDataDir })
+    panes.clear()
+    for (const name of ['AGENT_SESSION_ID', 'TERMINAL_HANDLE', 'PANE_KEY', 'PAIRING_CODE']) {
+      vi.stubEnv(`ORCA_${name}`, '')
+    }
+    vi.stubEnv('ORCA_ENVIRONMENT', '')
+    arm()
     vi.doMock('../../../../../../cli/runtime-client', async (original) => {
       const actual = await original<typeof CliRuntimeClient>()
       return {
@@ -115,7 +121,6 @@ export function useHelperFollowUpCli() {
       }
     })
     vi.doMock('../../../../../../cli/format', () => ({ printResult: output }))
-    logs = vi.spyOn(console, 'log').mockImplementation(() => {})
     const cliPath = '../../../../../../cli/index'
     main = (await import(cliPath)).main
   })
@@ -130,6 +135,9 @@ export function useHelperFollowUpCli() {
     rig = undefined
     getWorkerTerminalAutoReleaseScheduler(h.runtime).clear()
     h.cleanup()
+    if (userDataDir) {
+      rmSync(userDataDir, { recursive: true, force: true })
+    }
     vi.doUnmock('../../../../../../cli/runtime-client')
     vi.doUnmock('../../../../../../cli/format')
     vi.unstubAllEnvs()
@@ -157,20 +165,14 @@ export function useHelperFollowUpCli() {
 
   async function start(from: string, handle: string) {
     nextTerminal = handle
+    const spec = `work by ${handle}`
     return receipt.parse(
-      await success(
-        'worker-start',
-        '--from',
-        from,
-        '--spec',
-        `work by ${handle}`,
-        '--agent',
-        'codex'
-      )
+      await success('worker-start', '--from', from, '--spec', spec, '--agent', 'codex')
     )
   }
 
-  async function report(from: string, task: z.infer<typeof receipt>, to: string) {
+  async function report(from: string, task: Started, to: string) {
+    const payload = JSON.stringify({ ...task, state: undefined, outcome: 'succeeded' })
     await success(
       'send',
       '--from',
@@ -182,11 +184,7 @@ export function useHelperFollowUpCli() {
       '--type',
       'worker_done',
       '--payload',
-      JSON.stringify({
-        taskId: task.taskId,
-        dispatchId: task.dispatchId,
-        outcome: 'succeeded'
-      })
+      payload
     )
     expect(h.db.getDispatchContextById(task.dispatchId)?.status).toBe('completed')
   }
@@ -206,6 +204,13 @@ export function useHelperFollowUpCli() {
     return receipt.parse(
       await success('worker-start', '--from', from, '--spec', 'next step', '--terminal', terminal)
     )
+  }
+
+  /** The guide's recovery: reopen the worker's Task and start it on the agent that already runs. */
+  async function reopenOn(worker: Started, terminal: string) {
+    await success('task-update', '--from', 'term_coord', '--id', worker.taskId, '--status', 'ready')
+    const args = ['--from', 'term_coord', '--task', worker.taskId, '--terminal', terminal]
+    return receipt.parse(await success('worker-start', ...args))
   }
 
   /** The caller's follow-up to `helper` starts, owned and reported to `by`. */
@@ -268,9 +273,6 @@ export function useHelperFollowUpCli() {
     }).id
   }
 
-  const depthOf = (dispatch: z.infer<typeof receipt>) =>
-    h.db.getDispatchContextById(dispatch.dispatchId)!.depth
-
   function effects() {
     return {
       tasks: h.db.listTasks().length,
@@ -295,8 +297,12 @@ export function useHelperFollowUpCli() {
     continues,
     placeNextWorkerInChat,
     otherRun,
-    depthOf,
     effects,
+    reopenOn,
+    restart() {
+      h.restart()
+      arm()
+    },
     set nextTerminal(handle: string) {
       nextTerminal = handle
     }
