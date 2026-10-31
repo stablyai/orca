@@ -512,7 +512,8 @@ type KeptTerminalSwitchOptions = {
   afterStop?: (runtime: ReturnType<typeof setupMainOwnedWorkspace>['runtime']) => Promise<void>
 }
 
-function startSwitchFromKeptTerminal(options: KeptTerminalSwitchOptions = {}) {
+/** A whole-tab terminal whose stop keeps the pane; records main's settlements for it. */
+function keptSourceTerminal(options: KeptTerminalSwitchOptions = {}) {
   const { runtime } = setupMainOwnedWorkspace()
   const incarnationId = '11111111-1111-4111-8111-111111111111'
   runtime.registerPty(PTY_A, WORKTREE_ID, null, { tabId: TAB_ID, leafId: LEAF_A, incarnationId })
@@ -545,6 +546,24 @@ function startSwitchFromKeptTerminal(options: KeptTerminalSwitchOptions = {}) {
     },
     getForegroundProcess: async () => null
   })
+  const stoppedSource = {
+    worktreeId: WORKTREE_ID,
+    tabId: TAB_ID,
+    leafId: LEAF_A,
+    ptyId: PTY_A,
+    incarnationId
+  }
+  return {
+    runtime,
+    source: { ...source, presentation: source.presentation },
+    incarnationId,
+    settled,
+    stoppedSource
+  }
+}
+
+function startSwitchFromKeptTerminal(options: KeptTerminalSwitchOptions = {}) {
+  const { runtime, source, incarnationId, settled, stoppedSource } = keptSourceTerminal(options)
   const result = executeStructuredSessionSwitch(
     {
       sessionId: id,
@@ -560,13 +579,6 @@ function startSwitchFromKeptTerminal(options: KeptTerminalSwitchOptions = {}) {
     { runtime },
     'chat'
   )
-  const stoppedSource = {
-    worktreeId: WORKTREE_ID,
-    tabId: TAB_ID,
-    leafId: LEAF_A,
-    ptyId: PTY_A,
-    incarnationId
-  }
   return { result, settled, stoppedSource }
 }
 
@@ -674,4 +686,13 @@ it('settles a kept source at once when its stop is proven only after the deadlin
     stop.release()
     vi.useRealTimers()
   }
+})
+
+it('settles a kept source once when an addressed close stops it but cannot retire its tab', async () => {
+  const { runtime, source, incarnationId, settled, stoppedSource } = keptSourceTerminal()
+  vi.spyOn(runtime, 'closeMobileSessionTab').mockResolvedValue({ refused: true } as never)
+  await expect(
+    runtime.closeTerminal(source.handle, incarnationId, source.presentation)
+  ).rejects.toThrow('terminal_pane_close_failed')
+  expect(settled).toHaveBeenCalledExactlyOnceWith(stoppedSource)
 })

@@ -96,7 +96,13 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
         throw new Error('terminal_tab_pinned')
       }
       await captured.stop()
-      return captured.retire()
+      try {
+        return await captured.retire()
+      } catch (error) {
+        // The stopped pane stays; the window shows it exited rather than waiting on a replace.
+        captured.settleStoppedSource()
+        throw error
+      }
     }
 
     if (incarnation && pty?.pty.incarnationId !== incarnation) {
