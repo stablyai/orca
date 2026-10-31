@@ -146,9 +146,9 @@ test('chat right-click offers Copy for selected text and Paste in the composer o
     await expect(paste).toHaveCount(0)
     expect(await nativeMenu.evaluate((menu) => menu.items())).toEqual([])
 
-    // Why outside the selection: that press is what collapses it in Chromium when left alone.
+    // The press lands on the selection: a menu opened elsewhere drops it on purpose.
     await first.click({ clickCount: 3 })
-    await second.click({ button: 'right' })
+    await first.click({ button: 'right' })
     await copy.click()
     await expect.poll(takeCopiedText).toContain(FIRST)
     await expect
@@ -157,7 +157,7 @@ test('chat right-click offers Copy for selected text and Paste in the composer o
 
     if (process.platform === 'darwin') {
       await first.click({ clickCount: 3 })
-      await second.click({ modifiers: ['Control'] })
+      await first.click({ modifiers: ['Control'] })
       await copy.click()
       await expect.poll(takeCopiedText).toContain(FIRST)
     }
