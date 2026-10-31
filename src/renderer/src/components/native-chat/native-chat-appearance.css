@@ -53,7 +53,7 @@
 :root[data-theme-background]
   [data-terminal-chat-view]:not(.has-multiple-panes)
   .pane
-  > :is(.xterm-container, .pane-link-tooltip, .session-restored-banner, .pane-top-banner) {
+  > :is(.xterm-container, .session-restored-banner, .pane-top-banner) {
   opacity: 0;
 }
 
