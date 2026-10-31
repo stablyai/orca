@@ -156,6 +156,65 @@ it('keeps disabled/enabled mentions, keyboard disclosure, Open, Copy, Escape and
   expect(rig.copy).toHaveBeenCalledOnce()
 })
 
+it('mentions exactly the eligible Managing workers once in section order', async () => {
+  const user = userEvent.setup()
+  const managing: OrchestrationCrewRow[] = [
+    {
+      ...worker,
+      partyKey: 'dispatched-unknown',
+      sendAddress: 'dispatch:unknown',
+      status: 'unknown',
+      task: { title: 'Dispatched work', state: 'dispatched' }
+    },
+    {
+      ...worker,
+      partyKey: 'ready-waiting',
+      sendAddress: 'dispatch:waiting',
+      status: 'waiting',
+      task: { title: 'Ready work', state: 'ready' }
+    },
+    {
+      ...worker,
+      partyKey: 'completed-working',
+      sendAddress: 'dispatch:completed',
+      status: 'working',
+      task: { title: 'Completed work', state: 'completed' }
+    },
+    {
+      ...worker,
+      partyKey: 'dispatched-no-address',
+      sendAddress: undefined,
+      task: { title: 'Unavailable work', state: 'dispatched' }
+    }
+  ]
+  const peer: OrchestrationCrewRow = {
+    ...worker,
+    partyKey: 'sendable-peer',
+    role: 'peer',
+    sendAddress: 'dispatch:peer'
+  }
+  rig.snapshot = {
+    ...emptyCrew('ok'),
+    sections: { managedBy: [], managing, talkingWith: [peer] }
+  }
+  render(
+    <TooltipProvider>
+      <OrchestrationCrewPanel
+        target={host}
+        party="term_coordinator"
+        canMention
+        mention={rig.mention}
+      />
+    </TooltipProvider>
+  )
+  await user.click(screen.getByRole('button', { name: 'Show crew: 4 workers' }))
+  await user.click(screen.getByRole('button', { name: 'Mention all' }))
+  expect(rig.mention).toHaveBeenCalledExactlyOnceWith([
+    expect.objectContaining({ partyKey: 'dispatched-unknown', sendAddress: 'dispatch:unknown' }),
+    expect.objectContaining({ partyKey: 'ready-waiting', sendAddress: 'dispatch:waiting' })
+  ])
+})
+
 it('starts pending questions expanded without navigating or copying', async () => {
   const user = userEvent.setup()
   mount({ ...worker, pendingQuestion: { preview: 'Which option?', at: '2026-10-28T01:00:00Z' } })
