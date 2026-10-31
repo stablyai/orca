@@ -106,6 +106,7 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
   ): RuntimeMobileSessionTabsResult {
     return {
       worktree: worktreeId,
+      agentSenderAssociations: this.agentProjections.senders.build(worktreeId),
       publicationEpoch:
         publishedEpoch === null
           ? UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH

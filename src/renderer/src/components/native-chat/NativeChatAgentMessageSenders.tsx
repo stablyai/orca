@@ -21,12 +21,14 @@ export function NativeChatAgentMessageSenders({
   from,
   chatWorktreeId,
   target,
-  queued = false
+  queued = false,
+  dispatchId
 }: {
   from: AgentMessageSource
   chatWorktreeId: string | null
   target?: RuntimeClientTarget
   queued?: boolean
+  dispatchId?: string
 }): React.JSX.Element {
   const { shown, more } = agentMessageSendersShown(from)
   const owner = useNativeChatVisualOwner()
@@ -44,6 +46,7 @@ export function NativeChatAgentMessageSenders({
       {shown.map((sender, index) => (
         <Fragment key={sender.party.address}>
           <SenderName
+            dispatchId={dispatchId}
             from={from}
             sender={sender}
             chatWorktreeId={worktreeId}
@@ -64,19 +67,21 @@ export function NativeChatAgentMessageSenders({
 }
 
 function SenderName({
+  dispatchId,
   from,
   sender,
   chatWorktreeId,
   target,
   queued
 }: {
+  dispatchId?: string
   from: AgentMessageSource
   sender: AgentMessageSender
   chatWorktreeId: string | null
   target?: RuntimeClientTarget
   queued: boolean
 }): React.JSX.Element {
-  const label = useAgentMessageSenderLabel(sender, chatWorktreeId, target)
+  const label = useAgentMessageSenderLabel(sender, chatWorktreeId, target, dispatchId)
   if (!agentMessageSenderCanOpen(sender, Boolean(chatWorktreeId)) || !chatWorktreeId) {
     return (
       <span className={`max-w-48 truncate ${queued ? 'px-2' : 'px-2.5'}`} title={label}>

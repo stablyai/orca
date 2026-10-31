@@ -1,4 +1,8 @@
 // @vitest-environment happy-dom
+import {
+  structuredAgentSessionPaneKey,
+  structuredAgentSessionTabId
+} from '../../../../shared/structured-agent-session-projection'
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -225,3 +229,23 @@ it.each([false, true])(
     expect(feeds.get('local')!.activations).toBe(0)
   }
 )
+
+it('uses the same published /clear successor for the live sender label', () => {
+  const live = testOrcaSessionId('22222222-2222-4222-8222-222222222222')
+  publish('local', [summary(live)], [{ sessionId: live, conversationName: 'Continued sender' }])
+  useAppStore.setState({ unifiedTabsByWorktree: { [SENDER]: [tab(live, '')] } })
+  useAppStore.getState().setAgentSenderPublication('local', {
+    associations: [
+      {
+        address: `orca_session_id:${ROOT}`,
+        sessionId: live,
+        paneKey: structuredAgentSessionPaneKey(structuredAgentSessionTabId(live), live),
+        worktreeId: SENDER
+      }
+    ],
+    federation: [],
+    attachments: []
+  })
+  render(<NativeChatAgentMessageSenders from={source()} chatWorktreeId={RECIPIENT} />)
+  expect(screen.getByText('Continued sender')).toBeInTheDocument()
+})

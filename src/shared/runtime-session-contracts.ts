@@ -1,3 +1,4 @@
+import type { AgentSenderPublication } from './agent-sender-associations'
 import type { MobileProjectSectionCatalog } from './mobile-project-sections-contract'
 import type { AgentStatusOrchestrationContext } from './agent-status-types'
 import type { RemoteServerUpdateSupport } from './remote-server-update'
@@ -192,6 +193,7 @@ export type RuntimeNativeChatLaunchDraftResolution = {
 }
 
 export type RuntimeSyncWindowGraphResult = RuntimeStatus & {
+  agentSenderAssociations?: AgentSenderPublication
   agentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
   nativeChatLaunchDraftResolutions?: RuntimeNativeChatLaunchDraftResolution[]
   mobileSessionResyncWorktrees?: string[]
@@ -266,6 +268,7 @@ export type RuntimeMobileSessionRetiredTerminalSurface = {
 }
 
 export type RuntimeMobileSessionTabsResult = {
+  agentSenderAssociations?: AgentSenderPublication
   worktree: string
   /** Query-only truth about an executing launch that owns this workspace's first surface. */
   initialSurfaceLaunch?: { launchId: string; agent: TuiAgent }

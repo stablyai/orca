@@ -629,6 +629,13 @@ it.each([10, 100])(
       return projection.messages(counted).filter(({ agentStart }) => agentStart)
     }
     let messages = readRows()
+    for (const item of items) {
+      if (item.body.kind === 'agent-start') {
+        expect(messages.find((message) => message.id === item.itemId)?.agentStartDispatchId).toBe(
+          item.body.dispatchId
+        )
+      }
+    }
     expect(conversions).toBe(items.length)
     expect(taskReads).toBe(count)
     // One existing question pass visits the source array once; the second pass visits its composed rows.

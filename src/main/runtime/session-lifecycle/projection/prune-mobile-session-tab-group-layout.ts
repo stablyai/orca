@@ -4,7 +4,6 @@ import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
 import type {
   RuntimeMobileSessionSnapshotTab,
   RuntimeMobileSessionTabGroup,
-  RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot,
   RuntimeMobileSessionTerminalTab
 } from '../../../../shared/runtime-types'
@@ -91,13 +90,14 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
   }
 
   /** Transforms an internal mobile session tab snapshot into a sanitized client payload, resolving launch-agent ownership and normalizing titles. */
-  protected toMobileSessionTabsResult(
-    snapshot: RuntimeMobileSessionTabsSnapshot
-  ): RuntimeMobileSessionTabsResult {
+  protected toMobileSessionTabsResult(snapshot: RuntimeMobileSessionTabsSnapshot) {
     snapshot = titleStructuredConversationTabs(snapshot, (sessionId) =>
       this.structuredConversationTabName(snapshot.worktree, sessionId)
     )
-    return projectRuntimeMobileSessionTabs(snapshot, this.getMobileSessionProjectionHost())
+    return {
+      ...projectRuntimeMobileSessionTabs(snapshot, this.getMobileSessionProjectionHost()),
+      agentSenderAssociations: this.agentProjections.senders.build(snapshot.worktree)
+    }
   }
 
   refreshStructuredConversationTabTitle(workspaceId: string, sessionId: string): void {

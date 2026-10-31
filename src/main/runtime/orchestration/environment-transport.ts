@@ -8,6 +8,7 @@ export type OrchestrationWorkerServer = {
   environmentId: string
   name: string
   peerFingerprint: string
+  homePeerFingerprint?: string
   pairingRevision?: number
 }
 

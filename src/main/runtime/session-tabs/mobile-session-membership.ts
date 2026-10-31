@@ -1,3 +1,4 @@
+import type { AgentSenderPublication } from '../../../shared/agent-sender-associations'
 import type { OrcaRuntimeWithGetTerminalInteractiveWait as GetTerminalInteractiveWaitMethods } from '../terminal/wait/terminal-interactive-wait'
 import { OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal } from './pty-backed-session-publication'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
@@ -16,7 +17,20 @@ export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends O
     ...args: Parameters<GetTerminalInteractiveWaitMethods['getTerminalWorktreeIdForPaneKey']>
   ): ReturnType<GetTerminalInteractiveWaitMethods['getTerminalWorktreeIdForPaneKey']>
 
-  /** Bump snapshotVersion before emitting (coalesced unless immediate); clients discard re-emits at the same version. */
+  private lastSenderPublication: AgentSenderPublication | undefined
+
+  refreshAgentSenderAssociations(): void {
+    const publication = this.agentProjections.senders.build()
+    if (publication === this.lastSenderPublication) {
+      return
+    }
+    this.lastSenderPublication = publication
+    for (const worktreeId of this.mobileSessionTabsByWorktree.keys()) {
+      this.touchMobileSessionTabsForWorktree(worktreeId)
+    }
+  }
+
+  /** Bump snapshotVersion before emitting (coalesced unless immediate); clients discard same-version re-emits. */
   touchMobileSessionTabsForWorktree(
     worktreeId: string,
     options: { immediate?: boolean } = {}
