@@ -123,28 +123,6 @@ export function pickComposerUsageWindow(
   )
 }
 
-// Claude always has a 5-hour limit that is absent while idle; Codex has weekly-only plans, so it falls back.
-const PROVIDERS_WITH_SESSION_WINDOW: ReadonlySet<UsageProviderKey> = new Set(['claude'])
-
-export type ComposerUsageTarget =
-  | { kind: 'window'; entry: UsageWindowEntry }
-  | { kind: 'no-session' }
-
-export function resolveComposerUsageTarget(
-  usage: AgentUsage,
-  choice: ComposerUsageWindowChoice
-): ComposerUsageTarget | null {
-  if (
-    choice === 'session' &&
-    PROVIDERS_WITH_SESSION_WINDOW.has(usage.provider) &&
-    !usage.windows.some((entry) => entry.kind === 'session')
-  ) {
-    return { kind: 'no-session' }
-  }
-  const entry = pickComposerUsageWindow(usage.windows, choice)
-  return entry ? { kind: 'window', entry } : null
-}
-
 /** "5h", "7d", "30d": the window's length, which is what users call these limits. */
 export function formatUsageWindowLength(windowMinutes: number): string {
   return windowMinutes < 1440
