@@ -118,7 +118,7 @@ export function AgentLaunchSetupPanel({
         onAction={() => {}}
       />
     ) : null
-  const use = (surface: AgentPickerSurface) => {
+  const handleUse = (surface: AgentPickerSurface) => {
     const current = getDraft()
     if (current) {
       onUse({ ...acceptAgentPickerArguments(entry, current), surface })
@@ -171,7 +171,7 @@ export function AgentLaunchSetupPanel({
           (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement)
         ) {
           event.preventDefault()
-          use(mode === 'select' ? draft.surface : entry.defaultSurface)
+          handleUse(mode === 'select' ? draft.surface : entry.defaultSurface)
         }
       }}
     >
@@ -188,7 +188,7 @@ export function AgentLaunchSetupPanel({
           ) {
             event.preventDefault()
             event.stopPropagation()
-            use(mode === 'select' ? draft.surface : entry.defaultSurface)
+            handleUse(mode === 'select' ? draft.surface : entry.defaultSurface)
           }
         }}
         onKeyDown={(event) => {
@@ -351,7 +351,12 @@ export function AgentLaunchSetupPanel({
       </div>
       <div className="flex items-center justify-end gap-2 border-t border-border px-2.5 py-2">
         {mode === 'select' ? (
-          <Button type="button" size="xs" disabled={disabled} onClick={() => use(draft.surface)}>
+          <Button
+            type="button"
+            size="xs"
+            disabled={disabled}
+            onClick={() => handleUse(draft.surface)}
+          >
             {translate('agentPicker.use', 'Use')}
           </Button>
         ) : (
@@ -362,7 +367,7 @@ export function AgentLaunchSetupPanel({
               size="xs"
               disabled={disabled}
               variant={surface === entry.defaultSurface ? 'default' : 'outline'}
-              onClick={() => use(surface)}
+              onClick={() => handleUse(surface)}
             >
               {surface === 'chat'
                 ? translate('agentPicker.launchChat', 'Launch chat')

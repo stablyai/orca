@@ -621,10 +621,13 @@ it.each([5, 50])(
       { agentId: 'claude', agentArgs: '--model claude-sonnet-5-5', surface: 'terminal' },
       {}
     )
+    const dialogs = Array.from({ length: rows - 1 }, (_, index) => ({
+      id: `customize-dialog-${index}`
+    }))
     render(
       <TooltipProvider>
-        {Array.from({ length: rows - 1 }, (_, index) => (
-          <SourceControlAgentActionDialog key={index} {...mounted.props} />
+        {dialogs.map((dialog) => (
+          <SourceControlAgentActionDialog key={dialog.id} {...mounted.props} />
         ))}
       </TooltipProvider>
     )
