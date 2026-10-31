@@ -39,6 +39,15 @@ export type HostWorktreeInfo = {
 // Persisted counts may be days old; bound their live label without discarding history.
 export const HOME_WORKTREE_COUNTS_LIVE_MAX_AGE_MS = 10 * 60_000
 
+/** Agent states are live facts; a saved copy or a dropped connection can't vouch for them. */
+export function withoutHomeAgentStates(info: HostWorktreeInfo): HostWorktreeInfo {
+  if (!info.attention) {
+    return info
+  }
+  const { attention: _attention, ...rest } = info
+  return rest
+}
+
 export function markHomeWorktreeCatalogUnavailable(
   current: HostWorktreeInfo | undefined,
   hostId: string

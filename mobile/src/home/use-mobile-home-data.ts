@@ -14,7 +14,11 @@ import {
 import { loadHostCatalog } from '../transport/host-store'
 import type { HostCatalogEntry } from '../transport/types'
 import { fetchHomeHostWorktreeInfo } from '../worktree/home-host-worktree-fetch'
-import type { HomeWorktreeSummary, HostWorktreeInfo } from '../worktree/home-worktree-info'
+import {
+  withoutHomeAgentStates,
+  type HomeWorktreeSummary,
+  type HostWorktreeInfo
+} from '../worktree/home-worktree-info'
 import {
   LAST_VISITED_WORKTREE_STORAGE_KEY,
   readLastVisitedWorktreeRecord
@@ -23,15 +27,6 @@ import { selectHomeJumpBackInRows } from '../worktree/home-jump-back-in'
 import { selectHomeResumeCard } from '../worktree/home-resume-card'
 import { projectHomeHostConnections } from './home-host-connection-projection'
 import { useMobileHomeHostConnections } from './use-mobile-home-host-connections'
-
-// Agent states only mean something live; a saved copy may be days old, so a list read must prove them again.
-function withoutAgentStates(
-  info: Record<string, HostWorktreeInfo>
-): Record<string, HostWorktreeInfo> {
-  return Object.fromEntries(
-    Object.entries(info).map(([hostId, { attention: _attention, ...rest }]) => [hostId, rest])
-  )
-}
 
 export function useMobileHomeData() {
   const router = useRouter()
@@ -66,7 +61,14 @@ export function useMobileHomeData() {
         return
       }
       setWorktreeInfo((previous) =>
-        Object.keys(previous).length > 0 ? previous : withoutAgentStates(snapshot.worktreeInfo)
+        Object.keys(previous).length > 0
+          ? previous
+          : Object.fromEntries(
+              Object.entries(snapshot.worktreeInfo).map(([hostId, info]) => [
+                hostId,
+                withoutHomeAgentStates(info)
+              ])
+            )
       )
       for (const [hostId, info] of Object.entries(snapshot.worktreeInfo)) {
         if (info.lastActiveWorktree) {

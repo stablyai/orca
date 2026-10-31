@@ -10,6 +10,7 @@ import {
   fetchHomeHostWorktreeInfo,
   type HostWorktreeInfoSetter
 } from '../worktree/home-host-worktree-fetch'
+import { withoutHomeAgentStates } from '../worktree/home-worktree-info'
 import {
   readMobileHomeLastConnected,
   readMobileHomeReconnectAttempts,
@@ -83,6 +84,12 @@ function wireMobileHomeHostSubscriptions(
     unsubscribeNotifications = null
     unsubscribeClientEvents?.()
     unsubscribeClientEvents = null
+    // Agents keep moving while we're away; only the reconnect read may show their states again.
+    setWorktreeInfo((previous) => {
+      const current = previous[entry.hostId]
+      const next = current && withoutHomeAgentStates(current)
+      return next === current ? previous : { ...previous, [entry.hostId]: next }
+    })
   }
   wireState(entry.state)
   const unsubscribeState = entry.client.onStateChange(wireState)
