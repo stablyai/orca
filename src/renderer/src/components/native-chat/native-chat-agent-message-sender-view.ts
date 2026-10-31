@@ -3,8 +3,6 @@ import { useAgentMessageSenderSource } from './native-chat-agent-message-sender-
 import type { AppState } from '@/store/types'
 import type { AgentMessageSender } from '../../../../shared/agent-session/agent-session-message-source'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { agentMessageSenderOwner } from './native-chat-agent-message-sender-label'
-import { locateLegacyAgentMessageSender } from './native-chat-agent-message-sender-compatibility'
 import { resolveAgentMessageSenderTarget } from './native-chat-agent-message-sender-target'
 
 export function useAgentMessageSenderView(
@@ -46,8 +44,7 @@ export function useAgentMessageSenderView(
         dispatchId
       )
       if (resolved.kind === 'legacy') {
-        const owner = agentMessageSenderOwner(state, chatWorktreeId, stableTarget)
-        return owner ? locateLegacyAgentMessageSender(state, identity, owner) : undefined
+        return resolved.location
       }
       const located = resolved.kind === 'located' ? resolved.location : undefined
       // A located chat's own tab names its agent for cards saved before the agent kind was.

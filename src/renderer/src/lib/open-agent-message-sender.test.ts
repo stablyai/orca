@@ -47,7 +47,11 @@ vi.mock('./worktree-runtime-owner', async (original) => ({
 }))
 vi.mock('@/store', () => ({
   useAppStore: {
-    getState: () => ({ unifiedTabsByWorktree: mocks.tabs.get('current'), agentStatusByPaneKey: {} })
+    getState: () => ({
+      unifiedTabsByWorktree: mocks.tabs.get('current'),
+      agentStatusByPaneKey: {},
+      retainedAgentsByPaneKey: {}
+    })
   }
 }))
 

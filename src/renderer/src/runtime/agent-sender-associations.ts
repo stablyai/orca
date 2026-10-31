@@ -4,87 +4,25 @@ import type {
   AgentSenderPublication
 } from '../../../shared/agent-sender-associations'
 import type { AgentMessageSender } from '../../../shared/agent-session/agent-session-message-source'
-import {
-  structuredAgentSessionOwnerForTab,
-  structuredAgentSessionOwnerInputs
-} from './structured-agent-session-owner'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionOwnerInputs } from './structured-agent-session-owner'
 import type { Tab } from '../../../shared/tab-types'
-import { toHostSessionTabId } from '../../../shared/terminal-surface-id'
-import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
-import { getKnownExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { agentSenderAliasParts, assembleAgentSenderAliases } from './agent-sender-alias-projection'
+import {
+  effectivePublications,
+  type AgentSenderPublications
+} from './agent-sender-publication-patch'
 
-export type AgentSenderPublications = Record<string, Record<string, AgentSenderPublication>>
-type State = Partial<Pick<AppState, 'agentSenderPublicationsByHost'>>
+export { agentSenderPublicationPatch } from './agent-sender-publication-patch'
+export type { AgentSenderPublications } from './agent-sender-publication-patch'
 export type LocatedAgentSender = AgentSenderAssociation & { host: string; tab?: Tab }
 const EMPTY: AgentSenderPublications = Object.freeze({})
 const key = (host: string, address: string) => JSON.stringify([host, address])
-
-/** A host publishes once any frame carries the field; a frame without it changes only its own
- *  scope when it removes that worktree, so capability never follows which scopes have rows. */
-export function agentSenderPublicationPatch(
-  state: State,
-  host: string,
-  scope: string,
-  publication: AgentSenderPublication | undefined,
-  removed = false
-): Partial<State> {
-  const source = state.agentSenderPublicationsByHost ?? EMPTY
-  const scopes = source[host]
-  if (!publication) {
-    // The whole-host result is the only statement that a host does not publish.
-    if (scope === '*' && scopes) {
-      const next = { ...source }
-      delete next[host]
-      return { agentSenderPublicationsByHost: next }
-    }
-    // A whole-host result is replaced only by the next one; a chat inventory's removal can't speak for terminals.
-    if (!removed || !scopes?.[scope] || scopes['*']) {
-      return {}
-    }
-    const next = { ...scopes }
-    delete next[scope]
-    return { agentSenderPublicationsByHost: { ...source, [host]: next } }
-  }
-  if (scope !== '*' && scopes?.['*']) {
-    const previous = scopes['*']
-    const current = {
-      ...previous,
-      associations: previous.associations.filter((row) => row.worktreeId === scope),
-      attachments: previous.attachments.filter((row) => row.worktreeId === scope)
-    }
-    if (JSON.stringify(current) === JSON.stringify(publication)) {
-      return {}
-    }
-    publication = {
-      ...publication,
-      associations: [
-        ...previous.associations.filter((row) => row.worktreeId !== scope),
-        ...publication.associations
-      ],
-      attachments: [
-        ...previous.attachments.filter((row) => row.worktreeId !== scope),
-        ...publication.attachments
-      ]
-    }
-    scope = '*'
-  }
-  if (JSON.stringify(scopes?.[scope]) === JSON.stringify(publication)) {
-    return {}
-  }
-  return {
-    agentSenderPublicationsByHost: { ...source, [host]: { ...scopes, [scope]: publication } }
-  }
-}
 
 let cache:
   | {
       inputs: unknown[]
       source: AppState['agentSenderPublicationsByHost']
-      aliasesKey: string
+      parts: readonly unknown[]
       index: Map<string, LocatedAgentSender | null>
     }
   | undefined
@@ -101,8 +39,17 @@ function senderIndex(state: AppState) {
   if (cache && inputs.every((input, i) => input === cache?.inputs[i])) {
     return cache
   }
-  const visible = new Map<string, string | null>()
-  const chatTabs = new Map<string, Tab>()
+  const parts = agentSenderAliasParts(state)
+  if (
+    cache &&
+    cache.source === state.agentSenderPublicationsByHost &&
+    cache.parts.length === parts.length &&
+    cache.parts.every((part, i) => part === parts[i])
+  ) {
+    cache.inputs = inputs
+    return cache
+  }
+  const { visible, chatTabs } = assembleAgentSenderAliases(parts)
   const unique = <T>(map: Map<string, T | null>, id: string, value: T) => {
     if (!map.has(id)) {
       map.set(id, value)
@@ -110,55 +57,12 @@ function senderIndex(state: AppState) {
       map.set(id, null)
     }
   }
-  for (const tabs of Object.values(state.unifiedTabsByWorktree)) {
-    for (const tab of tabs) {
-      const host = structuredAgentSessionOwnerForTab(state, tab)
-      if (host && tab.contentType === 'agent-session') {
-        chatTabs.set(key(host, structuredAgentSessionPaneKey(tab.id, tab.entityId)), tab)
-        unique(
-          visible,
-          key(
-            host,
-            structuredAgentSessionPaneKey(structuredAgentSessionTabId(tab.entityId), tab.entityId)
-          ),
-          structuredAgentSessionPaneKey(tab.id, tab.entityId)
-        )
-      }
-    }
-  }
-  for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
-    for (const tab of tabs) {
-      const remote = tab.ptyId ? parseRemoteRuntimePtyId(tab.ptyId) : null
-      const host = remote
-        ? `runtime:${remote.environmentId}`
-        : getKnownExecutionHostIdForWorktree(state, worktreeId)
-      if (!host) {
-        continue
-      }
-      const [hostTab, leafId] = toHostSessionTabId(tab.id).split('::')
-      if (hostTab && leafId) {
-        unique(visible, key(host, `${hostTab}:${leafId}`), `${tab.id}:${leafId}`)
-      }
-    }
-  }
-  const aliasesKey = JSON.stringify([
-    [...visible],
-    [...chatTabs].map(([id, tab]) => [id, tab.label, tab.customLabel, tab.agentSessionAgent])
-  ])
-  if (
-    cache &&
-    cache.source === state.agentSenderPublicationsByHost &&
-    cache.aliasesKey === aliasesKey
-  ) {
-    cache.inputs = inputs
-    return cache
-  }
   builds++
   const index = new Map<string, LocatedAgentSender | null>()
   const publications = Object.entries(state.agentSenderPublicationsByHost ?? EMPTY)
   const execution = new Map<string, { host: string; publication: AgentSenderPublication }[]>()
   for (const [host, scopes] of publications) {
-    for (const publication of scopes['*'] ? [scopes['*']] : Object.values(scopes)) {
+    for (const publication of effectivePublications(scopes)) {
       if (publication.peerFingerprint) {
         const bucket = execution.get(publication.peerFingerprint) ?? []
         bucket.push({ host, publication })
@@ -191,7 +95,7 @@ function senderIndex(state: AppState) {
     }
   }
   for (const [host, scopes] of publications) {
-    const values = scopes['*'] ? [scopes['*']] : Object.values(scopes)
+    const values = effectivePublications(scopes)
     for (const publication of values) {
       for (const row of publication.associations) {
         visits++
@@ -244,7 +148,7 @@ function senderIndex(state: AppState) {
       index.set(id, previous)
     }
   }
-  cache = { inputs, source: state.agentSenderPublicationsByHost, aliasesKey, index }
+  cache = { inputs, source: state.agentSenderPublicationsByHost, parts, index }
   return cache
 }
 

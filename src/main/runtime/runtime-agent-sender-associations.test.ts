@@ -1,4 +1,8 @@
 import { afterEach, expect, it, vi } from 'vitest'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { writeEnvironmentStore } from '../../shared/runtime-environment-store-file'
 import { createRuntimeAgentProjections } from './construction/runtime-agent-projections'
 import {
   fingerprintOrchestrationPeer,
@@ -64,18 +68,19 @@ function harness(n = 1, records: AgentSessionRecordReader | null = null) {
   )
   // A warm restart keeps each terminal's handle; tests replace one to model a fresh terminal.
   const handles = new Map(leaves.map((l, i) => [l.tabId, handle(i)]))
+  const resolveServer = vi.fn(() => ({
+    environmentId: 'remote',
+    name: 'Remote',
+    peerFingerprint: 'execution-peer',
+    homePeerFingerprint: 'paired-home'
+  }))
   let openedDb: OrchestrationDb | null = null
   const openHistory = vi.fn(() => (openedDb = db))
   const start = () => {
     const { senders, setPeerKey } = createRuntimeAgentProjections(
       {
         getExistingOrchestrationDb: openHistory,
-        resolveOrchestrationWorkerServer: () => ({
-          environmentId: 'remote',
-          name: 'Remote',
-          peerFingerprint: 'execution-peer',
-          homePeerFingerprint: 'paired-home'
-        })
+        resolveOrchestrationWorkerServer: resolveServer
       },
       {
         getDb: () => openedDb,
@@ -134,7 +139,8 @@ function harness(n = 1, records: AgentSessionRecordReader | null = null) {
     restart: () => (projection = start()),
     worker,
     located,
-    openHistory
+    openHistory,
+    resolveServer
   }
 }
 
@@ -498,4 +504,48 @@ it('sends desktop clients the sender scope and strips it from phone frames', () 
   expect(projectSessionTabsForClient(frame, 'runtime', undefined).agentSenderAssociations).toEqual(
     frame.agentSenderAssociations
   )
+})
+
+it('publishes WSL chats, and only open chats when no tab table is recorded yet', () => {
+  const record = (sessionId: string, wslDistro: string | null = null) => {
+    const base = agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId }))
+    return agentSessionConversationView({ ...base, location: { ...base.location, wslDistro } })
+  }
+  for (const history of [100, 1000]) {
+    const rows = [
+      record('wsl-chat', 'Ubuntu'),
+      ...Array.from({ length: history }, (_, i) => record(`closed-${i}`))
+    ]
+    const h = harness(0, {
+      getRecord: (id) => rows.find((r) => r.sessionId === id) ?? null,
+      listRecords: () => rows,
+      // Before the tab table exists the store answers from the workspace's saved chat tabs.
+      getVisibleSessionTabIndex: () => ({ present: false, sessionIds: [] }),
+      listVisibleSessionIds: () => ['wsl-chat']
+    })
+    expect(h.projection.build().associations.map((r) => r.identity)).toEqual([
+      'orca_session_id:wsl-chat'
+    ])
+  }
+})
+
+it('reads paired principals again only after a pairing write, not on each Dispatch change', () => {
+  const h = harness(2)
+  h.db.db
+    .prepare(
+      'INSERT INTO federated_dispatches (dispatch_id, environment_id, environment_name, peer_fingerprint, protocol_version) VALUES (?, ?, ?, ?, ?)'
+    )
+    .run('federated', 'remote', 'Remote', 'execution-peer', 1)
+  expect(h.projection.build().principals).toHaveLength(1)
+  for (let i = 0; i < 2; i++) {
+    h.worker(i)
+    h.projection.build()
+  }
+  expect(h.resolveServer).toHaveBeenCalledTimes(1)
+  writeEnvironmentStore(mkdtempSync(join(tmpdir(), 'orca-sender-pairing-')), {
+    version: 1,
+    environments: []
+  })
+  h.projection.build()
+  expect(h.resolveServer).toHaveBeenCalledTimes(2)
 })

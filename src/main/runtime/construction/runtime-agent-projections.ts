@@ -5,6 +5,8 @@ import {
   type RuntimeAgentOrchestrationDependencies
 } from '../runtime-agent-orchestration-projection'
 import type { RuntimeConstructionServices } from './runtime-construction-services'
+import { environmentStoreWriteCount } from '../../../shared/runtime-environment-store-file'
+import type { AgentSenderPrincipal } from '../runtime-agent-sender-history'
 
 type SenderHost = Pick<
   RuntimeConstructionServices,
@@ -17,6 +19,9 @@ export function createRuntimeAgentProjections(
 ) {
   let historyChecked = false
   let peerKey: () => string | null = () => null
+  // Pairings change only by registry writes; resolving reads several files, so not per Dispatch change.
+  const principals = new Map<string, AgentSenderPrincipal | undefined>()
+  let pairing = environmentStoreWriteCount()
   const senders = new RuntimeAgentSenderAssociations({
     ...dependencies,
     getDb: () => {
@@ -37,14 +42,16 @@ export function createRuntimeAgentProjections(
       const key = peerKey()
       return key ? fingerprintOrchestrationPeer(key) : undefined
     },
+    pairingGeneration: environmentStoreWriteCount,
     principal: (environmentId) => {
-      try {
-        const { peerFingerprint, homePeerFingerprint } =
-          host.resolveOrchestrationWorkerServer(environmentId)
-        return homePeerFingerprint ? { peerFingerprint, homePeerFingerprint } : undefined
-      } catch {
-        return undefined
+      if (pairing !== environmentStoreWriteCount()) {
+        pairing = environmentStoreWriteCount()
+        principals.clear()
       }
+      if (!principals.has(environmentId)) {
+        principals.set(environmentId, resolvePrincipal(host, environmentId))
+      }
+      return principals.get(environmentId)
     }
   })
   return {
@@ -54,5 +61,18 @@ export function createRuntimeAgentProjections(
     setPeerKey: (read: () => string | null) => {
       peerKey = read
     }
+  }
+}
+
+function resolvePrincipal(
+  host: SenderHost,
+  environmentId: string
+): AgentSenderPrincipal | undefined {
+  try {
+    const { peerFingerprint, homePeerFingerprint } =
+      host.resolveOrchestrationWorkerServer(environmentId)
+    return homePeerFingerprint ? { peerFingerprint, homePeerFingerprint } : undefined
+  } catch {
+    return undefined
   }
 }

@@ -14,15 +14,15 @@ import {
   type AgentSenderPrincipal
 } from './runtime-agent-sender-history'
 import type { OrchestrationDb } from './orchestration/db'
+import { AgentSenderPublisher, type AgentSenderScope } from './runtime-agent-sender-publication'
+import type { AgentSenderRevision } from '../../shared/agent-sender-associations'
 
 type Dependencies = RuntimeAgentOrchestrationDependencies & {
   peerFingerprint(): string | undefined
   /** This host's principal as the paired environment authenticates it, and that peer's key. */
   principal(environmentId: string): AgentSenderPrincipal | undefined
-}
-type Scope = AgentSenderPublication & {
-  associations: AgentSenderAssociation[]
-  attachments: (AgentSenderAssociation & { homePeerFingerprint: string })[]
+  /** Moves when a pairing changes, so principals are read again only then. */
+  pairingGeneration(): number
 }
 /** Bounded like the hook server's per-pane maps; eviction only forgets an old respawn. */
 const MAX_HANDLE_INCARNATIONS = 4096
@@ -32,7 +32,8 @@ const MAX_HANDLE_INCARNATIONS = 4096
  *  separately, only when the facts they read change; status ticks and leases rebuild nothing. */
 export class RuntimeAgentSenderAssociations {
   private database: OrchestrationDb | null = null
-  private revision = ''
+  private history = ''
+  private pairing = -1
   private principals: AgentSenderPrincipal[] = []
   private historyReads = 0
   private chatReads = 0
@@ -48,18 +49,13 @@ export class RuntimeAgentSenderAssociations {
   private readonly handleIncarnations = new Map<string, string>()
   private terminalKey: unknown[] = []
   private failedKey: unknown[] = []
-  private terminal: Pick<Scope, 'associations' | 'attachments'> = {
+  private terminal: Pick<AgentSenderScope, 'associations' | 'attachments'> = {
     associations: [],
     attachments: []
   }
   private chatKey: unknown[] = []
   private chats: AgentSenderAssociation[] = []
-  private publication: AgentSenderPublication = {
-    associations: [],
-    principals: [],
-    attachments: []
-  }
-  private scoped = new Map<string, Scope>()
+  readonly publisher = new AgentSenderPublisher()
   private framed = new Map<string, AgentSenderPublication>()
   constructor(private readonly deps: Dependencies) {}
 
@@ -70,7 +66,13 @@ export class RuntimeAgentSenderAssociations {
     } catch (error) {
       console.warn('[runtime] Sender identity publication failed', error)
     }
-    return worktreeId ? this.scope(worktreeId) : this.publication
+    return worktreeId ? this.publisher.scope(worktreeId) : this.publisher.current()
+  }
+
+  /** A window graph reply carries the rows only when the window's applied base is stale. */
+  buildForGraph(base: AgentSenderRevision | undefined) {
+    this.build()
+    return this.publisher.forGraph(base)
   }
 
   /** The scope a client frame carries; remembered so a refresh republishes only changed worktrees. */
@@ -85,24 +87,8 @@ export class RuntimeAgentSenderAssociations {
     this.build()
     return [...worktreeIds].filter((id) => {
       const framed = this.framed.get(id)
-      return framed !== undefined && framed !== this.scope(id)
+      return framed !== undefined && framed !== this.publisher.scope(id)
     })
-  }
-
-  private scope(worktreeId: string): Scope {
-    let scoped = this.scoped.get(worktreeId)
-    if (!scoped) {
-      scoped = { ...this.hostFields(this.publication), associations: [], attachments: [] }
-      this.scoped.set(worktreeId, scoped)
-    }
-    return scoped
-  }
-
-  private hostFields(publication: AgentSenderPublication) {
-    return {
-      principals: publication.principals,
-      ...(publication.peerFingerprint ? { peerFingerprint: publication.peerFingerprint } : {})
-    }
   }
 
   private livePanes(): Map<string, AgentSenderPane & { original: boolean }> {
@@ -169,25 +155,17 @@ export class RuntimeAgentSenderAssociations {
     const db = this.deps.getDb()
     if (db !== this.database) {
       this.database = db
-      this.revision = ''
+      this.history = ''
       this.principals = []
     }
-    const revision = db ? readAgentSenderGeneration(db, this.revision === '') : ''
+    const history = db ? readAgentSenderGeneration(db, this.history === '') : ''
     const panes = this.livePanes()
     const peerFingerprint = this.deps.peerFingerprint()
-    const terminalKey = [
-      revision,
-      JSON.stringify(
-        [...panes.values()].map((p) => [
-          p.paneKey,
-          p.worktreeId,
-          p.handle,
-          p.processIncarnation,
-          p.original
-        ])
-      ),
-      peerFingerprint
-    ]
+    // Primitives compared in place: a status-only build allocates no key string.
+    const terminalKey: unknown[] = [history, this.deps.pairingGeneration(), peerFingerprint]
+    for (const p of panes.values()) {
+      terminalKey.push(p.paneKey, p.worktreeId, p.handle, p.processIncarnation, p.original)
+    }
     const records = this.deps.getSessionRecords()
     // A store says when what chats read changed; a reader without it is listed.
     const chatKey = [
@@ -208,10 +186,10 @@ export class RuntimeAgentSenderAssociations {
       this.chatKey = chatKey
     }
     if (terminalChanged) {
-      this.readTerminals(db, revision, panes, terminalKey)
+      this.readTerminals(db, history, panes, terminalKey)
     }
     if (terminalChanged || chatsChanged) {
-      this.publish({
+      this.publisher.publish({
         associations: [...this.terminal.associations, ...this.chats],
         principals: db ? this.principals : [],
         attachments: this.terminal.attachments,
@@ -222,7 +200,7 @@ export class RuntimeAgentSenderAssociations {
 
   private readTerminals(
     db: OrchestrationDb | null,
-    revision: string,
+    history: string,
     panes: Map<string, AgentSenderPane & { original: boolean }>,
     key: unknown[]
   ): void {
@@ -231,9 +209,11 @@ export class RuntimeAgentSenderAssociations {
       if (db) {
         this.historyReads++
         read = readAgentSenderWorkers(db, [...panes.values()], this.work)
-        if (revision !== this.revision) {
+        const pairing = this.deps.pairingGeneration()
+        if (history !== this.history || pairing !== this.pairing) {
           this.principals = readAgentSenderPrincipals(db, this.deps.principal)
-          this.revision = revision
+          this.history = history
+          this.pairing = pairing
         }
       }
     } catch (error) {
@@ -274,39 +254,6 @@ export class RuntimeAgentSenderAssociations {
             ]
           : []
       })
-    }
-  }
-
-  private publish(next: Scope): void {
-    if (JSON.stringify(next) === JSON.stringify(this.publication)) {
-      return
-    }
-    this.publication = next
-    const host = this.hostFields(next)
-    const scopes = new Map<string, Scope>()
-    const scopeOf = (worktreeId: string) => {
-      let scope = scopes.get(worktreeId)
-      if (!scope) {
-        scope = { ...host, associations: [], attachments: [] }
-        scopes.set(worktreeId, scope)
-      }
-      return scope
-    }
-    for (const id of this.scoped.keys()) {
-      scopeOf(id)
-    }
-    for (const row of next.associations) {
-      scopeOf(row.worktreeId).associations.push(row)
-    }
-    for (const row of next.attachments) {
-      scopeOf(row.worktreeId).attachments.push(row)
-    }
-    // An unchanged worktree keeps its scope object, so its clients get no frame.
-    for (const [id, scope] of scopes) {
-      const previous = this.scoped.get(id)
-      if (!previous || JSON.stringify(previous) !== JSON.stringify(scope)) {
-        this.scoped.set(id, scope)
-      }
     }
   }
 }

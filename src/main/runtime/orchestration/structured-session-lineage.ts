@@ -13,6 +13,8 @@ export type AgentSessionRecordReader = {
   listRecords: () => AgentSessionConversationView[]
   /** Absent on a store that predates tab visibility; every session then counts as open. */
   getVisibleSessionTabIndex?: () => { present: boolean; sessionIds: string[] }
+  /** Chats with an open tab, from the tab table or, before one is recorded, the saved workspace tabs. */
+  listVisibleSessionIds?: () => string[]
   /** Moves when a commit changes which chats exist, where, their /clear successor or open tabs. */
   senderIdentityRevision?: () => number
 }
@@ -28,11 +30,13 @@ export function conversationRecordReader(store: {
   listConversations: AgentSessionRecordReader['listRecords']
   getVisibleSessionTabIndex: NonNullable<AgentSessionRecordReader['getVisibleSessionTabIndex']>
   senderIdentityRevision?: () => number
+  listVisibleSessionIds?: () => string[]
 }): AgentSessionRecordReader {
   return {
     getRecord: store.getConversation,
     listRecords: store.listConversations,
     getVisibleSessionTabIndex: store.getVisibleSessionTabIndex,
+    ...(store.listVisibleSessionIds ? { listVisibleSessionIds: store.listVisibleSessionIds } : {}),
     ...(store.senderIdentityRevision
       ? { senderIdentityRevision: store.senderIdentityRevision }
       : {})

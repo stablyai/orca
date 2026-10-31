@@ -1,13 +1,19 @@
 // @vitest-environment happy-dom
 import { cleanup, renderHook } from '@testing-library/react'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   callRuntimeRpc: vi.fn(),
   activatePane: vi.fn(),
   activateChat: vi.fn(async () => true),
   paneUnavailable: vi.fn(),
-  toastInfo: vi.fn()
+  toastInfo: vi.fn(),
+  focusRenderer: vi.fn(() => true),
+  focusRuntime: vi.fn(async () => undefined)
+}))
+vi.mock('@/components/terminal-pane/terminal-handle-links', () => ({
+  focusRendererTerminalHandle: mocks.focusRenderer,
+  focusRuntimeTerminalHandle: mocks.focusRuntime
 }))
 vi.mock('sonner', async (original) => ({
   ...(await original<Record<string, unknown>>()),
@@ -34,9 +40,13 @@ import { openAgentMessageSender } from '@/lib/open-agent-message-sender'
 import { useAgentMessageSenderView } from './native-chat-agent-message-sender-view'
 import {
   agentMessageSenderOpens,
+  agentMessageSenderUnavailableText,
   GONE_TERMINAL_SENDER_CLICK,
   resolveAgentMessageSenderTarget
 } from './native-chat-agent-message-sender-target'
+import { unnamedSenderLabel } from './native-chat-agent-message-sender-label'
+import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { sameAgentIdentity } from '../../../../shared/agent-title-owner'
 import { initialStore, resetSenderStore, status } from './native-chat-agent-sender.test-fixture'
 import type { AgentSenderPublication } from '../../../../shared/agent-sender-associations'
 import type {
@@ -173,4 +183,112 @@ it('keeps an older host on its own lookup', async () => {
   expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(LOCAL, 'orchestration.partyLocation', {
     address: 'term_old'
   })
+})
+
+describe('an older paired host, which publishes no sender locations', () => {
+  const OLD = { kind: 'environment', environmentId: 'old-host' } as const
+  const oldCard = (sender: AgentMessageSender) => ({
+    avatar: renderHook(() => useAgentMessageSenderView(sender, 'workspace', OLD)).result.current,
+    link: agentMessageSenderOpens(
+      resolveAgentMessageSenderTarget(useAppStore.getState(), sender, 'workspace', OLD, undefined),
+      sender
+    )
+  })
+  const openOld = (sender: AgentMessageSender) =>
+    openAgentMessageSender(sourceOf(sender), sender, 'workspace', OLD, undefined, 'Worker')
+  const live = (agentType: string, handle = 'term_0') =>
+    useAppStore.setState({
+      agentStatusByPaneKey: {
+        [status(0).paneKey]: { ...status(0), terminalHandle: handle, agentType }
+      }
+    })
+  beforeEach(() => useAppStore.setState({ activeWorkspaceExecutionHostId: 'runtime:old-host' }))
+
+  it('draws a Claude card whose terminal now runs Codex as a plain name, and opens nothing', async () => {
+    live('codex')
+    expect(oldCard(terminal())).toEqual({ avatar: { agentType: 'claude' }, link: false })
+    await openOld(terminal())
+    expect(mocks.toastInfo).toHaveBeenCalledWith(
+      'Worker is no longer running in its terminal; another agent is running there now. Open that terminal from the sidebar if you need it.'
+    )
+    expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['omp', 'pi'],
+    ['claude-agent-teams', 'claude'],
+    [undefined, 'codex']
+  ] as const)('keeps a %s card over a %s terminal live and opening', async (saved, running) => {
+    live(running)
+    const { agent: _claude, ...unsaved } = terminal()
+    const sender = saved ? terminal('term_0', saved) : unsaved
+    expect(oldCard(sender)).toEqual({
+      avatar: expect.objectContaining({ dot: 'working' }),
+      link: true
+    })
+    mocks.callRuntimeRpc.mockResolvedValue({ location: { kind: 'terminal', handle: 'term_0' } })
+    await openOld(sender)
+    expect(mocks.focusRenderer).toHaveBeenCalledWith('term_0', 'old-host')
+  })
+
+  it('still asks the host when no row names the terminal, and judges what it returns by the same rule', async () => {
+    useAppStore.setState({ agentStatusByPaneKey: {} })
+    expect(oldCard(terminal()).link).toBe(true)
+    // The host recovers a newer handle whose terminal runs Codex: not the Claude sender.
+    live('codex', 'term_recovered')
+    mocks.callRuntimeRpc.mockResolvedValueOnce({
+      location: { kind: 'terminal', handle: 'term_recovered' }
+    })
+    await openOld(terminal('term_gone'))
+    expect(mocks.focusRenderer).not.toHaveBeenCalled()
+    expect(mocks.toastInfo).toHaveBeenCalledTimes(1)
+    // A host before the lookup falls back to the card's own handle, under the same rule.
+    live('codex', 'term_gone')
+    useAppStore.setState({ agentStatusByPaneKey: {} })
+    mocks.callRuntimeRpc.mockRejectedValueOnce(
+      new RuntimeRpcCallError({
+        id: 'rpc',
+        ok: false,
+        error: { code: 'method_not_found', message: 'method_not_found' },
+        _meta: { runtimeId: 'old' }
+      })
+    )
+    await openOld(terminal('term_gone'))
+    expect(mocks.focusRenderer).toHaveBeenCalledWith('term_gone', 'old-host')
+  })
+})
+
+it('names the agent and what to do in every message a raced click shows', () => {
+  const unnamed = unnamedSenderLabel()
+  expect(agentMessageSenderUnavailableText({ kind: 'replaced' }, unnamed)).toBe(
+    'An agent is no longer running in its terminal; another agent is running there now. Open that terminal from the sidebar if you need it.'
+  )
+  expect(agentMessageSenderUnavailableText({ kind: 'ambiguous' }, 'Worker')).toBe(
+    "Orca can't tell which terminal Worker is running in. Open it from the sidebar."
+  )
+  expect(agentMessageSenderUnavailableText({ kind: 'gone', sender: 'other' }, unnamed)).toBe(
+    'An agent is no longer running. Start a new agent from the sidebar to continue its work.'
+  )
+})
+
+it.each([
+  ['omp', 'pi', true],
+  ['claude-agent-teams', 'claude', true],
+  ['claude', 'claude', true],
+  ['claude', 'codex', false]
+] as const)('treats %s and %s as one agent: %s, in both directions', (a, b, same) => {
+  expect([sameAgentIdentity(a, b), sameAgentIdentity(b, a)]).toEqual([same, same])
+})
+
+it('keeps a published OMP card over its Pi-launched terminal live and opening', async () => {
+  useAppStore.setState({
+    agentStatusByPaneKey: { [status(0).paneKey]: { ...status(0), agentType: 'pi' } }
+  })
+  useAppStore.getState().setAgentSenderPublication('local', publication([row('term_0', 0)]))
+  expect(card(terminal('term_0', 'omp'))).toEqual({
+    avatar: expect.objectContaining({ agentType: 'omp', dot: 'working' }),
+    link: true
+  })
+  await open(terminal('term_0', 'omp'))
+  expect(mocks.activatePane).toHaveBeenCalledWith('workspace', 'tab-0', status(0).paneKey)
 })

@@ -11,7 +11,7 @@ import {
   createCanonicalSessionPaneResolver,
   type AgentSessionRecordReader
 } from './orchestration/structured-session-lineage'
-import { structuredWorkerHostScope } from './structured-worker-identity'
+import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import {
   resolveWorkerLineage,
   type WorkerLineage
@@ -223,14 +223,24 @@ export function readAgentSenderPrincipals(
   })
 }
 
+/** Chats with an open tab. Without a recorded tab table the store still knows the workspace's
+ *  saved chat tabs, so closed history never counts as open; a reader that can't say counts all. */
+function visibleChats(records: AgentSessionRecordReader | null): Set<string> | null {
+  const listed = records?.listVisibleSessionIds?.()
+  if (listed) {
+    return new Set(listed)
+  }
+  const visibility = records?.getVisibleSessionTabIndex?.()
+  return visibility?.present ? new Set(visibility.sessionIds) : null
+}
+
 /** Visible chats under their own and every /clear predecessor's session id. */
 export function readAgentSenderSessions(
   records: AgentSessionRecordReader | null
 ): AgentSenderAssociation[] {
   const sessions = records?.listRecords() ?? []
-  const visibility = records?.getVisibleSessionTabIndex?.()
   const resolve = createCanonicalSessionPaneResolver(records)
-  const visible = visibility?.present ? new Set(visibility.sessionIds) : null
+  const visible = visibleChats(records)
   const byPane = new Map(
     sessions.map((r) => [
       structuredAgentSessionPaneKey(structuredAgentSessionTabId(r.sessionId), r.sessionId),
@@ -243,7 +253,8 @@ export function readAgentSenderSessions(
     const sessionId = destination?.sessionId
     return !destination ||
       !sessionId ||
-      !structuredWorkerHostScope(destination.location) ||
+      // Local chats, WSL ones included, as the sidebar shows them.
+      destination.location.executionHostId !== LOCAL_EXECUTION_HOST_ID ||
       (visible && !visible.has(sessionId))
       ? []
       : [

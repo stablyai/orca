@@ -178,7 +178,14 @@ async function openSender(
     return
   }
   // The host's lookup may find whatever shell now holds the old pane; a known other agent isn't it.
-  if (agentMessageSenderReplacedOnHandle(useAppStore.getState(), sender, location.handle)) {
+  if (
+    agentMessageSenderReplacedOnHandle(
+      useAppStore.getState(),
+      sender,
+      executionHostIdForStructuredTarget(host),
+      location.handle
+    )
+  ) {
     toast.info(agentMessageSenderUnavailableText({ kind: 'replaced' }, name))
     return
   }
