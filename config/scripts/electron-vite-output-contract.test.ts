@@ -288,8 +288,16 @@ describe('Electron Vite output contract', () => {
     }
   })
 
-  it('executes the restricted published bridge and checks its returned IPC results', async () => {
+  it('executes multibyte encoding and the restricted bridge with checked IPC results', async () => {
     const source = `const {contextBridge, ipcRenderer} = require('electron');
+      const text = 'A🌊é中';
+      const encoded = new TextEncoder().encode(text);
+      if (Array.from(encoded).join(',') !== '65,240,159,140,138,195,169,228,184,173') {
+        throw new Error('Incorrect multibyte UTF-8 encoding');
+      }
+      if (new TextDecoder('utf-8', {fatal: true}).decode(encoded) !== text) {
+        throw new Error('Incorrect multibyte UTF-8 decoding');
+      }
       contextBridge.exposeInMainWorld('api', {
         app: {getIdentity: () => ipcRenderer.invoke('app:getIdentity')},
         orcaProfiles: {list: () => ipcRenderer.invoke('orcaProfiles:list')}

@@ -93,6 +93,8 @@ export async function verifyPreloadSource(source) {
       return modules.get(name)
     },
     Buffer,
+    TextEncoder,
+    TextDecoder,
     console,
     setTimeout,
     clearTimeout,
@@ -119,7 +121,7 @@ export async function verifyPreloadSource(source) {
   ]) {
     const result = await call()
     if (result?.channel !== channel) {
-      throw new Error(`Sandbox API did not return the ${channel} bridge result`)
+      throw new Error(`Sandbox API did not return the ${String(channel)} bridge result`)
     }
   }
   if (JSON.stringify(calls) !== JSON.stringify([['app:getIdentity'], ['orcaProfiles:list']])) {
