@@ -1,7 +1,7 @@
 import type { TaskPageProviderMetadataModel } from '../use-task-page-provider-metadata'
 import { useEffect } from 'react'
 import { translate } from '@/i18n/i18n'
-import { readIpcErrorMessage } from '@/lib/ipc-error'
+import { readIpcErrorDetail } from '@/lib/ipc-error'
 import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
 import { mapSettledWithConcurrency } from '../../../../../shared/map-with-concurrency'
 import type { Repo } from '../../../../../shared/repo-types'
@@ -153,7 +153,7 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
         for (const r of results) {
           if (r.status !== 'fulfilled') {
             errs.push(
-              readIpcErrorMessage(r.reason) ??
+              readIpcErrorDetail(r.reason) ??
                 translate(
                   'auto.components.TaskPage.gitlabLoadFailed',
                   'Could not load GitLab work items. Refresh to try again.'

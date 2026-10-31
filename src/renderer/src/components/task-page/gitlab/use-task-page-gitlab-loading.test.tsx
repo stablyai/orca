@@ -6,6 +6,7 @@ import type { TaskPageComposerActionsModel } from '../use-task-page-composer-act
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { GitLabWorkItem } from '../../../../../shared/gitlab-types'
+import { i18n } from '@/i18n/i18n'
 
 vi.mock('@/store', () => ({ useAppStore: { getState: vi.fn() } }))
 
@@ -42,13 +43,19 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('useTaskPageGitLabLoading', () => {
-  function GitLabListHarness({ view }: { view: 'issues' | 'mrs' }) {
+  function GitLabListHarness({
+    view,
+    executionHostId = 'local'
+  }: {
+    view: 'issues' | 'mrs'
+    executionHostId?: string
+  }) {
     const [gitlabItems, setGitlabItems] = useState<GitLabWorkItem[]>([])
     const [gitlabError, setGitlabError] = useState<string | null>(null)
     const [gitlabLoading, setGitlabLoading] = useState(false)
     useTaskPageGitLabLoading({
-      selectedRepos: [{ ...serverRepo, executionHostId: 'local' }],
-      selectedReposKey: 'local-repo',
+      selectedRepos: [{ ...serverRepo, executionHostId }],
+      selectedReposKey: executionHostId,
       primaryRepo: null,
       taskSource: 'gitlab',
       setGitlabItems,
@@ -103,6 +110,59 @@ describe('useTaskPageGitLabLoading', () => {
       ).toBeTruthy()
     }
   )
+
+  it.each([
+    {
+      failure: 'unknown owner with multiline recovery',
+      executionHostId: 'runtime:unresolved-owner',
+      expected:
+        'No se conoce el equipo de este repositorio.\nVuelve a conectarlo e inténtalo de nuevo.'
+    },
+    {
+      failure: 'unreadable rejection with translated fallback',
+      executionHostId: 'local',
+      expected: 'No se pudieron cargar los elementos de GitLab. Actualiza para volver a intentarlo.'
+    }
+  ])('renders $failure', async ({ executionHostId, expected }) => {
+    const language = i18n.language
+    const resources = i18n.getResourceBundle('es', 'translation')
+    try {
+      i18n.removeResourceBundle('es', 'translation')
+      i18n.addResourceBundle('es', 'translation', {
+        auto: {
+          runtime: {
+            forgeCredentialTarget: {
+              unknownHost:
+                'No se conoce el equipo de este repositorio.\nVuelve a conectarlo e inténtalo de nuevo.'
+            }
+          },
+          components: {
+            TaskPage: {
+              gitlabLoadFailed:
+                'No se pudieron cargar los elementos de GitLab. Actualiza para volver a intentarlo.'
+            }
+          }
+        }
+      })
+      await i18n.changeLanguage('es')
+      glListIssues.mockRejectedValue(null)
+      render(<GitLabListHarness view="issues" executionHostId={executionHostId} />)
+
+      const banner = await screen.findByText(expected.replace(/\s+/g, ' '))
+      expect(banner.textContent).toBe(expected)
+      if (executionHostId === 'runtime:unresolved-owner') {
+        expect(glListIssues).not.toHaveBeenCalled()
+        expect(rpc.call).not.toHaveBeenCalled()
+      }
+    } finally {
+      cleanup()
+      i18n.removeResourceBundle('es', 'translation')
+      if (resources) {
+        i18n.addResourceBundle('es', 'translation', resources)
+      }
+      await i18n.changeLanguage(language)
+    }
+  })
 
   it('suppresses a rejected project error when another project returns rows', async () => {
     rpc.call.mockRejectedValueOnce(
