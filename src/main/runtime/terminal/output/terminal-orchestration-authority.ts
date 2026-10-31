@@ -58,14 +58,18 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
 
   protected claimIdleShellPromptForPty(ptyId: string): Promise<boolean> {
     const confirm = this.ptyController?.confirmShellForeground?.bind(this.ptyController)
+    const readPane = this.getAgentStatusSnapshotForPaneFn
     return claimIdleShellPrompt({
-      hasPaneAgent: () =>
-        this.getPaneTerminalAgent(ptyId) !== null ||
-        // No store, or any row at all, keeps the settle; a stale row costs only the wait.
-        !this.getAgentStatusSnapshotForPaneFn ||
-        [...this.collectPaneKeysForPty(ptyId)].some(
-          (paneKey) => (this.getAgentStatusSnapshotForPaneFn?.(paneKey).length ?? 0) > 0
-        ),
+      hasPaneAgent: () => {
+        const paneKeys = [...this.collectPaneKeysForPty(ptyId)]
+        // No store, no pane identity, or any row at all keeps the settle; a stale row costs only the wait.
+        return (
+          this.getPaneTerminalAgent(ptyId) !== null ||
+          !readPane ||
+          paneKeys.length === 0 ||
+          paneKeys.some((paneKey) => readPane(paneKey).length > 0)
+        )
+      },
       claimPromptMarker: () =>
         this.headlessTerminals.get(ptyId)?.ownership.claimIdlePrompt() === true,
       confirmShellForeground: confirm ? () => confirm(ptyId) : null
