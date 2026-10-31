@@ -75,7 +75,7 @@ Do only this task, yourself: no subagents or helper workers unless the task asks
 ${
   params.unreadMail
     ? `  # Messages for this task are waiting; read them:
-  ${cli} orchestration check
+  ${cli} orchestration check${chat ? '' : ` --terminal ${params.workerHandle}`}
 
 `
     : ''

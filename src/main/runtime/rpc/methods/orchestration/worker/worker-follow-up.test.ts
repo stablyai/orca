@@ -173,7 +173,9 @@ describe('a follow-up to a finished terminal worker', () => {
     expect(h.db.getTask(followUp.task_id)?.spec).not.toContain(large)
     expect(
       JSON.stringify(vi.mocked(h.runtime.sendTerminalAgentPrompt).mock.calls.at(-1))
-    ).toContain('# Messages for this task are waiting; read them:')
+    ).toContain(
+      '# Messages for this task are waiting; read them:\\n  orca orchestration check --terminal term_worker'
+    )
     // Its start prompt is the wake, so no pointer types over the turn it starts.
     expect(h.db.getUndeliveredUnreadMessages(`dispatch:${followUp.id}`)).toHaveLength(0)
     expect(
