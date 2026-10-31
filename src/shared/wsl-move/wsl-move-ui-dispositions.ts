@@ -97,6 +97,7 @@ export const UI_STATE_GLOBAL_FIELDS = [
   'hideCliCreatedWorkspaces',
   'hideDetachedHeadWorkspaces',
   'hideWorkspacesFromOtherDevices',
+  'hideWorkspaceFilterBadge',
   'alwaysShowDefaultBranchWorkspace',
   'agentsHideWorkspacesFromOtherDevices',
   'agentsHideAutomationGeneratedWorkspaces',

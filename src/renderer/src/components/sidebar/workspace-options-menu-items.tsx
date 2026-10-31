@@ -1,4 +1,5 @@
 import { Fragment, useMemo, type ComponentType, type JSX } from 'react'
+import { EyeOff } from 'lucide-react'
 import { useAppStore } from '@/store'
 import {
   DropdownMenuLabel,
@@ -13,6 +14,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { countActiveWorkspaceFilters } from '../../../../shared/workspace-view/workspace-row-filters'
 import { useShallow } from 'zustand/react/shallow'
 import { selectSidebarFilterState, sidebarWorkspaceRowFilters } from './sidebar-filter-actions'
+import { FilterToggleRow } from './FilterToggleRow'
 import SidebarRepositoryFilterSection from './SidebarRepositoryFilterSection'
 import { WorkspaceFilterOptionRow } from './workspace-filter-option-row'
 import {
@@ -228,6 +230,28 @@ const OPTION_ITEMS: Record<WorkspaceViewOptionKey, ComponentType<OptionItemProps
   )
 }
 
+/**
+ * The filter-count badge lives on this menu's trigger button, so its "Hide
+ * filter badge" switch lives here too, at the end of the Filters section.
+ * It is a display preference, not a workspace filter, so it stays out of the
+ * shared WorkspaceViewOptionKey table.
+ */
+function HideFilterBadgeOptionItem(): JSX.Element {
+  const hideWorkspaceFilterBadge = useAppStore((s) => s.hideWorkspaceFilterBadge)
+  const setHideWorkspaceFilterBadge = useAppStore((s) => s.setHideWorkspaceFilterBadge)
+  return (
+    <FilterToggleRow
+      icon={<EyeOff className="size-3.5" />}
+      label={translate(
+        'auto.components.sidebar.SidebarWorkspaceFilterSection.hideFilterBadge',
+        'Hide filter badge'
+      )}
+      checked={hideWorkspaceFilterBadge}
+      onChange={setHideWorkspaceFilterBadge}
+    />
+  )
+}
+
 function SectionHeading({ section }: { section: WorkspaceViewSection }): JSX.Element | null {
   switch (section) {
     case 'show':
@@ -303,6 +327,7 @@ export function WorkspaceOptionsMenuItems({
               />
             )
           })}
+          {section === 'filters' && <HideFilterBadgeOptionItem />}
         </Fragment>
       ))}
     </>
