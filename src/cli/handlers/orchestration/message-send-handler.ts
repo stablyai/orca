@@ -2,7 +2,7 @@ import type { CommandHandler } from '../../dispatch'
 import { printResult } from '../../format'
 import { withReceiptNext } from './receipt-next-text'
 import { formatWorkerStart, type WorkerStartReceipt } from './worker-output'
-import { renderResolvedOrchestrationCommand } from '../../orchestration-mutation-recovery'
+import { withResolvedNextCommands } from '../../orchestration-mutation-recovery'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
 import { readInjectedAgentSessionId } from '../../../shared/agent-session-caller-env'
@@ -133,7 +133,11 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
     if ('delivery' in result.result && result.result.state !== 'ready') {
       process.exitCode = 1
     }
-    printResult(result, json, (value) => {
+    const rendered =
+      'delivery' in result.result
+        ? { ...result, result: withResolvedNextCommands(result.result) }
+        : result
+    printResult(rendered, json, (value) => {
       const warnings = 'warnings' in value ? (value.warnings ?? []) : []
       const withWarnings = (line: string): string =>
         withReceiptNext(
@@ -150,12 +154,7 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
       }
       if ('delivery' in value) {
         return withWarnings(
-          `Follow-up of ${value.followUpOf} (${value.delivery})\n${formatWorkerStart({
-            ...value,
-            nextCommands: value.nextCommands?.map((command) =>
-              renderResolvedOrchestrationCommand(command)
-            )
-          })}`
+          `Follow-up of ${value.followUpOf} (${value.delivery})\n${formatWorkerStart(value)}`
         )
       }
       if ('relay' in value) {

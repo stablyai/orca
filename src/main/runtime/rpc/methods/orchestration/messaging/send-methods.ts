@@ -35,8 +35,8 @@ import { orchestrationCallerIdentity } from '../runs/run-scope'
 import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
 import { planWorkerFollowUp, startWorkerFollowUp } from './worker-follow-up'
 import {
-  continueUnreadWorkerMail,
   followThroughWorkerReport,
+  takeHeldWorkerMail,
   settledDispatchId
 } from './settled-worker-follow-through'
 
@@ -225,9 +225,9 @@ export const ORCHESTRATION_SEND_METHODS = [
               : plan
           // A dispatch: address carries no recipient warnings, so `next` stays last.
           if (followUp?.kind === 'started') {
-            // Mail an earlier automatic continuation could not deliver joins this follow-up.
+            // Mail an earlier automatic continuation held joins this follow-up once it is ready.
             if (plan?.kind === 'start') {
-              continueUnreadWorkerMail(runtime, db, plan.latest.id)
+              takeHeldWorkerMail(runtime, db, plan.latest.id, followUp.receipt)
             }
             return followUp.receipt
           }

@@ -150,6 +150,17 @@ export function markUnreadFollowUpMail(db: OrchestrationDb, dispatchId: string):
     .run(dispatchId)
 }
 
+/** A follow-up that did not start gives back the mail it took, unread where it was sent. */
+export function restoreFollowUpMail(db: OrchestrationDb, messageIds: readonly string[]): void {
+  if (messageIds.length > 0) {
+    db.db
+      .prepare(
+        `UPDATE messages SET read = 0, delivered_at = NULL WHERE id IN (${messageIds.map(() => '?').join(',')})`
+      )
+      .run(...messageIds)
+  }
+}
+
 export function clearFollowUpMail(db: OrchestrationDb, dispatchId: string): void {
   db.db
     .prepare('UPDATE dispatch_contexts SET follow_up_mail_at = NULL WHERE id = ?')

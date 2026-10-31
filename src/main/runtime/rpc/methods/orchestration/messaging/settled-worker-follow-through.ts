@@ -3,6 +3,7 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import {
   clearFollowUpMail,
+  restoreFollowUpMail,
   FOLLOW_UP_MESSAGE_TYPES,
   listDispatchesWithFollowUpMail
 } from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
@@ -91,7 +92,46 @@ async function continueUnreadMail(
     return
   }
   const receipt = outcome?.kind === 'started' ? outcome.receipt : undefined
-  if (receipt && receipt.state !== 'ready') {
+  const to =
+    outcome?.kind === 'steer'
+      ? outcome.dispatchId
+      : typeof receipt?.dispatchId === 'string'
+        ? receipt.dispatchId
+        : undefined
+  // Mail counts as delivered only once the follow-up that takes it is ready.
+  if (!to || db.getWorkerDispatch(to)?.state !== 'ready') {
+    if (receipt) {
+      restoreFollowUpMail(
+        db,
+        unread.map((message) => message.id)
+      )
+      noticeUnreadMailNotContinued(
+        runtime,
+        db,
+        dispatchId,
+        String(receipt.lastError ?? receipt.state)
+      )
+    }
+    // A follow-up another send is still starting takes this mail once it is ready, or tells of it.
+    return
+  }
+  moveUnreadMail(runtime, db, first.run_id, dispatchId, to)
+  clearFollowUpMail(db, dispatchId)
+}
+
+/** After a send's own follow-up: mail held for it moves in once it is ready, or the coordinator hears it stayed. */
+export function takeHeldWorkerMail(
+  runtime: OrcaRuntimeService,
+  db: OrchestrationDb,
+  dispatchId: string,
+  receipt: Record<string, unknown>
+): void {
+  if (receipt.state === 'ready') {
+    continueUnreadWorkerMail(runtime, db, dispatchId)
+  } else if (
+    db.getDispatchContextById(dispatchId)?.follow_up_mail_at &&
+    db.getUnreadMessages(`dispatch:${dispatchId}`, [...FOLLOW_UP_MESSAGE_TYPES]).length > 0
+  ) {
     noticeUnreadMailNotContinued(
       runtime,
       db,
@@ -99,17 +139,6 @@ async function continueUnreadMail(
       String(receipt.lastError ?? receipt.state)
     )
   }
-  // Mail that arrived while it started still reaches a follow-up that started.
-  const to =
-    outcome?.kind === 'steer'
-      ? outcome.dispatchId
-      : receipt?.state === 'ready' && typeof receipt.dispatchId === 'string'
-        ? receipt.dispatchId
-        : undefined
-  if (to) {
-    moveUnreadMail(runtime, db, first.run_id, dispatchId, to)
-  }
-  clearFollowUpMail(db, dispatchId)
 }
 
 /** Nothing is lost silently: the coordinator hears that its mail did not reach the worker, once per batch. */

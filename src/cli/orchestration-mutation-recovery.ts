@@ -215,3 +215,15 @@ function stripUnsafeRetryAdvice(message: string, requestId: string): string {
     .replace(' Retry the command.', '')
     .replace(` Orchestration mutation request ID: ${requestId}.`, '')
 }
+
+/** Receipts name recovery commands as `orca …`; resolve them for this install before any output, JSON included. */
+export function withResolvedNextCommands<T extends { nextCommands?: string[] }>(receipt: T): T {
+  return receipt.nextCommands
+    ? {
+        ...receipt,
+        nextCommands: receipt.nextCommands.map((command) =>
+          renderResolvedOrchestrationCommand(command)
+        )
+      }
+    : receipt
+}

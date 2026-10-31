@@ -11,7 +11,7 @@ import { isDevCliInvocation } from './runtime-compatibility'
 import { resolveCoordinatorTerminalHandle } from './terminal-identity'
 import { formatWorkerStart } from './worker-output'
 import { explainOlderRuntimeRunRequired } from './older-runtime-run-binding'
-import { renderResolvedOrchestrationCommand } from '../../orchestration-mutation-recovery'
+import { withResolvedNextCommands } from '../../orchestration-mutation-recovery'
 
 export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler> = {
   'orchestration worker-start': async ({ flags, client, cwd, json }) => {
@@ -78,17 +78,7 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
     if (result.result.state !== 'ready') {
       process.exitCode = 1
     }
-    const renderedResult = result.result.nextCommands
-      ? {
-          ...result,
-          result: {
-            ...result.result,
-            nextCommands: result.result.nextCommands.map((command) =>
-              renderResolvedOrchestrationCommand(command)
-            )
-          }
-        }
-      : result
+    const renderedResult = { ...result, result: withResolvedNextCommands(result.result) }
     printResult(renderedResult, json, (value) => withReceiptNext(formatWorkerStart(value), value))
   }
 }
