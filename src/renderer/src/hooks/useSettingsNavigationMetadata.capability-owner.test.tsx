@@ -158,7 +158,7 @@ describe('settings navigation capability ownership', () => {
         gitBash: { isAvailable: vi.fn().mockResolvedValue(false) },
         runtime: { getStatus: vi.fn().mockResolvedValue({ hostPlatform: 'darwin' }) },
         runtimeEnvironments: { call: vi.fn() }
-      } as unknown as Window['api']
+      }
     })
     await act(async () => {
       root.render(createElement(Probe))
