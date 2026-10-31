@@ -8,6 +8,8 @@ import { NetworkInterfacePicker } from './NetworkInterfacePicker'
 import { MobilePairingConnectionOptions } from './pairing/MobilePairingConnectionOptions'
 import { MobileRelayBetaNotice } from './pairing/MobileRelayBetaNotice'
 import { MachineNameField } from '../machine-identity/MachineNameField'
+import { MobilePairingLocalPathSwitch } from './MobilePairingLocalPathSwitch'
+import { useMobilePairingRelayLocalPath } from './use-mobile-pairing-relay-local-path'
 import { MobileRelayMintFailureNotice } from './mobile-relay-mint-failure-notice'
 import { WindowsFirewallNotice } from './WindowsFirewallNotice'
 import type { MobilePairingConnectionMode } from '../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
@@ -65,6 +67,7 @@ export function MobileHeroPairingStep({
   pairQrDataUrl,
   pairQrSize = null,
   pairingUrl,
+  pairingEndpoint = null,
   pairingQrError,
   relayMintFailure,
   onUseLan,
@@ -90,6 +93,8 @@ export function MobileHeroPairingStep({
   pairQrDataUrl: string | null
   pairQrSize?: number | null
   pairingUrl: string | null
+  /** Direct endpoint the minted code advertises; null when it pairs over Relay alone. */
+  pairingEndpoint?: string | null
   pairingQrError: boolean
   relayMintFailure: MobileRelayMintFailure | null
   onUseLan: () => void
@@ -123,6 +128,7 @@ export function MobileHeroPairingStep({
   const copyPairingCodeRef = useRef<HTMLButtonElement | null>(null)
   const pairingWasReadyRef = useRef(pairingUrl != null && !pairLoading)
   const usingRelay = connectionMode === 'automatic'
+  const advertisesLocalPath = useMobilePairingRelayLocalPath() || !usingRelay
   const [networkDisclosureOpen, setNetworkDisclosureOpen] = useState(false)
   // Show custom addresses directly; their pinned row cannot be collapsed by a disclosure trigger.
   const networkDisclosurePinned = selectedAddressIsCustom
@@ -301,16 +307,26 @@ export function MobileHeroPairingStep({
             <CollapsibleContent>
               {/* Move the gap to the disclosure; ! overrides unlayered mobile-page.css, which outranks Tailwind utilities. */}
               <div className="mt-2 space-y-2 [&>.mp-network-row]:mb-0!">
-                <p className="mp-disclosure-hint">
-                  {t(
-                    'auto.components.mobile.MobileHero.directAddressHint',
-                    'Optional. Pick the Wi‑Fi or Tailscale address your phone should use when nearby — usually faster than Relay. Relay still works when you’re away.'
-                  )}
-                </p>
-                {networkRow}
+                <MobilePairingLocalPathSwitch />
+                {advertisesLocalPath ? (
+                  <>
+                    <p className="mp-disclosure-hint">
+                      {t(
+                        'auto.components.mobile.MobileHero.directAddressHint',
+                        'Optional. Pick the Wi‑Fi or Tailscale address your phone should use when nearby — usually faster than Relay. Relay still works when you’re away.'
+                      )}
+                    </p>
+                    {networkRow}
+                  </>
+                ) : null}
               </div>
             </CollapsibleContent>
           </Collapsible>
+        ) : usingRelay ? (
+          <div className="mb-[18px] space-y-2 [&>.mp-network-row]:mb-0!">
+            <MobilePairingLocalPathSwitch />
+            {advertisesLocalPath ? networkRow : null}
+          </div>
         ) : (
           networkRow
         )}
@@ -331,7 +347,7 @@ export function MobileHeroPairingStep({
           </button>
         </div>
         <WindowsFirewallNotice
-          pairingReady={pairQrDataUrl != null}
+          pairingReady={pairQrDataUrl != null && pairingEndpoint != null}
           address={selectedAddress}
           usingRelay={usingRelay}
           className="mt-3"

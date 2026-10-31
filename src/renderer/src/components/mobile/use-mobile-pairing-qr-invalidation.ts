@@ -9,6 +9,7 @@ type MutableRef<T> = { current: T }
 /** Keep QR policy aligned with mode/auth changes, including other windows; Relay sign-out clears instead of falling back to local-only. */
 export function useMobilePairingQrInvalidation(params: {
   connectionMode: MobilePairingConnectionMode
+  localPath: boolean
   signedIn: boolean
   pairLoading: boolean
   hasGeneratedRef: MutableRef<boolean>
@@ -23,6 +24,7 @@ export function useMobilePairingQrInvalidation(params: {
 }): void {
   const {
     connectionMode,
+    localPath,
     signedIn,
     pairLoading,
     hasGeneratedRef,
@@ -36,8 +38,8 @@ export function useMobilePairingQrInvalidation(params: {
     regenerate
   } = params
   const wasSignedInRef = useRef(signedIn)
-  // Distinguish new cross-window mode preferences from changes already handled here.
-  const handledModeRef = useRef(connectionMode)
+  // Distinguish new cross-window policy preferences from changes already handled here.
+  const handledPolicyRef = useRef({ connectionMode, localPath })
 
   // On Relay auth changes, clear old QR/loading; sign-in may remint, but sign-out cannot silently mint a local-only code.
   useEffect(() => {
@@ -75,10 +77,11 @@ export function useMobilePairingQrInvalidation(params: {
 
   // Invalidate late old-policy responses before reminting; the preference is already saved, so do not write it back across windows.
   useEffect(() => {
-    if (connectionMode === handledModeRef.current) {
+    const handled = handledPolicyRef.current
+    if (connectionMode === handled.connectionMode && localPath === handled.localPath) {
       return
     }
-    handledModeRef.current = connectionMode
+    handledPolicyRef.current = { connectionMode, localPath }
     pairingRequestIdRef.current += 1
     const shouldRegenerate = hasGeneratedRef.current || pairLoading
     hasGeneratedRef.current = false
@@ -88,13 +91,14 @@ export function useMobilePairingQrInvalidation(params: {
     setPairQrSize(null)
     setRelayMintFailure?.(null)
     if (shouldRegenerate && canMintMobilePairingOffer({ connectionMode, signedIn })) {
-      // Main rotates once on mode mismatch so windows reacting to the same preference share one new token.
+      // Main rotates once on policy mismatch so windows reacting to the same preference share one new token.
       regenerate(connectionMode, { rotate: false })
     } else {
       setPairLoading(false)
     }
   }, [
     connectionMode,
+    localPath,
     signedIn,
     pairLoading,
     hasGeneratedRef,
