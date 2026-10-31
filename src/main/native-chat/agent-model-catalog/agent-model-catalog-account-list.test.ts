@@ -3,12 +3,14 @@ import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type {
+  AgentSessionAccountHome,
+  AgentSessionRecord
+} from '../../../shared/agent-session-record'
 import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
 import { applyCodexConfiguredLaunchDefaults } from '../../codex/codex-configured-launch-defaults'
 import { getAgentSessionOptionCatalog } from '../../../shared/agent-session-option-catalog'
 import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session-wire'
-import type { AgentSessionAccountHome } from '../../../shared/agent-session-record'
 import {
   applyStructuredAgentSessionModelCatalog,
   commitStructuredAgentSessionOptionValues,
