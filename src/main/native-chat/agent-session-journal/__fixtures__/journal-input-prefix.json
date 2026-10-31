@@ -20,13 +20,21 @@
     "{\"v\":2,\"kind\":\"tombstone\",\"epoch\":\"epoch-1\",\"seq\":16,\"fence\":1,\"ts\":1016,\"itemId\":\"orca:resume-16\",\"revision\":1,\"queueResume\":true}",
     "{\"v\":2,\"kind\":\"item\",\"epoch\":\"epoch-1\",\"seq\":17,\"fence\":1,\"ts\":1017,\"itemId\":\"codex:thread-1:turn-2:0\",\"revision\":1,\"turnScope\":{\"kind\":\"thread\"},\"body\":{\"kind\":\"approval\",\"title\":\"Run shell?\",\"detail\":null,\"options\":[{\"id\":\"yes\",\"label\":\"Yes\"}],\"subject\":{\"kind\":\"plan\",\"text\":\"Plan\"},\"resolution\":{\"state\":\"approved\",\"selectedOptionId\":\"yes\",\"resolvedBy\":\"client\",\"resolvedAt\":1017}}}",
     "{\"v\":4,\"kind\":\"queue\",\"epoch\":\"epoch-1\",\"seq\":18,\"fence\":1,\"ts\":1018,\"messageId\":\"card-1\",\"change\":{\"op\":\"withdrawn\"}}",
-    "{\"v\":2,\"kind\":\"item\",\"epoch\":\"epoch-1\",\"seq\":19,\"fence\":1,\"ts\":1019,\"itemId\":\"codex:thread-1:turn-2:1\",\"revision\":1,\"turnScope\":{\"kind\":\"thread\"},\"body\":{\"kind\":\"status\",\"text\":\"The agent stopped.\",\"failure\":{\"kind\":\"providerExited\",\"detail\":{\"text\":\"exit 1\",\"audience\":\"log\"}}}}"
+    "{\"v\":2,\"kind\":\"item\",\"epoch\":\"epoch-1\",\"seq\":19,\"fence\":1,\"ts\":1019,\"itemId\":\"codex:thread-1:turn-2:1\",\"revision\":1,\"turnScope\":{\"kind\":\"thread\"},\"body\":{\"kind\":\"status\",\"text\":\"The agent stopped.\",\"failure\":{\"kind\":\"providerExited\",\"detail\":{\"text\":\"exit 1\",\"audience\":\"log\"}}}}",
+    "{\"kind\":\"item\",\"itemId\":\"codex:thread-1:turn-3:0\",\"revision\":1,\"body\":{\"kind\":\"turn\",\"turnId\":\"turn-3\",\"state\":\"running\"},\"v\":3,\"epoch\":\"epoch-1\",\"seq\":20,\"fence\":1,\"ts\":1020,\"ownerFence\":1,\"executionOwner\":2,\"turnScope\":{\"kind\":\"thread\"}}",
+    "{\"kind\":\"item\",\"echoOf\":null,\"itemId\":\"codex:thread-1:turn-3:1\",\"revision\":1,\"body\":{\"kind\":\"message\",\"role\":\"assistant\",\"blocks\":[{\"type\":\"text\",\"text\":\"Echoed\"}]},\"v\":2,\"epoch\":\"epoch-1\",\"seq\":21,\"fence\":1,\"ts\":1021,\"ownerFence\":1,\"turnScope\":{\"kind\":\"turn\",\"turnItemId\":\"codex:thread-1:turn-3:0\"}}",
+    "{\"kind\":\"item\",\"itemId\":\"codex:thread-1:turn-4:0\",\"revision\":1,\"body\":{\"kind\":\"turn\",\"turnId\":\"turn-4\",\"state\":\"running\"},\"v\":3,\"epoch\":\"epoch-1\",\"seq\":22,\"fence\":1,\"ts\":1022,\"ownerFence\":1,\"turnScope\":{\"kind\":\"thread\"}}",
+    "{\"kind\":\"tombstone\",\"itemId\":\"codex:thread-1:turn-4:0\",\"revision\":2,\"v\":2,\"epoch\":\"epoch-1\",\"seq\":23,\"fence\":1,\"ts\":1023}",
+    "{\"kind\":\"queue\",\"messageId\":\"card-3\",\"change\":{\"op\":\"queued\",\"body\":{\"kind\":\"message\",\"role\":\"user\",\"blocks\":[{\"type\":\"text\",\"text\":\"Hand this over\"}]},\"position\":2,\"queuedAt\":{\"epoch\":\"epoch-1\",\"sequence\":23}},\"v\":4,\"epoch\":\"epoch-1\",\"seq\":24,\"fence\":1,\"ts\":1024}",
+    "{\"kind\":\"submission\",\"clientMessageId\":\"send-2\",\"payloadFingerprint\":\"d6988eb76aa81c64728f527ffa51b1ff309e9657db975fd77f115c01e7da3f61\",\"providerHandle\":{\"kind\":\"codex\",\"threadId\":\"thread-1\"},\"body\":{\"kind\":\"message\",\"role\":\"user\",\"blocks\":[{\"type\":\"text\",\"text\":\"Hand this over\"}]},\"v\":2,\"epoch\":\"epoch-1\",\"seq\":25,\"fence\":1,\"ts\":1025,\"handoverRecorded\":true,\"queuedMessageId\":\"card-3\"}",
+    "{\"kind\":\"dispatch\",\"clientMessageId\":\"send-2\",\"state\":\"pending\",\"providerItemId\":null,\"reason\":null,\"v\":2,\"epoch\":\"epoch-1\",\"seq\":26,\"fence\":1,\"ts\":1026,\"turnScope\":{\"kind\":\"thread\"},\"carries\":[\"send-1\"]}",
+    "{\"kind\":\"dispatch\",\"clientMessageId\":\"send-2\",\"state\":\"rejected\",\"providerItemId\":null,\"reason\":\"provider_cancelled_before_start\",\"rejection\":{\"kind\":\"cancelled\"},\"answeredInTurn\":null,\"v\":2,\"epoch\":\"epoch-1\",\"seq\":27,\"fence\":1,\"ts\":1027}"
   ],
   "expected": {
     "sessionId": "session-1",
     "epoch": "epoch-1",
-    "lastSequence": 19,
-    "lastActivityAt": 1019,
+    "lastSequence": 27,
+    "lastActivityAt": 1027,
     "oldestSequence": 1,
     "highestFence": 1,
     "items": [
@@ -170,6 +178,68 @@
             "kind": "thread"
           }
         }
+      ],
+      [
+        "codex:thread-1:turn-3:0",
+        {
+          "itemId": "codex:thread-1:turn-3:0",
+          "revision": 1,
+          "body": {
+            "kind": "turn",
+            "turnId": "turn-3",
+            "state": "running"
+          },
+          "sequence": 20,
+          "observedAt": 1020,
+          "turnScope": {
+            "kind": "thread"
+          }
+        }
+      ],
+      [
+        "codex:thread-1:turn-3:1",
+        {
+          "itemId": "codex:thread-1:turn-3:1",
+          "revision": 1,
+          "body": {
+            "kind": "message",
+            "role": "assistant",
+            "blocks": [
+              {
+                "type": "text",
+                "text": "Echoed"
+              }
+            ]
+          },
+          "sequence": 21,
+          "observedAt": 1021,
+          "turnScope": {
+            "kind": "turn",
+            "turnItemId": "codex:thread-1:turn-3:0"
+          }
+        }
+      ],
+      [
+        "orca:send-2",
+        {
+          "itemId": "orca:send-2",
+          "revision": 0,
+          "body": {
+            "kind": "message",
+            "role": "user",
+            "blocks": [
+              {
+                "type": "text",
+                "text": "Hand this over"
+              }
+            ]
+          },
+          "sequence": 26,
+          "observedAt": 1026,
+          "turnScope": {
+            "kind": "thread"
+          }
+        }
       ]
     ],
     "itemFences": [
@@ -177,12 +247,21 @@
       ["codex:thread-1:turn-1:0", 1],
       ["codex:thread-1:turn-1:3", 1],
       ["codex:thread-1:turn-2:0", 1],
-      ["codex:thread-1:turn-2:1", 1]
+      ["codex:thread-1:turn-2:1", 1],
+      ["codex:thread-1:turn-3:0", 1],
+      ["codex:thread-1:turn-3:1", 1],
+      ["orca:send-2", 1]
     ],
-    "itemExecutionOwners": [],
-    "providerActivityAt": [[1, 1019]],
-    "tombstones": [["codex:thread-1:turn-1:2", 2]],
-    "removedTurnIds": [],
+    "itemExecutionOwners": [["codex:thread-1:turn-3:0", 2]],
+    "providerActivityAt": [
+      [1, 1022],
+      [2, 1020]
+    ],
+    "tombstones": [
+      ["codex:thread-1:turn-1:2", 2],
+      ["codex:thread-1:turn-4:0", 2]
+    ],
+    "removedTurnIds": ["turn-4"],
     "submissions": [
       [
         "send-1",
@@ -205,6 +284,27 @@
           },
           "handedOverAt": 1003
         }
+      ],
+      [
+        "send-2",
+        {
+          "clientMessageId": "send-2",
+          "fence": 1,
+          "payloadFingerprint": "d6988eb76aa81c64728f527ffa51b1ff309e9657db975fd77f115c01e7da3f61",
+          "dispatchState": "rejected",
+          "providerItemId": null,
+          "reason": "provider_cancelled_before_start",
+          "submittedAt": 1025,
+          "resolvedAt": 1027,
+          "submittedSequence": 25,
+          "handoverRecorded": true,
+          "acceptedSequence": 25,
+          "handedOverAt": 1026,
+          "rejection": {
+            "kind": "cancelled"
+          },
+          "answeredInTurn": null
+        }
       ]
     ],
     "receipts": [
@@ -222,7 +322,7 @@
       ]
     ],
     "aliases": [["codex:thread-1:turn-1:1", "orca:send-1"]],
-    "itemEchoes": [],
+    "itemEchoes": [["codex:thread-1:turn-3:1", null]],
     "appliedSettlementIds": ["settle-1"],
     "derivedTurnScope": null,
     "latestAcceptedTurnSequence": 2,
@@ -239,11 +339,22 @@
       "resumedSequence": 16,
       "reopenedSequence": 0
     },
-    "stoppedHistoryCarried": [],
-    "queuedHandOffPlaces": [],
-    "normalizedHandOffs": [],
+    "stoppedHistoryCarried": [["send-2", ["send-1"]]],
+    "queuedHandOffPlaces": [
+      [
+        "send-2",
+        {
+          "sequence": 26,
+          "observedAt": 1026,
+          "turnScope": {
+            "kind": "thread"
+          }
+        }
+      ]
+    ],
+    "normalizedHandOffs": ["send-2"],
     "queue": {
-      "revision": 6,
+      "revision": 8,
       "cards": [
         [
           "card-1",
@@ -299,6 +410,33 @@
             "queuedAt": {
               "epoch": "epoch-1",
               "sequence": 11
+            }
+          }
+        ],
+        [
+          "card-3",
+          {
+            "messageId": "card-3",
+            "position": 2,
+            "body": {
+              "kind": "message",
+              "role": "user",
+              "blocks": [
+                {
+                  "type": "text",
+                  "text": "Hand this over"
+                }
+              ]
+            },
+            "fingerprint": "d6988eb76aa81c64728f527ffa51b1ff309e9657db975fd77f115c01e7da3f61",
+            "state": "dispatched",
+            "holdReason": null,
+            "returnedReason": null,
+            "returnedRejection": null,
+            "consumedAs": "send-2",
+            "queuedAt": {
+              "epoch": "epoch-1",
+              "sequence": 23
             }
           }
         ]

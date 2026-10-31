@@ -175,8 +175,9 @@ it('leaves a legacy queued card whose saved body holds an undeclared key on disk
   expect(readStoredQueuedMessageRow(row(later))).toBeNull()
 })
 
-// Input rows as builds before outcome records wrote them, checked in with the chat they fold into.
-// A reducer change that reads them differently fails here: version the prefix fold, never edit this.
+// Input rows as builds before outcome records wrote them, checked in with the chat they fold into;
+// rows 20-27 are v1.4.245's own writes. Every keyed collection holds data, so a reducer change that
+// reads them differently fails here: version the prefix fold, never edit this.
 const prefix = z
   .object({
     sessionId: z.string(),
@@ -220,6 +221,9 @@ it('folds the checked-in input rows into the same chat, every value of which sto
     throw new Error('missing prefix chat')
   }
   expect(plain(loaded.state)).toEqual(prefix.expected)
+  const collections = journalStateCollections(loaded.state)
+  expect(collections.filter(({ entries }) => [...entries].length === 0)).toEqual([])
+  expect(collections.length).toBeGreaterThanOrEqual(15)
   // What restating this chat on a new epoch would store, admitted as this build stores it.
   const stored = [
     ...Object.entries(JSON.parse(journalStateScalars(loaded.state))).map(([key, value]) => ({
