@@ -1,3 +1,4 @@
+import { formatTerminalStartFailure } from '../../../../shared/terminal-start-failure'
 import {
   RuntimeLineageError,
   LINEAGE_PARENT_AMBIGUOUS
@@ -39,12 +40,15 @@ export function agentLaunchFailureMessage(
   error: unknown,
   targetKind?: AgentLaunchTarget['kind']
 ): string | undefined {
-  return error instanceof OrchestrationError ||
+  return (
+    formatTerminalStartFailure(error) ??
+    (error instanceof OrchestrationError ||
     (error instanceof RuntimeLineageError &&
       error.code === LINEAGE_PARENT_AMBIGUOUS &&
       targetKind === 'create-worktree')
-    ? error.message.slice(0, REFUSAL_TEXT_MAX_LENGTH)
-    : undefined
+      ? error.message.slice(0, REFUSAL_TEXT_MAX_LENGTH)
+      : undefined)
+  )
 }
 
 /** Keep a refused folder's full path or only its code; truncating the path would name a different folder. */

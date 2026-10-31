@@ -7,7 +7,8 @@ import {
   accepted,
   optionsClient,
   recordingMutate,
-  mountOptions
+  mountOptions,
+  settle
 } from '../../use-mobile-structured-agent-options.test-fixture'
 import { createElement, useState, type ReactNode } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
@@ -110,7 +111,11 @@ describe('MobileNativeChatSessionOptionPickers', () => {
   const setOption = vi.fn<MobileNativeChatSessionOptionsController['setOption']>()
   const invokeAction = vi.fn<MobileNativeChatSessionOptionsController['invokeAction']>()
 
-  const mount = (snapshot: SessionOptionDescriptor[], isWorking = false) => {
+  const mount = (
+    snapshot: SessionOptionDescriptor[],
+    isWorking = false,
+    requestedPage: string | null = null
+  ) => {
     const controller: MobileNativeChatSessionOptionsController = {
       snapshot,
       pendingId: null,
@@ -120,7 +125,7 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     }
     function Pickers({ working }: { working: boolean }) {
       const [presentation, setPresentation] = useState<MobileNativeChatPickerPresentation | null>(
-        null
+        requestedPage ? { page: requestedPage, refocus: false } : null
       )
       return createElement(MobileNativeChatSessionOptionPickers, {
         controller,
@@ -177,6 +182,62 @@ describe('MobileNativeChatSessionOptionPickers', () => {
       renderer?.unmount()
     })
     renderer = null
+  })
+
+  it('consumes a refused page without replay, then permits a fresh open and permission pick', async () => {
+    const placeholder: SessionOptionDescriptor = {
+      ...MODEL_DESCRIPTOR,
+      kind: { type: 'select', choices: [] },
+      valueSource: 'unknown',
+      settable: false
+    }
+    const update = mount([placeholder], false, 'model')
+    expect(pill('Model').props.disabled).toBe(true)
+    act(() => pill('Model').props.onPress())
+    expect(findAllByHostType(renderer!.root, 'BottomDrawer')).toHaveLength(0)
+    update(false, [placeholder, PERMISSION_DESCRIPTOR])
+    expect(pill('Model').props.disabled).toBe(false)
+    expect(findAllByHostType(renderer!.root, 'BottomDrawer')).toHaveLength(0)
+    await act(async () => pill('Model').props.onPress())
+    await act(async () => rowByText('Permissions').props.onPress())
+    await act(async () => rowByText('Full access').props.onPress())
+    expect(setOption).toHaveBeenCalledExactlyOnceWith('permissionMode', 'full-access')
+  })
+
+  it('accepts a click on the shown Codex default, captures it, and skips an accepted equal pick', async () => {
+    const pending = deferred<AgentSessionOptionsResult>()
+    let reads = 0
+    const rpc = optionsClient(() =>
+      ++reads === 1
+        ? Promise.resolve({
+            ...OPTIONS,
+            listedModelIds: OPTIONS.models.map((row) => row.id),
+            current: { model: 'gpt-fast', acceptedInputSources: { model: 'saved' }, defaulted: [] }
+          })
+        : pending.promise
+    )
+    const { calls, mutate } = recordingMutate(async () =>
+      accepted({ key: 'effort', value: 'low', options: { effort: 'low' } }, true)
+    )
+    const view = await mountOptions({ ...BASE, client: rpc.client, mutate, sendSelection: true })
+    const snapshot = () => [...view.current().optionSnapshot]
+    try {
+      const update = mount(snapshot())
+      expect(view.current().sendSelection()).toEqual({ selection: { model: 'gpt-fast' } })
+      await act(async () => pill('Model').props.onPress())
+      setOption.mockImplementation(view.current().setStructuredOption)
+      await act(async () => pill('Low').props.onPress())
+      await settle()
+      expect(calls.map((call) => call.fields)).toEqual([{ key: 'effort', value: 'low' }])
+      expect(view.current().sendSelection()).toEqual({
+        selection: { model: 'gpt-fast', effort: 'low' }
+      })
+      update(false, snapshot())
+      await act(async () => pill('Low').props.onPress())
+      expect(setOption).toHaveBeenCalledTimes(1)
+    } finally {
+      await view.unmount()
+    }
   })
 
   it('renders actual settled permission/reset picks without busy state and locks ordinary pending model work', async () => {

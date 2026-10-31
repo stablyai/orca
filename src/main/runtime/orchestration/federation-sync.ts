@@ -9,7 +9,10 @@ import {
   recordFederationAckCheckpoint
 } from './federation-ack-checkpoints'
 import { bindCoordinatorMutationPayload } from './dispatch-message-binding'
-import { resolveFederatedLifecycleSettlementCapability } from './federation-sync-capability'
+import {
+  armHomeAutoReleaseForOlderHost,
+  resolveFederatedLifecycleSettlementCapability
+} from './federation-sync-capability'
 import { getOrchestrationPeerCapabilityCache } from './orchestration-peer-capability-cache'
 import { parseFederatedLifecycle, parseRelayedMessage } from './federation-sync-message'
 export { parseRelayedMessage } from './federation-sync-message'
@@ -193,13 +196,19 @@ async function syncFederatedDispatchPages(
     acknowledgmentCursor >
       Math.max(getFederationAckedThrough(ackLease, ackIdentity), durableAcknowledgedThrough)
   ) {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: unchanged ack receipt cast; the gate flags it only because this diff adds the autoRelease opt-in inside its span.
     const delivered = (await runtime.callOrchestrationWorkerServer(
       federated.environment_id,
       'orchestration.federationAck',
       {
         dispatchId,
         throughSequence: acknowledgmentCursor,
-        ...(settlements.length > 0 ? { settlements } : {})
+        ...(settlements.length > 0
+          ? {
+              settlements,
+              ...(db.workerAutoReleaseEnabled?.() !== false ? { autoRelease: true } : {})
+            }
+          : {})
       },
       15_000,
       { orchestrationRequestId: `relay_ack_${dispatchId}_${cursor}` },
@@ -225,6 +234,12 @@ async function syncFederatedDispatchPages(
     pulled.runtimeEpoch
   )
   db.updateFederatedDispatchRuntimeEpoch(dispatchId, pulled.runtimeEpoch)
+  if (isCurrent()) {
+    // Best effort: without a deadline the worker keeps manual release, as before.
+    await armHomeAutoReleaseForOlderHost(runtime, dispatchId, currentServer.pairingRevision).catch(
+      () => undefined
+    )
+  }
   const toWorker =
     db.getWorkerDispatch(dispatchId)?.state === 'ready'
       ? db.listPendingFederationRelay(dispatchId, 'to_worker')

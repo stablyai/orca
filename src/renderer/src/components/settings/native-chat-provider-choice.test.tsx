@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import userEvent from '@testing-library/user-event'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { projectAgentLaunchSettings } from '../../../../shared/agent-launch-settings'
@@ -63,7 +64,13 @@ vi.mock('@/lib/host-chat-program-acquisition', () => ({ useChatProgramFacts: () 
 vi.mock('@/lib/host-chat-program', async (importOriginal) => ({
   ...(await importOriginal<typeof HostChatProgramModule>()),
   agentChoiceOpensAsChat: () => false,
-  resolveChatProgramContext: () => ({}),
+  resolveChatProgramContext: (_state: unknown, workspace: { runtimeEnvironmentId?: string }) => ({
+    executionHostId: workspace.runtimeEnvironmentId
+      ? `runtime:${workspace.runtimeEnvironmentId}`
+      : 'local',
+    hostCapabilities: [],
+    runtimeId: null
+  }),
   // The host publishes Antigravity's downloaded chat program; its agy CLI is not installed.
   readChatProgram: (_store: unknown, agent: TuiAgent) =>
     (agent === 'antigravity' && inventory.chatAvailable) || inventory.nativePrograms.includes(agent)
@@ -278,6 +285,15 @@ describe('agent row chat or CLI', () => {
     expect(group.querySelector('[aria-checked="false"]')?.getAttribute('aria-disabled')).toBe(
       'true'
     )
+    const row = group.closest('.py-3')
+    if (!(row instanceof HTMLElement)) {
+      throw new Error('Missing native-only row')
+    }
+    fireEvent.click(within(row).getByRole('button', { name: 'Expand agent settings' }))
+    expect(within(row).getByText('Model')).toBeTruthy()
+    expect(within(row).getByText('Reasoning effort')).toBeTruthy()
+    expect(within(row).queryByRole('textbox', { name: 'Arguments' })).toBeNull()
+    expect(within(row).queryByRole('textbox', { name: 'Command' })).toBeNull()
     expect(checked('Open Claude as')).toBe('Chat')
     expect(checked('Open Codex as')).toBe('Chat')
     vi.unstubAllGlobals()
@@ -452,4 +468,53 @@ describe('agent row chat or CLI', () => {
       cleanup()
     }
   })
+})
+
+it('offers the selected paired native-only program editor and writes effort without CLI controls', async () => {
+  inventory.detected = []
+  store.localDetectedAgentIdsByContext.host = ['claude', 'antigravity']
+  const settings = createGlobalSettingsFixture({
+    agentLaunchChoices: {},
+    agentPermissionDefault: 'own'
+  })
+  store.settings = settings
+  const mutate = vi.fn(async () => {})
+  const element = () => (
+    <AgentLaunchSettingsCatalog
+      settings={projectAgentLaunchSettings(settings, 'linux')}
+      mutate={mutate}
+      detectionTarget={{ kind: 'runtime', environmentId: 'paired-native' }}
+      hostName="Paired"
+      renderPermissions={() => null}
+    />
+  )
+  const view = render(element(), { wrapper: TooltipProvider })
+  const label = screen.getByText('Antigravity')
+  const row = label.closest('.py-3')
+  if (!(row instanceof HTMLElement)) {
+    throw new Error('Missing paired native-only row')
+  }
+  fireEvent.click(within(row).getByRole('button', { name: 'Expand agent settings' }))
+  expect(within(row).getByText('Model')).toBeTruthy()
+  expect(within(row).queryByRole('textbox', { name: 'Arguments' })).toBeNull()
+  expect(within(row).queryByRole('textbox', { name: 'Command' })).toBeNull()
+  expect(screen.queryByRole('radiogroup', { name: 'Open Antigravity as' })).toBeNull()
+  const effort = within(row).getByRole('button', { name: 'Reasoning effort: Default' })
+  await userEvent.click(effort)
+  const option = screen.getAllByRole('menuitemradio').find((item) => item.textContent === 'High')
+  if (!option) {
+    throw new Error('Missing paired effort option')
+  }
+  fireEvent.click(option)
+  await vi.waitFor(() => expect(mutate).toHaveBeenCalledOnce())
+  expect(mutate.mock.calls[0]).toEqual([
+    expect.objectContaining({
+      type: 'launch-choices',
+      agent: 'antigravity',
+      patch: { options: { effort: 'high' } }
+    })
+  ])
+  inventory.chatAvailable = false
+  view.rerender(element())
+  expect(within(row).queryByText('Model')).toBeNull()
 })

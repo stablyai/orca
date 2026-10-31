@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native'
 import { Check, ChevronRight, ShieldAlert, type LucideIcon } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { colors, concentricRadius, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
@@ -313,7 +313,7 @@ const styles = themedStyleSheet(() => ({
     gap: 6,
     height: 38,
     paddingHorizontal: 14,
-    borderRadius: 19,
+    borderRadius: radii.pill,
     backgroundColor: colors.composerControl
   },
   pillText: {
@@ -350,7 +350,7 @@ const styles = themedStyleSheet(() => ({
     paddingVertical: spacing.sm,
     minHeight: 50,
     alignItems: 'center',
-    borderRadius: radii.card,
+    borderRadius: concentricRadius(radii.surface, spacing.xs),
     backgroundColor: colors.bgRaised,
     borderWidth: 1,
     borderColor: colors.borderSubtle,

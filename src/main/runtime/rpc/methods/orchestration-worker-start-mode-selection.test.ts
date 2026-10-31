@@ -5,6 +5,7 @@ import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
 import { ORCHESTRATION_METHODS } from './orchestration'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
+import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
 import { OPENCODE_MODEL_VERSION_REFUSAL } from '../../../../shared/agent-launch-model-preferences'
 
 const STRUCTURED_HANDLE = 'structworker_abc'
@@ -18,7 +19,9 @@ const createStructuredWorkerSessionForWorktree = vi.fn(
     return { identity: { handle: STRUCTURED_HANDLE, sessionId: STRUCTURED_SESSION_ID }, host: {} }
   }
 )
-const createExistingWorktreeWorkerTerminal = vi.fn(async () => ({ handle: TERMINAL_HANDLE }))
+const createExistingWorktreeWorkerTerminal = vi.fn<
+  () => Promise<Partial<RuntimeTerminalCreate> & { handle: string }>
+>(async () => ({ handle: TERMINAL_HANDLE }))
 const sendStructuredWorkerPreamble = vi.fn(async (_args: { preamble: string }) => 'accepted')
 
 vi.mock('./orchestration/worker/worker-topology', async (importOriginal) => ({
@@ -150,6 +153,53 @@ describe('worker-start honours the settings default', () => {
     )
   }
 
+  it.each(['fresh', 'reattach', 'adopted'] as const)(
+    'uses actual %s creation for a terminal worker readiness failure',
+    async (context) => {
+      createExistingWorktreeWorkerTerminal.mockResolvedValueOnce({
+        handle: TERMINAL_HANDLE,
+        ptyId: 'pty-created',
+        incarnationId: 'inc-created',
+        worktreeId: 'repo::wt',
+        title: null,
+        ...(context === 'reattach' ? { isReattach: true as const } : {}),
+        ...(context === 'adopted' ? { agentSessionDisposition: 'adopted' as const } : {})
+      })
+      vi.spyOn(runtime, 'getPtyLivenessVerdict').mockReturnValue({
+        status: 'exited',
+        incarnationId: 'inc-created',
+        cause: {
+          kind: 'exited',
+          exitCode: 256,
+          initialOutputDiagnostic: 'git-bash-console-capacity'
+        }
+      })
+      vi.mocked(runtime.waitForTerminal).mockResolvedValue({
+        handle: TERMINAL_HANDLE,
+        condition: 'tui-idle',
+        satisfied: false,
+        status: 'exited',
+        exitCode: 256,
+        exitCause: {
+          kind: 'exited',
+          exitCode: 256,
+          initialOutputDiagnostic: 'git-bash-console-capacity'
+        }
+      })
+      await expect(
+        startWorker({ ...STRUCTURED_DEFAULT, experimentalNativeChat: false })
+      ).resolves.toMatchObject({
+        state: 'failed',
+        failedStage: 'agent_readiness',
+        lastError:
+          context === 'fresh'
+            ? expect.stringContaining('Close some Git Bash terminals')
+            : expect.not.stringContaining('Git Bash')
+      })
+      expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+    }
+  )
+
   it('starts a structured chat worker when structured native chat is the default', async () => {
     const result = await startWorker(STRUCTURED_DEFAULT)
 
@@ -162,7 +212,7 @@ describe('worker-start honours the settings default', () => {
     const preamble = sendStructuredWorkerPreamble.mock.calls[0]![0].preamble
     expect(preamble).toContain(`Your Orca session ID is: orca_session_id:${STRUCTURED_SESSION_ID}`)
     expect(preamble).toContain('The coordinator cannot see this chat')
-    expect(preamble).toContain('it will send this chat a fresh')
+    expect(preamble).toContain('More supervised work arrives in this chat')
     expect(preamble).not.toContain('this terminal')
     expect(preamble).not.toMatch(/exit the shell/i)
     expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
@@ -179,7 +229,7 @@ describe('worker-start honours the settings default', () => {
     expect(createStructuredWorkerSessionForWorktree).not.toHaveBeenCalled()
     const preamble = vi.mocked(runtime.sendTerminalAgentPrompt).mock.calls[0]![1]
     expect(preamble).toContain('The coordinator cannot see this terminal')
-    expect(preamble).toContain('Do not exit the shell. Your terminal stays available')
+    expect(preamble).toContain('Do not exit the shell. More supervised work arrives here')
     expect(preamble).not.toContain('this chat')
     expect(sendStructuredWorkerPreamble).not.toHaveBeenCalled()
   })

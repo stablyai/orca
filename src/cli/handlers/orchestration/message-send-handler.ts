@@ -1,5 +1,6 @@
 import type { CommandHandler } from '../../dispatch'
 import { printResult } from '../../format'
+import { withReceiptNext } from './receipt-next-text'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
 import { readInjectedAgentSessionId } from '../../../shared/agent-session-caller-env'
@@ -18,6 +19,7 @@ type LifecycleSendResult =
   | {
       action: 'completed' | 'failed'
       authority?: 'run_home' | 'worker_server_legacy'
+      autoReleaseAt?: string
     }
   | { action: 'settled'; outcome: 'succeeded' | 'failed'; duplicate?: boolean }
   | { action: 'rejected'; code: string; reason: string }
@@ -28,7 +30,7 @@ type SendRecipientWarning = {
   message: string
 }
 
-type OrchestrationSendResult =
+type OrchestrationSendResult = { next?: string } & (
   | {
       message: { id: string; run_id?: string }
       lifecycle?: LifecycleSendResult
@@ -50,6 +52,7 @@ type OrchestrationSendResult =
       lifecycle?: LifecycleSendResult
       warnings?: SendRecipientWarning[]
     }
+)
 
 function getLifecycleGroupRecipientError(type: 'worker_done' | 'heartbeat'): string {
   return `${type} messages belong to one exact Dispatch and cannot target a group address.`
@@ -122,11 +125,17 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
     printResult(result, json, (value) => {
       const warnings = 'warnings' in value ? (value.warnings ?? []) : []
       const withWarnings = (line: string): string =>
-        warnings.length > 0
-          ? [line, ...warnings.map((warning) => `Warning: ${warning.message}`)].join('\n')
-          : line
+        withReceiptNext(
+          [line, ...warnings.map((warning) => `Warning: ${warning.message}`)].join('\n'),
+          value
+        )
       if ('message' in value) {
-        return withWarnings(`Sent ${value.message.id}`)
+        const lifecycle = 'lifecycle' in value ? value.lifecycle : undefined
+        const autoRelease =
+          lifecycle && 'autoReleaseAt' in lifecycle && lifecycle.autoReleaseAt
+            ? ` (terminal auto-release at ${lifecycle.autoReleaseAt})`
+            : ''
+        return withWarnings(`Sent ${value.message.id}${autoRelease}`)
       }
       if ('relay' in value) {
         if (value.relay.destination === 'worker') {

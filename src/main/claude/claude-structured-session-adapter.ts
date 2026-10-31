@@ -2,7 +2,6 @@ import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { dispatchClaudeCommand } from './claude-structured-command-dispatch'
 import {
   AgentSessionAcquisitionRootExitObservedError,
-  type AgentSessionAcquisition,
   type StructuredAgentSessionAcquireInput,
   type StructuredAgentSessionAdapter
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
@@ -45,6 +44,7 @@ import {
 import { claudePromptCancelRoute } from './claude-structured-prompt-replies'
 import { claudeForkForRewind } from './claude-rewind-fork'
 import { openClaudeStructuredSession } from './structured/claude-structured-session-open'
+import { ClaudeConversationNaming } from './claude-conversation-naming'
 
 export type { ClaudeStructuredLaunch } from './claude-structured-launch-resolution'
 
@@ -54,8 +54,11 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   private readonly exits = new Map<string, ClaudeSessionExit>()
   private readonly settledExitErrors = new Map<string, Error>()
   private readonly exitLifecycle: ClaudeExitLifecycle
+  private readonly naming: ClaudeConversationNaming | undefined
 
   constructor(private readonly deps: ClaudeStructuredSessionAdapterDeps) {
+    const { namingInputs: snapshot, requestTimeoutMs: timeoutMs } = deps
+    this.naming = snapshot && new ClaudeConversationNaming({ snapshot, timeoutMs })
     this.atRestCommands = deps.atRestCommands
     this.exitLifecycle = {
       sessions: this.sessions,
@@ -68,14 +71,17 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
 
   supportsLocation = supportsClaudeStructuredLocation
 
-  acquire = (input: StructuredAgentSessionAcquireInput): Promise<AgentSessionAcquisition> => {
+  acquire = (input: StructuredAgentSessionAcquireInput) => {
     this.settledExitErrors.delete(input.identity.sessionId)
+    const record = this.deps.namingRecord?.(input.identity.sessionId)
+    const naming = this.naming?.acquire(input, record)
     return acquireClaudeSession({
       input,
       deps: this.deps,
       sessions: this.sessions,
       acquisitions: this.acquisitions,
       exits: this.exits,
+      ...(naming ? { naming } : {}),
       callbacks: {
         deliver: (attempt, sessionId, event) => this.deliver(attempt, sessionId, event),
         emit: (session, _events, event) => this.emit(session, event),
@@ -92,6 +98,9 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
         settleExit: (sessionId, exit) =>
           settleClaudeUnexpectedExit(this.exitLifecycle, sessionId, exit)
       }
+    }).catch((error: unknown) => {
+      naming?.failed()
+      throw error
     })
   }
 
@@ -142,6 +151,9 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   }
 
   forkForRewind = claudeForkForRewind
+  stopProviderNaming = (): void => this.naming?.stop()
+  nameProviderConversation: StructuredAgentSessionAdapter['nameProviderConversation'] = (input) =>
+    this.naming?.accept(input)
   compact: NonNullable<StructuredAgentSessionAdapter['compact']> = (input) =>
     dispatchClaudeCommand(this.session(input.sessionId), input.command)
 

@@ -22,12 +22,12 @@ Leave `publisher` out. Orca names the publisher after where the plugin comes fro
 repository, lowercased (`acme` for `github.com/Acme/gleam-syntax`), so the plugin installs as
 `acme.gleam-syntax`. Nobody can choose a publisher name that is not theirs.
 
-| Installed from                | Publisher                                                     |
-| ----------------------------- | ------------------------------------------------------------- |
+| Installed from                    | Publisher                                                    |
+| --------------------------------- | ------------------------------------------------------------ |
 | The official or community catalog | the repository owner, set by the catalog in the entry's `id` |
-| Another catalog               | whatever that catalog's entry `id` says                       |
-| A Git URL                     | the URL's owner (`.` and `_` become `-`)                      |
-| A local or development folder | `local`                                                       |
+| Another catalog                   | whatever that catalog's entry `id` says                      |
+| A Git URL                         | the URL's owner (`.` and `_` become `-`)                     |
+| A local or development folder     | `local`                                                      |
 
 `publisher` is deprecated: Orca ignores it for catalog and Git installs. Leaving it out needs
 `engines.orca` of at least `>=1.4.246`, because older Orca requires the field and refuses a

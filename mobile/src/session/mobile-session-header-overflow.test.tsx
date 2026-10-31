@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
 import { mountFixture } from '../test-support/rpc-recording/recorder-fixture-shape'
 import type { MobileSessionController } from './use-mobile-session-controller'
+import type { SessionTitleCard } from './use-session-title-card'
 
 vi.mock('react-native', () => ({
   View: 'View',
@@ -10,6 +11,7 @@ vi.mock('react-native', () => ({
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
   ActivityIndicator: 'ActivityIndicator',
+  Platform: { OS: 'web' },
   StyleSheet: { create: <T,>(v: T) => v, hairlineWidth: 1 }
 }))
 vi.mock('react-native-safe-area-context', () => ({ SafeAreaView: 'SafeAreaView' }))
@@ -105,10 +107,23 @@ function mountHeader(overrides: Partial<MobileSessionController> = {}) {
       showChecksAction: true,
       activePanel: null
     })
+    const details = mountFixture<SessionTitleCard>({
+      besideTabs: true,
+      barRef: useRef(null),
+      backRef: useRef(null),
+      openerRef: useRef(null),
+      titleRef: useRef(null),
+      boundaryRefs: useRef([]),
+      active: false,
+      requestedOpen: false,
+      closeFirst: () => false,
+      onAnchorLayout: () => {},
+      toggle: () => {}
+    })
     return createElement(
       'Screen',
       null,
-      createElement(MobileSessionHeader, { controller }),
+      createElement(MobileSessionHeader, { controller, details }),
       createElement(MobileSessionTerminalLayoutSheet, {
         controller,
         visible: showTerminalLayout,
@@ -151,7 +166,11 @@ it('keeps tabs usable through narrow/wide changes and opens collapsed actions af
   ).toEqual(['Back to worktrees', 'More session actions'])
   act(() => originalTabs[1].props.onPress())
   expect(originalTabs[1].props.accessibilityState.selected).toBe(true)
-  const header = native('View').find((node) => node.props.onLayout && !node.props.ref)!
+  const header = native('View').find(
+    (node) =>
+      node.props.onLayout &&
+      node.props.ref === tree!.root.findByType(MobileSessionHeader).props.details.barRef
+  )!
   act(() => header.props.onLayout({ nativeEvent: { layout: { width: 927 } } }))
   expect(
     native('Pressable').find((node) => node.props.accessibilityLabel === 'New tab')

@@ -59,7 +59,7 @@ export const hubStyles = themedStyleSheet(() => ({
   statePill: {
     paddingHorizontal: spacing.sm,
     paddingVertical: 1,
-    borderRadius: radii.button,
+    borderRadius: radii.pill,
     borderWidth: StyleSheet.hairlineWidth
   },
   statePillText: {

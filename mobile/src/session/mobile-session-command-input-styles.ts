@@ -55,7 +55,7 @@ export const mobileSessionCommandInputStyles = themedStyleSheet(() => ({
     borderColor: colors.borderSubtle,
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.sm + 2,
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   createButtonDisabled: {
     opacity: 0.5
