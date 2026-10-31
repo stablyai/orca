@@ -10,6 +10,9 @@ import {
 } from '@/runtime/structured-agent-session-client'
 import type { AgentSessionRefusalReference } from '../../../../shared/agent-session-wire-refusals'
 import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
+import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+import { readStructuredChatHostPermissionVerdict } from '@/runtime/structured-chat-host-permission'
+import { notifyHostPermissionRefused } from '@/lib/structured-agent-session-launch-permission-notice'
 import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
 import { CLI_CONVERSATION_ADOPTING_AGENTS } from '../../../../shared/structured-agent-cli-conversation-adoption'
 import { toHostSessionPaneKey } from '../../../../shared/terminal-surface-id'
@@ -128,11 +131,22 @@ export async function runCliChatResume(
       if (!isCurrent()) {
         return
       }
+      const permission = await waitForPromiseWithSignal(
+        readStructuredChatHostPermissionVerdict(target, agent),
+        controller.signal
+      )
+      if (!isCurrent()) {
+        return
+      }
+      if (permission.kind !== 'allowed') {
+        notifyHostPermissionRefused(agent, permission.kind)
+        return
+      }
       const result = await waitForPromiseWithSignal(
         callStructuredAgentSession<
           { ok: true } | { ok: false; refusal: AgentSessionRefusalReference }
         >(target, 'agentSession.stopTerminalAgentForChat', {
-          worktree: source.workspaceId,
+          worktree: toRuntimeWorktreeSelector(source.workspaceId),
           agent,
           providerSessionId: source.providerSessionId,
           cliSource

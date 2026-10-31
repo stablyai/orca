@@ -221,7 +221,7 @@ describe('CLI identity resume through the existing launch owner', () => {
       'agentSession.create'
     ])
     expect(mocks.call.mock.calls[0][2]).toEqual({
-      worktree: 'wt-1',
+      worktree: 'id:wt-1',
       agent: 'claude',
       providerSessionId: 'provider-1',
       cliSource: { workspaceId: 'wt-1', paneKey: SOURCE.paneKey }

@@ -1,5 +1,10 @@
 import { OrcaRuntimeWithGetWorktreePs } from '../workspaces/workspace-process-listing'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import {
+  captureWindowsPaneAgentStop,
+  stopWindowsPaneAgentAndWait,
+  windowsPaneAgentStopReleased
+} from '../../pty/windows-pane-agent-stop'
 import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
 import type { CliWriterTerminal } from '../structured-agent-cli-writers'
 import {
@@ -93,6 +98,43 @@ export abstract class OrcaRuntimeWithTerminalAgentStopPreparation extends OrcaRu
       throw agentSessionRefusalError('agent_session_ownership_unknown', { reason: 'ownerUnproven' })
     }
     try {
+      if (process.platform === 'win32') {
+        const request = {
+          rootPid: entry.rootProcessId,
+          agent: row.agentType,
+          hookProcess: row.agentPresence?.process,
+          ptyId: pane.ptyId,
+          incarnationId: pane.incarnationId
+        }
+        const captured = await captureWindowsPaneAgentStop(request)
+        if (!captured) {
+          throw new Error('agent identity unavailable')
+        }
+        if (captured.refusal) {
+          throw agentSessionRefusalError('agent_session_operation_invalid', {
+            reason: captured.refusal
+          })
+        }
+        return {
+          hasAgent: !!captured.agent,
+          paused: false,
+          current: conversationCurrent,
+          released: (predict) => windowsPaneAgentStopReleased(captured, predict),
+          beforeInterrupt: async () => {
+            const fresh = await captureWindowsPaneAgentStop(request)
+            if (
+              !fresh?.agent ||
+              fresh.refusal ||
+              fresh.agent.pid !== captured.agent?.pid ||
+              fresh.agent.startTime !== captured.agent.startTime ||
+              !conversationCurrent()
+            ) {
+              throw new Error('agent not in front')
+            }
+          },
+          stop: () => stopWindowsPaneAgentAndWait(captured, conversationCurrent)
+        }
+      }
       const rows = await readPosixPaneProcessRows()
       const captured = capturePosixPaneAgent(
         rows,
