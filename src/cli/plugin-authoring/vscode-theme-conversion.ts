@@ -1,4 +1,4 @@
-import { PLUGIN_THEME_MAX_BYTES } from '../../main/plugins/plugin-artifact-validation'
+import { PLUGIN_THEME_MAX_BYTES } from '../../main/plugins/plugin-authoring-checks'
 import type { PluginThemeTokenColorRule } from '../../shared/plugins/artifacts/plugin-theme-artifact'
 import {
   hasUsableTerminalThemeColors,
