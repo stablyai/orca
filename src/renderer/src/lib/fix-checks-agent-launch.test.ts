@@ -460,8 +460,7 @@ describe('startFixChecksAgent', () => {
     expect(mocks.focusTerminalTabSurface).not.toHaveBeenCalled()
   })
 
-  // Why: a saved chat stays implicit so a host that stops running chats falls back to a terminal.
-  it('replays a saved terminal explicitly and leaves a saved chat to the settings route', async () => {
+  it('replays a saved terminal explicitly and carries saved Chat as a supported preference', async () => {
     Object.assign(mocks.store.settings, { disabledTuiAgents: ['codex'] })
     Object.assign(mocks.store, {
       runtimeStatusByEnvironmentId: new Map(),
@@ -528,9 +527,26 @@ describe('startFixChecksAgent', () => {
       'terminal',
       undefined
     ])
+    expect(mocks.launchAgentInNewTab.mock.calls.map(([args]) => args.preferredSurface)).toEqual([
+      undefined,
+      'chat'
+    ])
     expect(
-      mocks.launchWorkItemDirect.mock.calls.map(([args]) => args.launchChoice?.requestedSurface)
-    ).toEqual(['terminal', undefined, undefined])
+      mocks.launchWorkItemDirect.mock.calls.map(([args]) => {
+        const inputs = args.resolveLaunchInputs('codex')
+        return {
+          requestedSurface: inputs.requestedSurface,
+          preferredSurface: inputs.preferredSurface
+        }
+      })
+    ).toEqual([
+      { requestedSurface: 'terminal', preferredSurface: undefined },
+      { requestedSurface: undefined, preferredSurface: 'chat' },
+      { requestedSurface: undefined, preferredSurface: undefined }
+    ])
+    expect(
+      mocks.launchWorkItemDirect.mock.calls[1][0].resolveLaunchInputs('claude').preferredSurface
+    ).toBeUndefined()
     clearHostAgentMenuSettingsForTests()
     replaceRuntimeEnvironmentRevisions([{ id: 'alpha', createdAt: 7 }])
     const pending = Promise.withResolvers<{ settings: typeof preferences }>()

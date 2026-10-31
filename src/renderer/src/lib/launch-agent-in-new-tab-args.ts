@@ -7,6 +7,7 @@ import type { NativeChatComposerFocusIntent } from '@/components/native-chat/use
 
 export type LaunchAgentInNewTabArgs = LaunchAgentInNewTabRequest & {
   requestedSurface?: AgentSessionLaunchRequest['requestedSurface']
+  preferredSurface?: AgentSessionLaunchRequest['preferredSurface']
   selectedExecutionHostId?: AgentSessionLaunchRequest['selectedExecutionHostId']
   agent: TuiAgent
   worktreeId: string

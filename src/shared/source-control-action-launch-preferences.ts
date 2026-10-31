@@ -140,13 +140,19 @@ function selectedActionInputViews(
   })
 }
 
-/** Saved replays request only a saved terminal; a saved chat follows the settings route, which can
- *  still fall back to a terminal where the host no longer runs chats. */
+/** Saved Terminal is strict; saved Chat uses supported routing with Terminal fallback. */
 export function resolveSourceControlActionRequestedSurface(
   recipe: Pick<SourceControlActionRecipe, 'agentId' | 'surface'>,
   agent: TuiAgent
 ): 'terminal' | undefined {
   return recipe.surface === 'terminal' && recipe.agentId === agent ? 'terminal' : undefined
+}
+
+export function resolveSourceControlActionPreferredSurface(
+  recipe: Pick<SourceControlActionRecipe, 'agentId' | 'surface'>,
+  agent: TuiAgent
+): 'chat' | undefined {
+  return recipe.agentId === agent && recipe.surface === 'chat' ? 'chat' : undefined
 }
 
 type ActionLaunchProjectionInput = ({ basePrompt: string } | { renderedPrompt: string }) & {
@@ -191,6 +197,9 @@ export function projectSelectedSourceControlActionLaunch(
     ...('agentArgs' in views ? { agentArgs: agentArgs?.trim() } : {}),
     requestedSurface:
       liveChoice?.requestedSurface ?? resolveSourceControlActionRequestedSurface(recipe, agent),
+    preferredSurface: liveChoice?.requestedSurface
+      ? undefined
+      : resolveSourceControlActionPreferredSurface(recipe, agent),
     selectedExecutionHostId: liveChoice?.executionHostId
   }
 }

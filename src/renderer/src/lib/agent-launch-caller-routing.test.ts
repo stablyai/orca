@@ -122,12 +122,63 @@ describe('agent launch caller routing', () => {
     })
   })
 
+  it.each([
+    { surface: 'chat', chatDefault: false, supported: true, chat: true },
+    { surface: 'terminal', chatDefault: true, supported: true, chat: false },
+    { surface: undefined, chatDefault: true, supported: true, chat: true },
+    { surface: undefined, chatDefault: false, supported: true, chat: false },
+    { surface: 'chat', chatDefault: false, supported: false, chat: false }
+  ] as const)(
+    'replays saved $surface with Chat default $chatDefault and host support $supported',
+    async ({ surface, chatDefault, supported, chat }) => {
+      store.settings = { ...store.settings, nativeChatProviders: { codex: chatDefault } }
+      mockHostCapabilities.mockReturnValue(
+        supported ? [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY] : []
+      )
+      const projection = projectSourceControlActionLaunch(
+        { agentId: 'codex', surface, agentArgs: '--search' },
+        'codex',
+        { basePrompt: 'Fix checks', settings: store.settings }
+      )
+      const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+      const result = launchAgentInNewTab({
+        requestId: 'saved-surface',
+        agent: 'codex',
+        worktreeId: 'wt-1',
+        ...projection
+      })
+      expect(result?.surface.kind).toBe(chat ? 'host-published' : 'local-terminal')
+      if (chat) {
+        expect(store.createTab).not.toHaveBeenCalled()
+        expect(mockBeginHostAdmittedStructuredLaunch).toHaveBeenCalledOnce()
+        expect(mockBeginHostAdmittedStructuredLaunch).toHaveBeenCalledWith(
+          expect.objectContaining({
+            plan: expect.objectContaining({ agent: 'codex', route: 'structured-native-chat' }),
+            worktreeId: 'wt-1'
+          })
+        )
+        expect(mockBeginHostAdmittedStructuredLaunch.mock.calls[0][0].plan).not.toHaveProperty(
+          'requestedSurface'
+        )
+      } else {
+        expect(mockBeginHostAdmittedStructuredLaunch).not.toHaveBeenCalled()
+        expect(store.createTab).toHaveBeenCalledOnce()
+        expect(
+          tokenizeStartupCommand(String(queuedStartupPayload(store)?.command), 'posix')
+        ).toMatchObject({
+          ok: true,
+          tokens: ['codex', '-c', 'disable_paste_burst=true', '--search']
+        })
+      }
+    }
+  )
+
   it.each(['new-tab', 'default-no-callback'] as const)(
     'settles delayed saved-source decline through %s with the captured Terminal base and exact Args',
     async (consumer) => {
       store.settings = {
         ...store.settings,
-        ...CHAT_DEFAULT_SETTINGS,
+        nativeChatProviders: { codex: false },
         agentCmdOverrides: { codex: 'cx' }
       }
       await useActualAdmission()
@@ -144,6 +195,7 @@ describe('agent launch caller routing', () => {
         projectSourceControlActionLaunch(
           {
             agentId: 'codex',
+            surface: 'chat',
             agentArgs: `-c 'model="true"'`,
             launchPreferences: {
               agentId: 'codex',
@@ -178,7 +230,8 @@ describe('agent launch caller routing', () => {
                 agent: 'codex',
                 workspace: { kind: 'git-worktree', worktreeId: 'wt-1' },
                 launchOptions: projection.sessionOptions,
-                chatLaunchOptions: projection.chatSessionOptions
+                chatLaunchOptions: projection.chatSessionOptions,
+                preferredSurface: projection.preferredSurface
               }),
               hooks: {},
               declinedTerminal: { agentArgs: projection.agentArgs, launchPlatform: 'linux' }
@@ -221,7 +274,7 @@ describe('agent launch caller routing', () => {
   it('settles actual host-answer re-entry and Chat decline from the same captured source', async () => {
     store.settings = {
       ...store.settings,
-      ...CHAT_DEFAULT_SETTINGS,
+      nativeChatProviders: { codex: false },
       agentCmdOverrides: { codex: 'cx' }
     }
     mockHostCapabilities.mockReturnValue(null)
@@ -236,6 +289,8 @@ describe('agent launch caller routing', () => {
     > & { sessionOptions?: Record<string, string>; chatSessionOptions?: Record<string, string> } =
       projectSourceControlActionLaunch(
         {
+          agentId: 'codex',
+          surface: 'chat',
           agentArgs: `-c 'model="true"'`,
           launchPreferences: {
             agentId: 'codex',

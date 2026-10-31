@@ -1,4 +1,4 @@
-import type { AgentLaunchInputViews } from '../../../shared/agent-launch-choices'
+import type { DirectWorkItemLaunchInputs } from './launch-work-item-direct-types'
 import { ensureAgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { AppState } from '@/store/types'
@@ -92,7 +92,7 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
   sessionOptions?: Readonly<Record<string, string>>
   chatSessionOptions?: Readonly<Record<string, string>>
   resolveLaunchInputs?: LaunchWorkItemDirectArgs['resolveLaunchInputs']
-  preflightInputs?: AgentLaunchInputViews
+  preflightInputs?: DirectWorkItemLaunchInputs
   resolveAgentArgs?: (agent: TuiAgent) => string | null | undefined
   resolveSessionOptions?: (agent: TuiAgent) => Readonly<Record<string, string>> | undefined
   launchChoice?: LaunchWorkItemDirectArgs['launchChoice']
@@ -112,6 +112,7 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
 }): Promise<DirectWorkItemAgentLaunchPreparation> {
   const agentSelection = await resolveDirectWorkItemAgent({
     agentOverride: args.agentOverride,
+    preferredSurface: args.preflightInputs?.preferredSurface ?? args.launchChoice?.preferredSurface,
     agentLaunchPreferences: args.agentLaunchPreferences,
     worktreeId: args.worktreeId,
     repoHost: args.repoHost,
@@ -175,7 +176,7 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
             promptDelivery: args.promptDelivery,
             ...(sessionOptions ? { launchOptions: sessionOptions } : {}),
             ...(chatSessionOptions !== undefined ? { chatLaunchOptions: chatSessionOptions } : {}),
-            ...directLaunchSurfaceRequest(args.launchChoice)
+            ...directLaunchSurfaceRequest(args.launchChoice, inputs)
           })
   const structuredLaunch = plan?.route === 'structured-native-chat'
 

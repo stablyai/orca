@@ -86,6 +86,7 @@ export function launchAgentInNewTabWithOutcome(
   const route = routeNewTabLaunch(store, args, {
     agent,
     requestedSurface: args.requestedSurface,
+    preferredSurface: args.preferredSurface,
     selectedExecutionHostId: args.selectedExecutionHostId,
     workspace: { kind: workspaceKindForWorktreeId(worktreeId), worktreeId },
     prompt: trimmedPrompt,

@@ -6,6 +6,7 @@ import {
   AgentLaunchChoiceCancelled,
   acquireAgentLaunchChoices
 } from '@/lib/host-chat-program-acquisition'
+import { agentsOfferedForLaunch } from '@/lib/host-chat-program'
 import { ensureAgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
 import {
   buildAgentLaunchRouteInput,
@@ -92,9 +93,17 @@ export function useSavedSourceControlActionStart() {
         sourceControlLaunchAppliesAgentArgs({
           agent: isTuiAgent(agent) ? agent : null,
           worktreeId,
-          repoId: args.repoId
+          repoId: args.repoId,
+          preferredSurface: projection.preferredSurface
         })
-      const detectedAgents = appliesArgs ? [...(choices.detected ?? [])] : choices.offered
+      const detectedAgents = appliesArgs
+        ? [...(choices.detected ?? [])]
+        : agentsOfferedForLaunch(
+            useAppStore.getState(),
+            workspace,
+            choices.detected,
+            projection.preferredSurface ? agent : undefined
+          )
       const plan = buildSourceControlAgentDeliveryPlan({
         settings: args.settings,
         agentLaunchPreferences,

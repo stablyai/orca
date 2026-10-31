@@ -112,6 +112,8 @@ export function selectAgentLaunchRouteView(state: AppState): AgentLaunchRouteVie
 
 export type AgentLaunchRouteArgs = {
   agent: TuiAgent
+  /** Invocation preference; host admission can still fall back to Terminal. */
+  preferredSurface?: 'chat'
   workspace: ProspectiveWorkspace
   prompt?: string
   promptDelivery?: NativeChatLaunchPromptDelivery
@@ -209,6 +211,7 @@ export function buildAgentLaunchRouteInput(
   return {
     agent,
     settings: store.settings,
+    preferredSurface: args.preferredSurface,
     executionHostId,
     hostCapabilities,
     ...(parseExecutionHostId(executionHostId)?.kind === 'runtime'

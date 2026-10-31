@@ -167,7 +167,7 @@ const SelectedSourceControlActionAgentPicker = memo(
           sourceControlPickerDraft(
             selection,
             entry,
-            props.surface ?? entry.defaultSurface,
+            (props.agent === entry.agent ? props.surface : undefined) ?? entry.defaultSurface,
             preview.status === 'ready' ? preview.agent : null
           )
         }

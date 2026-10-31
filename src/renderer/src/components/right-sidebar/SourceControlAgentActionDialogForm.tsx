@@ -169,7 +169,7 @@ export function SourceControlAgentActionDialogForm({
       sourceControlPickerDraft(
         setupSelection,
         entry,
-        surfaceRows.surface ?? entry.defaultSurface,
+        (selectedAgent === entry.agent ? surfaceRows.surface : undefined) ?? entry.defaultSurface,
         selectedAgent
       ),
     [setupSelection, surfaceRows.surface, selectedAgent]

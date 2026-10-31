@@ -6,6 +6,10 @@ import type { TuiAgent } from '../../../shared/tui-agent'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import type { AgentLaunchChoice } from '@/lib/agent-menu-selection'
+import type { AgentSessionLaunchRequest } from './agent-session-launch-plan'
+
+export type DirectWorkItemLaunchInputs = AgentLaunchInputViews &
+  Pick<AgentSessionLaunchRequest, 'requestedSurface' | 'preferredSurface'>
 
 export type LaunchableWorkItem = {
   provider?: TaskProvider
@@ -37,13 +41,14 @@ export type LaunchWorkItemDirectArgs = {
   /** The saved choice for `agentOverride`; a chat seeds it and a terminal applies it as flags. */
   sessionOptions?: Readonly<Record<string, string>>
   chatSessionOptions?: Readonly<Record<string, string>>
-  resolveLaunchInputs?: (agent: TuiAgent) => AgentLaunchInputViews
+  resolveLaunchInputs?: (agent: TuiAgent) => DirectWorkItemLaunchInputs
   /** On terminals, a flag `agentArgs` sets itself wins over the inherited saved choice. */
   sessionOptionsYieldToAgentArgs?: true
   resolveAgentArgs?: (agent: TuiAgent) => string | null | undefined
   resolveSessionOptions?: (agent: TuiAgent) => Readonly<Record<string, string>> | undefined
   /** For `agentOverride`: a picked surface and host, or a saved replay's terminal. */
-  launchChoice?: Pick<AgentLaunchChoice, 'requestedSurface' | 'executionHostId'>
+  launchChoice?: Pick<AgentLaunchChoice, 'requestedSurface' | 'executionHostId'> &
+    Pick<AgentSessionLaunchRequest, 'preferredSurface'>
   promptDelivery?: 'draft' | 'submit-after-ready'
   launchPlatform?: NodeJS.Platform
 }

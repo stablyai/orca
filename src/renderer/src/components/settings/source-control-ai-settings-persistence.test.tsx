@@ -634,3 +634,81 @@ it.each([
     view.unmount()
   }
 )
+
+it.each([false, true])(
+  'initial Source Control selection follows Chat default %s without overriding a saved choice',
+  async (chatDefault) => {
+    setLocalRuntimeCapabilitiesForTests(RUNTIME_CAPABILITIES)
+    const settings = useAppStore.getState().settings!
+    useAppStore.setState({
+      localDetectedAgentIdsByContext: { host: ['claude', 'codex'] },
+      settings: {
+        ...settings,
+        nativeChatProviders: { claude: chatDefault, codex: chatDefault },
+        sourceControlAi: normalizeSourceControlAiSettings({
+          ...getDefaultSourceControlAiSettings(),
+          enabled: true,
+          actions: { fixChecks: { agentId: null, commandInputTemplate: 'current {basePrompt}' } }
+        })
+      }
+    })
+    const model = settingsModel()
+    const mount = () =>
+      render(
+        <TooltipProvider>
+          <GitPersistenceHarness model={model} />
+        </TooltipProvider>
+      )
+    let view = mount()
+    const row = () => {
+      const element = screen.getByText('Broken checks fixes').closest('.rounded-md')
+      if (!(element instanceof HTMLElement)) {
+        throw new Error('Missing action row')
+      }
+      return within(element)
+    }
+    const open = async () => {
+      await waitFor(() =>
+        expect(row().getByRole('button', { name: 'Select agent' })).toHaveProperty(
+          'disabled',
+          false
+        )
+      )
+      fireEvent.pointerDown(row().getByRole('button', { name: 'Select agent' }), {
+        button: 0,
+        ctrlKey: false
+      })
+    }
+    await open()
+    fireEvent.click(screen.getByRole('menuitem', { name: /^Codex/ }))
+    const initialSurface = chatDefault ? 'Chat' : 'Terminal'
+    await waitFor(() =>
+      expect(row().getByRole('radio', { name: initialSurface }).getAttribute('aria-checked')).toBe(
+        'true'
+      )
+    )
+    expect(useAppStore.getState().settings?.sourceControlAi?.actions?.fixChecks).toEqual({
+      agentId: 'codex',
+      commandInputTemplate: 'current {basePrompt}',
+      ...(chatDefault ? { surface: 'chat' } : {})
+    })
+    fireEvent.click(row().getByRole('radio', { name: chatDefault ? 'Terminal' : 'Chat' }))
+    const saved = {
+      agentId: 'codex',
+      commandInputTemplate: 'current {basePrompt}',
+      surface: chatDefault ? 'terminal' : 'chat'
+    }
+    await waitFor(() =>
+      expect(useAppStore.getState().settings?.sourceControlAi?.actions?.fixChecks).toEqual(saved)
+    )
+    view.unmount()
+    view = mount()
+    expect(
+      row()
+        .getByRole('radio', { name: chatDefault ? 'Terminal' : 'Chat' })
+        .getAttribute('aria-checked')
+    ).toBe('true')
+    expect(useAppStore.getState().settings?.sourceControlAi?.actions?.fixChecks).toEqual(saved)
+    view.unmount()
+  }
+)

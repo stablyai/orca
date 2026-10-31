@@ -29,6 +29,7 @@ import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useAppStore } from '@/store'
 import { resolveSourceControlActionRecipe } from '../../../shared/source-control-ai'
 import {
+  type SourceControlActionRecipe,
   DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES,
   renderSourceControlActionCommandTemplate
 } from '../../../shared/source-control-ai-actions'
@@ -38,10 +39,7 @@ import type { TuiAgent } from '../../../shared/tui-agent'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import { translate } from '@/i18n/i18n'
-import {
-  projectSourceControlActionLaunch,
-  resolveSourceControlActionRequestedSurface
-} from '../../../shared/source-control-action-launch-preferences'
+import { projectSourceControlActionLaunch } from '../../../shared/source-control-action-launch-preferences'
 
 type StartFixChecksAgentArgs = {
   repoId: string
@@ -63,7 +61,8 @@ async function resolveSavedAgentOverride(
   savedAgentId: () => TuiAgent | null | undefined,
   repo: (RepoHostFields & { id: string }) | null,
   workspace: ProspectiveWorkspace,
-  preferencesPromise: Promise<AgentLaunchPreferences>
+  preferencesPromise: Promise<AgentLaunchPreferences>,
+  recipe: SourceControlActionRecipe
 ): Promise<SavedAgentOverrideResult> {
   if (!savedAgentId()) {
     return { kind: 'launch-default' }
@@ -82,8 +81,15 @@ async function resolveSavedAgentOverride(
     return { kind: 'launch-default' }
   }
   const available = pendingAgents
-    ? resolveChecksActionAgent(current, 'fixChecks', repo?.id, workspace, detected, preferences) ===
-      savedAgent
+    ? resolveChecksActionAgent(
+        current,
+        'fixChecks',
+        repo?.id,
+        workspace,
+        detected,
+        preferences,
+        recipe
+      ) === savedAgent
     : isTuiAgentEnabled(savedAgent, preferences.disabledTuiAgents)
   if (!available) {
     toast.error(
@@ -97,7 +103,10 @@ async function resolveSavedAgentOverride(
   return { kind: 'agent', agent: savedAgent }
 }
 
-async function pickExistingWorktreeAgent(worktreeId: string): Promise<TuiAgent | null> {
+async function pickExistingWorktreeAgent(
+  worktreeId: string,
+  recipe: SourceControlActionRecipe
+): Promise<TuiAgent | null> {
   const workspace = worktreeLaunchWorkspace(worktreeId)
   const [choices, preferences] = await Promise.all([
     acquireAgentLaunchChoices(workspace, () =>
@@ -113,7 +122,8 @@ async function pickExistingWorktreeAgent(worktreeId: string): Promise<TuiAgent |
     repoId,
     workspace,
     choices.detected,
-    preferences
+    preferences,
+    recipe
   )
   if (!agent) {
     const repo = state.repos.find((entry) => entry.id === repoId)
@@ -195,7 +205,7 @@ async function launchFixChecksAgent(args: StartFixChecksAgentArgs): Promise<bool
       )
       return false
     }
-    const agent = await pickExistingWorktreeAgent(targetWorktreeId)
+    const agent = await pickExistingWorktreeAgent(targetWorktreeId, recipe)
     const prompt = agent ? commandInput() : ''
     if (!agent || !prompt) {
       return false
@@ -275,7 +285,7 @@ async function launchFixChecksAgent(args: StartFixChecksAgentArgs): Promise<bool
   const workspace = typeof target === 'string' ? worktreeLaunchWorkspace(target) : target.workspace
   const preferences = ensureAgentLaunchPreferences(store, workspace)
   const [agentOverride, agentLaunchPreferences] = await Promise.all([
-    resolveSavedAgentOverride(savedAgentId, repo, workspace, preferences),
+    resolveSavedAgentOverride(savedAgentId, repo, workspace, preferences, recipe),
     preferences
   ])
   const prompt = agentOverride.kind === 'blocked' ? '' : commandInput()
@@ -295,17 +305,7 @@ async function launchFixChecksAgent(args: StartFixChecksAgentArgs): Promise<bool
         renderedPrompt: prompt,
         settings: store.settings
       }),
-    ...(agentOverride.kind === 'agent'
-      ? {
-          agentOverride: agentOverride.agent,
-          launchChoice: {
-            requestedSurface: resolveSourceControlActionRequestedSurface(
-              recipe,
-              agentOverride.agent
-            )
-          }
-        }
-      : {}),
+    ...(agentOverride.kind === 'agent' ? { agentOverride: agentOverride.agent } : {}),
     openModalFallback: args.openModalFallback
   })
 }

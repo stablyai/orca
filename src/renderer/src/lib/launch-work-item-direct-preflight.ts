@@ -1,4 +1,4 @@
-import type { AgentLaunchInputViews } from '../../../shared/agent-launch-choices'
+import type { DirectWorkItemLaunchInputs } from './launch-work-item-direct-types'
 import { readAgentLaunchPreferencesForWorkspace } from '@/components/settings/use-host-agent-launch-preferences'
 import { useAppStore, type AppState } from '@/store'
 import {
@@ -106,7 +106,7 @@ export async function planDirectWorkItemLaunch(args: {
   resolveSessionOptions?: (agent: TuiAgent) => Readonly<Record<string, string>> | undefined
   sessionOptions?: Readonly<Record<string, string>>
   chatSessionOptions?: Readonly<Record<string, string>>
-  launchInputs?: AgentLaunchInputViews
+  launchInputs?: DirectWorkItemLaunchInputs
   launchChoice?: LaunchWorkItemDirectArgs['launchChoice']
 }) {
   const { prospectiveAgent, projectContext } = args
@@ -134,17 +134,24 @@ export async function planDirectWorkItemLaunch(args: {
     promptDelivery: args.promptDelivery,
     ...(sessionOptions ? { launchOptions: sessionOptions } : {}),
     ...(chatSessionOptions !== undefined ? { chatLaunchOptions: chatSessionOptions } : {}),
-    ...directLaunchSurfaceRequest(args.launchChoice)
+    ...directLaunchSurfaceRequest(args.launchChoice, args.launchInputs)
   }
   await awaitStructuredRouteHostAnswer(useAppStore.getState(), request, 3000)
   return planAgentSessionLaunch(useAppStore.getState(), request)
 }
 
-/** A picked surface stays explicit through both planning sites; none follows the settings route. */
+/** Preserve explicit operations and captured saved preferences through both planning sites. */
 export function directLaunchSurfaceRequest(
-  choice: LaunchWorkItemDirectArgs['launchChoice']
-): Pick<AgentSessionLaunchRequest, 'requestedSurface' | 'selectedExecutionHostId'> {
+  choice: LaunchWorkItemDirectArgs['launchChoice'],
+  inputs?: Pick<AgentSessionLaunchRequest, 'requestedSurface' | 'preferredSurface'>
+): Pick<
+  AgentSessionLaunchRequest,
+  'requestedSurface' | 'preferredSurface' | 'selectedExecutionHostId'
+> {
+  const preferredSurface = inputs?.preferredSurface ?? choice?.preferredSurface
   return {
+    ...(preferredSurface ? { preferredSurface } : {}),
+    ...(inputs?.requestedSurface ? { requestedSurface: inputs.requestedSurface } : {}),
     ...(choice?.requestedSurface ? { requestedSurface: choice.requestedSurface } : {}),
     ...(choice?.executionHostId ? { selectedExecutionHostId: choice.executionHostId } : {})
   }

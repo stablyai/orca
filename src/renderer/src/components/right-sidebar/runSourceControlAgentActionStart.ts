@@ -31,7 +31,7 @@ import { admitSourceControlRecovery } from './source-control-recovery-admission'
 export type RunSourceControlAgentActionStartArgs = {
   selectedAgent: TuiAgent
   trimmedCommandInput: string
-  /** The picker's choice: a deliberate surface stays explicit, a saved replay requests terminal only. */
+  /** Deliberate surface operations remain distinct from saved route preferences. */
   launchChoice?: AgentLaunchChoice
   recipe: SelectedSourceControlActionRecipe
   saveTargetValue: string
@@ -56,6 +56,7 @@ export type RunSourceControlAgentActionStartArgs = {
     /** The action's saved choice, on either route. */
     sessionOptions?: Readonly<Record<string, string>>
     chatSessionOptions?: Readonly<Record<string, string>>
+    preferredSurface?: 'chat'
     launchChoice?: AgentLaunchChoice
     sessionOptionsYieldToAgentArgs?: true
   }) => boolean | Promise<boolean>

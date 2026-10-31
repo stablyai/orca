@@ -762,6 +762,8 @@ it.each(['claude', 'codex'] as const)(
     f.view.unmount()
     const reopened = f.mount()
     expect(f.controller.recipe).toMatchObject({ ...recipe, surface: 'chat' })
+    expect(screen.getByRole('radio', { name: 'Chat' }).getAttribute('aria-checked')).toBe('true')
+    expect(f.controller.agentArgsApply).toBe(false)
     reopened.unmount()
   }
 )
