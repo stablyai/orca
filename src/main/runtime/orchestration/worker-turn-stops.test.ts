@@ -295,7 +295,7 @@ describe('chat worker turn stops', () => {
 
   it('reports a finished turn and leaves failures to the chat error escalation', () => {
     const ctx = setup(formatOrcaSessionAddress(CHAT_SESSION))
-    const report = chatWorkerTurnStopReporter(ctx.deps)
+    const report = chatWorkerTurnStopReporter(ctx.deps, (run) => run())
     const status = () => ({ status: 'idle' as const, lastAssistantMessage: 'Read the files.' })
     report(completion('failure'), status)
     expect(ctx.mail()).toHaveLength(0)
@@ -303,6 +303,36 @@ describe('chat worker turn stops', () => {
     report(completion('success'), status)
     expect(ctx.mail()).toHaveLength(1)
     expect(ctx.mail()[0].body).toContain('Read the files.')
+  })
+})
+
+describe('a chat worker that reports and is continued at once', () => {
+  it('does not blame its follow-up for the turn that reported, but does for a stop of its own', () => {
+    const ctx = setup(formatOrcaSessionAddress(CHAT_SESSION))
+    const timers: (() => void)[] = []
+    const report = chatWorkerTurnStopReporter(ctx.deps, (run) => timers.push(run))
+    const scope = {
+      executionHostId: LOCAL_EXECUTION_HOST_ID,
+      wslDistro: null,
+      workspaceId: 'repo::/tmp/wt',
+      workspaceKind: 'git-worktree' as const
+    }
+    const finished = (turnId: string): AgentSessionTurnCompletionEvent => ({
+      type: 'completion',
+      completion: { scope, sessionId: CHAT_SESSION, turnId, outcome: 'success', completedAt: 1 }
+    })
+    // The turn that reported ends with the follow-up's task queued; the host starts it right after.
+    let status: 'idle' | 'working' = 'idle'
+    const read = () => ({ status, lastAssistantMessage: 'I sent worker_done.' })
+    report(finished('turn-reported'), read)
+    status = 'working'
+    timers.shift()!()
+    expect(ctx.mail()).toHaveLength(0)
+
+    status = 'idle'
+    report(finished('turn-follow-up'), () => ({ status, lastAssistantMessage: 'Nothing to do.' }))
+    timers.shift()!()
+    expect(ctx.mail()).toMatchObject([{ subject: 'Worker stopped without reporting' }])
   })
 })
 
