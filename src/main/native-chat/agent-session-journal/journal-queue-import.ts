@@ -1,3 +1,4 @@
+import type Database from '../../sqlite/sync-database'
 import { journalInputOrder } from './journal-input-order'
 // Adopt legacy cards and delete their rows atomically, using the same fold before and after import.
 // Retry failed bulk import on next open; do not loop while the host is running.
@@ -258,12 +259,25 @@ export class LegacyQueuedCards {
   }
 
   private read(): QueuedMessageRow[] {
-    return this.deps
-      .database()
-      .db.prepare(
-        `SELECT ${LEGACY_QUEUED_MESSAGE_COLUMNS} FROM queued_messages WHERE session_id = ? ORDER BY position ASC`
-      )
-      .all(this.deps.sessionId)
-      .flatMap((row) => readStoredQueuedMessageRow(row) ?? [])
+    return readLegacyRows(this.deps.database().db, this.deps.sessionId)
   }
+}
+
+export function readJournalLegacyCards(
+  db: Database.Database,
+  state: JournalReducerState
+): QueuedMessageRow[] {
+  return readLegacyRows(db, state.sessionId).flatMap((row) => {
+    const change = legacyQueuedChange(state, row)
+    return change ? [queuedCardFromChange(state, row.messageId, change)] : []
+  })
+}
+
+function readLegacyRows(db: Database.Database, sessionId: string): QueuedMessageRow[] {
+  return db
+    .prepare(
+      `SELECT ${LEGACY_QUEUED_MESSAGE_COLUMNS} FROM queued_messages WHERE session_id = ? ORDER BY position ASC`
+    )
+    .all(sessionId)
+    .flatMap((row) => readStoredQueuedMessageRow(row) ?? [])
 }

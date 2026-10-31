@@ -1,3 +1,4 @@
+import { journalInputOrder } from './journal-input-order'
 import { detachJournalNativePrefix, restoreJournalNativeState } from './journal-input-conversion'
 import type Database from '../../sqlite/sync-database'
 import type { JournalReducerState } from './journal-reducer'
@@ -57,6 +58,7 @@ export function persistJournalOutcomeRows(
 ): { state: JournalReducerState; adopt: () => JournalReducerState } {
   let scalar = state.lastSequence === 0 ? {} : journalOutcomeScalars(state)
   const transition = isolateJournalTransition(state, () => undefined)
+  journalInputOrder(transition.state).introduceOverlays(transition.state)
   const previous = db.prepare(`SELECT ordinal, deleted FROM journal_outcomes
     WHERE generation = ? AND field = ? AND entry_key = ? ORDER BY seq DESC LIMIT 1`)
   const insert = db.prepare(`INSERT INTO journal_outcomes

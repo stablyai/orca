@@ -113,7 +113,10 @@ export class AgentSessionJournal {
         this.state = loaded.state
         this.onCommitted?.()
       },
-      prepare: (db, rows, savedAt) => this.projection.prepare(db, rows, savedAt),
+      prepare: (db, rows, savedAt) => {
+        this.queuedMessages.inputState()
+        return this.projection.prepare(db, rows, savedAt)
+      },
       commit: (rows) => {
         this.onCommitted?.(rows)
         this.projection.verify()

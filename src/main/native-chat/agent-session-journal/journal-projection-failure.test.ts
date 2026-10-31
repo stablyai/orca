@@ -1,3 +1,4 @@
+import { readJournalLegacyCards } from './journal-queue-import'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -110,6 +111,17 @@ it('adopts nothing on an outcome, coverage, receipt, outer-abort or COMMIT failu
   expect(rig.state().submissions.has('preserved')).toBe(true)
   expect(stops.latest()?.settle).toBe(settle)
   expectProjectionMatches(database, rig.state())
+  database.db
+    .prepare(`INSERT INTO queued_messages
+    (session_id,message_id,position,body_json,fingerprint,created_at,host_instance,state)
+    VALUES (?,?,?,?,?,0,'legacy','waiting')`)
+    .run(sessionId, 'overlay', 2, JSON.stringify(user), 'overlay')
+  const beforeRead = encodeJournalState(rig.state())
+  journalInputOrder(rig.state()).overlay(
+    rig.state(),
+    readJournalLegacyCards(database.db, rig.state())
+  )
+  expect(encodeJournalState(rig.state())).toEqual(beforeRead)
   const saved = encodeJournalState(rig.state())
   const live = rig.state()
   const version = journalInputOrder(live).version()
@@ -134,6 +146,7 @@ it('adopts nothing on an outcome, coverage, receipt, outer-abort or COMMIT failu
       receipt
     )
   const unchanged = () => {
+    expect(live.inputCards.has('overlay')).toBe(false)
     expect(journalInputOrder(live).version()).toBe(version)
     expect(journalInputOrder(live).lineage.clock).toBe(clock)
     expect(
@@ -192,6 +205,18 @@ it('adopts nothing on an outcome, coverage, receipt, outer-abort or COMMIT failu
   await attempt('retry')
   expect(live.inputEntries.has('legacy')).toBe(false)
   expect(live.inputEntries.has('retry')).toBe(true)
+  expect(live.inputCards.has('overlay')).toBe(true)
+  const overlayWrites = database.db
+    .prepare(
+      "SELECT seq,value_json FROM journal_outcomes WHERE field='inputCards' AND entry_key=? AND deleted=0 ORDER BY seq"
+    )
+    .all(JSON.stringify('overlay'))
+  // Both rows touch the introduced object after the legacy-baseline cleanup in the first row.
+  expect(overlayWrites.map((row) => row.seq)).toEqual([live.lastSequence - 1, live.lastSequence])
+  expect(overlayWrites.map((row) => row.value_json)).toEqual(
+    Array(2).fill(JSON.stringify(['overlay', live.inputCards.get('overlay')]))
+  )
+
   expect(receipt.committed).toHaveBeenCalledTimes(2)
   expectProjectionMatches(database, live)
   const first = rig.state().lastSequence + 1

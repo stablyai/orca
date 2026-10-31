@@ -116,11 +116,10 @@ export class JournalInputOrder {
     return this.links.to(id)
   }
   overlay(state: JournalReducerState, rows: readonly QueuedMessageRow[]): void {
-    for (const id of this.cards.overlay(state, rows)) {
-      if (!this.reconstructing && this.legacyPlaces === 0) {
-        this.lineage.cards.delete(id)
-      }
-    }
+    this.cards.overlay(state, rows)
+  }
+  introduceOverlays(state: JournalReducerState): void {
+    this.cards.introduceOverlays((card) => this.queueChanged(state, undefined, card))
   }
 
   markOpeningRecovery(): void {

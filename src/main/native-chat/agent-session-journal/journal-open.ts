@@ -1,3 +1,4 @@
+import { readJournalLegacyCards } from './journal-queue-import'
 import { journalInputOrder } from './journal-input-order'
 // Replay live epochs without rewriting history; damage/newer rows fail load and remain on disk.
 
@@ -103,6 +104,9 @@ function foldJournalFromState(
     if (entry.seq > through || !fold.add(entry)) {
       break
     }
+  }
+  if (!deferNativeCleanup) {
+    journalInputOrder(state).overlay(state, readJournalLegacyCards(db, state))
   }
   return fold.finish()
 }

@@ -1,3 +1,4 @@
+import { readJournalLegacyCards } from './journal-queue-import'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import type { JournalReducerState } from './journal-reducer'
 import { initializeJournalInputOrder, journalInputOrder } from './journal-input-order'
@@ -80,6 +81,7 @@ export function restoreJournalNativeState(
   )
   owner.beginReconstruction()
   owner.restore(state)
+  owner.overlay(state, readJournalLegacyCards(db, state))
   owner.finishReconstruction(state)
 }
 

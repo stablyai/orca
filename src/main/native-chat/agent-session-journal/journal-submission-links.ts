@@ -30,8 +30,8 @@ export class JournalSubmissionLinks {
         entries.set(id, entry)
         this.linked.set(link, entries)
         this.ids.set(id, link)
-        this.revision++
       }
+      this.revision++
     }
   }
 }
