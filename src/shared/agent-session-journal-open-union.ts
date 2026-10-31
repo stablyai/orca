@@ -18,10 +18,10 @@ export function knownTags(union: z.ZodDiscriminatedUnion): ReadonlySet<string> {
   )
 }
 
-const fallbacks = new WeakSet<object>()
+const fallbacks = new WeakSet<z.core.$ZodType>()
 
 /** The arm that keeps an unknown tag; saved-outcome storage drops it, so an unknown tag refuses. */
-export function isJournalOpenUnionFallback(schema: object): boolean {
+export function isJournalOpenUnionFallback(schema: z.core.$ZodType): boolean {
   return fallbacks.has(schema)
 }
 
