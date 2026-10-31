@@ -183,8 +183,22 @@ jobs:
                 -f tag_name="$tag" \
                 -f target_commitish="$GITHUB_SHA" \
                 -f previous_tag_name="$previous_tag" \
-                --jq .body > "$notes_file"; then
+                --jq .body > "$notes_file.raw"; then
                 : > "$notes_file"
+              elif node "$GITHUB_WORKSPACE/config/scripts/group-android-release-notes.mjs" \
+                < "$notes_file.raw" > "$notes_file"; then
+                # Why: grouping adds headings, so notes that fit the body cap flat can
+                # overflow it grouped — truncation would cut entries off the end. The
+                # flat body always fits when the grouped one doesn't, and loses nothing.
+                grouped_bytes="$(wc -c < "$notes_file" | tr -d ' ')"
+                raw_bytes="$(wc -c < "$notes_file.raw" | tr -d ' ')"
+                if [ "$grouped_bytes" -gt 125000 ] && [ "$raw_bytes" -le 125000 ]; then
+                  mv "$notes_file.raw" "$notes_file"
+                fi
+              else
+                # Why: a grouping bug must not ship a bare release — fall back to
+                # the flat generated notes rather than an empty body.
+                mv "$notes_file.raw" "$notes_file"
               fi
             fi
             if [ ! -s "$notes_file" ]; then
