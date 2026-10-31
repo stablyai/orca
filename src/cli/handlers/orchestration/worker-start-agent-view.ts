@@ -35,7 +35,6 @@ type WorkerStartFields = {
   taskId: string
   runId?: string
   runCreated?: true
-  objective?: string
   state: string
   agent?: string
   model?: string
@@ -65,7 +64,6 @@ export const WORKER_START_VIEW: OrchestrationAgentView<WorkerStartAgentReceipt, 
         taskId: value.taskId,
         runId: value.runId ?? value.run?.id,
         runCreated: value.run?.created ? true : undefined,
-        objective: value.run?.created ? value.run.objective : undefined,
         state: value.state,
         agent: effective?.agent ?? requested?.agent ?? undefined,
         // Null unless requested or chosen by a fallback.

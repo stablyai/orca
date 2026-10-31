@@ -410,4 +410,15 @@ describe('orchestration agent views', () => {
     expect((await show(undefined)).stdout).toContain('waitingOnHuman=unknown')
     expect((await show({ agentWait: null })).stdout).not.toContain('waitingOnHuman')
   })
+
+  it('does not echo the Run objective the caller just sent', async () => {
+    const { stdout } = await run(
+      'worker-start',
+      [['spec', 'Review add']],
+      { ...OLDER_RUNTIME_START, run: { id: 'run_1', objective: 'Review add', created: true } },
+      true
+    )
+    expect(JSON.parse(stdout).result).toMatchObject({ runId: 'run_1', runCreated: true })
+    expect(stdout).not.toContain('Review add')
+  })
 })
