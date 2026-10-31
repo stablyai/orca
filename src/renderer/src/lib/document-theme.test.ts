@@ -278,6 +278,29 @@ describe('applyPluginAppTheme', () => {
     })
   })
 
+  it('checks omitted surfaces as main.css paints them in this mode', () => {
+    // A bright hue makes its 20% added-line tint unreadable, so the hue itself is dropped.
+    const dim = {
+      '--background': '#333333',
+      '--editor-surface': '#333333',
+      '--foreground': '#cccccc'
+    }
+    expect(painted({ ...dim, '--diff-added': '#ffffff' })).toEqual(dim)
+    // Bubble text is chat's mixed foreground, not raw --foreground.
+    const black = { '--background': '#000000', '--foreground': '#ffffff' }
+    expect(painted({ ...black, '--chat-user-message': '#727272' })).toEqual(black)
+    // Dark badges paint --accent at 80%.
+    const sidebar = { '--worktree-sidebar': '#000000', '--worktree-sidebar-foreground': '#ffffff' }
+    expect(
+      painted({
+        ...sidebar,
+        '--accent': '#ffffff',
+        '--accent-foreground': '#000000',
+        '--host-badge-foreground': '#767676'
+      })
+    ).toEqual({ ...sidebar, '--accent': '#ffffff', '--accent-foreground': '#000000' })
+  })
+
   it('keeps the startup cache tied to the theme id and revision until cleared', () => {
     const storage = memoryStorage()
     applyPluginAppTheme(theme({ '--background': '#101018' }), { ...options(), storage })

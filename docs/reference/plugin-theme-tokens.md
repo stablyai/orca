@@ -45,7 +45,7 @@ Every key an app theme may set in `tokens` (see [plugin themes](plugin-themes.md
 | `--worktree-sidebar-ring` | Focus rings in the workspace sidebar | no | same as `--sidebar-ring` |
 | `--worktree-sidebar-active` | The current workspace row; may be translucent, it paints over `--worktree-sidebar` | no | a translucent wash of `--worktree-sidebar-foreground` |
 | `--worktree-sidebar-active-border` | Border of the current workspace row | no | a mix of `--worktree-sidebar-border` |
-| `--host-badge` | Execution-host badge on workspaces (for example `Local`, an SSH host) | no | same as `--accent` |
+| `--host-badge` | Execution-host badge on workspaces (for example `Local`, an SSH host) | no | light: same as `--accent`; dark: `--accent` at 80% opacity |
 | `--host-badge-foreground` | Text on `--host-badge` | no | same as `--muted-foreground` |
 | `--tab-bar` | Strip behind tabs, including the title bar when tabs sit in it | no | same as `--card` |
 | `--tab-active` | Active tab | no | light: same as `--tab-bar`; dark: `--foreground` mixed 6% into `--tab-bar` |
@@ -58,13 +58,13 @@ Every key an app theme may set in `tokens` (see [plugin themes](plugin-themes.md
 | `--chat-user-message` | Your messages in chat; may be translucent, it paints over the chat | no | `--foreground` mixed lightly into the chat background |
 | `--text-link` | Links in Markdown previews and editors | no | Orca's built-in color |
 | `--diff-added` | Added-line hue: Monaco overview ruler and chat diff text | no | Orca's built-in color |
-| `--diff-added-background` | Added lines in diffs | no | a translucent tint of `--diff-added` |
-| `--diff-added-emphasis` | Added characters within a changed line | no | a translucent tint of `--diff-added` |
-| `--diff-added-gutter` | Gutter beside added lines | no | a translucent tint of `--diff-added` |
+| `--diff-added-background` | Added lines in diffs | no | light: `--diff-added` at 12% opacity; dark: `--diff-added` at 20% opacity |
+| `--diff-added-emphasis` | Added characters within a changed line | no | light: `--diff-added` at 15% opacity; dark: `--diff-added` at 20% opacity |
+| `--diff-added-gutter` | Gutter beside added lines | no | light: `--diff-added` at 24% opacity; dark: `--diff-added` at 32% opacity |
 | `--diff-removed` | Removed-line hue: Monaco overview ruler and chat diff text | no | Orca's built-in color |
-| `--diff-removed-background` | Removed lines in diffs | no | a translucent tint of `--diff-removed` |
-| `--diff-removed-emphasis` | Removed characters within a changed line | no | a translucent tint of `--diff-removed` |
-| `--diff-removed-gutter` | Gutter beside removed lines | no | a translucent tint of `--diff-removed` |
+| `--diff-removed-background` | Removed lines in diffs | no | light: `--diff-removed` at 12% opacity; dark: `--diff-removed` at 20% opacity |
+| `--diff-removed-emphasis` | Removed characters within a changed line | no | light: `--diff-removed` at 15% opacity; dark: `--diff-removed` at 20% opacity |
+| `--diff-removed-gutter` | Gutter beside removed lines | no | light: `--diff-removed` at 24% opacity; dark: `--diff-removed` at 32% opacity |
 | `--git-decoration-added` | Added files in the file explorer and source control | no | Orca's built-in color |
 | `--git-decoration-modified` | Modified files | no | Orca's built-in color |
 | `--git-decoration-deleted` | Deleted files | no | Orca's built-in color |
