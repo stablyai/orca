@@ -6,7 +6,8 @@ import {
   source,
   projectKey,
   seed,
-  oldDetails
+  oldDetails,
+  type TaskRefreshCalls
 } from './github-task-refresh-data.test-fixture'
 
 // @vitest-environment happy-dom
@@ -18,7 +19,7 @@ import { createRoot, type Root } from 'react-dom/client'
 
 import { useStore, type StoreApi } from 'zustand'
 
-import { afterEach, beforeEach, expect, vi } from 'vitest'
+import { afterEach, beforeEach, expect, vi, type Mock } from 'vitest'
 
 import type { AppState } from '@/store/types'
 
@@ -156,13 +157,13 @@ let openedItem = seed,
 let root: Root,
   container: HTMLDivElement,
   pages: (readonly GitHubWorkItem[] | null)[],
-  useItem = vi.fn()
-const direct = vi.fn(),
-  update = vi.fn(),
-  list = vi.fn(),
-  issueType = vi.fn(),
-  projectRead = vi.fn(),
-  postComment = vi.fn()
+  useItem: Mock<(item: GitHubWorkItem) => void> = vi.fn<(item: GitHubWorkItem) => void>()
+const direct: Mock<TaskRefreshCalls['direct']> = vi.fn<TaskRefreshCalls['direct']>(),
+  update: Mock<TaskRefreshCalls['update']> = vi.fn<TaskRefreshCalls['update']>(),
+  list: Mock<TaskRefreshCalls['list']> = vi.fn<TaskRefreshCalls['list']>(),
+  issueType: Mock<TaskRefreshCalls['issueType']> = vi.fn<TaskRefreshCalls['issueType']>(),
+  projectRead: Mock<TaskRefreshCalls['projectRead']> = vi.fn<TaskRefreshCalls['projectRead']>(),
+  postComment: Mock<TaskRefreshCalls['postComment']> = vi.fn<TaskRefreshCalls['postComment']>()
 function fixture(n = 1) {
   const prepared = createTaskRefreshStore(n)
   store = prepared.store

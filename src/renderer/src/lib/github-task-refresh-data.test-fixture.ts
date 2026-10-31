@@ -15,7 +15,11 @@ import {
 
 import type { GitHubAssignableUser } from '../../../shared/github/pull-request-types'
 
-import { vi } from 'vitest'
+import { vi, type Mock } from 'vitest'
+
+import type { GithubWorkItemApi } from '../../../preload/api/github-work-item-api'
+import type { GithubPullRequestApi } from '../../../preload/api/github-pull-request-api'
+import type { RepositoryApi } from '../../../preload/api/repository-api'
 
 // @vitest-environment happy-dom
 import type { Repo } from '../../../shared/repo-types'
@@ -137,6 +141,50 @@ export const resume = buildTaskPageGitHubResumeContextKey({
   pageSize: 30
 })
 
+export type TaskRefreshCalls = {
+  direct: GithubWorkItemApi['workItemDetails']
+  update: (
+    args: (
+      | Parameters<GithubWorkItemApi['updateIssue']>[0]
+      | Parameters<GithubPullRequestApi['updatePRState']>[0]
+      | Parameters<GithubPullRequestApi['mergePR']>[0]
+      | Parameters<GithubWorkItemApi['updateIssueBySlug']>[0]
+    ) & { updates?: Parameters<GithubWorkItemApi['updateIssue']>[0]['updates'] }
+  ) => Promise<{ ok: boolean; error?: string | { type: string; message: string } }>
+  // List/comment gates deliberately hold opaque payloads until the test resolves them.
+  list: (
+    args: Parameters<GithubWorkItemApi['listWorkItems']>[0] & { repoId: string }
+  ) => Promise<unknown>
+  issueType: (
+    args: Parameters<GithubWorkItemApi['updateIssueTypeBySlug']>[0]
+  ) => Promise<{ ok: boolean; error?: { type: string; message: string } }>
+  projectRead: GithubWorkItemApi['getProjectViewTable']
+  postComment: (args: Parameters<GithubWorkItemApi['addIssueComment']>[0]) => Promise<unknown>
+}
+export type TaskRefreshApiMocks = { [K in keyof TaskRefreshCalls]: Mock<TaskRefreshCalls[K]> }
+export type TaskRefreshApi = {
+  gh: {
+    viewer: Mock<() => Promise<{ login: string }>>
+    workItemDetails: TaskRefreshApiMocks['direct']
+    updateIssue: TaskRefreshApiMocks['update']
+    updatePRState: TaskRefreshApiMocks['update']
+    mergePR: TaskRefreshApiMocks['update']
+    updateIssueBySlug: TaskRefreshApiMocks['update']
+    addIssueComment: TaskRefreshApiMocks['postComment']
+    listWorkItems: TaskRefreshApiMocks['list']
+    countWorkItems: Mock<
+      (args: Parameters<GithubWorkItemApi['countWorkItems']>[0]) => Promise<number>
+    >
+    getProjectViewTable: TaskRefreshApiMocks['projectRead']
+    updateIssueTypeBySlug: TaskRefreshApiMocks['issueType']
+  }
+  repos: {
+    update: Mock<(args: Parameters<RepositoryApi['update']>[0]) => Promise<void>>
+  }
+  shell: { openUrl: Mock<(url: string) => void> }
+  ui: { writeClipboardText: Mock<(text: string) => Promise<void>> }
+}
+
 export function createTaskRefreshApi({
   direct,
   update,
@@ -144,13 +192,10 @@ export function createTaskRefreshApi({
   issueType,
   projectRead,
   postComment
-}: Record<
-  'direct' | 'update' | 'list' | 'issueType' | 'projectRead' | 'postComment',
-  ReturnType<typeof vi.fn>
->) {
+}: TaskRefreshApiMocks): TaskRefreshApi {
   return {
     gh: {
-      viewer: vi.fn().mockResolvedValue({ login: 'alice' }),
+      viewer: vi.fn<() => Promise<{ login: string }>>().mockResolvedValue({ login: 'alice' }),
       workItemDetails: direct,
       updateIssue: update,
       updatePRState: update,
@@ -158,13 +203,21 @@ export function createTaskRefreshApi({
       updateIssueBySlug: update,
       addIssueComment: postComment,
       listWorkItems: list,
-      countWorkItems: vi.fn().mockResolvedValue(0),
+      countWorkItems: vi
+        .fn<(args: Parameters<GithubWorkItemApi['countWorkItems']>[0]) => Promise<number>>()
+        .mockResolvedValue(0),
       getProjectViewTable: projectRead,
       updateIssueTypeBySlug: issueType
     },
-    repos: { update: vi.fn().mockResolvedValue(undefined) },
-    shell: { openUrl: vi.fn() },
-    ui: { writeClipboardText: vi.fn().mockResolvedValue(undefined) }
+    repos: {
+      update: vi
+        .fn<(args: Parameters<RepositoryApi['update']>[0]) => Promise<void>>()
+        .mockResolvedValue(undefined)
+    },
+    shell: { openUrl: vi.fn<(url: string) => void>() },
+    ui: {
+      writeClipboardText: vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
+    }
   }
 }
 export function confirmListForTest(
