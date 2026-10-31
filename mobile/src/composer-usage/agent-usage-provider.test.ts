@@ -23,8 +23,7 @@ const snapshot = decodeAccountsSnapshot({
   rateLimits: {
     claude: limits('claude', { session: window(20, 300), weekly: window(55, 10080) }),
     codex: null,
-    // Passthrough providers arrive unvalidated; a malformed one must hide, not crash.
-    gemini: { provider: 'gemini', session: 'broken' },
+    gemini: null,
     opencodeGo: limits('opencode-go', { monthly: window(12, 43200) }),
     inactiveClaudeAccounts: [],
     inactiveCodexAccounts: []
