@@ -19,6 +19,7 @@ import {
 } from '@/lib/http-link-routing'
 import { openWorkspaceBrowserTabForLink } from '@/lib/workspace-browser-tab-open'
 import { AgentTerminalPreview } from './AgentTerminalPreview'
+import { terminalPreviewApiFor } from './terminal-preview-api'
 import { AgentKanbanBoard } from './AgentKanbanBoard'
 import { AgentTerminalPanel } from './AgentTerminalDialog'
 import { handleTerminalHttpLink } from '@/components/terminal-pane/terminal-url-link-hit-testing'
@@ -26,7 +27,7 @@ import type { DashboardPreviewLinkSource } from './dashboard-preview-http-action
 import { installDashboardPreviewLinkInteraction } from './dashboard-preview-link-interaction'
 import type { DashboardCard } from '../../../../shared/dashboard-snapshot'
 
-const mocks = vi.hoisted(() => ({ getState: vi.fn() }))
+const mocks = vi.hoisted(() => ({ getState: vi.fn(), subscribe: vi.fn() }))
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(
     (selector: (state: ReturnType<typeof mocks.getState>) => unknown) => selector(mocks.getState()),
@@ -69,7 +70,8 @@ beforeEach(() => {
     }
   }))
   mocks.getState.mockImplementation(() => store.getState())
-  registerHttpLinkStoreAccessor(() => store.getState(), store.subscribe)
+  mocks.subscribe.mockImplementation((listener) => vi.fn(store.subscribe(listener)))
+  registerHttpLinkStoreAccessor(() => store.getState(), mocks.subscribe)
   registerWorkspaceHttpLinkBrowserOpener(async (request) => {
     if (!request.linkContext) {
       throw new Error('Expected a genuine link request')
@@ -166,10 +168,9 @@ function pointer(screen: HTMLElement, type: string, options: MouseEventInit = {}
   return event
 }
 async function output(data: string, ptyId = 'pty-1') {
+  const ack = vi.spyOn(terminalPreviewApiFor(ptyId), 'ack').mockClear()
   act(() => onData?.({ type: 'data', ptyId, data, bytes: data.length }))
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 30))
-  })
+  await waitFor(() => expect(ack).toHaveBeenCalledExactlyOnceWith(ptyId, data.length))
 }
 const osc = `\x1b]8;;${URL_TO_OPEN}\x07hidden label\x1b]8;;\x07`
 
@@ -223,7 +224,7 @@ it.each(['actions', 'open'] as const)(
     pointer(screen, 'mousemove', { buttons: 0 })
     await waitFor(() => expect(terminal.getAttribute('title')).toBe(URL_TO_OPEN))
     await output('\x1b[3;1Hprogress 2')
-    expect(view.container.textContent).toContain('progress 2')
+    await waitFor(() => expect(view.container.textContent).toContain('progress 2'))
     expect(terminal.getAttribute('title')).toBe(URL_TO_OPEN)
     // Keep the pointer stationary: the retained provider does not emit another hover.
     pointer(screen, 'mousedown')
@@ -680,11 +681,10 @@ it('honors primary/alternate and Open on real literal URLs, keeps background con
   view.rerender(
     <AgentTerminalPreview ptyId="pty-1" linkSource={source} onBrowserForeground={foreground} />
   )
+  const observed = mocks.subscribe.mock.calls.length
   pointer(screen, 'mousedown', { ctrlKey: true })
   pointer(screen, 'mouseup', { ctrlKey: true })
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 30))
-  })
+  await waitFor(() => expect(mocks.subscribe.mock.results[observed]?.value).toHaveBeenCalledOnce())
   expect(foreground).toHaveBeenCalledOnce()
   view.rerender(
     <AgentTerminalPreview
@@ -733,8 +733,8 @@ it('refuses real selected/drag/nonlink requests and forwards their mouse reports
   pointer(screen, 'mousedown', { clientX: 700 })
   pointer(screen, 'mouseup', { clientX: 700 })
   expect(preview.request).not.toHaveBeenCalled()
-  await new Promise((resolve) => setTimeout(resolve, 5))
-  expect(preview.sink.mock.calls.map(([data]) => data)).toEqual([
+  const reports = expect.poll(() => preview.sink.mock.calls.map(([data]) => data))
+  await reports.toEqual([
     '\x1b[<0;1;1M',
     '\x1b[<0;1;1m',
     '\x1b[<0;1;1M',
