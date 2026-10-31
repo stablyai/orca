@@ -6,7 +6,6 @@ import { createWebExplorerRootSync } from './web-explorer-root-sync'
 import { createWebJiraFilterStateApi } from './web-jira-filter-state-api'
 import type { PreloadApi } from '../../../../preload/api-types'
 import { assertClipboardTextWithinLimitWithYield } from '../../../../shared/clipboard-text'
-import type { ReadClipboardTextOptions } from '../../../../shared/clipboard-text'
 import { normalizeFeatureInteractions } from '../../../../shared/feature-interactions'
 import type { FeatureInteractionId } from '../../../../shared/feature-interactions'
 import { omitPairingLocalUiFields } from '../../../../shared/pairing-local-ui-fields'
@@ -16,6 +15,7 @@ import {
   readClipboardImagePngBase64,
   readClipboardImageThumbnail,
   saveClipboardImageAsTempFileInRuntime,
+  writeWebClipboardImage,
   writeWebClipboardText
 } from './web-clipboard-api'
 import {
@@ -144,7 +144,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
         return optimistic
       }
     },
-    readClipboardText: async (options?: ReadClipboardTextOptions) =>
+    readClipboardText: async (options) =>
       assertClipboardTextWithinLimitWithYield(
         await (navigator.clipboard?.readText?.() ?? ''),
         options
@@ -186,7 +186,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     writeTerminalClipboardText: writeWebClipboardText,
     writeSelectionClipboardText: () =>
       Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
-    writeClipboardImage: () => Promise.resolve(),
+    writeClipboardImage: writeWebClipboardImage,
     writeClipboardFile: () => Promise.resolve({ ok: false, reason: 'unsupported-platform' }),
     performNativePaste: () => {
       document.execCommand?.('paste')

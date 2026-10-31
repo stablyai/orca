@@ -105,6 +105,7 @@ vi.mock('@/i18n/i18n', async (importOriginal) => ({
 vi.mock('@/components/ui/popover', () => ({
   Popover: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   PopoverAnchor: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  PopoverTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   PopoverContent: ({ children }: { children: React.ReactNode }) =>
     popoverMock.contentMounted ? <div>{children}</div> : null
 }))

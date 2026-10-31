@@ -126,6 +126,7 @@
       "addErrors": {
         "alreadyAdded": "{{distro}} is already a host.",
         "distroStopped": "{{distro}} stopped since the list was read. Choose Start and add to start it.",
+        "distroUnverifiable": "WSL didn’t answer whether {{distro}} is running. Refresh the list, or add it from the dialog, which starts it if needed.",
         "wsl1": "{{distro}} runs WSL 1, which Orca no longer supports. Convert it to WSL 2 in a Windows terminal with: {{command}}",
         "notRegistered": "{{distro}} is not an installed WSL distro. Run {{command}} in a Windows terminal to see the installed ones, or reinstall it and try again.",
         "sshManaged": "{{distro}} already runs the Orca server for “{{server}}”, which this computer reaches over SSH. Remove that server first; moving it to a WSL host isn’t supported yet."
@@ -7227,7 +7228,9 @@
           "refresh": "Refresh",
           "wsl1Reason": "WSL 1 can’t run an Orca host; convert with {{command}}",
           "noWsl2Title": "No WSL 2 distros found",
-          "noWsl2Install": "Install one from a Windows terminal with {{command}}, then choose Refresh."
+          "noWsl2Install": "Install one from a Windows terminal with {{command}}, then choose Refresh.",
+          "unverifiable": "Unknown",
+          "unverifiableHint": "WSL didn’t say whether {{value0}} is running. Adding it starts it if needed."
         },
         "wslHostRowStatus": {
           "connecting": "Starting",
@@ -9404,7 +9407,6 @@
         },
         "TerminalWindowSection": {
           "1705318506": "ANSI magenta color",
-          "03c855d15f": "Reset all color overrides",
           "63f8d9336e": "Color Overrides",
           "e86e09b5c7": "Override individual terminal colors.",
           "1d1920dc8a": "Hide the mouse cursor when typing in the terminal.",
@@ -9471,7 +9473,11 @@
           "cf37ff69f6": "Base",
           "8abdab9f7c": "Restart now",
           "907131d741": "Restarting…",
-          "605a35d600": "Not applied by the terminal renderer yet — xterm.js has no bold color slot. A saved value is preserved."
+          "605a35d600": "Not applied by the terminal renderer yet — xterm.js has no bold color slot. A saved value is preserved.",
+          "color_overrides_dark_description": "Override individual colors of the dark terminal theme.",
+          "color_overrides_light_description": "Override individual colors of the light terminal theme.",
+          "reset_dark_color_overrides": "Reset dark color overrides",
+          "reset_light_color_overrides": "Reset light color overrides"
         },
         "UIZoomControl": {
           "c2c64b24d0": "Reset"
@@ -13261,7 +13267,9 @@
           "light": "Light",
           "languageIncomplete": "{{value0}}% translated, too incomplete to use as Orca’s language",
           "languageCoverage": "Interface language · {{value0}}% translated",
-          "newFileMenu": "Adds to the + menu"
+          "newFileMenu": "Adds to the + menu",
+          "editorReplacesViewer": "Opens {{value0}} instead of Orca’s viewer",
+          "editorMayReplaceViewer": "May open {{value0}} instead of Orca’s viewer"
         },
         "PluginCardAction": {
           "installed": "Installed",
@@ -16255,16 +16263,12 @@
         },
         "ImageViewer": {
           "3c9217f5a6": "Zoom in",
-          "6c89c73d9f": "Reset zoom",
           "be27304574": "Zoom out",
-          "77bfc9b35a": "Open image in popup",
           "3ef9551ba2": "Loading preview...",
-          "d9d2944855": "Failed to load file preview"
-        },
-        "ImageViewerPopup": {
-          "0ef78475e7": "Press Esc to close",
-          "535f4e2b56": "Close",
-          "9e27b2ecaf": "Full-size image preview"
+          "d9d2944855": "Failed to load file preview",
+          "fitToView": "Fit to view",
+          "actualSize": "Actual size",
+          "expand": "Expand image"
         },
         "IpynbViewer": {
           "859bf9fc21": "Run cell",
@@ -16386,7 +16390,10 @@
           "zoomOut": "Zoom out",
           "zoomIn": "Zoom in",
           "fit": "Fit to screen",
-          "close": "Close"
+          "close": "Close",
+          "copiedPng": "Copied as PNG",
+          "copyPngFailed": "Could not copy image",
+          "copyPng": "Copy as PNG"
         },
         "MermaidBlock": {
           "dcc132e691": "Diagram error:",
@@ -19960,7 +19967,8 @@
         "start": "Start",
         "startFailed": "Couldn’t start {{distro}}. Check it in Settings → Remote Orca Servers.",
         "unverifiable": "Orca couldn't check whether {{distro}} is running",
-        "startToSend": "Start {{distro}} to send."
+        "startToSend": "Start {{distro}} to send.",
+        "startDistro": "Start {{distro}}"
       },
       "interruptedContinue": {
         "continue": "Continue",
@@ -21847,7 +21855,10 @@
       "showLinked_one": "Show {{count}} linked review or task",
       "showLinked_other": "Show {{count}} linked reviews and tasks",
       "linkedCount_one": "{{count}} linked",
-      "linkedCount_other": "{{count}} linked"
+      "linkedCount_other": "{{count}} linked",
+      "addEmoji": "Add emoji",
+      "addEmojiTooltip": "Add emoji (or type :)",
+      "noEmojiFound": "No emoji found"
     },
     "attachments": {
       "updateRuntime": "Update the remote runtime to change workspace links",

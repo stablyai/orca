@@ -226,14 +226,4 @@ describe('sidebar pending layer', () => {
     install(domains([], [serverRow(7)]))
     expect(layer.readSidebarPendingLayer().writes).toEqual([])
   })
-
-  it('leaves a write with no row field to main alone', async () => {
-    const layer = await load()
-    await layer.withPendingSidebarRowWrites(
-      () => [{ worktreeId: local.id, updates: { comment: 'note' } }],
-      async () => {}
-    )
-    expect(layer.readSidebarPendingLayer()).toEqual({ writes: [], created: [] })
-    expect(feed.lastReadId).toBe(0)
-  })
 })

@@ -126,6 +126,7 @@
       "addErrors": {
         "alreadyAdded": "{{distro}} zaten ana makine olarak ekli.",
         "distroStopped": "Liste okunduktan sonra {{distro}} durdu. Başlatmak için “Başlat ve ekle” seçeneğini seçin.",
+        "distroUnverifiable": "WSL, {{distro}} dağıtımının çalışıp çalışmadığını yanıtlamadı. Listeyi yenileyin veya iletişim kutusundan ekleyin; gerekirse başlatılır.",
         "wsl1": "{{distro}}, Orca'nın artık desteklemediği WSL 1'i kullanıyor. Windows terminalinde şu komutla WSL 2'ye dönüştürün: {{command}}",
         "notRegistered": "{{distro}} yüklü bir WSL dağıtımı değil. Yüklü dağıtımları görmek için Windows terminalinde {{command}} komutunu çalıştırın veya dağıtımı yeniden yükleyip tekrar deneyin.",
         "sshManaged": "{{distro}} içinde zaten “{{server}}” için Orca sunucusu çalışıyor ve bu bilgisayar ona SSH üzerinden bağlanıyor. Önce bu sunucuyu kaldırın; WSL ana makinesine taşıma henüz desteklenmiyor."
@@ -7122,12 +7123,14 @@
           "added": "Zaten ana makine olarak ekli",
           "running": "Çalışıyor",
           "stopped": "Durduruldu",
+          "unverifiable": "Bilinmiyor",
           "title": "WSL dağıtımı ekle",
           "description": "Orca sunucusunu dağıtım içinde çalıştırır; böylece git, dosyalar ve terminaller doğrudan Linux'ta çalışır. Bu dağıtımda \\\\wsl.localhost üzerinden açtığınız projeler, terminalleri boşta kaldığında otomatik olarak bu ana bilgisayara taşınır; Windows sürücüsündeki (/mnt/…) projeler bu bilgisayarda kalır. Taşınan bir projeyi kenar çubuğundan geri getirebilirsiniz.",
           "distro": "Dağıtım",
           "loading": "WSL dağıtımları aranıyor…",
           "placeholder": "Dağıtım seçin",
           "stoppedHint": "{{value0}} durdurulmuş. Eklemek onu başlatır.",
+          "unverifiableHint": "WSL, {{value0}} dağıtımının çalışıp çalışmadığını bildirmedi. Eklemek gerekirse onu başlatır.",
           "addingHint": "Orca sunucusu dağıtıma yüklenip başlatılıyor. İlk seferinde bir dakika sürebilir.",
           "adding": "Kuruluyor…",
           "startAndAdd": "Başlat ve ekle",
@@ -9310,7 +9313,6 @@
         },
         "TerminalWindowSection": {
           "1705318506": "ANSI eflatun rengi",
-          "03c855d15f": "Tüm renk geçersiz kılmalarını sıfırla",
           "63f8d9336e": "Renk Geçersiz Kılmaları",
           "e86e09b5c7": "Tek tek terminal renklerini geçersiz kılın.",
           "1d1920dc8a": "Terminalde yazarken fare imlecini gizleyin.",
@@ -9377,7 +9379,11 @@
           "cf37ff69f6": "Temel",
           "8abdab9f7c": "Şimdi yeniden başlat",
           "907131d741": "Yeniden başlatılıyor…",
-          "605a35d600": "Terminal render motoru tarafından henüz uygulanmıyor; xterm.js'de kalın renk yuvası yok. Kaydedilen değer korunur."
+          "605a35d600": "Terminal render motoru tarafından henüz uygulanmıyor; xterm.js'de kalın renk yuvası yok. Kaydedilen değer korunur.",
+          "color_overrides_dark_description": "Koyu terminal temasının renklerini tek tek geçersiz kılın.",
+          "color_overrides_light_description": "Açık terminal temasının renklerini tek tek geçersiz kılın.",
+          "reset_dark_color_overrides": "Koyu tema renk geçersiz kılmalarını sıfırla",
+          "reset_light_color_overrides": "Açık tema renk geçersiz kılmalarını sıfırla"
         },
         "UIZoomControl": {
           "c2c64b24d0": "Sıfırla"
@@ -13283,7 +13289,9 @@
           "light": "Açık",
           "languageIncomplete": "%{{value0}} çevrildi; Orca’nın dili olarak kullanmak için fazla eksik",
           "languageCoverage": "Arayüz dili · %{{value0}} çevrildi",
-          "newFileMenu": "+ menüsüne ekler"
+          "newFileMenu": "+ menüsüne ekler",
+          "editorReplacesViewer": "{{value0}} dosyalarını Orca görüntüleyicisi yerine açar",
+          "editorMayReplaceViewer": "{{value0}} dosyalarını Orca görüntüleyicisi yerine açabilir"
         },
         "PluginPageAction": {
           "failedTitle": "{{value0}} yüklenemedi",
@@ -16139,16 +16147,12 @@
         },
         "ImageViewer": {
           "3c9217f5a6": "Yakınlaştır",
-          "6c89c73d9f": "Yakınlaştırmayı sıfırla",
           "be27304574": "Uzaklaştır",
-          "77bfc9b35a": "Görseli pop-up'ta aç",
           "3ef9551ba2": "Önizleme yükleniyor...",
-          "d9d2944855": "Dosya önizlemesi yüklenemedi"
-        },
-        "ImageViewerPopup": {
-          "0ef78475e7": "Kapatmak için Esc tuşuna basın",
-          "535f4e2b56": "Kapat",
-          "9e27b2ecaf": "Tam boyutlu görsel önizlemesi"
+          "d9d2944855": "Dosya önizlemesi yüklenemedi",
+          "fitToView": "Görünüme sığdır",
+          "actualSize": "Gerçek boyut",
+          "expand": "Görseli büyüt"
         },
         "IpynbViewer": {
           "859bf9fc21": "Hücreyi çalıştır",
@@ -16270,7 +16274,10 @@
           "zoomOut": "Uzaklaştır",
           "zoomIn": "Yakınlaştır",
           "fit": "Ekrana sığdır",
-          "close": "Kapat"
+          "close": "Kapat",
+          "copyPng": "PNG olarak kopyala",
+          "copiedPng": "PNG olarak kopyalandı",
+          "copyPngFailed": "Görsel kopyalanamadı"
         },
         "MermaidBlock": {
           "dcc132e691": "Diyagram hatası:",
@@ -19830,7 +19837,8 @@
         "stopped": "{{distro}} durduruldu",
         "start": "Başlat",
         "unverifiable": "Orca, {{distro}} öğesinin çalışıp çalışmadığını denetleyemedi",
-        "startToSend": "Göndermek için {{distro}} dağıtımını başlatın."
+        "startToSend": "Göndermek için {{distro}} dağıtımını başlatın.",
+        "startDistro": "{{distro}} dağıtımını başlat"
       },
       "interruptedContinue": {
         "continue": "Devam et",

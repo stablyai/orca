@@ -158,7 +158,10 @@ export function TerminalSurfacePreview({ settings }: { settings: GlobalSettings 
   const systemPrefersDark = useSystemPrefersDark()
   const customThemes = JSON.stringify(settings.terminalCustomThemes)
   const pluginPalettes = JSON.stringify(settings.terminalPluginPalettes)
-  const colorOverrides = JSON.stringify(settings.terminalColorOverrides)
+  const colorOverrides = JSON.stringify([
+    settings.terminalColorOverrides,
+    settings.terminalColorOverridesLight
+  ])
   const theme = useMemo(
     () =>
       composeActiveTerminalTheme(

@@ -84,7 +84,7 @@ function chatCreateRuntime(args: {
   ensurePathWithinWorkspaceMock.mockReturnValue(path)
   vi.mocked(getEffectiveHooks).mockReturnValue({ scripts: { setup: 'pnpm install' } })
   vi.mocked(getDefaultTabsLaunch).mockReturnValue(args.withDefaults ? DEFAULTS : undefined)
-  vi.mocked(createSetupRunnerScript).mockReturnValue({
+  vi.mocked(createSetupRunnerScript).mockResolvedValue({
     runnerScriptPath: '/repo/setup.sh',
     envVars: {},
     ...(args.wait ? { waitForAgentStartup: true } : {})

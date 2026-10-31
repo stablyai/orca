@@ -5,7 +5,6 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 describe('composeActiveTerminalTheme', () => {
   function settingsWith(partial: Partial<GlobalSettings>): GlobalSettings {
     return {
-      terminalColorOverrides: undefined,
       terminalCursorOpacity: undefined,
       terminalBackgroundOpacity: undefined,
       ...partial
@@ -36,16 +35,6 @@ describe('composeActiveTerminalTheme', () => {
 
     expect(result!.overviewRulerBorder).toBe('#222222')
     expect(result!.scrollbarSliderBackground).toBe('rgba(1, 2, 3, 0.4)')
-  })
-
-  it('layers terminalColorOverrides on top of the base theme', () => {
-    const base = { background: '#101010', foreground: '#fafafa' }
-    const result = composeActiveTerminalTheme(
-      base,
-      settingsWith({ terminalColorOverrides: { foreground: '#00ff00' } })
-    )
-    expect(result!.foreground).toBe('#00ff00')
-    expect(result!.background).toBe('#101010')
   })
 
   it('applies background opacity by converting the hex background to rgba', () => {
