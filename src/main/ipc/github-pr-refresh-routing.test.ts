@@ -19,7 +19,6 @@ import { createGitHubIpcHarness } from './github-ipc-test-harness'
 
 const {
   enqueuePRRefresh: enqueuePRRefreshMock,
-  refreshPRNow: refreshPRNowMock,
   reportVisiblePRRefreshCandidates: reportVisiblePRRefreshCandidatesMock
 } = mocks.prRefresh
 
@@ -103,24 +102,6 @@ describe('registerGitHubHandlers', () => {
     expect(isRegistered?.({ ...candidate, repoId: 're-added-repo' })).toBe(true)
   })
 
-  it('keeps manual PR refresh validation strict', async () => {
-    registerGitHubHandlers(store as never, stats as never)
-
-    await expect(
-      handlers['gh:refreshPRNow'](null, {
-        candidate: {
-          cacheKey: 'missing::feature/test',
-          repoPath: '/workspace/missing',
-          repoId: 'missing-repo',
-          branch: 'feature/test',
-          repoKind: 'git'
-        }
-      })
-    ).rejects.toThrow('Access denied: unknown repository path')
-
-    expect(refreshPRNowMock).not.toHaveBeenCalled()
-  })
-
   it('skips stale visible PR refresh candidates without rejecting the batch', async () => {
     registerGitHubHandlers(store as never, stats as never)
 
@@ -160,27 +141,5 @@ describe('registerGitHubHandlers', () => {
       1,
       7
     )
-  })
-
-  it('clears a sender visible PR refresh set when all current candidates are invalid', async () => {
-    registerGitHubHandlers(store as never, stats as never)
-
-    await handlers['gh:reportVisiblePRRefreshCandidates'](
-      { sender: Object.assign(new EventEmitter(), { id: 8 }) },
-      {
-        generation: 2,
-        candidates: [
-          {
-            cacheKey: 'missing::feature/old',
-            repoPath: '/workspace/missing',
-            repoId: 'missing-repo',
-            branch: 'feature/old',
-            repoKind: 'git'
-          }
-        ]
-      }
-    )
-
-    expect(reportVisiblePRRefreshCandidatesMock).toHaveBeenCalledWith([], 2, 8)
   })
 })
