@@ -22,7 +22,8 @@ import { getTaskPageRepoSourceContext } from '../task-page-source-context'
 
 import {
   createGitHubTaskObservationIndex,
-  gitHubTaskFamilyOrigin
+  gitHubTaskFamilyOrigin,
+  type ObservedGitHubWorkItem
 } from '@/lib/github-task-observation'
 
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
@@ -58,7 +59,7 @@ export function transitionTaskPageGitHubMutationQuery(
         )
       }
       const inputs = new Map<ListEntry, ListInput>()
-      const inspect = (row: Parameters<typeof listInput>[0]) => {
+      const inspect = (row: ObservedGitHubWorkItem) => {
         const owner = currentOwner(row)
         for (const family of ['assignees', 'reviewRequests'] as const) {
           const matches = owner
