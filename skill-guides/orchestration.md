@@ -104,3 +104,4 @@ assignment does not prove its agent stopped.
 | A failed or unknown worker; retry, stop, reset | `references/recovery-and-cleanup.md`      |
 | Custom argv or terminal layout                 | `references/low-level-topology.md`        |
 | Legacy labels, adopted Runs, takeover          | `references/legacy-contract-migration.md` |
+| User-provided worker routing policy or script  | `references/worker-routing-policy.md`     |

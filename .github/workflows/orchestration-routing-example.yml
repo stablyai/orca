@@ -1,0 +1,36 @@
+name: Orchestration routing example
+
+on:
+  pull_request:
+    paths:
+      - 'examples/orchestration-routing/**'
+      - '.github/workflows/orchestration-routing-example.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'examples/orchestration-routing/**'
+      - '.github/workflows/orchestration-routing-example.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: orchestration-routing-example-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python -m unittest discover -s examples/orchestration-routing -p "test_*.py"
