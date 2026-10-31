@@ -210,6 +210,11 @@
     },
     "cardProperties": {
       "agentModel": "Aracı modeli"
+    },
+    "wslHostOffer": {
+      "title": "{{distro}} dağıtımını ana makine olarak çalıştır (önerilir)",
+      "why": "Git, dosyalar ve terminaller Windows dosya paylaşımı yerine doğrudan Linux'ta çalışır.",
+      "accept": "Ana makine olarak çalıştır"
     }
   },
   "app": {
@@ -7115,13 +7120,15 @@
           "distro": "Dağıtım",
           "loading": "WSL dağıtımları aranıyor…",
           "placeholder": "Dağıtım seçin",
-          "none": "WSL dağıtımı bulunamadı. Yüklemek için: wsl --install",
           "stoppedHint": "{{value0}} durdurulmuş. Eklemek onu başlatır.",
           "addingHint": "Orca sunucusu dağıtıma yüklenip başlatılıyor. İlk seferinde bir dakika sürebilir.",
           "adding": "Kuruluyor…",
           "startAndAdd": "Başlat ve ekle",
           "add": "Ana makine ekle",
-          "refresh": "Yenile"
+          "refresh": "Yenile",
+          "wsl1Reason": "WSL 1 bir Orca ana makinesi çalıştıramaz; {{command}} ile dönüştürün",
+          "noWsl2Title": "WSL 2 dağıtımı bulunamadı",
+          "noWsl2Install": "Bir Windows terminalinde {{command}} ile bir dağıtım yükleyin, ardından Yenile'yi seçin."
         },
         "wslHostRowStatus": {
           "connecting": "Başlatılıyor",
@@ -13147,6 +13154,24 @@
           "assignedLight": "{{value0}} açık temanız olarak ayarlandı",
           "assignedDark": "{{value0}} koyu temanız olarak ayarlandı",
           "saveFailed": "Tema kaydedilemedi. Yeniden deneyin."
+        },
+        "PluginInstallTrustDialog": {
+          "titleFolder": "Bu klasöre güvendiğinizden emin olun",
+          "title": "{{value0}} kaynağına güvendiğinizden emin olun",
+          "theme": "Bu tema Orca’dan değil, {{value0}} kaynağından geliyor. Yalnızca güvendiğiniz yazarların eklentilerini yükleyin.",
+          "content": "Bu eklenti Orca’dan değil, {{value0}} kaynağından geliyor. Yalnızca güvendiğiniz yazarların eklentilerini yükleyin.",
+          "translations": "Bu çeviri Orca’dan değil, {{value0}} kaynağından geliyor. Çeviriler Orca’daki her metni değiştirebilir; bu yüzden yalnızca güvendiğiniz yazarlardan yükleyin.",
+          "code": "Bu eklenti Orca’dan değil, {{value0}} kaynağından geliyor. Yayıncının kodunu Orca içinde çalıştırır; bu yüzden yalnızca {{value0}} kaynağına güveniyorsanız yükleyin.",
+          "git": "Orca bu depoyu denetlemedi. Buradan gelen bir eklenti yayıncısının kodunu Orca içinde çalıştırabilir; bu yüzden yalnızca {{value0}} kaynağına güveniyorsanız yükleyin.",
+          "localFolder": "Bu doğrulanmamış bir yerel klasör. Buradan gelen bir eklenti Orca içinde kod çalıştırabilir; bu yüzden yalnızca kaynağına güveniyorsanız yükleyin.",
+          "devFolder": "Bu doğrulanmamış bir yerel klasör. Orca eklentisini olduğu gibi yükler ve sonraki kod düzenlemeleri sormadan çalışır; bu yüzden yalnızca güvendiğiniz klasörleri ekleyin.",
+          "publisher": "Yayıncı",
+          "repository": "Depo",
+          "folder": "Klasör",
+          "catalog": "Katalog",
+          "cancel": "İptal",
+          "addFolder": "Klasör ekle",
+          "install": "Yükle"
         }
       },
       "right": {
@@ -14553,7 +14578,8 @@
                   "79aa06bb2c": "Yenilenemedi. GitHub'ın API'si geçici olarak kullanılamıyor. Bilinen son durum gösteriliyor.",
                   "6ec12cee0c": "Yenilenemedi. GitHub şu anda erişilemez durumda. Bilinen son durum gösteriliyor.",
                   "de088015e8": "Yenilenemedi. GitHub istekleri sınırlıyor. Bilinen son durum gösteriliyor.",
-                  "d9dd7c6687": "GitHub'dan yenilenemedi. Bilinen son durum gösteriliyor."
+                  "d9dd7c6687": "GitHub'dan yenilenemedi. Bilinen son durum gösteriliyor.",
+                  "manual_provider": "{{provider}} kaynağından yenilenemedi. Tekrar deneyin."
                 }
               }
             },

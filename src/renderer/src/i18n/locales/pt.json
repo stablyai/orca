@@ -591,6 +591,11 @@
     },
     "cardProperties": {
       "agentModel": "Modelo do agente"
+    },
+    "wslHostOffer": {
+      "title": "Executar {{distro}} como host (recomendado)",
+      "why": "Git, arquivos e terminais passam a rodar nativamente no Linux em vez de pelo compartilhamento de arquivos do Windows.",
+      "accept": "Executar como host"
     }
   },
   "tray": {
@@ -9484,6 +9489,24 @@
           "manyDescription": "Não serão atualizadas até você revisá-las.",
           "review": "Revisar",
           "dismiss": "Dispensar"
+        },
+        "PluginInstallTrustDialog": {
+          "titleFolder": "Confirme que você confia nesta pasta",
+          "title": "Confirme que você confia em {{value0}}",
+          "theme": "Este tema é de {{value0}}, não do Orca. Instale apenas plugins de autores em quem você confia.",
+          "content": "Este plugin é de {{value0}}, não do Orca. Instale apenas plugins de autores em quem você confia.",
+          "translations": "Esta tradução é de {{value0}}, não do Orca. Traduções podem alterar qualquer texto do Orca, então instale-as apenas de autores em quem você confia.",
+          "code": "Este plugin é de {{value0}}, não do Orca. Ele executa o código do publicador dentro do Orca, então instale-o apenas se você confia em {{value0}}.",
+          "git": "O Orca não verificou este repositório. Um plugin dele pode executar o código do publicador dentro do Orca, então instale-o apenas se você confia em {{value0}}.",
+          "localFolder": "Esta é uma pasta local não verificada. Um plugin dela pode executar código dentro do Orca, então instale-o apenas se você confia na origem.",
+          "devFolder": "Esta é uma pasta local não verificada. O Orca carrega o plugin como está, e edições de código posteriores são executadas sem perguntar, então adicione apenas pastas em que você confia.",
+          "publisher": "Publicador",
+          "repository": "Repositório",
+          "folder": "Pasta",
+          "catalog": "Catálogo",
+          "cancel": "Cancelar",
+          "addFolder": "Adicionar pasta",
+          "install": "Instalar"
         }
       },
       "right": {
@@ -10591,7 +10614,8 @@
                   "79aa06bb2c": "Não foi possível atualizar. A API do GitHub está temporariamente indisponível. Mostrando o último status conhecido.",
                   "6ec12cee0c": "Não foi possível atualizar. O GitHub está inacessível agora. Mostrando o último status conhecido.",
                   "de088015e8": "Não foi possível atualizar. O GitHub está limitando as requisições. Mostrando o último status conhecido.",
-                  "d9dd7c6687": "Não foi possível atualizar a partir do GitHub. Mostrando o último status conhecido."
+                  "d9dd7c6687": "Não foi possível atualizar a partir do GitHub. Mostrando o último status conhecido.",
+                  "manual_provider": "Não foi possível atualizar a partir do {{provider}}. Tente novamente."
                 }
               }
             },
@@ -12463,13 +12487,15 @@
           "distro": "Distribuição",
           "loading": "Procurando distribuições WSL…",
           "placeholder": "Escolha uma distribuição",
-          "none": "Nenhuma distribuição WSL encontrada. Instale uma com: wsl --install",
           "stoppedHint": "{{value0}} está parada. Adicioná-la irá iniciá-la.",
           "addingHint": "Instalando e iniciando o servidor Orca na distribuição. Na primeira vez, pode levar um minuto.",
           "adding": "Configurando…",
           "startAndAdd": "Iniciar e adicionar",
           "add": "Adicionar host",
-          "refresh": "Atualizar"
+          "refresh": "Atualizar",
+          "wsl1Reason": "O WSL 1 não pode executar um host do Orca; converta com {{command}}",
+          "noWsl2Title": "Nenhuma distribuição WSL 2 encontrada",
+          "noWsl2Install": "Instale uma em um terminal do Windows com {{command}} e depois escolha Atualizar."
         },
         "wslHostRowStatus": {
           "connecting": "Iniciando",

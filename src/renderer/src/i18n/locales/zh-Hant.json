@@ -186,6 +186,11 @@
     },
     "cardProperties": {
       "agentModel": "代理程式模型"
+    },
+    "wslHostOffer": {
+      "title": "將 {{distro}} 作為主機執行（建議）",
+      "why": "Git、檔案和終端機將在 Linux 中原生執行，而不是透過 Windows 檔案共用。",
+      "accept": "作為主機執行"
     }
   },
   "app": {
@@ -6954,13 +6959,15 @@
           "distro": "發行版",
           "loading": "正在查詢 WSL 發行版…",
           "placeholder": "選擇發行版",
-          "none": "未找到 WSL 發行版。使用以下命令安裝：wsl --install",
           "stoppedHint": "{{value0}} 已停止。新增後會自動啟動。",
           "addingHint": "正在發行版中安裝並啟動 Orca 伺服器。首次可能需要一分鐘。",
           "adding": "正在設定…",
           "startAndAdd": "啟動並新增",
           "add": "新增主機",
-          "refresh": "重新整理"
+          "refresh": "重新整理",
+          "wsl1Reason": "WSL 1 無法執行 Orca 主機；請使用 {{command}} 轉換",
+          "noWsl2Title": "找不到 WSL 2 發行版",
+          "noWsl2Install": "在 Windows 終端機中使用 {{command}} 安裝一個，然後選擇「重新整理」。"
         },
         "wslHostRowStatus": {
           "connecting": "正在啟動",
@@ -12984,6 +12991,24 @@
           "assignedLight": "已將 {{value0}} 設為淺色主題",
           "assignedDark": "已將 {{value0}} 設為深色主題",
           "saveFailed": "無法儲存主題。請再試一次。"
+        },
+        "PluginInstallTrustDialog": {
+          "titleFolder": "請確認你信任此資料夾",
+          "title": "請確認你信任 {{value0}}",
+          "theme": "此主題來自 {{value0}}，而非 Orca。請只安裝你信任的作者的外掛。",
+          "content": "此外掛來自 {{value0}}，而非 Orca。請只安裝你信任的作者的外掛。",
+          "translations": "此翻譯來自 {{value0}}，而非 Orca。翻譯可以變更 Orca 中的任何文字，因此請只安裝你信任的作者的翻譯。",
+          "code": "此外掛來自 {{value0}}，而非 Orca。它會在 Orca 內執行發布者的程式碼，因此僅在你信任 {{value0}} 時安裝。",
+          "git": "Orca 尚未檢查此存放庫。來自它的外掛可以在 Orca 內執行發布者的程式碼，因此僅在你信任 {{value0}} 時安裝。",
+          "localFolder": "這是未經驗證的本機資料夾。來自它的外掛可以在 Orca 內執行程式碼，因此僅在你信任其來源時安裝。",
+          "devFolder": "這是未經驗證的本機資料夾。Orca 會按原樣載入其外掛，之後的程式碼修改會直接執行而不再詢問，因此請只新增你信任的資料夾。",
+          "publisher": "發布者",
+          "repository": "存放庫",
+          "folder": "資料夾",
+          "catalog": "目錄",
+          "cancel": "取消",
+          "addFolder": "新增資料夾",
+          "install": "安裝"
         }
       },
       "right": {
@@ -14366,7 +14391,8 @@
                   "79aa06bb2c": "重新整理失敗。GitHub 的 API 暫時不可用。正在顯示上次已知狀態。",
                   "6ec12cee0c": "重新整理失敗。現在無法存取 GitHub。正在顯示上次已知狀態。",
                   "de088015e8": "重新整理失敗。GitHub 正在限制請求頻率。正在顯示上次已知狀態。",
-                  "d9dd7c6687": "無法從 GitHub 重新整理。正在顯示上次已知狀態。"
+                  "d9dd7c6687": "無法從 GitHub 重新整理。正在顯示上次已知狀態。",
+                  "manual_provider": "無法從 {{provider}} 重新整理。請重試。"
                 }
               }
             },

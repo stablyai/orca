@@ -69,6 +69,9 @@ export class StructuredAgentSessionConversations extends Map<
     }
   }
 
+  loadedSessionIds = (): string[] =>
+    [...this].flatMap(([sessionId, { child }]) => (child ? [sessionId] : []))
+
   override set(sessionId: string, session: StructuredAgentSessionHostSession): this {
     const { journal } = session
     if (this.get(sessionId)?.journal === journal) {

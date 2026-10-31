@@ -10,6 +10,14 @@ vi.mock('@orca/process-host', () => ({
   runProcess: runProcessMock,
   runProcessSync: runProcessSyncMock
 }))
+// These cases model hosts with no registered distro; the lost-output fallback has its own suite.
+vi.mock('./wsl-registered-distro-fallback', () => ({
+  listedOrRegisteredWslDistros: async (listed: string[]) => listed,
+  readRegisteredWslDistrosLater: () => {},
+  isWslListOutputLost: () => false,
+  resetWslListOutputLost: () => {},
+  runningWhenListedNone: async () => []
+}))
 
 function exited(stdout: string, code: number | null = 0): ProcessResult {
   return { code, signal: null, stdout, stderr: '', timedOut: false }

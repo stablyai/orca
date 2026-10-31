@@ -210,6 +210,11 @@
     },
     "cardProperties": {
       "agentModel": "Agentenmodell"
+    },
+    "wslHostOffer": {
+      "title": "{{distro}} als Host ausführen (empfohlen)",
+      "why": "Git, Dateien und Terminals laufen dann nativ in Linux statt über die Windows-Dateifreigabe.",
+      "accept": "Als Host ausführen"
     }
   },
   "app": {
@@ -7129,13 +7134,15 @@
           "distro": "Distribution",
           "loading": "WSL-Distributionen werden gesucht…",
           "placeholder": "Distribution auswählen",
-          "none": "Keine WSL-Distributionen gefunden. Installation mit: wsl --install",
           "stoppedHint": "{{value0}} ist gestoppt. Das Hinzufügen startet die Distribution.",
           "addingHint": "Der Orca-Server wird in der Distribution installiert und gestartet. Beim ersten Mal kann dies eine Minute dauern.",
           "adding": "Wird eingerichtet…",
           "startAndAdd": "Starten und hinzufügen",
           "add": "Host hinzufügen",
-          "refresh": "Aktualisieren"
+          "refresh": "Aktualisieren",
+          "wsl1Reason": "WSL 1 kann keinen Orca-Host ausführen; konvertieren mit {{command}}",
+          "noWsl2Title": "Keine WSL-2-Distributionen gefunden",
+          "noWsl2Install": "Installiere eine in einem Windows-Terminal mit {{command}} und wähle dann Aktualisieren."
         },
         "wslHostRowStatus": {
           "connecting": "Wird gestartet",
@@ -13161,6 +13168,24 @@
           "assignedLight": "{{value0}} als helles Design festgelegt",
           "assignedDark": "{{value0}} als dunkles Design festgelegt",
           "saveFailed": "Das Design konnte nicht gespeichert werden. Versuche es erneut."
+        },
+        "PluginInstallTrustDialog": {
+          "titleFolder": "Stellen Sie sicher, dass Sie diesem Ordner vertrauen",
+          "title": "Stellen Sie sicher, dass Sie {{value0}} vertrauen",
+          "theme": "Dieses Design stammt von {{value0}}, nicht von Orca. Installieren Sie nur Plugins von Autoren, denen Sie vertrauen.",
+          "content": "Dieses Plugin stammt von {{value0}}, nicht von Orca. Installieren Sie nur Plugins von Autoren, denen Sie vertrauen.",
+          "translations": "Diese Übersetzung stammt von {{value0}}, nicht von Orca. Übersetzungen können jeden Text in Orca ändern. Installieren Sie sie daher nur von Autoren, denen Sie vertrauen.",
+          "code": "Dieses Plugin stammt von {{value0}}, nicht von Orca. Es führt den Code des Herausgebers in Orca aus. Installieren Sie es daher nur, wenn Sie {{value0}} vertrauen.",
+          "git": "Orca hat dieses Repository nicht geprüft. Ein Plugin daraus kann den Code seines Herausgebers in Orca ausführen. Installieren Sie es daher nur, wenn Sie {{value0}} vertrauen.",
+          "localFolder": "Dies ist ein nicht verifizierter lokaler Ordner. Ein Plugin daraus kann Code in Orca ausführen. Installieren Sie es daher nur, wenn Sie seiner Herkunft vertrauen.",
+          "devFolder": "Dies ist ein nicht verifizierter lokaler Ordner. Orca lädt sein Plugin unverändert, und spätere Codeänderungen laufen ohne Nachfrage. Fügen Sie daher nur Ordner hinzu, denen Sie vertrauen.",
+          "publisher": "Herausgeber",
+          "repository": "Repository",
+          "folder": "Ordner",
+          "catalog": "Katalog",
+          "cancel": "Abbrechen",
+          "addFolder": "Ordner hinzufügen",
+          "install": "Installieren"
         }
       },
       "right": {
@@ -14567,7 +14592,8 @@
                   "79aa06bb2c": "Aktualisierung fehlgeschlagen. Die GitHub-API ist vorübergehend nicht verfügbar. Der letzte bekannte Status wird angezeigt.",
                   "6ec12cee0c": "Aktualisierung fehlgeschlagen. GitHub ist derzeit nicht erreichbar. Der letzte bekannte Status wird angezeigt.",
                   "de088015e8": "Aktualisierung fehlgeschlagen. GitHub begrenzt die Anfragerate. Der letzte bekannte Status wird angezeigt.",
-                  "d9dd7c6687": "Die Daten von GitHub konnten nicht aktualisiert werden. Der letzte bekannte Status wird angezeigt."
+                  "d9dd7c6687": "Die Daten von GitHub konnten nicht aktualisiert werden. Der letzte bekannte Status wird angezeigt.",
+                  "manual_provider": "Die Daten von {{provider}} konnten nicht aktualisiert werden. Erneut versuchen."
                 }
               }
             },

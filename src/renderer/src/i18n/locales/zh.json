@@ -6509,13 +6509,15 @@
           "distro": "发行版",
           "loading": "正在查找 WSL 发行版…",
           "placeholder": "选择发行版",
-          "none": "未找到 WSL 发行版。使用以下命令安装：wsl --install",
           "stoppedHint": "{{value0}} 已停止。添加后会自动启动。",
           "addingHint": "正在发行版中安装并启动 Orca 服务器。首次可能需要一分钟。",
           "adding": "正在设置…",
           "startAndAdd": "启动并添加",
           "add": "添加主机",
-          "refresh": "刷新"
+          "refresh": "刷新",
+          "wsl1Reason": "WSL 1 无法运行 Orca 主机；请使用 {{command}} 转换",
+          "noWsl2Title": "未找到 WSL 2 发行版",
+          "noWsl2Install": "在 Windows 终端中使用 {{command}} 安装一个，然后选择“刷新”。"
         },
         "wslHostRowStatus": {
           "connecting": "正在启动",
@@ -12679,6 +12681,24 @@
           "manyDescription": "在你审核之前不会更新。",
           "review": "审核",
           "dismiss": "关闭"
+        },
+        "PluginInstallTrustDialog": {
+          "titleFolder": "请确认你信任此文件夹",
+          "title": "请确认你信任 {{value0}}",
+          "theme": "此主题来自 {{value0}}，而非 Orca。请只安装你信任的作者的插件。",
+          "content": "此插件来自 {{value0}}，而非 Orca。请只安装你信任的作者的插件。",
+          "translations": "此翻译来自 {{value0}}，而非 Orca。翻译可以更改 Orca 中的任何文本，因此请只安装你信任的作者的翻译。",
+          "code": "此插件来自 {{value0}}，而非 Orca。它会在 Orca 内运行发布者的代码，因此仅在你信任 {{value0}} 时安装。",
+          "git": "Orca 尚未检查此仓库。来自它的插件可以在 Orca 内运行发布者的代码，因此仅在你信任 {{value0}} 时安装。",
+          "localFolder": "这是未经验证的本地文件夹。来自它的插件可以在 Orca 内运行代码，因此仅在你信任其来源时安装。",
+          "devFolder": "这是未经验证的本地文件夹。Orca 会按原样加载其插件，之后的代码修改会直接运行而不再询问，因此请只添加你信任的文件夹。",
+          "publisher": "发布者",
+          "repository": "仓库",
+          "folder": "文件夹",
+          "catalog": "目录",
+          "cancel": "取消",
+          "addFolder": "添加文件夹",
+          "install": "安装"
         }
       },
       "right": {
@@ -14061,7 +14081,8 @@
                   "79aa06bb2c": "刷新失败。GitHub 的 API 暂时不可用。正在显示上次已知状态。",
                   "6ec12cee0c": "刷新失败。现在无法访问 GitHub。正在显示上次已知状态。",
                   "de088015e8": "刷新失败。GitHub 正在限制请求频率。正在显示上次已知状态。",
-                  "d9dd7c6687": "无法从 GitHub 刷新。正在显示上次已知状态。"
+                  "d9dd7c6687": "无法从 GitHub 刷新。正在显示上次已知状态。",
+                  "manual_provider": "无法从 {{provider}} 刷新。请重试。"
                 }
               }
             },
@@ -20210,6 +20231,11 @@
     },
     "cardProperties": {
       "agentModel": "智能体模型"
+    },
+    "wslHostOffer": {
+      "title": "将 {{distro}} 作为主机运行（推荐）",
+      "why": "Git、文件和终端将在 Linux 中原生运行，而不是通过 Windows 文件共享。",
+      "accept": "作为主机运行"
     }
   },
   "editor": {
