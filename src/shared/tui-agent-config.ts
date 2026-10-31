@@ -210,14 +210,10 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     detectCmd: 'cline',
     promptInjectionMode: 'stdin-after-start'
   },
-  freebuff: {
-    detectCmd: 'freebuff',
-    promptInjectionMode: 'stdin-after-start'
-  },
-  codebuff: {
-    detectCmd: 'codebuff',
-    promptInjectionMode: 'stdin-after-start'
-  },
+  // prettier-ignore
+  freebuff: { detectCmd: 'freebuff', promptInjectionMode: 'stdin-after-start' },
+  // prettier-ignore
+  codebuff: { detectCmd: 'codebuff', promptInjectionMode: 'stdin-after-start' },
   'command-code': {
     // Avoid cmd alias detection colliding with Windows cmd.exe.
     detectCmd: 'command-code',
@@ -330,7 +326,9 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   // prettier-ignore
   devin: { detectCmd: 'devin', promptInjectionMode: 'argv', argvPromptSeparator: '--' },
   // prettier-ignore
-  jcode: { detectCmd: 'jcode', launchCmd: 'jcode', expectedProcess: 'jcode', promptInjectionMode: 'stdin-after-start' }
+  jcode: { detectCmd: 'jcode', launchCmd: 'jcode', expectedProcess: 'jcode', promptInjectionMode: 'stdin-after-start' },
+  // prettier-ignore
+  'open-interpreter': { detectCmd: 'interpreter', promptInjectionMode: 'stdin-after-start' }
 }
 
 export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = Object.fromEntries(

@@ -50,7 +50,8 @@ const TUI_AGENT_KIND_BY_AGENT = {
   muse: 'muse',
   zcode: 'zcode',
   dsh: 'dsh',
-  jcode: 'jcode'
+  jcode: 'jcode',
+  'open-interpreter': 'open-interpreter'
 } satisfies Record<TuiAgent, ConcreteAgentKind>
 
 // Persisted settings/IPC may contain unknown strings despite the exhaustive type; retain telemetry with other.

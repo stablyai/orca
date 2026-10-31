@@ -376,6 +376,22 @@ describe('tui agent startup plans', () => {
       launchConfig: { agentCommand: 'qwen', agentArgs: '', agentEnv: {} }
     })
   })
+  it('launches OpenInterpreter through the installed interpreter executable', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'open-interpreter',
+      prompt: 'fix it',
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+
+    expect(plan).toEqual({
+      agent: 'open-interpreter',
+      launchCommand: 'interpreter',
+      expectedProcess: 'interpreter',
+      followupPrompt: 'fix it',
+      launchConfig: { agentCommand: 'interpreter', agentArgs: '', agentEnv: {} }
+    })
+  })
 
   it.each([
     ['yolo', 'linux', 'posix', undefined, "muse --trust-workspace '--yolo'"],

@@ -33,5 +33,6 @@ export const TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>> = {
   devin: 'devin.ai',
   openclaw: 'openclaw.ai',
   codebuddy: 'codebuddy.ai',
-  jcode: 'jcode.sh'
+  jcode: 'jcode.sh',
+  'open-interpreter': 'openinterpreter.com'
 }
