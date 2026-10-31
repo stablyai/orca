@@ -72,7 +72,8 @@ export function BottomSearchBar({
   useEffect(() => {
     onCoveredHeightChange?.(coveredHeight)
   }, [coveredHeight, onCoveredHeightChange])
-  const searching = focused || (hasSearch ?? value.trim() !== '')
+  // Close stays until the keyboard is down: iOS's late click at the tapped spot would otherwise hit the primary action that replaced it.
+  const searching = focused || keyboardUp || (hasSearch ?? value.trim() !== '')
 
   const closeSearch = () => {
     if (onClear) {

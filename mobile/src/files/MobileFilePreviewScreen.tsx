@@ -24,6 +24,10 @@ import { NavBar } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { MobileFilePreviewBody } from './MobileFilePreviewBody'
 import {
+  MobileMarkdownPreviewModeBar,
+  useMarkdownPreviewMode
+} from './MobileMarkdownPreviewModeBar'
+import {
   displayNameFromPreviewPath,
   type MobileFilePreviewRouteState
 } from './mobile-file-preview-route'
@@ -238,9 +242,7 @@ function MobileFilePreviewDocument({ route }: Props) {
     previewParams?.worktreeName,
     previewParams?.worktreeId ?? ''
   )
-  const meta = previewParams
-    ? `${worktreeLabel} - ${displayPath}`
-    : t('files.filePreviewScreen.title', 'Preview')
+  const [markdownMode, setMarkdownMode] = useMarkdownPreviewMode(displayPath, lineColumn?.line)
   const isEditableTerminalArtifact =
     previewSource?.source === 'terminalArtifact' &&
     isEditableMobileTerminalArtifactPreview(preview, previewSource.readOnly === true)
@@ -324,7 +326,7 @@ function MobileFilePreviewDocument({ route }: Props) {
             />
           }
           title={title || t('files.filePreviewScreen.title', 'Preview')}
-          subtitle={meta}
+          subtitle={previewParams ? worktreeLabel : undefined}
           trailing={
             isEditableTerminalArtifact ? (
               <NavBarButton
@@ -338,6 +340,19 @@ function MobileFilePreviewDocument({ route }: Props) {
               />
             ) : null
           }
+          accessory={
+            preview.status === 'ready' &&
+            preview.kind === 'markdown' &&
+            !isEditableTerminalArtifact ? (
+              <MobileMarkdownPreviewModeBar
+                mode={markdownMode}
+                onModeChange={setMarkdownMode}
+                relativePath={displayPath}
+                content={preview.content}
+                truncated={preview.truncated}
+              />
+            ) : null
+          }
         />
       </SafeAreaView>
       <MobileFilePreviewBody
@@ -347,6 +362,7 @@ function MobileFilePreviewDocument({ route }: Props) {
         relativePath={displayPath}
         title={title || t('files.filePreviewScreen.fileTitle', 'File')}
         editable={isEditableTerminalArtifact}
+        markdownMode={markdownMode}
         draftContent={draftContent}
         saveError={saveError}
         lineColumn={lineColumn}

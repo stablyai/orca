@@ -164,7 +164,7 @@ const styles = themedStyleSheet(() => ({
     marginTop: 2
   },
   group: {
-    backgroundColor: colors.bgPanel,
+    backgroundColor: colors.sheetGroup,
     borderRadius: radii.surface,
     overflow: 'hidden'
   },
@@ -180,7 +180,7 @@ const styles = themedStyleSheet(() => ({
     paddingHorizontal: spacing.md + 2
   },
   rowPressed: {
-    backgroundColor: colors.bgRaised
+    backgroundColor: colors.borderSubtle
   },
   rowDisabled: {
     opacity: 0.45
