@@ -13,6 +13,7 @@ import {
   type MobilePairingConnectionMode
 } from '../../../../shared/mobile-pairing-connection-mode'
 import { useMobilePairingConnectionMode } from './use-mobile-pairing-connection-mode'
+import { useMobilePairingRelayLocalPath } from './use-mobile-pairing-relay-local-path'
 import { useMobilePairingGeneration } from './use-mobile-pairing-generation'
 import { useMobilePairingQrInvalidation } from './use-mobile-pairing-qr-invalidation'
 import { useMobileInstallActions } from './use-mobile-install-actions'
@@ -31,12 +32,14 @@ export default function MobilePage(): React.JSX.Element {
   const [pairQrDataUrl, setPairQrDataUrl] = useState<string | null>(null)
   const [pairQrSize, setPairQrSize] = useState<number | null>(null)
   const [pairingUrl, setPairingUrl] = useState<string | null>(null)
+  const [pairingEndpoint, setPairingEndpoint] = useState<string | null>(null)
   const [pairingQrError, setPairingQrError] = useState(false)
   const [relayMintFailure, setRelayMintFailure] = useState<MobileRelayMintFailure | null>(null)
   const [pairLoading, setPairLoading] = useState(false)
   const signedIn = useAppStore((state) => state.orcaProfileAuthStatus?.state === 'connected')
   const refreshAuthStatus = useAppStore((state) => state.fetchOrcaProfileAuthStatus)
   const [connectionMode, setConnectionMode] = useMobilePairingConnectionMode()
+  const relayLocalPath = useMobilePairingRelayLocalPath()
   const [networkInterfaces, setNetworkInterfaces] = useState<MobileNetworkInterface[]>([])
   const pairingAddressChangeRef = useRef<(change: MobilePairingAddressChange) => void>(() => {})
   const notifyPairingAddressChange = useCallback(
@@ -83,6 +86,7 @@ export default function MobilePage(): React.JSX.Element {
 
   const { generatePairing } = useMobilePairingGeneration({
     connectionMode,
+    localPath: relayLocalPath,
     signedIn,
     selectedAddress,
     mountedRef,
@@ -91,6 +95,7 @@ export default function MobilePage(): React.JSX.Element {
     setPairQrDataUrl,
     setPairQrSize,
     setPairingUrl,
+    setPairingEndpoint,
     setPairingQrError,
     setPairLoading,
     setRelayMintFailure,
@@ -171,6 +176,7 @@ export default function MobilePage(): React.JSX.Element {
 
   useMobilePairingQrInvalidation({
     connectionMode,
+    localPath: relayLocalPath,
     signedIn,
     pairLoading,
     hasGeneratedRef,
@@ -345,6 +351,7 @@ export default function MobilePage(): React.JSX.Element {
       pairQrDataUrl={pairQrDataUrl}
       pairQrSize={pairQrSize}
       pairingUrl={pairingUrl}
+      pairingEndpoint={pairingEndpoint}
       pairingQrError={pairingQrError}
       relayMintFailure={
         connectionMode === 'automatic' && pairQrDataUrl == null ? relayMintFailure : null

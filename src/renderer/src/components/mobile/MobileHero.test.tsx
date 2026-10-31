@@ -25,7 +25,9 @@ vi.mock('../settings/MobilePairingConnectionOptions', () => ({
 }))
 
 vi.mock('./WindowsFirewallNotice', () => ({
-  WindowsFirewallNotice: () => null
+  WindowsFirewallNotice: (props: { pairingReady: boolean }) => (
+    <span data-testid="firewall-ready">{String(props.pairingReady)}</span>
+  )
 }))
 
 vi.mock('../settings/MachineNameField', () => ({
@@ -276,6 +278,47 @@ describe('HeroFlow height', () => {
 
     expect(screen.getByRole('alert')).toHaveTextContent('couldn’t be rendered as a QR code')
     expect(screen.getByRole('button', { name: /Copy pairing code/ })).toBeEnabled()
+  })
+
+  it('offers the firewall fix only when the minted code advertises a direct endpoint', () => {
+    const props: React.ComponentProps<typeof MobileHeroPairingStep> = {
+      pairQrDataUrl: 'data:image/png;base64,qr',
+      pairingUrl: 'orca://pair#ready',
+      pairingEndpoint: null,
+      pairingQrError: false,
+      relayMintFailure: null,
+      onUseLan: vi.fn(),
+      onRetryRelay: vi.fn(),
+      onCopyRelayDiagnostics: vi.fn(),
+      pairLoading: false,
+      connectionMode: 'automatic',
+      onConnectionModeChange: vi.fn(),
+      onRegeneratePairing: vi.fn(),
+      canGeneratePairing: true,
+      onCopyPairingCode: vi.fn(),
+      networkInterfaces: [],
+      customAddresses: [],
+      selectedAddress: '192.168.1.24',
+      selectedAddressIsCustom: false,
+      onSelectedAddressChange: vi.fn(),
+      onCustomAddressSelect: vi.fn(),
+      onCustomAddressRemove: vi.fn(),
+      beforeCustomAddressChange: vi.fn().mockResolvedValue(true),
+      onRefreshNetworkInterfaces: vi.fn(),
+      refreshingNetworkInterfaces: false
+    }
+    const { rerender } = render(<MobileHeroPairingStep {...props} />)
+    expect(screen.getByTestId('firewall-ready')).toHaveTextContent('false')
+
+    // Main may advertise its default address when the picker had none selected yet.
+    rerender(
+      <MobileHeroPairingStep
+        {...props}
+        selectedAddress={undefined}
+        pairingEndpoint="ws://192.168.1.24:6768"
+      />
+    )
+    expect(screen.getByTestId('firewall-ready')).toHaveTextContent('true')
   })
 
   it('moves focus to the pairing-code action after recovery succeeds', () => {

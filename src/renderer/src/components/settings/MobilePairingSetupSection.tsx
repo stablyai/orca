@@ -6,6 +6,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { NetworkInterfacePicker } from '../mobile/NetworkInterfacePicker'
+import { MobilePairingLocalPathSwitch } from '../mobile/MobilePairingLocalPathSwitch'
+import { useMobilePairingRelayLocalPath } from '../mobile/use-mobile-pairing-relay-local-path'
 import type { MobileNetworkInterface } from './mobile-network-interface-selection'
 import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
 
@@ -51,6 +53,7 @@ export function MobilePairingSetupSection({
   onGenerateQr
 }: MobilePairingSetupSectionProps): React.JSX.Element {
   const usingRelay = connectionMode === 'automatic'
+  const relayLocalPath = useMobilePairingRelayLocalPath()
   const [addressDisclosureOpen, setAddressDisclosureOpen] = useState(false)
   // Render search/custom-address pickers outright; a collapse trigger cannot close pinned-open state.
   const addressDisclosurePinned = addressDisclosureForcedOpen || selectedAddressIsCustom
@@ -113,6 +116,12 @@ export function MobilePairingSetupSection({
       </p>
     </div>
   )
+  const relayPathControls = (
+    <div className="space-y-3">
+      <MobilePairingLocalPathSwitch />
+      {relayLocalPath ? addressControls : null}
+    </div>
+  )
 
   return (
     <section className="space-y-5">
@@ -139,7 +148,7 @@ export function MobilePairingSetupSection({
         <div className="space-y-2">
           <p className="text-xs font-medium text-foreground">{relayAddressLabel}</p>
           <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-3">
-            {addressControls}
+            {relayPathControls}
           </div>
         </div>
       ) : usingRelay ? (
@@ -163,7 +172,7 @@ export function MobilePairingSetupSection({
           </CollapsibleTrigger>
           <CollapsibleContent>
             <div className="mt-2 rounded-md border border-border/60 bg-muted/20 px-3 py-3">
-              {addressControls}
+              {relayPathControls}
             </div>
           </CollapsibleContent>
         </Collapsible>

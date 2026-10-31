@@ -79,16 +79,20 @@ export function registerMobileHandlers(
       args?: {
         address?: string
         connectionMode?: MobilePairingConnectionMode
+        /** Relay only: false advertises no direct address, so the listener stays on loopback. */
+        localPath?: boolean
         rotate?: boolean
       }
     ) => {
+      const relayOnly = args?.connectionMode !== 'local-only' && args?.localPath === false
       // Explicit interfaces support overlay networks unreachable through the default LAN candidate.
-      const ip =
-        args?.address ??
-        (await getDefaultPairingAddress(
-          rpcServer.getNetworkExposureBindHost(),
-          getDefaultRouteInterfaceNames
-        ))
+      const ip = relayOnly
+        ? null
+        : (args?.address ??
+          (await getDefaultPairingAddress(
+            rpcServer.getNetworkExposureBindHost(),
+            getDefaultRouteInterfaceNames
+          )))
       // Relay works without a direct candidate; LAN-only must refuse when none is usable.
       if (!ip && args?.connectionMode === 'local-only') {
         return {

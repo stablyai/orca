@@ -24,6 +24,7 @@ import {
 } from '../../../../shared/mobile-pairing-connection-mode'
 import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
 import { useMobilePairingConnectionMode } from '../mobile/use-mobile-pairing-connection-mode'
+import { useMobilePairingRelayLocalPath } from '../mobile/use-mobile-pairing-relay-local-path'
 import { useMobilePairingAddressPreference } from '../mobile/use-mobile-pairing-address-preference'
 import { shouldOpenMobilePairingAddress } from './mobile-pane-search'
 export { getMobilePaneSearchEntries } from './mobile-pane-search'
@@ -46,6 +47,7 @@ export function MobilePane(): React.JSX.Element {
   const signedIn = useAppStore((state) => state.orcaProfileAuthStatus?.state === 'connected')
   const settingsSearchQuery = useAppStore((state) => state.settingsSearchQuery)
   const [connectionMode, setConnectionMode] = useMobilePairingConnectionMode()
+  const relayLocalPath = useMobilePairingRelayLocalPath()
   const [rotateNextQr, setRotateNextQr] = useState(false)
   const codeCopiedResetTimerRef = useRef<number | null>(null)
   const wasSignedInRef = useRef(signedIn)
@@ -53,6 +55,7 @@ export function MobilePane(): React.JSX.Element {
   const pairingRequestIdRef = useRef(0)
   // Distinguish cross-window mode sync from this window’s own changes.
   const handledModeRef = useRef(connectionMode)
+  const handledLocalPathRef = useRef(relayLocalPath)
   // Keep invalidatePairing stable so QR/loading changes cannot refetch network interfaces.
   const qrDisplayedRef = useRef(false)
   const loadingRef = useRef(false)
@@ -174,6 +177,7 @@ export function MobilePane(): React.JSX.Element {
         const result = await window.api.mobile.getPairingQR({
           ...(selectedAddress ? { address: selectedAddress } : {}),
           connectionMode: preferredMode,
+          ...(relayLocalPath ? {} : { localPath: false }),
           ...(opts.rotate || rotateNextQr ? { rotate: true } : {})
         })
         // Ignore superseded responses whose policy/address selection is no longer current.
@@ -238,6 +242,7 @@ export function MobilePane(): React.JSX.Element {
       connectionMode,
       loadDevices,
       mountedRef,
+      relayLocalPath,
       rotateNextQr,
       selectedAddress,
       signedIn
@@ -317,6 +322,19 @@ export function MobilePane(): React.JSX.Element {
     handledModeRef.current = connectionMode
     invalidatePairing({ armRotate: false })
   }, [connectionMode, invalidatePairing])
+
+  // Remint a shown code now: main rotates a pending code whose reach changed, so the stale one stops pairing.
+  useEffect(() => {
+    if (relayLocalPath === handledLocalPathRef.current) {
+      return
+    }
+    handledLocalPathRef.current = relayLocalPath
+    const hadCode = qrDisplayedRef.current || loadingRef.current
+    invalidatePairing({ armRotate: false })
+    if (hadCode) {
+      void generateQR({ rotate: false })
+    }
+  }, [relayLocalPath, invalidatePairing, generateQR])
 
   useEffect(() => {
     void loadNetworkInterfaces()
@@ -398,7 +416,7 @@ export function MobilePane(): React.JSX.Element {
       />
 
       <WindowsFirewallNotice
-        pairingReady={pairingUrl != null}
+        pairingReady={pairingUrl != null && endpoint != null}
         address={selectedAddress}
         usingRelay={connectionMode === 'automatic'}
       />

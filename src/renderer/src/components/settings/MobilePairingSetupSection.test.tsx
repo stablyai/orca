@@ -9,6 +9,8 @@ import userEvent from '@testing-library/user-event'
 import { MobilePairingSetupSection } from './MobilePairingSetupSection'
 import type { MobileNetworkInterface } from './mobile-network-interface-selection'
 import { TooltipProvider } from '../ui/tooltip'
+import { useAppStore } from '../../store'
+import { getDefaultSettings } from '../../../../shared/constants'
 
 afterEach(() => cleanup())
 
@@ -113,6 +115,27 @@ describe('MobilePairingSetupSection', () => {
     })
     expect(screen.getByRole('combobox')).toHaveTextContent(address)
     expect(screen.queryByRole('button', { name: /Also use a faster local path/i })).toBeNull()
+  })
+
+  it('pairs over Relay only when its local path is switched off', async () => {
+    const initialState = useAppStore.getState()
+    const updateSettings = vi.fn().mockResolvedValue(undefined)
+    useAppStore.setState({
+      settings: { ...getDefaultSettings('/tmp'), mobilePairingRelayLocalPath: false },
+      updateSettings
+    })
+    try {
+      const { user } = renderSection({
+        connectionMode: 'automatic',
+        addressDisclosureForcedOpen: true
+      })
+      // A Relay-only code advertises no direct address, so there is nothing to pick.
+      expect(screen.queryByRole('combobox')).toBeNull()
+      await user.click(screen.getByRole('switch', { name: 'Local path' }))
+      expect(updateSettings).toHaveBeenCalledWith({ mobilePairingRelayLocalPath: true })
+    } finally {
+      useAppStore.setState(initialState, true)
+    }
   })
 
   it('disables generate on LAN when no advertise address is selected', () => {

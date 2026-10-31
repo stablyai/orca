@@ -15491,6 +15491,10 @@
         },
         "relayClockSkewMessage": {
           "message": "Your computer's clock is off by about {{seconds}} seconds. Turn on automatic time, then retry."
+        },
+        "MobilePairingLocalPathSwitch": {
+          "label": "Local path",
+          "relayOnly": "Relay only: pairing won’t open this computer to your Wi‑Fi or Tailscale network."
         }
       },
       "gitlab": {

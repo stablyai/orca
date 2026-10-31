@@ -4,6 +4,7 @@ import {
   type MobileRelayMintFailure
 } from '../../../shared/mobile-relay-mint-failure'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../../shared/pairing'
+import type { RuntimePairingReach } from '../../../shared/runtime-pairing-reach'
 import { NETWORK_EXPOSURE_FAILED_GUIDANCE } from '../network-exposure-guidance'
 import { RuntimeRpcPairing } from './runtime-rpc-pairing'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
@@ -18,22 +19,33 @@ import {
 // How long an automatic mint waits for an on-demand Relay install before reporting it missing.
 const RELAY_PROVIDER_INSTALL_WAIT_MS = 15_000
 
+type MobilePairingOfferArgs = {
+  address?: string | null
+  connectionMode?: MobilePairingConnectionMode
+  name?: string
+  rotate?: boolean
+}
+
+// Relay reaches this desktop over an outbound link; only an advertised direct address needs off-host reach.
+function mobilePairingReach(args: MobilePairingOfferArgs): RuntimePairingReach {
+  return args.connectionMode === 'local-only' || Boolean(args.address?.trim())
+    ? 'network'
+    : 'this-computer'
+}
+
 export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
-  async createMobilePairingOffer(args: {
-    address?: string | null
-    connectionMode?: MobilePairingConnectionMode
-    name?: string
-    rotate?: boolean
-  }): Promise<MobilePairingOffer> {
-    // Network pairing opts into LAN exposure: widen before advertising QR endpoints; failed widening stays unavailable on loopback (STA-2370).
-    try {
-      await this.ensureNetworkExposure()
-    } catch (error) {
-      console.error(
-        '[runtime] Network exposure failed while creating a mobile pairing offer:',
-        error
-      )
-      return pairingUnavailable('network_exposure_failed', NETWORK_EXPOSURE_FAILED_GUIDANCE)
+  async createMobilePairingOffer(args: MobilePairingOfferArgs): Promise<MobilePairingOffer> {
+    // A direct path opts into LAN exposure: widen before advertising it; failed widening stays unavailable on loopback (STA-2370).
+    if (mobilePairingReach(args) === 'network') {
+      try {
+        await this.ensureNetworkExposure()
+      } catch (error) {
+        console.error(
+          '[runtime] Network exposure failed while creating a mobile pairing offer:',
+          error
+        )
+        return pairingUnavailable('network_exposure_failed', NETWORK_EXPOSURE_FAILED_GUIDANCE)
+      }
     }
     if (args.connectionMode === 'local-only') {
       this.mobilePairingOfferGeneration += 1
@@ -77,22 +89,19 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
   }
 
   protected async createMobilePairingOfferSerial(
-    args: {
-      address?: string | null
-      connectionMode?: MobilePairingConnectionMode
-      name?: string
-      rotate?: boolean
-    },
+    args: MobilePairingOfferArgs,
     generation: number
   ): Promise<MobilePairingOffer> {
     // Renderer input is untrusted; only explicit local-only may suppress Relay provisioning.
     const connectionMode = args.connectionMode === 'local-only' ? 'local-only' : 'automatic'
+    const reach = mobilePairingReach(args)
     const pending = this.deviceRegistry?.getPendingDevice('mobile')
     // Rotate when connection policy changes so old QR credentials retain no new-policy authority.
-    const switchingPendingMode =
+    const switchingPendingPolicy =
       pending != null &&
-      this.deviceRegistry?.getMobilePairingConnectionMode(pending.deviceId) !== connectionMode
-    if (args.rotate || switchingPendingMode) {
+      (this.deviceRegistry?.getMobilePairingConnectionMode(pending.deviceId) !== connectionMode ||
+        (pending.pairingReach ?? 'network') !== reach)
+    if (args.rotate || switchingPendingPolicy) {
       if (pending?.relayBinding) {
         // Durably enqueue cloud revocation before local rotation or old invites can outlive the QR.
         if (!this.queueRelayDeviceRevoke(pending.relayBinding)) {
@@ -105,7 +114,8 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
     }
     const direct = this.createPairingOffer({
       ...args,
-      rotate: args.rotate || switchingPendingMode,
+      reach,
+      rotate: args.rotate || switchingPendingPolicy,
       scope: 'mobile'
     })
     if (!direct.available) {

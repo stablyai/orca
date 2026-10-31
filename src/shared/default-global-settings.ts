@@ -253,6 +253,7 @@ export function buildDefaultSettings(args: {
     mobileAutoRestoreFitMs: null,
     // Why: Anywhere (Relay + local) is the default; local-only is written only on explicit same-network choice.
     mobilePairingConnectionMode: 'automatic',
+    mobilePairingRelayLocalPath: true,
     mobilePairingCustomAddress: null,
     mobilePairingCustomAddresses: [],
     machineName: '',

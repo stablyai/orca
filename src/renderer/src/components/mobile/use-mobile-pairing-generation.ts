@@ -12,6 +12,8 @@ type MutableRef<T> = { current: T }
 /** Mint through one guarded path: signed-out Relay cannot degrade to a mislabeled local-only QR; Relay failures clear the code. */
 export function useMobilePairingGeneration(params: {
   connectionMode: MobilePairingConnectionMode
+  /** Relay only: false mints a code with no direct address, keeping the listener on loopback. */
+  localPath: boolean
   signedIn: boolean
   selectedAddress: string | undefined
   mountedRef: MutableRef<boolean>
@@ -20,6 +22,7 @@ export function useMobilePairingGeneration(params: {
   setPairQrDataUrl: (value: string | null) => void
   setPairQrSize: (value: number | null) => void
   setPairingUrl: (value: string | null) => void
+  setPairingEndpoint: (value: string | null) => void
   setPairingQrError: (value: boolean) => void
   setPairLoading: (value: boolean) => void
   setRelayMintFailure: (value: MobileRelayMintFailure | null) => void
@@ -34,6 +37,7 @@ export function useMobilePairingGeneration(params: {
 } {
   const {
     connectionMode,
+    localPath,
     signedIn,
     selectedAddress,
     mountedRef,
@@ -42,6 +46,7 @@ export function useMobilePairingGeneration(params: {
     setPairQrDataUrl,
     setPairQrSize,
     setPairingUrl,
+    setPairingEndpoint,
     setPairingQrError,
     setPairLoading,
     setRelayMintFailure,
@@ -68,6 +73,7 @@ export function useMobilePairingGeneration(params: {
         const result = await window.api.mobile.getPairingQR({
           ...(address ? { address } : {}),
           connectionMode: preferredMode,
+          ...(localPath ? {} : { localPath: false }),
           ...(rotate ? { rotate: true } : {})
         })
         if (requestId !== pairingRequestIdRef.current) {
@@ -78,6 +84,7 @@ export function useMobilePairingGeneration(params: {
             setPairQrDataUrl(result.qrDataUrl)
             setPairQrSize(result.qrSize)
             setPairingUrl(result.pairingUrl)
+            setPairingEndpoint(result.endpoint)
             setPairingQrError(result.qrDataUrl === null)
             setRelayMintFailure(null)
           }
@@ -87,6 +94,7 @@ export function useMobilePairingGeneration(params: {
             setPairQrDataUrl(null)
             setPairQrSize(null)
             setPairingUrl(null)
+            setPairingEndpoint(null)
             setPairingQrError(false)
             if (result.reason === 'relay_mint_failed' && result.relayFailure) {
               setRelayMintFailure(result.relayFailure)
@@ -110,6 +118,7 @@ export function useMobilePairingGeneration(params: {
           setPairQrDataUrl(null)
           setPairQrSize(null)
           setPairingUrl(null)
+          setPairingEndpoint(null)
           setPairingQrError(false)
           setRelayMintFailure(null)
           toast.error(
@@ -128,6 +137,7 @@ export function useMobilePairingGeneration(params: {
     [
       connectionMode,
       hasGeneratedRef,
+      localPath,
       mountedRef,
       pairingRequestIdRef,
       refreshAuthStatus,
@@ -136,6 +146,7 @@ export function useMobilePairingGeneration(params: {
       setPairQrDataUrl,
       setPairQrSize,
       setPairingUrl,
+      setPairingEndpoint,
       setPairingQrError,
       setRelayMintFailure,
       signedIn
