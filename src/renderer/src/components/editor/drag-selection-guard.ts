@@ -17,6 +17,9 @@ type SelectionView = EditorView & {
     onSelectionChange(): void
     setCurSelection(): void
     forceFlush(): void
+    flush(): void
+    pendingRecords(): MutationRecord[]
+    currentSelection: { clear(): void }
     stop(): void
     start(): void
     ignoreSelectionChange(selection: NativeRange): boolean
@@ -35,73 +38,136 @@ export function completeRichMarkdownSelection(editorView: EditorView): false {
     return false
   }
   const view = selectionView(editorView)
-  const observer = view.domObserver
-  const beforeFlush = view.state.doc
-  const initialSelection = view.state.selection
-  const native = view.domSelectionRange()
-  let range: NativeRange = {
-    anchorNode: native.anchorNode,
-    anchorOffset: native.anchorOffset,
-    focusNode: native.focusNode,
-    focusOffset: native.focusOffset
-  }
-  observer.forceFlush()
-  if (view.state.doc !== beforeFlush) {
-    range = view.domSelectionRange()
-  }
-  const { anchorNode, anchorOffset, focusNode, focusOffset } = range
-  if (
-    !anchorNode ||
-    !focusNode ||
-    !view.dom.contains(anchorNode) ||
-    !view.dom.contains(focusNode) ||
-    observer.ignoreSelectionChange(range)
-  ) {
-    return false
-  }
+  while (!view.isDestroyed && view.dom.isConnected && !view.composing) {
+    const observer = view.domObserver
+    const initialSelection = view.state.selection
+    const ownerBeforeFlush = view.root.activeElement
+    observer.forceFlush()
+    if (view.isDestroyed || !view.dom.isConnected || view.composing) {
+      return false
+    }
+    // forceFlush only services a scheduled flush; actual mutation records can still be undelivered.
+    if (observer.pendingRecords().length) {
+      observer.flush()
+      if (view.isDestroyed || !view.dom.isConnected || view.composing) {
+        return false
+      }
+    }
 
-  const selection = view.state.selection
-  if (!(selection instanceof TextSelection)) {
-    const anchor = view.posAtDOM(anchorNode, anchorOffset)
-    const head = view.posAtDOM(focusNode, focusOffset)
-    // Structured selections render a native range too; only a different text gesture supersedes them.
-    const presentation = TextSelection.between(selection.$anchor, selection.$head)
+    // A synchronous focus handoff completes at nested blur; its later model navigation owns the target.
+    if (view.root.activeElement !== ownerBeforeFlush) {
+      return false
+    }
+    const state = view.state
+    const owner = view.root.activeElement
+    const native = view.domSelectionRange()
+    const range: NativeRange = {
+      anchorNode: native.anchorNode,
+      anchorOffset: native.anchorOffset,
+      focusNode: native.focusNode,
+      focusOffset: native.focusOffset
+    }
+    const { anchorNode, anchorOffset, focusNode, focusOffset } = range
     if (
-      (anchor === selection.anchor && head === selection.head) ||
-      (anchor === presentation.anchor && head === presentation.head)
+      !anchorNode ||
+      !focusNode ||
+      !view.dom.contains(anchorNode) ||
+      !view.dom.contains(focusNode)
     ) {
       return false
     }
-  }
-
-  const doc = view.state.doc
-  const anchor = view.posAtDOM(anchorNode, anchorOffset)
-  const head = view.posAtDOM(focusNode, focusOffset)
-  observer.stop()
-  try {
-    // Reuse the engine's selection reader (atoms, direction, createSelectionBetween), bypassing flush's focus/cache gates.
-    observer.handleDOMChange(-1, -1, false, [])
+    const ignored = observer.ignoreSelectionChange(range)
+    if (view.isDestroyed || !view.dom.isConnected || view.composing) {
+      return false
+    }
+    if (view.root.activeElement !== owner) {
+      return false
+    }
+    // A NodeView callback may replace the document or reconfigure the live view before mapping.
+    if (view.state.doc !== state.doc || view.state.plugins !== state.plugins) {
+      continue
+    }
+    const current = view.domSelectionRange()
     if (
-      !view.isDestroyed &&
-      view.state.doc === doc &&
-      !view.state.selection.eq(initialSelection) &&
-      view.state.selection instanceof TextSelection &&
-      view.state.selection.anchor === anchor &&
-      view.state.selection.head === head &&
-      anchorNode.isConnected &&
-      focusNode.isConnected
+      current.anchorNode !== anchorNode ||
+      current.anchorOffset !== anchorOffset ||
+      current.focusNode !== focusNode ||
+      current.focusOffset !== focusOffset
     ) {
-      // Restore native table highlighting once per publication, without rewriting on its selectionchange notification.
-      view.dom.ownerDocument
-        .getSelection()
-        ?.setBaseAndExtent(anchorNode, anchorOffset, focusNode, focusOffset)
+      continue
     }
-    if (!view.isDestroyed) {
-      observer.setCurSelection()
+    if (ignored) {
+      return false
     }
-  } finally {
-    if (!view.isDestroyed) {
-      observer.start()
+
+    const selection = view.state.selection
+    if (!(selection instanceof TextSelection)) {
+      const anchor = view.posAtDOM(anchorNode, anchorOffset)
+      const head = view.posAtDOM(focusNode, focusOffset)
+      // Structured selections render a native range too; only a different text gesture supersedes them.
+      const presentation = TextSelection.between(selection.$anchor, selection.$head)
+      if (
+        (anchor === selection.anchor && head === selection.head) ||
+        (anchor === presentation.anchor && head === presentation.head)
+      ) {
+        return false
+      }
+    }
+
+    const anchor = view.posAtDOM(anchorNode, anchorOffset)
+    const head = view.posAtDOM(focusNode, focusOffset)
+    observer.stop()
+    try {
+      if (view.hasFocus() && !view.input.mouseDown?.allowDefault) {
+        // Cached native endpoints can be unpublished. Let the engine classify them before acceptance.
+        observer.currentSelection.clear()
+        observer.onSelectionChange()
+      } else {
+        // Held/outgoing input still needs the engine reader beyond its ordinary focus/cache gates.
+        observer.handleDOMChange(-1, -1, false, [])
+      }
+      if (
+        !view.isDestroyed &&
+        view.dom.isConnected &&
+        !view.composing &&
+        view.root.activeElement === owner &&
+        view.state.doc === state.doc &&
+        view.state.plugins === state.plugins &&
+        !view.state.selection.eq(initialSelection) &&
+        view.state.selection instanceof TextSelection &&
+        view.state.selection.anchor === anchor &&
+        view.state.selection.head === head &&
+        anchorNode.isConnected &&
+        focusNode.isConnected
+      ) {
+        // Restore native table highlighting only for this accepted publication and current owner.
+        view.dom.ownerDocument
+          .getSelection()
+          ?.setBaseAndExtent(anchorNode, anchorOffset, focusNode, focusOffset)
+      }
+      if (!view.isDestroyed) {
+        observer.setCurSelection()
+      }
+    } finally {
+      if (!view.isDestroyed) {
+        observer.start()
+      }
+    }
+    if (
+      view.isDestroyed ||
+      !view.dom.isConnected ||
+      view.composing ||
+      view.root.activeElement !== owner
+    ) {
+      return false
+    }
+    // Complete newly owed input in the current context, without replaying the previous endpoints.
+    if (
+      view.state.doc === state.doc &&
+      view.state.plugins === state.plugins &&
+      !observer.pendingRecords().length
+    ) {
+      return false
     }
   }
   return false
@@ -155,9 +221,6 @@ export const DragSelectionGuard = Extension.create({
             if (viewRef?.input.mouseDown?.allowDefault) {
               observer.setCurSelection()
               return
-            }
-            if (editorView.hasFocus()) {
-              completeRichMarkdownSelection(editorView)
             }
             originalOnSelectionChange()
           }
