@@ -71,7 +71,6 @@ export class DaemonTerminalAdmission {
       this.options.requestEndpointRetirement()
       throw new Error(DAEMON_ENDPOINT_LOST_MESSAGE)
     }
-    this.options.host.noteSpawnPreparation(payload.sessionId)
     this.createOrAttachInFlight++
     let routedSessionId = payload.sessionId
     let result: CreateOrAttachResult

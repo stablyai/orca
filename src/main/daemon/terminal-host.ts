@@ -3,7 +3,7 @@ import { runTerminalCreation, type PendingTerminalCreation } from './terminal-cr
 import { beginTerminalHostFencedTermination } from './terminal-host-fenced-termination'
 import type { PtyFencedTerminationRequest } from '../../shared/pty-fenced-termination'
 import type { Session } from './session'
-import { SessionNotFoundError, type SessionInfo } from './types'
+import type { SessionInfo } from './types'
 import type { CreateOrAttachResult } from './terminal-host-create-contract'
 import type { TerminalHostOptions } from './terminal-host-options'
 import { recordTerminalHostSessionExit } from './terminal-host-session-exit'
@@ -55,13 +55,6 @@ export class TerminalHost extends TerminalHostInspection {
     this.reportReadinessEvent = opts.reportReadinessEvent
     this.onFinalCheckpoint = opts.onFinalCheckpoint
     this.killedTombstones = new TerminalHostTombstones(opts.maxTombstones ?? DEFAULT_MAX_TOMBSTONES)
-  }
-
-  noteSpawnPreparation(sessionId: string): void {
-    const session = this.sessions.get(sessionId)
-    if (session?.isTerminating) {
-      throw new SessionNotFoundError(sessionId)
-    }
   }
 
   createOrAttach(opts: InternalCreateOrAttachOptions): Promise<CreateOrAttachResult> {
