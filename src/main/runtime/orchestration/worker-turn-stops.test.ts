@@ -298,7 +298,7 @@ describe('chat worker turn stops', () => {
 
   it('reports a finished turn and leaves failures to the chat error escalation', () => {
     const ctx = setup(formatOrcaSessionAddress(CHAT_SESSION))
-    const report = chatWorkerTurnStopReporter(ctx.deps)
+    const report = chatWorkerTurnStopReporter(ctx.deps, (run) => run())
     const status = () => ({ status: 'idle' as const, lastAssistantMessage: 'Read the files.' })
     report(completion('failure'), status)
     expect(ctx.mail()).toHaveLength(0)
@@ -308,10 +308,8 @@ describe('chat worker turn stops', () => {
     expect(ctx.mail()[0].body).toContain('Read the files.')
   })
 
-  it('does not blame a follow-up still starting for the turn that reported, but does once it holds its task', () => {
-    const ctx = setup()
-    const address = formatOrcaSessionAddress(CHAT_SESSION)
-    // The report claimed a follow-up on the same chat; its task is not handed over yet.
+  // The report claimed a follow-up on the same chat; its task is not handed over yet.
+  function startingFollowUp(ctx: ReturnType<typeof setup>) {
     const followUp = ctx.db.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: 9,
@@ -322,21 +320,59 @@ describe('chat worker turn stops', () => {
     }).dispatch.id
     ctx.db.prepareStartingWorkerAuthority({
       dispatchId: followUp,
-      handle: address,
+      handle: formatOrcaSessionAddress(CHAT_SESSION),
       paneKey: null,
       processIncarnation: null,
       worktreeId: 'repo::/tmp/wt',
       effects: [],
       setupState: 'not_applicable'
     })
-    const report = chatWorkerTurnStopReporter(ctx.deps)
-    const status = () => ({ status: 'idle' as const, lastAssistantMessage: 'I sent worker_done.' })
+    return followUp
+  }
 
-    report(completion('success', 'turn-reported'), status)
-    expect(ctx.mail()).toHaveLength(0)
+  function chatWithTimers(ctx: ReturnType<typeof setup>) {
+    const timers: (() => void)[] = []
+    let status: 'idle' | 'working' = 'idle'
+    const report = chatWorkerTurnStopReporter(ctx.deps, (run) => timers.push(run))
+    return {
+      finish: (turnId: string) =>
+        report(completion('success', turnId), () => ({ status, lastAssistantMessage: 'Done.' })),
+      setStatus: (next: typeof status) => {
+        status = next
+      },
+      runTimers: () => {
+        for (const run of timers.splice(0)) {
+          run()
+        }
+      }
+    }
+  }
 
+  it('does not blame a follow-up for the turn whose report claimed it', () => {
+    const ctx = setup()
+    const followUp = startingFollowUp(ctx)
+    const chat = chatWithTimers(ctx)
+
+    chat.finish('turn-reported')
+    chat.runTimers()
     ctx.db.markWorkerDispatchReady(followUp)
-    report(completion('success', 'turn-follow-up'), status)
+    chat.setStatus('working')
+    chat.runTimers()
+
+    expect(ctx.mail()).toHaveLength(0)
+  })
+
+  it('still reports a follow-up whose own turn ended before its start settled', () => {
+    const ctx = setup()
+    const followUp = startingFollowUp(ctx)
+    const chat = chatWithTimers(ctx)
+
+    chat.finish('turn-follow-up')
+    chat.runTimers()
+    expect(ctx.mail()).toHaveLength(0)
+    ctx.db.markWorkerDispatchReady(followUp)
+    chat.runTimers()
+
     expect(ctx.mail()).toMatchObject([
       { subject: 'Worker stopped without reporting', payload: expect.stringContaining(followUp) }
     ])

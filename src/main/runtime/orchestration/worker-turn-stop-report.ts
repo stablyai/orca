@@ -78,15 +78,6 @@ export function reportWorkerTurnStop(
   deps: WorkerTurnStopReportDeps
 ): void {
   const dispatchId = workerTurnStopDispatchId(target)
-  // A Dispatch still starting has not handed over its task: the turn that finished is the one
-  // before it, such as the turn whose report claimed this follow-up.
-  if (
-    stop.reason === 'finished' &&
-    target.kind === 'local' &&
-    db.getWorkerDispatch(dispatchId)?.state === 'starting'
-  ) {
-    return
-  }
   // Waiting on mail, or a clean finish resting on its own question or helpers, is deliberate; an exit never is.
   if (
     stop.reason !== 'exited' &&
