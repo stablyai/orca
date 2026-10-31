@@ -17082,7 +17082,8 @@
         },
         "capturedOwner": {
           "orphan": "这种自动化没有可运行的主机。删除它，或者重新添加它所属的主机。",
-          "unfenced": "此主机上的 Orca 需要更新，然后您才能查看运行历史记录或管理此自动化。计划的运行可能仍会在主机上继续。"
+          "unfenced": "此主机上的 Orca 需要更新，然后您才能查看运行历史记录或管理此自动化。计划的运行可能仍会在主机上继续。",
+          "hostReselection": "请编辑此自动化，并在运行前重新选择其主机。"
         },
         "hostStatus": {
           "authority": {
@@ -17210,6 +17211,9 @@
         },
         "hostSummary": {
           "partialFailureOfHosts_other": "{{count}} 个主机中有 {{failed}} 个无法加载"
+        },
+        "automationTargetAvailability": {
+          "hostMismatch": "保存的运行主机与此项目配置不再匹配。"
         }
       },
       "agent": {
@@ -18805,7 +18809,10 @@
         "orcaStopCrash": "此回复进行期间，{{machine}} 上的 Orca 意外停止。",
         "orcaStopRemote": "此回复进行期间，{{machine}} 上的 Orca 已停止。",
         "orcaStopCanContinue": "你可以在此对话中继续。",
-        "orcaStopUnnamedServer": "远程服务器"
+        "orcaStopUnnamedServer": "远程服务器",
+        "permissionDenied": "{{agent}} 拒绝了权限。查看详情。",
+        "safetyReview": "{{agent}} 报告了安全审查警告。查看详情。",
+        "truncatedResponse": "提供方响应已截断（原始大小：{{bytes}} 字节）。"
       },
       "providerFrame": {
         "byteCount_other": "{{count}} 字节"

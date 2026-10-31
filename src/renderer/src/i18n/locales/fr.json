@@ -17682,7 +17682,8 @@
         },
         "capturedOwner": {
           "orphan": "Cette automatisation n'a pas d'hôte sur lequel s'exécuter. Supprimez-le ou ajoutez à nouveau l'hôte auquel il appartient.",
-          "unfenced": "Orca sur cet hôte a besoin d'une mise à jour avant de pouvoir afficher l'historique d'exécution ou gérer cette automatisation. Les exécutions planifiées peuvent toujours se poursuivre sur l'hôte."
+          "unfenced": "Orca sur cet hôte a besoin d'une mise à jour avant de pouvoir afficher l'historique d'exécution ou gérer cette automatisation. Les exécutions planifiées peuvent toujours se poursuivre sur l'hôte.",
+          "hostReselection": "Modifiez l’automatisation et sélectionnez à nouveau son hôte avant de l’exécuter."
         },
         "hostStatus": {
           "authority": {
@@ -17867,6 +17868,9 @@
           "partialFailureOfHosts_one": "Échec du chargement de {{failed}} sur {{count}} hôte",
           "partialFailureOfHosts_other": "Échec du chargement de {{failed}} sur {{count}} hôtes",
           "partialFailureOfHosts_many": "Échec du chargement de {{failed}} sur {{count}} hôtes"
+        },
+        "automationTargetAvailability": {
+          "hostMismatch": "L’hôte d’exécution enregistré ne correspond plus à cette configuration du projet."
         }
       },
       "agent": {
@@ -19548,7 +19552,10 @@
         "orcaStopCrash": "Orca sur {{machine}} s'est arrêté de manière inattendue pendant que cette réponse était en cours.",
         "orcaStopRemote": "Orca sur {{machine}} s'est arrêté pendant que cette réponse était en cours.",
         "orcaStopCanContinue": "Vous pouvez continuer dans cette conversation.",
-        "orcaStopUnnamedServer": "le serveur distant"
+        "orcaStopUnnamedServer": "le serveur distant",
+        "permissionDenied": "{{agent}} a refusé la permission. Voir les détails.",
+        "safetyReview": "{{agent}} a signalé un avertissement de sécurité. Voir les détails.",
+        "truncatedResponse": "Réponse du fournisseur tronquée (taille d’origine : {{bytes}} octets)."
       },
       "providerFrame": {
         "byteCount_one": "{{count}} octet",

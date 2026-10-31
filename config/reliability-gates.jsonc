@@ -4929,7 +4929,7 @@
       "invariant": "Index-only Git activity below the common Git directory must not emit worktrees:changed, invalidate worktree caches, or trigger fetchWorktrees fanout; structural add/remove/HEAD/gitdir/locked/config.worktree changes must still refresh worktrees and nudge Source Control. When the authoritative paired host accepts an external structural change for a uniquely identified server-local repo, each live client for that host must receive one existing host-scoped worktreesChanged invalidation and converge to the same repo/worktree identity without reconnect; duplicate watcher events must coalesce, stale cached or in-flight catalogs must not survive invalidation, and event-ignoring clients must remain compatible. Colliding local/SSH repo IDs must not publish the host-blind event until existing semantics can carry owner identity. External head moves (commit, amend, reset) must reach background worktree rows through spawn-free metadata reads, never through structural fanout. A process generation-scope rollover revokes every direct SSH target and old-scope provider request, not only the target whose counter exhausted.",
       "oracle": "Classify exact git-common paths as structural, status-only, or ignored; count notifications from debounced watcher events; force the Linux/Windows poll path to emit allowlisted leaf events, detect linked HEAD rewrites independent of entry-directory mtime, and surface in-place index rewrites via the backstop re-stat; diff head identities from metadata-file reads and notify only real head moves; assert Source Control subscribes to both structural and status-only signals with active-repo and visibility filters. Join the real runtime RPC server to two independently authenticated E2EE clients plus an event-ignoring client, advance the host Git inventory, trigger duplicate structural watcher callbacks, and require one host renderer notification plus one runtime event and a refreshed catalog per subscribed client; require the event-ignoring client to refresh safely on explicit read. Hold a scan after it captures old inventory, join it from a second paired client, publish the watcher invalidation, advance Git independently, and require both overlapping RPCs to retry or join one fresh scan before returning. Disconnect one client, advance inventory again, and require reconnect to read current state without stale event replay. Give a watcher a local repo ID colliding with an SSH owner and require the host renderer refresh while the unqualified runtime event stays absent. Force the real path in isolated Electron apps with git worktree add, a host Git inventory assertion, store-subscription barriers, matching host/client worktree identity, and visible rows in both renderers. For direct SSH, roll one exhausted target into a fresh process generation scope while invalidating sibling target tokens, and fill a partial pushed authority before clearing that target's PTY bindings once.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/worktree-base-directory-event-filter.test.ts src/main/ipc/worktree-base-directory-watcher.test.ts src/main/ipc/worktree-base-directory-poller.test.ts src/main/ipc/worktree-head-identity-reader.test.ts src/renderer/src/hooks/worktree-head-identity-apply.test.ts src/renderer/src/components/right-sidebar/git-status-push-signal-refresh.test.ts src/renderer/src/hooks/useIpcEvents-browser-tab-create.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/worktree-base-directory-event-filter.test.ts src/main/ipc/worktree-base-directory-watcher.test.ts src/main/ipc/worktree-base-directory-poller.test.ts src/main/ipc/worktree-head-identity-reader.test.ts src/renderer/src/components/right-sidebar/git-status-push-signal-refresh.test.ts src/renderer/src/hooks/useIpcEvents-browser-tab-create.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/external-worktree-paired-client-discovery.integration.test.ts src/main/window/attach-main-window-services.test.ts",
         "ORCA_E2E_FORCE_HEADFUL=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-external-worktree-discovery.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/connection/ssh-connection-generation.test.ts src/main/ssh/ssh-provider-authority.test.ts --reporter=dot",
@@ -4940,7 +4940,6 @@
         "src/main/ipc/worktree-base-directory-watcher.test.ts",
         "src/main/ipc/worktree-base-directory-poller.test.ts",
         "src/main/ipc/worktree-head-identity-reader.test.ts",
-        "src/renderer/src/hooks/worktree-head-identity-apply.test.ts",
         "src/renderer/src/components/right-sidebar/git-status-push-signal-refresh.test.ts",
         "src/renderer/src/hooks/useIpcEvents-browser-tab-create.test.ts",
         "src/main/runtime/external-worktree-paired-client-discovery.integration.test.ts",
@@ -4992,12 +4991,6 @@
           "assertions": [
             "loose-ref, packed-refs, detached, unborn, and relative-gitdir layouts resolve or skip without spawning Git",
             "traversal-shaped or backslash/colon symrefs are rejected before any path join and only hex object ids are ever emitted"
-          ]
-        },
-        {
-          "file": "src/renderer/src/hooks/worktree-head-identity-apply.test.ts",
-          "assertions": [
-            "head identities patch matching rows by path (including Windows separator/casing drift) and skip unknown rows"
           ]
         },
         {
@@ -5058,6 +5051,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/worktree-base-directory-event-filter.test.ts src/main/ipc/worktree-base-directory-watcher.test.ts src/main/ipc/worktree-base-directory-poller.test.ts src/main/ipc/worktree-head-identity-reader.test.ts src/renderer/src/hooks/worktree-head-identity-apply.test.ts src/renderer/src/components/right-sidebar/git-status-push-signal-refresh.test.ts src/renderer/src/hooks/useIpcEvents-browser-tab-create.test.ts",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/worktree-base-directory-event-filter.test.ts src/main/ipc/worktree-base-directory-watcher.test.ts src/main/ipc/worktree-base-directory-poller.test.ts src/main/ipc/worktree-head-identity-reader.test.ts src/renderer/src/components/right-sidebar/git-status-push-signal-refresh.test.ts src/renderer/src/hooks/useIpcEvents-browser-tab-create.test.ts",
           "result": "passed",
           "durationSeconds": 3.12,
           "summary": "7 files and 130 tests passed locally, adding head-identity emit-on-change without structural fanout, reflog status triggers, config.worktree structural classification, the in-place index backstop, and the spawn-free head reader with symref traversal rejection and hex-object-id output validation."
@@ -6000,7 +5994,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx src/shared/doc-preview-scheme.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts",
         // The hardening round: the third url door, the group projection, and both directions of the focus handoff.
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts src/renderer/src/components/browser-pane/workspace-doc/workspace-doc-page-pane.test.tsx src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.failure-message.test.tsx",
         "pnpm exec vitest run --config config/vitest.config.ts src/preload/doc-preview-link-interception.test.ts src/main/browser/doc-preview-guest-policy.test.ts src/main/window/main-window-webview-security.test.ts src/main/ipc/doc-preview-grant-ipc.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/browser-preview-tool-authorization.test.ts src/main/browser/doc-preview-guest-policy.test.ts src/main/ipc/browser.test.ts",
@@ -6055,7 +6049,6 @@
         "src/renderer/src/components/browser-pane/workspace-doc/use-doc-preview-guest-tools.test.ts",
         "src/renderer/src/components/editor/EditorPanelShell.header.test.tsx",
         "src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
-        "src/renderer/src/components/browser-pane/workspace-doc/workspace-doc-page-pane.test.tsx",
         "src/shared/doc-preview-scheme.test.ts",
         "src/renderer/src/lib/doc-preview-grants.test.ts",
         "src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.failure-message.test.tsx",
@@ -6299,13 +6292,6 @@
           ]
         },
         {
-          "file": "src/renderer/src/components/browser-pane/workspace-doc/workspace-doc-page-pane.test.tsx",
-          "assertions": [
-            "the pane offers its guest focus when the reader is in this very preview",
-            "it refuses while the reader is in a terminal in front of it, in a different browser tab, or while its own page is not the active one"
-          ]
-        },
-        {
           "file": "src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
           "assertions": [
             "a preview that is the reader's surface hands its guest focus, and one that is not leaves focus alone",
@@ -6335,6 +6321,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts src/renderer/src/components/browser-pane/workspace-doc/workspace-doc-page-pane.test.tsx src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
           "result": "failed",
           "durationSeconds": 7,
           "summary": "The adversarial pass answered the request for its own group-projection probe after this round landed, and it had measured a third observable this test was missing: the held-back group also has to leave the published layout tree, or the phone renders a split whose second pane can never hold anything. Adopted as a fourth assertion and re-run against the same sole delta, which now fails on the dangling-reference check and, with that check blinded, on the layout alone — group-left and group-right against the group-right the clean tree publishes. The two probes agreed on everything else, including that the tab list is unchanged under this mutant, which is why an assertion reading only the tab list cannot reach the site at all."
@@ -6344,6 +6331,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts src/renderer/src/components/browser-pane/workspace-doc/workspace-doc-page-pane.test.tsx src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
           "result": "passed",
           "durationSeconds": 3,
           "summary": "The adversarial pass's four coverage findings, landed and pinned: 58/58. The third url door now keeps a document page blank and names it by its document, the group projection holds a document back from published groups as well as from the tab list, the pane's focus handoff is pinned in the widening direction as well as the narrowing one, and the handoff is re-offered when the window takes focus back."
@@ -6353,6 +6341,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts src/renderer/src/components/browser-pane/workspace-doc/workspace-doc-page-pane.test.tsx src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
           "result": "failed",
           "durationSeconds": 3,
           "summary": "Three sole-delta mutants on the third url door, each failing only the new store test: committing the reported url onto a document page, dropping the document from the title normalizer there (which renames the tab New Tab, since a blank url is what that fallback reads), and marking a blank document page loading. The ordinary-page half of the same test passes under all three, so the door is pinned as a document-only refusal rather than as a door that writes nothing."
@@ -6362,6 +6351,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts src/renderer/src/components/browser-pane/workspace-doc/workspace-doc-page-pane.test.tsx src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
           "result": "failed",
           "durationSeconds": 3,
           "summary": "Two sole-delta mutants on the mobile publish boundary. Dropping the document from the group projection's browser ids fails only the new grouped test — the tab list stays correct because the per-tab guard still refuses the tab, and what breaks is a published group whose order and active tab name a tab the phone is never sent. This is the survivor the adversarial pass reported: it survives the whole suite without this test, because no other test in it has tab groups. Dropping the per-tab guard instead fails only the ungrouped test, so the two halves of the boundary are pinned separately."
@@ -6371,6 +6361,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts src/renderer/src/components/browser-pane/workspace-doc/workspace-doc-page-pane.test.tsx src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
           "result": "failed",
           "durationSeconds": 3,
           "summary": "Three sole-delta mutants widening the focus handoff, the direction the adversarial pass found uncovered: dropping the page-activity half, dropping the active-tab-type half, and dropping the active-browser-tab half each fail exactly one of the pane's refusals — the inactive page, the terminal in front, and the other browser tab respectively. The presence half of that test passes under all three, so a pane that had stopped offering focus at all would still fail rather than pass the refusals vacuously."
@@ -6380,6 +6371,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts src/renderer/src/components/browser-pane/workspace-doc/workspace-doc-page-pane.test.tsx src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
           "result": "failed",
           "durationSeconds": 3,
           "summary": "One sole-delta mutant dropping the window-focus re-offer: the guest is focused once at mount and never again after the window comes back, which is the desktop gap behind it — another app taking the front leaves the preview's only route out shut until the pane remounts. It fails only the new re-offer test, and the refusing-preview case beside it stays green, so the re-offer is pinned as gated rather than unconditional."

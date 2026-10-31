@@ -84,7 +84,7 @@ export function renderMobileTasksCreateDrawer(model: ConnectionPresentationModel
             : translate('tasks.tasksCreateDrawers.team', 'Team')}
         </Text>
         <Pressable
-          style={styles.targetButton}
+          style={[styles.targetButton, styles.targetButtonOnSheet]}
           disabled={!taskUiReady}
           onPress={() => {
             if (!taskUiReady) {

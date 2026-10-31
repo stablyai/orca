@@ -17082,7 +17082,8 @@
         },
         "capturedOwner": {
           "orphan": "このオートメーションには実行するホストがありません。削除するか、所属するホストを再度追加してください。",
-          "unfenced": "実行履歴を表示したり、この自動化を管理したりするには、このホスト上の Orca を更新する必要があります。スケジュールされた実行はホスト上で引き続き続行される可能性があります。"
+          "unfenced": "実行履歴を表示したり、この自動化を管理したりするには、このホスト上の Orca を更新する必要があります。スケジュールされた実行はホスト上で引き続き続行される可能性があります。",
+          "hostReselection": "オートメーションを編集し、実行する前にホストを選択し直してください。"
         },
         "hostStatus": {
           "authority": {
@@ -17210,6 +17211,9 @@
         },
         "hostSummary": {
           "partialFailureOfHosts_other": "{{count}} 台中 {{failed}} 台のホストを読み込めませんでした"
+        },
+        "automationTargetAvailability": {
+          "hostMismatch": "保存された実行ホストが、このプロジェクトの設定と一致しなくなりました。"
         }
       },
       "agent": {
@@ -18835,7 +18839,10 @@
         "orcaStopCrash": "この応答の途中で、{{machine}} の Orca が予期せず停止しました。",
         "orcaStopRemote": "この応答の途中で、{{machine}} の Orca が停止しました。",
         "orcaStopCanContinue": "この会話で続行できます。",
-        "orcaStopUnnamedServer": "リモートサーバー"
+        "orcaStopUnnamedServer": "リモートサーバー",
+        "permissionDenied": "{{agent}} が権限を拒否しました。詳細を表示。",
+        "safetyReview": "{{agent}} が安全性レビューの警告を報告しました。詳細を表示。",
+        "truncatedResponse": "プロバイダーの応答は切り詰められています（元のサイズ：{{bytes}} バイト）。"
       },
       "providerFrame": {
         "byteCount_other": "{{count}} バイト"

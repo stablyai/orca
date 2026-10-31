@@ -269,7 +269,7 @@ describe('execution-host agent launch settings', () => {
         value: ''
       }).success
     ).toBe(true)
-    expect(MOBILE_RPC_METHOD_ALLOWLIST.has('settings.getAgentLaunch')).toBe(false)
+    expect(MOBILE_RPC_METHOD_ALLOWLIST.has('settings.getAgentLaunch')).toBe(true)
     expect(MOBILE_RPC_METHOD_ALLOWLIST.has('settings.mutateAgentLaunch')).toBe(false)
   })
 })

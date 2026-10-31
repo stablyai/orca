@@ -17557,7 +17557,8 @@
         },
         "capturedOwner": {
           "orphan": "Bu otomasyonun çalışacağı bir sunucusu yok. Silin veya ait olduğu sunucuyu yeniden ekleyin.",
-          "unfenced": "Çalıştırma geçmişini görüntülemeden veya bu otomasyonu yönetmeden önce bu sunucudaki Orca'nın güncellenmesi gerekiyor. Planlanan çalıştırmalar sunucuda devam edebilir."
+          "unfenced": "Çalıştırma geçmişini görüntülemeden veya bu otomasyonu yönetmeden önce bu sunucudaki Orca'nın güncellenmesi gerekiyor. Planlanan çalıştırmalar sunucuda devam edebilir.",
+          "hostReselection": "Otomasyonu düzenleyin ve çalıştırmadan önce ana makinesini yeniden seçin."
         },
         "hostStatus": {
           "authority": {
@@ -17735,6 +17736,9 @@
         "hostSummary": {
           "partialFailureOfHosts_one": "{{count}} sunucudan {{failed}} tanesi yüklenemedi",
           "partialFailureOfHosts_other": "{{count}} sunucudan {{failed}} tanesi yüklenemedi"
+        },
+        "automationTargetAvailability": {
+          "hostMismatch": "Kaydedilen çalıştırma ana makinesi artık bu proje kurulumuyla eşleşmiyor."
         }
       },
       "agent": {
@@ -19056,7 +19060,10 @@
         "orcaStopCrash": "Bu yanıt hazırlanırken {{machine}} üzerindeki Orca beklenmedik biçimde durdu.",
         "orcaStopRemote": "Bu yanıt hazırlanırken {{machine}} üzerindeki Orca durdu.",
         "orcaStopCanContinue": "Bu konuşmada devam edebilirsiniz.",
-        "orcaStopUnnamedServer": "uzak sunucu"
+        "orcaStopUnnamedServer": "uzak sunucu",
+        "permissionDenied": "{{agent}} izin vermedi. Ayrıntıları görüntüleyin.",
+        "safetyReview": "{{agent}} bir güvenlik incelemesi uyarısı bildirdi. Ayrıntıları görüntüleyin.",
+        "truncatedResponse": "Sağlayıcı yanıtı kısaltıldı (özgün boyut: {{bytes}} bayt)."
       },
       "composer": {
         "send": "Gönder",

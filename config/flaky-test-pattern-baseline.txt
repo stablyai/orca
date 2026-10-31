@@ -12,7 +12,6 @@
 1 test-no-in-test-import-actual:src/main/claude/claude-agent-sdk-process-spawn.test.ts
 3 test-no-in-test-import-actual:src/main/codex-accounts/runtime-home-read-only-launch-resolution.test.ts
 1 test-no-in-test-import-actual:src/main/codex-accounts/runtime-home-wsl-system-default.test.ts
-2 test-no-in-test-import-actual:src/main/codex-accounts/service-managed-home-removal-retries.test.ts
 1 test-no-in-test-import-actual:src/main/codex-usage/scanner-file-identity.test.ts
 1 test-no-in-test-import-actual:src/main/codex/config-toml-hook-trust-scaling.test.ts
 8 test-no-in-test-import-actual:src/main/daemon/daemon-endpoint-publish.test.ts

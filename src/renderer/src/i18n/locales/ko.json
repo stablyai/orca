@@ -17082,7 +17082,8 @@
         },
         "capturedOwner": {
           "orphan": "이 자동화에는 실행할 호스트가 없습니다. 삭제하거나 해당 호스트를 다시 추가하세요.",
-          "unfenced": "실행 기록을 보거나 이 자동화를 관리하려면 이 호스트의 Orca를 업데이트해야 합니다. 예약된 실행은 호스트에서 계속 계속될 수 있습니다."
+          "unfenced": "실행 기록을 보거나 이 자동화를 관리하려면 이 호스트의 Orca를 업데이트해야 합니다. 예약된 실행은 호스트에서 계속 계속될 수 있습니다.",
+          "hostReselection": "자동화를 편집하고 실행하기 전에 호스트를 다시 선택하세요."
         },
         "hostStatus": {
           "authority": {
@@ -17210,6 +17211,9 @@
         },
         "hostSummary": {
           "partialFailureOfHosts_other": "호스트 {{count}}개 중 {{failed}}개를 불러오지 못했습니다"
+        },
+        "automationTargetAvailability": {
+          "hostMismatch": "저장된 실행 호스트가 더 이상 이 프로젝트 설정과 일치하지 않습니다."
         }
       },
       "agent": {
@@ -18835,7 +18839,10 @@
         "orcaStopCrash": "이 응답이 진행되는 동안 {{machine}}의 Orca가 예기치 않게 중지되었습니다.",
         "orcaStopRemote": "이 응답이 진행되는 동안 {{machine}}의 Orca가 중지되었습니다.",
         "orcaStopCanContinue": "이 대화에서 계속할 수 있습니다.",
-        "orcaStopUnnamedServer": "원격 서버"
+        "orcaStopUnnamedServer": "원격 서버",
+        "permissionDenied": "{{agent}}이(가) 권한을 거부했습니다. 세부 정보 보기.",
+        "safetyReview": "{{agent}}이(가) 안전 검토 경고를 보고했습니다. 세부 정보 보기.",
+        "truncatedResponse": "공급자 응답이 잘렸습니다(원래 크기: {{bytes}}바이트)."
       },
       "providerFrame": {
         "byteCount_other": "{{count}}바이트"

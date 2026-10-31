@@ -17571,7 +17571,8 @@
         },
         "capturedOwner": {
           "orphan": "Dieser Automatisierung fehlt ein Host zur Ausführung. Die Automatisierung löschen oder den zugehörigen Host erneut hinzufügen.",
-          "unfenced": "Orca auf diesem Host muss aktualisiert werden, bevor der Ausführungsverlauf angezeigt oder diese Automatisierung verwaltet werden kann. Geplante Ausführungen können auf dem Host weiterhin stattfinden."
+          "unfenced": "Orca auf diesem Host muss aktualisiert werden, bevor der Ausführungsverlauf angezeigt oder diese Automatisierung verwaltet werden kann. Geplante Ausführungen können auf dem Host weiterhin stattfinden.",
+          "hostReselection": "Bearbeite die Automatisierung und wähle ihren Host erneut aus, bevor du sie ausführst."
         },
         "hostStatus": {
           "authority": {
@@ -17749,6 +17750,9 @@
         "hostSummary": {
           "partialFailureOfHosts_one": "Laden fehlgeschlagen: {{failed}} von {{count}} Host",
           "partialFailureOfHosts_other": "Laden fehlgeschlagen: {{failed}} von {{count}} Hosts"
+        },
+        "automationTargetAvailability": {
+          "hostMismatch": "Der gespeicherte Ausführungshost stimmt nicht mehr mit dieser Projekteinrichtung überein."
         }
       },
       "agent": {
@@ -19069,7 +19073,10 @@
         "orcaStopCrash": "Orca auf {{machine}} wurde während dieser Antwort unerwartet beendet.",
         "orcaStopRemote": "Orca auf {{machine}} wurde während dieser Antwort gestoppt.",
         "orcaStopCanContinue": "Die Unterhaltung kann fortgesetzt werden.",
-        "orcaStopUnnamedServer": "dem entfernten Server"
+        "orcaStopUnnamedServer": "dem entfernten Server",
+        "permissionDenied": "{{agent}} hat die Berechtigung verweigert. Details anzeigen.",
+        "safetyReview": "{{agent}} hat eine Warnung zur Sicherheitsprüfung gemeldet. Details anzeigen.",
+        "truncatedResponse": "Anbieterantwort gekürzt (ursprüngliche Größe: {{bytes}} Bytes)."
       },
       "composer": {
         "send": "Senden",

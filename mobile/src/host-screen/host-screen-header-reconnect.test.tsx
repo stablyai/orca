@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ActionSheetAction } from '../components/ActionSheetModal'
 import type { ForceReconnect } from '../transport/rpc-client-context-contract'
 
@@ -12,6 +12,7 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 vi.mock('lucide-react-native', () => ({
+  CalendarClock: 'Icon',
   ChevronLeft: 'Icon',
   List: 'Icon',
   MoreHorizontal: 'Icon',
@@ -122,4 +123,44 @@ describe("the host header's ⋯ menu", () => {
     expect(controls(tree, 'Search workspaces')).toHaveLength(0)
     expect(controls(tree, 'New workspace')).toHaveLength(0)
   })
+})
+
+describe('host Automations entry', () => {
+  let tree: ReactTestRenderer | null = null
+  afterEach(() => {
+    act(() => tree?.unmount())
+    tree = null
+  })
+
+  it.each([false, true])(
+    'keeps one menu entry after Tasks with embedded=%s and disables it offline',
+    (embedded) => {
+      const navigate = vi.fn()
+      const controller = {
+        ...controllerWith(null),
+        embedded,
+        hostId: 'host/with space',
+        actions: { ...controllerWith(null).actions, navigateFromHostList: navigate }
+      }
+      const screen = (connState: 'connected' | 'reconnecting') => (
+        <HostScreenHeader controller={{ ...controller, connState }} />
+      )
+      act(() => {
+        tree = create(screen('connected'))
+      })
+      expect(controls(tree!, 'Automations')).toHaveLength(0)
+      act(() => controls(tree!, 'More actions')[0]?.props.onPress())
+      const entries = () => controls(tree!, 'Automations')
+      expect(entries()).toHaveLength(1)
+      const menuItems = tree!.root.findAll((node) => String(node.type) === 'MenuItem')
+      const entryIndex = menuItems.indexOf(entries()[0]!)
+      expect(menuItems[entryIndex - 1]?.props.accessibilityLabel).toBe('Tasks')
+      expect(entries()[0]?.props.disabled).toBe(false)
+      act(() => entries()[0]?.props.onPress())
+      expect(navigate).toHaveBeenCalledExactlyOnceWith('/h/host%2Fwith%20space/automations')
+      act(() => tree?.update(screen('reconnecting')))
+      expect(entries()).toHaveLength(1)
+      expect(entries()[0]?.props.disabled).toBe(true)
+    }
+  )
 })

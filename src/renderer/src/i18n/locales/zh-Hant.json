@@ -17338,7 +17338,8 @@
         },
         "capturedOwner": {
           "orphan": "此自動化沒有可供執行的主機。刪除它，或重新新增它所屬的主機。",
-          "unfenced": "此主機上的 Orca 需要更新，然後您才能查看執行歷史記錄或管理此自動化。排程執行仍可能在主機上繼續。"
+          "unfenced": "此主機上的 Orca 需要更新，然後您才能查看執行歷史記錄或管理此自動化。排程執行仍可能在主機上繼續。",
+          "hostReselection": "請編輯此自動化，並在執行前重新選擇其主機。"
         },
         "hostStatus": {
           "authority": {
@@ -17509,6 +17510,9 @@
         },
         "hostSummary": {
           "partialFailureOfHosts_other": "{{count}} 台主機中有 {{failed}} 台無法載入"
+        },
+        "automationTargetAvailability": {
+          "hostMismatch": "儲存的執行主機與此專案設定不再相符。"
         }
       },
       "agent": {
@@ -18810,7 +18814,10 @@
         "orcaStopCrash": "此回覆進行期間，{{machine}} 上的 Orca 意外停止。",
         "orcaStopRemote": "此回覆進行期間，{{machine}} 上的 Orca 已停止。",
         "orcaStopCanContinue": "你可以在此對話中繼續。",
-        "orcaStopUnnamedServer": "遠端伺服器"
+        "orcaStopUnnamedServer": "遠端伺服器",
+        "permissionDenied": "{{agent}} 拒絕了權限。查看詳細資訊。",
+        "safetyReview": "{{agent}} 回報了安全審查警告。查看詳細資訊。",
+        "truncatedResponse": "供應商回應已截斷（原始大小：{{bytes}} 位元組）。"
       },
       "composer": {
         "send": "傳送",
