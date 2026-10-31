@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import ImageViewer from './ImageViewer'
 import ImageDiffViewer from './ImageDiffViewer'
 import { EditorCommandOwnerContext } from './editor-command-owner-context'
@@ -13,7 +13,25 @@ vi.mock('./PdfViewer', () => ({ default: () => null }))
 const PNG =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
 
-afterEach(cleanup)
+// Browsers report the initial size on observe(); happy-dom never does.
+beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      constructor(private readonly callback: ResizeObserverCallback) {}
+      observe(): void {
+        this.callback([], this)
+      }
+      unobserve(): void {}
+      disconnect(): void {}
+    }
+  )
+})
+
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+})
 
 function renderImage(isCommandOwner: boolean, layout: 'fill' | 'intrinsic' = 'fill'): void {
   render(

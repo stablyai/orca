@@ -86,10 +86,10 @@ export function usePanZoomViewport({
     if (!canvas) {
       return
     }
-    const measure = (): void =>
+    // observe() delivers the initial size, so no synchronous measure is needed.
+    const observer = new ResizeObserver(() =>
       setViewport({ width: canvas.clientWidth, height: canvas.clientHeight })
-    measure()
-    const observer = new ResizeObserver(measure)
+    )
     observer.observe(canvas)
     return () => observer.disconnect()
   }, [canvas])
