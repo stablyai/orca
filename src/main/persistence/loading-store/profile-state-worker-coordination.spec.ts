@@ -5,6 +5,36 @@ import { StateSerializationSecretHandlingOperations } from './state-serializatio
 
 export function registerProfileStateWorkerCoordinationTests(): void {
   describe('worker-owned Store writes', () => {
+    it.each(['selective', 'complete'] as const)(
+      'retains original Chat metadata through failed %s worker write and retry',
+      async (mode) => {
+        const original = { experimentalNativeChat: { saved: [false, null] } }
+        const { store, authority, readState } = await fixture(undefined, original)
+        const selective = vi.spyOn(authority, 'writeSerializedDomains')
+        const complete = vi.spyOn(authority, 'writeCompleteSerializedDomains')
+        const input = {
+          agentDefaultSurface: 'chat' as const,
+          nativeChatProviders: { codex: false },
+          experimentalNativeChat: false
+        }
+        store.updateSettings(input)
+        if (mode === 'complete') {
+          store.updateOnboarding({ outcome: 'completed' })
+        }
+        authority.failNextWrite()
+        await expect(store.flushPendingOrThrowAsync()).rejects.toThrow('profile_state_write_failed')
+        await store.flushPendingOrThrowAsync()
+        expect(mode === 'selective' ? selective : complete).toHaveBeenCalledTimes(2)
+        expect(readState().settings).toMatchObject({
+          ...original,
+          agentDefaultSurface: 'chat',
+          nativeChatProviders: { codex: false }
+        })
+        expect(store.getSettings()).not.toHaveProperty('experimentalNativeChat')
+        expect(JSON.parse(store.prepareProfileStateExport().json).settings).toMatchObject(original)
+      }
+    )
+
     it('consumes the debounce timer and avoids full checkpoints after a selective durable write', async () => {
       const { store, authority, readState } = await fixture()
       const full = vi.spyOn(authority, 'writeCompleteSerializedDomains')

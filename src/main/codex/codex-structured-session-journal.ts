@@ -33,6 +33,7 @@ export function createCodexSessionJournalTranslator(input: {
         primaryThreadId: input.primaryThreadId,
         dispatchEchoes,
         dispatchRequestOrigin: (clientMessageId) => dispatchEchoes.requestOrigin(clientMessageId),
+        dispatchTurnOpener: (threadId, turnId) => dispatchEchoes.turnOpener(threadId, turnId),
         subagentExecutions: input.subagentExecutions,
         bindPromptItemId: (journalItemId, threadId, promptKey, turnId) =>
           prompts.bindJournalItemId(journalItemId, threadId, promptKey, turnId),

@@ -8,6 +8,7 @@ import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import { useWorkspaceKanbanWorktreeActions } from './use-workspace-kanban-worktree-actions'
 import { useWorktreeStatusMutations } from './worktree-list/drag/use-status-mutations'
+import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 
 const local = makeWorktree({ id: 'repo::/local', repoId: 'repo', path: '/local' })
 const hosted = makeWorktree({
@@ -16,7 +17,10 @@ const hosted = makeWorktree({
   path: '/hosted',
   hostId: toRuntimeExecutionHostId('env-1')
 })
-const catalog = { orderedIds: [local.id, hosted.id], rankByWorktreeId: new Map<string, number>() }
+const catalog = {
+  orderedKeys: [getWorktreeHostIdentity(local), getWorktreeHostIdentity(hosted)],
+  rankByKey: new Map<string, number>()
+}
 
 let updateWorktreesMeta: ReturnType<typeof vi.fn<AppState['updateWorktreesMeta']>>
 
@@ -51,6 +55,7 @@ describe("drops into a paired host's own column", () => {
           [local.id, local],
           [hosted.id, hosted]
         ]),
+        worktreeByKey: new Map([local, hosted].map((row) => [getWorktreeHostIdentity(row), row])),
         manualOrderCatalog: catalog,
         worktreesByStatus: new Map()
       })

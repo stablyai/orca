@@ -66,7 +66,7 @@ export function registerJournalEpochReplacementTests(): void {
 
   afterEach(async () => {
     try {
-      database.close()
+      await database.close()
     } catch {}
     await journals.closeAll()
     await rm(root, { recursive: true, force: true })

@@ -172,7 +172,7 @@ describe('MobileNativeChatComposer', () => {
     expect(findAllByHostType(composer, 'TextInput')).toHaveLength(1)
     expect(composer.children.at(-1)).toBe(actions)
     expect(inset.props.style).toMatchObject({ paddingBottom: spacing.sm })
-    expect(composer.props.style).toMatchObject({ borderWidth: 1, borderRadius: radii.composer })
+    expect(composer.props.style).toMatchObject({ borderWidth: 1, borderRadius: radii.floating })
   })
 
   it('preserves leading whitespace so prose is not turned into a slash command', async () => {

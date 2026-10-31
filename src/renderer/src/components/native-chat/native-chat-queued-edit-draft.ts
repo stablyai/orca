@@ -1,6 +1,6 @@
 import type { JSONContent } from '@tiptap/react'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session-journal-types'
-import { imageReferenceToken } from '../../../../shared/native-chat/native-chat-image-reference'
+import { withoutImageReference } from '../../../../shared/native-chat/native-chat-image-reference'
 import {
   imageReferencesToPromptMarkers,
   promptMarkersToImageReferences
@@ -180,7 +180,7 @@ export function handBackNativeChatQueuedEdit(
     draft.images.some((image) => sameQueuedEditImage(entry.image, image))
   )
   for (const { id } of kept) {
-    text = text.replaceAll(imageReferenceToken(id), '')
+    text = withoutImageReference(text, id)
     if (document) {
       document = withoutImageReferenceNodes(document, id)
     }

@@ -52,13 +52,10 @@ import {
   journalStopEventRowBuilder
 } from './journal-stop-and-resume-rows'
 import type { AgentJournalEpochReason, JournalStopEvent, JournalRow } from './journal-row-schema'
-import type { JournalOperationReceipt, JournalRowWriter } from './journal-row-writer'
-import type { JournalSubmissionWriter } from './journal-submission-writer'
-import type { JournalEpochController } from './journal-epoch-controller'
+import type { JournalOperationReceipt } from './journal-row-writer'
 import { JournalWriteQueue } from './journal-write-queue'
 import { journalItemExecutionFence, journalItemProvenance } from './journal-item-provenance'
 import { createJournalStoreCollaborators } from './journal-store-collaborators'
-import type { JournalItemAppender } from './journal-item-appender'
 import {
   journalContextCursor,
   journalContextReceipt,
@@ -83,11 +80,11 @@ export class AgentSessionJournal {
   private reopenUnmarked: AgentJournalCursor | null = null
   private onCommitted: ((rows?: readonly JournalRow[]) => void) | null = null
   private readonly queue: JournalWriteQueue
-  private readonly rowWriter: JournalRowWriter
-  private readonly epochController: JournalEpochController
-  private readonly itemAppender: JournalItemAppender
+  private readonly rowWriter: JournalCollaborators['rowWriter']
+  private readonly epochController: JournalCollaborators['epochController']
+  private readonly itemAppender: JournalCollaborators['itemAppender']
   private readonly lifecycleBatchAppender: JournalCollaborators['lifecycleBatchAppender']
-  private readonly submissionWriter: JournalSubmissionWriter
+  private readonly submissionWriter: JournalCollaborators['submissionWriter']
   private readonly stepWriter: JournalCollaborators['stepWriter']
   private readonly restore: () => Promise<void>
   /** Queued cards never count as owed work. */
@@ -176,8 +173,14 @@ export class AgentSessionJournal {
   }
 
   /** One nonthrowing listener; undefined rows mean adopted history, an empty array means metadata. */
-  observeCommits(listener: (rows?: readonly JournalRow[]) => void): void {
-    this.onCommitted = listener
+  observeCommits(listener: (rows?: readonly JournalRow[]) => void): () => void {
+    const registered: typeof listener = (...args) => listener(...args)
+    this.onCommitted = registered
+    return () => {
+      if (this.onCommitted === registered) {
+        this.onCommitted = null
+      }
+    }
   }
 
   cursor = (): AgentJournalCursor => journalContextCursor(this.state)
@@ -278,15 +281,15 @@ export class AgentSessionJournal {
   }
 
   /** Assign revisions here so callers cannot publish reducer-stale upserts. */
-  appendItem(...args: Parameters<JournalItemAppender['append']>) {
+  appendItem(...args: Parameters<typeof this.itemAppender.append>) {
     return this.itemAppender.append(...args)
   }
 
-  appendClaimingAttachments: JournalItemAppender['appendClaimingAttachments'] = (...args) =>
+  appendClaimingAttachments: typeof this.itemAppender.appendClaimingAttachments = (...args) =>
     this.itemAppender.appendClaimingAttachments(...args)
 
   /** Resolve on the write lane; null appends nothing. */
-  appendResolvedItem: JournalItemAppender['appendResolved'] = (resolve, options) =>
+  appendResolvedItem: typeof this.itemAppender.appendResolved = (resolve, options) =>
     this.itemAppender.appendResolved(resolve, options)
 
   appendTombstone(
@@ -346,18 +349,17 @@ export class AgentSessionJournal {
   appendPlannedLifecycleBatch = (input: JournalPlannedLifecycleBatchInput) =>
     this.lifecycleBatchAppender.appendPlanned(input)
 
-  appendSteps: JournalCollaborators['stepWriter']['append'] = (steps) =>
-    this.stepWriter.append(steps)
+  appendSteps: typeof this.stepWriter.append = (steps) => this.stepWriter.append(steps)
 
-  appendSubmission(...args: Parameters<JournalSubmissionWriter['append']>) {
+  appendSubmission(...args: Parameters<typeof this.submissionWriter.append>) {
     return this.submissionWriter.append(...args)
   }
 
-  resolveDispatch(...args: Parameters<JournalSubmissionWriter['resolveDispatch']>) {
+  resolveDispatch(...args: Parameters<typeof this.submissionWriter.resolveDispatch>) {
     return this.submissionWriter.resolveDispatch(...args)
   }
 
-  acceptLate: JournalSubmissionWriter['acceptLate'] = (i) => this.submissionWriter.acceptLate(i)
+  acceptLate: typeof this.submissionWriter.acceptLate = (i) => this.submissionWriter.acceptLate(i)
 
   /** Retire unanswered sends after their execution owner ended, without assuming delivery. */
   async markPendingSubmissionsUnknown(fence: number, reason?: string): Promise<string[]> {
@@ -383,9 +385,7 @@ export class AgentSessionJournal {
     return this.epochController.roll(reason, fence)
   }
 
-  replaceEpochItems(
-    ...args: Parameters<JournalEpochController['replace']>
-  ): Promise<AgentJournalCursor> {
+  replaceEpochItems(...args: Parameters<typeof this.epochController.replace>) {
     return this.epochController.replace(...args)
   }
 }

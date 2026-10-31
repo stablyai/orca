@@ -92,6 +92,7 @@ function createCodexTranslation(
     resetActivity,
     attributionFor,
     commands,
+    ...(deps.dispatchTurnOpener ? { turnOpener: deps.dispatchTurnOpener } : {}),
     ...(deps.now ? { now: deps.now } : {})
   })
   const routeThreadItem = createCodexThreadItemRouter({

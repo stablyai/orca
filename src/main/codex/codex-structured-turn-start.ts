@@ -199,7 +199,17 @@ export async function startCodexTurn(
             ...permission,
             ...requested
           },
-          { timeoutMs: input.timeoutMs, onReply: input.onReply }
+          {
+            timeoutMs: input.timeoutMs,
+            onReply: (reply) => {
+              // Record before the rest of the reply's stdout chunk is translated.
+              const turnId = readCodexTurnId(reply)
+              if (turnId) {
+                host.dispatchEchoes.repliedTurn(input.clientMessageId, host.threadId, turnId)
+              }
+              input.onReply?.()
+            }
+          }
         )
         .then((answer) => {
           const applied = reportedCodexPermissionMode({
@@ -307,10 +317,5 @@ export async function dispatchCodexTurn(
       answeredAt
     )
   }
-  return { state: 'admitted', ranOptions: codexRanOptions(session) }
-}
-
-/** Steers retain running-turn options; starts use request overrides over thread defaults. */
-function codexRanOptions(session: CodexTurnHost): Record<string, string> {
-  return { ...session.appliedTurnOptions }
+  return { state: 'admitted', ranOptions: { ...session.appliedTurnOptions } }
 }

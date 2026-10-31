@@ -121,6 +121,7 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
           liveness: { verdict: string }
           nextAction: { argv: string[] }
           attention?: { categories: string[] }
+          autoReleaseAt?: string
         }
       }[]
       counts: Record<string, number>
@@ -167,7 +168,10 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
                 const next = projection
                   ? ` next=${projection.nextAction.argv.join(' ') || 'none'}`
                   : ''
-                return `${worker.dispatchId} task=${worker.taskId} [${worker.workerState}${details} terminal=${worker.terminalState ?? 'none'}${next}`
+                const autoRelease = projection?.autoReleaseAt
+                  ? ` auto-release=${projection.autoReleaseAt}`
+                  : ''
+                return `${worker.dispatchId} task=${worker.taskId} [${worker.workerState}${details} terminal=${worker.terminalState ?? 'none'}${autoRelease}${next}`
               })
               .join('\n')
       const counts = Object.entries(value.counts)

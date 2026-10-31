@@ -33,8 +33,7 @@ vi.mock('@/store', () => ({
   }
 }))
 vi.mock('@/lib/agent-launch-through-host', () => ({
-  launchAgentThroughHost: testState.launchAgentThroughHost,
-  windowMakesHostLaunchTab: () => true
+  launchAgentThroughHost: testState.launchAgentThroughHost
 }))
 vi.mock('@/components/terminal-pane/pty-data-sidecar-subscriptions', () => ({
   subscribeToPtyData: (ptyId: string, watcher: (data: string) => void) => {

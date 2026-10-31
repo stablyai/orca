@@ -185,8 +185,7 @@ describe('LocalPtyProvider', () => {
       const { id, incarnationId } = await provider.spawn({ cols: 80, rows: 24 })
       await provider.shutdown(id, { immediate: true })
       expect(onExit).toHaveBeenCalledWith(id, -1, incarnationId, {
-        kind: 'unknown',
-        reason: 'stop_unverified'
+        kind: 'operator_close'
       })
     })
 

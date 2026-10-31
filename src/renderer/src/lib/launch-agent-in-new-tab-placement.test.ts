@@ -18,7 +18,7 @@ type PlacementSettings = {
   agentDefaultArgs: Record<string, string>
   agentDefaultEnv: Record<string, Record<string, string>>
   activeRuntimeEnvironmentId: string | null
-  experimentalNativeChat?: boolean
+  nativeChatProviders?: Record<string, boolean>
   nativeChatSessionOptions?: Record<
     string,
     { model?: string; valuesByModel?: Record<string, Record<string, string>> }

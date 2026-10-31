@@ -156,7 +156,7 @@ export type EditorFilesSlice = {
     relativePath: string,
     language: string,
     staged: boolean,
-    options?: EditorOpenTargetOptions & { selection?: EditorTabSelection }
+    options?: EditorOpenTargetOptions & { selection?: EditorTabSelection; oldPath?: string }
   ) => void
   openBranchDiff: (
     worktreeId: string,

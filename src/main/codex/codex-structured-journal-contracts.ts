@@ -46,6 +46,8 @@ export type CodexJournalTranslatorDeps = {
   /** Submission origin for one exact client message still awaiting its echo. */
   dispatchEchoes?: CodexDispatchEchoes
   dispatchRequestOrigin?: (clientMessageId: string) => CodexDispatchRequestOrigin | null
+  /** Armed send whose turn/start reply named this turn. */
+  dispatchTurnOpener?: CodexDispatchEchoes['turnOpener']
   subagentExecutions?: CodexSubagentExecutions
   coalesceMs?: number
   maxRetainedBytes?: number

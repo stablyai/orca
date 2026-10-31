@@ -26,7 +26,10 @@ import {
   editPersistedTestAgentSessionStore,
   openTestAgentSessionRecordStore
 } from './agent-session-record-store-test-harness'
-import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../native-chat/agent-session-journal/journal-host-database-test-support'
 
 const NOW = 1_800_000_000_000
 const NATIVE: AgentSessionExecutionLocation = {
@@ -124,6 +127,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  await closeTestJournalHostDatabases()
   await rm(directory, { recursive: true, force: true })
 })
 

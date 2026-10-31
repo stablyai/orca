@@ -1,3 +1,8 @@
+import {
+  EMPTY_PAGE_GEOMETRY,
+  samePageGeometry,
+  type BridgePageGeometry
+} from './bridge-page-geometry'
 import { BRIDGE_MAX_PENDING_REQUESTS, BRIDGE_MAX_SUBSCRIPTIONS } from './bridge-caps'
 import { MOBILE_WEB_SHELL_GRANTS } from '../page-route-policy'
 import {
@@ -16,6 +21,8 @@ import {
   ZERO_SAFE_AREA_INSETS,
   type BridgeSafeAreaInsets
 } from './bridge-safe-area-insets'
+import type { BridgeFoldDivision } from './bridge-fold-division'
+import type { BridgeTerminalKeyRail } from './bridge-terminal-key'
 
 // Grant the intersection of implemented capabilities and route declarations, plus protocol fault. Use the same resolved list for init and enforcement; new names need no version bump.
 export const BRIDGE_NATIVE_GRANTS: readonly string[] = [
@@ -32,6 +39,11 @@ export function createBridgeInitFrame(args: {
   pageRoutes: readonly string[]
   safeAreaInsets?: BridgeSafeAreaInsets
   keyboardInset?: number
+  /** The fold splitting the page, in its px; null or absent when none does. */
+  pageGeometry?: BridgePageGeometry
+  foldDivision?: BridgeFoldDivision | null
+  /** The keys the shell's rail shows beside the page; omitted while none does. */
+  terminalKeyRail?: BridgeTerminalKeyRail
   colorScheme?: BridgeColorScheme
   uiLocale?: BridgeUiLocale
   // Omit absent manifest pairs so older routing behavior remains available.
@@ -39,7 +51,10 @@ export function createBridgeInitFrame(args: {
   granted: readonly string[]
   host: BridgeInitHost
   storage: Readonly<Record<string, string>>
-  // Withheld oversized storage keys reject page writes; absent/empty both mean no app value was excluded (ruling 33.6).
+  refreshTerminalShortcuts?: boolean
+  /** The allowlisted keys whose app-side value is over the page's cap, so `storage` has none
+   *  (ruling 33.6). The page refuses its own writes to these rather than replacing the device's.
+   *  Absent and empty are the same answer: nothing of the app's was left out. */
   storageOversize?: readonly string[]
   ownsHostArea?: boolean
 }): Extract<BridgeHostMessage, { type: 'init' }> {
@@ -65,6 +80,21 @@ export function createBridgeInitFrame(args: {
     ...(args.keyboardInset === undefined || args.keyboardInset === 0
       ? {}
       : { keyboardInset: args.keyboardInset }),
+    ...(args.pageGeometry === undefined || samePageGeometry(args.pageGeometry, EMPTY_PAGE_GEOMETRY)
+      ? {}
+      : {
+          pageGeometry: {
+            ...args.pageGeometry,
+            occlusions: args.pageGeometry.occlusions.map((rect) => ({ ...rect }))
+          }
+        }),
+    ...(args.foldDivision === undefined || args.foldDivision === null
+      ? {}
+      : { foldDivision: { ...args.foldDivision } }),
+    ...(args.refreshTerminalShortcuts ? { refreshTerminalShortcuts: true } : {}),
+    ...(args.terminalKeyRail === undefined || args.terminalKeyRail.length === 0
+      ? {}
+      : { terminalKeyRail: [...args.terminalKeyRail] }),
     // Omit dark: it is what pages assume when an older shell sends nothing.
     ...(args.colorScheme === 'light' ? { colorScheme: 'light' as const } : {}),
     // Sent even for English: an absent field lets the page fall back to the WebView's language.
