@@ -262,7 +262,7 @@
 3 src/renderer/src/runtime/web-session-tabs-sync/use-web-session-tabs-sync.ts
 2 src/renderer/src/store/github/visible-hosted-review-refresh-targets.ts
 9 src/renderer/src/store/index.ts
-2 src/renderer/src/store/project-groups/project-group-mutations.ts
+1 src/renderer/src/store/project-groups/project-group-mutations.ts
 1 src/renderer/src/store/repos/all-host-repo-catalog-actions.ts
 2 src/renderer/src/store/repos/repo-add-actions.ts
 1 src/renderer/src/store/repos/repo-update.ts
