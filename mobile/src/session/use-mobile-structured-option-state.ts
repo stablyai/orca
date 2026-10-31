@@ -154,11 +154,18 @@ export function useMobileStructuredOptionState(args: {
       coherentCatalog,
       providerStarting,
       sendSelection,
-      isCurrentContext,
-      optionStamp,
-      turnId
+      isCurrentContext
     ]
   )
+  // A turn or host status change rereads within the same lease, as on desktop; it is not a new context.
+  const readStamp = JSON.stringify([optionStamp, turnId])
+  const seenReadStamp = useRef(readStamp)
+  useEffect(() => {
+    if (seenReadStamp.current !== readStamp) {
+      seenReadStamp.current = readStamp
+      reread()
+    }
+  }, [readStamp, reread])
 
   return {
     projectPermission,

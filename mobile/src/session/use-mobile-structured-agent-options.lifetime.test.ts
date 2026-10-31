@@ -220,6 +220,33 @@ it('reads the new physical path after an idle connected-to-connected migration w
   client.close()
 })
 
+it('coalesces a burst of turns into one running and one trailing options read', async () => {
+  const reads: ReturnType<typeof deferred<AgentSessionOptionsResult>>[] = []
+  const rpc = optionsClient(() => {
+    const read = deferred<AgentSessionOptionsResult>()
+    reads.push(read)
+    return read.promise
+  })
+  const { mutate } = recordingMutate(async () => ({ status: 'unknown' }))
+  const view = await mountOptions({ ...BASE, client: rpc.client, mutate })
+  expect(reads).toHaveLength(1)
+  await act(async () => reads[0].resolve(OPTIONS))
+  await settle()
+  for (let turn = 1; turn <= 10; turn++) {
+    await view.rerender({ turnId: `turn-${turn}` })
+  }
+  expect(reads).toHaveLength(2)
+  await act(async () => reads[1].resolve({ ...OPTIONS, conversationCommands: ['stale'] }))
+  await settle()
+  expect(view.current().conversationCommands).toEqual([])
+  expect(reads).toHaveLength(3)
+  await act(async () => reads[2].resolve({ ...OPTIONS, conversationCommands: ['compact'] }))
+  await settle()
+  expect(reads).toHaveLength(3)
+  expect(view.current().conversationCommands).toEqual(['compact'])
+  await view.unmount()
+})
+
 it.each(['current', 'failed-then-wake', 'true-end'] as const)(
   'settles a late refusal after a physical reset without losing progress (%s)',
   async (schedule) => {
@@ -303,6 +330,10 @@ it.each(['current', 'failed-then-wake', 'true-end'] as const)(
       const beforeWake = reads.length
       cause = 'status-wake'
       await view.rerender({ optionStamp: 'legitimate-status-wake' })
+      // The wake rereads behind the revalidation read still in flight, whose answer it supersedes.
+      expect(reads.length).toBe(beforeWake)
+      await act(async () => reads.at(-1)!.resolve(current))
+      await settle()
       expect(reads.length).toBe(beforeWake + 1)
       await act(async () => reads.at(-1)!.resolve(current))
     }
