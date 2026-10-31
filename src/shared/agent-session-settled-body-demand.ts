@@ -1,9 +1,14 @@
 import { SettledBodyDemandTree } from './agent-session-settled-body-demand-tree'
 
-type Lane<T> = { running: boolean; groups: Map<number, Group<T>> }
-type Group<T> = { lane: Lane<T>; bytes: number; items: Map<T, number>; head: number | null }
+type Member<T> = { value: T; order: number; bytes: number }
+type Lane<T> = {
+  running: boolean
+  items: Map<T, Member<T>>
+  tree: SettledBodyDemandTree<Member<T>>
+  indexed: number | null
+}
 
-// One indexed head per exact owner/charge; the selected entries remain the only demand owner.
+// Membership belongs to selected entries; owner availability changes only its global summary.
 export class SettledBodyDemand<T> {
   private readonly operations = {
     indexSteps: 0,
@@ -14,8 +19,8 @@ export class SettledBodyDemand<T> {
     drainRequests: 0,
     drainRuns: 0
   }
-  private readonly tree = new SettledBodyDemandTree<T>(this.operations)
-  private readonly membership = new Map<T, Group<T>>()
+  private readonly tree = new SettledBodyDemandTree<Lane<T>>(this.operations)
+  private readonly membership = new Map<T, Lane<T>>()
   private groups = 0
   private order = 0
   private drainQueued = false
@@ -35,7 +40,12 @@ export class SettledBodyDemand<T> {
     return this.membership.size
   }
   createLane(): Lane<T> {
-    return { running: false, groups: new Map() }
+    return {
+      running: false,
+      items: new Map(),
+      tree: new SettledBodyDemandTree(this.operations),
+      indexed: null
+    }
   }
   evidence() {
     return {
@@ -43,25 +53,21 @@ export class SettledBodyDemand<T> {
       indexed: this.tree.size,
       groups: this.groups,
       pending: this.size,
-      metadataBytes: this.size * 128 + this.groups * 160 + this.tree.size * 96
+      metadataBytes: this.size * (128 + 96) + this.groups * 160 + this.tree.size * 224
     }
   }
-  private unindex(group: Group<T>): void {
-    if (group.head !== null) {
-      this.tree.delete(group.head)
-      group.head = null
+  private unindex(lane: Lane<T>): void {
+    if (lane.indexed !== null) {
+      this.tree.delete(lane.indexed)
+      lane.indexed = null
     }
   }
-  private index(group: Group<T>): void {
+  private index(lane: Lane<T>): void {
     this.operations.headUpdates++
-    if (group.lane.running) {
-      return
-    }
-    const head = group.items.entries().next().value
-    if (head) {
-      this.operations.candidateExaminations++
-      this.tree.add(head[0], head[1], group.bytes)
-      group.head = head[1]
+    const first = lane.items.values().next().value
+    if (!lane.running && first) {
+      this.tree.add(lane, first.order, lane.tree.minimum)
+      lane.indexed = first.order
     }
   }
   add(value: T, lane: Lane<T>, bytes: number): void {
@@ -69,56 +75,48 @@ export class SettledBodyDemand<T> {
     if (this.membership.has(value)) {
       return
     }
-    let group = lane.groups.get(bytes)
-    if (!group) {
-      group = { lane, bytes, items: new Map(), head: null }
-      lane.groups.set(bytes, group)
+    this.unindex(lane)
+    const member = { value, order: ++this.order, bytes }
+    if (lane.items.size === 0) {
       this.groups++
     }
-    group.items.set(value, ++this.order)
-    this.membership.set(value, group)
-    if (group.items.size === 1) {
-      this.index(group)
-    }
+    lane.items.set(value, member)
+    lane.tree.add(member, member.order, bytes)
+    this.membership.set(value, lane)
+    this.index(lane)
   }
   delete(value: T): void {
     this.operations.queueOperations++
-    const group = this.membership.get(value)
-    if (!group) {
+    const lane = this.membership.get(value)
+    const member = lane?.items.get(value)
+    if (!lane || !member) {
       return
     }
-    const order = group.items.get(value)
-    const head = group.items.values().next().value
-    this.operations.candidateExaminations++
+    this.unindex(lane)
     this.membership.delete(value)
-    group.items.delete(value)
-    if (order === head) {
-      this.unindex(group)
-      this.index(group)
-    }
-    if (group.items.size === 0) {
-      group.lane.groups.delete(group.bytes)
+    lane.items.delete(value)
+    lane.tree.delete(member.order)
+    if (lane.items.size === 0) {
       this.groups--
     }
+    this.index(lane)
     if (this.size === 0) {
       this.order = 0
     }
   }
   setRunning(lane: Lane<T>, running: boolean): void {
-    if (lane.running === running) {
-      return
-    }
-    lane.running = running
-    for (const group of lane.groups.values()) {
+    if (lane.running !== running) {
       this.operations.ownerGroups++
-      if (running) {
-        this.unindex(group)
-      } else {
-        this.index(group)
-      }
+      this.unindex(lane)
+      lane.running = running
+      this.index(lane)
     }
   }
   firstFitting(bytes: number): T | null {
-    return this.tree.firstFitting(bytes)
+    const lane = this.tree.selectFitting(bytes, (owner) => {
+      const fit = owner.tree.fittingRange(bytes)
+      return { ...fit, value: fit.value ? owner : null }
+    })
+    return lane?.tree.firstFitting(bytes)?.value ?? null
   }
 }

@@ -1,3 +1,9 @@
+export type SettledBodyFit<T> = {
+  value: T | null
+  order: number
+  from: number
+  until: number
+}
 type Node<T> = {
   value: T
   order: number
@@ -6,6 +12,8 @@ type Node<T> = {
   height: number
   left: Node<T> | null
   right: Node<T> | null
+  ownFit?: SettledBodyFit<T>
+  fit?: SettledBodyFit<T>
 }
 export type SettledBodyDemandOperations = {
   indexSteps: number
@@ -23,6 +31,7 @@ export class SettledBodyDemandTree<T> {
 
   private refresh(node: Node<T>): Node<T> {
     this.operations.indexSteps++
+    node.fit = undefined
     node.height = 1 + Math.max(height(node.left), height(node.right))
     node.minimum = Math.min(
       node.bytes,
@@ -92,6 +101,7 @@ export class SettledBodyDemandTree<T> {
           this.operations.indexSteps++
           successor = successor.left
         }
+        node.ownFit = undefined
         node.value = successor.value
         node.order = successor.order
         node.bytes = successor.bytes
@@ -102,24 +112,68 @@ export class SettledBodyDemandTree<T> {
     this.root = remove(this.root, order)
     this.size--
   }
-  firstFitting(bytes: number): T | null {
+  get minimum(): number {
+    return this.root?.minimum ?? Infinity
+  }
+  selectFitting(bytes: number, select: (value: T) => SettledBodyFit<T>): T | null {
+    const search = (node: Node<T> | null): SettledBodyFit<T> => {
+      this.operations.indexSteps++
+      if (!node || node.minimum > bytes) {
+        return { value: null, order: Infinity, from: 0, until: node?.minimum ?? Infinity }
+      }
+      if (node.fit && node.fit.from <= bytes && bytes < node.fit.until) {
+        return node.fit
+      }
+      let best = search(node.left)
+      let from = best.from,
+        until = best.until
+      const include = (fit: SettledBodyFit<T>) => {
+        from = Math.max(from, fit.from)
+        until = Math.min(until, fit.until)
+        if (fit.order < best.order) {
+          best = fit
+        }
+      }
+      if (node.order < best.order) {
+        this.operations.indexSteps++
+        if (!node.ownFit || bytes < node.ownFit.from || bytes >= node.ownFit.until) {
+          this.operations.candidateExaminations++
+          node.ownFit = select(node.value)
+        }
+        include(node.ownFit)
+      }
+      if (node.order < best.order) {
+        include(search(node.right))
+      }
+      node.fit = { ...best, from, until }
+      return node.fit
+    }
+    return search(this.root).value
+  }
+  fittingRange(bytes: number): SettledBodyFit<T> {
     this.operations.indexSteps++
     let node = this.root
     if (!node || node.minimum > bytes) {
-      return null
+      return { value: null, order: Infinity, from: 0, until: node?.minimum ?? Infinity }
     }
+    let until = Infinity
     while (node) {
       this.operations.indexSteps++
       if (node.left && node.left.minimum <= bytes) {
         node = node.left
       } else {
         this.operations.candidateExaminations++
+        until = Math.min(until, node.left?.minimum ?? Infinity)
         if (node.bytes <= bytes) {
-          return node.value
+          return { value: node.value, order: node.order, from: node.bytes, until }
         }
+        until = Math.min(until, node.bytes)
         node = node.right
       }
     }
-    return null
+    return { value: null, order: Infinity, from: 0, until }
+  }
+  firstFitting(bytes: number): T | null {
+    return this.fittingRange(bytes).value
   }
 }

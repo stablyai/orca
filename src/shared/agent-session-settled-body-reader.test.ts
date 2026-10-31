@@ -1,3 +1,5 @@
+import { readCodexPendingPrompt } from '../main/codex/codex-prompt-request'
+import { codexPromptIdentity } from '../main/codex/codex-structured-prompt-items'
 import * as admission from './remote-runtime/requests/remote-runtime-prepared-request-admission'
 import { afterEach, expect, it, vi } from 'vitest'
 import {
@@ -101,7 +103,7 @@ it('keeps changed-source semantic errors terminal until a new source is selected
   })
 })
 
-it('bounds real 20/200-owner settlement work while retaining every exact READY body', async () => {
+it('bounds real 20/200-source settlement for many owners and one heterogeneous owner in both history directions', async () => {
   vi.useFakeTimers()
   const iterate = Set.prototype[Symbol.iterator]
   let leaseVisits = 0,
@@ -134,117 +136,188 @@ it('bounds real 20/200-owner settlement work while retaining every exact READY b
   const single = JSON.stringify(exact)
   expect(single.length).toBe(268)
   try {
-    for (const count of [20, 200]) {
-      let calls = 0,
-        publications = 0,
-        running = 0,
-        peak = 0,
-        peakBytes = 0,
-        peakAdmissions = 0
-      const visitsBefore = sourceVisits
-      const before = getAgentSessionSettledBodySchedulingEvidence()
-      const reservations = vi.spyOn(admission, 'reserveRemoteRuntimeRetainedBytes')
-      const releases = vi.fn()
-      const stopRelease = admission.subscribeRemoteRuntimeAdmissionRelease(releases)
-      let complete!: () => void
-      const completion = new Promise<void>((resolve) => {
-        complete = resolve
-      })
-      const owned = Array.from({ length: count }, (_, index) => {
-        const selected = {
-          ...source,
-          sessionId: `session-${String(index).padStart(3, '0')}`,
-          itemId: agentJournalItemKey({
-            provider: 'orca',
-            clientMessageId: `codex-prompt:thread-a:mcp-elicitation:00000000-0000-4000-8000-000000000000:${String(index).padStart(3, '0')}`
+    for (const mode of ['many', 'ascending', 'descending', 'mixed']) {
+      for (const count of [20, 200]) {
+        let calls = 0,
+          publications = 0,
+          running = 0,
+          peak = 0,
+          peakBytes = 0,
+          peakAdmissions = 0
+        const visitsBefore = sourceVisits
+        const before = getAgentSessionSettledBodySchedulingEvidence()
+        const pool = 64 * 1024 * 1024
+        const pressure = mode === 'mixed' ? reserveRemoteRuntimeRetainedBytes(pool) : null
+        let pressureBytes = pool,
+          smallCharge = 0
+        const reservations = vi.spyOn(admission, 'reserveRemoteRuntimeRetainedBytes')
+        const releases = vi.fn()
+        const stopRelease = admission.subscribeRemoteRuntimeAdmissionRelease(releases)
+        let complete!: () => void
+        const completion = new Promise<void>((resolve) => {
+          complete = resolve
+        })
+        const makeReader = () => {
+          const reader = createAgentSessionSettledBodyReader(async (request) => {
+            calls++
+            running++
+            peak = Math.max(peak, running)
+            const live = getRemoteRuntimeRequestAdmissionEvidence()
+            peakBytes = Math.max(peakBytes, live.retainedBytes)
+            peakAdmissions = Math.max(peakAdmissions, live.pendingRequestCount)
+            await Promise.resolve()
+            running--
+            const { cursor, ...selected } = request
+            return { source: selected, ...agentSessionJsonPiece(single, cursor) }
           })
+          readers.push(reader)
+          return reader
         }
-        const reader = createAgentSessionSettledBodyReader(async (request) => {
-          calls++
-          running++
-          peak = Math.max(peak, running)
-          const live = getRemoteRuntimeRequestAdmissionEvidence()
-          peakBytes = Math.max(peakBytes, live.retainedBytes)
-          peakAdmissions = Math.max(peakAdmissions, live.pendingRequestCount)
-          await Promise.resolve()
-          running--
-          return { source: selected, ...agentSessionJsonPiece(single, request.cursor) }
-        })
-        readers.push(reader)
-        const stop = reader.subscribe(selected, () => {
-          if (reader.getSnapshot(selected).status === 'ready' && ++publications === count) {
-            complete()
+        const shared = mode === 'many' || mode === 'mixed' ? null : makeReader()
+        const mixed = mode === 'mixed' ? Array.from({ length: count / 2 }, makeReader) : []
+        const owned = Array.from({ length: count }, (_, index) => {
+          const prompt = readCodexPendingPrompt(
+            {
+              id: 'x'.repeat(
+                mode === 'mixed'
+                  ? index < count / 2
+                    ? 200
+                    : 1
+                  : mode === 'descending'
+                    ? count - index
+                    : index + 1
+              ),
+              method: 'mcpServer/elicitation/request',
+              params: {
+                threadId: 'thread-a',
+                turnId: 'turn-a',
+                serverName: 'fixture',
+                mode: 'form',
+                message: 'Saved',
+                requestedSchema: {
+                  type: 'object',
+                  properties: { value: { type: 'string' } },
+                  required: ['value']
+                }
+              }
+            },
+            '00000000-0000-4000-8000-000000000000'
+          )
+          if (prompt?.elicitation?.kind !== 'form') {
+            throw new Error('Recorded form request must be supported')
           }
+          const selected = {
+            ...source,
+            sessionId:
+              mode === 'mixed'
+                ? `session-${String(index % (count / 2)).padStart(3, '0')}`
+                : mode === 'many'
+                  ? `session-${String(index).padStart(3, '0')}`
+                  : source.sessionId,
+            itemId: agentJournalItemKey(codexPromptIdentity(prompt))
+          }
+          const reader = mixed[index % mixed.length] ?? shared ?? makeReader()
+          const stop = reader.subscribe(selected, () => {
+            if (reader.getSnapshot(selected).status === 'ready') {
+              publications++
+              if (pressure && publications < count / 2) {
+                const retained = getRemoteRuntimeRequestAdmissionEvidence().retainedBytes
+                pressureBytes = pool - (retained - pressureBytes) - smallCharge
+                expect(pressure.resize(pressureBytes)).toBe(true)
+              } else if (pressure && publications === count / 2) {
+                pressure.release()
+              }
+              if (publications === count) {
+                complete()
+              }
+            }
+          })
+          return { reader, selected, stop }
         })
-        return { reader, selected, stop }
-      })
-      const queued = getAgentSessionSettledBodySchedulingEvidence()
-      expect(queued).toMatchObject({ indexed: count, groups: count, pending: count })
-      try {
-        await vi.advanceTimersByTimeAsync(0)
-        await completion
-        const after = getAgentSessionSettledBodySchedulingEvidence()
-        const examinations =
-          sourceVisits - visitsBefore + after.candidateExaminations - before.candidateExaminations
-        const indexSteps = after.indexSteps - before.indexSteps
-        const ownerGroups = after.ownerGroups - before.ownerGroups
-        const headUpdates = after.headUpdates - before.headUpdates
-        const queueOperations = after.queueOperations - before.queueOperations
-        const drainRequests = after.drainRequests - before.drainRequests
-        const drainRuns = after.drainRuns - before.drainRuns
-        const releaseWakes = after.releaseWakes - before.releaseWakes
-        expect(drainRequests).toBeLessThanOrEqual(3 * count)
-        expect(drainRuns).toBeLessThanOrEqual(count)
-        expect(releaseWakes).toBe(releases.mock.calls.length)
-        expect(examinations).toBeLessThanOrEqual(count * 12 + calls)
-        expect(indexSteps + ownerGroups + headUpdates + queueOperations).toBeLessThanOrEqual(
-          32 * count * Math.ceil(Math.log2(count + 1))
-        )
-        expect(calls).toBe(count)
-        expect(publications).toBe(count)
-        expect(reservations.mock.calls.length).toBe(count)
-        expect(peak).toBeLessThanOrEqual(2)
-        expect(peakBytes).toBeLessThanOrEqual(64 * 1024 * 1024)
-        expect(peakAdmissions).toBeLessThanOrEqual(512)
-        expect(releases.mock.calls.length).toBeGreaterThan(0)
-        expect(releases.mock.calls.length).toBeLessThanOrEqual(count)
-        expect(after).toMatchObject({ indexed: 0, groups: 0, pending: 0, metadataBytes: 0 })
-        const interest = getAgentSessionSettledBodyDemandEvidence()
-        expect(interest).toMatchObject({ selected: count, listeners: count, pending: 0, active: 0 })
-        expect(interest.metadataBytes).toBeLessThan(count * 2048)
-        owned.forEach(({ reader, selected }) =>
-          expect(reader.getSnapshot(selected)).toEqual({ status: 'ready', body: exact })
-        )
-        process.stdout.write(
-          `${JSON.stringify({ ownerPerf: true, count, calls, admissionCalls: reservations.mock.calls.length, releases: releases.mock.calls.length, examinations, indexSteps, ownerGroups, headUpdates, queueOperations, drainRequests, drainRuns, releaseWakes, peakIndexMetadataBytes: queued.metadataBytes, peak, peakBytes, peakAdmissions, metadataBytes: interest.metadataBytes })}\n`
-        )
-      } finally {
-        stopRelease()
-        reservations.mockRestore()
-        owned.forEach(({ stop, reader }) => {
-          stop()
-          reader.dispose()
+        const queued = getAgentSessionSettledBodySchedulingEvidence()
+        const owners = mode === 'many' ? count : mode === 'mixed' ? count / 2 : 1
+        expect(queued).toMatchObject({ indexed: owners, groups: owners, pending: count })
+        if (pressure) {
+          smallCharge =
+            JSON.stringify(owned[count - 1].selected).length * 3 +
+            256 +
+            6 * AGENT_SESSION_SETTLED_BODY_MAX_UNITS +
+            256 * 1024
+          pressureBytes = pool - smallCharge
+          expect(pressure.resize(pressureBytes)).toBe(true)
+        }
+        try {
+          await vi.advanceTimersByTimeAsync(0)
+          await completion
+          const after = getAgentSessionSettledBodySchedulingEvidence()
+          const examinations =
+            sourceVisits - visitsBefore + after.candidateExaminations - before.candidateExaminations
+          const indexSteps = after.indexSteps - before.indexSteps
+          const ownerGroups = after.ownerGroups - before.ownerGroups
+          const headUpdates = after.headUpdates - before.headUpdates
+          const queueOperations = after.queueOperations - before.queueOperations
+          const drainRequests = after.drainRequests - before.drainRequests
+          const drainRuns = after.drainRuns - before.drainRuns
+          const releaseWakes = after.releaseWakes - before.releaseWakes
+          expect(drainRequests).toBeLessThanOrEqual(mode === 'mixed' ? 4 * count + 2 : 3 * count)
+          expect(drainRuns).toBeLessThanOrEqual(mode === 'many' ? count : count + 1)
+          expect(releaseWakes).toBe(releases.mock.calls.length)
+          expect(examinations).toBeLessThanOrEqual(count * 12 + calls)
+          expect(indexSteps + ownerGroups + headUpdates + queueOperations).toBeLessThanOrEqual(
+            32 * count * Math.ceil(Math.log2(count + 1))
+          )
+          expect(calls).toBe(count)
+          expect(publications).toBe(count)
+          expect(reservations.mock.calls.length).toBe(count)
+          expect(peak).toBeLessThanOrEqual(mode === 'many' || mode === 'mixed' ? 2 : 1)
+          expect(peakBytes).toBeLessThanOrEqual(64 * 1024 * 1024)
+          expect(peakAdmissions).toBeLessThanOrEqual(512)
+          expect(releases.mock.calls.length).toBeGreaterThan(0)
+          expect(releases.mock.calls.length).toBeLessThanOrEqual(count)
+          expect(after).toMatchObject({ indexed: 0, groups: 0, pending: 0, metadataBytes: 0 })
+          const interest = getAgentSessionSettledBodyDemandEvidence()
+          expect(interest).toMatchObject({
+            selected: count,
+            listeners: count,
+            pending: 0,
+            active: 0
+          })
+          expect(interest.metadataBytes).toBeLessThan(count * 2048)
+          owned.forEach(({ reader, selected }) =>
+            expect(reader.getSnapshot(selected)).toEqual({ status: 'ready', body: exact })
+          )
+          process.stdout.write(
+            `${JSON.stringify({ ownerPerf: true, mode, count, calls, admissionCalls: reservations.mock.calls.length, releases: releases.mock.calls.length, examinations, indexSteps, ownerGroups, headUpdates, queueOperations, drainRequests, drainRuns, releaseWakes, peakIndexMetadataBytes: queued.metadataBytes, peak, peakBytes, peakAdmissions, metadataBytes: interest.metadataBytes })}\n`
+          )
+        } finally {
+          stopRelease()
+          reservations.mockRestore()
+          owned.forEach(({ stop, reader }) => {
+            stop()
+            reader.dispose()
+          })
+          pressure?.release()
+          await vi.advanceTimersByTimeAsync(0)
+        }
+        expect(getRemoteRuntimeRequestAdmissionEvidence()).toEqual({
+          pendingRequestCount: 0,
+          retainedBytes: 0
         })
-        await vi.advanceTimersByTimeAsync(0)
+        expect(getAgentSessionSettledBodyDemandEvidence()).toMatchObject({
+          selected: 0,
+          listeners: 0,
+          metadataBytes: 0,
+          pending: 0,
+          active: 0
+        })
+        expect(getAgentSessionSettledBodySchedulingEvidence()).toMatchObject({
+          indexed: 0,
+          groups: 0,
+          pending: 0,
+          metadataBytes: 0
+        })
+        expect(vi.getTimerCount()).toBe(0)
       }
-      expect(getRemoteRuntimeRequestAdmissionEvidence()).toEqual({
-        pendingRequestCount: 0,
-        retainedBytes: 0
-      })
-      expect(getAgentSessionSettledBodyDemandEvidence()).toMatchObject({
-        selected: 0,
-        listeners: 0,
-        metadataBytes: 0,
-        pending: 0,
-        active: 0
-      })
-      expect(getAgentSessionSettledBodySchedulingEvidence()).toMatchObject({
-        indexed: 0,
-        groups: 0,
-        pending: 0,
-        metadataBytes: 0
-      })
-      expect(vi.getTimerCount()).toBe(0)
     }
     expect(leaseVisits).toBe(0)
   } finally {
@@ -406,10 +479,12 @@ it('progresses the oldest eligible owner past a larger refused source, then wake
     ...source,
     itemId: agentJournalItemKey({
       provider: 'orca',
-      clientMessageId:
-        'codex-prompt:thread-extra:mcp-elicitation:00000000-0000-4000-8000-000000000000:1'
+      clientMessageId: 'codex-prompt:t:mcp-elicitation:00000000-0000-4000-8000-000000000000:1'
     })
   }
+  expect(charge(selections[0])).toBe(25_822_556)
+  expect(charge(selections[1])).toBe(25_822_196)
+  expect(charge(sameOwner)).toBeLessThan(charge(selections[1]))
   const stopSameOwner = owned[0].reader.subscribe(sameOwner, () => {})
   try {
     await vi.advanceTimersByTimeAsync(30000)
@@ -428,6 +503,7 @@ it('progresses the oldest eligible owner past a larger refused source, then wake
     expect(owned[1].reader.getSnapshot(selections[1])).toEqual({ status: 'ready', body })
     expect(calls).toEqual(Array(Math.ceil(json.length / 24576)).fill(selections[1].itemId))
     expect(owned[0].reader.getSnapshot(selections[0]).status).toBe('error')
+    expect(owned[0].reader.getSnapshot(sameOwner).status).toBe('error')
     owned.forEach(({ reader }) => reader.retry())
     await vi.advanceTimersByTimeAsync(30000)
     expect(owned[0].reader.getSnapshot(selections[0]).status).toBe('error')
