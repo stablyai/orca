@@ -30,3 +30,4 @@ export type TerminalWebViewCommand =
   | { type: 'cancel-select'; id?: number }
   | { type: 'do-select-all'; id?: number }
   | { type: 'set-theme'; id?: number; terminalTheme?: RuntimeMobileTerminalTheme }
+  | { type: 'set-dim-dir-listing-sizes'; id?: number; enabled: boolean }

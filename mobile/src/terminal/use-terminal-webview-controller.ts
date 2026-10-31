@@ -16,6 +16,10 @@ import { routeTerminalQueryReply } from './terminal-webview-query-reply-routing'
 import { useTerminalWebViewReadyPromises } from './terminal-webview-ready-promises'
 import { createTerminalWriteCoalescer } from './terminal-write-coalescer'
 import { isTerminalGestureInput } from './terminal-gesture-input'
+import {
+  loadTerminalDimDirListingSizes,
+  subscribeTerminalDimDirListingSizes
+} from '../storage/preferences'
 
 // Share readiness, queues, coalescing and imperative handles across hosts; only document command/notify transport differs.
 
@@ -223,6 +227,26 @@ export function useTerminalWebViewController(
   useEffect(() => {
     postMessage({ type: 'set-font-scale', fontScale: textScale })
   }, [postMessage, textScale])
+
+  // Settings toggle must dim already-mounted terminals without a reload.
+  // Subscribe first so a live toggle cannot be overridden by a stale load result.
+  useEffect(() => {
+    let cancelled = false
+    let receivedSubscriptionUpdate = false
+    const unsubscribe = subscribeTerminalDimDirListingSizes((enabled) => {
+      receivedSubscriptionUpdate = true
+      postMessage({ type: 'set-dim-dir-listing-sizes', enabled })
+    })
+    void loadTerminalDimDirListingSizes().then((enabled) => {
+      if (!cancelled && !receivedSubscriptionUpdate) {
+        postMessage({ type: 'set-dim-dir-listing-sizes', enabled })
+      }
+    })
+    return () => {
+      cancelled = true
+      unsubscribe()
+    }
+  }, [postMessage])
 
   const fitDimensions = useCallback(
     (frame: TerminalFrame) => {
