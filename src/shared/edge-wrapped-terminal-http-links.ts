@@ -1,3 +1,4 @@
+import { isWindowsAbsolutePathLike } from './cross-platform-path'
 import { TERMINAL_HTTP_URL_MAX_LENGTH } from './terminal-http-link-limits'
 import { translateLineWithColumns, type WrappedLogicalLine } from './wrapped-terminal-link-ranges'
 import type { TerminalLinkBuffer, TerminalLinkBufferLine } from './terminal-link-buffer'
@@ -10,6 +11,8 @@ const EMPTY_LABEL_ROW_PATTERN = /^[^\s:][^:]*:$/
 const LABEL_WITH_SPACING_ROW_PATTERN = /^[^\s:][^:]*:\s/
 const NON_BLANK_ROW_PATTERN = /\S/
 const SINGLE_TOKEN_ROW_PATTERN = /^ *\S+\s*$/
+const HANGING_INDENT_REMAINDER_PATTERN = /^\s+\S/
+const URL_WRAP_REMAINDER_PREFIX_PATTERN = /^[/?#&=%]/
 
 function maxEdgeWrappedHttpRows(lineLength: number, padding: number): number {
   // Width-2 cells give at least floor(columns / 2) characters per continued row; add two fragment rows to bound scanning by URL length.
@@ -86,6 +89,42 @@ function findHttpSchemeIndex(text: string): number {
   return -1
 }
 
+
+function isNonUrlContinuationRow(
+  nextRow: TrimmedTranslatedLine,
+  padding: number,
+  rightPadding: number
+): boolean {
+  // oxlint-disable-next-line unicorn/prefer-at -- the phone's terminal WebView (Chrome 74) has no Array#at
+  const nextColumnAfterText: number | undefined = nextRow.columns[nextRow.columns.length - 1]
+  const nextRowText = nextRow.text.slice(padding)
+  const nextRowReachesEdge =
+    nextColumnAfterText !== undefined && nextColumnAfterText >= nextRow.lineLength - rightPadding
+  const trimmedNext = nextRowText.trimStart()
+  const isLabelRow =
+    LABEL_WITH_SPACING_ROW_PATTERN.test(nextRowText) ||
+    ((EMPTY_LABEL_ROW_PATTERN.test(nextRowText) || HTTP_STATUS_ROW_PATTERN.test(nextRowText)) &&
+      !nextRowReachesEdge)
+  return (
+    isLabelRow ||
+    HTTP_SCHEME_START_PATTERN.test(trimmedNext) ||
+    isWindowsAbsolutePathLike(trimmedNext)
+  )
+}
+
+function urlFragmentFromTranslatedRow(
+  translated: TrimmedTranslatedLine,
+  startIndex: number,
+  stripLeadingWhitespace: boolean
+): { text: string; columns: number[] } {
+  const rawFragment = translated.text.slice(startIndex)
+  const indent = stripLeadingWhitespace ? rawFragment.length - rawFragment.trimStart().length : 0
+  return {
+    text: rawFragment.slice(indent),
+    columns: translated.columns.slice(startIndex + indent)
+  }
+}
+
 function rowsCanContinueAtTerminalEdge(
   row: TrimmedTranslatedLine,
   nextRow: TrimmedTranslatedLine,
@@ -96,16 +135,20 @@ function rowsCanContinueAtTerminalEdge(
     return false
   }
   // A cursor-positioned label is not continuation evidence even after an edge-ending URL.
-  // oxlint-disable-next-line unicorn/prefer-at -- the phone's terminal WebView (Chrome 74) has no Array#at
-  const nextColumnAfterText: number | undefined = nextRow.columns[nextRow.columns.length - 1]
-  const nextRowText = nextRow.text.slice(padding)
-  const nextRowReachesEdge =
-    nextColumnAfterText !== undefined && nextColumnAfterText >= nextRow.lineLength - rightPadding
-  const isLabelRow =
-    LABEL_WITH_SPACING_ROW_PATTERN.test(nextRowText) ||
-    ((EMPTY_LABEL_ROW_PATTERN.test(nextRowText) || HTTP_STATUS_ROW_PATTERN.test(nextRowText)) &&
-      !nextRowReachesEdge)
-  if (isLabelRow || HTTP_SCHEME_START_PATTERN.test(nextRowText) || nextRow.padding !== padding) {
+  if (isNonUrlContinuationRow(nextRow, padding, rightPadding)) {
+    return false
+  }
+  // PowerShell wraps with a hard newline, so the first row often misses the edge.
+  // Join a hanging indent, or a / ? & # % = remainder only when the URL looks cut off.
+  // A complete `.../` next to `/usr/...` is a following path, not a wrap.
+  const nextRemainder = nextRow.text.trimStart()
+  if (
+    HANGING_INDENT_REMAINDER_PATTERN.test(nextRow.text) ||
+    (URL_WRAP_REMAINDER_PREFIX_PATTERN.test(nextRemainder) && !row.text.endsWith('/'))
+  ) {
+    return true
+  }
+  if (nextRow.padding !== padding) {
     return false
   }
   // oxlint-disable-next-line unicorn/prefer-at -- the phone's terminal WebView (Chrome 74) has no Array#at
@@ -125,7 +168,7 @@ export function buildEdgeWrappedHttpLogicalLineCandidates(
   buffer: TerminalLinkBuffer,
   bufferLineNumber: number
 ): WrappedLogicalLine[] {
-  // Without xterm wrap metadata, accept cursor-positioned continuation only when preceding rows reach the edge.
+  // Without xterm wrap metadata, join at the terminal edge and also join PowerShell hanging-indent or cut-off remainders.
   const currentY = bufferLineNumber - 1
   const currentLine = buffer.getLine(currentY)
   if (!currentLine) {
@@ -210,9 +253,13 @@ export function buildEdgeWrappedHttpLogicalLineCandidates(
       }
       const fragmentStartIndex =
         rowY === startY ? schemeIndex : line.isWrapped ? 0 : continuationPadding
-      const fragment = translated.text.slice(fragmentStartIndex)
-      const whitespaceIndex = fragment.search(/\s/)
-      const possibleUrlFragmentLength = whitespaceIndex === -1 ? fragment.length : whitespaceIndex
+      const fragment = urlFragmentFromTranslatedRow(translated, fragmentStartIndex, rowY > startY)
+      if (!fragment.text) {
+        break
+      }
+      const whitespaceIndex = fragment.text.search(/\s/)
+      const possibleUrlFragmentLength =
+        whitespaceIndex === -1 ? fragment.text.length : whitespaceIndex
       if (text.length + possibleUrlFragmentLength > TERMINAL_HTTP_URL_MAX_LENGTH) {
         exceedsLengthLimit = true
         break
@@ -220,14 +267,14 @@ export function buildEdgeWrappedHttpLogicalLineCandidates(
 
       rows.push({
         y: rowY,
-        text: fragment,
+        text: fragment.text,
         sourceText: translated.sourceText,
-        columns: translated.columns.slice(fragmentStartIndex),
+        columns: fragment.columns,
         startIndex: text.length,
         isWrapped: line.isWrapped,
         lineLength: line.length
       })
-      text += fragment
+      text += fragment.text
       if (whitespaceIndex !== -1) {
         break
       }
