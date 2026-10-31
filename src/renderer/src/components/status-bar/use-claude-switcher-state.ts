@@ -1,0 +1,50 @@
+import { useShallow } from 'zustand/react/shallow'
+import { useAppStore } from '../../store'
+import type { ChatAccountAction } from './ProviderAccountChatButton'
+import { getClaudeAccountRosterSyncKey, getClaudeAccountSyncKey } from './provider-account-sync-key'
+
+const EMPTY_INACTIVE: [] = []
+
+export function useClaudeSwitcherState(
+  chatAction: ChatAccountAction | undefined,
+  activeRuntimeEnvironmentId: string | null
+) {
+  const hasActiveRuntimeEnvironment = activeRuntimeEnvironmentId !== null
+  const inactiveClaudeAccounts = useAppStore((s) =>
+    chatAction?.target.kind === 'environment' ? EMPTY_INACTIVE : s.rateLimits.inactiveClaudeAccounts
+  )
+  const claudeTarget = useAppStore((s) => (chatAction ? null : s.rateLimits.claudeTarget))
+  const settings = useAppStore((s) => (chatAction ? null : s.settings))
+  const ownHostName = useAppStore(
+    (s) =>
+      s.runtimeEnvironments.find((environment) => environment.id === activeRuntimeEnvironmentId)
+        ?.name
+  )
+  const accountSettings = useAppStore(
+    useShallow((s) =>
+      !hasActiveRuntimeEnvironment && s.settings
+        ? {
+            claudeManagedAccounts: s.settings.claudeManagedAccounts,
+            activeClaudeManagedAccountId: s.settings.activeClaudeManagedAccountId,
+            activeClaudeManagedAccountIdsByRuntime:
+              s.settings.activeClaudeManagedAccountIdsByRuntime
+          }
+        : null
+    )
+  )
+  const claudeAccountSyncKey = useAppStore((s) =>
+    chatAction
+      ? hasActiveRuntimeEnvironment
+        ? ''
+        : getClaudeAccountRosterSyncKey(s.settings)
+      : getClaudeAccountSyncKey(s.settings)
+  )
+  return {
+    inactiveClaudeAccounts,
+    claudeTarget,
+    settings,
+    ownHostName,
+    accountSettings,
+    claudeAccountSyncKey
+  }
+}

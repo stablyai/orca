@@ -12,6 +12,7 @@ import { MessageSquarePlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
+import { structuredChatTabById } from '@/lib/structured-chat-tab-index'
 import { useStructuredChatTabConversationName } from '@/runtime/structured-conversation-name'
 import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
 import {
@@ -87,7 +88,7 @@ export function NativeChatUsageLimitActionsProvider({
   const disabled = loading || preparing === intentKey
   const chatTab = useAppStore((state) =>
     directory
-      ? state.unifiedTabsByWorktree[directory.worktreeId]?.find((tab) => tab.id === pane.tabId)
+      ? structuredChatTabById(state.unifiedTabsByWorktree, directory.worktreeId, pane.tabId)
       : undefined
   )
   const conversationName = useStructuredChatTabConversationName(chatTab)

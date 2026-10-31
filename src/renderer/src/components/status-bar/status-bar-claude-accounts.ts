@@ -146,8 +146,15 @@ export function buildClaudeStatusSwitchGroups(
   return groups
 }
 
+export type ClaudeAccountSettings = Pick<
+  GlobalSettings,
+  | 'claudeManagedAccounts'
+  | 'activeClaudeManagedAccountIdsByRuntime'
+  | 'activeClaudeManagedAccountId'
+>
+
 function getClaudeStatusAccountsFromSettings(
-  settings: GlobalSettings | null | undefined,
+  settings: ClaudeAccountSettings | null | undefined,
   runtimeState: ClaudeRateLimitAccountsState
 ): ClaudeRateLimitAccountsState | null {
   if (!settings) {
@@ -191,7 +198,7 @@ function getClaudeStatusAccountsFromSettings(
 
 /** `ownerEnvironmentId` is the server owning the shown accounts; `null` is this desktop. */
 export function resolveClaudeStatusAccountState(
-  settings: GlobalSettings | null | undefined,
+  settings: ClaudeAccountSettings | null | undefined,
   runtimeState: ClaudeRateLimitAccountsState,
   ownerEnvironmentId: string | null
 ): ClaudeRateLimitAccountsState {

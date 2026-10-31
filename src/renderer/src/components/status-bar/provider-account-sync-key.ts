@@ -21,13 +21,19 @@ function memoizeSyncKey(
   return key
 }
 
-export function getClaudeAccountSyncKey(settings: GlobalSettings | null | undefined): string {
+export function getClaudeAccountRosterSyncKey(settings: GlobalSettings | null | undefined): string {
   return memoizeSyncKey(
     claudeKeyBySettings,
     settings,
     (resolved) =>
-      `${resolved.activeRuntimeEnvironmentId?.trim() || 'local'}:${resolved.activeClaudeManagedAccountId ?? 'system'}:${JSON.stringify(resolved.activeClaudeManagedAccountIdsByRuntime ?? null)}:${resolved.claudeManagedAccounts.map((account) => `${account.id}:${account.updatedAt}`).join('|')}`
+      `${resolved.activeClaudeManagedAccountId ?? 'system'}:${JSON.stringify(resolved.activeClaudeManagedAccountIdsByRuntime ?? null)}:${resolved.claudeManagedAccounts.map((account) => `${account.id}:${account.updatedAt}`).join('|')}`
   )
+}
+
+export function getClaudeAccountSyncKey(settings: GlobalSettings | null | undefined): string {
+  return settings
+    ? `${settings.activeRuntimeEnvironmentId?.trim() || 'local'}:${getClaudeAccountRosterSyncKey(settings)}`
+    : 'no-settings'
 }
 
 export function getCodexAccountSyncKey(settings: GlobalSettings | null | undefined): string {

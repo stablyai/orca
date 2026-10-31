@@ -98,14 +98,26 @@ export function AgentSessionContinuationDialog({
     : []
   const agents = getAgentCatalog().filter(
     (agent) =>
-      offered.includes(agent.id) &&
       isTuiAgentEnabled(agent.id, disabledAgents) &&
       isContinuationAgentAllowed(agent.id, request?.source.sourceAgent, request?.avoidSourceAgent)
   )
-  const rows = observation.model.state === 'settled' ? observation.model.rows : []
+  const destinationModel =
+    observation.model.state === 'settled'
+      ? {
+          ...observation.model,
+          rows: observation.model.rows.filter((row) =>
+            agents.some((agent) => agent.id === row.agent)
+          )
+        }
+      : observation.model
+  const rows = destinationModel.state === 'settled' ? destinationModel.rows : []
   const pickable = agents
     .map((agent) => agent.id)
-    .filter((agent) => rows.some((row) => row.agent === agent && row.kind !== 'chat-unavailable'))
+    .filter(
+      (agent) =>
+        offered.includes(agent) &&
+        rows.some((row) => row.agent === agent && row.kind !== 'chat-unavailable')
+    )
   const preparing = request === null
   const controlsDisabled = preparing || detecting || starting
   const hasFullContext = request ? hasFullAgentSessionContext(request.source) : false
@@ -224,7 +236,7 @@ export function AgentSessionContinuationDialog({
               value={selectedAgent}
               onValueChange={(agent) => setPick({ request, agent })}
               surfaceRows={{
-                model: observation.model,
+                model: destinationModel,
                 selection,
                 contextKey: observation.contextKey,
                 surface: currentPick?.surface,
