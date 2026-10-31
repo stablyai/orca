@@ -635,6 +635,67 @@ describe('orchestration mailbox pointer submit', () => {
     })
   })
 
+  it('hands rebound mail to its new owner when the Enter is refused', async () => {
+    const db = new OrchestrationDb(':memory:')
+    const message = db.insertMessage({
+      runId: 'run_legacy_local',
+      from: 'a',
+      to: 'run:run-1',
+      subject: 'rebound before Enter'
+    })
+    const ptyId = 'pty-rebound'
+    const reservation = { ptyId, processIncarnation: 'inc-rebound' }
+    const terminal = {
+      ptyId,
+      handle: 'term-rebound',
+      paneKeys: ['tab-1:leaf-1'],
+      lastAgentStatus: 'idle' as const,
+      lastAgentStatusObservedLive: true
+    }
+    const expectedTarget = { terminal, processIncarnation: reservation.processIncarnation }
+    const state = new OrchestrationMailboxPointerState()
+    const flight = state.beginFlight(ptyId)
+    state.setWatermark('run:run-1', 1, ptyId)
+    expect(db.stageMailboxPointerEnter([message.id], reservation)).toBe(true)
+    expect(db.markMailboxPointerWriteAttempted([message.id], reservation)).toBe(true)
+    const writePty = vi.fn(settledWriteStub(() => false))
+    const settle = vi.fn(() => state.settleFlight(ptyId, flight))
+    const redrive = vi.fn()
+
+    submitOrchestrationMailboxPointer(
+      {
+        mailboxOwner: { resolve: () => 'run:run-2' } as never,
+        state,
+        getDb: () => db,
+        resolveSubmitTarget: () => expectedTarget,
+        isLeafPtyProvenAbsent: async () => false,
+        isPtyAwaitingUserInput: () => false,
+        readDrivingInputRevision: () => null,
+        writePty,
+        settle,
+        redrive
+      },
+      {
+        mailboxHandle: 'run:run-1',
+        messages: [{ id: message.id, type: 'status' }],
+        newestSequence: 1,
+        ptyId,
+        flight,
+        expectedTarget
+      }
+    )
+
+    await vi.waitFor(() => expect(settle).toHaveBeenCalledOnce())
+    expect(writePty.mock.calls).toEqual([[ptyId, '\r']])
+    // Settling here would mark the mail delivered and the new owner would never be pointed.
+    expect(db.getMessageById(message.id)).toMatchObject({
+      delivered_at: null,
+      pointer_enter_pending: 0
+    })
+    expect(redrive).toHaveBeenCalledWith('run:run-1', true)
+    db.close()
+  })
+
   it('sends no second Enter for unread mail whose Enter was already attempted', async () => {
     const db = new OrchestrationDb(':memory:')
     const message = db.insertMessage({

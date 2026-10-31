@@ -114,11 +114,11 @@ export function submitOrchestrationMailboxPointer(
           return
         }
         // Unverifiable Enter stays attempted: neither delivery nor safe resend is proven.
-        if (enterSettlement.outcome === 'refused') {
-          releaseWithoutRedrive = true
-        } else if (submitted && !sameMailbox) {
-          // The typed line still gets its Enter after a rebind, but the mail goes on to its new owner.
+        if (enterSettlement.outcome !== 'unverifiable' && !sameMailbox) {
+          // Sent or refused, rebound mail goes on to its new owner.
           clearAndRedrive = true
+        } else if (enterSettlement.outcome === 'refused') {
+          releaseWithoutRedrive = true
         }
       }
     })
