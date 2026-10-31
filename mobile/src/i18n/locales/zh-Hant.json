@@ -3269,6 +3269,21 @@
     }
   },
   "tasks": {
+    "hostedMerge": {
+      "merged": "已合併",
+      "closed": "已關閉",
+      "conflicts": "有衝突",
+      "behind": "落後",
+      "blocked": "已封鎖",
+      "checksPending": "等待檢查",
+      "ableToMerge": "可以合併",
+      "unknown": "未知"
+    },
+    "pagination": {
+      "pageUnreachable": "第 {{page}} 頁超出 GitHub 搜尋可傳回的範圍。",
+      "loadPageFailed": "無法從 GitHub 載入第 {{page}} 頁。",
+      "noMoreResults": "第 {{page}} 頁沒有更多結果。"
+    },
     "composerSource": {
       "baseFailed": "無法解析基礎分支。",
       "forkPushWarning": "此 PR 未啟用「允許維護者編輯」；推送至分叉存放庫可能會遭 GitHub 拒絕。"

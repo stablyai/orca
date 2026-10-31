@@ -3465,6 +3465,21 @@
     }
   },
   "tasks": {
+    "hostedMerge": {
+      "merged": "Слито",
+      "closed": "Закрыто",
+      "conflicts": "Конфликты",
+      "behind": "Отстаёт",
+      "blocked": "Заблокировано",
+      "checksPending": "Проверки ожидаются",
+      "ableToMerge": "Можно слить",
+      "unknown": "Неизвестно"
+    },
+    "pagination": {
+      "pageUnreachable": "Страница {{page}} выходит за пределы результатов поиска GitHub.",
+      "loadPageFailed": "Не удалось загрузить страницу {{page}} из GitHub.",
+      "noMoreResults": "На странице {{page}} больше нет результатов."
+    },
     "composerSource": {
       "baseFailed": "Не удалось определить базовую ветку.",
       "forkPushWarning": "В этом PR отключена настройка «Разрешить правки сопровождающим»; GitHub может отклонить отправку в форк."

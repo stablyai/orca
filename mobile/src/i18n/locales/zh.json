@@ -3348,6 +3348,16 @@
     "githubViewControls": {
       "openView": "在 GitHub 中打开视图"
     },
+    "hostedMerge": {
+      "merged": "已合并",
+      "closed": "已关闭",
+      "conflicts": "有冲突",
+      "behind": "落后",
+      "blocked": "已阻止",
+      "checksPending": "检查待完成",
+      "ableToMerge": "可以合并",
+      "unknown": "未知"
+    },
     "itemActions": {
       "changeStatus": "更改状态",
       "copyGitHubLink": "复制 GitHub 链接",
@@ -3494,6 +3504,11 @@
       "team": "团队",
       "updated": "已更新",
       "updatedSortDescription": "最新活动优先"
+    },
+    "pagination": {
+      "pageUnreachable": "第 {{page}} 页超出了 GitHub 搜索可返回的范围。",
+      "loadPageFailed": "无法从 GitHub 加载第 {{page}} 页。",
+      "noMoreResults": "第 {{page}} 页没有更多结果。"
     },
     "pickerProjection": {
       "allRepos": "所有仓库",

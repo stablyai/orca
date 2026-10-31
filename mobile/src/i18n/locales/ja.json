@@ -3348,6 +3348,16 @@
     "githubViewControls": {
       "openView": "GitHub でビューを開く"
     },
+    "hostedMerge": {
+      "merged": "マージ済み",
+      "closed": "クローズ済み",
+      "conflicts": "競合あり",
+      "behind": "遅れあり",
+      "blocked": "ブロック中",
+      "checksPending": "チェック待ち",
+      "ableToMerge": "マージ可能",
+      "unknown": "不明"
+    },
     "itemActions": {
       "changeStatus": "ステータスを変更",
       "copyGitHubLink": "GitHub リンクをコピーする",
@@ -3494,6 +3504,11 @@
       "team": "チーム",
       "updated": "更新日時",
       "updatedSortDescription": "アクティビティが新しい順"
+    },
+    "pagination": {
+      "pageUnreachable": "ページ {{page}} は GitHub 検索で取得できる範囲を超えています。",
+      "loadPageFailed": "ページ {{page}} を GitHub から読み込めませんでした。",
+      "noMoreResults": "ページ {{page}} にこれ以上の結果はありません。"
     },
     "pickerProjection": {
       "allRepos": "すべてのリポジトリ",

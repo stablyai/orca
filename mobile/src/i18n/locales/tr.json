@@ -3273,6 +3273,21 @@
     }
   },
   "tasks": {
+    "hostedMerge": {
+      "merged": "Birleştirildi",
+      "closed": "Kapatıldı",
+      "conflicts": "Çakışmalar",
+      "behind": "Geride",
+      "blocked": "Engellendi",
+      "checksPending": "Kontroller bekleniyor",
+      "ableToMerge": "Birleştirilebilir",
+      "unknown": "Bilinmiyor"
+    },
+    "pagination": {
+      "pageUnreachable": "{{page}}. sayfa GitHub aramasının döndürebileceği aralığın dışında.",
+      "loadPageFailed": "{{page}}. sayfa GitHub’dan yüklenemedi.",
+      "noMoreResults": "{{page}}. sayfada başka sonuç yok."
+    },
     "composerSource": {
       "baseFailed": "Temel branch çözümlenemedi.",
       "forkPushWarning": "Bu PR'da “Allow edits from maintainers” kapalı; fork'a push işlemi GitHub tarafından reddedilebilir."

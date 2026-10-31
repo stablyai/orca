@@ -3269,6 +3269,21 @@
     }
   },
   "tasks": {
+    "hostedMerge": {
+      "merged": "병합됨",
+      "closed": "닫힘",
+      "conflicts": "충돌",
+      "behind": "뒤처짐",
+      "blocked": "차단됨",
+      "checksPending": "검사 대기 중",
+      "ableToMerge": "병합 가능",
+      "unknown": "알 수 없음"
+    },
+    "pagination": {
+      "pageUnreachable": "{{page}}페이지는 GitHub 검색에서 반환할 수 있는 범위를 벗어났습니다.",
+      "loadPageFailed": "GitHub에서 {{page}}페이지를 불러오지 못했습니다.",
+      "noMoreResults": "{{page}}페이지에 더 이상 결과가 없습니다."
+    },
     "composerSource": {
       "baseFailed": "기본 브랜치를 확인하지 못했습니다.",
       "forkPushWarning": "이 PR에서 \"유지 관리자의 수정 허용\"이 꺼져 있어 GitHub에서 포크로의 푸시를 거부할 수 있습니다."

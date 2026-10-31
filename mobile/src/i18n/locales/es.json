@@ -3369,6 +3369,21 @@
     }
   },
   "tasks": {
+    "hostedMerge": {
+      "merged": "Fusionado",
+      "closed": "Cerrado",
+      "conflicts": "Conflictos",
+      "behind": "Desactualizado",
+      "blocked": "Bloqueado",
+      "checksPending": "Comprobaciones pendientes",
+      "ableToMerge": "Se puede fusionar",
+      "unknown": "Desconocido"
+    },
+    "pagination": {
+      "pageUnreachable": "La página {{page}} está fuera del alcance de la búsqueda de GitHub.",
+      "loadPageFailed": "No se pudo cargar la página {{page}} desde GitHub.",
+      "noMoreResults": "No hay más resultados en la página {{page}}."
+    },
     "composerSource": {
       "baseFailed": "No se pudo resolver la rama base.",
       "forkPushWarning": "Esta PR tiene desactivada la opción \"Allow edits from maintainers\"; GitHub podría rechazar el push al fork."
