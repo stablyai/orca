@@ -13,7 +13,7 @@ vi.mock('@/components/confirmation-dialog-context', () => ({
   useConfirmationDialog: () => vi.fn()
 }))
 
-const refresh = { calls: [] as string[] }
+const refresh: { calls: string[] } = { calls: [] }
 
 import { useChecksPanelManualRefresh } from './use-checks-panel-manual-refresh'
 
@@ -202,7 +202,7 @@ describe('useChecksPanelManualRefresh ordering', () => {
     let rejectOld: (error: Error) => void = () => {}
     input.fetchHostedReviewForBranch = vi.fn(
       () =>
-        new Promise((_, reject) => {
+        new Promise<HostedReviewInfo | null>((_, reject) => {
           rejectOld = reject
         })
     )
@@ -232,7 +232,7 @@ describe('useChecksPanelManualRefresh ordering', () => {
     'publishes refreshed merged GitLab state to the existing workspace action (main=%s)',
     async (isMainWorktree) => {
       const input = makeInput()
-      const review: HostedReviewInfo = {
+      const review: HostedReviewInfo & { provider: 'gitlab' } = {
         provider: 'gitlab',
         number: 7,
         title: 'MR',

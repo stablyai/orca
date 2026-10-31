@@ -578,16 +578,16 @@ describe('gitlab client — review lookups after a merge request write', () => {
   })
 
   // Issue #14377: "I press Squash and merge" in Orca, and the card stayed Open while a poll was in flight.
-  it.each(Object.keys(writes) as (keyof typeof writes)[])(
+  it.each(Object.entries(writes))(
     '%s: the follow-up read starts after the write instead of joining an older poll',
-    async (write) => {
+    async (_name, write) => {
       const prePoll = Promise.withResolvers<HostedReviewInfo | null>()
       const poll = withHostedReviewBranchCache(
         identity,
         { headOid: null, force: true },
         () => prePoll.promise
       )
-      await expect(writes[write]()).resolves.toEqual({ ok: true })
+      await expect(write()).resolves.toEqual({ ok: true })
       const changed = { ...open, state: 'merged' as const }
       const afterWrite = vi.fn(async () => changed)
       const followUp = withHostedReviewBranchCache(

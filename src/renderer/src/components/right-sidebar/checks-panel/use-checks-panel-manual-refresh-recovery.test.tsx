@@ -34,7 +34,7 @@ const repo = {
   badgeColor: '#000',
   addedAt: 0
 }
-const openMR: HostedReviewInfo = {
+const openMR: HostedReviewInfo & { provider: 'gitlab' } = {
   provider: 'gitlab',
   number: 7,
   title: 'MR',
@@ -46,7 +46,6 @@ const openMR: HostedReviewInfo = {
 }
 
 const original = useAppStore.getState()
-const originalApi = (window as unknown as { api: unknown }).api
 let provider: () => Promise<HostedReviewInfo | null>
 const lookup = vi.fn(() => provider())
 // An older paired server drops reportReadOutcome and answers with the bare review.
@@ -78,7 +77,7 @@ function poll(): Promise<HostedReviewInfo | null> {
 }
 
 function renderPanel() {
-  const input = {
+  const input: RefreshInput = {
     activeConnectionId: null,
     activeGitLabReview: openMR,
     activeReview: openMR,
@@ -126,7 +125,7 @@ function renderPanel() {
     setGitStatusSnapshot: vi.fn(),
     setIsRefreshing: vi.fn(),
     updateWorktreeGitIdentity: vi.fn()
-  } as unknown as RefreshInput
+  }
   const shown: (string | null)[] = []
   const hook = renderHook(() => {
     const state = useChecksPanelManualRefresh(input)
@@ -155,7 +154,7 @@ beforeEach(() => {
   olderHost = false
   clickTimesOut = false
   lookup.mockClear()
-  ;(window as unknown as { api: unknown }).api = {
+  vi.stubGlobal('api', {
     // The real host branch cache behind the IPC reply shape.
     hostedReview: {
       forBranch: async (args: HostedReviewForBranchArgs) => {
@@ -177,8 +176,8 @@ beforeEach(() => {
         return olderHost ? read.review : hostedReviewForBranchReply(read, args.reportReadOutcome)
       }
     }
-  }
-  useAppStore.setState({ repos: [repo as never], hostedReviewCache: {} })
+  })
+  useAppStore.setState({ repos: [repo], hostedReviewCache: {} })
 })
 
 afterEach(() => {
@@ -186,7 +185,7 @@ afterEach(() => {
   _clearHostedReviewRequestGenerationsForTest()
   __resetHostedReviewBranchCacheForTests()
   useAppStore.setState(original)
-  ;(window as unknown as { api: unknown }).api = originalApi
+  vi.unstubAllGlobals()
   vi.useRealTimers()
 })
 

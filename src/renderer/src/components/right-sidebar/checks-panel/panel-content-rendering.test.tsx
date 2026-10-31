@@ -11,6 +11,8 @@ vi.mock('../SourceControlAgentActionDialog', () => ({ SourceControlAgentActionDi
 import { ChecksPanelActiveContent } from './active-content'
 import { ChecksPanelEmptyContent } from './empty-content'
 import { getHostedReviewManualRefreshError } from '../github-refresh-error-copy'
+import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
+import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 
 afterEach(() => {
   cleanup()
@@ -128,31 +130,59 @@ describe('checks panel concrete content', () => {
       const now = Date.parse('2026-10-30T12:00:00Z')
       vi.useFakeTimers({ toFake: ['Date'] })
       vi.setSystemTime(now)
-      const model = {
+      const model: ChecksPanelEmptyContentModel = {
         activeReview: null,
-        activeWorktree: { id: 'worktree-1' },
+        activeWorktree: makeWorktree({ id: 'worktree-1', repoId: 'repo-1' }),
+        activeWorktreeId: 'worktree-1',
         branch: 'without-pr',
         checksPanelHasHardRefreshError: false,
         checksPanelReviewLookup: 'unknown',
-        checksPanelReviewLookupResult: { openReviewUrl: null },
+        checksPanelReviewLookupResult: { state: 'unknown', openReviewUrl: null },
         confirmedReadiness: { confirmed: false, needsPush: false },
         conflictOperation: 'unknown',
         createComposerOpen: false,
+        createPrError: null,
+        createPrPushFirst: false,
         detachedHeadDisplay: null,
-        gitStatusInputs: { hasUncommittedChanges: false },
+        emptyRefreshing: false,
+        gitStatusInputs: { hasUncommittedChanges: false, remoteStatus: undefined },
         gitStatusProbeErrorContextKey: null,
+        handleCancelGeneratePullRequestFields: vi.fn(),
+        handleCreatePullRequest: vi.fn(),
+        handleGeneratePullRequestFields: vi.fn(),
+        handleLinkSuppressedPullRequest: vi.fn(),
+        handlePrBaseChange: vi.fn(),
+        handlePrTitleChange: vi.fn(),
+        handlePublishBranch: vi.fn(),
+        handleRefresh: vi.fn(async () => {}),
+        handleSyncBranch: vi.fn(),
         hardRefreshError: null,
-        hostedReviewCreateCopy: { providerName: 'GitHub' },
+        hostedReviewCreateCopy: localizedHostedReviewCopy('github'),
         hostedReviewCreateProvider: 'github',
         hostedReviewCreation: null,
+        isCreatingPr: false,
         isFolder: false,
         isGitHubReviewContext: true,
         isPublishingBranch: false,
+        isRemoteOperationActive: vi.fn(() => false),
+        isSyncingBranch: false,
         linkedGitLabMR: null,
         linkedPR: null,
         linkedReviewNumber: null,
         manualRefreshError: getHostedReviewManualRefreshError('github'),
         panelContextKey: 'worktree-1::without-pr',
+        prAiGenerationEnabled: false,
+        prBase: '',
+        prBaseQuery: '',
+        prBaseResults: [],
+        prBaseSearchError: null,
+        prBaseSearchPending: false,
+        prBody: '',
+        prDraft: false,
+        prGenerateDisabled: false,
+        prGenerateDisabledReason: undefined,
+        prGenerateError: null,
+        prGenerating: false,
         prNumber: null,
         prRefreshState: {
           ...refresh,
@@ -161,11 +191,20 @@ describe('checks panel concrete content', () => {
           nextAutoRetryAt: now + 600_000,
           retryDisabledUntil: retryDisabled ? now + 600_000 : undefined
         },
+        prRepoDefaultBaseRef: null,
+        prStackedCreationSupported: false,
+        prTitle: '',
         publishActionHasUncommittedChanges: false,
+        publishActionRemoteStatus: undefined,
+        setEmptyRefreshing: vi.fn(),
+        setPrBaseQuery: vi.fn(),
+        setPrBaseResults: vi.fn(),
+        setPrBody: vi.fn(),
+        setPrDraft: vi.fn(),
         sourceControlAiActionsVisible: false,
-        suppressedGitHubPR: null,
-        handleRefresh: vi.fn(async () => {})
-      } as unknown as ChecksPanelEmptyContentModel
+        stackParentReview: null,
+        suppressedGitHubPR: null
+      }
 
       const { container } = render(<ChecksPanelEmptyContent model={model} />)
 
