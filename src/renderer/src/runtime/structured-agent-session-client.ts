@@ -35,7 +35,7 @@ import {
 } from '../../../shared/structured-agent-cli-conversation-adoption'
 import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import { readStructuredAgentSessionHostSupport } from './structured-agent-session-host-capability'
+import { readStructuredAgentSessionHostSupport } from './structured-agent-session-host-support'
 import { subscribeRuntimeRpc } from './runtime-rpc-subscribe'
 /** Read a capability through the runtime's existing status cache. A failed/unknown
  *  probe is treated as legacy so a newer call is never made before the host has
