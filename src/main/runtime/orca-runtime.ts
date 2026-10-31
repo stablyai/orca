@@ -54,7 +54,7 @@ import { requireSwitchedOn } from './sidebar-inputs/require-switched-on'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-session-contracts'
 import { getHostDisplayLabelOverrides } from '../../shared/host-setting-overrides'
 import type { OrchestrationDb } from './orchestration/db'
-import { continueAllUnreadWorkerMail } from './rpc/methods/orchestration/messaging/settled-worker-follow-through'
+import { continueRestoredWorkerMailSoon } from './rpc/methods/orchestration/messaging/settled-worker-follow-through'
 
 const OrcaRuntimeSidebarBase: typeof OrcaRuntimeWithAgentTransitions = ORCA_SIDEBAR_INPUTS_IS_MAIN
   ? OrcaRuntimeWithSidebarTemporal
@@ -238,12 +238,7 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
   }
 
   protected continueRestoredWorkerMail(db: OrchestrationDb): void {
-    // After the open returns, so continuing a worker can use the database it is opening.
-    setTimeout(() => {
-      if (this._orchestrationDb === db) {
-        continueAllUnreadWorkerMail(this, db)
-      }
-    }, 0).unref?.()
+    continueRestoredWorkerMailSoon(this, db, () => this._orchestrationDb === db)
   }
 
   /** Read-only layout stream; layout.subscribe is not advertised yet. */

@@ -16,8 +16,11 @@ import { captureReportedWorkerResumeSession } from '../worker/worker-resume-sess
 export function followThroughWorkerReport(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,
-  dispatchId: string
+  dispatchId: string | undefined
 ): void {
+  if (!dispatchId) {
+    return
+  }
   captureReportedWorkerResumeSession(runtime, db, dispatchId)
   continueUnreadWorkerMail(runtime, db, dispatchId)
 }
@@ -91,6 +94,33 @@ function moveUnreadMail(
       runtime.notifyMessageArrived(`dispatch:${to}`, type)
     }
   } while (page.hasMore)
+}
+
+/** The Dispatch a worker_done receipt settled. */
+export function settledDispatchId(receipt: unknown): string | undefined {
+  if (!receipt || typeof receipt !== 'object' || !('lifecycle' in receipt)) {
+    return undefined
+  }
+  const { lifecycle } = receipt
+  return lifecycle &&
+    typeof lifecycle === 'object' &&
+    'dispatchId' in lifecycle &&
+    typeof lifecycle.dispatchId === 'string'
+    ? lifecycle.dispatchId
+    : undefined
+}
+
+/** After the open returns, so continuing a worker can use the database it is opening. */
+export function continueRestoredWorkerMailSoon(
+  runtime: OrcaRuntimeService,
+  db: OrchestrationDb,
+  isCurrent: () => boolean
+): void {
+  setTimeout(() => {
+    if (isCurrent()) {
+      continueAllUnreadWorkerMail(runtime, db)
+    }
+  }, 0).unref?.()
 }
 
 /** At startup: continue what a restart interrupted between a report and its follow-up. */

@@ -1,6 +1,8 @@
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
+import type { OrchestrationParty } from '../../../../orchestration/orchestration-party'
+import { CHAT_WORKER_AUTHORITY } from '../chat-assignee-admission'
 import type { WorkerResumeSession } from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
 import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
@@ -76,11 +78,24 @@ export async function reopenWorkerTerminal(
 export function placedWorkerParty(
   placed: { reopened?: ReopenedWorker },
   chat: unknown,
-  terminal: string | undefined
-): { workerChat: boolean; external: boolean; created: boolean } {
+  terminal: OrchestrationParty | '' | undefined
+): {
+  workerChat: boolean
+  external: boolean
+  created: boolean
+  authority: ReopenedWorker['authority'] | typeof CHAT_WORKER_AUTHORITY | undefined
+} {
   const workerChat = chat !== null || placed.reopened?.chat === true
   const external = Boolean(terminal) || placed.reopened?.userOpened === true
-  return { workerChat, external, created: !workerChat && !external }
+  // A structured worker's chat keeps the pane and process its custody is held under.
+  const chatAuthority =
+    terminal && terminal.terminalHandle === null ? CHAT_WORKER_AUTHORITY : undefined
+  return {
+    workerChat,
+    external,
+    created: !workerChat && !external,
+    authority: placed.reopened?.authority ?? chatAuthority
+  }
 }
 
 /** Bring a closed worker's chat back as a background tab in its own conversation; its next turn starts the agent at rest.

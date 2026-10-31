@@ -34,7 +34,7 @@ import { sendFederatedControlMail } from './send-control-mail'
 import { orchestrationCallerIdentity } from '../runs/run-scope'
 import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
 import { planWorkerFollowUp, startWorkerFollowUp } from './worker-follow-up'
-import { followThroughWorkerReport } from './settled-worker-follow-through'
+import { followThroughWorkerReport, settledDispatchId } from './settled-worker-follow-through'
 
 export const ORCHESTRATION_SEND_METHODS = [
   defineMethod({
@@ -76,9 +76,7 @@ export const ORCHESTRATION_SEND_METHODS = [
         for (const target of settled ? handBackReplayTargets(db, settled) : []) {
           runtime.notifyMessageArrived(target.to, target.type)
         }
-        if (settled) {
-          followThroughWorkerReport(runtime, db, settled)
-        }
+        followThroughWorkerReport(runtime, db, settled)
         return stripMutationReplayNudge(replayedMutationReceipt)
       }
       const from = params.from ?? 'unknown'
@@ -275,10 +273,11 @@ export const ORCHESTRATION_SEND_METHODS = [
           markWorkerDoneMutationEffectFree,
           withSendWarnings
         })
-        const settled = params.type === 'worker_done' ? settledDispatchId(sent) : undefined
-        if (settled) {
-          followThroughWorkerReport(runtime, db, settled)
-        }
+        followThroughWorkerReport(
+          runtime,
+          db,
+          params.type === 'worker_done' ? settledDispatchId(sent) : undefined
+        )
         return sent
       }
       return sendGroupMessage({
@@ -299,16 +298,3 @@ export const ORCHESTRATION_SEND_METHODS = [
     }
   })
 ]
-
-function settledDispatchId(receipt: unknown): string | undefined {
-  if (!receipt || typeof receipt !== 'object' || !('lifecycle' in receipt)) {
-    return undefined
-  }
-  const { lifecycle } = receipt
-  return lifecycle &&
-    typeof lifecycle === 'object' &&
-    'dispatchId' in lifecycle &&
-    typeof lifecycle.dispatchId === 'string'
-    ? lifecycle.dispatchId
-    : undefined
-}

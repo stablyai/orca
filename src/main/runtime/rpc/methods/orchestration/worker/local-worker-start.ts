@@ -28,7 +28,7 @@ import {
 import { failWorkerStartWithReceipt } from './worker-start-receipt'
 import { assertExplicitWorkerUsable } from './explicit-worker-terminal-validation'
 import { resolveDispatchAssigneeParty } from '../../../../orchestration/orchestration-party'
-import { CHAT_WORKER_AUTHORITY, chatAssigneeOf, chatWorkerMode } from '../chat-assignee-admission'
+import { chatAssigneeOf, chatWorkerMode } from '../chat-assignee-admission'
 import { recordCreatedWorkerTerminalCustody } from './created-worker-terminal-custody'
 import { releaseRetriedWorkerTerminal } from './retried-worker-terminal-release'
 import { requireWorkerAuthority, type WorkerEffect } from './worker-topology'
@@ -187,8 +187,8 @@ export async function startLocalWorker(args: {
     mode = placed.mode
     resolvedWorktree = placed.worktree
     terminalHandle = placed.terminalHandle
-    const { structuredSession, setupReceipt, reopened } = placed
-    const { workerChat, external, created } = placedWorkerParty(placed, chat, params.terminal)
+    const { structuredSession, setupReceipt } = placed
+    const { workerChat, external, created, authority } = placedWorkerParty(placed, chat, terminal)
     const setupStage = {
       db,
       dispatchId: started.dispatch.id,
@@ -238,12 +238,7 @@ export async function startLocalWorker(args: {
         )
       }
     }
-    // A structured worker's chat keeps the pane and process its custody is held under.
-    const terminalAuthority =
-      reopened?.authority ??
-      (terminal && terminal.terminalHandle === null
-        ? CHAT_WORKER_AUTHORITY
-        : requireWorkerAuthority(runtime, terminalHandle))
+    const terminalAuthority = authority ?? requireWorkerAuthority(runtime, terminalHandle)
     db.prepareStartingWorkerAuthority({
       dispatchId: started.dispatch.id,
       handle: terminalHandle,
