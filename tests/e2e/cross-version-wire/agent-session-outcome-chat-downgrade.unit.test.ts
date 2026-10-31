@@ -14,11 +14,14 @@ import Database from '../../../src/main/sqlite/sync-database'
 import {
   closeTestJournalHostDatabase,
   createTrackedJournalOpener,
+  liveTestJournalRows,
   openTestJournalHostDatabase,
   SAVED_BY_NEWER_ORCA
 } from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import { journalOutcomeSource } from '../../../src/main/native-chat/agent-session-journal/journal-outcome-format'
-import { JournalMaintenanceRunner } from '../../../src/main/native-chat/agent-session-journal/journal-state-backfill'
+import { restoreJournal } from '../../../src/main/native-chat/agent-session-journal/journal-open'
+import type { JournalStoredRow } from '../../../src/main/native-chat/agent-session-journal/journal-row-table'
+import type { AgentSessionJournal } from '../../../src/main/native-chat/agent-session-journal/journal-store'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,
@@ -26,9 +29,11 @@ import {
   resolveBaselineReleaseRef
 } from './release-checkout'
 
-// A chat saved as outcomes, whether new or converted, is refused by the newest release as a newer
-// Orca's, which leaves every byte as it was; a build from before that reason opens it read-only, as
-// it does any newer row, and changes no saved row (it only adds a table of its own).
+// A chat this build has written, new or an existing one whose input rows an older build wrote, is
+// refused by the newest release as a newer Orca's, which leaves every byte as it was; a build from
+// before that reason opens it read-only, as it does any newer row, and changes no saved row (it only
+// adds a table of its own). The existing chat's input rows stay byte for byte throughout, and this
+// build reads the whole chat again afterwards.
 const SUITE_TIMEOUT_MS = 180_000
 // A main build sharing this database and schema; the newest release is probed as well.
 const WRITABLE_BASELINE_REF = '3727100cc9dbcea6201f8a3e506676a3c4b53b18'
@@ -62,29 +67,43 @@ afterEach(() => {
   rmSync(directory, { recursive: true, force: true })
 })
 
-/** A chat this build writes, saved as outcomes from its first row or converted from input rows. */
-async function savedChat(kind: 'new' | 'converted'): Promise<void> {
-  const journals = createTrackedJournalOpener({ legacyInputs: kind === 'converted' })
+const appendStatus = (journal: Pick<AgentSessionJournal, 'appendItem'>, ordinal: number) =>
+  journal.appendItem(
+    { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal },
+    { kind: 'status', text: `item ${ordinal}` },
+    { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+  )
+
+/** A chat this build writes: new, or existing with three input rows of items an older build wrote
+ * before this build's first write. Returns that prefix as stored. */
+async function savedChat(kind: 'new' | 'existing'): Promise<JournalStoredRow[]> {
+  let prefix: JournalStoredRow[] = []
+  if (kind === 'existing') {
+    const older = createTrackedJournalOpener({ legacyInputs: true })
+    const journal = await older.open({ identity: IDENTITY, stateDirectory: directory })
+    for (let ordinal = 0; ordinal < 3; ordinal++) {
+      await appendStatus(journal, ordinal)
+    }
+    await older.closeAll()
+    prefix = liveTestJournalRows(openTestJournalHostDatabase(directory).db, IDENTITY.sessionId)
+    expect(prefix).toHaveLength(4)
+  }
+  const journals = createTrackedJournalOpener()
   const journal = await journals.open({ identity: IDENTITY, stateDirectory: directory })
-  for (let ordinal = 0; ordinal < 3; ordinal++) {
-    await journal.appendItem(
-      { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal },
-      { kind: 'status', text: `item ${ordinal}` },
-      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-    )
+  for (let ordinal = 3; ordinal < 6; ordinal++) {
+    await appendStatus(journal, ordinal)
   }
   await journals.closeAll()
   const database = openTestJournalHostDatabase(directory)
-  if (kind === 'converted') {
-    const runner = new JournalMaintenanceRunner({
-      database: () => database,
-      delay: async () => {}
-    })
-    await runner.pass()
-    runner.stop()
-  }
-  expect(journalOutcomeSource(database.db, IDENTITY.sessionId, journal.epoch)).not.toBeNull()
+  expect(journalOutcomeSource(database.db, IDENTITY.sessionId, journal.epoch)).toMatchObject({
+    prefix: prefix.length
+  })
+  const rows = liveTestJournalRows(database.db, IDENTITY.sessionId)
+  expect(rows.slice(0, prefix.length)).toEqual(prefix)
+  // One appended marker, after the prefix, where outcome records begin.
+  expect(rows.map((row) => row.seq)).toEqual([...prefix.map((row) => row.seq), prefix.length + 1])
   await closeTestJournalHostDatabase(directory)
+  return prefix
 }
 
 /** The database file and its log, by content; SQLite's shared-memory index is not data. */
@@ -120,16 +139,16 @@ function savedContent(): Map<string, unknown> {
   }
 }
 
-describe('a chat saved as outcomes, opened by a shipped build', () => {
+describe('a chat this build wrote, opened by a shipped build', () => {
   it.each([
     ['new', 'the newest release'],
-    ['converted', 'the newest release'],
+    ['existing', 'the newest release'],
     ['new', 'the writable baseline'],
-    ['converted', 'the writable baseline']
+    ['existing', 'the writable baseline']
   ] as const)(
-    'keeps a %s outcome chat from %s, leaving every byte as it was',
+    'keeps a %s chat from %s, leaving every byte as it was, and reads whole again after',
     async (kind, build) => {
-      await savedChat(kind)
+      const prefix = await savedChat(kind)
       const before = databaseBytes()
       const saved = savedContent()
       expect(before['agent-session-journal.db']).toBeDefined()
@@ -158,7 +177,8 @@ describe('a chat saved as outcomes, opened by a shipped build', () => {
           expect(failure).toMatchObject(SAVED_BY_NEWER_ORCA)
         } else {
           const opened = await older.open({ identity: OLDER_IDENTITY, stateDirectory: directory })
-          expect(opened.snapshot().items).toEqual([])
+          // It latches read-only at the marker, having read only the rows before it.
+          expect(opened.snapshot().items).toHaveLength(Math.max(prefix.length - 1, 0))
           await expect(
             opened.appendItem(
               { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal: 9 },
@@ -178,6 +198,17 @@ describe('a chat saved as outcomes, opened by a shipped build', () => {
         expect(
           [...saved].filter(([name, content]) => !isDeepStrictEqual(after.get(name), content))
         ).toEqual([])
+      }
+      // Upgraded again, this build reads the prefix and its records, the rows still as they were.
+      const database = openTestJournalHostDatabase(directory)
+      try {
+        const reopened = restoreJournal(database.db, IDENTITY.sessionId)
+        expect(reopened).toMatchObject({ newer: null, damage: null })
+        expect(reopened?.state.items.size).toBe(kind === 'existing' ? 6 : 3)
+        const rows = liveTestJournalRows(database.db, IDENTITY.sessionId)
+        expect(rows.slice(0, prefix.length)).toEqual(prefix)
+      } finally {
+        await closeTestJournalHostDatabase(directory)
       }
     },
     SUITE_TIMEOUT_MS
