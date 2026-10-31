@@ -31,6 +31,7 @@ const testState = vi.hoisted(() => ({
   replayPreHandlerPtyData: vi.fn(),
   isRemoteRuntimePtyId: vi.fn(),
   sendRuntimePtyInputVerified: vi.fn(),
+  settledWrite: vi.fn(),
   inspectRuntimeTerminalProcess: vi.fn(),
   subscribeToRuntimeTerminalData: vi.fn()
 }))
@@ -63,8 +64,17 @@ vi.mock('../../../shared/remote-runtime/remote-runtime-pty-id', async (importOri
   isRemoteRuntimePtyId: testState.isRemoteRuntimePtyId
 }))
 vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
-  sendRuntimePtyInputVerified: (ptyId: string, data: string) =>
-    testState.sendRuntimePtyInputVerified(ptyId, data)
+  sendRuntimePtyInputVerified: (
+    ptyId: string,
+    data: string,
+    _inputKind?: string,
+    options?: { requireWriteSettlement?: true }
+  ) => {
+    if (options?.requireWriteSettlement) {
+      testState.settledWrite(ptyId, data)
+    }
+    return testState.sendRuntimePtyInputVerified(ptyId, data)
+  }
 }))
 
 vi.mock('@/runtime/runtime-terminal-stream', () => ({
@@ -107,6 +117,7 @@ describe('pasteDraftWhenAgentReady', () => {
     testState.isRemoteRuntimePtyId.mockReturnValue(false)
     testState.sendRuntimePtyInputVerified.mockReset()
     testState.sendRuntimePtyInputVerified.mockResolvedValue(true)
+    testState.settledWrite.mockReset()
     testState.inspectRuntimeTerminalProcess.mockReset()
     testState.inspectRuntimeTerminalProcess.mockResolvedValue({
       foregroundProcess: 'bash',
@@ -659,6 +670,18 @@ describe('pasteDraftWhenAgentReady', () => {
       PASTED_ISSUE_URL
     )
     expect(testState.sendRuntimePtyInputVerified).toHaveBeenNthCalledWith(2, 'pty-right', '\r')
+    expect(testState.settledWrite.mock.calls).toEqual([
+      ['pty-right', PASTED_ISSUE_URL],
+      ['pty-right', '\r']
+    ])
+  })
+
+  it('fails the submission when the reused pane refuses the settled write', async () => {
+    testState.sendRuntimePtyInputVerified.mockResolvedValue(false)
+
+    await expect(
+      submitPromptToAgentPty({ tabId: 'tab-1', ptyId: 'pty-1', content: ISSUE_URL })
+    ).resolves.toBe(false)
   })
 
   it('streams large running-agent drafts as bounded bracketed chunks before submit', async () => {

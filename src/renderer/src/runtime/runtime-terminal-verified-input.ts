@@ -60,7 +60,9 @@ export async function sendRuntimePtyInputVerified(
     if (result.send.accepted === true) {
       recordRuntimeTerminalInputForPtyId(ptyId)
     }
-    const acknowledgment = readTerminalSendAcknowledgment(result)
+    const acknowledgment = readTerminalSendAcknowledgment(result, {
+      requireSettlement: options?.requireWriteSettlement === true
+    })
     if (acknowledgment === 'unverifiable') {
       throw new Error('PTY write acknowledgment unavailable')
     }

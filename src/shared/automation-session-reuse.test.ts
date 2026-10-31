@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AutomationRun } from './automations-types'
-import { findReusableAutomationRun } from './automation-session-reuse'
+import { findLiveAutomationRun, findReusableAutomationRun } from './automation-session-reuse'
 
 function run(overrides: Partial<AutomationRun>): AutomationRun {
   const createdAt = overrides.createdAt ?? 1
@@ -32,7 +32,7 @@ function run(overrides: Partial<AutomationRun>): AutomationRun {
 function find(
   runs: AutomationRun[],
   options: {
-    status?: { state: string; agentType?: string }
+    status?: { state: string; agentType?: string; sessionBoundary?: boolean }
     livePtyIds?: string[]
   } = {}
 ): string | null {
@@ -52,6 +52,19 @@ function find(
     agentStatusForPane: (paneKey) => statusesByPaneKey.get(paneKey),
     liveSession: (candidate) => (livePtyIds.has(candidate.terminalPtyId) ? candidate.id : null)
   })
+}
+
+function findLive(runs: AutomationRun[], options: { livePtyIds?: string[] } = {}): string | null {
+  const livePtyIds = new Set(options.livePtyIds ?? runs.map((entry) => entry.terminalPtyId))
+  return (
+    findLiveAutomationRun({
+      automationId: 'auto-1',
+      worktreeId: 'wt-1',
+      currentRunId: 'run-current',
+      runs,
+      liveSession: (candidate) => (livePtyIds.has(candidate.terminalPtyId) ? candidate.id : null)
+    })?.run.id ?? null
+  )
 }
 
 describe('automation session reuse selection', () => {
@@ -135,8 +148,76 @@ describe('automation session reuse selection', () => {
     expect(find([run({})], { status })).toBeNull()
   })
 
+  it('never falls back to an older idle pane when the newest live pane is busy', () => {
+    expect(
+      find([
+        run({
+          id: 'run-old',
+          terminalPaneKey: 'tab-old:leaf-1',
+          terminalPtyId: 'pty-old',
+          createdAt: 1
+        }),
+        run({
+          id: 'run-new',
+          terminalPaneKey: 'tab-new:leaf-1',
+          terminalPtyId: 'pty-new',
+          status: 'dispatched',
+          createdAt: 2
+        })
+      ])
+    ).toBeNull()
+  })
+
+  it('never treats a session boundary as an idle turn', () => {
+    expect(
+      find([run({})], { status: { state: 'done', agentType: 'claude', sessionBoundary: true } })
+    ).toBeNull()
+  })
+
   it('accepts an idle agent whose type the host could not tell', () => {
     expect(find([run({})], { status: { state: 'done', agentType: 'unknown' } })).toBe('run-1')
     expect(find([run({})], { status: { state: 'done' } })).toBe('run-1')
+  })
+})
+
+describe('automation live session selection', () => {
+  it('returns the pane its newest run still holds while that run is in flight', () => {
+    expect(
+      findLive([
+        run({ id: 'run-done', createdAt: 1 }),
+        run({ id: 'run-working', status: 'dispatched', createdAt: 2 })
+      ])
+    ).toBe('run-working')
+  })
+
+  it('skips runs whose pane no longer holds their PTY', () => {
+    expect(
+      findLive(
+        [
+          run({
+            id: 'run-old',
+            terminalPaneKey: 'tab-old:leaf-1',
+            terminalPtyId: 'pty-old',
+            createdAt: 1
+          }),
+          run({ id: 'run-new', createdAt: 2 })
+        ],
+        { livePtyIds: ['pty-old'] }
+      )
+    ).toBe('run-old')
+  })
+
+  it('never hands back a failed or skipped run', () => {
+    expect(findLive([run({ id: 'run-failed', status: 'dispatch_failed' })])).toBeNull()
+    expect(findLive([run({ id: 'run-skipped', status: 'skipped_unavailable' })])).toBeNull()
+  })
+
+  it('never hands back a pane a newer run has since taken over', () => {
+    expect(
+      findLive([
+        run({ id: 'run-old', status: 'dispatch_failed', createdAt: 2 }),
+        run({ id: 'run-earlier-record', status: 'completed', createdAt: 1 })
+      ])
+    ).toBeNull()
   })
 })

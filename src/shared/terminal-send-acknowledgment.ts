@@ -1,6 +1,7 @@
-/** An older host omits `writeSettlement`; its whole-write `accepted` verdict stands, as before. */
+/** An older host omits `writeSettlement`; its whole-write `accepted` verdict stands unless the caller needs proof of settlement. */
 export function readTerminalSendAcknowledgment(
-  result: unknown
+  result: unknown,
+  options?: { requireSettlement?: boolean }
 ): 'accepted' | 'refused' | 'unverifiable' {
   if (typeof result !== 'object' || result === null || !('send' in result)) {
     return 'unverifiable'
@@ -19,6 +20,10 @@ export function readTerminalSendAcknowledgment(
         return 'accepted'
       }
     }
+    return 'unverifiable'
+  }
+  if (options?.requireSettlement) {
+    // Why: a host that ignored the settlement request cannot prove the write landed.
     return 'unverifiable'
   }
   if ('accepted' in send) {

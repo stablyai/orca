@@ -3,7 +3,13 @@ import { translate } from '@/i18n/i18n'
 import { submitPromptToAgentPty } from '@/lib/agent-paste-draft'
 import { launchAgentBackgroundSession } from '@/lib/launch-agent-background-session'
 import { observeExistingAutomationSession } from '@/lib/automation-session-observer'
-import { findReusableAutomationSession } from '@/lib/automation-session-reuse'
+import {
+  findLiveAutomationSession,
+  findReusableAutomationSession,
+  waitForIdleAutomationSession,
+  type AutomationSessionLookup,
+  type ReusableAutomationSession
+} from '@/lib/automation-session-reuse'
 import type { AutomationTerminalOwnership } from '@/lib/automation-terminal-ownership'
 import { useAppStore } from '@/store'
 import { captureWorkspaceSelection, restoreWorkspaceSelection } from '@/lib/active-workspace-host'
@@ -92,8 +98,72 @@ export async function handleAutomationDispatchRequest({
       finalizeTerminalOwnership
     })
     const dispatchStartedAt = Date.now()
+    /** Returns false when the pane cannot take this run, so the caller launches a fresh session. */
+    const submitToReusableSession = async (
+      reusableSession: ReusableAutomationSession
+    ): Promise<boolean> => {
+      const releaseTab = acquireReuseDispatchTab(reusableSession.tabId)
+      if (!releaseTab) {
+        return false
+      }
+      completion.setReuseDispatchTabRelease(releaseTab)
+      try {
+        const submitted = await submitPromptToAgentPty({
+          tabId: reusableSession.tabId,
+          ptyId: reusableSession.ptyId,
+          content: automation.prompt
+        })
+        if (!submitted) {
+          completion.cleanupRunObservers()
+          return false
+        }
+        let reuseSawWorking = false
+        const handleReusableAgentStatus = (payload: { state: string }): void => {
+          if (payload.state === 'working') {
+            reuseSawWorking = true
+            return
+          }
+          if (payload.state === 'done' && reuseSawWorking) {
+            completion.handleAgentDone()
+          }
+        }
+        const reuseCompletionStartedAt = Date.now()
+        completion.setSessionObserver(
+          await observeExistingAutomationSession({
+            ptyId: reusableSession.ptyId,
+            paneKey: reusableSession.paneKey,
+            runId: run.id,
+            onData: completion.appendOutput,
+            onAgentStatus: (payload) => {
+              completion.captureAssistantMessage(payload.lastAssistantMessage)
+              handleReusableAgentStatus(payload)
+            },
+            onExit: completion.handleExit
+          })
+        )
+        completion.observeAgentStatus(reusableSession.paneKey, reuseCompletionStartedAt, {
+          requireWorkingAfterStart: true
+        })
+        await markDispatchResult({
+          runId: run.id,
+          status: 'dispatched',
+          workspaceId: worktree.id,
+          workspaceDisplayName: worktree.displayName,
+          terminalSessionId: reusableSession.tabId,
+          terminalPaneKey: reusableSession.paneKey,
+          terminalPtyId: reusableSession.ptyId,
+          precheckResult: resolved.context.precheckResult,
+          error: null
+        })
+        await completion.settlePendingAfterDispatch()
+        return true
+      } catch (error) {
+        completion.cleanupRunObservers()
+        throw error
+      }
+    }
     if (automation.reuseSession) {
-      const reusableSession = findReusableAutomationSession({
+      const lookup: AutomationSessionLookup = {
         automationId: automation.id,
         agentId: automation.agentId,
         worktreeId: worktree.id,
@@ -101,66 +171,19 @@ export async function handleAutomationDispatchRequest({
         // Dispatch runs only on desktop authority, so history reads explicitly target the local runtime.
         runs: await listAutomationRunsForTarget({ kind: 'local' }, automation.id),
         state: useAppStore.getState()
-      })
-      if (reusableSession) {
-        const releaseTab = acquireReuseDispatchTab(reusableSession.tabId)
-        if (releaseTab) {
-          completion.setReuseDispatchTabRelease(releaseTab)
-          try {
-            const submitted = await submitPromptToAgentPty({
-              tabId: reusableSession.tabId,
-              ptyId: reusableSession.ptyId,
-              content: automation.prompt
+      }
+      const liveSession = findLiveAutomationSession(lookup)
+      // A busy session is the intended reuse target: wait for its turn to finish instead of opening another.
+      const reusableSession =
+        findReusableAutomationSession(lookup) ??
+        (liveSession
+          ? await waitForIdleAutomationSession({
+              session: liveSession,
+              agentId: automation.agentId
             })
-            if (!submitted) {
-              completion.cleanupRunObservers()
-            } else {
-              let reuseSawWorking = false
-              const handleReusableAgentStatus = (payload: { state: string }): void => {
-                if (payload.state === 'working') {
-                  reuseSawWorking = true
-                  return
-                }
-                if (payload.state === 'done' && reuseSawWorking) {
-                  completion.handleAgentDone()
-                }
-              }
-              const reuseCompletionStartedAt = Date.now()
-              completion.setSessionObserver(
-                await observeExistingAutomationSession({
-                  ptyId: reusableSession.ptyId,
-                  paneKey: reusableSession.paneKey,
-                  runId: run.id,
-                  onData: completion.appendOutput,
-                  onAgentStatus: (payload) => {
-                    completion.captureAssistantMessage(payload.lastAssistantMessage)
-                    handleReusableAgentStatus(payload)
-                  },
-                  onExit: completion.handleExit
-                })
-              )
-              completion.observeAgentStatus(reusableSession.paneKey, reuseCompletionStartedAt, {
-                requireWorkingAfterStart: true
-              })
-              await markDispatchResult({
-                runId: run.id,
-                status: 'dispatched',
-                workspaceId: worktree.id,
-                workspaceDisplayName: worktree.displayName,
-                terminalSessionId: reusableSession.tabId,
-                terminalPaneKey: reusableSession.paneKey,
-                terminalPtyId: reusableSession.ptyId,
-                precheckResult: resolved.context.precheckResult,
-                error: null
-              })
-              await completion.settlePendingAfterDispatch()
-              return
-            }
-          } catch (error) {
-            completion.cleanupRunObservers()
-            throw error
-          }
-        }
+          : null)
+      if (reusableSession && (await submitToReusableSession(reusableSession))) {
+        return
       }
     }
     const result = await launchAgentBackgroundSession({
