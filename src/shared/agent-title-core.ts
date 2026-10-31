@@ -60,9 +60,9 @@ export const STRONG_WORKING_KEYWORDS_RE = new RegExp(
 
 export const STRONG_WORKING_KEYWORDS_RE_GLOBAL = new RegExp(STRONG_WORKING_KEYWORDS_RE.source, 'gi')
 
-// Same boundaries so ~/x/permission, permission-check and awaiting are not prompts.
+// Consuming boundaries support older Safari while rejecting permission-shaped paths and hyphenated fragments.
 export const STRONG_PERMISSION_KEYWORDS_RE =
-  /(^|[^\w./\\-])(action required|permission|waiting)(?![\w-])/i
+  /(^|[^\w./\\-])(action required|permissions|permission|waiting)(?![\w/\\-])/i
 
 export const CURSOR_NATIVE_TITLE_LOWER = 'cursor agent'
 
