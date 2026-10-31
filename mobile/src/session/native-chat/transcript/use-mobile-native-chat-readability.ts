@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react'
-import { getRepoIdFromWorktreeId } from '../../../src/shared/worktree/id'
-import type { RpcClient } from '../transport/rpc-client'
+import { getRepoIdFromWorktreeId } from '../../../../../src/shared/worktree/id'
+import type { RpcClient } from '../../../transport/rpc-client'
 import {
   nativeChatRepoListRead,
   type MobileRuntimeRepoSummary
-} from './mobile-session-read-operations'
-import { isFloatingWorkspaceWorktreeId } from './floating-workspace'
-import { resumeFolderWorkspaceListRead } from '../agent-history/mobile-agent-history-operations'
-import { isMobileFolderNativeChatReadable } from './native-chat/mobile-native-chat-eligibility'
-import { isNativeChatTranscriptLocalReadable } from '../../../src/shared/native-chat/transcript/native-chat-transcript-readability'
+} from '../../mobile-session-read-operations'
+import { isFloatingWorkspaceWorktreeId } from '../../floating-workspace'
+import { resumeFolderWorkspaceListRead } from '../../../agent-history/mobile-agent-history-operations'
+import { isMobileFolderNativeChatReadable } from '../mobile-native-chat-eligibility'
+import { isNativeChatTranscriptLocalReadable } from '../../../../../src/shared/native-chat/transcript/native-chat-transcript-readability'
 
 type ReadabilityState = {
   client: RpcClient | null
