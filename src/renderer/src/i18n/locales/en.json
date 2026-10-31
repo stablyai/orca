@@ -20164,7 +20164,6 @@
           "chatSwitchFailedFromTerminal": "{{agent}} could not switch to chat. Use Switch to Chat UI to try again.",
           "historyUnavailableFromTerminal": "{{agent}} couldn't open this conversation's history. Check that its saved conversation is available, then use Switch to Chat UI to try again.",
           "terminalSwitchFailed": "{{agent}} could not switch to a terminal. Try again.",
-          "writerUnconfirmed": "Orca could not confirm {{agent}} stopped. Check its open chats and terminals, then try this action again.",
           "sourceKept": "{{agent}} opened successfully. The original tab was kept; continue in the new tab.",
           "changeInProgress": "{{agent}} is still finishing another change to this conversation. Try again in a moment.",
           "conversationMissing": "Orca could not find this {{agent}} conversation. Open it from Session History, then try again.",

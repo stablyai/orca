@@ -17,18 +17,14 @@ export function conversationSwitchFailureText(
   const failure = structuredLaunchFailure(error)
   const reason = reasonOverride ?? failure?.details?.reason
   const values = { agent: agentLabel(args.agent) }
+  // Another chat (the host names it) or a CLI the status store shows live holds it: either way
+  // nothing was stopped, and the user continues there.
   if (reason === 'conversationHeldElsewhere') {
-    return failure?.owner
-      ? translate(
-          'components.tab.bar.switch.openElsewhere',
-          '{{agent}} is open in another chat or terminal. Continue there, then try switching again.',
-          values
-        )
-      : translate(
-          'components.tab.bar.switch.writerUnconfirmed',
-          'Orca could not confirm {{agent}} stopped. Check its open chats and terminals, then try this action again.',
-          values
-        )
+    return translate(
+      'components.tab.bar.switch.openElsewhere',
+      '{{agent}} is open in another chat or terminal. Continue there, then try switching again.',
+      values
+    )
   }
   if (reason === 'ownerUnproven' || reason === 'previousExitUnverifiable') {
     return translate(

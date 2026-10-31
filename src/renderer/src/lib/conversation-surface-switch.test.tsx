@@ -271,6 +271,35 @@ it('shows a host’s refusal of a replying agent once, without retrying', async 
 })
 
 it.each([
+  ['terminal', undefined],
+  ['chat', undefined],
+  ['terminal', { sessionId: 'owner-chat', workspaceId: 'workspace' }]
+] as const)(
+  'names the agent open elsewhere when another holder refuses a switch to %s (owner %o)',
+  async (direction, owner) => {
+    mocks.call.mockResolvedValue({
+      status: 'refused',
+      sessionId: subject.sessionId,
+      refusal: {
+        code: 'agent_session_conflict',
+        details: { reason: 'conversationHeldElsewhere', ...(owner ? { owner } : {}) }
+      }
+    })
+    mocks.capture.mockResolvedValue({
+      target: { kind: 'local' },
+      handle: 'terminal-source',
+      incarnationId: 'incarnation',
+      presentation: { identity: { tabId: 'terminal' }, holders: [] }
+    })
+    const args = direction === 'chat' ? { direction, ...fromPane, source: fromPane } : subject
+    await expect(runConversationSwitch(args)).resolves.toBe(false)
+    expect(mocks.error).toHaveBeenCalledExactlyOnceWith(
+      'Codex is open in another chat or terminal. Continue there, then try switching again.'
+    )
+  }
+)
+
+it.each([
   ['refuses', 'refused', true],
   ['fails before the request is sent', 'unsent', true],
   ['loses the answer after the send', 'lost', false]
