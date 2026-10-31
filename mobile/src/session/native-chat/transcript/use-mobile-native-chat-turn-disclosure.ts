@@ -21,7 +21,6 @@ import { nativeChatMessagesWaitingBehindLiveTurn } from '../../../../../src/shar
 import { NATIVE_CHAT_STREAMING_ID } from '../../../../../src/shared/native-chat/native-chat-streaming'
 import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat-resolution-receipt'
 import { useMobileNativeChatTranscriptRows } from './use-mobile-native-chat-transcript-rows'
-import type { MobileNativeChatRunPresentation } from '../../mobile-native-chat-run-descriptors'
 import {
   nativeChatRowsInDrawOrder,
   nativeChatTurnBarRows
@@ -53,6 +52,8 @@ export type MobileNativeChatTurnRow = {
   // Hold expanded user messages above recycled rows so scrolling away cannot collapse them.
   userMessageOpen: boolean
   onToggleUserMessage: (messageId: string) => void
+  automationInstructionsOpen: boolean
+  onToggleAutomationInstructions: (messageId: string) => void
 }
 
 export type MobileNativeChatLiveLine = NativeChatLiveLine & { reasoningExpanded: boolean }
@@ -109,17 +110,7 @@ export function useMobileNativeChatTurnDisclosure({
   lineYields?: boolean
   receipts?: ReadonlyMap<string, NativeChatResolvedPrompt> | null
   scopeKey: string
-}): {
-  active: NativeChatTurnStatus | null
-  presentation: MobileNativeChatRunPresentation
-  activeActivityText: string | null
-  onToggleTurn: (turnKey: string) => void
-  resolveRow: (index: number, message: NativeChatMessage) => MobileNativeChatTurnRow
-  listMessages: readonly NativeChatMessage[]
-  waitingRows: readonly { item: NativeChatMessage; index: number }[]
-  liveLine: MobileNativeChatLiveLine | null
-  onToggleReasoning: (key: string) => void
-} {
+}) {
   const { rows, turnKeys, liveTurnKey, unresolvedRowIds } = useMemo(() => {
     if (!enabled) {
       return {
@@ -170,6 +161,7 @@ export function useMobileNativeChatTurnDisclosure({
   const [expandedReasoning, toggleReasoning] = useScopedOpenKeys(scopeKey)
   const [openSubagentGroups, toggleSubagentGroup] = useScopedOpenKeys(scopeKey)
   const [openUserMessages, toggleUserMessage] = useScopedOpenKeys(scopeKey)
+  const [openAutomationInstructions, toggleAutomationInstructions] = useScopedOpenKeys(scopeKey)
   const bars = useMemo(() => nativeChatTurnBarRows(rows, turnKeys), [rows, turnKeys])
 
   const { active, activeTurnKey, completedByTurn } = turnStatuses
@@ -264,7 +256,10 @@ export function useMobileNativeChatTurnDisclosure({
           : {}),
         onToggleSubagentGroup: toggleSubagentGroup,
         userMessageOpen: message.role === 'user' && openUserMessages.has(message.id),
-        onToggleUserMessage: toggleUserMessage
+        onToggleUserMessage: toggleUserMessage,
+        automationInstructionsOpen:
+          message.role === 'user' && openAutomationInstructions.has(message.id),
+        onToggleAutomationInstructions: toggleAutomationInstructions
       }
     },
     [
@@ -290,7 +285,9 @@ export function useMobileNativeChatTurnDisclosure({
       toggleSubagentGroup,
       isWorking,
       openUserMessages,
-      toggleUserMessage
+      toggleUserMessage,
+      openAutomationInstructions,
+      toggleAutomationInstructions
     ]
   )
 

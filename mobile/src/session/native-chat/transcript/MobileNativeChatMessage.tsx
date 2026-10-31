@@ -78,7 +78,9 @@ function MobileNativeChatMessageImpl({
   subagentGroupsOpen,
   onToggleSubagentGroup,
   userMessageOpen,
-  onToggleUserMessage
+  onToggleUserMessage,
+  automationInstructionsOpen,
+  onToggleAutomationInstructions
 }: {
   message: NativeChatMessage
   // Stable placement key survives older messages joining a folded row.
@@ -115,6 +117,8 @@ function MobileNativeChatMessageImpl({
   onToggleSubagentGroup?: (groupId: string) => void
   userMessageOpen?: boolean
   onToggleUserMessage?: (messageId: string) => void
+  automationInstructionsOpen?: boolean
+  onToggleAutomationInstructions?: (messageId: string) => void
 }): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -291,6 +295,8 @@ function MobileNativeChatMessageImpl({
             fontScale={fontScale}
             open={userMessageOpen === true}
             onToggle={() => onToggleUserMessage?.(message.id)}
+            instructionsOpen={automationInstructionsOpen === true}
+            onToggleInstructions={() => onToggleAutomationInstructions?.(message.id)}
             recovery={recovery}
             status={showFull}
             onOpenFile={onOpenFile}
