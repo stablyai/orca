@@ -26,9 +26,10 @@ export const subscribeWebRuntimeEnvironment: RuntimeEnvironmentsApi['subscribe']
     timeoutMs,
     subscriptionId,
     expectedEnvironmentPairingRevision,
-    dispatchObservation
+    dispatchObservation,
+    observeDispatch
   },
-  callbacks
+  { onSent, ...callbacks }
 ) => {
   const environment = resolveEnvironment(selector)
   assertEnvironmentPairing(selector, expectedEnvironmentPairingRevision)
@@ -60,6 +61,8 @@ export const subscribeWebRuntimeEnvironment: RuntimeEnvironmentsApi['subscribe']
           params,
           {
             ...callbacks,
+            // As on the desktop, only a caller that asked to observe the send hears it.
+            ...(observeDispatch ? { onSent } : {}),
             onResponse: (response) => {
               try {
                 assertEnvironmentPairing(selector, expectedEnvironmentPairingRevision)

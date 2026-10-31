@@ -42,3 +42,20 @@ it('drops a request still queued at its send-by time, unsent, as the desktop doe
   expect(mocks.subscribe).not.toHaveBeenCalled()
   expect(onSent).not.toHaveBeenCalled()
 })
+
+it.each([true, false])(
+  'tells the caller its request was sent only when it asked to observe the send=%s',
+  async (observeDispatch) => {
+    mocks.enqueue.mockImplementationOnce(async (_id, _method, run) => run())
+    mocks.subscribe.mockImplementationOnce(async (_method, _params, callbacks) => {
+      callbacks.onSent?.(1)
+      return { unsubscribe: vi.fn() }
+    })
+    const onSent = vi.fn()
+    await subscribeWebRuntimeEnvironment(
+      { selector: 'environment', method: 'agentSession.switchToChat', params: {}, observeDispatch },
+      { onResponse: vi.fn(), onSent }
+    )
+    expect(onSent).toHaveBeenCalledTimes(observeDispatch ? 1 : 0)
+  }
+)
