@@ -48,12 +48,10 @@
       "untitledSession": "無題のセッション"
     },
     "sessionHistoryList": {
-      "assistantRole": "アシスタント",
       "currentWorktree": "現在のワークツリー",
       "messages_one": "{{count}} 件のメッセージ",
       "messages_other": "{{count}} 件のメッセージ",
-      "resumeSession": "Agent セッションを再開",
-      "userRole": "ユーザー"
+      "resumeSession": "Agent セッションを再開"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "ホストに接続できません",
@@ -362,7 +360,6 @@
     "sessionOptionPickers": {
       "agentWorking": "Agent が作業中",
       "backToModels": "モデル一覧に戻る",
-      "closePicker": "選択画面を閉じる",
       "dispatchUnconfirmed": "Agent に送信済み — 未確認",
       "modelFullAccessLabel": "モデル、{{value}}、フルアクセス",
       "modelLabel": "モデル、{{value}}",
@@ -823,12 +820,10 @@
       "blankTerminal": "ブランクターミナル"
     },
     "newWorktreeFormSheet": {
-      "advanced": "詳細設定",
       "agent": "Agent",
       "connectTarget": "接続先に接続",
       "connectTargetFirst": "先に接続先へ接続",
       "createWorktree": "ワークツリーを作成する",
-      "nameOrCreateFrom": "名前または「作成元」",
       "noProjectsFound": "プロジェクトが見つかりません",
       "note": "注記",
       "notePlaceholder": "メモを書く",
@@ -919,12 +914,10 @@
       "noResults": "検索結果が見つかりませんでした。",
       "searchPlaceholder": "名前を入力、または作成元を検索",
       "switchRepo": "{{repoName}} に切り替え",
-      "title": "名前または「作成元」",
       "typeWorkspaceName": "下のフィールドにワークスペース名を入力してください。"
     },
     "smartWorkspaceSourceField": {
       "openSelectedSource": "選択した作成元を開く",
-      "optional": "[オプション]",
       "searchPlaceholder": "名前を入力、または作成元を検索"
     },
     "smartWorkspaceSourceRow": {
@@ -3359,7 +3352,6 @@
       "changeStatus": "ステータスを変更",
       "copyGitHubLink": "GitHub リンクをコピーする",
       "copyLinearLink": "Linear リンクをコピーする",
-      "createWorkspace": "ワークスペースを作成",
       "creating": "作成中…",
       "mergeConflicts": "GitHub でマージの競合が報告されています。",
       "mergeMergeRequest": "MR をマージ",
@@ -3367,8 +3359,6 @@
     },
     "itemDetailContent": {
       "addSubIssue": "サブ Issue を追加",
-      "assignee": "担当者",
-      "assignees": "担当者",
       "checks": "チェック",
       "description": "説明",
       "discussion": "ディスカッション",
@@ -3380,13 +3370,10 @@
       "pipeline": "パイプライン",
       "pipelineJobs_one": "{{count}} 件のジョブ",
       "pipelineJobs_other": "{{count}} 件のジョブ",
-      "project": "プロジェクト",
       "rerunAll": "すべて再実行",
       "rerunFailed": "失敗分を再実行",
-      "status": "状態",
       "subIssueTitle": "サブ Issue のタイトル",
-      "subIssues": "サブ Issue",
-      "type": "種類"
+      "subIssues": "サブ Issue"
     },
     "itemDetailDrawer": {
       "refreshDetails": "詳細を更新"
@@ -3739,19 +3726,14 @@
       "addRepository": "Linear の Issue からワークスペースを作成する前に、Git リポジトリを追加してください。",
       "advanced": "詳細設定",
       "agent": "Agent",
-      "connect": "接続",
       "connectFirst": "先にリポジトリに接続",
       "connectRepository": "リポジトリに接続",
-      "connecting": "接続中…",
-      "createFrom": "{{branch}} から作成",
       "defaultBranch": "デフォルトブランチ",
       "detectingAgents": "Agent を検出中…",
-      "optional": "[オプション]",
       "remoteRepository": "リモートリポジトリ",
       "repository": "リポジトリ",
       "repositoryNotFound": "リポジトリが見つかりません。",
       "selectRepository": "リポジトリを選択",
-      "sshConnection": "SSH 接続",
       "startFrom": "作成元",
       "title": "ワークスペースを作成",
       "workspaceName": "ワークスペース名"
@@ -3874,7 +3856,6 @@
       "existing": "既存のブランチ",
       "existingHint": "新しいコミットはこのブランチに追加されます。",
       "hostUpdateRequired": "ブランチを再利用するか、別のブランチを明示的に作成するには、ワークスペースのホストで Orca を更新してください。",
-      "new": "新しいブランチ",
       "newHint": "新しいローカルブランチを作成",
       "newName": "新しいブランチ名",
       "title": "このワークツリーのブランチ"

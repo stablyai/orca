@@ -282,8 +282,9 @@
       "messages_other": "{{count}} messages",
       "currentWorktree": "current worktree",
       "resumeSession": "Resume agent session",
-      "userRole": "user",
-      "assistantRole": "assistant"
+      "hidePreview": "Hides the recent messages.",
+      "showPreview": "Shows the recent messages.",
+      "you": "You"
     },
     "panel": {
       "workspace": "Workspace",
@@ -304,7 +305,13 @@
       "skipped_other": "{{count}} transcripts skipped",
       "noSessions": "No agent sessions",
       "noSearchResults": "No sessions match your search.",
-      "emptyScope": "No past agent sessions in this scope."
+      "emptyScope": "No past agent sessions in this scope.",
+      "hideDetails": "Hide details",
+      "showDetails": "Show details",
+      "dismissNotice": "Dismiss",
+      "loading": "Loading agent sessions…",
+      "noMatches": "No matches",
+      "clearSearch": "Clear search"
     },
     "resumeTarget": {
       "runtimeUnavailable": "Resume from history is not available in runtime-hosted workspaces.",
@@ -1099,14 +1106,15 @@
     "newWorktreeFormSheet": {
       "createWorktree": "Create worktree",
       "noProjectsFound": "No projects found",
-      "nameOrCreateFrom": "Name or 'Create From'",
       "workspaceName": "Workspace name",
       "agent": "Agent",
       "connectTargetFirst": "Connect target first",
-      "advanced": "Advanced",
       "note": "Note",
       "notePlaceholder": "Write a note",
-      "connectTarget": "Connect target"
+      "connectTarget": "Connect target",
+      "options": "Options",
+      "createWorkspace": "Create workspace",
+      "startFrom": "Start from"
     },
     "newWorktreeModal": {
       "remoteRepository": "Remote repository"
@@ -1120,7 +1128,8 @@
       "project": "Project",
       "selectProject": "Select a project",
       "runOn": "Run on",
-      "selectRunTarget": "Select a run target"
+      "selectRunTarget": "Select a run target",
+      "where": "Where"
     },
     "protocolBlockScreen": {
       "updateMobileTitle": "Update Orca Mobile",
@@ -1156,19 +1165,21 @@
       "derivedFromName": "Derived from name"
     },
     "smartWorkspaceSourceDrawer": {
-      "title": "Name or 'Create From'",
       "crossRepoMessage": "This item lives in {{owner}}/{{repo}}.",
       "switchRepo": "Switch to {{repoName}}",
       "connectRepository": "Connect the repository to search sources.",
       "gitHubRemoteRequired": "This SSH repo needs a GitHub remote to list issues and PRs.",
       "noResults": "No results found.",
       "typeWorkspaceName": "Type a workspace name in the field below.",
-      "searchPlaceholder": "Type a name or search a source"
+      "searchPlaceholder": "Type a name or search a source",
+      "workspaceName": "Workspace name",
+      "startFrom": "Start from"
     },
     "smartWorkspaceSourceField": {
-      "optional": "[Optional]",
       "openSelectedSource": "Open selected source",
-      "searchPlaceholder": "Type a name or search a source"
+      "searchPlaceholder": "Type a name or search a source",
+      "optionalLabel": "Optional",
+      "clearSelectedSource": "Clear selected source"
     },
     "smartWorkspaceSourceRow": {
       "useName": "Use \"{{name}}\"",
@@ -1552,7 +1563,6 @@
       "title": "Branch for this worktree",
       "existing": "Existing branch",
       "existingHint": "New commits go on this branch.",
-      "new": "New branch",
       "newHint": "Create a new local branch",
       "newName": "New branch name",
       "automaticName": "Automatic name",
@@ -1606,7 +1616,9 @@
       "viewSource": "View Markdown source",
       "viewPreview": "View rendered Markdown preview",
       "copyLoadedSource": "Copy loaded Markdown source",
-      "copySource": "Copy Markdown source"
+      "copySource": "Copy Markdown source",
+      "previewMode": "Preview",
+      "sourceMode": "Source"
     },
     "fileMediaPreview": {
       "loadFailed": "Unable to load media",
@@ -2598,12 +2610,13 @@
       "modelFullAccessLabel": "Model, {{value}}, full access",
       "modelLabel": "Model, {{value}}",
       "permissionsLabel": "Permissions, {{value}}",
-      "closePicker": "Close picker",
       "backToModels": "Back to models",
       "agentWorking": "Agent is working",
       "settingsLocked": "Model settings unlock when this turn finishes.",
       "dispatchUnconfirmed": "Sent to the agent — not confirmed",
-      "permissions": "Permissions"
+      "permissions": "Permissions",
+      "applying": "Applying…",
+      "optionsSection": "Options"
     },
     "sessionOptionRows": {
       "defaultMarker": "Default",
@@ -3520,22 +3533,19 @@
     },
     "itemActions": {
       "creating": "Creating...",
-      "createWorkspace": "Create Workspace",
       "copyLinearLink": "Copy Linear link",
       "copyGitHubLink": "Copy GitHub link",
       "mergePullRequest": "Merge pull request",
       "mergeConflicts": "GitHub reports merge conflicts.",
       "mergeMergeRequest": "Merge merge request",
-      "changeStatus": "Change status"
+      "changeStatus": "Change status",
+      "copyLink": "Copy link",
+      "startWorkspace": "Start workspace",
+      "moreActions": "More actions"
     },
     "itemDetailContent": {
       "pipelineJobs_one": "{{count}} jobs",
       "pipelineJobs_other": "{{count}} jobs",
-      "type": "Type",
-      "status": "Status",
-      "assignee": "Assignee",
-      "project": "Project",
-      "assignees": "Assignees",
       "description": "Description",
       "checks": "Checks",
       "rerunFailed": "Rerun failed",
@@ -3549,7 +3559,14 @@
       "subIssueTitle": "Sub-issue title",
       "addSubIssue": "Add sub-issue",
       "discussion": "Discussion",
-      "noComments": "No comments."
+      "noComments": "No comments.",
+      "details": "Details",
+      "type": "Type",
+      "status": "Status",
+      "assignee": "Assignee",
+      "project": "Project",
+      "priority": "Priority",
+      "assignees": "Assignees"
     },
     "itemDetailDrawer": {
       "refreshDetails": "Refresh details"
@@ -3756,7 +3773,8 @@
       "page": "Page {{page}}",
       "pageOfTotal": "Page {{page}} of {{total}}",
       "nextPage": "Next page",
-      "intoBranch": "into {{base}}"
+      "intoBranch": "into {{base}}",
+      "kindAndStatus": "{{kind}}, {{status}}"
     },
     "providerPickers": {
       "repos": "Repositories",
@@ -3799,22 +3817,18 @@
       "title": "Create Workspace",
       "repository": "Repository",
       "selectRepository": "Select a repository",
-      "sshConnection": "SSH Connection",
       "remoteRepository": "Remote repository",
-      "connecting": "Connecting...",
-      "connect": "Connect",
       "workspaceName": "Workspace Name",
-      "optional": "[Optional]",
       "agent": "Agent",
       "connectFirst": "Connect repository first",
       "detectingAgents": "Detecting agents...",
       "advanced": "Advanced",
       "startFrom": "Start from",
       "defaultBranch": "Default branch",
-      "createFrom": "Create from {{branch}}",
       "addRepository": "Add a Git repository before creating a Linear workspace.",
       "repositoryNotFound": "Repository not found.",
-      "connectRepository": "Connect Repository"
+      "connectRepository": "Connect Repository",
+      "optionalLabel": "Optional"
     },
     "workspaceOptionPickers": {
       "baseBranchTitle": "Start From",

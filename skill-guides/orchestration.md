@@ -71,6 +71,8 @@ Never:
   shows mail `check` already handled.
 
 Finished workers close on their own; `send` reopens one when you need it again.
+If the user wants to watch a worker, start it with `--keep-open`; to keep one
+already started, run `ORCA orchestration worker-keep-open --dispatch <dispatch_id>`.
 If `worker-list` shows no `autoReleaseAt` for a finished worker, release it yourself.
 
 ## Task spec

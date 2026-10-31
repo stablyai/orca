@@ -1,6 +1,7 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
+import { LIST_LEADING_INSET, LIST_ROW_PADDING } from './list/ListGroup'
 
 export const smartWorkspaceSourceDrawerStyles = themedStyleSheet(() => ({
   root: {
@@ -8,22 +9,9 @@ export const smartWorkspaceSourceDrawerStyles = themedStyleSheet(() => ({
     minHeight: 0
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.xs,
-    paddingBottom: spacing.sm,
+    marginTop: -spacing.xs,
+    marginBottom: spacing.xs,
     flexShrink: 0
-  },
-  title: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  done: {
-    fontSize: typography.bodySize,
-    fontWeight: '600',
-    color: colors.accentBlue
   },
   results: {
     flex: 1,
@@ -31,21 +19,29 @@ export const smartWorkspaceSourceDrawerStyles = themedStyleSheet(() => ({
   },
   list: {
     flex: 1,
-    backgroundColor: colors.bgPanel,
-    borderTopLeftRadius: radii.surface,
-    borderTopRightRadius: radii.surface,
+    marginBottom: spacing.sm,
+    backgroundColor: colors.sheetGroup,
+    borderRadius: radii.surface,
     overflow: 'hidden'
   },
+  // With no rows the footer's message stands alone on the sheet, not in an empty group.
+  listEmpty: {
+    backgroundColor: 'transparent'
+  },
   listContent: {
-    flexGrow: 1,
-    paddingBottom: spacing.sm
+    flexGrow: 1
+  },
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.borderSubtle,
+    marginLeft: LIST_LEADING_INSET
   },
   // Pin dock to fill sheet bottom so flex-greedy FlatList cannot push TextInput below frame/keyboard.
   dock: {
     flexShrink: 0,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.borderSubtle,
-    backgroundColor: colors.bgBase,
+    backgroundColor: colors.sheetSurface,
     paddingTop: spacing.sm,
     paddingBottom: spacing.sm,
     gap: spacing.sm,
@@ -67,7 +63,7 @@ export const smartWorkspaceSourceDrawerStyles = themedStyleSheet(() => ({
     borderColor: colors.borderSubtle
   },
   tabSelected: {
-    backgroundColor: colors.bgPanel,
+    backgroundColor: colors.sheetGroup,
     borderColor: colors.textSecondary
   },
   tabText: {
@@ -91,7 +87,7 @@ export const smartWorkspaceSourceDrawerStyles = themedStyleSheet(() => ({
     borderColor: colors.borderSubtle
   },
   chipSelected: {
-    backgroundColor: colors.bgPanel,
+    backgroundColor: colors.sheetGroup,
     borderColor: colors.textSecondary
   },
   chipText: {
@@ -103,11 +99,10 @@ export const smartWorkspaceSourceDrawerStyles = themedStyleSheet(() => ({
     fontWeight: '600'
   },
   crossRepo: {
-    backgroundColor: colors.bgRaised,
+    backgroundColor: colors.sheetGroup,
     borderRadius: radii.surface,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    padding: spacing.md,
+    paddingHorizontal: LIST_ROW_PADDING,
+    paddingVertical: spacing.md,
     marginBottom: spacing.sm,
     gap: spacing.sm
   },
@@ -135,25 +130,23 @@ export const smartWorkspaceSourceDrawerStyles = themedStyleSheet(() => ({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs + 2,
     borderRadius: radii.control,
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.textSecondary
+    backgroundColor: colors.textPrimary
   },
   crossRepoSwitchText: {
     fontSize: 13,
     fontWeight: '600',
-    color: colors.textPrimary
+    color: colors.bgBase
   },
   notice: {
-    fontSize: 12,
-    color: colors.textMuted,
-    paddingHorizontal: spacing.xs,
+    fontSize: 13,
+    color: colors.textSecondary,
+    paddingHorizontal: LIST_ROW_PADDING,
     paddingBottom: spacing.sm
   },
   errorNotice: {
-    fontSize: 12,
+    fontSize: 13,
     color: colors.statusRed,
-    paddingHorizontal: spacing.xs,
+    paddingHorizontal: LIST_ROW_PADDING,
     paddingBottom: spacing.sm
   },
   loading: {
@@ -162,8 +155,9 @@ export const smartWorkspaceSourceDrawerStyles = themedStyleSheet(() => ({
   },
   empty: {
     paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.xl,
     textAlign: 'center',
-    color: colors.textMuted,
+    color: colors.textSecondary,
     fontSize: 13
   }
 }))

@@ -77,7 +77,7 @@ import {
   renderMobileTasksProjectMissingRepoDrawer,
   renderMobileTasksProjectDetailDrawer
 } from './mobile-tasks-project-detail-drawer'
-import { renderMobileTasksItemDetailDrawer } from './mobile-tasks-item-detail-drawer'
+import { MobileTasksItemDetailDrawer } from './mobile-tasks-item-detail-drawer'
 
 export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentationModel }) {
   const colorScheme = useMobileColorScheme()
@@ -268,7 +268,7 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
 
         {renderMobileTasksProjectDetailDrawer(model)}
 
-        {renderMobileTasksItemDetailDrawer(model)}
+        <MobileTasksItemDetailDrawer model={model} />
 
         <ActionSheetModal
           visible={taskUiReady && mergeMethodProjectRow != null}

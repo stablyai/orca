@@ -31,6 +31,7 @@ import {
   findByHostType
 } from '../../../test-support/react-test-renderer-host-nodes'
 
+vi.mock('../../../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
 vi.mock('react-native', () => ({
   AccessibilityInfo: { announceForAccessibilityWithOptions: vi.fn() },
   ActivityIndicator: 'ActivityIndicator',
@@ -296,7 +297,7 @@ describe('MobileNativeChatSessionOptionPickers', () => {
         expect(calls[index]?.fields).toEqual({ key: 'permissionMode', value })
         expect(view.current().pendingOptionId).toBeNull()
         await act(async () => renderer!.update(createElement(ActualPickers)))
-        expect(findAllByHostType(renderer!.root, 'ActivityIndicator')).toHaveLength(0)
+        expect(renderer!.root.findAllByProps({ children: 'Applying…' })).toHaveLength(0)
         expect(rowByText('GPT Fast').props.accessibilityState?.disabled).toBe(false)
         await act(async () =>
           replies[index].resolve(
@@ -306,7 +307,7 @@ describe('MobileNativeChatSessionOptionPickers', () => {
         await expect(pick).resolves.toBe(true)
         expect(view.current().pendingOptionId).toBeNull()
         await act(async () => renderer!.update(createElement(ActualPickers)))
-        expect(findAllByHostType(renderer!.root, 'ActivityIndicator')).toHaveLength(0)
+        expect(renderer!.root.findAllByProps({ children: 'Applying…' })).toHaveLength(0)
         expect(rowByText('GPT Fast').props.accessibilityState?.disabled).toBe(false)
       }
       act(() => {
@@ -314,7 +315,7 @@ describe('MobileNativeChatSessionOptionPickers', () => {
       })
       await act(async () => renderer!.update(createElement(ActualPickers)))
       expect(rowByText('GPT Live').props.accessibilityState?.disabled).toBe(true)
-      expect(findAllByHostType(renderer!.root, 'ActivityIndicator')).toHaveLength(1)
+      expect(renderer!.root.findAllByProps({ children: 'Applying…' })).toHaveLength(1)
       expect(calls.map((call) => call.fields)).toEqual([
         { key: 'permissionMode', value: 'full-access' },
         { key: 'permissionMode', value: 'own' },
@@ -535,7 +536,7 @@ describe('MobileNativeChatSessionOptionPickers', () => {
 
       await act(async () => pill('Back to models').props.onPress())
       expect(announce).toHaveBeenCalledTimes(platform === 'ios' ? 2 : 0)
-      await act(async () => pill('Close picker').props.onPress())
+      await act(async () => pill('Done').props.onPress())
       updateWorking(false)
       updateWorking(true)
       expect(announce).toHaveBeenCalledTimes(platform === 'ios' ? 2 : 0)
