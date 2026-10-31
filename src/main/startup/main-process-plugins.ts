@@ -19,6 +19,7 @@ import { resolveBundledPluginRoot } from '../plugins/plugin-bundled-bootstrap'
 import { resolvePluginHostEntryPath } from '../plugins/workers/plugin-host-process'
 import { applyPluginConsent, applyPluginEnablement } from '../plugins/plugin-enablement'
 import { setPluginServiceForRpc } from '../runtime/rpc/methods/plugins'
+import { setPluginInstallServicesForRpc } from '../runtime/rpc/methods/plugin-install-methods'
 import {
   normalizePluginConsents,
   normalizePluginIdList
@@ -219,6 +220,16 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
       applyPluginEnablement({ store, pluginService: state.pluginService!, pluginKey, enabled }),
     setDevPluginPaths: (devPluginPaths) =>
       store.updateSettings({ devPluginPaths }, { notifyListeners: true })
+  })
+  setPluginInstallServicesForRpc({
+    pluginService,
+    catalogs: {
+      marketplace: state.pluginMarketplaceService,
+      installer: state.pluginMarketplaceInstaller
+    },
+    applyConsent: (request) => applyPluginConsent({ store, pluginService, ...request }),
+    getSettings: () => store.getSettings(),
+    updateSettings: (patch) => store.updateSettings(patch, { notifyListeners: true })
   })
   // Initialization discovers manifests only; workers/panel reads wait for explicit triggers.
   void state.pluginService
