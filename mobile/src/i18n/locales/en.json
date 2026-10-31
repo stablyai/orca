@@ -4520,7 +4520,8 @@
   },
   "composerUsage": {
     "meter": {
-      "label": "{{provider}} {{window}} usage: {{percent}}% used. Show details"
+      "label": "{{provider}} {{window}} usage: {{percent}}% used. Show details",
+      "labelIdle": "{{provider}} {{window}} usage: no active window. Show details"
     },
     "sheet": {
       "title": "{{provider}} usage",
@@ -4538,7 +4539,8 @@
       "onPace": "On pace",
       "under": "{{percent}}% under pace",
       "ahead": "{{percent}}% ahead of pace",
-      "aheadRunOut": "{{percent}}% ahead of pace — at this rate you'd run out ~{{duration}} before reset"
+      "aheadRunOut": "{{percent}}% ahead of pace — at this rate you'd run out ~{{duration}} before reset",
+      "exhausted": "Limit reached \u2014 out until reset"
     },
     "picker": {
       "label": "Show in composer",
