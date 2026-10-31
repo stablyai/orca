@@ -90,7 +90,8 @@ describe('orca cli worktree awareness', () => {
     await main(['repo', 'add', '--path', './apps/web', '--json'], '/tmp/repo')
 
     expect(callMock).toHaveBeenCalledWith('repo.add', {
-      path: path.resolve('/tmp/repo/apps/web')
+      path: path.resolve('/tmp/repo/apps/web'),
+      kind: 'git'
     })
   })
 
@@ -569,7 +570,8 @@ describe('orca cli worktree awareness', () => {
     )
 
     expect(callMock).toHaveBeenCalledWith('repo.add', {
-      path: '/srv/orca/web'
+      path: '/srv/orca/web',
+      kind: 'git'
     })
   })
 
@@ -594,7 +596,8 @@ describe('orca cli worktree awareness', () => {
       )
 
       expect(callMock).toHaveBeenCalledWith('repo.add', {
-        path: serverPath
+        path: serverPath,
+        kind: 'git'
       })
     }
   )
