@@ -140,7 +140,9 @@ export type RuntimeNotifier = {
   focusTerminal(tabId: string, worktreeId: string, leafId?: string | null): void
   /** Raises the window onto a pane it shows; resolves false when the window does not know the worktree. */
   revealTerminalPane?(target: TerminalPaneRevealTarget): Promise<boolean>
-  focusEditorTab?(tabId: string, worktreeId: string): void
+  /** `sourceTabId`: a switch's source; the window focuses the tab only while that source, or
+   *  nothing, holds its group's selection in the workspace the user is in. */
+  focusEditorTab?(tabId: string, worktreeId: string, sourceTabId?: string): void
   closeSessionTab?(tabId: string, worktreeId: string): void | Promise<void | boolean>
   moveSessionTab?(worktreeId: string, move: RuntimeMobileSessionTabMove): void
   /** Host window only: host/all move it; caller/clients open without moving it; absence keeps legacy switching. Paired clients never navigate (all means host). */

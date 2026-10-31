@@ -8,6 +8,8 @@ import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-r
 import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
 import type { MirroredTerminalTab, TerminalSurface, ReadyTerminalSurface } from './state'
 import { chooseRemoteTerminalLayout, isTerminalSurfaceTab } from './terminal-surfaces'
+import { replacedTabPinned } from './slot-anchor'
+import type { Tab } from '../../../../shared/tab-types'
 
 function pendingBindingBelongsToEnvironment(
   ptyId: string,
@@ -62,7 +64,8 @@ export function buildMirroredTerminalTabs(
   sortOffset: number,
   now: number,
   focusTarget?: { parentTabId: string; leafId: string },
-  terminalPtyMode: 'local' | 'remote' = 'remote'
+  terminalPtyMode: 'local' | 'remote' = 'remote',
+  currentUnifiedTabs: readonly Tab[] = []
 ): MirroredTerminalTab[] {
   const groups = new Map<string, TerminalSurface[]>()
   for (const tab of snapshot.tabs.filter(isTerminalSurfaceTab)) {
@@ -164,7 +167,9 @@ export function buildMirroredTerminalTabs(
     const color = existing ? (existing.color ?? null) : (hostColorSurface?.color ?? null)
     const isPinned = existing
       ? existing.isPinned === true
-      : surfaces.some((surface) => surface.isPinned)
+      : (surfaces
+          .map((surface) => replacedTabPinned(currentUnifiedTabs, surface))
+          .find((pinned) => pinned !== undefined) ?? surfaces.some((surface) => surface.isPinned))
     // Why: viewMode echoes back through host snapshots, so prefer the client's record during the echo window and adopt the host value only without a prior tab.
     const hostViewModeSurface = surfaces.find((surface) => surface.viewMode)
     const viewMode = existing ? existing.viewMode : hostViewModeSurface?.viewMode

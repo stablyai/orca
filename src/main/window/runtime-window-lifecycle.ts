@@ -180,7 +180,8 @@ export function registerRuntimeWindowLifecycle(
     focusTerminal: (tabId, worktreeId, leafId) =>
       send('ui:focusTerminal', { tabId, worktreeId, leafId }),
     revealTerminalPane: (target) => revealTerminalPaneInWindow(mainWindow, target),
-    focusEditorTab: (tabId, worktreeId) => send('ui:focusEditorTab', { tabId, worktreeId }),
+    focusEditorTab: (tabId, worktreeId, sourceTabId) =>
+      send('ui:focusEditorTab', { tabId, worktreeId, ...(sourceTabId ? { sourceTabId } : {}) }),
     closeSessionTab: (tabId, worktreeId) =>
       requestSessionTabCloseFromRenderer(mainWindow, tabId, worktreeId),
     moveSessionTab: (worktreeId: string, move: RuntimeMobileSessionTabMove) =>

@@ -100,3 +100,166 @@ it('puts a terminal that replaced a chat where this client showed the chat', () 
   expect(switched).toBeDefined()
   expect(order).toEqual([switched!.id, group.tabOrder[0], group.tabOrder[2]])
 })
+
+const chatAfter = (tabId: string): Row => ({ ...chat, after: { tabId } })
+
+/** This client shows host-a, host-b, host-c in one group, its own order, with `active` selected. */
+function shownThree(active: 'host-a' | 'host-b') {
+  const shown = apply(
+    makeState(),
+    makeSnapshot([terminal('host-a'), terminal('host-b'), terminal('host-c')], {
+      tabGroups: [
+        { id: 'host-group-1', activeTabId: null, tabOrder: ['host-a', 'host-b', 'host-c'] }
+      ]
+    })
+  )
+  const group = shown.groupsByWorktree[WT]![0]!
+  const [a, b, c] = [group.tabOrder[0]!, group.tabOrder[1]!, group.tabOrder[2]!]
+  const local = { 'host-a': a, 'host-b': b }
+  // The host's order differs: this client moved host-c first.
+  const state = {
+    ...shown,
+    groupsByWorktree: { [WT]: [{ ...group, tabOrder: [c, a, b], activeTabId: local[active] }] }
+  }
+  return { state, a, b, c }
+}
+
+it.each([
+  ['the split pane’s tab held the selection', 'host-a', true],
+  ['the user had picked another tab', 'host-b', false]
+] as const)(
+  'opens a chat beside the split pane it came from on this client; selection when %s',
+  (_name, active, takes) => {
+    const { state, a, b, c } = shownThree(active)
+    const next = apply(
+      state,
+      makeSnapshot(
+        [terminal('host-a'), terminal('host-b'), terminal('host-c'), chatAfter('host-a')],
+        {
+          snapshotVersion: 2,
+          tabGroups: [
+            {
+              id: 'host-group-1',
+              activeTabId: null,
+              tabOrder: ['host-a', 'host-b', 'host-c', chat.id]
+            }
+          ]
+        }
+      )
+    )
+    const group = next.groupsByWorktree[WT]![0]!
+    const chatTab = next.unifiedTabsByWorktree[WT]!.find((tab) => tab.entityId === 'session-1')!
+    expect(group.tabOrder).toEqual([c, a, chatTab.id, b])
+    expect(group.activeTabId).toBe(takes ? chatTab.id : b)
+  }
+)
+
+it.each([
+  [true, undefined, true],
+  // The pin is this client's own: a host flag on the new row never overrides it.
+  [false, true, false]
+] as const)(
+  'keeps this client’s pin on the replaced tab (client pinned=%s, host pinned=%s)',
+  (clientPinned, hostPinned, expected) => {
+    const shown = apply(
+      makeState(),
+      makeSnapshot([chat, terminal('host-b')], {
+        tabGroups: [{ id: 'host-group-1', activeTabId: null, tabOrder: [chat.id, 'host-b'] }]
+      })
+    )
+    const state = {
+      ...shown,
+      unifiedTabsByWorktree: {
+        [WT]: shown.unifiedTabsByWorktree[WT]!.map((tab) =>
+          tab.entityId === 'session-1' ? { ...tab, isPinned: clientPinned } : tab
+        )
+      }
+    }
+    const next = apply(
+      state,
+      makeSnapshot(
+        [
+          {
+            ...terminal('host-switched', { replaces: { tabId: chat.id } }),
+            ...(hostPinned ? { isPinned: true } : {})
+          },
+          terminal('host-b')
+        ],
+        {
+          snapshotVersion: 2,
+          tabGroups: [
+            { id: 'host-group-1', activeTabId: null, tabOrder: ['host-switched', 'host-b'] }
+          ]
+        }
+      )
+    )
+    const switched = next.unifiedTabsByWorktree[WT]!.find((tab) => tab.label === 'host-switched')!
+    expect(switched.isPinned).toBe(expected)
+    expect(next.tabsByWorktree[WT]!.find((tab) => tab.id === switched.id)?.isPinned).toBe(expected)
+  }
+)
+
+it('places a destination in a split group this client is not looking at, without moving focus', () => {
+  const { state, a, b, c } = shownThree('host-a')
+  const [group] = state.groupsByWorktree[WT]!
+  // Two groups here: host-c alone in the active one, the source in the other (order unlike the host).
+  const twoGroups = {
+    ...state,
+    groupsByWorktree: {
+      [WT]: [
+        { ...group!, id: 'local-left', tabOrder: [c], activeTabId: c },
+        { ...group!, id: 'local-right', tabOrder: [b, a], activeTabId: a }
+      ]
+    },
+    activeGroupIdByWorktree: { [WT]: 'local-left' }
+  }
+  const next = apply(
+    twoGroups,
+    makeSnapshot(
+      [
+        terminal('host-switched', { replaces: { tabId: 'host-a' } }),
+        terminal('host-b'),
+        terminal('host-c')
+      ],
+      {
+        snapshotVersion: 2,
+        tabGroups: [
+          {
+            id: 'host-group-1',
+            activeTabId: null,
+            tabOrder: ['host-switched', 'host-b', 'host-c']
+          }
+        ]
+      }
+    )
+  )
+  const switched = next.unifiedTabsByWorktree[WT]!.find((tab) => tab.label === 'host-switched')!
+  const right = next.groupsByWorktree[WT]!.find((entry) => entry.id === 'local-right')!
+  expect(right.tabOrder).toEqual([b, switched.id])
+  expect(right.activeTabId).toBe(switched.id)
+  expect(switched.groupId).toBe('local-right')
+  expect(next.activeGroupIdByWorktree[WT]).toBe('local-left')
+})
+
+it.each([
+  ['shows the replaced tab', 'host-a', 'agent-session'],
+  ['moved to another tab', 'host-b', 'terminal']
+] as const)(
+  'focuses a chat that replaced a terminal only when this client %s, before any answer',
+  (_name, active, visibleType) => {
+    const { state } = shownThree(active)
+    const next = apply(
+      { ...state, activeGroupIdByWorktree: { [WT]: state.groupsByWorktree[WT]![0]!.id } },
+      makeSnapshot(
+        [{ ...chat, replaces: { tabId: 'host-a' } }, terminal('host-b'), terminal('host-c')],
+        {
+          snapshotVersion: 2,
+          tabGroups: [
+            { id: 'host-group-1', activeTabId: null, tabOrder: [chat.id, 'host-b', 'host-c'] }
+          ]
+        }
+      )
+    )
+    expect(next.activeTabTypeByWorktree[WT] ?? next.activeTabType).toBe(visibleType)
+  }
+)

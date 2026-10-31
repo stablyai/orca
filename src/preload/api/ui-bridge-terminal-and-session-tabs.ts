@@ -29,6 +29,13 @@ import type {
 } from '../../shared/runtime-types'
 import type { PreloadApi } from '../api-types'
 
+type FocusEditorTabPayload = {
+  tabId: string
+  worktreeId: string
+  userInitiated?: boolean
+  sourceTabId?: string
+}
+
 export const uiTerminalAndSessionTabsApi = {
   onCreateTerminal: (
     callback: (data: {
@@ -223,13 +230,9 @@ export const uiTerminalAndSessionTabsApi = {
     ipcRenderer.on('ui:focusTerminal', listener)
     return () => ipcRenderer.removeListener('ui:focusTerminal', listener)
   },
-  onFocusEditorTab: (
-    callback: (data: { tabId: string; worktreeId: string; userInitiated?: boolean }) => void
-  ): (() => void) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      data: { tabId: string; worktreeId: string; userInitiated?: boolean }
-    ) => callback(data)
+  onFocusEditorTab: (callback: (data: FocusEditorTabPayload) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: FocusEditorTabPayload) =>
+      callback(data)
     ipcRenderer.on('ui:focusEditorTab', listener)
     return () => ipcRenderer.removeListener('ui:focusEditorTab', listener)
   },

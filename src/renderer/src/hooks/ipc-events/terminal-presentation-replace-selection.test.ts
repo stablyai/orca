@@ -5,7 +5,7 @@ import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
 // chat's slot, and takes the selection only if the chat still held it when the replace landed.
 
 const mocks = vi.hoisted(() => ({
-  createTerminal: undefined as ((payload: Record<string, unknown>) => void) | undefined,
+  createTerminal: vi.fn<(payload: Record<string, unknown>) => void>(),
   reply: vi.fn()
 }))
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -27,7 +27,7 @@ Object.assign(api.ui, {
   onLaunchRecipe: () => () => {},
   onRequestTerminalTabMount: () => () => {},
   onCreateTerminal: (listener: (payload: Record<string, unknown>) => void) => {
-    mocks.createTerminal = listener
+    mocks.createTerminal.mockImplementation(listener)
     return () => {}
   },
   replyTerminalCreate: mocks.reply
@@ -46,62 +46,68 @@ const GROUP = 'group-1'
 const TERMINAL = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
 
 it.each([
-  ['still held it', 'chat-tab', TERMINAL],
-  ['lost it to another tab', 'u-other', 'u-other']
-])('takes the chat’s slot, and its selection only if the chat %s', (_name, active, after) => {
-  seedStore(store, {
-    activeWorktreeId: WT,
-    worktreesByRepo: { repo1: [makeWorktree({ id: WT, repoId: 'repo1', path: '/tmp/wt1' })] },
-    tabsByWorktree: { [WT]: [makeTab({ id: 'other', worktreeId: WT })] },
-    unifiedTabsByWorktree: {
-      [WT]: [
-        makeUnifiedTab({
-          id: 'chat-tab',
-          entityId: 'session-1',
-          groupId: GROUP,
-          worktreeId: WT,
-          contentType: 'agent-session',
-          executionHostId: 'local'
-        }),
-        makeUnifiedTab({
-          id: 'u-other',
-          entityId: 'other',
-          groupId: GROUP,
-          worktreeId: WT,
-          contentType: 'terminal'
-        })
-      ]
-    },
-    groupsByWorktree: {
-      [WT]: [
-        makeTabGroup({
-          id: GROUP,
-          worktreeId: WT,
-          activeTabId: active,
-          tabOrder: ['chat-tab', 'u-other'],
-          recentTabIds: [active]
-        })
-      ]
-    },
-    layoutByWorktree: { [WT]: { type: 'leaf', groupId: GROUP } },
-    activeGroupIdByWorktree: { [WT]: GROUP },
-    openFiles: [],
-    browserTabsByWorktree: {}
-  })
-  mocks.createTerminal?.({
-    requestId: `request-${active}`,
-    worktreeId: WT,
-    ptyId: 'switch-pty',
-    tabId: TERMINAL,
-    leafId: '11111111-1111-4111-8111-111111111111',
-    activate: true,
-    focus: true,
-    replaces: { tabId: 'chat-tab' }
-  })
-  const group = store.getState().groupsByWorktree[WT]?.[0]
-  expect(group?.tabOrder).toEqual([TERMINAL, 'u-other'])
-  expect(group?.activeTabId).toBe(after)
-  expect(mocks.reply).toHaveBeenLastCalledWith(
-    expect.objectContaining({ tabId: TERMINAL, closed: ['chat-tab'] })
-  )
-})
+  ['still held it', 'chat-tab', WT, TERMINAL],
+  ['lost it to another tab', 'u-other', WT, 'u-other'],
+  // The user moved to another workspace while the switch ran: nothing reveals this one.
+  ['held it in a workspace the user left', 'chat-tab', 'repo1::/tmp/wt2', 'u-other']
+])(
+  'takes the chat’s slot, and its selection only if the chat %s',
+  (_name, active, shown, after) => {
+    seedStore(store, {
+      activeWorktreeId: shown,
+      worktreesByRepo: { repo1: [makeWorktree({ id: WT, repoId: 'repo1', path: '/tmp/wt1' })] },
+      tabsByWorktree: { [WT]: [makeTab({ id: 'other', worktreeId: WT })] },
+      unifiedTabsByWorktree: {
+        [WT]: [
+          makeUnifiedTab({
+            id: 'chat-tab',
+            entityId: 'session-1',
+            groupId: GROUP,
+            worktreeId: WT,
+            contentType: 'agent-session',
+            executionHostId: 'local'
+          }),
+          makeUnifiedTab({
+            id: 'u-other',
+            entityId: 'other',
+            groupId: GROUP,
+            worktreeId: WT,
+            contentType: 'terminal'
+          })
+        ]
+      },
+      groupsByWorktree: {
+        [WT]: [
+          makeTabGroup({
+            id: GROUP,
+            worktreeId: WT,
+            activeTabId: active,
+            tabOrder: ['chat-tab', 'u-other'],
+            recentTabIds: [active]
+          })
+        ]
+      },
+      layoutByWorktree: { [WT]: { type: 'leaf', groupId: GROUP } },
+      activeGroupIdByWorktree: { [WT]: GROUP },
+      openFiles: [],
+      browserTabsByWorktree: {}
+    })
+    mocks.createTerminal({
+      requestId: `request-${active}`,
+      worktreeId: WT,
+      ptyId: 'switch-pty',
+      tabId: TERMINAL,
+      leafId: '11111111-1111-4111-8111-111111111111',
+      activate: true,
+      focus: true,
+      replaces: { tabId: 'chat-tab' }
+    })
+    const group = store.getState().groupsByWorktree[WT]?.[0]
+    expect(group?.tabOrder).toEqual([TERMINAL, 'u-other'])
+    expect(group?.activeTabId).toBe(after)
+    expect(store.getState().activeWorktreeId).toBe(shown)
+    expect(mocks.reply).toHaveBeenLastCalledWith(
+      expect.objectContaining({ tabId: TERMINAL, closed: ['chat-tab'] })
+    )
+  }
+)

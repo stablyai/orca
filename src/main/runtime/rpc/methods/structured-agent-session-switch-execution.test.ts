@@ -259,6 +259,10 @@ it.each(['single', 'split', 'other-workspace', 'reselected'] as const)(
       ).toBe(existingDestination.tabId)
     }
     const published = await runtime.listMobileSessionTabs(`id:${destinationWorkspace}`)
+    // Paired clients put the chat where they showed its source: its slot, or beside a split pane.
+    expect(published.tabs.find((tab) => tab.id === destination)).toMatchObject(
+      elsewhere ? {} : split ? { after: { tabId: TAB_ID } } : { replaces: { tabId: TAB_ID } }
+    )
     if (shape !== 'reselected') {
       expect(published.activeTabId).toBe(destination)
     }
@@ -447,6 +451,10 @@ it('puts the switched terminal in the chat tab’s slot and closes the chat tab,
     row.tabOrder.includes(terminal ?? '')
   )
   expect(group?.tabOrder).toEqual([TAB_ID, terminal, 'agent-session:later-tab'])
+  const published = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+  expect(
+    published.tabs.find((tab) => tab.type === 'terminal' && tab.parentTabId === terminal)
+  ).toMatchObject({ replaces: { tabId: `agent-session:${id}` } })
   expect(
     session().unifiedTabs?.[WORKTREE_ID]?.some(
       (tab) => tab.contentType === 'agent-session' && tab.entityId === id

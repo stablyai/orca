@@ -104,7 +104,8 @@ describe('replaceSessionTabInSnapshot', () => {
       't2',
       'agent-session:s2'
     ])
-    expect(gone.tabs.at(-1)).not.toHaveProperty('replaces')
+    // The window can drop the source before this write: clients that still show it get the slot.
+    expect(gone.tabs.at(-1)).toMatchObject({ replaces: { tabId: 'missing' } })
   })
 
   it.each([

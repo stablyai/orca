@@ -18,8 +18,11 @@ import {
   mergeMobileSessionSnapshotTabs,
   mergeMobileSessionTabGroups
 } from '../mobile-session-tab-merge'
+import { SwitchSlotAnchors } from './switch-slot-anchors'
 
 export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal extends OrcaRuntimeWithHasLiveOrPersistedServeOrSshOwnedPtyBinding {
+  /** Where switches put their destinations, for each destination's life (memory only). */
+  readonly switchSlotAnchors = new SwitchSlotAnchors()
   protected abstract markPaneLiveTitlesDirty(): void
   protected abstract getPtyManualTitle(
     ...args: Parameters<PtyTerminalSummaryMethods['getPtyManualTitle']>

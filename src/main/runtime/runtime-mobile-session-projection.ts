@@ -283,6 +283,7 @@ export function projectRuntimeMobileSessionTabs(
       ? { agentStatus: clientStatusFields as AgentStatusEntry }
       : {}
     tabs.push({
+      ...(tab.replaces ? { replaces: tab.replaces } : tab.after ? { after: tab.after } : {}),
       type: 'terminal',
       id: tab.id,
       parentTabId: tab.parentTabId,

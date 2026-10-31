@@ -257,6 +257,8 @@ export type UiCommandEventApi = {
       worktreeId: string
       /** A notification click authorizes revealing the tab. */
       userInitiated?: boolean
+      /** A switch's source: focus only while it, or nothing, holds its group's selection. */
+      sourceTabId?: string
     }) => void
   ) => () => void
   onCloseSessionTab: (callback: (data: { tabId: string; worktreeId: string }) => void) => () => void

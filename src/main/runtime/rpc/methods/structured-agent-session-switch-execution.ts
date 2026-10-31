@@ -263,6 +263,13 @@ async function switchToChat(
   const sameWorkspace =
     close !== undefined && worktreeIdsEqual(close.source.worktreeId, record.location.workspaceId)
   const replaces = sameWorkspace && close.wholeTab() ? close.source.tabId : undefined
+  if (sameWorkspace) {
+    ctx.runtime.switchSlotAnchors.record(
+      record.location.workspaceId,
+      `agent-session:${sessionId}`,
+      replaces ? { replaces: { tabId: replaces } } : { after: { tabId: close.source.tabId } }
+    )
+  }
   await ctx.runtime.publishStructuredAgentSessionTab({
     ...revealed,
     activate: true,

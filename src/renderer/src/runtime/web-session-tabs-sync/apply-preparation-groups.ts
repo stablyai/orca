@@ -1,7 +1,6 @@
 import type { TabGroup } from '../../../../shared/tab-types'
 import type { prepareWebSessionTabsSnapshotUnified } from './apply-preparation-unified'
 import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
-import { isStructuredAgentSessionHostTabId } from '../../../../shared/structured-agent-session-host-tab-id'
 import {
   isWebSessionBrowserPlacementGroupReserved,
   peekWebSessionBrowserPlacementGroup
@@ -10,6 +9,7 @@ import { peekWebSessionTerminalPlacementGroup } from '../web-session-terminal-pl
 import { reconcileClientOwnedTabPlacement } from '../web-session-client-owned-tab-placement'
 import { buildMirroredHostGroups, retainClientPlacedMirroredTabs } from './layout-groups'
 import { sanitizeRecentTabIds, pushRecentTabId } from './state-equality-core'
+import { slotAnchorLocalTabIds, slotAnchorOf } from './slot-anchor'
 
 export function prepareWebSessionTabsSnapshotGroups(
   base: ReturnType<typeof prepareWebSessionTabsSnapshotUnified>
@@ -94,11 +94,27 @@ export function prepareWebSessionTabsSnapshotGroups(
         })
       }
     }
+    // A switch's destination goes where this client showed its source, on first appearance.
+    const anchors = new Map(
+      snapshot.tabs.flatMap((row) => {
+        const anchor = slotAnchorOf(row)
+        const tabId = hostToLocalTabId.get(row.type === 'terminal' ? row.parentTabId : row.id)
+        const tabIds =
+          anchor &&
+          slotAnchorLocalTabIds(
+            state.unifiedTabsByWorktree[worktreeId] ?? [],
+            anchor.hostTabId,
+            hostToLocalTabId
+          )
+        return anchor && tabId && tabIds ? [[tabId, { tabIds, after: anchor.after }] as const] : []
+      })
+    )
     const adoptedTabs = mirroredUnifiedTabs
       .filter((tab) => !knownGroupTabIds.has(tab.id))
       .map((tab) => ({
         tabId: tab.id,
-        groupId: clientGroupIdByLocalTabId.get(tab.id) ?? tab.groupId
+        groupId: clientGroupIdByLocalTabId.get(tab.id) ?? tab.groupId,
+        anchor: anchors.get(tab.id)
       }))
     return reconcileClientOwnedTabPlacement({
       currentGroups,
@@ -185,53 +201,6 @@ export function prepareWebSessionTabsSnapshotGroups(
     )
   })()
 
-  // A replaced chat has already left this snapshot, so its local tab is found by its session.
-  const replacedLocalTabIds = (hostTabId: string): string[] => {
-    const chat = isStructuredAgentSessionHostTabId(hostTabId)
-      ? (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
-          (tab) =>
-            tab.contentType === 'agent-session' &&
-            tab.entityId === hostTabId.slice('agent-session:'.length)
-        )
-      : undefined
-    return [
-      ...(chat ? [chat.id] : []),
-      ...[hostTabId, toWebTerminalSurfaceTabId(hostTabId)].map(
-        (id) => hostToLocalTabId.get(id) ?? id
-      )
-    ]
-  }
-  // A row published in a replaced tab's slot lands where this client showed that tab, not at the end.
-  let placedGroups = nextGroups
-  for (const row of snapshot.tabs) {
-    // Only terminal and chat rows can name the tab they replaced.
-    const replaces = 'replaces' in row ? row.replaces : undefined
-    const tabId =
-      replaces && hostToLocalTabId.get(row.type === 'terminal' ? row.parentTabId : row.id)
-    const replaced = replaces ? replacedLocalTabIds(replaces.tabId) : []
-    const slot = currentGroups.find((group) => group.tabOrder.some((id) => replaced.includes(id)))
-    if (
-      !tabId ||
-      !slot ||
-      currentGroups.some((group) => group.tabOrder.includes(tabId)) ||
-      !placedGroups?.some((group) => group.tabOrder.includes(tabId)) ||
-      !placedGroups.some((group) => group.id === slot.id)
-    ) {
-      continue
-    }
-    const index = slot.tabOrder.findIndex((id) => replaced.includes(id))
-    placedGroups = placedGroups.map((group) => {
-      if (group.id !== slot.id && !group.tabOrder.includes(tabId)) {
-        return group
-      }
-      const tabOrder = group.tabOrder.filter((id) => id !== tabId)
-      if (group.id === slot.id) {
-        tabOrder.splice(Math.min(index, tabOrder.length), 0, tabId)
-      }
-      return { ...group, tabOrder }
-    })
-  }
-
   const nextTabBarOrder = (() => {
     const current = state.tabBarOrderByWorktree[worktreeId] ?? []
     const validTabBarIds = new Set([
@@ -268,7 +237,7 @@ export function prepareWebSessionTabsSnapshotGroups(
     currentGroups,
     clientGroupIdByLocalTabId,
     clientOwnedPlacement,
-    nextGroups: placedGroups,
+    nextGroups,
     nextTabBarOrder
   }
 }

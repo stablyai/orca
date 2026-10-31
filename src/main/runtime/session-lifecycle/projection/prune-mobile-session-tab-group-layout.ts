@@ -80,8 +80,9 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
   protected toMobileSessionTabsResult(
     snapshot: RuntimeMobileSessionTabsSnapshot
   ): RuntimeMobileSessionTabsResult {
-    snapshot = titleStructuredConversationTabs(snapshot, (sessionId) =>
-      this.structuredConversationTabName(snapshot.worktree, sessionId)
+    snapshot = titleStructuredConversationTabs(
+      this.switchSlotAnchors.stamp(snapshot),
+      (sessionId) => this.structuredConversationTabName(snapshot.worktree, sessionId)
     )
     return projectRuntimeMobileSessionTabs(snapshot, this.getMobileSessionProjectionHost())
   }

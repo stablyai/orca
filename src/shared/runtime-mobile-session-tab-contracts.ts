@@ -10,6 +10,8 @@ import type { StructuredAgentId } from './agent-session-provider-handle'
 export type RuntimeMobileSessionTerminalTab = {
   /** Published in the tab it replaced's slot; a client whose order differs puts it where that tab was. */
   replaces?: ReplacedTab
+  /** Published beside a split pane's tab it came from; a client puts it right after that tab. */
+  after?: ReplacedTab
   type: 'terminal'
   id: string
   title: string
@@ -110,6 +112,7 @@ export type RuntimeMobileSessionBrowserTab = {
 
 export type RuntimeMobileSessionAgentTab = {
   replaces?: ReplacedTab
+  after?: ReplacedTab
   type: 'agent-session'
   id: string
   title: string

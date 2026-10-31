@@ -10,6 +10,8 @@ import {
 export type ClientOwnedAdoptedTab = {
   tabId: string
   groupId: string
+  /** A switch's destination: this client's ids for the tab it replaced (or sits beside). */
+  anchor?: { tabIds: readonly string[]; after: boolean }
 }
 
 export type ClientOwnedPlacementInput = {
@@ -165,8 +167,26 @@ export function reconcileClientOwnedTabPlacement(
       target.tabOrder.push(move.tabId)
     }
   }
+  // A destination takes its group's selection only from its source, or from an empty group.
+  const inheritedActive = new Map<string, string>()
   for (const adopted of input.adoptedTabs) {
     if (movedTabIds.has(adopted.tabId) || !input.validUnifiedTabIds.has(adopted.tabId)) {
+      continue
+    }
+    const anchorIds = adopted.anchor?.tabIds ?? []
+    const slot = [...working.values()].find((entry) =>
+      entry.group.tabOrder.some((id) => anchorIds.includes(id))
+    )
+    if (slot && !slot.tabOrder.includes(adopted.tabId)) {
+      // After the last tab still shown that stood at or before the anchor in this client's order.
+      const at = slot.group.tabOrder.findIndex((id) => anchorIds.includes(id))
+      const before = new Set(slot.group.tabOrder.slice(0, at + 1))
+      const index = slot.tabOrder.reduce((last, id, i) => (before.has(id) ? i + 1 : last), 0)
+      slot.tabOrder.splice(index, 0, adopted.tabId)
+      const held = slot.group.activeTabId
+      if (held == null || anchorIds.includes(held)) {
+        inheritedActive.set(slot.group.id, adopted.tabId)
+      }
       continue
     }
     const targetGroupId = resolveTargetGroupId(adopted.groupId)
@@ -188,7 +208,9 @@ export function reconcileClientOwnedTabPlacement(
     const { group, tabOrder } = entry
     const realOrder = tabOrder.filter((id) => input.validUnifiedTabIds.has(id))
     const intentActive =
-      input.intentTabId && realOrder.includes(input.intentTabId) ? input.intentTabId : null
+      input.intentTabId && realOrder.includes(input.intentTabId)
+        ? input.intentTabId
+        : (inheritedActive.get(group.id) ?? null)
     const displacedActive =
       group.activeTabId && !realOrder.includes(group.activeTabId) ? group.activeTabId : null
     // Close/move successors follow local-close MRU then neighbor, limited to surviving tabs.

@@ -11,6 +11,7 @@ import type { AppState } from '../../store/types'
 import { resolveBrowserSessionTabTarget } from './browser-session-tab-target'
 import { resolveWindowTabIdForHostTab } from './host-session-tab-target'
 import { revealWorkspaceSurface } from '@/lib/workspace-surface-reveal'
+import { replacedTabHoldsSelection } from '@/lib/replaced-tab-selection'
 import { focusTerminalInitiatedTab } from './terminal-command-state'
 import { applyRuntimePaneTitle } from './terminal-pane-title-ipc-bridge'
 
@@ -150,7 +151,7 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
   )
 
   unsubs.push(
-    window.api.ui.onFocusEditorTab(({ tabId, worktreeId, userInitiated }) => {
+    window.api.ui.onFocusEditorTab(({ tabId, worktreeId, userInitiated, sourceTabId }) => {
       const localTabId = resolveWindowTabIdForHostTab(worktreeId, tabId)
       const store = useAppStore.getState()
       const tab = (store.unifiedTabsByWorktree[worktreeId] ?? []).find(
@@ -162,6 +163,19 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
         !userInitiated &&
         tab?.contentType === 'agent-session' &&
         store.activeWorktreeId !== worktreeId
+      ) {
+        return
+      }
+      // A switch's destination: never reveal a workspace the user left, nor take a group's selection
+      // from a tab the user picked there.
+      if (
+        sourceTabId &&
+        tab &&
+        (store.activeWorktreeId !== worktreeId ||
+          !replacedTabHoldsSelection(store, worktreeId, {
+            id: resolveWindowTabIdForHostTab(worktreeId, sourceTabId),
+            groupId: tab.groupId
+          }))
       ) {
         return
       }

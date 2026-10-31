@@ -113,6 +113,8 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
     // A replace takes the selection only from a tab that still holds it, decided by the layout
     // owner as it writes: here for main's layout, else by the window applying the replace.
     let activate = input.activate
+    // The switch's source: the replaced tab, or the split pane's tab the chat opens beside.
+    const source = input.replaces ?? (input.check ? input.placement?.afterTabId : undefined)
     const windowReplaces = Boolean(
       input.replaces && !ORCA_LAYOUT_OWNER_IS_MAIN && this.getAvailableAuthoritativeWindow()
     )
@@ -121,12 +123,12 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
       const applied = await this.queueChatTabChanges(
         () => {
           const session = this.getWorkspaceSessionForWorktree(input.workspaceId)
-          if (input.replaces && session) {
+          if (source && session) {
             activate &&= savedTabHoldsSelection(
               this.getWorkspaceSessionHostIdForWorktree(input.workspaceId),
               session,
               input.workspaceId,
-              input.replaces
+              source
             )
           }
           return [
@@ -165,7 +167,8 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
     if (activate && !windowReplaces && input.focusWindow !== false && input.check) {
       this.notifier?.focusEditorTab?.(
         input.tabId ?? host?.getSessionTabId(input.sessionId) ?? `agent-session:${input.sessionId}`,
-        input.workspaceId
+        input.workspaceId,
+        source
       )
     }
   }

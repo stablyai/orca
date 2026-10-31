@@ -59,8 +59,12 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
           // A replace opens in the replaced tab's group and takes its slot once the tab exists.
           const replaced = replaces && findUnifiedTab(worktreeId, replaces.tabId)
           // Decided in this write: a replace takes the selection only from a tab that still holds
-          // it; otherwise the terminal fills the slot without moving the user.
-          const takesSelection = !replaced || replacedTabHoldsSelection(store, worktreeId, replaced)
+          // it, in the workspace the user is in; otherwise the terminal fills the slot without
+          // moving the user (a source already gone is no proof the user stayed).
+          const takesSelection = replaced
+            ? store.activeWorktreeId === worktreeId &&
+              replacedTabHoldsSelection(store, worktreeId, replaced)
+            : !replaces
           const terminalPresentation = resolveTerminalPresentation({
             presentation: takesSelection ? presentation : 'background',
             activate,

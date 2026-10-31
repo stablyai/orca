@@ -22,6 +22,7 @@ import type {
   MirroredAgentTab
 } from './state'
 import type { Tab } from '../../../../shared/tab-types'
+import { replacedTabPinned } from './slot-anchor'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
 import { hasStructuredAgentSessionLaunchCancellationTombstone } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
@@ -155,7 +156,11 @@ export function buildMirroredAgentTabs(
         color: tab.color !== undefined ? tab.color : (existing?.color ?? null),
         sortOrder: sortOffset + index,
         createdAt: existing?.createdAt ?? now + sortOffset + index,
-        isPinned: tab.isPinned !== undefined ? tab.isPinned : existing?.isPinned === true
+        isPinned: existing
+          ? tab.isPinned !== undefined
+            ? tab.isPinned
+            : existing.isPinned === true
+          : (replacedTabPinned(currentUnifiedTabs, tab) ?? tab.isPinned === true)
       }
     }
   })

@@ -34,6 +34,7 @@ import {
   isTerminalRowRetiredByHost
 } from './host-retired-terminal-rows'
 import { hostSnapshotAffirmsWorktreeContents } from '../host-session-snapshot-authority'
+import { slotAnchorLocalTabIds, slotAnchorOf } from './slot-anchor'
 
 export function prepareWebSessionTabsSnapshotBase(
   state: WebSessionTabsSyncState,
@@ -98,7 +99,26 @@ export function prepareWebSessionTabsSnapshotBase(
     snapshot.navigationIntent === 'follow'
       ? (snapshot.tabs.find((tab) => tab.id === snapshot.activeTabId) ?? null)
       : null
-  const navigationIntentTab = callerFocusIntentTab ?? followIntentTab
+  // A switch's destination takes the focus its source had here, checked when it lands as a recorded
+  // intent's expected tab is; read from the snapshot, so a client that never got the answer converges.
+  const unifiedTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
+  const anchoredIntentTab =
+    (currentVisibleLocalTabId !== null &&
+      snapshot.tabs.find((tab) => {
+        const anchor = slotAnchorOf(tab)
+        const shown = unifiedTabs.some((local) =>
+          tab.type === 'terminal'
+            ? local.id === toWebTerminalSurfaceTabId(tab.parentTabId)
+            : tab.type === 'agent-session' && local.entityId === tab.sessionId
+        )
+        return (
+          anchor &&
+          !shown &&
+          slotAnchorLocalTabIds(unifiedTabs, anchor.hostTabId).includes(currentVisibleLocalTabId)
+        )
+      })) ||
+    null
+  const navigationIntentTab = callerFocusIntentTab ?? anchoredIntentTab ?? followIntentTab
   const honorSnapshotActiveFocus = navigationIntentTab !== null
   if (matchingFocusIntentTab) {
     clearWebSessionFocusIntent({ environmentId }, worktreeId)
@@ -175,7 +195,8 @@ export function prepareWebSessionTabsSnapshotBase(
           leafId: callerFocusIntentTab.leafId
         }
       : undefined,
-    options?.terminalPtyMode
+    options?.terminalPtyMode,
+    unifiedTabs
   )
   const mirroredTerminalTabEntries = mirroredTerminalTabs.map((entry) => entry.tab)
   const retainedTerminalIds = new Set(retainedTerminalTabs.map((tab) => tab.id))
