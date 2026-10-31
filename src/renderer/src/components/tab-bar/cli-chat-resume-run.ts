@@ -148,13 +148,9 @@ export async function runCliChatResume(
       controller.signal
     )
     const state = useAppStore.getState()
-    // An agent that already quit leaves nothing to stop, so its terminal stays and main's create runs;
-    // a row restored from before a restart says nothing about whether its agent came back.
-    const paneRow = state.agentStatusByPaneKey[source.paneKey]
+    // An agent that already quit leaves nothing to stop, so its terminal stays and main's create runs.
     const agentLiveInPane =
-      !!paneRow &&
-      !paneRow.restoredUnconfirmed &&
-      paneRow.providerSession?.id === source.providerSessionId
+      state.agentStatusByPaneKey[source.paneKey]?.providerSession?.id === source.providerSessionId
     if (closeSupported && agentLiveInPane) {
       // Main's answer to a chat that already holds the conversation; the host's create judges terminals.
       const ownerRow = Object.values(state.agentStatusByPaneKey).find(
