@@ -4937,6 +4937,15 @@
               }
             }
           },
+          "DefaultAgentStatusSegment": {
+            "auto": "Auto",
+            "blank": "Blank",
+            "ariaLabel": "Default agent: {{value0}}",
+            "tooltip": "Default agent — {{value0}}",
+            "title": "Default Agent",
+            "blankTerminal": "No agent (blank terminal)",
+            "settings": "Agent settings…"
+          },
           "CaffeinateStatusSegment": {
             "active": "Active",
             "inactive": "Inactive",

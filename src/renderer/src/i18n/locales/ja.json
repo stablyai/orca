@@ -4325,6 +4325,15 @@
             "attentionTooltip": "一部のスキルの更新はスキップされました — クリックして詳細を表示",
             "runningSkills_other": "{{count}} 件のスキルを更新中…"
           },
+          "DefaultAgentStatusSegment": {
+            "auto": "Auto",
+            "blank": "Blank",
+            "ariaLabel": "Default agent: {{value0}}",
+            "tooltip": "Default agent — {{value0}}",
+            "title": "Default Agent",
+            "blankTerminal": "No agent (blank terminal)",
+            "settings": "Agent settings…"
+          },
           "RuntimeHostStatusRow": {
             "previous_connection_closed": "以前の接続が閉じられました",
             "workspace_window_closed": "ワークスペースウィンドウが閉じられています",

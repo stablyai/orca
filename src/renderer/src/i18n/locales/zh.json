@@ -4325,6 +4325,15 @@
             "attentionTooltip": "已跳过部分技能更新 — 点击查看详情",
             "runningSkills_other": "正在更新 {{count}} 个技能…"
           },
+          "DefaultAgentStatusSegment": {
+            "auto": "Auto",
+            "blank": "Blank",
+            "ariaLabel": "Default agent: {{value0}}",
+            "tooltip": "Default agent — {{value0}}",
+            "title": "Default Agent",
+            "blankTerminal": "No agent (blank terminal)",
+            "settings": "Agent settings…"
+          },
           "RuntimeHostStatusRow": {
             "previous_connection_closed": "之前的连接关闭了",
             "workspace_window_closed": "工作区窗口已关闭",
