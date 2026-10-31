@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
 import { ChevronLeft, FolderOpen } from 'lucide-react-native'
 import { joinCreateProjectPath } from '../../../src/shared/create-project-location'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors } from '../theme/mobile-theme'
 import { addProjectStyles as styles } from './add-project-styles'
 import type { AddProjectFlow } from './use-add-project-flow'
@@ -15,23 +16,27 @@ type FormProps = {
 }
 
 export function CreateProjectForm({ flow, onBack, onBrowse }: FormProps) {
+  const t = useMobileTranslation()
   const name = flow.name.trim()
   return (
     <FormFrame
-      title="New project"
+      title={t('addProject.forms.newProject', 'New project')}
       message={
         flow.gitAvailable
-          ? 'An empty Git repository on the host.'
-          : 'Git was not found on the host, so this creates a plain folder.'
+          ? t('addProject.forms.gitRepoMessage', 'An empty Git repository on the host.')
+          : t(
+              'addProject.forms.plainFolderMessage',
+              'Git was not found on the host, so this creates a plain folder.'
+            )
       }
       onBack={onBack}
       flow={flow}
-      submitLabel="Create"
-      busyLabel="Creating…"
+      submitLabel={t('addProject.forms.create', 'Create')}
+      busyLabel={t('addProject.forms.creating', 'Creating…')}
       canSubmit={name.length > 0 && flow.parent.trim().length > 0}
       onSubmit={() => void flow.submitCreate()}
     >
-      <Text style={styles.label}>Name</Text>
+      <Text style={styles.label}>{t('addProject.forms.name', 'Name')}</Text>
       <TextInput
         style={styles.input}
         value={flow.name}
@@ -55,18 +60,19 @@ export function CreateProjectForm({ flow, onBack, onBrowse }: FormProps) {
 }
 
 export function CloneProjectForm({ flow, onBack, onBrowse }: FormProps) {
+  const t = useMobileTranslation()
   return (
     <FormFrame
-      title="Clone repository"
-      message="Clone a Git repository onto the host."
+      title={t('addProject.forms.cloneRepository', 'Clone repository')}
+      message={t('addProject.forms.cloneMessage', 'Clone a Git repository onto the host.')}
       onBack={onBack}
       flow={flow}
-      submitLabel="Clone"
-      busyLabel="Cloning…"
+      submitLabel={t('addProject.forms.clone', 'Clone')}
+      busyLabel={t('addProject.forms.cloning', 'Cloning…')}
       canSubmit={flow.url.trim().length > 0 && flow.parent.trim().length > 0}
       onSubmit={() => void flow.submitClone()}
     >
-      <Text style={styles.label}>Git URL</Text>
+      <Text style={styles.label}>{t('addProject.forms.gitUrl', 'Git URL')}</Text>
       <TextInput
         style={styles.input}
         value={flow.url}
@@ -81,16 +87,23 @@ export function CloneProjectForm({ flow, onBack, onBrowse }: FormProps) {
         selectionColor={colors.accentBlue}
       />
       <ParentField flow={flow} onBrowse={onBrowse} />
-      <Text style={styles.hint}>Cloned into a folder named after the repository.</Text>
+      <Text style={styles.hint}>
+        {t('addProject.forms.cloneHint', 'Cloned into a folder named after the repository.')}
+      </Text>
     </FormFrame>
   )
 }
 
 export function ExistingProjectForm({ flow, onBack, onBrowse }: FormProps) {
+  const t = useMobileTranslation()
   const canSubmit = flow.existingPath.trim().length > 0 && !flow.busy
   return (
-    <FormFrame title="Add existing folder" message="A folder already on the host." onBack={onBack}>
-      <Text style={styles.label}>Host path</Text>
+    <FormFrame
+      title={t('addProject.forms.addExistingFolder', 'Add existing folder')}
+      message={t('addProject.forms.existingMessage', 'A folder already on the host.')}
+      onBack={onBack}
+    >
+      <Text style={styles.label}>{t('addProject.forms.hostPath', 'Host path')}</Text>
       <View style={styles.fieldRow}>
         <TextInput
           style={styles.input}
@@ -117,7 +130,9 @@ export function ExistingProjectForm({ flow, onBack, onBrowse }: FormProps) {
           disabled={!canSubmit}
           onPress={() => void flow.submitExisting('folder')}
         >
-          <Text style={styles.cancelText}>Add as folder</Text>
+          <Text style={styles.cancelText}>
+            {t('addProject.forms.addAsFolder', 'Add as folder')}
+          </Text>
         </Pressable>
         <Pressable
           style={({ pressed }) => [
@@ -128,7 +143,9 @@ export function ExistingProjectForm({ flow, onBack, onBrowse }: FormProps) {
           disabled={!canSubmit}
           onPress={() => void flow.submitExisting('git')}
         >
-          <Text style={styles.submitText}>Add Git project</Text>
+          <Text style={styles.submitText}>
+            {t('addProject.forms.addGitProject', 'Add Git project')}
+          </Text>
         </Pressable>
       </View>
     </FormFrame>
@@ -136,9 +153,10 @@ export function ExistingProjectForm({ flow, onBack, onBrowse }: FormProps) {
 }
 
 function ParentField({ flow, onBrowse }: Pick<FormProps, 'flow' | 'onBrowse'>) {
+  const t = useMobileTranslation()
   return (
     <>
-      <Text style={styles.label}>Location on host</Text>
+      <Text style={styles.label}>{t('addProject.forms.locationOnHost', 'Location on host')}</Text>
       <View style={styles.fieldRow}>
         <TextInput
           style={styles.input}
@@ -158,13 +176,14 @@ function ParentField({ flow, onBrowse }: Pick<FormProps, 'flow' | 'onBrowse'>) {
 }
 
 function BrowseButton({ disabled, onPress }: { disabled: boolean; onPress: () => void }) {
+  const t = useMobileTranslation()
   return (
     <Pressable
       style={({ pressed }) => [styles.browseButton, pressed && styles.buttonPressed]}
       disabled={disabled}
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel="Browse host folders"
+      accessibilityLabel={t('addProject.forms.browseHostFolders', 'Browse host folders')}
     >
       <FolderOpen size={16} color={colors.textSecondary} />
     </Pressable>
@@ -182,6 +201,7 @@ function FormFrame(props: {
   canSubmit?: boolean
   onSubmit?: () => void
 }) {
+  const t = useMobileTranslation()
   const { flow, onSubmit } = props
   const enabled = props.canSubmit === true && !flow?.busy
   return (
@@ -192,7 +212,7 @@ function FormFrame(props: {
           onPress={props.onBack}
           disabled={flow?.busy}
           accessibilityRole="button"
-          accessibilityLabel="Back"
+          accessibilityLabel={t('addProject.forms.back', 'Back')}
         >
           <ChevronLeft size={18} color={colors.textSecondary} />
         </Pressable>

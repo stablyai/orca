@@ -3,6 +3,7 @@ import { Pressable, Text, View } from 'react-native'
 import { FolderOpen, FolderPlus, Globe, Plus } from 'lucide-react-native'
 import { ActionSheetContent } from '../components/ActionSheetModal'
 import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { RpcClient } from '../transport/rpc-client'
 import { AddProjectFolderBrowser } from './AddProjectFolderBrowser'
 import {
@@ -31,6 +32,7 @@ export function AddProjectSheet({
   onNewWorkspace,
   onProjectAdded
 }: Props) {
+  const t = useMobileTranslation()
   const flow = useAddProjectFlow({ client, visible, onProjectAdded })
   const [browsing, setBrowsing] = useState<BrowseTarget | null>(null)
   const afterCloseRef = useRef<(() => void) | null>(null)
@@ -47,7 +49,11 @@ export function AddProjectSheet({
       <AddProjectFolderBrowser
         client={client}
         startPath={browsing === 'parent' ? flow.parent : flow.existingPath}
-        pickLabel={browsing === 'parent' ? 'Use this location' : 'Use this folder'}
+        pickLabel={
+          browsing === 'parent'
+            ? t('addProject.sheet.useThisLocation', 'Use this location')
+            : t('addProject.sheet.useThisFolder', 'Use this folder')
+        }
         onBack={() => setBrowsing(null)}
         onPick={(path) => {
           if (browsing === 'parent') {
@@ -71,7 +77,7 @@ export function AddProjectSheet({
     const isGit = added.kind !== 'folder'
     content = (
       <View>
-        <Text style={styles.title}>Project added</Text>
+        <Text style={styles.title}>{t('addProject.sheet.projectAdded', 'Project added')}</Text>
         <Text style={styles.message} numberOfLines={2}>
           {`${added.displayName} · ${added.path}`}
         </Text>
@@ -80,14 +86,16 @@ export function AddProjectSheet({
             style={({ pressed }) => [styles.cancelButton, pressed && styles.buttonPressed]}
             onPress={onClose}
           >
-            <Text style={styles.cancelText}>Done</Text>
+            <Text style={styles.cancelText}>{t('addProject.sheet.done', 'Done')}</Text>
           </Pressable>
           {isGit ? (
             <Pressable
               style={({ pressed }) => [styles.submitButton, pressed && styles.buttonPressed]}
               onPress={() => closeThen(() => onNewWorkspace(added.id))}
             >
-              <Text style={styles.submitText}>Create workspace</Text>
+              <Text style={styles.submitText}>
+                {t('addProject.sheet.createWorkspace', 'Create workspace')}
+              </Text>
             </Pressable>
           ) : null}
         </View>
@@ -96,34 +104,36 @@ export function AddProjectSheet({
   } else {
     content = (
       <ActionSheetContent
-        title="Create"
+        title={t('addProject.sheet.title', 'Create')}
         actions={[
           {
-            label: 'New workspace',
+            label: t('addProject.sheet.newWorkspace', 'New workspace'),
             icon: Plus,
-            hint: 'In a project already on this host',
+            hint: t('addProject.sheet.newWorkspaceHint', 'In a project already on this host'),
             skipAutoClose: true,
             onPress: () => closeThen(() => onNewWorkspace())
           },
           {
-            label: 'New project',
+            label: t('addProject.sheet.newProject', 'New project'),
             icon: FolderPlus,
-            hint: 'Create an empty repository on the host',
+            hint: t('addProject.sheet.newProjectHint', 'Create an empty repository on the host'),
             skipAutoClose: true,
             onPress: () => flow.openStep('create')
           },
           {
-            label: 'Clone repository',
+            label: t('addProject.sheet.cloneRepository', 'Clone repository'),
             icon: Globe,
-            hint: flow.gitAvailable ? 'From a Git URL' : 'Git was not found on the host',
+            hint: flow.gitAvailable
+              ? t('addProject.sheet.cloneHint', 'From a Git URL')
+              : t('addProject.sheet.gitMissingHint', 'Git was not found on the host'),
             disabled: !flow.gitAvailable,
             skipAutoClose: true,
             onPress: () => flow.openStep('clone')
           },
           {
-            label: 'Add existing folder',
+            label: t('addProject.sheet.addExistingFolder', 'Add existing folder'),
             icon: FolderOpen,
-            hint: 'A project or folder already on the host',
+            hint: t('addProject.sheet.addExistingHint', 'A project or folder already on the host'),
             skipAutoClose: true,
             onPress: () => flow.openStep('existing')
           }

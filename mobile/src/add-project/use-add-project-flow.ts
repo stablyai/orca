@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
   hostDirectoryBrowse,
   hostGitAvailabilityRead,
@@ -15,14 +16,17 @@ export type AddProjectStep = 'choose' | 'create' | 'clone' | 'existing' | 'added
 // Match the desktop web client's clone budget; large or SSH-backed clones outlast the generic timeout.
 const PROJECT_CLONE_TIMEOUT_MS = 10 * 60_000
 
-const HOME_UNKNOWN_ERROR = "Couldn't read the host's home folder. Enter a full path instead of ~."
-
 export function useAddProjectFlow(args: {
   client: AddProjectRpcSender | null
   visible: boolean
   onProjectAdded: (project: AddedProject) => void
 }) {
   const { client, visible, onProjectAdded } = args
+  const t = useMobileTranslation()
+  const homeUnknownError = t(
+    'addProject.flow.homeUnknown',
+    "Couldn't read the host's home folder. Enter a full path instead of ~."
+  )
   const [step, setStep] = useState<AddProjectStep>('choose')
   const [name, setName] = useState('')
   const [url, setUrl] = useState('')
@@ -136,7 +140,7 @@ export function useAddProjectFlow(args: {
     () =>
       run(async (target) => {
         if (homeUnknownFor(parent, homeDir)) {
-          return HOME_UNKNOWN_ERROR
+          return homeUnknownError
         }
         const created = projectCreateRun.interpret(
           await projectCreateRun.request(target, {
@@ -148,14 +152,14 @@ export function useAddProjectFlow(args: {
         )
         return created.added ? created.repo : created.error
       }),
-    [gitAvailable, homeDir, name, parent, run]
+    [gitAvailable, homeDir, homeUnknownError, name, parent, run]
   )
 
   const submitClone = useCallback(
     () =>
       run(async (target) => {
         if (homeUnknownFor(parent, homeDir)) {
-          return HOME_UNKNOWN_ERROR
+          return homeUnknownError
         }
         return projectCloneRun.interpret(
           await projectCloneRun.request(
@@ -165,7 +169,7 @@ export function useAddProjectFlow(args: {
           )
         )
       }),
-    [homeDir, parent, run, url]
+    [homeDir, homeUnknownError, parent, run, url]
   )
 
   const submitExisting = useCallback(

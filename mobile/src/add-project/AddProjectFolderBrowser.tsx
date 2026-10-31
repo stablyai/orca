@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { ChevronLeft, CornerLeftUp, Folder } from 'lucide-react-native'
 import { joinCreateProjectPath } from '../../../src/shared/create-project-location'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { hostDirectoryBrowse, type AddProjectRpcSender } from './add-project-operations'
 import type { HostDirectoryListing } from './add-project-reply-schema'
@@ -16,6 +17,7 @@ type Props = {
 }
 
 export function AddProjectFolderBrowser({ client, startPath, pickLabel, onPick, onBack }: Props) {
+  const t = useMobileTranslation()
   const [listing, setListing] = useState<HostDirectoryListing | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -69,7 +71,7 @@ export function AddProjectFolderBrowser({ client, startPath, pickLabel, onPick, 
           style={styles.iconButton}
           onPress={onBack}
           accessibilityRole="button"
-          accessibilityLabel="Back"
+          accessibilityLabel={t('addProject.folderBrowser.back', 'Back')}
         >
           <ChevronLeft size={18} color={colors.textSecondary} />
         </Pressable>
@@ -85,7 +87,7 @@ export function AddProjectFolderBrowser({ client, startPath, pickLabel, onPick, 
             style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
             onPress={() => void browse(joinCreateProjectPath(listing.resolvedPath, '..'))}
             accessibilityRole="button"
-            accessibilityLabel="Parent folder"
+            accessibilityLabel={t('addProject.folderBrowser.parentFolder', 'Parent folder')}
           >
             <CornerLeftUp size={16} color={colors.textSecondary} />
             <Text style={styles.rowText}>..</Text>
@@ -107,7 +109,9 @@ export function AddProjectFolderBrowser({ client, startPath, pickLabel, onPick, 
           </Pressable>
         ))}
         {listing && !loading && directories.length === 0 ? (
-          <Text style={styles.empty}>No folders here</Text>
+          <Text style={styles.empty}>
+            {t('addProject.folderBrowser.noFolders', 'No folders here')}
+          </Text>
         ) : null}
       </ScrollView>
 
