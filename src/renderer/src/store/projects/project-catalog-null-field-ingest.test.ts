@@ -164,7 +164,7 @@ import { createTestStore } from '../slices/store-test-helpers'
 import * as launchDrafts from '@/components/native-chat/native-chat-composer-draft-store'
 
 it.each([false, true])(
-  'actual host-setup deletion retires project sources only for a returned registered repo=%s',
+  'actual host-setup deletion revokes new return writers only for a returned registered repo=%s',
   async (registered) => {
     launchDrafts.clearNativeChatComposerDraftsForTests()
     const setup = badSetups()[0]
@@ -197,7 +197,7 @@ it.each([false, true])(
       await store.getState().deleteProjectHostSetup({ setupId: setup.id, hostId: 'local' })
     ).not.toBeNull()
     expect(attempt.draft === undefined).toBe(registered)
-    expect(launchDrafts.readNativeChatComposerDraft(key).text).toBe(registered ? '' : 'task')
+    expect(launchDrafts.readNativeChatComposerDraft(key).text).toBe('task')
     expect(launchDrafts.readNativeChatComposerDraft(other).text).toBe('task')
     launchDrafts.clearNativeChatComposerDraftsForTests()
     vi.unstubAllGlobals()

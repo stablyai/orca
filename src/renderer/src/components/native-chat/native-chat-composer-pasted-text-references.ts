@@ -1,3 +1,4 @@
+import { currentDraftScope } from './native-chat-launch-draft-source'
 import { translate } from '@/i18n/i18n'
 import { formatNativeChatFileReference } from '../../../../shared/agent-image-paste'
 import {
@@ -20,7 +21,9 @@ export function nativeChatPastedTextState(scope: string, token: string): string 
   }
   return (
     readNativeChatComposerDraft(scope).pastedTextFiles?.[id] ??
-    (operations.get(id)?.scopeKey === scope ? 'saving' : 'unsaved')
+    (currentDraftScope(operations.get(id)?.scopeKey ?? '') === currentDraftScope(scope)
+      ? 'saving'
+      : 'unsaved')
   )
 }
 
@@ -82,7 +85,7 @@ export function settleNativeChatPastedText(id: string, path?: string): boolean {
     return false
   }
   operations.delete(id)
-  const { scopeKey } = operation
+  const scopeKey = currentDraftScope(operation.scopeKey)
   const draft = readNativeChatComposerDraft(scopeKey)
   const present = draft.text.includes(nativeChatPastedTextToken(id))
   if (present && path) {

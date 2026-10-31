@@ -1,3 +1,4 @@
+import { continueFolderLaunchDrafts } from '@/components/native-chat/native-chat-launch-draft-continuity'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
@@ -38,6 +39,7 @@ export function createFolderWorkspaceCatalogActions(
         return current
       }
       applied = true
+      continueFolderLaunchDrafts(catalog.hostId, catalog.folderWorkspaces)
       getFolderWorkspaceUpdateCoordinator(get).recordCatalogReplacement(
         getFolderWorkspaceCatalogReplacementIdentities(
           catalog,

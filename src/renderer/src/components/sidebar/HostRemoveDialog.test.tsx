@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { currentDraftScope } from '../native-chat/native-chat-launch-draft-source'
 
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -152,5 +153,136 @@ it.each(['success', 'failure'] as const)(
       await pending.promise.catch(() => {})
     })
     expect(button).toBeEnabled()
+  }
+)
+
+import { renderHook } from '@testing-library/react'
+import { useNativeChatDraft } from '../native-chat/use-native-chat-draft'
+import * as draftStore from '../native-chat/native-chat-composer-draft-store'
+import {
+  addNativeChatPendingAttachment,
+  nativeChatPendingAttachmentSnapshot
+} from '../native-chat/native-chat-pending-attachment-cache'
+import { addAllSshConfigHostsToOrca } from './add-remote-host-ssh-actions'
+
+it.each([false, true])(
+  'kept SSH setup input follows actual import and accepted catalog in response-first=%s order',
+  async (responseFirst) => {
+    draftStore.clearNativeChatComposerDraftsForTests()
+    const repo = { ...TEST_REPO, executionHostId: 'ssh:one' as const, connectionId: 'one' }
+    const newRepo = { ...repo, executionHostId: 'ssh:two' as const, connectionId: 'two' }
+    const workspace = `${repo.id}::/source-only`
+    const scope = draftStore.nativeChatLaunchPromptDraftScopeKey(workspace, 'codex', 'ssh:one')
+    const old = renderHook(() => useNativeChatDraft(scope, () => false))
+    act(() => old.result.current.setDraft('unsent @/workspace/file'))
+    addNativeChatPendingAttachment(scope, { id: 'kept-upload', path: '', pending: true })
+    const captured = draftStore.captureNativeChatEditDraftDestination(scope)
+    old.unmount()
+    const imported = Promise.withResolvers<{
+      targets: []
+      repoReadoptions: { oldTargetId: string; newTargetId: string; repoIds: string[] }[]
+    }>()
+    const catalog = Promise.withResolvers<(typeof newRepo)[]>()
+    const ssh = {
+      removeTarget: vi.fn().mockResolvedValue(undefined),
+      importConfig: vi.fn(() => imported.promise),
+      listTargets: vi.fn().mockResolvedValue([]),
+      addTarget: vi.fn(),
+      listConfigHosts: vi.fn(),
+      resolveConfigHost: vi.fn()
+    }
+    vi.stubGlobal('api', { ssh, repos: { list: vi.fn(() => catalog.promise) } })
+    useAppStore.setState({ repos: [repo], updateSettings: vi.fn().mockResolvedValue(undefined) })
+    const dialog = render(dialogs('one'))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Remove host' })))
+    expect(ssh.removeTarget).toHaveBeenCalledWith({ id: 'one' })
+    expect(draftStore.readNativeChatComposerDraft(scope).text).toBe('unsent @/workspace/file')
+    dialog.unmount()
+    const fetching = useAppStore.getState().fetchRepos({ runtimeEnvironmentId: null })
+    const adding = addAllSshConfigHostsToOrca({
+      ssh,
+      recordSshRepoReadoptions: useAppStore.getState().recordSshRepoReadoptions,
+      setSshTargetsMetadata: vi.fn(),
+      recordFeatureInteraction: vi.fn()
+    })
+    // Setup first acquired while the actual import RPC is held is included at acceptance.
+    const duringRpc = draftStore.nativeChatLaunchPromptDraftScopeKey(
+      `${repo.id}::/during-rpc`,
+      'claude',
+      'ssh:one'
+    )
+    draftStore.updateNativeChatComposerDraft(duringRpc, { text: 'opened during RPC' }, 'immediate')
+    const descriptor = { oldTargetId: 'one', newTargetId: 'two', repoIds: [repo.id] }
+    if (responseFirst) {
+      imported.resolve({ targets: [], repoReadoptions: [descriptor] })
+      await adding
+      expect(useAppStore.getState().pendingSshRepoReadoptions).toHaveLength(1)
+      expect(
+        draftStore.readNativeChatComposerDraft(
+          draftStore.nativeChatLaunchPromptDraftScopeKey(workspace, 'codex', 'ssh:two')
+        ).text
+      ).toBe('unsent @/workspace/file')
+      // A first setup opened during accepted pending catalog uses the same continuing association.
+      const duringPending = draftStore.nativeChatLaunchPromptDraftScopeKey(
+        `${repo.id}::/during-pending`,
+        'claude',
+        'ssh:one'
+      )
+      draftStore.updateNativeChatComposerDraft(
+        duringPending,
+        { text: 'opened during pending catalog' },
+        'immediate'
+      )
+      catalog.resolve([newRepo])
+      await fetching
+      expect(
+        draftStore.readNativeChatComposerDraft(
+          draftStore.nativeChatLaunchPromptDraftScopeKey(
+            `${repo.id}::/during-pending`,
+            'claude',
+            'ssh:two'
+          )
+        ).text
+      ).toBe('opened during pending catalog')
+    } else {
+      catalog.resolve([newRepo])
+      await fetching
+      imported.resolve({ targets: [], repoReadoptions: [descriptor] })
+      await adding
+    }
+    expect(
+      draftStore.readNativeChatComposerDraft(
+        draftStore.nativeChatLaunchPromptDraftScopeKey(
+          `${repo.id}::/during-rpc`,
+          'claude',
+          'ssh:two'
+        )
+      ).text
+    ).toBe('opened during RPC')
+    const current = draftStore.nativeChatLaunchPromptDraftScopeKey(workspace, 'codex', 'ssh:two')
+    expect(draftStore.readNativeChatComposerDraft(current)).toBe(
+      draftStore.readNativeChatComposerDraft(scope)
+    )
+    const reopened = renderHook(() => useNativeChatDraft(current, () => false))
+    expect(reopened.result.current.draft).toBe('unsent @/workspace/file')
+    expect(captured).toMatchObject({ scopeKey: currentDraftScope(current), active: true })
+    expect(nativeChatPendingAttachmentSnapshot(current).map(({ id }) => id)).toEqual([
+      'kept-upload'
+    ])
+    // Replay cannot claim a new occupant of the old address.
+    const replacement = draftStore.nativeChatLaunchPromptDraftScopeKey(
+      workspace,
+      'codex',
+      'ssh:one'
+    )
+    draftStore.updateNativeChatComposerDraft(
+      replacement,
+      { text: 'new old-address task' },
+      'immediate'
+    )
+    useAppStore.getState().recordSshRepoReadoptions([descriptor])
+    expect(draftStore.readNativeChatComposerDraft(replacement).text).toBe('new old-address task')
+    reopened.unmount()
+    draftStore.clearNativeChatComposerDraftsForTests()
   }
 )

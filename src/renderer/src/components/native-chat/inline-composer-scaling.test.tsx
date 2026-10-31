@@ -418,3 +418,74 @@ it.each([10, 100])(
     expect(bodies).toBe(1)
   }
 )
+
+import { useCallback, useSyncExternalStore } from 'react'
+import { nativeChatLaunchPromptDraftScopeKey } from './native-chat-composer-draft-store'
+import {
+  readLaunchSetupOptions,
+  writeLaunchSetupOptions,
+  subscribeLaunchSetupOptions
+} from './native-chat-launch-draft-source'
+it.each([10, 100])(
+  'isolates actual setup prompt/options/pending consumers across %s workspaces and another host',
+  async (count) => {
+    const scopes = [
+      nativeChatLaunchPromptDraftScopeKey('repo::/own', 'codex', 'local'),
+      nativeChatLaunchPromptDraftScopeKey('repo::/own', 'codex', 'ssh:other'),
+      ...Array.from({ length: count }, (_, i) =>
+        nativeChatLaunchPromptDraftScopeKey(`repo::/other${i}`, 'codex', 'local')
+      )
+    ]
+    const renders = scopes.map(() => 0)
+    function Probe({ scope, index }: { scope: string; index: number }) {
+      const draft = useNativeChatDraft(scope, () => false)
+      const pending = useNativeChatPendingAttachments(scope)
+      const subscribe = useCallback(
+        (listener: () => void) => subscribeLaunchSetupOptions(scope, listener),
+        [scope]
+      )
+      const options = useSyncExternalStore(subscribe, () => readLaunchSetupOptions(scope))
+      renders[index]++
+      return (
+        <output data-probe={index}>
+          {draft.draft}|{options?.choices.model}|{pending.length}
+        </output>
+      )
+    }
+    const view = render(
+      <>
+        {scopes.map((scope, index) => (
+          <Probe key={scope} scope={scope} index={index} />
+        ))}
+      </>
+    )
+    await act(async () => {})
+    const initial = [...renders]
+    act(() =>
+      writeLaunchSetupOptions(scopes[0], {
+        agent: 'codex',
+        surface: 'terminal',
+        choices: { model: 'chosen' }
+      })
+    )
+    expect(renders.slice(1)).toEqual(initial.slice(1))
+    act(() => updateNativeChatComposerDraft(scopes[0], { text: 'own input' }, 'deferred'))
+    expect(renders.slice(1)).toEqual(initial.slice(1))
+    act(() =>
+      addNativeChatPendingAttachment(scopes[0], { id: 'own-chip', path: '', pending: true })
+    )
+    expect(renders.slice(1)).toEqual(initial.slice(1))
+    expect(view.container.querySelector('[data-probe="0"]')?.textContent).toBe('own input|chosen|1')
+    const ownRenders = renders[0]
+    act(() =>
+      writeLaunchSetupOptions(scopes[1], {
+        agent: 'codex',
+        surface: 'chat',
+        choices: { model: 'other host' }
+      })
+    )
+    expect(renders[0]).toBe(ownRenders)
+    expect(renders.slice(2)).toEqual(initial.slice(2))
+    expect(view.container.querySelector('[data-probe="1"]')?.textContent).toBe('|other host|0')
+  }
+)

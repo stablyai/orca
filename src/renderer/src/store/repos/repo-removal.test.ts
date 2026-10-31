@@ -88,7 +88,7 @@ import {
 } from '@/components/native-chat/native-chat-composer-draft-storage'
 
 it.each([10, 100])(
-  'one committed project removal retires current/source-only launch resources in bounded passes at %i owners',
+  'one committed project removal retires current/source-only return writers while preserving ordinary pre-call cleanup at %i owners',
   async (count) => {
     drafts.clearNativeChatComposerDraftsForTests()
     pending.clearNativeChatPendingAttachmentsForTests()
@@ -159,27 +159,20 @@ it.each([10, 100])(
       }
     })
     const visits = { loading: 0, record: 0, listener: 0, submission: 0, pending: 0, chips: 0 }
-    const originalDelete = drafts.deleteNativeChatComposerDraftsWhere
     const originalLoading = persistence.deleteLoadingNativeChatComposerDraftsWhere
-    const originalPending = pending.dropNativeChatPendingAttachmentsWhere
+    const originalSubmissions = memory.retireNativeChatComposerSubmissionsWhere
+    vi.spyOn(memory, 'retireNativeChatComposerSubmissionsWhere').mockImplementation((match) =>
+      originalSubmissions((...args) => {
+        visits.submission++
+        return match(...args)
+      })
+    )
     vi.spyOn(persistence, 'deleteLoadingNativeChatComposerDraftsWhere').mockImplementation(
       (match) =>
         originalLoading((...args) => {
           visits.loading++
           return match(...args)
         })
-    )
-    vi.spyOn(drafts, 'deleteNativeChatComposerDraftsWhere').mockImplementation((match, retire) =>
-      originalDelete((key, draft) => {
-        visits[draft ? (draft.savedAt === 0 ? 'submission' : 'record') : 'listener']++
-        return match(key, draft)
-      }, retire)
-    )
-    vi.spyOn(pending, 'dropNativeChatPendingAttachmentsWhere').mockImplementation((match) =>
-      originalPending((...args) => {
-        visits.pending++
-        return match(...args)
-      })
     )
     const originalMapDelete = Map.prototype.delete
     vi.spyOn(Map.prototype, 'delete').mockImplementation(function (
@@ -194,6 +187,9 @@ it.each([10, 100])(
     remove.resolve()
     await removal
     const currentVisits = { ...visits }
+    process.stdout.write(
+      `${JSON.stringify({ metric: 'held-project-commit', count, visits: currentVisits })}\n`
+    )
     loaded.resolve(
       new Map(
         ids.map((id) => [
@@ -209,40 +205,35 @@ it.each([10, 100])(
     )
     await hydration
     expect(store.getState().repos.some((repo) => repo.id === 'repo-1')).toBe(false)
-    expect(drafts.deleteNativeChatComposerDraftsWhere).toHaveBeenCalledOnce()
-    expect(pending.dropNativeChatPendingAttachmentsWhere).toHaveBeenCalledOnce()
+    // New writers include W2/source-only scopes; ordinary cleanup still uses pre-call W0.
     expect(persistence.deleteLoadingNativeChatComposerDraftsWhere).toHaveBeenCalledOnce()
     expect(visits.loading).toBe(count)
-    expect(visits.submission).toBe(count + controls.length)
-    expect(currentVisits.record).toBeLessThanOrEqual(count + 2)
-    expect(currentVisits.listener).toBeLessThanOrEqual(count + 2)
-    expect(visits.pending).toBe(count + controls.length)
-    expect(visits.chips).toBe(count)
-    expect(memory.scopeListeners.size).toBe(0)
+    expect(currentVisits.submission).toBe(count + 2 * controls.length)
+    expect(visits.chips).toBe(1)
     for (const [
       i,
       { scope, attempt, unsubscribe, stop, observer, pendingListener, unsubscribePending }
     ] of snapshots.entries()) {
       expect(attempt.draft).toBeUndefined()
       expect(stop).toHaveBeenCalledOnce()
-      expect(pendingListener).toHaveBeenCalledOnce()
-      drafts.appendToNativeChatComposerDraft(scope, { text: '' })
+      expect(pendingListener).toHaveBeenCalledTimes(i === 0 ? 1 : 0)
       expect(observer).not.toHaveBeenCalled()
-      expect(drafts.readNativeChatComposerDraft(scope).text).toBe('')
-      expect(pending.nativeChatPendingAttachmentSnapshot(scope)).toEqual([])
-      expect(pending.settleNativeChatPendingAttachment(scope, `batch-chip-${i}`, '/late')).toBe(
-        false
+      expect(drafts.readNativeChatComposerDraft(scope).text).toBe(
+        i === 0 || i % 2 ? '' : `task ${i}`
       )
+      expect(pending.nativeChatPendingAttachmentSnapshot(scope)).toHaveLength(i === 0 ? 0 : 1)
+      drafts.finishNativeChatComposerSubmission(scope, attempt, true)
       unsubscribe()
       unsubscribePending()
     }
-    expect([...memory.records.keys()].filter((key) => !controls.includes(key))).toEqual([])
-    const successor = snapshots[0]
-    drafts.updateNativeChatComposerDraft(successor.scope, { text: 'fresh lifetime' }, 'immediate')
+    expect(drafts.readNativeChatComposerDraft(`loading:${ids[0]}`).text).toBe('')
+    expect(drafts.readNativeChatComposerDraft(`loading:${ids[1]}`).text).toBe('loaded')
+    const freshScope = drafts.nativeChatLaunchPromptDraftScopeKey(ids[0], 'claude', 'local')
+    drafts.updateNativeChatComposerDraft(freshScope, { text: 'fresh lifetime' }, 'immediate')
     snapshots.forEach(({ scope, attempt }) =>
       drafts.finishNativeChatComposerSubmission(scope, attempt, true)
     )
-    expect(drafts.readNativeChatComposerDraft(successor.scope).text).toBe('fresh lifetime')
+    expect(drafts.readNativeChatComposerDraft(freshScope).text).toBe('fresh lifetime')
     controls.forEach((key, i) => {
       expect(drafts.readNativeChatComposerDraft(key).text).toBe('keep')
       expect(liveAttempts[i].draft?.text).toBe('keep')

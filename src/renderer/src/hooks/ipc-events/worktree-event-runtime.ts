@@ -1,4 +1,6 @@
-import { recentlyRenamedWorktreeIdExpiry } from '@/store/slices/worktrees/listing/authoritative-worktree-removal-memory'
+import { transitionLaunchDrafts } from '@/components/native-chat/native-chat-launch-draft-transition'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+export const recentlyRenamedWorktreeIdExpiry = new Map<string, number>()
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -130,6 +132,24 @@ export function createWorktreeEventRuntime(
       renamed != null && useAppStore.getState().activeWorktreeId === renamed.oldWorktreeId
     const selectionBeforeRename = captureWorkspaceSelection(useAppStore.getState())
     if (renamed) {
+      const owners = new Set(
+        useAppStore
+          .getState()
+          .repos.filter(
+            (repo) =>
+              repo.id === repoId &&
+              (!options?.forceLocalOwner || !getRepoExecutionHostId(repo).startsWith('runtime:'))
+          )
+          .map(getRepoExecutionHostId)
+      )
+      const owner = options?.executionHostId ?? (owners.size === 1 ? [...owners][0] : undefined)
+      if (owner) {
+        transitionLaunchDrafts((source) =>
+          source.executionHostId === owner && source.workspaceId === renamed.oldWorktreeId
+            ? { executionHostId: owner, workspaceId: renamed.newWorktreeId }
+            : undefined
+        )
+      }
       // Shield both ids from the deletion diff across the rename's event burst — the worktree list lags the on-disk move.
       const expiry = Date.now() + WORKTREE_RENAME_PURGE_GRACE_MS
       recentlyRenamedWorktreeIdExpiry.set(renamed.oldWorktreeId, expiry)

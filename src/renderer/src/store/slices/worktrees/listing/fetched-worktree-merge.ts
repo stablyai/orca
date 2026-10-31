@@ -31,7 +31,6 @@ import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-quali
 import { isDisplayNamePersistencePending } from '../metadata/worktree-meta-persist'
 import { branchName } from '@/lib/git-utils'
 import {
-  retireLaunchPromptDraftsAfterScan,
   forgetAuthoritativelyRemovedWorktrees,
   forgetPersistedWorktreeMetaForRemovals,
   rememberAuthoritativelyRemovedWorktrees
@@ -295,9 +294,6 @@ export function mergeFetchedWorktrees(
     }
   })
   if (decision.outcome === 'applied') {
-    if (args.refresh.result.source === 'git') {
-      retireLaunchPromptDraftsAfterScan(args.hostId, authoritativelyRemovedIds)
-    }
     // Why: applied outside the updater so a repeated updater call cannot double-apply the removal memory.
     forgetAuthoritativelyRemovedWorktrees(args.hostId, authoritativelySeenIds)
     rememberAuthoritativelyRemovedWorktrees(args.hostId, authoritativelyRemovedIds)

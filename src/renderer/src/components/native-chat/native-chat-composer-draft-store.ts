@@ -1,3 +1,4 @@
+import { currentDraftScope, captureLaunchDraftDestination } from './native-chat-launch-draft-source'
 import { deleteNativeChatComposerDraftsWhere } from './native-chat-composer-draft-removal'
 export { deleteNativeChatComposerDraftsWhere } from './native-chat-composer-draft-removal'
 import { nativeChatPastedTextToken } from './native-chat-pasted-text-reference'
@@ -65,10 +66,6 @@ export {
   waitForNativeChatComposerDrafts
 } from './native-chat-composer-draft-load'
 
-export function hasUnsavedNativeChatComposerDraftChange(scopeKey: string): boolean {
-  return hasLocalChange(scopeKey)
-}
-
 export type NativeChatComposerDraftChange = {
   text?: string
   pastedTextFiles?: Readonly<Record<string, string>>
@@ -93,19 +90,24 @@ export function subscribeToNativeChatComposerDraft(
   scopeKey: string,
   listener: () => void
 ): () => void {
+  const destination = captureLaunchDraftDestination(scopeKey)
+  scopeKey = currentDraftScope(scopeKey)
+  const member = () => listener()
   const listeners = scopeListeners.get(scopeKey) ?? new Set()
   scopeListeners.set(scopeKey, listeners)
-  listeners.add(listener)
+  listeners.add(member)
   return () => {
-    listeners.delete(listener)
-    if (listeners.size === 0 && scopeListeners.get(scopeKey) === listeners) {
-      scopeListeners.delete(scopeKey)
+    const current = scopeListeners.get(destination?.scopeKey ?? scopeKey)
+    current?.delete(member)
+    if (current?.size === 0) {
+      scopeListeners.delete(destination?.scopeKey ?? scopeKey)
     }
   }
 }
 
 /** A draft storage refused to save: it is kept in memory only until a later write lands. */
 export function isNativeChatComposerDraftUnsaved(scopeKey: string): boolean {
+  scopeKey = currentDraftScope(scopeKey)
   return refusedScopes.has(scopeKey) && records.has(scopeKey)
 }
 
@@ -116,7 +118,7 @@ function isEmptyDraft(draft: NativeChatComposerDraft): boolean {
 export function readNativeChatComposerDraft(
   scopeKey: string
 ): NativeChatComposerDraft & Pick<StoredNativeChatComposerDraft, 'owner'> {
-  return records.get(scopeKey) ?? EMPTY_DRAFT
+  return records.get(currentDraftScope(scopeKey)) ?? EMPTY_DRAFT
 }
 
 export function finishNativeChatComposerSubmission(
@@ -124,9 +126,20 @@ export function finishNativeChatComposerSubmission(
   submission: DraftSubmission,
   recover = false
 ): void {
+  scopeKey = submission.scopeKey
   const draft = releaseNativeChatComposerSubmission(scopeKey, submission)
   if (recover && draft) {
-    appendToNativeChatComposerDraft(scopeKey, draft, draft.owner)
+    const held = readNativeChatComposerDraft(scopeKey)
+    appendToNativeChatComposerDraft(
+      scopeKey,
+      {
+        ...draft,
+        images: draft.images.filter(
+          (image) => !held.images.some((current) => current.id === image.id)
+        )
+      },
+      resolveNativeChatComposerDraftOwner(scopeKey) ?? draft.owner
+    )
   }
 }
 
@@ -138,6 +151,7 @@ export function updateNativeChatComposerDraft(
   append?: DraftAppend,
   position?: NativeChatDraftPosition
 ): void {
+  scopeKey = currentDraftScope(scopeKey)
   if (isNativeChatEditDraft(scopeKey) && !ephemeralDrafts.has(scopeKey)) {
     return
   }
@@ -212,6 +226,7 @@ export function appendToNativeChatComposerDraft(
   addition: NativeChatComposerDraftAddition,
   owner?: NativeChatComposerDraftOwner
 ): boolean {
+  scopeKey = currentDraftScope(scopeKey)
   const before = records.get(scopeKey)
   const current = readNativeChatComposerDraft(scopeKey)
   const placed = placeNativeChatComposerDraftAddition(current, addition)
@@ -269,6 +284,7 @@ export function structuredAgentSessionDraftScopeKey(sessionId: string): string {
 }
 
 export function deleteNativeChatComposerDraft(scopeKey: string): void {
+  scopeKey = currentDraftScope(scopeKey)
   deleteNativeChatComposerDraftsWhere((key) => key === scopeKey)
 }
 
@@ -310,9 +326,9 @@ export function clearNativeChatComposerDraftsForTests(): void {
   setNativeChatComposerDraftStorageForTests(null)
 }
 
-export { subscribeToNativeChatComposerDraftAppend } from './native-chat-composer-draft-memory'
-
 export {
+  subscribeToNativeChatComposerDraftAppend,
+  hasUnsavedNativeChatComposerDraftChange,
   captureNativeChatComposerSubmission,
   setNativeChatComposerDraftOwnerResolver,
   resolveNativeChatComposerDraftOwner,

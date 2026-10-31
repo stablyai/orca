@@ -1,6 +1,5 @@
 import {
   installNativeChatDraftRecord,
-  nativeChatLaunchPromptDraftOwner,
   notifyScope,
   records,
   reconcileRestoredImageChecks,
@@ -14,22 +13,18 @@ import {
 import type { StoredNativeChatComposerDraft } from './native-chat-composer-draft-storage'
 
 export function deleteNativeChatComposerDraftsWhere(
-  matches: (scopeKey: string, draft: StoredNativeChatComposerDraft | undefined) => boolean,
-  retireLaunchListeners = false
+  matches: (scope: string, draft: StoredNativeChatComposerDraft | undefined) => boolean
 ): void {
   deleteLoadingNativeChatComposerDraftsWhere(matches)
   retireNativeChatComposerSubmissionsWhere(matches)
-  for (const scopeKey of new Set([...records.keys(), ...scopeListeners.keys()])) {
-    const draft = records.get(scopeKey)
-    if (matches(scopeKey, draft)) {
-      installNativeChatDraftRecord(scopeKey)
-      reconcileRestoredImageChecks(scopeKey, [])
-      notifyScope(scopeKey)
-      if (retireLaunchListeners && nativeChatLaunchPromptDraftOwner(scopeKey)) {
-        scopeListeners.delete(scopeKey)
-      }
+  for (const scope of new Set([...records.keys(), ...scopeListeners.keys()])) {
+    const draft = records.get(scope)
+    if (matches(scope, draft)) {
+      installNativeChatDraftRecord(scope)
+      reconcileRestoredImageChecks(scope, [])
+      notifyScope(scope)
       if (draft) {
-        persistNativeChatComposerDraft(scopeKey, 'immediate')
+        persistNativeChatComposerDraft(scope, 'immediate')
       }
     }
   }

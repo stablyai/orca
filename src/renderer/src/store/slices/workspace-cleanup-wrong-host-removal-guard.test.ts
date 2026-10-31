@@ -544,7 +544,7 @@ it.each([
   { mode: 'normal', twin: false, preserved: false },
   { mode: 'postcommit-error', twin: false, preserved: false }
 ])(
-  'actual $mode removal retires source before postcommit work, twin=$twin preserved=$preserved',
+  'actual $mode removal revokes the return writer before postcommit work, twin=$twin preserved=$preserved',
   async ({ mode, twin, preserved }) => {
     launchDrafts.clearNativeChatComposerDraftsForTests()
     pendingChips.clearNativeChatPendingAttachmentsForTests()
@@ -595,11 +595,16 @@ it.each([
       )
     expect(removal.ok).toBe(mode !== 'postcommit-error')
     expect(attempt.draft).toBeUndefined()
-    expect(pendingChips.nativeChatPendingAttachmentSnapshot(scope)).toEqual([])
-    launchDrafts.updateNativeChatComposerDraft(scope, { text: 'new lifetime' }, 'immediate')
+    expect(pendingChips.nativeChatPendingAttachmentSnapshot(scope)).toHaveLength(twin ? 1 : 0)
+    const freshScope = launchDrafts.nativeChatLaunchPromptDraftScopeKey(
+      WORKTREE_ID,
+      'codex',
+      'local'
+    )
+    launchDrafts.updateNativeChatComposerDraft(freshScope, { text: 'new lifetime' }, 'immediate')
     launchDrafts.finishNativeChatComposerSubmission(scope, attempt, true)
-    expect(pendingChips.settleNativeChatPendingAttachment(scope, 'old-chip', '/old')).toBe(false)
-    expect(launchDrafts.readNativeChatComposerDraft(scope).text).toBe('new lifetime')
+    expect(pendingChips.takeNativeChatPendingAttachment(scope, 'old-chip') !== undefined).toBe(twin)
+    expect(launchDrafts.readNativeChatComposerDraft(freshScope).text).toBe('new lifetime')
     expect(launchDrafts.readNativeChatComposerDraft(other).text).toBe('other host task')
   }
 )

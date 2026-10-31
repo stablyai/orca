@@ -1,4 +1,12 @@
-import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactElement } from 'react'
+import {
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  useCallback,
+  type KeyboardEvent,
+  type ReactElement
+} from 'react'
 import { flushSync } from 'react-dom'
 import { ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -6,10 +14,18 @@ import { Separator } from '@/components/ui/separator'
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { translate } from '@/i18n/i18n'
 import { AgentLaunchSetupPanel } from './AgentLaunchSetupPanel'
-import type { AgentPickerDraft, AgentPickerEntry } from '../../../../shared/agent-launch-picker'
+import {
+  agentPickerDraft,
+  type AgentPickerDraft,
+  type AgentPickerEntry
+} from '../../../../shared/agent-launch-picker'
 
-// The menu and its popovers unmount on dismissal; authored setups live for this app session.
-const sessionDrafts = new Map<string, AgentPickerDraft>()
+import { agentLaunchPromptScopeKey } from './AgentLaunchPromptComposer'
+import {
+  readLaunchSetupOptions,
+  writeLaunchSetupOptions,
+  subscribeLaunchSetupOptions
+} from '../native-chat/native-chat-launch-draft-source'
 
 function setupKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
   if (event.key === 'Enter' || event.key === ' ') {
@@ -48,7 +64,16 @@ export function AgentLaunchSetupButton({
   onOpenChange?: (open: boolean) => void
   onUse: (draft: AgentPickerDraft) => boolean | void | Promise<boolean>
 }) {
-  const draftKey = JSON.stringify([entry.ownerKey, entry.agent, initial])
+  const draftKey = agentLaunchPromptScopeKey(entry)
+  const subscribe = useCallback(
+    (listener: () => void) => subscribeLaunchSetupOptions(draftKey, listener),
+    [draftKey]
+  )
+  const retained = useSyncExternalStore(subscribe, () => readLaunchSetupOptions(draftKey))
+  const authored = retained ?? initial ?? agentPickerDraft(entry)
+  const draft =
+    authored.arguments === undefined ? authored : { ...authored, argumentsOwner: entry.ownerKey }
+
   const [localOpen, setOpen] = useState(false)
   const open = controlledOpen ?? localOpen
   const closeFocus = useRef({ open, restore: true })
@@ -99,6 +124,21 @@ export function AgentLaunchSetupButton({
   }, [open])
   const changeOpen = (next: boolean) => {
     if (next) {
+      if (initial) {
+        const held = readLaunchSetupOptions(draftKey) ?? agentPickerDraft(entry)
+        writeLaunchSetupOptions(draftKey, {
+          ...held,
+          surface: initial.surface,
+          choices: {
+            ...held.choices,
+            ...initial.choices,
+            options: { ...held.choices.options, ...initial.choices.options }
+          },
+          ...(initial.arguments === undefined
+            ? {}
+            : { arguments: initial.arguments, argumentsOwner: entry.ownerKey })
+        })
+      }
       setPlacement('right')
     }
     if (controlledOpen === undefined) {
@@ -164,9 +204,9 @@ export function AgentLaunchSetupButton({
           <AgentLaunchSetupPanel
             key={draftKey}
             entry={entry}
-            initial={sessionDrafts.get(draftKey) ?? initial}
+            value={draft}
             disabled={disabled}
-            onDraftChange={(draft) => sessionDrafts.set(draftKey, draft)}
+            onDraftChange={(draft) => writeLaunchSetupOptions(draftKey, draft)}
             onUse={(draft) => {
               const accepted = onUse(draft)
               if (accepted !== false) {

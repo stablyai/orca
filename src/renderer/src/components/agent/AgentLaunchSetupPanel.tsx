@@ -40,18 +40,21 @@ import {
 export function AgentLaunchSetupPanel({
   entry,
   initial,
+  value,
   disabled,
   onDraftChange,
   onUse
 }: {
   entry: AgentPickerEntry
   initial?: AgentPickerDraft
+  value?: AgentPickerDraft
   disabled?: boolean
   onDraftChange?: (draft: AgentPickerDraft) => void
   onUse: (draft: AgentPickerDraft) => boolean | void | Promise<boolean>
 }) {
   const footer = useRef<AgentLaunchSetupFooterHandle>(null)
-  const [draft, updateDraft] = useState(() => initial ?? agentPickerDraft(entry))
+  const [localDraft, updateDraft] = useState(() => initial ?? agentPickerDraft(entry))
+  const draft = value ?? localDraft
   const setDraft = (next: AgentPickerDraft) => {
     updateDraft(next)
     onDraftChange?.(next)

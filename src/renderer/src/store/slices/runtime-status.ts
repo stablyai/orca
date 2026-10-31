@@ -1,4 +1,3 @@
-import { deleteRetiredRuntimeLaunchDrafts } from './worktrees/teardown/removed-worktree-chat-drafts'
 import type {
   RuntimeStatusSlice,
   RuntimeStatusStoreSetState,
@@ -135,7 +134,6 @@ export const createRuntimeStatusSlice: (
       }
     })
     const retiredEnvironmentIds = [...new Set([...removedIds, ...peerReplacement.retired])]
-    deleteRetiredRuntimeLaunchDrafts(retiredEnvironmentIds)
     // Prune removed environments’ agent/command caches; partial test stores may omit these slices.
     get().retainRuntimeDetectedAgents?.(environments.map((environment) => environment.id))
     get().retainRuntimeTerminalQuickCommands?.(environments.map((environment) => environment.id))

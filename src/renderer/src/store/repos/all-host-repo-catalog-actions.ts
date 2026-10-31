@@ -89,7 +89,12 @@ export function createAllHostRepoCatalogActions(
           return {
             repos: finalizedRepos,
             pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
-            ...reconcileFetchedCatalogWorktreeState(s, catalog, finalizedRepos),
+            ...reconcileFetchedCatalogWorktreeState(
+              s,
+              catalog,
+              finalizedRepos,
+              reconciliation.pendingReadoptions
+            ),
             ...mergedProjectCompatibility,
             ...(arrayElementsUnchanged(finalizedRepos, s.repos)
               ? {}

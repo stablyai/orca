@@ -19,10 +19,7 @@ import {
   collectRemovedHostTwins
 } from './repo-removal-host-twin-teardown'
 import { twinSelectionPatch } from './repo-removal-host-twin-attribution'
-import {
-  captureWorkspaceChatDraftKeys,
-  deleteProjectChatDrafts
-} from '../slices/worktrees/teardown/removed-worktree-chat-drafts'
+import * as chatDrafts from '../slices/worktrees/teardown/removed-worktree-chat-drafts'
 import {
   flushPurgedWorkspaceEdits,
   noticeRemovedUnsavedFiles
@@ -126,7 +123,7 @@ export function createRepoRemovalActions(
             ...removed.conversationIds
           ])
         )
-        const chatDraftKeys = captureWorkspaceChatDraftKeys(
+        const chatDraftKeys = chatDrafts.captureWorkspaceChatDraftKeys(
           get(),
           knownWorktreeIds.map((workspaceId) => ({
             workspaceId,
@@ -166,7 +163,7 @@ export function createRepoRemovalActions(
             throw err
           }
         }
-        deleteProjectChatDrafts(projectId, ownerHostId, chatDraftKeys)
+        chatDrafts.deleteProjectChatDrafts(projectId, ownerHostId)
         if (removeLocallyOnly && !vmServerDestroyed) {
           // Before the purge: a catalog refresh it triggers must already be fenced.
           recordPendingRuntimeRepoRemoval(target.environmentId, projectId)
@@ -230,6 +227,7 @@ export function createRepoRemovalActions(
         )
         closeRemovedHostTwinState(get, set, twins, preCallTwins, keepEditorBuffer)
         get().purgeWorktreeTerminalState(exclusiveWorktreeIds)
+        chatDrafts.deleteWorkspaceChatDrafts(chatDraftKeys)
         get().clearLocalDetectedAgentContextsForProjects(localAgentContextProjectIds)
 
         set((s) => {

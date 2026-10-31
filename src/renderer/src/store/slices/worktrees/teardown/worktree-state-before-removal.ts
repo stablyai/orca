@@ -3,7 +3,6 @@ import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   captureWorkspaceChatDraftKeys,
   deleteWorkspaceChatDraftOwners,
-  workspaceChatDraftFallbacks,
   type WorkspaceChatDraftKeys
 } from './removed-worktree-chat-drafts'
 
@@ -33,5 +32,5 @@ export function retireWorktreeDraftOwners(
   before: WorktreeStateBeforeRemoval
 ): WorktreeStateBeforeRemoval {
   deleteWorkspaceChatDraftOwners(before.chatDraftKeys)
-  return { ...before, chatDraftKeys: workspaceChatDraftFallbacks(before.chatDraftKeys) }
+  return before
 }

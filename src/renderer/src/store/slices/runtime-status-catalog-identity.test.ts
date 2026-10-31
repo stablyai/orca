@@ -180,7 +180,7 @@ describe('setRuntimeEnvironments catalog identity', () => {
 import * as launchDrafts from '@/components/native-chat/native-chat-composer-draft-store'
 import * as pendingChips from '@/components/native-chat/native-chat-pending-attachment-cache'
 
-it('only explicit retired/different-peer launch owners die; disconnect, same-peer rotation, SSH and ordinary chat stay', () => {
+it('runtime catalog replacement preserves ordinary setup drafts, preparation and other chat input', () => {
   launchDrafts.clearNativeChatComposerDraftsForTests()
   pendingChips.clearNativeChatPendingAttachmentsForTests()
   const store = createTestStore()
@@ -231,15 +231,23 @@ it('only explicit retired/different-peer launch owners die; disconnect, same-pee
       hostKeyFingerprint: 'different-peer'
     })
   )
-  expect(attempt.draft).toBeUndefined()
-  expect(pendingChips.nativeChatPendingAttachmentSnapshot(launch)).toEqual([])
+  expect(attempt.draft?.text).toBe('keep')
+  expect(pendingChips.nativeChatPendingAttachmentSnapshot(launch).map((chip) => chip.id)).toEqual([
+    'runtime-chip'
+  ])
   for (const key of [ssh, other, ordinary]) {
     expect(launchDrafts.readNativeChatComposerDraft(key).text).toBe('keep')
   }
-  launchDrafts.updateNativeChatComposerDraft(launch, { text: 'new peer' }, 'immediate')
+  const newPeer = launchDrafts.nativeChatLaunchPromptDraftScopeKey(
+    'repo::/gone',
+    'claude',
+    'runtime:env-a'
+  )
+  launchDrafts.updateNativeChatComposerDraft(newPeer, { text: 'new peer' }, 'immediate')
+  expect(launchDrafts.readNativeChatComposerDraft(newPeer).text).toBe('new peer')
   store.getState().setRuntimeEnvironments([])
-  expect(launchDrafts.readNativeChatComposerDraft(launch).text).toBe('')
-  launchDrafts.finishNativeChatComposerSubmission(launch, attempt, true)
-  expect(launchDrafts.readNativeChatComposerDraft(launch).text).toBe('')
+  expect(launchDrafts.readNativeChatComposerDraft(newPeer).text).toBe('new peer')
+  launchDrafts.finishNativeChatComposerSubmission(launch, attempt)
+  expect(launchDrafts.readNativeChatComposerDraft(newPeer).text).toBe('new peer')
   launchDrafts.clearNativeChatComposerDraftsForTests()
 })
