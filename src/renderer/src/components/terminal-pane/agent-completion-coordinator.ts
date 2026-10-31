@@ -1,9 +1,9 @@
+import { detectAgentStatusFromTitle } from '../../../../shared/agent-detection'
 import type { AgentStatus } from '../../../../shared/agent-detection'
 import type { RecognizedAgentProcess } from '../../../../shared/agent-process-recognition'
 import type {
   AgentCompletionCoordinator,
-  AgentCompletionCoordinatorOptions,
-  AgentCompletionStatusSnapshot
+  AgentCompletionCoordinatorOptions
 } from './agent-completion-coordinator-types'
 import {
   createAgentCompletionIdentityScope,
@@ -20,8 +20,6 @@ import {
 import { createAgentCompletionTitleObserver } from './agent-completion-title-observer'
 import { createAgentCompletionHookObserver } from './agent-completion-hook-observer'
 import { createAgentCompletionLifecycle } from './agent-completion-lifecycle'
-
-type CompletionSource = 'hook' | 'title' | 'process-exit'
 
 const COMPLETION_REPLAY_GUARD_MS = 1_000
 
@@ -93,35 +91,6 @@ export function createAgentCompletionCoordinator(
     dropPendingTitle()
   }
 
-  function clearPendingHookDone(): void {
-    notification.clearPendingHookDone()
-  }
-
-  function dispatchCompletion(
-    source: CompletionSource,
-    title: string,
-    override: Parameters<typeof notification.dispatchCompletion>[2] = {}
-  ): boolean {
-    return notification.dispatchCompletion(source, title, override)
-  }
-
-  function dispatchAttention(payload: AgentCompletionStatusSnapshot): void {
-    notification.dispatchAttention(payload)
-  }
-
-  const completionIdentityFor = (state: string, agentType: string | undefined, timestamp: number) =>
-    notification.completionIdentityFor(state, agentType, timestamp)
-  const hookCompletionIdentity = (payload: AgentCompletionStatusSnapshot) =>
-    notification.hookCompletionIdentity(payload)
-  const hookCompletionAgentIdentity = (payload: AgentCompletionStatusSnapshot) =>
-    notification.hookCompletionAgentIdentity(payload)
-  const doneShouldUseQuietWindow = (payload: AgentCompletionStatusSnapshot) =>
-    notification.doneShouldUseQuietWindow(payload)
-
-  function scheduleHookDoneCompletion(title: string, payload: AgentCompletionStatusSnapshot): void {
-    notification.scheduleHookDoneCompletion(title, payload)
-  }
-
   notification = createAgentCompletionNotificationController({
     options,
     state: completionState,
@@ -129,36 +98,24 @@ export function createAgentCompletionCoordinator(
     identityScope
   })
 
-  function recordWorkingBoundary(stateStartedAt: number | undefined): void {
-    identityScope.recordWorkingBoundary(stateStartedAt)
-  }
+  const {
+    clearPendingHookDone,
+    dispatchCompletion,
+    dispatchAttention,
+    completionIdentityFor,
+    hookCompletionIdentity,
+    hookCompletionAgentIdentity,
+    doneShouldUseQuietWindow,
+    scheduleHookDoneCompletion
+  } = notification
 
-  function clearWorkingBoundary(): void {
-    identityScope.clearWorkingBoundary()
-  }
-
-  function turnCompletedAtAlreadyHandled(turnCompletedAt: number): boolean {
-    return identityScope.turnCompletedAtAlreadyHandled(turnCompletedAt)
-  }
-
-  function rememberHandledTurnCompletedAt(turnCompletedAt: number): void {
-    identityScope.rememberTurnCompletedAt(turnCompletedAt)
-  }
-
-  function consumePendingStampedTailForAgent(
-    agentIdentity: string | null,
-    completionIdentity: string | null
-  ): boolean {
-    return identityScope.consumePendingStampedTailForAgent(agentIdentity, completionIdentity)
-  }
-
-  function consumeStampedTailForCurrentCoordinator(turnCompletedAt: number): void {
-    identityScope.consumeStampedTail(turnCompletedAt)
-  }
-
-  function hasUnconsumedStampedTail(): boolean {
-    return identityScope.hasUnconsumedStampedTail()
-  }
+  const recordWorkingBoundary = identityScope.recordWorkingBoundary
+  const clearWorkingBoundary = identityScope.clearWorkingBoundary
+  const turnCompletedAtAlreadyHandled = identityScope.turnCompletedAtAlreadyHandled
+  const rememberHandledTurnCompletedAt = identityScope.rememberTurnCompletedAt
+  const consumePendingStampedTailForAgent = identityScope.consumePendingStampedTailForAgent
+  const consumeStampedTailForCurrentCoordinator = identityScope.consumeStampedTail
+  const hasUnconsumedStampedTail = identityScope.hasUnconsumedStampedTail
 
   pendingTitle = createPendingTitleController({
     hasAgentEvidence: () => hasAgentRunEvidence,
@@ -227,10 +184,6 @@ export function createAgentCompletionCoordinator(
 
   function recordPaneActivity(): void {
     processMonitor.recordActivity()
-  }
-
-  function observeOutputActivity(): void {
-    recordPaneActivity()
   }
 
   function recordTitleWorking(title: string | null): boolean {
@@ -306,10 +259,50 @@ export function createAgentCompletionCoordinator(
   })
 
   return {
+    restoreCurrent: ({ title, working, status }) => {
+      if (
+        completionState.currentTurn !== 0 ||
+        completionState.lastCompletionToken ||
+        completionState.pendingHookDoneTimer !== null
+      ) {
+        return
+      }
+      if (title !== null) {
+        lastTitleStatus = detectAgentStatusFromTitle(title)
+      }
+      if (lastTitleStatus !== null || status) {
+        agentIdentityEstablished = hasAgentRunEvidence = processState.hasAgentRunEvidence = true
+      }
+      if (working && !completionState.requiresFreshWorking) {
+        completionState.workingStatusObserved = true
+      }
+      if (status?.state === 'working') {
+        recordWorkingBoundary(status.stateStartedAt)
+      }
+      if (status?.turnCompletedAt !== undefined && Number.isFinite(status.turnCompletedAt)) {
+        rememberHandledTurnCompletedAt(status.turnCompletedAt)
+      }
+    },
+    seedTitle: (title: string) => {
+      if (
+        completionState.currentTurn !== 0 ||
+        completionState.lastCompletionToken ||
+        completionState.pendingHookDoneTimer !== null
+      ) {
+        return
+      }
+      lastTitleStatus = detectAgentStatusFromTitle(title)
+      if (lastTitleStatus !== null) {
+        agentIdentityEstablished = hasAgentRunEvidence = processState.hasAgentRunEvidence = true
+      }
+      if (lastTitleStatus === 'working' && !completionState.requiresFreshWorking) {
+        completionState.workingStatusObserved = true
+      }
+    },
     observeTitle: titleObserver.observeTitle,
     observeClassifiedTitleCompletion: titleObserver.observeClassifiedTitleCompletion,
     observeTitleWorking,
-    observeOutputActivity,
+    observeOutputActivity: recordPaneActivity,
     observeHookStatus: hookObserver.observeHookStatus,
     seedHookStatus: hookObserver.seedHookStatus,
     startProcessTracking: () => processMonitor.start(),

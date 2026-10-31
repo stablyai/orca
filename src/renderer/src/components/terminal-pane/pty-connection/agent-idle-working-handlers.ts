@@ -10,33 +10,10 @@ import { settleTerminalPaneRecovery } from '../terminal-pane-recovery'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 export function installAgentIdleWorkingHandlers(session: ConnectPanePtySession): void {
-  session.onAgentBecameWorking = (): void => {
-    session.suppressNativeWindowsIdleCodexFocusReports = false
-    session.clearSuppressedTitleSideEffects()
-    if (session.syncAgentTaskCompleteTrackingEnabled()) {
-      session.requiresFreshWorkingForAgentTaskCompleteNotification = false
-      session.agentCompletionCoordinator.observeTitleWorking()
-    }
-    // New API calls refresh cache TTL; restart the countdown only at the next idle transition.
-    session.deps.setCacheTimerStartedAt(session.cacheKey, null)
-    session.clearPendingAgentTaskCompleteNotification()
-    if (session.pendingTerminalBellNotification) {
-      session.scheduleTerminalBellNotification()
-    }
-  }
-  session.onAgentExited = (): void => {
-    // Transient reconnect ineligibility cannot prevent authoritative shell-title exit from native chat.
-    session.deps.onAgentExitedRef.current(session.pane.leafId)
-    session.clearSuppressedTitleSideEffects()
-    session.clearCommandInferredPaneAgent()
-    session.requestKnownWindowsShiftEnterReconfirmation()
-    // Clear cache countdown when title returns to shell; process/PTY lifecycle owns actual agent-row removal.
-    session.deps.setCacheTimerStartedAt(session.cacheKey, null)
-    session.clearTitleOnlyInterruptTimer()
-    // Why: title reversion alone is not process death. The process/PTY tracker
-    // owns removing agent rows when the TUI actually exits.
-  }
-  // Inject opaque ORCA_PANE_KEY matching tabId:leafId so global hooks can attribute callbacks without cwd lookup.
+  // Why: inject ORCA_PANE_KEY so global Claude/Codex hooks can attribute their
+  // callbacks to the correct Orca pane without resolving worktrees from cwd.
+  // The key matches the `${tabId}:${leafId}` composite used for cacheTimerByKey
+  // and agentStatusByPaneKey. Treat it as opaque outside Orca.
   session.state = useAppStore.getState()
   session.parsedWorkspaceKey = parseWorkspaceKey(session.deps.worktreeId)
   session.restoredPtyIdForTransport =

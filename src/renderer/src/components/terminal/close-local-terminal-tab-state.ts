@@ -1,3 +1,4 @@
+import { retireTerminalSemanticResidentsForTab } from '../terminal-pane/terminal-side-effect-facts-handler'
 import { useAppStore } from '@/store'
 import type {
   TerminalTabCloseReason,
@@ -30,6 +31,7 @@ export function closeLocalTerminalTabState(
     } else {
       state.closeTab(terminalTabId)
     }
+    retireTerminalSemanticResidentsForTab(terminalTabId)
     return
   }
 
@@ -41,6 +43,7 @@ export function closeLocalTerminalTabState(
     )
     if (unified) {
       state.closeTab(unified.entityId, options)
+      retireTerminalSemanticResidentsForTab(unified.entityId)
       return
     }
   }

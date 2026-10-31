@@ -1,44 +1,15 @@
+import { buildForegroundLayoutRetractionPatch } from '../../store/slices/pane-foreground-agent'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
-import { batchAgentPaneKeysForTabs, isMirroredAgentStatusOwnedBy } from './agent-status-primitives'
+import {
+  batchAgentPaneKeysForTabs,
+  isMirroredAgentStatusOwnedBy,
+  recordPaneKeysForTabs,
+  forgetRetractionPaneKey
+} from './agent-status-primitives'
+export { recordPaneKeysForTabs, forgetRetractionPaneKey } from './agent-status-primitives'
 import { isMirroredTerminalSurfaceId } from './terminal-surfaces'
 import type { WebSessionTabsBatchContext, WebSessionTabsSyncState } from './state'
-
-function recordPaneKeysForTabs(
-  record: Readonly<Record<string, unknown>> | undefined,
-  tabIds: ReadonlySet<string>,
-  batchContext?: WebSessionTabsBatchContext,
-  paneKeyInValue = false
-): string[] {
-  if (!record) {
-    return []
-  }
-  const indexes = batchContext
-    ? (batchContext.retractionPaneKeysByRecord ??= new WeakMap())
-    : undefined
-  let index = indexes?.get(record)
-  if (!index) {
-    index = new Map<string, Set<string>>()
-    for (const [key, value] of Object.entries(record)) {
-      const paneKey = paneKeyInValue
-        ? typeof value === 'object' &&
-          value !== null &&
-          'paneKey' in value &&
-          typeof value.paneKey === 'string'
-          ? value.paneKey
-          : undefined
-        : key
-      const tabId = paneKey ? parsePaneKey(paneKey)?.tabId : undefined
-      if (!paneKey || !tabId) {
-        continue
-      }
-      const keys = index.get(tabId) ?? new Set<string>()
-      keys.add(paneKey)
-      index.set(tabId, keys)
-    }
-    indexes?.set(record, index)
-  }
-  return [...tabIds].flatMap((tabId) => [...(index.get(tabId) ?? [])])
-}
+import { writableWebSessionTabsRecord } from './state-equality-core'
 
 /** Unknown pane ownership prevents tab-wide cleanup, only for the colliding tab. */
 export function collectCollidingRetractionPaneKeys(
@@ -81,7 +52,10 @@ export function collectCollidingRetractionPaneKeys(
     }
     const entry =
       state.agentStatusByPaneKey[paneKey] ?? state.retainedAgentsByPaneKey?.[paneKey]?.entry
-    if (entry && isMirroredAgentStatusOwnedBy(entry, environmentId, worktreeId)) {
+    const context = state.paneForegroundAgentByPaneKey?.[paneKey]?.context
+    const foregroundOwned =
+      context?.worktreeId === worktreeId && (context.environmentId ?? 'local') === environmentId
+    if (entry ? isMirroredAgentStatusOwnedBy(entry, environmentId, worktreeId) : foregroundOwned) {
       const panes = owned.get(tabId) ?? new Set<string>()
       panes.add(paneKey)
       owned.set(tabId, panes)
@@ -93,4 +67,49 @@ export function collectCollidingRetractionPaneKeys(
     collisions.set(tabId, owned.get(tabId) ?? new Set())
   }
   return collisions
+}
+
+export function buildCurrentForegroundLeafRetractionPatch(
+  state: WebSessionTabsSyncState,
+  entries: WebSessionTabsSyncState['paneForegroundAgentByPaneKey'],
+  layouts: WebSessionTabsSyncState['terminalLayoutsByTabId'],
+  tabIds: ReadonlySet<string>,
+  environmentId: string,
+  worktreeId: string,
+  batchContext?: WebSessionTabsBatchContext
+) {
+  const current = entries ?? {}
+  const keys = recordPaneKeysForTabs(current, tabIds, batchContext)
+  const patch = buildForegroundLayoutRetractionPatch(
+    current,
+    layouts,
+    tabIds,
+    (entry, paneKey) => {
+      const context = entry.context
+      const row =
+        state.agentStatusByPaneKey[paneKey] ?? state.retainedAgentsByPaneKey?.[paneKey]?.entry
+      return (
+        context?.worktreeId === worktreeId &&
+        (context.environmentId ?? 'local') === environmentId &&
+        (!row || isMirroredAgentStatusOwnedBy(row, environmentId, worktreeId))
+      )
+    },
+    {
+      paneKeys: keys,
+      ...(batchContext
+        ? {
+            writable: () =>
+              writableWebSessionTabsRecord(state, 'paneForegroundAgentByPaneKey', batchContext)
+          }
+        : {})
+    }
+  )
+  if (patch) {
+    for (const key of keys) {
+      if (!(key in patch.paneForegroundAgentByPaneKey)) {
+        forgetRetractionPaneKey(patch.paneForegroundAgentByPaneKey, key, batchContext)
+      }
+    }
+  }
+  return patch
 }

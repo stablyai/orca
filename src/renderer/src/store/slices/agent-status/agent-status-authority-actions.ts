@@ -246,7 +246,16 @@ export function createAgentStatusAuthorityActions(
           paneForegroundAgentByPaneKey: movePaneKeyedRecord(
             s.paneForegroundAgentByPaneKey,
             from,
-            to
+            to,
+            (entry) =>
+              entry.agentEvidence === 'process-read'
+                ? {
+                    ...entry,
+                    agentEvidence: 'process-admitted',
+                    routingTrusted: false,
+                    routingConfirmationPending: false
+                  }
+                : entry
           ),
           ...movePaneAttention(s, from, to),
           lastTerminalInputAtByPaneKey: movePaneKeyedRecord(

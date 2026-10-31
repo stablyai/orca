@@ -8,6 +8,7 @@ export type SessionOptions = {
   cols: number
   rows: number
   terminalHandle?: string
+  startupCommand?: string
   launchAgent?: TuiAgent
   subprocess: SubprocessHandle
   shellReadySupported: boolean

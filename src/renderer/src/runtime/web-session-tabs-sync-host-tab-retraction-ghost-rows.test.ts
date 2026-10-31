@@ -1,4 +1,11 @@
 /** Host tab retraction must sweep renderer status and plant close markers like local close (STA-4593). Client-owned rows bypass normal mirror deletion and lose their only reachable pane keys at retraction; done rows otherwise become retained ghosts. Exercise real mirror, retention and sidebar logic with fake clocks. */
+import { useAppStore } from '../store'
+import { TerminalResidentRegistry } from '../components/terminal-pane/terminal-resident-registry'
+import { createTerminalResidentPolicy } from '../components/terminal-pane/terminal-resident-policy'
+import {
+  installTerminalTestGlobals,
+  restoreTerminalTestGlobals
+} from '../components/terminal-pane/pty-connection-test-environment'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   RuntimeMobileSessionTabsRemovedResult,
@@ -72,7 +79,12 @@ function makeHostSnapshot(args: {
   hostNow: number
   hostAgentStatusTabIds?: readonly string[]
   hostAgentStatusState?: 'working' | 'done'
-}): RuntimeMobileSessionTabsResult {
+}): Omit<RuntimeMobileSessionTabsResult, 'tabs'> & {
+  tabs: Extract<
+    RuntimeMobileSessionTabsResult['tabs'][number],
+    { type: 'terminal'; status: 'ready' }
+  >[]
+} {
   const leafByTab: Record<string, string> = {
     [KEEP_TAB]: KEEP_LEAF,
     [RETRACTED_TAB]: RETRACTED_LEAF
@@ -253,6 +265,97 @@ describe('a host-retracted paired tab leaves no ghost agent row behind', () => {
   afterEach(() => {
     vi.useRealTimers()
     resetRendererOwnedAgentStatusPanesForTests()
+  })
+
+  it('retracts only the removed owned leaf of a retained tab through the real final patch and rejects its later publication', async () => {
+    const store = seedPairedClientStore()
+    const before = vi.mocked(useAppStore.getState).getMockImplementation()
+    vi.mocked(useAppStore.getState).mockImplementation(store.getState)
+    await installTerminalTestGlobals()
+    const registry = new TerminalResidentRegistry<ReturnType<typeof createTerminalResidentPolicy>>()
+    try {
+      const snapshot = makeHostSnapshot({ snapshotVersion: 1, hostTabIds: [KEEP_TAB], hostNow: T0 })
+      const first = snapshot.tabs[0]!
+      const foreignLeaf = '33333333-3333-4333-8333-333333333333'
+      const withLeaves: RuntimeMobileSessionTabsResult = {
+        ...snapshot,
+        tabs: [
+          ...snapshot.tabs,
+          {
+            ...first,
+            id: `${KEEP_TAB}::${RETRACTED_LEAF}`,
+            leafId: RETRACTED_LEAF,
+            terminal: 'terminal-leaf-2',
+            isActive: false
+          },
+          {
+            ...first,
+            id: `${KEEP_TAB}::${foreignLeaf}`,
+            leafId: foreignLeaf,
+            terminal: 'terminal-foreign',
+            isActive: false
+          }
+        ]
+      }
+      applyHostSnapshot(store, withLeaves, T0)
+      const key = mirrorPaneKey(KEEP_TAB, RETRACTED_LEAF)
+      const ptyId =
+        store.getState().terminalLayoutsByTabId[mirrorTabId(KEEP_TAB)]!.ptyIdsByLeafId![
+          RETRACTED_LEAF
+        ]!
+      const owner = registry.admit(
+        {
+          endpoint: ENV,
+          executionHost: `runtime:${ENV}`,
+          ptyId,
+          incarnationId: 'inc-1',
+          runtimeId: null
+        },
+        (captured) =>
+          createTerminalResidentPolicy(
+            {
+              paneKey: key,
+              tabId: mirrorTabId(KEEP_TAB),
+              worktreeId: WT,
+              runtimeEnvironmentId: ENV,
+              cwd: '/path/wt1'
+            },
+            captured.identity,
+            () => captured.isLive,
+            {
+              setCacheTimerStartedAt: vi.fn(),
+              markTerminalBell: vi.fn(),
+              dispatchNotification: vi.fn()
+            }
+          )
+      )
+      const publication = owner.policy.foreground.publication
+      publication.publish({ agent: 'pi', agentEvidence: 'process-read', shellForeground: false })
+      expect(store.getState().paneForegroundAgentByPaneKey[key]?.context).toBeDefined()
+      const current = publication.captureRead()
+      const siblingKey = mirrorPaneKey(KEEP_TAB, KEEP_LEAF)
+      const foreignKey = mirrorPaneKey(KEEP_TAB, foreignLeaf)
+      const entry = store.getState().paneForegroundAgentByPaneKey[key]!
+      const sibling = { agent: 'codex' as const, shellForeground: false }
+      const foreign = { ...entry, context: { ...entry.context!, environmentId: 'other-host' } }
+      store.getState().setPaneForegroundAgent(siblingKey, sibling)
+      store.getState().setPaneForegroundAgent(foreignKey, foreign)
+      applyHostSnapshot(store, { ...snapshot, snapshotVersion: 2 }, T0 + 1)
+      expect(store.getState().tabsByWorktree[WT]?.map((tab) => tab.id)).toEqual([
+        mirrorTabId(KEEP_TAB)
+      ])
+      expect(store.getState().paneForegroundAgentByPaneKey[key]).toBeUndefined()
+      expect(store.getState().paneForegroundAgentByPaneKey[siblingKey]).toBe(sibling)
+      expect(store.getState().paneForegroundAgentByPaneKey[foreignKey]).toBe(foreign)
+      expect(owner.isLive).toBe(true)
+      expect(current()).toBe(false)
+      publication.publish({ agent: 'pi', agentEvidence: 'process-read', shellForeground: false })
+      expect(store.getState().paneForegroundAgentByPaneKey[key]).toBeUndefined()
+    } finally {
+      registry.dispose()
+      await restoreTerminalTestGlobals()
+      vi.mocked(useAppStore.getState).mockImplementation(before!)
+    }
   })
 
   it('control: retraction sweeps a host-authoritative pane the client never owned', () => {

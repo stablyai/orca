@@ -95,7 +95,8 @@ async function startOrcadRuntime(
   const { collectOrcadHealth } = await import('./orcad-health')
   const { agentHookServer } = await import('../agent-hooks/server')
   const { isAgentStatusHooksEnabled } = await import('../agent-hooks/managed-agent-hook-controls')
-  const { agentHookRuntimeDeps } = await import('../agent-hooks/agent-hook-runtime-deps')
+  const { agentHookRuntimeDeps, bindAgentHookRuntimeAuthority } =
+    await import('../agent-hooks/agent-hook-runtime-deps')
   const { installHookStatusSessionTabsRepublish } =
     await import('../agent-hooks/hook-status-session-tabs-republish')
   const { startOrcadManagedAgentHooks } = await import('./orcad-managed-agent-hooks')
@@ -286,8 +287,8 @@ async function startOrcadRuntime(
 
   // Recovery establishes terminal/dispatch identities before fencing observations.
   observedStatusCapture.attach(runtime)
-  agentHookServer.setCliWriterExecutionMatcher(observedPaneIdentities, runtime)
-  // First RPC clients must see a fully published graph.
+  bindAgentHookRuntimeAuthority(agentHookServer, observedPaneIdentities, runtime)
+  // Why before the RPC server binds: like `--serve`, the first client must find a ready graph.
   const { publishHeadlessRuntimeGraph } = await import('../runtime/headless-runtime-graph')
   publishHeadlessRuntimeGraph(runtime)
   // Only the runtime can identify running shells and install deferred migrated history.

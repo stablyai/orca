@@ -20,13 +20,11 @@ import { shouldWritePtyOutputForeground } from './foreground-output-scan'
 import { exposeE2eTerminalPtyOutputDebug } from './e2e-terminal-pty-harness'
 import type { PanePtyBinding } from './pane-pty-binding'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
-import {
-  isAgentTaskCompleteNotificationEnabled,
-  isAgentTaskCompleteTrackingEnabled
-} from './agent-task-complete-settings'
 
 import { installRunDeferredConnect } from './run-deferred-connect'
 
+import { installTerminalPaneInput } from './terminal-pane-input'
+import { installTerminalResidentPolicy } from './terminal-resident-presentation'
 import { installSleepingRecordAccess } from './sleeping-record-access'
 import { installShellCommandInference } from './shell-command-inference'
 import { installInterruptInputIntent } from './interrupt-input-intent'
@@ -80,18 +78,6 @@ export function connectPanePty(
   session.cleanupStartupDraftPasteTimers = (): void => {}
   session.unregisterE2ePtyDataInjection = (): void => {}
   session.startupInjectTimer = null
-  session.agentTaskCompleteNotificationGraceTimer = null
-  session.agentTaskCompleteNotificationMaxTimer = null
-  session.hookOwnedIdleAbsorbsBell = false
-  session.agentTaskCompleteStatusUnsubscribe = null
-  session.agentTaskCompleteSettingsUnsubscribe = null
-  session.agentTaskCompleteNotificationGeneration = 0
-  session.wasAgentTaskCompleteTrackingEnabled = isAgentTaskCompleteTrackingEnabled()
-  session.requiresFreshWorkingForAgentTaskCompleteNotification =
-    !session.wasAgentTaskCompleteTrackingEnabled
-  session.wasAgentTaskCompleteOsNotificationEnabled = isAgentTaskCompleteNotificationEnabled()
-  session.terminalBellNotificationTimer = null
-  session.pendingTerminalBellNotification = false
   session.reattachIdleAgentCursorResetTimer = null
   session.shiftEnterReconfirmTimer = null
   session.synchronizedForegroundOutputActive = false
@@ -188,6 +174,8 @@ export function connectPanePty(
     session.deps.paneKittyKeyboardModesRef.current.set(session.pane.id, created)
     return created
   })()
+  installTerminalResidentPolicy(session)
+  installTerminalPaneInput(session)
   installPaneHostCapabilityFlags(session)
   installPtyInputRecovery(session)
   installAgentPreReadyTypedDraft(session)

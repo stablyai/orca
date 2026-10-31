@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
+import { OrcaRuntimeService } from '../../../runtime/orca-runtime'
+import { onTestFinished, describe, expect, it, vi } from 'vitest'
 import { spawnMock } from '../pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from '../pty-ipc-test-harness'
 import { registerPtyHandlers } from '../register-handlers'
@@ -48,6 +49,17 @@ vi.mock('../../../codex/codex-pane-account-registry', () =>
 vi.mock('../../../codex/codex-state-db-backfill-recovery', () =>
   import('../pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
+
+function legacySourceSelection() {
+  const sourceRuntime = new OrcaRuntimeService()
+  const select = vi.fn(sourceRuntime.selectPtyLegacySemanticSource.bind(sourceRuntime))
+  onTestFinished(() => {
+    for (const [ptyId] of select.mock.calls) {
+      sourceRuntime.onPtyExit(ptyId, 0)
+    }
+  })
+  return select
+}
 
 describe('registerPtyHandlers', () => {
   const { handlers, mainWindow, mainWindowIpcEvent, createMockProc, getPtyWriteListener } =
@@ -107,6 +119,7 @@ describe('registerPtyHandlers', () => {
     try {
       let seq = 0
       const runtime = {
+        selectPtyLegacySemanticSource: legacySourceSelection(),
         setPtyController: vi.fn(),
         createPreAllocatedTerminalHandle: vi.fn(() => null),
         onPtyData: vi.fn(
@@ -191,6 +204,7 @@ describe('registerPtyHandlers', () => {
     } as never)
     let seq = 0
     const runtime = {
+      selectPtyLegacySemanticSource: legacySourceSelection(),
       setPtyController: vi.fn(),
       createPreAllocatedTerminalHandle: vi.fn(() => null),
       onPtyData: vi.fn((_id: string, data: string, _at: number, rawLength = data.length) => {

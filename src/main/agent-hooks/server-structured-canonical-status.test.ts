@@ -12,6 +12,8 @@ import {
 } from '../../shared/structured-agent-session-projection'
 import { AgentHookServer } from './server'
 import { GOOD_PANE, PANE } from './server.test-fixtures'
+import { WorkspaceActivityFactsProducer } from '../runtime/sidebar-inputs/workspace-activity-facts-producer'
+import { SidebarClock } from '../runtime/sidebar-inputs/sidebar-clock'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn(() => ({})) }))
@@ -52,6 +54,50 @@ function terminal(server: AgentHookServer, paneKey: string): void {
 afterEach(() => vi.restoreAllMocks())
 
 describe('structured canonical production slice', () => {
+  it('bounds canonical parent enumeration on sidebar resync at N and 10N', () => {
+    class MeasuredServer extends AgentHookServer {
+      get measuredStore() {
+        return this.canonicalStatusStore
+      }
+    }
+    const counts: number[] = []
+    for (const size of [10, 100]) {
+      const server = new MeasuredServer()
+      for (let index = 0; index < size; index++) {
+        const subject = makeStructuredAgentStatusSubject(SCOPE, `scale-session-${index}`)
+        server.ingestStructuredStatus(summary(subject), subject)
+      }
+      const store = server.measuredStore
+      const original = store.getParents.bind(store)
+      let copiedParents = 0
+      const spy = vi.spyOn(store, 'getParents').mockImplementation(() => {
+        const parents = original()
+        copiedParents += parents.length
+        return parents
+      })
+      const clock = new SidebarClock()
+      const producer = new WorkspaceActivityFactsProducer({
+        readSurfaces: () => ({ terminal: null, browser: false, structuredChat: false }),
+        resolveTabWorktreeId: () => SCOPE.workspaceId,
+        clock
+      })
+      const detach = producer.attachAgentStatusStore(server)
+      try {
+        copiedParents = 0
+        producer.resyncAgentPanes()
+        counts.push(copiedParents)
+        expect(server.getStatusSnapshot()).toHaveLength(size)
+      } finally {
+        detach()
+        clock.dispose()
+        spy.mockRestore()
+      }
+    }
+    expect(counts).toEqual([expect.any(Number), expect.any(Number)])
+    expect(counts[0], `copied parents at N and 10N: ${counts.join(', ')}`).toBeLessThanOrEqual(20)
+    expect(counts[1]).toBeLessThanOrEqual(200)
+  })
+
   it('stores once canonically and supplies every legacy reader from that row', () => {
     const server = new AgentHookServer()
     const changed = vi.fn()

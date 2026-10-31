@@ -117,6 +117,7 @@ export async function connectIpcPty(
       // Only fresh spawns discard pre-request state; reattach deliberately re-owns a pre-existing ID and needs its real buffered exit.
       discardPreHandlerPtyStateFromPriorIncarnation(spawnResult.id, priorIncarnationFence)
     }
+    transportOptions.onSourceAdmitted?.(spawnResult.id, spawnResult.incarnationId)
     context.bind(spawnResult.id)
     if (!spawnResult.isReattach && !spawnResult.coldRestore) {
       onPtySpawn?.(spawnResult.id)

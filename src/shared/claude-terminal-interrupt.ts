@@ -2,12 +2,13 @@ import { CLAUDE_IDLE, containsAgentSpinnerGlyph } from './agent-title-glyphs'
 import type { AgentHookEventPayload } from './agent-hook-listener/listener-event'
 import type { AgentStatus } from './agent-title-core'
 
-export type ClaudeTerminalEvidence =
+export type ClaudeTerminalEvidence = (
   | { kind: 'input'; data: string }
   | { kind: 'title'; title: string; staleWorkingTitleClear?: boolean }
   /** Claude's OSC 7501 activity; null once it stops reporting. Its titles then carry no glyph. */
   | { kind: 'activity'; status: AgentStatus | null }
   | { kind: 'reset' }
+) & { observedAt?: number }
 
 const TITLE_CONFIRMATION_WINDOW_MS = 5_000
 // Why shorter: Claude reports idle as Escape lands; a later idle is likelier the turn finishing.
@@ -44,7 +45,11 @@ export class ClaudeTerminalInterruptTracker<Row extends AgentHookEventPayload> {
     private readonly interrupt: (row: Row) => void
   ) {}
 
-  observe(paneKey: string, evidence: ClaudeTerminalEvidence, now = Date.now()): void {
+  observe(
+    paneKey: string,
+    evidence: ClaudeTerminalEvidence,
+    now = evidence.observedAt ?? Date.now()
+  ): void {
     if (evidence.kind === 'reset') {
       this.observations.delete(paneKey)
       return

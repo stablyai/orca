@@ -30,6 +30,7 @@ export const STALE_WORKING_TITLE_TIMEOUT_MS = 3000
 
 /** Provenance for title/idle facts; `staleWorkingTitleClear` marks facts synthesized by the 3s stale timer — not genuine task completions. */
 export type TerminalTitleFactMeta = {
+  observedAt?: number
   staleWorkingTitleClear?: boolean
 }
 
@@ -37,6 +38,7 @@ export type TerminalTitleFactMeta = {
 export type AgentIdleEdgeMeta = TerminalTitleFactMeta & { status?: AgentIdleStatus }
 
 type TerminalTitleTrackerChunkOptions = {
+  commandScanData?: string
   titleScanData?: string
   mode2031PendingSubscribe?: boolean
   /** The chunk's OSC 7501 activity changes, offsets in `data`; applied in byte order with its titles. */
@@ -70,7 +72,11 @@ export type TerminalTitleTracker = {
   handleChunk: (data: string, options?: TerminalTitleTrackerChunkOptions) => void
   /** Parse fabricated spinner title/BEL frames statelessly so they cannot corrupt real cross-chunk escapes. */
   applySyntheticTitleFrame: (frame: string) => void
-  /** Seed a mid-session tracker once without callbacks; observed/seeded live state wins. */
+  /**
+   * Seed the last-known title for a mid-session tracker (app relaunch with persisted titles).
+   * No-ops once any title has been observed or seeded (live state wins); fires no callbacks.
+   */
+  restoreCurrent: (rawTitle: string | null, activity: AgentStatus | null) => void
   seedInitialTitle: (rawTitle: string) => void
   /** The stream lost the program's OSC 7501 reports (a data gap): titles classify again. */
   endProgramActivity: () => void
@@ -80,6 +86,8 @@ export type TerminalTitleTracker = {
   getLastNormalizedTitle: () => string | null
   /** A thinning transport owns transient scans while bytes may be gapped. Keep title scans; reset transient carries when authority returns. */
   setTransientFactScanningSuppressed: (suppressed: boolean) => void
+  /** Dropped output: the OSC 133 scanner no longer knows which markers came just before. */
+  forgetCommandFinishedContext: () => void
   /** Enable consumer-only bell, PR-link, and mode-2031 scans without resetting title state. */
   setTransientSideEffectScanningEnabled: (enabled: boolean) => void
   /** Cancel the stale-title timer and clear accumulated tracker state. */
@@ -229,7 +237,7 @@ export function createTerminalTitleTracker(
     }
     // Fact order (matches renderer drain): titles → command-finished → pr-link → 2031-subscribe → bell; bell last.
     if (!transientFactScanningSuppressed) {
-      commandFinishedScanner?.scan(data)
+      commandFinishedScanner?.scan(options.commandScanData ?? data)
       if (prLinkDetector) {
         for (const link of prLinkDetector(data)) {
           onPrLink?.(link)
@@ -277,6 +285,14 @@ export function createTerminalTitleTracker(
     handleChunk,
     applySyntheticTitleFrame,
     endProgramActivity: () => applyProgramActivity(null),
+    restoreCurrent(rawTitle, activity): void {
+      clearStaleTitleTimer()
+      lastEmittedTitle = rawTitle === null ? null : normalizeTerminalTitle(rawTitle)
+      if (rawTitle) {
+        agentTracker?.seedTitle(rawTitle)
+      }
+      agentTracker?.seedProgramActivity(activity)
+    },
     seedInitialTitle(rawTitle: string): void {
       if (lastEmittedTitle !== null || !rawTitle) {
         return
@@ -291,6 +307,9 @@ export function createTerminalTitleTracker(
       return agentTracker?.restoreLastExit(confirmedStatus) ?? null
     },
     getLastNormalizedTitle: () => lastEmittedTitle,
+    forgetCommandFinishedContext(): void {
+      commandFinishedScanner?.reset()
+    },
     setTransientFactScanningSuppressed(suppressed: boolean): void {
       if (suppressed === transientFactScanningSuppressed) {
         return

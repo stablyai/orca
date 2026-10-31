@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
+import { OrcaRuntimeService } from '../../../runtime/orca-runtime'
+import { onTestFinished, describe, expect, it, vi } from 'vitest'
 import { setupPtyIpcSuite } from '../pty-ipc-test-harness'
 import { registerPtyHandlers } from '../register-handlers'
 
@@ -48,6 +49,17 @@ vi.mock('../../../codex/codex-state-db-backfill-recovery', () =>
 // The observable daemon provider adopts the spawn's sessionId as the PTY id.
 const PTY_ID = 'daemon-session'
 
+function legacySourceSelection() {
+  const sourceRuntime = new OrcaRuntimeService()
+  const select = vi.fn(sourceRuntime.selectPtyLegacySemanticSource.bind(sourceRuntime))
+  onTestFinished(() => {
+    for (const [ptyId] of select.mock.calls) {
+      sourceRuntime.onPtyExit(ptyId, 0)
+    }
+  })
+  return select
+}
+
 describe('the first delivery after a hidden drop (#33766)', () => {
   const {
     handlers,
@@ -60,6 +72,7 @@ describe('the first delivery after a hidden drop (#33766)', () => {
     vi.useFakeTimers()
     let seq = 0
     const runtime = {
+      selectPtyLegacySemanticSource: legacySourceSelection(),
       setPtyController: vi.fn(),
       registerPty: vi.fn(),
       noteTerminalSpawnCommand: vi.fn(),

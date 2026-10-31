@@ -1,3 +1,15 @@
+import type { PtyDataMeta } from './pty-dispatcher'
+import type { TerminalSemanticResident } from './terminal-semantic-residents'
+
+declare global {
+  var terminalConnectionTestDelivery:
+    | {
+        sidecars: Map<string, Set<(data: string, meta?: PtyDataMeta) => void>>
+        getResident: (ptyId: string) => TerminalSemanticResident | undefined
+      }
+    | undefined
+}
+
 import { vi } from 'vitest'
 import { resetAgentStartupDelayedDeliveryForTests } from '@/lib/agent-startup-delayed-delivery'
 import * as agentStatusStartupSnapshot from '@/hooks/ipc-events/agent-status-startup-snapshot'
@@ -54,6 +66,9 @@ export async function installTerminalTestGlobals(): Promise<void> {
         needsPassphrasePrompt: vi.fn().mockResolvedValue(false)
       },
       pty: {
+        onData: vi.fn(() => vi.fn()),
+        onExit: vi.fn(() => vi.fn()),
+        onReplay: vi.fn(() => vi.fn()),
         kill: vi.fn(),
         signal: vi.fn(),
         listSessions: vi.fn().mockResolvedValue([]),
@@ -100,6 +115,12 @@ export async function installTerminalTestGlobals(): Promise<void> {
     addEventListener: vi.fn(),
     removeEventListener: vi.fn()
   }
+  const dispatcher = await import('./pty-dispatcher')
+  const residents = await import('./terminal-semantic-residents')
+  globalThis.terminalConnectionTestDelivery = {
+    sidecars: dispatcher.ptyDataSidecars,
+    getResident: residents.getTerminalSemanticResident
+  }
   vi.mocked(window.api.pty.confirmForegroundProcess).mockImplementation((id) =>
     window.api.pty.getForegroundProcess(id)
   )
@@ -116,6 +137,8 @@ export async function installTerminalTestGlobals(): Promise<void> {
 }
 
 export async function restoreTerminalTestGlobals(): Promise<void> {
+  const residents = await import('./terminal-side-effect-facts-handler')
+  residents._resetTerminalSideEffectFactConsumersForTest()
   // Drain deferred confirmation work before the next test replaces its store mock.
   await drainFakeTimerWork()
   vi.useRealTimers()

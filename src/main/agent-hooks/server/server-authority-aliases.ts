@@ -202,6 +202,19 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
     const transferredStatus = this.state.lastStatusByPaneKey.get(toPaneKey) as
       | EnrichedAgentHookEventPayload
       | undefined
+    const pending = this.pendingLaunchAuthority.get(previousOwnerPaneKey)
+    this.pendingLaunchAuthority.delete(previousOwnerPaneKey)
+    this.pendingLaunchAuthority.delete(toPaneKey)
+    if (pending && pending.row === previousStatus && transferredStatus) {
+      const owner = parsePaneKey(toPaneKey)
+      this.pendingLaunchAuthority.set(toPaneKey, {
+        ...pending,
+        row: transferredStatus,
+        subject: transferredStatus,
+        isCurrent: undefined,
+        evidence: Object.freeze({ ...pending.evidence, paneKey: toPaneKey, tabId: owner?.tabId })
+      })
+    }
     const hydratedLaunchTokenHash = this.hydratedLaunchTokenHashByPaneKey.get(previousOwnerPaneKey)
     if (hydratedLaunchTokenHash) {
       this.hydratedLaunchTokenHashByPaneKey.delete(previousOwnerPaneKey)
@@ -252,10 +265,17 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
     if (authorityObservation) {
       const owner = parsePaneKey(toPaneKey)
       this.currentAuthorityObservations.delete(previousOwnerPaneKey)
-      this.currentAuthorityObservations.set(
-        toPaneKey,
-        Object.freeze({ ...authorityObservation, paneKey: toPaneKey, tabId: owner?.tabId })
-      )
+      this.currentAuthorityObservations.set(toPaneKey, {
+        ...authorityObservation,
+        ...(authorityObservation.subject === previousStatus && transferredStatus
+          ? { row: transferredStatus, subject: transferredStatus, isCurrent: undefined }
+          : {}),
+        evidence: Object.freeze({
+          ...authorityObservation.evidence,
+          paneKey: toPaneKey,
+          tabId: owner?.tabId
+        })
+      })
     }
     const promptDedupe = this.promptSentDedupeByPaneKey.get(previousOwnerPaneKey)
     if (promptDedupe !== undefined) {
@@ -273,6 +293,7 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
     })
     this.boundPaneKeyAliases()
     this.closedAgentStatusPaneKeys.delete(toPaneKey)
+    this.resolvePendingLaunchAuthority(toPaneKey)
     this.notifyPaneKeyAliasPersistenceListener()
     this.commitStatusRowMutation(
       previousStatus,

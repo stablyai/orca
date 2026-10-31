@@ -10,6 +10,54 @@ import {
 describe('agent completion coordinator', () => {
   useAgentCompletionCoordinatorLifecycle()
 
+  it('quiet restoration leaves the original pending completion and next live turn intact', () => {
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      inspectProcess: vi.fn(),
+      dispatchCompletion,
+      isLive: () => true
+    })
+    coordinator.observeHookStatus({
+      state: 'working',
+      prompt: 'original',
+      agentType: 'codex',
+      stateStartedAt: 10
+    })
+    coordinator.observeHookStatus({
+      state: 'done',
+      prompt: 'original',
+      agentType: 'codex',
+      turnCompletedAt: 20
+    })
+    expect(coordinator.hasPendingHookDoneCompletion()).toBe(true)
+    coordinator.restoreCurrent({
+      title: 'Codex done',
+      working: false,
+      status: { state: 'done', prompt: 'historical', agentType: 'codex', turnCompletedAt: 5 }
+    })
+    coordinator.seedTitle('Codex done')
+    expect(coordinator.hasPendingHookDoneCompletion()).toBe(true)
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+    coordinator.observeHookStatus({
+      state: 'working',
+      prompt: 'next',
+      agentType: 'codex',
+      stateStartedAt: 30
+    })
+    coordinator.observeHookStatus({
+      state: 'done',
+      prompt: 'next',
+      agentType: 'codex',
+      turnCompletedAt: 40
+    })
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+    expect(dispatchCompletion).toHaveBeenCalledTimes(2)
+    coordinator.dispose()
+  })
+
   it('cancels a hook completion when the same turn resumes work before the quiet window', () => {
     const dispatchCompletion = vi.fn()
     const coordinator = createAgentCompletionCoordinator({

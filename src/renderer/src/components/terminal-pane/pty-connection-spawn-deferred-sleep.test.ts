@@ -14,7 +14,7 @@ import { createMockTransport, createPane, createManager } from './pty-connection
 import { buildPaneConnectionDeps } from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
-import type { MockTransport } from './pty-connection-test-pane-fixtures'
+import type { ConnectCallbacks, MockTransport } from './pty-connection-test-pane-fixtures'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
@@ -200,13 +200,12 @@ async function expectRestoreAskedMainNotDeferred(
   expect(drain.queued.has(paneKey)).toBe(false)
 }
 
-function deferringTransport(reason = 'live_cap'): MockTransport {
+function deferringTransport(
+  reason: Parameters<NonNullable<ConnectCallbacks['onSpawnDeferred']>>[0] = 'live_cap'
+): MockTransport {
   const transport = createMockTransport(null)
   transport.connect.mockImplementation(
-    async (opts: {
-      sessionId?: string
-      callbacks?: { onSpawnDeferred?: (reason: string) => void }
-    }) => {
+    async (opts: { sessionId?: string; callbacks?: ConnectCallbacks }) => {
       // Why: the fixture tab names a PTY that is gone, so only the fresh restore reaches the gate.
       if (!opts.sessionId) {
         opts.callbacks?.onSpawnDeferred?.(reason)
@@ -508,10 +507,7 @@ describe('connectPanePty: a restore the host kept asleep', () => {
     const transport = createMockTransport(null)
     // Main takes the replaced PTY with the first request, as the IPC spawn does, then defers it.
     transport.connect.mockImplementation(
-      async (opts: {
-        claimReplacedPtyId?: () => string | null
-        callbacks?: { onSpawnDeferred?: (reason: string) => void }
-      }) => {
+      async (opts: { claimReplacedPtyId?: () => string | null; callbacks?: ConnectCallbacks }) => {
         opts.claimReplacedPtyId?.()
         opts.callbacks?.onSpawnDeferred?.('pressure')
         return undefined

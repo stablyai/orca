@@ -30,7 +30,7 @@ import {
   createSessionExitHandler,
   isCwdReadableByThisProcess
 } from './terminal-host-session-process'
-import type { TerminalHostSessionCreateDependencies } from './terminal-host-session-create'
+import type { TerminalHostSessionCreateDependencies } from './terminal-host-session-create-contract'
 export async function spawnAndPublishSession(
   opts: InternalCreateOrAttachOptions,
   deps: TerminalHostSessionCreateDependencies,
@@ -103,6 +103,7 @@ export async function spawnAndPublishSession(
     rows: size.rows,
     terminalHandle: opts.env?.ORCA_TERMINAL_HANDLE,
     launchAgent: opts.launchAgent,
+    startupCommand: opts.command,
     subprocess,
     ownerBackend: resolvePtyOwnerBackend({
       platform: process.platform,
@@ -164,7 +165,10 @@ export async function spawnAndPublishSession(
   deps.sessions.set(opts.sessionId, session)
   deps.onSessionCreated(opts.sessionId, opts.agentSessionGeneration, session.isAlive)
   onPublished(opts.sessionId, session.isAlive)
-  const token = session.attachClient(opts.streamClient)
+  const commit = opts.onSessionResolved?.(opts.sessionId)
+  // A stale observation endpoint cannot cancel accepted startup or claimed-owner promotion.
+  const token: symbol | null =
+    commit !== null && (!commit || commit()) ? session.attachClient(opts.streamClient) : null
   attachSessionInputViewer(session, opts.streamClient)
 
   const startupCommandWritten =

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { makeDeferred } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { isHiddenRendererPty } from './delivery/pty-hidden-delivery-gate'
@@ -62,6 +62,17 @@ type RuntimeSpawnController = {
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test doubles implement only the members these spawn paths read.
 const testDouble = <T>(value: unknown): T => value as T
 
+function legacySourceSelection() {
+  const sourceRuntime = new OrcaRuntimeService()
+  const select = vi.fn(sourceRuntime.selectPtyLegacySemanticSource.bind(sourceRuntime))
+  onTestFinished(() => {
+    for (const [ptyId] of select.mock.calls) {
+      sourceRuntime.onPtyExit(ptyId, 0)
+    }
+  })
+  return select
+}
+
 describe('runtime-controller spawn: hidden until a renderer view mounts', () => {
   const {
     mainWindow,
@@ -83,6 +94,7 @@ describe('runtime-controller spawn: hidden until a renderer view mounts', () => 
 
   function createRuntimeMock() {
     return {
+      selectPtyLegacySemanticSource: legacySourceSelection(),
       setPtyController: vi.fn(),
       registerPty: vi.fn(),
       noteTerminalSpawnCommand: vi.fn(),

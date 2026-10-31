@@ -55,6 +55,24 @@ export function applyWebSessionTabsSnapshots(
   changedAgentPaneKeys?: Set<string>,
   options?: WebSessionTabsSnapshotApplyOptions
 ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> {
+  return applyWebSessionTabsBatch(
+    state,
+    snapshots.map((snapshot) => ({ snapshot, environmentId, now })),
+    changedAgentPaneKeys,
+    options
+  )
+}
+
+function applyWebSessionTabsBatch(
+  state: WebSessionTabsSyncState,
+  operations: readonly {
+    snapshot: RuntimeMobileSessionTabsResult
+    environmentId: string
+    now?: number
+  }[],
+  changedAgentPaneKeys?: Set<string>,
+  options?: WebSessionTabsSnapshotApplyOptions
+): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> {
   const nextState = { ...state }
   const batchContext: WebSessionTabsBatchContext = {
     changedAgentPaneKeys,
@@ -63,12 +81,12 @@ export function applyWebSessionTabsSnapshots(
     openFilesIndex: null
   }
   let mergedPatch: Partial<WebSessionTabsSyncState> = {}
-  for (const snapshot of snapshots) {
+  for (const { snapshot, environmentId, now } of operations) {
     const patch = applyWebSessionTabsSnapshotWithContext(
       nextState,
       snapshot,
       environmentId,
-      now,
+      now ?? Date.now(),
       batchContext,
       options
     )
@@ -137,25 +155,9 @@ export function applyWebSessionTabsSnapshotOperations(
   operations: readonly DecidedWebSessionTabsSnapshotOperation[],
   changedAgentPaneKeys?: Set<string>
 ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> {
-  let nextState = state
-  let mergedPatch: Partial<WebSessionTabsSyncState> = {}
-  for (const { environmentId, snapshot, decision } of operations) {
-    if (!decision.apply) {
-      continue
-    }
-    const patch = applyWebSessionTabsSnapshot(
-      nextState,
-      snapshot,
-      environmentId,
-      undefined,
-      undefined,
-      changedAgentPaneKeys
-    )
-    if (patch === nextState) {
-      continue
-    }
-    mergedPatch = { ...mergedPatch, ...patch }
-    nextState = { ...nextState, ...patch }
-  }
-  return Object.keys(mergedPatch).length === 0 ? state : mergedPatch
+  return applyWebSessionTabsBatch(
+    state,
+    operations.filter(({ decision }) => decision.apply),
+    changedAgentPaneKeys
+  )
 }

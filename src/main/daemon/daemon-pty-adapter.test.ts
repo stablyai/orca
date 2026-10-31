@@ -5,6 +5,10 @@ import { DaemonClient } from './client'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { DaemonServer } from './daemon-server'
 import {
+  observeDaemonAdapterData,
+  observeClassifiedStartupData,
+  expectClassifiedStartupData,
+  expectDaemonAdapterBurstOperations,
   createMockSubprocess,
   startDaemonAdapterHarness,
   waitFor
@@ -114,8 +118,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     })
 
     it('carries classified startup spans from the daemon source to the adapter', async () => {
-      const onData = vi.fn()
-      adapter.onData(onData)
+      const { onData, actualSource } = observeClassifiedStartupData(adapter)
       const { id } = await adapter.spawn({
         cols: 80,
         rows: 24,
@@ -131,14 +134,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       await waitFor(() => onData.mock.calls.length >= 2)
 
       expect(lastSubprocess.write).toHaveBeenCalledWith('\x1b]10;rgb:2e2e/3434/3434\x1b\\')
-      expect(onData).toHaveBeenCalledWith({
-        id,
-        data: '',
-        sequenceChars: query.length,
-        seq: query.length,
-        transformed: true
-      })
-      expect(onData).toHaveBeenCalledWith({ id, data: 'prompt' })
+      expectClassifiedStartupData(onData, adapter, actualSource, id, query)
       await expect(adapter.getBufferSnapshot(id)).resolves.toMatchObject({
         data: expect.not.stringContaining(']10;rgb')
       })
@@ -658,29 +654,37 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
   describe('onData', () => {
     it('routes data events from daemon', async () => {
-      const dataPayloads: { id: string; data: string }[] = []
-      adapter.onData((payload) => dataPayloads.push(payload))
+      const expectData = observeDaemonAdapterData(adapter)
 
       const { id } = await adapter.spawn({ cols: 80, rows: 24 })
       lastSubprocess._simulateData('hello')
 
-      await waitFor(() => dataPayloads.length > 0)
-      expect(dataPayloads[0]).toEqual({ id, data: 'hello' })
+      await expectData(id, 'hello')
     })
 
     it('coalesces burst data events before serializing daemon stream output', async () => {
-      const dataPayloads: { id: string; data: string }[] = []
-      adapter.onData((payload) => dataPayloads.push(payload))
+      const expectData = observeDaemonAdapterData(adapter)
 
       const { id } = await adapter.spawn({ cols: 80, rows: 24 })
       lastSubprocess._simulateData('a')
       lastSubprocess._simulateData('b')
       lastSubprocess._simulateData('c')
 
-      await waitFor(() => dataPayloads.length > 0)
-      expect(dataPayloads).toEqual([{ id, data: 'abc' }])
+      await expectData(id, 'abc')
     })
   })
+
+  it.each([10, 100])(
+    'bounds real adapter burst enqueue and serialization work for %i emissions',
+    async (size) => {
+      await expectDaemonAdapterBurstOperations({
+        size,
+        adapter,
+        server,
+        emitData: (data) => lastSubprocess._simulateData(data)
+      })
+    }
+  )
 
   describe('onExit', () => {
     it('routes exit events from daemon', async () => {

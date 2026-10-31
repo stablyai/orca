@@ -1,6 +1,7 @@
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
 import { ownerSurfacing } from './orca-runtime-core'
 import type { SpawnIntent } from '../../shared/host-spawn-admission'
+import type { RuntimePtyController } from './runtime-pty-controller-contract'
 
 export type { TerminalCreateOptions }
 export type { Worktree } from '../../shared/worktree/types'
@@ -74,5 +75,21 @@ export function terminalRevealViewerOptions(
   return {
     ...ownerSurfacing(opts.surfaceOwner !== false),
     ...(opts.agentLaunchViewer ? { agentLaunchViewer: opts.agentLaunchViewer() } : {})
+  }
+}
+
+export function terminalSpawnResultFields(
+  result: Pick<
+    Awaited<ReturnType<NonNullable<RuntimePtyController['spawn']>>>,
+    'pid' | 'agentSessionEnsure'
+  >,
+  isReattach: boolean
+) {
+  return {
+    ...(result.pid ? { processId: result.pid } : {}),
+    ...(result.agentSessionEnsure
+      ? { agentSessionDisposition: result.agentSessionEnsure.disposition }
+      : {}),
+    ...(isReattach ? { isReattach: true as const } : {})
   }
 }

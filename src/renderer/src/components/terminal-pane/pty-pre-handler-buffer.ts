@@ -1,11 +1,14 @@
 import { isPtyIncarnationId } from '../../../../shared/pty-incarnation'
 import { clampUtf8Tail } from './pty-eager-buffer-clamp'
 import type { PtyDataMeta } from './pty-dispatcher'
+import { captureHandoffFactSubject } from './terminal-handoff-facts'
+import type { TerminalFactSubject } from './terminal-fact-subject'
 
 type BufferedPreHandlerPtyData = {
   data: string
   bytes: number
   meta?: PtyDataMeta
+  subject?: TerminalFactSubject
 }
 
 type BufferedPreHandlerPtyState = {
@@ -129,6 +132,7 @@ export function bufferPreHandlerPtyData(ptyId: string, data: string, meta?: PtyD
   state.chunks.push({
     data: chunk.data,
     bytes: chunk.bytes,
+    subject: captureHandoffFactSubject(ptyId),
     ...(bufferedMeta ? { meta: bufferedMeta } : {})
   })
   state.bytes += chunk.bytes
@@ -168,13 +172,17 @@ export function drainPreHandlerPtyData(
 }
 
 /** Replay buffered startup bytes without taking them from the future primary handler. */
-export function replayPreHandlerPtyData(ptyId: string, observer: (data: string) => void): void {
+export function replayPreHandlerPtyData(
+  ptyId: string,
+  observer: (data: string, meta?: PtyDataMeta, subject?: TerminalFactSubject) => void
+): void {
   const state = preHandlerPtyData.get(ptyId)
   if (!state) {
     return
   }
   for (let index = state.head; index < state.chunks.length; index += 1) {
-    observer(state.chunks[index].data)
+    const chunk = state.chunks[index]
+    observer(chunk.data, chunk.meta, chunk.subject)
   }
 }
 

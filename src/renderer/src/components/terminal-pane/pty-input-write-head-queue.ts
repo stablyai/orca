@@ -1,4 +1,8 @@
-import type { PendingPtyInputWrite } from './pty-input-write-queue-contract'
+import {
+  PTY_INPUT_WRITE_QUEUE_MAX_PENDING_REPLIES,
+  PTY_INPUT_WRITE_QUEUE_MAX_PENDING_REPLY_CODE_UNITS,
+  type PendingPtyInputWrite
+} from './pty-input-write-queue-contract'
 
 /** Amortized-O(1) FIFO: shift by head index, compact once the dead prefix dominates. */
 export type HeadQueue = { items: (PendingPtyInputWrite | undefined)[]; head: number }
@@ -27,4 +31,39 @@ export function shiftHeadQueue(queue: HeadQueue): PendingPtyInputWrite | undefin
     queue.head = 0
   }
   return removed
+}
+
+export function firstPendingPtyInputWrite(
+  pendingOrdinary: HeadQueue,
+  pendingReplies: HeadQueue
+): PendingPtyInputWrite | undefined {
+  const ordinary = peekHeadQueue(pendingOrdinary)
+  const reply = peekHeadQueue(pendingReplies)
+  if (!ordinary) {
+    return reply
+  }
+  if (!reply) {
+    return ordinary
+  }
+  return ordinary.sequence < reply.sequence ? ordinary : reply
+}
+
+export function admitPtyInputReply(
+  text: string,
+  pendingCount: () => number,
+  pendingCodeUnits: () => number,
+  shiftReply: () => PendingPtyInputWrite | undefined
+): boolean {
+  if (text.length > PTY_INPUT_WRITE_QUEUE_MAX_PENDING_REPLY_CODE_UNITS) {
+    return false
+  }
+  while (
+    pendingCount() >= PTY_INPUT_WRITE_QUEUE_MAX_PENDING_REPLIES ||
+    pendingCodeUnits() + text.length > PTY_INPUT_WRITE_QUEUE_MAX_PENDING_REPLY_CODE_UNITS
+  ) {
+    if (!shiftReply()) {
+      return false
+    }
+  }
+  return true
 }

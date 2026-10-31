@@ -1,3 +1,8 @@
+/** Singleton PTY event dispatcher and eager buffer helpers, split out from pty-transport.ts. */
+import {
+  observeTerminalSemanticResidentExit,
+  markCommittedPtyShutdowns
+} from './pty-shutdown-exit-deferral'
 import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../../../../shared/terminal-scrollback-limits'
 import {
   clearProcessedPtyCharTotal,
@@ -12,7 +17,7 @@ import {
   drainPreHandlerPtyData,
   drainPreHandlerPtyExit
 } from './pty-pre-handler-buffer'
-import { deliverPtyExitToHandlers } from './pty-exit-delivery'
+import { deliverPtyExitToHandlers, type PtyExitSidecarContext } from './pty-exit-delivery'
 import {
   clearReceivedPtyCharTotal,
   isPtyPushDeliveryBlackholed,
@@ -30,7 +35,6 @@ import {
   ptyExitHandlers,
   ptyReplayHandlers
 } from './pty-shutdown-data-suspension'
-import { markCommittedPtyShutdowns } from './pty-shutdown-exit-deferral'
 
 export {
   ptyDataHandlers,
@@ -62,7 +66,7 @@ export type PtyDataMeta = {
 /** Per-PTY replay handlers on a dedicated pty:replay channel so the renderer can engage the replay guard and suppress xterm auto-replies. */
 const ptyExitSidecars = new Map<
   string,
-  Set<(code: number, context: { hadPrimary: boolean }) => void>
+  Set<(code: number, context: PtyExitSidecarContext) => void>
 >()
 export const ptyWriteUnavailableHandlers = new Map<string, () => void>()
 let ptyDispatcherAttached = false
@@ -110,16 +114,7 @@ function attachPtyPushListeners(): void {
   attachPtySecondaryPushListeners(unsubscribes)
 }
 
-function handleDispatchedPtyData(payload: {
-  id: string
-  data: string
-  seq?: number
-  rawLength?: number
-  transformed?: boolean
-  background?: boolean
-  droppedOutput?: boolean
-  gapEscapeState?: string
-}): void {
+function handleDispatchedPtyData(payload: PtyDataMeta & { id: string; data: string }): void {
   let meta: PtyDataMeta | undefined
   if (typeof payload.seq === 'number') {
     meta ??= {}
@@ -163,7 +158,7 @@ function handleDispatchedPtyData(payload: {
       // Why: snapshot before iterating — watchers often unsubscribe (or subscribe siblings) mid-iteration, and mutating the live Set would skip or double-fire.
       const snapshot = Array.from(sidecars)
       for (const watcher of snapshot) {
-        watcher(payload.data)
+        watcher(payload.data, meta)
       }
     }
   }
@@ -189,6 +184,7 @@ function attachPtySecondaryPushListeners(unsubscribes: (() => void)[]): void {
   )
   unsubscribes.push(
     window.api.pty.onExit((payload) => {
+      observeTerminalSemanticResidentExit(payload.id, payload.code, payload.incarnationId)
       if (payload.preserveRendererBinding === true) {
         // Why: host-initiated remote sleep has no requester transaction in this renderer; classify its ordered exit before pane cleanup runs.
         markCommittedPtyShutdowns([payload.id])
@@ -232,7 +228,7 @@ function attachPtySecondaryPushListeners(unsubscribes: (() => void)[]): void {
 
 export function subscribeToPtyExit(
   ptyId: string,
-  watcher: (code: number, context: { hadPrimary: boolean }) => void
+  watcher: (code: number, context: PtyExitSidecarContext) => void
 ): () => void {
   ensurePtyDispatcher()
   let set = ptyExitSidecars.get(ptyId)

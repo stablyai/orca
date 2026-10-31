@@ -334,8 +334,14 @@ describe('Git Bash console-capacity pane retention', () => {
     started.output('\u001b[?1004h')
     sendTerminalInputThroughPane(started.pane, '\u001b[O')
     sendTerminalInputThroughPane(started.pane, '\u001b[I')
-    expect(started.transport.sendInput).toHaveBeenCalledWith('\u001b[O', 'query-reply')
-    expect(started.transport.sendInput).toHaveBeenCalledWith('\u001b[I', 'query-reply')
+    expect(started.transport.sendInput).toHaveBeenCalledWith('\u001b[O', 'query-reply', {
+      onEligible: expect.any(Function),
+      onDispatch: expect.any(Function)
+    })
+    expect(started.transport.sendInput).toHaveBeenCalledWith('\u001b[I', 'query-reply', {
+      onEligible: expect.any(Function),
+      onDispatch: expect.any(Function)
+    })
     started.output(MARKER)
     started.exit()
     expect(started.deps.onPaneProcessDied).toHaveBeenCalledWith(
@@ -393,7 +399,9 @@ describe('Git Bash console-capacity pane retention', () => {
     started.transport.getPtyId.mockReturnValue(null)
     started.transport.sendInputAccepted?.mockImplementation(() => new Promise<boolean>(() => {}))
     sendTerminalInputThroughPane(started.pane, '\u0003')
-    expect(started.transport.sendInputAccepted).toHaveBeenCalledWith('\u0003', 'query-reply')
+    expect(started.transport.sendInputAccepted).toHaveBeenCalledWith('\u0003', 'query-reply', {
+      call: { onEligible: expect.any(Function), onDispatch: expect.any(Function) }
+    })
     cwd.resolve('C:\\repo')
     await flushAsyncTicks(20)
     expect(started.transport.connect).toHaveBeenCalled()

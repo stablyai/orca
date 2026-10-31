@@ -13,7 +13,11 @@ export type PaneLaunchAgentPaneSlice = {
   worktreeId: string
   tabId: string
   paneKey: string
-  startup?: { command?: string; launchAgent?: string; initialAgentStatus?: { agent?: string } }
+  startup?: {
+    command?: string
+    launchAgent?: string
+    initialAgentStatus?: { agent?: string }
+  } | null
 }
 
 /** Share expected-agent precedence across finish confirmation, visible sampling and color-query policy; launch config may precede its identity. */

@@ -150,7 +150,7 @@ type ConnectedAgentPane = {
   bind: (ptyId: string) => void
   bindAttached: (ptyId: string) => void
   unbind: () => void
-  resolveConnect: (result: unknown) => void
+  resolveConnect: (result: Awaited<ReturnType<MockTransport['connect']>>) => void
   dispose: () => void
 }
 
@@ -159,7 +159,7 @@ function connectAgentPane(overrides: Record<string, unknown> = {}): ConnectedAge
   let ptyId: string | null = null
   transport.getPtyId.mockImplementation(() => ptyId)
   transport.sendInput.mockImplementation(() => ptyId !== null)
-  let resolveConnect: (result: unknown) => void = () => {}
+  let resolveConnect: (result: Awaited<ReturnType<MockTransport['connect']>>) => void = () => {}
   transport.connect.mockImplementation(() => new Promise((resolve) => (resolveConnect = resolve)))
   transportFactoryQueue.push(transport)
   const pane = createPane(1)
@@ -305,7 +305,10 @@ describe('agent pane keys typed before its PTY binds', () => {
     pane.type('y')
 
     expect(waitForAgentDraftInputReady).not.toHaveBeenCalled()
-    expect(pane.transport.sendInput).toHaveBeenCalledWith('y', 'driving')
+    expect(pane.transport.sendInput).toHaveBeenCalledWith('y', 'driving', {
+      onEligible: expect.any(Function),
+      onDispatch: expect.any(Function)
+    })
     pane.dispose()
   })
 
@@ -320,7 +323,10 @@ describe('agent pane keys typed before its PTY binds', () => {
     pane.type('fix it')
     pane.bind('pty-1')
     pane.type('y')
-    expect(pane.transport.sendInput).toHaveBeenCalledWith('y', 'driving')
+    expect(pane.transport.sendInput).toHaveBeenCalledWith('y', 'driving', {
+      onEligible: expect.any(Function),
+      onDispatch: expect.any(Function)
+    })
 
     ready(true)
     await flushAsyncTicks(20)
@@ -353,8 +359,14 @@ describe('agent pane keys typed before its PTY binds', () => {
     pane.type('1')
     pane.type('\r')
 
-    expect(pane.transport.sendInput).toHaveBeenCalledWith('1', 'driving')
-    expect(pane.transport.sendInput).toHaveBeenCalledWith('\r', 'driving')
+    expect(pane.transport.sendInput).toHaveBeenCalledWith('1', 'driving', {
+      onEligible: expect.any(Function),
+      onDispatch: expect.any(Function)
+    })
+    expect(pane.transport.sendInput).toHaveBeenCalledWith('\r', 'driving', {
+      onEligible: expect.any(Function),
+      onDispatch: expect.any(Function)
+    })
     ready(true)
     await flushAsyncTicks(20)
     expect(sendAgentDraftPasteContent).not.toHaveBeenCalled()
@@ -427,7 +439,10 @@ describe('agent pane keys typed before its PTY binds', () => {
     pane.bind('pty-1')
     pane.unbind()
     pane.type('abc')
-    expect(pane.transport.sendInput).toHaveBeenCalledWith('abc', 'driving')
+    expect(pane.transport.sendInput).toHaveBeenCalledWith('abc', 'driving', {
+      onEligible: expect.any(Function),
+      onDispatch: expect.any(Function)
+    })
 
     pane.bind('pty-2')
     await flushAsyncTicks(20)
@@ -452,7 +467,10 @@ describe('agent pane keys typed before its PTY binds', () => {
 
     expect(waitForAgentDraftInputReady).not.toHaveBeenCalled()
     expect(sendAgentDraftPasteContent).not.toHaveBeenCalled()
-    expect(pane.transport.sendInput).toHaveBeenCalledWith('z', 'driving')
+    expect(pane.transport.sendInput).toHaveBeenCalledWith('z', 'driving', {
+      onEligible: expect.any(Function),
+      onDispatch: expect.any(Function)
+    })
     pane.dispose()
   })
 
@@ -491,9 +509,14 @@ describe('agent pane keys typed before its PTY binds', () => {
     pane.type('before reattach')
     pane.type('\x03')
 
-    expect(pane.transport.sendInput).toHaveBeenCalledWith('before reattach', 'driving')
+    expect(pane.transport.sendInput).toHaveBeenCalledWith('before reattach', 'driving', {
+      onEligible: expect.any(Function),
+      onDispatch: expect.any(Function)
+    })
     // Ctrl+C takes the acknowledged-write path.
-    expect(pane.transport.sendInputAccepted).toHaveBeenCalledWith('\x03', 'driving')
+    expect(pane.transport.sendInputAccepted).toHaveBeenCalledWith('\x03', 'driving', {
+      call: { onEligible: expect.any(Function), onDispatch: expect.any(Function) }
+    })
     pane.bind('pty-1')
     await flushAsyncTicks(20)
     expect(waitForAgentDraftInputReady).not.toHaveBeenCalled()
@@ -526,7 +549,10 @@ describe('agent pane keys typed before its PTY binds', () => {
 
     pane.type('x')
 
-    expect(pane.transport.sendInput).toHaveBeenCalledWith('x', 'driving')
+    expect(pane.transport.sendInput).toHaveBeenCalledWith('x', 'driving', {
+      onEligible: expect.any(Function),
+      onDispatch: expect.any(Function)
+    })
     pane.dispose()
   })
 })

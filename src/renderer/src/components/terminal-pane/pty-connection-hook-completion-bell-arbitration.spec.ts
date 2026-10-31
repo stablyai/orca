@@ -274,7 +274,7 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
 
     it('restores a suppressed terminal bell when the pending agent completion is canceled', async () => {
       const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport()
+      const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
 
       vi.useFakeTimers()
@@ -310,7 +310,7 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
 
     it('cancels a title task-complete notification when the agent resumes before quiet', async () => {
       const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport()
+      const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
 
       vi.useFakeTimers()
@@ -348,6 +348,7 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
       expect(deps.dispatchNotification).toHaveBeenCalledWith({
         source: 'agent-task-complete',
         terminalTitle: '* Codex done',
+        workspaceOwner: { executionHostId: 'local', runtimeEnvironmentId: null },
         paneKey: makePaneKey('tab-1', LEAF_1),
         ptyId: 'tab-pty'
       })
@@ -355,7 +356,7 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
 
     it('forwards raw onData after a bell as a query reply', async () => {
       const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport()
+      const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
 
       const pane = createPane(1)
@@ -384,7 +385,14 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
 
         paneKey: makePaneKey('tab-1', LEAF_1)
       })
-      expect(transport.sendInput).toHaveBeenCalledWith('a', 'query-reply')
+      expect(transport.sendInput).toHaveBeenCalledWith(
+        'a',
+        'query-reply',
+        expect.objectContaining({
+          onEligible: expect.any(Function),
+          onDispatch: expect.any(Function)
+        })
+      )
     })
 
     // Why: on a stale-codex pane (pending account-switch restart), production blocks sendInput.

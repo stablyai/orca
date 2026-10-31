@@ -1,3 +1,5 @@
+import type { DaemonPtyAdapterOptions } from './daemon-pty-adapter-options'
+export type { DaemonPtyAdapterOptions, DaemonRespawnReason } from './daemon-pty-adapter-options'
 import { DaemonClient } from './client'
 import { DaemonPtyInputClosedIncarnations } from './daemon-pty-input-closed-incarnations'
 import { DaemonPtyInventoryObservation } from './daemon-pty-inventory-observation'
@@ -21,6 +23,7 @@ import {
   PROTOCOL_VERSION,
   supportsMode2031UnsubscribeFact,
   supportsPtyStartupIngress,
+  supportsUnseenOsc133Zones,
   type TakePendingOutputResult
 } from './types'
 import { ColdRestorePayloadCache } from './cold-restore-payload-cache'
@@ -51,28 +54,6 @@ export type SnapshotCheckpointResult = {
   checkpoint: HistoryCheckpointResult
   snapshot: NonNullable<TakePendingOutputResult['snapshot']> | null
 }
-
-export type DaemonPtyAdapterOptions = {
-  socketPath: string
-  tokenPath: string
-  pidPath?: string
-  profileScope?: string
-  protocolVersion?: number
-  historyPath?: string
-  runtimeDir?: string
-  packagedAppVersion?: string | null
-  respawn?: (reason: DaemonRespawnReason) => Promise<void | (() => void)>
-  /** Test seam; production reads the shared, coalesced `wsl --list --running`. */
-  readRunningWslDistros?: ReadRunningWslDistros
-  /** Test seam; production reads each distro's boot id through the background-work gate. */
-  wslBridgeBootIdentity?: WslBridgeBootIdentity
-}
-
-export type DaemonRespawnReason =
-  | 'daemon_died'
-  | 'unhealthy_resolver'
-  | 'stale_bundle'
-  | 'severed_tcc_attribution'
 
 export type DaemonIdentityChangeEvent = {
   previous: DaemonEndpointIdentity
@@ -287,7 +268,9 @@ export abstract class DaemonPtyRuntimeState {
   protected get canDelegateBackgroundToDaemon(): boolean {
     return (
       this.supportsAuthoritativeBufferSnapshots &&
-      supportsMode2031UnsubscribeFact(this.protocolVersion)
+      supportsMode2031UnsubscribeFact(this.protocolVersion) &&
+      // Why: main's own scanner must read an older relay's bytes, or a hidden OMP bubble ends its turn.
+      supportsUnseenOsc133Zones(this.protocolVersion)
     )
   }
 

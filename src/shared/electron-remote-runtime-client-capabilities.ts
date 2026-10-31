@@ -1,3 +1,4 @@
+import { TERMINAL_SIDE_EFFECT_STATE_CAPABILITY } from './terminal-transient-observation'
 import { STRUCTURED_AGENT_SESSION_RENDERER_CLIENT_CAPABILITIES } from './structured-agent-session-renderer-client-capabilities'
 import { TERMINAL_IMAGE_VIEWER_CAPABILITY } from './terminal-image-viewer-capability'
 import {
@@ -14,6 +15,7 @@ import {
 // host still requires the separate authenticated browser-client lease.
 export const ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
   ...NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+  TERMINAL_SIDE_EFFECT_STATE_CAPABILITY,
   TERMINAL_IMAGE_VIEWER_CAPABILITY,
   // The renderer that reads a paired host's structured chats is the one that reads its own.
   ...STRUCTURED_AGENT_SESSION_RENDERER_CLIENT_CAPABILITIES,

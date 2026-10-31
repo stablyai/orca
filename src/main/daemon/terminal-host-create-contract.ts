@@ -9,6 +9,7 @@ import type {
 } from '../../shared/agent-session-host-authority'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
+import type { TerminalTransientSink } from '../../shared/terminal-transient-observation'
 
 export type CreateOrAttachOptions = {
   sessionId: string
@@ -35,13 +36,14 @@ export type CreateOrAttachOptions = {
     surface: AgentSessionSurfaceBinding
   }
   streamClient: {
+    transients?: TerminalTransientSink
     onData: (data: string, rawLength?: number, transformed?: boolean, seq?: number) => void
     onExit: (code: number, incarnationId: PtyIncarnationId, cause?: TerminalExitCause) => void
     /** The child may still run, but its PTY master no longer takes input. */
     onInputClosed?: (incarnationId: PtyIncarnationId) => void
   }
-  /** Resolve the adopted owner’s canonical ID before stream callbacks can emit output. */
-  onSessionResolved?: (sessionId: string) => void
+  /** Prepare without mutation; a returned commit synchronously revalidates before replacement. */
+  onSessionResolved?: (sessionId: string) => (() => boolean) | null | void
 }
 
 export type CreateOrAttachResult = {
@@ -52,7 +54,7 @@ export type CreateOrAttachResult = {
   historySeeded?: boolean
   launchAgent?: TuiAgent
   wslDistro: string | null
-  attachToken: symbol
+  attachToken: symbol | null
   incarnationId: PtyIncarnationId
   agentSessionEnsure?: AgentSessionClaimedSpawnResult
   /** Fresh non-WSL spawns with an explicit cwd only; false means a proven permission denial. */

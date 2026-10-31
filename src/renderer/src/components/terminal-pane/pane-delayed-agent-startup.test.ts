@@ -38,7 +38,8 @@ it('confirms the real process when startup arrives after the command read window
     agent: 'claude',
     agentEvidence: 'process-read',
     routingTrusted: true,
-    shellForeground: false
+    shellForeground: false,
+    observationGeneration: 2
   })
   expect(f.read).toHaveBeenCalledTimes(4)
   f.tracker.dispose()

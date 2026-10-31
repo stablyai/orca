@@ -8,17 +8,39 @@ import { admitSshConnectionState } from '../../../shared/ssh-retained-payload-ad
 import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
 import { subscribeRuntimeEnvironment } from './runtime-environment-pairing-refresh'
 
+export type RuntimeClientEventSource = Parameters<typeof subscribeRuntimeEnvironment>[1]
+export type RuntimeClientEventInstallation = { baseline: boolean; source: RuntimeClientEventSource }
+export type RuntimeClientEventDelivery =
+  | RuntimeClientEvent
+  | { type: 'terminalSideEffectsReady'; capable: boolean }
+export type RuntimeClientEventReceiver = (
+  event: RuntimeClientEventDelivery,
+  installation?: RuntimeClientEventInstallation
+) => void
+
 export type RuntimeClientEventSubscription = {
   unsubscribe: () => void
 }
 
 export async function subscribeRuntimeClientEvents(
   environmentId: string,
-  onEvent: (event: RuntimeClientEvent) => void,
+  onEvent: RuntimeClientEventReceiver,
   onError: (error: unknown) => void = console.warn,
   // Control-outage events are lost, not queued. First replay-tagged response is the only signal to resync event-derived mirrors such as per-environment SSH state.
   onReplayedAfterReconnect?: () => void
 ): Promise<RuntimeClientEventSubscription> {
+  const callbacks = {
+    onResponse: (response: RuntimeRpcResponse<unknown>) => {
+      handleRuntimeClientEventResponse(
+        response,
+        onEvent,
+        onError,
+        callbacks,
+        onReplayedAfterReconnect
+      )
+    },
+    onError
+  }
   const handle = await subscribeRuntimeEnvironment(
     {
       selector: environmentId,
@@ -26,20 +48,16 @@ export async function subscribeRuntimeClientEvents(
       timeoutMs: 15_000,
       expectedEnvironmentPairingRevision: getRuntimeEnvironmentRevision(environmentId)
     },
-    {
-      onResponse: (response) => {
-        handleRuntimeClientEventResponse(response, onEvent, onError, onReplayedAfterReconnect)
-      },
-      onError
-    }
+    callbacks
   )
   return { unsubscribe: handle.unsubscribe }
 }
 
 function handleRuntimeClientEventResponse(
   response: RuntimeRpcResponse<unknown>,
-  onEvent: (event: RuntimeClientEvent) => void,
+  onEvent: RuntimeClientEventReceiver,
   onError: (error: unknown) => void,
+  source: RuntimeClientEventSource,
   onReplayedAfterReconnect?: () => void
 ): void {
   if (response.ok === false) {
@@ -51,6 +69,19 @@ function handleRuntimeClientEventResponse(
   }
   const message = response.result as RuntimeClientEventStreamMessage
   if (message.type === 'ready') {
+    onEvent(
+      {
+        type: 'terminalSideEffectsReady',
+        capable: message.snapshot?.terminalSideEffects !== undefined
+      },
+      { baseline: true, source }
+    )
+    for (const batch of message.snapshot?.terminalSideEffects ?? []) {
+      onEvent(
+        { type: 'terminalSideEffects', batch: { ...batch, replay: true } },
+        { baseline: true, source }
+      )
+    }
     for (const sshState of message.snapshot?.sshStates ?? []) {
       const state = admitSshConnectionState(sshState.state, sshState.targetId)
       if (state) {
@@ -74,7 +105,10 @@ function handleRuntimeClientEventResponse(
     return
   }
   if (isRuntimeClientEvent(message)) {
-    onEvent(message)
+    onEvent(
+      message,
+      message.type === 'terminalSideEffects' ? { baseline: false, source } : undefined
+    )
   }
 }
 
