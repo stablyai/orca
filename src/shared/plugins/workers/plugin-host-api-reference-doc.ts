@@ -55,7 +55,8 @@ const ERROR_CODES: Record<PluginErrorCode, string> = {
   invalid_request: 'the call itself is malformed',
   invalid_params:
     'params do not match the method, including a field this Orca does not know; the message names it',
-  unknown_method: 'the method does not exist in this Orca',
+  unknown_method:
+    'the method does not exist in this Orca, or the plugin has no worker handler for a panel message',
   capability_denied: 'the manifest does not declare the capability',
   consent_required: 'the plugin is disabled or the user has not approved this version',
   not_permitted:

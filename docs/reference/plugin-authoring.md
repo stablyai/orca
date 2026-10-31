@@ -12,10 +12,10 @@ A plugin is a folder (in practice its own Git repository) with `orca-plugin.json
 Start from `examples/plugins/orca-gleam-syntax`, which carries the JSON Schema for editor
 completion, or from one of:
 
-| Example                              | Execution        | Shows                                |
-| ------------------------------------ | ---------------- | ------------------------------------ |
-| `examples/plugins/orca-gleam-syntax` | `data`           | A syntax, no code                    |
-| `examples/plugins/hello-orca`        | `trusted-worker` | A panel, a worker command and events |
+| Example                              | Execution        | Shows                                                           |
+| ------------------------------------ | ---------------- | --------------------------------------------------------------- |
+| `examples/plugins/orca-gleam-syntax` | `data`           | A syntax, no code                                               |
+| `examples/plugins/hello-orca`        | `trusted-worker` | A panel, a worker command, events and a panel-to-worker counter |
 
 Leave `publisher` out. Orca names the publisher after where the plugin comes from, the way a
 [Go module path](https://go.dev/ref/mod#module-path) is its repository path: the owner of the
@@ -86,10 +86,70 @@ Aborting the `signal` rejects the call with `cancelled`. Treat an error `code` y
 
 Workers get the same calls on the `orca` object passed to `activate(orca)`:
 `orca.api`, `orca.host.call(method, params, { signal })`, `orca.host.has(method)`, plus
-`orca.commands.register(id, (args, { signal }) => …)` and `orca.events.on(event, handler)`, which
-both return `{ dispose() }`. A command's `signal` aborts when Orca stops waiting for it. In
+`orca.commands.register(id, (args, { signal }) => …)`, `orca.events.on(event, handler)` and
+`orca.panels.onMessage(panelId, (message, { signal }) => reply)`, which all return `{ dispose() }`.
+A command's or message handler's `signal` aborts when Orca stops waiting for it. In
 `agent.status.changed`, `state` and `mainAgent.state` are one of `working`, `blocked`, `waiting`
 and `done`.
+
+### Panel to worker messages
+
+A panel's content security policy blocks its own fetches, beacons and navigation, and it cannot
+reach another plugin. It can send JSON to the worker of its own plugin and get a JSON reply. This
+needs a `trusted-worker` plugin with `main`; the worker registers one handler per panel `id` from
+`contributes.panels`:
+
+```js
+// worker (main.mjs)
+export default function activate(orca) {
+  const subscription = orca.panels.onMessage('player', async (message, { signal }) => {
+    if (message.type === 'getState') return { playing: true }
+    throw new Error(`unknown message ${message.type}`)
+  })
+}
+```
+
+```js
+// panel
+if (typeof orca.panel?.postMessage === 'function') {
+  try {
+    const reply = await orca.panel.postMessage({ type: 'getState' }, { signal })
+  } catch (error) {
+    // error.code, error.message, error.retryable, and sometimes error.retryAfterMs
+  }
+}
+```
+
+Orca picks the worker and the handler from the panel that sent the message; nothing in the message
+can name another plugin or panel. It starts the worker if it is not running. Custom editors have
+no `orca.panel`.
+
+- **Shape.** The message and the reply are JSON (what `JSON.stringify` keeps); `undefined` replies
+  arrive as `null`. A message that is not JSON, or cannot be cloned, rejects with `invalid_params`.
+- **Size.** A message is at most 64 KiB, counting its keys and the call around it, so about 64,000
+  bytes of text; a reply is at most 256 KiB, enough for a small image as a `data:` URL. Past either,
+  the call rejects with `too_large`.
+- **Rate.** A plugin's panels share one budget of 30 messages per 10 seconds, host calls included.
+  Past it the call rejects with `rate_limited`. `retryAfterMs` is not always set, and after a burst
+  of 30 the window takes up to 10 seconds to free a slot, so back off up to that long. Poll no
+  faster than once a second, and debounce input such as a slider.
+- **Errors.** `unknown_method`: the plugin has no worker, or its worker registered no handler for
+  this panel. `unavailable`: the worker could not start or stopped before answering, so send
+  again; or the panel's session is stale because the plugin changed or is no longer approved, so
+  reopen the panel, since resending cannot recover. `action_failed`: the handler threw; the message
+  is its `message`, never its stack. `timeout`: the handler did not answer within 30 seconds.
+  `cancelled`: your `signal` aborted.
+- **Cancelling.** Aborting the panel's `signal` rejects the promise at once but does not stop the
+  handler; its own `signal` aborts when Orca stops waiting (the 30 second timeout or the worker
+  stopping).
+- **Handlers.** A second `onMessage` for the same panel id throws until the first is disposed.
+  Handlers run concurrently, up to 16 per worker, and a handler counts until it returns, even
+  after Orca stopped waiting for it; past that the call rejects with `rate_limited`.
+- **Detecting it.** Check `typeof orca.panel?.postMessage === 'function'` in a panel and
+  `typeof orca.panels?.onMessage === 'function'` in a worker. They are frame and worker APIs, not
+  host methods, so `orca.api.minor` does not change and `orca.host.has` does not list them.
+
+A worker cannot push to a panel yet: have the panel ask, as above.
 
 ### Custom editors
 
@@ -270,8 +330,8 @@ listed as experimental may change. These parts are stable and change only additi
 
 - manifest format 2, capability names and execution profiles;
 - host API 1 (`"pluginApi": 1`): method names, params, results, surfaces and error codes;
-- the frame API `window.orca` (`api`, `host.call`, `host.has`, `on`, and `document` in custom
-  editors) and the document `version`/`content` shape;
+- the frame API `window.orca` (`api`, `host.call`, `host.has`, `on`, `panel.postMessage` in panels,
+  and `document` in custom editors) and the document `version`/`content` shape;
 - theme token names, and theme ids once published (users' settings store them);
 - catalog format 2 (`orca-catalog.json`).
 
@@ -280,8 +340,8 @@ Experimental; these may still change without a new format:
 - the `agent.status.changed` payload: `paneKey` is not yet a terminal id `terminal.sendText`
   accepts;
 - the worker process model: Node version, lifecycle and the channel to Orca. Only
-  `activate(orca)` and `orca.api`, `orca.host`, `orca.commands`, `orca.events` and `orca.log` are
-  promised,
+  `activate(orca)` and `orca.api`, `orca.host`, `orca.commands`, `orca.events`, `orca.panels` and
+  `orca.log` are promised,
   and workers may be stopped at any time;
 - language-pack keys, which change when Orca's source moves or its English copy changes; packs
   get best-effort coverage per release;

@@ -95,6 +95,9 @@ async function harness(
       }
     },
     executeHostCall: async (pluginKey) => ({ ok: true, value: { pluginKey } }),
+    ensureWorker: async () => {
+      throw new Error('no worker in this test')
+    },
     log: () => () => {}
   })
   controllers.push(panels)

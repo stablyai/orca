@@ -262,6 +262,21 @@ test('contains hostile panel network and navigation probes', async ({
     // Why the host's code: the renderer checks only the shape, the host gates the method.
     expect(bridgeErrorCode).toBe('unknown_method')
 
+    await frame.getByRole('button', { name: 'Run panel-to-worker probes' }).click()
+    for (const probe of [
+      'worker-channel-no-worker',
+      'worker-channel-oversized',
+      'worker-channel-not-json',
+      'worker-channel-forged-identity',
+      'worker-channel-flood'
+    ]) {
+      await expect(frame.locator(`[data-probe="${probe}"]`)).toHaveAttribute(
+        'data-contained',
+        'true',
+        { timeout: 5_000 }
+      )
+    }
+
     expect(server.requests).toEqual([])
     expect(orcaPage.url()).toBe(appUrl)
     await expect(iframe).toBeVisible()

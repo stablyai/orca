@@ -168,6 +168,13 @@ test('runs hello-orca panel, command, and event behind visible consent', async (
 
     await openDemoPanel(orcaPage)
 
+    // The count lives in the forked worker, so this crosses panel, renderer, main and the worker process.
+    const helloFrame = orcaPage.frameLocator('iframe[title="Hello Orca"]')
+    for (const clicks of [1, 2]) {
+      await helloFrame.getByRole('button', { name: 'Count in the worker' }).click()
+      await expect(helloFrame.locator('#status')).toHaveText(`The worker has counted ${clicks}.`)
+    }
+
     const panelPath = join(pluginRoot, 'panel.html')
     const panelHtml = await readFile(panelPath, 'utf8')
     await writeFile(panelPath, panelHtml.replace('Hello Orca 👋', 'Hello Orca reloaded'))

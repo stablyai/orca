@@ -25,6 +25,10 @@ import {
   type PluginResponse
 } from '../../../shared/plugins/frames/plugin-protocol'
 import type { PluginEventName } from '../../../shared/plugins/manifest/plugin-manifest'
+import {
+  createWorkerPanelMessages,
+  type PluginPanelMessagesApi
+} from './plugin-host-panel-messages'
 import { PLUGIN_V1_EVENT_ALIASES } from '../../../shared/plugins/contributions/plugin-event-contribution'
 import {
   PLUGIN_HOST_API_MINOR,
@@ -64,6 +68,7 @@ export type PluginWorkerOrcaApi = {
       handler: (payload: unknown) => void | Promise<void>
     ): PluginDisposable
   }
+  panels: PluginPanelMessagesApi
   host: {
     call(method: string, params?: unknown, options?: { signal?: AbortSignal }): Promise<unknown>
     /** Whether this host implements `method` for workers. */
@@ -112,7 +117,8 @@ export function createPluginWorkerRuntime(
   >()
   const eventHandlers = new Map<string, Set<(payload: unknown) => void | Promise<void>>>()
   const pendingHostCalls = new Map<number, (response: PluginResponse) => void>()
-  const runningCommands = new Map<number, AbortController>()
+  const runningRequests = new Map<number, AbortController>()
+  const panelMessages = createWorkerPanelMessages({ send, running: runningRequests })
   let nextHostCallId = 0
   let initialized = false
   let shuttingDown = false
@@ -192,6 +198,7 @@ export function createPluginWorkerRuntime(
           }
         }
       }),
+      panels: panelMessages.api,
       host: Object.freeze({
         call: (method: string, params?: unknown, callOptions?: { signal?: AbortSignal }) =>
           hostCall(method, params, callOptions?.signal),
@@ -221,15 +228,19 @@ export function createPluginWorkerRuntime(
         return
       }
       const controller = new AbortController()
-      runningCommands.set(request.id, controller)
+      runningRequests.set(request.id, controller)
       try {
         const value = await handler(parsed.data.args, { signal: controller.signal })
         send(pluginResult(request.id, value))
       } catch (error) {
         send(pluginFailure(request.id, pluginError('action_failed', toErrorMessage(error))))
       } finally {
-        runningCommands.delete(request.id)
+        runningRequests.delete(request.id)
       }
+      return
+    }
+    if (request.method === WORKER_METHODS.deliverPanelMessage) {
+      await panelMessages.deliver(request)
       return
     }
     if (request.method === WORKER_METHODS.deliverEvent) {
@@ -297,7 +308,7 @@ export function createPluginWorkerRuntime(
             return
           }
           case 'cancel':
-            runningCommands.get(message.id)?.abort()
+            runningRequests.get(message.id)?.abort()
         }
       } catch (error) {
         // Failed activation cannot become ready; report and exit without waiting for the parent timeout.

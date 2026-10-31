@@ -8,6 +8,7 @@
     <h1>Hostile panel fixture</h1>
     <ul id="results"></ul>
     <button id="bridge">Run bridge budget probes</button>
+    <button id="worker-channel">Run panel-to-worker probes</button>
     <button id="navigate-top">Try top navigation</button>
     <button id="navigate-self">Try self navigation</button>
     <button id="navigate-anchor-form">Try anchor and form navigation</button>
@@ -170,6 +171,92 @@
             'rate_limited'
           )
         }, 150)
+      })
+
+      // Probe 8: the panel-to-worker channel names no target. This plugin has no worker, so every
+      // message must be refused or answered unknown_method, whatever identity the frame claims.
+      function forgeWorkerChannelIdentity() {
+        var id = 7001
+        var settled = false
+        window.addEventListener('message', function onResponse(event) {
+          var data = event.data
+          if (event.source !== window.parent || !data || data.kind !== 'res' || data.id !== id)
+            return
+          settled = true
+          window.removeEventListener('message', onResponse)
+          report(
+            'worker-channel-forged-identity',
+            Boolean(data.error) && data.error.code === 'unknown_method',
+            data.error ? data.error.code : 'unexpected success'
+          )
+        })
+        window.parent.postMessage(
+          {
+            orca: 1,
+            kind: 'req',
+            id: id,
+            method: 'panel.postMessage',
+            params: { type: 'getState', pluginKey: 'samples.victim', panelId: 'victim' },
+            pluginKey: 'samples.victim',
+            panelId: 'victim',
+            sessionToken: 'f'.repeat(43)
+          },
+          '*'
+        )
+        setTimeout(function () {
+          if (!settled) report('worker-channel-forged-identity', false, 'host sent no refusal')
+        }, 2000)
+      }
+
+      function floodWorkerChannel() {
+        var total = 40
+        var codes = []
+        for (var i = 0; i < total; i++) {
+          window.orca.panel.postMessage({ type: 'flood', sequence: i }).then(
+            function () {
+              codes.push('ok')
+            },
+            function (error) {
+              codes.push(error.code)
+            }
+          )
+        }
+        setTimeout(function () {
+          var limited = codes.filter(function (code) {
+            return code === 'rate_limited'
+          }).length
+          report(
+            'worker-channel-flood',
+            codes.length === total && limited > 0 && codes.indexOf('ok') < 0,
+            codes.length + ' of ' + total + ' answered, ' + limited + ' rate_limited'
+          )
+        }, 2000)
+      }
+
+      document.getElementById('worker-channel').addEventListener('click', function () {
+        var channel = window.orca.panel
+        if (!channel || typeof channel.postMessage !== 'function') {
+          report('worker-channel-api', false, 'orca.panel.postMessage is missing')
+          return
+        }
+        expectRefusal(
+          'worker-channel-no-worker',
+          channel.postMessage({ type: 'getState' }),
+          'unknown_method'
+        )
+        expectRefusal(
+          'worker-channel-oversized',
+          channel.postMessage({ padding: 'x'.repeat(128 * 1024) }),
+          'too_large'
+        )
+        expectRefusal(
+          'worker-channel-not-json',
+          channel.postMessage({ run: function () {} }),
+          'invalid_params'
+        )
+        forgeWorkerChannelIdentity()
+        // Floods spend the whole budget, so they run after the single-message probes.
+        setTimeout(floodWorkerChannel, 150)
       })
 
       // Opt-in busy loop: watchdog must demote the panel while Chromium isolates its renderer.
