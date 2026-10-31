@@ -714,7 +714,7 @@ it('reads reopened/backfilled assignments and committed clear facts from the alr
       { tabId: 'reserved-worker', sessionId: SESSION_Y }
     ]
   })
-  closeTestJournalHostDatabase(directory)
+  await closeTestJournalHostDatabase(directory)
   const path = join(directory, 'orchestration.sqlite')
   let db = new OrchestrationDb(path)
   let opened = false
@@ -750,6 +750,7 @@ it('reads reopened/backfilled assignments and committed clear facts from the alr
     const before = runtime['agentOrchestrationProjection'].buildByPaneKey()
     expect(before?.[chatRow(SESSION_Y)]?.parentPaneKey).toBe(chatRow(SESSION_X))
     await openAgentSessionRecordStoreOnce({
+      legacySessionTabIds: [],
       stateDirectory: directory,
       hostId: 'local',
       logger: recordingStructuredAgentSessionLogger().logger
@@ -770,7 +771,7 @@ it('reads reopened/backfilled assignments and committed clear facts from the alr
     }
   } finally {
     if (opened) {
-      ;(await releaseAgentSessionRecordStore())?.journalDatabase.close()
+      await (await releaseAgentSessionRecordStore())?.journalDatabase.close()
     }
     db.close()
     rmSync(directory, { recursive: true, force: true })

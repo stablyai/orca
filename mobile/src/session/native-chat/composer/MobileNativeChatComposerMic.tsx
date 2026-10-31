@@ -5,6 +5,7 @@ import { colors } from '../../../theme/mobile-theme'
 import { MobileDictationGrapes, MobileDictationTimer } from '../../MobileDictationMeter'
 import { MobileDictationMeterContext } from '../../mobile-dictation-meter-context'
 import { keepHeldPressThroughLongPress } from '../../held-press-long-press'
+import { composerInputStyles as inputStyles } from '../../../components/composer-input/composer-input-styles'
 import { mobileNativeChatComposerStyles as styles } from './mobile-native-chat-composer-styles'
 
 export type MobileNativeChatMicProps = {
@@ -53,7 +54,7 @@ export function MobileNativeChatComposerMic({
                 ? 'Transcribing dictation'
                 : 'Dictate'
         }
-        style={({ pressed }) => [styles.ghostButton, pressed && styles.pressed]}
+        style={({ pressed }) => [inputStyles.ghostButton, pressed && inputStyles.pressed]}
         // Hold mode is walkie-talkie (press-in/out); toggle mode taps.
         onPress={dictationMode === 'hold' ? undefined : onMicPress}
         onPressIn={dictationMode === 'hold' ? onMicPressIn : undefined}

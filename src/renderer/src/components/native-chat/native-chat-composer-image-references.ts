@@ -13,8 +13,9 @@ import {
 } from './native-chat-pending-attachment-cache'
 import {
   imageReferenceInsertion,
-  imageReferenceToken
-} from '../../../../shared/native-chat-image-reference'
+  imageReferenceToken,
+  withoutImageReference
+} from '../../../../shared/native-chat/native-chat-image-reference'
 import { withoutImageReferenceNodes } from './native-chat-prompt-document-text'
 
 /** A chip for each image at the caret, or after the draft when the editor takes no input. */
@@ -47,8 +48,7 @@ export function removeImageReferences(
     return
   }
   const { text, document } = readNativeChatComposerDraft(scopeKey)
-  const token = imageReferenceToken(attachmentId)
-  const kept = text.replaceAll(`${token} `, '').replaceAll(token, '')
+  const kept = withoutImageReference(text, attachmentId)
   if (kept === text) {
     return
   }

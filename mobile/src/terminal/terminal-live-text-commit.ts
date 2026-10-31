@@ -1,5 +1,9 @@
 import { getTerminalLiveSpecialKeyBytes } from './terminal-live-input'
 import { readUtf8CodePointAt } from '../../../src/shared/utf8-byte-limits'
+import {
+  encodeModifyOtherKeysEnter,
+  TERMINAL_KITTY_SHIFT_ENTER_INPUT
+} from '../../../src/shared/terminal-modified-enter-encoding'
 
 export type TerminalLiveSpecialKeyDecision =
   | { readonly kind: 'ignore' }
@@ -61,10 +65,14 @@ export function getTerminalLiveSpecialKeyDecision({
   return { kind: 'send-now', bytes }
 }
 
-// An ending Return gives echoed text to the terminal and resets the field mirror.
+// An ending Return or Shift+Enter gives echoed text to the terminal and resets the field mirror.
 // Use endsWith because custom keys can contain command plus Return; an internal Return does not end this payload.
 export function terminalLiveAccessoryInputEndsLine(bytes: string): boolean {
-  return bytes.endsWith('\r')
+  return (
+    bytes.endsWith('\r') ||
+    bytes === TERMINAL_KITTY_SHIFT_ENTER_INPUT ||
+    bytes === encodeModifyOtherKeysEnter(1, 2)
+  )
 }
 
 export function getTerminalLiveAccessoryBytesDecision({

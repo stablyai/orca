@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   installNavigationPolicy: vi.fn(),
   isAllowedPartition: vi.fn(),
   attachRouteGuest: vi.fn(),
+  installJavaScriptDialogs: vi.fn(),
   registerPluginGuard: vi.fn()
 }))
 
@@ -31,6 +32,9 @@ vi.mock('../browser/local-ssh-browser-partitions', () => ({
 }))
 vi.mock('../browser/extensions/browser-extension-session-loader', () => ({
   getBrowserExtensionSessionForProfile: () => null
+}))
+vi.mock('../browser/browser-javascript-dialogs', () => ({
+  installBrowserJavaScriptDialogs: mocks.installJavaScriptDialogs
 }))
 vi.mock('../browser/doc-preview-protocol', () => ({
   isDocPreviewSession: (candidate: unknown) => candidate === 'doc-preview-session'
@@ -272,6 +276,7 @@ describe('orca-preview scheme admission', () => {
       }
     )
     expect(mocks.attachRouteGuest).not.toHaveBeenCalled()
+    expect(mocks.installJavaScriptDialogs).not.toHaveBeenCalled()
   })
 
   it('keeps browser guests on the browsing profile and its route registration', () => {
@@ -282,6 +287,7 @@ describe('orca-preview scheme admission', () => {
     expect(mocks.attachGuestPolicies).toHaveBeenCalledOnce()
     expect(mocks.attachGuestPolicies.mock.calls[0]?.[2]).toBeUndefined()
     expect(mocks.attachRouteGuest).toHaveBeenCalledOnce()
+    expect(mocks.installJavaScriptDialogs).toHaveBeenCalledOnce()
   })
 
   // WebContents teardown leaves no preview readers; clear grants and the dead failure sink.

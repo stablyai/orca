@@ -2,6 +2,7 @@ import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import {
   assertStructuredAgentResolutionCurrent,
   resolveAgainAfterRefreshOnMissingProgram,
+  type StructuredAgentCommand,
   type StructuredAgentResolutionOperation
 } from '../native-chat/structured-agent-command-resolution'
 // What a structured Claude child's environment is built from, shared by its launch and the
@@ -25,7 +26,10 @@ function cloneDefinedEnv(env: NodeJS.ProcessEnv | Record<string, string>): Recor
 export type ClaudeEnvDeps = {
   signal?: AbortSignal
   operation?: StructuredAgentResolutionOperation
-  resolveCommand?: (options?: { pathEnv?: string | null; homePath?: string }) => string
+  resolveCommand?: (options?: {
+    pathEnv?: string | null
+    homePath?: string
+  }) => StructuredAgentCommand
   /** Refresh once after command lookup misses; absent disables retry. */
   refreshEnvironmentAfterMiss?: (askedAt: number) => Promise<void>
   /** Cwd used to resolve relative PATH entries; defaults to Orca's cwd. */
@@ -40,6 +44,7 @@ export type ClaudeEnvDeps = {
 
 export type ClaudeChildEnvSources = {
   command: string
+  prefixArgs: string[]
   overlay: Record<string, string> | undefined
   inheritedEnv: Record<string, string>
 }
@@ -67,11 +72,14 @@ async function readClaudeChildEnvSources(deps: ClaudeEnvDeps): Promise<ClaudeChi
   assertStructuredAgentResolutionCurrent(deps.operation)
   deps.signal?.throwIfAborted()
   const effectiveEnv = { ...inheritedEnv, ...overlay }
-  const command = (deps.resolveCommand ?? resolveClaudeCommand)({
+  const options = {
     pathEnv: effectiveEnv.PATH ?? effectiveEnv.Path ?? null,
     homePath: effectiveEnv.HOME ?? effectiveEnv.USERPROFILE
-  })
-  return { command, overlay: overlay ? cloneDefinedEnv(overlay) : undefined, inheritedEnv }
+  }
+  const invocation = deps.resolveCommand
+    ? deps.resolveCommand(options)
+    : { command: resolveClaudeCommand(options), prefixArgs: [] }
+  return { ...invocation, overlay: overlay ? cloneDefinedEnv(overlay) : undefined, inheritedEnv }
 }
 
 // Merge onto the shell environment to retain PATH and ambient Anthropic auth.

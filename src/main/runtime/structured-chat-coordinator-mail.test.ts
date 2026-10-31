@@ -480,14 +480,19 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     expect(chat.steers).toHaveLength(1)
   })
 
+  // Consuming checks hand their batch over, so only an older Orca leaves one outstanding.
+  const holdOutstandingBatch = (runId: string): string => {
+    const consumerGeneration = db.getRunRaw(runId)!.consumer_generation
+    return db.getOrCreateRunDelivery({ runId, consumerGeneration })!.delivery.id
+  }
+
   it('wakes a coordinator holding an unacked batch once, at turn end, for mail that came mid-turn', async () => {
     const chat = await openChat(COORDINATOR)
     const { runId, taskId } = await coordinatorRunAndTask()
     await finishWorker(taskId)
     await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
     await settleTurn(COORDINATOR, 0)
-    const held = await call('orchestration.check', { run: runId }, { sessionId: COORDINATOR })
-    const heldId = String(held.deliveryId)
+    const heldId = holdOutstandingBatch(runId)
 
     expect(await sendUserMessage(COORDINATOR, 'keep working')).toMatchObject({ ok: true })
     await vi.waitFor(() => expect(chat.turns).toHaveLength(2), WAIT)
@@ -513,7 +518,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     expect(chat.steers).toHaveLength(0)
     const cli = localOrchestrationCliCommand()
     expect(turnText(chat.turns[2]!)).toContain(
-      `You have 1 new orchestration message after delivery ${heldId}, which you have not acknowledged. If you no longer have it, run \`${cli} orchestration check --run ${runId}\` to see it again; once it is handled, run \`${cli} orchestration check --run ${runId} --ack ${heldId}\`.`
+      `You have 1 new orchestration message after delivery ${heldId}, which you have not acknowledged. If you no longer have it, run \`${cli} orchestration check --run ${runId}\` to see it again; once it is handled, run \`${cli} orchestration check --run ${runId} --ack ${heldId}\`, then \`${cli} orchestration check --run ${runId}\` for the new mail.`
     )
 
     // Ending that turn without acking stays quiet: nothing newer arrived, so no edge even reads the chat to send.
@@ -533,12 +538,14 @@ describe('a worker result reaches the structured chat that coordinates it', () =
       `You have 1 new orchestration message after delivery ${heldId}`
     )
 
-    const next = await call(
+    const acked = await call(
       'orchestration.check',
       { run: runId, ack: heldId },
       { sessionId: COORDINATOR }
     )
-    expect(next).toMatchObject({ acknowledged: heldId, count: 2 })
+    expect(acked).toMatchObject({ acknowledged: heldId, count: 0 })
+    const next = await call('orchestration.check', { run: runId }, { sessionId: COORDINATOR })
+    expect(next).toMatchObject({ count: 2 })
   })
 
   it('holds a held-batch nudge for a turn that starts while the nudge reads the chat', async () => {
@@ -547,7 +554,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     await finishWorker(taskId)
     await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
     await settleTurn(COORDINATOR, 0)
-    const held = await call('orchestration.check', { run: runId }, { sessionId: COORDINATOR })
+    const heldId = holdOutstandingBatch(runId)
     const task2 = await call('orchestration.taskCreate', { spec: 'b' }, { sessionId: COORDINATOR })
     const reading = Promise.withResolvers<void>()
     const release = Promise.withResolvers<void>()
@@ -585,7 +592,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     await host.flushStreamedEvents(COORDINATOR)
     await vi.waitFor(() => expect(chat.turns).toHaveLength(3), WAIT)
     expect(chat.steers).toHaveLength(0)
-    expect(turnText(chat.turns[2]!)).toContain(`--ack ${String(held.deliveryId)}`)
+    expect(turnText(chat.turns[2]!)).toContain(`--ack ${heldId}`)
   })
 })
 
@@ -690,7 +697,8 @@ describe('a /clear keeps the chat its orchestration address', () => {
       (await call('orchestration.runCreate', { objective: 'second' }, { sessionId: firstClear }))
         .run
     )
-    expect(boundOrcaSessionId(first)).toBeNull()
+    // A later run-create keeps the earlier Run; the run-use below keeps only the one it names.
+    expect(boundOrcaSessionId(first)).toBe(root)
 
     const cleared = await clearChat(firstClear)
     await startClearedContext(cleared)

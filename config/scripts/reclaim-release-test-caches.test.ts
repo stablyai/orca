@@ -1,4 +1,15 @@
-import { lstat, mkdir, mkdtemp, readFile, rm, symlink, utimes, writeFile } from 'node:fs/promises'
+import {
+  lstat,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  symlink,
+  utimes,
+  writeFile
+} from 'node:fs/promises'
+import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
@@ -27,8 +38,22 @@ async function fixture() {
   const shared = join(commonDirectory, 'orca-cache', 'release-source')
   await mkdir(cache, { recursive: true })
   await mkdir(shared, { recursive: true })
+  await writeFile(join(worktree, '.gitignore'), '.cross-version-checkouts/\n')
+  const date = new Date(nowMs - 30 * day).toISOString()
+  const env = { ...process.env, GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date }
+  for (const args of [
+    ['init', '-q'],
+    ['add', '.gitignore'],
+    ['commit', '-qm', 'base']
+  ]) {
+    execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], {
+      cwd: worktree,
+      env
+    })
+  }
   const targets = { commonDirectory, worktrees: [worktree, worktree] }
-  return { root, worktree, cache, shared, targets, nowMs, report: () => {} }
+  const getProcessTable = () => ''
+  return { root, worktree, cache, shared, targets, nowMs, getProcessTable, report: () => {} }
 }
 
 async function stamped(path: string, format = CHECKOUT_FORMAT, ageDays = 60) {
@@ -40,10 +65,18 @@ async function stamped(path: string, format = CHECKOUT_FORMAT, ageDays = 60) {
   return path
 }
 
+async function idle(worktree: string) {
+  const time = new Date(nowMs - 30 * day)
+  for (const entry of await readdir(worktree, { recursive: true })) {
+    await utimes(join(worktree, entry), time, time)
+  }
+}
+
 it('previews old stamped views and seeds without changing them', async () => {
   const options = await fixture()
   const local = await stamped(join(options.cache, 'v-old', `${commit}-format-4`), 4)
   const seed = await stamped(join(options.shared, `format-${CHECKOUT_FORMAT}`, commit))
+  await idle(options.worktree)
   const result = await reclaimReleaseTestCaches(options)
   expect(result.entries).toBe(2)
   expect(result.logicalBytes).toBeGreaterThan(0)
@@ -52,13 +85,25 @@ it('previews old stamped views and seeds without changing them', async () => {
   await expect(lstat(`${local}.lock`)).rejects.toMatchObject({ code: 'ENOENT' })
 })
 
-it('requires stopped-test acknowledgement before deleting anything', async () => {
+it('removes old local checkouts only from idle worktrees unless tests are stopped', async () => {
   const options = await fixture()
   const local = await stamped(join(options.cache, 'v-old', `${commit}-format-4`), 4)
-  await expect(reclaimReleaseTestCaches({ ...options, apply: true })).rejects.toThrow(
-    '--tests-stopped'
-  )
+  await writeFile(join(options.worktree, 'edited.ts'), 'recent work')
+  await idle(options.cache)
+  const active = await reclaimReleaseTestCaches({ ...options, apply: true })
+  expect(active).toMatchObject({ entries: 0, protected: 1 })
   expect((await lstat(local)).isDirectory()).toBe(true)
+
+  await idle(options.worktree)
+  const idleResult = await reclaimReleaseTestCaches({ ...options, apply: true })
+  expect(idleResult).toMatchObject({ entries: 1, protected: 0 })
+  await expect(lstat(local)).rejects.toMatchObject({ code: 'ENOENT' })
+
+  const stopped = await stamped(join(options.cache, 'v-old', `${commit}-format-3`), 3)
+  await writeFile(join(options.worktree, 'edited.ts'), 'more recent work')
+  const override = await reclaimReleaseTestCaches({ ...options, apply: true, testsStopped: true })
+  expect(override).toMatchObject({ entries: 1, protected: 0 })
+  await expect(lstat(stopped)).rejects.toMatchObject({ code: 'ENOENT' })
 })
 
 it('removes old generated trees and retains recent, future, malformed and mutable trees', async () => {

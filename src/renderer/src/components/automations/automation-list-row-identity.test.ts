@@ -155,22 +155,16 @@ describe('automation list row identity across hosts', () => {
         displayName: 'Runtime workspace'
       }
     ] as Worktree[]
-    const fallbackRepos = new Map([[REPO_ID, repos[1]]])
-    const fallbackWorktrees = new Map([['ws-1', worktrees[1]]])
 
-    expect(rows.map((row) => automationRepoForRow(row, repos, fallbackRepos)?.displayName)).toEqual(
-      ['Desktop repo', 'Runtime repo']
-    )
+    expect(rows.map((row) => automationRepoForRow(row, repos)?.displayName)).toEqual([
+      'Desktop repo',
+      'Runtime repo'
+    ])
     expect(
       rows.map((row) => {
-        const repo = automationRepoForRow(row, repos, fallbackRepos)
-        return automationWorktreeForRow(
-          row,
-          { [REPO_ID]: worktrees },
-          repo,
-          fallbackWorktrees,
-          'ws-1'
-        )?.displayName
+        const repo = automationRepoForRow(row, repos)
+        return automationWorktreeForRow(row, { [REPO_ID]: worktrees }, repo, repos, 'ws-1')
+          ?.displayName
       })
     ).toEqual(['Desktop workspace', 'Runtime workspace'])
   })

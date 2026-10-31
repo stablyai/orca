@@ -144,7 +144,7 @@ export async function performAttach(
   const lock = input.lock ?? heldStructuredAgentSessionAttachLock(input.acquireSignal)
   const preparedTranscript = store.getRecord(sessionId)
     ? { ok: true as const, items: null }
-    : await prepareAdoptedTranscript(params)
+    : await prepareAdoptedTranscript(params, lock.signal)
   if (!preparedTranscript.ok) {
     return preparedTranscript
   }

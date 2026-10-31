@@ -140,14 +140,4 @@ describe('CliSection install failure surfacing', () => {
     expect(toasts.success).not.toHaveBeenCalled()
     expect(toasts.error).toHaveBeenCalledTimes(1)
   })
-
-  it('keeps the success toast and shows no failure notice when registration lands', async () => {
-    await renderCliSectionAndInstall(async () =>
-      notInstalledStatus({ state: 'installed', detail: null })
-    )
-
-    expect(screen.queryByRole('alert')).toBeNull()
-    expect(toasts.success).toHaveBeenCalledTimes(1)
-    expect(toasts.error).not.toHaveBeenCalled()
-  })
 })

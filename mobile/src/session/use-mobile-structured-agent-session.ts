@@ -1,3 +1,4 @@
+import { asyncQuestionSourceScope as questionSourceScope } from '../../../src/shared/native-chat/input/native-chat-ask'
 import { useCallback, useMemo, useRef } from 'react'
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat/transcript/native-chat-transcript-retention'
 import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'
@@ -8,11 +9,10 @@ import {
 import { withNativeChatCutTurnNotices } from '../../../src/shared/native-chat/transcript/native-chat-cut-turn-notice'
 import { agentSessionTranscriptRows } from '../../../src/shared/agent-session-context-clear'
 import { tuiAgentDisplayName } from '../../../src/shared/tui-agent-display-names'
-import { isStructuredAgentSessionMainAgentWorking } from '../../../src/shared/structured-agent-session-main-agent-working'
+import { mobileStructuredAgentSessionWorking } from './mobile-structured-agent-session-working'
 import { isFinalAgentSessionReadRefusal } from '../../../src/shared/structured-agent-session-read-refusal'
 import {
   runningStructuredAgentSessionTurnId,
-  structuredAgentSessionHostSaysWorking,
   structuredAgentSessionQueueSendsNext
 } from '../../../src/shared/structured-agent-session-live-turn'
 import {
@@ -60,7 +60,8 @@ export function useMobileStructuredAgentSession(
     enabled,
     onActionResolved,
     onSendError,
-    hostSupport
+    hostSupport,
+    onCommandsChanged
   } = args
   // Gate queueing by capability while accepting published cards from every host.
   const queueCapable = hostSupport?.queuedMessages === true
@@ -73,7 +74,7 @@ export function useMobileStructuredAgentSession(
   const commandPendingRef = useRef(false)
   // Legacy hosts must join repeated Stop while the first turn cancel remains pending.
   const inFlightStopsRef = useRef(new Map<string, Promise<boolean>>())
-  const stateArgs = { client, sessionId, sessionKey, enabled, connected }
+  const stateArgs = { client, sessionId, sessionKey, enabled, connected, onCommandsChanged }
   const { state, stateRef, queuedMessages, queuePause, olderPages, loadEarlier } =
     useMobileStructuredAgentState(stateArgs)
 
@@ -150,9 +151,7 @@ export function useMobileStructuredAgentSession(
     { ...state, items: transcriptItems },
     turnId
   )
-  const isWorking = structuredAgentSessionHostSaysWorking(state.working, () =>
-    isStructuredAgentSessionMainAgentWorking(turnId, state.submissions, state.fence)
-  )
+  const isWorking = mobileStructuredAgentSessionWorking(state)
   const queueSendsNext = structuredAgentSessionQueueSendsNext(state.nextQueuedMessageId, isWorking)
   const backgroundTasks = useMobileStructuredBackgroundTasks({
     sessionKey,
@@ -181,7 +180,8 @@ export function useMobileStructuredAgentSession(
     hostStopping,
     stopPressed: stopPress.pressed,
     queueCapable,
-    queueFollowUps
+    queueFollowUps,
+    queueSendsNext
   })
   const { stopping } = turnIndicator
   const sendWithOutcome = useMobileStructuredSendWithOutcome({
@@ -202,10 +202,10 @@ export function useMobileStructuredAgentSession(
     sessionCommands: args.sessionCommands,
     onSendError,
     queueSendsNext,
-    sendOptions: hostSupport?.sendOptions === true ? options.sendSelection : undefined,
+    sendSelection: options.sendSelection,
     takesSkills: hostSupport?.sendSkills === true
   })
-  const { items, currentRequests, actionablePromptIds, status } = state
+  const { items, currentRequests, actionablePromptIds, status, epoch } = state
   // Prefer host actionability: ended-agent prompts must receive no answer.
   const [approvalPrompt, questionPrompt] = useMemo(() => {
     const prompts = { items, currentRequests, actionablePromptIds }
@@ -272,6 +272,7 @@ export function useMobileStructuredAgentSession(
   return {
     ...options,
     visualSource,
+    asyncQuestionSourceScope: questionSourceScope({ kind: 'journal', agent, sessionId, epoch }),
     imagePreviewsByMessageId: sends.imagePreviewsByMessageId,
     session: {
       messages,
@@ -286,6 +287,7 @@ export function useMobileStructuredAgentSession(
     },
     isWorking: isWorking || queueSendsNext,
     canStop,
+    sendFollowUp: turnIndicator.sendFollowUp ?? null,
     turnId,
     turnIndicator,
     ...turnTiming,

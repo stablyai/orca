@@ -1,5 +1,5 @@
 import { isPluginAutoUpdateOn } from '../../../../shared/plugins/catalog/plugin-update-policy'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import type { PluginHostInstallSource, PluginHostListEntry } from '../../../../preload/api-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -7,11 +7,15 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { PluginDevelopmentDialog } from '../plugins/dialogs/PluginDevelopmentDialog'
 import { PluginInstallDialog } from '../plugins/dialogs/PluginInstallDialog'
+import { PluginInstallTrustDialogHost } from '../plugins/dialogs/PluginInstallTrustDialog'
+import { sourceInstallTrustPrompt } from '../plugins/presentation/plugin-install-trust'
+import { confirmPluginInstallTrust } from '@/store/plugin-install-trust-request'
 import { PluginRemoveDialog } from '../plugins/dialogs/PluginRemoveDialog'
 import { PluginRollbackDialog } from '../plugins/dialogs/PluginRollbackDialog'
 import { PluginsHeaderActions } from '../plugins/list/PluginSettingsMenu'
 import { PluginSettingsOverview } from '../plugins/list/PluginSettingsOverview'
 import { PluginsAlphaNotice } from '../plugins/list/PluginsAlphaNotice'
+import { PluginsSectionDescription } from '../plugins/list/PluginsSectionDescription'
 import { getPluginsSectionPresentation } from './plugins-search'
 import { SettingsSection } from './SettingsSection'
 import { usePluginLogs } from '../plugins/state/use-plugin-logs'
@@ -111,6 +115,13 @@ export function PluginsSettingsSection({
     }
   }
 
+  const loadPluginListForSubscription = useEffectEvent(async (): Promise<void> => {
+    await loadPluginList(window.api.plugins.list())
+    if (mountedRef.current) {
+      setLoading(false)
+    }
+  })
+
   const clearBusy = (pluginKey: string): void => {
     if (mountedRef.current) {
       setBusyPluginKeys((current) => new Set([...current].filter((key) => key !== pluginKey)))
@@ -164,15 +175,9 @@ export function PluginsSettingsSection({
       return
     }
     setLoading(true)
-    const load = async (): Promise<void> => {
-      await loadPluginList(window.api.plugins.list())
-      if (mountedRef.current) {
-        setLoading(false)
-      }
-    }
-    void load()
+    void loadPluginListForSubscription()
     const unsubscribe = window.api.plugins.onChanged(() => {
-      void loadPluginList(window.api.plugins.list())
+      void loadPluginListForSubscription()
     })
     return () => {
       listRequestRef.current += 1
@@ -200,6 +205,9 @@ export function PluginsSettingsSection({
   const removePlugin = plugins.find((plugin) => plugin.pluginKey === removePluginId) ?? null
 
   const install = async (source: PluginHostInstallSource): Promise<void> => {
+    if (!(await confirmPluginInstallTrust(sourceInstallTrustPrompt(source)))) {
+      return
+    }
     const result = await window.api.plugins.install(source)
     if (!result.ok) {
       throw new Error(result.error)
@@ -326,6 +334,7 @@ export function PluginsSettingsSection({
     <SettingsSection
       id="plugins"
       {...sectionPresentation}
+      description={<PluginsSectionDescription text={sectionPresentation.description} />}
       hideHeader={featureEnabled && page.openKey !== null}
       bodyClassName="space-y-6 rounded-none border-0 bg-transparent p-0 shadow-none"
       headerAction={
@@ -393,6 +402,7 @@ export function PluginsSettingsSection({
         busy={devPathsBusy}
         onChange={updateDevPaths}
       />
+      <PluginInstallTrustDialogHost />
       <PluginRemoveDialog
         plugin={removePlugin}
         busy={Boolean(removePlugin && busyPluginKeys.has(removePlugin.pluginKey))}

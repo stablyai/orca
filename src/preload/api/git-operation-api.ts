@@ -2,6 +2,7 @@ import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../../share
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { GitPushTarget } from '../../shared/worktree/types'
 import type { GitStageWorktreeScope } from '../../shared/git-stage-worktree-scope'
+import type { ConflictResolution } from '../../shared/source-control-entry-actions'
 import type { HostedReviewProvider } from '../../shared/hosted-review'
 import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control-ai'
 import type { SourceControlAiSettings } from '../../shared/source-control-ai-types'
@@ -46,6 +47,10 @@ export type GitOperationApi = {
   commit: (args: {
     worktreePath: string
     message: string
+    connectionId?: string
+  }) => Promise<{ success: boolean; error?: string }>
+  completeMerge: (args: {
+    worktreePath: string
     connectionId?: string
   }) => Promise<{ success: boolean; error?: string }>
   generateCommitMessage: (args: {
@@ -98,6 +103,12 @@ export type GitOperationApi = {
     connectionId?: string
   }) => Promise<void>
   stage: (args: { worktreePath: string; filePath: string; connectionId?: string }) => Promise<void>
+  resolveConflict: (args: {
+    worktreePath: string
+    filePath: string
+    resolution: ConflictResolution
+    connectionId?: string
+  }) => Promise<void>
   bulkStage: (args: {
     worktreePath: string
     filePaths: string[]

@@ -7,10 +7,11 @@ import {
 import { providerSpawnAbsent } from '../provider-process/provider-executable-missing'
 import { settledClaudeTurnEndLeaf } from './claude-structured-resume-point'
 import { claudeHeldSends } from './claude-command-lifecycle'
+import { claudeCloseReport, settleClaudeExitedSession } from './claude-structured-session-close'
 import {
-  claudeRootExitObserved,
-  settleClaudeExitedSession
-} from './claude-structured-session-close'
+  AgentSessionAcquisitionExitUnprovenError,
+  AgentSessionAcquisitionRootExitObservedError
+} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type {
   ClaudeAcquisitionAttempt,
   ClaudeSession,
@@ -54,7 +55,10 @@ export function observeClaudeSessionExit(
   exit.publication = closePromise
     .then((proven) => {
       // Observed root exit releases the lease even if tree cleanup remains unverified.
-      if (!proven && !claudeRootExitObserved(session.connection)) {
+      if (
+        claudeCloseReport(session.connection, proven, error) instanceof
+        AgentSessionAcquisitionExitUnprovenError
+      ) {
         return undefined
       }
       return settleClaudeUnexpectedExit(lifecycle, sessionId, exit)
@@ -83,7 +87,8 @@ export function settleClaudeUnexpectedExit(
       return
     }
     exits.delete(sessionId)
-    lifecycle.settledExitErrors.set(sessionId, exit.error)
+    const report = claudeCloseReport(exit.connection, true, exit.error)
+    lifecycle.settledExitErrors.set(sessionId, report ?? exit.error)
     const ended: ClaudeStructuredSessionEvent = {
       type: 'ended',
       sessionId,
@@ -98,6 +103,10 @@ export function settleClaudeUnexpectedExit(
               })
             : agentSessionFailureFact('hostFault'),
       cause: 'unexpected-exit',
+      ...(report instanceof AgentSessionAcquisitionRootExitObservedError &&
+      report.deathEvidenceKind === 'kill-delivered'
+        ? { deathEvidenceKind: 'kill-delivered' as const }
+        : {}),
       fence: exit.session.fence,
       acquisitionGeneration: exit.session.acquisitionGeneration,
       observedAt: exit.observedAt

@@ -1,3 +1,4 @@
+import type { TerminalLaunchInputAttemptOwner } from './terminal-launch-input-attempt'
 import type { WorkspaceAttentionSlice } from '@/store/slices/workspace-attention/workspace-attention-contract'
 import type { NotificationWorkspaceOwner } from '../../../../shared/notification-source'
 import type { PtyTransport, PtyTransportRecoveryState } from './pty-transport-types'
@@ -62,6 +63,7 @@ export type PtyConnectionDeps = {
   cwd?: string
   /** Delays a fresh split's spawn without delaying its renderer pane. */
   cwdPromise?: Promise<string>
+  launchInputAttempt?: TerminalLaunchInputAttemptOwner
   placement?: TerminalPanePlacement
   /** Input handed off from a predecessor mount of the same deferred split. */
   preconnectInput?: readonly PtyPreconnectInputEntry[]
@@ -127,6 +129,8 @@ export type PtyConnectionDeps = {
   clearExitedPanePtyLayoutBindingForLeaf?: (leafId: string, exitedPtyId: string) => void
   /** Settles the captured one-shot startup only after this pane owns a concrete PTY. */
   onStartupBound?: () => void
+  /** Re-renders mobile lock overlays for fit/driver state that arrived before this pane bound its PTY. */
+  refreshMobileOverlays?: () => void
   deferPtyInput?: (paneId: number, data: string, forward: (data: string) => void) => void
   /** Record main’s 2031 subscription and current theme for later flip pushes; subscription itself is silent (#9993). */
   recordPaneMode2031Subscription?: (paneId: number, subscribedMode: 'dark' | 'light') => void

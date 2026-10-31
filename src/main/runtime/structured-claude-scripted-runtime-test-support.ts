@@ -162,6 +162,7 @@ export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
           announce()
           return Promise.resolve(initialized)
         },
+        renameSession: () => Promise.resolve(),
         getContextUsage: () => {
           child.calls.push('get_context_usage')
           return Promise.resolve({})
@@ -249,7 +250,7 @@ export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
         hostId: 'local',
         claimKeyId: 'key-1',
         resolveWorkspacePath: async () => directory,
-        resolveClaudeCommand: () => '/usr/local/bin/claude',
+        resolveClaudeCommand: () => ({ command: '/usr/local/bin/claude', prefixArgs: [] }),
         resolveLaunchArgs: () => [],
         resolveClaudeAuthPolicy: () => ({ account: 'system' }),
         openClaudeConnection: openConnection,

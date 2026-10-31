@@ -12,6 +12,7 @@ export function nativeChatRowSpeaksOrActs(
   receipts: ReadonlyMap<string, NativeChatResolvedPrompt>
 ): boolean {
   return (
+    !message.agentStart &&
     message.role !== 'user' &&
     message.role !== 'reasoning' &&
     receipts.get(message.id)?.kind !== 'approval' &&

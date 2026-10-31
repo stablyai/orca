@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { shallow } from 'zustand/shallow'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import { mulberry32 } from '../../../../shared/agent-tui-ansi-fuzz-stream'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import { findTabAgentEntry } from '../native-chat/native-chat-tab-agent-entry'
 import {
@@ -66,7 +67,9 @@ describe('selectTabAgentTypesByTabId', () => {
 
     expect(selectTabAgentTypesByTabId(agentFirst, layouts)['tab-1']).toBe('codex')
     expect(selectTabAgentTypesByTabId(activeFirst, layouts)['tab-1']).toBe('codex')
-    expect(selectNativeChatTabWideFallbackUnsafeTabsById(layouts)).toEqual({ 'tab-1': true })
+    expect(selectNativeChatTabWideFallbackUnsafeTabsById(layouts)).toEqual({
+      'tab-1': true
+    })
   })
 
   it('does not inherit a supported sibling when the active split leaf is a shell', () => {
@@ -227,7 +230,6 @@ describe('selectTabAgentTypesByTabId', () => {
 
     for (let consumer = 0; consumer < 100; consumer++) {
       select({
-        settings: { experimentalNativeChat: true },
         agentStatusByPaneKey: statuses,
         terminalLayoutsByTabId: layouts
       })
@@ -240,10 +242,14 @@ describe('selectTabAgentTypesByTabId', () => {
 
   it('reuses outputs and invalidates only the projection whose input changed', () => {
     const onStatusEntryVisited = vi.fn()
+    const onStatusComparisonVisited = vi.fn()
+    const onLayoutComparisonVisited = vi.fn()
     const onAgentTypeLayoutVisited = vi.fn()
     const onUnsafeLayoutVisited = vi.fn()
     const select = createTabBarAgentProjectionSelector({
       onStatusEntryVisited,
+      onStatusComparisonVisited,
+      onLayoutComparisonVisited,
       onAgentTypeLayoutVisited,
       onUnsafeLayoutVisited
     })
@@ -254,7 +260,6 @@ describe('selectTabAgentTypesByTabId', () => {
     }
 
     const first = select({
-      settings: { experimentalNativeChat: true },
       agentStatusByPaneKey: working,
       terminalLayoutsByTabId: split
     })
@@ -263,14 +268,16 @@ describe('selectTabAgentTypesByTabId', () => {
       'tab-1:leaf-b': entry({ agentType: 'codex', state: 'done' })
     }
     const afterStatus = select({
-      settings: { experimentalNativeChat: true },
       agentStatusByPaneKey: done,
       terminalLayoutsByTabId: split
     })
 
     expect(afterStatus).toBe(first)
-    expect(onStatusEntryVisited).toHaveBeenCalledTimes(4)
-    expect(onAgentTypeLayoutVisited).toHaveBeenCalledTimes(2)
+    // Same-key pings that keep each agent cost one status comparison and no projection walks.
+    expect(onStatusComparisonVisited).toHaveBeenCalledTimes(2)
+    expect(onLayoutComparisonVisited).toHaveBeenCalledTimes(1)
+    expect(onStatusEntryVisited).toHaveBeenCalledTimes(2)
+    expect(onAgentTypeLayoutVisited).toHaveBeenCalledTimes(1)
     expect(onUnsafeLayoutVisited).toHaveBeenCalledTimes(1)
 
     const singleLeaf = {
@@ -281,7 +288,6 @@ describe('selectTabAgentTypesByTabId', () => {
       }
     }
     const afterLayout = select({
-      settings: { experimentalNativeChat: true },
       agentStatusByPaneKey: done,
       terminalLayoutsByTabId: singleLeaf
     })
@@ -292,20 +298,144 @@ describe('selectTabAgentTypesByTabId', () => {
     expect(afterLayout.nativeChatTabWideFallbackUnsafeTabsById).not.toBe(
       first.nativeChatTabWideFallbackUnsafeTabsById
     )
-    expect(onStatusEntryVisited).toHaveBeenCalledTimes(6)
-    expect(onAgentTypeLayoutVisited).toHaveBeenCalledTimes(3)
+    // Only the edited tab is re-resolved; its layout claims it, so no first-pane status walk.
+    expect(onStatusComparisonVisited).toHaveBeenCalledTimes(2)
+    expect(onLayoutComparisonVisited).toHaveBeenCalledTimes(2)
+    expect(onStatusEntryVisited).toHaveBeenCalledTimes(2)
+    expect(onAgentTypeLayoutVisited).toHaveBeenCalledTimes(2)
     expect(onUnsafeLayoutVisited).toHaveBeenCalledTimes(2)
+  })
+
+  it('shares one layout diff across both projections and walks previous layouts only on removal', () => {
+    const onLayoutComparisonVisited = vi.fn()
+    const onAgentTypeLayoutVisited = vi.fn()
+    const onUnsafeLayoutVisited = vi.fn()
+    const select = createTabBarAgentProjectionSelector({
+      onLayoutComparisonVisited,
+      onAgentTypeLayoutVisited,
+      onUnsafeLayoutVisited
+    })
+    const statuses = { 'tab-0:leaf-a': entry({ agentType: 'claude' }) }
+    const tabCount = 100
+    let layouts: Record<string, TerminalLayoutSnapshot> = {}
+    for (let index = 0; index < tabCount; index++) {
+      layouts[`tab-${index}`] = splitLayout('leaf-a')
+    }
+    select({ agentStatusByPaneKey: statuses, terminalLayoutsByTabId: layouts })
+    onLayoutComparisonVisited.mockClear()
+    onAgentTypeLayoutVisited.mockClear()
+    onUnsafeLayoutVisited.mockClear()
+
+    layouts = { ...layouts, 'tab-7': splitLayout('leaf-b') }
+    select({ agentStatusByPaneKey: statuses, terminalLayoutsByTabId: layouts })
+
+    expect(onLayoutComparisonVisited).toHaveBeenCalledTimes(tabCount)
+    expect(onAgentTypeLayoutVisited).toHaveBeenCalledTimes(1)
+    expect(onUnsafeLayoutVisited).toHaveBeenCalledTimes(1)
+
+    onLayoutComparisonVisited.mockClear()
+    layouts = { ...layouts, 'tab-new': splitLayout('leaf-a') }
+    select({ agentStatusByPaneKey: statuses, terminalLayoutsByTabId: layouts })
+
+    expect(onLayoutComparisonVisited).toHaveBeenCalledTimes(tabCount + 1)
+
+    onLayoutComparisonVisited.mockClear()
+    const { 'tab-7': _removed, ...withoutTab7 } = layouts
+    layouts = withoutTab7
+    const afterRemoval = select({
+      agentStatusByPaneKey: statuses,
+      terminalLayoutsByTabId: layouts
+    })
+
+    // A removal is the one case that needs the second walk to find the dropped key.
+    expect(onLayoutComparisonVisited).toHaveBeenCalledTimes(tabCount + tabCount + 1)
+    expect(afterRemoval.nativeChatTabWideFallbackUnsafeTabsById['tab-7']).toBeUndefined()
+  })
+
+  it('patches incrementally to the same result as a full projection', () => {
+    // Why: an LCG multiply past 2^53 loses low bits and collapses the picks onto a few cases.
+    const nextRandom = mulberry32(7)
+    const random = (limit: number): number => Math.floor(nextRandom() * limit)
+    const tabCount = 8
+    const agents = ['claude', 'codex', 'grok', undefined] as const
+    const leaves = ['leaf-a', 'leaf-b', 'leaf-c'] as const
+    const layoutChoices: TerminalLayoutSnapshot[] = [
+      splitLayout('leaf-a'),
+      splitLayout('leaf-b'),
+      splitLayout(null),
+      splitLayout('leaf-c'),
+      {
+        root: { type: 'leaf', leafId: 'leaf-b' },
+        activeLeafId: 'leaf-b',
+        expandedLeafId: null
+      },
+      { root: null, activeLeafId: 'leaf-a', expandedLeafId: null },
+      { root: null, activeLeafId: null, expandedLeafId: null }
+    ]
+    const select = createTabBarAgentProjectionSelector()
+    let statuses: Record<string, AgentStatusEntry> = {}
+    let layouts: Record<string, TerminalLayoutSnapshot> = {}
+    const seenTabIds = new Set<string>()
+    const seenAgents = new Set<(typeof agents)[number]>()
+    const seenLayouts = new Set<TerminalLayoutSnapshot>()
+    const appliedOperations = new Set<number>()
+    for (let step = 0; step < 2_000; step++) {
+      const tabId = `tab-${random(tabCount)}`
+      const paneKey = `${tabId}:${leaves[random(leaves.length)]}`
+      const operation = random(7)
+      seenTabIds.add(tabId)
+      // A status ping for a missing pane falls through, like operation 6, to reselect unchanged inputs.
+      if (operation !== 1 || statuses[paneKey]) {
+        appliedOperations.add(operation)
+      }
+      if (operation === 0) {
+        const agentType = agents[random(agents.length)]
+        seenAgents.add(agentType)
+        statuses = { ...statuses, [paneKey]: entry({ agentType }) }
+      } else if (operation === 1 && statuses[paneKey]) {
+        statuses = {
+          ...statuses,
+          [paneKey]: { ...statuses[paneKey], state: 'done' }
+        }
+      } else if (operation === 2) {
+        const { [paneKey]: _removed, ...rest } = statuses
+        statuses = rest
+      } else if (operation === 3) {
+        // Same keys and entries in a new insertion order.
+        statuses = Object.fromEntries(Object.entries(statuses).toReversed())
+      } else if (operation === 4) {
+        const layout = layoutChoices[random(layoutChoices.length)]!
+        seenLayouts.add(layout)
+        layouts = { ...layouts, [tabId]: layout }
+      } else if (operation === 5) {
+        const { [tabId]: _removed, ...rest } = layouts
+        layouts = rest
+      }
+      const result = select({
+        agentStatusByPaneKey: statuses,
+        terminalLayoutsByTabId: layouts
+      })
+      expect(result.tabAgentTypesByTabId).toEqual(selectTabAgentTypesByTabId(statuses, layouts))
+      expect(result.nativeChatTabWideFallbackUnsafeTabsById).toEqual(
+        selectNativeChatTabWideFallbackUnsafeTabsById(layouts)
+      )
+    }
+    // Why: a degenerate generator silently narrows the differential check, so pin what it exercised.
+    expect(seenTabIds.size).toBe(tabCount)
+    expect(seenAgents).toEqual(new Set(agents))
+    expect(seenLayouts).toEqual(new Set(layoutChoices))
+    expect(appliedOperations).toEqual(new Set([0, 1, 2, 3, 4, 5, 6]))
   })
 
   it('normalizes missing maps to shared empty inputs', () => {
     const select = createTabBarAgentProjectionSelector()
 
-    const first = select({ settings: { experimentalNativeChat: true } })
+    const first = select({})
 
-    expect(select({ settings: { experimentalNativeChat: true } })).toBe(first)
+    expect(select({})).toBe(first)
   })
 
-  it('keeps agent evidence available for explicit chat toggles while the default is off', () => {
+  it('keeps agent evidence stable across saved launch preference changes', () => {
     const onStatusEntryVisited = vi.fn()
     const onAgentTypeLayoutVisited = vi.fn()
     const onUnsafeLayoutVisited = vi.fn()
@@ -315,23 +445,24 @@ describe('selectTabAgentTypesByTabId', () => {
       onUnsafeLayoutVisited
     })
     const state = {
-      settings: { experimentalNativeChat: true },
+      settings: { nativeChatProviders: { claude: true } },
       agentStatusByPaneKey: { 'tab-1:leaf-a': entry({ agentType: 'claude' }) },
       terminalLayoutsByTabId: { 'tab-1': splitLayout('leaf-a') }
     }
-
+    const cliState = { ...state, settings: { nativeChatProviders: { claude: false } } }
     const first = select(state)
-    const disabled = select({ ...state, settings: { experimentalNativeChat: false } })
+    const disabled = select(cliState)
     const afterReenable = select(state)
 
     expect(disabled.tabAgentTypesByTabId).toEqual({ 'tab-1': 'claude' })
-    expect(afterReenable).not.toBe(first)
+    expect(disabled).toBe(first)
+    expect(afterReenable).toBe(first)
     expect(onStatusEntryVisited).toHaveBeenCalledTimes(1)
     expect(onAgentTypeLayoutVisited).toHaveBeenCalledTimes(1)
     expect(onUnsafeLayoutVisited).toHaveBeenCalledTimes(1)
   })
 
-  it('production selector scans once and reuses agent evidence with Chat UI off', () => {
+  it('production selector scans once and reuses agent evidence', () => {
     let statusEnumerations = 0
     let layoutEnumerations = 0
     const statuses = new Proxy(
@@ -352,26 +483,11 @@ describe('selectTabAgentTypesByTabId', () => {
         }
       }
     )
-    const disabledState = {
-      settings: { experimentalNativeChat: false },
-      agentStatusByPaneKey: statuses,
-      terminalLayoutsByTabId: layouts
-    }
+    const state = { agentStatusByPaneKey: statuses, terminalLayoutsByTabId: layouts }
 
-    const disabled = selectTabBarAgentProjections(disabledState)
+    const projections = selectTabBarAgentProjections(state)
     for (let consumer = 0; consumer < 100; consumer++) {
-      expect(selectTabBarAgentProjections(disabledState)).toBe(disabled)
-    }
-    expect(statusEnumerations).toBe(1)
-    expect(layoutEnumerations).toBe(2)
-
-    const enabledState = {
-      ...disabledState,
-      settings: { experimentalNativeChat: true }
-    }
-    const enabled = selectTabBarAgentProjections(enabledState)
-    for (let consumer = 0; consumer < 100; consumer++) {
-      expect(selectTabBarAgentProjections(enabledState)).toBe(enabled)
+      expect(selectTabBarAgentProjections(state)).toBe(projections)
     }
     expect(statusEnumerations).toBe(1)
     expect(layoutEnumerations).toBe(2)

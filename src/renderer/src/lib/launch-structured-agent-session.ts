@@ -43,6 +43,7 @@ export type StructuredAgentSessionLaunchIntent = {
   target: RuntimeClientTarget
   agent: TuiAgent
   params: StructuredAgentSessionCreateParams
+  sendSelectionSupport?: boolean
   createMessageSupport?: boolean
   createPrepared?: true
   prepareCreate?: (hostTakesExplicitOptions: boolean) => void
@@ -60,12 +61,18 @@ function launchSeedOptions(
   state: ReturnType<typeof useAppStore.getState>,
   owner: Pick<StructuredAgentSessionLaunchIntent, 'target'>,
   agent: TuiAgent,
-  hostSeedOptions: LaunchSeed
+  hostSeedOptions: LaunchSeed,
+  resumeFrom?: StructuredAgentSessionResumeSource
 ): { seedOptions?: Readonly<Record<string, string>> } {
   const seedOptions =
     owner.target.kind === 'local'
-      ? structuredLaunchSeedOptions(state.settings, agent)
-      : hostSeedOptions
+      ? structuredLaunchSeedOptions(
+          resumeFrom ? { ...state.settings, agentLaunchChoices: undefined } : state.settings,
+          agent
+        )
+      : resumeFrom
+        ? undefined
+        : hostSeedOptions
   return seedOptions ? { seedOptions } : {}
 }
 
@@ -135,7 +142,7 @@ function buildStructuredAgentSessionLaunchIntent(
       ...(resumeFrom ? { resumeFrom } : {}),
       randomUuid: createBrowserUuid
     }),
-    ...launchSeedOptions(state, owner, agent, hostSeedOptions)
+    ...launchSeedOptions(state, owner, agent, hostSeedOptions, resumeFrom)
   }
 }
 
@@ -171,6 +178,7 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
   firstMessage?: StructuredAgentSessionFirstMessage
   optionsMode?: 'replace-model-selection'
   options?: Readonly<Record<string, string>>
+  sendSelectionSupport?: boolean
   createMessageSupport?: boolean
 }): StructuredAgentSessionLaunchIntent {
   const state = useAppStore.getState()
@@ -200,7 +208,11 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
       : { createMessageSupport: args.createMessageSupport }),
     ...(args.createMessageSupport === undefined ? {} : { createPrepared: true as const }),
     ...(args.explicitLaunchOptions ? { explicitLaunchOptions: args.explicitLaunchOptions } : {}),
-    ...launchSeedOptions(state, { target }, args.agent, args.seedOptions)
+    ...(args.createMessageSupport !== undefined
+      ? args.seedOptions
+        ? { seedOptions: args.seedOptions }
+        : {}
+      : launchSeedOptions(state, { target }, args.agent, args.seedOptions, args.resumeFrom))
   }
 }
 

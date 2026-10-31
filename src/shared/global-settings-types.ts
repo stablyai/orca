@@ -1,3 +1,4 @@
+import type { AgentLaunchChoices } from './agent-launch-choices'
 import type { TelemetrySettings } from './telemetry-settings-types'
 import type { BrowserProfileScope } from './browser-profile-scope'
 import type { GlobalSettingsBase } from './global-settings-base'
@@ -205,14 +206,14 @@ export type GlobalSettings = GlobalSettingsBase & {
   terminalLinkClickBehavior?: 'actions' | 'open' | 'none'
   /** Middle mouse URL behavior; defaults to opening the primary routed destination. */
   terminalUrlMiddleClickBehavior?: 'open' | 'actions' | 'none'
-  /** New supported agent launches use structured Chat UI; off defaults to terminal UI. */
-  experimentalNativeChat?: boolean
   /** Opt-in resume of working structured chats after restart; off still lists them for review before token spending. */
   nativeChatResumeWorkOnRestart?: boolean
-  /** Queue editable mid-turn follow-ups until turn end on capable hosts. Absent means on; off sends immediately. */
+  /** Queue follow-ups while the agent works on capable hosts; absent means on. */
   nativeChatQueueFollowUps?: boolean
   /** Teach newly started native chats to create inline visuals; absent means on. */
   nativeChatInlineVisuals?: boolean
+  /** Hovering a web link in chat fetches the page to preview it; absent means on. GitHub cards ignore this. */
+  nativeChatLinkPreviews?: boolean
   /** Structured Codex/Claude chats inherit the login-shell env; off limits it to nativeChatShellEnvironmentVariables plus PATH/locale. */
   nativeChatInheritShellEnvironment?: boolean
   /** Login-shell variable names structured chat inherits while the whole environment is off. */
@@ -248,7 +249,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   /** Maximum worker nesting; 1 forbids sub-workers. Renderer-only: omit from SettingsUpdate RPC so workers cannot raise their cap. */
   nestedWorkerMaxDepth?: number
   /** Escalate native-chat worker turn errors to the dispatching Run; absent means on. Renderer-only so workers cannot silence failures via CLI. */
-  orchestrationChatErrorEscalationEnabled?: boolean
+  /** Close a finished worker's terminal or chat after a grace period; absent means on. The coordinator's runtime decides. */
+  orchestrationWorkerAutoReleaseEnabled?: boolean
   /** Only toggles the sidebar shortcut; Artifacts stay reachable from Settings. */
   showArtifactsButton?: boolean
   /** Only toggles the sidebar shortcut; Skills stay reachable from Settings. */
@@ -267,6 +269,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   browserClientHostedRemoteEnabled?: boolean
   /** Browser profile new tabs in a workspace use; missing = 'shared' (the Default profile). */
   browserProfileScope?: BrowserProfileScope
+  /** Profile new tabs use per browser host when no repo/workspace profile applies; missing = Default. */
+  browserDefaultProfileIdByHostId?: Partial<Record<ExecutionHostId, string>>
   /** Routes SSH-workspace browser pages through the workspace's SSH host; off = plain local browsing. */
   browserSshWorkspaceRoutingEnabled?: boolean
   /** Per-target opt-outs recorded from the routing error card's "Browse from this device instead". */
@@ -383,6 +387,7 @@ export type GlobalSettings = GlobalSettingsBase & {
   }
   /** Per-agent default CLI arguments appended after the binary/path and before prompts. */
   agentDefaultArgs?: Partial<Record<TuiAgent, string>>
+  agentLaunchChoices?: AgentLaunchChoices
   /** Per-agent launch environment defaults used when yolo mode is exposed as env. */
   agentDefaultEnv?: Partial<Record<TuiAgent, Record<string, string>>>
   /** One-shot guard for adding yolo-mode default args to untouched agent launch profiles. */
@@ -465,6 +470,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   experimentalEphemeralVms?: boolean
   /** Experimental (Windows): add WSL distros as hosts, each running its own Orca server. */
   experimentalWslHosts?: boolean
+  /** Declined the add-project offer to run a `\\wsl.localhost` project's distro as a host. */
+  wslHostOfferDismissed?: boolean
   /** Compact worktree cards: hide the metadata row when title and branch say the same thing. */
   compactWorktreeCards: boolean
   /** Legacy persisted key from the Experimental rollout; new writes use compactWorktreeCards. */

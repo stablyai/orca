@@ -108,7 +108,7 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
       srcDoc={panelDocument ?? ''}
       onLoad={onFrameLoad}
       title={panel.title}
-      className="h-full w-full flex-1 border-0 bg-background"
+      className="min-h-0 w-full flex-1 border-0 bg-background"
     />
   )
 }

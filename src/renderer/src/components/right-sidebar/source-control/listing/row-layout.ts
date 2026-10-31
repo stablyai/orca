@@ -6,6 +6,9 @@ export const SOURCE_CONTROL_ROW_ACTION_OVERLAY_CLASS =
 export const SOURCE_CONTROL_TREE_INDENT_PX = 12
 export const SOURCE_CONTROL_TREE_DIRECTORY_PADDING_PX = 8
 export const SOURCE_CONTROL_TREE_FILE_PADDING_PX = 20
+export function getSourceControlRowHighlightClass(isOpenFile: boolean): string {
+  return isOpenFile ? 'bg-accent hover:bg-accent' : 'hover:bg-accent/40'
+}
 export function getSubmoduleWorktreeOnlyLabel(): string {
   return translate('sourceControl.submodule.worktreeOnlyLabel', 'Stage inside submodule')
 }

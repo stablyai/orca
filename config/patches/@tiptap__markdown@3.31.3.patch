@@ -1,0 +1,24 @@
+diff --git a/dist/index.cjs b/dist/index.cjs
+--- a/dist/index.cjs
++++ b/dist/index.cjs
+@@ -129,7 +129,7 @@
+ * ```
+ */
+ function isTaskItem(item) {
+-	const match = (item.raw || item.text || "").match(/^(\s*)[-+*]\s+\[([ xX])\]\s+/);
++	const match = (item.raw || item.text || "").match(/^(\s*)[-+*]\s+\[([ xX])\][^\S\r\n]+/);
+ 	if (match) return {
+ 		isTask: true,
+ 		checked: match[2].toLowerCase() === "x",
+diff --git a/dist/index.js b/dist/index.js
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -128,7 +128,7 @@
+ * ```
+ */
+ function isTaskItem(item) {
+-	const match = (item.raw || item.text || "").match(/^(\s*)[-+*]\s+\[([ xX])\]\s+/);
++	const match = (item.raw || item.text || "").match(/^(\s*)[-+*]\s+\[([ xX])\][^\S\r\n]+/);
+ 	if (match) return {
+ 		isTask: true,
+ 		checked: match[2].toLowerCase() === "x",

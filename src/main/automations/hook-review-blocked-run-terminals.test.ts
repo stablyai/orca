@@ -1,6 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { AutomationDispatchResult, AutomationRun } from '../../shared/automations-types'
 import { closeEarlierHookReviewRunTerminals } from './hook-review-blocked-run-terminals'
+import {
+  createTranscriptPane,
+  TRANSCRIPT_PANE_PTY_ID
+} from '../runtime/agent-transcript-pane-test-harness'
 import { AGENT_HOOKS_REVIEW_BLOCKED_ERROR } from './runtime-terminal-run-observer'
 
 function makeRun(id: string, dispatchedAt: number): AutomationRun {
@@ -19,6 +23,36 @@ function makeRun(id: string, dispatchedAt: number): AutomationRun {
 }
 
 describe('closeEarlierHookReviewRunTerminals', () => {
+  it('skips a previously blocked pane whose exact process ended', async () => {
+    const { runtime, handle } = await createTranscriptPane({
+      paneTitle: 'shell',
+      foregroundProcess: 'bash',
+      data: ''
+    })
+    const prior = makeRun('prior', 1)
+    prior.terminalPtyId = TRANSCRIPT_PANE_PTY_ID
+    const latest = makeRun('latest', 2)
+    runtime.onPtyExit(TRANSCRIPT_PANE_PTY_ID, 137, 'inc-1', { providerExitObserved: true })
+    const closeTerminal = vi.fn()
+    const markDispatchResult = vi.fn()
+    await closeEarlierHookReviewRunTerminals(
+      {
+        store: { listAutomationRuns: () => [prior, latest] },
+        runtime: {
+          getTerminalHandleForPaneKey: () => handle,
+          getTerminalPtyIdForHandle: () => TRANSCRIPT_PANE_PTY_ID,
+          readTerminalClientUse: () => 'unused',
+          waitForTerminal: runtime.waitForTerminal.bind(runtime),
+          closeTerminal
+        },
+        markDispatchResult
+      },
+      latest
+    )
+    expect(closeTerminal).not.toHaveBeenCalled()
+    expect(markDispatchResult).not.toHaveBeenCalled()
+  })
+
   it('closes earlier tabs still on the hook review and keeps the newest one to answer in', async () => {
     const runs = ['stuck', 'typed', 'restored', 'unknown', 'answered', 'latest'].map((id, index) =>
       makeRun(id, index)

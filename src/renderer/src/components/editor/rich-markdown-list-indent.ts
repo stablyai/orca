@@ -1,5 +1,5 @@
 import type { Editor } from '@tiptap/react'
-import { Fragment } from '@tiptap/pm/model'
+import { Fragment, type Attrs } from '@tiptap/pm/model'
 import { TextSelection } from '@tiptap/pm/state'
 
 type ListItemTypeName = 'listItem' | 'taskItem'
@@ -65,10 +65,21 @@ function splitListBeforeCursorItem(editor: Editor): void {
   }
   const { state } = editor
   const { $from } = state.selection
-  if ($from.index(context.itemDepth - 1) === 0) {
+  const index = $from.index(context.itemDepth - 1)
+  if (index === 0) {
     return
   }
-  editor.view.dispatch(state.tr.split($from.before(context.itemDepth), 1))
+  const list = $from.node(context.itemDepth - 1)
+  editor.view.dispatch(
+    state.tr.split($from.before(context.itemDepth), 1, [
+      { type: list.type, attrs: withShiftedStart(list.attrs, index) }
+    ])
+  )
+}
+
+/** Keep ordered-list numbering when a list is split or its tail is moved. */
+function withShiftedStart(attrs: Attrs, offset: number): Attrs {
+  return typeof attrs.start === 'number' ? { ...attrs, start: attrs.start + offset } : attrs
 }
 
 function retypeListAtCursor(editor: Editor, target: ListItemTypeName): void {
@@ -86,14 +97,27 @@ function retypeListAtCursor(editor: Editor, target: ListItemTypeName): void {
 
   // Replace the subtree atomically because separately retyping list/items creates schema-invalid intermediate states.
   const itemType = state.schema.nodes[target]
-  const items = list.children.map((item) => itemType.create(null, item.content, item.marks))
+  const range = state.selection.$from.blockRange(state.selection.$to, (node) => node === list)
+  const selectedEnd = range?.endIndex ?? list.childCount
+  const trailing = Fragment.fromArray(list.children.slice(selectedEnd))
+  const items = list.children.slice(0, selectedEnd).map((item, index) => {
+    const content =
+      index === selectedEnd - 1 && trailing.size > 0
+        ? item.content.append(
+            Fragment.from(
+              list.type.create(withShiftedStart(list.attrs, selectedEnd), trailing, list.marks)
+            )
+          )
+        : item.content
+    return itemType.create(null, content, item.marks)
+  })
   const retyped = state.schema.nodes[LIST_TYPE_FOR_ITEM[target]].create(
     null,
     Fragment.from(items),
     list.marks
   )
   const tr = state.tr.replaceWith(listPos, listPos + list.nodeSize, retyped)
-  // Size-preserving retyping deletes/reinserts the subtree; restore selection rather than keeping replaceWith’s collapsed cursor.
+  // Retyping replaces the subtree; keep the selected text instead of the replacement cursor.
   tr.setSelection(TextSelection.create(tr.doc, from, to))
   editor.view.dispatch(tr)
 }

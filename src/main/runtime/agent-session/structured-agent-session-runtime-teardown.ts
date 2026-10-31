@@ -10,8 +10,8 @@ export type InstalledRuntime = {
   journalDatabase: JournalHostDatabase
   // Wait for observed adapter exits to publish and all recovery callbacks they raised to settle.
   waitForRecovery: () => Promise<void>
-  /** Host bookkeeping that runs on timers, stopped before anything else. */
-  stopBackgroundWork?: () => void
+  /** Stop admissions and timers synchronously; join accepted work before closing its sinks. */
+  stopBackgroundWork?: () => void | Promise<void>
 }
 
 /** Latch the resume-marker trigger: the startup-ordering ratchet requires the quit call without arguments. */
@@ -32,8 +32,9 @@ export async function tearDownRuntime(
   // Record quit before any await so an interrupted shutdown is not mistaken for a crash.
   recordAgentSessionRuntimeEnd(trigger)
   // Stop delivery before recovery can wake queued sends and start children teardown would kill.
-  installed.stopBackgroundWork?.()
+  const backgroundWork = installed.stopBackgroundWork?.()
   installed.host.stopDelivery()
+  await backgroundWork
   // Drain an in-flight recovery before stopping children; recovery may still
   // be writing lifecycle rows or acquiring a replacement child.
   await installed.waitForRecovery()
@@ -57,9 +58,10 @@ export async function tearDownRuntime(
   } catch (error) {
     failures.push(error)
   }
+  await installed.host.drainStatusWrites()
   if (failures.length === 0) {
     // Close only after all sinks drain and conversations settle.
-    installed.journalDatabase.close()
+    await installed.journalDatabase.close()
     return
   }
   if (failures.length === 1) {

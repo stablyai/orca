@@ -15,6 +15,7 @@ export function createClaudeTranscriptItemReader(
 ) {
   const dependencies = new Map<string, AgentJournalRenderItem>()
   let localPrompts: Map<string, string> | undefined
+  let promptTurns: Map<string, string[]> | undefined
   const saved = (key: string) => {
     const held = dependencies.get(key)
     if (held) {
@@ -63,19 +64,28 @@ export function createClaudeTranscriptItemReader(
       const scope = scopeOf(item)
       return scope.kind === 'turn' ? scope : undefined
     }
-    let scope: AgentJournalTurnScope | undefined
-    journal.visitItems((itemId, _sequence, body) => {
-      if (
-        body.kind === 'turn' &&
-        body.userItemId &&
-        journal.canonicalItemId(body.userItemId) === item.itemId
-      ) {
-        const turn = saved(itemId)
-        if (turn) {
-          scope = scopeOf({ ...item, turnScope: { kind: 'turn', turnItemId: itemId } })
+    // One pass, like localPrompts: a stale entry cannot commit past the catch-up guard.
+    if (!promptTurns) {
+      const turns = new Map<string, string[]>()
+      journal.visitItems((itemId, _sequence, body) => {
+        if (body.kind === 'turn' && body.userItemId) {
+          const user = journal.canonicalItemId(body.userItemId)
+          const held = turns.get(user)
+          if (held) {
+            held.push(itemId)
+          } else {
+            turns.set(user, [itemId])
+          }
         }
+      })
+      promptTurns = turns
+    }
+    let scope: AgentJournalTurnScope | undefined
+    for (const turnItemId of promptTurns.get(item.itemId) ?? []) {
+      if (saved(turnItemId)) {
+        scope = scopeOf({ ...item, turnScope: { kind: 'turn', turnItemId } })
       }
-    })
+    }
     return scope
   }
   return { saved, localPrompt, scopeOf, promptScope, dependencies }

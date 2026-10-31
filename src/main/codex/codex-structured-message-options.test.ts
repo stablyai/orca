@@ -1,3 +1,11 @@
+import { CODEX_SESSION_OPTION_CATALOG } from '../../shared/agent-session-option-catalog-claude-codex'
+import {
+  applyStructuredAgentSessionOptions,
+  createStructuredAgentSessionOptionState
+} from '../../shared/structured-agent-session-options'
+import { structuredAgentSessionMessageSelection } from '../../shared/structured-agent-session-option-view'
+import { captureStructuredExecutionOptions } from '../native-chat/agent-session-wire/structured-agent-session-execution-options'
+import { claudeAndCodexAgents } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
 import { describe, expect, it, vi } from 'vitest'
 import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { optionSession } from './codex-structured-option-session.test-fixture'
@@ -329,3 +337,80 @@ describe('Codex captured message choices', () => {
     })
   })
 })
+
+it.each([true, false])(
+  'sends delayed client literal with accepted effort=%s after another client changes the host tuple',
+  async (acceptedEffort) => {
+    const literal = 'retired-literal'
+    const model = {
+      id: 'model-b',
+      label: 'Model B',
+      isDefault: true,
+      defaultEffort: 'medium',
+      efforts: [
+        { value: 'medium', label: 'Medium' },
+        { value: 'high', label: 'High' }
+      ]
+    }
+    const clientA = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('codex'),
+      CODEX_SESSION_OPTION_CATALOG,
+      {
+        models: [model],
+        current: {
+          model: literal,
+          effort: 'high',
+          confirmed: ['model', 'effort'],
+          defaulted: [],
+          acceptedInputSources: {
+            model: 'saved',
+            ...(acceptedEffort ? { effort: 'saved' as const } : {})
+          }
+        }
+      }
+    )
+    const request = vi.fn(async (method: string, _params?: Record<string, unknown>) =>
+      method === 'turn/start' ? { turn: { id: 'literal-turn' } } : { config: {} }
+    )
+    const session = optionSession(request)
+    seedMessageDefaults(session)
+    session.options = new Map([
+      ['model', model.id],
+      ['effort', 'high']
+    ])
+    session.reportedOptions = { model: model.id, effort: 'high' }
+    session.appliedTurnOptions = { model: model.id, effort: 'high' }
+    const expected = { model: literal, ...(acceptedEffort ? { effort: 'high' } : {}) }
+    const captured = captureStructuredExecutionOptions(
+      {
+        agents: claudeAndCodexAgents(),
+        agent: 'codex',
+        persistedOptions: { model: model.id, effort: 'high' }
+      },
+      undefined,
+      structuredAgentSessionMessageSelection(clientA)
+    )
+    if ('refusal' in captured) {
+      throw new Error('accepted snapshot was refused')
+    }
+    expect(captured.options).toEqual(expected)
+    const turnOptions = await resolvedCodexMessageOptions(session, captured.options)
+    expect(turnOptions).toEqual(expected)
+    expect(Object.fromEntries(session.options)).toEqual({ model: model.id, effort: 'high' })
+    await startCodexTurn(session, {
+      clientMessageId: 'delayed-client',
+      body: USER_MESSAGE,
+      turnOptions
+    })
+    const turn = request.mock.calls.filter(([method]) => method === 'turn/start')
+    expect(turn).toHaveLength(1)
+    expect(turn[0]?.[1]).toMatchObject({
+      threadId: 'thread-1',
+      clientUserMessageId: 'delayed-client',
+      ...expected
+    })
+    if (!acceptedEffort) {
+      expect(turn[0]?.[1]).not.toHaveProperty('effort')
+    }
+  }
+)

@@ -43,6 +43,7 @@ export type ConnectionLogLevel = 'info' | 'success' | 'warn' | 'error'
 export type MobileConnectionDiagnosticPath = 'lan' | 'tailscale' | 'relay'
 
 export type ConnectionDiagnosticCode =
+  | 'native-render-failed'
   | 'client-session-started'
   | 'app-resumed'
   | 'network-changed'

@@ -1,4 +1,4 @@
-import { isNativeChatDefaultFor } from '../../../shared/structured-native-chat-launch-route'
+import { nativeChatPreferenceFor } from '../../../shared/structured-native-chat-launch-route'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import { MANAGED_RUNTIME_INSTALL_RUNTIME_CAPABILITY as INSTALL } from '../../../shared/managed-runtime-install'
 import {
@@ -142,7 +142,7 @@ export function readAgentLaunchChoice(
     (support.blocker === 'runtime-capability-unknown' ||
       (support.blocker === 'agent-without-structured-session' && !catalogReady))
   const chatEligibility =
-    !isNativeChatDefaultFor(store.settings, agent) ||
+    !nativeChatPreferenceFor(store.settings, agent) ||
     (!support.supported && !routePending) ||
     program === 'missing'
       ? 'no'

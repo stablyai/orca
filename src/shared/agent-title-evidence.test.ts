@@ -5,7 +5,10 @@ import {
   GEMINI_SILENT_WORKING,
   GEMINI_WORKING
 } from './agent-title-core'
-import { collectAgentTitleEvidence } from './agent-title-evidence'
+import {
+  collectAgentTitleEvidence,
+  collectExplicitAgentTitleEvidence
+} from './agent-title-evidence'
 import { resolveCanonicalPaneAgentIdentity } from './pane-agent-identity-adapter'
 import { resolvePublishedPaneAgentIdentity } from './published-pane-agent-identity'
 
@@ -270,6 +273,12 @@ describe('collectAgentTitleEvidence', () => {
     expect(agentFor('ssh | tmux | Cursor Agent')).toBe('cursor')
     expect(agentFor('ssh | tmux | OC | review the parser')).toBe('opencode')
     expect(agentFor('zsh | Fix the Codex parser')).toBeNull()
+  })
+
+  it('keeps canonical diagnostics separate from consuming observer frames', () => {
+    const title = `outer-a | outer-b | OC | ${'x | '.repeat(200)}Cursor Agent`
+    expect(collectAgentTitleEvidence(title).agent).toBe('cursor')
+    expect(collectExplicitAgentTitleEvidence(title).agent).toBe('opencode')
   })
 
   it('bounds wrapper inspection while preserving innermost identity', () => {

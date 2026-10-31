@@ -1,5 +1,5 @@
 import { once } from 'node:events'
-import { createServer, type AddressInfo, type Socket } from 'node:net'
+import { connect, createServer, type AddressInfo, type Socket } from 'node:net'
 import { afterEach, describe, expect, it } from 'vitest'
 import { SystemSshSocksClientSocket } from './system-ssh-socks-client-socket'
 
@@ -30,10 +30,10 @@ describe('SystemSshSocksClientSocket', () => {
     servers.push(server)
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
     const address = server.address() as AddressInfo
-    const socket = new SystemSshSocksClientSocket(address.port, {
-      host: 'split-horizon.internal',
-      port: 8443
-    })
+    const socket = new SystemSshSocksClientSocket(
+      { host: 'split-horizon.internal', port: 8443 },
+      async () => connect({ host: '127.0.0.1', port: address.port })
+    )
     socket.on('error', () => {})
     await once(socket, 'connect')
 

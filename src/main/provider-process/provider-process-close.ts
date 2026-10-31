@@ -11,6 +11,7 @@ export type ProviderProcessTree = {
   readonly treeVerdict: DescendantTreeVerdict
   /** A live root targeted by a reap can no longer count as a voluntary exit. */
   readonly forcedReapAttempted?: boolean
+  readonly killDelivered?: boolean
 }
 
 export type ProviderProcessClosePolicy = {
@@ -36,6 +37,7 @@ export type ProviderProcessCloseResult = {
   /** Null when this close made no observation of the descendants. */
   tree: DescendantTreeVerdict | null
   selfExit?: true
+  killDelivered?: true
 }
 
 export const ROOT_ONLY_GRACEFUL_EXIT_MS = 1_500
@@ -49,9 +51,9 @@ export function rootOnlyProviderClosePolicy(supervised: boolean): ProviderProces
   }
 }
 
-/** Root-only policy reports unproven descendants without retrying them. */
-export function acceptProviderRootExit(result: ProviderProcessCloseResult): boolean {
-  return result.root === 'exited'
+/** Writer close is final after delivery; descendant observations remain independent. */
+export function acceptProviderWriterClose(result: ProviderProcessCloseResult): boolean {
+  return result.root === 'exited' || result.killDelivered === true
 }
 
 /** The supervisor owns the POSIX signal ladder; its wrapper must outlive that ladder. */
@@ -72,6 +74,7 @@ export async function closeProviderProcess(
   }
   let reaped = false
   let fallbackTree: DescendantTreeVerdict | null = null
+  let killDelivered = false
   if (input.rootVerdict() !== 'exited') {
     await waitForProcessExitUntil(input.exitPromise, policy.gracefulExitMs)
     if (input.rootVerdict() !== 'exited') {
@@ -80,7 +83,9 @@ export async function closeProviderProcess(
       if (tree) {
         await tree.reap()
       } else {
-        fallbackTree = await input.terminateTree()
+        const verdict = await input.terminateTree()
+        fallbackTree = typeof verdict === 'object' && verdict ? verdict.tree : verdict
+        killDelivered = typeof verdict === 'object' && verdict !== null
       }
       await waitForProcessExitUntil(input.exitPromise, policy.forcedExitMs)
     }
@@ -96,5 +101,9 @@ export async function closeProviderProcess(
   if (!reaped && input.rootVerdict() === 'exited' && tree && tree.treeVerdict !== 'exited') {
     await tree.reap()
   }
-  return { root: input.rootVerdict(), tree: tree ? tree.treeVerdict : fallbackTree }
+  return {
+    root: input.rootVerdict(),
+    tree: tree ? tree.treeVerdict : fallbackTree,
+    ...(tree?.killDelivered || killDelivered ? { killDelivered: true } : {})
+  }
 }

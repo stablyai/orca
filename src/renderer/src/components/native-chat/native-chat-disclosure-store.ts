@@ -8,7 +8,7 @@ export type NativeChatRunScroll = { top: number; followsEnd: boolean }
 export type NativeChatDisclosureStore = {
   read: (key: string) => boolean | undefined
   write: (key: string, open: boolean) => void
-  /** Forget on disclosure close; use a plain map so internal scrolling cannot rerender the transcript. */
+  /** Reset on disclosure writes; use a plain map so internal scrolling cannot rerender the transcript. */
   runScroll: Map<string, NativeChatRunScroll>
 }
 
@@ -25,9 +25,7 @@ export function useNativeChatDisclosures(): NativeChatDisclosureStore {
   const [runScroll] = useState(() => new Map<string, NativeChatRunScroll>())
   const write = useCallback(
     (key: string, next: boolean) => {
-      if (!next) {
-        runScroll.delete(key)
-      }
+      runScroll.delete(key)
       setOpen((current) => {
         if (current.get(key) === next) {
           return current
