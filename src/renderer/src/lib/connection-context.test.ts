@@ -729,7 +729,11 @@ describe('getConnectionIdFromState', () => {
     expect(getConnectionIdFromState(local, key)).toBeNull()
     const contested = {
       ...local,
-      projectGroups: [makeProjectGroup({ connectionId: 'ssh-2' })]
+      projectGroups: [makeProjectGroup()],
+      repos: [
+        ...local.repos,
+        makeRepo({ id: 'repo-2', projectGroupId: 'group-1', connectionId: 'ssh-2' })
+      ]
     }
     expect(getConnectionIdFromState(contested, key)).toBeUndefined()
     expect(getConnectionIdFromState(contested, key)).toBeUndefined()

@@ -62,6 +62,15 @@ describe('plugin install IPC schema', () => {
     ).toEqual({ kind: 'git', url: 'https://example.com/plugin.git', ref: 'v1.2.3' })
   })
 
+  it('carries only a full commit as the commit the dialog showed', () => {
+    const source = { kind: 'git', url: 'https://example.com/plugin.git', ref: 'v1.2.3' }
+    expect(parsePluginInstallArgs({ ...source, expectedCommit: 'a'.repeat(40) })).toEqual({
+      ...source,
+      expectedCommit: 'a'.repeat(40)
+    })
+    expect(() => parsePluginInstallArgs({ ...source, expectedCommit: 'abc1234' })).toThrow()
+  })
+
   it('accepts HTTPS and SSH git transports', () => {
     expect(
       parsePluginInstallArgs({

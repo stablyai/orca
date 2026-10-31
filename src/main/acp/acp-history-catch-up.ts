@@ -12,7 +12,10 @@ import { nativeChatRowRendersContent } from '../../shared/native-chat-row-conten
 import { projectNativeChatTranscriptMessages } from '../../shared/native-chat-transcript-projection'
 import { projectStructuredAgentSessionMessages } from '../../shared/structured-agent-session-message-projection'
 import { usableJournalHistoryOrigin } from '../native-chat/agent-session-journal/journal-history-origin'
-import { journalLifecycleItemMutation } from '../native-chat/agent-session-journal/journal-lifecycle-mutation'
+import {
+  journalLifecycleItemMutation,
+  type JournalLifecycleIdentityMutationInput
+} from '../native-chat/agent-session-journal/journal-lifecycle-mutation'
 import { isHistoricalProviderTimelineItem } from '../native-chat/agent-session-timeline/provider-timeline-history'
 import { isProviderTimelineTurnInNamespace } from '../native-chat/agent-session-timeline/provider-timeline-identity'
 import type {
@@ -20,7 +23,7 @@ import type {
   StructuredAgentSessionHistoryJournal
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import {
-  continuedOutsideNotice,
+  HISTORY_CATCH_UP_MAX_BYTES,
   continuedOutsideRecordId,
   createHistoryCatchUpBatch,
   runHistoryCatchUp
@@ -34,6 +37,7 @@ import {
 import { translateHistoryTurn, type AcpHistoryScope } from './acp-history-translation'
 import { matchAcpHistoryTurns, type AcpHistoryCandidate } from './acp-history-turn-matching'
 import { acpAgentName } from './acp-structured-agent-definitions'
+import { acpHistoryBoundary } from './acp-history-boundary'
 
 export type AcpHistoryCatchUpInput = AcpHistoryScope & {
   frames: readonly AcpLoadHistoryFrame[]
@@ -65,7 +69,7 @@ export async function catchUpAcpHistory(input: AcpHistoryCatchUpInput): Promise<
           items: translateHistoryTurn(input, source, check)
         }))
       const baseline = view()
-      const { natives, kind, matched } = matchAcpHistoryTurns(
+      const { kind } = matchAcpHistoryTurns(
         input,
         baseline,
         candidates,
@@ -77,56 +81,102 @@ export async function catchUpAcpHistory(input: AcpHistoryCatchUpInput): Promise<
       // The rows written name the import, so a later open's additions settle under their own id.
       const written: string[] = []
       const read = (key: string) => baseline.items.get(key) ?? null
+      const boundaryBody = acpHistoryBoundary()
+      const desired = new Map<
+        string,
+        {
+          mutation: JournalLifecycleIdentityMutationInput
+          saved: AgentJournalRenderItem | null
+          bytes: number
+        }
+      >()
+      let retainedBytes = 0
+      const compose = (mutation: JournalLifecycleIdentityMutationInput) => {
+        check()
+        const key = agentJournalItemKey(mutation.identity)
+        if ((baseline.canonical.get(key) ?? key) !== key) {
+          throw new Error('unowned-history-target')
+        }
+        const previous = desired.get(key)
+        // Occurrences are complete snapshots; only the body replaces first creation metadata.
+        const final =
+          previous?.mutation.kind === 'item' && mutation.kind === 'item'
+            ? { ...previous.mutation, body: mutation.body }
+            : mutation
+        const bytes = Buffer.byteLength(JSON.stringify(final), 'utf8')
+        retainedBytes += bytes - (previous?.bytes ?? 0)
+        if (retainedBytes > HISTORY_CATCH_UP_MAX_BYTES) {
+          throw new Error('too-large')
+        }
+        desired.set(key, { mutation: final, saved: previous?.saved ?? read(key), bytes })
+      }
       let divided = false
       for (const { source, items } of candidates) {
         check()
         const coverage = kind.get(source.turn)
+        const dividerIdentity = {
+          provider: 'legacy',
+          agent: input.agent,
+          sessionId: input.sessionId,
+          recordId: continuedOutsideRecordId(source.turn)
+        } as const
+        const dividerKey = agentJournalItemKey(dividerIdentity)
+        const savedDivider = read(dividerKey)
+        if (savedDivider) {
+          compose(
+            boundaryBody
+              ? journalLifecycleItemMutation(
+                  { ...savedDivider, turnScope: AGENT_JOURNAL_THREAD_SCOPE },
+                  dividerIdentity,
+                  boundaryBody
+                )
+              : { kind: 'tombstone', identity: dividerIdentity }
+          )
+        }
         if (coverage === 'native' || coverage === 'adopted') {
           continue
         }
         for (const mutation of items) {
           check()
           const key = agentJournalItemKey(mutation.identity)
-          const canonical = baseline.canonical.get(key) ?? key
-          const held = read(canonical)
-          if (canonical !== key || (held && !isHistoricalProviderTimelineItem(held, read))) {
+          const held = read(key)
+          if (held && !isHistoricalProviderTimelineItem(held, read)) {
             throw new Error('unowned-history-target')
           }
-          if (held && JSON.stringify(held.body) === JSON.stringify(mutation.body)) {
-            continue
-          }
           if (!held && coverage !== 'imported' && !divided && baseline.retained) {
-            const divider = journalLifecycleItemMutation(
-              { turnScope: AGENT_JOURNAL_THREAD_SCOPE },
-              {
-                provider: 'legacy',
-                agent: input.agent,
-                sessionId: input.sessionId,
-                recordId: continuedOutsideRecordId(source.turn)
-              },
-              continuedOutsideNotice(
-                natives.length > 0 && ![...matched.values()].includes(natives.length - 1)
+            if (boundaryBody && !savedDivider) {
+              compose(
+                journalLifecycleItemMutation(
+                  { turnScope: AGENT_JOURNAL_THREAD_SCOPE },
+                  dividerIdentity,
+                  boundaryBody
+                )
               )
-            )
-            const dividerKey = agentJournalItemKey(divider.identity)
-            if (!read(dividerKey)) {
-              batch.push(divider)
-              written.push(dividerKey)
             }
             divided = true
           }
-          if (!held) {
+          compose(
+            held
+              ? { ...mutation, turnScope: held.turnScope ?? mutation.turnScope, linkage: undefined }
+              : mutation
+          )
+        }
+        await yieldTurn()
+      }
+      for (const [key, { mutation, saved }] of desired) {
+        check()
+        if (mutation.kind === 'tombstone') {
+          if (saved) {
+            batch.expectItem(key, { canonicalItemId: key, revision: saved.revision })
             batch.push(mutation)
             written.push(key)
-          } else if (mutation.kind === 'item') {
-            // Ordinary revisions retain the creating scope/position and an unstated producer.
-            batch.revise(
-              { ...mutation, linkage: undefined },
-              { canonicalItemId: canonical, revision: held.revision }
-            )
-          } else {
-            throw new Error('unowned-history-target')
           }
+        } else if (!saved) {
+          batch.push(mutation)
+          written.push(key)
+        } else if (JSON.stringify(saved.body) !== JSON.stringify(mutation.body)) {
+          batch.revise(mutation, { canonicalItemId: key, revision: saved.revision })
+          written.push(key)
         }
         await yieldTurn()
       }
@@ -190,11 +240,27 @@ function journalView(
       return turnKeys.has(item.itemId) && turn?.userItemId ? [turn.userItemId] : []
     })
   )
+  const dividerKeys = new Set(
+    candidates.map(({ source }) =>
+      agentJournalItemKey({
+        provider: 'legacy',
+        agent: scope.agent,
+        sessionId: scope.sessionId,
+        recordId: continuedOutsideRecordId(source.turn)
+      })
+    )
+  )
   const items = new Map(
     all
       .filter((item) => {
         const id = parseAgentJournalItemKey(item.itemId)
         return (
+          (dividerKeys.has(item.itemId) &&
+            item.turnScope?.kind === 'thread' &&
+            item.body.kind === 'status' &&
+            (item.body.presentation === 'continued-outside' ||
+              item.body.presentation === 'continued-outside-rewound' ||
+              item.body.presentation === 'history-loaded')) ||
           turnKeys.has(item.itemId) ||
           userKeys.has(item.itemId) ||
           (item.turnScope?.kind === 'turn' && turnKeys.has(item.turnScope.turnItemId)) ||

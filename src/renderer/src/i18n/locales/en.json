@@ -693,7 +693,7 @@
       },
       "userAgent": {
         "title": "Browser identity",
-        "description": "Choose the user agent for every browser profile and page. Native mode disables Google sign-in. Changes take effect after a restart.",
+        "description": "Choose the user agent for every browser profile and page. Changes take effect after a restart.",
         "remoteUnsupported": "Manage browser identity on the remote host with the Orca CLI.",
         "loading": "Loading…",
         "resetRequired": "Identity data must be reset explicitly before it can be changed.",
@@ -701,7 +701,7 @@
         "optionClean": "Cleaned",
         "optionCleanTooltip": "Removes Orca and Electron tokens to match imported Chrome sessions.",
         "optionNative": "Native",
-        "optionNativeTooltip": "Keeps Electron's built-in identity for sites that reject the cleaned identity. Google sign-in is unavailable in Native mode.",
+        "optionNativeTooltip": "Keeps Electron's built-in identity for sites that reject the cleaned identity.",
         "restartRequired": "Restart required",
         "unavailable": "Browser identity is unavailable."
       },
@@ -2844,6 +2844,7 @@
         "8c967b4d15": "Later"
       },
       "TaskPage": {
+        "gitlabLoadFailed": "Could not load GitLab work items. Refresh to try again.",
         "ff69a30681": "Cancel",
         "8ff6fdc368": "Creating…",
         "919a20dd5b": "Enter {{value0}}",
@@ -3731,6 +3732,17 @@
             "vmProvisioningTitle": "Provisioning VM",
             "cancelProvisioning": "Cancel",
             "vmProvisioningLogEmpty": "Waiting for recipe output…"
+          },
+          "PendingNativeChatCreation": {
+            "sendBlockedFailed": "Retry creating the worktree to send",
+            "sendBlockedHeld": "Sends when the worktree is ready"
+          },
+          "WorktreeSetupSteps": {
+            "prepare": "Prepare workspace",
+            "fetch": "Fetch base branch",
+            "create": "Create worktree",
+            "setup": "Set up workspace",
+            "startAgent": "Start {{agent}}"
           }
         }
       },
@@ -11978,8 +11990,7 @@
         "PluginInstallDialog": {
           "localRequired": "Enter the plugin folder path.",
           "gitUrlRequired": "Enter a repository URL.",
-          "gitUrlInvalid": "Use an HTTPS or SSH Git URL.",
-          "gitRefRequired": "Add a #tag or #commit, like #v0.1.0.",
+          "gitUrlInvalid": "Use a repository link like https://github.com/owner/repo, owner/repo, or an SSH URL.",
           "title": "Install plugin",
           "description": "Nothing runs until you enable it.",
           "source": "Install source",
@@ -11989,12 +12000,23 @@
           "localPlaceholder": "Path to a plugin folder",
           "localHelp": "The folder with orca-plugin.json",
           "gitLabel": "Repository URL",
-          "gitPlaceholder": "https://git.example/acme/orca-notes#v0.1.0",
-          "gitHelp": "End with #tag or #commit to pin a version",
+          "gitPlaceholder": "https://github.com/acme/orca-notes",
+          "gitHelp": "Paste a repository, release, or tag link. Without #tag or #commit, Orca uses the latest version tag.",
           "cancel": "Cancel",
           "installing": "Installing…",
           "install": "Install",
-          "installFailed": "Plugin installation failed. Check the source and try again."
+          "installFailed": "Plugin installation failed. Check the source and try again.",
+          "checking": "Checking…",
+          "continue": "Continue",
+          "gitUrlCredentials": "Remove the username or token from the URL. Orca uses your Git sign-in.",
+          "gitRefInvalid": "The version after # isn't a valid tag, branch, or commit name.",
+          "gitRefNotFound": "This repository has no tag or branch named {{value0}}.",
+          "gitUnreachable": "Couldn't read this repository. Check the URL and that your Git account can access it.",
+          "resolvedLatestTag": "Installs {{value0}}, the latest version, at commit {{value1}}.",
+          "resolvedTag": "Installs {{value0}} at commit {{value1}}.",
+          "resolvedBranch": "Installs branch {{value0}} as it is now, at commit {{value1}}.",
+          "resolvedCommit": "Installs commit {{value0}}.",
+          "resolvedDefaultBranch": "No version tag found, so this installs the latest commit, {{value0}}."
         },
         "PluginKeybindingConsentPreview": {
           "worktree": "Only in a workspace"
@@ -12107,7 +12129,8 @@
           "invalidManifest": "orca-plugin.json is invalid. Fix it, then refresh plugins.",
           "installedManifestUnloadable": "This version can't load in this Orca. Update or reinstall it.",
           "invalidArtifact": "A worker or panel file is missing or unsafe. Fix it, then refresh.",
-          "consentChanged": "This plugin changed while you were reviewing it. Review it again."
+          "consentChanged": "This plugin changed while you were reviewing it. Review it again.",
+          "installGitMoved": "The repository changed after Orca checked it. Try again."
         },
         "plugins": {
           "search": {
@@ -13218,7 +13241,9 @@
           "license": "License",
           "whatsNew": "What’s new",
           "hashCopied": "Content hash copied",
-          "hashCopyFailed": "Couldn't copy the hash."
+          "hashCopyFailed": "Couldn't copy the hash.",
+          "readme": "Read the README on {{value0}}",
+          "installs": "Installs"
         },
         "PluginListEmptyStates": {
           "noFilterMatches": "No plugins match these filters",
@@ -15326,29 +15351,25 @@
         },
         "slides": {
           "HomeSlide": {
-            "a7d9e2c44d": "7d",
-            "a3d5476811": "5h",
-            "8a350a4784": "Account usage",
-            "e27fdaee51": "New Workspace",
-            "4405f3c440": "Pair Desktop",
-            "0b00c98506": "Quick Actions",
-            "0bad5b07c8": "GitHub and Linear",
-            "d047197480": "GitHub · Linear",
             "a4c3f7b7aa": "Tasks",
-            "d33d7a9c29": "orca  ·  feat/mobile-page",
-            "25d6e8a491": "feat/mobile-page",
-            "c791677f2f": "Resume",
             "cf3f98fa3f": "Disconnected",
-            "091355da3d": "M1 Mini · home",
-            "0bc1881bc4": "Connected · 40 worktrees · 5 active",
             "19c212e25e": "MacBook Pro",
             "2f1a1d10c4": "Desktops",
-            "156db8a68a": "PRs created",
-            "4a40af029b": "Agent time",
-            "00a6903322": "Agents spawned",
-            "c0e2e9dcd9": "Welcome back",
             "af761a0c0d": "Settings",
-            "5d94e8ddcc": "Orca"
+            "5d94e8ddcc": "Orca",
+            "dc1f3f5535": "Jump back in",
+            "c2a0215163": "Waiting for input",
+            "0c14dac908": "2m",
+            "77c0dae863": "Done",
+            "3166f865af": "14m",
+            "609517273b": "Working",
+            "005afbad3d": "now",
+            "e986b282af": "Last opened",
+            "8a3ebdbdac": "1h",
+            "04a94cadee": "40 worktrees · 5 active",
+            "b5308d5e2c": "M1 Mini",
+            "aefd110ea5": "Pair a desktop",
+            "d08ee9c466": "New workspace"
           },
           "TerminalSlide": {
             "0bb39f8fe6": "Send",
@@ -17849,7 +17870,8 @@
         },
         "capturedOwner": {
           "orphan": "This automation has no host to run on. Delete it, or re-add the host it belongs to.",
-          "unfenced": "Orca on this host needs an update before you can view run history or manage this automation. Scheduled runs may still continue on the host."
+          "unfenced": "Orca on this host needs an update before you can view run history or manage this automation. Scheduled runs may still continue on the host.",
+          "hostReselection": "Edit the automation and reselect its host before running it."
         },
         "hostStatus": {
           "authority": {
@@ -18027,6 +18049,9 @@
         "hostSummary": {
           "partialFailureOfHosts_one": "{{failed}} of {{count}} host could not be loaded",
           "partialFailureOfHosts_other": "{{failed}} of {{count}} hosts could not be loaded"
+        },
+        "automationTargetAvailability": {
+          "hostMismatch": "The saved run host no longer matches this project setup."
         }
       },
       "agent": {
@@ -18942,6 +18967,9 @@
           "PluginsSectionDescription": {
             "openWith": "Open with (when focus is not in an editable field)"
           }
+        },
+        "pluginInstallCount": {
+          "installs": "{{value0}} installs"
         }
       }
     },
@@ -19358,7 +19386,10 @@
         "orcaStopCrash": "Orca on {{machine}} stopped unexpectedly while this response was in progress.",
         "orcaStopRemote": "Orca on {{machine}} stopped while this response was in progress.",
         "orcaStopCanContinue": "You can continue in this conversation.",
-        "orcaStopUnnamedServer": "the remote server"
+        "orcaStopUnnamedServer": "the remote server",
+        "permissionDenied": "{{agent}} denied permission. View details.",
+        "safetyReview": "{{agent}} reported a safety review warning. View details.",
+        "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes)."
       },
       "composer": {
         "send": "Send",

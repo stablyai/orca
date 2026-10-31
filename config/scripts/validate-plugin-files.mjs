@@ -7,7 +7,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
-import { loadPluginSchemaModule } from './plugin-schema-module-loader.mjs'
+import { loadPluginSchemaModule, REPO_ROOT } from './plugin-schema-module-loader.mjs'
 
 const { validatePluginFile, pluginManifestWarnings } = loadPluginSchemaModule(
   'installation/plugin-file-validation.ts'
@@ -29,6 +29,23 @@ const { catalogImagesFromManifest } = loadPluginSchemaModule(
 const { strictPluginArtifactErrors } = loadPluginSchemaModule(
   'authoring/plugin-strict-artifact-checks.ts'
 )
+
+const { englishSourceLookup } = loadPluginSchemaModule(
+  'languages/plugin-translation-string-policy.ts'
+)
+let englishSource = null
+// Why Orca's English: pack strings are capped relative to the text they translate.
+function englishLookup() {
+  englishSource ??= englishSourceLookup(
+    JSON.parse(
+      readFileSync(
+        path.join(REPO_ROOT, 'src', 'renderer', 'src', 'i18n', 'locales', 'en.json'),
+        'utf8'
+      )
+    )
+  )
+  return englishSource
+}
 
 function readPluginText(pluginDir) {
   return (manifestPath) => {
@@ -150,7 +167,7 @@ for (const target of targets) {
     const errors = validatePluginFile(path.basename(file), raw, readCatalogFile)
     if (errors.length === 0 && path.basename(file) === 'orca-plugin.json') {
       const { manifest } = parsePluginManifest(raw)
-      errors.push(...strictPluginArtifactErrors(manifest, readPluginText(root)))
+      errors.push(...strictPluginArtifactErrors(manifest, readPluginText(root), englishLookup()))
     }
     for (const error of errors) {
       console.error(`${file}: ${error}`)

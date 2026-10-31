@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { createEditorStore } from './editor-slice-test-harness'
 import type { OpenFile } from './editor'
 import { isClientLocalReadOnlyTab } from '@/lib/local-file-access'
+import { captureWorktreeOperationGenerationSnapshot } from '@/lib/worktree-operation-generation'
+import type { EditorFileOperationProvenance } from '@/lib/editor-file-operation-owner'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 vi.mock('@/runtime/close-mirrored-editor-tab', () => ({
@@ -28,6 +30,38 @@ function grantedSourceTab(grantId: string): OpenFile {
 }
 
 describe('markdown preview read authority (#31034)', () => {
+  it('retains an existing preview acquisition except for an explicit external SSH refresh', () => {
+    const store = createEditorStore()
+    const proof = (target: string): EditorFileOperationProvenance => ({
+      ownershipProjection: 'explicit',
+      generation: captureWorktreeOperationGenerationSnapshot(
+        { executionHostId: 'runtime:env-1', runtimeEnvironmentId: 'env-1' },
+        { endpoint: { kind: 'environment', environmentId: 'env-1' }, at: `ssh:${target}` }
+      )
+    })
+    const first = proof('box')
+    const incoming = proof('other')
+    store.setState({ openFiles: [{ ...grantedSourceTab('grant-1'), operationProvenance: first }] })
+    store.getState().openMarkdownPreview(PREVIEW_INPUT, { sourceFileId: 'brief-source' })
+    store
+      .getState()
+      .openMarkdownPreview(
+        { ...PREVIEW_INPUT, operationProvenance: incoming },
+        { sourceFileId: 'brief-source' }
+      )
+    expect(store.getState().openFiles.at(-1)?.operationProvenance).toBe(first)
+    store
+      .getState()
+      .openMarkdownPreview(
+        { ...PREVIEW_INPUT, externalSshTargetId: 'other', operationProvenance: incoming },
+        { sourceFileId: 'brief-source' }
+      )
+    expect(store.getState().openFiles.at(-1)).toMatchObject({
+      operationProvenance: incoming,
+      externalSshTargetId: 'other',
+      terminalArtifactGrantId: 'grant-1'
+    })
+  })
   it('reads a terminal-opened host file with its source tab grant', () => {
     const store = createEditorStore()
     store.setState({ openFiles: [grantedSourceTab('grant-1')] })
