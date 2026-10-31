@@ -442,7 +442,7 @@
       },
       "userAgent": {
         "title": "Identité du navigateur",
-        "description": "Choisissez l'agent utilisateur pour chaque profil et page de navigateur. Le mode natif désactive la connexion à Google. Les modifications prennent effet après un redémarrage.",
+        "description": "Choisissez l'agent utilisateur pour chaque profil et page de navigateur. Les modifications prennent effet après un redémarrage.",
         "remoteUnsupported": "Gérez l'identité du navigateur sur l'hôte distant avec la CLI Orca.",
         "loading": "Chargement…",
         "resetRequired": "Les données d'identité doivent être réinitialisées explicitement avant de pouvoir être modifiées.",
@@ -450,7 +450,7 @@
         "optionClean": "Nettoyé",
         "optionCleanTooltip": "Supprime les jetons Orca et Electron pour correspondre aux sessions Chrome importées.",
         "optionNative": "Indigène",
-        "optionNativeTooltip": "Conserve l'identité intégrée d'Electron pour les sites qui rejettent l'identité nettoyée. La connexion Google n'est pas disponible en mode natif.",
+        "optionNativeTooltip": "Conserve l'identité intégrée d'Electron pour les sites qui rejettent l'identité nettoyée.",
         "restartRequired": "Redémarrage requis",
         "unavailable": "L'identité du navigateur n'est pas disponible."
       },
@@ -11782,8 +11782,7 @@
         "PluginInstallDialog": {
           "localRequired": "Saisissez le chemin du dossier du plugin.",
           "gitUrlRequired": "Saisissez une URL de dépôt.",
-          "gitUrlInvalid": "Utilisez une URL Git HTTPS ou SSH.",
-          "gitRefRequired": "Ajoutez un #tag ou #commit, par exemple #v0.1.0.",
+          "gitUrlInvalid": "Utilisez un lien de dépôt comme https://github.com/owner/repo, owner/repo ou une URL SSH.",
           "title": "Installer le plugin",
           "description": "Rien ne s'exécute avant que vous l'activiez.",
           "source": "Source d'installation",
@@ -11793,12 +11792,23 @@
           "localPlaceholder": "Chemin d'un dossier de plugin",
           "localHelp": "Le dossier contenant orca-plugin.json",
           "gitLabel": "URL du dépôt",
-          "gitPlaceholder": "https://git.example/acme/orca-notes#v0.1.0",
-          "gitHelp": "Terminez par #tag ou #commit pour figer une version",
+          "gitPlaceholder": "https://github.com/acme/orca-notes",
+          "gitHelp": "Collez un lien de dépôt, de version ou de tag. Sans #tag ni #commit, Orca utilise le tag de version le plus récent.",
           "cancel": "Annuler",
           "installing": "Installation…",
           "install": "Installer",
-          "installFailed": "Échec de l'installation du plugin. Vérifiez la source et réessayez."
+          "installFailed": "Échec de l'installation du plugin. Vérifiez la source et réessayez.",
+          "checking": "Vérification…",
+          "continue": "Continuer",
+          "gitUrlCredentials": "Retirez le nom d'utilisateur ou le jeton de l'URL. Orca utilise votre connexion Git.",
+          "gitRefInvalid": "La version après # n'est pas un nom de tag, de branche ou de commit valide.",
+          "gitRefNotFound": "Ce dépôt n'a aucun tag ni aucune branche nommé {{value0}}.",
+          "gitUnreachable": "Impossible de lire ce dépôt. Vérifiez l'URL et que votre compte Git y a accès.",
+          "resolvedLatestTag": "Installe {{value0}}, la version la plus récente, au commit {{value1}}.",
+          "resolvedTag": "Installe {{value0}} au commit {{value1}}.",
+          "resolvedBranch": "Installe la branche {{value0}} dans son état actuel, au commit {{value1}}.",
+          "resolvedCommit": "Installe le commit {{value0}}.",
+          "resolvedDefaultBranch": "Aucun tag de version trouvé : le commit le plus récent, {{value0}}, sera installé."
         },
         "PluginKeybindingConsentPreview": {
           "worktree": "Uniquement dans un espace de travail"
@@ -11968,7 +11978,8 @@
           "invalidManifest": "orca-plugin.json est non valide. Corrigez-le, puis actualisez les plugins.",
           "installedManifestUnloadable": "Cette version ne peut pas se charger dans cet Orca. Mettez-la à jour ou réinstallez-la.",
           "invalidArtifact": "Un fichier de worker ou de panneau est manquant ou dangereux. Corrigez-le, puis actualisez.",
-          "consentChanged": "Ce plugin a changé pendant votre examen. Examinez-le à nouveau."
+          "consentChanged": "Ce plugin a changé pendant votre examen. Examinez-le à nouveau.",
+          "installGitMoved": "Le dépôt a changé après la vérification d'Orca. Réessayez."
         },
         "plugins": {
           "search": {
@@ -13050,7 +13061,9 @@
           "license": "Licence",
           "whatsNew": "Nouveautés",
           "hashCopied": "Empreinte du contenu copiée",
-          "hashCopyFailed": "Impossible de copier l’empreinte."
+          "hashCopyFailed": "Impossible de copier l’empreinte.",
+          "readme": "Lire le README sur {{value0}}",
+          "installs": "Installations"
         },
         "PluginListEmptyStates": {
           "noFilterMatches": "Aucun plugin ne correspond à ces filtres",
@@ -15162,27 +15175,10 @@
         },
         "slides": {
           "HomeSlide": {
-            "a7d9e2c44d": "7 j",
-            "a3d5476811": "5 h",
-            "8a350a4784": "Utilisation du compte",
-            "e27fdaee51": "Nouvel espace de travail",
-            "4405f3c440": "Appairer l'ordinateur",
-            "0b00c98506": "Actions rapides",
-            "0bad5b07c8": "GitHub et Linear",
-            "d047197480": "GitHub · Linear",
             "a4c3f7b7aa": "Tâches",
-            "d33d7a9c29": "orca  ·  feat/mobile-page",
-            "25d6e8a491": "feat/mobile-page",
-            "c791677f2f": "Reprendre",
             "cf3f98fa3f": "Déconnecté",
-            "091355da3d": "M1 Mini · accueil",
-            "0bc1881bc4": "Connecté · 40 worktrees · 5 actifs",
             "19c212e25e": "MacBook Pro",
             "2f1a1d10c4": "Ordinateurs",
-            "156db8a68a": "PRs créées",
-            "4a40af029b": "Temps agent",
-            "00a6903322": "Agents lancés",
-            "c0e2e9dcd9": "Bon retour",
             "af761a0c0d": "Paramètres",
             "5d94e8ddcc": "Orca"
           },
@@ -17685,7 +17681,8 @@
         },
         "capturedOwner": {
           "orphan": "Cette automatisation n'a pas d'hôte sur lequel s'exécuter. Supprimez-le ou ajoutez à nouveau l'hôte auquel il appartient.",
-          "unfenced": "Orca sur cet hôte a besoin d'une mise à jour avant de pouvoir afficher l'historique d'exécution ou gérer cette automatisation. Les exécutions planifiées peuvent toujours se poursuivre sur l'hôte."
+          "unfenced": "Orca sur cet hôte a besoin d'une mise à jour avant de pouvoir afficher l'historique d'exécution ou gérer cette automatisation. Les exécutions planifiées peuvent toujours se poursuivre sur l'hôte.",
+          "hostReselection": "Modifiez l’automatisation et sélectionnez à nouveau son hôte avant de l’exécuter."
         },
         "hostStatus": {
           "authority": {
@@ -17870,6 +17867,9 @@
           "partialFailureOfHosts_one": "Échec du chargement de {{failed}} sur {{count}} hôte",
           "partialFailureOfHosts_other": "Échec du chargement de {{failed}} sur {{count}} hôtes",
           "partialFailureOfHosts_many": "Échec du chargement de {{failed}} sur {{count}} hôtes"
+        },
+        "automationTargetAvailability": {
+          "hostMismatch": "L’hôte d’exécution enregistré ne correspond plus à cette configuration du projet."
         }
       },
       "agent": {
@@ -18844,6 +18844,9 @@
           "PluginsSectionDescription": {
             "openWith": "Ouvrir avec (lorsqu’aucun champ modifiable n’a le focus)"
           }
+        },
+        "pluginInstallCount": {
+          "installs": "{{value0}} installations"
         }
       }
     },
@@ -19548,7 +19551,10 @@
         "orcaStopCrash": "Orca sur {{machine}} s'est arrêté de manière inattendue pendant que cette réponse était en cours.",
         "orcaStopRemote": "Orca sur {{machine}} s'est arrêté pendant que cette réponse était en cours.",
         "orcaStopCanContinue": "Vous pouvez continuer dans cette conversation.",
-        "orcaStopUnnamedServer": "le serveur distant"
+        "orcaStopUnnamedServer": "le serveur distant",
+        "permissionDenied": "{{agent}} a refusé la permission. Voir les détails.",
+        "safetyReview": "{{agent}} a signalé un avertissement de sécurité. Voir les détails.",
+        "truncatedResponse": "Réponse du fournisseur tronquée (taille d’origine : {{bytes}} octets)."
       },
       "providerFrame": {
         "byteCount_one": "{{count}} octet",

@@ -9,20 +9,23 @@ import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { useAppStore } from '@/store'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import { isRepoSearchQueryTooLarge, searchRepos } from '@/lib/repo-search'
 import { cn } from '@/lib/utils'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { projectHostCountLabel } from '@/components/project-host-count-label'
 import type { Repo } from '../../../../shared/repo-types'
 import {
+  filterAutomationProjectGroups,
   getAutomationProjectGroupForRepo,
   getAutomationProjectGroups,
+  getAutomationProjectRepoDetail,
+  hasMultipleAutomationProjectHosts,
   getAutomationProjectSelectedSource
 } from './automation-project-groups'
 
 type AutomationProjectComboboxProps = {
   repos: readonly Repo[]
+  recordedProject?: { id: string; label: string }
   value: string
   onValueChange: (repoId: string) => void
   placeholder?: string
@@ -31,24 +34,9 @@ type AutomationProjectComboboxProps = {
   allowAddProject?: boolean
 }
 
-function getRepoDetail(repo: Repo, hostLabel?: string | null): string {
-  const label = hostLabel?.trim()
-  return label ? `${label} · ${repo.path}` : repo.path
-}
-
-function hasMultipleHosts(repos: readonly Repo[]): boolean {
-  const hostIds = new Set<string>()
-  for (const repo of repos) {
-    hostIds.add(getRepoExecutionHostId(repo))
-    if (hostIds.size > 1) {
-      return true
-    }
-  }
-  return false
-}
-
 export default function AutomationProjectCombobox({
   repos,
+  recordedProject,
   value,
   onValueChange,
   placeholder = 'Select project',
@@ -82,20 +70,18 @@ export default function AutomationProjectCombobox({
     () => getAutomationProjectGroupForRepo(groups, value),
     [groups, value]
   )
+  const recordedChoice =
+    recordedProject && !repos.some((repo) => repo.id === recordedProject.id)
+      ? recordedProject
+      : null
   const selectedRepo = selectedGroup
     ? getAutomationProjectSelectedSource(selectedGroup, value)
     : null
-  const showHostLabels = useMemo(() => hasMultipleHosts(repos), [repos])
-  const filteredGroups = useMemo(() => {
-    if (isRepoSearchQueryTooLarge(query)) {
-      return []
-    }
-    const trimmed = query.trim()
-    if (!trimmed) {
-      return groups
-    }
-    return groups.filter((group) => searchRepos(group.sources, trimmed).length > 0)
-  }, [groups, query])
+  const showHostLabels = useMemo(() => hasMultipleAutomationProjectHosts(repos), [repos])
+  const filteredGroups = useMemo(
+    () => filterAutomationProjectGroups(groups, query),
+    [groups, query]
+  )
 
   const cancelFocusFrame = useCallback((): void => {
     if (focusFrameRef.current !== null) {
@@ -220,7 +206,9 @@ export default function AutomationProjectCombobox({
             triggerClassName
           )}
         >
-          {selectedRepo ? (
+          {recordedChoice?.id === value ? (
+            recordedChoice.label
+          ) : selectedRepo ? (
             <span className="inline-flex min-w-0 items-center gap-1.5">
               <RepoBadgeLabel
                 name={selectedRepo.displayName}
@@ -253,7 +241,17 @@ export default function AutomationProjectCombobox({
             onValueChange={setQuery}
           />
           <CommandList>
-            {filteredGroups.length === 0 ? (
+            {recordedChoice ? (
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-accent hover:text-accent-foreground"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => handleSelect(recordedChoice.id)}
+              >
+                {recordedChoice.label}
+              </button>
+            ) : null}
+            {filteredGroups.length === 0 && !recordedChoice ? (
               <div className="px-3 py-6 text-center text-xs text-muted-foreground">
                 {translate(
                   'auto.components.automations.AutomationProjectCombobox.empty',
@@ -269,7 +267,7 @@ export default function AutomationProjectCombobox({
               const hostLabel = showHostLabels ? getRepoHostLabel?.(selectedSource) : null
               const detail = hasHostMenu
                 ? `${hostLabel?.trim() || getRepoExecutionHostId(selectedSource)} · ${projectHostCountLabel(hostCount)}`
-                : getRepoDetail(selectedSource, hostLabel)
+                : getAutomationProjectRepoDetail(selectedSource, hostLabel)
               return (
                 <div
                   key={group.projectKey}

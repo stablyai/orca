@@ -116,13 +116,13 @@ export const BRIDGED_PARITY_EXCLUSIONS: Readonly<Partial<Record<BridgedParityCla
 
 // Pin strict History verdicts and unchanged legacy counts in both directions.
 export const BRIDGED_PARITY_BASELINE: Readonly<Record<BridgedParityClass | 'identical', number>> = {
-  identical: 393,
+  identical: 386,
   'reply-meta-required': 0,
-  'result-absent-settlement': 342,
+  'result-absent-settlement': 337,
   'result-absent-observation': 3,
   'result-absent-stream-release': 6,
   'params-undefined': 27,
-  'write-ordinal': 14,
+  'write-ordinal': 13,
   unclassified: 0
 }
 
@@ -176,8 +176,7 @@ export const BRIDGED_PARITY_MEMBERS: Readonly<
     'matrix-live-worktree-name-runtime.clientevents.subscribe-2-1',
     'matrix-live-worktree-name-worktree.show-1',
     'matrix-live-worktree-name-worktree.show-2',
-    'matrix-live-worktree-name-worktree.show-3',
-    'settings-home-coalesced'
+    'matrix-live-worktree-name-worktree.show-3'
   ]
 }
 

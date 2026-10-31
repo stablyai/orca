@@ -1,3 +1,4 @@
+import { isRepoSearchQueryTooLarge, searchRepos } from '@/lib/repo-search'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { ProjectGroupingSettings } from '../../../../shared/project-grouping'
 import {
@@ -69,4 +70,34 @@ function compareAutomationProjectSource(a: Repo, b: Repo): number {
     return aLocal ? -1 : 1
   }
   return (a.addedAt ?? 0) - (b.addedAt ?? 0) || a.id.localeCompare(b.id)
+}
+
+export function getAutomationProjectRepoDetail(repo: Repo, hostLabel?: string | null): string {
+  const label = hostLabel?.trim()
+  return label ? `${label} · ${repo.path}` : repo.path
+}
+
+export function hasMultipleAutomationProjectHosts(repos: readonly Repo[]): boolean {
+  const hostIds = new Set<string>()
+  for (const repo of repos) {
+    hostIds.add(getRepoExecutionHostId(repo))
+    if (hostIds.size > 1) {
+      return true
+    }
+  }
+  return false
+}
+
+export function filterAutomationProjectGroups(
+  groups: AutomationProjectGroup[],
+  query: string
+): AutomationProjectGroup[] {
+  if (isRepoSearchQueryTooLarge(query)) {
+    return []
+  }
+  const trimmed = query.trim()
+  if (!trimmed) {
+    return groups
+  }
+  return groups.filter((group) => searchRepos(group.sources, trimmed).length > 0)
 }

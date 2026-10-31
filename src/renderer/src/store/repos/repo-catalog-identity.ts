@@ -3,7 +3,7 @@ import type { ProjectGroupingSettings } from '../../../../shared/project-groupin
 import type { Repo } from '../../../../shared/repo-types'
 import { applyInheritedProjectGroups } from '../../../../shared/project-group-inheritance'
 import { reconcileFetchedRepos } from '../slices/repo-identity-reconcile'
-import { getRepoHostIdentity } from '../slices/repo-host-identity'
+import { getRepoRowIdentity } from '../slices/repo-host-identity'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { RepoSlice } from './repo-state'
 import { mergeFetchedProjectCompatibilityForHost } from '../../../../shared/project-compatibility-host-merge'
@@ -23,14 +23,14 @@ export function mergeFetchedReposForHost(
     settings,
     grouping
   )
-  const fetchedIdentities = new Set(fetchedWithProjectGroups.map(getRepoHostIdentity))
+  const fetchedIdentities = new Set(fetchedWithProjectGroups.map(getRepoRowIdentity))
   const preserved = previous.filter((repo) => {
     const existingHostId = getRepoExecutionHostId(repo)
-    return existingHostId !== hostId || fetchedIdentities.has(getRepoHostIdentity(repo))
+    return existingHostId !== hostId || fetchedIdentities.has(getRepoRowIdentity(repo))
   })
   return reconcileFetchedRepos(
     previous,
-    mergeByIdentity(preserved, fetchedWithProjectGroups, getRepoHostIdentity)
+    mergeByIdentity(preserved, fetchedWithProjectGroups, getRepoRowIdentity)
   )
 }
 
