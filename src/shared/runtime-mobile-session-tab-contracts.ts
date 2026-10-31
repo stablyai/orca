@@ -106,6 +106,8 @@ export type RuntimeMobileSessionBrowserTab = {
 }
 
 export type RuntimeMobileSessionAgentTab = {
+  sideChatOf?: string
+  sideChatSupported?: boolean
   type: 'agent-session'
   id: string
   title: string

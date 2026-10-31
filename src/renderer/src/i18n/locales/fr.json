@@ -18973,6 +18973,12 @@
   },
   "components": {
     "native-chat": {
+      "sideChat": {
+        "new": "Nouvelle discussion annexe",
+        "badge": "btw",
+        "failed": "Impossible d’ouvrir une conversation parallèle.",
+        "title": "Discussion annexe"
+      },
       "imagePreview": {
         "fileActions": "Actions sur le fichier",
         "linkActions": "Actions sur le lien"
@@ -20406,7 +20412,9 @@
         "queueSearchSteer": "orienter",
         "shellEnvSearchVariables": "variables d'environnement",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "proxy"
+        "shellEnvSearchProxy": "proxy",
+        "sideChatPaneTitle": "Regrouper les discussions annexes dans un volet",
+        "sideChatPaneCopy": "Réunit les discussions annexes de cet espace de travail dans un volet partagé. Si désactivé, les nouvelles s’ouvrent à côté de leur onglet source ; les volets existants sont conservés."
       }
     },
     "agentChildRow": {

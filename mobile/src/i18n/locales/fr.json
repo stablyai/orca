@@ -2430,6 +2430,18 @@
       "noEnabledAgent": "Aucun agent IA activé n'a été détecté sur l'hôte de cet espace de travail.",
       "savedAgentUnavailable": "L'agent enregistré pour cette action n'est pas disponible sur l'hôte de cet espace de travail."
     },
+    "sideChat": {
+      "new": "Nouvelle discussion annexe",
+      "readOnly": "Lecture seule",
+      "readOnlyDescription": "Utilise un bac à sable en lecture seule sans élévation des permissions",
+      "inheritPermissions": "Utiliser les permissions de la discussion principale",
+      "inheritDescription": "Démarre avec les permissions de la discussion principale ; les modifications ultérieures sont indépendantes",
+      "badge": "btw",
+      "failed": "Impossible d’ouvrir une discussion parallèle.",
+      "unsupportedHost": "Cet hôte ne peut pas ouvrir de discussion parallèle.",
+      "unavailable": "Cette discussion n’est actuellement pas disponible pour ouvrir une discussion parallèle.",
+      "updateHostForReadOnly": "Mettez à jour Orca sur cet hôte pour ouvrir une discussion parallèle en lecture seule."
+    },
     "structuredComposerCommand": {
       "operationUnconfirmed": "L'opération sur la conversation n'a pas été confirmée.",
       "removeAttachments": "Retirez les pièces jointes avant d'utiliser une commande de session de chat."

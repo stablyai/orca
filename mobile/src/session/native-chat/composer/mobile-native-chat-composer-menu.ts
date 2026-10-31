@@ -26,6 +26,7 @@ import { getMobileNativeChatCommands } from '../mobile-native-chat-send-classifi
 export const MENU_ROWS_PER_GROUP = 10
 
 export type MobileComposerStructuredCatalog = {
+  sideChat?: boolean
   /** What the session reported for its `/` menu; undefined until read or on an older host. */
   reported: readonly AgentSessionSlashCommand[] | undefined
   conversationCommands: readonly AgentSessionConversationCommand[]
@@ -56,7 +57,12 @@ export function mobileComposerCatalog({
   }
   const reported = structured?.reported
   const commands = structured
-    ? structuredSessionSlashCommands(agent, structured.conversationCommands, reported)
+    ? structuredSessionSlashCommands(
+        agent,
+        structured.conversationCommands,
+        reported,
+        structured.sideChat
+      )
     : getMobileNativeChatCommands(agent)
   return {
     profile: getNativeChatAgentProfile(agent),

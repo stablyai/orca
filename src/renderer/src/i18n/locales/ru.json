@@ -20442,6 +20442,9 @@
         "effortPickerFailed": "Не удалось открыть меню выбора глубины рассуждений.",
         "modelApplyFailed": "Не удалось применить модель {{value}}.",
         "effortApplyFailed": "Не удалось применить глубину рассуждений {{value}}."
+      },
+      "sideChat": {
+        "title": "Боковой чат"
       }
     },
     "tab": {
@@ -20856,7 +20859,9 @@
         "queueSearchSteer": "направить агента",
         "shellEnvSearchVariables": "переменные окружения",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "прокси"
+        "shellEnvSearchProxy": "прокси",
+        "sideChatPaneTitle": "Собирать боковые чаты в одной панели",
+        "sideChatPaneCopy": "Собирает боковые чаты этой рабочей области в отдельной панели. Если выключено, новые чаты открываются рядом с исходной вкладкой; существующие панели сохраняются."
       }
     },
     "agentChildRow": {

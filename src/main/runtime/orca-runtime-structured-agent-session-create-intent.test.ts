@@ -1,3 +1,11 @@
+import {
+  createRestTestRig,
+  REST_TEST_CALLER
+} from '../native-chat/agent-session-wire/structured-agent-session-rest-test-rig'
+import {
+  hostTestAttachParams,
+  HOST_TEST_SESSION
+} from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import type { AgentLaunchChoices } from '../../shared/agent-launch-choices'
 import { prepareStructuredAgentSessionCreateForWorktree } from './rpc/methods/structured-agent-session-create'
 import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
@@ -60,6 +68,54 @@ function createCodexIntentRuntime(
 }
 
 describe('structured Codex folder trust', () => {
+  it.each([true, false])(
+    'keeps floating side chats on their source pin, available=%s',
+    async (pinned) => {
+      const rig = await createRestTestRig({ idleSweep: { intervalMs: 60_000 } })
+      try {
+        const location = {
+          ...hostTestAttachParams(null).location,
+          workspaceId: FLOATING_TERMINAL_WORKTREE_ID
+        }
+        expect(
+          (
+            await rig.host.attach(REST_TEST_CALLER, hostTestAttachParams(null, { location }), {
+              hostLaunchDirectory: '/original-folder'
+            })
+          ).ok
+        ).toBe(true)
+        if (!pinned) {
+          const getRecord = rig.store.getRecord.bind(rig.store)
+          vi.spyOn(rig.store, 'getRecord').mockImplementation((id) => {
+            const record = getRecord(id)
+            return record ? { ...record, launchDirectory: undefined } : null
+          })
+        }
+        setStructuredAgentSessionHost(rig.host)
+        const { runtime, prepareCodexStructuredLaunch } = createCodexIntentRuntime(
+          {},
+          FLOATING_TERMINAL_WORKTREE_ID,
+          '/changed-folder'
+        )
+        const resolveCurrentFolder = vi.spyOn(runtime, 'resolveRuntimeFileTarget')
+        const intent = runtime.resolveStructuredAgentSessionCreateIntent({
+          envelope: { sessionId: 'side-child', clientOperationId: 'side-operation' },
+          worktree: `id:${FLOATING_TERMINAL_WORKTREE_ID}`,
+          agent: 'codex',
+          sideChatOf: HOST_TEST_SESSION
+        })
+        await (pinned
+          ? expect(intent).resolves.toMatchObject({ hostLaunchDirectory: '/original-folder' })
+          : expect(intent).rejects.toThrow('agent_session_identity_required'))
+        expect(resolveCurrentFolder).not.toHaveBeenCalled()
+        expect(prepareCodexStructuredLaunch).not.toHaveBeenCalled()
+        expect(applyAgentWorkspaceTrust).not.toHaveBeenCalled()
+      } finally {
+        await rig.dispose()
+      }
+    }
+  )
+
   it('takes a floating chat directory from the host-resolved workspace', async () => {
     const { createIntent } = createCodexIntentRuntime(
       {},

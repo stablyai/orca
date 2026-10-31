@@ -142,6 +142,7 @@ export function buildMirroredAgentTabs(
         executionHostId,
         contentType: 'agent-session',
         agentSessionAgent: tab.agent,
+        ...(tab.sideChatOf ? { sideChatOf: tab.sideChatOf } : {}),
         // Wire title can violate its string type; fall back instead of throwing inside store patches.
         label: tab.title?.trim() || defaultAgentChatLabel(tab.agent),
         // Manual rename is client-owned; host snapshots must not null it.

@@ -2351,6 +2351,18 @@
       "noEnabledAgent": "このワークスペースホストでは有効な AI Agent が検出されませんでした。",
       "savedAgentUnavailable": "この操作用に保存された Agent は、このワークスペースホストでは利用できません。"
     },
+    "sideChat": {
+      "new": "新しいサイドチャット",
+      "readOnly": "読み取り専用",
+      "readOnlyDescription": "権限を昇格できない読み取り専用サンドボックスを使用します",
+      "inheritPermissions": "メインチャットの権限を使用",
+      "inheritDescription": "作成時はメインチャットの権限を使用し、その後は個別に変更できます",
+      "badge": "btw",
+      "failed": "サイドチャットを開けませんでした。",
+      "unsupportedHost": "このホストではサイドチャットを開けません。",
+      "unavailable": "現在、このチャットからサイドチャットを開くことはできません。",
+      "updateHostForReadOnly": "読み取り専用のサイドチャットを開くには、このホストの Orca を更新してください。"
+    },
     "structuredComposerCommand": {
       "operationUnconfirmed": "会話の操作が実行されたことを確認できませんでした。",
       "removeAttachments": "チャットセッションのコマンドを使う前に添付ファイルを削除してください。"

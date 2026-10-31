@@ -101,6 +101,15 @@ function structuredLaunchCreateOptions(state: StructuredLaunchState): {
   const { intent } = state
   const overlay = structuredLaunchOptionOverlay(state)
   const requested = structuredLaunchRequestedOptions({ ...state.selection, held: overlay })
+  if (intent.params.sideChatOf) {
+    const options = { ...requested, ...overlay }
+    holdStructuredLaunchCreatePicks(state)
+    const { permissionMode: _permissionMode, ...selection } = options
+    return {
+      ...(Object.keys(options).length ? { options } : {}),
+      ...(intent.sendSelectionSupport ? { selection } : {})
+    }
+  }
   const firstFrame = firstFrameOptionState(intent.agent, intent.target, {
     newLaunch: !intent.params.resumeFrom,
     worktree: intent.params.worktree,

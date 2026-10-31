@@ -13,6 +13,7 @@ import {
 
 export function useMobileStructuredNativeChatSendBridge(args: {
   agent: StructuredAgentId | undefined
+  sideChat?: boolean
   sessionCommands?: readonly AgentSessionSlashCommand[]
   sendStructured: (
     text: string,
@@ -36,6 +37,7 @@ export function useMobileStructuredNativeChatSendBridge(args: {
 } {
   const {
     agent,
+    sideChat = false,
     captureSendOrigin,
     clearDraftForSend,
     onSendError,
@@ -55,7 +57,12 @@ export function useMobileStructuredNativeChatSendBridge(args: {
         onSendError('Message not sent (disconnected)')
         return 'rejected'
       }
-      const isHostCommand = isStructuredAgentSessionComposerCommand(text, agent, sessionCommands)
+      const isHostCommand = isStructuredAgentSessionComposerCommand(
+        text,
+        agent,
+        sessionCommands,
+        sideChat
+      )
       const skills = readMobileNativeChatPickedSkills(origin.draftKey)
       clearDraftForSend(origin, text)
       const outcome = await sendStructured(text, images, deadline, attachments, skills)
@@ -68,6 +75,7 @@ export function useMobileStructuredNativeChatSendBridge(args: {
     },
     [
       agent,
+      sideChat,
       captureSendOrigin,
       clearDraftForSend,
       onSendError,

@@ -18753,6 +18753,12 @@
   },
   "components": {
     "native-chat": {
+      "sideChat": {
+        "new": "Nuevo chat paralelo",
+        "badge": "btw",
+        "failed": "No se pudo abrir una conversación paralela.",
+        "title": "Chat secundario"
+      },
       "imagePreview": {
         "fileActions": "Acciones de archivo",
         "linkActions": "Acciones de enlace"
@@ -20113,7 +20119,9 @@
         "queueSearchSteer": "dirigir",
         "shellEnvSearchVariables": "variables de entorno",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "proxy"
+        "shellEnvSearchProxy": "proxy",
+        "sideChatPaneTitle": "Agrupar chats secundarios en un panel",
+        "sideChatPaneCopy": "Reúne los chats secundarios de este espacio de trabajo en un panel dividido. Al desactivarlo, los nuevos se abren junto a su pestaña de origen; los paneles existentes se conservan."
       },
       "TerminalInteraction": {
         "copyTrimsGutter": "Recortar margen al copiar",

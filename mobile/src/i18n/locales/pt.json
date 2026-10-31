@@ -2430,6 +2430,18 @@
       "noEnabledAgent": "Nenhum agente de IA ativado foi detectado neste host do espaço de trabalho.",
       "savedAgentUnavailable": "O agente salvo para esta ação não está disponível neste host do espaço de trabalho."
     },
+    "sideChat": {
+      "new": "Nova conversa paralela",
+      "readOnly": "Somente leitura",
+      "readOnlyDescription": "Usa um ambiente de somente leitura sem elevação de permissões",
+      "inheritPermissions": "Usar permissões da conversa principal",
+      "inheritDescription": "Começa com as permissões da conversa principal; alterações posteriores são independentes",
+      "badge": "btw",
+      "failed": "Não foi possível abrir uma conversa paralela.",
+      "unsupportedHost": "Este host não pode abrir uma conversa paralela.",
+      "unavailable": "No momento, esta conversa não está disponível para abrir uma conversa paralela.",
+      "updateHostForReadOnly": "Atualize o Orca neste host para abrir uma conversa paralela de somente leitura."
+    },
     "structuredComposerCommand": {
       "operationUnconfirmed": "A operação na conversa não foi confirmada.",
       "removeAttachments": "Remova os anexos antes de usar um comando de sessão de chat."

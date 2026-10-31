@@ -1,4 +1,8 @@
 // Create is strict: send reserved tabId only to hosts advertising support.
+import {
+  AGENT_SESSION_SIDE_CHAT_RUNTIME_CAPABILITY,
+  AGENT_SESSION_SIDE_CHAT_READ_ONLY_CAPABILITY
+} from './agent-session-side-chat'
 export const AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY =
   'agentSession.create.tab-id.v1' as const
 // Create is strict: advertise tabPlacement before sending it; the host saves its own group/tab IDs for the paired client (L270).
@@ -34,6 +38,8 @@ export const AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY =
   'agent-session.send-selection.v1' as const
 
 export const AGENT_SESSION_CREATE_RUNTIME_CAPABILITIES = [
+  AGENT_SESSION_SIDE_CHAT_RUNTIME_CAPABILITY,
+  AGENT_SESSION_SIDE_CHAT_READ_ONLY_CAPABILITY,
   AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY,
   AGENT_SESSION_SEND_USAGE_LIMIT_CONTINUATION_RUNTIME_CAPABILITY,
   AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY,

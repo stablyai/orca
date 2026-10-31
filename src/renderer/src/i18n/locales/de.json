@@ -19774,6 +19774,9 @@
         "effortPickerFailed": "Die Auswahl des Denkaufwands konnte nicht geöffnet werden.",
         "modelApplyFailed": "Modell {{value}} konnte nicht angewendet werden.",
         "effortApplyFailed": "Denkaufwand {{value}} konnte nicht angewendet werden."
+      },
+      "sideChat": {
+        "title": "Nebenchat"
       }
     },
     "tab": {
@@ -20168,7 +20171,9 @@
         "queueSearchSteer": "Steuern",
         "shellEnvSearchVariables": "Umgebungsvariablen",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "Proxy"
+        "shellEnvSearchProxy": "Proxy",
+        "sideChatPaneTitle": "Nebenchats in einem Bereich bündeln",
+        "sideChatPaneCopy": "Nebenchats dieses Arbeitsbereichs in einem geteilten Bereich sammeln. Wenn deaktiviert, öffnen neue Nebenchats neben ihrem Ursprungstab; bestehende Bereiche bleiben erhalten."
       }
     },
     "agentChildRow": {

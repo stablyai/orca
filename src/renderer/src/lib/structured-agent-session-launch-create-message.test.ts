@@ -113,12 +113,14 @@ describe('the first message owned by create', () => {
     })
     const create = deferred<unknown>()
     mocks.call.mockReturnValue(create.promise)
-    const launch = start()
+    const skills = [{ name: 'review', path: '/picked/SKILL.md' }]
+    const launch = start('use $review', skills)
     holdStructuredAgentSessionLaunchOption(launch.sessionId, 'model', 'picked-model')
     holdStructuredAgentSessionLaunchOption(launch.sessionId, 'effort', 'high')
     await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
     const params = createParams()
-    expect(params.firstMessage?.body.blocks).toEqual([{ type: 'text', text: 'opening text' }])
+    expect(params.firstMessage?.body.blocks).toEqual([{ type: 'text', text: 'use $review' }])
+    expect(params.firstMessage?.body.skills).toEqual(skills)
     expect(params.options).toEqual({ model: 'picked-model', effort: 'high' })
     expect(params.firstMessage?.selection).toEqual({ model: 'picked-model', effort: 'high' })
     expect(params.envelope.payloadFingerprint).toBe(
@@ -289,8 +291,8 @@ describe('the first message owned by create', () => {
       }))
     })
     recordHostModelCatalogSnapshot(target, 'codex', null, list('m1'))
-    const refused = deferred<unknown>()
-    const create = deferred<unknown>()
+    const refused = Promise.withResolvers<unknown>()
+    const create = Promise.withResolvers<unknown>()
     mocks.call.mockReturnValueOnce(refused.promise).mockReturnValueOnce(create.promise)
     mocks.call.mockResolvedValue({ ok: true, value: { key: 'effort', value: 'medium' } })
     const launch = start()
@@ -334,7 +336,7 @@ describe('the first message owned by create', () => {
   })
 
   it('returns a refused create once after the new draft, with no later send', async () => {
-    const create = deferred<unknown>()
+    const create = Promise.withResolvers<unknown>()
     mocks.call.mockReturnValue(create.promise)
     const launch = start()
     const held = holdStructuredAgentSessionLaunchOption(launch.sessionId, 'model', 'gpt-5.4')!
@@ -363,7 +365,7 @@ describe('the first message owned by create', () => {
   })
 
   it('returns text at 30 seconds and a late create reply cannot send it again', async () => {
-    const create = deferred<unknown>()
+    const create = Promise.withResolvers<unknown>()
     mocks.call.mockReturnValue(create.promise)
     const launch = start()
     await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
@@ -477,7 +479,7 @@ describe('the first message owned by create', () => {
   )
 
   it('keeps the older host acquisition wait outside the send deadline', async () => {
-    const create = deferred<unknown>()
+    const create = Promise.withResolvers<unknown>()
     mocks.supports.mockResolvedValue(false)
     mocks.call.mockReturnValue(create.promise)
     const launch = start()
@@ -508,7 +510,7 @@ describe('the first message owned by create', () => {
   })
 
   it('bounds the click even if capability negotiation has not answered', async () => {
-    const support = deferred<boolean>()
+    const support = Promise.withResolvers<boolean>()
     mocks.supports.mockReturnValue(support.promise)
     mocks.call.mockImplementation(async () => created())
     const launch = start()
@@ -589,7 +591,7 @@ describe('the first message owned by create', () => {
   })
 
   it('recovers a reload by replaying the frozen create when the old row is outside history', async () => {
-    const create = deferred<unknown>()
+    const create = Promise.withResolvers<unknown>()
     mocks.call.mockReturnValue(create.promise)
     mocks.supportsMode.mockResolvedValue(false)
     const launch = startStructuredAgentLaunch('workspace-1', 'codex', {
@@ -636,7 +638,7 @@ describe('the first message owned by create', () => {
   })
 
   it('allows Retry after the deadline while the original create never answers', async () => {
-    const create = deferred<unknown>()
+    const create = Promise.withResolvers<unknown>()
     mocks.call.mockReturnValue(create.promise)
     const paired = { kind: 'environment', environmentId: 'frozen-generation' } as const
     replaceRuntimeEnvironmentRevisions([{ id: paired.environmentId, createdAt: 1 }])
@@ -694,7 +696,7 @@ describe('the first message owned by create', () => {
     'does not revive a closed conversation reader when create replies late, in %s build',
     async (_build, isMain, methods) => {
       layoutOwner.isMain = isMain
-      const create = deferred<unknown>()
+      const create = Promise.withResolvers<unknown>()
       mocks.call.mockImplementation((_target, method) =>
         method === 'agentSession.create' ? create.promise : Promise.resolve({})
       )
@@ -789,4 +791,28 @@ describe('the first message owned by create', () => {
       expect(draft(launch.sessionId)).toBe('opening text')
     }
   )
+})
+
+it('does not seed a side chat from unrelated new-chat defaults on exact-selection hosts', async () => {
+  const restore = resetCreateMessageFixture()
+  try {
+    mocks.exactSupport.mockResolvedValue(true)
+    mocks.settings = { nativeChatSessionOptions: { codex: { model: 'different-default' } } }
+    mocks.call.mockImplementation(async () => created())
+    const launch = startStructuredAgentLaunch('workspace-1', 'codex', {
+      requestId: newAgentLaunchRequestId(),
+      executionHostId: 'local',
+      sideChatOf: 'codex_parent',
+      prompt: 'a side question',
+      launchOptions: { permissionMode: 'read-only' }
+    })
+    await launch.launchResult
+    const params = createParams()
+    expect(params.sideChatOf).toBe('codex_parent')
+    expect(params.options).toEqual({ permissionMode: 'read-only' })
+    expect(params.firstMessage?.selection).toEqual({})
+  } finally {
+    mocks.settings = {}
+    cleanupCreateMessageFixture(restore)
+  }
 })

@@ -45,6 +45,7 @@ export function useNativeChatComposerCommandPicker(
     ...pickerArgs,
     ...editor,
     agentCommands,
+    sideChat: structuredTransport?.openSideChat !== undefined,
     commandAvailable,
     sessionSkills,
     onPickerDemand: structuredTransport?.setCommandsMenuOpen,

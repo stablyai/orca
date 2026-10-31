@@ -23,7 +23,7 @@ afterEach(async () => {
   await rm(directory, { recursive: true, force: true })
 })
 
-async function namedFeed() {
+async function namedFeed(sideChat?: AgentSessionRecord['sideChat']) {
   const journal = await journals.open({
     identity: {
       sessionId: 'session',
@@ -35,7 +35,11 @@ async function namedFeed() {
     stateDirectory: directory,
     now: () => 100
   })
-  let record: AgentSessionRecord = { ...agentSessionRecordFixture(), sessionId: 'session' }
+  let record: AgentSessionRecord = {
+    ...agentSessionRecordFixture(),
+    sessionId: 'session',
+    ...(sideChat ? { sideChat } : {})
+  }
   let failure: StructuredChatNamingFailure | undefined
   const sessions = new Map([['session', indexedStatusFeedSession({ journal })]])
   const feed = new StructuredAgentSessionStatusFeed({
@@ -159,4 +163,23 @@ it('shows a closed chat its naming failure only while it keeps the name that fai
   sleep(undefined)
   expect(events.at(-1)).not.toHaveProperty('session.sleptAt')
   expect(lastName(events)).toBe('parser/explain')
+})
+
+it('publishes the saved side-chat relationship to a reloaded desktop without a live provider child', async () => {
+  const { feed, events, sessions } = await namedFeed({
+    sourceSessionId: 'parent-session',
+    sourceProviderSessionId: 'parent-provider'
+  })
+  expect(events.at(-1)).toMatchObject({
+    type: 'snapshot',
+    sessions: [{ sessionId: 'session', sideChatOf: 'parent-session' }]
+  })
+  feed.revokeLive('session')
+  sessions.clear()
+  const reloaded: AgentSessionStatusEvent[] = []
+  feed.subscribe({ id: 'reloaded-side-chat', emit: (event) => reloaded.push(event) })
+  expect(reloaded.at(-1)).toMatchObject({
+    type: 'snapshot',
+    sessions: [{ sessionId: 'session', sideChatOf: 'parent-session' }]
+  })
 })

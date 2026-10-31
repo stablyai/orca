@@ -79,7 +79,10 @@ const CLAUDE_PERMISSION_MODES = {
   ask: 'default',
   'accept-edits': 'acceptEdits',
   auto: 'auto'
-} as const satisfies Record<Exclude<AgentChatPermissionMode, 'full-access'>, PermissionMode>
+} as const satisfies Record<
+  Exclude<AgentChatPermissionMode, 'full-access' | 'read-only'>,
+  PermissionMode
+>
 
 /** Full access is the owned CLI flag: the SDK's typed bypass emits a flag older binaries reject. */
 export function claudeStructuredPermissionOptions(
@@ -91,7 +94,7 @@ export function claudeStructuredPermissionOptions(
   }
   return mode === 'full-access'
     ? { extraArgs: { 'dangerously-skip-permissions': null } }
-    : { permissionMode: CLAUDE_PERMISSION_MODES[mode] }
+    : { permissionMode: CLAUDE_PERMISSION_MODES[mode === 'read-only' ? 'ask' : mode] }
 }
 
 export type ClaudeStructuredLaunch = {

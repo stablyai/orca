@@ -19115,6 +19115,13 @@
       "useKnownId": "Use known user ID \"{{value0}}\""
     },
     "native-chat": {
+      "sideChat": {
+        "new": "New side chat",
+        "badge": "btw",
+        "failed": "Could not open a side chat.",
+        "inheritPermissions": "Use main chat permissions",
+        "title": "Side chat"
+      },
       "install": {
         "checking": "Checking whether {{agent}} is ready on this host…"
       },
@@ -19470,7 +19477,9 @@
           "medium": "Med",
           "xhigh": "XHigh"
         },
-        "imageUnavailable": "Preview unavailable"
+        "imageUnavailable": "Preview unavailable",
+        "permissionReadOnly": "Read only",
+        "permissionReadOnlyDescription": "Uses a read-only sandbox without permission escalation"
       },
       "tool": {
         "exitCode": "exit {{value0}}",
@@ -20472,7 +20481,9 @@
         "linkPreviewsTitle": "Link previews",
         "linkPreviewsCopy": "Hovering a web link shows a preview card. Orca fetches the page to build it, so the site can see the request.",
         "linkPreviewsSearchUnfurl": "unfurl",
-        "linkPreviewsSearchHover": "hover card"
+        "linkPreviewsSearchHover": "hover card",
+        "sideChatPaneTitle": "Group side chats in one pane",
+        "sideChatPaneCopy": "Collect this workspace’s side chats in a shared split pane. When off, new side chats open beside their source tab; existing panes stay in place."
       }
     },
     "agentChildRow": {

@@ -18314,6 +18314,12 @@
       }
     },
     "native-chat": {
+      "sideChat": {
+        "new": "새 사이드 채팅",
+        "badge": "btw",
+        "failed": "사이드 채팅을 열 수 없습니다.",
+        "title": "사이드 채팅"
+      },
       "install": {
         "checking": "이 호스트에서 {{agent}}이(가) 준비되었는지 확인하는 중…"
       },
@@ -19600,7 +19606,9 @@
         "queueSearchSteer": "지금 보내기",
         "shellEnvSearchVariables": "환경 변수",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "프록시"
+        "shellEnvSearchProxy": "프록시",
+        "sideChatPaneTitle": "사이드 채팅을 한 창에 모으기",
+        "sideChatPaneCopy": "이 작업 공간의 사이드 채팅을 하나의 분할 창에 모읍니다. 끄면 새 사이드 채팅은 원본 탭 옆에 열리며 기존 창은 유지됩니다."
       }
     },
     "agentChildRow": {

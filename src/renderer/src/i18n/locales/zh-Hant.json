@@ -19467,6 +19467,9 @@
         "effortPickerFailed": "無法開啟推理強度選擇器。",
         "modelApplyFailed": "無法套用模型 {{value}}。",
         "effortApplyFailed": "無法套用推理強度 {{value}}。"
+      },
+      "sideChat": {
+        "title": "旁支對話"
       }
     },
     "tab": {
@@ -19854,7 +19857,9 @@
         "queueSearchSteer": "立即傳送",
         "shellEnvSearchVariables": "環境變數",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "代理"
+        "shellEnvSearchProxy": "代理",
+        "sideChatPaneTitle": "將旁支對話集中到一個窗格",
+        "sideChatPaneCopy": "將目前工作區的旁支對話集中到一個分欄窗格。關閉後，新旁支對話會在來源分頁旁開啟；既有窗格保持不變。"
       }
     },
     "agentChildRow": {

@@ -387,3 +387,32 @@ describe('codex structured launch resolution', () => {
     ).rejects.toThrow('workspace-1 is gone')
   })
 })
+
+it.each(['fork', 'resume', 'clear'] as const)(
+  'keeps the side-chat identity on %s',
+  async (mode) => {
+    const side = record({
+      sideChat: { sourceSessionId: 'codex_parent_123', sourceProviderSessionId: 'parent-thread' },
+      providerHandleChain:
+        mode === 'resume'
+          ? [
+              {
+                linkId: 'child-link',
+                handle: codexProviderHandle('child-thread'),
+                origin: 'created',
+                mintedAtFence: 1,
+                observedAt: 1
+              }
+            ]
+          : [],
+      ...(mode === 'clear'
+        ? { providerContextBoundary: { operationId: 'clear', afterFence: 2, clearedAt: 100 } }
+        : {})
+    })
+    const launch = await resolverFor(side)({ identity: IDENTITY })
+    expect(launch.sideChat).toBe(true)
+    expect(launch.resumeThreadId).toBe(mode === 'resume' ? 'child-thread' : null)
+    expect(launch.forkThreadId).toBe(mode === 'fork' ? 'parent-thread' : undefined)
+    expect(launch.supersedeIfUnsaved).toBeUndefined()
+  }
+)

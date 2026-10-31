@@ -68,6 +68,7 @@ describe('mobile structured send actions', () => {
   let listener: ((value: unknown) => void) | null = null
   let storedOperations: Map<string, string>
   let agent = 'codex'
+  let openSideChat: ((question?: string) => Promise<boolean>) | undefined
   let sessionCommands: readonly AgentSessionSlashCommand[] | undefined
   let sendOrdinary: ReturnType<typeof useMobileStructuredNativeChatSendBridge>['sendWithOutcome']
   let hostSupport: StructuredAgentSessionHostSupport | null = null
@@ -118,6 +119,7 @@ describe('mobile structured send actions', () => {
       connected: true,
       agent,
       sessionCommands,
+      openSideChat,
       hostSupport,
       onSendError
     })
@@ -190,8 +192,28 @@ describe('mobile structured send actions', () => {
     listener = null
     agent = 'codex'
     sessionCommands = undefined
+    openSideChat = undefined
     hostSupport = null
     resetMobileNativeChatDraftInputsForTests()
+  })
+
+  it('routes side-chat questions through the current opener after a host rerender', async () => {
+    const first = vi.fn(async () => true)
+    const next = vi.fn(async () => true)
+    openSideChat = first
+    await mountSession()
+    await act(async () => {
+      expect(await hook!.sendWithOutcome('/btw inspect this')).toBe('accepted')
+    })
+    expect(first).toHaveBeenCalledExactlyOnceWith('inspect this')
+    openSideChat = next
+    act(() => renderer?.update(createElement(Harness)))
+    await act(async () => {
+      expect(await hook!.sendWithOutcome('/btw continue')).toBe('accepted')
+    })
+    expect(next).toHaveBeenCalledExactlyOnceWith('continue')
+    expect(first).toHaveBeenCalledTimes(1)
+    expect(calls()).toEqual([])
   })
 
   it.each([10, 100])(

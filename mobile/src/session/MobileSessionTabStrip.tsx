@@ -195,6 +195,9 @@ export function MobileSessionTabStrip({
             const tabState = tabStates.get(tab.id)
             const hostAgentIdentity = getMobileTerminalTabHostAgentIdentity(tab, terminals)
             const title = getMobileSessionTabTitle(tab, hostAgentIdentity)
+            const sideChat = tab.type === 'agent-session' && !!tab.sideChatOf
+            const sideChatBadge = t('session.sideChat.badge', 'btw')
+            const accessibleTitle = sideChat ? `${sideChatBadge}, ${title}` : title
             return (
               <Pressable
                 key={tab.id}
@@ -216,10 +219,10 @@ export function MobileSessionTabStrip({
                 accessibilityLabel={
                   tabState && tabState !== 'idle'
                     ? t('session.tabStrip.tabStatus', '{{title}}, {{status}}', {
-                        title,
+                        title: accessibleTitle,
                         status: agentStateLabel(tabState)
                       })
-                    : title
+                    : accessibleTitle
                 }
                 accessibilityState={{ selected: tab.id === activeSessionTabId }}
                 onLongPress={() => {
@@ -257,6 +260,7 @@ export function MobileSessionTabStrip({
                         )
                       })()}
                   </View>
+                  {sideChat ? <Text style={styles.sideChatBadge}>{sideChatBadge}</Text> : null}
                   <Text
                     style={[styles.tabText, tab.id === activeSessionTabId && styles.tabTextActive]}
                     numberOfLines={1}

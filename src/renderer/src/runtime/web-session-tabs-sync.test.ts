@@ -601,3 +601,31 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(reverted.groupsByWorktree?.[WT]?.[0]?.tabOrder).toEqual([local1, local2])
   })
 })
+
+it('refreshes a mirrored tab when only its side-chat relationship changes', () => {
+  const tab = {
+    type: 'agent-session' as const,
+    id: 'agent-session:child-side',
+    title: 'Codex Chat',
+    sessionId: 'child-side',
+    agent: 'codex' as const,
+    isActive: true
+  }
+  const initial = makeState()
+  const first = applyWebSessionTabsSnapshot(
+    initial,
+    makeSnapshot([tab], { activeTabId: tab.id }),
+    ENV,
+    NOW
+  )
+  const after = { ...initial, ...first }
+  const patch = applyWebSessionTabsSnapshot(
+    after,
+    makeSnapshot([{ ...tab, sideChatOf: 'parent-side' }], { activeTabId: tab.id }),
+    ENV,
+    NOW + 1
+  )
+  expect(
+    patch.unifiedTabsByWorktree?.[WT]?.find((entry) => entry.entityId === 'child-side')?.sideChatOf
+  ).toBe('parent-side')
+})

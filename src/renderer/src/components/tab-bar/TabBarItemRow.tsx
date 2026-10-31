@@ -18,6 +18,7 @@ import {
 } from '@/runtime/structured-conversation-name'
 import { agentTypeToIconAgent } from '@/lib/agent-status'
 import { formatSimulatorTabLabel } from '@/lib/simulator-tab-label'
+import { useStructuredChatTabSideChat } from '@/runtime/use-structured-chat-tab-side-chat'
 
 // Why only values and `actions`: anything a tab draws must be a compared prop, or a skipped render shows it stale.
 type TabBarItemRowProps = {
@@ -71,6 +72,9 @@ function TabBarItemRow({
   const namingFailure = useStructuredChatTabNamingFailure(
     item.type === 'agent-session' ? item.data : undefined
   )
+  const sideChat = useStructuredChatTabSideChat(
+    item.type === 'agent-session' ? item.data : undefined
+  )
   const dragData: TabDragItemData = {
     kind: 'tab',
     worktreeId,
@@ -80,6 +84,7 @@ function TabBarItemRow({
     tabType: item.type,
     label: getTabDragLabel(item, generatedTabTitlesEnabled, useAppStore.getState()),
     iconPath: item.type === 'editor' ? item.data.filePath : undefined,
+    sideChat,
     color: item.type === 'terminal' ? (item.data.color ?? null) : null
   }
   const shared = {
@@ -120,7 +125,11 @@ function TabBarItemRow({
     )
   }
   if (item.type === 'agent-session') {
-    const nativeChat = { sessionId: item.data.entityId, agent: item.data.agentSessionAgent }
+    const nativeChat = {
+      sessionId: item.data.entityId,
+      agent: item.data.agentSessionAgent,
+      ...(sideChat ? { sideChat: true } : {})
+    }
     return (
       <SortableTab
         {...sortableTabProps}

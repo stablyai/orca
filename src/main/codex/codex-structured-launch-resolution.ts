@@ -126,8 +126,18 @@ export function codexStructuredLaunchPart(
         args: [...prefixArgs, ...args, 'app-server'],
         codexHome: accountHome.path,
         resumeThreadId,
+        ...(record.sideChat
+          ? {
+              sideChat: true,
+              ...(!head && !record.providerContextBoundary
+                ? { forkThreadId: record.sideChat.sourceProviderSessionId }
+                : {})
+            }
+          : {}),
         // Only created threads may be unsaved; resumed, forked and adopted threads were persisted.
-        ...(resumeThreadId && head?.origin === 'created' ? { supersedeIfUnsaved: true } : {}),
+        ...(resumeThreadId && head?.origin === 'created' && !record.sideChat
+          ? { supersedeIfUnsaved: true }
+          : {}),
         // Own settings leaves a new thread to config and a resumed thread to its saved policy.
         ...(basis.permissionMode === 'own'
           ? {}

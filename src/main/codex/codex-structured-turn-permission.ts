@@ -14,6 +14,7 @@ import type { CodexSandboxPolicy } from './codex-structured-sandbox-policy'
 type PermissionHost = {
   connection: Pick<CodexSession['connection'], 'request'>
   permissions?: CodexSession['permissions']
+  sideChat?: CodexSession['sideChat']
 }
 
 /** Prepared outside the host serialize so a configuration request never holds up accepting sends. */

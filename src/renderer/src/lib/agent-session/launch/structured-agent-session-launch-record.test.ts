@@ -33,3 +33,15 @@ describe('a persisted create opening message', () => {
     expect(validRecord({ ...record, firstMessage: { ...record.firstMessage, body } })).toBe(false)
   })
 })
+
+it('preserves a side-chat parent across recovery while rejecting malformed or mixed resume intent', () => {
+  expect(validRecord({ ...record, sideChatOf: 'codex_parent_123' })).toBe(true)
+  expect(validRecord({ ...record, sideChatOf: { id: 'codex_parent_123' } })).toBe(false)
+  expect(
+    validRecord({
+      ...record,
+      sideChatOf: 'codex_parent_123',
+      resumeFrom: { providerSessionId: 'another-thread' }
+    })
+  ).toBe(false)
+})

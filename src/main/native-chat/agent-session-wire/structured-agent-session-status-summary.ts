@@ -60,6 +60,7 @@ export function structuredAgentSessionStatusSummary({
   const launchDirectory = record ? agentSessionPinnedLaunchDirectory(record) : undefined
   return {
     sessionId,
+    ...(record?.sideChat ? { sideChatOf: record.sideChat.sourceSessionId } : {}),
     workspaceId: session.params.location.workspaceId,
     agent: session.params.provider,
     ...(session.child || starting
@@ -117,9 +118,16 @@ export function renamedStructuredStatusSummary(
   sessionId: string
 ): AgentSessionStatusSummary | null {
   const record = deps.getConversation(sessionId)
-  const { conversationName: _name, namingError: _error, sleptAt: _sleptAt, ...rest } = previous
+  const {
+    conversationName: _name,
+    namingError: _error,
+    sleptAt: _sleptAt,
+    sideChatOf: _sideChatOf,
+    ...rest
+  } = previous
   const summary = {
     ...rest,
+    ...(record?.sideChat ? { sideChatOf: record.sideChat.sourceSessionId } : {}),
     ...structuredSummaryConversationNaming(record, deps.namingFailure?.(sessionId)),
     ...(typeof record?.sleptAt === 'number' ? { sleptAt: record.sleptAt } : {})
   }

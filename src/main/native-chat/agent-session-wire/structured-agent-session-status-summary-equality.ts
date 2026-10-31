@@ -13,6 +13,7 @@ export function structuredStatusSummariesEqual(
 ): boolean {
   return (
     a.workspaceId === b.workspaceId &&
+    a.sideChatOf === b.sideChatOf &&
     a.agent === b.agent &&
     a.status === b.status &&
     a.hostExecutionOwned === b.hostExecutionOwned &&

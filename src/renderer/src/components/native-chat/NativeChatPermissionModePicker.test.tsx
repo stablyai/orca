@@ -248,7 +248,9 @@ describe('NativeChatComposerPermissionPicker', () => {
             .getAllByRole('radio')
             .filter((row) => row.getAttribute('aria-checked') === 'true')
             .map((row) => row.getAttribute('data-value'))
-        ).toEqual(report && ['accept-edits', 'full-access'].includes(report) ? [report] : [])
+        ).toEqual(
+          report && ['read-only', 'accept-edits', 'full-access'].includes(report) ? [report] : []
+        )
         expect(
           screen.getAllByRole('radio').some((row) => row.getAttribute('data-value') === 'own')
         ).toBe(false)

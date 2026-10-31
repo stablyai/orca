@@ -1,3 +1,4 @@
+import { useSideChatPane } from './use-side-chat-pane'
 import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
 import { TabGroupSplitNodeTree } from './TabGroupSplitNodeTree'
 import { WorkspaceTabDragLayer } from './WorkspaceTabDragLayer'
@@ -33,8 +34,20 @@ export default function TabGroupSplitLayout({
               hoveredTabInsertion={hoveredTabInsertion}
             />
           </div>
+          <SideChatPanePlacement worktreeId={worktreeId} active={isWorktreeActive} />
         </div>
       )}
     </WorkspaceTabDragLayer>
   )
+}
+
+function SideChatPanePlacement({
+  worktreeId,
+  active
+}: {
+  worktreeId: string
+  active: boolean
+}): null {
+  useSideChatPane(worktreeId, active)
+  return null
 }

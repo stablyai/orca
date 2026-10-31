@@ -15,7 +15,7 @@ import type { RpcAnyMethodDeclaration, RpcRequest, RpcResponse } from '../core'
 import { RpcDispatcher } from '../dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
 import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
-import { recordingStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { structuredSessionProjectionStub } from '../../structured-session-projection.test-fixture'
 import { resetStructuredAgentSessionClosesBeforeCreateForTests } from './structured-agent-session-close-before-create'
 
 export const SESSION = 'session-alpha'
@@ -218,7 +218,7 @@ export function hostStub(): StructuredAgentSessionHost {
     getConversation: vi.fn(() => null)
   }
   // Not a call: the logger the host hands a runtime caller that reports for it.
-  Reflect.set(hostCalls, 'deps', { logger: recordingStructuredAgentSessionLogger().logger, store })
+  Reflect.set(hostCalls, 'deps', structuredSessionProjectionStub(store))
   return hostCalls as unknown as StructuredAgentSessionHost
 }
 

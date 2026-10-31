@@ -71,7 +71,7 @@ export function useMobileStructuredSendWithOutcome(args: {
   sendsOut: MobileStructuredSendsOut
   controller: Pick<
     StructuredAgentSessionComposerOptions,
-    'snapshot' | 'setOption' | 'invokeAction' | 'conversationCommands'
+    'snapshot' | 'setOption' | 'invokeAction' | 'conversationCommands' | 'openSideChat'
   >
   sessionCommands?: readonly AgentSessionSlashCommand[]
   onSendError: MobileNativeChatSendErrorReporter
@@ -136,6 +136,7 @@ export function useMobileStructuredSendWithOutcome(args: {
       const sendAttachments = attachments ?? []
       const commandOutcome = await dispatchMobileStructuredCommand({
         text,
+        skills: pickedSkills,
         hasAttachments: Boolean(sendAttachments.length || images?.length),
         client,
         sessionId,

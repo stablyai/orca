@@ -1,3 +1,4 @@
+import { useWorkspaceSideChatTabs } from '@/runtime/use-workspace-side-chat-tabs'
 import React, { useCallback } from 'react'
 import { useTabStripOverflowNavigation } from './tab-strip-overflow-navigation'
 import { useTabStripDragScrollHandlers } from './tab-strip-drag-scroll'
@@ -25,6 +26,7 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     onOpenFileTab,
     onPinFile
   } = props
+  const sideChatTabIds = useWorkspaceSideChatTabs(worktreeId)
   const runtime = useTabBarRuntimeModel({ worktreeId, groupId })
   const baseCreateMenu = useTabBarCreateMenuController({
     worktreeId,
@@ -121,6 +123,7 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     tabStripDragScroll,
     activeClientHostedBrowserRowId,
     itemActions,
+    sideChatTabIds,
     surfaceRef
   })
 }

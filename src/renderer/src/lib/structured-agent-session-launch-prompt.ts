@@ -1,3 +1,4 @@
+import type { AgentJournalSkillRef } from '../../../shared/agent-session-journal-types'
 import { structuredAgentSessionSendBody } from '../../../shared/structured-agent-session-send-mutation'
 import type { StructuredAgentLaunchReceipt } from './agent-session/launch/structured-agent-session-launch-recovery'
 import type { StructuredAgentSessionFirstMessage } from '../../../shared/structured-agent-session-create'
@@ -34,6 +35,7 @@ type StagedDelivery = Omit<StructuredPromptDeliveryResult, 'inComposer' | 'failu
 
 export type StructuredLaunchPromptOptions = {
   prompt?: string
+  skills?: readonly AgentJournalSkillRef[]
   promptDelivery?: 'auto-submit' | 'submit-after-ready' | 'draft'
   onPromptDelivered?: () => void
 }
@@ -41,7 +43,7 @@ export type StructuredLaunchPromptOptions = {
 type LaunchReceipt = StructuredAgentLaunchReceipt
 
 /** Share one staged-text send across launch callers; reserve the chat send slot at click so typed messages cannot overtake it before create. */
-export type StagedStructuredLaunchPrompt = {
+export type StagedStructuredLaunchPrompt = Pick<StructuredLaunchPromptOptions, 'skills'> & {
   sessionId: string
   text: string
   slot: StructuredAgentSessionReservedSend | null
@@ -65,7 +67,7 @@ const staged = new Map<string, Set<StagedStructuredLaunchPrompt>>()
 export function stageStructuredLaunchPrompt(
   sessionId: string,
   text: string,
-  options: { callerKeepsText?: true } = {}
+  options: Pick<StructuredLaunchPromptOptions, 'skills'> & { callerKeepsText?: true } = {}
 ): StagedStructuredLaunchPrompt {
   let discard = (): void => {}
   const whenDiscarded = new Promise<void>((resolve) => {
@@ -191,7 +193,7 @@ function handBackStagedPrompt(prompt: StagedStructuredLaunchPrompt): boolean {
     handBackStructuredAgentSessionMessage(
       prompt.sessionId,
       `launch-${prompt.sessionId}`,
-      structuredAgentSessionSendBody(prompt.text, [])
+      structuredAgentSessionSendBody(prompt.text, [], prompt.skills)
     )
     return true
   } catch (error) {

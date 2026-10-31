@@ -35,7 +35,8 @@ vi.mock('./native-chat-cli-fork-run', () => ({
 
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(
-    (selector: (state: Record<string, unknown>) => unknown) => selector({ settings: null }),
+    (selector: (state: Record<string, unknown>) => unknown) =>
+      selector({ settings: null, unifiedTabsByWorktree: {} }),
     { getState: () => ({}) }
   )
 }))

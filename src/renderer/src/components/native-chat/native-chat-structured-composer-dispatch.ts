@@ -19,7 +19,9 @@ export async function dispatchNativeChatStructuredComposerText(
     draftText,
     attachments.map((attachment) => attachment.id)
   )
-  const { handled, ...command } = await transport.dispatchCommand(prompt)
+  const { handled, ...command } = await (skills.length > 0
+    ? transport.dispatchCommand(prompt, skills)
+    : transport.dispatchCommand(prompt))
   // Commands already reveal at keypress; messages reveal unless admitted as queued cards.
   if (handled) {
     return { ...command, revealsTranscript: false }

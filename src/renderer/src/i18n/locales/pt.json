@@ -19793,6 +19793,12 @@
       "useKnownId": "Usar o ID de usuário conhecido \"{{value0}}\""
     },
     "native-chat": {
+      "sideChat": {
+        "new": "Nova conversa paralela",
+        "badge": "btw",
+        "failed": "Não foi possível abrir uma conversa paralela.",
+        "title": "Conversa paralela"
+      },
       "taskList": {
         "title": "Tarefas",
         "completed": "Concluída",
@@ -21185,7 +21191,9 @@
         "queueSearchSteer": "orientar",
         "shellEnvSearchVariables": "variáveis de ambiente",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "proxy"
+        "shellEnvSearchProxy": "proxy",
+        "sideChatPaneTitle": "Agrupar conversas paralelas num painel",
+        "sideChatPaneCopy": "Reúne as conversas paralelas deste espaço de trabalho num painel dividido. Quando desativado, as novas abrem junto ao separador de origem; os painéis existentes são mantidos."
       }
     },
     "jiraIssueAssigneeField": {

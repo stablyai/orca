@@ -27,6 +27,10 @@ import {
   AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY,
   AGENT_SESSION_CREATE_OPTIONS_MODE_RUNTIME_CAPABILITY
 } from '../../../shared/agent-session-create-capabilities'
+import {
+  AGENT_SESSION_SIDE_CHAT_RUNTIME_CAPABILITY,
+  AGENT_SESSION_SIDE_CHAT_READ_ONLY_CAPABILITY
+} from '../../../shared/agent-session-side-chat'
 import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import {
@@ -81,6 +85,18 @@ export function supportsStructuredAgentSessionCreateMessage(
   target: RuntimeClientTarget
 ): Promise<boolean> {
   return structuredAgentSessionHostSupports(target, AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY)
+}
+
+export function supportsStructuredAgentSessionReadOnlySideChat(
+  target: RuntimeClientTarget
+): Promise<boolean> {
+  return structuredAgentSessionHostSupports(target, AGENT_SESSION_SIDE_CHAT_READ_ONLY_CAPABILITY)
+}
+
+export function supportsStructuredAgentSessionSideChat(
+  target: RuntimeClientTarget
+): Promise<boolean> {
+  return structuredAgentSessionHostSupports(target, AGENT_SESSION_SIDE_CHAT_RUNTIME_CAPABILITY)
 }
 
 export function supportsStructuredAgentSessionCliSource(

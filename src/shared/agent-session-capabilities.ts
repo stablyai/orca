@@ -1,5 +1,7 @@
 /** Branch on declared capabilities, not agent names. Sessions may narrow them (legacy Codex history cannot rewind), never widen them; plain data crosses the wire unchanged. */
 export type AgentSessionCapabilities = {
+  /** Forks context into an independent conversation. */
+  sideChat?: boolean
   /** Roll the conversation back to before a turn. */
   rewind: boolean
   /** Compact the conversation's context on request: offers the `/compact` command. */

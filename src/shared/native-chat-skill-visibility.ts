@@ -47,11 +47,13 @@ export function nativeChatSessionSkills(
 export function nativeChatPickerCommands(
   agent: AgentType,
   commands: readonly SlashCommandSuggestion[],
-  scannedSkills: readonly DiscoveredSkill[]
+  scannedSkills: readonly DiscoveredSkill[],
+  sideChat = false
 ): readonly SlashCommandSuggestion[] {
   return classifyPickerCommands(commands, scannedSkills, {
     // A chat that keeps scanned skills (OpenCode) may report each as a command too.
     reportMayListSkills: getNativeChatAgentProfile(agent)?.keepsScannedSkills === true,
-    isSendCommand: (name) => isStructuredAgentSessionComposerCommand(`/${name}`, agent)
+    isSendCommand: (name) =>
+      isStructuredAgentSessionComposerCommand(`/${name}`, agent, undefined, sideChat)
   })
 }

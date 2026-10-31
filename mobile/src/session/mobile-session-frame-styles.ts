@@ -164,6 +164,18 @@ export const mobileSessionFrameStyles = themedStyleSheet(() => ({
   tabIcon: {
     flexShrink: 0
   },
+  sideChatBadge: {
+    flexShrink: 0,
+    overflow: 'hidden',
+    backgroundColor: colors.bgRaised,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderSubtle,
+    borderRadius: radii.control,
+    paddingHorizontal: spacing.xs,
+    color: colors.textSecondary,
+    fontWeight: '500',
+    fontSize: typography.metaSize
+  },
   tabText: {
     flexShrink: 1,
     color: colors.textSecondary,

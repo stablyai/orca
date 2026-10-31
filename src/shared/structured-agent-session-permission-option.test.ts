@@ -140,3 +140,15 @@ describe('the permission mode picker', () => {
     expect(structuredAgentSessionOptionPicks(state, { permissionMode: 'full-access' })).toEqual([])
   })
 })
+
+it('lets a chat with a saved own mode change a provider-reported read-only policy', () => {
+  expect(
+    permission(live('codex', { permissionMode: 'own', reportedPermissionMode: 'read-only' }))
+  ).toMatchObject({
+    settable: true,
+    kind: {
+      currentValue: 'read-only',
+      choices: expect.arrayContaining([expect.objectContaining({ value: 'full-access' })])
+    }
+  })
+})

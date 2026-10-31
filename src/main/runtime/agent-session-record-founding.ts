@@ -17,6 +17,7 @@ export type AgentSessionRecordIdentity = Pick<
   | 'options'
   | 'launchArgs'
   | 'launchDirectory'
+  | 'sideChat'
 >
 
 export function agentSessionRecordIdentityFields(
@@ -31,6 +32,7 @@ export function agentSessionRecordIdentityFields(
     sessionId: identity.sessionId,
     location: identity.location,
     provider: identity.provider,
+    ...(identity.sideChat ? { sideChat: identity.sideChat } : {}),
     accountHome: identity.accountHome,
     ...(Object.keys(options).length > 0 ? { options } : {}),
     ...(permissionMode ? { permissionMode } : {}),

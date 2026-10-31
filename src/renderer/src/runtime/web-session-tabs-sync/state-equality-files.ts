@@ -82,6 +82,7 @@ export function tabEqual(a: Tab, b: Tab): boolean {
     a.executionHostId === b.executionHostId &&
     a.contentType === b.contentType &&
     a.agentSessionAgent === b.agentSessionAgent &&
+    a.sideChatOf === b.sideChatOf &&
     a.label === b.label &&
     // Include generated label in equality or unified titles diverge from terminal tabs.
     a.generatedLabel === b.generatedLabel &&

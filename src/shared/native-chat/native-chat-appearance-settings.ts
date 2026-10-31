@@ -18,6 +18,8 @@ export type NativeChatAppearanceSettings = {
 export type AgentDefaultSurface = 'chat' | 'terminal'
 
 export type NativeChatGlobalSettings = {
+  /** Client layout preference: collect workspace side chats in one ordinary split group. */
+  nativeChatSideChatPane?: boolean
   /** Unlisted agents follow this default; absent means terminal. */
   agentDefaultSurface?: AgentDefaultSurface
   nativeChatAppearance?: NativeChatAppearanceSettings

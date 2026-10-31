@@ -2355,6 +2355,18 @@
       "noEnabledAgent": "Bu çalışma alanı sunucusunda etkin bir AI ajanı algılanmadı.",
       "savedAgentUnavailable": "Bu işlem için kaydedilen ajan, bu çalışma alanı sunucusunda kullanılamıyor."
     },
+    "sideChat": {
+      "new": "Yeni yan sohbet",
+      "readOnly": "Salt okunur",
+      "readOnlyDescription": "İzin yükseltmesi olmadan salt okunur bir korumalı alan kullanır",
+      "inheritPermissions": "Ana sohbetin izinlerini kullan",
+      "inheritDescription": "Başlangıçta ana sohbetin izinlerini kullanır; sonraki değişiklikler bağımsızdır",
+      "badge": "btw",
+      "failed": "Yan sohbet açılamadı.",
+      "unsupportedHost": "Bu ana bilgisayarda yan sohbet açılamıyor.",
+      "unavailable": "Bu sohbet şu anda yan sohbet açmak için kullanılamıyor.",
+      "updateHostForReadOnly": "Salt okunur bir yan sohbet açmak için bu ana bilgisayardaki Orca’yı güncelleyin."
+    },
     "structuredComposerCommand": {
       "operationUnconfirmed": "Konuşma işlemi doğrulanamadı.",
       "removeAttachments": "Bir sohbet oturumu komutu kullanmadan önce ekleri kaldırın."

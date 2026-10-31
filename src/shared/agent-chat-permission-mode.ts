@@ -12,7 +12,7 @@ import type { TuiAgent } from './tui-agent'
 /** A chat's own permission choice. Saved in chat records and settings: never rename a value. */
 export type AgentChatPermissionChoice = 'own' | AgentChatPermissionMode
 
-export type AgentChatPermissionMode = 'ask' | 'accept-edits' | 'auto' | 'full-access'
+export type AgentChatPermissionMode = 'read-only' | 'ask' | 'accept-edits' | 'auto' | 'full-access'
 
 export function isAgentChatPermissionChoice(value: unknown): value is AgentChatPermissionChoice {
   return value === 'own' || isAgentChatPermissionMode(value)
@@ -20,6 +20,7 @@ export function isAgentChatPermissionChoice(value: unknown): value is AgentChatP
 
 /** Picker order: least to most access. */
 export const AGENT_CHAT_PERMISSION_MODES = [
+  'read-only',
   'ask',
   'accept-edits',
   'auto',
@@ -28,6 +29,7 @@ export const AGENT_CHAT_PERMISSION_MODES = [
 
 /** Desktop/mobile resolve these lucide names through their own icon packages. */
 export const AGENT_CHAT_PERMISSION_MODE_ICON_NAMES = {
+  'read-only': 'Eye',
   ask: 'Hand',
   'accept-edits': 'FilePenLine',
   auto: 'ShieldCheck',

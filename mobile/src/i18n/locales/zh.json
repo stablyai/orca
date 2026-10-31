@@ -2351,6 +2351,18 @@
       "noEnabledAgent": "此工作区主机上未检测到已启用的 AI 智能体。",
       "savedAgentUnavailable": "为此操作保存的智能体在此工作区主机上不可用。"
     },
+    "sideChat": {
+      "new": "新建旁聊",
+      "readOnly": "只读",
+      "readOnlyDescription": "使用只读沙箱，不允许提升权限",
+      "inheritPermissions": "沿用主会话权限",
+      "inheritDescription": "创建时沿用主会话权限；后续可独立修改",
+      "badge": "btw",
+      "failed": "无法打开旁支会话。",
+      "unsupportedHost": "此主机无法打开旁支会话。",
+      "unavailable": "当前无法从此会话打开旁支会话。",
+      "updateHostForReadOnly": "请更新此主机上的 Orca，以打开只读旁支会话。"
+    },
     "structuredComposerCommand": {
       "operationUnconfirmed": "对话操作未获确认。",
       "removeAttachments": "使用聊天会话命令前，请先移除附件。"

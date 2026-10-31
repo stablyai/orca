@@ -62,8 +62,9 @@ type RestoreCloseHost = Pick<
   deps: {
     store: Pick<
       StructuredAgentSessionHost['deps']['store'],
-      'getConversation' | 'isSessionUnreadable' | 'isSessionTabRetired'
+      'getRecord' | 'getConversation' | 'isSessionUnreadable' | 'isSessionTabRetired'
     >
+    agents: Pick<StructuredAgentSessionHost['deps']['agents'], 'capabilities'>
   }
 }
 
@@ -229,10 +230,12 @@ describe('reopened structured session close', () => {
       {
         deps: {
           store: {
+            getRecord: () => null,
             getConversation: (id: string) => records.get(id) ?? null,
             isSessionUnreadable: () => false,
             isSessionTabRetired: (id: string) => !hostTabs.has(id)
-          }
+          },
+          agents: { capabilities: () => null }
         },
         reconcileRestartLeases: async () => undefined,
         seedSessionTabs: async () => undefined,
@@ -423,10 +426,12 @@ describe('in-flight structured session close', () => {
       {
         deps: {
           store: {
+            getRecord: () => null,
             getConversation: (id: string) => records.get(id) ?? null,
             isSessionUnreadable: () => false,
             isSessionTabRetired: (id: string) => !hostTabs.has(id)
-          }
+          },
+          agents: { capabilities: () => null }
         },
         reconcileRestartLeases: async () => undefined,
         seedSessionTabs: async () => undefined,

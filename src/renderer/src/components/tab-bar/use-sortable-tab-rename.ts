@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type SyntheticEvent,
+  type MouseEvent
+} from 'react'
 import {
   RENAME_TERMINAL_TAB_EVENT,
   type RenameTerminalTabDetail
@@ -87,4 +94,20 @@ export function useSortableTabRename({
     cancelRename,
     setRenameInputElement
   }
+}
+
+const stopRenameEvent = (event: SyntheticEvent): void => event.stopPropagation()
+
+/** Keep rename input gestures inside the editor, including Linux middle-button paste. */
+export const tabRenameInputEvents = {
+  onPointerDown: stopRenameEvent,
+  onMouseDown: (event: MouseEvent): void => {
+    event.stopPropagation()
+    if (event.button === 1) {
+      event.preventDefault()
+    }
+  },
+  onClick: stopRenameEvent,
+  onDoubleClick: stopRenameEvent,
+  onAuxClick: stopRenameEvent
 }

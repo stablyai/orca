@@ -120,7 +120,7 @@ export async function openCodexStructuredSession(
   if (
     translator &&
     input.events &&
-    launch.resumeThreadId !== null &&
+    (launch.resumeThreadId !== null || launch.forkThreadId !== undefined) &&
     !opened.supersededThreadId &&
     !threadReturnedTurns(opened.thread)
   ) {
@@ -155,6 +155,7 @@ export async function openCodexStructuredSession(
       : (opened.serviceTier ?? CODEX_DEFAULT_SERVICE_TIER)
   const catalogAccess = codexAcquireCatalogAccess(deps, launch, sessionId)
   const session: CodexSession = {
+    ...(launch.sideChat ? { sideChat: true } : {}),
     events: input.events,
     account: start.account,
     connection,

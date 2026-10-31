@@ -10,7 +10,6 @@ import type {
 } from '../../shared/agent-session-journal-types'
 import { randomUUID } from 'node:crypto'
 import type { AgentJournalDispatchRejection } from '../../shared/agent-session-failure-words'
-import { cancelProcessAcquisition } from '@orca/process-host/cancel-process-acquisition'
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import type { openCodexAppServerConnection } from './codex-app-server-connection'
 import { CodexAcquisitionWindow } from './codex-structured-acquisition-window'
@@ -48,6 +47,8 @@ export type CodexStructuredLaunch = {
   cwd: string
   codexHome: string | null
   resumeThreadId: string | null
+  forkThreadId?: string
+  sideChat?: boolean
   /** Replace an unsaved thread created by this session; never supersede a proven resume. */
   supersedeIfUnsaved?: boolean
   permissionPolicy?: CodexStructuredPermissionPolicy
@@ -137,6 +138,7 @@ export type CodexStructuredSessionAdapterDeps = {
 }
 
 export type CodexSession = {
+  sideChat?: boolean
   events?: StructuredAgentSessionEventSink
   account?: AgentSessionAccountKind
   connection: CodexAppServerConnection
@@ -320,25 +322,4 @@ export class CodexAcquisitionRegistry {
   }
 }
 
-export async function cancelCodexAcquisitionAttempt(
-  attempt: CodexAcquisitionAttempt | undefined,
-  requestedClose = true
-): Promise<boolean> {
-  if (!attempt) {
-    return true
-  }
-  const closed = await cancelProcessAcquisition({
-    cancel: () => {
-      attempt.cancelled = true
-      attempt.requestedClose = requestedClose
-    },
-    connection: () => attempt.window.connection,
-    exitProven: () => attempt.exitProven,
-    finished: attempt.finished
-  })
-  if (closed) {
-    attempt.exitProven = true
-    attempt.dispose?.()
-  }
-  return closed
-}
+export { cancelCodexAcquisitionAttempt } from './codex-structured-acquisition-lifecycle'

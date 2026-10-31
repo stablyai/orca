@@ -29,9 +29,10 @@ describe('useMobileStructuredNativeChatSendBridge', () => {
   const restoreRejectedDraft = vi.fn()
   const sendStructured = vi.fn()
 
-  function Harness({ agent }: { agent: StructuredAgentId }): null {
+  function Harness({ agent, sideChat }: { agent: StructuredAgentId; sideChat?: boolean }): null {
     sendWithOutcome = useMobileStructuredNativeChatSendBridge({
       agent,
+      sideChat,
       captureSendOrigin,
       clearDraftForSend,
       onSendError,
@@ -41,9 +42,9 @@ describe('useMobileStructuredNativeChatSendBridge', () => {
     return null
   }
 
-  function mount(agent: StructuredAgentId): void {
+  function mount(agent: StructuredAgentId, sideChat?: boolean): void {
     act(() => {
-      renderer = create(createElement(Harness, { agent }))
+      renderer = create(createElement(Harness, { agent, sideChat }))
     })
   }
 
@@ -111,6 +112,19 @@ describe('useMobileStructuredNativeChatSendBridge', () => {
 
     expect(restoreRejectedDraft).toHaveBeenCalledWith(ORIGIN, 'hello')
   })
+  it.each([false, true])(
+    'keeps draft ownership consistent with /btw capability (%s)',
+    async (sideChat) => {
+      sendStructured.mockResolvedValue('unknown')
+      mount('claude', sideChat)
+      await expect(sendWithOutcome('/btw question')).resolves.toBe('unknown')
+      if (sideChat) {
+        expect(restoreRejectedDraft).toHaveBeenCalledWith(ORIGIN, '/btw question')
+      } else {
+        expect(restoreRejectedDraft).not.toHaveBeenCalled()
+      }
+    }
+  )
   it.each(['accepted', 'unknown', 'rejected'] as const)(
     'carries typed provider commands and attachments through %s',
     async (outcome) => {

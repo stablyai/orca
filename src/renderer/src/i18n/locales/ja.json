@@ -18314,6 +18314,12 @@
       }
     },
     "native-chat": {
+      "sideChat": {
+        "new": "新しいサイドチャット",
+        "badge": "btw",
+        "failed": "サイドチャットを開けませんでした。",
+        "title": "サイドチャット"
+      },
       "install": {
         "checking": "このホストで {{agent}} の準備ができているか確認しています…"
       },
@@ -19600,7 +19606,9 @@
         "queueSearchSteer": "今すぐ送信",
         "shellEnvSearchVariables": "環境変数",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "プロキシ"
+        "shellEnvSearchProxy": "プロキシ",
+        "sideChatPaneTitle": "サイドチャットを1つのペインにまとめる",
+        "sideChatPaneCopy": "このワークスペースのサイドチャットを分割ペインにまとめます。オフにすると、新しいサイドチャットは元のタブの隣に開き、既存のペインは維持されます。"
       }
     },
     "agentChildRow": {

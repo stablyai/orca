@@ -1,3 +1,4 @@
+import type { AgentJournalSkillRef } from '../../../shared/agent-session-journal-types'
 import type { StructuredLaunchSurfaceAddress } from './agent-session/launch/structured-agent-session-launch-record'
 import type { StructuredAgentSessionResumeSource } from '../../../shared/structured-agent-session-create'
 import type { TuiAgent } from '../../../shared/tui-agent'
@@ -50,6 +51,7 @@ export type AgentSessionLaunchRequest = AgentLaunchRouteArgs & {
 
 /** Carry the decided route and delivery fields in memory so post-create launches and same-session retries reuse them without re-resolving. */
 export type AgentSessionLaunchVerdict = {
+  sideChatOf?: string
   route: AgentLaunchRoute
   requestedSurface?: AgentLaunchSurface
   requestId: AgentLaunchRequestId
@@ -57,6 +59,7 @@ export type AgentSessionLaunchVerdict = {
   worktreeId?: string
   executionHostId?: ExecutionHostId
   prompt?: string
+  skills?: readonly AgentJournalSkillRef[]
   promptDelivery?: NativeChatLaunchPromptDelivery
   resumeFrom?: StructuredAgentSessionResumeSource
   onPromptDelivered?: () => void
@@ -93,9 +96,11 @@ export type AgentSessionLaunchPlan = Readonly<AgentSessionLaunchVerdict> & {
 function structuredLaunchOptions(verdict: AgentSessionLaunchVerdict): StructuredAgentLaunchOptions {
   return {
     requestId: verdict.requestId,
+    ...(verdict.skills?.length ? { skills: verdict.skills } : {}),
     ...(verdict.prompt !== undefined ? { prompt: verdict.prompt } : {}),
     ...(verdict.promptDelivery ? { promptDelivery: verdict.promptDelivery } : {}),
     ...(verdict.resumeFrom ? { resumeFrom: verdict.resumeFrom } : {}),
+    ...(verdict.sideChatOf ? { sideChatOf: verdict.sideChatOf } : {}),
     ...(verdict.onPromptDelivered ? { onPromptDelivered: verdict.onPromptDelivered } : {}),
     ...(verdict.promptKeptByCaller ? { promptKeptByCaller: true as const } : {}),
     ...(verdict.executionHostId ? { executionHostId: verdict.executionHostId } : {}),

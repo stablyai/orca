@@ -11,12 +11,28 @@ const CODEX_CHAT_PERMISSION_MODES = agentChatPermissionModes('codex')!
 
 describe('agent chat permission modes', () => {
   it('orders the picker from least to most access', () => {
-    expect(AGENT_CHAT_PERMISSION_MODES).toEqual(['ask', 'accept-edits', 'auto', 'full-access'])
+    expect(AGENT_CHAT_PERMISSION_MODES).toEqual([
+      'read-only',
+      'ask',
+      'accept-edits',
+      'auto',
+      'full-access'
+    ])
   })
 
   it('offers Claude every mode, Codex no edits-only mode, ACP agents Ask and Full access', () => {
-    expect(agentChatPermissionModes('claude')?.modes).toEqual(AGENT_CHAT_PERMISSION_MODES)
-    expect(agentChatPermissionModes('codex')?.modes).toEqual(['ask', 'auto', 'full-access'])
+    expect(agentChatPermissionModes('claude')?.modes).toEqual([
+      'ask',
+      'accept-edits',
+      'auto',
+      'full-access'
+    ])
+    expect(agentChatPermissionModes('codex')?.modes).toEqual([
+      'read-only',
+      'ask',
+      'auto',
+      'full-access'
+    ])
     expect(agentChatPermissionModes('omp')?.modes).toEqual(['ask', 'full-access'])
     expect(agentChatPermissionModes('pi')).toBeNull()
   })

@@ -41,6 +41,7 @@ export function ChatBehaviorSetting({
     entries.resumeOnRestart,
     ...(hostQueuesMessages ? [entries.queueFollowUps] : []),
     entries.linkPreviews,
+    entries.sideChatPane,
     entries.shellEnvironment
   ]
   if (!forceVisible && !matchesSettingsSearch(query, rows)) {
@@ -115,6 +116,24 @@ export function ChatBehaviorSetting({
                   'Toggle link previews'
                 )}
                 onChange={() => updateSettings({ nativeChatLinkPreviews: !linkPreviewsEnabled })}
+              />
+            </SearchableSetting>
+            <SearchableSetting
+              {...entries.sideChatPane}
+              id={entries.sideChatPane.targetSectionId}
+              forceVisible={forceVisible}
+              className="max-w-none"
+            >
+              <SettingsSwitchRow
+                label={entries.sideChatPane.title}
+                description={entries.sideChatPane.description}
+                checked={settings.nativeChatSideChatPane === true}
+                ariaLabel={entries.sideChatPane.title}
+                onChange={() =>
+                  updateSettings({
+                    nativeChatSideChatPane: settings.nativeChatSideChatPane !== true
+                  })
+                }
               />
             </SearchableSetting>
             <SearchableSetting

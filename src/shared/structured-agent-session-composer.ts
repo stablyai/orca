@@ -1,3 +1,4 @@
+import type { AgentJournalSkillRef } from './agent-session-journal-types'
 import { getTextDrivenNativeChatCommands } from './native-chat-agent-profiles'
 import type { AgentType } from './agent-status-types'
 import type {
@@ -50,6 +51,7 @@ export type StructuredAgentSessionComposerOptions = {
   ) => Promise<Omit<StructuredAgentSessionCommandOutcome, 'handled'>>
   /** Without host goal support, /goal remains agent-handled text. */
   setThreadGoalObjective?: (objective: string) => Promise<boolean>
+  openSideChat?: (question: string, skills?: readonly AgentJournalSkillRef[]) => Promise<boolean>
 }
 
 /** Visible condition holding a refusal: agent/prompt/background work, an in-flight send or a Retry card. */
@@ -75,7 +77,9 @@ function commandParts(text: string): { name: string; argument: string } | null {
   if (!text.startsWith('/')) {
     return null
   }
-  const match = /^\/([^\s]+)(?:\s+(.*))?$/.exec(text.trimEnd())
+  const trimmed = text.trimEnd()
+  const match =
+    /^\/(btw)(?:\s+([\s\S]*))?$/i.exec(trimmed) ?? /^\/([^\s]+)(?:\s+(.*))?$/.exec(trimmed)
   return match ? { name: match[1]!.toLowerCase(), argument: match[2]?.trim() ?? '' } : null
 }
 
@@ -103,9 +107,15 @@ export function structuredSlashCommands(
 export function structuredSessionSlashCommands(
   agent: AgentType,
   conversationCommands: readonly AgentSessionConversationCommand[] | undefined,
-  reported: readonly AgentSessionSlashCommand[] | undefined
+  reported: readonly AgentSessionSlashCommand[] | undefined,
+  sideChat = false
 ): readonly SlashCommandSuggestion[] {
-  const hostOwned = structuredSlashCommands(conversationCommands, agent)
+  const hostOwned = [
+    ...structuredSlashCommands(conversationCommands, agent),
+    ...(sideChat
+      ? [{ name: 'btw', description: 'Start a side chat with this conversation’s context' }]
+      : [])
+  ]
   if (reported === undefined) {
     return hostOwned
   }
@@ -126,11 +136,15 @@ function structuredRecognizedCommands(): readonly SlashCommandSuggestion[] {
 export function isStructuredAgentSessionComposerCommand(
   text: string,
   _agent: AgentType = 'codex',
-  _reported?: readonly AgentSessionSlashCommand[]
+  _reported?: readonly AgentSessionSlashCommand[],
+  sideChat = false
 ): boolean {
   const command = commandParts(text)
   return Boolean(
-    command && structuredRecognizedCommands().some((entry) => entry.name === command.name)
+    command &&
+    (command.name === 'btw'
+      ? sideChat
+      : structuredRecognizedCommands().some((entry) => entry.name === command.name))
   )
 }
 
@@ -170,6 +184,12 @@ export function structuredAgentSessionCommandChangesConversation(text: string): 
   )
 }
 
+/** Opening an empty side chat executes nothing; a question starts its first turn. */
+export function structuredAgentSessionCommandStartsSideChatTurn(text: string): boolean {
+  const command = commandParts(text)
+  return command?.name === 'btw' && command.argument !== ''
+}
+
 /** `/goal` with nothing after it: an entrance to goal mode, not an objective. */
 export function isBareStructuredAgentSessionGoalCommand(text: string): boolean {
   const command = commandParts(text)
@@ -192,9 +212,19 @@ function unavailable(name: string): StructuredAgentSessionCommandOutcome {
 
 export async function dispatchStructuredAgentSessionComposerCommand(
   text: string,
-  controller: StructuredAgentSessionComposerOptions
+  controller: StructuredAgentSessionComposerOptions,
+  skills: readonly AgentJournalSkillRef[] = []
 ): Promise<StructuredAgentSessionCommandOutcome> {
   const command = commandParts(text)
+  if (command?.name === 'btw') {
+    if (!controller.openSideChat) {
+      return { handled: false, accepted: false, error: null }
+    }
+    const accepted = await (skills.length > 0
+      ? controller.openSideChat(command.argument, skills)
+      : controller.openSideChat(command.argument))
+    return { handled: true, accepted, error: accepted ? null : 'Could not open a side chat.' }
+  }
   if (command?.name === 'goal' && controller.setThreadGoalObjective) {
     if (!command.argument) {
       return {
@@ -212,7 +242,12 @@ export async function dispatchStructuredAgentSessionComposerCommand(
   }
   if (
     !command ||
-    !isStructuredAgentSessionComposerCommand(text, controller.agent, controller.sessionCommands)
+    !isStructuredAgentSessionComposerCommand(
+      text,
+      controller.agent,
+      controller.sessionCommands,
+      controller.openSideChat !== undefined
+    )
   ) {
     return { handled: false, accepted: false, error: null }
   }

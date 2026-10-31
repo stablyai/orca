@@ -2351,6 +2351,18 @@
       "noEnabledAgent": "此工作區主機上未偵測到已啟用的 AI 代理程式。",
       "savedAgentUnavailable": "先前為此動作設定的代理程式無法在此工作區主機上使用。"
     },
+    "sideChat": {
+      "new": "新增旁支對話",
+      "readOnly": "唯讀",
+      "readOnlyDescription": "使用唯讀沙箱，不允許提升權限",
+      "inheritPermissions": "沿用主對話權限",
+      "inheritDescription": "建立時沿用主對話權限；之後可獨立修改",
+      "badge": "btw",
+      "failed": "無法開啟旁支對話。",
+      "unsupportedHost": "此主機無法開啟旁支對話。",
+      "unavailable": "目前無法從此對話開啟旁支對話。",
+      "updateHostForReadOnly": "請更新此主機上的 Orca，以開啟唯讀旁支對話。"
+    },
     "structuredComposerCommand": {
       "operationUnconfirmed": "無法確認對話操作。",
       "removeAttachments": "使用聊天工作階段命令前，請先移除附件。"

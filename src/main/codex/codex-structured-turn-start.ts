@@ -67,6 +67,7 @@ export type CodexTurnHost = {
   connection: Pick<CodexAppServerConnection, 'request'>
   threadId: string
   permissions?: CodexSession['permissions']
+  sideChat?: CodexSession['sideChat']
   options: Map<string, string>
   appliedTurnOptions?: Readonly<Record<string, string>>
   appliedSettings?: CodexSession['appliedSettings']

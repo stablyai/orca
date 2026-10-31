@@ -59,6 +59,11 @@ export async function handleStructuredAgentSessionCreate(
   ctx: RpcContext
 ) {
   requireStructuredAgentAudience(ctx, params.agent)
+  if ('sideChatOf' in params && params.sideChatOf && params.resumeFrom) {
+    throw agentSessionRefusalError('agent_session_operation_invalid', {
+      reason: 'requestMalformed'
+    })
+  }
   if (params.envelope.expectedRuntimeFence !== null) {
     throw agentSessionRefusalError('agent_session_operation_invalid', {
       reason: 'requestMalformed'
@@ -86,6 +91,7 @@ export async function handleStructuredAgentSessionCreate(
         caller: callerFor(ctx),
         structuredAgentCliSourceEvidence: ctx.structuredAgentCliSourceEvidence,
         ...(params.resumeFrom ? { resumeFrom: params.resumeFrom } : {}),
+        ...(params.sideChatOf ? { sideChatOf: params.sideChatOf } : {}),
         ...(params.tabId ? { tabId: params.tabId } : {}),
         ...(params.optionsMode ? { optionsMode: params.optionsMode } : {}),
         ...(params.options ? { options: params.options } : {}),

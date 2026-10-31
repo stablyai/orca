@@ -52,6 +52,7 @@ export type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgent
   }
 
 export type MobileStructuredAgentSessionArgs = {
+  openSideChat?: (question: string) => Promise<boolean>
   client: RpcClient | null
   sessionId: string | null
   /** Host/workspace scope used to keep same provider ids isolated. */

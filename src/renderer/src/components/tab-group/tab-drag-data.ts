@@ -15,6 +15,7 @@ export type TabDragItemData = {
   iconPath?: string
   color?: string | null
   agent?: TuiAgent | null
+  sideChat?: boolean
 }
 
 export type TabPaneDropData = {

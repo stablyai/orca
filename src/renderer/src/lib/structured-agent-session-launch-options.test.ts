@@ -1,6 +1,7 @@
 import { useAppStore } from '@/store'
 // @vitest-environment happy-dom
 
+import { prepareStructuredLaunchCreateMessage } from './structured-agent-session-launch-create-message'
 import type * as LaunchErrors from '@/lib/structured-agent-session-launch-errors'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
@@ -224,6 +225,28 @@ describe('picks made while a chat launches', () => {
       return new Promise(() => {})
     })
   })
+
+  it.each([undefined, { permissionMode: 'read-only' }])(
+    'keeps parent permissions unless the side-chat action explicitly chooses a mode: %s',
+    (launchOptions) => {
+      const intent = launchIntent({ permissionMode: 'full-access', model: 'host-default' })
+      intent.params.sideChatOf = 'codex_parent_123'
+      intent.createMessageSupport = true
+      mocks.createIntent.mockReturnValue(intent)
+      mocks.launch.mockReturnValue(new Promise(() => {}))
+      startStructuredAgentLaunch(WORKTREE_ID, 'codex', {
+        requestId: 'side-permissions',
+        sideChatOf: 'codex_parent_123',
+        launchOptions
+      })
+      const state = getStructuredLaunchStateBySessionId(SESSION_ID)
+      if (!state) {
+        throw new Error('Side-chat launch missing')
+      }
+      prepareStructuredLaunchCreateMessage(state, true)
+      expect(intent.params.options).toEqual(launchOptions)
+    }
+  )
 
   it('applies them against the receipt fence before the first turn and before publishing', async () => {
     const created = deferred<{ sessionId: string; fence: number }>()

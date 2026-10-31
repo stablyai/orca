@@ -2114,6 +2114,18 @@
       "savedAgentUnavailable": "The saved agent for this action is not available on this workspace host.",
       "noEnabledAgent": "No enabled AI agent was detected on this workspace host."
     },
+    "sideChat": {
+      "new": "New side chat",
+      "readOnly": "Read only",
+      "readOnlyDescription": "Uses a read-only sandbox without permission escalation",
+      "inheritPermissions": "Use main chat permissions",
+      "inheritDescription": "Starts with the main chat’s permissions; later changes are independent",
+      "badge": "btw",
+      "failed": "Could not open a side chat.",
+      "unsupportedHost": "This host cannot open a side chat.",
+      "unavailable": "This chat is not currently available for a side chat.",
+      "updateHostForReadOnly": "Update Orca on this host to open a read-only side chat."
+    },
     "structuredComposerCommand": {
       "removeAttachments": "Remove attachments before using a chat-session command.",
       "operationUnconfirmed": "Conversation operation was not confirmed."

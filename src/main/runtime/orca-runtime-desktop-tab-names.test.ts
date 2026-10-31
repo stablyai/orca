@@ -31,7 +31,9 @@ it("publishes the desktop's chat tab name over the saved name, and the saved nam
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: title projection reads only the record from this host stub.
   setStructuredAgentSessionHost({
     deps: {
+      agents: { capabilities: () => undefined },
       store: {
+        getRecord: () => null,
         getConversation: () => ({
           location: { workspaceId: TEST_WORKTREE_ID },
           conversationName: 'auth/login'

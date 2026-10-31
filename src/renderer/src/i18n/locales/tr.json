@@ -19758,6 +19758,9 @@
         "effortPickerFailed": "Çaba seçici açılamadı.",
         "modelApplyFailed": "{{value}} modeli uygulanamadı.",
         "effortApplyFailed": "Çaba düzeyi {{value}} olarak ayarlanamadı."
+      },
+      "sideChat": {
+        "title": "Yan sohbet"
       }
     },
     "tab": {
@@ -20152,7 +20155,9 @@
         "queueSearchSteer": "yönlendir",
         "shellEnvSearchVariables": "ortam değişkenleri",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "vekil sunucu"
+        "shellEnvSearchProxy": "vekil sunucu",
+        "sideChatPaneTitle": "Yan sohbetleri tek bölmede grupla",
+        "sideChatPaneCopy": "Bu çalışma alanının yan sohbetlerini ortak bir bölmede toplar. Kapalıyken yenileri kaynak sekmenin yanında açılır; mevcut bölmeler korunur."
       }
     },
     "agentChildRow": {

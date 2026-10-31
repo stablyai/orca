@@ -105,7 +105,9 @@ describe('structured session cold restoration', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: title projection reads only the record and replacement list from this host stub.
     setStructuredAgentSessionHost({
       deps: {
+        agents: { capabilities: () => undefined },
         store: {
+          getRecord: () => null,
           getConversation: () => ({
             location: { workspaceId: 'workspace-1' },
             conversationName: name

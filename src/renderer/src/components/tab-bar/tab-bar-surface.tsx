@@ -1,4 +1,5 @@
 import React from 'react'
+import { SideChatTabBadge } from './SideChatTabBadge'
 import { SortableContext } from '@dnd-kit/sortable'
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
@@ -38,6 +39,7 @@ export function renderTabBarSurface({
   tabStripDragScroll,
   activeClientHostedBrowserRowId,
   itemActions,
+  sideChatTabIds,
   surfaceRef
 }: {
   props: TabBarProps
@@ -48,6 +50,7 @@ export function renderTabBarSurface({
   tabStripDragScroll: ReturnType<typeof useTabStripDragScrollHandlers>
   activeClientHostedBrowserRowId: string | null
   itemActions: TabBarItemActions
+  sideChatTabIds: ReadonlySet<string>
   surfaceRef: (node: HTMLDivElement | null) => void
 }): React.JSX.Element {
   const {
@@ -92,6 +95,10 @@ export function renderTabBarSurface({
     showStaticCreateMenuItems
   } = createMenu
   const { orderedItems, sortableIds, dropIndicatorByVisibleId } = itemProjection
+  const sideChatOnly =
+    orderedItems.length > 0 &&
+    orderedItems.every((item) => sideChatTabIds.has(item.unifiedTabId)) &&
+    !props.clientHostedBrowserRows?.length
   const clientHostedBrowserRows = props.clientHostedBrowserRows ?? EMPTY_CLIENT_HOSTED_ROWS
   const {
     tabStripRef,
@@ -112,7 +119,16 @@ export function renderTabBarSurface({
   })
 
   return (
-    <div ref={surfaceRef} className="flex items-stretch h-full overflow-hidden flex-1 min-w-0">
+    <div
+      ref={surfaceRef}
+      data-side-chat-only={sideChatOnly}
+      className="group/side-chat-pane flex items-stretch h-full overflow-hidden flex-1 min-w-0"
+    >
+      {sideChatOnly && (
+        <span className="flex shrink-0 items-center border-r border-border/70 px-1.5">
+          <SideChatTabBadge className="mr-0" />
+        </span>
+      )}
       {tabStripOverflowState.hasOverflow ? (
         <Tooltip>
           <TooltipTrigger asChild>

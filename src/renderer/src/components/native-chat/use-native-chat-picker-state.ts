@@ -55,6 +55,7 @@ export type NativeChatPickerState = {
 
 export function useNativeChatPickerState(args: {
   agent: AgentType
+  sideChat?: boolean
   terminalTabId: string
   draftScopeKey: string
   draft: string
@@ -102,8 +103,8 @@ export function useNativeChatPickerState(args: {
   const skillPickerTriggered = !disabled && isSkillPickerTriggered(draft.slice(0, caret), profile)
   const discovery = useNativeChatSkills(agent, terminalTabId, skillPickerTriggered)
   const pickerCommands = useMemo(
-    () => nativeChatPickerCommands(agent, agentCommands, discovery.skills),
-    [agent, agentCommands, discovery.skills]
+    () => nativeChatPickerCommands(agent, agentCommands, discovery.skills, args.sideChat),
+    [agent, agentCommands, discovery.skills, args.sideChat]
   )
   const listboxId = `native-chat-picker-${useId().replaceAll(':', '')}`
   const dismissalContext = `${draftScopeKey}:${agent}`

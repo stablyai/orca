@@ -62,6 +62,22 @@ describe('mobile structured conversation commands', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
+  it('hands picked skill files to the side-chat opener', async () => {
+    const { input, sendRequest } = setup()
+    const skills = [{ name: 'review', path: '/picked/SKILL.md' }]
+    const openSideChat = vi.fn(async () => true)
+    expect(
+      await dispatchMobileStructuredCommand({
+        ...input,
+        text: '/btw use $review',
+        skills,
+        controller: { ...input.controller, openSideChat }
+      })
+    ).toBe('accepted')
+    expect(openSideChat).toHaveBeenCalledExactlyOnceWith('use $review', skills)
+    expect(sendRequest).not.toHaveBeenCalled()
+  })
+
   it.each(['/clear', '/compact'])(
     'uses the command RPC for %s without an ordinary send',
     async (text) => {
@@ -242,4 +258,21 @@ describe('mobile structured conversation commands', () => {
     expect(await dispatchMobileStructuredCommand({ ...input, text: 'hello' })).toBeNull()
     expect(sendRequest).not.toHaveBeenCalled()
   })
+})
+
+it('leaves native /btw to the agent unless the host side-chat callback is available', async () => {
+  const { input, sendRequest } = setup()
+  input.text = '/btw Native question'
+  expect(await dispatchMobileStructuredCommand(input)).toBeNull()
+  expect(sendRequest).not.toHaveBeenCalled()
+  expect(input.onError).not.toHaveBeenCalled()
+  const openSideChat = vi.fn(async () => true)
+  expect(
+    await dispatchMobileStructuredCommand({
+      ...input,
+      controller: { ...input.controller, openSideChat }
+    })
+  ).toBe('accepted')
+  expect(openSideChat).toHaveBeenCalledExactlyOnceWith('Native question')
+  expect(sendRequest).not.toHaveBeenCalled()
 })

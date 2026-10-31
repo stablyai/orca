@@ -73,3 +73,19 @@ describe('decodeAgentSessionAgentsResult', () => {
     expect(decodeAgentSessionAgentsResult({ agents: 'claude' })).toBeNull()
   })
 })
+
+it('offers side chats only when the registered backend explicitly advertises them', () => {
+  expect(
+    decodeAgentSessionAgentsResult({ agents: [CODEX] })?.[0]?.capabilities.sideChat
+  ).toBeUndefined()
+  expect(
+    decodeAgentSessionAgentsResult({
+      agents: [{ ...CODEX, capabilities: { ...CODEX.capabilities, sideChat: true } }]
+    })?.[0]?.capabilities.sideChat
+  ).toBe(true)
+  expect(
+    decodeAgentSessionAgentsResult({
+      agents: [{ ...CODEX, capabilities: { ...CODEX.capabilities, sideChat: 'true' } }]
+    })
+  ).toEqual([])
+})

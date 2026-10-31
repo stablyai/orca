@@ -18279,6 +18279,12 @@
   },
   "components": {
     "native-chat": {
+      "sideChat": {
+        "new": "新建旁聊",
+        "badge": "btw",
+        "failed": "无法打开旁支对话。",
+        "title": "旁支对话"
+      },
       "install": {
         "checking": "正在检查 {{agent}} 是否已在此主机上就绪…"
       },
@@ -19601,7 +19607,9 @@
         "queueSearchSteer": "立即发送",
         "shellEnvSearchVariables": "环境变量",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "代理"
+        "shellEnvSearchProxy": "代理",
+        "sideChatPaneTitle": "将旁支对话集中到一个窗格",
+        "sideChatPaneCopy": "将当前工作区的旁支对话集中到一个分栏窗格。关闭后，新旁支对话会在来源标签旁打开；已有窗格保持不变。"
       }
     },
     "agentChildRow": {

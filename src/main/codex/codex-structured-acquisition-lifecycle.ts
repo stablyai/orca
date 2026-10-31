@@ -1,12 +1,12 @@
+import { cancelProcessAcquisition } from '@orca/process-host/cancel-process-acquisition'
 import {
   AgentSessionAcquisitionExitUnprovenError,
   AgentSessionAcquisitionRootExitObservedError
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { isCodexAppServerHandshakeExitUnprovenError } from './app-server/codex-app-server-handshake-exit-proof'
-import {
-  cancelCodexAcquisitionAttempt,
-  type CodexAcquisitionAttempt,
-  type CodexAcquisitionRegistry
+import type {
+  CodexAcquisitionAttempt,
+  CodexAcquisitionRegistry
 } from './codex-structured-session-state'
 
 export async function stopSupersededCodexAcquisition(input: {
@@ -59,4 +59,27 @@ export async function closeFailedCodexAcquisition(input: {
     throw new AgentSessionAcquisitionRootExitObservedError(input.cause, 'kill-delivered')
   }
   throw input.cause
+}
+
+export async function cancelCodexAcquisitionAttempt(
+  attempt: CodexAcquisitionAttempt | undefined,
+  requestedClose = true
+): Promise<boolean> {
+  if (!attempt) {
+    return true
+  }
+  const closed = await cancelProcessAcquisition({
+    cancel: () => {
+      attempt.cancelled = true
+      attempt.requestedClose = requestedClose
+    },
+    connection: () => attempt.window.connection,
+    exitProven: () => attempt.exitProven,
+    finished: attempt.finished
+  })
+  if (closed) {
+    attempt.exitProven = true
+    attempt.dispose?.()
+  }
+  return closed
 }

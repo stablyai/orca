@@ -37,6 +37,8 @@ export type MobileSessionTab =
     }
   | {
       type: 'agent-session'
+      sideChatOf?: string
+      sideChatSupported?: boolean
       id: string
       title: string
       sessionId: string

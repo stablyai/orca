@@ -22,7 +22,8 @@ export function useMobileNativeChatSessionLane({
   connState,
   onSendError,
   onQueuedEditNotice,
-  onActionResolved
+  onActionResolved,
+  openSideChat
 }: {
   client: RpcClient | null
   hostId: string
@@ -38,6 +39,7 @@ export function useMobileNativeChatSessionLane({
   onQueuedEditNotice?: (message: string) => void
   onSendError: MobileNativeChatSendErrorReporter
   onActionResolved?: () => void
+  openSideChat?: (question: string) => Promise<boolean>
 }): {
   structuredSession: ReturnType<typeof useMobileStructuredAgentSession>
   session: ReturnType<typeof useMobileNativeChatSession>
@@ -65,6 +67,7 @@ export function useMobileNativeChatSessionLane({
     transcriptPath: structured ? null : (resolution?.transcriptPath ?? null)
   })
   const structuredSession = useMobileStructuredAgentSession({
+    openSideChat,
     client,
     sessionId: structured ? sessionId : null,
     sourceIdentity,

@@ -114,6 +114,9 @@ export function getTabLayoutSignature(
   if (item.type === 'editor') {
     return `${item.type}:${item.id}:${item.isPinned}:${item.data.isDirty}:${item.data.isPreview}:${item.data.externalMutation ?? ''}:${status ?? ''}:${label}`
   }
+  if (item.type === 'agent-session') {
+    return `${item.type}:${item.id}:${item.isPinned}:${!!item.data.sideChatOf}:${label}`
+  }
   return `${item.type}:${item.id}:${item.isPinned}:${label}`
 }
 

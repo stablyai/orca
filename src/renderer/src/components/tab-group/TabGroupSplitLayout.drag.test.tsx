@@ -14,7 +14,9 @@ vi.mock('../../store', () => {
   const state = (): Record<string, unknown> => ({
     recordFeatureInteraction: recordFeatureInteractionMock,
     setTabGroupSplitRatio: setTabGroupSplitRatioMock,
-    layoutByWorktree: {}
+    layoutByWorktree: {},
+    unifiedTabsByWorktree: {},
+    groupsByWorktree: {}
   })
   // The switch-on ratio commit reads the store directly.
   const useAppStore = Object.assign(

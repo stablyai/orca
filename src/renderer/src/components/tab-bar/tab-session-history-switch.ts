@@ -129,6 +129,7 @@ export function canPaneOfferResumeInNewChat(
 
 /** A native chat tab's session and the provider recorded when it was created. */
 export type NativeChatTabSession = {
+  sideChat?: boolean
   sessionId: string
   agent: AgentType | undefined
 }

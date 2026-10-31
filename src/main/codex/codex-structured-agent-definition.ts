@@ -7,6 +7,7 @@ export const CODEX_STRUCTURED_AGENT: DirectoryAccountAgentDefinition = {
   handleTransport: CODEX_STRUCTURED_HANDLE_NAMESPACE.transport,
   accountHomeVariable: 'CODEX_HOME',
   capabilities: {
+    sideChat: true,
     // A thread with legacy, unpaginated history narrows this to unsupported once it runs.
     rewind: true,
     compact: true,

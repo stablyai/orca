@@ -11,6 +11,10 @@ import type { SessionOptionDescriptor } from './native-chat/input/native-chat-se
 /** English names and descriptions for surfaces without a translation catalog. */
 const MODE_COPY: Readonly<Record<AgentChatPermissionMode, { label: string; description: string }>> =
   {
+    'read-only': {
+      label: 'Read only',
+      description: 'Uses a read-only sandbox without permission escalation'
+    },
     ask: {
       label: 'Ask for approval',
       description: "Asks before edits and commands your settings don't allow"
