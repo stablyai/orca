@@ -3,7 +3,11 @@ import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalEntryChange } from './journal-transition-collections'
 import { journalEntryJson, journalStateScalars } from './journal-state-layout'
-import { admitOutcomeFormat1, JOURNAL_OUTCOME_FORMAT_1 } from './journal-outcome-format-1'
+import {
+  admitOutcomeFormat1,
+  JOURNAL_OUTCOME_FORMAT_1,
+  type AdmittedOutcome
+} from './journal-outcome-format-1'
 import { decodeOutcomeFormat1Onto } from './journal-outcome-format-1-decode'
 import { AgentSessionJournalError } from './journal-write-guards'
 
@@ -77,6 +81,10 @@ export function journalOutcomeScalars(state: JournalReducerState): Record<string
 /** Admits one stored record or refuses the chat: a newer format or field as newer, anything else as
  * damage. */
 export function decodeJournalOutcome(row: SqliteRow): JournalOutcome {
+  return admitJournalOutcome(row).value
+}
+
+function admitJournalOutcome(row: SqliteRow): { value: JournalOutcome; admitted: AdmittedOutcome } {
   return decodingOutcome(() => {
     if (
       typeof row.seq !== 'number' ||
@@ -103,10 +111,12 @@ export function decodeJournalOutcome(row: SqliteRow): JournalOutcome {
       json: row.value_json,
       deleted: row.deleted === 1
     }
-    if (value.format !== JOURNAL_OUTCOME_FORMAT_1 || admitOutcomeFormat1(value) === 'unknown') {
+    const admitted =
+      value.format === JOURNAL_OUTCOME_FORMAT_1 ? admitOutcomeFormat1(value) : 'unknown'
+    if (admitted === 'unknown') {
       throw new AgentSessionJournalError('journal_read_only', 'the chat holds a newer outcome')
     }
-    return value
+    return { value, admitted }
   })
 }
 
@@ -122,17 +132,22 @@ export function decodingOutcome<T>(decode: () => T): T {
   }
 }
 
+type Newest = AdmittedOutcome & Pick<JournalOutcome, 'ordinal' | 'deleted'>
+
 /** Last-write-wins per key, deletions included, so the tail can remove values from a frozen prefix;
  * order comes from the canonical log. */
 export class JournalOutcomeFold {
-  private readonly values = new Map<string, Map<string, JournalOutcome>>()
-  add(value: JournalOutcome): void {
+  private readonly values = new Map<string, Map<string, Newest>>()
+  /** Admits one stored record and keeps its value as admission parsed it, not its text. */
+  add(row: SqliteRow): Pick<JournalOutcome, 'field' | 'key'> {
+    const { value, admitted } = admitJournalOutcome(row)
     let field = this.values.get(value.field)
     if (!field) {
       field = new Map()
       this.values.set(value.field, field)
     }
-    field.set(value.key, value)
+    field.set(value.key, { ordinal: value.ordinal, deleted: value.deleted, ...admitted })
+    return value
   }
 
   /** Applies the latest values over `baseline` (the folded input prefix) or over the scalars alone:
@@ -147,14 +162,14 @@ export class JournalOutcomeFold {
     through: number,
     baseline?: JournalReducerState
   ): JournalReducerState {
-    const scalarJson: [string, string][] = [
-      ...[...(this.values.get('$')?.values() ?? [])].map((value): [string, string] => [
-        String(JSON.parse(value.key)),
-        value.json
+    const scalars: [string, unknown][] = [
+      ...[...(this.values.get('$')?.values() ?? [])].map((value): [string, unknown] => [
+        String(value.entryKey),
+        value.kept
       ]),
-      ['lastSequence', JSON.stringify(through)]
+      ['lastSequence', through]
     ]
-    const decode = decodingOutcome(() => decodeOutcomeFormat1Onto(scalarJson, baseline))
+    const decode = decodingOutcome(() => decodeOutcomeFormat1Onto(scalars, baseline))
     for (const [field, entries] of this.values) {
       if (field === '$') {
         continue
@@ -165,10 +180,10 @@ export class JournalOutcomeFold {
       for (const value of ordered) {
         decodingOutcome(() => {
           if (value.deleted || value.ordinal !== JOURNAL_PREFIX_ORDINAL) {
-            decode.remove(field, JSON.parse(value.key))
+            decode.remove(field, value.entryKey)
           }
           if (!value.deleted) {
-            decode.entry(field, value.json)
+            decode.entry(field, value.kept)
           }
         })
       }

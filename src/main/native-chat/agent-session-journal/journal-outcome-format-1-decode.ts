@@ -1,17 +1,17 @@
-import type { z } from 'zod'
+import { z } from 'zod'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
 import { createJournalReducerState, type JournalReducerState } from './journal-reducer'
 import { JournalDerivedTurnScope } from './journal-derived-turn-scope'
 import {
-  outcomeFormat1EntryParsers,
-  outcomeFormat1Fields,
-  outcomeFormat1Scalars,
+  outcomeFormat1StoredScalars,
   outcomeFormat1StrictScalars
 } from './journal-outcome-format-1'
 
 // Part of frozen outcome format 1: builds reducer state from its stored scalars and keyed entries.
+// Every value arrives as admission parsed it and walked it strictly, so these views only type it.
 
 type JournalStateDecode = {
-  entry: (path: string, entryJson: string) => void
+  entry: (path: string, entry: unknown) => void
   remove: (path: string, key: unknown) => void
   finish: () => JournalReducerState
 }
@@ -21,20 +21,18 @@ type Target = {
   remove: (key: unknown) => void
 }
 
-/** Applies stored scalars and entries onto `baseline`, or onto a new chat state when the scalars
+/** Applies admitted scalars and entries onto `baseline`, or onto a new chat state when the scalars
  * are complete. A map or set entry for an existing key replaces it in place. */
 export function decodeOutcomeFormat1Onto(
-  scalarJson: readonly [string, string][],
+  scalars: readonly [string, unknown][],
   baseline?: JournalReducerState
 ): JournalStateDecode {
   const state = baseline ?? createJournalReducerState('', '')
   if (!baseline) {
-    outcomeFormat1StrictScalars.parse(
-      Object.fromEntries(scalarJson.map(([key, json]) => [key, JSON.parse(json)]))
-    )
+    outcomeFormat1StrictScalars.parse(Object.fromEntries(scalars))
   }
-  for (const [key, json] of scalarJson) {
-    applyScalar(state, key, JSON.parse(json))
+  for (const [key, value] of scalars) {
+    applyScalar(state, key, value)
   }
   const targets = collectionTargets(state)
   const target = (path: string): Target => {
@@ -45,7 +43,7 @@ export function decodeOutcomeFormat1Onto(
     return found
   }
   return {
-    entry: (path, entryJson) => target(path).set(JSON.parse(entryJson)),
+    entry: (path, entry) => target(path).set(entry),
     remove: (path, key) => target(path).remove(key),
     finish: () => state
   }
@@ -60,8 +58,11 @@ export function durableQueuePauseMarks(
   return { ...marks, latestStop: stop && { sequence: stop.sequence, event: stop.event } }
 }
 
+const f = outcomeFormat1StoredScalars.shape
+const admittedPauseMarks = z.custom<JournalReducerState['queuePauseMarks']>()
+const admittedHistoryOrigin = z.custom<JournalReducerState['historyOrigin']>()
+
 function applyScalar(state: JournalReducerState, key: string, value: unknown): void {
-  const f = outcomeFormat1Scalars.shape
   switch (key) {
     case 'sessionId':
       state.sessionId = f.sessionId.parse(value)
@@ -88,13 +89,13 @@ function applyScalar(state: JournalReducerState, key: string, value: unknown): v
       state.latestAcceptedTurnSequence = f.latestAcceptedTurnSequence.parse(value)
       return
     case 'queuePauseMarks':
-      state.queuePauseMarks = f.queuePauseMarks.parse(value)
+      state.queuePauseMarks = admittedPauseMarks.parse(value)
       return
     case 'queue':
       state.queue.revision = f.queue.parse(value).revision
       return
     case 'historyOrigin':
-      state.historyOrigin = f.historyOrigin.parse(value)
+      state.historyOrigin = admittedHistoryOrigin.parse(value)
       return
     default:
       throw new Error('unknown saved journal scalar')
@@ -105,24 +106,24 @@ const isString = (key: unknown): key is string => typeof key === 'string'
 const isNumber = (key: unknown): key is number => typeof key === 'number'
 
 function collectionTargets(state: JournalReducerState): Map<string, Target> {
-  const map = <K, V>(
-    target: Map<K, V>,
-    schema: z.ZodType<[K, V]>,
-    isKey: (key: unknown) => key is K
-  ): Target => ({
-    set: (entry) => {
-      const [key, value] = schema.parse(entry)
-      target.set(key, value)
-    },
-    remove: (key) => {
-      if (isKey(key)) {
-        target.delete(key)
+  const map = <K, V>(target: Map<K, V>, isKey: (key: unknown) => key is K): Target => {
+    const admitted = z.custom<[K, V]>()
+    return {
+      set: (entry) => {
+        const [key, value] = admitted.parse(entry)
+        target.set(key, value)
+      },
+      remove: (key) => {
+        if (isKey(key)) {
+          target.delete(key)
+        }
       }
     }
-  })
-  const set = (target: Set<string>, schema: z.ZodType<[string, string]>): Target => ({
+  }
+  const member = z.custom<[string, string]>()
+  const set = (target: Set<string>): Target => ({
     set: (entry) => {
-      target.add(schema.parse(entry)[0])
+      target.add(member.parse(entry)[0])
     },
     remove: (key) => {
       if (isString(key)) {
@@ -130,15 +131,16 @@ function collectionTargets(state: JournalReducerState): Map<string, Target> {
       }
     }
   })
-  const p = outcomeFormat1EntryParsers
+  const item = z.custom<AgentJournalRenderItem>()
+  const echo = z.custom<[string] | [string, unknown]>()
   const items = state.items
   return new Map<string, Target>([
     [
       'items',
       {
         set: (entry) => {
-          const item = outcomeFormat1Fields.items.element.parse(entry)
-          items.set(item.itemId, item)
+          const value = item.parse(entry)
+          items.set(value.itemId, value)
         },
         remove: (key) => {
           if (isString(key)) {
@@ -147,20 +149,20 @@ function collectionTargets(state: JournalReducerState): Map<string, Target> {
         }
       }
     ],
-    ['itemFences', map(state.itemFences, p.itemFences, isString)],
-    ['itemExecutionOwners', map(state.itemExecutionOwners, p.itemExecutionOwners, isString)],
-    ['providerActivityAt', map(state.providerActivityAt, p.providerActivityAt, isNumber)],
-    ['tombstones', map(state.tombstones, p.tombstones, isString)],
-    ['removedTurnIds', set(state.removedTurnIds, p.removedTurnIds)],
-    ['submissions', map(state.submissions, p.submissions, isString)],
-    ['receipts', map(state.receipts, p.receipts, isString)],
-    ['aliases', map(state.aliases, p.aliases, isString)],
+    ['itemFences', map(state.itemFences, isString)],
+    ['itemExecutionOwners', map(state.itemExecutionOwners, isString)],
+    ['providerActivityAt', map(state.providerActivityAt, isNumber)],
+    ['tombstones', map(state.tombstones, isString)],
+    ['removedTurnIds', set(state.removedTurnIds)],
+    ['submissions', map(state.submissions, isString)],
+    ['receipts', map(state.receipts, isString)],
+    ['aliases', map(state.aliases, isString)],
     [
       'itemEchoes',
       {
         set: (entry) => {
-          const echo = p.itemEchoes.parse(entry)
-          state.itemEchoes.set(echo[0], echo[1])
+          const value = echo.parse(entry)
+          state.itemEchoes.set(value[0], value[1])
         },
         remove: (key) => {
           if (isString(key)) {
@@ -169,10 +171,10 @@ function collectionTargets(state: JournalReducerState): Map<string, Target> {
         }
       }
     ],
-    ['appliedSettlementIds', set(state.appliedSettlementIds, p.appliedSettlementIds)],
-    ['stoppedHistoryCarried', map(state.stoppedHistoryCarried, p.stoppedHistoryCarried, isString)],
-    ['queuedHandOffPlaces', map(state.queuedHandOffPlaces, p.queuedHandOffPlaces, isString)],
-    ['normalizedHandOffs', set(state.normalizedHandOffs, p.normalizedHandOffs)],
-    ['queue.cards', map(state.queue.cards, p['queue.cards'], isString)]
+    ['appliedSettlementIds', set(state.appliedSettlementIds)],
+    ['stoppedHistoryCarried', map(state.stoppedHistoryCarried, isString)],
+    ['queuedHandOffPlaces', map(state.queuedHandOffPlaces, isString)],
+    ['normalizedHandOffs', set(state.normalizedHandOffs)],
+    ['queue.cards', map(state.queue.cards, isString)]
   ])
 }

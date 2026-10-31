@@ -21,6 +21,7 @@ import { applyJournalRow, type JournalReducerState } from './journal-reducer'
 import { isolateJournalTransition } from './journal-reducer-transition'
 import { encodeJournalState } from './journal-state-codec'
 import type * as RowStorage from './journal-storage-row-schema'
+import type * as Strict from './journal-storage-strict'
 import type * as OutcomeFormat1 from './journal-outcome-format-1'
 import {
   projectionBase as base,
@@ -35,8 +36,32 @@ import {
 // N/10N contracts: each counts statements (prepare and exec), rows read and rows and bytes
 // written, never time, and requires the same work for a chat ten times larger.
 
-// Admission's own work: strict walks of input rows and of outcome records, counted at the calls.
-const admission = vi.hoisted(() => ({ rows: 0, records: 0 }))
+// Admission's own work: strict walks of input rows and of outcome records, counted at the calls,
+// and every strict walk at all, counted at each strict schema storage builds.
+const admission = vi.hoisted(() => ({ rows: 0, records: 0, walks: 0 }))
+vi.mock('./journal-storage-strict', async (original) => {
+  const actual = await original<typeof Strict>()
+  // A schema storage cannot close further comes back as it is, so one instance can recur.
+  const counted = new WeakSet<ReturnType<typeof actual.strictStorage>>()
+  return {
+    ...actual,
+    strictStorage: (schema: Parameters<typeof actual.strictStorage>[0]) => {
+      const strict = actual.strictStorage(schema)
+      if (counted.has(strict)) {
+        return strict
+      }
+      counted.add(strict)
+      const walk = strict.safeParse.bind(strict)
+      Object.defineProperty(strict, 'safeParse', {
+        value: (...input: Parameters<typeof walk>) => {
+          admission.walks += 1
+          return walk(...input)
+        }
+      })
+      return strict
+    }
+  }
+})
 vi.mock('./journal-storage-row-schema', async (original) => {
   const actual = await original<typeof RowStorage>()
   return {
@@ -400,21 +425,40 @@ it("opens an existing chat reading main's prefix rows and each tail key's newest
   expect(large.keys).toBe(small.keys)
 })
 
+/** The text of each keyed record an open decodes: every key's newest live record. */
+function newestEntries(database: JournalHostDatabase) {
+  const rows = database.db
+    .prepare(
+      `SELECT value_json FROM journal_outcomes o WHERE field <> '$' AND deleted = 0 AND seq =
+        (SELECT MAX(seq) FROM journal_outcomes WHERE generation = o.generation AND field = o.field
+        AND entry_key = o.entry_key)`
+    )
+    .all()
+  return { texts: new Set(rows.map((row) => String(row.value_json))), records: rows.length }
+}
+
 // Admission is linear in what is read, with a constant of one: one strict walk per input row read
-// (main parses each row once; this adds the walk), one per outcome record read or written.
+// (main parses each row once; this adds the walk), one per outcome record read or written. Decoding
+// takes each record as admission parsed it: no record is parsed or walked twice.
 it('admits each row and record an existing chat reads or writes once, at N and 10N', async () => {
   const measure = async (size: number) => {
     const { database, rig } = await prefixChat(size, `admission-${size}`)
+    const entries = newestEntries(database)
     const watched = watch(database)
     admission.rows = 0
     admission.records = 0
+    admission.walks = 0
+    const parses = vi.spyOn(JSON, 'parse')
     restoreJournal(database.db, sessionId)
-    const open = { ...admission, read: watched.take().read }
+    const parsed = parses.mock.calls.filter(([text]) => entries.texts.has(text)).length
+    parses.mockRestore()
+    const open = { ...admission, parsed, entries: entries.records, read: watched.take().read }
     admission.rows = 0
     const page = readJournalRowsAfterCursor(database.db, sessionId, epoch, 0, 100)
     const paged = { walks: admission.rows, rows: page.filter((row) => row.kind !== 'outcome') }
     admission.rows = 0
     admission.records = 0
+    admission.walks = 0
     await rig.writer.enqueue(revision('answer', message('z'.repeat(4_096), 'assistant'), 3))
     const written = { ...admission, writes: watched.take().writes }
     watched.stop()
@@ -425,11 +469,15 @@ it('admits each row and record an existing chat reads or writes once, at N and 1
     expect(open.read.journal_rows).toBe(prefix + 2)
     expect(open.rows).toBe(prefix)
     expect(open.records).toBe(keys)
+    expect(open.walks).toBe(open.rows + open.records)
+    expect(open.entries).toBeGreaterThan(0)
+    expect(open.parsed).toBe(open.entries)
     expect(paged.rows).toHaveLength(100)
     expect(paged.walks).toBe(100)
     // The written row's read-back, and each record the write inserts.
     expect(written.rows).toBe(1)
     expect(written.writes).toStrictEqual([['journal_outcomes INSERT', written.records]])
+    expect(written.walks).toBe(written.rows + written.records)
   }
 })
 

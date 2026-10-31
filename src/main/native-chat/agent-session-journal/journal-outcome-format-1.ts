@@ -194,15 +194,18 @@ const strictly = (schemas: Record<string, z.ZodType>) =>
 const collections = strictly(outcomeFormat1Stored)
 const scalars = strictly(outcomeFormat1StoredScalars.shape)
 
+/** A record's key and value as admission parsed and checked them; decoding takes them as they are. */
+export type AdmittedOutcome = { readonly entryKey: unknown; readonly kept: unknown }
+
 /** Admission: a field, scalar, key or union tag format 1 does not declare, at any depth, is a newer
  * writer's ('unknown'); content failing a declared type is damage and throws. An admitted value is
- * decoded as stored, never re-encoded through the schema. */
+ * decoded as stored, never re-encoded through the schema, and never parsed or walked again. */
 export function admitOutcomeFormat1(value: {
   field: string
   key: string
   json: string
   deleted: boolean
-}): 'unknown' | undefined {
+}): 'unknown' | AdmittedOutcome {
   const key: unknown = JSON.parse(value.key)
   const schema =
     value.field === '$'
@@ -217,7 +220,7 @@ export function admitOutcomeFormat1(value: {
     throw new Error('invalid journal outcome key')
   }
   if (value.deleted) {
-    return value.json === 'null' ? undefined : 'unknown'
+    return value.json === 'null' ? { entryKey: key, kept: null } : 'unknown'
   }
   const kept: unknown = JSON.parse(value.json)
   const verdict = storageVerdict(schema, kept)
@@ -231,7 +234,7 @@ export function admitOutcomeFormat1(value: {
   if (storedKey !== key) {
     throw new Error('mismatched journal outcome key')
   }
-  return undefined
+  return { entryKey: key, kept }
 }
 
 function itemId(value: unknown): unknown {

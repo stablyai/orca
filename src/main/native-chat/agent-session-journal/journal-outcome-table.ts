@@ -5,7 +5,6 @@ import { isolateJournalTransition } from './journal-reducer-transition'
 import type { JournalRow } from './journal-row-schema'
 import { journalRowReadBack } from './journal-row-table'
 import {
-  decodeJournalOutcome,
   encodeJournalOutcomes,
   journalOutcomeScalars,
   JournalOutcomeFold,
@@ -36,8 +35,7 @@ export function readJournalOutcomes(
     if (!row) {
       return fold.finish(sessionId, epoch, source.through, baseline)
     }
-    const value = decodeJournalOutcome(row)
-    fold.add(value)
+    const value = fold.add(row)
     after = { field: value.field, key: value.key }
   }
 }

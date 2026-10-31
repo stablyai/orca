@@ -183,7 +183,10 @@ const values = z
 it('admits and decodes every declared shape as stored, and refuses one key more as newer', () => {
   for (const [field, key, value] of values) {
     const json = JSON.stringify(value)
-    expect(admitOutcomeFormat1({ field, key, json, deleted: false })).toBeUndefined()
+    expect(admitOutcomeFormat1({ field, key, json, deleted: false })).toEqual({
+      entryKey: JSON.parse(key),
+      kept: value
+    })
     const decoded =
       field === 'items'
         ? outcomeFormat1Fields.items.element.parse(value)

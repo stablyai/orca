@@ -247,7 +247,10 @@ it('folds the checked-in input rows into the same chat, every value of which sto
   ]
   expect(stored.length).toBeGreaterThan(20)
   for (const value of stored) {
-    expect(admitOutcomeFormat1({ ...value, deleted: false })).toBeUndefined()
+    expect(admitOutcomeFormat1({ ...value, deleted: false })).toEqual({
+      entryKey: JSON.parse(value.key),
+      kept: JSON.parse(value.json)
+    })
   }
 })
 
