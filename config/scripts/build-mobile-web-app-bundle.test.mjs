@@ -429,9 +429,9 @@ describe('the Phase C budget', () => {
         key
       ).toBeGreaterThanOrEqual(measured)
     }
-    // Observed 1–14 scripts/route rules out a four-per-route bound or linear fit.
+    // Observed 1–15 scripts/route rules out a four-per-route bound or linear fit.
     expect(Math.min(...MOBILE_WEB_APP_BUNDLE_ROUTE_SCRIPT_SPREAD)).toBe(1)
-    expect(Math.max(...MOBILE_WEB_APP_BUNDLE_ROUTE_SCRIPT_SPREAD)).toBe(14)
+    expect(Math.max(...MOBILE_WEB_APP_BUNDLE_ROUTE_SCRIPT_SPREAD)).toBe(15)
   })
 
   it('sits exactly one margin over the swept tree and grants the worst route beyond it', () => {
@@ -454,7 +454,7 @@ describe('the Phase C budget', () => {
     const CHUNKED_ALONG_THE_ENGINE = 172
     expect(WITH_ONE_ARTIFACT).toBeLessThanOrEqual(mobileWebAppBundleMaxChunks(ROUTES))
     expect(CHUNKED_ALONG_THE_ENGINE).toBeGreaterThan(mobileWebAppBundleMaxChunks(ROUTES))
-    // Chunked engine also emitted 215 total assets, exceeding the current 160-asset envelope.
+    // Chunked engine also emitted 215 total assets, exceeding the current 165-asset envelope.
     expect(mobileWebAppBundleMaxAssets(ROUTES, 42)).toBeLessThan(CHUNKED_ALONG_THE_ENGINE + 42 + 1)
   })
 
@@ -485,15 +485,15 @@ describe('the Phase C budget', () => {
   )
 
   it('fails the build when the derived ceiling passes what the phone will accept', async () => {
-    // Measured sweep crosses the phone’s 256-asset limit at 24 routes with either 42 or 50 images.
+    // Measured sweep crosses the phone’s 256-asset limit at 24 routes with 42 images, or 23 with 50.
     expect(await readMobileWebBundleMaxAssets()).toBe(MOBILE_WEB_BUNDLE_MAX_ASSETS)
-    expect(assertAssetCeilingFitsShell(23, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toBe(244)
+    expect(assertAssetCeilingFitsShell(23, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toBe(255)
     expect(() => assertAssetCeilingFitsShell(24, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toThrow(
-      /258 .*256/
+      /270 .*256/
     )
-    expect(assertAssetCeilingFitsShell(23, 50, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toBe(252)
-    expect(() => assertAssetCeilingFitsShell(24, 50, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toThrow(
-      /266 .*256/
+    expect(assertAssetCeilingFitsShell(22, 50, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toBe(248)
+    expect(() => assertAssetCeilingFitsShell(23, 50, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toThrow(
+      /263 .*256/
     )
   })
 })
