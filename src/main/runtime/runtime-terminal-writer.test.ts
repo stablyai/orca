@@ -186,7 +186,7 @@ it.each([
 })
 
 describe('submit settle before Enter', () => {
-  async function submitTimes(text: string, idleShell: boolean): Promise<number[]> {
+  async function submitTimes(text: string, idleShell: boolean, proofMs = 0): Promise<number[]> {
     vi.useFakeTimers()
     const startedAt = Date.now()
     const enters: number[] = []
@@ -200,7 +200,10 @@ describe('submit settle before Enter', () => {
       () => 'linux',
       () => null,
       undefined,
-      async () => idleShell
+      () =>
+        new Promise<boolean>((resolve) => {
+          setTimeout(() => resolve(idleShell), proofMs)
+        })
     )
     const pending = writer.writeAction('pty', { text, enter: true }, `${text}\r`, {
       inputKind: 'driving'
@@ -222,5 +225,11 @@ describe('submit settle before Enter', () => {
   it('keeps the settle for multi-line text even at an idle prompt', async () => {
     const [at] = await submitTimes('echo one\necho two', true)
     expect(at).toBeGreaterThanOrEqual(500)
+  })
+
+  it('counts a failed idle proof toward the settle instead of adding to it', async () => {
+    const [unproven] = await submitTimes('ls -la', false)
+    const [slowProof] = await submitTimes('ls -la', false, 250)
+    expect(slowProof).toBe(unproven)
   })
 })

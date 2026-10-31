@@ -83,15 +83,18 @@ export class RuntimeTerminalWriter {
     }
     if (hasSuffix) {
       const suffix = (action.enter ? '\r' : '') + (action.interrupt ? '\x03' : '')
+      const claimStartedAt = Date.now()
       // A shell at its prompt reads one line as typed; agent TUIs need the paste to settle.
       if (text && !(isSingleLine(text) && (await this.claimIdleShellPrompt(ptyId)))) {
+        const delayMs = resolveAgentPromptSubmitDelayForAgent(
+          this.getWriteHostPlatform(ptyId),
+          text,
+          this.getAgent(ptyId)
+        )
         // Enter must wait for host ingestion; a flat 500ms cannot cover 16MB.
+        // A failed idle proof already spent part of that wait, so a send is never slower than before.
         await waitForTerminalWriteDelay(
-          resolveAgentPromptSubmitDelayForAgent(
-            this.getWriteHostPlatform(ptyId),
-            text,
-            this.getAgent(ptyId)
-          ),
+          Math.max(0, delayMs - (Date.now() - claimStartedAt)),
           options.signal
         )
       }
