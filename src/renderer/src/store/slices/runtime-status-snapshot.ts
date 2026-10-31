@@ -58,3 +58,14 @@ export function applyRuntimeHostStatusSnapshot(
     publishEvidence(entry)
   }
 }
+
+export async function readRuntimeHostStatusSnapshots(
+  get: () => RuntimeStatusStoreState
+): Promise<void> {
+  try {
+    const snapshots = await window.api.runtimeEnvironments.getStatusSnapshots()
+    snapshots.forEach((snapshot) => get().applyRuntimeHostStatusSnapshot(snapshot))
+  } catch (error) {
+    console.error('Failed to read runtime host status:', error)
+  }
+}

@@ -20,7 +20,7 @@ import { ipcOrRuntimeTargetForHostId } from '../../runtime/runtime-client-target
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { ProjectRemovalFailure, RepoSlice } from '../repos/repo-state'
 import { mergeProjectCompatibilityForHostRepoChange } from '../repos/repo-catalog-identity'
-import { applyProjectGroupDeleteCascade } from './project-group-removal-state'
+import { applyCommittedProjectGroupDeleteCascade } from './project-group-removal-state'
 import { adoptFromEndpoint } from '../adopt-from-endpoint'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
@@ -152,7 +152,7 @@ export function createProjectGroupMutationActions(
         if (!deleted) {
           return false
         }
-        set((s) => applyProjectGroupDeleteCascade(s, groupId, ownerHostId))
+        set(applyCommittedProjectGroupDeleteCascade(get(), groupId, ownerHostId))
         return true
       } catch (err) {
         console.error('Failed to delete project group:', err)

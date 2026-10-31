@@ -1,3 +1,5 @@
+import { deleteNativeChatComposerDraftsWhere } from './native-chat-composer-draft-removal'
+export { deleteNativeChatComposerDraftsWhere } from './native-chat-composer-draft-removal'
 import { nativeChatPastedTextToken } from './native-chat-pasted-text-reference'
 // Own complete unsent drafts in memory so each write repairs storage from one authoritative record.
 
@@ -16,7 +18,6 @@ import {
   clearDraftMemoryForTests,
   resolveNativeChatComposerDraftOwner,
   releaseNativeChatComposerSubmission,
-  retireNativeChatComposerSubmissionsWhere,
   type DraftSubmission,
   installNativeChatDraftRecord,
   type NativeChatDraftPosition,
@@ -37,7 +38,6 @@ import {
   type DraftRecord
 } from './native-chat-composer-draft-memory'
 import {
-  deleteLoadingNativeChatComposerDraftsWhere,
   persistNativeChatComposerDraft,
   resetNativeChatComposerDraftPersistenceForTests
 } from './native-chat-composer-draft-persistence'
@@ -268,26 +268,8 @@ export function structuredAgentSessionDraftScopeKey(sessionId: string): string {
   return `${STRUCTURED_AGENT_SESSION_DRAFT_SCOPE_PREFIX}${sessionId}`
 }
 
-function deleteDraftsWhere(
-  matches: (scopeKey: string, draft: StoredNativeChatComposerDraft | undefined) => boolean
-): void {
-  deleteLoadingNativeChatComposerDraftsWhere(matches)
-  retireNativeChatComposerSubmissionsWhere(matches)
-  for (const scopeKey of new Set([...records.keys(), ...scopeListeners.keys()])) {
-    const draft = records.get(scopeKey)
-    if (matches(scopeKey, draft)) {
-      installNativeChatDraftRecord(scopeKey)
-      reconcileRestoredImageChecks(scopeKey, [])
-      notifyScope(scopeKey)
-      if (draft) {
-        persistNativeChatComposerDraft(scopeKey, 'immediate')
-      }
-    }
-  }
-}
-
 export function deleteNativeChatComposerDraft(scopeKey: string): void {
-  deleteDraftsWhere((key) => key === scopeKey)
+  deleteNativeChatComposerDraftsWhere((key) => key === scopeKey)
 }
 
 /** The conversation a structured chat's draft belongs to, or null for a pane's draft. */
@@ -304,7 +286,7 @@ export function nativeChatDraftScopeTabId(scopeKey: string): string {
 
 /** Delete closed-tab pane drafts; conversation-scoped drafts outlive their tabs. */
 export function deleteNativeChatComposerDraftsForTab(tabId: string): void {
-  deleteDraftsWhere(
+  deleteNativeChatComposerDraftsWhere(
     (scopeKey) =>
       !scopeKey.startsWith(STRUCTURED_AGENT_SESSION_DRAFT_SCOPE_PREFIX) &&
       nativeChatDraftScopeTabId(scopeKey) === tabId
@@ -313,7 +295,7 @@ export function deleteNativeChatComposerDraftsForTab(tabId: string): void {
 
 /** Drops every draft written in a workspace the user removed, open and closed chats alike. */
 export function deleteNativeChatComposerDraftsOwnedBy(owner: NativeChatComposerDraftOwner): void {
-  deleteDraftsWhere(
+  deleteNativeChatComposerDraftsWhere(
     (_scopeKey, draft) =>
       draft?.owner?.workspaceId === owner.workspaceId &&
       draft.owner.executionHostId === owner.executionHostId

@@ -1,3 +1,4 @@
+import { deleteRetiredRuntimeLaunchDrafts } from './worktrees/teardown/removed-worktree-chat-drafts'
 import type {
   RuntimeStatusSlice,
   RuntimeStatusStoreSetState,
@@ -30,7 +31,11 @@ import {
   ensureBrowserClientHostOnRuntimeContact,
   ensureBrowserClientHostsForRestoredPages
 } from '@/runtime/restored-client-hosted-browser-host-attach'
-import { applyRuntimeHostStatusSnapshot, snapshotOutrunsCatalog } from './runtime-status-snapshot'
+import {
+  applyRuntimeHostStatusSnapshot,
+  snapshotOutrunsCatalog,
+  readRuntimeHostStatusSnapshots
+} from './runtime-status-snapshot'
 import { refreshRuntimeEnvironmentCatalog } from '@/runtime/runtime-environment-pairing-refresh'
 import {
   classifyPeerReplacements,
@@ -57,14 +62,7 @@ export const createRuntimeStatusSlice: (
   runtimeStatusByEnvironmentId: new Map(),
   removedRuntimeEnvironmentIds: new Set(),
 
-  readRuntimeHostStatusSnapshots: async () => {
-    try {
-      const snapshots = await window.api.runtimeEnvironments.getStatusSnapshots()
-      snapshots.forEach((snapshot) => get().applyRuntimeHostStatusSnapshot(snapshot))
-    } catch (error) {
-      console.error('Failed to read runtime host status:', error)
-    }
-  },
+  readRuntimeHostStatusSnapshots: () => readRuntimeHostStatusSnapshots(get),
 
   setRuntimeEnvironments: (environments) => {
     const previousEnvironments = get().runtimeEnvironments
@@ -136,6 +134,8 @@ export const createRuntimeStatusSlice: (
         ...(removedChanged ? { removedRuntimeEnvironmentIds: nextRemoved } : {})
       }
     })
+    const retiredEnvironmentIds = [...new Set([...removedIds, ...peerReplacement.retired])]
+    deleteRetiredRuntimeLaunchDrafts(retiredEnvironmentIds)
     // Prune removed environments’ agent/command caches; partial test stores may omit these slices.
     get().retainRuntimeDetectedAgents?.(environments.map((environment) => environment.id))
     get().retainRuntimeTerminalQuickCommands?.(environments.map((environment) => environment.id))
@@ -147,7 +147,6 @@ export const createRuntimeStatusSlice: (
       get().markEnvironmentSshStateStale?.(id)
     }
     // Why: a same-id re-pair to another peer retires it as surely as a removal.
-    const retiredEnvironmentIds = [...new Set([...removedIds, ...peerReplacement.retired])]
     if (retiredEnvironmentIds.length > 0) {
       evictInstalledAgentSkillDiscoveryForRuntimeEnvironments(retiredEnvironmentIds)
       get().purgeStaleRuntimeHostState?.(retiredEnvironmentIds)

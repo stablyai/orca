@@ -62,3 +62,28 @@ it.each([false, true])(
     }
   }
 )
+
+import { recentlyRenamedWorktreeIdExpiry } from '@/store/slices/worktrees/listing/authoritative-worktree-removal-memory'
+
+it('the actual rename event protects both identities before starting discovery', async () => {
+  recentlyRenamedWorktreeIdExpiry.clear()
+  const unsubs: (() => void)[] = []
+  useAppStore.setState({
+    fetchWorktrees: vi.fn(async () => {
+      expect(recentlyRenamedWorktreeIdExpiry.has('repo::/old')).toBe(true)
+      expect(recentlyRenamedWorktreeIdExpiry.has('repo::/new')).toBe(true)
+      return false
+    }),
+    fetchWorktreeLineage: vi.fn(),
+    migrateWorktreeIdentity: vi.fn()
+  })
+  const runtime = createWorktreeEventRuntime(unsubs, () => false)
+  runtime.worktreeChangeRefreshQueue.enqueue({
+    repoId: 'repo',
+    executionHostId: 'local',
+    renamed: { oldWorktreeId: 'repo::/old', newWorktreeId: 'repo::/new' }
+  })
+  await vi.waitFor(() => expect(useAppStore.getState().fetchWorktrees).toHaveBeenCalledOnce())
+  unsubs.forEach((unsubscribe) => unsubscribe())
+  recentlyRenamedWorktreeIdExpiry.clear()
+})

@@ -176,3 +176,70 @@ describe('setRuntimeEnvironments catalog identity', () => {
     expect(store.getState().runtimeEnvironments[0]?.pairingRevision).toBe(pairingRevision + 1)
   })
 })
+
+import * as launchDrafts from '@/components/native-chat/native-chat-composer-draft-store'
+import * as pendingChips from '@/components/native-chat/native-chat-pending-attachment-cache'
+
+it('only explicit retired/different-peer launch owners die; disconnect, same-peer rotation, SSH and ordinary chat stay', () => {
+  launchDrafts.clearNativeChatComposerDraftsForTests()
+  pendingChips.clearNativeChatPendingAttachmentsForTests()
+  const store = createTestStore()
+  const environment = { ...knownEnvironment, hostKeyFingerprint: 'same-peer' }
+  store.getState().setRuntimeEnvironments(cloneRedactedCatalog(environment))
+  const launch = launchDrafts.nativeChatLaunchPromptDraftScopeKey(
+    'repo::/gone',
+    'claude',
+    'runtime:env-a'
+  )
+  const ssh = launchDrafts.nativeChatLaunchPromptDraftScopeKey('repo::/gone', 'claude', 'ssh:box')
+  const other = launchDrafts.nativeChatLaunchPromptDraftScopeKey(
+    'repo::/gone',
+    'claude',
+    'runtime:other'
+  )
+  const ordinary = launchDrafts.structuredAgentSessionDraftScopeKey('conversation')
+  for (const key of [launch, ssh, other, ordinary]) {
+    launchDrafts.updateNativeChatComposerDraft(
+      key,
+      { text: 'keep', owner: { workspaceId: 'repo::/gone', executionHostId: 'runtime:env-a' } },
+      'immediate'
+    )
+  }
+  const attempt = launchDrafts.captureNativeChatComposerSubmission(launch)
+  pendingChips.addNativeChatPendingAttachment(launch, {
+    id: 'runtime-chip',
+    path: '',
+    pending: true
+  })
+  store
+    .getState()
+    .setRuntimeEnvironmentStatus(
+      'env-a',
+      { status: null, checkedAt: 1 },
+      { suppressDisconnectToast: true }
+    )
+  store
+    .getState()
+    .setRuntimeEnvironments(
+      cloneRedactedCatalog({ ...environment, pairingRevision: pairingRevision + 1 })
+    )
+  expect(attempt.draft?.text).toBe('keep')
+  store.getState().setRuntimeEnvironments(
+    cloneRedactedCatalog({
+      ...environment,
+      pairingRevision: pairingRevision + 2,
+      hostKeyFingerprint: 'different-peer'
+    })
+  )
+  expect(attempt.draft).toBeUndefined()
+  expect(pendingChips.nativeChatPendingAttachmentSnapshot(launch)).toEqual([])
+  for (const key of [ssh, other, ordinary]) {
+    expect(launchDrafts.readNativeChatComposerDraft(key).text).toBe('keep')
+  }
+  launchDrafts.updateNativeChatComposerDraft(launch, { text: 'new peer' }, 'immediate')
+  store.getState().setRuntimeEnvironments([])
+  expect(launchDrafts.readNativeChatComposerDraft(launch).text).toBe('')
+  launchDrafts.finishNativeChatComposerSubmission(launch, attempt, true)
+  expect(launchDrafts.readNativeChatComposerDraft(launch).text).toBe('')
+  launchDrafts.clearNativeChatComposerDraftsForTests()
+})

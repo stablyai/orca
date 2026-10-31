@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { selectProjectGroupRemovalTargets } from './project-group-removal-targets'
@@ -79,4 +79,61 @@ describe('selectProjectGroupRemovalTargets', () => {
     expect([...result.deletedGroupIds]).toEqual([])
     expect(result.projectIds).toEqual([])
   })
+})
+
+import * as launchDrafts from '@/components/native-chat/native-chat-composer-draft-store'
+import { makeFolderWorkspace } from './worktrees-slice-test-fixtures'
+import { createTestStore } from './store-test-helpers'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+const groupedRepo = makeRepo('grouped', rootGroup.id)
+const rootGroupsDelete = vi.fn()
+
+it('committed group cascade retires actual dropped folders added during RPC, keeping ungrouped repos and other-host copies', async () => {
+  launchDrafts.clearNativeChatComposerDraftsForTests()
+  const reply = Promise.withResolvers<boolean>()
+  rootGroupsDelete.mockReturnValue(reply.promise)
+  vi.stubGlobal('window', { api: { projectGroups: { delete: rootGroupsDelete } } })
+  const store = createTestStore()
+  store.setState({
+    projectGroups: [{ ...rootGroup, executionHostId: 'local' }],
+    repos: [{ ...groupedRepo, executionHostId: 'local', projectGroupId: rootGroup.id }]
+  })
+  const deleting = store.getState().deleteProjectGroup(rootGroup.id, { hostId: 'local' })
+  await vi.waitFor(() => expect(rootGroupsDelete).toHaveBeenCalledOnce())
+  const folder = makeFolderWorkspace({
+    id: 'late-folder',
+    projectGroupId: rootGroup.id,
+    executionHostId: 'local'
+  })
+  store.setState({ folderWorkspaces: [folder, { ...folder, executionHostId: 'runtime:other' }] })
+  const gone = launchDrafts.nativeChatLaunchPromptDraftScopeKey(
+    folderWorkspaceKey(folder.id),
+    'claude',
+    'local'
+  )
+  const controls = [
+    launchDrafts.nativeChatLaunchPromptDraftScopeKey(
+      folderWorkspaceKey(folder.id),
+      'claude',
+      'runtime:other'
+    ),
+    launchDrafts.nativeChatLaunchPromptDraftScopeKey(`${groupedRepo.id}::/live`, 'codex', 'local')
+  ]
+  for (const key of [gone, ...controls]) {
+    launchDrafts.updateNativeChatComposerDraft(key, { text: 'task' }, 'immediate')
+  }
+  const attempt = launchDrafts.captureNativeChatComposerSubmission(gone)
+  reply.resolve(false)
+  expect(await deleting).toBe(false)
+  expect(attempt.draft?.text).toBe('task')
+  rootGroupsDelete.mockResolvedValue(true)
+  expect(await store.getState().deleteProjectGroup(rootGroup.id, { hostId: 'local' })).toBe(true)
+  expect(attempt.draft).toBeUndefined()
+  expect(store.getState().folderWorkspaces).toEqual([
+    { ...folder, executionHostId: 'runtime:other' }
+  ])
+  expect(store.getState().repos[0].projectGroupId).toBeNull()
+  controls.forEach((key) => expect(launchDrafts.readNativeChatComposerDraft(key).text).toBe('task'))
+  launchDrafts.clearNativeChatComposerDraftsForTests()
+  vi.unstubAllGlobals()
 })

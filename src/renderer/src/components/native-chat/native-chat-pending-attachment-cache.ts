@@ -1,3 +1,4 @@
+import { nativeChatLaunchPromptDraftOwner } from './native-chat-composer-draft-memory'
 import { insertNativeChatComposerDraftText } from './native-chat-composer-draft-insertion'
 // Pending chips outlive composers in memory; completed images persist immediately in their draft.
 
@@ -225,19 +226,22 @@ export function clearNativeChatPendingAttachments(scopeKey: string): void {
   }
 }
 
-function dropPendingWhere(
+export function dropNativeChatPendingAttachmentsWhere(
   matches: (scopeKey: string, owner: NativeChatComposerDraftOwner | undefined) => boolean
 ): void {
-  for (const scopeKey of pendingCache.keys()) {
+  for (const scopeKey of new Set([...pendingCache.keys(), ...listeners.keys()])) {
     if (matches(scopeKey, pendingOwners.get(scopeKey))) {
       writePending(scopeKey, [])
+      if (nativeChatLaunchPromptDraftOwner(scopeKey)) {
+        listeners.delete(scopeKey)
+      }
     }
   }
 }
 
 /** Drop only closed-tab pane chips; conversation scopes survive tab closure. */
 export function dropNativeChatPendingAttachmentsForTab(tabId: string): void {
-  dropPendingWhere(
+  dropNativeChatPendingAttachmentsWhere(
     (scopeKey) =>
       structuredAgentSessionIdOfDraftScope(scopeKey) === null &&
       nativeChatDraftScopeTabId(scopeKey) === tabId
@@ -245,7 +249,7 @@ export function dropNativeChatPendingAttachmentsForTab(tabId: string): void {
 }
 
 export function dropNativeChatPendingAttachmentsOwnedBy(owner: NativeChatComposerDraftOwner): void {
-  dropPendingWhere(
+  dropNativeChatPendingAttachmentsWhere(
     (_scopeKey, pendingOwner) =>
       pendingOwner?.workspaceId === owner.workspaceId &&
       pendingOwner.executionHostId === owner.executionHostId
