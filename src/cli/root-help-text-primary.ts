@@ -141,7 +141,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  orchestration worker-stop Fence one Dispatch; stop only its supervised worker',
   '  orchestration worker-abandon Fence an uncertain worker without claiming it stopped',
   "  orchestration worker-release Release a settled worker's terminal after archiving its output",
-  '  orchestration worker-retain Keep a worker terminal live for debugging',
+  '  orchestration worker-keep-open Keep a worker open after it finishes',
   '  orchestration worker-list Report worker terminal resource accounting',
   '  orchestration coordinator-start Retired: load the current orchestration skill',
   '  orchestration coordinator-stop Retired: load the current orchestration skill',

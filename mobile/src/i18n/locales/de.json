@@ -48,12 +48,10 @@
       "untitledSession": "Sitzung ohne Titel"
     },
     "sessionHistoryList": {
-      "assistantRole": "Assistent",
       "currentWorktree": "Aktueller Worktree",
       "messages_one": "{{count}} Nachricht",
       "messages_other": "{{count}} Nachrichten",
-      "resumeSession": "Agentensitzung fortsetzen",
-      "userRole": "Benutzer"
+      "resumeSession": "Agentensitzung fortsetzen"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "Host nicht erreichbar",
@@ -188,7 +186,11 @@
       "cancelEditing": "Bearbeitung abbrechen",
       "placeholder": "Frage stellen, @ für Dateiverweise, / für Befehle",
       "saveEditedMessage": "Bearbeitete Nachricht speichern",
-      "sendMessage": "Nachricht senden"
+      "sendMessage": "Nachricht senden",
+      "sendQueue": "Einreihen",
+      "sendSteer": "Steuern",
+      "sendQueueHint": "Läuft nach dem aktuellen Durchgang",
+      "sendSteerHint": "Fließt in das ein, was der Agent gerade tut"
     },
     "composerAttachments": {
       "attachedImage": "Angehängtes Bild",
@@ -279,7 +281,10 @@
       "compaction": "Kontext komprimiert",
       "contextCleared": "Kontext geleert",
       "plan": "Plan",
-      "stoppedManually": "Manuell gestoppt"
+      "stoppedManually": "Manuell gestoppt",
+      "permissionDenied": "{{agent}} hat die Berechtigung verweigert. Details anzeigen.",
+      "safetyReview": "{{agent}} hat eine Warnung zur Sicherheitsprüfung gemeldet. Details anzeigen.",
+      "truncatedResponse": "Anbieterantwort gekürzt (ursprüngliche Größe: {{bytes}} Bytes)."
     },
     "orcaStop": {
       "canContinue": "Die Unterhaltung kann fortgesetzt werden.",
@@ -359,7 +364,6 @@
     "sessionOptionPickers": {
       "agentWorking": "Agent arbeitet",
       "backToModels": "Zurück zu den Modellen",
-      "closePicker": "Auswahl schließen",
       "dispatchUnconfirmed": "An den Agenten gesendet — nicht bestätigt",
       "modelFullAccessLabel": "Modell, {{value}}, Vollzugriff",
       "modelLabel": "Modell, {{value}}",
@@ -824,12 +828,10 @@
       "blankTerminal": "Leeres Terminal"
     },
     "newWorktreeFormSheet": {
-      "advanced": "Erweitert",
       "agent": "Agent",
       "connectTarget": "Mit Ziel verbinden",
       "connectTargetFirst": "Zuerst mit dem Ziel verbinden",
       "createWorktree": "Worktree erstellen",
-      "nameOrCreateFrom": "Name oder „Erstellen aus“",
       "noProjectsFound": "Keine Projekte gefunden",
       "note": "Notiz",
       "notePlaceholder": "Notiz schreiben",
@@ -920,12 +922,10 @@
       "noResults": "Keine Ergebnisse gefunden.",
       "searchPlaceholder": "Namen eingeben oder Quelle suchen",
       "switchRepo": "Zu {{repoName}} wechseln",
-      "title": "Name oder „Erstellen aus“",
       "typeWorkspaceName": "Im Feld unten einen Namen für den Arbeitsbereich eingeben."
     },
     "smartWorkspaceSourceField": {
       "openSelectedSource": "Ausgewählte Quelle öffnen",
-      "optional": "[Optional]",
       "searchPlaceholder": "Namen eingeben oder Quelle suchen"
     },
     "smartWorkspaceSourceRow": {
@@ -3360,7 +3360,6 @@
       "changeStatus": "Status ändern",
       "copyGitHubLink": "GitHub-Link kopieren",
       "copyLinearLink": "Linear-Link kopieren",
-      "createWorkspace": "Arbeitsbereich erstellen",
       "creating": "Wird erstellt…",
       "mergeConflicts": "GitHub meldet Merge-Konflikte.",
       "mergeMergeRequest": "Merge Request mergen",
@@ -3368,8 +3367,6 @@
     },
     "itemDetailContent": {
       "addSubIssue": "Unter-Issue hinzufügen",
-      "assignee": "Zuständige Person",
-      "assignees": "Zuständige Personen",
       "checks": "Checks",
       "description": "Beschreibung",
       "discussion": "Diskussion",
@@ -3381,13 +3378,10 @@
       "pipeline": "Pipeline",
       "pipelineJobs_one": "{{count}} Job",
       "pipelineJobs_other": "{{count}} Jobs",
-      "project": "Projekt",
       "rerunAll": "Alle erneut ausführen",
       "rerunFailed": "Fehlgeschlagene erneut ausführen",
-      "status": "Status",
       "subIssueTitle": "Titel des Unter-Issues",
-      "subIssues": "Untergeordnete Issues",
-      "type": "Typ"
+      "subIssues": "Untergeordnete Issues"
     },
     "itemDetailDrawer": {
       "refreshDetails": "Details aktualisieren"
@@ -3740,19 +3734,14 @@
       "addRepository": "Vor dem Erstellen eines Linear-Arbeitsbereichs ein Git-Repository hinzufügen.",
       "advanced": "Erweitert",
       "agent": "Agent",
-      "connect": "Verbinden",
       "connectFirst": "Zuerst Repository verbinden",
       "connectRepository": "Repository verbinden",
-      "connecting": "Verbindung wird hergestellt…",
-      "createFrom": "Aus {{branch}} erstellen",
       "defaultBranch": "Standard-Branch",
       "detectingAgents": "Agenten werden erkannt…",
-      "optional": "[Optional]",
       "remoteRepository": "Entferntes Repository",
       "repository": "Repository",
       "repositoryNotFound": "Repository nicht gefunden.",
       "selectRepository": "Repository auswählen",
-      "sshConnection": "SSH-Verbindung",
       "startFrom": "Ausgangspunkt",
       "title": "Arbeitsbereich erstellen",
       "workspaceName": "Arbeitsbereichsname"
@@ -3875,7 +3864,6 @@
       "existing": "Bestehender Branch",
       "existingHint": "Neue Commits werden diesem Branch hinzugefügt.",
       "hostUpdateRequired": "Orca auf dem Host des Arbeitsbereichs aktualisieren, um einen Branch wiederzuverwenden oder explizit einen separaten Branch zu erstellen.",
-      "new": "Neuer Branch",
       "newHint": "Einen neuen lokalen Branch erstellen",
       "newName": "Name des neuen Branches",
       "title": "Branch für diesen Worktree"

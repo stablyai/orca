@@ -142,8 +142,9 @@ it('replays the same logical continuation through the durable send ledger', asyn
   expect(dispatch).toHaveBeenCalledTimes(1)
 })
 
-it('keeps a continuation unconfirmed when its accepted message cannot be read back', async () => {
-  const { host, store } = await interruptedRestart()
+// The row commits with its fold or not at all, and dispatch reads only committed sends.
+it('refuses a continuation whose message cannot be recorded, without handing it to the agent', async () => {
+  const { host, dispatch } = await interruptedRestart()
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   expect(await host.restartResume.list()).toHaveLength(1)
   continuationCannotFold()
@@ -152,17 +153,10 @@ it('keeps a continuation unconfirmed when its accepted message cannot be read ba
     .continueAfterRestart([SESSION], 'modal')
     .finally(() => vi.restoreAllMocks())
 
-  expect(result.continued).toMatchObject([{ sessionId: SESSION, outcome: 'unknown' }])
-  expect(result.failed).toMatchObject([{ sessionId: SESSION, outcome: 'unconfirmed' }])
-  expect(await statusNotes(host)).toContainEqual({
-    text: AGENT_SESSION_RESTART_CONTINUATION_UNCONFIRMED_NOTE,
-    tone: 'warning'
-  })
-  expect(
-    store
-      .listOperationRows()
-      .find((row) => row.callerKey === STRUCTURED_AGENT_SESSION_RESTART_CONTINUATION_CALLER)
-  ).toMatchObject({ outcome: { status: 'succeeded' } })
+  expect(result.continued).toMatchObject([{ sessionId: SESSION, outcome: 'refused' }])
+  expect(result.failed).toMatchObject([{ sessionId: SESSION, outcome: 'refused' }])
+  expect((await host.journalSnapshot(SESSION)).submissions).toEqual([])
+  expect(dispatch).not.toHaveBeenCalled()
 })
 
 it('reports a continuation delivered when its send throws after its message is in the chat', async () => {

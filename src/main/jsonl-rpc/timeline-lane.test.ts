@@ -116,6 +116,8 @@ describe('JSON-lines timeline admission', () => {
     await vi.advanceTimersByTimeAsync(250)
     await test.lane.drained()
     expect(test.lane.openTurnId).not.toBeNull()
+    // Close the journal's projection repair timer; leave the lane alive to detect retry leaks.
+    await test.journal.journal.close()
     expect(vi.getTimerCount()).toBe(0)
   })
 

@@ -48,12 +48,10 @@
       "untitledSession": "제목 없는 세션"
     },
     "sessionHistoryList": {
-      "assistantRole": "어시스턴트",
       "currentWorktree": "현재 워크트리",
       "messages_one": "메시지 {{count}}개",
       "messages_other": "메시지 {{count}}개",
-      "resumeSession": "에이전트 세션 재개",
-      "userRole": "사용자"
+      "resumeSession": "에이전트 세션 재개"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "호스트에 연결할 수 없습니다.",
@@ -188,7 +186,11 @@
       "cancelEditing": "편집 취소",
       "placeholder": "무엇이든 물어보세요. @로 파일 참조, /로 명령어 실행",
       "saveEditedMessage": "수정한 메시지 저장",
-      "sendMessage": "메시지 보내기"
+      "sendMessage": "메시지 보내기",
+      "sendQueue": "대기열에 추가",
+      "sendSteer": "지금 보내기",
+      "sendQueueHint": "현재 턴이 끝난 뒤 실행됩니다",
+      "sendSteerHint": "Agent가 지금 하고 있는 작업에 들어갑니다"
     },
     "composerAttachments": {
       "attachedImage": "첨부된 이미지",
@@ -279,7 +281,10 @@
       "compaction": "컨텍스트가 압축됨",
       "contextCleared": "컨텍스트 지워짐",
       "plan": "계획",
-      "stoppedManually": "수동으로 중지됨"
+      "stoppedManually": "수동으로 중지됨",
+      "permissionDenied": "{{agent}}이(가) 권한을 거부했습니다. 세부 정보 보기.",
+      "safetyReview": "{{agent}}이(가) 안전 검토 경고를 보고했습니다. 세부 정보 보기.",
+      "truncatedResponse": "공급자 응답이 잘렸습니다(원래 크기: {{bytes}}바이트)."
     },
     "orcaStop": {
       "canContinue": "이 대화에서 계속할 수 있습니다.",
@@ -359,7 +364,6 @@
     "sessionOptionPickers": {
       "agentWorking": "에이전트 작업 중",
       "backToModels": "모델 목록으로 돌아가기",
-      "closePicker": "선택 창 닫기",
       "dispatchUnconfirmed": "에이전트에 전송됨 — 확인되지 않음",
       "modelFullAccessLabel": "모델, {{value}}, 전체 액세스",
       "modelLabel": "모델, {{value}}",
@@ -820,12 +824,10 @@
       "blankTerminal": "빈 Terminal"
     },
     "newWorktreeFormSheet": {
-      "advanced": "고급",
       "agent": "에이전트",
       "connectTarget": "대상 연결",
       "connectTargetFirst": "먼저 대상에 연결하세요",
       "createWorktree": "작업 트리 만들기",
-      "nameOrCreateFrom": "이름 또는 '다음에서 만들기'",
       "noProjectsFound": "프로젝트를 찾을 수 없습니다.",
       "note": "메모",
       "notePlaceholder": "메모 쓰기",
@@ -916,12 +918,10 @@
       "noResults": "검색 결과가 없습니다.",
       "searchPlaceholder": "이름 입력 또는 소스 검색",
       "switchRepo": "{{repoName}}(으)로 전환",
-      "title": "이름 또는 '다음에서 만들기'",
       "typeWorkspaceName": "아래 입력란에 워크스페이스 이름을 입력하세요."
     },
     "smartWorkspaceSourceField": {
       "openSelectedSource": "선택한 소스 열기",
-      "optional": "[선택 사항]",
       "searchPlaceholder": "이름 입력 또는 소스 검색"
     },
     "smartWorkspaceSourceRow": {
@@ -3356,7 +3356,6 @@
       "changeStatus": "상태 변경",
       "copyGitHubLink": "GitHub 링크 복사",
       "copyLinearLink": "Linear 링크 복사",
-      "createWorkspace": "워크스페이스 만들기",
       "creating": "만드는 중…",
       "mergeConflicts": "GitHub에서 병합 충돌이 보고되었습니다.",
       "mergeMergeRequest": "MR 병합",
@@ -3364,8 +3363,6 @@
     },
     "itemDetailContent": {
       "addSubIssue": "하위 이슈 추가",
-      "assignee": "담당자",
-      "assignees": "담당자",
       "checks": "체크",
       "description": "설명",
       "discussion": "토론",
@@ -3377,13 +3374,10 @@
       "pipeline": "파이프라인",
       "pipelineJobs_one": "작업 {{count}}개",
       "pipelineJobs_other": "작업 {{count}}개",
-      "project": "프로젝트",
       "rerunAll": "모두 재실행",
       "rerunFailed": "실패한 체크 재실행",
-      "status": "상태",
       "subIssueTitle": "하위 이슈 제목",
-      "subIssues": "하위 이슈",
-      "type": "유형"
+      "subIssues": "하위 이슈"
     },
     "itemDetailDrawer": {
       "refreshDetails": "상세 정보 새로고침"
@@ -3736,19 +3730,14 @@
       "addRepository": "Linear 워크스페이스를 생성하기 전에 Git 리포지토리를 추가하세요.",
       "advanced": "고급",
       "agent": "에이전트",
-      "connect": "연결",
       "connectFirst": "먼저 리포지토리를 연결하세요",
       "connectRepository": "리포지토리 연결",
-      "connecting": "연결 중…",
-      "createFrom": "{{branch}} 기준으로 생성",
       "defaultBranch": "기본 브랜치",
       "detectingAgents": "에이전트 감지 중…",
-      "optional": "[선택 사항]",
       "remoteRepository": "원격 리포지토리",
       "repository": "리포지토리",
       "repositoryNotFound": "리포지토리를 찾을 수 없습니다.",
       "selectRepository": "리포지토리 선택",
-      "sshConnection": "SSH 연결",
       "startFrom": "시작 기준",
       "title": "워크스페이스 생성",
       "workspaceName": "워크스페이스 이름"
@@ -3871,7 +3860,6 @@
       "existing": "기존 브랜치",
       "existingHint": "새 커밋이 이 브랜치에 추가됩니다.",
       "hostUpdateRequired": "브랜치를 재사용하거나 별도의 브랜치를 명시적으로 생성하려면 워크스페이스 호스트의 Orca를 업데이트하세요.",
-      "new": "새 브랜치",
       "newHint": "새 로컬 브랜치 만들기",
       "newName": "새 브랜치 이름",
       "title": "이 워크트리의 브랜치"
