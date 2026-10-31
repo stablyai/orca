@@ -19,6 +19,7 @@ export class QuickChatIntents {
   readonly pending = new Map<string, QuickChatIntent>()
   private listeners = new Set<() => void>()
   private version = 0
+  private handoff: Set<QuickChatIntent> | null = null
   snapshot = () => this.version
   subscribe = (listener: () => void) => {
     this.listeners.add(listener)
@@ -59,7 +60,10 @@ export class QuickChatIntents {
     return intent
   }
   live(intent: QuickChatIntent): boolean {
-    return this.pending.get(intent.id) === intent && intent.authority.canReveal()
+    return (
+      this.pending.get(intent.id) === intent &&
+      (this.handoff?.has(intent) === true || intent.authority.canReveal())
+    )
   }
   finish(intent: QuickChatIntent): void {
     if (!this.pending.delete(intent.id)) {
@@ -74,11 +78,17 @@ export class QuickChatIntents {
     if (!this.live(intent)) {
       return false
     }
-    const siblings = [...this.pending.values()].filter((pending) => this.live(pending))
+    if (this.handoff) {
+      action()
+      return true
+    }
+    const siblings = new Set([...this.pending.values()].filter((pending) => this.live(pending)))
+    this.handoff = siblings
     siblings.forEach((pending) => pending.authority.dispose())
     try {
       action()
     } finally {
+      this.handoff = null
       siblings.forEach((pending) => {
         if (this.pending.get(pending.id) === pending) {
           pending.authority = this.capture(pending)
@@ -87,8 +97,8 @@ export class QuickChatIntents {
     }
     return true
   }
-  anchor(control?: HTMLElement): void {
-    for (const intent of this.pending.values()) {
+  anchor(control?: HTMLElement, accepted?: QuickChatIntent): void {
+    for (const intent of accepted ? [accepted] : this.pending.values()) {
       if (!intent.anchorControl?.isConnected) {
         intent.anchorControl = control
         intent.anchor = control?.getBoundingClientRect()

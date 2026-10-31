@@ -149,6 +149,7 @@ beforeEach(() => {
 afterEach(async () => {
   await i18n.changeLanguage('en')
   cleanup()
+  vi.restoreAllMocks()
   resetHostStructuredAgentsForTests()
   setLocalRuntimeCapabilitiesForTests(null)
   useAppStore.setState(initial, true)
@@ -466,6 +467,7 @@ it('cancels an explicit user reselect of Chats and finishes two requests from on
 it.each([10, 100])(
   'keeps one real observation with linear model work for %s pending actions and isolates a peer publication',
   async (q) => {
+    const subscribe = vi.spyOn(useAppStore, 'subscribe')
     useAppStore.setState({ localDetectedAgentIdsByContext: {} })
     let release = () => {}
     mocks.detect.mockReturnValue(
@@ -478,6 +480,7 @@ it.each([10, 100])(
       await act(async () => requestQuickChatFromShortcut())
     }
     expect(mocks.detect).toHaveBeenCalledOnce()
+    expect(subscribe.mock.calls.length).toBeLessThan(q * 3 + 20)
     expect(mocks.builds).toBeLessThan(q * 4 + 10)
     const before = mocks.builds
     Object.assign(window.api, {
@@ -499,6 +502,7 @@ it.each([10, 100])(
     expect(mocks.builds).toBe(before)
     await act(async () => release())
     await waitFor(() => expect(mocks.launch).toHaveBeenCalledTimes(q))
+    expect(subscribe.mock.calls.length).toBeLessThan(q * 4 + 30)
   }
 )
 
@@ -586,8 +590,15 @@ it('finishes activation refusal and launch failure exactly as the existing launc
   await act(async () => requestQuickChatFromShortcut())
   expect(mocks.launch).toHaveBeenCalledOnce()
   expect(mocks.error).toHaveBeenCalledTimes(2)
+  const failure = mocks.error.mock.calls.at(-1)
+  const existing = renderHook(() =>
+    useTabAgentMenuLaunch({ worktreeId: worktree.id, groupId: '', onFocusTerminal: vi.fn() })
+  )
+  mocks.launch.mockReturnValueOnce(null)
+  act(() => existing.result.current({ kind: 'chat', agent: 'codex', executionHostId: 'local' }))
+  expect(mocks.error.mock.calls.at(-1)).toEqual(failure)
   await act(async () => requestQuickChatFromShortcut())
-  expect(mocks.launch).toHaveBeenCalledTimes(2)
+  expect(mocks.launch).toHaveBeenCalledTimes(3)
 })
 
 it('delivers native/guest IPC through the real preload subscription and renderer bridge to controller settlement, and unsubscribes', async () => {
@@ -720,3 +731,35 @@ it('waits for earlier accepted fallback preparation and executes distinct choice
   await waitFor(() => expect(finished).toEqual([first, second]))
   expect(mocks.launch).toHaveBeenCalledOnce()
 })
+
+it.each([false, true])(
+  'observes native Chats independently of a locally focused WSL project and unselected same-ID twins (warm=%s)',
+  async (warm) => {
+    const otherRepo = { ...repo, id: 'wsl-project', path: 'C:\\other' }
+    const other = { ...worktree, id: 'other-workspace', repoId: otherRepo.id, path: otherRepo.path }
+    const project = { ...runtimeProject('wsl'), id: otherRepo.id, sourceRepoIds: [otherRepo.id] }
+    useAppStore.setState({
+      repos: [repo, { ...repo, executionHostId: 'runtime:peer' }, otherRepo],
+      projects: [project],
+      worktreesByRepo: {
+        [repo.id]: [worktree, { ...worktree, hostId: 'runtime:peer' }],
+        [otherRepo.id]: [other]
+      },
+      activeRepoId: otherRepo.id,
+      activeWorktreeId: other.id,
+      activeWorkspaceExecutionHostId: 'local',
+      detectedAgentIds: ['claude'],
+      localDetectedAgentIdsByContext: warm ? { host: ['codex'] } : {}
+    })
+    mount()
+    await act(async () => requestQuickChatFromShortcut())
+    await waitFor(() => expect(mocks.launch).toHaveBeenCalledOnce())
+    expect(mocks.launch.mock.calls[0][0]).toMatchObject({
+      worktreeId: worktree.id,
+      selectedExecutionHostId: 'local',
+      requestedSurface: 'chat',
+      agent: 'codex'
+    })
+    expect(mocks.detect.mock.calls.every(([context]) => !context?.wslDistro)).toBe(true)
+  }
+)

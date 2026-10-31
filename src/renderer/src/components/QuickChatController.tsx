@@ -88,12 +88,10 @@ const QuickChatObservation = memo(function QuickChatObservation({
     onFocusChat: requestNativeChatComposerFocus
   })
   useSyncExternalStore(intents.subscribe, intents.snapshot, intents.snapshot)
-  const ready = [...intents.pending.values()].filter(
-    (intent) =>
-      intent.destination?.worktreeId === worktreeId && intent.destination.repoId === repoId
-  )
   const head = intents.pending.values().next().value
-  const first = head && ready.includes(head) ? head : undefined
+  const matches = (intent: QuickChatIntent) =>
+    intent.destination?.worktreeId === worktreeId && intent.destination.repoId === repoId
+  const first = head && matches(head) ? head : undefined
   const entries = useAgentLaunchPickerInventory(worktreeId, model, Boolean(first))
   const current = useRef({ model, first, entries })
   useLayoutEffect(() => {
@@ -178,7 +176,11 @@ const QuickChatObservation = memo(function QuickChatObservation({
     }
     if (!resolvedTarget) {
       showQuickChatFailure()
-      ready.forEach((intent) => intents.finish(intent))
+      for (const intent of intents.pending.values()) {
+        if (matches(intent)) {
+          intents.finish(intent)
+        }
+      }
       return
     }
     if (model.state !== 'settled') {
@@ -186,12 +188,14 @@ const QuickChatObservation = memo(function QuickChatObservation({
     }
     const row = model.rows.find((row) => row.kind === 'chat' && row.agent === model.defaultTuiAgent)
     if (row) {
-      for (const intent of intents.pending.values()) {
-        if (!ready.includes(intent)) {
-          break
+      intents.transition(first, () => {
+        for (const intent of intents.pending.values()) {
+          if (!matches(intent)) {
+            break
+          }
+          launchIntent(intent, row)
         }
-        launchIntent(intent, row)
-      }
+      })
     }
   })
   if (!first || model.state !== 'settled' || !first.anchor) {
@@ -261,12 +265,12 @@ export function QuickChatController() {
       if (!control) {
         const mounted = mountedAnchor()
         if (mounted) {
-          intents.anchor(mounted)
+          intents.anchor(mounted, intent)
         }
       }
-      if (!control) {
+      const state = useAppStore.getState()
+      if (!control && (state.activeView !== 'terminal' || !state.sidebarOpen)) {
         intents.transition(intent, () => {
-          const state = useAppStore.getState()
           state.setActiveView('terminal')
           state.setSidebarOpen(true)
         })
