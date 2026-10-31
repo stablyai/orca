@@ -188,13 +188,16 @@ function headOfQueuePositions(
   )
   const earlier: string[] = []
   const rest: (typeof cards)[number][] = []
-  const explicit = new Set(
-    batch.flatMap(({ submission }) =>
-      submission.origin === 'client' && submission.queuedMessageId
-        ? [submission.queuedMessageId]
+  const cardsById = new Map(cards.map((card) => [card.messageId, card]))
+  const explicitHeads = new Map(
+    batch.flatMap(({ submission }) => {
+      const id = submission.origin === 'client' ? submission.queuedMessageId : undefined
+      return id && cardsById.get(id)?.consumedAs === submission.clientMessageId
+        ? [[submission.clientMessageId, id] as const]
         : []
-    )
+    })
   )
+  const explicit = new Set(explicitHeads.values())
   for (const card of cards) {
     if (explicit.has(card.messageId)) {
       continue
@@ -216,11 +219,7 @@ function headOfQueuePositions(
   const head: string[] = []
   let previousBoundary = 0
   for (const { submission, body } of batch) {
-    const id = body
-      ? submission.clientMessageId
-      : submission.origin === 'client'
-        ? submission.queuedMessageId
-        : undefined
+    const id = body ? submission.clientMessageId : explicitHeads.get(submission.clientMessageId)
     if (!id || keptIds.has(id)) {
       continue
     }
