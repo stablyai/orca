@@ -15,7 +15,7 @@ import type {
 import type { WriteSettlement } from '../../../shared/pty-write-settlement'
 
 type PointerSubmitDependencies = {
-  mailboxOwner: OrchestrationMailboxOwner
+  mailboxOwner: Pick<OrchestrationMailboxOwner, 'resolve'>
   state: OrchestrationMailboxPointerState
   getDb: () => OrchestrationDb | null
   resolveSubmitTarget: (ptyId: string) => OrchestrationMailboxPointerSubmitTarget | null

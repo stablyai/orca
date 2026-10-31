@@ -664,7 +664,7 @@ describe('orchestration mailbox pointer submit', () => {
 
     submitOrchestrationMailboxPointer(
       {
-        mailboxOwner: { resolve: () => 'run:run-2' } as never,
+        mailboxOwner: { resolve: () => 'run:run-2' },
         state,
         getDb: () => db,
         resolveSubmitTarget: () => expectedTarget,
