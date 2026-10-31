@@ -17,6 +17,10 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { JournalRow } from '../agent-session-journal/journal-row-schema'
+import type {
+  JournalOutcomeReadRow,
+  JournalReadRow
+} from '../agent-session-journal/journal-read-row'
 
 type Notice = { fence: number; clientMessageId: string; mailbox: string; messages: string[] }
 
@@ -69,16 +73,13 @@ export class StructuredNativeResponses {
       this.queued.reset(journal)
     } else {
       for (const row of changes.rows) {
-        this.changed(journal, row)
+        if (row.kind === 'outcome') {
+          this.changedOutcome(journal, row)
+        } else {
+          this.changed(journal, row)
+        }
       }
-      if (
-        changes.rows.some(
-          (row) =>
-            (row.kind === 'tombstone' && !isJournalStopOrResumeRow(row)) ||
-            (row.kind === 'lifecycle-batch' &&
-              row.mutations.some((item) => item.kind === 'tombstone'))
-        )
-      ) {
+      if (changes.rows.some(rewritesHistory)) {
         this.recovery.reset()
         for (const submission of journal.submissions()) {
           this.recovery.submission(submission)
@@ -116,6 +117,24 @@ export class StructuredNativeResponses {
       for (const mutation of row.mutations) {
         this.observeKey(journal, mutation.itemId)
       }
+    }
+  }
+
+  /** An outcome sequence names touched keys; each is re-read at its current value, as typed rows were. */
+  private changedOutcome(journal: AgentSessionJournal, row: JournalOutcomeReadRow): void {
+    for (const id of row.queueCardIds) {
+      this.queued.changedCard(journal, id)
+    }
+    for (const clientMessageId of row.submissionIds) {
+      // Only a rewind retiring an Orca send deletes a submission: the typed tombstone's retireSubmission.
+      if (row.deleted.submissionIds.includes(clientMessageId)) {
+        this.disposeNotice(clientMessageId)
+      } else {
+        this.observeSubmission(journal, clientMessageId)
+      }
+    }
+    for (const itemId of row.itemIds) {
+      this.observeKey(journal, itemId)
     }
   }
 
@@ -282,4 +301,15 @@ export class StructuredNativeResponses {
 
 function identityFence(journal: AgentSessionJournal, clientMessageId: string): number {
   return journal.submission(clientMessageId)?.fence ?? 0
+}
+
+/** Provider history was rewritten: a tombstone outside Stop/resume marks, or an outcome sequence that deleted an item. */
+function rewritesHistory(row: JournalReadRow): boolean {
+  if (row.kind === 'outcome') {
+    return row.deleted.itemIds.length > 0
+  }
+  return (
+    (row.kind === 'tombstone' && !isJournalStopOrResumeRow(row)) ||
+    (row.kind === 'lifecycle-batch' && row.mutations.some((item) => item.kind === 'tombstone'))
+  )
 }

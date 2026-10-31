@@ -23,12 +23,17 @@ export class StructuredQueuedNativeResponses {
             ? journal.submission(row.clientMessageId)?.queuedMessageId
             : undefined
     if (id) {
-      const card = journal.queuedMessages.get(id)
-      if (card) {
-        this.observe(card)
-      } else {
-        this.messages.delete(id)
-      }
+      this.changedCard(journal, id)
+    }
+  }
+
+  /** The card's current value decides: a present card is re-read, a gone one forgotten. */
+  changedCard(journal: AgentSessionJournal, id: string): void {
+    const card = journal.queuedMessages.get(id)
+    if (card) {
+      this.observe(card)
+    } else {
+      this.messages.delete(id)
     }
   }
 
