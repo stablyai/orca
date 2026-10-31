@@ -19824,7 +19824,6 @@
         "editMessage": "Modifier le message",
         "showFullMessage": "Afficher le message complet",
         "showLess": "Afficher moins",
-        "turnOffQueueing": "Désactiver la file d'attente",
         "withdrawnHold": "Arrêté avant l'envoi",
         "pausedSendFailed": "Envoi impossible. Appuyez sur Envoyer pour réessayer.",
         "paused": "En pause",
@@ -20479,9 +20478,8 @@
         }
       },
       "nativeChat": {
-        "queueFollowUpsTitle": "Mettre les messages en file d’attente",
-        "queueFollowUpsCopy": "Les messages envoyés pendant que l'agent travaille attendent sous forme de cartes que vous pouvez envoyer maintenant, modifier ou supprimer. Les messages avec des images sont envoyés immédiatement.",
-        "queueFollowUpsToggleLabel": "Activer ou désactiver la file d'attente",
+        "followUpBehaviorTitle": "Mettre les messages suivants en file d’attente",
+        "followUpBehaviorCopy": "Les messages envoyés pendant que l’agent travaille attendent sous forme de cartes jusqu’à la fin du tour, au lieu d’entrer dans le tour en cours. Cmd/Ctrl+Entrée fait l’inverse pour un message.",
         "inlineVisualsTitle": "Visuels intégrés",
         "inlineVisualsCopy": "Laissez l'agent afficher des graphiques, des diagrammes et des maquettes dans ses réponses. S'applique aux nouveaux chats.",
         "inlineVisualsToggleLabel": "Activer/désactiver les visuels intégrés",

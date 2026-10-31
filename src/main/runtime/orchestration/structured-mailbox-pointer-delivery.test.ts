@@ -9,6 +9,8 @@ import {
 import type { StructuredWorkerIdentity } from '../structured-worker-identity'
 import { RuntimeMessageWaiters } from '../runtime-message-waiters'
 
+import { verifyHeldLocalWorkerDone } from './structured-mailbox-held-worker-report.test-fixture'
+
 const IDENTITY: StructuredWorkerIdentity = {
   handle: 'structworker_1',
   sessionId: 'session-1',
@@ -777,3 +779,8 @@ describe('a mailbox a /clear moves while its nudge is in flight', () => {
     expect(send).toHaveBeenCalledTimes(1)
   })
 })
+
+it.each(['gone', 'live-other-kind', 'metadata-read-fails'])(
+  'delivers held local worker_done with exact durable identity after terminal loss (%s)',
+  verifyHeldLocalWorkerDone
+)

@@ -37,6 +37,10 @@ import {
 import { releaseRetriedWorkerTerminal } from '../worker/retried-worker-terminal-release'
 import { withWorkerStartNext } from '../receipt-next'
 import { prepareWorkerStartCard } from '../../../../orchestration/worker-start-card'
+import {
+  recordWorkerLaunchObservation,
+  workerLaunchAgent
+} from '../../../../orchestration/worker-launch-observation'
 
 export async function startFederatedWorker(args: {
   params: WorkerStartInput
@@ -170,6 +174,7 @@ export async function startFederatedWorker(args: {
   const taskForRemote = task ?? createdTask
   db.recordWorkerStage({ dispatchId: started.dispatch.id, stage: 'remote_attach_requested' })
   let readyResult: unknown
+  let launch = requestedLaunch
   try {
     const remote = parseRemoteFederatedWorkerStartReceipt(
       await runtime.callOrchestrationWorkerServer(
@@ -214,7 +219,8 @@ export async function startFederatedWorker(args: {
         'The worker server returned a different Dispatch attachment.'
       )
     }
-    const launch = resolveFederatedWorkerLaunchReceipt(
+    recordWorkerLaunchObservation(db, started.dispatch.id, remote.launch)
+    launch = resolveFederatedWorkerLaunchReceipt(
       remote.launch,
       requestedLaunch,
       remote.state === 'ready'
@@ -292,7 +298,7 @@ export async function startFederatedWorker(args: {
       dispatchId: started.dispatch.id,
       workerAddress: `dispatch:${started.dispatch.id}`,
       task: taskForRemote.spec,
-      agent: requestedLaunch.requested.agent
+      agent: workerLaunchAgent(launch) ?? workerLaunchAgent(requestedLaunch)
     })
   }
   return readyResult

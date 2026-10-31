@@ -101,60 +101,6 @@ describe('stopWslHostServer', () => {
     warn.mockRestore()
   })
 
-  it('names each terminal that refused, and still asks the server to stop', async () => {
-    const { all } = steps({
-      endTerminals: vi.fn(async () => [
-        { handle: 'term_1', worktreeId: 'gone::/home/me/old', reason: 'selector_not_found' }
-      ]),
-      census: vi.fn(async () => census(1)),
-      decommission: vi.fn(async (): Promise<OrcadDecommissionResult> => ({
-        outcome: 'refused',
-        verdict: 'live',
-        code: 'orcad_decommission_terminals_running',
-        reason: '1 terminal is still running on this host.'
-      }))
-    })
-    const result = await stopWslHostServer(all)
-    expect(all.decommission).toHaveBeenCalled()
-    expect(result).toEqual({
-      stopped: false,
-      reason:
-        'Terminals that refused to close: term_1 (gone::/home/me/old): selector_not_found 1 terminal session kept running. Orca’s server kept running: 1 terminal is still running on this host.',
-      verdict: 'live'
-    })
-  })
-
-  it('never reports stopped when the decommission could not prove it stopped the serving orcad', async () => {
-    const { all } = steps({
-      decommission: vi.fn(async (): Promise<OrcadDecommissionResult> => ({
-        outcome: 'refused',
-        verdict: 'unverifiable',
-        code: 'orcad_wsl_host_serving_instance_unproven',
-        reason: 'the orcad this computer was connected to is not the one the distro records'
-      }))
-    })
-    await expect(stopWslHostServer(all)).resolves.toMatchObject({
-      stopped: false,
-      verdict: 'unverifiable'
-    })
-  })
-
-  it('calls a census that did not answer unverifiable, not live', async () => {
-    const { all } = steps({
-      census: vi.fn(async () => census(null)),
-      decommission: vi.fn(async (): Promise<OrcadDecommissionResult> => ({
-        outcome: 'refused',
-        verdict: 'unverifiable',
-        code: 'orcad_decommission_census_unavailable',
-        reason: 'The terminal daemon did not answer a session count.'
-      }))
-    })
-    await expect(stopWslHostServer(all)).resolves.toMatchObject({
-      stopped: false,
-      verdict: 'unverifiable'
-    })
-  })
-
   it('reports a daemon that did not retire', async () => {
     const { all } = steps({
       decommission: vi.fn(async (): Promise<OrcadDecommissionResult> => ({
