@@ -5,14 +5,22 @@ import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import { waitForActivePaneHookDescriptor, waitForActiveTerminalManager } from './helpers/terminal'
+import {
+  waitForActivePaneHookDescriptor,
+  waitForActivePanePtyId,
+  waitForActiveTerminalManager,
+  waitForPaneIdentitySnapshot
+} from './helpers/terminal'
+import { waitForPtyShellEcho } from './terminal-pty-readiness'
 import type { GlobalSettings } from '../../src/shared/global-settings-types'
 
 const QUESTION = 'Tabs or spaces?'
 
 async function enableNativeChatSetting(page: Page): Promise<void> {
   await page.evaluate(async () => {
-    const nextSettings = await window.api.settings.set({ experimentalNativeChat: true })
+    const nextSettings = await window.api.settings.set({
+      nativeChatProviders: { claude: true, codex: true }
+    })
     window.__store?.setState({ settings: nextSettings as GlobalSettings })
   })
 }
@@ -107,7 +115,11 @@ test.describe('Desktop chat AskUserQuestion card (#11761)', () => {
     await ensureTerminalVisible(orcaPage)
     await waitForActiveTerminalManager(orcaPage, 30_000)
 
+    const boundPane = await waitForPaneIdentitySnapshot(orcaPage, 1)
+    const ptyId = await waitForActivePanePtyId(orcaPage)
+    await waitForPtyShellEcho(orcaPage, ptyId, 15_000)
     const descriptor = await waitForActivePaneHookDescriptor(orcaPage)
+    expect(descriptor.paneKey).toBe(`${boundPane.tabId}:${boundPane.activeLeafId}`)
     const [tabId] = descriptor.paneKey.split(':')
     const sessionId = `e2e-ask-card-${randomUUID()}`
 
@@ -147,6 +159,11 @@ test.describe('Desktop chat AskUserQuestion card (#11761)', () => {
       // Require card dismissal and composer return; the transcript keeps its resolution receipt.
       await expect(cardQuestion).toHaveCount(0, { timeout: 20_000 })
       await orcaPage.screenshot({ path: path.join(screenshotDir, '03-answered.png') })
+      const finalPane = await waitForPaneIdentitySnapshot(orcaPage, 1)
+      expect(finalPane.tabId).toBe(boundPane.tabId)
+      expect(finalPane.activeLeafId).toBe(boundPane.activeLeafId)
+      expect(finalPane.ptyIdsByLeafId).toEqual(boundPane.ptyIdsByLeafId)
+      await expect(orcaPage.locator('[data-native-chat-root="true"]')).toBeVisible()
     } finally {
       rmSync(scratchDir, { recursive: true, force: true })
     }

@@ -2,6 +2,9 @@ import { installPtyKittyFileReader } from './pty-kitty-file-reader'
 import { installSpawnDeferredSleep } from './spawn-deferred-sleep'
 import type { PaneManager, ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { useAppStore } from '@/store'
+import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/windows-pty-compatibility'
+import { buildTerminalKeyboardProtocolOptions } from '@/lib/pane-manager/terminal-keyboard-protocol'
+import { resolvePaneKeyboardProtocolAgent } from '../terminal-keyboard-protocol-pane-agent'
 import { TerminalKittyKeyboardModeTracker } from '../../../../../shared/terminal-kitty-keyboard-mode-tracker'
 import type { PtyConnectionDeps } from '../pty-connection-types'
 import { registerTerminalPaneRecoveryInstance } from '../terminal-pane-recovery'
@@ -150,6 +153,29 @@ export function connectPanePty(
 
   // Use stable leaf UUIDs for keys crossing env, hook IPC and replay; numeric pane IDs are renderer-local.
   session.cacheKey = makePaneKey(session.deps.tabId, session.pane.leafId)
+  installSleepingRecordAccess(session)
+  installShellCommandInference(session)
+  installInterruptInputIntent(session)
+  installTerminalKeydownFit(session)
+  installPtyExitHibernate(session)
+  installSpawnDeferredSleep(session)
+  installTitleSpawnBell(session)
+  installAgentTaskCompleteNotify(session)
+  const backendContext = {
+    userAgent: navigator.userAgent,
+    osRelease: window.api.platform?.get?.()?.osRelease,
+    connectionId: session.ownerContext.connectionId,
+    cwd: session.deps.cwd,
+    shellOverride: session.tab?.shellOverride,
+    executionHostId: session.ownerContext.executionHostId,
+    tuiAgent: resolvePaneKeyboardProtocolAgent(session.paneStartup, session.tab?.launchAgent)
+  }
+  // Capture backend policy before the tracker and transport copy xterm's initial capability flags.
+  Object.assign(
+    session.pane.terminal.options,
+    buildWindowsPtyCompatibilityOptions(backendContext),
+    buildTerminalKeyboardProtocolOptions(backendContext)
+  )
   // xterm exposes no Kitty read; mirror the flags its encoder applies.
   session.kittyKeyboardModes = (() => {
     const existing = session.deps.paneKittyKeyboardModesRef.current.get(session.pane.id)
@@ -162,14 +188,6 @@ export function connectPanePty(
     session.deps.paneKittyKeyboardModesRef.current.set(session.pane.id, created)
     return created
   })()
-  installSleepingRecordAccess(session)
-  installShellCommandInference(session)
-  installInterruptInputIntent(session)
-  installTerminalKeydownFit(session)
-  installPtyExitHibernate(session)
-  installSpawnDeferredSleep(session)
-  installTitleSpawnBell(session)
-  installAgentTaskCompleteNotify(session)
   installPaneHostCapabilityFlags(session)
   installPtyInputRecovery(session)
   installAgentPreReadyTypedDraft(session)

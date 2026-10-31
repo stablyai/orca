@@ -44,36 +44,39 @@ Folder contexts without a Git repository cannot provide a historical release che
 
 ## Cleaning up older historical caches
 
-First stop cross-version tests in all this repository's worktrees, then preview historical-cache
-cleanup across the registered local worktrees and shared source cache:
+Preview historical-cache cleanup across the registered local worktrees and shared source cache:
 
 ```sh
-pnpm reclaim-space --tests-stopped
+pnpm reclaim-space
 ```
 
 The default selects stamped release checkouts older than 30 days, including previous extraction
 formats. Answer `Y` after the preview to apply it, or run the same selection directly:
 
 ```sh
-pnpm reclaim-space --apply --tests-stopped
+pnpm reclaim-space --apply
 ```
 
 Use `--release-cache-min-age-days 7` for a shorter retention window, or `--release-cache-min-age-days 0` to select all
 recognised completed release checkouts. `--repo DIRECTORY` selects another local repository.
 Each run rescans and rechecks eligibility; it does not apply a saved preview.
 
-This is manual because older harnesses do not hold a lease while importing source. Locks prevent
-deletion during publication or shared-source copying, but do not prove that a completed checkout
-is unused. Local checkout age uses directory modification time, which ordinary reuse does not
-refresh; shared seed timestamps reflect recent copying. `--tests-stopped` acknowledges that the
-caller has stopped consumers; it does not detect them.
+Shared seeds are always eligible because the format lease blocks deletion while tests copy them.
+Older harnesses do not hold a lease while importing a local checkout, so local checkouts are
+selected only from worktrees idle for 7 days (no process references the worktree path, HEAD has
+not moved, and no changed or untracked Git path was modified); active worktrees are reported as
+retained. After stopping cross-version tests in all worktrees, add `--tests-stopped`
+to include active worktrees too; it acknowledges stopped consumers but does not detect them.
+Locks prevent deletion during publication or shared-source copying. Local checkout age uses
+directory modification time, which ordinary reuse does not refresh; shared seed timestamps reflect
+recent copying.
 
 The script checks matching commit/format stamps, skips symlinked cache paths and future formats,
 and leaves mutable `working-tree` copies, source, dependencies, and worktree registrations alone.
 It reports logical bytes rather than promised disk savings: another clone may retain the same
 blocks. Deleted historical source rebuilds on the next test run. Run the command on the execution
-host for SSH repositories. The same manual command also performs P1's Electron maintenance;
-automatic dev-bundle sweeps exclude historical test cache cleanup.
+host for SSH repositories. The same command also performs P1's Electron maintenance; automatic
+dev cleanup includes historical test caches under the idle-worktree rule, without `--tests-stopped`.
 
 ## Measurement and validation
 

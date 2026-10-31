@@ -322,7 +322,7 @@ describe('CodexAccountService config sync', () => {
       testState.userDataDir,
       'account-1',
       '',
-      '{"account":"managed"}\n'
+      createCodexAuthJson('user@example.com', 'provider-1', 'fixture-refresh')
     )
     const settings = createSettings({
       codexManagedAccounts: [
@@ -355,6 +355,14 @@ describe('CodexAccountService config sync', () => {
 
     expect(result.accounts).toHaveLength(1)
     expect(result.activeAccountId).toBe(null)
+    const normalized = store.getSettings()
+    const stableAuth = readFileSync(join(managedHomePath, 'auth.json'), 'utf8')
+    store.updateSettings.mockClear()
+    expect(service.listAccounts()).toEqual(result)
+    expect(service.listAccounts()).toEqual(result)
+    expect(store.getSettings()).toBe(normalized)
+    expect(store.updateSettings).not.toHaveBeenCalled()
+    expect(readFileSync(join(managedHomePath, 'auth.json'), 'utf8')).toBe(stableAuth)
   })
 
   it('rejects paths that escape the managed accounts root', async () => {

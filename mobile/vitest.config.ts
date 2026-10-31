@@ -16,14 +16,20 @@ export default defineConfig({
     }
   },
   test: {
+    // Web renderer tests must resolve the SVG/icon libraries through the same host aliases.
+    server: {
+      deps: {
+        inline: [
+          'lucide-react-native',
+          'react-native-svg',
+          '@react-native-async-storage/async-storage'
+        ],
+        external: [/\/config\/scripts\/build-mobile-web-app-bundle\.mjs$/]
+      }
+    },
     pool: 'threads',
     environment: 'node',
     setupFiles: ['./vitest.setup.ts'],
-    server: {
-      deps: {
-        inline: ['@react-native-async-storage/async-storage']
-      }
-    },
     onConsoleLog: (log) => !log.includes('react-test-renderer is deprecated'),
     // Collect component and script tests too so render regressions and CI tooling are covered.
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'scripts/**/*.test.ts']
