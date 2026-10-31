@@ -101,7 +101,7 @@ const publish = (hostId: string, associations: AgentSenderAssociation[], revisio
     attachments: [],
     revision: { epoch: 'host', revision }
   })
-const open = (sender: AgentMessageSender, target = LOCAL) =>
+const open = (sender: AgentMessageSender, target: RuntimeClientTarget = LOCAL) =>
   openAgentMessageSender(
     { kind: 'agent', senders: [sender], orchestration: null },
     sender,
