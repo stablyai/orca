@@ -75,6 +75,7 @@ function HeldField({
       notices={notices}
       imageAttachments={[]}
       sendButtonDisabled
+      sendHeld={false}
       isWorking={false}
       attachDisabled
       dictationDisabled

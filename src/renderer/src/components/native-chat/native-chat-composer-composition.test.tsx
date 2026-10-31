@@ -79,6 +79,7 @@ function fieldProps(overrides: Partial<TestFieldProps> = {}): TestFieldProps {
     notices: [],
     imageAttachments: [],
     sendButtonDisabled: false,
+    sendHeld: false,
     isWorking: false,
     attachDisabled: false,
     dictationDisabled: false,

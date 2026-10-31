@@ -189,7 +189,7 @@ it('renders the Queue switch and description using the German catalog', async ()
     await i18n.changeLanguage('de')
   })
   try {
-    const { container } = renderSetting({ experimentalNativeChat: true })
+    const { container } = renderSetting({})
     const copy = de.components.settings.nativeChat
     expect(
       container

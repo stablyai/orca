@@ -160,6 +160,7 @@ function ComposerProbe({
           notices={notice ? [{ key: 'composer', kind: 'attachment', text: notice }] : []}
           imageAttachments={attachments.imageAttachments}
           sendButtonDisabled={false}
+          sendHeld={false}
           isWorking={false}
           attachDisabled={disabled}
           dictationDisabled
