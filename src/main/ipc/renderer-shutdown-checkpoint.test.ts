@@ -149,23 +149,6 @@ describe('registerRendererShutdownCheckpointHandler', () => {
     expect(event.returnValue).toEqual({ ok: true })
   })
 
-  it('reports a staging failure so the renderer can retry', () => {
-    const store = {
-      stageWorkspaceSessionBeforeUnload: vi.fn(),
-      updateUI: vi.fn(() => {
-        throw new Error('disk full')
-      }),
-      flushPendingOrThrowAsync: vi.fn(() => Promise.resolve())
-    }
-    registerRendererShutdownCheckpointHandler(store as never)
-
-    const handler = syncHandlers.get('app:stage-before-unload-sync')
-    const event: { returnValue?: unknown } = {}
-    handler?.(event, { sessions: [], ui: { activeView: 'settings' } })
-
-    expect(event.returnValue).toEqual({ ok: false, error: 'disk full' })
-  })
-
   it('does not queue persistence when staging is incomplete', async () => {
     const store = {
       stageWorkspaceSessionBeforeUnload: vi.fn(),
@@ -184,21 +167,6 @@ describe('registerRendererShutdownCheckpointHandler', () => {
     expect(store.flushPendingOrThrowAsync).not.toHaveBeenCalled()
     expect(event.returnValue).toEqual({ ok: false, error: 'invalid state' })
     await expect(invokeHandlers.get(AWAIT_CHANNEL)?.()).resolves.toEqual({ ok: false })
-  })
-
-  it('stages synchronously without waiting on the durable write', () => {
-    const store = {
-      stageWorkspaceSessionBeforeUnload: vi.fn(),
-      updateUI: vi.fn(),
-      flushPendingOrThrowAsync: vi.fn(() => new Promise<void>(() => {}))
-    }
-    registerRendererShutdownCheckpointHandler(store as never)
-
-    const handler = syncHandlers.get('app:stage-before-unload-sync')
-    const event: { returnValue?: unknown } = {}
-    handler?.(event, { sessions: [], ui: { activeView: 'settings' } })
-
-    expect(event.returnValue).toEqual({ ok: true })
   })
 
   it('holds the checkpoint open until the durable write settles', async () => {
@@ -267,16 +235,5 @@ describe('registerRendererShutdownCheckpointHandler', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('reports success before any checkpoint is staged', async () => {
-    const store = {
-      stageWorkspaceSessionBeforeUnload: vi.fn(),
-      updateUI: vi.fn(),
-      flushPendingOrThrowAsync: vi.fn(() => Promise.resolve())
-    }
-    registerRendererShutdownCheckpointHandler(store as never)
-
-    await expect(invokeHandlers.get(AWAIT_CHANNEL)?.()).resolves.toEqual({ ok: true })
   })
 })

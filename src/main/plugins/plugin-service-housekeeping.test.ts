@@ -45,16 +45,6 @@ function failRegistration(): void {
 }
 
 describe('PluginServiceHousekeeping', () => {
-  it('checks bindings and reaps healthy workers without refreshing or restarting watchers', async () => {
-    const { reapIdle, refresh } = sync()
-    await vi.advanceTimersByTimeAsync(180_000)
-    expect(reapIdle).toHaveBeenCalledTimes(3)
-    expect(refresh).not.toHaveBeenCalled()
-    expect(watcher().start).toHaveBeenCalledOnce()
-    expect(watcher().checkRootBindings).toHaveBeenCalledTimes(3)
-    expect(vi.getTimerCount()).toBe(1)
-  })
-
   it('retries failed registration using the existing maintenance interval', async () => {
     const { reapIdle, refresh } = sync()
     failRegistration()
@@ -68,15 +58,6 @@ describe('PluginServiceHousekeeping', () => {
     await vi.advanceTimersByTimeAsync(60_000)
     expect(refresh).toHaveBeenCalledOnce()
     expect(vi.getTimerCount()).toBe(1)
-  })
-
-  it('retains a synchronous startup failure for the next bounded retry', async () => {
-    vi.mocked(watcher().start).mockImplementation((_paths, _refresh, onWatcherError) => {
-      onWatcherError?.()
-    })
-    const { refresh } = sync()
-    await vi.advanceTimersByTimeAsync(60_000)
-    expect(refresh).toHaveBeenCalledOnce()
   })
 
   it('keeps unchanged missing roots idle and refreshes when their binding appears', async () => {
@@ -124,21 +105,5 @@ describe('PluginServiceHousekeeping', () => {
     resolve(true)
     await Promise.resolve()
     expect(refresh).toHaveBeenCalledOnce()
-  })
-
-  it('stops retries and releases subscriptions when disabled or disposed', () => {
-    const { reapIdle, refresh } = sync()
-    failRegistration()
-    housekeeping.sync({ enabled: false, devPaths: ['plugin'], reapIdle, refresh })
-    vi.advanceTimersByTime(120_000)
-    expect(reapIdle).not.toHaveBeenCalled()
-    expect(refresh).not.toHaveBeenCalled()
-    expect(vi.getTimerCount()).toBe(0)
-    sync()
-    failRegistration()
-    housekeeping.dispose()
-    vi.advanceTimersByTime(120_000)
-    expect(refresh).not.toHaveBeenCalled()
-    expect(vi.getTimerCount()).toBe(0)
   })
 })

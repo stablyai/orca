@@ -893,6 +893,13 @@
       "pluginNewFile": {
         "unavailable": "{{value0}} 已不可用。请重新启用其插件。",
         "failed": "无法创建文件。"
+      },
+      "pluginAutoUpdates": {
+        "one": "{{value0}} 已更新到 {{value1}}",
+        "many": "已更新 {{value0}} 个插件"
+      },
+      "pluginInstallLink": {
+        "invalid": "该插件链接无效。"
       }
     },
     "lib": {
@@ -8628,7 +8635,6 @@
         },
         "TerminalWindowSection": {
           "1705318506": "ANSI 洋红色",
-          "03c855d15f": "重置所有颜色覆盖",
           "63f8d9336e": "颜色覆盖",
           "e86e09b5c7": "覆盖各个终端颜色。",
           "1d1920dc8a": "在终端中输入时隐藏鼠标光标。",
@@ -8695,7 +8701,11 @@
           "cf37ff69f6": "根据",
           "8abdab9f7c": "立即重启",
           "907131d741": "正在重新启动...",
-          "605a35d600": "终端渲染器尚未应用此项 — xterm.js 没有粗体颜色槽位。已保存的值会被保留。"
+          "605a35d600": "终端渲染器尚未应用此项 — xterm.js 没有粗体颜色槽位。已保存的值会被保留。",
+          "color_overrides_dark_description": "覆盖深色终端主题的各个颜色。",
+          "color_overrides_light_description": "覆盖浅色终端主题的各个颜色。",
+          "reset_dark_color_overrides": "重置深色主题颜色覆盖",
+          "reset_light_color_overrides": "重置浅色主题颜色覆盖"
         },
         "UIZoomControl": {
           "c2c64b24d0": "重置"
@@ -11280,7 +11290,8 @@
           "pathLabel": "开发插件文件夹路径",
           "placeholder": "插件文件夹路径",
           "add": "添加路径",
-          "reviewHelp": "只审核一次。之后的代码修改会直接运行。"
+          "reviewHelp": "只审核一次。之后的代码修改会直接运行。",
+          "dialogTitle": "开发文件夹"
         },
         "PluginInstallDialog": {
           "localRequired": "请输入插件文件夹路径。",
@@ -12485,7 +12496,9 @@
           "repository": "仓库",
           "stoppedDataBody": "无法加载其文件。重新启动以重试。",
           "newerBody": "你浏览时目录已更改。",
-          "showNewer": "查看新版本"
+          "showNewer": "查看新版本",
+          "newerTitle": "有更新的版本",
+          "alsoListedBy": "{{value0}} 也收录了此插件。更新只来自安装时所用的目录；如需切换，请移除后重新安装。"
         },
         "PluginDetailSections": {
           "typeLanguagePack": "界面语言",
@@ -12535,7 +12548,9 @@
           "rollbackTo": "回滚到 {{value0}}…",
           "copyContentHash": "复制内容哈希",
           "reviewUpdate": "审核更新",
-          "dataLoadFailed": "无法加载其文件"
+          "dataLoadFailed": "无法加载其文件",
+          "updateNeedsReview": "更新 {{value0}} 需要审查",
+          "updatedTo": "已更新到 {{value0}}"
         },
         "PluginSettingsOverview": {
           "offTitle": "插件已关闭"
@@ -12598,20 +12613,27 @@
           "dark": "深色",
           "light": "浅色",
           "languageIncomplete": "已翻译 {{value0}}%，不够完整，无法用作 Orca 的语言",
-          "languageCoverage": "界面语言 · 已翻译 {{value0}}%"
+          "languageCoverage": "界面语言 · 已翻译 {{value0}}%",
+          "newFileMenu": "添加到 + 菜单"
         },
         "PluginInstallConsent": {
           "noOtherAccess": "无其他访问权限",
           "replacesShortcut": "{{value0}}（{{value1}}）会替换你的“{{value2}}”快捷键。",
           "updatesKeepApproval": "仅在需要新访问权限时更新才会再次询问",
           "fullAccessUpdates": "更新可能会在不询问的情况下更改其代码",
-          "editsFileTypes": "在 Orca 中打开并编辑 {{value0}} 文件。它可以读取自己打开的文件。"
+          "editsFileTypes": "在 Orca 中打开并编辑 {{value0}} 文件。它可以读取自己打开的文件。",
+          "install": "安装并启用",
+          "keepOff": "保持关闭"
         },
         "PluginPageAction": {
-          "contentOnly": "仅内容"
+          "contentOnly": "仅内容",
+          "failedTitle": "无法安装 {{value0}}"
         },
         "PluginSettingsMenu": {
-          "autoUpdateHint": "仅在需要新访问权限时再次询问"
+          "autoUpdateHint": "仅在需要新访问权限时再次询问",
+          "label": "插件设置",
+          "development": "开发文件夹…",
+          "autoUpdateLabel": "自动更新插件"
         },
         "PluginInUseAction": {
           "inUseDark": "使用中 · 深色",
@@ -12681,6 +12703,39 @@
           "manyDescription": "在你审核之前不会更新。",
           "review": "审核",
           "dismiss": "关闭"
+        },
+        "PluginInstallTrustDialog": {
+          "titleFolder": "请确认你信任此文件夹",
+          "title": "请确认你信任 {{value0}}",
+          "theme": "此主题来自 {{value0}}，而非 Orca。请只安装你信任的作者的插件。",
+          "content": "此插件来自 {{value0}}，而非 Orca。请只安装你信任的作者的插件。",
+          "translations": "此翻译来自 {{value0}}，而非 Orca。翻译可以更改 Orca 中的任何文本，因此请只安装你信任的作者的翻译。",
+          "code": "此插件来自 {{value0}}，而非 Orca。它会在 Orca 内运行发布者的代码，因此仅在你信任 {{value0}} 时安装。",
+          "git": "Orca 尚未检查此仓库。来自它的插件可以在 Orca 内运行发布者的代码，因此仅在你信任 {{value0}} 时安装。",
+          "localFolder": "这是未经验证的本地文件夹。来自它的插件可以在 Orca 内运行代码，因此仅在你信任其来源时安装。",
+          "devFolder": "这是未经验证的本地文件夹。Orca 会按原样加载其插件，之后的代码修改会直接运行而不再询问，因此请只添加你信任的文件夹。",
+          "publisher": "发布者",
+          "repository": "仓库",
+          "folder": "文件夹",
+          "catalog": "目录",
+          "cancel": "取消",
+          "addFolder": "添加文件夹",
+          "install": "安装"
+        },
+        "PluginPageHero": {
+          "screenshots": "屏幕截图",
+          "openScreenshot": "打开屏幕截图：{{value0}}",
+          "position": "{{value0}} / {{value1}}",
+          "previous": "上一张屏幕截图",
+          "next": "下一张屏幕截图"
+        },
+        "PluginChips": {
+          "updateNeedsReview": "更新需要审查",
+          "updatedTo": "已更新到 {{value0}}",
+          "devUnverified": "开发 · 未验证"
+        },
+        "PluginContributionActionNewFile": {
+          "create": "创建"
         }
       },
       "right": {
@@ -14063,7 +14118,8 @@
                   "79aa06bb2c": "刷新失败。GitHub 的 API 暂时不可用。正在显示上次已知状态。",
                   "6ec12cee0c": "刷新失败。现在无法访问 GitHub。正在显示上次已知状态。",
                   "de088015e8": "刷新失败。GitHub 正在限制请求频率。正在显示上次已知状态。",
-                  "d9dd7c6687": "无法从 GitHub 刷新。正在显示上次已知状态。"
+                  "d9dd7c6687": "无法从 GitHub 刷新。正在显示上次已知状态。",
+                  "manual_provider": "无法从 {{provider}} 刷新。请重试。"
                 }
               }
             },
@@ -16094,13 +16150,29 @@
           "message": "有插件可以打开 .{{value0}} 文件：{{value1}}",
           "view": "查看插件",
           "notNow": "暂不",
-          "never": "不再为 .{{value0}} 建议"
+          "never": "不再为 .{{value0}} 建议",
+          "editorMessage": "有插件为 .{{value0}} 文件提供编辑器：{{value1}}"
         },
         "RichMarkdownEmojiMenu": {
           "chooseEmoji": "选择表情符号"
         },
         "richMarkdownBlobImagePaste": {
           "saveFailed": "无法将粘贴的图片保存到文档旁。重启 Orca 后可能无法加载该图片。"
+        },
+        "PluginCustomEditorFrame": {
+          "loading": "正在加载编辑器…",
+          "unresponsive": "{{value0}} 已停止响应。请切换到源代码以继续编辑。",
+          "loadFailed": "无法加载 {{value0}}。请切换到源代码以编辑此文件。",
+          "editTooLarge": "此文件过大，{{value0}} 无法保存更改。请改用源代码。",
+          "saveBlocked": "无法保存 {{value0}} 的最新更改。",
+          "editsHeld": "{{value0}} 发送更改的速度过快；Orca 稍后会应用最新的一次。",
+          "largeFile": "文件较大，可能需要一点时间。"
+        },
+        "PluginBytesCustomEditorSurface": {
+          "retry": "重试",
+          "tooLarge": "{{value0}} 过大，无法在 {{value1}} 中打开（{{value2}}；上限为 {{value3}}）。",
+          "unsupported": "{{value0}} 无法从此文件的存储位置读取它。请更新托管该文件的 Orca 服务器，或切换到源代码。",
+          "readFailed": "无法为 {{value1}} 读取 {{value0}}。{{value2}}"
         }
       },
       "diff": {
@@ -16423,7 +16495,8 @@
           },
           "pluginQuickActions": {
             "description": "{{value0}} 插件命令",
-            "keyword": "插件命令"
+            "keyword": "插件命令",
+            "newFileDescription": "在当前工作区中创建未命名的 {{value0}} 文件。"
           }
         }
       },
@@ -17660,7 +17733,8 @@
           "notInstalled": "未安装"
         },
         "PluginListGroup": {
-          "showAll": "再显示 {{value0}} 个"
+          "showAll": "再显示 {{value0}} 个",
+          "showAllTotal": "显示全部 {{value0}} 个插件"
         },
         "PluginListRow": {
           "official": "官方"
@@ -18156,6 +18230,13 @@
         },
         "pluginInstallCount": {
           "installs": "{{value0}} 次安装"
+        },
+        "PluginCatalogLinkDialog": {
+          "failed": "无法添加此目录。",
+          "title": "要添加目录 {{value0}} 吗？",
+          "cancel": "取消",
+          "add": "添加目录",
+          "body": "有链接请求显示此目录中的 {{value0}}。请只添加你信任的人的目录。"
         }
       }
     },
@@ -18484,6 +18565,8 @@
       },
       "composer": {
         "send": "发送",
+        "alternateSteerHint": "{{shortcut}} 立即发送",
+        "alternateQueueHint": "{{shortcut}} 加入队列",
         "noPty": "没有实时终端，请切回终端以重新连接。",
         "locked": "输入正被另一台设备占用。",
         "placeholder": "随心输入，@ 引用文件，/ 使用命令",
@@ -18962,7 +19045,6 @@
         "editMessage": "编辑消息",
         "showFullMessage": "显示完整消息",
         "showLess": "收起",
-        "turnOffQueueing": "关闭排队",
         "withdrawnHold": "在发送前已停止",
         "pausedSendFailed": "无法发送。点按发送以重试。",
         "paused": "已暂停",
@@ -19596,9 +19678,8 @@
         }
       },
       "nativeChat": {
-        "queueFollowUpsTitle": "将后续消息加入队列",
-        "queueFollowUpsCopy": "智能体工作时发送的消息会以卡片形式等待，你可以立即发送、编辑或删除。带图片的消息会立即发送。",
-        "queueFollowUpsToggleLabel": "切换后续消息队列",
+        "followUpBehaviorTitle": "将后续消息加入队列",
+        "followUpBehaviorCopy": "智能体工作时发送的消息会以卡片形式等待到回合结束，而不是进入正在进行的回合。Cmd/Ctrl+Enter 会对单条消息采取相反做法。",
         "inlineVisualsTitle": "内联可视化",
         "inlineVisualsCopy": "允许智能体在其回复中显示图表、示意图和原型图。适用于新启动的聊天。",
         "inlineVisualsToggleLabel": "切换内联可视化",
@@ -20899,7 +20980,7 @@
     },
     "claude": {
       "added": "已添加账户。选择它即可将其用于您下次启动的 Claude。",
-      "nextLaunch": "{{value0}} → {{value1}}。您下次启动的 Claude 将使用它。正在运行的会话会保留其账户。",
+      "nextLaunch": "{{value0}} → {{value1}}。您下次启动的 Claude 终端将使用此账户。正在运行的 Claude 终端会保留其账户。",
       "profileSwitching": "切换会应用于您在任何标签页中下次启动的 Claude。正在运行的会话会保留其账户。",
       "systemDefault": "系统默认",
       "unnamedAccount": "Claude 账户",
@@ -20929,8 +21010,8 @@
         "title": "切换到 {{account}}",
         "dontAskAgainHint": "您可以在“设置”→“AI 提供商帐户”中关闭此功能。",
         "listLabel": "要重新启动的 Claude 会话",
-        "settingTitle": "Claude 运行期间切换账户时",
-        "settingDescription": "重启后，每个正在进行的对话都会在新账户上继续。",
+        "settingTitle": "Claude 在终端中运行期间切换账户时",
+        "settingDescription": "重启后，每个终端对话都会在新账户上继续。",
         "settingRestart": "总是重新启动",
         "session": "Claude 会话",
         "restartingOther": "正在 {{account}} 账户上重启 {{count}} 个 Claude 会话",

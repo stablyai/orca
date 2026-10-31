@@ -18,6 +18,9 @@ vi.mock('electron', () => ({
   BrowserWindow: {
     getFocusedWindow: getFocusedWindowMock
   },
+  MenuItem: class {
+    click = vi.fn()
+  },
   Menu: {
     buildFromTemplate: buildFromTemplateMock,
     setApplicationMenu: setApplicationMenuMock,

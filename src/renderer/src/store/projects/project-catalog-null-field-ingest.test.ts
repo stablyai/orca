@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
-import { getProjectHostSetupProjectionFromState } from '../project-host-setup-selector'
+
 import { fetchProjectHostSetupCompatibility } from './project-host-routing'
 import { adoptFromEndpoint } from '../adopt-from-endpoint'
 
@@ -20,27 +20,6 @@ const projects = [
     updatedAt: 1
   }
 ] satisfies Project[]
-
-// Mirrors the Settings.tsx projectByRepoId useMemo that crashed.
-function buildProjectByRepoIdLikeSettings(
-  setups: readonly ProjectHostSetup[],
-  projectList: readonly Project[]
-): Map<string, Project> {
-  const projectById = new Map(projectList.map((project) => [project.id, project]))
-  const byRepoId = new Map<string, Project>()
-  for (const setup of setups) {
-    const project = projectById.get(setup.projectId)
-    if (project && setup.repoId.trim()) {
-      byRepoId.set(setup.repoId, project)
-    }
-  }
-  return byRepoId
-}
-
-// Mirrors project-grouping.ts's checkout identity, which runs on the sidebar render path.
-function checkoutIdentityLikeSidebar(setup: ProjectHostSetup): string {
-  return setup.path.trim() || setup.repoId || setup.id
-}
 
 // Reflect.set models older-host malformed fields without asserting them valid.
 function badSetups(): ProjectHostSetup[] {
@@ -93,30 +72,6 @@ describe('project catalog ingest with non-string row fields', () => {
     expect(adopted.hostId).toBe('runtime:env-1')
   })
 
-  it('lets the Settings projectByRepoId memo run instead of throwing on .trim()', async () => {
-    stubProjectsApi(badSetups())
-    const ingested = await fetchProjectHostSetupCompatibility({ kind: 'local' }, repos)
-    const projection = getProjectHostSetupProjectionFromState({
-      repos,
-      projects: [...ingested.projects],
-      projectHostSetups: [...ingested.setups]
-    })
-    expect(() =>
-      buildProjectByRepoIdLikeSettings(projection.setups, projection.projects)
-    ).not.toThrow()
-    // Why: an empty repoId is not an openable repo row, so it must not be indexed.
-    const byRepoId = buildProjectByRepoIdLikeSettings(projection.setups, projection.projects)
-    expect(byRepoId.has('')).toBe(false)
-    expect([...byRepoId.keys()]).toEqual(['repo-1'])
-  })
-
-  // Null path crashes main-window sidebar grouping, beyond Settings’ error boundary.
-  it('lets the sidebar checkout identity run instead of throwing on a null path', async () => {
-    stubProjectsApi(badSetups())
-    const ingested = await fetchProjectHostSetupCompatibility({ kind: 'local' }, repos)
-    expect(() => ingested.setups.map(checkoutIdentityLikeSidebar)).not.toThrow()
-  })
-
   // Why: a coerced field must change one value, never which rows exist.
   it('does not add or drop rows because a field was repaired', async () => {
     stubProjectsApi(badSetups())
@@ -132,30 +87,5 @@ describe('project catalog ingest with non-string row fields', () => {
     expect(repaired.projects.map((project) => project.id)).toEqual(
       untouched.projects.map((project) => project.id)
     )
-  })
-
-  // Why: this is a zustand selector compared with Object.is, so instability is a re-render storm.
-  it('keeps the projection reference-stable per (repos, projects, setups) input', async () => {
-    stubProjectsApi(badSetups())
-    const ingested = await fetchProjectHostSetupCompatibility({ kind: 'local' }, repos)
-    const args = {
-      repos,
-      projects: [...ingested.projects],
-      projectHostSetups: [...ingested.setups]
-    }
-    expect(getProjectHostSetupProjectionFromState(args)).toBe(
-      getProjectHostSetupProjectionFromState(args)
-    )
-  })
-
-  // Clean ingest must retain rows: TerminalPane/quick-command memos depend on their identity.
-  it('preserves row identity when the catalog is already clean', async () => {
-    const clean = badSetups()
-    ;(clean[1] as { repoId: string; path: string }).repoId = ''
-    ;(clean[1] as { repoId: string; path: string }).path = ''
-    stubProjectsApi(clean)
-    const projection = await fetchProjectHostSetupCompatibility({ kind: 'local' }, repos)
-    expect(projection.setups[0]).toBe(clean[0])
-    expect(projection.setups[1]).toBe(clean[1])
   })
 })

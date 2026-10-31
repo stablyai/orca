@@ -103,7 +103,7 @@ export function registerWslHostIpcBridge(unsubs: (() => void)[]): void {
     }
     const [focusedHost] = selectWslHostsWithVisibleWork(state)
     const entry = focusedHost ? `${state.activeWorktreeId}\0${focusedHost}` : ''
-    // Switching to a workspace on a WSL host (or launch restoring one) is the user acting on it.
+    // A switch or launch restore onto a WSL host: main connects a running distro, never boots one.
     if (entry !== focusEntry) {
       focusEntry = entry
       if (typeof api.focusHost === 'function') {

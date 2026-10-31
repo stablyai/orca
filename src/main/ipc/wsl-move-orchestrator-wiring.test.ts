@@ -136,6 +136,11 @@ vi.mock('./wsl-move-release-here', () => ({
 }))
 vi.mock('./wsl-move-undo-wiring', () => ({ createWslMoveUndoPorts: vi.fn() }))
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
+// Most cases drive the orchestrator's own moves, which are Stage 2 behaviour.
+const stage = vi.hoisted(() => ({ autoMoves: true }))
+vi.mock('../../shared/wsl-move/wsl-move-rollout-stage', () => ({
+  wslMoveAutoMovesBridgeProjects: () => stage.autoMoves
+}))
 
 const sleptPanes = [{ paneKey: 'tab:leaf', sessionId: 'wt@@a' }]
 
@@ -289,6 +294,25 @@ describe('WSL move orchestrator wiring', () => {
     await answerWindow()
     expect(host.added).toEqual(['Ubuntu'])
     expect(driver.moveProjectsToWslHost).toHaveBeenCalledTimes(1)
+  })
+
+  // B3: in Stage 1 opening a bridge project moves nothing; only the user's own move does.
+  it('T2 in Stage 1: opening a bridge project adds no host and moves nothing', async () => {
+    stage.autoMoves = false
+    try {
+      vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '1')
+      await register()
+      await handlers.get('wslMoveOrchestrator:projectOpened')?.(
+        { sender: { id: MAIN_WINDOW_ID } },
+        'Ubuntu'
+      )
+      await answerWindow()
+      expect(host.added).toEqual([])
+      expect(driver.previewWslMove).not.toHaveBeenCalled()
+      expect(driver.moveProjectsToWslHost).not.toHaveBeenCalled()
+    } finally {
+      stage.autoMoves = true
+    }
   })
 
   it('T2: never adds a host for a stopped distro or one whose state cannot be read', async () => {

@@ -518,6 +518,8 @@ describe("a queued card's Send-now while a Codex turn runs", () => {
       expect(verdictOf((await settled()).submissions, sent)).toBe('accepted')
     )
     expect((await settled()).owesWork).toBe(false)
+    // Delivered once: the turn's end neither steers it again nor starts a turn with it.
+    expect([steers, answers]).toEqual([1, 1])
   })
 
   it('is settled when a Stop ends that turn, on a Codex that names a steered start falsely', async () => {

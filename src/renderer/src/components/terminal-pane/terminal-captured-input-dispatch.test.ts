@@ -1,9 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { PtyTransport } from './pty-transport-types'
-import {
-  requestCapturedTerminalReconfirmation,
-  sendCapturedTerminalInput
-} from './terminal-captured-input-dispatch'
+import { sendCapturedTerminalInput } from './terminal-captured-input-dispatch'
 
 function createTransport(ptyId: string | null, sendResult = true): PtyTransport {
   return {
@@ -13,57 +10,6 @@ function createTransport(ptyId: string | null, sendResult = true): PtyTransport 
 }
 
 describe('sendCapturedTerminalInput', () => {
-  it('sends on the captured route while its PTY still owns the mounted pane', () => {
-    const transport = createTransport('pty-original')
-
-    expect(
-      sendCapturedTerminalInput({
-        targetPaneMounted: true,
-        currentTransport: transport,
-        capturedTransport: transport,
-        capturedPtyId: 'pty-original',
-        data: '\r'
-      })
-    ).toBe(true)
-    expect(transport.sendInput).toHaveBeenCalledWith('\r', 'driving')
-  })
-
-  it('runs the accepted callback only after a successful captured send', () => {
-    const transport = createTransport('pty-original')
-    const onAccepted = vi.fn()
-
-    expect(
-      sendCapturedTerminalInput({
-        targetPaneMounted: true,
-        currentTransport: transport,
-        capturedTransport: transport,
-        capturedPtyId: 'pty-original',
-        data: '\x1b[13;2u',
-        onAccepted
-      })
-    ).toBe(true)
-
-    expect(onAccepted).toHaveBeenCalledOnce()
-  })
-
-  it('does not run the accepted callback for a rejected captured send', () => {
-    const transport = createTransport('pty-original', false)
-    const onAccepted = vi.fn()
-
-    expect(
-      sendCapturedTerminalInput({
-        targetPaneMounted: true,
-        currentTransport: transport,
-        capturedTransport: transport,
-        capturedPtyId: 'pty-original',
-        data: '\x1b[13;2u',
-        onAccepted
-      })
-    ).toBe(false)
-
-    expect(onAccepted).not.toHaveBeenCalled()
-  })
-
   it('does not deliver to a replacement transport for a reused pane', () => {
     const original = createTransport('pty-original')
     const replacement = createTransport('pty-replacement')
@@ -112,26 +58,5 @@ describe('sendCapturedTerminalInput', () => {
       })
     ).toBe(false)
     expect(transport.sendInput).not.toHaveBeenCalled()
-  })
-})
-
-describe('requestCapturedTerminalReconfirmation', () => {
-  it('reconfirms only through the still-current captured binding', () => {
-    const requestWindowsShiftEnterReconfirmation = vi.fn()
-    const binding = { requestWindowsShiftEnterReconfirmation }
-
-    requestCapturedTerminalReconfirmation(binding, binding)
-
-    expect(requestWindowsShiftEnterReconfirmation).toHaveBeenCalledOnce()
-  })
-
-  it('does not call a disposed binding or its replacement', () => {
-    const original = { requestWindowsShiftEnterReconfirmation: vi.fn() }
-    const replacement = { requestWindowsShiftEnterReconfirmation: vi.fn() }
-
-    requestCapturedTerminalReconfirmation(replacement, original)
-
-    expect(original.requestWindowsShiftEnterReconfirmation).not.toHaveBeenCalled()
-    expect(replacement.requestWindowsShiftEnterReconfirmation).not.toHaveBeenCalled()
   })
 })

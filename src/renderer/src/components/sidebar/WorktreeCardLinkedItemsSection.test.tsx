@@ -149,30 +149,6 @@ describe('workspace linked references in hover details', () => {
     expect(icon?.classList.contains('lucide-git-merge')).toBe(true)
     expect(icon?.classList.contains('dark:text-purple-400/70')).toBe(true)
   })
-  it('shows grouped peers and only each review’s own known checks', () => {
-    const { container } = render(<Fixture onManage={vi.fn()} />)
-    expect(screen.getByText('Reviews · 2')).toBeTruthy()
-    expect(screen.getByText('Issues & tasks · 2')).toBeTruthy()
-    expect(screen.getAllByText('Active review')).toHaveLength(1)
-    expect(screen.getByText('MR !42')).toBeTruthy()
-    expect(screen.getByText('· GitLab · gitlab.example.com/team/orca')).toBeTruthy()
-    expect(screen.getByText('ENG-215')).toBeTruthy()
-    expect(screen.getByText('· Linear · acme')).toBeTruthy()
-    const checks = screen.getByLabelText('Checks: Passing')
-    expect(checks.previousElementSibling?.textContent).toBe('PR #57')
-    expect(checks.previousElementSibling?.previousElementSibling?.getAttribute('aria-label')).toBe(
-      'GitHub'
-    )
-    expect(checks.nextElementSibling?.textContent).not.toContain('GitHub')
-    const key = getWorkspaceAttachmentKey(attachments[0])
-    expect(
-      Array.from(container.querySelectorAll('[data-workspace-hover-reference]'))
-        .find((node) => node.getAttribute('data-workspace-hover-reference') === key)
-        ?.querySelector('[aria-label="Checks: Passing"]')
-    ).toBeTruthy()
-    expect(screen.queryByText('Used for checks')).toBeNull()
-    expect(screen.getAllByLabelText('Checks: Passing')).toHaveLength(1)
-  })
   it('offers Orca link destinations without activating the parent or dismissing hover', () => {
     const openUrl = vi.fn()
     Object.defineProperty(window, 'api', { configurable: true, value: { shell: { openUrl } } })

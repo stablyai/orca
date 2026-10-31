@@ -15,7 +15,6 @@ import {
   OptionsParams
 } from './structured-agent-session-schemas'
 import { agentSessionPinnedLaunchDirectory } from '../../agent-session-record-launch-directory'
-import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
 import {
   clientRequestsCommands,
   clientReadsOptionsWithoutModel
@@ -59,9 +58,14 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
         await requireInstalledStructuredHost(ctx, params.sessionId)
       ).readOptions(params.sessionId, { readsWithoutModel })
       if (result.current.model === undefined && !readsWithoutModel) {
-        throw agentSessionRefusalError('structured_agent_session_unsupported', {
-          reason: 'clientCapabilityMissing'
-        })
+        return {
+          ...result,
+          current: { ...result.current, model: '' },
+          models: [
+            { id: '', label: 'Model not reported', isDefault: false, efforts: [] },
+            ...result.models.filter((model) => model.id !== '')
+          ]
+        }
       }
       return result
     }
@@ -105,6 +109,9 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
                     resolve: () => ctx.runtime.resolveStructuredAgentCatalogWorkspace(worktree)
                   }
                 })
+        }
+        if (params.sessionId !== undefined) {
+          return host.readModelCatalog(request)
         }
         if (!params.savedOnly) {
           void catalog.demand(request)

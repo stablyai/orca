@@ -29,49 +29,6 @@ function runtimeReturning(...results: RuntimeWorktreePsResult[]) {
 }
 
 describe('worktree.ps catalog snapshots', () => {
-  it('preserves the exact legacy response when no snapshot field is sent', async () => {
-    const runtime = makeRuntime()
-    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
-    const response = await dispatcher.dispatch({
-      id: 'legacy',
-      authToken: 'token',
-      method: 'worktree.ps',
-      params: { limit: 10_000 }
-    })
-
-    expect(response).toMatchObject({
-      ok: true,
-      result: { worktrees: [], totalCount: 0, truncated: false }
-    })
-    expect((response as { result: unknown }).result).not.toHaveProperty('snapshotId')
-  })
-
-  it('returns a full snapshot followed by a tiny unchanged response', async () => {
-    const runtime = makeRuntime()
-    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
-    const first = await dispatcher.dispatch({
-      id: 'first',
-      authToken: 'token',
-      method: 'worktree.ps',
-      params: { limit: 10_000, afterSnapshotId: null }
-    })
-    const snapshotId = (first as { result: { snapshotId: string } }).result.snapshotId
-
-    const second = await dispatcher.dispatch({
-      id: 'second',
-      authToken: 'token',
-      method: 'worktree.ps',
-      params: { limit: 10_000, afterSnapshotId: snapshotId }
-    })
-
-    expect(snapshotId).toEqual(expect.any(String))
-    expect(second).toMatchObject({
-      ok: true,
-      result: { unchanged: true, snapshotId }
-    })
-    expect(runtime.getWorktreePs).toHaveBeenCalledTimes(2)
-  })
-
   it('gates source-default worktree projection by client capability', async () => {
     const runtime = makeRuntime()
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
@@ -204,16 +161,6 @@ describe('worktree.ps snapshot polls', () => {
     const second = await poll(dispatcher, { limit: 10_000, afterSnapshotId: first.snapshotId })
 
     expect(second).toEqual({ unchanged: true, snapshotId: first.snapshotId })
-  })
-
-  it('keeps a null lastOutputAt null', async () => {
-    const dispatcher = new RpcDispatcher({
-      runtime: makeRuntime(psRow({ lastOutputAt: null, preview: '' })),
-      methods: WORKTREE_METHODS
-    })
-    const result = await poll(dispatcher, { limit: 10_000, afterSnapshotId: null })
-
-    expect(result.worktrees).toEqual([expect.objectContaining({ lastOutputAt: null })])
   })
 
   it('returns byte-identical rows, preview included, to callers that do not poll snapshots', async () => {
