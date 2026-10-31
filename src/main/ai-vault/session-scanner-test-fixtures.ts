@@ -78,7 +78,8 @@ export function isolatedScanRoots(root: string) {
     kimiSessionsDir: join(root, 'kimi-sessions'),
     museSessionsDir: join(root, 'muse-sessions'),
     jcodeSessionsDir: join(root, 'jcode-sessions'),
-    kiroSessionsDir: join(root, 'kiro-sessions')
+    kiroSessionsDir: join(root, 'kiro-sessions'),
+    qwenProjectsDir: join(root, 'qwen-projects')
   }
 }
 
@@ -281,4 +282,27 @@ export async function writeJcodeSessionFixture(
       ]
     })
   )
+}
+
+// Qwen Code: <projects>/<encoded-cwd>/chats/<sessionId>.jsonl, a Gemini-shaped
+// append-only transcript where every record carries its own cwd/gitBranch.
+export function writeQwenScannerFixture(qwenProjectsDir: string): Promise<void> {
+  return writeJsonlFile(join(qwenProjectsDir, '-tmp-qwen', 'chats', 'qwen-session.jsonl'), [
+    {
+      type: 'user',
+      sessionId: 'qwen-session',
+      timestamp: '2026-05-01T10:12:00.000Z',
+      cwd: '/tmp/qwen',
+      gitBranch: 'main',
+      message: { role: 'user', parts: [{ text: 'Qwen title' }] }
+    },
+    {
+      type: 'assistant',
+      sessionId: 'qwen-session',
+      timestamp: '2026-05-01T10:12:01.000Z',
+      cwd: '/tmp/qwen',
+      model: 'qwen3-coder',
+      message: { role: 'model', parts: [{ text: 'Qwen reply' }] }
+    }
+  ])
 }

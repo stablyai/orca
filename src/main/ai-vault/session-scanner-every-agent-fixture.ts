@@ -2,7 +2,8 @@ import {
   isolatedScanRoots,
   writeJcodeSessionFixture,
   writeMuseScannerFixture,
-  writeOpenCode2SqliteFixture
+  writeOpenCode2SqliteFixture,
+  writeQwenScannerFixture
 } from './session-scanner-test-fixtures'
 import { writeKiroSessionFixture } from './session-scanner-kiro-fixtures'
 import { writeDocumentAgentFixtures } from './session-scanner-document-agent-fixtures'
@@ -25,6 +26,7 @@ export async function writeEveryAgentVault(root: string): Promise<EveryAgentVaul
   await writeMuseScannerFixture(roots.museSessionsDir)
   await writeJcodeSessionFixture(roots)
   await writeKiroSessionFixture(roots)
+  await writeQwenScannerFixture(roots.qwenProjectsDir)
   roots.opencodeDbPaths = [await writeOpenCode2SqliteFixture(root)]
   writeOpenCodeSqliteDatabase(roots.zcodeDbPath, [
     {

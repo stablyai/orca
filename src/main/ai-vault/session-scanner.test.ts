@@ -460,6 +460,7 @@ describe('scanAiVaultSessions', () => {
     expect(commandByAgent.get('kiro')).toBe(
       `cd '/tmp/kiro' && kiro-cli chat --tui --resume-id '${KIRO_FIXTURE_SESSION_ID}'`
     )
+    expect(commandByAgent.get('qwen-code')).toBe("cd '/tmp/qwen' && qwen --resume 'qwen-session'")
 
     expect(result.sessions.find((session) => session.agent === 'rovo')).toMatchObject({
       filePath: join(roots.rovoSessionsDir, 'rovo-session', 'metadata.json'),
