@@ -12026,6 +12026,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/cold-restore-payload-cache.test.ts src/main/daemon/history-reader.test.ts src/main/daemon/terminal-history-incremental-restore.test.ts src/main/daemon/hibernation-cold-restore-repro.test.ts src/main/daemon/daemon-pty-adapter.test.ts",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/cold-restore-payload-cache.test.ts src/main/daemon/history-reader.test.ts src/main/daemon/terminal-history-incremental-restore.test.ts src/main/daemon/daemon-pty-adapter.test.ts",
           "result": "passed",
           "durationSeconds": 5.68,
           "summary": "Five focused files passed 150 tests, including deterministic single-record replay slicing, one-at-a-time admission, UTF-16 boundary preservation, header-only queue bypass, byte-bounded LRU eviction, and ACK cleanup."
