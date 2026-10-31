@@ -120,6 +120,7 @@ export type TerminalActions = {
     prompt: string,
     options?: {
       replaceExistingGeneratedTitle?: boolean
+      sessionId?: string
     }
   ) => void
   setGeneratedTabTitlesFromAgentPrompts: (updates: readonly GeneratedTabTitleUpdate[]) => void
