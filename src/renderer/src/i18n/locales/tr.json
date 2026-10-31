@@ -20094,8 +20094,6 @@
         "inlineVisualsCopy": "Ajanın yanıtlarında grafikler, diyagramlar ve taslaklar göstermesine izin verin. Yeni başlatılan sohbetlere uygulanır.",
         "inlineVisualsToggleLabel": "Yanıtlardaki görselleri aç/kapat",
         "followUpBehaviorCopy": "Ajan çalışırken gönderilen mesajlar tur bitene kadar kart olarak bekler. Cmd/Ctrl+Enter bir mesajı çalışan tura gönderir.",
-        "followUpSteer": "Yönlendir",
-        "followUpQueue": "Sıraya al",
         "behaviorTitle": "Davranış",
         "resumeSearchUpdate": "güncelle",
         "resumeSearchRelaunch": "yeniden başlat",

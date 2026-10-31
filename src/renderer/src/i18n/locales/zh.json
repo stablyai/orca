@@ -19545,8 +19545,6 @@
       "nativeChat": {
         "followUpBehaviorTitle": "将后续消息加入队列",
         "followUpBehaviorCopy": "智能体工作时发送的消息会以卡片形式等待，直到回合结束。Cmd/Ctrl+Enter 会将一条消息发送到正在进行的回合。",
-        "followUpSteer": "立即发送",
-        "followUpQueue": "加入队列",
         "inlineVisualsTitle": "内联可视化",
         "inlineVisualsCopy": "允许智能体在其回复中显示图表、示意图和原型图。适用于新启动的聊天。",
         "inlineVisualsToggleLabel": "切换内联可视化",

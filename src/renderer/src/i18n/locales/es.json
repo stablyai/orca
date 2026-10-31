@@ -20055,8 +20055,6 @@
       "nativeChat": {
         "followUpBehaviorTitle": "Poner mensajes de seguimiento en cola",
         "followUpBehaviorCopy": "Los mensajes enviados mientras el agente trabaja esperan como tarjetas hasta que termina el turno. Cmd/Ctrl+Intro envía uno al turno en curso.",
-        "followUpSteer": "Enviar ahora",
-        "followUpQueue": "Poner en cola",
         "inlineVisualsTitle": "Elementos visuales inline",
         "inlineVisualsCopy": "Permite que el agente muestre gráficos, diagramas y maquetas dentro de sus respuestas. Se aplica a los chats nuevos.",
         "inlineVisualsToggleLabel": "Alternar elementos visuales inline",

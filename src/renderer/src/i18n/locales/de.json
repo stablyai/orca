@@ -20110,8 +20110,6 @@
         "inlineVisualsCopy": "Dem Agenten erlauben, Diagramme, Schaubilder und Mockups in seinen Antworten anzuzeigen. Gilt für neu gestartete Chats.",
         "inlineVisualsToggleLabel": "Eingebettete Grafiken umschalten",
         "followUpBehaviorCopy": "Nachrichten während der Arbeit des Agenten warten als Karten, bis der Durchgang endet. Cmd/Strg+Enter sendet eine Nachricht in den laufenden Durchgang.",
-        "followUpSteer": "Steuern",
-        "followUpQueue": "Einreihen",
         "behaviorTitle": "Verhalten",
         "resumeSearchUpdate": "Aktualisieren",
         "resumeSearchRelaunch": "Neu starten",
