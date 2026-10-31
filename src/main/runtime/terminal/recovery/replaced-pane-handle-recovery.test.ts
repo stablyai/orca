@@ -133,7 +133,7 @@ describe('a stale handle of a replaced pane (switch on)', () => {
 })
 
 describe('issuedForPaneKey census', () => {
-  it('is written by issuePtyHandle and read only by recoverTerminalPane', () => {
+  it('is minted by issuePtyHandle, compared by the canonical source and read for recovery', () => {
     const root = path.resolve(__dirname, '../../../../..')
     const users: string[] = []
     const walk = (dir: string): void => {
@@ -152,6 +152,7 @@ describe('issuedForPaneKey census', () => {
     expect(users.sort()).toEqual([
       'src/main/runtime/runtime-terminal-contracts.ts',
       'src/main/runtime/terminal/identity/terminal-handle-bindings.ts',
+      'src/main/runtime/terminal/identity/terminal-identity-source.ts',
       'src/main/runtime/terminal/recovery/resolve-terminal-pane.ts'
     ])
   })

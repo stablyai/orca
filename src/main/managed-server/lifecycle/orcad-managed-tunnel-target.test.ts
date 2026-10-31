@@ -69,6 +69,20 @@ describe('forwardToVerifiedOrcad', () => {
       expect(state.rereadRemotePort).not.toHaveBeenCalled()
     }
   )
+  it('removes a forward with the wrong fixed local port before checking identity', async () => {
+    const state = setup([], 6_768)
+    state.addForward.mockResolvedValueOnce({
+      id: 'wrong-forward',
+      localPort: 41_001,
+      remotePort: 6_768
+    })
+    const result = forwardToVerifiedOrcad(state.args)
+    await expect(result).rejects.toThrow('unexpected local port')
+    expect(state.removeForwardAndWait).toHaveBeenCalledExactlyOnceWith('wrong-forward')
+    expect(state.verify).not.toHaveBeenCalled()
+    expect(state.rereadRemotePort).not.toHaveBeenCalled()
+  })
+
   it('keeps a forward whose server proves it is this orcad', async () => {
     const state = setup([], 6_768)
     await expect(forwardToVerifiedOrcad(state.args)).resolves.toMatchObject({ remotePort: 6_768 })

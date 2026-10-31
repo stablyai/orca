@@ -62,11 +62,11 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
     this.graphStatus = 'unavailable'
     this.setTerminalSideEffectConsumerAvailable(false)
     this.rememberDetachedPreAllocatedLeaves()
-    this.tabs.clear()
-    this.leaves.clear()
+    this.terminalIdentity.clearTabs()
+    this.terminalIdentity.clearLeaves()
     this.leavesByPtyId.clear()
-    this.handles.clear()
-    this.handleByLeafKey.clear()
+    this.terminalIdentity.clearHandles()
+    this.terminalIdentity.clearLeafBindings()
     this.clearPtyIncarnationHandles()
     this.rejectAllWaiters('terminal_handle_stale')
     this.refreshWritableFlags()
@@ -77,16 +77,16 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
   }
 
   protected restoreHeadlessGraphAuthority(): void {
-    this.rendererGraphEpoch += 1
+    this.terminalIdentity.advanceRendererEpoch()
     this.authoritativeWindowId = HEADLESS_RUNTIME_WINDOW_ID
     this.graphStatus = 'ready'
     this.rendererGeneration = null
     this.setTerminalSideEffectConsumerAvailable(false)
-    this.tabs.clear()
-    this.leaves.clear()
+    this.terminalIdentity.clearTabs()
+    this.terminalIdentity.clearLeaves()
     this.leavesByPtyId.clear()
-    this.handles.clear()
-    this.handleByLeafKey.clear()
+    this.terminalIdentity.clearHandles()
+    this.terminalIdentity.clearLeafBindings()
     this.clearPtyIncarnationHandles()
     this.rejectAllWaiters('terminal_handle_stale')
     this.refreshWritableFlags()

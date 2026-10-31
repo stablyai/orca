@@ -266,6 +266,40 @@ describe('ManagedOrcadPairingRepairs', () => {
 })
 
 describe('buildWithPairingRepair', () => {
+  it.each(['read', 'ensure'])(
+    'preserves the original %s failure after the sealed refusal',
+    async (phase) => {
+      const state = setup(() => readiness(offer('fresh-token')))
+      const final = new Error(`actual ${phase} rejection`)
+      if (phase === 'read') {
+        state.deps.readReadiness.mockRejectedValueOnce(final)
+      }
+      const sealed = new OrcadManagedPairingRejectedError('sealed refusal')
+      await expect(
+        buildWithPairingRepair(
+          {
+            resolve: state.deps.resolve,
+            repairs: state.repairs,
+            ensure: async () => {
+              throw final
+            }
+          },
+          'env-1',
+          async () => {
+            throw sealed
+          }
+        )
+      ).rejects.toBe(final)
+      expect(state.deps.readReadiness).toHaveBeenCalledOnce()
+      if (phase === 'read') {
+        expect(state.deps.refresh).not.toHaveBeenCalled()
+        expect(state.repairs.standingFailure('env-1', REFUSED)).toBeNull()
+      } else {
+        expect(state.deps.refresh).toHaveBeenCalledOnce()
+      }
+    }
+  )
+
   function recovery() {
     const state = setup(() => readiness(offer('fresh-token')))
     return {

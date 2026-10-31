@@ -1,3 +1,4 @@
+import { sessionCrewChanges } from './orchestration/crew/crew-changes'
 import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
 import type { JournalOperationReceipt } from '../native-chat/agent-session-journal/journal-row-writer'
 import { journalOpenRefusalError } from '../native-chat/agent-session-journal/journal-open-failure'
@@ -228,6 +229,35 @@ export class AgentSessionStoreTransactions {
         if (writes) {
           freezeRows(draft, writes)
           this.published = draft
+          const topologyChanged =
+            writes.sessionTabs !== null ||
+            writes.records.remove.length > 0 ||
+            writes.records.upsert.some(([id]) => {
+              const before = published.records.get(id)
+              const after = draft.records.get(id)
+              return (
+                !before ||
+                !after ||
+                before.lease.claimStatus !== after.lease.claimStatus ||
+                before.provider !== after.provider ||
+                before.location !== after.location ||
+                before.conversationCommand !== after.conversationCommand
+              )
+            })
+          const renamed = writes.records.upsert
+            .filter(
+              ([id]) =>
+                published.records.get(id)?.conversationName !==
+                draft.records.get(id)?.conversationName
+            )
+            .map(([id]) => id)
+          if (topologyChanged) {
+            sessionCrewChanges.notify(new Set(['records']))
+          } else if (renamed.length) {
+            sessionCrewChanges.notify(
+              Object.assign(new Set(['names'] as const), { recordIds: renamed })
+            )
+          }
         }
       }
     }

@@ -1,3 +1,4 @@
+import { CrewChanges } from './crew/crew-changes'
 import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -85,6 +86,7 @@ let db: InstanceType<typeof OrchestrationDb>
 function probe(extra: Record<string, unknown> = {}): MailTargetProbe {
   return Object.assign(Object.create(MailTargetProbe.prototype), {
     _orchestrationDb: db,
+    crewChanges: new CrewChanges(),
     ptysById: new Map(),
     ...extra
   })

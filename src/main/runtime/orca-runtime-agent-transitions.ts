@@ -121,11 +121,17 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithMig
     // Attach connector watches at hook-store startup, before any connector call.
     this.externalConversations.current()
     const detachTransitions = this.agentTransitions.attach(store)
+    const detachCrew = store.subscribeStatusRowMutations(() =>
+      this.crewChanges.notify(new Set(['status', 'names']))
+    )
+    this.crewChanges.notify(new Set(['status', 'names']))
     const subscribe = store.subscribeEnrichedStatus?.bind(store)
     const detachTitles = subscribe
       ? subscribeHookStatusTitles({ subscribeEnrichedStatus: subscribe }, this)
       : () => {}
     return () => {
+      detachCrew()
+      this.crewChanges.notify(new Set(['status', 'names']))
       detachTitles()
       detachTransitions()
     }

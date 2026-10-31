@@ -1,7 +1,14 @@
+import type { AgentTransitionDetector } from '../../../agent-hooks/agent-transition-detector'
+import {
+  readCrewRuntimeInputs,
+  watchCrewRuntimeSources
+} from '../../orchestration/crew/crew-runtime-watch'
+import { CrewReadModel } from '../../orchestration/crew/crew-read-model'
+import { getPublishedHostDescriptor } from '../../host-descriptor'
 import type { AutomationsChangedPayload } from '../../../../shared/runtime-client-events'
 import { getWorkerTerminalAutoReleaseScheduler } from '../../orchestration/worker-terminal-auto-release-scheduler'
 import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
-import { OrcaRuntimeWithPtyForegroundProcessReads } from '../../client/runtime-client-state'
+import { OrcaRuntimeWithOrchestrationDatabaseBinding } from './orchestration-database-binding'
 import type {
   AutomationOwnerPrecondition,
   AutomationDestination
@@ -17,22 +24,19 @@ import {
   type AutomationListResult
 } from '../../../../shared/automation-list-scope'
 import { OrchestrationDb } from '../../orchestration/db'
-import { orchestrationDbFile } from '../../orchestration/db/orchestration-db-file'
 import {
   committedHandBackTypes,
   type MailHandBack
 } from '../../orchestration/db/messages/helper-mailbox-hand-back'
 import { existsSync } from 'node:fs'
-import { getAppEnvironment } from '../../../../shared/app-environment'
 import type { LegacyWorkerTerminalRecoveryPlan } from '../../orchestration/orchestration-legacy-worker-terminal-recovery'
 import type { LegacyWorkerTerminalRecoveryResult } from '../../runtime-legacy-worker-terminal-recovery-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 
-// Keyed by runtime, not a field: the database can open while the runtime is still constructing.
-const runtimesWatchingAutoReleaseSetting = new WeakSet<object>()
+export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithOrchestrationDatabaseBinding {
+  abstract readonly agentTransitions: Pick<AgentTransitionDetector, 'subscribe'>
 
-export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithPtyForegroundProcessReads {
   abstract notifyAutomationsChanged(payload?: AutomationsChangedPayload): void
   abstract ensureOrchestrationFederationRelay(runId?: string): void
   protected abstract scheduleRestoredMessageRepoints(): void
@@ -159,6 +163,7 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
     if (!this._orchestrationDb) {
       this._orchestrationDb = new OrchestrationDb(this.orchestrationDbPath())
       this.bindMailHandBack(this._orchestrationDb)
+      this.bindCrewChanges(this._orchestrationDb)
       this.ensureOrchestrationFederationRelay()
       this.scheduleRestoredMessageRepoints()
       this.bindWorkerTerminalAutoRelease(this._orchestrationDb)
@@ -176,38 +181,51 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
       : null
   }
 
-  private orchestrationDbPath(): string {
-    return orchestrationDbFile(getAppEnvironment().getPath('userData'))
-  }
-
   setOrchestrationDb(db: OrchestrationDb): void {
     this.orchestrationFederation.resetForDatabaseChange()
     this.mailPointerRepointScheduler.clear()
     this._orchestrationDb = db
     this.bindMailHandBack(db)
+    this.bindCrewChanges(db)
     this.ensureOrchestrationFederationRelay()
     this.scheduleRestoredMessageRepoints()
     this.bindWorkerTerminalAutoRelease(db)
   }
 
-  private bindWorkerTerminalAutoRelease(db: OrchestrationDb): void {
-    db.workerTerminalAutoReleaseListener = () => {
-      if (this._orchestrationDb === db) {
-        getWorkerTerminalAutoReleaseScheduler(this).rearm()
-      }
-    }
-    db.workerAutoReleaseEnabled = () =>
-      this.store?.getSettings?.()?.orchestrationWorkerAutoReleaseEnabled !== false
-    if (this.store?.onSettingsChanged && !runtimesWatchingAutoReleaseSetting.has(this)) {
-      runtimesWatchingAutoReleaseSetting.add(this)
-      // Turning the setting off drops the timer; turning it on finds the deadlines still due.
-      this.store.onSettingsChanged((updates) => {
-        if ('orchestrationWorkerAutoReleaseEnabled' in updates && this._orchestrationDb) {
-          getWorkerTerminalAutoReleaseScheduler(this).rearm()
-        }
-      })
-    }
+  private unwatchCrewDb: (() => void) | undefined
+
+  private bindCrewChanges(db: OrchestrationDb): void {
+    this.unwatchCrewDb?.()
+    this.unwatchCrewDb = db.crewChanges.subscribe(this.crewChanges.notify)
+    this.crewChanges.notify()
   }
+
+  private readonly crewReadModel = new CrewReadModel(
+    (previous) =>
+      readCrewRuntimeInputs(
+        this.crewRuntimeReaders(),
+        this._orchestrationDb,
+        existsSync(this.orchestrationDbPath()),
+        getPublishedHostDescriptor(this.runtimeId)?.installationId ?? this.runtimeId,
+        previous
+      ),
+    (wake) =>
+      watchCrewRuntimeSources(
+        {
+          store: this.store,
+          watchChanges: this.crewChanges.subscribe,
+          watchTransitions: (listener) => this.agentTransitions.subscribe(listener),
+          watchClient: (listener) => this.onClientEvent(listener)
+        },
+        wake
+      )
+  )
+
+  getOrchestrationCrewSnapshot(party: string) {
+    return this.crewReadModel.read(party)
+  }
+
+  watchOrchestrationCrew = (wake: () => void) => this.crewReadModel.subscribe(wake)
 
   private bindMailHandBack(db: OrchestrationDb): void {
     db.mailHandBackListener = (handBack) => this.offerHandedBackMail(db, handBack)

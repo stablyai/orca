@@ -10,12 +10,15 @@ import { canonicalOrcaSessionId } from './orchestration/canonical-orca-session-i
 import type { OrchestrationDb } from './orchestration/db'
 import { OrchestrationError } from './orchestration/orchestration-error'
 import {
+  createLineageRunningSessionResolver,
   readAgentSessionRecordStore,
   resolveLineageRunningSession,
+  type AgentSessionRecordReader,
   type LineageRunningSession,
   type RunningStructuredSession
 } from './orchestration/structured-session-lineage'
 import {
+  captureStructuredWorkerTabVisibility,
   structuredSessionTabRetired,
   structuredWorkerAddressable
 } from './structured-worker-custody'
@@ -115,16 +118,21 @@ export function isRecordedStructuredWorkerSession(
 
 /** The session running this worker now: the one minted for it, or its `/clear` successor. */
 export function structuredWorkerSession(
-  identity: Pick<StructuredWorkerIdentity, 'sessionId'>
+  identity: Pick<StructuredWorkerIdentity, 'sessionId'>,
+  context?: StructuredWorkerReadContext
 ): LineageRunningSession {
+  if (context) {
+    return context.resolveSession(identity.sessionId)
+  }
   return resolveLineageRunningSession(readAgentSessionRecordStore(), identity.sessionId)
 }
 
 /** The worker's running session on this host, or the typed refusal an actor answers instead. */
 function locateStructuredWorker(
-  identity: Pick<StructuredWorkerIdentity, 'sessionId'>
+  identity: Pick<StructuredWorkerIdentity, 'sessionId'>,
+  context?: StructuredWorkerReadContext
 ): { running: RunningStructuredSession } | { reason: string; refusal: OrchestrationError } {
-  const located = structuredWorkerSession(identity)
+  const located = structuredWorkerSession(identity, context)
   if (located.kind === 'here') {
     return { running: located }
   }
@@ -163,13 +171,14 @@ export function requireRunningStructuredWorker(
 export function holdStructuredWorker(
   identity: StructuredWorkerIdentity,
   db: OrchestrationDb | null | undefined,
-  row = db?.getWorkerTerminalResourceByHandle?.(identity.handle)
+  row = db?.getWorkerTerminalResourceByHandle?.(identity.handle),
+  context?: StructuredWorkerReadContext
 ): StructuredWorkerHold {
-  const located = locateStructuredWorker(identity)
+  const located = locateStructuredWorker(identity, context)
   if ('refusal' in located) {
     return { kind: 'unverifiable', identity, reason: located.reason, refusal: located.refusal }
   }
-  const addressable = structuredWorkerAddressable(db, located.running, row)
+  const addressable = structuredWorkerAddressable(db, located.running, row, context?.visibility)
   if (addressable === null) {
     return {
       kind: 'unverifiable',
@@ -188,10 +197,11 @@ export function holdStructuredWorker(
 /** A worker this runtime owns and its orchestration has not released, with its running session. */
 export function resolveStructuredWorkerAuthority(
   handle: string,
-  db: OrchestrationDb | null | undefined
+  db: OrchestrationDb | null | undefined,
+  context?: StructuredWorkerReadContext
 ): StructuredWorkerAuthority | null {
   const identity = resolveStructuredWorkerIdentity(handle, db)
-  const hold = identity ? holdStructuredWorker(identity, db) : null
+  const hold = identity ? holdStructuredWorker(identity, db, undefined, context) : null
   return hold?.kind === 'held' ? { identity: hold.identity, running: hold.running } : null
 }
 
@@ -266,5 +276,55 @@ export function observeStructuredSession(sessionId: string): StructuredWorkerObs
   return {
     status: 'unverifiable',
     reason: 'The session has no attached provider child in this runtime generation.'
+  }
+}
+
+export type StructuredWorkerReadContext = {
+  resolveSession: (sessionId: string) => LineageRunningSession
+  visibility: ReturnType<typeof captureStructuredWorkerTabVisibility>
+}
+
+export function captureAgentSessionRecordInputs(
+  source: AgentSessionRecordReader | null
+): AgentSessionRecordReader | null {
+  const facts = new Map<
+    string,
+    { record: AgentSessionConversationView | null } | { error: unknown }
+  >()
+  return source
+    ? {
+        ...source,
+        getRecord: (id) => {
+          let fact = facts.get(id)
+          if (!fact) {
+            try {
+              fact = { record: structuredClone(source.getRecord(id)) }
+            } catch (error) {
+              fact = { error }
+            }
+            facts.set(id, fact)
+          }
+          if ('error' in fact) {
+            throw fact.error
+          }
+          return fact.record
+        }
+      }
+    : null
+}
+
+export function captureStructuredWorkerReadInputs() {
+  return {
+    records: captureAgentSessionRecordInputs(readAgentSessionRecordStore()),
+    visibility: captureStructuredWorkerTabVisibility()
+  }
+}
+
+export function createStructuredWorkerReadContext(
+  inputs = captureStructuredWorkerReadInputs()
+): StructuredWorkerReadContext {
+  return {
+    resolveSession: createLineageRunningSessionResolver(inputs.records),
+    visibility: inputs.visibility
   }
 }

@@ -1,3 +1,4 @@
+import { createFederationSyncDatabase } from './federation-sync-test-harness'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../orca-runtime'
 
@@ -21,11 +22,10 @@ describe('terminal federation acknowledgment recovery', () => {
     const sync = vi
       .spyOn(runtime, 'syncOrchestrationFederatedDispatch')
       .mockResolvedValue(undefined)
-    runtime.setOrchestrationDb({
-      listActiveFederatedDispatches: () => [],
-      findNextTerminalFederatedDispatchPendingAcknowledgment: (afterRowId: number) =>
-        candidates.find((candidate) => candidate.rowId > afterRowId)
-    } as never)
+    const { db } = createFederationSyncDatabase()
+    db.findNextTerminalFederatedDispatchPendingAcknowledgment = (afterRowId) =>
+      candidates.find((candidate) => candidate.rowId > afterRowId)
+    runtime.setOrchestrationDb(db)
 
     await vi.waitFor(() => expect(sync).toHaveBeenCalledTimes(1))
     expect(sync.mock.calls).toEqual([['dispatch_1']])
@@ -56,11 +56,10 @@ describe('terminal federation acknowledgment recovery', () => {
     const sync = vi
       .spyOn(runtime, 'syncOrchestrationFederatedDispatch')
       .mockRejectedValue(new Error('worker unavailable'))
-    runtime.setOrchestrationDb({
-      listActiveFederatedDispatches: () => [],
-      findNextTerminalFederatedDispatchPendingAcknowledgment: (afterRowId: number) =>
-        candidates.find((candidate) => candidate.rowId > afterRowId)
-    } as never)
+    const { db } = createFederationSyncDatabase()
+    db.findNextTerminalFederatedDispatchPendingAcknowledgment = (afterRowId) =>
+      candidates.find((candidate) => candidate.rowId > afterRowId)
+    runtime.setOrchestrationDb(db)
 
     await vi.advanceTimersByTimeAsync(3_000)
 
@@ -84,13 +83,12 @@ describe('terminal federation acknowledgment recovery', () => {
       }
     })
     const sync = vi.spyOn(runtime, 'syncOrchestrationFederatedDispatch').mockReturnValue(blocked)
-    runtime.setOrchestrationDb({
-      listActiveFederatedDispatches: () => [],
-      findNextTerminalFederatedDispatchPendingAcknowledgment: () => ({
-        dispatchId: 'dispatch_1',
-        rowId: 1
-      })
-    } as never)
+    const { db } = createFederationSyncDatabase()
+    db.findNextTerminalFederatedDispatchPendingAcknowledgment = () => ({
+      dispatchId: 'dispatch_1',
+      rowId: 1
+    })
+    runtime.setOrchestrationDb(db)
     expect(sync).toHaveBeenCalledTimes(1)
 
     runtime.stopOrchestrationFederationRelay()

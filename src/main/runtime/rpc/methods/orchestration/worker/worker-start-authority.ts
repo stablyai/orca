@@ -1,3 +1,4 @@
+import { selectExistingWorkerStartRun } from './worker-start-run-authority'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type {
@@ -31,26 +32,26 @@ export function resolveWorkerStartRun(
   const db = runtime.getOrchestrationDb()
   const coordinator = args.coordinator
   const coordinated = coordinator ? db.getCurrentRunForCoordinator(coordinator) : undefined
-  if (coordinator && coordinated) {
-    const run = args.runId ? db.getCoordinatedRun(coordinator, args.runId) : coordinated
-    if (!run) {
-      throw fenced(`This caller coordinates Run ${coordinated.id}, not ${args.runId}.`)
+  let dispatchCreator: ReturnType<typeof resolveDispatchCreator> | undefined
+  const authority = selectExistingWorkerStartRun(
+    coordinated,
+    args.runId,
+    () => (coordinator && args.runId ? db.getCoordinatedRun(coordinator, args.runId) : undefined),
+    () => {
+      dispatchCreator = resolveDispatchCreator(runtime, args.from, args.callerSession)
+      const creatorId = db.resolveCreatorDispatchId(dispatchCreator)
+      const creator = creatorId ? db.getDispatchContextById(creatorId) : undefined
+      const run = creator ? db.getRun(creator.run_id) : undefined
+      return creator && run ? { creator, run } : undefined
     }
-    return { bindRun: () => ({ run, created: false }) }
-  }
-  // Use the same active delegated Dispatch for authority and creator/reporting identity; remote Dispatches have no local row.
-  const dispatchCreator = resolveDispatchCreator(runtime, args.from, args.callerSession)
-  const creatorId = db.resolveCreatorDispatchId(dispatchCreator)
-  const creator = creatorId ? db.getDispatchContextById(creatorId) : undefined
-  const run = creator ? db.getRun(creator.run_id) : undefined
-  if (creator && run && run.legacy !== 1) {
-    if (args.runId && args.runId !== run.id) {
-      throw fenced(
-        `This worker's Dispatch ${creator.id} is in Run ${run.id}; it starts helpers only there.`
-      )
+  )
+  if (authority) {
+    return {
+      bindRun: () => ({ run: authority.run, created: false }),
+      ...(authority.creator ? { helperCreator: authority.creator } : {})
     }
-    return { bindRun: () => ({ run, created: false }), helperCreator: creator }
   }
+  dispatchCreator ??= resolveDispatchCreator(runtime, args.from, args.callerSession)
   // Only a root caller gets a new Run, so a worker can never reset its depth this way.
   if (
     args.coordinator &&

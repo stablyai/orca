@@ -1,14 +1,10 @@
 /** E9 for runtime calls: a poll or fetch reaches a WSL host only without booting its distro. */
+import { assertWslHostRunAllowed, wslHostRuntimeCallGuard } from './wsl-host-gate'
 import type { WslHostDeploymentRecord } from '../../shared/wsl-host-deployment-store'
 import { deferUntilWslDistroRunning } from '../wsl-background-distro-gate'
 import { rethrowRetryable, settlingConnectFailure } from './wsl-host-connect-failure'
 import type { WslHostConnector, WslHostServiceDependencies } from './wsl-host-connector-contract'
-import {
-  wslHostNotConnectedMessage,
-  wslHostStoppedMessage,
-  WSL_HOST_REMOVING_MESSAGE,
-  wslHostRunRefusal
-} from './wsl-host-add-admission'
+import { wslHostNotConnectedMessage, wslHostStoppedMessage } from './wsl-host-add-admission'
 import { admitConnectToPendingHost } from './wsl-host-removal'
 import type { WslOrcadConnection } from './wsl-orcad-connection'
 
@@ -43,22 +39,19 @@ export async function ensureWslHostForRuntimeCall(
   if (reachability === 'available') {
     return
   }
-  const refusal = wslHostRunRefusal(deps)
-  if (refusal || port.removing.has(environmentId)) {
-    throw new Error(refusal?.message ?? WSL_HOST_REMOVING_MESSAGE)
-  }
+  assertWslHostRunAllowed(deps, port.removing, environmentId)
   // A pending host never reconnects for a runtime call.
   admitConnectToPendingHost(deps.userDataPath(), record, false)
   if (reachability === 'stopped') {
     parkStopped(record, port)
   }
   if (parked.has(environmentId)) {
-    throw new Error(wslHostStoppedMessage(record.distro))
+    throw wslHostRuntimeCallGuard(wslHostStoppedMessage(record.distro), 'parked')
   }
   // Unconfirmed (running list unreadable, or possibly stale right after an exit) or not
   // visible: refuse rather than risk a boot; liveness publishes the verdict.
   if (reachability !== 'unreachable' || !port.isVisible()) {
-    throw new Error(wslHostNotConnectedMessage(record.distro))
+    throw wslHostRuntimeCallGuard(wslHostNotConnectedMessage(record.distro), 'unavailable')
   }
   if (connector.isSettling(record.distro)) {
     throw settlingConnectFailure(record.distro)

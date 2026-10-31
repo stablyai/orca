@@ -44,10 +44,12 @@ const PARTY_NAMING_FIELDS = [
   'terminal',
   'callerTerminalHandle',
   'sessionId',
-  'address'
+  'address',
+  'party'
 ] as const
 // These identity-adjacent fields must never resolve as parties.
 const NAMES_NO_RESOLVED_PARTY: Readonly<Record<string, string>> = {
+  'orchestration.crewSubscribe party': 'queries the selected party; declares no caller',
   'orchestration.run from': 'retired; refused before any handler',
   'orchestration.runShow from': 'reads a Run by id; `from` is unused',
   'orchestration.dispatchShow from': '`from` only fills the preview preamble text',
@@ -107,6 +109,9 @@ describe('orchestration session callers at the dispatch entry', () => {
       })
       .sort()
 
+    // The population: 49 registered methods carrying 35 party-naming fields.
+    expect(registry.size).toBe(49)
+    expect(partyNaming).toHaveLength(35)
     expect(partyNaming).toEqual(
       [
         ...Object.entries(ORCHESTRATION_CALLER_PARAM).map(
@@ -121,6 +126,20 @@ describe('orchestration session callers at the dispatch entry', () => {
     expect(Object.keys(MINIMAL_PARAMS).sort()).toEqual(
       Object.keys(ORCHESTRATION_CALLER_PARAM).sort()
     )
+    expect(
+      needsOrchestrationCallerResolution(
+        orchestrationRequest('orchestration.crewSubscribe', { party: ADDRESS_X })
+      )
+    ).toBe(false)
+    expect(
+      needsOrchestrationCallerResolution(
+        orchestrationRequest(
+          'orchestration.crewSubscribe',
+          { party: ADDRESS_X },
+          { sessionId: SESSION_X }
+        )
+      )
+    ).toBe(true)
   })
 
   it.each(Object.keys(ORCHESTRATION_CALLER_PARAM))(

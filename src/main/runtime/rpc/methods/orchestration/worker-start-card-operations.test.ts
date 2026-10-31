@@ -55,7 +55,7 @@ it.each([10, 100])(
           existingTabCount: index
         })
       )
-      runtime.handles.set(handle, {
+      runtime.seedTerminalHandle(handle, {
         handle,
         runtimeId: runtime.getRuntimeId(),
         rendererGraphEpoch: 1,

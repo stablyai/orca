@@ -52,7 +52,7 @@ export function captureRuntimeEnvironmentCapabilityEvidence(
   const state = stateFor(environmentId)
   return {
     environmentId,
-    pairingKey: pairingKey(connection),
+    pairingKey: runtimeEnvironmentConnectionPairingKey(connection),
     epoch: state.epoch,
     sequence: ++state.nextSequence
   }
@@ -108,7 +108,7 @@ export function getAcceptedRuntimeEnvironmentCapabilityOutcome(
   const accepted = stateFor(environmentId).accepted
   if (
     !accepted ||
-    accepted.evidence.pairingKey !== pairingKey(connection) ||
+    accepted.evidence.pairingKey !== runtimeEnvironmentConnectionPairingKey(connection) ||
     (runtimeId !== null && accepted.runtimeId !== runtimeId)
   ) {
     return null
@@ -145,7 +145,9 @@ export function isRuntimeEnvironmentCapabilityPaused(environmentId: string): boo
   return stateFor(environmentId).accepted?.verdict === 'absent'
 }
 
-function pairingKey(connection: PairedRuntimeConnection): string {
+export function runtimeEnvironmentConnectionPairingKey(
+  connection: PairedRuntimeConnection
+): string {
   return [connection.endpoint, connection.credential.deviceToken, connection.hostPublicKeyB64].join(
     '\0'
   )

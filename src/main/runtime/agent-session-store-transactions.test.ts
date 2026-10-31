@@ -1,7 +1,13 @@
+import { sessionCrewChanges } from './orchestration/crew/crew-changes'
+import { CrewReadModel, type CrewReadDependencies } from './orchestration/crew/crew-read-model'
+import { subscribeCrew } from './orchestration/crew/crew-stream'
+import { OrchestrationDb } from './orchestration/db'
+import { conversationRecordReader } from './orchestration/structured-session-lineage'
+import type { OrchestrationCrewFrame } from '../../shared/orchestration-crew'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import {
   closeTestJournalHostDatabases,
@@ -243,3 +249,85 @@ describe('after the database closes', () => {
     expect(store.getRecord('chat-a-0001')).toBe(before)
   })
 })
+
+it.each([3, 30])(
+  'keeps %i crew subscribers idle on lease-only commits and refreshes a committed name',
+  async (population) => {
+    const store = await openTestAgentSessionRecordStore(root)
+    const records: AgentSessionRecord[] = []
+    for (let i = 0; i < population; i++) {
+      records.push(await liveChat(store, `chat-crew-${i}`))
+    }
+    const db = new OrchestrationDb(':memory:')
+    const run = db.createRun({
+      objective: 'Crew',
+      coordinatorHandle: 'term_coord',
+      coordinatorPaneKey: 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+    })
+    db.createDispatchContext({
+      taskId: db.createTask({ runId: run.id, spec: 'Worker' }).id,
+      assigneeHandle: `orca_session_id:${records[0].sessionId}`,
+      creator: { kind: 'system' },
+      maxDepth: 10
+    })
+    const list = vi.spyOn(store, 'listConversations')
+    const dependencies = vi.fn((): CrewReadDependencies => ({
+      db,
+      retainedDbExists: true,
+      hostKey: 'test',
+      records: conversationRecordReader(store),
+      statuses: [],
+      liveHandle: (handle) => handle === 'term_coord',
+      handleForPane: () => null,
+      paneForHandle: () => 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      name: (party, _task, captured) =>
+        party.orcaSessionId
+          ? (captured?.getRecord(party.orcaSessionId)?.conversationName ?? 'Chat')
+          : 'Coordinator'
+    }))
+    const model = new CrewReadModel(dependencies, (wake) => {
+      const stops = [db.crewChanges.subscribe(wake), sessionCrewChanges.subscribe(wake)]
+      return () => stops.forEach((stop) => stop())
+    })
+    const publications = Array.from({ length: population }, (): OrchestrationCrewFrame[] => [])
+    const stops = publications.map((frames, i) =>
+      subscribeCrew(
+        () => model.read(i === 0 ? 'term_coord' : `orca_session_id:chat-empty-${i}`),
+        model.subscribe,
+        (frame) => frames.push(frame)
+      )
+    )
+    try {
+      expect(dependencies).toHaveBeenCalledTimes(1)
+      expect(list).toHaveBeenCalledTimes(1)
+      for (const record of records) {
+        await store.renewLease({
+          sessionId: record.sessionId,
+          fence: record.lease.runtimeFence,
+          childProbe: { outcome: 'identity-matched', matchedOn: ['spawn-token'] },
+          now: NOW + 10_000
+        })
+      }
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(dependencies).toHaveBeenCalledTimes(1)
+      expect(list).toHaveBeenCalledTimes(1)
+      await store.setConversationName(records[0].sessionId, 'Renamed worker')
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(dependencies).toHaveBeenCalledTimes(2)
+      expect(list).toHaveBeenCalledTimes(1)
+      expect(publications[0].filter((frame) => frame.type === 'complete')).toHaveLength(2)
+      expect(publications[0].findLast((frame) => frame.type === 'rows')).toMatchObject({
+        rows: [{ label: 'Renamed worker' }]
+      })
+      for (const frames of publications.slice(1)) {
+        expect(frames.filter((frame) => frame.type === 'complete')).toHaveLength(1)
+      }
+    } finally {
+      stops.forEach((stop) => stop())
+      list.mockRestore()
+      db.close()
+    }
+  }
+)

@@ -233,7 +233,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
         })
       }
       if (pty) {
-        pty.connected = false
+        this.terminalIdentity.setPtyConnected(pty, false)
         pty.runtimeSessionOwned = false
         this.setPairedRendererSessionOwnership(pty.ptyId, false)
         pty.disconnectedAt = Date.now()
@@ -278,7 +278,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
     const exitedSurfaces: { handle: string; paneKey: string | null }[] = []
     for (const leaf of this.getLeavesForPty(ptyId)) {
       this.detachedPreAllocatedLeaves.delete(ptyId)
-      leaf.connected = false
+      this.terminalIdentity.updateLeafConnected(leaf, false)
       leaf.writable = false
       leaf.lastExitCode = exitCode
       leaf.lastExitCause = exitCause

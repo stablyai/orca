@@ -154,3 +154,97 @@ export function createCanonicalSessionPaneResolver(
     return structuredAgentSessionPaneKey(structuredAgentSessionTabId(id), id)
   }
 }
+
+type LineageSuffix =
+  | { kind: 'terminal'; sessionId: string; record: AgentSessionConversationView; here: boolean }
+  | { kind: 'missing'; sessionId: string }
+  | { kind: 'cycle' }
+
+type LineageNode = { next: string | null; suffix?: LineageSuffix }
+
+/** Discover each captured edge once; only requested lineage output is materialized per call. */
+export function createLineageRunningSessionResolver(
+  store: AgentSessionRecordReader | null
+): (sessionId: string) => LineageRunningSession {
+  const nodes = new Map<string, LineageNode>()
+  const discover = (root: string): LineageSuffix => {
+    const path: string[] = []
+    const active = new Set<string>()
+    let current = root
+    let suffix: LineageSuffix
+    for (;;) {
+      const known = nodes.get(current)?.suffix
+      if (known) {
+        suffix = known
+        break
+      }
+      if (active.has(current)) {
+        suffix = { kind: 'cycle' }
+        break
+      }
+      active.add(current)
+      path.push(current)
+      let record: AgentSessionConversationView | null
+      try {
+        record = store?.getRecord(current) ?? null
+      } catch {
+        record = null
+      }
+      if (!record) {
+        nodes.set(current, { next: null })
+        suffix = { kind: 'missing', sessionId: current }
+        break
+      }
+      const next = clearedInto(record)
+      nodes.set(current, { next: next || null })
+      if (!next) {
+        suffix = {
+          kind: 'terminal',
+          sessionId: current,
+          record,
+          here: Boolean(structuredWorkerHostScope(record.location))
+        }
+        break
+      }
+      current = next
+    }
+    for (const member of path) {
+      nodes.get(member)!.suffix = suffix
+    }
+    return suffix
+  }
+  return (sessionId) => {
+    if (!store) {
+      return {
+        kind: 'unverifiable',
+        reason: 'The structured agent-session host is not installed in this runtime generation.',
+        lineage: [sessionId]
+      }
+    }
+    const suffix = discover(sessionId)
+    const lineage: string[] = []
+    const visited = suffix.kind === 'cycle' ? new Set<string>() : null
+    let current: string | null = sessionId
+    while (current !== null && !visited?.has(current)) {
+      lineage.push(current)
+      visited?.add(current)
+      current = nodes.get(current)!.next
+    }
+    if (suffix.kind === 'terminal') {
+      return {
+        kind: suffix.here ? 'here' : 'other-host',
+        sessionId: suffix.sessionId,
+        record: suffix.record,
+        lineage
+      }
+    }
+    return {
+      kind: 'unverifiable',
+      reason:
+        suffix.kind === 'missing'
+          ? `No durable record backs structured session ${suffix.sessionId}.`
+          : `The /clear lineage of structured session ${sessionId} loops back on itself.`,
+      lineage
+    }
+  }
+}

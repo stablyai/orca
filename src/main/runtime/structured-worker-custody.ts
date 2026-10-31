@@ -24,11 +24,26 @@ type SessionTabReader = Pick<
   'getPersistedVisibleSessionTabIndex'
 >
 
+type CustodySource =
+  | ReturnType<typeof captureStructuredWorkerTabVisibility>
+  | SessionTabReader
+  | null
+
 /** Judge ownership on the resolved successor session; absent host returns null because reading storage would install it. */
 export function structuredWorkerOwned(
   running: RunningStructuredSession,
-  host: SessionTabReader | null = getStructuredAgentSessionHost()
+  source?: CustodySource
 ): boolean | null {
+  if (source && 'installed' in source) {
+    return source.installed
+      ? structuredWorkerRecordIsCurrent(
+          running.record,
+          running.record.ownerObservation.claimStatus === 'released' &&
+            source.isListed(running.sessionId)
+        )
+      : null
+  }
+  const host = source === undefined ? getStructuredAgentSessionHost() : source
   if (!host) {
     return null
   }
@@ -84,9 +99,9 @@ export function structuredWorkerAddressable(
   db: OrchestrationDb | null | undefined,
   running: RunningStructuredSession,
   row: CustodyRow | undefined,
-  host: SessionTabReader | null = getStructuredAgentSessionHost()
+  source?: CustodySource
 ): boolean | null {
-  const owned = structuredWorkerOwned(running, host)
+  const owned = structuredWorkerOwned(running, source)
   if (owned === null) {
     return null
   }
@@ -169,4 +184,23 @@ function ownedWorkerIncarnation(
     )
     .get(incarnation, JSON.stringify(hostScope))
   return owned === undefined ? null : incarnation
+}
+
+/** Finite captured membership; unreadable visibility never proves an open released session. */
+export function captureStructuredWorkerTabVisibility() {
+  const host = getStructuredAgentSessionHost()
+  let listed: ReadonlySet<string> | undefined
+  return {
+    installed: Boolean(host),
+    isListed: (sessionId: string): boolean => {
+      if (!listed) {
+        try {
+          listed = new Set(host?.getPersistedVisibleSessionTabIndex?.().sessionIds ?? [])
+        } catch {
+          listed = new Set()
+        }
+      }
+      return listed.has(sessionId)
+    }
+  }
 }

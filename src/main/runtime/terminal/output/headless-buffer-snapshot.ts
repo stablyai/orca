@@ -1,3 +1,4 @@
+import type { TerminalIdentityReadContext } from '../query/terminal-identity-read-context'
 import { OrcaRuntimeWithVisibleSnapshotPreview } from './terminal-visible-state'
 import type { TerminalOscLinkRange } from '../../../../shared/terminal-osc-link-ranges'
 import { parseTerminalKittyKeyboardFlags } from '../../../../shared/terminal-kitty-keyboard-flags'
@@ -104,9 +105,12 @@ export abstract class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends Orc
   }
 
   // Concrete-PTY handles cannot adopt later pane occupants; only pre-spawn handles may bind their first PTY (#7718).
-  resolveLiveLeafForHandle(handle: string): { ptyId: string | null } | null {
+  resolveLiveLeafForHandle(
+    handle: string,
+    context?: TerminalIdentityReadContext
+  ): { ptyId: string | null } | null {
     // Repair runtime-owned handles cleared by renderer reload before reading their records.
-    this.getLivePtyForHandle(handle)
+    this.getLivePtyForHandle(handle, context)
     const record = this.handles.get(handle)
     if (!record) {
       return null
@@ -149,12 +153,17 @@ export abstract class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends Orc
         Object.freeze({ ...terminal })
       )
     }
+    if (terminal) {
+      this.crewChanges.notify()
+    }
     return authority
   }
 
   releaseOrchestrationCompatibilitySshAttachment(attachmentId: string): void {
     this.orchestrationCompatibilitySshAttachments.delete(attachmentId)
-    this.orchestrationCompatibilitySshTerminals.delete(attachmentId)
+    if (this.orchestrationCompatibilitySshTerminals.delete(attachmentId)) {
+      this.crewChanges.notify()
+    }
   }
 
   /**
@@ -162,10 +171,18 @@ export abstract class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends Orc
    * claiming one handle name nobody: neither may borrow the other's pane or process.
    */
   protected getOrchestrationCompatibilitySshTerminal(
-    handle: string
+    handle: string,
+    context?: TerminalIdentityReadContext
   ): OrchestrationCompatibilitySshTerminal | undefined {
     let found: { targetId: string; terminal: OrchestrationCompatibilitySshTerminal } | undefined
-    for (const [attachmentId, terminal] of this.orchestrationCompatibilitySshTerminals) {
+    const candidates = context
+      ? context.sshAttachmentIds(handle)
+      : this.orchestrationCompatibilitySshTerminals.keys()
+    for (const attachmentId of candidates) {
+      const terminal = this.orchestrationCompatibilitySshTerminals.get(attachmentId)
+      if (!terminal) {
+        continue
+      }
       const targetId = this.orchestrationCompatibilitySshAttachments.get(attachmentId)?.targetId
       if (terminal.handle !== handle || !targetId) {
         continue

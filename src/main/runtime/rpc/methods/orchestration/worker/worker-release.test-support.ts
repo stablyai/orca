@@ -1,6 +1,6 @@
 import { expect, vi } from 'vitest'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
-import { eraseRpcMethods, type RpcContext } from '../../../core'
+import { isStreamingMethod, eraseRpcMethods, type RpcContext, type RpcMethod } from '../../../core'
 import { OrchestrationDb } from '../../../../orchestration/db'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
@@ -217,9 +217,9 @@ export function createOrchestrationWorkerReleaseHarness(): OrchestrationWorkerRe
     }
   }
 
-  function findMethod(name: string) {
+  function findMethod(name: string): RpcMethod {
     const method = eraseRpcMethods(ORCHESTRATION_METHODS).find((m) => m.name === name)
-    if (!method) {
+    if (!method || isStreamingMethod(method)) {
       throw new Error(`Method not found: ${name}`)
     }
     return method

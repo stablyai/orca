@@ -1,14 +1,21 @@
 import { vi } from 'vitest'
 import { ORCHESTRATION_METHODS } from '../orchestration'
-import { eraseRpcMethods, type RpcContext } from '../../core'
+import { isStreamingMethod, eraseRpcMethods, type RpcContext, type RpcMethod } from '../../core'
 import { OrchestrationDb } from '../../../orchestration/db'
 import { OrcaRuntimeService } from '../../../orca-runtime'
+import type { TerminalHandleRecord } from '../../../runtime-terminal-contracts'
+
+class OrchestrationRpcRuntime extends OrcaRuntimeService {
+  seedTerminalHandle(handle: string, record: TerminalHandleRecord): void {
+    this.terminalIdentity.setHandle(handle, record)
+  }
+}
 
 export const COORDINATOR_PANE_KEY = 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 
 export type OrchestrationRpcState = {
   db: OrchestrationDb
-  runtime: OrcaRuntimeService
+  runtime: OrchestrationRpcRuntime
   ctx: RpcContext
   activeRunId: string | undefined
 }
@@ -17,7 +24,7 @@ export type OrchestrationRpcState = {
 export function createOrchestrationRpcHarness() {
   let db: OrchestrationDb
   let dbOpen = false
-  let runtime: OrcaRuntimeService
+  let runtime: OrchestrationRpcRuntime
   let activeRunId: string | undefined
 
   const coordinatorPaneKey = COORDINATOR_PANE_KEY
@@ -28,7 +35,7 @@ export function createOrchestrationRpcHarness() {
   ): OrchestrationRpcState {
     db = new OrchestrationDb(':memory:')
     dbOpen = true
-    runtime = new OrcaRuntimeService(store)
+    runtime = new OrchestrationRpcRuntime(store)
     runtime.setOrchestrationDb(db)
     vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
       handle === 'term_coord' ? coordinatorPaneKey : null
@@ -67,9 +74,9 @@ export function createOrchestrationRpcHarness() {
     currentDb.close()
   }
 
-  function findMethod(name: string) {
+  function findMethod(name: string): RpcMethod {
     const method = eraseRpcMethods(ORCHESTRATION_METHODS).find((m) => m.name === name)
-    if (!method) {
+    if (!method || isStreamingMethod(method)) {
       throw new Error(`Method not found: ${name}`)
     }
     return method

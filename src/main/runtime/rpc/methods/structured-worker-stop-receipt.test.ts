@@ -16,7 +16,7 @@ import {
   structuredWorkerProcessIncarnation
 } from '../../structured-worker-identity'
 import { ORCHESTRATION_METHODS } from './orchestration'
-import { eraseRpcMethods } from '../core'
+import { isStreamingMethod, eraseRpcMethods } from '../core'
 
 const SESSION = 'session-stop-receipt'
 const HANDLE = 'structworker_22222222-2222-4222-a222-222222222222'
@@ -47,7 +47,7 @@ describe('worker-stop on a structured worker this runtime cannot reach', () => {
     const method = eraseRpcMethods(ORCHESTRATION_METHODS).find(
       (candidate) => candidate.name === name
     )
-    if (!method) {
+    if (!method || isStreamingMethod(method)) {
       throw new Error(`Method not found: ${name}`)
     }
     return method.handler(method.params!.parse(params), { runtime })

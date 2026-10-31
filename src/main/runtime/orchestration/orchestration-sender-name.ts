@@ -1,16 +1,41 @@
+import { crewDisplayName } from './crew/crew-rules'
 import type { AgentMessageSender } from '../../../shared/agent-session/agent-session-message-source'
 import { defaultAgentChatLabel } from '../../../shared/agent-session/agent-session-chat-label'
 import {
   getAgentRowConversationName,
   type ConversationNameTab
 } from '../../../shared/agent-row-conversation-name'
-import type { AgentType } from '../../../shared/agent-status-types'
+import type { AgentStatusIpcPayload, AgentType } from '../../../shared/agent-status-types'
 import { formatAgentTypeLabel } from '../../../shared/agent-type-label'
 import { structuredChatDisplayName } from '../../../shared/structured-chat-row-name'
 import type { Tab } from '../../../shared/tab-types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import type { OrchestrationDb } from './db'
 import type { DispatchContextRow } from './types'
 import { lineageLiveSession, type AgentSessionRecordReader } from './structured-session-lineage'
+
+export type SenderHookRow = Pick<
+  AgentStatusIpcPayload,
+  | 'paneKey'
+  | 'worktreeId'
+  | 'agentType'
+  | 'providerSession'
+  | 'receivedAt'
+  | 'connectionId'
+  | 'launchToken'
+>
+
+export type MirroredTabs = {
+  unifiedTabs?: Readonly<
+    Record<string, readonly Pick<Tab, 'contentType' | 'entityId' | 'customLabel' | 'label'>[]>
+  >
+  tabsByWorktree?: Readonly<
+    Record<string, readonly (Pick<TerminalTab, 'id'> & Partial<ConversationNameTab>)[]>
+  >
+  terminalLayoutsByTabId?: Readonly<
+    Record<string, Pick<TerminalLayoutSnapshot, 'root' | 'titlesByLeafId'>>
+  >
+}
 
 export type TerminalSenderNaming = {
   /** The tab as this host mirrors the workspace session. */
@@ -38,7 +63,8 @@ type Party = AgentMessageSender['party']
 export function orchestrationSenderName(
   party: Party,
   sources: SenderNamingSources,
-  reportedDispatchId?: string
+  reportedDispatchId?: string,
+  taskName?: string | null
 ): string | null {
   const federated = party.address.startsWith('dispatch:')
   const terminal =
@@ -53,12 +79,14 @@ export function orchestrationSenderName(
         terminal.providerSessionId
       )
     : null
-  return (
-    chat?.ownName ||
-    terminalName ||
-    dispatchTaskName(party, federated, terminal, sources.db, reportedDispatchId) ||
-    chat?.fallback ||
-    (terminal?.agent ? formatAgentTypeLabel(terminal.agent) : null)
+  return crewDisplayName(
+    chat?.ownName,
+    terminalName,
+    taskName !== undefined
+      ? taskName
+      : dispatchTaskName(party, federated, terminal, sources.db, reportedDispatchId),
+    chat?.fallback,
+    terminal?.agent ? formatAgentTypeLabel(terminal.agent) : null
   )
 }
 

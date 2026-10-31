@@ -1,3 +1,4 @@
+import { captureMainTerminalPaneLookup, findMainTerminalPane } from './pty-pane-query'
 // Publish main-owned workspace panes from Store layout changes, even without a window graph.
 
 import type { PaneStartFactOf } from '../../pane-start-statuses'
@@ -14,8 +15,6 @@ import type { RuntimeStore } from '../../runtime-store-contract'
 import type { WorkspaceLayoutReads } from '../../workspace-layout-stream'
 import {
   composeMainTerminalSurfaces,
-  pairedRuntimeHostOfBinding,
-  terminalHoldsPane,
   TerminalSurfaceIndex,
   type BoundTerminal,
   type MainTerminalSurfaces
@@ -120,17 +119,13 @@ class MainSurfacePublisher {
   findPaneForPty(ptyId: string): { worktreeId: string; tabId: string; leafId: string } | null {
     const surfaces = this.index.surfaces()
     const terminal = this.host.registered(ptyId)
-    const pane = surfaces.leaves.find(
-      (leaf) =>
-        leaf.ptyId === ptyId &&
-        (pairedRuntimeHostOfBinding(ptyId) !== null ||
-          terminalHoldsPane(
-            terminal,
-            leaf,
-            surfaces.paneFacts.get(`${leaf.tabId}::${leaf.leafId}`)
-          ))
-    )
-    return pane ? { worktreeId: pane.worktreeId, tabId: pane.tabId, leafId: pane.leafId } : null
+    return findMainTerminalPane(ptyId, surfaces.leaves, surfaces.paneFacts, terminal)
+  }
+
+  capturePaneLookup(): (
+    ptyId: string
+  ) => { worktreeId: string; tabId: string; leafId: string } | null {
+    return captureMainTerminalPaneLookup(this.index.surfaces(), this.host.registered)
   }
 
   /** Return the main-owned binding; start/failure/sleep status prevents treating its stored terminal as live. */

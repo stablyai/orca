@@ -9,6 +9,7 @@ import {
   type WslHostsGateState
 } from '../../shared/wsl-host-internal-gate'
 import type { OrcadDeploymentLink } from '../../shared/runtime-environments'
+import { wslHostRunRefusal, WSL_HOST_REMOVING_MESSAGE } from './wsl-host-add-admission'
 import type { WslHostsMovedProjects, WslHostsPolicyState } from '../../shared/wsl-hosts-policy'
 
 export const WSL_HOSTS_GATED_OFF_MESSAGE = 'WSL hosts are not available in this build.'
@@ -150,4 +151,19 @@ export function assertWslHostReachable(environment: {
   if (isGatedOffWslHost(environment)) {
     throw new Error(WSL_HOSTS_GATED_OFF_MESSAGE)
   }
+}
+
+export function assertWslHostRunAllowed(
+  gate: Parameters<typeof wslHostRunRefusal>[0],
+  removing: ReadonlySet<string>,
+  environmentId: string
+): void {
+  const refusal = wslHostRunRefusal(gate)
+  if (refusal || removing.has(environmentId)) {
+    throw new Error(refusal?.message ?? WSL_HOST_REMOVING_MESSAGE)
+  }
+}
+
+export function wslHostRuntimeCallGuard(message: string, _reason: 'parked' | 'unavailable'): Error {
+  return new Error(message)
 }

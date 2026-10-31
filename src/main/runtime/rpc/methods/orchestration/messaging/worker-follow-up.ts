@@ -1,10 +1,10 @@
+import { selectWorkerFollowUpPlan } from '../../../../orchestration/db/dispatch-context/worker-follow-up-plan'
 /** A message to a worker that finished becomes its next Task: worker-start run for the sender, on that same worker.
  *  Open workers take it in place, closed ones reopen in their saved conversation, and agents that keep none start fresh. */
 
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import {
   carryWorkerResumeSession,
-  FOLLOW_UP_MESSAGE_TYPES,
   resolveWorkerLineage
 } from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
@@ -16,8 +16,6 @@ import {
   chooseWorkerFollowUpPlacement,
   type WorkerFollowUpDelivery
 } from '../worker/worker-follow-up-choice'
-
-const ACTIVE_STATUSES: readonly string[] = ['pending', 'dispatched']
 
 export type WorkerFollowUpPlan =
   | { kind: 'steer'; dispatchId: string }
@@ -44,27 +42,14 @@ export function planWorkerFollowUp(
   dispatchId: string,
   type: MessageType
 ): WorkerFollowUpPlan | undefined {
-  const addressed = db.getDispatchContextById(dispatchId)
-  // A working worker reads its mail; only a settled Dispatch can have been continued.
-  const lineage =
-    addressed && !ACTIVE_STATUSES.includes(addressed.status)
-      ? resolveWorkerLineage(db, addressed.id)
-      : undefined
-  if (!lineage) {
-    return undefined
-  }
-  const { latest, resource } = lineage
-  if (ACTIVE_STATUSES.includes(latest.status)) {
-    return { kind: 'steer', dispatchId: latest.id }
-  }
-  if (
-    !FOLLOW_UP_MESSAGE_TYPES.some((followUpType) => followUpType === type) ||
-    db.getFederatedDispatch(latest.id) ||
-    !db.getWorkerDispatch(resource?.origin_dispatch_id ?? latest.id)
-  ) {
-    return latest.id === dispatchId ? undefined : { kind: 'steer', dispatchId: latest.id }
-  }
-  return { kind: 'start', addressed: dispatchId, latest, resource }
+  const plan = selectWorkerFollowUpPlan(
+    db.getDispatchContextById(dispatchId),
+    () => resolveWorkerLineage(db, dispatchId),
+    type,
+    (id) => Boolean(db.getFederatedDispatch(id)),
+    (id) => Boolean(db.getWorkerDispatch(id))
+  )
+  return plan?.kind === 'start' ? { ...plan, addressed: dispatchId } : plan
 }
 
 export async function startWorkerFollowUp(args: {

@@ -262,8 +262,7 @@ describe('terminal query erased boundary regressions', () => {
     class SummaryRuntime extends OrcaRuntimeService {
       summarize() {
         const pty = this.recordPtyWorktree('changing-binding', 'missing', { connected: false })
-        pty.tabId = 'tab'
-        pty.surfaceRecordedAtGraphSequence = 1
+        this.terminalIdentity.setRecordedSurface(pty, 'tab', pty.paneKey ?? null, 1)
         let reads = 0
         Object.defineProperty(pty, 'paneKey', {
           get: () => (++reads === 1 ? null : 'tab:00000000-0000-4000-8000-000000000001')

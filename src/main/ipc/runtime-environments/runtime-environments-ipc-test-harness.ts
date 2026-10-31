@@ -45,6 +45,8 @@ export function withRuntimeStatusOwners<T extends Record<string, Mock>>(transpor
       }
       return owner
     },
+    getRuntimeEnvironmentStatusSnapshot: (environmentId: string) =>
+      owners.get(environmentId)?.read() ?? null,
     getRuntimeEnvironmentStatusSnapshots: () => [...owners.values()].map((owner) => owner.read()),
     resetRuntimeEnvironmentStatusOwners: () => {
       owners.forEach((owner) => owner.dispose())
