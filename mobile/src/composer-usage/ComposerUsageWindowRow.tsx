@@ -32,7 +32,7 @@ function paceCopy(pace: UsagePace, t: Translate): { text: string; color: string 
       return null
     case 'exhausted':
       return {
-        text: t('composerUsage.pace.exhausted', 'Limit reached — out until reset'),
+        text: t('composerUsage.pace.exhausted', 'Limit reached for this window'),
         color: colors.statusRed
       }
     case 'on-pace':

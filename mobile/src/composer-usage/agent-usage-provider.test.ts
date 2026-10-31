@@ -57,7 +57,7 @@ describe('resolveComposerUsageTarget', () => {
     codex: { accounts: [], activeAccountId: null },
     rateLimits: {
       claude: limits('claude', { weekly: window(70, 10080) }),
-      codex: null,
+      codex: limits('codex', { weekly: window(97, 10080) }),
       gemini: null,
       grok: limits('grok', { weekly: window(22, 10080) }),
       inactiveClaudeAccounts: [],
@@ -71,9 +71,10 @@ describe('resolveComposerUsageTarget', () => {
     expect(resolveComposerUsageTarget(claude, 'weekly')?.kind).toBe('window')
   })
 
-  it('keeps the fallback for providers that never have a session window', () => {
-    const grok = selectAgentUsage(weeklyOnly, 'grok')!
-    const target = resolveComposerUsageTarget(grok, 'session')
-    expect(target?.kind === 'window' && target.entry.kind).toBe('weekly')
+  it('keeps the fallback for weekly-only providers and Codex weekly-only plans', () => {
+    for (const agent of ['grok', 'codex']) {
+      const target = resolveComposerUsageTarget(selectAgentUsage(weeklyOnly, agent)!, 'session')
+      expect(target?.kind === 'window' && target.entry.kind).toBe('weekly')
+    }
   })
 })

@@ -4540,7 +4540,7 @@
       "under": "{{percent}}% under pace",
       "ahead": "{{percent}}% ahead of pace",
       "aheadRunOut": "{{percent}}% ahead of pace — at this rate you'd run out ~{{duration}} before reset",
-      "exhausted": "Limit reached \u2014 out until reset"
+      "exhausted": "Limit reached for this window"
     },
     "picker": {
       "label": "Show in composer",

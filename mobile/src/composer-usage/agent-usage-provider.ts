@@ -123,8 +123,8 @@ export function pickComposerUsageWindow(
   )
 }
 
-// Providers with a 5-hour session limit; it is absent while idle, so a session choice must not fall back to weekly.
-const PROVIDERS_WITH_SESSION_WINDOW: ReadonlySet<UsageProviderKey> = new Set(['claude', 'codex'])
+// Claude always has a 5-hour limit that is absent while idle; Codex has weekly-only plans, so it falls back.
+const PROVIDERS_WITH_SESSION_WINDOW: ReadonlySet<UsageProviderKey> = new Set(['claude'])
 
 export type ComposerUsageTarget =
   | { kind: 'window'; entry: UsageWindowEntry }
