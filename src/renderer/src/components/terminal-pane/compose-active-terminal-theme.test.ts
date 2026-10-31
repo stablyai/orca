@@ -17,9 +17,9 @@ describe('composeActiveTerminalTheme', () => {
     const result = composeActiveTerminalTheme(base, settingsWith({}))
     expect(result).toEqual({
       overviewRulerBorder: 'transparent',
-      scrollbarSliderBackground: 'rgba(46, 52, 52, 0.4)',
-      scrollbarSliderHoverBackground: 'rgba(46, 52, 52, 0.6)',
-      scrollbarSliderActiveBackground: 'rgba(46, 52, 52, 0.8)',
+      scrollbarSliderBackground: 'rgba(46, 52, 52, 0.35)',
+      scrollbarSliderHoverBackground: 'rgba(46, 52, 52, 0.55)',
+      scrollbarSliderActiveBackground: 'rgba(46, 52, 52, 0.7)',
       ...base
     })
   })

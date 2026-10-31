@@ -63,9 +63,9 @@ export function composeActiveTerminalTheme(
     overviewRulerBorder: 'transparent',
     ...(foreground && isHexColor(foreground)
       ? {
-          scrollbarSliderBackground: hexToRgba(foreground, 0.4),
-          scrollbarSliderHoverBackground: hexToRgba(foreground, 0.6),
-          scrollbarSliderActiveBackground: hexToRgba(foreground, 0.8)
+          scrollbarSliderBackground: hexToRgba(foreground, 0.35),
+          scrollbarSliderHoverBackground: hexToRgba(foreground, 0.55),
+          scrollbarSliderActiveBackground: hexToRgba(foreground, 0.7)
         }
       : {}),
     ...baseTheme
