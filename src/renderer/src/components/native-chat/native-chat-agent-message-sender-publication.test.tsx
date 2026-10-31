@@ -491,3 +491,72 @@ it.each([100, 1000])(
     expect(cards[0].result.current.label).toBe('Sender 0')
   }
 )
+
+it.each([100, 1000])(
+  'holds a replaced card’s rows as a located card’s: a write it doesn’t read renders and rebuilds nothing, at %i senders',
+  (n) => {
+    const LOCAL = { kind: 'local' } as const
+    const rows = Array.from({ length: n }, (_, i) => association(i))
+    useAppStore.setState({
+      agentStatusByPaneKey: Object.fromEntries(rows.map((_, i) => [status(i).paneKey, status(i)])),
+      tabsByWorktree: {
+        workspace: rows.map((_, i) => makeTab({ id: `tab-${i}`, worktreeId: 'workspace' }))
+      }
+    })
+    useAppStore.getState().setAgentSenderPublication('local', publication(rows))
+    let renders = 0
+    // Cards saved by Codex senders whose terminals now run Claude: half draw only the name, half
+    // the avatar beside it.
+    const useNameOnly = (replaced: AgentMessageSender) => ({
+      opens: useAgentMessageSenderOpens(replaced, 'workspace', LOCAL),
+      dot: undefined
+    })
+    const useNameAndAvatar = (replaced: AgentMessageSender) => ({
+      opens: useAgentMessageSenderOpens(replaced, 'workspace', LOCAL),
+      dot: useAgentMessageSenderView(replaced, 'workspace', LOCAL).dot
+    })
+    const cards = Array.from({ length: 50 }, (_, i) => {
+      const replaced: AgentMessageSender = { ...sender(`term_${i}`), agent: 'codex' }
+      const useCard = i % 2 === 0 ? useNameAndAvatar : useNameOnly
+      return renderHook(() => {
+        renders++
+        return useCard(replaced)
+      })
+    })
+    expect(cards.map((card) => card.result.current)).toEqual(
+      cards.map(() => ({ opens: false, dot: undefined }))
+    )
+    const rendersFor = (update: () => void) => {
+      const before = renders
+      act(update)
+      return renders - before
+    }
+    const builds = agentMessageSenderRowBuildsForTest()
+    expect(rendersFor(() => useAppStore.setState({ sidebarBody: 'agents' }))).toBe(0)
+    expect(
+      rendersFor(() =>
+        useAppStore.setState(
+          agentSenderPublicationPatch(
+            useAppStore.getState(),
+            'runtime:other',
+            'other',
+            publication([{ identity: 'unrelated', paneKey: 'other', worktreeId: 'other' }])
+          )
+        )
+      )
+    ).toBe(0)
+    expect(agentMessageSenderRowBuildsForTest()).toBe(builds)
+    // Codex runs in card 0's terminal again: that card alone draws its link.
+    expect(
+      rendersFor(() =>
+        useAppStore.setState({
+          agentStatusByPaneKey: {
+            ...useAppStore.getState().agentStatusByPaneKey,
+            [status(0).paneKey]: { ...status(0), agentType: 'codex' }
+          }
+        })
+      )
+    ).toBe(1)
+    expect(cards[0].result.current).toEqual({ opens: true, dot: 'working' })
+  }
+)

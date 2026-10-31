@@ -7,6 +7,7 @@ import type { AppState } from '@/store/types'
 import type { AgentMessageSender } from '../../../../shared/agent-session/agent-session-message-source'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
+  agentMessageSenderCandidateLocation,
   agentMessageSenderOpens,
   resolveAgentMessageSenderTarget
 } from './native-chat-agent-message-sender-target'
@@ -64,7 +65,22 @@ function useSenderLocation(
     },
     [resolve]
   )
-  return { identity, savedAgent, resolve, locate }
+  // The kind check reads the candidate's row before it can veto it, so the card leases that row's
+  // source in every answer: a replaced card reuses it as a located one does.
+  const leaseLocate = useCallback(
+    (state: AppState) =>
+      identity
+        ? agentMessageSenderCandidateLocation(
+            state,
+            identity,
+            chatWorktreeId,
+            stableTarget,
+            dispatchId
+          )
+        : undefined,
+    [identity, chatWorktreeId, stableTarget, dispatchId]
+  )
+  return { identity, savedAgent, resolve, locate, leaseLocate }
 }
 
 export function useAgentMessageSenderView(
@@ -73,8 +89,13 @@ export function useAgentMessageSenderView(
   target?: RuntimeClientTarget,
   dispatchId?: string
 ) {
-  const { savedAgent, locate } = useSenderLocation(sender, chatWorktreeId, target, dispatchId)
-  return useAgentMessageSenderSource(locate, savedAgent)
+  const { savedAgent, locate, leaseLocate } = useSenderLocation(
+    sender,
+    chatWorktreeId,
+    target,
+    dispatchId
+  )
+  return useAgentMessageSenderSource(locate, savedAgent, leaseLocate)
 }
 
 /** Whether the card's sender name is a link. Its kind check reads the located row, so it holds
@@ -85,7 +106,7 @@ export function useAgentMessageSenderOpens(
   target?: RuntimeClientTarget,
   dispatchId?: string
 ): boolean {
-  const { identity, resolve, locate } = useSenderLocation(
+  const { identity, resolve, leaseLocate } = useSenderLocation(
     sender,
     chatWorktreeId,
     target,
@@ -98,5 +119,5 @@ export function useAgentMessageSenderOpens(
     },
     [resolve, identity]
   )
-  return useLeasedSenderSelector(locate, opens)
+  return useLeasedSenderSelector(leaseLocate, opens)
 }

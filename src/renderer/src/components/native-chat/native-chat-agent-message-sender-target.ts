@@ -66,23 +66,47 @@ export function resolveAgentMessageSenderTarget(
   target: RuntimeClientTarget | undefined,
   dispatchId: string | undefined
 ): AgentMessageSenderTarget {
+  const candidate = senderCandidate(state, sender, chatWorktreeId, target, dispatchId)
+  const location = candidateLocation(candidate)
+  return location && replacedAt(state, sender, location) ? REPLACED : candidate
+}
+
+/** Where the card's sender runs before the kind check: the row source a card leases, also when
+ *  that check then vetoes it, so a replaced card reuses its rows as a located one does. */
+export function agentMessageSenderCandidateLocation(
+  state: AppState,
+  sender: AgentMessageSender,
+  chatWorktreeId: string | null,
+  target: RuntimeClientTarget | undefined,
+  dispatchId: string | undefined
+): SenderLocation | undefined {
+  return candidateLocation(senderCandidate(state, sender, chatWorktreeId, target, dispatchId))
+}
+
+/** The host's answer, or this window's legacy placement for an older host, before the veto. */
+function senderCandidate(
+  state: AppState,
+  sender: AgentMessageSender,
+  chatWorktreeId: string | null,
+  target: RuntimeClientTarget | undefined,
+  dispatchId: string | undefined
+): AgentMessageSenderTarget {
   const owner = agentMessageSenderOwner(state, chatWorktreeId, target)
   if (!owner) {
     return NONE
   }
   const resolution = resolveAgentMessageSender(state, owner, sender, dispatchId)
-  if (resolution.kind === 'legacy') {
-    const location = locateLegacyAgentMessageSender(state, sender, owner)
-    return !location
-      ? LEGACY
-      : replacedAt(state, sender, location)
-        ? REPLACED
-        : { kind: 'legacy', location }
-  }
-  if (resolution.kind !== 'located') {
+  if (resolution.kind !== 'legacy') {
     return resolution
   }
-  return replacedAt(state, sender, resolution.location) ? REPLACED : resolution
+  const location = locateLegacyAgentMessageSender(state, sender, owner)
+  return location ? { kind: 'legacy', location } : LEGACY
+}
+
+function candidateLocation(candidate: AgentMessageSenderTarget): SenderLocation | undefined {
+  return candidate.kind === 'located' || candidate.kind === 'legacy'
+    ? candidate.location
+    : undefined
 }
 
 /** Whether the card draws a link: only where a click can open something. Federated senders stay

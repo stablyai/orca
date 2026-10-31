@@ -118,10 +118,12 @@ export function readAgentMessageSenderRow(
 }
 
 /** Share the sidebar projection before notifying cards; only subscription leases retain a source.
- *  `savedAgent`: the kind written on the message, drawn ahead of any live row's guess. */
+ *  `savedAgent`: the kind written on the message, drawn ahead of any live row's guess.
+ *  `leaseLocate`: the rows the card reads to decide, also where it then draws none. */
 export function useAgentMessageSenderSource(
   locate: LocateSender,
-  savedAgent?: AgentMessageSenderView['agentType']
+  savedAgent?: AgentMessageSenderView['agentType'],
+  leaseLocate: LocateSender = locate
 ): AgentMessageSenderView {
   const selected = useMemo(() => {
     let previous = EMPTY_VIEW
@@ -137,7 +139,7 @@ export function useAgentMessageSenderSource(
       return previous
     }
   }, [locate, savedAgent])
-  return useLeasedSenderSelector(locate, selected)
+  return useLeasedSenderSelector(leaseLocate, selected)
 }
 
 /** A card selector that may read the located sender's sidebar row: it leases that row's source as
