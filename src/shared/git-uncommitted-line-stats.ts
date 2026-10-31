@@ -49,7 +49,7 @@ function normalizeNumstatPath(rawPath: string): string {
 
 export function parseNumstat(
   stdout: string,
-  onRenameSource?: (path: string) => void
+  onRenameSource?: (path: string, destination: string) => void
 ): Map<string, GitLineStats> {
   if (stdout.includes('\0')) {
     return parseNulDelimitedNumstat(stdout, onRenameSource)
@@ -75,7 +75,7 @@ export function parseNumstat(
 
 function parseNulDelimitedNumstat(
   stdout: string,
-  onRenameSource?: (path: string) => void
+  onRenameSource?: (path: string, destination: string) => void
 ): Map<string, GitLineStats> {
   const stats = new Map<string, GitLineStats>()
   const records = iterateNulDelimitedFields(stdout)[Symbol.iterator]()
@@ -91,10 +91,10 @@ function parseNulDelimitedNumstat(
       // Git -z emits rename paths as: "added<TAB>removed<TAB>\0old\0new\0".
       // The empty header path is followed by the preimage and postimage.
       const oldPath = records.next().value
-      if (oldPath) {
-        onRenameSource?.(oldPath)
-      }
       path = records.next().value ?? ''
+      if (oldPath) {
+        onRenameSource?.(oldPath, path)
+      }
     }
     if (!path) {
       continue
