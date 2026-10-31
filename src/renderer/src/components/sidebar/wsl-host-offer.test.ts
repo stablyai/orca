@@ -105,6 +105,7 @@ describe('offer actions', () => {
   function deps(addResult: WslHostAddResult) {
     const calls: string[] = []
     const acceptDeps = {
+      readWslHostsSetting: () => false,
       updateSettings: vi.fn(async (updates: object) => {
         calls.push(`settings ${JSON.stringify(updates)}`)
       }),
@@ -135,11 +136,47 @@ describe('offer actions', () => {
     expect(d.addLocalPath).toHaveBeenCalledOnce()
   })
 
-  it('accept stops and returns a refusal without adding the project', async () => {
+  it('accept stops, restores the setting and returns a refusal without adding the project', async () => {
     const refusal = { ok: false as const, kind: 'unsupported-wsl1' as const, message: 'wsl1' }
-    const { acceptDeps: d } = deps(refusal)
+    const { calls, acceptDeps: d } = deps(refusal)
     expect(await acceptWslHostOffer(offer, d)).toEqual(refusal)
     expect(d.addLocalPath).not.toHaveBeenCalled()
+    expect(calls).toEqual([
+      'settings {"experimentalWslHosts":true}',
+      'host Ubuntu',
+      'settings {"experimentalWslHosts":false}'
+    ])
+  })
+
+  it('accept restores the setting when the host add throws', async () => {
+    const { calls, acceptDeps: d } = deps({ ok: true, environmentId: 'unused' })
+    d.addWslHost.mockRejectedValueOnce(new Error('ipc gone'))
+    await expect(acceptWslHostOffer(offer, d)).rejects.toThrow('ipc gone')
+    expect(d.addLocalPath).not.toHaveBeenCalled()
+    expect(calls).toEqual([
+      'settings {"experimentalWslHosts":true}',
+      'settings {"experimentalWslHosts":false}'
+    ])
+  })
+
+  it('a decline after a failed accept leaves the setting as it was', async () => {
+    const refusal = { ok: false as const, kind: 'failed' as const, message: 'no' }
+    const { acceptDeps: d } = deps(refusal)
+    await acceptWslHostOffer(offer, d)
+    await declineWslHostOffer(offer, d)
+    expect(d.updateSettings).toHaveBeenLastCalledWith({ wslHostOfferDismissed: true })
+    expect(d.updateSettings.mock.calls.map(([u]) => u)).toEqual([
+      { experimentalWslHosts: true },
+      { experimentalWslHosts: false },
+      { wslHostOfferDismissed: true }
+    ])
+  })
+
+  it('restores a setting that was already on', async () => {
+    const { acceptDeps: d } = deps({ ok: false, kind: 'failed', message: 'no' })
+    d.readWslHostsSetting = () => true
+    await acceptWslHostOffer(offer, d)
+    expect(d.updateSettings).toHaveBeenLastCalledWith({ experimentalWslHosts: true })
   })
 
   it('decline remembers the choice and adds the project as before', async () => {

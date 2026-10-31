@@ -33,6 +33,7 @@ export function AddRepoWslHostOffer({
     setError(null)
     try {
       const refusal = await acceptWslHostOffer(offer, {
+        readWslHostsSetting: () => useAppStore.getState().settings?.experimentalWslHosts === true,
         updateSettings: (updates) => useAppStore.getState().updateSettingsOrThrow(updates),
         addWslHost: addWslHostDistro,
         addLocalPath: (path, source) => {

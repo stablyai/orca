@@ -9,6 +9,8 @@ export type WslHostOffer = {
 }
 
 export type WslHostOfferDeps = {
+  /** The setting before Accept, restored when the host add fails. */
+  readWslHostsSetting: () => boolean
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void>
   addWslHost: (args: { distro: string; startIfStopped: boolean }) => Promise<WslHostAddResult>
   addLocalPath: (path: string, source: AddRepoExistingWorkspaceSource) => Promise<unknown>
@@ -22,10 +24,20 @@ export async function acceptWslHostOffer(
   offer: WslHostOffer,
   deps: WslHostOfferDeps
 ): Promise<Extract<WslHostAddResult, { ok: false }> | null> {
-  await deps.updateSettings({ experimentalWslHosts: true })
-  // Accepting is the user's ask to run this distro, so a stopped one may start.
-  const result = await deps.addWslHost({ distro: offer.distro, startIfStopped: true })
+  const previous = deps.readWslHostsSetting()
+  // Left on after a failure, a later "Add on this computer" would still be auto-moved.
+  const restore = (): Promise<void> => deps.updateSettings({ experimentalWslHosts: previous })
+  let result: WslHostAddResult
+  try {
+    await deps.updateSettings({ experimentalWslHosts: true })
+    // Accepting is the user's ask to run this distro, so a stopped one may start.
+    result = await deps.addWslHost({ distro: offer.distro, startIfStopped: true })
+  } catch (cause) {
+    await restore()
+    throw cause
+  }
   if (!result.ok && result.kind !== 'already-added') {
+    await restore()
     return result
   }
   await deps.addLocalPath(offer.path, offer.source)
