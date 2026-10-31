@@ -1,9 +1,9 @@
-import type { AgentSessionSubscribeEvent } from './agent-session-wire'
+import type { AgentSessionSubscribeEvent } from '../agent-session-wire'
 import {
   actionablePromptIdsAfterStructuredAgentSessionBatch,
   hostWorkingAfterStructuredAgentSessionBatch,
   latestTurnAfterStructuredAgentSessionBatch
-} from './structured-agent-session-live-turn'
+} from '../structured-agent-session-live-turn'
 
 export const STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS = 48
 
