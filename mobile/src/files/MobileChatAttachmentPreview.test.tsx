@@ -71,6 +71,7 @@ vi.mock('react-native', () => ({
 }))
 vi.mock('react-native-safe-area-context', () => ({
   SafeAreaView: 'SafeAreaView',
+  useSafeAreaInsets: () => ({ top: 0, left: 0, right: 0, bottom: 34 }),
   useSafeAreaFrame: () => ({ x: 0, y: 0, width: 390, height: 844 })
 }))
 vi.mock('lucide-react-native', () => ({

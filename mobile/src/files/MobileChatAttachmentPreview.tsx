@@ -4,7 +4,8 @@ import { createMobileChatAttachmentReader } from './mobile-chat-attachment-read'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react'
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 import { useWorkspaceClient } from '../transport/use-workspace-client'
 import { createAttachmentTextPreviewHook } from '../../../src/shared/use-attachment-text-preview'
@@ -24,6 +25,7 @@ const useAttachmentTextPreview = createAttachmentTextPreviewHook({
 export function MobileChatAttachmentPreview({ params }: { params: MobileFilePreviewRouteParams }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  const insets = useSafeAreaInsets()
   const { client, state } = useWorkspaceClient(params.hostId)
   const router = useWorkspaceRouteHandoff()
   const clipboard = useClipboardWriter()
@@ -155,7 +157,7 @@ export function MobileChatAttachmentPreview({ params }: { params: MobileFilePrev
       <ScrollView ref={scrollRef} style={styles.scroll} contentContainerStyle={styles.textContent}>
         {segments}
       </ScrollView>
-      <View style={[styles.topBar, { flexWrap: 'wrap' }]}>
+      <View style={[styles.topBar, { flexWrap: 'wrap', paddingBottom: insets.bottom }]}>
         {action(
           t('chat.textAttachmentPreview.first', 'First'),
           busy || !display,
@@ -173,7 +175,7 @@ export function MobileChatAttachmentPreview({ params }: { params: MobileFilePrev
         )}
         <TextInput
           accessibilityLabel={t('chat.textAttachmentPreview.attachmentPage', 'Attachment page')}
-          style={styles.meta}
+          style={[styles.meta, { fontSize: TEXT_INPUT_FONT_SIZE }]}
           keyboardType="number-pad"
           value={pageInput.value}
           editable={!busy}
